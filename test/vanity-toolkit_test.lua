@@ -87,7 +87,7 @@ check("every control has a description", (function()
 end)())
 
 section("Excluded features are absent")
-local source = io.open("scripts/vanity-toolkit.lua"):read("a")
+local source = io.open("scripts/vanity-toolkit.lua"):read("*a")
 for _, banned in ipairs({ "aimBot", "setAimbotFov", "spoofTeleport", "speedSpoof",
                           "pedSpoof", "spoofAllVisible", "camBypass", "lockEventLogger" }) do
     -- The header comment names them; no call site may.

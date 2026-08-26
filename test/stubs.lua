@@ -99,7 +99,15 @@ function Ham.getName()           return "tester" end
 function Ham.getServerEndpoint() return "127.0.0.1:30120" end
 function Ham.isGuiOpen()         return false end
 
-local function record(t) H.draws[#H.draws + 1] = t end
+-- Set H.drawError to make every Ham draw call raise, so a front end's
+-- draw-failure path can be exercised. The scripts capture these functions as
+-- locals at load, so the flag has to live inside the function body.
+H.drawError = false
+
+local function record(t)
+    if H.drawError then error("stub draw failure", 0) end
+    H.draws[#H.draws + 1] = t
+end
 
 function Ham.drawText(text, p, color, size, centered, outline, outlineColor)
     record({ fn = "drawText", text = text, x = p[1] or p.x, y = p[2] or p.y,
@@ -173,9 +181,28 @@ end
 
 H.recordCall = recordCall
 
+-- Writes that move the world. A teleport native that leaves the ped where it
+-- was makes every movement assertion vacuous — the ladder would measure zero
+-- and no monitor could ever fire — so these four write through to H.world as
+-- well as recording the call.
+function SetEntityCoords(entity, x, y, z, ...)
+    recordCall("SetEntityCoords", entity, x, y, z, ...)
+    w.coords.x, w.coords.y, w.coords.z = x, y, z
+end
+
+function SetEntityHealth(entity, value)
+    recordCall("SetEntityHealth", entity, value)
+    w.health = value
+end
+
+function SetPedArmour(ped, value)
+    recordCall("SetPedArmour", ped, value)
+    w.armour = value
+end
+
 -- Natives whose return value nothing depends on.
 for _, name in ipairs({
-    "SetEntityCoords", "SetEntityHeading", "SetEntityHealth", "SetPedArmour",
+    "SetEntityHeading",
     "SetEntityInvincible", "SetEntityVisible", "SetEntityVelocity",
     "SetSuperJumpThisFrame", "SetPedCanRagdoll", "SetPedInfiniteAmmo",
     "SetRunSprintMultiplierForPlayer", "SetSwimMultiplierForPlayer",
@@ -234,6 +261,7 @@ end
 function Ham.setPosition(x, y, z)
     recordCall("Ham.setPosition", x, y, z)
     H.ham.setPosition = { x = x, y = y, z = z }
+    w.coords.x, w.coords.y, w.coords.z = x, y, z
 end
 
 function Ham.getDiscordName()   return "tester#0001" end
@@ -287,11 +315,69 @@ function Ham.addFont(index, size)  recordCall("Ham.addFont", index, size); retur
 function Ham.setFont(handle)       recordCall("Ham.setFont", handle) end
 function Ham.resetFont()           recordCall("Ham.resetFont") end
 
+-- Anti-cheat detection: tests may overwrite the list, or set it to nil to
+-- simulate a build where Ham cannot answer.
+H.antiCheats = { "FiveGuard", "ElectronAC" }
+function Ham.getAntiCheats()
+    recordCall("Ham.getAntiCheats")
+    if H.antiCheats == nil then error("getAntiCheats failed", 0) end
+    return H.antiCheats
+end
+
+-- Input. Mouse buttons are edge-triggered like the real API: H.click() arms a
+-- press for exactly one frame, H.frame() clears it again.
 H.mouse = { x = 640.0, y = 360.0 }
 H.keysDown = {}
+H.mouseDown = {}
+H.mouseClicked = {}
+H.mouseReleased = {}
+H.keysPressed = {}
+
 function Ham.getMousePos()  return H.mouse.x, H.mouse.y end
 function Ham.getKeyState(k) return H.keysDown[k] and 1 or 0 end
 function Ham.isKeyDown(k)   return H.keysDown[k] or false end
+function Ham.isKeyPressed(k)  return H.keysPressed[k] or false end
+function Ham.isKeyReleased(k) return false end
+function Ham.isMouseDown(b)     return H.mouseDown[b or 0] or false end
+function Ham.isMouseClicked(b)  return H.mouseClicked[b or 0] or false end
+function Ham.isMouseReleased(b) return H.mouseReleased[b or 0] or false end
+function Ham.isMouseDoubleClicked() return false end
+
+-- Buttons released automatically at the end of the frame they were pressed in.
+H.mouseAuto = {}
+
+-- Move the cursor to (x, y) and press for exactly one frame.
+function H.click(x, y, button)
+    local b = button or 0
+    H.mouse.x, H.mouse.y = x, y
+    H.mouseClicked[b], H.mouseDown[b], H.mouseAuto[b] = true, true, true
+end
+
+-- Press and keep holding, for drags. Pair with H.moveTo and H.release.
+function H.hold(x, y, button)
+    local b = button or 0
+    H.mouse.x, H.mouse.y = x, y
+    H.mouseClicked[b], H.mouseDown[b] = true, true
+    H.mouseAuto[b] = nil
+end
+
+function H.release(button)
+    local b = button or 0
+    H.mouseDown[b], H.mouseReleased[b] = false, true
+    H.mouseAuto[b] = nil
+end
+
+function H.moveTo(x, y) H.mouse.x, H.mouse.y = x, y end
+function H.hover(x, y)  H.mouse.x, H.mouse.y = x, y end
+
+function H.press(key) H.keysPressed[key] = true end
+
+-- Hold a virtual key down for one frame, so getKeyState sees a press edge.
+function H.tapKey(vk)
+    H.keysDown[vk] = true
+    H.frame()
+    H.keysDown[vk] = false
+end
 
 H.httpSyncResponse = { success = true, status = 200, data = '{"ok":true}' }
 function Ham.httpGet(url, headers)
@@ -315,6 +401,12 @@ function H.frame(ms)
             if not ok then error("thread error: " .. tostring(err), 0) end
         end
     end
+    -- Clicks and key presses last exactly one frame, as they do in Ham. A
+    -- button pressed with H.click comes back up; one pressed with H.hold stays
+    -- down until H.release, which is what a drag needs.
+    for b in pairs(H.mouseAuto) do H.mouseDown[b] = false end
+    H.mouseAuto = {}
+    H.mouseClicked, H.mouseReleased, H.keysPressed = {}, {}, {}
 end
 
 function H.frames(n, ms)
@@ -345,6 +437,47 @@ function H.hasText(text)
         if d.fn == "drawText" and d.text == text then return true end
     end
     return false
+end
+
+-- Every drawText of this frame batch, in draw order.
+function H.drawnTexts()
+    local out = {}
+    for _, d in ipairs(H.draws) do
+        if d.fn == "drawText" then out[#out + 1] = d.text end
+    end
+    return out
+end
+
+-- A drawn label, by exact text or by prefix. Immediate-mode widgets hit-test
+-- where they draw, so a label's position is a place a click lands on it.
+function H.findText(text, prefix)
+    for _, d in ipairs(H.draws) do
+        if d.fn == "drawText" then
+            if d.text == text then return d end
+            if prefix and d.text:sub(1, #text) == text then return d end
+        end
+    end
+end
+
+-- Click on a drawn label. Returns false if it was not drawn this frame.
+function H.clickText(text, prefix)
+    local d = H.findText(text, prefix)
+    if not d then return false end
+    H.click(d.x, d.y)
+    return true
+end
+
+-- The window a self-drawn GUI paints: the panel of the shadow/panel pair, i.e.
+-- two consecutive filled rects of the same size with the second offset back.
+function H.windowRect()
+    for i = 1, #H.draws - 1 do
+        local a, b = H.draws[i], H.draws[i + 1]
+        if a.fn == "drawRectFilled" and b.fn == "drawRectFilled"
+            and a.rect[3] == b.rect[3] and a.rect[4] == b.rect[4]
+            and b.rect[1] < a.rect[1] and b.rect[2] < a.rect[2] then
+            return b.rect
+        end
+    end
 end
 
 return H
