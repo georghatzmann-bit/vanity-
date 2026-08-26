@@ -5,6 +5,8 @@ Lua scripts for the **Vanity** menu (FiveM / GTA V sandbox).
 ## Layout
 
 - `docs/vanity-script-api.md` — the Vanity Script API reference. **Read this before writing any script.**
+- `docs/ham/` — the Ham Lua API reference, mirrored from docs.hammafia.cc, one file per function.
+  Start at `docs/ham/README.md`; `data-types.md` and `key-codes.md` hold the shared formats.
 - `scripts/` — one `.lua` file per script.
 
 ## Conventions
