@@ -118,8 +118,26 @@ function Ham.drawLine(a, b, color, thickness)
     record({ fn = "drawLine", a = a, b = b, color = color, thickness = thickness })
 end
 
-function Ham.drawCircle(circle, color, thickness)
-    record({ fn = "drawCircle", circle = circle, color = color, thickness = thickness })
+function Ham.drawCircle(circle, color, segments, thickness, filled)
+    record({ fn = "drawCircle", circle = circle, color = color,
+             segments = segments, thickness = thickness, filled = filled })
+end
+
+function Ham.drawRectGradient(rect, colorStart, colorEnd, vertical)
+    record({ fn = "drawRectGradient", rect = rect, colorStart = colorStart,
+             colorEnd = colorEnd, vertical = vertical })
+end
+
+function Ham.drawTexture(texture, pos1, pos2, color)
+    record({ fn = "drawTexture", texture = texture, pos1 = pos1, pos2 = pos2, color = color })
+end
+
+function Ham.pushClipRect(minPos, maxPos, intersect)
+    record({ fn = "pushClipRect", minPos = minPos, maxPos = maxPos, intersect = intersect })
+end
+
+function Ham.popClipRect()
+    record({ fn = "popClipRect" })
 end
 
 function Ham.worldToScreen(x, y, z) return true, x, y end
@@ -139,6 +157,154 @@ function Ham.httpPostAsync(url, payload, headers) return request("POST", url, pa
 function Ham.httpGetAsync(url, headers)           return request("GET", url, nil, headers) end
 function Ham.getAsyncResult()                     return H.httpResponse end
 function Ham.cleanupAsyncRequests() end
+
+--------------------------------------------------------------- extended natives
+-- Every native below records its call into H.calls so tests can assert that a
+-- menu action reached the game, and a few return plausible values.
+
+H.calls = {}
+
+local function recordCall(name, ...)
+    local args = { ... }
+    args.n = select("#", ...)
+    H.calls[#H.calls + 1] = { name = name, args = args }
+    H.calls[name] = (H.calls[name] or 0) + 1
+end
+
+H.recordCall = recordCall
+
+-- Natives whose return value nothing depends on.
+for _, name in ipairs({
+    "SetEntityCoords", "SetEntityHeading", "SetEntityHealth", "SetPedArmour",
+    "SetEntityInvincible", "SetEntityVisible", "SetEntityVelocity",
+    "SetSuperJumpThisFrame", "SetPedCanRagdoll", "SetPedInfiniteAmmo",
+    "SetRunSprintMultiplierForPlayer", "SetSwimMultiplierForPlayer",
+    "RequestModel", "SetModelAsNoLongerNeeded", "SetPedIntoVehicle",
+    "SetVehicleFixed", "SetVehicleDeformationFixed", "SetVehicleDirtLevel",
+    "SetVehicleOnGroundProperly", "SetEntityAsMissionEntity", "DeleteVehicle",
+    "SetVehicleModKit", "SetVehicleMod", "ToggleVehicleMod",
+    "SetVehicleNumberPlateText", "NetworkOverrideClockTime",
+    "SetWeatherTypeNowPersist", "GiveWeaponToPed", "RemoveAllPedWeapons",
+}) do
+    _G[name] = function(...) recordCall(name, ...) end
+end
+
+function GetHashKey(s)          recordCall("GetHashKey", s); return #tostring(s) * 7919 end
+function HasModelLoaded()       return true end
+function CreateVehicle(...)     recordCall("CreateVehicle", ...); w.veh = 77; return 77 end
+function GetNumVehicleMods()    return 4 end
+function GetSelectedPedWeapon() return 453432689 end
+function GetEntityVelocity()    return { x = 1.0, y = 0.0, z = 0.0 } end
+
+function GetGroundZFor_3dCoord(x, y, z)
+    recordCall("GetGroundZFor_3dCoord", x, y, z)
+    return true, 30.0
+end
+
+-- Waypoint: set H.world.waypoint to a table to make one exist.
+w.waypoint = nil
+function GetFirstBlipInfoId()   return w.waypoint and 99 or 0 end
+function DoesBlipExist(b)       return b ~= 0 end
+function GetBlipInfoIdCoord()   return w.waypoint or { x = 0.0, y = 0.0, z = 0.0 } end
+
+------------------------------------------------------------------ extended Ham
+-- Feature toggles record their argument so tests can read the last state set.
+
+H.ham = {}
+
+for _, name in ipairs({
+    "godMode", "invisible", "noClip", "freeCam", "spectatorMode",
+    "antiTeleport", "antiBlockControl", "disableWeather", "toggleMouse",
+    "toggleInputBlock",
+}) do
+    Ham[name] = function(enabled)
+        recordCall("Ham." .. name, enabled)
+        H.ham[name] = enabled
+        return true
+    end
+end
+
+for _, name in ipairs({ "setNoClipSpeed", "setFreecamSpeed" }) do
+    Ham[name] = function(speed)
+        recordCall("Ham." .. name, speed)
+        H.ham[name] = speed
+    end
+end
+
+function Ham.setPosition(x, y, z)
+    recordCall("Ham.setPosition", x, y, z)
+    H.ham.setPosition = { x = x, y = y, z = z }
+end
+
+function Ham.getDiscordName()   return "tester#0001" end
+function Ham.getDiscordId()     return "123456789012345678" end
+function Ham.getServerHostname() return "Test Server" end
+
+-- Inspection data; tests may overwrite these tables.
+H.inspect = {
+    resources   = { "chat", "spawnmanager", "mapmanager", "hardcap" },
+    injectable  = { "chat", "mapmanager" },
+    safe        = { "spawnmanager" },
+    pedModels   = { "a_m_y_skater_01", "s_m_y_cop_01" },
+    stateBags   = { ["player:1"] = { isDead = false, job = "police" } },
+    events      = { chat = { "chat:addMessage" }, spawnmanager = { "playerSpawned" } },
+    registered  = { chat = { "chatMessage" } },
+}
+
+function Ham.getResources()            return H.inspect.resources end
+function Ham.getInjectableResources()  return H.inspect.injectable end
+function Ham.getSafeResources()        return H.inspect.safe end
+function Ham.getPedModelNames()        return H.inspect.pedModels end
+function Ham.getAllStateBags()         return H.inspect.stateBags end
+function Ham.getAllEvents()            return H.inspect.events end
+function Ham.getAllRegisteredEvents()  return H.inspect.registered end
+
+function Ham.hasResource(name)
+    for _, r in ipairs(H.inspect.resources) do
+        if r == name then return true end
+    end
+    return false
+end
+
+function Ham.findEvent(term)
+    for resource, events in pairs(H.inspect.events) do
+        for _, e in ipairs(events) do
+            if e:find(term, 1, true) then
+                return { event = e, resource = resource }
+            end
+        end
+    end
+    return nil
+end
+
+H.clipboard = ""
+function Ham.copyToClipboard(text) H.clipboard = text; recordCall("Ham.copyToClipboard") end
+function Ham.getClipboard()        return H.clipboard end
+function Ham.openUrl(url)          recordCall("Ham.openUrl", url); return true end
+function Ham.Execute(res, code)    recordCall("Ham.Execute", res, code); return true end
+
+function Ham.addFont(index, size)  recordCall("Ham.addFont", index, size); return { font = index } end
+function Ham.setFont(handle)       recordCall("Ham.setFont", handle) end
+function Ham.resetFont()           recordCall("Ham.resetFont") end
+
+H.mouse = { x = 640.0, y = 360.0 }
+H.keysDown = {}
+function Ham.getMousePos()  return H.mouse.x, H.mouse.y end
+function Ham.getKeyState(k) return H.keysDown[k] and 1 or 0 end
+function Ham.isKeyDown(k)   return H.keysDown[k] or false end
+
+H.httpSyncResponse = { success = true, status = 200, data = '{"ok":true}' }
+function Ham.httpGet(url, headers)
+    recordCall("Ham.httpGet", url)
+    H.posts[#H.posts + 1] = { method = "GET", url = url, headers = headers, sync = true }
+    return H.httpSyncResponse
+end
+function Ham.httpPost(url, payload, headers)
+    recordCall("Ham.httpPost", url)
+    H.posts[#H.posts + 1] =
+        { method = "POST", url = url, payload = payload, headers = headers, sync = true }
+    return H.httpSyncResponse
+end
 
 --------------------------------------------------------------------------- driver
 function H.frame(ms)
