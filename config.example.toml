@@ -1,0 +1,48 @@
+# Jarvis Einstellungen. setup.ps1 kopiert diese Datei nach config.toml,
+# dort kannst du alles anpassen.
+
+[wakeword]
+# Fertiges openWakeWord-Modell, "Hey Jarvis" auf Englisch ausgesprochen.
+model = "hey_jarvis"
+# 0.0 bis 1.0. Höher = seltener aus Versehen aktiv, aber schwerer auszulösen.
+threshold = 0.5
+
+[listen]
+# Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden).
+silence_seconds = 1.2
+# Maximale Länge eines Befehls (Sekunden).
+max_seconds = 20
+# Wenn nach "Hey Jarvis" so lange nichts gesagt wird, bricht Jarvis ab (Sekunden).
+start_timeout_seconds = 6
+# Mindestlautstärke für Sprache. 0 = automatisch an Hintergrundgeräusche anpassen.
+energy_threshold = 0
+
+[stt]
+# tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.
+model = "small"
+language = "de"
+# "cpu" läuft überall. "cuda" ist schneller, braucht aber eine Nvidia-Karte mit CUDA 12 und cuDNN.
+device = "cpu"
+
+[tts]
+# "edge" = menschliche Microsoft-Stimme (gratis, braucht Internet)
+# "windows" = eingebaute Windows-Stimme (offline)
+engine = "edge"
+# Andere gute Stimmen: de-DE-KillianNeural, de-DE-FlorianMultilingualNeural
+voice = "de-DE-ConradNeural"
+rate = "+5%"
+pitch = "-4Hz"
+
+[brain]
+# Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
+claude_path = ""
+# Maximale Wartezeit auf Claude (Sekunden).
+timeout_seconds = 180
+# Werkzeuge, die Claude ohne Nachfrage nutzen darf.
+allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "Edit", "Write"]
+# Werkzeuge, die komplett gesperrt sind (Löschen, Herunterfahren, Formatieren).
+disallowed_tools = [
+    "Bash(rm:*)", "Bash(del:*)", "Bash(rmdir:*)", "Bash(rd:*)",
+    "Bash(Remove-Item:*)", "Bash(format:*)", "Bash(shutdown:*)",
+    "Bash(Stop-Computer:*)", "Bash(Restart-Computer:*)", "Bash(reg delete:*)",
+]
