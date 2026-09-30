@@ -67,45 +67,139 @@ class CommandRecorder:
         return pcm.astype(np.float32) / 32768.0
 
 
-class Microphone:
-    """Liest das Mikrofon in 80-ms-Blöcken (int16, mono, 16 kHz)."""
+def resample(frame: np.ndarray, target: int) -> np.ndarray:
+    """Rechnet einen Block auf `target` Samples um (z. B. 48 kHz auf 16 kHz)."""
+    if len(frame) == target:
+        return frame
+    ratio = len(frame) / target
+    x = frame.astype(np.float32)
+    width = int(round(ratio))
+    if width > 1:
+        # Einfacher Tiefpass gegen Aliasing vor dem Heruntertakten.
+        x = np.convolve(x, np.ones(width, dtype=np.float32) / width, mode="same")
+    positions = np.linspace(0, len(x) - 1, target)
+    return np.interp(positions, np.arange(len(x)), x).astype(np.int16)
 
-    def __init__(self) -> None:
+
+def input_devices() -> list[dict]:
+    """Alle Mikrofone mit Index, Name und Treiber."""
+    import sounddevice as sd
+
+    hostapis = sd.query_hostapis()
+    try:
+        default_index = sd.default.device[0]
+    except Exception:
+        default_index = -1
+    devices = []
+    for index, info in enumerate(sd.query_devices()):
+        if info["max_input_channels"] < 1:
+            continue
+        devices.append(
+            {
+                "index": index,
+                "name": info["name"],
+                "hostapi": hostapis[info["hostapi"]]["name"],
+                "default": index == default_index,
+            }
+        )
+    return devices
+
+
+def resolve_device(spec: str | int | None, devices: list[dict]) -> int | None:
+    """Findet das Mikrofon aus der Config: leer = Windows-Standard,
+    Zahl = Index, Text = Teil des Namens."""
+    if spec is None or spec == "":
+        return None
+    if isinstance(spec, int) or str(spec).strip().isdigit():
+        index = int(spec)
+        if any(d["index"] == index for d in devices):
+            return index
+        raise ValueError(f"Kein Mikrofon mit der Nummer {index}.")
+    wanted = str(spec).strip().lower()
+    matches = [d for d in devices if wanted in d["name"].lower()]
+    if not matches:
+        raise ValueError(f'Kein Mikrofon gefunden, dessen Name "{spec}" enthält.')
+    # Unter Windows ist MME am unkompliziertesten, danach der Rest.
+    matches.sort(key=lambda d: d["hostapi"] != "MME")
+    return matches[0]["index"]
+
+
+class Microphone:
+    """Liest das Mikrofon in 80-ms-Blöcken und liefert immer int16, mono, 16 kHz."""
+
+    def __init__(self, device: str | int | None = None) -> None:
         import sounddevice as sd
 
-        self._stream = sd.InputStream(
-            samplerate=SAMPLE_RATE,
+        self._sd = sd
+        self.device = resolve_device(device, input_devices())
+        info = sd.query_devices(self.device, "input")
+        self.name = info["name"]
+        try:
+            sd.check_input_settings(
+                device=self.device, samplerate=SAMPLE_RATE, channels=1, dtype="int16"
+            )
+            self.rate = SAMPLE_RATE
+        except Exception:
+            # Manche Treiber können kein 16 kHz, dann rechnen wir selbst um.
+            self.rate = int(info["default_samplerate"])
+        self._block = int(round(self.rate * FRAME_SECONDS))
+        self._stream = None
+        # Die letzten ~5 Sekunden, um das Grundrauschen zu schätzen.
+        self._recent_levels: collections.deque[float] = collections.deque(maxlen=62)
+        self.frames_read = 0
+        self.peak = 0
+
+    def start(self) -> None:
+        if self._stream is not None:
+            return
+        self._stream = self._sd.InputStream(
+            device=self.device,
+            samplerate=self.rate,
             channels=1,
             dtype="int16",
-            blocksize=FRAME_SAMPLES,
+            blocksize=self._block,
         )
-        # Die letzten ~2 Sekunden, um das Grundrauschen zu schätzen.
-        self._recent_levels: collections.deque[float] = collections.deque(maxlen=25)
+        self._stream.start()
+
+    def stop(self) -> None:
+        if self._stream is None:
+            return
+        self._stream.stop()
+        self._stream.close()
+        self._stream = None
 
     def __enter__(self) -> "Microphone":
-        self._stream.start()
+        self.start()
         return self
 
     def __exit__(self, *exc) -> None:
-        self._stream.stop()
-        self._stream.close()
+        self.stop()
 
     def read(self) -> np.ndarray:
-        data, _overflowed = self._stream.read(FRAME_SAMPLES)
-        frame = data[:, 0].copy()
+        data, _overflowed = self._stream.read(self._block)
+        frame = resample(data[:, 0].copy(), FRAME_SAMPLES)
         self._recent_levels.append(rms(frame))
+        self.frames_read += 1
+        self.peak = max(self.peak, int(np.abs(frame.astype(np.int32)).max(initial=0)))
         return frame
 
     def drain(self) -> None:
         """Verwirft Audio, das sich angesammelt hat (z. B. während Jarvis sprach)."""
-        while self._stream.read_available >= FRAME_SAMPLES:
-            self._stream.read(FRAME_SAMPLES)
+        while self._stream is not None and self._stream.read_available >= self._block:
+            self._stream.read(self._block)
 
     @property
     def noise_floor(self) -> float:
         if not self._recent_levels:
             return 200.0
-        return float(np.median(self._recent_levels))
+        # Leise Momente zählen, damit gesprochene Wörter den Wert nicht hochtreiben.
+        return float(np.percentile(self._recent_levels, 20))
+
+    @property
+    def dead_silent(self) -> bool:
+        """True, wenn nach 3 Sekunden nur exakte Nullen kamen. Das passiert,
+        wenn Windows den Mikrofonzugriff für Desktop-Apps blockiert."""
+        return self.frames_read >= 38 and self.peak == 0
 
 
 class WakeWord:
@@ -115,11 +209,11 @@ class WakeWord:
 
         openwakeword.utils.download_models(model_names=[model_name])
         self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
-        self._threshold = threshold
+        self.threshold = threshold
 
-    def detected(self, frame: np.ndarray) -> bool:
+    def score(self, frame: np.ndarray) -> float:
         scores = self._model.predict(frame)
-        return max(scores.values(), default=0.0) >= self._threshold
+        return float(max(scores.values(), default=0.0))
 
     def reset(self) -> None:
         self._model.reset()

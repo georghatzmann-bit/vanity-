@@ -1,6 +1,7 @@
 import json
 import sys
 import textwrap
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -9,9 +10,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from jarvis.audio import FRAME_SAMPLES, CommandRecorder  # noqa: E402
+from jarvis.audio import FRAME_SAMPLES, CommandRecorder, resample, resolve_device  # noqa: E402
 from jarvis.brain import BrainError, ClaudeBrain  # noqa: E402
 from jarvis.config import load_config  # noqa: E402
+from jarvis.mute import MUTE_PHRASES, MuteSwitch  # noqa: E402
 
 
 def frame(level: int) -> np.ndarray:
@@ -44,6 +46,112 @@ class CommandRecorderTest(unittest.TestCase):
     def test_automatic_threshold_follows_noise(self):
         self.assertEqual(CommandRecorder(noise_floor=50).threshold, 300)
         self.assertEqual(CommandRecorder(noise_floor=400).threshold, 1000)
+
+
+class ResampleTest(unittest.TestCase):
+    def test_48k_block_becomes_16k_block(self):
+        t = np.arange(3840) / 48000
+        block = (8000 * np.sin(2 * np.pi * 440 * t)).astype(np.int16)
+        out = resample(block, FRAME_SAMPLES)
+        self.assertEqual(out.shape, (FRAME_SAMPLES,))
+        self.assertEqual(out.dtype, np.int16)
+        self.assertGreater(np.abs(out).max(), 7000)
+
+    def test_16k_block_is_unchanged(self):
+        block = frame(123)
+        self.assertIs(resample(block, FRAME_SAMPLES), block)
+
+
+DEVICES = [
+    {"index": 1, "name": "Mikrofonarray (Realtek Audio)", "hostapi": "MME", "default": True},
+    {"index": 5, "name": "Headset Microphone (Arctis 7)", "hostapi": "Windows WASAPI", "default": False},
+    {"index": 9, "name": "Headset Microphone (Arctis 7)", "hostapi": "MME", "default": False},
+]
+
+
+class ResolveDeviceTest(unittest.TestCase):
+    def test_empty_means_windows_default(self):
+        self.assertIsNone(resolve_device("", DEVICES))
+
+    def test_by_number(self):
+        self.assertEqual(resolve_device("5", DEVICES), 5)
+        self.assertEqual(resolve_device(1, DEVICES), 1)
+
+    def test_by_name_prefers_mme(self):
+        self.assertEqual(resolve_device("arctis", DEVICES), 9)
+
+    def test_unknown_device_explains(self):
+        with self.assertRaises(ValueError):
+            resolve_device("Blue Yeti", DEVICES)
+        with self.assertRaises(ValueError):
+            resolve_device("42", DEVICES)
+
+
+class MuteTest(unittest.TestCase):
+    def test_toggle(self):
+        mute = MuteSwitch()
+        self.assertFalse(mute.muted)
+        mute.toggle()
+        self.assertTrue(mute.muted)
+        self.assertFalse(mute.wait_until_unmuted(timeout=0.01))
+        mute.toggle()
+        self.assertTrue(mute.wait_until_unmuted(timeout=0.01))
+
+    def test_mute_phrases_do_not_catch_volume_commands(self):
+        self.assertTrue(MUTE_PHRASES.search("Jarvis, Mikrofon aus bitte"))
+        self.assertTrue(MUTE_PHRASES.search("Hör auf zuzuhören."))
+        self.assertFalse(MUTE_PHRASES.search("Mach den PC stumm"))
+        self.assertFalse(MUTE_PHRASES.search("Schalte das Mikrofon in Discord aus"))
+
+    def test_voice_loop_stops_mic_while_muted(self):
+        from jarvis.__main__ import voice_loop
+
+        class Stop(Exception):
+            pass
+
+        events = []
+
+        class Mic:
+            dead_silent = False
+            reads = 0
+
+            def start(self):
+                events.append("start")
+
+            def stop(self):
+                events.append("stop")
+
+            def read(self):
+                Mic.reads += 1
+                if Mic.reads > 3:
+                    raise Stop
+                return frame(0)
+
+        class Wake:
+            threshold = 0.5
+
+            def score(self, _frame):
+                return 0.0
+
+            def reset(self):
+                events.append("reset")
+
+        class Sounds:
+            def listening(self):
+                pass
+
+            def muted(self):
+                events.append("muted")
+                threading.Timer(0.05, mute.unmute).start()
+
+            def unmuted(self):
+                events.append("unmuted")
+
+        mute = MuteSwitch()
+        mute.mute()
+        with self.assertRaises(Stop):
+            voice_loop(load_config(), Mic(), Wake(), None, None, print, mute, Sounds(), "X")
+        self.assertEqual(events, ["start", "stop", "muted", "unmuted", "start", "reset"])
 
 
 FAKE_CLAUDE = textwrap.dedent(

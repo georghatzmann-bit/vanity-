@@ -6,3 +6,4 @@ faster-whisper>=1.0.0
 edge-tts>=6.1.10
 miniaudio>=1.59
 pyttsx3>=2.90
+keyboard>=0.13.5

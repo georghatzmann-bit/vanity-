@@ -66,13 +66,13 @@ class TextToSpeech:
         engine.runAndWait()
 
 
-def chime() -> None:
-    """Kurzer Zwei-Ton-Klang, wenn Jarvis zuhört."""
+def chime(freqs: tuple[int, ...] = (880, 1320)) -> None:
+    """Kurze Tonfolge, z. B. aufsteigend wenn Jarvis zuhört."""
     import sounddevice as sd
 
     rate = 24000
     tones = []
-    for freq in (880, 1320):
+    for freq in freqs:
         t = np.linspace(0, 0.09, int(rate * 0.09), endpoint=False)
         envelope = np.minimum(1, np.minimum(t, t[::-1]) * 60)
         tones.append(0.25 * np.sin(2 * np.pi * freq * t) * envelope)

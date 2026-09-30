@@ -5,7 +5,17 @@
 # Fertiges openWakeWord-Modell, "Hey Jarvis" auf Englisch ausgesprochen.
 model = "hey_jarvis"
 # 0.0 bis 1.0. Höher = seltener aus Versehen aktiv, aber schwerer auszulösen.
+# Wenn Jarvis öfter "fast erkannt" meldet, hier z. B. 0.35 eintragen.
 threshold = 0.5
+
+[audio]
+# Welches Mikrofon Jarvis nutzt. Leer = Windows-Standardmikrofon.
+# Sonst ein Teil des Namens (z. B. "Headset") oder die Nummer aus start.bat --mic-test.
+input_device = ""
+
+[mute]
+# Tastenkürzel, das das Mikrofon aus- und wieder einschaltet (funktioniert überall in Windows).
+hotkey = "ctrl+alt+m"
 
 [listen]
 # Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden).
