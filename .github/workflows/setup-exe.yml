@@ -1,0 +1,90 @@
+# Baut JarvisSetup.exe auf Windows, installiert sie dort einmal still zur Probe
+# und stellt sie als Release bereit (Seite "Releases" > neueste Version).
+name: JarvisSetup.exe bauen
+
+on:
+  push:
+    branches: [main, claude/project-thread-0revfw]
+    paths:
+      - "jarvis/**"
+      - "jarvis_home/**"
+      - "werkzeuge/**"
+      - "installer/**"
+      - "requirements*.txt"
+      - "Jarvis.bat"
+      - ".github/workflows/setup-exe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup-exe:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        shell: pwsh
+        run: |
+          $v = (python -c "import jarvis; print(jarvis.__version__)").Trim()
+          "JARVIS_VERSION=$v" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Symbol
+        run: |
+          python -m pip install --quiet pillow
+          python -c "from jarvis.tray import save_app_icon; save_app_icon('installer/jarvis.ico')"
+
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: JarvisSetup.exe bauen
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\jarvis.iss'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JarvisSetup
+          path: installer/Output/JarvisSetup.exe
+
+      - name: Probe-Installation (still)
+        shell: pwsh
+        run: |
+          $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=setup.log" -PassThru -Wait
+          Write-Host "Installer beendet mit $($p.ExitCode)"
+          Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if ($p.ExitCode -ne 0) { Get-Content setup.log -Tail 60; exit 1 }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe")) { Write-Host "venv fehlt"; exit 1 }
+
+      - name: Probe-Start
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, edge_tts, miniaudio, pystray, psutil; print('Kern-Pakete OK')"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -c "import piper; print('Offline-Stimme OK')"
+          Push-Location $app
+          & $py -m jarvis --selbsttest --schnell
+          Write-Host "Selbsttest beendet mit $LASTEXITCODE (ohne Mikrofon und Claude sind Fehler dort normal)"
+          Get-Content logs\selbsttest.txt -ErrorAction SilentlyContinue
+          Pop-Location
+          exit 0
+
+      - name: Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: jarvis-${{ env.JARVIS_VERSION }}-build${{ github.run_number }}
+          name: Jarvis ${{ env.JARVIS_VERSION }} (Build ${{ github.run_number }})
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: installer/Output/JarvisSetup.exe
+          body: |
+            JarvisSetup.exe herunterladen und doppelklicken. Der Installer lädt alles Nötige selbst herunter.
+            Windows fragt beim ersten Start vielleicht nach: "Weitere Informationen" und dann "Trotzdem ausführen".

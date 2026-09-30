@@ -1,8 +1,9 @@
 ﻿# Installiert Jarvis auf Windows. Normalerweise startet Jarvis.bat dieses Skript von selbst
 # (beim ersten Mal und wenn ein Update neue Pakete braucht).
 # Von Hand, in PowerShell im Jarvis-Ordner:
-#   powershell -ExecutionPolicy Bypass -File werkzeuge\installieren.ps1 [-Neu]
-param([switch]$Neu)
+#   powershell -ExecutionPolicy Bypass -File werkzeuge\installieren.ps1 [-Neu] [-Auto]
+# -Auto: ohne Rueckfragen (so ruft es JarvisSetup.exe auf).
+param([switch]$Neu, [switch]$Auto)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -135,7 +136,7 @@ if (-not $python) {
     Write-Warn "nicht gefunden"
     Write-Host ""
     Write-Host "  Jarvis braucht Python (kostenlos). Ich kann es jetzt automatisch installieren." -ForegroundColor White
-    $answer = Read-Host "  Python 3.12 installieren? [J/n]"
+    $answer = if ($Auto) { "j" } else { Read-Host "  Python 3.12 installieren? [J/n]" }
     if ($answer -notmatch '^(n|nein)$' -and (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Host "  Python wird installiert, das dauert etwa eine Minute ..." -ForegroundColor Cyan
         $ErrorActionPreference = "Continue"
@@ -280,5 +281,5 @@ if ($Neu) {
     Write-Host "  Gleich oeffnet sich die Einrichtung. Ab jetzt startest du Jarvis mit dem Symbol auf dem Desktop." -ForegroundColor White
 }
 Write-Host ""
-Start-Sleep -Seconds 2
+if (-not $Auto) { Start-Sleep -Seconds 2 }
 exit 0
