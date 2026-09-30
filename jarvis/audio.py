@@ -76,6 +76,9 @@ class CommandRecorder:
     start_timeout_seconds: float = 6.0
     energy_threshold: float = 0.0
     noise_floor: float = 200.0
+    # So lange zählt Lautes noch nicht als "Sprechen hat begonnen" (das Echo des
+    # Signaltons). Aufgenommen wird es trotzdem, falls man gleich losredet.
+    ignore_seconds: float = 0.0
 
     def __post_init__(self) -> None:
         self.frames: list[np.ndarray] = []
@@ -92,10 +95,11 @@ class CommandRecorder:
         """Fügt einen Frame hinzu. Gibt True zurück, wenn die Aufnahme fertig ist."""
         self.frames.append(frame)
         elapsed = len(self.frames) * FRAME_SECONDS
-        if rms(frame) >= self.threshold:
+        loud = rms(frame) >= self.threshold
+        if loud and elapsed > self.ignore_seconds:
             self.speech_started = True
             self.silent_frames = 0
-        elif self.speech_started:
+        elif self.speech_started and not loud:
             self.silent_frames += 1
 
         if elapsed >= self.max_seconds:
@@ -127,7 +131,8 @@ def resample(frame: np.ndarray, target: int) -> np.ndarray:
 
 
 def input_devices() -> list[dict]:
-    """Alle Mikrofone mit Index, Name und Treiber."""
+    """Alle Mikrofone mit Index, Name und Treiber. `default` markiert das Mikrofon,
+    das in Windows als Standard eingestellt ist."""
     import sounddevice as sd
 
     hostapis = sd.query_hostapis()
@@ -135,8 +140,10 @@ def input_devices() -> list[dict]:
         default_index = sd.default.device[0]
     except Exception:
         default_index = -1
+    all_devices = sd.query_devices()
+    real_default = _real_default_input(hostapis, all_devices)
     devices = []
-    for index, info in enumerate(sd.query_devices()):
+    for index, info in enumerate(all_devices):
         if info["max_input_channels"] < 1:
             continue
         devices.append(
@@ -144,10 +151,47 @@ def input_devices() -> list[dict]:
                 "index": index,
                 "name": info["name"],
                 "hostapi": hostapis[info["hostapi"]]["name"],
-                "default": index == default_index,
+                "default": index == default_index or same_device(info["name"], real_default),
             }
         )
     return devices
+
+
+def _real_default_input(hostapis, devices) -> str:
+    """Name des echten Standardmikrofons. Unter MME heißt der Standard nur
+    "Microsoft Soundmapper", WASAPI nennt das Gerät dahinter beim Namen."""
+    for wanted in ("Windows WASAPI", "Windows DirectSound"):
+        for api in hostapis:
+            if api.get("name") != wanted:
+                continue
+            index = api.get("default_input_device", -1)
+            if index is None or index < 0 or index >= len(devices):
+                continue
+            name = str(devices[index]["name"]).strip()
+            if name and not is_alias(name):
+                return name
+    return ""
+
+
+# Einträge, hinter denen sich nur "das Windows-Standardmikrofon" verbirgt.
+_ALIASES = ("sound mapper", "soundmapper", "primärer soundaufnahmetreiber", "primary sound capture")
+
+
+def is_alias(name: str) -> bool:
+    low = name.lower()
+    return any(alias in low for alias in _ALIASES)
+
+
+def same_device(name: str, other: str) -> bool:
+    """MME kürzt Gerätenamen auf 31 Zeichen, WASAPI nicht. Gleich ist, was bis zur
+    Kürzung übereinstimmt ("Mikrofon" und "Mikrofonarray (...)" sind verschieden)."""
+    a, b = str(name or "").strip(), str(other or "").strip()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= 30 and long_.startswith(short)
 
 
 def friendly_device_error(exc: Exception) -> str:
@@ -190,7 +234,9 @@ class Microphone:
     READ_TIMEOUT = 3.0
     BUFFER_SECONDS = 10.0
 
-    def __init__(self, device: str | int | None = None) -> None:
+    def __init__(self, device: str | int | None = None, fallback: bool = False) -> None:
+        """`fallback`: Gibt es das eingestellte Mikrofon gerade nicht (Headset abgesteckt),
+        erst einmal das Windows-Standardmikrofon nehmen. `missing` nennt dann das fehlende."""
         import sounddevice as sd
 
         self._sd = sd
@@ -201,13 +247,30 @@ class Microphone:
         self._recent_levels: collections.deque[float] = collections.deque(maxlen=62)
         self.frames_read = 0
         self.peak = 0
-        self._select(resolve_device(device, input_devices()))
+        self.missing = ""
+        try:
+            index = resolve_device(device, input_devices())
+        except ValueError as exc:
+            if not fallback:
+                raise
+            log.warning("%s Nehme vorerst das Windows-Standardmikrofon.", exc)
+            self.missing = str(device)
+            index = None
+        self._select(index)
 
     def _select(self, device: int | None) -> None:
         sd = self._sd
         self.device = device
         info = sd.query_devices(device, "input")
         self.name = info["name"]
+        if device is None and is_alias(self.name):
+            # "Microsoft Soundmapper" sagt niemandem etwas: das echte Gerät dahinter zeigen.
+            try:
+                real = _real_default_input(sd.query_hostapis(), sd.query_devices())
+                if real:
+                    self.name = f"{real} (Windows-Standard)"
+            except Exception as exc:
+                log.debug("Standardmikrofon unbekannt: %s", exc)
         try:
             sd.check_input_settings(device=device, samplerate=SAMPLE_RATE, channels=1, dtype="int16")
             self.rate = SAMPLE_RATE
@@ -265,9 +328,11 @@ class Microphone:
         refresh_devices()
         try:
             device = resolve_device(self._spec, input_devices())
+            self.missing = ""
         except ValueError as exc:
             log.warning("%s Nehme vorerst das Standardmikrofon.", exc)
             device = None
+            self.missing = str(self._spec)
         self._select(device)
         self.frames_read = 0
         self.peak = 0
@@ -332,13 +397,14 @@ class WakeWord:
         self._model.reset()
 
 
-def record_command(mic: Microphone, listen_cfg: dict, on_level=None) -> np.ndarray | None:
+def record_command(mic: Microphone, listen_cfg: dict, on_level=None, ignore_seconds: float = 0.0) -> np.ndarray | None:
     recorder = CommandRecorder(
         silence_seconds=listen_cfg["silence_seconds"],
         max_seconds=listen_cfg["max_seconds"],
         start_timeout_seconds=listen_cfg["start_timeout_seconds"],
         energy_threshold=listen_cfg["energy_threshold"],
         noise_floor=mic.noise_floor,
+        ignore_seconds=ignore_seconds,
     )
     while True:
         frame = mic.read()

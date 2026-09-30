@@ -27,7 +27,7 @@ from .assistant import Assistant
 from .brain import BrainError, ClaudeBrain
 from .config import HOME_DIR, LOG_DIR, STATE_DIR, load_config
 from .logsetup import setup_logging
-from .mute import MuteSwitch, register_hotkey
+from .mute import MuteSwitch, hotkey_label, register_hotkey
 from .persona import build_persona
 from .reminders import ReminderStore
 from .ui import ConsoleUi, MultiUi, Ui
@@ -101,19 +101,21 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
         def weather() -> None:
             source = Weather(place)
             wait = 1.0
+            retry = 30.0
             while not stopped.wait(wait):
                 try:
                     now = source.current()
                     parts = [f"{now['temp']}°" if now["temp"] is not None else "", now["text"], now["place"]]
                     ui.config(weather=" · ".join(p for p in parts if p))
-                    wait = 30 * 60
+                    wait, retry = 30 * 60, 30.0
                 except LookupError as exc:
                     log.warning("Wetter: %s", exc)
                     ui.config(weather="")
                     return
                 except Exception as exc:
+                    # Kein Netz (z. B. gleich nach dem Anmelden): bald nochmal, dann seltener.
                     log.debug("Wetter: %s", exc)
-                    wait = 5 * 60
+                    wait, retry = retry, min(retry * 2, 5 * 60)
 
         threading.Thread(target=weather, name="jarvis-wetter", daemon=True).start()
 
@@ -136,11 +138,18 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
     from .audio import Microphone, WakeWord, friendly_device_error
 
     try:
-        mic = Microphone(cfg["audio"]["input_device"])
+        mic = Microphone(cfg["audio"]["input_device"], fallback=True)
     except Exception as exc:
         log.error("Mikrofon: %s", exc)
         ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Ein anderes wählst du über das Zahnrad im Jarvis-Fenster.", "error")
         return None
+    if mic.missing:
+        # Lieber mit dem Standardmikrofon weiter als gar nicht zuhören, aber deutlich sagen.
+        ui.toast(
+            f'Dein Mikrofon „{mic.missing}“ ist nicht angeschlossen. Ich höre vorerst über '
+            f'„{mic.name}“. Anderes Mikrofon: Zahnrad im Jarvis-Fenster.',
+            "error",
+        )
     ui.config(mic=mic.name)
     hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? werkzeuge\\Einrichtung.bat)")
     ui.message("info", "Lade Spracherkennung (beim ersten Start wird das Modell heruntergeladen) ...")
@@ -159,7 +168,7 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
 def register_mute_hotkey(cfg: dict, assistant: Assistant) -> str:
     hotkey = cfg["mute"]["hotkey"]
     if hotkey and register_hotkey(hotkey, assistant.mute.toggle):
-        return hotkey.upper()
+        return hotkey_label(hotkey)
     return "(kein Tastenkürzel)"
 
 
@@ -265,7 +274,12 @@ def run_gui(cfg: dict, args) -> int:
         # Kurz warten, damit die Seite noch "Einrichtung öffnet sich" zeigen kann.
         threading.Timer(0.6, quit_all).start()
 
-    window = Window(Api(bridge, assistant, assistant.mute, open_setup), background, on_closed, cfg.get("gui", {}))
+    def listen_now() -> bool:
+        return bool(voice_ref) and voice_ref[0].listen_now()
+
+    window = Window(
+        Api(bridge, assistant, assistant.mute, open_setup, listen_now), background, on_closed, cfg.get("gui", {})
+    )
     print("Jarvis-Fenster wird geöffnet. Dieses Konsolenfenster zeigt nebenbei das Gespräch.")
     window.start()
     return 0

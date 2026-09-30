@@ -71,11 +71,12 @@ class Api:
     """Was die Seite in Python aufrufen darf (window.pywebview.api.*).
     Interne Dinge beginnen mit _, damit pywebview sie nicht an die Seite gibt."""
 
-    def __init__(self, bridge: GuiBridge, assistant, mute, on_setup=None) -> None:
+    def __init__(self, bridge: GuiBridge, assistant, mute, on_setup=None, on_listen=None) -> None:
         self._bridge = bridge
         self._assistant = assistant
         self._mute = mute
         self._on_setup = on_setup
+        self._on_listen = on_listen
 
     def hello(self) -> dict:
         info = dict(self._bridge.info)
@@ -100,6 +101,14 @@ class Api:
 
     def stop(self) -> None:
         self._assistant.stop()
+
+    def listen_now(self) -> dict:
+        """Klick auf den Arc Reactor: sofort zuhören, ohne "Hey Jarvis"."""
+        if self._mute is not None and self._mute.muted:
+            return {"ok": False, "reason": "muted"}
+        if self._on_listen is None or not self._on_listen():
+            return {"ok": False, "reason": "novoice"}
+        return {"ok": True, "reason": ""}
 
     def new_conversation(self) -> None:
         self._assistant.new_conversation()

@@ -92,6 +92,27 @@ _KEYS = {
 }
 
 
+_LABELS = {
+    "ctrl": "Strg", "strg": "Strg", "control": "Strg", "steuerung": "Strg", "alt": "Alt",
+    "altgr": "AltGr", "alt gr": "AltGr", "shift": "Umschalt", "umschalt": "Umschalt",
+    "win": "Win", "windows": "Win", "space": "Leertaste", "leertaste": "Leertaste",
+    "pause": "Pause", "insert": "Einfg", "einfg": "Einfg", "home": "Pos1", "pos1": "Pos1",
+    "end": "Ende", "ende": "Ende", "scroll lock": "Rollen", "rollen": "Rollen",
+}
+_SPOKEN = {"Strg": "Steuerung", "Win": "Windows-Taste", "Einfg": "Einfügen", "Pos1": "Position eins"}
+
+
+def hotkey_label(combo: str, spoken: bool = False) -> str:
+    """"ctrl+alt+m" -> "Strg+Alt+M" zum Anzeigen, "Steuerung Alt M" zum Vorlesen."""
+    parts = []
+    for part in (p.strip() for p in str(combo or "").split("+")):
+        if not part:
+            continue
+        label = _LABELS.get(part.lower(), part.upper() if len(part) <= 3 else part.capitalize())
+        parts.append(_SPOKEN.get(label, label) if spoken else label)
+    return (" " if spoken else "+").join(parts)
+
+
 def parse_hotkey(combo: str) -> tuple[int, int] | None:
     """"ctrl+alt+m" -> (Modifier-Bits, virtueller Tastencode) für RegisterHotKey."""
     parts = [p.strip().lower() for p in combo.split("+") if p.strip()]

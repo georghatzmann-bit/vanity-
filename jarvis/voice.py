@@ -13,6 +13,10 @@ log = logging.getLogger("jarvis")
 # Ab diesem Wert zeigt Jarvis "fast erkannt" an, damit man die Schwelle einstellen kann.
 NEAR_MISS = 0.2
 
+# Der Signalton nach "Hey Jarvis" dauert knapp 0.2 s. Mit der Verzögerung der
+# Lautsprecher kommt sein Echo bis etwa 0.45 s danach im Mikrofon an.
+CHIME_ECHO_SECONDS = 0.45
+
 PRIVACY_HINT = (
     "Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff: "
     "Einstellungen > Datenschutz und Sicherheit > Mikrofon > "
@@ -53,7 +57,16 @@ class VoiceLoop:
         self._warned_silence = False
         self._last_hint = 0.0
         self._level_tick = 0
+        self._trigger = threading.Event()
         self.stopped = threading.Event()
+
+    def listen_now(self) -> bool:
+        """Zuhören wie nach "Hey Jarvis", aber per Klick (Arc Reactor im Fenster).
+        Geht nicht, solange das Mikrofon stumm ist."""
+        if self._mute.muted:
+            return False
+        self._trigger.set()
+        return True
 
     def prompt(self) -> None:
         self._hints(f'\nSag "Hey Jarvis" ...  ({self._hotkey} = stumm/laut, Strg+C = beenden)')
@@ -132,13 +145,17 @@ class VoiceLoop:
 
         score = wake.score(frame)
         threshold = wake.threshold
-        if active:
+        clicked = self._trigger.is_set()
+        if clicked:
+            self._trigger.clear()
+            log.info("Zuhören per Klick")
+        elif active:
             if not self._barge_in:
                 return
             # Während Jarvis spricht, hört das Mikrofon seine eigene Stimme mit.
             # Deshalb muss "Hey Jarvis" dann deutlicher sein.
             threshold = max(threshold + 0.2, 0.75)
-        if score < threshold:
+        if not clicked and score < threshold:
             now = time.monotonic()
             if not active and score >= NEAR_MISS and now - self._last_hint > 2:
                 self._hints(f"  (fast erkannt: {score:.2f}, nötig sind {wake.threshold:.2f})")
@@ -146,13 +163,17 @@ class VoiceLoop:
             return
 
         if active:
-            log.info("Unterbrochen durch Hey Jarvis (%.2f)", score)
+            log.info("Unterbrochen durch %s (%.2f)", "Klick" if clicked else "Hey Jarvis", score)
             assistant.stop()
-        self._sounds.listening()
+        # Was sich bis hierhin angestaut hat, ist noch "Hey Jarvis" selbst.
         mic.drain()
+        # Den Ton nebenher abspielen und sofort aufnehmen: Wer gleich weiterredet
+        # ("Hey Jarvis, wie spät ist es?"), verliert so kein Wort. Das Echo des Tons
+        # startet die Aufnahme nicht (ignore_seconds).
+        threading.Thread(target=self._sounds.listening, name="jarvis-ton", daemon=True).start()
         assistant.set_recording(True)
         try:
-            audio = record_command(mic, self._cfg["listen"], on_level=ui.level)
+            audio = record_command(mic, self._cfg["listen"], on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS)
         finally:
             assistant.set_recording(False)
         if audio is None:
@@ -186,6 +207,7 @@ class VoiceLoop:
                 return
         self._sounds.unmuted()
         self._hints("[LAUT] Ich höre wieder zu.")
+        self._trigger.clear()  # ein Klick von vor dem Stummschalten zählt nicht mehr
         self._mic.start()
         self._wake.reset()
         self._assistant.update_state()

@@ -84,6 +84,8 @@
     micBtn: $('micBtn'),
     stopBtn: $('stopBtn'),
     newBtn: $('newBtn'),
+    setupBtn: $('setupBtn'),
+    tryList: $('tryList'),
     toasts: $('toasts'),
     canvas: $('reactor'),
     reactorWrap: $('reactorWrap'),
@@ -112,6 +114,15 @@
       if (/^f\d{1,2}$/i.test(p) || p.length === 1) return p.toUpperCase();
       return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
     });
+  }
+
+  /** "claude-sonnet-5-5" -> "Sonnet 5.5". Unbekanntes bleibt, wie es ist. */
+  function prettyModel(model) {
+    const text = String(model || '').trim();
+    const m = text.match(/claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?(?![\d])/i);
+    if (!m) return text;
+    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+    return m[3] ? name + ' ' + m[2] + '.' + m[3] : name + ' ' + m[2];
   }
 
   // ------------------------------------------------------------------ Zustandsanzeige
@@ -186,7 +197,7 @@
     h.textContent = '';
     switch (st) {
       case 'idle':
-        h.textContent = 'Sag „Hey Jarvis“';
+        h.textContent = 'Sag „Hey Jarvis“ oder klick auf den Reaktor';
         break;
       case 'listening':
         h.textContent = 'Sprich jetzt – ich höre dir zu';
@@ -252,7 +263,7 @@
     }
     if (typeof cfg.model === 'string') {
       S.model = cfg.model.trim();
-      el.modelName.textContent = S.model;
+      el.modelName.textContent = prettyModel(S.model);
       el.modelName.title = S.model;
       el.modelLine.hidden = !S.model;
     }
@@ -308,7 +319,8 @@
 
   function updateChatMeta() {
     const n = el.messages.childElementCount;
-    el.chat.classList.toggle('has-msgs', n > 0);
+    // Hinweise ("Bereit ...") zählen nicht als Unterhaltung: die Beispiele bleiben sichtbar.
+    el.chat.classList.toggle('has-msgs', !!el.messages.querySelector('.msg-user, .msg-jarvis'));
     el.msgCount.textContent = n ? String(n).padStart(2, '0') : '';
   }
 
@@ -363,7 +375,8 @@
     m.classList.toggle('streaming', !final);
     m.classList.toggle('empty', text.length === 0);
     if (m._parts.model && typeof model === 'string') {
-      m._parts.model.textContent = model;
+      m._parts.model.textContent = prettyModel(model);
+      m._parts.model.title = model;
       m._parts.model.hidden = !model;
     }
   }
@@ -597,6 +610,8 @@
     toggle_mute: () => window.pywebview.api.toggle_mute(),
     stop: () => window.pywebview.api.stop(),
     new_conversation: () => window.pywebview.api.new_conversation(),
+    open_setup: () => window.pywebview.api.open_setup(),
+    listen_now: () => window.pywebview.api.listen_now(),
   };
 
   function realApiReady() {
@@ -703,6 +718,56 @@
       });
   }
 
+  function openSetup() {
+    if (!api) {
+      toast('Noch keine Verbindung zu Jarvis.', 'error');
+      return;
+    }
+    if (api === demo) {
+      location.href = 'setup.html';
+      return;
+    }
+    el.setupBtn.disabled = true;
+    toast('Die Einrichtung öffnet sich. Danach startet Jarvis von selbst neu.', 'info');
+    callApi('open_setup')
+      .then((ok) => {
+        if (ok === false) {
+          el.setupBtn.disabled = false;
+          toast('Die Einrichtung ließ sich nicht öffnen.', 'error');
+        }
+      })
+      .catch((err) => {
+        console.warn('Jarvis: open_setup() fehlgeschlagen', err);
+        el.setupBtn.disabled = false;
+        toast('Die Einrichtung ließ sich nicht öffnen.', 'error');
+      });
+  }
+
+  /** Klick auf den Reaktor: Jarvis hört sofort zu, ohne „Hey Jarvis“. */
+  function listenNow() {
+    if (!api) {
+      toast('Noch keine Verbindung zu Jarvis.', 'error');
+      return;
+    }
+    if (S.shown === 'listening') return;
+    callApi('listen_now')
+      .then((res) => {
+        if (typeof res === 'string') {
+          try { res = JSON.parse(res); } catch { res = null; }
+        }
+        if (!res || res.ok) return;
+        if (res.reason === 'muted') {
+          toast('Das Mikrofon ist stumm. Erst die Mikrofon-Taste drücken.', 'info');
+        } else if (res.reason === 'novoice') {
+          toast('Die Sprachsteuerung ist gerade aus. Tippen geht aber.', 'info');
+        }
+      })
+      .catch((err) => {
+        console.warn('Jarvis: listen_now() fehlgeschlagen', err);
+        toast('Zuhören hat nicht geklappt.', 'error');
+      });
+  }
+
   function updateSendBtn() {
     el.sendBtn.disabled = el.input.value.trim().length === 0;
   }
@@ -722,6 +787,21 @@
     el.micBtn.addEventListener('click', toggleMute);
     el.stopBtn.addEventListener('click', stopAnswer);
     el.newBtn.addEventListener('click', newConversation);
+    el.setupBtn.addEventListener('click', openSetup);
+    el.reactorWrap.addEventListener('click', listenNow);
+    el.reactorWrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        listenNow();
+      }
+    });
+    el.tryList.addEventListener('click', (e) => {
+      const chip = e.target.closest('.try-chip');
+      if (!chip) return;
+      el.input.value = chip.textContent;
+      updateSendBtn();
+      sendText();
+    });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (S.shown === 'speaking' || S.shown === 'thinking') {
@@ -1346,7 +1426,7 @@
 
   function createDemo(freeze) {
     const FROZEN = STATES.includes(freeze) ? freeze : null;
-    const MODEL = 'Claude Sonnet 4.5';
+    const MODEL = 'claude-sonnet-5-5';
     const queue = [];
     const push = (ev) => queue.push(ev);
     let gen = 0;
@@ -1499,7 +1579,7 @@
           mic: 'Mikrofon (Realtek High Definition Audio)',
           model: MODEL,
           muted,
-          version: '1.0.0',
+          version: '1.1.0',
           weather: '16° · leicht bewölkt · Berlin',
         });
       },
@@ -1539,6 +1619,18 @@
         setState(muted ? 'muted' : 'idle');
         resume(3000);
         return Promise.resolve(true);
+      },
+      listen_now() {
+        if (muted) return Promise.resolve({ ok: false, reason: 'muted' });
+        gen += 1;
+        const g = gen;
+        const [q, a] = CONVO[turn % CONVO.length];
+        turn += 1;
+        (async () => {
+          const ok = await exchange(g, q, a(), true);
+          if (ok && g === gen) resume(1500);
+        })();
+        return Promise.resolve({ ok: true, reason: '' });
       },
       destroy() {
         gen += 1;

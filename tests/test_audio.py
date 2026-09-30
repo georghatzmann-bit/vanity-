@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -244,3 +245,123 @@ class ConfigMergeTest(unittest.TestCase):
             path.write_text('[brain]\nclaude_path = "C:\\Users\\georg\\claude.exe"\n', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "einfache Anführungszeichen"):
                 load_config(path)
+
+
+class FakeSoundDevice:
+    """So sieht PortAudio unter Windows aus: dasselbe Gerät unter mehreren Treibern,
+    MME mit gekürzten Namen und dem "Soundmapper" als Standard."""
+
+    def __init__(self):
+        self.default = mock.Mock(device=(0, 5))
+        self._devices = [
+            {"name": "Microsoft Soundmapper - Input", "hostapi": 0, "max_input_channels": 2},
+            {"name": "Mikrofon", "hostapi": 0, "max_input_channels": 1},
+            {"name": "Mikrofonarray (Realtek(R) Audi", "hostapi": 0, "max_input_channels": 2},
+            {"name": "Headset (Arctis 7 Chat)", "hostapi": 0, "max_input_channels": 1},
+            {"name": "Mikrofonarray (Realtek(R) Audio)", "hostapi": 1, "max_input_channels": 2},
+            {"name": "Lautsprecher (Realtek(R) Audio)", "hostapi": 1, "max_input_channels": 0},
+        ]
+
+    def query_hostapis(self):
+        return [
+            {"name": "MME", "default_input_device": 0},
+            {"name": "Windows WASAPI", "default_input_device": 4},
+        ]
+
+    def query_devices(self):
+        return self._devices
+
+
+class DefaultMicrophoneTest(unittest.TestCase):
+    def test_same_device_across_drivers(self):
+        from jarvis.audio import same_device
+
+        self.assertTrue(same_device("Mikrofonarray (Realtek(R) Audi", "Mikrofonarray (Realtek(R) Audio)"))
+        self.assertTrue(same_device(" Headset (Arctis 7 Chat) ", "Headset (Arctis 7 Chat)"))
+        # Ein kurzer Name ist kein gekürzter Name.
+        self.assertFalse(same_device("Mikrofon", "Mikrofonarray (Realtek(R) Audio)"))
+        self.assertFalse(same_device("", "Mikrofon"))
+
+    def test_real_default_is_marked_not_just_the_soundmapper(self):
+        import sys
+
+        from jarvis.audio import input_devices
+
+        with mock.patch.dict(sys.modules, {"sounddevice": FakeSoundDevice()}):
+            devices = input_devices()
+        marked = [d["name"] for d in devices if d["default"]]
+        self.assertIn("Mikrofonarray (Realtek(R) Audi", marked)
+        self.assertIn("Mikrofonarray (Realtek(R) Audio)", marked)
+        self.assertNotIn("Mikrofon", marked)
+        self.assertNotIn("Headset (Arctis 7 Chat)", marked)
+        # Nur Eingänge.
+        self.assertNotIn("Lautsprecher (Realtek(R) Audio)", [d["name"] for d in devices])
+
+
+class ChimeTest(unittest.TestCase):
+    def test_chime_is_audible_after_conversion(self):
+        from jarvis.tts import chime_samples
+
+        samples = chime_samples((880, 1320))
+        self.assertEqual(samples.dtype, np.int16)
+        # Player.play() macht daraus int16. Vorher kam dabei nur Stille heraus.
+        played = np.ascontiguousarray(samples, dtype=np.int16)
+        self.assertGreater(int(np.abs(played.astype(np.int32)).max()), 5000)
+
+
+class MissingMicrophoneTest(unittest.TestCase):
+    def test_unplugged_microphone_falls_back_to_windows_default(self):
+        import sys
+
+        from jarvis.audio import Microphone
+
+        present = [{"index": 2, "name": "Mikrofon (Realtek(R) Audio)", "hostapi": "MME", "default": True}]
+        with mock.patch.dict(sys.modules, {"sounddevice": mock.Mock()}), \
+                mock.patch("jarvis.audio.input_devices", return_value=present), \
+                mock.patch.object(Microphone, "_select", lambda self, device: setattr(self, "device", device)):
+            mic = Microphone("Headset (Arctis 7 Chat)", fallback=True)
+            self.assertEqual(mic.missing, "Headset (Arctis 7 Chat)")
+            self.assertIsNone(mic.device)  # None = Windows-Standard
+            # Ohne fallback bleibt es ein klarer Fehler (Mikrofon-Test, Selbsttest).
+            with self.assertRaises(ValueError):
+                Microphone("Headset (Arctis 7 Chat)")
+            self.assertEqual(Microphone("Mikrofon (Realtek(R) Audio)", fallback=True).missing, "")
+
+
+class ChimeEchoTest(unittest.TestCase):
+    def test_echo_of_the_tone_does_not_start_or_end_the_recording(self):
+        # Ton-Echo (laut), dann eine Pause, dann der eigentliche Befehl.
+        recorder = CommandRecorder(silence_seconds=1.2, start_timeout_seconds=6, ignore_seconds=0.45, noise_floor=60)
+        frames = [frame(6000)] * 4 + [frame(0)] * 12 + [frame(3000)] * 10 + [frame(0)] * 16
+        done_at = None
+        for i, f in enumerate(frames):
+            if recorder.add(f):
+                done_at = i
+                break
+        # Ohne das Zeitfenster wäre nach Echo + 1.2 s Stille Schluss gewesen,
+        # bevor der Befehl überhaupt anfängt.
+        self.assertIsNotNone(done_at)
+        self.assertGreater(done_at, 4 + 12 + 10)
+        audio = recorder.audio()
+        self.assertIsNotNone(audio)
+
+    def test_speaking_right_away_is_kept(self):
+        recorder = CommandRecorder(silence_seconds=1.2, ignore_seconds=0.45, noise_floor=60)
+        frames = [frame(3000)] * 12 + [frame(0)] * 16
+        for f in frames:
+            if recorder.add(f):
+                break
+        # Auch die ersten Blöcke (während des Tons gesprochen) sind in der Aufnahme.
+        self.assertGreaterEqual(len(recorder.frames), 12)
+        self.assertTrue(recorder.speech_started)
+
+
+class HotkeyLabelTest(unittest.TestCase):
+    def test_labels_for_screen_and_voice(self):
+        from jarvis.mute import hotkey_label
+
+        self.assertEqual(hotkey_label("ctrl+alt+m"), "Strg+Alt+M")
+        self.assertEqual(hotkey_label("f9"), "F9")
+        self.assertEqual(hotkey_label("pause"), "Pause")
+        self.assertEqual(hotkey_label("ctrl+alt+m", spoken=True), "Steuerung Alt M")
+        self.assertEqual(hotkey_label(""), "")

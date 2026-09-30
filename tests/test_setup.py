@@ -287,3 +287,108 @@ class SingleInstanceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsDefaultMicTest(SetupTestCase):
+    DEVICES = [
+        {"index": 0, "name": "Microsoft Soundmapper - Input", "hostapi": "MME", "default": True},
+        {"index": 1, "name": "Mikrofonarray (Realtek(R) Audi", "hostapi": "MME", "default": True},
+        {"index": 2, "name": "Headset (Arctis 7 Chat)", "hostapi": "MME", "default": False},
+        {"index": 4, "name": "Mikrofonarray (Realtek(R) Audio)", "hostapi": "Windows WASAPI", "default": True},
+    ]
+
+    def test_full_names_and_what_jarvis_uses_now(self):
+        save_setting("audio", "input_device", "Headset (Arctis 7 Chat)")
+        self.api._reload()
+        with mock.patch("jarvis.audio.input_devices", return_value=self.DEVICES):
+            mics = self.api.mics()
+        by_id = {m["id"]: m for m in mics}
+        # MME kürzt den Namen, angezeigt wird der volle.
+        self.assertEqual(by_id[1]["label"], "Mikrofonarray (Realtek(R) Audio)")
+        self.assertEqual(by_id[2]["label"], "Headset (Arctis 7 Chat)")
+        self.assertTrue(by_id[1]["default"])
+        self.assertTrue(by_id[2]["current"])
+        self.assertFalse(by_id[1]["current"])
+
+    def test_windows_default_can_be_chosen_again(self):
+        save_setting("audio", "input_device", "Headset (Arctis 7 Chat)")
+        result = self.api.mic_save("")
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.saved()["audio"]["input_device"], "")
+        opened = []
+
+        class Recorder(FakeMic):
+            def __init__(self, device):
+                opened.append(device)
+                self.name = "Standard"
+                self.dead_silent = False
+                self._count = 0
+
+        with mock.patch("jarvis.audio.Microphone", Recorder), mock.patch("jarvis.audio.WakeWord", FakeWake):
+            started = self.api.mic_start("")
+            self.api.mic_stop()
+        self.assertTrue(started["ok"])
+        self.assertEqual(opened, [None])
+
+
+class SetupPageTest(unittest.TestCase):
+    """Die Seite muss zur Python-Seite passen: jede Methode, die setup.js aufruft,
+    gibt es in SetupApi (sonst hängt ein Knopf still)."""
+
+    def test_every_call_from_the_page_exists(self):
+        import re
+
+        from jarvis.gui.app import WEB_DIR
+
+        script = (WEB_DIR / "setup.js").read_text(encoding="utf-8")
+        called = set(re.findall(r"call\('([a-z_]+)'", script))
+        self.assertGreater(len(called), 15)
+        missing = sorted(name for name in called if not callable(getattr(setup_wizard.SetupApi, name, None)))
+        self.assertEqual(missing, [])
+        html = (WEB_DIR / "setup.html").read_text(encoding="utf-8")
+        for asset in ("style.css", "setup.css", "setup.js"):
+            self.assertIn(asset, html)
+            self.assertTrue((WEB_DIR / asset).exists(), asset)
+
+    def test_main_window_calls_exist(self):
+        import re
+
+        from jarvis.gui.app import WEB_DIR, Api
+
+        script = (WEB_DIR / "app.js").read_text(encoding="utf-8")
+        called = set(re.findall(r"window\.pywebview\.api\.([a-z_]+)\(", script))
+        self.assertIn("open_setup", called)
+        self.assertEqual(sorted(n for n in called if not callable(getattr(Api, n, None))), [])
+
+
+class AlexaCheckTest(SetupTestCase):
+    def test_missing_address_or_token_is_explained_in_plain_words(self):
+        self.assertIn("Adresse", self.api.ha_check("", "")["message"])
+        result = self.api.ha_check("homeassistant.local:8123", "")
+        self.assertFalse(result["ok"])
+        self.assertIn("Token", result["message"])
+        self.assertNotIn("config.toml", result["message"])
+
+    def test_address_without_http_is_completed(self):
+        seen = {}
+
+        class FakeHa:
+            def __init__(self, cfg):
+                seen.update(cfg)
+
+            def ping(self):
+                return "API running."
+
+            def devices(self):
+                return [("media_player.echo_kueche", "Echo Küche", "idle"), ("light.flur", "Flur", "on")]
+
+        with mock.patch("jarvis.homeassistant.HomeAssistant", FakeHa):
+            result = self.api.ha_check("homeassistant.local:8123", "geheim")
+        self.assertTrue(result["ok"])
+        self.assertEqual(seen["url"], "http://homeassistant.local:8123")
+        self.assertEqual([e["entity"] for e in result["echos"]], ["media_player.echo_kueche"])
+
+    def test_saved_address_is_the_tested_one(self):
+        with mock.patch.object(self.api, "_reload"):
+            self.assertTrue(self.api.ha_save("homeassistant.local:8123/", "geheim")["ok"])
+        self.assertEqual(self.saved()["homeassistant"]["url"], "http://homeassistant.local:8123")

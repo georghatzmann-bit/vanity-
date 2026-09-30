@@ -59,12 +59,12 @@
 
     <!-- Bühne mit Arc Reactor -->
     <main class="stage">
-      <div class="reactor-wrap" id="reactorWrap">
+      <div class="reactor-wrap" id="reactorWrap" role="button" tabindex="0" title="Klicken: Jarvis hört sofort zu (ohne „Hey Jarvis“)" aria-label="Jarvis sofort zuhören lassen">
         <canvas id="reactor" aria-hidden="true"></canvas>
       </div>
       <div class="status" aria-live="polite">
         <div class="state-label" id="stateLabel">Bereit</div>
-        <div class="state-hint" id="stateHint">Sag „Hey Jarvis“</div>
+        <div class="state-hint" id="stateHint">Sag „Hey Jarvis“ oder klick auf den Reaktor</div>
       </div>
     </main>
 
@@ -80,7 +80,13 @@
         <div class="chat-empty" id="chatEmpty">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A1.5 1.5 0 0 1 4 14.5z"/><path d="M8.5 8.5h7M8.5 11.5h4.5"/></svg>
           <p>Noch keine Unterhaltung.</p>
-          <p class="sub">Sag „Hey Jarvis“ oder schreib unten etwas.</p>
+          <p class="sub">Sag „Hey Jarvis“ oder probier eins davon:</p>
+          <div class="try" id="tryList">
+            <button type="button" class="try-chip">Wie spät ist es?</button>
+            <button type="button" class="try-chip">Wie wird das Wetter morgen?</button>
+            <button type="button" class="try-chip">Erinnere mich in 10 Minuten an den Tee</button>
+            <button type="button" class="try-chip">Öffne YouTube</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -105,6 +111,9 @@
         </button>
         <button type="button" class="icon-btn" id="newBtn" title="Neue Unterhaltung" aria-label="Neue Unterhaltung">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A1.5 1.5 0 0 1 4 14.5z"/><path d="M12 6.5v6M9 9.5h6"/></svg>
+        </button>
+        <button type="button" class="icon-btn" id="setupBtn" title="Einrichtung: Mikrofon, Stimme, Wohnort, Claude, Extras" aria-label="Einrichtung öffnen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"/><circle cx="12" cy="12" r="6.6"/></svg>
         </button>
       </div>
     </footer>

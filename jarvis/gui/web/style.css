@@ -432,6 +432,18 @@ body[data-link="offline"] .link-dot { animation: blink .8s ease-in-out infinite;
   flex: 1 1 auto;
   min-height: 120px;
   container-type: size;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reactor-wrap:focus-visible canvas {
+  filter: drop-shadow(0 0 14px rgba(79, 216, 255, .55));
+}
+
+body[data-state="listening"] .reactor-wrap,
+body[data-state="muted"] .reactor-wrap {
+  cursor: default;
 }
 
 .reactor-wrap::before {
@@ -564,9 +576,9 @@ body[data-link="offline"] .link-dot { animation: blink .8s ease-in-out infinite;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;   /* unten, oben ist Platz für Hinweise wie "Bereit" */
   gap: 4px;
-  padding: 24px;
+  padding: 24px 24px 34px;
   text-align: center;
   color: var(--text-faint);
   pointer-events: none;
@@ -587,6 +599,35 @@ body[data-link="offline"] .link-dot { animation: blink .8s ease-in-out infinite;
 .chat-empty p { margin: 0; font-size: 13px; color: var(--text-dim); }
 .chat-empty p.sub { font-size: 12px; color: var(--text-faint); }
 .chat.has-msgs .chat-empty { opacity: 0; }
+.chat.has-msgs .try { visibility: hidden; }
+
+.try {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 340px;
+  margin-top: 14px;
+  pointer-events: auto;
+}
+
+.try-chip {
+  padding: 7px 12px;
+  border: 1px solid var(--line-mid);
+  border-radius: 16px;
+  background: rgba(6, 22, 38, .7);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  transition: border-color .2s ease, color .2s ease, box-shadow .2s ease, transform .12s ease;
+}
+
+.try-chip:hover {
+  border-color: var(--cyan);
+  color: var(--white);
+  box-shadow: 0 0 14px rgba(79, 216, 255, .25);
+}
+
+.try-chip:active { transform: translateY(1px); }
 
 .msg {
   display: flex;
@@ -882,6 +923,13 @@ body[data-link="offline"] .link-dot { animation: blink .8s ease-in-out infinite;
 }
 
 #stopBtn svg { fill: currentColor; fill-opacity: .25; }
+
+#setupBtn svg { transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+#setupBtn:hover svg { transform: rotate(60deg); }
+#setupBtn:disabled { opacity: .5; cursor: progress; }
+#setupBtn:disabled svg { animation: spin-slow 2.4s linear infinite; }
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
 
 .ico-mic-off { display: none; }
 #micBtn.is-muted .ico-mic { display: none; }

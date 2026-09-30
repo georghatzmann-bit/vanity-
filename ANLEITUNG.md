@@ -22,7 +22,7 @@ Danach liegt ein **Jarvis-Symbol auf dem Desktop** (und im Startmenü). Ab jetzt
 
 Beim ersten Start öffnet sich die Einrichtung von selbst. Sie führt dich durch alles, du klickst nur:
 
-1. **Mikrofon:** Mikrofon anklicken, reinsprechen, der Balken zeigt den Pegel. Sag "Hey Jarvis" (englisch ausgesprochen), dann leuchtet es auf.
+1. **Mikrofon:** Mikrofon anklicken, reinsprechen, der Balken zeigt den Pegel. Sag "Hey Jarvis" (englisch ausgesprochen), dann leuchtet es auf. Ganz oben steht "Windows-Standard" und darunter, welches Mikrofon das gerade ist. Ist es das falsche, klick einfach dein richtiges an. "Aktuell" zeigt, welches Jarvis nimmt.
 2. **Stimme:** Stimmen anhören und die schönste nehmen.
 3. **Wohnort:** für das Wetter.
 4. **Claude:** Jarvis prüft, ob Claude antwortet. Fehlt Claude Code oder bist du nicht angemeldet, gibt es dafür einen Knopf.
@@ -33,7 +33,8 @@ Danach startet Jarvis mit dem Arc-Reactor-Fenster. Die Einrichtung kannst du jed
 ## So benutzt du Jarvis
 
 - **"Hey Jarvis"** sagen (englisch ausgesprochen), auf den Ton warten, Befehl auf Deutsch sprechen.
-- Oder unten im Fenster **tippen** und Enter drücken.
+- Oder auf den leuchtenden **Arc Reactor klicken**: Dann hört Jarvis sofort zu, ganz ohne "Hey Jarvis".
+- Oder unten im Fenster **tippen** und Enter drücken. Solange der Verlauf leer ist, stehen dort Beispiele zum Anklicken.
 - **Strg+Alt+M** schaltet das Mikrofon stumm und wieder an, egal welches Fenster vorne ist. Das geht auch mit dem Mikrofon-Knopf im Fenster.
 - **"Hey Jarvis, Stopp"** oder der Stopp-Knopf unterbricht Jarvis, auch mitten im Satz.
 
@@ -86,7 +87,8 @@ Dann kann eine Home-Assistant-Automation oder ein Skript zum Beispiel `rest_comm
 
 ## Wenn etwas nicht klappt
 
-- **Jarvis reagiert nicht auf "Hey Jarvis":** Zahnrad > Mikrofon. Dort siehst du den Pegel und ob "Hey Jarvis" ankommt. Klappt es nur knapp, den Schalter "empfindlicher" einschalten.
+- **Jarvis reagiert nicht auf "Hey Jarvis":** Zahnrad > Mikrofon. Dort siehst du den Pegel und ob "Hey Jarvis" ankommt. Klappt es nur knapp, den Schalter "empfindlicher" einschalten. Zum Ausprobieren geht auch ein Klick auf den Arc Reactor.
+- **Jarvis nimmt das falsche Mikrofon:** Zahnrad > Mikrofon > dein richtiges Mikrofon anklicken (nicht "Windows-Standard"). Es wird sofort gespeichert. Ist es später mal abgesteckt, hört Jarvis so lange über das Standardmikrofon und sagt dir das.
 - **Claude lehnt ab:** Jarvis probiert automatisch andere Modelle und zuletzt einen einfachen Modus. Hilft das nicht, `werkzeuge\Claude-Test.bat` starten und die Tabelle an Claude im Jarvis-Projekt schicken.
 - **Irgendwas geht nicht und du weißt nicht was:** `werkzeuge\Selbsttest.bat` prüft alles und sagt bei jedem Punkt, was zu tun ist. Den Inhalt von `logs\selbsttest.txt` kannst du Claude im Jarvis-Projekt schicken.
 - **"Jarvis läuft schon":** Jarvis ist schon offen, oft versteckt als Symbol unten rechts neben der Uhr. Dort mit Rechtsklick beenden oder das Fenster öffnen.

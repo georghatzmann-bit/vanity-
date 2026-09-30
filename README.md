@@ -4,6 +4,8 @@ Dein eigener Sprachassistent wie bei Iron Man: Du sagst "Hey Jarvis", sprichst d
 
 **Schnellstart: siehe [ANLEITUNG.md](ANLEITUNG.md).** Kurz: ZIP entpacken, `Jarvis.bat` doppelklicken, die Einrichtung durchklicken.
 
+![Das Jarvis-Fenster](docs/bilder/hauptfenster.jpg)
+
 ```
 Mikrofon → "Hey Jarvis" (openWakeWord, lokal)
          → Sprache zu Text (faster-whisper, lokal)
@@ -15,15 +17,19 @@ Mikrofon → "Hey Jarvis" (openWakeWord, lokal)
 
 ## Was Jarvis kann
 
-- **Sprache und Tippen:** "Hey Jarvis" plus Befehl, oder unten im Fenster tippen.
+- **Sprache und Tippen:** "Hey Jarvis" plus Befehl, oder auf den Arc Reactor klicken (dann hört Jarvis sofort zu), oder unten im Fenster tippen. Beispiel-Befehle zum Anklicken stehen im leeren Verlauf.
 - **Schnelle Antworten:** Jarvis spricht den ersten Satz, während Claude noch am Rest schreibt. Braucht Claude länger, sagt Jarvis "Einen Moment, Sir."
 - **Sofort-Befehle ohne Claude:** Uhrzeit, Datum, lauter/leiser, Musik pausieren/weiter/nächstes Lied, "Stopp", "Mikrofon aus", "Neue Unterhaltung".
-- **Unterbrechen:** "Hey Jarvis" unterbricht eine laufende Antwort, der Stopp-Knopf auch.
+- **Unterbrechen:** "Hey Jarvis" unterbricht eine laufende Antwort, der Stopp-Knopf, Esc und ein Klick auf den Reaktor auch.
 - **PC-Aufgaben über Claude:** Programme und Webseiten öffnen, Dateien finden, Websuche, Wetter, Bildschirm vorlesen, Erinnerungen, Gaming-Modus, Morgen-Briefing.
 - **Erst fragen:** Löschen (nur in den Papierkorb), Installieren und Nachrichten verschicken macht Jarvis erst nach deinem "Ja".
 - **Alexa und Smart Home** über Home Assistant (optional).
 - **Arc-Reactor-Fenster** mit Zuständen (bereit, hört zu, denkt nach, spricht, stumm), Chatverlauf, CPU/RAM, Uhr, Tray-Icon und Autostart.
-- **Grafische Einrichtung** beim ersten Start: Mikrofon mit Pegel und Hey-Jarvis-Test, Stimmen zum Anhören, Wohnort, Claude-Prüfung, Stumm-Taste, Autostart, Alexa. Später über das Zahnrad.
+- **Grafische Einrichtung** beim ersten Start: Mikrofon mit Pegel und Hey-Jarvis-Test (zeigt, welches Mikrofon Windows als Standard nimmt), Stimmen zum Anhören, Wohnort mit Wetter-Vorschau, Claude-Prüfung mit Installieren/Anmelden-Knopf, Stumm-Taste, Autostart, Alexa. Jeder Schritt speichert sofort. Später über das Zahnrad.
+
+| Einrichtung: Mikrofon | Einrichtung: fertig |
+|---|---|
+| ![Mikrofon wählen](docs/bilder/einrichtung-mikrofon.jpg) | ![Zusammenfassung](docs/bilder/einrichtung-fertig.jpg) |
 - **Selbsttest** (`werkzeuge\Selbsttest.bat`) und Logdatei (`logs\jarvis.log`).
 
 ## Die Startdateien
@@ -131,7 +137,10 @@ jarvis/
   intents.py      Sofort-Befehle ohne Claude
   tool.py         python -m jarvis.tool ... (für Claude)
   pc.py reminders.py homeassistant.py server.py   PC-Aktionen, Erinnerungen, Alexa, Web-Eingang
-  gui/            Arc-Reactor-Fenster (pywebview + HTML/Canvas)
+  gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
+  gui/web/        index.html app.js style.css     Hauptfenster (Arc Reactor als Canvas)
+                  setup.html setup.js setup.css   Einrichtung (Api: setup_wizard.SetupApi)
+                  Beide Seiten laufen auch im normalen Browser als Demo (ohne Jarvis-Kern).
   tray.py autostart.py selftest.py simulate.py logsetup.py
 jarvis_home/CLAUDE.md   Jarvis' Persönlichkeit
 tests/                  python -m pytest

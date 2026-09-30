@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import time
 
-from .audio import Microphone, input_devices, rms
+from .audio import Microphone, input_devices, is_alias, rms
 from .config import save_setting
-
-# Einträge, hinter denen sich nur "das Windows-Standardmikrofon" verbirgt.
-_ALIASES = ("sound mapper", "soundmapper", "primärer soundaufnahmetreiber", "primary sound capture")
 
 
 def choices(devices: list[dict]) -> list[dict]:
@@ -20,7 +17,7 @@ def choices(devices: list[dict]) -> list[dict]:
     result = []
     for d in pool:
         name = d["name"].strip()
-        if any(alias in name.lower() for alias in _ALIASES) or name in seen:
+        if is_alias(name) or name in seen:
             continue
         seen.add(name)
         result.append(d)

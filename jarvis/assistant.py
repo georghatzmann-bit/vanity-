@@ -167,7 +167,9 @@ class Assistant:
             return ""
         if name == "mute" and self.mute is not None:
             self.mute.mute()
-            hotkey = self._cfg.get("mute", {}).get("hotkey", "").upper()
+            from .mute import hotkey_label
+
+            hotkey = hotkey_label(self._cfg.get("mute", {}).get("hotkey", ""), spoken=True)
             return f"Sehr wohl, Sir. Mit {hotkey} hole ich Sie wieder zurück." if hotkey else "Sehr wohl, Sir."
         if name == "reset":
             if self.brain is not None:

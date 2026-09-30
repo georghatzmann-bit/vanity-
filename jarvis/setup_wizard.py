@@ -51,6 +51,21 @@ def mark_done() -> None:
     DONE_MARKER.write_text(time.strftime("%Y-%m-%d %H:%M:%S\n"), encoding="utf-8")
 
 
+def _device(value) -> int | None:
+    """Mikrofon aus der Seite: Nummer, oder leer/"default" für das Windows-Standardmikrofon."""
+    if value is None or str(value).strip().lower() in ("", "default", "standard", "-1"):
+        return None
+    return int(value)
+
+
+def _ha_url(value) -> str:
+    """Adresse von Home Assistant. "homeassistant.local:8123" reicht, http:// ergänzt Jarvis."""
+    url = str(value or "").strip().rstrip("/")
+    if url and not url.startswith(("http://", "https://")):
+        url = "http://" + url
+    return url
+
+
 def launch(*args: str) -> None:
     """Startet Jarvis (oder die Einrichtung) als eigenen Prozess ohne Konsolenfenster."""
     exe = Path(sys.executable)
@@ -113,13 +128,14 @@ class MicTest:
                 self._wake_error = f"Die Hey-Jarvis-Erkennung lädt nicht ({exc}). Ist das Internet an?"
                 self._loader = None
 
-    def start(self, device: int) -> dict:
+    def start(self, device: int | None) -> dict:
+        """`device` None = Windows-Standardmikrofon."""
         from .audio import Microphone, friendly_device_error
 
         self.stop()
         self.preload()
         try:
-            mic = Microphone(int(device))
+            mic = Microphone(device)
         except Exception as exc:
             return {"ok": False, "name": "", "error": friendly_device_error(exc)}
         with self._lock:
@@ -232,7 +248,7 @@ class ClaudeCheck:
         except Exception as exc:
             self._set(state="error", message=f"Unerwarteter Fehler: {exc}", version=version)
             return
-        self._set(state="ok", message="Claude antwortet. Das Gehirn ist verbunden.", model=answer.model, version=version)
+        self._set(state="ok", message="Das Gehirn ist verbunden. Jarvis kann denken.", model=answer.model, version=version)
 
     def poll(self) -> dict:
         with self._lock:
@@ -279,21 +295,41 @@ class SetupApi:
     # ------------------------------------------------------------ Mikrofon
 
     def mics(self) -> list:
-        from .audio import input_devices
-
-        self._mic.preload()
+        """Die Mikrofone für die Auswahl. `default` = in Windows als Standard eingestellt,
+        `current` = das, was Jarvis mit der gespeicherten Einstellung gerade nimmt."""
+        from .audio import input_devices, resolve_device, same_device
         from .mic_setup import choices
 
+        self._mic.preload()
         try:
-            devices = choices(input_devices())
+            everything = input_devices()
+            devices = choices(everything)
         except Exception as exc:
             log.warning("Mikrofone: %s", exc)
             return []
+
+        def label(name: str) -> str:
+            # MME kürzt Namen auf 31 Zeichen. Den vollen Namen kennt WASAPI.
+            name = name.strip()
+            longer = [d["name"].strip() for d in everything if same_device(name, d["name"])]
+            return max(longer, key=len, default=name)
+
         self._devices = {d["index"]: d["name"] for d in devices}
-        return [{"id": d["index"], "name": d["name"].strip(), "api": d["hostapi"], "default": d["default"]} for d in devices]
+        saved = str(self._cfg["audio"].get("input_device") or "").strip()
+        try:
+            current = resolve_device(saved, devices) if saved else None
+        except ValueError:
+            current = None
+        return [
+            {
+                "id": d["index"], "name": d["name"].strip(), "label": label(d["name"]),
+                "api": d["hostapi"], "default": bool(d["default"]), "current": d["index"] == current,
+            }
+            for d in devices
+        ]
 
     def mic_start(self, device) -> dict:
-        return self._mic.start(int(device))
+        return self._mic.start(_device(device))
 
     def mic_poll(self) -> dict:
         return self._mic.poll()
@@ -303,10 +339,14 @@ class SetupApi:
         return True
 
     def mic_save(self, device) -> dict:
-        name = self._devices.get(int(device))
+        index = _device(device)
+        if index is None:
+            # Leer = Windows-Standardmikrofon.
+            return self._save("audio", "input_device", "", extra={"name": "Windows-Standardmikrofon"})
+        name = self._devices.get(index)
         if name is None:
             self.mics()
-            name = self._devices.get(int(device))
+            name = self._devices.get(index)
         if name is None:
             return {"ok": False, "name": "", "error": "Dieses Mikrofon gibt es nicht mehr."}
         return self._save("audio", "input_device", name.strip(), extra={"name": name.strip()})
@@ -427,8 +467,13 @@ class SetupApi:
     def ha_check(self, url, token) -> dict:
         from .homeassistant import HomeAssistant
 
+        url = _ha_url(url)
         token = str(token or "").strip() or self._cfg.get("homeassistant", {}).get("token", "")
-        ha = HomeAssistant({"url": str(url or "").strip(), "token": token})
+        if not url:
+            return {"ok": False, "message": "Bitte die Adresse von Home Assistant eintragen.", "echos": []}
+        if not token:
+            return {"ok": False, "message": "Bitte auch den Token eintragen (Home Assistant: Profil > Sicherheit > Langlebige Zugriffstoken).", "echos": []}
+        ha = HomeAssistant({"url": url, "token": token})
         try:
             ha.ping()
             echos = [
@@ -445,7 +490,7 @@ class SetupApi:
         from .homeassistant import _fold
 
         try:
-            save_setting("homeassistant", "url", str(url or "").strip())
+            save_setting("homeassistant", "url", _ha_url(url))
             if str(token or "").strip():
                 save_setting("homeassistant", "token", str(token).strip())
             for echo in echos or []:

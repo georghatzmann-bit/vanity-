@@ -280,6 +280,19 @@ class GuiBridgeTest(unittest.TestCase):
         self.assertEqual(submitted, ["Öffne YouTube", "STOP", "NEU"])
         self.assertFalse([name for name in vars(api) if not name.startswith("_")], "nichts Internes an die Seite geben")
 
+    def test_listen_now(self):
+        bridge = GuiBridge()
+        mute = MuteSwitch()
+        clicks = []
+        api = Api(bridge, None, mute, None, lambda: clicks.append(1) or True)
+        self.assertEqual(api.listen_now(), {"ok": True, "reason": ""})
+        self.assertEqual(clicks, [1])
+        mute.mute()
+        self.assertEqual(api.listen_now()["reason"], "muted")
+        mute.unmute()
+        self.assertEqual(Api(bridge, None, mute).listen_now()["reason"], "novoice")
+        self.assertEqual(Api(bridge, None, mute, None, lambda: False).listen_now()["reason"], "novoice")
+
 
 class StopLoop(Exception):
     pass
@@ -389,6 +402,30 @@ class VoiceLoopTest(unittest.TestCase):
         with self.assertRaises(StopLoop):
             loop.run()
         self.assertEqual(stopped, [True])
+
+    def test_click_on_the_reactor_listens_without_hey_jarvis(self):
+        events = []
+        cfg = load_config()
+        cfg["listen"].update(silence_seconds=0.24, energy_threshold=1000)
+        frames = [frame(10)] * 2 + [frame(5000)] * 5 + [frame(10)] * 4
+        assistant, _ui, _speaker, mute = make(FakeBrain())
+        submitted = []
+        assistant.submit = submitted.append
+        # Das Wake-Word kommt nie über die Schwelle, trotzdem hört Jarvis nach dem Klick zu.
+        loop = VoiceLoop(cfg, FakeMic(frames, events), FakeWake([], events), FakeStt("Wie spät ist es?"),
+                         assistant, mute, FakeSounds(events), "X", hints=None)
+        self.assertTrue(loop.listen_now())
+        with self.assertRaises(StopLoop):
+            loop.run()
+        self.assertEqual(submitted, ["Wie spät ist es?"])
+
+    def test_click_is_refused_while_muted(self):
+        events = []
+        assistant, _ui, _speaker, mute = make()
+        loop = VoiceLoop(load_config(), FakeMic([], events), FakeWake([], events), None,
+                         assistant, mute, FakeSounds(events), "X", hints=None)
+        mute.mute()
+        self.assertFalse(loop.listen_now())
 
     def test_microphone_hiccup_is_survived(self):
         events = []

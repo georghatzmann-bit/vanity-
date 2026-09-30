@@ -74,6 +74,7 @@ def synthesize_windows(text: str) -> tuple[np.ndarray, int]:
     """Eingebaute Windows-Stimme (offline). Schreibt eine WAV-Datei und liest sie ein."""
     import pyttsx3
 
+    _com_ready()
     engine = pyttsx3.init()
     for voice in engine.getProperty("voices"):
         if "de" in (voice.id or "").lower() or "german" in (voice.name or "").lower():
@@ -102,6 +103,20 @@ def synthesize_windows(text: str) -> tuple[np.ndarray, int]:
             pass
 
 
+def _com_ready() -> None:
+    """Die Windows-Stimme (SAPI) braucht COM im aufrufenden Thread. pyttsx3 richtet das
+    nicht selbst ein, und Jarvis spricht aus einem eigenen Thread: ohne diesen Aufruf
+    käme dort "CoInitialize wurde nicht aufgerufen"."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED, schon aktiv = egal
+    except Exception as exc:
+        log.debug("COM: %s", exc)
+
+
 def play(samples: np.ndarray, rate: int) -> None:
     Player().play(samples, rate, lambda level: None)
 
@@ -115,12 +130,14 @@ def chime(freqs: tuple[int, ...] = (880, 1320)) -> None:
 
 
 def chime_samples(freqs: tuple[int, ...], rate: int = 24000) -> np.ndarray:
+    """Tonfolge als int16, so wie Player.play() sie erwartet. (Als Gleitkommazahlen
+    zwischen -1 und 1 würde die Umwandlung in int16 alles zu 0 machen: Stille.)"""
     tones = []
     for freq in freqs:
         t = np.linspace(0, 0.09, int(rate * 0.09), endpoint=False)
         envelope = np.minimum(1, np.minimum(t, t[::-1]) * 60)
         tones.append(0.25 * np.sin(2 * np.pi * freq * t) * envelope)
-    return np.concatenate(tones).astype(np.float32)
+    return (np.concatenate(tones) * 32767).astype(np.int16)
 
 
 class Speaker:
