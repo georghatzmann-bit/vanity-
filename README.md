@@ -26,6 +26,8 @@ Mikrofon → "Hey Jarvis" (openWakeWord, lokal)
 
 ## Starten
 
+**Zuerst einmal das Mikrofon wählen:** `mikrofon.bat` doppelklicken, die Nummer deines Mikrofons eintippen, kurz reinsprechen und mit Enter speichern. Das musst du nur einmal machen (oder wenn du das Mikrofon wechselst).
+
 - `start.bat` doppelklicken, dann "Hey Jarvis" sagen (englisch ausgesprochen), kurz auf den Ton warten und deinen Befehl auf Deutsch sprechen.
 - `start.bat --text` zum Testen per Tastatur, ohne Mikrofon.
 - "Jarvis, neue Unterhaltung" setzt das Gedächtnis zurück.
@@ -38,7 +40,7 @@ Beispiele: "Öffne YouTube", "Wie wird das Wetter morgen in Wien?", "Such auf me
 Starte `start.bat --mic-test`. Das zeigt alle Mikrofone und einen Live-Pegel:
 
 - **Der Pegel bleibt bei 0:** Windows blockiert das Mikrofon. Öffne *Einstellungen > Datenschutz und Sicherheit > Mikrofon* und schalte "Desktop-Apps den Zugriff auf das Mikrofon erlauben" ein.
-- **Der Pegel bewegt sich kaum, wenn du sprichst:** Es ist das falsche Mikrofon. Trag in `config.toml` unter `[audio]` z. B. `input_device = "Headset"` (ein Teil des Namens aus der Liste) oder die Nummer ein.
+- **Der Pegel bewegt sich kaum, wenn du sprichst:** Es ist das falsche Mikrofon. Starte `mikrofon.bat` und wähle das richtige.
 - **Der Pegel bewegt sich, aber "Hey-Jarvis" bleibt niedrig:** Sprich "Hey Jarvis" englisch aus ("Hey Dschaarwis"). Wenn der beste Wert bei etwa 0.3 bis 0.5 landet, stell in `config.toml` unter `[wakeword]` `threshold = 0.35` ein.
 
 Im normalen Betrieb zeigt Jarvis "fast erkannt: 0.38" an, wenn er dich knapp nicht verstanden hat.
@@ -49,7 +51,7 @@ Alles steht in `config.toml`:
 
 - **Stimme:** `voice` unter `[tts]`, z. B. `de-DE-KillianNeural` oder `de-DE-FlorianMultilingualNeural`. Mit `rate` und `pitch` klingt sie schneller, langsamer, tiefer.
 - **Empfindlichkeit:** `threshold` unter `[wakeword]` höher stellen, wenn Jarvis zu oft aus Versehen reagiert.
-- **Mikrofon:** `input_device` unter `[audio]`.
+- **Mikrofon:** am einfachsten mit `mikrofon.bat`, sonst `input_device` unter `[audio]`.
 - **Stumm-Taste:** `hotkey` unter `[mute]`, z. B. `"f9"`.
 - **Genauigkeit:** `model = "medium"` unter `[stt]` versteht besser, ist aber langsamer.
 - **Persönlichkeit:** `jarvis_home/CLAUDE.md` beschreibt, wie Jarvis redet und was er darf.

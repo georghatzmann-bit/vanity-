@@ -12,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jarvis.audio import FRAME_SAMPLES, CommandRecorder, resample, resolve_device  # noqa: E402
 from jarvis.brain import BrainError, ClaudeBrain, RefusalError  # noqa: E402
-from jarvis.config import load_config  # noqa: E402
+from jarvis import mic_setup  # noqa: E402
+from jarvis.config import load_config, save_setting  # noqa: E402
 from jarvis.mute import MUTE_PHRASES, MuteSwitch  # noqa: E402
 
 
@@ -85,6 +86,85 @@ class ResolveDeviceTest(unittest.TestCase):
             resolve_device("Blue Yeti", DEVICES)
         with self.assertRaises(ValueError):
             resolve_device("42", DEVICES)
+
+
+    def test_exact_name_wins_over_partial_match(self):
+        devices = DEVICES + [
+            {"index": 12, "name": "Mikrofon (USB Audio)", "hostapi": "MME", "default": False},
+            {"index": 13, "name": "Mikrofon (USB Audio) 2", "hostapi": "MME", "default": False},
+        ]
+        self.assertEqual(resolve_device("Mikrofon (USB Audio) 2", devices), 13)
+        self.assertEqual(resolve_device("Mikrofon (USB Audio)", devices), 12)
+
+
+WINDOWS_DEVICES = [
+    {"index": 0, "name": "Microsoft Soundmapper - Input", "hostapi": "MME", "default": False},
+    {"index": 1, "name": "Mikrofonarray (Realtek(R) Audio)", "hostapi": "MME", "default": True},
+    {"index": 2, "name": "Headset (Arctis 7 Chat)", "hostapi": "MME", "default": False},
+    {"index": 6, "name": "Primärer Soundaufnahmetreiber", "hostapi": "Windows DirectSound", "default": False},
+    {"index": 7, "name": "Mikrofonarray (Realtek(R) Audio)", "hostapi": "Windows DirectSound", "default": False},
+    {"index": 11, "name": "Headset (Arctis 7 Chat)", "hostapi": "Windows WASAPI", "default": False},
+]
+
+
+class MicSetupTest(unittest.TestCase):
+    def test_each_microphone_is_listed_once(self):
+        names = [d["name"] for d in mic_setup.choices(WINDOWS_DEVICES)]
+        self.assertEqual(names, ["Mikrofonarray (Realtek(R) Audio)", "Headset (Arctis 7 Chat)"])
+
+    def test_picking_a_number_saves_the_name(self):
+        from unittest import mock
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            answers = iter(["9", "2", ""])
+            saved = {}
+            with mock.patch.object(mic_setup, "input_devices", return_value=WINDOWS_DEVICES), \
+                    mock.patch.object(mic_setup, "level_check", return_value=2500.0), \
+                    mock.patch("builtins.input", lambda _prompt="": next(answers)), \
+                    mock.patch.object(mic_setup, "save_setting",
+                                      lambda *a: saved.setdefault("args", a)), \
+                    mock.patch("builtins.print"):
+                mic_setup.run()
+            self.assertEqual(saved["args"], ("audio", "input_device", "Headset (Arctis 7 Chat)"))
+            self.assertFalse(path.exists())
+
+
+class SaveSettingTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "config.toml"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_replaces_existing_value_and_keeps_comments(self):
+        self.path.write_text('[audio]\n# Kommentar\ninput_device = ""\n\n[mute]\nhotkey = "f9"\n', encoding="utf-8")
+        save_setting("audio", "input_device", 'Headset "Pro"', self.path)
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# Kommentar", text)
+        self.assertIn('hotkey = "f9"', text)
+        cfg = load_config(self.path)
+        self.assertEqual(cfg["audio"]["input_device"], 'Headset "Pro"')
+        self.assertEqual(cfg["mute"]["hotkey"], "f9")
+
+    def test_adds_missing_section(self):
+        self.path.write_text('[wakeword]\nthreshold = 0.4\n', encoding="utf-8")
+        save_setting("audio", "input_device", "Arctis", self.path)
+        cfg = load_config(self.path)
+        self.assertEqual(cfg["audio"]["input_device"], "Arctis")
+        self.assertEqual(cfg["wakeword"]["threshold"], 0.4)
+
+    def test_adds_key_to_existing_section(self):
+        self.path.write_text('[audio]\n\n[mute]\nhotkey = "f9"\n', encoding="utf-8")
+        save_setting("audio", "input_device", "Arctis", self.path)
+        self.assertEqual(load_config(self.path)["audio"]["input_device"], "Arctis")
+
+    def test_creates_config_from_example(self):
+        save_setting("audio", "input_device", "Arctis", self.path)
+        cfg = load_config(self.path)
+        self.assertEqual(cfg["audio"]["input_device"], "Arctis")
+        self.assertIn("[brain]", self.path.read_text(encoding="utf-8"))
 
 
 class MuteTest(unittest.TestCase):

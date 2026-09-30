@@ -119,8 +119,8 @@ def resolve_device(spec: str | int | None, devices: list[dict]) -> int | None:
     matches = [d for d in devices if wanted in d["name"].lower()]
     if not matches:
         raise ValueError(f'Kein Mikrofon gefunden, dessen Name "{spec}" enthält.')
-    # Unter Windows ist MME am unkompliziertesten, danach der Rest.
-    matches.sort(key=lambda d: d["hostapi"] != "MME")
+    # Exakter Name zuerst, und unter Windows ist MME am unkompliziertesten.
+    matches.sort(key=lambda d: (d["name"].strip().lower() != wanted, d["hostapi"] != "MME"))
     return matches[0]["index"]
 
 

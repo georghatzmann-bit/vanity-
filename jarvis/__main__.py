@@ -3,6 +3,7 @@
     python -m jarvis             Sprachmodus: "Hey Jarvis" sagen, dann den Befehl
     python -m jarvis --text      Tippmodus zum Testen ohne Mikrofon
     python -m jarvis --silent    Antworten nur anzeigen, nicht vorlesen
+    python -m jarvis --mic       Mikrofon auswählen und speichern (mikrofon.bat)
     python -m jarvis --mic-test  Mikrofone anzeigen und Pegel + Wake Word live testen
 """
 
@@ -30,7 +31,7 @@ PRIVACY_HINT = (
     "\n!! Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff:\n"
     "   Einstellungen > Datenschutz und Sicherheit > Mikrofon >\n"
     '   "Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten.\n'
-    "   Sonst mit start.bat --mic-test das richtige Mikrofon suchen.\n"
+    "   Oder es ist das falsche Mikrofon: mikrofon.bat starten und das richtige wählen.\n"
 )
 
 
@@ -146,7 +147,7 @@ def run_voice(cfg: dict, brain: ClaudeBrain, speak) -> None:
     from .stt import SpeechToText
 
     mic = Microphone(cfg["audio"]["input_device"])
-    print(f"Mikrofon: {mic.name}")
+    print(f"Mikrofon: {mic.name}   (falsches Mikrofon? mikrofon.bat starten)")
     print("Lade Spracherkennung (beim ersten Start wird das Modell heruntergeladen) ...")
     stt = SpeechToText(cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"])
     wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
@@ -170,10 +171,7 @@ def run_mic_test(cfg: dict) -> None:
     for d in input_devices():
         mark = "  <- Windows-Standard" if d["default"] else ""
         print(f"  {d['index']:>3}  {d['name']}  [{d['hostapi']}]{mark}")
-    print(
-        '\nEin anderes Mikrofon wählst du in config.toml unter [audio] mit\n'
-        'input_device = "Teil des Namens" oder der Nummer.\n'
-    )
+    print("\nEin anderes Mikrofon wählst du am einfachsten mit mikrofon.bat.\n")
 
     mic = Microphone(cfg["audio"]["input_device"])
     wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
@@ -203,6 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="jarvis", description="Dein persönlicher Jarvis.")
     parser.add_argument("--text", action="store_true", help="Tippen statt sprechen")
     parser.add_argument("--silent", action="store_true", help="Antworten nicht vorlesen")
+    parser.add_argument("--mic", action="store_true", help="Mikrofon auswählen und speichern")
     parser.add_argument("--mic-test", action="store_true", help="Mikrofon und Wake Word testen")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -220,6 +219,15 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     cfg = load_config()
+
+    if args.mic:
+        from . import mic_setup
+
+        try:
+            mic_setup.run()
+        except (KeyboardInterrupt, EOFError):
+            print()
+        return 0
 
     if args.mic_test:
         try:
