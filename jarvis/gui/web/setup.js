@@ -1352,16 +1352,15 @@
     let claudeT0 = 0;
     const later = (v, ms) => sleep(ms).then(() => v);
     const VOICES = [
-      { id: 'de-DE-ConradNeural', name: 'Conrad', desc: 'Tief und ruhig, der klassische Butler (Standard)', gender: 'm' },
-      { id: 'de-DE-KillianNeural', name: 'Killian', desc: 'Jünger und freundlich', gender: 'm' },
-      { id: 'de-DE-FlorianMultilingualNeural', name: 'Florian', desc: 'Sehr natürlich, klingt fast wie ein Mensch', gender: 'm' },
-      { id: 'de-AT-JonasNeural', name: 'Jonas', desc: 'Mit österreichischem Klang', gender: 'm' },
-      { id: 'de-DE-SeraphinaMultilingualNeural', name: 'Seraphina', desc: 'Warm und natürlich', gender: 'w' },
-      { id: 'de-DE-KatjaNeural', name: 'Katja', desc: 'Klar und sachlich', gender: 'w' },
+      { id: 'de-DE-ConradNeural', name: 'Conrad', desc: 'Tief und ruhig, der klassische Butler', gender: 'm', tags: ['Hochdeutsch', 'Standard'], recommended: true },
+      { id: 'de-AT-JonasNeural', name: 'Jonas', desc: 'Am natürlichsten und am schnellsten', gender: 'm', tags: ['Österreich'] },
+      { id: 'de-CH-JanNeural', name: 'Jan', desc: 'Sehr natürlich und freundlich', gender: 'm', tags: ['Schweiz'] },
+      { id: 'de-DE-KatjaNeural', name: 'Katja', desc: 'Klar und freundlich', gender: 'w', tags: ['Hochdeutsch', 'weiblich'] },
+      { id: 'de-AT-IngridNeural', name: 'Ingrid', desc: 'Warm und ruhig', gender: 'w', tags: ['Österreich', 'weiblich'] },
     ];
     return {
       hello: () => later({
-        version: '1.1.0',
+        version: '1.2.0',
         first_run: params.get('first') !== '0',
         values: {
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',
