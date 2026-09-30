@@ -276,7 +276,15 @@ def run_gui(cfg: dict, args) -> int:
         voice_ref.append(voice)
         console.idle_hint = f'Sag "Hey Jarvis" ...  ({hotkey} = stumm/laut)'
         console.message("info", f'Bereit. Sag "Hey Jarvis" oder schreib. {hotkey} schaltet das Mikrofon stumm.')
-        assistant.say("Jarvis ist online, Sir.")
+        from datetime import datetime
+
+        from .greeting import build_greeting, current_weather
+
+        now = datetime.now()
+        upcoming = assistant.reminders.upcoming(now) if assistant.reminders is not None else []
+        hello = build_greeting(now, current_weather(str(cfg.get("ich", {}).get("ort", "")).strip()), upcoming)
+        ui.message("jarvis", hello, id="begruessung")
+        assistant.say(hello)
         assistant.update_state()
         if stopped.is_set():
             return

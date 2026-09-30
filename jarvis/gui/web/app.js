@@ -309,7 +309,8 @@
 
   function updateChatMeta() {
     // Hinweise ("Bereit ...") zählen nicht als Unterhaltung: die Beispiele bleiben sichtbar.
-    el.chat.classList.toggle('has-msgs', !!el.messages.querySelector('.msg-user, .msg-jarvis'));
+    // Die Begrüßung beim Start zählt auch nicht.
+    el.chat.classList.toggle('has-msgs', !!el.messages.querySelector('.msg-user, .msg-jarvis:not([data-id="begruessung"])'));
   }
 
   function createMsg(role, id) {
@@ -835,12 +836,13 @@
 
     // Zielwerte je Zustand; alles gleitet weich dorthin
     const LOOK = {
-      idle: { glow: 0.28, core: 0.8, ring: 0.3, wave: 0, spin: 0, breath: 1, speed: 0.12 },
-      listening: { glow: 0.5, core: 1, ring: 0.55, wave: 1, spin: 0, breath: 0.4, speed: 0.2 },
-      thinking: { glow: 0.42, core: 0.9, ring: 0.45, wave: 0, spin: 1, breath: 0.6, speed: 0.35 },
-      speaking: { glow: 0.5, core: 1, ring: 0.5, wave: 0.55, spin: 0, breath: 0.3, speed: 0.18 },
-      muted: { glow: 0.08, core: 0.45, ring: 0.18, wave: 0, spin: 0, breath: 0.3, speed: 0.05 },
+      idle: { glow: 0.3, core: 0.82, ring: 0.3, wave: 0, spin: 0, breath: 1, speed: 0.12, eq: 0, ripple: 0, orbit: 0.35 },
+      listening: { glow: 0.62, core: 1, ring: 0.55, wave: 1, spin: 0, breath: 0.4, speed: 0.22, eq: 0, ripple: 1, orbit: 1 },
+      thinking: { glow: 0.5, core: 0.92, ring: 0.45, wave: 0, spin: 1, breath: 0.6, speed: 0.4, eq: 0, ripple: 0, orbit: 0.8 },
+      speaking: { glow: 0.6, core: 1, ring: 0.5, wave: 0, spin: 0, breath: 0.3, speed: 0.2, eq: 1, ripple: 0, orbit: 0.7 },
+      muted: { glow: 0.08, core: 0.45, ring: 0.18, wave: 0, spin: 0, breath: 0.3, speed: 0.05, eq: 0, ripple: 0, orbit: 0.1 },
     };
+    const KEYS = Object.keys(LOOK.idle);
 
     let visState = 'idle';
     const cur = { ...LOOK.idle, col: COL.idle.slice() };
@@ -852,6 +854,17 @@
     let lvl = 0;
     let flash = 0;
     let running = false;
+
+    // Lichtpartikel, die ruhig um den Kreis ziehen
+    const PARTICLES = Array.from({ length: 56 }, () => ({
+      r: 0.92 + Math.random() * 0.55,
+      a: Math.random() * Math.PI * 2,
+      v: (0.04 + Math.random() * 0.2) * (Math.random() < 0.5 ? -1 : 1),
+      s: 0.7 + Math.random() * 1.6,
+      tw: Math.random() * Math.PI * 2,
+    }));
+    const EQ = 72;
+    const eqVals = new Float32Array(EQ);
 
     function rgba(c, a) {
       return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clamp(a, 0, 1).toFixed(3) + ')';
@@ -889,10 +902,8 @@
     }
 
     function update(dt) {
-      const k = 1 - Math.exp(-dt / 0.18);
-      for (const key of ['glow', 'core', 'ring', 'wave', 'spin', 'breath', 'speed']) {
-        cur[key] += (target[key] - cur[key]) * k;
-      }
+      const k = 1 - Math.exp(-dt / 0.2);
+      for (const key of KEYS) cur[key] += (target[key] - cur[key]) * k;
       const col = flash > 0.01 ? COL.error : targetCol;
       const kc = 1 - Math.exp(-dt / (flash > 0.01 ? 0.08 : 0.3));
       for (let i = 0; i < 3; i++) cur.col[i] += (col[i] - cur.col[i]) * kc;
@@ -907,6 +918,14 @@
       const want = fresh && (visState === 'listening' || visState === 'speaking') ? S.levelTarget : 0;
       lvl += (want - lvl) * (1 - Math.exp(-dt / (want > lvl ? 0.05 : 0.22)));
 
+      for (const p of PARTICLES) p.a += p.v * dt * motion * (0.6 + 1.6 * cur.orbit + lvl * 2);
+      const ke = 1 - Math.exp(-dt / 0.06);
+      for (let i = 0; i < EQ; i++) {
+        const u = i / EQ;
+        const n = 0.5 + 0.3 * Math.sin(u * 37 + time * 7.3) + 0.2 * Math.sin(u * 91 - time * 11.1);
+        eqVals[i] += (lvl * (0.25 + 0.75 * clamp(n, 0, 1)) - eqVals[i]) * ke;
+      }
+
       flash *= Math.exp(-dt / 0.5);
       if (flash < 0.004) flash = 0;
     }
@@ -920,67 +939,96 @@
       if (R < 12) return;
 
       const c = cur.col;
+      const hi = light(c, 0.45);
       const breath = 0.5 + 0.5 * Math.sin(time * 1.6);
       const pulse = cur.breath * breath * 0.04 + lvl * 0.14;
+      const coreR = R * 0.38 * (1 + pulse);
 
-      // 1) Weiches Licht hinter dem Kreis
-      const glowR = R * (1.55 + lvl * 0.25);
-      const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, glowR);
-      g.addColorStop(0, rgba(c, 0.22 * cur.glow + lvl * 0.12));
-      g.addColorStop(0.55, rgba(c, 0.07 * cur.glow));
+      // 1) Weiches Licht hinter dem Kreis (additiv: leuchtet wie Licht, nicht wie Farbe)
+      ctx.globalCompositeOperation = 'lighter';
+      const glowR = R * (1.7 + lvl * 0.35);
+      const g = ctx.createRadialGradient(cx, cy, coreR * 0.5, cx, cy, glowR);
+      g.addColorStop(0, rgba(c, 0.26 * cur.glow + lvl * 0.14));
+      g.addColorStop(0.45, rgba(c, 0.08 * cur.glow));
       g.addColorStop(1, rgba(c, 0));
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2) Äußerer Ring, dezent
+      // 2) Lichtpartikel
+      for (const p of PARTICLES) {
+        const wob = cur.ripple * lvl * R * 0.06 * Math.sin(time * 3 + p.tw);
+        const pr = R * p.r + wob;
+        const x = cx + Math.cos(p.a) * pr;
+        const y = cy + Math.sin(p.a) * pr;
+        const a = (0.12 + 0.5 * cur.orbit) * (0.55 + 0.45 * Math.sin(time * 1.3 + p.tw)) * (1.3 - (p.r - 0.92));
+        ctx.fillStyle = rgba(hi, a);
+        ctx.beginPath();
+        ctx.arc(x, y, p.s * (0.8 + lvl * 0.8), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 3) Zuhören: Wellen laufen vom Kern nach außen
+      if (cur.ripple > 0.02) {
+        ctx.lineWidth = 1.2;
+        for (let k = 0; k < 3; k++) {
+          const ph = (time * 0.7 + k / 3) % 1;
+          const rr = coreR + ph * (R * 1.25 - coreR);
+          ctx.strokeStyle = rgba(hi, (1 - ph) * 0.35 * cur.ripple * (0.6 + lvl));
+          ctx.beginPath();
+          ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+
+      // 4) Äußerer Ring, dezent
       ctx.lineWidth = 1;
       ctx.strokeStyle = rgba(c, 0.12 + 0.1 * cur.ring);
       ctx.beginPath();
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 3) Zwölf kurze Bögen (angelehnt an den Arc Reactor), drehen sich langsam
+      // 5) Zwölf kurze Bögen (angelehnt an den Arc Reactor), drehen sich langsam
       const segR = R * 0.8;
       const segs = 12;
       const gap = 0.09;
       ctx.lineWidth = Math.max(2, R * 0.035);
       ctx.lineCap = 'round';
+      ctx.strokeStyle = rgba(c, 0.16 + 0.34 * cur.ring + lvl * 0.25);
       for (let i = 0; i < segs; i++) {
         const a0 = angle + (i / segs) * Math.PI * 2 + gap;
         const a1 = angle + ((i + 1) / segs) * Math.PI * 2 - gap;
-        ctx.strokeStyle = rgba(c, 0.16 + 0.34 * cur.ring + lvl * 0.25);
         ctx.beginPath();
         ctx.arc(cx, cy, segR, a0, a1);
         ctx.stroke();
       }
 
-      // 4) Nachdenken: ein heller Bogen mit weichem Schweif läuft um den Kreis
+      // 6) Nachdenken: zwei helle Bögen mit weichem Schweif laufen gegeneinander
       if (cur.spin > 0.02) {
-        const len = Math.PI * 0.7;
-        const head = rgba(light(c, 0.45), 0.95 * cur.spin);
         ctx.lineWidth = Math.max(2.5, R * 0.04);
-        if (ctx.createConicGradient) {
-          const cgrad = ctx.createConicGradient(spinAngle - len, cx, cy);
-          const f = len / (Math.PI * 2);
-          cgrad.addColorStop(0, rgba(c, 0));
-          cgrad.addColorStop(f * 0.97, head);
-          cgrad.addColorStop(f, rgba(c, 0));
-          cgrad.addColorStop(1, rgba(c, 0));
-          ctx.strokeStyle = cgrad;
+        const arcs = [[spinAngle, segR, 0.7], [-spinAngle * 0.7 + 1.3, R * 0.62, 0.45]];
+        for (const [head, rad, lenF] of arcs) {
+          const len = Math.PI * lenF;
+          if (ctx.createConicGradient) {
+            const cg = ctx.createConicGradient(head - len, cx, cy);
+            const f = len / (Math.PI * 2);
+            cg.addColorStop(0, rgba(c, 0));
+            cg.addColorStop(f * 0.97, rgba(light(c, 0.5), 0.95 * cur.spin));
+            cg.addColorStop(f, rgba(c, 0));
+            cg.addColorStop(1, rgba(c, 0));
+            ctx.strokeStyle = cg;
+          } else {
+            ctx.strokeStyle = rgba(light(c, 0.5), 0.8 * cur.spin);
+          }
           ctx.beginPath();
-          ctx.arc(cx, cy, segR, spinAngle - len, spinAngle);
-          ctx.stroke();
-        } else {
-          ctx.strokeStyle = head;
-          ctx.beginPath();
-          ctx.arc(cx, cy, segR, spinAngle - len * 0.4, spinAngle);
+          ctx.arc(cx, cy, rad, head - len, head);
           ctx.stroke();
         }
       }
 
-      // 5) Zuhören und Sprechen: weiche Welle, die dem Pegel folgt
+      // 7) Zuhören: weiche Welle, die dem Pegel folgt
       if (cur.wave > 0.02) {
         const base = R * 0.62;
         const amp = R * (0.02 + 0.16 * lvl) * cur.wave;
@@ -1006,19 +1054,43 @@
         }
       }
 
-      // 6) Kern: leuchtende Scheibe, innen hell, außen in der Akzentfarbe
-      const coreR = R * 0.38 * (1 + pulse);
-      const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-      cg.addColorStop(0, rgba(light(c, 0.8), cur.core));
-      cg.addColorStop(0.45, rgba(light(c, 0.35), 0.95 * cur.core));
-      cg.addColorStop(0.85, rgba(light(c, 0.02), 0.9 * cur.core));
-      cg.addColorStop(1, rgba(c, 0.8 * cur.core));
-      ctx.fillStyle = cg;
+      // 8) Sprechen: ein Kranz aus Balken pulsiert mit der Stimme
+      if (cur.eq > 0.02) {
+        ctx.lineWidth = Math.max(1.5, R * 0.018);
+        ctx.lineCap = 'round';
+        const r0 = coreR + R * 0.08;
+        ctx.strokeStyle = rgba(hi, 0.85 * cur.eq);
+        ctx.beginPath();
+        for (let i = 0; i < EQ; i++) {
+          const th = (i / EQ) * Math.PI * 2 - Math.PI / 2;
+          const len = R * (0.02 + 0.2 * eqVals[i]);
+          ctx.moveTo(cx + Math.cos(th) * r0, cy + Math.sin(th) * r0);
+          ctx.lineTo(cx + Math.cos(th) * (r0 + len), cy + Math.sin(th) * (r0 + len));
+        }
+        ctx.stroke();
+      }
+
+      // 9) Kern: leuchtende Scheibe, innen hell, außen in der Akzentfarbe
+      const cgr = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+      cgr.addColorStop(0, rgba(light(c, 0.85), cur.core));
+      cgr.addColorStop(0.45, rgba(light(c, 0.35), 0.95 * cur.core));
+      cgr.addColorStop(0.85, rgba(light(c, 0.02), 0.9 * cur.core));
+      cgr.addColorStop(1, rgba(c, 0.8 * cur.core));
+      ctx.fillStyle = cgr;
       ctx.beginPath();
       ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
       ctx.fill();
 
-      // feiner Ring im Kern und ein Rand darum
+      // Glanz im Kern, feiner Ring und Rand
+      ctx.globalCompositeOperation = 'lighter';
+      const sheen = ctx.createRadialGradient(cx, cy - coreR * 0.35, 0, cx, cy - coreR * 0.35, coreR * 0.8);
+      sheen.addColorStop(0, rgba([255, 255, 255], 0.18 * cur.core));
+      sheen.addColorStop(1, rgba([255, 255, 255], 0));
+      ctx.fillStyle = sheen;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.lineWidth = 1;
       ctx.strokeStyle = rgba([255, 255, 255], 0.22 * cur.core);
       ctx.beginPath();

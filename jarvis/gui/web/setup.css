@@ -21,7 +21,6 @@
   min-height: 0;
   padding: 20px 12px 16px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
 }
 
 .rail-brand {
@@ -341,7 +340,7 @@
   gap: 16px;
   padding: 12px 16px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
 }
 
 .plan-ico {
@@ -398,7 +397,7 @@
   padding: 10px 14px;
   border: 0;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
   color: var(--text);
   text-align: left;
   transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease);
@@ -459,7 +458,7 @@
   min-width: 0;
   padding: 16px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
 }
 
 .meter-block + .meter-block {
@@ -615,7 +614,7 @@
   gap: 16px;
   padding: 14px 16px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
   cursor: pointer;
 }
 
@@ -769,7 +768,7 @@
   min-width: 0;
   padding: 12px 12px 12px 14px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
   cursor: pointer;
   transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease);
 }
@@ -912,7 +911,7 @@
   margin-top: 16px;
   padding: 16px 20px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
 }
 
 .weather-temp {
@@ -947,7 +946,7 @@
   gap: 16px;
   padding: 20px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
 }
 
 .claude-icon {
@@ -1042,7 +1041,7 @@
   margin-top: 12px;
   padding: 16px 20px;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
 }
 
 .howto ol {
@@ -1099,7 +1098,7 @@
   padding: 12px 14px;
   border: 0;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
   color: var(--text);
   text-align: left;
   transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease);
@@ -1137,7 +1136,7 @@
   padding: 0 16px;
   border: 0;
   border-radius: var(--r-l);
-  background: var(--surface-1);
+  background: rgba(21, 25, 34, 0.7);
   color: var(--text);
   text-align: left;
   transition: background var(--t) var(--ease);
@@ -1193,7 +1192,49 @@
 @keyframes step-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateX(16px);
+  }
+}
+
+.step.back {
+  animation-name: step-back;
+}
+
+@keyframes step-back {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+
+.choice,
+.voice,
+.segmented button,
+.sum,
+.plan li {
+  transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.choice:hover,
+.voice:hover,
+.segmented button:hover,
+.sum:hover {
+  transform: translateY(-1px);
+}
+
+.plan li {
+  animation: plan-in 420ms var(--ease) both;
+}
+
+.plan li:nth-child(2) { animation-delay: 60ms; }
+.plan li:nth-child(3) { animation-delay: 120ms; }
+.plan li:nth-child(4) { animation-delay: 180ms; }
+.plan li:nth-child(5) { animation-delay: 240ms; }
+
+@keyframes plan-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
 }
 

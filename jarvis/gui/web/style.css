@@ -278,7 +278,6 @@ body[data-state="thinking"] #stopBtn:not(:disabled) {
   min-width: 0;
   min-height: 0;
   border-radius: var(--r-l);
-  background: var(--surface-1);
 }
 
 .chat-head {
@@ -583,8 +582,34 @@ body[data-state="thinking"] #stopBtn:not(:disabled) {
 @keyframes msg-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(8px) scale(0.98);
   }
+}
+
+.controls .btn,
+.try-chip,
+.send-btn {
+  transition: background var(--t) var(--ease), transform var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+
+.controls .btn:hover:not(:disabled),
+.try-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.controls .btn:active:not(:disabled),
+.try-chip:active {
+  transform: translateY(0);
+}
+
+.state-label {
+  transition: color 300ms var(--ease);
+}
+
+body[data-state="listening"] .state-label,
+body[data-state="speaking"] .state-label {
+  color: #cfe5ff;
 }
 
 @keyframes typing {

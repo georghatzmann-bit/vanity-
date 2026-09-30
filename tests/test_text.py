@@ -103,3 +103,29 @@ class TranscriptTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GreetingTest(unittest.TestCase):
+    def test_morning_with_weather_and_todays_reminders(self):
+        import datetime as dt
+
+        from jarvis.greeting import build_greeting
+
+        now = dt.datetime(2026, 10, 1, 8, 15)
+        upcoming = [
+            {"zeit": "2026-10-01T18:30:00", "text": "Mama anrufen"},
+            {"zeit": "2026-10-01T09:00:00", "text": "Tee"},
+            {"zeit": "2026-10-02T09:00:00", "text": "Morgen erst"},
+        ]
+        text = build_greeting(now, {"temp": 12, "text": "leicht bewölkt"}, upcoming)
+        self.assertTrue(text.startswith("Guten Morgen, Sir."))
+        self.assertIn("Draußen: 12 Grad, leicht bewölkt.", text)
+        self.assertIn("Heute stehen noch 2 Erinnerungen an, die nächste um 09:00: Tee.", text)
+
+    def test_evening_without_anything(self):
+        import datetime as dt
+
+        from jarvis.greeting import build_greeting
+
+        self.assertEqual(build_greeting(dt.datetime(2026, 10, 1, 21, 0)), "Guten Abend, Sir. Alle Systeme bereit.")
+
