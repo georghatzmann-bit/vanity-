@@ -18,40 +18,40 @@
 
   const STEPS = [
     {
-      id: 'welcome', nav: 'Willkommen', eyebrow: 'Willkommen',
-      title: 'Guten Tag, Sir.',
-      lead: 'Ich bin J.A.R.V.I.S., Ihr Sprachassistent am PC.',
-      next: 'Einrichtung starten',
+      id: 'welcome', nav: 'Willkommen',
+      title: 'Willkommen bei Jarvis',
+      lead: 'In fünf kurzen Schritten ist Jarvis startklar. Du klickst nur.',
+      next: 'Los geht\'s',
     },
     {
-      id: 'mic', nav: 'Mikrofon', eyebrow: 'Mikrofon',
-      title: 'Womit soll ich Sie hören?',
-      lead: 'Klicken Sie Ihr Mikrofon an und sprechen Sie. Der Balken zeigt sofort, ob es Sie hört.',
+      id: 'mic', nav: 'Mikrofon',
+      title: 'Welches Mikrofon soll Jarvis nutzen?',
+      lead: 'Klick ein Mikrofon an und sprich. Die Anzeige rechts zeigt sofort, ob es dich hört.',
     },
     {
-      id: 'voice', nav: 'Stimme', eyebrow: 'Stimme',
-      title: 'Wie soll ich klingen?',
-      lead: 'Hören Sie die Stimmen probe und wählen Sie Ihren Favoriten.',
+      id: 'voice', nav: 'Stimme',
+      title: 'Wie soll Jarvis klingen?',
+      lead: 'Hör dir die Stimmen an und wähl deinen Favoriten.',
     },
     {
-      id: 'place', nav: 'Wohnort', eyebrow: 'Wohnort',
-      title: 'Wo sind Sie zu Hause?',
-      lead: 'Für das Wetter und alles, was mit Ihrer Umgebung zu tun hat.',
+      id: 'place', nav: 'Wohnort',
+      title: 'Wo wohnst du?',
+      lead: 'Für das Wetter und alles, was mit deiner Umgebung zu tun hat.',
     },
     {
-      id: 'claude', nav: 'Claude', eyebrow: 'Gehirn',
-      title: 'Mein Gehirn verbinden',
-      lead: 'Jarvis denkt mit Claude Code. Ich frage Claude kurz, ob alles bereit ist.',
+      id: 'claude', nav: 'Claude',
+      title: 'Claude verbinden',
+      lead: 'Claude Code ist das Gehirn von Jarvis. Jarvis prüft kurz, ob alles bereit ist.',
     },
     {
-      id: 'extras', nav: 'Extras', eyebrow: 'Extras',
-      title: 'Noch ein paar Extras',
+      id: 'extras', nav: 'Extras',
+      title: 'Extras',
       lead: 'Alles hier ist freiwillig und lässt sich später ändern.',
     },
     {
-      id: 'done', nav: 'Fertig', eyebrow: 'Fertig',
-      title: 'Alle Systeme bereit, Sir.',
-      lead: 'So habe ich mich eingerichtet. Ein Klick auf eine Kachel führt zurück zu dem Schritt.',
+      id: 'done', nav: 'Fertig',
+      title: 'Jarvis ist bereit',
+      lead: 'So ist Jarvis eingerichtet. Klick auf eine Zeile, um etwas zu ändern.',
       next: 'Jarvis starten',
     },
   ];
@@ -59,13 +59,20 @@
 
   const CLAUDE_TEXT = {
     idle:    ['Noch nicht geprüft', 'Jarvis fragt Claude einmal, ob alles funktioniert.'],
-    running: ['Ich frage Claude …', 'Das dauert meistens ein paar Sekunden.'],
-    ok:      ['Claude antwortet', ''],
-    missing: ['Claude Code fehlt', ''],
+    running: ['Jarvis fragt Claude …', 'Das dauert meistens ein paar Sekunden.'],
+    ok:      ['Claude ist verbunden', ''],
+    missing: ['Claude Code fehlt noch', ''],
     login:   ['Noch nicht angemeldet', ''],
     refused: ['Claude hat abgelehnt', ''],
+    limit:   ['Kontingent aufgebraucht', ''],
+    network: ['Keine Verbindung', ''],
+    account: ['Konto braucht Aufmerksamkeit', ''],
+    billing: ['Falsche Anmeldung', ''],
+    timeout: ['Keine Antwort', ''],
     error:   ['Das hat nicht geklappt', ''],
   };
+
+  const SPEED_NAMES = { schnell: 'Schnell', ausgewogen: 'Ausgewogen', gruendlich: 'Gründlich' };
 
   // ------------------------------------------------------------------ Zustand
 
@@ -80,7 +87,8 @@
     },
     voices: [], voice: '', playing: '',
     place: { saved: '', lastChecked: '', result: null },
-    claude: { state: 'idle', message: '', model: '', version: '', polling: false },
+    claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
+    speed: 'ausgewogen',
     hotkeys: [], hotkey: '', autostart: false,
     ha: { url: '', tokenSet: false, echos: [] },
     finishing: false,
@@ -123,15 +131,20 @@
 
   // ------------------------------------------------------------------ Hinweise
 
+  const TOAST_ICONS = {
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    error: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/>',
+    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 10"/>',
+  };
+
   function toast(text, kind) {
     const box = $('toasts');
     const isErr = kind === 'error';
+    const type = isErr ? 'error' : kind === 'ok' ? 'ok' : 'info';
     const t = document.createElement('div');
-    t.className = 'toast ' + (isErr ? 'toast-error' : 'toast-info');
+    t.className = 'toast toast-' + type;
     t.setAttribute('role', isErr ? 'alert' : 'status');
-    const icon = document.createElement('span');
-    icon.className = 'toast-icon';
-    icon.textContent = isErr ? '!' : 'i';
+    const icon = svg('<svg viewBox="0 0 24 24">' + TOAST_ICONS[type] + '</svg>');
     const body = document.createElement('span');
     body.className = 'toast-text';
     body.textContent = String(text == null ? '' : text);
@@ -141,9 +154,9 @@
     const hide = () => {
       if (!t.isConnected || t.classList.contains('out')) return;
       t.classList.add('out');
-      setTimeout(() => t.remove(), 320);
+      setTimeout(() => t.remove(), 200);
     };
-    setTimeout(hide, isErr ? 6500 : 3800);
+    setTimeout(hide, isErr ? 7000 : 4000);
     t.addEventListener('click', hide);
   }
 
@@ -162,203 +175,118 @@
   function svg(markup) {
     const t = document.createElement('template');
     t.innerHTML = markup.trim(); // nur feste Symbole aus diesem Skript, nie Text von außen
-    return t.content.firstChild;
+    const node = t.content.firstChild;
+    node.setAttribute('class', 'ico');
+    node.setAttribute('aria-hidden', 'true');
+    return node;
   }
 
   const ICON = {
     check: '<svg viewBox="0 0 24 24"><path d="M5 12.5 10 17 19 7.5"/></svg>',
-    mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg>',
+    mic: '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>',
     headset: '<svg viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3.5" y="13.5" width="4" height="6" rx="1.5"/><rect x="16.5" y="13.5" width="4" height="6" rx="1.5"/><path d="M18.5 19.5c0 1.5-2 2-4.5 2"/></svg>',
     cam: '<svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="6"/><circle cx="12" cy="10" r="2.2"/><path d="M8 20h8M12 16v4"/></svg>',
-    laptop: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/><path d="M10 10h.01M12 10h.01M14 10h.01"/></svg>',
+    laptop: '<svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="10" rx="1.5"/><path d="M3 19h18"/></svg>',
     windows: '<svg viewBox="0 0 24 24"><path d="M4 5.5 11 4.5v7H4zM13 4.2l7-1.2v8.5h-7zM4 13h7v7l-7-1zM13 13h7v8l-7-1.2z"/></svg>',
-    play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg>',
+    play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
+    spinner: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1-9 9"/></svg>',
+    alert: '<svg viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/></svg>',
+    download: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></svg>',
+    key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l3 3M14 9l2 2"/></svg>',
+    clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    wifi: '<svg viewBox="0 0 24 24"><path d="M3 9a13 13 0 0 1 18 0M6 12.5a8.5 8.5 0 0 1 12 0M9 16a4 4 0 0 1 6 0M12 19.5h.01"/></svg>',
+    brain: '<svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2.4 4.8.8.8 1.1 1.7 1.1 2.7V18h5v-1.5c0-1 .3-1.9 1.1-2.7C16.8 12.6 18 11.2 18 9a6 6 0 0 0-6-6zM10 21h4"/></svg>',
+    dot: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></svg>',
   };
 
-  // ------------------------------------------------------------------ Arc Reactor (Canvas)
+  // ------------------------------------------------------------------ Kreis (nur auf der Begrüßungsseite)
 
-  const reactors = [];
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
+  const lighten = (c, t) => [c[0] + (255 - c[0]) * t, c[1] + (255 - c[1]) * t, c[2] + (255 - c[2]) * t];
+  const ACCENT = [76, 157, 255];
 
-  function reactor(canvas, opts) {
+  function orb(canvas) {
+    if (!canvas) return null;
     const ctx = canvas.getContext('2d');
-    const r = {
-      canvas, ctx, w: 0, h: 0, dpr: 1,
-      color: (opts.color || [79, 216, 255]).slice(),
-      target: (opts.color || [79, 216, 255]).slice(),
-      spin: opts.spin || 1, spinTarget: opts.spin || 1,
-      mode: opts.mode || 'idle',
-      level: 0, levelTarget: 0,
-      boot: opts.boot === false ? 1 : 0,
-      small: !!opts.small,
-      a: [0, 0, 0, 0],
-      set(o) {
-        if (o.color) this.target = o.color.slice();
-        if (o.spin != null) this.spinTarget = o.spin;
-        if (o.mode) this.mode = o.mode;
-        if (o.level != null) this.levelTarget = clamp(o.level, 0, 1);
-      },
-    };
+    let w = 0;
+    let h = 0;
+    let dpr = 1;
+    let angle = 0;
+    let t = 0;
+    let last = 0;
     const fit = () => {
       const b = canvas.getBoundingClientRect();
-      r.dpr = clamp(window.devicePixelRatio || 1, 1, 2);
-      r.w = Math.max(1, b.width);
-      r.h = Math.max(1, b.height);
-      const cw = Math.round(r.w * r.dpr);
-      const ch = Math.round(r.h * r.dpr);
+      dpr = clamp(window.devicePixelRatio || 1, 1, 2);
+      w = Math.max(1, b.width);
+      h = Math.max(1, b.height);
+      const cw = Math.round(w * dpr);
+      const ch = Math.round(h * dpr);
       if (canvas.width !== cw || canvas.height !== ch) {
         canvas.width = cw;
         canvas.height = ch;
       }
     };
-    fit();
-    if (window.ResizeObserver) new ResizeObserver(fit).observe(canvas);
-    reactors.push(r);
-    return r;
-  }
-
-  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
-
-  function drawReactor(r, dt, t) {
-    if (!r.canvas.isConnected || r.canvas.offsetParent === null) return;
-    const k = 1 - Math.exp(-dt / 0.25);
-    for (let i = 0; i < 3; i++) r.color[i] += (r.target[i] - r.color[i]) * k;
-    r.spin += (r.spinTarget - r.spin) * k;
-    r.level += (r.levelTarget - r.level) * (1 - Math.exp(-dt / 0.08));
-    r.boot = Math.min(1, r.boot + dt / (reducedMotion() ? 0.3 : 1.4));
-    const sf = reducedMotion() ? 0.25 : 1;
-    r.a[0] += dt * 0.12 * r.spin * sf;
-    r.a[1] -= dt * 0.45 * r.spin * sf;
-    r.a[2] += dt * 0.8 * r.spin * sf;
-    r.a[3] += dt * (r.mode === 'run' ? 4.2 : 0) * sf;
-
-    const { ctx, w, h, dpr } = r;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    const cx = w / 2;
-    const cy = h / 2;
-    const ease = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
-    const R = Math.min(w, h) * 0.46 * (0.9 + 0.1 * ease(r.boot));
-    if (R < 6) return;
-    const C = r.color;
-    const breathe = 0.5 - 0.5 * Math.cos(t * 1.4);
-    const B = (0.78 + 0.22 * breathe + r.level * 0.5) * ease(r.boot * 1.2);
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'butt';
-
-    // Außenring mit Skala
-    ctx.strokeStyle = rgba(C, 0.18 * B);
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, 0, Math.PI * 2);
-    ctx.stroke();
-    if (!r.small) {
-      const n = 72;
-      ctx.beginPath();
-      for (let i = 0; i < n; i++) {
-        const ang = r.a[0] + (i * Math.PI * 2) / n;
-        const r1 = R * (i % 6 === 0 ? 0.9 : 0.93);
-        ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1);
-        ctx.lineTo(cx + Math.cos(ang) * R * 0.97, cy + Math.sin(ang) * R * 0.97);
-      }
-      ctx.strokeStyle = rgba(C, 0.35 * B);
-      ctx.stroke();
-    }
-
-    // Segmentring
-    {
-      const rr = R * 0.8;
-      const segs = [[0, 1.1], [1.35, 0.55], [2.1, 1.2], [3.55, 0.35], [4.1, 1.3], [5.6, 0.45]];
-      const lw = Math.max(2, R * 0.05);
-      ctx.beginPath();
-      for (const [st, len] of segs) {
-        const a0 = st + r.a[1];
-        ctx.moveTo(cx + Math.cos(a0) * rr, cy + Math.sin(a0) * rr);
-        ctx.arc(cx, cy, rr, a0, a0 + len);
-      }
-      ctx.strokeStyle = rgba(C, 0.14 * B);
-      ctx.lineWidth = lw * 3;
-      ctx.stroke();
-      ctx.strokeStyle = rgba(C, 0.85 * B);
-      ctx.lineWidth = lw;
-      ctx.stroke();
-    }
-
-    // Suchlauf beim Prüfen
-    if (r.mode === 'run') {
-      const rr = R * 0.66;
-      for (let i = 0; i < 14; i++) {
-        const a0 = r.a[3] - i * 0.07;
-        ctx.beginPath();
-        ctx.arc(cx, cy, rr, a0 - 0.07, a0);
-        ctx.strokeStyle = rgba(C, (1 - i / 14) * 0.9 * B);
-        ctx.lineWidth = Math.max(2, R * 0.035);
-        ctx.stroke();
-      }
-    } else {
-      ctx.setLineDash([Math.max(2, R * 0.04), Math.max(2, R * 0.05)]);
-      ctx.lineDashOffset = -r.a[2] * R * 0.2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 0.66, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba(C, 0.35 * B);
+    const draw = (now) => {
+      requestAnimationFrame(draw);
+      if (document.hidden || canvas.offsetParent === null) return;
+      if (now - last < 1000 / 30 - 3) return; // 30 Bilder pro Sekunde reichen
+      const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 30;
+      last = now;
+      const motion = reducedMotion() ? 0.25 : 1;
+      t += dt * motion;
+      angle += dt * 0.12 * motion;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const cx = w / 2;
+      const cy = h / 2;
+      const R = Math.min(w, h) * 0.46;
+      if (R < 10) return;
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.6);
+      const glow = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.05);
+      glow.addColorStop(0, rgba(ACCENT, 0.12));
+      glow.addColorStop(1, rgba(ACCENT, 0));
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
       ctx.lineWidth = 1;
+      ctx.strokeStyle = rgba(ACCENT, 0.16);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Spulen
-    {
-      const n = r.small ? 8 : 10;
-      const r1 = R * 0.36;
-      const r2 = R * 0.52;
-      for (let i = 0; i < n; i++) {
-        const mid = (i * Math.PI * 2) / n - r.a[0] * 0.5;
-        const half = (Math.PI / n) * 0.62;
+      ctx.lineWidth = Math.max(2, R * 0.035);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = rgba(ACCENT, 0.4);
+      for (let i = 0; i < 12; i++) {
+        const a0 = angle + (i / 12) * Math.PI * 2 + 0.09;
+        const a1 = angle + ((i + 1) / 12) * Math.PI * 2 - 0.09;
         ctx.beginPath();
-        ctx.arc(cx, cy, r2, mid - half, mid + half);
-        ctx.arc(cx, cy, r1, mid + half * 0.85, mid - half * 0.85, true);
-        ctx.closePath();
-        ctx.fillStyle = rgba(C, (0.1 + 0.08 * breathe + r.level * 0.2) * B);
-        ctx.fill();
-        ctx.strokeStyle = rgba(C, 0.45 * B);
-        ctx.lineWidth = 1;
+        ctx.arc(cx, cy, R * 0.8, a0, a1);
         ctx.stroke();
       }
-    }
-
-    // Kern
-    {
-      const core = R * (0.25 + 0.03 * breathe + 0.06 * r.level);
-      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, core * 2.2);
-      g.addColorStop(0, rgba([255, 255, 255], 0.95 * B));
-      g.addColorStop(0.28, rgba([Math.min(255, C[0] + 110), Math.min(255, C[1] + 40), Math.min(255, C[2] + 10)], 0.85 * B));
-      g.addColorStop(0.55, rgba(C, 0.3 * B));
-      g.addColorStop(1, rgba(C, 0));
+      const coreR = R * 0.38 * (1 + breath * 0.03);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+      g.addColorStop(0, rgba(lighten(ACCENT, 0.8), 1));
+      g.addColorStop(0.45, rgba(lighten(ACCENT, 0.35), 0.95));
+      g.addColorStop(0.85, rgba(lighten(ACCENT, 0.02), 0.9));
+      g.addColorStop(1, rgba(ACCENT, 0.8));
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(cx, cy, core * 2.2, 0, Math.PI * 2);
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = rgba(C, 0.8 * B);
-      ctx.lineWidth = Math.max(1.5, R * 0.018);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
       ctx.beginPath();
-      ctx.arc(cx, cy, core * 1.08, 0, Math.PI * 2);
+      ctx.arc(cx, cy, coreR * 0.62, 0, Math.PI * 2);
       ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = rgba(lighten(ACCENT, 0.5), 0.3);
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR + 5, 0, Math.PI * 2);
+      ctx.stroke();
+    };
+    fit();
+    if (window.ResizeObserver) new ResizeObserver(fit).observe(canvas);
+    requestAnimationFrame(draw);
+    return { fit };
   }
-
-  let lastFrame = 0;
-  function frame(now) {
-    requestAnimationFrame(frame);
-    const dt = lastFrame ? Math.min(0.1, (now - lastFrame) / 1000) : 1 / 60;
-    lastFrame = now;
-    const t = now / 1000;
-    for (const r of reactors) drawReactor(r, dt, t);
-  }
-
-  const CYAN = [79, 216, 255];
-  const AMBER = [255, 181, 71];
-  const GREEN = [93, 255, 196];
-  const RED = [255, 77, 94];
 
   // ------------------------------------------------------------------ Navigation
 
@@ -441,11 +369,10 @@
         sec.style.animation = '';
       }
     });
-    $('eyebrow').textContent = step.eyebrow;
-    $('stepCount').textContent = `Schritt ${index + 1} / ${STEPS.length}`;
-    $('title').textContent = index === 0 && !S.first ? 'Einstellungen, Sir.' : step.title;
+    $('stepCount').textContent = `Schritt ${index + 1} von ${STEPS.length}`;
+    $('title').textContent = index === 0 && !S.first ? 'Einstellungen' : step.title;
     $('lead').textContent = index === 0 && !S.first
-      ? 'Klicken Sie links auf das, was Sie ändern möchten. Alles andere bleibt, wie es ist.'
+      ? 'Klick links auf das, was du ändern möchtest. Alles andere bleibt, wie es ist.'
       : step.lead;
     $('progressFill').style.width = ((index / (STEPS.length - 1)) * 100).toFixed(1) + '%';
     $('cardBody').scrollTop = 0;
@@ -460,7 +387,6 @@
     const back = $('backBtn');
     back.hidden = S.step === 0;
     next.textContent = step.next || 'Weiter';
-    next.classList.toggle('launch', step.id === 'done');
     next.disabled = S.finishing;
     const hint = $('footHint');
     hint.replaceChildren();
@@ -470,9 +396,9 @@
       later.addEventListener('click', () => finish(false));
       hint.append(later);
     } else if (step.id === 'welcome') {
-      hint.textContent = S.first ? 'Etwa zwei Minuten' : '';
+      hint.textContent = S.first ? 'Dauert etwa zwei Minuten' : '';
     } else if (step.id === 'claude' && S.claude.state !== 'ok' && S.claude.state !== 'running') {
-      hint.textContent = 'Sie können auch ohne Claude weitermachen.';
+      hint.textContent = 'Du kannst auch ohne Claude weitermachen.';
     } else {
       hint.textContent = 'Wird sofort gespeichert';
     }
@@ -510,27 +436,10 @@
 
   // ------------------------------------------------------------------ 1 Willkommen
 
-  let bootGen = 0;
-  async function startBoot() {
-    const gen = ++bootGen;
-    const line = $('bootLine');
-    const text = S.first
-      ? 'Bevor wir loslegen, richten wir fünf Dinge ein. Sie klicken nur, den Rest erledige ich.'
-      : 'Schön, Sie wiederzusehen. Was möchten Sie ändern?';
-    line.replaceChildren();
-    const span = el('span');
-    const caret = el('span', 'caret');
-    line.append(span, caret);
-    if (reducedMotion()) {
-      span.textContent = text;
-      return;
-    }
-    await sleep(350);
-    for (let i = 1; i <= text.length; i++) {
-      if (gen !== bootGen) return;
-      span.textContent = text.slice(0, i);
-      await sleep(text[i - 1] === '.' || text[i - 1] === ',' ? 160 : 22);
-    }
+  function startBoot() {
+    $('bootLine').textContent = S.first
+      ? 'Dauert etwa zwei Minuten. Jeder Schritt wird sofort gespeichert.'
+      : 'Schön, dass du wieder da bist. Klick links auf den Schritt, den du ändern möchtest.';
   }
 
   // ------------------------------------------------------------------ 2 Mikrofon
@@ -554,7 +463,7 @@
     }
     if (pick !== undefined) micStart(pick, false);
     else if (S.mic.savedName) {
-      setMicStatus('warn', `Ihr gespeichertes Mikrofon „${S.mic.savedName}“ ist gerade nicht angeschlossen. Stecken Sie es an und klicken Sie „Liste neu laden“, oder wählen Sie ein anderes.`);
+      setMicStatus('warn', `Dein gespeichertes Mikrofon „${S.mic.savedName}“ ist gerade nicht angeschlossen. Steck es an und klick „Liste neu laden“, oder wähl ein anderes.`);
     }
   }
 
@@ -597,12 +506,9 @@
       txt.append(el('span', 'choice-name', o.name));
       if (o.sub) txt.append(el('span', 'choice-sub', o.sub));
       b.title = o.name;
-      b.append(radio, ico, txt);
-      if (o.current) {
-        const badges = el('span', 'badges');
-        badges.append(el('span', 'badge ok', 'Aktuell'));
-        b.append(badges);
-      }
+      const badges = el('span', 'badges');
+      if (o.current) badges.append(el('span', 'badge ok', 'Aktiv'));
+      b.append(radio, ico, txt, badges);
       b.addEventListener('click', () => micStart(o.id, true));
       box.append(b);
     }
@@ -648,14 +554,14 @@
       return;
     }
     S.mic.running = true;
-    setMicStatus('run', 'Hört zu. Sprechen Sie etwas und sagen Sie „Hey Jarvis“.');
+    setMicStatus('run', 'Hört zu. Sprich etwas und sag „Hey Jarvis“.');
     if (save) {
       call('mic_save', id).then((r) => {
         if (r && r.ok) {
           S.mic.savedName = id === '' ? '' : r.name || '';
           (S.mic.list || []).forEach((d) => { d.current = d.id === id; });
           renderMics();
-        } else if (r) toast(r.error || 'Konnte das Mikrofon nicht speichern.', 'error');
+        } else if (r) toast(r.error || 'Das Mikrofon ließ sich nicht speichern.', 'error');
       }).catch(failed);
     }
     micPoll();
@@ -698,11 +604,11 @@
     for (let i = 0; i < segs.length; i++) {
       const on = i < lit;
       segs[i].classList.toggle('on', on);
-      segs[i].classList.toggle('hot', on && i >= segs.length * 0.72);
-      segs[i].classList.toggle('peak', on && i >= segs.length * 0.9);
+      segs[i].classList.toggle('hot', on && i >= segs.length * 0.8);
+      segs[i].classList.toggle('peak', on && i >= segs.length * 0.94);
     }
     $('levelNum').textContent = Math.round(level * 100) + ' %';
-    $('wakeNum').textContent = st.ready ? wake.toFixed(2) + ' / ' + threshold.toFixed(2) : 'lädt …';
+    $('wakeNum').textContent = st.ready ? Math.round(wake * 100) + ' %' : 'lädt …';
     $('wakeFill').style.width = (wake * 100).toFixed(1) + '%';
     $('wakeBest').style.left = 'calc(' + (best * 100).toFixed(1) + '% - 1px)';
     $('wakeMark').style.left = 'calc(' + (threshold * 100).toFixed(1) + '% - 1px)';
@@ -711,16 +617,15 @@
     if (detected && !S.mic.detected) {
       S.mic.detected = true;
       $('micLive').classList.add('detected');
-      if (bigReactorRef) bigReactorRef.set({ color: GREEN });
     }
     const running = performance.now() - S.mic.startedAt;
     if (st.error) setMicStatus('error', st.error);
-    else if (st.silent) setMicStatus('error', 'Von diesem Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff: Einstellungen › Datenschutz und Sicherheit › Mikrofon › „Desktop-Apps den Zugriff erlauben“ einschalten. Oder es ist das falsche Mikrofon.');
-    else if (S.mic.detected) setMicStatus('ok', '„Hey Jarvis“ erkannt! Dieses Mikrofon passt.');
-    else if (!st.ready) setMicStatus('run', 'Der Pegel läuft schon. Die Hey-Jarvis-Erkennung lädt noch ein paar Sekunden …');
-    else if (running > 6000 && S.mic.maxLevel < 0.03) setMicStatus('warn', 'Kaum etwas zu hören. Sprechen Sie etwas – bleibt der Balken leer, ist es wohl das falsche Mikrofon.');
-    else if (best >= 0.15) setMicStatus('warn', `Fast erkannt (${best.toFixed(2)}). Noch einmal deutlich „Hey Dschaarwis“ sagen – oder unten „Empfindlicher“ einschalten.`);
-    else setMicStatus('run', 'Hört zu. Sagen Sie jetzt „Hey Jarvis“ (englisch ausgesprochen).');
+    else if (st.silent) setMicStatus('error', 'Von diesem Mikrofon kommt gar nichts. Meist blockiert Windows den Zugriff: Einstellungen › Datenschutz und Sicherheit › Mikrofon › „Desktop-Apps den Zugriff erlauben“ einschalten. Oder es ist das falsche Mikrofon.');
+    else if (S.mic.detected) setMicStatus('ok', '„Hey Jarvis“ erkannt. Dieses Mikrofon passt.');
+    else if (!st.ready) setMicStatus('run', 'Die Lautstärke wird schon gemessen. Die Hey-Jarvis-Erkennung lädt noch ein paar Sekunden …');
+    else if (running > 6000 && S.mic.maxLevel < 0.03) setMicStatus('warn', 'Kaum etwas zu hören. Sprich etwas. Bleibt die Anzeige leer, ist es wohl das falsche Mikrofon.');
+    else if (best >= 0.15) setMicStatus('warn', `Fast erkannt (${Math.round(best * 100)} %). Sag noch einmal deutlich „Hey Jarvis“, oder schalte unten „Empfindlicher“ ein.`);
+    else setMicStatus('run', 'Hört zu. Sag jetzt „Hey Jarvis“.');
   }
 
   async function micStop() {
@@ -756,8 +661,12 @@
       const avatar = el('span', 'avatar', (v.name || '?').charAt(0));
       const txt = el('span', 'voice-text');
       txt.append(el('span', 'voice-name', v.name), el('span', 'voice-desc', v.desc));
-      const tag = el('span', 'badge voice-tag', v.gender === 'w' ? 'weiblich' : 'männlich');
-      txt.append(tag);
+      const tags = el('span', 'voice-tags');
+      (Array.isArray(v.tags) ? v.tags : []).forEach((tag, i) => {
+        tags.append(el('span', 'badge' + (i === 0 && v.recommended ? ' accent' : ''), tag));
+      });
+      if (!tags.childElementCount) tags.append(el('span', 'badge', v.gender === 'w' ? 'weiblich' : 'männlich'));
+      txt.append(tags);
       const play = el('button', 'play');
       play.type = 'button';
       play.title = v.name + ' anhören';
@@ -790,7 +699,7 @@
     renderRail();
     if (changed) {
       call('voice_save', v.id).then((r) => {
-        if (r && !r.ok) toast(r.error || 'Konnte die Stimme nicht speichern.', 'error');
+        if (r && !r.ok) toast(r.error || 'Die Stimme ließ sich nicht speichern.', 'error');
       }).catch(failed);
     }
     if (andPreview && changed && !S.playing) preview(v);
@@ -834,9 +743,9 @@
     const ok = !!(res && res.ok);
     card.classList.toggle('empty', !ok);
     if (!ok) {
-      $('weatherTemp').textContent = '--°';
-      $('weatherPlace').textContent = 'Hier erscheint gleich das Wetter';
-      $('weatherText').textContent = 'Ort eintippen und „Prüfen“ klicken (oder Enter).';
+      $('weatherTemp').textContent = '–';
+      $('weatherPlace').textContent = 'Noch kein Ort geprüft';
+      $('weatherText').textContent = 'Ort eintippen und „Prüfen“ klicken. Hier erscheint dann das Wetter.';
       return;
     }
     $('weatherTemp').textContent = res.temp == null ? '–' : res.temp + '°';
@@ -855,7 +764,7 @@
       return 'empty';
     }
     btn.classList.add('busy');
-    placeMsg('', 'Ich schaue nach …');
+    placeMsg('', 'Suche …');
     let res;
     try {
       res = await call('place_check', text);
@@ -891,7 +800,7 @@
         renderRail();
         return true;
       }
-      toast((r && r.error) || 'Konnte den Ort nicht speichern.', 'error');
+      toast((r && r.error) || 'Der Ort ließ sich nicht speichern.', 'error');
     } catch (err) {
       failed(err);
     }
@@ -916,15 +825,17 @@
 
   // ------------------------------------------------------------------ 5 Claude
 
-  let claudeReactorRef = null;
-
   function claudeEnter() {
+    renderSpeed();
     if (S.claude.state === 'idle' || S.claude.state === 'error') claudeCheck();
     else renderClaude();
   }
 
   async function claudeCheck() {
     S.claude.state = 'running';
+    S.claude.message = '';
+    S.claude.detail = '';
+    S.claude.note = '';
     renderClaude();
     try {
       await call('claude_check');
@@ -939,7 +850,7 @@
     S.claude.polling = true;
     try {
       for (;;) {
-        await sleep(600);
+        await sleep(500);
         let r;
         try {
           r = await call('claude_poll');
@@ -951,6 +862,12 @@
         S.claude.message = r.message || '';
         S.claude.model = r.model || '';
         S.claude.version = r.version || '';
+        S.claude.detail = r.detail || '';
+        S.claude.note = r.note || '';
+        if (r.speed && SPEED_NAMES[r.speed]) {
+          S.speed = r.speed;
+          renderSpeed();
+        }
         renderClaude();
         if (S.claude.state !== 'running') break;
       }
@@ -966,44 +883,119 @@
     return m[3] && m[3].length <= 2 ? `${name} ${m[2]}.${m[3]}` : `${name} ${m[2]}`;
   }
 
+  const CLAUDE_ICON = {
+    idle: ICON.brain, running: ICON.spinner, ok: ICON.check, missing: ICON.download, login: ICON.key,
+    limit: ICON.clock, network: ICON.wifi, timeout: ICON.clock,
+  };
+
+  const CLAUDE_HOWTO = {
+    missing: ['So geht es:', [
+      'Auf „Claude Code installieren“ klicken. Ein blaues Fenster installiert es, das dauert etwa eine Minute.',
+      'Wenn es fertig ist, das Fenster schließen und hier „Nochmal prüfen“ klicken.',
+      'Danach führt Jarvis dich durch die Anmeldung mit deinem Claude-Konto.',
+    ]],
+    login: ['So geht es:', [
+      'Auf „Bei Claude anmelden“ klicken. Ein Fenster mit Claude Code öffnet sich.',
+      'Der Browser fragt nach deinem Claude-Konto (Pro-Abo). Anmelden und zurück ins Fenster.',
+      'Das Fenster schließen und hier „Nochmal prüfen“ klicken.',
+    ]],
+    refused: ['Was das heißt:', [
+      'Claudes Sicherheitsfilter schlägt manchmal fälschlich an, sogar bei harmlosen Fragen.',
+      'Jarvis hat schon alle Modelle und einen ganz einfachen Modus probiert.',
+      'Du kannst trotzdem weitermachen. Die genaue Meldung steht unten, die kannst du kopieren und weitergeben.',
+    ]],
+    billing: ['So geht es:', [
+      'Claude Code ist mit einem API-Schlüssel angemeldet statt mit deinem Pro-Abo.',
+      'Auf „Bei Claude anmelden“ klicken, im Fenster /login eintippen und dein Claude-Konto (Pro) wählen.',
+      'Danach hier „Nochmal prüfen“ klicken.',
+    ]],
+  };
+
   function renderClaude() {
     const st = S.claude.state;
     const card = $('claudeCard');
     card.dataset.state = st;
     const [title, fallback] = CLAUDE_TEXT[st] || CLAUDE_TEXT.error;
+    const icon = $('claudeIcon');
+    icon.replaceChildren(svg(CLAUDE_ICON[st] || ICON.alert));
     $('claudeTitle').textContent = title;
     $('claudeMsg').textContent = S.claude.message && st !== 'running' ? S.claude.message : fallback;
+    if (st === 'running' && S.claude.message && !/^Ich frage Claude/.test(S.claude.message)) {
+      $('claudeMsg').textContent = S.claude.message; // "sonnet hat abgelehnt, versuche haiku ..."
+    }
+    const note = $('claudeNote');
+    note.textContent = st === 'ok' ? S.claude.note : '';
+    note.hidden = !note.textContent;
     const meta = [];
     if (st === 'ok' && S.claude.model) meta.push('Modell: ' + prettyModel(S.claude.model));
     if (S.claude.version) meta.push('Claude Code ' + S.claude.version.replace(/\s*\(Claude Code\)\s*/i, ''));
-    $('claudeMeta').textContent = meta.join('   ·   ');
+    $('claudeMeta').textContent = meta.join('  ·  ');
     $('claudeInstall').hidden = st !== 'missing';
-    $('claudeLogin').hidden = st !== 'login';
+    $('claudeLogin').hidden = st !== 'login' && st !== 'billing';
     $('claudeRetry').hidden = st === 'running';
     $('claudeRetry').textContent = st === 'ok' ? 'Noch einmal prüfen' : 'Nochmal prüfen';
 
     const howto = $('claudeHowto');
     howto.replaceChildren();
-    howto.hidden = true;
-    const steps = {
-      missing: ['So geht es:', ['Auf „Claude Code installieren“ klicken. Ein blaues Fenster installiert es (etwa eine Minute).', 'Ist es fertig, das Fenster schließen und hier „Nochmal prüfen“ klicken.', 'Danach führt Jarvis Sie durch die Anmeldung mit Ihrem Claude-Konto.']],
-      login: ['So geht es:', ['Auf „Bei Claude anmelden“ klicken. Ein Fenster mit Claude Code öffnet sich.', 'Der Browser fragt nach Ihrem Claude-Konto (Pro-Abo). Anmelden und zurück ins Fenster.', 'Das Fenster schließen und hier „Nochmal prüfen“.']],
-      refused: ['Was das heißt:', ['Claudes Sicherheitsfilter schlägt manchmal fälschlich an, sogar bei harmlosen Fragen.', 'Jarvis probiert dann automatisch andere Modelle und einen einfachen Modus.', 'Sie können trotzdem weitermachen. Hilft das nicht, zeigt werkzeuge\\Claude-Test.bat mehr.']],
-    }[st];
+    const steps = CLAUDE_HOWTO[st];
+    howto.hidden = !steps;
     if (steps) {
       howto.append(el('b', null, steps[0]));
       const ol = el('ol');
-      steps[1].forEach((s) => ol.append(el('li', null, s)));
+      steps[1].forEach((line) => ol.append(el('li', null, line)));
       howto.append(ol);
-      howto.hidden = false;
     }
 
-    if (claudeReactorRef) {
-      const color = st === 'ok' ? GREEN : st === 'running' ? AMBER : st === 'error' ? RED : st === 'idle' ? CYAN : AMBER;
-      claudeReactorRef.set({ color, mode: st === 'running' ? 'run' : 'idle', spin: st === 'running' ? 2.4 : 1 });
-    }
+    const details = $('claudeDetails');
+    const showDetail = !!S.claude.detail && st !== 'ok' && st !== 'running';
+    details.hidden = !showDetail;
+    $('claudeDetail').textContent = showDetail ? S.claude.detail : '';
+    if (showDetail && (st === 'error' || st === 'refused')) details.open = true;
+
     if (STEPS[S.step].id === 'claude') renderFoot();
     renderRail();
+  }
+
+  function renderSpeed() {
+    document.querySelectorAll('#speed [data-speed]').forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.speed === S.speed));
+    });
+  }
+
+  async function chooseSpeed(key) {
+    if (!SPEED_NAMES[key] || key === S.speed) return;
+    const before = S.speed;
+    S.speed = key;
+    renderSpeed();
+    try {
+      const r = await call('brain_speed', key);
+      if (r && r.ok) toast('Antwort-Tempo: ' + SPEED_NAMES[key] + '.', 'ok');
+      else {
+        S.speed = before;
+        renderSpeed();
+        toast((r && r.error) || 'Das ließ sich nicht speichern.', 'error');
+      }
+    } catch (err) {
+      S.speed = before;
+      renderSpeed();
+      failed(err);
+    }
+  }
+
+  async function copyDetail() {
+    const text = S.claude.detail || '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents($('claudeDetail'));
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('copy');
+      sel.removeAllRanges();
+    }
+    toast('Kopiert. Du kannst die Meldung jetzt weitergeben.', 'ok');
   }
 
   // ------------------------------------------------------------------ 6 Extras
@@ -1023,7 +1015,7 @@
       }
       $('autostart').checked = !!S.autostart;
       $('haUrl').value = S.ha.url || '';
-      if (S.ha.tokenSet) $('haToken').placeholder = 'gespeichert – nur für einen neuen Token ausfüllen';
+      if (S.ha.tokenSet) $('haToken').placeholder = 'Gespeichert. Nur für einen neuen Token ausfüllen.';
       if (S.ha.url) $('alexa').open = true;
     }
     renderHotkeys();
@@ -1047,8 +1039,8 @@
         renderHotkeys();
         renderRail();
         call('hotkey_save', hk.id).then((r) => {
-          if (r && !r.ok) toast(r.error || 'Konnte die Taste nicht speichern.', 'error');
-          else toast('Stumm-Taste: ' + hk.label + '. Gilt ab dem nächsten Start von Jarvis.', 'info');
+          if (r && !r.ok) toast(r.error || 'Die Taste ließ sich nicht speichern.', 'error');
+          else toast('Stumm-Taste: ' + hk.label + '. Gilt ab dem nächsten Start von Jarvis.', 'ok');
         }).catch(failed);
       });
       box.append(b);
@@ -1063,7 +1055,7 @@
       if (r) {
         S.autostart = !!r.enabled;
         box.checked = S.autostart;
-        if (!r.ok) toast('Autostart ging nicht: ' + (r.error || 'unbekannter Fehler'), 'error');
+        if (!r.ok) toast('Autostart ließ sich nicht umstellen: ' + (r.error || 'unbekannter Fehler'), 'error');
       }
     } catch (err) {
       box.checked = !want;
@@ -1132,10 +1124,10 @@
       const echos = S.ha.echos.map((e) => ({ entity: e.entity, room: e.room || '' }));
       const r = await call('ha_save', $('haUrl').value.trim(), $('haToken').value.trim(), echos);
       if (r && r.ok) {
-        toast('Alexa gespeichert.', 'info');
+        toast('Alexa gespeichert.', 'ok');
         S.ha.url = $('haUrl').value.trim();
         if ($('haToken').value.trim()) S.ha.tokenSet = true;
-      } else toast((r && r.error) || 'Konnte Alexa nicht speichern.', 'error');
+      } else toast((r && r.error) || 'Alexa ließ sich nicht speichern.', 'error');
     } catch (err) {
       failed(err);
     }
@@ -1144,30 +1136,32 @@
 
   // ------------------------------------------------------------------ 7 Fertig
 
-  let doneReactorRef = null;
-
   function doneEnter() {
     const box = $('summary');
     box.replaceChildren();
     const claudeOk = S.claude.state === 'ok';
-    const tiles = [
-      ['Mikrofon', micLabel() || 'Windows-Standard', 'mic', S.mic.detected ? 'ok' : ''],
-      ['Stimme', voiceName() || 'Conrad', 'voice', ''],
-      ['Wohnort', S.place.saved || 'nicht eingetragen', 'place', S.place.saved ? '' : 'warn'],
-      ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'verbunden') : 'noch nicht bereit', 'claude', claudeOk ? 'ok' : 'warn'],
-      ['Stumm-Taste', S.hotkey ? hotkeyLabel(S.hotkey) : 'keine', 'extras', ''],
-      ['Autostart', S.autostart ? 'startet mit Windows' : 'aus', 'extras', ''],
+    const rows = [
+      ['Mikrofon', micLabel() || 'Windows-Standard', 'mic', S.mic.detected ? ['ok', 'Getestet'] : null],
+      ['Stimme', voiceName() || 'Standard', 'voice', null],
+      ['Wohnort', S.place.saved || 'Nicht eingetragen', 'place', S.place.saved ? null : ['warn', 'Kein Wetter']],
+      ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'Verbunden') : 'Noch nicht bereit', 'claude',
+        claudeOk ? ['ok', 'Verbunden'] : ['warn', 'Prüfen']],
+      ['Antwort-Tempo', SPEED_NAMES[S.speed] || 'Ausgewogen', 'claude', null],
+      ['Stumm-Taste', S.hotkey ? hotkeyLabel(S.hotkey) : 'Keine', 'extras', null],
+      ['Autostart', S.autostart ? 'Startet mit Windows' : 'Aus', 'extras', null],
     ];
-    tiles.forEach(([k, v, step, tone], i) => {
-      const b = el('button', 'sum' + (tone ? ' ' + tone : ''));
+    rows.forEach(([k, v, step, state]) => {
+      const b = el('button', 'sum' + (state ? ' ' + state[0] : ''));
       b.type = 'button';
-      b.style.animationDelay = (0.08 * i + 0.15).toFixed(2) + 's';
-      b.append(el('span', 'sum-k', k), el('span', 'sum-v', v));
-      b.title = v;
+      const st = el('span', 'sum-state');
+      if (state) {
+        st.append(svg(state[0] === 'ok' ? ICON.check : ICON.alert), el('span', null, state[1]));
+      }
+      b.append(el('span', 'sum-k', k), el('span', 'sum-v', v), st);
+      b.title = k + ' ändern';
       b.addEventListener('click', () => go(INDEX[step]));
       box.append(b);
     });
-    if (doneReactorRef) doneReactorRef.set({ color: claudeOk ? GREEN : CYAN, spin: 1.6 });
   }
 
   async function finish(start) {
@@ -1177,7 +1171,7 @@
     const btn = $('nextBtn');
     btn.disabled = true;
     btn.classList.add('busy');
-    btn.textContent = start ? 'Jarvis startet …' : 'Wird geschlossen …';
+    btn.textContent = start ? 'Jarvis startet …' : 'Wird gespeichert …';
     try {
       await call('finish', !!start);
       if (demo) {
@@ -1197,8 +1191,6 @@
 
   // ------------------------------------------------------------------ Start
 
-  let bigReactorRef = null;
-
   function applyHello(info) {
     S.hello = info || {};
     S.first = S.hello.first_run !== false;
@@ -1212,6 +1204,7 @@
     S.autostart = !!v.autostart;
     S.ha.url = String(v.ha_url || '');
     S.ha.tokenSet = !!v.ha_token_set;
+    if (SPEED_NAMES[v.speed]) S.speed = v.speed;
     $('railVersion').textContent = S.hello.version ? 'Version ' + S.hello.version : '';
     if (S.hello.claude && S.hello.claude.installed === false) {
       S.claude.state = 'missing';
@@ -1245,10 +1238,14 @@
       placeCheck(true);
     });
     $('claudeRetry').addEventListener('click', claudeCheck);
+    $('claudeCopy').addEventListener('click', copyDetail);
+    document.querySelectorAll('#speed [data-speed]').forEach((b) => {
+      b.addEventListener('click', () => chooseSpeed(b.dataset.speed));
+    });
     $('claudeInstall').addEventListener('click', async () => {
       try {
         const r = await call('claude_install');
-        if (r && r.ok) toast('Ein Fenster installiert jetzt Claude Code. Danach „Bei Claude anmelden“.', 'info');
+        if (r && r.ok) toast('Ein Fenster installiert jetzt Claude Code. Danach „Bei Claude anmelden“.', 'ok');
         else toast((r && r.error) || 'Das Installationsfenster ging nicht auf.', 'error');
       } catch (err) {
         failed(err);
@@ -1257,7 +1254,7 @@
     $('claudeLogin').addEventListener('click', async () => {
       try {
         const r = await call('claude_login');
-        if (r && r.ok) toast('Melden Sie sich im neuen Fenster an und klicken Sie danach „Nochmal prüfen“.', 'info');
+        if (r && r.ok) toast('Melde dich im neuen Fenster an und klick danach „Nochmal prüfen“.', 'ok');
         else toast((r && r.error) || 'Das Anmeldefenster ging nicht auf.', 'error');
       } catch (err) {
         failed(err);
@@ -1299,11 +1296,7 @@
 
   function boot() {
     bind();
-    reactor($('railReactor'), { small: true, spin: 0.8 });
-    bigReactorRef = reactor($('bigReactor'), { spin: 1 });
-    claudeReactorRef = reactor($('claudeReactor'), { spin: 1 });
-    doneReactorRef = reactor($('doneReactor'), { spin: 1.4 });
-    requestAnimationFrame(frame);
+    orb($('bigReactor'));
     renderRail();
 
     let connected = false;
@@ -1365,7 +1358,7 @@
         values: {
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',
           voice: 'de-DE-ConradNeural', hotkey: 'ctrl+alt+m', threshold: 0.5, autostart: false,
-          ha_url: '', ha_token_set: false,
+          ha_url: '', ha_token_set: false, speed: 'ausgewogen',
         },
         claude: { installed: claudeMode !== 'missing', path: 'C:\\Users\\Georg\\.local\\bin\\claude.exe' },
       }, 60),
@@ -1404,15 +1397,27 @@
       claude_check: () => { claudeT0 = performance.now(); return later({ started: true }, 50); },
       claude_poll: () => {
         const running = claudeMode === 'running' || performance.now() - claudeT0 < 2200;
-        if (running) return later({ state: 'running', message: 'Ich frage Claude ...', model: '', version: '' }, 30);
+        if (running) {
+          const msg = performance.now() - claudeT0 > 1200 ? 'Sonnet hat abgelehnt, versuche Haiku …' : 'Ich frage Claude ...';
+          return later({ state: 'running', message: msg, model: '', version: '2.1.286 (Claude Code)', detail: '', note: '' }, 30);
+        }
         const msg = {
           ok: 'Das Gehirn ist verbunden. Jarvis kann denken.',
           missing: 'Claude Code ist noch nicht installiert.',
           login: 'Claude Code ist installiert, aber noch nicht mit deinem Pro-Konto angemeldet.',
-          refused: 'Claude hat abgelehnt. Jarvis probiert später automatisch andere Modelle.',
-          error: 'Ich erreiche Claude gerade nicht, Sir. Ist das Internet verbunden?',
+          refused: 'Claude hat bei allen Modellen abgelehnt, auch mit ganz einfachen Einstellungen.',
+          error: 'Claude hat einen Fehler gemeldet.',
         }[claudeMode] || '';
-        return later({ state: claudeMode, message: msg, model: claudeMode === 'ok' ? 'claude-sonnet-5-5' : '', version: claudeMode === 'missing' ? '' : '2.1.286 (Claude Code)' }, 30);
+        const detail = {
+          refused: "API Error: Claude can't help with this. Start a new session to continue.  Learn more: https://www.anthropic.com/legal/aup",
+          error: 'error_during_execution\nBeispiel für eine technische Meldung von Claude Code',
+        }[claudeMode] || '';
+        return later({
+          state: claudeMode, message: msg, model: claudeMode === 'ok' ? 'claude-haiku-4-5-20251001' : '',
+          version: claudeMode === 'missing' ? '' : '2.1.286 (Claude Code)', detail,
+          note: claudeMode === 'ok' ? 'Sonnet hat nicht geklappt, Jarvis nimmt deshalb Haiku. Das merkt er sich.' : '',
+          speed: claudeMode === 'ok' ? 'schnell' : undefined,
+        }, 30);
       },
       claude_install: () => later({ ok: true, error: '' }, 100),
       claude_login: () => later({ ok: true, error: '' }, 100),
@@ -1423,6 +1428,7 @@
         { id: 'pause', label: 'Pause' },
       ], 40),
       hotkey_save: () => later({ ok: true, error: '' }, 60),
+      brain_speed: (key) => later({ ok: true, error: '', speed: key }, 80),
       autostart_set: (on) => later({ ok: true, enabled: !!on, error: '' }, 120),
       ha_check: () => later({
         ok: true, message: 'Verbunden. 2 Echo-Gerät(e) gefunden.',

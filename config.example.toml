@@ -25,7 +25,8 @@ hotkey = "ctrl+alt+m"
 
 [listen]
 # Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden).
-silence_seconds = 1.2
+# Kleiner = schnellere Antwort. Schneidet Jarvis dich mitten im Satz ab: auf 1.2 erhöhen.
+silence_seconds = 0.9
 # Maximale Länge eines Befehls (Sekunden).
 max_seconds = 20
 # Wenn nach "Hey Jarvis" so lange nichts gesagt wird, bricht Jarvis ab (Sekunden).
@@ -41,6 +42,8 @@ model = "small"
 language = "de"
 # "cpu" läuft überall. "cuda" ist schneller, braucht aber eine Nvidia-Karte mit CUDA 12 und cuDNN.
 device = "cpu"
+# 1 = schnell (reicht für kurze Befehle), 5 = gründlicher, aber langsamer.
+beam_size = 1
 
 [tts]
 # "edge" = menschliche Microsoft-Stimme (gratis, braucht Internet)

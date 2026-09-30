@@ -108,7 +108,7 @@ class ClaudeBrainTest(unittest.TestCase):
         sonnet_try, haiku_try = self.calls()[1:]
         self.assertIsNotNone(arg(sonnet_try, "--resume"))
         self.assertIsNone(arg(haiku_try, "--resume"))
-        self.assertIn("sonnet hat abgelehnt, versuche haiku", notes[0])
+        self.assertIn("Sonnet hat abgelehnt, versuche Haiku", notes[0])
         self.brain.ask("nur-haiku weiter")
         last = self.calls()[-1]
         self.assertEqual(arg(last, "--model"), "haiku")
@@ -132,16 +132,72 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertEqual([arg(c, "--model") for c in calls], ["sonnet", "haiku", "opus", "sonnet"])
         self.assertEqual(arg(calls[-1], "--append-system-prompt"), SIMPLE_PERSONA)
         self.assertIsNone(arg(calls[-1], "--system-prompt-file"))
-        self.assertEqual(self.brain.attempt.label(), "sonnet, einfacher Modus")
+        self.assertEqual(self.brain.attempt.label(), "Sonnet, einfacher Modus")
 
     def test_refusal_from_everything_raises_and_resets(self):
         chunks = []
         with self.assertRaises(RefusalError) as ctx:
             self.brain.ask("abgelehnt", on_text=chunks.append)
-        self.assertEqual(len(self.calls()), 6)
+        # 3 Modelle x 2 Persönlichkeiten, dann noch "nur Unterhaltung" ohne Werkzeuge
+        self.assertEqual(len(self.calls()), 7)
+        self.assertEqual(arg(self.calls()[-1], "--tools"), "")
         self.assertEqual(chunks, [], "Fehlertexte von Claude Code dürfen nie vorgelesen werden")
         self.assertIn("Sir", ctx.exception.spoken)
         self.assertEqual(self.brain.attempt, Attempt("sonnet", "jarvis"))
+
+    def test_new_refusal_wording_is_recognised(self):
+        # "Claude can't help with this." enthält weder "safeguards" noch "Usage Policy".
+        answer = self.brain.ask("wort-abgelehnt")
+        self.assertEqual(answer.model, "claude-haiku-test")
+        self.assertEqual([arg(c, "--model") for c in self.calls()], ["sonnet", "haiku"])
+
+    def test_refusal_is_recognised_by_stop_reason_alone(self):
+        answer = self.brain.ask("still-abgelehnt")
+        self.assertEqual(answer.model, "claude-haiku-test")
+
+    def test_refusal_is_recognised_by_system_event(self):
+        answer = self.brain.ask("system-abgelehnt")
+        self.assertEqual(answer.model, "claude-haiku-test")
+
+    def test_unavailable_model_moves_on(self):
+        notes = []
+        self.brain.notice = notes.append
+        answer = self.brain.ask("modell-weg")
+        self.assertEqual(answer.model, "claude-haiku-test")
+        self.assertIn("Sonnet ist nicht verfügbar, versuche Haiku", notes[0])
+
+    def test_unknown_error_tries_talking_without_tools(self):
+        notes = []
+        self.brain.notice = notes.append
+        with self.assertLogs("jarvis.brain", "WARNING") as logs:
+            answer = self.brain.ask("interner-fehler")
+        self.assertIn("PowerShell-Werkzeug startet nicht", "\n".join(logs.output))
+        self.assertIn("Sehr wohl", answer.text)
+        last = self.calls()[-1]
+        self.assertEqual(arg(last, "--tools"), "")
+        self.assertNotIn("--allowedTools", last["args"])
+        self.assertEqual(self.brain.attempt.profile, "reden")
+        self.assertIn("meldet einen Fehler", notes[0])
+
+    def test_rescue_that_fails_too_keeps_the_normal_setup(self):
+        with self.assertRaises(BrainError) as ctx:
+            self.brain.ask("immer-kaputt")
+        self.assertIn("Alles kaputt", str(ctx.exception))
+        self.assertEqual(len(self.calls()), 2)
+        self.assertEqual(self.brain.attempt, Attempt("sonnet", "jarvis"))
+
+    def test_api_key_is_left_out_when_it_blocks_the_subscription(self):
+        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-alt"}):
+            answer = self.brain.ask("guthaben")
+        self.assertIn("Sehr wohl", answer.text)
+        self.assertEqual([c["apikey"] for c in self.calls()], [True, False])
+
+    def test_account_problem_is_not_retried(self):
+        with self.assertRaises(BrainError) as ctx:
+            self.brain.ask("konto")
+        self.assertEqual(ctx.exception.kind, "account")
+        self.assertIn("on hold", str(ctx.exception))
+        self.assertEqual(len(self.calls()), 1)
 
     def test_old_claude_without_safe_mode_still_works(self):
         with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "safe-mode"}), self.assertLogs("jarvis.brain", "WARNING"):
@@ -176,6 +232,7 @@ class ClaudeBrainTest(unittest.TestCase):
     def test_crash_without_output_shows_stderr(self):
         with self.assertRaisesRegex(BrainError, "Traceback: irgendwas"):
             self.brain.ask("absturz")
+        self.assertEqual(self.brain.attempt, Attempt("sonnet", "jarvis"))
 
     def test_timeout(self):
         self.cfg["timeout_seconds"] = 1
@@ -227,6 +284,10 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(classify("API Error: Connection error.").kind, "network")
         self.assertEqual(classify("API Error: 529 Overloaded").kind, "overloaded")
         self.assertIs(classify("req_0114019 irgendwas"), BrainError)
+        self.assertIs(classify("API Error: Claude can’t help with this. Start a new session to continue."), RefusalError)
+        self.assertIs(classify("Opus 5.5's safeguards flagged this message (https://www.anthropic.com/legal/aup)."), RefusalError)
+        self.assertEqual(classify("There's an issue with the selected model (x). It may not exist").kind, "model")
+        self.assertEqual(classify("Credit balance is too low").kind, "billing")
 
 
 if __name__ == "__main__":

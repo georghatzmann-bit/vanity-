@@ -156,7 +156,9 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
     try:
         from .stt import SpeechToText
 
-        stt = SpeechToText(cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"])
+        stt = SpeechToText(
+            cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"], cfg["stt"].get("beam_size", 1)
+        )
         wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
     except Exception as exc:
         log.exception("Spracherkennung lädt nicht")

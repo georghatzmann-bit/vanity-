@@ -64,6 +64,22 @@ class NotInstalledError(BrainError):
     kind = "missing"
 
 
+class ModelUnavailableError(BrainError):
+    """Das Modell gibt es für dieses Konto gerade nicht (dann kommt das nächste dran)."""
+
+    kind = "model"
+
+
+class AccountError(BrainError):
+    """Das Claude-Konto braucht Aufmerksamkeit (gesperrt, Bestätigung nötig)."""
+
+    kind = "account"
+
+
+class BillingError(BrainError):
+    kind = "billing"
+
+
 class Cancelled(BrainError):
     kind = "cancelled"
 
@@ -88,16 +104,48 @@ SPOKEN_ERRORS = {
         "Ich finde Claude Code nicht, Sir. Bitte installieren Sie es und melden Sie sich einmal an."
     ),
     "cancelled": "Abgebrochen, Sir.",
-    "other": "Verzeihung, Sir, da ist etwas schiefgelaufen. Die Details stehen in der Logdatei.",
+    "model": "Kein Claude-Modell steht Ihnen gerade zur Verfügung, Sir.",
+    "account": "Ihr Claude-Konto meldet ein Problem, Sir. Bitte schauen Sie einmal auf claude.ai nach.",
+    "billing": (
+        "Claude meldet ein Abrechnungsproblem, Sir. Vermutlich ist Claude Code mit einem API-Schlüssel "
+        "statt mit Ihrem Pro-Abo angemeldet."
+    ),
+    "other": "Verzeihung, Sir, Claude hat einen Fehler gemeldet. Die Einzelheiten stehen im Fenster und in der Logdatei.",
 }
 
 _PATTERNS = [
-    (RefusalError, re.compile(r"safeguard|usage polic|can't respond to your last message|\[cyber\]", re.I)),
+    (
+        RefusalError,
+        re.compile(
+            r"safeguard|usage polic|can.?t respond to (your last|this) message|can.?t help with this"
+            r"|flagged this (message|session|request)|anthropic\.com/legal/aup|\[cyber\]",
+            re.I,
+        ),
+    ),
+    (ModelUnavailableError, re.compile(r"issue with the selected model|may not exist or you may not have access|is not available on your", re.I)),
+    (BillingError, re.compile(r"credit balance|billing", re.I)),
+    (AccountError, re.compile(r"account (is )?(on hold|suspended|disabled)|organization (has been )?disabled|verification required|verify your", re.I)),
     (LimitError, re.compile(r"usage limit|limit reached|rate.?limit|hit your limit|limit will reset|resets? at", re.I)),
     (LoginError, re.compile(r"/login|invalid api key|not logged in|log ?in again|oauth token|authenticat|unauthori[sz]ed|\b401\b", re.I)),
     (OverloadedError, re.compile(r"overloaded|\b529\b|over capacity", re.I)),
     (NetworkError, re.compile(r"connection error|unable to connect|enotfound|econnrefused|econnreset|etimedout|fetch failed|getaddrinfo|network|socket hang up|certificate", re.I)),
 ]
+
+# Die Fehlerart, die Claude Code bei API-Fehlern mitschickt (Feld "error" der Nachricht).
+ERROR_KINDS: dict[str, type[BrainError]] = {
+    "authentication_failed": LoginError,
+    "oauth_org_not_allowed": LoginError,
+    "account_on_hold": AccountError,
+    "verification_required": AccountError,
+    "billing_error": BillingError,
+    "rate_limit": LimitError,
+    "overloaded": OverloadedError,
+    "server_error": OverloadedError,
+    "model_not_found": ModelUnavailableError,
+}
+
+# Bei diesen Fehlern kommt der nächste Versuch (anderes Modell, einfachere Einstellung) dran.
+NEXT_ATTEMPT = (RefusalError, ModelUnavailableError)
 
 UNKNOWN_OPTION = re.compile(r"unknown option '--([\w-]+)'", re.I)
 
@@ -125,11 +173,64 @@ class Answer:
 @dataclass(frozen=True)
 class Attempt:
     model: str
-    profile: str  # "jarvis" = volle Persönlichkeit, "einfach" = kurze Notfall-Persönlichkeit
+    # "jarvis" = volle Persönlichkeit, "einfach" = kurze Notfall-Persönlichkeit,
+    # "reden" = kurze Persönlichkeit ganz ohne Werkzeuge (letzter Ausweg: nur Unterhaltung)
+    profile: str
 
     def label(self) -> str:
-        name = self.model or "Standardmodell"
-        return name if self.profile == "jarvis" else f"{name}, einfacher Modus"
+        name = self.model[:1].upper() + self.model[1:] if self.model else "Standardmodell"
+        if self.profile == "einfach":
+            return f"{name}, einfacher Modus"
+        if self.profile == "reden":
+            return f"{name}, nur Unterhaltung"
+        return name
+
+
+@dataclass
+class Run:
+    """Was ein Aufruf von Claude Code geliefert hat."""
+
+    result: dict | None
+    stderr: str = ""
+    spoke: bool = False
+    model: str = ""
+    refused: bool = False
+    error_kind: str = ""
+    errors: list[str] | None = None
+    returncode: int | None = None
+
+    @property
+    def failed(self) -> bool:
+        r = self.result
+        return r is None or bool(r.get("is_error")) or r.get("subtype", "success") != "success"
+
+    def error_text(self) -> str:
+        """Alles, was Claude Code zum Fehler gesagt hat, ohne Wiederholungen."""
+        parts: list[str] = []
+        r = self.result or {}
+        text = r.get("result")
+        if isinstance(text, str) and text.strip():
+            parts.append(text.strip())
+        for item in r.get("errors") or []:
+            if isinstance(item, dict):
+                item = item.get("message") or item.get("error") or json.dumps(item, ensure_ascii=False)
+            if str(item).strip():
+                parts.append(str(item).strip())
+        parts += [e.strip() for e in (self.errors or []) if e and e.strip()]
+        if self.stderr.strip():
+            parts.append(self.stderr.strip()[-600:])
+        if not parts and r.get("subtype") not in (None, "success"):
+            parts.append(str(r.get("subtype")))
+        unique = list(dict.fromkeys(parts))
+        return "\n".join(unique) if unique else f"keine Ausgabe (Exit {self.returncode})"
+
+    def error_class(self, text: str) -> type[BrainError]:
+        if self.refused:
+            return RefusalError
+        guessed = classify(text)
+        if guessed is RefusalError:
+            return guessed
+        return ERROR_KINDS.get(self.error_kind) or guessed
 
 
 class ClaudeBrain:
@@ -154,6 +255,10 @@ class ClaudeBrain:
         models = [m for m in (cfg.get("models") or [cfg.get("model", "")]) if m] or [""]
         profiles = ["jarvis", "einfach"] if cfg.get("simple_fallback", True) else ["jarvis"]
         self.attempts = [Attempt(m, p) for p in profiles for m in models]
+        if cfg.get("simple_fallback", True):
+            # Ganz zum Schluss: nur reden, ohne Werkzeuge. Dann kann Jarvis zwar nichts am PC
+            # tun, aber wenigstens antworten.
+            self.attempts.append(Attempt("haiku" if "haiku" in models else models[0], "reden"))
         self._index = 0
         self._isolated = cfg.get("isolated", True)
         self._timeout = cfg.get("timeout_seconds", 180)
@@ -164,6 +269,7 @@ class ClaudeBrain:
         self._persona = persona or home / "CLAUDE.md"
         self._state_file = (state_dir / "gehirn.json") if state_dir else None
         self._unsupported: set[str] = set()
+        self._without_api_key = False
         self._session: str | None = None
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
@@ -240,14 +346,17 @@ class ClaudeBrain:
                 cmd += ["--system-prompt-file", str(self._persona)]
             else:
                 cmd += ["--append-system-prompt", SIMPLE_PERSONA]
-        elif attempt.profile == "einfach":
+        elif attempt.profile != "jarvis":
             cmd += ["--append-system-prompt", SIMPLE_PERSONA]
-        if self._tools and "tools" not in self._unsupported:
-            # Nur die Werkzeuge, die Jarvis braucht: schneller und weniger Ablenkung.
-            cmd += ["--tools", *self._tools]
-        if self._allowed:
-            cmd += ["--allowedTools", *self._allowed]
-        if self._disallowed:
+        if attempt.profile == "reden" and "tools" not in self._unsupported:
+            cmd += ["--tools", ""]  # gar keine Werkzeuge
+        else:
+            if self._tools and "tools" not in self._unsupported:
+                # Nur die Werkzeuge, die Jarvis braucht: schneller und weniger Ablenkung.
+                cmd += ["--tools", *self._tools]
+            if self._allowed:
+                cmd += ["--allowedTools", *self._allowed]
+        if self._disallowed and attempt.profile != "reden":
             cmd += ["--disallowedTools", *self._disallowed]
         if session:
             if "session-id" in self._unsupported:
@@ -272,6 +381,11 @@ class ClaudeBrain:
         env["PYTHONUTF8"] = "1"
         env["JARVIS_ROOT"] = str(ROOT)
         env["JARVIS_USER_SAID"] = text[:500]
+        if self._without_api_key:
+            # Ein alter API-Schlüssel in den Windows-Umgebungsvariablen hat Vorrang vor dem
+            # Pro-Abo. Ohne ihn meldet sich Claude Code mit dem Abo an.
+            for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
+                env.pop(name, None)
         return env
 
     def ask(self, text: str, on_text: Callable[[str], None] | None = None) -> Answer:
@@ -279,27 +393,57 @@ class ClaudeBrain:
         entsteht. Bei einer Ablehnung kommt der nächste Versuch aus `attempts` dran,
         in einer neuen Unterhaltung, und dabei bleibt es danach."""
         self._cancelled = False
+        rescue_from: list[int] = []
+        try:
+            return self._ask_chain(text, on_text, rescue_from)
+        except BrainError:
+            if rescue_from:
+                # Auch der Notfall-Versuch hat nicht geholfen: nächstes Mal wie vorher.
+                self._index = rescue_from[0]
+            raise
+
+    def _ask_chain(self, text: str, on_text, rescue_from: list[int]) -> Answer:
         overload_retry = True
         while True:
             try:
                 answer = self._ask_once(text, on_text=on_text)
                 self._save_state()
                 return answer
-            except RefusalError:
+            except NEXT_ATTEMPT as exc:
                 self._session = None
                 if self._index + 1 >= len(self.attempts):
                     # Alles probiert: beim nächsten Mal wieder vorne anfangen.
-                    self._index = 0
+                    rescue_from[:] = [0]
                     raise
-                refused = self.attempt
+                failed = self.attempt
                 self._index += 1
-                self.notice(f"{refused.label()} hat abgelehnt, versuche {self.attempt.label()} ...")
+                why = "hat abgelehnt" if isinstance(exc, RefusalError) else "ist nicht verfügbar"
+                self.notice(f"{failed.label()} {why}, versuche {self.attempt.label()} ...")
             except OverloadedError:
                 if not overload_retry:
                     raise
                 overload_retry = False
                 self.notice("Claude ist überlastet, versuche es gleich noch einmal ...")
                 time.sleep(2)
+            except (LoginError, BillingError):
+                if self._without_api_key or not _api_key_set():
+                    raise
+                # Ein API-Schlüssel aus den Umgebungsvariablen verdrängt das Pro-Abo.
+                self._without_api_key = True
+                self.notice("Claude Code nutzt einen API-Schlüssel statt deines Abos, versuche es mit dem Abo ...")
+            except BrainError as exc:
+                if type(exc) is not BrainError or rescue_from:
+                    raise  # Kontingent, Netz, Konto, Abbruch ...: ein anderer Versuch hilft nicht
+                # Unbekannter Fehler: einmal ganz einfach probieren (kurze Persönlichkeit, keine
+                # Werkzeuge). Klappt das, bleibt Jarvis dabei, bis wieder alles geht.
+                rescue = next((i for i, a in enumerate(self.attempts) if a.profile == "reden"), None)
+                if rescue is None or rescue == self._index:
+                    raise
+                rescue_from.append(self._index)
+                failed = self.attempt
+                self._session = None
+                self._index = rescue
+                self.notice(f"{failed.label()} meldet einen Fehler, versuche {self.attempt.label()} ...")
 
     def _ask_once(
         self,
@@ -314,9 +458,10 @@ class ClaudeBrain:
         session = self._session if resume else str(uuid.uuid4())
         for _ in range(4):
             cmd = self.command(attempt, isolated, session if keep_session else None, resume)
-            result, stderr, spoke, stream_model = self._run(cmd, text, on_text)
+            run = self._run(cmd, text, on_text)
+            result, stderr = run.result, run.stderr
             unknown = UNKNOWN_OPTION.search(stderr or "")
-            if result is None and unknown and not spoke and unknown.group(1) not in self._unsupported:
+            if result is None and unknown and not run.spoke and unknown.group(1) not in self._unsupported:
                 flag = unknown.group(1)
                 self._unsupported.add(flag)
                 log.warning(
@@ -338,27 +483,27 @@ class ClaudeBrain:
 
         if self._cancelled:
             raise Cancelled("abgebrochen")
-        if result is None:
-            detail = (stderr or "").strip()[-600:] or "keine Ausgabe"
-            error = classify(detail)
-            raise error(f"Claude Code meldet einen Fehler: {detail}")
-        if result.get("is_error") or result.get("subtype", "success") != "success":
-            message = str(result.get("result") or result.get("subtype") or "Unbekannter Fehler")
-            error = classify(message)
-            if error is RefusalError:
+        if run.failed:
+            detail = run.error_text()
+            error = run.error_class(detail)
+            log.warning(
+                "Claude meldet einen Fehler (%s, %s, Exit %s, Art %s): %s",
+                error.kind, attempt.label(), run.returncode, run.error_kind or "-", detail[:2000],
+            )
+            if error in NEXT_ATTEMPT:
                 self._session = None
-            raise error(message)
+            raise error(detail)
 
         if keep_session:
             self._session = result.get("session_id") or session
         # modelUsage enthält auch Hilfsmodelle (z. B. Haiku für Titel). Das eigentliche
         # Modell nennt Claude Code beim Start (init).
         used = list(result.get("modelUsage") or {})
-        self.last_model = stream_model or (used[0] if used else attempt.model or "")
+        self.last_model = run.model or (used[0] if used else attempt.model or "")
         return Answer(str(result.get("result") or "").strip(), self.last_model, self._session or "")
 
-    def _run(self, cmd: list[str], text: str, on_text) -> tuple[dict | None, str, bool, str]:
-        """Startet Claude, liest den Stream und gibt (Ergebnis, stderr, schon_gesprochen, Modell) zurück."""
+    def _run(self, cmd: list[str], text: str, on_text) -> Run:
+        """Startet Claude, liest den Stream und sammelt Ergebnis, Fehler und Modell."""
         log.debug("Claude-Aufruf: %s", " ".join(cmd[1:]))
         started = time.monotonic()
         try:
@@ -442,10 +587,10 @@ class ClaudeBrain:
             log.debug("Claude stderr: %s", stderr.strip()[-1000:])
         if timed_out.is_set():
             raise TooSlowError("Claude hat zu lange gebraucht.")
-        if stream.result is None and stream.errors:
-            # Kein Ergebnis, aber Fehlermeldungen im Stream (z. B. API-Fehler).
-            stderr = "\n".join(stream.errors) + "\n" + stderr
-        return stream.result, stderr, stream.spoke, stream.model
+        return Run(
+            stream.result, stderr, stream.spoke, stream.model, stream.refused, stream.error_kind,
+            list(stream.errors), proc.returncode,
+        )
 
     # ------------------------------------------------------------------ Diagnose
 
@@ -481,6 +626,8 @@ class _StreamReader:
         self.result: dict | None = None
         self.model = ""
         self.errors: list[str] = []
+        self.refused = False
+        self.error_kind = ""
 
     def feed(self, line: str) -> None:
         line = line.strip()
@@ -496,12 +643,29 @@ class _StreamReader:
         kind = event.get("type")
         if kind == "result":
             self.result = event
-        elif kind == "system" and event.get("subtype") == "init":
-            self.model = event.get("model", "")
+        elif kind == "system":
+            self._system(event)
         elif kind == "stream_event" and self._partial:
             self._stream_event(event.get("event") or {})
         elif kind == "assistant":
-            self._assistant(event.get("message") or {})
+            message = event.get("message") or {}
+            if event.get("error"):
+                self.error_kind = str(event["error"])
+            if message.get("stop_reason") == "refusal":
+                self.refused = True
+            self._assistant(message)
+
+    def _system(self, event: dict) -> None:
+        subtype = event.get("subtype")
+        if subtype == "init":
+            self.model = event.get("model", "")
+        elif subtype == "model_fallback" and event.get("fallback_model"):
+            # Claude Code ist selbst auf ein anderes Modell ausgewichen.
+            self.model = str(event["fallback_model"])
+        elif subtype == "model_refusal_no_fallback":
+            self.refused = True
+            if event.get("content"):
+                self.errors.append(str(event["content"])[:1000])
 
     def _stream_event(self, event: dict) -> None:
         etype = event.get("type")
@@ -540,6 +704,10 @@ class _StreamReader:
             if text.strip():
                 self.spoke = True
             self._on_text(text)
+
+
+def _api_key_set() -> bool:
+    return any(os.environ.get(name) for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
 
 
 def find_claude(cfg: dict | None = None) -> str | None:

@@ -1,5 +1,6 @@
 """Die Einrichtung (setup_wizard) und was dazugehört: Speichern, Claude finden, Start-Sperre."""
 
+import sys
 import threading
 import time
 import tomllib
@@ -100,7 +101,10 @@ class SettingsTest(SetupTestCase):
         info = self.api.hello()
         self.assertTrue(info["first_run"])
         self.assertIn("version", info)
-        self.assertEqual(set(info["values"]), {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "ha_url", "ha_token_set"})
+        self.assertEqual(
+            set(info["values"]),
+            {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "ha_url", "ha_token_set", "speed"},
+        )
         self.assertEqual(len(self.api.voices()), len(setup_wizard.VOICES))
         self.assertTrue(all(v["id"].endswith("Neural") for v in self.api.voices()))
 
@@ -228,7 +232,8 @@ class FindClaudeTest(unittest.TestCase):
 
 class TomlValueTest(unittest.TestCase):
     def test_values_survive_a_round_trip(self):
-        for value in (True, False, 0.35, 3, "C:\\Users\\Georg\\claude.exe", 'Er sagte "Hallo"', "Zeile\neins"):
+        for value in (True, False, 0.35, 3, "C:\\Users\\Georg\\claude.exe", 'Er sagte "Hallo"', "Zeile\neins",
+                      ["haiku", "sonnet"]):
             with self.subTest(value=value):
                 self.assertEqual(tomllib.loads(f"x = {toml_value(value)}")["x"], value)
 
@@ -345,10 +350,12 @@ class SetupPageTest(unittest.TestCase):
         self.assertGreater(len(called), 15)
         missing = sorted(name for name in called if not callable(getattr(setup_wizard.SetupApi, name, None)))
         self.assertEqual(missing, [])
-        html = (WEB_DIR / "setup.html").read_text(encoding="utf-8")
-        for asset in ("style.css", "setup.css", "setup.js"):
-            self.assertIn(asset, html)
-            self.assertTrue((WEB_DIR / asset).exists(), asset)
+        for page, assets in (("setup.html", ("base.css", "setup.css", "setup.js")),
+                             ("index.html", ("base.css", "style.css", "app.js"))):
+            html = (WEB_DIR / page).read_text(encoding="utf-8")
+            for asset in assets:
+                self.assertIn(asset, html, page)
+                self.assertTrue((WEB_DIR / asset).exists(), asset)
 
     def test_main_window_calls_exist(self):
         import re
@@ -359,6 +366,41 @@ class SetupPageTest(unittest.TestCase):
         called = set(re.findall(r"window\.pywebview\.api\.([a-z_]+)\(", script))
         self.assertIn("open_setup", called)
         self.assertEqual(sorted(n for n in called if not callable(getattr(Api, n, None))), [])
+
+
+@unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+class ClaudeCheckTest(SetupTestCase):
+    def check(self, refuse: str) -> dict:
+        from tests.helpers import make_fake_claude
+
+        save_setting("brain", "claude_path", str(make_fake_claude(self.home)))
+        check = setup_wizard.ClaudeCheck(load_config())
+        with mock.patch.dict("os.environ", {"FAKE_REFUSE": refuse}), self.assertLogs("jarvis", "INFO"):
+            check._run()
+        return check.poll()
+
+    def test_fallback_model_is_explained_and_kept(self):
+        result = self.check("sonnet")
+        self.assertEqual(result["state"], "ok")
+        self.assertEqual(result["model"], "claude-haiku-test")
+        self.assertIn("Sonnet hat nicht geklappt, Jarvis nimmt deshalb Haiku", result["note"])
+        # Dauerhaft: Jarvis fragt ab jetzt zuerst Haiku.
+        self.assertEqual(self.saved()["brain"]["models"], ["haiku", "sonnet", "opus"])
+        self.assertEqual(result["speed"], "schnell")
+
+    def test_speed_choice_saves_the_model_order(self):
+        self.state.mkdir(parents=True, exist_ok=True)
+        (self.state / "gehirn.json").write_text("{}", encoding="utf-8")
+        self.assertTrue(self.api.brain_speed("gründlich")["ok"])
+        self.assertEqual(self.saved()["brain"]["models"], ["opus", "sonnet", "haiku"])
+        self.assertFalse((self.state / "gehirn.json").exists(), "die alte Ersatz-Wahl darf nicht überstimmen")
+        self.assertEqual(self.api.hello()["values"]["speed"], "gruendlich")
+        self.assertFalse(self.api.brain_speed("turbo")["ok"])
+
+    def test_refusal_everywhere_shows_claudes_own_words(self):
+        result = self.check("sonnet,haiku,opus")
+        self.assertEqual(result["state"], "refused")
+        self.assertIn("safeguards", result["detail"])
 
 
 class AlexaCheckTest(SetupTestCase):

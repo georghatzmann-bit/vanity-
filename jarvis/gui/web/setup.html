@@ -6,185 +6,186 @@
   <meta name="color-scheme" content="dark">
   <title>Jarvis einrichten</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="setup.css">
 </head>
 <body class="setup" data-step="welcome" data-link="wait">
-  <div class="backdrop" aria-hidden="true">
-    <div class="backdrop-hex"></div>
-    <div class="backdrop-scan"></div>
-  </div>
-
   <div class="shell">
-    <!-- Linke Leiste: Marke und Schritte -->
-    <aside class="rail panel hud" aria-label="Schritte">
+    <!-- Links: die Schritte -->
+    <aside class="rail" aria-label="Schritte">
       <div class="rail-brand">
-        <canvas class="rail-reactor" id="railReactor" width="64" height="64" aria-hidden="true"></canvas>
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/></svg>
         <div>
-          <div class="rail-name">J.A.R.V.I.S.</div>
+          <div class="rail-name">Jarvis</div>
           <div class="rail-sub">Einrichtung</div>
         </div>
       </div>
       <ol class="steps" id="steps"></ol>
       <div class="rail-foot">
+        <span>Alles lässt sich später über die Einstellungen ändern.</span>
         <span id="railVersion"></span>
-        <span class="rail-note">Alles lässt sich später über das Zahnrad ändern.</span>
       </div>
     </aside>
 
-    <!-- Rechte Seite: der aktuelle Schritt -->
-    <main class="card panel hud" id="card">
-      <header class="card-head">
-        <div class="eyebrow"><span id="eyebrow">Willkommen</span><span class="eyebrow-rule"></span><span class="eyebrow-count" id="stepCount"></span></div>
-        <h1 id="title">Guten Tag, Sir.</h1>
-        <p class="lead" id="lead"></p>
-        <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
+    <!-- Rechts: der aktuelle Schritt -->
+    <main class="page" id="card">
+      <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
+      <header class="page-head">
+        <div class="step-count" id="stepCount">Schritt 1 von 7</div>
+        <h1 id="title">Willkommen bei Jarvis</h1>
+        <p class="lead" id="lead">In fünf kurzen Schritten ist Jarvis startklar. Du klickst nur.</p>
       </header>
 
-      <div class="card-body" id="cardBody">
+      <div class="page-body" id="cardBody">
 
         <!-- 1 Willkommen -->
         <section class="step" data-step="welcome">
           <div class="welcome">
-            <div class="welcome-reactor">
-              <canvas id="bigReactor" aria-hidden="true"></canvas>
-            </div>
-            <div class="welcome-text">
-              <p class="boot" id="bootLine" aria-live="polite"></p>
-              <ul class="plan">
-                <li><span class="plan-ico ico-mic"></span><b>Mikrofon</b><span>damit ich Sie höre</span></li>
-                <li><span class="plan-ico ico-voice"></span><b>Stimme</b><span>wie ich klingen soll</span></li>
-                <li><span class="plan-ico ico-place"></span><b>Wohnort</b><span>für das Wetter</span></li>
-                <li><span class="plan-ico ico-brain"></span><b>Claude</b><span>mein Gehirn</span></li>
-                <li><span class="plan-ico ico-extras"></span><b>Extras</b><span>Stumm-Taste, Autostart, Alexa</span></li>
-              </ul>
-              <p class="fineprint">Dauert etwa zwei Minuten. Jeder Schritt speichert sofort.</p>
-            </div>
+            <div class="welcome-orb"><canvas id="bigReactor" aria-hidden="true"></canvas></div>
+            <ul class="plan">
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span><span><b>Mikrofon</b><small>Damit Jarvis dich hört</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><span><b>Stimme</b><small>Wie Jarvis klingen soll</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span><b>Wohnort</b><small>Für das Wetter</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2.4 4.8.8.8 1.1 1.7 1.1 2.7V18h5v-1.5c0-1 .3-1.9 1.1-2.7C16.8 12.6 18 11.2 18 9a6 6 0 0 0-6-6zM10 21h4"/></svg></span><span><b>Claude</b><small>Das Gehirn: beantwortet Fragen, erledigt Aufgaben</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></span><span><b>Extras</b><small>Stumm-Taste, Autostart, Alexa</small></span></li>
+            </ul>
           </div>
+          <p class="note" id="bootLine">Dauert etwa zwei Minuten. Jeder Schritt wird sofort gespeichert.</p>
         </section>
 
         <!-- 2 Mikrofon -->
         <section class="step" data-step="mic" hidden>
           <div class="mic-layout">
             <div class="mic-list-wrap">
-              <div class="sub-head">
-                <span>Mikrofone</span>
+              <div class="section-head">
+                <h2>Mikrofone</h2>
                 <button type="button" class="link-btn" id="micReload">Liste neu laden</button>
               </div>
-              <div class="mic-list" id="micList" role="radiogroup" aria-label="Mikrofon auswählen"></div>
+              <div class="choices" id="micList" role="radiogroup" aria-label="Mikrofon auswählen"></div>
             </div>
-            <div class="mic-live panel" id="micLive">
+            <div class="mic-live" id="micLive">
+              <div class="section-head"><h2>Test</h2></div>
               <div class="meter-block">
-                <div class="meter-top"><span>Pegel</span><span class="meter-num" id="levelNum">–</span></div>
+                <div class="meter-top"><span>Lautstärke</span><span class="meter-num" id="levelNum">–</span></div>
                 <div class="vu" id="vu" aria-hidden="true"></div>
               </div>
               <div class="meter-block">
-                <div class="meter-top"><span>„Hey Jarvis“</span><span class="meter-num" id="wakeNum">–</span></div>
+                <div class="meter-top"><span>„Hey Jarvis“ erkannt</span><span class="meter-num" id="wakeNum">–</span></div>
                 <div class="wake-track" aria-hidden="true">
                   <span class="wake-fill" id="wakeFill"></span>
                   <span class="wake-best" id="wakeBest"></span>
-                  <span class="wake-mark" id="wakeMark" title="Schwelle"></span>
+                  <span class="wake-mark" id="wakeMark" title="Ab hier reagiert Jarvis"></span>
                 </div>
               </div>
-              <div class="mic-status" id="micStatus" data-tone="idle" aria-live="polite">
-                <span class="dot"></span><span id="micStatusText">Wählen Sie links ein Mikrofon.</span>
+              <div class="status-box" id="micStatus" data-tone="idle" aria-live="polite">
+                <span class="status-dot"></span><span id="micStatusText">Wähl links ein Mikrofon.</span>
               </div>
-              <label class="switch-row">
-                <span>
+              <label class="setting">
+                <span class="setting-text">
                   <b>Empfindlicher</b>
-                  <small>Wenn „Hey Jarvis“ nur knapp ankommt</small>
+                  <small>Wenn „Hey Jarvis“ nur knapp erkannt wird</small>
                 </span>
-                <input type="checkbox" id="sensitive"><span class="switch" aria-hidden="true"></span>
+                <input type="checkbox" class="sr-input" id="sensitive"><span class="switch" aria-hidden="true"></span>
               </label>
-              <p class="tip">Sagen Sie <b>„Hey Dschaarwis“</b> – englisch ausgesprochen.</p>
             </div>
           </div>
+          <p class="note">„Hey Jarvis“ englisch aussprechen, etwa „Hej Dschahrwis“.</p>
         </section>
 
         <!-- 3 Stimme -->
         <section class="step" data-step="voice" hidden>
           <div class="voice-grid" id="voiceGrid" role="radiogroup" aria-label="Stimme auswählen"></div>
-          <p class="tip">Die Stimmen kommen von Microsoft und brauchen Internet. Ohne Internet spricht Jarvis mit der Windows-Stimme.</p>
+          <p class="note" id="voiceNote">Die Stimmen kommen kostenlos von Microsoft und brauchen Internet. Ohne Internet spricht Jarvis mit einer Ersatzstimme.</p>
         </section>
 
         <!-- 4 Wohnort -->
         <section class="step" data-step="place" hidden>
           <form class="place-form" id="placeForm" autocomplete="off">
-            <label class="field">
-              <span class="field-ico" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
-              </span>
-              <input id="placeInput" type="text" maxlength="80" placeholder="z. B. Wien oder Graz, Österreich" aria-label="Wohnort" spellcheck="false">
-            </label>
+            <input id="placeInput" class="input" type="text" maxlength="80" placeholder="z. B. Wien oder Graz, Österreich" aria-label="Wohnort" spellcheck="false">
             <button type="submit" class="btn" id="placeCheck">Prüfen</button>
           </form>
+          <p class="form-msg" id="placeMsg" aria-live="polite"></p>
           <div class="weather-card empty" id="weatherCard">
             <div class="weather-temp" id="weatherTemp"></div>
-            <div>
+            <div class="weather-info">
               <div class="weather-place" id="weatherPlace"></div>
               <div class="weather-text" id="weatherText"></div>
             </div>
           </div>
-          <p class="form-msg" id="placeMsg" aria-live="polite"></p>
-          <p class="tip">Jarvis nutzt den Ort für „Wie wird das Wetter?“ und zeigt das Wetter im Fenster. Leer lassen geht auch.</p>
+          <p class="note">Jarvis braucht den Ort für „Wie wird das Wetter?“ und zeigt das Wetter im Fenster. Leer lassen geht auch.</p>
         </section>
 
         <!-- 5 Claude -->
         <section class="step" data-step="claude" hidden>
           <div class="claude-card" id="claudeCard" data-state="idle">
-            <canvas class="claude-reactor" id="claudeReactor" aria-hidden="true"></canvas>
+            <span class="claude-icon" id="claudeIcon" aria-hidden="true"></span>
             <div class="claude-text">
               <div class="claude-title" id="claudeTitle">Noch nicht geprüft</div>
               <div class="claude-msg" id="claudeMsg">Jarvis fragt Claude einmal, ob alles funktioniert.</div>
+              <div class="claude-note" id="claudeNote" hidden></div>
               <div class="claude-meta" id="claudeMeta"></div>
               <div class="claude-actions">
-                <button type="button" class="btn" id="claudeInstall" hidden>Claude Code installieren</button>
-                <button type="button" class="btn" id="claudeLogin" hidden>Bei Claude anmelden</button>
-                <button type="button" class="btn ghost" id="claudeRetry">Nochmal prüfen</button>
+                <button type="button" class="btn primary" id="claudeInstall" hidden>Claude Code installieren</button>
+                <button type="button" class="btn primary" id="claudeLogin" hidden>Bei Claude anmelden</button>
+                <button type="button" class="btn" id="claudeRetry">Nochmal prüfen</button>
               </div>
             </div>
           </div>
           <div class="howto" id="claudeHowto" hidden></div>
-          <p class="tip">Claude Code ist das Gehirn: Es beantwortet Fragen und erledigt Aufgaben am PC. Dafür reicht Ihr Claude-Pro-Abo.</p>
+          <details class="details" id="claudeDetails" hidden>
+            <summary>Claudes genaue Meldung</summary>
+            <pre id="claudeDetail"></pre>
+            <button type="button" class="btn small" id="claudeCopy">Kopieren</button>
+          </details>
+
+          <div class="section-head spaced"><h2>Antwort-Tempo</h2></div>
+          <div class="segmented" id="speed" role="radiogroup" aria-label="Antwort-Tempo">
+            <button type="button" role="radio" data-speed="schnell"><b>Schnell</b><small>Haiku. Antwortet am schnellsten, gut für kurze Fragen.</small></button>
+            <button type="button" role="radio" data-speed="ausgewogen"><b>Ausgewogen</b><small>Sonnet. Klüger, braucht etwas länger.</small></button>
+            <button type="button" role="radio" data-speed="gruendlich"><b>Gründlich</b><small>Opus. Am klügsten, am langsamsten.</small></button>
+          </div>
+          <p class="note">Dafür reicht dein Claude-Pro-Abo. Lehnt ein Modell ab, nimmt Jarvis automatisch ein anderes.</p>
         </section>
 
         <!-- 6 Extras -->
         <section class="step" data-step="extras" hidden>
-          <div class="extras">
-            <div class="extra">
-              <div class="extra-head">
-                <span class="extra-ico ico-key"></span>
-                <div><b>Stumm-Taste</b><small>Schaltet das Mikrofon überall in Windows aus und an.</small></div>
-              </div>
+          <div class="settings">
+            <div class="setting stacked">
+              <span class="setting-text">
+                <b>Stumm-Taste</b>
+                <small>Schaltet das Mikrofon überall in Windows aus und wieder an.</small>
+              </span>
               <div class="keys" id="hotkeys" role="radiogroup" aria-label="Stumm-Taste"></div>
             </div>
 
-            <label class="extra switch-row">
-              <span class="extra-head">
-                <span class="extra-ico ico-power"></span>
-                <span><b>Mit Windows starten</b><small>Jarvis ist nach dem Anmelden sofort da.</small></span>
+            <label class="setting">
+              <span class="setting-text">
+                <b>Mit Windows starten</b>
+                <small>Jarvis ist nach dem Anmelden sofort da.</small>
               </span>
-              <input type="checkbox" id="autostart"><span class="switch" aria-hidden="true"></span>
+              <input type="checkbox" class="sr-input" id="autostart"><span class="switch" aria-hidden="true"></span>
             </label>
 
-            <details class="extra alexa" id="alexa">
-              <summary class="extra-head">
-                <span class="extra-ico ico-alexa"></span>
-                <span><b>Alexa über Home Assistant</b><small>Optional. Jarvis spricht über Ihre Echos und schaltet Geräte.</small></span>
+            <details class="setting alexa" id="alexa">
+              <summary>
+                <span class="setting-text">
+                  <b>Alexa über Home Assistant</b>
+                  <small>Freiwillig. Jarvis spricht über deine Echos und schaltet Geräte.</small>
+                </span>
                 <span class="chev" aria-hidden="true"></span>
               </summary>
               <div class="alexa-body">
-                <label class="field small">
+                <label class="field">
                   <span class="field-label">Adresse</span>
-                  <input id="haUrl" type="text" placeholder="http://homeassistant.local:8123" spellcheck="false">
+                  <input id="haUrl" class="input" type="text" placeholder="http://homeassistant.local:8123" spellcheck="false">
                 </label>
-                <label class="field small">
+                <label class="field">
                   <span class="field-label">Token</span>
-                  <input id="haToken" type="password" placeholder="Langlebiges Zugriffstoken" spellcheck="false">
+                  <input id="haToken" class="input" type="password" placeholder="Langlebiges Zugriffstoken" spellcheck="false">
                 </label>
                 <div class="alexa-actions">
                   <button type="button" class="btn" id="haCheck">Verbindung testen</button>
-                  <button type="button" class="btn ghost" id="haSave" hidden>Alexa speichern</button>
+                  <button type="button" class="btn primary" id="haSave" hidden>Alexa speichern</button>
                 </div>
                 <p class="form-msg" id="haMsg" aria-live="polite"></p>
                 <div class="echos" id="echos"></div>
@@ -195,18 +196,15 @@
 
         <!-- 7 Fertig -->
         <section class="step" data-step="done" hidden>
-          <div class="done">
-            <div class="done-reactor"><canvas id="doneReactor" aria-hidden="true"></canvas></div>
-            <div class="summary" id="summary"></div>
-          </div>
-          <p class="tip">Sagen Sie <b>„Hey Jarvis“</b>, warten Sie auf den Ton und sprechen Sie Ihren Befehl auf Deutsch. Tippen geht auch.</p>
+          <div class="summary" id="summary"></div>
+          <p class="note">Sag „Hey Jarvis“, warte auf den Ton und sprich deinen Befehl. Oder klick auf den Kreis im Jarvis-Fenster. Tippen geht auch.</p>
         </section>
       </div>
 
-      <footer class="card-foot">
-        <button type="button" class="btn ghost" id="backBtn">Zurück</button>
+      <footer class="page-foot">
+        <button type="button" class="btn ghost" id="backBtn" hidden>Zurück</button>
         <span class="foot-hint" id="footHint"></span>
-        <button type="button" class="btn primary" id="nextBtn">Einrichtung starten</button>
+        <button type="button" class="btn primary" id="nextBtn">Los geht's</button>
       </footer>
     </main>
   </div>

@@ -58,6 +58,27 @@ def _device(value) -> int | None:
     return int(value)
 
 
+# Antwort-Tempo: welches Claude-Modell zuerst gefragt wird (die anderen sind Ersatz).
+SPEEDS = {
+    "schnell": ["haiku", "sonnet", "opus"],
+    "ausgewogen": ["sonnet", "haiku", "opus"],
+    "gruendlich": ["opus", "sonnet", "haiku"],
+}
+
+
+def speed_of(models) -> str:
+    first = str((models or ["sonnet"])[0]).lower()
+    return "schnell" if "haiku" in first else "gruendlich" if "opus" in first else "ausgewogen"
+
+
+def _forget_brain_state() -> None:
+    """Die gemerkte Ersatz-Wahl (daten/gehirn.json) soll eine neue Auswahl nicht überstimmen."""
+    try:
+        (STATE_DIR / "gehirn.json").unlink()
+    except OSError:
+        pass
+
+
 def _ha_url(value) -> str:
     """Adresse von Home Assistant. "homeassistant.local:8123" reicht, http:// ergänzt Jarvis."""
     url = str(value or "").strip().rstrip("/")
@@ -196,16 +217,32 @@ class MicTest:
 
 
 class ClaudeCheck:
+    """Fragt Claude einmal im Hintergrund. Die Seite holt sich den Stand über poll()."""
+
+    MESSAGES = {
+        "login": "Claude Code ist installiert, aber noch nicht mit deinem Pro-Konto angemeldet.",
+        "refused": "Claude hat bei allen Modellen abgelehnt, auch mit ganz einfachen Einstellungen.",
+        "missing": "Claude Code ist noch nicht installiert.",
+        "limit": "Dein Claude-Kontingent ist gerade aufgebraucht. Es füllt sich in ein paar Stunden wieder auf.",
+        "network": "Claude ist gerade nicht erreichbar. Ist das Internet an?",
+        "account": "Dein Claude-Konto meldet ein Problem. Bitte einmal auf claude.ai nachsehen.",
+        "billing": "Claude Code rechnet über einen API-Schlüssel ab statt über dein Pro-Abo.",
+        "timeout": "Claude hat zu lange nicht geantwortet.",
+    }
+
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._lock = threading.Lock()
-        self.result = {"state": "idle", "message": "", "model": "", "version": ""}
+        self.result = {"state": "idle", "message": "", "model": "", "version": "", "detail": "", "note": ""}
 
     def start(self) -> dict:
         with self._lock:
             if self.result["state"] == "running":
                 return {"started": False}
-            self.result = {"state": "running", "message": "Ich frage Claude ...", "model": "", "version": ""}
+            self.result = {
+                "state": "running", "message": "Ich frage Claude ...", "model": "", "version": "",
+                "detail": "", "note": "",
+            }
         threading.Thread(target=self._run, name="einrichtung-claude", daemon=True).start()
         return {"started": True}
 
@@ -223,7 +260,7 @@ class ClaudeCheck:
             cfg = self._cfg["brain"]
         path = find_claude(cfg)
         if not path:
-            self._set(state="missing", message="Claude Code ist noch nicht installiert.")
+            self._set(state="missing", message=self.MESSAGES["missing"])
             return
         try:
             version = subprocess.run(
@@ -232,23 +269,48 @@ class ClaudeCheck:
             ).stdout.strip()
         except Exception:
             version = ""
+        self._set(version=version)
+        notes: list[str] = []
+
+        def notice(text: str) -> None:
+            # "sonnet hat abgelehnt, versuche haiku ..." live auf der Seite zeigen.
+            notes.append(text)
+            log.info("Claude-Prüfung: %s", text)
+            self._set(message=text[:1].upper() + text[1:])
+
         try:
             cfg = dict(cfg, claude_path=path)
             brain = ClaudeBrain(cfg, HOME_DIR, STATE_DIR, persona=build_persona(HOME_DIR, STATE_DIR, self._cfg))
+            brain.notice = notice
+            first = brain.attempts[0]
             answer = brain.ask("Antworte nur mit: Test bestanden.")
         except BrainError as exc:
-            state = {"login": "login", "missing": "missing", "refusal": "refused"}.get(exc.kind, "error")
-            message = {
-                "login": "Claude Code ist installiert, aber noch nicht mit deinem Pro-Konto angemeldet.",
-                "refused": "Claude hat abgelehnt. Jarvis probiert später automatisch andere Modelle.",
-                "missing": "Claude Code ist noch nicht installiert.",
-            }.get(state, exc.spoken)
-            self._set(state=state, message=message, version=version)
+            log.warning("Claude-Prüfung fehlgeschlagen (%s): %s", exc.kind, exc)
+            state = {"refusal": "refused", "cancelled": "error", "other": "error"}.get(exc.kind, exc.kind)
+            message = self.MESSAGES.get(state, "Claude hat einen Fehler gemeldet.")
+            self._set(state=state if state in self.MESSAGES else "error", message=message,
+                      detail=str(exc).strip()[:700])
             return
         except Exception as exc:
-            self._set(state="error", message=f"Unerwarteter Fehler: {exc}", version=version)
+            log.exception("Claude-Prüfung")
+            self._set(state="error", message="Unerwarteter Fehler in Jarvis.", detail=str(exc)[:700])
             return
-        self._set(state="ok", message="Das Gehirn ist verbunden. Jarvis kann denken.", model=answer.model, version=version)
+        note = ""
+        speed = speed_of(cfg.get("models"))
+        if brain.attempt != first:
+            note = (f"{first.label()} hat nicht geklappt, Jarvis nimmt deshalb {brain.attempt.label()}. "
+                    "Das merkt er sich.")
+            working = brain.attempt.model
+            if working and brain.attempt.profile == "jarvis":
+                # Dauerhaft merken: sonst fragt Jarvis jeden Tag zuerst das Modell, das ablehnt.
+                models = [working] + [m for m in (cfg.get("models") or []) if m != working]
+                try:
+                    save_setting("brain", "models", models)
+                    speed = speed_of(models)
+                except OSError as exc:
+                    log.warning("Modell-Reihenfolge nicht gespeichert: %s", exc)
+        self._set(state="ok", message="Das Gehirn ist verbunden. Jarvis kann denken.", model=answer.model,
+                  note=note, speed=speed)
 
     def poll(self) -> dict:
         with self._lock:
@@ -288,6 +350,7 @@ class SetupApi:
                 "autostart": enabled(),
                 "ha_url": str(cfg.get("homeassistant", {}).get("url", "")),
                 "ha_token_set": bool(cfg.get("homeassistant", {}).get("token")),
+                "speed": speed_of(cfg["brain"].get("models")),
             },
             "claude": {"installed": bool(claude), "path": claude or ""},
         }
@@ -451,6 +514,17 @@ class SetupApi:
 
     def hotkey_save(self, hotkey) -> dict:
         return self._save("mute", "hotkey", str(hotkey))
+
+    def brain_speed(self, value) -> dict:
+        """Antwort-Tempo: "schnell" (Haiku zuerst), "ausgewogen" (Sonnet) oder "gruendlich" (Opus)."""
+        key = str(value or "").strip().lower().replace("ü", "ue")
+        models = SPEEDS.get(key)
+        if not models:
+            return {"ok": False, "error": "Unbekannte Auswahl.", "speed": ""}
+        result = self._save("brain", "models", models, extra={"speed": key})
+        if result["ok"]:
+            _forget_brain_state()
+        return result
 
     def autostart_set(self, on) -> dict:
         from . import autostart

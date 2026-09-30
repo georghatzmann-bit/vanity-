@@ -4,119 +4,97 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>J.A.R.V.I.S.</title>
+  <title>Jarvis</title>
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-state="idle" data-link="wait">
-  <div class="backdrop" aria-hidden="true">
-    <div class="backdrop-hex"></div>
-    <div class="backdrop-scan"></div>
-  </div>
-
   <div class="app" id="app">
-    <!-- Kopfzeile: System links, Marke Mitte, Uhr rechts -->
+    <!-- Kopfzeile -->
     <header class="topbar">
-      <section class="panel hud sys" aria-label="Systemstatus">
-        <div class="panel-head">
-          <span class="panel-title">System</span>
-          <span class="rule"></span>
-          <span class="link" id="linkTag"><i class="link-dot"></i><span id="linkText">Verbinde …</span></span>
-        </div>
-        <div class="meters">
-          <div class="meter" id="cpuMeter">
-            <span class="meter-label">CPU</span>
-            <span class="meter-track"><span class="meter-fill"></span></span>
-            <span class="meter-value">– %</span>
-          </div>
-          <div class="meter" id="ramMeter">
-            <span class="meter-label">RAM</span>
-            <span class="meter-track"><span class="meter-fill"></span></span>
-            <span class="meter-value">– %</span>
-          </div>
-        </div>
-        <div class="sys-lines">
-          <div class="sys-line" id="micLine" hidden><span class="k">Mikrofon:</span> <span class="v" id="micName"></span></div>
-          <div class="sys-line" id="modelLine" hidden><span class="k">Modell:</span> <span class="v" id="modelName"></span></div>
-        </div>
-      </section>
-
-      <div class="brand" aria-hidden="true">
-        <div class="brand-name">J.A.R.V.I.S.</div>
-        <div class="brand-sub">Just A Rather Very Intelligent System</div>
-        <div class="brand-ver" id="versionTag"></div>
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/></svg>
+        <span class="brand-name">Jarvis</span>
+        <span class="link-tag" id="linkTag"><span class="link-dot"></span><span id="linkText">Verbinde …</span></span>
       </div>
-
-      <section class="clock" aria-label="Uhrzeit und Datum">
-        <div class="clock-time"><span id="clockHM">--:--</span><span class="clock-sec" id="clockS">--</span></div>
-        <div class="clock-date" id="clockDate"></div>
-        <div class="clock-weather" id="weatherLine" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2.6v1.3M3.3 8.9h1.3M5 4.9l.9.9M13 4.9l-.9.9"/><path d="M6.2 11.6a3.4 3.4 0 1 1 6.1-3.4"/><path d="M8 20.2h9.4a3.4 3.4 0 0 0 .3-6.8 4.8 4.8 0 0 0-9.2 1.3A2.8 2.8 0 0 0 8 20.2z"/></svg>
+      <div class="topbar-right">
+        <div class="weather" id="weatherLine" hidden>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 3.5v1.2M3.5 8.5h1.2M5 5l.85.85M12 5l-.85.85"/><path d="M5.9 11.1a3.1 3.1 0 1 1 5.6-2.7"/><path d="M8 20h9a3.5 3.5 0 0 0 .4-7 4.8 4.8 0 0 0-9.1 1.5A2.8 2.8 0 0 0 8 20z"/></svg>
           <span id="weatherText"></span>
         </div>
-      </section>
+        <div class="clock" id="clock">
+          <span class="clock-time" id="clockHM">--:--</span>
+          <span class="clock-date" id="clockDate"></span>
+        </div>
+        <button type="button" class="icon-btn" id="setupBtn" title="Einstellungen: Mikrofon, Stimme, Wohnort, Claude" aria-label="Einstellungen öffnen">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+        </button>
+      </div>
     </header>
 
-    <!-- Bühne mit Arc Reactor -->
-    <main class="stage">
-      <div class="reactor-wrap" id="reactorWrap" role="button" tabindex="0" title="Klicken: Jarvis hört sofort zu (ohne „Hey Jarvis“)" aria-label="Jarvis sofort zuhören lassen">
-        <canvas id="reactor" aria-hidden="true"></canvas>
-      </div>
-      <div class="status" aria-live="polite">
-        <div class="state-label" id="stateLabel">Bereit</div>
-        <div class="state-hint" id="stateHint">Sag „Hey Jarvis“ oder klick auf den Reaktor</div>
-      </div>
-    </main>
+    <main class="main">
+      <!-- Bühne: Zustand von Jarvis -->
+      <section class="stage" aria-label="Jarvis">
+        <div class="orb-wrap" id="reactorWrap" role="button" tabindex="0" title="Klicken: Jarvis hört sofort zu, ohne „Hey Jarvis“" aria-label="Jarvis sofort zuhören lassen">
+          <canvas id="reactor" aria-hidden="true"></canvas>
+        </div>
+        <div class="status" aria-live="polite">
+          <h1 class="state-label" id="stateLabel">Bereit</h1>
+          <p class="state-hint" id="stateHint">Sag „Hey Jarvis“ oder klick auf den Kreis</p>
+        </div>
+        <div class="controls" role="group" aria-label="Steuerung">
+          <button type="button" class="btn" id="micBtn" aria-pressed="false">
+            <svg class="ico ico-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+            <svg class="ico ico-mic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 5 2.2"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16"/></svg>
+            <span id="micBtnText">Stumm schalten</span>
+          </button>
+          <button type="button" class="btn" id="stopBtn" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+            <span>Stopp</span>
+          </button>
+        </div>
+        <div class="mic-line" id="micLine" hidden>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+          <span class="mic-name" id="micName"></span>
+          <button type="button" class="link-btn" id="micChange">Ändern</button>
+        </div>
+      </section>
 
-    <!-- Verlauf -->
-    <aside class="panel hud chat" aria-label="Verlauf">
-      <div class="panel-head">
-        <span class="panel-title">Verlauf</span>
-        <span class="rule"></span>
-        <span class="panel-meta" id="msgCount"></span>
-      </div>
-      <div class="chat-body">
-        <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
-        <div class="chat-empty" id="chatEmpty">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A1.5 1.5 0 0 1 4 14.5z"/><path d="M8.5 8.5h7M8.5 11.5h4.5"/></svg>
-          <p>Noch keine Unterhaltung.</p>
-          <p class="sub">Sag „Hey Jarvis“ oder probier eins davon:</p>
-          <div class="try" id="tryList">
-            <button type="button" class="try-chip">Wie spät ist es?</button>
-            <button type="button" class="try-chip">Wie wird das Wetter morgen?</button>
-            <button type="button" class="try-chip">Erinnere mich in 10 Minuten an den Tee</button>
-            <button type="button" class="try-chip">Öffne YouTube</button>
+      <!-- Unterhaltung -->
+      <aside class="chat" aria-label="Unterhaltung">
+        <div class="chat-head">
+          <div class="chat-heading">
+            <span class="chat-title">Unterhaltung</span>
+            <span class="chat-sub" id="modelLine" hidden>mit <span id="modelName"></span></span>
+          </div>
+          <button type="button" class="btn ghost small" id="newBtn" title="Neue Unterhaltung: Jarvis vergisst das bisherige Gespräch">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Neu</span>
+          </button>
+        </div>
+        <div class="chat-body">
+          <div class="messages" id="messages" role="log" aria-live="polite" aria-relevant="additions text"></div>
+          <div class="chat-empty" id="chatEmpty">
+            <svg class="empty-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.5L4 19.5l1.5-4.3A7.5 7.5 0 1 1 20 11.5z"/></svg>
+            <p class="empty-title">Noch keine Unterhaltung</p>
+            <p class="empty-hint">Sag „Hey Jarvis“, klick auf den Kreis oder nimm ein Beispiel:</p>
+            <div class="try" id="tryList">
+              <button type="button" class="try-chip">Wie spät ist es?</button>
+              <button type="button" class="try-chip">Wie wird das Wetter morgen?</button>
+              <button type="button" class="try-chip">Erinnere mich in 10 Minuten an den Tee</button>
+              <button type="button" class="try-chip">Öffne YouTube</button>
+            </div>
           </div>
         </div>
-      </div>
-    </aside>
-
-    <!-- Eingabe und Steuerung -->
-    <footer class="dock">
-      <form class="panel hud cmd" id="cmdForm" autocomplete="off">
-        <span class="cmd-prompt" aria-hidden="true">›</span>
-        <input id="cmdInput" type="text" placeholder="Schreib Jarvis etwas …" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
-        <button type="submit" class="send-btn" id="sendBtn" title="Senden (Enter)" aria-label="Senden" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5 10.2 13.8"/><path d="M20.5 3.5 14 20.5l-3.8-6.7L3.5 10z"/></svg>
-          <span class="send-text">Senden</span>
-        </button>
-      </form>
-      <div class="ctrl" role="group" aria-label="Steuerung">
-        <button type="button" class="icon-btn" id="micBtn" title="Stumm/Laut" aria-label="Stumm/Laut" aria-pressed="false">
-          <svg class="ico-mic" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3M8.5 21h7"/></svg>
-          <svg class="ico-mic-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10V6a3 3 0 0 0-5.7-1.3"/><path d="M9 9v2.5a3 3 0 0 0 4.9 2.3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 10.4 5.2M18.5 11.5a6.4 6.4 0 0 1-.6 2.7"/><path d="M12 18v3M8.5 21h7"/><path d="M3.5 3.5l17 17"/></svg>
-        </button>
-        <button type="button" class="icon-btn" id="stopBtn" title="Stopp" aria-label="Stopp">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>
-        </button>
-        <button type="button" class="icon-btn" id="newBtn" title="Neue Unterhaltung" aria-label="Neue Unterhaltung">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A1.5 1.5 0 0 1 4 14.5z"/><path d="M12 6.5v6M9 9.5h6"/></svg>
-        </button>
-        <button type="button" class="icon-btn" id="setupBtn" title="Einrichtung: Mikrofon, Stimme, Wohnort, Claude, Extras" aria-label="Einrichtung öffnen">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"/><circle cx="12" cy="12" r="6.6"/></svg>
-        </button>
-      </div>
-    </footer>
+        <form class="composer" id="cmdForm" autocomplete="off">
+          <input id="cmdInput" class="composer-input" type="text" placeholder="Nachricht an Jarvis" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
+          <button type="submit" class="send-btn" id="sendBtn" title="Senden (Enter)" aria-label="Senden" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+          </button>
+        </form>
+      </aside>
+    </main>
   </div>
 
   <div class="toasts" id="toasts" aria-live="assertive"></div>

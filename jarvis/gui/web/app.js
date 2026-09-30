@@ -27,10 +27,10 @@
   const STATES = ['idle', 'listening', 'thinking', 'speaking', 'muted', 'error'];
   const LABELS = {
     idle: 'Bereit',
-    listening: 'Ich höre zu …',
-    thinking: 'Einen Moment …',
-    speaking: 'Jarvis spricht',
-    muted: 'Stumm',
+    listening: 'Hört zu',
+    thinking: 'Denkt nach',
+    speaking: 'Spricht',
+    muted: 'Mikrofon aus',
     error: 'Fehler',
   };
 
@@ -63,25 +63,22 @@
     stateLabel: $('stateLabel'),
     stateHint: $('stateHint'),
     linkText: $('linkText'),
-    cpu: $('cpuMeter'),
-    ram: $('ramMeter'),
     micLine: $('micLine'),
     micName: $('micName'),
+    micChange: $('micChange'),
     modelLine: $('modelLine'),
     modelName: $('modelName'),
-    version: $('versionTag'),
     weatherLine: $('weatherLine'),
     weatherText: $('weatherText'),
     clockHM: $('clockHM'),
-    clockS: $('clockS'),
     clockDate: $('clockDate'),
     chat: document.querySelector('.chat'),
     messages: $('messages'),
-    msgCount: $('msgCount'),
     form: $('cmdForm'),
     input: $('cmdInput'),
     sendBtn: $('sendBtn'),
     micBtn: $('micBtn'),
+    micBtnText: $('micBtnText'),
     stopBtn: $('stopBtn'),
     newBtn: $('newBtn'),
     setupBtn: $('setupBtn'),
@@ -179,16 +176,11 @@
     S.shown = st;
     el.body.dataset.state = st;
     el.stateLabel.textContent = LABELS[st];
+    el.stopBtn.disabled = !(st === 'speaking' || st === 'thinking');
     renderHint(st);
     Reactor.setState(st);
     if (changed && el.stateLabel.animate && !reducedMotion) {
-      el.stateLabel.animate(
-        [
-          { opacity: 0, transform: 'translateY(5px)', filter: 'blur(4px)' },
-          { opacity: 1, transform: 'none', filter: 'blur(0)' },
-        ],
-        { duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)' }
-      );
+      el.stateLabel.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
     }
   }
 
@@ -197,16 +189,16 @@
     h.textContent = '';
     switch (st) {
       case 'idle':
-        h.textContent = 'Sag „Hey Jarvis“ oder klick auf den Reaktor';
+        h.textContent = 'Sag „Hey Jarvis“ oder klick auf den Kreis';
         break;
       case 'listening':
-        h.textContent = 'Sprich jetzt – ich höre dir zu';
+        h.textContent = 'Sprich jetzt, ich höre zu';
         break;
       case 'thinking':
-        h.textContent = 'Deine Anfrage wird verarbeitet';
+        h.textContent = 'Claude arbeitet an deiner Anfrage';
         break;
       case 'speaking':
-        h.textContent = 'Esc oder Stopp zum Unterbrechen';
+        h.textContent = 'Esc oder Stopp unterbricht';
         break;
       case 'muted': {
         const parts = hotkeyParts(S.hotkey);
@@ -217,14 +209,14 @@
             k.textContent = p;
             h.append(k);
           });
-          h.append(' zum Einschalten');
+          h.append(' schaltet das Mikrofon wieder ein');
         } else {
-          h.textContent = 'Mikrofon-Taste zum Einschalten';
+          h.textContent = 'Das Mikrofon ist aus';
         }
         break;
       }
       case 'error':
-        h.textContent = 'Da ist etwas schiefgelaufen – bitte noch einmal versuchen';
+        h.textContent = 'Das hat nicht geklappt. Bitte noch einmal versuchen.';
         break;
       default:
         break;
@@ -237,20 +229,11 @@
     const hk = parts ? ` (${parts.join('+')})` : '';
     b.classList.toggle('is-muted', S.muted);
     b.setAttribute('aria-pressed', S.muted ? 'true' : 'false');
-    b.title = (S.muted ? 'Laut schalten – Mikrofon ist stumm' : 'Stumm schalten') + hk;
+    el.micBtnText.textContent = S.muted ? 'Mikrofon einschalten' : 'Stumm schalten';
+    b.title = (S.muted ? 'Das Mikrofon ist aus. Einschalten' : 'Mikrofon ausschalten') + hk;
   }
 
-  // ------------------------------------------------------------------ Systemanzeige
-
-  function setMeter(meter, value) {
-    const v = Number(value);
-    if (!Number.isFinite(v)) return;
-    const p = clamp(v, 0, 100);
-    meter.querySelector('.meter-fill').style.width = p.toFixed(1) + '%';
-    meter.querySelector('.meter-value').textContent = Math.round(p) + ' %';
-    meter.classList.toggle('crit', p >= 90);
-    meter.classList.toggle('warn', p >= 75 && p < 90);
-  }
+  // ------------------------------------------------------------------ Einstellungen vom Kern
 
   function applyConfig(cfg) {
     if (!cfg || typeof cfg !== 'object') return;
@@ -275,7 +258,7 @@
     }
     if (typeof cfg.version === 'string' || typeof cfg.version === 'number') {
       S.version = String(cfg.version).trim();
-      el.version.textContent = S.version ? 'Version ' + S.version : '';
+      el.setupBtn.title = 'Einstellungen: Mikrofon, Stimme, Wohnort, Claude' + (S.version ? ' · Jarvis ' + S.version : '');
     }
     if (typeof cfg.muted === 'boolean') S.muted = cfg.muted;
     renderState();
@@ -284,15 +267,15 @@
   function setLink(mode) {
     S.link = mode;
     el.body.dataset.link = mode;
-    el.linkText.textContent = { wait: 'Verbinde …', live: 'Online', demo: 'Demo', offline: 'Getrennt' }[mode] || '';
+    el.linkText.textContent = { wait: 'Verbinde …', live: 'Verbunden', demo: 'Demo', offline: 'Getrennt' }[mode] || '';
   }
 
   // ------------------------------------------------------------------ Uhr
 
   function tickClock() {
     const d = new Date();
-    el.clockHM.textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-    el.clockS.textContent = pad2(d.getSeconds());
+    const hm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    if (el.clockHM.textContent !== hm) el.clockHM.textContent = hm;
     const ds = d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
     if (el.clockDate.textContent !== ds) el.clockDate.textContent = ds;
     setTimeout(tickClock, 1000 - d.getMilliseconds() + 8);
@@ -318,10 +301,8 @@
   }
 
   function updateChatMeta() {
-    const n = el.messages.childElementCount;
     // Hinweise ("Bereit ...") zählen nicht als Unterhaltung: die Beispiele bleiben sichtbar.
     el.chat.classList.toggle('has-msgs', !!el.messages.querySelector('.msg-user, .msg-jarvis'));
-    el.msgCount.textContent = n ? String(n).padStart(2, '0') : '';
   }
 
   function createMsg(role, id) {
@@ -478,14 +459,23 @@
 
   // ------------------------------------------------------------------ Hinweise
 
+  const TOAST_ICONS = {
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    error: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/>',
+    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 10"/>',
+  };
+
   function toast(text, kind) {
     const isErr = kind === 'error';
+    const type = isErr ? 'error' : kind === 'ok' ? 'ok' : 'info';
     const t = document.createElement('div');
-    t.className = 'toast ' + (isErr ? 'toast-error' : 'toast-info');
+    t.className = 'toast toast-' + type;
     t.setAttribute('role', isErr ? 'alert' : 'status');
-    const icon = document.createElement('span');
-    icon.className = 'toast-icon';
-    icon.textContent = isErr ? '!' : 'i';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('class', 'ico');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = TOAST_ICONS[type];
     const body = document.createElement('span');
     body.className = 'toast-text';
     body.textContent = text == null ? '' : String(text);
@@ -495,9 +485,9 @@
     const hide = () => {
       if (!t.isConnected || t.classList.contains('out')) return;
       t.classList.add('out');
-      setTimeout(() => t.remove(), 320);
+      setTimeout(() => t.remove(), 200);
     };
-    setTimeout(hide, 4000);
+    setTimeout(hide, isErr ? 7000 : 4000);
     t.addEventListener('click', hide);
   }
 
@@ -521,9 +511,7 @@
         handleMessage(ev);
         break;
       case 'stats':
-        if (ev.cpu != null) setMeter(el.cpu, ev.cpu);
-        if (ev.ram != null) setMeter(el.ram, ev.ram);
-        break;
+        break; // CPU/RAM zeigt das Fenster bewusst nicht mehr an
       case 'config':
         applyConfig(ev);
         break;
@@ -788,6 +776,7 @@
     el.stopBtn.addEventListener('click', stopAnswer);
     el.newBtn.addEventListener('click', newConversation);
     el.setupBtn.addEventListener('click', openSetup);
+    el.micChange.addEventListener('click', openSetup);
     el.reactorWrap.addEventListener('click', listenNow);
     el.reactorWrap.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -817,7 +806,7 @@
   }
 
   // ==================================================================
-  //   Arc Reactor (Canvas)
+  //   Der Kreis (Canvas): zeigt ruhig, was Jarvis gerade tut
   // ==================================================================
 
   const Reactor = (() => {
@@ -827,93 +816,49 @@
     let H = 0;
     let dpr = 1;
 
-    const PAL = {
-      cyan: [79, 216, 255],
-      cyanHi: [125, 230, 255],
-      white: [205, 244, 255],
-      amber: [255, 181, 71],
-      red: [255, 77, 94],
-      grey: [112, 130, 146],
+    // Farben je Zustand (eine Akzentfarbe, Grau für stumm, Rot nur bei Fehlern)
+    const COL = {
+      idle: [76, 157, 255],
+      listening: [110, 182, 255],
+      thinking: [76, 157, 255],
+      speaking: [128, 190, 255],
+      muted: [112, 120, 136],
+      error: [240, 85, 90],
     };
 
-    const T = {
-      idle: {
-        p: PAL.cyan, a: PAL.cyan, core: [150, 232, 255],
-        rot: 1, seg: 0.16, pulseHz: 0.2, pulseAmp: 0.11, bright: 0.8,
-        expand: 0, listen: 0, eq: 0, orbit: 0, mute: 0,
-      },
-      listening: {
-        p: PAL.cyanHi, a: PAL.cyanHi, core: [196, 244, 255],
-        rot: 1.8, seg: 0.4, pulseHz: 0.95, pulseAmp: 0.13, bright: 1.05,
-        expand: 1, listen: 1, eq: 0, orbit: 0, mute: 0,
-      },
-      thinking: {
-        p: PAL.cyan, a: PAL.amber, core: [255, 222, 170],
-        rot: 1.4, seg: 1.9, pulseHz: 0.7, pulseAmp: 0.09, bright: 0.95,
-        expand: 0.35, listen: 0, eq: 0, orbit: 1, mute: 0,
-      },
-      speaking: {
-        p: PAL.white, a: PAL.cyan, core: [236, 252, 255],
-        rot: 1.25, seg: 0.3, pulseHz: 0.4, pulseAmp: 0.05, bright: 1.08,
-        expand: 0.55, listen: 0, eq: 1, orbit: 0, mute: 0,
-      },
-      muted: {
-        p: PAL.grey, a: PAL.red, core: [118, 134, 150],
-        rot: 0.2, seg: 0.04, pulseHz: 0.09, pulseAmp: 0.05, bright: 0.46,
-        expand: -0.5, listen: 0, eq: 0, orbit: 0, mute: 1,
-      },
+    // Zielwerte je Zustand; alles gleitet weich dorthin
+    const LOOK = {
+      idle: { glow: 0.28, core: 0.8, ring: 0.3, wave: 0, spin: 0, breath: 1, speed: 0.12 },
+      listening: { glow: 0.5, core: 1, ring: 0.55, wave: 1, spin: 0, breath: 0.4, speed: 0.2 },
+      thinking: { glow: 0.42, core: 0.9, ring: 0.45, wave: 0, spin: 1, breath: 0.6, speed: 0.35 },
+      speaking: { glow: 0.5, core: 1, ring: 0.5, wave: 0.55, spin: 0, breath: 0.3, speed: 0.18 },
+      muted: { glow: 0.08, core: 0.45, ring: 0.18, wave: 0, spin: 0, breath: 0.3, speed: 0.05 },
     };
 
-    const cloneT = (t) => ({ ...t, p: t.p.slice(), a: t.a.slice(), core: t.core.slice() });
-    const cur = cloneT(T.idle);
-    let target = T.idle;
     let visState = 'idle';
-
-    // Animationswerte
-    let aTicks = 0;
-    let aSeg = 0;
-    let aCoil = 0;
-    let aInner = 0;
-    let aDash = 0;
-    let aSweep = 0;
-    let phase = 0;
+    const cur = { ...LOOK.idle, col: COL.idle.slice() };
+    let target = LOOK.idle;
+    let targetCol = COL.idle;
     let time = 0;
+    let angle = 0;
+    let spinAngle = 0;
     let lvl = 0;
     let flash = 0;
-    let errHold = 0;
-    let bootT = 0;
-    const N_EQ = 72;
-    const eqVals = new Float32Array(N_EQ);
-    const ripples = [];
-    let nextRipple = 0;
-
-    const SEGMENTS = [
-      [0.0, 0.95], [1.08, 0.3], [1.5, 1.25], [2.9, 0.16], [3.2, 1.45], [4.8, 0.55], [5.48, 0.62],
-    ];
-    const ORBITS = [
-      { r: 0.765, speed: 2.1, ph: 0 },
-      { r: 0.765, speed: 2.1, ph: Math.PI },
-      { r: 0.935, speed: -1.35, ph: 1.2 },
-    ];
+    let running = false;
 
     function rgba(c, a) {
       return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clamp(a, 0, 1).toFixed(3) + ')';
     }
 
-    function mix(c1, c2, t) {
-      return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+    function light(c, t) {
+      return [lerp(c[0], 255, t), lerp(c[1], 255, t), lerp(c[2], 255, t)];
     }
 
     function resize() {
-      // Canvas nur so groß wie der Reaktor (plus Rand für das Fadenkreuz),
-      // nicht die ganze Bühne -> deutlich weniger Pixel pro Bild.
       const r = el.reactorWrap.getBoundingClientRect();
       dpr = clamp(window.devicePixelRatio || 1, 1, 2);
-      const side = Math.max(1, Math.min(r.width, r.height));
-      W = Math.max(1, Math.floor(Math.min(r.width, side * 1.1)));
-      H = Math.max(1, Math.floor(side));
-      canvas.style.width = W + 'px';
-      canvas.style.height = H + 'px';
+      W = Math.max(1, Math.floor(r.width));
+      H = Math.max(1, Math.floor(r.height));
       const cw = Math.round(W * dpr);
       const ch = Math.round(H * dpr);
       if (canvas.width !== cw || canvas.height !== ch) {
@@ -924,11 +869,12 @@
 
     function setState(st) {
       if (st === 'error') {
-        // Fehler: der Blitz liegt über dem bisherigen Zustand
+        flash = 1;
         return;
       }
-      visState = st;
-      target = T[st] || T.idle;
+      visState = LOOK[st] ? st : 'idle';
+      target = LOOK[visState];
+      targetCol = COL[visState];
     }
 
     function flashNow() {
@@ -936,460 +882,155 @@
     }
 
     function update(dt) {
-      const sf = reducedMotion ? 0.3 : 1;
-      const k = 1 - Math.exp(-dt / 0.13);
-      for (const key of ['rot', 'seg', 'pulseHz', 'pulseAmp', 'bright', 'expand', 'listen', 'eq', 'orbit', 'mute']) {
+      const k = 1 - Math.exp(-dt / 0.18);
+      for (const key of ['glow', 'core', 'ring', 'wave', 'spin', 'breath', 'speed']) {
         cur[key] += (target[key] - cur[key]) * k;
       }
-      for (const key of ['p', 'a', 'core']) {
-        for (let i = 0; i < 3; i++) cur[key][i] += (target[key][i] - cur[key][i]) * k;
-      }
+      const col = flash > 0.01 ? COL.error : targetCol;
+      const kc = 1 - Math.exp(-dt / (flash > 0.01 ? 0.08 : 0.3));
+      for (let i = 0; i < 3; i++) cur.col[i] += (col[i] - cur.col[i]) * kc;
 
-      time += dt * sf;
-      aTicks += dt * 0.05 * cur.rot * sf;
-      aSeg -= dt * cur.seg * sf;
-      aCoil += dt * 0.07 * cur.rot * sf;
-      aInner -= dt * 0.3 * cur.rot * sf;
-      aDash += dt * 14 * cur.rot * sf;
-      aSweep += dt * 2.3 * sf;
-      phase += dt * Math.PI * 2 * cur.pulseHz * (reducedMotion ? 0.5 : 1);
+      const motion = reducedMotion ? 0.25 : 1;
+      time += dt * motion;
+      angle += dt * cur.speed * motion;
+      spinAngle += dt * (1.2 + 2.2 * cur.spin) * motion;
 
-      // Pegel glätten (schneller Anstieg, langsamer Abfall)
-      const fresh = nowMs() - S.levelAt < 450;
+      // Pegel: schnell hoch, langsam runter, nach kurzer Funkstille auf 0
+      const fresh = nowMs() - S.levelAt < 400;
       const want = fresh && (visState === 'listening' || visState === 'speaking') ? S.levelTarget : 0;
-      const tau = want > lvl ? 0.055 : 0.2;
-      lvl += (want - lvl) * (1 - Math.exp(-dt / tau));
+      lvl += (want - lvl) * (1 - Math.exp(-dt / (want > lvl ? 0.05 : 0.22)));
 
-      // Equalizer
-      const ke = 1 - Math.exp(-dt / 0.07);
-      for (let i = 0; i < N_EQ; i++) {
-        const u = Math.abs((i / N_EQ) * 2 - 1); // gespiegelt
-        const n = 0.5 + 0.28 * Math.sin(u * 9.0 + time * 4.2) + 0.22 * Math.sin(u * 23.0 - time * 6.9);
-        const tgt = lvl * (0.18 + 0.82 * clamp(n, 0, 1));
-        eqVals[i] += (tgt - eqVals[i]) * ke;
-      }
-
-      // Wellen beim Zuhören
-      if (cur.listen > 0.5 && time >= nextRipple) {
-        ripples.push(time);
-        nextRipple = time + 1.25 / (1 + lvl * 1.5);
-      }
-      while (ripples.length && time - ripples[0] > 1.7) ripples.shift();
-
-      flash *= Math.exp(-dt / 0.42);
-      if (flash < 0.003) flash = 0;
-      errHold += ((S.errorActive ? 0.32 : 0) - errHold) * (1 - Math.exp(-dt / 0.2));
-      bootT = Math.min(1, bootT + dt / (reducedMotion ? 0.6 : 1.7));
+      flash *= Math.exp(-dt / 0.5);
+      if (flash < 0.004) flash = 0;
     }
-
-    const easeOut = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
-
-    let cx = 0;
-    let cy = 0;
 
     function draw() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, W, H);
+      const cx = W / 2;
+      const cy = H / 2;
+      const R = Math.min(W, H) * 0.34;
+      if (R < 12) return;
 
-      cx = W / 2;
-      cy = H / 2;
-      const base = Math.min(W, H) * 0.42;
-      if (base < 8) return;
+      const c = cur.col;
+      const breath = 0.5 + 0.5 * Math.sin(time * 1.6);
+      const pulse = cur.breath * breath * 0.04 + lvl * 0.14;
 
-      const redMix = Math.max(flash * 0.85, errHold);
-      const P = mix(cur.p, PAL.red, redMix);
-      const A = mix(cur.a, PAL.red, Math.min(1, Math.max(flash, errHold * 2.6))); // Akzentring bleibt im Fehlerfall rot
-      const CORE = mix(cur.core, [255, 170, 178], redMix);
-      const breathe = 0.5 - 0.5 * Math.cos(phase);
-      const pulse = breathe * cur.pulseAmp;
-      const B = cur.bright * (0.88 + 0.24 * breathe) + lvl * 0.35 * (cur.listen + cur.eq * 0.6);
-      const scale = 1 + 0.035 * cur.expand + 0.03 * lvl * cur.listen;
-      const R = base * scale;
-      const lb = (i) => easeOut(bootT * 1.7 - i * 0.11); // gestaffelter Aufbau
-      const rb = (i) => 0.86 + 0.14 * lb(i);
+      // 1) Weiches Licht hinter dem Kreis
+      const glowR = R * (1.55 + lvl * 0.25);
+      const g = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, glowR);
+      g.addColorStop(0, rgba(c, 0.22 * cur.glow + lvl * 0.12));
+      g.addColorStop(0.55, rgba(c, 0.07 * cur.glow));
+      g.addColorStop(1, rgba(c, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+      ctx.fill();
 
-      ctx.lineCap = 'butt';
-      ctx.globalCompositeOperation = 'lighter';
+      // 2) Äußerer Ring, dezent
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = rgba(c, 0.12 + 0.1 * cur.ring);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.stroke();
 
-      // (Das weiche Umgebungsglühen liegt als CSS-Ebene hinter dem Canvas – spart Füllrate.)
-
-      // --- Fadenkreuz-Linien (statisch)
-      {
-        const a = 0.28 * lb(0) * (0.6 + 0.4 * B);
-        ctx.strokeStyle = rgba(P, a);
-        ctx.lineWidth = 1;
+      // 3) Zwölf kurze Bögen (angelehnt an den Arc Reactor), drehen sich langsam
+      const segR = R * 0.8;
+      const segs = 12;
+      const gap = 0.09;
+      ctx.lineWidth = Math.max(2, R * 0.035);
+      ctx.lineCap = 'round';
+      for (let i = 0; i < segs; i++) {
+        const a0 = angle + (i / segs) * Math.PI * 2 + gap;
+        const a1 = angle + ((i + 1) / segs) * Math.PI * 2 - gap;
+        ctx.strokeStyle = rgba(c, 0.16 + 0.34 * cur.ring + lvl * 0.25);
         ctx.beginPath();
-        const r1 = R * 1.07;
-        const r2 = R * 1.24;
-        ctx.moveTo(cx - r2, cy); ctx.lineTo(cx - r1, cy);
-        ctx.moveTo(cx + r1, cy); ctx.lineTo(cx + r2, cy);
-        ctx.moveTo(cx, cy - R * 1.055); ctx.lineTo(cx, cy - R * 1.1);
-        ctx.moveTo(cx, cy + R * 1.055); ctx.lineTo(cx, cy + R * 1.1);
-        // kleine Endhaken
-        ctx.moveTo(cx - r2, cy - 4); ctx.lineTo(cx - r2, cy + 4);
-        ctx.moveTo(cx + r2, cy - 4); ctx.lineTo(cx + r2, cy + 4);
+        ctx.arc(cx, cy, segR, a0, a1);
         ctx.stroke();
       }
 
-      // --- äußerer Skalenring
-      {
-        const sc = rb(0);
-        const rO = R * 0.995 * sc;
-        const rI = R * 0.965 * sc;
-        const rL = R * 0.935 * sc;
-        const n = 120;
-        const step = (Math.PI * 2) / n;
-        ctx.beginPath();
-        for (let i = 0; i < n; i++) {
-          const ang = aTicks + i * step;
-          const c = Math.cos(ang);
-          const sn = Math.sin(ang);
-          const ri = i % 10 === 0 ? rL : rI;
-          ctx.moveTo(cx + c * ri, cy + sn * ri);
-          ctx.lineTo(cx + c * rO, cy + sn * rO);
+      // 4) Nachdenken: ein heller Bogen mit weichem Schweif läuft um den Kreis
+      if (cur.spin > 0.02) {
+        const len = Math.PI * 0.7;
+        const head = rgba(light(c, 0.45), 0.95 * cur.spin);
+        ctx.lineWidth = Math.max(2.5, R * 0.04);
+        if (ctx.createConicGradient) {
+          const cgrad = ctx.createConicGradient(spinAngle - len, cx, cy);
+          const f = len / (Math.PI * 2);
+          cgrad.addColorStop(0, rgba(c, 0));
+          cgrad.addColorStop(f * 0.97, head);
+          cgrad.addColorStop(f, rgba(c, 0));
+          cgrad.addColorStop(1, rgba(c, 0));
+          ctx.strokeStyle = cgrad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, segR, spinAngle - len, spinAngle);
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = head;
+          ctx.beginPath();
+          ctx.arc(cx, cy, segR, spinAngle - len * 0.4, spinAngle);
+          ctx.stroke();
         }
-        ctx.strokeStyle = rgba(P, 0.4 * B * lb(0));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 1.025 * sc, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(P, 0.13 * B * lb(0));
-        ctx.stroke();
       }
 
-      // --- segmentierter Ring (Akzentfarbe)
-      {
-        const r = R * 0.875 * rb(1);
-        const lw = Math.max(2, R * 0.022);
-        ctx.beginPath();
-        for (const [st, len] of SEGMENTS) {
-          const a0 = st + aSeg;
-          ctx.moveTo(cx + Math.cos(a0) * r, cy + Math.sin(a0) * r);
-          ctx.arc(cx, cy, r, a0, a0 + len);
-        }
-        ctx.strokeStyle = rgba(A, 0.12 * B * lb(1));
-        ctx.lineWidth = lw * 3.2;
-        ctx.stroke();
-        ctx.strokeStyle = rgba(A, 0.85 * B * lb(1));
-        ctx.lineWidth = lw;
-        ctx.stroke();
-
-        // feiner Begleitring
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + lw * 2.2, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(A, 0.14 * B * lb(1));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // --- gestrichelter Ring
-      {
-        ctx.setLineDash([2, 6]);
-        ctx.lineDashOffset = -aDash;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.8 * rb(2), 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(P, 0.38 * B * lb(2));
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.lineDashOffset = 0;
-      }
-
-      // --- Denk-Sweep (Konusverlauf)
-      if (cur.orbit > 0.01 && ctx.createConicGradient) {
-        const g = ctx.createConicGradient(aSweep, cx, cy);
-        g.addColorStop(0, rgba(A, 0));
-        g.addColorStop(0.8, rgba(A, 0));
-        g.addColorStop(0.995, rgba(A, 0.26 * cur.orbit));
-        g.addColorStop(1, rgba(A, 0));
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.84, 0, Math.PI * 2);
-        ctx.arc(cx, cy, R * 0.36, 0, Math.PI * 2, true);
-        ctx.fillStyle = g;
-        ctx.fill();
-      }
-
-      // --- Wellenring beim Sprechen
-      if (cur.eq > 0.01) {
-        const r0 = R * 0.735;
-        const M = 90;
-        ctx.beginPath();
-        for (let i = 0; i <= M; i++) {
-          const ang = (i / M) * Math.PI * 2;
-          const w =
-            Math.sin(ang * 6 + time * 3.1) * 0.55 +
-            Math.sin(ang * 11 - time * 4.7) * 0.3 +
-            Math.sin(ang * 17 + time * 7.3) * 0.15;
-          const rr = r0 + w * R * 0.038 * (0.25 + lvl) * cur.eq;
-          const x = cx + Math.cos(ang) * rr;
-          const y = cy + Math.sin(ang) * rr;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.strokeStyle = rgba(P, 0.45 * cur.eq * B);
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-      }
-
-      // --- Ringe um den Spulenkranz
-      {
-        const sc = rb(3);
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.68 * sc, 0, Math.PI * 2);
-        ctx.moveTo(cx + R * 0.465 * sc, cy);
-        ctx.arc(cx, cy, R * 0.465 * sc, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(P, 0.42 * B * lb(3));
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-      }
-
-      // --- Spulenkranz (10 Segmente)
-      {
-        const sc = rb(4);
-        const rO = R * 0.64 * sc;
-        const rI = R * 0.5 * sc;
-        const n = 10;
-        const gap = 0.1;
-        const seg = (Math.PI * 2) / n;
-        ctx.beginPath();
-        for (let i = 0; i < n; i++) {
-          const a0 = aCoil + i * seg + gap / 2;
-          const a1 = a0 + seg - gap;
-          ctx.moveTo(cx + Math.cos(a0) * rO, cy + Math.sin(a0) * rO);
-          ctx.arc(cx, cy, rO, a0, a1);
-          ctx.arc(cx, cy, rI, a1, a0, true);
+      // 5) Zuhören und Sprechen: weiche Welle, die dem Pegel folgt
+      if (cur.wave > 0.02) {
+        const base = R * 0.62;
+        const amp = R * (0.02 + 0.16 * lvl) * cur.wave;
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.beginPath();
+          const n = 120;
+          for (let i = 0; i <= n; i++) {
+            const th = (i / n) * Math.PI * 2;
+            const off = pass ? 1.7 : 0;
+            const w = 0.55 * Math.sin(3 * th + time * 2.1 + off)
+              + 0.3 * Math.sin(5 * th - time * 3.3 + off)
+              + 0.15 * Math.sin(9 * th + time * 5.2);
+            const r = base + amp * w;
+            const x = cx + Math.cos(th) * r;
+            const y = cy + Math.sin(th) * r;
+            if (i) ctx.lineTo(x, y);
+            else ctx.moveTo(x, y);
+          }
           ctx.closePath();
-        }
-        const fillA = (0.1 + 0.08 * B + lvl * 0.3 * cur.listen + lvl * 0.12 * cur.eq) * lb(4);
-        const g = ctx.createRadialGradient(cx, cy, rI, cx, cy, rO);
-        g.addColorStop(0, rgba(P, fillA * 1.5));
-        g.addColorStop(1, rgba(P, fillA * 0.45));
-        ctx.fillStyle = g;
-        ctx.fill();
-        ctx.strokeStyle = rgba(P, 0.62 * B * lb(4));
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-
-        // Wicklungen
-        const w0 = rI + (rO - rI) * 0.22;
-        const w1 = rO - (rO - rI) * 0.22;
-        ctx.beginPath();
-        for (let i = 0; i < n; i++) {
-          const a0 = aCoil + i * seg + gap / 2;
-          for (let j = 1; j <= 3; j++) {
-            const ang = a0 + ((seg - gap) * j) / 4;
-            const c = Math.cos(ang);
-            const sn = Math.sin(ang);
-            ctx.moveTo(cx + c * w0, cy + sn * w0);
-            ctx.lineTo(cx + c * w1, cy + sn * w1);
-          }
-        }
-        ctx.strokeStyle = rgba(P, 0.26 * B * lb(4));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // --- innerer Skalenring
-      {
-        const sc = rb(5);
-        const rO = R * 0.415 * sc;
-        const rI = R * 0.395 * sc;
-        const rL = rI - R * 0.015;
-        const n = 60;
-        const step = (Math.PI * 2) / n;
-        ctx.beginPath();
-        for (let i = 0; i < n; i++) {
-          const ang = aInner + i * step;
-          const c = Math.cos(ang);
-          const sn = Math.sin(ang);
-          const ri = i % 5 === 0 ? rL : rI;
-          ctx.moveTo(cx + c * ri, cy + sn * ri);
-          ctx.lineTo(cx + c * rO, cy + sn * rO);
-        }
-        ctx.strokeStyle = rgba(P, 0.45 * B * lb(5));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // --- Equalizer um den Kern
-      if (cur.eq > 0.01) {
-        const r0 = R * 0.335;
-        const maxLen = R * 0.12;
-        ctx.beginPath();
-        for (let i = 0; i < N_EQ; i++) {
-          const ang = (i / N_EQ) * Math.PI * 2 - Math.PI / 2;
-          const len = (R * 0.01 + eqVals[i] * maxLen) * cur.eq;
-          const c = Math.cos(ang);
-          const sn = Math.sin(ang);
-          ctx.moveTo(cx + c * r0, cy + sn * r0);
-          ctx.lineTo(cx + c * (r0 + len), cy + sn * (r0 + len));
-        }
-        ctx.strokeStyle = rgba(mix(P, [255, 255, 255], 0.3), 0.85 * cur.eq);
-        ctx.lineWidth = Math.max(1.3, ((Math.PI * 2 * r0) / N_EQ) * 0.42);
-        ctx.stroke();
-      }
-
-      // --- Kreisende Punkte (Denken)
-      if (cur.orbit > 0.01) {
-        for (const o of ORBITS) {
-          const r = R * o.r;
-          const head = o.ph + time * o.speed;
-          const dir = Math.sign(o.speed);
-          for (let j = 9; j >= 0; j--) {
-            const ang = head - dir * j * 0.055;
-            const f = 1 - j / 10;
-            ctx.beginPath();
-            ctx.arc(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, Math.max(1, R * 0.016 * f), 0, Math.PI * 2);
-            ctx.fillStyle = rgba(A, (j === 0 ? 1 : 0.5 * f) * cur.orbit);
-            ctx.fill();
-          }
-          const hx = cx + Math.cos(head) * r;
-          const hy = cy + Math.sin(head) * r;
-          const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, R * 0.07);
-          g.addColorStop(0, rgba(A, 0.5 * cur.orbit));
-          g.addColorStop(1, rgba(A, 0));
-          ctx.fillStyle = g;
-          ctx.fillRect(hx - R * 0.07, hy - R * 0.07, R * 0.14, R * 0.14);
+          ctx.lineWidth = pass ? 1 : 1.8;
+          ctx.strokeStyle = rgba(light(c, 0.2), (pass ? 0.3 : 0.75) * cur.wave);
+          ctx.stroke();
         }
       }
 
-      // --- Wellen (Zuhören)
-      for (const born of ripples) {
-        const a = (time - born) / 1.7;
-        const r = R * (0.9 + a * 0.24);
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(P, Math.pow(1 - a, 2) * 0.5 * cur.listen * (0.6 + lvl));
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
+      // 6) Kern: leuchtende Scheibe, innen hell, außen in der Akzentfarbe
+      const coreR = R * 0.38 * (1 + pulse);
+      const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+      cg.addColorStop(0, rgba(light(c, 0.8), cur.core));
+      cg.addColorStop(0.45, rgba(light(c, 0.35), 0.95 * cur.core));
+      cg.addColorStop(0.85, rgba(light(c, 0.02), 0.9 * cur.core));
+      cg.addColorStop(1, rgba(c, 0.8 * cur.core));
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+      ctx.fill();
 
-      // --- Kern
-      {
-        const coreR = R * 0.25 * (1 + pulse + lvl * 0.38 * cur.listen + lvl * 0.12 * cur.eq) * (1 - 0.12 * cur.mute) * (0.6 + 0.4 * lb(6));
-        const glowR = coreR * 2.5;
-        let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-        g.addColorStop(0, rgba(CORE, 0.55 * B));
-        g.addColorStop(0.3, rgba(P, 0.28 * B));
-        g.addColorStop(0.62, rgba(P, 0.07 * B));
-        g.addColorStop(1, rgba(P, 0));
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
-        ctx.fill();
-
-        g = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-        g.addColorStop(0, rgba([255, 255, 255], 0.95 * B * lb(6)));
-        g.addColorStop(0.35, rgba(CORE, 0.8 * B * lb(6)));
-        g.addColorStop(0.8, rgba(P, 0.3 * B * lb(6)));
-        g.addColorStop(1, rgba(P, 0));
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Kernring
-        const rr = R * 0.3 * rb(6);
-        ctx.beginPath();
-        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(P, 0.16 * B * lb(6));
-        ctx.lineWidth = Math.max(4, R * 0.06);
-        ctx.stroke();
-        ctx.strokeStyle = rgba(CORE, 0.9 * B * lb(6));
-        ctx.lineWidth = Math.max(1.5, R * 0.016);
-        ctx.stroke();
-
-        // kleiner innerer Ring
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.165, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(CORE, 0.35 * B * lb(6));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // --- Stumm: rote Kontur und durchgestrichenes Mikrofon
-      if (cur.mute > 0.01) {
-        const m = cur.mute;
-        const r = R * 0.915;
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(PAL.red, 0.55 * m);
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.beginPath();
-        for (let i = 0; i < 4; i++) {
-          const a0 = Math.PI / 4 + (i * Math.PI) / 2 - 0.16 + aTicks * 0.5;
-          ctx.moveTo(cx + Math.cos(a0) * (r + 6), cy + Math.sin(a0) * (r + 6));
-          ctx.arc(cx, cy, r + 6, a0, a0 + 0.32);
-        }
-        ctx.strokeStyle = rgba(PAL.red, 0.7 * m);
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        ctx.globalCompositeOperation = 'source-over';
-        const sz = R * 0.13;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.fillStyle = 'rgba(12,4,8,' + (0.72 * m).toFixed(3) + ')';
-        ctx.beginPath();
-        ctx.arc(0, 0, sz * 1.25, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = rgba(PAL.red, 0.95 * m);
-        ctx.lineWidth = Math.max(1.5, sz * 0.13);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        // Kapsel
-        const cw = sz * 0.5;
-        const top = -sz * 0.78;
-        const bot = sz * 0.12;
-        ctx.beginPath();
-        ctx.moveTo(-cw / 2, top + cw / 2);
-        ctx.arc(0, top + cw / 2, cw / 2, Math.PI, 0);
-        ctx.lineTo(cw / 2, bot - cw / 2);
-        ctx.arc(0, bot - cw / 2, cw / 2, 0, Math.PI);
-        ctx.closePath();
-        // Bügel, Stiel, Fuß
-        ctx.moveTo(-sz * 0.52, -sz * 0.22);
-        ctx.arc(0, -sz * 0.22, sz * 0.52, Math.PI, 0, true);
-        ctx.moveTo(0, sz * 0.3);
-        ctx.lineTo(0, sz * 0.62);
-        ctx.moveTo(-sz * 0.3, sz * 0.62);
-        ctx.lineTo(sz * 0.3, sz * 0.62);
-        // Schrägstrich
-        ctx.moveTo(-sz * 0.72, -sz * 0.82);
-        ctx.lineTo(sz * 0.72, sz * 0.82);
-        ctx.stroke();
-        ctx.restore();
-        ctx.lineCap = 'butt';
-        ctx.globalCompositeOperation = 'lighter';
-      }
-
-      // --- Fehler: roter Schockring
-      if (flash > 0.01) {
-        const r = R * (0.95 + (1 - flash) * 0.38);
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(PAL.red, 0.85 * flash);
-        ctx.lineWidth = 2 + 4 * flash;
-        ctx.stroke();
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.3);
-        g.addColorStop(0, rgba(PAL.red, 0.28 * flash));
-        g.addColorStop(1, rgba(PAL.red, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - R * 1.3, cy - R * 1.3, R * 2.6, R * 2.6);
-      }
-
-      ctx.globalCompositeOperation = 'source-over';
+      // feiner Ring im Kern und ein Rand darum
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = rgba([255, 255, 255], 0.22 * cur.core);
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR * 0.62, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(light(c, 0.5), 0.3 * cur.core);
+      ctx.beginPath();
+      ctx.arc(cx, cy, coreR + 5, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     let last = 0;
     let lastDraw = 0;
 
     function frame(now) {
+      if (!running) return;
       requestAnimationFrame(frame);
-      // Ruhige Zustände (oder Fenster ohne Fokus) mit 30 fps, sonst 60 fps -> spart CPU.
-      const calm = ((visState === 'idle' || visState === 'muted') && flash === 0 && bootT >= 1) || !document.hasFocus();
+      if (document.hidden) return;
+      const calm = (visState === 'idle' || visState === 'muted') && flash === 0;
       const minGap = calm ? 1000 / 30 - 3 : 1000 / 60 - 3;
       if (now - lastDraw < minGap) return;
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
@@ -1400,20 +1041,13 @@
     }
 
     function start() {
+      if (running) return;
+      running = true;
       resize();
       if (window.ResizeObserver) {
         new ResizeObserver(() => resize()).observe(el.reactorWrap);
       }
       window.addEventListener('resize', resize);
-      if (window.matchMedia) {
-        // Wechsel der Bildschirmskalierung (z. B. Fenster auf anderen Monitor gezogen)
-        const watchDpr = () => {
-          const mq = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
-          const onChange = () => { resize(); watchDpr(); };
-          if (mq.addEventListener) mq.addEventListener('change', onChange, { once: true });
-        };
-        watchDpr();
-      }
       requestAnimationFrame(frame);
     }
 

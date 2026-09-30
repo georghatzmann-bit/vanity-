@@ -234,7 +234,9 @@ def load_models(r: Report, cfg: dict):
         from .stt import SpeechToText
 
         started = time.monotonic()
-        stt = SpeechToText(cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"])
+        stt = SpeechToText(
+            cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"], cfg["stt"].get("beam_size", 1)
+        )
         r.add("Spracherkennung", "ok", f"Whisper {cfg['stt']['model']} auf {cfg['stt']['device']} ({time.monotonic() - started:.0f} s)")
     except Exception as exc:
         hint = "Internet prüfen (beim ersten Mal lädt Whisper etwa 500 MB)."
@@ -294,7 +296,10 @@ def check_claude(r: Report, cfg: dict) -> None:
             "login": "In der Eingabeaufforderung claude starten und mit dem Pro-Konto anmelden.",
             "limit": "Das Pro-Kontingent ist aufgebraucht, es füllt sich nach ein paar Stunden wieder auf.",
             "network": "Internet prüfen.",
-        }.get(exc.kind, "Details stehen in logs/jarvis.log.")
+            "account": "Auf claude.ai anmelden und nachsehen, was das Konto meldet.",
+            "billing": "Claude Code nutzt einen API-Schlüssel. In der Eingabeaufforderung: claude, dann /login und das Pro-Konto wählen.",
+            "model": "In config.toml unter [brain] models andere Modelle eintragen, z. B. [\"haiku\"].",
+        }.get(exc.kind, "Claudes eigene Meldung steht links. Details stehen in logs/jarvis.log.")
         r.add("Claude antwortet", "fehler", f"{exc.kind}: {str(exc)[:200]}", hint)
         return
     mode = brain.attempt.label()

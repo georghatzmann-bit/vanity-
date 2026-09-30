@@ -292,4 +292,7 @@ def _short_reason(exc: BrainError) -> str:
         "overloaded": "Claude ist überlastet.",
         "timeout": "Claude hat zu lange gebraucht.",
         "missing": "Claude Code nicht gefunden.",
-    }.get(exc.kind, "Fehler bei Claude, Details in logs/jarvis.log.")
+        "model": "Kein Claude-Modell verfügbar.",
+        "account": "Claude-Konto meldet ein Problem (claude.ai).",
+        "billing": "Claude rechnet über einen API-Schlüssel ab statt über das Abo.",
+    }.get(exc.kind, "Claude meldet: " + (str(exc).strip().splitlines() or ["Fehler"])[0][:160])

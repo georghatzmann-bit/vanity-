@@ -61,6 +61,8 @@ def load_config(path: Path | None = None) -> dict:
 def toml_value(value) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(toml_value(v) for v in value) + "]"
     if isinstance(value, (int, float)):
         return repr(value)
     text = str(value)

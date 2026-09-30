@@ -14,7 +14,7 @@ HALLUCINATIONS = re.compile(
 
 
 class SpeechToText:
-    def __init__(self, model: str, language: str, device: str = "cpu") -> None:
+    def __init__(self, model: str, language: str, device: str = "cpu", beam_size: int = 1) -> None:
         from faster_whisper import WhisperModel
 
         compute_type = "int8" if device == "cpu" else "float16"
@@ -25,10 +25,12 @@ class SpeechToText:
         except Exception:
             self._model = WhisperModel(model, device=device, compute_type=compute_type)
         self._language = language
+        # 1 = gierige Suche: bei kurzen Befehlen genauso gut wie 5, aber spürbar schneller.
+        self._beam_size = max(1, int(beam_size))
 
     def transcribe(self, audio: np.ndarray) -> str:
         segments, _info = self._model.transcribe(
-            audio, language=self._language, beam_size=5, vad_filter=True
+            audio, language=self._language, beam_size=self._beam_size, vad_filter=True
         )
         return clean_transcript(" ".join(s.text.strip() for s in segments))
 
