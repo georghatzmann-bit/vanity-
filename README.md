@@ -2,7 +2,7 @@
 
 Dein eigener Sprachassistent wie bei Iron Man: Du sagst "Hey Jarvis", sprichst deinen Befehl, Claude Code erledigt ihn auf deinem PC, und Jarvis antwortet mit einer menschlichen Stimme. Dazu gibt es ein Arc-Reactor-Fenster mit Chatverlauf.
 
-**Schnellstart: siehe [ANLEITUNG.md](ANLEITUNG.md)** (setup.bat, mikrofon.bat, selbsttest.bat, start.bat).
+**Schnellstart: siehe [ANLEITUNG.md](ANLEITUNG.md).** Kurz: ZIP entpacken, `Jarvis.bat` doppelklicken, die Einrichtung durchklicken.
 
 ```
 Mikrofon → "Hey Jarvis" (openWakeWord, lokal)
@@ -23,34 +23,34 @@ Mikrofon → "Hey Jarvis" (openWakeWord, lokal)
 - **Erst fragen:** Löschen (nur in den Papierkorb), Installieren und Nachrichten verschicken macht Jarvis erst nach deinem "Ja".
 - **Alexa und Smart Home** über Home Assistant (optional).
 - **Arc-Reactor-Fenster** mit Zuständen (bereit, hört zu, denkt nach, spricht, stumm), Chatverlauf, CPU/RAM, Uhr, Tray-Icon und Autostart.
-- **Selbsttest** (`selbsttest.bat`) und Logdatei (`logs\jarvis.log`).
+- **Grafische Einrichtung** beim ersten Start: Mikrofon mit Pegel und Hey-Jarvis-Test, Stimmen zum Anhören, Wohnort, Claude-Prüfung, Stumm-Taste, Autostart, Alexa. Später über das Zahnrad.
+- **Selbsttest** (`werkzeuge\Selbsttest.bat`) und Logdatei (`logs\jarvis.log`).
 
 ## Die Startdateien
 
+Im Alltag brauchst du nur **`Jarvis.bat`** oder das Jarvis-Symbol auf dem Desktop. `Jarvis.bat` installiert beim ersten Mal alles (und nach Updates, wenn sich die Pakete geändert haben), legt das Desktop-Symbol an und öffnet beim allerersten Start die Einrichtung.
+
+Für Sonderfälle liegen im Ordner `werkzeuge`:
+
 | Datei | Was sie macht |
 |---|---|
-| `setup.bat` | Installiert alles (einmal, und nach jedem Update) |
-| `mikrofon.bat` | Mikrofon auswählen und speichern |
-| `selbsttest.bat` | Prüft alles und sagt, was zu tun ist |
-| `start.bat` | Startet Jarvis mit Fenster |
-| `autostart-an.bat` / `autostart-aus.bat` | Jarvis mit Windows starten oder nicht |
+| `Einrichtung.bat` | Einrichtung öffnen (wie das Zahnrad im Fenster) |
+| `Selbsttest.bat` | Prüft alles und sagt, was zu tun ist |
+| `Mikrofon-Test.bat` | Mikrofone, Pegel und "Hey Jarvis"-Erkennung live in der Konsole |
+| `Claude-Test.bat` | Zeigt, welches Claude-Modell antwortet |
+| `Tippen.bat` | Tippen statt sprechen, im Konsolenfenster |
+| `Konsole.bat` | Sprachsteuerung ohne Fenster |
+| `Neu-installieren.bat` | Alle Pakete frisch installieren |
 
-`start.bat` versteht zusätzlich:
-
-- `--text` tippen statt sprechen (im Konsolenfenster)
-- `--konsole` Sprachsteuerung ohne Fenster
-- `--silent` Antworten nicht vorlesen
-- `--mic-test` Mikrofone, Pegel und "Hey Jarvis"-Erkennung live anzeigen
-- `--claude-test` zeigt, welches Claude-Modell antwortet
-- `-v` alle Details im Konsolenfenster
+`Jarvis.bat` versteht auch alle Optionen direkt, zum Beispiel `Jarvis.bat --silent` (nicht vorlesen) oder `Jarvis.bat -v` (alle Details).
 
 ## Jarvis reagiert nicht?
 
-Starte `start.bat --mic-test`. Das zeigt alle Mikrofone und einen Live-Pegel:
+Öffne über das Zahnrad die Einrichtung, Schritt Mikrofon (oder `werkzeuge\Mikrofon-Test.bat`). Das zeigt einen Live-Pegel und ob "Hey Jarvis" ankommt:
 
 - **Der Pegel bleibt bei 0:** Windows blockiert das Mikrofon. Öffne *Einstellungen > Datenschutz und Sicherheit > Mikrofon* und schalte "Desktop-Apps den Zugriff auf das Mikrofon erlauben" ein.
-- **Der Pegel bewegt sich kaum, wenn du sprichst:** Es ist das falsche Mikrofon. Starte `mikrofon.bat` und wähle das richtige.
-- **Der Pegel bewegt sich, aber "Hey-Jarvis" bleibt niedrig:** Sprich "Hey Jarvis" englisch aus ("Hey Dschaarwis"). Wenn der beste Wert bei etwa 0.3 bis 0.5 landet, stell in `config.toml` unter `[wakeword]` `threshold = 0.35` ein.
+- **Der Pegel bewegt sich kaum, wenn du sprichst:** Es ist das falsche Mikrofon. Wähle in der Einrichtung ein anderes.
+- **Der Pegel bewegt sich, aber "Hey-Jarvis" bleibt niedrig:** Sprich "Hey Jarvis" englisch aus ("Hey Dschaarwis"). Wenn der beste Wert bei etwa 0.3 bis 0.5 landet, schalte in der Einrichtung "empfindlicher" ein (das setzt `threshold = 0.35`).
 
 Im Konsolenfenster zeigt Jarvis "fast erkannt: 0.38" an, wenn er dich knapp nicht verstanden hat.
 
@@ -62,18 +62,18 @@ Manchmal schlägt Claudes Sicherheitsfilter fälschlich an, sogar bei "hi". Jarv
 2. Lehnt ein Modell ab, versucht Jarvis automatisch das nächste aus `models` (Sonnet, Haiku, Opus). Im Fenster steht dann zum Beispiel "sonnet hat abgelehnt, versuche haiku".
 3. Lehnen alle ab, versucht Jarvis dieselben Modelle mit einer ganz kurzen Persönlichkeit ("einfacher Modus").
 4. Was funktioniert hat, merkt sich Jarvis zwölf Stunden lang, damit die nächste Antwort nicht wieder alle Versuche braucht.
-5. Geht gar nichts, sagt Jarvis es auf Deutsch. `start.bat --claude-test` zeigt dann eine Tabelle, welches Modell mit und ohne deine Einstellungen antwortet.
+5. Geht gar nichts, sagt Jarvis es auf Deutsch. `werkzeuge\Claude-Test.bat` zeigt dann eine Tabelle, welches Modell mit und ohne deine Einstellungen antwortet.
 
 Auch andere Probleme sagt Jarvis klar an: Pro-Kontingent aufgebraucht, nicht angemeldet, kein Internet, Claude überlastet.
 
 ## Anpassen
 
-Alles steht in `config.toml` (Vorlage mit Erklärungen: `config.example.toml`):
+Das Wichtigste stellst du in der Einrichtung ein. Alles steht in `config.toml` (Vorlage mit Erklärungen: `config.example.toml`):
 
 - **Wohnort** für das Wetter: `ort` unter `[ich]`.
 - **Stimme:** `voice` unter `[tts]`, z. B. `de-DE-KillianNeural` oder `de-DE-FlorianMultilingualNeural`. Mit `rate` und `pitch` klingt sie schneller, langsamer, tiefer.
 - **Empfindlichkeit:** `threshold` unter `[wakeword]`.
-- **Mikrofon:** am einfachsten mit `mikrofon.bat`.
+- **Mikrofon:** am einfachsten in der Einrichtung.
 - **Stumm-Taste:** `hotkey` unter `[mute]`, z. B. `"f9"`. Jarvis schluckt die Tastenkombination, sie tippt also nichts ins offene Programm.
 - **Genauigkeit:** `model = "medium"` unter `[stt]` versteht besser, ist aber langsamer.
 - **"Einen Moment, Sir":** `ack_after_seconds` unter `[answer]` (0 = nie).
@@ -104,7 +104,8 @@ smarthome geraete|an|aus|status <gerät>
 ## Windows-Details
 
 - Die Python-Umgebung liegt unter `%LOCALAPPDATA%\Jarvis\venv`, nicht im Jarvis-Ordner. So lädt OneDrive nicht 1 GB hoch und sperrt beim Installieren keine Dateien.
-- Es läuft immer nur ein Jarvis. Ein zweiter Start meldet "Jarvis läuft schon".
+- Es läuft immer nur ein Jarvis. Ein zweiter Start meldet "Jarvis läuft schon". Nach der Einrichtung wartet der neue Jarvis kurz, bis der alte zu ist.
+- Die Installation (`werkzeuge\installieren.ps1`) schreibt alles nach `%LOCALAPPDATA%\Jarvis\installation.log`. Sie legt `Jarvis.lnk` auf dem Desktop und im Startmenü an (minimiert gestartet, damit kein Konsolenfenster aufblitzt).
 - Fällt das Mikrofon aus (abgesteckt, Ruhezustand), liest Jarvis die Geräteliste neu ein und versucht es immer wieder. Ist dein Mikrofon weg, nimmt er so lange das Windows-Standardmikrofon.
 - Startet Claude ein Programm (etwa Notepad), wartet Jarvis nicht, bis es wieder zu ist.
 - Eine alte `config.toml` behält deine Einstellungen. Die Listen `allowed_tools` und `disallowed_tools` werden mit den neuen Vorgaben zusammengelegt, damit neue Sperren auch bei dir greifen.
@@ -121,7 +122,8 @@ smarthome geraete|an|aus|status <gerät>
 
 ```
 jarvis/
-  __main__.py     Start, Modi (Fenster, Konsole, Text, Tests)
+  __main__.py     Start, Modi (Fenster, Konsole, Text, Tests), erster Start -> Einrichtung
+  setup_wizard.py Einrichtung (Python-Seite von gui/web/setup.html)
   assistant.py    Kern: Befehl annehmen, Sofort-Befehle, Claude fragen, sprechen
   brain.py        Claude Code headless mit Streaming, Modell-Fallback, Fehlerarten
   voice.py        Sprachschleife: Wake Word, Aufnahme, Unterbrechen

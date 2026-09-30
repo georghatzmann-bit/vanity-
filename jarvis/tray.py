@@ -33,6 +33,22 @@ def make_icon_image(size: int = 64, muted: bool = False):
     return image
 
 
+def save_app_icon(path) -> None:
+    """Symbol für die Desktop-Verknüpfung (werkzeuge/installieren.ps1):
+    leuchtender Arc Reactor auf dunklem Kreis, in allen Größen, die Windows braucht."""
+    from PIL import Image, ImageDraw, ImageFilter
+
+    size = 256
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ImageDraw.Draw(image).ellipse((6, 6, size - 7, size - 7), fill=(5, 12, 22, 255), outline=(79, 216, 255, 110), width=5)
+    reactor = make_icon_image(196)
+    glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    glow.alpha_composite(reactor, (30, 30))
+    image.alpha_composite(glow.filter(ImageFilter.GaussianBlur(9)))
+    image.alpha_composite(glow)
+    image.save(str(path), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+
+
 class Tray:
     def __init__(self, on_show, on_toggle_mute, on_quit, is_muted) -> None:
         self._on_show = on_show

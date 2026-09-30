@@ -1,13 +1,15 @@
 """Startet Jarvis.
 
-    python -m jarvis               Arc-Reactor-Fenster + Sprachsteuerung (start.bat)
+    python -m jarvis               Arc-Reactor-Fenster + Sprachsteuerung (Jarvis.bat),
+                                   beim allerersten Start vorher die Einrichtung
+    python -m jarvis --einrichten  Einrichtung mit Mikrofon, Stimme, Wohnort, Claude
     python -m jarvis --konsole     nur Konsolenfenster, ohne Oberfläche
     python -m jarvis --text        Tippmodus zum Testen ohne Mikrofon
     python -m jarvis --silent      Antworten nur anzeigen, nicht vorlesen
-    python -m jarvis --mic         Mikrofon auswählen und speichern (mikrofon.bat)
+    python -m jarvis --mic         Mikrofon in der Konsole auswählen
     python -m jarvis --mic-test    Mikrofone anzeigen und Pegel + Wake Word live testen
     python -m jarvis --claude-test prüfen, welches Claude-Modell antwortet
-    python -m jarvis --selftest    alles prüfen (selbsttest.bat)
+    python -m jarvis --selftest    alles prüfen (werkzeuge\\Selbsttest.bat)
     python -m jarvis --autostart an|aus
 """
 
@@ -137,10 +139,10 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
         mic = Microphone(cfg["audio"]["input_device"])
     except Exception as exc:
         log.error("Mikrofon: %s", exc)
-        ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Starte mikrofon.bat und wähle dein Mikrofon.", "error")
+        ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Ein anderes wählst du über das Zahnrad im Jarvis-Fenster.", "error")
         return None
     ui.config(mic=mic.name)
-    hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? mikrofon.bat starten)")
+    hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? werkzeuge\\Einrichtung.bat)")
     ui.message("info", "Lade Spracherkennung (beim ersten Start wird das Modell heruntergeladen) ...")
     try:
         from .stt import SpeechToText
@@ -149,7 +151,7 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
         wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
     except Exception as exc:
         log.exception("Spracherkennung lädt nicht")
-        ui.toast(f"Spracherkennung lädt nicht: {exc}. selbsttest.bat zeigt mehr.", "error")
+        ui.toast(f"Spracherkennung lädt nicht: {exc}. werkzeuge\\Selbsttest.bat zeigt mehr.", "error")
         return None
     return VoiceLoop(cfg, mic, wake, stt, assistant, assistant.mute, Sounds(), hotkey, hints)
 
@@ -165,7 +167,7 @@ def register_mute_hotkey(cfg: dict, assistant: Assistant) -> str:
 
 def run_text(assistant: Assistant) -> None:
     if not has_console():
-        tell("Jarvis hat weder Fenster noch Mikrofon. Starte selbsttest.bat, dort steht, was fehlt.")
+        tell("Jarvis hat weder Fenster noch Mikrofon. Starte werkzeuge\\Selbsttest.bat, dort steht, was fehlt.")
         return
     print("Jarvis ist bereit. Tippe deinen Befehl ('exit' zum Beenden).")
     while True:
@@ -229,7 +231,7 @@ def run_gui(cfg: dict, args) -> int:
                 assistant.mute.on_change(tray.set_muted)
                 window.allow_close = not gui_cfg.get("close_to_tray", False)
         if assistant.brain is None:
-            ui.message("info", "Claude Code fehlt. selbsttest.bat sagt, was zu tun ist.")
+            ui.message("info", "Claude Code fehlt. Das Zahnrad hilft beim Einrichten.")
         voice = load_voice(cfg, assistant, ui, hotkey, lambda _text: None)
         if voice is None:
             ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis unten etwas schreiben.")
@@ -256,7 +258,14 @@ def run_gui(cfg: dict, args) -> int:
             tray.stop()
         assistant.stop()
 
-    window = Window(Api(bridge, assistant, assistant.mute), background, on_closed, cfg.get("gui", {}))
+    def open_setup() -> None:
+        from .setup_wizard import launch
+
+        launch("--einrichten")
+        # Kurz warten, damit die Seite noch "Einrichtung öffnet sich" zeigen kann.
+        threading.Timer(0.6, quit_all).start()
+
+    window = Window(Api(bridge, assistant, assistant.mute, open_setup), background, on_closed, cfg.get("gui", {}))
     print("Jarvis-Fenster wird geöffnet. Dieses Konsolenfenster zeigt nebenbei das Gespräch.")
     window.start()
     return 0
@@ -286,7 +295,7 @@ def run_mic_test(cfg: dict) -> None:
     for d in input_devices():
         mark = "  <- Windows-Standard" if d["default"] else ""
         print(f"  {d['index']:>3}  {d['name']}  [{d['hostapi']}]{mark}")
-    print("\nEin anderes Mikrofon wählst du am einfachsten mit mikrofon.bat.\n")
+    print("\nEin anderes Mikrofon wählst du am einfachsten in der Einrichtung (werkzeuge\\Einrichtung.bat).\n")
 
     mic = Microphone(cfg["audio"]["input_device"])
     wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
@@ -333,6 +342,12 @@ def run_autostart(value: str) -> int:
 _instance_lock = None
 
 
+def _first_run() -> bool:
+    from .setup_wizard import setup_done
+
+    return not setup_done()
+
+
 def has_console() -> bool:
     """False beim Autostart (pythonw): dann sieht niemand print(), und input() geht nicht."""
     return sys.stdin is not None
@@ -352,9 +367,19 @@ def tell(text: str, error: bool = True, popup: bool = False) -> None:
             pass
 
 
-def claim_single_instance() -> bool:
+def claim_single_instance(name: str = "JarvisSprachassistent", wait: float = 0.0) -> bool:
     """Nur ein Jarvis gleichzeitig, sonst antworten zwei auf "Hey Jarvis"
-    (z. B. Autostart läuft schon und start.bat wird doppelt geklickt)."""
+    (z. B. Autostart läuft schon und Jarvis.bat wird doppelt geklickt).
+    `wait`: so lange warten, falls der alte Jarvis gerade beendet wird (nach der Einrichtung)."""
+    end = time.monotonic() + wait
+    while True:
+        claimed = _try_claim(name)
+        if claimed or time.monotonic() >= end:
+            return claimed
+        time.sleep(0.25)
+
+
+def _try_claim(name: str) -> bool:
     global _instance_lock
     if os.name == "nt":
         try:
@@ -362,8 +387,12 @@ def claim_single_instance() -> bool:
 
             kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
             kernel32.CreateMutexW.restype = ctypes.c_void_p
-            handle = kernel32.CreateMutexW(None, False, "Local\\JarvisSprachassistent")
+            kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+            handle = kernel32.CreateMutexW(None, False, "Local\\" + name)
             if handle and ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
+                # Eigenen Griff wieder abgeben, sonst bliebe die Sperre auch nach dem
+                # Ende des anderen Jarvis bestehen.
+                kernel32.CloseHandle(handle)
                 return False
             _instance_lock = handle
         except Exception as exc:
@@ -373,11 +402,14 @@ def claim_single_instance() -> bool:
         import fcntl
 
         STATE_DIR.mkdir(parents=True, exist_ok=True)
-        _instance_lock = open(STATE_DIR / "jarvis.lock", "w")
-        fcntl.flock(_instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock = open(STATE_DIR / f"{name.lower()}.lock", "w")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.close()
+            return False
+        _instance_lock = lock
         return True
-    except BlockingIOError:
-        return False
     except Exception as exc:
         log.debug("Sperrdatei: %s", exc)
         return True
@@ -394,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--selftest", "--selbsttest", action="store_true", help="Alles prüfen")
     parser.add_argument("--schnell", action="store_true", help="Selbsttest ohne Töne und mit kurzem Mikrofontest")
     parser.add_argument("--autostart", choices=["an", "aus", "ein", "on", "off"], help="Mit Windows starten")
+    parser.add_argument("--einrichten", "--setup", action="store_true", help="Einrichtung öffnen")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -405,7 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         tell(
             f"config.toml ist fehlerhaft: {exc}\nTipp: Tippfehler korrigieren oder config.toml löschen, "
-            "setup.bat legt sie neu an."
+            "Jarvis legt sie beim nächsten Start neu an."
         )
         return 1
 
@@ -437,8 +470,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.claude_test:
         return run_claude_test(cfg)
 
-    if not claim_single_instance():
-        # Als Fenster, weil sich start.bat danach sofort schließt.
+    gui_wanted = not args.text and not args.konsole and cfg.get("gui", {}).get("enabled", True)
+    if args.einrichten or (gui_wanted and not args.silent and _first_run()):
+        from .setup_wizard import run_setup
+
+        if not claim_single_instance("JarvisEinrichtung"):
+            tell("Die Einrichtung ist schon offen.", error=False, popup=True)
+            return 0
+        return run_setup(cfg)
+
+    # Nach der Einrichtung startet Jarvis neu, der alte braucht evtl. noch einen Moment.
+    if not claim_single_instance(wait=6.0 if not has_console() else 0.0):
+        # Als Fenster, weil sich Jarvis.bat danach sofort schließt.
         tell(
             "Jarvis läuft schon (Symbol unten rechts neben der Uhr). Ein zweiter Jarvis würde doppelt antworten.",
             error=False,
@@ -446,7 +489,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    if not args.text and not args.konsole and cfg.get("gui", {}).get("enabled", True):
+    if gui_wanted:
         from .gui.app import webview_available
 
         ok, reason = webview_available()
@@ -461,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
             # Hintergrund-Threads (Mikrofon, Tray) sollen das Beenden nicht aufhalten.
             os._exit(code)
         if not has_console():
-            tell(f"Das Jarvis-Fenster geht nicht ({reason}). Starte selbsttest.bat, dort steht, was fehlt.")
+            tell(f"Das Jarvis-Fenster geht nicht ({reason}). Starte werkzeuge\\Selbsttest.bat, dort steht, was fehlt.")
             return 1
         print(f"Oberfläche nicht verfügbar ({reason}), Jarvis läuft im Konsolenfenster.")
 

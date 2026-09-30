@@ -17,7 +17,7 @@ PRIVACY_HINT = (
     "Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff: "
     "Einstellungen > Datenschutz und Sicherheit > Mikrofon > "
     '"Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten. '
-    "Oder es ist das falsche Mikrofon: mikrofon.bat starten und das richtige wählen."
+    "Oder es ist das falsche Mikrofon: in der Einrichtung (Zahnrad) das richtige wählen."
 )
 
 

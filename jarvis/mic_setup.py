@@ -74,6 +74,6 @@ def run() -> None:
     keep = input("Dieses Mikrofon speichern? (J/n): ").strip().lower()
     if keep in ("", "j", "ja", "y", "yes"):
         save_setting("audio", "input_device", name)
-        print("Gespeichert. Starte Jarvis jetzt mit start.bat.")
+        print("Gespeichert. Starte Jarvis jetzt mit Jarvis.bat.")
     else:
-        print("Nichts geändert. Starte mikrofon.bat nochmal, um ein anderes zu wählen.")
+        print("Nichts geändert. Die Einrichtung (werkzeuge\\Einrichtung.bat) zeigt alle Mikrofone.")

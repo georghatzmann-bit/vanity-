@@ -116,7 +116,7 @@ class AssistantTest(unittest.TestCase):
 
     def test_refusal_message_points_to_the_test(self):
         assistant, *_ = make(FakeBrain(error=RefusalError("safeguards")))
-        self.assertIn("claude-test", assistant.handle("hi"))
+        self.assertIn("Claude-Test", assistant.handle("hi"))
 
     def test_filler_when_claude_is_slow(self):
         cfg = load_config()

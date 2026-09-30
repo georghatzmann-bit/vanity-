@@ -58,13 +58,24 @@ def load_config(path: Path | None = None) -> dict:
     return config
 
 
-def save_setting(section: str, key: str, value: str, path: Path | None = None) -> None:
-    """Schreibt einen Text-Wert in config.toml und lässt Kommentare und den Rest stehen."""
+def toml_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    text = str(value)
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = "".join(c if ord(c) >= 32 else f"\\u{ord(c):04x}" for c in escaped)
+    return f'"{escaped}"'
+
+
+def save_setting(section: str, key: str, value, path: Path | None = None) -> None:
+    """Schreibt einen Wert (Text, Zahl, Ja/Nein) in config.toml und lässt Kommentare
+    und den Rest stehen."""
     path = path or CONFIG_PATH
     if not path.exists():
         path.write_text(EXAMPLE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    new_line = f'{key} = "{escaped}"'
+    new_line = f"{key} = {toml_value(value)}"
     lines = path.read_text(encoding="utf-8-sig").splitlines()
 
     header = f"[{section}]"

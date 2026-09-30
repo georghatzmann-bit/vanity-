@@ -1,4 +1,4 @@
-# Jarvis Einstellungen. setup.ps1 kopiert diese Datei nach config.toml,
+# Jarvis Einstellungen. Die Installation kopiert diese Datei nach config.toml,
 # dort kannst du alles anpassen. Was in config.toml fehlt, kommt von hier.
 
 [ich]
@@ -16,7 +16,7 @@ threshold = 0.5
 
 [audio]
 # Welches Mikrofon Jarvis nutzt. Leer = Windows-Standardmikrofon.
-# Am einfachsten mit mikrofon.bat auswählen.
+# Am einfachsten in der Einrichtung auswählen (Zahnrad im Jarvis-Fenster).
 input_device = ""
 
 [mute]
@@ -62,7 +62,7 @@ ack_after_seconds = 3.0
 enabled = true
 
 [gui]
-# Das Arc-Reactor-Fenster. false = nur Konsolenfenster (wie start.bat --konsole).
+# Das Arc-Reactor-Fenster. false = nur Konsolenfenster (wie werkzeuge\Konsole.bat).
 enabled = true
 width = 1200
 height = 780

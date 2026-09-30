@@ -1,0 +1,15 @@
+Jarvis - kleine Helfer
+======================
+
+Normalerweise brauchst du nur Jarvis.bat im Ordner darueber (oder das
+Jarvis-Symbol auf dem Desktop). Diese Dateien hier sind fuer Sonderfaelle:
+
+  Einrichtung.bat       Mikrofon, Stimme, Wohnort, Claude, Alexa, Autostart
+                        (geht auch ueber das Zahnrad im Jarvis-Fenster)
+  Selbsttest.bat        prueft alles und sagt auf Deutsch, was zu tun ist
+  Mikrofon-Test.bat     Pegel und "Hey Jarvis"-Erkennung live ansehen
+  Claude-Test.bat       zeigt, welches Claude-Modell antwortet
+  Tippen.bat            Jarvis ohne Mikrofon, Befehle eintippen
+  Konsole.bat           Jarvis ohne Fenster, nur Text
+  Neu-installieren.bat  alle Pakete neu installieren
+  installieren.ps1      das Installationsprogramm (startet Jarvis.bat von selbst)

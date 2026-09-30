@@ -1,4 +1,4 @@
-"""`start.bat --selftest`: prüft alles, was Jarvis braucht, und sagt auf Deutsch, was zu tun ist."""
+"""`werkzeuge\\Selbsttest.bat`: prüft alles, was Jarvis braucht, und sagt auf Deutsch, was zu tun ist."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ import datetime as dt
 import importlib
 import os
 import platform
-import shutil
 import subprocess
 import sys
 import time
@@ -93,7 +92,7 @@ def check_python(r: Report) -> None:
     if sys.version_info >= (3, 11):
         r.add("Python", "ok", version)
     else:
-        r.add("Python", "fehler", version, "Python 3.11 oder neuer installieren und setup.bat erneut ausführen.")
+        r.add("Python", "fehler", version, "Python 3.11 bis 3.14 installieren und werkzeuge\\Neu-installieren.bat starten.")
 
 
 def check_packages(r: Report) -> None:
@@ -104,19 +103,19 @@ def check_packages(r: Report) -> None:
         except Exception as exc:
             missing.append(f"{package} ({type(exc).__name__})")
     if missing:
-        r.add("Pakete", "fehler", "fehlen: " + ", ".join(missing), "setup.bat noch einmal ausführen.")
+        r.add("Pakete", "fehler", "fehlen: " + ", ".join(missing), "werkzeuge\\Neu-installieren.bat starten.")
     else:
         r.add("Pakete", "ok", "alle wichtigen Pakete da")
     for module, (package, purpose) in OPTIONAL.items():
         try:
             importlib.import_module(module)
         except Exception as exc:
-            r.add(f"Zusatzpaket {package}", "warnung", f"fehlt ({type(exc).__name__}), gebraucht für: {purpose}", "setup.bat noch einmal ausführen.")
+            r.add(f"Zusatzpaket {package}", "warnung", f"fehlt ({type(exc).__name__}), gebraucht für: {purpose}", "werkzeuge\\Neu-installieren.bat starten.")
 
 
 def check_config(r: Report, cfg: dict) -> None:
     if not CONFIG_PATH.exists():
-        r.add("config.toml", "warnung", "fehlt, Jarvis nutzt die Standardwerte", "setup.bat legt sie an, oder config.example.toml kopieren.")
+        r.add("config.toml", "warnung", "fehlt, Jarvis nutzt die Standardwerte", "Die Einrichtung (Zahnrad im Jarvis-Fenster) legt sie an.")
     else:
         r.add("config.toml", "ok", "lesbar")
     threshold = cfg["wakeword"]["threshold"]
@@ -156,7 +155,7 @@ def check_folder(r: Report) -> None:
     if ".venv" in sys.executable.replace("\\", "/").split("/") and os.name == "nt":
         r.add(
             "Python-Umgebung", "warnung", sys.executable,
-            "Die alte Umgebung im Jarvis-Ordner läuft noch. setup.bat noch einmal starten, "
+            "Die alte Umgebung im Jarvis-Ordner läuft noch. Jarvis.bat starten, "
             "dann zieht sie nach %LOCALAPPDATA%\\Jarvis um.",
         )
 
@@ -202,7 +201,7 @@ def check_microphone(r: Report, cfg: dict, seconds: float) -> None:
         mic = Microphone(spec)
     except Exception as exc:
         detail = friendly_device_error(exc)
-        r.add("Mikrofon", "fehler", detail, "Mikrofon anschließen, dann mikrofon.bat starten und es auswählen.")
+        r.add("Mikrofon", "fehler", detail, "Mikrofon anschließen, dann in der Einrichtung (werkzeuge\\Einrichtung.bat) auswählen.")
         return
     loudest = 0.0
     with mic:
@@ -214,10 +213,10 @@ def check_microphone(r: Report, cfg: dict, seconds: float) -> None:
         r.add(
             "Mikrofon", "fehler", f"{name}: absolute Stille",
             'Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > "Desktop-Apps den Zugriff erlauben" '
-            "einschalten, oder mit mikrofon.bat ein anderes wählen.",
+            "einschalten, oder in der Einrichtung ein anderes wählen.",
         )
     elif loudest < 150:
-        r.add("Mikrofon", "warnung", f"{name}: sehr leise (Pegel {loudest:.0f})", "Während des Tests sprechen. Bleibt es leise, mit mikrofon.bat ein anderes wählen.")
+        r.add("Mikrofon", "warnung", f"{name}: sehr leise (Pegel {loudest:.0f})", "Während des Tests sprechen. Bleibt es leise, in der Einrichtung ein anderes wählen.")
     else:
         r.add("Mikrofon", "ok", f"{name}, Pegel bis {loudest:.0f}")
 
@@ -230,7 +229,7 @@ def load_models(r: Report, cfg: dict):
         wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
         r.add("Wake Word", "ok", f"{cfg['wakeword']['model']}, Schwelle {cfg['wakeword']['threshold']}")
     except Exception as exc:
-        r.add("Wake Word", "fehler", f"Modell lädt nicht ({exc})", "Internet prüfen und setup.bat erneut ausführen.")
+        r.add("Wake Word", "fehler", f"Modell lädt nicht ({exc})", "Internet prüfen und werkzeuge\\Neu-installieren.bat starten.")
     try:
         from .stt import SpeechToText
 
@@ -268,7 +267,9 @@ class _SilentUi:
 def check_claude(r: Report, cfg: dict) -> None:
     from .brain import BrainError, ClaudeBrain
 
-    path = cfg["brain"].get("claude_path") or shutil.which("claude")
+    from .brain import find_claude
+
+    path = find_claude(cfg["brain"])
     if not path:
         r.add("Claude Code", "fehler", "nicht gefunden", "In PowerShell: irm https://claude.ai/install.ps1 | iex, danach einmal claude starten und anmelden.")
         return
@@ -289,7 +290,7 @@ def check_claude(r: Report, cfg: dict) -> None:
         answer = brain.ask("Antworte nur mit: Test bestanden.")
     except BrainError as exc:
         hint = {
-            "refusal": "start.bat --claude-test zeigt, welches Modell ablehnt. Ergebnis an Claude im Jarvis-Projekt schicken.",
+            "refusal": "werkzeuge\\Claude-Test.bat zeigt, welches Modell ablehnt. Ergebnis an Claude im Jarvis-Projekt schicken.",
             "login": "In der Eingabeaufforderung claude starten und mit dem Pro-Konto anmelden.",
             "limit": "Das Pro-Kontingent ist aufgebraucht, es füllt sich nach ein paar Stunden wieder auf.",
             "network": "Internet prüfen.",
@@ -311,7 +312,7 @@ def check_gui(r: Report) -> None:
     if ok:
         r.add("Oberfläche", "ok", "Arc-Reactor-Fenster startklar")
     else:
-        hint = "setup.bat noch einmal ausführen."
+        hint = "werkzeuge\\Neu-installieren.bat starten."
         if "WebView2" in reason:
             hint = "Microsoft Edge WebView2 Runtime installieren: https://developer.microsoft.com/microsoft-edge/webview2/"
         r.add("Oberfläche", "warnung", f"{reason}, Jarvis läuft dann nur im Konsolenfenster", hint)
@@ -358,7 +359,7 @@ def check_autostart(r: Report) -> None:
         return
     from . import autostart
 
-    r.add("Autostart", "ok", "an" if autostart.enabled() else "aus (einschalten mit autostart.bat)")
+    r.add("Autostart", "ok", "an" if autostart.enabled() else "aus (einschalten in der Einrichtung)")
 
 
 def run(cfg: dict, quick: bool = False, out=print) -> Report:
@@ -394,7 +395,7 @@ def run(cfg: dict, quick: bool = False, out=print) -> Report:
     elif r.warnings:
         out(f"Jarvis ist startklar, mit {len(r.warnings)} Hinweis(en).")
     else:
-        out("Alles bereit. Starte Jarvis mit start.bat.")
+        out("Alles bereit. Starte Jarvis mit dem Symbol auf dem Desktop oder Jarvis.bat.")
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         (LOG_DIR / "selbsttest.txt").write_text(r.text() + "\n", encoding="utf-8")

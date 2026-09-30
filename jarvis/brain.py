@@ -71,7 +71,7 @@ class Cancelled(BrainError):
 SPOKEN_ERRORS = {
     "refusal": (
         "Verzeihung, Sir, Claude lehnt das gerade ab, auch mit den anderen Modellen. "
-        "Versuchen Sie es bitte anders formuliert, oder starten Sie einmal start.bat --claude-test."
+        "Versuchen Sie es bitte anders formuliert, oder starten Sie einmal den Claude-Test im Ordner werkzeuge."
     ),
     "limit": (
         "Ihr Claude-Kontingent ist gerade aufgebraucht, Sir. "
@@ -146,7 +146,7 @@ class ClaudeBrain:
     REMEMBER_SECONDS = 12 * 3600
 
     def __init__(self, cfg: dict, home: Path, state_dir: Path | None = None, persona: Path | None = None) -> None:
-        self._claude = cfg.get("claude_path") or shutil.which("claude")
+        self._claude = find_claude(cfg)
         if not self._claude:
             raise NotInstalledError(
                 "Claude Code wurde nicht gefunden. Installiere es und melde dich einmal mit 'claude' an."
@@ -540,6 +540,28 @@ class _StreamReader:
             if text.strip():
                 self.spoke = True
             self._on_text(text)
+
+
+def find_claude(cfg: dict | None = None) -> str | None:
+    """Sucht Claude Code: Eintrag in config.toml, dann PATH, dann die üblichen Orte.
+    (Direkt nach der Installation kennt ein laufendes Programm den neuen PATH noch nicht.)"""
+    configured = str((cfg or {}).get("claude_path") or "").strip()
+    if configured:
+        if Path(configured).expanduser().is_file() or shutil.which(configured):
+            return configured
+        log.warning("claude_path in config.toml gibt es nicht (%s), ich suche selbst.", configured)
+    found = shutil.which("claude")
+    if found:
+        return found
+    home = Path.home()
+    candidates = [home / ".local" / "bin" / "claude.exe", home / ".local" / "bin" / "claude"]
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates.append(Path(appdata) / "npm" / "claude.cmd")
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return None
 
 
 def _pump(pipe, put) -> None:

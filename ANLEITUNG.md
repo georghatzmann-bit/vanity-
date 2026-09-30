@@ -1,33 +1,36 @@
-# Jarvis in 5 Schritten
+# Jarvis in 3 Schritten
 
-Diese Anleitung ist für dich, Georg. Du brauchst nur Doppelklicks.
+Diese Anleitung ist für dich, Georg. Du brauchst nur einen Doppelklick.
 
-## 1. Neue Version holen
+## 1. Jarvis holen
 
-1. Falls Jarvis läuft: Fenster schließen.
+1. Falls Jarvis läuft: Fenster schließen (oder unten rechts neben der Uhr auf das Jarvis-Symbol, Rechtsklick, Beenden).
 2. Diese ZIP-Datei laden: https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/project-thread-0revfw.zip
-3. Am besten bekommt Jarvis einen eigenen Ordner außerhalb von OneDrive, zum Beispiel `C:\Jarvis`. Öffne die ZIP, darin ist ein Ordner. Öffne ihn, markiere alles (Strg+A), kopiere es (Strg+C) und füge es in `C:\Jarvis` ein (Strg+V). Fragt Windows nach: "Dateien im Ziel ersetzen".
-4. Kopier deine alte `config.toml` aus dem bisherigen Jarvis-Ordner mit nach `C:\Jarvis`. Dann bleibt dein Mikrofon eingestellt.
+3. Tipp, damit Windows nicht bei jeder Datei nachfragt: Rechtsklick auf die ZIP > Eigenschaften > unten Haken bei **"Zulassen"** > OK.
+4. Jarvis bekommt am besten einen eigenen Ordner außerhalb von OneDrive, zum Beispiel `C:\Jarvis`. Öffne die ZIP, darin ist ein Ordner. Öffne ihn, markiere alles (Strg+A), kopiere es (Strg+C) und füge es in `C:\Jarvis` ein (Strg+V). Fragt Windows nach: "Dateien im Ziel ersetzen".
+5. Hattest du Jarvis schon woanders: Kopier deine alte `config.toml` mit nach `C:\Jarvis`. Dann sind deine Einstellungen gleich wieder da.
 
-## 2. Einrichten
+## 2. Doppelklick auf `Jarvis.bat`
 
-Doppelklick auf **`setup.bat`**. Das installiert alles Neue (Oberfläche, Tray-Icon und so weiter). Beim ersten Mal dauert es ein paar Minuten. Die großen Programmdateien legt es unter `%LOCALAPPDATA%\Jarvis` ab, damit OneDrive sie nicht hochlädt.
+Beim ersten Mal installiert Jarvis alles, was er braucht. Das dauert ein paar Minuten, ein kleiner Arc Reactor zeigt dir, was gerade passiert. Fehlt Python, fragt er, ob er es installieren soll: einfach Enter drücken.
 
-## 3. Mikrofon wählen (nur einmal)
+Fragt Windows nach, weil die Datei aus dem Internet kommt: Beim blauen Fenster "Der Computer wurde durch Windows geschützt" auf **"Weitere Informationen"** und dann **"Trotzdem ausführen"** klicken, bei "Sicherheitswarnung" auf **"Ausführen"**. Das kommt nur beim ersten Mal (und gar nicht, wenn du bei der ZIP "Zulassen" angehakt hast).
 
-Doppelklick auf **`mikrofon.bat`**, die Nummer deines Mikrofons eintippen, kurz reinsprechen, Enter.
+Danach liegt ein **Jarvis-Symbol auf dem Desktop** (und im Startmenü). Ab jetzt startest du Jarvis nur noch damit.
 
-## 4. Selbsttest
+## 3. Die Einrichtung
 
-Doppelklick auf **`selbsttest.bat`**. Jarvis prüft alles: Lautsprecher, Stimme, Mikrofon (sprich dabei kurz), Spracherkennung, die ganze Kette mit einer Computerstimme und ob Claude antwortet.
+Beim ersten Start öffnet sich die Einrichtung von selbst. Sie führt dich durch alles, du klickst nur:
 
-- Überall `[ OK ]`: perfekt.
-- Steht irgendwo `[FEHLER]`: Darunter steht mit `->`, was zu tun ist.
-- Kommst du nicht weiter: Schick den Inhalt von `logs\selbsttest.txt` an Claude im Jarvis-Projekt.
+1. **Mikrofon:** Mikrofon anklicken, reinsprechen, der Balken zeigt den Pegel. Sag "Hey Jarvis" (englisch ausgesprochen), dann leuchtet es auf.
+2. **Stimme:** Stimmen anhören und die schönste nehmen.
+3. **Wohnort:** für das Wetter.
+4. **Claude:** Jarvis prüft, ob Claude antwortet. Fehlt Claude Code oder bist du nicht angemeldet, gibt es dafür einen Knopf.
+5. **Extras** (alles optional): Stumm-Taste, mit Windows starten, Alexa.
 
-## 5. Starten
+Danach startet Jarvis mit dem Arc-Reactor-Fenster. Die Einrichtung kannst du jederzeit über das **Zahnrad** im Jarvis-Fenster wieder öffnen.
 
-Doppelklick auf **`start.bat`**. Es öffnet sich das Jarvis-Fenster mit dem Arc Reactor. Dann:
+## So benutzt du Jarvis
 
 - **"Hey Jarvis"** sagen (englisch ausgesprochen), auf den Ton warten, Befehl auf Deutsch sprechen.
 - Oder unten im Fenster **tippen** und Enter drücken.
@@ -47,18 +50,14 @@ Doppelklick auf **`start.bat`**. Es öffnet sich das Jarvis-Fenster mit dem Arc 
 - "Lösch die Datei alt.txt auf dem Desktop": Jarvis fragt erst nach und legt sie nach deinem "Ja" in den Papierkorb.
 - "Neue Unterhaltung" (Jarvis vergisst das bisherige Gespräch)
 
-## Was du selbst noch erledigen musst
+## Was du vielleicht noch willst
 
-Nur das, was der Selbsttest anmeckert, plus die Dinge, die du haben willst:
+1. **Mikrofon-Zugriff**, falls die Einrichtung sagt, dass nur Stille ankommt: Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > "Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten.
+2. **WebView2**, falls statt des Fensters eine Meldung kommt, dass es fehlt: https://developer.microsoft.com/microsoft-edge/webview2/ (dort den "Evergreen Bootstrapper" laden und starten). Bei Windows 11 ist es normalerweise schon da.
+3. **Gaming-Modus** (optional): In `config.toml` unter `[gaming]` eintragen, welche Programme dabei zugehen sollen, zum Beispiel `close_apps = ["OneDrive", "Teams"]`.
+4. **Alexa** (optional): siehe unten.
 
-1. **Wohnort eintragen** (für das Wetter): `config.toml` mit dem Editor öffnen, ganz oben bei `[ich]` zum Beispiel `ort = "Wien"` eintragen.
-2. **Mikrofon-Zugriff**, falls der Selbsttest "absolute Stille" meldet: Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > "Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten.
-3. **WebView2**, falls der Selbsttest sagt, dass es fehlt: https://developer.microsoft.com/microsoft-edge/webview2/ (dort den "Evergreen Bootstrapper" laden und starten). Bei Windows 11 ist es normalerweise schon da.
-4. **Mit Windows starten** (optional): Doppelklick auf `autostart-an.bat`. Ausschalten mit `autostart-aus.bat`.
-5. **Gaming-Modus** (optional): In `config.toml` unter `[gaming]` eintragen, welche Programme dabei zugehen sollen, zum Beispiel `close_apps = ["OneDrive", "Teams"]`.
-6. **Alexa** (optional): siehe unten.
-
-Ein Tipp: Liegt Jarvis noch in OneDrive oder in einem Ordner namens `.claude`, meldet der Selbsttest das als Warnung. Es funktioniert trotzdem, ein eigener Ordner wie `C:\Jarvis` ist aber schneller und macht weniger Ärger.
+Im Ordner `werkzeuge` liegen kleine Helfer für Sonderfälle (Selbsttest, Mikrofon-Test, Claude-Test, Neu installieren). Was sie machen, steht in `werkzeuge\LIESMICH.txt`.
 
 ## Alexa einrichten (optional)
 
@@ -67,18 +66,8 @@ Jarvis spricht über Home Assistant mit deinen Echos. Das kostet nichts, braucht
 1. **Home Assistant** installieren, zum Beispiel auf einem Raspberry Pi: https://www.home-assistant.io/installation/
 2. In Home Assistant **HACS** installieren und darüber **"Alexa Media Player"**. Dann mit deinem Amazon-Konto anmelden. Deine Echos erscheinen als `media_player.echo_...`.
 3. In Home Assistant unten links auf deinen Namen > **Sicherheit** > **Langlebige Zugriffstoken** > Token erstellen und kopieren.
-4. In `config.toml` eintragen:
-   ```toml
-   [homeassistant]
-   url = "http://homeassistant.local:8123"
-   token = "HIER DEN LANGEN TOKEN EINFÜGEN"
-
-   [homeassistant.alexa]
-   wohnzimmer = "media_player.echo_wohnzimmer"
-   kueche = "media_player.echo_dot_kueche"
-   ```
-5. `selbsttest.bat` starten. Bei "Home Assistant / Alexa" sollte `[ OK ]` stehen.
-6. Ausprobieren: "Hey Jarvis, sag im Wohnzimmer Bescheid, dass das Essen fertig ist." oder "Schalte das Wohnzimmerlicht an."
+4. In der Jarvis-Einrichtung (Zahnrad) bei **Extras > Alexa** die Adresse (zum Beispiel `http://homeassistant.local:8123`) und den Token einfügen und auf **Verbindung testen** klicken. Jarvis findet deine Echos, du gibst jedem einen Raum (zum Beispiel "wohnzimmer").
+5. Ausprobieren: "Hey Jarvis, sag im Wohnzimmer Bescheid, dass das Essen fertig ist." oder "Schalte das Wohnzimmerlicht an."
 
 **Umgekehrt, Alexa sagt Jarvis etwas** (für Fortgeschrittene): In `config.toml` unter `[server]` `enabled = true` und ein langes `token` setzen. In Home Assistant in `configuration.yaml`:
 
@@ -97,8 +86,9 @@ Dann kann eine Home-Assistant-Automation oder ein Skript zum Beispiel `rest_comm
 
 ## Wenn etwas nicht klappt
 
-- **Jarvis reagiert nicht auf "Hey Jarvis":** `start.bat --mic-test` zeigt den Pegel und wie gut "Hey Jarvis" erkannt wird. Mehr dazu in der README.
-- **Claude lehnt ab:** Jarvis probiert automatisch andere Modelle und zuletzt einen einfachen Modus. Hilft das nicht, `start.bat --claude-test` starten und die Tabelle an Claude im Jarvis-Projekt schicken.
+- **Jarvis reagiert nicht auf "Hey Jarvis":** Zahnrad > Mikrofon. Dort siehst du den Pegel und ob "Hey Jarvis" ankommt. Klappt es nur knapp, den Schalter "empfindlicher" einschalten.
+- **Claude lehnt ab:** Jarvis probiert automatisch andere Modelle und zuletzt einen einfachen Modus. Hilft das nicht, `werkzeuge\Claude-Test.bat` starten und die Tabelle an Claude im Jarvis-Projekt schicken.
+- **Irgendwas geht nicht und du weißt nicht was:** `werkzeuge\Selbsttest.bat` prüft alles und sagt bei jedem Punkt, was zu tun ist. Den Inhalt von `logs\selbsttest.txt` kannst du Claude im Jarvis-Projekt schicken.
 - **"Jarvis läuft schon":** Jarvis ist schon offen, oft versteckt als Symbol unten rechts neben der Uhr. Dort mit Rechtsklick beenden oder das Fenster öffnen.
 - **Mikrofon abgesteckt:** Jarvis merkt das und versucht es alle paar Sekunden wieder. Steckst du es wieder ein, hört er von selbst weiter zu.
 - **Irgendwas anderes:** In `logs\jarvis.log` steht genau, was passiert ist. Die Datei kannst du Claude schicken.

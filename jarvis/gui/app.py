@@ -71,10 +71,11 @@ class Api:
     """Was die Seite in Python aufrufen darf (window.pywebview.api.*).
     Interne Dinge beginnen mit _, damit pywebview sie nicht an die Seite gibt."""
 
-    def __init__(self, bridge: GuiBridge, assistant, mute) -> None:
+    def __init__(self, bridge: GuiBridge, assistant, mute, on_setup=None) -> None:
         self._bridge = bridge
         self._assistant = assistant
         self._mute = mute
+        self._on_setup = on_setup
 
     def hello(self) -> dict:
         info = dict(self._bridge.info)
@@ -102,6 +103,18 @@ class Api:
 
     def new_conversation(self) -> None:
         self._assistant.new_conversation()
+
+    def open_setup(self) -> bool:
+        """Zahnrad: Einrichtung öffnen. Jarvis schließt sich dafür und startet danach neu."""
+        if self._on_setup is None:
+            return False
+        try:
+            self._on_setup()
+            return True
+        except Exception as exc:
+            log.warning("Einrichtung öffnen: %s", exc)
+            self._bridge.toast(f"Die Einrichtung ließ sich nicht öffnen: {exc}", "error")
+            return False
 
 
 def webview_available() -> tuple[bool, str]:
