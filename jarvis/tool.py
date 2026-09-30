@@ -14,17 +14,28 @@ from pathlib import Path
 
 from .config import STATE_DIR, load_config
 
-# Beginnt Georgs letzte Antwort so, darf Jarvis Löschen oder Installieren wirklich ausführen.
-CONFIRM_START = re.compile(r"^(ja|jawohl|jep|jo|genau|okay|ok|gerne|bestätigt|in ordnung|passt|klar)\b")
-# Diese kurzen Sätze gelten nur, wenn sie allein stehen ("Mach das Licht aus" ist kein Ja).
-CONFIRM_EXACT = {"mach das", "mach es", "mach weiter", "tu es", "tu das", "los", "mach", "weiter", "ausführen"}
+# Georgs letzte Antwort gilt nur als Ja für Löschen oder Installieren, wenn sie aus
+# diesen Wörtern besteht. Alles andere ("nein", "warte", "aber", "und ...") ist kein Ja.
+CONFIRM_YES = {
+    "ja", "jawohl", "jo", "jep", "jup", "jap", "japp", "yes", "yep", "klar", "genau", "gern", "gerne",
+    "natürlich", "sicher", "bitte", "los", "okay", "ok", "oke", "okey", "unbedingt", "ordnung", "passt",
+    "bestätigt", "go", "mach", "machs", "tu", "tus", "einverstanden", "selbstverständlich", "richtig",
+    "fall", "weiter", "ausführen", "lösch", "lösche", "installier", "installiere",
+}
+# Diese Wörter dürfen dabei sein, reichen allein aber nicht ("Jarvis.", "Das.").
+CONFIRM_FILLER = {
+    "das", "es", "sir", "jarvis", "doch", "auf", "jeden", "in", "hm", "hmm", "äh", "ähm", "öhm",
+    "na", "mal", "dann", "also", "gut", "sehr", "geht", "gehts", "sie", "ihn", "die", "den", "alle", "beide",
+}
 
 HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
-  erinnern "<wann>" "<text>"   wann: "in 20 minuten", "18:30", "morgen um 8", "2026-10-01 08:00"
+  erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
+                               "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
   erinnerung-loeschen <id>     löscht eine Erinnerung
   medien pause|weiter|naechstes|voriges
   lautstaerke lauter|leiser|stumm [schritte]
+  lautstaerke <0-100>          stellt die Lautstärke auf so viel Prozent
   bildschirm                   speichert ein Bildschirmfoto und nennt den Pfad
   gaming an|aus
   papierkorb "<pfad>"          verschiebt in den Papierkorb (erst nach Georgs Ja)
@@ -38,12 +49,17 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
 
 
 def confirmed(said: str | None = None) -> bool:
-    from .intents import normalize
-
-    text = normalize(os.environ.get("JARVIS_USER_SAID", "") if said is None else said)
-    if not text or len(text.split()) > 8:
+    text = os.environ.get("JARVIS_USER_SAID", "") if said is None else said
+    if "?" in text:
         return False
-    return bool(CONFIRM_START.match(text)) or text in CONFIRM_EXACT
+    text = re.sub(r"[’`´]", "'", text.lower())
+    text = re.sub(r"(\w)'s\b", r"\1 es", text)  # "Mach's", "Tu's", "Los geht's"
+    words = [re.sub(r"^(?:ja+)+$", "ja", w) for w in re.findall(r"\w+", text)]  # "Jaja"
+    if not words or len(words) > 10:
+        return False
+    if any(w not in CONFIRM_YES and w not in CONFIRM_FILLER for w in words):
+        return False
+    return any(w in CONFIRM_YES for w in words)
 
 
 def need_confirmation(action: str) -> int:
@@ -114,6 +130,9 @@ def _dispatch(command: str, rest: list[str]) -> int:
     if command in ("lautstaerke", "lautstärke"):
         from . import pc
 
+        if rest and rest[0].rstrip("%").isdigit():
+            print(pc.set_volume(int(rest[0].rstrip("%"))))
+            return 0
         steps = int(rest[1]) if len(rest) > 1 and rest[1].isdigit() else 5
         print(pc.volume(rest[0] if rest else "lauter", steps))
         return 0
@@ -139,6 +158,7 @@ def _dispatch(command: str, rest: list[str]) -> int:
         if not rest:
             print('Aufruf: papierkorb "<pfad>"')
             return 1
+        pc.trash_target(" ".join(rest))  # ganze Ordner gar nicht erst nachfragen
         if not confirmed():
             return need_confirmation(f"{rest[0]} in den Papierkorb verschieben")
         print(pc.to_recycle_bin(" ".join(rest)))

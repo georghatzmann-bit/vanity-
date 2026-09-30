@@ -13,7 +13,7 @@ import time
 
 from . import intents
 from .brain import BrainError, Cancelled, RefusalError
-from .text import SentenceSplitter, speakable
+from .text import SentenceSplitter, speakable, strip_sources
 from .ui import Ui
 
 log = logging.getLogger("jarvis")
@@ -41,7 +41,11 @@ class Assistant:
         self._lock = threading.Lock()  # immer nur ein Befehl gleichzeitig
         self._busy = 0
         self._recording = False
+        self._transcribing = False
         self._speaking = False
+        self._follow_up = False
+        # Die Stumm-Taste, die wirklich angemeldet werden konnte (setzt __main__).
+        self.hotkey = ""
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
@@ -62,6 +66,16 @@ class Assistant:
         self._recording = value
         self.update_state()
 
+    def set_transcribing(self, value: bool) -> None:
+        """Während Whisper die Aufnahme in Text umwandelt: "denkt nach" statt "bereit"."""
+        self._transcribing = value
+        self.update_state()
+
+    def take_follow_up(self) -> bool:
+        """True, wenn die letzte gesprochene Antwort eine Frage war (nur einmal)."""
+        value, self._follow_up = self._follow_up, False
+        return value
+
     def set_speaking(self, value: bool) -> None:
         """Wird vom Speaker gemeldet, wenn er anfängt oder aufhört zu sprechen."""
         self._speaking = value
@@ -74,7 +88,7 @@ class Assistant:
             state = "listening"
         elif self._speaking:
             state = "speaking"
-        elif self._busy:
+        elif self._busy or self._transcribing:
             state = "thinking"
         else:
             state = "idle"
@@ -87,6 +101,13 @@ class Assistant:
     def submit(self, text: str) -> None:
         """Nimmt einen Befehl an und erledigt ihn im Hintergrund (für Sprache und Oberfläche)."""
         if not text.strip():
+            return
+        intent = intents.match(text)
+        if intent is not None and intent.name == "stop":
+            # Sofort, nicht erst nach der laufenden Antwort (die hängt sonst davor in der Schlange).
+            self.ui.message("user", text)
+            self.stop()
+            self.update_state()
             return
         if self._worker is None or not self._worker.is_alive():
             self._worker = threading.Thread(target=self._work, name="jarvis-befehle", daemon=True)
@@ -136,6 +157,7 @@ class Assistant:
             return ""
         with self._lock:
             self._busy += 1
+            self._follow_up = False
             self.update_state()
             try:
                 log.info("Befehl: %s", text)
@@ -148,6 +170,7 @@ class Assistant:
                     if speak:
                         self.say(answer)
                 log.info("Antwort: %s", answer)
+                self._follow_up = bool(speak and answer and answer.rstrip().endswith("?"))
             finally:
                 self._busy -= 1
                 self.update_state()
@@ -169,8 +192,11 @@ class Assistant:
             self.mute.mute()
             from .mute import hotkey_label
 
-            hotkey = hotkey_label(self._cfg.get("mute", {}).get("hotkey", ""), spoken=True)
-            return f"Sehr wohl, Sir. Mit {hotkey} hole ich Sie wieder zurück." if hotkey else "Sehr wohl, Sir."
+            # Nur ein Tastenkürzel nennen, das Windows auch wirklich angenommen hat.
+            hotkey = hotkey_label(self.hotkey, spoken=True) if self.hotkey else ""
+            if hotkey:
+                return f"Sehr wohl, Sir. Mit {hotkey} hole ich Sie wieder zurück."
+            return "Sehr wohl, Sir. Über den Mikrofon-Knopf im Fenster hole ich Sie wieder zurück."
         if name == "reset":
             if self.brain is not None:
                 self.brain.new_conversation()
@@ -190,6 +216,9 @@ class Assistant:
                 return ""
             if name == "volume_down":
                 pc.volume("leiser")
+                return ""
+            if name == "volume_set":
+                pc.set_volume(int(intent.arg))
                 return ""
             if name in ("media_pause", "media_play"):
                 pc.media("pause")
@@ -213,12 +242,20 @@ class Assistant:
         shown: list[str] = []
         spoken_any = threading.Event()
         started = time.monotonic()
+        sources = threading.Event()
 
         def on_text(chunk: str) -> None:
             for sentence in splitter.feed(chunk):
                 emit(sentence)
 
         def emit(sentence: str) -> None:
+            # Die Websuche hängt eine Quellenliste an ("Sources: ..."). Die liest Jarvis nicht vor.
+            if sources.is_set():
+                return
+            cut = strip_sources(sentence)
+            if cut != sentence.strip():
+                sources.set()
+                sentence = cut
             clean = speakable(sentence)
             if not clean:
                 return
@@ -261,7 +298,7 @@ class Assistant:
 
         for sentence in splitter.flush():
             emit(sentence)
-        full = speakable(answer.text) or " ".join(shown)
+        full = speakable(strip_sources(answer.text)) or " ".join(shown)
         if not shown and full and speak:
             # Nichts kam gestreamt an (ältere Claude-Version): ganze Antwort vorlesen.
             self.say(full)

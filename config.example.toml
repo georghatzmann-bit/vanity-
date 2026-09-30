@@ -35,6 +35,9 @@ start_timeout_seconds = 6
 energy_threshold = 0
 # true = "Hey Jarvis" unterbricht Jarvis, auch während er spricht oder nachdenkt.
 barge_in = true
+# true = Endet Jarvis mit einer Frage ("Soll ich die Datei löschen, Sir?"), hört er danach
+# kurz ohne "Hey Jarvis" zu, damit ein einfaches "Ja" reicht.
+follow_up = true
 
 [stt]
 # tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.

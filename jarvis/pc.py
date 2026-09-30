@@ -89,6 +89,15 @@ def volume(direction: str, steps: int = 5) -> str:
     raise PcError(f"Unbekannt: {direction}. Möglich: lauter, leiser, stumm.")
 
 
+def set_volume(percent: int) -> str:
+    """Stellt die Lautstärke auf etwa `percent` Prozent: erst ganz leise, dann
+    hoch. Jeder Tastendruck sind unter Windows 2 Prozent."""
+    percent = max(0, min(100, int(percent)))
+    press("volume down", 50)
+    press("volume up", round(percent / 2))
+    return f"Lautstärke auf {percent} Prozent."
+
+
 def screenshot(path: Path) -> Path:
     from PIL import ImageGrab
 
@@ -164,10 +173,41 @@ def windows_path(path: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(path)))
 
 
+# Diese Ordner selbst nie in den Papierkorb, ihren Inhalt schon.
+_KEEP_FOLDERS = ("Desktop", "Documents", "Dokumente", "Downloads")
+
+
+def protected(target: Path) -> bool:
+    """Laufwerke, der Benutzerordner (und alles darüber) sowie Desktop,
+    Dokumente und Downloads selbst, auch die in OneDrive."""
+    def key(path: Path) -> str:
+        return os.path.normcase(os.path.abspath(path))
+
+    target = Path(os.path.abspath(target))
+    if target.parent == target:
+        return True
+    home = Path.home()
+    if Path(key(home)).is_relative_to(key(target)):
+        return True
+    keep = set()
+    for base in [home, *home.glob("OneDrive*")]:
+        keep.add(key(base))
+        keep.update(key(base / name) for name in _KEEP_FOLDERS)
+    return key(target) in keep
+
+
+def trash_target(path: str) -> Path:
+    """Der Pfad für den Papierkorb, oder ein Fehler bei ganzen Ordnern wie dem Desktop."""
+    target = windows_path(path)
+    if protected(target):
+        raise PcError(f"{target} verschiebe ich nicht in den Papierkorb. Nur einzelne Dateien oder Unterordner.")
+    return target
+
+
 def to_recycle_bin(path: str) -> str:
     from send2trash import send2trash
 
-    target = windows_path(path)
+    target = trash_target(path)
     if not target.exists():
         raise PcError(f"Nicht gefunden: {target}")
     send2trash(str(target))

@@ -54,11 +54,19 @@ class VoiceLoop:
         self._hotkey = hotkey
         self._hints = hints or (lambda _text: None)
         self._barge_in = cfg["listen"].get("barge_in", True)
+        self._follow_up = cfg["listen"].get("follow_up", True)
         self._warned_silence = False
         self._last_hint = 0.0
         self._level_tick = 0
+        self._was_active = False
+        self._fallback_checked = time.monotonic()
         self._trigger = threading.Event()
         self.stopped = threading.Event()
+
+    # So viele Fehler hintereinander (ohne Mikrofon-Fehler) übersteht die Schleife.
+    MAX_ERRORS = 5
+    # So oft (Sekunden) schaut Jarvis nach dem eigenen Mikrofon, solange das Ersatzmikrofon läuft.
+    FALLBACK_CHECK_SECONDS = 30
 
     def listen_now(self) -> bool:
         """Zuhören wie nach "Hey Jarvis", aber per Klick (Kreis im Jarvis-Fenster).
@@ -74,31 +82,53 @@ class VoiceLoop:
     def run(self) -> None:
         """Läuft, bis `stopped` gesetzt wird oder Strg+C kommt. Fällt das Mikrofon aus
         (Headset abgesteckt, Ruhezustand), versucht Jarvis es immer wieder zu öffnen,
-        erst schnell, dann alle 10 Sekunden. Tippen geht in der Zeit weiter."""
+        erst schnell, dann alle 10 Sekunden. Tippen geht in der Zeit weiter.
+        Andere Fehler (z. B. in der Spracherkennung) überlebt die Schleife auch, erst nach
+        vielen hintereinander gibt sie auf."""
         self.prompt()
         self._mic.start()
         failures = 0
-        while not self.stopped.is_set():
-            try:
-                self._step()
-                if failures >= 2:
-                    self._assistant.ui.toast("Das Mikrofon ist wieder da.", "info")
-                failures = 0
-            except Exception as exc:
-                # Nur Audio-Fehler abfangen, alles andere ist ein echter Fehler.
-                if not isinstance(exc, OSError) and "PortAudio" not in type(exc).__name__:
+        errors = 0
+        try:
+            while not self.stopped.is_set():
+                try:
+                    self._step()
+                    if failures >= 2:
+                        self._assistant.ui.toast("Das Mikrofon ist wieder da.", "info")
+                    failures = 0
+                    errors = 0
+                except KeyboardInterrupt:
                     raise
-                failures += 1
-                log.warning("Mikrofon-Fehler Nr. %d (%s), versuche es neu zu öffnen ...", failures, exc)
-                if failures == 1:
-                    self._assistant.ui.toast("Mikrofon-Problem, ich versuche es neu zu öffnen ...", "error")
-                elif failures == 3:
-                    self._assistant.ui.toast(
-                        "Das Mikrofon ist weg. Ich versuche es alle 10 Sekunden wieder. Tippen geht weiter.",
-                        "error",
-                    )
-                self._reopen(2 if failures < 3 else 10)
-        self._mic.stop()
+                except Exception as exc:
+                    if isinstance(exc, OSError) or "PortAudio" in type(exc).__name__:
+                        failures += 1
+                        log.warning("Mikrofon-Fehler Nr. %d (%s), versuche es neu zu öffnen ...", failures, exc)
+                        if failures == 1:
+                            self._assistant.ui.toast("Mikrofon-Problem, ich versuche es neu zu öffnen ...", "error")
+                        elif failures == 3:
+                            self._assistant.ui.toast(
+                                "Das Mikrofon ist weg. Ich versuche es alle 10 Sekunden wieder. Tippen geht weiter.",
+                                "error",
+                            )
+                        self._reopen(2 if failures < 3 else 10)
+                        continue
+                    errors += 1
+                    log.exception("Fehler in der Sprachsteuerung (Nr. %d)", errors)
+                    if errors >= self.MAX_ERRORS:
+                        self._assistant.ui.toast(
+                            f"Die Sprachsteuerung ist aus ({exc}). Tippen geht weiter. Details in logs\\jarvis.log.",
+                            "error",
+                        )
+                        self._assistant.ui.message("info", "Sprachsteuerung aus. Du kannst Jarvis unten etwas schreiben.")
+                        return
+                    self._assistant.set_transcribing(False)
+                    self._assistant.set_recording(False)
+                    self._pause(1.0)
+        finally:
+            try:
+                self._mic.stop()
+            except Exception:
+                pass
 
     def _reopen(self, delay: float) -> None:
         try:
@@ -125,7 +155,7 @@ class VoiceLoop:
             time.sleep(0.25)
 
     def _step(self) -> None:
-        from .audio import record_command, rms
+        from .audio import rms
 
         mic, wake, assistant, ui = self._mic, self._wake, self._assistant, self._assistant.ui
         if self._mute.muted:
@@ -133,11 +163,27 @@ class VoiceLoop:
             return
 
         frame = mic.read()
+        if getattr(mic, "missing", "") and not (assistant.busy or assistant.speaking):
+            # Läuft gerade das Ersatzmikrofon: ab und zu schauen, ob das eigene wieder da ist.
+            now = time.monotonic()
+            if now - self._fallback_checked > self.FALLBACK_CHECK_SECONDS:
+                self._fallback_checked = now
+                self._reopen(0)
+                if not getattr(mic, "missing", ""):
+                    ui.toast(f"Dein Mikrofon ist wieder da: {mic.name}", "info")
+                return
         if not self._warned_silence and mic.dead_silent:
             ui.toast(PRIVACY_HINT, "error")
             self._warned_silence = True
 
         active = assistant.busy or assistant.speaking
+        if self._was_active and not active and assistant.take_follow_up() and self._follow_up:
+            # Jarvis hat eine Frage gestellt ("Soll ich ... löschen?"): Die Antwort
+            # geht ohne "Hey Jarvis".
+            self._was_active = False
+            self._listen(follow_up=True)
+            return
+        self._was_active = active
         if not active:
             self._level_tick += 1
             if self._level_tick % 3 == 0:
@@ -165,25 +211,46 @@ class VoiceLoop:
         if active:
             log.info("Unterbrochen durch %s (%.2f)", "Klick" if clicked else "Hey Jarvis", score)
             assistant.stop()
+        self._listen()
+
+    def _listen(self, follow_up: bool = False) -> None:
+        """Ton, Befehl aufnehmen, in Text umwandeln und an Jarvis geben."""
+        from .audio import record_command
+
+        mic, wake, assistant, ui = self._mic, self._wake, self._assistant, self._assistant.ui
         # Was sich bis hierhin angestaut hat, ist noch "Hey Jarvis" selbst.
         mic.drain()
         # Den Ton nebenher abspielen und sofort aufnehmen: Wer gleich weiterredet
         # ("Hey Jarvis, wie spät ist es?"), verliert so kein Wort. Das Echo des Tons
         # startet die Aufnahme nicht (ignore_seconds).
         threading.Thread(target=self._sounds.listening, name="jarvis-ton", daemon=True).start()
+        listen_cfg = self._cfg["listen"]
+        if follow_up:
+            listen_cfg = dict(listen_cfg, start_timeout_seconds=min(5.0, float(listen_cfg["start_timeout_seconds"])))
         assistant.set_recording(True)
         try:
-            audio = record_command(mic, self._cfg["listen"], on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS)
+            audio = record_command(mic, listen_cfg, on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS)
         finally:
             assistant.set_recording(False)
         if audio is None:
-            ui.message("info", "Nichts gehört. Sprich direkt nach dem Ton.")
+            if not follow_up:
+                ui.message("info", "Nichts gehört. Sprich direkt nach dem Ton.")
         else:
-            text = self._stt.transcribe(audio)
-            if not text:
+            assistant.set_transcribing(True)
+            try:
+                text = self._stt.transcribe(audio)
+            except Exception:
+                log.exception("Spracherkennung")
+                ui.message("info", "Nicht verstanden (Fehler in der Spracherkennung, Details in logs\\jarvis.log).")
+                text = None
+            finally:
+                assistant.set_transcribing(False)
+            if text == "":
                 ui.message("info", "Nichts verstanden.")
-            else:
+            elif text:
                 assistant.submit(text)
+                # Auch bei einer ganz schnellen Antwort zählt: Jarvis war dran (für die Rückfrage).
+                self._was_active = True
                 if not self._barge_in:
                     self._wait_until_idle()
         wake.reset()

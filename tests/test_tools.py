@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 import tests.helpers  # noqa: F401
-from jarvis import autostart, tool
+from jarvis import autostart, pc, tool
 from jarvis.homeassistant import HomeAssistant, HomeAssistantError
 from jarvis.reminders import ReminderStore, WhenError, parse_when, spoken_when
 from jarvis.server import CommandServer
@@ -31,20 +31,104 @@ class ParseWhenTest(unittest.TestCase):
         self.assertEqual(parse_when("18:30", NOW), dt.datetime(2026, 9, 30, 18, 30))
         self.assertEqual(parse_when("um 18 Uhr", NOW), dt.datetime(2026, 9, 30, 18, 0))
         self.assertEqual(parse_when("um 18 Uhr 45", NOW), dt.datetime(2026, 9, 30, 18, 45))
-        # Schon vorbei: dann morgen.
-        self.assertEqual(parse_when("8:00", NOW), dt.datetime(2026, 10, 1, 8, 0))
+        # Schon vorbei: dann morgen. "08:00" ist eindeutig, "8:00" um 15:20 heißt 20 Uhr.
+        self.assertEqual(parse_when("08:00", NOW), dt.datetime(2026, 10, 1, 8, 0))
+        self.assertEqual(parse_when("8:00", NOW), dt.datetime(2026, 9, 30, 20, 0))
         self.assertEqual(parse_when("morgen um 7", NOW), dt.datetime(2026, 10, 1, 7, 0))
         self.assertEqual(parse_when("übermorgen 9.15", NOW), dt.datetime(2026, 10, 2, 9, 15))
         self.assertEqual(parse_when("2026-10-05 08:00", NOW), dt.datetime(2026, 10, 5, 8, 0))
 
     def test_nonsense_is_rejected(self):
-        for text in ("irgendwann", "in vielen Jahren", "25:00", "um halb acht"):
+        for text in ("irgendwann", "in vielen Jahren", "25:00", "24:00", "in -5 minuten", "in 1e9 stunden",
+                     "in 0 Minuten", "morgen", "in 100000 Tagen", "31.2. um 8"):
             with self.subTest(text=text), self.assertRaises(WhenError):
                 parse_when(text, NOW)
 
     def test_spoken(self):
         self.assertEqual(spoken_when(dt.datetime(2026, 9, 30, 18, 5), NOW), "heute um 18:05 Uhr")
         self.assertEqual(spoken_when(dt.datetime(2026, 10, 1, 8, 0), NOW), "morgen um 8:00 Uhr")
+
+
+EVENING = dt.datetime(2026, 9, 30, 19, 45, 10)  # ein Mittwoch
+
+
+class ParseWhenMoreTest(unittest.TestCase):
+    def check(self, cases, now=EVENING):
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(parse_when(text, now), expected)
+
+    def test_relative(self):
+        after = lambda **kw: EVENING + dt.timedelta(**kw)  # noqa: E731
+        self.check({
+            "in anderthalb Stunden": after(minutes=90),
+            "in eineinhalb Stunden": after(minutes=90),
+            "in einer Woche": after(days=7),
+            "in einer Viertelstunde": after(minutes=15),
+            "in zwölf Minuten": after(minutes=12),
+            "in elf Minuten": after(minutes=11),
+            "in fünfundzwanzig Minuten": after(minutes=25),
+            "in neunundfünfzig Minuten": after(minutes=59),
+            "in 2 Stunden und 30 Minuten": after(hours=2, minutes=30),
+            "in 1 Stunde 30 Minuten": after(minutes=90),
+            "in 10 Min.": after(minutes=10),
+            "in 45 min.": after(minutes=45),
+            "in 10 Minuten!": after(minutes=10),
+            '"in 10 minuten"': after(minutes=10),
+            "in ner halben Stunde": after(minutes=30),
+        })
+
+    def test_twelve_hours_later_when_the_morning_is_over(self):
+        self.check({
+            "um 8": dt.datetime(2026, 9, 30, 20, 0),
+            "8 Uhr": dt.datetime(2026, 9, 30, 20, 0),
+            "heute um 8": dt.datetime(2026, 9, 30, 20, 0),
+            "um viertel nach acht": dt.datetime(2026, 9, 30, 20, 15),
+            "viertel vor neun": dt.datetime(2026, 9, 30, 20, 45),
+            # 7 und 19 Uhr sind beide vorbei: morgen früh.
+            "um 7": dt.datetime(2026, 10, 1, 7, 0),
+            "halb acht": dt.datetime(2026, 10, 1, 7, 30),
+            # Früh, morgens und vormittags bleiben am Vormittag.
+            "um 8 früh": dt.datetime(2026, 10, 1, 8, 0),
+            "morgens um 8": dt.datetime(2026, 10, 1, 8, 0),
+            "vormittags um 10": dt.datetime(2026, 10, 1, 10, 0),
+            "morgen früh um 8": dt.datetime(2026, 10, 1, 8, 0),
+            "morgen um 8": dt.datetime(2026, 10, 1, 8, 0),
+            "08:00": dt.datetime(2026, 10, 1, 8, 0),
+        })
+
+    def test_day_and_daytime(self):
+        self.check({
+            "heute Abend um 8": dt.datetime(2026, 9, 30, 20, 0),
+            "heute Abend 20:00": dt.datetime(2026, 9, 30, 20, 0),
+            "um 8 Uhr abends": dt.datetime(2026, 9, 30, 20, 0),
+            "12 Uhr mittags": dt.datetime(2026, 10, 1, 12, 0),
+            "morgen abend um 7": dt.datetime(2026, 10, 1, 19, 0),
+            "heute Nacht um 2": dt.datetime(2026, 10, 1, 2, 0),
+            "Montag um 9": dt.datetime(2026, 10, 5, 9, 0),
+            "am Montag um 9 Uhr": dt.datetime(2026, 10, 5, 9, 0),
+            "nächsten Mittwoch um 8": dt.datetime(2026, 10, 7, 8, 0),
+            "1.10. um 8": dt.datetime(2026, 10, 1, 8, 0),
+            "am 1.10. um 8 Uhr": dt.datetime(2026, 10, 1, 8, 0),
+            "01.10.2026 08:00": dt.datetime(2026, 10, 1, 8, 0),
+            "1.1. um 8": dt.datetime(2027, 1, 1, 8, 0),
+            "acht Uhr dreißig": dt.datetime(2026, 9, 30, 20, 30),
+        })
+
+    def test_past_times_are_explained(self):
+        for text in ("heute 19:00", "heute um 7", "2026-09-30 08:00", "01.01.2026 08:00"):
+            with self.subTest(text=text), self.assertRaises(WhenError) as ctx:
+                parse_when(text, EVENING)
+            self.assertIn("Vergangenheit", str(ctx.exception))
+            self.assertIn("30.09.2026 19:45", str(ctx.exception))
+
+    def test_errors_show_the_time_and_examples(self):
+        with self.assertRaises(WhenError) as ctx:
+            parse_when("irgendwann", EVENING)
+        message = str(ctx.exception)
+        self.assertIn("Zeit nicht verstanden", message)
+        self.assertIn("Mittwoch, 30.09.2026 19:45", message)
+        self.assertIn("morgen um 8", message)
 
 
 class ReminderStoreTest(unittest.TestCase):
@@ -125,6 +209,41 @@ class ToolTest(unittest.TestCase):
             self.assertEqual(code, 0)
             trash.assert_called_once()
 
+    def test_recycle_bin_refuses_whole_folders(self):
+        with TemporaryDirectory() as home, mock.patch.object(Path, "home", return_value=Path(home)):
+            home = Path(home)
+            for name in ("Desktop", "Documents", "Downloads"):
+                (home / name).mkdir()
+            (home / "OneDrive" / "Dokumente").mkdir(parents=True)
+            with mock.patch("jarvis.pc.to_recycle_bin", return_value="verschoben") as trash:
+                for target in (home, home / "Desktop", home / "Downloads", home / "Documents",
+                               home / "OneDrive" / "Dokumente", home.parent, Path(home.anchor)):
+                    with self.subTest(target=target):
+                        code, out = run_tool("papierkorb", str(target), said="Ja")
+                        self.assertEqual(code, 1, out)
+                        self.assertIn("nicht in den Papierkorb", out)
+                trash.assert_not_called()
+                code, out = run_tool("papierkorb", str(home / "Desktop" / "alt.txt"), said="Ja")
+                self.assertEqual(code, 0, out)
+                trash.assert_called_once()
+            self.assertTrue(pc.protected(home / "Desktop"))
+            self.assertFalse(pc.protected(home / "Desktop" / "Projekt"))
+            with self.assertRaises(pc.PcError):
+                pc.to_recycle_bin(str(home / "Downloads"))
+
+    def test_volume_in_percent(self):
+        with mock.patch("jarvis.pc.set_volume", return_value="Lautstärke auf 30 Prozent.") as set_volume:
+            code, out = run_tool("lautstaerke", "30")
+            self.assertEqual((code, out.strip()), (0, "Lautstärke auf 30 Prozent."))
+            run_tool("lautstaerke", "70%")
+        self.assertEqual([c.args for c in set_volume.call_args_list], [(30,), (70,)])
+        with mock.patch("jarvis.pc.press") as press:
+            self.assertEqual(pc.set_volume(30), "Lautstärke auf 30 Prozent.")
+            self.assertEqual(press.call_args_list, [mock.call("volume down", 50), mock.call("volume up", 15)])
+            press.reset_mock()
+            self.assertEqual(pc.set_volume(150), "Lautstärke auf 100 Prozent.")
+            self.assertEqual(press.call_args_list[-1], mock.call("volume up", 50))
+
     def test_install_needs_a_yes(self):
         with mock.patch("jarvis.pc.install", return_value="ok") as install:
             self.assertEqual(run_tool("installieren", "Spotify.Spotify", said="Installier Spotify")[0], 3)
@@ -132,10 +251,16 @@ class ToolTest(unittest.TestCase):
             install.assert_called_once_with("Spotify.Spotify")
 
     def test_confirmation_words(self):
-        for said in ("Ja", "Ja, bitte.", "Jawohl", "Okay, mach.", "Mach das", "Los!", "Genau"):
+        for said in ("Ja", "Ja, bitte.", "Jawohl", "Okay, mach.", "Mach das", "Los!", "Genau", "Jaja", "Na klar.",
+                     "Sicher.", "Natürlich.", "Gern.", "Mach's.", "Tu's.", "Yes.", "Los geht's.", "Hm, ja.", "Ähm, ja.",
+                     "Okay, Jarvis.", "Jarvis, ja.", "In Ordnung.", "Auf jeden Fall.", "Ja, lösch sie.", "Ja, gerne doch."):
             with self.subTest(said=said):
                 self.assertTrue(tool.confirmed(said))
-        for said in ("", "Mach das Licht aus", "Lösch alles", "Nein", "Ja wie wäre es wenn du erst noch nachschaust ob"):
+        for said in ("", "Mach das Licht aus", "Lösch alles", "Nein", "Ja wie wäre es wenn du erst noch nachschaust ob",
+                     "Ok, nein, doch nicht.", "Okay, warte mal.", "Ja nicht löschen!", "Klar, aber erst morgen.",
+                     "Ja, aber nicht den Ordner Bilder.", "Okay, lösch den Ordner Downloads.", "Okay, installier mir Spotify.",
+                     "Genau, lösch alles auf dem Desktop.", "Ja, und installier auch noch VLC.", "Ja, äh, nein.",
+                     "Nee.", "Moment.", "Ja, stopp.", "Halt!", "Abbrechen.", "Lieber nicht.", "Jarvis.", "Ja?", "Schon gut."):
             with self.subTest(said=said):
                 self.assertFalse(tool.confirmed(said))
 

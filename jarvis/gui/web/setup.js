@@ -86,7 +86,7 @@
       running: false, polling: false, startedAt: 0, maxLevel: 0, threshold: 0.5, detected: false,
     },
     voices: [], voice: '', playing: '',
-    place: { saved: '', lastChecked: '', result: null },
+    place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
     speed: 'ausgewogen',
     hotkeys: [], hotkey: '', autostart: false,
@@ -772,14 +772,18 @@
     }
     btn.classList.add('busy');
     placeMsg('', 'Suche …');
+    // Kommt eine ältere, langsame Suche erst nach einer neueren zurück, zählt sie nicht mehr.
+    const seq = ++S.place.seq;
     let res;
     try {
       res = await call('place_check', text);
     } catch (err) {
+      if (seq !== S.place.seq) return 'stale';
       btn.classList.remove('busy');
       failed(err);
       return 'network';
     }
+    if (seq !== S.place.seq) return 'stale';
     btn.classList.remove('busy');
     S.place.lastChecked = text;
     S.place.result = res;

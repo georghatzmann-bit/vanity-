@@ -277,7 +277,8 @@ class GuiBridgeTest(unittest.TestCase):
         self.assertFalse(api.toggle_mute())
         api.stop()
         api.new_conversation()
-        self.assertEqual(submitted, ["Öffne YouTube", "STOP", "NEU"])
+        # "Neue Unterhaltung" stoppt erst die laufende Antwort.
+        self.assertEqual(submitted, ["Öffne YouTube", "STOP", "STOP", "NEU"])
         self.assertFalse([name for name in vars(api) if not name.startswith("_")], "nichts Internes an die Seite geben")
 
     def test_listen_now(self):
@@ -294,7 +295,7 @@ class GuiBridgeTest(unittest.TestCase):
         self.assertEqual(Api(bridge, None, mute, None, lambda: False).listen_now()["reason"], "novoice")
 
 
-class StopLoop(Exception):
+class StopLoop(BaseException):  # kein Exception: die Sprachschleife fängt die ab
     pass
 
 

@@ -419,7 +419,7 @@ class SetupPageTest(unittest.TestCase):
 
 
 @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
-class ClaudeCheckTest(SetupTestCase):
+class ClaudeCheckFallbackTest(SetupTestCase):
     def check(self, refuse: str) -> dict:
         from tests.helpers import make_fake_claude
 

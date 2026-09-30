@@ -149,16 +149,32 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
             ui.toast(f"Web-Eingang startet nicht: {exc}", "error")
 
 
-def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> VoiceLoop | None:
-    """Lädt Mikrofon, Wake Word und Spracherkennung. Bei Problemen None (Tippen geht trotzdem)."""
-    from .audio import Microphone, WakeWord, friendly_device_error
+def load_voice(
+    cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints, wait_for_mic: threading.Event | None = None
+) -> VoiceLoop | None:
+    """Lädt Mikrofon, Wake Word und Spracherkennung. Bei Problemen None (Tippen geht trotzdem).
+    Mit `wait_for_mic` wartet es, bis ein Mikrofon da ist (alle 10 Sekunden ein Versuch),
+    bis dieses Ereignis gesetzt wird."""
+    from .audio import Microphone, WakeWord, friendly_device_error, refresh_devices
 
     try:
         mic = Microphone(cfg["audio"]["input_device"], fallback=True)
     except Exception as exc:
         log.error("Mikrofon: %s", exc)
         ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Ein anderes wählst du in den Einstellungen (oben rechts im Jarvis-Fenster).", "error")
-        return None
+        if wait_for_mic is None:
+            return None
+        # Gar kein Mikrofon da (z. B. nur ein USB-Headset, das noch nicht steckt): warten.
+        ui.message("info", "Kein Mikrofon da. Sobald eins angeschlossen ist, hört Jarvis zu. Schreiben geht schon.")
+        while True:
+            if wait_for_mic.wait(10):
+                return None
+            try:
+                refresh_devices()
+                mic = Microphone(cfg["audio"]["input_device"], fallback=True)
+                break
+            except Exception as retry_exc:
+                log.debug("Mikrofon noch nicht da: %s", retry_exc)
     if mic.missing:
         # Lieber mit dem Standardmikrofon weiter als gar nicht zuhören, aber deutlich sagen.
         ui.toast(
@@ -193,6 +209,7 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
 def register_mute_hotkey(cfg: dict, assistant: Assistant) -> str:
     hotkey = cfg["mute"]["hotkey"]
     if hotkey and register_hotkey(hotkey, assistant.mute.toggle):
+        assistant.hotkey = hotkey
         return hotkey_label(hotkey)
     return "(kein Tastenkürzel)"
 
@@ -266,7 +283,7 @@ def run_gui(cfg: dict, args) -> int:
                 window.allow_close = not gui_cfg.get("close_to_tray", False)
         if assistant.brain is None:
             ui.message("info", "Claude Code fehlt. Die Einstellungen (oben rechts) helfen beim Einrichten.")
-        voice = load_voice(cfg, assistant, ui, hotkey, lambda _text: None)
+        voice = load_voice(cfg, assistant, ui, hotkey, lambda _text: None, wait_for_mic=stopped)
         if voice is None:
             ui.config(voice=False)
             ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis rechts eine Nachricht schreiben.")

@@ -38,7 +38,9 @@ class TextToSpeech:
         self._voice = cfg.get("voice", "de-DE-ConradNeural")
         self._rate = cfg.get("rate", "+0%")
         self._pitch = cfg.get("pitch", "+0Hz")
-        self._edge_failed_at = 0.0
+        # None statt 0.0: time.monotonic() zählt unter Windows ab dem Hochfahren, sonst
+        # käme nach einem Neustart eine Minute lang die Ersatzstimme.
+        self._edge_failed_at: float | None = None
         self._reported_at = -1e9
         self._on_problem = on_problem or (lambda _text: None)
         self._cache_dir = Path(cache_dir) if cache_dir else None
@@ -55,7 +57,8 @@ class TextToSpeech:
             except Exception as exc:
                 log.debug("Stimmen-Zwischenspeicher: %s", exc)
         # Nach einem Fehler (z. B. kein Internet) eine Minute lang direkt die Ersatzstimme nehmen.
-        if self._engine == "edge" and time.monotonic() - self._edge_failed_at > 60:
+        failed = self._edge_failed_at
+        if self._engine == "edge" and (failed is None or time.monotonic() - failed > 60):
             try:
                 samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
                 samples = trim_silence(samples, rate)
@@ -390,7 +393,12 @@ class Speaker:
         self._pending = 0
         self._lock = threading.Condition()
         self._speaking = False
+        self._playing_generation = -1
+        self._speaking_lock = threading.Lock()
         self.spoken: list[str] = []
+        # Der Player fragt beim Abspielen nach, ob der Satz noch dran ist. So geht kein
+        # "Stopp" verloren, das genau zwischen Prüfen und Losspielen kommt.
+        self._player.should_stop = lambda: not self._current(self._playing_generation)
         threading.Thread(target=self._synth_worker, name="jarvis-tts", daemon=True).start()
         threading.Thread(target=self._play_worker, name="jarvis-play", daemon=True).start()
 
@@ -453,6 +461,10 @@ class Speaker:
             except Exception as exc:
                 log.error("Sprachausgabe fehlgeschlagen: %s", exc)
                 self._done_one(generation)
+                if not self.busy:
+                    # Der vorige Satz ist schon fertig gespielt: sonst bliebe "spricht" hängen.
+                    self._on_level(0.0)
+                    self._set_speaking(False)
                 continue
             if self._current(generation):
                 self._audio.put((generation, text, samples, rate))
@@ -462,6 +474,7 @@ class Speaker:
             generation, text, samples, rate = self._audio.get()
             if not self._current(generation):
                 continue
+            self._playing_generation = generation
             self._set_speaking(True)
             try:
                 self._player.play(samples, rate, self._on_level)
@@ -475,9 +488,11 @@ class Speaker:
                     self._set_speaking(False)
 
     def _set_speaking(self, value: bool) -> None:
-        if value != self._speaking:
+        with self._speaking_lock:
+            if value == self._speaking:
+                return
             self._speaking = value
-            self._on_speaking(value)
+        self._on_speaking(value)
 
 
 class Player:
@@ -489,6 +504,10 @@ class Player:
 
     def __init__(self) -> None:
         self._stopped = threading.Event()
+        self.should_stop: Callable[[], bool] | None = None
+
+    def _cancelled(self) -> bool:
+        return self._stopped.is_set() or bool(self.should_stop and self.should_stop())
 
     def play(self, samples: np.ndarray, rate: int, on_level: Callable[[float], None]) -> None:
         import sounddevice as sd
@@ -519,7 +538,7 @@ class Player:
             try:
                 limit = time.monotonic() + len(samples) / rate + 2.0
                 while not finished.wait(0.05):
-                    if self._stopped.is_set() or time.monotonic() > limit:
+                    if self._cancelled() or time.monotonic() > limit:
                         break
                     index = position[0]
                     chunk = samples[index : index + window].astype(np.float32)
@@ -528,7 +547,7 @@ class Player:
             finally:
                 with PORTAUDIO_LOCK:
                     try:
-                        if self._stopped.is_set():
+                        if self._cancelled():
                             stream.abort()
                         else:
                             stream.stop()

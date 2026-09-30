@@ -271,6 +271,7 @@ class ClaudeBrain:
         self._unsupported: set[str] = set()
         self._without_api_key = False
         self._session: str | None = None
+        self._conversation = 0
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
         self.last_model = ""
@@ -292,6 +293,9 @@ class ClaudeBrain:
         return self._isolated and not ({"safe-mode", "system-prompt-file"} & self._unsupported)
 
     def new_conversation(self) -> None:
+        # Der Zähler sorgt dafür, dass eine gerade laufende Antwort die alte
+        # Unterhaltung nicht wieder zurückbringt.
+        self._conversation += 1
         self._session = None
 
     def cancel(self) -> None:
@@ -405,6 +409,8 @@ class ClaudeBrain:
     def _ask_chain(self, text: str, on_text, rescue_from: list[int]) -> Answer:
         overload_retry = True
         while True:
+            if self._cancelled:
+                raise Cancelled("abgebrochen")
             try:
                 answer = self._ask_once(text, on_text=on_text)
                 self._save_state()
@@ -424,7 +430,10 @@ class ClaudeBrain:
                     raise
                 overload_retry = False
                 self.notice("Claude ist überlastet, versuche es gleich noch einmal ...")
-                time.sleep(2)
+                for _ in range(20):
+                    if self._cancelled:
+                        break
+                    time.sleep(0.1)
             except (LoginError, BillingError):
                 if self._without_api_key or not _api_key_set():
                     raise
@@ -454,9 +463,12 @@ class ClaudeBrain:
         keep_session: bool = True,
     ) -> Answer:
         attempt = attempt or self.attempt
+        conversation = self._conversation
         resume = keep_session and self._session is not None
         session = self._session if resume else str(uuid.uuid4())
         for _ in range(4):
+            if self._cancelled:
+                raise Cancelled("abgebrochen")
             cmd = self.command(attempt, isolated, session if keep_session else None, resume)
             run = self._run(cmd, text, on_text)
             result, stderr = run.result, run.stderr
@@ -494,7 +506,7 @@ class ClaudeBrain:
                 self._session = None
             raise error(detail)
 
-        if keep_session:
+        if keep_session and conversation == self._conversation:
             self._session = result.get("session_id") or session
         # modelUsage enthält auch Hilfsmodelle (z. B. Haiku für Titel). Das eigentliche
         # Modell nennt Claude Code beim Start (init).

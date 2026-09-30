@@ -111,6 +111,8 @@ class Api:
         return {"ok": True, "reason": ""}
 
     def new_conversation(self) -> None:
+        # Erst die laufende Antwort stoppen, sonst landet sie im frisch geleerten Verlauf.
+        self._assistant.stop()
         self._assistant.new_conversation()
 
     def open_setup(self) -> bool:
