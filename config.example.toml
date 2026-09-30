@@ -49,10 +49,11 @@ beam_size = 1
 # "edge" = menschliche Microsoft-Stimme (gratis, braucht Internet)
 # "windows" = eingebaute Windows-Stimme (offline)
 engine = "edge"
-# Andere gute Stimmen: de-DE-KillianNeural, de-DE-FlorianMultilingualNeural
+# Andere gute Stimmen: de-AT-JonasNeural (am natürlichsten), de-CH-JanNeural, de-DE-KatjaNeural.
+# Am einfachsten in der Einrichtung auswählen, dort gibt es Hörproben.
 voice = "de-DE-ConradNeural"
-rate = "+5%"
-pitch = "-4Hz"
+rate = "-5%"
+pitch = "-8Hz"
 
 [answer]
 # Braucht Claude länger als so viele Sekunden, sagt Jarvis schon mal "Einen Moment, Sir".
@@ -135,4 +136,4 @@ token = ""
 
 [intern]
 # Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
-config_version = 2
+config_version = 3

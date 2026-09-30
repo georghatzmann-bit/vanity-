@@ -11,9 +11,11 @@ import hashlib
 import logging
 import os
 import queue
+import re
 import tempfile
 import threading
 import time
+import urllib.request
 import wave
 from pathlib import Path
 from typing import Callable
@@ -31,12 +33,14 @@ class TextToSpeech:
     CACHE_MAX_CHARS = 80
     CACHE_MAX_FILES = 400
 
-    def __init__(self, cfg: dict, cache_dir: Path | None = None) -> None:
+    def __init__(self, cfg: dict, cache_dir: Path | None = None, on_problem: Callable[[str], None] | None = None) -> None:
         self._engine = cfg.get("engine", "edge")
         self._voice = cfg.get("voice", "de-DE-ConradNeural")
         self._rate = cfg.get("rate", "+0%")
         self._pitch = cfg.get("pitch", "+0Hz")
         self._edge_failed_at = 0.0
+        self._reported_at = -1e9
+        self._on_problem = on_problem or (lambda _text: None)
         self._cache_dir = Path(cache_dir) if cache_dir else None
         self.used_edge = False  # kam der letzte Satz von der Microsoft-Stimme (oder der Ersatzstimme)?
 
@@ -61,8 +65,26 @@ class TextToSpeech:
                 return samples, rate
             except Exception as exc:
                 self._edge_failed_at = time.monotonic()
-                log.warning("Microsoft-Stimme nicht erreichbar (%s), nutze die Ersatzstimme.", exc)
+                reason = _short_reason(exc)
+                log.warning("Microsoft-Stimme nicht erreichbar (%s), nutze die Ersatzstimme.", reason)
+                if time.monotonic() - self._reported_at > 600:
+                    self._reported_at = time.monotonic()
+                    self._on_problem(
+                        f"Die Microsoft-Stimme ist gerade nicht erreichbar ({reason}). "
+                        "Jarvis spricht so lange mit der Ersatzstimme."
+                    )
+        return self._offline(text)
+
+    def _offline(self, text: str) -> tuple[np.ndarray, int]:
+        """Ohne Internet: erst Piper (natürliche Offline-Stimme), zuletzt die Windows-Stimme."""
         self.used_edge = False
+        voice = piper_voice()
+        if voice is not None:
+            try:
+                samples, rate = voice.synthesize(text)
+                return trim_silence(samples, rate), rate
+            except Exception as exc:
+                log.warning("Offline-Stimme (Piper): %s", exc)
         samples, rate = synthesize_windows(text)
         return trim_silence(samples, rate), rate
 
@@ -122,18 +144,61 @@ def trim_silence(samples: np.ndarray, rate: int, lead: float = 0.05, trail: floa
     return samples[start:end]
 
 
+def _short_reason(exc: Exception) -> str:
+    text = str(exc) or type(exc).__name__
+    if "CERTIFICATE" in text.upper() or "SSL" in text.upper():
+        return "Zertifikat wird nicht akzeptiert, oft wegen eines Virenscanners"
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) or "timeout" in text.lower():
+        return "keine Antwort"
+    return text.splitlines()[0][:120]
+
+
 def synthesize_edge(text: str, voice: str, rate: str = "+0%", pitch: str = "+0Hz") -> tuple[np.ndarray, int]:
     import miniaudio
 
     mp3 = asyncio.run(_edge_mp3(text, voice, rate, pitch))
-    decoded = miniaudio.decode(mp3, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1)
+    # Die Microsoft-Stimmen kommen mit 24 kHz. Ohne Angabe würde miniaudio auf 44,1 kHz umrechnen.
+    decoded = miniaudio.decode(mp3, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1, sample_rate=24000)
     return np.frombuffer(decoded.samples, dtype=np.int16).copy(), decoded.sample_rate
+
+
+_EDGE_SSL_READY = False
+
+
+def _edge_ssl() -> None:
+    """edge-tts vertraut nur den Zertifikaten aus certifi. Prüft ein Virenscanner HTTPS
+    (Avast, Kaspersky, ESET ...), scheitert dann jede Verbindung und Jarvis spräche immer
+    mit der Ersatzstimme. Darum zusätzlich den Zertifikatsspeicher von Windows nutzen."""
+    global _EDGE_SSL_READY
+    if _EDGE_SSL_READY:
+        return
+    _EDGE_SSL_READY = True
+    try:
+        import ssl
+
+        from edge_tts import communicate
+
+        context = ssl.create_default_context()  # unter Windows mit den Windows-Zertifikaten
+        try:
+            import certifi
+
+            context.load_verify_locations(cafile=certifi.where())
+        except Exception:
+            pass
+        if hasattr(communicate, "_SSL_CTX"):
+            communicate._SSL_CTX = context
+    except Exception as exc:
+        log.debug("Zertifikate für die Microsoft-Stimme: %s", exc)
 
 
 async def _edge_mp3(text: str, voice: str, rate: str, pitch: str) -> bytes:
     import edge_tts
 
-    communicate = edge_tts.Communicate(text, voice=voice, rate=rate, pitch=pitch)
+    _edge_ssl()
+    # Kurze Zeitlimits: Lieber schnell auf die Ersatzstimme als lange Stille.
+    communicate = edge_tts.Communicate(
+        text, voice=voice, rate=rate, pitch=pitch, connect_timeout=5, receive_timeout=12
+    )
     audio = bytearray()
     async for chunk in communicate.stream():
         if chunk["type"] == "audio":
@@ -174,6 +239,87 @@ def synthesize_windows(text: str) -> tuple[np.ndarray, int]:
             os.remove(path)
         except OSError:
             pass
+
+
+# ------------------------------------------------------------------ Offline-Stimme (Piper)
+
+PIPER_MODEL = "de_DE-thorsten-medium"
+PIPER_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/"
+_piper = None
+_piper_failed = False
+_piper_lock = threading.Lock()
+
+
+def piper_dir() -> Path:
+    """Die Offline-Stimme liegt neben der Python-Umgebung, nicht im Jarvis-Ordner:
+    So übersteht sie ein neues Entpacken von Jarvis."""
+    base = os.environ.get("LOCALAPPDATA")
+    if base:
+        return Path(base) / "Jarvis" / "stimmen"
+    from .config import STATE_DIR
+
+    return STATE_DIR / "stimmen"
+
+
+def ensure_piper_model() -> bool:
+    """Lädt die Offline-Stimme einmalig herunter (63 MB). Ohne piper-tts: nichts tun."""
+    try:
+        import piper  # noqa: F401
+    except Exception:
+        return False
+    folder = piper_dir()
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        for name, minimum in ((f"{PIPER_MODEL}.onnx.json", 1000), (f"{PIPER_MODEL}.onnx", 50_000_000)):
+            target = folder / name
+            if target.exists() and target.stat().st_size >= minimum:
+                continue
+            part = target.with_name(target.name + ".part")
+            with urllib.request.urlopen(PIPER_URL + name, timeout=30) as response, open(part, "wb") as out:
+                while chunk := response.read(1 << 16):
+                    out.write(chunk)
+            if part.stat().st_size < minimum:
+                raise OSError(f"{name} ist unvollständig")
+            os.replace(part, target)
+            log.info("Offline-Stimme geladen: %s", target)
+        return True
+    except Exception as exc:
+        log.warning("Offline-Stimme nicht geladen: %s", exc)
+        return False
+
+
+class _PiperVoice:
+    def __init__(self, model: Path) -> None:
+        from piper import PiperVoice
+
+        self._voice = PiperVoice.load(str(model))
+        self._lock = threading.Lock()
+
+    def synthesize(self, text: str) -> tuple[np.ndarray, int]:
+        # espeak liest das englische "Sir" als "Sieh-er". "Sörr" klingt richtig.
+        text = re.sub(r"\bSir\b", "Sörr", text)
+        with self._lock:
+            chunks = list(self._voice.synthesize(text))
+        if not chunks:
+            raise RuntimeError("keine Audiodaten")
+        return np.concatenate([c.audio_int16_array for c in chunks]), int(chunks[0].sample_rate)
+
+
+def piper_voice():
+    """Die geladene Offline-Stimme oder None (nicht installiert oder noch nicht heruntergeladen)."""
+    global _piper, _piper_failed
+    with _piper_lock:
+        if _piper is not None or _piper_failed:
+            return _piper
+        model = piper_dir() / f"{PIPER_MODEL}.onnx"
+        if not model.exists() or not model.with_name(model.name + ".json").exists():
+            return None
+        try:
+            _piper = _PiperVoice(model)
+        except Exception as exc:
+            log.warning("Offline-Stimme lässt sich nicht laden: %s", exc)
+            _piper_failed = True
+        return _piper
 
 
 def _com_ready() -> None:

@@ -46,9 +46,11 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
+    # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
+    3: [("tts", "rate", "+5%", "-5%"), ("tts", "pitch", "-4Hz", "-8Hz")],
 }
 
 

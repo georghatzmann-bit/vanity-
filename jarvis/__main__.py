@@ -54,7 +54,7 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     if not silent:
         from .tts import Speaker, TextToSpeech
 
-        tts = TextToSpeech(cfg["tts"], STATE_DIR / "stimmen")
+        tts = TextToSpeech(cfg["tts"], STATE_DIR / "stimmen", on_problem=lambda text: ui.toast(text, "error"))
         speaker = Speaker(
             tts.synthesize,
             on_level=ui.level,
@@ -66,6 +66,15 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         threading.Thread(
             target=tts.prepare, args=(["Jarvis ist online, Sir.", *FILLERS],), name="jarvis-stimmen", daemon=True
         ).start()
+
+        def offline_voice() -> None:
+            # Die Offline-Ersatzstimme einmalig im Hintergrund holen (63 MB), wenn der Start durch ist.
+            time.sleep(30)
+            from .tts import ensure_piper_model
+
+            ensure_piper_model()
+
+        threading.Thread(target=offline_voice, name="jarvis-offline-stimme", daemon=True).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
     assistant_ref.append(assistant)
 

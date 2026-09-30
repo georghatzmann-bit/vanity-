@@ -97,6 +97,14 @@ class SettingsTest(SetupTestCase):
         self.assertEqual(self.api.wake_sensitive(False)["threshold"], 0.5)
         self.assertEqual(self.saved()["wakeword"]["threshold"], 0.5)
 
+    def test_only_voices_that_speak_clean_german(self):
+        ids = [v["id"] for v in setup_wizard.VOICES]
+        self.assertFalse([i for i in ids if "Multilingual" in i], "Multilingual-Stimmen sprechen kurze Antworten englisch aus")
+        with mock.patch.object(self.api, "_reload"):
+            self.assertTrue(self.api.voice_save("de-AT-JonasNeural")["ok"])
+        tts = self.saved()["tts"]
+        self.assertEqual((tts["voice"], tts["rate"], tts["pitch"]), ("de-AT-JonasNeural", "+0%", "+0Hz"))
+
     def test_hello_describes_the_start(self):
         info = self.api.hello()
         self.assertTrue(info["first_run"])
@@ -251,11 +259,23 @@ class UpgradeConfigTest(unittest.TestCase):
             self.assertEqual(upgrade_config(path), ["listen.silence_seconds = 0.9"])
             data = tomllib.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(data["listen"]["silence_seconds"], 0.9)
-            self.assertEqual(data["intern"]["config_version"], 2)
+            from jarvis.config import CONFIG_VERSION
+
+            self.assertEqual(data["intern"]["config_version"], CONFIG_VERSION)
             # Wer danach selbst 1.2 einträgt, behält das.
             save_setting("listen", "silence_seconds", 1.2, path)
             self.assertEqual(upgrade_config(path), [])
             self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["listen"]["silence_seconds"], 1.2)
+
+    def test_old_conrad_settings_get_the_more_natural_ones(self):
+        from jarvis.config import EXAMPLE_PATH, upgrade_config
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "config.toml"
+            text = EXAMPLE_PATH.read_text(encoding="utf-8").replace('rate = "-5%"', 'rate = "+5%"')
+            text = text.replace('pitch = "-8Hz"', 'pitch = "-4Hz"')
+            path.write_text(text.split("[intern]")[0], encoding="utf-8")
+            self.assertEqual(upgrade_config(path), ['tts.rate = -5%', 'tts.pitch = -8Hz'])
 
     def test_changed_value_is_kept(self):
         from jarvis.config import EXAMPLE_PATH, upgrade_config

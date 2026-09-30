@@ -22,13 +22,20 @@ DONE_MARKER = STATE_DIR / "einrichtung-fertig.txt"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 NEW_CONSOLE = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
 
+# Nur Stimmen, die Deutsch sauber aussprechen. Die "Multilingual"-Stimmen (Florian,
+# Seraphina) sprechen kurze Antworten oft englisch aus ("Earl Digt" statt "Erledigt").
+# rate/pitch: jeweils die natürlichste Einstellung (gemessen).
 VOICES = [
-    {"id": "de-DE-ConradNeural", "name": "Conrad", "desc": "Tief und ruhig, der klassische Butler (Standard)", "gender": "m"},
-    {"id": "de-DE-KillianNeural", "name": "Killian", "desc": "Jünger und freundlich", "gender": "m"},
-    {"id": "de-DE-FlorianMultilingualNeural", "name": "Florian", "desc": "Sehr natürlich, klingt fast wie ein Mensch", "gender": "m"},
-    {"id": "de-AT-JonasNeural", "name": "Jonas", "desc": "Mit österreichischem Klang", "gender": "m"},
-    {"id": "de-DE-SeraphinaMultilingualNeural", "name": "Seraphina", "desc": "Warm und natürlich", "gender": "w"},
-    {"id": "de-DE-KatjaNeural", "name": "Katja", "desc": "Klar und sachlich", "gender": "w"},
+    {"id": "de-DE-ConradNeural", "name": "Conrad", "desc": "Tief und ruhig, der klassische Butler",
+     "gender": "m", "tags": ["Hochdeutsch", "Standard"], "recommended": True, "rate": "-5%", "pitch": "-8Hz"},
+    {"id": "de-AT-JonasNeural", "name": "Jonas", "desc": "Am natürlichsten und am schnellsten",
+     "gender": "m", "tags": ["Österreich"], "rate": "+0%", "pitch": "+0Hz"},
+    {"id": "de-CH-JanNeural", "name": "Jan", "desc": "Sehr natürlich und freundlich",
+     "gender": "m", "tags": ["Schweiz"], "rate": "+0%", "pitch": "+0Hz"},
+    {"id": "de-DE-KatjaNeural", "name": "Katja", "desc": "Klar und freundlich",
+     "gender": "w", "tags": ["Hochdeutsch", "weiblich"], "rate": "+0%", "pitch": "+0Hz"},
+    {"id": "de-AT-IngridNeural", "name": "Ingrid", "desc": "Warm und ruhig",
+     "gender": "w", "tags": ["Österreich", "weiblich"], "rate": "+0%", "pitch": "+0Hz"},
 ]
 PREVIEW_TEXT = "Guten Tag, Sir. Alle Systeme sind bereit. Womit darf ich dienen?"
 
@@ -438,9 +445,11 @@ class SetupApi:
     def _speech(self, voice: str):
         from .tts import TextToSpeech
 
+        known = next((v for v in VOICES if v["id"] == voice), {})
         tts = self._cfg["tts"]
         return TextToSpeech(
-            {"engine": "edge", "voice": voice, "rate": tts.get("rate", "+0%"), "pitch": tts.get("pitch", "+0Hz")},
+            {"engine": "edge", "voice": voice, "rate": known.get("rate", tts.get("rate", "+0%")),
+             "pitch": known.get("pitch", tts.get("pitch", "+0Hz"))},
             STATE_DIR / "stimmen",
         )
 
@@ -467,7 +476,15 @@ class SetupApi:
             self._playing.release()
 
     def voice_save(self, voice) -> dict:
-        return self._save("tts", "voice", str(voice))
+        voice = str(voice)
+        known = next((v for v in VOICES if v["id"] == voice), None)
+        if known:
+            # Tempo und Tonhöhe passend zur Stimme, sonst klingt z. B. Jonas zu tief.
+            for key in ("rate", "pitch"):
+                result = self._save("tts", key, known[key])
+                if not result["ok"]:
+                    return result
+        return self._save("tts", "voice", voice)
 
     # ------------------------------------------------------------ Wohnort
 

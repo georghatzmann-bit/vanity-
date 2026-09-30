@@ -334,6 +334,36 @@ class VoiceCacheTest(unittest.TestCase):
         self.assertEqual(rate, 24000)
 
 
+class OfflineVoiceTest(unittest.TestCase):
+    def test_piper_comes_before_the_windows_voice(self):
+        from jarvis import tts
+
+        class FakePiper:
+            def synthesize(self, text):
+                return np.full(2205, 8000, np.int16), 22050
+
+        problems = []
+        speech = tts.TextToSpeech({"voice": "de-DE-ConradNeural"}, on_problem=problems.append)
+        with mock.patch.object(tts, "synthesize_edge", side_effect=OSError("SSL: CERTIFICATE_VERIFY_FAILED")), \
+                mock.patch.object(tts, "piper_voice", return_value=FakePiper()), \
+                mock.patch.object(tts, "synthesize_windows") as windows:
+            samples, rate = speech.synthesize("Sehr wohl, Sir.")
+        self.assertEqual(rate, 22050)
+        windows.assert_not_called()
+        self.assertFalse(speech.used_edge)
+        self.assertIn("Virenscanner", problems[0])
+
+    def test_windows_voice_is_the_last_resort(self):
+        from jarvis import tts
+
+        speech = tts.TextToSpeech({"voice": "de-DE-ConradNeural"})
+        with mock.patch.object(tts, "synthesize_edge", side_effect=TimeoutError()), \
+                mock.patch.object(tts, "piper_voice", return_value=None), \
+                mock.patch.object(tts, "synthesize_windows", return_value=(np.full(100, 5000, np.int16), 16000)):
+            _samples, rate = speech.synthesize("Hallo.")
+        self.assertEqual(rate, 16000)
+
+
 class ChimeTest(unittest.TestCase):
     def test_chime_is_audible_after_conversion(self):
         from jarvis.tts import chime_samples
