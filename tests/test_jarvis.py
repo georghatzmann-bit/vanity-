@@ -11,7 +11,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from jarvis.audio import FRAME_SAMPLES, CommandRecorder, resample, resolve_device  # noqa: E402
-from jarvis.brain import BrainError, ClaudeBrain  # noqa: E402
+from jarvis.brain import BrainError, ClaudeBrain, RefusalError  # noqa: E402
 from jarvis.config import load_config  # noqa: E402
 from jarvis.mute import MUTE_PHRASES, MuteSwitch  # noqa: E402
 
@@ -163,6 +163,13 @@ FAKE_CLAUDE = textwrap.dedent(
         f.write(json.dumps({"args": args, "prompt": prompt}) + "\\n")
     if prompt == "kaputt":
         print(json.dumps({"is_error": True, "result": "Limit erreicht"}))
+    elif prompt == "abgelehnt":
+        print(json.dumps({"type": "result", "is_error": True, "result":
+            "We're improving these safeguards. Claude Code can't respond to your last message with Opus."}))
+        sys.exit(1)
+    elif prompt == "absturz":
+        print("Traceback: irgendwas", file=sys.stderr)
+        sys.exit(2)
     else:
         print(json.dumps({"is_error": False, "result": "Sehr wohl, Sir. " + prompt}))
     """
@@ -200,6 +207,7 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertNotIn("--continue", first["args"])
         self.assertIn("--continue", second["args"])
         self.assertIn("Bash(rm:*)", first["args"])
+        self.assertEqual(first["args"][first["args"].index("--model") + 1], "sonnet")
 
     @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
     def test_new_conversation_drops_continue(self):
@@ -207,6 +215,19 @@ class ClaudeBrainTest(unittest.TestCase):
         self.brain.new_conversation()
         self.brain.ask("neu")
         self.assertNotIn("--continue", self.calls()[-1]["args"])
+
+    @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+    def test_refusal_is_recognised_and_starts_fresh(self):
+        self.brain.ask("hallo")
+        with self.assertRaises(RefusalError):
+            self.brain.ask("abgelehnt")
+        self.brain.ask("weiter")
+        self.assertNotIn("--continue", self.calls()[-1]["args"])
+
+    @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+    def test_crash_without_json_shows_stderr(self):
+        with self.assertRaisesRegex(BrainError, "Traceback: irgendwas"):
+            self.brain.ask("absturz")
 
     @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
     def test_error_result_raises(self):

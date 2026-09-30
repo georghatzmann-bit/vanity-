@@ -15,7 +15,7 @@ import sys
 import time
 import warnings
 
-from .brain import BrainError, ClaudeBrain
+from .brain import BrainError, ClaudeBrain, RefusalError
 from .config import HOME_DIR, load_config
 from .mute import MUTE_PHRASES, MuteSwitch, register_hotkey
 
@@ -40,6 +40,9 @@ def handle(text: str, brain: ClaudeBrain) -> str:
         return "Sehr wohl, Sir. Wir fangen von vorne an."
     try:
         return brain.ask(text)
+    except RefusalError as exc:
+        log.warning("Claude hat die Anfrage abgelehnt: %s", exc)
+        return "Verzeihung, Sir, darauf darf ich so nicht antworten. Versuchen Sie es bitte mit anderen Worten."
     except BrainError as exc:
         log.error("%s", exc)
         return "Verzeihung, Sir, da ist etwas schiefgelaufen. Details stehen im Fenster."

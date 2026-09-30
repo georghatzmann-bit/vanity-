@@ -46,6 +46,9 @@ pitch = "-4Hz"
 [brain]
 # Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
 claude_path = ""
+# Welches Claude-Modell Jarvis nutzt: "sonnet" (schnell, schont dein Pro-Limit),
+# "opus" (am klügsten, aber langsamer) oder "haiku" (am schnellsten).
+model = "sonnet"
 # Maximale Wartezeit auf Claude (Sekunden).
 timeout_seconds = 180
 # Werkzeuge, die Claude ohne Nachfrage nutzen darf.
