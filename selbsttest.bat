@@ -7,5 +7,8 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-".venv\Scripts\python.exe" -m jarvis --mic
+echo Jarvis prueft jetzt alles. Das dauert ein bis zwei Minuten.
+echo.
+".venv\Scripts\python.exe" -m jarvis --selftest %*
+echo.
 pause

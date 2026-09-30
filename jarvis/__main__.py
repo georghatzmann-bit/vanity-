@@ -1,79 +1,270 @@
 """Startet Jarvis.
 
-    python -m jarvis             Sprachmodus: "Hey Jarvis" sagen, dann den Befehl
-    python -m jarvis --text      Tippmodus zum Testen ohne Mikrofon
-    python -m jarvis --silent    Antworten nur anzeigen, nicht vorlesen
-    python -m jarvis --mic       Mikrofon auswählen und speichern (mikrofon.bat)
-    python -m jarvis --mic-test  Mikrofone anzeigen und Pegel + Wake Word live testen
+    python -m jarvis               Arc-Reactor-Fenster + Sprachsteuerung (start.bat)
+    python -m jarvis --konsole     nur Konsolenfenster, ohne Oberfläche
+    python -m jarvis --text        Tippmodus zum Testen ohne Mikrofon
+    python -m jarvis --silent      Antworten nur anzeigen, nicht vorlesen
+    python -m jarvis --mic         Mikrofon auswählen und speichern (mikrofon.bat)
+    python -m jarvis --mic-test    Mikrofone anzeigen und Pegel + Wake Word live testen
+    python -m jarvis --claude-test prüfen, welches Claude-Modell antwortet
+    python -m jarvis --selftest    alles prüfen (selbsttest.bat)
+    python -m jarvis --autostart an|aus
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
-import re
+import os
 import sys
+import threading
 import time
-import warnings
 
-from .brain import BrainError, ClaudeBrain, RefusalError
-from .config import HOME_DIR, load_config
-from .mute import MUTE_PHRASES, MuteSwitch, register_hotkey
+from . import __version__
+from .assistant import Assistant
+from .brain import BrainError, ClaudeBrain
+from .config import HOME_DIR, LOG_DIR, STATE_DIR, load_config
+from .logsetup import setup_logging
+from .mute import MuteSwitch, register_hotkey
+from .persona import build_persona
+from .reminders import ReminderStore
+from .ui import ConsoleUi, MultiUi, Ui
+from .voice import PRIVACY_HINT, Sounds, VoiceLoop
 
 log = logging.getLogger("jarvis")
 
-RESET_PHRASES = re.compile(r"\b(neue unterhaltung|neues gespräch|vergiss alles)\b", re.I)
 
-# Ab diesem Wert zeigt Jarvis "fast erkannt" an, damit man die Schwelle einstellen kann.
-NEAR_MISS = 0.2
+# ---------------------------------------------------------------------- Aufbau
 
-PRIVACY_HINT = (
-    "\n!! Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff:\n"
-    "   Einstellungen > Datenschutz und Sicherheit > Mikrofon >\n"
-    '   "Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten.\n'
-    "   Oder es ist das falsche Mikrofon: mikrofon.bat starten und das richtige wählen.\n"
-)
-
-
-def handle(text: str, brain: ClaudeBrain) -> str:
-    if RESET_PHRASES.search(text):
-        brain.new_conversation()
-        return "Sehr wohl, Sir. Wir fangen von vorne an."
+def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
+    mute = MuteSwitch()
+    reminders = ReminderStore(STATE_DIR / "erinnerungen.json")
     try:
-        return brain.ask(text)
-    except RefusalError as exc:
-        log.warning("Alle Modelle haben abgelehnt: %s", exc)
-        return (
-            "Verzeihung, Sir, Claude lehnt das gerade ab. "
-            "Starten Sie bitte einmal start.bat --claude-test, dann sehen wir, woran es liegt."
-        )
+        persona = build_persona(HOME_DIR, STATE_DIR, cfg)
+        brain = ClaudeBrain(cfg["brain"], HOME_DIR, STATE_DIR, persona=persona)
     except BrainError as exc:
         log.error("%s", exc)
-        return "Verzeihung, Sir, da ist etwas schiefgelaufen. Details stehen im Fenster."
+        ui.toast(str(exc), "error")
+        brain = None
+
+    speaker = None
+    assistant_ref: list[Assistant] = []
+    if not silent:
+        from .tts import Speaker, TextToSpeech
+
+        speaker = Speaker(
+            TextToSpeech(cfg["tts"]).synthesize,
+            on_level=ui.level,
+            on_speaking=lambda value: assistant_ref and assistant_ref[0].set_speaking(value),
+        )
+    assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
+    assistant_ref.append(assistant)
+
+    def on_mute(muted: bool) -> None:
+        assistant.update_state()
+        ui.config(muted=muted)
+
+    mute.on_change(on_mute)
+    return assistant
 
 
-def run_text(brain: ClaudeBrain, speak) -> None:
+def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.Event) -> None:
+    """Erinnerungen, Systemanzeige und (falls eingeschaltet) der Web-Eingang für Home Assistant."""
+
+    def reminders() -> None:
+        while not stopped.wait(5):
+            try:
+                assistant.check_reminders()
+            except Exception as exc:
+                log.debug("Erinnerungen: %s", exc)
+
+    threading.Thread(target=reminders, name="jarvis-erinnerungen", daemon=True).start()
+
+    try:
+        import psutil
+
+        def stats() -> None:
+            psutil.cpu_percent(interval=None)
+            while not stopped.wait(2):
+                ui.stats(psutil.cpu_percent(interval=None), psutil.virtual_memory().percent)
+
+        threading.Thread(target=stats, name="jarvis-stats", daemon=True).start()
+    except ImportError:
+        pass
+
+    place = str(cfg.get("ich", {}).get("ort", "")).strip()
+    if place:
+        from .weather import Weather
+
+        def weather() -> None:
+            source = Weather(place)
+            wait = 1.0
+            while not stopped.wait(wait):
+                try:
+                    now = source.current()
+                    parts = [f"{now['temp']}°" if now["temp"] is not None else "", now["text"], now["place"]]
+                    ui.config(weather=" · ".join(p for p in parts if p))
+                    wait = 30 * 60
+                except LookupError as exc:
+                    log.warning("Wetter: %s", exc)
+                    ui.config(weather="")
+                    return
+                except Exception as exc:
+                    log.debug("Wetter: %s", exc)
+                    wait = 5 * 60
+
+        threading.Thread(target=weather, name="jarvis-wetter", daemon=True).start()
+
+    server_cfg = cfg.get("server", {})
+    if server_cfg.get("enabled"):
+        from .homeassistant import HomeAssistant
+        from .server import CommandServer
+
+        try:
+            ha = HomeAssistant(cfg.get("homeassistant", {}))
+            url = CommandServer(server_cfg, assistant, ha if ha.configured else None).start()
+            ui.message("info", f"Web-Eingang für Home Assistant läuft: {url}")
+        except Exception as exc:
+            log.error("Web-Eingang startet nicht: %s", exc)
+            ui.toast(f"Web-Eingang startet nicht: {exc}", "error")
+
+
+def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> VoiceLoop | None:
+    """Lädt Mikrofon, Wake Word und Spracherkennung. Bei Problemen None (Tippen geht trotzdem)."""
+    from .audio import Microphone, WakeWord, friendly_device_error
+
+    try:
+        mic = Microphone(cfg["audio"]["input_device"])
+    except Exception as exc:
+        log.error("Mikrofon: %s", exc)
+        ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Starte mikrofon.bat und wähle dein Mikrofon.", "error")
+        return None
+    ui.config(mic=mic.name)
+    hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? mikrofon.bat starten)")
+    ui.message("info", "Lade Spracherkennung (beim ersten Start wird das Modell heruntergeladen) ...")
+    try:
+        from .stt import SpeechToText
+
+        stt = SpeechToText(cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"])
+        wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
+    except Exception as exc:
+        log.exception("Spracherkennung lädt nicht")
+        ui.toast(f"Spracherkennung lädt nicht: {exc}. selbsttest.bat zeigt mehr.", "error")
+        return None
+    return VoiceLoop(cfg, mic, wake, stt, assistant, assistant.mute, Sounds(), hotkey, hints)
+
+
+def register_mute_hotkey(cfg: dict, assistant: Assistant) -> str:
+    hotkey = cfg["mute"]["hotkey"]
+    if hotkey and register_hotkey(hotkey, assistant.mute.toggle):
+        return hotkey.upper()
+    return "(kein Tastenkürzel)"
+
+
+# ---------------------------------------------------------------------- Modi
+
+def run_text(assistant: Assistant) -> None:
     print("Jarvis ist bereit. Tippe deinen Befehl ('exit' zum Beenden).")
     while True:
         try:
             text = input("\nDu: ").strip()
         except (EOFError, KeyboardInterrupt):
             break
-        if text.lower() in {"exit", "quit"}:
+        if text.lower() in {"exit", "quit", "ende"}:
             break
-        if not text:
-            continue
-        answer = handle(text, brain)
-        print(f"Jarvis{model_tag(brain)}: {answer}")
-        speak(answer)
+        if text:
+            assistant.handle(text)
 
 
-def model_tag(brain) -> str:
-    model = getattr(brain, "last_model", "")
-    return f" [{model}]" if model else ""
+def run_console_voice(cfg: dict, console: ConsoleUi, assistant: Assistant) -> None:
+    hotkey = register_mute_hotkey(cfg, assistant)
+    voice = load_voice(cfg, assistant, assistant.ui, hotkey, print)
+    if voice is None:
+        print("\nOhne Mikrofon geht es im Tippmodus weiter.")
+        console.show_user = False
+        run_text(assistant)
+        return
+    console.idle_hint = f'\nSag "Hey Jarvis" ...  ({hotkey} = stumm/laut, Strg+C = beenden)'
+    assistant.say("Jarvis ist online, Sir.")
+    try:
+        voice.run()
+    except Exception as exc:
+        log.exception("Sprachschleife abgestürzt")
+        print(f"\nDie Sprachsteuerung ist ausgefallen: {exc}\nDetails in logs\\jarvis.log. Es geht im Tippmodus weiter.")
+        console.show_user = False
+        run_text(assistant)
+    finally:
+        voice.stopped.set()
 
 
-def run_claude_test(brain: ClaudeBrain) -> None:
+def run_gui(cfg: dict, args) -> int:
+    from .gui.app import Api, GuiBridge, Window
+    from .tray import Tray
+
+    bridge = GuiBridge()
+    console = ConsoleUi()
+    ui = MultiUi(console, bridge)
+    assistant = build_core(cfg, ui, args.silent)
+    stopped = threading.Event()
+    hotkey = register_mute_hotkey(cfg, assistant)
+    ui.config(hotkey=hotkey, version=__version__, muted=False)
+    window: Window
+    tray_ref: list[Tray] = []
+    voice_ref: list[VoiceLoop] = []
+
+    def quit_all() -> None:
+        stopped.set()
+        window.destroy()
+
+    def background() -> None:
+        start_services(cfg, assistant, ui, stopped)
+        gui_cfg = cfg.get("gui", {})
+        if gui_cfg.get("tray", True):
+            tray = Tray(window.show, assistant.mute.toggle, quit_all, lambda: assistant.mute.muted)
+            if tray.start():
+                tray_ref.append(tray)
+                assistant.mute.on_change(tray.set_muted)
+                window.allow_close = not gui_cfg.get("close_to_tray", False)
+        if assistant.brain is None:
+            ui.message("info", "Claude Code fehlt. selbsttest.bat sagt, was zu tun ist.")
+        voice = load_voice(cfg, assistant, ui, hotkey, lambda _text: None)
+        if voice is None:
+            ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis unten etwas schreiben.")
+            assistant.update_state()
+            return
+        voice_ref.append(voice)
+        console.idle_hint = f'Sag "Hey Jarvis" ...  ({hotkey} = stumm/laut)'
+        ui.message("info", f'Bereit. Sag "Hey Jarvis" oder schreib unten. {hotkey} schaltet das Mikrofon stumm.')
+        assistant.say("Jarvis ist online, Sir.")
+        assistant.update_state()
+        if stopped.is_set():
+            return
+        try:
+            voice.run()
+        except Exception as exc:
+            log.exception("Sprachschleife abgestürzt")
+            ui.toast(f"Sprachsteuerung gestoppt: {exc}", "error")
+
+    def on_closed() -> None:
+        stopped.set()
+        for voice in voice_ref:
+            voice.stopped.set()
+        for tray in tray_ref:
+            tray.stop()
+        assistant.stop()
+
+    window = Window(Api(bridge, assistant, assistant.mute), background, on_closed, cfg.get("gui", {}))
+    print("Jarvis-Fenster wird geöffnet. Dieses Konsolenfenster zeigt nebenbei das Gespräch.")
+    window.start()
+    return 0
+
+
+def run_claude_test(cfg: dict) -> int:
+    try:
+        brain = ClaudeBrain(cfg["brain"], HOME_DIR, STATE_DIR, persona=build_persona(HOME_DIR, STATE_DIR, cfg))
+    except BrainError as exc:
+        print(exc)
+        return 1
     print('Teste, ob Claude auf "hi" antwortet. Das dauert etwa eine Minute ...\n')
     for model, mode, result in brain.diagnose("hi"):
         print(f"  {model:<8} {mode:<26} {result}")
@@ -82,105 +273,7 @@ def run_claude_test(brain: ClaudeBrain) -> None:
         '"mit deinen Einstellungen" nutzt deine Skills, Plugins und CLAUDE.md-Dateien,\n'
         '"ohne Erweiterungen" ist so, wie Jarvis Claude normalerweise startet.'
     )
-
-
-def voice_loop(cfg, mic, wake, stt, brain, speak, mute: MuteSwitch, sounds, hotkey: str) -> None:
-    """Die Hauptschleife im Sprachmodus. Läuft, bis Strg+C gedrückt wird."""
-    from .audio import record_command
-
-    prompt = f'\nSag "Hey Jarvis" ...  ({hotkey} = stumm/laut, Strg+C = beenden)'
-    print(prompt)
-    mic.start()
-    warned_silence = False
-    last_hint = 0.0
-    while True:
-        if mute.muted:
-            mic.stop()
-            sounds.muted()
-            print(f"\n[STUMM] Mikrofon ist aus. {hotkey} drücken, um es wieder einzuschalten.")
-            while not mute.wait_until_unmuted(timeout=0.5):
-                pass
-            sounds.unmuted()
-            print("[LAUT] Ich höre wieder zu.")
-            mic.start()
-            wake.reset()
-            print(prompt)
-            continue
-
-        frame = mic.read()
-        if not warned_silence and mic.dead_silent:
-            print(PRIVACY_HINT)
-            warned_silence = True
-
-        score = wake.score(frame)
-        if score < wake.threshold:
-            now = time.monotonic()
-            if score >= NEAR_MISS and now - last_hint > 2:
-                print(f"  (fast erkannt: {score:.2f}, nötig sind {wake.threshold:.2f})")
-                last_hint = now
-            continue
-
-        sounds.listening()
-        print("Ich höre ...")
-        audio = record_command(mic, cfg["listen"])
-        if audio is None:
-            print("Nichts gehört. Sprich direkt nach dem Ton.")
-        else:
-            text = stt.transcribe(audio)
-            if not text:
-                print("Nichts verstanden.")
-            elif MUTE_PHRASES.search(text):
-                print(f"\nDu: {text}")
-                speak(f"Sehr wohl, Sir. Mit {hotkey} hole ich Sie wieder zurück.")
-                mute.mute()
-            else:
-                print(f"\nDu: {text}")
-                answer = handle(text, brain)
-                print(f"Jarvis{model_tag(brain)}: {answer}")
-                speak(answer)
-        wake.reset()
-        mic.drain()
-        if not mute.muted:
-            print(prompt)
-
-
-class Sounds:
-    def listening(self) -> None:
-        from .tts import chime
-
-        chime((880, 1320))
-
-    def muted(self) -> None:
-        from .tts import chime
-
-        chime((660, 440))
-
-    def unmuted(self) -> None:
-        from .tts import chime
-
-        chime((440, 660, 880))
-
-
-def run_voice(cfg: dict, brain: ClaudeBrain, speak) -> None:
-    from .audio import Microphone, WakeWord
-    from .stt import SpeechToText
-
-    mic = Microphone(cfg["audio"]["input_device"])
-    print(f"Mikrofon: {mic.name}   (falsches Mikrofon? mikrofon.bat starten)")
-    print("Lade Spracherkennung (beim ersten Start wird das Modell heruntergeladen) ...")
-    stt = SpeechToText(cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"])
-    wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
-
-    mute = MuteSwitch()
-    hotkey = cfg["mute"]["hotkey"]
-    if not register_hotkey(hotkey, mute.toggle):
-        hotkey = "(kein Tastenkürzel)"
-
-    speak("Jarvis ist online, Sir.")
-    try:
-        voice_loop(cfg, mic, wake, stt, brain, speak, mute, Sounds(), hotkey.upper())
-    finally:
-        mic.stop()
+    return 0
 
 
 def run_mic_test(cfg: dict) -> None:
@@ -212,33 +305,59 @@ def run_mic_test(cfg: dict) -> None:
                 flush=True,
             )
             if not warned and mic.dead_silent:
-                print("\n" + PRIVACY_HINT)
+                print("\n\n!! " + PRIVACY_HINT + "\n")
                 warned = True
 
+
+def run_autostart(value: str) -> int:
+    from . import autostart
+
+    try:
+        if value in ("an", "ein", "on"):
+            path = autostart.enable()
+            print(f"Jarvis startet ab jetzt mit Windows. (Eintrag: {path})")
+        else:
+            removed = autostart.disable()
+            print("Autostart ist aus." if removed else "Autostart war schon aus.")
+        return 0
+    except Exception as exc:
+        print(f"Autostart ging nicht: {exc}")
+        return 1
+
+
+# ---------------------------------------------------------------------- Start
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="jarvis", description="Dein persönlicher Jarvis.")
     parser.add_argument("--text", action="store_true", help="Tippen statt sprechen")
+    parser.add_argument("--konsole", "--no-gui", action="store_true", help="ohne Fenster, nur Konsole")
     parser.add_argument("--silent", action="store_true", help="Antworten nicht vorlesen")
     parser.add_argument("--mic", action="store_true", help="Mikrofon auswählen und speichern")
     parser.add_argument("--mic-test", action="store_true", help="Mikrofon und Wake Word testen")
     parser.add_argument("--claude-test", action="store_true", help="Prüfen, welches Claude-Modell antwortet")
+    parser.add_argument("--selftest", "--selbsttest", action="store_true", help="Alles prüfen")
+    parser.add_argument("--schnell", action="store_true", help="Selbsttest ohne Töne und mit kurzem Mikrofontest")
+    parser.add_argument("--autostart", choices=["an", "aus", "ein", "on", "off"], help="Mit Windows starten")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(levelname)s: %(message)s",
-    )
-    if not args.verbose:
-        # Die Download-Meldungen von Hugging Face sind nur Lärm.
-        for name in ("httpx", "huggingface_hub", "urllib3", "filelock"):
-            logging.getLogger(name).setLevel(logging.ERROR)
-        warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    log_file = setup_logging(LOG_DIR, args.verbose)
+    log.info("Jarvis %s startet (%s)", __version__, " ".join(sys.argv[1:]) or "Standard")
 
-    cfg = load_config()
+    try:
+        cfg = load_config()
+    except Exception as exc:
+        print(f"config.toml ist fehlerhaft: {exc}\nTipp: Tippfehler korrigieren oder config.toml löschen, setup.bat legt sie neu an.")
+        return 1
+
+    if args.autostart:
+        return run_autostart(args.autostart)
+
+    if args.selftest:
+        from . import selftest
+
+        report = selftest.run(cfg, quick=args.schnell)
+        return 1 if report.failed else 0
 
     if args.mic:
         from . import mic_setup
@@ -256,32 +375,42 @@ def main(argv: list[str] | None = None) -> int:
             print()
         return 0
 
-    try:
-        brain = ClaudeBrain(cfg["brain"], HOME_DIR)
-    except BrainError as exc:
-        print(exc)
-        return 1
-
     if args.claude_test:
-        run_claude_test(brain)
-        return 0
+        return run_claude_test(cfg)
 
-    if args.silent:
-        def speak(_text: str) -> None:
-            pass
-    else:
-        from .tts import TextToSpeech
+    if not args.text and not args.konsole and cfg.get("gui", {}).get("enabled", True):
+        from .gui.app import webview_available
 
-        speak = TextToSpeech(cfg["tts"]).say
+        ok, reason = webview_available()
+        if ok:
+            try:
+                code = run_gui(cfg, args)
+            except Exception:
+                log.exception("Oberfläche abgestürzt")
+                print(f"Die Oberfläche ist abgestürzt. Details in {log_file}.")
+                code = 1
+            logging.shutdown()
+            # Hintergrund-Threads (Mikrofon, Tray) sollen das Beenden nicht aufhalten.
+            os._exit(code)
+        print(f"Oberfläche nicht verfügbar ({reason}), Jarvis läuft im Konsolenfenster.")
 
+    console = ConsoleUi()
+    assistant = build_core(cfg, console, args.silent)
+    stopped = threading.Event()
+    start_services(cfg, assistant, console, stopped)
     try:
         if args.text:
-            run_text(brain, speak)
+            console.show_user = False
+            run_text(assistant)
         else:
-            run_voice(cfg, brain, speak)
+            run_console_voice(cfg, console, assistant)
     except KeyboardInterrupt:
         pass
+    finally:
+        stopped.set()
+        assistant.stop()
     print("\nJarvis verabschiedet sich.")
+    time.sleep(0.2)
     return 0
 
 

@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE_PATH = ROOT / "config.example.toml"
 CONFIG_PATH = ROOT / "config.toml"
 HOME_DIR = ROOT / "jarvis_home"
+# Was Jarvis sich merkt (Erinnerungen, welches Modell zuletzt ging) und die Logdateien.
+STATE_DIR = ROOT / "daten"
+LOG_DIR = ROOT / "logs"
 
 
 def _merge(base: dict, override: dict) -> dict:

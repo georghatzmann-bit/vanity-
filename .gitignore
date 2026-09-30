@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 config.toml
 jarvis_home/.claude/
+logs/
+daten/
+jarvis_home/bildschirm.png
+.pytest_cache/

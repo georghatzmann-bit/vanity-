@@ -20,6 +20,18 @@ class MuteSwitch:
         self._muted = threading.Event()
         self._unmuted = threading.Event()
         self._unmuted.set()
+        self._listeners: list = []
+
+    def on_change(self, callback) -> None:
+        """`callback(muted)` wird bei jedem Umschalten aufgerufen (z. B. für die Oberfläche)."""
+        self._listeners.append(callback)
+
+    def _notify(self) -> None:
+        for callback in self._listeners:
+            try:
+                callback(self.muted)
+            except Exception as exc:
+                log.debug("Stumm-Anzeige fehlgeschlagen: %s", exc)
 
     @property
     def muted(self) -> bool:
@@ -28,10 +40,12 @@ class MuteSwitch:
     def mute(self) -> None:
         self._unmuted.clear()
         self._muted.set()
+        self._notify()
 
     def unmute(self) -> None:
         self._muted.clear()
         self._unmuted.set()
+        self._notify()
 
     def toggle(self) -> None:
         if self.muted:

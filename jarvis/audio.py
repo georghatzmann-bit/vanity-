@@ -105,6 +105,16 @@ def input_devices() -> list[dict]:
     return devices
 
 
+def friendly_device_error(exc: Exception) -> str:
+    """Macht aus PortAudio-Fehlern einen verständlichen Satz."""
+    text = str(exc)
+    if "device -1" in text or "no default" in text.lower():
+        return "Windows meldet kein Standardmikrofon."
+    if "Invalid device" in text or "Invalid number of channels" in text:
+        return "Dieses Mikrofon lässt sich nicht öffnen (vielleicht von einem anderen Programm belegt)."
+    return text
+
+
 def resolve_device(spec: str | int | None, devices: list[dict]) -> int | None:
     """Findet das Mikrofon aus der Config: leer = Windows-Standard,
     Zahl = Index, Text = Teil des Namens."""
@@ -219,7 +229,7 @@ class WakeWord:
         self._model.reset()
 
 
-def record_command(mic: Microphone, listen_cfg: dict) -> np.ndarray | None:
+def record_command(mic: Microphone, listen_cfg: dict, on_level=None) -> np.ndarray | None:
     recorder = CommandRecorder(
         silence_seconds=listen_cfg["silence_seconds"],
         max_seconds=listen_cfg["max_seconds"],
@@ -227,6 +237,9 @@ def record_command(mic: Microphone, listen_cfg: dict) -> np.ndarray | None:
         energy_threshold=listen_cfg["energy_threshold"],
         noise_floor=mic.noise_floor,
     )
-    while not recorder.add(mic.read()):
-        pass
-    return recorder.audio()
+    while True:
+        frame = mic.read()
+        if on_level is not None:
+            on_level(min(1.0, rms(frame) / 3000))
+        if recorder.add(frame):
+            return recorder.audio()

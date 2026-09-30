@@ -1,5 +1,11 @@
 # Jarvis Einstellungen. setup.ps1 kopiert diese Datei nach config.toml,
-# dort kannst du alles anpassen.
+# dort kannst du alles anpassen. Was in config.toml fehlt, kommt von hier.
+
+[ich]
+# Dein Wohnort, damit Jarvis beim Wetter weiß, wo du bist (z. B. "Wien"). Das Fenster zeigt dann auch das aktuelle Wetter.
+ort = ""
+# Was Jarvis sonst über dich wissen soll, in einem Satz (optional).
+notizen = ""
 
 [wakeword]
 # Fertiges openWakeWord-Modell, "Hey Jarvis" auf Englisch ausgesprochen.
@@ -10,7 +16,7 @@ threshold = 0.5
 
 [audio]
 # Welches Mikrofon Jarvis nutzt. Leer = Windows-Standardmikrofon.
-# Sonst ein Teil des Namens (z. B. "Headset") oder die Nummer aus start.bat --mic-test.
+# Am einfachsten mit mikrofon.bat auswählen.
 input_device = ""
 
 [mute]
@@ -26,6 +32,8 @@ max_seconds = 20
 start_timeout_seconds = 6
 # Mindestlautstärke für Sprache. 0 = automatisch an Hintergrundgeräusche anpassen.
 energy_threshold = 0
+# true = "Hey Jarvis" unterbricht Jarvis, auch während er spricht oder nachdenkt.
+barge_in = true
 
 [stt]
 # tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.
@@ -43,6 +51,26 @@ voice = "de-DE-ConradNeural"
 rate = "+5%"
 pitch = "-4Hz"
 
+[answer]
+# Braucht Claude länger als so viele Sekunden, sagt Jarvis schon mal "Einen Moment, Sir".
+# 0 = nie.
+ack_after_seconds = 3.0
+
+[local]
+# Uhrzeit, Datum, Lautstärke, Musik pausieren und "Stopp" erledigt Jarvis sofort selbst,
+# ohne Claude zu fragen. Das ist schneller und schont dein Pro-Kontingent.
+enabled = true
+
+[gui]
+# Das Arc-Reactor-Fenster. false = nur Konsolenfenster (wie start.bat --konsole).
+enabled = true
+width = 1200
+height = 780
+# Symbol unten rechts neben der Uhr (anzeigen, stumm, beenden).
+tray = true
+# true = Fenster schließen versteckt Jarvis nur im Tray, beenden dann über das Tray-Symbol.
+close_to_tray = false
+
 [brain]
 # Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
 claude_path = ""
@@ -53,13 +81,47 @@ models = ["sonnet", "haiku", "opus"]
 # true = Claude Code startet für Jarvis ohne deine persönlichen Skills, Plugins,
 # MCP-Server und CLAUDE.md-Dateien. So stören sie Jarvis nicht.
 isolated = true
+# Lehnen alle Modelle ab, probiert Jarvis sie noch einmal mit einer ganz kurzen Persönlichkeit.
+simple_fallback = true
 # Maximale Wartezeit auf Claude (Sekunden).
 timeout_seconds = 180
+# Welche Werkzeuge Claude für Jarvis überhaupt bekommt.
+tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"]
 # Werkzeuge, die Claude ohne Nachfrage nutzen darf.
-allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "Edit", "Write"]
-# Werkzeuge, die komplett gesperrt sind (Löschen, Herunterfahren, Formatieren).
+allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write"]
+# Befehle, die komplett gesperrt sind. Zum Löschen und Installieren gibt es eigene
+# Jarvis-Befehle, die erst nach deinem "Ja" etwas tun.
 disallowed_tools = [
     "Bash(rm:*)", "Bash(del:*)", "Bash(rmdir:*)", "Bash(rd:*)",
     "Bash(Remove-Item:*)", "Bash(format:*)", "Bash(shutdown:*)",
     "Bash(Stop-Computer:*)", "Bash(Restart-Computer:*)", "Bash(reg delete:*)",
+    "Bash(winget install:*)", "Bash(winget uninstall:*)", "Bash(msiexec:*)",
+    "PowerShell(Remove-Item:*)", "PowerShell(Stop-Computer:*)", "PowerShell(Restart-Computer:*)",
+    "PowerShell(Format-Volume:*)",
 ]
+
+[gaming]
+# Diese Programme schließt "Gaming-Modus an" (Namen wie im Task-Manager, z. B. "OneDrive", "Teams").
+close_apps = []
+# Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
+power_plan = true
+
+[homeassistant]
+# Für Alexa und Smart Home. Adresse deines Home Assistant, z. B. "http://homeassistant.local:8123".
+url = ""
+# Langlebiges Zugriffstoken: in Home Assistant unten links auf deinen Namen >
+# Sicherheit > "Langlebige Zugriffstoken" > Token erstellen.
+token = ""
+
+[homeassistant.alexa]
+# Deine Echo-Geräte: Raumname = Entität aus Home Assistant (Alexa Media Player).
+# wohnzimmer = "media_player.echo_wohnzimmer"
+# kueche = "media_player.echo_dot_kueche"
+
+[server]
+# Web-Eingang, über den Home Assistant (und damit Alexa) Jarvis Befehle schicken kann.
+enabled = false
+host = "0.0.0.0"
+port = 8765
+# Ein langes, geheimes Wort (mindestens 12 Zeichen), das auch in Home Assistant steht.
+token = ""

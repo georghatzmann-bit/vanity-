@@ -1,0 +1,4 @@
+# Windows-Skripte behalten ihre CRLF-Zeilenenden, auch im ZIP-Download.
+*.bat -text
+*.cmd -text
+*.ps1 -text
