@@ -238,6 +238,36 @@ class TomlValueTest(unittest.TestCase):
                 self.assertEqual(tomllib.loads(f"x = {toml_value(value)}")["x"], value)
 
 
+class UpgradeConfigTest(unittest.TestCase):
+    def test_old_default_gets_the_new_value_once(self):
+        from jarvis.config import EXAMPLE_PATH, upgrade_config
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "config.toml"
+            # Eine config.toml von früher: Kopie der alten Vorlage, ohne [intern].
+            old = EXAMPLE_PATH.read_text(encoding="utf-8").replace("silence_seconds = 0.9", "silence_seconds = 1.2")
+            old = old.split("[intern]")[0]
+            path.write_text(old, encoding="utf-8")
+            self.assertEqual(upgrade_config(path), ["listen.silence_seconds = 0.9"])
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(data["listen"]["silence_seconds"], 0.9)
+            self.assertEqual(data["intern"]["config_version"], 2)
+            # Wer danach selbst 1.2 einträgt, behält das.
+            save_setting("listen", "silence_seconds", 1.2, path)
+            self.assertEqual(upgrade_config(path), [])
+            self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["listen"]["silence_seconds"], 1.2)
+
+    def test_changed_value_is_kept(self):
+        from jarvis.config import EXAMPLE_PATH, upgrade_config
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / "config.toml"
+            text = EXAMPLE_PATH.read_text(encoding="utf-8").replace("silence_seconds = 0.9", "silence_seconds = 1.5")
+            path.write_text(text.split("[intern]")[0], encoding="utf-8")
+            self.assertEqual(upgrade_config(path), [])
+            self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["listen"]["silence_seconds"], 1.5)
+
+
 class OpenSetupTest(unittest.TestCase):
     def test_gear_button(self):
         from jarvis.gui.app import Api, GuiBridge

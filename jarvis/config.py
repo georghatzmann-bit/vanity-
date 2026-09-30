@@ -44,6 +44,36 @@ def _read_toml(path: Path) -> dict:
         raise ValueError(f"{path.name}: {exc}.{hint}") from exc
 
 
+# Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
+# Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
+CONFIG_VERSION = 2
+_UPGRADES = {
+    2: [("listen", "silence_seconds", 1.2, 0.9)],
+}
+
+
+def upgrade_config(path: Path | None = None) -> list[str]:
+    """Passt eine config.toml von einer älteren Jarvis-Version an. Gibt die geänderten Werte zurück."""
+    path = path or CONFIG_PATH
+    if not path.exists():
+        return []
+    data = _read_toml(path)
+    try:
+        version = int((data.get("intern") or {}).get("config_version", 1))
+    except (TypeError, ValueError):
+        version = 1
+    if version >= CONFIG_VERSION:
+        return []
+    changed = []
+    for target in range(version + 1, CONFIG_VERSION + 1):
+        for section, key, old, new in _UPGRADES.get(target, []):
+            if (data.get(section) or {}).get(key) == old:
+                save_setting(section, key, new, path)
+                changed.append(f"{section}.{key} = {new}")
+    save_setting("intern", "config_version", CONFIG_VERSION, path)
+    return changed
+
+
 def load_config(path: Path | None = None) -> dict:
     defaults = _read_toml(EXAMPLE_PATH)
     config = defaults

@@ -132,3 +132,7 @@ host = "0.0.0.0"
 port = 8765
 # Ein langes, geheimes Wort (mindestens 12 Zeichen), das auch in Home Assistant steht.
 token = ""
+
+[intern]
+# Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
+config_version = 2

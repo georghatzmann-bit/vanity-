@@ -25,7 +25,7 @@ import time
 from . import __version__
 from .assistant import Assistant
 from .brain import BrainError, ClaudeBrain
-from .config import HOME_DIR, LOG_DIR, STATE_DIR, load_config
+from .config import HOME_DIR, LOG_DIR, STATE_DIR, load_config, upgrade_config
 from .logsetup import setup_logging
 from .mute import MuteSwitch, hotkey_label, register_hotkey
 from .persona import build_persona
@@ -467,6 +467,8 @@ def main(argv: list[str] | None = None) -> int:
     log.info("Jarvis %s startet (%s)", __version__, " ".join(sys.argv[1:]) or "Standard")
 
     try:
+        for change in upgrade_config():
+            log.info("config.toml angepasst: %s", change)
         cfg = load_config()
     except Exception as exc:
         tell(
