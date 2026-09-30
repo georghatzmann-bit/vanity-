@@ -343,9 +343,10 @@ _instance_lock = None
 
 
 def _first_run() -> bool:
+    from .gui.app import WEB_DIR
     from .setup_wizard import setup_done
 
-    return not setup_done()
+    return not setup_done() and (WEB_DIR / "setup.html").exists()
 
 
 def has_console() -> bool:

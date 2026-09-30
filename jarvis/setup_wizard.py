@@ -212,7 +212,7 @@ class ClaudeCheck:
         try:
             version = subprocess.run(
                 [path, "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=60, creationflags=NO_WINDOW,
+                timeout=60, creationflags=NO_WINDOW, cwd=str(HOME_DIR),
             ).stdout.strip()
         except Exception:
             version = ""
