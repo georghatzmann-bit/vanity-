@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import collections
 import logging
+import os
 import threading
 from pathlib import Path
 
@@ -141,6 +142,38 @@ def webview2_installed() -> bool:
     return False
 
 
+def fit_to_screen(width: int, height: int) -> tuple[int, int]:
+    """Das Fenster soll auf den Bildschirm passen, auch bei 150 % Skalierung auf Full HD
+    (dann sind nur etwa 1280 x 680 Punkte frei). Größen in logischen Punkten."""
+    if os.name != "nt":
+        return width, height
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        area = wintypes.RECT()
+        user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(area), 0)  # SPI_GETWORKAREA
+        free_w, free_h = area.right - area.left, area.bottom - area.top
+        aware = 0
+        try:
+            user32.GetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+            user32.GetAwarenessFromDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+            aware = user32.GetAwarenessFromDpiAwarenessContext(user32.GetThreadDpiAwarenessContext())
+        except Exception:
+            pass
+        if aware:
+            # Das Programm sieht echte Pixel, das Fenster wird aber in Punkten angegeben.
+            scale = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100 or 1.0
+            free_w, free_h = int(free_w / scale), int(free_h / scale)
+        if free_w > 400 and free_h > 300:
+            width = min(width, free_w - 40)
+            height = min(height, free_h - 40)
+    except Exception as exc:
+        log.debug("Bildschirmgröße unbekannt: %s", exc)
+    return width, height
+
+
 class Window:
     """Öffnet das Fenster und hält es am Laufen. `start()` blockiert, bis es geschlossen wird."""
 
@@ -151,25 +184,43 @@ class Window:
         self._cfg = cfg
         self._window = None
         self._hidden = False
+        self._closed_lock = threading.Lock()
+        self._closed_done = False
         self.allow_close = True
 
     def start(self) -> None:
         import webview
 
+        width, height = fit_to_screen(int(self._cfg.get("width", 1200)), int(self._cfg.get("height", 780)))
         self._window = webview.create_window(
             "Jarvis",
             # Ein lokaler Pfad: pywebview liefert die Seite über einen kleinen lokalen Server aus.
             url=str(WEB_DIR / "index.html"),
             js_api=self._api,
-            width=int(self._cfg.get("width", 1200)),
-            height=int(self._cfg.get("height", 780)),
-            min_size=(800, 600),
+            width=width,
+            height=height,
+            min_size=(min(800, width), min(600, height)),
             background_color="#04070d",
             text_select=True,
         )
         self._window.events.closing += self._closing
-        self._window.events.closed += self._on_closed
-        webview.start(self._on_started, debug=bool(self._cfg.get("debug", False)))
+        self._window.events.closed += self._closed
+        try:
+            webview.start(self._on_started, debug=bool(self._cfg.get("debug", False)))
+        finally:
+            # Aufräumen, bevor das Programm endet (das closed-Ereignis läuft in einem
+            # eigenen Thread und käme sonst evtl. zu spät).
+            self._closed()
+
+    def _closed(self) -> None:
+        with self._closed_lock:
+            if self._closed_done:
+                return
+            self._closed_done = True
+            try:
+                self._on_closed()
+            except Exception:
+                log.exception("Aufräumen nach dem Schließen")
 
     def _closing(self):
         if self.allow_close:

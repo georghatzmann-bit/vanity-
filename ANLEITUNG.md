@@ -4,11 +4,14 @@ Diese Anleitung ist für dich, Georg. Du brauchst nur Doppelklicks.
 
 ## 1. Neue Version holen
 
-Lade den aktuellen Stand herunter (auf GitHub: grüner Button **Code**, dann **Download ZIP**) und entpacke ihn **in denselben Ordner** wie bisher. Deine `config.toml` mit deinem Mikrofon bleibt dabei erhalten.
+1. Falls Jarvis läuft: Fenster schließen.
+2. Diese ZIP-Datei laden: https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/project-thread-0revfw.zip
+3. Am besten bekommt Jarvis einen eigenen Ordner außerhalb von OneDrive, zum Beispiel `C:\Jarvis`. Öffne die ZIP, darin ist ein Ordner. Öffne ihn, markiere alles (Strg+A), kopiere es (Strg+C) und füge es in `C:\Jarvis` ein (Strg+V). Fragt Windows nach: "Dateien im Ziel ersetzen".
+4. Kopier deine alte `config.toml` aus dem bisherigen Jarvis-Ordner mit nach `C:\Jarvis`. Dann bleibt dein Mikrofon eingestellt.
 
 ## 2. Einrichten
 
-Doppelklick auf **`setup.bat`**. Das installiert alles Neue (Oberfläche, Tray-Icon und so weiter). Beim ersten Mal dauert es ein paar Minuten.
+Doppelklick auf **`setup.bat`**. Das installiert alles Neue (Oberfläche, Tray-Icon und so weiter). Beim ersten Mal dauert es ein paar Minuten. Die großen Programmdateien legt es unter `%LOCALAPPDATA%\Jarvis` ab, damit OneDrive sie nicht hochlädt.
 
 ## 3. Mikrofon wählen (nur einmal)
 
@@ -55,7 +58,7 @@ Nur das, was der Selbsttest anmeckert, plus die Dinge, die du haben willst:
 5. **Gaming-Modus** (optional): In `config.toml` unter `[gaming]` eintragen, welche Programme dabei zugehen sollen, zum Beispiel `close_apps = ["OneDrive", "Teams"]`.
 6. **Alexa** (optional): siehe unten.
 
-Ein Tipp: Dein Jarvis-Ordner liegt in OneDrive. Das funktioniert, aber OneDrive lädt dann tausende Dateien aus dem Ordner `.venv` hoch. Schneller ist ein Ordner wie `C:\Jarvis`. Wenn du ihn verschiebst, einfach danach `setup.bat` noch einmal starten.
+Ein Tipp: Liegt Jarvis noch in OneDrive oder in einem Ordner namens `.claude`, meldet der Selbsttest das als Warnung. Es funktioniert trotzdem, ein eigener Ordner wie `C:\Jarvis` ist aber schneller und macht weniger Ärger.
 
 ## Alexa einrichten (optional)
 
@@ -96,4 +99,6 @@ Dann kann eine Home-Assistant-Automation oder ein Skript zum Beispiel `rest_comm
 
 - **Jarvis reagiert nicht auf "Hey Jarvis":** `start.bat --mic-test` zeigt den Pegel und wie gut "Hey Jarvis" erkannt wird. Mehr dazu in der README.
 - **Claude lehnt ab:** Jarvis probiert automatisch andere Modelle und zuletzt einen einfachen Modus. Hilft das nicht, `start.bat --claude-test` starten und die Tabelle an Claude im Jarvis-Projekt schicken.
+- **"Jarvis läuft schon":** Jarvis ist schon offen, oft versteckt als Symbol unten rechts neben der Uhr. Dort mit Rechtsklick beenden oder das Fenster öffnen.
+- **Mikrofon abgesteckt:** Jarvis merkt das und versucht es alle paar Sekunden wieder. Steckst du es wieder ein, hört er von selbst weiter zu.
 - **Irgendwas anderes:** In `logs\jarvis.log` steht genau, was passiert ist. Die Datei kannst du Claude schicken.

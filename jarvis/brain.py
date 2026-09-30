@@ -324,6 +324,11 @@ class ClaudeBrain:
                     "Bitte in der Eingabeaufforderung 'claude update' ausführen.",
                     flag,
                 )
+                if flag in ("safe-mode", "system-prompt-file", "tools"):
+                    self.notice(
+                        "Claude Code ist veraltet, deshalb laufen deine eigenen Skills mit. "
+                        "Bitte einmal 'claude update' in der Eingabeaufforderung ausführen."
+                    )
                 continue
             if result is None and resume and re.search(r"no conversation found|session.*not found", stderr or "", re.I):
                 # Die alte Unterhaltung gibt es nicht mehr, also neu anfangen.

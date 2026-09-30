@@ -73,6 +73,7 @@ close_to_tray = false
 
 [brain]
 # Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
+# Windows-Pfade in einfache Anführungszeichen: claude_path = 'C:\Users\Georg\.local\bin\claude.exe'
 claude_path = ""
 # Welche Claude-Modelle Jarvis nutzt, der Reihe nach. Lehnt eins eine Anfrage ab,
 # versucht Jarvis automatisch das nächste. "sonnet" ist schnell und schont dein
@@ -87,7 +88,8 @@ simple_fallback = true
 timeout_seconds = 180
 # Welche Werkzeuge Claude für Jarvis überhaupt bekommt.
 tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"]
-# Werkzeuge, die Claude ohne Nachfrage nutzen darf.
+# Werkzeuge, die Claude ohne Nachfrage nutzen darf. (Diese und die nächste Liste
+# ergänzen in deiner config.toml die Vorgaben hier, sie ersetzen sie nicht.)
 allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write"]
 # Befehle, die komplett gesperrt sind. Zum Löschen und Installieren gibt es eigene
 # Jarvis-Befehle, die erst nach deinem "Ja" etwas tun.
@@ -96,8 +98,10 @@ disallowed_tools = [
     "Bash(Remove-Item:*)", "Bash(format:*)", "Bash(shutdown:*)",
     "Bash(Stop-Computer:*)", "Bash(Restart-Computer:*)", "Bash(reg delete:*)",
     "Bash(winget install:*)", "Bash(winget uninstall:*)", "Bash(msiexec:*)",
-    "PowerShell(Remove-Item:*)", "PowerShell(Stop-Computer:*)", "PowerShell(Restart-Computer:*)",
-    "PowerShell(Format-Volume:*)",
+    "PowerShell(Remove-Item:*)", "PowerShell(rm:*)", "PowerShell(del:*)", "PowerShell(ri:*)",
+    "PowerShell(rmdir:*)", "PowerShell(rd:*)", "PowerShell(erase:*)", "PowerShell(Clear-RecycleBin:*)",
+    "PowerShell(Stop-Computer:*)", "PowerShell(Restart-Computer:*)", "PowerShell(Format-Volume:*)",
+    "PowerShell(winget install:*)", "PowerShell(winget uninstall:*)", "PowerShell(msiexec:*)",
 ]
 
 [gaming]

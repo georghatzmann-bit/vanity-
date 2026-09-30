@@ -202,3 +202,45 @@ class ConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HotkeyParseTest(unittest.TestCase):
+    def test_parse(self):
+        from jarvis.mute import parse_hotkey
+
+        self.assertEqual(parse_hotkey("ctrl+alt+m"), (0x3, ord("M")))
+        self.assertEqual(parse_hotkey("Strg + Alt + J"), (0x3, ord("J")))
+        self.assertEqual(parse_hotkey("f9"), (0, 0x78))
+        self.assertEqual(parse_hotkey("shift+F12"), (0x4, 0x7B))
+        self.assertEqual(parse_hotkey("ctrl+pause"), (0x2, 0x13))
+        self.assertIsNone(parse_hotkey("ctrl+ä"))
+        self.assertIsNone(parse_hotkey("hyper+m"))
+        self.assertIsNone(parse_hotkey(""))
+
+
+class ConfigMergeTest(unittest.TestCase):
+    def test_old_config_keeps_new_safety_rules(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        from jarvis.config import load_config
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_bytes(
+                '\ufeff[brain]\nallowed_tools = ["Read"]\ndisallowed_tools = ["Bash(meins:*)"]\n'.encode("utf-8")
+            )
+            brain = load_config(path)["brain"]
+        self.assertIn("Bash(winget install:*)", brain["disallowed_tools"])
+        self.assertIn("Bash(meins:*)", brain["disallowed_tools"])
+        self.assertIn("PowerShell", brain["allowed_tools"])
+
+    def test_windows_path_gets_a_hint(self):
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        from jarvis.config import load_config
+
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.toml"
+            path.write_text('[brain]\nclaude_path = "C:\\Users\\georg\\claude.exe"\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "einfache Anführungszeichen"):
+                load_config(path)

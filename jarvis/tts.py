@@ -103,19 +103,13 @@ def synthesize_windows(text: str) -> tuple[np.ndarray, int]:
 
 
 def play(samples: np.ndarray, rate: int) -> None:
-    import sounddevice as sd
-
-    sd.play(samples, rate)
-    sd.wait()
+    Player().play(samples, rate, lambda level: None)
 
 
 def chime(freqs: tuple[int, ...] = (880, 1320)) -> None:
     """Kurze Tonfolge, z. B. aufsteigend wenn Jarvis zuhört."""
     try:
-        import sounddevice as sd
-
-        sd.play(chime_samples(freqs), 24000)
-        sd.wait()
+        play(chime_samples(freqs), 24000)
     except Exception as exc:
         log.debug("Ton konnte nicht abgespielt werden: %s", exc)
 
@@ -245,7 +239,11 @@ class Speaker:
 
 
 class Player:
-    """Spielt Audio ab, meldet dabei die Lautstärke (für die Animation) und lässt sich stoppen."""
+    """Spielt Audio ab, meldet dabei die Lautstärke (für die Animation) und lässt sich stoppen.
+
+    Jeder Player hat einen eigenen Ausgabe-Stream. sd.play() teilt sich einen globalen
+    Stream, dann würde ein Signalton mitten in Jarvis' Satz diesen abschneiden.
+    """
 
     def __init__(self) -> None:
         self._stopped = threading.Event()
@@ -253,30 +251,47 @@ class Player:
     def play(self, samples: np.ndarray, rate: int, on_level: Callable[[float], None]) -> None:
         import sounddevice as sd
 
+        from .audio import PORTAUDIO_LOCK, playing
+
         self._stopped.clear()
-        duration = len(samples) / rate
-        sd.play(samples, rate)
-        start = time.monotonic()
+        samples = np.ascontiguousarray(samples, dtype=np.int16).reshape(-1)
+        position = [0]
+        finished = threading.Event()
+
+        def fill(outdata, frames, time_info, status) -> None:
+            start = position[0]
+            chunk = samples[start : start + frames]
+            outdata[: len(chunk), 0] = chunk
+            position[0] = start + len(chunk)
+            if len(chunk) < frames:
+                outdata[len(chunk) :, 0] = 0
+                raise sd.CallbackStop
+
         window = max(1, rate // 20)
-        while not self._stopped.is_set():
-            elapsed = time.monotonic() - start
-            if elapsed >= duration + 0.05:
-                break
-            index = int(elapsed * rate)
-            chunk = samples[index : index + window].astype(np.float32)
-            level = float(np.sqrt(np.mean(chunk**2))) / 8000 if chunk.size else 0.0
-            on_level(min(1.0, level))
-            time.sleep(0.05)
-        if self._stopped.is_set():
-            sd.stop()
-        else:
-            sd.wait()
+        with playing():
+            with PORTAUDIO_LOCK:
+                stream = sd.OutputStream(
+                    samplerate=rate, channels=1, dtype="int16", callback=fill, finished_callback=finished.set
+                )
+                stream.start()
+            try:
+                limit = time.monotonic() + len(samples) / rate + 2.0
+                while not finished.wait(0.05):
+                    if self._stopped.is_set() or time.monotonic() > limit:
+                        break
+                    index = position[0]
+                    chunk = samples[index : index + window].astype(np.float32)
+                    level = float(np.sqrt(np.mean(chunk**2))) / 8000 if chunk.size else 0.0
+                    on_level(min(1.0, level))
+            finally:
+                with PORTAUDIO_LOCK:
+                    try:
+                        if self._stopped.is_set():
+                            stream.abort()
+                        else:
+                            stream.stop()
+                    finally:
+                        stream.close()
 
     def stop(self) -> None:
         self._stopped.set()
-        try:
-            import sounddevice as sd
-
-            sd.stop()
-        except Exception:
-            pass

@@ -24,13 +24,37 @@ def _merge(base: dict, override: dict) -> dict:
     return merged
 
 
+# Diese Listen werden mit den Vorgaben zusammengelegt statt ersetzt. So bekommt eine
+# alte config.toml neue Sperren (z. B. für Installieren) automatisch dazu.
+_UNION_LISTS = (("brain", "disallowed_tools"), ("brain", "allowed_tools"))
+
+
+def _read_toml(path: Path) -> dict:
+    # utf-8-sig: Der Windows-Editor speichert manchmal mit BOM, das mag tomllib nicht.
+    text = path.read_text(encoding="utf-8-sig")
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        hint = ""
+        if "escape" in str(exc).lower() or "\\" in text:
+            hint = (
+                " Windows-Pfade bitte in einfache Anführungszeichen setzen, "
+                "zum Beispiel claude_path = 'C:\\Users\\Georg\\claude.exe'."
+            )
+        raise ValueError(f"{path.name}: {exc}.{hint}") from exc
+
+
 def load_config(path: Path | None = None) -> dict:
-    with EXAMPLE_PATH.open("rb") as f:
-        config = tomllib.load(f)
+    defaults = _read_toml(EXAMPLE_PATH)
+    config = defaults
     user_path = path or CONFIG_PATH
     if user_path.exists():
-        with user_path.open("rb") as f:
-            config = _merge(config, tomllib.load(f))
+        config = _merge(defaults, _read_toml(user_path))
+        for section, key in _UNION_LISTS:
+            base = defaults.get(section, {}).get(key) or []
+            mine = (config.get(section) or {}).get(key)
+            if isinstance(mine, list):
+                config[section][key] = list(dict.fromkeys([*base, *mine]))
     return config
 
 
@@ -41,7 +65,7 @@ def save_setting(section: str, key: str, value: str, path: Path | None = None) -
         path.write_text(EXAMPLE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     new_line = f'{key} = "{escaped}"'
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
 
     header = f"[{section}]"
     start = next((i for i, line in enumerate(lines) if line.strip() == header), None)

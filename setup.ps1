@@ -7,14 +7,29 @@ Set-Location $PSScriptRoot
 
 Write-Host "== Jarvis Setup ==" -ForegroundColor Cyan
 
+# Bevorzugt eine gut unterstuetzte Python-Version. "py -3" nimmt sonst die neueste,
+# und fuer ganz neue Versionen gibt es manche Pakete noch nicht.
+# (Fehlermeldungen von "py" werden verschluckt. Das geht in Windows PowerShell nur mit
+# ErrorActionPreference Continue, sonst bricht das Skript an der Umleitung ab.)
+$pyArgs = $null
+$ErrorActionPreference = "Continue"
 if (Get-Command py -ErrorAction SilentlyContinue) {
-    function Invoke-Py { py -3 @args }
-} elseif (Get-Command python -ErrorAction SilentlyContinue) {
-    function Invoke-Py { python @args }
-} else {
+    foreach ($candidate in @("-3.13", "-3.12", "-3.11", "-3.14", "-3")) {
+        $found = & py $candidate -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $found) { $pyArgs = @("py", $candidate); break }
+    }
+}
+$ErrorActionPreference = "Stop"
+if (-not $pyArgs -and (Get-Command python -ErrorAction SilentlyContinue)) {
+    $pyArgs = @("python")
+}
+if (-not $pyArgs) {
     Write-Host "Python wurde nicht gefunden." -ForegroundColor Red
     Write-Host "Download: https://www.python.org/downloads/ (Haken bei 'Add python.exe to PATH' setzen)"
     exit 1
+}
+function Invoke-Py {
+    if ($pyArgs.Count -gt 1) { & $pyArgs[0] $pyArgs[1] @args } else { & $pyArgs[0] @args }
 }
 $version = Invoke-Py -c "import sys; print('%d.%d' % sys.version_info[:2])"
 if (-not $version -or [version]$version -lt [version]"3.11") {
@@ -22,20 +37,39 @@ if (-not $version -or [version]$version -lt [version]"3.11") {
     Write-Host "Download: https://www.python.org/downloads/ (Haken bei 'Add python.exe to PATH' setzen)"
     exit 1
 }
+if ([version]$version -ge [version]"3.15") {
+    Write-Host "Python $version ist noch zu neu, dafuer fehlen manche Pakete." -ForegroundColor Red
+    Write-Host "Bitte zusaetzlich Python 3.13 installieren: https://www.python.org/downloads/"
+    exit 1
+}
 Write-Host "Python $version gefunden."
 
-if ($PSScriptRoot -match "OneDrive") {
-    Write-Host "Hinweis: Jarvis liegt in OneDrive. Das geht, aber OneDrive synchronisiert dann" -ForegroundColor Yellow
-    Write-Host "tausende Dateien aus dem Ordner .venv. Schneller ist ein Ordner wie C:\Jarvis." -ForegroundColor Yellow
-}
+# Heruntergeladene Dateien entsperren, sonst fragt Windows bei jedem Doppelklick nach.
+Get-ChildItem -Path $PSScriptRoot -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\\.venv\\' } |
+    Unblock-File -ErrorAction SilentlyContinue
 
-if (-not (Test-Path ".venv\Scripts\python.exe")) {
-    Write-Host "Erstelle virtuelle Umgebung ..."
-    Invoke-Py -m venv .venv
+# Die Python-Umgebung (rund 1 GB) liegt ausserhalb des Jarvis-Ordners, damit OneDrive
+# sie nicht hochlaedt und beim Installieren keine Dateien sperrt.
+$venvDir = Join-Path $env:LOCALAPPDATA "Jarvis\venv"
+$venvPy = Join-Path $venvDir "Scripts\python.exe"
+if (Test-Path $venvPy) {
+    $ErrorActionPreference = "Continue"
+    & $venvPy -c "import sys" 2>$null
+    $venvOk = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = "Stop"
+    if (-not $venvOk) {
+        Write-Host "Die Python-Umgebung ist kaputt und wird neu angelegt ..."
+        Remove-Item -Recurse -Force $venvDir -ErrorAction SilentlyContinue
+    }
 }
-$venvPy = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPy)) {
-    Write-Host "Die virtuelle Umgebung konnte nicht angelegt werden." -ForegroundColor Red
+    Write-Host "Erstelle die Python-Umgebung in $venvDir ..."
+    New-Item -ItemType Directory -Force (Split-Path $venvDir) | Out-Null
+    Invoke-Py -m venv $venvDir
+}
+if (-not (Test-Path $venvPy)) {
+    Write-Host "Die Python-Umgebung konnte nicht angelegt werden." -ForegroundColor Red
     exit 1
 }
 
@@ -44,13 +78,26 @@ Write-Host "Installiere Pakete (das dauert beim ersten Mal ein paar Minuten) ...
 & $venvPy -m pip install -r requirements.txt
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Die wichtigsten Pakete konnten nicht installiert werden (siehe Meldungen oben)." -ForegroundColor Red
-    Write-Host "Internet pruefen und setup.bat noch einmal starten."
+    Write-Host "Internet pruefen, alle Jarvis-Fenster schliessen und setup.bat noch einmal starten."
     exit 1
 }
 Write-Host "Installiere Extras (Oberflaeche, Tray-Icon, Systemanzeige) ..."
-& $venvPy -m pip install -r requirements-extras.txt
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Einige Extras gingen nicht. Jarvis laeuft trotzdem, notfalls ohne Fenster." -ForegroundColor Yellow
+$missing = @()
+foreach ($line in Get-Content "requirements-extras.txt") {
+    $package = $line.Trim()
+    if (-not $package -or $package.StartsWith("#")) { continue }
+    & $venvPy -m pip install $package --quiet
+    if ($LASTEXITCODE -ne 0) { $missing += $package }
+}
+if ($missing.Count -gt 0) {
+    Write-Host ("Diese Extras gingen nicht: " + ($missing -join ", ") + ". Jarvis laeuft trotzdem.") -ForegroundColor Yellow
+}
+
+# Die alte Umgebung im Jarvis-Ordner wird nicht mehr gebraucht.
+$oldVenv = Join-Path $PSScriptRoot ".venv"
+if (Test-Path $oldVenv) {
+    Remove-Item -Recurse -Force $oldVenv -ErrorAction SilentlyContinue
+    if (-not (Test-Path $oldVenv)) { Write-Host "Alten Ordner .venv entfernt (liegt jetzt in $venvDir)." }
 }
 
 if (-not (Test-Path "config.toml")) {

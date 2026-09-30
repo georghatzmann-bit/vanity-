@@ -37,6 +37,7 @@ class ConsoleUi(Ui):
 
     def __init__(self, idle_hint: str = "") -> None:
         self._last_state = ""
+        self._last_line = ""
         self._lock = threading.Lock()
         # Im Sprachmodus: 'Sag "Hey Jarvis" ...', sobald Jarvis wieder bereit ist.
         self.idle_hint = idle_hint
@@ -50,7 +51,8 @@ class ConsoleUi(Ui):
         if value == "listening":
             self._print("Ich höre ...")
         elif value == "idle" and previous in ("thinking", "speaking") and self.idle_hint:
-            self._print(self.idle_hint)
+            if self._last_line != self.idle_hint:
+                self._print(self.idle_hint)
 
     def message(self, role: str, text: str, id: str | None = None, model: str = "", final: bool = True) -> None:
         if not final:
@@ -69,6 +71,7 @@ class ConsoleUi(Ui):
 
     def _print(self, text: str) -> None:
         with self._lock:
+            self._last_line = text
             try:
                 print(text, flush=True)
             except (OSError, ValueError, AttributeError):

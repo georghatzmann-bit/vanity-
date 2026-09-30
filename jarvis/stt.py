@@ -18,7 +18,12 @@ class SpeechToText:
         from faster_whisper import WhisperModel
 
         compute_type = "int8" if device == "cpu" else "float16"
-        self._model = WhisperModel(model, device=device, compute_type=compute_type)
+        try:
+            # Erst ohne Internet: Beim Autostart ist das Netz oft noch nicht da, und
+            # sonst fragt Hugging Face bei jedem Start nach Updates.
+            self._model = WhisperModel(model, device=device, compute_type=compute_type, local_files_only=True)
+        except Exception:
+            self._model = WhisperModel(model, device=device, compute_type=compute_type)
         self._language = language
 
     def transcribe(self, audio: np.ndarray) -> str:

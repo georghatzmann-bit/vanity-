@@ -59,37 +59,57 @@ class VoiceLoop:
         self._hints(f'\nSag "Hey Jarvis" ...  ({self._hotkey} = stumm/laut, Strg+C = beenden)')
 
     def run(self) -> None:
-        """Läuft, bis `stopped` gesetzt wird oder Strg+C kommt. Fällt das Mikrofon
-        kurz aus (z. B. Headset abgesteckt), versucht Jarvis es wieder zu öffnen."""
+        """Läuft, bis `stopped` gesetzt wird oder Strg+C kommt. Fällt das Mikrofon aus
+        (Headset abgesteckt, Ruhezustand), versucht Jarvis es immer wieder zu öffnen,
+        erst schnell, dann alle 10 Sekunden. Tippen geht in der Zeit weiter."""
         self.prompt()
         self._mic.start()
         failures = 0
         while not self.stopped.is_set():
             try:
                 self._step()
+                if failures >= 2:
+                    self._assistant.ui.toast("Das Mikrofon ist wieder da.", "info")
                 failures = 0
             except Exception as exc:
                 # Nur Audio-Fehler abfangen, alles andere ist ein echter Fehler.
                 if not isinstance(exc, OSError) and "PortAudio" not in type(exc).__name__:
                     raise
                 failures += 1
-                if failures > 5:
-                    raise
-                log.warning("Mikrofon-Fehler (%s), versuche es neu zu öffnen ...", exc)
-                self._assistant.ui.toast("Mikrofon-Problem, ich versuche es neu zu öffnen ...", "error")
-                self._reopen()
+                log.warning("Mikrofon-Fehler Nr. %d (%s), versuche es neu zu öffnen ...", failures, exc)
+                if failures == 1:
+                    self._assistant.ui.toast("Mikrofon-Problem, ich versuche es neu zu öffnen ...", "error")
+                elif failures == 3:
+                    self._assistant.ui.toast(
+                        "Das Mikrofon ist weg. Ich versuche es alle 10 Sekunden wieder. Tippen geht weiter.",
+                        "error",
+                    )
+                self._reopen(2 if failures < 3 else 10)
         self._mic.stop()
 
-    def _reopen(self) -> None:
+    def _reopen(self, delay: float) -> None:
         try:
             self._mic.stop()
         except Exception:
             pass
-        time.sleep(2)
+        self._pause(delay)
+        if self.stopped.is_set():
+            return
         try:
-            self._mic.start()
+            # Geräteliste neu einlesen, damit ein wieder eingestecktes Headset gefunden wird.
+            reopen = getattr(self._mic, "reopen", None)
+            if reopen:
+                reopen()
+            else:
+                self._mic.start()
+            self._assistant.ui.config(mic=getattr(self._mic, "name", None))
         except Exception as exc:
             log.warning("Mikrofon lässt sich noch nicht öffnen: %s", exc)
+
+    def _pause(self, seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while not self.stopped.is_set() and time.monotonic() < end:
+            time.sleep(0.25)
 
     def _step(self) -> None:
         from .audio import record_command, rms

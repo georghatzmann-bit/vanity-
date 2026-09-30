@@ -9,8 +9,10 @@ from __future__ import annotations
 import os
 import re
 import sys
+import tempfile
+from pathlib import Path
 
-from .config import HOME_DIR, STATE_DIR, load_config
+from .config import STATE_DIR, load_config
 
 # Beginnt Georgs letzte Antwort so, darf Jarvis Löschen oder Installieren wirklich ausführen.
 CONFIRM_START = re.compile(r"^(ja|jawohl|jep|jo|genau|okay|ok|gerne|bestätigt|in ordnung|passt|klar)\b")
@@ -119,7 +121,8 @@ def _dispatch(command: str, rest: list[str]) -> int:
     if command == "bildschirm":
         from . import pc
 
-        path = pc.screenshot(HOME_DIR / "bildschirm.png")
+        # Im Temp-Ordner, damit Bildschirmfotos nicht in OneDrive landen.
+        path = pc.screenshot(Path(tempfile.gettempdir()) / "jarvis-bildschirm.png")
         print(f"Bildschirmfoto gespeichert: {path} (mit dem Read-Werkzeug ansehen)")
         return 0
 

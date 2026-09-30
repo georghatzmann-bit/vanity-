@@ -138,10 +138,27 @@ def check_folder(r: Report) -> None:
     except OSError as exc:
         r.add("Jarvis-Ordner", "fehler", f"nicht beschreibbar ({exc})", "Jarvis in einen normalen Ordner wie C:\\Jarvis legen.")
         return
-    if "onedrive" in path.lower():
-        r.add("Jarvis-Ordner", "warnung", detail, "Liegt in OneDrive. Das geht, aber OneDrive synchronisiert dann tausende Dateien aus .venv. Schneller ist ein Ordner wie C:\\Jarvis.")
+    parts = [p.lower() for p in ROOT.parts]
+    if ".claude" in parts:
+        r.add(
+            "Jarvis-Ordner", "warnung", detail,
+            'Liegt in einem Ordner namens ".claude". Claude Code behandelt solche Ordner besonders. '
+            "Besser einen eigenen Ordner wie C:\\Jarvis nehmen (ANLEITUNG.md, Schritt 1).",
+        )
+    elif "onedrive" in path.lower():
+        r.add(
+            "Jarvis-Ordner", "warnung", detail,
+            "Liegt in OneDrive. Das geht, OneDrive synchronisiert dann aber Logdateien und Erinnerungen "
+            "ständig mit. Ein eigener Ordner wie C:\\Jarvis ist ruhiger.",
+        )
     else:
         r.add("Jarvis-Ordner", "ok", detail)
+    if ".venv" in sys.executable.replace("\\", "/").split("/") and os.name == "nt":
+        r.add(
+            "Python-Umgebung", "warnung", sys.executable,
+            "Die alte Umgebung im Jarvis-Ordner läuft noch. setup.bat noch einmal starten, "
+            "dann zieht sie nach %LOCALAPPDATA%\\Jarvis um.",
+        )
 
 
 def check_speakers(r: Report, play_sound: bool) -> None:
@@ -305,6 +322,12 @@ def check_hotkey(r: Report, cfg: dict) -> None:
     if not combo:
         r.add("Stumm-Taste", "warnung", "keine eingetragen")
         return
+    if os.name == "nt":
+        from .mute import parse_hotkey
+
+        if parse_hotkey(combo):
+            r.add("Stumm-Taste", "ok", combo.upper())
+            return
     try:
         import keyboard
 

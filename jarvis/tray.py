@@ -74,6 +74,11 @@ class Tray:
     def stop(self) -> None:
         if self._icon is not None:
             try:
+                # Erst unsichtbar machen, sonst bleibt unter Windows ein "Geister-Symbol" stehen.
+                self._icon.visible = False
+            except Exception:
+                pass
+            try:
                 self._icon.stop()
             except Exception:
                 pass

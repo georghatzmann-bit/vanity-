@@ -74,7 +74,7 @@ Alles steht in `config.toml` (Vorlage mit Erklärungen: `config.example.toml`):
 - **Stimme:** `voice` unter `[tts]`, z. B. `de-DE-KillianNeural` oder `de-DE-FlorianMultilingualNeural`. Mit `rate` und `pitch` klingt sie schneller, langsamer, tiefer.
 - **Empfindlichkeit:** `threshold` unter `[wakeword]`.
 - **Mikrofon:** am einfachsten mit `mikrofon.bat`.
-- **Stumm-Taste:** `hotkey` unter `[mute]`, z. B. `"f9"`.
+- **Stumm-Taste:** `hotkey` unter `[mute]`, z. B. `"f9"`. Jarvis schluckt die Tastenkombination, sie tippt also nichts ins offene Programm.
 - **Genauigkeit:** `model = "medium"` unter `[stt]` versteht besser, ist aber langsamer.
 - **"Einen Moment, Sir":** `ack_after_seconds` unter `[answer]` (0 = nie).
 - **Fenster:** `[gui]`, z. B. `close_to_tray = true`, damit Schließen Jarvis nur ins Tray-Icon versteckt.
@@ -83,7 +83,7 @@ Alles steht in `config.toml` (Vorlage mit Erklärungen: `config.example.toml`):
 
 ## Jarvis-Befehle für Claude
 
-Claude steuert die Jarvis-Extras über kleine Befehle, die du auch selbst ausprobieren kannst (im Jarvis-Ordner, `.venv\Scripts\python.exe -m jarvis.tool hilfe`):
+Claude steuert die Jarvis-Extras über kleine Befehle, die du auch selbst ausprobieren kannst (im Jarvis-Ordner, `"%LOCALAPPDATA%\Jarvis\venv\Scripts\python.exe" -m jarvis.tool hilfe`):
 
 ```
 erinnern "in 20 minuten" "Tee"     erinnerungen      erinnerung-loeschen <id>
@@ -100,6 +100,15 @@ smarthome geraete|an|aus|status <gerät>
 - Löschen, Formatieren, Herunterfahren und direktes Installieren sind unter `disallowed_tools` gesperrt. Stattdessen gibt es `papierkorb` und `installieren`, die erst etwas tun, wenn dein letzter Satz ein "Ja" war.
 - Der Web-Eingang für Home Assistant ist aus, bis du ihn mit einem eigenen Token einschaltest.
 - Wake Word und Spracherkennung laufen lokal. Nur der erkannte Text geht an Claude.
+
+## Windows-Details
+
+- Die Python-Umgebung liegt unter `%LOCALAPPDATA%\Jarvis\venv`, nicht im Jarvis-Ordner. So lädt OneDrive nicht 1 GB hoch und sperrt beim Installieren keine Dateien.
+- Es läuft immer nur ein Jarvis. Ein zweiter Start meldet "Jarvis läuft schon".
+- Fällt das Mikrofon aus (abgesteckt, Ruhezustand), liest Jarvis die Geräteliste neu ein und versucht es immer wieder. Ist dein Mikrofon weg, nimmt er so lange das Windows-Standardmikrofon.
+- Startet Claude ein Programm (etwa Notepad), wartet Jarvis nicht, bis es wieder zu ist.
+- Eine alte `config.toml` behält deine Einstellungen. Die Listen `allowed_tools` und `disallowed_tools` werden mit den neuen Vorgaben zusammengelegt, damit neue Sperren auch bei dir greifen.
+- Windows-Pfade in `config.toml` in einfache Anführungszeichen setzen: `claude_path = 'C:\Users\Georg\...'`.
 
 ## Grenzen
 

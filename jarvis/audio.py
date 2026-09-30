@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import collections
+import contextlib
+import logging
+import queue
+import threading
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -11,6 +16,46 @@ SAMPLE_RATE = 16000
 # openWakeWord erwartet Blöcke von 80 ms (1280 Samples bei 16 kHz).
 FRAME_SAMPLES = 1280
 FRAME_SECONDS = FRAME_SAMPLES / SAMPLE_RATE
+
+log = logging.getLogger(__name__)
+
+# Schützt das Öffnen, Schließen und Neu-Einlesen der Audiogeräte. PortAudio darf nicht
+# neu gestartet werden, während irgendwo noch ein Ton läuft.
+PORTAUDIO_LOCK = threading.RLock()
+
+
+_outputs = 0
+
+
+@contextlib.contextmanager
+def playing():
+    """Markiert, dass gerade ein Ton läuft (dann wird PortAudio nicht neu gestartet)."""
+    global _outputs
+    with PORTAUDIO_LOCK:
+        _outputs += 1
+    try:
+        yield
+    finally:
+        with PORTAUDIO_LOCK:
+            _outputs -= 1
+
+
+def refresh_devices(timeout: float = 30.0) -> None:
+    """PortAudio neu starten, damit neu eingesteckte Geräte in der Liste auftauchen.
+    Wartet, bis Jarvis nichts mehr abspielt."""
+    import sounddevice as sd
+
+    deadline = time.monotonic() + timeout
+    while True:
+        with PORTAUDIO_LOCK:
+            if _outputs == 0 or time.monotonic() > deadline:
+                try:
+                    sd._terminate()
+                    sd._initialize()
+                except Exception as exc:
+                    log.warning("Audiogeräte konnten nicht neu eingelesen werden: %s", exc)
+                return
+        time.sleep(0.1)
 
 
 def rms(frame: np.ndarray) -> float:
@@ -135,48 +180,98 @@ def resolve_device(spec: str | int | None, devices: list[dict]) -> int | None:
 
 
 class Microphone:
-    """Liest das Mikrofon in 80-ms-Blöcken und liefert immer int16, mono, 16 kHz."""
+    """Liest das Mikrofon in 80-ms-Blöcken und liefert immer int16, mono, 16 kHz.
+
+    Das Audio kommt über einen Callback in eine Warteschlange. So merkt `read()` nach
+    ein paar Sekunden ohne Daten, dass das Mikrofon weg ist (Headset abgesteckt,
+    Ruhezustand), statt ewig zu warten.
+    """
+
+    READ_TIMEOUT = 3.0
+    BUFFER_SECONDS = 10.0
 
     def __init__(self, device: str | int | None = None) -> None:
         import sounddevice as sd
 
         self._sd = sd
-        self.device = resolve_device(device, input_devices())
-        info = sd.query_devices(self.device, "input")
+        self._spec = device
+        self._stream = None
+        self._queue: queue.Queue = queue.Queue()
+        # Die letzten ~5 Sekunden, um das Grundrauschen zu schätzen.
+        self._recent_levels: collections.deque[float] = collections.deque(maxlen=62)
+        self.frames_read = 0
+        self.peak = 0
+        self._select(resolve_device(device, input_devices()))
+
+    def _select(self, device: int | None) -> None:
+        sd = self._sd
+        self.device = device
+        info = sd.query_devices(device, "input")
         self.name = info["name"]
         try:
-            sd.check_input_settings(
-                device=self.device, samplerate=SAMPLE_RATE, channels=1, dtype="int16"
-            )
+            sd.check_input_settings(device=device, samplerate=SAMPLE_RATE, channels=1, dtype="int16")
             self.rate = SAMPLE_RATE
         except Exception:
             # Manche Treiber können kein 16 kHz, dann rechnen wir selbst um.
             self.rate = int(info["default_samplerate"])
         self._block = int(round(self.rate * FRAME_SECONDS))
-        self._stream = None
-        # Die letzten ~5 Sekunden, um das Grundrauschen zu schätzen.
-        self._recent_levels: collections.deque[float] = collections.deque(maxlen=62)
-        self.frames_read = 0
-        self.peak = 0
 
     def start(self) -> None:
         if self._stream is not None:
             return
-        self._stream = self._sd.InputStream(
-            device=self.device,
-            samplerate=self.rate,
-            channels=1,
-            dtype="int16",
-            blocksize=self._block,
-        )
-        self._stream.start()
+        self._queue = buffer = queue.Queue(maxsize=int(self.BUFFER_SECONDS / FRAME_SECONDS))
+
+        def on_audio(indata, frames, time_info, status) -> None:
+            chunk = indata[:, 0].copy()
+            try:
+                buffer.put_nowait(chunk)
+            except queue.Full:
+                # Niemand liest gerade (Jarvis denkt nach): das älteste Stück verwerfen.
+                try:
+                    buffer.get_nowait()
+                    buffer.put_nowait(chunk)
+                except (queue.Empty, queue.Full):
+                    pass
+
+        with PORTAUDIO_LOCK:
+            stream = self._sd.InputStream(
+                device=self.device,
+                samplerate=self.rate,
+                channels=1,
+                dtype="int16",
+                blocksize=self._block,
+                callback=on_audio,
+            )
+            stream.start()
+        self._stream = stream
 
     def stop(self) -> None:
-        if self._stream is None:
+        stream, self._stream = self._stream, None
+        if stream is None:
             return
-        self._stream.stop()
-        self._stream.close()
-        self._stream = None
+        with PORTAUDIO_LOCK:
+            try:
+                stream.abort()
+            finally:
+                stream.close()
+
+    def reopen(self) -> None:
+        """Nach einem Ausfall: Geräteliste neu einlesen und das Mikrofon wieder öffnen.
+        Ist das eingestellte Mikrofon weg, nimmt Jarvis vorerst das Windows-Standardmikrofon."""
+        try:
+            self.stop()
+        except Exception:
+            pass
+        refresh_devices()
+        try:
+            device = resolve_device(self._spec, input_devices())
+        except ValueError as exc:
+            log.warning("%s Nehme vorerst das Standardmikrofon.", exc)
+            device = None
+        self._select(device)
+        self.frames_read = 0
+        self.peak = 0
+        self.start()
 
     def __enter__(self) -> "Microphone":
         self.start()
@@ -186,8 +281,13 @@ class Microphone:
         self.stop()
 
     def read(self) -> np.ndarray:
-        data, _overflowed = self._stream.read(self._block)
-        frame = resample(data[:, 0].copy(), FRAME_SAMPLES)
+        if self._stream is None:
+            raise OSError("Das Mikrofon ist nicht geöffnet.")
+        try:
+            data = self._queue.get(timeout=self.READ_TIMEOUT)
+        except queue.Empty:
+            raise OSError("Das Mikrofon liefert keine Daten mehr (abgesteckt oder nach dem Ruhezustand?).") from None
+        frame = resample(data, FRAME_SAMPLES)
         self._recent_levels.append(rms(frame))
         self.frames_read += 1
         self.peak = max(self.peak, int(np.abs(frame.astype(np.int32)).max(initial=0)))
@@ -195,8 +295,11 @@ class Microphone:
 
     def drain(self) -> None:
         """Verwirft Audio, das sich angesammelt hat (z. B. während Jarvis sprach)."""
-        while self._stream is not None and self._stream.read_available >= self._block:
-            self._stream.read(self._block)
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
 
     @property
     def noise_floor(self) -> float:
