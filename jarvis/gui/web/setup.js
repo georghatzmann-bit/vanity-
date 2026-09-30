@@ -739,10 +739,16 @@
     p.textContent = text || '';
   }
 
-  function showWeather(res) {
+  function showWeather(res, offlinePlace) {
     const card = $('weatherCard');
     const ok = !!(res && res.ok);
     card.classList.toggle('empty', !ok);
+    if (!ok && offlinePlace) {
+      $('weatherTemp').textContent = '–';
+      $('weatherPlace').textContent = offlinePlace;
+      $('weatherText').textContent = 'Das Wetter ist gerade nicht erreichbar. Jarvis zeigt es, sobald es wieder geht.';
+      return;
+    }
     if (!ok) {
       $('weatherTemp').textContent = '–';
       $('weatherPlace').textContent = 'Noch kein Ort geprüft';
@@ -785,6 +791,7 @@
     }
     const msg = (res && res.error) || 'Das hat nicht geklappt.';
     if (/gespeichert/i.test(msg)) {
+      showWeather(null, text);
       if (save) await placeSave(text);
       placeMsg('warn', msg);
       return 'network';
