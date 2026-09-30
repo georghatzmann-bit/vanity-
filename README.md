@@ -1,6 +1,6 @@
 # Jarvis
 
-Dein eigener Sprachassistent wie bei Iron Man: Du sagst "Hey Jarvis", sprichst deinen Befehl, Claude Code erledigt ihn auf deinem PC, und Jarvis antwortet mit einer menschlichen Stimme. Dazu gibt es ein Arc-Reactor-Fenster mit Chatverlauf.
+Dein eigener Sprachassistent wie bei Iron Man: Du sagst "Hey Jarvis", sprichst deinen Befehl, Claude Code erledigt ihn auf deinem PC, und Jarvis antwortet mit einer menschlichen Stimme. Dazu gibt es ein aufgeräumtes Fenster mit Unterhaltung.
 
 **Schnellstart: siehe [ANLEITUNG.md](ANLEITUNG.md).** Kurz: ZIP entpacken, `Jarvis.bat` doppelklicken, die Einrichtung durchklicken.
 
@@ -12,20 +12,20 @@ Mikrofon → "Hey Jarvis" (openWakeWord, lokal)
          → schnelle Befehle direkt (Uhrzeit, Lautstärke, Musik, Stopp)
          → alles andere: Claude Code (dein Claude Pro Abo), Antwort wird gestreamt
          → Jarvis-Stimme (Microsoft Neural über edge-tts, gratis), Satz für Satz
-         → Arc-Reactor-Fenster, Tray-Icon, Alexa über Home Assistant
+         → Jarvis-Fenster, Tray-Icon, Alexa über Home Assistant
 ```
 
 ## Was Jarvis kann
 
-- **Sprache und Tippen:** "Hey Jarvis" plus Befehl, oder auf den Arc Reactor klicken (dann hört Jarvis sofort zu), oder unten im Fenster tippen. Beispiel-Befehle zum Anklicken stehen im leeren Verlauf.
+- **Sprache und Tippen:** "Hey Jarvis" plus Befehl, oder auf den Kreis im Fenster klicken (dann hört Jarvis sofort zu), oder rechts unten tippen. Beispiel-Befehle zum Anklicken stehen in der leeren Unterhaltung.
 - **Schnelle Antworten:** Jarvis spricht den ersten Satz, während Claude noch am Rest schreibt. Braucht Claude länger, sagt Jarvis "Einen Moment, Sir."
 - **Sofort-Befehle ohne Claude:** Uhrzeit, Datum, lauter/leiser, Musik pausieren/weiter/nächstes Lied, "Stopp", "Mikrofon aus", "Neue Unterhaltung".
-- **Unterbrechen:** "Hey Jarvis" unterbricht eine laufende Antwort, der Stopp-Knopf, Esc und ein Klick auf den Reaktor auch.
+- **Unterbrechen:** "Hey Jarvis" unterbricht eine laufende Antwort, der Stopp-Knopf, Esc und ein Klick auf den Kreis auch.
 - **PC-Aufgaben über Claude:** Programme und Webseiten öffnen, Dateien finden, Websuche, Wetter, Bildschirm vorlesen, Erinnerungen, Gaming-Modus, Morgen-Briefing.
 - **Erst fragen:** Löschen (nur in den Papierkorb), Installieren und Nachrichten verschicken macht Jarvis erst nach deinem "Ja".
 - **Alexa und Smart Home** über Home Assistant (optional).
-- **Arc-Reactor-Fenster** mit Zuständen (bereit, hört zu, denkt nach, spricht, stumm), Chatverlauf, CPU/RAM, Uhr, Tray-Icon und Autostart.
-- **Grafische Einrichtung** beim ersten Start: Mikrofon mit Pegel und Hey-Jarvis-Test (zeigt, welches Mikrofon Windows als Standard nimmt), Stimmen zum Anhören, Wohnort mit Wetter-Vorschau, Claude-Prüfung mit Installieren/Anmelden-Knopf, Stumm-Taste, Autostart, Alexa. Jeder Schritt speichert sofort. Später über das Zahnrad.
+- **Jarvis-Fenster** mit Zuständen (bereit, hört zu, denkt nach, spricht, Mikrofon aus), Unterhaltung, Wetter, Uhr, Tray-Icon und Autostart.
+- **Grafische Einrichtung** beim ersten Start: Mikrofon mit Pegel und Hey-Jarvis-Test (zeigt, welches Mikrofon Windows als Standard nimmt), Stimmen zum Anhören, Wohnort mit Wetter-Vorschau, Claude-Prüfung mit Installieren/Anmelden-Knopf und Claudes genauer Meldung, Antwort-Tempo, Stumm-Taste, Autostart, Alexa. Jeder Schritt speichert sofort. Später über "Einstellungen" oben rechts.
 
 | Einrichtung: Mikrofon | Einrichtung: fertig |
 |---|---|
@@ -40,7 +40,7 @@ Für Sonderfälle liegen im Ordner `werkzeuge`:
 
 | Datei | Was sie macht |
 |---|---|
-| `Einrichtung.bat` | Einrichtung öffnen (wie das Zahnrad im Fenster) |
+| `Einrichtung.bat` | Einrichtung öffnen (wie "Einstellungen" im Fenster) |
 | `Selbsttest.bat` | Prüft alles und sagt, was zu tun ist |
 | `Mikrofon-Test.bat` | Mikrofone, Pegel und "Hey Jarvis"-Erkennung live in der Konsole |
 | `Claude-Test.bat` | Zeigt, welches Claude-Modell antwortet |
@@ -52,7 +52,7 @@ Für Sonderfälle liegen im Ordner `werkzeuge`:
 
 ## Jarvis reagiert nicht?
 
-Öffne über das Zahnrad die Einrichtung, Schritt Mikrofon (oder `werkzeuge\Mikrofon-Test.bat`). Das zeigt einen Live-Pegel und ob "Hey Jarvis" ankommt:
+Öffne oben rechts die Einstellungen, Schritt Mikrofon (oder `werkzeuge\Mikrofon-Test.bat`). Das zeigt einen Live-Pegel und ob "Hey Jarvis" ankommt:
 
 - **Der Pegel bleibt bei 0:** Windows blockiert das Mikrofon. Öffne *Einstellungen > Datenschutz und Sicherheit > Mikrofon* und schalte "Desktop-Apps den Zugriff auf das Mikrofon erlauben" ein.
 - **Der Pegel bewegt sich kaum, wenn du sprichst:** Es ist das falsche Mikrofon. Wähle in der Einrichtung ein anderes.
@@ -138,7 +138,8 @@ jarvis/
   tool.py         python -m jarvis.tool ... (für Claude)
   pc.py reminders.py homeassistant.py server.py   PC-Aktionen, Erinnerungen, Alexa, Web-Eingang
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
-  gui/web/        index.html app.js style.css     Hauptfenster (Arc Reactor als Canvas)
+  gui/web/        base.css                        gemeinsame Farben, Schrift, Knöpfe
+                  index.html app.js style.css     Hauptfenster (Kreis als Canvas)
                   setup.html setup.js setup.css   Einrichtung (Api: setup_wizard.SetupApi)
                   Beide Seiten laufen auch im normalen Browser als Demo (ohne Jarvis-Kern).
   tray.py autostart.py selftest.py simulate.py logsetup.py

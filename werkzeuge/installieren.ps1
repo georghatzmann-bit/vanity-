@@ -30,18 +30,9 @@ $total = 7
 $script:step = 0
 
 function Show-Banner {
-    $c = "Cyan"
     Write-Host ""
-    Write-Host "            .-~~~~~~~~-.           " -ForegroundColor DarkCyan
-    Write-Host "         .'   .----.   '.        " -ForegroundColor DarkCyan -NoNewline
-    Write-Host "  J . A . R . V . I . S ." -ForegroundColor $c
-    Write-Host "        /    / .--. \    \       " -ForegroundColor $c -NoNewline
-    Write-Host "  Just A Rather Very Intelligent System" -ForegroundColor DarkGray
-    Write-Host "       |    | ( () ) |    |      " -ForegroundColor White
-    Write-Host "        \    \ '--' /    /       " -ForegroundColor $c -NoNewline
-    Write-Host "  Installation" -ForegroundColor White
-    Write-Host "         '.   '----'   .'        " -ForegroundColor DarkCyan
-    Write-Host "            '-~~~~~~~~-'           " -ForegroundColor DarkCyan
+    Write-Host "  Jarvis" -ForegroundColor White
+    Write-Host "  Installation. Beim ersten Mal dauert das ein paar Minuten." -ForegroundColor DarkGray
     Write-Host ""
 }
 
@@ -280,7 +271,7 @@ if (-not $webview2) {
 }
 
 Write-Host ""
-Write-Host "  Alle Systeme bereit." -ForegroundColor Green
+Write-Host "  Fertig. Jarvis ist installiert." -ForegroundColor Green
 if ($Neu) {
     Write-Host "  Starte Jarvis mit dem Symbol auf dem Desktop." -ForegroundColor White
 } elseif (Test-Path (Join-Path $root "daten\einrichtung-fertig.txt")) {

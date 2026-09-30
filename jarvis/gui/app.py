@@ -103,7 +103,7 @@ class Api:
         self._assistant.stop()
 
     def listen_now(self) -> dict:
-        """Klick auf den Arc Reactor: sofort zuhören, ohne "Hey Jarvis"."""
+        """Klick auf den Kreis im Fenster: sofort zuhören, ohne "Hey Jarvis"."""
         if self._mute is not None and self._mute.muted:
             return {"ok": False, "reason": "muted"}
         if self._on_listen is None or not self._on_listen():
@@ -222,7 +222,7 @@ class Window:
             width=width,
             height=height,
             min_size=(min(800, width), min(600, height)),
-            background_color="#04070d",
+            background_color="#0f1115",
             text_select=True,
         )
         self._window.events.closing += self._closing

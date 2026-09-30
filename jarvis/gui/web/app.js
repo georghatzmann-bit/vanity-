@@ -43,6 +43,7 @@
     errorActive: false,
     hotkey: 'STRG+ALT+M',
     mic: '',
+    voice: null,        // false = Sprachsteuerung aus (kein Mikrofon), dann nur Tippen
     model: '',
     weather: '',
     version: '',
@@ -189,7 +190,9 @@
     h.textContent = '';
     switch (st) {
       case 'idle':
-        h.textContent = 'Sag „Hey Jarvis“ oder klick auf den Kreis';
+        h.textContent = S.voice === false
+          ? 'Die Sprachsteuerung ist aus. Schreib Jarvis rechts eine Nachricht.'
+          : 'Sag „Hey Jarvis“ oder klick auf den Kreis';
         break;
       case 'listening':
         h.textContent = 'Sprich jetzt, ich höre zu';
@@ -238,11 +241,15 @@
   function applyConfig(cfg) {
     if (!cfg || typeof cfg !== 'object') return;
     if (typeof cfg.hotkey === 'string') S.hotkey = cfg.hotkey;
-    if (typeof cfg.mic === 'string') {
-      S.mic = cfg.mic.trim();
-      el.micName.textContent = S.mic;
-      el.micName.title = S.mic;
-      el.micLine.hidden = !S.mic;
+    if (typeof cfg.mic === 'string') S.mic = cfg.mic.trim();
+    if (typeof cfg.voice === 'boolean') S.voice = cfg.voice;
+    if (typeof cfg.mic === 'string' || typeof cfg.voice === 'boolean') {
+      const off = S.voice === false;
+      el.micName.textContent = off ? 'Kein Mikrofon aktiv' : S.mic;
+      el.micName.title = off ? 'Jarvis konnte kein Mikrofon öffnen' : S.mic;
+      el.micLine.hidden = !off && !S.mic;
+      el.micLine.classList.toggle('off', off);
+      renderState(true);
     }
     if (typeof cfg.model === 'string') {
       S.model = cfg.model.trim();

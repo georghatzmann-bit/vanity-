@@ -79,7 +79,7 @@ REQUIRED = {
 OPTIONAL = {
     "pyttsx3": ("pyttsx3", "Windows-Stimme als Reserve ohne Internet"),
     "keyboard": ("keyboard", "Tastenkürzel zum Stummschalten und Musiktasten"),
-    "webview": ("pywebview", "Arc-Reactor-Fenster"),
+    "webview": ("pywebview", "Jarvis-Fenster"),
     "psutil": ("psutil", "CPU- und RAM-Anzeige"),
     "pystray": ("pystray", "Tray-Icon"),
     "PIL": ("pillow", "Tray-Icon und Bildschirmfotos"),
@@ -115,7 +115,7 @@ def check_packages(r: Report) -> None:
 
 def check_config(r: Report, cfg: dict) -> None:
     if not CONFIG_PATH.exists():
-        r.add("config.toml", "warnung", "fehlt, Jarvis nutzt die Standardwerte", "Die Einrichtung (Zahnrad im Jarvis-Fenster) legt sie an.")
+        r.add("config.toml", "warnung", "fehlt, Jarvis nutzt die Standardwerte", "Die Einrichtung (Einstellungen im Jarvis-Fenster) legt sie an.")
     else:
         r.add("config.toml", "ok", "lesbar")
     threshold = cfg["wakeword"]["threshold"]
@@ -315,7 +315,7 @@ def check_gui(r: Report) -> None:
 
     ok, reason = webview_available()
     if ok:
-        r.add("Oberfläche", "ok", "Arc-Reactor-Fenster startklar")
+        r.add("Oberfläche", "ok", "Jarvis-Fenster startklar")
     else:
         hint = "werkzeuge\\Neu-installieren.bat starten."
         if "WebView2" in reason:

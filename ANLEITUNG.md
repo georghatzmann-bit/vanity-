@@ -12,7 +12,7 @@ Diese Anleitung ist für dich, Georg. Du brauchst nur einen Doppelklick.
 
 ## 2. Doppelklick auf `Jarvis.bat`
 
-Beim ersten Mal installiert Jarvis alles, was er braucht. Das dauert ein paar Minuten, ein kleiner Arc Reactor zeigt dir, was gerade passiert. Fehlt Python, fragt er, ob er es installieren soll: einfach Enter drücken.
+Beim ersten Mal installiert Jarvis alles, was er braucht. Das dauert ein paar Minuten, ein Fenster zeigt dir, was gerade passiert. Fehlt Python, fragt er, ob er es installieren soll: einfach Enter drücken.
 
 Fragt Windows nach, weil die Datei aus dem Internet kommt: Beim blauen Fenster "Der Computer wurde durch Windows geschützt" auf **"Weitere Informationen"** und dann **"Trotzdem ausführen"** klicken, bei "Sicherheitswarnung" auf **"Ausführen"**. Das kommt nur beim ersten Mal (und gar nicht, wenn du bei der ZIP "Zulassen" angehakt hast).
 
@@ -28,12 +28,12 @@ Beim ersten Start öffnet sich die Einrichtung von selbst. Sie führt dich durch
 4. **Claude:** Jarvis prüft, ob Claude antwortet. Fehlt Claude Code oder bist du nicht angemeldet, gibt es dafür einen Knopf.
 5. **Extras** (alles optional): Stumm-Taste, mit Windows starten, Alexa.
 
-Danach startet Jarvis mit dem Arc-Reactor-Fenster. Die Einrichtung kannst du jederzeit über das **Zahnrad** im Jarvis-Fenster wieder öffnen.
+Danach startet das Jarvis-Fenster. Die Einrichtung kannst du jederzeit über **Einstellungen** (oben rechts im Jarvis-Fenster) wieder öffnen.
 
 ## So benutzt du Jarvis
 
 - **"Hey Jarvis"** sagen (englisch ausgesprochen), auf den Ton warten, Befehl auf Deutsch sprechen.
-- Oder auf den leuchtenden **Arc Reactor klicken**: Dann hört Jarvis sofort zu, ganz ohne "Hey Jarvis".
+- Oder auf den **Kreis** in der Mitte klicken: Dann hört Jarvis sofort zu, ganz ohne "Hey Jarvis".
 - Oder unten im Fenster **tippen** und Enter drücken. Solange der Verlauf leer ist, stehen dort Beispiele zum Anklicken.
 - **Strg+Alt+M** schaltet das Mikrofon stumm und wieder an, egal welches Fenster vorne ist. Das geht auch mit dem Mikrofon-Knopf im Fenster.
 - **"Hey Jarvis, Stopp"** oder der Stopp-Knopf unterbricht Jarvis, auch mitten im Satz.
@@ -67,7 +67,7 @@ Jarvis spricht über Home Assistant mit deinen Echos. Das kostet nichts, braucht
 1. **Home Assistant** installieren, zum Beispiel auf einem Raspberry Pi: https://www.home-assistant.io/installation/
 2. In Home Assistant **HACS** installieren und darüber **"Alexa Media Player"**. Dann mit deinem Amazon-Konto anmelden. Deine Echos erscheinen als `media_player.echo_...`.
 3. In Home Assistant unten links auf deinen Namen > **Sicherheit** > **Langlebige Zugriffstoken** > Token erstellen und kopieren.
-4. In der Jarvis-Einrichtung (Zahnrad) bei **Extras > Alexa** die Adresse (zum Beispiel `http://homeassistant.local:8123`) und den Token einfügen und auf **Verbindung testen** klicken. Jarvis findet deine Echos, du gibst jedem einen Raum (zum Beispiel "wohnzimmer").
+4. In der Jarvis-Einrichtung (Einstellungen oben rechts) bei **Extras > Alexa** die Adresse (zum Beispiel `http://homeassistant.local:8123`) und den Token einfügen und auf **Verbindung testen** klicken. Jarvis findet deine Echos, du gibst jedem einen Raum (zum Beispiel "wohnzimmer").
 5. Ausprobieren: "Hey Jarvis, sag im Wohnzimmer Bescheid, dass das Essen fertig ist." oder "Schalte das Wohnzimmerlicht an."
 
 **Umgekehrt, Alexa sagt Jarvis etwas** (für Fortgeschrittene): In `config.toml` unter `[server]` `enabled = true` und ein langes `token` setzen. In Home Assistant in `configuration.yaml`:
@@ -87,9 +87,10 @@ Dann kann eine Home-Assistant-Automation oder ein Skript zum Beispiel `rest_comm
 
 ## Wenn etwas nicht klappt
 
-- **Jarvis reagiert nicht auf "Hey Jarvis":** Zahnrad > Mikrofon. Dort siehst du den Pegel und ob "Hey Jarvis" ankommt. Klappt es nur knapp, den Schalter "empfindlicher" einschalten. Zum Ausprobieren geht auch ein Klick auf den Arc Reactor.
-- **Jarvis nimmt das falsche Mikrofon:** Zahnrad > Mikrofon > dein richtiges Mikrofon anklicken (nicht "Windows-Standard"). Es wird sofort gespeichert. Ist es später mal abgesteckt, hört Jarvis so lange über das Standardmikrofon und sagt dir das.
-- **Claude lehnt ab:** Jarvis probiert automatisch andere Modelle und zuletzt einen einfachen Modus. Hilft das nicht, `werkzeuge\Claude-Test.bat` starten und die Tabelle an Claude im Jarvis-Projekt schicken.
+- **Jarvis reagiert nicht auf "Hey Jarvis":** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob "Hey Jarvis" ankommt. Klappt es nur knapp, den Schalter "empfindlicher" einschalten. Zum Ausprobieren geht auch ein Klick auf den Kreis.
+- **Jarvis nimmt das falsche Mikrofon:** Einstellungen > Mikrofon > dein richtiges Mikrofon anklicken (nicht "Windows-Standard"). Es wird sofort gespeichert. Ist es später mal abgesteckt, hört Jarvis so lange über das Standardmikrofon und sagt dir das.
+- **Claude lehnt ab oder meldet einen Fehler:** Jarvis probiert automatisch andere Modelle (Sonnet, Haiku, Opus) und zuletzt einen ganz einfachen Modus. Unter Einstellungen > Claude steht Claudes genaue Meldung mit einem Knopf zum Kopieren. Die kannst du Claude im Jarvis-Projekt schicken.
+- **Jarvis antwortet zu langsam:** Einstellungen > Claude > Antwort-Tempo auf **Schnell** stellen. Dann antwortet Haiku, das ist am schnellsten.
 - **Irgendwas geht nicht und du weißt nicht was:** `werkzeuge\Selbsttest.bat` prüft alles und sagt bei jedem Punkt, was zu tun ist. Den Inhalt von `logs\selbsttest.txt` kannst du Claude im Jarvis-Projekt schicken.
 - **"Jarvis läuft schon":** Jarvis ist schon offen, oft versteckt als Symbol unten rechts neben der Uhr. Dort mit Rechtsklick beenden oder das Fenster öffnen.
 - **Mikrofon abgesteckt:** Jarvis merkt das und versucht es alle paar Sekunden wieder. Steckst du es wieder ein, hört er von selbst weiter zu.

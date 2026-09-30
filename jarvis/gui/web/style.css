@@ -266,6 +266,10 @@ body[data-state="thinking"] #stopBtn:not(:disabled) {
   font-size: var(--fs-hint);
 }
 
+.mic-line.off .mic-name {
+  color: var(--warn);
+}
+
 /* ------------------------------------------------------------------ Unterhaltung */
 
 .chat {

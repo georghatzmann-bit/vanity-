@@ -21,7 +21,7 @@ PRIVACY_HINT = (
     "Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff: "
     "Einstellungen > Datenschutz und Sicherheit > Mikrofon > "
     '"Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten. '
-    "Oder es ist das falsche Mikrofon: in der Einrichtung (Zahnrad) das richtige wählen."
+    "Oder es ist das falsche Mikrofon: in den Einstellungen (oben rechts im Jarvis-Fenster) das richtige wählen."
 )
 
 
@@ -61,7 +61,7 @@ class VoiceLoop:
         self.stopped = threading.Event()
 
     def listen_now(self) -> bool:
-        """Zuhören wie nach "Hey Jarvis", aber per Klick (Arc Reactor im Fenster).
+        """Zuhören wie nach "Hey Jarvis", aber per Klick (Kreis im Jarvis-Fenster).
         Geht nicht, solange das Mikrofon stumm ist."""
         if self._mute.muted:
             return False

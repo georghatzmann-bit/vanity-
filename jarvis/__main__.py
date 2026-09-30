@@ -1,6 +1,6 @@
 """Startet Jarvis.
 
-    python -m jarvis               Arc-Reactor-Fenster + Sprachsteuerung (Jarvis.bat),
+    python -m jarvis               Jarvis-Fenster + Sprachsteuerung (Jarvis.bat),
                                    beim allerersten Start vorher die Einrichtung
     python -m jarvis --einrichten  Einrichtung mit Mikrofon, Stimme, Wohnort, Claude
     python -m jarvis --konsole     nur Konsolenfenster, ohne Oberfläche
@@ -141,18 +141,23 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
         mic = Microphone(cfg["audio"]["input_device"], fallback=True)
     except Exception as exc:
         log.error("Mikrofon: %s", exc)
-        ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Ein anderes wählst du über das Zahnrad im Jarvis-Fenster.", "error")
+        ui.toast(f"Mikrofon-Problem: {friendly_device_error(exc)} Ein anderes wählst du in den Einstellungen (oben rechts im Jarvis-Fenster).", "error")
         return None
     if mic.missing:
         # Lieber mit dem Standardmikrofon weiter als gar nicht zuhören, aber deutlich sagen.
         ui.toast(
             f'Dein Mikrofon „{mic.missing}“ ist nicht angeschlossen. Ich höre vorerst über '
-            f'„{mic.name}“. Anderes Mikrofon: Zahnrad im Jarvis-Fenster.',
+            f'„{mic.name}“. Anderes Mikrofon: Einstellungen oben rechts im Jarvis-Fenster.',
             "error",
         )
     ui.config(mic=mic.name)
     hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? werkzeuge\\Einrichtung.bat)")
-    ui.message("info", "Lade Spracherkennung (beim ersten Start wird das Modell heruntergeladen) ...")
+    # Nur wenn es dauert (beim ersten Start wird das Modell heruntergeladen), Bescheid sagen.
+    slow = threading.Timer(
+        2.0, lambda: ui.message("info", "Lade die Spracherkennung. Beim ersten Start dauert das ein paar Minuten ...")
+    )
+    slow.daemon = True
+    slow.start()
     try:
         from .stt import SpeechToText
 
@@ -164,6 +169,8 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
         log.exception("Spracherkennung lädt nicht")
         ui.toast(f"Spracherkennung lädt nicht: {exc}. werkzeuge\\Selbsttest.bat zeigt mehr.", "error")
         return None
+    finally:
+        slow.cancel()
     return VoiceLoop(cfg, mic, wake, stt, assistant, assistant.mute, Sounds(), hotkey, hints)
 
 
@@ -242,15 +249,17 @@ def run_gui(cfg: dict, args) -> int:
                 assistant.mute.on_change(tray.set_muted)
                 window.allow_close = not gui_cfg.get("close_to_tray", False)
         if assistant.brain is None:
-            ui.message("info", "Claude Code fehlt. Das Zahnrad hilft beim Einrichten.")
+            ui.message("info", "Claude Code fehlt. Die Einstellungen (oben rechts) helfen beim Einrichten.")
         voice = load_voice(cfg, assistant, ui, hotkey, lambda _text: None)
         if voice is None:
-            ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis unten etwas schreiben.")
+            ui.config(voice=False)
+            ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis rechts eine Nachricht schreiben.")
             assistant.update_state()
             return
+        ui.config(voice=True)
         voice_ref.append(voice)
         console.idle_hint = f'Sag "Hey Jarvis" ...  ({hotkey} = stumm/laut)'
-        ui.message("info", f'Bereit. Sag "Hey Jarvis" oder schreib unten. {hotkey} schaltet das Mikrofon stumm.')
+        console.message("info", f'Bereit. Sag "Hey Jarvis" oder schreib. {hotkey} schaltet das Mikrofon stumm.')
         assistant.say("Jarvis ist online, Sir.")
         assistant.update_state()
         if stopped.is_set():

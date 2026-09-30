@@ -1,6 +1,6 @@
 """Grafische Einrichtung: Mikrofon, Stimme, Wohnort, Claude und Extras in sieben Schritten.
 
-Öffnet sich beim ersten Start von selbst (und später über das Zahnrad im Jarvis-Fenster).
+Öffnet sich beim ersten Start von selbst (und später über die Einstellungen im Jarvis-Fenster).
 Die Seite liegt in gui/web/setup.html, hier ist die Python-Seite dazu (window.pywebview.api).
 """
 
@@ -632,7 +632,7 @@ def run_setup(cfg: dict, start_after: bool = True) -> int:
         width=width,
         height=height,
         min_size=(min(800, width), min(600, height)),
-        background_color="#04070d",
+        background_color="#0f1115",
     )
     window_ref.append(window)
     try:
@@ -645,7 +645,7 @@ def run_setup(cfg: dict, start_after: bool = True) -> int:
         start = bool(api.finished.get("start"))
     else:
         # Einfach zugemacht: Wurde die Einrichtung schon einmal abgeschlossen (z. B. über
-        # das Zahnrad geöffnet), geht es zurück zu Jarvis. Beim ersten Mal nicht.
+        # die Einstellungen geöffnet), geht es zurück zu Jarvis. Beim ersten Mal nicht.
         start = setup_done()
     if start and not jarvis_running(wait=5.0):
         launch()
@@ -653,7 +653,7 @@ def run_setup(cfg: dict, start_after: bool = True) -> int:
 
 
 def jarvis_running(wait: float = 0.0) -> bool:
-    """Läuft Jarvis gerade? Nach dem Zahnrad beendet sich der alte Jarvis erst, darum
+    """Läuft Jarvis gerade? Nach dem Öffnen der Einstellungen beendet sich der alte Jarvis erst, darum
     bis zu `wait` Sekunden warten."""
     end = time.monotonic() + wait
     while True:

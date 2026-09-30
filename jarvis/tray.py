@@ -7,46 +7,41 @@ import logging
 log = logging.getLogger(__name__)
 
 
+ACCENT = (76, 157, 255, 255)
+MUTED = (240, 85, 90, 255)
+
+
 def make_icon_image(size: int = 64, muted: bool = False):
-    """Zeichnet einen kleinen Arc Reactor als Symbol."""
+    """Das Jarvis-Zeichen: ein Ring mit Punkt. Blau, stumm rot. Vierfach groß gezeichnet
+    und verkleinert, damit die Kanten auch in 16 Pixeln glatt sind."""
     from PIL import Image, ImageDraw
 
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    big = size * 4
+    image = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    color = (255, 77, 94, 255) if muted else (79, 216, 255, 255)
-    glow = (color[0], color[1], color[2], 90)
-    s = size
-    draw.ellipse((2, 2, s - 3, s - 3), outline=glow, width=max(2, s // 16))
-    draw.ellipse((s * 0.14, s * 0.14, s * 0.86, s * 0.86), outline=color, width=max(2, s // 12))
-    for i in range(8):
-        import math
-
-        angle = i * math.pi / 4
-        r1, r2 = s * 0.24, s * 0.34
-        cx = cy = s / 2
-        draw.line(
-            (cx + r1 * math.cos(angle), cy + r1 * math.sin(angle), cx + r2 * math.cos(angle), cy + r2 * math.sin(angle)),
-            fill=color,
-            width=max(1, s // 20),
-        )
-    draw.ellipse((s * 0.36, s * 0.36, s * 0.64, s * 0.64), fill=(220, 248, 255, 255) if not muted else color)
-    return image
+    color = MUTED if muted else ACCENT
+    ring = max(4, round(big * 0.09))
+    pad = ring // 2 + round(big * 0.06)
+    draw.ellipse((pad, pad, big - 1 - pad, big - 1 - pad), outline=color, width=ring)
+    dot = big * 0.2
+    c = big / 2
+    draw.ellipse((c - dot, c - dot, c + dot, c + dot), fill=color)
+    return image.resize((size, size), Image.LANCZOS)
 
 
 def save_app_icon(path) -> None:
-    """Symbol für die Desktop-Verknüpfung (werkzeuge/installieren.ps1):
-    leuchtender Arc Reactor auf dunklem Kreis, in allen Größen, die Windows braucht."""
-    from PIL import Image, ImageDraw, ImageFilter
+    """Symbol für die Desktop-Verknüpfung (werkzeuge/installieren.ps1): das Jarvis-Zeichen
+    auf einer dunklen, abgerundeten Fläche, in allen Größen, die Windows braucht."""
+    from PIL import Image, ImageDraw
 
     size = 256
-    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ImageDraw.Draw(image).ellipse((6, 6, size - 7, size - 7), fill=(5, 12, 22, 255), outline=(79, 216, 255, 110), width=5)
-    reactor = make_icon_image(196)
-    glow = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    glow.alpha_composite(reactor, (30, 30))
-    image.alpha_composite(glow.filter(ImageFilter.GaussianBlur(9)))
-    image.alpha_composite(glow)
-    image.save(str(path), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    big = size * 4
+    tile = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    ImageDraw.Draw(tile).rounded_rectangle((8, 8, big - 9, big - 9), radius=big // 5, fill=(21, 25, 34, 255))
+    tile = tile.resize((size, size), Image.LANCZOS)
+    mark = make_icon_image(160)
+    tile.alpha_composite(mark, (48, 48))
+    tile.save(str(path), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
 
 class Tray:

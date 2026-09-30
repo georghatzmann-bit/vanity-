@@ -1,1 +1,1 @@
-"""Die Arc-Reactor-Oberfläche (pywebview-Fenster mit HTML/Canvas)."""
+"""Das Jarvis-Fenster (pywebview mit HTML/Canvas)."""
