@@ -637,6 +637,7 @@
   // ------------------------------------------------------------------ 3 Stimme
 
   async function voiceEnter() {
+    call('voice_prepare').catch(() => {});
     if (!S.voices.length) {
       try {
         const list = await call('voices');
@@ -1388,6 +1389,7 @@
       mic_save: (id) => later({ ok: true, error: '', name: String(id) }, 80),
       wake_sensitive: (on) => { threshold = on ? 0.35 : 0.5; return later({ ok: true, error: '', threshold }, 80); },
       voices: () => later(VOICES, 60),
+      voice_prepare: () => later(true, 20),
       voice_preview: () => later({ ok: true, error: '' }, 2600),
       voice_save: () => later({ ok: true, error: '' }, 80),
       place_check: (text) => later(/^x+$/i.test(text) || /unbekannt/i.test(text)

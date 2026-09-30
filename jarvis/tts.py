@@ -7,6 +7,7 @@ Satz schon, während der aktuelle noch läuft.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import queue
@@ -14,6 +15,7 @@ import tempfile
 import threading
 import time
 import wave
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -24,29 +26,100 @@ log = logging.getLogger(__name__)
 
 
 class TextToSpeech:
-    def __init__(self, cfg: dict) -> None:
+    # Kurze Sätze ("Einen Moment, Sir.") merkt sich Jarvis auf der Festplatte: Beim
+    # nächsten Mal kommen sie sofort, ohne Internet-Umweg.
+    CACHE_MAX_CHARS = 80
+    CACHE_MAX_FILES = 400
+
+    def __init__(self, cfg: dict, cache_dir: Path | None = None) -> None:
         self._engine = cfg.get("engine", "edge")
         self._voice = cfg.get("voice", "de-DE-ConradNeural")
         self._rate = cfg.get("rate", "+0%")
         self._pitch = cfg.get("pitch", "+0Hz")
         self._edge_failed_at = 0.0
+        self._cache_dir = Path(cache_dir) if cache_dir else None
+        self.used_edge = False  # kam der letzte Satz von der Microsoft-Stimme (oder der Ersatzstimme)?
 
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
         """Gibt die gesprochene Fassung von `text` als int16-Samples und Abtastrate zurück."""
-        # Nach einem Fehler (z. B. kein Internet) eine Minute lang direkt die Windows-Stimme nehmen.
+        cached = self._cache_file(text)
+        if cached is not None and cached.exists():
+            try:
+                with np.load(cached) as data:
+                    self.used_edge = True
+                    return data["samples"].copy(), int(data["rate"])
+            except Exception as exc:
+                log.debug("Stimmen-Zwischenspeicher: %s", exc)
+        # Nach einem Fehler (z. B. kein Internet) eine Minute lang direkt die Ersatzstimme nehmen.
         if self._engine == "edge" and time.monotonic() - self._edge_failed_at > 60:
             try:
-                return synthesize_edge(text, self._voice, self._rate, self._pitch)
+                samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
+                samples = trim_silence(samples, rate)
+                if cached is not None:
+                    self._store(cached, samples, rate)
+                self.used_edge = True
+                return samples, rate
             except Exception as exc:
                 self._edge_failed_at = time.monotonic()
-                log.warning("Microsoft-Stimme nicht erreichbar (%s), nutze Windows-Stimme.", exc)
-        return synthesize_windows(text)
+                log.warning("Microsoft-Stimme nicht erreichbar (%s), nutze die Ersatzstimme.", exc)
+        self.used_edge = False
+        samples, rate = synthesize_windows(text)
+        return trim_silence(samples, rate), rate
+
+    def prepare(self, texts) -> None:
+        """Legt feste Sätze im Voraus in den Zwischenspeicher (im Hintergrund aufrufen)."""
+        for text in texts:
+            text = speakable(text)
+            cached = self._cache_file(text)
+            if cached is None or cached.exists():
+                continue
+            try:
+                samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
+                self._store(cached, trim_silence(samples, rate), rate)
+            except Exception as exc:
+                log.debug("Vorbereiten von %r: %s", text, exc)
+                return
+
+    def _cache_file(self, text: str) -> Path | None:
+        if self._cache_dir is None or self._engine != "edge" or not text or len(text) > self.CACHE_MAX_CHARS:
+            return None
+        key = "|".join((self._voice, self._rate, self._pitch, text))
+        return self._cache_dir / (hashlib.sha1(key.encode("utf-8")).hexdigest()[:24] + ".npz")
+
+    def _store(self, path: Path, samples: np.ndarray, rate: int) -> None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp.npz")
+            np.savez(tmp, samples=np.asarray(samples, dtype=np.int16), rate=np.int32(rate))
+            os.replace(tmp, path)
+            files = sorted(path.parent.glob("*.npz"), key=lambda f: f.stat().st_mtime)
+            for old in files[: max(0, len(files) - self.CACHE_MAX_FILES)]:
+                old.unlink(missing_ok=True)
+        except OSError as exc:
+            log.debug("Stimmen-Zwischenspeicher: %s", exc)
 
     def say(self, text: str) -> None:
         text = speakable(text)
         if text:
             samples, rate = self.synthesize(text)
             play(samples, rate)
+
+
+def trim_silence(samples: np.ndarray, rate: int, lead: float = 0.05, trail: float = 0.18) -> np.ndarray:
+    """Schneidet die Stille vor und nach einem Satz auf ein natürliches Maß.
+    Die Microsoft-Stimmen liefern vorn etwa 0,2 s und hinten bis zu 0,9 s Stille mit.
+    Satz für Satz gesprochen, wirkt Jarvis dadurch zäh."""
+    samples = np.asarray(samples)
+    if samples.size == 0 or rate <= 0:
+        return samples
+    level = np.abs(samples.astype(np.int32))
+    threshold = max(120, int(level.max() * 0.02))
+    loud = np.flatnonzero(level > threshold)
+    if loud.size == 0:
+        return samples
+    start = max(0, int(loud[0] - lead * rate))
+    end = min(samples.size, int(loud[-1] + trail * rate) + 1)
+    return samples[start:end]
 
 
 def synthesize_edge(text: str, voice: str, rate: str = "+0%", pitch: str = "+0Hz") -> tuple[np.ndarray, int]:
@@ -130,14 +203,20 @@ def chime(freqs: tuple[int, ...] = (880, 1320)) -> None:
 
 
 def chime_samples(freqs: tuple[int, ...], rate: int = 24000) -> np.ndarray:
-    """Tonfolge als int16, so wie Player.play() sie erwartet. (Als Gleitkommazahlen
-    zwischen -1 und 1 würde die Umwandlung in int16 alles zu 0 machen: Stille.)"""
-    tones = []
-    for freq in freqs:
-        t = np.linspace(0, 0.09, int(rate * 0.09), endpoint=False)
-        envelope = np.minimum(1, np.minimum(t, t[::-1]) * 60)
-        tones.append(0.25 * np.sin(2 * np.pi * freq * t) * envelope)
-    return (np.concatenate(tones) * 32767).astype(np.int16)
+    """Weicher Klang aus kurzen, leicht überlappenden Tönen, die sanft ausklingen.
+    Als int16, so wie Player.play() es erwartet. (Als Gleitkommazahlen zwischen -1 und 1
+    würde die Umwandlung in int16 alles zu 0 machen: Stille.)"""
+    step, length = 0.085, 0.22
+    out = np.zeros(int(rate * (step * (len(freqs) - 1) + length)), dtype=np.float64)
+    t = np.arange(int(rate * length)) / rate
+    envelope = np.minimum(1.0, t / 0.005) * np.exp(-t * 16)
+    for i, freq in enumerate(freqs):
+        tone = np.sin(2 * np.pi * freq * t) + 0.2 * np.sin(2 * np.pi * 2 * freq * t)
+        start = int(rate * step * i)
+        out[start : start + t.size] += 0.24 * tone * envelope
+    peak = float(np.abs(out).max()) or 1.0
+    out *= min(1.0, 0.3 / peak)
+    return (out * 32767).astype(np.int16)
 
 
 class Speaker:

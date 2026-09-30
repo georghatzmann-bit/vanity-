@@ -54,11 +54,18 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     if not silent:
         from .tts import Speaker, TextToSpeech
 
+        tts = TextToSpeech(cfg["tts"], STATE_DIR / "stimmen")
         speaker = Speaker(
-            TextToSpeech(cfg["tts"]).synthesize,
+            tts.synthesize,
             on_level=ui.level,
             on_speaking=lambda value: assistant_ref and assistant_ref[0].set_speaking(value),
         )
+        from .assistant import FILLERS
+
+        # Die festen Sätze schon mal vorbereiten, dann kommen sie später ohne Verzögerung.
+        threading.Thread(
+            target=tts.prepare, args=(["Jarvis ist online, Sir.", *FILLERS],), name="jarvis-stimmen", daemon=True
+        ).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
     assistant_ref.append(assistant)
 

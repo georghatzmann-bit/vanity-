@@ -327,6 +327,7 @@ class SetupApi:
         self._claude = ClaudeCheck(cfg)
         self._devices: dict[int, str] = {}
         self._playing = threading.Lock()
+        self._previews_started = False
         self.finished: dict | None = None
 
     # ------------------------------------------------------------ Start
@@ -426,14 +427,37 @@ class SetupApi:
     def voices(self) -> list:
         return VOICES
 
+    def voice_prepare(self) -> bool:
+        """Holt die Hörproben im Hintergrund, sobald der Stimmen-Schritt offen ist.
+        Dann spielt jeder Klick sofort."""
+        if not self._previews_started:
+            self._previews_started = True
+            threading.Thread(target=self._prepare_previews, name="einrichtung-stimmen", daemon=True).start()
+        return True
+
+    def _speech(self, voice: str):
+        from .tts import TextToSpeech
+
+        tts = self._cfg["tts"]
+        return TextToSpeech(
+            {"engine": "edge", "voice": voice, "rate": tts.get("rate", "+0%"), "pitch": tts.get("pitch", "+0Hz")},
+            STATE_DIR / "stimmen",
+        )
+
+    def _prepare_previews(self) -> None:
+        for v in VOICES:
+            self._speech(v["id"]).prepare([PREVIEW_TEXT])
+
     def voice_preview(self, voice) -> dict:
-        from .tts import Player, synthesize_edge
+        from .tts import Player
 
         if not self._playing.acquire(blocking=False):
             return {"ok": False, "error": "Es spielt gerade schon eine Stimme."}
         try:
-            tts = self._cfg["tts"]
-            samples, rate = synthesize_edge(PREVIEW_TEXT, str(voice), tts.get("rate", "+0%"), tts.get("pitch", "+0Hz"))
+            speech = self._speech(str(voice))
+            samples, rate = speech.synthesize(PREVIEW_TEXT)
+            if not speech.used_edge:
+                return {"ok": False, "error": "Die Stimme lässt sich gerade nicht laden. Ist das Internet an?"}
             Player().play(samples, rate, lambda level: None)
             return {"ok": True, "error": ""}
         except Exception as exc:

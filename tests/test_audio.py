@@ -298,6 +298,42 @@ class DefaultMicrophoneTest(unittest.TestCase):
         self.assertNotIn("Lautsprecher (Realtek(R) Audio)", [d["name"] for d in devices])
 
 
+class TrimSilenceTest(unittest.TestCase):
+    def test_long_silence_is_cut_to_a_natural_pause(self):
+        from jarvis.tts import trim_silence
+
+        rate = 24000
+        speech = (np.sin(np.linspace(0, 400, rate)) * 12000).astype(np.int16)
+        samples = np.concatenate([np.zeros(rate // 4, np.int16), speech, np.zeros(rate, np.int16)])
+        trimmed = trim_silence(samples, rate)
+        self.assertAlmostEqual(len(trimmed) / rate, 1.0 + 0.05 + 0.18, delta=0.01)
+        self.assertEqual(len(trim_silence(np.zeros(100, np.int16), rate)), 100, "reine Stille bleibt, wie sie ist")
+
+
+class VoiceCacheTest(unittest.TestCase):
+    def test_short_sentences_come_from_the_cache_the_second_time(self):
+        from tempfile import TemporaryDirectory
+
+        from jarvis import tts
+
+        calls = []
+
+        def fake_edge(text, voice, rate="+0%", pitch="+0Hz"):
+            calls.append(text)
+            return (np.full(2400, 9000, np.int16), 24000)
+
+        with TemporaryDirectory() as folder, mock.patch.object(tts, "synthesize_edge", fake_edge):
+            speech = tts.TextToSpeech({"voice": "de-DE-ConradNeural"}, folder)
+            first, _ = speech.synthesize("Einen Moment, Sir.")
+            again, rate = speech.synthesize("Einen Moment, Sir.")
+            speech.synthesize("Ein sehr langer Satz, " * 5)
+            speech.synthesize("Ein sehr langer Satz, " * 5)
+        self.assertEqual(calls.count("Einen Moment, Sir."), 1)
+        self.assertEqual(calls.count("Ein sehr langer Satz, " * 5), 2, "lange Sätze werden nicht gespeichert")
+        self.assertTrue(np.array_equal(first, again))
+        self.assertEqual(rate, 24000)
+
+
 class ChimeTest(unittest.TestCase):
     def test_chime_is_audible_after_conversion(self):
         from jarvis.tts import chime_samples
