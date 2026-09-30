@@ -2,7 +2,7 @@
 
 Dein eigener Sprachassistent wie bei Iron Man: Du sagst "Hey Jarvis", sprichst deinen Befehl, Claude Code erledigt ihn auf deinem PC, und Jarvis antwortet mit einer menschlichen Stimme. Dazu gibt es ein aufgeräumtes Fenster mit Unterhaltung.
 
-**Schnellstart: siehe [ANLEITUNG.md](ANLEITUNG.md).** Kurz: ZIP entpacken, `Jarvis.bat` doppelklicken, die Einrichtung durchklicken.
+**Schnellstart:** [JarvisSetup.exe](https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe) laden, doppelklicken, die Einrichtung durchklicken. Mehr in der [ANLEITUNG.md](ANLEITUNG.md).
 
 ![Das Jarvis-Fenster](docs/bilder/hauptfenster.jpg)
 

@@ -2,21 +2,20 @@
 
 Diese Anleitung ist für dich, Georg. Du brauchst nur einen Doppelklick.
 
-## 1. Jarvis holen
+## 1. JarvisSetup.exe laden
 
-1. Falls Jarvis läuft: Fenster schließen (oder unten rechts neben der Uhr auf das Jarvis-Symbol, Rechtsklick, Beenden).
-2. Diese ZIP-Datei laden: https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/project-thread-0revfw.zip
-3. Tipp, damit Windows nicht bei jeder Datei nachfragt: Rechtsklick auf die ZIP > Eigenschaften > unten Haken bei **"Zulassen"** > OK.
-4. Jarvis bekommt am besten einen eigenen Ordner außerhalb von OneDrive, zum Beispiel `C:\Jarvis`. Öffne die ZIP, darin ist ein Ordner. Öffne ihn, markiere alles (Strg+A), kopiere es (Strg+C) und füge es in `C:\Jarvis` ein (Strg+V). Fragt Windows nach: "Dateien im Ziel ersetzen".
-5. Hattest du Jarvis schon woanders: Kopier deine alte `config.toml` mit nach `C:\Jarvis`. Dann sind deine Einstellungen gleich wieder da.
+1. Falls ein älteres Jarvis läuft: unten rechts neben der Uhr Rechtsklick auf das Jarvis-Symbol > Jarvis beenden.
+2. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
 
-## 2. Doppelklick auf `Jarvis.bat`
+## 2. Doppelklick auf JarvisSetup.exe
 
-Beim ersten Mal installiert Jarvis alles, was er braucht. Das dauert ein paar Minuten, ein Fenster zeigt dir, was gerade passiert. Fehlt Python, fragt er, ob er es installieren soll: einfach Enter drücken.
+Der Installer richtet alles selbst ein: Python, Spracherkennung, Stimmen, Desktop-Symbol und auf Wunsch den Autostart. Admin-Rechte braucht er nicht. Beim ersten Mal dauert das ein paar Minuten.
 
-Fragt Windows nach, weil die Datei aus dem Internet kommt: Beim blauen Fenster "Der Computer wurde durch Windows geschützt" auf **"Weitere Informationen"** und dann **"Trotzdem ausführen"** klicken, bei "Sicherheitswarnung" auf **"Ausführen"**. Das kommt nur beim ersten Mal (und gar nicht, wenn du bei der ZIP "Zulassen" angehakt hast).
+Fragt Windows nach, weil die Datei aus dem Internet kommt: Beim blauen Fenster "Der Computer wurde durch Windows geschützt" auf **"Weitere Informationen"** und dann **"Trotzdem ausführen"** klicken. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
 
-Danach liegt ein **Jarvis-Symbol auf dem Desktop** (und im Startmenü). Ab jetzt startest du Jarvis nur noch damit.
+Deinstallieren geht wie bei jedem Programm: Windows-Einstellungen > Apps > Jarvis > Deinstallieren.
+
+(Ohne Installer geht es auch: die ZIP von https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/project-thread-0revfw.zip entpacken und `Jarvis.bat` doppelklicken.)
 
 ## 3. Die Einrichtung
 
