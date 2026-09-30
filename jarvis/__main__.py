@@ -42,8 +42,11 @@ def handle(text: str, brain: ClaudeBrain) -> str:
     try:
         return brain.ask(text)
     except RefusalError as exc:
-        log.warning("Claude hat die Anfrage abgelehnt: %s", exc)
-        return "Verzeihung, Sir, darauf darf ich so nicht antworten. Versuchen Sie es bitte mit anderen Worten."
+        log.warning("Alle Modelle haben abgelehnt: %s", exc)
+        return (
+            "Verzeihung, Sir, Claude lehnt das gerade ab. "
+            "Starten Sie bitte einmal start.bat --claude-test, dann sehen wir, woran es liegt."
+        )
     except BrainError as exc:
         log.error("%s", exc)
         return "Verzeihung, Sir, da ist etwas schiefgelaufen. Details stehen im Fenster."
@@ -61,8 +64,24 @@ def run_text(brain: ClaudeBrain, speak) -> None:
         if not text:
             continue
         answer = handle(text, brain)
-        print(f"Jarvis: {answer}")
+        print(f"Jarvis{model_tag(brain)}: {answer}")
         speak(answer)
+
+
+def model_tag(brain) -> str:
+    model = getattr(brain, "last_model", "")
+    return f" [{model}]" if model else ""
+
+
+def run_claude_test(brain: ClaudeBrain) -> None:
+    print('Teste, ob Claude auf "hi" antwortet. Das dauert etwa eine Minute ...\n')
+    for model, mode, result in brain.diagnose("hi"):
+        print(f"  {model:<8} {mode:<26} {result}")
+    print(
+        "\nKopier diese Tabelle und schick sie Claude im Jarvis-Projekt.\n"
+        '"mit deinen Einstellungen" nutzt deine Skills, Plugins und CLAUDE.md-Dateien,\n'
+        '"ohne Erweiterungen" ist so, wie Jarvis Claude normalerweise startet.'
+    )
 
 
 def voice_loop(cfg, mic, wake, stt, brain, speak, mute: MuteSwitch, sounds, hotkey: str) -> None:
@@ -117,7 +136,7 @@ def voice_loop(cfg, mic, wake, stt, brain, speak, mute: MuteSwitch, sounds, hotk
             else:
                 print(f"\nDu: {text}")
                 answer = handle(text, brain)
-                print(f"Jarvis: {answer}")
+                print(f"Jarvis{model_tag(brain)}: {answer}")
                 speak(answer)
         wake.reset()
         mic.drain()
@@ -203,6 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--silent", action="store_true", help="Antworten nicht vorlesen")
     parser.add_argument("--mic", action="store_true", help="Mikrofon auswählen und speichern")
     parser.add_argument("--mic-test", action="store_true", help="Mikrofon und Wake Word testen")
+    parser.add_argument("--claude-test", action="store_true", help="Prüfen, welches Claude-Modell antwortet")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -241,6 +261,10 @@ def main(argv: list[str] | None = None) -> int:
     except BrainError as exc:
         print(exc)
         return 1
+
+    if args.claude_test:
+        run_claude_test(brain)
+        return 0
 
     if args.silent:
         def speak(_text: str) -> None:

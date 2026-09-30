@@ -45,6 +45,12 @@ Starte `start.bat --mic-test`. Das zeigt alle Mikrofone und einen Live-Pegel:
 
 Im normalen Betrieb zeigt Jarvis "fast erkannt: 0.38" an, wenn er dich knapp nicht verstanden hat.
 
+## Claude lehnt ab?
+
+Manchmal schlägt Claudes Sicherheitsfilter fälschlich an, sogar bei "hi". Jarvis startet Claude Code deshalb ohne deine persönlichen Skills, Plugins und CLAUDE.md-Dateien (`isolated = true`) und versucht bei einer Ablehnung automatisch das nächste Modell aus `models`. Welches Modell geantwortet hat, steht in eckigen Klammern hinter "Jarvis".
+
+`start.bat --claude-test` probiert jedes Modell einmal mit und ohne deine Einstellungen aus und zeigt eine kleine Tabelle, an der man sieht, woran es liegt.
+
 ## Anpassen
 
 Alles steht in `config.toml`:

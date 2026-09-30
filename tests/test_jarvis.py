@@ -236,22 +236,28 @@ class MuteTest(unittest.TestCase):
 
 FAKE_CLAUDE = textwrap.dedent(
     """
-    import json, sys
+    import json, os, sys
     prompt = sys.stdin.read()
     args = sys.argv[1:]
+    model = args[args.index("--model") + 1] if "--model" in args else ""
     with open("calls.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"args": args, "prompt": prompt}) + "\\n")
+    if os.environ.get("FAKE_OLD_CLAUDE") and "--safe-mode" in args:
+        print("error: unknown option '--safe-mode'", file=sys.stderr)
+        sys.exit(1)
+    refusal = {"type": "result", "is_error": True, "result":
+        "API Error: Sonnet 5.5's safeguards flagged this session. Claude Code can't respond to your last message."}
     if prompt == "kaputt":
         print(json.dumps({"is_error": True, "result": "Limit erreicht"}))
-    elif prompt == "abgelehnt":
-        print(json.dumps({"type": "result", "is_error": True, "result":
-            "We're improving these safeguards. Claude Code can't respond to your last message with Opus."}))
+    elif prompt == "abgelehnt" or (prompt.startswith("nur-haiku") and model != "haiku"):
+        print(json.dumps(refusal))
         sys.exit(1)
     elif prompt == "absturz":
         print("Traceback: irgendwas", file=sys.stderr)
         sys.exit(2)
     else:
-        print(json.dumps({"is_error": False, "result": "Sehr wohl, Sir. " + prompt}))
+        print(json.dumps({"is_error": False, "result": "Sehr wohl, Sir. " + prompt,
+                          "modelUsage": {"claude-" + model + "-test": {}}}))
     """
 )
 
@@ -288,6 +294,10 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertIn("--continue", second["args"])
         self.assertIn("Bash(rm:*)", first["args"])
         self.assertEqual(first["args"][first["args"].index("--model") + 1], "sonnet")
+        self.assertIn("--safe-mode", first["args"])
+        persona = first["args"][first["args"].index("--system-prompt-file") + 1]
+        self.assertTrue(persona.endswith("CLAUDE.md"))
+        self.assertEqual(self.brain.last_model, "claude-sonnet-test")
 
     @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
     def test_new_conversation_drops_continue(self):
@@ -297,12 +307,43 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertNotIn("--continue", self.calls()[-1]["args"])
 
     @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
-    def test_refusal_is_recognised_and_starts_fresh(self):
+    def test_refusal_falls_back_to_next_model_and_stays_there(self):
         self.brain.ask("hallo")
+        self.assertEqual(self.brain.ask("nur-haiku bitte"), "Sehr wohl, Sir. nur-haiku bitte")
+        self.assertEqual(self.brain.last_model, "claude-haiku-test")
+        sonnet_try, haiku_try = self.calls()[1:]
+        self.assertIn("--continue", sonnet_try["args"])
+        self.assertNotIn("--continue", haiku_try["args"])
+        self.brain.ask("nur-haiku weiter")
+        last = self.calls()[-1]["args"]
+        self.assertEqual(last[last.index("--model") + 1], "haiku")
+        self.assertIn("--continue", last)
+
+    @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+    def test_refusal_from_every_model_raises(self):
         with self.assertRaises(RefusalError):
             self.brain.ask("abgelehnt")
+        models = [c["args"][c["args"].index("--model") + 1] for c in self.calls()]
+        self.assertEqual(models, ["sonnet", "haiku", "opus"])
         self.brain.ask("weiter")
         self.assertNotIn("--continue", self.calls()[-1]["args"])
+
+    @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+    def test_old_claude_without_safe_mode_still_works(self):
+        from unittest import mock
+
+        with mock.patch.dict("os.environ", {"FAKE_OLD_CLAUDE": "1"}), self.assertLogs("jarvis.brain"):
+            self.assertEqual(self.brain.ask("hallo"), "Sehr wohl, Sir. hallo")
+        self.assertNotIn("--safe-mode", self.calls()[-1]["args"])
+
+    @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+    def test_diagnose_reports_each_model_and_mode(self):
+        rows = self.brain.diagnose("nur-haiku")
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(rows[0], ("sonnet", "mit deinen Einstellungen", "ABGELEHNT"))
+        self.assertEqual(rows[3], ("haiku", "ohne Erweiterungen", "OK (claude-haiku-test)"))
+        self.assertNotIn("--safe-mode", self.calls()[0]["args"])
+        self.assertIn("--safe-mode", self.calls()[1]["args"])
 
     @unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
     def test_crash_without_json_shows_stderr(self):
