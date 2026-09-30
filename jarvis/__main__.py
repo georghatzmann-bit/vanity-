@@ -161,7 +161,7 @@ def load_voice(cfg: dict, assistant: Assistant, ui: Ui, hotkey: str, hints) -> V
     hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? werkzeuge\\Einrichtung.bat)")
     # Nur wenn es dauert (beim ersten Start wird das Modell heruntergeladen), Bescheid sagen.
     slow = threading.Timer(
-        2.0, lambda: ui.message("info", "Lade die Spracherkennung. Beim ersten Start dauert das ein paar Minuten ...")
+        6.0, lambda: ui.message("info", "Lade die Spracherkennung. Beim ersten Start dauert das ein paar Minuten ...")
     )
     slow.daemon = True
     slow.start()
