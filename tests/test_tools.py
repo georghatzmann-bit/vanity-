@@ -58,6 +58,18 @@ class ReminderStoreTest(unittest.TestCase):
             store.remove({early["id"]})
             self.assertEqual([r["id"] for r in store.all()], [later["id"]])
 
+    def test_locked_file_is_never_overwritten_with_nothing(self):
+        with TemporaryDirectory() as tmp:
+            store = ReminderStore(Path(tmp) / "erinnerungen.json")
+            store.add(NOW + dt.timedelta(hours=1), "Tee")
+            with mock.patch.object(Path, "read_text", side_effect=PermissionError(13, "gesperrt")):
+                with mock.patch("jarvis.reminders.time.sleep"):
+                    self.assertEqual(store.all(), [])  # Anzeige: einfach leer
+                    with self.assertRaises(PermissionError):
+                        store.add(NOW + dt.timedelta(hours=2), "Pizza")
+            self.assertEqual([r["text"] for r in store.all()], ["Tee"])
+            self.assertEqual(list(Path(tmp).glob("*.tmp")), [])
+
     def test_broken_file_is_empty(self):
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "erinnerungen.json"

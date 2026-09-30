@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import re
 import shutil
 import subprocess
@@ -374,9 +375,14 @@ class ClaudeBrain:
             raise BrainError(f"Claude Code nicht startbar: {exc}") from exc
         self._proc = proc
 
+        # Beide Ausgaben lesen eigene Threads. Startet Claude ein Programm (z. B. Notepad),
+        # erbt es unter Windows oft die Ausgabe-Handles, dann kommt das Dateiende erst,
+        # wenn das Programm wieder zu ist. Deshalb zählt das result-Ereignis, nicht das Ende.
         stderr_parts: list[str] = []
-        reader = threading.Thread(target=lambda: stderr_parts.append(proc.stderr.read()), daemon=True)
-        reader.start()
+        lines: queue.Queue = queue.Queue()
+        threading.Thread(target=_pump, args=(proc.stdout, lines.put), daemon=True).start()
+        err_reader = threading.Thread(target=_pump, args=(proc.stderr, stderr_parts.append), daemon=True)
+        err_reader.start()
         timed_out = threading.Event()
 
         def on_timeout() -> None:
@@ -396,16 +402,33 @@ class ClaudeBrain:
             pass
 
         stream = _StreamReader(on_text, partial="include-partial-messages" not in self._unsupported)
+        exited_at = None
         try:
-            for line in proc.stdout:
+            while stream.result is None:
+                try:
+                    line = lines.get(timeout=0.25)
+                except queue.Empty:
+                    if proc.poll() is None:
+                        continue
+                    # Claude ist beendet. Kurz auf restliche Zeilen warten, dann aufhören.
+                    exited_at = exited_at or time.monotonic()
+                    if time.monotonic() - exited_at > 1.0:
+                        break
+                    continue
+                if line is None:
+                    break
                 stream.feed(line)
         finally:
             timer.cancel()
-            proc.wait()
-            reader.join(timeout=5)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                log.warning("Claude beendet sich nach der Antwort nicht, wird beendet.")
+                proc.kill()
+            err_reader.join(timeout=0.5 if stream.result is not None else 3)
             self._proc = None
 
-        stderr = "".join(stderr_parts)
+        stderr = "".join(part for part in list(stderr_parts) if part)
         log.debug(
             "Claude fertig nach %.1f s, Exit %s, Modell %s", time.monotonic() - started,
             proc.returncode, stream.model,
@@ -512,6 +535,17 @@ class _StreamReader:
             if text.strip():
                 self.spoke = True
             self._on_text(text)
+
+
+def _pump(pipe, put) -> None:
+    """Liest eine Ausgabe zeilenweise, am Ende kommt None."""
+    try:
+        for line in pipe:
+            put(line)
+    except (OSError, ValueError):
+        pass
+    finally:
+        put(None)
 
 
 def _kill(proc: subprocess.Popen) -> None:

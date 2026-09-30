@@ -5,11 +5,15 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import os
 import re
 import threading
+import time
 import uuid
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 _UNITS = {
     "sekunde": 1, "sekunden": 1, "sek": 1,
@@ -98,15 +102,31 @@ class ReminderStore:
 
     def all(self) -> list[dict]:
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-            return [r for r in data if isinstance(r, dict) and "zeit" in r and "text" in r]
-        except (OSError, ValueError):
+            return self._read()
+        except OSError:
             return []
+
+    def _read(self) -> list[dict]:
+        """Liest die Datei. Ist sie nur kurz gesperrt (Virenscanner, OneDrive, der andere
+        Prozess schreibt gerade), wird es noch ein paar Mal versucht und sonst ein Fehler
+        gemeldet, damit niemand eine leere Liste zurückschreibt."""
+        try:
+            raw = _retry(lambda: self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return []
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            log.warning("Erinnerungsdatei %s ist kaputt und wird neu angelegt.", self.path)
+            return []
+        if not isinstance(data, list):
+            return []
+        return [r for r in data if isinstance(r, dict) and "zeit" in r and "text" in r]
 
     def add(self, when: dt.datetime, text: str) -> dict:
         reminder = {"id": uuid.uuid4().hex[:8], "zeit": when.isoformat(timespec="seconds"), "text": text}
         with self._lock:
-            items = self.all()
+            items = self._read()
             items.append(reminder)
             self._write(items)
         return reminder
@@ -114,7 +134,7 @@ class ReminderStore:
     def remove(self, ids: set[str]) -> None:
         with self._lock:
             # Frisch lesen, damit gerade neu angelegte Erinnerungen nicht verloren gehen.
-            items = [r for r in self.all() if r.get("id") not in ids]
+            items = [r for r in self._read() if r.get("id") not in ids]
             self._write(items)
 
     def due(self, now: dt.datetime | None = None) -> list[dict]:
@@ -141,6 +161,25 @@ class ReminderStore:
 
     def _write(self, items: list[dict]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
+        # Eigener Name pro Prozess: Jarvis und "python -m jarvis.tool" schreiben evtl. gleichzeitig.
+        tmp = self.path.with_name(f"{self.path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         tmp.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
-        os.replace(tmp, self.path)
+        try:
+            _retry(lambda: os.replace(tmp, self.path))
+        finally:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+
+
+def _retry(action, attempts: int = 8, pause: float = 0.15):
+    """Unter Windows sind Dateien manchmal für einen Moment gesperrt."""
+    for attempt in range(attempts):
+        try:
+            return action()
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(pause)

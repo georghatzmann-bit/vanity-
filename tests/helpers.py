@@ -80,6 +80,10 @@ FAKE_CLAUDE = textwrap.dedent(
         sys.exit(2)
     if prompt == "langsam":
         time.sleep(5)
+    if prompt == "programm":
+        # Wie "start notepad": ein Programm läuft weiter und erbt stdout und stderr.
+        import subprocess
+        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], close_fds=False)
     if prompt == "werkzeug":
         say("Einen Moment, ich schaue nach.")
         out({"type": "assistant", "message": {"model": "claude-" + model + "-test",

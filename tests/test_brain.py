@@ -48,6 +48,12 @@ class ClaudeBrainTest(unittest.TestCase):
         lines = (self.home / "calls.jsonl").read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines]
 
+    def test_started_program_does_not_block_the_answer(self):
+        started = time.monotonic()
+        answer = self.brain.ask("programm")
+        self.assertEqual(answer.text, "Sehr wohl, Sir. programm")
+        self.assertLess(time.monotonic() - started, 5)
+
     def test_prompt_goes_via_stdin_and_streams(self):
         tricky = 'öffne "Notepad" & del C:\\ ; rm -rf /'
         chunks = []

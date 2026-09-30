@@ -136,6 +136,8 @@
     if (value === 'muted') S.muted = true;
     else if (value === 'listening') S.muted = false;
     S.state = value;
+    // Antwort ist vorbei: Schreibmarken entfernen, leere Platzhalter verwerfen
+    if (value === 'idle' || value === 'muted' || value === 'listening') finalizeStreaming();
     renderState();
   }
 
@@ -425,6 +427,20 @@
     if (stick || role === 'user') scrollToBottom();
   }
 
+  function finalizeStreaming() {
+    const open = el.messages.querySelectorAll('.msg.streaming');
+    if (!open.length) return;
+    open.forEach((m) => {
+      m.classList.remove('streaming');
+      if (m.classList.contains('empty')) {
+        const oid = m.dataset.id;
+        if (oid && msgById.get(oid) === m) msgById.delete(oid);
+        m.remove();
+      }
+    });
+    updateChatMeta();
+  }
+
   function clearMessages() {
     const old = Array.from(el.messages.children);
     old.forEach((m) => {
@@ -508,7 +524,7 @@
 
   function handleEvents(evs) {
     if (typeof evs === 'string') {
-      try { evs = JSON.parse(evs); } catch (e) { return; }
+      try { evs = JSON.parse(evs); } catch { return; }
     }
     if (!evs) return;
     if (!Array.isArray(evs)) evs = [evs];
@@ -543,7 +559,7 @@
       .then((cfg) => {
         if (gen !== bridgeGen) return;
         if (typeof cfg === 'string') {
-          try { cfg = JSON.parse(cfg); } catch (e) { cfg = null; }
+          try { cfg = JSON.parse(cfg); } catch { cfg = null; }
         }
         applyConfig(cfg);
       })
@@ -587,7 +603,7 @@
     try {
       const a = window.pywebview && window.pywebview.api;
       return !!(a && typeof a.poll === 'function');
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -785,7 +801,7 @@
     let lvl = 0;
     let flash = 0;
     let errHold = 0;
-    let boot = 0;
+    let bootT = 0;
     const N_EQ = 72;
     const eqVals = new Float32Array(N_EQ);
     const ripples = [];
@@ -883,7 +899,7 @@
       flash *= Math.exp(-dt / 0.42);
       if (flash < 0.003) flash = 0;
       errHold += ((S.errorActive ? 0.32 : 0) - errHold) * (1 - Math.exp(-dt / 0.2));
-      boot = Math.min(1, boot + dt / (reducedMotion ? 0.6 : 1.7));
+      bootT = Math.min(1, bootT + dt / (reducedMotion ? 0.6 : 1.7));
     }
 
     const easeOut = (x) => 1 - Math.pow(1 - clamp(x, 0, 1), 3);
@@ -902,14 +918,14 @@
 
       const redMix = Math.max(flash * 0.85, errHold);
       const P = mix(cur.p, PAL.red, redMix);
-      const A = mix(cur.a, PAL.red, redMix);
+      const A = mix(cur.a, PAL.red, Math.min(1, Math.max(flash, errHold * 2.6))); // Akzentring bleibt im Fehlerfall rot
       const CORE = mix(cur.core, [255, 170, 178], redMix);
       const breathe = 0.5 - 0.5 * Math.cos(phase);
       const pulse = breathe * cur.pulseAmp;
       const B = cur.bright * (0.88 + 0.24 * breathe) + lvl * 0.35 * (cur.listen + cur.eq * 0.6);
       const scale = 1 + 0.035 * cur.expand + 0.03 * lvl * cur.listen;
       const R = base * scale;
-      const lb = (i) => easeOut(boot * 1.7 - i * 0.11); // gestaffelter Aufbau
+      const lb = (i) => easeOut(bootT * 1.7 - i * 0.11); // gestaffelter Aufbau
       const rb = (i) => 0.86 + 0.14 * lb(i);
 
       ctx.lineCap = 'butt';
@@ -1293,7 +1309,7 @@
     function frame(now) {
       requestAnimationFrame(frame);
       // Ruhige Zustände (oder Fenster ohne Fokus) mit 30 fps, sonst 60 fps -> spart CPU.
-      const calm = ((visState === 'idle' || visState === 'muted') && flash === 0 && boot >= 1) || !document.hasFocus();
+      const calm = ((visState === 'idle' || visState === 'muted') && flash === 0 && bootT >= 1) || !document.hasFocus();
       const minGap = calm ? 1000 / 30 - 3 : 1000 / 60 - 3;
       if (now - lastDraw < minGap) return;
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
@@ -1383,11 +1399,8 @@
 
     const pause = (g, ms) => sleep(ms).then(() => g === gen);
 
-    async function speak(g, answer) {
-      const id = 'demo-' + ++msgSeq;
+    async function speak(g, id, answer) {
       setState('speaking');
-      push({ type: 'message', role: 'jarvis', id, text: '', model: MODEL, final: false });
-      if (!(await pause(g, 450))) return false;
       const words = answer.split(' ');
       for (let k = 1; k <= words.length; k++) {
         push({ type: 'message', role: 'jarvis', id, text: words.slice(0, k).join(' '), model: MODEL, final: k === words.length });
@@ -1406,8 +1419,15 @@
       }
       push({ type: 'message', role: 'user', text: question });
       setState('thinking');
-      if (!(await pause(g, byVoice ? 1900 : 1200))) return false;
-      return speak(g, answer);
+      if (!(await pause(g, 500))) return false;
+      // Antwortblase erscheint schon beim Nachdenken (Tipp-Punkte), dann wird sie gefüllt.
+      const id = 'demo-' + ++msgSeq;
+      push({ type: 'message', role: 'jarvis', id, text: '', model: MODEL, final: false });
+      if (!(await pause(g, byVoice ? 1400 : 900))) {
+        push({ type: 'message', role: 'jarvis', id, text: '…', model: MODEL, final: true });
+        return false;
+      }
+      return speak(g, id, answer);
     }
 
     async function cycle(g) {
@@ -1576,7 +1596,7 @@
 
     // Fokus ins Eingabefeld, damit man direkt tippen kann
     setTimeout(() => {
-      try { el.input.focus({ preventScroll: true }); } catch (e) { /* egal */ }
+      try { el.input.focus({ preventScroll: true }); } catch { /* egal */ }
     }, 600);
   }
 
