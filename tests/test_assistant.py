@@ -106,6 +106,32 @@ class ProgressTest(unittest.TestCase):
         self.assertNotIn("Ich sehe kurz im Netz nach.", speaker.said)
 
 
+class FastMessageTest(unittest.TestCase):
+    def test_chat_message_skips_claude(self):
+        from unittest import mock
+
+        from jarvis import messaging
+
+        brain = FakeBrain()
+        assistant, ui, speaker, _ = make(brain)
+        with mock.patch.object(messaging, "send", return_value="ok") as sent:
+            answer = assistant.handle("Schreib Max auf Discord, bin gleich da.")
+        sent.assert_called_once_with("discord", "Max", "bin gleich da.")
+        self.assertEqual(brain.asked, [], "ohne Umweg über Claude")
+        self.assertIn(answer, ["An Max ist raus, Sir.", "Gesendet, Sir.", "Erledigt. Max hat es."])
+        self.assertEqual([e[1]["state"] for e in ui.of("progress")], ["running", "done"])
+
+    def test_failed_message_is_explained(self):
+        from unittest import mock
+
+        from jarvis import messaging
+
+        assistant, ui, speaker, _ = make(FakeBrain())
+        with mock.patch.object(messaging, "send", side_effect=messaging.MessagingError("Discord kam nicht nach vorn.")):
+            answer = assistant.handle("Schreib Max auf Discord, bin gleich da.")
+        self.assertEqual(answer, "Discord kam nicht nach vorn.")
+
+
 class AssistantTest(unittest.TestCase):
     def test_answer_is_spoken_sentence_by_sentence(self):
         assistant, ui, speaker, _ = make()

@@ -35,6 +35,8 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   installieren "<name|id>"     installiert ein Programm (Name wie "spotify" oder winget-ID)
   deinstallieren <winget-id>   deinstalliert ein Programm (erst nach Georgs Ja)
   admin "<PowerShell-Befehl>"  führt etwas mit Administratorrechten aus (Windows fragt Georg)
+  nachricht <app> "<person>" "<text>"
+                               schickt eine Chatnachricht, app: discord, telegram, whatsapp
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
@@ -137,6 +139,19 @@ def _dispatch(command: str, rest: list[str]) -> int:
         store.remove(ids)
         print("Erinnerung gelöscht.")
         return 0
+
+    if command in ("nachricht", "nachrichten", "message"):
+        from . import messaging
+
+        if len(rest) < 3:
+            print('Aufruf: nachricht <discord|telegram|whatsapp> "<person>" "<text>"')
+            return 1
+        try:
+            print(messaging.send(rest[0], rest[1], " ".join(rest[2:])))
+            return 0
+        except messaging.MessagingError as exc:
+            print(f"Nicht gesendet: {exc}")
+            return 1
 
     if command == "medien":
         from . import pc

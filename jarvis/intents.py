@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 MONTHS = [
@@ -21,6 +21,7 @@ MONTHS = [
 class Intent:
     name: str
     arg: str = ""
+    data: dict = field(default_factory=dict)
 
 
 def normalize(text: str) -> str:
@@ -154,7 +155,114 @@ _WITH_NAME = {"install", "close", "open", "open_known", "folder"}
 _NOT_A_NAME = {"es", "das", "ihn", "sie", "alles", "dich", "mich", "den", "die", "das fenster", "fenster"}
 
 
+# ---------------------------------------------------------------------- Nachrichten
+
+# "Schreib Max auf Discord, bin gleich da" / "Schick eine Nachricht an Anna über WhatsApp: ..."
+# Läuft auf dem Originaltext, damit die Nachricht ihre Groß- und Kleinschreibung behält.
+_MSG_VERB = r"(?:schreib|schreibe|schick|schicke|sende|send)"
+_MSG_FILL = r"(?:(?:bitte|mal|kurz|schnell)\s+)*"
+_MSG_NOTE = r"(?:(?:eine|ne|'ne)\s+(?:nachricht|message|dm|pn)\s+)?"
+_MSG_APP = r"(?P<app>discord|whats\s?app|telegram)"
+_MSG_VIA = r"(?:auf|über|ueber|in|per|via|bei)"
+_MSG_WORD = r"[A-Za-zÄÖÜäöüß][\wÄÖÜäöüß.\-]*"
+_MESSAGE = [
+    # Name vor der App: Die App trennt Name und Text, ein Satzzeichen ist nicht nötig.
+    re.compile(
+        rf"^{_MSG_VERB}\s+{_MSG_FILL}{_MSG_NOTE}(?:an\s+)?(?P<person>{_MSG_WORD}(?:\s+{_MSG_WORD})?)\s+"
+        rf"{_MSG_NOTE}{_MSG_VIA}\s+{_MSG_APP}\s*[,:;\-–—]?\s*(?P<text>.+)$",
+        re.I,
+    ),
+    # App vor dem Namen: Dann muss ein Komma oder Doppelpunkt den Namen vom Text trennen.
+    re.compile(
+        rf"^{_MSG_VERB}\s+{_MSG_FILL}{_MSG_NOTE}{_MSG_VIA}\s+{_MSG_APP}\s+(?:an\s+)?"
+        rf"(?P<person>{_MSG_WORD}(?:\s+{_MSG_WORD})?)\s*[,:]\s*(?P<text>.+)$",
+        re.I,
+    ),
+]
+# Kein Name: "Schreib mir auf Discord ..." ist eher eine Bitte an Jarvis selbst.
+_NOT_A_PERSON = {
+    "mir", "mich", "uns", "dir", "dich", "ihm", "ihr", "ihnen", "es", "das", "den", "die", "der", "dem",
+    "ein", "eine", "einen", "etwas", "was", "alle", "jemandem", "jemand", "nachricht", "an",
+    # "meinem Bruder", "deinen Namen": keine Namen, die eine Schnellsuche findet
+    "mein", "meine", "meinem", "meinen", "meiner", "dein", "deine", "deinem", "deinen", "deiner",
+    "sein", "seine", "seinem", "seinen", "ihrem", "ihren", "unser", "unserem", "unseren", "unserer",
+    "eurem", "euren", "allen", "jedem", "keinem", "diesem", "dieser", "diesen",
+}
+
+
+def match_message(text: str) -> Intent | None:
+    """Erkennt "Schreib <Person> auf <App>, <Text>". Sätze mit "dass" ("..., dass ich später
+    komme") gehen an Claude, der formuliert sie in eine richtige Nachricht um."""
+    raw = re.sub(r"^\s*(?:(?:hey|hallo|okay|ok)\s+)?jarvis[\s,!.]*", "", str(text).strip(), flags=re.I)
+    for pattern in _MESSAGE:
+        found = pattern.match(raw)
+        if not found:
+            continue
+        person = found.group("person").strip(" .,")
+        body = found.group("text").strip()
+        if person.split()[0].lower() in _NOT_A_PERSON or not body:
+            continue
+        if re.match(r"(?:dass|das|ob|wann|wo|wie|warum|weil)\b", body, re.I):
+            return None  # indirekte Rede: lieber Claude
+        app = re.sub(r"\s", "", found.group("app").lower())
+        return Intent("message", app, {"person": person, "text": body})
+    return None
+
+
+# ---------------------------------------------------------------------- Erinnerungen und Timer
+
+_REMIND = [
+    # "Erinnere mich in 20 Minuten an den Tee", "Erinnere mich morgen um 8 daran, den Müll rauszubringen"
+    re.compile(r"^(?:bitte\s+)?erinnere?\s+mich\s+(?:bitte\s+)?(?P<when>.+?)\s+"
+               r"(?P<sep>an|ans|daran,?(?:\s+dass)?)\s+(?P<what>.+?)[.!]?$", re.I),
+    # "Kannst du mich in 10 Minuten an den Tee erinnern?"
+    re.compile(r"^(?:kannst|könntest|würdest)\s+du\s+mich\s+(?:bitte\s+)?(?P<when>.+?)\s+"
+               r"(?P<sep>an|ans|daran)\s+(?P<what>.+?)\s+erinnern[?.!]?$", re.I),
+]
+_TIMER = [
+    re.compile(r"^(?:stell|stelle|setz|setze|start|starte|mach|mache)\s+(?:mir\s+)?(?:bitte\s+)?(?:einen|nen|ein)?\s*"
+               r"(?:timer|wecker|countdown)\s+(?:auf|für|über|von|in)\s+(?P<dur>.+?)[.!]?$", re.I),
+    re.compile(r"^(?:timer|countdown)\s+(?:auf|für|über)?\s*(?P<dur>.+?)[.!]?$", re.I),
+]
+
+
+def match_reminder(text: str, now: dt.datetime | None = None) -> Intent | None:
+    """Erinnerungen und Timer ohne Claude. Versteht Jarvis die Zeit nicht, macht es Claude."""
+    from .reminders import parse_when
+
+    raw = re.sub(r"^\s*(?:(?:hey|hallo|okay|ok)\s+)?jarvis[\s,!.]*", "", str(text).strip(), flags=re.I)
+    for pattern in _REMIND:
+        found = pattern.match(raw)
+        if not found:
+            continue
+        what = found.group("what").strip(" ,.")
+        if found.group("sep").lower() == "ans":
+            what = "das " + what
+        try:
+            when = parse_when(found.group("when"), now)
+        except ValueError:
+            return None
+        return Intent("remind", what, {"when": when, "what": what})
+    for pattern in _TIMER:
+        found = pattern.match(raw)
+        if not found:
+            continue
+        duration = found.group("dur").strip(" ,.")
+        try:
+            when = parse_when(duration if duration.lower().startswith("in ") else "in " + duration, now)
+        except ValueError:
+            return None
+        return Intent("timer", duration, {"when": when, "what": "Der Timer ist abgelaufen."})
+    return None
+
+
 def match(text: str) -> Intent | None:
+    message = match_message(text)
+    if message is not None:
+        return message
+    reminder = match_reminder(text)
+    if reminder is not None:
+        return reminder
     norm = normalize(text)
     if not norm:
         return None

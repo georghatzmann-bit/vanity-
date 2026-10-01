@@ -262,6 +262,10 @@ class Assistant:
                 return pc.open_folder(intent.arg).replace(" ist offen.", " ist offen, Sir.")
             if name in ("open", "close", "install"):
                 return self._app(name, intent.arg)
+            if name == "message":
+                return self._message(intent.arg, intent.data["person"], intent.data["text"])
+            if name in ("remind", "timer"):
+                return self._remind(name, intent)
         except Exception as exc:
             log.info("Schneller Befehl %s ging nicht (%s), frage Claude.", name, exc)
             return None
@@ -295,6 +299,35 @@ class Assistant:
             f"Ich installiere {known.name}, Sir. Einen Moment.",
             f"Sehr wohl. {known.name} wird installiert, ich sage Bescheid.",
         ])
+
+    def _message(self, app: str, person: str, text: str) -> str:
+        """Chatnachricht ohne Claude-Umweg: in wenigen Sekunden statt zwanzig."""
+        from . import messaging
+
+        found = messaging.find_app(app)
+        label = f"Schreibt {person} auf {found.name if found else app}"
+        step = {"id": f"m{next(self._ids)}", "tool": "Nachricht", "label": label, "detail": text,
+                "kind": "message", "state": "running"}
+        self.ui.progress(step)
+        try:
+            messaging.send(app, person, text)
+        except messaging.MessagingError as exc:
+            self.ui.progress(dict(step, state="error"))
+            return f"{exc}"
+        self.ui.progress(dict(step, state="done"))
+        return random.choice([f"An {person} ist raus, Sir.", "Gesendet, Sir.", f"Erledigt. {person} hat es."])
+
+    def _remind(self, name: str, intent) -> str | None:
+        """Erinnerungen und Timer sofort, ohne Claude."""
+        from .reminders import spoken_when
+
+        if self.reminders is None:
+            return None
+        when = intent.data["when"]
+        self.reminders.add(when, intent.data["what"])
+        if name == "timer":
+            return random.choice([f"Timer läuft, Sir. {intent.arg}.", f"Sehr wohl. {intent.arg}, ab jetzt."])
+        return f"Sehr wohl, Sir. Ich erinnere Sie {spoken_when(when)}."
 
     def _install(self, known) -> None:
         from . import apps
