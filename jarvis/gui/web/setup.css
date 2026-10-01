@@ -1125,10 +1125,11 @@
 
 /* ------------------------------------------------------------------ 7 Fertig */
 
+/* Acht Zeilen und zwei Hinweise passen so ohne Scrollen ins Fenster (1000 x 720) */
 .summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   max-width: 640px;
 }
 
@@ -1137,7 +1138,7 @@
   grid-template-columns: 140px minmax(0, 1fr) auto 12px;
   align-items: center;
   gap: 16px;
-  min-height: 52px;
+  min-height: 42px;
   padding: 0 16px;
   border: 0;
   border-radius: var(--r-l);

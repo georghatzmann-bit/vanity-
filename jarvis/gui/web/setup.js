@@ -1355,6 +1355,8 @@
     if (showDetail && (st === 'error' || st === 'refused')) details.open = true;
 
     if (STEPS[S.step].id === 'claude') renderFoot();
+    // Wer schon vor dem Ende der Prüfung auf "Weiter" geklickt hat, sieht das Ergebnis auch in der Übersicht
+    if (STEPS[S.step].id === 'done') doneEnter();
     renderRail();
   }
 
@@ -1543,12 +1545,14 @@
     const box = $('summary');
     box.replaceChildren();
     const claudeOk = S.claude.state === 'ok';
+    const checking = S.claude.state === 'running';
     const rows = [
       ['Mikrofon', micLabel() || 'Windows-Standard', 'mic', S.mic.detected ? ['ok', 'Getestet'] : null],
       ['Stimme', voiceName() || 'Standard', 'voice', null],
       ['Wohnort', S.place.saved || 'Nicht eingetragen', 'place', S.place.saved ? null : ['warn', 'Kein Wetter']],
-      ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'Verbunden') : 'Noch nicht bereit', 'claude',
-        claudeOk ? ['ok', 'Verbunden'] : ['warn', 'Prüfen']],
+      ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'Verbunden')
+        : checking ? 'Wird geprüft …' : 'Noch nicht bereit', 'claude',
+        claudeOk ? ['ok', 'Verbunden'] : checking ? null : ['warn', 'Prüfen']],
       ['Antwort-Tempo', SPEED_NAMES[S.speed] || 'Ausgewogen', 'claude', null],
       ['Stumm-Taste', S.hotkey ? hotkeyLabel(S.hotkey) : 'Keine', 'extras', null],
       ['Autostart', S.autostart ? 'Startet mit Windows' : 'Aus', 'extras', null],
