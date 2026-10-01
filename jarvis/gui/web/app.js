@@ -62,6 +62,7 @@
   let bridgeGen = 0;
   let pollFails = 0;
   let Werkstatt = null; // Ansicht für Programmier-Aufträge (werkstatt.js)
+  let Projekte = null; // alle Werkstatt-Projekte (projekte.js)
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -80,7 +81,15 @@
     touched: () => window.pywebview.api.touched(),
     workshop_state: () => window.pywebview.api.workshop_state(),
     workshop_cancel: () => window.pywebview.api.workshop_cancel(),
+    workshop_projects: () => window.pywebview.api.workshop_projects(),
+    workshop_new: (text) => window.pywebview.api.workshop_new(text),
+    workshop_continue: (folder, text) => window.pywebview.api.workshop_continue(folder, text),
+    workshop_run: (folder) => window.pywebview.api.workshop_run(folder),
     open_folder: (path) => window.pywebview.api.open_folder(path),
+    memory_state: () => window.pywebview.api.memory_state(),
+    remember: (text) => window.pywebview.api.remember(text),
+    forget: (text) => window.pywebview.api.forget(text),
+    answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
   };
 
   function call(name, ...args) {
@@ -664,7 +673,14 @@
       case 'state': applyState(String(ev.value || '')); break;
       case 'message': addMessage(ev.role, ev.text, ev.id, ev.final); break;
       case 'progress': onProgress(ev.step); break;
-      case 'workshop': if (Werkstatt) Werkstatt.handle(ev); break;
+      case 'workshop':
+        if (ev.state === 'projects') {
+          if (Projekte) Projekte.open();
+        } else if (Werkstatt) {
+          if (ev.state === 'start' && Projekte && Projekte.isOpen()) Projekte.close();
+          Werkstatt.handle(ev);
+        }
+        break;
       case 'level': S.level = clamp(Number(ev.value) || 0, 0, 1); Core.level(S.level); break;
       case 'toast': toast(ev.text, ev.kind); break;
       case 'config': applyConfig(ev); break;
@@ -927,7 +943,7 @@
     }
 
     function frame(now) {
-      if (document.body.dataset.view === 'workshop') {
+      if (document.body.dataset.view !== 'hud') {
         // Die Werkstatt liegt darüber: nicht zeichnen, nur ab und zu nachsehen
         last = now;
         setTimeout(() => requestAnimationFrame(frame), 250);
@@ -1205,7 +1221,7 @@
     function frame(now) {
       const dt = Math.min(0.1, (now - (last || now)) / 1000);
       last = now;
-      if (document.body.dataset.view === 'workshop') {
+      if (document.body.dataset.view !== 'hud') {
         setTimeout(() => requestAnimationFrame(frame), 250);
         return;
       }
@@ -1435,6 +1451,14 @@
         return Promise.resolve(true);
       },
       open_folder: () => Promise.reject(new Error('Demo')),
+      workshop_projects: () => Promise.resolve(DEMO_PROJECTS),
+      workshop_new: () => Promise.resolve(true),
+      workshop_continue: () => Promise.resolve(true),
+      workshop_run: () => Promise.reject(new Error('Demo')),
+      memory_state: () => Promise.resolve(DEMO_MEMORY),
+      remember: () => Promise.resolve(true),
+      forget: () => Promise.resolve(true),
+      answer_suggestion: () => Promise.resolve(true),
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
@@ -1461,10 +1485,42 @@
     };
   }
 
+  const DEMO_PROJECTS = [
+    { name: 'Discord Bot Wetter', folder: 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-10-01_1530_discord-bot-wetter', state: 'done',
+      task: 'Bau mir einen Discord-Bot, der jeden Morgen das Wetter postet', model: 'sonnet', start: true,
+      summary: 'Der Bot ist fertig, Sir. Tragen Sie den Token in .env ein und starten Sie ihn mit start.bat.',
+      updated: new Date(Date.now() - 2 * 3600e3).toISOString(), history: [{}, {}] },
+    { name: 'Weltraum Shooter', folder: 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-09-30_2010_weltraum-shooter', state: 'done',
+      task: 'Programmier mir ein Weltraum-Spiel mit Highscore, Levels und Sound', model: 'opus', start: true,
+      summary: 'Das Spiel läuft, Sir: drei Level, Highscore-Liste und Soundeffekte. Steuerung mit Pfeiltasten und Leertaste.',
+      updated: new Date(Date.now() - 26 * 3600e3).toISOString(), history: [{}, {}, {}] },
+    { name: 'Downloads Sortieren', folder: 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-09-28_1112_downloads-sortieren', state: 'error',
+      task: 'Schreib ein Skript, das meine Downloads nach Typ sortiert', model: 'sonnet', start: false,
+      summary: 'Das Claude-Kontingent war erschöpft. Sagen Sie einfach: Arbeite an Downloads Sortieren weiter.',
+      updated: new Date(Date.now() - 4 * 86400e3).toISOString(), history: [{}] },
+  ];
+  const DEMO_MEMORY = {
+    facts: [
+      { text: 'Georg spielt gern Valorant und Minecraft', source: 'gelernt' },
+      { text: 'Georg sagt: Ich höre beim Zocken gern Rock', source: 'georg' },
+      { text: 'Max ist Georgs bester Freund, sie schreiben über Discord', source: 'gelernt' },
+      { text: 'Georg baut einen Discord-Bot für seinen Clan', source: 'jarvis' },
+    ],
+    contacts: [{ name: 'Max', app: 'discord', count: 14 }, { name: 'Anna', app: 'whatsapp', count: 6 }],
+    routines: [
+      { key: 'a', label: 'Discord und Spotify', uhrzeit: '18:05', tage: 'werktags', anzahl: 7 },
+      { key: 'b', label: 'YouTube', uhrzeit: '21:30', tage: 'täglich', anzahl: 9 },
+    ],
+  };
+
   // ------------------------------------------------------------------ Start
 
   function boot() {
-    if (window.JarvisWerkstatt) Werkstatt = window.JarvisWerkstatt.create({ call, toast });
+    if (window.JarvisWerkstatt) {
+      Werkstatt = window.JarvisWerkstatt.create({ call, toast, onHub: () => Projekte && Projekte.open() });
+      if (Werkstatt) Werkstatt.renderPill();
+    }
+    if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });
     bindUi();
     tickClock();
     Core.start(el.core);

@@ -236,6 +236,10 @@ class Assistant:
                 return self._memory_command(*remembered)
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
+            projects = getattr(self.workshop, "project_command", None)
+            answer = projects(text) if projects is not None else None
+            if answer is not None:
+                return answer
             # Bauaufträge und Wünsche zum letzten Projekt gehen vor die übrigen Sofort-Befehle,
             # sonst schnappt sich "Öffne ..." oder "Such ..." einen Teil davon.
             where = self.workshop.route(text, free=intent is None)

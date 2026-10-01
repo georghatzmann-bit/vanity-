@@ -263,6 +263,15 @@ body[data-link="offline"] .link-dot {
   animation: pulse-dot 1.6s ease-in-out infinite;
 }
 
+.ws-pill[data-state="idle"] {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.2);
+}
+
+.ws-pill[data-state="idle"] .ws-pill-time {
+  display: none;
+}
+
 .ws-pill[data-state="done"] {
   background: var(--ok-soft);
   box-shadow: inset 0 0 0 1px rgba(63, 185, 104, 0.45);

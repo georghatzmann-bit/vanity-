@@ -217,6 +217,71 @@ def project_folder(task: str, base: Path, now: dt.datetime | None = None) -> Pat
     return folder
 
 
+# Woran ein großer Auftrag zu erkennen ist (dann baut Opus, das klügste Modell)
+_BIG = re.compile(
+    r"\b(?:spiel|game|multiplayer|3d|shop|datenbank|database|komplett|vollständig|ki|chatbot|unity|unreal|"
+    r"mod|website mit|app mit|mit login|anmeldung|benutzerkonten|dashboard|server|api|mehrere|mehreren|"
+    r"künstliche intelligenz|engine|editor|simulation|plattform|verwaltung|system)\w*", re.I)
+_SAYS_OPUS = re.compile(r"\b(?:opus|gründlich|so gut wie möglich|beste qualität|richtig gut|profi|professionell)\b", re.I)
+_SAYS_FAST = re.compile(r"\b(?:sonnet|schnell mal|nur kurz|quick)\b", re.I)
+
+
+def choose_model(task: str, setting: str = "auto") -> str:
+    """"auto": Opus für große Aufträge (Spiele, Shops, mehrere Teile, lange Beschreibungen),
+    sonst Sonnet. Georg kann es auch sagen ("... mit Opus", "gründlich")."""
+    setting = str(setting or "auto").strip().lower()
+    if setting not in ("auto", ""):
+        return setting
+    if _SAYS_OPUS.search(task):
+        return "opus"
+    if _SAYS_FAST.search(task):
+        return "sonnet"
+    score = len({m.group(0).lower()[:6] for m in _BIG.finditer(task)})
+    score += (len(task) > 160) + (len(task) > 320) + (len(re.findall(r",| und ", task)) >= 4)
+    return "opus" if score >= 3 else "sonnet"
+
+
+PROJECT_FILE = "projekt.json"
+
+
+def project_name(folder: Path) -> str:
+    """"2026-10-01_1530_discord-bot-wuerfel" -> "Discord Bot Wuerfel"."""
+    slug = re.sub(r"^\d{4}-\d{2}-\d{2}_\d{4}_", "", folder.name)
+    words = [w for w in re.split(r"[-_ ]+", slug) if w]
+    return " ".join(w[:1].upper() + w[1:] for w in words) or folder.name
+
+
+def read_project(folder: Path) -> dict | None:
+    """Die Projektkarte (projekt.json), bei älteren Projekten aus dem Werkstatt-Protokoll."""
+    folder = Path(folder)
+    for name in (PROJECT_FILE, "werkstatt-protokoll.json"):
+        try:
+            data = json.loads((folder / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        try:
+            changed = dt.datetime.fromtimestamp((folder / name).stat().st_mtime).isoformat(timespec="minutes")
+        except OSError:
+            changed = ""
+        return {
+            "name": str(data.get("name") or project_name(folder)),
+            "folder": str(folder),
+            "task": str(data.get("auftrag") or ""),
+            "state": str(data.get("zustand") or ""),
+            "summary": str(data.get("zusammenfassung") or ""),
+            "session": str(data.get("sitzung") or ""),
+            "model": str(data.get("modell") or ""),
+            "created": str(data.get("erstellt") or ""),
+            "updated": str(data.get("zuletzt") or changed),
+            "question": str(data.get("frage") or ""),
+            "history": list(data.get("verlauf") or [])[-20:],
+            "start": (folder / "start.bat").is_file(),
+        }
+    return None
+
+
 def project_python() -> str:
     """Ein Python für Georgs Projekte: das, aus dem Jarvis' eigene Umgebung gebaut ist (nicht
     die Umgebung selbst, sonst landen fremde Pakete bei Jarvis). Leer, wenn es keins gibt."""
@@ -242,6 +307,7 @@ class Job:
     detail: str = ""
     ended: float | None = None
     question: str = ""  # endet die Arbeit mit einer Frage, gilt die nächste Antwort der Werkstatt
+    model: str = ""  # "opus" oder "sonnet" (choose_model)
 
     def status(self) -> str:
         """Ein Satz für "Wie weit bist du?"."""
@@ -307,37 +373,139 @@ class Workshop:
             if self._brain is None or not getattr(self._brain, "claude_path", ""):
                 return "Für die Werkstatt brauche ich mein Gehirn, Sir. Bitte öffnen Sie einmal die Einstellungen."
             folder = project_folder(task, self.base)
-            self.job = Job(task, folder)
+            self.job = Job(task, folder, model=choose_model(task, self._cfg.get("modell", "auto")))
             self._cancelled = False
         self._begin(self.job)
+        if self.job.model == "opus":
+            return "Sehr wohl, Sir. Ein größeres Projekt, dafür nehme ich mein bestes Werkzeug. Sie können mir im Fenster zusehen."
         return "Sehr wohl, Sir. Ich gehe in die Werkstatt. Sie können mir im Fenster zusehen."
 
-    def follow_up(self, text: str) -> str:
-        """Am letzten Projekt weiter: derselbe Ordner, dieselbe Claude-Sitzung."""
+    def follow_up(self, text: str, project: dict | None = None) -> str:
+        """Am letzten (oder an einem genannten) Projekt weiter: derselbe Ordner, dieselbe Claude-Sitzung."""
         with self._lock:
             last = self.job
-            if last is None:
-                pass
-            elif last.state == "running":
+            if last is not None and last.state == "running":
                 return "Ich bin noch mitten in der Arbeit, Sir. Sagen Sie es mir gleich, wenn ich fertig bin."
-            if last is None or not last.folder.is_dir():
-                last = None
             if self._brain is None or not getattr(self._brain, "claude_path", ""):
                 return "Für die Werkstatt brauche ich mein Gehirn, Sir. Bitte öffnen Sie einmal die Einstellungen."
-            if last is None:
-                folder = project_folder(text, self.base)
-                self.job = Job(text, folder)
+            setting = self._cfg.get("modell", "auto")
+            if project is not None and Path(project["folder"]).is_dir():
+                model = choose_model(text, setting) if _SAYS_OPUS.search(text) else (project.get("model") or choose_model(text, setting))
+                self.job = Job(text, Path(project["folder"]), session=project.get("session") or str(uuid.uuid4()),
+                               resume=bool(project.get("session")), model=model)
+            elif last is not None and last.folder.is_dir():
+                model = choose_model(text, setting) if _SAYS_OPUS.search(text) else (last.model or choose_model(text, setting))
+                self.job = Job(text, last.folder, session=last.session, resume=True, model=model)
             else:
-                self.job = Job(text, last.folder, session=last.session, resume=True)
+                self.job = Job(text, project_folder(text, self.base), model=choose_model(text, setting))
             self._cancelled = False
         self._begin(self.job)
         if self.job.resume:
-            return "Sehr wohl, Sir. Ich mache in der Werkstatt weiter."
+            name = project_name(self.job.folder)
+            return f"Sehr wohl, Sir. Ich mache am Projekt {name} weiter." if project else "Sehr wohl, Sir. Ich mache in der Werkstatt weiter."
         return "Sehr wohl, Sir. Ich gehe in die Werkstatt. Sie können mir im Fenster zusehen."
 
+    # ------------------------------------------------------------------ Projekte
+
+    def projects(self) -> list[dict]:
+        """Alle Projekte in der Werkstatt, das zuletzt bearbeitete zuerst."""
+        try:
+            folders = [f for f in self.base.iterdir() if f.is_dir()]
+        except OSError:
+            return []
+        found = [p for p in (read_project(f) for f in folders) if p]
+        job = self.job
+        for item in found:
+            if job is not None and Path(item["folder"]) == job.folder and job.state == "running":
+                item["state"] = "running"
+        return sorted(found, key=lambda p: p.get("updated", ""), reverse=True)
+
+    def find_project(self, words: str) -> dict | None:
+        """Das Projekt, dessen Name oder Auftrag am besten zu den Wörtern passt ("Discord-Bot")."""
+        wanted = [w for w in re.findall(r"[a-zäöüß0-9]+", words.lower()) if len(w) > 1 and w not in _PROJECT_FILL]
+        if not wanted:
+            return None
+        best, best_score = None, 0.0
+        for item in self.projects():
+            name = item["name"].lower().replace("ae", "ä").replace("oe", "ö").replace("ue", "ü") + " " + item["name"].lower()
+            hay = name + " " + item["task"].lower()
+            score = sum(2 if w in name else 1 if w in hay else 0 for w in wanted) / len(wanted)
+            if score > best_score:
+                best, best_score = item, score
+        return best if best_score >= 1.0 else None
+
+    def project_command(self, text: str) -> str | None:
+        """"Welche Projekte habe ich?", "Arbeite am Discord-Bot weiter: ...", "Öffne den Ordner vom
+        Discord-Bot", "Starte das Projekt Discord-Bot". None = kein Projekt-Befehl."""
+        found = match_project(text)
+        if found is None:
+            return None
+        action = found[0]
+        if action == "list":
+            items = self.projects()
+            self._ui.workshop({"state": "projects"})
+            if self._show_window is not None:
+                try:
+                    self._show_window()
+                except Exception:
+                    pass
+            if not items:
+                return "Die Werkstatt ist noch leer, Sir. Sagen Sie einfach, was ich bauen soll."
+            names = [p["name"] for p in items[:3]]
+            more = f" und {len(items) - 3} weitere" if len(items) > 3 else ""
+            listed = ", ".join(names[:-1]) + " und " + names[-1] if len(names) > 1 else names[0]
+            return f"{len(items)} Projekt{'e' if len(items) != 1 else ''}, Sir. Zuletzt: {listed}{more}. Die Liste ist im Fenster."
+        project = self.find_project(found[1])
+        if project is None:
+            return f"Ein Projekt namens {found[1]} finde ich nicht, Sir."
+        if action == "continue":
+            return self.follow_up(text, project)
+        folder = Path(project["folder"])
+        try:
+            if action == "open":
+                _start_file(folder)
+                return f"Der Ordner von {project['name']} ist offen, Sir."
+            if not (folder / "start.bat").is_file():
+                return f"{project['name']} hat noch keine start.bat, Sir. Sagen Sie: Arbeite am {project['name']} weiter und leg eine Startdatei an."
+            _start_file(folder / "start.bat", folder)
+            return f"{project['name']} startet, Sir."
+        except OSError as exc:
+            log.info("Projekt %s: %s", action, exc)
+            return f"Das ging leider nicht, Sir: {exc}"
+
+    def _save_project(self, job: Job, state: str) -> None:
+        """projekt.json im Projektordner: Name, Auftrag, Stand, Sitzung, Verlauf."""
+        path = job.folder / PROJECT_FILE
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, ValueError):
+            data = {}
+        now = dt.datetime.now().isoformat(timespec="minutes")
+        data.setdefault("name", project_name(job.folder))
+        data.setdefault("auftrag", job.task)
+        data.setdefault("erstellt", now)
+        data.update(zuletzt=now, zustand=state, sitzung=job.session, modell=job.model)
+        if state != "running":
+            data["zusammenfassung"] = job.summary
+            data["frage"] = job.question
+        history = data.setdefault("verlauf", [])
+        if state == "running":
+            history.append({"zeit": now, "wunsch": job.task[:500], "zustand": "running"})
+        elif history and history[-1].get("zustand") == "running":
+            history[-1]["zustand"] = state
+        del history[:-50]
+        try:
+            job.folder.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as exc:
+            log.debug("Projektkarte: %s", exc)
+
     def _begin(self, job: Job) -> None:
+        self._save_project(job, "running")
         self._ui.workshop({"state": "start", "task": job.task, "folder": str(job.folder), "begun": job.begun,
-                           "continues": job.resume})
+                           "continues": job.resume, "model": job.model, "name": project_name(job.folder)})
         if self._show_window is not None:
             try:
                 self._show_window()
@@ -369,7 +537,8 @@ class Workshop:
         if not task or age > 120:
             return False
         log.info("Werkstatt-Auftrag vom Gehirn: %s", task)
-        said = self.follow_up(task) if data.get("weiter") else self.start(task)
+        project = self.find_project(str(data.get("projekt") or "")) if data.get("projekt") else None
+        said = self.follow_up(task, project) if data.get("weiter") or project else self.start(task)
         if said.startswith("Ich ") or said.startswith("Für "):
             self._announce(said)  # noch beschäftigt oder kein Gehirn: das soll Georg hören
         return True
@@ -397,6 +566,7 @@ class Workshop:
             "seconds": round((ended or time.monotonic()) - job.started),
             "todos": list(job.todos), "steps": [s.to_dict() for s in job.steps[-200:]],
             "text": job.text[-4000:], "summary": job.summary, "detail": job.detail,
+            "model": job.model, "name": project_name(job.folder),
         }
 
     def status(self) -> str:
@@ -427,8 +597,10 @@ class Workshop:
         (dieselbe Liste wie beim Gehirn: brain._unsupported)."""
         brain = self._brain
         unsupported = set(getattr(brain, "_unsupported", set()) or set())
-        model = str(self._cfg.get("modell", "sonnet") or "")
+        model = job.model or choose_model(job.task, self._cfg.get("modell", "auto"))
         effort = str(self._cfg.get("effort", "medium") or "")
+        if model == "opus" and str(self._cfg.get("modell", "auto")).lower() == "auto" and effort == "medium":
+            effort = "high"  # großer Auftrag: gründlich nachdenken
         cmd = [brain.claude_path, "-p", "--output-format", "stream-json", "--verbose"]
         if "include-partial-messages" not in unsupported:
             cmd.append("--include-partial-messages")
@@ -488,6 +660,17 @@ class Workshop:
                 self._finish(job, "error", f"Die Werkstatt ließ sich nicht starten, Sir. {exc}", str(exc))
                 return
             stream, stderr, timed_out = outcome
+            result = stream.result or {}
+            if job.model == "opus" and result.get("is_error") and re.search(
+                    r"model.*(?:not (?:available|found|supported)|invalid|access)|opus.*(?:pro|plan|upgrade)",
+                    str(result.get("result", "")), re.I):
+                log.warning("Werkstatt: Opus geht mit diesem Konto nicht, nehme Sonnet.")
+                job.model = "sonnet"
+                job.resume = False
+                job.session = str(uuid.uuid4())
+                job.steps.clear()
+                job.text = ""
+                continue
             if self._cancelled or timed_out or stream.result is not None:
                 break
             unknown = UNKNOWN_OPTION.search(stderr or "")
@@ -495,6 +678,15 @@ class Workshop:
             if unknown and isinstance(unsupported, set) and unknown.group(1) not in unsupported:
                 unsupported.add(unknown.group(1))  # gilt dann auch fürs Gehirn
                 log.warning("Werkstatt: Claude kennt --%s nicht, ohne diese Option nochmal.", unknown.group(1))
+                continue
+            failure = f"{stderr or ''} {(stream.result or {}).get('result', '') if stream.result else ''}"
+            if job.model == "opus" and re.search(r"model.*(?:not (?:available|found|supported)|invalid|access)|"
+                                                 r"(?:not (?:available|allowed)|no access).*model|opus.*(?:pro|plan|upgrade)",
+                                                 failure, re.I):
+                log.warning("Werkstatt: Opus geht mit diesem Konto nicht, nehme Sonnet.")
+                job.model = "sonnet"
+                job.resume = False
+                job.session = str(uuid.uuid4())
                 continue
             if job.resume and re.search(r"no conversation found|session.*not found", stderr or "", re.I):
                 # Die alte Sitzung gibt es nicht mehr: im selben Ordner neu anfangen.
@@ -604,6 +796,7 @@ class Workshop:
         })
         log.info("Werkstatt %s nach %d s: %s", state, seconds, summary[:300])
         save_log(job, state)
+        self._save_project(job, state)
         spoken = job.summary
         if state == "done":
             first = re.split(r"(?<=[.!?])\s+", spoken)
@@ -613,6 +806,51 @@ class Workshop:
             spoken = f"Aus der Werkstatt: {spoken}"
         self._announce(spoken)
         job.state = state  # erst jetzt: wer auf das Ende wartet, hat dann auch die Ansage
+
+
+_PROJECT_FILL = {"das", "den", "die", "der", "dem", "projekt", "projekts", "am", "an", "beim", "bei", "mit", "von",
+                 "vom", "mein", "meinem", "meinen", "meine", "weiter", "ordner", "werkstatt", "in", "im", "zum", "zur"}
+
+# "Welche Projekte habe ich?", "Zeig mir meine Projekte"
+_LIST = re.compile(r"^(?:welche|was für) projekte\b|^(?:zeig|zeige|öffne)(?: mir)? (?:meine |alle |die )?(?:werkstatt[- ]?)?projekte\b|"
+                   r"^was (?:hast du|haben wir)(?: (?:schon|alles))* (?:in der werkstatt )?gebaut\b|^(?:öffne|zeig|zeige)(?: mir)? (?:die )?werkstatt$")
+# "Arbeite am Discord-Bot weiter: füg einen Befehl hinzu", "Mach beim Projekt Würfelspiel weiter, ..."
+_CONTINUE_NAMED = re.compile(
+    r"^(?:mach|mache|arbeite|arbeit)\s+(?:am|beim|an dem|an der|mit dem|mit der|bei dem|bei der)\s+(?:projekt\s+)?"
+    r"(?P<name>.+?)\s+weiter\b[\s,:.-]*(?P<rest>.*)$")
+# "Öffne den Ordner vom Discord-Bot", "Öffne das Projekt Würfelspiel"
+_OPEN_PROJECT = re.compile(r"^(?:öffne|zeig|zeige)(?: mir)? (?:den ordner (?:vom|von dem|von der|des)|das projekt)\s+(?P<name>.+)$")
+# "Starte das Projekt Discord-Bot", "Starte den Discord-Bot aus der Werkstatt"
+_RUN_PROJECT = re.compile(r"^(?:starte|start|führ|führe)\s+(?:das projekt\s+(?P<a>.+?)|(?:den|das|die)\s+(?P<b>.+?)\s+aus der werkstatt)(?: aus)?$")
+
+
+def match_project(text: str):
+    """("list", "") / ("continue", name, rest) / ("open", name) / ("run", name) oder None."""
+    norm = _norm(text)
+    if _LIST.search(norm):
+        return ("list", "")
+    found = _CONTINUE_NAMED.match(norm)
+    if found and found.group("name") not in ("projekt", "letzten projekt", "der werkstatt", "dem projekt"):
+        return ("continue", found.group("name"), found.group("rest").strip())
+    found = _OPEN_PROJECT.match(norm)
+    if found:
+        return ("open", found.group("name"))
+    found = _RUN_PROJECT.match(norm)
+    if found:
+        return ("run", found.group("a") or found.group("b"))
+    return None
+
+
+def _start_file(path: Path, cwd: Path | None = None) -> None:
+    """Öffnet einen Ordner oder startet eine Datei wie ein Doppelklick."""
+    if os.name == "nt":
+        if cwd is not None:
+            os.startfile(str(path), cwd=str(cwd))  # type: ignore[call-arg]
+        else:
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        return
+    subprocess.Popen(["xdg-open", str(path)], cwd=str(cwd) if cwd else None,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _explain(detail: str) -> str:
@@ -627,11 +865,12 @@ def _explain(detail: str) -> str:
     return "In der Werkstatt ist etwas schiefgegangen, Sir. Die Einzelheiten stehen im Fenster."
 
 
-def hand_over(state_dir: Path, task: str, continue_last: bool = False) -> Path:
+def hand_over(state_dir: Path, task: str, continue_last: bool = False, project: str = "") -> Path:
     """Für jarvis.tool: einen Auftrag an die laufende Werkstatt übergeben."""
     path = Path(state_dir) / HANDOFF
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"auftrag": task, "weiter": continue_last, "zeit": dt.datetime.now().isoformat(timespec="seconds")}
+    data = {"auftrag": task, "weiter": continue_last, "projekt": project,
+            "zeit": dt.datetime.now().isoformat(timespec="seconds")}
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     return path
 

@@ -208,6 +208,64 @@ class Api:
             log.debug("Werkstatt-Stand: %s", exc)
             return None
 
+    def workshop_projects(self) -> list:
+        """Alle Werkstatt-Projekte für die Projektliste."""
+        shop = getattr(self._assistant, "workshop", None)
+        if shop is None:
+            return []
+        try:
+            return shop.projects()[:60]
+        except Exception as exc:
+            log.debug("Werkstatt-Projekte: %s", exc)
+            return []
+
+    def workshop_new(self, text) -> bool:
+        """Neuer Auftrag aus der Projektliste."""
+        shop = getattr(self._assistant, "workshop", None)
+        text = str(text or "").strip()
+        if shop is None or not text or shop.busy:
+            return False
+
+        def work() -> None:
+            self._assistant.announce(shop.start(text))
+
+        threading.Thread(target=work, name="jarvis-werkstatt-neu", daemon=True).start()
+        return True
+
+    def workshop_continue(self, folder, text) -> bool:
+        """"Weiterarbeiten" an einem Projekt aus der Liste."""
+        shop = getattr(self._assistant, "workshop", None)
+        text = str(text or "").strip()
+        if shop is None or not text:
+            return False
+        project = next((p for p in shop.projects() if p["folder"] == str(folder)), None)
+        if project is None:
+            return False
+
+        def work() -> None:
+            said = shop.follow_up(text, project)
+            self._assistant.announce(said)
+
+        threading.Thread(target=work, name="jarvis-werkstatt-weiter", daemon=True).start()
+        return True
+
+    def workshop_run(self, folder) -> bool:
+        """"Starten": die start.bat eines Projekts."""
+        shop = getattr(self._assistant, "workshop", None)
+        if shop is None or not folder:
+            return False
+        try:
+            target = Path(str(folder)).resolve()
+            if Path(shop.base).resolve() not in target.parents or not (target / "start.bat").is_file():
+                return False
+            from ..workshop import _start_file
+
+            _start_file(target / "start.bat", target)
+            return True
+        except OSError as exc:
+            log.info("Projekt starten: %s", exc)
+            return False
+
     def workshop_cancel(self) -> bool:
         """Stopp-Knopf in der Werkstatt."""
         shop = getattr(self._assistant, "workshop", None)

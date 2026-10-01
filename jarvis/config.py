@@ -46,7 +46,7 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 5
+CONFIG_VERSION = 6
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
@@ -65,6 +65,8 @@ _UPGRADES = {
         ("listen", "silence_seconds", 0.7, 0.9),
         ("listen", "max_seconds", 20, 60),
     ],
+    # Die Werkstatt wählt selbst: Opus für große Aufträge, Sonnet für kleine.
+    6: [("werkstatt", "modell", "sonnet", "auto")],
 }
 # Einträge, die aus Listen in einer älteren config.toml verschwinden (Version, Abschnitt, Schlüssel, Einträge).
 # Jarvis 2 darf Programme ohne Nachfrage installieren.

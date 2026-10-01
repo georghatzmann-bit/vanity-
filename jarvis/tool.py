@@ -44,6 +44,9 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   discord stumm|taub           schaltet Mikrofon oder Ton in Discord um (zurück ins Spiel)
   werkstatt "<auftrag>"        gibt einen Programmier- oder Bauauftrag an die Werkstatt
   werkstatt-weiter "<wunsch>"  arbeitet am letzten Werkstatt-Projekt weiter
+  werkstatt-projekt "<name>" "<wunsch>"
+                               arbeitet an einem bestimmten Werkstatt-Projekt weiter
+  werkstatt-projekte           zeigt alle Werkstatt-Projekte
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
   vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
@@ -126,6 +129,29 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(command: str, rest: list[str]) -> int:
     cfg = load_config()
+
+    if command == "werkstatt-projekte":
+        from .workshop import Workshop
+
+        items = Workshop(cfg, None, None, print).projects()
+        if not items:
+            print("Die Werkstatt ist noch leer.")
+        for item in items[:40]:
+            print(f"{item['name']}  [{item['state'] or '?'}, {item['updated']}]  {item['task'][:80]}  ({item['folder']})")
+        return 0
+
+    if command == "werkstatt-projekt":
+        from .workshop import hand_over
+
+        if len(rest) < 2:
+            print('Aufruf: werkstatt-projekt "<name>" "<wunsch>"')
+            return 1
+        if os.environ.get("JARVIS_WERKSTATT"):
+            print("Du bist schon in der Werkstatt. Bau es selbst, hier im Projektordner.")
+            return 1
+        hand_over(STATE_DIR, " ".join(rest[1:]), continue_last=True, project=rest[0])
+        print("Die Werkstatt übernimmt. Sag Georg nur kurz, dass du am Projekt weitermachst.")
+        return 0
 
     if command in ("werkstatt", "werkstatt-weiter"):
         from .workshop import hand_over

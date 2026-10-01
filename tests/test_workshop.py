@@ -358,3 +358,87 @@ class AssistantWorkshopTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ModelAndProjectsTest(unittest.TestCase):
+    """Opus für große Aufträge, und eine Übersicht über alle Projekte."""
+
+    def test_model_choice(self):
+        from jarvis.workshop import choose_model
+
+        self.assertEqual(choose_model("Bau mir einen Discord-Bot, der würfelt"), "sonnet")
+        self.assertEqual(choose_model("Bau mir ein Multiplayer-Spiel mit Login, Shop und Datenbank"), "opus")
+        self.assertEqual(choose_model("Bau mir gründlich eine Webseite"), "opus")
+        self.assertEqual(choose_model("Bau mir ein Spiel mit Login und Datenbank, aber nur kurz mit Sonnet"), "sonnet")
+        self.assertEqual(choose_model("Bau mir ein Spiel mit Login und Datenbank", "sonnet"), "sonnet", "fest eingestellt")
+
+    def test_commands(self):
+        from jarvis.workshop import match_project
+
+        self.assertEqual(match_project("Welche Projekte habe ich?"), ("list", ""))
+        self.assertEqual(match_project("Arbeite am Discord-Bot weiter: füg einen Befehl hinzu"),
+                         ("continue", "discord-bot", "füg einen befehl hinzu"))
+        self.assertEqual(match_project("Öffne den Ordner vom Discord-Bot"), ("open", "discord-bot"))
+        self.assertEqual(match_project("Starte das Projekt Würfelspiel"), ("run", "würfelspiel"))
+        self.assertIsNone(match_project("Starte Spotify"))
+        self.assertIsNone(match_project("Mach in der Werkstatt weiter"))
+
+    @posix_only
+    def test_projects_are_listed_found_and_continued(self):
+        with TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cfg = load_config()
+            cfg["brain"]["claude_path"] = str(make_fake_claude(home))
+            cfg["werkstatt"] = {"ordner": str(home / "Werkstatt"), "modell": "auto", "effort": "medium"}
+            (home / "CLAUDE.md").write_text("# Jarvis", encoding="utf-8")
+            brain = ClaudeBrain(cfg["brain"], home, home / "daten")
+            self.addCleanup(brain.close)
+            ui, said = RecordingUi(), []
+            shop = Workshop(cfg, brain, ui, said.append)
+
+            def wait():
+                end = time.monotonic() + 15
+                while shop.busy and time.monotonic() < end:
+                    time.sleep(0.05)
+
+            shop.start("Bau mir einen Discord-Bot, der Hallo sagt")
+            wait()
+            first = shop.job.folder
+            shop.start("Bau mir ein Würfelspiel")
+            wait()
+            items = shop.projects()
+            names = {p["name"] for p in items}
+            self.assertEqual(len(items), 2)
+            self.assertIn("Discord Bot Hallo Sagt", names)
+            bot = shop.find_project("discord-bot")
+            self.assertEqual(Path(bot["folder"]), first)
+            self.assertEqual(bot["state"], "done")
+            self.assertTrue(bot["session"])
+            self.assertEqual(bot["model"], "sonnet")
+            self.assertIsNone(shop.find_project("Raumschiff"))
+            answer = shop.project_command("Arbeite am Discord-Bot weiter: füg einen Befehl hinzu")
+            self.assertIn("Discord Bot Hallo Sagt", answer)
+            wait()
+            self.assertEqual(shop.job.folder, first, "am alten Projekt weiter, nicht am letzten")
+            self.assertTrue(shop.job.resume)
+            card = json.loads((first / "projekt.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(card["verlauf"]), 2)
+            self.assertEqual(card["auftrag"], "Bau mir einen Discord-Bot, der Hallo sagt")
+            listed = shop.project_command("Welche Projekte habe ich?")
+            self.assertTrue(listed.startswith("2 Projekte, Sir."), listed)
+            self.assertIn(("workshop", {"state": "projects"}), ui.events)
+            self.assertIn("finde ich nicht", shop.project_command("Starte das Projekt Raumschiff"))
+            self.assertIn("keine start.bat", shop.project_command("Starte das Projekt Discord-Bot"))
+
+    def test_opus_falls_back_to_sonnet(self):
+        from jarvis.workshop import Job
+
+        cfg = load_config()
+        cfg["werkstatt"] = {"modell": "auto"}
+        brain = types.SimpleNamespace(claude_path="claude", _unsupported=set(), isolated=True, disallowed_tools=[],
+                                      persona_path="", state_dir="")
+        shop = Workshop(cfg, brain, RecordingUi(), lambda text: None)
+        job = Job("Bau mir ein Multiplayer-Spiel mit Login, Shop und Datenbank", Path("/tmp/x"), model="opus")
+        cmd = shop.command(job, Path("/tmp/p.md"))
+        self.assertEqual(cmd[cmd.index("--model") + 1], "opus")
+        self.assertEqual(cmd[cmd.index("--effort") + 1], "high")

@@ -406,6 +406,7 @@
       pill: $('workshopPill'),
       pillText: $('workshopPillText'),
       pillTime: $('workshopPillTime'),
+      projects: $('wsProjects'),
     };
     if (!el.ws) return null;
 
@@ -803,11 +804,14 @@
 
     function renderPill() {
       if (!el.pill) return;
+      el.pill.hidden = false;
       if (!job) {
-        el.pill.hidden = true;
+        el.pill.dataset.state = 'idle';
+        el.pillText.textContent = 'Werkstatt';
+        el.pillTime.textContent = '';
+        el.pill.title = 'Werkstatt: alle Projekte';
         return;
       }
-      el.pill.hidden = false;
       el.pill.dataset.state = job.state;
       let text = 'Werkstatt arbeitet';
       if (job.state === 'running' && job.todos.length) {
@@ -916,7 +920,18 @@
     el.resultBack.addEventListener('click', close);
     el.folder.addEventListener('click', openFolder);
     el.resultFolder.addEventListener('click', openFolder);
-    if (el.pill) el.pill.addEventListener('click', open);
+    // Der Knopf oben: läuft ein Auftrag, zu ihm, sonst zu allen Projekten.
+    function hub() {
+      if (opts.onHub) opts.onHub();
+      else open();
+    }
+    if (el.pill) {
+      el.pill.addEventListener('click', () => {
+        if (job && (job.state === 'running' || (job.endedAt && Date.now() - job.endedAt < 120000))) open();
+        else hub();
+      });
+    }
+    if (el.projects) el.projects.addEventListener('click', hub);
     el.stop.addEventListener('click', async () => {
       // Erst fragen, dann stoppen: ein Klick aus Versehen soll keine Arbeit kosten.
       if (!el.stop.classList.contains('armed')) {
@@ -961,6 +976,8 @@
       close,
       isOpen: () => isOpen,
       hasJob: () => !!job,
+      running: () => !!job && job.state === 'running',
+      renderPill,
     };
   }
 

@@ -25,7 +25,7 @@
         <span class="link" id="link"><span class="link-dot"></span><span id="linkText">Verbinde …</span></span>
       </div>
       <div class="top-right">
-        <button type="button" class="ws-pill" id="workshopPill" data-state="running" hidden title="Werkstatt öffnen">
+        <button type="button" class="ws-pill" id="workshopPill" data-state="idle" title="Werkstatt: alle Projekte">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0 5 5l-8.8 8.8a2.1 2.1 0 0 1-3-3l8.8-8.8a4 4 0 0 0-2-2z"/><path d="m16 3 1.5 3.5L21 8"/></svg>
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
@@ -176,6 +176,10 @@
         <span class="ws-timer" id="wsTimer" title="Dauer">00:00</span>
       </div>
       <div class="ws-actions">
+        <button type="button" class="ws-btn" id="wsProjects" title="Alle Projekte der Werkstatt">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+          <span>Projekte</span>
+        </button>
         <button type="button" class="ws-btn" id="wsFolder" title="Den Projektordner im Explorer öffnen">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2l2 2h8.8A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>
           <span>Ordner öffnen</span>
@@ -248,6 +252,43 @@
     </footer>
   </section>
 
+  <!-- Werkstatt: alle Projekte -->
+  <section class="ws hub" id="hub" aria-label="Werkstatt-Projekte" hidden>
+    <header class="ws-top">
+      <button type="button" class="ws-back" id="hubBack" title="Zurück zu Jarvis (Esc)">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>
+        <span>Jarvis</span>
+      </button>
+      <div class="ws-title">
+        <span class="ws-kicker">Werkstatt</span>
+        <h1 class="ws-task">Projekte</h1>
+      </div>
+      <div class="ws-status"><span class="hub-count" id="hubCount"></span></div>
+      <div class="ws-actions">
+        <button type="button" class="ws-btn" id="hubJob" hidden title="Den laufenden Auftrag ansehen">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0 5 5l-8.8 8.8a2.1 2.1 0 0 1-3-3l8.8-8.8a4 4 0 0 0-2-2z"/></svg>
+          <span id="hubJobText">Laufender Auftrag</span>
+        </button>
+      </div>
+    </header>
+    <div class="hub-body">
+      <form class="hub-new" id="hubNew" autocomplete="off">
+        <label class="hub-new-label" for="hubNewInput">Neuer Auftrag</label>
+        <div class="hub-new-row">
+          <input id="hubNewInput" type="text" maxlength="1500" spellcheck="false"
+                 placeholder="Was soll ich bauen? Zum Beispiel: einen Discord-Bot, der jeden Morgen das Wetter postet">
+          <button type="submit" class="ws-btn primary" id="hubNewBtn" disabled>Bauen</button>
+        </div>
+        <small class="hub-hint">Große Aufträge (Spiele, Apps mit Login, Shops) baut Jarvis mit Opus, kleine mit Sonnet. „Gründlich“ nimmt immer Opus.</small>
+      </form>
+      <div class="hub-grid" id="hubGrid" role="list"></div>
+      <div class="hub-empty" id="hubEmpty" hidden>
+        <b>Noch keine Projekte</b>
+        <span>Sag „Hey Jarvis, bau mir …“ oder schreib oben einen Auftrag. Jedes Projekt bekommt einen eigenen Ordner.</span>
+      </div>
+    </div>
+  </section>
+
   <!-- Verlauf als Schublade -->
   <div class="drawer-shade" id="drawerShade" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Verlauf" aria-hidden="true">
@@ -267,6 +308,7 @@
   <div class="toasts" id="toasts" aria-live="assertive"></div>
 
   <script src="werkstatt.js"></script>
+  <script src="projekte.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

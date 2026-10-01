@@ -178,8 +178,10 @@ disallowed_tools = [
 # Hintergrund in einem eigenen Ordner und zeigt jeden Schritt im Fenster.
 # Leer = %USERPROFILE%\Jarvis-Werkstatt
 ordner = ""
-# Modell und Gründlichkeit für die Werkstatt ("opus" ist am klügsten, aber langsamer).
-modell = "sonnet"
+# Modell für die Werkstatt: "auto" nimmt Opus (das klügste) für große Aufträge wie Spiele, Apps mit
+# Login oder Shops und Sonnet (schneller) für kleine. Sagst du "gründlich" oder "mit Opus", nimmt er Opus.
+# Geht Opus mit deinem Konto nicht, nimmt er von selbst Sonnet. Fest: "opus" oder "sonnet".
+modell = "auto"
 effort = "medium"
 # Abbruch, wenn so viele Minuten gar nichts passiert, und Obergrenze für einen Auftrag.
 still_minuten = 12
@@ -213,4 +215,4 @@ token = ""
 
 [intern]
 # Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
-config_version = 4
+config_version = 6
