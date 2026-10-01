@@ -174,9 +174,9 @@ _RULES += [
     # Licht (über Home Assistant, sonst Alexa): "Mach das Licht im Wohnzimmer aus", "Dimm das Licht auf 30 Prozent"
     ("light", re.compile(
         r"^(?:(?:mach|mache|schalt|schalte|dreh|drehe|stell|stelle) )?(?:das |die )?(?P<what>licht|lampe|lampen|deckenlicht|stehlampe)"
-        r"(?: (?:im|in der|in dem|auf dem|vom|von der) (?P<room>[\wäöüß -]+?))? (?P<how>an|aus|ein|heller|dunkler|"
+        r"(?: (?P<prep>im|in der|in dem|auf dem|vom|von der) (?P<room>[\wäöüß -]+?))? (?P<how>an|aus|ein|heller|dunkler|"
         r"auf (?P<pct>\d{1,3}) ?(?:%|prozent)(?: (?:stellen|dimmen))?)$|"
-        r"^(?:dimm|dimme) (?:das |die )?(?P<what2>licht|lampe|lampen)(?: (?:im|in der|in dem) (?P<room2>[\wäöüß -]+?))?"
+        r"^(?:dimm|dimme) (?:das |die )?(?P<what2>licht|lampe|lampen)(?: (?P<prep2>im|in der|in dem) (?P<room2>[\wäöüß -]+?))?"
         r"(?: auf (?P<pct2>\d{1,3}) ?(?:%|prozent))?$"
     )),
     ("install", re.compile(
@@ -673,8 +673,9 @@ def match(text: str) -> Intent | None:
                     pct = "80" if how == "heller" else "30"
                 elif how == "dimmen" and not pct:
                     pct = "30"
-                on = how not in ("aus",)
-                return Intent("light", room, {"on": on, "pct": int(pct) if pct else None, "said": text.strip()})
+                on = how not in ("aus",) and pct not in ("0", "00", "000")  # "auf 0 Prozent" heißt aus
+                return Intent("light", room, {"on": on, "pct": int(pct) if pct and on else None, "said": text.strip(),
+                                              "prep": groups.get("prep") or groups.get("prep2") or ""})
             if name == "radio":
                 kind = "bluetooth" if "bluetooth" in norm else "wifi"
                 on = not re.search(r"\b(?:aus|ab|ausschalten|deaktivier|deaktiviere|deaktivieren)\b", norm)

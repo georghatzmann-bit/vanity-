@@ -6,6 +6,7 @@ import threading
 import time
 import unittest
 import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 
@@ -164,6 +165,23 @@ class BridgeTest(unittest.TestCase):
         with mock.patch.object(self.bridge, "post"):
             self.assertTrue(self.bridge.receive(message))
             self.assertFalse(self.bridge.receive(message), "zweimal dieselbe Nachricht: nur einmal")
+
+    def test_skill_answers_in_time_even_after_other_messages(self):
+        # Alexa wartet höchstens acht Sekunden. Kommt kurz vor der Frist eine fremde Nachricht
+        # (eine Quittung, ein anderer Befehl), darf readline() danach nicht noch einmal ganz warten.
+        kanal = self.secret["kanal"]
+
+        def noise():
+            time.sleep(0.8)
+            request = urllib.request.Request(f"{self.relay.url}/{kanal}-antwort", data=b"fremd", method="POST")
+            urllib.request.urlopen(request, timeout=2).read()
+
+        threading.Thread(target=noise, daemon=True).start()
+        start = time.time()
+        said, acked = alexa_skill.frage_jarvis("öffne discord", kanal, self.secret["schluessel"], self.relay.url,
+                                               warten=1.2)
+        self.assertEqual((said, acked), ("", False))
+        self.assertLess(time.time() - start, 1.7)
 
     def test_pc_off_and_slow_answers(self):
         with mock.patch.object(alexa_skill, "KANAL", self.secret["kanal"]), \

@@ -514,7 +514,8 @@ class Assistant:
         if not ha.configured:
             return None
         room, on, pct = intent.arg, bool(intent.data.get("on", True)), intent.data.get("pct")
-        where = f" im {room[:1].upper() + room[1:]}" if room else ""
+        # "Licht in der Küche", nicht "Licht im Küche"
+        where = f" {intent.data.get('prep') or 'im'} {room[:1].upper() + room[1:]}" if room else ""
         label = f"Licht{where} " + ("aus" if not on else f"auf {pct} Prozent" if pct else "an")
         with self._step(label, "app"):
             try:

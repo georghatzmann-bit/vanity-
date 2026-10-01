@@ -107,6 +107,31 @@ class MessageTurnTest(unittest.TestCase):
         self.assertNotEqual(intents.match("Öffne den Server Ordner").name, "discord")
 
 
+class LightTest(unittest.TestCase):
+    def test_zero_percent_means_off(self):
+        for said in ("Stell das Licht auf 0 Prozent", "Dimm das Licht auf 0 Prozent"):
+            with self.subTest(said=said):
+                found = intents.match(said)
+                self.assertEqual((found.name, found.data["on"], found.data["pct"]), ("light", False, None))
+        self.assertEqual(intents.match("Stell das Licht auf 10 Prozent").data["pct"], 10)
+
+    def test_answer_keeps_the_preposition(self):
+        from unittest import mock
+
+        from jarvis.config import load_config
+        from tests.test_assistant import FakeBrain, make
+
+        cfg = load_config()
+        cfg["homeassistant"] = {"url": "http://ha.local:8123", "token": "t"}
+        assistant, _ui, _speaker, _ = make(FakeBrain(), cfg=cfg)
+        with mock.patch("jarvis.homeassistant.HomeAssistant.light", return_value="ok") as light:
+            answer = assistant.handle("Mach das Licht in der Küche auf 40 Prozent")
+            self.assertEqual(answer, "Licht in der Küche auf 40 Prozent, Sir.")
+            light.assert_called_with("küche", True, 40)
+            assistant.handle("Stell das Licht auf 0 Prozent")
+            light.assert_called_with("", False, None)
+
+
 class PowerAbortTest(unittest.TestCase):
     """Jarvis sagt "Ein Abbrechen hält mich auf": das muss auch über den echten Weg klappen
     (Sprache und Tippen gehen über submit, und "Abbrechen"/"Stopp" wird dort sofort erledigt)."""

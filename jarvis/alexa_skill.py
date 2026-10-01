@@ -71,16 +71,30 @@ def unseal(text, schluessel=None):
 
 # ---------------------------------------------------------------------- Weg zum PC
 
+def _rest(frist):
+    return max(0.05, frist - time.time())
+
+
+def _frist_setzen(stream, frist):
+    """Jedes Warten endet spätestens zur Frist. Sonst wartet readline() nach einer Quittung noch
+    einmal die ganze Zeit, und Alexa (höchstens acht Sekunden) meldet einen Fehler."""
+    try:
+        stream.fp.raw._sock.settimeout(_rest(frist))
+    except AttributeError:
+        pass
+
+
 def frage_jarvis(text, kanal=None, schluessel=None, relay=None, warten=None):
     """Schickt den Befehl und wartet auf die Antwort. Gibt (antwort, quittiert) zurück."""
     kanal, relay, warten = kanal or KANAL, relay or RELAY, warten or WARTEN
     ident = uuid.uuid4().hex
     start = time.time()
+    frist = start + warten
     message = seal({"id": ident, "text": text, "zeit": int(start)}, schluessel).encode("ascii")
     for pause in (0.4, 0):
         request = urllib.request.Request(relay + "/" + kanal + "-befehl", data=message, method="POST")
         try:
-            urllib.request.urlopen(request, timeout=3).read()
+            urllib.request.urlopen(request, timeout=min(3, _rest(frist))).read()
             break
         except urllib.error.HTTPError as exc:
             if exc.code != 429 or not pause:
@@ -89,8 +103,9 @@ def frage_jarvis(text, kanal=None, schluessel=None, relay=None, warten=None):
     url = relay + "/" + kanal + "-antwort/json?" + urllib.parse.urlencode({"since": int(start) - 2})
     acked = False
     try:
-        with urllib.request.urlopen(url, timeout=warten) as stream:
-            while time.time() - start < warten:
+        with urllib.request.urlopen(url, timeout=_rest(frist)) as stream:
+            while time.time() < frist:
+                _frist_setzen(stream, frist)
                 line = stream.readline()
                 if not line:
                     break
