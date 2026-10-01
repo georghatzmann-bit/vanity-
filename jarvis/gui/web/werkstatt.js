@@ -386,7 +386,9 @@
       result: $('wsResult'),
       stamp: $('wsStamp'),
       summary: $('wsSummary'),
+      answer: $('wsAnswer'),
       detail: $('wsDetail'),
+      kicker: document.querySelector('.ws-kicker'),
       resultFolder: $('wsResultFolder'),
       resultBack: $('wsResultBack'),
       construct: $('wsConstruct'),
@@ -422,6 +424,8 @@
       return {
         task: String(data.task || 'Auftrag'),
         folder: String(data.folder || ''),
+        continues: !!data.continues,
+        question: '',
         state: 'running',
         begun: String(data.begun || nowClock()),
         startedAt: Date.now() - (Number(data.seconds) || 0) * 1000,
@@ -458,6 +462,7 @@
         job.state = state;
         job.summary = String(ev.summary || '');
         job.detail = String(ev.detail || '');
+        job.question = String(ev.question || '');
         if (ev.folder) job.folder = String(ev.folder);
         const secs = Number(ev.seconds);
         job.endedAt = Number.isFinite(secs) && secs > 0 ? job.startedAt + secs * 1000 : Date.now();
@@ -556,6 +561,7 @@
 
     function renderHeader() {
       el.ws.dataset.state = job.state;
+      if (el.kicker) el.kicker.textContent = job.continues ? 'Werkstatt · weiter am Projekt' : 'Werkstatt';
       el.task.textContent = job.task;
       el.task.title = job.task;
       el.chip.dataset.state = job.state;
@@ -762,6 +768,7 @@
       el.summary.textContent = job.summary || (job.state === 'done' ? 'Der Auftrag ist erledigt.' : '');
       el.detail.textContent = job.detail;
       el.detail.hidden = !job.detail;
+      el.answer.hidden = !(job.state === 'done' && job.question);
       if (wasHidden) el.result.scrollIntoView({ block: 'nearest' });
     }
 

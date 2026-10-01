@@ -37,6 +37,8 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   admin "<PowerShell-Befehl>"  führt etwas mit Administratorrechten aus (Windows fragt Georg)
   nachricht <app> "<person>" "<text>"
                                schickt eine Chatnachricht, app: discord, telegram, whatsapp
+  werkstatt "<auftrag>"        gibt einen Programmier- oder Bauauftrag an die Werkstatt
+  werkstatt-weiter "<wunsch>"  arbeitet am letzten Werkstatt-Projekt weiter
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
@@ -106,6 +108,21 @@ def main(argv: list[str] | None = None) -> int:
 
 def _dispatch(command: str, rest: list[str]) -> int:
     cfg = load_config()
+
+    if command in ("werkstatt", "werkstatt-weiter"):
+        from .workshop import hand_over
+
+        task = " ".join(rest).strip()
+        if not task:
+            print(f'Aufruf: {command} "<auftrag>"')
+            return 1
+        if os.environ.get("JARVIS_WERKSTATT"):
+            print("Du bist schon in der Werkstatt. Bau es selbst, hier im Projektordner.")
+            return 1
+        hand_over(STATE_DIR, task, continue_last=command == "werkstatt-weiter")
+        print("Die Werkstatt übernimmt (das Fenster zeigt die Arbeit). Sag Georg nur kurz, dass du in der "
+              "Werkstatt bist, und mach den Auftrag nicht selbst.")
+        return 0
 
     if command == "erinnern":
         from .reminders import ReminderStore, parse_when, spoken_when

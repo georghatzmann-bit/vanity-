@@ -104,7 +104,17 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
     """Erinnerungen, Systemanzeige und (falls eingeschaltet) der Web-Eingang für Home Assistant."""
 
     def reminders() -> None:
-        while not stopped.wait(5):
+        tick = 0
+        while not stopped.wait(1):
+            tick += 1
+            # Bauaufträge, die das Gehirn an die Werkstatt übergibt (jarvis.tool werkstatt ...)
+            if assistant.workshop is not None:
+                try:
+                    assistant.workshop.take_handoff(STATE_DIR)
+                except Exception:
+                    log.exception("Werkstatt-Übergabe")
+            if tick % 5:
+                continue
             try:
                 assistant.check_reminders()
             except Exception as exc:

@@ -91,12 +91,15 @@ Jarvis macht das einfach. Nur vor **Löschen, Deinstallieren, Herunterfahren und
 
 ## Die Werkstatt: Jarvis programmiert für dich
 
-Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
+Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“**, **„Ich brauche ein Programm, das meine Fotos sortiert“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
 
 1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster wechselt in die **Blaupausen-Ansicht**: links der Plan, in der Mitte jeder Schritt mit Dauer, rechts ein Drahtgitter-Modell, das mit dem Fortschritt wächst, dazu die Dateien und Befehle.
 2. Jarvis arbeitet im Hintergrund. Du kannst ihn währenddessen ganz normal fragen. **„Wie weit bist du?“** nennt den aktuellen Schritt.
 3. Ist er fertig, sagt er es dir und das Fenster zeigt einen Stempel **„Fertig“**. **Ordner öffnen** zeigt das Projekt. Darin liegt eine `LIESMICH.txt`, wie man es startet.
 
+- **Weiter am selben Projekt:** „Füg dem Bot noch einen Befehl hinzu“, „Der Bot startet nicht“ oder „Mach in der Werkstatt weiter: …“. Jarvis arbeitet dann im selben Ordner weiter und weiß noch, was er gebaut hat.
+- Fehlt etwas, das nur du hast (zum Beispiel ein Bot-Token), baut Jarvis trotzdem alles fertig und sagt dir am Ende, wo du es einträgst. Stellt er doch einmal eine Frage, antwortest du einfach mit „Hey Jarvis, …“. Die Antwort geht direkt in die Werkstatt.
+- Für Programme legt Jarvis eine `start.bat` an: Doppelklick, und es läuft.
 - Jedes Projekt bekommt einen eigenen Ordner unter `%USERPROFILE%\Jarvis-Werkstatt`.
 - **Zurück** (oder Esc) bringt dich zum normalen Jarvis, die Arbeit läuft weiter. Oben erscheint dann ein Knopf **„Werkstatt · Schritt 2/5“**, der dich wieder hinbringt.
 - **Stopp** (zweimal klicken) oder **„Brich die Werkstatt ab“** beendet die Arbeit. Was schon gebaut ist, bleibt im Ordner.

@@ -646,6 +646,17 @@
   user-select: text;
 }
 
+.ws-answer {
+  grid-area: detail;
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--bp-accent);
+  background: rgba(var(--bp-glow), 0.08);
+  color: var(--bp-text-2);
+  font-size: var(--fs-hint);
+  line-height: 1.5;
+}
+
 .ws-detail {
   grid-area: detail;
   max-height: 120px;

@@ -13,7 +13,8 @@ from unittest import mock
 from tests.helpers import RecordingUi, make_fake_claude
 from jarvis.brain import ClaudeBrain
 from jarvis.config import load_config
-from jarvis.workshop import Workshop, is_workshop_request, project_folder
+from jarvis.workshop import (Workshop, hand_over, is_change_request, is_continue_request, is_workshop_request,
+                             looks_like_answer, project_folder)
 
 posix_only = unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
 
@@ -29,6 +30,14 @@ class RecognitionTest(unittest.TestCase):
             "Mach mir eine Batch-Datei, die Discord und Steam startet",
             "Ab in die Werkstatt: ein Taschenrechner",
             "Behebe den Fehler in meinem Skript",
+            # Füllwörter und andere Satzformen, die früher nicht ankamen
+            "Hey Jarvis, bau mir bitte schnell eine App für meine Einkaufsliste",
+            "Erstelle mir bitte ein Python Programm, das Bilder verkleinert",
+            "Ich brauche ein Programm, das meine Fotos nach Datum sortiert",
+            "Ich hätte gern eine Webseite für meinen Clan",
+            "Schreib mir Code für einen Discord-Bot",
+            "Kannst du mir bitte einen Chatbot bauen?",
+            "Bau mir eine KI, die meine Mails sortiert",
         ):
             with self.subTest(said=said):
                 self.assertTrue(is_workshop_request(said))
@@ -48,6 +57,25 @@ class RecognitionTest(unittest.TestCase):
         ):
             with self.subTest(said=said):
                 self.assertFalse(is_workshop_request(said))
+
+    def test_continue_change_and_answer(self):
+        for said in ("Mach in der Werkstatt weiter", "Werkstatt, füg noch einen Befehl hinzu",
+                     "Arbeite weiter", "Füg in der Werkstatt noch einen Highscore hinzu"):
+            with self.subTest(said=said):
+                self.assertTrue(is_continue_request(said))
+        self.assertFalse(is_continue_request("Wie weit ist die Werkstatt?"))
+        for said in ("Füg dem Bot noch einen Befehl hinzu", "Der Bot startet nicht", "Reparier das Skript",
+                     "Mach das Spiel schwerer", "Es funktioniert immer noch nicht"):
+            with self.subTest(said=said):
+                self.assertTrue(is_change_request(said))
+        for said in ("Mach Spotify an", "Mach das Licht heller", "Öffne den Bot-Ordner", "Wie spät ist es?"):
+            with self.subTest(said=said):
+                self.assertFalse(is_change_request(said))
+        self.assertTrue(looks_like_answer("Nimm den Token aus meiner Notiz"))
+        self.assertTrue(looks_like_answer("Ja, mach das"))
+        for said in ("Wie spät ist es?", "Öffne Spotify", "Erzähl mir einen Witz", "Was ist ein Token?"):
+            with self.subTest(said=said):
+                self.assertFalse(looks_like_answer(said))
 
     def test_questions_about_the_workshop_are_status(self):
         from jarvis import intents
@@ -123,6 +151,78 @@ class WorkshopRunTest(unittest.TestCase):
         self.assertEqual({s["state"] for s in snap["steps"]}, {"done"})
         self.assertTrue(snap["summary"].startswith("Der Bot ist fertig"))
 
+    def test_question_at_the_end_and_answer_continues_the_same_project(self):
+        self.workshop.start("Bau mir einen Bot mit Token")
+        self.wait()
+        job = self.workshop.job
+        self.assertEqual(job.question, "Wie lautet Ihr Bot-Token?")
+        self.assertTrue(self.said[-1].endswith("Wie lautet Ihr Bot-Token?"))
+        self.assertEqual(self.ui.of("workshop")[-1][1]["question"], "Wie lautet Ihr Bot-Token?")
+        # Die nächste Antwort gehört der Werkstatt, aber nur eine echte Antwort
+        self.assertIsNone(self.workshop.route("Wie spät ist es?", free=False))
+        self.assertIsNone(self.workshop.route("Erzähl mir einen Witz"))
+        self.assertEqual(self.workshop.route("Der Token steht in meiner Notiz"), "continue")
+        said = self.workshop.follow_up("Der Token steht in meiner Notiz")
+        self.assertEqual(said, "Sehr wohl, Sir. Ich mache in der Werkstatt weiter.")
+        self.wait()
+        again = self.workshop.job
+        self.assertEqual((again.folder, again.session, again.state), (job.folder, job.session, "done"))
+        calls = [json.loads(line) for line in (job.folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(calls), 2)
+        second = calls[1]["args"]
+        self.assertEqual(second[second.index("--resume") + 1], job.session)
+        self.assertNotIn("--session-id", second)
+        self.assertEqual(calls[1]["cwd"], str(job.folder))
+        starts = [e[1] for e in self.ui.of("workshop") if e[1]["state"] == "start"]
+        self.assertEqual([e["continues"] for e in starts], [False, True])
+        # Nach etwas anderem gilt die Frage nicht mehr
+        again.question = "Noch was?"
+        self.workshop.forget_question()
+        self.assertEqual(again.question, "")
+
+    def test_unknown_option_is_dropped_and_the_job_still_runs(self):
+        with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "effort"}):
+            self.workshop.start("Bau mir einen Discord-Bot, der Hallo sagt")
+            self.wait()
+        self.assertEqual(self.workshop.job.state, "done")
+        self.assertIn("effort", self.brain._unsupported)
+        args = json.loads((self.workshop.job.folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()[-1])["args"]
+        self.assertNotIn("--effort", args)
+
+    def test_environment_for_projects(self):
+        from jarvis.workshop import Job
+
+        env = self.workshop.environment(Job("Bau mir was", self.home / "x"))
+        self.assertEqual((env["PYTHONUTF8"], env["PYTHONIOENCODING"], env["JARVIS_WERKSTATT"]), ("1", "utf-8", "1"))
+        self.assertTrue(env["PATH"].startswith(str(Path(env["JARVIS_PYTHON"]).parent)))
+        persona = self.workshop._persona(Job("Bau mir was", self.home / "x"))
+        text = persona.read_text(encoding="utf-8")
+        self.assertTrue(persona.is_absolute())
+        self.assertIn("Ein Ordner allein ist kein Ergebnis", text)
+        self.assertIn("Stell keine Rückfragen", text)
+        self.assertIn("nichts mit `jarvis.tool werkstatt` weiter", text)
+
+    def test_handoff_from_the_brain(self):
+        state = self.home / "daten"
+        hand_over(state, "Bau mir einen Discord-Bot, der Hallo sagt")
+        self.assertTrue(self.workshop.take_handoff(state))
+        self.wait()
+        self.assertEqual(self.workshop.job.state, "done")
+        self.assertFalse((state / "werkstatt-auftrag.json").exists(), "abgeholt")
+        self.assertFalse(self.workshop.take_handoff(state), "nichts mehr da")
+        # Weiter am selben Projekt
+        hand_over(state, "Füg noch einen Befehl hinzu", continue_last=True)
+        folder = self.workshop.job.folder
+        self.assertTrue(self.workshop.take_handoff(state))
+        self.wait()
+        self.assertEqual(self.workshop.job.folder, folder)
+        # Uralte Übergaben (z. B. nach einem Absturz) werden nicht mehr ausgeführt
+        path = hand_over(state, "Bau mir ein Spiel")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["zeit"] = "2020-01-01T00:00:00"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        self.assertFalse(self.workshop.take_handoff(state))
+
     def test_one_job_at_a_time_and_status_and_cancel(self):
         self.workshop.start("Bau mir ein langsames Spiel")
         time.sleep(1.0)
@@ -132,6 +232,23 @@ class WorkshopRunTest(unittest.TestCase):
         self.wait()
         self.assertEqual(self.workshop.job.state, "cancelled")
         self.assertIn("abgebrochen", self.said[-1])
+
+
+class ToolHandoffTest(unittest.TestCase):
+    def test_tool_writes_the_handoff_but_not_from_inside_the_workshop(self):
+        from jarvis import tool
+
+        with TemporaryDirectory() as folder, mock.patch("jarvis.tool.STATE_DIR", Path(folder)), \
+                mock.patch("builtins.print") as printed:
+            self.assertEqual(tool.main(["werkstatt", "Bau", "mir", "einen", "Bot"]), 0)
+            data = json.loads((Path(folder) / "werkstatt-auftrag.json").read_text(encoding="utf-8"))
+            self.assertEqual((data["auftrag"], data["weiter"]), ("Bau mir einen Bot", False))
+            self.assertIn("Werkstatt übernimmt", printed.call_args[0][0])
+            self.assertEqual(tool.main(["werkstatt-weiter", "Füg", "noch", "was", "hinzu"]), 0)
+            data = json.loads((Path(folder) / "werkstatt-auftrag.json").read_text(encoding="utf-8"))
+            self.assertTrue(data["weiter"])
+            with mock.patch.dict("os.environ", {"JARVIS_WERKSTATT": "1"}):
+                self.assertEqual(tool.main(["werkstatt", "Bau", "was"]), 1)
 
 
 class WindowApiTest(unittest.TestCase):
@@ -215,11 +332,25 @@ class AssistantWorkshopTest(unittest.TestCase):
             def cancel(self):
                 return True
 
+            def route(self, text, free=True):
+                from jarvis.workshop import Workshop
+
+                return Workshop.route(self, text, free)
+
+            job = None
+
+            def forget_question(self):
+                pass
+
         brain = FakeBrain()
         assistant, _ui, _speaker, _ = make(brain)
         assistant.workshop = StubWorkshop()
         self.assertEqual(assistant.handle("Bau mir einen Discord-Bot"), "Sehr wohl, Sir. Ich gehe in die Werkstatt.")
         self.assertEqual(brain.asked, [])
+        # Auch wenn ein anderer Sofort-Befehl einen Teil erkennen würde ("Such ...", "Öffne ...")
+        self.assertEqual(assistant.handle("Ich brauche ein Programm, das YouTube öffnet und nach Musik sucht"),
+                         "Sehr wohl, Sir. Ich gehe in die Werkstatt.")
+        self.assertEqual(assistant.workshop.tasks[-1], "Ich brauche ein Programm, das YouTube öffnet und nach Musik sucht")
         assistant.workshop.busy = True
         self.assertEqual(assistant.handle("Wie weit bist du?"), "Ich bin bei Schritt 2 von 3, Sir.")
         self.assertEqual(assistant.handle("Brich die Werkstatt ab"), "Abgebrochen, Sir.")

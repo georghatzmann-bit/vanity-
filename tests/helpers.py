@@ -173,6 +173,8 @@ FAKE_CLAUDE = textwrap.dedent(
                 time.sleep(8)
             tool("toolu_b", "Bash", {"command": "python bot.py"}, output="Hallo")
             text = "Der Bot ist fertig, Sir. Er liegt im Werkstatt-Ordner. Starten Sie ihn mit python bot.py."
+            if "Token" in prompt:
+                text = "Der Bot ist fast fertig, Sir. Wie lautet Ihr Bot-Token?"
             say(text)
             result(text)
             raise Done(0)

@@ -35,6 +35,11 @@ PROGRESS_EVERY = 25.0
 PROGRESS_MAX = 3
 
 
+# Diese Befehle gelten immer, auch wenn der Satz nach Werkstatt klingt ("Stopp", "Wie weit bist du?").
+_BEFORE_WORKSHOP = {"stop", "mute", "reset", "message", "remind", "timer", "workshop_status", "workshop_cancel",
+                    "window_show", "window_hide", "setup"}
+
+
 class Assistant:
     def __init__(self, cfg: dict, brain, speaker, ui: Ui, mute=None, reminders=None) -> None:
         self._cfg = cfg
@@ -210,11 +215,16 @@ class Assistant:
         """Erledigt schnelle Befehle selbst. None = Claude soll es machen,
         "" = erledigt, ohne etwas zu sagen."""
         intent = intents.match(text)
-        if intent is None:
-            from .workshop import is_workshop_request
-
-            if self.workshop is not None and is_workshop_request(text):
+        if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
+            # Bauaufträge und Wünsche zum letzten Projekt gehen vor die übrigen Sofort-Befehle,
+            # sonst schnappt sich "Öffne ..." oder "Such ..." einen Teil davon.
+            where = self.workshop.route(text, free=intent is None)
+            if where == "new":
                 return self.workshop.start(text)
+            if where == "continue":
+                return self.workshop.follow_up(text)
+            self.workshop.forget_question()  # nur die direkte Antwort gehört zur Rückfrage
+        if intent is None:
             parts = intents.match_parts(text) if self._local else None
             if parts:
                 return self._many(parts)
