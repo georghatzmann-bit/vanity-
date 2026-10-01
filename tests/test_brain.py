@@ -32,12 +32,17 @@ def arg(call, name):
 
 @posix_only
 class ClaudeBrainTest(unittest.TestCase):
+    """Ein Claude-Prozess pro Frage (so wie früher, und als Rückfall für alte Versionen)."""
+
+    live = False
+
     def setUp(self):
         self.tmp = TemporaryDirectory()
         self.home = Path(self.tmp.name)
         self.state = self.home / "daten"
         self.cfg = load_config()["brain"]
         self.cfg["claude_path"] = str(make_fake_claude(self.home))
+        self.cfg["live"] = self.live
         (self.home / "CLAUDE.md").write_text("# Jarvis", encoding="utf-8")
         self.brain = ClaudeBrain(self.cfg, self.home, self.state)
 
@@ -274,6 +279,137 @@ class ClaudeBrainTest(unittest.TestCase):
         with mock.patch("shutil.which", return_value=None), self.assertRaises(BrainError) as ctx:
             ClaudeBrain(cfg, self.home)
         self.assertEqual(ctx.exception.kind, "missing")
+
+
+@posix_only
+class LiveBrainTest(ClaudeBrainTest):
+    """Dieselben Prüfungen mit dem dauerhaft laufenden Claude-Prozess, dazu dessen Besonderheiten."""
+
+    live = True
+
+    def tearDown(self):
+        self.brain.close()
+        super().tearDown()
+
+    def test_conversation_continues_with_same_session(self):
+        self.brain.ask("hallo")
+        self.brain.ask("und jetzt?")
+        first, second = self.calls()
+        self.assertEqual(first["pid"], second["pid"], "dieselbe Unterhaltung im selben Prozess")
+        self.assertTrue(first["live"])
+        self.assertTrue(arg(first, "--session-id"))
+        self.assertEqual(arg(first, "--input-format"), "stream-json")
+        self.assertEqual(second["prompt"], "und jetzt?")
+
+    def test_refusal_falls_back_to_next_model_and_stays_there(self):
+        notes = []
+        self.brain.notice = notes.append
+        self.brain.ask("hallo")
+        answer = self.brain.ask("nur-haiku bitte")
+        self.assertEqual(answer.model, "claude-haiku-test")
+        first, sonnet_try, haiku_try = self.calls()
+        self.assertEqual(sonnet_try["pid"], first["pid"])
+        self.assertNotEqual(haiku_try["pid"], first["pid"], "neuer Prozess für das neue Modell")
+        self.assertEqual(arg(haiku_try, "--model"), "haiku")
+        self.assertIsNone(arg(haiku_try, "--resume"))
+        self.assertIn("Sonnet hat abgelehnt, versuche Haiku", notes[0])
+        self.brain.ask("nur-haiku weiter")
+        last = self.calls()[-1]
+        self.assertEqual(last["pid"], haiku_try["pid"])
+        again = ClaudeBrain(self.cfg, self.home, self.state)
+        self.assertEqual(again.attempt, Attempt("haiku", "jarvis"))
+
+    def test_each_question_sees_what_georg_just_said(self):
+        self.brain.ask("lösch die alte Datei")
+        self.brain.ask("ja")
+        first, second = self.calls()
+        self.assertEqual(first["pid"], second["pid"])
+        self.assertEqual((first["said"], second["said"]), ("lösch die alte Datei", "ja"))
+
+    def test_prewarm_starts_claude_before_the_first_question(self):
+        self.brain.prewarm()
+        for _ in range(50):
+            if self.brain._live is not None:
+                break
+            time.sleep(0.05)
+        self.assertIsNotNone(self.brain._live)
+        warm_pid = self.brain._live.proc.pid
+        self.brain.ask("hallo")
+        self.assertEqual(self.calls()[0]["pid"], warm_pid)
+
+    def test_cancel_keeps_the_conversation_for_the_next_question(self):
+        self.brain.ask("hallo")
+        session = arg(self.calls()[0], "--session-id")
+        thread = threading.Thread(target=lambda: self.assertRaises(Cancelled, self.brain.ask, "langsam"))
+        thread.start()
+        time.sleep(0.6)
+        self.brain.cancel()
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.brain.ask("weiter")
+        last = self.calls()[-1]
+        self.assertEqual(arg(last, "--resume"), session, "neuer Prozess, gleiche Unterhaltung")
+
+    def test_old_claude_without_live_mode_asks_one_process_per_question(self):
+        with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "input-format"}), self.assertLogs("jarvis.brain", "WARNING"):
+            answer = self.brain.ask("hallo")
+        self.assertEqual(answer.text, "Sehr wohl, Sir. hallo")
+        self.assertFalse(self.brain.live_enabled)
+        self.assertFalse(self.calls()[-1]["live"])
+
+    def test_long_pause_starts_a_new_conversation(self):
+        self.brain.ask("hallo")
+        self.brain._last_turn_at -= self.brain._new_after + 1
+        self.brain.ask("guten Morgen")
+        first, second = self.calls()
+        self.assertNotEqual(first["pid"], second["pid"])
+        self.assertNotEqual(arg(second, "--session-id"), arg(first, "--session-id"))
+        self.assertIsNone(arg(second, "--resume"))
+
+
+@posix_only
+class StepsAndPatienceTest(unittest.TestCase):
+    """Arbeitsschritte kommen live an, und lange Arbeit ist kein Grund zum Abbrechen."""
+
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self.cfg = load_config()["brain"]
+        self.cfg["claude_path"] = str(make_fake_claude(self.home))
+        (self.home / "CLAUDE.md").write_text("# Jarvis", encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def brain(self, **cfg):
+        brain = ClaudeBrain(dict(self.cfg, **cfg), self.home, self.home / "daten")
+        self.addCleanup(brain.close)
+        return brain
+
+    def test_steps_are_reported_with_start_and_end(self):
+        for live in (False, True):
+            with self.subTest(live=live):
+                seen = []
+                self.brain(live=live).ask("werkzeug", on_step=lambda step: seen.append((step.label, step.state)))
+                self.assertEqual(seen, [("Führt einen Befehl aus", "running"), ("Führt einen Befehl aus", "done")])
+
+    def test_quiet_tool_is_not_cut_off(self):
+        for live in (False, True):
+            with self.subTest(live=live):
+                steps = []
+                brain = self.brain(live=live, timeout_seconds=1, tool_timeout_seconds=20)
+                answer = brain.ask("lange-arbeit", on_step=steps.append)
+                self.assertIn("installiert", answer.text)
+                self.assertEqual(steps[0].label, "Installiert Spotify")
+                self.assertEqual(steps[-1].state, "done")
+
+    def test_silence_without_a_tool_still_ends(self):
+        for live in (False, True):
+            with self.subTest(live=live):
+                started = time.monotonic()
+                with self.assertRaises(TooSlowError):
+                    self.brain(live=live, timeout_seconds=1).ask("langsam")
+                self.assertLess(time.monotonic() - started, 4)
 
 
 class ClassifyTest(unittest.TestCase):

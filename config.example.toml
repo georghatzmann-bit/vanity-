@@ -115,8 +115,18 @@ models = ["sonnet", "haiku", "opus"]
 isolated = true
 # Lehnen alle Modelle ab, probiert Jarvis sie noch einmal mit einer ganz kurzen Persönlichkeit.
 simple_fallback = true
-# Maximale Wartezeit auf Claude (Sekunden).
+# true = Claude läuft dauerhaft im Hintergrund weiter. Jede Frage spart so den Start
+# von Claude Code (unter Windows 2 bis 3 Sekunden).
+live = true
+# Nach so vielen Minuten Pause beginnt eine neue Unterhaltung (0 = nie). Ein kurzer
+# Verlauf macht die Antworten schneller.
+new_after_minutes = 30
+# Jarvis bricht nur ab, wenn Claude so viele Sekunden gar nichts mehr meldet ...
 timeout_seconds = 180
+# ... oder ein Werkzeug (Installation, Build, Test) so lange still läuft.
+tool_timeout_seconds = 660
+# Obergrenze für eine ganze Aufgabe (Sekunden). "Stopp" bricht jederzeit ab.
+max_seconds = 1800
 # Wie lange Claude nachdenkt: "low" antwortet am schnellsten, "medium" oder "high" gründlicher.
 effort = "low"
 # Welche Werkzeuge Claude für Jarvis überhaupt bekommt.

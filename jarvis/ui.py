@@ -31,6 +31,11 @@ class Ui:
     def stats(self, cpu: float, ram: float) -> None:
         pass
 
+    def progress(self, step: dict) -> None:
+        """Ein Arbeitsschritt von Claude: begonnen (state "running") oder fertig ("done", "error").
+        Felder: id, tool, label ("Installiert Spotify"), detail, kind, state, seconds."""
+        pass
+
 
 class ConsoleUi(Ui):
     """Schreibt das Gespräch ins Konsolenfenster."""
@@ -68,6 +73,10 @@ class ConsoleUi(Ui):
 
     def toast(self, text: str, kind: str = "info") -> None:
         self._print(f"{'!! ' if kind == 'error' else ''}{text}")
+
+    def progress(self, step: dict) -> None:
+        if step.get("state") == "running" and step.get("label"):
+            self._print(f"  … {step['label']}")
 
     def _print(self, text: str) -> None:
         with self._lock:
@@ -111,3 +120,6 @@ class MultiUi(Ui):
 
     def stats(self, cpu, ram):
         self._each("stats", cpu, ram)
+
+    def progress(self, step):
+        self._each("progress", step)

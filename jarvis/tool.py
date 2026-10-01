@@ -53,8 +53,20 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
 """
 
 
+def last_said() -> str:
+    """Was Georg zu dieser Anfrage gesagt hat. Jarvis schreibt es vor jeder Frage in eine Datei
+    (der Claude-Prozess läuft weiter, seine Umgebung bleibt also alt); sonst die Umgebung."""
+    path = os.environ.get("JARVIS_SAID_FILE", "")
+    if path:
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except OSError:
+            pass
+    return os.environ.get("JARVIS_USER_SAID", "")
+
+
 def confirmed(said: str | None = None) -> bool:
-    text = os.environ.get("JARVIS_USER_SAID", "") if said is None else said
+    text = last_said() if said is None else said
     if "?" in text:
         return False
     text = re.sub(r"[’`´]", "'", text.lower())

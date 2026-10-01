@@ -44,6 +44,10 @@ class TextToSpeech:
         self._eleven_model = str(cfg.get("elevenlabs_model", "") or "").strip()
         self._eleven_plain = False
         self._eleven_paused_until = 0.0
+        # ElevenLabs erlaubt nur wenige Anfragen gleichzeitig (Gratis-Konto: 2), alles darüber
+        # lehnt es ab. Jarvis lädt deshalb immer nur einen Satz auf einmal. Das reicht: Ein Satz
+        # ist viel schneller geladen, als der davor gesprochen ist.
+        self._eleven_slot = threading.BoundedSemaphore(1)
         self._previous = ""
         key = str(cfg.get("elevenlabs_key", "") or "").strip()
         if self._engine == "elevenlabs" and key and self._eleven_voice:
@@ -101,11 +105,19 @@ class TextToSpeech:
                     )
         return self._offline(text)
 
+    # Ist ElevenLabs kurz ausgelastet, lieber einen Moment warten als die Stimme wechseln.
+    BUSY_RETRIES = (0.3, 0.6, 1.0, 1.5)
+
     def _eleven_stream(self, text: str) -> "StreamingAudio":
         """Startet ElevenLabs und kommt zurück, sobald die ersten Töne da sind."""
         from .elevenlabs import FALLBACK_MODEL, RATE, ElevenLabsError
 
-        for _ in range(3):
+        busy_waits = list(self.BUSY_RETRIES)
+        timeouts = 0
+        while True:
+            # Der Satz davor muss fertig geladen sein (er wird ja gerade erst gesprochen).
+            if not self._eleven_slot.acquire(timeout=20):
+                raise ElevenLabsError("net", "Der Satz davor lädt nicht fertig")
             audio = StreamingAudio(RATE)
             model, plain, previous = self._eleven_model, self._eleven_plain, self._previous
 
@@ -116,14 +128,23 @@ class TextToSpeech:
                     audio.finish()
                 except Exception as exc:
                     audio.finish(exc)
+                finally:
+                    self._eleven_slot.release()
 
             threading.Thread(target=run, name="jarvis-elevenlabs", daemon=True).start()
             if not audio.ready.wait(8.0):
+                timeouts += 1
+                if timeouts < 2:
+                    log.info("ElevenLabs antwortet langsam, versuche den Satz noch einmal.")
+                    continue
                 raise ElevenLabsError("net", "ElevenLabs antwortet nicht")
             error = audio.error
             if error is None or audio.available() > 0:
                 return audio
             kind = getattr(error, "kind", "other")
+            if kind == "busy" and busy_waits:
+                time.sleep(busy_waits.pop(0))
+                continue
             if kind == "model" and self._eleven_model != FALLBACK_MODEL:
                 log.warning("ElevenLabs-Modell %s geht nicht (%s), nehme %s.", self._eleven_model, error, FALLBACK_MODEL)
                 self._eleven_model = FALLBACK_MODEL
@@ -132,11 +153,10 @@ class TextToSpeech:
                 self._eleven_plain = True
                 continue
             raise error
-        raise ElevenLabsError("other", "ElevenLabs liefert nichts")
 
     def _eleven_problem(self, exc: Exception) -> None:
         kind = getattr(exc, "kind", "other")
-        pause = {"key": 1800, "quota": 1800, "plan": 1800, "voice": 1800, "busy": 5, "net": 60}.get(kind, 120)
+        pause = {"key": 1800, "quota": 1800, "plan": 1800, "voice": 1800, "busy": 5, "net": 20}.get(kind, 60)
         self._eleven_paused_until = time.monotonic() + pause
         log.warning("ElevenLabs: %s (Pause %d s, solange spricht die Microsoft-Stimme)", exc, pause)
         tell = {
@@ -176,7 +196,8 @@ class TextToSpeech:
                 if self._eleven is not None:
                     from .elevenlabs import RATE
 
-                    pcm = self._eleven.speak(text, self._eleven_voice, self._eleven_model, plain=self._eleven_plain)
+                    with self._eleven_slot:  # nicht gleichzeitig mit dem, was Jarvis gerade sagt
+                        pcm = self._eleven.speak(text, self._eleven_voice, self._eleven_model, plain=self._eleven_plain)
                     samples, rate = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16), RATE
                 else:
                     samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)

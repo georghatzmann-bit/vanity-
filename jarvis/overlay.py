@@ -55,6 +55,7 @@ class View:
     text: str = ""
     level: float = 0.0
     changed: float = field(default_factory=time.monotonic)
+    activity: str = ""  # was Jarvis gerade tut ("Installiert Spotify"), statt nur "Denkt nach"
 
 
 # ---------------------------------------------------------------------- Zeichnen
@@ -203,6 +204,8 @@ def render(view: View, now: float | None = None, scale: float = 1.0):
     label_font = _font(round(11 * scale), bold=True)
     text_font = _font(round(15 * scale))
     label = LABELS.get(view.state, "Jarvis").upper()
+    if view.state == "thinking" and view.activity:
+        label = _fit(view.activity.upper(), label_font, right - left)
     draw.text((left, pad + inner_h * 0.17), label, font=label_font, fill=color + (230,))
     text = view.text.strip() or {"listening": "Ich höre …", "thinking": "Einen Moment …"}.get(view.state, "")
     if view.state == "thinking" and view.text.strip():
@@ -297,6 +300,14 @@ class Overlay(Ui):
 
     def level(self, value: float) -> None:
         self.view.level = max(0.0, min(1.0, float(value)))
+
+    def progress(self, step: dict) -> None:
+        with self._lock:
+            if step.get("state") == "running":
+                self.view.activity = str(step.get("label") or "")
+                self._activity_id = step.get("id")
+            elif step.get("id") == getattr(self, "_activity_id", None):
+                self.view.activity = ""
 
     # -------- Anzeige
     def wanted(self, now: float | None = None) -> bool:

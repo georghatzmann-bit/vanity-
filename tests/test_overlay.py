@@ -48,6 +48,16 @@ class OverlayLogicTest(unittest.TestCase):
         ov.state("listening")
         self.assertEqual(ov.view.text, "")
 
+    def test_shows_what_jarvis_is_doing(self):
+        overlay = Overlay()
+        overlay.state("thinking")
+        overlay.progress({"id": "t1", "label": "Installiert Spotify", "state": "running"})
+        self.assertEqual(overlay.view.activity, "Installiert Spotify")
+        img = render(overlay.view, now=1.0)
+        self.assertEqual(img.mode, "RGBA")
+        overlay.progress({"id": "t1", "label": "Installiert Spotify", "state": "done"})
+        self.assertEqual(overlay.view.activity, "")
+
     def test_only_windows_gets_a_window(self):
         with mock.patch("os.name", "posix"):
             self.assertFalse(Overlay().start())

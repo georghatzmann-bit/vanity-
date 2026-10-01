@@ -45,6 +45,8 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     try:
         persona = build_persona(HOME_DIR, STATE_DIR, cfg)
         brain = ClaudeBrain(cfg["brain"], HOME_DIR, STATE_DIR, persona=persona)
+        # Claude schon jetzt starten: Die erste Frage kommt dann ohne Startzeit an.
+        brain.prewarm()
     except BrainError as exc:
         log.error("%s", exc)
         ui.toast(str(exc), "error")
@@ -374,6 +376,8 @@ def run_gui(cfg: dict, args) -> int:
         if overlay is not None:
             overlay.stop()
         assistant.stop()
+        if assistant.brain is not None:
+            assistant.brain.close()
 
     window = Window(
         Api(bridge, assistant, assistant.mute, open_setup, listen_now), background, on_closed, gui_cfg,
@@ -661,6 +665,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         stopped.set()
         assistant.stop()
+        if assistant.brain is not None:
+            assistant.brain.close()
     print("\nJarvis verabschiedet sich.")
     time.sleep(0.2)
     return 0

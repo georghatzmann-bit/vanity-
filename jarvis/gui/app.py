@@ -63,6 +63,9 @@ class GuiBridge(Ui):
         self.info.update({k: v for k, v in values.items() if v is not None})
         self._push({"type": "config", **values})
 
+    def progress(self, step: dict) -> None:
+        self._push({"type": "progress", "step": dict(step)})
+
     def stats(self, cpu: float, ram: float) -> None:
         self._push({"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)})
 

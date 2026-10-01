@@ -31,6 +31,13 @@ class FakeElevenLabs:
         self.library_voices = []
         # Stimmen, die ElevenLabs Gratis-Konten verweigert, ohne dass man es ihnen ansieht
         self.locked_ids = set()
+        # Wie der echte Server: nur so viele Anfragen gleichzeitig (Gratis: 2), sonst 429
+        self.max_concurrent = None
+        self.stream_seconds = 0.0  # so lange dauert das Liefern eines Satzes
+        self.active = 0
+        self.peak = 0
+        self.refused = 0
+        self._active_lock = threading.Lock()
         self.audio = tone().tobytes()
         outer = self
 
@@ -88,21 +95,41 @@ class FakeElevenLabs:
                     if outer.speech_error:
                         code, payload = outer.speech_error
                         return self._json(code, payload)
-                    if body.get("model_id") in outer.model_error_for:
-                        return self._json(400, {"detail": {"status": "model_not_supported",
-                                                           "message": "This model is not available for your plan"}})
-                    self.send_response(200)
-                    self.send_header("Content-Type", "audio/pcm")
-                    self.send_header("Transfer-Encoding", "chunked")
-                    self.end_headers()
-                    data = outer.audio
-                    for i in range(0, len(data), 4801):  # ungerade Stücke: Samples werden geteilt
-                        part = data[i:i + 4801]
-                        self.wfile.write(f"{len(part):X}\r\n".encode() + part + b"\r\n")
-                        self.wfile.flush()
-                    self.wfile.write(b"0\r\n\r\n")
-                    return
+                    with outer._active_lock:
+                        if outer.max_concurrent is not None and outer.active >= outer.max_concurrent:
+                            outer.refused += 1
+                            busy = True
+                        else:
+                            outer.active += 1
+                            outer.peak = max(outer.peak, outer.active)
+                            busy = False
+                    if busy:
+                        return self._json(429, {"detail": {"status": "too_many_concurrent_requests",
+                                                           "message": "Too many concurrent requests"}})
+                    try:
+                        return self._stream_audio(body)
+                    finally:
+                        with outer._active_lock:
+                            outer.active -= 1
                 self._json(404, {"detail": "nicht gefunden"})
+
+            def _stream_audio(self, body):
+                if body.get("model_id") in outer.model_error_for:
+                    return self._json(400, {"detail": {"status": "model_not_supported",
+                                                       "message": "This model is not available for your plan"}})
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/pcm")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                data = outer.audio
+                parts = range(0, len(data), 4801)  # ungerade Stücke: Samples werden geteilt
+                for i in parts:
+                    part = data[i:i + 4801]
+                    self.wfile.write(f"{len(part):X}\r\n".encode() + part + b"\r\n")
+                    self.wfile.flush()
+                    if outer.stream_seconds:
+                        time.sleep(outer.stream_seconds / len(parts))
+                self.wfile.write(b"0\r\n\r\n")
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -288,6 +315,47 @@ class ElevenLabsVoiceTest(unittest.TestCase):
         self.assertEqual(len(self.problems), 1)
         self.assertIn("nur mit Abo", self.problems[0])
         self.assertNotIn("Guthaben", self.problems[0])
+
+    def test_long_answer_stays_with_elevenlabs_on_the_free_plan(self):
+        """Lange Antworten: Jarvis bereitet Sätze vor, während er spricht. Das Gratis-Konto
+        erlaubt aber nur 2 Anfragen gleichzeitig. Früher kam dann für einige Sätze die
+        Microsoft-Stimme."""
+        from jarvis.tts import Speaker
+
+        self.fake.max_concurrent = 2
+        self.fake.stream_seconds = 0.6
+
+        class SlowPlayer:
+            should_stop = None
+
+            def play(self, samples, rate, on_level):
+                materialize(samples)
+                time.sleep(0.15)
+
+            def stop(self):
+                pass
+
+        speaker = Speaker(self.tts.synthesize, player=SlowPlayer())
+        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+            for i in range(7):
+                speaker.say(f"Das hier ist der Satz Nummer {i} einer etwas längeren Antwort von Jarvis, Sir.")
+            self.assertTrue(speaker.wait(40))
+        self.assertEqual(edge.call_count, 0, "jeder Satz mit derselben Stimme")
+        self.assertEqual(self.fake.refused, 0, "ElevenLabs musste nichts ablehnen")
+        self.assertEqual(self.problems, [])
+
+    def test_busy_server_is_retried_instead_of_switching_voices(self):
+        self.fake.speech_error = (429, {"detail": {"status": "too_many_concurrent_requests", "message": "Busy"}})
+
+        def free_again():
+            time.sleep(0.5)
+            self.fake.speech_error = None
+
+        threading.Thread(target=free_again, daemon=True).start()
+        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+            audio, _ = self.tts.synthesize("Ein Satz, während ElevenLabs kurz ausgelastet ist.")
+        self.assertIsInstance(audio, StreamingAudio)
+        edge.assert_not_called()
 
     def test_without_voice_or_key_it_is_plain_microsoft(self):
         tts = TextToSpeech({"engine": "elevenlabs", "elevenlabs_key": "sk_test"}, None)

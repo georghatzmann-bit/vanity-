@@ -205,6 +205,7 @@ class Run:
     error_kind: str = ""
     errors: list[str] | None = None
     returncode: int | None = None
+    session: str = ""
 
     @property
     def failed(self) -> bool:
@@ -268,7 +269,11 @@ class ClaudeBrain:
             self.attempts.append(Attempt("haiku" if "haiku" in models else models[0], "reden"))
         self._index = 0
         self._isolated = cfg.get("isolated", True)
-        self._timeout = cfg.get("timeout_seconds", 180)
+        # Abgebrochen wird nur, wenn Claude so lange gar nichts mehr meldet. Läuft gerade ein
+        # Werkzeug (Installation, Build, Test), darf es deutlich länger still sein.
+        self._idle_timeout = float(cfg.get("timeout_seconds", 120))
+        self._tool_timeout = float(cfg.get("tool_timeout_seconds", 660))
+        self._max_seconds = float(cfg.get("max_seconds", 1800))
         self._tools = cfg.get("tools", [])
         self._effort = str(cfg.get("effort", "") or "").strip()
         self._allowed = cfg.get("allowed_tools", [])
@@ -283,6 +288,17 @@ class ClaudeBrain:
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
         self.last_model = ""
+        # Ein Claude-Prozess, der zwischen den Fragen weiterläuft: spart bei jeder Frage den
+        # Start von Claude Code (unter Windows 2 bis 3 Sekunden).
+        self._live_wanted = bool(cfg.get("live", True))
+        self._live: _LiveClaude | None = None
+        self._live_lock = threading.RLock()
+        # Nach so langer Pause beginnt eine neue Unterhaltung: kleiner Verlauf, schnellere Antworten.
+        self._new_after = float(cfg.get("new_after_minutes", 30)) * 60
+        self._last_turn_at: float | None = None
+        # Was Georg zuletzt gesagt hat, für die Rückfrage-Prüfung in jarvis.tool ("Ja" vor dem Löschen).
+        # Eine Datei statt einer Umgebungsvariable, weil der Claude-Prozess weiterläuft.
+        self._said_file = (state_dir or home) / "zuletzt-gesagt.txt"
         # Zwischenstände ("Sonnet lehnt ab, versuche Haiku") gehen nur ins Protokoll,
         # `alert` meldet Dinge, um die sich Georg kümmern muss (z. B. ein nötiges Update).
         self.notice: Callable[[str], None] = lambda text: log.info("%s", text)
@@ -303,11 +319,16 @@ class ClaudeBrain:
     def isolated(self) -> bool:
         return self._isolated and not ({"safe-mode", "system-prompt-file"} & self._unsupported)
 
+    @property
+    def live_enabled(self) -> bool:
+        return self._live_wanted and "input-format" not in self._unsupported
+
     def new_conversation(self) -> None:
         # Der Zähler sorgt dafür, dass eine gerade laufende Antwort die alte
         # Unterhaltung nicht wieder zurückbringt.
         self._conversation += 1
         self._session = None
+        self._drop_live()
 
     def cancel(self) -> None:
         """Bricht die laufende Anfrage ab (z. B. bei "Stopp")."""
@@ -315,6 +336,56 @@ class ClaudeBrain:
         proc = self._proc
         if proc and proc.poll() is None:
             _kill(proc)
+
+    def prewarm(self) -> None:
+        """Startet Claude schon im Hintergrund, damit die nächste Frage ohne Startzeit läuft."""
+        if not self.live_enabled:
+            return
+
+        def warm() -> None:
+            try:
+                with self._live_lock:
+                    self._ensure_live(self.attempt, None)
+            except Exception as exc:
+                log.debug("Vorwärmen von Claude: %s", exc)
+
+        threading.Thread(target=warm, name="jarvis-gehirn-vorwaermen", daemon=True).start()
+
+    def close(self) -> None:
+        """Beim Beenden von Jarvis: den laufenden Claude-Prozess mitnehmen."""
+        self._drop_live()
+
+    def _drop_live(self) -> None:
+        with self._live_lock:
+            live, self._live = self._live, None
+        if live is not None:
+            live.close()
+
+    def _ensure_live(self, attempt: Attempt, isolated: bool | None) -> "_LiveClaude":
+        """Der laufende Claude-Prozess für diesen Versuch; startet ihn bei Bedarf (mit dem
+        bisherigen Gespräch, falls es eins gibt)."""
+        isolated = self.isolated if isolated is None else isolated
+        key = (attempt, isolated)
+        live = self._live
+        if live is not None and (not live.alive() or live.key != key or live.conversation != self._conversation):
+            self._live = None
+            live.close()
+            live = None
+        if live is None:
+            resume = self._session is not None
+            session = self._session or str(uuid.uuid4())
+            cmd = self.command(attempt, isolated, session, resume) + ["--input-format", "stream-json"]
+            log.debug("Claude-Prozess startet: %s", " ".join(cmd[1:]))
+            live = _LiveClaude(cmd, self._home, self.environment(""), key, self._conversation, session)
+            self._live = live
+        return live
+
+    def _write_said(self, text: str) -> None:
+        try:
+            self._said_file.parent.mkdir(parents=True, exist_ok=True)
+            self._said_file.write_text(text[:500], encoding="utf-8")
+        except OSError as exc:
+            log.debug("Zuletzt gesagt: %s", exc)
 
     def _load_state(self) -> None:
         if not self._state_file or not self._state_file.exists():
@@ -398,6 +469,7 @@ class ClaudeBrain:
         env["PYTHONUTF8"] = "1"
         env["JARVIS_ROOT"] = str(ROOT)
         env["JARVIS_USER_SAID"] = text[:500]
+        env["JARVIS_SAID_FILE"] = str(self._said_file)
         if self._without_api_key:
             # Ein alter API-Schlüssel in den Windows-Umgebungsvariablen hat Vorrang vor dem
             # Pro-Abo. Ohne ihn meldet sich Claude Code mit dem Abo an.
@@ -405,27 +477,36 @@ class ClaudeBrain:
                 env.pop(name, None)
         return env
 
-    def ask(self, text: str, on_text: Callable[[str], None] | None = None) -> Answer:
+    def ask(self, text: str, on_text: Callable[[str], None] | None = None, on_step=None) -> Answer:
         """Fragt Claude. `on_text` bekommt die Antwort Stück für Stück, sobald sie
-        entsteht. Bei einer Ablehnung kommt der nächste Versuch aus `attempts` dran,
-        in einer neuen Unterhaltung, und dabei bleibt es danach."""
+        entsteht, `on_step` jeden Arbeitsschritt (Werkzeug) als `steps.Step`. Bei einer
+        Ablehnung kommt der nächste Versuch aus `attempts` dran, in einer neuen
+        Unterhaltung, und dabei bleibt es danach."""
         self._cancelled = False
+        if self._new_after > 0 and self._last_turn_at is not None and time.monotonic() - self._last_turn_at > self._new_after:
+            log.info("Lange Pause: neue Unterhaltung.")
+            self.new_conversation()
         rescue_from: list[int] = []
         try:
-            return self._ask_chain(text, on_text, rescue_from)
+            answer = self._ask_chain(text, on_text, rescue_from, on_step)
+            self._last_turn_at = time.monotonic()
+            return answer
         except BrainError:
             if rescue_from:
                 # Auch der Notfall-Versuch hat nicht geholfen: nächstes Mal wie vorher.
                 self._index = rescue_from[0]
             raise
+        finally:
+            if self.live_enabled and self._live is None and not self._cancelled:
+                self.prewarm()  # nach einem Fehler gleich wieder bereit sein
 
-    def _ask_chain(self, text: str, on_text, rescue_from: list[int]) -> Answer:
+    def _ask_chain(self, text: str, on_text, rescue_from: list[int], on_step=None) -> Answer:
         overload_retry = True
         while True:
             if self._cancelled:
                 raise Cancelled("abgebrochen")
             try:
-                answer = self._ask_once(text, on_text=on_text)
+                answer = self._ask_once(text, on_text=on_text, on_step=on_step)
                 self._save_state()
                 return answer
             except NEXT_ATTEMPT as exc:
@@ -474,16 +555,24 @@ class ClaudeBrain:
         isolated: bool | None = None,
         on_text: Callable[[str], None] | None = None,
         keep_session: bool = True,
+        on_step=None,
     ) -> Answer:
         attempt = attempt or self.attempt
         conversation = self._conversation
         resume = keep_session and self._session is not None
         session = self._session if resume else str(uuid.uuid4())
-        for _ in range(4):
+        # Die normale Unterhaltung läuft über den dauerhaften Prozess, Proben (diagnose) nicht.
+        live = self.live_enabled and keep_session
+        self._write_said(text)
+        for _ in range(5):
             if self._cancelled:
                 raise Cancelled("abgebrochen")
-            cmd = self.command(attempt, isolated, session if keep_session else None, resume)
-            run = self._run(cmd, text, on_text, prompt=with_time(text))
+            if live:
+                run = self._run_live(attempt, isolated, text, on_text, prompt=with_time(text), on_step=on_step)
+                session = run.session or session
+            else:
+                cmd = self.command(attempt, isolated, session if keep_session else None, resume)
+                run = self._run(cmd, text, on_text, prompt=with_time(text), on_step=on_step)
             result, stderr = run.result, run.stderr
             unknown = UNKNOWN_OPTION.search(stderr or "")
             if result is None and unknown and not run.spoke and unknown.group(1) not in self._unsupported:
@@ -499,16 +588,21 @@ class ClaudeBrain:
                         "Claude Code ist veraltet, deshalb laufen deine eigenen Skills mit. "
                         "Bitte einmal 'claude update' in der Eingabeaufforderung ausführen."
                     )
+                if flag == "input-format":
+                    live = False  # dann wie früher: ein Prozess pro Frage
                 continue
-            if result is None and resume and re.search(r"no conversation found|session.*not found", stderr or "", re.I):
+            if result is None and (resume or live) and re.search(r"no conversation found|session.*not found", stderr or "", re.I):
                 # Die alte Unterhaltung gibt es nicht mehr, also neu anfangen.
                 resume, session = False, str(uuid.uuid4())
+                self._session = None
                 continue
             break
 
         if self._cancelled:
             raise Cancelled("abgebrochen")
         if run.failed:
+            if live:
+                self._drop_live()  # nach einem Fehler mit frischem Prozess weiter
             detail = run.error_text()
             error = run.error_class(detail)
             log.warning(
@@ -527,7 +621,7 @@ class ClaudeBrain:
         self.last_model = run.model or (used[0] if used else attempt.model or "")
         return Answer(str(result.get("result") or "").strip(), self.last_model, self._session or "")
 
-    def _run(self, cmd: list[str], text: str, on_text, prompt: str | None = None) -> Run:
+    def _run(self, cmd: list[str], text: str, on_text, prompt: str | None = None, on_step=None) -> Run:
         """Startet Claude, liest den Stream und sammelt Ergebnis, Fehler und Modell.
         `text` ist, was Georg gesagt hat, `prompt` geht an Claude (mit Datum und Uhrzeit)."""
         log.debug("Claude-Aufruf: %s", " ".join(cmd[1:]))
@@ -559,15 +653,6 @@ class ClaudeBrain:
         threading.Thread(target=_pump, args=(proc.stdout, lines.put), daemon=True).start()
         err_reader = threading.Thread(target=_pump, args=(proc.stderr, stderr_parts.append), daemon=True)
         err_reader.start()
-        timed_out = threading.Event()
-
-        def on_timeout() -> None:
-            timed_out.set()
-            _kill(proc)
-
-        timer = threading.Timer(self._timeout, on_timeout)
-        timer.daemon = True
-        timer.start()
 
         # Die Frage geht über stdin, damit gesprochener Text nie als
         # Kommandozeile interpretiert wird.
@@ -577,25 +662,11 @@ class ClaudeBrain:
         except OSError:
             pass
 
-        stream = _StreamReader(on_text, partial="include-partial-messages" not in self._unsupported)
-        exited_at = None
+        stream = _StreamReader(on_text, partial="include-partial-messages" not in self._unsupported, on_step=on_step)
+        timed_out = False
         try:
-            while stream.result is None:
-                try:
-                    line = lines.get(timeout=0.25)
-                except queue.Empty:
-                    if proc.poll() is None:
-                        continue
-                    # Claude ist beendet. Kurz auf restliche Zeilen warten, dann aufhören.
-                    exited_at = exited_at or time.monotonic()
-                    if time.monotonic() - exited_at > 1.0:
-                        break
-                    continue
-                if line is None:
-                    break
-                stream.feed(line)
+            timed_out = self._read_turn(proc, lines, stream, started)
         finally:
-            timer.cancel()
             try:
                 proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
@@ -611,11 +682,92 @@ class ClaudeBrain:
         )
         if stderr.strip():
             log.debug("Claude stderr: %s", stderr.strip()[-1000:])
-        if timed_out.is_set():
-            raise TooSlowError("Claude hat zu lange gebraucht.")
+        if timed_out:
+            raise TooSlowError("Claude hat zu lange nichts mehr gemeldet.")
         return Run(
             stream.result, stderr, stream.spoke, stream.model, stream.refused, stream.error_kind,
             list(stream.errors), proc.returncode,
+        )
+
+    def _read_turn(self, proc: subprocess.Popen, lines: queue.Queue, stream: "_StreamReader", started: float) -> bool:
+        """Liest Zeilen, bis das Ergebnis da ist oder Claude beendet ist. True, wenn Claude zu
+        lange nichts gemeldet hat (dann ist der Prozess beendet)."""
+        last = time.monotonic()
+        exited_at = None
+        while stream.result is None:
+            try:
+                line = lines.get(timeout=0.25)
+            except queue.Empty:
+                now = time.monotonic()
+                quiet = self._tool_timeout if stream.running else self._idle_timeout
+                if now - last > quiet or now - started > self._max_seconds:
+                    log.warning(
+                        "Claude meldet seit %.0f s nichts (läuft seit %.0f s, Werkzeug aktiv: %s), breche ab.",
+                        now - last, now - started, bool(stream.running),
+                    )
+                    _kill(proc)
+                    return True
+                if proc.poll() is None:
+                    continue
+                # Claude ist beendet. Kurz auf restliche Zeilen warten, dann aufhören.
+                exited_at = exited_at or now
+                if now - exited_at > 1.0:
+                    break
+                continue
+            if line is None:
+                break
+            last = time.monotonic()
+            stream.feed(line)
+        return False
+
+    # ------------------------------------------------------------------ Dauerhafter Prozess
+
+    def _run_live(self, attempt: Attempt, isolated: bool | None, text: str, on_text, prompt: str, on_step=None) -> Run:
+        """Wie `_run`, aber über den dauerhaft laufenden Claude-Prozess."""
+        started = time.monotonic()
+        with self._live_lock:
+            try:
+                live = self._ensure_live(attempt, isolated)
+            except FileNotFoundError as exc:
+                raise NotInstalledError(f"Claude Code nicht startbar: {exc}") from exc
+            except OSError as exc:
+                raise BrainError(f"Claude Code nicht startbar: {exc}") from exc
+        self._proc = live.proc
+        mark = len(live.stderr_parts)
+        stream = _StreamReader(on_text, partial="include-partial-messages" not in self._unsupported, on_step=on_step)
+        timed_out = False
+        try:
+            live.send(prompt)
+            timed_out = self._read_turn(live.proc, live.lines, stream, started)
+        except (OSError, ValueError) as exc:
+            log.debug("Claude-Prozess nimmt nichts mehr an: %s", exc)
+            time.sleep(0.3)  # Fehlermeldung (z. B. unbekannte Option) noch einsammeln
+        finally:
+            self._proc = None
+        if timed_out or stream.result is None or not live.alive():
+            # Abgebrochen, abgestürzt oder zu alt für --input-format: nächstes Mal frisch starten.
+            if live.alive():
+                _kill(live.proc)
+            with self._live_lock:
+                if self._live is live:
+                    self._live = None
+            try:
+                live.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+            live.err_reader.join(timeout=1.0)  # Fehlermeldungen vollständig einsammeln
+        stderr = "".join(part for part in list(live.stderr_parts)[mark:] if part)
+        log.debug(
+            "Claude (dauerhaft, Frage %d) fertig nach %.1f s, Modell %s", live.turns,
+            time.monotonic() - started, stream.model,
+        )
+        if stderr.strip():
+            log.debug("Claude stderr: %s", stderr.strip()[-1000:])
+        if timed_out:
+            raise TooSlowError("Claude hat zu lange nichts mehr gemeldet.")
+        return Run(
+            stream.result, stderr, stream.spoke, stream.model, stream.refused, stream.error_kind,
+            list(stream.errors), live.proc.poll(), session=live.session,
         )
 
     # ------------------------------------------------------------------ Diagnose
@@ -644,8 +796,9 @@ class ClaudeBrain:
 class _StreamReader:
     """Wertet die Zeilen von `--output-format stream-json` aus."""
 
-    def __init__(self, on_text, partial: bool) -> None:
+    def __init__(self, on_text, partial: bool, on_step=None) -> None:
         self._on_text = on_text
+        self._on_step = on_step
         self._partial = partial
         self._any_text = False
         self.spoke = False
@@ -654,6 +807,9 @@ class _StreamReader:
         self.errors: list[str] = []
         self.refused = False
         self.error_kind = ""
+        # Werkzeuge, die Claude gestartet hat (id -> Schritt), und welche davon noch laufen
+        self.steps: dict = {}
+        self.running: set[str] = set()
 
     def feed(self, line: str) -> None:
         line = line.strip()
@@ -680,6 +836,8 @@ class _StreamReader:
             if message.get("stop_reason") == "refusal":
                 self.refused = True
             self._assistant(message)
+        elif kind == "user":
+            self._tool_results(event.get("message") or {})
 
     def _system(self, event: dict) -> None:
         subtype = event.get("subtype")
@@ -706,6 +864,9 @@ class _StreamReader:
                 self._emit(delta["text"])
 
     def _assistant(self, message: dict) -> None:
+        for block in message.get("content") or []:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                self._tool_start(block)
         texts = [
             block.get("text", "")
             for block in message.get("content") or []
@@ -725,11 +886,96 @@ class _StreamReader:
         self._any_text = True
         self._emit(text)
 
+    def _tool_start(self, block: dict) -> None:
+        from .steps import describe
+
+        tool_id = str(block.get("id") or f"schritt-{len(self.steps) + 1}")
+        if tool_id in self.steps:
+            return  # dieselbe Nachricht kam schon einmal
+        step = describe(tool_id, str(block.get("name") or ""), block.get("input"))
+        self.steps[tool_id] = step
+        self.running.add(tool_id)
+        self._step(step)
+
+    def _tool_results(self, message: dict) -> None:
+        content = message.get("content")
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                continue
+            tool_id = str(block.get("tool_use_id") or "")
+            step = self.steps.get(tool_id)
+            if step is None or tool_id not in self.running:
+                continue
+            self.running.discard(tool_id)
+            step.finish(error=bool(block.get("is_error")))
+            self._step(step)
+
+    def _step(self, step) -> None:
+        if self._on_step:
+            try:
+                self._on_step(step)
+            except Exception as exc:
+                log.debug("Anzeige des Arbeitsschritts: %s", exc)
+
     def _emit(self, text: str) -> None:
         if self._on_text:
             if text.strip():
                 self.spoke = True
             self._on_text(text)
+
+
+class _LiveClaude:
+    """Ein Claude-Prozess, der zwischen den Fragen weiterläuft. Fragen gehen als JSON-Zeilen
+    hinein (--input-format stream-json), die Antworten kommen wie gewohnt als Stream heraus,
+    pro Frage mit einem eigenen result-Ereignis."""
+
+    def __init__(self, cmd: list[str], cwd: Path, env: dict, key, conversation: int, session: str) -> None:
+        self.key = key
+        self.conversation = conversation
+        self.session = session
+        self.turns = 0
+        self.proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=NO_WINDOW,
+        )
+        self.lines: queue.Queue = queue.Queue()
+        self.stderr_parts: list = []
+        threading.Thread(target=_pump, args=(self.proc.stdout, self.lines.put), daemon=True).start()
+        self.err_reader = threading.Thread(target=_pump, args=(self.proc.stderr, self.stderr_parts.append), daemon=True)
+        self.err_reader.start()
+
+    def alive(self) -> bool:
+        return self.proc.poll() is None
+
+    def send(self, prompt: str) -> None:
+        # Reste einer abgebrochenen Frage verwerfen, damit sie nicht als Antwort gelten.
+        while True:
+            try:
+                self.lines.get_nowait()
+            except queue.Empty:
+                break
+        message = {"type": "user", "message": {"role": "user", "content": prompt}}
+        self.proc.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
+        self.proc.stdin.flush()
+        self.turns += 1
+
+    def close(self) -> None:
+        try:
+            self.proc.stdin.close()
+        except Exception:
+            pass
+        try:
+            self.proc.wait(timeout=3)
+        except Exception:
+            _kill(self.proc)
 
 
 def _api_key_set() -> bool:

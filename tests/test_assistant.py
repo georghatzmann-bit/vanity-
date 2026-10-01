@@ -18,18 +18,29 @@ from jarvis.voice import VoiceLoop
 
 
 class FakeBrain:
-    def __init__(self, chunks=None, error=None, delay=0.0, model="claude-sonnet-test"):
+    def __init__(self, chunks=None, error=None, delay=0.0, model="claude-sonnet-test", steps=None):
         self.chunks = chunks or ["Guten Tag, Sir", ". Heute ist ", "Mittwoch."]
         self.error = error
         self.delay = delay
         self.model = model
+        self.steps = steps or []  # (Werkzeug, Eingabe, Dauer in Sekunden)
         self.asked = []
         self.cancelled = False
         self.reset = 0
         self.notice = None
 
-    def ask(self, text, on_text=None):
+    def ask(self, text, on_text=None, on_step=None):
+        from jarvis.steps import describe
+
         self.asked.append(text)
+        for number, (tool, data, seconds) in enumerate(self.steps):
+            step = describe(f"t{number}", tool, data)
+            if on_step:
+                on_step(step)
+            time.sleep(seconds)
+            step.finish()
+            if on_step:
+                on_step(step)
         end = time.monotonic() + self.delay
         while time.monotonic() < end:
             if self.cancelled:
@@ -72,6 +83,27 @@ def make(brain=None, cfg=None, **kwargs):
     mute = MuteSwitch()
     assistant = Assistant(cfg, brain if brain is not None else FakeBrain(), speaker, ui, mute, **kwargs)
     return assistant, ui, speaker, mute
+
+
+class ProgressTest(unittest.TestCase):
+    """Statt nur "denkt nach": Jarvis zeigt und sagt, was er gerade tut."""
+
+    def test_long_step_is_shown_and_announced(self):
+        brain = FakeBrain(steps=[("Bash", {"command": "winget install --id Spotify.Spotify -e"}, 2.0)])
+        assistant, ui, speaker, _ = make(brain)
+        assistant.handle("Installier mir bitte Spotify, aber über winget mit allen Optionen")
+        labels = [(e[1]["label"], e[1]["state"]) for e in ui.of("progress")]
+        self.assertEqual(labels, [("Installiert Spotify", "running"), ("Installiert Spotify", "done")])
+        self.assertIn("Ich installiere das gerade.", speaker.said)
+        self.assertNotIn("Einen Moment, Sir.", speaker.said, "kein Lückenfüller, wenn Jarvis sagt, was er tut")
+
+    def test_quick_step_is_only_shown(self):
+        brain = FakeBrain(steps=[("WebSearch", {"query": "Wetter Wien"}, 0.2)])
+        assistant, ui, speaker, _ = make(brain)
+        assistant.handle("Wie wird das Wetter?")
+        self.assertEqual(len(ui.of("progress")), 2)
+        time.sleep(1.6)  # der Ansage-Zeitpunkt ist vorbei, der Schritt war aber längst fertig
+        self.assertNotIn("Ich sehe kurz im Netz nach.", speaker.said)
 
 
 class AssistantTest(unittest.TestCase):

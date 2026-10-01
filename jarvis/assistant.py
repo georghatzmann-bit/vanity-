@@ -25,6 +25,12 @@ FILLERS = [
     "Einen Augenblick.",
 ]
 
+# Arbeitsschritte, die länger dauern, sagt Jarvis an ("Ich installiere Spotify."). Kurze nicht.
+PROGRESS_AFTER = 1.5
+# Bei langer Arbeit höchstens alle so viele Sekunden ein Zwischenstand, und höchstens so viele.
+PROGRESS_EVERY = 25.0
+PROGRESS_MAX = 3
+
 
 class Assistant:
     def __init__(self, cfg: dict, brain, speaker, ui: Ui, mute=None, reminders=None) -> None:
@@ -371,6 +377,32 @@ class Assistant:
                 spoken_any.set()
                 self.say(clean)
 
+        # Was Claude gerade tut: in der Anzeige sofort, gesagt nur, wenn es dauert.
+        said_progress: list[float] = []
+
+        def on_step(step) -> None:
+            self.ui.progress(step.to_dict())
+            if not speak or step.state != "running" or not step.spoken:
+                return
+
+            def tell() -> None:
+                if step.state != "running" or not self._busy:
+                    return  # schon fertig: nichts ansagen
+                now = time.monotonic()
+                if len(said_progress) >= PROGRESS_MAX:
+                    return
+                if said_progress and now - said_progress[-1] < PROGRESS_EVERY:
+                    return
+                if not said_progress and spoken_any.is_set() and now - started < PROGRESS_EVERY:
+                    return  # Claude hat schon selbst etwas gesagt
+                said_progress.append(now)
+                spoken_any.set()
+                self.say(step.spoken)
+
+            later = threading.Timer(PROGRESS_AFTER, tell)
+            later.daemon = True
+            later.start()
+
         # Wenn Claude länger braucht, sagt Jarvis schon mal "Einen Moment, Sir."
         timer = None
         if speak and self._ack_after > 0:
@@ -384,7 +416,7 @@ class Assistant:
             timer.start()
 
         try:
-            answer = self.brain.ask(text, on_text=on_text)
+            answer = self.brain.ask(text, on_text=on_text, on_step=on_step)
         except Cancelled:
             return ""
         except BrainError as exc:

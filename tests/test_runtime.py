@@ -232,12 +232,13 @@ class BrainFixesTest(unittest.TestCase):
         (home / "CLAUDE.md").write_text("# Jarvis", encoding="utf-8")
         exe = home / "claude"
         exe.write_text("")
-        self.brain = ClaudeBrain({"claude_path": str(exe), "models": ["sonnet"]}, home)
+        # Diese Prüfungen ersetzen die Aufrufe von Claude selbst, ein dauerhafter Prozess stört da.
+        self.brain = ClaudeBrain({"claude_path": str(exe), "models": ["sonnet"], "live": False}, home)
 
     def test_stop_during_overload_pause(self):
         calls = []
 
-        def overloaded(text, on_text=None):
+        def overloaded(text, on_text=None, on_step=None):
             calls.append(text)
             raise OverloadedError("529 Overloaded")
 
@@ -251,7 +252,7 @@ class BrainFixesTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 1.5)
 
     def test_new_conversation_during_an_answer_stays_new(self):
-        def run(cmd, text, on_text, prompt=None):
+        def run(cmd, text, on_text, prompt=None, on_step=None):
             self.brain.new_conversation()  # Knopf gedrückt, während Claude noch schreibt
             return Run({"type": "result", "subtype": "success", "result": "Hallo", "session_id": "alt"}, "", True, "sonnet")
 

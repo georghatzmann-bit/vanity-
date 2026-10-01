@@ -17,25 +17,18 @@ def frame(level: int) -> np.ndarray:
     return np.full(FRAME_SAMPLES, level, dtype=np.int16)
 
 
-# Tut so, als wäre es Claude Code mit --output-format stream-json.
+# Tut so, als wäre es Claude Code mit --output-format stream-json. Mit
+# --input-format stream-json läuft es weiter und beantwortet eine JSON-Zeile nach der anderen.
 FAKE_CLAUDE = textwrap.dedent(
     """
     import json, os, re, sys, time, uuid
-    raw = sys.stdin.read()
-    # Jarvis schreibt Datum und Uhrzeit in Klammern vor die Nachricht.
-    stamp = re.match(r"\\(([^()]*\\d{1,2}:\\d{2} Uhr)\\)\\n", raw)
-    prompt = raw[stamp.end():] if stamp else raw
     args = sys.argv[1:]
 
     def arg(name):
         return args[args.index(name) + 1] if name in args else ""
 
     model = arg("--model")
-    with open("calls.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps({"args": args, "prompt": prompt, "raw": raw, "stamp": stamp.group(1) if stamp else "",
-                            "said": os.environ.get("JARVIS_USER_SAID"),
-                            "pythonpath": os.environ.get("PYTHONPATH", ""),
-                            "apikey": bool(os.environ.get("ANTHROPIC_API_KEY"))}) + "\\n")
+    live = arg("--input-format") == "stream-json"
     for flag in os.environ.get("FAKE_UNKNOWN", "").split(","):
         if flag and "--" + flag in args:
             print("error: unknown option '--" + flag + "'", file=sys.stderr)
@@ -45,9 +38,25 @@ FAKE_CLAUDE = textwrap.dedent(
         sys.exit(1)
     session = arg("--session-id") or arg("--resume") or str(uuid.uuid4())
     partial = "--include-partial-messages" in args
+    no_tools = "--tools" in args and arg("--tools") == ""
+
+
+    class Done(Exception):
+        def __init__(self, code):
+            self.code = code
+
 
     def out(obj):
         print(json.dumps(obj), flush=True)
+
+
+    def said():
+        path = os.environ.get("JARVIS_SAID_FILE", "")
+        if path and os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return f.read()
+        return os.environ.get("JARVIS_USER_SAID")
+
 
     def say(text):
         if partial:
@@ -59,23 +68,20 @@ FAKE_CLAUDE = textwrap.dedent(
         out({"type": "assistant", "message": {"model": "claude-" + model + "-test",
              "content": [{"type": "text", "text": text}]}})
 
+
     def result(text, error=False):
         usage = {} if error else {"claude-" + model + "-test": {}}
         out({"type": "result", "subtype": "success", "is_error": error, "result": text,
              "session_id": session, "modelUsage": usage})
 
-    out({"type": "system", "subtype": "init", "model": "claude-" + model + "-test", "session_id": session})
-    refused = prompt == "abgelehnt" or (prompt.startswith("nur-haiku") and model != "haiku") \\
-        or model in os.environ.get("FAKE_REFUSE", "").split(",") \\
-        or (prompt.startswith("nur-einfach") and "--append-system-prompt" not in args)
-    if refused:
-        msg = ("API Error: Claude Code is unable to respond to this request, which appears to violate our "
-               "Usage Policy. Sonnet 5.5's safeguards flagged this session. Claude Code can't respond to "
-               "your last message. Details: `[cyber]`")
-        out({"type": "assistant", "message": {"model": "<synthetic>", "content": [{"type": "text", "text": msg}]}})
-        result(msg, error=True)
-        sys.exit(1)
-    no_tools = "--tools" in args and arg("--tools") == ""
+
+    def tool(tool_id, name, data, output="ok", error=False, pause=0.0):
+        out({"type": "assistant", "message": {"model": "claude-" + model + "-test",
+             "content": [{"type": "tool_use", "id": tool_id, "name": name, "input": data}]}})
+        time.sleep(pause)
+        out({"type": "user", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": tool_id, "content": output, "is_error": error}]}})
+
 
     def api_error(text, kind="", stop="stop_sequence", subtype="success", errors=None, show=True):
         event = {"type": "assistant", "message": {"model": "<synthetic>", "stop_reason": stop,
@@ -90,55 +96,101 @@ FAKE_CLAUDE = textwrap.dedent(
         if errors:
             final["errors"] = errors
         out(final)
-        sys.exit(1)
+        raise Done(1)
 
-    if prompt.startswith("wort-abgelehnt") and model != "haiku":
-        # Neuere Wortwahl ohne "safeguards" oder "Usage Policy" im Satz.
-        api_error("API Error: Claude can't help with this. Start a new session to continue.  "
-                  "Learn more: https://www.anthropic.com/legal/aup")
-    if prompt.startswith("still-abgelehnt") and model != "haiku":
-        # Nur am stop_reason erkennbar.
-        api_error("Das geht leider nicht.", stop="refusal")
-    if prompt.startswith("system-abgelehnt") and model != "haiku":
-        out({"type": "system", "subtype": "model_refusal_no_fallback", "original_model": model,
-             "content": "Diese Anfrage wurde blockiert.", "session_id": session})
-        api_error("", show=False)
-    if prompt.startswith("modell-weg") and model != "haiku":
-        api_error("There's an issue with the selected model (" + model + "). It may not exist or you "
-                  "may not have access to it.", kind="model_not_found")
-    if prompt.startswith("interner-fehler") and not no_tools:
-        api_error("", subtype="error_during_execution", errors=["PowerShell-Werkzeug startet nicht"], show=False)
-    if prompt.startswith("guthaben") and os.environ.get("ANTHROPIC_API_KEY"):
-        api_error("Credit balance is too low", kind="billing_error")
-    if prompt.startswith("konto"):
-        api_error("Your account is on hold. Visit claude.ai for details.", kind="account_on_hold")
-    if prompt.startswith("immer-kaputt"):
-        api_error("", subtype="error_during_execution", errors=["Alles kaputt"], show=False)
-    if prompt == "limit":
-        result("Claude AI usage limit reached|1759248000", error=True)
-        sys.exit(1)
-    if prompt == "login":
-        result("Invalid API key · Please run /login", error=True)
-        sys.exit(1)
-    if prompt == "absturz":
-        print("Traceback: irgendwas", file=sys.stderr)
-        sys.exit(2)
-    if prompt == "langsam":
-        time.sleep(5)
-    if prompt == "programm":
-        # Wie "start notepad": ein Programm läuft weiter und erbt stdout und stderr.
-        import subprocess
-        subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], close_fds=False)
-    if prompt == "werkzeug":
-        say("Einen Moment, ich schaue nach.")
-        out({"type": "assistant", "message": {"model": "claude-" + model + "-test",
-             "content": [{"type": "tool_use", "name": "Bash", "input": {"command": "date"}}]}})
-        say("Heute ist Mittwoch, Sir.")
-        result("Einen Moment, ich schaue nach.\\n\\nHeute ist Mittwoch, Sir.")
-        sys.exit(0)
-    text = "Sehr wohl, Sir. " + prompt
-    say(text)
-    result(text)
+
+    def turn(raw):
+        # Jarvis schreibt Datum und Uhrzeit in Klammern vor die Nachricht.
+        stamp = re.match(r"\\(([^()]*\\d{1,2}:\\d{2} Uhr)\\)\\n", raw)
+        prompt = raw[stamp.end():] if stamp else raw
+        with open("calls.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"args": args, "prompt": prompt, "raw": raw, "stamp": stamp.group(1) if stamp else "",
+                                "said": said(), "pid": os.getpid(), "live": live,
+                                "pythonpath": os.environ.get("PYTHONPATH", ""),
+                                "apikey": bool(os.environ.get("ANTHROPIC_API_KEY"))}) + "\\n")
+        out({"type": "system", "subtype": "init", "model": "claude-" + model + "-test", "session_id": session})
+        refused = prompt == "abgelehnt" or (prompt.startswith("nur-haiku") and model != "haiku") \\
+            or model in os.environ.get("FAKE_REFUSE", "").split(",") \\
+            or (prompt.startswith("nur-einfach") and "--append-system-prompt" not in args)
+        if refused:
+            msg = ("API Error: Claude Code is unable to respond to this request, which appears to violate our "
+                   "Usage Policy. Sonnet 5.5's safeguards flagged this session. Claude Code can't respond to "
+                   "your last message. Details: `[cyber]`")
+            out({"type": "assistant", "message": {"model": "<synthetic>", "content": [{"type": "text", "text": msg}]}})
+            result(msg, error=True)
+            raise Done(1)
+        if prompt.startswith("wort-abgelehnt") and model != "haiku":
+            # Neuere Wortwahl ohne "safeguards" oder "Usage Policy" im Satz.
+            api_error("API Error: Claude can't help with this. Start a new session to continue.  "
+                      "Learn more: https://www.anthropic.com/legal/aup")
+        if prompt.startswith("still-abgelehnt") and model != "haiku":
+            # Nur am stop_reason erkennbar.
+            api_error("Das geht leider nicht.", stop="refusal")
+        if prompt.startswith("system-abgelehnt") and model != "haiku":
+            out({"type": "system", "subtype": "model_refusal_no_fallback", "original_model": model,
+                 "content": "Diese Anfrage wurde blockiert.", "session_id": session})
+            api_error("", show=False)
+        if prompt.startswith("modell-weg") and model != "haiku":
+            api_error("There's an issue with the selected model (" + model + "). It may not exist or you "
+                      "may not have access to it.", kind="model_not_found")
+        if prompt.startswith("interner-fehler") and not no_tools:
+            api_error("", subtype="error_during_execution", errors=["PowerShell-Werkzeug startet nicht"], show=False)
+        if prompt.startswith("guthaben") and os.environ.get("ANTHROPIC_API_KEY"):
+            api_error("Credit balance is too low", kind="billing_error")
+        if prompt.startswith("konto"):
+            api_error("Your account is on hold. Visit claude.ai for details.", kind="account_on_hold")
+        if prompt.startswith("immer-kaputt"):
+            api_error("", subtype="error_during_execution", errors=["Alles kaputt"], show=False)
+        if prompt == "limit":
+            result("Claude AI usage limit reached|1759248000", error=True)
+            raise Done(1)
+        if prompt == "login":
+            result("Invalid API key · Please run /login", error=True)
+            raise Done(1)
+        if prompt == "absturz":
+            print("Traceback: irgendwas", file=sys.stderr, flush=True)
+            raise Done(2)
+        if prompt == "langsam":
+            time.sleep(5)
+        if prompt == "programm":
+            # Wie "start notepad": ein Programm läuft weiter und erbt stdout und stderr.
+            import subprocess
+            subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], close_fds=False)
+        if prompt == "werkzeug":
+            say("Einen Moment, ich schaue nach.")
+            tool("toolu_1", "Bash", {"command": "date"}, output="Mi 1. Okt")
+            say("Heute ist Mittwoch, Sir.")
+            result("Einen Moment, ich schaue nach.\\n\\nHeute ist Mittwoch, Sir.")
+            raise Done(0)
+        if prompt == "lange-arbeit":
+            # Ein Werkzeug, das eine Weile still arbeitet (z. B. eine Installation).
+            tool("toolu_2", "Bash", {"command": "winget install --id Spotify.Spotify -e"}, pause=2.5)
+            say("Spotify ist installiert, Sir.")
+            result("Spotify ist installiert, Sir.")
+            raise Done(0)
+        text = "Sehr wohl, Sir. " + prompt
+        say(text)
+        result(text)
+
+
+    if live:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            content = json.loads(line)["message"]["content"]
+            raw = content if isinstance(content, str) else "".join(b.get("text", "") for b in content)
+            try:
+                turn(raw)
+            except Done as done:
+                if done.code == 2:
+                    sys.exit(2)  # Absturz: der Prozess ist weg
+                # Andere Fehler: wie das echte Claude Code weiterlaufen (das Ergebnis kam schon).
+    else:
+        try:
+            turn(sys.stdin.read())
+        except Done as done:
+            sys.exit(done.code)
     """
 )
 
@@ -175,6 +227,9 @@ class RecordingUi:
 
     def stats(self, cpu, ram):
         pass
+
+    def progress(self, step):
+        self.events.append(("progress", dict(step)))
 
     def of(self, kind):
         return [e for e in self.events if e[0] == kind]
