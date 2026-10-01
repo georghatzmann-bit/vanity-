@@ -1,96 +1,91 @@
-# Jarvis in 3 Schritten
+# Jarvis 2 in 4 Schritten
 
-Diese Anleitung ist für dich, Georg. Du brauchst nur einen Doppelklick.
+Diese Anleitung ist für dich, Georg. Jarvis läuft danach unsichtbar im Hintergrund und ist immer da, wenn du „Hey Jarvis“ sagst.
 
-## 1. JarvisSetup.exe laden
+## 1. JarvisSetup.exe laden und starten
 
-1. Falls ein älteres Jarvis läuft: unten rechts neben der Uhr Rechtsklick auf das Jarvis-Symbol > Jarvis beenden.
+1. Falls ein älteres Jarvis läuft: unten rechts neben der Uhr Rechtsklick auf das Jarvis-Symbol > **Jarvis beenden**.
 2. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
+3. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
+4. Den Haken bei **„Jarvis mit Windows starten“** drin lassen. Admin-Rechte braucht der Installer nicht. Beim ersten Mal dauert er ein paar Minuten.
 
-## 2. Doppelklick auf JarvisSetup.exe
+Deine Einstellungen von vorher bleiben erhalten.
 
-Der Installer richtet alles selbst ein: Python, Spracherkennung, Stimmen, Desktop-Symbol und auf Wunsch den Autostart. Admin-Rechte braucht er nicht. Beim ersten Mal dauert das ein paar Minuten.
+## 2. Gratis-Schlüssel für die Spracherkennung (Groq, 2 Minuten)
 
-Fragt Windows nach, weil die Datei aus dem Internet kommt: Beim blauen Fenster "Der Computer wurde durch Windows geschützt" auf **"Weitere Informationen"** und dann **"Trotzdem ausführen"** klicken. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
+Damit versteht Jarvis dich viel besser und schneller. Kostet nichts.
 
-Deinstallieren geht wie bei jedem Programm: Windows-Einstellungen > Apps > Jarvis > Deinstallieren.
+1. https://console.groq.com/keys öffnen und mit Google anmelden.
+2. **Create API Key** klicken, einen Namen eingeben (zum Beispiel „Jarvis“), **Submit**.
+3. Den Schlüssel (beginnt mit `gsk_`) kopieren. Er wird nur einmal angezeigt.
 
-(Ohne Installer geht es auch: die ZIP von https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/project-thread-0revfw.zip entpacken und `Jarvis.bat` doppelklicken.)
+## 3. Premium-Stimme (ElevenLabs, etwa 6 $ im Monat)
 
-## 3. Die Einrichtung
+Das ist der große Unterschied: Jarvis klingt dann wie ein Mensch.
 
-Beim ersten Start öffnet sich die Einrichtung von selbst. Sie führt dich durch alles, du klickst nur:
+1. https://elevenlabs.io öffnen und ein Konto anlegen.
+2. Unter **Upgrade** das Abo **Starter** wählen (etwa 6 $ im Monat, reicht für mehrere hundert Antworten).
+3. https://elevenlabs.io/app/settings/api-keys öffnen > **Create API Key** > Namen eingeben > ohne Einschränkungen erstellen.
+4. Den Schlüssel (beginnt mit `sk_`) kopieren.
 
-1. **Mikrofon:** Mikrofon anklicken, reinsprechen, der Balken zeigt den Pegel. Sag "Hey Jarvis" (englisch ausgesprochen), dann leuchtet es auf. Ganz oben steht "Windows-Standard" und darunter, welches Mikrofon das gerade ist. Ist es das falsche, klick einfach dein richtiges an. "Aktuell" zeigt, welches Jarvis nimmt.
-2. **Stimme:** Stimmen anhören und die schönste nehmen.
-3. **Wohnort:** für das Wetter.
-4. **Claude:** Jarvis prüft, ob Claude antwortet. Fehlt Claude Code oder bist du nicht angemeldet, gibt es dafür einen Knopf.
-5. **Extras** (alles optional): Stumm-Taste, mit Windows starten, Alexa.
+## 4. Schlüssel in die Einrichtung
 
-Danach startet das Jarvis-Fenster. Die Einrichtung kannst du jederzeit über **Einstellungen** (oben rechts im Jarvis-Fenster) wieder öffnen.
+Die Einrichtung öffnet sich nach der Installation von selbst. Später: Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Einstellungen**.
+
+1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
+2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen und **Prüfen** klicken. Dann Stimmen anhören (Play-Knopf) und eine anklicken. **Auf Deutsch** spielt den Begrüßungssatz mit dieser Stimme. Weiter unten gibt es **deutsche Stimmen aus der Bibliothek**: anhören und **Übernehmen**.
+3. **Wohnort**, **Gehirn** (prüft dein Claude-Abo) und **Extras** wie gewohnt.
+
+Zum Schluss **Jarvis starten**.
 
 ## So benutzt du Jarvis
 
-- **"Hey Jarvis"** sagen (englisch ausgesprochen), auf den Ton warten, Befehl auf Deutsch sprechen.
-- Oder auf den **Kreis** in der Mitte klicken: Dann hört Jarvis sofort zu, ganz ohne "Hey Jarvis".
-- Oder unten im Fenster **tippen** und Enter drücken. Solange der Verlauf leer ist, stehen dort Beispiele zum Anklicken.
-- **Strg+Alt+M** schaltet das Mikrofon stumm und wieder an, egal welches Fenster vorne ist. Das geht auch mit dem Mikrofon-Knopf im Fenster.
-- **"Hey Jarvis, Stopp"** oder der Stopp-Knopf unterbricht Jarvis, auch mitten im Satz.
+Jarvis läuft im Hintergrund. Du siehst nur das Symbol unten rechts neben der Uhr.
+
+- **„Hey Jarvis“** sagen (englisch ausgesprochen), kurz warten, Befehl auf Deutsch sprechen.
+- Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu, ganz ohne „Hey Jarvis“.
+- Oben in der Bildschirmmitte erscheint dabei eine kleine **Jarvis-Anzeige**: was du gesagt hast und was Jarvis antwortet. Sie stiehlt keinen Fokus und bleibt bei Vollbild-Spielen und im Gaming-Modus weg.
+- **Das große Jarvis-Fenster** öffnest du mit einem Klick auf das Symbol neben der Uhr, mit einem Doppelklick auf das Desktop-Symbol oder mit „Hey Jarvis, zeig dich“. Schließen versteckt es nur, Jarvis hört weiter zu. Beenden: Rechtsklick aufs Symbol > Jarvis beenden.
+- **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
+- **„Stopp“** oder der Stopp-Knopf unterbricht Jarvis sofort.
 
 ## Was du sagen kannst
 
-- "Wie spät ist es?", "Welcher Tag ist heute?" (antwortet sofort, ohne Claude)
-- "Mach die Musik leiser", "Nächstes Lied", "Musik pausieren"
-- "Öffne YouTube", "Starte Spotify"
-- "Wie wird das Wetter morgen?"
-- "Erinnere mich in 20 Minuten an den Tee"
-- "Was steht gerade auf meinem Bildschirm?"
-- "Gaming-Modus an"
-- "Guten Morgen" (kurzes Briefing mit Wetter, Erinnerungen und Schlagzeilen)
-- "Lösch die Datei alt.txt auf dem Desktop": Jarvis fragt erst nach und legt sie nach deinem "Ja" in den Papierkorb.
-- "Neue Unterhaltung" (Jarvis vergisst das bisherige Gespräch)
+Sofort, ohne Wartezeit:
 
-## Was du vielleicht noch willst
+- „Öffne Spotify“, „Starte Discord“, „Mach Steam zu“, „Öffne YouTube“, „Öffne den Ordner Downloads“
+- „Installier mir Spotify“ oder „Lad mir Discord runter“ (Jarvis installiert und meldet sich, wenn es fertig ist)
+- „Gaming-Modus an“ / „Gaming-Modus aus“
+- „Wie spät ist es?“, „Lauter“, „Lautstärke auf 30“, „Nächstes Lied“, „Musik pausieren“
+- „Sperr den PC“, „Zeig dich“, „Versteck dich“
 
-1. **Mikrofon-Zugriff**, falls die Einrichtung sagt, dass nur Stille ankommt: Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > "Desktop-Apps den Zugriff auf das Mikrofon erlauben" einschalten.
-2. **WebView2**, falls statt des Fensters eine Meldung kommt, dass es fehlt: https://developer.microsoft.com/microsoft-edge/webview2/ (dort den "Evergreen Bootstrapper" laden und starten). Bei Windows 11 ist es normalerweise schon da.
-3. **Gaming-Modus** (optional): In `config.toml` unter `[gaming]` eintragen, welche Programme dabei zugehen sollen, zum Beispiel `close_apps = ["OneDrive", "Teams"]`.
-4. **Alexa** (optional): siehe unten.
+Mit Nachdenken (ein paar Sekunden):
 
-Im Ordner `werkzeuge` liegen kleine Helfer für Sonderfälle (Selbsttest, Mikrofon-Test, Claude-Test, Neu installieren). Was sie machen, steht in `werkzeuge\LIESMICH.txt`.
+- „Wie wird das Wetter morgen?“, „Was gibt es Neues?“
+- „Erinnere mich in 20 Minuten an den Tee“
+- „Mach den Dunkelmodus an“, „Schalte Bluetooth aus“
+- „Was steht gerade auf meinem Bildschirm?“
+- „Guten Morgen“ (Wetter, Erinnerungen, Schlagzeilen)
+
+Jarvis macht das einfach. Nur vor **Löschen, Deinstallieren, Herunterfahren und Neustarten** und bevor er **in deinem Namen etwas sendet oder kauft**, fragt er einmal nach. Braucht etwas Administratorrechte, zeigt Windows die übliche Abfrage: einmal **Ja** klicken.
+
+## Wenn etwas nicht klappt
+
+- **Jarvis reagiert nicht auf „Hey Jarvis“:** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob „Hey Jarvis“ ankommt. Klappt es nur knapp, „Empfindlicher“ einschalten. Strg + Alt + J geht immer.
+- **Die Stimme klingt wieder nach Computer:** Dann ist das ElevenLabs-Guthaben aufgebraucht oder das Internet weg. Jarvis sagt das einmal an. Unter Einstellungen > Stimme steht, wie viele Zeichen noch übrig sind.
+- **Jarvis versteht dich schlecht:** Prüfen, ob der Groq-Schlüssel unter Einstellungen > Mikrofon „Aktiv“ zeigt. Ohne Groq erkennt dein PC selbst, das ist langsamer und ungenauer.
+- **Jarvis lehnt etwas ab:** Anders formulieren hilft meistens. Unter Einstellungen > Gehirn steht Claudes genaue Meldung mit einem Knopf zum Kopieren.
+- **Mikrofon blockiert** (die Einrichtung meldet absolute Stille): Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > „Desktop-Apps den Zugriff auf das Mikrofon erlauben“ einschalten.
+- **Irgendwas anderes:** `werkzeuge\Selbsttest.bat` prüft alles. In `logs\jarvis.log` (im Jarvis-Ordner unter `%LOCALAPPDATA%\Programs\Jarvis`) steht genau, was passiert ist. Beides kannst du Claude im Jarvis-Projekt schicken.
+
+Deinstallieren: Windows-Einstellungen > Apps > Jarvis > Deinstallieren. Das nimmt auch den Autostart mit.
 
 ## Alexa einrichten (optional)
 
 Jarvis spricht über Home Assistant mit deinen Echos. Das kostet nichts, braucht aber einmal etwas Einrichtung:
 
 1. **Home Assistant** installieren, zum Beispiel auf einem Raspberry Pi: https://www.home-assistant.io/installation/
-2. In Home Assistant **HACS** installieren und darüber **"Alexa Media Player"**. Dann mit deinem Amazon-Konto anmelden. Deine Echos erscheinen als `media_player.echo_...`.
+2. In Home Assistant **HACS** installieren und darüber **„Alexa Media Player“**. Dann mit deinem Amazon-Konto anmelden. Deine Echos erscheinen als `media_player.echo_...`.
 3. In Home Assistant unten links auf deinen Namen > **Sicherheit** > **Langlebige Zugriffstoken** > Token erstellen und kopieren.
-4. In der Jarvis-Einrichtung (Einstellungen oben rechts) bei **Extras > Alexa** die Adresse (zum Beispiel `http://homeassistant.local:8123`) und den Token einfügen und auf **Verbindung testen** klicken. Jarvis findet deine Echos, du gibst jedem einen Raum (zum Beispiel "wohnzimmer").
-5. Ausprobieren: "Hey Jarvis, sag im Wohnzimmer Bescheid, dass das Essen fertig ist." oder "Schalte das Wohnzimmerlicht an."
-
-**Umgekehrt, Alexa sagt Jarvis etwas** (für Fortgeschrittene): In `config.toml` unter `[server]` `enabled = true` und ein langes `token` setzen. In Home Assistant in `configuration.yaml`:
-
-```yaml
-rest_command:
-  jarvis:
-    url: "http://DEIN-PC-NAME:8765/befehl"
-    method: POST
-    headers:
-      Authorization: "Bearer DEIN-SERVER-TOKEN"
-    content_type: "application/json"
-    payload: '{"text": "{{ text }}", "alexa": "{{ raum }}"}'
-```
-
-Dann kann eine Home-Assistant-Automation oder ein Skript zum Beispiel `rest_command.jarvis` mit `text: "Gaming-Modus an"` aufrufen. Jarvis erledigt es auf dem PC und antwortet, wenn `raum` gesetzt ist, über das Echo in diesem Raum. Beim ersten Start fragt die Windows-Firewall, ob Jarvis im Heimnetz erreichbar sein darf: "Private Netzwerke" erlauben.
-
-## Wenn etwas nicht klappt
-
-- **Jarvis reagiert nicht auf "Hey Jarvis":** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob "Hey Jarvis" ankommt. Klappt es nur knapp, den Schalter "empfindlicher" einschalten. Zum Ausprobieren geht auch ein Klick auf den Kreis.
-- **Jarvis nimmt das falsche Mikrofon:** Einstellungen > Mikrofon > dein richtiges Mikrofon anklicken (nicht "Windows-Standard"). Es wird sofort gespeichert. Ist es später mal abgesteckt, hört Jarvis so lange über das Standardmikrofon und sagt dir das.
-- **Claude lehnt ab oder meldet einen Fehler:** Jarvis probiert automatisch andere Modelle (Sonnet, Haiku, Opus) und zuletzt einen ganz einfachen Modus. Unter Einstellungen > Claude steht Claudes genaue Meldung mit einem Knopf zum Kopieren. Die kannst du Claude im Jarvis-Projekt schicken.
-- **Jarvis antwortet zu langsam:** Einstellungen > Claude > Antwort-Tempo auf **Schnell** stellen. Dann antwortet Haiku, das ist am schnellsten.
-- **Irgendwas geht nicht und du weißt nicht was:** `werkzeuge\Selbsttest.bat` prüft alles und sagt bei jedem Punkt, was zu tun ist. Den Inhalt von `logs\selbsttest.txt` kannst du Claude im Jarvis-Projekt schicken.
-- **"Jarvis läuft schon":** Jarvis ist schon offen, oft versteckt als Symbol unten rechts neben der Uhr. Dort mit Rechtsklick beenden oder das Fenster öffnen.
-- **Mikrofon abgesteckt:** Jarvis merkt das und versucht es alle paar Sekunden wieder. Steckst du es wieder ein, hört er von selbst weiter zu.
-- **Irgendwas anderes:** In `logs\jarvis.log` steht genau, was passiert ist. Die Datei kannst du Claude schicken.
+4. In der Jarvis-Einrichtung bei **Extras > Alexa** die Adresse (zum Beispiel `http://homeassistant.local:8123`) und den Token einfügen und auf **Verbindung testen** klicken.
+5. Ausprobieren: „Hey Jarvis, sag im Wohnzimmer Bescheid, dass das Essen fertig ist.“
