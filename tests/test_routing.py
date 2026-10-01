@@ -73,6 +73,25 @@ class WorkshopTurnTest(unittest.TestCase):
                 self.assertTrue(is_continue_request(said))
 
 
+class ProjectCommandTest(unittest.TestCase):
+    """Sätze, die wie Werkstatt-Projektbefehle gebaut sind, aber kein Projekt meinen."""
+
+    def test_unknown_names_fall_through_unless_a_project_is_meant(self):
+        from tempfile import TemporaryDirectory
+
+        from jarvis.workshop import Workshop
+        from tests.helpers import RecordingUi
+
+        with TemporaryDirectory() as base:
+            shop = Workshop({"werkstatt": {"ordner": base}}, None, RecordingUi(), lambda text: None)
+            for said in ("Mach mit der Musik weiter", "Mach mit dem Hörbuch weiter", "Öffne den Ordner von Steam",
+                         "Öffne den Ordner vom Desktop"):
+                with self.subTest(said=said):
+                    self.assertIsNone(shop.project_command(said))
+            self.assertIn("finde ich nicht", shop.project_command("Starte das Projekt Würfelspiel"))
+            self.assertIn("finde ich nicht", shop.project_command("Mach beim Projekt Würfelspiel weiter"))
+
+
 class MessageTurnTest(unittest.TestCase):
     """Nachrichten gehen ohne Rückfrage raus: Ein Gruß an Jarvis darf keine werden."""
 

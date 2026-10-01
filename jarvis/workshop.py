@@ -457,7 +457,9 @@ class Workshop:
             return f"{len(items)} Projekt{'e' if len(items) != 1 else ''}, Sir. Zuletzt: {listed}{more}. Die Liste ist im Fenster."
         project = self.find_project(found[1])
         if project is None:
-            return f"Ein Projekt namens {found[1]} finde ich nicht, Sir."
+            if re.search(r"\b(?:projekt|werkstatt)\b", _norm(text)):
+                return f"Ein Projekt namens {found[1]} finde ich nicht, Sir."
+            return None  # "Mach mit der Musik weiter", "Öffne den Ordner von Steam": kein Werkstatt-Projekt
         if action == "continue":
             return self.follow_up(text, project)
         folder = Path(project["folder"])
