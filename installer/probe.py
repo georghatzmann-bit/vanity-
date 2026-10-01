@@ -27,15 +27,20 @@ def check(name, ok, detail=""):
         failed.append(name)
 
 
-def top_center_activity(img):
-    """Wie viele Pixel oben in der Mitte deutlich hell oder farbig sind (die Anzeige)."""
+def top_center(img):
+    """Der Bereich oben in der Mitte, in dem die Anzeige erscheint."""
     w, _ = img.size
-    region = img.convert("RGB").crop((w // 2 - 260, 0, w // 2 + 260, 130))
-    lit = 0
-    for r, g, b in region.getdata():
-        if max(r, g, b) > 200 or (b > 150 and b > r + 60):
-            lit += 1
-    return lit
+    return img.convert("RGB").crop((w // 2 - 260, 0, w // 2 + 260, 130))
+
+
+def changed_pixels(a, b):
+    """Wie viele Pixel sich oben in der Mitte deutlich verändert haben. Ob die Anzeige
+    heller oder dunkler ist als der Desktop dahinter, spielt so keine Rolle."""
+    changed = 0
+    for pa, pb in zip(top_center(a).getdata(), top_center(b).getdata()):
+        if max(abs(x - y) for x, y in zip(pa, pb)) > 40:
+            changed += 1
+    return changed
 
 
 # 1. Startmenü
@@ -49,7 +54,6 @@ check("'Zaubertrank' nicht gefunden", apps.best_match("zaubertrank", items) is N
 
 # 2. Jarvis-Anzeige
 before = ImageGrab.grab()
-base = top_center_activity(before)
 overlay = Overlay()
 check("Anzeige startet", overlay.start())
 overlay.state("listening")
@@ -57,8 +61,8 @@ overlay.level(0.7)
 time.sleep(1.5)
 shot = ImageGrab.grab()
 shot.save(OUT / "anzeige-hoert-zu.png")
-lit = top_center_activity(shot)
-check("Anzeige sichtbar beim Zuhören", lit > base + 400, f"(helle Pixel {lit}, vorher {base})")
+changed = changed_pixels(before, shot)
+check("Anzeige sichtbar beim Zuhören", changed > 400, f"({changed} Pixel verändert)")
 
 overlay.message("user", "Öffne Spotify und spiel meine Playlist")
 overlay.state("thinking")
@@ -72,8 +76,8 @@ ImageGrab.grab().save(OUT / "anzeige-spricht.png")
 
 overlay.state("idle")
 time.sleep(5.5)
-after = top_center_activity(ImageGrab.grab())
-check("Anzeige verschwindet danach", after < base + 200, f"(helle Pixel {after})")
+after = changed_pixels(before, ImageGrab.grab())
+check("Anzeige verschwindet danach", after < 200, f"({after} Pixel noch verändert)")
 overlay.stop()
 
 print("FEHLER:", ", ".join(failed) if failed else "keine", flush=True)
