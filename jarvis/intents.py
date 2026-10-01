@@ -59,6 +59,11 @@ _RULES: list[tuple[str, re.Pattern]] = [
         r"(?: (?:starten|beginnen|anfangen))?$|"
         r"^(?:vergiss alles|(?:fang|fange) (?:nochmal |noch mal |neu )?(?:von )?vorne an)$"
     )),
+    # "Was kannst du?" ist meist die erste Frage: sofort und kurz beantworten
+    ("help", re.compile(
+        r"^(?:was kannst du(?: (?:alles|so|eigentlich|denn|für mich))*(?: tun| machen)?|was kann ich (?:dich )?(?:alles )?(?:fragen|sagen)|"
+        r"hilfe|wobei kannst du (?:mir )?helfen|was sind deine (?:funktionen|befehle))$"
+    )),
     ("time", re.compile(
         r"^(?:wie spät(?: ist es| haben wir(?: es)?)?|wie ?viel uhr(?: ist es| haben wir)?|"
         r"(?:sag mir |was ist )?die uhrzeit|uhrzeit)(?: gerade| eigentlich)*$"

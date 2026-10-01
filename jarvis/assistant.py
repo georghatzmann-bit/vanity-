@@ -332,6 +332,10 @@ class Assistant:
         if name in _POWER:
             return self._power(_POWER[name])
         now = dt.datetime.now()
+        if name == "help":
+            return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Erinnerungen, "
+                    "Wetter, Musik, Licht, den PC herunterfahren, und in der Werkstatt programmiere ich für Sie. "
+                    "Sagen Sie zum Beispiel: Schreib Max auf Discord, bin gleich da.")
         if name == "time":
             return intents.spoken_time(now)
         if name == "date":
