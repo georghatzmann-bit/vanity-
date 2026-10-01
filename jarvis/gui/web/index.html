@@ -30,7 +30,7 @@
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
         </button>
-        <button type="button" class="ws-pill phone-pill" id="phoneBtn" title="Handy und Alexa mit Jarvis verbinden">
+        <button type="button" class="ws-pill phone-pill" id="phoneBtn" title="Handy, Alexa und Discord mit Jarvis verbinden">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
           <span class="ws-pill-text">Verbinden</span>
         </button>
@@ -299,7 +299,7 @@
     <header class="dlg-head">
       <div>
         <span class="dlg-kicker">Jarvis überall</span>
-        <h2 id="phoneTitle">Handy und Alexa</h2>
+        <h2 id="phoneTitle">Handy, Alexa und Discord</h2>
       </div>
       <button type="button" class="icon-btn" id="phoneClose" aria-label="Schließen">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -308,6 +308,7 @@
     <div class="dlg-tabs" role="tablist" aria-label="Verbindungen">
       <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
       <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
+      <button type="button" role="tab" data-pane="discord" aria-selected="false">Discord</button>
     </div>
     <div class="dlg-pane" data-pane="phone">
     <label class="row toggle-row dlg-row">
@@ -359,6 +360,31 @@
           <button type="button" class="btn small ghost" id="alexaTest">Verbindung testen</button>
         </div>
         <p class="dlg-note">Der Skill gehört nur dir und läuft nur auf deinen Echos. Die Nachrichten laufen verschlüsselt über ntfy.sh. Antwortet Jarvis nicht innerhalb von sechs Sekunden, sagt Alexa „Ich kümmere mich darum“ und Jarvis macht weiter.</p>
+      </div>
+    </div>
+    <div class="dlg-pane" data-pane="discord" hidden>
+      <div class="row dlg-row">
+        <span class="row-text">
+          <b id="discordState">Nicht eingerichtet</b>
+          <small id="discordHint">Jarvis' eigener Bot gestaltet deinen Server im Hintergrund: Kanäle, Rollen, Regeln, Begrüßung. Ohne Maus, während du zockst.</small>
+        </span>
+      </div>
+      <ol class="dlg-steps alexa-steps" id="discordSteps">
+        <li><b>Developer Portal öffnen</b><span>Mit deinem Discord-Konto anmelden, dann „New Application“, Name „Jarvis“, „Create“.</span>
+          <button type="button" class="btn small" id="discordPortal">Öffnen</button></li>
+        <li><b>Token holen</b><span>Links „Bot“, dann „Reset Token“ und den Token kopieren.</span></li>
+        <li><b>Token einfügen</b><span>Jarvis prüft ihn sofort und speichert ihn nur auf diesem PC.</span></li>
+      </ol>
+      <form class="dlg-url discord-token" id="discordForm" autocomplete="off">
+        <input id="discordToken" type="password" placeholder="Bot-Token einfügen" spellcheck="false" aria-label="Discord-Bot-Token">
+        <button type="submit" class="btn small" id="discordSave">Prüfen</button>
+      </form>
+      <div class="dlg-row discord-invite" id="discordInviteRow" hidden>
+        <span class="row-text">
+          <b>Auf deinen Server holen</b>
+          <small>Server auswählen, „Autorisieren“. Danach: „Jarvis, gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen.“</small>
+        </span>
+        <button type="button" class="btn small primary" id="discordInvite">Einladen</button>
       </div>
     </div>
   </section>

@@ -193,6 +193,12 @@ close_apps = []
 # Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
 power_plan = true
 
+[discord]
+# Jarvis' eigener Discord-Bot: gestaltet deinen Server im Hintergrund (Kanäle, Rollen, Nachrichten),
+# ohne Maus, während du zockst. Am einfachsten im Jarvis-Fenster oben rechts ("Verbinden", Bereich
+# Discord) einrichten. Den Token nie weitergeben.
+bot_token = ""
+
 [alexa]
 # "Alexa, sag Jarvis, er soll Discord öffnen": ein eigener Alexa-Skill, ohne Home Assistant und
 # ohne Router-Einstellungen. Am einfachsten im Jarvis-Fenster oben rechts ("Verbinden", Bereich

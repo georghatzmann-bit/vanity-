@@ -229,6 +229,66 @@ class Api:
         except Exception as exc:
             return {"ok": False, "text": f"Das ging nicht: {exc}"}
 
+    # ------------------------------------------------------------------ Discord-Bot
+
+    def discord_info(self) -> dict:
+        from ..discord_bot import DiscordBot, DiscordError
+
+        token = str(((getattr(self._assistant, "_cfg", {}) or {}).get("discord", {}) or {}).get("bot_token") or "")
+        if not token:
+            return {"configured": False, "name": "", "guilds": [], "error": ""}
+        bot = DiscordBot(token)
+        try:
+            me = bot.me()
+            return {"configured": True, "name": str(me.get("username") or "Jarvis"),
+                    "guilds": [str(g.get("name") or "") for g in bot.guilds()], "error": ""}
+        except DiscordError as exc:
+            return {"configured": True, "name": "", "guilds": [], "error": str(exc)}
+
+    def discord_save(self, token) -> dict:
+        """Bot-Token prüfen und speichern."""
+        from ..config import save_setting
+        from ..discord_bot import DiscordBot, DiscordError
+
+        token = str(token or "").strip().strip('"')
+        if token.lower().startswith("bot "):
+            token = token[4:].strip()
+        bot = DiscordBot(token)
+        if not bot.configured:
+            return {"configured": False, "name": "", "guilds": [], "error": "Das sieht nicht wie ein Bot-Token aus. Bitte den ganzen Token kopieren."}
+        try:
+            me = bot.me()
+        except DiscordError as exc:
+            return {"configured": False, "name": "", "guilds": [], "error": str(exc)}
+        cfg = getattr(self._assistant, "_cfg", None)
+        if cfg is not None:
+            cfg.setdefault("discord", {})["bot_token"] = token
+        save_setting("discord", "bot_token", token)
+        return {"configured": True, "name": str(me.get("username") or "Jarvis"),
+                "guilds": [str(g.get("name") or "") for g in bot.guilds()], "error": ""}
+
+    def discord_invite(self) -> dict:
+        """Öffnet den Link, mit dem Georg den Bot auf seinen Server holt."""
+        from .. import pc
+        from ..discord_bot import DiscordBot, DiscordError
+
+        token = str(((getattr(self._assistant, "_cfg", {}) or {}).get("discord", {}) or {}).get("bot_token") or "")
+        try:
+            url = DiscordBot(token).invite_url()
+            pc.open_uri(url)
+            return {"ok": True, "url": url}
+        except (DiscordError, OSError) as exc:
+            return {"ok": False, "url": "", "error": str(exc)}
+
+    def discord_portal(self) -> bool:
+        from .. import pc
+
+        try:
+            pc.open_uri("https://discord.com/developers/applications")
+            return True
+        except OSError:
+            return False
+
     # ------------------------------------------------------------------ Alexa
 
     def alexa_info(self) -> dict:

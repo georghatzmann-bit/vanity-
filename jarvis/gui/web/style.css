@@ -1521,7 +1521,7 @@ body[data-view="workshop"] .holo-scan {
 
 .dlg-tabs {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 4px;
   border-radius: 8px;
@@ -1575,6 +1575,29 @@ body[data-view="workshop"] .holo-scan {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: center;
+}
+
+.discord-token input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(var(--glow), 0.2);
+  border-radius: 6px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: 13px/1 var(--mono);
+}
+
+.discord-token input:focus {
+  border-color: rgba(var(--glow), 0.6);
+}
+
+.discord-invite[hidden],
+#discordSteps[hidden],
+#discordForm[hidden] {
+  display: none;
 }
 
 .alexa-link {
