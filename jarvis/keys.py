@@ -17,7 +17,7 @@ VK = {
     "ctrl": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B,
     "enter": 0x0D, "esc": 0x1B, "tab": 0x09, "backspace": 0x08, "space": 0x20, "delete": 0x2E,
     "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "home": 0x24, "end": 0x23,
-    "pageup": 0x21, "pagedown": 0x22,
+    "pageup": 0x21, "pagedown": 0x22, "printscreen": 0x2C,
     # Die Taste rechts neben L (US: Apostroph, deutsch: Ä). Discord: Strg+' startet einen Anruf.
     "quote": 0xDE,
 }

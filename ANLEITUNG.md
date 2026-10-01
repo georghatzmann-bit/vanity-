@@ -127,7 +127,9 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - „Spiel Thunderstruck“ (das erste YouTube-Video läuft sofort), „Spiel Queen auf Spotify“
 - „Dunkelmodus an“, „Bluetooth aus“, „WLAN an“, „Öffne die Bluetooth-Einstellungen“
 - „Wie wird das Wetter morgen?“, „Was ist 15 mal 23?“, „Wie spät ist es?“
-- „Lauter“, „Lautstärke auf 30“, „Nächstes Lied“, „Musik pausieren“
+- „Lauter“, „Lautstärke 30“, „Mach Musik an“, „Nächstes Lied“, „Pausiere“
+- „Minimiere alles“, „Mach einen Screenshot“ (landet unter Bilder > Screenshots), „Wie viel Speicher ist frei?“
+- „Weck mich um 7“ (Jarvis sagt es an, und mit Benachrichtigungen kommt es auch aufs Handy)
 - „Installier mir Spotify“ (Jarvis meldet sich, wenn es fertig ist)
 - „Gaming-Modus an“, „Sperr den PC“, „Zeig dich“, „Versteck dich“
 - „Erinnere mich in 20 Minuten an den Tee“, „Stell einen Timer auf 10 Minuten“
@@ -139,7 +141,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - „Sag Max, dass ich später anrufe“: Jarvis nimmt die App, über die du Max sonst schreibst, und schickt „Ich rufe später an“.
 - „Schreib in den Kanal allgemein: bin gleich da“
 - „Geh in den Sprachkanal Zocken“, „Öffne den Discord-Server Gilde“, „Geh in den Kanal memes“
-- „Ruf Max auf Discord an“, „Discord stumm“, „Discord taub“
+- „Ruf Max an“ (über Discord), „Discord stumm“, „Discord taub“
 
 **PC** (mit 15 Sekunden Vorlauf, „Stopp“ oder „Abbrechen“ hält es auf):
 

@@ -357,6 +357,8 @@ class Assistant:
         if name in _POWER:
             return self._power(_POWER[name])
         now = dt.datetime.now()
+        if name == "disk_free":
+            return self._disk_free()
         if name == "help":
             return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Erinnerungen, "
                     "Wetter, Musik, Licht, den PC herunterfahren, und in der Werkstatt programmiere ich für Sie. "
@@ -368,6 +370,17 @@ class Assistant:
         try:
             from . import pc
 
+            if name == "show_desktop":
+                from . import keys
+
+                keys.press("win", "d")
+                return ""
+            if name == "screenshot":
+                from . import keys
+
+                keys.press("win", "printscreen")
+                return random.choice(["Screenshot ist gespeichert, Sir. Er liegt unter Bilder, Screenshots.",
+                                      "Festgehalten, Sir. Unter Bilder, Screenshots."])
             if name == "volume_up":
                 pc.volume("lauter")
                 return ""
@@ -611,6 +624,8 @@ class Assistant:
         from . import messaging
 
         kind, target = intent.arg, intent.data.get("target", "")
+        if intent.data.get("any_app") and self.contact_app(target) in ("whatsapp", "telegram"):
+            return None  # "Ruf Max an", Max schreibt aber über WhatsApp: das versucht Claude
         shown = target[:1].upper() + target[1:]
         labels = {
             "person": f"Öffnet den Chat mit {shown}", "channel": f"Öffnet den Kanal {shown}",
@@ -648,6 +663,34 @@ class Assistant:
         if self.memory.forget(fact):
             return random.choice(["Vergessen, Sir.", "Gelöscht, Sir. Als hätten Sie es nie gesagt."])
         return "Dazu hatte ich mir nichts gemerkt, Sir."
+
+    def _disk_free(self) -> str:
+        """"Wie viel Speicher ist frei?" sofort: freie Gigabyte auf jedem eingebauten Laufwerk."""
+        try:
+            import psutil
+
+            drives = []
+            for part in psutil.disk_partitions(all=False):
+                opts = (part.opts or "").lower()
+                if not part.fstype or "cdrom" in opts or "removable" in opts:
+                    continue
+                try:
+                    usage = psutil.disk_usage(part.mountpoint)
+                except OSError:
+                    continue
+                if usage.total < 20 * 1024 ** 3:
+                    continue
+                name = part.mountpoint.rstrip("\\/").rstrip(":") or part.mountpoint
+                drives.append((name, int(usage.free / 1024 ** 3)))
+        except Exception as exc:
+            log.debug("Speicher: %s", exc)
+            return None
+        if not drives:
+            return None
+        first, rest = drives[0], drives[1:5]
+        text = f"Auf Laufwerk {first[0]} sind {first[1]} Gigabyte frei"
+        text += "".join(f", auf {name} {free}" for name, free in rest)
+        return text + ", Sir."
 
     def _recall(self) -> str:
         """"Was weißt du über mich?" sofort aus dem Gedächtnis, ohne Claude."""

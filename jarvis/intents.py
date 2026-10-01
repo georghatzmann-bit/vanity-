@@ -74,7 +74,7 @@ _RULES: list[tuple[str, re.Pattern]] = [
         r"was für ein tag ist heute|datum)$"
     )),
     ("volume_set", re.compile(
-        r"^(?:(?:mach|stell|setz|setze|dreh) )?(?:die )?lautstärke auf (\d{1,3}) ?(?:%|prozent)?"
+        r"^(?:(?:mach|stell|setz|setze|dreh) )?(?:die )?lautstärke (?:auf )?(\d{1,3}) ?(?:%|prozent)?"
         r"(?: (?:stellen|setzen|drehen))?$"
     )),
     ("volume_up", re.compile(
@@ -85,11 +85,11 @@ _RULES: list[tuple[str, re.Pattern]] = [
     )),
     ("media_pause", re.compile(
         r"^((musik|wiedergabe|lied|song|video) (pause|pausieren|anhalten|stoppen|stopp|stop|aus)|pause|"
-        r"(mach|schalt) die musik aus|(stopp|stop|pausiere) die musik|halt die musik an)$"
+        r"(mach|schalt) die musik aus|(stopp|stop|pausiere) die musik|halt die musik an|pausiere|pausieren)$"
     )),
     ("media_play", re.compile(
         r"^((musik|wiedergabe) (weiter|fortsetzen|abspielen)|weiter abspielen|play|"
-        r"(spiel|spiele) (die |etwas |wieder )?musik( ab| weiter)?)$"
+        r"(spiel|spiele) (die |etwas |wieder )?musik( ab| weiter)?|((mach|schalt|schalte) )?(die )?musik (wieder )?an)$"
     )),
     ("media_next", re.compile(r"^(nächstes (lied|stück|video|titel)|nächster (song|titel)|skip|überspringen)$")),
     ("media_prev", re.compile(r"^((vorheriges|voriges|letztes) (lied|stück|video)|(vorheriger|voriger) (song|titel))$")),
@@ -124,6 +124,19 @@ _RULES += [
     ("setup", re.compile(
         r"^(?:öffne|zeig|zeige) (?:mir )?(?:deine|die jarvis)[ -]?einstellungen$|"
         r"^(?:öffne|starte) (?:die )?einrichtung$|^einrichtung (?:öffnen|starten)$"
+    )),
+    ("show_desktop", re.compile(
+        r"^(?:minimier|minimiere) (?:alle fenster|alles)$|^alles minimieren$|^alle fenster minimieren$|"
+        r"^(?:zeig|zeige) (?:mir )?den desktop$|^desktop (?:anzeigen|zeigen)$"
+    )),
+    ("screenshot", re.compile(
+        r"^(?:mach|mache|nimm|schieß|schiess) (?:mir )?(?:mal )?(?:einen |ein |nen )?(?:screenshot|bildschirmfoto)$|"
+        r"^screenshot(?: machen| bitte)?$"
+    )),
+    ("disk_free", re.compile(
+        r"^wie ?viel (?:speicher(?:platz)?|platz) (?:ist|habe ich|hab ich|hat der pc|hat mein pc)?(?: noch)? (?:frei|übrig)"
+        r"(?: auf (?:der festplatte|den festplatten|meinem pc|dem pc))?$|"
+        r"^wie voll (?:ist|sind) (?:meine|die) festplatten?$"
     )),
     ("lock", re.compile(
         r"^(?:sperr|sperre) (?:den |meinen )?(?:pc|computer|rechner|bildschirm)$|"
@@ -371,11 +384,23 @@ _DISCORD_NOT_A_TARGET = {"es", "das", "den", "die", "der", "dem", "ihn", "sie", 
                          "ordner", "einstellungen", "log", "logs", "konsole"}
 
 
+_CALL_ANYONE = re.compile(r"^(?:ruf|rufe)\s+(?P<x>[\wäöüß][\wäöüß .-]{0,40}?)\s+an$")
+_NOT_CALLABLE = re.compile(r"\b(?:polizei|feuerwehr|notruf|notarzt|rettung|krankenwagen|ambulanz|hilfe|\d+)\b")
+
+
 def match_discord(text: str) -> Intent | None:
     """Discord-Aktionen über die Schnellsuche und Discords eigene Tasten, ohne Maus."""
+    norm = normalize(text)
+    found = _CALL_ANYONE.match(norm)
+    if found and "discord" not in norm:
+        # "Ruf Max an": Discord-Anruf. Schreibt Georg mit Max über WhatsApp, übernimmt Claude (Assistant).
+        target = re.sub(r"^(?:den|die|der|dem)\s+", "", found.group("x")).strip(" -")
+        if target and target not in _DISCORD_NOT_A_TARGET and not _NOT_CALLABLE.search(target) \
+                and not re.search(r"\b(?:whatsapp|telegram|handy|telefon)\b", target):
+            return Intent("discord", "call", {"target": target, "any_app": True})
+        return None
     if not re.search(r"discord|kanal|channel|voice|sprachkanal|talk|server|chat|dm\b", str(text), re.I):
         return None
-    norm = normalize(text)
     for kind, pattern in _DISCORD:
         found = pattern.match(norm)
         if not found:
@@ -401,6 +426,13 @@ _REMIND = [
     re.compile(r"^(?:kannst|könntest|würdest)\s+du\s+mich\s+(?:bitte\s+)?(?P<when>.+?)\s+"
                r"(?P<sep>an|ans|daran)\s+(?P<what>.+?)\s+erinnern[?.!]?$", re.I),
 ]
+# "Weck mich um 7", "Stell mir einen Wecker auf 6:30" (Uhrzeit, keine Dauer)
+_ALARM = [
+    re.compile(r"^(?:bitte\s+)?(?:weck|wecke)\s+mich\s+(?:bitte\s+)?(?:morgen\s+früh\s+|morgen\s+)?"
+               r"(?P<when>(?:um\s+)?(?:halb\s+)?\d{1,2}(?:[:.]\d{2})?(?:\s+uhr)?)(?:\s+(?:auf|bitte))?[.!]?$", re.I),
+    re.compile(r"^(?:stell|stelle|setz|setze|mach|mache)\s+(?:mir\s+)?(?:bitte\s+)?(?:einen|nen)?\s*wecker\s+"
+               r"(?:auf|für|um)\s+(?P<when>(?:halb\s+)?\d{1,2}(?:[:.]\d{2})?(?:\s+uhr)?)[.!]?$", re.I),
+]
 _TIMER = [
     re.compile(r"^(?:stell|stelle|setz|setze|start|starte|mach|mache)\s+(?:mir\s+)?(?:bitte\s+)?(?:einen|nen|ein)?\s*"
                r"(?:timer|wecker|countdown)\s+(?:auf|für|über|von|in)\s+(?P<dur>.+?)[.!]?$", re.I),
@@ -424,6 +456,17 @@ def match_reminder(text: str, now: dt.datetime | None = None) -> Intent | None:
             when = parse_when(found.group("when"), now)
         except ValueError:
             return None
+        return Intent("remind", what, {"when": when, "what": what})
+    for pattern in _ALARM:
+        found = pattern.match(raw)
+        if not found:
+            continue
+        clock = found.group("when").strip(" ,.").replace(".", ":")
+        try:
+            when = parse_when(clock if clock.lower().startswith("um ") else "um " + clock, now)
+        except ValueError:
+            return None
+        what = "Ihr Wecker. Zeit aufzustehen"
         return Intent("remind", what, {"when": when, "what": what})
     for pattern in _TIMER:
         found = pattern.match(raw)
@@ -657,6 +700,8 @@ def match(text: str) -> Intent | None:
                 arg = next((g for g in found.groups() if g), "").strip()
                 if not arg or arg in _NOT_A_NAME or re.search(r"\b(?:und|oder|dann|danach)\b", arg):
                     continue  # mehrere Dinge auf einmal: das kann Claude besser
+                if name == "open" and re.search(r"\san$", arg):
+                    continue  # "Ruf die Polizei an", "Ruf mich an": kein Programm
                 if name == "open_known":
                     from .apps import find_known
 

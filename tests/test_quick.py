@@ -381,3 +381,62 @@ class PowerTest(unittest.TestCase):
                 mock.patch.object(pc, "power") as power, mock.patch("builtins.print"):
             self.assertEqual(tool.main(["herunterfahren"]), 3)
         power.assert_not_called()
+
+
+class EverydayTest(unittest.TestCase):
+    """Alltagssätze, die ohne Claude sofort gehen sollen."""
+
+    def test_recognition(self):
+        cases = {
+            "Mach Musik an": ("media_play", ""), "Pausiere": ("media_pause", ""), "Lautstärke 50": ("volume_set", "50"),
+            "Minimiere alles": ("show_desktop", ""), "Zeig den Desktop": ("show_desktop", ""),
+            "Öffne den Desktop": ("folder", "desktop"), "Mach einen Screenshot": ("screenshot", ""),
+            "Wie viel Speicher ist frei?": ("disk_free", ""),
+        }
+        for said, expected in cases.items():
+            with self.subTest(said=said):
+                found = intents.match(said)
+                self.assertEqual((found.name, found.arg), expected)
+
+    def test_alarm_is_a_reminder_at_that_time(self):
+        now = dt.datetime(2026, 10, 1, 23, 0)
+        for said, when in (("Weck mich um 7", dt.datetime(2026, 10, 2, 7, 0)),
+                           ("Weck mich morgen um halb 8", dt.datetime(2026, 10, 2, 7, 30)),
+                           ("Stell einen Wecker auf 6:30", dt.datetime(2026, 10, 2, 6, 30))):
+            found = intents.match_reminder(said, now)
+            self.assertEqual((found.name, found.data["when"]), ("remind", when), said)
+        self.assertEqual(intents.match_reminder("Stell einen Wecker auf 10 Minuten", now).name, "timer")
+
+    def test_call_someone(self):
+        found = intents.match("Ruf Max an")
+        self.assertEqual((found.name, found.arg, found.data), ("discord", "call", {"target": "max", "any_app": True}))
+        for said in ("Ruf die Polizei an", "Ruf 112 an", "Ruf mich an"):
+            self.assertIsNone(intents.match(said), said)
+
+    def test_assistant_does_them(self):
+        assistant, ui, speaker, _ = make()
+        with mock.patch("jarvis.keys.press") as pressed:
+            assistant.handle("Minimiere alles")
+            assistant.handle("Mach einen Screenshot")
+        self.assertEqual([c.args for c in pressed.call_args_list], [("win", "d"), ("win", "printscreen")])
+        parts = [mock.Mock(mountpoint="C:\\", fstype="NTFS", opts="rw,fixed"),
+                 mock.Mock(mountpoint="D:\\", fstype="NTFS", opts="rw,fixed"),
+                 mock.Mock(mountpoint="E:\\", fstype="", opts="cdrom")]
+        usage = {"C:\\": mock.Mock(total=500 * 1024 ** 3, free=120 * 1024 ** 3),
+                 "D:\\": mock.Mock(total=2000 * 1024 ** 3, free=830 * 1024 ** 3)}
+        with mock.patch("psutil.disk_partitions", return_value=parts), \
+                mock.patch("psutil.disk_usage", side_effect=lambda m: usage[m]):
+            self.assertEqual(assistant.handle("Wie viel Speicher ist frei?"),
+                             "Auf Laufwerk C sind 120 Gigabyte frei, auf D 830, Sir.")
+        self.assertEqual(assistant.brain.asked, [])
+
+    def test_call_goes_to_discord_unless_whatsapp_is_known(self):
+        assistant, ui, speaker, _ = make()
+        with mock.patch("jarvis.messaging.discord_call") as called:
+            assistant.handle("Ruf Max an")
+        called.assert_called_once_with("max")
+        assistant.memory = mock.Mock(contact_app=mock.Mock(return_value="whatsapp"))
+        with mock.patch("jarvis.messaging.discord_call") as called:
+            assistant.handle("Ruf Anna an")
+        called.assert_not_called()
+        self.assertEqual(assistant.brain.asked[-1], "Ruf Anna an")
