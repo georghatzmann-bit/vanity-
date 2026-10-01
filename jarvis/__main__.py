@@ -332,6 +332,13 @@ def run_gui(cfg: dict, args) -> int:
     window = Window(
         Api(bridge, assistant, assistant.mute, open_setup, listen_now), background, on_closed, cfg.get("gui", {})
     )
+
+    def window_control(what: str) -> bool:
+        (window.show if what == "show" else window.hide)()
+        return True
+
+    assistant.window_control = window_control
+    assistant.open_setup = open_setup
     print("Jarvis-Fenster wird geöffnet. Dieses Konsolenfenster zeigt nebenbei das Gespräch.")
     window.start()
     return 0

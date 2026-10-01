@@ -85,32 +85,24 @@ class Cancelled(BrainError):
 
 
 SPOKEN_ERRORS = {
-    "refusal": (
-        "Verzeihung, Sir, Claude lehnt das gerade ab, auch mit den anderen Modellen. "
-        "Versuchen Sie es bitte anders formuliert, oder starten Sie einmal den Claude-Test im Ordner werkzeuge."
-    ),
-    "limit": (
-        "Ihr Claude-Kontingent ist gerade aufgebraucht, Sir. "
-        "Es füllt sich in ein paar Stunden von selbst wieder auf."
-    ),
+    "refusal": "Das kann ich so leider nicht erledigen, Sir. Versuchen Sie es bitte etwas anders formuliert.",
+    "limit": "Mein Kontingent ist für den Moment aufgebraucht, Sir. In ein paar Stunden bin ich wieder ganz der Alte.",
     "login": (
-        "Claude Code ist nicht angemeldet, Sir. Bitte in der Eingabeaufforderung "
-        "einmal claude starten und mit Ihrem Pro-Konto anmelden."
+        "Ich bin gerade nicht angemeldet, Sir. Bitte öffnen Sie einmal die Einstellungen, "
+        "dort lässt sich das mit zwei Klicks beheben."
     ),
-    "network": "Ich erreiche Claude gerade nicht, Sir. Ist das Internet verbunden?",
-    "overloaded": "Claude ist gerade überlastet, Sir. Versuchen Sie es bitte gleich noch einmal.",
+    "network": "Ich erreiche das Internet gerade nicht, Sir.",
+    "overloaded": "Meine Leitungen sind gerade überlastet, Sir. Versuchen Sie es bitte gleich noch einmal.",
     "timeout": "Das hat zu lange gedauert, Sir. Ich habe abgebrochen.",
-    "missing": (
-        "Ich finde Claude Code nicht, Sir. Bitte installieren Sie es und melden Sie sich einmal an."
-    ),
+    "missing": "Mir fehlt gerade mein Gehirn, Sir. Bitte öffnen Sie einmal die Einstellungen.",
     "cancelled": "Abgebrochen, Sir.",
-    "model": "Kein Claude-Modell steht Ihnen gerade zur Verfügung, Sir.",
-    "account": "Ihr Claude-Konto meldet ein Problem, Sir. Bitte schauen Sie einmal auf claude.ai nach.",
+    "model": "Mein Gehirn ist gerade nicht erreichbar, Sir. Versuchen Sie es bitte gleich noch einmal.",
+    "account": "Mit Ihrem Claude-Konto stimmt etwas nicht, Sir. Bitte schauen Sie einmal auf claude.ai nach.",
     "billing": (
-        "Claude meldet ein Abrechnungsproblem, Sir. Vermutlich ist Claude Code mit einem API-Schlüssel "
-        "statt mit Ihrem Pro-Abo angemeldet."
+        "Es gibt ein Abrechnungsproblem, Sir. Vermutlich ist noch ein alter API-Schlüssel statt "
+        "Ihres Abos eingetragen."
     ),
-    "other": "Verzeihung, Sir, Claude hat einen Fehler gemeldet. Die Einzelheiten stehen im Fenster und in der Logdatei.",
+    "other": "Da ist etwas schiefgegangen, Sir. Die Einzelheiten stehen im Protokoll.",
 }
 
 _PATTERNS = [
@@ -151,9 +143,24 @@ UNKNOWN_OPTION = re.compile(r"unknown option '--([\w-]+)'", re.I)
 
 # Kurze Persönlichkeit für den Notfall, wenn der volle Jarvis-Text abgelehnt wird.
 SIMPLE_PERSONA = (
-    "Du bist Jarvis, ein freundlicher Assistent. Antworte immer auf Deutsch, "
-    "in ein bis drei kurzen Sätzen, ohne Markdown, und sprich den Nutzer mit Sir an."
+    "Du bist Jarvis, ein höflicher Butler mit trockenem Humor, wie in Iron Man. Antworte immer "
+    "auf Deutsch, in ein oder zwei kurzen Sätzen, ohne Markdown, und sprich den Nutzer mit Sir an."
 )
+
+WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+MONTHS = [
+    "Januar", "Februar", "März", "April", "Mai", "Juni",
+    "Juli", "August", "September", "Oktober", "November", "Dezember",
+]
+
+
+def with_time(text: str, now=None) -> str:
+    """Datum und Uhrzeit vor die Nachricht: So muss Claude nicht erst den PC fragen."""
+    import datetime as dt
+
+    now = now or dt.datetime.now()
+    stamp = f"{WEEKDAYS[now.weekday()]}, {now.day}. {MONTHS[now.month - 1]} {now.year}, {now:%H:%M} Uhr"
+    return f"({stamp})\n{text}"
 
 
 def classify(message: str) -> type[BrainError]:
@@ -263,6 +270,7 @@ class ClaudeBrain:
         self._isolated = cfg.get("isolated", True)
         self._timeout = cfg.get("timeout_seconds", 180)
         self._tools = cfg.get("tools", [])
+        self._effort = str(cfg.get("effort", "") or "").strip()
         self._allowed = cfg.get("allowed_tools", [])
         self._disallowed = cfg.get("disallowed_tools", [])
         self._home = home
@@ -275,7 +283,10 @@ class ClaudeBrain:
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
         self.last_model = ""
+        # Zwischenstände ("Sonnet lehnt ab, versuche Haiku") gehen nur ins Protokoll,
+        # `alert` meldet Dinge, um die sich Georg kümmern muss (z. B. ein nötiges Update).
         self.notice: Callable[[str], None] = lambda text: log.info("%s", text)
+        self.alert: Callable[[str], None] = lambda text: log.warning("%s", text)
         self._load_state()
 
     # ------------------------------------------------------------------ Zustand
@@ -344,6 +355,8 @@ class ClaudeBrain:
             cmd.append("--include-partial-messages")
         if attempt.model:
             cmd += ["--model", attempt.model]
+        if self._effort and "effort" not in self._unsupported:
+            cmd += ["--effort", self._effort]
         if isolated:
             cmd.append("--safe-mode")
             if attempt.profile == "jarvis":
@@ -470,7 +483,7 @@ class ClaudeBrain:
             if self._cancelled:
                 raise Cancelled("abgebrochen")
             cmd = self.command(attempt, isolated, session if keep_session else None, resume)
-            run = self._run(cmd, text, on_text)
+            run = self._run(cmd, text, on_text, prompt=with_time(text))
             result, stderr = run.result, run.stderr
             unknown = UNKNOWN_OPTION.search(stderr or "")
             if result is None and unknown and not run.spoke and unknown.group(1) not in self._unsupported:
@@ -482,7 +495,7 @@ class ClaudeBrain:
                     flag,
                 )
                 if flag in ("safe-mode", "system-prompt-file", "tools"):
-                    self.notice(
+                    self.alert(
                         "Claude Code ist veraltet, deshalb laufen deine eigenen Skills mit. "
                         "Bitte einmal 'claude update' in der Eingabeaufforderung ausführen."
                     )
@@ -514,8 +527,9 @@ class ClaudeBrain:
         self.last_model = run.model or (used[0] if used else attempt.model or "")
         return Answer(str(result.get("result") or "").strip(), self.last_model, self._session or "")
 
-    def _run(self, cmd: list[str], text: str, on_text) -> Run:
-        """Startet Claude, liest den Stream und sammelt Ergebnis, Fehler und Modell."""
+    def _run(self, cmd: list[str], text: str, on_text, prompt: str | None = None) -> Run:
+        """Startet Claude, liest den Stream und sammelt Ergebnis, Fehler und Modell.
+        `text` ist, was Georg gesagt hat, `prompt` geht an Claude (mit Datum und Uhrzeit)."""
         log.debug("Claude-Aufruf: %s", " ".join(cmd[1:]))
         started = time.monotonic()
         try:
@@ -558,7 +572,7 @@ class ClaudeBrain:
         # Die Frage geht über stdin, damit gesprochener Text nie als
         # Kommandozeile interpretiert wird.
         try:
-            proc.stdin.write(text)
+            proc.stdin.write(text if prompt is None else prompt)
             proc.stdin.close()
         except OSError:
             pass

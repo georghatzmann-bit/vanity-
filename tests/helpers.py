@@ -20,8 +20,11 @@ def frame(level: int) -> np.ndarray:
 # Tut so, als wäre es Claude Code mit --output-format stream-json.
 FAKE_CLAUDE = textwrap.dedent(
     """
-    import json, os, sys, time, uuid
-    prompt = sys.stdin.read()
+    import json, os, re, sys, time, uuid
+    raw = sys.stdin.read()
+    # Jarvis schreibt Datum und Uhrzeit in Klammern vor die Nachricht.
+    stamp = re.match(r"\\(([^()]*\\d{1,2}:\\d{2} Uhr)\\)\\n", raw)
+    prompt = raw[stamp.end():] if stamp else raw
     args = sys.argv[1:]
 
     def arg(name):
@@ -29,7 +32,8 @@ FAKE_CLAUDE = textwrap.dedent(
 
     model = arg("--model")
     with open("calls.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps({"args": args, "prompt": prompt, "said": os.environ.get("JARVIS_USER_SAID"),
+        f.write(json.dumps({"args": args, "prompt": prompt, "raw": raw, "stamp": stamp.group(1) if stamp else "",
+                            "said": os.environ.get("JARVIS_USER_SAID"),
                             "pythonpath": os.environ.get("PYTHONPATH", ""),
                             "apikey": bool(os.environ.get("ANTHROPIC_API_KEY"))}) + "\\n")
     for flag in os.environ.get("FAKE_UNKNOWN", "").split(","):

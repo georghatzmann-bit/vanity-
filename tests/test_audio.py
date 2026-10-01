@@ -231,7 +231,10 @@ class ConfigMergeTest(unittest.TestCase):
                 '\ufeff[brain]\nallowed_tools = ["Read"]\ndisallowed_tools = ["Bash(meins:*)"]\n'.encode("utf-8")
             )
             brain = load_config(path)["brain"]
-        self.assertIn("Bash(winget install:*)", brain["disallowed_tools"])
+        self.assertIn("Bash(Remove-Item:*)", brain["disallowed_tools"])
+        self.assertIn("PowerShell(winget uninstall:*)", brain["disallowed_tools"])
+        # Installieren darf Jarvis seit Version 2 ohne Nachfrage.
+        self.assertNotIn("PowerShell(winget install:*)", brain["disallowed_tools"])
         self.assertIn("Bash(meins:*)", brain["disallowed_tools"])
         self.assertIn("PowerShell", brain["allowed_tools"])
 

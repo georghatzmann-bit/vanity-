@@ -278,6 +278,7 @@ def check_claude(r: Report, cfg: dict) -> None:
     try:
         version = subprocess.run(
             [path, "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+            stdin=subprocess.DEVNULL,
             timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         ).stdout.strip()
     except Exception as exc:

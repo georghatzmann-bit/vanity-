@@ -29,6 +29,12 @@ CONFIRM_FILLER = {
 }
 
 HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
+  oeffnen "<name>"             startet ein Programm aus dem Startmenü oder eine bekannte Webseite
+  schliessen "<name>"          schließt ein Programm
+  programme [filter]           zeigt, was im Startmenü steht
+  installieren "<name|id>"     installiert ein Programm (Name wie "spotify" oder winget-ID)
+  deinstallieren <winget-id>   deinstalliert ein Programm (erst nach Georgs Ja)
+  admin "<PowerShell-Befehl>"  führt etwas mit Administratorrechten aus (Windows fragt Georg)
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
@@ -39,7 +45,6 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   bildschirm                   speichert ein Bildschirmfoto und nennt den Pfad
   gaming an|aus
   papierkorb "<pfad>"          verschiebt in den Papierkorb (erst nach Georgs Ja)
-  installieren <winget-id>     installiert ein Programm (erst nach Georgs Ja)
   alexa-sagen <raum> "<text>"  Ansage über ein Echo-Gerät
   alexa-geraete                zeigt die eingetragenen Echo-Geräte
   smarthome geraete [filter]   zeigt Geräte aus Home Assistant
@@ -164,15 +169,69 @@ def _dispatch(command: str, rest: list[str]) -> int:
         print(pc.to_recycle_bin(" ".join(rest)))
         return 0
 
-    if command == "installieren":
+    if command in ("installieren", "installiere", "install"):
         from . import pc
 
         if not rest:
-            print("Aufruf: installieren <winget-id>, die ID findest du mit: winget search <name>")
+            print('Aufruf: installieren "<name oder winget-id>", die ID findest du mit: winget search <name>')
+            return 1
+        print(pc.install(" ".join(rest)))
+        return 0
+
+    if command in ("deinstallieren", "deinstalliere", "uninstall"):
+        from . import apps
+
+        if not rest:
+            print("Aufruf: deinstallieren <winget-id>")
             return 1
         if not confirmed():
-            return need_confirmation(f"{rest[0]} installieren")
-        print(pc.install(rest[0]))
+            return need_confirmation(f"{rest[0]} deinstallieren")
+        print(apps.uninstall(" ".join(rest)))
+        return 0
+
+    if command in ("oeffnen", "öffnen", "starten", "open"):
+        from . import apps
+
+        if not rest:
+            print('Aufruf: oeffnen "<name>"')
+            return 1
+        try:
+            print(apps.open_app(" ".join(rest)))
+        except apps.AppNotFound as exc:
+            print(f"{exc} Mit 'python -m jarvis.tool programme <teil des namens>' siehst du, was es gibt.")
+            return 1
+        return 0
+
+    if command in ("schliessen", "schließen", "beenden", "close"):
+        from . import apps
+
+        if not rest:
+            print('Aufruf: schliessen "<name>"')
+            return 1
+        print(apps.close_app(" ".join(rest)))
+        return 0
+
+    if command in ("programme", "apps"):
+        from . import apps
+
+        wanted = apps.normalize(" ".join(rest))
+        rows = [(name, app_id) for name, app_id in apps.START_MENU.apps() if wanted in apps.normalize(name)]
+        if not rows:
+            print("Nichts Passendes im Startmenü.")
+        for name, app_id in rows[:80]:
+            print(f"{name}  [{app_id}]")
+        return 0
+
+    if command == "admin":
+        from . import pc
+
+        if not rest:
+            print('Aufruf: admin "<PowerShell-Befehl>"')
+            return 1
+        line = " ".join(rest)
+        if pc.needs_confirmation(line) and not confirmed():
+            return need_confirmation(f"das mit Administratorrechten ausführen ({line[:80]})")
+        print(pc.run_admin(line))
         return 0
 
     if command in ("alexa-sagen", "alexa", "ansage"):

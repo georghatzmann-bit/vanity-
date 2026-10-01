@@ -22,11 +22,15 @@ input_device = ""
 [mute]
 # Tastenkürzel, das das Mikrofon aus- und wieder einschaltet (funktioniert überall in Windows).
 hotkey = "ctrl+alt+m"
+# Tastenkürzel: Jarvis hört sofort zu, ohne "Hey Jarvis" (wie ein Klick auf den Kreis).
+listen_hotkey = "ctrl+alt+j"
 
 [listen]
 # Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden).
-# Kleiner = schnellere Antwort. Schneidet Jarvis dich mitten im Satz ab: auf 1.2 erhöhen.
-silence_seconds = 0.9
+# Kleiner = schnellere Antwort. Schneidet Jarvis dich mitten im Satz ab: auf 1.0 erhöhen.
+silence_seconds = 0.7
+# true = eine kleine KI erkennt, wann du sprichst (genauer als nur die Lautstärke).
+vad = true
 # Maximale Länge eines Befehls (Sekunden).
 max_seconds = 20
 # Wenn nach "Hey Jarvis" so lange nichts gesagt wird, bricht Jarvis ab (Sekunden).
@@ -40,7 +44,14 @@ barge_in = true
 follow_up = true
 
 [stt]
-# tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.
+# "auto" = Groq, wenn unten ein Schlüssel steht, sonst auf dem eigenen PC.
+# "groq" = immer Groq, "lokal" = immer auf dem eigenen PC (geht auch ohne Internet).
+engine = "auto"
+# Kostenloser Schlüssel von https://console.groq.com/keys: Spracherkennung in Bestqualität
+# (Whisper large-v3-turbo), in einem Bruchteil einer Sekunde. Am einfachsten in der Einrichtung eintragen.
+groq_key = ""
+groq_model = "whisper-large-v3-turbo"
+# Für die Erkennung auf dem eigenen PC: tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.
 model = "small"
 language = "de"
 # "cpu" läuft überall. "cuda" ist schneller, braucht aber eine Nvidia-Karte mit CUDA 12 und cuDNN.
@@ -49,9 +60,17 @@ device = "cpu"
 beam_size = 1
 
 [tts]
+# "elevenlabs" = Premium-Stimmen von ElevenLabs (die besten, kostenpflichtig, Schlüssel unten)
 # "edge" = menschliche Microsoft-Stimme (gratis, braucht Internet)
 # "windows" = eingebaute Windows-Stimme (offline)
 engine = "edge"
+# ElevenLabs: Schlüssel von https://elevenlabs.io/app/settings/api-keys und die Stimme.
+# Am einfachsten in der Einrichtung (Schritt Stimme), dort gibt es Hörproben.
+elevenlabs_key = ""
+elevenlabs_voice = ""
+elevenlabs_voice_name = ""
+# eleven_v4_turbo = schnellstes und natürlichstes Modell, eleven_flash_v2_5 = Reserve
+elevenlabs_model = "eleven_v4_turbo"
 # Andere gute Stimmen: de-AT-JonasNeural (am natürlichsten), de-CH-JanNeural, de-DE-KatjaNeural.
 # Am einfachsten in der Einrichtung auswählen, dort gibt es Hörproben.
 voice = "de-DE-ConradNeural"
@@ -69,14 +88,19 @@ ack_after_seconds = 3.0
 enabled = true
 
 [gui]
-# Das Arc-Reactor-Fenster. false = nur Konsolenfenster (wie werkzeuge\Konsole.bat).
+# Das Jarvis-Fenster. false = nur Konsolenfenster (wie werkzeuge\Konsole.bat).
 enabled = true
-width = 1200
-height = 780
+width = 1280
+height = 800
+# true = Jarvis startet unsichtbar im Hintergrund. Das Fenster öffnest du über das Symbol
+# unten rechts neben der Uhr oder mit "Hey Jarvis, zeig dich".
+start_hidden = true
 # Symbol unten rechts neben der Uhr (anzeigen, stumm, beenden).
 tray = true
-# true = Fenster schließen versteckt Jarvis nur im Tray, beenden dann über das Tray-Symbol.
-close_to_tray = false
+# true = Fenster schließen versteckt Jarvis nur, er hört weiter zu. Beenden über das Tray-Symbol.
+close_to_tray = true
+# true = Beim Zuhören und Sprechen erscheint oben am Bildschirm eine kleine Jarvis-Anzeige.
+overlay = true
 
 [brain]
 # Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
@@ -93,22 +117,24 @@ isolated = true
 simple_fallback = true
 # Maximale Wartezeit auf Claude (Sekunden).
 timeout_seconds = 180
+# Wie lange Claude nachdenkt: "low" antwortet am schnellsten, "medium" oder "high" gründlicher.
+effort = "low"
 # Welche Werkzeuge Claude für Jarvis überhaupt bekommt.
 tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"]
 # Werkzeuge, die Claude ohne Nachfrage nutzen darf. (Diese und die nächste Liste
 # ergänzen in deiner config.toml die Vorgaben hier, sie ersetzen sie nicht.)
 allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write"]
-# Befehle, die komplett gesperrt sind. Zum Löschen und Installieren gibt es eigene
-# Jarvis-Befehle, die erst nach deinem "Ja" etwas tun.
+# Befehle, die komplett gesperrt sind. Zum Löschen und Deinstallieren gibt es eigene
+# Jarvis-Befehle, die erst nach deinem "Ja" etwas tun. Installieren darf Jarvis einfach so.
 disallowed_tools = [
     "Bash(rm:*)", "Bash(del:*)", "Bash(rmdir:*)", "Bash(rd:*)",
     "Bash(Remove-Item:*)", "Bash(format:*)", "Bash(shutdown:*)",
     "Bash(Stop-Computer:*)", "Bash(Restart-Computer:*)", "Bash(reg delete:*)",
-    "Bash(winget install:*)", "Bash(winget uninstall:*)", "Bash(msiexec:*)",
+    "Bash(winget uninstall:*)", "Bash(msiexec:*)",
     "PowerShell(Remove-Item:*)", "PowerShell(rm:*)", "PowerShell(del:*)", "PowerShell(ri:*)",
     "PowerShell(rmdir:*)", "PowerShell(rd:*)", "PowerShell(erase:*)", "PowerShell(Clear-RecycleBin:*)",
     "PowerShell(Stop-Computer:*)", "PowerShell(Restart-Computer:*)", "PowerShell(Format-Volume:*)",
-    "PowerShell(winget install:*)", "PowerShell(winget uninstall:*)", "PowerShell(msiexec:*)",
+    "PowerShell(winget uninstall:*)", "PowerShell(msiexec:*)",
 ]
 
 [gaming]
@@ -139,4 +165,4 @@ token = ""
 
 [intern]
 # Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
-config_version = 3
+config_version = 4

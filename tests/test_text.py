@@ -186,7 +186,8 @@ class IntentTest(unittest.TestCase):
     def test_everything_else_goes_to_claude(self):
         for text in (
             "Wie spät ist es in Tokio?",
-            "Öffne YouTube",
+            "Öffne Spotify und Discord",
+            "Installiere Spotify und starte es",
             "Mach den PC stumm",
             "Schalte das Mikrofon in Discord aus",
             "Stopp die Musik auf Spotify und öffne Netflix",

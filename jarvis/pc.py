@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -166,6 +167,60 @@ def _running(exe: str) -> bool:
     return exe.lower() in (result.stdout or "").lower()
 
 
+def lock() -> None:
+    """Sperrt den PC (wie Windows-Taste + L)."""
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    import ctypes
+
+    if not ctypes.windll.user32.LockWorkStation():
+        raise PcError("Der PC ließ sich nicht sperren.")
+
+
+# Bekannte Ordner und ihre Windows-IDs (die echten Pfade, auch wenn sie in OneDrive liegen).
+_KNOWN_FOLDERS = {
+    "downloads": ("Downloads", "{374DE290-123F-4565-9164-39C4925E467B}"),
+    "download": ("Downloads", "{374DE290-123F-4565-9164-39C4925E467B}"),
+    "dokumente": ("Dokumente", "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}"),
+    "bilder": ("Bilder", "{33E28130-4E1E-4676-835A-98395C3BC3BB}"),
+    "fotos": ("Bilder", "{33E28130-4E1E-4676-835A-98395C3BC3BB}"),
+    "desktop": ("Desktop", "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}"),
+    "musik": ("Musik", "{4BD8D571-6D19-48D3-BE97-422220080E43}"),
+    "videos": ("Videos", "{18989B1D-99B5-455B-841C-AB7C74E4DDFC}"),
+}
+_ENGLISH_FOLDERS = {"Dokumente": "Documents", "Bilder": "Pictures", "Musik": "Music"}
+
+
+def known_folder(name: str) -> tuple[str, Path]:
+    """(Anzeigename, Pfad) eines Benutzerordners wie "Downloads" oder "Bilder"."""
+    label, guid = _KNOWN_FOLDERS[name.lower()]
+    if os.name == "nt":
+        try:
+            import ctypes
+            import uuid
+            from ctypes import wintypes
+
+            raw = ctypes.create_string_buffer(uuid.UUID(guid).bytes_le, 16)
+            out = ctypes.c_wchar_p()
+            shell32 = ctypes.windll.shell32
+            shell32.SHGetKnownFolderPath.argtypes = [ctypes.c_void_p, wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)]
+            if shell32.SHGetKnownFolderPath(raw, 0, None, ctypes.byref(out)) == 0 and out.value:
+                path = Path(out.value)
+                ctypes.windll.ole32.CoTaskMemFree(out)
+                return label, path
+        except Exception as exc:
+            log.debug("Bekannter Ordner %s: %s", name, exc)
+    return label, Path.home() / _ENGLISH_FOLDERS.get(label, label)
+
+
+def open_folder(name: str) -> str:
+    label, path = known_folder(name)
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    os.startfile(str(path))  # type: ignore[attr-defined]
+    return f"{label} ist offen."
+
+
 def windows_path(path: str) -> Path:
     """Nimmt auch Pfade aus Git Bash ("/c/Users/...") und mit %USERPROFILE% oder ~."""
     path = path.strip().strip('"')
@@ -214,33 +269,124 @@ def to_recycle_bin(path: str) -> str:
     return f"In den Papierkorb verschoben: {target}"
 
 
-def install(package_id: str, wait_seconds: float = 100) -> str:
-    """Installiert mit winget. Dauert es länger als `wait_seconds`, läuft winget im
-    Hintergrund weiter (Claude bricht Befehle nach etwa zwei Minuten ab)."""
+def install(target: str, wait_seconds: float = 100) -> str:
+    """Installiert mit winget (Name wie "spotify" oder winget-ID). Dauert es länger als
+    `wait_seconds`, läuft winget im Hintergrund weiter (Claude bricht Befehle nach etwa
+    zwei Minuten ab)."""
+    from . import apps
+
     if os.name != "nt":
         raise PcError("Das geht nur unter Windows.")
-    log_file = Path(tempfile.gettempdir()) / "jarvis-installieren.log"
-    flags = NO_WINDOW | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    with open(log_file, "w", encoding="utf-8", errors="replace") as out:
-        proc = subprocess.Popen(
-            [
-                "winget", "install", "--id", package_id, "-e",
-                "--accept-package-agreements", "--accept-source-agreements",
-            ],
-            stdout=out,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            creationflags=flags,
-        )
+    result: dict = {}
+
+    def work() -> None:
         try:
-            code = proc.wait(timeout=wait_seconds)
-        except subprocess.TimeoutExpired:
-            return f"Die Installation von {package_id} läuft noch im Hintergrund und ist gleich fertig."
-    text = log_file.read_text(encoding="utf-8", errors="replace")
-    tail = [line.strip() for line in text.splitlines() if line.strip()][-3:]
-    if code != 0:
-        raise PcError("Installation fehlgeschlagen: " + " ".join(tail))
-    return f"{package_id} ist installiert."
+            result["text"] = apps.install(target)
+        except Exception as exc:
+            result["error"] = exc
+
+    worker = threading.Thread(target=work, name="jarvis-installieren", daemon=False)
+    worker.start()
+    worker.join(wait_seconds)
+    if worker.is_alive():
+        return f"Die Installation von {target} läuft noch und ist gleich fertig."
+    if "error" in result:
+        raise PcError(str(result["error"]))
+    return result["text"]
+
+
+# Befehle, die auch mit Administratorrechten erst nach Georgs Ja laufen.
+DESTRUCTIVE = re.compile(
+    r"\b(remove-item|ri|rm|rmdir|rd|del|erase|clear-recyclebin|format-volume|format(?!-)|clear-disk|"
+    r"initialize-disk|remove-partition|diskpart|stop-computer|restart-computer|shutdown|logoff|"
+    r"remove-itemproperty|remove-appxpackage|remove-appxprovisionedpackage|uninstall-package|"
+    r"disable-windowsoptionalfeature|bcdedit|vssadmin|takeown|cipher|winget\s+uninstall|msiexec)\b"
+    r"|reg(?:\.exe)?\s+delete|icacls\s.*/(?:remove|deny)",
+    re.I,
+)
+
+
+def needs_confirmation(command: str) -> bool:
+    return bool(DESTRUCTIVE.search(command))
+
+
+def run_admin(command: str, timeout: float = 300) -> str:
+    """Führt einen PowerShell-Befehl mit Administratorrechten aus. Windows zeigt dafür
+    die übliche Abfrage (UAC), Georg klickt einmal auf Ja. Gibt die Ausgabe zurück."""
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    import ctypes
+    import uuid
+    from ctypes import wintypes
+
+    tag = uuid.uuid4().hex[:8]
+    temp = Path(tempfile.gettempdir())
+    script = temp / f"jarvis-admin-{tag}.ps1"
+    output = temp / f"jarvis-admin-{tag}.txt"
+    out = str(output).replace("'", "''")
+    script.write_text(
+        "$ErrorActionPreference = 'Continue'\r\n"
+        "$code = 0\r\n"
+        "try {\r\n"
+        f"  & {{ {command} }} *>&1 | Out-File -FilePath '{out}' -Encoding utf8 -Width 400\r\n"
+        "  if ($LASTEXITCODE) { $code = $LASTEXITCODE }\r\n"
+        "} catch {\r\n"
+        f"  $_ | Out-File -FilePath '{out}' -Encoding utf8 -Append\r\n"
+        "  $code = 1\r\n"
+        "}\r\n"
+        "exit $code\r\n",
+        encoding="utf-8-sig",
+    )
+
+    class ShellExecuteInfo(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", wintypes.DWORD),
+            ("fMask", ctypes.c_ulong),
+            ("hwnd", wintypes.HWND),
+            ("lpVerb", wintypes.LPCWSTR),
+            ("lpFile", wintypes.LPCWSTR),
+            ("lpParameters", wintypes.LPCWSTR),
+            ("lpDirectory", wintypes.LPCWSTR),
+            ("nShow", ctypes.c_int),
+            ("hInstApp", wintypes.HINSTANCE),
+            ("lpIDList", ctypes.c_void_p),
+            ("lpClass", wintypes.LPCWSTR),
+            ("hkeyClass", wintypes.HKEY),
+            ("dwHotKey", wintypes.DWORD),
+            ("hIconOrMonitor", wintypes.HANDLE),
+            ("hProcess", wintypes.HANDLE),
+        ]
+
+    info = ShellExecuteInfo()
+    info.cbSize = ctypes.sizeof(info)
+    info.fMask = 0x40  # SEE_MASK_NOCLOSEPROCESS
+    info.lpVerb = "runas"
+    info.lpFile = "powershell.exe"
+    info.lpParameters = f'-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "{script}"'
+    info.nShow = 0  # SW_HIDE
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    try:
+        if not shell32.ShellExecuteExW(ctypes.byref(info)):
+            if ctypes.get_last_error() == 1223:  # ERROR_CANCELLED
+                raise PcError("Georg hat die Administrator-Abfrage abgelehnt.")
+            raise PcError(f"Administratorrechte gingen nicht (Fehler {ctypes.get_last_error()}).")
+        if kernel32.WaitForSingleObject(info.hProcess, int(timeout * 1000)) != 0:
+            raise PcError("Der Befehl mit Administratorrechten läuft noch.")
+        code = wintypes.DWORD()
+        kernel32.GetExitCodeProcess(info.hProcess, ctypes.byref(code))
+        kernel32.CloseHandle(info.hProcess)
+        text = output.read_text(encoding="utf-8-sig", errors="replace").strip() if output.exists() else ""
+        text = text[-1500:]
+        if code.value != 0:
+            raise PcError(f"Mit Administratorrechten fehlgeschlagen (Code {code.value}): {text}")
+        return text or "Erledigt (mit Administratorrechten)."
+    finally:
+        for path in (script, output):
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
 
 def _run(cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess:

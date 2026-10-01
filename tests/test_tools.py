@@ -244,11 +244,45 @@ class ToolTest(unittest.TestCase):
             self.assertEqual(pc.set_volume(150), "Lautstärke auf 100 Prozent.")
             self.assertEqual(press.call_args_list[-1], mock.call("volume up", 50))
 
-    def test_install_needs_a_yes(self):
-        with mock.patch("jarvis.pc.install", return_value="ok") as install:
-            self.assertEqual(run_tool("installieren", "Spotify.Spotify", said="Installier Spotify")[0], 3)
-            self.assertEqual(run_tool("installieren", "Spotify.Spotify", said="Jarvis, ja bitte")[0], 0)
-            install.assert_called_once_with("Spotify.Spotify")
+    def test_install_runs_without_asking(self):
+        with mock.patch("jarvis.pc.install", return_value="Spotify ist installiert.") as install:
+            code, out = run_tool("installieren", "spotify", said="Installier Spotify")
+        self.assertEqual((code, out.strip()), (0, "Spotify ist installiert."))
+        install.assert_called_once_with("spotify")
+
+    def test_uninstall_needs_a_yes(self):
+        with mock.patch("jarvis.apps.uninstall", return_value="ok") as uninstall:
+            self.assertEqual(run_tool("deinstallieren", "Spotify.Spotify", said="Deinstallier Spotify")[0], 3)
+            uninstall.assert_not_called()
+            self.assertEqual(run_tool("deinstallieren", "Spotify.Spotify", said="Jarvis, ja bitte")[0], 0)
+            uninstall.assert_called_once_with("Spotify.Spotify")
+
+    def test_admin_asks_only_for_destructive_commands(self):
+        with mock.patch("jarvis.pc.run_admin", return_value="Erledigt.") as admin:
+            code, _ = run_tool("admin", "Set-Service spooler -StartupType Manual", said="Stell den Druckdienst um")
+            self.assertEqual(code, 0)
+            code, out = run_tool("admin", "Remove-Item C:\\Temp\\alt -Recurse", said="Räum den Temp-Ordner auf")
+            self.assertEqual(code, 3)
+            self.assertIn("Frag Georg zuerst", out)
+            self.assertEqual(admin.call_count, 1)
+            code, _ = run_tool("admin", "Remove-Item C:\\Temp\\alt -Recurse", said="Ja, mach das.")
+            self.assertEqual(code, 0)
+            self.assertEqual(admin.call_count, 2)
+
+    def test_open_and_close_programs(self):
+        with mock.patch("jarvis.apps.open_app", return_value="Spotify startet.") as open_app:
+            code, out = run_tool("oeffnen", "spotify")
+        self.assertEqual((code, out.strip()), (0, "Spotify startet."))
+        open_app.assert_called_once_with("spotify")
+        from jarvis import apps
+
+        with mock.patch("jarvis.apps.open_app", side_effect=apps.AppNotFound("Zauberei finde ich nicht im Startmenü.")):
+            code, out = run_tool("oeffnen", "Zauberei")
+        self.assertEqual(code, 1)
+        self.assertIn("programme", out)
+        with mock.patch("jarvis.apps.close_app", return_value="Discord ist zu.") as close_app:
+            self.assertEqual(run_tool("schliessen", "discord")[1].strip(), "Discord ist zu.")
+        close_app.assert_called_once_with("discord")
 
     def test_confirmation_words(self):
         for said in ("Ja", "Ja, bitte.", "Jawohl", "Okay, mach.", "Mach das", "Los!", "Genau", "Jaja", "Na klar.",

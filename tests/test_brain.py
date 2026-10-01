@@ -225,7 +225,7 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertIn("Kontingent", ctx.exception.spoken)
         with self.assertRaises(LoginError) as ctx:
             self.brain.ask("login")
-        self.assertIn("anmelden", ctx.exception.spoken)
+        self.assertIn("angemeldet", ctx.exception.spoken)
         # Kein Modellwechsel bei solchen Fehlern.
         self.assertEqual(self.brain.model, "sonnet")
 

@@ -80,13 +80,78 @@ _RULES: list[tuple[str, re.Pattern]] = [
         r"^((musik|wiedergabe|lied|song|video) (pause|pausieren|anhalten|stoppen|stopp|stop|aus)|pause|"
         r"(mach|schalt) die musik aus|(stopp|stop|pausiere) die musik|halt die musik an)$"
     )),
-    ("media_play", re.compile(r"^((musik|wiedergabe) (weiter|fortsetzen|abspielen)|weiter abspielen|play)$")),
+    ("media_play", re.compile(
+        r"^((musik|wiedergabe) (weiter|fortsetzen|abspielen)|weiter abspielen|play|"
+        r"(spiel|spiele) (die |etwas |wieder )?musik( ab| weiter)?)$"
+    )),
     ("media_next", re.compile(r"^(nächstes (lied|stück|video|titel)|nächster (song|titel)|skip|überspringen)$")),
     ("media_prev", re.compile(r"^((vorheriges|voriges|letztes) (lied|stück|video)|(vorheriger|voriger) (song|titel))$")),
 ]
 
+# Füllwörter vor einem Programmnamen: "Öffne mir mal kurz den Spotify"
+_FILL = r"(?:(?:den|die|das|dem|der|mein|meine|meinen|mir|uns|kurz|schnell|gleich|noch|einmal|wieder|bitte|mal) )*"
+# "Gaming-Modus", "Gaming Mode", "Gamingmodus", "Spielemodus"
+_GAMING = r"(?:gaming|gamer|game|spiele|spiel)[ -]?(?:modus|mode)"
+_ASK = r"(?:(?:kannst|könntest|würdest) du |sei so gut und )?"
+
+_RULES += [
+    ("gaming_off", re.compile(
+        rf"^{_ASK}(?:(?:mach|mache|schalt|schalte|stell|stelle) )?(?:den )?{_GAMING} "
+        r"(?:aus|ab|beenden|deaktivieren|ausschalten|off)$|"
+        rf"^(?:beende|beend|deaktiviere|deaktivier|stopp|stoppe) (?:den )?{_GAMING}$"
+    )),
+    ("gaming_on", re.compile(
+        rf"^{_ASK}(?:(?:mach|mache|schalt|schalte|aktivier|aktiviere|starte|start|stell|stelle) )?(?:den )?{_GAMING}"
+        r"(?: (?:an|ein|aktivieren|einschalten|starten|on))?$"
+    )),
+    ("window_show", re.compile(
+        r"^(?:zeig|zeige) dich$|^(?:komm|komme) (?:raus|nach vorne|her)$|"
+        r"^(?:öffne|zeig|zeige) (?:mir )?(?:dein|das|dein jarvis|das jarvis)[ -]?fenster$|"
+        r"^(?:jarvis[ -]?)?fenster (?:öffnen|zeigen|auf)$"
+    )),
+    ("window_hide", re.compile(
+        r"^(?:versteck|verstecke|minimier|minimiere) dich$|^(?:geh|gehe) in den hintergrund$|"
+        r"^(?:schließ|schließe|schliess|schliesse|versteck|verstecke|minimier|minimiere) (?:dein|das) fenster$|"
+        r"^(?:dein )?fenster (?:zu|schließen|verstecken|minimieren)$"
+    )),
+    ("setup", re.compile(
+        r"^(?:öffne|zeig|zeige) (?:mir )?(?:deine|die jarvis)[ -]?einstellungen$|"
+        r"^(?:öffne|starte) (?:die )?einrichtung$|^einrichtung (?:öffnen|starten)$"
+    )),
+    ("lock", re.compile(
+        r"^(?:sperr|sperre) (?:den |meinen )?(?:pc|computer|rechner|bildschirm)$|"
+        r"^(?:pc|computer|rechner|bildschirm) sperren$"
+    )),
+    ("folder", re.compile(
+        r"^(?:öffne|zeig|zeige) (?:mir )?(?:den |meinen |meine |die )?(?:ordner )?"
+        r"(downloads|download|dokumente|bilder|fotos|desktop|musik|videos)(?: ordner)?$"
+    )),
+    ("install", re.compile(
+        rf"^{_ASK}(?:installiere|installier|instaliere|installieren) {_FILL}(.+?)(?: (?:herunter|runter))?$|"
+        rf"^{_ASK}(?:lade|lad|hol|hole) {_FILL}(.+?) (?:herunter|runter|aus dem internet)$|"
+        rf"^{_ASK}{_FILL}(.+?) (?:installieren|herunterladen|runterladen)$"
+    )),
+    ("close", re.compile(
+        rf"^{_ASK}(?:schließe|schließ|schliesse|schliess|beende|beend) {_FILL}(.+?)$|"
+        rf"^{_ASK}{_FILL}(.+?) (?:schließen|schliessen|beenden|zumachen)$|"
+        rf"^(?:mach|mache) {_FILL}(.+?) (?:zu|aus)$"
+    )),
+    ("open", re.compile(
+        rf"^{_ASK}(?:öffne|öffnen|starte|start|launche|ruf|rufe) {_FILL}(.+?)(?: (?:auf|für mich))?$|"
+        rf"^{_ASK}{_FILL}(.+?) (?:öffnen|starten|aufmachen|aufrufen)$|"
+        rf"^(?:mach|mache) {_FILL}(.+?) auf$|"
+        rf"^(?:zeig|zeige) mir {_FILL}(.+?)$"
+    )),
+    # "Mach Spotify an" nur für bekannte Programme, sonst ist es eher das Licht.
+    ("open_known", re.compile(rf"^(?:mach|mache|schalt|schalte) {_FILL}(.+?) an$")),
+]
+
 # Bei Fragen ("Ist das Mikrofon aus?") nie stummschalten oder das Gespräch löschen.
-_NOT_FOR_QUESTIONS = {"mute", "reset"}
+_NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off"}
+# Diese Absichten bekommen den Namen des Programms oder Ordners mit.
+_WITH_NAME = {"install", "close", "open", "open_known", "folder"}
+# Wörter, die kein Programmname sind ("Öffne es", "Schließ das")
+_NOT_A_NAME = {"es", "das", "ihn", "sie", "alles", "dich", "mich", "den", "die", "das fenster", "fenster"}
 
 
 def match(text: str) -> Intent | None:
@@ -101,6 +166,17 @@ def match(text: str) -> Intent | None:
         if found:
             if name == "volume_set":
                 return Intent(name, str(min(int(found.group(1)), 100)))
+            if name in _WITH_NAME:
+                arg = next((g for g in found.groups() if g), "").strip()
+                if not arg or arg in _NOT_A_NAME or re.search(r"\b(?:und|oder|dann|danach)\b", arg):
+                    continue  # mehrere Dinge auf einmal: das kann Claude besser
+                if name == "open_known":
+                    from .apps import find_known
+
+                    if find_known(arg) is None:
+                        continue
+                    name = "open"
+                return Intent(name, arg)
             return Intent(name)
     return None
 

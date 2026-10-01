@@ -46,11 +46,16 @@ class Assistant:
         self._follow_up = False
         # Die Stumm-Taste, die wirklich angemeldet werden konnte (setzt __main__).
         self.hotkey = ""
+        # Vom Fenster gesetzt: "show"/"hide" zeigt oder versteckt es, open_setup öffnet die Einstellungen.
+        self.window_control = None
+        self.open_setup = None
+        self.gaming = False
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
-        if brain is not None and hasattr(brain, "notice"):
-            brain.notice = lambda text: self.ui.message("info", text)
+        if brain is not None and hasattr(brain, "alert"):
+            # Zwischenstände des Gehirns bleiben im Protokoll, nur Wichtiges kommt als Hinweis.
+            brain.alert = lambda text: (log.warning("%s", text), self.ui.toast(text, "error"))
 
     # ------------------------------------------------------------------ Zustand
 
@@ -180,6 +185,8 @@ class Assistant:
         return answer
 
     def _local_answer(self, text: str) -> str | None:
+        """Erledigt schnelle Befehle selbst. None = Claude soll es machen,
+        "" = erledigt, ohne etwas zu sagen."""
         intent = intents.match(text)
         if intent is None:
             return None
@@ -201,6 +208,17 @@ class Assistant:
             if self.brain is not None:
                 self.brain.new_conversation()
             return "Sehr wohl, Sir. Wir fangen von vorne an."
+        if name in ("window_show", "window_hide"):
+            if self.window_control is None or not self.window_control("show" if name == "window_show" else "hide"):
+                return "Ich habe gerade kein Fenster, Sir. Ich bin nur Stimme."
+            if name == "window_show":
+                return random.choice(["Hier bin ich, Sir.", "Zu Ihren Diensten, Sir.", "Bitte sehr, Sir."])
+            return random.choice(["Ich ziehe mich zurück, Sir. Rufen Sie einfach.", "Sehr wohl. Ich bin im Hintergrund."])
+        if name == "setup":
+            if self.open_setup is None:
+                return None
+            threading.Timer(1.5, self.open_setup).start()
+            return "Die Einstellungen öffnen sich, Sir."
         if not self._local:
             return None
         now = dt.datetime.now()
@@ -229,10 +247,92 @@ class Assistant:
             if name == "media_prev":
                 pc.media("voriges")
                 return ""
+            if name in ("gaming_on", "gaming_off"):
+                return self._gaming(name == "gaming_on")
+            if name == "lock":
+                pc.lock()
+                return "Gesperrt, Sir."
+            if name == "folder":
+                return pc.open_folder(intent.arg).replace(" ist offen.", " ist offen, Sir.")
+            if name in ("open", "close", "install"):
+                return self._app(name, intent.arg)
         except Exception as exc:
             log.info("Schneller Befehl %s ging nicht (%s), frage Claude.", name, exc)
             return None
         return None
+
+    def _app(self, action: str, target: str) -> str | None:
+        """Programme öffnen, schließen und installieren. None = Claude soll es versuchen."""
+        from . import apps
+
+        if action == "open":
+            try:
+                said = apps.open_app(target)
+            except apps.AppNotFound:
+                return None
+            if said.endswith(" startet."):
+                name = said.removesuffix(" startet.")
+                return random.choice([f"{name} startet, Sir.", f"Sehr wohl, {name} kommt.", f"{name}, kommt sofort."])
+            return said.replace(" ist offen.", " ist offen, Sir.")
+        if action == "close":
+            try:
+                said = apps.close_app(target)
+            except apps.AppNotFound:
+                return None
+            return said.replace(" ist zu.", " ist zu, Sir.")
+        known = apps.find_known(target)
+        if known is None or not known.winget:
+            return None  # Claude sucht die passende winget-ID
+        self.ui.message("info", f"Installiere {known.name} ...")
+        threading.Thread(target=self._install, args=(known,), name="jarvis-installieren", daemon=True).start()
+        return random.choice([
+            f"Ich installiere {known.name}, Sir. Einen Moment.",
+            f"Sehr wohl. {known.name} wird installiert, ich sage Bescheid.",
+        ])
+
+    def _install(self, known) -> None:
+        from . import apps
+
+        try:
+            said = apps.install(known.name)
+        except Exception as exc:
+            log.warning("Installation von %s: %s", known.name, exc)
+            self.announce(f"{known.name} ließ sich leider nicht installieren, Sir. Einzelheiten stehen im Protokoll.")
+            return
+        try:
+            apps.open_app(known.name)
+            started = True
+        except Exception:
+            started = False
+        if "schon installiert" in said:
+            self.announce(f"{known.name} war schon installiert, Sir." + (" Ich habe es gestartet." if started else ""))
+        else:
+            self.announce(f"{known.name} ist installiert, Sir." + (" Es startet gerade." if started else ""))
+
+    def _gaming(self, on: bool) -> str:
+        from . import pc
+
+        try:
+            pc.gaming_mode(on, self._cfg.get("gaming", {}))
+        except Exception as exc:
+            log.info("Gaming-Modus: %s", exc)
+        self.set_gaming(on)
+        if on:
+            return "Gaming-Modus aktiv, Sir. Volle Leistung, und ich halte mich im Hintergrund. Viel Erfolg."
+        return "Gaming-Modus beendet, Sir. Willkommen zurück."
+
+    def set_gaming(self, on: bool) -> None:
+        """Im Gaming-Modus läuft Jarvis mit niedriger Priorität und ohne Einblendungen."""
+        self.gaming = on
+        try:
+            import psutil
+
+            proc = psutil.Process()
+            if hasattr(psutil, "BELOW_NORMAL_PRIORITY_CLASS"):
+                proc.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS if on else psutil.NORMAL_PRIORITY_CLASS)
+        except Exception as exc:
+            log.debug("Priorität: %s", exc)
+        self.ui.config(gaming=on)
 
     def _ask_claude(self, text: str, speak: bool) -> str:
         if self.brain is None:
@@ -322,14 +422,14 @@ class Assistant:
 
 def _short_reason(exc: BrainError) -> str:
     return {
-        "refusal": "Claude hat abgelehnt (alle Modelle).",
-        "limit": "Claude-Kontingent aufgebraucht.",
-        "login": "Claude Code ist nicht angemeldet.",
-        "network": "Keine Verbindung zu Claude.",
-        "overloaded": "Claude ist überlastet.",
-        "timeout": "Claude hat zu lange gebraucht.",
-        "missing": "Claude Code nicht gefunden.",
-        "model": "Kein Claude-Modell verfügbar.",
-        "account": "Claude-Konto meldet ein Problem (claude.ai).",
-        "billing": "Claude rechnet über einen API-Schlüssel ab statt über das Abo.",
-    }.get(exc.kind, "Claude meldet: " + (str(exc).strip().splitlines() or ["Fehler"])[0][:160])
+        "refusal": "Das wurde abgelehnt, auch mit den anderen Modellen.",
+        "limit": "Das Claude-Kontingent ist gerade aufgebraucht.",
+        "login": "Nicht angemeldet. Einstellungen > Gehirn hilft.",
+        "network": "Keine Internetverbindung.",
+        "overloaded": "Gerade überlastet, gleich nochmal versuchen.",
+        "timeout": "Hat zu lange gedauert.",
+        "missing": "Claude Code fehlt. Einstellungen > Gehirn hilft.",
+        "model": "Gerade kein Modell erreichbar.",
+        "account": "Das Claude-Konto meldet ein Problem (claude.ai).",
+        "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
+    }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])

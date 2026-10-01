@@ -46,11 +46,24 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 3
+CONFIG_VERSION = 4
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
     3: [("tts", "rate", "+5%", "-5%"), ("tts", "pitch", "-4Hz", "-8Hz")],
+    # Jarvis 2: Satzende per Sprach-KI erkannt (schneller), läuft im Hintergrund weiter,
+    # wenn das Fenster zugeht, und das größere Fenster.
+    4: [
+        ("listen", "silence_seconds", 0.9, 0.7),
+        ("gui", "close_to_tray", False, True),
+        ("gui", "width", 1200, 1280),
+        ("gui", "height", 780, 800),
+    ],
+}
+# Einträge, die aus Listen in einer älteren config.toml verschwinden (Version, Abschnitt, Schlüssel, Einträge).
+# Jarvis 2 darf Programme ohne Nachfrage installieren.
+_LIST_REMOVALS = {
+    4: [("brain", "disallowed_tools", ("Bash(winget install:*)", "PowerShell(winget install:*)"))],
 }
 
 
@@ -69,9 +82,18 @@ def upgrade_config(path: Path | None = None) -> list[str]:
     changed = []
     for target in range(version + 1, CONFIG_VERSION + 1):
         for section, key, old, new in _UPGRADES.get(target, []):
-            if (data.get(section) or {}).get(key) == old:
+            current = (data.get(section) or {}).get(key)
+            if current == old and type(current) is type(old):
                 save_setting(section, key, new, path)
+                data.setdefault(section, {})[key] = new  # spätere Stufen bauen darauf auf
                 changed.append(f"{section}.{key} = {new}")
+        for section, key, items in _LIST_REMOVALS.get(target, []):
+            current = (data.get(section) or {}).get(key)
+            if isinstance(current, list) and any(item in current for item in items):
+                kept = [item for item in current if item not in items]
+                save_setting(section, key, kept, path)
+                data[section][key] = kept
+                changed.append(f"{section}.{key}: ohne {', '.join(items)}")
     save_setting("intern", "config_version", CONFIG_VERSION, path)
     return changed
 
@@ -123,8 +145,34 @@ def save_setting(section: str, key: str, value, path: Path | None = None) -> Non
         )
         for i in range(start + 1, end):
             if lines[i].split("=", 1)[0].strip() == key and not lines[i].lstrip().startswith("#"):
-                lines[i] = new_line
+                # Eine Liste kann über mehrere Zeilen gehen: alle ersetzen.
+                last = _value_end(lines, i)
+                lines[i:last + 1] = [new_line]
                 break
         else:
             lines.insert(start + 1, new_line)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _value_end(lines: list[str], first: int) -> int:
+    """Die letzte Zeile des Werts, der in Zeile `first` beginnt (bei mehrzeiligen Listen)."""
+    depth = 0
+    quote = ""
+    for i in range(first, len(lines)):
+        line = lines[i] if i > first else lines[i].split("=", 1)[1]
+        for ch in line:
+            if quote:
+                if ch == quote:
+                    quote = ""
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "#":
+                break
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+        quote = ""
+        if depth <= 0:
+            return i
+    return first

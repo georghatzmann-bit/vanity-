@@ -251,7 +251,7 @@ class BrainFixesTest(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 1.5)
 
     def test_new_conversation_during_an_answer_stays_new(self):
-        def run(cmd, text, on_text):
+        def run(cmd, text, on_text, prompt=None):
             self.brain.new_conversation()  # Knopf gedrückt, während Claude noch schreibt
             return Run({"type": "result", "subtype": "success", "result": "Hallo", "session_id": "alt"}, "", True, "sonnet")
 
