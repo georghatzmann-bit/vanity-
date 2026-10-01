@@ -240,6 +240,25 @@ class SentenceTest(unittest.TestCase):
         for text in ("Max hat am 33. Mai Geburtstag", "Georg spielt gern Valorant.", "Max hat Geburtstag"):
             self.assertIsNone(parse_birthday(text), text)
 
+    def test_birthdays_of_relatives_and_names_with_s(self):
+        # Vorher: "Soll ich Vaters auf Discord gratulieren?", "heute hat Ihrem Bruder Tom Geburtstag", "Luka", "Klau"
+        cases = {
+            "Der Geburtstag meines Vaters ist am 4. April": ("Ihr Vater", ""),
+            "Der Geburtstag meiner Mutter ist am 4. April": ("Ihre Mutter", ""),
+            "Der Geburtstag von meinem Bruder Tom ist am 4. April": ("Ihr Bruder Tom", "Tom"),
+            "Der Geburtstag meines besten Freundes Lukas ist am 4. April": ("Ihr bester Freund Lukas", "Lukas"),
+            "Meines Bruders Geburtstag ist am 4. April": ("Ihr Bruder", ""),
+            "Lukas Geburtstag ist am 4. April": ("Lukas", "Lukas"),
+            "Lukas' Geburtstag ist am 4. April": ("Lukas", "Lukas"),
+            "Klaus Geburtstag ist am 4. April": ("Klaus", "Klaus"),
+            "Toms Geburtstag ist am 4. April": ("Tom", "Tom"),
+            "Meine beste Freundin Lea hat am 4. April Geburtstag": ("Ihre beste Freundin Lea", "Lea"),
+        }
+        for text, expected in cases.items():
+            found = parse_birthday(text)
+            self.assertEqual((found["shown"], found["name"], found["month"], found["day"]), (*expected, 4, 4), text)
+        self.assertTrue(parse_birthday("Der Geburtstag von mir ist am 5. Juni")["own"])
+
     def test_recall(self):
         for said in ("Was weißt du über mich?", "Jarvis, was weißt du eigentlich alles über mich", "Was hast du dir gemerkt?",
                      "Welche Gewohnheiten habe ich?", "Was kennst du denn für Gewohnheiten?"):

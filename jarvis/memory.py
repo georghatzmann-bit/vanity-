@@ -517,7 +517,7 @@ _DATE = (r"(?P<day>\d{1,2})\.?\s*(?:(?P<month>\d{1,2})\.?(?:\s*(?P<year>(?:19|20
 _BIRTHDAY = [re.compile(pattern, re.I) for pattern in (
     rf"^(?P<who>.+?)\s+(?:hat|haben|hab|habe)\s+(?:am\s+)?{_DATE}\s+(?:seinen\s+|ihren\s+|meinen\s+)?geburtstag\b",
     rf"^(?P<who>.+?)\s+(?:hat|haben|hab|habe)\s+(?:seinen\s+|ihren\s+|meinen\s+)?geburtstag\s+am\s+{_DATE}",
-    rf"^(?:der\s+)?geburtstag\s+(?:von|meines|meiner)\s+(?P<who>.+?)\s+ist\s+am\s+{_DATE}",
+    rf"^(?:der\s+)?geburtstag\s+(?:von\s+)?(?P<who>.+?)\s+ist\s+am\s+{_DATE}",
     rf"^(?P<who>.+?)\s+geburtstag\s+ist\s+am\s+{_DATE}",
     rf"^(?P<who>.+?)\s+(?:ist|wurde|bin)\s+am\s+{_DATE}\s+geboren",
     rf"^am\s+{_DATE}\s+(?:hat|haben|hab|habe)\s+(?P<who>.+?)\s+(?:seinen\s+|ihren\s+|meinen\s+)?geburtstag$",
@@ -528,7 +528,27 @@ _RELATION = {
     "nachbar", "nachbarin", "neffe", "nichte", "enkel", "enkelin", "frau", "mann", "partner", "partnerin",
     "schwager", "schwägerin", "bester", "beste", "besten", "kleiner", "kleine", "großer", "große", "ex",
 }
-_OWNER = {"mein": "Ihr", "meine": "Ihre", "meinem": "Ihrem", "meiner": "Ihrer", "meines": "Ihres", "meinen": "Ihren"}
+# Jarvis sagt es immer als Subjekt ("Ihr Vater hat heute Geburtstag"), auch aus "meines Vaters" oder "von meinem Bruder"
+_OWNER = {"mein": "Ihr", "meine": "Ihre", "meinem": "Ihr", "meiner": "Ihre", "meines": "Ihr", "meinen": "Ihr"}
+# Namen, die selbst auf s enden: "Lukas Geburtstag ist am ..." ist Lukas, nicht Luka
+_S_NAMES = {
+    "andreas", "elias", "jonas", "lukas", "lucas", "matthias", "mathias", "niklas", "nicklas", "nikolas", "nicolas",
+    "thomas", "tobias", "mattis", "janis", "jannis", "hans", "jens", "lars", "nils", "niels", "mats", "chris",
+    "dennis", "boris", "louis", "carlos", "iris", "doris", "agnes", "ines",
+}
+
+
+def _relation(word: str, owner: str) -> str:
+    """Verwandte in der Grundform: "Vaters" -> "Vater", "Freundes" -> "Freund", "besten" -> "bester" nach "Ihr"."""
+    low = word.lower()
+    if low in ("besten", "kleinen", "großen"):
+        return word[:-1] + ("r" if owner == "Ihr" else "")
+    if low in _RELATION:
+        return word
+    for end in ("es", "s", "en", "n"):
+        if low.endswith(end) and low[:-len(end)] in _RELATION:
+            return word[:-len(end)]
+    return word
 
 
 def parse_birthday(text: str) -> dict | None:
@@ -554,16 +574,20 @@ def parse_birthday(text: str) -> dict | None:
         dt.date(2000, month, day)  # 2000 ist ein Schaltjahr: auch der 29. Februar ist gültig
     except ValueError:
         return None
-    who = found.group("who").strip(" ,'’")
+    said = found.group("who")
+    who = said.strip(" ,'’")
     words = who.split()
     if not words or len(words) > 5:
         return None
-    if who.lower().endswith("s") and len(words) == 1 and found.re is _BIRTHDAY[3]:
+    if (found.re is _BIRTHDAY[3] and len(words) == 1 and who.lower().endswith("s") and not said.endswith(("'", "’"))
+            and who.lower() not in _S_NAMES and not who.lower().endswith(("us", "ss"))):
         who = who[:-1]  # "Annas Geburtstag ist am ..."
         words = [who]
-    own = who.lower() in ("ich", "georg", "mein", "meiner")
-    shown = " ".join(_OWNER.get(w.lower(), w) if i == 0 else w for i, w in enumerate(words))
-    name = " ".join(w for w in words if w.lower() not in _OWNER and w.lower() not in _RELATION and w[:1].isupper())
+    own = who.lower() in ("ich", "georg", "mein", "meiner", "mir")
+    owner = _OWNER.get(words[0].lower(), "")
+    shown = " ".join(owner if i == 0 and owner else _relation(w, owner) for i, w in enumerate(words))
+    name = " ".join(w for w in words if w.lower() not in _OWNER and _relation(w, owner).lower() not in _RELATION
+                    and w[:1].isupper())
     return {"who": who, "shown": shown, "name": "" if own else name, "own": own, "month": month, "day": day,
             "year": int(year) if year else 0}
 
