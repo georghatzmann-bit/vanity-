@@ -73,5 +73,54 @@ class WorkshopTurnTest(unittest.TestCase):
                 self.assertTrue(is_continue_request(said))
 
 
+class MessageTurnTest(unittest.TestCase):
+    """Nachrichten gehen ohne Rückfrage raus: Ein Gruß an Jarvis darf keine werden."""
+
+    def test_greetings_and_asides_are_no_messages(self):
+        for said in ("Sag gute Nacht, Jarvis", "Sag Guten Morgen, Jarvis", "Sag nichts, ich denke nach",
+                     "Schreib in den Kanal allgemein, wer online ist"):
+            with self.subTest(said=said):
+                found = intents.match(said)
+                self.assertTrue(found is None or found.name != "message", found)
+        found = intents.match("Schreib in den Kanal allgemein: Wer ist online?")
+        self.assertEqual((found.name, found.data["text"]), ("message", "Wer ist online?"))
+        self.assertEqual(intents.match("Sag Max, dass ich gleich komme").data["text"], "Ich komme gleich")
+        self.assertNotEqual(intents.match("Öffne den Server Ordner").name, "discord")
+
+
+class PowerAbortTest(unittest.TestCase):
+    """Jarvis sagt "Ein Abbrechen hält mich auf": das muss auch über den echten Weg klappen
+    (Sprache und Tippen gehen über submit, und "Abbrechen"/"Stopp" wird dort sofort erledigt)."""
+
+    def test_saying_stop_during_the_countdown_keeps_the_pc_on(self):
+        from unittest import mock
+
+        from jarvis import pc
+        from tests.test_assistant import FakeBrain, make
+
+        for said in ("Abbrechen", "Stopp", "Jarvis, stopp!"):
+            with self.subTest(said=said):
+                assistant, ui, _speaker, _ = make(FakeBrain())
+                with mock.patch.object(pc, "power", return_value="ok"), \
+                        mock.patch.object(pc, "power_pending", return_value=False):
+                    assistant.handle("Fahr den PC herunter")
+                with mock.patch.object(pc, "power_abort", return_value=True) as abort:
+                    assistant.submit(said)
+                abort.assert_called_once()
+                self.assertIn("Der PC bleibt an", " ".join(str(e) for e in ui.events))
+
+    def test_stop_without_a_countdown_does_not_touch_windows(self):
+        from unittest import mock
+
+        from jarvis import pc
+        from tests.test_assistant import FakeBrain, make
+
+        assistant, _ui, _speaker, _ = make(FakeBrain())
+        with mock.patch.object(pc, "power_pending", return_value=False), \
+                mock.patch.object(pc, "power_abort") as abort:
+            assistant.submit("Stopp")
+        abort.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

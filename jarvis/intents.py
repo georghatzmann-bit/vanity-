@@ -268,6 +268,8 @@ _NOT_A_PERSON = {
     "hallo", "hi", "danke", "ja", "nein", "so", "jetzt", "gleich", "sofort", "nur", "auch", "endlich",
     "lieber", "wieder", "wer", "wie", "wo", "warum", "wann", "welche", "welcher", "welches", "code",
     "einem", "einer", "kein", "keine", "noch", "zuerst", "dann", "danach", "lass", "uns",
+    # "Sag gute Nacht, Jarvis", "Sag nichts, ich denke nach"
+    "gute", "guten", "gutes", "nichts", "nix", "servus", "tschüss", "tschau",
 }
 # Text, der mit einem Relativwort anfängt, ist keine Nachricht ("Schreib Python-Code, der ...")
 _NOT_A_TEXT = re.compile(r"^(?:der|die|den|dem|welche|welcher|welches|wo|womit|was)\b", re.I)
@@ -281,7 +283,9 @@ def _message_text(body: str) -> str | None:
         from .messaging import direct_speech
 
         return direct_speech(body)
-    if re.match(r"(?:ob|wann|wo|wie|warum|weil)\b", body, re.I) or _NOT_A_TEXT.match(body):
+    # "..., wer online ist" ist indirekt (Claude formuliert es um), "Wer ist online?" schon die Nachricht
+    question = body.endswith("?") and not re.match(r"(?:ob|weil)\b", body, re.I)
+    if (not question and re.match(r"(?:ob|wann|wo|wie|warum|weil|wer)\b", body, re.I)) or _NOT_A_TEXT.match(body):
         return None
     return body or None
 
@@ -348,7 +352,8 @@ _DISCORD: list[tuple[str, re.Pattern]] = [
         r"^discord\s+(?:stumm|mute|unmute|entstummen|mikro aus|mikro an|mikrofon aus|mikrofon an)$|"
         r"^(?:mute|unmute|entstumme)(?:\s+mich)?(?:\s+(?:in|auf|bei))?\s+discord$")),
 ]
-_DISCORD_NOT_A_TARGET = {"es", "das", "den", "die", "der", "dem", "ihn", "sie", "mich", "dich"}
+_DISCORD_NOT_A_TARGET = {"es", "das", "den", "die", "der", "dem", "ihn", "sie", "mich", "dich",
+                         "ordner", "einstellungen", "log", "logs", "konsole"}
 
 
 def match_discord(text: str) -> Intent | None:

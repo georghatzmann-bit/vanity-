@@ -137,6 +137,9 @@ class Assistant:
             # Sofort, nicht erst nach der laufenden Antwort (die hängt sonst davor in der Schlange).
             self.ui.message("user", text)
             self.stop()
+            # "Ein Abbrechen hält mich auf": auch ein laufendes Herunterfahren
+            if self.abort_power():
+                self.announce("Abgebrochen, Sir. Der PC bleibt an.")
             self.update_state()
             return
         if self._worker is None or not self._worker.is_alive():
@@ -291,12 +294,8 @@ class Assistant:
         if name in ("stop", "power_abort"):
             if self.speaker is not None:
                 self.speaker.stop()
-            if self._power_pending():
-                from . import pc
-
-                self._power_until = 0.0
-                if pc.power_abort():
-                    return "Abgebrochen, Sir. Der PC bleibt an."
+            if self.abort_power():
+                return "Abgebrochen, Sir. Der PC bleibt an."
             return "" if name == "stop" else None
         if name == "mute" and self.mute is not None:
             self.mute.mute()
@@ -718,6 +717,19 @@ class Assistant:
 
             return pc.power_pending()  # auch, wenn das Gehirn es geplant hat
         except Exception:
+            return False
+
+    def abort_power(self) -> bool:
+        """Hält ein geplantes Herunterfahren, einen Neustart o. Ä. auf. True, wenn etwas lief."""
+        if not self._power_pending():
+            return False
+        from . import pc
+
+        self._power_until = 0.0
+        try:
+            return pc.power_abort()
+        except Exception as exc:
+            log.warning("Herunterfahren ließ sich nicht aufhalten: %s", exc)
             return False
 
     def _power(self, action: str) -> str | None:

@@ -116,6 +116,10 @@ class Api:
 
     def stop(self) -> None:
         self._assistant.stop()
+        # Der Stopp-Knopf hält auch ein angekündigtes Herunterfahren auf.
+        abort = getattr(self._assistant, "abort_power", None)
+        if abort is not None and abort():
+            self._assistant.announce("Abgebrochen, Sir. Der PC bleibt an.")
 
     def listen_now(self) -> dict:
         """Klick auf den Kreis im Fenster: sofort zuhören, ohne "Hey Jarvis"."""
