@@ -43,6 +43,7 @@ Konten von vor März 2026 haben außerdem die alten Standard-Stimmen wie George 
 Die Einrichtung öffnet sich nach der Installation von selbst. Später: Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Einstellungen**.
 
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
+   Optional: Soll **„Jarvis“ allein** reichen (ohne „Hey“)? Dann auf **Picovoice öffnen** klicken, gratis Konto anlegen, den **AccessKey** kopieren, bei **Picovoice** einfügen und **Prüfen** klicken. Danach oben im Test „Jarvis“ sagen.
 2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen und **Prüfen** klicken. Dann Stimmen anhören (Play-Knopf) und eine anklicken. **Auf Deutsch** spielt den Begrüßungssatz mit dieser Stimme. Mit Gratis-Konto prüft Jarvis beim Anklicken, ob ElevenLabs die Stimme herausgibt. Wenn nicht, steht „ab Starter“ dran. Weiter unten gibt es **deutsche Stimmen aus der Bibliothek**: anhören und, ab dem Starter-Abo, **Übernehmen**.
 3. **Wohnort**, **Gehirn** (prüft dein Claude-Abo) und **Extras** wie gewohnt.
 
@@ -52,10 +53,11 @@ Zum Schluss **Jarvis starten**.
 
 Jarvis läuft im Hintergrund. Du siehst nur das Symbol unten rechts neben der Uhr.
 
-- **„Hey Jarvis“** sagen (englisch ausgesprochen), kurz warten, Befehl auf Deutsch sprechen.
+- **„Hey Jarvis“** sagen (englisch ausgesprochen), kurz warten, Befehl auf Deutsch sprechen. Mit Picovoice-Schlüssel reicht **„Jarvis“**.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu, ganz ohne „Hey Jarvis“.
-- Oben in der Bildschirmmitte erscheint dabei eine kleine **Jarvis-Anzeige**: was du gesagt hast und was Jarvis antwortet. Sie stiehlt keinen Fokus und bleibt bei Vollbild-Spielen und im Gaming-Modus weg.
-- **Das große Jarvis-Fenster** öffnest du mit einem Klick auf das Symbol neben der Uhr, mit einem Doppelklick auf das Desktop-Symbol oder mit „Hey Jarvis, zeig dich“. Schließen versteckt es nur, Jarvis hört weiter zu. Beenden: Rechtsklick aufs Symbol > Jarvis beenden.
+- Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Klickst du hinein, bleibt es offen. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
+- **Minimieren oder Schließen** lässt Jarvis ganz verschwinden, auch aus der Taskleiste. Er hört trotzdem weiter zu. Zurück holst du ihn mit „Hey Jarvis“, einem Klick auf das Symbol neben der Uhr oder „Hey Jarvis, zeig dich“. Beenden: Rechtsklick aufs Symbol > Jarvis beenden.
+- Im Fenster steht unter der Antwort, **was Jarvis gerade tut** („Installiert Spotify“, „Sucht im Netz …“), mit einem Haken, wenn der Schritt fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
 - **„Stopp“** oder der Stopp-Knopf unterbricht Jarvis sofort.
 
@@ -68,20 +70,35 @@ Sofort, ohne Wartezeit:
 - „Gaming-Modus an“ / „Gaming-Modus aus“
 - „Wie spät ist es?“, „Lauter“, „Lautstärke auf 30“, „Nächstes Lied“, „Musik pausieren“
 - „Sperr den PC“, „Zeig dich“, „Versteck dich“
+- „Schreib Max auf Discord, bin gleich da“ oder „Schick Anna über WhatsApp: Ich komme später“ (geht in ein paar Sekunden raus, auch über Telegram)
+- „Erinnere mich in 20 Minuten an den Tee“, „Erinnere mich um 18 Uhr ans Training“, „Stell einen Timer auf 10 Minuten“
 
 Mit Nachdenken (ein paar Sekunden):
 
 - „Wie wird das Wetter morgen?“, „Was gibt es Neues?“
-- „Erinnere mich in 20 Minuten an den Tee“
+- „Schreib Max auf Discord, dass ich später komme“ (Jarvis formuliert die Nachricht selbst)
 - „Mach den Dunkelmodus an“, „Schalte Bluetooth aus“
 - „Was steht gerade auf meinem Bildschirm?“
 - „Guten Morgen“ (Wetter, Erinnerungen, Schlagzeilen)
 
-Jarvis macht das einfach. Nur vor **Löschen, Deinstallieren, Herunterfahren und Neustarten** und bevor er **in deinem Namen etwas sendet oder kauft**, fragt er einmal nach. Braucht etwas Administratorrechte, zeigt Windows die übliche Abfrage: einmal **Ja** klicken.
+Jarvis macht das einfach. Nur vor **Löschen, Deinstallieren, Herunterfahren und Neustarten**, vor **E-Mails** und bevor er **etwas kauft**, fragt er einmal nach. Chatnachrichten, die du ihm wörtlich sagst, schickt er sofort. Braucht etwas Administratorrechte, zeigt Windows die übliche Abfrage: einmal **Ja** klicken.
+
+## Die Werkstatt: Jarvis programmiert für dich
+
+Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
+
+1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster wechselt in die **Blaupausen-Ansicht**: links der Plan, in der Mitte jeder Schritt mit Dauer, rechts ein Drahtgitter-Modell, das mit dem Fortschritt wächst, dazu die Dateien und Befehle.
+2. Jarvis arbeitet im Hintergrund. Du kannst ihn währenddessen ganz normal fragen. **„Wie weit bist du?“** nennt den aktuellen Schritt.
+3. Ist er fertig, sagt er es dir und das Fenster zeigt einen Stempel **„Fertig“**. **Ordner öffnen** zeigt das Projekt. Darin liegt eine `LIESMICH.txt`, wie man es startet.
+
+- Jedes Projekt bekommt einen eigenen Ordner unter `%USERPROFILE%\Jarvis-Werkstatt`.
+- **Zurück** (oder Esc) bringt dich zum normalen Jarvis, die Arbeit läuft weiter. Oben erscheint dann ein Knopf **„Werkstatt · Schritt 2/5“**, der dich wieder hinbringt.
+- **Stopp** (zweimal klicken) oder **„Brich die Werkstatt ab“** beendet die Arbeit. Was schon gebaut ist, bleibt im Ordner.
 
 ## Wenn etwas nicht klappt
 
 - **Jarvis reagiert nicht auf „Hey Jarvis“:** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob „Hey Jarvis“ ankommt. Klappt es nur knapp, „Empfindlicher“ einschalten. Strg + Alt + J geht immer.
+- **Eine Nachricht kam nicht an:** Jarvis tippt nur, solange Discord, WhatsApp oder Telegram wirklich vorne ist. Springt etwas anderes nach vorn, bricht er ab, bevor etwas rausgeht, und sagt dir das. Die App muss installiert und angemeldet sein. Der Name muss so heißen, wie die Person in der App angezeigt wird.
 - **Die Stimme klingt wieder nach Computer:** Dann ist das ElevenLabs-Guthaben aufgebraucht, die gewählte Stimme braucht ein Abo, oder das Internet ist weg. Jarvis sagt einmal an, was davon. Unter Einstellungen > Stimme steht, wie viele Credits noch übrig sind.
 - **Jarvis versteht dich schlecht:** Prüfen, ob der Groq-Schlüssel unter Einstellungen > Mikrofon „Aktiv“ zeigt. Ohne Groq erkennt dein PC selbst, das ist langsamer und ungenauer.
 - **Jarvis lehnt etwas ab:** Anders formulieren hilft meistens. Unter Einstellungen > Gehirn steht Claudes genaue Meldung mit einem Knopf zum Kopieren.
