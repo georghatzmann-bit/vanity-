@@ -94,6 +94,55 @@ class HomeAssistant:
         self.call("homeassistant", "turn_on" if on else "turn_off", {"entity_id": entity})
         return f"{entity} ist {'an' if on else 'aus'}."
 
+    def find_light(self, room: str = "") -> str:
+        """Das Licht in einem Raum ("Wohnzimmer", "Küche") oder, ohne Raum, das erste Licht."""
+        words = [_fold(w) for w in str(room).split() if w.strip()]
+        lights = [s for s in self.states() if str(s.get("entity_id", "")).startswith(("light.", "switch."))]
+
+        def text(state: dict) -> str:
+            friendly = str((state.get("attributes") or {}).get("friendly_name", ""))
+            return _fold(friendly) + " " + _fold(str(state.get("entity_id", "")))
+
+        found = [s for s in lights if all(w in text(s) for w in words)] if words else lights
+        if not found:
+            raise HomeAssistantError(f"Kein Licht für {room or 'diesen Raum'} gefunden.")
+        found.sort(key=lambda s: (not s["entity_id"].startswith("light."),
+                                  not any(k in text(s) for k in ("licht", "lampe", "light"))))
+        return found[0]["entity_id"]
+
+    def light(self, room: str = "", on: bool = True, brightness: int | None = None) -> str:
+        """Licht an/aus oder auf eine Helligkeit in Prozent ("Wohnzimmer", 30)."""
+        entity = self.find_light(room)
+        data: dict = {"entity_id": entity}
+        if not on:
+            self.call("homeassistant", "turn_off", data)
+            return f"{entity} ist aus."
+        if brightness is not None and entity.startswith("light."):
+            data["brightness_pct"] = max(1, min(100, int(brightness)))
+            self.call("light", "turn_on", data)
+            return f"{entity} auf {data['brightness_pct']} Prozent."
+        self.call("homeassistant", "turn_on", data)
+        return f"{entity} ist an."
+
+    def alexa_command(self, room: str, text: str) -> str:
+        """Lässt ein Echo einen Sprachbefehl ausführen, als hätte Georg ihn gesagt (Alexa Media
+        Player, "custom"): damit geht alles, was Alexa kann, z. B. "Schalte das Licht aus"."""
+        target = self.alexa_target(room)
+        if not target.startswith("media_player."):
+            raise HomeAssistantError("Für Alexa-Befehle braucht es ein Echo als media_player in Home Assistant.")
+        self.call("media_player", "play_media", {"entity_id": target, "media_content_type": "custom",
+                                                  "media_content_id": text})
+        return f"Alexa ({room}) macht: {text}"
+
+    def alexa_target_or_none(self, room: str) -> str:
+        try:
+            return self.alexa_target(room) if room else ""
+        except HomeAssistantError:
+            return ""
+
+    def first_echo(self) -> str:
+        return next(iter(self.alexa), "") if self.alexa else ""
+
     def alexa_target(self, room: str) -> str:
         key = _fold(room)
         for name, target in self.alexa.items():

@@ -93,6 +93,7 @@ class Api:
         self._on_listen = on_listen
         self._on_touched = None  # setzt __main__ (Hintergrund-Modus)
         self._start_server = None  # setzt __main__: startet den Web-Eingang für die Handy-App
+        self._start_alexa = None  # setzt __main__: startet die Alexa-Verbindung
 
     def hello(self) -> dict:
         info = dict(self._bridge.info)
@@ -217,6 +218,96 @@ class Api:
         if server_cfg.get("enabled") and self._start_server is not None:
             self._start_server()
         return self.phone_info()
+
+    def wol_prepare(self) -> dict:
+        """PC fürs Einschalten per Netzwerk vorbereiten (Windows fragt nach Administratorrechten)."""
+        from .. import pc
+
+        try:
+            text = pc.prepare_wake_on_lan().strip()
+            return {"ok": text.startswith("Bereit"), "text": text or "Keine Antwort."}
+        except Exception as exc:
+            return {"ok": False, "text": f"Das ging nicht: {exc}"}
+
+    # ------------------------------------------------------------------ Alexa
+
+    def alexa_info(self) -> dict:
+        from ..alexa import CONSOLE_URL
+
+        cfg = getattr(self._assistant, "_cfg", {}) or {}
+        alexa = cfg.get("alexa", {}) or {}
+        bridge = getattr(self._assistant, "alexa", None)
+        return {"enabled": bool(alexa.get("aktiv")) and bool(alexa.get("kanal")),
+                "connected": bool(bridge is not None and bridge.connected), "console": CONSOLE_URL}
+
+    def alexa_enable(self, on) -> dict:
+        """Alexa-Verbindung an oder aus. Beim ersten Mal entstehen Kanal und Schlüssel."""
+        from ..alexa import new_secrets
+        from ..config import save_setting
+
+        cfg = getattr(self._assistant, "_cfg", None)
+        if cfg is None:
+            return self.alexa_info()
+        alexa = cfg.setdefault("alexa", {})
+        try:
+            if on and (not str(alexa.get("kanal") or "").startswith("jarvis-") or len(str(alexa.get("schluessel") or "")) != 64):
+                fresh = new_secrets()
+                alexa.update(fresh)
+                save_setting("alexa", "kanal", fresh["kanal"])
+                save_setting("alexa", "schluessel", fresh["schluessel"])
+            alexa["aktiv"] = bool(on)
+            save_setting("alexa", "aktiv", bool(on))
+            if on and self._start_alexa is not None:
+                self._start_alexa()
+            if not on and getattr(self._assistant, "alexa", None) is not None:
+                self._assistant.alexa.stop()
+                self._assistant.alexa = None
+        except Exception as exc:
+            log.warning("Alexa-Verbindung: %s", exc)
+            self._bridge.toast(f"Die Alexa-Verbindung ließ sich nicht umstellen: {exc}", "error")
+        return self.alexa_info()
+
+    def alexa_copy(self, which) -> dict:
+        """"modell" (Sprachmodell als JSON) oder "code" (lambda_function.py) in die Zwischenablage."""
+        import json
+
+        from .. import pc
+        from ..alexa import RELAY, interaction_model, skill_code
+
+        alexa = (getattr(self._assistant, "_cfg", {}) or {}).get("alexa", {}) or {}
+        if which == "modell":
+            text = json.dumps(interaction_model(), ensure_ascii=False, indent=2)
+        elif which == "code" and alexa.get("kanal") and alexa.get("schluessel"):
+            text = skill_code(alexa["kanal"], alexa["schluessel"], str(alexa.get("vermittlung") or RELAY))
+        else:
+            return {"ok": False, "text": ""}
+        try:
+            copied = pc.copy_text(text)
+        except Exception as exc:
+            log.debug("Zwischenablage: %s", exc)
+            copied = False
+        return {"ok": copied, "text": text}
+
+    def alexa_console(self) -> bool:
+        from .. import pc
+        from ..alexa import CONSOLE_URL
+
+        try:
+            pc.open_uri(CONSOLE_URL)
+            return True
+        except Exception as exc:
+            log.info("Alexa-Konsole: %s", exc)
+            return False
+
+    def alexa_test(self) -> dict:
+        """Ein Befehl auf demselben Weg wie vom Echo: kommt eine Antwort zurück?"""
+        bridge = getattr(self._assistant, "alexa", None)
+        if bridge is None:
+            return {"ok": False, "error": "Die Alexa-Verbindung ist aus."}
+        try:
+            return {"ok": True, "answer": bridge.self_test()}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
 
     # ------------------------------------------------------------------ Gedächtnis
 

@@ -189,6 +189,22 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
 
     if cfg.get("server", {}).get("enabled"):
         start_server(cfg, assistant, ui)
+    if cfg.get("alexa", {}).get("aktiv"):
+        start_alexa(cfg, assistant)
+
+
+def start_alexa(cfg: dict, assistant: Assistant) -> bool:
+    """Hört auf Befehle vom eigenen Alexa-Skill ("Alexa, sag Jarvis, ...")."""
+    from .alexa import AlexaBridge
+
+    old = getattr(assistant, "alexa", None)
+    if old is not None:
+        old.stop()
+    bridge = AlexaBridge(cfg, assistant)
+    assistant.alexa = bridge if bridge.start() else None
+    if assistant.alexa is not None:
+        log.info("Alexa-Verbindung wartet auf Befehle.")
+    return assistant.alexa is not None
 
 
 def start_server(cfg: dict, assistant: Assistant, ui: Ui) -> str:
@@ -475,6 +491,7 @@ def run_gui(cfg: dict, args) -> int:
 
     api = Api(bridge, assistant, assistant.mute, open_setup, listen_now)
     api._start_server = lambda: start_server(cfg, assistant, ui)
+    api._start_alexa = lambda: start_alexa(cfg, assistant)
     window = Window(api, background, on_closed, gui_cfg, hidden=hidden, icon=desktop.app_icon())
     if on_wake == "fenster":
         from .overlay import _fullscreen_app

@@ -1519,6 +1519,74 @@ body[data-view="workshop"] .holo-scan {
   font-size: var(--fs-hint);
 }
 
+.dlg-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dlg-tabs button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-weight: 600;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.dlg-tabs button[aria-selected="true"] {
+  background: rgba(var(--glow), 0.16);
+  color: var(--text);
+}
+
+.dlg-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dlg-pane[hidden],
+.dlg-pair[hidden],
+.dlg-alexa[hidden] {
+  display: none;
+}
+
+.dlg-alexa {
+  display: grid;
+  gap: 16px;
+}
+
+.alexa-steps li {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: start;
+}
+
+.alexa-steps li b,
+.alexa-steps li span {
+  grid-column: 1;
+}
+
+.alexa-steps li .btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.alexa-link {
+  flex: 1;
+  color: var(--text-2);
+  font-size: var(--fs-hint);
+}
+
+.alexa-link[data-ok="1"] {
+  color: var(--ok);
+}
+
 @keyframes dlg-in {
   from {
     opacity: 0;

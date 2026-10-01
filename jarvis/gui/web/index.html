@@ -30,9 +30,9 @@
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
         </button>
-        <button type="button" class="ws-pill phone-pill" id="phoneBtn" title="Jarvis aufs Handy: per QR-Code koppeln">
+        <button type="button" class="ws-pill phone-pill" id="phoneBtn" title="Handy und Alexa mit Jarvis verbinden">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
-          <span class="ws-pill-text">Handy</span>
+          <span class="ws-pill-text">Verbinden</span>
         </button>
         <div class="weather" id="weather" hidden>
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20h9a3.5 3.5 0 0 0 .4-7 4.8 4.8 0 0 0-9.1 1.5A2.8 2.8 0 0 0 8 20z"/><path d="M8.5 3.5v1.2M3.5 8.5h1.2M5 5l.85.85M12 5l-.85.85M5.9 11.1a3.1 3.1 0 1 1 5.6-2.7"/></svg>
@@ -298,13 +298,18 @@
   <section class="dlg" id="phoneDlg" role="dialog" aria-modal="true" aria-labelledby="phoneTitle" hidden>
     <header class="dlg-head">
       <div>
-        <span class="dlg-kicker">Fernbedienung</span>
-        <h2 id="phoneTitle">Jarvis aufs Handy</h2>
+        <span class="dlg-kicker">Jarvis überall</span>
+        <h2 id="phoneTitle">Handy und Alexa</h2>
       </div>
       <button type="button" class="icon-btn" id="phoneClose" aria-label="Schließen">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </header>
+    <div class="dlg-tabs" role="tablist" aria-label="Verbindungen">
+      <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
+      <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
+    </div>
+    <div class="dlg-pane" data-pane="phone">
     <label class="row toggle-row dlg-row">
       <span class="row-text">
         <b id="phoneState">Aus</b>
@@ -326,7 +331,35 @@
       <p class="dlg-note">Von unterwegs: <b>Tailscale</b> (kostenlos) auf PC und Handy installieren, dann klappt es überall.
         Fragt Windows nach der Firewall, „Zulassen“ wählen.</p>
       <p class="dlg-note" id="phoneMac" hidden></p>
+      <button type="button" class="link-btn" id="phoneWol">PC fürs Einschalten per Netzwerk vorbereiten (fragt nach Administratorrechten)</button>
       <button type="button" class="link-btn" id="phoneNew">Neu koppeln (alte Handys ausschließen)</button>
+    </div>
+    </div>
+    <div class="dlg-pane" data-pane="alexa" hidden>
+      <label class="row toggle-row dlg-row">
+        <span class="row-text">
+          <b id="alexaState">Aus</b>
+          <small>„Alexa, sag Jarvis, er soll Discord öffnen.“ Dein eigener Alexa-Skill, ohne Home Assistant und ohne Router-Einstellungen.</small>
+        </span>
+        <input type="checkbox" class="sr-input" id="alexaToggle"><span class="switch" aria-hidden="true"></span>
+      </label>
+      <div class="dlg-alexa" id="alexaSetup" hidden>
+        <ol class="dlg-steps alexa-steps">
+          <li><b>Entwicklerkonsole öffnen</b><span>Mit dem Amazon-Konto anmelden, mit dem auch dein Echo läuft.</span>
+            <button type="button" class="btn small" id="alexaConsole">Öffnen</button></li>
+          <li><b>Skill erstellen</b><span>Name „Jarvis“, Sprache Deutsch, Modell „Benutzerdefiniert“, Hosting „Von Alexa gehostet (Python)“, Vorlage „Von Grund auf neu“.</span></li>
+          <li><b>Sprachmodell einfügen</b><span>Links „Interaktionsmodell“, dann „JSON-Editor“: alles ersetzen, „Modell speichern“, „Modell erstellen“.</span>
+            <button type="button" class="btn small" id="alexaModel">Kopieren</button></li>
+          <li><b>Code einfügen</b><span>Oben „Code“, Datei lambda_function.py: alles ersetzen, „Speichern“, dann „Bereitstellen“.</span>
+            <button type="button" class="btn small" id="alexaCode">Kopieren</button></li>
+          <li><b>Testen einschalten</b><span>Oben „Test“: „Entwicklung“ wählen. Fertig. Sag: „Alexa, sag Jarvis, er soll Spotify öffnen.“</span></li>
+        </ol>
+        <div class="dlg-url">
+          <span class="alexa-link" id="alexaLink">Verbindung wird aufgebaut …</span>
+          <button type="button" class="btn small ghost" id="alexaTest">Verbindung testen</button>
+        </div>
+        <p class="dlg-note">Der Skill gehört nur dir und läuft nur auf deinen Echos. Die Nachrichten laufen verschlüsselt über ntfy.sh. Antwortet Jarvis nicht innerhalb von sechs Sekunden, sagt Alexa „Ich kümmere mich darum“ und Jarvis macht weiter.</p>
+      </div>
     </div>
   </section>
 

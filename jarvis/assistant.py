@@ -386,6 +386,8 @@ class Assistant:
                 return "Dunkler Modus, Sir." if dark else "Heller Modus, Sir. Etwas grell, wenn Sie mich fragen."
             if name == "radio":
                 return self._radio(intent.arg, bool(intent.data.get("on")))
+            if name == "light":
+                return self._light(intent)
             if name == "weather":
                 return self._weather(intent)
             if name == "calc":
@@ -502,6 +504,30 @@ class Assistant:
         if label == "WLAN" and not on:
             return "WLAN ist aus, Sir. Ohne Internet höre und spreche ich nur eingeschränkt."
         return f"{label} ist {'an' if on else 'aus'}, Sir."
+
+    def _light(self, intent) -> str | None:
+        """Licht über Home Assistant, sonst sagt Jarvis es einem Echo (alles, was Alexa kann).
+        Ohne Home Assistant: None, dann erklärt Claude, was es braucht."""
+        from .homeassistant import HomeAssistant, HomeAssistantError
+
+        ha = HomeAssistant(self._cfg.get("homeassistant", {}))
+        if not ha.configured:
+            return None
+        room, on, pct = intent.arg, bool(intent.data.get("on", True)), intent.data.get("pct")
+        where = f" im {room[:1].upper() + room[1:]}" if room else ""
+        label = f"Licht{where} " + ("aus" if not on else f"auf {pct} Prozent" if pct else "an")
+        with self._step(label, "app"):
+            try:
+                ha.light(room, on, pct)
+            except HomeAssistantError:
+                if not ha.alexa:
+                    raise
+                ha.alexa_command(room if ha.alexa_target_or_none(room) else ha.first_echo(), intent.data.get("said") or label)
+        if not on:
+            return random.choice([f"Licht{where} ist aus, Sir.", "Erledigt, Sir. Gemütlich dunkel."])
+        if pct:
+            return f"Licht{where} auf {pct} Prozent, Sir."
+        return random.choice([f"Licht{where} ist an, Sir.", "Es werde Licht, Sir."])
 
     def _weather(self, intent) -> str | None:
         """Wetter sofort von Open-Meteo, ohne Claude. Ohne Ort fragt Claude nach."""

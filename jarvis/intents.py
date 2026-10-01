@@ -171,6 +171,14 @@ _RULES += [
         r"^(?:energiesparmodus|standby)(?: an| bitte)?$|^(?:pc|computer|rechner) (?:schlafen legen|in den standby)$"
     )),
     ("power_logoff", re.compile(r"^(?:melde|meld) (?:mich|georg) ab$|^abmelden$")),
+    # Licht (über Home Assistant, sonst Alexa): "Mach das Licht im Wohnzimmer aus", "Dimm das Licht auf 30 Prozent"
+    ("light", re.compile(
+        r"^(?:(?:mach|mache|schalt|schalte|dreh|drehe|stell|stelle) )?(?:das |die )?(?P<what>licht|lampe|lampen|deckenlicht|stehlampe)"
+        r"(?: (?:im|in der|in dem|auf dem|vom|von der) (?P<room>[\wäöüß -]+?))? (?P<how>an|aus|ein|heller|dunkler|"
+        r"auf (?P<pct>\d{1,3}) ?(?:%|prozent)(?: (?:stellen|dimmen))?)$|"
+        r"^(?:dimm|dimme) (?:das |die )?(?P<what2>licht|lampe|lampen)(?: (?:im|in der|in dem) (?P<room2>[\wäöüß -]+?))?"
+        r"(?: auf (?P<pct2>\d{1,3}) ?(?:%|prozent))?$"
+    )),
     ("install", re.compile(
         rf"^{_ASK}(?:installiere|installier|instaliere|installieren) {_FILL}(.+?)(?: (?:herunter|runter))?$|"
         rf"^{_ASK}(?:lade|lad|hol|hole) {_FILL}(.+?) (?:herunter|runter|aus dem internet)$|"
@@ -204,7 +212,7 @@ _RULES += [
 
 # Bei Fragen ("Ist das Mikrofon aus?") nie stummschalten oder das Gespräch löschen.
 _NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off", "dark_on", "dark_off", "radio",
-                      "power_off", "power_restart", "power_sleep", "power_logoff"}
+                      "power_off", "power_restart", "power_sleep", "power_logoff", "light"}
 # Diese Absichten bekommen den Namen des Programms oder Ordners mit.
 _WITH_NAME = {"install", "close", "open", "open_known", "folder"}
 # Wörter, die kein Programmname sind ("Öffne es", "Schließ das")
@@ -656,6 +664,17 @@ def match(text: str) -> Intent | None:
                 if settings_page(arg) is None:
                     continue  # unbekannte Seite: vielleicht ein Programm ("Öffne die Steam-Einstellungen")
                 return Intent(name, arg)
+            if name == "light":
+                groups = found.groupdict()
+                how = groups.get("how") or ("dimmen" if groups.get("what2") else "")
+                pct = groups.get("pct") or groups.get("pct2")
+                room = (groups.get("room") or groups.get("room2") or "").strip()
+                if how in ("heller", "dunkler"):
+                    pct = "80" if how == "heller" else "30"
+                elif how == "dimmen" and not pct:
+                    pct = "30"
+                on = how not in ("aus",)
+                return Intent("light", room, {"on": on, "pct": int(pct) if pct else None, "said": text.strip()})
             if name == "radio":
                 kind = "bluetooth" if "bluetooth" in norm else "wifi"
                 on = not re.search(r"\b(?:aus|ab|ausschalten|deaktivier|deaktiviere|deaktivieren)\b", norm)

@@ -193,6 +193,17 @@ close_apps = []
 # Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
 power_plan = true
 
+[alexa]
+# "Alexa, sag Jarvis, er soll Discord öffnen": ein eigener Alexa-Skill, ohne Home Assistant und
+# ohne Router-Einstellungen. Am einfachsten im Jarvis-Fenster oben rechts ("Verbinden", Bereich
+# Alexa) einschalten, dort steht jeder Schritt mit Knöpfen zum Kopieren.
+aktiv = false
+# Kanal und Schlüssel entstehen beim Einschalten von selbst. Nicht weitergeben.
+kanal = ""
+schluessel = ""
+# Vermittlungsdienst zwischen Alexa und dem PC (kostenlos, die Nachrichten sind verschlüsselt).
+vermittlung = "https://ntfy.sh"
+
 [homeassistant]
 # Für Alexa und Smart Home. Adresse deines Home Assistant, z. B. "http://homeassistant.local:8123".
 url = ""

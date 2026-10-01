@@ -66,6 +66,10 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   herunterfahren-abbrechen     hält ein geplantes Herunterfahren oder einen Neustart auf
   alexa-sagen <raum> "<text>"  Ansage über ein Echo-Gerät
   alexa-geraete                zeigt die eingetragenen Echo-Geräte
+  alexa-befehl <raum> "<text>" ein Echo führt einen Sprachbefehl aus (alles, was Alexa kann)
+  licht an|aus [raum] [prozent]  schaltet oder dimmt das Licht (Home Assistant)
+  wol-vorbereiten              stellt Windows so ein, dass der PC per Netzwerk eingeschaltet werden kann
+  wecken <mac-adresse>         schaltet ein anderes Gerät im Netz per Wake-on-LAN ein
   smarthome geraete [filter]   zeigt Geräte aus Home Assistant
   smarthome an|aus <gerät>     schaltet ein Gerät
   smarthome status <gerät>     zeigt den Zustand
@@ -402,6 +406,42 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print('Aufruf: alexa-sagen <raum> "<text>"')
             return 1
         print(HomeAssistant(cfg.get("homeassistant", {})).announce(rest[0], " ".join(rest[1:])))
+        return 0
+
+    if command == "wol-vorbereiten":
+        from . import pc
+
+        print(pc.prepare_wake_on_lan())
+        print("Im BIOS muss 'Wake on LAN' (oder 'Power On By PCI-E') ebenfalls eingeschaltet sein.")
+        return 0
+
+    if command == "wecken":
+        from . import pc
+
+        if not rest:
+            print("Aufruf: wecken <mac-adresse>")
+            return 1
+        print(pc.wake(rest[0]))
+        return 0
+
+    if command == "alexa-befehl":
+        from .homeassistant import HomeAssistant
+
+        if len(rest) < 2:
+            print('Aufruf: alexa-befehl <raum> "<text>"')
+            return 1
+        print(HomeAssistant(cfg.get("homeassistant", {})).alexa_command(rest[0], " ".join(rest[1:])))
+        return 0
+
+    if command == "licht":
+        from .homeassistant import HomeAssistant
+
+        if not rest or rest[0] not in ("an", "aus", "ein"):
+            print("Aufruf: licht an|aus [raum] [prozent]")
+            return 1
+        pct = int(rest[-1]) if len(rest) > 1 and rest[-1].isdigit() else None
+        room = " ".join(r for r in rest[1:] if not r.isdigit())
+        print(HomeAssistant(cfg.get("homeassistant", {})).light(room, rest[0] != "aus", pct))
         return 0
 
     if command in ("alexa-geraete", "alexa-geräte"):

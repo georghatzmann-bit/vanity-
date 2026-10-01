@@ -177,6 +177,76 @@ def lock() -> None:
         raise PcError("Der PC ließ sich nicht sperren.")
 
 
+# ---------------------------------------------------------------------- PC per Netzwerk einschalten (Wake-on-LAN)
+
+WOL_SCRIPT = r"""
+$changed = @()
+Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | ForEach-Object {
+  try { Set-NetAdapterPowerManagement -Name $_.Name -WakeOnMagicPacket Enabled -ErrorAction Stop; $changed += $_.Name } catch {}
+  try { powercfg /deviceenablewake "$($_.InterfaceDescription)" 2>$null | Out-Null } catch {}
+}
+try { Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' -Name HiberbootEnabled -Value 0 -Type DWord } catch {}
+if ($changed.Count) { "Bereit: " + ($changed -join ', ') } else { "Keine passende Netzwerkkarte gefunden." }
+"""
+
+
+def prepare_wake_on_lan() -> str:
+    """Stellt Windows so ein, dass der PC per Netzwerk ("Magic Packet") eingeschaltet werden kann:
+    Netzwerkkarte darf wecken, Schnellstart aus. Im BIOS muss "Wake on LAN" ebenfalls an sein."""
+    return run_admin(WOL_SCRIPT.strip())
+
+
+def wake(mac: str, broadcast: str = "255.255.255.255") -> str:
+    """Weckt ein anderes Gerät im Netz (Magic Packet an Port 9)."""
+    import socket
+
+    digits = re.sub(r"[^0-9a-fA-F]", "", str(mac))
+    if len(digits) != 12:
+        raise PcError(f"{mac} ist keine MAC-Adresse.")
+    packet = b"\xff" * 6 + bytes.fromhex(digits) * 16
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.sendto(packet, (broadcast, 9))
+    return f"Weckruf an {mac} geschickt."
+
+
+# ---------------------------------------------------------------------- Zwischenablage
+
+def copy_text(text: str) -> bool:
+    """Legt Text in die Windows-Zwischenablage (für "Kopieren"-Knöpfe). False, wenn es nicht ging."""
+    if os.name != "nt":
+        return False
+    import ctypes
+    from ctypes import wintypes
+
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    user32.SetClipboardData.argtypes = [wintypes.UINT, ctypes.c_void_p]
+    user32.SetClipboardData.restype = ctypes.c_void_p
+    data = str(text).encode("utf-16-le") + b"\x00\x00"
+    for _ in range(10):  # ein anderes Programm hält die Zwischenablage vielleicht gerade fest
+        if user32.OpenClipboard(None):
+            break
+        time.sleep(0.05)
+    else:
+        return False
+    try:
+        user32.EmptyClipboard()
+        handle = kernel32.GlobalAlloc(0x0002, len(data))  # GMEM_MOVEABLE
+        pointer = kernel32.GlobalLock(handle)
+        if not pointer:
+            return False
+        ctypes.memmove(pointer, data, len(data))
+        kernel32.GlobalUnlock(handle)
+        return bool(user32.SetClipboardData(13, handle))  # CF_UNICODETEXT
+    finally:
+        user32.CloseClipboard()
+
+
 # ---------------------------------------------------------------------- Ein und aus
 
 _POWER_NOTE = "Jarvis fährt den PC herunter. Sag 'Jarvis, abbrechen', um es aufzuhalten."
