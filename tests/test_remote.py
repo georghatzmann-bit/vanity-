@@ -92,6 +92,30 @@ class ServerTest(unittest.TestCase):
                          [("user", "Öffne Spotify"), ("schritt", "Öffnet Spotify"), ("jarvis", "Spotify startet, Sir.")])
         last = data["eintraege"][-1]["n"]
         self.assertEqual(self.request(f"/api/verlauf?seit={last}")[1]["eintraege"], [])
+        # Daran merkt die App einen Neustart von Jarvis (dann zählt er wieder ab 1)
+        self.assertEqual(data["start"], self.phone.started)
+        self.assertNotEqual(PhoneUi().started, self.phone.started)
+
+    def test_iphone_home_screen_app_keeps_the_key(self):
+        # Mit Schlüssel: die App vom Home-Bildschirm startet verbunden (eigener Speicher auf dem iPhone)
+        _code, manifest = self.request(f"/app/manifest.webmanifest?t={TOKEN}", token="")
+        manifest = json.loads(manifest) if isinstance(manifest, str) else manifest
+        self.assertEqual(manifest["start_url"], f"/app/#t={TOKEN}")
+        self.assertEqual(manifest["id"], "/app/")
+        for query in ("", "?t=falsch-falsch-falsch", "?t="):
+            _code, manifest = self.request(f"/app/manifest.webmanifest{query}", token="")
+            manifest = json.loads(manifest) if isinstance(manifest, str) else manifest
+            self.assertEqual(manifest["start_url"], "/app/", query)
+
+    def test_stop_also_cancels_a_shutdown(self):
+        said = []
+        self.assistant.abort_power = lambda: True
+        self.assistant.announce = said.append
+        self.assertEqual(self.request("/api/stopp", {})[0], 200)
+        self.assertEqual((self.assistant.stopped, said), (1, ["Abgebrochen, Sir. Der PC bleibt an."]))
+        self.assistant.abort_power = lambda: False
+        self.request("/api/stopp", {})
+        self.assertEqual((self.assistant.stopped, len(said)), (2, 1))
 
     def test_suggestion_stop_and_root(self):
         self.phone.suggestion({"frage": "Soll ich?"})
@@ -110,7 +134,12 @@ class PairingTest(unittest.TestCase):
         self.assertGreaterEqual(len(token), 20)
         self.assertEqual(remote.app_url(token, "192.168.1.20"), f"http://192.168.1.20:8765/app/#t={token}")
         svg = remote.qr_svg(remote.app_url(token, "192.168.1.20"))
-        self.assertTrue(svg.startswith("<svg"), svg[:40])
+        try:
+            import qrcode  # noqa: F401
+        except ImportError:  # optional: ohne steht im Fenster die Adresse zum Abtippen
+            self.assertEqual(svg, "")
+        else:
+            self.assertTrue(svg.startswith("<svg"), svg[:40])
 
     def test_local_ip_never_fails(self):
         self.assertTrue(remote.local_ip())

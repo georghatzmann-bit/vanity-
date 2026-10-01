@@ -63,12 +63,14 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
                 raise ValueError("kein Objekt")
             return data
 
-        def _static(self, path: str) -> None:
+        def _static(self, path: str, query: str = "") -> None:
             name = path[len("/app"):].strip("/") or "index.html"
             target = (APP_DIR / name).resolve()
             if APP_DIR not in target.parents or not target.is_file() or target.suffix not in TYPES:
                 return self._send(404, {"fehler": "Unbekannt"})
             body = target.read_bytes()
+            if target.suffix == ".webmanifest":
+                body = _manifest(body, query, token)
             self.send_response(200)
             self.send_header("Content-Type", TYPES[target.suffix])
             self.send_header("Content-Length", str(len(body)))
@@ -86,7 +88,7 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
                 self.end_headers()
                 return
             if path == "/app" or path.startswith("/app/"):
-                return self._static(parsed.path)
+                return self._static(parsed.path, parsed.query)
             if not self._authorized():
                 return self._send(401, {"fehler": "Token fehlt oder falsch"})
             if path == "/status":
@@ -99,7 +101,8 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
                     since = int((query.get("seit") or ["0"])[0])
                 except ValueError:
                     since = 0
-                return self._send(200, {"eintraege": phone.since(since) if phone is not None else []})
+                return self._send(200, {"eintraege": phone.since(since) if phone is not None else [],
+                                        "start": getattr(phone, "started", "")})
             if path == "/api/projekte":
                 shop = getattr(assistant, "workshop", None)
                 items = shop.projects()[:30] if shop is not None else []
@@ -130,6 +133,10 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
                 return self._send(200, {"ok": True})
             if path == "/api/stopp":
                 assistant.stop()
+                # Wie der Stopp-Knopf im Fenster: auch ein angekündigtes Herunterfahren
+                abort = getattr(assistant, "abort_power", None)
+                if abort is not None and abort():
+                    assistant.announce("Abgebrochen, Sir. Der PC bleibt an.")
                 return self._send(200, {"ok": True})
             if path == "/befehl":
                 text = str(data.get("text", "")).strip()
@@ -147,6 +154,19 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
             return self._send(404, {"fehler": "Unbekannt"})
 
     return Handler
+
+
+def _manifest(body: bytes, query: str, token: str) -> bytes:
+    """Auf dem iPhone hat die App auf dem Home-Bildschirm einen eigenen Speicher, getrennt von
+    Safari, und startet mit start_url. Fragt die App mit dem richtigen Schlüssel, steht er deshalb
+    auch in start_url, sonst wäre sie nach dem Hinzufügen nicht verbunden."""
+    given = (urllib.parse.parse_qs(query).get("t") or [""])[0]
+    if not token or not hmac.compare_digest(given.encode(), token.encode()):
+        return body
+    data = json.loads(body.decode("utf-8"))
+    data["id"] = data.get("id") or data.get("start_url") or "/app/"
+    data["start_url"] = "/app/#t=" + token
+    return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
 def _status(assistant, phone) -> dict:

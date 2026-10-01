@@ -34,6 +34,8 @@ class PhoneUi(Ui):
     def __init__(self) -> None:
         self._items: collections.deque = collections.deque(maxlen=self.KEEP)
         self._ids = itertools.count(1)
+        # Nach einem Neustart zählt Jarvis wieder ab 1. Daran merkt die App, dass sie neu laden muss.
+        self.started = secrets.token_hex(4)
         self._lock = threading.Lock()
         self.state_value = "idle"
         self.offer: dict | None = None

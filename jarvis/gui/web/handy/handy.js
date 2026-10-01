@@ -58,11 +58,24 @@
     if (found) {
       token = found[1];
       storage('set', [KEY, token]);
-      history.replaceState(null, '', location.pathname + location.search);
     } else {
       token = storage('get', KEY);
     }
+    rememberToken();
   })();
+
+  // Auf dem iPhone hat die App auf dem Home-Bildschirm einen eigenen Speicher, getrennt von
+  // Safari. Deshalb bleibt der Schlüssel in der Adresse und im Startpunkt (start_url) der App.
+  function rememberToken() {
+    const base = location.pathname + location.search;
+    try {
+      history.replaceState(null, '', token ? base + '#t=' + token : base);
+    } catch {
+      /* egal */
+    }
+    const manifest = document.querySelector('link[rel="manifest"]');
+    if (manifest) manifest.setAttribute('href', token ? 'manifest.webmanifest?t=' + encodeURIComponent(token) : 'manifest.webmanifest');
+  }
 
   // ------------------------------------------------------------------ Verbindung
 
@@ -83,7 +96,7 @@
     return res.json();
   }
 
-  const S = { link: 'wait', state: 'idle', last: 0, busy: false, waiting: 0, speak: storage('get', SPEAK) === '1', tab: 'talk' };
+  const S = { link: 'wait', state: 'idle', last: 0, start: '', busy: false, waiting: 0, speak: storage('get', SPEAK) === '1', tab: 'talk' };
 
   function setLink(link) {
     if (S.link === link) return;
@@ -127,6 +140,7 @@
       if (err && err.code === 401) {
         token = '';
         storage('set', [KEY, '']);
+        if (!DEMO) rememberToken();
         setLink('pair');
       } else {
         setLink('off');
@@ -191,7 +205,18 @@
     if (S.link !== 'ok') return;
     try {
       const data = await api('/api/verlauf?seit=' + S.last);
-      (data.eintraege || []).forEach(addItem);
+      if (data.start && S.start && data.start !== S.start) {
+        // Jarvis wurde neu gestartet und zählt wieder ab 1: alles ab dort holen
+        S.start = data.start;
+        S.last = 0;
+        seen.clear();
+        return pollFeed();
+      }
+      S.start = data.start || S.start;
+      const items = data.eintraege || [];
+      items.forEach(addItem);
+      // Antwort da: gleich den Zustand holen, sonst tippt Jarvis noch bis zu 3 s weiter
+      if (items.some((i) => i.art === 'jarvis')) pollStatus();
     } catch {
       /* der Status merkt es */
     }
