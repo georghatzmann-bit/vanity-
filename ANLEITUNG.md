@@ -167,7 +167,8 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 - Was du sagst („Merk dir, …“), behält Jarvis für immer.
 - Er merkt sich, mit wem du über welche App schreibst. „Sag Max …“ nimmt dann die richtige App.
-- Er sieht, was du ungefähr zur selben Zeit öffnest. Nach ein paar Tagen fragt er zur passenden Zeit: **„Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?“** Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**. Beim Zocken und wenn du nicht am PC bist, fragt er nie.
+- Er sieht, was du ungefähr zur selben Zeit öffnest und in welchen Discord-Sprachkanal du gehst. Nach ein paar Tagen fragt er zur passenden Zeit: **„Sir, um diese Zeit öffnen Sie meist Discord und gehen in den Sprachkanal Zocken. Soll ich?“** Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**. Beim Zocken und wenn du nicht am PC bist, fragt er nie.
+- **Geburtstage:** Sag „Merk dir, Max hat am 3. Mai Geburtstag“. Am 3. Mai sagt Jarvis: „Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?“ Ein „Ja“, und die Glückwünsche sind raus.
 - Jede Nacht schaut er kurz auf die Gespräche vom Vortag und merkt sich, was wichtig war.
 - Alles bleibt auf deinem PC. Im Fenster rechts bei **Gedächtnis** > **Ansehen** siehst du alles und kannst mit × einzelne Sachen löschen.
 

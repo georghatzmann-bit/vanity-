@@ -1545,6 +1545,13 @@
       { key: 'a', label: 'Discord und Spotify', uhrzeit: '18:05', tage: 'werktags', anzahl: 7 },
       { key: 'b', label: 'YouTube', uhrzeit: '21:30', tage: 'täglich', anzahl: 9 },
     ],
+    birthdays: (() => {
+      const day = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+      return [
+        { shown: 'Max', date: day(3), days: 3, own: false },
+        { shown: 'Ihre Mutter', date: day(41), days: 41, own: false },
+      ];
+    })(),
   };
 
   // ------------------------------------------------------------------ Start

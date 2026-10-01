@@ -600,6 +600,8 @@ class Assistant:
             return str(exc)
         if kind in ("person", "call"):
             self.learn("message", shown, app="discord")
+        elif kind == "voice":
+            self.learn("voice", shown)
         return {
             "person": f"Der Chat mit {shown}, Sir.", "channel": f"Kanal {shown}, Sir.", "server": f"Server {shown}, Sir.",
             "voice": f"Sprachkanal {shown}, Sir.", "call": f"Ich rufe {shown} an, Sir.",
@@ -637,6 +639,11 @@ class Assistant:
         if routines:
             habit = "Gewohnheit" if len(routines) == 1 else "Gewohnheiten"
             parts.append(f"{habit}: " + "; ".join(r.describe() for r in routines[:2]) + ".")
+        soon = [b for b in self.memory.upcoming_birthdays(days=14) if not b["own"]][:1]
+        if soon:
+            days = soon[0]["in_tagen"]
+            when = "heute" if days == 0 else "morgen" if days == 1 else f"in {days} Tagen"
+            parts.append(f"{soon[0]['shown']} hat {when} Geburtstag.")
         parts.append("Alles steht im Fenster unter Gedächtnis.")
         return " ".join(parts)
 
@@ -655,6 +662,11 @@ class Assistant:
         if routine is None:
             return False
         self.memory.offered(routine, now)
+        if not routine.commands():
+            # Nur eine Ansage ("Sir, heute hat Ihre Mutter Geburtstag."), nichts zu beantworten
+            self.ui.message("jarvis", routine.question())
+            self.say(routine.question())
+            return True
         self._offer = (routine, time.monotonic() + 120)
         self.ui.suggestion(routine.as_dict())
         self.ui.message("jarvis", routine.question())
@@ -700,14 +712,20 @@ class Assistant:
         if not confirmed(text):
             return None
         self.memory.feedback(routine.key, "ja")
-        rest = []
+        rest, said = [], []
         for command in routine.commands():
             intent = intents.match(command)
             done = self._do(intent, command) if intent is not None else None
             if done is None:
                 rest.append(command)
+            elif done:
+                said.append(done)
         if rest:
             self._rest = " und ".join(rest)
+        from .memory import Occasion
+
+        if isinstance(routine, Occasion):
+            return " ".join(said) or "Sehr wohl, Sir."  # "An Max ist raus, Sir." oder warum nicht
         return random.choice([f"Sehr wohl. {routine.label}, Sir.", f"Kommt sofort, Sir: {routine.label}."])
 
     def contact_app(self, person: str) -> str:

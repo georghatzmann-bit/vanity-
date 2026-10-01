@@ -26,8 +26,8 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# Diese Aktionen zählen für Routinen (Programme und Webseiten öffnen)
-ROUTINE_KINDS = {"open", "web"}
+# Diese Aktionen zählen für Routinen (Programme und Webseiten öffnen, in einen Discord-Sprachkanal gehen)
+ROUTINE_KINDS = {"open", "web", "voice"}
 KEEP_DAYS = 60  # so lange bleiben Gewohnheiten gespeichert
 SAID_DAYS = 3  # Gesagtes nur für den Tagesrückblick, danach weg
 MAX_EVENTS = 5000
@@ -74,17 +74,28 @@ class Routine:
 
     @property
     def label(self) -> str:
-        return _join([name for _kind, name in self.actions])
+        return _join([f"Sprachkanal {name}" if kind == "voice" else name for kind, name in self._ordered()])
+
+    def _ordered(self) -> list[tuple[str, str]]:
+        """Erst öffnen, dann in den Sprachkanal (Discord muss dafür offen sein)."""
+        return sorted(self.actions, key=lambda action: action[0] == "voice")
 
     def fits(self, day: dt.date) -> bool:
         weekend = day.weekday() >= 5
         return self.days == "täglich" or (self.days == "am Wochenende") == weekend
 
     def question(self) -> str:
-        return f"Sir, um diese Zeit öffnen Sie meist {self.label}. Soll ich?"
+        opened = [name for kind, name in self._ordered() if kind != "voice"]
+        voices = [name for kind, name in self._ordered() if kind == "voice"]
+        parts = []
+        if opened:
+            parts.append(f"öffnen Sie meist {_join(opened)}")
+        if voices:
+            parts.append(("gehen in den Sprachkanal " if opened else "gehen Sie meist in den Sprachkanal ") + _join(voices))
+        return f"Sir, um diese Zeit {' und '.join(parts)}. Soll ich?"
 
     def commands(self) -> list[str]:
-        return [f"Öffne {name}" for _kind, name in self.actions]
+        return [f"Geh in den Sprachkanal {name}" if kind == "voice" else f"Öffne {name}" for kind, name in self._ordered()]
 
     def describe(self) -> str:
         return f"{self.days} gegen {self.clock} Uhr: {self.label}"
@@ -92,6 +103,31 @@ class Routine:
     def as_dict(self) -> dict:
         return {"key": self.key, "label": self.label, "uhrzeit": self.clock, "tage": self.days,
                 "anzahl": self.count, "befehle": self.commands(), "frage": self.question()}
+
+
+@dataclass
+class Occasion:
+    """Ein Anlass aus dem Gedächtnis, z. B. ein Geburtstag: einmal am Tag ansagen und, wenn es
+    passt, anbieten, etwas zu tun ("Soll ich Max auf Discord gratulieren?")."""
+
+    key: str
+    label: str
+    text: str  # die Ansage
+    offer: str = ""  # die Frage dazu, leer = nur ansagen
+    command: str = ""  # was bei "Ja" passiert
+
+    def question(self) -> str:
+        return f"{self.text} {self.offer}".strip()
+
+    def commands(self) -> list[str]:
+        return [self.command] if self.command else []
+
+    def describe(self) -> str:
+        return self.text
+
+    def as_dict(self) -> dict:
+        return {"key": self.key, "label": self.label, "uhrzeit": "", "tage": "heute", "anzahl": 0,
+                "befehle": self.commands(), "frage": self.question()}
 
 
 class Memory:
@@ -298,11 +334,14 @@ class Memory:
         wanted = set(routine.keys)
         return any(f"{e.get('art')}:{_key(e.get('was', ''))}" in wanted for e in self.events(since=today))
 
-    def due(self, now: dt.datetime | None = None) -> Routine | None:
-        """Die Routine, die gerade dran ist und noch nicht erledigt oder abgelehnt wurde."""
+    def due(self, now: dt.datetime | None = None) -> Routine | Occasion | None:
+        """Der Anlass oder die Routine, die gerade dran ist und noch nicht erledigt oder abgelehnt wurde."""
         now = now or self._now()
         with self._lock:
             answers = self._load()["vorschlaege"]
+        occasion = self.occasion(now)
+        if occasion is not None:
+            return occasion
         for routine in self.routines(now):
             if not routine.fits(now.date()):
                 continue
@@ -335,6 +374,58 @@ class Memory:
             else:
                 state[answer] = int(state.get(answer, 0)) + 1
             self._save()
+
+    # ------------------------------------------------------------------ Geburtstage
+
+    def birthdays(self) -> list[dict]:
+        """Alle Geburtstage, die in den Fakten stehen ("Max hat am 3. Mai Geburtstag")."""
+        found, seen = [], set()
+        for fact in self.facts():
+            birthday = parse_birthday(fact.get("text", ""))
+            if birthday and (birthday["who"], birthday["month"], birthday["day"]) not in seen:
+                seen.add((birthday["who"], birthday["month"], birthday["day"]))
+                found.append(birthday)
+        return found
+
+    def upcoming_birthdays(self, now: dt.datetime | None = None, days: int = 30) -> list[dict]:
+        """Geburtstage in den nächsten Tagen, der nächste zuerst, mit "in_tagen"."""
+        today = (now or self._now()).date()
+        items = []
+        for birthday in self.birthdays():
+            next_day = _next_birthday(birthday, today)
+            if next_day is not None and (next_day - today).days <= days:
+                items.append({**birthday, "datum": next_day.isoformat(), "in_tagen": (next_day - today).days})
+        return sorted(items, key=lambda b: b["in_tagen"])
+
+    def occasion(self, now: dt.datetime | None = None) -> Occasion | None:
+        """Ein Geburtstag heute, tagsüber einmal angesagt (nicht nachts um zwei)."""
+        now = now or self._now()
+        if not (9 * 60 <= _minutes(now) <= 21 * 60 + 30):
+            return None
+        with self._lock:
+            answers = self._load()["vorschlaege"]
+        for birthday in self.upcoming_birthdays(now, days=0):
+            key = f"geburtstag:{_key(birthday['who'])}"
+            state = answers.get(key, {})
+            if state.get("nie") or state.get("angeboten") == now.date().isoformat():
+                continue
+            return self._birthday_occasion(birthday, key, now.date())
+        return None
+
+    def _birthday_occasion(self, birthday: dict, key: str, today: dt.date) -> Occasion:
+        if birthday["own"]:
+            return Occasion(key, "Ihr Geburtstag", "Alles Gute zum Geburtstag, Sir. Möge das neue Lebensjahr so "
+                                                    "reibungslos laufen wie Ihre Systeme.")
+        shown, name = birthday["shown"], birthday["name"]
+        age = today.year - birthday["year"] if birthday.get("year") else 0
+        text = f"Sir, {shown} wird heute {age}." if 0 < age < 120 else f"Sir, heute hat {shown} Geburtstag."
+        if not name:
+            return Occasion(key, f"Geburtstag: {shown}", text)
+        app = self.contact_app(name) or "discord"
+        app_name = {"discord": "Discord", "whatsapp": "WhatsApp", "telegram": "Telegram"}.get(app, "Discord")
+        first = name.split()[0]
+        return Occasion(key, f"Glückwunsch an {name}", text, f"Soll ich {name} auf {app_name} gratulieren?",
+                        f"Schreib {name} auf {app_name}: Alles Gute zum Geburtstag, {first}! 🎉")
 
     # ------------------------------------------------------------------ für das Gehirn
 
@@ -411,6 +502,81 @@ class Memory:
         with self._lock:
             self._load()["rueckblick"] = day.isoformat()
             self._save()
+
+
+# ---------------------------------------------------------------------- Geburtstage erkennen
+
+_MONTHS = {
+    "januar": 1, "jänner": 1, "jaenner": 1, "jan": 1, "februar": 2, "feber": 2, "feb": 2, "märz": 3, "maerz": 3,
+    "mär": 3, "mrz": 3, "april": 4, "apr": 4, "mai": 5, "juni": 6, "jun": 6, "juli": 7, "jul": 7, "august": 8,
+    "aug": 8, "september": 9, "sept": 9, "sep": 9, "oktober": 10, "okt": 10, "november": 11, "nov": 11,
+    "dezember": 12, "dez": 12,
+}
+_DATE = (r"(?P<day>\d{1,2})\.?\s*(?:(?P<month>\d{1,2})\.?(?:\s*(?P<year>(?:19|20)\d{2}))?"
+         r"|(?P<mname>[A-Za-zÄÖÜäöü]+)\.?(?:\s+(?P<year2>(?:19|20)\d{2}))?)")
+_BIRTHDAY = [re.compile(pattern, re.I) for pattern in (
+    rf"^(?P<who>.+?)\s+(?:hat|haben|hab|habe)\s+(?:am\s+)?{_DATE}\s+(?:seinen\s+|ihren\s+|meinen\s+)?geburtstag\b",
+    rf"^(?P<who>.+?)\s+(?:hat|haben|hab|habe)\s+(?:seinen\s+|ihren\s+|meinen\s+)?geburtstag\s+am\s+{_DATE}",
+    rf"^(?:der\s+)?geburtstag\s+(?:von|meines|meiner)\s+(?P<who>.+?)\s+ist\s+am\s+{_DATE}",
+    rf"^(?P<who>.+?)\s+geburtstag\s+ist\s+am\s+{_DATE}",
+    rf"^(?P<who>.+?)\s+(?:ist|wurde|bin)\s+am\s+{_DATE}\s+geboren",
+    rf"^am\s+{_DATE}\s+(?:hat|haben|hab|habe)\s+(?P<who>.+?)\s+(?:seinen\s+|ihren\s+|meinen\s+)?geburtstag$",
+)]
+_RELATION = {
+    "bruder", "schwester", "freund", "freundin", "kumpel", "cousin", "cousine", "onkel", "tante", "opa", "oma",
+    "mutter", "vater", "mama", "papa", "mami", "papi", "sohn", "tochter", "chef", "chefin", "kollege", "kollegin",
+    "nachbar", "nachbarin", "neffe", "nichte", "enkel", "enkelin", "frau", "mann", "partner", "partnerin",
+    "schwager", "schwägerin", "bester", "beste", "besten", "kleiner", "kleine", "großer", "große", "ex",
+}
+_OWNER = {"mein": "Ihr", "meine": "Ihre", "meinem": "Ihrem", "meiner": "Ihrer", "meines": "Ihres", "meinen": "Ihren"}
+
+
+def parse_birthday(text: str) -> dict | None:
+    """"Max hat am 3. Mai Geburtstag" -> {"who": "Max", "shown": "Max", "name": "Max", "month": 5, "day": 3, ...}.
+    "name" ist leer, wenn niemand zum Anschreiben dasteht ("Meine Mutter hat ...")."""
+    raw = " ".join(str(text).split()).strip(" .")
+    if "geburtstag" not in raw.lower() and "geboren" not in raw.lower():
+        return None
+    raw = re.sub(r"^Georg sagt:\s*", "", raw)
+    for pattern in _BIRTHDAY:
+        found = pattern.match(raw)
+        if found:
+            break
+    else:
+        return None
+    day = int(found.group("day"))
+    if found.group("month"):
+        month = int(found.group("month"))
+    else:
+        month = _MONTHS.get(found.group("mname").lower().rstrip("."), 0)
+    year = found.group("year") or found.group("year2")
+    try:
+        dt.date(2000, month, day)  # 2000 ist ein Schaltjahr: auch der 29. Februar ist gültig
+    except ValueError:
+        return None
+    who = found.group("who").strip(" ,'’")
+    words = who.split()
+    if not words or len(words) > 5:
+        return None
+    if who.lower().endswith("s") and len(words) == 1 and found.re is _BIRTHDAY[3]:
+        who = who[:-1]  # "Annas Geburtstag ist am ..."
+        words = [who]
+    own = who.lower() in ("ich", "georg", "mein", "meiner")
+    shown = " ".join(_OWNER.get(w.lower(), w) if i == 0 else w for i, w in enumerate(words))
+    name = " ".join(w for w in words if w.lower() not in _OWNER and w.lower() not in _RELATION and w[:1].isupper())
+    return {"who": who, "shown": shown, "name": "" if own else name, "own": own, "month": month, "day": day,
+            "year": int(year) if year else 0}
+
+
+def _next_birthday(birthday: dict, today: dt.date) -> dt.date | None:
+    for year in (today.year, today.year + 1):
+        try:
+            day = dt.date(year, birthday["month"], birthday["day"])
+        except ValueError:
+            day = dt.date(year, 2, 28)  # 29. Februar in einem normalen Jahr
+        if day >= today:
+            return day
+    return None
 
 
 # ---------------------------------------------------------------------- Sätze

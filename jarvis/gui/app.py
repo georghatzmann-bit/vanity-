@@ -375,7 +375,7 @@ class Api:
         """Was Jarvis über Georg weiß: Fakten, Kontakte, Gewohnheiten (für die Gedächtnis-Ansicht)."""
         memory = getattr(self._assistant, "memory", None)
         if memory is None:
-            return {"facts": [], "contacts": [], "routines": []}
+            return {"facts": [], "contacts": [], "routines": [], "birthdays": []}
         try:
             return {
                 "facts": [{"text": f.get("text", ""), "source": f.get("quelle", ""), "since": f.get("seit", "")}
@@ -383,10 +383,12 @@ class Api:
                 "contacts": [{"name": c.get("name", ""), "app": c.get("app", ""), "count": c.get("anzahl", 0)}
                              for c in memory.contacts()[:12]],
                 "routines": [r.as_dict() for r in memory.routines()][:10],
+                "birthdays": [{"shown": b["shown"], "date": b["datum"], "days": b["in_tagen"], "own": b["own"]}
+                              for b in memory.upcoming_birthdays(days=366)][:12],
             }
         except Exception as exc:
             log.debug("Gedächtnis-Stand: %s", exc)
-            return {"facts": [], "contacts": [], "routines": []}
+            return {"facts": [], "contacts": [], "routines": [], "birthdays": []}
 
     def remember(self, text) -> bool:
         from ..memory import match_memory

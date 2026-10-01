@@ -1768,6 +1768,7 @@ body[data-view="workshop"] .holo-scan {
 
 .mem-list .mem-time {
   flex: none;
+  min-width: 64px;
   color: var(--accent-text);
   font: 600 13px/1.45 var(--mono);
 }

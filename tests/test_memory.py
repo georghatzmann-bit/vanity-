@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 import tests.helpers  # noqa: F401
-from jarvis.memory import Memory, match_memory
+from jarvis.memory import Memory, Occasion, match_memory, parse_birthday
 
 
 class Clock:
@@ -84,6 +84,51 @@ class MemoryTest(unittest.TestCase):
         self.assertTrue(17 * 60 + 50 <= routine.minute <= 18 * 60 + 15, routine.clock)
         self.assertEqual(routine.commands(), ["Öffne Discord", "Öffne Spotify"])
         self.assertIn("Soll ich?", routine.question())
+
+    def test_voice_channel_is_part_of_a_habit(self):
+        for number in range(5):
+            self.clock.when = dt.datetime(2026, 9, 21 + number, 20, number)
+            self.memory.record("open", "Discord")
+            self.clock.when += dt.timedelta(minutes=1)
+            self.memory.record("voice", "Zocken")
+        routine = self.memory.routines(dt.datetime(2026, 10, 1, 12, 0))[0]
+        self.assertEqual(routine.commands(), ["Öffne Discord", "Geh in den Sprachkanal Zocken"])
+        self.assertEqual(routine.question(),
+                         "Sir, um diese Zeit öffnen Sie meist Discord und gehen in den Sprachkanal Zocken. Soll ich?")
+        self.assertEqual(routine.label, "Discord und Sprachkanal Zocken")
+
+    def test_birthday_today_is_announced_once_during_the_day(self):
+        self.memory.remember("Max hat am 1. Oktober Geburtstag")
+        self.memory.record("message", "Max", app="telegram")
+        self.assertIsNone(self.memory.due(dt.datetime(2026, 10, 1, 7, 30)), "nicht vor neun")
+        occasion = self.memory.due(dt.datetime(2026, 10, 1, 9, 5))
+        self.assertIsInstance(occasion, Occasion)
+        self.assertEqual(occasion.question(), "Sir, heute hat Max Geburtstag. Soll ich Max auf Telegram gratulieren?")
+        self.assertEqual(occasion.commands(), ["Schreib Max auf Telegram: Alles Gute zum Geburtstag, Max! 🎉"])
+        self.memory.offered(occasion, dt.datetime(2026, 10, 1, 9, 5))
+        self.assertIsNone(self.memory.due(dt.datetime(2026, 10, 1, 15, 0)), "nur einmal am Tag")
+        self.assertIsNone(self.memory.due(dt.datetime(2026, 10, 2, 10, 0)), "am nächsten Tag nicht mehr")
+
+    def test_birthday_with_age_relatives_and_own(self):
+        self.memory.remember("Georg sagt: Mein Bruder Tom hat am 01.10.2000 Geburtstag")
+        occasion = self.memory.occasion(dt.datetime(2026, 10, 1, 12, 0))
+        self.assertEqual(occasion.question(), "Sir, Ihr Bruder Tom wird heute 26. Soll ich Tom auf Discord gratulieren?")
+        self.memory.forget("Bruder Tom")
+        self.memory.remember("Georg sagt: Meine Mutter hat am 1. Oktober Geburtstag")
+        occasion = self.memory.occasion(dt.datetime(2026, 10, 1, 12, 0))
+        self.assertEqual((occasion.question(), occasion.commands()), ("Sir, heute hat Ihre Mutter Geburtstag.", []))
+        self.memory.forget("Mutter")
+        self.memory.remember("Georg sagt: Ich habe am 1. Oktober Geburtstag")
+        occasion = self.memory.occasion(dt.datetime(2026, 10, 1, 12, 0))
+        self.assertTrue(occasion.question().startswith("Alles Gute zum Geburtstag, Sir."))
+        self.assertEqual(occasion.commands(), [])
+
+    def test_upcoming_birthdays(self):
+        self.memory.remember("Max hat am 3. Oktober Geburtstag")
+        self.memory.remember("Anna hat am 2.10. Geburtstag")
+        self.memory.remember("Lisa hat am 1. Mai Geburtstag")
+        soon = self.memory.upcoming_birthdays(dt.datetime(2026, 10, 1, 12, 0), days=7)
+        self.assertEqual([(b["name"], b["in_tagen"]) for b in soon], [("Anna", 1), ("Max", 2)])
 
     def test_two_days_are_not_a_habit_and_random_times_neither(self):
         week_of_habits(self.memory, self.clock, days=2)
@@ -176,6 +221,25 @@ class SentenceTest(unittest.TestCase):
         for said in ("Merk dir das", "Merk dir das bitte", "Merk dir, was ich gesagt habe", "Merk dir, wo ich geparkt habe"):
             self.assertIsNone(match_memory(said), said)
 
+    def test_birthdays_are_recognized(self):
+        cases = {
+            "Max hat am 3. Mai Geburtstag": ("Max", "Max", 5, 3, 0),
+            "Georg sagt: Mein Bruder Tom hat am 12.03. Geburtstag": ("Ihr Bruder Tom", "Tom", 3, 12, 0),
+            "Annas Geburtstag ist am 5. Juni": ("Anna", "Anna", 6, 5, 0),
+            "Der Geburtstag von Lisa ist am 1.12.": ("Lisa", "Lisa", 12, 1, 0),
+            "Tom Müller hat Geburtstag am 3. Jänner": ("Tom Müller", "Tom Müller", 1, 3, 0),
+            "Max ist am 3. Mai 1990 geboren": ("Max", "Max", 5, 3, 1990),
+            "Am 3. Mai hat Max Geburtstag": ("Max", "Max", 5, 3, 0),
+            "Georg sagt: Meine Mutter hat am 14. Februar Geburtstag.": ("Ihre Mutter", "", 2, 14, 0),
+        }
+        for text, (shown, name, month, day, year) in cases.items():
+            found = parse_birthday(text)
+            self.assertEqual((found["shown"], found["name"], found["month"], found["day"], found["year"]),
+                             (shown, name, month, day, year), text)
+        self.assertTrue(parse_birthday("Georg sagt: Ich habe am 5. Juni Geburtstag")["own"])
+        for text in ("Max hat am 33. Mai Geburtstag", "Georg spielt gern Valorant.", "Max hat Geburtstag"):
+            self.assertIsNone(parse_birthday(text), text)
+
     def test_recall(self):
         for said in ("Was weißt du über mich?", "Jarvis, was weißt du eigentlich alles über mich", "Was hast du dir gemerkt?",
                      "Welche Gewohnheiten habe ich?", "Was kennst du denn für Gewohnheiten?"):
@@ -212,6 +276,34 @@ class AssistantMemoryTest(unittest.TestCase):
         self.assertIn("Max hat am 3. Mai Geburtstag; „Ich höre gern Rock“", answer)
         self.assertIn("Discord", answer)
         self.assertEqual(self.brain.asked, [])
+
+    def test_birthday_offer_sends_congratulations(self):
+        self.assistant.memory.remember("Max hat am 1. Oktober Geburtstag")
+        self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
+        with mock.patch.object(self.assistant, "_present", return_value=True), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+        self.assertEqual(self.speaker.said[-1], "Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?")
+        with mock.patch("jarvis.messaging.send", return_value="ok") as sent:
+            answer = self.assistant.handle("Ja, mach")
+        self.assertEqual(sent.call_args.args, ("discord", "Max", "Alles Gute zum Geburtstag, Max! 🎉"))
+        self.assertIn("Max", answer)
+        self.assertEqual(self.brain.asked, [])
+
+    def test_birthday_without_contact_is_only_announced(self):
+        self.assistant.memory.remember("Georg sagt: Meine Oma hat am 1. Oktober Geburtstag")
+        self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
+        with mock.patch.object(self.assistant, "_present", return_value=True), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+        self.assertEqual(self.speaker.said[-1], "Sir, heute hat Ihre Oma Geburtstag.")
+        self.assertIsNone(self.assistant._offer, "nichts zu beantworten")
+
+    def test_voice_channel_is_learned(self):
+        with mock.patch("jarvis.messaging.discord_open") as opened:
+            self.assistant.handle("Geh in den Sprachkanal Zocken")
+        opened.assert_called_once_with("zocken", "voice")
+        self.assertIn(("voice", "Zocken"), [(e["art"], e["was"]) for e in self.assistant.memory.events()])
 
     def offer(self):
         week_of_habits(self.assistant.memory, self.clock)

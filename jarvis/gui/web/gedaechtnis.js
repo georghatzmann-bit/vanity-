@@ -22,13 +22,26 @@
       routinesEmpty: $('memRoutinesEmpty'),
       contacts: $('memContacts'),
       contactsEmpty: $('memContactsEmpty'),
+      birthdays: $('memBirthdays'),
+      birthdaysEmpty: $('memBirthdaysEmpty'),
       facts: $('memFacts'),
       factsEmpty: $('memFactsEmpty'),
       offer: $('offer'),
       offerText: $('offerText'),
     };
     if (!el.sum) return null;
-    let data = { facts: [], contacts: [], routines: [] };
+    let data = { facts: [], contacts: [], routines: [], birthdays: [] };
+    const MONTHS = ['Jän.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.'];
+
+    function when(days) {
+      if (days === 0) return 'heute';
+      if (days === 1) return 'morgen';
+      return 'in ' + days + ' Tagen';
+    }
+
+    function birthdayLine(b) {
+      return b.own ? 'Ihr Geburtstag ist ' + when(b.days) : b.shown + ' hat ' + when(b.days) + ' Geburtstag';
+    }
 
     function plural(n, one, many) {
       return n + ' ' + (n === 1 ? one : many);
@@ -42,9 +55,31 @@
         el.sum.textContent = plural(facts.length, 'Sache', 'Sachen') + ' über Sie · ' + plural(routines.length, 'Gewohnheit', 'Gewohnheiten')
           + ' · ' + plural(contacts.length, 'Kontakt', 'Kontakte');
       }
+      const birthdays = data.birthdays || [];
       const first = routines[0];
-      el.next.hidden = !first;
-      if (first) el.next.textContent = first.tage + ' gegen ' + first.uhrzeit + ' Uhr: ' + first.label;
+      const soon = birthdays.find((b) => b.days <= 7);
+      el.next.hidden = !first && !soon;
+      if (soon) el.next.textContent = birthdayLine(soon);
+      else if (first) el.next.textContent = first.tage + ' gegen ' + first.uhrzeit + ' Uhr: ' + first.label;
+
+      if (el.birthdays) {
+        el.birthdays.replaceChildren(...birthdays.map((b) => {
+          const li = document.createElement('li');
+          const date = document.createElement('span');
+          date.className = 'mem-time';
+          const d = new Date(b.date + 'T12:00:00');
+          date.textContent = isNaN(d) ? '' : d.getDate() + '. ' + MONTHS[d.getMonth()];
+          const text = document.createElement('span');
+          text.className = 'mem-text';
+          text.textContent = b.own ? 'Ihr Geburtstag' : b.shown;
+          const small = document.createElement('small');
+          small.textContent = when(b.days);
+          text.appendChild(small);
+          li.append(date, text);
+          return li;
+        }));
+        el.birthdaysEmpty.hidden = birthdays.length > 0;
+      }
 
       el.routines.replaceChildren(...routines.map((r) => {
         const li = document.createElement('li');
