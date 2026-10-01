@@ -184,11 +184,14 @@ class SendTest(unittest.TestCase):
         self.assertGreaterEqual(desk.clock, 0.6)
 
     def test_waits_while_a_key_is_held(self):
-        # Georg läuft noch mit W oder sprintet mit Umschalt: erst loslassen, dann tippen
+        # Georg läuft noch mit W oder sprintet mit Umschalt: erst loslassen, dann Discord holen und tippen
         desk = FakeDesktop(held_for=0.8)
         send("discord", "Max", "Hallo", desk)
         self.assertGreaterEqual(desk.clock, 0.8)
         self.assertEqual(desk.actions[-2:], [("press", ("enter",)), ("focus", 4242)])
+        desk = FakeDesktop(held_for=1.6)  # länger als das erste Warten: dann wartet jeder Tastendruck
+        send("discord", "Max", "Hallo", desk)
+        self.assertIn(("type", "Hallo"), desk.actions)
 
     def test_keys_held_the_whole_time_sends_nothing(self):
         desk = FakeDesktop(held_for=999)

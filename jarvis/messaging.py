@@ -246,9 +246,10 @@ class _Session:
             self.desk.sleep(0.05)
 
     def wait_quiet(self, seconds: float) -> None:
-        """Wartet, bis Georg Maus und Tastatur kurz loslässt (höchstens `seconds`)."""
+        """Wartet, bis Georg Maus und Tastatur kurz loslässt und keine Taste mehr hält (höchstens
+        `seconds`). So holt Jarvis die App nicht nach vorn, während Georg gerade läuft oder zielt."""
         end = self.desk.now() + seconds
-        while self.desk.now() < end and self.desk.idle_seconds() < 0.35:
+        while self.desk.now() < end and (self.desk.idle_seconds() < 0.35 or self.desk.keys_held()):
             self.desk.sleep(0.05)
 
     def bring_forward(self) -> None:
