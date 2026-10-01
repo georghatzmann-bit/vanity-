@@ -212,6 +212,29 @@ def wake(mac: str, broadcast: str = "255.255.255.255") -> str:
 
 # ---------------------------------------------------------------------- Zwischenablage
 
+def low_disks(min_free_gb: float = 10.0, min_free_pct: float = 8.0) -> list[tuple[str, int]]:
+    """Fest eingebaute Laufwerke, auf denen kaum noch Platz ist: [("C", 6), ...] (frei in GB).
+    Kleine Partitionen (Wiederherstellung, Start) zählen nicht."""
+    import psutil
+
+    found = []
+    for part in psutil.disk_partitions(all=False):
+        opts = (part.opts or "").lower()
+        if not part.fstype or "cdrom" in opts or "removable" in opts:
+            continue
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+        except (OSError, PermissionError):
+            continue
+        if usage.total < 20 * 1024 ** 3:
+            continue
+        free_gb = usage.free / 1024 ** 3
+        if free_gb < min_free_gb and 100.0 - usage.percent < min_free_pct:
+            drive = part.mountpoint.rstrip("\\/").rstrip(":") or part.mountpoint
+            found.append((drive, int(free_gb)))
+    return found
+
+
 def copy_text(text: str) -> bool:
     """Legt Text in die Windows-Zwischenablage (für "Kopieren"-Knöpfe). False, wenn es nicht ging."""
     if os.name != "nt":

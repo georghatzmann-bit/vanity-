@@ -662,7 +662,7 @@ class Assistant:
             return False
         if not self._present() or self._fullscreen():
             return False
-        routine = self.memory.due(now)
+        routine = self.memory.due(now) or self._disk_notice(now)
         if routine is None:
             return False
         self.memory.offered(routine, now)
@@ -677,6 +677,34 @@ class Assistant:
         self._follow_up = True  # die Antwort geht ohne "Hey Jarvis"
         self.say(routine.question())
         return True
+
+    def _disk_notice(self, now=None):
+        """Eine fast volle Festplatte (bei Spielen schnell passiert), höchstens alle drei Tage und
+        nur tagsüber: "Sir, auf Laufwerk C sind nur noch 6 Gigabyte frei. Soll ich nachsehen, ...?" """
+        from .memory import Occasion
+
+        now = now or dt.datetime.now()
+        if time.monotonic() < getattr(self, "_disk_checked", 0.0) or not 9 <= now.hour < 22:
+            return None
+        self._disk_checked = time.monotonic() + 3600  # höchstens einmal pro Stunde nachsehen
+        try:
+            from . import pc
+
+            low = pc.low_disks()
+        except Exception as exc:
+            log.debug("Festplatten: %s", exc)
+            return None
+        for drive, free in low:
+            key = f"speicher:{drive.lower()}"
+            if not self.memory.may_offer(key, now, every_days=3):
+                continue
+            amount = "weniger als ein Gigabyte" if free < 1 else "ein Gigabyte" if free == 1 else f"{free} Gigabyte"
+            return Occasion(key, f"Laufwerk {drive} fast voll", f"Sir, auf Laufwerk {drive} ist nur noch {amount} frei."
+                            if free <= 1 else f"Sir, auf Laufwerk {drive} sind nur noch {amount} frei.",
+                            "Soll ich nachsehen, was dort am meisten Platz braucht?",
+                            f"Schau schnell nach, was auf Laufwerk {drive} am meisten Platz braucht (Downloads, Spiele-Ordner "
+                            f"wie Steam, Papierkorb, Temp, ohne das ganze Laufwerk zu durchsuchen), und schlag vor, was weg kann")
+        return None
 
     def _present(self) -> bool:
         """Sitzt Georg am PC (Maus oder Tastatur in den letzten fünf Minuten)?"""

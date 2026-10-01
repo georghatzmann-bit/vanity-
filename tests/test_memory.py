@@ -275,6 +275,7 @@ class AssistantMemoryTest(unittest.TestCase):
         self.brain = FakeBrain()
         self.assistant, self.ui, self.speaker, _ = make(self.brain)
         self.assistant.memory = Memory(Path(self.folder.name) / "g.json", now=self.clock)
+        self.assistant._disk_checked = float("inf")  # die echte Festplatte dieses Rechners spielt keine Rolle
 
     def tearDown(self):
         self.folder.cleanup()
@@ -319,6 +320,28 @@ class AssistantMemoryTest(unittest.TestCase):
             self.assertTrue(self.assistant.check_suggestions(self.clock.when))
         self.assertEqual(self.speaker.said[-1], "Sir, heute hat Ihre Oma Geburtstag.")
         self.assertIsNone(self.assistant._offer, "nichts zu beantworten")
+
+    def test_full_disk_is_mentioned_every_few_days(self):
+        self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
+        present = (mock.patch.object(self.assistant, "_present", return_value=True),
+                   mock.patch.object(self.assistant, "_fullscreen", return_value=False))
+        with present[0], present[1], mock.patch("jarvis.pc.low_disks", return_value=[("C", 6)]):
+            self.assistant._disk_checked = 0.0
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+            self.assertEqual(self.speaker.said[-1], "Sir, auf Laufwerk C sind nur noch 6 Gigabyte frei. "
+                                                    "Soll ich nachsehen, was dort am meisten Platz braucht?")
+            self.brain.chunks = ["Am meisten Platz brauchen Ihre Spiele, Sir."]
+            answer = self.assistant.handle("Ja, bitte")
+            self.assertIn("Laufwerk C am meisten Platz", self.brain.asked[-1])
+            self.assertIn("Spiele", answer)
+            # Nicht gleich wieder, auch nicht nach einer Stunde
+            self.assistant._disk_checked = 0.0
+            self.assertFalse(self.assistant.check_suggestions(dt.datetime(2026, 10, 2, 10, 0)))
+            self.assistant._disk_checked = 0.0
+            self.assertTrue(self.assistant.check_suggestions(dt.datetime(2026, 10, 4, 10, 0)), "drei Tage später")
+        with present[0], present[1], mock.patch("jarvis.pc.low_disks", return_value=[]):
+            self.assistant._disk_checked = 0.0
+            self.assertFalse(self.assistant.check_suggestions(dt.datetime(2026, 10, 8, 10, 0)))
 
     def test_voice_channel_is_learned(self):
         with mock.patch("jarvis.messaging.discord_open") as opened:

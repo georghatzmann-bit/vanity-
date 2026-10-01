@@ -357,6 +357,19 @@ class Memory:
             return routine
         return None
 
+    def may_offer(self, key: str, now: dt.datetime | None = None, every_days: int = 1) -> bool:
+        """Darf Jarvis das jetzt anbieten? Nicht nach "Nie wieder", nicht nach meist "Nein" und
+        nicht öfter als alle `every_days` Tage."""
+        now = now or self._now()
+        with self._lock:
+            state = dict(self._load()["vorschlaege"].get(key, {}))
+        if state.get("nie"):
+            return False
+        if int(state.get("nein", 0)) >= 3 and int(state.get("nein", 0)) > 2 * int(state.get("ja", 0)):
+            return False
+        last = str(state.get("angeboten", ""))
+        return not last or last <= (now.date() - dt.timedelta(days=every_days)).isoformat()
+
     def offered(self, routine: Routine, now: dt.datetime | None = None) -> None:
         now = now or self._now()
         with self._lock:
