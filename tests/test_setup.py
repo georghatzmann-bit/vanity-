@@ -556,6 +556,36 @@ class PremiumSettingsTest(SetupTestCase):
         self.assertTrue(result["ok"], result)
         self.assertEqual(self.saved()["tts"]["elevenlabs_voice"], "v_lib_added")
 
+    def test_free_account_switches_away_from_a_library_voice(self):
+        self.fake.tier = "free"
+        self.fake.library_voices = [("v_lennard", "Lennard - Warm & Trustworthy")]
+        self.assertTrue(self.api.eleven_select("v_lennard", "Lennard")["ok"])
+        result = self.api.eleven_check("sk_test")
+        self.assertTrue(result["ok"], result)
+        self.assertTrue(result["free"])
+        self.assertEqual((result["used"], result["limit"]), (1200, 10000))
+        self.assertEqual(result["selected"], "v_george")
+        self.assertIn("Lennard", result["note"])
+        self.assertIn("Starter", result["note"])
+        tts = self.saved()["tts"]
+        self.assertEqual((tts["engine"], tts["elevenlabs_voice"], tts["elevenlabs_voice_name"]), ("elevenlabs", "v_george", "George"))
+
+    def test_free_account_does_not_take_library_voices(self):
+        self.fake.tier = "free"
+        self.api.eleven_check("sk_test")
+        result = self.api.eleven_add("owner1", "v_lib", "Otto")
+        self.assertFalse(result["ok"])
+        self.assertIn("Starter", result["error"])
+        self.assertFalse(any("/v1/voices/add/" in r[1] for r in self.fake.requests), "gar nicht erst übernommen")
+
+    def test_paid_account_keeps_its_library_voice(self):
+        self.fake.library_voices = [("v_lennard", "Lennard - Warm & Trustworthy")]
+        self.assertTrue(self.api.eleven_select("v_lennard", "Lennard")["ok"])
+        result = self.api.eleven_check("sk_test")
+        self.assertFalse(result["free"])
+        self.assertEqual((result["selected"], result["note"]), ("v_lennard", ""))
+        self.assertEqual(self.saved()["tts"]["elevenlabs_voice"], "v_lennard")
+
     def test_links_only_to_the_sign_up_pages(self):
         with mock.patch("webbrowser.open", return_value=True) as opened:
             self.assertTrue(self.api.open_url("https://console.groq.com/keys"))

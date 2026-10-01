@@ -678,14 +678,27 @@
     const plan = S.eleven.plan;
     const line = $('elevenPlan');
     if (plan && plan.limit) {
-      const left = Math.max(0, plan.limit - plan.used);
-      line.textContent = `Abo ${plan.tier || 'aktiv'}: noch ${left.toLocaleString('de-DE')} von ${plan.limit.toLocaleString('de-DE')} Zeichen diesen Monat (ein Satz von Jarvis braucht etwa 60).`;
+      const left = Math.max(0, plan.limit - plan.used).toLocaleString('de-DE');
+      const all = plan.limit.toLocaleString('de-DE');
+      const tier = plan.tier ? plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1) : 'aktiv';
+      line.textContent = plan.free
+        ? `Gratis-Konto: noch ${left} von ${all} Credits diesen Monat, ein Satz von Jarvis braucht etwa 30 bis 60. Damit gehen die Standard-Stimmen, Stimmen aus der Bibliothek erst ab Starter.`
+        : `Abo ${tier}: noch ${left} von ${all} Credits diesen Monat, ein Satz von Jarvis braucht etwa 30 bis 60.`;
       line.hidden = false;
     } else {
       line.hidden = true;
     }
     $('libraryBox').hidden = !S.eleven.checked;
+    $('libraryNote').hidden = !freePlan();
     renderElevenVoices();
+  }
+
+  // Mit Gratis-Konto gibt ElevenLabs Stimmen aus der Bibliothek nicht über die Schnittstelle frei.
+  const freePlan = () => !!(S.eleven.plan && S.eleven.plan.free);
+  const locked = (v) => freePlan() && !!v.from_library;
+
+  function lockedHint(v) {
+    toast(`${v.name} kommt aus der Bibliothek. Die gibt ElevenLabs über Jarvis erst ab dem Starter-Abo frei. Kostenlos gehen die Standard-Stimmen wie George.`, 'info');
   }
 
   const LABEL_DE = {
@@ -711,10 +724,13 @@
   }
 
   function elevenCard(v, opts) {
-    const card = el('div', 'voice' + (opts.library ? ' lib' : ''));
-    const chosen = !opts.library && S.tts.engine === 'elevenlabs' && S.eleven.selected === v.voice_id;
+    // Bibliothek unten: dort erklärt ein Hinweis den Tarif, die Karten bleiben normal
+    const off = !opts.library && locked(v);
+    const card = el('div', 'voice' + (opts.library ? ' lib' : '') + (off ? ' locked' : ''));
+    const chosen = !opts.library && !off && S.tts.engine === 'elevenlabs' && S.eleven.selected === v.voice_id;
     card.setAttribute('role', opts.library ? 'group' : 'radio');
     if (!opts.library) card.setAttribute('aria-checked', String(chosen));
+    if (off) card.setAttribute('aria-disabled', 'true');
     card.tabIndex = 0;
     if (S.playing === v.voice_id) card.classList.add('playing');
     const avatar = el('span', 'avatar', (v.name || '?').charAt(0));
@@ -724,6 +740,7 @@
     txt.append(el('span', 'voice-name', v.name), el('span', 'voice-desc', v.description || bits));
     const tags = el('span', 'voice-tags');
     if (chosen) tags.append(el('span', 'badge accent', 'Aktiv'));
+    if (off) tags.append(el('span', 'badge warn', 'ab Starter'));
     if (bits && v.description) tags.append(el('span', 'badge', bits));
     txt.append(tags);
     const play = el('button', 'play');
@@ -739,7 +756,9 @@
       playSample(v);
     });
     card.append(avatar, txt, play);
-    if (opts.library) {
+    if (opts.library && freePlan()) {
+      // Anhören ja, übernehmen erst mit Abo (sonst wäre eine Stimme gewählt, die nicht spricht)
+    } else if (opts.library) {
       const take = el('button', 'btn small', 'Übernehmen');
       take.type = 'button';
       take.addEventListener('click', (e) => {
@@ -760,7 +779,7 @@
         card.append(german);
         card.classList.add('with-action');
       }
-      const pick = () => elevenSelect(v);
+      const pick = () => (off ? lockedHint(v) : elevenSelect(v));
       card.addEventListener('click', pick);
       card.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -774,7 +793,8 @@
 
   function renderElevenVoices() {
     const grid = $('elevenGrid');
-    grid.replaceChildren(...S.eleven.voices.map((v) => elevenCard(v, {})));
+    const voices = [...S.eleven.voices].sort((a, b) => Number(locked(a)) - Number(locked(b)));
+    grid.replaceChildren(...voices.map((v) => elevenCard(v, {})));
     const lib = $('libraryGrid');
     lib.replaceChildren(...S.eleven.library.map((v) => elevenCard(v, { library: true })));
     for (const b of document.querySelectorAll('#libraryGender .chip')) {
@@ -828,12 +848,18 @@
         S.eleven.keySet = true;
         S.eleven.checked = true;
         S.eleven.voices = Array.isArray(r.voices) ? r.voices : [];
-        S.eleven.plan = { tier: r.tier, used: r.used, limit: r.limit };
-        if (!S.eleven.selected || !S.eleven.voices.some((v) => v.voice_id === S.eleven.selected)) {
+        S.eleven.plan = { tier: r.tier, used: r.used, limit: r.limit, free: !!r.free };
+        const current = S.eleven.voices.find((v) => v.voice_id === S.eleven.selected);
+        if (!current || locked(current) || r.note) {
           S.eleven.selected = r.selected || '';
+          const v = S.eleven.voices.find((x) => x.voice_id === S.eleven.selected);
+          if (v) S.eleven.name = v.name;
         }
         $('elevenKey').value = '';
-        if (key) formMsg('elevenMsg', 'ok', 'Verbunden. Wähl unten eine Stimme, sie gilt sofort.');
+        if (r.note) formMsg('elevenMsg', 'warn', r.note);
+        else if (key) formMsg('elevenMsg', 'ok', r.free
+          ? 'Verbunden mit deinem Gratis-Konto. Wähl unten eine Stimme, sie gilt sofort.'
+          : 'Verbunden. Wähl unten eine Stimme, sie gilt sofort.');
         if (!S.eleven.library.length) elevenLibrary(S.eleven.gender);
         if (key && S.eleven.selected) {
           const v = S.eleven.voices.find((x) => x.voice_id === S.eleven.selected);
@@ -897,7 +923,7 @@
         S.eleven.selected = r.voice_id;
         S.eleven.name = v.name;
         S.tts.engine = 'elevenlabs';
-        S.eleven.voices = [{ ...v, voice_id: r.voice_id, library: false }, ...S.eleven.voices];
+        S.eleven.voices = [{ ...v, voice_id: r.voice_id, library: false, from_library: true }, ...S.eleven.voices];
         S.eleven.library = S.eleven.library.filter((x) => x.voice_id !== v.voice_id);
         toast(`${v.name} ist übernommen und spricht ab jetzt für Jarvis.`, 'ok');
       } else {
@@ -1749,8 +1775,12 @@
       eleven_check: (key) => later(key === 'falsch'
         ? { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit sk_).' }
         : {
-          ok: true, error: '', tier: 'starter', used: 4120, limit: 30000, selected: 'v_george', active: true,
+          ok: true, error: '', selected: 'v_george', active: true, note: '',
+          ...(params.get('plan') === 'free'
+            ? { tier: 'free', free: true, used: 1830, limit: 10000 }
+            : { tier: 'starter', free: false, used: 4120, limit: 30000 }),
           voices: [
+            ...(params.get('plan') === 'free' ? [{ voice_id: 'v_lennard', name: 'Lennard', gender: 'male', accent: 'standard', age: 'middle_aged', description: 'Warm und vertrauenswürdig, Hochdeutsch', preview_url: '', from_library: true }] : []),
             { voice_id: 'v_george', name: 'George', gender: 'male', accent: 'british', age: 'middle_aged', description: 'Warm, ruhig, erzählend', preview_url: '' },
             { voice_id: 'v_daniel', name: 'Daniel', gender: 'male', accent: 'british', age: 'middle_aged', description: 'Klar und souverän, wie ein Nachrichtensprecher', preview_url: '' },
             { voice_id: 'v_brian', name: 'Brian', gender: 'male', accent: 'american', age: 'middle_aged', description: 'Tief und sonor', preview_url: '' },
@@ -1759,11 +1789,11 @@
         }, 900),
       eleven_library: (gender) => later({
         ok: true, error: '', voices: gender === 'female' ? [
-          { voice_id: 'l_lena', public_owner_id: 'o1', name: 'Lena', gender: 'female', accent: 'standard', description: 'Junge, natürliche Stimme aus Berlin', preview_url: '' },
+          { voice_id: 'l_lena', public_owner_id: 'o1', from_library: true, name: 'Lena', gender: 'female', accent: 'standard', description: 'Junge, natürliche Stimme aus Berlin', preview_url: '' },
         ] : [
-          { voice_id: 'l_otto', public_owner_id: 'o1', name: 'Otto', gender: 'male', accent: 'standard', description: 'Tiefer, ruhiger Erzähler, Hochdeutsch', preview_url: '' },
-          { voice_id: 'l_maximilian', public_owner_id: 'o2', name: 'Maximilian', gender: 'male', accent: 'austrian', description: 'Wiener Charme, souverän', preview_url: '' },
-          { voice_id: 'l_karl', public_owner_id: 'o3', name: 'Karl', gender: 'male', accent: 'standard', description: 'Butler-Ton, britisch angehaucht', preview_url: '' },
+          { voice_id: 'l_otto', public_owner_id: 'o1', from_library: true, name: 'Otto', gender: 'male', accent: 'standard', description: 'Tiefer, ruhiger Erzähler, Hochdeutsch', preview_url: '' },
+          { voice_id: 'l_maximilian', public_owner_id: 'o2', from_library: true, name: 'Maximilian', gender: 'male', accent: 'austrian', description: 'Wiener Charme, souverän', preview_url: '' },
+          { voice_id: 'l_karl', public_owner_id: 'o3', from_library: true, name: 'Karl', gender: 'male', accent: 'standard', description: 'Butler-Ton, britisch angehaucht', preview_url: '' },
         ],
       }, 500),
       eleven_add: (owner, id) => later({ ok: true, error: '', voice_id: id + '_mein' }, 600),

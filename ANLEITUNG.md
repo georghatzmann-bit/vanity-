@@ -19,21 +19,22 @@ Damit versteht Jarvis dich viel besser und schneller. Kostet nichts.
 2. **Create API Key** klicken, einen Namen eingeben (zum Beispiel „Jarvis“), **Submit**.
 3. Den Schlüssel (beginnt mit `gsk_`) kopieren. Er wird nur einmal angezeigt.
 
-## 3. Premium-Stimme (ElevenLabs, etwa 6 $ im Monat)
+## 3. Premium-Stimme (ElevenLabs, gratis zum Ausprobieren)
 
 Das ist der große Unterschied: Jarvis klingt dann wie ein Mensch.
 
-1. https://elevenlabs.io öffnen und ein Konto anlegen.
-2. Unter **Upgrade** das Abo **Starter** wählen (etwa 6 $ im Monat, reicht für mehrere hundert Antworten).
-3. https://elevenlabs.io/app/settings/api-keys öffnen > **Create API Key** > Namen eingeben > ohne Einschränkungen erstellen.
-4. Den Schlüssel (beginnt mit `sk_`) kopieren.
+1. https://elevenlabs.io öffnen und ein Konto anlegen. Das **Gratis-Konto** reicht zum Ausprobieren: 10.000 Credits im Monat, das sind etwa 150 bis 300 kurze Antworten von Jarvis. Damit gehen die **Standard-Stimmen** wie George oder Daniel.
+2. https://elevenlabs.io/app/settings/api-keys öffnen > **Create API Key** > Namen eingeben > ohne Einschränkungen erstellen.
+3. Den Schlüssel (beginnt mit `sk_`) kopieren.
+
+Später, wenn es dir gefällt: Unter **Upgrade** das Abo **Starter** wählen (etwa 6 $ im Monat, 30.000 Credits). Erst damit gehen auch die **deutschen Stimmen aus der Bibliothek** (zum Beispiel Lennard). ElevenLabs gibt sie für Gratis-Konten nicht an Programme wie Jarvis heraus.
 
 ## 4. Schlüssel in die Einrichtung
 
 Die Einrichtung öffnet sich nach der Installation von selbst. Später: Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Einstellungen**.
 
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
-2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen und **Prüfen** klicken. Dann Stimmen anhören (Play-Knopf) und eine anklicken. **Auf Deutsch** spielt den Begrüßungssatz mit dieser Stimme. Weiter unten gibt es **deutsche Stimmen aus der Bibliothek**: anhören und **Übernehmen**.
+2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen und **Prüfen** klicken. Dann Stimmen anhören (Play-Knopf) und eine anklicken. **Auf Deutsch** spielt den Begrüßungssatz mit dieser Stimme. Weiter unten gibt es **deutsche Stimmen aus der Bibliothek**: anhören und, ab dem Starter-Abo, **Übernehmen**. Stimmen mit dem Zeichen „ab Starter“ gehen mit dem Gratis-Konto nicht.
 3. **Wohnort**, **Gehirn** (prüft dein Claude-Abo) und **Extras** wie gewohnt.
 
 Zum Schluss **Jarvis starten**.
@@ -72,7 +73,7 @@ Jarvis macht das einfach. Nur vor **Löschen, Deinstallieren, Herunterfahren und
 ## Wenn etwas nicht klappt
 
 - **Jarvis reagiert nicht auf „Hey Jarvis“:** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob „Hey Jarvis“ ankommt. Klappt es nur knapp, „Empfindlicher“ einschalten. Strg + Alt + J geht immer.
-- **Die Stimme klingt wieder nach Computer:** Dann ist das ElevenLabs-Guthaben aufgebraucht oder das Internet weg. Jarvis sagt das einmal an. Unter Einstellungen > Stimme steht, wie viele Zeichen noch übrig sind.
+- **Die Stimme klingt wieder nach Computer:** Dann ist das ElevenLabs-Guthaben aufgebraucht, die gewählte Stimme braucht ein Abo, oder das Internet ist weg. Jarvis sagt einmal an, was davon. Unter Einstellungen > Stimme steht, wie viele Credits noch übrig sind.
 - **Jarvis versteht dich schlecht:** Prüfen, ob der Groq-Schlüssel unter Einstellungen > Mikrofon „Aktiv“ zeigt. Ohne Groq erkennt dein PC selbst, das ist langsamer und ungenauer.
 - **Jarvis lehnt etwas ab:** Anders formulieren hilft meistens. Unter Einstellungen > Gehirn steht Claudes genaue Meldung mit einem Knopf zum Kopieren.
 - **Mikrofon blockiert** (die Einrichtung meldet absolute Stille): Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > „Desktop-Apps den Zugriff auf das Mikrofon erlauben“ einschalten.

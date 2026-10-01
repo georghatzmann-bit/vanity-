@@ -1,4 +1,6 @@
-"""ElevenLabs: die natürlichsten Stimmen, kostenpflichtig (ab etwa 6 Dollar im Monat).
+"""ElevenLabs: die natürlichsten Stimmen. Das Gratis-Konto reicht zum Ausprobieren
+(10.000 Credits im Monat, über die Schnittstelle nur die Standard-Stimmen), ab dem
+Starter-Abo (etwa 6 Dollar im Monat) gehen auch die Stimmen aus der Bibliothek.
 
 Nur die Teile der Schnittstelle, die Jarvis braucht: Stimmen auflisten, deutsche Stimmen
 aus der Bibliothek suchen und übernehmen, das Kontingent abfragen und Sprache streamen
@@ -25,13 +27,16 @@ LANGUAGE_MODELS = {"eleven_flash_v2_5", "eleven_turbo_v2_5"}
 RATE = 24000
 # Bekannte Stimmen, die es in jedem Konto gibt: britisch, ruhig, passend für Jarvis
 PREFERRED_NAMES = ("George", "Daniel", "Brian", "Bill")
+# So heißt der Tarif ohne Abo. Damit gibt ElevenLabs keine Bibliotheks-Stimmen über die
+# Schnittstelle frei ("Free users cannot use library voices via the API").
+FREE_TIER = "free"
 
 VOICE_SETTINGS = {"stability": 0.5, "similarity_boost": 0.8, "style": 0.0, "use_speaker_boost": True, "speed": 1.0}
 
 
 class ElevenLabsError(RuntimeError):
-    """`kind`: key (Schlüssel falsch), quota (Guthaben leer), permission (Schlüssel darf das nicht),
-    model, param, voice, busy, net, other."""
+    """`kind`: key (Schlüssel falsch), quota (Guthaben leer), plan (Stimme gibt es erst mit Abo),
+    permission (Schlüssel darf das nicht), model, param, voice, busy, net, other."""
 
     def __init__(self, kind: str, message: str) -> None:
         super().__init__(message)
@@ -92,6 +97,7 @@ class ElevenLabs:
             row = _voice(v)
             row["public_owner_id"] = v.get("public_owner_id", "")
             row["library"] = True
+            row["from_library"] = True
             rows.append(row)
         return rows
 
@@ -127,21 +133,30 @@ class ElevenLabs:
         return b"".join(self.stream(text, voice_id, model, **kwargs))
 
 
-def pick_default_voice(voices: list[dict]) -> dict | None:
+def pick_default_voice(voices: list[dict], free: bool = False) -> dict | None:
     """Eine gute erste Wahl für Jarvis: eine der ruhigen britischen Standardstimmen,
-    sonst die erste männliche, sonst irgendeine."""
+    sonst die erste männliche, sonst irgendeine. Eigene Stimmen und Standardstimmen vor
+    denen aus der Bibliothek; mit Gratis-Konto (`free`) nur die, die dort auch gehen."""
+    usable = [v for v in voices if not v.get("from_library")]
+    ordered = usable if free else usable + [v for v in voices if v.get("from_library")]
     for name in PREFERRED_NAMES:
-        for v in voices:
+        for v in ordered:
             if v["name"].split(" ")[0].lower() == name.lower():
                 return v
-    for v in voices:
+    for v in ordered:
         if v.get("gender") == "male":
             return v
-    return voices[0] if voices else None
+    return ordered[0] if ordered else None
+
+
+def usable_on_plan(voice: dict, tier: str) -> bool:
+    """Kann Jarvis diese Stimme mit diesem Tarif nutzen? Bibliotheks-Stimmen erst mit Abo."""
+    return not (voice.get("from_library") and str(tier).lower() == FREE_TIER)
 
 
 def _voice(v: dict) -> dict:
     labels = v.get("labels") or {}
+    sharing = v.get("sharing") if isinstance(v.get("sharing"), dict) else {}
     return {
         "voice_id": str(v.get("voice_id", "")),
         "name": str(v.get("name", "")).split(" - ")[0].strip(),
@@ -151,6 +166,8 @@ def _voice(v: dict) -> dict:
         "description": str(v.get("description") or labels.get("description") or v.get("descriptive") or "")[:140],
         "category": str(v.get("category", "")),
         "preview_url": str(v.get("preview_url") or ""),
+        # Aus der Bibliothek übernommen (statt Standardstimme oder selbst erstellt)
+        "from_library": str(sharing.get("status") or "") in ("copied", "copied_disabled"),
     }
 
 
@@ -172,8 +189,12 @@ def _error(exc: urllib.error.HTTPError) -> ElevenLabsError:
     except Exception:
         pass
     text = f"{status} {message}".lower()
-    # ElevenLabs meldet ein leeres Guthaben manchmal auch mit 401, deshalb zuerst prüfen.
-    if exc.code == 402 or "quota" in text or "credit" in text or "payment" in text:
+    # Die Stimme gibt es erst mit (größerem) Abo, z. B. eine Bibliotheks-Stimme im Gratis-Konto.
+    # Kommt als 402 wie ein leeres Guthaben, ist aber etwas anderes.
+    if "paid_plan_required" in text or "cannot use library voices" in text or "tier or above" in text:
+        kind = "plan"
+    # ElevenLabs meldet ein leeres Guthaben manchmal auch mit 401, deshalb vor dem Schlüssel prüfen.
+    elif exc.code == 402 or "quota" in text or "credit" in text or "payment" in text:
         kind = "quota"
     elif "permission" in text:
         kind = "permission"  # Schlüssel mit eingeschränkten Rechten

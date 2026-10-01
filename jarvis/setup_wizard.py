@@ -510,14 +510,17 @@ class SetupApi:
         return {
             "key": "Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit sk_).",
             "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Im Konto unter Abo nachsehen.",
+            "plan": "Diese Stimme gibt ElevenLabs nur mit Abo frei (ab Starter, etwa 6 $ im Monat). "
+                    "Kostenlos gehen die Standard-Stimmen wie George oder Daniel.",
             "permission": "Dem Schlüssel fehlen Rechte. Erstelle am besten einen neuen ohne Einschränkungen.",
             "net": "ElevenLabs ist gerade nicht erreichbar. Ist das Internet an?",
             "voice": "Diese Stimme gibt es nicht mehr.",
         }.get(getattr(exc, "kind", ""), f"ElevenLabs meldet: {exc}")
 
     def eleven_check(self, key="") -> dict:
-        """Schlüssel prüfen und speichern, dann Kontingent und Stimmen zeigen."""
-        from .elevenlabs import ElevenLabsError, pick_default_voice
+        """Schlüssel prüfen und speichern, dann Kontingent und Stimmen zeigen. Mit Gratis-Konto
+        gehen Bibliotheks-Stimmen nicht: Ist so eine gewählt, nimmt Jarvis eine Standard-Stimme."""
+        from .elevenlabs import FREE_TIER, ElevenLabsError, pick_default_voice, usable_on_plan
 
         api = self._eleven(str(key or ""))
         if api is None:
@@ -537,13 +540,25 @@ class SetupApi:
             if not saved["ok"]:
                 return saved
         tts = self._cfg["tts"]
+        tier = str((sub or {}).get("tier", ""))
+        free = tier.lower() == FREE_TIER
         selected = str(tts.get("elevenlabs_voice", "") or "")
-        if not any(v["voice_id"] == selected for v in voices):
-            selected = (pick_default_voice(voices) or {}).get("voice_id", "")
+        note = ""
+        current = next((v for v in voices if v["voice_id"] == selected), None)
+        if current is None:
+            selected = (pick_default_voice(voices, free) or {}).get("voice_id", "")
+        elif not usable_on_plan(current, tier):
+            fallback = pick_default_voice(voices, free)
+            selected = (fallback or {}).get("voice_id", "")
+            if fallback and tts.get("engine") == "elevenlabs":
+                switched = self.eleven_select(fallback["voice_id"], fallback["name"])
+                if switched["ok"]:
+                    note = (f'{current["name"]} kommt aus der Bibliothek und geht mit dem Gratis-Konto nicht. '
+                            f'Jarvis spricht jetzt mit {fallback["name"]}. {current["name"]} geht ab dem Starter-Abo.')
         return {
-            "ok": True, "error": "", "voices": voices, "selected": selected,
-            "active": tts.get("engine") == "elevenlabs",
-            "tier": (sub or {}).get("tier", ""), "used": (sub or {}).get("used", 0), "limit": (sub or {}).get("limit", 0),
+            "ok": True, "error": "", "voices": voices, "selected": selected, "note": note,
+            "active": tts.get("engine") == "elevenlabs", "free": free,
+            "tier": tier, "used": (sub or {}).get("used", 0), "limit": (sub or {}).get("limit", 0),
         }
 
     def eleven_library(self, gender="male") -> dict:
@@ -559,12 +574,17 @@ class SetupApi:
             return {"ok": False, "error": self._eleven_error(exc), "voices": []}
 
     def eleven_add(self, public_owner_id, voice_id, name) -> dict:
-        """Eine Bibliotheks-Stimme ins eigene Konto holen und gleich nehmen."""
-        from .elevenlabs import ElevenLabsError
+        """Eine Bibliotheks-Stimme ins eigene Konto holen und gleich nehmen (erst ab Starter-Abo)."""
+        from .elevenlabs import FREE_TIER, ElevenLabsError
 
         api = self._eleven()
         if api is None:
             return {"ok": False, "error": "Erst den Schlüssel prüfen."}
+        try:
+            if api.subscription()["tier"].lower() == FREE_TIER:
+                return {"ok": False, "error": self._eleven_error(ElevenLabsError("plan", "Gratis-Konto"))}
+        except ElevenLabsError:
+            pass  # Kontingent nicht lesbar (Schlüssel mit wenig Rechten): einfach versuchen
         try:
             new_id = api.add_shared(str(public_owner_id), str(voice_id), str(name))
         except ElevenLabsError as exc:

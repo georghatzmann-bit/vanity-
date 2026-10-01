@@ -304,6 +304,11 @@
   color: var(--accent-text);
 }
 
+.badge.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
 /* ------------------------------------------------------------------ 1 Willkommen */
 
 .welcome {
@@ -1427,6 +1432,11 @@
   gap: 12px;
 }
 
+/* Der Hinweis gehört zur Überschrift darüber */
+.library .plan-line {
+  margin-top: -12px;
+}
+
 .chips {
   display: flex;
   gap: 6px;
@@ -1459,6 +1469,13 @@
 
 .voice.lib {
   cursor: default;
+}
+
+/* Gibt es mit diesem Tarif nicht: sichtbar, aber zurückgenommen */
+.voice.locked .avatar,
+.voice.locked .voice-name,
+.voice.locked .voice-desc {
+  opacity: 0.6;
 }
 
 @media (max-width: 720px) {

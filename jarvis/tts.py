@@ -136,12 +136,16 @@ class TextToSpeech:
 
     def _eleven_problem(self, exc: Exception) -> None:
         kind = getattr(exc, "kind", "other")
-        pause = {"key": 1800, "quota": 1800, "voice": 1800, "busy": 5, "net": 60}.get(kind, 120)
+        pause = {"key": 1800, "quota": 1800, "plan": 1800, "voice": 1800, "busy": 5, "net": 60}.get(kind, 120)
         self._eleven_paused_until = time.monotonic() + pause
         log.warning("ElevenLabs: %s (Pause %d s, solange spricht die Microsoft-Stimme)", exc, pause)
         tell = {
             "key": "Der ElevenLabs-Schlüssel stimmt nicht. Ich spreche so lange mit der Microsoft-Stimme.",
             "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Ich spreche so lange mit der Microsoft-Stimme.",
+            "plan": (
+                "Diese ElevenLabs-Stimme gibt es nur mit Abo. Ich spreche so lange mit der Microsoft-Stimme. "
+                "Kostenlos gehen die Standard-Stimmen wie George, du findest sie in den Einstellungen unter Stimme."
+            ),
             "voice": "Die gewählte ElevenLabs-Stimme gibt es nicht mehr. Bitte in den Einstellungen eine andere wählen.",
         }.get(kind)
         if tell and time.monotonic() - self._reported_at > 600:

@@ -11,7 +11,7 @@ from unittest import mock
 import numpy as np
 
 import tests.helpers  # noqa: F401
-from jarvis.elevenlabs import ElevenLabs, ElevenLabsError, pick_default_voice
+from jarvis.elevenlabs import ElevenLabs, ElevenLabsError, pick_default_voice, usable_on_plan
 from jarvis.tts import StreamingAudio, TextToSpeech, materialize
 
 
@@ -26,6 +26,9 @@ class FakeElevenLabs:
         self.requests = []
         self.speech_error = None  # (code, body)
         self.model_error_for = set()
+        self.tier = "starter"
+        # Aus der Bibliothek übernommene Stimmen: mit Gratis-Konto verweigert der Server sie
+        self.library_voices = []
         self.audio = tone().tobytes()
         outer = self
 
@@ -54,6 +57,10 @@ class FakeElevenLabs:
                         {"voice_id": "v_george", "name": "George - Warm, Captivating Storyteller",
                          "labels": {"gender": "male", "accent": "british"}, "preview_url": "https://x/george.mp3",
                          "category": "premade"},
+                    ] + [
+                        {"voice_id": voice_id, "name": name, "labels": {"gender": "male", "accent": "german"},
+                         "category": "professional", "sharing": {"status": "copied", "public_owner_id": "owner1"}}
+                        for voice_id, name in outer.library_voices
                     ]})
                 if self.path.startswith("/v1/shared-voices"):
                     return self._json(200, {"voices": [
@@ -61,7 +68,8 @@ class FakeElevenLabs:
                          "accent": "standard", "language": "de", "preview_url": "https://x/otto.mp3"},
                     ]})
                 if self.path == "/v1/user/subscription":
-                    return self._json(200, {"tier": "starter", "character_count": 1200, "character_limit": 30000})
+                    limit = 10000 if outer.tier == "free" else 30000
+                    return self._json(200, {"tier": outer.tier, "character_count": 1200, "character_limit": limit})
                 self._json(404, {"detail": "nicht gefunden"})
 
             def do_POST(self):
@@ -70,6 +78,11 @@ class FakeElevenLabs:
                 if self.path.startswith("/v1/voices/add/"):
                     return self._json(200, {"voice_id": "v_lib_added"})
                 if "/stream" in self.path:
+                    voice_id = self.path.split("/")[3]
+                    if outer.tier == "free" and voice_id in {v for v, _ in outer.library_voices}:
+                        return self._json(402, {"detail": {
+                            "type": "payment_required", "code": "paid_plan_required",
+                            "message": "Free users cannot use library voices via the API. Please upgrade."}})
                     if outer.speech_error:
                         code, payload = outer.speech_error
                         return self._json(code, payload)
@@ -139,6 +152,10 @@ class ElevenLabsClientTest(unittest.TestCase):
             ((401, {"detail": {"status": "invalid_api_key", "message": "Invalid"}}), "key"),
             ((401, {"detail": {"status": "quota_exceeded", "message": "This request exceeds your quota"}}), "quota"),
             ((402, {"detail": {"status": "payment_required", "message": "Payment required"}}), "quota"),
+            ((402, {"detail": {"type": "payment_required", "code": "paid_plan_required",
+                               "message": "Free users cannot use library voices via the API. Please upgrade."}}), "plan"),
+            ((400, {"detail": {"type": "invalid_request", "code": "bad_request",
+                               "message": "You need to be on the creator tier or above to use this voice."}}), "plan"),
             ((400, {"detail": {"status": "quota_exceeded", "message": "You have 0 credits remaining"}}), "quota"),
             ((404, {"detail": {"status": "voice_not_found", "message": "Voice not found"}}), "voice"),
             ((429, {"detail": {"status": "too_many_concurrent_requests", "message": "Busy"}}), "busy"),
@@ -150,6 +167,20 @@ class ElevenLabsClientTest(unittest.TestCase):
                 with self.assertRaises(ElevenLabsError) as ctx:
                     self.api.speak("Hallo.", "v_george")
                 self.assertEqual(ctx.exception.kind, kind)
+
+    def test_library_voices_are_marked_and_skipped_on_the_free_plan(self):
+        self.fake.library_voices = [("v_daniel_lib", "Daniel - Corporate Narration")]
+        voices = self.api.voices()
+        self.assertEqual([v["from_library"] for v in voices], [False, False, True])
+        library_daniel = voices[2]
+        self.assertFalse(usable_on_plan(library_daniel, "free"))
+        self.assertTrue(usable_on_plan(library_daniel, "starter"))
+        self.assertTrue(usable_on_plan(voices[1], "free"))
+        # Gratis-Konto: nie eine Bibliotheks-Stimme vorschlagen, auch wenn sie "Daniel" heißt
+        only_library = [library_daniel]
+        self.assertIsNone(pick_default_voice(only_library, free=True))
+        self.assertEqual(pick_default_voice(only_library)["voice_id"], "v_daniel_lib")
+        self.assertEqual(pick_default_voice(voices, free=True)["voice_id"], "v_george")
 
     def test_wrong_key(self):
         with self.assertRaises(ElevenLabsError) as ctx:
@@ -241,6 +272,20 @@ class ElevenLabsVoiceTest(unittest.TestCase):
         self.assertEqual(len([r for r in self.fake.requests if "/stream" in r[1]]), 1, "danach erst einmal Pause")
         self.assertEqual(len(self.problems), 1)
         self.assertIn("Guthaben", self.problems[0])
+
+    def test_library_voice_on_free_plan_speaks_microsoft_and_explains_once(self):
+        self.fake.tier = "free"
+        self.fake.library_voices = [("v_lennard", "Lennard - Warm & Trustworthy")]
+        self.tts._eleven_voice = "v_lennard"
+        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+            samples, _ = self.tts.synthesize("Ein Satz.")
+            self.tts.synthesize("Noch ein Satz.")
+        self.assertIsInstance(samples, np.ndarray)
+        self.assertEqual(edge.call_count, 2)
+        self.assertEqual(len([r for r in self.fake.requests if "/stream" in r[1]]), 1, "danach erst einmal Pause")
+        self.assertEqual(len(self.problems), 1)
+        self.assertIn("nur mit Abo", self.problems[0])
+        self.assertNotIn("Guthaben", self.problems[0])
 
     def test_without_voice_or_key_it_is_plain_microsoft(self):
         tts = TextToSpeech({"engine": "elevenlabs", "elevenlabs_key": "sk_test"}, None)
