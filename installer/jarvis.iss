@@ -26,7 +26,14 @@ UninstallDisplayIcon={app}\jarvis.ico
 UninstallDisplayName=Jarvis
 Compression=lzma2
 SolidCompression=yes
+; Dunkel und blau wie Jarvis (ab Inno Setup 6.6), sonst das helle Standard-Aussehen
+#if Ver >= EncodeVer(6, 6, 0)
+WizardStyle=modern dark polar includetitlebar hidebevels
+#else
 WizardStyle=modern
+#endif
+WizardImageFile=wizard-100.bmp,wizard-200.bmp
+WizardSmallImageFile=wizard-klein-100.bmp,wizard-klein-200.bmp
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -35,7 +42,10 @@ MinVersion=10.0
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [Messages]
-de.WelcomeLabel2=Jarvis wird jetzt auf deinem PC eingerichtet.%n%nDer Installer lädt dabei alles Nötige herunter (Spracherkennung, Stimmen und das Gehirn). Das dauert beim ersten Mal ein paar Minuten.%n%nDanach läuft Jarvis im Hintergrund. Sag einfach „Hey Jarvis“.
+de.WelcomeLabel1=Willkommen bei Jarvis
+de.WelcomeLabel2=Jarvis wird jetzt auf deinem PC eingerichtet.%n%nDer Installer holt alles Nötige selbst: Python, Spracherkennung, Stimmen und Jarvis' Gehirn (Claude Code). Das dauert beim ersten Mal ein paar Minuten.%n%nDanach läuft Jarvis im Hintergrund. Sag einfach „Hey Jarvis“. Handy, Alexa und Discord verbindest du später im Jarvis-Fenster unter „Verbinden“.
+de.FinishedHeadingLabel=Jarvis ist bereit
+de.FinishedLabel=Gleich öffnet sich die Einrichtung: Mikrofon, Stimme und die Anmeldung für das Gehirn. Danach sag einfach „Hey Jarvis“.
 
 [Tasks]
 Name: "autostart"; Description: "Jarvis mit Windows starten (läuft unsichtbar im Hintergrund, immer erreichbar)"
