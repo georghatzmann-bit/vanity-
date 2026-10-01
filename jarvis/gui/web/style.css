@@ -1362,6 +1362,27 @@ body[data-view="workshop"] .holo-scan {
   color: var(--ok);
 }
 
+/* Drei Punkte: Handy, Alexa, Discord. Grün = verbunden (der Tooltip sagt es auch in Worten) */
+.conn {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.conn i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+  opacity: 0.4;
+  transition: background 160ms ease, opacity 160ms ease;
+}
+
+.conn i[data-on="1"] {
+  background: var(--ok);
+  opacity: 1;
+}
+
 .dlg-shade {
   position: fixed;
   inset: 0;

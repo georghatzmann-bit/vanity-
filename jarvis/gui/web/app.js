@@ -64,6 +64,7 @@
   let Werkstatt = null; // Ansicht für Programmier-Aufträge (werkstatt.js)
   let Projekte = null; // alle Werkstatt-Projekte (projekte.js)
   let Gedaechtnis = null; // was Jarvis über Georg weiß, Vorschläge (gedaechtnis.js)
+  let Koppeln = null; // Handy, Alexa, Discord (koppeln.js)
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -89,6 +90,7 @@
     open_folder: (path) => window.pywebview.api.open_folder(path),
     memory_state: () => window.pywebview.api.memory_state(),
     phone_info: () => window.pywebview.api.phone_info(),
+    connections: () => window.pywebview.api.connections(),
     phone_enable: (on) => window.pywebview.api.phone_enable(on),
     phone_new_key: () => window.pywebview.api.phone_new_key(),
     alexa_info: () => window.pywebview.api.alexa_info(),
@@ -736,6 +738,7 @@
     }
     syncWorkshop();
     if (Gedaechtnis) Gedaechtnis.refresh();
+    if (Koppeln && Koppeln.dots) Koppeln.dots();
     refreshToday();
     setInterval(refreshToday, 60000);
     pollLoop(gen);
@@ -1473,6 +1476,7 @@
       workshop_run: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
       phone_info: () => Promise.resolve(DEMO_PHONE),
+      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled, discord: true }),
       phone_enable: (on) => Promise.resolve(Object.assign(DEMO_PHONE, { enabled: !!on, running: !!on })),
       phone_new_key: () => Promise.resolve(DEMO_PHONE),
       alexa_info: () => Promise.resolve(DEMO_ALEXA),
@@ -1562,7 +1566,7 @@
       if (Werkstatt) Werkstatt.renderPill();
     }
     if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });
-    if (window.JarvisKoppeln) window.JarvisKoppeln.create({ call, toast });
+    if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });
     if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
     if (Gedaechtnis && /[?&]vorschlag\b/.test(location.search)) {
       Gedaechtnis.offer({ frage: 'Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?' });

@@ -206,6 +206,32 @@
       }
     });
 
+    // ------------------------------------------------------------ Punkte am Knopf
+
+    const NAMES = { phone: 'Handy', alexa: 'Alexa', discord: 'Discord' };
+
+    async function refreshDots() {
+      let state = null;
+      try {
+        state = await call('connections');
+      } catch {
+        return; // noch nicht verbunden: später nochmal
+      }
+      if (!state) return;
+      const on = [];
+      document.querySelectorAll('#phoneConn i[data-k]').forEach((dot) => {
+        const active = !!state[dot.dataset.k];
+        dot.dataset.on = active ? '1' : '0';
+        if (active) on.push(NAMES[dot.dataset.k]);
+      });
+      el.btn.dataset.on = state.phone ? '1' : '0';
+      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, Alexa und Discord.'
+        : 'Handy, Alexa und Discord mit Jarvis verbinden';
+      el.btn.setAttribute('aria-label', 'Verbinden' + (on.length ? ', verbunden: ' + on.join(', ') : ''));
+    }
+
+    setInterval(refreshDots, 30000);
+
     function open() {
       lastFocus = document.activeElement;
       el.shade.hidden = false;
@@ -219,6 +245,7 @@
       el.shade.hidden = true;
       el.dlg.hidden = true;
       if (lastFocus && lastFocus.focus) lastFocus.focus();
+      refreshDots();
     }
 
     el.btn.addEventListener('click', open);
@@ -274,7 +301,7 @@
       }
     });
     refresh();
-    return { open, close, refresh, showPane };
+    return { open, close, refresh, showPane, dots: refreshDots };
   }
 
   window.JarvisKoppeln = { create };

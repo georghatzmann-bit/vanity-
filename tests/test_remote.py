@@ -185,3 +185,17 @@ class PairingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConnectionDotsTest(unittest.TestCase):
+    """Die Punkte am Knopf "Verbinden": was läuft, ohne Netzwerkabfrage."""
+
+    def test_connections(self):
+        from jarvis.gui.app import Api
+
+        api = Api.__new__(Api)
+        api._assistant = mock.Mock(_cfg={"discord": {"bot_token": "x" * 72}},
+                                   server=mock.Mock(running=True), alexa=mock.Mock(connected=False))
+        self.assertEqual(api.connections(), {"phone": True, "alexa": False, "discord": True})
+        api._assistant = mock.Mock(_cfg={}, server=None, alexa=None)
+        self.assertEqual(api.connections(), {"phone": False, "alexa": False, "discord": False})

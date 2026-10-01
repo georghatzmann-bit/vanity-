@@ -231,6 +231,16 @@ class Api:
 
     # ------------------------------------------------------------------ Discord-Bot
 
+    def connections(self) -> dict:
+        """Was gerade verbunden ist, für die Punkte am Knopf "Verbinden" (ohne Netzwerkabfrage)."""
+        cfg = getattr(self._assistant, "_cfg", {}) or {}
+        server = getattr(self._assistant, "server", None)
+        bridge = getattr(self._assistant, "alexa", None)
+        token = str(((cfg.get("discord", {}) or {}).get("bot_token")) or "")
+        return {"phone": bool(server is not None and server.running),
+                "alexa": bool(bridge is not None and bridge.connected),
+                "discord": len(token) > 50}
+
     def discord_info(self) -> dict:
         from ..discord_bot import DiscordBot, DiscordError
 
