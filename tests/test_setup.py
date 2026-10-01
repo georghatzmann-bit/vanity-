@@ -111,7 +111,8 @@ class SettingsTest(SetupTestCase):
         self.assertIn("version", info)
         self.assertEqual(
             set(info["values"]),
-            {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "ha_url", "ha_token_set", "speed"},
+            {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "ha_url", "ha_token_set", "speed",
+             "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set"},
         )
         self.assertEqual(len(self.api.voices()), len(setup_wizard.VOICES))
         self.assertTrue(all(v["id"].endswith("Neural") for v in self.api.voices()))
@@ -511,3 +512,79 @@ class AlexaCheckTest(SetupTestCase):
         with mock.patch.object(self.api, "_reload"):
             self.assertTrue(self.api.ha_save("homeassistant.local:8123/", "geheim")["ok"])
         self.assertEqual(self.saved()["homeassistant"]["url"], "http://homeassistant.local:8123")
+
+
+class PremiumSettingsTest(SetupTestCase):
+    """Einrichtung: ElevenLabs-Stimmen und Groq-Schlüssel gegen nachgebaute Server."""
+
+    def setUp(self):
+        super().setUp()
+        from tests.test_elevenlabs import FakeElevenLabs
+
+        self.fake = FakeElevenLabs()
+        self.addCleanup(self.fake.stop)
+        patch = mock.patch("jarvis.elevenlabs.BASE", self.fake.url)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_eleven_key_voices_and_choice(self):
+        bad = self.api.eleven_check("falsch")
+        self.assertFalse(bad["ok"])
+        self.assertIn("Schlüssel stimmt nicht", bad["error"])
+        self.assertFalse(self.config_path.exists(), "ein falscher Schlüssel wird nicht gespeichert")
+        result = self.api.eleven_check("sk_test")
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([v["name"] for v in result["voices"]], ["Rachel", "George"])
+        self.assertEqual(result["selected"], "v_george", "Jarvis schlägt die britische Stimme vor")
+        self.assertEqual((result["used"], result["limit"]), (1200, 30000))
+        self.assertEqual(self.saved()["tts"]["elevenlabs_key"], "sk_test")
+        self.assertTrue(self.api.eleven_select("v_george", "George")["ok"])
+        tts = self.saved()["tts"]
+        self.assertEqual((tts["engine"], tts["elevenlabs_voice"], tts["elevenlabs_voice_name"]), ("elevenlabs", "v_george", "George"))
+        values = self.api.hello()["values"]
+        self.assertTrue(values["eleven_key_set"])
+        self.assertEqual(values["eleven_voice_name"], "George")
+        # Zurück zur kostenlosen Stimme
+        self.assertTrue(self.api.voice_save("de-DE-ConradNeural")["ok"])
+        self.assertEqual(self.saved()["tts"]["engine"], "edge")
+
+    def test_library_voice_is_added_and_chosen(self):
+        self.api.eleven_check("sk_test")
+        library = self.api.eleven_library("male")
+        self.assertEqual(library["voices"][0]["name"], "Otto")
+        result = self.api.eleven_add("owner1", "v_lib", "Otto")
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(self.saved()["tts"]["elevenlabs_voice"], "v_lib_added")
+
+    def test_links_only_to_the_sign_up_pages(self):
+        with mock.patch("webbrowser.open", return_value=True) as opened:
+            self.assertTrue(self.api.open_url("https://console.groq.com/keys"))
+            self.assertFalse(self.api.open_url("https://example.com/boese"))
+            self.assertFalse(self.api.open_url("file:///C:/Windows"))
+        self.assertEqual(opened.call_count, 1)
+
+    def test_groq_key(self):
+        import json as _json
+        import threading as _threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                ok = self.headers.get("Authorization") == "Bearer gsk_gut"
+                data = _json.dumps({"data": [{"id": "whisper-large-v3-turbo"}]} if ok else {"error": "invalid"}).encode()
+                self.send_response(200 if ok else 401)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        _threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        with mock.patch("jarvis.stt.GROQ_MODELS_URL", f"http://127.0.0.1:{server.server_port}/openai/v1/models"):
+            self.assertIn("gsk_", self.api.groq_check("gsk_falsch")["error"])
+            self.assertTrue(self.api.groq_check("gsk_gut")["ok"])
+        self.assertEqual(self.saved()["stt"]["groq_key"], "gsk_gut")
+        self.assertTrue(self.api.hello()["values"]["groq_key_set"])

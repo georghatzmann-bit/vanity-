@@ -31,7 +31,7 @@
     {
       id: 'voice', nav: 'Stimme',
       title: 'Wie soll Jarvis klingen?',
-      lead: 'Hör dir die Stimmen an und wähl deinen Favoriten.',
+      lead: 'Premium klingt wie ein echter Mensch. Kostenlos geht auch, klingt aber nach Computer.',
     },
     {
       id: 'place', nav: 'Wohnort',
@@ -39,9 +39,9 @@
       lead: 'Für das Wetter und alles, was mit deiner Umgebung zu tun hat.',
     },
     {
-      id: 'claude', nav: 'Claude',
-      title: 'Claude verbinden',
-      lead: 'Claude Code ist das Gehirn von Jarvis. Jarvis prüft kurz, ob alles bereit ist.',
+      id: 'claude', nav: 'Gehirn',
+      title: 'Das Gehirn verbinden',
+      lead: 'Jarvis denkt mit Claude, deinem Pro-Abo. Er prüft kurz, ob alles bereit ist.',
     },
     {
       id: 'extras', nav: 'Extras',
@@ -86,6 +86,9 @@
       running: false, polling: false, startedAt: 0, maxLevel: 0, threshold: 0.5, detected: false,
     },
     voices: [], voice: '', playing: '',
+    tts: { engine: 'edge', tab: 'premium' },
+    eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false },
+    groq: { keySet: false },
     place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
     speed: 'ausgewogen',
@@ -341,6 +344,7 @@
   }
 
   function voiceName() {
+    if (S.tts.engine === 'elevenlabs' && S.eleven.name) return S.eleven.name + ' (Premium)';
     const v = S.voices.find((x) => x.id === S.voice);
     return v ? v.name : (S.voice || '').replace(/^de-\w\w-|Neural$|Multilingual/g, '');
   }
@@ -453,6 +457,7 @@
   }
 
   async function micEnter() {
+    renderGroq();
     buildVu();
     if (!S.mic.list) await micLoad();
     // Das, was Jarvis gerade nimmt, gleich testen (ohne neu zu speichern).
@@ -648,6 +653,303 @@
     }
     if (!S.voice && S.voices.length) S.voice = S.voices[0].id;
     renderVoices();
+    renderVoiceKind();
+    if (S.eleven.keySet && !S.eleven.checked) elevenCheck('');
+  }
+
+  // ---------- Premium (ElevenLabs) und Kostenlos (Microsoft)
+
+  function renderVoiceKind() {
+    for (const b of document.querySelectorAll('#voiceKind button')) {
+      const on = b.dataset.kind === S.tts.tab;
+      b.setAttribute('aria-checked', String(on));
+    }
+    $('premiumPanel').hidden = S.tts.tab !== 'premium';
+    $('freePanel').hidden = S.tts.tab !== 'free';
+    renderElevenState();
+  }
+
+  function renderElevenState() {
+    const state = $('elevenState');
+    const active = S.tts.engine === 'elevenlabs' && S.eleven.selected;
+    state.textContent = active ? 'Aktiv' : S.eleven.checked ? 'Verbunden' : S.eleven.keySet ? 'Gespeichert' : '';
+    state.dataset.tone = active || S.eleven.checked ? 'ok' : '';
+    $('elevenKey').placeholder = S.eleven.keySet ? 'Schlüssel gespeichert (zum Ändern neu einfügen)' : 'sk_…';
+    const plan = S.eleven.plan;
+    const line = $('elevenPlan');
+    if (plan && plan.limit) {
+      const left = Math.max(0, plan.limit - plan.used);
+      line.textContent = `Abo ${plan.tier || 'aktiv'}: noch ${left.toLocaleString('de-DE')} von ${plan.limit.toLocaleString('de-DE')} Zeichen diesen Monat (ein Satz von Jarvis braucht etwa 60).`;
+      line.hidden = false;
+    } else {
+      line.hidden = true;
+    }
+    $('libraryBox').hidden = !S.eleven.checked;
+    renderElevenVoices();
+  }
+
+  const LABEL_DE = {
+    british: 'britisch', american: 'amerikanisch', australian: 'australisch', irish: 'irisch', scottish: 'schottisch',
+    german: 'deutsch', standard: 'Hochdeutsch', austrian: 'österreichisch', swiss: 'schweizerisch', bavarian: 'bayrisch',
+    young: 'jung', middle_aged: 'mittleres Alter', 'middle aged': 'mittleres Alter', old: 'älter',
+  };
+  const de = (label) => LABEL_DE[String(label || '').toLowerCase()] || String(label || '').replace(/_/g, ' ');
+
+  async function germanSample(v, btn) {
+    if (S.playing) return;
+    S.playing = v.voice_id;
+    btn.classList.add('busy');
+    renderElevenVoices();
+    try {
+      const r = await call('eleven_preview', v.voice_id);
+      if (r && !r.ok) toast(r.error || 'Die Hörprobe ließ sich nicht abspielen.', 'error');
+    } catch (err) {
+      failed(err);
+    }
+    S.playing = '';
+    renderElevenVoices();
+  }
+
+  function elevenCard(v, opts) {
+    const card = el('div', 'voice' + (opts.library ? ' lib' : ''));
+    const chosen = !opts.library && S.tts.engine === 'elevenlabs' && S.eleven.selected === v.voice_id;
+    card.setAttribute('role', opts.library ? 'group' : 'radio');
+    if (!opts.library) card.setAttribute('aria-checked', String(chosen));
+    card.tabIndex = 0;
+    if (S.playing === v.voice_id) card.classList.add('playing');
+    const avatar = el('span', 'avatar', (v.name || '?').charAt(0));
+    const txt = el('span', 'voice-text');
+    const bits = [v.gender === 'male' ? 'männlich' : v.gender === 'female' ? 'weiblich' : '', de(v.accent), de(v.age)]
+      .filter(Boolean).join(' · ');
+    txt.append(el('span', 'voice-name', v.name), el('span', 'voice-desc', v.description || bits));
+    const tags = el('span', 'voice-tags');
+    if (chosen) tags.append(el('span', 'badge accent', 'Aktiv'));
+    if (bits && v.description) tags.append(el('span', 'badge', bits));
+    txt.append(tags);
+    const play = el('button', 'play');
+    play.type = 'button';
+    play.title = v.name + ' anhören';
+    play.setAttribute('aria-label', v.name + ' anhören');
+    play.append(svg(ICON.play));
+    const bars = el('span', 'bars');
+    bars.append(el('i'), el('i'), el('i'));
+    play.append(bars);
+    play.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playSample(v);
+    });
+    card.append(avatar, txt, play);
+    if (opts.library) {
+      const take = el('button', 'btn small', 'Übernehmen');
+      take.type = 'button';
+      take.addEventListener('click', (e) => {
+        e.stopPropagation();
+        elevenAdd(v, take);
+      });
+      card.append(take);
+      card.classList.add('with-action');
+    } else {
+      if (chosen) {
+        const german = el('button', 'btn small ghost', 'Auf Deutsch');
+        german.type = 'button';
+        german.title = 'Den Begrüßungssatz mit dieser Stimme hören (kostet etwa 60 Zeichen Guthaben)';
+        german.addEventListener('click', (e) => {
+          e.stopPropagation();
+          germanSample(v, german);
+        });
+        card.append(german);
+        card.classList.add('with-action');
+      }
+      const pick = () => elevenSelect(v);
+      card.addEventListener('click', pick);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pick();
+        }
+      });
+    }
+    return card;
+  }
+
+  function renderElevenVoices() {
+    const grid = $('elevenGrid');
+    grid.replaceChildren(...S.eleven.voices.map((v) => elevenCard(v, {})));
+    const lib = $('libraryGrid');
+    lib.replaceChildren(...S.eleven.library.map((v) => elevenCard(v, { library: true })));
+    for (const b of document.querySelectorAll('#libraryGender .chip')) {
+      b.setAttribute('aria-pressed', String(b.dataset.gender === S.eleven.gender));
+    }
+  }
+
+  let sampleAudio = null;
+
+  function playSample(v) {
+    if (sampleAudio) {
+      sampleAudio.pause();
+      sampleAudio = null;
+    }
+    if (S.playing === v.voice_id) {
+      S.playing = '';
+      renderElevenVoices();
+      return;
+    }
+    if (!v.preview_url) {
+      toast('Für diese Stimme gibt es keine Hörprobe.', 'info');
+      return;
+    }
+    S.playing = v.voice_id;
+    renderElevenVoices();
+    sampleAudio = new Audio(v.preview_url);
+    const done = () => {
+      if (S.playing === v.voice_id) {
+        S.playing = '';
+        renderElevenVoices();
+      }
+    };
+    sampleAudio.addEventListener('ended', done);
+    sampleAudio.addEventListener('error', () => {
+      done();
+      toast('Die Hörprobe ließ sich nicht laden. Ist das Internet an?', 'error');
+    });
+    sampleAudio.play().catch(done);
+  }
+
+  async function elevenCheck(key) {
+    if (S.eleven.busy) return;
+    S.eleven.busy = true;
+    const btn = $('elevenCheck');
+    btn.classList.add('busy');
+    btn.disabled = true;
+    formMsg('elevenMsg', '', '');
+    try {
+      const r = await call('eleven_check', key);
+      if (r && r.ok) {
+        S.eleven.keySet = true;
+        S.eleven.checked = true;
+        S.eleven.voices = Array.isArray(r.voices) ? r.voices : [];
+        S.eleven.plan = { tier: r.tier, used: r.used, limit: r.limit };
+        if (!S.eleven.selected || !S.eleven.voices.some((v) => v.voice_id === S.eleven.selected)) {
+          S.eleven.selected = r.selected || '';
+        }
+        $('elevenKey').value = '';
+        if (key) formMsg('elevenMsg', 'ok', 'Verbunden. Wähl unten eine Stimme, sie gilt sofort.');
+        if (!S.eleven.library.length) elevenLibrary(S.eleven.gender);
+        if (key && S.eleven.selected) {
+          const v = S.eleven.voices.find((x) => x.voice_id === S.eleven.selected);
+          if (v) await elevenSelect(v, true);
+        }
+      } else {
+        formMsg('elevenMsg', 'error', (r && r.error) || 'Das hat nicht geklappt.');
+      }
+    } catch (err) {
+      failed(err);
+    } finally {
+      S.eleven.busy = false;
+      btn.classList.remove('busy');
+      btn.disabled = false;
+      renderElevenState();
+      renderRail();
+    }
+  }
+
+  async function elevenLibrary(gender) {
+    S.eleven.gender = gender;
+    renderElevenVoices();
+    try {
+      const r = await call('eleven_library', gender);
+      if (r && r.ok) {
+        const mine = new Set(S.eleven.voices.map((v) => v.name));
+        S.eleven.library = (r.voices || []).filter((v) => !mine.has(v.name));
+      } else if (r) {
+        toast(r.error || 'Die Bibliothek ließ sich nicht laden.', 'error');
+      }
+    } catch (err) {
+      failed(err);
+    }
+    renderElevenVoices();
+  }
+
+  async function elevenSelect(v, quiet) {
+    try {
+      const r = await call('eleven_select', v.voice_id, v.name);
+      if (r && r.ok) {
+        S.eleven.selected = v.voice_id;
+        S.eleven.name = v.name;
+        S.tts.engine = 'elevenlabs';
+        if (!quiet) toast(`${v.name} spricht ab jetzt für Jarvis.`, 'ok');
+      } else {
+        toast((r && r.error) || 'Die Stimme ließ sich nicht speichern.', 'error');
+      }
+    } catch (err) {
+      failed(err);
+    }
+    renderElevenState();
+    renderRail();
+  }
+
+  async function elevenAdd(v, btn) {
+    btn.classList.add('busy');
+    btn.disabled = true;
+    try {
+      const r = await call('eleven_add', v.public_owner_id || '', v.voice_id, v.name);
+      if (r && r.ok) {
+        S.eleven.selected = r.voice_id;
+        S.eleven.name = v.name;
+        S.tts.engine = 'elevenlabs';
+        S.eleven.voices = [{ ...v, voice_id: r.voice_id, library: false }, ...S.eleven.voices];
+        S.eleven.library = S.eleven.library.filter((x) => x.voice_id !== v.voice_id);
+        toast(`${v.name} ist übernommen und spricht ab jetzt für Jarvis.`, 'ok');
+      } else {
+        toast((r && r.error) || 'Die Stimme ließ sich nicht übernehmen.', 'error');
+      }
+    } catch (err) {
+      failed(err);
+    }
+    renderElevenState();
+    renderRail();
+  }
+
+  function formMsg(id, tone, text) {
+    const m = $(id);
+    m.textContent = text || '';
+    if (tone) m.dataset.tone = tone;
+    else delete m.dataset.tone;
+  }
+
+  // ---------- Groq (Spracherkennung)
+
+  function renderGroq() {
+    const state = $('groqState');
+    state.textContent = S.groq.keySet ? 'Aktiv' : '';
+    state.dataset.tone = S.groq.keySet ? 'ok' : '';
+    $('groqKey').placeholder = S.groq.keySet ? 'Schlüssel gespeichert (zum Ändern neu einfügen)' : 'gsk_…';
+  }
+
+  async function groqCheck(key) {
+    const btn = $('groqCheck');
+    if (!key) {
+      formMsg('groqMsg', S.groq.keySet ? 'ok' : 'warn', S.groq.keySet ? 'Der Schlüssel ist schon gespeichert.' : 'Bitte zuerst den Schlüssel einfügen.');
+      return;
+    }
+    btn.classList.add('busy');
+    btn.disabled = true;
+    try {
+      const r = await call('groq_check', key);
+      if (r && r.ok) {
+        S.groq.keySet = true;
+        $('groqKey').value = '';
+        formMsg('groqMsg', 'ok', 'Passt. Ab dem nächsten Start versteht Jarvis dich über Groq.');
+      } else {
+        formMsg('groqMsg', 'error', (r && r.error) || 'Das hat nicht geklappt.');
+      }
+    } catch (err) {
+      failed(err);
+    } finally {
+      btn.classList.remove('busy');
+      btn.disabled = false;
+      renderGroq();
+    }
   }
 
   function renderVoices() {
@@ -698,9 +1000,12 @@
     S.voice = v.id;
     renderVoices();
     renderRail();
-    if (changed) {
+    if (changed || S.tts.engine !== 'edge') {
       call('voice_save', v.id).then((r) => {
         if (r && !r.ok) toast(r.error || 'Die Stimme ließ sich nicht speichern.', 'error');
+        else S.tts.engine = 'edge';
+        renderElevenState();
+        renderRail();
       }).catch(failed);
     }
     if (andPreview && changed && !S.playing) preview(v);
@@ -1211,6 +1516,13 @@
     S.mic.threshold = Number(v.threshold) || 0.5;
     $('sensitive').checked = S.mic.threshold <= 0.4;
     S.voice = String(v.voice || '');
+    S.tts.engine = String(v.tts_engine || 'edge');
+    S.eleven.keySet = !!v.eleven_key_set;
+    S.eleven.selected = String(v.eleven_voice || '');
+    S.eleven.name = String(v.eleven_voice_name || '');
+    S.groq.keySet = !!v.groq_key_set;
+    // Premium zuerst zeigen, außer jemand hat ElevenLabs schon und bewusst zurück auf Microsoft gestellt.
+    S.tts.tab = S.eleven.keySet && S.tts.engine !== 'elevenlabs' ? 'free' : 'premium';
     S.place.saved = String(v.ort || '');
     S.hotkey = String(v.hotkey || '');
     S.autostart = !!v.autostart;
@@ -1229,6 +1541,35 @@
 
   function bind() {
     $('nextBtn').addEventListener('click', next);
+    for (const b of document.querySelectorAll('#voiceKind button')) {
+      b.addEventListener('click', () => {
+        S.tts.tab = b.dataset.kind;
+        renderVoiceKind();
+      });
+    }
+    $('elevenForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const key = $('elevenKey').value.trim();
+      if (!key && !S.eleven.keySet) {
+        formMsg('elevenMsg', 'warn', 'Bitte zuerst den Schlüssel einfügen.');
+        return;
+      }
+      elevenCheck(key);
+    });
+    for (const b of document.querySelectorAll('#libraryGender .chip')) {
+      b.addEventListener('click', () => elevenLibrary(b.dataset.gender));
+    }
+    $('groqForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      groqCheck($('groqKey').value.trim());
+    });
+    for (const b of document.querySelectorAll('[data-open]')) {
+      b.addEventListener('click', () => {
+        call('open_url', b.dataset.open).then((ok) => {
+          if (ok === false) toast('Der Browser ließ sich nicht öffnen.', 'error');
+        }).catch(failed);
+      });
+    }
     $('backBtn').addEventListener('click', () => go(S.step - 1));
     $('micReload').addEventListener('click', async () => {
       await micStop();
@@ -1370,6 +1711,9 @@
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',
           voice: 'de-DE-ConradNeural', hotkey: 'ctrl+alt+m', threshold: 0.5, autostart: false,
           ha_url: '', ha_token_set: false, speed: 'ausgewogen',
+          tts_engine: params.get('eleven') === '1' ? 'elevenlabs' : 'edge', eleven_key_set: params.get('eleven') === '1',
+          eleven_voice: params.get('eleven') === '1' ? 'v_george' : '', eleven_voice_name: params.get('eleven') === '1' ? 'George' : '',
+          groq_key_set: params.get('groq') === '1',
         },
         claude: { installed: claudeMode !== 'missing', path: 'C:\\Users\\Georg\\.local\\bin\\claude.exe' },
       }, 60),
@@ -1402,6 +1746,33 @@
       voice_prepare: () => later(true, 20),
       voice_preview: () => later({ ok: true, error: '' }, 2600),
       voice_save: () => later({ ok: true, error: '' }, 80),
+      eleven_check: (key) => later(key === 'falsch'
+        ? { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit sk_).' }
+        : {
+          ok: true, error: '', tier: 'starter', used: 4120, limit: 30000, selected: 'v_george', active: true,
+          voices: [
+            { voice_id: 'v_george', name: 'George', gender: 'male', accent: 'british', age: 'middle_aged', description: 'Warm, ruhig, erzählend', preview_url: '' },
+            { voice_id: 'v_daniel', name: 'Daniel', gender: 'male', accent: 'british', age: 'middle_aged', description: 'Klar und souverän, wie ein Nachrichtensprecher', preview_url: '' },
+            { voice_id: 'v_brian', name: 'Brian', gender: 'male', accent: 'american', age: 'middle_aged', description: 'Tief und sonor', preview_url: '' },
+            { voice_id: 'v_alice', name: 'Alice', gender: 'female', accent: 'british', age: 'middle_aged', description: 'Klar und freundlich', preview_url: '' },
+          ],
+        }, 900),
+      eleven_library: (gender) => later({
+        ok: true, error: '', voices: gender === 'female' ? [
+          { voice_id: 'l_lena', public_owner_id: 'o1', name: 'Lena', gender: 'female', accent: 'standard', description: 'Junge, natürliche Stimme aus Berlin', preview_url: '' },
+        ] : [
+          { voice_id: 'l_otto', public_owner_id: 'o1', name: 'Otto', gender: 'male', accent: 'standard', description: 'Tiefer, ruhiger Erzähler, Hochdeutsch', preview_url: '' },
+          { voice_id: 'l_maximilian', public_owner_id: 'o2', name: 'Maximilian', gender: 'male', accent: 'austrian', description: 'Wiener Charme, souverän', preview_url: '' },
+          { voice_id: 'l_karl', public_owner_id: 'o3', name: 'Karl', gender: 'male', accent: 'standard', description: 'Butler-Ton, britisch angehaucht', preview_url: '' },
+        ],
+      }, 500),
+      eleven_add: (owner, id) => later({ ok: true, error: '', voice_id: id + '_mein' }, 600),
+      eleven_select: (id, name) => later({ ok: true, error: '', voice_id: id, name }, 80),
+      eleven_preview: () => later({ ok: true, error: '' }, 2000),
+      groq_check: (key) => later(/^gsk_/.test(key) ? { ok: true, error: '' }
+        : { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit gsk_).' }, 700),
+      groq_remove: () => later({ ok: true, error: '' }, 60),
+      open_url: () => later(true, 30),
       place_check: (text) => later(/^x+$/i.test(text) || /unbekannt/i.test(text)
         ? { ok: false, place: '', temp: null, text: '', error: `"${text}" kenne ich leider nicht. Vielleicht mit Land, z. B. "Wien, Österreich"?` }
         : { ok: true, place: String(text).split(',')[0].trim(), temp: 16, text: 'teils bewölkt', error: '' }, 600),
@@ -1435,7 +1806,7 @@
       claude_login: () => later({ ok: true, error: '' }, 100),
       hotkeys: () => later([
         { id: 'ctrl+alt+m', label: 'Strg + Alt + M' },
-        { id: 'ctrl+alt+j', label: 'Strg + Alt + J' },
+        { id: 'ctrl+shift+m', label: 'Strg + Umschalt + M' },
         { id: 'f9', label: 'F9' },
         { id: 'pause', label: 'Pause' },
       ], 40),

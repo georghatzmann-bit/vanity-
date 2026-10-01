@@ -30,7 +30,8 @@ VOICE_SETTINGS = {"stability": 0.5, "similarity_boost": 0.8, "style": 0.0, "use_
 
 
 class ElevenLabsError(RuntimeError):
-    """`kind`: key (Schlüssel falsch), quota (Guthaben leer), model, param, voice, busy, net, other."""
+    """`kind`: key (Schlüssel falsch), quota (Guthaben leer), permission (Schlüssel darf das nicht),
+    model, param, voice, busy, net, other."""
 
     def __init__(self, kind: str, message: str) -> None:
         super().__init__(message)
@@ -38,9 +39,9 @@ class ElevenLabsError(RuntimeError):
 
 
 class ElevenLabs:
-    def __init__(self, key: str, base: str = BASE, timeout: float = 8.0) -> None:
+    def __init__(self, key: str, base: str | None = None, timeout: float = 8.0) -> None:
         self.key = (key or "").strip()
-        self.base = base.rstrip("/")
+        self.base = (base or BASE).rstrip("/")
         self.timeout = timeout
 
     # ------------------------------------------------------------------ Grundlagen
@@ -174,6 +175,8 @@ def _error(exc: urllib.error.HTTPError) -> ElevenLabsError:
     # ElevenLabs meldet ein leeres Guthaben manchmal auch mit 401, deshalb zuerst prüfen.
     if exc.code == 402 or "quota" in text or "credit" in text or "payment" in text:
         kind = "quota"
+    elif "permission" in text:
+        kind = "permission"  # Schlüssel mit eingeschränkten Rechten
     elif exc.code == 401 or "invalid_api_key" in text or "api_key" in status:
         kind = "key"
     elif exc.code == 404 or "voice_not_found" in text:

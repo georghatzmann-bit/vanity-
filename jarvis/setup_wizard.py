@@ -41,7 +41,8 @@ PREVIEW_TEXT = "Guten Tag, Sir. Alle Systeme sind bereit. Womit darf ich dienen?
 
 HOTKEYS = [
     {"id": "ctrl+alt+m", "label": "Strg + Alt + M"},
-    {"id": "ctrl+alt+j", "label": "Strg + Alt + J"},
+    # Strg + Alt + J ist "Jarvis hört zu"
+    {"id": "ctrl+shift+m", "label": "Strg + Umschalt + M"},
     {"id": "f9", "label": "F9"},
     {"id": "pause", "label": "Pause"},
 ]
@@ -360,6 +361,11 @@ class SetupApi:
                 "ha_url": str(cfg.get("homeassistant", {}).get("url", "")),
                 "ha_token_set": bool(cfg.get("homeassistant", {}).get("token")),
                 "speed": speed_of(cfg["brain"].get("models")),
+                "tts_engine": str(cfg["tts"].get("engine", "edge")),
+                "eleven_key_set": bool(str(cfg["tts"].get("elevenlabs_key", "") or "").strip()),
+                "eleven_voice": str(cfg["tts"].get("elevenlabs_voice", "") or ""),
+                "eleven_voice_name": str(cfg["tts"].get("elevenlabs_voice_name", "") or ""),
+                "groq_key_set": bool(str(cfg["stt"].get("groq_key", "") or "").strip()),
             },
             "claude": {"installed": bool(claude), "path": claude or ""},
         }
@@ -477,6 +483,7 @@ class SetupApi:
             self._playing.release()
 
     def voice_save(self, voice) -> dict:
+        """Eine der kostenlosen Microsoft-Stimmen nehmen (auch als Ersatz für ElevenLabs)."""
         voice = str(voice)
         known = next((v for v in VOICES if v["id"] == voice), None)
         if known:
@@ -485,7 +492,153 @@ class SetupApi:
                 result = self._save("tts", key, known[key])
                 if not result["ok"]:
                     return result
-        return self._save("tts", "voice", voice)
+        result = self._save("tts", "voice", voice)
+        if result["ok"]:
+            result = self._save("tts", "engine", "edge")
+        return result
+
+    # ------------------------------------------------------------ Premium-Stimmen (ElevenLabs)
+
+    def _eleven(self, key: str = ""):
+        from .elevenlabs import ElevenLabs
+
+        key = str(key or "").strip() or str(self._cfg["tts"].get("elevenlabs_key", "") or "").strip()
+        return ElevenLabs(key) if key else None
+
+    @staticmethod
+    def _eleven_error(exc) -> str:
+        return {
+            "key": "Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit sk_).",
+            "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Im Konto unter Abo nachsehen.",
+            "permission": "Dem Schlüssel fehlen Rechte. Erstelle am besten einen neuen ohne Einschränkungen.",
+            "net": "ElevenLabs ist gerade nicht erreichbar. Ist das Internet an?",
+            "voice": "Diese Stimme gibt es nicht mehr.",
+        }.get(getattr(exc, "kind", ""), f"ElevenLabs meldet: {exc}")
+
+    def eleven_check(self, key="") -> dict:
+        """Schlüssel prüfen und speichern, dann Kontingent und Stimmen zeigen."""
+        from .elevenlabs import ElevenLabsError, pick_default_voice
+
+        api = self._eleven(str(key or ""))
+        if api is None:
+            return {"ok": False, "error": "Bitte zuerst den Schlüssel einfügen."}
+        sub = None
+        try:
+            sub = api.subscription()
+        except ElevenLabsError as exc:
+            if exc.kind != "permission":
+                return {"ok": False, "error": self._eleven_error(exc)}
+        try:
+            voices = api.voices()
+        except ElevenLabsError as exc:
+            return {"ok": False, "error": self._eleven_error(exc)}
+        if str(key or "").strip():
+            saved = self._save("tts", "elevenlabs_key", str(key).strip())
+            if not saved["ok"]:
+                return saved
+        tts = self._cfg["tts"]
+        selected = str(tts.get("elevenlabs_voice", "") or "")
+        if not any(v["voice_id"] == selected for v in voices):
+            selected = (pick_default_voice(voices) or {}).get("voice_id", "")
+        return {
+            "ok": True, "error": "", "voices": voices, "selected": selected,
+            "active": tts.get("engine") == "elevenlabs",
+            "tier": (sub or {}).get("tier", ""), "used": (sub or {}).get("used", 0), "limit": (sub or {}).get("limit", 0),
+        }
+
+    def eleven_library(self, gender="male") -> dict:
+        """Deutsche Stimmen aus der ElevenLabs-Bibliothek."""
+        from .elevenlabs import ElevenLabsError
+
+        api = self._eleven()
+        if api is None:
+            return {"ok": False, "error": "Erst den Schlüssel prüfen.", "voices": []}
+        try:
+            return {"ok": True, "error": "", "voices": api.library(gender=str(gender or ""))}
+        except ElevenLabsError as exc:
+            return {"ok": False, "error": self._eleven_error(exc), "voices": []}
+
+    def eleven_add(self, public_owner_id, voice_id, name) -> dict:
+        """Eine Bibliotheks-Stimme ins eigene Konto holen und gleich nehmen."""
+        from .elevenlabs import ElevenLabsError
+
+        api = self._eleven()
+        if api is None:
+            return {"ok": False, "error": "Erst den Schlüssel prüfen."}
+        try:
+            new_id = api.add_shared(str(public_owner_id), str(voice_id), str(name))
+        except ElevenLabsError as exc:
+            return {"ok": False, "error": self._eleven_error(exc)}
+        return self.eleven_select(new_id, name)
+
+    def eleven_select(self, voice_id, name="") -> dict:
+        voice_id, name = str(voice_id or "").strip(), str(name or "").strip()
+        if not voice_id:
+            return {"ok": False, "error": "Keine Stimme gewählt."}
+        for section, key, value in (("tts", "elevenlabs_voice", voice_id), ("tts", "elevenlabs_voice_name", name),
+                                    ("tts", "engine", "elevenlabs")):
+            result = self._save(section, key, value)
+            if not result["ok"]:
+                return result
+        return {"ok": True, "error": "", "voice_id": voice_id, "name": name}
+
+    def eleven_preview(self, voice_id) -> dict:
+        """Spielt den Begrüßungssatz mit einer ElevenLabs-Stimme (kostet etwa 60 Zeichen Guthaben)."""
+        import numpy as np
+
+        from .elevenlabs import DEFAULT_MODEL, FALLBACK_MODEL, RATE, ElevenLabsError
+        from .tts import Player, trim_silence
+
+        api = self._eleven()
+        if api is None:
+            return {"ok": False, "error": "Erst den Schlüssel prüfen."}
+        if not self._playing.acquire(blocking=False):
+            return {"ok": False, "error": "Es spielt gerade schon eine Stimme."}
+        try:
+            model = str(self._cfg["tts"].get("elevenlabs_model", "") or DEFAULT_MODEL)
+            try:
+                pcm = api.speak(PREVIEW_TEXT, str(voice_id), model)
+            except ElevenLabsError as exc:
+                if exc.kind not in ("model", "param"):
+                    raise
+                pcm = api.speak(PREVIEW_TEXT, str(voice_id), FALLBACK_MODEL, plain=True)
+            samples = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16)
+            Player().play(trim_silence(samples, RATE), RATE, lambda level: None)
+            return {"ok": True, "error": ""}
+        except ElevenLabsError as exc:
+            return {"ok": False, "error": self._eleven_error(exc)}
+        except Exception as exc:
+            log.warning("ElevenLabs-Hörprobe: %s", exc)
+            return {"ok": False, "error": "Die Hörprobe ließ sich nicht abspielen."}
+        finally:
+            self._playing.release()
+
+    # ------------------------------------------------------------ Links
+
+    ALLOWED_LINKS = ("https://elevenlabs.io/", "https://console.groq.com/", "https://claude.ai/")
+
+    def open_url(self, url) -> bool:
+        """Öffnet eine der Anmelde-Seiten im Browser (nur diese, nichts anderes)."""
+        url = str(url or "")
+        if not url.startswith(self.ALLOWED_LINKS):
+            return False
+        import webbrowser
+
+        return bool(webbrowser.open(url))
+
+    # ------------------------------------------------------------ Spracherkennung (Groq)
+
+    def groq_check(self, key) -> dict:
+        from .stt import check_groq_key
+
+        key = str(key or "").strip()
+        ok, error = check_groq_key(key)
+        if not ok:
+            return {"ok": False, "error": error}
+        return self._save("stt", "groq_key", key)
+
+    def groq_remove(self) -> dict:
+        return self._save("stt", "groq_key", "")
 
     # ------------------------------------------------------------ Wohnort
 

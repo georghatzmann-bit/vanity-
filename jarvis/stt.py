@@ -73,6 +73,33 @@ class SpeechToText:
         return clean_transcript(" ".join(s.text.strip() for s in segments), self._prompt)
 
 
+GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models"
+
+
+def check_groq_key(key: str, timeout: float = 8.0) -> tuple[bool, str]:
+    """Prüft einen Groq-Schlüssel, ohne Audio zu verbrauchen. Gibt (ok, Fehlertext) zurück."""
+    import urllib.error
+    import urllib.request
+
+    key = (key or "").strip()
+    if not key:
+        return False, "Bitte zuerst den Schlüssel einfügen."
+    request = urllib.request.Request(GROQ_MODELS_URL, headers={"Authorization": f"Bearer {key}", "User-Agent": "Jarvis"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            return False, "Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit gsk_)."
+        return False, f"Groq meldet einen Fehler ({exc.code}). Bitte gleich noch einmal versuchen."
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return False, "Groq ist gerade nicht erreichbar. Ist das Internet an?"
+    models = {m.get("id") for m in data.get("data", []) if isinstance(m, dict)}
+    if models and not any(str(m).startswith("whisper") for m in models):
+        return False, "Der Schlüssel geht, aber Whisper ist für dieses Konto nicht freigeschaltet."
+    return True, ""
+
+
 class CloudSpeechToText:
     """Groq: Whisper large-v3-turbo, meist in 0,2 bis 0,5 Sekunden. Kostenloser Schlüssel von
     console.groq.com. Klappt es nicht (kein Netz, Limit, falscher Schlüssel), übernimmt
