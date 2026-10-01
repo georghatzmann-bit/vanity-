@@ -3,13 +3,16 @@ erledigt ihn selbst oder fragt Claude, und spricht die Antwort."""
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import itertools
 import logging
 import queue
 import random
+import re
 import threading
 import time
+import urllib.parse
 
 from . import intents
 from .brain import BrainError, Cancelled, RefusalError
@@ -58,6 +61,10 @@ class Assistant:
         # Die Werkstatt für Programmier- und Bauaufgaben (setzt __main__).
         self.workshop = None
         self.gaming = False
+        # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
+        self.weathers: dict = {}
+        # Was bei mehreren Befehlen übrig blieb und Claude machen soll
+        self._rest = ""
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
@@ -175,13 +182,20 @@ class Assistant:
             try:
                 log.info("Befehl: %s", text)
                 self.ui.message("user", text)
+                self._rest = ""
                 answer = self._local_answer(text)
+                rest, self._rest = self._rest, ""
                 if answer is None:
                     answer = self._ask_claude(text, speak)
-                elif answer:
-                    self.ui.message("jarvis", answer)
-                    if speak:
-                        self.say(answer)
+                else:
+                    if answer:
+                        self.ui.message("jarvis", answer)
+                        if speak:
+                            self.say(answer)
+                    if rest:
+                        # "Öffne Spotify und schreib mir ein Gedicht": den Teil kann nur Claude
+                        later = self._ask_claude(rest, speak)
+                        answer = " ".join(a for a in (answer, later) if a)
                 log.info("Antwort: %s", answer)
                 self._follow_up = bool(speak and answer and answer.rstrip().endswith("?"))
             finally:
@@ -201,7 +215,43 @@ class Assistant:
 
             if self.workshop is not None and is_workshop_request(text):
                 return self.workshop.start(text)
+            parts = intents.match_parts(text) if self._local else None
+            if parts:
+                return self._many(parts)
             return None
+        return self._do(intent, text)
+
+    def _many(self, parts) -> str | None:
+        """Mehrere Befehle in einem Satz, nacheinander. Was Jarvis davon nicht selbst kann,
+        macht danach Claude (self._rest)."""
+        said = []
+        for number, (piece, intent) in enumerate(parts):
+            answer = self._do(intent, piece)
+            if answer is None:
+                if not said and number == 0:
+                    return None  # schon der erste Teil geht nicht: Claude macht alles
+                self._rest = " und ".join(p for p, _ in parts[number:])
+                break
+            if answer:
+                said.append(answer)
+        return _join(said)
+
+    @contextlib.contextmanager
+    def _step(self, label: str, kind: str = "app", detail: str = ""):
+        """Zeigt einen schnellen Befehl als Arbeitsschritt im Fenster (läuft, erledigt, Fehler)."""
+        step = {"id": f"q{next(self._ids)}", "tool": "Jarvis", "label": label, "detail": detail, "kind": kind,
+                "state": "running"}
+        started = time.monotonic()
+        self.ui.progress(step)
+        try:
+            yield
+        except BaseException:
+            self.ui.progress(dict(step, state="error", seconds=round(time.monotonic() - started, 1)))
+            raise
+        self.ui.progress(dict(step, state="done", seconds=round(time.monotonic() - started, 1)))
+
+    def _do(self, intent, text: str) -> str | None:
+        """Ein erkannter Befehl. None = das kann Jarvis nicht selbst, Claude soll es machen."""
         name = intent.name
         if name in ("workshop_status", "workshop_cancel"):
             if self.workshop is None:
@@ -280,6 +330,24 @@ class Assistant:
                 return self._message(intent.arg, intent.data["person"], intent.data["text"])
             if name in ("remind", "timer"):
                 return self._remind(name, intent)
+            if name in ("web", "search", "images", "route", "map", "play"):
+                return self._web(name, intent)
+            if name == "settings_page":
+                label, uri = pc.settings_page(intent.arg)
+                with self._step(f"Öffnet die Einstellungen: {label}", "app", uri):
+                    pc.open_uri(uri)
+                return random.choice([f"Die Einstellungen für {label}, Sir.", f"{label}-Einstellungen sind offen, Sir."])
+            if name in ("dark_on", "dark_off"):
+                dark = name == "dark_on"
+                with self._step("Schaltet auf dunkel" if dark else "Schaltet auf hell", "app"):
+                    pc.dark_mode(dark)
+                return "Dunkler Modus, Sir." if dark else "Heller Modus, Sir. Etwas grell, wenn Sie mich fragen."
+            if name == "radio":
+                return self._radio(intent.arg, bool(intent.data.get("on")))
+            if name == "weather":
+                return self._weather(intent)
+            if name == "calc":
+                return self._calc(intent)
         except Exception as exc:
             log.info("Schneller Befehl %s ging nicht (%s), frage Claude.", name, exc)
             return None
@@ -291,7 +359,8 @@ class Assistant:
 
         if action == "open":
             try:
-                said = apps.open_app(target)
+                with self._step(f"Öffnet {_display(target)}", "app"):
+                    said = apps.open_app(target)
             except apps.AppNotFound:
                 return None
             if said.endswith(" startet."):
@@ -300,7 +369,8 @@ class Assistant:
             return said.replace(" ist offen.", " ist offen, Sir.")
         if action == "close":
             try:
-                said = apps.close_app(target)
+                with self._step(f"Schließt {_display(target)}", "app"):
+                    said = apps.close_app(target)
             except apps.AppNotFound:
                 return None
             return said.replace(" ist zu.", " ist zu, Sir.")
@@ -313,6 +383,101 @@ class Assistant:
             f"Ich installiere {known.name}, Sir. Einen Moment.",
             f"Sehr wohl. {known.name} wird installiert, ich sage Bescheid.",
         ])
+
+    def _web(self, name: str, intent) -> str | None:
+        """Webseiten, Suchen, Karten und Abspielen: ein Link, den Windows sofort öffnet."""
+        from . import apps, pc, web
+
+        query = intent.arg.strip()
+        if name == "web":
+            found = web.site(query)
+            label, url = found if found else (query[:1].upper() + query[1:], web.first_hit_url(query))
+            with self._step(f"Öffnet {label}", "web", url):
+                pc.open_uri(url)
+            return random.choice([f"{label} ist offen, Sir.", f"Bitte sehr, {label}.", f"{label}, Sir."])
+        if name == "search":
+            site = intent.data.get("site") or "google"
+            if site == "spotify":
+                return self._spotify(query)
+            label, url = web.search_url(site, query)
+            with self._step(f"Sucht auf {label}: {query}", "search", url):
+                pc.open_uri(url)
+            if label == "Google":
+                return random.choice([f"Hier ist Google zu {query}, Sir.", f"Die Suche nach {query} ist offen, Sir."])
+            return random.choice([f"{label} mit {query}, Sir.", f"Hier ist {label} zu {query}, Sir."])
+        if name == "images":
+            label, url = web.search_url("bilder", query)
+            with self._step(f"Sucht Bilder: {query}", "search", url):
+                pc.open_uri(url)
+            return f"Bilder von {query}, Sir."
+        if name == "map":
+            label, url = web.search_url("maps", query)
+            with self._step(f"Zeigt auf der Karte: {query}", "web", url):
+                pc.open_uri(url)
+            return f"{query[:1].upper() + query[1:]} auf der Karte, Sir."
+        if name == "route":
+            url = web.directions_url(query)
+            with self._step(f"Plant die Route nach {query}", "web", url):
+                pc.open_uri(url)
+            return f"Die Route nach {query} ist offen, Sir."
+        # Abspielen
+        site = intent.data.get("site") or ""
+        if site == "spotify":
+            return self._spotify(query)
+        if not site and (apps.find_known(query) is not None or apps.START_MENU.find(query, strict=True)):
+            return self._app("open", query)  # "Spiel Minecraft" heißt: das Spiel starten
+        with self._step(f"Sucht auf YouTube: {query}", "web"):
+            video = web.first_video(query)
+            url = web.video_url(video) if video else web.search_url("youtube", query)[1]
+            pc.open_uri(url)
+        if video:
+            return random.choice([f"{query} läuft, Sir.", f"Bitte sehr, {query}.", f"{query}, kommt sofort."])
+        return f"Hier ist YouTube zu {query}, Sir."
+
+    def _spotify(self, query: str) -> str:
+        """Spotify sucht, abspielen muss Georg selbst: ohne Spotify-Konto für Entwickler geht es nicht."""
+        from . import apps, pc, web
+
+        installed = apps.START_MENU.find("spotify", strict=True) is not None
+        url = "spotify:search:" + urllib.parse.quote(query) if installed else web.search_url("spotify", query)[1]
+        with self._step(f"Sucht in Spotify: {query}", "app", url):
+            pc.open_uri(url)
+        return f"Spotify zeigt {query}, Sir. Ein Klick, und es läuft."
+
+    def _radio(self, kind: str, on: bool) -> str | None:
+        from . import pc
+
+        label = "Bluetooth" if kind == "bluetooth" else "WLAN"
+        try:
+            with self._step(f"Schaltet {label} {'ein' if on else 'aus'}", "app"):
+                pc.radio(kind, on)
+        except pc.RadioMissing:
+            return f"Ich finde an diesem PC kein {label}, Sir."
+        if label == "WLAN" and not on:
+            return "WLAN ist aus, Sir. Ohne Internet höre und spreche ich nur eingeschränkt."
+        return f"{label} ist {'an' if on else 'aus'}, Sir."
+
+    def _weather(self, intent) -> str | None:
+        """Wetter sofort von Open-Meteo, ohne Claude. Ohne Ort fragt Claude nach."""
+        from .weather import Weather, spoken_weather
+
+        place = (intent.data.get("place") or str(self._cfg.get("ich", {}).get("ort", ""))).strip()
+        if not place:
+            return None
+        source = self.weathers.get(place.lower())
+        if source is None:
+            source = self.weathers[place.lower()] = Weather(place)
+        with self._step(f"Holt das Wetter für {place[:1].upper() + place[1:]}", "web"):
+            data = source.forecast()
+        return spoken_weather(data, intent.arg or "heute", intent.data.get("ask", ""))
+
+    def _calc(self, intent) -> str:
+        from .calc import spoken
+
+        if intent.data.get("error") == "durch null":
+            return "Durch null teilen kann nicht einmal ich, Sir."
+        result = spoken(intent.data["value"])
+        return random.choice([f"Das macht {result}, Sir.", f"{result}, Sir.", f"Ergibt {result}, Sir."])
 
     def _message(self, app: str, person: str, text: str) -> str:
         """Chatnachricht ohne Claude-Umweg: in wenigen Sekunden statt zwanzig."""
@@ -518,3 +683,25 @@ def _short_reason(exc: BrainError) -> str:
         "account": "Das Claude-Konto meldet ein Problem (claude.ai).",
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
+
+
+def _join(answers: list[str]) -> str:
+    """Mehrere kurze Antworten zu einer: nur die letzte endet mit "Sir"."""
+    answers = [a.strip() for a in answers if a and a.strip()]
+    if len(answers) < 2:
+        return answers[0] if answers else ""
+    trimmed = [re.sub(r",? Sir\.$", ".", a) for a in answers[:-1]]
+    return " ".join(trimmed + [answers[-1]])
+
+
+def _display(name: str) -> str:
+    """So heißt es in der Anzeige: "youtube" -> "YouTube", "vs code" -> "Visual Studio Code"."""
+    from . import apps, web
+
+    known = apps.find_known(name)
+    if known is not None:
+        return known.name
+    site = web.site(name)
+    if site is not None:
+        return site[0]
+    return name[:1].upper() + name[1:]

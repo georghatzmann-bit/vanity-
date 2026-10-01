@@ -1,0 +1,297 @@
+"""Sofort-Befehle ohne Claude: Webseiten, Suchen, Abspielen, Einstellungen, Schalter,
+Wetter, Rechnen und mehrere Befehle in einem Satz."""
+
+import datetime as dt
+import unittest
+from unittest import mock
+
+import tests.helpers  # noqa: F401
+from jarvis import calc, intents, web
+from jarvis.weather import spoken_weather
+from tests.test_assistant import FakeBrain, make
+
+
+def intent_of(text):
+    found = intents.match(text)
+    if found is None:
+        return None
+    data = {k: v for k, v in found.data.items() if k not in ("value", "when")}
+    return (found.name, found.arg, data) if data else (found.name, found.arg)
+
+
+class RecognitionTest(unittest.TestCase):
+    def test_websites_searches_and_playing(self):
+        cases = {
+            "Geh auf Reddit": ("web", "Reddit"),
+            "Öffne amazon.de": ("web", "amazon.de"),
+            "Öffne die Seite von Billa": ("web", "Billa"),
+            "Öffne YouTube im Browser": ("web", "YouTube"),
+            "Such auf YouTube nach Katzenvideos": ("search", "Katzenvideos", {"site": "youtube"}),
+            "Such Katzenvideos auf YouTube": ("search", "Katzenvideos", {"site": "youtube"}),
+            "Hey Jarvis, google mal Pizza in der Nähe": ("search", "Pizza in der Nähe", {"site": "google"}),
+            "Such nach dem besten Gaming-Monitor": ("search", "dem besten Gaming-Monitor", {"site": "google"}),
+            "Such mir ein Rezept für Lasagne": ("search", "ein Rezept für Lasagne", {"site": "google"}),
+            "Such bei willhaben nach einem Sofa": ("search", "einem Sofa", {"site": "willhaben"}),
+            "Zeig mir Bilder vom Eiffelturm": ("images", "Eiffelturm"),
+            "Navigiere nach Graz": ("route", "Graz"),
+            "Zeig mir Hallstatt auf der Karte": ("map", "Hallstatt"),
+            "Spiel Bohemian Rhapsody auf YouTube": ("play", "Bohemian Rhapsody", {"site": "youtube"}),
+            "Spiel auf Spotify Queen": ("play", "Queen", {"site": "spotify"}),
+            "Spiel Thunderstruck": ("play", "Thunderstruck", {"site": ""}),
+            "Spiel ein Lied von Queen": ("play", "Queen", {"site": ""}),
+        }
+        for said, expected in cases.items():
+            with self.subTest(said=said):
+                self.assertEqual(intent_of(said), expected)
+
+    def test_settings_switches_weather_and_sums(self):
+        cases = {
+            "Öffne die Bluetooth-Einstellungen": ("settings_page", "bluetooth"),
+            "Zeig mir die Einstellungen für WLAN": ("settings_page", "wlan"),
+            "Mach den Dunkelmodus an": ("dark_on", ""),
+            "Dunkel-Modus aus": ("dark_off", ""),
+            "Schalte auf hellen Modus": ("dark_off", ""),
+            "Bluetooth aus": ("radio", "bluetooth", {"on": False}),
+            "Mach das WLAN an": ("radio", "wifi", {"on": True}),
+            "Wie wird das Wetter morgen?": ("weather", "morgen", {"place": "", "ask": ""}),
+            "Regnet es?": ("weather", "jetzt", {"place": "", "ask": "regen"}),
+            "Brauche ich heute einen Schirm?": ("weather", "heute", {"place": "", "ask": "regen"}),
+            "Wie warm ist es in Graz?": ("weather", "jetzt", {"place": "graz", "ask": "temperatur"}),
+            "Wie wird das Wetter am Wochenende in Salzburg?": ("weather", "wochenende", {"place": "salzburg", "ask": ""}),
+            "Was ist 15 mal 23?": ("calc", "15 mal 23"),
+            "Wie viel sind 20 Prozent von 80?": ("calc", "20 Prozent von 80"),
+            "Was ist 1 durch 0": ("calc", "1 durch 0", {"error": "durch null"}),
+        }
+        for said, expected in cases.items():
+            with self.subTest(said=said):
+                self.assertEqual(intent_of(said), expected)
+
+    def test_what_stays_with_the_old_rules_or_claude(self):
+        cases = {
+            "Öffne YouTube": ("open", "youtube"),
+            "Öffne Spotify": ("open", "spotify"),
+            "Spiel Musik ab": ("media_play", ""),
+            "Spiel die Musik weiter": ("media_play", ""),
+            "Öffne die Einstellungen": ("open", "einstellungen"),
+            "Lautstärke auf 30": ("volume_set", "30"),
+            "Schreib Max auf Discord, bin gleich da": ("message", "discord", {"person": "Max", "text": "bin gleich da"}),
+        }
+        for said, expected in cases.items():
+            with self.subTest(said=said):
+                self.assertEqual(intent_of(said), expected)
+        for said in ("Such auf meinem PC nach der Rechnung", "Spiel ein Spiel mit mir", "Spiel meine Playlist",
+                     "Ist Bluetooth an?", "Was ist die Hauptstadt von Frankreich?", "Öffne die Wetter-App",
+                     "Wie spät ist es in New York?"):
+            with self.subTest(said=said):
+                found = intents.match(said)
+                self.assertTrue(found is None or found.name in ("open",), found)
+
+    def test_several_commands_in_one_sentence(self):
+        def parts(text):
+            found = intents.match_parts(text)
+            return [(p, i.name, i.arg, i.data.get("site", "")) for p, i in found] if found else None
+
+        self.assertEqual(parts("Öffne Spotify und Discord"),
+                         [("Öffne Spotify", "open", "spotify", ""), ("öffne Discord", "open", "discord", "")])
+        self.assertEqual([p[1] for p in parts("Mach den Gaming-Modus an und öffne Steam")], ["gaming_on", "open"])
+        self.assertEqual(len(parts("Öffne Spotify, Discord und Steam")), 3)
+        # Seite öffnen und dort suchen: gleich die Suche auf der Seite
+        self.assertEqual(parts("Öffne YouTube und such nach Katzen"),
+                         [("Öffne YouTube such nach Katzen", "search", "Katzen", "youtube")])
+        # Ein Teil, den nur Claude kann: dann macht Claude den ganzen Satz
+        self.assertIsNone(parts("Öffne Spotify und erzähl mir einen Witz"))
+        self.assertIsNone(parts("Öffne Spotify"))
+
+
+class WebTest(unittest.TestCase):
+    def test_sites_and_domains(self):
+        self.assertEqual(web.site("YouTube"), ("YouTube", "https://www.youtube.com"))
+        self.assertEqual(web.site("die Seite von willhaben"), ("willhaben", "https://www.willhaben.at"))
+        self.assertEqual(web.site("youtubemusic"), ("YouTube Music", "https://music.youtube.com"))
+        self.assertEqual(web.site("amazon.de"), ("Amazon", "https://amazon.de"))
+        self.assertEqual(web.site("orf punkt at"), ("ORF", "https://orf.at"))
+        self.assertEqual(web.site("www.beispiel.com/seite"), ("beispiel.com", "https://beispiel.com/seite"))
+        self.assertIsNone(web.site("Zauberei"))
+
+    def test_search_urls(self):
+        self.assertEqual(web.search_url("youtube", "Katzen Videos"),
+                         ("YouTube", "https://www.youtube.com/results?search_query=Katzen+Videos"))
+        self.assertEqual(web.search_url("spotify", "Queen live")[1], "https://open.spotify.com/search/Queen%20live")
+        self.assertEqual(web.search_url("unbekannt", "x")[0], "Google")
+        self.assertTrue(web.directions_url("Graz Hauptplatz").endswith("destination=Graz+Hauptplatz"))
+        self.assertTrue(web.first_hit_url("billa").startswith("https://duckduckgo.com/?q=%5C"))
+
+    def test_first_youtube_video(self):
+        page = 'x"videoRenderer":{"videoId":"fJ9rUzIMcZQ","thumbnail":{}} y"videoId":"aaaaaaaaaaa"'
+        self.assertEqual(web.first_video("queen", fetch=lambda url, timeout: page), "fJ9rUzIMcZQ")
+        self.assertIsNone(web.first_video("queen", fetch=lambda url, timeout: "<html>nichts</html>"))
+
+        def broken(url, timeout):
+            raise OSError("kein Netz")
+
+        self.assertIsNone(web.first_video("queen", fetch=broken))
+
+
+class CalcTest(unittest.TestCase):
+    def test_spoken_sums(self):
+        cases = {
+            "15 mal 23": "345", "100 durch 7": "ungefähr 14,2857", "2 hoch 10": "1024", "Wurzel aus 144": "12",
+            "20 Prozent von 80": "16", "3,5 + 1,25": "4,75", "1.000 mal 3": "3000", "zwei mal drei": "6",
+            "(3 + 4) * 2": "14", "12 x 12": "144", "5 zum Quadrat": "25", "10 geteilt durch 4": "2,5",
+            "15 minus 20": "minus 5", "1000 mal 1000": "1.000.000",
+        }
+        for said, expected in cases.items():
+            with self.subTest(said=said):
+                self.assertEqual(calc.spoken(calc.evaluate(said)), expected)
+
+    def test_not_a_sum(self):
+        for said in ("ein Quasar", "das Wetter", "5", "Hallo 5 mal", "9 hoch 999", "1 durch 0"):
+            with self.subTest(said=said), self.assertRaises(calc.CalcError):
+                calc.evaluate(said)
+
+
+WEATHER = {
+    "place": "Wien",
+    "current": {"temperature_2m": 18.2, "weather_code": 1, "precipitation": 0.0},
+    "daily": {
+        "time": ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05"],
+        "weather_code": [3, 80, 0, 61, 2],
+        "temperature_2m_max": [24.1, 17.4, 25.0, 15.2, 20.0],
+        "temperature_2m_min": [14.0, 9.2, 11.0, 8.6, 10.0],
+        "precipitation_probability_max": [0, 70, 5, 45, 10],
+    },
+}
+TODAY = dt.date(2026, 10, 1)  # ein Donnerstag
+
+
+class WeatherTest(unittest.TestCase):
+    def say(self, when, ask=""):
+        return spoken_weather(WEATHER, when, ask, TODAY)
+
+    def test_sentences(self):
+        self.assertEqual(self.say("jetzt"), "Gerade 18 Grad in Wien, überwiegend klar, Sir.")
+        self.assertEqual(self.say("heute"), "Heute in Wien 14 bis 24 Grad, bewölkt. Gerade sind es 18 Grad, Sir.")
+        self.assertEqual(self.say("morgen"),
+                         "Morgen in Wien 9 bis 17 Grad, Regenschauer, Regenrisiko 70 Prozent. Ein Schirm wäre klug, Sir.")
+        self.assertEqual(self.say("wochenende"),
+                         "Am Samstag in Wien 11 bis 25 Grad, klar. Am Sonntag 9 bis 15 Grad, leichter Regen, "
+                         "Regenrisiko 45 Prozent, Sir.")
+        self.assertEqual(self.say("freitag"), self.say("morgen"))
+
+    def test_questions(self):
+        self.assertEqual(self.say("jetzt", "regen"), "Nein, Sir, gerade ist es in Wien trocken.")
+        self.assertEqual(self.say("morgen", "regen"),
+                         "Ja, Sir. Morgen 70 Prozent Regenrisiko in Wien. Nehmen Sie einen Schirm mit.")
+        self.assertEqual(self.say("sonntag", "regen"), "Vielleicht, Sir. Am Sonntag liegt das Regenrisiko in Wien bei 45 Prozent.")
+        self.assertEqual(self.say("übermorgen", "regen"), "Nein, Sir. Übermorgen bleibt es in Wien trocken.")
+        self.assertEqual(self.say("morgen", "temperatur"), "Morgen in Wien 9 bis 17 Grad, Sir.")
+
+
+class AssistantQuickTest(unittest.TestCase):
+    """Alles ohne Claude, mit Schritt im Fenster, und schnell."""
+
+    def run_quick(self, text, **patches):
+        from jarvis.config import load_config
+
+        cfg = load_config()
+        cfg.setdefault("ich", {})["ort"] = "Wien"
+        brain = FakeBrain()
+        assistant, ui, speaker, _ = make(brain, cfg)
+        opened = []
+        with mock.patch("jarvis.pc.open_uri", side_effect=opened.append), \
+                mock.patch("jarvis.apps._launch", side_effect=opened.append), \
+                mock.patch("os.name", "nt"), \
+                mock.patch("jarvis.apps.START_MENU.find", return_value=None):
+            stack = [mock.patch(target, **kw) for target, kw in patches.items()]
+            for patch in stack:
+                patch.start()
+            try:
+                answer = assistant.handle(text)
+            finally:
+                for patch in stack:
+                    patch.stop()
+        steps = [(e[1]["label"], e[1]["state"]) for e in ui.of("progress")]
+        return answer, opened, steps, brain
+
+    def test_websites_and_searches_open_at_once(self):
+        answer, opened, steps, brain = self.run_quick("Such auf YouTube nach Katzenvideos")
+        self.assertEqual(opened, ["https://www.youtube.com/results?search_query=Katzenvideos"])
+        self.assertIn("Katzenvideos", answer)
+        self.assertEqual(steps, [("Sucht auf YouTube: Katzenvideos", "running"), ("Sucht auf YouTube: Katzenvideos", "done")])
+        self.assertEqual(brain.asked, [])
+        answer, opened, _, brain = self.run_quick("Geh auf amazon.de")
+        self.assertEqual(opened, ["https://amazon.de"])
+        self.assertEqual(brain.asked, [])
+
+    def test_play_on_youtube_starts_the_first_video(self):
+        answer, opened, _, brain = self.run_quick(
+            "Spiel Bohemian Rhapsody", **{"jarvis.web.first_video": {"return_value": "fJ9rUzIMcZQ"}})
+        self.assertEqual(opened, ["https://www.youtube.com/watch?v=fJ9rUzIMcZQ"])
+        self.assertIn("Bohemian Rhapsody", answer)
+        self.assertEqual(brain.asked, [])
+        # "Spiel Minecraft" startet das Spiel, statt ein Video zu suchen
+        with mock.patch("jarvis.apps.open_app", return_value="Minecraft Launcher startet.") as open_app:
+            answer, opened, _, _ = self.run_quick("Spiel Minecraft", **{"jarvis.web.first_video": {"return_value": "x" * 11}})
+        open_app.assert_called_once_with("Minecraft")
+        self.assertEqual(opened, [])
+
+    def test_settings_dark_mode_and_radio(self):
+        answer, opened, _, brain = self.run_quick("Öffne die Bluetooth-Einstellungen")
+        self.assertEqual(opened, ["ms-settings:bluetooth"])
+        with mock.patch("jarvis.pc.dark_mode") as dark:
+            answer, _, steps, brain = self.run_quick("Mach den Dunkelmodus an")
+        dark.assert_called_once_with(True)
+        self.assertEqual(answer, "Dunkler Modus, Sir.")
+        with mock.patch("jarvis.pc.radio") as radio:
+            answer, _, _, brain = self.run_quick("Bluetooth aus")
+        radio.assert_called_once_with("bluetooth", False)
+        self.assertEqual(answer, "Bluetooth ist aus, Sir.")
+        from jarvis import pc
+
+        with mock.patch("jarvis.pc.radio", side_effect=pc.RadioMissing("kein Bluetooth")):
+            answer, _, _, brain = self.run_quick("Bluetooth an")
+        self.assertEqual(answer, "Ich finde an diesem PC kein Bluetooth, Sir.")
+        self.assertEqual(brain.asked, [])
+
+    def test_weather_and_sums(self):
+        from jarvis.weather import Weather
+
+        with mock.patch.object(Weather, "forecast", return_value=dict(WEATHER, place="Wien")):
+            answer, _, steps, brain = self.run_quick("Wie wird das Wetter morgen?")
+        self.assertTrue(answer.startswith("Morgen in Wien"), answer)
+        self.assertEqual(brain.asked, [])
+        answer, _, _, brain = self.run_quick("Was ist 15 mal 23?")
+        self.assertIn("345", answer)
+        self.assertEqual(brain.asked, [])
+
+    def test_weather_falls_back_to_claude_without_internet(self):
+        from jarvis.weather import Weather
+
+        with mock.patch.object(Weather, "forecast", side_effect=OSError("kein Netz")):
+            _, _, steps, brain = self.run_quick("Wie wird das Wetter morgen?")
+        self.assertEqual(len(brain.asked), 1)
+        self.assertEqual(steps[-1][1], "error")
+
+    def test_several_commands(self):
+        answer, opened, steps, brain = self.run_quick(
+            "Öffne YouTube und Reddit", **{"jarvis.apps.open_app": {"side_effect": lambda name: f"{name.title()} ist offen."}})
+        self.assertEqual(answer, "Youtube ist offen. Reddit ist offen, Sir.")
+        self.assertEqual(brain.asked, [])
+        self.assertEqual([s for s in steps if s[1] == "done"], [("Öffnet YouTube", "done"), ("Öffnet Reddit", "done")])
+
+    def test_a_failing_part_goes_to_claude(self):
+        from jarvis import apps
+
+        def open_app(name):
+            if name.lower() == "zaubertrank":
+                raise apps.AppNotFound("weg")
+            return "Spotify startet."
+
+        answer, _, _, brain = self.run_quick("Öffne Spotify und Zaubertrank",
+                                             **{"jarvis.apps.open_app": {"side_effect": open_app}})
+        self.assertEqual(brain.asked, ["öffne Zaubertrank"])
+        self.assertIn("Spotify", answer)
+
+
+if __name__ == "__main__":
+    unittest.main()

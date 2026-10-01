@@ -177,6 +177,160 @@ def lock() -> None:
         raise PcError("Der PC ließ sich nicht sperren.")
 
 
+# ---------------------------------------------------------------------- Einstellungen und Schalter
+
+# Gesprochener Name -> (Anzeige, Seite in den Windows-Einstellungen)
+SETTINGS: dict[str, tuple[str, str]] = {
+    "windows": ("Windows", "ms-settings:"),
+    "bluetooth": ("Bluetooth", "ms-settings:bluetooth"),
+    "geräte": ("Geräte", "ms-settings:bluetooth"),
+    "wlan": ("WLAN", "ms-settings:network-wifi"),
+    "w-lan": ("WLAN", "ms-settings:network-wifi"),
+    "wifi": ("WLAN", "ms-settings:network-wifi"),
+    "wi-fi": ("WLAN", "ms-settings:network-wifi"),
+    "netzwerk": ("Netzwerk", "ms-settings:network"),
+    "internet": ("Netzwerk", "ms-settings:network"),
+    "vpn": ("VPN", "ms-settings:network-vpn"),
+    "hotspot": ("Hotspot", "ms-settings:network-mobilehotspot"),
+    "sound": ("Sound", "ms-settings:sound"),
+    "ton": ("Sound", "ms-settings:sound"),
+    "audio": ("Sound", "ms-settings:sound"),
+    "lautsprecher": ("Sound", "ms-settings:sound"),
+    "mikrofon": ("Sound", "ms-settings:sound"),
+    "bildschirm": ("Bildschirm", "ms-settings:display"),
+    "anzeige": ("Bildschirm", "ms-settings:display"),
+    "display": ("Bildschirm", "ms-settings:display"),
+    "monitor": ("Bildschirm", "ms-settings:display"),
+    "auflösung": ("Bildschirm", "ms-settings:display"),
+    "nachtlicht": ("Nachtlicht", "ms-settings:nightlight"),
+    "hintergrund": ("Hintergrund", "ms-settings:personalization-background"),
+    "hintergrundbild": ("Hintergrund", "ms-settings:personalization-background"),
+    "wallpaper": ("Hintergrund", "ms-settings:personalization-background"),
+    "farben": ("Farben", "ms-settings:colors"),
+    "farbe": ("Farben", "ms-settings:colors"),
+    "design": ("Farben", "ms-settings:colors"),
+    "personalisierung": ("Personalisierung", "ms-settings:personalization"),
+    "sperrbildschirm": ("Sperrbildschirm", "ms-settings:lockscreen"),
+    "taskleiste": ("Taskleiste", "ms-settings:taskbar"),
+    "update": ("Windows Update", "ms-settings:windowsupdate"),
+    "updates": ("Windows Update", "ms-settings:windowsupdate"),
+    "windows update": ("Windows Update", "ms-settings:windowsupdate"),
+    "apps": ("Apps", "ms-settings:appsfeatures"),
+    "programme": ("Apps", "ms-settings:appsfeatures"),
+    "standard apps": ("Standard-Apps", "ms-settings:defaultapps"),
+    "standard-apps": ("Standard-Apps", "ms-settings:defaultapps"),
+    "standardprogramme": ("Standard-Apps", "ms-settings:defaultapps"),
+    "autostart": ("Autostart", "ms-settings:startupapps"),
+    "datenschutz": ("Datenschutz", "ms-settings:privacy"),
+    "kamera": ("Kamera", "ms-settings:camera"),
+    "webcam": ("Kamera", "ms-settings:camera"),
+    "maus": ("Maus", "ms-settings:mousetouchpad"),
+    "touchpad": ("Touchpad", "ms-settings:devices-touchpad"),
+    "tastatur": ("Tastatur", "ms-settings:keyboard"),
+    "drucker": ("Drucker", "ms-settings:printers"),
+    "scanner": ("Drucker", "ms-settings:printers"),
+    "energie": ("Energie", "ms-settings:powersleep"),
+    "strom": ("Energie", "ms-settings:powersleep"),
+    "akku": ("Akku", "ms-settings:batterysaver"),
+    "speicher": ("Speicher", "ms-settings:storagesense"),
+    "benachrichtigungen": ("Benachrichtigungen", "ms-settings:notifications"),
+    "konto": ("Konto", "ms-settings:yourinfo"),
+    "konten": ("Konto", "ms-settings:yourinfo"),
+    "anmeldung": ("Anmeldeoptionen", "ms-settings:signinoptions"),
+    "anmeldeoptionen": ("Anmeldeoptionen", "ms-settings:signinoptions"),
+    "sprache": ("Sprache", "ms-settings:regionlanguage"),
+    "region": ("Sprache", "ms-settings:regionlanguage"),
+    "uhrzeit": ("Datum und Uhrzeit", "ms-settings:dateandtime"),
+    "datum": ("Datum und Uhrzeit", "ms-settings:dateandtime"),
+    "gaming": ("Gaming", "ms-settings:gaming-gamemode"),
+    "spiele": ("Gaming", "ms-settings:gaming-gamemode"),
+    "spielmodus": ("Gaming", "ms-settings:gaming-gamemode"),
+    "barrierefreiheit": ("Barrierefreiheit", "ms-settings:easeofaccess"),
+    "info": ("Info", "ms-settings:about"),
+    "systeminfo": ("Info", "ms-settings:about"),
+    "sicherheit": ("Windows-Sicherheit", "windowsdefender:"),
+    "virenschutz": ("Windows-Sicherheit", "windowsdefender:"),
+}
+
+
+def settings_page(name: str) -> tuple[str, str] | None:
+    """(Anzeige, Adresse) einer Einstellungsseite für "Bluetooth", "WLAN", "Sound" ..."""
+    wanted = re.sub(r"\s+", " ", str(name).lower().replace("_", " ")).strip(" -")
+    wanted = re.sub(r"^(?:die|den|das|der|dem|meine|meinen|mein)\s+", "", wanted)
+    return SETTINGS.get(wanted) or SETTINGS.get(wanted.replace(" ", "")) or SETTINGS.get(wanted.replace("-", " "))
+
+
+def open_uri(uri: str) -> None:
+    """Öffnet eine Adresse (Webseite, ms-settings:, spotify:) mit dem Programm, das Windows dafür hat."""
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    os.startfile(uri)  # type: ignore[attr-defined]
+
+
+def dark_mode(on: bool) -> str:
+    """Dunkler oder heller Modus für Windows und Apps, sofort."""
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    import ctypes
+    import winreg
+
+    value = 0 if on else 1
+    path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE) as key:
+        winreg.SetValueEx(key, "AppsUseLightTheme", 0, winreg.REG_DWORD, value)
+        winreg.SetValueEx(key, "SystemUsesLightTheme", 0, winreg.REG_DWORD, value)
+    # Allen Fenstern Bescheid geben (WM_SETTINGCHANGE "ImmersiveColorSet"), dann schalten
+    # Taskleiste und offene Apps gleich um.
+    result = ctypes.c_size_t()
+    ctypes.windll.user32.SendMessageTimeoutW(0xFFFF, 0x001A, 0, "ImmersiveColorSet", 0x0002, 1000, ctypes.byref(result))
+    return "Dunkler Modus an." if on else "Heller Modus an."
+
+
+class RadioMissing(PcError):
+    """Diesen Funk (Bluetooth oder WLAN) gibt es an diesem PC nicht."""
+
+
+# Windows' eigener Funk-Schalter (wie im Info-Center), über Windows PowerShell 5.1.
+_RADIO_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
+  $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]
+function Await($op, $type) { $t = $asTask.MakeGenericMethod($type).Invoke($null, @($op)); $t.Wait(-1) | Out-Null; $t.Result }
+[Windows.Devices.Radios.Radio,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null
+[Windows.Devices.Radios.RadioAccessStatus,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null
+[Windows.Devices.Radios.RadioState,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null
+$access = Await ([Windows.Devices.Radios.Radio]::RequestAccessAsync()) ([Windows.Devices.Radios.RadioAccessStatus])
+if ("$access" -ne 'Allowed') { 'DENIED'; exit }
+$radios = Await ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Collections.Generic.IReadOnlyList[Windows.Devices.Radios.Radio]])
+$hits = @($radios | Where-Object { "$($_.Kind)" -eq '__KIND__' })
+if ($hits.Count -eq 0) { 'NONE'; exit }
+foreach ($r in $hits) { Await ($r.SetStateAsync('__STATE__')) ([Windows.Devices.Radios.RadioAccessStatus]) | Out-Null }
+'OK'
+"""
+
+
+def radio(kind: str, on: bool) -> str:
+    """Bluetooth oder WLAN an oder aus. kind: "bluetooth" oder "wifi"."""
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    label = "Bluetooth" if kind == "bluetooth" else "WLAN"
+    script = _RADIO_SCRIPT.replace("__KIND__", "Bluetooth" if kind == "bluetooth" else "WiFi")
+    script = script.replace("__STATE__", "On" if on else "Off")
+    result = _run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+                  timeout=20)
+    out = (result.stdout or "").strip().splitlines()
+    answer = out[-1].strip() if out else ""
+    if answer == "OK":
+        return f"{label} ist {'an' if on else 'aus'}."
+    if answer == "NONE":
+        raise RadioMissing(f"Ich finde an diesem PC kein {label}.")
+    if answer == "DENIED":
+        raise PcError(f"Windows lässt mich {label} nicht schalten.")
+    raise PcError(f"{label} ließ sich nicht schalten: {(result.stderr or answer or 'keine Ausgabe').strip()[-300:]}")
+
+
 # Bekannte Ordner und ihre Windows-IDs (die echten Pfade, auch wenn sie in OneDrive liegen).
 _KNOWN_FOLDERS = {
     "downloads": ("Downloads", "{374DE290-123F-4565-9164-39C4925E467B}"),

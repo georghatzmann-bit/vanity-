@@ -40,6 +40,10 @@ log = logging.getLogger("jarvis")
 # ---------------------------------------------------------------------- Aufbau
 
 def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
+    from .apps import START_MENU
+
+    # Das Startmenü im Hintergrund lesen: "Öffne ..." wartet dann nie auf PowerShell.
+    START_MENU.warm()
     mute = MuteSwitch()
     reminders = ReminderStore(STATE_DIR / "erinnerungen.json")
     try:
@@ -126,11 +130,17 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
 
         def weather() -> None:
             source = Weather(place)
+            # Dieselbe Quelle für "Wie wird das Wetter morgen?": Ort und Vorhersage sind dann schon da.
+            assistant.weathers.setdefault(place.lower(), source)
             wait = 1.0
             retry = 30.0
             while not stopped.wait(wait):
                 try:
                     now = source.current()
+                    try:
+                        source.forecast()
+                    except Exception as exc:
+                        log.debug("Vorhersage: %s", exc)
                     parts = [f"{now['temp']}°" if now["temp"] is not None else "", now["text"], now["place"]]
                     ui.config(weather=" · ".join(p for p in parts if p))
                     wait, retry = 30 * 60, 30.0

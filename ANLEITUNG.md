@@ -63,9 +63,16 @@ Jarvis läuft im Hintergrund. Du siehst nur das Symbol unten rechts neben der Uh
 
 ## Was du sagen kannst
 
-Sofort, ohne Wartezeit:
+Sofort, ohne Wartezeit (meist unter einer Sekunde):
 
 - „Öffne Spotify“, „Starte Discord“, „Mach Steam zu“, „Öffne YouTube“, „Öffne den Ordner Downloads“
+- „Geh auf Reddit“, „Öffne amazon.de“, „Öffne die Seite von Billa“
+- „Such auf YouTube nach Katzenvideos“, „Google mal Pizza in der Nähe“, „Such bei willhaben nach einem Sofa“, „Zeig mir Bilder vom Eiffelturm“, „Navigiere nach Graz“
+- „Spiel Thunderstruck“ oder „Spiel Bohemian Rhapsody auf YouTube“ (das erste Video läuft sofort). „Spiel Queen auf Spotify“ öffnet die Suche in Spotify.
+- „Öffne die Bluetooth-Einstellungen“, „Dunkelmodus an“, „Bluetooth aus“, „WLAN an“, „Öffne den Geräte-Manager“
+- „Wie wird das Wetter morgen?“, „Brauche ich einen Schirm?“, „Wie warm ist es in Graz?“
+- „Was ist 15 mal 23?“, „20 Prozent von 80“
+- Mehrere Befehle auf einmal: „Öffne Spotify und Discord“, „Mach den Gaming-Modus an und öffne Steam“
 - „Installier mir Spotify“ oder „Lad mir Discord runter“ (Jarvis installiert und meldet sich, wenn es fertig ist)
 - „Gaming-Modus an“ / „Gaming-Modus aus“
 - „Wie spät ist es?“, „Lauter“, „Lautstärke auf 30“, „Nächstes Lied“, „Musik pausieren“
@@ -75,9 +82,8 @@ Sofort, ohne Wartezeit:
 
 Mit Nachdenken (ein paar Sekunden):
 
-- „Wie wird das Wetter morgen?“, „Was gibt es Neues?“
+- „Was gibt es Neues?“, „Wann spielt Rapid heute?“
 - „Schreib Max auf Discord, dass ich später komme“ (Jarvis formuliert die Nachricht selbst)
-- „Mach den Dunkelmodus an“, „Schalte Bluetooth aus“
 - „Was steht gerade auf meinem Bildschirm?“
 - „Guten Morgen“ (Wetter, Erinnerungen, Schlagzeilen)
 

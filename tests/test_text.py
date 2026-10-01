@@ -191,7 +191,7 @@ class IntentTest(unittest.TestCase):
             "Mach den PC stumm",
             "Schalte das Mikrofon in Discord aus",
             "Stopp die Musik auf Spotify und öffne Netflix",
-            "Wie wird das Wetter morgen?",
+            "Wie war das Wetter gestern?",  # "Wie wird das Wetter morgen?" kann Jarvis jetzt selbst
             "Wie spät ist es in New York?",
             "Halt, warte kurz",
             "Stopp die Zeit",

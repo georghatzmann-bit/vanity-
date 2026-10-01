@@ -62,18 +62,51 @@ class FindAppTest(unittest.TestCase):
             with self.assertRaises(apps.AppNotFound):
                 apps.open_app("Zaubertrank", menu)
 
-    def test_start_menu_is_reloaded_once_when_something_is_missing(self):
+    def test_start_menu_never_makes_opening_wait(self):
         calls = []
 
         def loader():
             calls.append(1)
             return list(START_MENU) + ([("Neu Installiert", "neu")] if len(calls) > 1 else [])
 
+        def wait_for(count):
+            end = time.monotonic() + 3
+            while len(calls) < count and time.monotonic() < end:
+                time.sleep(0.01)
+            time.sleep(0.05)
+
         menu = StartMenu(loader=loader)
+        menu.warm()  # beim Start im Hintergrund
+        self.assertEqual(menu.find("spotify")[0], "Spotify")  # wartet höchstens auf dieses erste Laden
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(menu.find("steam")[0], "Steam")
+        self.assertEqual(len(calls), 1, "zwischengespeichert")
+        # Fehlt ein Name (gerade erst installiert?), wird nicht gewartet, aber im Hintergrund neu gelesen.
+        menu._loaded_at -= StartMenu.MISS_REFRESH + 1
+        self.assertIsNone(menu.find("neu installiert"))
+        wait_for(2)
         self.assertEqual(menu.find("neu installiert"), ("Neu Installiert", "neu"))
-        self.assertEqual(len(calls), 2)
+        # Eine alte Liste gilt weiter, bis die neue im Hintergrund fertig ist.
+        menu._loaded_at -= StartMenu.MAX_AGE + 1
+        started = time.monotonic()
         self.assertEqual(menu.find("spotify")[0], "Spotify")
-        self.assertEqual(len(calls), 2)  # zwischengespeichert
+        self.assertLess(time.monotonic() - started, 0.05)
+        wait_for(3)
+        self.assertEqual(len(calls), 3)
+
+    def test_websites_win_over_similar_programs(self):
+        entries = list(START_MENU) + [("Amazon Music", "amazon-music"), ("YouTube", "youtube-pwa")]
+        menu = StartMenu(loader=lambda: entries)
+        with mock.patch("jarvis.apps._launch") as launch, mock.patch("os.name", "nt"):
+            self.assertEqual(apps.open_app("Amazon", menu), "Amazon ist offen.")
+            launch.assert_called_with("https://www.amazon.de")
+            self.assertEqual(apps.open_app("YouTube", menu), "YouTube startet.")  # genau so installiert
+            launch.assert_called_with("shell:AppsFolder\\youtube-pwa")
+            self.assertEqual(apps.open_app("amazon.de", menu), "Amazon ist offen.")
+            self.assertEqual(apps.open_app("orf punkt at", menu), "ORF ist offen.")
+            launch.assert_called_with("https://orf.at")
+            self.assertEqual(apps.open_app("Geräte-Manager", menu), "Geräte-Manager ist offen.")
+            launch.assert_called_with("devmgmt.msc")
 
     def test_closing_finds_the_right_processes(self):
         running = [("Discord.exe", 10), ("Discord.exe", 11), ("python.exe", 12), ("chrome.exe", 13), ("steam.exe", 14)]

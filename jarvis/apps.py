@@ -99,6 +99,16 @@ KNOWN_APPS: tuple[KnownApp, ...] = (
     KnownApp("Task-Manager", (), ("Taskmgr.exe",), ("taskmanager", "task manager")),
     KnownApp("Einstellungen", (), ("SystemSettings.exe",), ("windows einstellungen", "settings")),
     KnownApp("Paint", (), ("mspaint.exe",), ("ms paint",)),
+    KnownApp("Systemsteuerung", (), (), ("control panel", "system steuerung")),
+    KnownApp("Geräte-Manager", (), (), ("gerätemanager", "geräte manager", "device manager")),
+    KnownApp("Datenträgerverwaltung", (), (), ("datenträger verwaltung", "festplattenverwaltung")),
+    KnownApp("Dienste", (), (), ("services", "windows dienste")),
+    KnownApp("Ereignisanzeige", (), (), ("event viewer", "ereignis anzeige")),
+    KnownApp("Registrierungs-Editor", (), ("regedit.exe",), ("registry", "regedit", "registrierungseditor")),
+    KnownApp("Ressourcenmonitor", (), (), ("resource monitor", "resmon", "ressourcen monitor")),
+    KnownApp("Eingabeaufforderung", (), ("cmd.exe",), ("cmd", "kommandozeile", "konsole")),
+    KnownApp("PowerShell", (), ("powershell.exe",), ("power shell",)),
+    KnownApp("Papierkorb", (), (), ("recycle bin",)),
 )
 
 # Programme, die Windows immer hat: falls sie im Startmenü anders heißen.
@@ -109,32 +119,19 @@ _BUILTIN_COMMANDS = {
     "Task-Manager": "taskmgr.exe",
     "Einstellungen": "ms-settings:",
     "Paint": "mspaint.exe",
+    "Systemsteuerung": "control.exe",
+    "Geräte-Manager": "devmgmt.msc",
+    "Datenträgerverwaltung": "diskmgmt.msc",
+    "Dienste": "services.msc",
+    "Ereignisanzeige": "eventvwr.msc",
+    "Registrierungs-Editor": "regedit.exe",
+    "Ressourcenmonitor": "resmon.exe",
+    "Eingabeaufforderung": "cmd.exe",
+    "PowerShell": "powershell.exe",
+    "Papierkorb": "shell:RecycleBinFolder",
 }
 
-WEBSITES = {
-    "youtube": ("YouTube", "https://www.youtube.com"),
-    "google": ("Google", "https://www.google.com"),
-    "gmail": ("Gmail", "https://mail.google.com"),
-    "google mail": ("Gmail", "https://mail.google.com"),
-    "outlook": ("Outlook", "https://outlook.live.com"),
-    "twitch": ("Twitch", "https://www.twitch.tv"),
-    "reddit": ("Reddit", "https://www.reddit.com"),
-    "instagram": ("Instagram", "https://www.instagram.com"),
-    "tiktok": ("TikTok", "https://www.tiktok.com"),
-    "facebook": ("Facebook", "https://www.facebook.com"),
-    "twitter": ("X", "https://x.com"),
-    "amazon": ("Amazon", "https://www.amazon.de"),
-    "ebay": ("eBay", "https://www.ebay.de"),
-    "wikipedia": ("Wikipedia", "https://de.wikipedia.org"),
-    "github": ("GitHub", "https://github.com"),
-    "chatgpt": ("ChatGPT", "https://chatgpt.com"),
-    "willhaben": ("willhaben", "https://www.willhaben.at"),
-    "orf": ("ORF", "https://orf.at"),
-    "google maps": ("Google Maps", "https://maps.google.com"),
-    "maps": ("Google Maps", "https://maps.google.com"),
-    "prime video": ("Prime Video", "https://www.primevideo.com"),
-    "disney plus": ("Disney Plus", "https://www.disneyplus.com"),
-}
+from .web import SITES as WEBSITES  # noqa: E402  (Name -> (Anzeige, Adresse))
 
 # Startmenü-Einträge, die niemand öffnen will, wenn er nur den Programmnamen sagt.
 _JUNK = re.compile(r"uninstall|deinstall|readme|liesmich|help|hilfe|website|webseite|support|manual|handbuch|release notes|license|lizenz", re.I)
@@ -171,36 +168,78 @@ def find_known(name: str) -> KnownApp | None:
 
 class StartMenu:
     """Alles, was im Startmenü steht, mit Name und AppID (über Get-StartApps).
-    Die Liste wird zwischengespeichert und bei Bedarf neu geholt."""
+
+    Die Liste liegt im Speicher: beim Start im Hintergrund geladen (warm), danach alle
+    zehn Minuten im Hintergrund erneuert. "Öffne ..." wartet so nie auf PowerShell
+    (das dauert unter Windows 1 bis 3 Sekunden), nur beim allerersten Mal, falls die
+    Liste da noch nicht fertig ist."""
 
     MAX_AGE = 10 * 60
+    # Fehlt ein Name, wird die Liste im Hintergrund erneuert, aber höchstens so oft.
+    MISS_REFRESH = 20
 
     def __init__(self, loader=None) -> None:
         self._loader = loader or load_start_apps
         self._apps: list[tuple[str, str]] = []
         self._loaded_at = -1e9
         self._lock = threading.Lock()
+        self._refreshing = False
+        self._loaded = threading.Event()
 
-    def apps(self, refresh: bool = False) -> list[tuple[str, str]]:
+    def _load(self) -> list[tuple[str, str]]:
+        asked = time.monotonic()
         with self._lock:
-            if refresh or time.monotonic() - self._loaded_at > self.MAX_AGE:
-                try:
-                    self._apps = self._loader()
-                    self._loaded_at = time.monotonic()
-                except Exception as exc:
-                    log.warning("Startmenü nicht lesbar: %s", exc)
+            if self._loaded_at >= asked:
+                return list(self._apps)  # ein anderer Thread hat gerade frisch geladen
+            try:
+                self._apps = self._loader()
+            except Exception as exc:
+                log.warning("Startmenü nicht lesbar: %s", exc)
+            self._loaded_at = time.monotonic()
+            self._loaded.set()
             return list(self._apps)
 
-    def find(self, name: str) -> tuple[str, str] | None:
-        """Der beste Eintrag für einen gesprochenen Namen, oder None."""
-        found = best_match(name, self.apps())
-        if found is None:
-            # Vielleicht gerade erst installiert: einmal frisch nachsehen.
-            found = best_match(name, self.apps(refresh=True))
+    def warm(self) -> None:
+        """Lädt die Liste im Hintergrund, damit das erste "Öffne ..." nicht wartet."""
+        self.refresh_later()
+
+    def refresh_later(self) -> None:
+        if self._refreshing:
+            return
+        self._refreshing = True
+
+        def run() -> None:
+            try:
+                self._load()
+            finally:
+                self._refreshing = False
+
+        threading.Thread(target=run, name="jarvis-startmenue", daemon=True).start()
+
+    def apps(self, refresh: bool = False) -> list[tuple[str, str]]:
+        if refresh:
+            return self._load()
+        if not self._loaded.is_set():
+            if self._refreshing:
+                self._loaded.wait(timeout=10)  # das erste Laden läuft schon: darauf warten
+            if not self._loaded.is_set():
+                return self._load()
+        elif time.monotonic() - self._loaded_at > self.MAX_AGE:
+            self.refresh_later()  # die alte Liste gilt, bis die neue da ist
+        return list(self._apps)
+
+    def find(self, name: str, strict: bool = False) -> tuple[str, str] | None:
+        """Der beste Eintrag für einen gesprochenen Namen, oder None. strict: nur der genaue
+        Name (bei Webseiten: "Amazon" soll nicht "Amazon Music" starten).
+        Fehlt der Name, wird die Liste im Hintergrund erneuert (vielleicht gerade erst
+        installiert); gewartet wird darauf nicht."""
+        found = best_match(name, self.apps(), strict=strict)
+        if found is None and time.monotonic() - self._loaded_at > self.MISS_REFRESH:
+            self.refresh_later()
         return found
 
 
-def best_match(name: str, apps: list[tuple[str, str]]) -> tuple[str, str] | None:
+def best_match(name: str, apps: list[tuple[str, str]], strict: bool = False) -> tuple[str, str] | None:
     wanted = normalize(name)
     if not wanted or not apps:
         return None
@@ -216,6 +255,8 @@ def best_match(name: str, apps: list[tuple[str, str]]) -> tuple[str, str] | None
     for entry, norm in candidates:
         if norm.replace(" ", "") in {n.replace(" ", "") for n in names}:
             return entry
+    if strict:
+        return None
     starts = [(len(norm), entry) for entry, norm in candidates if any(norm.startswith(n + " ") for n in names)]
     if starts:
         return min(starts)[1]
@@ -250,24 +291,34 @@ def load_start_apps() -> list[tuple[str, str]]:
 START_MENU = StartMenu()
 
 
+def website(name: str, known: KnownApp | None = None) -> tuple[str, str] | None:
+    """(Anzeige, Adresse), wenn der Name eine Webseite ist ("YouTube", "amazon.de"), sonst None."""
+    from . import web
+
+    found = web.site(name)
+    if found is None and known is not None and known.url:
+        found = (known.name, known.url)
+    return found
+
+
 def open_app(name: str, start_menu: StartMenu | None = None) -> str:
-    """Startet ein Programm oder öffnet eine bekannte Webseite. Gibt einen kurzen Satz zurück."""
+    """Startet ein Programm oder öffnet eine bekannte Webseite. Gibt einen kurzen Satz zurück.
+
+    Ist der Name auch eine Webseite, zählt im Startmenü nur der genaue Name ("YouTube" als
+    App ja, "Amazon Music" für "Amazon" nein), sonst öffnet sich gleich die Seite."""
     name = name.strip().strip("\"'")
     if not name:
         raise AppNotFound("Kein Programmname.")
     menu = start_menu or START_MENU
     known = find_known(name)
-    entry = menu.find(name) if os.name == "nt" else None
+    site = website(name, known)
+    entry = menu.find(name, strict=site is not None) if os.name == "nt" else None
     if entry is not None:
         _launch(f"shell:AppsFolder\\{entry[1]}")
         return f"{entry[0]} startet."
     if known is not None and known.name in _BUILTIN_COMMANDS:
         _launch(_BUILTIN_COMMANDS[known.name])
         return f"{known.name} ist offen."
-    key = normalize(name)
-    site = WEBSITES.get(key) or WEBSITES.get(key.replace(" ", ""))
-    if site is None and known is not None and known.url:
-        site = (known.name, known.url)
     if site is not None:
         _launch(site[1])
         return f"{site[0]} ist offen."

@@ -26,9 +26,10 @@ class Intent:
 
 def normalize(text: str) -> str:
     """Kleinbuchstaben, ohne Satzzeichen, ohne "Jarvis" am Anfang oder Ende und
-    ohne doppelte Wörter ("Stopp. Stopp.")."""
+    ohne doppelte Wörter ("Stopp. Stopp."). Punkte zwischen Buchstaben bleiben ("amazon.de")."""
     text = text.lower().strip()
-    text = re.sub(r"[.,!?;:\"'„“”»«]", " ", text)
+    text = re.sub(r"(?<!\w)\.|\.(?!\w)", " ", text)
+    text = re.sub(r"[,!?;:\"'„“”»«]", " ", text)
     text = re.sub(r"^\s*(hey\s+|hallo\s+|okay\s+|ok\s+)?jarvis\b", " ", text)
     text = re.sub(r"\bjarvis\s*$", " ", text)
     text = re.sub(r"\b(bitte|mal|doch|jetzt)\b", " ", text)
@@ -127,6 +128,27 @@ _RULES += [
         r"^(?:öffne|zeig|zeige) (?:mir )?(?:den |meinen |meine |die )?(?:ordner )?"
         r"(downloads|download|dokumente|bilder|fotos|desktop|musik|videos)(?: ordner)?$"
     )),
+    # "Öffne die Bluetooth-Einstellungen", "Zeig mir die Einstellungen für WLAN"
+    ("settings_page", re.compile(
+        r"^(?:öffne|öffnen|zeig|zeige|geh in|gehe in|geh zu|gehe zu|ruf|rufe) (?:mir )?(?:die |den )?(.+?)[ -]?einstellungen$|"
+        r"^(?:öffne|zeig|zeige) (?:mir )?(?:die )?einstellungen (?:für|von|zum|zur|zu) (?:den |die |das |dem |der )?(.+)$|"
+        r"^(.+?)[ -]?einstellungen (?:öffnen|zeigen|aufmachen)$"
+    )),
+    ("dark_off", re.compile(
+        r"^(?:(?:mach|mache|schalt|schalte|deaktivier|deaktiviere|stell|stelle) )?(?:den |das )?"
+        r"(?:dunkel[ -]?modus|dark[ -]?mode|dunkles design) (?:aus|ab|deaktivieren|ausschalten)$|"
+        r"^(?:(?:mach|mache|schalt|schalte|aktivier|aktiviere|stell|stelle) )?(?:den |das |auf )?"
+        r"(?:hell[ -]?modus|hellen modus|light[ -]?mode|helles (?:design|theme))(?: (?:an|ein|um|aktivieren|einschalten))?$"
+    )),
+    ("dark_on", re.compile(
+        r"^(?:(?:mach|mache|schalt|schalte|aktivier|aktiviere|stell|stelle) )?(?:den |das |auf )?"
+        r"(?:dunkel[ -]?modus|dark[ -]?mode|dunkles (?:design|theme)|dunklen modus)(?: (?:an|ein|um|aktivieren|einschalten))?$"
+    )),
+    ("radio", re.compile(
+        r"^(?:(?:mach|mache|schalt|schalte|stell|stelle) )?(?:das |den |die )?(?:bluetooth|wlan|w-lan|wifi|wi-fi) "
+        r"(?:an|ein|aus|ab|einschalten|ausschalten|aktivieren|deaktivieren)$|"
+        r"^(?:aktivier|aktiviere|deaktivier|deaktiviere) (?:das |den |die )?(?:bluetooth|wlan|w-lan|wifi|wi-fi)$"
+    )),
     ("install", re.compile(
         rf"^{_ASK}(?:installiere|installier|instaliere|installieren) {_FILL}(.+?)(?: (?:herunter|runter))?$|"
         rf"^{_ASK}(?:lade|lad|hol|hole) {_FILL}(.+?) (?:herunter|runter|aus dem internet)$|"
@@ -159,7 +181,7 @@ _RULES += [
 ]
 
 # Bei Fragen ("Ist das Mikrofon aus?") nie stummschalten oder das Gespräch löschen.
-_NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off"}
+_NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off", "dark_on", "dark_off", "radio"}
 # Diese Absichten bekommen den Namen des Programms oder Ordners mit.
 _WITH_NAME = {"install", "close", "open", "open_known", "folder"}
 # Wörter, die kein Programmname sind ("Öffne es", "Schließ das")
@@ -267,6 +289,186 @@ def match_reminder(text: str, now: dt.datetime | None = None) -> Intent | None:
     return None
 
 
+
+# ---------------------------------------------------------------------- Rechnen
+
+_CALC = [
+    re.compile(r"^(?:und )?(?:was|wie ?viel|wieviel) (?:ist|sind|ergibt|ergeben|macht|machen|gibt) (?P<expr>.+)$", re.I),
+    re.compile(r"^(?:rechne|berechne|rechne mir|berechne mir)(?: mal| bitte| schnell)* (?P<expr>.+?)(?: aus)?$", re.I),
+    re.compile(r"^(?P<expr>[\d(].*)$", re.I),
+]
+
+
+def _raw(text: str) -> str:
+    """Der Satz ohne "Jarvis" vorne und ohne Satzzeichen am Ende, Groß-/Kleinschreibung bleibt."""
+    raw = re.sub(r"^\s*(?:(?:hey|hallo|okay|ok)\s+)?jarvis[\s,!.]*", "", str(text).strip(), flags=re.I)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return raw.rstrip(" .!?").strip(" „“\"'")
+
+
+def match_calc(text: str) -> Intent | None:
+    """"Was ist 15 mal 23?" -> rechnet sofort. Alles, was keine reine Rechnung ist, geht weiter."""
+    from .calc import CalcError, evaluate
+
+    raw = _raw(text)
+    for pattern in _CALC:
+        found = pattern.match(raw)
+        if not found:
+            continue
+        expr = found.group("expr")
+        try:
+            value = evaluate(expr)
+        except CalcError as exc:
+            if str(exc) == "durch null":
+                return Intent("calc", expr, {"error": "durch null"})
+            continue
+        return Intent("calc", expr, {"value": value})
+    return None
+
+
+# ---------------------------------------------------------------------- Webseiten und Suchen
+
+_POLITE = r"(?:(?:kannst|könntest|würdest) du (?:mir )?(?:bitte )?|bitte )?"
+_PLEASE = r"(?:(?:bitte|mal|kurz|schnell|doch|gleich) )*"
+_ENGINES = (r"(?P<site>youtube|amazon|ebay|willhaben|geizhals|idealo|wikipedia|reddit|twitch|github|netflix|tiktok|"
+            r"steam|google maps|maps|google bilder|google|spotify|stack overflow)")
+_WEB: list[tuple[str, re.Pattern]] = [
+    # "Such auf YouTube nach Katzenvideos", "Schau bei willhaben nach einem Sofa"
+    ("search", re.compile(rf"^{_POLITE}(?:such|suche|schau|schaue|guck|gucke)(?: mir)? {_PLEASE}(?:auf|bei|in|im) "
+                          rf"(?P<site>[\wäöüß. ]+?) nach (?P<q>.+)$", re.I)),
+    # "Such Katzenvideos auf YouTube"
+    ("search", re.compile(rf"^{_POLITE}(?:such|suche)(?: mir)? {_PLEASE}(?:nach )?(?P<q>.+?) (?:auf|bei|in|im) {_ENGINES}$",
+                          re.I)),
+    # "Google mal Pizza in der Nähe", "Such im Internet nach ...", "Such nach ..."
+    ("search", re.compile(rf"^{_POLITE}(?:googl?e?|googel)(?: mal| doch| bitte| schnell)*(?: nach)? (?P<q>.+)$", re.I)),
+    ("search", re.compile(rf"^{_POLITE}(?:such|suche|schau|schaue)(?: mir)? {_PLEASE}"
+                          rf"(?:(?:im (?:internet|netz|web)|online|bei google|auf google|in google|mit google) )?nach (?P<q>.+)$",
+                          re.I)),
+    ("search", re.compile(rf"^{_POLITE}(?:such|suche)(?: mir)? {_PLEASE}(?:im (?:internet|netz|web) |online )?"
+                          rf"(?P<q>(?:ein|eine|einen|einem|ne|nen|das|die|den|alles über|infos über|informationen über)\b.+)$",
+                          re.I)),
+    # "Zeig mir Bilder vom Eiffelturm"
+    ("images", re.compile(rf"^{_POLITE}(?:zeig|zeige|such|suche)(?: mir)? {_PLEASE}(?:ein paar |einige )?(?:bilder|fotos) "
+                          rf"(?:von|vom|von der|von dem|zu|zum|zur|über) (?P<q>.+)$", re.I)),
+    # "Navigiere nach Graz", "Route zum Stephansplatz", "Zeig mir Hallstatt auf der Karte"
+    ("route", re.compile(rf"^{_POLITE}(?:navigier|navigiere|führ|führe|bring|bringe)(?: mich)? {_PLEASE}"
+                         rf"(?:nach|zu|zum|zur|in die|ins) (?P<q>.+)$", re.I)),
+    ("route", re.compile(r"^(?:route|weg|navigation|wegbeschreibung) (?:nach|zu|zum|zur) (?P<q>.+)$", re.I)),
+    ("map", re.compile(rf"^{_POLITE}(?:zeig|zeige)(?: mir)? {_PLEASE}(?P<q>.+?) auf (?:der karte|google maps|maps)$", re.I)),
+    # "Spiel Bohemian Rhapsody auf YouTube", "Spiel auf Spotify Queen", "Spiel Thunderstruck"
+    ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele|play)(?: mir)? {_PLEASE}(?:auf|bei|in|über) (?P<site>youtube|spotify) "
+                        rf"(?P<q>.+?)(?: ab)?$", re.I)),
+    ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele|play)(?: mir)? {_PLEASE}(?P<q>.+?) (?:auf|bei|in|über) "
+                        rf"(?P<site>youtube|spotify)(?: ab)?$", re.I)),
+    ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele)(?: mir)? {_PLEASE}(?P<q>.+?)(?: ab)?$", re.I)),
+    # "Geh auf Reddit", "Öffne die Seite von willhaben", "Öffne YouTube im Browser", "Öffne amazon.de"
+    ("web", re.compile(rf"^{_POLITE}(?:geh|gehe|surf|surfe)(?: mal)? (?:auf|zu|nach) (?P<site>.+)$", re.I)),
+    ("web", re.compile(rf"^{_POLITE}(?:öffne|öffnen|zeig|zeige|ruf|rufe|lade|lad)(?: mir)? {_PLEASE}(?:die |eine )?"
+                       rf"(?:web ?seite|website|internetseite|homepage|seite|url) (?:von |vom |der |des )?(?P<site>.+?)(?: auf)?$",
+                       re.I)),
+    ("web", re.compile(rf"^{_POLITE}(?:öffne|öffnen|mach)(?: mir)? {_PLEASE}(?P<site>.+?) im (?:browser|internet)(?: auf)?$",
+                       re.I)),
+    ("web", re.compile(rf"^{_POLITE}(?:öffne|öffnen|starte|start)(?: mir)? {_PLEASE}(?P<site>\S+\.[a-z]{{2,4}}(?:/\S*)?)$",
+                       re.I)),
+]
+# Das ist keine Suche oder kein Abspielen, das macht Jarvis anders (oder Claude)
+_MEDIA_WORDS = re.compile(
+    r"^(?:(?:die |etwas |wieder |mal )?musik(?: weiter| ab| wieder)?|weiter|wieder|ab|was|etwas|irgendwas|"
+    r"(?:das |den )?(?:nächste|nächsten|vorherige|vorherigen|letzte|letzten) (?:lied|song|titel|stück|video))$", re.I)
+_NOT_PLAYABLE = re.compile(r"\b(?:mit mir|mit uns|gegen mich|ein spiel|eine runde|meine|meinen|mein|was schönes|"
+                           r"irgendwas|irgendetwas|etwas)\b", re.I)
+_LOCAL_SEARCH = re.compile(r"\b(?:datei|dateien|ordner|desktop|dokument|dokumente|download|downloads|festplatte|"
+                           r"laufwerk|pc|computer|rechner|papierkorb|e-?mails?|mails?|postfach)\b", re.I)
+_MANY = re.compile(r"\b(?:und dann|und danach|dann|danach|anschließend)\b|\bund (?:öffne|starte|schließ|such|spiel|mach|geh)", re.I)
+
+
+def match_web(text: str) -> Intent | None:
+    """Webseiten öffnen, suchen, abspielen, Karten. Läuft auf dem Originaltext, damit die
+    Suche so bleibt, wie Georg sie gesagt hat."""
+    from . import web
+
+    raw = _raw(text)
+    if _MANY.search(raw):
+        return None  # mehrere Befehle: das zerlegt match_parts
+    for name, pattern in _WEB:
+        found = pattern.match(raw)
+        if not found:
+            continue
+        groups = found.groupdict()
+        query = (groups.get("q") or "").strip(" ,.:")
+        site = (groups.get("site") or "").strip(" ,.:")
+        if name == "search":
+            if _LOCAL_SEARCH.search(query) or (site and _LOCAL_SEARCH.search(site)):
+                return None  # "Such auf meinem PC nach ...": das ist keine Websuche
+            if site and web.search_engine(site) is None:
+                continue
+            if not query:
+                continue
+            if not site and web.site(query) is not None:
+                return Intent("web", query)  # "Google YouTube": einfach die Seite
+            return Intent("search", query, {"site": site.lower() or "google"})
+        if name in ("images", "route", "map"):
+            if not query or _LOCAL_SEARCH.search(query):
+                continue
+            return Intent(name, query)
+        if name == "play":
+            if not query or _MEDIA_WORDS.match(query) or (not site and _NOT_PLAYABLE.search(query)):
+                continue
+            query = re.sub(r"^(?:das lied|den song|das video|das album|die playlist|musik von|lieder von|songs von|"
+                           r"etwas von|was von|ein lied von|einen song von)\s+", "", query, flags=re.I)
+            return Intent("play", query, {"site": site.lower()})
+        if name == "web":
+            if not site or site.lower() in {"neu", "nochmal", "zu", "auf", "zurück"}:
+                continue
+            return Intent("web", site)
+    return None
+
+
+# ---------------------------------------------------------------------- Wetter
+
+_WEATHER_ASK = re.compile(
+    r"^(?:(?:wie|was) (?:wird|ist|wirds|sagt|gibts|gibt es)\b.*\bwetter|wetter\b|wettervorhersage|wetterbericht|"
+    r"(?:zeig|sag|gib) (?:mir )?(?:das |den )?wetter)|"
+    r"^(?:wie )?(?:warm|kalt|heiß) (?:ist|wird|wirds) es\b|"
+    r"^wie ?viel(?:e)? grad (?:hat es|ist es|sind es|hat|wird es haben|haben wir|hats)\b|"
+    r"^(?:regnet|schneit) es\b|^wird es (?:\w+ )?(?:regnen|schneien)\b|^gibt es (?:\w+ )?(?:regen|schnee)\b|"
+    r"^(?:brauche|brauch) ich (?:\w+ )?(?:einen |nen |ne |eine )?(?:regen)?(?:schirm|jacke)\b"
+)
+_WHEN = re.compile(r"\b(heute|morgen|übermorgen|wochenende|montag|dienstag|mittwoch|donnerstag|freitag|samstag|"
+                   r"sonntag|gerade|aktuell|draußen)\b")
+_NOT_PLACE = r"(?!(?:heute|morgen|übermorgen|am|gerade|aktuell|draußen|der nähe)\b)"
+_PLACE = re.compile(rf"\b(?:in|für) ({_NOT_PLACE}[a-zäöüß][\wäöüß-]*(?: {_NOT_PLACE}[a-zäöüß][\wäöüß-]*){{0,2}})")
+
+
+def match_weather(text: str) -> Intent | None:
+    """"Wie wird das Wetter morgen?", "Regnet es?", "Brauche ich einen Schirm?", "Wie warm ist es in Graz?" """
+    norm = normalize(text)
+    if not _WEATHER_ASK.search(norm):
+        return None
+    if re.search(r"\b(?:öffne|app|karte|radar|seite)\b", norm):
+        return None  # "Öffne die Wetter-App" ist ein Programm
+    when_found = _WHEN.search(norm)
+    when = when_found.group(1) if when_found else ""
+    if when in ("gerade", "aktuell", "draußen"):
+        when = "jetzt"
+    if not when:
+        # "Regnet es?" fragt nach jetzt, "Wird es regnen?" nach heute
+        when = "jetzt" if re.match(r"^(?:regnet|schneit) es\b|^(?:wie )?(?:warm|kalt|heiß) ist es\b|^wie ?viel", norm) else "heute"
+    place_found = _PLACE.search(norm)
+    place = place_found.group(1).strip() if place_found else ""
+    if place in ("der nähe", "der gegend"):
+        place = ""
+    if re.search(r"\b(?:regnet|regen|regnen|schirm|nass)\b", norm):
+        ask = "regen"
+    elif re.search(r"\b(?:schneit|schnee|schneien)\b", norm):
+        ask = "schnee"
+    elif re.search(r"\b(?:warm|kalt|heiß|grad|temperatur)\b", norm) and "wetter" not in norm:
+        ask = "temperatur"
+    else:
+        ask = ""
+    return Intent("weather", when, {"place": place, "ask": ask})
+
+
 def match(text: str) -> Intent | None:
     message = match_message(text)
     if message is not None:
@@ -274,6 +476,10 @@ def match(text: str) -> Intent | None:
     reminder = match_reminder(text)
     if reminder is not None:
         return reminder
+    for special in (match_calc, match_web, match_weather):
+        found = special(text)
+        if found is not None:
+            return found
     norm = normalize(text)
     if not norm:
         return None
@@ -296,8 +502,77 @@ def match(text: str) -> Intent | None:
                         continue
                     name = "open"
                 return Intent(name, arg)
+            if name == "settings_page":
+                from .pc import settings_page
+
+                arg = next((g for g in found.groups() if g), "").strip()
+                if settings_page(arg) is None:
+                    continue  # unbekannte Seite: vielleicht ein Programm ("Öffne die Steam-Einstellungen")
+                return Intent(name, arg)
+            if name == "radio":
+                kind = "bluetooth" if "bluetooth" in norm else "wifi"
+                on = not re.search(r"\b(?:aus|ab|ausschalten|deaktivier|deaktiviere|deaktivieren)\b", norm)
+                return Intent(name, kind, {"on": on})
             return Intent(name)
     return None
+
+
+# ---------------------------------------------------------------------- Mehrere Befehle auf einmal
+
+_SPLIT = re.compile(r"\s*,?\s*\b(?:und dann|und danach|und anschließend|und|dann|danach|anschließend)\b\s*|\s*[,;]\s*",
+                    re.I)
+_VERBS = {"öffne", "öffnen", "starte", "start", "schließe", "schließ", "schliesse", "schliess", "beende", "beend",
+          "installiere", "installier", "zeig", "zeige", "such", "suche", "spiel", "spiele", "geh", "gehe"}
+# Teile, die selbst mit einem Verb oder Fragewort anfangen, bekommen kein fremdes Verb
+_OWN_VERB = {
+    "erzähl", "erzähle", "sag", "sage", "schreib", "schreibe", "mach", "mache", "spiel", "spiele", "such", "suche",
+    "zeig", "zeige", "öffne", "starte", "schließ", "schließe", "beende", "installiere", "geh", "gehe", "ruf", "rufe",
+    "schick", "schicke", "stell", "stelle", "dreh", "drehe", "erinnere", "lies", "frag", "frage", "hol", "hole",
+    "kauf", "kaufe", "bestell", "bestelle", "gib", "finde", "find", "bau", "baue", "programmier", "programmiere",
+    "prüf", "prüfe", "check", "lösch", "lösche", "schalt", "schalte", "fahr", "fahre", "wie", "was", "wer", "wo",
+    "wann", "warum", "welche", "welcher", "welches", "ist", "sind", "kannst", "hast", "bist", "übersetz", "übersetze",
+}
+_SEARCHABLE = {"youtube", "amazon", "ebay", "willhaben", "geizhals", "idealo", "wikipedia", "reddit", "twitch", "github",
+               "netflix", "tiktok", "spotify", "google"}
+
+
+def match_parts(text: str) -> list[tuple[str, Intent]] | None:
+    """"Öffne Spotify und Discord", "Mach den Gaming-Modus an und öffne Steam": jeder Teil
+    einzeln. Nur wenn Jarvis jeden Teil selbst kann, sonst None (dann macht es Claude ganz)."""
+    raw = _raw(text)
+    pieces = [p.strip(" ,.") for p in _SPLIT.split(raw) if p and p.strip(" ,.")]
+    if not 2 <= len(pieces) <= 5:
+        return None
+    verb = ""
+    first = pieces[0].split()[0].lower() if pieces[0].split() else ""
+    if first in _VERBS:
+        verb = first
+    parts: list[tuple[str, Intent]] = []
+    for piece in pieces:
+        intent = match(piece)
+        words = piece.lower().split()
+        if intent is None and verb and len(words) <= 4 and words[0] not in _OWN_VERB:
+            # "Öffne Spotify und Discord": der zweite Teil bekommt das Verb vom ersten
+            longer = f"{verb} {piece}"
+            intent = match(longer)
+            if intent is not None:
+                piece = longer
+        if intent is None or intent.name in ("stop", "reset", "workshop_cancel", "workshop_status"):
+            return None
+        parts.append((piece, intent))
+    # "Öffne YouTube und such nach Katzen" -> gleich auf YouTube suchen
+    merged: list[tuple[str, Intent]] = []
+    for piece, intent in parts:
+        if merged and intent.name in ("search", "play"):
+            last_piece, last = merged[-1]
+            opened = re.sub(r"[^a-zäöüß ]", "", last.arg.lower()).strip() if last.name in ("open", "web") else ""
+            if opened in _SEARCHABLE and (intent.data.get("site") in ("", "google") or intent.name == "play"):
+                site = "youtube" if intent.name == "play" and opened != "spotify" else opened
+                data = dict(intent.data, site=site)
+                merged[-1] = (f"{last_piece} {piece}", Intent(intent.name, intent.arg, data))
+                continue
+        merged.append((piece, intent))
+    return merged
 
 
 def spoken_time(now: dt.datetime) -> str:
