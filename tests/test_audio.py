@@ -39,6 +39,39 @@ class CommandRecorderTest(unittest.TestCase):
         self.assertEqual(CommandRecorder(noise_floor=50).threshold, 300)
         self.assertEqual(CommandRecorder(noise_floor=400).threshold, 1000)
 
+    def run_frames(self, rec, levels):
+        """Speist Frames ein (Lautstärken), gibt zurück, nach wie vielen Frames Schluss war."""
+        for number, level in enumerate(levels, 1):
+            if rec.add(frame(level)):
+                return number
+        return None
+
+    def test_short_command_ends_quickly(self):
+        # "Öffne Spotify": 0,64 s Sprechen, dann reichen 0,9 s Stille
+        rec = CommandRecorder(silence_seconds=0.9, energy_threshold=1000)
+        done = self.run_frames(rec, [5000] * 8 + [10] * 40)
+        self.assertEqual(done, 8 + 12)  # 12 x 80 ms = 0,96 s
+
+    def test_thinking_pause_in_a_longer_sentence_does_not_cut(self):
+        # 2,4 s reden, 1,0 s Denkpause, weiterreden: die Pause beendet die Aufnahme nicht
+        rec = CommandRecorder(silence_seconds=0.9, energy_threshold=1000)
+        levels = [5000] * 30 + [10] * 12 + [5000] * 20 + [10] * 40
+        done = self.run_frames(rec, levels)
+        self.assertIsNotNone(done)
+        self.assertGreater(done, 30 + 12 + 20, "erst nach dem zweiten Teil ist Schluss")
+        self.assertEqual(rec.speech_frames, 50)
+        # Nach 4 s Sprechen wartet Jarvis die vollen 0,9 + 0,8 s
+        self.assertAlmostEqual(rec.needed_silence, 1.7)
+        self.assertEqual(done, 30 + 12 + 20 + 22)  # 22 x 80 ms = 1,76 s
+
+    def test_long_dictation_is_not_cut_at_twenty_seconds(self):
+        rec = CommandRecorder(silence_seconds=0.9, max_seconds=60, energy_threshold=1000)
+        # 30 s reden mit kurzen Atempausen, dann Stille
+        levels = ([5000] * 20 + [10] * 5) * 15 + [10] * 30
+        done = self.run_frames(rec, levels)
+        self.assertGreater(done, 15 * 25, "nicht vor dem Ende des Diktats abgeschnitten")
+        self.assertLess(done * 0.08, 60)
+
 
 class ResampleTest(unittest.TestCase):
     def test_48k_block_becomes_16k_block(self):

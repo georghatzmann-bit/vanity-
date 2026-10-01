@@ -29,13 +29,14 @@ hotkey = "ctrl+alt+m"
 listen_hotkey = "ctrl+alt+j"
 
 [listen]
-# Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden).
-# Kleiner = schnellere Antwort. Schneidet Jarvis dich mitten im Satz ab: auf 1.0 erhöhen.
-silence_seconds = 0.7
+# Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden), bei
+# kurzen Befehlen. Redest du länger, wartet Jarvis von selbst bis zu 0.8 Sekunden mehr,
+# damit Denkpausen nicht abschneiden. Schneidet er dich trotzdem ab: auf 1.2 erhöhen.
+silence_seconds = 0.9
 # true = eine kleine KI erkennt, wann du sprichst (genauer als nur die Lautstärke).
 vad = true
-# Maximale Länge eines Befehls (Sekunden).
-max_seconds = 20
+# Maximale Länge eines Befehls (Sekunden). Reicht auch für lange Werkstatt-Aufträge.
+max_seconds = 60
 # Wenn nach "Hey Jarvis" so lange nichts gesagt wird, bricht Jarvis ab (Sekunden).
 start_timeout_seconds = 6
 # Mindestlautstärke für Sprache. 0 = automatisch an Hintergrundgeräusche anpassen.

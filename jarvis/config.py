@@ -46,7 +46,7 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 4
+CONFIG_VERSION = 5
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
@@ -58,6 +58,12 @@ _UPGRADES = {
         ("gui", "close_to_tray", False, True),
         ("gui", "width", 1200, 1280),
         ("gui", "height", 780, 800),
+    ],
+    # 0,7 s Stille schnitt Sätze bei kurzen Denkpausen ab, 20 s waren für lange Aufträge zu kurz.
+    # Längere Sätze bekommen jetzt von selbst mehr Zeit (audio.CommandRecorder.needed_silence).
+    5: [
+        ("listen", "silence_seconds", 0.7, 0.9),
+        ("listen", "max_seconds", 20, 60),
     ],
 }
 # Einträge, die aus Listen in einer älteren config.toml verschwinden (Version, Abschnitt, Schlüssel, Einträge).
@@ -79,23 +85,28 @@ def upgrade_config(path: Path | None = None) -> list[str]:
         version = 1
     if version >= CONFIG_VERSION:
         return []
-    changed = []
+    changed: dict[str, str] = {}
+    before: dict[str, object] = {}
     for target in range(version + 1, CONFIG_VERSION + 1):
         for section, key, old, new in _UPGRADES.get(target, []):
             current = (data.get(section) or {}).get(key)
             if current == old and type(current) is type(old):
                 save_setting(section, key, new, path)
                 data.setdefault(section, {})[key] = new  # spätere Stufen bauen darauf auf
-                changed.append(f"{section}.{key} = {new}")
+                before.setdefault(f"{section}.{key}", current)
+                if new == before[f"{section}.{key}"]:
+                    changed.pop(f"{section}.{key}", None)  # über Umwege wieder beim alten Wert
+                else:
+                    changed[f"{section}.{key}"] = f"{section}.{key} = {new}"
         for section, key, items in _LIST_REMOVALS.get(target, []):
             current = (data.get(section) or {}).get(key)
             if isinstance(current, list) and any(item in current for item in items):
                 kept = [item for item in current if item not in items]
                 save_setting(section, key, kept, path)
                 data[section][key] = kept
-                changed.append(f"{section}.{key}: ohne {', '.join(items)}")
+                changed[f"{section}.{key}"] = f"{section}.{key}: ohne {', '.join(items)}"
     save_setting("intern", "config_version", CONFIG_VERSION, path)
-    return changed
+    return list(changed.values())  # pro Einstellung nur der neue Endwert
 
 
 def load_config(path: Path | None = None) -> dict:

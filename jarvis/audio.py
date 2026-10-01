@@ -86,6 +86,12 @@ class CommandRecorder:
     # Ab hier beginnt Sprechen, und solange es darüber bleibt, spricht man noch.
     VAD_START = 0.5
     VAD_KEEP = 0.3
+    # Wer länger redet, macht auch längere Denkpausen ("Schreib Max ... äh ... bin gleich da").
+    # Ab PAUSE_FROM Sekunden Sprechen wartet Jarvis nach und nach länger auf das Satzende,
+    # höchstens PAUSE_EXTRA Sekunden mehr. Kurze Befehle ("Öffne Spotify") bleiben schnell.
+    PAUSE_FROM = 0.8
+    PAUSE_RATE = 0.25
+    PAUSE_EXTRA = 0.8
 
     def __post_init__(self) -> None:
         self.frames: list[np.ndarray] = []
@@ -115,7 +121,14 @@ class CommandRecorder:
             return True
         if not self.speech_started:
             return elapsed >= self.start_timeout_seconds
-        return self.silent_frames * FRAME_SECONDS >= self.silence_seconds
+        return self.silent_frames * FRAME_SECONDS >= self.needed_silence
+
+    @property
+    def needed_silence(self) -> float:
+        """So lange Stille beendet die Aufnahme: kurz bei kurzen Befehlen, länger beim Erzählen."""
+        spoken = self.speech_frames * FRAME_SECONDS
+        extra = min(self.PAUSE_EXTRA, max(0.0, (spoken - self.PAUSE_FROM) * self.PAUSE_RATE))
+        return self.silence_seconds + extra
 
     def _is_speech(self, frame: np.ndarray) -> bool:
         if self.vad is None:

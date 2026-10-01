@@ -254,13 +254,14 @@ class UpgradeConfigTest(unittest.TestCase):
         with TemporaryDirectory() as folder:
             path = Path(folder) / "config.toml"
             # Eine config.toml von früher: Kopie der alten Vorlage, ohne [intern].
-            old = EXAMPLE_PATH.read_text(encoding="utf-8").replace("silence_seconds = 0.7", "silence_seconds = 1.2")
-            old = old.split("[intern]")[0]
+            old = EXAMPLE_PATH.read_text(encoding="utf-8").replace("silence_seconds = 0.9", "silence_seconds = 1.2")
+            old = old.replace("max_seconds = 60", "max_seconds = 20").split("[intern]")[0]
             path.write_text(old, encoding="utf-8")
-            # Stufe für Stufe: 1.2 wurde 0.9 und mit Jarvis 2 dann 0.7.
-            self.assertEqual(upgrade_config(path), ["listen.silence_seconds = 0.9", "listen.silence_seconds = 0.7"])
+            # Stufe für Stufe (1.2 -> 0.9 -> 0.7 -> 0.9), gemeldet wird nur der Endwert.
+            self.assertEqual(upgrade_config(path), ["listen.silence_seconds = 0.9", "listen.max_seconds = 60"])
             data = tomllib.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(data["listen"]["silence_seconds"], 0.7)
+            self.assertEqual(data["listen"]["silence_seconds"], 0.9)
+            self.assertEqual(data["listen"]["max_seconds"], 60)
             from jarvis.config import CONFIG_VERSION
 
             self.assertEqual(data["intern"]["config_version"], CONFIG_VERSION)
@@ -284,7 +285,7 @@ class UpgradeConfigTest(unittest.TestCase):
 
         with TemporaryDirectory() as folder:
             path = Path(folder) / "config.toml"
-            text = EXAMPLE_PATH.read_text(encoding="utf-8").replace("silence_seconds = 0.7", "silence_seconds = 1.5")
+            text = EXAMPLE_PATH.read_text(encoding="utf-8").replace("silence_seconds = 0.9", "silence_seconds = 1.5")
             path.write_text(text.split("[intern]")[0], encoding="utf-8")
             self.assertEqual(upgrade_config(path), [])
             self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["listen"]["silence_seconds"], 1.5)
@@ -298,15 +299,14 @@ class UpgradeToJarvis2Test(unittest.TestCase):
             path = Path(folder) / "config.toml"
             text = EXAMPLE_PATH.read_text(encoding="utf-8").split("[intern]")[0]
             text = text.replace("close_to_tray = true", "close_to_tray = false")
-            text = text.replace("silence_seconds = 0.7", "silence_seconds = 0.9")
             # Die alte, mehrzeilige Sperrliste mit "winget install"
             text = text.replace('"Bash(winget uninstall:*)",', '"Bash(winget install:*)", "Bash(winget uninstall:*)",')
             text = text.replace('"PowerShell(winget uninstall:*)",', '"PowerShell(winget install:*)", "PowerShell(winget uninstall:*)",')
             path.write_text(text, encoding="utf-8")
             changes = upgrade_config(path)
             self.assertIn("gui.close_to_tray = True", changes)
-            self.assertIn("listen.silence_seconds = 0.7", changes)
             cfg = load_config(path)
+        self.assertEqual(cfg["listen"]["silence_seconds"], 0.9)
         self.assertTrue(cfg["gui"]["close_to_tray"])
         self.assertTrue(cfg["gui"]["start_hidden"])
         blocked = cfg["brain"]["disallowed_tools"]
