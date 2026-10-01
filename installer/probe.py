@@ -77,5 +77,40 @@ time.sleep(5.5)
 check("Anzeige verschwindet danach", not ctypes.windll.user32.IsWindowVisible(hwnd))
 overlay.stop()
 
+# 3. Sofort-Schalter: Dunkelmodus (Registry) und Funk (Windows-Funkschalter über PowerShell)
+import winreg  # noqa: E402
+
+from jarvis import pc  # noqa: E402
+
+_THEME = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+
+
+def light_theme():
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _THEME) as key:
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+    except OSError:
+        return None
+
+
+was_light = light_theme()
+started = time.monotonic()
+pc.dark_mode(True)
+check("Dunkelmodus an", light_theme() == 0, f"in {time.monotonic() - started:.1f} s")
+pc.dark_mode(False)
+check("Dunkelmodus aus", light_theme() == 1)
+if was_light == 0:
+    pc.dark_mode(True)
+for kind in ("bluetooth", "wifi"):
+    # Ein Server in GitHub Actions hat meist keinen Funk: "kein ..." ist dort die richtige Antwort.
+    started = time.monotonic()
+    try:
+        outcome = pc.radio(kind, True)
+    except pc.RadioMissing as exc:
+        outcome = f"kein Funk ({exc})"
+    except Exception as exc:
+        outcome = f"Fehler: {exc!r}"
+    print(f"   Funk {kind}: {outcome} ({time.monotonic() - started:.1f} s)", flush=True)
+
 print("FEHLER:", ", ".join(failed) if failed else "keine", flush=True)
 sys.exit(1 if failed else 0)

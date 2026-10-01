@@ -357,12 +357,12 @@ _WEB: list[tuple[str, re.Pattern]] = [
     ("map", re.compile(rf"^{_POLITE}(?:zeig|zeige)(?: mir)? {_PLEASE}(?P<q>.+?) auf (?:der karte|google maps|maps)$", re.I)),
     # "Spiel Bohemian Rhapsody auf YouTube", "Spiel auf Spotify Queen", "Spiel Thunderstruck"
     ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele|play)(?: mir)? {_PLEASE}(?:auf|bei|in|über) (?P<site>youtube|spotify) "
-                        rf"(?P<q>.+?)(?: ab)?$", re.I)),
+                        rf"(?P<q>.+?)(?: ab| vor)?$", re.I)),
     ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele|play)(?: mir)? {_PLEASE}(?P<q>.+?) (?:auf|bei|in|über) "
-                        rf"(?P<site>youtube|spotify)(?: ab)?$", re.I)),
-    ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele)(?: mir)? {_PLEASE}(?P<q>.+?)(?: ab)?$", re.I)),
+                        rf"(?P<site>youtube|spotify)(?: ab| vor)?$", re.I)),
+    ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele)(?: mir)? {_PLEASE}(?P<q>.+?)(?: ab| vor)?$", re.I)),
     # "Geh auf Reddit", "Öffne die Seite von willhaben", "Öffne YouTube im Browser", "Öffne amazon.de"
-    ("web", re.compile(rf"^{_POLITE}(?:geh|gehe|surf|surfe)(?: mal)? (?:auf|zu|nach) (?P<site>.+)$", re.I)),
+    ("go", re.compile(rf"^{_POLITE}(?:geh|gehe|surf|surfe)(?: mal)? (?:auf|zu|nach) (?P<site>.+)$", re.I)),
     ("web", re.compile(rf"^{_POLITE}(?:öffne|öffnen|zeig|zeige|ruf|rufe|lade|lad)(?: mir)? {_PLEASE}(?:die |eine )?"
                        rf"(?:web ?seite|website|internetseite|homepage|seite|url) (?:von |vom |der |des )?(?P<site>.+?)(?: auf)?$",
                        re.I)),
@@ -374,7 +374,12 @@ _WEB: list[tuple[str, re.Pattern]] = [
 # Das ist keine Suche oder kein Abspielen, das macht Jarvis anders (oder Claude)
 _MEDIA_WORDS = re.compile(
     r"^(?:(?:die |etwas |wieder |mal )?musik(?: weiter| ab| wieder)?|weiter|wieder|ab|was|etwas|irgendwas|"
-    r"(?:das |den )?(?:nächste|nächsten|vorherige|vorherigen|letzte|letzten) (?:lied|song|titel|stück|video))$", re.I)
+    r"(?:das |den )?(?:nächste|nächsten|vorherige|vorherigen|letzte|letzten) (?:lied|song|titel|stück|video)|"
+    r"lauter|leiser|(?:es |das |den |die )?(?:lied |song |video |titel )?(?:nochmal|noch mal|noch einmal|von vorne?)|"
+    r"(?:das |den )?(?:lied|song|video|titel) von (?:vorhin|gerade|eben)(?: nochmal| noch mal| noch einmal)?|"
+    r"(?:ein|einen|eine) (?:lied|song|video|musikstück))$", re.I)
+# Ziele, die keine Orte sind ("Bring mich zum Lachen", "Bring mich nach Hause": die Adresse kennt Maps nicht)
+_NO_PLACE = re.compile(r"^(?:hause|haus|heim|lachen|weinen|nachdenken|schlafen|bett)$", re.I)
 _NOT_PLAYABLE = re.compile(r"\b(?:mit mir|mit uns|gegen mich|ein spiel|eine runde|meine|meinen|mein|was schönes|"
                            r"irgendwas|irgendetwas|etwas)\b", re.I)
 _LOCAL_SEARCH = re.compile(r"\b(?:datei|dateien|ordner|desktop|dokument|dokumente|download|downloads|festplatte|"
@@ -400,6 +405,8 @@ def match_web(text: str) -> Intent | None:
         if name == "search":
             if _LOCAL_SEARCH.search(query) or (site and _LOCAL_SEARCH.search(site)):
                 return None  # "Such auf meinem PC nach ...": das ist keine Websuche
+            if re.match(r"ob\b", query, re.I):
+                return None  # "Schau nach, ob es Updates gibt": nachsehen soll Claude, nicht Google
             if site and web.search_engine(site) is None:
                 continue
             if not query:
@@ -408,7 +415,7 @@ def match_web(text: str) -> Intent | None:
                 return Intent("web", query)  # "Google YouTube": einfach die Seite
             return Intent("search", query, {"site": site.lower() or "google"})
         if name in ("images", "route", "map"):
-            if not query or _LOCAL_SEARCH.search(query):
+            if not query or _LOCAL_SEARCH.search(query) or _NO_PLACE.match(query):
                 continue
             return Intent(name, query)
         if name == "play":
@@ -417,9 +424,15 @@ def match_web(text: str) -> Intent | None:
             query = re.sub(r"^(?:das lied|den song|das video|das album|die playlist|musik von|lieder von|songs von|"
                            r"etwas von|was von|ein lied von|einen song von)\s+", "", query, flags=re.I)
             return Intent("play", query, {"site": site.lower()})
+        if name == "go":
+            if web.site(site) is None:
+                continue  # "Geh auf stumm", "Geh zu meinen Downloads": keine Webseite
+            return Intent("web", site)
         if name == "web":
             if not site or site.lower() in {"neu", "nochmal", "zu", "auf", "zurück"}:
                 continue
+            if re.search(r"\b(?:du|ich|wir)\b", site, re.I):
+                continue  # "Öffne die Webseite, die du gebaut hast"
             return Intent("web", site)
     return None
 

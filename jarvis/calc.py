@@ -101,7 +101,10 @@ def evaluate(text: str) -> float:
         result = _eval(tree)
     except ZeroDivisionError as exc:
         raise CalcError("durch null") from exc
-    if isinstance(result, complex) or not math.isfinite(result) or abs(result) > 1e15:
+    except OverflowError as exc:  # "Eine Million hoch hundert"
+        raise CalcError("zu groß") from exc
+    # Erst die Größe prüfen: math.isfinite() verträgt keine riesigen ganzen Zahlen
+    if isinstance(result, complex) or abs(result) > 1e15 or not math.isfinite(result):
         raise CalcError("zu groß")
     return result
 
