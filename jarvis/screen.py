@@ -255,14 +255,25 @@ TYPE_SCRIPT = UIA_HEAD + r"""
 $win = Find-Window $env:JARVIS_UI_WINDOW
 $want = $env:JARVIS_UI_NAME
 $all = Walk $win 2500
-$editable = $all | Where-Object {
-  $p = $null; $_.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p) -and -not $p.Current.IsReadOnly }
-$target = if ($want) {
-  ($editable | Where-Object { $_.Current.Name -like "*$want*" } | Select-Object -First 1)
-} else { $editable | Select-Object -First 1 }
-if (-not $target) { throw "Kein Eingabefeld gefunden: $want" }
-$p = $target.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-$p.SetValue($env:JARVIS_UI_TEXT)
+function Pick($items) {
+  if ($want) { $items | Where-Object { $_.Current.Name -like "*$want*" } | Select-Object -First 1 }
+  else { $items | Select-Object -First 1 }
+}
+$target = Pick @($all | Where-Object {
+  $p = $null; $_.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$p) -and -not $p.Current.IsReadOnly })
+if ($target) {
+  $target.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($env:JARVIS_UI_TEXT)
+} else {
+  # Mehrzeilige Felder (Editor, WordPad) haben kein ValuePattern, sie bekommen den Text als Fensternachricht
+  $target = Pick @($all | Where-Object { $_.Current.NativeWindowHandle -ne 0 -and $_.Current.ClassName -match '^(Edit|RichEdit)' })
+  if (-not $target) { throw "Kein Eingabefeld gefunden: $want" }
+  Add-Type -Namespace JarvisUi -Name Native -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageW(IntPtr hWnd, int msg, IntPtr wParam, string lParam);'
+  $hwnd = [IntPtr]$target.Current.NativeWindowHandle
+  if ([JarvisUi.Native]::SendMessageW($hwnd, 0x000C, [IntPtr]::Zero, $env:JARVIS_UI_TEXT) -eq [IntPtr]::Zero) {
+    throw "Das Feld nimmt keinen Text an: $want"
+  }
+  [void][JarvisUi.Native]::SendMessageW($hwnd, 0x00B9, [IntPtr]1, $null)
+}
 "OK " + $target.Current.Name
 """
 

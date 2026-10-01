@@ -50,6 +50,15 @@ class ScreenTest(unittest.TestCase):
             screen.type_into("Notepad", "", "Hallo")
         self.assertEqual(ps.call_args.args[1]["JARVIS_UI_TEXT"], "Hallo")
 
+    def test_typing_also_reaches_multiline_fields(self):
+        # Der Editor hat ein mehrzeiliges Feld ohne ValuePattern; das bekommt den Text als WM_SETTEXT
+        script = screen.TYPE_SCRIPT
+        self.assertIn("ValuePattern", script)
+        self.assertIn("'^(Edit|RichEdit)'", script)
+        self.assertIn("0x000C, [IntPtr]::Zero, $env:JARVIS_UI_TEXT", script)
+        self.assertLess(script.index("ValuePattern]::Pattern).SetValue"), script.index("SendMessageW($hwnd"),
+                        "einzeilige Felder zuerst, wie bisher")
+
     def test_only_on_windows(self):
         with mock.patch.object(screen.os, "name", "posix"):
             with self.assertRaises(screen.ScreenError):

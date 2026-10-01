@@ -148,6 +148,9 @@ try:
     started = time.monotonic()
     print("   Ohne Tastatur schreiben:", screen.type_into(title, "", "Hallo von Jarvis"),
           f"({time.monotonic() - started:.1f} s)", flush=True)
+    time.sleep(0.5)
+    seen = " ".join(l["t"] for l in screen.read_text())
+    print(f"   Text im Editor sichtbar: {'OK' if 'Jarvis' in seen else 'nicht gesehen'}", flush=True)
     found = screen.elements(title, 60)
     print(f"   Elemente im Editor: {[(e.get('art'), e.get('name')) for e in found[:8]]}", flush=True)
 except Exception as exc:
