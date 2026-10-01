@@ -30,6 +30,25 @@ def week_of_habits(memory, clock, start=dt.datetime(2026, 9, 21, 18, 0), days=8,
         memory.record("open", "Spotify")
 
 
+class WindowRememberTest(unittest.TestCase):
+    """Das Feld "Merk dir ..." in der Gedächtnis-Ansicht speichert wie der gesprochene Satz."""
+
+    def test_typed_facts_are_stored_like_spoken_ones(self):
+        from jarvis.gui.app import Api
+
+        with tempfile.TemporaryDirectory() as folder:
+            memory = Memory(Path(folder) / "gedaechtnis.json")
+            api = Api.__new__(Api)
+            api._assistant = mock.Mock(memory=memory)
+            for typed in ("Merk dir, dass ich gern Pizza esse", "merk dir Max hat am 3. Mai Geburtstag",
+                          "ich höre gern Rock", "Anna mag Katzen"):
+                self.assertTrue(api.remember(typed), typed)
+            self.assertEqual([f["text"] for f in memory.facts()],
+                             ["Georg sagt: Ich esse gern Pizza", "Max hat am 3. Mai Geburtstag",
+                              "Georg sagt: Ich höre gern Rock", "Anna mag Katzen"])
+            self.assertFalse(api.remember("   "))
+
+
 class MemoryTest(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()

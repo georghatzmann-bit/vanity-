@@ -389,8 +389,17 @@ class Api:
             return {"facts": [], "contacts": [], "routines": []}
 
     def remember(self, text) -> bool:
+        from ..memory import match_memory
+
         memory = getattr(self._assistant, "memory", None)
-        return bool(memory is not None and str(text or "").strip() and memory.remember(str(text)))
+        text = " ".join(str(text or "").split())
+        if memory is None or not text:
+            return False
+        # Wie gesprochen: "Merk dir, dass ich Pizza mag" -> "Georg sagt: Ich mag Pizza"
+        found = match_memory(text)
+        if not found or found[0] != "remember":
+            found = match_memory("Merk dir " + text)
+        return bool(memory.remember(found[1] if found and found[0] == "remember" else text))
 
     def forget(self, text) -> bool:
         memory = getattr(self._assistant, "memory", None)
