@@ -67,6 +67,13 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es drei Bereiche.
 
 **Geklappt, wenn:** oben in der App „Bereit“ steht. Du kannst schreiben, mit dem Mikrofon der Handy-Tastatur diktieren, Schnellaktionen antippen und die Werkstatt verfolgen. Das Handy muss im selben WLAN sein. Von unterwegs: **Tailscale** (kostenlos) auf PC und Handy installieren.
 
+**Benachrichtigungen aufs Handy** (Erinnerungen, „Aus der Werkstatt: fertig“), wenn du nicht am PC sitzt:
+
+1. Im selben Bereich **Benachrichtigungen** einschalten.
+2. Auf dem Handy die kostenlose App **ntfy** installieren.
+3. In der App auf **+** tippen und den Kanalnamen eintragen, den Jarvis anzeigt (beginnt mit `jarvis-`).
+4. In Jarvis auf **Test schicken** klicken. Auf dem Handy erscheint sofort eine Nachricht.
+
 ### Alexa
 
 „Alexa, sag Jarvis, er soll Discord öffnen.“ Dafür legst du einmal deinen eigenen Alexa-Skill an. Der gehört nur dir. Home Assistant brauchst du dafür nicht.

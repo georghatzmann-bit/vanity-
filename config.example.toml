@@ -232,6 +232,13 @@ port = 8765
 # Ein langes, geheimes Wort (mindestens 12 Zeichen), das auch in Home Assistant steht.
 token = ""
 
+[handy]
+# Benachrichtigungen aufs Handy mit der kostenlosen App "ntfy": Erinnerungen, "Aus der Werkstatt"
+# und andere Ansagen kommen aufs Handy, wenn du nicht am PC sitzt. Am einfachsten im Jarvis-Fenster
+# unter "Verbinden", Bereich Handy, einschalten. Der Kanal entsteht dabei von selbst (geheim halten).
+push = false
+push_kanal = ""
+
 [intern]
 # Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
 config_version = 6

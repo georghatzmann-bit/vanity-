@@ -39,6 +39,12 @@
       discordSave: $('discordSave'),
       discordInviteRow: $('discordInviteRow'),
       discordInvite: $('discordInvite'),
+      pushToggle: $('pushToggle'),
+      pushState: $('pushState'),
+      pushSetup: $('pushSetup'),
+      pushTopic: $('pushTopic'),
+      pushCopy: $('pushCopy'),
+      pushTest: $('pushTest'),
     };
     function el_tabs() {
       return document.querySelectorAll('.dlg-tabs button[data-pane]');
@@ -206,6 +212,64 @@
       }
     });
 
+    // ------------------------------------------------------------ Benachrichtigungen aufs Handy
+
+    let push = null;
+
+    function renderPush() {
+      if (!el.pushToggle) return;
+      const on = !!(push && push.enabled);
+      el.pushToggle.checked = on;
+      el.pushState.textContent = on ? 'Benachrichtigungen: an' : 'Benachrichtigungen: aus';
+      el.pushSetup.hidden = !on;
+      el.pushTopic.textContent = on ? push.topic : '';
+    }
+
+    async function refreshPush() {
+      try {
+        push = await call('push_info');
+      } catch {
+        push = { enabled: false };
+      }
+      renderPush();
+    }
+
+    if (el.pushToggle) {
+      el.pushToggle.addEventListener('change', async () => {
+        const want = el.pushToggle.checked;
+        el.pushToggle.disabled = true;
+        try {
+          push = await call('push_enable', want);
+          toast(want ? 'Benachrichtigungen sind an. Jetzt den Kanal in der App ntfy abonnieren.' : 'Benachrichtigungen sind aus.', 'ok');
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        } finally {
+          el.pushToggle.disabled = false;
+          renderPush();
+        }
+      });
+      el.pushCopy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(el.pushTopic.textContent);
+          toast('Kanalname kopiert.', 'ok');
+        } catch {
+          toast('Kopieren ging nicht. Bitte von Hand abschreiben.', 'error');
+        }
+      });
+      el.pushTest.addEventListener('click', async () => {
+        el.pushTest.disabled = true;
+        try {
+          const result = await call('push_test');
+          toast(result && result.ok ? 'Unterwegs. Auf dem Handy sollte gleich eine Nachricht von Jarvis erscheinen.'
+            : (result && result.error) || 'Das ging nicht.', result && result.ok ? 'ok' : 'error');
+        } catch {
+          toast('Im Demo-Modus geht keine Nachricht raus.', 'info');
+        } finally {
+          el.pushTest.disabled = false;
+        }
+      });
+    }
+
     // ------------------------------------------------------------ Punkte am Knopf
 
     const NAMES = { phone: 'Handy', alexa: 'Alexa', discord: 'Discord' };
@@ -238,6 +302,7 @@
       el.dlg.hidden = false;
       render();
       refresh();
+      refreshPush();
       el.close.focus();
     }
 

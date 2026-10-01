@@ -28,7 +28,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Discord ohne Maus:** „Schreib Max auf Discord, bin gleich da“, „Geh in den Sprachkanal Zocken“, „Ruf Max auf Discord an“, „Discord stumm“. Jarvis nutzt Discords Schnellsuche und Tastenkürzel, prüft am Fenstertitel, ob er richtig gelandet ist, versucht es bei einer Störung (Maus bewegt, anderes Fenster vorn) von selbst noch zweimal und bringt dich danach zurück ins Spiel. Auch WhatsApp und Telegram.
 - **Discord-Server gestalten im Hintergrund:** Jarvis' eigener Bot legt Kanäle, Rollen, Regeln und Begrüßung an, über die offizielle Discord-Schnittstelle, ohne dein Spiel zu stören.
 - **Lernt dich kennen:** „Merk dir, …“, Kontakte mit ihrer App („Sag Max …“), Gewohnheiten auch mit Discord-Sprachkanal („Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?“), Geburtstage mit Angebot zu gratulieren, jede Nacht ein kurzer Rückblick auf die Gespräche. Alles bleibt lokal (`daten\gedaechtnis.json`) und ist im Fenster einsehbar.
-- **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen, Vorschläge beantworten und die Werkstatt verfolgen. Von unterwegs mit Tailscale. Dazu Wake-on-LAN: den PC per Handy einschalten.
+- **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen, Vorschläge beantworten und die Werkstatt verfolgen. Von unterwegs mit Tailscale. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
 - **Alexa:** „Alexa, sag Jarvis, er soll Discord öffnen.“ Ein eigener Skill (Von Alexa gehostet), den Jarvis fertig zum Kopieren anbietet. Die Nachrichten laufen verschlüsselt über ntfy.sh, ohne Home Assistant und ohne Router-Einstellungen. Mit Home Assistant zusätzlich Ansagen auf Echos und Licht.
 - **Bildschirm lesen und Programme ohne Maus bedienen:** Texterkennung von Windows (in etwa einer Sekunde) und UI Automation: Knöpfe drücken und Felder ausfüllen, ohne Maus und Tastatur zu nehmen.
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Große Aufträge mit Opus, kleine mit Sonnet. Das Fenster zeigt alles als Blaupause und alle Projekte als Übersicht mit Starten und Weiterbauen.
@@ -63,7 +63,7 @@ Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden�
 - `[gui]` `start_hidden`, `close_to_tray`, `overlay`, `on_wake`
 - `[brain]` `models`, `effort`, `disallowed_tools`, `timeout_seconds`
 - `[werkstatt]` `ordner`, `modell = "auto" | "opus" | "sonnet"`, `effort`
-- `[server]` Handy-App, `[alexa]` Skill, `[discord]` `bot_token`, `[homeassistant]` Echos und Licht
+- `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[alexa]` Skill, `[discord]` `bot_token`, `[homeassistant]` Echos und Licht
 - `[gaming]` `close_apps`, `power_plan`
 - `jarvis_home/CLAUDE.md`: Jarvis' Persönlichkeit und seine Befehle
 
@@ -119,6 +119,7 @@ jarvis/
   discord_bot.py  Jarvis' Discord-Bot (REST): Server gestalten im Hintergrund
   screen.py       Bildschirmfoto, Texterkennung, UI Automation
   remote.py server.py        Handy-App: Verlauf, Zustand, QR-Code, Web-Eingang
+  push.py         Benachrichtigungen aufs Handy (ntfy)
   alexa.py alexa_skill.py    Alexa: Brücke über ntfy.sh und der Skill-Code
   presence.py     Fenster beim Weckwort zeigen und danach wieder verstecken
   apps.py         Programme: Startmenü-Index, bekannte Apps, winget, Schließen

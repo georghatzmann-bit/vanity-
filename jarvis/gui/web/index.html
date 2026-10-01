@@ -354,6 +354,28 @@
       <button type="button" class="link-btn" id="phoneWol">PC fürs Einschalten per Netzwerk vorbereiten (fragt nach Administratorrechten)</button>
       <button type="button" class="link-btn" id="phoneNew">Neu koppeln (alte Handys ausschließen)</button>
     </div>
+    <div class="dlg-push">
+      <label class="row toggle-row dlg-row">
+        <span class="row-text">
+          <b id="pushState">Benachrichtigungen: aus</b>
+          <small>Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn Sie nicht am PC sitzen. Mit der kostenlosen App ntfy.</small>
+        </span>
+        <input type="checkbox" class="sr-input" id="pushToggle"><span class="switch" aria-hidden="true"></span>
+      </label>
+      <div id="pushSetup" hidden>
+        <ol class="dlg-steps">
+          <li><b>App „ntfy“ installieren</b><span>Kostenlos im App Store oder bei Google Play.</span></li>
+          <li><b>Kanal abonnieren</b><span>In der App auf „+“ tippen und genau diesen Namen eintragen.</span></li>
+          <li><b>Testen</b><span>Dann kommt sofort eine Nachricht von Jarvis.</span></li>
+        </ol>
+        <div class="dlg-url">
+          <code id="pushTopic"></code>
+          <button type="button" class="btn small ghost" id="pushCopy">Kopieren</button>
+          <button type="button" class="btn small" id="pushTest">Test schicken</button>
+        </div>
+        <p class="dlg-note">Der Kanalname ist geheim und zufällig. Die Nachrichten selbst laufen unverschlüsselt über ntfy.sh, wie eine SMS.</p>
+      </div>
+    </div>
     </div>
     <div class="dlg-pane" data-pane="alexa" hidden>
       <label class="row toggle-row dlg-row">

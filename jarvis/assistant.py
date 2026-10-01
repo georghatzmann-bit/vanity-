@@ -177,9 +177,34 @@ class Assistant:
         self.ui.message("info", "Neue Unterhaltung")
 
     def announce(self, text: str) -> None:
-        """Sagt etwas von sich aus, z. B. eine Erinnerung."""
+        """Sagt etwas von sich aus, z. B. eine Erinnerung. Sitzt Georg nicht am PC, kommt es auch
+        als Benachrichtigung aufs Handy (wenn eingeschaltet, siehe push.py)."""
         self.ui.message("jarvis", text)
         self.say(text)
+        self._push(text)
+
+    def _push(self, text: str) -> None:
+        push = getattr(self, "push", None)
+        if push is None or not push.enabled or not text:
+            return
+        try:
+            if self._present():
+                return  # Georg sitzt am PC und hört es
+        except Exception:
+            pass
+        push.send(text, priority=4 if text.startswith("Erinnerung") else 3, click=self._phone_link())
+
+    def _phone_link(self) -> str:
+        """Tippen auf die Benachrichtigung öffnet die Handy-App (ohne Schlüssel, den hat das Handy schon)."""
+        server = getattr(self, "server", None)
+        if server is None or not getattr(server, "running", False):
+            return ""
+        try:
+            from .remote import local_ip
+
+            return f"http://{local_ip()}:{server.port}/app/"
+        except Exception:
+            return ""
 
     def say(self, text: str) -> None:
         if self.speaker is not None:

@@ -219,6 +219,46 @@ class Api:
             self._start_server()
         return self.phone_info()
 
+    def push_info(self) -> dict:
+        """Benachrichtigungen aufs Handy (ntfy): an/aus und der Kanal zum Abonnieren."""
+        from ..push import RELAY
+
+        handy = ((getattr(self._assistant, "_cfg", {}) or {}).get("handy", {})) or {}
+        topic = str(handy.get("push_kanal") or "")
+        relay = str(handy.get("vermittlung") or RELAY).rstrip("/")
+        return {"enabled": bool(handy.get("push")) and topic.startswith("jarvis-"), "topic": topic,
+                "url": f"{relay}/{topic}" if topic else ""}
+
+    def push_enable(self, on) -> dict:
+        """Benachrichtigungen an oder aus. Beim ersten Mal entsteht ein geheimer Kanalname."""
+        from ..config import save_setting
+        from ..push import Push, new_topic
+
+        cfg = getattr(self._assistant, "_cfg", None)
+        if cfg is None:
+            return self.push_info()
+        handy = cfg.setdefault("handy", {})
+        try:
+            if on and not str(handy.get("push_kanal") or "").startswith("jarvis-"):
+                handy["push_kanal"] = new_topic()
+                save_setting("handy", "push_kanal", handy["push_kanal"])
+            handy["push"] = bool(on)
+            save_setting("handy", "push", bool(on))
+            self._assistant.push = Push(cfg)
+        except Exception as exc:
+            log.warning("Benachrichtigungen: %s", exc)
+            self._bridge.toast(f"Die Benachrichtigungen ließen sich nicht umstellen: {exc}", "error")
+        return self.push_info()
+
+    def push_test(self) -> dict:
+        import datetime as dt
+
+        push = getattr(self._assistant, "push", None)
+        if push is None or not push.enabled:
+            return {"ok": False, "error": "Die Benachrichtigungen sind aus."}
+        ok = push.send(f"Guten Tag, Sir. Die Benachrichtigungen funktionieren ({dt.datetime.now():%H:%M:%S}).", wait=True)
+        return {"ok": ok, "error": "" if ok else "ntfy.sh war gerade nicht erreichbar. Bitte gleich noch einmal."}
+
     def wol_prepare(self) -> dict:
         """PC fürs Einschalten per Netzwerk vorbereiten (Windows fragt nach Administratorrechten)."""
         from .. import pc

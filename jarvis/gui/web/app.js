@@ -91,6 +91,9 @@
     memory_state: () => window.pywebview.api.memory_state(),
     phone_info: () => window.pywebview.api.phone_info(),
     connections: () => window.pywebview.api.connections(),
+    push_info: () => window.pywebview.api.push_info(),
+    push_enable: (on) => window.pywebview.api.push_enable(on),
+    push_test: () => window.pywebview.api.push_test(),
     phone_enable: (on) => window.pywebview.api.phone_enable(on),
     phone_new_key: () => window.pywebview.api.phone_new_key(),
     alexa_info: () => window.pywebview.api.alexa_info(),
@@ -1477,6 +1480,9 @@
       memory_state: () => Promise.resolve(DEMO_MEMORY),
       phone_info: () => Promise.resolve(DEMO_PHONE),
       connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled, discord: true }),
+      push_info: () => Promise.resolve(DEMO_PUSH),
+      push_enable: (on) => Promise.resolve(Object.assign(DEMO_PUSH, { enabled: !!on })),
+      push_test: () => Promise.resolve({ ok: true, error: '' }),
       phone_enable: (on) => Promise.resolve(Object.assign(DEMO_PHONE, { enabled: !!on, running: !!on })),
       phone_new_key: () => Promise.resolve(DEMO_PHONE),
       alexa_info: () => Promise.resolve(DEMO_ALEXA),
@@ -1537,6 +1543,7 @@
     qr: '<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h7v7H0zM14 0h7v7h-7zM0 14h7v7H0z" fill="#000"/><path d="M1 1h5v5H1zM15 1h5v5h-5zM1 15h5v5H1z" fill="#fff"/><path d="M2 2h3v3H2zM16 2h3v3h-3zM2 16h3v3H2zM9 1h1v2H9zM11 3h2v1h-2zM8 8h5v1H8zM9 10h1v3H9zM12 11h2v2h-2zM15 9h2v1h-2zM17 12h3v1h-3zM14 15h2v2h-2zM18 16h2v4h-2zM9 15h3v1H9zM10 18h1v3h-1z" fill="#000"/></svg>',
   };
   const DEMO_ALEXA = { enabled: true, connected: true };
+  const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
   const DEMO_MEMORY = {
     facts: [
       { text: 'Georg spielt gern Valorant und Minecraft', source: 'gelernt' },
