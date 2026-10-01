@@ -4,7 +4,16 @@ import ctypes
 import sys
 from ctypes import wintypes
 
-pid = int(sys.argv[1])
+# Das pythonw.exe im venv ist nur ein Starter: Das eigentliche Python ist sein Kind.
+import psutil  # noqa: E402
+
+root = int(sys.argv[1])
+pids = {root}
+try:
+    pids |= {child.pid for child in psutil.Process(root).children(recursive=True)}
+except psutil.Error as exc:
+    print("Prozess nicht lesbar:", exc)
+print("Prozesse:", sorted(pids))
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 found = []

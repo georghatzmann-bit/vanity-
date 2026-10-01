@@ -69,10 +69,11 @@ class FakeMic:
 
 
 def build_recording(synthesize, wake_phrase: str = "Hey Jarvis", command: str = "Wie spät ist es?", german_voice: str = "de-DE-ConradNeural") -> np.ndarray:
-    from .tts import synthesize_edge
+    from .tts import materialize, synthesize_edge
 
     wake, wake_rate = synthesize_edge(wake_phrase, WAKE_VOICE, "-5%")
     cmd, cmd_rate = synthesize(command) if synthesize else synthesize_edge(command, german_voice)
+    cmd = materialize(cmd)
     parts = [
         noise(1.0),
         to_16k(wake, wake_rate),

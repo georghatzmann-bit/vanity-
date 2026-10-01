@@ -38,6 +38,19 @@ class TextToSpeech:
         self._voice = cfg.get("voice", "de-DE-ConradNeural")
         self._rate = cfg.get("rate", "+0%")
         self._pitch = cfg.get("pitch", "+0Hz")
+        # ElevenLabs (Premium): Schlüssel, Stimme und Modell
+        self._eleven = None
+        self._eleven_voice = str(cfg.get("elevenlabs_voice", "") or "").strip()
+        self._eleven_model = str(cfg.get("elevenlabs_model", "") or "").strip()
+        self._eleven_plain = False
+        self._eleven_paused_until = 0.0
+        self._previous = ""
+        key = str(cfg.get("elevenlabs_key", "") or "").strip()
+        if self._engine == "elevenlabs" and key and self._eleven_voice:
+            from .elevenlabs import DEFAULT_MODEL, ElevenLabs
+
+            self._eleven = ElevenLabs(key)
+            self._eleven_model = self._eleven_model or DEFAULT_MODEL
         # None statt 0.0: time.monotonic() zählt unter Windows ab dem Hochfahren, sonst
         # käme nach einem Neustart eine Minute lang die Ersatzstimme.
         self._edge_failed_at: float | None = None
@@ -56,9 +69,19 @@ class TextToSpeech:
                     return data["samples"].copy(), int(data["rate"])
             except Exception as exc:
                 log.debug("Stimmen-Zwischenspeicher: %s", exc)
+        if self._eleven is not None and time.monotonic() >= self._eleven_paused_until:
+            try:
+                audio = self._eleven_stream(text)
+                if cached is not None:
+                    audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
+                self._previous = text
+                self.used_edge = True
+                return audio, audio.rate
+            except Exception as exc:
+                self._eleven_problem(exc)
         # Nach einem Fehler (z. B. kein Internet) eine Minute lang direkt die Ersatzstimme nehmen.
         failed = self._edge_failed_at
-        if self._engine == "edge" and (failed is None or time.monotonic() - failed > 60):
+        if self._engine in ("edge", "elevenlabs") and (failed is None or time.monotonic() - failed > 60):
             try:
                 samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
                 samples = trim_silence(samples, rate)
@@ -77,6 +100,53 @@ class TextToSpeech:
                         "Jarvis spricht so lange mit der Ersatzstimme."
                     )
         return self._offline(text)
+
+    def _eleven_stream(self, text: str) -> "StreamingAudio":
+        """Startet ElevenLabs und kommt zurück, sobald die ersten Töne da sind."""
+        from .elevenlabs import FALLBACK_MODEL, RATE, ElevenLabsError
+
+        for _ in range(3):
+            audio = StreamingAudio(RATE)
+            model, plain, previous = self._eleven_model, self._eleven_plain, self._previous
+
+            def run(audio=audio, model=model, plain=plain, previous=previous) -> None:
+                try:
+                    for chunk in self._eleven.stream(text, self._eleven_voice, model, previous, plain=plain):
+                        audio.feed(chunk)
+                    audio.finish()
+                except Exception as exc:
+                    audio.finish(exc)
+
+            threading.Thread(target=run, name="jarvis-elevenlabs", daemon=True).start()
+            if not audio.ready.wait(8.0):
+                raise ElevenLabsError("net", "ElevenLabs antwortet nicht")
+            error = audio.error
+            if error is None or audio.available() > 0:
+                return audio
+            kind = getattr(error, "kind", "other")
+            if kind == "model" and self._eleven_model != FALLBACK_MODEL:
+                log.warning("ElevenLabs-Modell %s geht nicht (%s), nehme %s.", self._eleven_model, error, FALLBACK_MODEL)
+                self._eleven_model = FALLBACK_MODEL
+                continue
+            if kind == "param" and not self._eleven_plain:
+                self._eleven_plain = True
+                continue
+            raise error
+        raise ElevenLabsError("other", "ElevenLabs liefert nichts")
+
+    def _eleven_problem(self, exc: Exception) -> None:
+        kind = getattr(exc, "kind", "other")
+        pause = {"key": 1800, "quota": 1800, "voice": 1800, "busy": 5, "net": 60}.get(kind, 120)
+        self._eleven_paused_until = time.monotonic() + pause
+        log.warning("ElevenLabs: %s (Pause %d s, solange spricht die Microsoft-Stimme)", exc, pause)
+        tell = {
+            "key": "Der ElevenLabs-Schlüssel stimmt nicht. Ich spreche so lange mit der Microsoft-Stimme.",
+            "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Ich spreche so lange mit der Microsoft-Stimme.",
+            "voice": "Die gewählte ElevenLabs-Stimme gibt es nicht mehr. Bitte in den Einstellungen eine andere wählen.",
+        }.get(kind)
+        if tell and time.monotonic() - self._reported_at > 600:
+            self._reported_at = time.monotonic()
+            self._on_problem(tell)
 
     def _offline(self, text: str) -> tuple[np.ndarray, int]:
         """Ohne Internet: erst Piper (natürliche Offline-Stimme), zuletzt die Windows-Stimme."""
@@ -99,16 +169,27 @@ class TextToSpeech:
             if cached is None or cached.exists():
                 continue
             try:
-                samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
+                if self._eleven is not None:
+                    from .elevenlabs import RATE
+
+                    pcm = self._eleven.speak(text, self._eleven_voice, self._eleven_model, plain=self._eleven_plain)
+                    samples, rate = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16), RATE
+                else:
+                    samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
                 self._store(cached, trim_silence(samples, rate), rate)
             except Exception as exc:
                 log.debug("Vorbereiten von %r: %s", text, exc)
                 return
 
     def _cache_file(self, text: str) -> Path | None:
-        if self._cache_dir is None or self._engine != "edge" or not text or len(text) > self.CACHE_MAX_CHARS:
+        if self._cache_dir is None or not text or len(text) > self.CACHE_MAX_CHARS:
             return None
-        key = "|".join((self._voice, self._rate, self._pitch, text))
+        if self._eleven is not None:
+            key = "|".join(("elevenlabs", self._eleven_voice, self._eleven_model, text))
+        elif self._engine == "edge":
+            key = "|".join((self._voice, self._rate, self._pitch, text))
+        else:
+            return None
         return self._cache_dir / (hashlib.sha1(key.encode("utf-8")).hexdigest()[:24] + ".npz")
 
     def _store(self, path: Path, samples: np.ndarray, rate: int) -> None:
@@ -343,6 +424,16 @@ def play(samples: np.ndarray, rate: int) -> None:
     Player().play(samples, rate, lambda level: None)
 
 
+def materialize(samples, timeout: float = 30.0) -> np.ndarray:
+    """Fertige Samples, auch wenn die Stimme noch streamt (wartet dann bis zum Ende)."""
+    if isinstance(samples, StreamingAudio):
+        samples.done.wait(timeout)
+        if samples.error is not None and samples.available() == 0:
+            raise samples.error
+        return trim_silence(samples.samples(), samples.rate)
+    return samples
+
+
 def chime(freqs: tuple[int, ...] = (880, 1320)) -> None:
     """Kurze Tonfolge, z. B. aufsteigend wenn Jarvis zuhört."""
     try:
@@ -366,6 +457,94 @@ def chime_samples(freqs: tuple[int, ...], rate: int = 24000) -> np.ndarray:
     peak = float(np.abs(out).max()) or 1.0
     out *= min(1.0, 0.3 / peak)
     return (out * 32767).astype(np.int16)
+
+
+class StreamingAudio:
+    """Sprache, die noch aus dem Netz kommt (ElevenLabs). Der Player spielt schon den
+    Anfang, während der Rest lädt. Stille vorn wird übersprungen, hinten abgeschnitten."""
+
+    # So viel Ton muss da sein, bevor das Abspielen beginnt (gegen Aussetzer)
+    BUFFER_SECONDS = 0.25
+
+    def __init__(self, rate: int) -> None:
+        self.rate = rate
+        self._data = bytearray()
+        self._lock = threading.Lock()
+        self.ready = threading.Event()  # genug Ton da, fertig oder Fehler
+        self.done = threading.Event()
+        self.error: Exception | None = None
+        self.end: int | None = None
+        self.on_complete: Callable[["StreamingAudio"], None] | None = None
+
+    def feed(self, chunk: bytes) -> None:
+        with self._lock:
+            self._data.extend(chunk)
+            enough = len(self._data) // 2 >= self.rate * self.BUFFER_SECONDS
+        if enough:
+            self.ready.set()
+
+    def finish(self, error: Exception | None = None) -> None:
+        self.error = error
+        samples = self.samples()
+        if samples.size:
+            trimmed = trim_silence(samples, self.rate, lead=10.0)  # nur hinten kürzen
+            self.end = len(trimmed)
+        else:
+            self.end = 0
+        self.done.set()
+        self.ready.set()
+        if error is None and self.on_complete is not None and samples.size:
+            try:
+                self.on_complete(self)
+            except Exception as exc:
+                log.debug("Zwischenspeicher: %s", exc)
+
+    def samples(self) -> np.ndarray:
+        with self._lock:
+            raw = bytes(self._data[: len(self._data) // 2 * 2])
+        out = np.frombuffer(raw, dtype=np.int16)
+        return out if self.end is None else out[: self.end]
+
+    def available(self) -> int:
+        with self._lock:
+            n = len(self._data) // 2
+        return n if self.end is None else min(n, self.end)
+
+    def complete(self) -> bool:
+        return self.done.is_set()
+
+    def first_sound(self) -> int:
+        """Wo die Sprache anfängt (etwas davor, damit nichts abgeschnitten wird)."""
+        head = self.samples()[: self.rate]
+        loud = np.flatnonzero(np.abs(head.astype(np.int32)) > max(120, int(np.abs(head).max(initial=0)) * 0.02))
+        return max(0, int(loud[0]) - int(0.05 * self.rate)) if loud.size else 0
+
+    def read(self, start: int, count: int) -> np.ndarray:
+        with self._lock:
+            n = len(self._data) // 2
+            stop = min(n if self.end is None else min(n, self.end), start + count)
+            if stop <= start:
+                return np.zeros(0, dtype=np.int16)
+            return np.frombuffer(bytes(self._data[start * 2 : stop * 2]), dtype=np.int16)
+
+
+class _ArraySource:
+    """Fertige Samples mit derselben Schnittstelle wie StreamingAudio."""
+
+    def __init__(self, samples: np.ndarray) -> None:
+        self._samples = np.ascontiguousarray(samples, dtype=np.int16).reshape(-1)
+
+    def available(self) -> int:
+        return len(self._samples)
+
+    def complete(self) -> bool:
+        return True
+
+    def first_sound(self) -> int:
+        return 0
+
+    def read(self, start: int, count: int) -> np.ndarray:
+        return self._samples[start : start + count]
 
 
 class Speaker:
@@ -509,24 +688,26 @@ class Player:
     def _cancelled(self) -> bool:
         return self._stopped.is_set() or bool(self.should_stop and self.should_stop())
 
-    def play(self, samples: np.ndarray, rate: int, on_level: Callable[[float], None]) -> None:
+    def play(self, samples, rate: int, on_level: Callable[[float], None]) -> None:
+        """Spielt fertige Samples oder StreamingAudio ab (das darf noch wachsen)."""
         import sounddevice as sd
 
         from .audio import PORTAUDIO_LOCK, playing
 
         self._stopped.clear()
-        samples = np.ascontiguousarray(samples, dtype=np.int16).reshape(-1)
-        position = [0]
+        source = samples if isinstance(samples, StreamingAudio) else _ArraySource(samples)
+        position = [source.first_sound()]
         finished = threading.Event()
 
         def fill(outdata, frames, time_info, status) -> None:
             start = position[0]
-            chunk = samples[start : start + frames]
+            chunk = source.read(start, frames)
             outdata[: len(chunk), 0] = chunk
             position[0] = start + len(chunk)
             if len(chunk) < frames:
                 outdata[len(chunk) :, 0] = 0
-                raise sd.CallbackStop
+                if source.complete() and position[0] >= source.available():
+                    raise sd.CallbackStop
 
         window = max(1, rate // 20)
         with playing():
@@ -536,12 +717,15 @@ class Player:
                 )
                 stream.start()
             try:
-                limit = time.monotonic() + len(samples) / rate + 2.0
+                last_position, last_progress = position[0], time.monotonic()
                 while not finished.wait(0.05):
-                    if self._cancelled() or time.monotonic() > limit:
+                    if self._cancelled():
                         break
-                    index = position[0]
-                    chunk = samples[index : index + window].astype(np.float32)
+                    if position[0] != last_position:
+                        last_position, last_progress = position[0], time.monotonic()
+                    elif time.monotonic() - last_progress > (2.0 if source.complete() else 10.0):
+                        break  # hängt (kein Ton mehr vom Gerät oder aus dem Netz)
+                    chunk = source.read(position[0], window).astype(np.float32)
                     level = float(np.sqrt(np.mean(chunk**2))) / 8000 if chunk.size else 0.0
                     on_level(min(1.0, level))
             finally:
