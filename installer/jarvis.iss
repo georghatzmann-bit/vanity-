@@ -98,10 +98,24 @@ begin
   Result := Code;
 end;
 
+procedure StopJarvis();
+var
+  Code: Integer;
+begin
+  // Ein laufendes (altes) Jarvis beenden: Sonst sperrt es Dateien in seiner Python-Umgebung,
+  // und das Aktualisieren der Pakete schlägt fehl. Danach startet der Installer es neu.
+  Exec('powershell.exe',
+    '-NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name=''pythonw.exe'' or Name=''python.exe''\" | ' +
+    'Where-Object { $_.CommandLine -like ''*Jarvis*'' } | Invoke-CimMethod -MethodName Terminate | Out-Null; Start-Sleep -Milliseconds 800"',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
 begin
+  if CurStep = ssInstall then
+    StopJarvis();
   if CurStep = ssPostInstall then
   begin
     WizardForm.StatusLabel.Caption := 'Jarvis lädt alles Nötige herunter. Das dauert beim ersten Mal ein paar Minuten ...';

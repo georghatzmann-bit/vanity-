@@ -374,5 +374,6 @@ if ($Neu) {
     Write-Host "  Gleich oeffnet sich die Einrichtung. Ab jetzt startest du Jarvis mit dem Symbol auf dem Desktop." -ForegroundColor White
 }
 Write-Host ""
+Add-Content -Encoding UTF8 $logFile "`n== Fertig"
 if (-not $Auto) { Start-Sleep -Seconds 2 }
 exit 0

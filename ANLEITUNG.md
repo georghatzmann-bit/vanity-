@@ -4,12 +4,11 @@ Diese Anleitung ist für dich, Georg. Jarvis läuft danach unsichtbar im Hinterg
 
 ## 1. Installieren (5 Minuten)
 
-1. Falls ein älteres Jarvis läuft: unten rechts neben der Uhr Rechtsklick auf das Jarvis-Symbol > **Jarvis beenden**.
-2. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
-3. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
-4. Den Haken bei **„Jarvis mit Windows starten“** drin lassen und **Installieren** klicken.
+1. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
+2. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
+3. Den Haken bei **„Jarvis mit Windows starten“** drin lassen und **Installieren** klicken.
 
-Der Installer holt selbst: Python, die Spracherkennung, die Stimmen und Claude Code (Jarvis' Gehirn). Beim ersten Mal dauert das ein paar Minuten. Fehlt auf einem ganz frischen PC eine Microsoft-Laufzeit, fragt Windows einmal nach Administratorrechten: **Ja** klicken.
+Der Installer holt selbst: Python, die Spracherkennung, die Stimmen und Claude Code (Jarvis' Gehirn). Beim ersten Mal dauert das ein paar Minuten. Läuft noch ein älteres Jarvis, beendet der Installer es selbst und startet danach das neue. Fehlt auf einem ganz frischen PC eine Microsoft-Laufzeit, fragt Windows einmal nach Administratorrechten: **Ja** klicken.
 
 **Geklappt, wenn:** sich am Ende die Einrichtung von selbst öffnet. Deine Einstellungen von vorher bleiben erhalten.
 
@@ -20,7 +19,7 @@ Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen (siehe unten) und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
 2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen (siehe unten), **Prüfen**, Stimmen anhören und eine anklicken. Ohne Schlüssel spricht die kostenlose Microsoft-Stimme.
 3. **Wohnort:** für das Wetter.
-4. **Gehirn:** **Bei Claude anmelden** klicken, im Browser mit deinem Claude-Konto anmelden, zurück in die Einrichtung, **Nochmal prüfen**. Es klappt, wenn „Bereit“ erscheint. Dafür reicht dein Claude-Pro-Abo.
+4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Bereit“ erscheint. Dafür reicht dein Claude-Pro-Abo.
 5. **Extras:** Stumm-Taste, Autostart und **Volle Freigabe** (siehe unten). Einfach so lassen, wie es ist.
 6. **Jarvis starten.**
 
@@ -200,6 +199,8 @@ Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“*
 - **Jarvis lehnt etwas ab:** Anders formulieren hilft meistens. Unter Einstellungen > Gehirn steht Claudes genaue Meldung.
 - **Mikrofon blockiert** (die Einrichtung meldet absolute Stille): Windows-Einstellungen > Datenschutz und Sicherheit > Mikrofon > „Desktop-Apps den Zugriff auf das Mikrofon erlauben“ einschalten.
 - **Irgendwas anderes:** `werkzeuge\Selbsttest.bat` im Jarvis-Ordner prüft alles. In `logs\jarvis.log` steht genau, was passiert ist. Beides kannst du Claude im Jarvis-Projekt schicken.
+
+**Neue Version:** Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Neueste Version laden**. Der Browser lädt die neue `JarvisSetup.exe`, doppelklicken, fertig. Deine Einstellungen und das Gedächtnis bleiben.
 
 Deinstallieren: Windows-Einstellungen > Apps > Jarvis > Deinstallieren. Das nimmt auch den Autostart mit.
 

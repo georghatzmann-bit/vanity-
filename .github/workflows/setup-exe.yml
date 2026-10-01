@@ -127,6 +127,29 @@ jobs:
           path: probe-bilder/
           if-no-files-found: ignore
 
+      - name: Probe-Update (über ein laufendes Jarvis, wie bei Georg)
+        shell: pwsh
+        run: |
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $old = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -WorkingDirectory $app -PassThru
+          Start-Sleep -Seconds 20
+          if ($old.HasExited) { Write-Host "Jarvis lief nicht (Code $($old.ExitCode))"; exit 1 }
+          Write-Host "Jarvis laeuft (PID $($old.Id)), jetzt die neue Version drueber installieren"
+          $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=update.log" -PassThru -Wait
+          Write-Host "Installer beendet mit $($p.ExitCode)"
+          $log = "$env:LOCALAPPDATA\Jarvis\installation.log"
+          Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 25
+          if ($p.ExitCode -ne 0) { Get-Content update.log -Tail 60; exit 1 }
+          if (-not (Select-String -Path $log -Pattern "^== Fertig" -Quiet)) { Write-Host "Die Bestandteile wurden nicht fertig installiert"; exit 1 }
+          $left = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' }
+          if ($left) {
+            Write-Host "Das alte Jarvis laeuft noch: $($left.ProcessId -join ', ')"
+            $left | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            exit 1
+          }
+          Write-Host "Update ueber ein laufendes Jarvis: OK"
+
       - name: Probe-Deinstallation
         shell: pwsh
         run: |

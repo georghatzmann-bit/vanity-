@@ -9,6 +9,18 @@ log = logging.getLogger(__name__)
 
 ACCENT = (76, 157, 255, 255)
 MUTED = (240, 85, 90, 255)
+# Die neueste JarvisSetup.exe. Das Projekt ist privat: der Browser lädt sie, weil Georg dort bei
+# GitHub angemeldet ist. Danach einfach doppelklicken, die Einstellungen bleiben.
+DOWNLOAD_URL = "https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe"
+
+
+def open_download() -> None:
+    import webbrowser
+
+    try:
+        webbrowser.open(DOWNLOAD_URL)
+    except Exception as exc:
+        log.warning("Download ließ sich nicht öffnen: %s", exc)
 
 
 def make_icon_image(size: int = 64, muted: bool = False):
@@ -75,6 +87,7 @@ class Tray:
                 ))
             if self._on_setup is not None:
                 items.append(pystray.MenuItem("Einstellungen", lambda: self._on_setup()))
+            items.append(pystray.MenuItem("Neueste Version laden", lambda: open_download()))
             items += [pystray.Menu.SEPARATOR, pystray.MenuItem("Jarvis beenden", lambda: self._on_quit())]
             self._icon = pystray.Icon("jarvis", make_icon_image(), "Jarvis", pystray.Menu(*items))
             self._icon.run_detached()

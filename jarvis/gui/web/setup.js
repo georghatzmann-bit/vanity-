@@ -1297,9 +1297,10 @@
       'Danach führt Jarvis dich durch die Anmeldung mit deinem Claude-Konto.',
     ]],
     login: ['So geht es:', [
-      'Auf „Bei Claude anmelden“ klicken. Ein Fenster mit Claude Code öffnet sich.',
-      'Der Browser fragt nach deinem Claude-Konto (Pro-Abo). Anmelden und zurück ins Fenster.',
-      'Das Fenster schließen und hier „Nochmal prüfen“ klicken.',
+      'Auf „Bei Claude anmelden“ klicken. Ein schwarzes Fenster mit Claude Code öffnet sich.',
+      'Dort Enter drücken, bis sich der Browser öffnet. Fragt es nach der Anmeldeart: die erste nehmen (Claude-Konto mit Abo).',
+      'Im Browser mit deinem Claude-Konto anmelden und erlauben. Fragt das Fenster danach noch etwas: Enter.',
+      'Das schwarze Fenster schließen und hier „Nochmal prüfen“ klicken.',
     ]],
     refused: ['Was das heißt:', [
       'Claudes Sicherheitsfilter schlägt manchmal fälschlich an, sogar bei harmlosen Fragen.',
