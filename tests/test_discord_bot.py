@@ -67,6 +67,10 @@ class FakeDiscord:
             role = dict(body, id=f"r{self.ids}", position=len(self.roles))
             self.roles.append(role)
             return self.reply(role)
+        if "/messages" in path and method == "GET":
+            channel = path.split("/")[2]
+            return self.reply([{"id": f"m{n}", "content": text, "author": {"id": "999"}}
+                               for n, (cid, text) in enumerate(self.messages) if cid == channel][::-1])
         if path.endswith("/messages"):
             self.messages.append((path.split("/")[2], body["content"]))
             return self.reply({"id": "m1"})
@@ -109,9 +113,13 @@ class BotTest(unittest.TestCase):
         admin = next(r for r in self.discord.roles if r["name"] == "Admin")
         self.assertEqual((admin["color"], admin["hoist"]), (0xE74C3C, True))
         self.assertEqual(self.discord.messages, [(regeln["id"], "Willkommen! Seid nett zueinander.")])
-        # zweites Mal: nur die Nachricht kommt wieder, sonst ist alles schon da
-        again = self.bot.apply_plan(dict(PLAN, nachrichten=[]))
+        # zweites Mal (etwa nach einem Abbruch): alles ist schon da, auch die Nachricht nicht doppelt
+        again = self.bot.apply_plan(PLAN)
         self.assertEqual(again, [])
+        self.assertEqual(len(self.discord.messages), 1)
+        # Ein neuer Text kommt dagegen raus
+        self.bot.apply_plan(dict(PLAN, nachrichten=[{"kanal": "regeln", "text": "Neu: Freitag ist Turnier."}]))
+        self.assertEqual(self.discord.messages[-1], (regeln["id"], "Neu: Freitag ist Turnier."))
 
     def test_structure_and_invites(self):
         self.bot.apply_plan(PLAN)

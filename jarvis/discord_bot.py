@@ -185,6 +185,22 @@ class DiscordBot:
     def send(self, channel_id: str, text: str) -> dict:
         return self.request("POST", f"/channels/{channel_id}/messages", {"content": str(text)[:2000]}) or {}
 
+    def send_once(self, channel_id: str, text: str) -> bool:
+        """Postet nur, wenn der Bot genau diesen Text dort nicht schon gepostet hat. So bringt ein
+        zweites Anwenden desselben Plans (etwa nach einem Abbruch) keine doppelten Regeln."""
+        text = str(text)[:2000]
+        try:
+            me = str(self.me().get("id") or "")
+            recent = self.request("GET", f"/channels/{channel_id}/messages?limit=50") or []
+        except DiscordError as exc:
+            log.debug("Letzte Nachrichten: %s", exc)
+            me, recent = "", []
+        if me and any(str((m.get("author") or {}).get("id")) == me and (m.get("content") or "").strip() == text.strip()
+                      for m in recent if isinstance(m, dict)):
+            return False
+        self.send(channel_id, text)
+        return True
+
     def invite(self, channel_id: str) -> str:
         data = self.request("POST", f"/channels/{channel_id}/invites", {"max_age": 0, "max_uses": 0}, reason="Jarvis") or {}
         return f"https://discord.gg/{data.get('code', '')}"
@@ -250,6 +266,6 @@ class DiscordBot:
         for message in plan.get("nachrichten") or []:
             target = lookup(str(message.get("kanal") or ""), 0) or lookup(str(message.get("kanal") or ""), 5)
             if target and str(message.get("text") or "").strip():
-                self.send(target["id"], str(message["text"]))
-                done.append(f"Nachricht in {target.get('name')} gepostet")
+                if self.send_once(target["id"], str(message["text"])):
+                    done.append(f"Nachricht in {target.get('name')} gepostet")
         return done
