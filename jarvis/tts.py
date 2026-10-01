@@ -491,13 +491,15 @@ class StreamingAudio:
             self.end = len(trimmed)
         else:
             self.end = 0
-        self.done.set()
-        self.ready.set()
+        # Erst speichern, dann "fertig" melden: Wer auf das Ende wartet, findet den
+        # Satz danach sicher im Zwischenspeicher.
         if error is None and self.on_complete is not None and samples.size:
             try:
                 self.on_complete(self)
             except Exception as exc:
                 log.debug("Zwischenspeicher: %s", exc)
+        self.done.set()
+        self.ready.set()
 
     def samples(self) -> np.ndarray:
         with self._lock:

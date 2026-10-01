@@ -4,19 +4,8 @@ import ctypes
 import sys
 from ctypes import wintypes
 
-# Das pythonw.exe im venv ist nur ein Starter: Das eigentliche Python ist sein Kind.
-import psutil  # noqa: E402
-
-root = int(sys.argv[1])
-pids = {root}
-try:
-    pids |= {child.pid for child in psutil.Process(root).children(recursive=True)}
-except psutil.Error as exc:
-    print("Prozess nicht lesbar:", exc)
-print("Prozesse:", sorted(pids))
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
-found = []
 EnumProc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
 
@@ -56,8 +45,9 @@ def process_tree(root: int) -> set[int]:
     return tree
 
 
-pids = process_tree(pid)
+pids = process_tree(int(sys.argv[1]))
 print("Prozesse von Jarvis:", sorted(pids))
+found = []
 
 
 def visit(hwnd, _):
