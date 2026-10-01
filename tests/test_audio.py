@@ -434,3 +434,140 @@ class HotkeyLabelTest(unittest.TestCase):
         self.assertEqual(hotkey_label("pause"), "Pause")
         self.assertEqual(hotkey_label("ctrl+alt+m", spoken=True), "Steuerung Alt M")
         self.assertEqual(hotkey_label(""), "")
+
+
+class CloudSpeechTest(unittest.TestCase):
+    """Groq-Spracherkennung gegen einen kleinen Nachbau des Servers."""
+
+    def setUp(self):
+        import json as _json
+        import threading as _threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        self.requests = []
+        self.reply = (200, {"text": " Öffne Spotify. "}, {})
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                outer.requests.append((self.path, dict(self.headers), body))
+                code, payload, headers = outer.reply
+                data = _json.dumps(payload).encode()
+                self.send_response(code)
+                for k, v in headers.items():
+                    self.send_header(k, v)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        _threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_port}/openai/v1/audio/transcriptions"
+
+    def tearDown(self):
+        self.server.shutdown()
+
+    def make(self, problems=None):
+        from jarvis.stt import CloudSpeechToText
+
+        class Local:
+            calls = 0
+
+            def transcribe(self, audio):
+                Local.calls += 1
+                return "lokal erkannt"
+
+        stt = CloudSpeechToText("gsk_test", fallback=Local, on_problem=(problems.append if problems is not None else None))
+        stt.URL = self.url
+        return stt, Local
+
+    def test_success_sends_wav_and_key(self):
+        stt, local = self.make()
+        audio = np.zeros(16000, dtype=np.float32)
+        self.assertEqual(stt.transcribe(audio), "Öffne Spotify.")
+        self.assertEqual(stt.last_engine, "groq")
+        path, headers, body = self.requests[0]
+        self.assertEqual(headers["Authorization"], "Bearer gsk_test")
+        self.assertIn("multipart/form-data; boundary=", headers["Content-Type"])
+        self.assertIn(b'name="model"\r\n\r\nwhisper-large-v3-turbo', body)
+        self.assertIn(b'name="language"\r\n\r\nde', body)
+        self.assertIn(b"RIFF", body)
+        self.assertEqual(local.calls, 0)
+
+    def test_wrong_key_falls_back_and_tells_once(self):
+        problems = []
+        stt, local = self.make(problems)
+        self.reply = (401, {"error": {"message": "Invalid API Key"}}, {})
+        audio = np.zeros(8000, dtype=np.float32)
+        self.assertEqual(stt.transcribe(audio), "lokal erkannt")
+        self.assertEqual(stt.transcribe(audio), "lokal erkannt")
+        self.assertEqual(len(self.requests), 1, "nach einem Schlüssel-Fehler erst einmal nicht nochmal fragen")
+        self.assertEqual(len(problems), 1)
+        self.assertIn("Groq", problems[0])
+
+    def test_rate_limit_pauses_only_briefly(self):
+        stt, local = self.make()
+        self.reply = (429, {"error": {"message": "Rate limit"}}, {"retry-after": "0"})
+        audio = np.zeros(8000, dtype=np.float32)
+        self.assertEqual(stt.transcribe(audio), "lokal erkannt")
+        self.reply = (200, {"text": "Wieder da"}, {})
+        self.assertEqual(stt.transcribe(audio), "Wieder da")
+
+    def test_no_network_uses_the_local_model(self):
+        stt, local = self.make()
+        stt.URL = "http://127.0.0.1:9/nirgends"
+        self.assertEqual(stt.transcribe(np.zeros(8000, dtype=np.float32)), "lokal erkannt")
+        self.assertEqual(stt.last_engine, "lokal")
+
+    def test_engine_choice(self):
+        from jarvis.stt import CloudSpeechToText, make_transcriber
+
+        cfg = {"engine": "auto", "groq_key": "gsk_x", "model": "small", "language": "de"}
+        self.assertIsInstance(make_transcriber(cfg), CloudSpeechToText)
+        with mock.patch("jarvis.stt.SpeechToText") as local:
+            make_transcriber(dict(cfg, groq_key=""))
+            make_transcriber(dict(cfg, engine="lokal"))
+        self.assertEqual(local.call_count, 2)
+
+    def test_whisper_repeating_the_hint_is_ignored(self):
+        from jarvis.stt import clean_transcript
+
+        self.assertEqual(clean_transcript("Spotify, Discord.", "Jarvis, Spotify, Discord, Steam."), "")
+        self.assertEqual(clean_transcript("Öffne Spotify.", "Jarvis, Spotify, Discord, Steam."), "Öffne Spotify.")
+
+
+class VoiceActivityRecorderTest(unittest.TestCase):
+    def test_speech_by_probability_with_hysteresis(self):
+        probabilities = iter([0.1, 0.9, 0.6, 0.35, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+        rec = CommandRecorder(silence_seconds=0.3, noise_floor=50, vad=lambda frame: next(probabilities))
+        done = False
+        for _ in range(10):
+            done = rec.add(np.full(FRAME_SAMPLES, 800, dtype=np.int16))
+            if done:
+                break
+        self.assertTrue(done)
+        self.assertTrue(rec.speech_started)
+        # 3 Frames Sprache (0.9, 0.6 und 0.35 dank Hysterese), dann 4 leise (0.32 s) bis zum Ende
+        self.assertEqual(rec.speech_frames, 3)
+        self.assertEqual(len(rec.frames), 8)
+
+    def test_quiet_frames_never_count_as_speech(self):
+        rec = CommandRecorder(start_timeout_seconds=0.4, noise_floor=50, vad=lambda frame: 0.99)
+        for _ in range(6):
+            if rec.add(np.full(FRAME_SAMPLES, 30, dtype=np.int16)):
+                break
+        self.assertFalse(rec.speech_started)
+
+    def test_broken_vad_falls_back_to_loudness(self):
+        def broken(frame):
+            raise RuntimeError("kaputt")
+
+        rec = CommandRecorder(silence_seconds=0.2, energy_threshold=1000, vad=broken)
+        rec.add(np.full(FRAME_SAMPLES, 3000, dtype=np.int16))
+        self.assertTrue(rec.speech_started)
+        self.assertIsNone(rec.vad)

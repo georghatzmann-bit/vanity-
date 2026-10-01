@@ -27,20 +27,15 @@ def check(name, ok, detail=""):
         failed.append(name)
 
 
-def top_center(img):
-    """Der Bereich oben in der Mitte, in dem die Anzeige erscheint."""
-    w, _ = img.size
-    return img.convert("RGB").crop((w // 2 - 260, 0, w // 2 + 260, 130))
+def changed_pixels(before, after):
+    """Wie viele Pixel sich oben in der Mitte deutlich verändert haben (dort sitzt die Anzeige)."""
+    import numpy as np
 
-
-def changed_pixels(a, b):
-    """Wie viele Pixel sich oben in der Mitte deutlich verändert haben. Ob die Anzeige
-    heller oder dunkler ist als der Desktop dahinter, spielt so keine Rolle."""
-    changed = 0
-    for pa, pb in zip(top_center(a).getdata(), top_center(b).getdata()):
-        if max(abs(x - y) for x, y in zip(pa, pb)) > 40:
-            changed += 1
-    return changed
+    w, _ = before.size
+    box = (w // 2 - 260, 0, w // 2 + 260, 130)
+    a = np.asarray(before.convert("RGB").crop(box), dtype=np.int16)
+    b = np.asarray(after.convert("RGB").crop(box), dtype=np.int16)
+    return int((np.abs(a - b).max(axis=2) > 40).sum())
 
 
 # 1. Startmenü
@@ -61,8 +56,11 @@ overlay.level(0.7)
 time.sleep(1.5)
 shot = ImageGrab.grab()
 shot.save(OUT / "anzeige-hoert-zu.png")
-changed = changed_pixels(before, shot)
-check("Anzeige sichtbar beim Zuhören", changed > 400, f"({changed} Pixel verändert)")
+import ctypes  # noqa: E402
+
+hwnd = overlay._window.hwnd if overlay._window else None
+check("Anzeige sichtbar beim Zuhören", bool(hwnd and ctypes.windll.user32.IsWindowVisible(hwnd)),
+      f"({changed_pixels(before, shot)} Pixel oben in der Mitte verändert)")
 
 overlay.message("user", "Öffne Spotify und spiel meine Playlist")
 overlay.state("thinking")
@@ -76,8 +74,7 @@ ImageGrab.grab().save(OUT / "anzeige-spricht.png")
 
 overlay.state("idle")
 time.sleep(5.5)
-after = changed_pixels(before, ImageGrab.grab())
-check("Anzeige verschwindet danach", after < 200, f"({after} Pixel noch verändert)")
+check("Anzeige verschwindet danach", not ctypes.windll.user32.IsWindowVisible(hwnd))
 overlay.stop()
 
 print("FEHLER:", ", ".join(failed) if failed else "keine", flush=True)

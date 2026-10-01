@@ -43,8 +43,10 @@ class Sounds:
 
 
 class VoiceLoop:
-    def __init__(self, cfg: dict, mic, wake, stt, assistant, mute: MuteSwitch, sounds, hotkey: str, hints=print) -> None:
+    def __init__(self, cfg: dict, mic, wake, stt, assistant, mute: MuteSwitch, sounds, hotkey: str, hints=print,
+                 vad=None) -> None:
         self._cfg = cfg
+        self._vad = vad
         self._mic = mic
         self._wake = wake
         self._stt = stt
@@ -229,7 +231,7 @@ class VoiceLoop:
             listen_cfg = dict(listen_cfg, start_timeout_seconds=min(5.0, float(listen_cfg["start_timeout_seconds"])))
         assistant.set_recording(True)
         try:
-            audio = record_command(mic, listen_cfg, on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS)
+            audio = record_command(mic, listen_cfg, on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS, vad=self._vad)
         finally:
             assistant.set_recording(False)
         if audio is None:
@@ -237,8 +239,13 @@ class VoiceLoop:
                 ui.message("info", "Nichts gehört. Sprich direkt nach dem Ton.")
         else:
             assistant.set_transcribing(True)
+            started = time.monotonic()
             try:
                 text = self._stt.transcribe(audio)
+                log.info(
+                    "Erkannt in %.2f s (%s, %.1f s Aufnahme): %s", time.monotonic() - started,
+                    getattr(self._stt, "last_engine", "") or "lokal", len(audio) / 16000, text,
+                )
             except Exception:
                 log.exception("Spracherkennung")
                 ui.message("info", "Nicht verstanden (Fehler in der Spracherkennung, Details in logs\\jarvis.log).")

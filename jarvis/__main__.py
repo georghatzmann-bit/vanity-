@@ -192,11 +192,13 @@ def load_voice(
     slow.daemon = True
     slow.start()
     try:
-        from .stt import SpeechToText
+        from .stt import CloudSpeechToText, make_transcriber
 
-        stt = SpeechToText(
-            cfg["stt"]["model"], cfg["stt"]["language"], cfg["stt"]["device"], cfg["stt"].get("beam_size", 1)
-        )
+        place = str(cfg.get("ich", {}).get("ort", "")).strip()
+        stt = make_transcriber(cfg["stt"], place, on_problem=lambda text: ui.toast(text, "error"))
+        if isinstance(stt, CloudSpeechToText):
+            # Die Ersatz-Erkennung auf dem eigenen PC in Ruhe vorbereiten.
+            threading.Timer(45.0, stt.warm_up_fallback).start()
         wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
     except Exception as exc:
         log.exception("Spracherkennung lädt nicht")
@@ -204,7 +206,15 @@ def load_voice(
         return None
     finally:
         slow.cancel()
-    return VoiceLoop(cfg, mic, wake, stt, assistant, assistant.mute, Sounds(), hotkey, hints)
+    vad = None
+    if cfg["listen"].get("vad", True):
+        try:
+            from .audio import VoiceActivity
+
+            vad = VoiceActivity()
+        except Exception as exc:
+            log.warning("Sprach-KI für das Satzende lädt nicht (%s), nehme die Lautstärke.", exc)
+    return VoiceLoop(cfg, mic, wake, stt, assistant, assistant.mute, Sounds(), hotkey, hints, vad=vad)
 
 
 def register_mute_hotkey(cfg: dict, assistant: Assistant) -> str:

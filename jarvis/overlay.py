@@ -485,7 +485,7 @@ class _LayeredWindow:
 
         WS_EX = 0x00080000 | 0x00000020 | 0x00000008 | 0x00000080 | 0x08000000  # LAYERED|TRANSPARENT|TOPMOST|TOOLWINDOW|NOACTIVATE
         self.hwnd = user32.CreateWindowExW(
-            WS_EX, self.CLASS_NAME, "Jarvis", 0x80000000, 0, 0, 1, 1, None, None, instance, None  # WS_POPUP
+            WS_EX, self.CLASS_NAME, "Jarvis Anzeige", 0x80000000, 0, 0, 1, 1, None, None, instance, None  # WS_POPUP
         )
         if not self.hwnd:
             raise OSError(f"CreateWindowExW: {ctypes.get_last_error()}")

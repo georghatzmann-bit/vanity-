@@ -95,6 +95,7 @@ def listen_for_show(callback, stopped: threading.Event) -> bool:
     def wait() -> None:
         while not stopped.is_set():
             if kernel32.WaitForSingleObject(handle, 500) == 0:
+                log.info("Zweiter Start: Fenster nach vorn")
                 try:
                     callback()
                 except Exception:

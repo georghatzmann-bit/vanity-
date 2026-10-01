@@ -107,7 +107,8 @@ jobs:
           else { Write-Host "Zweiter Start beendet mit $($second.ExitCode)" }
           Start-Sleep -Seconds 6
           & $py -c "from PIL import ImageGrab; ImageGrab.grab().save(r'$env:GITHUB_WORKSPACE\probe-bilder\fenster-nach-zweitem-start.png')"
-          & $py -c "import ctypes; h = ctypes.windll.user32.FindWindowW(None, 'Jarvis'); print('Jarvis-Fenster sichtbar:', bool(h and ctypes.windll.user32.IsWindowVisible(h)))"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_fenster.py" $first.Id
+          if ($LASTEXITCODE -ne 0) { $probe = 1 }
           if ($first.HasExited) { Write-Host "Jarvis ist beim zweiten Start abgestuerzt"; $probe = 1 }
           Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue
           Write-Host "--- jarvis.log"

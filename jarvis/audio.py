@@ -79,11 +79,19 @@ class CommandRecorder:
     # So lange zählt Lautes noch nicht als "Sprechen hat begonnen" (das Echo des
     # Signaltons). Aufgenommen wird es trotzdem, falls man gleich losredet.
     ignore_seconds: float = 0.0
+    # Sprach-KI (Silero VAD): bekommt einen Frame, liefert die Wahrscheinlichkeit für Sprache.
+    # Ohne sie entscheidet nur die Lautstärke.
+    vad: object = None
+
+    # Ab hier beginnt Sprechen, und solange es darüber bleibt, spricht man noch.
+    VAD_START = 0.5
+    VAD_KEEP = 0.3
 
     def __post_init__(self) -> None:
         self.frames: list[np.ndarray] = []
         self.speech_started = False
         self.silent_frames = 0
+        self.speech_frames = 0
 
     @property
     def threshold(self) -> float:
@@ -95,10 +103,11 @@ class CommandRecorder:
         """Fügt einen Frame hinzu. Gibt True zurück, wenn die Aufnahme fertig ist."""
         self.frames.append(frame)
         elapsed = len(self.frames) * FRAME_SECONDS
-        loud = rms(frame) >= self.threshold
+        loud = self._is_speech(frame)
         if loud and elapsed > self.ignore_seconds:
             self.speech_started = True
             self.silent_frames = 0
+            self.speech_frames += 1
         elif self.speech_started and not loud:
             self.silent_frames += 1
 
@@ -107,6 +116,20 @@ class CommandRecorder:
         if not self.speech_started:
             return elapsed >= self.start_timeout_seconds
         return self.silent_frames * FRAME_SECONDS >= self.silence_seconds
+
+    def _is_speech(self, frame: np.ndarray) -> bool:
+        if self.vad is None:
+            return rms(frame) >= self.threshold
+        try:
+            probability = float(self.vad(frame))
+        except Exception as exc:
+            log.debug("Sprach-KI: %s", exc)
+            self.vad = None
+            return rms(frame) >= self.threshold
+        # Ganz leise ist nie Sprache (z. B. Rauschen, das die KI für ein Flüstern hält).
+        if rms(frame) < max(120.0, self.noise_floor * 1.3):
+            return False
+        return probability >= (self.VAD_KEEP if self.speech_started else self.VAD_START)
 
     def audio(self) -> np.ndarray | None:
         """Die Aufnahme als float32 für Whisper, oder None wenn nichts gesagt wurde."""
@@ -380,6 +403,24 @@ class Microphone:
         return self.frames_read >= 38 and self.peak == 0
 
 
+class VoiceActivity:
+    """Silero VAD (kommt mit openWakeWord): erkennt Sprache viel zuverlässiger als die
+    Lautstärke, auch bei Lüfter, Musik oder Tastaturgeklapper. So endet die Aufnahme
+    schneller und schneidet trotzdem keine Sätze ab."""
+
+    def __init__(self) -> None:
+        from openwakeword.vad import VAD
+
+        self._vad = VAD()
+
+    def reset(self) -> None:
+        self._vad.reset_states()
+
+    def __call__(self, frame: np.ndarray) -> float:
+        # 1280 Samples = 2 Stücke à 40 ms, wie openWakeWord es selbst macht.
+        return float(self._vad.predict(frame, frame_size=640))
+
+
 class WakeWord:
     def __init__(self, model_name: str, threshold: float) -> None:
         import openwakeword
@@ -397,7 +438,11 @@ class WakeWord:
         self._model.reset()
 
 
-def record_command(mic: Microphone, listen_cfg: dict, on_level=None, ignore_seconds: float = 0.0) -> np.ndarray | None:
+def record_command(
+    mic: Microphone, listen_cfg: dict, on_level=None, ignore_seconds: float = 0.0, vad: VoiceActivity | None = None
+) -> np.ndarray | None:
+    if vad is not None:
+        vad.reset()
     recorder = CommandRecorder(
         silence_seconds=listen_cfg["silence_seconds"],
         max_seconds=listen_cfg["max_seconds"],
@@ -405,6 +450,7 @@ def record_command(mic: Microphone, listen_cfg: dict, on_level=None, ignore_seco
         energy_threshold=listen_cfg["energy_threshold"],
         noise_floor=mic.noise_floor,
         ignore_seconds=ignore_seconds,
+        vad=vad,
     )
     while True:
         frame = mic.read()
