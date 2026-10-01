@@ -4,9 +4,11 @@ import datetime as dt
 import json
 import sys
 import time
+import types
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from tests.helpers import RecordingUi, make_fake_claude
 from jarvis.brain import ClaudeBrain
@@ -113,6 +115,13 @@ class WorkshopRunTest(unittest.TestCase):
         self.assertEqual(args[args.index("--add-dir") + 1], str(job.folder))
         self.assertEqual(args[args.index("--effort") + 1], "medium")
         self.assertIn("TodoWrite", args)
+        # Der ganze Stand für das Fenster (nach einem Neuladen), als JSON übertragbar
+        snap = json.loads(json.dumps(self.workshop.snapshot()))
+        self.assertEqual((snap["state"], snap["task"], snap["folder"]),
+                         ("done", "Bau mir einen Discord-Bot, der Hallo sagt", str(job.folder)))
+        self.assertEqual([t["text"] for t in snap["todos"]], ["Ordner anlegen", "Bot schreiben", "Testen"])
+        self.assertEqual({s["state"] for s in snap["steps"]}, {"done"})
+        self.assertTrue(snap["summary"].startswith("Der Bot ist fertig"))
 
     def test_one_job_at_a_time_and_status_and_cancel(self):
         self.workshop.start("Bau mir ein langsames Spiel")
@@ -123,6 +132,67 @@ class WorkshopRunTest(unittest.TestCase):
         self.wait()
         self.assertEqual(self.workshop.job.state, "cancelled")
         self.assertIn("abgebrochen", self.said[-1])
+
+
+class WindowApiTest(unittest.TestCase):
+    """Was das Fenster in der Werkstatt aufrufen darf: Stand, Stopp, Ordner öffnen."""
+
+    def setUp(self):
+        from jarvis.gui.app import Api, GuiBridge
+
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name) / "Jarvis-Werkstatt"
+        self.base.mkdir()
+        self.said = []
+        self.shop = Workshop({"werkstatt": {"ordner": str(self.base)}}, None, RecordingUi(), self.said.append)
+        self.api = Api(GuiBridge(), types.SimpleNamespace(workshop=self.shop), mute=None)
+
+    def test_nothing_to_show_or_stop_without_a_job(self):
+        self.assertIsNone(self.api.workshop_state())
+        self.assertFalse(self.api.workshop_cancel())
+        self.assertIsNone(api_without_workshop().workshop_state())
+
+    def test_state_of_a_finished_job(self):
+        from jarvis.steps import describe
+        from jarvis.workshop import Job
+
+        job = Job("Bau mir ein Spiel", self.base / "2026-10-01_1530_spiel")
+        step = describe("t1", "Write", {"file_path": str(job.folder / "spiel.py")})
+        step.finish()
+        job.steps.append(step)
+        job.todos = [{"text": "Spiel schreiben", "state": "completed"}]
+        self.shop.job = job
+        self.shop._finish(job, "done", "Das Spiel ist fertig, Sir. Starten Sie es mit start.bat.")
+        snap = json.loads(json.dumps(self.api.workshop_state()))
+        self.assertEqual(snap["state"], "done")
+        self.assertEqual(snap["steps"][0]["label"], "Schreibt spiel.py")
+        self.assertEqual(snap["todos"], [{"text": "Spiel schreiben", "state": "completed"}])
+        self.assertRegex(snap["begun"], r"^\d\d:\d\d$")
+        self.assertGreaterEqual(snap["seconds"], 0)
+        self.assertFalse(self.api.workshop_cancel(), "fertige Arbeit lässt sich nicht mehr stoppen")
+        self.assertTrue(self.said[-1].startswith("Aus der Werkstatt: Das Spiel ist fertig"))
+
+    def test_open_folder_only_for_project_folders(self):
+        project = self.base / "2026-10-01_1530_spiel"
+        project.mkdir()
+        outside = Path(self.tmp.name) / "anderswo"
+        outside.mkdir()
+        with mock.patch("os.startfile", create=True) as start, mock.patch("subprocess.Popen") as popen:
+            self.assertTrue(self.api.open_folder(str(project)))
+            self.assertFalse(self.api.open_folder(str(outside)))
+            self.assertFalse(self.api.open_folder(str(self.base / ".." / "anderswo")))
+            self.assertFalse(self.api.open_folder(str(self.base)))
+            self.assertFalse(self.api.open_folder(str(project / "fehlt")))
+            self.assertFalse(self.api.open_folder(""))
+            self.assertFalse(self.api.open_folder(None))
+        self.assertEqual(start.call_count + popen.call_count, 1, "nur der Projektordner wurde geöffnet")
+
+
+def api_without_workshop():
+    from jarvis.gui.app import Api, GuiBridge
+
+    return Api(GuiBridge(), types.SimpleNamespace(), mute=None)
 
 
 class AssistantWorkshopTest(unittest.TestCase):

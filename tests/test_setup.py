@@ -429,7 +429,7 @@ class SetupPageTest(unittest.TestCase):
         missing = sorted(name for name in called if not callable(getattr(setup_wizard.SetupApi, name, None)))
         self.assertEqual(missing, [])
         for page, assets in (("setup.html", ("base.css", "setup.css", "setup.js")),
-                             ("index.html", ("base.css", "style.css", "app.js"))):
+                             ("index.html", ("base.css", "style.css", "werkstatt.css", "werkstatt.js", "app.js"))):
             html = (WEB_DIR / page).read_text(encoding="utf-8")
             for asset in assets:
                 self.assertIn(asset, html, page)

@@ -17,6 +17,15 @@
   const motionMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const reducedMotion = () => !!(motionMQ && motionMQ.matches);
 
+  // 2,4 s · 12 s · 1:05 min
+  function fmtSecs(value) {
+    const v = Math.max(0, Number(value) || 0);
+    if (v < 10) return v.toFixed(1).replace('.', ',') + ' s';
+    if (v < 59.5) return Math.round(v) + ' s';
+    const total = Math.round(v);
+    return Math.floor(total / 60) + ':' + pad2(total % 60) + ' min';
+  }
+
   const STATES = ['idle', 'listening', 'thinking', 'speaking', 'muted', 'error'];
   const LABELS = {
     idle: 'Bereit',
@@ -46,11 +55,13 @@
     subtitleTimer: 0,
     hintTimer: 0,
     gaming: false,
+    cpuHistory: [],       // Prozessor der letzten zwei Minuten (alle 2 s ein Wert)
   };
 
   let api = null;
   let bridgeGen = 0;
   let pollFails = 0;
+  let Werkstatt = null; // Ansicht für Programmier-Aufträge (werkstatt.js)
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -67,6 +78,9 @@
     reminders: () => window.pywebview.api.reminders(),
     toggle_gaming: () => window.pywebview.api.toggle_gaming(),
     touched: () => window.pywebview.api.touched(),
+    workshop_state: () => window.pywebview.api.workshop_state(),
+    workshop_cancel: () => window.pywebview.api.workshop_cancel(),
+    open_folder: (path) => window.pywebview.api.open_folder(path),
   };
 
   function call(name, ...args) {
@@ -96,9 +110,11 @@
     clockTime: $('clockTime'),
     clockDate: $('clockDate'),
     cpuNum: $('cpuNum'),
-    cpuBar: $('cpuBar'),
+    cpuRing: $('cpuRing'),
     ramNum: $('ramNum'),
-    ramBar: $('ramBar'),
+    ramRing: $('ramRing'),
+    sparkLine: $('sparkLine'),
+    sparkFill: $('sparkFill'),
     micName: $('micName'),
     micHint: $('micHint'),
     listenKey: $('listenKey'),
@@ -110,6 +126,8 @@
     field: $('field'),
     stateLabel: $('stateLabel'),
     stateHint: $('stateHint'),
+    status: document.querySelector('.status'),
+    activity: $('activity'),
     subtitles: $('subtitles'),
     subUser: $('subUser'),
     subJarvis: $('subJarvis'),
@@ -204,26 +222,39 @@
     }[state];
   }
 
+  // Beim Nachdenken steht oben, was Jarvis gerade wirklich tut ("Installiert Spotify")
+  function labelFor(state) {
+    const run = state === 'thinking' ? Activity.running() : null;
+    return run ? String(run.label || LABELS[state]) : LABELS[state];
+  }
+
+  function setLabel(text, force) {
+    if (el.stateLabel.textContent === text && !force) return;
+    el.stateLabel.textContent = text;
+    el.stateLabel.title = text;
+    el.stateLabel.classList.remove('swap');
+    void el.stateLabel.offsetWidth;
+    el.stateLabel.classList.add('swap');
+  }
+
   function renderState(force) {
     const state = effectiveState();
     if (state === S.shown && !force) return;
     S.shown = state;
     el.body.dataset.state = state;
-    el.stateLabel.textContent = LABELS[state];
-    el.stateLabel.classList.remove('swap');
-    void el.stateLabel.offsetWidth;
-    el.stateLabel.classList.add('swap');
+    setLabel(labelFor(state), force);
     if (!S.hintTimer) el.stateHint.textContent = hintFor(state);
     el.stopBtn.disabled = !(state === 'speaking' || state === 'thinking');
     Core.setState(state);
     if (state === 'listening') {
-      // Neue Frage: alte Untertitel weg
+      // Neue Frage: alte Untertitel und Schritte weg
       clearTimeout(S.subtitleTimer);
       el.subtitles.classList.remove('fade');
       el.subUser.textContent = '';
       setJarvisText('');
+      Activity.reset();
     }
-    if (state === 'idle' && el.subJarvis.textContent) scheduleSubtitleFade();
+    if (state === 'idle' && (el.subJarvis.textContent || Activity.count())) scheduleSubtitleFade();
   }
 
   function applyState(value) {
@@ -279,11 +310,13 @@
     S.subtitleTimer = setTimeout(() => {
       if (effectiveState() !== 'idle') return;
       el.subtitles.classList.add('fade');
+      Activity.fade();
       setTimeout(() => {
         if (!el.subtitles.classList.contains('fade')) return;
         el.subUser.textContent = '';
         setJarvisText('');
         el.subtitles.classList.remove('fade');
+        Activity.reset();
       }, 650);
     }, 14000);
   }
@@ -330,6 +363,7 @@
       el.subtitles.classList.remove('fade');
       el.subUser.textContent = text;
       setJarvisText('');
+      Activity.reset();
     } else if (role === 'jarvis') {
       clearTimeout(S.subtitleTimer);
       el.subtitles.classList.remove('fade');
@@ -383,6 +417,144 @@
     }
   }
 
+  // ------------------------------------------------------------------ Arbeitsschritte
+
+  const MARK_PATHS = {
+    done: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    error: '<path d="M7 7l10 10M17 7 7 17"/>',
+  };
+  const MARK_WORDS = { running: 'läuft', done: 'erledigt', error: 'Fehler' };
+
+  // Zustandszeichen: drehender Ring, Haken oder Kreuz (nie nur Farbe)
+  function markFor(state) {
+    const span = document.createElement('span');
+    span.className = 'mark mark-' + (state === 'running' ? 'run' : state);
+    span.setAttribute('role', 'img');
+    span.setAttribute('aria-label', MARK_WORDS[state] || '');
+    if (MARK_PATHS[state]) {
+      const ico = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      ico.setAttribute('viewBox', '0 0 24 24');
+      ico.innerHTML = MARK_PATHS[state];
+      span.append(ico);
+    }
+    return span;
+  }
+
+  // Unter den Untertiteln: was Jarvis für diese Frage tut, höchstens drei Zeilen.
+  const Activity = (() => {
+    const steps = new Map(); // id -> {data, el, firstSeen}
+    const more = document.createElement('li');
+    more.className = 'act-more';
+    let timer = 0;
+
+    function count() {
+      return steps.size;
+    }
+
+    function running() {
+      let found = null;
+      for (const item of steps.values()) if (item.data.state === 'running') found = item.data;
+      return found;
+    }
+
+    function row() {
+      const li = document.createElement('li');
+      li.className = 'act';
+      const label = document.createElement('span');
+      label.className = 'act-label';
+      const time = document.createElement('span');
+      time.className = 'act-time';
+      li.append(document.createElement('span'), label, time);
+      return li;
+    }
+
+    function paint(item) {
+      const d = item.data;
+      const state = ['running', 'done', 'error'].includes(d.state) ? d.state : 'done';
+      if (item.el.dataset.state !== state) {
+        item.el.dataset.state = state;
+        item.el.firstElementChild.replaceWith(markFor(state));
+      }
+      const label = String(d.label || 'Arbeitet');
+      item.el.querySelector('.act-label').textContent = label;
+      item.el.title = d.detail ? label + ' · ' + d.detail : label;
+      item.el.querySelector('.act-time').textContent = state === 'running'
+        ? fmtSecs((Date.now() - item.firstSeen) / 1000)
+        : fmtSecs(d.seconds);
+    }
+
+    function layout() {
+      const items = [...steps.values()];
+      const extra = items.length - 3;
+      items.forEach((item, i) => {
+        item.el.hidden = i < extra;
+        item.el.classList.toggle('old', i < items.length - 1 && item.data.state !== 'running');
+      });
+      if (extra > 0) {
+        more.textContent = '+ ' + extra + (extra === 1 ? ' früherer Schritt' : ' frühere Schritte');
+        if (more.parentNode !== el.activity) el.activity.prepend(more);
+      } else {
+        more.remove();
+      }
+    }
+
+    function tick() {
+      for (const item of steps.values()) if (item.data.state === 'running') paint(item);
+    }
+
+    function sync() {
+      const busy = !!running();
+      if (busy && !timer) timer = setInterval(tick, 1000);
+      if (!busy && timer) {
+        clearInterval(timer);
+        timer = 0;
+      }
+    }
+
+    function update(data) {
+      if (!data || typeof data !== 'object' || data.id == null) return;
+      const id = String(data.id);
+      let item = steps.get(id);
+      if (!item) {
+        item = { data: {}, el: row(), firstSeen: Date.now() - (Number(data.seconds) || 0) * 1000 };
+        steps.set(id, item);
+        el.activity.append(item.el);
+      }
+      item.data = Object.assign({}, item.data, data);
+      paint(item);
+      layout();
+      el.activity.classList.remove('fade');
+      el.status.classList.add('busy');
+      sync();
+      if (effectiveState() === 'thinking') setLabel(labelFor('thinking'));
+    }
+
+    function reset() {
+      steps.clear();
+      more.remove();
+      el.activity.replaceChildren();
+      el.activity.classList.remove('fade');
+      el.status.classList.remove('busy');
+      sync();
+      if (effectiveState() === 'thinking') setLabel(labelFor('thinking'));
+    }
+
+    function fade() {
+      el.activity.classList.add('fade');
+    }
+
+    return { update, reset, running, count, fade };
+  })();
+
+  function onProgress(step) {
+    if (!step || typeof step !== 'object') return;
+    if (step.workshop) {
+      if (Werkstatt) Werkstatt.step(step);
+      return;
+    }
+    Activity.update(step);
+  }
+
   // ------------------------------------------------------------------ Heute (Erinnerungen)
 
   let todayTimer = 0;
@@ -415,12 +587,27 @@
 
   // ------------------------------------------------------------------ System, Mikrofon, Gaming
 
-  function setMeter(num, bar, value) {
+  function setGauge(num, ring, value) {
     if (typeof value !== 'number' || !isFinite(value)) return;
     const v = clamp(value, 0, 100);
-    num.textContent = Math.round(v) + ' %';
-    bar.style.width = v.toFixed(1) + '%';
-    bar.classList.toggle('high', v >= 85);
+    num.textContent = String(Math.round(v));
+    num.dataset.v = '1';
+    ring.style.strokeDasharray = v.toFixed(1) + ' 100';
+    ring.classList.toggle('high', v >= 85);
+  }
+
+  // Verlaufslinie des Prozessors: die neuesten Werte rechts
+  function pushCpu(value) {
+    if (typeof value !== 'number' || !isFinite(value)) return;
+    S.cpuHistory.push(clamp(value, 0, 100));
+    if (S.cpuHistory.length > 60) S.cpuHistory.shift();
+    const n = S.cpuHistory.length;
+    if (n < 2) return;
+    const step = 120 / 59;
+    const pts = S.cpuHistory.map((v, i) => [120 - (n - 1 - i) * step, 27 - (v / 100) * 24]);
+    const line = pts.map((pt, i) => (i ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1)).join(' ');
+    el.sparkLine.setAttribute('d', line);
+    el.sparkFill.setAttribute('d', line + ' L120 28 L' + pts[0][0].toFixed(1) + ' 28 Z');
   }
 
   function applyConfig(c) {
@@ -476,10 +663,16 @@
     switch (ev.type) {
       case 'state': applyState(String(ev.value || '')); break;
       case 'message': addMessage(ev.role, ev.text, ev.id, ev.final); break;
+      case 'progress': onProgress(ev.step); break;
+      case 'workshop': if (Werkstatt) Werkstatt.handle(ev); break;
       case 'level': S.level = clamp(Number(ev.value) || 0, 0, 1); Core.level(S.level); break;
       case 'toast': toast(ev.text, ev.kind); break;
       case 'config': applyConfig(ev); break;
-      case 'stats': setMeter(el.cpuNum, el.cpuBar, ev.cpu); setMeter(el.ramNum, el.ramBar, ev.ram); break;
+      case 'stats':
+        setGauge(el.cpuNum, el.cpuRing, ev.cpu);
+        setGauge(el.ramNum, el.ramRing, ev.ram);
+        pushCpu(ev.cpu);
+        break;
       default: break;
     }
   }
@@ -510,6 +703,7 @@
     } catch {
       /* egal, die Ereignisse kommen trotzdem */
     }
+    syncWorkshop();
     refreshToday();
     setInterval(refreshToday, 60000);
     pollLoop(gen);
@@ -531,6 +725,13 @@
   }
 
   function bindUi() {
+    // Schmales Fenster: kürzerer Platzhalter, damit er nicht abgeschnitten wird
+    const narrow = window.matchMedia ? window.matchMedia('(max-width: 480px)') : null;
+    const placeholder = () => {
+      el.input.placeholder = narrow && narrow.matches ? 'Nachricht …' : 'Schreib Jarvis etwas …';
+    };
+    placeholder();
+    if (narrow && narrow.addEventListener) narrow.addEventListener('change', placeholder);
     el.input.addEventListener('input', () => {
       el.sendBtn.disabled = !el.input.value.trim();
     });
@@ -630,10 +831,22 @@
     }
   }
 
+  // Läuft gerade etwas in der Werkstatt? (nach dem Verbinden und wenn das Fenster wieder erscheint)
+  async function syncWorkshop() {
+    if (!Werkstatt) return;
+    try {
+      const snap = await call('workshop_state');
+      if (snap && typeof snap === 'object') Werkstatt.load(snap);
+    } catch {
+      /* ältere Version ohne Werkstatt */
+    }
+  }
+
   // Python ruft das auf, wenn das versteckte Fenster wieder erscheint.
   window.jarvisShown = () => {
     Core.boot();
     renderRecent();
+    syncWorkshop();
   };
 
   // ==================================================================
@@ -674,6 +887,8 @@
     }));
     const BARS = 96;
     const seeds = Array.from({ length: BARS }, () => Math.random() * 1000);
+    const RING_TEXT = 'J.A.R.V.I.S. · JUST A RATHER VERY INTELLIGENT SYSTEM ·'.split('');
+    const MONO = '"Cascadia Mono", Consolas, ui-monospace, monospace';
 
     const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
 
@@ -712,6 +927,12 @@
     }
 
     function frame(now) {
+      if (document.body.dataset.view === 'workshop') {
+        // Die Werkstatt liegt darüber: nicht zeichnen, nur ab und zu nachsehen
+        last = now;
+        setTimeout(() => requestAnimationFrame(frame), 250);
+        return;
+      }
       const dt = Math.min(0.05, (now - (last || now)) / 1000);
       last = now;
       t += dt;
@@ -781,6 +1002,27 @@
         ctx.stroke();
       }
       ctx.restore();
+
+      // Umlaufende Schrift ganz außen
+      if (ease > 0.6) {
+        const fontPx = Math.max(7, R * 0.032);
+        ctx.save();
+        ctx.rotate(-angle * 0.05 - 2.2);
+        ctx.font = `600 ${fontPx.toFixed(1)}px ${MONO}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = rgba(c, 0.42 * (ease - 0.6) / 0.4);
+        const rr = R * 0.992;
+        const stepA = (fontPx * 0.95) / rr;
+        for (let i = 0; i < RING_TEXT.length; i += 1) {
+          ctx.save();
+          ctx.rotate(i * stepA);
+          ctx.translate(0, -rr);
+          ctx.fillText(RING_TEXT[i], 0, 0);
+          ctx.restore();
+        }
+        ctx.restore();
+      }
 
       // Segment-Ring
       ctx.save();
@@ -876,6 +1118,18 @@
         ctx.fill();
       }
 
+      // Spulenring wie beim Arc-Reaktor: zehn Blöcke, leuchten mit der Stimme
+      ctx.save();
+      ctx.rotate(-angle * 0.18);
+      ctx.lineCap = 'butt';
+      const coils = 10;
+      for (let i = 0; i < coils; i += 1) {
+        const a0 = (i / coils) * Math.PI * 2 + 0.05;
+        const glowK = 0.16 + 0.22 * look.energy + 0.3 * lv * look.wave;
+        arc(R * 0.555, a0, a0 + (Math.PI * 2 / coils) * 0.72 * ease, R * 0.04, rgba(c, glowK * ease));
+      }
+      ctx.restore();
+
       // Innerer Kern
       const breath = 0.5 + 0.5 * Math.sin(t * 1.8);
       const coreR = R * (0.3 + 0.035 * breath * look.energy + 0.07 * lv * look.wave) * (0.6 + 0.4 * ease);
@@ -951,16 +1205,21 @@
     function frame(now) {
       const dt = Math.min(0.1, (now - (last || now)) / 1000);
       last = now;
+      if (document.body.dataset.view === 'workshop') {
+        setTimeout(() => requestAnimationFrame(frame), 250);
+        return;
+      }
       ctx.clearRect(0, 0, w, h);
       const core = el.coreWrap.getBoundingClientRect();
       const cx = (core.left + core.width / 2) * dpr;
       const cy = (core.top + core.height / 2) * dpr;
+      const coreSize = Math.min(core.width, core.height);
       const color = getComputedStyle(document.body).getPropertyValue('--glow').trim() || '76, 157, 255';
       // feine Kreise um den Kern
       ctx.lineWidth = 1 * dpr;
       for (let i = 1; i <= 4; i += 1) {
         ctx.beginPath();
-        ctx.arc(cx, cy, core.width * dpr * (0.5 + i * 0.28), 0, Math.PI * 2);
+        ctx.arc(cx, cy, coreSize * dpr * (0.5 + i * 0.28), 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(${color}, ${0.05 - i * 0.008})`;
         ctx.stroke();
       }
@@ -1005,12 +1264,24 @@
     let muted = false;
     let gaming = false;
     let gen = 0;
+    // [Frage, Antwort, Arbeitsschritte dazwischen]
     const CONVO = [
-      ['Öffne Spotify', 'Spotify läuft, Sir.'],
-      ['Wie wird das Wetter morgen?', 'Morgen in Wien bis zu 18 Grad und meist sonnig, Sir. Ein Schirm wäre übertrieben.'],
+      ['Öffne Spotify', 'Spotify läuft, Sir.', [{ label: 'Öffnet Spotify', kind: 'app', ms: 500 }]],
+      ['Wie wird das Wetter morgen?', 'Morgen in Wien bis zu 18 Grad und meist sonnig, Sir. Ein Schirm wäre übertrieben.', [
+        { label: 'Sucht im Netz: Wetter Wien morgen', kind: 'web', ms: 1300 },
+        { label: 'Liest wetter.orf.at', kind: 'web', ms: 900 },
+      ]],
       ['Mach den Gaming-Modus an', 'Gaming-Modus aktiv, Sir. Volle Leistung, und ich halte mich im Hintergrund. Viel Erfolg.'],
       ['Wer bist du eigentlich?', 'Jarvis, Sir. Butler, Techniker und gelegentlich die Stimme der Vernunft.'],
     ];
+    const shopMode = (params.get('werkstatt') || '').toLowerCase();
+    let shop = null;
+    const startShop = (mode) => {
+      if (!window.JarvisWerkstatt) return;
+      if (shop) shop.cancel();
+      shop = window.JarvisWerkstatt.demo(push, mode);
+      shop.start();
+    };
     let turn = 0;
     let cpu = 18;
     let ram = 46;
@@ -1025,7 +1296,7 @@
       }
     }
 
-    async function exchange(g, question, answer, spoken) {
+    async function exchange(g, question, answer, spoken, steps) {
       if (spoken) {
         state('listening');
         await levels(1600, 0.7);
@@ -1033,7 +1304,20 @@
       }
       push({ type: 'message', role: 'user', text: question });
       state('thinking');
-      await sleep(1100);
+      if (steps && steps.length) {
+        await sleep(350);
+        for (const st of steps) {
+          const id = 'd' + Math.random().toString(36).slice(2);
+          const base = { id, tool: 'PowerShell', label: st.label, detail: st.detail || '', kind: st.kind || 'command' };
+          push({ type: 'progress', step: Object.assign({ state: 'running', seconds: 0 }, base) });
+          await sleep(st.ms || 900);
+          if (g !== gen) return;
+          push({ type: 'progress', step: Object.assign({ state: 'done', seconds: (st.ms || 900) / 1000 }, base) });
+        }
+        await sleep(250);
+      } else {
+        await sleep(1100);
+      }
       if (g !== gen) return;
       state('speaking');
       const id = 'd' + Math.random().toString(36).slice(2);
@@ -1053,9 +1337,9 @@
       while (g === gen) {
         await sleep(3800);
         if (g !== gen || muted) return;
-        const [q, a] = CONVO[turn % CONVO.length];
+        const [q, a, steps] = CONVO[turn % CONVO.length];
         turn += 1;
-        await exchange(g, q, a, true);
+        await exchange(g, q, a, true, steps);
       }
     }
 
@@ -1068,8 +1352,10 @@
         state('listening');
         setInterval(() => push({ type: 'level', value: 0.3 + Math.random() * 0.5 }), 60);
       } else if (freeze === 'thinking') {
-        push({ type: 'message', role: 'user', text: CONVO[1][0] });
+        push({ type: 'message', role: 'user', text: 'Installier mir bitte Spotify' });
         state('thinking');
+        push({ type: 'progress', step: { id: 'f1', tool: 'PowerShell', label: 'Sucht nach Programmen', detail: 'winget search Spotify', kind: 'search', state: 'done', seconds: 1.2 } });
+        push({ type: 'progress', step: { id: 'f2', tool: 'PowerShell', label: 'Installiert Spotify', detail: 'winget install --id Spotify.Spotify', kind: 'install', state: 'running', seconds: 3.4 } });
       } else if (freeze === 'speaking') {
         push({ type: 'message', role: 'user', text: CONVO[1][0] });
         push({ type: 'message', role: 'jarvis', id: 'f3', text: CONVO[1][1], final: false });
@@ -1094,8 +1380,15 @@
         gen += 1;
         const g = gen;
         const t = String(text || '').trim();
+        if (/^(bau|programmier|schreib mir ein (skript|programm|tool))|werkstatt/i.test(t)) {
+          // Bauaufträge gehen in die Werkstatt, wie bei Jarvis selbst
+          exchange(g, t, 'Sehr wohl, Sir. Ich gehe in die Werkstatt. Sie können mir im Fenster zusehen.', false)
+            .then(() => startShop('live'));
+          return Promise.resolve(true);
+        }
         const known = CONVO.find(([q]) => q.toLowerCase() === t.toLowerCase());
-        exchange(g, t, known ? known[1] : 'Im Demo-Modus spiele ich nur vor, Sir. Verbunden mit Jarvis erledige ich das sofort.', false)
+        exchange(g, t, known ? known[1] : 'Im Demo-Modus spiele ich nur vor, Sir. Verbunden mit Jarvis erledige ich das sofort.', false,
+          known ? known[2] : null)
           .then(() => { if (g === gen && !freeze) cycle(g); });
         return Promise.resolve(true);
       },
@@ -1117,9 +1410,9 @@
         if (muted) return Promise.resolve({ ok: false, reason: 'muted' });
         gen += 1;
         const g = gen;
-        const [q, a] = CONVO[turn % CONVO.length];
+        const [q, a, steps] = CONVO[turn % CONVO.length];
         turn += 1;
-        exchange(g, q, a, true).then(() => { if (g === gen && !freeze) cycle(g); });
+        exchange(g, q, a, true, steps).then(() => { if (g === gen && !freeze) cycle(g); });
         return Promise.resolve({ ok: true, reason: '' });
       },
       new_conversation: () => Promise.resolve(true),
@@ -1134,6 +1427,14 @@
         push({ type: 'config', gaming });
         return Promise.resolve(gaming);
       },
+      touched: () => Promise.resolve(null),
+      workshop_state: () => Promise.resolve(null),
+      workshop_cancel: () => {
+        if (!shop) return Promise.resolve(false);
+        shop.cancel();
+        return Promise.resolve(true);
+      },
+      open_folder: () => Promise.reject(new Error('Demo')),
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
@@ -1141,8 +1442,16 @@
           push({ type: 'stats', cpu, ram });
         }, 2000);
         push({ type: 'stats', cpu, ram });
+        if (shopMode) {
+          // ?werkstatt=live|running|done|error: ein Auftrag zum Zuschauen
+          setTimeout(() => startShop(shopMode), ['running', 'done', 'error'].includes(shopMode) ? 0 : 900);
+        }
         if (freeze) {
           frozen();
+        } else if (shopMode) {
+          push({ type: 'message', role: 'user', text: 'Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt' });
+          push({ type: 'message', role: 'jarvis', id: 'w0', text: 'Sehr wohl, Sir. Ich gehe in die Werkstatt. Sie können mir im Fenster zusehen.', final: true });
+          state('idle');
         } else {
           push({ type: 'message', role: 'jarvis', id: 'begruessung', text: 'Guten Tag, Sir. Draußen 14 Grad und leicht bewölkt. Heute stehen noch zwei Erinnerungen an.', final: true });
           gen += 1;
@@ -1155,6 +1464,7 @@
   // ------------------------------------------------------------------ Start
 
   function boot() {
+    if (window.JarvisWerkstatt) Werkstatt = window.JarvisWerkstatt.create({ call, toast });
     bindUi();
     tickClock();
     Core.start(el.core);

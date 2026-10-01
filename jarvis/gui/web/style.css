@@ -1,17 +1,19 @@
 /* ==========================================================================
-   Jarvis – Hauptfenster im HUD-Stil
-   Ein lebendiger Kern in der Mitte, Untertitel statt Chat-Blasen, links das
-   System, rechts der Tag und der Verlauf. Eine Akzentfarbe (Blau), Grün/Rot nur
-   für Status. Abstände im 4er-Raster, drei Textgrößen.
+   Jarvis – Hauptfenster im Hologramm-Stil
+   Ein lebendiger Kern in der Mitte, Untertitel statt Chat-Blasen, darunter die
+   Arbeitsschritte. Links das System, rechts der Tag und der Verlauf.
+   Hologramm: Glas mit abgeschrägten Ecken, feine Leuchtkanten, Punktraster und
+   ein langsamer Scan. Eine Akzentfarbe (Blau), Grün/Orange/Rot nur für Status.
+   Abstände im 4er-Raster, drei Textgrößen.
    ========================================================================== */
 
 :root {
-  --hud-bg: #080b11;
-  --panel: rgba(16, 21, 30, 0.58);
-  --panel-hover: rgba(20, 26, 37, 0.7);
+  --hud-bg: #070a10;
+  --panel: rgba(14, 19, 28, 0.6);
+  --panel-hover: rgba(18, 25, 37, 0.72);
   --stroke: rgba(120, 170, 255, 0.14);
   --glow: 76, 157, 255;
-  --cyan: #56d6ff;
+  --cut: 14px;
 }
 
 body {
@@ -51,15 +53,48 @@ body[data-state="error"] {
   pointer-events: none;
 }
 
+/* Feines Punktraster, das zur Mitte hin sichtbar wird */
+.holo-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(var(--glow), 0.5) 0.7px, transparent 1.3px);
+  background-position: center;
+  background-size: 24px 24px;
+  opacity: 0.32;
+  -webkit-mask-image: radial-gradient(ellipse 58% 62% at 50% 44%, #000 0%, rgba(0, 0, 0, 0.4) 55%, transparent 88%);
+  mask-image: radial-gradient(ellipse 58% 62% at 50% 44%, #000 0%, rgba(0, 0, 0, 0.4) 55%, transparent 88%);
+  transition: opacity 600ms var(--ease);
+}
+
+body[data-state="thinking"] .holo-grid {
+  opacity: 0.5;
+}
+
 .vignette {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(900px 640px at 50% 46%, rgba(var(--glow), 0.1), transparent 70%),
-    radial-gradient(1400px 900px at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55));
+    radial-gradient(900px 640px at 50% 44%, rgba(var(--glow), 0.1), transparent 70%),
+    radial-gradient(1400px 900px at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.6));
   transition: background 600ms var(--ease);
+}
+
+/* Ein heller Streifen wandert langsam über das Bild, wie bei einer Projektion */
+.holo-scan {
+  position: fixed;
+  top: -24vh;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: 24vh;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(var(--glow), 0.02) 70%, rgba(var(--glow), 0.055) 97%, transparent);
+  mix-blend-mode: screen;
+  animation: holo-scan 11s linear infinite;
 }
 
 /* ------------------------------------------------------------------ Raster */
@@ -103,7 +138,7 @@ body[data-state="error"] {
   flex: none;
   fill: none;
   stroke: var(--accent);
-  stroke-width: 1.8;
+  stroke-width: 1.6;
   filter: drop-shadow(0 0 6px rgba(var(--glow), 0.6));
 }
 
@@ -111,6 +146,7 @@ body[data-state="error"] {
   font: 600 13px/1 var(--font-display);
   letter-spacing: 0.32em;
   color: var(--text);
+  text-shadow: 0 0 12px rgba(var(--glow), 0.45);
 }
 
 .link {
@@ -118,7 +154,7 @@ body[data-state="error"] {
   align-items: center;
   gap: 8px;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-3);
   font-size: var(--fs-hint);
@@ -148,6 +184,7 @@ body[data-link="offline"] .link-dot {
   display: flex;
   align-items: center;
   gap: 24px;
+  min-width: 0;
 }
 
 .weather {
@@ -156,6 +193,7 @@ body[data-link="offline"] .link-dot {
   gap: 8px;
   color: var(--text-2);
   font-size: var(--fs-body);
+  white-space: nowrap;
 }
 
 .clock {
@@ -176,6 +214,76 @@ body[data-link="offline"] .link-dot {
   margin-top: 4px;
   color: var(--text-3);
   font-size: var(--fs-hint);
+  white-space: nowrap;
+}
+
+/* Werkstatt läuft: kleiner Knopf oben, führt zur Blaupause */
+.ws-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(var(--glow), 0.1);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.32);
+  font-size: var(--fs-hint);
+  animation: rise 200ms var(--ease) both;
+  transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+
+.ws-pill:hover {
+  background: rgba(var(--glow), 0.18);
+  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.6), 0 0 18px rgba(var(--glow), 0.25);
+}
+
+.ws-pill .ico {
+  width: 16px;
+  height: 16px;
+  color: var(--accent-text);
+}
+
+.ws-pill-text {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-pill-time {
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-pill[data-state="running"] .ico {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+.ws-pill[data-state="done"] {
+  background: var(--ok-soft);
+  box-shadow: inset 0 0 0 1px rgba(63, 185, 104, 0.45);
+}
+
+.ws-pill[data-state="done"] .ico {
+  color: var(--ok);
+}
+
+.ws-pill[data-state="error"] {
+  background: var(--err-soft);
+  box-shadow: inset 0 0 0 1px rgba(240, 85, 90, 0.45);
+}
+
+.ws-pill[data-state="error"] .ico {
+  color: var(--err);
+}
+
+.ws-pill[data-state="cancelled"] {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 /* ------------------------------------------------------------------ Seitenleisten */
@@ -197,7 +305,12 @@ body[data-link="offline"] .link-dot {
   grid-area: right;
 }
 
+/* Hologramm-Glas: oben rechts und unten links abgeschrägt (mit Leuchtkante),
+   oben links und unten rechts feine Winkel. Dazu kaum sichtbare Zeilen. */
 .panel {
+  --pbg: var(--panel);
+  --edge: rgba(var(--glow), 0.5);
+  --diag: calc(var(--cut) * 0.7071);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -205,14 +318,24 @@ body[data-link="offline"] .link-dot {
   min-height: 0;
   padding: 16px;
   border-radius: var(--r-l);
-  background: var(--panel);
+  background:
+    linear-gradient(225deg, transparent calc(var(--diag) - 0.8px), var(--edge) calc(var(--diag) - 0.8px),
+      var(--edge) calc(var(--diag) + 0.6px), transparent calc(var(--diag) + 0.6px)) top right / calc(var(--cut) + 1px) calc(var(--cut) + 1px) no-repeat,
+    linear-gradient(45deg, transparent calc(var(--diag) - 0.8px), var(--edge) calc(var(--diag) - 0.8px),
+      var(--edge) calc(var(--diag) + 0.6px), transparent calc(var(--diag) + 0.6px)) bottom left / calc(var(--cut) + 1px) calc(var(--cut) + 1px) no-repeat,
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, rgba(var(--glow), 0.07), transparent 96px),
+    var(--pbg);
+  box-shadow: inset 0 1px 0 rgba(var(--glow), 0.14);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
   backdrop-filter: blur(18px) saturate(130%);
   -webkit-backdrop-filter: blur(18px) saturate(130%);
-  transition: background var(--t) var(--ease), transform var(--t) var(--ease);
+  transform-origin: 50% 50%;
 }
 
 .panel:hover {
-  background: var(--panel-hover);
+  --pbg: var(--panel-hover);
+  --edge: rgba(var(--glow), 0.8);
 }
 
 /* HUD-Ecken: zwei feine Winkel statt eines Rahmens */
@@ -223,30 +346,30 @@ body[data-link="offline"] .link-dot {
   width: 14px;
   height: 14px;
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.75;
   transition: opacity var(--t) var(--ease), width var(--t) var(--ease), height var(--t) var(--ease);
 }
 
 .panel::before {
   top: 0;
   left: 0;
-  border-top: 1.5px solid rgba(var(--glow), 0.55);
-  border-left: 1.5px solid rgba(var(--glow), 0.55);
+  border-top: 1.5px solid rgba(var(--glow), 0.6);
+  border-left: 1.5px solid rgba(var(--glow), 0.6);
   border-top-left-radius: var(--r-l);
 }
 
 .panel::after {
   right: 0;
   bottom: 0;
-  border-right: 1.5px solid rgba(var(--glow), 0.55);
-  border-bottom: 1.5px solid rgba(var(--glow), 0.55);
+  border-right: 1.5px solid rgba(var(--glow), 0.6);
+  border-bottom: 1.5px solid rgba(var(--glow), 0.6);
   border-bottom-right-radius: var(--r-l);
 }
 
 .panel:hover::before,
 .panel:hover::after {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   opacity: 1;
 }
 
@@ -263,7 +386,6 @@ body[data-link="offline"] .link-dot {
 .panel-title {
   display: flex;
   align-items: center;
-  gap: 8px;
   margin: 0;
   color: var(--text-3);
   font: 600 11px/1 var(--font);
@@ -271,53 +393,130 @@ body[data-link="offline"] .link-dot {
   text-transform: uppercase;
 }
 
-.panel-title::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 2px;
-  background: rgba(var(--glow), 0.9);
-  box-shadow: 0 0 8px rgba(var(--glow), 0.8);
+.panel-no {
+  display: inline-flex;
+  align-items: center;
+  color: rgb(var(--glow));
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 8px rgba(var(--glow), 0.7);
 }
 
-.meter {
-  display: flex;
-  flex-direction: column;
+.panel-no::after {
+  content: "";
+  width: 12px;
+  height: 1px;
+  margin: 0 8px;
+  background: rgba(var(--glow), 0.55);
+}
+
+/* Rundinstrumente für Prozessor und Speicher */
+.gauges {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.meter-top {
-  display: flex;
-  justify-content: space-between;
+.gauge {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.gauge svg {
+  width: 76px;
+  height: 76px;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.g-ticks {
+  fill: none;
+  stroke: rgba(var(--glow), 0.3);
+  stroke-width: 3;
+  stroke-dasharray: 0.5 2.5;
+}
+
+.g-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 5;
+}
+
+.g-val {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 0 100;
+  filter: drop-shadow(0 0 4px rgba(76, 157, 255, 0.8));
+  transition: stroke-dasharray 600ms var(--ease), stroke 300ms var(--ease);
+}
+
+.g-val.high {
+  stroke: var(--warn);
+  filter: drop-shadow(0 0 4px rgba(240, 163, 58, 0.7));
+}
+
+.g-num {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  color: var(--text);
+  font: 300 var(--fs-head) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  transform: translate(-50%, -50%);
+}
+
+.g-num[data-v]::after {
+  content: "%";
+  margin-left: 1px;
+  color: var(--text-3);
+  font-size: var(--fs-hint);
+}
+
+.g-name {
   color: var(--text-2);
   font-size: var(--fs-hint);
 }
 
-.meter-num {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+.spark-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.bar {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.bar span {
+.spark {
   display: block;
-  width: 0;
-  height: 100%;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgba(76, 157, 255, 0.5), rgb(76, 157, 255));
-  box-shadow: 0 0 10px rgba(76, 157, 255, 0.6);
-  transition: width 600ms var(--ease);
+  width: 100%;
+  height: 28px;
 }
 
-.bar span.high {
-  background: linear-gradient(90deg, rgba(240, 163, 58, 0.6), var(--warn));
-  box-shadow: 0 0 10px rgba(240, 163, 58, 0.5);
+.spark-grid {
+  fill: none;
+  stroke: rgba(var(--glow), 0.12);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-line {
+  fill: none;
+  stroke: rgba(var(--glow), 0.9);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-fill {
+  fill: rgba(var(--glow), 0.12);
+  stroke: none;
+}
+
+.spark-label {
+  color: var(--text-3);
+  font-size: var(--fs-hint);
 }
 
 .row {
@@ -353,6 +552,7 @@ body[data-link="offline"] .link-dot {
 
 .side .link-btn {
   align-self: flex-start;
+  min-height: 24px;
   font-size: var(--fs-hint);
 }
 
@@ -382,6 +582,7 @@ body[data-link="offline"] .link-dot {
 
 .today time {
   color: var(--accent-text);
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
@@ -406,7 +607,13 @@ body[data-link="offline"] .link-dot {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  animation: rise 220ms var(--ease) both;
+  padding-left: 8px;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.08);
+  animation: rise 200ms var(--ease) both;
+}
+
+.recent li.jarvis {
+  border-left-color: rgba(var(--glow), 0.6);
 }
 
 .recent .who {
@@ -443,18 +650,21 @@ body[data-link="offline"] .link-dot {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
   min-height: 0;
   padding-bottom: 8px;
 }
 
+/* Der Kern lässt unten Platz für Untertitel und Arbeitsschritte. Wird es eng,
+   gibt er nach (die Zeichnung bleibt rund, object-fit unten). */
 .core-wrap {
   position: relative;
-  width: min(58vh, 100%, 560px);
+  width: min(calc(100vh - 340px), 100%, 560px);
+  min-width: 160px;
+  min-height: 160px;
   aspect-ratio: 1 / 1;
   flex: 0 1 auto;
-  min-height: 0;
   border-radius: 50%;
   cursor: pointer;
   outline-offset: 8px;
@@ -473,6 +683,7 @@ body[data-link="offline"] .link-dot {
   display: block;
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
 .status {
@@ -486,11 +697,15 @@ body[data-link="offline"] .link-dot {
 }
 
 .state {
+  max-width: 100%;
+  overflow: hidden;
   color: rgb(var(--glow));
-  font: 600 13px/1 var(--font);
+  font: 600 13px/1.2 var(--font);
   letter-spacing: 0.32em;
-  text-transform: uppercase;
+  text-overflow: ellipsis;
   text-shadow: 0 0 16px rgba(var(--glow), 0.7);
+  text-transform: uppercase;
+  white-space: nowrap;
   transition: color 300ms var(--ease);
 }
 
@@ -537,7 +752,8 @@ body[data-link="offline"] .link-dot {
   animation: word-in 320ms var(--ease) both;
 }
 
-.subtitles.fade {
+.subtitles.fade,
+.activity.fade {
   opacity: 0;
   transform: translateY(-4px);
   transition: opacity 600ms var(--ease), transform 600ms var(--ease);
@@ -547,6 +763,108 @@ body[data-link="offline"] .link-dot {
   margin: 0;
   color: var(--text-3);
   font-size: var(--fs-hint);
+}
+
+.status.busy .hint {
+  display: none;
+}
+
+/* Arbeitsschritte: was Jarvis gerade wirklich tut */
+.activity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity:empty {
+  display: none;
+}
+
+.act {
+  display: inline-grid;
+  grid-template-columns: 16px minmax(0, auto) auto;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, 100%);
+  min-height: 28px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 6px;
+  background: rgba(var(--glow), 0.05);
+  color: var(--text-2);
+  font-size: var(--fs-hint);
+  animation: act-in 180ms var(--ease) both;
+  transition: opacity 200ms var(--ease), background 200ms var(--ease), color 200ms var(--ease);
+}
+
+.act[data-state="running"] {
+  background: rgba(var(--glow), 0.1);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.28);
+}
+
+.act.old {
+  opacity: 0.6;
+}
+
+.act-label {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.act-time {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.act-more {
+  color: var(--text-3);
+  font-size: var(--fs-hint);
+}
+
+/* Zustandszeichen: Ring dreht sich, Haken, Kreuz */
+.mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.mark svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mark-run::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(var(--glow), 0.25);
+  border-top-color: rgb(var(--glow));
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.mark-done {
+  color: var(--ok);
+}
+
+.mark-error {
+  color: var(--err);
 }
 
 /* ------------------------------------------------------------------ Unten */
@@ -609,25 +927,51 @@ body[data-link="offline"] .link-dot {
 }
 
 .command {
+  --diag: 7.07px;
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
   max-width: 640px;
   height: 52px;
-  padding: 0 6px 0 18px;
-  border-radius: 12px;
-  background: var(--panel);
+  padding: 0 6px 0 16px;
+  border-radius: 10px;
+  background:
+    linear-gradient(225deg, transparent calc(var(--diag) - 0.8px), rgba(var(--glow), 0.5) calc(var(--diag) - 0.8px),
+      rgba(var(--glow), 0.5) calc(var(--diag) + 0.6px), transparent calc(var(--diag) + 0.6px)) top right / 11px 11px no-repeat,
+    linear-gradient(45deg, transparent calc(var(--diag) - 0.8px), rgba(var(--glow), 0.5) calc(var(--diag) - 0.8px),
+      rgba(var(--glow), 0.5) calc(var(--diag) + 0.6px), transparent calc(var(--diag) + 0.6px)) bottom left / 11px 11px no-repeat,
+    var(--panel);
+  box-shadow: inset 0 0 0 1px var(--stroke);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  box-shadow: inset 0 0 0 1px var(--stroke);
-  transition: box-shadow var(--t) var(--ease), background var(--t) var(--ease);
+  transition: box-shadow var(--t) var(--ease);
 }
 
 .command:focus-within {
-  background: var(--panel-hover);
-  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.6), 0 0 24px rgba(var(--glow), 0.18);
+  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.6), inset 0 0 24px rgba(var(--glow), 0.12);
+}
+
+/* Eingabe-Marke: ein kurzer Leuchtstrich, blinkt, solange das Feld leer ist */
+.command-mark {
+  width: 3px;
+  height: 18px;
+  flex: none;
+  border-radius: 2px;
+  background: rgb(var(--glow));
+  box-shadow: 0 0 10px rgba(var(--glow), 0.8);
+  opacity: 0.45;
+  transition: opacity var(--t) var(--ease);
+}
+
+.command:focus-within .command-mark {
+  opacity: 1;
+}
+
+.command:focus-within:has(input:placeholder-shown) .command-mark {
+  animation: pulse-dot 1.1s steps(2, jump-none) infinite;
 }
 
 .command input {
@@ -691,12 +1035,12 @@ body[data-link="offline"] .link-dot {
   display: flex;
   flex-direction: column;
   width: min(440px, 92vw);
-  background: rgba(13, 17, 25, 0.92);
+  background: rgba(11, 15, 23, 0.94);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.4), inset 1px 0 0 var(--stroke);
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.4), inset 1px 0 0 rgba(var(--glow), 0.25);
   transform: translateX(104%);
-  transition: transform 220ms var(--ease);
+  transition: transform 200ms var(--ease);
 }
 
 .drawer.open {
@@ -752,6 +1096,7 @@ body[data-link="offline"] .link-dot {
 .history li.jarvis {
   align-self: flex-start;
   background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 2px 0 0 rgba(var(--glow), 0.6);
 }
 
 .history li.info {
@@ -761,6 +1106,7 @@ body[data-link="offline"] .link-dot {
   color: var(--text-3);
   font-size: var(--fs-hint);
   text-align: center;
+  box-shadow: none;
 }
 
 .history time {
@@ -774,16 +1120,18 @@ body[data-link="offline"] .link-dot {
   padding: 0 24px;
 }
 
-/* ------------------------------------------------------------------ Start-Animation */
+/* ------------------------------------------------------------------ Start: die Projektion baut sich auf */
 
 body[data-boot="1"] .panel,
 body[data-boot="1"] .bottom > *,
 body[data-boot="1"] .top > * {
   opacity: 0;
-  transform: translateY(8px);
 }
 
-body[data-boot="2"] .panel,
+body[data-boot="2"] .panel {
+  animation: materialize 560ms var(--ease) both;
+}
+
 body[data-boot="2"] .bottom > *,
 body[data-boot="2"] .top > * {
   animation: rise 420ms var(--ease) both;
@@ -791,15 +1139,24 @@ body[data-boot="2"] .top > * {
 
 body[data-boot="2"] .side.left .panel:nth-child(2),
 body[data-boot="2"] .side.right .panel:nth-child(2) {
-  animation-delay: 80ms;
+  animation-delay: 90ms;
 }
 
 body[data-boot="2"] .side.left .panel:nth-child(3) {
-  animation-delay: 160ms;
+  animation-delay: 180ms;
 }
 
 body[data-boot="2"] .bottom > * {
-  animation-delay: 220ms;
+  animation-delay: 240ms;
+}
+
+/* ------------------------------------------------------------------ Ansicht wechseln */
+
+body[data-view="workshop"] .hud,
+body[data-view="workshop"] .field,
+body[data-view="workshop"] .holo-grid,
+body[data-view="workshop"] .holo-scan {
+  visibility: hidden;
 }
 
 /* ------------------------------------------------------------------ Bewegungen */
@@ -811,6 +1168,24 @@ body[data-boot="2"] .bottom > * {
   }
   to {
     opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes materialize {
+  0% {
+    opacity: 0;
+    filter: brightness(2.4);
+    transform: scaleY(0.03);
+  }
+  45% {
+    opacity: 1;
+    filter: brightness(1.6);
+    transform: scaleY(1.015);
+  }
+  100% {
+    opacity: 1;
+    filter: none;
     transform: none;
   }
 }
@@ -828,6 +1203,17 @@ body[data-boot="2"] .bottom > * {
   }
 }
 
+@keyframes act-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 @keyframes swap {
   from {
     opacity: 0;
@@ -841,6 +1227,15 @@ body[data-boot="2"] .bottom > * {
   }
 }
 
+@keyframes holo-scan {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(150vh);
+  }
+}
+
 /* ------------------------------------------------------------------ Kleinere Fenster */
 
 @media (max-width: 1100px) {
@@ -848,6 +1243,15 @@ body[data-boot="2"] .bottom > * {
     grid-template-columns: minmax(200px, 232px) minmax(0, 1fr) minmax(208px, 248px);
     column-gap: 16px;
     padding: 0 16px;
+  }
+
+  .gauge svg {
+    width: 64px;
+    height: 64px;
+  }
+
+  .g-num {
+    top: 32px;
   }
 }
 
@@ -877,7 +1281,8 @@ body[data-boot="2"] .bottom > * {
   }
 
   .core-wrap {
-    width: min(40vh, 100%, 400px);
+    width: min(calc(100vh - 560px), 100%, 400px);
+    min-width: 160px;
   }
 
   .hint {
@@ -890,10 +1295,23 @@ body[data-boot="2"] .bottom > * {
 }
 
 @media (max-width: 560px) {
+  .hud {
+    padding: 0 16px;
+  }
+
   .side.right,
   .weather,
-  .clock-date {
+  .clock-date,
+  .link {
     display: none;
+  }
+
+  .ws-pill-time {
+    display: none;
+  }
+
+  .core-wrap {
+    width: min(calc(100vh - 380px), 100%, 360px);
   }
 
   .bottom {
@@ -903,6 +1321,10 @@ body[data-boot="2"] .bottom > * {
   .round {
     width: 44px;
     height: 44px;
+  }
+
+  .command {
+    padding-left: 12px;
   }
 
   .sub-jarvis {

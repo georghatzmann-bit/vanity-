@@ -1,0 +1,1041 @@
+/* ==========================================================================
+   Jarvis – Werkstatt
+   Programmier-Aufträge als Blaupause: dunkelblaues Zeichenpapier mit Raster,
+   feine Zeichenlinien, Passkreuze an den Ecken, ein Schriftfeld unten rechts.
+   Links Plan und Befehle, in der Mitte der Ablauf, rechts Konstrukt und
+   Dateien. Status nie nur über Farbe: immer Zeichen und Text dazu.
+   ========================================================================== */
+
+.ws {
+  --bp-bg: #061629;
+  --bp-paper: #08203d;
+  --bp-line: rgba(160, 205, 255, 0.24);
+  --bp-line-strong: rgba(180, 220, 255, 0.55);
+  --bp-grid: rgba(150, 200, 255, 0.055);
+  --bp-grid-major: rgba(150, 200, 255, 0.12);
+  --bp-text: #e4eeff;
+  --bp-text-2: #a8bfdf;
+  --bp-text-3: #7591b8;
+  --bp-accent: #7cc4ff;
+  --bp-glow: 124, 196, 255;
+  --bp-card: rgba(5, 19, 38, 0.62);
+  --glow: 124, 196, 255;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  color: var(--bp-text);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(40, 110, 200, 0.28), transparent 70%),
+    radial-gradient(1400px 900px at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.45)),
+    linear-gradient(var(--bp-grid-major) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(90deg, var(--bp-grid-major) 1px, transparent 1px) 0 0 / 80px 80px,
+    linear-gradient(var(--bp-grid) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(90deg, var(--bp-grid) 1px, transparent 1px) 0 0 / 16px 16px,
+    linear-gradient(180deg, var(--bp-paper), var(--bp-bg));
+}
+
+.ws.opening {
+  animation: ws-open 240ms var(--ease) both;
+}
+
+.ws.closing {
+  animation: ws-close 160ms var(--ease) both;
+}
+
+.ws .ico {
+  width: 18px;
+  height: 18px;
+}
+
+/* ------------------------------------------------------------------ Kopf */
+
+.ws-top {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  min-height: 72px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--bp-line);
+  background: rgba(4, 16, 32, 0.55);
+}
+
+.ws-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--bp-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bp-text-2);
+  font-weight: 600;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.ws-back:hover {
+  border-color: var(--bp-line-strong);
+  background: rgba(var(--bp-glow), 0.08);
+  color: var(--bp-text);
+}
+
+.ws-title {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ws-kicker {
+  color: var(--bp-accent);
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.ws-task {
+  margin: 0;
+  overflow: hidden;
+  color: var(--bp-text);
+  font: 600 var(--fs-head) / 1.25 var(--font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ws-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  border-radius: 6px;
+  background: rgba(var(--bp-glow), 0.12);
+  color: var(--bp-text);
+  box-shadow: inset 0 0 0 1px rgba(var(--bp-glow), 0.4);
+  font-size: var(--fs-hint);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ws-chip-mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.ws-chip[data-state="running"] .ws-chip-mark::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(var(--bp-glow), 0.25);
+  border-top-color: var(--bp-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.ws-chip[data-state="done"] {
+  background: var(--ok-soft);
+  box-shadow: inset 0 0 0 1px rgba(63, 185, 104, 0.5);
+}
+
+.ws-chip[data-state="error"] {
+  background: var(--err-soft);
+  box-shadow: inset 0 0 0 1px rgba(240, 85, 90, 0.5);
+}
+
+.ws-chip[data-state="cancelled"] {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  color: var(--bp-text-2);
+}
+
+.ws-chip-mark svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ws-chip[data-state="done"] .ws-chip-mark {
+  color: var(--ok);
+}
+
+.ws-chip[data-state="error"] .ws-chip-mark {
+  color: var(--err);
+}
+
+.ws-timer {
+  min-width: 56px;
+  color: var(--bp-text);
+  font: 400 var(--fs-head) / 1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.ws-actions,
+.ws-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ws-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--bp-line);
+  border-radius: 6px;
+  background: rgba(4, 16, 32, 0.4);
+  color: var(--bp-text);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.ws-btn:hover:not(:disabled) {
+  border-color: var(--bp-line-strong);
+  background: rgba(var(--bp-glow), 0.1);
+}
+
+.ws-btn:disabled {
+  opacity: 0.45;
+}
+
+.ws-btn.primary {
+  border-color: transparent;
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.ws-btn.primary:hover:not(:disabled) {
+  background: var(--accent-strong-hover);
+}
+
+.ws-btn.danger {
+  border-color: rgba(240, 85, 90, 0.45);
+  color: #ff9a9d;
+}
+
+.ws-btn.danger:hover:not(:disabled) {
+  border-color: rgba(240, 85, 90, 0.8);
+  background: var(--err-soft);
+}
+
+.ws-btn.danger.armed {
+  border-color: transparent;
+  background: var(--err);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ Fläche */
+
+.ws-body {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) minmax(240px, 320px);
+  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-areas:
+    "plan flow model"
+    "cmds flow files";
+  gap: 24px;
+  min-height: 0;
+  padding: 24px;
+}
+
+.ws-plan {
+  grid-area: plan;
+}
+
+.ws-flow {
+  grid-area: flow;
+}
+
+.ws-model {
+  grid-area: model;
+}
+
+.ws-files {
+  grid-area: files;
+}
+
+.ws-cmds {
+  grid-area: cmds;
+}
+
+/* Listen, die nicht ganz hineinpassen, laufen unten weich aus */
+.ws-todos.more,
+.ws-list.more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
+
+/* Karten: gezeichnete Linie, Passkreuze an zwei Ecken */
+.ws-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  border: 1px solid var(--bp-line);
+  border-radius: 4px;
+  background: var(--bp-card);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.ws-card::before,
+.ws-card::after {
+  content: "";
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--bp-line-strong), var(--bp-line-strong)) center / 1px 100% no-repeat,
+    linear-gradient(var(--bp-line-strong), var(--bp-line-strong)) center / 100% 1px no-repeat;
+}
+
+.ws-card::before {
+  top: -7px;
+  left: -7px;
+}
+
+.ws-card::after {
+  right: -7px;
+  bottom: -7px;
+}
+
+.ws-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--bp-text-2);
+  font: 600 11px/1 var(--font);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ws-no {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--bp-line-strong);
+  border-radius: 3px;
+  color: var(--bp-accent);
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0;
+}
+
+.ws-count {
+  margin-left: auto;
+  color: var(--bp-text-3);
+  font: 400 var(--fs-hint) / 1 var(--mono);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.ws-empty {
+  margin: 0;
+  color: var(--bp-text-3);
+  font-size: var(--fs-hint);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ Plan */
+
+.ws-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(var(--bp-glow), 0.12);
+}
+
+.ws-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--bp-accent);
+  box-shadow: 0 0 10px rgba(var(--bp-glow), 0.8);
+  transition: width 400ms var(--ease);
+}
+
+.ws[data-state="done"] .ws-progress span {
+  background: var(--ok);
+  box-shadow: 0 0 10px rgba(63, 185, 104, 0.7);
+}
+
+.ws-todos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.ws-todo {
+  display: grid;
+  grid-template-columns: 24px 20px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  color: var(--bp-text-2);
+  line-height: 1.4;
+  animation: ws-in 180ms var(--ease) both;
+  transition: background 200ms var(--ease), color 200ms var(--ease);
+}
+
+.ws-todo-no {
+  padding-top: 2px;
+  color: var(--bp-text-3);
+  font: 400 var(--fs-hint) / 1.4 var(--mono);
+}
+
+.ws-todo .mark {
+  margin-top: 1px;
+}
+
+.ws-todo[data-state="pending"] .mark::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--bp-text-3);
+  border-radius: 50%;
+}
+
+.ws-todo[data-state="in_progress"] {
+  background: rgba(var(--bp-glow), 0.1);
+  color: var(--bp-text);
+  box-shadow: inset 2px 0 0 var(--bp-accent);
+}
+
+.ws-todo[data-state="completed"] {
+  color: var(--bp-text-3);
+}
+
+.ws-todo[data-state="completed"] .mark {
+  color: var(--ok);
+}
+
+.ws-todo[data-state="error"] {
+  color: var(--bp-text);
+}
+
+.ws-todo[data-state="error"] .mark {
+  color: var(--err);
+}
+
+.ws-todo[data-state="cancelled"] .mark {
+  color: var(--bp-text-3);
+}
+
+/* ------------------------------------------------------------------ Ablauf */
+
+.ws-flow {
+  padding-bottom: 8px;
+}
+
+.ws-steps {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  list-style: none;
+  scroll-behavior: smooth;
+}
+
+.ws-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px 8px 8px 0;
+  border-radius: 4px;
+  animation: ws-step-in 200ms var(--ease) both;
+}
+
+/* Die Zeitleiste: eine feine Linie verbindet die Punkte */
+.ws-step::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 13.5px;
+  width: 1px;
+  background: var(--bp-line);
+}
+
+.ws-step:first-child::before {
+  top: 50%;
+}
+
+.ws-step:last-child::before {
+  bottom: 50%;
+}
+
+.ws-step:only-child::before {
+  display: none;
+}
+
+.ws-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+
+.ws-node .mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bp-bg);
+  box-shadow: 0 0 0 1px var(--bp-line);
+}
+
+.ws-step[data-state="done"] .ws-node .mark {
+  color: var(--ok);
+}
+
+.ws-step[data-state="error"] .ws-node .mark {
+  color: var(--err);
+  box-shadow: 0 0 0 1px rgba(240, 85, 90, 0.6);
+}
+
+.ws-step[data-state="running"] {
+  background: linear-gradient(90deg, rgba(var(--bp-glow), 0.1), rgba(var(--bp-glow), 0.03) 70%, transparent);
+}
+
+.ws-step[data-state="running"] .ws-node .mark {
+  box-shadow: 0 0 0 1px var(--bp-accent), 0 0 14px rgba(var(--bp-glow), 0.6);
+}
+
+.ws-kind {
+  display: grid;
+  place-items: center;
+  color: var(--bp-text-2);
+}
+
+.ws-kind svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ws-step[data-state="running"] .ws-kind {
+  color: var(--bp-accent);
+}
+
+.ws-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ws-label {
+  overflow: hidden;
+  color: var(--bp-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-detail-line {
+  overflow: hidden;
+  color: var(--bp-text-3);
+  font: 400 var(--fs-hint) / 1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-time {
+  color: var(--bp-text-3);
+  font: 400 var(--fs-hint) / 1 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ws-step[data-state="running"] .ws-time {
+  color: var(--bp-accent);
+}
+
+/* Ergebnis: Stempel wie auf einer geprüften Zeichnung */
+.ws-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "stamp summary"
+    "stamp detail"
+    "stamp actions";
+  align-items: start;
+  gap: 8px 16px;
+  padding: 16px;
+  border: 1px dashed var(--bp-line-strong);
+  border-radius: 4px;
+  background: rgba(4, 16, 32, 0.6);
+  animation: ws-in 200ms var(--ease) both;
+}
+
+.ws-stamp {
+  grid-area: stamp;
+  align-self: center;
+  padding: 8px 12px;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  outline: 1px solid currentColor;
+  outline-offset: 3px;
+  color: var(--ok);
+  font: 700 var(--fs-head) / 1 var(--font-display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transform: rotate(-6deg);
+  animation: stamp-in 200ms var(--ease) both;
+}
+
+.ws-result[data-state="error"] .ws-stamp {
+  color: var(--err);
+}
+
+.ws-result[data-state="cancelled"] .ws-stamp {
+  color: var(--bp-text-2);
+}
+
+.ws-summary {
+  grid-area: summary;
+  margin: 0;
+  color: var(--bp-text);
+  line-height: 1.55;
+  user-select: text;
+}
+
+.ws-detail {
+  grid-area: detail;
+  max-height: 120px;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--bp-text-2);
+  font: 400 var(--fs-hint) / 1.5 var(--mono);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.ws-result-actions {
+  grid-area: actions;
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------------ Konstrukt */
+
+.ws-model-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ws-model-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ws-model-read {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.ws-model-read b {
+  color: var(--bp-text);
+  font: 400 var(--fs-head) / 1 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-model-read small {
+  color: var(--bp-text-3);
+  font-size: var(--fs-hint);
+}
+
+/* ------------------------------------------------------------------ Dateien und Befehle */
+
+.ws-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.ws-list li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--bp-text);
+  animation: ws-in 180ms var(--ease) both;
+}
+
+.ws-list li svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--bp-text-2);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ws-list .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-cmds .name {
+  color: var(--bp-text-2);
+  font: 400 var(--fs-hint) / 1.4 var(--mono);
+}
+
+.ws-tag {
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(var(--bp-glow), 0.12);
+  color: var(--bp-text-2);
+  font-size: 11px;
+}
+
+.ws-tag.new {
+  background: var(--ok-soft);
+  color: #8fdcaa;
+}
+
+.ws-tag.err {
+  background: var(--err-soft);
+  color: #ff9a9d;
+}
+
+/* ------------------------------------------------------------------ Fuß: Jarvis spricht, Schriftfeld */
+
+.ws-foot {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 24px;
+  padding: 0 24px 24px;
+}
+
+.ws-console {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-left: 2px solid var(--bp-accent);
+  background: rgba(4, 16, 32, 0.6);
+}
+
+.ws-console-who {
+  padding-top: 2px;
+  color: var(--bp-accent);
+  font: 600 11px/1.6 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ws-console-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--bp-text);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  user-select: text;
+}
+
+.ws[data-state="running"] .ws-console-text::after {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 14px;
+  margin-left: 4px;
+  vertical-align: -2px;
+  background: var(--bp-accent);
+  animation: pulse-dot 1s steps(2, jump-none) infinite;
+}
+
+/* Schriftfeld wie auf einer technischen Zeichnung */
+.ws-block {
+  display: grid;
+  grid-template-columns: minmax(160px, 280px) auto auto;
+  margin: 0;
+  border: 1px solid var(--bp-line-strong);
+  border-radius: 2px;
+  background: rgba(4, 16, 32, 0.6);
+}
+
+.ws-block > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 12px;
+}
+
+.ws-block > div + div {
+  border-left: 1px solid var(--bp-line);
+}
+
+.ws-block dt {
+  color: var(--bp-text-3);
+  font: 600 10px/1 var(--font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ws-block dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--bp-text);
+  font: 400 var(--fs-hint) / 1.3 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ Bewegungen */
+
+@keyframes ws-open {
+  from {
+    opacity: 0.4;
+    clip-path: circle(0% at var(--ox, 50%) var(--oy, 0%));
+  }
+  to {
+    opacity: 1;
+    clip-path: circle(150% at var(--ox, 50%) var(--oy, 0%));
+  }
+}
+
+@keyframes ws-close {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes ws-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes ws-step-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: none;
+  }
+}
+
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(1.7);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-6deg) scale(1);
+  }
+}
+
+/* ------------------------------------------------------------------ Kleinere Fenster */
+
+@media (max-width: 1180px) {
+  .ws-body {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 0.9fr);
+    grid-template-areas:
+      "plan flow"
+      "model flow"
+      "files flow";
+    gap: 16px 24px;
+  }
+
+  /* Die Befehle stehen auch im Ablauf */
+  .ws-cmds {
+    display: none;
+  }
+
+  .ws-block {
+    grid-template-columns: minmax(140px, 220px) auto;
+  }
+
+  .ws-block > div:last-child {
+    display: none;
+  }
+}
+
+/* Niedriges, schmales Fenster: das Konstrukt hätte kaum Platz */
+@media (max-width: 1180px) and (max-height: 700px) {
+  .ws-body {
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas:
+      "plan flow"
+      "files flow";
+  }
+
+  .ws-model {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .ws {
+    overflow-y: auto;
+  }
+
+  .ws-top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 12px 16px;
+    background: rgba(4, 16, 32, 0.94);
+  }
+
+  .ws-back span {
+    display: none;
+  }
+
+  .ws-back {
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .ws-title {
+    flex-basis: calc(100% - 60px);
+  }
+
+  .ws-task {
+    font-size: 17px;
+    white-space: normal;
+  }
+
+  .ws-status {
+    flex: 1 1 auto;
+  }
+
+  .ws-btn {
+    min-height: 44px;
+  }
+
+  .ws-body {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .ws-cmds,
+  .ws-model {
+    display: flex;
+  }
+
+  .ws-model {
+    height: 240px;
+  }
+
+  .ws-todos.more,
+  .ws-list.more {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .ws-steps,
+  .ws-todos,
+  .ws-list {
+    overflow: visible;
+  }
+
+  .ws-foot {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 0 16px 16px;
+  }
+
+  .ws-block {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ws-result {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "stamp"
+      "summary"
+      "detail"
+      "actions";
+  }
+
+  .ws-stamp {
+    justify-self: start;
+  }
+}

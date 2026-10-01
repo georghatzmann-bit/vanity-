@@ -672,9 +672,10 @@ class ClaudeBrain:
         # Kommandozeile interpretiert wird.
         try:
             proc.stdin.write(text if prompt is None else prompt)
-            proc.stdin.close()
         except OSError:
             pass
+        finally:
+            _close(proc.stdin)
 
         stream = _StreamReader(on_text, partial="include-partial-messages" not in self._unsupported, on_step=on_step)
         timed_out = False
@@ -769,6 +770,7 @@ class ClaudeBrain:
                 live.proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
+            _close(live.proc.stdin)
             live.err_reader.join(timeout=1.0)  # Fehlermeldungen vollständig einsammeln
         stderr = "".join(part for part in list(live.stderr_parts)[mark:] if part)
         log.debug(
@@ -982,10 +984,7 @@ class _LiveClaude:
         self.turns += 1
 
     def close(self) -> None:
-        try:
-            self.proc.stdin.close()
-        except Exception:
-            pass
+        _close(self.proc.stdin)
         try:
             self.proc.wait(timeout=3)
         except Exception:
@@ -1019,14 +1018,27 @@ def find_claude(cfg: dict | None = None) -> str | None:
 
 
 def _pump(pipe, put) -> None:
-    """Liest eine Ausgabe zeilenweise, am Ende kommt None."""
+    """Liest eine Ausgabe zeilenweise, am Ende kommt None. Danach ist die Leitung zu,
+    sonst bleibt bei jedem Aufruf ein Datei-Handle offen, bis Python aufräumt."""
     try:
         for line in pipe:
             put(line)
     except (OSError, ValueError):
         pass
     finally:
+        try:
+            pipe.close()
+        except (OSError, ValueError):
+            pass
         put(None)
+
+
+def _close(pipe) -> None:
+    """Schließt eine Leitung, auch wenn Claude schon weg ist (dann scheitert das Leeren)."""
+    try:
+        pipe.close()
+    except (OSError, ValueError):
+        pass
 
 
 def _kill(proc: subprocess.Popen) -> None:

@@ -57,6 +57,8 @@ class OverlayLogicTest(unittest.TestCase):
         self.assertEqual(img.mode, "RGBA")
         overlay.progress({"id": "t1", "label": "Installiert Spotify", "state": "done"})
         self.assertEqual(overlay.view.activity, "")
+        overlay.progress({"id": "w1", "label": "Schreibt bot.py", "state": "running", "workshop": True})
+        self.assertEqual(overlay.view.activity, "", "Werkstatt-Schritte gehören ins Werkstatt-Fenster")
 
     def test_only_windows_gets_a_window(self):
         with mock.patch("os.name", "posix"):

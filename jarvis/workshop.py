@@ -109,11 +109,14 @@ class Job:
     task: str
     folder: Path
     started: float = field(default_factory=time.monotonic)
+    begun: str = field(default_factory=lambda: dt.datetime.now().strftime("%H:%M"))
     steps: list = field(default_factory=list)
     todos: list = field(default_factory=list)
     text: str = ""
     state: str = "running"  # running, done, error, cancelled
     summary: str = ""
+    detail: str = ""
+    ended: float | None = None
 
     def status(self) -> str:
         """Ein Satz für "Wie weit bist du?"."""
@@ -160,7 +163,7 @@ class Workshop:
             folder = project_folder(task, self.base)
             self.job = Job(task, folder)
             self._cancelled = False
-        self._ui.workshop({"state": "start", "task": task, "folder": str(folder)})
+        self._ui.workshop({"state": "start", "task": task, "folder": str(folder), "begun": self.job.begun})
         if self._show_window is not None:
             try:
                 self._show_window()
@@ -180,6 +183,19 @@ class Workshop:
 
             _kill(proc)
         return True
+
+    def snapshot(self) -> dict | None:
+        """Der ganze Stand für das Fenster (wenn es neu lädt oder Ereignisse verpasst hat)."""
+        job = self.job
+        if job is None:
+            return None
+        ended = job.ended if job.state != "running" else None
+        return {
+            "task": job.task, "folder": str(job.folder), "state": job.state, "begun": job.begun,
+            "seconds": round((ended or time.monotonic()) - job.started),
+            "todos": list(job.todos), "steps": [s.to_dict() for s in job.steps[-200:]],
+            "text": job.text[-4000:], "summary": job.summary, "detail": job.detail,
+        }
 
     def status(self) -> str:
         if self.job is None:
@@ -219,7 +235,7 @@ class Workshop:
         return cmd
 
     def _work(self, job: Job) -> None:
-        from .brain import NO_WINDOW, _kill, _pump, _StreamReader, with_time
+        from .brain import NO_WINDOW, _close, _kill, _pump, _StreamReader, with_time
 
         started = time.monotonic()
         try:
@@ -243,9 +259,10 @@ class Workshop:
         threading.Thread(target=_pump, args=(proc.stderr, errors.append), daemon=True).start()
         try:
             proc.stdin.write(with_time(job.task))
-            proc.stdin.close()
         except OSError:
             pass
+        finally:
+            _close(proc.stdin)
 
         def on_text(chunk: str) -> None:
             job.text += chunk
@@ -310,7 +327,9 @@ class Workshop:
         from .text import speakable
 
         job.summary = speakable(summary) or summary
-        seconds = round(time.monotonic() - job.started)
+        job.detail = detail
+        job.ended = time.monotonic()
+        seconds = round(job.ended - job.started)
         self._ui.workshop({
             "state": state, "summary": summary, "detail": detail, "folder": str(job.folder), "seconds": seconds,
         })

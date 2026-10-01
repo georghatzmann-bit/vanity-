@@ -302,6 +302,8 @@ class Overlay(Ui):
         self.view.level = max(0.0, min(1.0, float(value)))
 
     def progress(self, step: dict) -> None:
+        if step.get("workshop"):
+            return  # Die Werkstatt hat ihr eigenes Fenster, hier geht es nur um das Gespräch
         with self._lock:
             if step.get("state") == "running":
                 self.view.activity = str(step.get("label") or "")

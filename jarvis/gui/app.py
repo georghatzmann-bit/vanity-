@@ -153,6 +153,48 @@ class Api:
         if self._on_touched is not None:
             self._on_touched()
 
+    # ------------------------------------------------------------------ Werkstatt
+
+    def workshop_state(self) -> dict | None:
+        """Der aktuelle Werkstatt-Auftrag (oder None), damit die Ansicht nach einem Neuladen stimmt."""
+        shop = getattr(self._assistant, "workshop", None)
+        if shop is None:
+            return None
+        try:
+            return shop.snapshot()
+        except Exception as exc:
+            log.debug("Werkstatt-Stand: %s", exc)
+            return None
+
+    def workshop_cancel(self) -> bool:
+        """Stopp-Knopf in der Werkstatt."""
+        shop = getattr(self._assistant, "workshop", None)
+        return bool(shop is not None and shop.cancel())
+
+    def open_folder(self, path) -> bool:
+        """Öffnet einen Projektordner im Explorer. Nur Ordner in der Werkstatt, sonst nichts."""
+        shop = getattr(self._assistant, "workshop", None)
+        if shop is None or not path:
+            return False
+        try:
+            target = Path(str(path)).resolve()
+            base = Path(shop.base).resolve()
+        except (OSError, ValueError):
+            return False
+        if base not in target.parents or not target.is_dir():
+            return False
+        try:
+            if os.name == "nt":
+                os.startfile(str(target))  # type: ignore[attr-defined]
+            else:
+                import subprocess
+
+                subprocess.Popen(["xdg-open", str(target)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            log.info("Ordner öffnen: %s", exc)
+            return False
+        return True
+
     def new_conversation(self) -> None:
         # Erst die laufende Antwort stoppen, sonst landet sie im frisch geleerten Verlauf.
         self._assistant.stop()
