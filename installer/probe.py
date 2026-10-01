@@ -112,5 +112,49 @@ for kind in ("bluetooth", "wifi"):
         outcome = f"Fehler: {exc!r}"
     print(f"   Funk {kind}: {outcome} ({time.monotonic() - started:.1f} s)", flush=True)
 
+# 4. Bildschirm lesen und Fenster ohne Maus (nur Messwerte, ein Server kann manches nicht)
+import subprocess  # noqa: E402
+
+from jarvis import screen  # noqa: E402
+
+started = time.monotonic()
+shot_path = screen.capture(OUT / "bildschirm-klein.jpg")
+print(f"   Bildschirmfoto: {shot_path.stat().st_size // 1024} KB in {time.monotonic() - started:.1f} s", flush=True)
+try:
+    from PIL import Image, ImageDraw, ImageFont
+
+    card = Image.new("RGB", (900, 220), "white")
+    try:
+        font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 64)
+    except OSError:
+        font = ImageFont.load_default()
+    ImageDraw.Draw(card).text((30, 60), "JARVIS LIEST 4711", fill="black", font=font)
+    card.save(OUT / "ocr-probe.png")
+    started = time.monotonic()
+    lines = screen.read_text(image=OUT / "ocr-probe.png")
+    seen = " ".join(l["t"] for l in lines)
+    print(f"   Texterkennung: {seen!r} in {time.monotonic() - started:.1f} s "
+          f"({'OK' if '4711' in seen else 'nicht erkannt'})", flush=True)
+except Exception as exc:
+    print(f"   Texterkennung: Fehler {exc!r}", flush=True)
+editor = None
+try:
+    editor = subprocess.Popen(["notepad.exe"])
+    time.sleep(2.5)
+    started = time.monotonic()
+    names = [w["titel"] for w in screen.windows()]
+    print(f"   Fenster: {len(names)} in {time.monotonic() - started:.1f} s, z. B. {names[:6]}", flush=True)
+    title = next((n for n in names if "Notepad" in n or "Editor" in n), "Notepad")
+    started = time.monotonic()
+    print("   Ohne Tastatur schreiben:", screen.type_into(title, "", "Hallo von Jarvis"),
+          f"({time.monotonic() - started:.1f} s)", flush=True)
+    found = screen.elements(title, 60)
+    print(f"   Elemente im Editor: {[(e.get('art'), e.get('name')) for e in found[:8]]}", flush=True)
+except Exception as exc:
+    print(f"   Fenster ohne Maus: Fehler {exc!r}", flush=True)
+finally:
+    if editor is not None:
+        subprocess.run(["taskkill", "/f", "/pid", str(editor.pid)], capture_output=True)
+
 print("FEHLER:", ", ".join(failed) if failed else "keine", flush=True)
 sys.exit(1 if failed else 0)

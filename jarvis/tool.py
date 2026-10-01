@@ -66,7 +66,12 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   medien pause|weiter|naechstes|voriges
   lautstaerke lauter|leiser|stumm [schritte]
   lautstaerke <0-100>          stellt die Lautstärke auf so viel Prozent
-  bildschirm                   speichert ein Bildschirmfoto und nennt den Pfad
+  bildschirm [fenster]         speichert ein kleines Bildschirmfoto (nur das vordere Fenster) und nennt den Pfad
+  bildschirm-text [fenster]    liest den Text auf dem Bildschirm direkt am PC, mit Positionen (schnell)
+  fenster                      zeigt alle offenen Fenster
+  ui "<fenster>"               zeigt Knöpfe, Felder und Menüs eines Fensters
+  ui-klick "<fenster>" "<knopf>"   drückt einen Knopf ohne Maus
+  ui-schreiben "<fenster>" "<feld>" "<text>"   schreibt in ein Feld ohne Tastatur ("" = erstes Feld)
   gaming an|aus
   papierkorb "<pfad>"          verschiebt in den Papierkorb
   herunterfahren [sekunden]    fährt den PC herunter (Georg kann in der Zeit abbrechen, Vorgabe 15)
@@ -354,12 +359,46 @@ def _dispatch(command: str, rest: list[str]) -> int:
         return 0
 
     if command == "bildschirm":
-        from . import pc
+        from . import screen
 
-        # Im Temp-Ordner, damit Bildschirmfotos nicht in OneDrive landen.
-        path = pc.screenshot(Path(tempfile.gettempdir()) / "jarvis-bildschirm.png")
+        # Im Temp-Ordner, damit Bildschirmfotos nicht in OneDrive landen. Klein: Claude liest es schneller.
+        window = bool(rest and rest[0].lower() in ("fenster", "window"))
+        path = screen.capture(Path(tempfile.gettempdir()) / "jarvis-bildschirm.jpg", window=window)
         print(f"Bildschirmfoto gespeichert: {path} (mit dem Read-Werkzeug ansehen)")
         return 0
+
+    if command in ("bildschirm-text", "lesen"):
+        from . import screen
+
+        lines = screen.read_text(window=bool(rest and rest[0].lower() in ("fenster", "window")))
+        print(screen.as_text(lines) if lines else "Kein Text erkannt.")
+        return 0
+
+    if command == "fenster":
+        from . import screen
+
+        for row in screen.windows():
+            print(f"{row.get('titel', '')}  [{row.get('programm', '')}]")
+        return 0
+
+    if command in ("ui", "ui-klick", "ui-schreiben"):
+        from . import screen
+
+        if not rest:
+            print('Aufruf: ui "<fenster>" | ui-klick "<fenster>" "<knopf>" | ui-schreiben "<fenster>" "<feld>" "<text>"')
+            return 1
+        if command == "ui":
+            for row in screen.elements(rest[0]):
+                print(f"{row.get('art', '')}: {row.get('name', '')}{'' if row.get('an', True) else ' (aus)'}")
+            return 0
+        if command == "ui-klick" and len(rest) >= 2:
+            print(screen.click(rest[0], " ".join(rest[1:])))
+            return 0
+        if command == "ui-schreiben" and len(rest) >= 3:
+            print(screen.type_into(rest[0], rest[1], " ".join(rest[2:])))
+            return 0
+        print("Zu wenige Angaben.")
+        return 1
 
     power = {"herunterfahren": "shutdown", "ausschalten": "shutdown", "neustarten": "restart", "neustart": "restart",
              "energiesparen": "sleep", "standby": "sleep", "ruhezustand": "hibernate", "abmelden": "logoff"}
