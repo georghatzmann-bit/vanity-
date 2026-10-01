@@ -136,6 +136,16 @@ class MicTest:
             "silent": False, "ready": self._wake is not None, "error": "",
         }
 
+    def reload(self) -> None:
+        """Neue Weckwort-Einstellung (z. B. Picovoice-Schlüssel): Erkennung neu laden."""
+        with self._lock:
+            if self._loader is not None and self._loader.is_alive():
+                return
+            self._wake = None
+            self._loader = None
+            self._wake_error = ""
+        self.preload()
+
     def preload(self) -> None:
         """Lädt die Hey-Jarvis-Erkennung schon mal, damit der Test gleich losgeht."""
         with self._lock:
@@ -148,7 +158,7 @@ class MicTest:
         from .audio import WakeWord
 
         try:
-            wake = WakeWord(self._cfg["wakeword"]["model"], self.threshold)
+            wake = WakeWord(self._cfg["wakeword"]["model"], self.threshold, self._cfg["wakeword"].get("picovoice_key", ""))
             with self._lock:
                 self._wake = wake
         except Exception as exc:
@@ -367,6 +377,7 @@ class SetupApi:
                 "eleven_voice": str(cfg["tts"].get("elevenlabs_voice", "") or ""),
                 "eleven_voice_name": str(cfg["tts"].get("elevenlabs_voice_name", "") or ""),
                 "groq_key_set": bool(str(cfg["stt"].get("groq_key", "") or "").strip()),
+                "pico_key_set": bool(str(cfg["wakeword"].get("picovoice_key", "") or "").strip()),
             },
             "claude": {"installed": bool(claude), "path": claude or ""},
         }
@@ -669,7 +680,7 @@ class SetupApi:
 
     # ------------------------------------------------------------ Links
 
-    ALLOWED_LINKS = ("https://elevenlabs.io/", "https://console.groq.com/", "https://claude.ai/")
+    ALLOWED_LINKS = ("https://elevenlabs.io/", "https://console.groq.com/", "https://claude.ai/", "https://console.picovoice.ai/")
 
     def open_url(self, url) -> bool:
         """Öffnet eine der Anmelde-Seiten im Browser (nur diese, nichts anderes)."""
@@ -690,6 +701,27 @@ class SetupApi:
         if not ok:
             return {"ok": False, "error": error}
         return self._save("stt", "groq_key", key)
+
+    def picovoice_check(self, key) -> dict:
+        """Schlüssel für "Jarvis" ohne Hey prüfen und speichern; der Mikrofon-Test nutzt ihn sofort."""
+        from .audio import picovoice_problem
+
+        key = str(key or "").strip()
+        if not key:
+            return {"ok": False, "error": "Bitte zuerst den Schlüssel einfügen."}
+        problem = picovoice_problem(key)
+        if problem:
+            return {"ok": False, "error": problem}
+        saved = self._save("wakeword", "picovoice_key", key)
+        if saved["ok"]:
+            self._mic.reload()
+        return saved
+
+    def picovoice_remove(self) -> dict:
+        saved = self._save("wakeword", "picovoice_key", "")
+        if saved["ok"]:
+            self._mic.reload()
+        return saved
 
     def groq_remove(self) -> dict:
         return self._save("stt", "groq_key", "")

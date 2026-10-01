@@ -132,6 +132,67 @@ def colorref(hex_color: str) -> int:
     return (blue << 16) | (green << 8) | red
 
 
+def find_window(title: str) -> int:
+    """Das eigene pywebview-Fenster mit genau diesem Titel (nicht die Anzeige, nicht das Tray)."""
+    if os.name != "nt":
+        return 0
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        found: list[int] = []
+
+        def visit(hwnd, _):
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == os.getpid():
+                name = ctypes.create_unicode_buffer(256)
+                user32.GetWindowTextW(hwnd, name, 256)
+                kind = ctypes.create_unicode_buffer(256)
+                user32.GetClassNameW(hwnd, kind, 256)
+                if name.value == title and kind.value.startswith("WindowsForms"):
+                    found.append(int(hwnd))
+            return True
+
+        user32.EnumWindows(enum_proc(visit), 0)
+        return found[0] if found else 0
+    except Exception as exc:
+        log.debug("Fenster suchen: %s", exc)
+        return 0
+
+
+_SWP = {"nosize": 0x0001, "nomove": 0x0002, "noactivate": 0x0010, "show": 0x0040}
+
+
+def show_quietly(hwnd: int) -> bool:
+    """Zeigt ein Fenster ganz vorn, ohne Georg die Tastatur wegzunehmen (er tippt vielleicht gerade)."""
+    if os.name != "nt" or not hwnd:
+        return False
+    try:
+        import ctypes
+
+        flags = _SWP["nosize"] | _SWP["nomove"] | _SWP["noactivate"] | _SWP["show"]
+        return bool(ctypes.windll.user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, flags))  # HWND_TOPMOST
+    except Exception as exc:
+        log.debug("Fenster leise zeigen: %s", exc)
+        return False
+
+
+def release_topmost(hwnd: int) -> None:
+    """Danach wieder ein ganz normales Fenster (nicht mehr immer oben)."""
+    if os.name != "nt" or not hwnd:
+        return
+    try:
+        import ctypes
+
+        flags = _SWP["nosize"] | _SWP["nomove"] | _SWP["noactivate"]
+        ctypes.windll.user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, flags)  # HWND_NOTOPMOST
+    except Exception as exc:
+        log.debug("Fenster normal: %s", exc)
+
+
 def style_title_bar(title: str, background: str, text: str = "#c9d1dc", border: str = "#1c2533") -> bool:
     """Titelleiste in der Farbe des Fensters, auch wenn Windows auf "hell" steht: Windows 11
     färbt Leiste, Schrift und Rand ein, Windows 10 nimmt wenigstens den dunklen Modus.

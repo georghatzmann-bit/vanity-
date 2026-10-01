@@ -89,6 +89,7 @@
     tts: { engine: 'edge', tab: 'premium' },
     eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false, blocked: new Set() },
     groq: { keySet: false },
+    pico: { keySet: false },
     place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
     speed: 'ausgewogen',
@@ -458,6 +459,7 @@
 
   async function micEnter() {
     renderGroq();
+    renderPico();
     buildVu();
     if (!S.mic.list) await micLoad();
     // Das, was Jarvis gerade nimmt, gleich testen (ohne neu zu speichern).
@@ -968,6 +970,39 @@
   }
 
   // ---------- Groq (Spracherkennung)
+
+  function renderPico() {
+    const state = $('picoState');
+    state.textContent = S.pico.keySet ? 'Aktiv' : '';
+    state.dataset.tone = S.pico.keySet ? 'ok' : '';
+    $('picoKey').placeholder = S.pico.keySet ? 'Schlüssel gespeichert (zum Ändern neu einfügen)' : 'AccessKey';
+  }
+
+  async function picoCheck(key) {
+    const btn = $('picoCheck');
+    if (!key) {
+      formMsg('picoMsg', S.pico.keySet ? 'ok' : 'warn', S.pico.keySet ? 'Der Schlüssel ist schon gespeichert.' : 'Bitte zuerst den Schlüssel einfügen.');
+      return;
+    }
+    btn.classList.add('busy');
+    btn.disabled = true;
+    try {
+      const r = await call('picovoice_check', key);
+      if (r && r.ok) {
+        S.pico.keySet = true;
+        $('picoKey').value = '';
+        formMsg('picoMsg', 'ok', 'Passt. Sag oben im Test einfach „Jarvis“.');
+      } else {
+        formMsg('picoMsg', 'error', (r && r.error) || 'Das hat nicht geklappt.');
+      }
+    } catch (err) {
+      failed(err);
+    } finally {
+      btn.classList.remove('busy');
+      btn.disabled = false;
+      renderPico();
+    }
+  }
 
   function renderGroq() {
     const state = $('groqState');
@@ -1571,6 +1606,7 @@
     S.eleven.selected = String(v.eleven_voice || '');
     S.eleven.name = String(v.eleven_voice_name || '');
     S.groq.keySet = !!v.groq_key_set;
+    S.pico.keySet = !!v.pico_key_set;
     // Premium zuerst zeigen, außer jemand hat ElevenLabs schon und bewusst zurück auf Microsoft gestellt.
     S.tts.tab = S.eleven.keySet && S.tts.engine !== 'elevenlabs' ? 'free' : 'premium';
     S.place.saved = String(v.ort || '');
@@ -1611,6 +1647,10 @@
     }
     $('designPrompt').addEventListener('click', () => copyText(DESIGN_PROMPT, 'Beschreibung kopiert. In Voice Design einfügen.'));
     $('designText').addEventListener('click', () => copyText(DESIGN_TEXT, 'Probetext kopiert. In Voice Design als Text einfügen.'));
+    $('picoForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      picoCheck($('picoKey').value.trim());
+    });
     $('groqForm').addEventListener('submit', (e) => {
       e.preventDefault();
       groqCheck($('groqKey').value.trim());
@@ -1766,6 +1806,7 @@
           tts_engine: params.get('eleven') === '1' ? 'elevenlabs' : 'edge', eleven_key_set: params.get('eleven') === '1',
           eleven_voice: params.get('eleven') === '1' ? 'v_george' : '', eleven_voice_name: params.get('eleven') === '1' ? 'George' : '',
           groq_key_set: params.get('groq') === '1',
+          pico_key_set: params.get('pico') === '1',
         },
         claude: { installed: claudeMode !== 'missing', path: 'C:\\Users\\Georg\\.local\\bin\\claude.exe' },
       }, 60),
@@ -1830,6 +1871,9 @@
       groq_check: (key) => later(/^gsk_/.test(key) ? { ok: true, error: '' }
         : { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit gsk_).' }, 700),
       groq_remove: () => later({ ok: true, error: '' }, 60),
+      picovoice_check: (key) => later(key.length > 20 ? { ok: true, error: '' }
+        : { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal von console.picovoice.ai kopieren.' }, 700),
+      picovoice_remove: () => later({ ok: true, error: '' }, 60),
       open_url: () => later(true, 30),
       place_check: (text) => later(/^x+$/i.test(text) || /unbekannt/i.test(text)
         ? { ok: false, place: '', temp: null, text: '', error: `"${text}" kenne ich leider nicht. Vielleicht mit Land, z. B. "Wien, Österreich"?` }

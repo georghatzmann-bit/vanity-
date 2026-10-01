@@ -66,6 +66,7 @@
     open_setup: () => window.pywebview.api.open_setup(),
     reminders: () => window.pywebview.api.reminders(),
     toggle_gaming: () => window.pywebview.api.toggle_gaming(),
+    touched: () => window.pywebview.api.touched(),
   };
 
   function call(name, ...args) {
@@ -603,6 +604,8 @@
     let touched = 0;
     const touch = () => { touched = performance.now(); };
     document.addEventListener('pointerdown', touch, true);
+    // Hintergrund-Modus: Wer ins Fenster klickt, will es behalten (sonst verschwindet es nach dem Gespräch).
+    document.addEventListener('pointerdown', () => { call('touched').catch(() => {}); }, true);
     document.addEventListener('keydown', touch, true);
     window.addEventListener('focus', () => {
       const shownAt = performance.now();

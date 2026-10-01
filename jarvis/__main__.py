@@ -209,7 +209,7 @@ def load_voice(
         if isinstance(stt, CloudSpeechToText):
             # Die Ersatz-Erkennung auf dem eigenen PC in Ruhe vorbereiten.
             threading.Timer(45.0, stt.warm_up_fallback).start()
-        wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
+        wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"], cfg["wakeword"].get("picovoice_key", ""))
     except Exception as exc:
         log.exception("Spracherkennung lädt nicht")
         ui.toast(f"Spracherkennung lädt nicht: {exc}. werkzeuge\\Selbsttest.bat zeigt mehr.", "error")
@@ -291,10 +291,17 @@ def run_gui(cfg: dict, args) -> int:
     tray_ref: list[Tray] = []
     voice_ref: list[VoiceLoop] = []
     overlay = None
+    # Hintergrund-Modus: Beim Weckwort erscheint das Fenster ("fenster"), nur die kleine
+    # Anzeige oben ("anzeige") oder gar nichts ("nichts").
+    on_wake = str(gui_cfg.get("on_wake", "fenster") or "fenster").lower()
+    presence_ref: list = []
     if gui_cfg.get("overlay", True):
         from .overlay import Overlay
 
-        overlay = Overlay(suppressed=lambda: assistant.gaming or desktop.jarvis_in_front())
+        overlay = Overlay(
+            suppressed=lambda: assistant.gaming or desktop.jarvis_in_front()
+            or (on_wake == "fenster" and (not window.hidden or bool(presence_ref)))
+        )
         ui.add(overlay)
     hotkey = register_mute_hotkey(cfg, assistant)
     ui.config(hotkey=hotkey, version=__version__, muted=False)
@@ -317,10 +324,10 @@ def run_gui(cfg: dict, args) -> int:
         start_services(cfg, assistant, ui, stopped)
         if overlay is not None:
             overlay.start()
-        desktop.listen_for_show(window.show, stopped)
+        desktop.listen_for_show(show_window, stopped)
         if gui_cfg.get("tray", True):
             tray = Tray(
-                window.show, assistant.mute.toggle, quit_all, lambda: assistant.mute.muted,
+                show_window, assistant.mute.toggle, quit_all, lambda: assistant.mute.muted,
                 on_listen=listen_now, on_gaming=assistant.toggle_gaming, is_gaming=lambda: assistant.gaming,
                 on_setup=open_setup,
             )
@@ -388,13 +395,29 @@ def run_gui(cfg: dict, args) -> int:
         if assistant.brain is not None:
             assistant.brain.close()
 
-    window = Window(
-        Api(bridge, assistant, assistant.mute, open_setup, listen_now), background, on_closed, gui_cfg,
-        hidden=hidden, icon=desktop.app_icon(),
-    )
+    api = Api(bridge, assistant, assistant.mute, open_setup, listen_now)
+    window = Window(api, background, on_closed, gui_cfg, hidden=hidden, icon=desktop.app_icon())
+    if on_wake == "fenster":
+        from .overlay import _fullscreen_app
+        from .presence import Presence
+
+        presence = Presence(
+            window,
+            suppressed=lambda: assistant.gaming or _fullscreen_app(),
+            keep_open=lambda: assistant.workshop is not None and assistant.workshop.busy,
+        )
+        presence_ref.append(presence)
+        ui.add(presence)
+        api._on_touched = presence.keep
+
+    def show_window() -> None:
+        """Georg will das Fenster sehen (Tray, "Zeig dich", zweiter Start): dann bleibt es offen."""
+        window.show()
+        for presence in presence_ref:
+            presence.keep()
 
     def window_control(what: str) -> bool:
-        (window.show if what == "show" else window.hide)()
+        (show_window if what == "show" else window.hide)()
         return True
 
     assistant.window_control = window_control
@@ -439,7 +462,7 @@ def run_mic_test(cfg: dict) -> None:
     print("\nEin anderes Mikrofon wählst du am einfachsten in der Einrichtung (werkzeuge\\Einrichtung.bat).\n")
 
     mic = Microphone(cfg["audio"]["input_device"])
-    wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
+    wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"], cfg["wakeword"].get("picovoice_key", ""))
     print(f"Teste: {mic.name} ({mic.rate} Hz)")
     print('Sprich etwas und sag "Hey Jarvis". Strg+C beendet den Test.\n')
     best = 0.0

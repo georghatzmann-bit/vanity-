@@ -421,21 +421,83 @@ class VoiceActivity:
         return float(self._vad.predict(frame, frame_size=640))
 
 
+class JarvisKeyword:
+    """Porcupine (Picovoice) mit dem eingebauten Weckwort "Jarvis": So reicht auch "Jarvis"
+    allein, ohne "Hey". Braucht einen kostenlosen Schlüssel von console.picovoice.ai."""
+
+    def __init__(self, key: str, sensitivity: float = 0.6) -> None:
+        import pvporcupine
+
+        self._engine = pvporcupine.create(access_key=key, keywords=["jarvis"], sensitivities=[sensitivity])
+        self.frame_length = int(self._engine.frame_length)
+        self._buffer = np.zeros(0, dtype=np.int16)
+
+    def detect(self, frame: np.ndarray) -> bool:
+        self._buffer = np.concatenate([self._buffer, np.asarray(frame, dtype=np.int16).reshape(-1)])
+        hit = False
+        while len(self._buffer) >= self.frame_length:
+            chunk, self._buffer = self._buffer[: self.frame_length], self._buffer[self.frame_length :]
+            if self._engine.process(chunk.tolist()) >= 0:
+                hit = True
+        return hit
+
+    def reset(self) -> None:
+        self._buffer = np.zeros(0, dtype=np.int16)
+
+    def close(self) -> None:
+        try:
+            self._engine.delete()
+        except Exception:
+            pass
+
+
+def picovoice_problem(key: str) -> str:
+    """Prüft einen Picovoice-Schlüssel. Leer, wenn er geht, sonst eine Erklärung."""
+    try:
+        keyword = JarvisKeyword(key)
+    except ImportError:
+        return "Das Paket für „Jarvis“ ohne Hey fehlt. Bitte werkzeuge\\Neu-installieren.bat starten."
+    except Exception as exc:
+        text = str(exc).lower()
+        if "access" in text and "key" in text or "invalid" in text or "activation" in text:
+            return "Dieser Schlüssel stimmt nicht. Bitte noch einmal von console.picovoice.ai kopieren."
+        if "network" in text or "connection" in text or "internet" in text:
+            return "Picovoice ist gerade nicht erreichbar. Ist das Internet an?"
+        return f"Picovoice meldet: {exc}"
+    keyword.close()
+    return ""
+
+
 class WakeWord:
-    def __init__(self, model_name: str, threshold: float) -> None:
+    """ "Hey Jarvis" über openWakeWord, mit Picovoice-Schlüssel zusätzlich "Jarvis" allein."""
+
+    def __init__(self, model_name: str, threshold: float, picovoice_key: str = "") -> None:
         import openwakeword
         from openwakeword.model import Model
 
         openwakeword.utils.download_models(model_names=[model_name])
         self._model = Model(wakeword_models=[model_name], inference_framework="onnx")
         self.threshold = threshold
+        self.keyword: JarvisKeyword | None = None
+        key = str(picovoice_key or "").strip()
+        if key:
+            try:
+                self.keyword = JarvisKeyword(key)
+                log.info("Weckwort: auch „Jarvis“ allein (Picovoice).")
+            except Exception as exc:
+                log.warning("„Jarvis“ allein geht gerade nicht (%s), nur „Hey Jarvis“.", exc)
 
     def score(self, frame: np.ndarray) -> float:
         scores = self._model.predict(frame)
-        return float(max(scores.values(), default=0.0))
+        best = float(max(scores.values(), default=0.0))
+        if self.keyword is not None and self.keyword.detect(frame):
+            best = max(best, 1.0)
+        return best
 
     def reset(self) -> None:
         self._model.reset()
+        if self.keyword is not None:
+            self.keyword.reset()
 
 
 def record_command(

@@ -1,6 +1,8 @@
 # Extras: Oberfläche, Tray-Icon, Systemanzeige, Papierkorb, Bildschirmfotos.
 # Fehlt eins davon, läuft Jarvis trotzdem (dann eben ohne diese Funktion).
 pywebview>=5.0
+# "Jarvis" allein als Weckwort (nur mit kostenlosem Picovoice-Schlüssel aktiv)
+pvporcupine>=3.0
 pystray>=0.19
 pillow>=10.0
 psutil>=5.9

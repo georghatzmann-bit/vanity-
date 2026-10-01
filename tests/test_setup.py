@@ -47,7 +47,7 @@ class FakeMic:
 
 
 class FakeWake:
-    def __init__(self, model, threshold):
+    def __init__(self, model, threshold, picovoice_key=""):
         self.threshold = threshold
 
     def reset(self):
@@ -112,7 +112,7 @@ class SettingsTest(SetupTestCase):
         self.assertEqual(
             set(info["values"]),
             {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "ha_url", "ha_token_set", "speed",
-             "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set"},
+             "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set", "pico_key_set"},
         )
         self.assertEqual(len(self.api.voices()), len(setup_wizard.VOICES))
         self.assertTrue(all(v["id"].endswith("Neural") for v in self.api.voices()))
@@ -606,6 +606,17 @@ class PremiumSettingsTest(SetupTestCase):
         self.assertFalse(result["free"])
         self.assertEqual((result["selected"], result["note"]), ("v_lennard", ""))
         self.assertEqual(self.saved()["tts"]["elevenlabs_voice"], "v_lennard")
+
+    def test_picovoice_key_is_checked_saved_and_used_by_the_mic_test(self):
+        with mock.patch("jarvis.audio.picovoice_problem", return_value="Dieser Schlüssel stimmt nicht."):
+            self.assertFalse(self.api.picovoice_check("falsch")["ok"])
+        self.assertFalse(self.api.hello()["values"]["pico_key_set"])
+        with mock.patch("jarvis.audio.picovoice_problem", return_value=""), \
+                mock.patch.object(self.api._mic, "reload") as reload:
+            self.assertTrue(self.api.picovoice_check("gut")["ok"])
+        reload.assert_called_once()
+        self.assertEqual(self.saved()["wakeword"]["picovoice_key"], "gut")
+        self.assertTrue(self.api.hello()["values"]["pico_key_set"])
 
     def test_links_only_to_the_sign_up_pages(self):
         with mock.patch("webbrowser.open", return_value=True) as opened:

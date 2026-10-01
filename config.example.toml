@@ -13,6 +13,9 @@ model = "hey_jarvis"
 # 0.0 bis 1.0. Höher = seltener aus Versehen aktiv, aber schwerer auszulösen.
 # Wenn Jarvis öfter "fast erkannt" meldet, hier z. B. 0.35 eintragen.
 threshold = 0.5
+# Kostenloser Schlüssel von console.picovoice.ai: Dann reicht auch "Jarvis" allein.
+# Am einfachsten in der Einrichtung beim Mikrofon eintragen.
+picovoice_key = ""
 
 [audio]
 # Welches Mikrofon Jarvis nutzt. Leer = Windows-Standardmikrofon.
@@ -101,6 +104,12 @@ tray = true
 close_to_tray = true
 # true = Beim Zuhören und Sprechen erscheint oben am Bildschirm eine kleine Jarvis-Anzeige.
 overlay = true
+# Was beim Weckwort ("Hey Jarvis", Strg+Alt+J) erscheint, wenn Jarvis im Hintergrund ist:
+# "fenster" = das Jarvis-Fenster (ohne dir die Tastatur wegzunehmen), nach dem Gespräch
+# verschwindet es wieder; "anzeige" = nur die kleine Anzeige oben; "nichts".
+on_wake = "fenster"
+# true = Minimieren lässt Jarvis ganz verschwinden (auch aus der Taskleiste), er hört weiter zu.
+minimize_to_background = true
 
 [brain]
 # Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.

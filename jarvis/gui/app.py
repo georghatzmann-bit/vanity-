@@ -88,6 +88,7 @@ class Api:
         self._mute = mute
         self._on_setup = on_setup
         self._on_listen = on_listen
+        self._on_touched = None  # setzt __main__ (Hintergrund-Modus)
 
     def hello(self) -> dict:
         info = dict(self._bridge.info)
@@ -146,6 +147,11 @@ class Api:
         """Schalter in der Spalte links: Gaming-Modus an oder aus."""
         self._assistant.toggle_gaming()
         return not bool(getattr(self._assistant, "gaming", False))
+
+    def touched(self) -> None:
+        """Die Seite meldet: Georg hat ins Fenster geklickt. Dann verschwindet es nicht von selbst."""
+        if self._on_touched is not None:
+            self._on_touched()
 
     def new_conversation(self) -> None:
         # Erst die laufende Antwort stoppen, sonst landet sie im frisch geleerten Verlauf.
@@ -294,6 +300,10 @@ class Window:
         self._window.events.closing += self._closing
         self._window.events.closed += self._closed
         try:
+            self._window.events.minimized += self._minimized
+        except AttributeError:
+            pass
+        try:
             # Läuft im Fenster-Thread, bevor das Fenster zum ersten Mal erscheint.
             self._window.events.before_show += self._style_title_bar
         except AttributeError:
@@ -330,6 +340,35 @@ class Window:
         self.hide()
         return False
 
+    def _minimized(self) -> None:
+        # Hintergrund-Modus: Minimieren lässt Jarvis ganz verschwinden (auch aus der Taskleiste),
+        # er hört weiter zu. Zurück kommt er mit "Hey Jarvis", Strg+Alt+J oder dem Tray-Symbol.
+        if self._cfg.get("minimize_to_background", True) and self.allow_close is False:
+            self.hide()
+
+    def show_quiet(self) -> None:
+        """Erscheint ganz vorn, ohne den Fokus zu nehmen (beim Weckwort)."""
+        from .. import desktop
+
+        hwnd = desktop.find_window("Jarvis") if self._window is not None else 0
+        if not hwnd or not desktop.show_quietly(hwnd):
+            self.show()
+            return
+        self._quiet = True
+        self._hidden = False
+        try:
+            self._window.evaluate_js("window.jarvisShown && window.jarvisShown()")
+        except Exception:
+            pass
+
+    def settle(self) -> None:
+        """Georg hat das Fenster angefasst: ab jetzt ein ganz normales Fenster."""
+        if getattr(self, "_quiet", False):
+            from .. import desktop
+
+            desktop.release_topmost(desktop.find_window("Jarvis"))
+            self._quiet = False
+
     def _style_title_bar(self) -> None:
         """Dunkle Titelleiste in der Farbe des HUD, auch wenn Windows auf "hell" steht."""
         from ..desktop import style_title_bar
@@ -349,6 +388,7 @@ class Window:
 
     def hide(self) -> None:
         if self._window is not None:
+            self.settle()  # nicht als "immer oben" verstecken, sonst bleibt es beim nächsten Zeigen so
             self._window.hide()
             self._hidden = True
 

@@ -106,7 +106,23 @@
             </form>
             <p class="form-msg" id="groqMsg" aria-live="polite"></p>
           </div>
-          <p class="note">„Hey Jarvis“ englisch aussprechen, etwa „Hej Dschahrwis“. Oder Strg + Alt + J drücken.</p>
+          <div class="key-card" id="picoCard">
+            <div class="key-head">
+              <span class="key-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4M3.5 3.5a12 12 0 0 0 0 17M20.5 3.5a12 12 0 0 1 0 17"/></svg></span>
+              <span class="key-text">
+                <b>Nur „Jarvis“ sagen, ohne Hey <span class="badge accent">gratis</span></b>
+                <small>Mit einem kostenlosen Picovoice-Schlüssel reicht auch „Jarvis“ allein. So geht's: Picovoice öffnen, Konto anlegen, den „AccessKey“ kopieren und hier einfügen. Danach oben im Test „Jarvis“ sagen.</small>
+              </span>
+              <span class="key-state" id="picoState"></span>
+            </div>
+            <form class="key-form" id="picoForm" autocomplete="off">
+              <input class="input mono" id="picoKey" type="password" placeholder="AccessKey" spellcheck="false" aria-label="Picovoice-Schlüssel">
+              <button type="submit" class="btn primary" id="picoCheck">Prüfen</button>
+              <button type="button" class="btn ghost" data-open="https://console.picovoice.ai/">Picovoice öffnen</button>
+            </form>
+            <p class="form-msg" id="picoMsg" aria-live="polite"></p>
+          </div>
+          <p class="note">„Hey Jarvis“ englisch aussprechen, etwa „Hej Dschahrwis“. Mit Picovoice-Schlüssel reicht „Jarvis“. Oder Strg + Alt + J drücken.</p>
         </section>
 
         <!-- 3 Stimme -->

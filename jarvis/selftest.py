@@ -226,7 +226,7 @@ def load_models(r: Report, cfg: dict):
     try:
         from .audio import WakeWord
 
-        wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"])
+        wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"], cfg["wakeword"].get("picovoice_key", ""))
         r.add("Wake Word", "ok", f"{cfg['wakeword']['model']}, Schwelle {cfg['wakeword']['threshold']}")
     except Exception as exc:
         r.add("Wake Word", "fehler", f"Modell lädt nicht ({exc})", "Internet prüfen und werkzeuge\\Neu-installieren.bat starten.")

@@ -571,3 +571,54 @@ class VoiceActivityRecorderTest(unittest.TestCase):
         rec.add(np.full(FRAME_SAMPLES, 3000, dtype=np.int16))
         self.assertTrue(rec.speech_started)
         self.assertIsNone(rec.vad)
+
+
+class JarvisKeywordTest(unittest.TestCase):
+    """ "Jarvis" ohne Hey über Porcupine (nachgebaut, ohne echten Schlüssel)."""
+
+    def fake_porcupine(self, error=None):
+        import types
+
+        class Engine:
+            frame_length = 512
+
+            def __init__(self):
+                self.chunks = 0
+
+            def process(self, pcm):
+                assert len(pcm) == 512
+                self.chunks += 1
+                return 0 if max(pcm) > 20000 else -1
+
+            def delete(self):
+                pass
+
+        module = types.ModuleType("pvporcupine")
+
+        def create(access_key, keywords, sensitivities):
+            if error:
+                raise error
+            assert keywords == ["jarvis"]
+            return Engine()
+
+        module.create = create
+        return mock.patch.dict("sys.modules", {"pvporcupine": module})
+
+    def test_frames_are_regrouped_for_porcupine(self):
+        from jarvis.audio import JarvisKeyword
+
+        with self.fake_porcupine():
+            keyword = JarvisKeyword("schluessel")
+            quiet = np.zeros(1280, dtype=np.int16)
+            loud = np.full(1280, 30000, dtype=np.int16)
+            self.assertFalse(keyword.detect(quiet))
+            self.assertTrue(keyword.detect(loud))
+            self.assertEqual(keyword._engine.chunks, 5, "2560 Samples = 5 Stücke zu 512")
+
+    def test_wrong_key_is_explained(self):
+        from jarvis.audio import picovoice_problem
+
+        with self.fake_porcupine(RuntimeError("Failed to parse AccessKey `x`")):
+            self.assertIn("Schlüssel stimmt nicht", picovoice_problem("x"))
+        with self.fake_porcupine():
+            self.assertEqual(picovoice_problem("gut"), "")
