@@ -331,6 +331,7 @@ _DISCORD: list[tuple[str, re.Pattern]] = [
     # "Geh in den Sprachkanal Zocken", "Tritt dem Voice-Channel Lobby bei", "Join Voice Lobby"
     ("voice", re.compile(
         r"^(?:geh|gehe|komm|komme|wechsel|wechsle|spring|joine?|tritt|verbinde mich mit|verbind mich mit)\s+"
+        r"(?:(?:in|auf|bei)\s+discord\s+)?"
         r"(?:in\s+den\s+|dem\s+|zum\s+|mit\s+dem\s+|in\s+)?(?:sprachkanal|sprach[ -]?channel|voice[ -]?channel|voice|talk)\s+"
         rf"(?P<x>.+?){_IN_DISCORD}(?:\s+bei)?$")),
     # "Geh auf den Server Gilde", "Öffne den Discord-Server Gilde"
@@ -339,7 +340,7 @@ _DISCORD: list[tuple[str, re.Pattern]] = [
         rf"(?:discord[ -]?)?server\s+(?P<x>.+?){_IN_DISCORD}$")),
     # "Geh in den Kanal allgemein", "Öffne den Kanal memes auf Discord"
     ("channel", re.compile(
-        r"^(?:geh|gehe|wechsel|wechsle|spring)\s+(?:in|zu)\s+(?:den\s+)?(?:text)?(?:kanal|channel)\s+"
+        r"^(?:geh|gehe|wechsel|wechsle|spring)\s+(?:(?:in|auf|bei)\s+discord\s+)?(?:in|zu)\s+(?:den\s+)?(?:text)?(?:kanal|channel)\s+"
         rf"(?!von\b)(?P<x>.+?){_IN_DISCORD}$")),
     ("channel", re.compile(
         r"^(?:öffne|zeig mir|zeige mir)\s+(?:den\s+)?(?:text)?(?:kanal|channel)\s+(?!von\b)(?P<x>.+?)\s+(?:auf|in)\s+discord$")),

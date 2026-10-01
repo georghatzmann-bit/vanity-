@@ -818,7 +818,7 @@ _LIST = re.compile(r"^(?:welche|was für) projekte\b|^(?:zeig|zeige|öffne)(?: m
                    r"^was (?:hast du|haben wir)(?: (?:schon|alles))* (?:in der werkstatt )?gebaut\b|^(?:öffne|zeig|zeige)(?: mir)? (?:die )?werkstatt$")
 # "Arbeite am Discord-Bot weiter: füg einen Befehl hinzu", "Mach beim Projekt Würfelspiel weiter, ..."
 _CONTINUE_NAMED = re.compile(
-    r"^(?:mach|mache|arbeite|arbeit)\s+(?:am|beim|an dem|an der|mit dem|mit der|bei dem|bei der)\s+(?:projekt\s+)?"
+    r"^(?:mach|mache|arbeite|arbeit)\s+(?:am|beim|an dem|an der|an|mit dem|mit der|bei dem|bei der)\s+(?:projekt\s+)?"
     r"(?P<name>.+?)\s+weiter\b[\s,:.-]*(?P<rest>.*)$")
 # "Öffne den Ordner vom Discord-Bot", "Öffne das Projekt Würfelspiel"
 _OPEN_PROJECT = re.compile(r"^(?:öffne|zeig|zeige)(?: mir)? (?:den ordner (?:vom|von dem|von der|des)|das projekt)\s+(?P<name>.+)$")

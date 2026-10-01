@@ -426,6 +426,22 @@ _FORGET = re.compile(
     re.I,
 )
 
+# "Was weißt du über mich?", "Was hast du dir gemerkt?", "Welche Gewohnheiten kennst du?"
+_FILL = r"(?:\s+(?:eigentlich|denn|alles|so|schon|bisher|jetzt))*"
+_RECALL = re.compile(
+    r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?"
+    rf"(?:was\s+(?:weißt|weisst)\s+du{_FILL}\s+(?:über|von)\s+mich"
+    rf"|was\s+hast\s+du\s+dir{_FILL}(?:\s+über\s+mich)?\s+gemerkt"
+    r"|(?:welche|was\s+für)\s+gewohnheiten\s+(?:habe\s+ich|hab\s+ich|kennst\s+du)"
+    rf"|was\s+(?:sind\s+meine|kennst\s+du{_FILL}\s+für)\s+gewohnheiten){_FILL}\s*[?.!]*$",
+    re.I,
+)
+# "Merk dir das" oder "Merk dir, wo ich geparkt habe": ohne Zusammenhang nicht zu speichern,
+# das übernimmt Claude (kennt das Gespräch und hat den Befehl "merken").
+_NOT_A_FACT = re.compile(r"^(?:das|dies|dieses|es|was|wie|wo|wer|wann|warum|wieso|welche[nmrs]?)\b", re.I)
+_LEAD = re.compile(r"^(?:das|dies|dieses)\s*[:,]\s*(?=\S)", re.I)
+_ONLY_FILLER = re.compile(r"^(?:bitte|mal|doch|jetzt|gut|schon|einfach|genau|auch)(?:\s+(?:bitte|mal|doch|jetzt|gut|schon|einfach|genau|auch))*[\s.!]*$", re.I)
+
 
 def _first_to_third(fact: str, clause: bool = False) -> str:
     """"(dass) ich gern Rock höre" -> "Georg sagt: Ich höre gern Rock" (so ist klar, wer "ich" ist)."""
@@ -440,11 +456,15 @@ def _first_to_third(fact: str, clause: bool = False) -> str:
 
 
 def match_memory(text: str):
-    """("remember", fakt) / ("forget", wörter) / None"""
+    """("remember", fakt) / ("forget", wörter) / ("recall", "") / None"""
     raw = " ".join(str(text).split()).strip()
+    if _RECALL.match(raw):
+        return "recall", ""
     found = _REMEMBER.match(raw)
-    if found and len(found.group("fact").strip(" .!")) >= 3:
-        return "remember", _first_to_third(found.group("fact"), clause=bool(found.group("dass")))
+    if found:
+        fact = _LEAD.sub("", found.group("fact").strip())  # "Merk dir das: Max hat ..." -> "Max hat ..."
+        if len(fact.strip(" .!")) >= 3 and not _NOT_A_FACT.match(fact) and not _ONLY_FILLER.match(fact):
+            return "remember", _first_to_third(fact, clause=bool(found.group("dass")))
     found = _FORGET.match(raw)
     if found and len(found.group("fact").strip(" .!")) >= 3:
         return "forget", found.group("fact").strip(" .!")

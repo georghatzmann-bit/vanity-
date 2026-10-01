@@ -168,8 +168,19 @@ class SentenceTest(unittest.TestCase):
                          ("remember", "Max hat am 3. Mai Geburtstag"))
         self.assertEqual(match_memory("Vergiss das mit der Pizza"), ("forget", "Pizza"))
         self.assertEqual(match_memory("Vergiss, dass ich gern Pizza esse"), ("forget", "ich gern Pizza esse"))
-        self.assertIsNone(match_memory("Was hast du dir gemerkt?"))
         self.assertIsNone(match_memory("Vergiss es"))
+        self.assertEqual(match_memory("Merk dir das: Max hat am 3. Mai Geburtstag"),
+                         ("remember", "Max hat am 3. Mai Geburtstag"))
+        self.assertEqual(match_memory("Merk dir, das ich gern Pizza esse"), ("remember", "Georg sagt: Ich esse gern Pizza"))
+        # Ohne Zusammenhang nichts Unsinniges speichern ("Das", "Bitte"), das macht Claude mit dem Gespräch
+        for said in ("Merk dir das", "Merk dir das bitte", "Merk dir, was ich gesagt habe", "Merk dir, wo ich geparkt habe"):
+            self.assertIsNone(match_memory(said), said)
+
+    def test_recall(self):
+        for said in ("Was weißt du über mich?", "Jarvis, was weißt du eigentlich alles über mich", "Was hast du dir gemerkt?",
+                     "Welche Gewohnheiten habe ich?", "Was kennst du denn für Gewohnheiten?"):
+            self.assertEqual(match_memory(said), ("recall", ""), said)
+        self.assertIsNone(match_memory("Was weißt du über Pizza?"))
 
 
 class AssistantMemoryTest(unittest.TestCase):
@@ -190,6 +201,17 @@ class AssistantMemoryTest(unittest.TestCase):
                       ("Notiert, Sir.", "Ist gespeichert, Sir.", "Vermerkt, Sir. Ich vergesse es nicht."))
         self.assertEqual(self.brain.asked, [])
         self.assertEqual(self.assistant.memory.facts()[0]["text"], "Georg sagt: Ich höre gern Rock")
+
+    def test_recall_without_claude(self):
+        self.assertIn("Noch nicht viel", self.assistant.handle("Was weißt du über mich?"))
+        self.assistant.handle("Merk dir, dass ich gern Rock höre")
+        self.assistant.handle("Merk dir: Max hat am 3. Mai Geburtstag")
+        week_of_habits(self.assistant.memory, self.clock)
+        answer = self.assistant.handle("Was weißt du über mich?")
+        self.assertIn("2 Dinge", answer)
+        self.assertIn("Max hat am 3. Mai Geburtstag; „Ich höre gern Rock“", answer)
+        self.assertIn("Discord", answer)
+        self.assertEqual(self.brain.asked, [])
 
     def offer(self):
         week_of_habits(self.assistant.memory, self.clock)

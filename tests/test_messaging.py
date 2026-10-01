@@ -312,6 +312,8 @@ class DiscordRecognitionTest(unittest.TestCase):
         cases = {
             "Geh in den Sprachkanal Zocken": ("voice", "zocken"),
             "Tritt dem Voice-Channel Lobby bei": ("voice", "lobby"),
+            "Geh in Discord in den Sprachkanal Lobby": ("voice", "lobby"),
+            "Geh auf Discord in den Kanal memes": ("channel", "memes"),
             "Öffne den Chat mit Max": ("person", "max"),
             "Geh auf den Server Gilde": ("server", "gilde"),
             "Geh in den Kanal memes": ("channel", "memes"),

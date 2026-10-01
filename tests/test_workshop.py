@@ -382,6 +382,8 @@ class ModelAndProjectsTest(unittest.TestCase):
         self.assertEqual(match_project("Starte das Projekt Würfelspiel"), ("run", "würfelspiel"))
         self.assertIsNone(match_project("Starte Spotify"))
         self.assertIsNone(match_project("Mach in der Werkstatt weiter"))
+        # So schlägt es das Fenster nach einem Fehler vor
+        self.assertEqual(match_project("Arbeite an Downloads Sortieren weiter"), ("continue", "downloads sortieren", ""))
 
     @posix_only
     def test_projects_are_listed_found_and_continued(self):

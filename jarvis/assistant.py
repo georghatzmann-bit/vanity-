@@ -609,12 +609,36 @@ class Assistant:
     # ------------------------------------------------------------------ Gedächtnis und Vorschläge
 
     def _memory_command(self, action: str, fact: str) -> str:
+        if action == "recall":
+            return self._recall()
         if action == "remember":
             self.memory.remember(fact)
             return random.choice(["Notiert, Sir.", "Ist gespeichert, Sir.", "Vermerkt, Sir. Ich vergesse es nicht."])
         if self.memory.forget(fact):
             return random.choice(["Vergessen, Sir.", "Gelöscht, Sir. Als hätten Sie es nie gesagt."])
         return "Dazu hatte ich mir nichts gemerkt, Sir."
+
+    def _recall(self) -> str:
+        """"Was weißt du über mich?" sofort aus dem Gedächtnis, ohne Claude."""
+        facts = self.memory.facts()
+        routines = self.memory.routines()
+        if not facts and not routines:
+            return "Noch nicht viel, Sir. Sagen Sie „Merk dir, …“, und ich behalte es. Ihre Gewohnheiten lerne ich mit der Zeit von selbst."
+
+        def spoken(text: str) -> str:
+            said = re.match(r"Georg sagt:\s*(.+)$", text)
+            return f"„{said.group(1)}“" if said else text
+
+        parts = []
+        if facts:
+            count = "eine Sache" if len(facts) == 1 else f"{len(facts)} Dinge"
+            latest = [spoken(f.get("text", "")) for f in facts[-3:]][::-1]
+            parts.append(f"Ich weiß {count} über Sie, Sir. Zuletzt: " + "; ".join(latest) + ".")
+        if routines:
+            habit = "Gewohnheit" if len(routines) == 1 else "Gewohnheiten"
+            parts.append(f"{habit}: " + "; ".join(r.describe() for r in routines[:2]) + ".")
+        parts.append("Alles steht im Fenster unter Gedächtnis.")
+        return " ".join(parts)
 
     def check_suggestions(self, now=None) -> bool:
         """Bietet eine Routine an, wenn gerade ihre Zeit ist ("Sir, um diese Zeit öffnen Sie meist
