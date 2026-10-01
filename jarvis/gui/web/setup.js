@@ -93,7 +93,7 @@
     place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
     speed: 'ausgewogen',
-    hotkeys: [], hotkey: '', autostart: false,
+    hotkeys: [], hotkey: '', autostart: false, fullPermission: true,
     ha: { url: '', tokenSet: false, echos: [] },
     finishing: false,
   };
@@ -1416,6 +1416,7 @@
         }
       }
       $('autostart').checked = !!S.autostart;
+      $('fullPermission').checked = !!S.fullPermission;
       $('haUrl').value = S.ha.url || '';
       if (S.ha.tokenSet) $('haToken').placeholder = 'Gespeichert. Nur für einen neuen Token ausfüllen.';
       if (S.ha.url) $('alexa').open = true;
@@ -1551,6 +1552,7 @@
       ['Antwort-Tempo', SPEED_NAMES[S.speed] || 'Ausgewogen', 'claude', null],
       ['Stumm-Taste', S.hotkey ? hotkeyLabel(S.hotkey) : 'Keine', 'extras', null],
       ['Autostart', S.autostart ? 'Startet mit Windows' : 'Aus', 'extras', null],
+      ['Freigabe', S.fullPermission ? 'Volle Freigabe' : 'Fragt vorher nach', 'extras', null],
     ];
     rows.forEach(([k, v, step, state]) => {
       const b = el('button', 'sum' + (state ? ' ' + state[0] : ''));
@@ -1612,6 +1614,7 @@
     S.place.saved = String(v.ort || '');
     S.hotkey = String(v.hotkey || '');
     S.autostart = !!v.autostart;
+    S.fullPermission = v.full_permission !== false;
     S.ha.url = String(v.ha_url || '');
     S.ha.tokenSet = !!v.ha_token_set;
     if (SPEED_NAMES[v.speed]) S.speed = v.speed;
@@ -1706,6 +1709,26 @@
       }
     });
     $('autostart').addEventListener('change', autostartChanged);
+    $('fullPermission').addEventListener('change', async () => {
+      const box = $('fullPermission');
+      const want = box.checked;
+      box.disabled = true;
+      try {
+        const r = await call('permission_set', want);
+        if (r && r.ok) {
+          S.fullPermission = want;
+          toast(want ? 'Volle Freigabe: Jarvis fragt nicht mehr nach.' : 'Jarvis fragt vor Herunterfahren & Co. nach.', 'ok');
+        } else {
+          box.checked = S.fullPermission;
+          toast((r && r.error) || 'Das ging nicht.', 'error');
+        }
+      } catch (err) {
+        box.checked = S.fullPermission;
+        failed(err);
+      } finally {
+        box.disabled = false;
+      }
+    });
     $('haCheck').addEventListener('click', haCheck);
     $('haSave').addEventListener('click', haSave);
     document.addEventListener('keydown', (e) => {
@@ -1915,6 +1938,7 @@
       hotkey_save: () => later({ ok: true, error: '' }, 60),
       brain_speed: (key) => later({ ok: true, error: '', speed: key }, 80),
       autostart_set: (on) => later({ ok: true, enabled: !!on, error: '' }, 120),
+      permission_set: () => later({ ok: true, error: '' }, 80),
       ha_check: () => later({
         ok: true, message: 'Verbunden. 2 Echo-Gerät(e) gefunden.',
         echos: [

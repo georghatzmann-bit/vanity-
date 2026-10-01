@@ -97,6 +97,15 @@ class SettingsTest(SetupTestCase):
         self.assertEqual(self.api.wake_sensitive(False)["threshold"], 0.5)
         self.assertEqual(self.saved()["wakeword"]["threshold"], 0.5)
 
+    def test_full_permission_switch(self):
+        # Ohne Eintrag gilt die volle Freigabe, der Schalter speichert [rechte] volle_freigabe.
+        self.assertTrue(self.api.hello()["values"]["full_permission"])
+        self.assertTrue(self.api.permission_set(False)["ok"])
+        self.assertIs(self.saved()["rechte"]["volle_freigabe"], False)
+        self.assertFalse(self.api.hello()["values"]["full_permission"])
+        self.assertTrue(self.api.permission_set(True)["ok"])
+        self.assertIs(self.saved()["rechte"]["volle_freigabe"], True)
+
     def test_only_voices_that_speak_clean_german(self):
         ids = [v["id"] for v in setup_wizard.VOICES]
         self.assertFalse([i for i in ids if "Multilingual" in i], "Multilingual-Stimmen sprechen kurze Antworten englisch aus")
@@ -111,8 +120,9 @@ class SettingsTest(SetupTestCase):
         self.assertIn("version", info)
         self.assertEqual(
             set(info["values"]),
-            {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "ha_url", "ha_token_set", "speed",
-             "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set", "pico_key_set"},
+            {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
+             "speed", "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set",
+             "pico_key_set"},
         )
         self.assertEqual(len(self.api.voices()), len(setup_wizard.VOICES))
         self.assertTrue(all(v["id"].endswith("Neural") for v in self.api.voices()))

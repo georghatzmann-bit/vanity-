@@ -380,6 +380,7 @@ class SetupApi:
                 "hotkey": str(cfg["mute"].get("hotkey", "")),
                 "threshold": float(cfg["wakeword"]["threshold"]),
                 "autostart": enabled(),
+                "full_permission": bool(cfg.get("rechte", {}).get("volle_freigabe", True)),
                 "ha_url": str(cfg.get("homeassistant", {}).get("url", "")),
                 "ha_token_set": bool(cfg.get("homeassistant", {}).get("token")),
                 "speed": speed_of(cfg["brain"].get("models")),
@@ -817,6 +818,10 @@ class SetupApi:
         if result["ok"]:
             _forget_brain_state()
         return result
+
+    def permission_set(self, on) -> dict:
+        """Volle Freigabe an oder aus ([rechte] volle_freigabe)."""
+        return self._save("rechte", "volle_freigabe", bool(on))
 
     def autostart_set(self, on) -> dict:
         from . import autostart
