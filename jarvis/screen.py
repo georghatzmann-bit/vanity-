@@ -171,6 +171,13 @@ def as_text(lines: list[dict], positions: bool = True) -> str:
 
 UIA_HEAD = r"""
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+# Ohne die Win32-Übersetzer sind Menüs, Titelleisten und Knöpfe klassischer Programme (Editor,
+# Explorer-Dialoge) nur leere "Pane"-Flächen ohne Namen und ohne Knopf-Funktion.
+try {
+  Add-Type -AssemblyName UIAutomationClientsideProviders
+  [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly(
+    [UIAutomationClientsideProviders.UIAutomationClientSideProviders].Assembly.GetName())
+} catch {}
 $A = [System.Windows.Automation.AutomationElement]
 $Scope = [System.Windows.Automation.TreeScope]
 $True_ = [System.Windows.Automation.Condition]::TrueCondition
@@ -219,6 +226,7 @@ $rows = foreach ($e in (Walk $win ([int]$env:JARVIS_UI_LIMIT))) {
   $c = $e.Current
   $name = $c.Name
   $type = $c.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+  if ($c.ClassName -match '^(Edit|RichEdit)') { $type = 'Edit' }  # auch ohne Win32-Übersetzer ein Feld
   if (-not $name -and $type -notin @('Edit', 'Document', 'ComboBox')) { continue }
   [pscustomobject]@{ art = $type; name = $name; an = $c.IsEnabled }
 }

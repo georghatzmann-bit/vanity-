@@ -55,6 +55,13 @@ class ScreenTest(unittest.TestCase):
         # Walk lieferte gar nichts (im Windows-Build: "Kein Eingabefeld gefunden" im Editor).
         self.assertIn("$queue.Enqueue(@($child, ($depth + 1)))", screen.UIA_HEAD)
 
+    def test_classic_programs_show_their_controls(self):
+        # Im Windows-Build war der Editor ohne die Win32-Übersetzer nur "Pane/Edit" und "Pane/Statusleiste".
+        head = screen.UIA_HEAD
+        self.assertLess(head.index("try {"), head.index("RegisterClientSideProviderAssembly"))
+        self.assertLess(head.index("RegisterClientSideProviderAssembly"), head.index("} catch {}"))
+        self.assertIn("if ($c.ClassName -match '^(Edit|RichEdit)') { $type = 'Edit' }", screen.ELEMENTS_SCRIPT)
+
     def test_typing_also_reaches_multiline_fields(self):
         # Der Editor hat ein mehrzeiliges Feld ohne ValuePattern; das bekommt den Text als WM_SETTEXT
         script = screen.TYPE_SCRIPT
