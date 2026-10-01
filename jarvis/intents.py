@@ -149,6 +149,28 @@ _RULES += [
         r"(?:an|ein|aus|ab|einschalten|ausschalten|aktivieren|deaktivieren)$|"
         r"^(?:aktivier|aktiviere|deaktivier|deaktiviere) (?:das |den |die )?(?:bluetooth|wlan|w-lan|wifi|wi-fi)$"
     )),
+    # Ein und aus (nur mit voller Freigabe sofort, sonst fragt Claude nach)
+    ("power_abort", re.compile(
+        r"^(?:(?:herunterfahren|runterfahren|neustart|shutdown|ausschalten) (?:abbrechen|stoppen|stopp|aufhalten)|"
+        r"nicht(?: herunterfahren| runterfahren| neu starten| ausschalten)?|"
+        r"(?:brich|breche) das herunterfahren ab|(?:halt|stopp) das herunterfahren)$"
+    )),
+    ("power_off", re.compile(
+        r"^(?:fahr|fahre) (?:den |meinen |die )?(?:pc|computer|rechner|laptop|kiste) (?:herunter|runter)(?: bitte)?$|"
+        r"^(?:den |meinen )?(?:pc|computer|rechner|laptop) (?:herunterfahren|runterfahren|ausschalten|ausmachen)$|"
+        r"^(?:schalt|schalte|mach|mache) (?:den |meinen |die )?(?:pc|computer|rechner|laptop|kiste) aus$|"
+        r"^(?:herunterfahren|runterfahren|pc aus|computer aus|feierabend für heute fahr runter)$"
+    )),
+    ("power_restart", re.compile(
+        r"^(?:starte|start) (?:den |meinen )?(?:pc|computer|rechner|laptop) neu$|"
+        r"^(?:den |meinen )?(?:pc|computer|rechner|laptop) neu ?starten$|^(?:neustart|neu starten|reboot)$"
+    )),
+    ("power_sleep", re.compile(
+        r"^(?:(?:schick|schicke|versetz|versetze|setz|setze) )?(?:den |meinen )?(?:pc|computer|rechner|laptop) "
+        r"(?:in den |auf )?(?:energiesparmodus|standby|schlafmodus|ruhemodus)(?: (?:schicken|versetzen))?$|"
+        r"^(?:energiesparmodus|standby)(?: an| bitte)?$|^(?:pc|computer|rechner) (?:schlafen legen|in den standby)$"
+    )),
+    ("power_logoff", re.compile(r"^(?:melde|meld) (?:mich|georg) ab$|^abmelden$")),
     ("install", re.compile(
         rf"^{_ASK}(?:installiere|installier|instaliere|installieren) {_FILL}(.+?)(?: (?:herunter|runter))?$|"
         rf"^{_ASK}(?:lade|lad|hol|hole) {_FILL}(.+?) (?:herunter|runter|aus dem internet)$|"
@@ -181,7 +203,8 @@ _RULES += [
 ]
 
 # Bei Fragen ("Ist das Mikrofon aus?") nie stummschalten oder das Gespräch löschen.
-_NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off", "dark_on", "dark_off", "radio"}
+_NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off", "dark_on", "dark_off", "radio",
+                      "power_off", "power_restart", "power_sleep", "power_logoff"}
 # Diese Absichten bekommen den Namen des Programms oder Ordners mit.
 _WITH_NAME = {"install", "close", "open", "open_known", "folder"}
 # Wörter, die kein Programmname sind ("Öffne es", "Schließ das")
@@ -198,20 +221,40 @@ _MSG_NOTE = r"(?:(?:eine|ne|'ne)\s+(?:nachricht|message|dm|pn)\s+)?"
 _MSG_APP = r"(?P<app>discord|whats\s?app|telegram)"
 _MSG_VIA = r"(?:auf|über|ueber|in|per|via|bei)"
 _MSG_WORD = r"[A-Za-zÄÖÜäöüß][\wÄÖÜäöüß.\-]*"
+# Zweites Wort eines Namens ("Max Müller"), aber nicht "Max bitte" oder "Max Bescheid"
+_MSG_NAME = (rf"(?P<person>{_MSG_WORD}"
+             rf"(?:\s+(?!(?:bitte|bescheid|mal|kurz|schnell|noch|auch|gleich|jetzt|sofort)\b){_MSG_WORD})?)"
+             r"(?:\s+(?:bitte|mal|kurz|schnell|noch|gleich))*")
 _MESSAGE = [
     # Name vor der App: Die App trennt Name und Text, ein Satzzeichen ist nicht nötig.
     re.compile(
-        rf"^{_MSG_VERB}\s+{_MSG_FILL}{_MSG_NOTE}(?:an\s+)?(?P<person>{_MSG_WORD}(?:\s+{_MSG_WORD})?)\s+"
+        rf"^(?:{_MSG_VERB}|sag|sage)\s+{_MSG_FILL}{_MSG_NOTE}(?:an\s+)?{_MSG_NAME}\s+"
         rf"{_MSG_NOTE}{_MSG_VIA}\s+{_MSG_APP}\s*[,:;\-–—]?\s*(?P<text>.+)$",
         re.I,
     ),
     # App vor dem Namen: Dann muss ein Komma oder Doppelpunkt den Namen vom Text trennen.
     re.compile(
         rf"^{_MSG_VERB}\s+{_MSG_FILL}{_MSG_NOTE}{_MSG_VIA}\s+{_MSG_APP}\s+(?:an\s+)?"
-        rf"(?P<person>{_MSG_WORD}(?:\s+{_MSG_WORD})?)\s*[,:]\s*(?P<text>.+)$",
+        rf"{_MSG_NAME}\s*[,:]\s*(?P<text>.+)$",
         re.I,
     ),
 ]
+# Ohne App (dann die, über die Georg mit der Person sonst schreibt, sonst Discord). Hier muss
+# ein Komma oder Doppelpunkt den Namen vom Text trennen.
+_MESSAGE_NO_APP = [
+    # "Schreib Max: bin gleich da", "Schick Anna, ich komme später"
+    re.compile(rf"^{_MSG_VERB}\s+{_MSG_FILL}{_MSG_NOTE}(?:an\s+)?{_MSG_NAME}\s*[,:]\s*(?P<text>.+)$", re.I),
+    # "Sag Max, dass ich später komme", "Sag Max Bescheid, dass ...", "Sag Max, ich bin gleich da"
+    re.compile(rf"^(?:sag|sage)\s+{_MSG_FILL}{_MSG_NAME}(?:\s+bescheid)?\s*[,:]\s*(?P<text>.+)$", re.I),
+    # "Richte Max aus, dass ich später komme"
+    re.compile(rf"^(?:richte|richt)\s+{_MSG_FILL}{_MSG_NAME}\s+aus\s*[,:]?\s*(?P<text>.+)$", re.I),
+]
+# In einen Discord-Kanal: "Schreib in den Kanal allgemein: Wer ist online?"
+_CHANNEL_MESSAGE = re.compile(
+    rf"^{_MSG_VERB}\s+{_MSG_FILL}(?:in\s+den|im|in)\s+(?:text)?(?:kanal|channel)\s+#?(?P<channel>[\wÄÖÜäöüß\-]+)"
+    rf"(?:\s+{_MSG_VIA}\s+discord)?\s*[,:]\s*(?P<text>.+)$",
+    re.I,
+)
 # Kein Name: "Schreib mir auf Discord ..." ist eher eine Bitte an Jarvis selbst.
 _NOT_A_PERSON = {
     "mir", "mich", "uns", "dir", "dich", "ihm", "ihr", "ihnen", "es", "das", "den", "die", "der", "dem",
@@ -220,25 +263,111 @@ _NOT_A_PERSON = {
     "mein", "meine", "meinem", "meinen", "meiner", "dein", "deine", "deinem", "deinen", "deiner",
     "sein", "seine", "seinem", "seinen", "ihrem", "ihren", "unser", "unserem", "unseren", "unserer",
     "eurem", "euren", "allen", "jedem", "keinem", "diesem", "dieser", "diesen",
+    # "Sag mal, ...", "Sag Bescheid, wenn ...", "Sag ehrlich, ..."
+    "mal", "bitte", "kurz", "schnell", "bescheid", "ehrlich", "einfach", "doch", "nochmal", "jarvis",
+    "hallo", "hi", "danke", "ja", "nein", "so", "jetzt", "gleich", "sofort", "nur", "auch", "endlich",
+    "lieber", "wieder", "wer", "wie", "wo", "warum", "wann", "welche", "welcher", "welches", "code",
+    "einem", "einer", "kein", "keine", "noch", "zuerst", "dann", "danach", "lass", "uns",
 }
+# Text, der mit einem Relativwort anfängt, ist keine Nachricht ("Schreib Python-Code, der ...")
+_NOT_A_TEXT = re.compile(r"^(?:der|die|den|dem|welche|welcher|welches|wo|womit|was)\b", re.I)
+
+
+def _message_text(body: str) -> str | None:
+    """Der Text der Nachricht. Indirekte Rede ("dass ich später komme") wird zur direkten
+    ("Ich komme später"); was Jarvis nicht sicher umformen kann, macht Claude (None)."""
+    body = body.strip()
+    if re.match(r"(?:dass|das)\b", body, re.I):
+        from .messaging import direct_speech
+
+        return direct_speech(body)
+    if re.match(r"(?:ob|wann|wo|wie|warum|weil)\b", body, re.I) or _NOT_A_TEXT.match(body):
+        return None
+    return body or None
 
 
 def match_message(text: str) -> Intent | None:
-    """Erkennt "Schreib <Person> auf <App>, <Text>". Sätze mit "dass" ("..., dass ich später
-    komme") gehen an Claude, der formuliert sie in eine richtige Nachricht um."""
+    """Erkennt "Schreib <Person> auf <App>, <Text>" (auch "Sag Max, dass ich später komme").
+    Ohne genannte App ist arg leer, dann entscheidet der Assistent."""
     raw = re.sub(r"^\s*(?:(?:hey|hallo|okay|ok)\s+)?jarvis[\s,!.]*", "", str(text).strip(), flags=re.I)
-    for pattern in _MESSAGE:
-        found = pattern.match(raw)
+    found = _CHANNEL_MESSAGE.match(raw)
+    if found:
+        body = _message_text(found.group("text"))
+        if body:
+            return Intent("message", "discord", {"person": "#" + found.group("channel"), "text": body})
+        return None
+    for patterns, with_app in ((_MESSAGE, True), (_MESSAGE_NO_APP, False)):
+        for pattern in patterns:
+            found = pattern.match(raw)
+            if not found:
+                continue
+            person = found.group("person").strip(" .,")
+            if person.split()[0].lower() in _NOT_A_PERSON:
+                continue
+            body = _message_text(found.group("text"))
+            if body is None:
+                return None  # das formuliert Claude besser
+            app = re.sub(r"\s", "", found.group("app").lower()) if with_app else ""
+            return Intent("message", app, {"person": person, "text": body})
+    return None
+
+
+# ---------------------------------------------------------------------- Discord ohne Maus
+
+_IN_DISCORD = r"(?:\s+(?:auf|in|bei|über)\s+discord)?"
+_DISCORD: list[tuple[str, re.Pattern]] = [
+    # "Geh in den Sprachkanal Zocken", "Tritt dem Voice-Channel Lobby bei", "Join Voice Lobby"
+    ("voice", re.compile(
+        r"^(?:geh|gehe|komm|komme|wechsel|wechsle|spring|joine?|tritt|verbinde mich mit|verbind mich mit)\s+"
+        r"(?:in\s+den\s+|dem\s+|zum\s+|mit\s+dem\s+|in\s+)?(?:sprachkanal|sprach[ -]?channel|voice[ -]?channel|voice|talk)\s+"
+        rf"(?P<x>.+?){_IN_DISCORD}(?:\s+bei)?$")),
+    # "Geh auf den Server Gilde", "Öffne den Discord-Server Gilde"
+    ("server", re.compile(
+        r"^(?:öffne|geh|gehe|wechsel|wechsle|spring|zeig mir|zeige mir)\s+(?:auf|in|zu)?\s*(?:den|meinen)?\s*"
+        rf"(?:discord[ -]?)?server\s+(?P<x>.+?){_IN_DISCORD}$")),
+    # "Geh in den Kanal allgemein", "Öffne den Kanal memes auf Discord"
+    ("channel", re.compile(
+        r"^(?:geh|gehe|wechsel|wechsle|spring)\s+(?:in|zu)\s+(?:den\s+)?(?:text)?(?:kanal|channel)\s+"
+        rf"(?!von\b)(?P<x>.+?){_IN_DISCORD}$")),
+    ("channel", re.compile(
+        r"^(?:öffne|zeig mir|zeige mir)\s+(?:den\s+)?(?:text)?(?:kanal|channel)\s+(?!von\b)(?P<x>.+?)\s+(?:auf|in)\s+discord$")),
+    # "Öffne den Chat mit Max", "Geh in den Chat von Anna auf Discord"
+    ("person", re.compile(
+        r"^(?:öffne|geh|gehe|wechsel|wechsle|spring|zeig mir|zeige mir)\s+(?:in|zu)?\s*(?:den|meinen)?\s*"
+        rf"(?:chat|dm|privatchat|unterhaltung|direktnachrichten)\s+(?:mit|von)\s+(?P<x>.+?){_IN_DISCORD}$")),
+    # "Ruf Max auf Discord an", "Starte einen Anruf mit Max auf Discord"
+    ("call", re.compile(r"^(?:ruf|rufe)\s+(?P<x>.+?)\s+(?:auf|in|über|per)\s+discord\s+an$")),
+    ("call", re.compile(r"^(?:starte|start)\s+(?:einen\s+)?(?:anruf|call|sprachanruf)\s+mit\s+(?P<x>.+?)\s+(?:auf|in|über)\s+discord$")),
+    # Mikrofon in Discord stumm/laut, taub (nichts hören): Discord schaltet um
+    ("deafen", re.compile(
+        r"^(?:(?:schalt|schalte|mach|mache|stell|stelle)\s+)?(?:mich\s+)?(?:in|bei|auf)\s+discord\s+(?:taub|wieder hörend)$|"
+        r"^discord\s+(?:taub|deafen|undeafen|ton aus|ton an)$|^(?:deafen|undeafen)(?:\s+mich)?(?:\s+(?:in|auf|bei))?\s+discord$")),
+    ("mute", re.compile(
+        r"^(?:(?:schalt|schalte|mach|mache|stell|stelle)\s+)?(?:mich|mein mikro|mein mikrofon)\s+(?:in|bei|auf)\s+discord\s+"
+        r"(?:stumm|laut|wieder laut|an|aus|ein)(?:\s+(?:schalten|stellen))?$|"
+        r"^discord\s+(?:stumm|mute|unmute|entstummen|mikro aus|mikro an|mikrofon aus|mikrofon an)$|"
+        r"^(?:mute|unmute|entstumme)(?:\s+mich)?(?:\s+(?:in|auf|bei))?\s+discord$")),
+]
+_DISCORD_NOT_A_TARGET = {"es", "das", "den", "die", "der", "dem", "ihn", "sie", "mich", "dich"}
+
+
+def match_discord(text: str) -> Intent | None:
+    """Discord-Aktionen über die Schnellsuche und Discords eigene Tasten, ohne Maus."""
+    if not re.search(r"discord|kanal|channel|voice|sprachkanal|talk|server|chat|dm\b", str(text), re.I):
+        return None
+    norm = normalize(text)
+    for kind, pattern in _DISCORD:
+        found = pattern.match(norm)
         if not found:
             continue
-        person = found.group("person").strip(" .,")
-        body = found.group("text").strip()
-        if person.split()[0].lower() in _NOT_A_PERSON or not body:
-            continue
-        if re.match(r"(?:dass|das|ob|wann|wo|wie|warum|weil)\b", body, re.I):
-            return None  # indirekte Rede: lieber Claude
-        app = re.sub(r"\s", "", found.group("app").lower())
-        return Intent("message", app, {"person": person, "text": body})
+        if kind in ("mute", "deafen"):
+            return Intent("discord", kind)
+        target = re.sub(r"^(?:dem|den|der|die|das)\s+", "", found.group("x")).strip(" -")
+        if not target or target in _DISCORD_NOT_A_TARGET or re.search(r"\b(?:whatsapp|telegram|youtube|twitch)\b", target):
+            return None
+        if kind == "person" and re.search(r"\b(?:whats ?app|telegram)\b", norm):
+            return None
+        return Intent("discord", kind, {"target": target})
     return None
 
 
@@ -489,7 +618,7 @@ def match(text: str) -> Intent | None:
     reminder = match_reminder(text)
     if reminder is not None:
         return reminder
-    for special in (match_calc, match_web, match_weather):
+    for special in (match_discord, match_calc, match_web, match_weather):
         found = special(text)
         if found is not None:
             return found

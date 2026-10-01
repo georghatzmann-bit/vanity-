@@ -161,7 +161,6 @@ class IntentTest(unittest.TestCase):
         for text in (
             "Ist mein Mikrofon aus?",
             "Warum ist das Mikrofon aus?",
-            "Schick den PC in den Schlafmodus.",
             "Wie komme ich aus dem Schlafmodus?",
             "Das Mikrofon aus dem Schrank ist kaputt",
             "Ich möchte ein neues Gespräch mit meiner Mutter vorbereiten",
@@ -171,6 +170,8 @@ class IntentTest(unittest.TestCase):
         ):
             with self.subTest(text=text):
                 self.assertIsNone(intents.match(text))
+        # Das ist der PC, nicht Jarvis' Mikrofon
+        self.assertEqual(intents.match("Schick den PC in den Schlafmodus.").name, "power_sleep")
 
     def test_volume_set(self):
         for text, value in (("Lautstärke auf 50", "50"), ("Stell die Lautstärke auf 30 Prozent.", "30"),

@@ -8,9 +8,30 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+FULL_PERMISSION = (
+    "- Georg hat dir volle Freigabe erteilt. Du fragst nicht nach, sondern machst es einfach, auch "
+    "Programme deinstallieren, Dateien in den Papierkorb legen, Administrator-Befehle, Herunterfahren, "
+    "Neustarten, Energiesparen und Abmelden. Endgültig löschen (statt Papierkorb), Laufwerke formatieren "
+    "und die Registry ausräumen tust du trotzdem nicht. Nur zwei Dinge fragst du kurz: etwas kaufen oder "
+    "bezahlen, und Nachrichten oder E-Mails in Georgs Namen, deren Inhalt er nicht selbst gesagt hat."
+)
+
+
+def _permissions(text: str, full: bool) -> str:
+    """Der Abschnitt zwischen <!-- rueckfragen --> und <!-- /rueckfragen -->: mit voller Freigabe
+    ersetzt, sonst ohne die Markierungen."""
+    start, end = "<!-- rueckfragen -->", "<!-- /rueckfragen -->"
+    if start not in text or end not in text:
+        return text
+    before, rest = text.split(start, 1)
+    middle, after = rest.split(end, 1)
+    return before + (FULL_PERMISSION if full else middle.strip("\n")) + after
+
+
 def build_persona(home: Path, state_dir: Path, cfg: dict) -> Path:
     base_file = home / "CLAUDE.md"
     me = cfg.get("ich", {})
+    full = bool(cfg.get("rechte", {}).get("volle_freigabe", True))
     extra = []
     if me.get("ort"):
         extra.append(
@@ -19,10 +40,10 @@ def build_persona(home: Path, state_dir: Path, cfg: dict) -> Path:
         )
     if me.get("notizen"):
         extra.append(f"- {me['notizen']}")
-    if not extra:
-        return base_file
     try:
-        text = base_file.read_text(encoding="utf-8").rstrip() + "\n\n## Über Georg\n\n" + "\n".join(extra) + "\n"
+        text = _permissions(base_file.read_text(encoding="utf-8"), full).rstrip() + "\n"
+        if extra:
+            text += "\n## Über Georg\n\n" + "\n".join(extra) + "\n"
         target = state_dir / "persona.md"
         state_dir.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")

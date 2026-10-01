@@ -295,3 +295,86 @@ class AssistantQuickTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PowerTest(unittest.TestCase):
+    """Herunterfahren & Co.: mit voller Freigabe sofort, mit Vorlauf und "Abbrechen"."""
+
+    def test_recognition(self):
+        from jarvis.intents import match
+
+        cases = {
+            "Fahr den PC herunter": "power_off", "Mach den PC aus": "power_off", "PC aus": "power_off",
+            "Starte den PC neu": "power_restart", "Neustart": "power_restart",
+            "Schick den PC in den Energiesparmodus": "power_sleep", "Melde mich ab": "power_logoff",
+            "Herunterfahren abbrechen": "power_abort", "Doch nicht": "power_abort",
+        }
+        for said, name in cases.items():
+            with self.subTest(said=said):
+                self.assertEqual(match(said).name, name)
+        self.assertIsNone(match("Soll ich den PC herunterfahren?"))
+
+    def test_full_permission_shuts_down_with_a_grace_period(self):
+        from unittest import mock
+
+        from jarvis import pc
+        from tests.test_assistant import FakeBrain, make
+
+        brain = FakeBrain()
+        assistant, _ui, _speaker, _ = make(brain)
+        with mock.patch.object(pc, "power", return_value="ok") as power, \
+                mock.patch.object(pc, "power_pending", return_value=False):
+            answer = assistant.handle("Fahr den PC herunter")
+        power.assert_called_once_with("shutdown", 15)
+        self.assertIn("15 Sekunden", answer)
+        self.assertEqual(brain.asked, [])
+        with mock.patch.object(pc, "power_abort", return_value=True) as abort:
+            self.assertEqual(assistant.handle("Abbrechen"), "Abgebrochen, Sir. Der PC bleibt an.")
+        abort.assert_called_once()
+
+    def test_without_full_permission_claude_asks_first(self):
+        from unittest import mock
+
+        from jarvis import pc
+        from jarvis.config import load_config
+        from tests.test_assistant import FakeBrain, make
+
+        cfg = load_config()
+        cfg["rechte"] = {"volle_freigabe": False}
+        brain = FakeBrain(chunks=["Wirklich herunterfahren, Sir?"])
+        assistant, _ui, _speaker, _ = make(brain, cfg=cfg)
+        with mock.patch.object(pc, "power") as power:
+            assistant.handle("Fahr den PC herunter")
+        power.assert_not_called()
+        self.assertEqual(brain.asked, ["Fahr den PC herunter"])
+
+    def test_persona_says_what_jarvis_may_do(self):
+        import tempfile
+        from pathlib import Path
+
+        from jarvis.config import HOME_DIR
+        from jarvis.persona import build_persona
+
+        with tempfile.TemporaryDirectory() as folder:
+            full = build_persona(HOME_DIR, Path(folder), {"rechte": {"volle_freigabe": True}}).read_text(encoding="utf-8")
+            self.assertIn("volle Freigabe", full)
+            self.assertNotIn("Nur bei folgenden Dingen", full)
+            careful = build_persona(HOME_DIR, Path(folder), {"rechte": {"volle_freigabe": False}}).read_text(encoding="utf-8")
+            self.assertIn("Nur bei folgenden Dingen", careful)
+            self.assertNotIn("<!--", careful)
+
+    def test_tool_needs_no_yes_with_full_permission(self):
+        from unittest import mock
+
+        from jarvis import pc, tool
+
+        with mock.patch.object(tool, "load_config", return_value={"rechte": {"volle_freigabe": True}}), \
+                mock.patch.object(pc, "power", return_value="Der PC fährt in 15 Sekunden herunter.") as power, \
+                mock.patch("builtins.print"):
+            self.assertEqual(tool.main(["herunterfahren"]), 0)
+        power.assert_called_once_with("shutdown", 15)
+        with mock.patch.object(tool, "load_config", return_value={"rechte": {"volle_freigabe": False}}), \
+                mock.patch.object(tool, "last_said", return_value="Fahr runter"), \
+                mock.patch.object(pc, "power") as power, mock.patch("builtins.print"):
+            self.assertEqual(tool.main(["herunterfahren"]), 3)
+        power.assert_not_called()

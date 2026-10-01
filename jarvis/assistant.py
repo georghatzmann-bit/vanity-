@@ -37,7 +37,9 @@ PROGRESS_MAX = 3
 
 # Diese Befehle gelten immer, auch wenn der Satz nach Werkstatt klingt ("Stopp", "Wie weit bist du?").
 _BEFORE_WORKSHOP = {"stop", "mute", "reset", "message", "remind", "timer", "workshop_status", "workshop_cancel",
-                    "window_show", "window_hide", "setup"}
+                    "window_show", "window_hide", "setup", "discord", "power_abort", "power_off", "power_restart",
+                    "power_sleep", "power_logoff"}
+_POWER = {"power_off": "shutdown", "power_restart": "restart", "power_sleep": "sleep", "power_logoff": "logoff"}
 
 
 class Assistant:
@@ -271,10 +273,16 @@ class Assistant:
                     return None  # "Bist du fertig?" ohne laufende Arbeit: normale Frage an Claude
                 return self.workshop.status()
             return "Abgebrochen, Sir." if self.workshop.cancel() else "In der Werkstatt läuft gerade nichts, Sir."
-        if name == "stop":
+        if name in ("stop", "power_abort"):
             if self.speaker is not None:
                 self.speaker.stop()
-            return ""
+            if self._power_pending():
+                from . import pc
+
+                self._power_until = 0.0
+                if pc.power_abort():
+                    return "Abgebrochen, Sir. Der PC bleibt an."
+            return "" if name == "stop" else None
         if name == "mute" and self.mute is not None:
             self.mute.mute()
             from .mute import hotkey_label
@@ -301,6 +309,8 @@ class Assistant:
             return "Die Einstellungen öffnen sich, Sir."
         if not self._local:
             return None
+        if name in _POWER:
+            return self._power(_POWER[name])
         now = dt.datetime.now()
         if name == "time":
             return intents.spoken_time(now)
@@ -338,6 +348,8 @@ class Assistant:
                 return self._app(name, intent.arg)
             if name == "message":
                 return self._message(intent.arg, intent.data["person"], intent.data["text"])
+            if name == "discord":
+                return self._discord(intent)
             if name in ("remind", "timer"):
                 return self._remind(name, intent)
             if name in ("web", "search", "images", "route", "map", "play"):
@@ -490,21 +502,78 @@ class Assistant:
         return random.choice([f"Das macht {result}, Sir.", f"{result}, Sir.", f"Ergibt {result}, Sir."])
 
     def _message(self, app: str, person: str, text: str) -> str:
-        """Chatnachricht ohne Claude-Umweg: in wenigen Sekunden statt zwanzig."""
+        """Chatnachricht ohne Claude-Umweg: in zwei, drei Sekunden statt zwanzig. Ohne genannte
+        App die, über die Georg mit der Person sonst schreibt, sonst Discord."""
         from . import messaging
 
+        app = app or self.contact_app(person) or "discord"
         found = messaging.find_app(app)
-        label = f"Schreibt {person} auf {found.name if found else app}"
+        where = "Discord" if person.startswith("#") else (found.name if found else app)
+        label = f"Schreibt in {person} auf {where}" if person.startswith("#") else f"Schreibt {person} auf {where}"
         step = {"id": f"m{next(self._ids)}", "tool": "Nachricht", "label": label, "detail": text,
                 "kind": "message", "state": "running"}
         self.ui.progress(step)
+        started = time.monotonic()
         try:
             messaging.send(app, person, text)
         except messaging.MessagingError as exc:
-            self.ui.progress(dict(step, state="error"))
+            self.ui.progress(dict(step, state="error", seconds=round(time.monotonic() - started, 1)))
             return f"{exc}"
-        self.ui.progress(dict(step, state="done"))
+        self.ui.progress(dict(step, state="done", seconds=round(time.monotonic() - started, 1)))
+        self.learn("message", person, app=app)
+        if person.startswith("#"):
+            return random.choice([f"Steht in {person[1:]}, Sir.", "Gepostet, Sir."])
         return random.choice([f"An {person} ist raus, Sir.", "Gesendet, Sir.", f"Erledigt. {person} hat es."])
+
+    def _discord(self, intent) -> str:
+        """Discord ohne Maus: Chats, Kanäle, Server und Sprachkanäle über die Schnellsuche,
+        stumm und taub über Discords eigene Tasten. Danach geht es zurück ins Spiel."""
+        from . import messaging
+
+        kind, target = intent.arg, intent.data.get("target", "")
+        shown = target[:1].upper() + target[1:]
+        labels = {
+            "person": f"Öffnet den Chat mit {shown}", "channel": f"Öffnet den Kanal {shown}",
+            "server": f"Öffnet den Server {shown}", "voice": f"Geht in den Sprachkanal {shown}",
+            "call": f"Ruft {shown} an", "mute": "Schaltet das Discord-Mikrofon um", "deafen": "Schaltet den Discord-Ton um",
+        }
+        try:
+            with self._step(labels[kind], "message"):
+                if kind in ("mute", "deafen"):
+                    messaging.discord_key(kind)
+                elif kind == "call":
+                    messaging.discord_call(target)
+                else:
+                    messaging.discord_open(target, kind)
+        except messaging.MessagingError as exc:
+            return str(exc)
+        if kind in ("person", "call"):
+            self.learn("message", shown, app="discord")
+        return {
+            "person": f"Der Chat mit {shown}, Sir.", "channel": f"Kanal {shown}, Sir.", "server": f"Server {shown}, Sir.",
+            "voice": f"Sprachkanal {shown}, Sir.", "call": f"Ich rufe {shown} an, Sir.",
+            "mute": "Discord-Mikrofon umgeschaltet, Sir.", "deafen": "Discord-Ton umgeschaltet, Sir.",
+        }[kind]
+
+    def contact_app(self, person: str) -> str:
+        """Über welche App Georg mit dieser Person sonst schreibt (aus dem Gedächtnis)."""
+        memory = getattr(self, "memory", None)
+        if memory is None:
+            return ""
+        try:
+            return memory.contact_app(person)
+        except Exception:
+            return ""
+
+    def learn(self, kind: str, what: str, **data) -> None:
+        """Merkt sich, was Georg tut, damit Jarvis Gewohnheiten erkennt (siehe memory.py)."""
+        memory = getattr(self, "memory", None)
+        if memory is None or not what:
+            return
+        try:
+            memory.record(kind, what, **data)
+        except Exception as exc:
+            log.debug("Gedächtnis: %s", exc)
 
     def _remind(self, name: str, intent) -> str | None:
         """Erinnerungen und Timer sofort, ohne Claude."""
@@ -536,6 +605,42 @@ class Assistant:
             self.announce(f"{known.name} war schon installiert, Sir." + (" Ich habe es gestartet." if started else ""))
         else:
             self.announce(f"{known.name} ist installiert, Sir." + (" Es startet gerade." if started else ""))
+
+    @property
+    def full_permission(self) -> bool:
+        """Georg hat Jarvis volle Freigabe erteilt: kein Nachfragen vor Herunterfahren & Co."""
+        return bool(self._cfg.get("rechte", {}).get("volle_freigabe", True))
+
+    def _power_pending(self) -> bool:
+        if time.monotonic() < getattr(self, "_power_until", 0.0):
+            return True
+        try:
+            from . import pc
+
+            return pc.power_pending()  # auch, wenn das Gehirn es geplant hat
+        except Exception:
+            return False
+
+    def _power(self, action: str) -> str | None:
+        """Herunterfahren, Neustart, Energiesparen, Abmelden. Ohne volle Freigabe fragt Claude
+        erst nach. Mit Vorlauf, in dem "Abbrechen" alles aufhält."""
+        from . import pc
+
+        if not self.full_permission:
+            return None
+        delay = 15 if action in ("shutdown", "restart") else 6
+        labels = {"shutdown": "Fährt den PC herunter", "restart": "Startet den PC neu",
+                  "sleep": "Schickt den PC in den Energiesparmodus", "logoff": "Meldet ab"}
+        with self._step(labels[action], "app", f"in {delay} Sekunden"):
+            pc.power(action, delay)
+        self._power_until = time.monotonic() + delay
+        self.learn("power", action)
+        return {
+            "shutdown": f"Ich fahre in {delay} Sekunden herunter, Sir. Ein Abbrechen hält mich auf.",
+            "restart": f"Neustart in {delay} Sekunden, Sir. Ein Abbrechen hält mich auf.",
+            "sleep": "Gute Nacht, Sir. Der PC schläft gleich.",
+            "logoff": "Ich melde Sie gleich ab, Sir.",
+        }[action]
 
     def _gaming(self, on: bool) -> str:
         from . import pc

@@ -177,6 +177,92 @@ def lock() -> None:
         raise PcError("Der PC ließ sich nicht sperren.")
 
 
+# ---------------------------------------------------------------------- Ein und aus
+
+_POWER_NOTE = "Jarvis fährt den PC herunter. Sag 'Jarvis, abbrechen', um es aufzuhalten."
+_SLEEP = ("Add-Type -AssemblyName System.Windows.Forms; "
+          "[System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false) | Out-Null")
+_later: threading.Timer | None = None
+
+
+def _pending_file() -> Path:
+    from .config import STATE_DIR
+
+    return STATE_DIR / "ausschalten.txt"
+
+
+def power_pending() -> bool:
+    """Ist gerade ein Herunterfahren o. Ä. geplant (auch vom Gehirn über jarvis.tool)?"""
+    try:
+        return time.time() < float(_pending_file().read_text(encoding="utf-8").strip() or 0)
+    except (OSError, ValueError):
+        return False
+
+
+def _mark_pending(seconds: int) -> None:
+    try:
+        _pending_file().parent.mkdir(parents=True, exist_ok=True)
+        _pending_file().write_text(str(time.time() + seconds), encoding="utf-8")
+    except OSError as exc:
+        log.debug("Merker fürs Herunterfahren: %s", exc)
+
+
+def power(action: str, delay: int = 15) -> str:
+    """Herunterfahren ("shutdown"), Neustart ("restart"), Abmelden ("logoff"), Energiesparen
+    ("sleep") oder Ruhezustand ("hibernate"), nach `delay` Sekunden. Bis dahin hält
+    power_abort() alles auf. Gibt einen kurzen Satz zurück."""
+    global _later
+    if os.name != "nt":
+        raise PcError("Das geht nur unter Windows.")
+    delay = max(0, int(delay))
+    if action in ("shutdown", "restart"):
+        flag = "/s" if action == "shutdown" else "/r"
+        cmd = ["shutdown", flag, "/t", str(delay), "/c", _POWER_NOTE]
+        result = _run(cmd)
+        if result.returncode != 0 and "1190" in (result.stdout + result.stderr):
+            _run(["shutdown", "/a"])  # schon eins geplant: durch das neue ersetzen
+            result = _run(cmd)
+        if result.returncode != 0:
+            raise PcError(f"Windows lehnt das ab: {(result.stderr or result.stdout).strip()[:160]}")
+        _mark_pending(delay)
+        return f"Der PC {'fährt' if action == 'shutdown' else 'startet'} in {delay} Sekunden {'herunter' if action == 'shutdown' else 'neu'}."
+    commands = {
+        "logoff": ["shutdown", "/l"],
+        "hibernate": ["shutdown", "/h"],
+        "sleep": ["powershell", "-NoProfile", "-NonInteractive", "-Command", _SLEEP],
+    }
+    if action not in commands:
+        raise PcError(f"Unbekannte Aktion: {action}")
+    if _later is not None:
+        _later.cancel()
+    if delay:
+        _later = threading.Timer(delay, lambda: _run(commands[action]))
+        _later.daemon = True
+        _later.start()
+        _mark_pending(delay)
+    else:
+        _run(commands[action])
+    return {"logoff": "Abmelden", "hibernate": "Ruhezustand", "sleep": "Energiesparen"}[action] + f" in {delay} Sekunden."
+
+
+def power_abort() -> bool:
+    """Hält ein geplantes Herunterfahren, einen Neustart oder das Energiesparen auf.
+    True, wenn etwas aufgehalten wurde."""
+    global _later
+    stopped = False
+    if _later is not None:
+        _later.cancel()
+        _later = None
+        stopped = True
+    if os.name == "nt":
+        stopped = _run(["shutdown", "/a"]).returncode == 0 or stopped
+    try:
+        _pending_file().unlink()
+    except OSError:
+        pass
+    return stopped
+
+
 # ---------------------------------------------------------------------- Einstellungen und Schalter
 
 # Gesprochener Name -> (Anzeige, Seite in den Windows-Einstellungen)

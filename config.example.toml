@@ -86,6 +86,13 @@ pitch = "-8Hz"
 # 0 = nie.
 ack_after_seconds = 3.0
 
+[rechte]
+# true = volle Freigabe: Jarvis fragt nicht nach, bevor er herunterfährt, neu startet, ein Programm
+# deinstalliert, etwas mit Administratorrechten ausführt oder etwas in den Papierkorb legt.
+# Herunterfahren und Neustart haben 15 Sekunden Vorlauf, "Jarvis, abbrechen" hält sie auf.
+# Nur vor endgültigem Löschen, Formatieren und Käufen fragt Jarvis trotzdem einmal nach.
+volle_freigabe = true
+
 [local]
 # Uhrzeit, Datum, Lautstärke, Musik pausieren und "Stopp" erledigt Jarvis sofort selbst,
 # ohne Claude zu fragen. Das ist schneller und schont dein Pro-Kontingent.

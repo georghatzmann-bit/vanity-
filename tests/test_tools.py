@@ -199,8 +199,22 @@ class ToolTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("Zeit nicht verstanden", out)
 
+    def careful(self):
+        """Ohne volle Freigabe ([rechte] volle_freigabe = false)."""
+        cfg = tool.load_config()
+        cfg["rechte"] = {"volle_freigabe": False}
+        return mock.patch.object(tool, "load_config", return_value=cfg)
+
+    def test_full_permission_needs_no_yes(self):
+        with mock.patch("jarvis.pc.to_recycle_bin", return_value="In den Papierkorb verschoben") as trash, \
+                mock.patch("jarvis.apps.uninstall", return_value="ok") as uninstall:
+            self.assertEqual(run_tool("papierkorb", "C:\\Users\\georg\\Desktop\\alt.txt", said="Lösch alt.txt")[0], 0)
+            self.assertEqual(run_tool("deinstallieren", "Spotify.Spotify", said="Deinstallier Spotify")[0], 0)
+        trash.assert_called_once()
+        uninstall.assert_called_once_with("Spotify.Spotify")
+
     def test_recycle_bin_needs_a_yes(self):
-        with mock.patch("jarvis.pc.to_recycle_bin", return_value="In den Papierkorb verschoben") as trash:
+        with self.careful(), mock.patch("jarvis.pc.to_recycle_bin", return_value="In den Papierkorb verschoben") as trash:
             code, out = run_tool("papierkorb", "C:\\Users\\georg\\Desktop\\alt.txt", said="Lösch die Datei alt.txt")
             self.assertEqual(code, 3)
             self.assertIn("Frag Georg zuerst", out)
@@ -251,7 +265,7 @@ class ToolTest(unittest.TestCase):
         install.assert_called_once_with("spotify")
 
     def test_uninstall_needs_a_yes(self):
-        with mock.patch("jarvis.apps.uninstall", return_value="ok") as uninstall:
+        with self.careful(), mock.patch("jarvis.apps.uninstall", return_value="ok") as uninstall:
             self.assertEqual(run_tool("deinstallieren", "Spotify.Spotify", said="Deinstallier Spotify")[0], 3)
             uninstall.assert_not_called()
             self.assertEqual(run_tool("deinstallieren", "Spotify.Spotify", said="Jarvis, ja bitte")[0], 0)

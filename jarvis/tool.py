@@ -37,6 +37,11 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   admin "<PowerShell-Befehl>"  führt etwas mit Administratorrechten aus (Windows fragt Georg)
   nachricht <app> "<person>" "<text>"
                                schickt eine Chatnachricht, app: discord, telegram, whatsapp
+                               (Discord-Kanal: "#kanalname" als person)
+  discord chat|kanal|server|sprachkanal "<name>"
+                               öffnet das in Discord über die Schnellsuche (ohne Maus)
+  discord anrufen "<person>"   startet einen Discord-Anruf
+  discord stumm|taub           schaltet Mikrofon oder Ton in Discord um (zurück ins Spiel)
   werkstatt "<auftrag>"        gibt einen Programmier- oder Bauauftrag an die Werkstatt
   werkstatt-weiter "<wunsch>"  arbeitet am letzten Werkstatt-Projekt weiter
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
@@ -48,7 +53,11 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   lautstaerke <0-100>          stellt die Lautstärke auf so viel Prozent
   bildschirm                   speichert ein Bildschirmfoto und nennt den Pfad
   gaming an|aus
-  papierkorb "<pfad>"          verschiebt in den Papierkorb (erst nach Georgs Ja)
+  papierkorb "<pfad>"          verschiebt in den Papierkorb
+  herunterfahren [sekunden]    fährt den PC herunter (Georg kann in der Zeit abbrechen, Vorgabe 15)
+  neustarten [sekunden]        startet den PC neu
+  energiesparen | ruhezustand | abmelden
+  herunterfahren-abbrechen     hält ein geplantes Herunterfahren oder einen Neustart auf
   alexa-sagen <raum> "<text>"  Ansage über ein Echo-Gerät
   alexa-geraete                zeigt die eingetragenen Echo-Geräte
   smarthome geraete [filter]   zeigt Geräte aus Home Assistant
@@ -81,6 +90,12 @@ def confirmed(said: str | None = None) -> bool:
     if any(w not in CONFIRM_YES and w not in CONFIRM_FILLER for w in words):
         return False
     return any(w in CONFIRM_YES for w in words)
+
+
+def full_permission(cfg: dict | None = None) -> bool:
+    """Georg hat Jarvis volle Freigabe erteilt ([rechte] volle_freigabe): kein Nachfragen."""
+    cfg = cfg if cfg is not None else load_config()
+    return bool(cfg.get("rechte", {}).get("volle_freigabe", True))
 
 
 def need_confirmation(action: str) -> int:
@@ -170,6 +185,32 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print(f"Nicht gesendet: {exc}")
             return 1
 
+    if command == "discord":
+        from . import messaging
+
+        action = rest[0].lower() if rest else ""
+        name = " ".join(rest[1:])
+        kinds = {"chat": "person", "person": "person", "kanal": "channel", "channel": "channel",
+                 "server": "server", "sprachkanal": "voice", "voice": "voice"}
+        try:
+            if action in ("stumm", "mute"):
+                messaging.discord_key("mute")
+                print("Discord-Mikrofon umgeschaltet.")
+            elif action in ("taub", "deafen"):
+                messaging.discord_key("deafen")
+                print("Discord-Ton umgeschaltet.")
+            elif action in ("anrufen", "call") and name:
+                print(f"Anruf an {messaging.discord_call(name)} gestartet.")
+            elif action in kinds and name:
+                print(f"{messaging.discord_open(name, kinds[action])} ist offen.")
+            else:
+                print('Aufruf: discord chat|kanal|server|sprachkanal|anrufen "<name>" oder discord stumm|taub')
+                return 1
+            return 0
+        except messaging.MessagingError as exc:
+            print(f"Nicht geklappt: {exc}")
+            return 1
+
     if command == "medien":
         from . import pc
 
@@ -194,6 +235,27 @@ def _dispatch(command: str, rest: list[str]) -> int:
         print(f"Bildschirmfoto gespeichert: {path} (mit dem Read-Werkzeug ansehen)")
         return 0
 
+    power = {"herunterfahren": "shutdown", "ausschalten": "shutdown", "neustarten": "restart", "neustart": "restart",
+             "energiesparen": "sleep", "standby": "sleep", "ruhezustand": "hibernate", "abmelden": "logoff"}
+    if command in power:
+        from . import pc
+
+        action = power[command]
+        if not (full_permission(cfg) or confirmed()):
+            return need_confirmation({"shutdown": "den PC herunterfahren", "restart": "den PC neu starten",
+                                      "sleep": "den PC in den Energiesparmodus schicken",
+                                      "hibernate": "den PC in den Ruhezustand schicken",
+                                      "logoff": "Georg abmelden"}[action])
+        delay = int(rest[0]) if rest and rest[0].isdigit() else (15 if action in ("shutdown", "restart") else 5)
+        print(pc.power(action, delay) + " Georg kann bis dahin 'Jarvis, abbrechen' sagen.")
+        return 0
+
+    if command in ("herunterfahren-abbrechen", "abbrechen"):
+        from . import pc
+
+        print("Aufgehalten, der PC bleibt an." if pc.power_abort() else "Es war nichts geplant.")
+        return 0
+
     if command == "gaming":
         from . import pc
 
@@ -208,7 +270,7 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print('Aufruf: papierkorb "<pfad>"')
             return 1
         pc.trash_target(" ".join(rest))  # ganze Ordner gar nicht erst nachfragen
-        if not confirmed():
+        if not (full_permission(cfg) or confirmed()):
             return need_confirmation(f"{rest[0]} in den Papierkorb verschieben")
         print(pc.to_recycle_bin(" ".join(rest)))
         return 0
@@ -228,7 +290,7 @@ def _dispatch(command: str, rest: list[str]) -> int:
         if not rest:
             print("Aufruf: deinstallieren <winget-id>")
             return 1
-        if not confirmed():
+        if not (full_permission(cfg) or confirmed()):
             return need_confirmation(f"{rest[0]} deinstallieren")
         print(apps.uninstall(" ".join(rest)))
         return 0
@@ -273,6 +335,7 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print('Aufruf: admin "<PowerShell-Befehl>"')
             return 1
         line = " ".join(rest)
+        # Endgültiges Löschen und Formatieren fragt Jarvis auch mit voller Freigabe einmal nach.
         if pc.needs_confirmation(line) and not confirmed():
             return need_confirmation(f"das mit Administratorrechten ausführen ({line[:80]})")
         print(pc.run_admin(line))

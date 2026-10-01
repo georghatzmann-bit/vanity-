@@ -15,11 +15,16 @@ log = logging.getLogger(__name__)
 
 VK = {
     "ctrl": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B,
-    "enter": 0x0D, "esc": 0x1B, "tab": 0x09, "backspace": 0x08, "space": 0x20,
+    "enter": 0x0D, "esc": 0x1B, "tab": 0x09, "backspace": 0x08, "space": 0x20, "delete": 0x2E,
     "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27, "home": 0x24, "end": 0x23,
+    "pageup": 0x21, "pagedown": 0x22,
+    # Die Taste rechts neben L (US: Apostroph, deutsch: Ä). Discord: Strg+' startet einen Anruf.
+    "quote": 0xDE,
 }
 VK.update({chr(c).lower(): c for c in range(ord("A"), ord("Z") + 1)})
 VK.update({str(d): 0x30 + d for d in range(10)})
+# F1 bis F24. F13 bis F24 gibt es auf keiner Tastatur: frei für Tastenkürzel, die kein Spiel stören.
+VK.update({f"f{n}": 0x6F + n for n in range(1, 25)})
 
 _INPUT_KEYBOARD = 1
 _KEYUP = 0x0002
@@ -122,10 +127,127 @@ def focus(hwnd: int) -> bool:
     if not hwnd:
         return False
     try:
-        _ctypes, user32, _INPUT, _KB = _api()
-        # Windows lässt nur nach einer Eingabe das Fenster wechseln: kurz Alt tippen.
-        _send([(VK["alt"], 0, 0), (VK["alt"], 0, _KEYUP)])
-        return bool(user32.SetForegroundWindow(hwnd))
+        return bring_to_front(hwnd)
     except Exception as exc:
         log.debug("Fenster zurückholen: %s", exc)
         return False
+
+
+def _wait_front(user32, hwnd: int, seconds: float) -> bool:
+    end = time.monotonic() + seconds
+    while True:
+        if int(user32.GetForegroundWindow() or 0) == int(hwnd):
+            return True
+        if time.monotonic() >= end:
+            return False
+        time.sleep(0.02)
+
+
+def bring_to_front(hwnd: int) -> bool:
+    """Fenster nach vorn, auch wenn es minimiert ist. Windows erlaubt das einem Programm im
+    Hintergrund nicht immer; dann helfen (wie bei AutoHotkey) ein Alt-Tipp und zuletzt das
+    kurze Koppeln an das vordere Fenster."""
+    ctypes, user32, _INPUT, _KB = _api()
+    kernel32 = ctypes.windll.kernel32
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    if _wait_front(user32, hwnd, 0):
+        return True
+    user32.SetForegroundWindow(hwnd)
+    if _wait_front(user32, hwnd, 0.12):
+        return True
+    _send([(VK["alt"], 0, 0)])
+    try:
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        _send([(VK["alt"], 0, _KEYUP)])
+    if _wait_front(user32, hwnd, 0.2):
+        return True
+    front = user32.GetForegroundWindow()
+    theirs = user32.GetWindowThreadProcessId(front, None) if front else 0
+    ours = kernel32.GetCurrentThreadId()
+    attached = bool(theirs and theirs != ours and user32.AttachThreadInput(ours, theirs, True))
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if attached:
+            user32.AttachThreadInput(ours, theirs, False)
+    return _wait_front(user32, hwnd, 0.25)
+
+
+def window_title(hwnd: int = 0) -> str:
+    """Titel eines Fensters (ohne Angabe: des vorderen). Discord zeigt dort den offenen Chat."""
+    try:
+        ctypes, user32, _INPUT, _KB = _api()
+        hwnd = hwnd or user32.GetForegroundWindow()
+        if not hwnd:
+            return ""
+        length = user32.GetWindowTextLengthW(hwnd)
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buffer, length + 1)
+        return buffer.value
+    except Exception:
+        return ""
+
+
+def find_window(names, hint: str = "") -> int:
+    """Das Hauptfenster eines laufenden Programms (z. B. Discord), auch minimiert. 0, wenn es
+    keins gibt oder es nur im Infobereich neben der Uhr sitzt (dann ist es unsichtbar)."""
+    try:
+        ctypes, user32, _INPUT, _KB = _api()
+        from ctypes import wintypes
+
+        import psutil
+    except Exception:
+        return 0
+    wanted = {str(n).lower() for n in names}
+    names_of: dict[int, str] = {}
+    found: list[tuple[bool, int, int]] = []
+
+    def visit(hwnd, _param):
+        try:
+            if not user32.IsWindowVisible(hwnd) or user32.GetWindow(hwnd, 4):  # GW_OWNER: Dialoge
+                return True
+            if user32.GetWindowTextLengthW(hwnd) == 0:
+                return True
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value not in names_of:
+                try:
+                    names_of[pid.value] = psutil.Process(pid.value).name().lower()
+                except Exception:
+                    names_of[pid.value] = ""
+            if names_of[pid.value] in wanted:
+                rect = wintypes.RECT()
+                user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                area = max(0, rect.right - rect.left) * max(0, rect.bottom - rect.top)
+                titled = bool(hint) and hint.lower() in window_title(hwnd).lower()
+                found.append((titled, area, int(hwnd)))
+        except Exception:
+            pass
+        return True
+
+    callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(visit)
+    user32.EnumWindows(callback, 0)
+    return max(found)[2] if found else 0
+
+
+def idle_seconds() -> float:
+    """Wie lange Maus und Tastatur schon still sind. Unbekannt: sehr lange."""
+    try:
+        ctypes, user32, _INPUT, _KB = _api()
+        from ctypes import wintypes
+
+        class LASTINPUTINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
+
+        info = LASTINPUTINFO()
+        info.cbSize = ctypes.sizeof(LASTINPUTINFO)
+        if not user32.GetLastInputInfo(ctypes.byref(info)):
+            return 999.0
+        kernel32 = ctypes.windll.kernel32
+        kernel32.GetTickCount.restype = wintypes.DWORD
+        return ((kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF) / 1000.0
+    except Exception:
+        return 999.0
