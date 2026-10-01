@@ -50,6 +50,11 @@ class ScreenTest(unittest.TestCase):
             screen.type_into("Notepad", "", "Hallo")
         self.assertEqual(ps.call_args.args[1]["JARVIS_UI_TEXT"], "Hallo")
 
+    def test_tree_walk_counts_depth(self):
+        # "@($child, $depth + 1)" ist in PowerShell @(($child, $depth) + 1): Die Tiefe blieb 0, und
+        # Walk lieferte gar nichts (im Windows-Build: "Kein Eingabefeld gefunden" im Editor).
+        self.assertIn("$queue.Enqueue(@($child, ($depth + 1)))", screen.UIA_HEAD)
+
     def test_typing_also_reaches_multiline_fields(self):
         # Der Editor hat ein mehrzeiliges Feld ohne ValuePattern; das bekommt den Text als WM_SETTEXT
         script = screen.TYPE_SCRIPT

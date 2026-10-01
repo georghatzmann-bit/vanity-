@@ -146,13 +146,15 @@ try:
     print(f"   Fenster: {len(names)} in {time.monotonic() - started:.1f} s, z. B. {names[:6]}", flush=True)
     title = next((n for n in names if "Notepad" in n or "Editor" in n), "Notepad")
     started = time.monotonic()
+    found = screen.elements(title, 60)
+    print(f"   Elemente im Editor: {len(found)} in {time.monotonic() - started:.1f} s, "
+          f"z. B. {[(e.get('art'), e.get('name')) for e in found[:8]]}", flush=True)
+    started = time.monotonic()
     print("   Ohne Tastatur schreiben:", screen.type_into(title, "", "Hallo von Jarvis"),
           f"({time.monotonic() - started:.1f} s)", flush=True)
     time.sleep(0.5)
     seen = " ".join(l["t"] for l in screen.read_text())
     print(f"   Text im Editor sichtbar: {'OK' if 'Jarvis' in seen else 'nicht gesehen'}", flush=True)
-    found = screen.elements(title, 60)
-    print(f"   Elemente im Editor: {[(e.get('art'), e.get('name')) for e in found[:8]]}", flush=True)
     try:
         screen.click(title, "Gibt es nicht 4711")
         print("   Fehlertext: kein Fehler, obwohl es den Knopf nicht gibt", flush=True)

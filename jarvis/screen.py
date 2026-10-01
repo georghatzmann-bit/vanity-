@@ -195,7 +195,8 @@ function Walk($root, $limit) {
     if ($depth -gt 0) { [void]$found.Add($node) }
     if ($depth -ge 14) { continue }
     $child = $walker.GetFirstChild($node)
-    while ($child -ne $null) { $queue.Enqueue(@($child, $depth + 1)); $child = $walker.GetNextSibling($child) }
+    # Klammern nötig: Das Komma bindet in PowerShell stärker als +, sonst bleibt die Tiefe 0
+    while ($child -ne $null) { $queue.Enqueue(@($child, ($depth + 1))); $child = $walker.GetNextSibling($child) }
   }
   return $found
 }
