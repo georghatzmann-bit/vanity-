@@ -92,6 +92,7 @@ class Api:
         self._on_setup = on_setup
         self._on_listen = on_listen
         self._on_touched = None  # setzt __main__ (Hintergrund-Modus)
+        self._start_server = None  # setzt __main__: startet den Web-Eingang für die Handy-App
 
     def hello(self) -> dict:
         info = dict(self._bridge.info)
@@ -149,6 +150,73 @@ class Api:
             rows.append({"uhr": when.strftime("%H:%M"), "text": str(r.get("text", "")),
                          "tag": "heute" if days == 0 else "morgen"})
         return rows[:8]
+
+    # ------------------------------------------------------------------ Handy
+
+    def phone_info(self) -> dict:
+        """Alles für "Jarvis aufs Handy": an/aus, Adresse, QR-Code, MAC-Adresse fürs Einschalten."""
+        from ..remote import app_url, local_ip, mac_address, qr_svg
+
+        cfg = getattr(self._assistant, "_cfg", {}) or {}
+        server_cfg = cfg.get("server", {}) or {}
+        token = str(server_cfg.get("token") or "")
+        enabled = bool(server_cfg.get("enabled")) and len(token) >= 12
+        server = getattr(self._assistant, "server", None)
+        running = bool(server is not None and server.running)
+        ip = local_ip()
+        port = server.port if running else int(server_cfg.get("port", 8765) or 8765)
+        url = app_url(token, ip, port) if enabled else ""
+        return {"enabled": enabled, "running": running, "url": url, "qr": qr_svg(url) if url else "",
+                "ip": ip, "port": port, "mac": mac_address(ip)}
+
+    def phone_enable(self, on) -> dict:
+        """Handy-Verbindung an oder aus. Beim ersten Mal entsteht ein geheimer Schlüssel."""
+        from ..config import save_setting
+        from ..remote import new_token
+
+        cfg = getattr(self._assistant, "_cfg", None)
+        if cfg is None:
+            return self.phone_info()
+        server_cfg = cfg.setdefault("server", {})
+        try:
+            if on:
+                if len(str(server_cfg.get("token") or "")) < 12:
+                    server_cfg["token"] = new_token()
+                    save_setting("server", "token", server_cfg["token"])
+                server_cfg["enabled"] = True
+                save_setting("server", "enabled", True)
+                if self._start_server is not None:
+                    self._start_server()
+            else:
+                server_cfg["enabled"] = False
+                save_setting("server", "enabled", False)
+                server = getattr(self._assistant, "server", None)
+                if server is not None:
+                    server.stop()
+                    self._assistant.server = None
+        except Exception as exc:
+            log.warning("Handy-Verbindung: %s", exc)
+            self._bridge.toast(f"Die Handy-Verbindung ließ sich nicht umstellen: {exc}", "error")
+        return self.phone_info()
+
+    def phone_new_key(self) -> dict:
+        """Neu koppeln: neuer Schlüssel, alte Handys kommen nicht mehr hinein."""
+        from ..config import save_setting
+        from ..remote import new_token
+
+        cfg = getattr(self._assistant, "_cfg", None)
+        if cfg is None:
+            return self.phone_info()
+        server_cfg = cfg.setdefault("server", {})
+        server_cfg["token"] = new_token()
+        save_setting("server", "token", server_cfg["token"])
+        server = getattr(self._assistant, "server", None)
+        if server is not None:
+            server.stop()
+            self._assistant.server = None
+        if server_cfg.get("enabled") and self._start_server is not None:
+            self._start_server()
+        return self.phone_info()
 
     # ------------------------------------------------------------------ Gedächtnis
 

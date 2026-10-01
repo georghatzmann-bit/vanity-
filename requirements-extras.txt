@@ -9,3 +9,5 @@ psutil>=5.9
 Send2Trash>=1.8
 # Natürliche Offline-Stimme, wenn die Microsoft-Stimme nicht erreichbar ist (lädt einmalig 63 MB).
 piper-tts>=1.8,<2
+# QR-Code zum Koppeln der Handy-App
+qrcode>=7.4

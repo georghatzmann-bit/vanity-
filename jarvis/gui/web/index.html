@@ -30,6 +30,10 @@
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
         </button>
+        <button type="button" class="ws-pill phone-pill" id="phoneBtn" title="Jarvis aufs Handy: per QR-Code koppeln">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>
+          <span class="ws-pill-text">Handy</span>
+        </button>
         <div class="weather" id="weather" hidden>
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20h9a3.5 3.5 0 0 0 .4-7 4.8 4.8 0 0 0-9.1 1.5A2.8 2.8 0 0 0 8 20z"/><path d="M8.5 3.5v1.2M3.5 8.5h1.2M5 5l.85.85M12 5l-.85.85M5.9 11.1a3.1 3.1 0 1 1 5.6-2.7"/></svg>
           <span id="weatherText"></span>
@@ -289,6 +293,43 @@
     </div>
   </section>
 
+  <!-- Jarvis aufs Handy -->
+  <div class="dlg-shade" id="phoneShade" hidden></div>
+  <section class="dlg" id="phoneDlg" role="dialog" aria-modal="true" aria-labelledby="phoneTitle" hidden>
+    <header class="dlg-head">
+      <div>
+        <span class="dlg-kicker">Fernbedienung</span>
+        <h2 id="phoneTitle">Jarvis aufs Handy</h2>
+      </div>
+      <button type="button" class="icon-btn" id="phoneClose" aria-label="Schließen">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <label class="row toggle-row dlg-row">
+      <span class="row-text">
+        <b id="phoneState">Aus</b>
+        <small>Dein Handy steuert Jarvis im selben WLAN: schreiben, diktieren, Schnellaktionen, Werkstatt.</small>
+      </span>
+      <input type="checkbox" class="sr-input" id="phoneToggle"><span class="switch" aria-hidden="true"></span>
+    </label>
+    <div class="dlg-pair" id="phonePair" hidden>
+      <div class="qr" id="phoneQr" aria-label="QR-Code zum Koppeln"></div>
+      <ol class="dlg-steps">
+        <li><b>Kamera aufs Bild halten</b><span>und den Link öffnen. Das Handy merkt sich den Schlüssel.</span></li>
+        <li><b>Zum Startbildschirm hinzufügen</b><span>im Browser-Menü (iPhone: Teilen). Dann ist Jarvis eine App.</span></li>
+        <li><b>Sprechen</b><span>mit dem Mikrofon auf der Handy-Tastatur.</span></li>
+      </ol>
+      <div class="dlg-url">
+        <code id="phoneUrl"></code>
+        <button type="button" class="btn small ghost" id="phoneCopy">Kopieren</button>
+      </div>
+      <p class="dlg-note">Von unterwegs: <b>Tailscale</b> (kostenlos) auf PC und Handy installieren, dann klappt es überall.
+        Fragt Windows nach der Firewall, „Zulassen“ wählen.</p>
+      <p class="dlg-note" id="phoneMac" hidden></p>
+      <button type="button" class="link-btn" id="phoneNew">Neu koppeln (alte Handys ausschließen)</button>
+    </div>
+  </section>
+
   <!-- Verlauf als Schublade -->
   <div class="drawer-shade" id="drawerShade" hidden></div>
   <aside class="drawer" id="drawer" aria-label="Verlauf" aria-hidden="true">
@@ -309,6 +350,7 @@
 
   <script src="werkstatt.js"></script>
   <script src="projekte.js"></script>
+  <script src="koppeln.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

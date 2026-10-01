@@ -41,6 +41,13 @@ log = logging.getLogger("jarvis")
 
 def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .apps import START_MENU
+    from .remote import PhoneUi
+
+    # Die Handy-App sieht dasselbe wie das Fenster: Nachrichten, Schritte, Vorschläge
+    phone = PhoneUi()
+    if not isinstance(ui, MultiUi):
+        ui = MultiUi(ui)
+    ui.add(phone)
 
     # Das Startmenü im Hintergrund lesen: "Öffne ..." wartet dann nie auf PowerShell.
     START_MENU.warm()
@@ -83,6 +90,8 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
 
         threading.Thread(target=offline_voice, name="jarvis-offline-stimme", daemon=True).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
+    assistant.phone = phone
+    assistant.server = None
     assistant_ref.append(assistant)
     from .memory import Memory
 
@@ -178,18 +187,29 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
 
         threading.Thread(target=weather, name="jarvis-wetter", daemon=True).start()
 
-    server_cfg = cfg.get("server", {})
-    if server_cfg.get("enabled"):
-        from .homeassistant import HomeAssistant
-        from .server import CommandServer
+    if cfg.get("server", {}).get("enabled"):
+        start_server(cfg, assistant, ui)
 
-        try:
-            ha = HomeAssistant(cfg.get("homeassistant", {}))
-            url = CommandServer(server_cfg, assistant, ha if ha.configured else None).start()
-            ui.message("info", f"Web-Eingang für Home Assistant läuft: {url}")
-        except Exception as exc:
-            log.error("Web-Eingang startet nicht: %s", exc)
-            ui.toast(f"Web-Eingang startet nicht: {exc}", "error")
+
+def start_server(cfg: dict, assistant: Assistant, ui: Ui) -> str:
+    """Der Web-Eingang: Handy-App und Home Assistant. Gibt die Adresse zurück ("" = ging nicht)."""
+    from .homeassistant import HomeAssistant
+    from .server import CommandServer
+
+    if getattr(assistant, "server", None) is not None and assistant.server.running:
+        return f"läuft auf Port {assistant.server.port}"
+    try:
+        ha = HomeAssistant(cfg.get("homeassistant", {}))
+        server = CommandServer(cfg.get("server", {}), assistant, ha if ha.configured else None,
+                               phone=getattr(assistant, "phone", None))
+        url = server.start()
+        assistant.server = server
+        log.info("Web-Eingang läuft: %s", url)
+        return url
+    except Exception as exc:
+        log.error("Web-Eingang startet nicht: %s", exc)
+        ui.toast(f"Die Handy-Verbindung startet nicht: {exc}", "error")
+        return ""
 
 
 def learn_from_yesterday(assistant: Assistant) -> None:
@@ -454,6 +474,7 @@ def run_gui(cfg: dict, args) -> int:
             assistant.brain.close()
 
     api = Api(bridge, assistant, assistant.mute, open_setup, listen_now)
+    api._start_server = lambda: start_server(cfg, assistant, ui)
     window = Window(api, background, on_closed, gui_cfg, hidden=hidden, icon=desktop.app_icon())
     if on_wake == "fenster":
         from .overlay import _fullscreen_app

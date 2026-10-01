@@ -87,6 +87,9 @@
     workshop_run: (folder) => window.pywebview.api.workshop_run(folder),
     open_folder: (path) => window.pywebview.api.open_folder(path),
     memory_state: () => window.pywebview.api.memory_state(),
+    phone_info: () => window.pywebview.api.phone_info(),
+    phone_enable: (on) => window.pywebview.api.phone_enable(on),
+    phone_new_key: () => window.pywebview.api.phone_new_key(),
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
     answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
@@ -1456,6 +1459,9 @@
       workshop_continue: () => Promise.resolve(true),
       workshop_run: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
+      phone_info: () => Promise.resolve(DEMO_PHONE),
+      phone_enable: (on) => Promise.resolve(Object.assign(DEMO_PHONE, { enabled: !!on, running: !!on })),
+      phone_new_key: () => Promise.resolve(DEMO_PHONE),
       remember: () => Promise.resolve(true),
       forget: () => Promise.resolve(true),
       answer_suggestion: () => Promise.resolve(true),
@@ -1499,6 +1505,11 @@
       summary: 'Das Claude-Kontingent war erschöpft. Sagen Sie einfach: Arbeite an Downloads Sortieren weiter.',
       updated: new Date(Date.now() - 4 * 86400e3).toISOString(), history: [{}] },
   ];
+  const DEMO_PHONE = {
+    enabled: true, running: true, ip: '192.168.1.20', port: 8765, mac: '3C:7C:3F:12:AB:9E',
+    url: 'http://192.168.1.20:8765/app/#t=demo-schluessel-123456',
+    qr: '<svg viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h7v7H0zM14 0h7v7h-7zM0 14h7v7H0z" fill="#000"/><path d="M1 1h5v5H1zM15 1h5v5h-5zM1 15h5v5H1z" fill="#fff"/><path d="M2 2h3v3H2zM16 2h3v3h-3zM2 16h3v3H2zM9 1h1v2H9zM11 3h2v1h-2zM8 8h5v1H8zM9 10h1v3H9zM12 11h2v2h-2zM15 9h2v1h-2zM17 12h3v1h-3zM14 15h2v2h-2zM18 16h2v4h-2zM9 15h3v1H9zM10 18h1v3h-1z" fill="#000"/></svg>',
+  };
   const DEMO_MEMORY = {
     facts: [
       { text: 'Georg spielt gern Valorant und Minecraft', source: 'gelernt' },
@@ -1521,6 +1532,7 @@
       if (Werkstatt) Werkstatt.renderPill();
     }
     if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });
+    if (window.JarvisKoppeln) window.JarvisKoppeln.create({ call, toast });
     bindUi();
     tickClock();
     Core.start(el.core);

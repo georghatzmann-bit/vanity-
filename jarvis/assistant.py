@@ -128,8 +128,9 @@ class Assistant:
 
     # ------------------------------------------------------------------ Befehle
 
-    def submit(self, text: str) -> None:
-        """Nimmt einen Befehl an und erledigt ihn im Hintergrund (für Sprache und Oberfläche)."""
+    def submit(self, text: str, speak: bool = True) -> None:
+        """Nimmt einen Befehl an und erledigt ihn im Hintergrund (für Sprache, Oberfläche und Handy).
+        speak=False: Antwort nur anzeigen, nicht vorlesen (z. B. vom Handy, wenn Georg nicht am PC ist)."""
         if not text.strip():
             return
         intent = intents.match(text)
@@ -145,14 +146,15 @@ class Assistant:
         if self._worker is None or not self._worker.is_alive():
             self._worker = threading.Thread(target=self._work, name="jarvis-befehle", daemon=True)
             self._worker.start()
-        self._queue.put(text)
+        self._queue.put((text, speak))
         self.update_state()
 
     def _work(self) -> None:
         while True:
-            text = self._queue.get()
+            item = self._queue.get()
+            text, speak = item if isinstance(item, tuple) else (item, True)
             try:
-                self.handle(text)
+                self.handle(text, speak=speak)
             except Exception:
                 log.exception("Unerwarteter Fehler bei: %s", text)
                 self.ui.toast("Da ist etwas schiefgelaufen. Details in logs/jarvis.log.", "error")
