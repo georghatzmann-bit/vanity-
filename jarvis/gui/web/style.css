@@ -1630,3 +1630,183 @@ body[data-view="workshop"] .holo-scan {
     justify-self: center;
   }
 }
+
+/* ------------------------------------------------------------------ Gedächtnis und Vorschläge */
+
+.mem-panel {
+  flex: none;
+}
+
+.mem-sum {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-hint);
+  line-height: 1.5;
+}
+
+.mem-next {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(var(--glow), 0.6);
+  border-radius: 0 6px 6px 0;
+  background: rgba(var(--glow), 0.06);
+  color: var(--text);
+  font-size: var(--fs-hint);
+  line-height: 1.45;
+}
+
+.offer {
+  display: grid;
+  gap: 8px;
+  width: min(520px, 100%);
+  margin: 12px auto 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(var(--glow), 0.14), rgba(var(--glow), 0.05));
+  box-shadow: inset 0 0 0 1px rgba(var(--glow), 0.4), 0 0 32px rgba(var(--glow), 0.12);
+  text-align: left;
+  animation: rise 200ms var(--ease) both;
+}
+
+.offer[hidden] {
+  display: none;
+}
+
+.offer-kicker {
+  color: var(--accent-text);
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.offer-text {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mem-drawer .mem-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 0;
+  padding: 0 24px 24px;
+  overflow-y: auto;
+}
+
+.mem-add {
+  display: flex;
+  gap: 8px;
+}
+
+.mem-add input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(var(--glow), 0.25);
+  border-radius: 6px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: inherit;
+}
+
+.mem-add input:focus {
+  border-color: rgba(var(--glow), 0.6);
+  box-shadow: 0 0 0 3px rgba(var(--glow), 0.14);
+}
+
+.mem-section h3 {
+  margin: 0 0 4px;
+  color: var(--text);
+  font: 600 var(--fs-body) / 1.3 var(--font-display);
+}
+
+.mem-hint {
+  margin: 0 0 12px;
+  color: var(--text-3);
+  font-size: var(--fs-hint);
+  line-height: 1.45;
+}
+
+.mem-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mem-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  line-height: 1.45;
+}
+
+.mem-list li .mem-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.mem-list li small {
+  display: block;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.mem-list .mem-time {
+  flex: none;
+  color: var(--accent-text);
+  font: 600 13px/1.45 var(--mono);
+}
+
+.mem-del {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 18px;
+  line-height: 1;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.mem-del:hover,
+.mem-del:focus-visible {
+  background: var(--err-soft);
+  color: #ff9a9d;
+}
+
+.mem-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mem-chip {
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: rgba(var(--glow), 0.1);
+  color: var(--text);
+  font-size: var(--fs-hint);
+}
+
+.mem-chip small {
+  color: var(--text-3);
+}

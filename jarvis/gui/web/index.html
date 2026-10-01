@@ -114,6 +114,15 @@
           <p class="sub-jarvis" id="subJarvis"></p>
         </div>
         <ol class="activity" id="activity" aria-label="Was Jarvis gerade tut"></ol>
+        <div class="offer" id="offer" hidden role="group" aria-label="Vorschlag">
+          <span class="offer-kicker">Vorschlag</span>
+          <p class="offer-text" id="offerText"></p>
+          <div class="offer-actions">
+            <button type="button" class="btn small primary" data-answer="ja">Ja, mach</button>
+            <button type="button" class="btn small" data-answer="nein">Nein</button>
+            <button type="button" class="btn small ghost" data-answer="nie">Nie wieder</button>
+          </div>
+        </div>
         <p class="hint" id="stateHint">Sag „Hey Jarvis“, klick auf den Kern oder schreib unten</p>
       </div>
     </main>
@@ -126,9 +135,18 @@
         <p class="empty" id="todayEmpty">Keine Erinnerungen. Sag zum Beispiel „Erinnere mich um 18 Uhr ans Training“.</p>
       </section>
 
+      <section class="panel mem-panel">
+        <div class="panel-head">
+          <h2 class="panel-title"><span class="panel-no">05</span>Gedächtnis</h2>
+          <button type="button" class="link-btn" id="memOpen">Ansehen</button>
+        </div>
+        <p class="mem-sum" id="memSum">Jarvis lernt Sie kennen. Sag zum Beispiel „Merk dir, dass ich gern Rock höre“.</p>
+        <p class="mem-next" id="memNext" hidden></p>
+      </section>
+
       <section class="panel grow">
         <div class="panel-head">
-          <h2 class="panel-title"><span class="panel-no">05</span>Verlauf</h2>
+          <h2 class="panel-title"><span class="panel-no">06</span>Verlauf</h2>
           <button type="button" class="link-btn" id="historyOpen">Alles</button>
         </div>
         <ol class="recent" id="recent"></ol>
@@ -405,11 +423,47 @@
     <p class="empty" id="historyEmpty">Noch keine Unterhaltung.</p>
   </aside>
 
+  <!-- Gedächtnis als Schublade -->
+  <div class="drawer-shade" id="memShade" hidden></div>
+  <aside class="drawer mem-drawer" id="memDrawer" aria-label="Gedächtnis" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Gedächtnis</h2>
+      <button type="button" class="icon-btn" id="memClose" aria-label="Gedächtnis schließen">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mem-body">
+      <form class="mem-add" id="memAdd" autocomplete="off">
+        <input id="memInput" type="text" maxlength="300" placeholder="Merk dir … (z. B. Max hat am 3. Mai Geburtstag)" aria-label="Etwas, das Jarvis sich merken soll">
+        <button type="submit" class="btn small primary">Merken</button>
+      </form>
+      <section class="mem-section">
+        <h3>Gewohnheiten</h3>
+        <p class="mem-hint">Was Sie ungefähr zur selben Zeit tun. Jarvis bietet es zur passenden Zeit an.</p>
+        <ul class="mem-list" id="memRoutines"></ul>
+        <p class="empty" id="memRoutinesEmpty">Noch keine. Nach ein paar Tagen erkennt Jarvis, was Sie regelmäßig öffnen.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Kontakte</h3>
+        <p class="mem-hint">Mit wem Sie über welche App schreiben. „Sag Max …“ nimmt dann die richtige App.</p>
+        <div class="mem-chips" id="memContacts"></div>
+        <p class="empty" id="memContactsEmpty">Noch keine Nachrichten verschickt.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Was Jarvis über Sie weiß</h3>
+        <p class="mem-hint">Was Sie gesagt haben und was Jarvis jede Nacht aus den Gesprächen lernt. × löscht es.</p>
+        <ul class="mem-list facts" id="memFacts"></ul>
+        <p class="empty" id="memFactsEmpty">Noch nichts. Sag „Merk dir, …“ oder schreib es oben hinein.</p>
+      </section>
+    </div>
+  </aside>
+
   <div class="toasts" id="toasts" aria-live="assertive"></div>
 
   <script src="werkstatt.js"></script>
   <script src="projekte.js"></script>
   <script src="koppeln.js"></script>
+  <script src="gedaechtnis.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

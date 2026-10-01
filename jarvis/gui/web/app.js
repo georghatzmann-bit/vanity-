@@ -63,6 +63,7 @@
   let pollFails = 0;
   let Werkstatt = null; // Ansicht für Programmier-Aufträge (werkstatt.js)
   let Projekte = null; // alle Werkstatt-Projekte (projekte.js)
+  let Gedaechtnis = null; // was Jarvis über Georg weiß, Vorschläge (gedaechtnis.js)
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -696,6 +697,7 @@
         break;
       case 'level': S.level = clamp(Number(ev.value) || 0, 0, 1); Core.level(S.level); break;
       case 'toast': toast(ev.text, ev.kind); break;
+      case 'suggestion': if (Gedaechtnis) Gedaechtnis.offer(ev.offer); break;
       case 'config': applyConfig(ev); break;
       case 'stats':
         setGauge(el.cpuNum, el.cpuRing, ev.cpu);
@@ -733,6 +735,7 @@
       /* egal, die Ereignisse kommen trotzdem */
     }
     syncWorkshop();
+    if (Gedaechtnis) Gedaechtnis.refresh();
     refreshToday();
     setInterval(refreshToday, 60000);
     pollLoop(gen);
@@ -1553,6 +1556,10 @@
     }
     if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });
     if (window.JarvisKoppeln) window.JarvisKoppeln.create({ call, toast });
+    if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
+    if (Gedaechtnis && /[?&]vorschlag\b/.test(location.search)) {
+      Gedaechtnis.offer({ frage: 'Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?' });
+    }
     bindUi();
     tickClock();
     Core.start(el.core);
