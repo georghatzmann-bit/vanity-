@@ -110,6 +110,32 @@ class Api:
             return {"ok": False, "reason": "novoice"}
         return {"ok": True, "reason": ""}
 
+    def reminders(self) -> list:
+        """Die nächsten Erinnerungen (heute und morgen) für die Spalte "Heute"."""
+        import datetime as dt
+
+        store = getattr(self._assistant, "reminders", None)
+        if store is None:
+            return []
+        now = dt.datetime.now()
+        rows = []
+        for r in store.upcoming(now):
+            try:
+                when = dt.datetime.fromisoformat(r["zeit"])
+            except (KeyError, ValueError):
+                continue
+            days = (when.date() - now.date()).days
+            if days > 1:
+                break
+            rows.append({"uhr": when.strftime("%H:%M"), "text": str(r.get("text", "")),
+                         "tag": "heute" if days == 0 else "morgen"})
+        return rows[:8]
+
+    def toggle_gaming(self) -> bool:
+        """Schalter in der Spalte links: Gaming-Modus an oder aus."""
+        self._assistant.toggle_gaming()
+        return not bool(getattr(self._assistant, "gaming", False))
+
     def new_conversation(self) -> None:
         # Erst die laufende Antwort stoppen, sonst landet sie im frisch geleerten Verlauf.
         self._assistant.stop()

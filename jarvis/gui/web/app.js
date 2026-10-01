@@ -1,8 +1,7 @@
 /* ==========================================================================
-   J.A.R.V.I.S. – Oberfläche
+   J.A.R.V.I.S. – Hauptfenster
    Brücke zu Python über pywebview (window.pywebview.api), sonst Demo-Modus.
-   Alle Texte aus Ereignissen werden ausschließlich als Klartext (textContent)
-   eingesetzt.
+   Texte aus Ereignissen werden nur als Klartext (textContent) eingesetzt.
    ========================================================================== */
 (() => {
   'use strict';
@@ -14,15 +13,9 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const pad2 = (n) => String(n).padStart(2, '0');
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const nowMs = () => performance.now();
-
   const params = new URLSearchParams(location.search);
-
   const motionMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-  let reducedMotion = !!(motionMQ && motionMQ.matches);
-  if (motionMQ && motionMQ.addEventListener) {
-    motionMQ.addEventListener('change', (e) => { reducedMotion = e.matches; });
-  }
+  const reducedMotion = () => !!(motionMQ && motionMQ.matches);
 
   const STATES = ['idle', 'listening', 'thinking', 'speaking', 'muted', 'error'];
   const LABELS = {
@@ -31,527 +24,52 @@
     thinking: 'Denkt nach',
     speaking: 'Spricht',
     muted: 'Mikrofon aus',
-    error: 'Fehler',
+    error: 'Störung',
   };
+  const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+  const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September',
+    'Oktober', 'November', 'Dezember'];
 
   // ------------------------------------------------------------------ Zustand
 
   const S = {
-    state: 'idle',      // letzter Zustand vom Backend (ohne "error")
-    shown: '',          // aktuell angezeigter Zustand
+    state: 'idle',
+    shown: '',
     muted: false,
-    errorActive: false,
-    hotkey: 'STRG+ALT+M',
-    mic: '',
-    voice: null,        // false = Sprachsteuerung aus (kein Mikrofon), dann nur Tippen
-    model: '',
-    weather: '',
-    version: '',
-    link: 'wait',       // wait | live | demo | offline
-    levelTarget: 0,
-    levelAt: 0,
+    error: false,
+    voice: null,          // false = kein Mikrofon, nur Tippen
+    listenKey: 'ctrl+alt+j',
+    link: 'wait',
+    level: 0,
+    history: [],          // {key, role, text, time, el}
+    pendingEchoes: [],    // getippte Texte, deren Echo vom Backend nicht doppelt erscheinen soll
+    subtitleTimer: 0,
+    hintTimer: 0,
+    gaming: false,
   };
 
-  let api = null;       // aktive API (echt oder Demo)
-  let bridgeGen = 0;    // erhöht sich bei jedem Wechsel der API
-  let demo = null;
-  let errorTimer = 0;
+  let api = null;
+  let bridgeGen = 0;
+  let pollFails = 0;
 
-  // ------------------------------------------------------------------ DOM
+  // ------------------------------------------------------------------ Python-Brücke
 
-  const el = {
-    body: document.body,
-    stateLabel: $('stateLabel'),
-    stateHint: $('stateHint'),
-    linkText: $('linkText'),
-    micLine: $('micLine'),
-    micName: $('micName'),
-    micChange: $('micChange'),
-    modelLine: $('modelLine'),
-    modelName: $('modelName'),
-    weatherLine: $('weatherLine'),
-    weatherText: $('weatherText'),
-    clockHM: $('clockHM'),
-    clockDate: $('clockDate'),
-    chat: document.querySelector('.chat'),
-    messages: $('messages'),
-    form: $('cmdForm'),
-    input: $('cmdInput'),
-    sendBtn: $('sendBtn'),
-    micBtn: $('micBtn'),
-    micBtnText: $('micBtnText'),
-    stopBtn: $('stopBtn'),
-    newBtn: $('newBtn'),
-    setupBtn: $('setupBtn'),
-    tryList: $('tryList'),
-    toasts: $('toasts'),
-    canvas: $('reactor'),
-    reactorWrap: $('reactorWrap'),
+  // Alle Aufrufe an Python an einer Stelle. Im Demo-Modus antwortet ein Nachbau.
+  const REAL = {
+    hello: () => window.pywebview.api.hello(),
+    poll: () => window.pywebview.api.poll(),
+    send_text: (text) => window.pywebview.api.send_text(text),
+    toggle_mute: () => window.pywebview.api.toggle_mute(),
+    stop: () => window.pywebview.api.stop(),
+    listen_now: () => window.pywebview.api.listen_now(),
+    new_conversation: () => window.pywebview.api.new_conversation(),
+    open_setup: () => window.pywebview.api.open_setup(),
+    reminders: () => window.pywebview.api.reminders(),
+    toggle_gaming: () => window.pywebview.api.toggle_gaming(),
   };
 
-  // ------------------------------------------------------------------ Tastenkürzel hübsch machen
-
-  const KEYNAMES = {
-    ctrl: 'Strg', control: 'Strg', strg: 'Strg', alt: 'Alt', altgr: 'AltGr', shift: 'Shift',
-    umschalt: 'Umschalt', win: 'Win', windows: 'Win', super: 'Win', cmd: 'Win', meta: 'Win',
-    space: 'Leertaste', leertaste: 'Leertaste', esc: 'Esc', escape: 'Esc', enter: 'Enter',
-    return: 'Enter', tab: 'Tab', pause: 'Pause', entf: 'Entf', del: 'Entf', delete: 'Entf',
-    einfg: 'Einfg', insert: 'Einfg', pos1: 'Pos1', home: 'Pos1', ende: 'Ende', end: 'Ende',
-  };
-
-  /** "STRG+ALT+M" -> ["Strg","Alt","M"]; null, wenn es kein gültiges Kürzel ist. */
-  function hotkeyParts(hk) {
-    if (typeof hk !== 'string') return null;
-    const s = hk.trim();
-    if (!s || /[()]/.test(s)) return null;
-    const parts = s.split('+').map((p) => p.trim().replace(/^<(.+)>$/, '$1'));
-    if (!parts.length || parts.some((p) => !p || /\s/.test(p) || p.length > 12)) return null;
-    return parts.map((p) => {
-      const low = p.toLowerCase();
-      if (KEYNAMES[low]) return KEYNAMES[low];
-      if (/^f\d{1,2}$/i.test(p) || p.length === 1) return p.toUpperCase();
-      return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-    });
-  }
-
-  /** "claude-sonnet-5-5" -> "Sonnet 5.5". Unbekanntes bleibt, wie es ist. */
-  function prettyModel(model) {
-    const text = String(model || '').trim();
-    const m = text.match(/claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?(?![\d])/i);
-    if (!m) return text;
-    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
-    return m[3] ? name + ' ' + m[2] + '.' + m[3] : name + ' ' + m[2];
-  }
-
-  // ------------------------------------------------------------------ Zustandsanzeige
-
-  function effectiveState() {
-    if (S.errorActive) return 'error';
-    if (S.muted && (S.state === 'idle' || S.state === 'muted' || S.state === 'listening')) return 'muted';
-    if (!S.muted && S.state === 'muted') return 'idle';
-    return S.state;
-  }
-
-  function applyState(value) {
-    if (typeof value !== 'string') return;
-    value = value.toLowerCase();
-    if (!STATES.includes(value)) return;
-    if (value === 'error') {
-      triggerError();
-      return;
-    }
-    clearTimeout(errorTimer);
-    S.errorActive = false;
-    if (value === 'muted') S.muted = true;
-    else if (value === 'listening') S.muted = false;
-    S.state = value;
-    // Antwort ist vorbei: Schreibmarken entfernen, leere Platzhalter verwerfen
-    if (value === 'idle' || value === 'muted' || value === 'listening') finalizeStreaming();
-    renderState();
-  }
-
-  function triggerError() {
-    S.errorActive = true;
-    Reactor.flash();
-    clearTimeout(errorTimer);
-    errorTimer = setTimeout(() => {
-      S.errorActive = false;
-      renderState();
-    }, 2800);
-    renderState(true);
-  }
-
-  function setMuted(v) {
-    S.muted = !!v;
-    renderState();
-  }
-
-  function renderState(force) {
-    const st = effectiveState();
-    renderMicButton();
-    if (st === S.shown && !force) {
-      if (st === 'muted') renderHint(st); // Kürzel kann sich geändert haben
-      return;
-    }
-    const changed = st !== S.shown;
-    S.shown = st;
-    el.body.dataset.state = st;
-    el.stateLabel.textContent = LABELS[st];
-    el.stopBtn.disabled = !(st === 'speaking' || st === 'thinking');
-    renderHint(st);
-    Reactor.setState(st);
-    if (changed && el.stateLabel.animate && !reducedMotion) {
-      el.stateLabel.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 180, easing: 'ease-out' });
-    }
-  }
-
-  function renderHint(st) {
-    const h = el.stateHint;
-    h.textContent = '';
-    switch (st) {
-      case 'idle':
-        h.textContent = S.voice === false
-          ? 'Die Sprachsteuerung ist aus. Schreib Jarvis rechts eine Nachricht.'
-          : 'Sag „Hey Jarvis“ oder klick auf den Kreis';
-        break;
-      case 'listening':
-        h.textContent = 'Sprich jetzt, ich höre zu';
-        break;
-      case 'thinking':
-        h.textContent = 'Claude arbeitet an deiner Anfrage';
-        break;
-      case 'speaking':
-        h.textContent = 'Esc oder Stopp unterbricht';
-        break;
-      case 'muted': {
-        const parts = hotkeyParts(S.hotkey);
-        if (parts) {
-          parts.forEach((p, i) => {
-            if (i) h.append('+');
-            const k = document.createElement('kbd');
-            k.textContent = p;
-            h.append(k);
-          });
-          h.append(' schaltet das Mikrofon wieder ein');
-        } else {
-          h.textContent = 'Das Mikrofon ist aus';
-        }
-        break;
-      }
-      case 'error':
-        h.textContent = 'Das hat nicht geklappt. Bitte noch einmal versuchen.';
-        break;
-      default:
-        break;
-    }
-  }
-
-  function renderMicButton() {
-    const b = el.micBtn;
-    const parts = hotkeyParts(S.hotkey);
-    const hk = parts ? ` (${parts.join('+')})` : '';
-    b.classList.toggle('is-muted', S.muted);
-    b.setAttribute('aria-pressed', S.muted ? 'true' : 'false');
-    el.micBtnText.textContent = S.muted ? 'Mikrofon einschalten' : 'Stumm schalten';
-    b.title = (S.muted ? 'Das Mikrofon ist aus. Einschalten' : 'Mikrofon ausschalten') + hk;
-  }
-
-  // ------------------------------------------------------------------ Einstellungen vom Kern
-
-  function applyConfig(cfg) {
-    if (!cfg || typeof cfg !== 'object') return;
-    if (typeof cfg.hotkey === 'string') S.hotkey = cfg.hotkey;
-    if (typeof cfg.mic === 'string') S.mic = cfg.mic.trim();
-    if (typeof cfg.voice === 'boolean') S.voice = cfg.voice;
-    if (typeof cfg.mic === 'string' || typeof cfg.voice === 'boolean') {
-      const off = S.voice === false;
-      el.micName.textContent = off ? 'Kein Mikrofon aktiv' : S.mic;
-      el.micName.title = off ? 'Jarvis konnte kein Mikrofon öffnen' : S.mic;
-      el.micLine.hidden = !off && !S.mic;
-      el.micLine.classList.toggle('off', off);
-      renderState(true);
-    }
-    if (typeof cfg.model === 'string') {
-      S.model = cfg.model.trim();
-      el.modelName.textContent = prettyModel(S.model);
-      el.modelName.title = S.model;
-      el.modelLine.hidden = !S.model;
-    }
-    if (typeof cfg.weather === 'string' || cfg.weather === null) {
-      S.weather = (cfg.weather || '').trim();
-      el.weatherText.textContent = S.weather;
-      el.weatherLine.title = S.weather;
-      el.weatherLine.hidden = !S.weather;
-    }
-    if (typeof cfg.version === 'string' || typeof cfg.version === 'number') {
-      S.version = String(cfg.version).trim();
-      el.setupBtn.title = 'Einstellungen: Mikrofon, Stimme, Wohnort, Claude' + (S.version ? ' · Jarvis ' + S.version : '');
-    }
-    if (typeof cfg.muted === 'boolean') S.muted = cfg.muted;
-    renderState();
-  }
-
-  function setLink(mode) {
-    S.link = mode;
-    el.body.dataset.link = mode;
-    el.linkText.textContent = { wait: 'Verbinde …', live: 'Verbunden', demo: 'Demo', offline: 'Getrennt' }[mode] || '';
-  }
-
-  // ------------------------------------------------------------------ Uhr
-
-  function tickClock() {
-    const d = new Date();
-    const hm = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-    if (el.clockHM.textContent !== hm) el.clockHM.textContent = hm;
-    const ds = d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
-    if (el.clockDate.textContent !== ds) el.clockDate.textContent = ds;
-    setTimeout(tickClock, 1000 - d.getMilliseconds() + 8);
-  }
-
-  // ------------------------------------------------------------------ Verlauf
-
-  const MAX_MSG = 200;
-  const msgById = new Map();
-  const pendingEchoes = []; // lokal angezeigte, getippte Nachrichten, die Python evtl. noch meldet
-
-  function hhmm(d) {
-    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-  }
-
-  function isNearBottom() {
-    const m = el.messages;
-    return m.scrollHeight - m.scrollTop - m.clientHeight < 90;
-  }
-
-  function scrollToBottom() {
-    el.messages.scrollTop = el.messages.scrollHeight;
-  }
-
-  function updateChatMeta() {
-    // Hinweise ("Bereit ...") zählen nicht als Unterhaltung: die Beispiele bleiben sichtbar.
-    // Die Begrüßung beim Start zählt auch nicht.
-    el.chat.classList.toggle('has-msgs', !!el.messages.querySelector('.msg-user, .msg-jarvis:not([data-id="begruessung"])'));
-  }
-
-  function createMsg(role, id) {
-    const m = document.createElement('div');
-    m.className = 'msg msg-' + role;
-    const parts = {};
-    if (role !== 'info') {
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      const who = document.createElement('span');
-      who.className = 'msg-who';
-      who.textContent = role === 'user' ? 'Du' : 'Jarvis';
-      const time = document.createElement('span');
-      time.className = 'msg-time';
-      time.textContent = hhmm(new Date());
-      meta.append(who, time);
-      m.append(meta);
-    }
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
-    parts.text = document.createElement('span');
-    parts.text.className = 'msg-text';
-    bubble.append(parts.text);
-    if (role === 'jarvis') {
-      const typing = document.createElement('span');
-      typing.className = 'typing';
-      typing.setAttribute('aria-label', 'Jarvis schreibt');
-      typing.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
-      bubble.append(typing);
-    }
-    m.append(bubble);
-    if (role === 'jarvis') {
-      parts.model = document.createElement('div');
-      parts.model.className = 'msg-model';
-      parts.model.hidden = true;
-      m.append(parts.model);
-    }
-    m._parts = parts;
-    m._role = role;
-    if (id) setMsgId(m, id);
-    return m;
-  }
-
-  function setMsgId(m, id) {
-    m.dataset.id = id;
-    msgById.set(id, m);
-  }
-
-  function fillMsg(m, text, model, final) {
-    m._parts.text.textContent = text;
-    m.classList.toggle('streaming', !final);
-    m.classList.toggle('empty', text.length === 0);
-    if (m._parts.model && typeof model === 'string') {
-      m._parts.model.textContent = prettyModel(model);
-      m._parts.model.title = model;
-      m._parts.model.hidden = !model;
-    }
-  }
-
-  function appendMsg(m) {
-    el.messages.append(m);
-    let extra = el.messages.childElementCount - MAX_MSG;
-    while (extra-- > 0) {
-      const old = el.messages.firstElementChild;
-      if (!old) break;
-      const oid = old.dataset.id;
-      if (oid && msgById.get(oid) === old) msgById.delete(oid);
-      old.remove();
-    }
-    updateChatMeta();
-  }
-
-  function takePendingEcho(text) {
-    const t = nowMs();
-    for (let i = pendingEchoes.length - 1; i >= 0; i--) {
-      const p = pendingEchoes[i];
-      if (t - p.t > 20000 || !p.el.isConnected) pendingEchoes.splice(i, 1);
-    }
-    const idx = pendingEchoes.findIndex((p) => p.text === text.trim());
-    return idx >= 0 ? pendingEchoes.splice(idx, 1)[0] : null;
-  }
-
-  function handleMessage(ev) {
-    const role = ev.role === 'user' || ev.role === 'jarvis' ? ev.role : 'info';
-    const text = ev.text == null ? '' : String(ev.text);
-    const id = ev.id == null || ev.id === '' ? null : String(ev.id);
-    const final = ev.final !== false;
-    const model = ev.model == null ? undefined : String(ev.model);
-    const stick = isNearBottom();
-
-    let m = id ? msgById.get(id) : null;
-    if (m && !m.isConnected) {
-      msgById.delete(id);
-      m = null;
-    }
-
-    if (!m && role === 'user') {
-      // Getippter Text wurde bereits lokal angezeigt -> nicht doppelt zeigen.
-      const echo = takePendingEcho(text);
-      if (echo) {
-        echo.el.classList.remove('local', 'failed');
-        if (id) setMsgId(echo.el, id);
-        fillMsg(echo.el, text, undefined, true);
-        if (stick) scrollToBottom();
-        return;
-      }
-    }
-
-    if (m) {
-      fillMsg(m, text, model, final);
-    } else {
-      m = createMsg(role, id);
-      fillMsg(m, text, model, final);
-      appendMsg(m);
-    }
-    if (stick || role === 'user') scrollToBottom();
-  }
-
-  function finalizeStreaming() {
-    const open = el.messages.querySelectorAll('.msg.streaming');
-    if (!open.length) return;
-    open.forEach((m) => {
-      m.classList.remove('streaming');
-      if (m.classList.contains('empty')) {
-        const oid = m.dataset.id;
-        if (oid && msgById.get(oid) === m) msgById.delete(oid);
-        m.remove();
-      }
-    });
-    updateChatMeta();
-  }
-
-  function clearMessages() {
-    const old = Array.from(el.messages.children);
-    old.forEach((m) => {
-      const oid = m.dataset.id;
-      if (oid && msgById.get(oid) === m) msgById.delete(oid);
-    });
-    pendingEchoes.length = 0;
-    if (!old.length) return;
-    old.forEach((m) => m.classList.add('leaving'));
-    setTimeout(() => {
-      old.forEach((m) => m.remove());
-      updateChatMeta();
-    }, reducedMotion ? 60 : 260);
-  }
-
-  function clearMessagesNow() {
-    el.messages.replaceChildren();
-    msgById.clear();
-    pendingEchoes.length = 0;
-    updateChatMeta();
-  }
-
-  // ------------------------------------------------------------------ Hinweise
-
-  const TOAST_ICONS = {
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
-    error: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17h.01"/>',
-    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 10"/>',
-  };
-
-  function toast(text, kind) {
-    const isErr = kind === 'error';
-    const type = isErr ? 'error' : kind === 'ok' ? 'ok' : 'info';
-    const t = document.createElement('div');
-    t.className = 'toast toast-' + type;
-    t.setAttribute('role', isErr ? 'alert' : 'status');
-    const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    icon.setAttribute('viewBox', '0 0 24 24');
-    icon.setAttribute('class', 'ico');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.innerHTML = TOAST_ICONS[type];
-    const body = document.createElement('span');
-    body.className = 'toast-text';
-    body.textContent = text == null ? '' : String(text);
-    t.append(icon, body);
-    el.toasts.append(t);
-    while (el.toasts.childElementCount > 3) el.toasts.firstElementChild.remove();
-    const hide = () => {
-      if (!t.isConnected || t.classList.contains('out')) return;
-      t.classList.add('out');
-      setTimeout(() => t.remove(), 200);
-    };
-    setTimeout(hide, isErr ? 7000 : 4000);
-    t.addEventListener('click', hide);
-  }
-
-  // ------------------------------------------------------------------ Ereignisse
-
-  function handleEvent(ev) {
-    if (!ev || typeof ev !== 'object') return;
-    switch (ev.type) {
-      case 'state':
-        applyState(ev.value);
-        break;
-      case 'level': {
-        const v = Number(ev.value);
-        if (Number.isFinite(v)) {
-          S.levelTarget = clamp(v, 0, 1);
-          S.levelAt = nowMs();
-        }
-        break;
-      }
-      case 'message':
-        handleMessage(ev);
-        break;
-      case 'stats':
-        break; // CPU/RAM zeigt das Fenster bewusst nicht mehr an
-      case 'config':
-        applyConfig(ev);
-        break;
-      case 'toast':
-        toast(ev.text, ev.kind);
-        break;
-      default:
-        break;
-    }
-  }
-
-  function handleEvents(evs) {
-    if (typeof evs === 'string') {
-      try { evs = JSON.parse(evs); } catch { return; }
-    }
-    if (!evs) return;
-    if (!Array.isArray(evs)) evs = [evs];
-    for (const ev of evs) {
-      try {
-        handleEvent(ev);
-      } catch (err) {
-        console.error('Jarvis: Ereignis konnte nicht verarbeitet werden', ev, err);
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------ Brücke
-
-  function callApi(name, ...args) {
-    if (!api || typeof api[name] !== 'function') {
-      return Promise.reject(new Error('API nicht verfügbar: ' + name));
-    }
+  function call(name, ...args) {
+    if (!api || typeof api[name] !== 'function') return Promise.reject(new Error('nicht verbunden: ' + name));
     try {
       return Promise.resolve(api[name](...args));
     } catch (err) {
@@ -559,817 +77,1057 @@
     }
   }
 
-  function connect(newApi, mode) {
-    bridgeGen += 1;
-    const gen = bridgeGen;
-    api = newApi;
-    setLink(mode);
-    callApi('hello')
-      .then((cfg) => {
-        if (gen !== bridgeGen) return;
-        if (typeof cfg === 'string') {
-          try { cfg = JSON.parse(cfg); } catch { cfg = null; }
-        }
-        applyConfig(cfg);
-      })
-      .catch((err) => console.warn('Jarvis: hello() fehlgeschlagen', err));
-    pollLoop(gen, mode);
-  }
-
-  async function pollLoop(gen, mode) {
-    let fails = 0;
-    while (gen === bridgeGen) {
-      let evs;
-      try {
-        evs = await callApi('poll');
-      } catch (err) {
-        if (gen !== bridgeGen) return;
-        fails += 1;
-        if (fails === 1) console.warn('Jarvis: poll() fehlgeschlagen', err);
-        if (fails >= 3 && S.link !== 'offline') setLink('offline');
-        await sleep(1000);
-        continue;
-      }
-      if (gen !== bridgeGen) return;
-      if (fails && S.link === 'offline') setLink(mode);
-      fails = 0;
-      handleEvents(evs);
-      await sleep(80);
-    }
-  }
-
-  /** Greift bei jedem Aufruf frisch auf window.pywebview.api zu (pywebview kann das Objekt ersetzen). */
-  const realApi = {
-    hello: () => window.pywebview.api.hello(),
-    poll: () => window.pywebview.api.poll(),
-    send_text: (t) => window.pywebview.api.send_text(t),
-    toggle_mute: () => window.pywebview.api.toggle_mute(),
-    stop: () => window.pywebview.api.stop(),
-    new_conversation: () => window.pywebview.api.new_conversation(),
-    open_setup: () => window.pywebview.api.open_setup(),
-    listen_now: () => window.pywebview.api.listen_now(),
-  };
-
-  function realApiReady() {
+  function realReady() {
     try {
-      const a = window.pywebview && window.pywebview.api;
-      return !!(a && typeof a.poll === 'function');
+      return !!(window.pywebview && window.pywebview.api && typeof window.pywebview.api.hello === 'function');
     } catch {
       return false;
     }
   }
 
-  function connectReal() {
-    if (S.link === 'live' || S.link === 'offline') {
-      if (api === realApi) return true;
+  // ------------------------------------------------------------------ DOM
+
+  const el = {
+    body: document.body,
+    linkText: $('linkText'),
+    weather: $('weather'),
+    weatherText: $('weatherText'),
+    clockTime: $('clockTime'),
+    clockDate: $('clockDate'),
+    cpuNum: $('cpuNum'),
+    cpuBar: $('cpuBar'),
+    ramNum: $('ramNum'),
+    ramBar: $('ramBar'),
+    micName: $('micName'),
+    micHint: $('micHint'),
+    listenKey: $('listenKey'),
+    micChange: $('micChange'),
+    gamingToggle: $('gamingToggle'),
+    gamingText: $('gamingText'),
+    coreWrap: $('coreWrap'),
+    core: $('core'),
+    field: $('field'),
+    stateLabel: $('stateLabel'),
+    stateHint: $('stateHint'),
+    subtitles: $('subtitles'),
+    subUser: $('subUser'),
+    subJarvis: $('subJarvis'),
+    today: $('today'),
+    todayEmpty: $('todayEmpty'),
+    recent: $('recent'),
+    recentEmpty: $('recentEmpty'),
+    historyOpen: $('historyOpen'),
+    drawer: $('drawer'),
+    drawerShade: $('drawerShade'),
+    history: $('history'),
+    historyEmpty: $('historyEmpty'),
+    historyClose: $('historyClose'),
+    newBtn: $('newBtn'),
+    micBtn: $('micBtn'),
+    micBtnText: $('micBtnText'),
+    form: $('cmdForm'),
+    input: $('cmdInput'),
+    sendBtn: $('sendBtn'),
+    stopBtn: $('stopBtn'),
+    setupBtn: $('setupBtn'),
+    toasts: $('toasts'),
+  };
+
+  // ------------------------------------------------------------------ Tastenkürzel
+
+  const KEYNAMES = {
+    ctrl: 'Strg', control: 'Strg', strg: 'Strg', alt: 'Alt', altgr: 'AltGr', shift: 'Umschalt',
+    umschalt: 'Umschalt', win: 'Win', windows: 'Win', space: 'Leertaste', pause: 'Pause',
+  };
+
+  function hotkeyLabel(hk) {
+    if (typeof hk !== 'string' || !hk.trim()) return '';
+    return hk.split('+').map((p) => {
+      const low = p.trim().toLowerCase();
+      if (KEYNAMES[low]) return KEYNAMES[low];
+      return low.length === 1 || /^f\d{1,2}$/.test(low) ? low.toUpperCase() : low.charAt(0).toUpperCase() + low.slice(1);
+    }).join(' + ');
+  }
+
+  // ------------------------------------------------------------------ Hinweise (Toasts)
+
+  const TOAST_ICONS = {
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    ok: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 10"/>',
+    error: '<path d="M12 4 2.8 20h18.4L12 4z"/><path d="M12 10v4M12 17h.01"/>',
+  };
+
+  function toast(text, kind) {
+    kind = TOAST_ICONS[kind] ? kind : 'info';
+    const box = document.createElement('div');
+    box.className = 'toast toast-' + kind;
+    box.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    const ns = 'http://www.w3.org/2000/svg';
+    const ico = document.createElementNS(ns, 'svg');
+    ico.setAttribute('viewBox', '0 0 24 24');
+    ico.setAttribute('class', 'ico');
+    ico.innerHTML = TOAST_ICONS[kind];
+    const span = document.createElement('span');
+    span.className = 'toast-text';
+    span.textContent = String(text || '');
+    box.append(ico, span);
+    const close = () => {
+      if (!box.isConnected) return;
+      box.classList.add('out');
+      setTimeout(() => box.remove(), 200);
+    };
+    box.addEventListener('click', close);
+    el.toasts.append(box);
+    while (el.toasts.childElementCount > 3) el.toasts.firstElementChild.remove();
+    setTimeout(close, kind === 'error' ? 9000 : 4500);
+  }
+
+  // ------------------------------------------------------------------ Zustand anzeigen
+
+  function effectiveState() {
+    if (S.error) return 'error';
+    if (S.muted && (S.state === 'idle' || S.state === 'muted' || S.state === 'listening')) return 'muted';
+    if (!S.muted && S.state === 'muted') return 'idle';
+    return S.state;
+  }
+
+  function hintFor(state) {
+    if (state === 'idle' && S.voice === false) return 'Kein Mikrofon gefunden. Du kannst Jarvis unten schreiben.';
+    return {
+      idle: 'Sag „Hey Jarvis“, klick auf den Kern oder schreib unten',
+      listening: 'Ich höre …',
+      thinking: 'Einen Moment …',
+      speaking: 'Sag „Stopp“, um mich zu unterbrechen',
+      muted: 'Das Mikrofon ist aus. Der Knopf unten links schaltet es wieder ein.',
+      error: 'Da ist etwas schiefgelaufen. Einzelheiten stehen im Protokoll.',
+    }[state];
+  }
+
+  function renderState(force) {
+    const state = effectiveState();
+    if (state === S.shown && !force) return;
+    S.shown = state;
+    el.body.dataset.state = state;
+    el.stateLabel.textContent = LABELS[state];
+    el.stateLabel.classList.remove('swap');
+    void el.stateLabel.offsetWidth;
+    el.stateLabel.classList.add('swap');
+    if (!S.hintTimer) el.stateHint.textContent = hintFor(state);
+    el.stopBtn.disabled = !(state === 'speaking' || state === 'thinking');
+    Core.setState(state);
+    if (state === 'listening') {
+      // Neue Frage: alte Untertitel weg
+      clearTimeout(S.subtitleTimer);
+      el.subtitles.classList.remove('fade');
+      el.subUser.textContent = '';
+      setJarvisText('');
     }
-    if (!realApiReady()) return false;
-    if (demo) {
-      demo.destroy();
-      demo = null;
-      clearMessagesNow();
-      S.state = 'idle';
-      S.muted = false;
-      S.errorActive = false;
-      S.levelTarget = 0;
+    if (state === 'idle' && el.subJarvis.textContent) scheduleSubtitleFade();
+  }
+
+  function applyState(value) {
+    if (typeof value !== 'string' || !STATES.includes(value)) return;
+    if (value === 'error') {
+      S.error = true;
+      renderState();
+      setTimeout(() => {
+        S.error = false;
+        renderState();
+      }, 2600);
+      return;
+    }
+    S.state = value;
+    renderState();
+  }
+
+  function showHint(text, ms) {
+    clearTimeout(S.hintTimer);
+    el.stateHint.textContent = text;
+    S.hintTimer = setTimeout(() => {
+      S.hintTimer = 0;
+      el.stateHint.textContent = hintFor(effectiveState());
+    }, ms || 4000);
+  }
+
+  // ------------------------------------------------------------------ Untertitel
+
+  let shownWords = [];
+
+  function setJarvisText(text) {
+    const words = String(text || '').split(/(\s+)/).filter((w) => w.length);
+    // Gleicher Anfang: nur die neuen Wörter einblenden
+    let same = 0;
+    while (same < shownWords.length && same < words.length && shownWords[same] === words[same]) same += 1;
+    if (same < shownWords.length) {
+      el.subJarvis.replaceChildren();
+      same = 0;
+    }
+    const delayBase = reducedMotion() ? 0 : 28;
+    for (let i = same; i < words.length; i += 1) {
+      const span = document.createElement('span');
+      span.className = 'w';
+      span.textContent = words[i];
+      span.style.animationDelay = ((i - same) * delayBase) + 'ms';
+      el.subJarvis.append(span);
+    }
+    shownWords = words;
+  }
+
+  function scheduleSubtitleFade() {
+    clearTimeout(S.subtitleTimer);
+    S.subtitleTimer = setTimeout(() => {
+      if (effectiveState() !== 'idle') return;
+      el.subtitles.classList.add('fade');
+      setTimeout(() => {
+        if (!el.subtitles.classList.contains('fade')) return;
+        el.subUser.textContent = '';
+        setJarvisText('');
+        el.subtitles.classList.remove('fade');
+      }, 650);
+    }, 14000);
+  }
+
+  // ------------------------------------------------------------------ Verlauf
+
+  function timeNow() {
+    const d = new Date();
+    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function addMessage(role, text, id, final) {
+    role = ['user', 'jarvis', 'info'].includes(role) ? role : 'info';
+    text = String(text || '');
+    if (role === 'user') {
+      // Getippter Text erscheint sofort; das Echo vom Backend nicht noch einmal.
+      const i = S.pendingEchoes.findIndex((p) => p.text === text.trim() && Date.now() - p.at < 20000);
+      if (i >= 0) {
+        S.pendingEchoes.splice(i, 1);
+        return;
+      }
+    }
+    const key = id ? role + ':' + id : '';
+    let item = key ? S.history.find((h) => h.key === key) : null;
+    if (item) {
+      item.text = text;
+      if (item.el) item.el.querySelector('.text').textContent = text;
+    } else {
+      item = { key, role, text, time: timeNow(), el: null };
+      S.history.push(item);
+      if (S.history.length > 300) {
+        const old = S.history.shift();
+        if (old.el) old.el.remove();
+      }
+      item.el = historyItem(item);
+      el.history.append(item.el);
+    }
+    el.historyEmpty.hidden = S.history.length > 0;
+    if (el.drawer.classList.contains('open')) el.history.scrollTop = el.history.scrollHeight;
+    renderRecent();
+
+    if (role === 'user') {
+      clearTimeout(S.subtitleTimer);
+      el.subtitles.classList.remove('fade');
+      el.subUser.textContent = text;
+      setJarvisText('');
+    } else if (role === 'jarvis') {
+      clearTimeout(S.subtitleTimer);
+      el.subtitles.classList.remove('fade');
+      setJarvisText(text);
+      if (final !== false && effectiveState() === 'idle') scheduleSubtitleFade();
+      if (final !== false) refreshToday();
+    } else {
+      showHint(text, 5000);
+    }
+  }
+
+  function historyItem(item) {
+    const li = document.createElement('li');
+    li.className = item.role;
+    const text = document.createElement('div');
+    text.className = 'text';
+    text.textContent = item.text;
+    li.append(text);
+    if (item.role !== 'info') {
+      const time = document.createElement('time');
+      time.textContent = (item.role === 'user' ? 'Du · ' : 'Jarvis · ') + item.time;
+      li.append(time);
+    }
+    return li;
+  }
+
+  function renderRecent() {
+    const items = S.history.filter((h) => h.role !== 'info' && h.text).slice(-5);
+    el.recent.replaceChildren(...items.map((h) => {
+      const li = document.createElement('li');
+      li.className = h.role;
+      const who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = h.role === 'user' ? 'Du' : 'Jarvis';
+      const what = document.createElement('span');
+      what.className = 'what';
+      what.textContent = h.text;
+      li.append(who, what);
+      return li;
+    }));
+    el.recentEmpty.hidden = items.length > 0;
+  }
+
+  function openDrawer(open) {
+    el.drawer.classList.toggle('open', open);
+    el.drawer.setAttribute('aria-hidden', String(!open));
+    el.drawerShade.hidden = !open;
+    if (open) {
+      el.history.scrollTop = el.history.scrollHeight;
+      el.historyClose.focus({ preventScroll: true });
+    }
+  }
+
+  // ------------------------------------------------------------------ Heute (Erinnerungen)
+
+  let todayTimer = 0;
+
+  function refreshToday() {
+    clearTimeout(todayTimer);
+    todayTimer = setTimeout(async () => {
+      try {
+        const list = await call('reminders');
+        renderToday(Array.isArray(list) ? list : []);
+      } catch {
+        /* ältere Version ohne Erinnerungs-Abfrage */
+      }
+    }, 300);
+  }
+
+  function renderToday(list) {
+    el.today.replaceChildren(...list.slice(0, 5).map((r) => {
+      const li = document.createElement('li');
+      const time = document.createElement('time');
+      time.textContent = String(r.uhr || '');
+      const span = document.createElement('span');
+      span.textContent = String(r.text || '') + (r.tag && r.tag !== 'heute' ? ' (' + r.tag + ')' : '');
+      span.title = span.textContent;
+      li.append(time, span);
+      return li;
+    }));
+    el.todayEmpty.hidden = list.length > 0;
+  }
+
+  // ------------------------------------------------------------------ System, Mikrofon, Gaming
+
+  function setMeter(num, bar, value) {
+    if (typeof value !== 'number' || !isFinite(value)) return;
+    const v = clamp(value, 0, 100);
+    num.textContent = Math.round(v) + ' %';
+    bar.style.width = v.toFixed(1) + '%';
+    bar.classList.toggle('high', v >= 85);
+  }
+
+  function applyConfig(c) {
+    if (!c || typeof c !== 'object') return;
+    if ('muted' in c) {
+      S.muted = !!c.muted;
+      el.micBtn.setAttribute('aria-pressed', String(S.muted));
+      el.micBtn.title = S.muted ? 'Mikrofon wieder einschalten' : 'Mikrofon stumm schalten';
+      el.micBtnText.textContent = el.micBtn.title;
       renderState();
     }
-    connect(realApi, 'live');
-    return true;
+    if (typeof c.mic === 'string' && c.mic) el.micName.textContent = c.mic;
+    if ('voice' in c) {
+      S.voice = c.voice;
+      if (c.voice === false) el.micName.textContent = 'Kein Mikrofon';
+      renderState(true);
+    }
+    if (typeof c.listen_hotkey === 'string' && c.listen_hotkey) {
+      el.listenKey.textContent = c.listen_hotkey.includes('+') && c.listen_hotkey.includes(' ')
+        ? c.listen_hotkey : hotkeyLabel(c.listen_hotkey) || c.listen_hotkey;
+    }
+    if (typeof c.weather === 'string') {
+      el.weatherText.textContent = c.weather;
+      el.weather.hidden = !c.weather;
+    }
+    if ('gaming' in c) {
+      S.gaming = !!c.gaming;
+      el.gamingToggle.checked = S.gaming;
+      el.gamingText.textContent = S.gaming ? 'An' : 'Aus';
+    }
+    if (typeof c.version === 'string' && c.version) el.linkText.title = 'Jarvis ' + c.version;
+  }
+
+  function setLink(link) {
+    S.link = link;
+    el.body.dataset.link = link;
+    el.linkText.textContent = { wait: 'Verbinde …', live: 'Online', demo: 'Demo', offline: 'Getrennt' }[link] || link;
+  }
+
+  // ------------------------------------------------------------------ Uhr
+
+  function tickClock() {
+    const d = new Date();
+    el.clockTime.textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    el.clockDate.textContent = WEEKDAYS[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()];
+    setTimeout(tickClock, 1000 - (d.getMilliseconds() % 1000) + 5);
+  }
+
+  // ------------------------------------------------------------------ Ereignisse
+
+  function handle(ev) {
+    if (!ev || typeof ev !== 'object') return;
+    switch (ev.type) {
+      case 'state': applyState(String(ev.value || '')); break;
+      case 'message': addMessage(ev.role, ev.text, ev.id, ev.final); break;
+      case 'level': S.level = clamp(Number(ev.value) || 0, 0, 1); Core.level(S.level); break;
+      case 'toast': toast(ev.text, ev.kind); break;
+      case 'config': applyConfig(ev); break;
+      case 'stats': setMeter(el.cpuNum, el.cpuBar, ev.cpu); setMeter(el.ramNum, el.ramBar, ev.ram); break;
+      default: break;
+    }
+  }
+
+  async function pollLoop(gen) {
+    while (gen === bridgeGen) {
+      try {
+        const events = await call('poll');
+        pollFails = 0;
+        if (S.link === 'offline') setLink(api === REAL ? 'live' : 'demo');
+        if (Array.isArray(events)) events.forEach(handle);
+      } catch {
+        pollFails += 1;
+        if (pollFails >= 25) setLink('offline');
+      }
+      await sleep(document.hidden ? 300 : 80);
+    }
+  }
+
+  async function connect(target, link) {
+    bridgeGen += 1;
+    api = target;
+    setLink(link);
+    const gen = bridgeGen;
+    try {
+      const info = await call('hello');
+      applyConfig(info || {});
+    } catch {
+      /* egal, die Ereignisse kommen trotzdem */
+    }
+    refreshToday();
+    setInterval(refreshToday, 60000);
+    pollLoop(gen);
   }
 
   // ------------------------------------------------------------------ Bedienung
 
-  function sendText() {
-    const text = el.input.value.trim();
-    if (!text) return;
-    if (!api) {
-      toast('Noch keine Verbindung zu Jarvis.', 'error');
-      return;
+  async function listenNow() {
+    Core.pulse();
+    try {
+      const r = await call('listen_now');
+      if (r && r.ok === false) {
+        if (r.reason === 'muted') toast('Das Mikrofon ist aus. Schalte es unten links wieder ein.', 'info');
+        else toast('Kein Mikrofon bereit. Schreib Jarvis einfach unten.', 'info');
+      }
+    } catch {
+      toast('Jarvis ist gerade nicht verbunden.', 'error');
     }
-    el.input.value = '';
-    updateSendBtn();
-    const m = createMsg('user', null);
-    m.classList.add('local');
-    fillMsg(m, text, undefined, true);
-    appendMsg(m);
-    scrollToBottom();
-    const echo = { el: m, text, t: nowMs() };
-    pendingEchoes.push(echo);
-    callApi('send_text', text)
-      .then((ok) => {
-        if (ok === false) {
-          m.classList.add('failed');
-          const i = pendingEchoes.indexOf(echo);
-          if (i >= 0) pendingEchoes.splice(i, 1);
-          toast('Jarvis konnte die Nachricht gerade nicht annehmen.', 'error');
-        }
-      })
-      .catch((err) => {
-        console.warn('Jarvis: send_text() fehlgeschlagen', err);
-        m.classList.add('failed');
-        const i = pendingEchoes.indexOf(echo);
-        if (i >= 0) pendingEchoes.splice(i, 1);
-        toast('Nachricht konnte nicht gesendet werden.', 'error');
-      });
-  }
-
-  function toggleMute() {
-    if (!api) {
-      toast('Noch keine Verbindung zu Jarvis.', 'error');
-      return;
-    }
-    const before = S.muted;
-    setMuted(!before); // sofortige Rückmeldung
-    callApi('toggle_mute')
-      .then((v) => {
-        if (typeof v === 'boolean') setMuted(v);
-      })
-      .catch((err) => {
-        console.warn('Jarvis: toggle_mute() fehlgeschlagen', err);
-        setMuted(before);
-        toast('Stummschaltung hat nicht geklappt.', 'error');
-      });
-  }
-
-  function stopAnswer() {
-    if (!api) return;
-    callApi('stop').catch((err) => {
-      console.warn('Jarvis: stop() fehlgeschlagen', err);
-      toast('Stopp hat nicht geklappt.', 'error');
-    });
-  }
-
-  function newConversation() {
-    if (!api) {
-      toast('Noch keine Verbindung zu Jarvis.', 'error');
-      return;
-    }
-    clearMessages();
-    callApi('new_conversation')
-      .then(() => toast('Neue Unterhaltung begonnen.', 'info'))
-      .catch((err) => {
-        console.warn('Jarvis: new_conversation() fehlgeschlagen', err);
-        toast('Neue Unterhaltung konnte nicht gestartet werden.', 'error');
-      });
-  }
-
-  function openSetup() {
-    if (!api) {
-      toast('Noch keine Verbindung zu Jarvis.', 'error');
-      return;
-    }
-    if (api === demo) {
-      location.href = 'setup.html';
-      return;
-    }
-    el.setupBtn.disabled = true;
-    toast('Die Einrichtung öffnet sich. Danach startet Jarvis von selbst neu.', 'info');
-    callApi('open_setup')
-      .then((ok) => {
-        if (ok === false) {
-          el.setupBtn.disabled = false;
-          toast('Die Einrichtung ließ sich nicht öffnen.', 'error');
-        }
-      })
-      .catch((err) => {
-        console.warn('Jarvis: open_setup() fehlgeschlagen', err);
-        el.setupBtn.disabled = false;
-        toast('Die Einrichtung ließ sich nicht öffnen.', 'error');
-      });
-  }
-
-  /** Klick auf den Reaktor: Jarvis hört sofort zu, ohne „Hey Jarvis“. */
-  function listenNow() {
-    if (!api) {
-      toast('Noch keine Verbindung zu Jarvis.', 'error');
-      return;
-    }
-    if (S.shown === 'listening') return;
-    callApi('listen_now')
-      .then((res) => {
-        if (typeof res === 'string') {
-          try { res = JSON.parse(res); } catch { res = null; }
-        }
-        if (!res || res.ok) return;
-        if (res.reason === 'muted') {
-          toast('Das Mikrofon ist stumm. Erst die Mikrofon-Taste drücken.', 'info');
-        } else if (res.reason === 'novoice') {
-          toast('Die Sprachsteuerung ist gerade aus. Tippen geht aber.', 'info');
-        }
-      })
-      .catch((err) => {
-        console.warn('Jarvis: listen_now() fehlgeschlagen', err);
-        toast('Zuhören hat nicht geklappt.', 'error');
-      });
-  }
-
-  function updateSendBtn() {
-    el.sendBtn.disabled = el.input.value.trim().length === 0;
   }
 
   function bindUi() {
-    el.form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      sendText();
+    el.input.addEventListener('input', () => {
+      el.sendBtn.disabled = !el.input.value.trim();
     });
-    el.input.addEventListener('input', updateSendBtn);
-    el.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-        e.preventDefault();
-        sendText();
+    el.form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const text = el.input.value.trim();
+      if (!text) return;
+      el.input.value = '';
+      el.sendBtn.disabled = true;
+      addMessage('user', text);
+      S.pendingEchoes.push({ text, at: Date.now() });
+      try {
+        const ok = await call('send_text', text);
+        if (ok === false) toast('Das ließ sich nicht senden.', 'error');
+      } catch {
+        toast('Jarvis ist gerade nicht verbunden.', 'error');
       }
     });
-    el.micBtn.addEventListener('click', toggleMute);
-    el.stopBtn.addEventListener('click', stopAnswer);
-    el.newBtn.addEventListener('click', newConversation);
+    el.micBtn.addEventListener('click', async () => {
+      try {
+        const muted = await call('toggle_mute');
+        if (typeof muted === 'boolean') applyConfig({ muted });
+      } catch {
+        toast('Jarvis ist gerade nicht verbunden.', 'error');
+      }
+    });
+    el.stopBtn.addEventListener('click', () => call('stop').catch(() => {}));
     el.setupBtn.addEventListener('click', openSetup);
     el.micChange.addEventListener('click', openSetup);
-    el.reactorWrap.addEventListener('click', listenNow);
-    el.reactorWrap.addEventListener('keydown', (e) => {
+    el.coreWrap.addEventListener('click', listenNow);
+    el.coreWrap.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         listenNow();
       }
     });
-    el.tryList.addEventListener('click', (e) => {
-      const chip = e.target.closest('.try-chip');
-      if (!chip) return;
-      el.input.value = chip.textContent;
-      updateSendBtn();
-      sendText();
+    el.historyOpen.addEventListener('click', () => openDrawer(true));
+    el.historyClose.addEventListener('click', () => openDrawer(false));
+    el.drawerShade.addEventListener('click', () => openDrawer(false));
+    el.newBtn.addEventListener('click', async () => {
+      try {
+        await call('new_conversation');
+        S.history.forEach((h) => h.el && h.el.remove());
+        S.history = [];
+        el.historyEmpty.hidden = false;
+        renderRecent();
+        el.subUser.textContent = '';
+        setJarvisText('');
+        toast('Neue Unterhaltung. Jarvis fängt von vorne an.', 'ok');
+      } catch {
+        toast('Jarvis ist gerade nicht verbunden.', 'error');
+      }
+    });
+    el.gamingToggle.addEventListener('change', async () => {
+      const wanted = el.gamingToggle.checked;
+      try {
+        const on = await call('toggle_gaming');
+        applyConfig({ gaming: typeof on === 'boolean' ? on : wanted });
+      } catch {
+        el.gamingToggle.checked = !wanted;
+        toast('Der Gaming-Modus ließ sich gerade nicht umschalten.', 'error');
+      }
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (S.shown === 'speaking' || S.shown === 'thinking') {
-          e.preventDefault();
-          stopAnswer();
-        } else if (document.activeElement === el.input && el.input.value) {
-          el.input.value = '';
-          updateSendBtn();
-        }
-      }
+      if (e.key === 'Escape' && el.drawer.classList.contains('open')) openDrawer(false);
     });
-    updateSendBtn();
   }
 
+  async function openSetup() {
+    toast('Die Einstellungen öffnen sich …', 'info');
+    try {
+      const ok = await call('open_setup');
+      if (ok === false) toast('Die Einstellungen ließen sich nicht öffnen.', 'error');
+    } catch {
+      toast('Im Demo-Modus gibt es keine Einstellungen.', 'info');
+    }
+  }
+
+  // Python ruft das auf, wenn das versteckte Fenster wieder erscheint.
+  window.jarvisShown = () => {
+    Core.boot();
+    renderRecent();
+  };
+
   // ==================================================================
-  //   Der Kreis (Canvas): zeigt ruhig, was Jarvis gerade tut
+  //   Der Kern: Ringe, Stimm-Kranz, Wellen und Glühen (Canvas)
   // ==================================================================
 
-  const Reactor = (() => {
-    const canvas = el.canvas;
-    const ctx = canvas.getContext('2d', { alpha: true });
-    let W = 0;
-    let H = 0;
-    let dpr = 1;
-
-    // Farben je Zustand (eine Akzentfarbe, Grau für stumm, Rot nur bei Fehlern)
-    const COL = {
-      idle: [76, 157, 255],
-      listening: [110, 182, 255],
-      thinking: [76, 157, 255],
-      speaking: [128, 190, 255],
-      muted: [112, 120, 136],
-      error: [240, 85, 90],
-    };
-
-    // Zielwerte je Zustand; alles gleitet weich dorthin
+  const Core = (() => {
     const LOOK = {
-      idle: { glow: 0.3, core: 0.82, ring: 0.3, wave: 0, spin: 0, breath: 1, speed: 0.12, eq: 0, ripple: 0, orbit: 0.35 },
-      listening: { glow: 0.62, core: 1, ring: 0.55, wave: 1, spin: 0, breath: 0.4, speed: 0.22, eq: 0, ripple: 1, orbit: 1 },
-      thinking: { glow: 0.5, core: 0.92, ring: 0.45, wave: 0, spin: 1, breath: 0.6, speed: 0.4, eq: 0, ripple: 0, orbit: 0.8 },
-      speaking: { glow: 0.6, core: 1, ring: 0.5, wave: 0, spin: 0, breath: 0.3, speed: 0.2, eq: 1, ripple: 0, orbit: 0.7 },
-      muted: { glow: 0.08, core: 0.45, ring: 0.18, wave: 0, spin: 0, breath: 0.3, speed: 0.05, eq: 0, ripple: 0, orbit: 0.1 },
+      idle:      { color: [76, 157, 255],  spin: 0.22, energy: 0.25, wave: 0.12, ripple: 0, scan: 0 },
+      listening: { color: [86, 214, 255],  spin: 0.5,  energy: 0.7,  wave: 0.75, ripple: 1, scan: 0 },
+      thinking:  { color: [123, 140, 255], spin: 1.7,  energy: 0.55, wave: 0.2,  ripple: 0, scan: 1 },
+      speaking:  { color: [76, 157, 255],  spin: 0.7,  energy: 0.9,  wave: 1.0,  ripple: 0, scan: 0 },
+      muted:     { color: [240, 85, 90],   spin: 0.04, energy: 0.08, wave: 0.0,  ripple: 0, scan: 0 },
+      error:     { color: [240, 85, 90],   spin: 0.5,  energy: 0.4,  wave: 0.1,  ripple: 0, scan: 0 },
     };
-    const KEYS = Object.keys(LOOK.idle);
-
-    let visState = 'idle';
-    const cur = { ...LOOK.idle, col: COL.idle.slice() };
+    const look = { color: [76, 157, 255], spin: 0.22, energy: 0.25, wave: 0.12, ripple: 0, scan: 0 };
     let target = LOOK.idle;
-    let targetCol = COL.idle;
-    let time = 0;
+    let canvas = null;
+    let ctx = null;
+    let size = 0;
+    let dpr = 1;
     let angle = 0;
-    let spinAngle = 0;
-    let lvl = 0;
-    let flash = 0;
-    let running = false;
-
-    // Lichtpartikel, die ruhig um den Kreis ziehen
-    const PARTICLES = Array.from({ length: 56 }, () => ({
-      r: 0.92 + Math.random() * 0.55,
+    let t = 0;
+    let last = 0;
+    let level = 0;
+    let levelTarget = 0;
+    let levelAt = 0;
+    let bootT = 0;
+    let pulseT = -10;
+    let ripples = [];
+    let lastRipple = 0;
+    const PARTICLES = Array.from({ length: 54 }, () => ({
+      r: 0.42 + Math.random() * 0.62,
       a: Math.random() * Math.PI * 2,
-      v: (0.04 + Math.random() * 0.2) * (Math.random() < 0.5 ? -1 : 1),
-      s: 0.7 + Math.random() * 1.6,
-      tw: Math.random() * Math.PI * 2,
+      s: (0.04 + Math.random() * 0.12) * (Math.random() < 0.5 ? -1 : 1),
+      z: 0.4 + Math.random() * 0.9,
+      p: Math.random() * Math.PI * 2,
     }));
-    const EQ = 72;
-    const eqVals = new Float32Array(EQ);
+    const BARS = 96;
+    const seeds = Array.from({ length: BARS }, () => Math.random() * 1000);
 
-    function rgba(c, a) {
-      return 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + clamp(a, 0, 1).toFixed(3) + ')';
-    }
-
-    function light(c, t) {
-      return [lerp(c[0], 255, t), lerp(c[1], 255, t), lerp(c[2], 255, t)];
-    }
+    const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
 
     function resize() {
-      const r = el.reactorWrap.getBoundingClientRect();
-      dpr = clamp(window.devicePixelRatio || 1, 1, 2);
-      W = Math.max(1, Math.floor(r.width));
-      H = Math.max(1, Math.floor(r.height));
-      const cw = Math.round(W * dpr);
-      const ch = Math.round(H * dpr);
-      if (canvas.width !== cw || canvas.height !== ch) {
-        canvas.width = cw;
-        canvas.height = ch;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      const s = Math.max(120, Math.round(Math.min(rect.width, rect.height) * dpr));
+      if (s !== size) {
+        size = s;
+        canvas.width = s;
+        canvas.height = s;
       }
     }
 
-    function setState(st) {
-      if (st === 'error') {
-        flash = 1;
-        return;
-      }
-      visState = LOOK[st] ? st : 'idle';
-      target = LOOK[visState];
-      targetCol = COL[visState];
+    function setState(state) {
+      target = LOOK[state] || LOOK.idle;
     }
 
-    function flashNow() {
-      flash = 1;
+    function levelIn(v) {
+      levelTarget = v;
+      levelAt = performance.now();
     }
 
-    function update(dt) {
-      const k = 1 - Math.exp(-dt / 0.2);
-      for (const key of KEYS) cur[key] += (target[key] - cur[key]) * k;
-      const col = flash > 0.01 ? COL.error : targetCol;
-      const kc = 1 - Math.exp(-dt / (flash > 0.01 ? 0.08 : 0.3));
-      for (let i = 0; i < 3; i++) cur.col[i] += (col[i] - cur.col[i]) * kc;
+    function boot() {
+      bootT = 0;
+    }
 
-      const motion = reducedMotion ? 0.25 : 1;
-      time += dt * motion;
-      angle += dt * cur.speed * motion;
-      spinAngle += dt * (1.2 + 2.2 * cur.spin) * motion;
+    function pulse() {
+      pulseT = t;
+    }
 
-      // Pegel: schnell hoch, langsam runter, nach kurzer Funkstille auf 0
-      const fresh = nowMs() - S.levelAt < 400;
-      const want = fresh && (visState === 'listening' || visState === 'speaking') ? S.levelTarget : 0;
-      lvl += (want - lvl) * (1 - Math.exp(-dt / (want > lvl ? 0.05 : 0.22)));
+    function noise(i, time) {
+      const s = seeds[i];
+      return 0.5 + 0.25 * Math.sin(time * 5.1 + s) + 0.15 * Math.sin(time * 9.7 + s * 1.7) + 0.1 * Math.sin(time * 2.3 + s * 0.3);
+    }
 
-      for (const p of PARTICLES) p.a += p.v * dt * motion * (0.6 + 1.6 * cur.orbit + lvl * 2);
-      const ke = 1 - Math.exp(-dt / 0.06);
-      for (let i = 0; i < EQ; i++) {
-        const u = i / EQ;
-        const n = 0.5 + 0.3 * Math.sin(u * 37 + time * 7.3) + 0.2 * Math.sin(u * 91 - time * 11.1);
-        eqVals[i] += (lvl * (0.25 + 0.75 * clamp(n, 0, 1)) - eqVals[i]) * ke;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - (last || now)) / 1000);
+      last = now;
+      t += dt;
+      bootT = Math.min(1, bootT + dt / 1.4);
+      // sanft zum Ziel-Aussehen
+      const k = Math.min(1, dt * 4);
+      for (let i = 0; i < 3; i += 1) look.color[i] = lerp(look.color[i], target.color[i], k);
+      for (const key of ['spin', 'energy', 'wave', 'ripple', 'scan']) look[key] = lerp(look[key], target[key], k);
+      // Pegel: schnell rauf, langsam runter; nach 300 ms ohne Meldung abklingen
+      const stale = performance.now() - levelAt > 300;
+      const want = stale ? 0 : levelTarget;
+      level += (want - level) * Math.min(1, dt * (want > level ? 18 : 5));
+      angle += dt * look.spin;
+      draw();
+      // Ruhig: 30 Bilder pro Sekunde reichen, sonst 60
+      const calm = target === LOOK.idle || target === LOOK.muted;
+      if (calm && !reducedMotion()) {
+        setTimeout(() => requestAnimationFrame(frame), 33);
+      } else {
+        requestAnimationFrame(frame);
       }
+    }
 
-      flash *= Math.exp(-dt / 0.5);
-      if (flash < 0.004) flash = 0;
+    function arc(r, a0, a1, width, color) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r, a0, a1);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      ctx.stroke();
     }
 
     function draw() {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-      const cx = W / 2;
-      const cy = H / 2;
-      const R = Math.min(W, H) * 0.34;
-      if (R < 12) return;
+      if (!ctx) return;
+      const c = look.color;
+      const R = size * 0.47;
+      const ease = 1 - Math.pow(1 - bootT, 3);
+      const lv = level;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, size, size);
+      ctx.translate(size / 2, size / 2);
+      ctx.lineCap = 'round';
 
-      const c = cur.col;
-      const hi = light(c, 0.45);
-      const breath = 0.5 + 0.5 * Math.sin(time * 1.6);
-      const pulse = cur.breath * breath * 0.04 + lvl * 0.14;
-      const coreR = R * 0.38 * (1 + pulse);
-
-      // 1) Weiches Licht hinter dem Kreis (additiv: leuchtet wie Licht, nicht wie Farbe)
-      ctx.globalCompositeOperation = 'lighter';
-      const glowR = R * (1.7 + lvl * 0.35);
-      const g = ctx.createRadialGradient(cx, cy, coreR * 0.5, cx, cy, glowR);
-      g.addColorStop(0, rgba(c, 0.26 * cur.glow + lvl * 0.14));
-      g.addColorStop(0.45, rgba(c, 0.08 * cur.glow));
-      g.addColorStop(1, rgba(c, 0));
-      ctx.fillStyle = g;
+      // Glühen hinter allem
+      const glow = ctx.createRadialGradient(0, 0, R * 0.1, 0, 0, R * 1.02);
+      glow.addColorStop(0, rgba(c, 0.32 * (0.5 + look.energy * 0.6 + lv * 0.4) * ease));
+      glow.addColorStop(0.45, rgba(c, 0.08 * ease));
+      glow.addColorStop(1, rgba(c, 0));
+      ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+      ctx.arc(0, 0, R * 1.02, 0, Math.PI * 2);
       ctx.fill();
 
-      // 2) Lichtpartikel
-      for (const p of PARTICLES) {
-        const wob = cur.ripple * lvl * R * 0.06 * Math.sin(time * 3 + p.tw);
-        const pr = R * p.r + wob;
-        const x = cx + Math.cos(p.a) * pr;
-        const y = cy + Math.sin(p.a) * pr;
-        const a = (0.12 + 0.5 * cur.orbit) * (0.55 + 0.45 * Math.sin(time * 1.3 + p.tw)) * (1.3 - (p.r - 0.92));
-        ctx.fillStyle = rgba(hi, a);
+      // Skala ganz außen: 120 Striche
+      ctx.save();
+      ctx.rotate(angle * 0.08);
+      const ticks = 120;
+      const shownTicks = Math.floor(ticks * ease);
+      for (let i = 0; i < shownTicks; i += 1) {
+        const a = (i / ticks) * Math.PI * 2;
+        const long = i % 10 === 0;
+        const r0 = R * (long ? 0.915 : 0.94);
         ctx.beginPath();
-        ctx.arc(x, y, p.s * (0.8 + lvl * 0.8), 0, Math.PI * 2);
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        ctx.lineTo(Math.cos(a) * R * 0.965, Math.sin(a) * R * 0.965);
+        ctx.lineWidth = (long ? 1.6 : 1) * dpr;
+        ctx.strokeStyle = rgba(c, long ? 0.5 : 0.2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Segment-Ring
+      ctx.save();
+      ctx.rotate(angle * 0.45);
+      const segs = 8;
+      for (let i = 0; i < segs; i += 1) {
+        const a0 = (i / segs) * Math.PI * 2;
+        const len = (Math.PI * 2 / segs) * 0.62 * ease;
+        arc(R * 0.86, a0, a0 + len, 2.4 * dpr, rgba(c, 0.55));
+      }
+      ctx.restore();
+
+      // Gegenläufige Bögen
+      ctx.save();
+      ctx.rotate(-angle * 0.95);
+      arc(R * 0.775, 0, Math.PI * 2, 1 * dpr, rgba(c, 0.12));
+      arc(R * 0.775, 0, 1.25 * ease, 3 * dpr, rgba(c, 0.9));
+      arc(R * 0.775, 2.2, 2.2 + 0.7 * ease, 2 * dpr, rgba(c, 0.55));
+      arc(R * 0.775, 4.1, 4.1 + 0.32 * ease, 2 * dpr, rgba(c, 0.4));
+      ctx.restore();
+
+      // Suchstrahl beim Nachdenken
+      if (look.scan > 0.02 && ctx.createConicGradient) {
+        ctx.save();
+        // Radar: die helle Kante läuft vorn, dahinter klingt der Schein aus.
+        const a = angle * 2.4;
+        const cone = ctx.createConicGradient(a, 0, 0);
+        cone.addColorStop(0, rgba(c, 0));
+        cone.addColorStop(0.86, rgba(c, 0));
+        cone.addColorStop(0.995, rgba(c, 0.34 * look.scan));
+        cone.addColorStop(1, rgba(c, 0));
+        ctx.fillStyle = cone;
+        ctx.beginPath();
+        ctx.arc(0, 0, R * 0.86, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        // umlaufende Punkte
+        for (let i = 0; i < 3; i += 1) {
+          const a2 = angle * (2.2 + i * 0.4) + i * 2.1;
+          const rr = R * (0.66 + i * 0.05);
+          ctx.beginPath();
+          ctx.arc(Math.cos(a2) * rr, Math.sin(a2) * rr, 2.6 * dpr, 0, Math.PI * 2);
+          ctx.fillStyle = rgba(c, 0.9 * look.scan);
+          ctx.fill();
+        }
+      }
+
+      // Wellen beim Zuhören
+      if (look.ripple > 0.05 && t - lastRipple > 0.85 && !reducedMotion()) {
+        lastRipple = t;
+        ripples.push(t);
+      }
+      ripples = ripples.filter((born) => t - born < 1.7);
+      for (const born of ripples) {
+        const p = (t - born) / 1.7;
+        arc(lerp(R * 0.34, R * 0.95, p), 0, Math.PI * 2, 1.5 * dpr, rgba(c, 0.5 * (1 - p) * look.ripple));
+      }
+      // Klick-Puls
+      if (t - pulseT < 0.6) {
+        const p = (t - pulseT) / 0.6;
+        arc(lerp(R * 0.3, R * 0.9, p), 0, Math.PI * 2, 3 * dpr * (1 - p), rgba(c, 0.8 * (1 - p)));
+      }
+
+      // Stimm-Kranz: 96 Balken
+      const base = R * 0.6;
+      ctx.save();
+      ctx.rotate(-Math.PI / 2 + angle * 0.12);
+      const amp = 0.04 + look.wave * (0.15 + lv * 0.85);
+      for (let i = 0; i < BARS; i += 1) {
+        if (i / BARS > ease) break;
+        const a = (i / BARS) * Math.PI * 2;
+        const v = noise(i, t * (0.6 + look.energy)) * amp;
+        const len = R * (0.012 + 0.16 * v);
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        ctx.beginPath();
+        ctx.moveTo(cos * base, sin * base);
+        ctx.lineTo(cos * (base + len), sin * (base + len));
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeStyle = rgba(lerpColor(c, [255, 255, 255], 0.25 * v), 0.35 + 0.6 * Math.min(1, v * 2.2));
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Funken auf ihren Bahnen
+      for (const p of PARTICLES) {
+        p.a += p.s * 0.016 * (0.6 + look.spin);
+        const rr = R * p.r;
+        const tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.3 + p.p));
+        ctx.beginPath();
+        ctx.arc(Math.cos(p.a) * rr, Math.sin(p.a) * rr, 1.1 * dpr * p.z, 0, Math.PI * 2);
+        ctx.fillStyle = rgba(lerpColor(c, [255, 255, 255], 0.4), 0.55 * tw * ease);
         ctx.fill();
       }
 
-      // 3) Zuhören: Wellen laufen vom Kern nach außen
-      if (cur.ripple > 0.02) {
-        ctx.lineWidth = 1.2;
-        for (let k = 0; k < 3; k++) {
-          const ph = (time * 0.7 + k / 3) % 1;
-          const rr = coreR + ph * (R * 1.25 - coreR);
-          ctx.strokeStyle = rgba(hi, (1 - ph) * 0.35 * cur.ripple * (0.6 + lvl));
-          ctx.beginPath();
-          ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-      ctx.globalCompositeOperation = 'source-over';
-
-      // 4) Äußerer Ring, dezent
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = rgba(c, 0.12 + 0.1 * cur.ring);
+      // Innerer Kern
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.8);
+      const coreR = R * (0.3 + 0.035 * breath * look.energy + 0.07 * lv * look.wave) * (0.6 + 0.4 * ease);
+      arc(coreR * 1.32, 0, Math.PI * 2, 1 * dpr, rgba(c, 0.32));
+      arc(coreR * 1.18, -angle * 1.6, -angle * 1.6 + 1.1, 2 * dpr, rgba(c, 0.6));
+      const g = ctx.createRadialGradient(-coreR * 0.25, -coreR * 0.3, coreR * 0.05, 0, 0, coreR);
+      g.addColorStop(0, 'rgba(255,255,255,0.98)');
+      g.addColorStop(0.28, rgba(lerpColor(c, [255, 255, 255], 0.55), 0.95));
+      g.addColorStop(0.75, rgba(c, 0.85));
+      g.addColorStop(1, rgba(c, 0.15));
+      ctx.fillStyle = g;
+      ctx.shadowColor = rgba(c, 0.9);
+      ctx.shadowBlur = 40 * dpr * (0.6 + lv);
       ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 5) Zwölf kurze Bögen (angelehnt an den Arc Reactor), drehen sich langsam
-      const segR = R * 0.8;
-      const segs = 12;
-      const gap = 0.09;
-      ctx.lineWidth = Math.max(2, R * 0.035);
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = rgba(c, 0.16 + 0.34 * cur.ring + lvl * 0.25);
-      for (let i = 0; i < segs; i++) {
-        const a0 = angle + (i / segs) * Math.PI * 2 + gap;
-        const a1 = angle + ((i + 1) / segs) * Math.PI * 2 - gap;
+      ctx.arc(0, 0, coreR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      // feine Linien im Kern
+      ctx.save();
+      ctx.rotate(angle * 0.6);
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2;
         ctx.beginPath();
-        ctx.arc(cx, cy, segR, a0, a1);
+        ctx.moveTo(Math.cos(a) * coreR * 0.35, Math.sin(a) * coreR * 0.35);
+        ctx.lineTo(Math.cos(a) * coreR * 0.92, Math.sin(a) * coreR * 0.92);
+        ctx.lineWidth = 1 * dpr;
+        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
         ctx.stroke();
       }
-
-      // 6) Nachdenken: zwei helle Bögen mit weichem Schweif laufen gegeneinander
-      if (cur.spin > 0.02) {
-        ctx.lineWidth = Math.max(2.5, R * 0.04);
-        const arcs = [[spinAngle, segR, 0.7], [-spinAngle * 0.7 + 1.3, R * 0.62, 0.45]];
-        for (const [head, rad, lenF] of arcs) {
-          const len = Math.PI * lenF;
-          if (ctx.createConicGradient) {
-            const cg = ctx.createConicGradient(head - len, cx, cy);
-            const f = len / (Math.PI * 2);
-            cg.addColorStop(0, rgba(c, 0));
-            cg.addColorStop(f * 0.97, rgba(light(c, 0.5), 0.95 * cur.spin));
-            cg.addColorStop(f, rgba(c, 0));
-            cg.addColorStop(1, rgba(c, 0));
-            ctx.strokeStyle = cg;
-          } else {
-            ctx.strokeStyle = rgba(light(c, 0.5), 0.8 * cur.spin);
-          }
-          ctx.beginPath();
-          ctx.arc(cx, cy, rad, head - len, head);
-          ctx.stroke();
-        }
-      }
-
-      // 7) Zuhören: weiche Welle, die dem Pegel folgt
-      if (cur.wave > 0.02) {
-        const base = R * 0.62;
-        const amp = R * (0.02 + 0.16 * lvl) * cur.wave;
-        for (let pass = 0; pass < 2; pass++) {
-          ctx.beginPath();
-          const n = 120;
-          for (let i = 0; i <= n; i++) {
-            const th = (i / n) * Math.PI * 2;
-            const off = pass ? 1.7 : 0;
-            const w = 0.55 * Math.sin(3 * th + time * 2.1 + off)
-              + 0.3 * Math.sin(5 * th - time * 3.3 + off)
-              + 0.15 * Math.sin(9 * th + time * 5.2);
-            const r = base + amp * w;
-            const x = cx + Math.cos(th) * r;
-            const y = cy + Math.sin(th) * r;
-            if (i) ctx.lineTo(x, y);
-            else ctx.moveTo(x, y);
-          }
-          ctx.closePath();
-          ctx.lineWidth = pass ? 1 : 1.8;
-          ctx.strokeStyle = rgba(light(c, 0.2), (pass ? 0.3 : 0.75) * cur.wave);
-          ctx.stroke();
-        }
-      }
-
-      // 8) Sprechen: ein Kranz aus Balken pulsiert mit der Stimme
-      if (cur.eq > 0.02) {
-        ctx.lineWidth = Math.max(1.5, R * 0.018);
-        ctx.lineCap = 'round';
-        const r0 = coreR + R * 0.08;
-        ctx.strokeStyle = rgba(hi, 0.85 * cur.eq);
-        ctx.beginPath();
-        for (let i = 0; i < EQ; i++) {
-          const th = (i / EQ) * Math.PI * 2 - Math.PI / 2;
-          const len = R * (0.02 + 0.2 * eqVals[i]);
-          ctx.moveTo(cx + Math.cos(th) * r0, cy + Math.sin(th) * r0);
-          ctx.lineTo(cx + Math.cos(th) * (r0 + len), cy + Math.sin(th) * (r0 + len));
-        }
-        ctx.stroke();
-      }
-
-      // 9) Kern: leuchtende Scheibe, innen hell, außen in der Akzentfarbe
-      const cgr = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-      cgr.addColorStop(0, rgba(light(c, 0.85), cur.core));
-      cgr.addColorStop(0.45, rgba(light(c, 0.35), 0.95 * cur.core));
-      cgr.addColorStop(0.85, rgba(light(c, 0.02), 0.9 * cur.core));
-      cgr.addColorStop(1, rgba(c, 0.8 * cur.core));
-      ctx.fillStyle = cgr;
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glanz im Kern, feiner Ring und Rand
-      ctx.globalCompositeOperation = 'lighter';
-      const sheen = ctx.createRadialGradient(cx, cy - coreR * 0.35, 0, cx, cy - coreR * 0.35, coreR * 0.8);
-      sheen.addColorStop(0, rgba([255, 255, 255], 0.18 * cur.core));
-      sheen.addColorStop(1, rgba([255, 255, 255], 0));
-      ctx.fillStyle = sheen;
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = rgba([255, 255, 255], 0.22 * cur.core);
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR * 0.62, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = rgba(light(c, 0.5), 0.3 * cur.core);
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR + 5, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.restore();
     }
 
+    function lerpColor(a, b, k) {
+      return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
+    }
+
+    function start(node) {
+      canvas = node;
+      ctx = canvas.getContext('2d');
+      resize();
+      if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
+      else window.addEventListener('resize', resize);
+      requestAnimationFrame(frame);
+    }
+
+    return { start, setState, level: levelIn, boot, pulse };
+  })();
+
+  // ==================================================================
+  //   Hintergrund: ruhiges Feld aus Staub und feinen Kreisen
+  // ==================================================================
+
+  const Field = (() => {
+    let canvas = null;
+    let ctx = null;
+    let w = 0;
+    let h = 0;
+    let dpr = 1;
     let last = 0;
-    let lastDraw = 0;
+    const dust = Array.from({ length: 70 }, () => ({
+      x: Math.random(), y: Math.random(), z: 0.3 + Math.random() * 0.7,
+      vx: (Math.random() - 0.5) * 0.004, vy: -0.002 - Math.random() * 0.004, p: Math.random() * 6,
+    }));
+
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      w = Math.round(window.innerWidth * dpr);
+      h = Math.round(window.innerHeight * dpr);
+      canvas.width = w;
+      canvas.height = h;
+    }
 
     function frame(now) {
-      if (!running) return;
-      requestAnimationFrame(frame);
-      if (document.hidden) return;
-      const calm = (visState === 'idle' || visState === 'muted') && flash === 0;
-      const minGap = calm ? 1000 / 30 - 3 : 1000 / 60 - 3;
-      if (now - lastDraw < minGap) return;
-      const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
+      const dt = Math.min(0.1, (now - (last || now)) / 1000);
       last = now;
-      lastDraw = now;
-      update(dt);
-      draw();
+      ctx.clearRect(0, 0, w, h);
+      const core = el.coreWrap.getBoundingClientRect();
+      const cx = (core.left + core.width / 2) * dpr;
+      const cy = (core.top + core.height / 2) * dpr;
+      const color = getComputedStyle(document.body).getPropertyValue('--glow').trim() || '76, 157, 255';
+      // feine Kreise um den Kern
+      ctx.lineWidth = 1 * dpr;
+      for (let i = 1; i <= 4; i += 1) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, core.width * dpr * (0.5 + i * 0.28), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${color}, ${0.05 - i * 0.008})`;
+        ctx.stroke();
+      }
+      // Staub, der langsam nach oben treibt
+      for (const d of dust) {
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        if (d.y < -0.02) {
+          d.y = 1.02;
+          d.x = Math.random();
+        }
+        if (d.x < -0.02) d.x = 1.02;
+        if (d.x > 1.02) d.x = -0.02;
+        const tw = 0.4 + 0.6 * Math.abs(Math.sin(now / 1000 * 0.8 + d.p));
+        ctx.beginPath();
+        ctx.arc(d.x * w, d.y * h, 1.2 * dpr * d.z, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${color}, ${0.28 * tw * d.z})`;
+        ctx.fill();
+      }
+      setTimeout(() => requestAnimationFrame(frame), 40);
     }
 
-    function start() {
-      if (running) return;
-      running = true;
+    function start(node) {
+      if (reducedMotion()) return;
+      canvas = node;
+      ctx = canvas.getContext('2d');
       resize();
-      if (window.ResizeObserver) {
-        new ResizeObserver(() => resize()).observe(el.reactorWrap);
-      }
       window.addEventListener('resize', resize);
       requestAnimationFrame(frame);
     }
 
-    return { start, setState, flash: flashNow };
+    return { start };
   })();
 
   // ==================================================================
-  //   Demo-Modus (gefälschte API mit denselben Methoden)
+  //   Demo-Modus: gleiche Methoden wie die Python-Api, mit Beispieldaten
   // ==================================================================
 
   function createDemo(freeze) {
-    const FROZEN = STATES.includes(freeze) ? freeze : null;
-    const MODEL = 'claude-sonnet-5-5';
     const queue = [];
     const push = (ev) => queue.push(ev);
+    let muted = false;
+    let gaming = false;
     let gen = 0;
-    let muted = FROZEN === 'muted';
-    let mode = 'idle';
-    let msgSeq = 0;
-    let cpu = 18;
-    let ram = 47;
-    let turn = 0;
-    const timers = [];
-
-    const nowText = () => {
-      const d = new Date();
-      return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-    };
-
     const CONVO = [
-      ['Wie wird das Wetter morgen?', () => 'Morgen wird es sonnig, Sir, bei etwa achtzehn Grad.'],
-      ['Wie spät ist es?', () => 'Es ist ' + nowText() + ' Uhr, Sir.'],
-      ['Erinnere mich in zehn Minuten an den Tee.', () => 'Sehr wohl, Sir. In zehn Minuten erinnere ich Sie an den Tee.'],
-      ['Spiel etwas Musik.', () => 'Gern, Sir. Ich starte Ihre Wiedergabeliste „Werkstatt“.'],
+      ['Öffne Spotify', 'Spotify läuft, Sir.'],
+      ['Wie wird das Wetter morgen?', 'Morgen in Wien bis zu 18 Grad und meist sonnig, Sir. Ein Schirm wäre übertrieben.'],
+      ['Mach den Gaming-Modus an', 'Gaming-Modus aktiv, Sir. Volle Leistung, und ich halte mich im Hintergrund. Viel Erfolg.'],
+      ['Wer bist du eigentlich?', 'Jarvis, Sir. Butler, Techniker und gelegentlich die Stimme der Vernunft.'],
     ];
+    let turn = 0;
+    let cpu = 18;
+    let ram = 46;
 
-    function setState(s) {
-      mode = s;
-      push({ type: 'state', value: s });
+    const state = (v) => push({ type: 'state', value: v });
+
+    async function levels(ms, strength) {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        push({ type: 'level', value: clamp(strength * (0.3 + 0.7 * Math.abs(Math.sin(Date.now() / 90))) * Math.random() + 0.05, 0, 1) });
+        await sleep(60);
+      }
     }
 
-    // Pegel und Systemwerte simulieren
-    timers.push(setInterval(() => {
-      if (mode !== 'listening' && mode !== 'speaking') return;
-      const t = nowMs() / 1000;
-      let v;
-      if (mode === 'speaking') {
-        const syl = Math.max(0, Math.sin(t * 8.5) * 0.55 + Math.sin(t * 21.0) * 0.25 + 0.3);
-        v = syl * (0.65 + 0.35 * Math.sin(t * 1.6)) + Math.random() * 0.08;
-      } else {
-        v = 0.12 + 0.6 * Math.abs(Math.sin(t * 2.9)) * Math.abs(Math.sin(t * 0.8 + 1)) + Math.random() * 0.1;
-      }
-      push({ type: 'level', value: clamp(v, 0, 1) });
-    }, 70));
-
-    const pushStats = () => {
-      const busy = mode === 'thinking' ? 22 : mode === 'speaking' ? 10 : 0;
-      cpu = clamp(cpu + (Math.random() - 0.5) * 9 + (12 + busy - cpu) * 0.25, 3, 97);
-      ram = clamp(ram + (Math.random() - 0.5) * 1.2 + (47 - ram) * 0.05, 20, 95);
-      push({ type: 'stats', cpu: +cpu.toFixed(1), ram: +ram.toFixed(1) });
-    };
-    timers.push(setInterval(pushStats, 1500));
-
-    const pause = (g, ms) => sleep(ms).then(() => g === gen);
-
-    async function speak(g, id, answer) {
-      setState('speaking');
-      const words = answer.split(' ');
-      for (let k = 1; k <= words.length; k++) {
-        push({ type: 'message', role: 'jarvis', id, text: words.slice(0, k).join(' '), model: MODEL, final: k === words.length });
-        if (!(await pause(g, 120 + Math.random() * 90))) {
-          push({ type: 'message', role: 'jarvis', id, text: words.slice(0, k).join(' ') + ' …', model: MODEL, final: true });
-          return false;
-        }
-      }
-      return pause(g, Math.max(1400, answer.length * 30));
-    }
-
-    async function exchange(g, question, answer, byVoice) {
-      if (byVoice) {
-        setState('listening');
-        if (!(await pause(g, 2600))) return false;
+    async function exchange(g, question, answer, spoken) {
+      if (spoken) {
+        state('listening');
+        await levels(1600, 0.7);
+        if (g !== gen) return;
       }
       push({ type: 'message', role: 'user', text: question });
-      setState('thinking');
-      if (!(await pause(g, 500))) return false;
-      // Antwortblase erscheint schon beim Nachdenken (Tipp-Punkte), dann wird sie gefüllt.
-      const id = 'demo-' + ++msgSeq;
-      push({ type: 'message', role: 'jarvis', id, text: '', model: MODEL, final: false });
-      if (!(await pause(g, byVoice ? 1400 : 900))) {
-        push({ type: 'message', role: 'jarvis', id, text: '…', model: MODEL, final: true });
-        return false;
+      state('thinking');
+      await sleep(1100);
+      if (g !== gen) return;
+      state('speaking');
+      const id = 'd' + Math.random().toString(36).slice(2);
+      const words = answer.split(' ');
+      for (let i = 1; i <= words.length; i += 1) {
+        if (g !== gen) return;
+        push({ type: 'message', role: 'jarvis', id, text: words.slice(0, i).join(' '), final: false });
+        push({ type: 'level', value: 0.4 + Math.random() * 0.5 });
+        await sleep(170);
       }
-      return speak(g, id, answer);
+      push({ type: 'message', role: 'jarvis', id, text: answer, final: true });
+      await levels(700, 0.6);
+      state(muted ? 'muted' : 'idle');
     }
 
     async function cycle(g) {
       while (g === gen) {
-        setState(muted ? 'muted' : 'idle');
-        if (!(await pause(g, turn === 0 ? 2200 : 7000))) return;
-        if (muted) continue;
+        await sleep(3800);
+        if (g !== gen || muted) return;
         const [q, a] = CONVO[turn % CONVO.length];
         turn += 1;
-        if (!(await exchange(g, q, a(), true))) return;
+        await exchange(g, q, a, true);
       }
     }
 
-    function frozenLoop(g) {
-      if (FROZEN === 'error') {
-        setState('idle');
-        const tick = () => {
-          if (g !== gen) return;
-          push({ type: 'state', value: 'error' });
-          timers.push(setTimeout(tick, 2400));
-        };
-        tick();
-        return;
-      }
-      if (muted) setState('muted');
-      else setState(FROZEN === 'muted' ? 'idle' : FROZEN);
-    }
-
-    function resume(delay) {
-      gen += 1;
-      const g = gen;
-      if (FROZEN) {
-        frozenLoop(g);
-      } else {
-        sleep(delay || 0).then(() => {
-          if (g === gen) cycle(g);
-        });
-      }
-    }
-
-    function seedFrozen() {
-      push({ type: 'message', role: 'info', text: 'Demo-Modus – keine Verbindung zum Jarvis-Kern, alle Daten sind simuliert.' });
+    function frozen() {
       push({ type: 'message', role: 'user', text: CONVO[0][0] });
-      push({ type: 'message', role: 'jarvis', id: 'seed-1', text: CONVO[0][1](), model: MODEL, final: true });
-      push({ type: 'message', role: 'user', text: CONVO[1][0] });
-      push({ type: 'message', role: 'jarvis', id: 'seed-2', text: CONVO[1][1](), model: MODEL, final: true });
-      if (FROZEN === 'thinking') {
-        push({ type: 'message', role: 'user', text: CONVO[2][0] });
-        push({ type: 'message', role: 'jarvis', id: 'seed-3', text: '', model: MODEL, final: false });
-      } else if (FROZEN === 'speaking') {
-        push({ type: 'message', role: 'user', text: CONVO[2][0] });
-        push({ type: 'message', role: 'jarvis', id: 'seed-3', text: 'Sehr wohl, Sir. In zehn Minuten', model: MODEL, final: false });
+      push({ type: 'message', role: 'jarvis', id: 'f1', text: CONVO[0][1], final: true });
+      push({ type: 'message', role: 'user', text: CONVO[3][0] });
+      push({ type: 'message', role: 'jarvis', id: 'f2', text: CONVO[3][1], final: true });
+      if (freeze === 'listening') {
+        state('listening');
+        setInterval(() => push({ type: 'level', value: 0.3 + Math.random() * 0.5 }), 60);
+      } else if (freeze === 'thinking') {
+        push({ type: 'message', role: 'user', text: CONVO[1][0] });
+        state('thinking');
+      } else if (freeze === 'speaking') {
+        push({ type: 'message', role: 'user', text: CONVO[1][0] });
+        push({ type: 'message', role: 'jarvis', id: 'f3', text: CONVO[1][1], final: false });
+        state('speaking');
+        setInterval(() => push({ type: 'level', value: 0.35 + Math.random() * 0.55 }), 60);
+      } else if (freeze === 'muted') {
+        muted = true;
+        push({ type: 'config', muted: true });
+        state('muted');
+      } else {
+        state('idle');
       }
     }
 
-    function cannedReply(text) {
-      const t = text.toLowerCase();
-      if (/wetter|regen|sonne|temperatur/.test(t)) return CONVO[0][1]();
-      if (/uhr|spät|zeit/.test(t)) return CONVO[1][1]();
-      if (/hallo|hi\b|hey|guten (morgen|tag|abend)/.test(t)) return 'Guten Tag, Sir. Womit kann ich dienen?';
-      const short = text.length > 60 ? text.slice(0, 57) + '…' : text;
-      return 'Verstanden, Sir: „' + short + '“. Im Demo-Modus kann ich das leider nicht wirklich ausführen – dafür muss ich mit dem Jarvis-Kern verbunden sein.';
-    }
-
-    const fake = {
-      hello() {
-        return Promise.resolve({
-          hotkey: 'STRG+ALT+M',
-          mic: 'Mikrofon (Realtek High Definition Audio)',
-          model: MODEL,
-          muted,
-          version: '2.0.0',
-          weather: '16° · leicht bewölkt · Berlin',
-        });
-      },
-      poll() {
-        return new Promise((resolve) => setTimeout(() => resolve(queue.splice(0)), 12));
-      },
-      send_text(text) {
-        const t = String(text == null ? '' : text).trim();
-        if (!t) return Promise.resolve(false);
+    return {
+      hello: () => Promise.resolve({
+        hotkey: 'ctrl+alt+m', listen_hotkey: 'ctrl+alt+j', mic: 'Headset (Arctis 7 Chat)', muted: false,
+        version: '2.0.0', weather: '14° · leicht bewölkt · Wien', voice: true, gaming: false,
+      }),
+      poll: () => Promise.resolve(queue.splice(0)),
+      send_text: (text) => {
         gen += 1;
         const g = gen;
-        (async () => {
-          const ok = await exchange(g, t, cannedReply(t), false);
-          if (ok && g === gen) resume(1500);
-        })();
+        const t = String(text || '').trim();
+        const known = CONVO.find(([q]) => q.toLowerCase() === t.toLowerCase());
+        exchange(g, t, known ? known[1] : 'Im Demo-Modus spiele ich nur vor, Sir. Verbunden mit Jarvis erledige ich das sofort.', false)
+          .then(() => { if (g === gen && !freeze) cycle(g); });
         return Promise.resolve(true);
       },
-      toggle_mute() {
+      toggle_mute: () => {
         muted = !muted;
         gen += 1;
         push({ type: 'config', muted });
-        setState(muted ? 'muted' : 'idle');
-        if (!muted) resume(FROZEN ? 0 : 2500);
-        else if (FROZEN) resume(0);
+        state(muted ? 'muted' : 'idle');
+        if (!muted && !freeze) cycle(gen);
         return Promise.resolve(muted);
       },
-      stop() {
-        const busy = mode === 'speaking' || mode === 'thinking';
+      stop: () => {
         gen += 1;
-        if (busy) push({ type: 'message', role: 'info', text: 'Antwort abgebrochen.' });
-        setState(muted ? 'muted' : 'idle');
-        resume(4000);
+        state(muted ? 'muted' : 'idle');
+        if (!freeze) cycle(gen);
         return Promise.resolve(true);
       },
-      new_conversation() {
-        gen += 1;
-        setState(muted ? 'muted' : 'idle');
-        resume(3000);
-        return Promise.resolve(true);
-      },
-      listen_now() {
+      listen_now: () => {
         if (muted) return Promise.resolve({ ok: false, reason: 'muted' });
         gen += 1;
         const g = gen;
         const [q, a] = CONVO[turn % CONVO.length];
         turn += 1;
-        (async () => {
-          const ok = await exchange(g, q, a(), true);
-          if (ok && g === gen) resume(1500);
-        })();
+        exchange(g, q, a, true).then(() => { if (g === gen && !freeze) cycle(g); });
         return Promise.resolve({ ok: true, reason: '' });
       },
-      destroy() {
-        gen += 1;
-        timers.forEach((t) => { clearInterval(t); clearTimeout(t); });
-        queue.length = 0;
+      new_conversation: () => Promise.resolve(true),
+      open_setup: () => Promise.resolve(false),
+      reminders: () => Promise.resolve([
+        { uhr: '14:00', text: 'Tee aufgießen', tag: 'heute' },
+        { uhr: '18:30', text: 'Training', tag: 'heute' },
+        { uhr: '08:00', text: 'Zahnarzt anrufen', tag: 'morgen' },
+      ]),
+      toggle_gaming: () => {
+        gaming = !gaming;
+        push({ type: 'config', gaming });
+        return Promise.resolve(gaming);
       },
       start() {
-        pushStats();
-        if (FROZEN) {
-          seedFrozen();
-          if (FROZEN === 'muted') push({ type: 'config', muted: true });
+        setInterval(() => {
+          cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
+          ram = clamp(ram + (Math.random() - 0.5) * 2, 30, 80);
+          push({ type: 'stats', cpu, ram });
+        }, 2000);
+        push({ type: 'stats', cpu, ram });
+        if (freeze) {
+          frozen();
         } else {
-          push({ type: 'message', role: 'info', text: 'Demo-Modus – keine Verbindung zum Jarvis-Kern, alle Daten sind simuliert.' });
+          push({ type: 'message', role: 'jarvis', id: 'begruessung', text: 'Guten Tag, Sir. Draußen 14 Grad und leicht bewölkt. Heute stehen noch zwei Erinnerungen an.', final: true });
+          gen += 1;
+          cycle(gen);
         }
-        resume(0);
       },
     };
-    return fake;
-  }
-
-  function startDemo() {
-    if (demo || api) return;
-    const freeze = (params.get('state') || '').toLowerCase();
-    demo = createDemo(freeze);
-    demo.start();
-    connect(demo, 'demo');
   }
 
   // ------------------------------------------------------------------ Start
@@ -1377,32 +1135,37 @@
   function boot() {
     bindUi();
     tickClock();
+    Core.start(el.core);
+    Field.start(el.field);
     renderState(true);
-    Reactor.start();
-    updateChatMeta();
+    renderRecent();
     setLink('wait');
+    requestAnimationFrame(() => {
+      el.body.dataset.boot = '2';
+    });
 
-    const demoAllowed = params.get('demo') !== '0';
+    const connectReal = () => {
+      if (api || !realReady()) return false;
+      connect(REAL, 'live');
+      return true;
+    };
     window.addEventListener('pywebviewready', () => {
       if (!connectReal()) setTimeout(connectReal, 50);
     });
     if (connectReal()) return;
-
-    const t0 = nowMs();
+    const t0 = performance.now();
     const watcher = setInterval(() => {
       if (connectReal()) {
         clearInterval(watcher);
         return;
       }
-      if (!api && nowMs() - t0 >= 1500) {
-        if (typeof window.pywebview === 'undefined' && demoAllowed) startDemo();
+      if (performance.now() - t0 > 1500 && typeof window.pywebview === 'undefined' && params.get('demo') !== '0') {
+        clearInterval(watcher);
+        const demo = createDemo((params.get('state') || '').toLowerCase());
+        demo.start();
+        connect(demo, 'demo');
       }
     }, 100);
-
-    // Fokus ins Eingabefeld, damit man direkt tippen kann
-    setTimeout(() => {
-      try { el.input.focus({ preventScroll: true }); } catch { /* egal */ }
-    }, 600);
   }
 
   if (document.readyState === 'loading') {
