@@ -41,5 +41,37 @@ class WrongTurnTest(unittest.TestCase):
             calc.evaluate("1000000 hoch 100")
 
 
+class WorkshopTurnTest(unittest.TestCase):
+    """Die Werkstatt kommt vor den Sofort-Befehlen dran: Sie darf sich nur echte Bauaufträge nehmen."""
+
+    def test_using_is_not_building(self):
+        from jarvis.workshop import is_workshop_request
+
+        for said in ("Ich will ein Spiel spielen", "Ich möchte ein Game zocken", "Ich will ein neues Spiel kaufen",
+                     "Ich möchte ein Programm installieren", "Behebe den Fehler mit dem Sound"):
+            with self.subTest(said=said):
+                self.assertFalse(is_workshop_request(said))
+        for said in ("Ich brauche ein Programm, das meine Fotos umbenennt", "Behebe den Fehler in meinem Skript",
+                     "Behebe den Fehler"):
+            with self.subTest(said=said):
+                self.assertTrue(is_workshop_request(said))
+        self.assertEqual(intents.match("Werkstatt Status").name, "workshop_status")
+
+    def test_everyday_commands_are_no_answer_to_its_question(self):
+        from jarvis.workshop import is_continue_request, looks_like_answer
+
+        for said in ("Mach das Licht an", "Schalte den Fernseher ein", "Mach die Heizung wärmer", "Danke",
+                     "Gute Nacht", "Mach mit der Musik weiter", "Schreib mir eine Nachricht an Mama auf WhatsApp"):
+            with self.subTest(said=said):
+                self.assertFalse(looks_like_answer(said))
+        for said in ("Ja, mach das", "Nein danke", "Blau", "Nimm den Token aus meiner Notiz"):
+            with self.subTest(said=said):
+                self.assertTrue(looks_like_answer(said))
+        self.assertFalse(is_continue_request("Mach weiter mit dem Hörbuch"))
+        for said in ("Mach weiter", "Mach in der Werkstatt weiter", "Arbeite weiter am Bot"):
+            with self.subTest(said=said):
+                self.assertTrue(is_continue_request(said))
+
+
 if __name__ == "__main__":
     unittest.main()

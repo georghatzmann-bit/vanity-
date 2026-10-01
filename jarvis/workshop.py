@@ -108,18 +108,27 @@ _WORKSHOP = [
         r".*\b(?:bauen|schreiben|programmieren|erstellen|machen|entwickeln|coden)$"
     ),
     # "Ich brauche ein Programm, das ...", "Ich hätte gern eine Webseite für ..."
+    # ("Ich will ein Spiel spielen", "Ich möchte ein Programm installieren" sind keine)
     re.compile(
-        r"^ich (?:brauche|bräuchte|brauch|hätte gern|hätte gerne|möchte|will|würde gern|würde gerne|hätte)\s+"
+        r"^ich (?!.*\b(?:spielen|zocken|installieren|herunterladen|runterladen|downloaden|kaufen|öffnen|starten|"
+        r"empfehlen|finden|suchen|sehen|anschauen|löschen|deinstallieren|ausprobieren)\b)"
+        r"(?:brauche|bräuchte|brauch|hätte gern|hätte gerne|möchte|will|würde gern|würde gerne|hätte)\s+"
         r"(?:mal |noch |jetzt )?" + _ARTICLE + r"\s+" + _THING + r".*$"
     ),
     # "Schreib mir Code für ...", "Programmier mir was, das ..."
     re.compile(r"^(?:schreib|schreibe)\s+(?:mir |uns )?" + _FILLERS + r"(?:den |einen )?(?:code|quellcode|programmcode)\b"),
     re.compile(r"\bwerkstatt\b"),
-    re.compile(r"^(?:fix|fixe|behebe|reparier|repariere)\s+(?:den |die |das )?(?:fehler|bug|code|skript|programm)\b"),
+    re.compile(r"^(?:fix|fixe|behebe|reparier|repariere)\s+(?:den |die |das )?(?:code|skript|script|programm)\b"),
+    # "Behebe den Fehler in meinem Skript", aber nicht "Behebe den Fehler mit dem Sound"
+    re.compile(r"^(?:fix|fixe|behebe|reparier|repariere)\s+(?:den |die |das )?(?:fehler|bug)"
+               r"(?:$| (?:in|im|bei|an) .*\b(?:code|skript|script|programm|bot|app|spiel|webseite|website|tool|projekt))"),
 ]
+_ARTIFACT_WORDS = (r"(?:bot|skript|script|programm|spiel|game|app|seite|website|webseite|homepage|tool|code|projekt|"
+                   r"plugin|mod|befehl|befehle|funktion|fehler|bug)")
 # Weiter am letzten Projekt, ausdrücklich: "Mach in der Werkstatt weiter", "Werkstatt, füg noch ... hinzu"
 _CONTINUE = re.compile(
-    r"^(?:mach|mache|arbeite|arbeit)(?: (?:in der werkstatt|am projekt|daran|damit))? weiter\b|"
+    r"^(?:mach|mache|arbeite|arbeit)(?: (?:in der werkstatt|am projekt|daran|damit))? weiter"
+    r"(?:$| (?:am|an dem|an der|mit dem|mit der|beim) " + _ARTIFACT_WORDS + r")|"
     r"^werkstatt\b(?! (?:abbrechen|stoppen|stopp|beenden|status))|"
     r"^(?:zurück )?in die werkstatt\b|"
     r"\bin der werkstatt\b(?!.*\?$)"
@@ -127,8 +136,7 @@ _CONTINUE = re.compile(
 # Wünsche zum gerade gebauten Projekt, ohne die Werkstatt zu nennen (nur kurz nach dem Ende)
 _CHANGE_VERB = (r"^(?:füg|füge|bau|baue|mach|mache|änder|ändere|reparier|repariere|fix|fixe|verbesser|verbessere|"
                 r"erweiter|erweitere|pass|passe|ergänz|ergänze|teste|test|programmier|programmiere|schreib|schreibe)\b")
-_ARTIFACT = (r"\b(?:bot|skript|script|programm|spiel|game|app|seite|website|webseite|homepage|tool|code|projekt|"
-             r"plugin|mod|befehl|befehle|funktion|fehler|bug)\b")
+_ARTIFACT = r"\b" + _ARTIFACT_WORDS + r"\b"
 _BROKEN = re.compile(
     r"^(?:der bot|das skript|das script|das programm|das spiel|die app|die seite|die webseite|das tool|es|er)\s+"
     r"(?:geht|funktioniert|läuft|startet|klappt|reagiert|antwortet)\s+(?:noch |immer noch |gar )?nicht\b"
@@ -172,7 +180,12 @@ def is_change_request(text: str) -> bool:
 _NOT_AN_ANSWER = re.compile(
     r"^(?:wie|was|wer|wo|wohin|woher|wann|warum|wieso|weshalb|welche|welcher|welches|wieviel|wie ?viel|"
     r"öffne|starte|schließ|schließe|beende|spiel|spiele|such|suche|zeig|zeige|erzähl|erzähle|sag mir|"
-    r"stell|stelle|dreh|drehe|erinnere|erinner|lies|übersetz|übersetze|ruf|rufe|guten (?:morgen|tag|abend))\b"
+    r"stell|stelle|dreh|drehe|erinnere|erinner|lies|übersetz|übersetze|ruf|rufe|guten (?:morgen|tag|abend)|"
+    r"schalt|schalte|gute nacht|tschüss|bis (?:später|dann|morgen))\b|"
+    r"^(?:mach|mache)\b.*\b(?:licht|lampe|lampen|fernseher|tv|heizung|musik|radio|rollo|rollos|jalousie|jalousien|"
+    r"steckdose|ventilator|klima|hörbuch|podcast)\b|"
+    r"^(?:schreib|schreibe|schick|schicke)\b.*\b(?:nachricht|mail|e-mail|sms)\b|"
+    r"^(?:danke|dankeschön|danke schön|vielen dank|super|perfekt|toll|klasse|gut gemacht|super gemacht)$"
 )
 
 
