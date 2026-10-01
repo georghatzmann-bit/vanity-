@@ -11,6 +11,7 @@
     python -m jarvis --claude-test prüfen, welches Claude-Modell antwortet
     python -m jarvis --selftest    alles prüfen (werkzeuge\\Selbsttest.bat)
     python -m jarvis --autostart an|aus
+    python -m jarvis --hintergrund unsichtbar starten, nur das Symbol neben der Uhr (Autostart)
 """
 
 from __future__ import annotations
@@ -254,43 +255,73 @@ def run_console_voice(cfg: dict, console: ConsoleUi, assistant: Assistant) -> No
 
 
 def run_gui(cfg: dict, args) -> int:
+    from . import desktop
     from .gui.app import Api, GuiBridge, Window
     from .tray import Tray
 
+    gui_cfg = cfg.get("gui", {})
+    hidden = bool(args.hintergrund and gui_cfg.get("start_hidden", True))
+    desktop.set_app_id()
     bridge = GuiBridge()
     console = ConsoleUi()
     ui = MultiUi(console, bridge)
     assistant = build_core(cfg, ui, args.silent)
     stopped = threading.Event()
-    hotkey = register_mute_hotkey(cfg, assistant)
-    ui.config(hotkey=hotkey, version=__version__, muted=False)
     window: Window
     tray_ref: list[Tray] = []
     voice_ref: list[VoiceLoop] = []
+    overlay = None
+    if gui_cfg.get("overlay", True):
+        from .overlay import Overlay
+
+        overlay = Overlay(suppressed=lambda: assistant.gaming or desktop.jarvis_in_front())
+        ui.add(overlay)
+    hotkey = register_mute_hotkey(cfg, assistant)
+    ui.config(hotkey=hotkey, version=__version__, muted=False)
 
     def quit_all() -> None:
         stopped.set()
         window.destroy()
 
+    def listen_now() -> bool:
+        return bool(voice_ref) and voice_ref[0].listen_now()
+
+    def open_setup() -> None:
+        from .setup_wizard import launch
+
+        launch("--einrichten")
+        # Kurz warten, damit die Seite noch "Einrichtung öffnet sich" zeigen kann.
+        threading.Timer(0.6, quit_all).start()
+
     def background() -> None:
         start_services(cfg, assistant, ui, stopped)
-        gui_cfg = cfg.get("gui", {})
+        if overlay is not None:
+            overlay.start()
+        desktop.listen_for_show(window.show, stopped)
         if gui_cfg.get("tray", True):
-            tray = Tray(window.show, assistant.mute.toggle, quit_all, lambda: assistant.mute.muted)
+            tray = Tray(
+                window.show, assistant.mute.toggle, quit_all, lambda: assistant.mute.muted,
+                on_listen=listen_now, on_gaming=assistant.toggle_gaming, is_gaming=lambda: assistant.gaming,
+                on_setup=open_setup,
+            )
             if tray.start():
                 tray_ref.append(tray)
                 assistant.mute.on_change(tray.set_muted)
-                window.allow_close = not gui_cfg.get("close_to_tray", False)
+                window.allow_close = not gui_cfg.get("close_to_tray", True)
+                if hidden:
+                    first_hint(tray)
         if assistant.brain is None:
-            ui.message("info", "Claude Code fehlt. Die Einstellungen (oben rechts) helfen beim Einrichten.")
+            ui.message("info", "Mein Gehirn fehlt noch. Die Einstellungen (oben rechts) helfen beim Einrichten.")
         voice = load_voice(cfg, assistant, ui, hotkey, lambda _text: None, wait_for_mic=stopped)
         if voice is None:
             ui.config(voice=False)
-            ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis rechts eine Nachricht schreiben.")
+            ui.message("info", "Die Sprachsteuerung ist aus. Du kannst Jarvis eine Nachricht schreiben.")
             assistant.update_state()
             return
         ui.config(voice=True)
         voice_ref.append(voice)
+        listen_key = register_listen_hotkey(cfg, voice)
+        ui.config(listen_hotkey=listen_key)
         console.idle_hint = f'Sag "Hey Jarvis" ...  ({hotkey} = stumm/laut)'
         console.message("info", f'Bereit. Sag "Hey Jarvis" oder schreib. {hotkey} schaltet das Mikrofon stumm.')
         from datetime import datetime
@@ -311,26 +342,31 @@ def run_gui(cfg: dict, args) -> int:
             log.exception("Sprachschleife abgestürzt")
             ui.toast(f"Sprachsteuerung gestoppt: {exc}", "error")
 
+    def first_hint(tray: Tray) -> None:
+        # Beim allerersten unsichtbaren Start einmal sagen, wo Jarvis steckt.
+        marker = STATE_DIR / "hinweis-hintergrund.txt"
+        if marker.exists():
+            return
+        tray.notify('Ich laufe im Hintergrund. Sag „Hey Jarvis“ oder drück Strg+Alt+J. Das Fenster öffnest du über dieses Symbol.')
+        try:
+            STATE_DIR.mkdir(parents=True, exist_ok=True)
+            marker.write_text("gezeigt\n", encoding="utf-8")
+        except OSError:
+            pass
+
     def on_closed() -> None:
         stopped.set()
         for voice in voice_ref:
             voice.stopped.set()
         for tray in tray_ref:
             tray.stop()
+        if overlay is not None:
+            overlay.stop()
         assistant.stop()
 
-    def open_setup() -> None:
-        from .setup_wizard import launch
-
-        launch("--einrichten")
-        # Kurz warten, damit die Seite noch "Einrichtung öffnet sich" zeigen kann.
-        threading.Timer(0.6, quit_all).start()
-
-    def listen_now() -> bool:
-        return bool(voice_ref) and voice_ref[0].listen_now()
-
     window = Window(
-        Api(bridge, assistant, assistant.mute, open_setup, listen_now), background, on_closed, cfg.get("gui", {})
+        Api(bridge, assistant, assistant.mute, open_setup, listen_now), background, on_closed, gui_cfg,
+        hidden=hidden, icon=desktop.app_icon(),
     )
 
     def window_control(what: str) -> bool:
@@ -339,9 +375,17 @@ def run_gui(cfg: dict, args) -> int:
 
     assistant.window_control = window_control
     assistant.open_setup = open_setup
-    print("Jarvis-Fenster wird geöffnet. Dieses Konsolenfenster zeigt nebenbei das Gespräch.")
+    print("Jarvis läuft im Hintergrund." if hidden else "Jarvis-Fenster wird geöffnet.")
     window.start()
     return 0
+
+
+def register_listen_hotkey(cfg: dict, voice: VoiceLoop) -> str:
+    """Tastenkürzel, mit dem Jarvis sofort zuhört (wie ein Klick auf den Kreis)."""
+    combo = str(cfg.get("mute", {}).get("listen_hotkey", "") or "").strip()
+    if combo and register_hotkey(combo, voice.listen_now):
+        return hotkey_label(combo)
+    return ""
 
 
 def run_claude_test(cfg: dict) -> int:
@@ -500,6 +544,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--selftest", "--selbsttest", action="store_true", help="Alles prüfen")
     parser.add_argument("--schnell", action="store_true", help="Selbsttest ohne Töne und mit kurzem Mikrofontest")
     parser.add_argument("--autostart", choices=["an", "aus", "ein", "on", "off"], help="Mit Windows starten")
+    parser.add_argument("--hintergrund", action="store_true", help="unsichtbar starten (so startet der Autostart)")
     parser.add_argument("--einrichten", "--setup", action="store_true", help="Einrichtung öffnen")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -556,7 +601,13 @@ def main(argv: list[str] | None = None) -> int:
         return run_setup(cfg)
 
     # Nach der Einrichtung startet Jarvis neu, der alte braucht evtl. noch einen Moment.
-    if not claim_single_instance(wait=6.0 if not has_console() else 0.0):
+    if not claim_single_instance(wait=6.0 if not has_console() and not args.hintergrund else 0.0):
+        from .desktop import signal_running_instance
+
+        if args.hintergrund:
+            return 0  # Autostart, aber Jarvis läuft schon: nichts zu tun
+        if signal_running_instance():
+            return 0  # Der laufende Jarvis zeigt sein Fenster
         # Als Fenster, weil sich Jarvis.bat danach sofort schließt.
         tell(
             "Jarvis läuft schon (Symbol unten rechts neben der Uhr). Ein zweiter Jarvis würde doppelt antworten.",

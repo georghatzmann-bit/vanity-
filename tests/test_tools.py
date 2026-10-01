@@ -429,21 +429,49 @@ class CommandServerTest(unittest.TestCase):
             CommandServer({"token": "kurz"}, None).start()
 
 
-class AutostartTest(unittest.TestCase):
-    def test_launcher_text(self):
-        text = autostart.launcher_text(Path("C:/Users/georg/Jarvis Ordner"), Path("C:/Users/georg/Jarvis Ordner/.venv/Scripts/pythonw.exe"))
-        self.assertIn("chcp 65001", text)
-        self.assertIn('cd /d "C:/Users/georg/Jarvis Ordner"', text)
-        self.assertIn('start "" "C:/Users/georg/Jarvis Ordner/.venv/Scripts/pythonw.exe" -m jarvis', text)
-        self.assertTrue(text.endswith("\r\n"))
+class FakeRegistry:
+    def __init__(self):
+        self.value = None
 
-    def test_enable_and_disable(self):
+    def get(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+
+    def delete(self):
+        had, self.value = self.value is not None, None
+        return had
+
+
+class AutostartTest(unittest.TestCase):
+    def test_command_starts_hidden_without_console(self):
+        line = autostart.command(Path("C:/Users/georg/AppData/Local/Programs/Jarvis"),
+                                 Path("C:/Users/georg/AppData/Local/Jarvis/venv/Scripts/pythonw.exe"))
+        self.assertEqual(
+            line,
+            '"C:/Users/georg/AppData/Local/Jarvis/venv/Scripts/pythonw.exe" '
+            '"C:/Users/georg/AppData/Local/Programs/Jarvis/Jarvis.pyw" --hintergrund',
+        )
+
+    def test_enable_and_disable_and_old_file_goes(self):
+        reg = FakeRegistry()
         with TemporaryDirectory() as tmp, mock.patch.dict("os.environ", {"APPDATA": tmp}):
-            path = autostart.enable()
-            self.assertTrue(path.exists())
-            self.assertTrue(autostart.enabled())
-            self.assertTrue(autostart.disable())
-            self.assertFalse(autostart.enabled())
+            old = autostart.startup_dir()
+            old.mkdir(parents=True)
+            (old / "Jarvis.cmd").write_text("@echo off")
+            autostart.enable(reg)
+            self.assertIn("--hintergrund", reg.value)
+            self.assertFalse((old / "Jarvis.cmd").exists())
+            self.assertTrue(autostart.enabled(reg))
+            self.assertTrue(autostart.disable(reg))
+            self.assertFalse(autostart.enabled(reg))
+            self.assertFalse(autostart.disable(reg))
+
+    def test_launcher_file_exists(self):
+        from jarvis.config import ROOT
+
+        self.assertIn("from jarvis.__main__ import main", (ROOT / "Jarvis.pyw").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
 
 #define AppVersion GetEnv("JARVIS_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.2.0"
+  #define AppVersion "2.0.0"
 #endif
 
 [Setup]
@@ -35,16 +35,18 @@ MinVersion=10.0
 Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [Messages]
-de.WelcomeLabel2=Jarvis wird jetzt auf deinem PC eingerichtet.%n%nDer Installer lädt dabei alles Nötige kostenlos herunter (Python, Spracherkennung, Stimmen). Das dauert beim ersten Mal ein paar Minuten.%n%nFür das Gehirn brauchst du Claude Code mit deinem Claude-Pro-Abo. Das richtet die Einrichtung danach mit dir ein.
+de.WelcomeLabel2=Jarvis wird jetzt auf deinem PC eingerichtet.%n%nDer Installer lädt dabei alles Nötige herunter (Spracherkennung, Stimmen und das Gehirn). Das dauert beim ersten Mal ein paar Minuten.%n%nDanach läuft Jarvis im Hintergrund. Sag einfach „Hey Jarvis“.
 
 [Tasks]
-Name: "autostart"; Description: "Jarvis mit Windows starten (immer erreichbar)"
+Name: "autostart"; Description: "Jarvis mit Windows starten (läuft unsichtbar im Hintergrund, immer erreichbar)"
+Name: "desktopicon"; Description: "Symbol auf dem Desktop"
 
 [Files]
 Source: "..\jarvis\*"; DestDir: "{app}\jarvis"; Excludes: "__pycache__,*.pyc"; Flags: recursesubdirs ignoreversion
 Source: "..\jarvis_home\*"; DestDir: "{app}\jarvis_home"; Flags: recursesubdirs ignoreversion
 Source: "..\werkzeuge\*"; DestDir: "{app}\werkzeuge"; Flags: recursesubdirs ignoreversion
 Source: "..\Jarvis.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Jarvis.pyw"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\requirements-extras.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\config.example.toml"; DestDir: "{app}"; Flags: ignoreversion
@@ -52,16 +54,23 @@ Source: "..\ANLEITUNG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "jarvis.ico"; DestDir: "{app}"; Flags: ignoreversion
 
+[Icons]
+; Direkt pythonw + Jarvis.pyw: kein Konsolenfenster, eigenes Symbol, eigener Taskleisten-Eintrag
+Name: "{userprograms}\Jarvis"; Filename: "{localappdata}\Jarvis\venv\Scripts\pythonw.exe"; Parameters: """{app}\Jarvis.pyw"""; WorkingDir: "{app}"; IconFilename: "{app}\jarvis.ico"; Comment: "Jarvis zeigen"; AppUserModelID: "Jarvis.Assistent"
+Name: "{userdesktop}\Jarvis"; Filename: "{localappdata}\Jarvis\venv\Scripts\pythonw.exe"; Parameters: """{app}\Jarvis.pyw"""; WorkingDir: "{app}"; IconFilename: "{app}\jarvis.ico"; Comment: "Jarvis zeigen"; AppUserModelID: "Jarvis.Assistent"; Tasks: desktopicon
+
+[Registry]
+; Autostart: unsichtbar im Hintergrund, nur das Symbol neben der Uhr
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Jarvis"; ValueData: """{localappdata}\Jarvis\venv\Scripts\pythonw.exe"" ""{app}\Jarvis.pyw"" --hintergrund"; Flags: uninsdeletevalue; Tasks: autostart
+
 [Run]
-Filename: "{localappdata}\Jarvis\venv\Scripts\pythonw.exe"; Parameters: "-m jarvis"; WorkingDir: "{app}"; Description: "Jarvis jetzt starten"; Flags: postinstall nowait skipifsilent
+Filename: "{localappdata}\Jarvis\venv\Scripts\pythonw.exe"; Parameters: """{app}\Jarvis.pyw"""; WorkingDir: "{app}"; Description: "Jarvis jetzt starten"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
-Filename: "{cmd}"; Parameters: "/C taskkill /F /FI ""WINDOWTITLE eq Jarvis*"""; Flags: runhidden; RunOnceId: "JarvisBeenden"
+Filename: "powershell.exe"; Parameters: "-NoProfile -Command ""Get-CimInstance Win32_Process -Filter \""Name='pythonw.exe' or Name='python.exe'\"" | Where-Object {{ $_.CommandLine -like '*Jarvis*' } | Invoke-CimMethod -MethodName Terminate"""; Flags: runhidden; RunOnceId: "JarvisBeenden"
 
 [UninstallDelete]
 Type: files; Name: "{userstartup}\Jarvis.cmd"
-Type: files; Name: "{userdesktop}\Jarvis.lnk"
-Type: files; Name: "{userprograms}\Jarvis.lnk"
 Type: filesandordirs; Name: "{localappdata}\Jarvis"
 Type: filesandordirs; Name: "{app}"
 
@@ -73,7 +82,7 @@ var
 begin
   if WizardSilent() then Show := SW_HIDE else Show := SW_SHOWNORMAL;
   if not Exec('powershell.exe',
-      '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\werkzeuge\installieren.ps1') + '" -Auto',
+      '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\werkzeuge\installieren.ps1') + '" -Auto -OhneVerknuepfung',
       ExpandConstant('{app}'), Show, ewWaitUntilTerminated, Code) then
     Code := -1;
   Result := Code;
@@ -82,7 +91,6 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
-  Dummy: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -93,9 +101,6 @@ begin
       SuppressibleMsgBox('Beim Herunterladen der Bestandteile ist etwas schiefgegangen (Code ' + IntToStr(Code) + ').' + #13#10 + #13#10 +
         'Details stehen in ' + ExpandConstant('{localappdata}\Jarvis\installation.log') + '.' + #13#10 +
         'Meist hilft es, JarvisSetup.exe mit Internet einfach noch einmal zu starten.', mbError, MB_OK, IDOK);
-    end
-    else if WizardIsTaskSelected('autostart') then
-      Exec(ExpandConstant('{localappdata}\Jarvis\venv\Scripts\python.exe'), '-m jarvis --autostart an',
-        ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Dummy);
+    end;
   end;
 end;

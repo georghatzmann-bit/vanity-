@@ -1,4 +1,8 @@
-"""Jarvis mit Windows starten: legt eine kleine Datei in den Autostart-Ordner."""
+"""Jarvis mit Windows starten: ein Eintrag unter "Autostart" in der Registry (HKCU\\...\\Run).
+
+Er startet Jarvis.pyw mit pythonw, also ohne Konsolenfenster, und mit --hintergrund:
+Jarvis läuft dann unsichtbar, nur das Symbol neben der Uhr ist da.
+"""
 
 from __future__ import annotations
 
@@ -8,25 +12,44 @@ from pathlib import Path
 
 from .config import ROOT
 
-FILE_NAME = "Jarvis.cmd"
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+VALUE_NAME = "Jarvis"
+# Frühere Jarvis-Versionen legten eine kleine Datei in den Autostart-Ordner.
+OLD_FILE_NAME = "Jarvis.cmd"
 
 
-def startup_dir() -> Path:
-    appdata = os.environ.get("APPDATA")
-    if not appdata:
-        raise RuntimeError("Der Autostart-Ordner geht nur unter Windows.")
-    return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+class _WindowsRegistry:
+    def get(self) -> str | None:
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+                value, _ = winreg.QueryValueEx(key, VALUE_NAME)
+                return str(value)
+        except FileNotFoundError:
+            return None
+
+    def set(self, value: str) -> None:
+        import winreg
+
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
+            winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_SZ, value)
+
+    def delete(self) -> bool:
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+                winreg.DeleteValue(key, VALUE_NAME)
+            return True
+        except FileNotFoundError:
+            return False
 
 
-def launcher_text(root: Path, pythonw: Path) -> str:
-    # chcp 65001, damit Ordnernamen mit Umlauten stimmen. "start" öffnet Jarvis
-    # ohne Konsolenfenster (pythonw), der Autostart-Eintrag selbst schließt sich sofort.
-    return (
-        "@echo off\r\n"
-        "chcp 65001 >nul\r\n"
-        f'cd /d "{root}"\r\n'
-        f'start "" "{pythonw}" -m jarvis\r\n'
-    )
+def registry():
+    if os.name != "nt":
+        raise RuntimeError("Der Autostart geht nur unter Windows.")
+    return _WindowsRegistry()
 
 
 def pythonw_path() -> Path:
@@ -35,24 +58,47 @@ def pythonw_path() -> Path:
     return candidate if candidate.exists() else exe
 
 
-def enable() -> Path:
-    target = startup_dir() / FILE_NAME
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # UTF-8 ohne BOM: cmd liest die Datei nach chcp 65001 richtig.
-    target.write_bytes(launcher_text(ROOT, pythonw_path()).encode("utf-8"))
-    return target
+def command(root: Path = ROOT, pythonw: Path | None = None) -> str:
+    """Die Zeile im Autostart: pythonw startet Jarvis.pyw unsichtbar im Hintergrund."""
+    pythonw = pythonw or pythonw_path()
+    return f'"{pythonw}" "{root / "Jarvis.pyw"}" --hintergrund'
 
 
-def disable() -> bool:
-    target = startup_dir() / FILE_NAME
-    if target.exists():
-        target.unlink()
+def startup_dir() -> Path | None:
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return None
+    return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
+def _remove_old_file() -> bool:
+    folder = startup_dir()
+    old = folder / OLD_FILE_NAME if folder else None
+    if old is not None and old.exists():
+        old.unlink()
         return True
     return False
 
 
-def enabled() -> bool:
+def enable(reg=None) -> str:
+    reg = reg or registry()
+    reg.set(command())
+    _remove_old_file()
+    return f"HKEY_CURRENT_USER\\{RUN_KEY}\\{VALUE_NAME}"
+
+
+def disable(reg=None) -> bool:
+    reg = reg or registry()
+    removed = reg.delete()
+    return _remove_old_file() or removed
+
+
+def enabled(reg=None) -> bool:
     try:
-        return (startup_dir() / FILE_NAME).exists()
-    except RuntimeError:
-        return False
+        reg = reg or registry()
+        if reg.get():
+            return True
+    except Exception:
+        pass
+    folder = startup_dir()
+    return bool(folder and (folder / OLD_FILE_NAME).exists())

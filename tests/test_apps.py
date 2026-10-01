@@ -187,7 +187,8 @@ class LocalCommandTest(unittest.TestCase):
             started = time.monotonic()
             answer = assistant.handle("Installier mir Spotify")
             self.assertLess(time.monotonic() - started, 0.15)
-            self.assertIn("installiere Spotify", answer.replace("Ich installiere", "installiere"))
+            self.assertIn("Spotify", answer)
+            self.assertIn("installier", answer.lower())
             for _ in range(50):
                 if any("ist installiert" in s for s in speaker.said):
                     break

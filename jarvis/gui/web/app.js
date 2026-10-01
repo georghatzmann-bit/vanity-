@@ -1292,7 +1292,7 @@
           mic: 'Mikrofon (Realtek High Definition Audio)',
           model: MODEL,
           muted,
-          version: '1.2.0',
+          version: '2.0.0',
           weather: '16° · leicht bewölkt · Berlin',
         });
       },

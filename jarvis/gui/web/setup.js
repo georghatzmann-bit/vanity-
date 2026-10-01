@@ -1364,7 +1364,7 @@
     ];
     return {
       hello: () => later({
-        version: '1.2.0',
+        version: '2.0.0',
         first_run: params.get('first') !== '0',
         values: {
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',

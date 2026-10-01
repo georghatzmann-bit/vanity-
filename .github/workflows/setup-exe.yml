@@ -12,6 +12,7 @@ on:
       - "installer/**"
       - "requirements*.txt"
       - "Jarvis.bat"
+      - "Jarvis.pyw"
       - ".github/workflows/setup-exe.yml"
   workflow_dispatch:
 
@@ -75,6 +76,63 @@ jobs:
           Get-Content logs\selbsttest.txt -ErrorAction SilentlyContinue
           Pop-Location
           exit 0
+
+      - name: Probe Windows-Einbindung (Hintergrund, Anzeige, zweiter Start)
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $run = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name Jarvis -ErrorAction SilentlyContinue).Jarvis
+          Write-Host "Autostart: $run"
+          if (-not $run -or $run -notmatch "--hintergrund") { Write-Host "Autostart-Eintrag fehlt"; exit 1 }
+          $lnk = Join-Path ([Environment]::GetFolderPath("Programs")) "Jarvis.lnk"
+          if (-not (Test-Path $lnk)) { Write-Host "Startmenue-Verknuepfung fehlt"; exit 1 }
+          $l = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+          Write-Host "Verknuepfung: $($l.TargetPath) $($l.Arguments) in $($l.WorkingDirectory)"
+          Push-Location $app
+          $env:PROBE_OUT = "$env:GITHUB_WORKSPACE\probe-bilder"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe.py"
+          $probe = $LASTEXITCODE
+          # Wie der Autostart: unsichtbar starten. Danach ein zweiter Start (Doppelklick
+          # aufs Symbol): der muss sich sofort beenden und das Fenster des ersten zeigen.
+          New-Item -ItemType Directory -Force daten | Out-Null
+          Set-Content daten\einrichtung-fertig.txt "probe"
+          $first = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -PassThru
+          Start-Sleep -Seconds 30
+          if ($first.HasExited) { Write-Host "Jarvis hat sich beendet (Code $($first.ExitCode))"; Get-Content logs\jarvis.log -Tail 60; exit 1 }
+          Write-Host "Jarvis laeuft unsichtbar (PID $($first.Id))"
+          $second = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"" -PassThru
+          if (-not $second.WaitForExit(20000)) { Write-Host "Zweiter Start haengt"; Stop-Process -Id $second.Id -Force; $probe = 1 }
+          else { Write-Host "Zweiter Start beendet mit $($second.ExitCode)" }
+          Start-Sleep -Seconds 6
+          & $py -c "from PIL import ImageGrab; ImageGrab.grab().save(r'$env:GITHUB_WORKSPACE\probe-bilder\fenster-nach-zweitem-start.png')"
+          & $py -c "import ctypes; h = ctypes.windll.user32.FindWindowW(None, 'Jarvis'); print('Jarvis-Fenster sichtbar:', bool(h and ctypes.windll.user32.IsWindowVisible(h)))"
+          if ($first.HasExited) { Write-Host "Jarvis ist beim zweiten Start abgestuerzt"; $probe = 1 }
+          Stop-Process -Id $first.Id -Force -ErrorAction SilentlyContinue
+          Write-Host "--- jarvis.log"
+          Get-Content logs\jarvis.log -Tail 40 -ErrorAction SilentlyContinue
+          Pop-Location
+          exit $probe
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-bilder
+          path: probe-bilder/
+          if-no-files-found: ignore
+
+      - name: Probe-Deinstallation
+        shell: pwsh
+        run: |
+          $uninst = "$env:LOCALAPPDATA\Programs\Jarvis\unins000.exe"
+          $p = Start-Process $uninst -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru -Wait
+          Write-Host "Deinstallation beendet mit $($p.ExitCode)"
+          Start-Sleep -Seconds 3
+          $run = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name Jarvis -ErrorAction SilentlyContinue).Jarvis
+          if ($run) { Write-Host "Autostart-Eintrag ist noch da"; exit 1 }
+          if (Test-Path "$env:LOCALAPPDATA\Programs\Jarvis\jarvis") { Write-Host "Programmordner ist noch da"; exit 1 }
+          Write-Host "Sauber deinstalliert"
 
       - name: Release
         if: github.event_name == 'push'

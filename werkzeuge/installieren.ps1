@@ -1,9 +1,10 @@
 ﻿# Installiert Jarvis auf Windows. Normalerweise startet Jarvis.bat dieses Skript von selbst
 # (beim ersten Mal und wenn ein Update neue Pakete braucht).
 # Von Hand, in PowerShell im Jarvis-Ordner:
-#   powershell -ExecutionPolicy Bypass -File werkzeuge\installieren.ps1 [-Neu] [-Auto]
+#   powershell -ExecutionPolicy Bypass -File werkzeuge\installieren.ps1 [-Neu] [-Auto] [-OhneVerknuepfung]
 # -Auto: ohne Rueckfragen (so ruft es JarvisSetup.exe auf).
-param([switch]$Neu, [switch]$Auto)
+# -OhneVerknuepfung: Desktop- und Startmenue-Symbol legt JarvisSetup.exe selbst an.
+param([switch]$Neu, [switch]$Auto, [switch]$OhneVerknuepfung)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -238,21 +239,26 @@ Start-Step "Symbol auf dem Desktop"
 $icon = Join-Path $jarvisDir "jarvis.ico"
 $null = Invoke-Quiet $venvPy @("-c", "import sys; from jarvis.tray import save_app_icon; save_app_icon(sys.argv[1])", $icon)
 function New-JarvisShortcut([string]$path) {
+    # Direkt pythonw + Jarvis.pyw: kein Konsolenfenster beim Start
     $shell = New-Object -ComObject WScript.Shell
     $link = $shell.CreateShortcut($path)
-    $link.TargetPath = Join-Path $root "Jarvis.bat"
+    $link.TargetPath = Join-Path $venvDir "Scripts\pythonw.exe"
+    $link.Arguments = '"' + (Join-Path $root "Jarvis.pyw") + '"'
     $link.WorkingDirectory = $root
-    $link.Description = "Jarvis starten"
-    $link.WindowStyle = 7  # minimiert: das kurze Konsolenfenster blitzt nicht auf
+    $link.Description = "Jarvis zeigen"
     if (Test-Path $icon) { $link.IconLocation = "$icon,0" }
     $link.Save()
 }
-try {
-    New-JarvisShortcut (Join-Path ([Environment]::GetFolderPath("Desktop")) "Jarvis.lnk")
-    New-JarvisShortcut (Join-Path ([Environment]::GetFolderPath("Programs")) "Jarvis.lnk")
-    Write-Ok "Desktop und Startmenue"
-} catch {
-    Write-Warn "ging nicht ($($_.Exception.Message)). Jarvis.bat geht trotzdem."
+if ($OhneVerknuepfung) {
+    Write-Ok "legt der Installer an"
+} else {
+    try {
+        New-JarvisShortcut (Join-Path ([Environment]::GetFolderPath("Desktop")) "Jarvis.lnk")
+        New-JarvisShortcut (Join-Path ([Environment]::GetFolderPath("Programs")) "Jarvis.lnk")
+        Write-Ok "Desktop und Startmenue"
+    } catch {
+        Write-Warn "ging nicht ($($_.Exception.Message)). Jarvis.bat geht trotzdem."
+    }
 }
 
 # Merken, womit installiert wurde. Jarvis.bat installiert nur neu, wenn sich das aendert.

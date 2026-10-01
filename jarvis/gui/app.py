@@ -199,23 +199,29 @@ def fit_to_screen(width: int, height: int) -> tuple[int, int]:
 
 
 class Window:
-    """Öffnet das Fenster und hält es am Laufen. `start()` blockiert, bis es geschlossen wird."""
+    """Öffnet das Fenster und hält es am Laufen. `start()` blockiert, bis es geschlossen wird.
+    Mit `hidden` startet Jarvis unsichtbar (nur Tray-Symbol), das Fenster kommt später."""
 
-    def __init__(self, api: Api, on_started, on_closed, cfg: dict) -> None:
+    def __init__(self, api: Api, on_started, on_closed, cfg: dict, hidden: bool = False, icon: str | None = None) -> None:
         self._api = api
         self._on_started = on_started
         self._on_closed = on_closed
         self._cfg = cfg
         self._window = None
-        self._hidden = False
+        self._hidden = hidden
+        self._icon = icon
         self._closed_lock = threading.Lock()
         self._closed_done = False
         self.allow_close = True
 
+    @property
+    def hidden(self) -> bool:
+        return self._hidden
+
     def start(self) -> None:
         import webview
 
-        width, height = fit_to_screen(int(self._cfg.get("width", 1200)), int(self._cfg.get("height", 780)))
+        width, height = fit_to_screen(int(self._cfg.get("width", 1280)), int(self._cfg.get("height", 800)))
         self._window = webview.create_window(
             "Jarvis",
             # Ein lokaler Pfad: pywebview liefert die Seite über einen kleinen lokalen Server aus.
@@ -224,13 +230,22 @@ class Window:
             width=width,
             height=height,
             min_size=(min(800, width), min(600, height)),
-            background_color="#0f1115",
+            background_color="#05080d",
             text_select=True,
+            hidden=self._hidden,
         )
         self._window.events.closing += self._closing
         self._window.events.closed += self._closed
         try:
-            webview.start(self._on_started, debug=bool(self._cfg.get("debug", False)))
+            options = {"debug": bool(self._cfg.get("debug", False))}
+            if self._icon:
+                options["icon"] = self._icon
+            try:
+                webview.start(self._on_started, **options)
+            except TypeError:
+                # Ältere pywebview-Version ohne icon=
+                options.pop("icon", None)
+                webview.start(self._on_started, **options)
         finally:
             # Aufräumen, bevor das Programm endet (das closed-Ereignis läuft in einem
             # eigenen Thread und käme sonst evtl. zu spät).
@@ -258,6 +273,10 @@ class Window:
             self._window.show()
             self._window.restore()
             self._hidden = False
+            try:
+                self._window.evaluate_js("window.jarvisShown && window.jarvisShown()")
+            except Exception:
+                pass
 
     def hide(self) -> None:
         if self._window is not None:

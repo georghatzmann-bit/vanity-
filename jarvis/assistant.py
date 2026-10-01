@@ -321,6 +321,12 @@ class Assistant:
             return "Gaming-Modus aktiv, Sir. Volle Leistung, und ich halte mich im Hintergrund. Viel Erfolg."
         return "Gaming-Modus beendet, Sir. Willkommen zurück."
 
+    def toggle_gaming(self) -> None:
+        """Gaming-Modus umschalten (Tray-Menü)."""
+        threading.Thread(
+            target=lambda: self.announce(self._gaming(not self.gaming)), name="jarvis-gaming", daemon=True
+        ).start()
+
     def set_gaming(self, on: bool) -> None:
         """Im Gaming-Modus läuft Jarvis mit niedriger Priorität und ohne Einblendungen."""
         self.gaming = on
