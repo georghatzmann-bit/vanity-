@@ -45,12 +45,15 @@ dir im Fenster zu, jeder Schritt erscheint dort.
 """
 
 # "Bau mir einen Discord-Bot", "Programmier ein Spiel", "Schreib ein Python-Skript, das ..."
+# Eine bloße "Datei" oder "Seite" ("Erstelle eine Datei auf dem Desktop", "Mach mir eine neue Seite
+# in Chrome") ist keine Bauaufgabe; als "Batch-Datei" oder "Webseite" schon.
 _THING = (
-    r"(?:python[- ]?|powershell[- ]?|batch[- ]?|discord[- ]?|web[- ]?|minecraft[- ]?|kleine[ns]? |"
+    r"(?:(?:python[- ]?|powershell[- ]?|batch[- ]?|discord[- ]?|web[- ]?|minecraft[- ]?|kleine[ns]? |"
     r"einfache[ns]? |neue[ns]? |eigene[ns]? )*"
     r"(?:skript|script|programm|tool|bot|app|anwendung|website|webseite|homepage|spiel|game|mod|"
-    r"plugin|addon|add-on|projekt|code|datei|rechner|taschenrechner|seite|dashboard|overlay|launcher|"
+    r"plugin|addon|add-on|projekt|code|rechner|taschenrechner|dashboard|overlay|launcher|"
     r"installer|automatisierung|makro)\w*"
+    r"|(?:python|powershell|batch|web|html|internet)[- ]?(?:datei|seite)\w*)"
 )
 _WORKSHOP = [
     re.compile(r"^(?:(?:kannst|könntest) du (?:mir )?)?(?:programmier|programmiere|entwickel|entwickle|code|coden)\b"),
@@ -71,6 +74,12 @@ def is_workshop_request(text: str) -> bool:
     norm = " ".join(re.sub(r"[.,!?;:\"'„“”]", " ", text.lower()).split())
     norm = re.sub(r"^(?:(?:hey|hallo|okay|ok) )?jarvis ", "", norm)
     norm = re.sub(r"^(?:bitte |mal |jetzt )+", "", norm)
+    # "Mach mir ein Spiel an" heißt starten, nicht bauen.
+    if re.match(r"^(?:mach|mache)\b.*\b(?:an|auf|aus|zu)$", norm):
+        return False
+    # Fragen ("Wie weit ist die Werkstatt?") starten keinen neuen Auftrag.
+    if text.strip().endswith("?") or re.match(r"^(?:wie|was|wo|wann|warum|ist|bist|läuft|hast)\b", norm):
+        return any(p.search(norm) for p in _WORKSHOP if p.pattern != r"\bwerkstatt\b")
     return any(p.search(norm) for p in _WORKSHOP)
 
 

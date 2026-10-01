@@ -38,9 +38,21 @@ class RecognitionTest(unittest.TestCase):
             "Öffne Discord",
             "Mach das Licht an",
             "Schreib Max auf Discord, bin gleich da",
+            "Erstelle eine Datei namens Einkauf auf dem Desktop",
+            "Mach mir eine neue Seite in Chrome",
+            "Mach mir ein Spiel an",
+            "Wie weit ist die Werkstatt?",
+            "Ist die Werkstatt schon fertig?",
         ):
             with self.subTest(said=said):
                 self.assertFalse(is_workshop_request(said))
+
+    def test_questions_about_the_workshop_are_status(self):
+        from jarvis import intents
+
+        for said in ("Wie weit ist die Werkstatt?", "Ist die Werkstatt schon fertig?", "Wie weit bist du?"):
+            with self.subTest(said=said):
+                self.assertEqual(intents.match(said).name, "workshop_status")
 
     def test_project_folder_names(self):
         with TemporaryDirectory() as base:
