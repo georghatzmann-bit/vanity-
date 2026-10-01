@@ -337,6 +337,7 @@ class SetupApi:
         self._devices: dict[int, str] = {}
         self._playing = threading.Lock()
         self._previews_started = False
+        self._eleven_tier: str | None = None  # Tarif von ElevenLabs, sobald einmal gelesen
         self.finished: dict | None = None
 
     # ------------------------------------------------------------ Start
@@ -511,7 +512,7 @@ class SetupApi:
             "key": "Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit sk_).",
             "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Im Konto unter Abo nachsehen.",
             "plan": "Diese Stimme gibt ElevenLabs nur mit Abo frei (ab Starter, etwa 6 $ im Monat). "
-                    "Kostenlos gehen die Standard-Stimmen wie George oder Daniel.",
+                    "Kostenlos geht eine Stimme, die du in ElevenLabs selbst entwirfst (Voice Design).",
             "permission": "Dem Schlüssel fehlen Rechte. Erstelle am besten einen neuen ohne Einschränkungen.",
             "net": "ElevenLabs ist gerade nicht erreichbar. Ist das Internet an?",
             "voice": "Diese Stimme gibt es nicht mehr.",
@@ -542,6 +543,7 @@ class SetupApi:
         tts = self._cfg["tts"]
         tier = str((sub or {}).get("tier", ""))
         free = tier.lower() == FREE_TIER
+        self._eleven_tier = tier if sub else None
         selected = str(tts.get("elevenlabs_voice", "") or "")
         note = ""
         current = next((v for v in voices if v["voice_id"] == selected), None)
@@ -580,21 +582,53 @@ class SetupApi:
         api = self._eleven()
         if api is None:
             return {"ok": False, "error": "Erst den Schlüssel prüfen."}
-        try:
-            if api.subscription()["tier"].lower() == FREE_TIER:
-                return {"ok": False, "error": self._eleven_error(ElevenLabsError("plan", "Gratis-Konto"))}
-        except ElevenLabsError:
-            pass  # Kontingent nicht lesbar (Schlüssel mit wenig Rechten): einfach versuchen
+        if self._eleven_free(api):
+            return {"ok": False, "error": self._eleven_error(ElevenLabsError("plan", "Gratis-Konto"))}
         try:
             new_id = api.add_shared(str(public_owner_id), str(voice_id), str(name))
         except ElevenLabsError as exc:
             return {"ok": False, "error": self._eleven_error(exc)}
         return self.eleven_select(new_id, name)
 
+    def _eleven_free(self, api) -> bool:
+        """Ist das ElevenLabs-Konto ein Gratis-Konto? Unbekannt (Schlüssel ohne Leserecht) gilt als nein."""
+        from .elevenlabs import FREE_TIER, ElevenLabsError
+
+        if self._eleven_tier is None:
+            try:
+                self._eleven_tier = api.subscription()["tier"]
+            except ElevenLabsError:
+                return False
+        return self._eleven_tier.lower() == FREE_TIER
+
+    def _eleven_plan_error(self, api, voice_id: str):
+        """Darf das Konto diese Stimme nutzen? Ein Wort zur Probe (kostet 3 Credits). Gibt den
+        Fehler zurück, wenn die Stimme ein Abo braucht, sonst None (andere Fehler zählen hier nicht)."""
+        from .elevenlabs import DEFAULT_MODEL, FALLBACK_MODEL, ElevenLabsError
+
+        model = str(self._cfg["tts"].get("elevenlabs_model", "") or DEFAULT_MODEL)
+        try:
+            try:
+                api.speak("Ja.", voice_id, model)
+            except ElevenLabsError as exc:
+                if exc.kind not in ("model", "param"):
+                    raise
+                api.speak("Ja.", voice_id, FALLBACK_MODEL, plain=True)
+        except ElevenLabsError as exc:
+            return exc if exc.kind == "plan" else None
+        return None
+
     def eleven_select(self, voice_id, name="") -> dict:
+        """Stimme nehmen. Mit Gratis-Konto erst kurz prüfen, ob ElevenLabs sie herausgibt:
+        Viele fertige Stimmen gehen erst ab Starter, auch wenn sie im Konto stehen."""
         voice_id, name = str(voice_id or "").strip(), str(name or "").strip()
         if not voice_id:
             return {"ok": False, "error": "Keine Stimme gewählt."}
+        api = self._eleven()
+        if api is not None and self._eleven_free(api):
+            problem = self._eleven_plan_error(api, voice_id)
+            if problem is not None:
+                return {"ok": False, "locked": True, "error": self._eleven_error(problem)}
         for section, key, value in (("tts", "elevenlabs_voice", voice_id), ("tts", "elevenlabs_voice_name", name),
                                     ("tts", "engine", "elevenlabs")):
             result = self._save(section, key, value)

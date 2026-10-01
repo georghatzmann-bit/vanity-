@@ -87,7 +87,7 @@
     },
     voices: [], voice: '', playing: '',
     tts: { engine: 'edge', tab: 'premium' },
-    eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false },
+    eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false, blocked: new Set() },
     groq: { keySet: false },
     place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
@@ -682,7 +682,7 @@
       const all = plan.limit.toLocaleString('de-DE');
       const tier = plan.tier ? plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1) : 'aktiv';
       line.textContent = plan.free
-        ? `Gratis-Konto: noch ${left} von ${all} Credits diesen Monat, ein Satz von Jarvis braucht etwa 30 bis 60. Damit gehen die Standard-Stimmen, Stimmen aus der Bibliothek erst ab Starter.`
+        ? `Gratis-Konto: noch ${left} von ${all} Credits diesen Monat, ein Satz von Jarvis braucht etwa 30 bis 60. Fertige Stimmen gibt ElevenLabs dafür meist erst ab Starter frei, eine selbst entworfene geht immer.`
         : `Abo ${tier}: noch ${left} von ${all} Credits diesen Monat, ein Satz von Jarvis braucht etwa 30 bis 60.`;
       line.hidden = false;
     } else {
@@ -690,15 +690,34 @@
     }
     $('libraryBox').hidden = !S.eleven.checked;
     $('libraryNote').hidden = !freePlan();
+    $('designHint').hidden = !freePlan();
     renderElevenVoices();
   }
 
   // Mit Gratis-Konto gibt ElevenLabs Stimmen aus der Bibliothek nicht über die Schnittstelle frei.
   const freePlan = () => !!(S.eleven.plan && S.eleven.plan.free);
-  const locked = (v) => freePlan() && !!v.from_library;
+  const locked = (v) => freePlan() && (!!v.from_library || S.eleven.blocked.has(v.voice_id));
 
   function lockedHint(v) {
-    toast(`${v.name} kommt aus der Bibliothek. Die gibt ElevenLabs über Jarvis erst ab dem Starter-Abo frei. Kostenlos gehen die Standard-Stimmen wie George.`, 'info');
+    toast(`${v.name} gibt ElevenLabs erst ab dem Starter-Abo an Jarvis heraus. Kostenlos geht eine Stimme, die du selbst entwirfst (siehe oben).`, 'info');
+  }
+
+  // Beschreibung und Probetext für Voice Design: eine eigene Jarvis-Stimme, auch im Gratis-Konto
+  const DESIGN_PROMPT = 'Perfect audio quality. Middle-aged British man, calm, deep and warm voice, refined and polite like a loyal butler, dry wit, measured pace, speaks fluent German with a slight British accent.';
+  const DESIGN_TEXT = 'Guten Abend, Sir. Ich habe alle Systeme überprüft, es läuft alles einwandfrei. Ihr Kaffee ist in fünf Minuten fertig, und das Wetter bleibt bis morgen freundlich.';
+
+  async function copyText(text, done) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const area = el('textarea');
+      area.value = text;
+      document.body.append(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    toast(done, 'ok');
   }
 
   const LABEL_DE = {
@@ -904,6 +923,11 @@
         S.eleven.name = v.name;
         S.tts.engine = 'elevenlabs';
         if (!quiet) toast(`${v.name} spricht ab jetzt für Jarvis.`, 'ok');
+      } else if (r && r.locked) {
+        // ElevenLabs gibt diese Stimme dem Gratis-Konto nicht: markieren statt auswählen
+        S.eleven.blocked.add(v.voice_id);
+        if (S.eleven.selected === v.voice_id) S.eleven.selected = '';
+        if (!quiet) lockedHint(v);
       } else {
         toast((r && r.error) || 'Die Stimme ließ sich nicht speichern.', 'error');
       }
@@ -1585,6 +1609,8 @@
     for (const b of document.querySelectorAll('#libraryGender .chip')) {
       b.addEventListener('click', () => elevenLibrary(b.dataset.gender));
     }
+    $('designPrompt').addEventListener('click', () => copyText(DESIGN_PROMPT, 'Beschreibung kopiert. In Voice Design einfügen.'));
+    $('designText').addEventListener('click', () => copyText(DESIGN_TEXT, 'Probetext kopiert. In Voice Design als Text einfügen.'));
     $('groqForm').addEventListener('submit', (e) => {
       e.preventDefault();
       groqCheck($('groqKey').value.trim());
@@ -1797,7 +1823,9 @@
         ],
       }, 500),
       eleven_add: (owner, id) => later({ ok: true, error: '', voice_id: id + '_mein' }, 600),
-      eleven_select: (id, name) => later({ ok: true, error: '', voice_id: id, name }, 80),
+      eleven_select: (id, name) => later(params.get('plan') === 'free' && id === 'v_brian'
+        ? { ok: false, locked: true, error: 'Diese Stimme gibt ElevenLabs nur mit Abo frei (ab Starter, etwa 6 $ im Monat).' }
+        : { ok: true, error: '', voice_id: id, name }, params.get('plan') === 'free' ? 400 : 80),
       eleven_preview: () => later({ ok: true, error: '' }, 2000),
       groq_check: (key) => later(/^gsk_/.test(key) ? { ok: true, error: '' }
         : { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit gsk_).' }, 700),

@@ -19,22 +19,31 @@ Damit versteht Jarvis dich viel besser und schneller. Kostet nichts.
 2. **Create API Key** klicken, einen Namen eingeben (zum Beispiel „Jarvis“), **Submit**.
 3. Den Schlüssel (beginnt mit `gsk_`) kopieren. Er wird nur einmal angezeigt.
 
-## 3. Premium-Stimme (ElevenLabs, gratis zum Ausprobieren)
+## 3. Premium-Stimme (ElevenLabs, gratis möglich)
 
 Das ist der große Unterschied: Jarvis klingt dann wie ein Mensch.
 
-1. https://elevenlabs.io öffnen und ein Konto anlegen. Das **Gratis-Konto** reicht zum Ausprobieren: 10.000 Credits im Monat, das sind etwa 150 bis 300 kurze Antworten von Jarvis. Damit gehen die **Standard-Stimmen** wie George oder Daniel.
+1. https://elevenlabs.io öffnen und ein Konto anlegen.
 2. https://elevenlabs.io/app/settings/api-keys öffnen > **Create API Key** > Namen eingeben > ohne Einschränkungen erstellen.
 3. Den Schlüssel (beginnt mit `sk_`) kopieren.
 
-Später, wenn es dir gefällt: Unter **Upgrade** das Abo **Starter** wählen (etwa 6 $ im Monat, 30.000 Credits). Erst damit gehen auch die **deutschen Stimmen aus der Bibliothek** (zum Beispiel Lennard). ElevenLabs gibt sie für Gratis-Konten nicht an Programme wie Jarvis heraus.
+**Welche Stimmen gehen gratis?** Das Gratis-Konto hat 10.000 Credits im Monat, das sind etwa 150 bis 300 kurze Antworten von Jarvis. Fertige Stimmen gibt ElevenLabs damit aber meist nicht an Programme wie Jarvis heraus. Kostenlos geht immer eine Stimme, die du **selbst entwirfst**:
+
+1. Auf elevenlabs.io links **Voices** > **My Voices** > **Add a new voice** > **Voice Design**.
+2. Als Beschreibung einfügen (die Jarvis-Einrichtung hat dafür einen Kopieren-Knopf):
+   `Perfect audio quality. Middle-aged British man, calm, deep and warm voice, refined and polite like a loyal butler, dry wit, measured pace, speaks fluent German with a slight British accent.`
+3. Als Text einfügen:
+   `Guten Abend, Sir. Ich habe alle Systeme überprüft, es läuft alles einwandfrei. Ihr Kaffee ist in fünf Minuten fertig, und das Wetter bleibt bis morgen freundlich.`
+4. **Generate** klicken, die drei Vorschläge anhören und den besten speichern, zum Beispiel unter dem Namen „Jarvis“. Das kostet nur die Credits für den Probetext.
+
+Konten von vor März 2026 haben außerdem die alten Standard-Stimmen wie George oder Daniel. Die gehen gratis, laufen aber Ende 2026 aus. Fertige Stimmen aus der Bibliothek (zum Beispiel Lennard) gehen ab dem Abo **Starter** (etwa 6 $ im Monat, 30.000 Credits).
 
 ## 4. Schlüssel in die Einrichtung
 
 Die Einrichtung öffnet sich nach der Installation von selbst. Später: Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Einstellungen**.
 
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
-2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen und **Prüfen** klicken. Dann Stimmen anhören (Play-Knopf) und eine anklicken. **Auf Deutsch** spielt den Begrüßungssatz mit dieser Stimme. Weiter unten gibt es **deutsche Stimmen aus der Bibliothek**: anhören und, ab dem Starter-Abo, **Übernehmen**. Stimmen mit dem Zeichen „ab Starter“ gehen mit dem Gratis-Konto nicht.
+2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen und **Prüfen** klicken. Dann Stimmen anhören (Play-Knopf) und eine anklicken. **Auf Deutsch** spielt den Begrüßungssatz mit dieser Stimme. Mit Gratis-Konto prüft Jarvis beim Anklicken, ob ElevenLabs die Stimme herausgibt. Wenn nicht, steht „ab Starter“ dran. Weiter unten gibt es **deutsche Stimmen aus der Bibliothek**: anhören und, ab dem Starter-Abo, **Übernehmen**.
 3. **Wohnort**, **Gehirn** (prüft dein Claude-Abo) und **Extras** wie gewohnt.
 
 Zum Schluss **Jarvis starten**.

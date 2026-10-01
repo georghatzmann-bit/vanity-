@@ -1432,6 +1432,33 @@
   gap: 12px;
 }
 
+/* Gratis-Konto: eigene Stimme mit Voice Design */
+.design-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r-l);
+  background: var(--accent-soft);
+}
+
+.design-hint .row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.design-hint small {
+  color: var(--text-2);
+  font-size: var(--fs-hint);
+}
+
+.design-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Der Hinweis gehört zur Überschrift darüber */
 .library .plan-line {
   margin-top: -12px;

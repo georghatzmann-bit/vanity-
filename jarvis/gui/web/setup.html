@@ -134,6 +134,17 @@
               <p class="form-msg" id="elevenMsg" aria-live="polite"></p>
             </div>
             <div class="plan-line" id="elevenPlan" hidden></div>
+            <div class="design-hint" id="designHint" hidden>
+              <span class="row-text">
+                <b>Eigene Jarvis-Stimme, kostenlos</b>
+                <small>Auf elevenlabs.io unter Voices > My Voices > Add a new voice > Voice Design die Beschreibung und den Probetext einfügen, Generate klicken und die beste Stimme speichern. Danach hier oben Prüfen klicken, dann steht sie unten zur Wahl.</small>
+              </span>
+              <div class="design-actions">
+                <button type="button" class="btn small ghost" id="designPrompt">Beschreibung kopieren</button>
+                <button type="button" class="btn small ghost" id="designText">Probetext kopieren</button>
+                <button type="button" class="btn small" data-open="https://elevenlabs.io/voice-design">Voice Design öffnen</button>
+              </div>
+            </div>
             <div class="voice-grid" id="elevenGrid" role="radiogroup" aria-label="ElevenLabs-Stimme"></div>
             <div class="library" id="libraryBox" hidden>
               <div class="section-head spaced">

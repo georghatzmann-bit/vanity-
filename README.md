@@ -36,7 +36,7 @@ Mikrofon → "Hey Jarvis" (openWakeWord, lokal) oder Strg+Alt+J
 
 - **Claude-Pro-Abo:** das Gehirn.
 - **Groq:** gratis (großzügiges Tageslimit, darüber übernimmt der eigene PC).
-- **ElevenLabs:** optional. Gratis-Konto zum Ausprobieren (10.000 Credits im Monat, nur Standard-Stimmen wie George), Starter ab etwa 6 $ im Monat mit 30.000 Credits und den deutschen Stimmen aus der Bibliothek. Ohne Schlüssel spricht die gratis Microsoft-Stimme.
+- **ElevenLabs:** optional. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme (Voice Design). Fertige Stimmen, auch die deutschen aus der Bibliothek, gehen ab Starter (etwa 6 $ im Monat, 30.000 Credits). Ohne Schlüssel spricht die gratis Microsoft-Stimme.
 
 ## Anpassen
 

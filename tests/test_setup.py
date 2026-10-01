@@ -557,9 +557,10 @@ class PremiumSettingsTest(SetupTestCase):
         self.assertEqual(self.saved()["tts"]["elevenlabs_voice"], "v_lib_added")
 
     def test_free_account_switches_away_from_a_library_voice(self):
-        self.fake.tier = "free"
+        # Lennard wurde gewählt, als das Konto noch ein Abo hatte
         self.fake.library_voices = [("v_lennard", "Lennard - Warm & Trustworthy")]
         self.assertTrue(self.api.eleven_select("v_lennard", "Lennard")["ok"])
+        self.fake.tier = "free"
         result = self.api.eleven_check("sk_test")
         self.assertTrue(result["ok"], result)
         self.assertTrue(result["free"])
@@ -569,6 +570,26 @@ class PremiumSettingsTest(SetupTestCase):
         self.assertIn("Starter", result["note"])
         tts = self.saved()["tts"]
         self.assertEqual((tts["engine"], tts["elevenlabs_voice"], tts["elevenlabs_voice_name"]), ("elevenlabs", "v_george", "George"))
+
+    def test_free_account_tries_a_voice_before_taking_it(self):
+        # Neue Standard-Stimmen sehen aus wie normale, ElevenLabs verweigert sie aber Gratis-Konten
+        self.fake.tier = "free"
+        self.fake.locked_ids = {"v_rachel"}
+        self.api.eleven_check("sk_test")
+        refused = self.api.eleven_select("v_rachel", "Rachel")
+        self.assertFalse(refused["ok"])
+        self.assertTrue(refused["locked"])
+        self.assertIn("Voice Design", refused["error"])
+        probe = [r for r in self.fake.requests if "/stream" in r[1]][-1]
+        self.assertEqual(probe[3]["text"], "Ja.", "nur ein Wort zur Probe")
+        self.assertNotEqual(self.saved()["tts"].get("elevenlabs_voice"), "v_rachel")
+        self.assertTrue(self.api.eleven_select("v_george", "George")["ok"])
+        self.assertEqual(self.saved()["tts"]["elevenlabs_voice"], "v_george")
+
+    def test_paid_account_takes_a_voice_without_trying(self):
+        self.api.eleven_check("sk_test")
+        self.assertTrue(self.api.eleven_select("v_george", "George")["ok"])
+        self.assertFalse(any("/stream" in r[1] for r in self.fake.requests), "kein Guthaben verbraucht")
 
     def test_free_account_does_not_take_library_voices(self):
         self.fake.tier = "free"

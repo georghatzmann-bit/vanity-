@@ -1,6 +1,7 @@
 """ElevenLabs: die natürlichsten Stimmen. Das Gratis-Konto reicht zum Ausprobieren
-(10.000 Credits im Monat, über die Schnittstelle nur die Standard-Stimmen), ab dem
-Starter-Abo (etwa 6 Dollar im Monat) gehen auch die Stimmen aus der Bibliothek.
+(10.000 Credits im Monat). Über die Schnittstelle gehen damit aber nur eigene Stimmen
+(Voice Design) und, bei Konten von vor März 2026, die alten Standard-Stimmen. Fertige
+Stimmen aus der Bibliothek erst ab dem Starter-Abo (etwa 6 Dollar im Monat).
 
 Nur die Teile der Schnittstelle, die Jarvis braucht: Stimmen auflisten, deutsche Stimmen
 aus der Bibliothek suchen und übernehmen, das Kontingent abfragen und Sprache streamen
@@ -25,8 +26,9 @@ FALLBACK_MODEL = "eleven_flash_v2_5"
 # Diese Modelle akzeptieren language_code (andere melden sonst einen Fehler)
 LANGUAGE_MODELS = {"eleven_flash_v2_5", "eleven_turbo_v2_5"}
 RATE = 24000
-# Bekannte Stimmen, die es in jedem Konto gibt: britisch, ruhig, passend für Jarvis
-PREFERRED_NAMES = ("George", "Daniel", "Brian", "Bill")
+# Ruhige britische Stimmen, passend für Jarvis: die neuen Standard-Stimmen (Eldrin, Finley)
+# und ihre Vorgänger, die es nur in älteren Konten gibt und die Ende 2026 auslaufen.
+PREFERRED_NAMES = ("Eldrin", "George", "Finley", "Daniel", "Brian", "Bill")
 # So heißt der Tarif ohne Abo. Damit gibt ElevenLabs keine Bibliotheks-Stimmen über die
 # Schnittstelle frei ("Free users cannot use library voices via the API").
 FREE_TIER = "free"

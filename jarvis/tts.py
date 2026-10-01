@@ -144,7 +144,7 @@ class TextToSpeech:
             "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Ich spreche so lange mit der Microsoft-Stimme.",
             "plan": (
                 "Diese ElevenLabs-Stimme gibt es nur mit Abo. Ich spreche so lange mit der Microsoft-Stimme. "
-                "Kostenlos gehen die Standard-Stimmen wie George, du findest sie in den Einstellungen unter Stimme."
+                "Kostenlos geht eine Stimme, die du in ElevenLabs selbst entwirfst. Mehr dazu in den Einstellungen unter Stimme."
             ),
             "voice": "Die gewählte ElevenLabs-Stimme gibt es nicht mehr. Bitte in den Einstellungen eine andere wählen.",
         }.get(kind)

@@ -29,6 +29,8 @@ class FakeElevenLabs:
         self.tier = "starter"
         # Aus der Bibliothek übernommene Stimmen: mit Gratis-Konto verweigert der Server sie
         self.library_voices = []
+        # Stimmen, die ElevenLabs Gratis-Konten verweigert, ohne dass man es ihnen ansieht
+        self.locked_ids = set()
         self.audio = tone().tobytes()
         outer = self
 
@@ -79,7 +81,7 @@ class FakeElevenLabs:
                     return self._json(200, {"voice_id": "v_lib_added"})
                 if "/stream" in self.path:
                     voice_id = self.path.split("/")[3]
-                    if outer.tier == "free" and voice_id in {v for v, _ in outer.library_voices}:
+                    if outer.tier == "free" and voice_id in {v for v, _ in outer.library_voices} | outer.locked_ids:
                         return self._json(402, {"detail": {
                             "type": "payment_required", "code": "paid_plan_required",
                             "message": "Free users cannot use library voices via the API. Please upgrade."}})
