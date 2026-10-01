@@ -153,6 +153,11 @@ try:
     print(f"   Text im Editor sichtbar: {'OK' if 'Jarvis' in seen else 'nicht gesehen'}", flush=True)
     found = screen.elements(title, 60)
     print(f"   Elemente im Editor: {[(e.get('art'), e.get('name')) for e in found[:8]]}", flush=True)
+    try:
+        screen.click(title, "Gibt es nicht 4711")
+        print("   Fehlertext: kein Fehler, obwohl es den Knopf nicht gibt", flush=True)
+    except screen.ScreenError as exc:
+        print(f"   Fehlertext: {str(exc)!r}", flush=True)
 except Exception as exc:
     print(f"   Fenster ohne Maus: Fehler {exc!r}", flush=True)
 finally:

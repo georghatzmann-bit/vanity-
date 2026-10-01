@@ -59,6 +59,19 @@ class ScreenTest(unittest.TestCase):
         self.assertLess(script.index("ValuePattern]::Pattern).SetValue"), script.index("SendMessageW($hwnd"),
                         "einzeilige Felder zuerst, wie bisher")
 
+    def test_errors_come_back_as_plain_text(self):
+        import subprocess
+
+        failed = subprocess.CompletedProcess([], 1, stdout="", stderr="Kein Element gefunden: Senden\r\n")
+        with mock.patch.object(screen.os, "name", "nt"), \
+                mock.patch.object(screen.subprocess, "run", return_value=failed) as run:
+            with self.assertRaises(screen.ScreenError) as caught:
+                screen.click("Discord", "Senden")
+        self.assertEqual(str(caught.exception), "Kein Element gefunden: Senden")
+        script = run.call_args.args[0][-1]
+        self.assertIn("trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }", script)
+        self.assertLess(script.index("trap"), script.index("Add-Type"), "der Fehlerfang steht vor dem Skript")
+
     def test_only_on_windows(self):
         with mock.patch.object(screen.os, "name", "posix"):
             with self.assertRaises(screen.ScreenError):

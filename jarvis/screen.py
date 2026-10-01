@@ -37,7 +37,9 @@ def _powershell(script: str, env: dict | None = None, timeout: float = 30) -> st
     # Startet Jarvis aus PowerShell 7, erbt Windows PowerShell sonst dessen Module.
     full_env.pop("PSModulePath", None)
     full_env.update(env or {})
-    head = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$ErrorActionPreference = 'Stop'\n"
+    # Bei einem Fehler nur dessen Text ausgeben, ohne "At line:" und "FullyQualifiedErrorId"
+    head = ("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$ErrorActionPreference = 'Stop'\n"
+            "trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }\n")
     try:
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", head + script],
