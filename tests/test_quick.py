@@ -308,6 +308,8 @@ class PowerTest(unittest.TestCase):
             "Starte den PC neu": "power_restart", "Neustart": "power_restart",
             "Schick den PC in den Energiesparmodus": "power_sleep", "Melde mich ab": "power_logoff",
             "Herunterfahren abbrechen": "power_abort", "Doch nicht": "power_abort",
+            "Fahr herunter": "power_off", "Fahr dich runter": "power_off", "Ruhezustand": "power_sleep",
+            "Energiesparmodus": "power_sleep",
         }
         for said, name in cases.items():
             with self.subTest(said=said):

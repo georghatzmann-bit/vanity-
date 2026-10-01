@@ -224,7 +224,7 @@ token = ""
 
 [server]
 # Web-Eingang für die Handy-App und für Home Assistant/Alexa. Am einfachsten im Jarvis-Fenster
-# oben rechts über "Handy" einschalten: Dann entsteht der Schlüssel von selbst, und ein QR-Code
+# oben über "Verbinden", Bereich Handy, einschalten: Dann entsteht der Schlüssel von selbst, und ein QR-Code
 # verbindet dein Handy. Handy und PC müssen im selben WLAN sein (von unterwegs: Tailscale).
 enabled = false
 host = "0.0.0.0"

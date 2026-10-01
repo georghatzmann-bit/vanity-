@@ -34,7 +34,7 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   schliessen "<name>"          schließt ein Programm
   programme [filter]           zeigt, was im Startmenü steht
   installieren "<name|id>"     installiert ein Programm (Name wie "spotify" oder winget-ID)
-  deinstallieren <winget-id>   deinstalliert ein Programm (erst nach Georgs Ja)
+  deinstallieren <winget-id>   deinstalliert ein Programm (ohne volle Freigabe erst nach Georgs Ja)
   admin "<PowerShell-Befehl>"  führt etwas mit Administratorrechten aus (Windows fragt Georg)
   nachricht <app> "<person>" "<text>"
                                schickt eine Chatnachricht, app: discord, telegram, whatsapp
@@ -73,7 +73,7 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   ui-klick "<fenster>" "<knopf>"   drückt einen Knopf ohne Maus
   ui-schreiben "<fenster>" "<feld>" "<text>"   schreibt in ein Feld ohne Tastatur ("" = erstes Feld)
   gaming an|aus
-  papierkorb "<pfad>"          verschiebt in den Papierkorb
+  papierkorb "<pfad>"          verschiebt in den Papierkorb (ohne volle Freigabe erst nach Georgs Ja)
   herunterfahren [sekunden]    fährt den PC herunter (Georg kann in der Zeit abbrechen, Vorgabe 15)
   neustarten [sekunden]        startet den PC neu
   energiesparen | ruhezustand | abmelden

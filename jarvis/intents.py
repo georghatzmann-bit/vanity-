@@ -159,7 +159,8 @@ _RULES += [
         r"^(?:fahr|fahre) (?:den |meinen |die )?(?:pc|computer|rechner|laptop|kiste) (?:herunter|runter)(?: bitte)?$|"
         r"^(?:den |meinen )?(?:pc|computer|rechner|laptop) (?:herunterfahren|runterfahren|ausschalten|ausmachen)$|"
         r"^(?:schalt|schalte|mach|mache) (?:den |meinen |die )?(?:pc|computer|rechner|laptop|kiste) aus$|"
-        r"^(?:herunterfahren|runterfahren|pc aus|computer aus|feierabend für heute fahr runter)$"
+        r"^(?:herunterfahren|runterfahren|pc aus|computer aus|feierabend für heute fahr runter)$|"
+        r"^(?:fahr|fahre) (?:dich |alles )?(?:herunter|runter)(?: bitte)?$"
     )),
     ("power_restart", re.compile(
         r"^(?:starte|start) (?:den |meinen )?(?:pc|computer|rechner|laptop) neu$|"
@@ -168,7 +169,7 @@ _RULES += [
     ("power_sleep", re.compile(
         r"^(?:(?:schick|schicke|versetz|versetze|setz|setze) )?(?:den |meinen )?(?:pc|computer|rechner|laptop) "
         r"(?:in den |auf )?(?:energiesparmodus|standby|schlafmodus|ruhemodus)(?: (?:schicken|versetzen))?$|"
-        r"^(?:energiesparmodus|standby)(?: an| bitte)?$|^(?:pc|computer|rechner) (?:schlafen legen|in den standby)$"
+        r"^(?:energiesparmodus|standby|ruhezustand)(?: an| bitte)?$|^(?:pc|computer|rechner) (?:schlafen legen|in den standby)$"
     )),
     ("power_logoff", re.compile(r"^(?:melde|meld) (?:mich|georg) ab$|^abmelden$")),
     # Licht (über Home Assistant, sonst Alexa): "Mach das Licht im Wohnzimmer aus", "Dimm das Licht auf 30 Prozent"
