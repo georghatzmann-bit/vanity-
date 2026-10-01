@@ -303,10 +303,12 @@ class AssistantMemoryTest(unittest.TestCase):
                 mock.patch.object(self.assistant, "_fullscreen", return_value=False):
             self.assertTrue(self.assistant.check_suggestions(self.clock.when))
         self.assertEqual(self.speaker.said[-1], "Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?")
-        with mock.patch("jarvis.messaging.send", return_value="ok") as sent:
+        # Die Bestätigung ist zufällig ("Gesendet, Sir." nennt Max nicht): hier immer die erste
+        with mock.patch("jarvis.messaging.send", return_value="ok") as sent, \
+                mock.patch("jarvis.assistant.random.choice", side_effect=lambda options: options[0]):
             answer = self.assistant.handle("Ja, mach")
         self.assertEqual(sent.call_args.args, ("discord", "Max", "Alles Gute zum Geburtstag, Max! 🎉"))
-        self.assertIn("Max", answer)
+        self.assertEqual(answer, "An Max ist raus, Sir.")
         self.assertEqual(self.brain.asked, [])
 
     def test_birthday_without_contact_is_only_announced(self):
