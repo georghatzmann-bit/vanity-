@@ -155,6 +155,14 @@ try:
     time.sleep(0.5)
     seen = " ".join(l["t"] for l in screen.read_text())
     print(f"   Text im Editor sichtbar: {'OK' if 'Jarvis' in seen else 'nicht gesehen'}", flush=True)
+    found = screen.elements(title)
+    print(f"   Elemente danach: {len(found)}, z. B. {[(e.get('art'), e.get('name')) for e in found[:8]]}", flush=True)
+    tree = screen._powershell(screen.UIA_HEAD + r"""
+$all = @(Walk (Find-Window $env:JARVIS_UI_WINDOW) 200)
+"Baum: " + $all.Count + " | " + (($all | Select-Object -First 12 | ForEach-Object {
+  $_.Current.ControlType.ProgrammaticName + "/" + $_.Current.ClassName + "/" + $_.Current.Name }) -join ", ")
+""", {"JARVIS_UI_WINDOW": title})
+    print("  ", tree.strip()[:600], flush=True)
     try:
         screen.click(title, "Gibt es nicht 4711")
         print("   Fehlertext: kein Fehler, obwohl es den Knopf nicht gibt", flush=True)
