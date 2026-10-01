@@ -233,6 +233,22 @@ def find_window(names, hint: str = "") -> int:
     return max(found)[2] if found else 0
 
 
+# Tasten, die eine Nachricht verfälschen: Umschalt, Strg, Alt, Windows, Buchstaben, Ziffern, Leertaste,
+# Enter, Rücktaste, Tab, Satzzeichen, Ziffernblock. Funktionstasten und Maustasten stören nicht.
+_TYPING_KEYS = ([0x08, 0x09, 0x0D, 0x10, 0x11, 0x12, 0x20, 0x5B, 0x5C, 0xE2] + list(range(0x30, 0x3A))
+                + list(range(0x41, 0x5B)) + list(range(0x60, 0x70)) + list(range(0xA0, 0xA6))
+                + list(range(0xBA, 0xC1)) + list(range(0xDB, 0xE0)))
+
+
+def keys_held() -> bool:
+    """Hält Georg gerade eine Taste gedrückt (W zum Laufen, Umschalt zum Sprinten)?"""
+    try:
+        _ctypes, user32, _INPUT, _KB = _api()
+        return any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in _TYPING_KEYS)
+    except Exception:
+        return False
+
+
 def idle_seconds() -> float:
     """Wie lange Maus und Tastatur schon still sind. Unbekannt: sehr lange."""
     try:

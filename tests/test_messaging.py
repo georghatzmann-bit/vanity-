@@ -16,7 +16,7 @@ class FakeDesktop:
     """
 
     def __init__(self, running=True, comes_to_front=True, steal_at=(), window=True, found=True,
-                 title="#allgemein | Gilde - Discord", busy_for=0.0):
+                 title="#allgemein | Gilde - Discord", busy_for=0.0, held_for=0.0):
         self.actions = []
         self.front = "explorer.exe"
         self.title = title
@@ -27,6 +27,7 @@ class FakeDesktop:
         self._found = found
         self._query = None
         self._busy_until = busy_for  # so lange bewegt Georg noch die Maus
+        self._held_until = held_for  # so lange hält Georg eine Taste (W, Umschalt) gedrückt
         self._keys = 0
         self.clock = 0.0
 
@@ -59,6 +60,9 @@ class FakeDesktop:
 
     def idle_seconds(self):
         return 0.0 if self.clock < self._busy_until else 5.0
+
+    def keys_held(self):
+        return self.clock < self._held_until
 
     def _key(self):
         self._keys += 1
@@ -178,6 +182,20 @@ class SendTest(unittest.TestCase):
         desk = FakeDesktop(busy_for=0.6)
         send("discord", "Max", "Hallo", desk)
         self.assertGreaterEqual(desk.clock, 0.6)
+
+    def test_waits_while_a_key_is_held(self):
+        # Georg läuft noch mit W oder sprintet mit Umschalt: erst loslassen, dann tippen
+        desk = FakeDesktop(held_for=0.8)
+        send("discord", "Max", "Hallo", desk)
+        self.assertGreaterEqual(desk.clock, 0.8)
+        self.assertEqual(desk.actions[-2:], [("press", ("enter",)), ("focus", 4242)])
+
+    def test_keys_held_the_whole_time_sends_nothing(self):
+        desk = FakeDesktop(held_for=999)
+        with self.assertRaises(MessagingError) as caught:
+            send("discord", "Max", "Hallo", desk)
+        self.assertIn("Tasten gedrückt", str(caught.exception))
+        self.assertNotIn(("type", "Hallo"), desk.actions)
 
     def test_channel_messages(self):
         desk = FakeDesktop()

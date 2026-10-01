@@ -129,6 +129,11 @@ class Desktop:
 
         return idle_seconds()
 
+    def keys_held(self) -> bool:
+        from .keys import keys_held
+
+        return keys_held()
+
     def press(self, *keys: str) -> None:
         from .keys import press
 
@@ -222,12 +227,23 @@ class _Session:
         return self.desk.foreground_process() in self.app.processes
 
     def step(self, action, *args) -> None:
+        self.hands_off()
         if not self.in_front():
             raise _Retry(
                 "nicht mehr vorne",
                 f"{self.app.name} war immer wieder nicht vorne. Ich habe abgebrochen, bevor etwas rausging.",
             )
         action(*args)
+
+    def hands_off(self) -> None:
+        """Hält Georg gerade eine Taste (W zum Laufen, Umschalt zum Sprinten), wartet Jarvis kurz.
+        Sonst rutschen Buchstaben in die Nachricht, und Umschalt+Enter macht nur eine neue Zeile."""
+        end = self.desk.now() + 1.5 * self.slow
+        while self.desk.keys_held():
+            if self.desk.now() >= end:
+                raise _Retry("Tasten gedrückt", f"Sie hatten die ganze Zeit Tasten gedrückt, Sir. Ich habe in "
+                                                f"{self.app.name} nichts geschickt. Sagen Sie es einfach noch einmal.")
+            self.desk.sleep(0.05)
 
     def wait_quiet(self, seconds: float) -> None:
         """Wartet, bis Georg Maus und Tastatur kurz loslässt (höchstens `seconds`)."""
