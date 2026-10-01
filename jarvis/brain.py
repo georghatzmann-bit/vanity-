@@ -1044,6 +1044,9 @@ def find_claude(cfg: dict | None = None) -> str | None:
     appdata = os.environ.get("APPDATA")
     if appdata:
         candidates.append(Path(appdata) / "npm" / "claude.cmd")
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        candidates.append(Path(local) / "Microsoft" / "WinGet" / "Links" / "claude.exe")
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)

@@ -28,7 +28,7 @@ try { $Host.UI.RawUI.WindowTitle = "Jarvis wird installiert" } catch {}
 
 # ------------------------------------------------------------------ Anzeige
 
-$total = 7
+$total = 8
 $script:step = 0
 
 function Show-Banner {
@@ -138,13 +138,30 @@ if (-not $python) {
     Write-Host ""
     Write-Host "  Jarvis braucht Python (kostenlos). Ich kann es jetzt automatisch installieren." -ForegroundColor White
     $answer = if ($Auto) { "j" } else { Read-Host "  Python 3.12 installieren? [J/n]" }
-    if ($answer -notmatch '^(n|nein)$' -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    if ($answer -notmatch '^(n|nein)$') {
         Write-Host "  Python wird installiert, das dauert etwa eine Minute ..." -ForegroundColor Cyan
         $ErrorActionPreference = "Continue"
-        winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements --silent
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget install -e --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements --silent *>> $logFile
+            $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+            $python = Find-Python
+        }
+        if (-not $python) {
+            # Ohne winget (aeltere Windows 10): direkt von python.org, nur fuer diesen Benutzer
+            $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
+            $setup = Join-Path $env:TEMP "python-3.12-setup.exe"
+            try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                Invoke-WebRequest -UseBasicParsing "https://www.python.org/ftp/python/3.12.10/python-3.12.10-$arch.exe" -OutFile $setup
+                $null = Invoke-Quiet $setup @("/quiet", "InstallAllUsers=0", "PrependPath=1", "Include_launcher=1", "Include_test=0")
+                Remove-Item $setup -ErrorAction SilentlyContinue
+            } catch {
+                Add-Content -Encoding UTF8 $logFile "Python-Download: $($_.Exception.Message)"
+            }
+            $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+            $python = Find-Python
+        }
         $ErrorActionPreference = "Stop"
-        $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
-        $python = Find-Python
     }
     if (-not $python) {
         Write-Host ""
@@ -233,7 +250,56 @@ Start-Step "Spracherkennung laden (500 MB)"
 $code = Invoke-Quiet $venvPy @("-c", "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')")
 if ($code -eq 0) { Write-Ok } else { Write-Warn "laedt Jarvis beim ersten Start" }
 
-# ------------------------------------------------------------------ 5. Symbol
+# ------------------------------------------------------------------ 5. Claude Code und Windows-Bausteine
+
+Start-Step "Jarvis' Gehirn (Claude Code)"
+function Find-Claude {
+    $found = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) { return $found.Source }
+    foreach ($candidate in @(
+        (Join-Path $env:USERPROFILE ".local\bin\claude.exe"),
+        (Join-Path $env:APPDATA "npm\claude.cmd"),
+        (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\claude.exe"))) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+    return $null
+}
+if (Find-Claude) {
+    Write-Ok "vorhanden"
+} else {
+    # Der offizielle Installer (ohne Administrator, ohne Node.js). Anmelden geht danach in der Einrichtung.
+    # In einem eigenen PowerShell-Prozess: der Installer beendet sich bei Fehlern mit "exit".
+    $ErrorActionPreference = "Continue"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $claudeSetup = Join-Path $env:TEMP "claude-install.ps1"
+        Invoke-WebRequest -UseBasicParsing "https://claude.ai/install.ps1" -OutFile $claudeSetup
+        $null = Invoke-Quiet "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $claudeSetup)
+        Remove-Item $claudeSetup -ErrorAction SilentlyContinue
+    } catch {
+        Add-Content -Encoding UTF8 $logFile "Claude-Installer: $($_.Exception.Message)"
+    }
+    $ErrorActionPreference = "Stop"
+    if (Find-Claude) { Write-Ok "installiert, anmelden in der Einrichtung" } else { Write-Warn "ging nicht, die Einrichtung hilft weiter" }
+}
+
+# Fuer Spracherkennung und Wake Word: die Microsoft-Laufzeit (auf fast jedem PC schon da)
+$runtime = Join-Path $env:SystemRoot "System32\msvcp140.dll"
+if (-not (Test-Path $runtime)) {
+    Write-Host "  Die Microsoft-Laufzeit (Visual C++) fehlt, Windows fragt gleich einmal nach." -ForegroundColor Cyan
+    $ErrorActionPreference = "Continue"
+    try {
+        $vc = Join-Path $env:TEMP "vc_redist.x64.exe"
+        Invoke-WebRequest -UseBasicParsing "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $vc
+        Start-Process $vc -ArgumentList "/install", "/quiet", "/norestart" -Verb RunAs -Wait
+        Remove-Item $vc -ErrorAction SilentlyContinue
+    } catch {
+        Add-Content -Encoding UTF8 $logFile "VC-Laufzeit: $($_.Exception.Message)"
+    }
+    $ErrorActionPreference = "Stop"
+}
+
+# ------------------------------------------------------------------ 6. Symbol
 
 Start-Step "Symbol auf dem Desktop"
 $icon = Join-Path $jarvisDir "jarvis.ico"
@@ -266,15 +332,28 @@ Copy-Item "requirements.txt", "requirements-extras.txt" $jarvisDir -Force
 
 # ------------------------------------------------------------------ Hinweise
 
-$webview2 = @(
+$webviewKeys = @(
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
     "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
     "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-) | Where-Object { Test-Path $_ }
+)
+$webview2 = $webviewKeys | Where-Object { Test-Path $_ }
 if (-not $webview2) {
-    Write-Host ""
-    Write-Host "  Fuer das Jarvis-Fenster fehlt 'Microsoft Edge WebView2':" -ForegroundColor Yellow
-    Write-Host "  https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Bootstrapper)" -ForegroundColor Yellow
+    # Das Jarvis-Fenster braucht Microsoft Edge WebView2 (unter Windows 11 immer da, unter 10 meistens)
+    Write-Host "  Fuer das Jarvis-Fenster wird Microsoft Edge WebView2 installiert ..." -ForegroundColor Cyan
+    $ErrorActionPreference = "Continue"
+    try {
+        $wv = Join-Path $env:TEMP "MicrosoftEdgeWebview2Setup.exe"
+        Invoke-WebRequest -UseBasicParsing "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile $wv
+        $null = Invoke-Quiet $wv @("/silent", "/install")
+        Remove-Item $wv -ErrorAction SilentlyContinue
+    } catch {
+        Add-Content -Encoding UTF8 $logFile "WebView2: $($_.Exception.Message)"
+    }
+    $ErrorActionPreference = "Stop"
+    if (-not ($webviewKeys | Where-Object { Test-Path $_ })) {
+        Write-Host "  WebView2 fehlt noch: https://developer.microsoft.com/microsoft-edge/webview2/ (Evergreen Bootstrapper)" -ForegroundColor Yellow
+    }
 }
 
 Write-Host ""
