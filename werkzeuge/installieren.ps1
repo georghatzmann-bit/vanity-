@@ -270,14 +270,22 @@ if (Find-Claude) {
     # Der offizielle Installer (ohne Administrator, ohne Node.js). Anmelden geht danach in der Einrichtung.
     # In einem eigenen PowerShell-Prozess: der Installer beendet sich bei Fehlern mit "exit".
     $ErrorActionPreference = "Continue"
+    # Kam der Start aus PowerShell 7 (Windows Terminal, GitHub), erbt Windows PowerShell dessen
+    # Modulpfade und findet dann Get-FileHash nicht, das der Claude-Installer braucht.
+    $modulePath = $env:PSModulePath
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
         $claudeSetup = Join-Path $env:TEMP "claude-install.ps1"
         Invoke-WebRequest -UseBasicParsing "https://claude.ai/install.ps1" -OutFile $claudeSetup
+        if ($modulePath) {
+            $env:PSModulePath = (($modulePath -split ";") | Where-Object { $_ -and $_ -notmatch "\\PowerShell\\" }) -join ";"
+        }
         $null = Invoke-Quiet "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $claudeSetup)
         Remove-Item $claudeSetup -ErrorAction SilentlyContinue
     } catch {
         Add-Content -Encoding UTF8 $logFile "Claude-Installer: $($_.Exception.Message)"
+    } finally {
+        $env:PSModulePath = $modulePath
     }
     $ErrorActionPreference = "Stop"
     if (Find-Claude) { Write-Ok "installiert, anmelden in der Einrichtung" } else { Write-Warn "ging nicht, die Einrichtung hilft weiter" }

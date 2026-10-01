@@ -239,6 +239,23 @@ class FindClaudeTest(unittest.TestCase):
                 self.assertIsNone(find_claude({}))
 
 
+class ClaudeInstallEnvTest(unittest.TestCase):
+    def test_drops_powershell7_module_paths(self):
+        # So erbt es Windows PowerShell, wenn Jarvis aus PowerShell 7 gestartet wurde
+        env = setup_wizard.windows_powershell_env({
+            "PSMODULEPATH": r"C:\Users\G\Documents\PowerShell\Modules;C:\Program Files\PowerShell\Modules;"
+                            r"c:\program files\powershell\7\Modules;C:\Program Files\WindowsPowerShell\Modules;"
+                            r"C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules",
+            "PATH": "x",
+        })
+        self.assertEqual(env["PSMODULEPATH"],
+                         r"C:\Program Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules")
+        self.assertEqual(env["PATH"], "x")
+
+    def test_without_module_path(self):
+        self.assertEqual(setup_wizard.windows_powershell_env({"PATH": "x"}), {"PATH": "x"})
+
+
 class TomlValueTest(unittest.TestCase):
     def test_values_survive_a_round_trip(self):
         for value in (True, False, 0.35, 3, "C:\\Users\\Georg\\claude.exe", 'Er sagte "Hallo"', "Zeile\neins",

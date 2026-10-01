@@ -22,6 +22,17 @@ DONE_MARKER = STATE_DIR / "einrichtung-fertig.txt"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 NEW_CONSOLE = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
 
+
+def windows_powershell_env(environ) -> dict:
+    """Umgebung für Windows PowerShell ohne die Modulpfade von PowerShell 7. Wurde Jarvis aus
+    PowerShell 7 gestartet, findet der Claude-Installer sonst Get-FileHash nicht."""
+    env = dict(environ)
+    for key in [k for k in env if k.upper() == "PSMODULEPATH"]:
+        kept = [p for p in env[key].split(";") if p and "\\powershell\\" not in p.lower()]
+        env[key] = ";".join(kept)
+    return env
+
+
 # Nur Stimmen, die Deutsch sauber aussprechen. Die "Multilingual"-Stimmen (Florian,
 # Seraphina) sprechen kurze Antworten oft englisch aus ("Earl Digt" statt "Erledigt").
 # rate/pitch: jeweils die natürlichste Einstellung (gemessen).
@@ -767,7 +778,7 @@ class SetupApi:
         try:
             subprocess.Popen(
                 ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-                creationflags=NEW_CONSOLE,
+                creationflags=NEW_CONSOLE, env=windows_powershell_env(os.environ),
             )
             return {"ok": True, "error": ""}
         except Exception as exc:
