@@ -280,6 +280,7 @@ class ClaudeBrain:
         self._disallowed = cfg.get("disallowed_tools", [])
         self._home = home
         self._persona = persona or home / "CLAUDE.md"
+        self.state_dir = state_dir
         self._state_file = (state_dir / "gehirn.json") if state_dir else None
         self._unsupported: set[str] = set()
         self._without_api_key = False
@@ -318,6 +319,19 @@ class ClaudeBrain:
     @property
     def isolated(self) -> bool:
         return self._isolated and not ({"safe-mode", "system-prompt-file"} & self._unsupported)
+
+    # Für die Werkstatt (eigener Claude-Prozess mit denselben Grundeinstellungen)
+    @property
+    def claude_path(self) -> str:
+        return self._claude
+
+    @property
+    def persona_path(self) -> Path:
+        return self._persona
+
+    @property
+    def disallowed_tools(self) -> list[str]:
+        return list(self._disallowed)
 
     @property
     def live_enabled(self) -> bool:

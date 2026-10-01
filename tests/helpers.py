@@ -105,7 +105,7 @@ FAKE_CLAUDE = textwrap.dedent(
         prompt = raw[stamp.end():] if stamp else raw
         with open("calls.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps({"args": args, "prompt": prompt, "raw": raw, "stamp": stamp.group(1) if stamp else "",
-                                "said": said(), "pid": os.getpid(), "live": live,
+                                "said": said(), "pid": os.getpid(), "live": live, "cwd": os.getcwd(),
                                 "pythonpath": os.environ.get("PYTHONPATH", ""),
                                 "apikey": bool(os.environ.get("ANTHROPIC_API_KEY"))}) + "\\n")
         out({"type": "system", "subtype": "init", "model": "claude-" + model + "-test", "session_id": session})
@@ -161,6 +161,20 @@ FAKE_CLAUDE = textwrap.dedent(
             tool("toolu_1", "Bash", {"command": "date"}, output="Mi 1. Okt")
             say("Heute ist Mittwoch, Sir.")
             result("Einen Moment, ich schaue nach.\\n\\nHeute ist Mittwoch, Sir.")
+            raise Done(0)
+        if prompt.startswith("Bau mir"):
+            # Die Werkstatt: Plan, Datei, Test, Zusammenfassung
+            tool("toolu_t", "TodoWrite", {"todos": [
+                {"content": "Ordner anlegen", "status": "completed"},
+                {"content": "Bot schreiben", "status": "in_progress"},
+                {"content": "Testen", "status": "pending"}]})
+            tool("toolu_w", "Write", {"file_path": "bot.py", "content": "print('Hallo')"})
+            if "langsam" in prompt:
+                time.sleep(8)
+            tool("toolu_b", "Bash", {"command": "python bot.py"}, output="Hallo")
+            text = "Der Bot ist fertig, Sir. Er liegt im Werkstatt-Ordner. Starten Sie ihn mit python bot.py."
+            say(text)
+            result(text)
             raise Done(0)
         if prompt == "lange-arbeit":
             # Ein Werkzeug, das eine Weile still arbeitet (z. B. eine Installation).
@@ -230,6 +244,9 @@ class RecordingUi:
 
     def progress(self, step):
         self.events.append(("progress", dict(step)))
+
+    def workshop(self, event):
+        self.events.append(("workshop", dict(event)))
 
     def of(self, kind):
         return [e for e in self.events if e[0] == kind]

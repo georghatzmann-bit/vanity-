@@ -143,6 +143,16 @@ _RULES += [
         rf"^(?:mach|mache) {_FILL}(.+?) auf$|"
         rf"^(?:zeig|zeige) mir {_FILL}(.+?)$"
     )),
+    ("workshop_cancel", re.compile(
+        r"^(?:brich|breche) (?:die )?(?:werkstatt|arbeit|programmierung) ab$|"
+        r"^(?:werkstatt|arbeit) (?:stopp|stoppen|abbrechen|beenden)$|"
+        r"^(?:stopp|stoppe|beende) (?:die )?(?:werkstatt|arbeit in der werkstatt)$|"
+        r"^(?:hör|höre) auf zu (?:programmieren|bauen|coden)$"
+    )),
+    ("workshop_status", re.compile(
+        r"^(?:wie weit bist du(?: (?:mit dem|mit der|mit den|in der werkstatt).*)?|wie läuft(?:s| es)(?: in der werkstatt)?|"
+        r"was macht die werkstatt|(?:status|stand) (?:der|in der) werkstatt|bist du (?:schon )?fertig)$"
+    )),
     # "Mach Spotify an" nur für bekannte Programme, sonst ist es eher das Licht.
     ("open_known", re.compile(rf"^(?:mach|mache|schalt|schalte) {_FILL}(.+?) an$")),
 ]

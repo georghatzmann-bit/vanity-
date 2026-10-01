@@ -66,6 +66,14 @@ class GuiBridge(Ui):
     def progress(self, step: dict) -> None:
         self._push({"type": "progress", "step": dict(step)})
 
+    def workshop(self, event: dict) -> None:
+        # Laufender Text kommt oft: nur der neueste zählt, sonst läuft die Warteschlange voll.
+        if event.get("state") == "text":
+            with self._lock:
+                for old in [e for e in self._events if e.get("type") == "workshop" and e.get("state") == "text"]:
+                    self._events.remove(old)
+        self._push({"type": "workshop", **event})
+
     def stats(self, cpu: float, ram: float) -> None:
         self._push({"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)})
 

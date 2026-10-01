@@ -55,6 +55,8 @@ class Assistant:
         # Vom Fenster gesetzt: "show"/"hide" zeigt oder versteckt es, open_setup öffnet die Einstellungen.
         self.window_control = None
         self.open_setup = None
+        # Die Werkstatt für Programmier- und Bauaufgaben (setzt __main__).
+        self.workshop = None
         self.gaming = False
         self._last_state = ""
         self._ids = itertools.count(1)
@@ -195,8 +197,20 @@ class Assistant:
         "" = erledigt, ohne etwas zu sagen."""
         intent = intents.match(text)
         if intent is None:
+            from .workshop import is_workshop_request
+
+            if self.workshop is not None and is_workshop_request(text):
+                return self.workshop.start(text)
             return None
         name = intent.name
+        if name in ("workshop_status", "workshop_cancel"):
+            if self.workshop is None:
+                return None
+            if name == "workshop_status":
+                if not self.workshop.busy and intent is not None and "werkstatt" not in text.lower():
+                    return None  # "Bist du fertig?" ohne laufende Arbeit: normale Frage an Claude
+                return self.workshop.status()
+            return "Abgebrochen, Sir." if self.workshop.cancel() else "In der Werkstatt läuft gerade nichts, Sir."
         if name == "stop":
             if self.speaker is not None:
                 self.speaker.stop()

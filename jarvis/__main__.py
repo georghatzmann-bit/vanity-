@@ -80,6 +80,13 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         threading.Thread(target=offline_voice, name="jarvis-offline-stimme", daemon=True).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
     assistant_ref.append(assistant)
+    from .workshop import Workshop
+
+    def show_window() -> None:
+        if assistant.window_control is not None:
+            assistant.window_control("show")
+
+    assistant.workshop = Workshop(cfg, brain, ui, assistant.announce, show_window=show_window)
 
     def on_mute(muted: bool) -> None:
         assistant.update_state()
@@ -376,6 +383,8 @@ def run_gui(cfg: dict, args) -> int:
         if overlay is not None:
             overlay.stop()
         assistant.stop()
+        if assistant.workshop is not None:
+            assistant.workshop.cancel()
         if assistant.brain is not None:
             assistant.brain.close()
 
@@ -665,6 +674,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         stopped.set()
         assistant.stop()
+        if assistant.workshop is not None:
+            assistant.workshop.cancel()
         if assistant.brain is not None:
             assistant.brain.close()
     print("\nJarvis verabschiedet sich.")

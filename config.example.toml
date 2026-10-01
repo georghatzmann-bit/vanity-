@@ -147,6 +147,18 @@ disallowed_tools = [
     "PowerShell(winget uninstall:*)", "PowerShell(msiexec:*)",
 ]
 
+[werkstatt]
+# Programmier- und Bauaufträge ("Bau mir einen Discord-Bot ...") erledigt Jarvis im
+# Hintergrund in einem eigenen Ordner und zeigt jeden Schritt im Fenster.
+# Leer = %USERPROFILE%\Jarvis-Werkstatt
+ordner = ""
+# Modell und Gründlichkeit für die Werkstatt ("opus" ist am klügsten, aber langsamer).
+modell = "sonnet"
+effort = "medium"
+# Abbruch, wenn so viele Minuten gar nichts passiert, und Obergrenze für einen Auftrag.
+still_minuten = 12
+max_minuten = 60
+
 [gaming]
 # Diese Programme schließt "Gaming-Modus an" (Namen wie im Task-Manager, z. B. "OneDrive", "Teams").
 close_apps = []

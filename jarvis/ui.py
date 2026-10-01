@@ -36,6 +36,11 @@ class Ui:
         Felder: id, tool, label ("Installiert Spotify"), detail, kind, state, seconds."""
         pass
 
+    def workshop(self, event: dict) -> None:
+        """Die Werkstatt: state "start" (task, folder), "text" (text), "done"/"error"/"cancelled"
+        (summary, folder, seconds). Die Arbeitsschritte kommen als progress mit workshop=True."""
+        pass
+
 
 class ConsoleUi(Ui):
     """Schreibt das Gespräch ins Konsolenfenster."""
@@ -77,6 +82,13 @@ class ConsoleUi(Ui):
     def progress(self, step: dict) -> None:
         if step.get("state") == "running" and step.get("label"):
             self._print(f"  … {step['label']}")
+
+    def workshop(self, event: dict) -> None:
+        state = event.get("state")
+        if state == "start":
+            self._print(f"[Werkstatt] {event.get('task', '')} -> {event.get('folder', '')}")
+        elif state in ("done", "error", "cancelled"):
+            self._print(f"[Werkstatt {state}] {event.get('summary', '')}")
 
     def _print(self, text: str) -> None:
         with self._lock:
@@ -123,3 +135,6 @@ class MultiUi(Ui):
 
     def progress(self, step):
         self._each("progress", step)
+
+    def workshop(self, event):
+        self._each("workshop", event)
