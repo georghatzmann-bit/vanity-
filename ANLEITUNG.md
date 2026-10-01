@@ -114,6 +114,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 
 **Sofort, ohne Wartezeit** (meist unter einer Sekunde):
 
+- „Was kannst du?“ (eine kurze Übersicht zum Einstieg)
 - „Öffne Spotify“, „Starte Discord“, „Mach Steam zu“, „Öffne YouTube“, „Öffne den Ordner Downloads“
 - „Geh auf Reddit“, „Such auf YouTube nach Katzenvideos“, „Google mal Pizza in der Nähe“, „Navigiere nach Graz“
 - „Spiel Thunderstruck“ (das erste YouTube-Video läuft sofort), „Spiel Queen auf Spotify“
