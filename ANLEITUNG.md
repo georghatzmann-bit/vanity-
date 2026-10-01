@@ -5,6 +5,7 @@ Diese Anleitung ist für dich, Georg. Jarvis läuft danach unsichtbar im Hinterg
 ## 1. Installieren (5 Minuten)
 
 1. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
+   Zeigt GitHub „Page not found“: erst oben rechts bei GitHub anmelden (das Projekt ist privat), dann den Link noch einmal öffnen.
 2. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
 3. Den Haken bei **„Jarvis mit Windows starten“** drin lassen und **Installieren** klicken.
 
