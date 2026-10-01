@@ -807,7 +807,7 @@ class SetupApi:
 
 def run_setup(cfg: dict, start_after: bool = True) -> int:
     """Öffnet den Assistenten. Danach startet (falls gewünscht) Jarvis als neuer Prozess."""
-    from .gui.app import WEB_DIR, fit_to_screen, webview_available
+    from .gui.app import WEB_DIR, place_on_screen, webview_available
 
     ok, reason = webview_available()
     if not ok:
@@ -819,13 +819,16 @@ def run_setup(cfg: dict, start_after: bool = True) -> int:
 
     window_ref: list = []
     api = SetupApi(cfg, window_ref)
-    width, height = fit_to_screen(1000, 720)
+    place = place_on_screen(1000, 720)
+    width, height = place["width"], place["height"]
     window = webview.create_window(
         "Jarvis einrichten",
         url=str(WEB_DIR / "setup.html"),
         js_api=api,
         width=width,
         height=height,
+        x=place["x"],
+        y=place["y"],
         min_size=(min(800, width), min(600, height)),
         background_color="#0f1115",
     )

@@ -596,6 +596,25 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && el.drawer.classList.contains('open')) openDrawer(false);
     });
+
+    // Kommt das Fenster nach vorn, setzt Windows den Fokus auf den ersten Knopf (mit
+    // Fokus-Rahmen). Ohne Klick oder Taste gehört der Cursor ins Eingabefeld:
+    // Fenster auf, lostippen.
+    let touched = 0;
+    const touch = () => { touched = performance.now(); };
+    document.addEventListener('pointerdown', touch, true);
+    document.addEventListener('keydown', touch, true);
+    window.addEventListener('focus', () => {
+      const shownAt = performance.now();
+      const toInput = () => {
+        if (touched > shownAt - 400) return;
+        if (el.drawer.classList.contains('open')) return;
+        if (document.activeElement === el.input) return;
+        el.input.focus({ preventScroll: true });
+      };
+      setTimeout(toInput, 0);
+      setTimeout(toInput, 150);
+    });
   }
 
   async function openSetup() {

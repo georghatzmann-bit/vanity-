@@ -192,11 +192,17 @@ def webview2_installed() -> bool:
     return False
 
 
-def fit_to_screen(width: int, height: int) -> tuple[int, int]:
-    """Das Fenster soll auf den Bildschirm passen, auch bei 150 % Skalierung auf Full HD
-    (dann sind nur etwa 1280 x 680 Punkte frei). Größen in logischen Punkten."""
+def place_on_screen(width: int, height: int) -> dict:
+    """Größe und Lage für ein Fenster, in logischen Punkten (so rechnet pywebview).
+
+    Das Fenster soll auf den Bildschirm passen, auch bei 150 % Skalierung auf Full HD (dann
+    sind nur etwa 1280 x 680 Punkte frei), und mittig über der Taskleiste stehen. Die Lage
+    geben wir selbst vor: pywebview 6 setzt die Mitte unter Windows zu spät, das Fenster
+    landet sonst an der Standard-Stelle von Windows (nach rechts unten versetzt) und ragt auf
+    kleinen Bildschirmen über den Rand."""
+    place = {"width": width, "height": height, "x": None, "y": None}
     if os.name != "nt":
-        return width, height
+        return place
     try:
         import ctypes
         from ctypes import wintypes
@@ -204,6 +210,7 @@ def fit_to_screen(width: int, height: int) -> tuple[int, int]:
         user32 = ctypes.windll.user32
         area = wintypes.RECT()
         user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(area), 0)  # SPI_GETWORKAREA
+        left, top = area.left, area.top
         free_w, free_h = area.right - area.left, area.bottom - area.top
         aware = 0
         try:
@@ -215,13 +222,20 @@ def fit_to_screen(width: int, height: int) -> tuple[int, int]:
         if aware:
             # Das Programm sieht echte Pixel, das Fenster wird aber in Punkten angegeben.
             scale = ctypes.windll.shcore.GetScaleFactorForDevice(0) / 100 or 1.0
+            left, top = int(left / scale), int(top / scale)
             free_w, free_h = int(free_w / scale), int(free_h / scale)
         if free_w > 400 and free_h > 300:
             width = min(width, free_w - 40)
             height = min(height, free_h - 40)
+            place.update(
+                width=width,
+                height=height,
+                x=left + (free_w - width) // 2,
+                y=top + (free_h - height) // 2,
+            )
     except Exception as exc:
         log.debug("Bildschirmgröße unbekannt: %s", exc)
-    return width, height
+    return place
 
 
 class Window:
@@ -247,7 +261,8 @@ class Window:
     def start(self) -> None:
         import webview
 
-        width, height = fit_to_screen(int(self._cfg.get("width", 1280)), int(self._cfg.get("height", 800)))
+        place = place_on_screen(int(self._cfg.get("width", 1280)), int(self._cfg.get("height", 800)))
+        width, height = place["width"], place["height"]
         self._window = webview.create_window(
             "Jarvis",
             # Ein lokaler Pfad: pywebview liefert die Seite über einen kleinen lokalen Server aus.
@@ -255,6 +270,8 @@ class Window:
             js_api=self._api,
             width=width,
             height=height,
+            x=place["x"],
+            y=place["y"],
             min_size=(min(800, width), min(600, height)),
             background_color="#05080d",
             text_select=True,

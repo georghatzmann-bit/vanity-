@@ -13,6 +13,9 @@ on:
       - "requirements*.txt"
       - "Jarvis.bat"
       - "Jarvis.pyw"
+      - "config.example.toml"
+      - "ANLEITUNG.md"
+      - "README.md"
       - ".github/workflows/setup-exe.yml"
   workflow_dispatch:
 

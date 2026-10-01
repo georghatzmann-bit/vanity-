@@ -166,6 +166,7 @@ def load_voice(
         if wait_for_mic is None:
             return None
         # Gar kein Mikrofon da (z. B. nur ein USB-Headset, das noch nicht steckt): warten.
+        ui.config(mic="Kein Mikrofon gefunden")
         ui.message("info", "Kein Mikrofon da. Sobald eins angeschlossen ist, hört Jarvis zu. Schreiben geht schon.")
         while True:
             if wait_for_mic.wait(10):
