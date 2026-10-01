@@ -833,6 +833,17 @@ def run_setup(cfg: dict, start_after: bool = True) -> int:
         background_color="#0f1115",
     )
     window_ref.append(window)
+
+    def dark_title_bar() -> None:
+        # Dunkle Titelleiste wie die Seite (base.css --bg), auch wenn Windows auf "hell" steht.
+        from .desktop import style_title_bar
+
+        style_title_bar("Jarvis einrichten", "#0f1115")
+
+    try:
+        window.events.before_show += dark_title_bar
+    except AttributeError:
+        pass  # ältere pywebview-Version ohne dieses Ereignis
     try:
         webview.start()
     finally:

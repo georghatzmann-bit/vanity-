@@ -238,6 +238,9 @@ def place_on_screen(width: int, height: int) -> dict:
     return place
 
 
+TITLE_BAR_COLOR = "#080b11"  # wie der Hintergrund des HUD (style.css --hud-bg)
+
+
 class Window:
     """Öffnet das Fenster und hält es am Laufen. `start()` blockiert, bis es geschlossen wird.
     Mit `hidden` startet Jarvis unsichtbar (nur Tray-Symbol), das Fenster kommt später."""
@@ -280,6 +283,11 @@ class Window:
         self._window.events.closing += self._closing
         self._window.events.closed += self._closed
         try:
+            # Läuft im Fenster-Thread, bevor das Fenster zum ersten Mal erscheint.
+            self._window.events.before_show += self._style_title_bar
+        except AttributeError:
+            pass  # ältere pywebview-Version: dann färbt show() die Leiste
+        try:
             options = {"debug": bool(self._cfg.get("debug", False))}
             if self._icon:
                 options["icon"] = self._icon
@@ -311,8 +319,15 @@ class Window:
         self.hide()
         return False
 
+    def _style_title_bar(self) -> None:
+        """Dunkle Titelleiste in der Farbe des HUD, auch wenn Windows auf "hell" steht."""
+        from ..desktop import style_title_bar
+
+        style_title_bar("Jarvis", TITLE_BAR_COLOR)
+
     def show(self) -> None:
         if self._window is not None:
+            self._style_title_bar()
             self._window.show()
             self._window.restore()
             self._hidden = False

@@ -123,3 +123,55 @@ def jarvis_in_front() -> bool:
         return pid.value == os.getpid()
     except Exception:
         return False
+
+
+def colorref(hex_color: str) -> int:
+    """'#RRGGBB' als Windows-Farbwert (0x00BBGGRR)."""
+    value = hex_color.lstrip("#")
+    red, green, blue = int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+    return (blue << 16) | (green << 8) | red
+
+
+def style_title_bar(title: str, background: str, text: str = "#c9d1dc", border: str = "#1c2533") -> bool:
+    """Titelleiste in der Farbe des Fensters, auch wenn Windows auf "hell" steht: Windows 11
+    färbt Leiste, Schrift und Rand ein, Windows 10 nimmt wenigstens den dunklen Modus.
+    Sucht das eigene Fenster mit genau diesem Titel. True, wenn es gefunden wurde."""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        dwmapi = ctypes.windll.dwmapi
+        dwmapi.DwmSetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
+        enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        found = []
+
+        def visit(hwnd, _):
+            pid = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if pid.value == os.getpid():
+                name = ctypes.create_unicode_buffer(256)
+                user32.GetWindowTextW(hwnd, name, 256)
+                kind = ctypes.create_unicode_buffer(256)
+                user32.GetClassNameW(hwnd, kind, 256)
+                # Nur das pywebview-Fenster, nicht die Anzeige oder das Tray-Fenster.
+                if name.value == title and kind.value.startswith("WindowsForms"):
+                    found.append(hwnd)
+            return True
+
+        user32.EnumWindows(enum_proc(visit), 0)
+        for hwnd in found:
+            for attribute, value in (
+                (20, 1),  # DWMWA_USE_IMMERSIVE_DARK_MODE
+                (35, colorref(background)),  # DWMWA_CAPTION_COLOR (ab Windows 11)
+                (36, colorref(text)),  # DWMWA_TEXT_COLOR
+                (34, colorref(border)),  # DWMWA_BORDER_COLOR
+            ):
+                number = ctypes.c_int(value)
+                dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(number), ctypes.sizeof(number))
+        return bool(found)
+    except Exception as exc:
+        log.debug("Titelleiste: %s", exc)
+        return False

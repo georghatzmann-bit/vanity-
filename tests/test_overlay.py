@@ -83,3 +83,18 @@ class OverlayDrawingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TitleBarColorTest(unittest.TestCase):
+    def test_colorref_is_blue_green_red(self):
+        from jarvis.desktop import colorref
+
+        self.assertEqual(colorref("#080b11"), 0x00110B08)
+        self.assertEqual(colorref("#ff0000"), 0x000000FF)
+        self.assertEqual(colorref("0f1115"), 0x0015110F)
+
+    def test_style_title_bar_does_nothing_off_windows(self):
+        from jarvis.desktop import style_title_bar
+
+        with mock.patch("jarvis.desktop.os.name", "posix"):
+            self.assertFalse(style_title_bar("Jarvis", "#080b11"))
