@@ -84,6 +84,12 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         threading.Thread(target=offline_voice, name="jarvis-offline-stimme", daemon=True).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
     assistant_ref.append(assistant)
+    from .memory import Memory
+
+    # Das Gedächtnis: Fakten, Kontakte, Gewohnheiten. Das Gehirn bekommt sie zu Beginn jeder Unterhaltung.
+    assistant.memory = Memory(STATE_DIR / "gedaechtnis.json")
+    if brain is not None:
+        brain.context = assistant.memory.context
     from .workshop import Workshop
 
     def show_window() -> None:
@@ -119,6 +125,13 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                 assistant.check_reminders()
             except Exception as exc:
                 log.debug("Erinnerungen: %s", exc)
+            if tick % 60 == 30:
+                try:
+                    assistant.check_suggestions()  # Routinen zur passenden Zeit anbieten
+                except Exception:
+                    log.exception("Vorschläge")
+            if tick % 600 == 120:
+                learn_from_yesterday(assistant)
 
     threading.Thread(target=reminders, name="jarvis-erinnerungen", daemon=True).start()
 
@@ -177,6 +190,31 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
         except Exception as exc:
             log.error("Web-Eingang startet nicht: %s", exc)
             ui.toast(f"Web-Eingang startet nicht: {exc}", "error")
+
+
+def learn_from_yesterday(assistant: Assistant) -> None:
+    """Tagesrückblick: Was Georg gestern gesagt hat, wird zu dauerhaften Fakten (im Hintergrund,
+    mit dem kleinen, schnellen Modell, wenn Jarvis gerade nichts zu tun hat)."""
+    memory, brain = assistant.memory, assistant.brain
+    if memory is None or brain is None or assistant.busy or not hasattr(brain, "oneshot"):
+        return
+    if not assistant._cfg.get("gedaechtnis", {}).get("lernen", True):
+        return
+    day = memory.digest_due()
+    if day is None:
+        return
+
+    def work() -> None:
+        try:
+            learned = memory.apply_digest(day, brain.oneshot(memory.digest_prompt(day)))
+        except Exception as exc:
+            log.info("Tagesrückblick später nochmal: %s", exc)
+            return
+        if learned:
+            log.info("Gelernt: %s", "; ".join(learned))
+            assistant.ui.toast(f"Jarvis hat dazugelernt: {len(learned)} neue Dinge über Sie.", "info")
+
+    threading.Thread(target=work, name="jarvis-rueckblick", daemon=True).start()
 
 
 def load_voice(

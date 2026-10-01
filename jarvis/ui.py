@@ -41,6 +41,10 @@ class Ui:
         (summary, folder, seconds). Die Arbeitsschritte kommen als progress mit workshop=True."""
         pass
 
+    def suggestion(self, offer: dict | None) -> None:
+        """Ein Vorschlag aus Georgs Routinen (memory.Routine.as_dict), None = keiner mehr."""
+        pass
+
 
 class ConsoleUi(Ui):
     """Schreibt das Gespräch ins Konsolenfenster."""
@@ -138,3 +142,6 @@ class MultiUi(Ui):
 
     def workshop(self, event):
         self._each("workshop", event)
+
+    def suggestion(self, offer):
+        self._each("suggestion", offer)

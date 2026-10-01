@@ -72,6 +72,9 @@ class Assistant:
         self.weathers: dict = {}
         # Was bei mehreren Befehlen übrig blieb und Claude machen soll
         self._rest = ""
+        # Das Gedächtnis (memory.Memory, setzt __main__) und ein offener Vorschlag (Routine, bis wann)
+        self.memory = None
+        self._offer = None
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
@@ -189,6 +192,7 @@ class Assistant:
             try:
                 log.info("Befehl: %s", text)
                 self.ui.message("user", text)
+                self.learn("said", text)
                 self._rest = ""
                 answer = self._local_answer(text)
                 rest, self._rest = self._rest, ""
@@ -216,6 +220,17 @@ class Assistant:
     def _local_answer(self, text: str) -> str | None:
         """Erledigt schnelle Befehle selbst. None = Claude soll es machen,
         "" = erledigt, ohne etwas zu sagen."""
+        offer = self._take_offer()
+        if offer is not None:
+            answer = self._answer_offer(offer, text)
+            if answer is not None:
+                return answer
+        if self.memory is not None:
+            from .memory import match_memory
+
+            remembered = match_memory(text)
+            if remembered is not None:
+                return self._memory_command(*remembered)
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             # Bauaufträge und Wünsche zum letzten Projekt gehen vor die übrigen Sofort-Befehle,
@@ -387,7 +402,9 @@ class Assistant:
                 return None
             if said.endswith(" startet."):
                 name = said.removesuffix(" startet.")
+                self.learn("open", name)
                 return random.choice([f"{name} startet, Sir.", f"Sehr wohl, {name} kommt.", f"{name}, kommt sofort."])
+            self.learn("open", said.removesuffix(" ist offen.") if said.endswith(" ist offen.") else _display(target))
             return said.replace(" ist offen.", " ist offen, Sir.")
         if action == "close":
             try:
@@ -416,6 +433,8 @@ class Assistant:
             label, url = found if found else (query[:1].upper() + query[1:], web.first_hit_url(query))
             with self._step(f"Öffnet {label}", "web", url):
                 pc.open_uri(url)
+            if found:
+                self.learn("web", label)
             return random.choice([f"{label} ist offen, Sir.", f"Bitte sehr, {label}.", f"{label}, Sir."])
         if name == "search":
             site = intent.data.get("site") or "google"
@@ -554,6 +573,86 @@ class Assistant:
             "voice": f"Sprachkanal {shown}, Sir.", "call": f"Ich rufe {shown} an, Sir.",
             "mute": "Discord-Mikrofon umgeschaltet, Sir.", "deafen": "Discord-Ton umgeschaltet, Sir.",
         }[kind]
+
+    # ------------------------------------------------------------------ Gedächtnis und Vorschläge
+
+    def _memory_command(self, action: str, fact: str) -> str:
+        if action == "remember":
+            self.memory.remember(fact)
+            return random.choice(["Notiert, Sir.", "Ist gespeichert, Sir.", "Vermerkt, Sir. Ich vergesse es nicht."])
+        if self.memory.forget(fact):
+            return random.choice(["Vergessen, Sir.", "Gelöscht, Sir. Als hätten Sie es nie gesagt."])
+        return "Dazu hatte ich mir nichts gemerkt, Sir."
+
+    def check_suggestions(self, now=None) -> bool:
+        """Bietet eine Routine an, wenn gerade ihre Zeit ist ("Sir, um diese Zeit öffnen Sie meist
+        Discord und Spotify. Soll ich?"). Nie beim Zocken, nie wenn Georg nicht am PC ist."""
+        if self.memory is None or not self._cfg.get("gedaechtnis", {}).get("vorschlaege", True):
+            return False
+        if self.busy or self.speaking or self._recording or self.gaming:
+            return False
+        if self.mute is not None and self.mute.muted:
+            return False
+        if not self._present() or self._fullscreen():
+            return False
+        routine = self.memory.due(now)
+        if routine is None:
+            return False
+        self.memory.offered(routine, now)
+        self._offer = (routine, time.monotonic() + 120)
+        self.ui.suggestion(routine.as_dict())
+        self.ui.message("jarvis", routine.question())
+        self._follow_up = True  # die Antwort geht ohne "Hey Jarvis"
+        self.say(routine.question())
+        return True
+
+    def _present(self) -> bool:
+        """Sitzt Georg am PC (Maus oder Tastatur in den letzten fünf Minuten)?"""
+        try:
+            from .keys import idle_seconds
+
+            return idle_seconds() < 300
+        except Exception:
+            return False
+
+    def _fullscreen(self) -> bool:
+        try:
+            from .overlay import _fullscreen_app
+
+            return bool(_fullscreen_app())
+        except Exception:
+            return False
+
+    def _take_offer(self):
+        offer, self._offer = self._offer, None
+        if offer is None or time.monotonic() > offer[1]:
+            return None
+        return offer[0]
+
+    def _answer_offer(self, routine, text: str) -> str | None:
+        """Georgs Antwort auf einen Vorschlag. None = war keine Antwort, normal weiter."""
+        from .tool import confirmed
+
+        reply = intents.normalize(text)
+        self.ui.suggestion(None)
+        if re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit)\b", reply):
+            self.memory.feedback(routine.key, "nie")
+            return "Verstanden, Sir. Das frage ich nicht mehr."
+        if re.match(r"^(?:nein|nö|nee|ne|nicht jetzt|jetzt nicht|später|lass(?: es| mal)?|nein danke|danke nein)\b", reply):
+            self.memory.feedback(routine.key, "nein")
+            return random.choice(["Sehr wohl, Sir.", "Wie Sie wünschen."])
+        if not confirmed(text):
+            return None
+        self.memory.feedback(routine.key, "ja")
+        rest = []
+        for command in routine.commands():
+            intent = intents.match(command)
+            done = self._do(intent, command) if intent is not None else None
+            if done is None:
+                rest.append(command)
+        if rest:
+            self._rest = " und ".join(rest)
+        return random.choice([f"Sehr wohl. {routine.label}, Sir.", f"Kommt sofort, Sir: {routine.label}."])
 
     def contact_app(self, person: str) -> str:
         """Über welche App Georg mit dieser Person sonst schreibt (aus dem Gedächtnis)."""

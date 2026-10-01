@@ -93,6 +93,15 @@ ack_after_seconds = 3.0
 # Nur vor endgültigem Löschen, Formatieren und Käufen fragt Jarvis trotzdem einmal nach.
 volle_freigabe = true
 
+[gedaechtnis]
+# Jarvis merkt sich, was du ihm sagst ("Merk dir, ..."), mit wem du über welche App schreibst
+# und wann du was öffnest. Alles bleibt auf deinem PC (daten\gedaechtnis.json).
+# true = Gewohnheiten zur passenden Zeit anbieten ("Sir, um diese Zeit öffnen Sie meist Discord
+# und Spotify. Soll ich?"). Nie beim Zocken, und "Nie wieder" stellt den Vorschlag ab.
+vorschlaege = true
+# true = Jarvis lernt jede Nacht aus den Gesprächen des Vortags dazu (ein kurzer Aufruf beim kleinen Modell).
+lernen = true
+
 [local]
 # Uhrzeit, Datum, Lautstärke, Musik pausieren und "Stopp" erledigt Jarvis sofort selbst,
 # ohne Claude zu fragen. Das ist schneller und schont dein Pro-Kontingent.

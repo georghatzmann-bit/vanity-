@@ -304,6 +304,8 @@ class ClaudeBrain:
         # `alert` meldet Dinge, um die sich Georg kümmern muss (z. B. ein nötiges Update).
         self.notice: Callable[[str], None] = lambda text: log.info("%s", text)
         self.alert: Callable[[str], None] = lambda text: log.warning("%s", text)
+        # Was Jarvis über Georg weiß (memory.Memory.context): kommt an den Anfang jeder Unterhaltung.
+        self.context: Callable[[], str] | None = None
         self._load_state()
 
     # ------------------------------------------------------------------ Zustand
@@ -470,6 +472,27 @@ class ClaudeBrain:
                 cmd += ["--session-id", session]
         return cmd
 
+    def oneshot(self, prompt: str, model: str = "haiku", timeout: float = 120) -> str:
+        """Eine einzelne Frage ohne Werkzeuge und ohne Verlauf, neben der Unterhaltung her
+        (z. B. der nächtliche Tagesrückblick des Gedächtnisses). Gibt den Text zurück."""
+        cmd = [self._claude, "-p", "--output-format", "text"]
+        if model:
+            cmd += ["--model", model]
+        if "safe-mode" not in self._unsupported:
+            cmd.append("--safe-mode")
+        if "tools" not in self._unsupported:
+            cmd += ["--tools", ""]
+        try:
+            result = subprocess.run(
+                cmd, input=prompt, capture_output=True, cwd=self._home, env=self.environment(prompt),
+                text=True, encoding="utf-8", errors="replace", timeout=timeout, creationflags=NO_WINDOW,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise BrainError(f"Claude antwortet nicht: {exc}") from exc
+        if result.returncode != 0:
+            raise classify(result.stderr or result.stdout)(((result.stderr or result.stdout) or "Fehler").strip()[:300])
+        return result.stdout.strip()
+
     def environment(self, text: str) -> dict:
         """Umgebung für Claude: damit `python -m jarvis.tool ...` im Jarvis-Ordner
         mit Jarvis' eigenem Python funktioniert."""
@@ -578,15 +601,25 @@ class ClaudeBrain:
         # Die normale Unterhaltung läuft über den dauerhaften Prozess, Proben (diagnose) nicht.
         live = self.live_enabled and keep_session
         self._write_said(text)
+        prompt = with_time(text)
+        if not resume and self.context is not None:
+            try:
+                known = self.context()
+            except Exception as exc:
+                log.debug("Gedächtnis: %s", exc)
+                known = ""
+            if known:
+                stamp, _, said = prompt.partition("\n")
+                prompt = f"{stamp}\n<gedaechtnis>\n{known}\n</gedaechtnis>\n{said}"
         for _ in range(5):
             if self._cancelled:
                 raise Cancelled("abgebrochen")
             if live:
-                run = self._run_live(attempt, isolated, text, on_text, prompt=with_time(text), on_step=on_step)
+                run = self._run_live(attempt, isolated, text, on_text, prompt=prompt, on_step=on_step)
                 session = run.session or session
             else:
                 cmd = self.command(attempt, isolated, session if keep_session else None, resume)
-                run = self._run(cmd, text, on_text, prompt=with_time(text), on_step=on_step)
+                run = self._run(cmd, text, on_text, prompt=prompt, on_step=on_step)
             result, stderr = run.result, run.stderr
             unknown = UNKNOWN_OPTION.search(stderr or "")
             if result is None and unknown and not run.spoke and unknown.group(1) not in self._unsupported:

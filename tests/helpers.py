@@ -238,6 +238,9 @@ class RecordingUi:
     def toast(self, text, kind="info"):
         self.events.append(("toast", text, kind))
 
+    def suggestion(self, offer):
+        self.events.append(("suggestion", offer))
+
     def config(self, **values):
         self.events.append(("config", values))
 

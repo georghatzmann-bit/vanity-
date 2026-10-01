@@ -77,6 +77,9 @@ class GuiBridge(Ui):
     def stats(self, cpu: float, ram: float) -> None:
         self._push({"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)})
 
+    def suggestion(self, offer: dict | None) -> None:
+        self._push({"type": "suggestion", "offer": offer})
+
 
 class Api:
     """Was die Seite in Python aufrufen darf (window.pywebview.api.*).
@@ -142,6 +145,41 @@ class Api:
             rows.append({"uhr": when.strftime("%H:%M"), "text": str(r.get("text", "")),
                          "tag": "heute" if days == 0 else "morgen"})
         return rows[:8]
+
+    # ------------------------------------------------------------------ Gedächtnis
+
+    def memory_state(self) -> dict:
+        """Was Jarvis über Georg weiß: Fakten, Kontakte, Gewohnheiten (für die Gedächtnis-Ansicht)."""
+        memory = getattr(self._assistant, "memory", None)
+        if memory is None:
+            return {"facts": [], "contacts": [], "routines": []}
+        try:
+            return {
+                "facts": [{"text": f.get("text", ""), "source": f.get("quelle", ""), "since": f.get("seit", "")}
+                          for f in reversed(memory.facts())][:60],
+                "contacts": [{"name": c.get("name", ""), "app": c.get("app", ""), "count": c.get("anzahl", 0)}
+                             for c in memory.contacts()[:12]],
+                "routines": [r.as_dict() for r in memory.routines()][:10],
+            }
+        except Exception as exc:
+            log.debug("Gedächtnis-Stand: %s", exc)
+            return {"facts": [], "contacts": [], "routines": []}
+
+    def remember(self, text) -> bool:
+        memory = getattr(self._assistant, "memory", None)
+        return bool(memory is not None and str(text or "").strip() and memory.remember(str(text)))
+
+    def forget(self, text) -> bool:
+        memory = getattr(self._assistant, "memory", None)
+        return bool(memory is not None and str(text or "").strip() and memory.remove(str(text)))
+
+    def answer_suggestion(self, answer) -> bool:
+        """Knöpfe am Vorschlag: "Ja", "Nein" oder "Nie wieder"."""
+        answer = {"ja": "Ja", "nein": "Nein", "nie": "Nie wieder"}.get(str(answer), "")
+        if not answer:
+            return False
+        self._assistant.submit(answer)
+        return True
 
     def toggle_gaming(self) -> bool:
         """Schalter in der Spalte links: Gaming-Modus an oder aus."""

@@ -44,6 +44,9 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   discord stumm|taub           schaltet Mikrofon oder Ton in Discord um (zurück ins Spiel)
   werkstatt "<auftrag>"        gibt einen Programmier- oder Bauauftrag an die Werkstatt
   werkstatt-weiter "<wunsch>"  arbeitet am letzten Werkstatt-Projekt weiter
+  merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
+  vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
+  gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
@@ -137,6 +140,31 @@ def _dispatch(command: str, rest: list[str]) -> int:
         hand_over(STATE_DIR, task, continue_last=command == "werkstatt-weiter")
         print("Die Werkstatt übernimmt (das Fenster zeigt die Arbeit). Sag Georg nur kurz, dass du in der "
               "Werkstatt bist, und mach den Auftrag nicht selbst.")
+        return 0
+
+    if command in ("merken", "merke", "gedaechtnis", "gedächtnis", "vergessen", "vergiss"):
+        from .memory import Memory
+
+        memory = Memory(STATE_DIR / "gedaechtnis.json")
+        what = " ".join(rest).strip()
+        if command in ("merken", "merke"):
+            if not what:
+                print('Aufruf: merken "<fakt>"')
+                return 1
+            print(f"Gemerkt: {memory.remember(what, source='jarvis')}")
+            return 0
+        if command in ("vergessen", "vergiss"):
+            count = memory.forget(what)
+            print(f"{count} Eintrag/Einträge vergessen." if count else "Dazu war nichts gespeichert.")
+            return 0
+        facts, contacts, routines = memory.facts(), memory.contacts(), memory.routines()
+        print("Fakten:" if facts else "Noch keine Fakten.")
+        for fact in facts:
+            print(f"- {fact['text']}")
+        if contacts:
+            print("Kontakte: " + ", ".join(f"{c['name']} ({c.get('app', '?')})" for c in contacts[:20]))
+        for routine in routines:
+            print(f"Gewohnheit: {routine.describe()}")
         return 0
 
     if command == "erinnern":
