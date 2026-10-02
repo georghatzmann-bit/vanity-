@@ -660,3 +660,210 @@ class ModelAndProjectsTest(unittest.TestCase):
         cmd = shop.command(job, Path("/tmp/p.md"))
         self.assertEqual(cmd[cmd.index("--model") + 1], "opus")
         self.assertEqual(cmd[cmd.index("--effort") + 1], "high")
+
+
+class ProjectViewDeleteTest(unittest.TestCase):
+    """Projekte ansehen (Fenster und "Zeig mir das Projekt …"), löschen (mit Rückfrage) und mitten in der Arbeit ändern."""
+
+    def setUp(self):
+        from jarvis.gui.app import Api, GuiBridge
+
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = (Path(self.tmp.name) / "Jarvis-Werkstatt").resolve()
+        self.base.mkdir()
+        self.ui = RecordingUi()
+        self.shop = Workshop({"werkstatt": {"ordner": str(self.base)}}, None, self.ui, lambda text: None)
+        self.api = Api(GuiBridge(), types.SimpleNamespace(workshop=self.shop, announce=lambda text: None), mute=None)
+        self.game = self.make("2026-10-01_1530_spiel", "Bau mir ein Spiel")
+        self.bot = self.make("2026-10-02_0900_bot", "Bau mir einen Bot", zuletzt="2026-10-02T09:10")
+
+    def make(self, name, task, **card):
+        folder = self.base / name
+        folder.mkdir()
+        data = {"auftrag": task, "zustand": "done", "erstellt": "2026-10-01T15:30", "zuletzt": "2026-10-01T15:40"}
+        data.update(card)
+        (folder / "projekt.json").write_text(json.dumps(data), encoding="utf-8")
+        return folder
+
+    def test_commands(self):
+        from jarvis.workshop import match_project
+
+        self.assertEqual(match_project("Zeig mir das Projekt Würfelspiel"), ("show", "würfelspiel"))
+        self.assertEqual(match_project("Öffne das Projekt Discord-Bot"), ("show", "discord-bot"))
+        self.assertEqual(match_project("Zeig mir den Discord-Bot aus der Werkstatt"), ("show", "discord-bot"))
+        self.assertEqual(match_project("Zeig mir das letzte Projekt"), ("show", "letzte"))
+        self.assertEqual(match_project("Lösch das Projekt Würfelspiel"), ("delete", "würfelspiel"))
+        self.assertEqual(match_project("Lösche den Discord-Bot aus der Werkstatt"), ("delete", "discord-bot"))
+        self.assertEqual(match_project("Öffne den Ordner vom Discord-Bot"), ("open", "discord-bot"))
+        self.assertIsNone(match_project("Lösch die Downloads"))
+        self.assertIsNone(match_project("Zeig mir das Wetter"))
+
+    def test_view_shows_plan_steps_files_and_history(self):
+        card = json.loads((self.game / "projekt.json").read_text(encoding="utf-8"))
+        card.update(dauer=312, verlauf=[{"zeit": "2026-10-01T15:30", "wunsch": "Bau mir ein Spiel", "zustand": "done"},
+                                        {"zeit": "2026-10-01T16:00", "wunsch": "Mach es blau", "zustand": "done"}])
+        (self.game / "projekt.json").write_text(json.dumps(card), encoding="utf-8")
+        protocol = {"auftrag": "Mach es blau", "zustand": "done", "plan": [{"text": "Farben ändern", "state": "completed"}],
+                    "schritte": [{"id": "t1", "tool": "Write", "label": "Schreibt spiel.py", "kind": "file", "state": "done"},
+                                 {"bad": True}]}
+        (self.game / "werkstatt-protokoll.json").write_text(json.dumps(protocol), encoding="utf-8")
+        (self.game / "spiel.py").write_text("print('hi')", encoding="utf-8")
+        (self.game / "start.bat").write_text("python spiel.py", encoding="utf-8")
+        (self.game / "index.html").write_text("<h1>Spiel</h1>", encoding="utf-8")
+        (self.game / ".venv").mkdir()
+        (self.game / ".venv" / "python.exe").write_text("x", encoding="utf-8")
+
+        view = json.loads(json.dumps(self.api.workshop_project(str(self.game))))
+        self.assertFalse(view["live"])
+        self.assertEqual(view["state"], "done")
+        self.assertEqual(view["task"], "Bau mir ein Spiel")
+        self.assertEqual([s["label"] for s in view["steps"]], ["Schreibt spiel.py"])
+        self.assertEqual(view["todos"], [{"text": "Farben ändern", "state": "completed"}])
+        self.assertEqual(view["seconds"], 312)
+        self.assertEqual(view["begun"], "01.10. 15:30")
+        self.assertEqual(len(view["history"]), 2)
+        self.assertTrue(view["start"])
+        self.assertTrue(view["preview"])
+        names = sorted(Path(f["path"]).name for f in view["files"])
+        self.assertEqual(names, ["index.html", "spiel.py", "start.bat"], "ohne Umgebung und Jarvis' eigene Karten")
+        # Nur Projektordner direkt in der Werkstatt
+        self.assertIsNone(self.api.workshop_project(str(self.base)))
+        self.assertIsNone(self.api.workshop_project(str(self.game / "..")))
+        self.assertIsNone(self.api.workshop_project(""))
+        self.assertIsNone(self.api.workshop_project(str(Path(self.tmp.name))))
+        # Liste: Vorschau nur mit Webseite
+        items = {p["name"]: p for p in self.api.workshop_projects()}
+        self.assertTrue(items["Spiel"]["preview"])
+        self.assertFalse(items["Bot"]["preview"])
+
+    def test_preview_opens_only_the_projects_page(self):
+        (self.game / "index.html").write_text("<h1>Spiel</h1>", encoding="utf-8")
+        with mock.patch("webbrowser.open", return_value=True) as browser:
+            self.assertTrue(self.api.workshop_preview(str(self.game)))
+            self.assertFalse(self.api.workshop_preview(str(self.bot)), "keine Webseite im Projekt")
+            self.assertFalse(self.api.workshop_preview(str(Path(self.tmp.name))))
+        self.assertEqual(browser.call_count, 1)
+        self.assertTrue(browser.call_args[0][0].startswith("file:"))
+        self.assertTrue(browser.call_args[0][0].endswith("index.html"))
+
+    def test_running_project_is_shown_live(self):
+        job = Job("Bau mir einen Bot", self.bot)
+        job.todos = [{"text": "Bot schreiben", "state": "in_progress"}]
+        self.shop.job = job
+        view = self.api.workshop_project(str(self.bot))
+        self.assertTrue(view["live"])
+        self.assertEqual(view["state"], "running")
+        self.assertEqual(view["todos"], job.todos)
+        self.assertFalse(self.api.workshop_project(str(self.game))["live"])
+
+    def test_delete_from_the_window(self):
+        result = self.api.workshop_delete(str(self.game))
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["name"], "Spiel")
+        self.assertFalse(self.game.exists())
+        self.assertIn(("workshop", {"state": "deleted", "folder": str(self.game), "name": "Spiel"}), self.ui.events)
+        self.assertEqual([p["name"] for p in self.shop.projects()], ["Bot"])
+        # Nichts außerhalb der Werkstatt, nicht die Werkstatt selbst, nichts doppelt
+        outside = Path(self.tmp.name) / "anderswo"
+        outside.mkdir()
+        (outside / "projekt.json").write_text("{}", encoding="utf-8")
+        for target in (str(outside), str(self.base), str(self.game), "", None, str(self.bot / "..")):
+            with self.subTest(target=target):
+                self.assertFalse(self.api.workshop_delete(target)["ok"])
+        self.assertTrue(outside.exists() and self.base.exists() and self.bot.exists())
+        # Ein Ordner ohne Projektkarte ist kein Werkstatt-Projekt
+        other = self.base / "eigener-ordner"
+        other.mkdir()
+        self.assertFalse(self.api.workshop_delete(str(other))["ok"])
+        self.assertTrue(other.exists())
+
+    def test_never_while_working_on_it_and_forgets_the_last_job(self):
+        job = Job("Bau mir einen Bot", self.bot)
+        self.shop.job = job
+        result = self.shop.delete_project(str(self.bot))
+        self.assertFalse(result["ok"])
+        self.assertIn("arbeitet", result["error"])
+        self.assertTrue(self.bot.exists())
+        job.state = "done"
+        self.assertTrue(self.shop.delete_project(str(self.bot))["ok"])
+        self.assertIsNone(self.shop.job, "\"Mach weiter\" führt nicht in einen gelöschten Ordner")
+
+    def test_read_only_files_are_deleted_too(self):
+        locked = self.game / ".git" / "objects" / "ab"
+        locked.mkdir(parents=True)
+        (locked / "cd").write_text("x", encoding="utf-8")
+        os.chmod(locked / "cd", 0o400)
+        self.assertTrue(self.shop.delete_project(str(self.game))["ok"])
+        self.assertFalse(self.game.exists())
+
+    def test_windows_puts_it_into_the_recycle_bin(self):
+        import jarvis.workshop as workshop
+
+        def recycle(path):
+            import shutil
+
+            shutil.rmtree(path)
+            return True
+
+        with mock.patch.object(workshop, "RECYCLE_BIN", True), mock.patch.object(workshop, "_to_recycle_bin", side_effect=recycle):
+            result = self.shop.delete_project(str(self.game))
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["trash"])
+        self.assertFalse(self.game.exists())
+
+    def test_voice_shows_and_deletes_only_after_yes(self):
+        answer = self.shop.project_command("Zeig mir das Projekt Spiel")
+        self.assertIn("Spiel", answer)
+        self.assertIn(("workshop", {"state": "project", "folder": str(self.game), "name": "Spiel"}), self.ui.events)
+        self.assertIn("Bot", self.shop.project_command("Zeig mir das letzte Projekt"))
+
+        question = self.shop.project_command("Lösch das Projekt Spiel")
+        self.assertIn("wirklich löschen", question)
+        self.assertTrue(self.game.exists(), "erst nach dem Ja")
+        self.assertIn("ist gelöscht", self.shop.project_command("Ja"))
+        self.assertFalse(self.game.exists())
+        self.assertIsNone(self.shop.project_command("Ja"), "die Frage gilt nur einmal")
+
+        self.shop.project_command("Lösch das Projekt Bot")
+        self.assertIn("bleibt", self.shop.project_command("Nein"))
+        self.shop.project_command("Lösch das Projekt Bot")
+        self.assertIsNone(self.shop.project_command("Wie spät ist es?"), "etwas anderes: normal weiter")
+        self.assertIsNone(self.shop.project_command("Ja"))
+        self.assertTrue(self.bot.exists())
+
+        self.shop.project_command("Lösch das Projekt Bot")
+        with mock.patch("jarvis.workshop.time.monotonic", return_value=time.monotonic() + 600):
+            self.assertIsNone(self.shop.project_command("Ja"), "zu spät: kein Löschen")
+        self.assertTrue(self.bot.exists())
+        self.assertIn("finde ich nicht", self.shop.project_command("Lösch das Projekt Raumschiff"))
+
+    def test_assistant_asks_before_deleting(self):
+        from tests.test_assistant import FakeBrain, make
+
+        brain = FakeBrain()
+        assistant, _ui, _speaker, _ = make(brain)
+        assistant.workshop = self.shop
+        self.assertIn("wirklich löschen", assistant.handle("Lösch das Projekt Spiel"))
+        self.assertIn("gelöscht", assistant.handle("Ja"))
+        self.assertFalse(self.game.exists())
+        self.assertIn("Bot", assistant.handle("Zeig mir das Projekt Bot"))
+        self.assertEqual(brain.asked, [])
+
+    def test_change_field_in_the_window(self):
+        told = []
+        self.shop.tell = lambda text: told.append(text) or "Notiert, Sir."
+        self.assertTrue(self.api.workshop_tell("Mach den Hintergrund blau"))
+        self.assertFalse(self.api.workshop_tell("   "))
+        end = time.monotonic() + 5
+        while not told and time.monotonic() < end:
+            time.sleep(0.02)
+        self.assertEqual(told, ["Mach den Hintergrund blau"])
+
+    def test_finished_job_saves_its_duration(self):
+        job = Job("Bau mir ein Spiel", self.game)
+        self.shop.job = job
+        job.started -= 125
+        self.shop._finish(job, "done", "Fertig, Sir.")
+        card = json.loads((self.game / "projekt.json").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(card["dauer"], 125)

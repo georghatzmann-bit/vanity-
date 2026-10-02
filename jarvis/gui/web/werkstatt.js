@@ -88,6 +88,18 @@
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
+  function fmtSize(bytes) {
+    if (!(bytes > 0)) return '0 KB';
+    if (bytes < 1024 * 1024) return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    return (bytes / 1048576).toFixed(1).replace('.', ',') + ' MB';
+  }
+
+  function shortDate(iso) {
+    const d = new Date(String(iso || ''));
+    if (Number.isNaN(d.getTime())) return '';
+    return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '. ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
   function baseName(path) {
     const parts = String(path || '').split(/[\\/]+/).filter(Boolean);
     return parts.length ? parts[parts.length - 1] : String(path || '');
@@ -670,10 +682,23 @@
       pillText: $('workshopPillText'),
       pillTime: $('workshopPillTime'),
       projects: $('wsProjects'),
+      resultRun: $('wsResultRun'),
+      resultPreview: $('wsResultPreview'),
+      resultDelete: $('wsResultDelete'),
+      historyBox: $('wsHistoryBox'),
+      history: $('wsHistory'),
+      tell: $('wsTell'),
+      tellLabel: $('wsTellLabel'),
+      tellInput: $('wsTellInput'),
+      tellBtn: $('wsTellBtn'),
     };
     if (!el.ws) return null;
 
+    // live: der laufende (oder letzte) Auftrag aus den Ereignissen. job: was die Ansicht gerade zeigt,
+    // das ist live oder ein Projekt aus der Liste ("Ansehen", "Zeig mir das Projekt …").
+    let live = null;
     let job = null;
+    let deleteArmed = 0;
     let isOpen = false;
     let follow = true;
     let armTimer = 0;
@@ -702,6 +727,13 @@
         order: [],
         planId: '',
         logo: logoSrc(data.logo),
+        viewed: false, // ein Projekt aus der Liste, nicht der laufende Auftrag
+        noClock: false,
+        name: String(data.name || ''),
+        start: !!data.start,
+        preview: !!data.preview,
+        history: [],
+        diskFiles: null,
       };
     }
 
@@ -717,95 +749,180 @@
       if (!ev || typeof ev !== 'object') return;
       const state = String(ev.state || '');
       if (state === 'start') {
-        job = newJob(ev);
-        resetView();
-        showModel();
-        renderAll();
+        live = newJob(ev);
+        show(live);
         open();
         return;
       }
-      if (!job) {
-        job = newJob(ev);
-        showModel();
+      if (state === 'deleted') {
+        forget(String(ev.folder || ''));
+        return;
       }
+      if (!live) {
+        live = newJob(ev);
+        if (!job) {
+          job = live;
+          showModel();
+        }
+      }
+      const shown = job === live;
       if (state === 'text') {
-        job.text = String(ev.text || '');
-        renderText();
+        live.text = String(ev.text || '');
+        if (shown) renderText();
         return;
       }
       if (state === 'logo') {
-        job.logo = logoSrc(ev.logo);
-        Construct.setLogo(job.logo);
+        live.logo = logoSrc(ev.logo);
+        if (shown) Construct.setLogo(live.logo);
         return;
       }
       if (state === 'done' || state === 'error' || state === 'cancelled') {
-        job.state = state;
-        job.summary = String(ev.summary || '');
-        job.detail = String(ev.detail || '');
-        job.question = String(ev.question || '');
-        if (ev.folder) job.folder = String(ev.folder);
+        live.state = state;
+        live.summary = String(ev.summary || '');
+        live.detail = String(ev.detail || '');
+        live.question = String(ev.question || '');
+        if (ev.folder) live.folder = String(ev.folder);
         const secs = Number(ev.seconds);
-        job.endedAt = Number.isFinite(secs) && secs > 0 ? job.startedAt + secs * 1000 : Date.now();
-        for (const s of job.steps.values()) {
+        live.endedAt = Number.isFinite(secs) && secs > 0 ? live.startedAt + secs * 1000 : Date.now();
+        for (const s of live.steps.values()) {
           if (s.state !== 'running') continue;
           s.state = state === 'done' ? 'done' : state === 'error' ? 'error' : 'cancelled';
-          renderStep(s);
+          if (shown) renderStep(s);
         }
-        renderAll();
+        if (shown) renderAll();
+        else {
+          renderPill();
+          syncTicker();
+        }
       }
+    }
+
+    const todoList = (todos) => todos.map((t) => ({
+      text: String((t && t.text) || ''), state: String((t && t.state) || 'pending'),
+    }));
+
+    // Einen Schritt in einen Auftrag übernehmen. null = nur ein Haken im Plan, kein neuer Schritt.
+    function addStep(j, data) {
+      const id = String(data.id);
+      const todos = Array.isArray(data.todos) ? data.todos : null;
+      if (todos) j.todos = todoList(todos);
+      // Der Plan steht einmal im Ablauf; jedes Abhaken danach nur im Plan.
+      if (data.kind === 'plan' && todos && j.planId && j.planId !== id) return null;
+      if (data.kind === 'plan' && todos && !j.planId) j.planId = id;
+      const known = j.steps.get(id);
+      const merged = Object.assign({}, known || {}, data, { id });
+      if (!known) {
+        merged.firstSeen = Date.now() - (Number(data.seconds) || 0) * 1000;
+        j.order.push(id);
+      }
+      j.steps.set(id, merged);
+      return merged;
     }
 
     function step(data, quiet) {
       if (!data || typeof data !== 'object' || !data.id) return;
-      if (!job) job = newJob({});
-      const id = String(data.id);
-      const todos = Array.isArray(data.todos) ? data.todos : null;
-      if (todos) {
-        job.todos = todos.map((t) => ({ text: String((t && t.text) || ''), state: String((t && t.state) || 'pending') }));
-        renderTodos();
+      if (!live) {
+        live = newJob({});
+        if (!job) job = live;
       }
-      // Der Plan steht einmal im Ablauf; jedes Abhaken danach nur im Plan.
-      if (data.kind === 'plan' && todos && job.planId && job.planId !== id) {
-        renderReadout();
-        renderPill();
+      const merged = addStep(live, data);
+      if (job !== live) {
+        renderPill(); // Georg sieht sich gerade ein anderes Projekt an
         return;
       }
-      if (data.kind === 'plan' && todos && !job.planId) job.planId = id;
-      const known = job.steps.get(id);
-      const merged = Object.assign({}, known || {}, data, { id });
-      if (!known) {
-        merged.firstSeen = Date.now() - (Number(data.seconds) || 0) * 1000;
-        job.order.push(id);
+      if (Array.isArray(data.todos)) renderTodos();
+      if (merged) {
+        renderStep(merged, quiet);
+        renderLists();
+        renderCounts();
       }
-      job.steps.set(id, merged);
-      renderStep(merged, quiet);
-      renderLists();
-      renderCounts();
       renderReadout();
       renderPill();
     }
 
+    // Ein ganzer Stand (workshop_state oder ein Projekt zum Ansehen) als Auftrag
+    function fromSnapshot(snap) {
+      const j = newJob(snap);
+      j.state = CHIP[snap.state] ? String(snap.state) : 'running';
+      j.summary = String(snap.summary || '');
+      j.detail = String(snap.detail || '');
+      j.text = String(snap.text || '');
+      j.question = String(snap.question || '');
+      if (j.state !== 'running') j.endedAt = Date.now();
+      if (Array.isArray(snap.todos)) j.todos = todoList(snap.todos);
+      for (const s of Array.isArray(snap.steps) ? snap.steps : []) {
+        if (!s || typeof s !== 'object' || !s.id) continue;
+        const copy = Object.assign({}, s);
+        if (copy.kind === 'plan' && j.planId) continue;
+        delete copy.todos;
+        if (copy.kind === 'plan' && !j.planId) j.planId = String(copy.id);
+        addStep(j, copy);
+      }
+      if (Array.isArray(snap.history)) j.history = snap.history.slice(-20);
+      return j;
+    }
+
     function load(snap) {
       if (!snap || typeof snap !== 'object') return;
-      job = newJob(snap);
-      job.state = CHIP[snap.state] ? String(snap.state) : 'running';
-      job.summary = String(snap.summary || '');
-      job.detail = String(snap.detail || '');
-      job.text = String(snap.text || '');
-      if (job.state !== 'running') job.endedAt = Date.now();
-      resetView();
-      showModel();
-      if (Array.isArray(snap.todos)) {
-        job.todos = snap.todos.map((t) => ({ text: String((t && t.text) || ''), state: String((t && t.state) || 'pending') }));
+      live = fromSnapshot(snap);
+      if (job && job.viewed && isOpen) {
+        renderPill();
+        syncTicker();
+        return;
       }
-      for (const s of Array.isArray(snap.steps) ? snap.steps : []) {
-        const copy = Object.assign({}, s);
-        if (copy.kind === 'plan' && job.planId) continue;
-        delete copy.todos;
-        if (copy.kind === 'plan' && !job.planId) job.planId = String(copy.id);
-        step(copy, true);
+      show(live);
+    }
+
+    // Die Ansicht ganz neu für einen Auftrag zeichnen
+    function show(j) {
+      job = j;
+      resetView();
+      if (!job) return;
+      showModel();
+      for (const id of job.order) {
+        const s = job.steps.get(id);
+        if (s) renderStep(s, true);
       }
       renderAll();
+    }
+
+    // "Ansehen" in der Projektliste oder "Zeig mir das Projekt …": ein Projekt mit Plan, Ablauf, Dateien
+    function view(data) {
+      if (!data || typeof data !== 'object') return false;
+      const j = fromSnapshot(data);
+      j.start = !!data.start;
+      j.preview = !!data.preview;
+      if (data.live) {
+        if (live && live.folder === j.folder && live.state === 'running') {
+          Object.assign(live, { start: j.start, preview: j.preview, history: j.history });
+        } else {
+          live = j;
+        }
+        show(live);
+      } else {
+        j.viewed = true;
+        j.begun = String(data.begun || '–');
+        const secs = Number(data.seconds);
+        j.noClock = !(secs > 0);
+        j.startedAt = Date.now() - (secs > 0 ? secs * 1000 : 0);
+        j.endedAt = Date.now();
+        j.diskFiles = Array.isArray(data.files) ? data.files : null;
+        show(j);
+      }
+      open();
+      return true;
+    }
+
+    // Ein Projekt wurde gelöscht: nicht mehr zeigen
+    function forget(folder) {
+      if (!folder) return;
+      if (live && live.folder === folder && live.state !== 'running') live = null;
+      if (job && job.folder === folder) {
+        if (isOpen) close();
+        else show(live);
+      }
+      renderPill();
+      syncTicker();
     }
 
     // ------------------------------------------------------------ Anzeige
@@ -835,14 +952,20 @@
       syncTicker();
     }
 
-    function elapsed() {
-      if (!job) return 0;
-      return (job.endedAt || Date.now()) - job.startedAt;
+    function elapsed(j) {
+      j = j || job;
+      if (!j) return 0;
+      return (j.endedAt || Date.now()) - j.startedAt;
     }
 
     function renderHeader() {
       el.ws.dataset.state = job.state;
-      if (el.kicker) el.kicker.textContent = job.continues ? 'Werkstatt · weiter am Projekt' : 'Werkstatt';
+      el.ws.dataset.viewed = job.viewed ? 'true' : 'false';
+      if (el.kicker) {
+        el.kicker.textContent = job.viewed ? 'Werkstatt · Projekt' + (job.name ? ' ' + job.name : '')
+          : job.continues ? 'Werkstatt · weiter am Projekt' : 'Werkstatt';
+      }
+      el.back.title = job.viewed ? 'Zurück zu allen Projekten (Esc)' : 'Zurück zu Jarvis (Esc). Die Arbeit läuft weiter.';
       el.task.textContent = job.task;
       el.task.title = job.task;
       el.chip.dataset.state = job.state;
@@ -856,7 +979,25 @@
       el.path.textContent = job.folder ? shortPath(job.folder) : '–';
       el.path.title = job.folder;
       el.begun.textContent = job.begun;
-      el.timer.textContent = fmtClock(elapsed());
+      el.timer.textContent = job.noClock ? '' : fmtClock(elapsed());
+      el.timer.hidden = job.noClock;
+      renderTell();
+    }
+
+    // Das Feld unten: mitten in der Arbeit etwas ändern, danach am Projekt weiterbauen
+    function renderTell() {
+      if (!el.tell || !job) return;
+      const working = job.state === 'running';
+      const otherBusy = !working && !!live && live !== job && live.state === 'running';
+      el.tell.dataset.mode = working ? 'tell' : 'more';
+      el.tellLabel.textContent = working ? 'Ändern' : 'Weiterbauen';
+      el.tellBtn.textContent = working ? 'Einbauen' : 'Weiterbauen';
+      el.tellInput.placeholder = otherBusy
+        ? 'Die Werkstatt arbeitet gerade an einem anderen Auftrag. Danach geht es hier weiter.'
+        : working ? 'Etwas ändern? Zum Beispiel: Mach den Hintergrund blau'
+          : 'Was soll noch dazu? Zum Beispiel: ein Highscore oder ein dunkles Design';
+      el.tellInput.disabled = otherBusy;
+      el.tellBtn.disabled = otherBusy || !el.tellInput.value.trim();
     }
 
     // Was "in Arbeit" war, zeigt nach dem Ende den echten Ausgang statt eines drehenden Rings
@@ -966,6 +1107,10 @@
         const key = String(s.detail).toLowerCase();
         if (!files.has(key)) files.set(key, { path: String(s.detail), created: s.tool === 'Write' });
       }
+      if (job.diskFiles) {
+        files.clear();
+        for (const f of job.diskFiles) files.set(String(f.path).toLowerCase(), { path: String(f.path), size: Number(f.size) || 0, disk: true });
+      }
       el.files.replaceChildren(...[...files.values()].map((f) => {
         const li = document.createElement('li');
         const name = document.createElement('span');
@@ -974,11 +1119,12 @@
         name.title = f.path;
         const tag = document.createElement('span');
         tag.className = 'ws-tag' + (f.created ? ' new' : '');
-        tag.textContent = f.created ? 'neu' : 'geändert';
-        li.append(svg(f.created ? FILE_NEW : FILE_EDIT), name, tag);
+        tag.textContent = f.disk ? fmtSize(f.size) : f.created ? 'neu' : 'geändert';
+        li.append(svg(f.disk ? KIND_ICONS.file : f.created ? FILE_NEW : FILE_EDIT), name, tag);
         return li;
       }));
       el.filesEmpty.hidden = files.size > 0;
+      el.filesEmpty.textContent = job.diskFiles ? 'Der Projektordner ist leer.' : 'Noch keine Dateien geschrieben.';
       // Befehle: die neuesten zuerst
       const cmds = steps.filter((s) => /^(Bash|PowerShell)$/i.test(String(s.tool)) && s.detail).reverse();
       el.cmds.replaceChildren(...cmds.slice(0, 8).map((s) => {
@@ -1050,6 +1196,25 @@
       el.detail.textContent = job.detail;
       el.detail.hidden = !job.detail;
       el.answer.hidden = !(job.state === 'done' && job.question);
+      el.resultRun.hidden = !job.start;
+      el.resultPreview.hidden = !job.preview;
+      el.resultDelete.hidden = !job.folder;
+      el.resultFolder.classList.toggle('primary', !job.start);
+      el.resultBack.textContent = job.viewed ? 'Alle Projekte' : 'Zurück zu Jarvis';
+      disarmDelete();
+      const rounds = (job.history || []).filter((h) => h && h.wunsch);
+      el.historyBox.hidden = rounds.length < 2;
+      el.history.replaceChildren(...rounds.slice(-8).reverse().map((h) => {
+        const li = document.createElement('li');
+        const what = document.createElement('span');
+        what.textContent = '„' + String(h.wunsch).slice(0, 160) + '“';
+        what.title = String(h.wunsch);
+        const when = document.createElement('time');
+        when.textContent = shortDate(h.zeit);
+        li.dataset.state = String(h.zustand || '');
+        li.append(when, what);
+        return li;
+      }));
       if (wasHidden) el.result.scrollIntoView({ block: 'nearest' });
     }
 
@@ -1085,6 +1250,7 @@
     function renderPill() {
       if (!el.pill) return;
       el.pill.hidden = false;
+      const job = live; // die Leiste oben zeigt immer den laufenden Auftrag, nicht ein angesehenes Projekt
       if (!job) {
         el.pill.dataset.state = 'idle';
         el.pillText.textContent = 'Werkstatt';
@@ -1105,19 +1271,18 @@
         text = 'Werkstatt: abgebrochen';
       }
       el.pillText.textContent = text;
-      el.pillTime.textContent = job.state === 'running' ? fmtClock(elapsed()) : '';
+      el.pillTime.textContent = job.state === 'running' ? fmtClock(elapsed(job)) : '';
       el.pill.title = 'Werkstatt öffnen: ' + job.task;
     }
 
     // Uhr, laufende Schritte und Knopf oben: einmal pro Sekunde
     function tick() {
-      if (!job) return;
-      el.timer.textContent = fmtClock(elapsed());
       renderPill();
-      if (job.state !== 'running') {
+      if (!job || job !== live || job.state !== 'running') {
         syncTicker();
         return;
       }
+      el.timer.textContent = fmtClock(elapsed());
       for (const [id, li] of stepEls) {
         const s = job.steps.get(id);
         if (s && s.state === 'running') li.querySelector('.ws-time').textContent = stepTime(s);
@@ -1125,7 +1290,7 @@
     }
 
     function syncTicker() {
-      const want = job && job.state === 'running';
+      const want = !!live && live.state === 'running';
       if (want && !ticker) ticker = setInterval(tick, 1000);
       if (!want && ticker) {
         clearInterval(ticker);
@@ -1165,6 +1330,8 @@
     function close() {
       if (!isOpen) return;
       isOpen = false;
+      const fromList = !!(job && job.viewed);
+      if (fromList) setTimeout(() => show(live), 180);
       disarm();
       el.body.dataset.view = 'hud';
       el.ws.classList.remove('opening');
@@ -1177,6 +1344,14 @@
       Construct.stop();
       renderPill();
       if (opts.onView) opts.onView('hud');
+      if (fromList && opts.onHub) opts.onHub();
+    }
+
+    // Zum laufenden (oder letzten) Auftrag, auch wenn gerade ein anderes Projekt offen war
+    function openLive() {
+      if (!live) return;
+      if (job !== live) show(live);
+      open();
     }
 
     function disarm() {
@@ -1196,8 +1371,93 @@
       }
     }
 
+    function disarmDelete() {
+      deleteArmed = 0;
+      el.resultDelete.classList.remove('armed');
+      el.resultDelete.textContent = 'Löschen';
+    }
+
+    async function runProject() {
+      if (!job || !job.folder) return;
+      try {
+        const ok = await call('workshop_run', job.folder);
+        toast(ok === false ? 'Starten ging nicht.' : (job.name || 'Das Projekt') + ' startet.', ok === false ? 'error' : 'ok');
+      } catch {
+        toast('Im Demo-Modus startet nichts.', 'info');
+      }
+    }
+
+    async function previewProject() {
+      if (!job || !job.folder) return;
+      try {
+        const ok = await call('workshop_preview', job.folder);
+        toast(ok === false ? 'Die Vorschau ging nicht auf.' : 'Die Vorschau öffnet sich im Browser.', ok === false ? 'error' : 'ok');
+      } catch {
+        toast('Im Demo-Modus gibt es keine Vorschau.', 'info');
+      }
+    }
+
+    // Löschen: erst fragen (der Knopf wird rot), dann löschen. Unter Windows landet es im Papierkorb.
+    async function deleteProject() {
+      if (!job || !job.folder) return;
+      if (job.state === 'running') {
+        toast('Daran arbeitet die Werkstatt gerade. Erst stoppen, dann löschen.', 'info');
+        return;
+      }
+      if (Date.now() - deleteArmed > 4000) {
+        deleteArmed = Date.now();
+        el.resultDelete.classList.add('armed');
+        el.resultDelete.textContent = 'Wirklich löschen?';
+        setTimeout(() => { if (Date.now() - deleteArmed >= 4000) disarmDelete(); }, 4100);
+        return;
+      }
+      disarmDelete();
+      const folder = job.folder;
+      const name = job.name || 'Das Projekt';
+      try {
+        const r = await call('workshop_delete', folder);
+        if (r && r.ok) {
+          toast(name + (r.trash ? ' liegt jetzt im Papierkorb.' : ' ist gelöscht.'), 'ok');
+          forget(folder);
+          if (opts.onDeleted) opts.onDeleted(folder);
+        } else {
+          toast((r && r.error) || 'Das Löschen ging nicht.', 'error');
+        }
+      } catch {
+        toast('Im Demo-Modus wird nichts gelöscht.', 'info');
+      }
+    }
+
     el.back.addEventListener('click', close);
     el.resultBack.addEventListener('click', close);
+    el.resultRun.addEventListener('click', runProject);
+    el.resultPreview.addEventListener('click', previewProject);
+    el.resultDelete.addEventListener('click', deleteProject);
+    if (el.tell) {
+      el.tellInput.addEventListener('input', () => {
+        el.tellBtn.disabled = el.tellInput.disabled || !el.tellInput.value.trim();
+      });
+      el.tell.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = el.tellInput.value.trim();
+        if (!text || !job) return;
+        const working = job.state === 'running';
+        el.tellBtn.disabled = true;
+        try {
+          const ok = working ? await call('workshop_tell', text) : await call('workshop_continue', job.folder, text);
+          if (ok === false) {
+            toast(working ? 'Das ging gerade nicht.' : 'Das Projekt gibt es nicht mehr, oder die Werkstatt arbeitet gerade.', 'error');
+          } else {
+            el.tellInput.value = '';
+            toast(working ? 'Jarvis baut das gleich mit ein.' : 'Jarvis baut an ' + (job.name || 'dem Projekt') + ' weiter.', 'ok');
+          }
+        } catch {
+          toast('Jarvis ist gerade nicht verbunden.', 'error');
+        } finally {
+          el.tellBtn.disabled = el.tellInput.disabled || !el.tellInput.value.trim();
+        }
+      });
+    }
     el.folder.addEventListener('click', openFolder);
     el.resultFolder.addEventListener('click', openFolder);
     // Der Knopf oben: läuft ein Auftrag, zu ihm, sonst zu allen Projekten.
@@ -1207,7 +1467,7 @@
     }
     if (el.pill) {
       el.pill.addEventListener('click', () => {
-        if (job && (job.state === 'running' || (job.endedAt && Date.now() - job.endedAt < 120000))) open();
+        if (live && (live.state === 'running' || (live.endedAt && Date.now() - live.endedAt < 120000))) openLive();
         else hub();
       });
     }
@@ -1252,11 +1512,12 @@
       handle,
       step,
       load,
-      open,
+      view,
+      open: openLive,
       close,
       isOpen: () => isOpen,
-      hasJob: () => !!job,
-      running: () => !!job && job.state === 'running',
+      hasJob: () => !!live,
+      running: () => !!live && live.state === 'running',
       renderPill,
     };
   }

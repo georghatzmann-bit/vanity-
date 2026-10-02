@@ -206,9 +206,16 @@
           <p class="ws-summary" id="wsSummary"></p>
           <p class="ws-answer" id="wsAnswer" hidden>Antworten Sie einfach mit „Hey Jarvis, …“. Die Antwort geht direkt in die Werkstatt.</p>
           <pre class="ws-detail" id="wsDetail" hidden></pre>
+          <div class="ws-history" id="wsHistoryBox" hidden>
+            <span class="ws-history-h">Bisherige Aufträge</span>
+            <ol id="wsHistory"></ol>
+          </div>
           <div class="ws-result-actions">
-            <button type="button" class="ws-btn primary" id="wsResultFolder">Ordner öffnen</button>
+            <button type="button" class="ws-btn primary" id="wsResultRun" hidden title="start.bat ausführen: das Programm starten">Starten</button>
+            <button type="button" class="ws-btn" id="wsResultPreview" hidden title="Die Webseite des Projekts im Browser ansehen">Vorschau</button>
+            <button type="button" class="ws-btn" id="wsResultFolder">Ordner öffnen</button>
             <button type="button" class="ws-btn" id="wsResultBack">Zurück zu Jarvis</button>
+            <button type="button" class="ws-btn danger" id="wsResultDelete" hidden title="Das Projekt löschen (kommt in den Papierkorb)">Löschen</button>
           </div>
         </div>
         <ol class="ws-steps" id="wsSteps"></ol>
@@ -240,6 +247,12 @@
     </div>
 
     <footer class="ws-foot">
+      <form class="ws-tell" id="wsTell" autocomplete="off">
+        <label class="ws-tell-label" for="wsTellInput" id="wsTellLabel">Ändern</label>
+        <input id="wsTellInput" type="text" maxlength="1500" spellcheck="false"
+               placeholder="Etwas ändern? Zum Beispiel: Mach den Hintergrund blau">
+        <button type="submit" class="ws-btn primary" id="wsTellBtn" disabled>Einbauen</button>
+      </form>
       <div class="ws-console">
         <span class="ws-console-who">Jarvis</span>
         <p class="ws-console-text" id="wsText">Ich sehe mir den Auftrag an …</p>

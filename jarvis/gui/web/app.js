@@ -88,6 +88,10 @@
     workshop_new: (text) => window.pywebview.api.workshop_new(text),
     workshop_continue: (folder, text) => window.pywebview.api.workshop_continue(folder, text),
     workshop_run: (folder) => window.pywebview.api.workshop_run(folder),
+    workshop_project: (folder) => window.pywebview.api.workshop_project(folder),
+    workshop_delete: (folder) => window.pywebview.api.workshop_delete(folder),
+    workshop_tell: (text) => window.pywebview.api.workshop_tell(text),
+    workshop_preview: (folder) => window.pywebview.api.workshop_preview(folder),
     open_folder: (path) => window.pywebview.api.open_folder(path),
     memory_state: () => window.pywebview.api.memory_state(),
     phone_info: () => window.pywebview.api.phone_info(),
@@ -804,6 +808,11 @@
       case 'workshop':
         if (ev.state === 'projects') {
           if (Projekte) Projekte.open();
+        } else if (ev.state === 'project') {
+          if (Projekte) Projekte.show(ev.folder); // "Zeig mir das Projekt …"
+        } else if (ev.state === 'deleted') {
+          if (Werkstatt) Werkstatt.handle(ev);
+          if (Projekte && Projekte.isOpen()) Projekte.refresh();
         } else if (Werkstatt) {
           if (ev.state === 'start' && Projekte && Projekte.isOpen()) Projekte.close();
           Werkstatt.handle(ev);
@@ -1223,6 +1232,14 @@
       workshop_new: () => Promise.resolve(true),
       workshop_continue: () => Promise.resolve(true),
       workshop_run: () => Promise.reject(new Error('Demo')),
+      workshop_project: (folder) => Promise.resolve(demoProject(folder)),
+      workshop_delete: (folder) => {
+        const at = DEMO_PROJECTS.findIndex((p) => p.folder === folder);
+        if (at >= 0) DEMO_PROJECTS.splice(at, 1);
+        return Promise.resolve({ ok: at >= 0, trash: true, error: at >= 0 ? '' : 'Das Projekt gibt es nicht mehr.' });
+      },
+      workshop_tell: () => Promise.resolve(true),
+      workshop_preview: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
       phone_info: () => Promise.resolve(DEMO_PHONE),
       connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled }),
@@ -1299,6 +1316,38 @@
       summary: 'Das Claude-Kontingent war erschöpft. Sagen Sie einfach: Arbeite an Downloads Sortieren weiter.',
       updated: new Date(Date.now() - 4 * 86400e3).toISOString(), history: [{}] },
   ];
+  // So sieht ein Projekt zum Ansehen aus (workshop_project in gui/app.py)
+  function demoProject(folder) {
+    const p = DEMO_PROJECTS.find((x) => x.folder === folder);
+    if (!p) return null;
+    const ok = p.state === 'done';
+    const plan = ok
+      ? ['Projektordner und Umgebung anlegen', 'Code schreiben', 'Testen und Fehler beheben', 'LIESMICH.txt mit Startanleitung']
+      : ['Projektordner anlegen', 'Skript schreiben', 'Testen'];
+    const todos = plan.map((text, i) => ({ text, state: ok || i === 0 ? 'completed' : i === 1 ? 'in_progress' : 'pending' }));
+    const files = ok
+      ? [['main.py', 6400], ['start.bat', 120], ['LIESMICH.txt', 900], ['logo.svg', 1300], ['requirements.txt', 40]]
+      : [['sortieren.py', 2100]];
+    const steps = [
+      { id: 'p1', tool: 'TodoWrite', label: 'Plan erstellt', kind: 'plan', state: 'done', seconds: 1 },
+      { id: 'c1', tool: 'Bash', label: 'Legt die Umgebung an', detail: 'python -m venv .venv', kind: 'command', state: 'done', seconds: 9 },
+      ...files.map(([name], i) => ({ id: 'f' + i, tool: 'Write', label: 'Schreibt ' + name, detail: folder + '\\' + name,
+        kind: 'file', state: 'done', seconds: 1 })),
+      { id: 'c2', tool: 'Bash', label: 'Testet', detail: 'python -m pytest -q', kind: 'command', state: ok ? 'done' : 'error', seconds: 4 },
+    ];
+    const history = [
+      { zeit: p.updated, wunsch: p.task, zustand: p.state },
+      ...(p.history || []).slice(1).map((_, i) => ({
+        zeit: new Date(Date.parse(p.updated) - (i + 1) * 3600e3).toISOString(),
+        wunsch: ['Füg noch einen !würfel-Befehl hinzu', 'Mach das Design dunkler'][i % 2], zustand: 'done',
+      })),
+    ].reverse();
+    return Object.assign({}, p, {
+      live: false, todos, steps, history, preview: false, seconds: ok ? 412 : 95, begun: '01.10. 15:30',
+      files: files.map(([name, size]) => ({ path: folder + '\\' + name, size })),
+    });
+  }
+
   const DEMO_PHONE = {
     enabled: true, running: true, ip: '192.168.1.20', port: 8765, mac: '3C:7C:3F:12:AB:9E',
     url: 'http://192.168.1.20:8765/app/#t=demo-schluessel-123456',
@@ -1374,7 +1423,9 @@
 
   function boot() {
     if (window.JarvisWerkstatt) {
-      Werkstatt = window.JarvisWerkstatt.create({ call, toast, onHub: () => Projekte && Projekte.open() });
+      Werkstatt = window.JarvisWerkstatt.create({
+        call, toast, onHub: () => Projekte && Projekte.open(), onDeleted: () => Projekte && Projekte.refresh(),
+      });
       if (Werkstatt) Werkstatt.renderPill();
     }
     if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });

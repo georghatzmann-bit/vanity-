@@ -591,7 +591,7 @@ class Api:
 
     def workshop_projects(self) -> list:
         """Alle Werkstatt-Projekte für die Projektliste, mit ihrem Logo (logo.svg) als kleinem Hologramm."""
-        from ..workshop import project_logo
+        from ..workshop import preview_page, project_logo
 
         shop = getattr(self._assistant, "workshop", None)
         if shop is None:
@@ -600,6 +600,7 @@ class Api:
             items = shop.projects()[:60]
             for item in items:
                 item["logo"] = project_logo(Path(item["folder"]))
+                item["preview"] = preview_page(Path(item["folder"])) is not None
             return items
         except Exception as exc:
             log.debug("Werkstatt-Projekte: %s", exc)
@@ -650,6 +651,54 @@ class Api:
             return True
         except OSError as exc:
             log.info("Projekt starten: %s", exc)
+            return False
+
+    def workshop_project(self, folder) -> dict | None:
+        """"Ansehen": ein Projekt mit Plan, Ablauf, Dateien und Logo für die Werkstatt-Ansicht."""
+        shop = getattr(self._assistant, "workshop", None)
+        if shop is None:
+            return None
+        try:
+            return shop.project_view(folder)
+        except Exception as exc:
+            log.debug("Projekt ansehen: %s", exc)
+            return None
+
+    def workshop_delete(self, folder) -> dict:
+        """"Löschen" an einem Projekt (das Fenster fragt vorher nach). Unter Windows in den Papierkorb."""
+        shop = getattr(self._assistant, "workshop", None)
+        if shop is None:
+            return {"ok": False, "error": "Die Werkstatt ist aus."}
+        return shop.delete_project(folder)
+
+    def workshop_tell(self, text) -> bool:
+        """Das Feld unten in der Werkstatt: ein Wunsch mitten in der Arbeit (oder danach zum Weiterbauen)."""
+        shop = getattr(self._assistant, "workshop", None)
+        text = str(text or "").strip()[:1500]
+        if shop is None or not text:
+            return False
+
+        def work() -> None:
+            self._assistant.announce(shop.tell(text))
+
+        threading.Thread(target=work, name="jarvis-werkstatt-wunsch", daemon=True).start()
+        return True
+
+    def workshop_preview(self, folder) -> bool:
+        """"Vorschau": die Webseite eines Projekts (index.html) im Browser ansehen."""
+        from ..workshop import preview_page
+
+        shop = getattr(self._assistant, "workshop", None)
+        target = shop._inside(folder) if shop is not None else None
+        page = preview_page(target) if target is not None else None
+        if page is None:
+            return False
+        import webbrowser
+
+        try:
+            return bool(webbrowser.open(page.resolve().as_uri()))
+        except Exception as exc:
+            log.info("Vorschau: %s", exc)
             return False
 
     def workshop_cancel(self) -> bool:

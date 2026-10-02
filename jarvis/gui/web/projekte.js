@@ -1,6 +1,7 @@
 /* Jarvis – Werkstatt-Projekte
-   Alle Projekte auf einen Blick: Stand, Auftrag, Ergebnis. Pro Projekt: Ordner öffnen,
-   Starten (start.bat) und Weiterbauen. Oben ein neuer Auftrag. */
+   Alle Projekte auf einen Blick: Stand, Auftrag, Ergebnis. Pro Projekt: Ansehen (in der Werkstatt mit
+   Plan, Ablauf, Dateien und Hologramm), Starten (start.bat), Vorschau (index.html), Ordner öffnen,
+   Weiterbauen und Löschen (zweimal klicken, unter Windows in den Papierkorb). Oben ein neuer Auftrag. */
 (function () {
   'use strict';
 
@@ -120,6 +121,16 @@
       }
       head.append(h, chip);
       art.appendChild(head);
+      h.tabIndex = 0;
+      h.setAttribute('role', 'button');
+      h.title = 'Ansehen: ' + String(p.name || 'Projekt');
+      h.addEventListener('click', () => show(p.folder));
+      h.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          show(p.folder);
+        }
+      });
 
       if (p.task) {
         const task = document.createElement('p');
@@ -184,6 +195,7 @@
 
       const actions = document.createElement('div');
       actions.className = 'hub-actions';
+      actions.appendChild(button('Ansehen', 'Das Projekt in der Werkstatt ansehen: Plan, Ablauf, Dateien, Hologramm', () => show(p.folder)));
       actions.appendChild(button('Ordner', 'Den Projektordner im Explorer öffnen', async () => {
         try {
           const ok = await call('open_folder', p.folder);
@@ -202,14 +214,79 @@
           }
         }));
       }
+      if (p.preview) {
+        actions.appendChild(button('Vorschau', 'Die Webseite des Projekts im Browser ansehen', async () => {
+          try {
+            const ok = await call('workshop_preview', p.folder);
+            toast(ok === false ? 'Die Vorschau ging nicht auf.' : 'Die Vorschau öffnet sich im Browser.', ok === false ? 'error' : 'ok');
+          } catch {
+            toast('Im Demo-Modus gibt es keine Vorschau.', 'info');
+          }
+        }));
+      }
       const grow = button('Weiterbauen', 'Einen Wunsch zu diesem Projekt an die Werkstatt geben', () => {
         more.hidden = !more.hidden;
         if (!more.hidden) moreInput.focus();
       }, 'primary');
       if (p.state === 'running') grow.disabled = true;
       actions.appendChild(grow);
+
+      // Löschen: erst fragen, dann löschen
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'mem-del hub-del';
+      del.textContent = '×';
+      del.title = 'Projekt löschen (zweimal klicken, kommt in den Papierkorb)';
+      del.setAttribute('aria-label', 'Projekt ' + String(p.name || '') + ' löschen');
+      if (p.state === 'running') del.hidden = true;
+      let armed = 0;
+      del.addEventListener('click', async () => {
+        if (Date.now() - armed > 4000) {
+          armed = Date.now();
+          art.classList.add('armed');
+          setTimeout(() => { if (Date.now() - armed >= 4000) art.classList.remove('armed'); }, 4100);
+          toast('Nochmal klicken, um „' + String(p.name || 'das Projekt') + '“ zu löschen.', 'info');
+          return;
+        }
+        armed = 0;
+        art.classList.remove('armed');
+        del.disabled = true;
+        try {
+          const r = await call('workshop_delete', p.folder);
+          if (r && r.ok) {
+            toast(String(p.name || 'Das Projekt') + (r.trash ? ' liegt jetzt im Papierkorb.' : ' ist gelöscht.'), 'ok');
+            items = items.filter((x) => x.folder !== p.folder);
+            render();
+          } else {
+            toast((r && r.error) || 'Das Löschen ging nicht.', 'error');
+          }
+        } catch {
+          toast('Im Demo-Modus wird nichts gelöscht.', 'info');
+        } finally {
+          del.disabled = false;
+        }
+      });
+      actions.appendChild(del);
       art.append(actions, more);
       return art;
+    }
+
+    // Ein Projekt in der Werkstatt ansehen
+    async function show(folder) {
+      if (!opts.werkstatt || !opts.werkstatt.view) return;
+      let data = null;
+      try {
+        data = await call('workshop_project', folder);
+      } catch {
+        data = null;
+      }
+      if (!data) {
+        toast('Das Projekt gibt es nicht mehr.', 'error');
+        refresh();
+        return;
+      }
+      close();
+      opts.werkstatt.view(data);
     }
 
     // ---------- Labor: Jarvis' eigene Werkzeuge (gebaut und getestet in seiner Sandbox)
@@ -385,7 +462,7 @@
       }
     });
 
-    return { open, close, refresh, isOpen: () => isOpen };
+    return { open, close, refresh, show, isOpen: () => isOpen };
   }
 
   window.JarvisProjekte = { create };

@@ -93,10 +93,13 @@
 }
 
 .ws-kicker {
+  overflow: hidden;
   color: var(--bp-accent);
-  font: 600 11px/1 var(--mono);
+  font: 600 11px/1.2 var(--mono);
   letter-spacing: 0.24em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .ws-task {
@@ -605,6 +608,7 @@
   grid-template-areas:
     "stamp summary"
     "stamp detail"
+    "stamp history"
     "stamp actions";
   align-items: start;
   gap: 8px 16px;
@@ -673,8 +677,59 @@
 }
 
 .ws-result-actions {
+  display: flex;
+  flex-wrap: wrap;
   grid-area: actions;
+  gap: 8px;
   margin-top: 4px;
+}
+
+/* Bisherige Aufträge eines Projekts (der erste Auftrag und jedes Weiterbauen) */
+.ws-history {
+  display: grid;
+  grid-area: history;
+  gap: 4px;
+}
+
+.ws-history-h {
+  color: var(--bp-text-3);
+  font: 600 10px/1.4 var(--font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ws-history ol {
+  display: grid;
+  gap: 2px;
+  max-height: 112px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.ws-history li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  color: var(--bp-text-2);
+  font-size: var(--fs-hint);
+  line-height: 1.5;
+}
+
+.ws-history li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-history time {
+  color: var(--bp-text-3);
+  font: 400 12px/1.5 var(--mono);
+}
+
+.ws-history li[data-state="error"] span {
+  color: #ffb3b5;
 }
 
 /* ------------------------------------------------------------------ Hologramm */
@@ -785,6 +840,60 @@
   align-items: stretch;
   gap: 24px;
   padding: 0 24px 24px;
+}
+
+/* Mitten in der Arbeit etwas ändern, danach am Projekt weiterbauen: wie eine Befehlszeile */
+.ws-tell {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 4px 4px 16px;
+  border: 1px solid var(--bp-line-strong);
+  border-radius: 2px;
+  background: rgba(4, 16, 32, 0.6);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+
+.ws-tell:focus-within {
+  border-color: rgba(var(--bp-glow), 0.75);
+  box-shadow: 0 0 0 1px rgba(var(--bp-glow), 0.25), 0 0 24px rgba(var(--bp-glow), 0.12);
+}
+
+.ws-tell-label {
+  flex: none;
+  color: var(--bp-accent);
+  font: 600 11px/1 var(--mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ws-tell-label::after {
+  content: " ›";
+}
+
+.ws-tell input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--bp-text);
+  font: 400 var(--fs-body) / 1.4 var(--mono);
+}
+
+.ws-tell input::placeholder {
+  color: var(--bp-text-3);
+}
+
+.ws-tell input:disabled {
+  cursor: not-allowed;
+}
+
+.ws-tell .ws-btn {
+  flex: none;
 }
 
 .ws-console {
@@ -1044,6 +1153,7 @@
       "stamp"
       "summary"
       "detail"
+      "history"
       "actions";
   }
 
@@ -1258,6 +1368,42 @@
   gap: 8px;
 }
 
+/* Der Name öffnet das Projekt in der Werkstatt */
+.hub-card h3[role="button"] {
+  cursor: pointer;
+  border-radius: 2px;
+  transition: color var(--t) var(--ease);
+}
+
+.hub-card h3[role="button"]:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--bp-glow), 0.6);
+  text-underline-offset: 4px;
+}
+
+.hub-card h3[role="button"]:focus-visible {
+  outline: 2px solid rgba(var(--bp-glow), 0.8);
+  outline-offset: 2px;
+}
+
+/* Löschen: das × am Ende der Knopfzeile, beim ersten Klick wird die Karte rot */
+.hub-del {
+  width: 36px;
+  height: 36px;
+  margin-left: auto;
+  color: var(--bp-text-3);
+}
+
+.hub-card.armed {
+  border-color: rgba(240, 85, 90, 0.75);
+}
+
+.hub-card.armed .hub-del {
+  background: var(--err);
+  color: #fff;
+}
+
 .hub-more[hidden] {
   display: none;
 }
@@ -1463,7 +1609,28 @@ body[data-view="hub"] .hud {
     gap: 16px;
   }
 
-  .hub-actions .ws-btn {
+  .hub-actions .ws-btn,
+  .hub-del {
+    min-height: 44px;
+  }
+
+  .hub-del {
+    width: 44px;
+  }
+
+  .ws-tell {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+
+  .ws-tell input {
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .ws-tell .ws-btn {
+    order: 3;
+    width: 100%;
     min-height: 44px;
   }
 }

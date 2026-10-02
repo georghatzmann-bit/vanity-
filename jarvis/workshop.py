@@ -47,6 +47,8 @@ WORKSHOP_TOOLS = [
 ]
 # Übergabe vom Gehirn (jarvis.tool werkstatt ...) an die laufende Werkstatt
 HANDOFF = "werkstatt-auftrag.json"
+RECYCLE_BIN = os.name == "nt"  # gelöschte Projekte in den Papierkorb (nur unter Windows)
+DELETE_WINDOW = 45.0  # so lange gilt ein "Ja" auf "Soll ich das Projekt wirklich löschen?" (Sekunden)
 # So lange nach dem Ende gilt "Füg noch ... hinzu" als Wunsch zum letzten Projekt (Sekunden) ...
 FOLLOW_UP_WINDOW = 30 * 60
 # ... und so lange ist eine Antwort auf die Rückfrage am Ende für die Werkstatt.
@@ -493,6 +495,7 @@ class Workshop:
         self._proc: subprocess.Popen | None = None
         self._cancelled = False
         self._lock = threading.Lock()
+        self._delete_offer: tuple[str, str, float] | None = None  # (Ordner, Name, gilt bis) nach "Wirklich löschen?"
 
     @property
     def busy(self) -> bool:
@@ -669,7 +672,11 @@ class Workshop:
 
     def project_command(self, text: str) -> str | None:
         """"Welche Projekte habe ich?", "Arbeite am Discord-Bot weiter: ...", "Öffne den Ordner vom
-        Discord-Bot", "Starte das Projekt Discord-Bot". None = kein Projekt-Befehl."""
+        Discord-Bot", "Starte das Projekt Discord-Bot", "Zeig mir das Projekt Würfelspiel", "Lösch das
+        Projekt Würfelspiel" (mit Rückfrage). None = kein Projekt-Befehl."""
+        answer = self._answer_delete(text)
+        if answer is not None:
+            return answer
         found = match_project(text)
         if found is None:
             return None
@@ -689,12 +696,19 @@ class Workshop:
             listed = ", ".join(names[:-1]) + " und " + names[-1] if len(names) > 1 else names[0]
             return f"{len(items)} Projekt{'e' if len(items) != 1 else ''}, Sir. Zuletzt: {listed}{more}. Die Liste ist im Fenster."
         project = self.find_project(found[1])
+        if project is None and found[1] in _LAST_WORDS:
+            items = self.projects()
+            project = items[0] if items else None
         if project is None:
             if re.search(r"\b(?:projekt|werkstatt)\b", _norm(text)):
                 return f"Ein Projekt namens {found[1]} finde ich nicht, Sir."
             return None  # "Mach mit der Musik weiter", "Öffne den Ordner von Steam": kein Werkstatt-Projekt
         if action == "continue":
             return self.follow_up(text, project)
+        if action == "show":
+            return self.show_project(project)
+        if action == "delete":
+            return self._offer_delete(project)
         folder = Path(project["folder"])
         try:
             if action == "open":
@@ -707,6 +721,117 @@ class Workshop:
         except OSError as exc:
             log.info("Projekt %s: %s", action, exc)
             return f"Das ging leider nicht, Sir: {exc}"
+
+    def _inside(self, folder) -> Path | None:
+        """Ein Projektordner direkt in der Werkstatt (mit Projektkarte), sonst None."""
+        try:
+            target = Path(str(folder or "")).resolve()
+            base = Path(self.base).resolve()
+        except (OSError, ValueError):
+            return None
+        if not str(folder or "").strip() or target.parent != base or not target.is_dir():
+            return None
+        return target if read_project(target) is not None else None
+
+    def _is_live(self, target: Path) -> bool:
+        job = self.job
+        try:
+            return job is not None and job.folder.resolve() == target
+        except OSError:
+            return False
+
+    def project_view(self, folder) -> dict | None:
+        """Ein Projekt zum Ansehen in der Werkstatt: Auftrag, Plan, Ablauf, Dateien, Logo, Verlauf.
+        Der gerade laufende (oder letzte) Auftrag kommt mit live = True und dem ganzen Stand."""
+        target = self._inside(folder)
+        if target is None:
+            return None
+        info = read_project(target) or {}
+        if self._is_live(target):
+            snap = self.snapshot() or {}
+            snap.update(live=True, history=info.get("history", []), start=info.get("start", False),
+                        preview=bool(preview_page(target)), files=project_files(target), created=info.get("created", ""))
+            return snap
+        try:
+            protocol = json.loads((target / "werkstatt-protokoll.json").read_text(encoding="utf-8"))
+            if not isinstance(protocol, dict):
+                protocol = {}
+        except (OSError, ValueError):
+            protocol = {}
+        try:
+            card = json.loads((target / PROJECT_FILE).read_text(encoding="utf-8"))
+            seconds = int(card.get("dauer") or 0) if isinstance(card, dict) else 0
+        except (OSError, ValueError, TypeError):
+            seconds = 0
+        state = info.get("state") if info.get("state") in ("done", "error", "cancelled") else "cancelled"
+        steps = [dict(s, workshop=True) for s in protocol.get("schritte") or [] if isinstance(s, dict) and s.get("id")]
+        todos = [t for t in protocol.get("plan") or [] if isinstance(t, dict)]
+        info.update(
+            live=False, state=state, steps=steps[-200:], todos=todos[:40], logo=project_logo(target),
+            begun=_short_date(info.get("created", "")), seconds=seconds, detail="", text="",
+            preview=bool(preview_page(target)), files=project_files(target),
+        )
+        return info
+
+    def show_project(self, project: dict) -> str:
+        """\"Zeig mir das Projekt Würfelspiel\": das Projekt in der Werkstatt-Ansicht im Fenster."""
+        self._ui.workshop({"state": "project", "folder": project["folder"], "name": project["name"]})
+        if self._show_window is not None:
+            try:
+                self._show_window()
+            except Exception as exc:
+                log.debug("Werkstatt-Fenster: %s", exc)
+        return random.choice([f"Hier ist {project['name']}, Sir.", f"Bitte sehr, Sir: {project['name']}."])
+
+    def _offer_delete(self, project: dict) -> str:
+        target = self._inside(project["folder"])
+        if target is None:
+            return f"{project['name']} gibt es schon nicht mehr, Sir."
+        if self.busy and self._is_live(target):
+            return f"An {project['name']} arbeite ich gerade, Sir. Sagen Sie erst: Werkstatt stopp."
+        self._delete_offer = (str(target), project["name"], time.monotonic() + DELETE_WINDOW)
+        if self.job is not None:
+            self.job.start_offer = False  # das nächste \"Ja\" gilt dem Löschen
+        return f"Soll ich {project['name']} wirklich löschen, Sir? Es kommt in den Papierkorb."
+
+    def _answer_delete(self, text: str) -> str | None:
+        """Georgs Antwort auf \"Soll ich ... wirklich löschen?\". None = keine Antwort darauf."""
+        offer, self._delete_offer = self._delete_offer, None
+        if offer is None or time.monotonic() > offer[2]:
+            return None
+        from .tool import confirmed
+
+        if confirmed(text):
+            result = self.delete_project(offer[0])
+            if result["ok"]:
+                where = "liegt jetzt im Papierkorb" if result["trash"] else "ist gelöscht"
+                return f"{offer[1]} {where}, Sir."
+            return f"Das Löschen ging leider nicht, Sir. {result['error']}".strip()
+        if re.match(r"^(?:nein|nö|nee|ne|lieber nicht|doch nicht|abbrechen|lass(?: es| mal)?|nicht löschen)\b", _norm(text)):
+            return "Sehr wohl, Sir. Das Projekt bleibt."
+        return None
+
+    def delete_project(self, folder) -> dict:
+        """Löscht ein Werkstatt-Projekt (unter Windows in den Papierkorb, von dort lässt es sich
+        wiederherstellen). {"ok", "name", "trash", "error"}. Nie den Ordner, an dem gerade gearbeitet wird."""
+        target = self._inside(folder)
+        if target is None:
+            return {"ok": False, "name": "", "trash": False, "error": "Das Projekt gibt es nicht mehr."}
+        name = (read_project(target) or {}).get("name") or project_name(target)
+        with self._lock:
+            if self.busy and self._is_live(target):
+                return {"ok": False, "name": name, "trash": False,
+                        "error": "Daran arbeitet die Werkstatt gerade. Erst stoppen, dann löschen."}
+            try:
+                trash = _remove(target)
+            except OSError as exc:
+                log.info("Projekt löschen %s: %s", target, exc)
+                return {"ok": False, "name": name, "trash": False, "error": f"Windows sagt: {exc}"}
+            if self._is_live(target) or (self.job is not None and not self.job.folder.exists()):
+                self.job = None  # \"Mach weiter\" soll nicht in einen gelöschten Ordner führen
+        log.info("Werkstatt-Projekt gelöscht (%s): %s", "Papierkorb" if trash else "endgültig", target)
+        self._ui.workshop({"state": "deleted", "folder": str(target), "name": name})
+        return {"ok": True, "name": name, "trash": trash, "error": ""}
 
     def _save_project(self, job: Job, state: str) -> None:
         """projekt.json im Projektordner: Name, Auftrag, Stand, Sitzung, Verlauf."""
@@ -725,6 +850,8 @@ class Workshop:
         if state != "running":
             data["zusammenfassung"] = job.summary
             data["frage"] = job.question
+            if job.ended is not None:
+                data["dauer"] = round(job.ended - job.started)
         history = data.setdefault("verlauf", [])
         if state == "running":
             history.append({"zeit": now, "wunsch": job.task[:500], "zustand": "running"})
@@ -1127,8 +1254,18 @@ _LIST = re.compile(r"^(?:welche|was für) projekte\b|^(?:zeig|zeige|öffne)(?: m
 _CONTINUE_NAMED = re.compile(
     r"^(?:mach|mache|arbeite|arbeit)\s+(?:am|beim|an dem|an der|an|mit dem|mit der|bei dem|bei der)\s+(?:projekt\s+)?"
     r"(?P<name>.+?)\s+weiter\b[\s,:.-]*(?P<rest>.*)$")
-# "Öffne den Ordner vom Discord-Bot", "Öffne das Projekt Würfelspiel"
-_OPEN_PROJECT = re.compile(r"^(?:öffne|zeig|zeige)(?: mir)? (?:den ordner (?:vom|von dem|von der|des)|das projekt)\s+(?P<name>.+)$")
+# "Öffne den Ordner vom Discord-Bot"
+_OPEN_PROJECT = re.compile(r"^(?:öffne|zeig|zeige)(?: mir)? den ordner (?:vom|von dem|von der|des)(?: projekt)?\s+(?P<name>.+)$")
+# "Zeig mir das Projekt Würfelspiel", "Öffne das Projekt Discord-Bot", "Zeig mir den Discord-Bot aus der Werkstatt",
+# "Zeig mir das letzte Projekt": das Projekt im Fenster ansehen
+_SHOW_PROJECT = re.compile(
+    r"^(?:öffne|zeig|zeige|lade|hol|hole)(?: mir)? (?:(?:das|dein|mein) projekt\s+(?P<a>.+)|"
+    r"(?:den|das|die)\s+(?P<b>.+?)\s+aus der werkstatt|das\s+(?P<c>[^ ]+?)[- ]projekt)(?: an| her| auf)?$")
+# "Lösch das Projekt Würfelspiel", "Entferne den Discord-Bot aus der Werkstatt", "Lösch das letzte Projekt"
+_DELETE_PROJECT = re.compile(
+    r"^(?:lösch|lösche|entfern|entferne|schmeiß|schmeiss|wirf)(?: mir)?\s+(?:(?:das|mein) projekt\s+(?P<a>.+?)|"
+    r"(?:den|das|die)\s+(?P<b>.+?)\s+aus der werkstatt|das\s+(?P<c>[^ ]+?)[- ]projekt)(?: weg| raus)?$")
+_LAST_WORDS = {"letzte", "letzten", "neueste", "neuesten", "aktuelle", "aktuellen"}
 # "Starte das Projekt Discord-Bot", "Starte den Discord-Bot aus der Werkstatt"
 _RUN_PROJECT = re.compile(r"^(?:starte|start|führ|führe)\s+(?:das projekt\s+(?P<a>.+?)|(?:den|das|die)\s+(?P<b>.+?)\s+aus der werkstatt)(?: aus)?$")
 
@@ -1144,10 +1281,115 @@ def match_project(text: str):
     found = _OPEN_PROJECT.match(norm)
     if found:
         return ("open", found.group("name"))
+    found = _DELETE_PROJECT.match(norm)
+    if found:
+        return ("delete", _project_words(found))
+    found = _SHOW_PROJECT.match(norm)
+    if found:
+        return ("show", _project_words(found))
     found = _RUN_PROJECT.match(norm)
     if found:
         return ("run", found.group("a") or found.group("b"))
     return None
+
+
+def _project_words(found) -> str:
+    name = (found.group("a") or found.group("b") or found.group("c") or "").strip()
+    return "letzte" if re.fullmatch(r"(?:das |den )?(?:letzte|letzten|neueste|neuesten)(?: projekt)?", name) else name
+
+
+def _short_date(iso: str) -> str:
+    """\"2026-10-01T15:30\" -> \"01.10. 15:30\" (für das Schriftfeld)."""
+    try:
+        return dt.datetime.fromisoformat(str(iso)).strftime("%d.%m. %H:%M")
+    except ValueError:
+        return ""
+
+
+# Was beim Ansehen eines Projekts nicht als Datei zählt: Umgebungen, Pakete, Zwischenstände
+_SKIP_DIRS = {".git", ".venv", "venv", "env", "node_modules", "__pycache__", ".idea", ".vscode", "dist", "build",
+              ".mypy_cache", ".pytest_cache"}
+_SKIP_FILES = {PROJECT_FILE, "werkstatt-protokoll.json"}
+
+
+def project_files(folder: Path, limit: int = 80) -> list[dict]:
+    """Die Dateien eines Projekts (ohne Umgebungen und Jarvis' eigene Karten), die neuesten zuerst."""
+    found = []
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in _SKIP_DIRS and not d.startswith(".")]
+        for name in files:
+            if name in _SKIP_FILES or name.startswith("."):
+                continue
+            path = Path(root) / name
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            found.append((stat.st_mtime, {"path": str(path), "size": stat.st_size}))
+            if len(found) > 2000:
+                break
+    found.sort(key=lambda item: item[0], reverse=True)
+    return [item for _, item in found[:limit]]
+
+
+def preview_page(folder: Path) -> Path | None:
+    """Eine Webseite im Projekt zum Ansehen im Browser: index.html, sonst die einzige .html-Datei."""
+    folder = Path(folder)
+    for name in ("index.html", "index.htm"):
+        if (folder / name).is_file():
+            return folder / name
+    try:
+        pages = [p for p in folder.iterdir() if p.suffix.lower() in (".html", ".htm") and p.is_file()]
+    except OSError:
+        return None
+    return pages[0] if len(pages) == 1 else None
+
+
+def _writable(func, path, _exc) -> None:
+    """Schreibgeschützte Dateien (z. B. in .git) beim endgültigen Löschen trotzdem entfernen."""
+    try:
+        os.chmod(path, 0o700)
+        func(path)
+    except OSError:
+        pass
+
+
+def _to_recycle_bin(path: Path) -> bool:
+    """Windows: in den Papierkorb (SHFileOperationW mit FOF_ALLOWUNDO), ohne Rückfrage-Fenster."""
+    import ctypes
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                    ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+
+    fo_delete, silent, no_confirm, allow_undo, no_error_ui = 0x3, 0x4, 0x10, 0x40, 0x400
+    op = SHFILEOPSTRUCTW(None, fo_delete, str(path) + "\0", None, allow_undo | no_confirm | silent | no_error_ui,
+                         False, None, None)
+    code = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))  # type: ignore[attr-defined]
+    if code != 0 or op.fAnyOperationsAborted:
+        log.info("Papierkorb ging nicht (%s) für %s", code, path)
+    return not path.exists()
+
+
+def _remove(path: Path) -> bool:
+    """Löscht einen Projektordner. True = im Papierkorb, False = endgültig gelöscht. OSError, wenn es nicht geht."""
+    import shutil
+
+    if RECYCLE_BIN:
+        try:
+            if _to_recycle_bin(path):
+                return True
+        except (OSError, AttributeError, ValueError) as exc:
+            log.info("Papierkorb: %s", exc)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_writable)
+    else:
+        shutil.rmtree(path, onerror=_writable)
+    if path.exists():
+        raise OSError("Einige Dateien sind noch in Benutzung. Ist das Programm noch offen?")
+    return False
 
 
 def _start_file(path: Path, cwd: Path | None = None) -> None:
