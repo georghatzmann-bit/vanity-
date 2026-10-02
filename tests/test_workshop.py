@@ -1,5 +1,6 @@
 """Die Werkstatt: Programmieraufträge im Hintergrund, mit Plan, Schritten und Ansage am Ende."""
 
+import base64
 import datetime as dt
 import json
 import os
@@ -14,8 +15,8 @@ from unittest import mock
 from tests.helpers import RecordingUi, make_fake_claude
 from jarvis.brain import ClaudeBrain
 from jarvis.config import load_config
-from jarvis.workshop import (Workshop, choose_effort, hand_over, is_change_request, is_continue_request, is_wish,
-                             is_workshop_request, looks_like_answer, project_folder)
+from jarvis.workshop import (Job, Workshop, choose_effort, hand_over, is_change_request, is_continue_request, is_wish,
+                             is_workshop_request, looks_like_answer, project_folder, project_logo)
 
 posix_only = unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
 
@@ -118,6 +119,72 @@ class RecognitionTest(unittest.TestCase):
             second = project_folder("Bau mir einen Discord-Bot, der Hallo sagt", Path(base), now)
             self.assertEqual(second.name, "2026-10-01_1530_discord-bot-hallo-sagt-2")
             self.assertEqual(project_folder("Programmier was", Path(base), now).name, "2026-10-01_1530_was")
+
+
+class ProjectLogoTest(unittest.TestCase):
+    """logo.svg aus dem Projektordner wird zum Hologramm im Fenster, aber nur ein harmloses Bild."""
+
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.folder = Path(self.tmp.name)
+
+    def logo(self, svg, encoding="utf-8"):
+        (self.folder / "logo.svg").write_bytes(svg.encode(encoding) if isinstance(svg, str) else svg)
+        return project_logo(self.folder)
+
+    def test_a_plain_logo_is_shown(self):
+        svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">'
+               '<defs><linearGradient id="g"><stop offset="0" stop-color="#5865F2"/></linearGradient>'
+               '<path id="kopf" d="M60 80h136v100H60z"/></defs>'
+               '<use href="#kopf" fill="url(#g)"/><use xlink:href="#kopf"/><text x="10" y="20">Bot</text></svg>')
+        src = self.logo(svg)
+        self.assertTrue(src.startswith("data:image/svg+xml;base64,"))
+        self.assertEqual(base64.b64decode(src.split(",", 1)[1]).decode("utf-8"), svg)
+        self.assertTrue(self.logo("\ufeff" + svg).startswith("data:"), "mit BOM von Windows-Editoren")
+        self.assertTrue(self.logo('<svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M1 1h2"/></svg>'))
+
+    def test_nothing_without_a_logo(self):
+        self.assertEqual(project_logo(self.folder), "")
+        self.assertEqual(project_logo(self.folder / "gibt-es-nicht"), "")
+        self.assertEqual(self.logo("Hallo, ich bin kein Bild"), "")
+        self.assertEqual(self.logo(b"\xff\xfe<\x00s\x00"), "", "kaputte Kodierung")
+        self.assertEqual(self.logo("<svg>" + "<!-- x -->" * 6000 + "</svg>"), "", "zu groß")
+
+    def test_nothing_that_could_run_or_load_something(self):
+        for bad in (
+            '<svg><script>alert(1)</script></svg>',
+            '<svg onload="alert(1)"><rect/></svg>',
+            '<svg><rect width="9" height="9" onclick = "x()"/></svg>',
+            '<svg><a href="javascript:alert(1)"><rect/></a></svg>',
+            '<svg><foreignObject><iframe src="https://example.com"/></foreignObject></svg>',
+            '<svg><image href="https://example.com/a.png"/></svg>',
+            '<svg><use xlink:href="data:image/svg+xml;base64,AAAA#x"/></svg>',
+            '<svg><use href="https://example.com/s.svg#a"/></svg>',
+            '<svg><rect style="fill: url(https://example.com/x)"/></svg>',
+            '<svg><style>@import "https://example.com/x.css";</style></svg>',
+            '<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "aaaa">]><svg>&a;</svg>',
+        ):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.logo(bad), "")
+
+    def test_the_window_hears_about_it_once(self):
+        ui = RecordingUi()
+        shop = Workshop({}, None, ui, lambda text: None)
+        job = Job("Bau mir einen Bot", self.folder)
+        shop._check_logo(job)
+        self.assertEqual(ui.of("workshop"), [], "noch keins da")
+        self.logo('<svg viewBox="0 0 256 256"><circle r="9"/></svg>')
+        shop._check_logo(job)
+        shop._check_logo(job)
+        self.assertEqual(len(ui.of("workshop")), 1)
+        self.assertEqual(ui.of("workshop")[0][1]["state"], "logo")
+        self.logo('<svg viewBox="0 0 256 256"><rect width="9" height="9"/></svg>')
+        shop._check_logo(job)
+        self.assertEqual(len(ui.of("workshop")), 1, "ohne Hinweis kein neues Lesen")
+        shop._check_logo(job, touched=True)
+        self.assertEqual(len(ui.of("workshop")), 2, "geändert: das neue Logo")
+        self.assertEqual(job.logo, ui.of("workshop")[1][1]["logo"])
 
 
 @posix_only
@@ -235,6 +302,28 @@ class WorkshopRunTest(unittest.TestCase):
         again.question = "Noch was?"
         self.workshop.forget_question()
         self.assertEqual(again.question, "")
+
+    def test_the_logo_becomes_the_hologram(self):
+        self.workshop.start("Bau mir einen Discord-Bot mit Logo")
+        self.wait()
+        job = self.workshop.job
+        self.assertEqual(job.state, "done")
+        events = [e[1] for e in self.ui.of("workshop")]
+        logos = [e["logo"] for e in events if e["state"] == "logo"]
+        self.assertEqual(len(logos), 1, "einmal, sobald logo.svg geschrieben ist")
+        self.assertTrue(logos[0].startswith("data:image/svg+xml;base64,"))
+        self.assertIn("<circle", base64.b64decode(logos[0].split(",", 1)[1]).decode("utf-8"))
+        states = [e["state"] for e in events]
+        self.assertLess(states.index("logo"), states.index("done"), "noch während der Arbeit")
+        self.assertEqual(events[0]["logo"], "", "ein neues Projekt hat noch keins")
+        self.assertEqual(self.workshop.snapshot()["logo"], logos[0], "auch nach einem Neuladen")
+        # Am selben Projekt weiter: das Logo ist gleich beim Start da
+        self.workshop.follow_up("Füg noch einen Befehl hinzu")
+        self.wait()
+        starts = [e[1] for e in self.ui.of("workshop") if e[1]["state"] == "start"]
+        self.assertEqual(starts[-1]["logo"], logos[0])
+        prompt = (self.home / "daten" / "werkstatt-persoenlichkeit.md").read_text(encoding="utf-8")
+        self.assertIn("noch kein logo.svg", prompt)
 
     def test_wish_during_the_work_goes_into_the_running_job(self):
         self.workshop.start("Bau mir einen Discord-Bot, langsam")
@@ -404,6 +493,18 @@ class WindowApiTest(unittest.TestCase):
         self.assertGreaterEqual(snap["seconds"], 0)
         self.assertFalse(self.api.workshop_cancel(), "fertige Arbeit lässt sich nicht mehr stoppen")
         self.assertTrue(self.said[-1].startswith("Aus der Werkstatt: Das Spiel ist fertig"))
+
+    def test_projects_bring_their_logo(self):
+        game = self.base / "2026-10-01_1530_spiel"
+        bot = self.base / "2026-10-01_1600_bot"
+        for folder, task in ((game, "Bau mir ein Spiel"), (bot, "Bau mir einen Bot")):
+            folder.mkdir()
+            (folder / "projekt.json").write_text(json.dumps({"auftrag": task, "zustand": "done"}), encoding="utf-8")
+        (game / "logo.svg").write_text('<svg viewBox="0 0 256 256"><circle r="9"/></svg>', encoding="utf-8")
+        (bot / "logo.svg").write_text('<svg onload="x()"><circle r="9"/></svg>', encoding="utf-8")
+        items = {p["name"]: p for p in json.loads(json.dumps(self.api.workshop_projects()))}
+        self.assertTrue(items["Spiel"]["logo"].startswith("data:image/svg+xml;base64,"))
+        self.assertEqual(items["Bot"]["logo"], "", "kein Bild, in dem etwas laufen könnte")
 
     def test_open_folder_only_for_project_folders(self):
         project = self.base / "2026-10-01_1530_spiel"

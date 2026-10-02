@@ -1277,15 +1277,23 @@
     };
   }
 
+  // Logos, wie sie die Werkstatt zeichnet (logo.svg im Projektordner)
+  const DEMO_ROCKET = 'data:image/svg+xml;base64,' + btoa(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">'
+    + '<path d="M128 26c34 26 50 68 46 120l-18 22h-56l-18-22c-4-52 12-94 46-120z" fill="#E8EEF8"/>'
+    + '<circle cx="128" cy="100" r="18" fill="#3B82F6"/>'
+    + '<path d="M82 144l-32 42 42-8zM174 144l32 42-42-8z" fill="#EF4444"/>'
+    + '<path d="M108 172h40l-20 54z" fill="#F59E0B"/></svg>');
   const DEMO_PROJECTS = [
     { name: 'Discord Bot Wetter', folder: 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-10-01_1530_discord-bot-wetter', state: 'done',
       task: 'Bau mir einen Discord-Bot, der jeden Morgen das Wetter postet', model: 'sonnet', start: true,
       summary: 'Der Bot ist fertig, Sir. Tragen Sie den Token in .env ein und starten Sie ihn mit start.bat.',
-      updated: new Date(Date.now() - 2 * 3600e3).toISOString(), history: [{}, {}] },
+      updated: new Date(Date.now() - 2 * 3600e3).toISOString(), history: [{}, {}],
+      logo: (window.JarvisWerkstatt && window.JarvisWerkstatt.DEMO_LOGO) || '' },
     { name: 'Weltraum Shooter', folder: 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-09-30_2010_weltraum-shooter', state: 'done',
       task: 'Programmier mir ein Weltraum-Spiel mit Highscore, Levels und Sound', model: 'opus', start: true,
       summary: 'Das Spiel läuft, Sir: drei Level, Highscore-Liste und Soundeffekte. Steuerung mit Pfeiltasten und Leertaste.',
-      updated: new Date(Date.now() - 26 * 3600e3).toISOString(), history: [{}, {}, {}] },
+      updated: new Date(Date.now() - 26 * 3600e3).toISOString(), history: [{}, {}, {}], logo: DEMO_ROCKET },
     { name: 'Downloads Sortieren', folder: 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-09-28_1112_downloads-sortieren', state: 'error',
       task: 'Schreib ein Skript, das meine Downloads nach Typ sortiert', model: 'sonnet', start: false,
       summary: 'Das Claude-Kontingent war erschöpft. Sagen Sie einfach: Arbeite an Downloads Sortieren weiter.',

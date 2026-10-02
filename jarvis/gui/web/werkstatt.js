@@ -1,11 +1,12 @@
 /* ==========================================================================
    Jarvis – Werkstatt-Ansicht
-   Ein Programmier-Auftrag auf einen Blick: Plan, Ablauf, Fortschritt,
-   Dateien und Befehle. app.js reicht die Ereignisse weiter:
+   Ein Programmier-Auftrag als Blaupause: Plan (A), Ablauf (B), Hologramm (C),
+   Dateien (D), Befehle (E). app.js reicht die Ereignisse weiter:
      progress  mit step.workshop = true   -> step()
-     workshop  start | text | done | error | cancelled -> handle()
+     workshop  start | text | logo | done | error | cancelled -> handle()
    und beim Verbinden den ganzen Stand (workshop_state) -> load().
-   Texte aus Ereignissen werden nur als Klartext (textContent) eingesetzt.
+   Texte aus Ereignissen werden nur als Klartext (textContent) eingesetzt,
+   das Logo nur als Bild (logoSrc: data:image/svg+xml).
    ========================================================================== */
 (() => {
   'use strict';
@@ -41,10 +42,10 @@
   const CHIP = { running: 'Arbeitet', done: 'Fertig', error: 'Fehler', cancelled: 'Abgebrochen' };
   const STAMP = { done: 'Fertig', error: 'Fehler', cancelled: 'Abgebrochen' };
   const COLORS = {
-    running: [110, 140, 255],
-    done: [63, 191, 133],
-    error: [242, 100, 95],
-    cancelled: [108, 114, 130],
+    running: [124, 196, 255],
+    done: [96, 214, 146],
+    error: [240, 85, 90],
+    cancelled: [128, 148, 176],
   };
 
   function svg(paths, cls) {
@@ -120,18 +121,185 @@
     return out;
   }
 
-  // Fortschritt als ruhiger Ring: grauer Grund, farbiger Bogen (Arbeitet blau, Fertig grün,
-  // Fehler rot). Die Zahl in der Mitte steht als Text darüber (wsPercent).
+  // ==================================================================
+  //   Hologramm: Das Projekt entsteht als Drahtmodell, von unten nach oben
+  //   (wie ein 3D-Drucker, mit Laser-Ebene an der Baukante). Die Form passt
+  //   zum Auftrag: ein Roboter für Bots, ein Controller für Spiele, ein Globus
+  //   für Webseiten ... Hat die Werkstatt ihr eigenes logo.svg gezeichnet,
+  //   baut sich an seiner Stelle dieses Logo als Hologramm auf (setLogo).
+  // ==================================================================
+
+  // Symbole im 24er-Raster (wie die Icons): Linienzüge, "c" am Ende = geschlossen
+  const ring = (cx, cy, r, n = 20, from = 0, to = Math.PI * 2) => {
+    const pts = [];
+    for (let i = 0; i <= n; i += 1) {
+      const a = from + (to - from) * (i / n);
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+    return pts;
+  };
+  const gear = () => {
+    const pts = [];
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * Math.PI * 2;
+      for (const [d, r] of [[-0.3, 6.3], [-0.16, 8.6], [0.16, 8.6], [0.3, 6.3]]) {
+        pts.push([12 + Math.cos(a + d) * r, 12 + Math.sin(a + d) * r]);
+      }
+    }
+    pts.push(pts[0]);
+    return pts;
+  };
+  const EMBLEMS = {
+    robot: () => [
+      [[5, 8], [19, 8], [19, 19], [5, 19], [5, 8]],
+      ring(9.5, 12.5, 1.5, 10), ring(14.5, 12.5, 1.5, 10),
+      [[9, 16], [15, 16]],
+      [[12, 8], [12, 4.5]], ring(12, 3.6, 1, 8),
+      [[5, 11.5], [3, 11.5], [3, 15.5], [5, 15.5]], [[19, 11.5], [21, 11.5], [21, 15.5], [19, 15.5]],
+    ],
+    gamepad: () => [
+      [[6, 7.5], [18, 7.5], [21, 12.5], [21.8, 16.8], [19.6, 18.6], [16, 15.8], [8, 15.8], [4.4, 18.6], [2.2, 16.8], [3, 12.5], [6, 7.5]],
+      [[7.2, 10], [7.2, 13.6]], [[5.4, 11.8], [9, 11.8]],
+      ring(16, 10.6, 0.9, 8), ring(18, 12.8, 0.9, 8),
+    ],
+    globe: () => [
+      ring(12, 12, 8.5, 28),
+      [[3.5, 12], [20.5, 12]], [[5, 7.5], [19, 7.5]], [[5, 16.5], [19, 16.5]],
+      ring(12, 12, 8.5, 18, -Math.PI / 2, Math.PI / 2).map(([x, y]) => [12 + (x - 12) * 0.42, y]),
+      ring(12, 12, 8.5, 18, Math.PI / 2, Math.PI * 1.5).map(([x, y]) => [12 + (x - 12) * 0.42, y]),
+    ],
+    bag: () => [
+      [[5, 8.5], [19, 8.5], [18, 20.5], [6, 20.5], [5, 8.5]],
+      ring(12, 8.5, 3.4, 12, Math.PI, Math.PI * 2),
+      [[8.5, 12], [15.5, 12]],
+    ],
+    note: () => [
+      [[15, 17], [15, 4], [20.5, 6.2], [20.5, 9], [15, 6.8]],
+      ring(12.4, 17, 2.6, 16),
+      [[6, 9], [6, 18]], ring(4.6, 18, 1.4, 10),
+    ],
+    chart: () => [
+      [[3.5, 3.5], [3.5, 20.5], [20.5, 20.5]],
+      [[6.5, 20.5], [6.5, 14], [9.5, 14], [9.5, 20.5]],
+      [[11.5, 20.5], [11.5, 9], [14.5, 9], [14.5, 20.5]],
+      [[16.5, 20.5], [16.5, 5.5], [19.5, 5.5], [19.5, 20.5]],
+    ],
+    gear: () => [gear(), ring(12, 12, 2.8, 14)],
+    window: () => [
+      [[3, 5], [21, 5], [21, 19.5], [3, 19.5], [3, 5]],
+      [[3, 8.5], [21, 8.5]], ring(5.4, 6.8, 0.6, 6), ring(7.6, 6.8, 0.6, 6),
+      [[6.5, 12.5], [9.5, 14.5], [6.5, 16.5]], [[11, 16.5], [16, 16.5]],
+    ],
+  };
+  const EMBLEM_WORDS = [
+    ['robot', /\bbots?\b|roboter|discord|telegram|whatsapp|chatbot|assistent/],
+    ['gamepad', /(?<!bei|ab)spiel|\bgames?\b|pygame|snake|tetris|pong|minecraft|würfel|quiz|jump/],
+    ['bag', /shop|\bladen\b|verkauf|produkt|bestell|kasse|warenkorb/],
+    ['note', /musik|music|spotify|song|playlist|radio|sound|beat|podcast/],
+    ['globe', /webseite|website|homepage|html|landing|seite|\bweb\b|blog/],
+    ['chart', /aktie|finanz|budget|tabelle|excel|statistik|diagramm|chart|ausgaben|krypto|bitcoin|börse/],
+    ['window', /\bapps?\b|programm(?!ier)|fenster|rechner|kalender|notiz|todo|editor/],
+    ['gear', /skript|script|tool|werkzeug|automat|sortier|download|ordner|datei|backup|python|makro|\bmod\b|plugin/],
+  ];
+
+  // Welches Symbol zum Auftrag passt; unbekannt bleibt die Kugel von früher
+  function emblemFor(task) {
+    const text = String(task || '').toLowerCase();
+    for (const [name, pattern] of EMBLEM_WORDS) if (pattern.test(text)) return name;
+    return 'sphere';
+  }
+
+  // Kanten von unten nach oben sortiert, dazu ihre Höhe (ey) und die Höhe des ganzen Modells
+  function prepare(v, e, flat) {
+    const mid = ([a, b]) => (v[a][1] + v[b][1]) / 2;
+    e.sort((e1, e2) => mid(e1) - mid(e2));
+    const ys = v.map((p) => p[1]);
+    return { v, e, ey: e.map(mid), lo: Math.min(...ys), hi: Math.max(...ys), flat };
+  }
+
+  // Ein Symbol als 3D-Drahtmodell: vorne und hinten derselbe Linienzug, dazwischen Streben
+  function extrude(lines) {
+    const v = [];
+    const e = [];
+    const depth = 0.2;
+    for (const line of lines) {
+      const ids = line.map(([x, y]) => {
+        v.push([(x - 12) / 10, (12 - y) / 10, depth], [(x - 12) / 10, (12 - y) / 10, -depth]);
+        return v.length - 2;
+      });
+      for (let i = 0; i + 1 < ids.length; i += 1) {
+        e.push([ids[i], ids[i + 1]], [ids[i] + 1, ids[i + 1] + 1]);
+      }
+      const every = line.length > 12 ? 4 : 1;
+      ids.forEach((id, i) => { if (i % every === 0) e.push([id, id + 1]); });
+    }
+    return prepare(v, e, true);
+  }
+
+  function geodesic() {
+    const p = (1 + Math.sqrt(5)) / 2;
+    const norm = (q) => {
+      const l = Math.hypot(q[0], q[1], q[2]);
+      return [q[0] / l, q[1] / l, q[2] / l];
+    };
+    const v = [[-1, p, 0], [1, p, 0], [-1, -p, 0], [1, -p, 0], [0, -1, p], [0, 1, p], [0, -1, -p], [0, 1, -p],
+      [p, 0, -1], [p, 0, 1], [-p, 0, -1], [-p, 0, 1]].map(norm);
+    const faces = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2],
+      [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10],
+      [8, 6, 7], [9, 8, 1]];
+    const cache = new Map();
+    const mid = (a, b) => {
+      const key = a < b ? a + '_' + b : b + '_' + a;
+      if (cache.has(key)) return cache.get(key);
+      v.push(norm([(v[a][0] + v[b][0]) / 2, (v[a][1] + v[b][1]) / 2, (v[a][2] + v[b][2]) / 2]));
+      cache.set(key, v.length - 1);
+      return v.length - 1;
+    };
+    const edges = new Map();
+    const edge = (a, b) => {
+      const key = a < b ? a + '_' + b : b + '_' + a;
+      if (!edges.has(key)) edges.set(key, [a, b]);
+    };
+    for (const [a, b, c] of faces) {
+      const ab = mid(a, b);
+      const bc = mid(b, c);
+      const ca = mid(c, a);
+      for (const [x, y, z] of [[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]]) {
+        edge(x, y);
+        edge(y, z);
+        edge(z, x);
+      }
+    }
+    return prepare(v, [...edges.values()], false);
+  }
+
+  // Nur ein Bild, das Jarvis selbst geschickt hat: data:image/svg+xml (in einem Bild laufen keine Skripte)
+  function logoSrc(value) {
+    const src = String(value || '');
+    return src.length < 200000 && /^data:image\/svg\+xml;base64,[A-Za-z0-9+/]+={0,2}$/.test(src) ? src : '';
+  }
+
   const Construct = (() => {
+    let geo = geodesic();
+    let shape = 'sphere';
     let canvas = null;
     let ctx = null;
-    let size = 0;
+    let w = 0;
+    let h = 0;
     let dpr = 1;
     let running = false;
     let last = 0;
+    let t = 0;
     let shown = 0;
     let goal = 0;
     let state = 'running';
+    let flashT = -10;
+    // Das Logo aus der Werkstatt (logo.svg) ersetzt das Drahtmodell, sobald es geladen ist
+    let logo = '';
+    let logoImg = null;
+    let logoT = 0;
+    let art = null; // das Logo in Hologramm-Farbe, neu nur bei anderer Größe oder Farbe
+    let artKey = '';
     const color = COLORS.running.slice();
 
     const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
@@ -140,11 +308,13 @@
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       dpr = Math.min(2, window.devicePixelRatio || 1);
-      const s = Math.max(1, Math.round(Math.min(rect.width, rect.height) * dpr));
-      if (s !== size) {
-        size = s;
-        canvas.width = s;
-        canvas.height = s;
+      const nw = Math.max(1, Math.round(rect.width * dpr));
+      const nh = Math.max(1, Math.round(rect.height * dpr));
+      if (nw !== w || nh !== h) {
+        w = nw;
+        h = nh;
+        canvas.width = w;
+        canvas.height = h;
         if (!running) draw();
       }
     }
@@ -158,23 +328,210 @@
       resize();
     }
 
-    function draw() {
-      if (!ctx || !size) return;
-      const r = size / 2 - 10 * dpr;
-      if (r < 8) return; // noch unsichtbar (Werkstatt zu), nichts zu zeichnen
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, size, size);
-      ctx.translate(size / 2, size / 2);
-      ctx.lineCap = 'round';
-      ctx.lineWidth = 8 * dpr;
+    function project(x, y, z, view) {
+      const x1 = x * view.cy + z * view.sy;
+      const z1 = -x * view.sy + z * view.cy;
+      const y2 = y * view.cp - z1 * view.sp;
+      const z2 = y * view.sp + z1 * view.cp;
+      const s = 3.4 / (3.4 + z2);
+      return [view.cx + x1 * view.R * s, view.cy0 - y2 * view.R * s, z2];
+    }
+
+    function ellipse(view, yLevel, radius, alpha, width, fill) {
       ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+      for (let i = 0; i <= 48; i += 1) {
+        const a = (i / 48) * Math.PI * 2;
+        const [x, y] = project(Math.cos(a) * radius, yLevel, Math.sin(a) * radius, view);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      if (fill) {
+        ctx.fillStyle = rgba(color, fill);
+        ctx.fill();
+      }
+      ctx.lineWidth = width * dpr;
+      ctx.strokeStyle = rgba(color, alpha);
       ctx.stroke();
-      if (shown > 0.002) {
+    }
+
+    // Das Logo in Hologramm-Farbe: Helles wird fast weiß, Dunkles ein tiefer Ton derselben Farbe
+    // (nichts verschwindet im dunklen Hintergrund), dazu feine Scanlinien.
+    function logoArt(side) {
+      const key = side + ':' + (color[0] | 0) + ',' + (color[1] | 0) + ',' + (color[2] | 0);
+      if (art && artKey === key) return art;
+      if (!art) art = document.createElement('canvas');
+      art.width = side;
+      art.height = side;
+      const c = art.getContext('2d');
+      const iw = logoImg.naturalWidth || 256;
+      const ih = logoImg.naturalHeight || 256;
+      const k = Math.min(side / iw, side / ih);
+      const dw = iw * k;
+      const dh = ih * k;
+      const dx = (side - dw) / 2;
+      const dy = (side - dh) / 2;
+      c.clearRect(0, 0, side, side);
+      c.globalCompositeOperation = 'source-over';
+      c.drawImage(logoImg, dx, dy, dw, dh);
+      c.globalCompositeOperation = 'source-in';
+      c.fillStyle = rgba(color, 1);
+      c.fillRect(0, 0, side, side);
+      c.globalCompositeOperation = 'overlay';
+      c.filter = 'grayscale(1)';
+      c.drawImage(logoImg, dx, dy, dw, dh);
+      c.filter = 'none';
+      c.globalCompositeOperation = 'destination-in';
+      c.drawImage(logoImg, dx, dy, dw, dh);
+      c.globalCompositeOperation = 'destination-out';
+      c.fillStyle = 'rgba(0,0,0,0.38)';
+      const gap = Math.max(2, Math.round(3 * dpr));
+      const line = Math.max(1, Math.round(dpr));
+      for (let y = 0; y < side; y += gap) c.fillRect(0, y, side, line);
+      c.globalCompositeOperation = 'source-over';
+      artKey = key;
+      return art;
+    }
+
+    // Wie weit das Logo schon gebaut ist: beim ersten Erscheinen fährt der Laser schnell bis zur Baukante
+    function logoReveal() {
+      const m = reducedMotion() ? 1 : clamp((t - logoT) / 1.2, 0, 1);
+      return Math.min(shown, 1 - (1 - m) ** 3);
+    }
+
+    function drawLogo(view, level, flash) {
+      const top = project(0, 0.9, 0, view)[1];
+      const bottom = project(0, -0.9, 0, view)[1];
+      const side = Math.round(bottom - top);
+      if (side < 16) return;
+      const img = logoArt(side);
+      const yaw = reducedMotion() ? 0 : Math.sin(t * 0.55) * 0.55; // schwenkt wie ein Hologramm
+      const dw = side * Math.cos(yaw);
+      const bob = reducedMotion() ? 0 : Math.sin(t * 1.3) * 2 * dpr;
+      const x = view.cx - dw / 2;
+      const y = top + bob;
+      const cut = project(0, level, 0, view)[1] + bob; // darunter ist gebaut
+      ctx.save();
+      ctx.globalAlpha = 0.13; // noch geplant: blass
+      ctx.drawImage(img, x, y, dw, side);
+      if (cut < y + side) {
         ctx.beginPath();
-        ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * shown);
-        ctx.strokeStyle = rgba(color, 1);
+        ctx.rect(0, cut, w, h - cut);
+        ctx.clip();
+        const flicker = reducedMotion() ? 0 : Math.sin(t * 7.3) * Math.sin(t * 2.9) * 0.08;
+        ctx.globalAlpha = clamp(0.86 + flicker + flash * 0.14, 0, 1);
+        ctx.shadowColor = rgba(color, 0.9);
+        ctx.shadowBlur = 14 * dpr;
+        ctx.drawImage(img, x, y, dw, side);
+      }
+      ctx.restore();
+    }
+
+    function drawWire(view, level, flash) {
+      const P = geo.v.map(([x, y, z]) => project(x, y, z, view));
+      let built = 0;
+      while (built < geo.ey.length && geo.ey[built] <= level) built += 1;
+      // Drahtlinien: geplant (blass) und gebaut (hell, vorne heller), die neuesten leuchten
+      for (let i = 0; i < geo.e.length; i += 1) {
+        const [a, b] = geo.e[i];
+        const pa = P[a];
+        const pb = P[b];
+        const near = 1 - ((pa[2] + pb[2]) / 2 + 1) / 2;
+        let alpha = 0.1;
+        let width = 1;
+        if (i < built) {
+          alpha = 0.28 + 0.52 * near + flash * 0.4;
+          if (geo.flat) alpha += 0.15;
+          if (state === 'running' && built - i <= 5) {
+            alpha = 1;
+            width = 1.6;
+          }
+        }
+        ctx.beginPath();
+        ctx.moveTo(pa[0], pa[1]);
+        ctx.lineTo(pb[0], pb[1]);
+        ctx.lineWidth = width * (geo.flat ? 1.3 : 1) * dpr;
+        ctx.strokeStyle = rgba(color, alpha);
+        ctx.stroke();
+      }
+      // Knotenpunkte des gebauten Teils
+      if (geo.flat) return;
+      for (let i = 0; i < P.length; i += 1) {
+        if (geo.v[i][1] > level) continue;
+        const near = 1 - (P[i][2] + 1) / 2;
+        ctx.beginPath();
+        ctx.arc(P[i][0], P[i][1], (1 + near) * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = rgba(color, 0.35 + 0.5 * near);
+        ctx.fill();
+      }
+    }
+
+    function draw() {
+      if (!ctx || !w || !h) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const flat = geo.flat || !!logoImg;
+      // Kugeln drehen sich ganz, Symbole schwenken hin und her (dann bleiben sie lesbar)
+      const yaw = reducedMotion() ? (flat ? 0.3 : 0.5) : flat ? Math.sin(t * 0.55) * 0.7 : t * 0.32;
+      const pitch = flat ? -0.12 : -0.36;
+      const view = {
+        cx: w / 2, cy0: h * 0.47, R: Math.min(w * 0.36, h * 0.38),
+        cy: Math.cos(yaw), sy: Math.sin(yaw), cp: Math.cos(pitch), sp: Math.sin(pitch),
+      };
+      // Höhe der Baukante: vom Fuß bis zur Spitze des Modells (das Logo reicht von -0,9 bis 0,9)
+      const level = logoImg ? -0.9 + 1.8 * logoReveal() : geo.lo - 0.03 + (geo.hi - geo.lo + 0.06) * shown;
+      const flash = Math.max(0, 1 - (t - flashT) / 0.9);
+      ctx.lineCap = 'round';
+
+      // Projektor-Sockel unter dem Modell
+      ctx.setLineDash([3 * dpr, 4 * dpr]);
+      ellipse(view, -1.12, 0.9, 0.22, 1, 0.03);
+      ctx.setLineDash([]);
+      // Lichtkegel vom Sockel nach oben
+      const base = project(0, -1.12, 0, view);
+      const glow = ctx.createLinearGradient(0, base[1], 0, base[1] - view.R * 2.1);
+      glow.addColorStop(0, rgba(color, 0.12));
+      glow.addColorStop(1, rgba(color, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.moveTo(base[0] - view.R * 0.9, base[1]);
+      ctx.lineTo(base[0] + view.R * 0.9, base[1]);
+      ctx.lineTo(base[0] + view.R * 1.15, base[1] - view.R * 2.1);
+      ctx.lineTo(base[0] - view.R * 1.15, base[1] - view.R * 2.1);
+      ctx.closePath();
+      ctx.fill();
+      // Gyroskop-Ring mit Lichtpunkt
+      ctx.save();
+      ctx.translate(view.cx, view.cy0);
+      ctx.rotate(Math.sin(t * 0.21) * 0.18);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, view.R * 1.28, view.R * 0.32, 0, 0, Math.PI * 2);
+      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = rgba(color, 0.16);
+      ctx.stroke();
+      const dotA = t * 0.9;
+      ctx.beginPath();
+      ctx.arc(Math.cos(dotA) * view.R * 1.28, Math.sin(dotA) * view.R * 0.32, 2.2 * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(color, 0.8);
+      ctx.fill();
+      ctx.restore();
+
+      if (logoImg) drawLogo(view, level, flash);
+      else drawWire(view, level, flash);
+      // Laser-Ebene an der Baukante
+      if (state === 'running' && level > -0.99 && level < 0.99 && shown > 0.01 && shown < 0.995) {
+        const r = flat ? 1.05 : Math.sqrt(Math.max(0, 1 - level * level)) * 1.06;
+        ctx.save();
+        ctx.shadowColor = rgba(color, 0.9);
+        ctx.shadowBlur = 12 * dpr;
+        ellipse(view, level, r, 0.95, 1.6, 0.08);
+        ctx.restore();
+      }
+      // Fertig: ein Lichtring breitet sich aus
+      if (flash > 0) {
+        ctx.beginPath();
+        ctx.arc(view.cx, view.cy0, view.R * (1 + (1 - flash) * 0.7), 0, Math.PI * 2);
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeStyle = rgba(color, flash * 0.8);
         ctx.stroke();
       }
     }
@@ -183,11 +540,12 @@
       if (!running) return;
       const dt = Math.min(0.05, (now - (last || now)) / 1000);
       last = now;
-      shown += (goal - shown) * Math.min(1, dt * (reducedMotion() ? 30 : 4));
+      t += dt;
+      shown += (goal - shown) * Math.min(1, dt * (reducedMotion() ? 30 : state === 'done' ? 4 : 2));
       const want = COLORS[state] || COLORS.running;
-      for (let i = 0; i < 3; i += 1) color[i] += (want[i] - color[i]) * Math.min(1, dt * 5);
+      for (let i = 0; i < 3; i += 1) color[i] += (want[i] - color[i]) * Math.min(1, dt * 3);
       draw();
-      requestAnimationFrame(frame);
+      setTimeout(() => requestAnimationFrame(frame), document.hidden ? 500 : 33);
     }
 
     function start() {
@@ -204,21 +562,63 @@
 
     function set(progress, newState) {
       goal = clamp(progress, 0, 1);
-      if (newState) state = newState;
+      if (newState && newState !== state) {
+        if (newState === 'done') flashT = t;
+        state = newState;
+      }
       if (!running) {
         shown = goal;
         draw();
       }
     }
 
+    function setShape(name) {
+      const want = EMBLEMS[name] ? name : 'sphere';
+      if (want === shape) return;
+      shape = want;
+      geo = EMBLEMS[want] ? extrude(EMBLEMS[want]()) : geodesic();
+      draw();
+    }
+
+    // Das Logo der Werkstatt; leer = wieder das Drahtmodell. Ein Bild, das nicht lädt, ändert nichts.
+    function setLogo(src) {
+      src = logoSrc(src);
+      if (src === logo) return;
+      logo = src;
+      logoImg = null;
+      artKey = '';
+      if (!src) {
+        draw();
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        if (logo !== src) return;
+        logoImg = img;
+        logoT = t;
+        draw();
+      };
+      img.onerror = () => {
+        if (logo === src) logo = '';
+      };
+      img.src = src;
+    }
+
     function reset() {
       shown = 0;
       goal = 0;
       state = 'running';
+      flashT = -10;
+      logo = '';
+      logoImg = null;
+      artKey = '';
       draw();
     }
 
-    return { attach, start, stop, set, reset };
+    return {
+      attach, start, stop, set, reset, setShape, setLogo,
+      shape: () => shape, hasLogo: () => !!logoImg, progress: () => shown,
+    };
   })();
 
   // ==================================================================
@@ -301,7 +701,14 @@
         steps: new Map(),
         order: [],
         planId: '',
+        logo: logoSrc(data.logo),
       };
+    }
+
+    // Das Hologramm zum Auftrag: erst das passende Symbol, das eigene Logo, sobald es da ist
+    function showModel() {
+      Construct.setShape(emblemFor(job.task));
+      Construct.setLogo(job.logo);
     }
 
     // ------------------------------------------------------------ Ereignisse
@@ -312,14 +719,23 @@
       if (state === 'start') {
         job = newJob(ev);
         resetView();
+        showModel();
         renderAll();
         open();
         return;
       }
-      if (!job) job = newJob(ev);
+      if (!job) {
+        job = newJob(ev);
+        showModel();
+      }
       if (state === 'text') {
         job.text = String(ev.text || '');
         renderText();
+        return;
+      }
+      if (state === 'logo') {
+        job.logo = logoSrc(ev.logo);
+        Construct.setLogo(job.logo);
         return;
       }
       if (state === 'done' || state === 'error' || state === 'cancelled') {
@@ -378,6 +794,7 @@
       job.text = String(snap.text || '');
       if (job.state !== 'running') job.endedAt = Date.now();
       resetView();
+      showModel();
       if (Array.isArray(snap.todos)) {
         job.todos = snap.todos.map((t) => ({ text: String((t && t.text) || ''), state: String((t && t.state) || 'pending') }));
       }
@@ -845,11 +1262,29 @@
   }
 
   // ==================================================================
-  //   Demo: ein Auftrag zum Zuschauen (Seite ohne Python, ?werkstatt=…)
+  //   Demo: ein Auftrag zum Zuschauen (Seite ohne Python, ?werkstatt=…,
+  //   dazu ?auftrag=… für ein anderes Symbol und ?logo=0 ohne eigenes Logo)
   // ==================================================================
 
+  // So ein Logo zeichnet die Werkstatt für einen Discord-Bot (logo.svg)
+  const DEMO_LOGO = 'data:image/svg+xml;base64,' + btoa(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">'
+    + '<circle cx="128" cy="128" r="114" fill="none" stroke="#5865F2" stroke-width="10"/>'
+    + '<circle cx="128" cy="128" r="96" fill="#1E2A78"/>'
+    + '<rect x="122" y="50" width="12" height="30" rx="4" fill="#C9D1FF"/>'
+    + '<circle cx="128" cy="48" r="11" fill="#FFFFFF"/>'
+    + '<rect x="64" y="80" width="128" height="100" rx="30" fill="#5865F2"/>'
+    + '<rect x="46" y="112" width="20" height="40" rx="8" fill="#C9D1FF"/>'
+    + '<rect x="190" y="112" width="20" height="40" rx="8" fill="#C9D1FF"/>'
+    + '<circle cx="104" cy="126" r="15" fill="#FFFFFF"/><circle cx="152" cy="126" r="15" fill="#FFFFFF"/>'
+    + '<path d="M100 156q28 18 56 0" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>'
+    + '<rect x="96" y="186" width="64" height="18" rx="9" fill="#5865F2"/>'
+    + '</svg>');
+
   function demo(push, mode) {
-    const task = 'Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt';
+    const params = new URLSearchParams(location.search);
+    const task = params.get('auftrag') || 'Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt';
+    const withLogo = params.get('logo') !== '0';
     const folder = 'C:\\Users\\Georg\\Jarvis-Werkstatt\\2026-10-01_1530_discord-bot-jeden-morgen-hallo';
     const PLAN = ['Projektordner und Umgebung anlegen', 'Discord-Bibliothek installieren', 'Bot-Code schreiben',
       'Testen und Fehler beheben', 'LIESMICH.txt mit Startanleitung'];
@@ -860,6 +1295,8 @@
       { id: 'p1', tool: 'TodoWrite', label: 'Plant die Schritte', detail: '5 Schritte', kind: 'plan', todos: todos(0, true), ms: 500,
         say: 'Ich lege zuerst einen Plan an.' },
       { id: 's1', tool: 'PowerShell', label: 'Legt Ordner an', detail: 'Projektordner und virtuelle Umgebung anlegen', kind: 'file', ms: 1100 },
+      { id: 'sl', tool: 'Write', label: 'Schreibt logo.svg', detail: folder + '\\logo.svg', kind: 'file', ms: 700, logo: true,
+        say: 'Ich zeichne kurz ein Logo für den Bot.' },
       { id: 'p2', tool: 'TodoWrite', label: 'Plant die Schritte', detail: '5 Schritte', kind: 'plan', todos: todos(1, true), ms: 300,
         say: 'Jetzt kommt die Discord-Bibliothek dazu.' },
       { id: 's2', tool: 'PowerShell', label: 'Installiert Python-Pakete', detail: 'pip install discord.py python-dotenv', kind: 'install', ms: 3400 },
@@ -892,6 +1329,9 @@
       said += (said ? '\n\n' : '') + text;
       event({ state: 'text', text: said });
     };
+    const drawn = (s) => {
+      if (s.logo && withLogo) event({ state: 'logo', logo: DEMO_LOGO });
+    };
 
     // Ohne Warten bis zu einer Stelle (für Bildschirmfotos)
     function upTo(count, runLast) {
@@ -900,6 +1340,7 @@
         if (s.say) sayMore(s.say);
         const last = i === count - 1 && runLast;
         stepEv(s, last ? 'running' : 'done', last ? 0 : s.ms / 1000);
+        if (!last) drawn(s);
       });
     }
 
@@ -914,6 +1355,7 @@
         await wait(s.ms);
         if (g !== gen) return;
         stepEv(s, 'done', s.ms / 1000);
+        drawn(s);
         await wait(250);
       }
       if (g !== gen) return;
@@ -926,13 +1368,13 @@
         gen += 1;
         said = '';
         if (mode === 'running') {
-          upTo(10, true);
+          upTo(11, true);
         } else if (mode === 'done') {
           upTo(STEPS.length, false);
           sayMore(SUMMARY);
           event({ state: 'done', summary: SUMMARY, folder, seconds: 252 });
         } else if (mode === 'error') {
-          upTo(8, false);
+          upTo(9, false);
           stepEv({ id: 'sx', tool: 'PowerShell', label: 'Testet den Code', detail: 'python -m py_compile bot.py', kind: 'command' }, 'error', 2.4);
           sayMore('Beim Testen ist ein Fehler aufgetreten.');
           event({
@@ -951,5 +1393,5 @@
     };
   }
 
-  window.JarvisWerkstatt = { create, demo };
+  window.JarvisWerkstatt = { create, demo, DEMO_LOGO };
 })();

@@ -2,7 +2,8 @@
 
 "Bau mir einen Discord-Bot, der ..." landet nicht im normalen Gespräch, sondern hier:
 eigener Projektordner, gründlicheres Nachdenken, ein Plan mit Schritten (TodoWrite),
-Dateien schreiben, Pakete installieren, testen. Das Fenster zeigt alles als Blaupause.
+Dateien schreiben, Pakete installieren, testen. Das Fenster zeigt alles als Blaupause, das Projekt
+als Hologramm: zuerst ein passendes Symbol, dann das logo.svg, das die Werkstatt dafür zeichnet.
 Währenddessen bleibt Jarvis ansprechbar; ist die Arbeit fertig, sagt er Bescheid.
 
 Während der Arbeit kann Georg mit Jarvis reden: "Wie weit bist du?" beantwortet Jarvis aus dem Plan,
@@ -20,6 +21,7 @@ Erkennt Jarvis einen Bauauftrag nicht selbst, gibt das Gehirn ihn über
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import json
 import logging
@@ -73,6 +75,11 @@ nichts mit `jarvis.tool werkstatt` weiter.
   lege eine Vorlage an (zum Beispiel .env.beispiel) und sag am Ende in einem Satz, was er wo eintragen
   muss.
 - Mach zuerst mit TodoWrite einen kurzen Plan mit drei bis sieben Schritten und hake sie ab.
+- Gibt es im Projektordner noch kein logo.svg, zeichne gleich nach dem Plan eins: ein schlichtes, flaches
+  Logo, das zum Projekt passt (ein Roboterkopf für einen Bot, ein Controller für ein Spiel ...). Georg sieht
+  es in der Werkstatt als Hologramm. Nur Formen und Linien in kräftigen Farben, möglichst ohne Text,
+  <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">, keine Bilder,
+  keine Skripte, keine Links nach außen, höchstens 20 KB. Ein kurzer Schritt, keine Designarbeit.
 - Teste, was du baust (starten, kurz ausprobieren, Tests). Scheitert ein Befehl, lies die Meldung und
   versuche einen anderen Weg, statt aufzugeben. Fehlen Pakete, installiere sie.
 - Georg soll von deinen Tests nichts merken: Öffne nie den Browser, den Explorer oder Dateien und
@@ -347,6 +354,32 @@ def read_project(folder: Path) -> dict | None:
     return None
 
 
+LOGO_FILE = "logo.svg"
+LOGO_MAX_BYTES = 48_000
+# Was in einem Logo nichts zu suchen hat: Skripte, eingebettete Seiten und Bilder, Verweise nach außen
+# (erlaubt sind nur Verweise im Bild selbst wie url(#verlauf) oder href="#form").
+_LOGO_BAD = re.compile(
+    r"<\s*(?:script|foreignobject|iframe|embed|object|image|audio|video)\b|<!entity|javascript:|@import|"
+    r"\son[a-z]+\s*=|href\s*=\s*[\"']?\s*[^\"'\s#]|url\(\s*[\"']?\s*[^\"'\s#)]",
+    re.I,
+)
+
+
+def project_logo(folder: Path) -> str:
+    """Das Logo, das die Werkstatt für das Projekt gezeichnet hat (logo.svg), als data:-Adresse für das
+    Fenster. Leer, wenn es keins gibt oder etwas Unerwartetes darin steht."""
+    path = Path(folder) / LOGO_FILE
+    try:
+        if path.stat().st_size > LOGO_MAX_BYTES:
+            return ""
+        text = path.read_bytes().decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return ""
+    if "<svg" not in text.lower() or _LOGO_BAD.search(text):
+        return ""
+    return "data:image/svg+xml;base64," + base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
 def project_python() -> str:
     """Ein Python für Georgs Projekte: das, aus dem Jarvis' eigene Umgebung gebaut ist (nicht
     die Umgebung selbst, sonst landen fremde Pakete bei Jarvis). Leer, wenn es keins gibt."""
@@ -379,6 +412,7 @@ class Job:
     sent: int = 0  # Nachrichten an Claude (der Auftrag und Georgs Wünsche)
     results: int = 0  # fertige Antworten von Claude
     start_offer: bool = False  # Jarvis hat gefragt, ob er das Ergebnis starten soll
+    logo: str = field(default="", repr=False)  # logo.svg als data:-Adresse (project_logo), fürs Hologramm
     proc: subprocess.Popen | None = field(default=None, repr=False)  # der laufende Claude-Prozess
 
     def status(self) -> str:
@@ -705,8 +739,10 @@ class Workshop:
 
     def _begin(self, job: Job) -> None:
         self._save_project(job, "running")
+        job.logo = project_logo(job.folder)  # am selben Projekt weiter: das Logo ist schon da
         self._ui.workshop({"state": "start", "task": job.task, "folder": str(job.folder), "begun": job.begun,
-                           "continues": job.resume, "model": job.model, "name": project_name(job.folder)})
+                           "continues": job.resume, "model": job.model, "name": project_name(job.folder),
+                           "logo": job.logo})
         if self._show_window is not None:
             try:
                 self._show_window()
@@ -770,7 +806,7 @@ class Workshop:
             "seconds": round((ended or time.monotonic()) - job.started),
             "todos": list(job.todos), "steps": [s.to_dict() for s in job.steps[-200:]],
             "text": job.text[-4000:], "summary": job.summary, "detail": job.detail,
-            "model": job.model, "name": project_name(job.folder),
+            "model": job.model, "name": project_name(job.folder), "logo": job.logo,
         }
 
     def status(self) -> str:
@@ -971,6 +1007,8 @@ class Workshop:
             data = step.to_dict()
             data["workshop"] = True
             self._ui.progress(data)
+            if step.state != "running":
+                self._check_logo(job, LOGO_FILE in str(step.detail).lower())
 
         stream = _StreamReader(on_text, partial=True, on_step=on_step)
         quiet_limit = float(self._cfg.get("still_minuten", 12)) * 60
@@ -1037,9 +1075,20 @@ class Workshop:
         self._proc = None
         return stream, "".join(e for e in errors if e), timed_out
 
+    def _check_logo(self, job: Job, touched: bool = False) -> None:
+        """Hat die Werkstatt ihr Logo gezeichnet (oder es eben geändert), zeigt das Fenster es als
+        Hologramm. Solange es keins gibt, wird nach jedem Schritt kurz nachgesehen."""
+        if job.logo and not touched:
+            return
+        logo = project_logo(job.folder)
+        if logo and logo != job.logo:
+            job.logo = logo
+            self._ui.workshop({"state": "logo", "logo": logo})
+
     def _finish(self, job: Job, state: str, summary: str, detail: str = "") -> None:
         from .text import speakable
 
+        self._check_logo(job, touched=True)  # zuletzt per Befehl geändert? Dann jetzt das neue
         job.summary = speakable(summary) or summary
         job.detail = detail
         job.ended = time.monotonic()

@@ -578,12 +578,17 @@ class Api:
             return None
 
     def workshop_projects(self) -> list:
-        """Alle Werkstatt-Projekte für die Projektliste."""
+        """Alle Werkstatt-Projekte für die Projektliste, mit ihrem Logo (logo.svg) als kleinem Hologramm."""
+        from ..workshop import project_logo
+
         shop = getattr(self._assistant, "workshop", None)
         if shop is None:
             return []
         try:
-            return shop.projects()[:60]
+            items = shop.projects()[:60]
+            for item in items:
+                item["logo"] = project_logo(Path(item["folder"]))
+            return items
         except Exception as exc:
             log.debug("Werkstatt-Projekte: %s", exc)
             return []

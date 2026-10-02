@@ -37,8 +37,9 @@ class Ui:
         pass
 
     def workshop(self, event: dict) -> None:
-        """Die Werkstatt: state "start" (task, folder), "text" (text), "done"/"error"/"cancelled"
-        (summary, folder, seconds). Die Arbeitsschritte kommen als progress mit workshop=True."""
+        """Die Werkstatt: state "start" (task, folder, logo), "text" (text), "logo" (logo: das Projekt-Logo
+        als data:image/svg+xml), "done"/"error"/"cancelled" (summary, folder, seconds). Die Arbeitsschritte
+        kommen als progress mit workshop=True."""
         pass
 
     def suggestion(self, offer: dict | None) -> None:

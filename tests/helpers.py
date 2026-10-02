@@ -201,6 +201,13 @@ FAKE_CLAUDE = textwrap.dedent(
                 {"content": "Bot schreiben", "status": "in_progress"},
                 {"content": "Testen", "status": "pending"}]})
             tool("toolu_w", "Write", {"file_path": "bot.py", "content": "print('Hallo')"})
+            if "Logo" in prompt:
+                # Das Logo fürs Hologramm (logo.svg im Projektordner)
+                logo = '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">' \\
+                    '<circle cx="128" cy="128" r="90" fill="#5865F2"/></svg>'
+                with open("logo.svg", "w", encoding="utf-8") as f:
+                    f.write(logo)
+                tool("toolu_l", "Write", {"file_path": os.path.join(os.getcwd(), "logo.svg"), "content": logo})
             if "langsam" in prompt:
                 time.sleep(8)
             tool("toolu_b", "Bash", {"command": "python bot.py"}, output="Hallo")

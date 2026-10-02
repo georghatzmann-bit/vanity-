@@ -11,6 +11,8 @@
     error: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v6M12 16.5v.5"/></svg>',
     cancelled: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"/></svg>',
   };
+  // Das Logo des Projekts (logo.svg), nur als Bild von Jarvis selbst: data:image/svg+xml
+  const LOGO = /^data:image\/svg\+xml;base64,[A-Za-z0-9+/]+={0,2}$/;
 
   function when(iso) {
     const d = new Date(String(iso || ''));
@@ -107,6 +109,15 @@
       mark.setAttribute('aria-hidden', 'true');
       mark.innerHTML = MARK[p.state] || '';
       chip.append(mark, document.createTextNode(STATE[p.state] || 'Offen'));
+      const logo = String(p.logo || '');
+      if (logo.length < 200000 && LOGO.test(logo)) {
+        const img = document.createElement('img');
+        img.className = 'hub-logo';
+        img.alt = '';
+        img.src = logo;
+        img.addEventListener('error', () => img.remove());
+        head.append(img);
+      }
       head.append(h, chip);
       art.appendChild(head);
 
