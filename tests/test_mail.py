@@ -298,12 +298,18 @@ class SentenceTest(unittest.TestCase):
             "Was schreibt Max?": ("von", "Max"), "Was hat mir Max geschrieben?": ("von", "Max"),
             "Hat Anna geschrieben?": ("von", "Anna"), "Was schreibt die Sparkasse?": ("von", "Sparkasse"),
             "Lies mir die letzte Mail von Max vor": ("von", "Max"),
+            # So fragt auch die Post-Karte im Fenster, mit dem Absender, wie er in der Mail steht
+            "Lies mir die letzte Mail von Heise News vor": ("von", "Heise News"),
+            "Lies mir die letzte Mail von Discord vor": ("von", "Discord"),
+            "Lies mir die letzte Mail von Sparkasse Wien Kundenservice Team vor": ("von", "Sparkasse Wien Kundenservice Team"),
+            "Lies mir die letzte Mail von noreply@steampowered.com vor": ("von", "noreply@steampowered.com"),
         }
         for said, expected in cases.items():
             self.assertEqual(match_mail(said), expected, said)
         for said in ("Was schreibt Max auf Discord?", "Was schreibt man in eine Bewerbung?", "Was hat er geschrieben?",
                      "Schreib Max eine Mail", "Fass meine Mails zusammen", "Beantworte die Mail von Max",
-                     "Hab ich neue Nachrichten?", "Was schreibt man?"):
+                     "Hab ich neue Nachrichten?", "Was schreibt man?", "Was schreibt die Zeitung über Wien?",
+                     "Was schreibt Max in der Gruppe?"):
             self.assertIsNone(match_mail(said), said)
 
     def test_spoken(self):

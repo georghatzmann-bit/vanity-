@@ -1077,10 +1077,16 @@ def match_mail(text: str):
     if _NEW.match(raw):
         return "neu", ""
     found = _FROM.match(raw)
-    if not found or _CHAT.search(raw):
+    if not found:
+        return None
+    # "Lies mir die letzte Mail von Heise News vor" (auch ein Klick auf die Post-Karte) meint sicher eine
+    # Mail: dann darf der Absender "Discord" heißen oder länger sein ("Sparkasse Wien Kundenservice Team").
+    explicit = bool(found.group("d") or found.group("e"))
+    if not explicit and _CHAT.search(raw):
         return None
     who = next((g for g in found.groupdict().values() if g), "").strip(" ,.!?")
     who = re.sub(r"^(?:der|die|das|mein|meine|meinem|meiner|meines|von)\s+", "", who, flags=re.I).strip()
-    if not who or who.lower() in _NOT_A_NAME or len(who.split()) > 3 or not re.search(r"[A-Za-zÄÖÜäöüß]{2}", who):
+    if (not who or who.lower() in _NOT_A_NAME or len(who.split()) > (6 if explicit else 3)
+            or not re.search(r"[A-Za-zÄÖÜäöüß]{2}", who)):
         return None
     return "von", who
