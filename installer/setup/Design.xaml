@@ -24,28 +24,15 @@
     <FontFamily x:Key="SchriftMono">Cascadia Mono, Consolas</FontFamily>
 
     <!-- Jarvis' Kern: eine weiche Kugel von #9AABFF nach #4C5BD8 -->
-    <RadialGradientBrush x:Key="KugelFarbe" GradientOrigin="0.38,0.30" Center="0.42,0.36" RadiusX="0.70" RadiusY="0.70">
-        <GradientStop Color="#C2CCFF" Offset="0" />
-        <GradientStop Color="#9AABFF" Offset="0.30" />
-        <GradientStop Color="#6E8CFF" Offset="0.66" />
-        <GradientStop Color="#4C5BD8" Offset="1" />
+    <!-- Leises Licht im Inneren der Linienkugel -->
+    <RadialGradientBrush x:Key="KugelInnen" GradientOrigin="0.5,0.4" Center="0.5,0.45" RadiusX="0.5" RadiusY="0.5">
+        <GradientStop Color="#1AE2E6F0" Offset="0" />
+        <GradientStop Color="#00E2E6F0" Offset="1" />
     </RadialGradientBrush>
-    <LinearGradientBrush x:Key="KugelTiefe" StartPoint="0.5,0.35" EndPoint="0.5,1">
-        <GradientStop Color="#004C5BD8" Offset="0" />
-        <GradientStop Color="#552A3290" Offset="1" />
-    </LinearGradientBrush>
-    <RadialGradientBrush x:Key="KugelLicht" GradientOrigin="0.34,0.24" Center="0.36,0.26" RadiusX="0.30" RadiusY="0.22">
-        <GradientStop Color="#59FFFFFF" Offset="0" />
-        <GradientStop Color="#00FFFFFF" Offset="1" />
-    </RadialGradientBrush>
-    <LinearGradientBrush x:Key="KugelRand" StartPoint="0.5,0" EndPoint="0.5,1">
-        <GradientStop Color="#40FFFFFF" Offset="0" />
-        <GradientStop Color="#00FFFFFF" Offset="0.55" />
-    </LinearGradientBrush>
     <RadialGradientBrush x:Key="KernGlanzFarbe">
-        <GradientStop Color="#476E8CFF" Offset="0" />
-        <GradientStop Color="#1A6E8CFF" Offset="0.5" />
-        <GradientStop Color="#006E8CFF" Offset="1" />
+        <GradientStop Color="#249AABFF" Offset="0" />
+        <GradientStop Color="#0C9AABFF" Offset="0.5" />
+        <GradientStop Color="#009AABFF" Offset="1" />
     </RadialGradientBrush>
 
     <!-- Sichtbarer Fokus (nur bei Bedienung mit der Tastatur) -->

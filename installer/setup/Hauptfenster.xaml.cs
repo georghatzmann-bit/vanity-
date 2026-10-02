@@ -748,10 +748,11 @@ namespace JarvisSetup
             KernAtmen(4.2);
         }
 
-        // ------------------------------------------------------------------ Lebendige Kugel
+        // ------------------------------------------------------------------ Linienkugel
 
-        // Dieselbe Form wie im Jarvis-Fenster (gui/web/orb.js): kein starrer Kreis, sondern langsame,
-        // weiche Wellen wie bei einem Tropfen. Dahinter kreisen zwei farbige Schleier.
+        // Dieselbe Kugel wie im Jarvis-Fenster (gui/web/orb.js): feine Ringe, leicht von oben gesehen,
+        // die sich langsam drehen. Die Oberfläche atmet kaum merklich. Während der Installation dreht
+        // sie sich etwas schneller, bei einem Fehler langsamer.
         readonly Stopwatch kugelUhr = Stopwatch.StartNew();
         double kugelTempo = 1.0;
         double kugelZeit;
@@ -761,12 +762,9 @@ namespace JarvisSetup
         {
             KugelFormen(0);
             if (!bewegung)
-                return;  // Windows-Einstellung "Animationen anzeigen" ist aus: Form bleibt still
+                return;  // Windows-Einstellung "Animationen anzeigen" ist aus: die Kugel bleibt still
             CompositionTarget.Rendering += KugelBild;
             Closed += (s, e) => CompositionTarget.Rendering -= KugelBild;
-            var drehen = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(26)) { RepeatBehavior = RepeatBehavior.Forever };
-            Timeline.SetDesiredFrameRate(drehen, 30);
-            SchleierDrehung.BeginAnimation(RotateTransform.AngleProperty, drehen);
         }
 
         void KugelBild(object sender, EventArgs e)
@@ -780,32 +778,69 @@ namespace JarvisSetup
             KugelFormen(kugelZeit);
         }
 
-        /// <summary>Formt die Kugel für den Zeitpunkt t: 72 Punkte, weich verbunden.</summary>
+        /// <summary>Zeichnet die Ringe für den Zeitpunkt t, je nach Tiefe in drei Pfade (hinten, Mitte, vorn).</summary>
         void KugelFormen(double t)
         {
-            const int punkte = 72;
-            const double mitte = 60, grund = 57;
-            var p = new Point[punkte];
-            for (int i = 0; i < punkte; i++)
+            const int ringe = 22, teile = 64;
+            const double mitte = 60, grund = 54, neigung = -0.36;
+            double sinN = Math.Sin(neigung), cosN = Math.Cos(neigung);
+            var hinten = new StreamGeometry();
+            var mittig = new StreamGeometry();
+            var vorn = new StreamGeometry();
+            var x = new double[teile + 1];
+            var y = new double[teile + 1];
+            var z = new double[teile + 1];
+            using (StreamGeometryContext h = hinten.Open())
+            using (StreamGeometryContext m = mittig.Open())
+            using (StreamGeometryContext v = vorn.Open())
             {
-                double winkel = i * 2 * Math.PI / punkte;
-                double r = grund * (1 + 0.045 * (0.6 * Math.Sin(2 * winkel + t * 0.8) + 0.4 * Math.Sin(3 * winkel - t * 0.6 + 1.9)));
-                p[i] = new Point(mitte + Math.Cos(winkel) * r, mitte + Math.Sin(winkel) * r);
+                for (int i = 0; i < ringe; i++)
+                {
+                    double phi = (i + 0.5) / ringe * Math.PI, rho = Math.Sin(phi), y0 = Math.Cos(phi);
+                    for (int j = 0; j <= teile; j++)
+                    {
+                        double lam = j * 2 * Math.PI / teile;
+                        double r = 1 + rho * 0.04 * (0.55 * Math.Sin(2 * lam + 3 * phi + t * 0.55) + 0.45 * Math.Sin(3 * phi - lam - t * 0.4));
+                        double a = lam + t * 0.12;
+                        double px = rho * Math.Cos(a) * r, pz = rho * Math.Sin(a) * r, py = y0 * r;
+                        x[j] = mitte + px * grund;
+                        y[j] = mitte + (py * cosN - pz * sinN) * grund;
+                        z[j] = py * sinN + pz * cosN;
+                    }
+                    Abschnitte(h, x, y, z, -2, -0.3);
+                    Abschnitte(m, x, y, z, -0.3, 0.3);
+                    Abschnitte(v, x, y, z, 0.3, 2);
+                }
             }
-            var form = new StreamGeometry();
-            using (StreamGeometryContext stift = form.Open())
-            {
-                stift.BeginFigure(Mitte(p[punkte - 1], p[0]), true, true);
-                for (int i = 0; i < punkte; i++)
-                    stift.QuadraticBezierTo(p[i], Mitte(p[i], p[(i + 1) % punkte]), true, true);
-            }
-            form.Freeze();
-            KugelForm.Data = form;
-            KugelFormTiefe.Data = form;
-            KugelFormLicht.Data = form;
-            KugelFormRand.Data = form;
+            hinten.Freeze();
+            mittig.Freeze();
+            vorn.Freeze();
+            KugelHinten.Data = hinten;
+            KugelMitte.Data = mittig;
+            KugelVorn.Data = vorn;
         }
 
-        static Point Mitte(Point a, Point b) => new Point((a.X + b.X) / 2, (a.Y + b.Y) / 2);
+        /// <summary>Die Teile eines Rings, deren Tiefe zwischen von und bis liegt, als offene Linienzüge.</summary>
+        static void Abschnitte(StreamGeometryContext stift, double[] x, double[] y, double[] z, double von, double bis)
+        {
+            bool offen = false;
+            for (int j = 0; j < x.Length - 1; j++)
+            {
+                double tiefe = (z[j] + z[j + 1]) / 2;
+                if (tiefe >= von && tiefe < bis)
+                {
+                    if (!offen)
+                    {
+                        stift.BeginFigure(new Point(x[j], y[j]), false, false);
+                        offen = true;
+                    }
+                    stift.LineTo(new Point(x[j + 1], y[j + 1]), true, true);
+                }
+                else
+                {
+                    offen = false;
+                }
+            }
+        }
     }
 }
