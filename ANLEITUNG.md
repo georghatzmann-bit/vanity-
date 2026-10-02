@@ -129,7 +129,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **Gespräch:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, ein gestrichelter Ring um die Kugel). Einfach weiterreden, ohne „Hey Jarvis“: „Und morgen?“ Schluss ist, wenn du nichts mehr sagst, oder mit **„Danke“**, **„Alles klar“** oder **„Tschüss“**. Beim Zocken (Gaming-Modus oder Vollbild) gibt es kein Gespräch, da redest du ja meist mit anderen. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Gespräch ohne Weckwort** ausschalten.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
-- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Verbinden** (Handy, Alexa, Discord, Konnektoren), **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht (Erinnerungen, Wecker, Timer), wie ausgelastet der PC ist, und das **Gedächtnis**.
+- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Blaupause**, **Verbinden** (Handy, Alexa, Discord, Konnektoren), **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht (Erinnerungen, Wecker, Timer), wie ausgelastet der PC ist, und das **Gedächtnis**.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
@@ -245,10 +245,10 @@ Jarvis wartet nicht nur auf Befehle. Wie ein guter Butler sagt er Bescheid, wenn
 - **Am PC:** Ein Programm reagiert nicht mehr („Discord reagiert seit einer halben Minute nicht mehr. Soll ich es neu starten?“). Ein Programm im Hintergrund frisst minutenlang den Prozessor. Der Arbeitsspeicher ist voll, der Akku fast leer, die Grafikkarte sehr heiß, das Internet weg (und wieder da).
 - **Sicherheit:** Ein neues Programm startet mit Windows. Auf „Ja“ schaut Jarvis nach, ob es harmlos ist. Und wenn Windows seit Tagen auf einen Neustart für Updates wartet.
 - **Morgens:** Ein kurzer Überblick über den Tag (Wetter, Erinnerungen, Geburtstage und was du vorhattest). Termine und Mails sagt er dir, wenn du „Was steht heute an?“ fragst.
-- **Zurück am PC:** „Willkommen zurück, Sir. Während Sie weg waren: …“ mit allem, was du verpasst hast.
+- **Zurück am PC:** „Willkommen zurück, Sir. Während Sie weg waren: …“ mit allem, was du verpasst hast. Wer mit Jarvis redet, tippt oder mit dem Controller zockt, gilt als da: Was du schon gehört hast, wiederholt er nicht.
 - **Pause:** Nach drei Stunden am Stück schlägt er fünf Minuten Pause vor.
 
-Die Regeln: Jarvis spricht nur, wenn du am PC sitzt, nie beim Zocken oder im Vollbild, nie mitten in ein Gespräch, und zwischen zwei Hinweisen bleiben ein paar Minuten Ruhe. Dringendes (Akku fast leer) kommt sonst aufs Handy. Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**, ohne „Hey Jarvis“. „Nie wieder“ stellt diese Art Hinweis für immer ab. Sagst du **„Hinweise aus“**, meldet er sich nur noch bei Dringendem, **„Hinweise an“** schaltet alles wieder ein (auch was du mit „Nie wieder“ abgestellt hast). Im Verlauf stehen Hinweise mit „Hinweis“ hinter der Uhrzeit. Ganze Bereiche schaltest du in der `config.toml` unter `[hinweise]` ab, zum Beispiel `pausen = false`.
+Die Regeln: Jarvis spricht nur, wenn du am PC sitzt, nie beim Zocken oder im Vollbild, nie mitten in ein Gespräch, und zwischen zwei Hinweisen bleiben ein paar Minuten Ruhe. Denselben Satz sagt er höchstens alle drei Stunden. Sagst du **„Weiß ich schon“** oder **„Das hast du schon gesagt“**, kommt diese Art Hinweis heute nicht mehr. Dringendes (Akku fast leer) kommt sonst aufs Handy. Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**, ohne „Hey Jarvis“. „Nie wieder“ stellt diese Art Hinweis für immer ab. Sagst du **„Hinweise aus“**, meldet er sich nur noch bei Dringendem, **„Hinweise an“** schaltet alles wieder ein (auch was du mit „Nie wieder“ abgestellt hast). Im Verlauf stehen Hinweise mit „Hinweis“ hinter der Uhrzeit. Ganze Bereiche schaltest du in der `config.toml` unter `[hinweise]` ab, zum Beispiel `pausen = false`.
 
 ## Die Werkstatt: Jarvis programmiert für dich
 
@@ -264,13 +264,29 @@ Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“*
 3. Ist er fertig, sagt er es dir und fragt: „Soll ich es gleich starten?“ Ein **„Ja“** genügt. **Ordner öffnen** zeigt das Projekt.
 
 - **Große Aufträge** (Spiele, Apps mit Login, Shops) baut Jarvis mit Opus und viel Nachdenken, kleine mit Sonnet. Sagst du „beste Qualität“, denkt er noch gründlicher.
-- **Alle Projekte auf einen Blick:** oben im Fenster **Werkstatt**, oder „Zeig mir meine Projekte“. Jede Karte zeigt das Logo des Projekts, den Stand, **Starten** und **Weiterbauen**.
+- **Alle Projekte auf einen Blick:** oben im Fenster **Werkstatt**, oder „Zeig mir meine Projekte“. Jede Karte zeigt das Logo des Projekts, den Stand, **Ansehen**, **Starten**, **Vorschau** (bei Webseiten) und **Weiterbauen**.
+- **Ein Projekt ansehen:** **Ansehen** (oder ein Klick auf den Namen) oder „Zeig mir das Projekt Würfelspiel“. Die Werkstatt zeigt dann Plan, Ablauf, alle Dateien im Ordner, das Logo-Hologramm und die bisherigen Aufträge. Unten im Feld **Weiterbauen** schreibst du, was noch dazu soll.
+- **Mitten in der Arbeit ändern:** unten in der Werkstatt ins Feld **Ändern** schreiben („Mach den Hintergrund blau“) und **Einbauen**, oder einfach sagen. Es geht sofort in die laufende Arbeit.
+- **Projekt löschen:** auf der Karte das **×** zweimal klicken, in der Projektansicht **Löschen** zweimal, oder „Lösch das Projekt Würfelspiel“ (Jarvis fragt nach, „Ja“ löscht). Der Ordner kommt in den Papierkorb, von dort holst du ihn zurück. Woran die Werkstatt gerade arbeitet, wird nicht gelöscht.
 - **Weiter am selben Projekt:** „Arbeite am Discord-Bot weiter: füg einen Befehl hinzu“. Jarvis weiß noch, was er gebaut hat.
 - „Starte das Projekt Würfelspiel“, „Öffne den Ordner vom Discord-Bot“
 - Jedes Projekt hat einen eigenen Ordner unter `%USERPROFILE%\Jarvis-Werkstatt`.
 - **Tests stören dich nicht:** Die Werkstatt testet auf einem eigenen, unsichtbaren Windows-Arbeitsplatz. Fenster von Spielen und Programmen, die sie zum Ausprobieren startet, poppen nicht auf deinem Bildschirm auf, auch nicht beim Zocken. Erst „Starte es“ zeigt dir das Ergebnis. (Abschalten: `unsichtbar = false` unter `[werkstatt]`.)
 - **Mit deinen Konnektoren:** Die Werkstatt darf deine claude.ai-Konnektoren benutzen, zum Beispiel Canva für ein Logo.
 - **Stopp** (zweimal klicken) oder **„Brich die Werkstatt ab“** beendet die Arbeit. Was schon gebaut ist, bleibt.
+
+## Die Blaupause: 3D-Modelle wie bei Tony Stark
+
+![Die Blaupause](docs/bilder/blaupause.jpg)
+
+Sag **„Blaupause“** (oder oben im Fenster **Blaupause**), dann **„Generiere einen Iron-Man-Helm“**, **„Bau mir eine Drohne“** oder **„Konstruiere ein Raumschiff“**. Jarvis zeichnet das Modell Teil für Teil, jedes Teil baut sich mit einem Laser von unten nach oben auf. Der Hintergrund ist echtes Blaupausen-Papier mit Raster, Maßlinien in echten Größen und Schriftfeld.
+
+- **Ansehen:** Ziehen dreht, das Mausrad zoomt, rechte Maustaste verschiebt, Doppelklick holt ein Teil heran. Auf dem Touchscreen: ein Finger dreht, zwei zoomen.
+- **Sofort per Sprache:** „Dreh es um 90 Grad“, „Lass es drehen“, „Zoom rein“, „Von oben“, „Explosionsansicht“ (alle Baugruppen auseinander, mit Namen), „Bau es wieder zusammen“, „Zeig mir das Triebwerk genauer“, „Nur den Rumpf“, „Zeig alles“, „Mach das größer“, „Mach die Flügel doppelt so groß“, „Mach die Flügel rot“, „Entferne die Antenne“, „Rückgängig“, „Drahtmodell“, „Hologramm“, „Echte Farben“.
+- **Umbauen mit Jarvis:** „Füg noch zwei Raketen an die Flügel“, „Mach den Rumpf schlanker“, „Setz ein Cockpit drauf“. Hast du ein Teil angeklickt, meint „das“ dieses Teil.
+- **Darstellung:** **Blaupause** (weiße Zeichnung), **Holo** (leuchtendes Hologramm), **Echt** (Farben und Material).
+- **Speichern und 3D-Druck:** „Speicher das als Drohne“, „Lade die Blaupause Drohne“, „Zeig mir meine Blaupausen“. **STL** oder „Exportier als STL“ legt eine Datei für den 3D-Drucker in `Jarvis-Werkstatt\Blaupausen` (in Millimetern, steht auf dem Boden).
+- **Stopp** hält eine laufende Konstruktion an. Gezeichnet wird mit Sonnet (`[blaupause] modell = "opus"` für aufwendigere Modelle).
 
 ## Wenn etwas nicht klappt
 
