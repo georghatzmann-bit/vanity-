@@ -660,6 +660,10 @@ class ModelAndProjectsTest(unittest.TestCase):
         cmd = shop.command(job, Path("/tmp/p.md"))
         self.assertEqual(cmd[cmd.index("--model") + 1], "opus")
         self.assertEqual(cmd[cmd.index("--effort") + 1], "high")
+        # Rückfragen (Konnektoren) gehen an Jarvis, sonst lehnt Claude Code sie still ab
+        self.assertEqual(cmd[cmd.index("--permission-prompt-tool") + 1], "stdio")
+        brain._unsupported.add("permission-prompt-tool")
+        self.assertNotIn("--permission-prompt-tool", shop.command(job, Path("/tmp/p.md")))
 
 
 class ProjectViewDeleteTest(unittest.TestCase):

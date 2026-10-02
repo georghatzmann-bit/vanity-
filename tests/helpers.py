@@ -168,11 +168,13 @@ FAKE_CLAUDE = textwrap.dedent(
             import subprocess
             subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], close_fds=False)
         if prompt.startswith("konnektor:"):
-            # Ein Werkzeug, das nicht freigegeben ist (z. B. ein Konnektor): Claude Code fragt den Host
+            # Ein Werkzeug, das nicht freigegeben ist (z. B. ein Konnektor): Claude Code fragt den Host, aber
+            # wie das echte Claude Code nur mit --permission-prompt-tool stdio. Sonst lehnt es still ab.
             name = prompt.split(":", 1)[1].strip()
-            if not live:
-                say("Kein Host für die Rückfrage.")
-                result("Kein Host für die Rückfrage.")
+            if not live or arg("--permission-prompt-tool") != "stdio":
+                text = "Abgelehnt: Claude requested permissions to use " + name + ", but you haven't granted it yet."
+                say(text)
+                result(text)
                 raise Done(0)
             out({"type": "control_request", "request_id": "perm-1", "request": {
                 "subtype": "can_use_tool", "tool_name": name, "input": {"q": "neu"}, "tool_use_id": "toolu_k"}})

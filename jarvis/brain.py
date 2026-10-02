@@ -394,6 +394,16 @@ class ClaudeBrain:
     def live_enabled(self) -> bool:
         return self._live_wanted and "input-format" not in self._unsupported
 
+    def live_flags(self) -> list[str]:
+        """Für den dauerhaften Prozess: Fragen kommen als JSON-Zeilen über stdin, und die Rückfragen von
+        Claude Code ("Darf ich den Kalender-Konnektor benutzen?") gehen an Jarvis (konnektoren.answer).
+        Ohne --permission-prompt-tool lehnt Claude Code im Hintergrund jedes Werkzeug, das nicht in
+        allowed_tools steht, still ab ("you haven't granted it yet"), also auch jeden Konnektor."""
+        flags = ["--input-format", "stream-json"]
+        if "permission-prompt-tool" not in self._unsupported:
+            flags += ["--permission-prompt-tool", "stdio"]
+        return flags
+
     def new_conversation(self) -> None:
         # Der Zähler sorgt dafür, dass eine gerade laufende Antwort die alte
         # Unterhaltung nicht wieder zurückbringt.
@@ -466,7 +476,7 @@ class ClaudeBrain:
         if live is None:
             resume = self._session is not None
             session = self._session or str(uuid.uuid4())
-            cmd = self.command(attempt, isolated, session, resume, effort=effort) + ["--input-format", "stream-json"]
+            cmd = self.command(attempt, isolated, session, resume, effort=effort) + self.live_flags()
             log.debug("Claude-Prozess startet: %s", " ".join(cmd[1:]))
             live = _LiveClaude(cmd, self._home, self.environment(""), key, self._conversation, session,
                                model=attempt.model, effort=effort)
@@ -1149,7 +1159,7 @@ class _StreamReader:
         if subtype == "init":
             self.model = event.get("model", "")
             if "mcp_servers" in event:
-                konnektoren.note(event.get("mcp_servers"))
+                konnektoren.note(event.get("mcp_servers"), str(event.get("permissionMode") or ""))
         elif subtype == "model_fallback" and event.get("fallback_model"):
             # Claude Code ist selbst auf ein anderes Modell ausgewichen.
             self.model = str(event["fallback_model"])

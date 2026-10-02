@@ -971,6 +971,9 @@ class Workshop:
             cmd.append("--include-partial-messages")
         if "input-format" not in unsupported:
             cmd += ["--input-format", "stream-json"]  # Georgs Wünsche während der Arbeit
+            if "permission-prompt-tool" not in unsupported:
+                # Rückfragen (Konnektoren für Logo, Deploy ...) an Jarvis statt still abgelehnt, siehe brain.live_flags
+                cmd += ["--permission-prompt-tool", "stdio"]
         if model:
             cmd += ["--model", model]
         if effort and "effort" not in unsupported:

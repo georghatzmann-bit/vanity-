@@ -3,7 +3,9 @@ verbunden hat. Claude Code lädt sie selbst (als "claude.ai Gmail" usw.), sobald
 Claude-Konto angemeldet ist. Jarvis braucht dafür keine eigenen Anbindungen und keine Passwörter.
 
 Damit Claude sie im Hintergrund benutzen darf, beantwortet Jarvis die Rückfragen von Claude Code
-("Darf ich mcp__claude_ai_Gmail__search_threads benutzen?", Steuerleitung can_use_tool) selbst:
+("Darf ich mcp__claude_ai_Gmail__search_threads benutzen?", Steuerleitung can_use_tool) selbst. Die kommen
+nur mit --permission-prompt-tool stdio bei Jarvis an (brain.live_flags), sonst lehnt Claude Code jeden
+Konnektor still ab ("you haven't granted it yet"). Jarvis antwortet so:
 Konnektoren ja, außer wenn das Werkzeug löscht, kauft, bezahlt, veröffentlicht oder Ähnliches.
 Das macht Georg selbst in der App. Senden, Antworten, Weiterleiten und Shop-Änderungen nur direkt nach
 Georgs "Ja" (needs_yes). Alles andere, das nicht freigegeben ist, bleibt gesperrt.
@@ -48,6 +50,7 @@ NOT_ALLOWED_MESSAGE = "Dieses Werkzeug ist für Jarvis nicht freigegeben."
 # Was Claude Code an Servern meldet (Name -> Zustand), zuletzt gesehen beim Start einer Frage
 _seen: dict[str, str] = {}
 _seen_at = 0.0
+_logged = ""
 _lock = threading.Lock()
 
 
@@ -145,19 +148,26 @@ def answer(proc, line: str, connectors: bool = True, said: str | None = None) ->
     return True
 
 
-def note(servers) -> None:
-    """Merkt sich, welche Server Claude Code beim Start einer Frage meldet (system/init, mcp_servers)."""
-    global _seen_at
+def note(servers, mode: str = "") -> None:
+    """Merkt sich, welche Server Claude Code beim Start einer Frage meldet (system/init, mcp_servers).
+    mode: der Rechte-Modus von Claude Code (permissionMode). Beides kommt einmal ins Protokoll, wenn es sich
+    ändert: Geht ein Konnektor nicht, sieht man dort, ob er fehlt, eine Anmeldung braucht oder abgelehnt wird."""
+    global _seen_at, _logged
     if not isinstance(servers, list):
         return
     found = {}
     for item in servers:
         if isinstance(item, dict) and item.get("name"):
             found[str(item["name"])] = str(item.get("status") or "")
+    summary = ", ".join(f"{display_name(name)} ({status or '?'})" for name, status in sorted(found.items()))
+    line = f"{summary or 'keine'}; Rechte-Modus von Claude Code: {mode or '?'}"
     with _lock:
         _seen.clear()
         _seen.update(found)
         _seen_at = time.time()
+        changed, _logged = line != _logged, line
+    if changed:
+        log.info("Konnektoren: %s", line)
 
 
 def seen() -> list[dict]:

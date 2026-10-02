@@ -434,6 +434,19 @@ class ConnectorTest(unittest.TestCase):
         self.assertEqual(steps[0].label, "Nutzt Gmail")
         self.assertEqual(steps[0].kind, "message")
 
+    def test_live_process_hands_the_questions_to_jarvis(self):
+        # Ohne --permission-prompt-tool stdio lehnt das echte Claude Code jeden Konnektor still ab
+        # (so ging bei Georg kein einziger), mit kommen die Rückfragen bei Jarvis an.
+        self.assertEqual(self.brain.live_flags(), ["--input-format", "stream-json", "--permission-prompt-tool", "stdio"])
+
+    def test_old_claude_without_permission_prompts_still_answers(self):
+        with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "permission-prompt-tool"}), \
+                self.assertLogs("jarvis.brain", "WARNING"):
+            answer = self.brain.ask("hallo")
+        self.assertEqual(answer.text, "Sehr wohl, Sir. hallo")
+        self.assertEqual(self.brain.live_flags(), ["--input-format", "stream-json"])
+        self.assertTrue(self.brain.live_enabled, "der dauerhafte Prozess bleibt")
+
     def test_deleting_buying_and_publishing_are_refused(self):
         for tool in ("mcp__claude_ai_Gmail__trash_message", "mcp__claude_ai_Vercel__buy_domain",
                      "mcp__claude_ai_Shopify__graphql_mutation"):
@@ -482,6 +495,17 @@ class ConnectorTest(unittest.TestCase):
             self.brain.ask("hallo")
         self.assertEqual([c["name"] for c in konnektoren.seen()], ["Gmail", "Google Calendar"])
         self.assertTrue(all(c["ok"] for c in konnektoren.seen()))
+
+    def test_connectors_and_permission_mode_go_into_the_log_once(self):
+        from jarvis import konnektoren
+
+        konnektoren._logged = ""
+        servers = [{"name": "claude.ai Shopify", "status": "needs-auth"}, {"name": "claude.ai Gmail", "status": "connected"}]
+        with self.assertLogs("jarvis.konnektoren", "INFO") as logs:
+            konnektoren.note(servers, "auto")
+            konnektoren.note(servers, "auto")
+        self.assertEqual(logs.output, ["INFO:jarvis.konnektoren:Konnektoren: Gmail (connected), Shopify (needs-auth); "
+                                       "Rechte-Modus von Claude Code: auto"])
 
     def test_mcp_list_is_understood(self):
         from jarvis.konnektoren import parse_list
