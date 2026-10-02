@@ -804,6 +804,13 @@ _RUN_WORDS = re.compile(r"^(?:führe|führ)\s+(?:(?:den|die|das|mal|bitte)\s+)*(
 
 # "Wenn ich dir sage, du sollst ...": kein Name für einen Befehl
 _NO_NAME = {"dir", "mir", "es", "das", "dies", "so", "was", "etwas", "nichts", "ihm", "ihr", "euch", "dann", "jetzt"}
+# "Wenn ich morgen Bescheid sage, ...": eine Zeit oder "Bescheid" ist kein Name, das ist ein Gespräch für Claude
+_NOT_IN_NAME = {"morgen", "heute", "später", "gleich", "nachher", "nochmal", "wieder", "bescheid"}
+
+
+def _is_name(key: str) -> bool:
+    words = key.split()
+    return bool(words) and not all(w in _NO_NAME for w in words) and not any(w in _NOT_IN_NAME for w in words)
 
 
 def command_key(text: str) -> str:
@@ -849,7 +856,7 @@ def match_memory(text: str):
         return "unteach", found.group("trigger").strip(" .!" + _QUOTES)
     for pattern in (_TEACH_SAY_FIRST, _TEACH_NAMED, _TEACH):
         found = pattern.match(raw)
-        if found and not found.group("action").rstrip().endswith("?") and command_key(found.group("trigger")) not in _NO_NAME:
+        if found and not found.group("action").rstrip().endswith("?") and _is_name(command_key(found.group("trigger"))):
             return "teach", (found.group("trigger").strip(" ,.!" + _QUOTES), found.group("action").strip())
     found = _REMEMBER.match(raw)
     if found:

@@ -27,7 +27,8 @@ class ParseTest(unittest.TestCase):
 
     def test_not_a_command(self):
         for said in ("Wenn ich nach Hause komme, mach das Licht an", "Wenn ich morgen aufstehe, sag mir das Wetter",
-                     "Wenn ich Hallo sage, was machst du dann?", "Wenn ich dir sage, du sollst leiser sein, dann hör auf"):
+                     "Wenn ich Hallo sage, was machst du dann?", "Wenn ich dir sage, du sollst leiser sein, dann hör auf",
+                     "Wenn ich es dir sage, dann mach es", "Wenn ich morgen Bescheid sage, mach das Licht an"):
             self.assertIsNone(match_memory(said), said)
         self.assertEqual(match_memory("Merk dir, dass ich Pizza mag")[0], "remember")
 
