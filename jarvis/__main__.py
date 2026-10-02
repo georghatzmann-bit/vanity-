@@ -68,6 +68,7 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         brain = None
 
     speaker = None
+    tts = None
     assistant_ref: list[Assistant] = []
     if not silent:
         from .tts import Speaker, TextToSpeech
@@ -96,6 +97,7 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
     assistant.phone = phone
     assistant.server = None
+    assistant.tts = tts  # für die Handy-App: Antworten in Jarvis' Stimme auf dem Handy
     assistant_ref.append(assistant)
     from .memory import Memory
 
@@ -347,6 +349,7 @@ def load_voice(
 
         place = str(cfg.get("ich", {}).get("ort", "")).strip()
         stt = make_transcriber(cfg["stt"], place, on_problem=lambda text: ui.toast(text, "error"))
+        assistant.transcriber = stt  # auch für die Sprechtaste der Handy-App
         if isinstance(stt, CloudSpeechToText):
             # Die Ersatz-Erkennung auf dem eigenen PC in Ruhe vorbereiten.
             threading.Timer(45.0, stt.warm_up_fallback).start()

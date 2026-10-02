@@ -248,9 +248,59 @@ class Api:
         running = bool(server is not None and server.running)
         ip = local_ip()
         port = server.port if running else int(server_cfg.get("port", 8765) or 8765)
-        url = app_url(token, ip, port) if enabled else ""
+        lan = app_url(token, ip, port) if enabled else ""
+        # Über Tailscale (HTTPS): die bessere Adresse, geht überall und mit Sprechtaste
+        secure = str(server_cfg.get("https") or "").rstrip("/")
+        url = f"{secure}/app/#t={token}" if enabled and secure.startswith("https://") else lan
         return {"enabled": enabled, "running": running, "url": url, "qr": qr_svg(url) if url else "",
-                "ip": ip, "port": port, "mac": mac_address(ip)}
+                "ip": ip, "port": port, "mac": mac_address(ip), "lan_url": lan, "secure": bool(enabled and secure)}
+
+    def tailscale_info(self) -> dict:
+        """Für "Sicher von überall": Ist Tailscale da, angemeldet, und läuft die HTTPS-Adresse schon?"""
+        from .. import tailscale
+
+        info = tailscale.status()
+        server_cfg = (getattr(self._assistant, "_cfg", {}) or {}).get("server", {}) or {}
+        info["url"] = str(server_cfg.get("https") or "")
+        return info
+
+    def tailscale_enable(self, on) -> dict:
+        """HTTPS über Tailscale an (oder aus). Danach zeigt der QR-Code die sichere Adresse."""
+        from .. import tailscale
+        from ..config import save_setting
+
+        cfg = getattr(self._assistant, "_cfg", None)
+        if cfg is None:
+            return {"ok": False, "error": "Jarvis läuft nicht."}
+        server_cfg = cfg.setdefault("server", {})
+        if not on:
+            tailscale.stop()
+            server_cfg["https"] = ""
+            save_setting("server", "https", "")
+            return {"ok": True, "error": "", "url": ""}
+        server = getattr(self._assistant, "server", None)
+        port = server.port if server is not None and server.running else int(server_cfg.get("port", 8765) or 8765)
+        result = tailscale.serve(port)
+        if result["ok"]:
+            server_cfg["https"] = result["url"]
+            save_setting("server", "https", result["url"])
+        return result
+
+    def tailscale_help(self, which) -> bool:
+        """Knöpfe: Tailscale herunterladen oder HTTPS im Tailscale-Konto erlauben."""
+        from .. import pc
+
+        url = str(which or "")
+        if url == "download":
+            url = "https://tailscale.com/download"
+        if not (url.startswith("https://tailscale.com/") or url.startswith("https://login.tailscale.com/")):
+            return False
+        try:
+            pc.open_uri(url)
+            return True
+        except Exception as exc:
+            log.info("Tailscale-Seite: %s", exc)
+            return False
 
     def phone_enable(self, on) -> dict:
         """Handy-Verbindung an oder aus. Beim ersten Mal entsteht ein geheimer Schlüssel."""

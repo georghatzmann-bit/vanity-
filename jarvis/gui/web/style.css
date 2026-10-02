@@ -1550,7 +1550,7 @@ body[data-view="workshop"] .holo-scan {
 
 .dlg-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   padding: 4px;
   border-radius: 8px;
@@ -1875,4 +1875,17 @@ body[data-view="workshop"] .holo-scan {
   font: 13px/1.4 var(--mono);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Verbinden > Handy: sicher von überall */
+.dlg-pair .ts-row {
+  grid-column: 1 / -1;
+  align-items: center;
+}
+
+.ts-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
 }

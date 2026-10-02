@@ -45,6 +45,10 @@
       pushTopic: $('pushTopic'),
       pushCopy: $('pushCopy'),
       pushTest: $('pushTest'),
+      tsState: $('tsState'),
+      tsHint: $('tsHint'),
+      tsHelp: $('tsHelp'),
+      tsToggle: $('tsToggle'),
       calState: $('calState'),
       calForm: $('calForm'),
       calUrl: $('calUrl'),
@@ -84,6 +88,54 @@
         info = { enabled: false };
       }
       render();
+      if (info && info.enabled) refreshTailscale();
+    }
+
+    // ------------------------------------------------------------ Sicher von überall (Tailscale)
+
+    let ts = null;
+    let tsEnable = '';
+
+    function renderTailscale() {
+      if (!el.tsState) return;
+      const on = !!(ts && ts.url);
+      el.tsState.textContent = on ? 'Sicher von überall: an' : 'Sicher von überall: aus';
+      el.tsToggle.textContent = on ? 'Ausschalten' : tsEnable ? 'Erlaubt, nochmal' : 'Einschalten';
+      el.tsHelp.hidden = !(ts && !ts.installed) && !tsEnable;
+      el.tsHelp.textContent = tsEnable ? 'HTTPS erlauben' : 'Tailscale holen';
+      if (on) el.tsHint.textContent = 'Die App läuft über ' + ts.url.replace(/^https:\/\//, '').replace(/\/$/, '') + '. Den QR-Code oben einmal neu scannen.';
+      else if (ts && !ts.installed) el.tsHint.textContent = 'Erst Tailscale holen (oder sag: „Jarvis, installiere Tailscale“), einmal anmelden, am Handy dieselbe App mit demselben Konto. Dann hier einschalten.';
+      else if (ts && ts.error) el.tsHint.textContent = ts.error;
+    }
+
+    async function refreshTailscale() {
+      try {
+        ts = await call('tailscale_info');
+      } catch {
+        ts = null;
+      }
+      renderTailscale();
+    }
+
+    if (el.tsToggle) {
+      el.tsToggle.addEventListener('click', async () => {
+        const want = !(ts && ts.url);
+        el.tsToggle.disabled = true;
+        el.tsToggle.textContent = want ? 'Richte ein …' : 'Schalte aus …';
+        try {
+          const r = await call('tailscale_enable', want);
+          tsEnable = r && r.enable_url ? r.enable_url : '';
+          if (r && r.ok) toast(want ? 'Sicher von überall ist an. Den QR-Code neu scannen.' : 'Sicher von überall ist aus.', 'ok');
+          else toast((r && r.error) || 'Das ging gerade nicht.', 'error');
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        } finally {
+          el.tsToggle.disabled = false;
+          await refreshTailscale();
+          refresh();
+        }
+      });
+      el.tsHelp.addEventListener('click', () => call('tailscale_help', tsEnable || 'download').catch(() => {}));
     }
 
     // ------------------------------------------------------------ Alexa

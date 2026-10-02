@@ -343,14 +343,23 @@
       <ol class="dlg-steps">
         <li><b>Kamera aufs Bild halten</b><span>und den Link öffnen. Das Handy merkt sich den Schlüssel.</span></li>
         <li><b>Zum Startbildschirm hinzufügen</b><span>im Browser-Menü (iPhone: Teilen). Dann ist Jarvis eine App.</span></li>
-        <li><b>Sprechen</b><span>mit dem Mikrofon auf der Handy-Tastatur.</span></li>
+        <li><b>Sprechen</b><span>mit dem Mikrofon auf der Handy-Tastatur, mit sicherer Verbindung (unten) auch direkt in der App.</span></li>
       </ol>
       <div class="dlg-url">
         <code id="phoneUrl"></code>
         <button type="button" class="btn small ghost" id="phoneCopy">Kopieren</button>
       </div>
-      <p class="dlg-note">Von unterwegs: <b>Tailscale</b> (kostenlos) auf PC und Handy installieren, dann klappt es überall.
-        Fragt Windows nach der Firewall, „Zulassen“ wählen.</p>
+      <div class="row dlg-row ts-row">
+        <span class="row-text">
+          <b id="tsState">Sicher von überall: aus</b>
+          <small id="tsHint">Mit Tailscale (kostenlos) geht die App auch unterwegs, über eine verschlüsselte Adresse. Dann gibt es in der App eine Sprechtaste und sie lässt sich als echte App installieren.</small>
+        </span>
+        <span class="ts-actions">
+          <button type="button" class="btn small ghost" id="tsHelp" hidden>Tailscale holen</button>
+          <button type="button" class="btn small" id="tsToggle">Einschalten</button>
+        </span>
+      </div>
+      <p class="dlg-note">Fragt Windows nach der Firewall, „Zulassen“ wählen. Tailscale braucht es auf PC und Handy, mit demselben Konto.</p>
       <p class="dlg-note" id="phoneMac" hidden></p>
       <button type="button" class="link-btn" id="phoneWol">PC fürs Einschalten per Netzwerk vorbereiten (fragt nach Administratorrechten)</button>
       <button type="button" class="link-btn" id="phoneNew">Neu koppeln (alte Handys ausschließen)</button>

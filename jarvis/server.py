@@ -8,6 +8,8 @@ POST /api/befehl           {"text": "Öffne Spotify", "sprechen": false}
 POST /api/vorschlag        {"antwort": "ja" | "nein" | "nie"}
 POST /api/stopp
 GET  /api/projekte         die Werkstatt-Projekte
+POST /api/sprich           {"text": "..."} -> WAV in Jarvis' Stimme (Antworten auf dem Handy hören)
+POST /api/hoeren           Aufnahme vom Handy (webm, mp4, wav) -> {"text": "..."} und als Befehl ausgeführt
 
 Home Assistant / Alexa:
 POST /befehl  {"text": "Mach Musik an", "alexa": "wohnzimmer", "sprechen": true}  (wartet auf die Antwort)
@@ -29,6 +31,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parent / "gui" / "web" / "handy"
+MAX_RECORDING = 6_000_000  # Bytes, etwa eine Minute Sprache vom Handy
 TYPES = {
     ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
     ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".json": "application/json",
@@ -110,10 +113,37 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
                 return self._send(200, {"projekte": [{k: p.get(k) for k in keep} for p in items]})
             return self._send(404, {"fehler": "Unbekannt"})
 
+        def _audio(self, body: bytes) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _hear(self) -> None:
+            """Die Sprechtaste der Handy-App: Aufnahme erkennen und als Befehl ausführen."""
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if not 0 < length <= MAX_RECORDING:
+                return self._send(413 if length else 400, {"fehler": "Aufnahme fehlt oder ist zu lang"})
+            data = self.rfile.read(length)
+            try:
+                text = assistant.hear(data)
+            except Exception as exc:
+                log.warning("Aufnahme vom Handy: %s", exc)
+                return self._send(500, {"fehler": "Die Aufnahme ließ sich nicht erkennen."})
+            if text:
+                log.info("Gesprochen am Handy: %s", text)
+                speak = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("sprechen", ["0"])[0] == "1"
+                assistant.submit(text, speak=speak)
+            return self._send(200, {"ok": True, "text": text})
+
         def do_POST(self):
             path = urllib.parse.urlparse(self.path).path.rstrip("/")
             if not self._authorized():
                 return self._send(401, {"fehler": "Token fehlt oder falsch"})
+            if path == "/api/hoeren":
+                return self._hear()
             try:
                 data = self._json()
             except (ValueError, UnicodeDecodeError):
@@ -131,6 +161,15 @@ def make_handler(assistant, token: str, homeassistant=None, phone=None):
                     return self._send(400, {"fehler": "antwort: ja, nein oder nie"})
                 assistant.submit(answer, speak=False)
                 return self._send(200, {"ok": True})
+            if path == "/api/sprich":
+                text = str(data.get("text", "")).strip()[:600]
+                if not text:
+                    return self._send(400, {"fehler": "Feld 'text' ist leer"})
+                try:
+                    return self._audio(assistant.speech_wav(text))
+                except Exception as exc:
+                    log.warning("Stimme fürs Handy: %s", exc)
+                    return self._send(503, {"fehler": "Die Stimme ist gerade nicht verfügbar."})
             if path == "/api/stopp":
                 assistant.stop()
                 # Wie der Stopp-Knopf im Fenster: auch ein angekündigtes Herunterfahren

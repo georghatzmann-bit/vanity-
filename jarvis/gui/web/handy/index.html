@@ -27,10 +27,9 @@
     </div>
     <div class="top-side">
       <span class="weather" id="weather" hidden></span>
-      <button type="button" class="icon-btn" id="speakBtn" aria-pressed="false" title="Antworten auch am PC vorlesen">
-        <svg viewBox="0 0 24 24" aria-hidden="true" class="ico ico-quiet"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
-        <svg viewBox="0 0 24 24" aria-hidden="true" class="ico ico-loud"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
-        <span class="sr-only" id="speakText">Am PC vorlesen: aus</span>
+      <button type="button" class="ton-btn" id="speakBtn" aria-label="Wo Jarvis antwortet">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+        <span id="speakText">Handy</span>
       </button>
     </div>
   </header>
@@ -98,6 +97,9 @@
 
   <!-- Eingabe -->
   <form class="composer" id="composer" autocomplete="off">
+    <button type="button" class="mic" id="mic" aria-label="Sprechen" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+    </button>
     <textarea id="input" rows="1" maxlength="2000" placeholder="Schreib oder diktier Jarvis etwas …" aria-label="Nachricht an Jarvis"></textarea>
     <button type="submit" class="send" id="send" aria-label="Senden" disabled>
       <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M5 12h13M13 6l6 6-6 6"/></svg>

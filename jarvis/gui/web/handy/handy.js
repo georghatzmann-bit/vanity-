@@ -5,7 +5,8 @@
 
   const $ = (id) => document.getElementById(id);
   const KEY = 'jarvisSchluessel';
-  const SPEAK = 'jarvisVorlesen';
+  const SPEAK = 'jarvisVorlesen'; // alt: "1" = am PC vorlesen
+  const TON = 'jarvisTon'; // "handy", "pc" oder "still"
   const DEMO = location.protocol === 'file:' || /[?&]demo\b/.test(location.search);
 
   const el = {
@@ -32,6 +33,7 @@
     input: $('input'),
     send: $('send'),
     stop: $('stop'),
+    mic: $('mic'),
     toast: $('toast'),
   };
 
@@ -96,7 +98,8 @@
     return res.json();
   }
 
-  const S = { link: 'wait', state: 'idle', last: 0, start: '', busy: false, waiting: 0, speak: storage('get', SPEAK) === '1', tab: 'talk' };
+  const S = { link: 'wait', state: 'idle', last: 0, start: '', busy: false, waiting: 0, tab: 'talk', speakFrom: Infinity,
+    ton: storage('get', TON) || (storage('get', SPEAK) === '1' ? 'pc' : 'handy') };
 
   function setLink(link) {
     if (S.link === link) return;
@@ -197,6 +200,10 @@
     }
     if (typing) el.feed.insertBefore(li, typing);
     else el.feed.appendChild(li);
+    // Antworten auf das, was hier am Handy gesagt wurde, in Jarvis' Stimme vorlesen
+    if (kind === 'jarvis' && S.ton === 'handy' && Number(item.n) > S.speakFrom && Date.now() - S.waiting < 180000) {
+      Voice.say(String(item.text || ''));
+    }
     while (el.feed.children.length > 120) el.feed.firstElementChild.remove();
     el.feedEmpty.hidden = true;
     scrollFeed();
@@ -230,8 +237,10 @@
       toast('Jarvis ist gerade nicht erreichbar.', 'error');
       return;
     }
+    Voice.unlock();
     try {
-      await api('/api/befehl', { text, sprechen: S.speak });
+      S.speakFrom = S.last;
+      await api('/api/befehl', { text, sprechen: S.ton === 'pc' });
       S.waiting = Date.now();
       S.busy = true;
       renderState();
@@ -447,11 +456,147 @@
     }, 2400);
   }
 
+  const TONES = {
+    handy: ['Handy', 'Jarvis antwortet hier auf dem Handy, in seiner Stimme'],
+    pc: ['PC', 'Jarvis antwortet am PC (Lautsprecher dort)'],
+    still: ['Still', 'Antworten nur als Text, nirgends vorlesen'],
+  };
+
   function renderSpeak() {
-    el.speakBtn.setAttribute('aria-pressed', String(S.speak));
-    el.speakText.textContent = 'Am PC vorlesen: ' + (S.speak ? 'an' : 'aus');
-    el.speakBtn.title = S.speak ? 'Jarvis liest Antworten am PC vor' : 'Antworten nur hier anzeigen (am PC still)';
+    const [label, hint] = TONES[S.ton] || TONES.handy;
+    el.speakBtn.dataset.ton = S.ton;
+    el.speakText.textContent = label;
+    el.speakBtn.title = hint;
+    el.speakBtn.setAttribute('aria-label', 'Wo Jarvis antwortet: ' + label + '. Tippen zum Wechseln.');
   }
+
+  // ------------------------------------------------------------------ Jarvis' Stimme auf dem Handy
+
+  const Voice = {
+    ctx: null,
+    queue: Promise.resolve(),
+    // Browser spielen Ton erst nach einem Tippen: beim ersten Tippen freischalten.
+    unlock() {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      try {
+        if (!this.ctx) this.ctx = new Ctx();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const silent = this.ctx.createBuffer(1, 1, 22050);
+        const src = this.ctx.createBufferSource();
+        src.buffer = silent;
+        src.connect(this.ctx.destination);
+        src.start(0);
+      } catch {
+        /* dann eben ohne Ton */
+      }
+    },
+    say(text) {
+      if (DEMO || !text.trim()) return;
+      this.queue = this.queue.then(() => this.play(text)).catch(() => {});
+    },
+    async play(text) {
+      if (!this.ctx) return;
+      const res = await fetch('/api/sprich', {
+        method: 'POST', cache: 'no-store',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return;
+      const data = await res.arrayBuffer();
+      const buffer = await new Promise((ok, fail) => this.ctx.decodeAudioData(data, ok, fail));
+      await new Promise((done) => {
+        const src = this.ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(this.ctx.destination);
+        src.onended = done;
+        src.start(0);
+      });
+    },
+  };
+
+  // ------------------------------------------------------------------ Sprechtaste
+
+  const Mic = {
+    rec: null,
+    chunks: [],
+    timer: 0,
+    supported() {
+      return window.isSecureContext && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && !!window.MediaRecorder;
+    },
+    async toggle() {
+      Voice.unlock();
+      if (this.rec) {
+        this.stop();
+        return;
+      }
+      if (DEMO) {
+        toast('Im Demo-Modus hört Jarvis nicht zu.', 'ok');
+        return;
+      }
+      if (!this.supported()) {
+        toast('Direkt sprechen geht mit der sicheren Verbindung (am PC: Verbinden › Handy › Sicher von überall). Bis dahin: Mikrofon der Tastatur.', 'error');
+        return;
+      }
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      } catch {
+        toast('Kein Zugriff aufs Mikrofon. In den Browser-Einstellungen erlauben.', 'error');
+        return;
+      }
+      const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'].find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+      this.chunks = [];
+      this.rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      this.rec.ondataavailable = (e) => { if (e.data && e.data.size) this.chunks.push(e.data); };
+      this.rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(this.chunks, { type: this.rec.mimeType || type || 'audio/webm' });
+        this.rec = null;
+        this.render();
+        this.upload(blob);
+      };
+      this.rec.start();
+      this.timer = setTimeout(() => this.stop(), 30000);
+      this.render();
+      toast('Ich höre zu, Sir. Nochmal tippen zum Senden.', 'ok');
+    },
+    stop() {
+      clearTimeout(this.timer);
+      if (this.rec && this.rec.state !== 'inactive') this.rec.stop();
+    },
+    async upload(blob) {
+      if (!blob.size) return;
+      el.mic.classList.add('busy');
+      S.speakFrom = S.last;
+      try {
+        const res = await fetch('/api/hoeren?sprechen=' + (S.ton === 'pc' ? '1' : '0'), {
+          method: 'POST', cache: 'no-store',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': blob.type || 'application/octet-stream' },
+          body: blob,
+        });
+        const data = res.ok ? await res.json() : null;
+        if (!data || !data.text) {
+          toast('Das habe ich nicht verstanden, Sir.', 'error');
+          return;
+        }
+        S.waiting = Date.now();
+        S.busy = true;
+        renderState();
+        setTimeout(pollFeed, 150);
+        setTimeout(pollStatus, 400);
+      } catch {
+        toast('Senden ging nicht. Ist der PC an?', 'error');
+      } finally {
+        el.mic.classList.remove('busy');
+      }
+    },
+    render() {
+      const on = !!this.rec;
+      el.mic.setAttribute('aria-pressed', String(on));
+      el.mic.setAttribute('aria-label', on ? 'Aufnahme senden' : 'Sprechen');
+    },
+  };
 
   el.tabs.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
@@ -480,11 +625,13 @@
     }
   });
   el.speakBtn.addEventListener('click', () => {
-    S.speak = !S.speak;
-    storage('set', [SPEAK, S.speak ? '1' : '0']);
+    S.ton = { handy: 'pc', pc: 'still', still: 'handy' }[S.ton] || 'handy';
+    storage('set', [TON, S.ton]);
     renderSpeak();
-    toast(S.speak ? 'Jarvis liest am PC vor.' : 'Antworten nur hier, am PC still.', 'ok');
+    if (S.ton === 'handy') Voice.unlock();
+    toast({ handy: 'Jarvis antwortet hier, in seiner Stimme.', pc: 'Jarvis antwortet am PC.', still: 'Antworten nur als Text.' }[S.ton], 'ok');
   });
+  el.mic.addEventListener('click', () => Mic.toggle());
   el.offer.addEventListener('click', async (e) => {
     const b = e.target.closest('button[data-answer]');
     if (!b) return;
@@ -500,6 +647,10 @@
     const chip = e.target.closest('[data-say]');
     if (chip) send(chip.dataset.say);
   });
+  // Als App installierbar (nur über HTTPS, also mit "Sicher von überall")
+  if (window.isSecureContext && 'serviceWorker' in navigator && !DEMO) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 
   // Nur abfragen, solange die App sichtbar ist (schont den Akku)
   let statusTimer = 0;

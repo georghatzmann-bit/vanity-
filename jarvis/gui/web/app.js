@@ -105,6 +105,9 @@
     discord_info: () => window.pywebview.api.discord_info(),
     discord_save: (token) => window.pywebview.api.discord_save(token),
     discord_invite: () => window.pywebview.api.discord_invite(),
+    tailscale_info: () => window.pywebview.api.tailscale_info(),
+    tailscale_enable: (on) => window.pywebview.api.tailscale_enable(on),
+    tailscale_help: (which) => window.pywebview.api.tailscale_help(which),
     calendar_info: () => window.pywebview.api.calendar_info(),
     calendar_add: (url) => window.pywebview.api.calendar_add(url),
     calendar_remove: (url) => window.pywebview.api.calendar_remove(url),
@@ -1497,6 +1500,9 @@
       discord_info: () => Promise.resolve({ configured: true, name: 'Jarvis', guilds: ['Georgs Gaming-Zentrale'], error: '' }),
       discord_save: () => Promise.resolve({ configured: true, name: 'Jarvis', guilds: [], error: '' }),
       discord_invite: () => Promise.resolve({ ok: true }),
+      tailscale_info: () => Promise.resolve({ installed: true, running: true, name: 'georgs-pc.tail1234.ts.net', error: '', url: DEMO_TS.url }),
+      tailscale_enable: (on) => { DEMO_TS.url = on ? 'https://georgs-pc.tail1234.ts.net/' : ''; return Promise.resolve({ ok: true, url: DEMO_TS.url, error: '' }); },
+      tailscale_help: () => Promise.resolve(true),
       calendar_info: () => Promise.resolve(DEMO_CAL),
       calendar_add: (url) => {
         if (!/^(https|webcal):\/\//.test(url)) return Promise.resolve({ ok: false, error: 'Das ist keine iCal-Adresse. Sie beginnt mit https:// oder webcal:// und endet meist auf .ics.' });
@@ -1563,6 +1569,8 @@
   };
   const DEMO_ALEXA = { enabled: true, connected: true };
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
+  const DEMO_TS = { url: '' };
+
   const DEMO_CAL = {
     feeds: [{ url: 'https://calendar.google.com/calendar/ical/georg/private-abc/basic.ics', shown: 'https://calendar.google.com/…', error: '' }],
     count: 6,

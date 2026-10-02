@@ -184,6 +184,44 @@ class Assistant:
         self.say(text)
         self._push(text)
 
+    def speech_wav(self, text: str) -> bytes:
+        """Ein Satz in Jarvis' Stimme als WAV-Datei (für die Handy-App)."""
+        import io
+        import wave
+
+        from .text import speakable
+        from .tts import materialize
+
+        tts = getattr(self, "tts", None)
+        text = speakable(text)[:600]
+        if tts is None or not text:
+            raise RuntimeError("Keine Stimme verfügbar")
+        samples, rate = tts.synthesize(text)
+        samples = materialize(samples)
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(int(rate))
+            out.writeframes(samples.astype("<i2").tobytes())
+        return buffer.getvalue()
+
+    def hear(self, data: bytes) -> str:
+        """Aufnahme vom Handy (webm, mp4 oder wav) in Text. Leer = nichts verstanden."""
+        import io
+
+        transcriber = getattr(self, "transcriber", None)
+        if transcriber is None:
+            from .stt import make_transcriber
+
+            transcriber = self.transcriber = make_transcriber(self._cfg["stt"])
+        from faster_whisper import decode_audio
+
+        audio = decode_audio(io.BytesIO(data), sampling_rate=16000)
+        if audio.size < 16000 * 0.3:
+            return ""
+        return transcriber.transcribe(audio).strip()
+
     def _push(self, text: str) -> None:
         push = getattr(self, "push", None)
         if push is None or not push.enabled or not text:

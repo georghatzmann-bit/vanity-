@@ -190,6 +190,46 @@ body[data-link="off"] .orb {
   border-color: rgba(var(--glow), 0.5);
 }
 
+/* Wo Jarvis antwortet: Handy, PC oder still (Text steht dabei, nicht nur ein Symbol) */
+.ton-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.ton-btn .ico {
+  width: 18px;
+  height: 18px;
+}
+
+.ton-btn[data-ton="handy"] {
+  border-color: rgba(var(--glow), 0.5);
+}
+
+.ton-btn[data-ton="handy"] .ico {
+  color: var(--accent);
+}
+
+.ton-btn[data-ton="still"] {
+  color: var(--text-3);
+}
+
+.ton-btn:focus-visible,
+.mic:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ------------------------------------------------------------------ Koppeln */
 
 .pair {
@@ -663,6 +703,42 @@ textarea:focus-visible {
 
 .send:disabled {
   opacity: 0.35;
+}
+
+.mic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.mic[aria-pressed="true"] {
+  border-color: rgba(255, 107, 107, 0.6);
+  background: rgba(255, 107, 107, 0.16);
+  color: var(--err);
+  animation: rec 1.2s ease-in-out infinite;
+}
+
+.mic.busy {
+  opacity: 0.5;
+}
+
+@keyframes rec {
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 107, 107, 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic[aria-pressed="true"] {
+    animation: none;
+  }
 }
 
 .stop {

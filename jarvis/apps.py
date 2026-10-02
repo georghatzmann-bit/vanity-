@@ -90,6 +90,8 @@ KNOWN_APPS: tuple[KnownApp, ...] = (
     KnownApp("PowerToys", ("Microsoft.PowerToys",), ("PowerToys.exe",), ("power toys",), True),
     KnownApp("Windows Terminal", ("Microsoft.WindowsTerminal",), ("WindowsTerminal.exe",), ("terminal",)),
     KnownApp("Git", ("Git.Git",), ()),
+    KnownApp("Tailscale", ("Tailscale.Tailscale",), ("tailscale-ipn.exe",), ("tail scale",), True),
+    KnownApp("Obsidian", ("Obsidian.Obsidian",), ("Obsidian.exe",), ("obsidian notes",)),
     KnownApp("Node.js", ("OpenJS.NodeJS.LTS",), (), ("node", "nodejs", "node js")),
     KnownApp("Wallpaper Engine", (), ("wallpaper32.exe", "wallpaper64.exe"), ("wallpaper",), True),
     KnownApp("Rechner", (), ("CalculatorApp.exe",), ("taschenrechner", "calculator")),
