@@ -443,24 +443,51 @@ def match_discord(text: str) -> Intent | None:
 
 _REMIND = [
     # "Erinnere mich in 20 Minuten an den Tee", "Erinnere mich morgen um 8 daran, den Müll rauszubringen"
-    re.compile(r"^(?:bitte\s+)?erinnere?\s+mich\s+(?:bitte\s+)?(?P<when>.+?)\s+"
-               r"(?P<sep>an|ans|daran,?(?:\s+dass)?)\s+(?P<what>.+?)[.!]?$", re.I),
+    re.compile(r"^(?:bitte\s+)?erinnere?\s+mich\s+(?:bitte\s+)?(?P<when>.+?)(?:\s+|(?=,))"
+               r"(?P<sep>an|ans|daran,?(?:\s+dass)?|,\s*dass)\s+(?P<what>.+?)[.!]?$", re.I),
     # "Kannst du mich in 10 Minuten an den Tee erinnern?"
     re.compile(r"^(?:kannst|könntest|würdest)\s+du\s+mich\s+(?:bitte\s+)?(?P<when>.+?)\s+"
                r"(?P<sep>an|ans|daran)\s+(?P<what>.+?)\s+erinnern[?.!]?$", re.I),
 ]
-# "Weck mich um 7", "Stell mir einen Wecker auf 6:30" (Uhrzeit, keine Dauer)
+# "Weck mich um 7", "Stell mir einen Wecker auf 6:30" (Uhrzeit, keine Dauer), auch "um halb sieben"
+_HOUR = r"(?:\d{1,2}|eins|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)(?![\wäöüß])"
 _ALARM = [
     re.compile(r"^(?:bitte\s+)?(?:weck|wecke)\s+mich\s+(?:bitte\s+)?(?:morgen\s+früh\s+|morgen\s+)?"
-               r"(?P<when>(?:um\s+)?(?:halb\s+)?\d{1,2}(?:[:.]\d{2})?(?:\s+uhr)?)(?:\s+(?:auf|bitte))?[.!]?$", re.I),
+               r"(?P<when>(?:um\s+)?(?:halb\s+)?" + _HOUR + r"(?:[:.]\d{2})?(?:\s+uhr)?)(?:\s+(?:auf|bitte))?[.!]?$", re.I),
     re.compile(r"^(?:stell|stelle|setz|setze|mach|mache)\s+(?:mir\s+)?(?:bitte\s+)?(?:einen|nen)?\s*wecker\s+"
-               r"(?:auf|für|um)\s+(?P<when>(?:halb\s+)?\d{1,2}(?:[:.]\d{2})?(?:\s+uhr)?)[.!]?$", re.I),
+               r"(?:auf|für|um)\s+(?P<when>(?:halb\s+)?" + _HOUR + r"(?:[:.]\d{2})?(?:\s+uhr)?)[.!]?$", re.I),
 ]
 _TIMER = [
     re.compile(r"^(?:stell|stelle|setz|setze|start|starte|mach|mache)\s+(?:mir\s+)?(?:bitte\s+)?(?:einen|nen|ein)?\s*"
                r"(?:timer|wecker|countdown)\s+(?:auf|für|über|von|in)\s+(?P<dur>.+?)[.!]?$", re.I),
     re.compile(r"^(?:timer|countdown)\s+(?:auf|für|über)?\s*(?P<dur>.+?)[.!]?$", re.I),
 ]
+
+
+_MINE = {"mein": "Ihr", "meine": "Ihre", "meinen": "Ihren", "meinem": "Ihrem", "meiner": "Ihrer", "meines": "Ihres"}
+_INFINITIVE = {"bin": "sein", "hab": "haben", "habe": "haben", "muss": "müssen", "muß": "müssen", "will": "wollen",
+               "kann": "können", "soll": "sollen", "darf": "dürfen", "mag": "mögen", "weiß": "wissen", "tu": "tun"}
+_MODAL = {"muss", "muß", "will", "kann", "soll", "darf", "möchte", "sollte", "müsste", "wollte"}
+
+
+def _for_georg(what: str) -> str:
+    """Jarvis sagt die Erinnerung zu Georg: "meinen Tee" wird "Ihren Tee", und aus "(daran, dass) ich die Wäsche
+    aufhänge" wird der Merkzettel "die Wäsche aufhängen" (sonst hieße es "Erinnerung, Sir: ich die Wäsche aufhänge")."""
+    words = [_MINE.get(w.lower(), w) for w in what.split()]
+    if len(words) >= 2 and words[0].lower() == "ich" and "," not in what:
+        words = words[1:]
+        if words[0].lower() in ("mich", "mir"):
+            words = words[1:]
+        last = words[-1]
+        if last.lower() in _MODAL and len(words) > 1 and words[-2].lower().endswith("n"):
+            words = words[:-1]  # "aufhängen muss" -> "aufhängen"
+        elif last.lower() in _INFINITIVE:
+            words[-1] = _INFINITIVE[last.lower()]
+        elif re.search(r"[^aeiouäöü][ae]le$|[^aeiouäöü]ere$", last.lower()):
+            words[-1] = last[:-1] + "n"  # "ändere" -> "ändern"
+        elif last.lower().endswith("e"):
+            words[-1] = last + "n"  # "aufhänge" -> "aufhängen"
+    return " ".join(words)
 
 
 def match_reminder(text: str, now: dt.datetime | None = None) -> Intent | None:
@@ -475,6 +502,7 @@ def match_reminder(text: str, now: dt.datetime | None = None) -> Intent | None:
         what = found.group("what").strip(" ,.")
         if found.group("sep").lower() == "ans":
             what = "das " + what
+        what = _for_georg(what)
         try:
             when = parse_when(found.group("when"), now)
         except ValueError:

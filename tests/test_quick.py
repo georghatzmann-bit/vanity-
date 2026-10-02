@@ -403,7 +403,9 @@ class EverydayTest(unittest.TestCase):
         now = dt.datetime(2026, 10, 1, 23, 0)
         for said, when in (("Weck mich um 7", dt.datetime(2026, 10, 2, 7, 0)),
                            ("Weck mich morgen um halb 8", dt.datetime(2026, 10, 2, 7, 30)),
-                           ("Stell einen Wecker auf 6:30", dt.datetime(2026, 10, 2, 6, 30))):
+                           ("Stell einen Wecker auf 6:30", dt.datetime(2026, 10, 2, 6, 30)),
+                           ("Weck mich morgen um halb sieben", dt.datetime(2026, 10, 2, 6, 30)),
+                           ("Weck mich um sieben Uhr", dt.datetime(2026, 10, 2, 7, 0))):
             found = intents.match_reminder(said, now)
             self.assertEqual((found.name, found.data["when"]), ("remind", when), said)
         self.assertEqual(intents.match_reminder("Stell einen Wecker auf 10 Minuten", now).name, "timer")

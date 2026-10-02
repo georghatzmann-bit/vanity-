@@ -389,6 +389,15 @@ class ReminderRecognitionTest(unittest.TestCase):
             "Kannst du mich in 10 Minuten an die Wäsche erinnern?": ("remind", "14:10", "die Wäsche"),
             "Stell einen Timer auf 10 Minuten": ("timer", "14:10", "Der Timer ist abgelaufen."),
             "Starte einen Timer für eine halbe Stunde": ("timer", "14:30", "Der Timer ist abgelaufen."),
+            # Jarvis sagt es zu Georg: nicht "Erinnerung, Sir: ich die Wäsche aufhänge" oder "meinen Tee"
+            "Erinnere mich in 2 Stunden daran, dass ich die Wäsche aufhänge": ("remind", "16:00", "die Wäsche aufhängen"),
+            "Erinnere mich in 2 Stunden, dass ich die Wäsche aufhängen muss": ("remind", "16:00", "die Wäsche aufhängen"),
+            "Erinnere mich um 21 Uhr daran, dass ich meine Tabletten nehme": ("remind", "21:00", "Ihre Tabletten nehmen"),
+            "Erinnere mich um 15 Uhr daran, dass ich mich bei Bosch bewerbe": ("remind", "15:00", "bei Bosch bewerben"),
+            "Erinnere mich um 15 Uhr daran, dass ich das Passwort ändere": ("remind", "15:00", "das Passwort ändern"),
+            "Erinnere mich um 15 Uhr daran, dass ich morgen frei habe": ("remind", "15:00", "morgen frei haben"),
+            "Erinnere mich in 10 Minuten an meinen Tee": ("remind", "14:10", "Ihren Tee"),
+            "Erinnere mich in einer Stunde daran, dass der Paketbote kommt": ("remind", "15:00", "der Paketbote kommt"),
         }
         for said, (name, clock, what) in cases.items():
             with self.subTest(said=said):
