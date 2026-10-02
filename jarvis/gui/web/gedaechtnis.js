@@ -1,5 +1,5 @@
-/* Jarvis – Gedächtnis: Zusammenfassung in der rechten Spalte, alles in einer Schublade,
-   und Vorschläge aus den Gewohnheiten als Karte mit Ja, Nein, Nie wieder. */
+/* Jarvis – Gedächtnis: Zusammenfassung in der rechten Spalte und alles in einer Schublade.
+   Vorschläge aus den Gewohnheiten sagt Jarvis als Ergänzung zu einer Antwort, ohne Karte. */
 (function () {
   'use strict';
 
@@ -33,8 +33,6 @@
       birthdaysEmpty: $('memBirthdaysEmpty'),
       facts: $('memFacts'),
       factsEmpty: $('memFactsEmpty'),
-      offer: $('offer'),
-      offerText: $('offerText'),
     };
     if (!el.sum) return null;
     let data = { facts: [], contacts: [], routines: [], birthdays: [], commands: [], skills: [], notebook: false };
@@ -271,14 +269,8 @@
       }
     }
 
-    function offer(o) {
-      if (!o || !o.frage) {
-        el.offer.hidden = true;
-        return;
-      }
-      el.offerText.textContent = o.frage;
-      el.offer.hidden = false;
-    }
+    // Vorschläge stehen in Jarvis' Antwort ("Übrigens, Sir: ..."), es gibt keine Karte mehr.
+    function offer() {}
 
     el.open.addEventListener('click', () => openDrawer(true));
     el.close.addEventListener('click', () => openDrawer(false));
@@ -313,16 +305,6 @@
         }
       });
     }
-    el.offer.addEventListener('click', async (e) => {
-      const b = e.target.closest('button[data-answer]');
-      if (!b) return;
-      el.offer.hidden = true;
-      try {
-        await call('answer_suggestion', b.dataset.answer);
-      } catch {
-        toast('Das ging gerade nicht.', 'error');
-      }
-    });
     refresh();
     setInterval(refresh, 60000);
     return { refresh, offer };

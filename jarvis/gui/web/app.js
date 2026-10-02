@@ -1,5 +1,5 @@
 /* ==========================================================================
-   J.A.R.V.I.S. – Hauptfenster
+   Jarvis – Hauptfenster
    Brücke zu Python über pywebview (window.pywebview.api), sonst Demo-Modus.
    Texte aus Ereignissen werden nur als Klartext (textContent) eingesetzt.
    ========================================================================== */
@@ -56,6 +56,7 @@
     hintTimer: 0,
     gaming: false,
     cpuHistory: [],       // Prozessor der letzten zwei Minuten (alle 2 s ein Wert)
+    name: '',             // Vorname für die Begrüßung ([ich] name)
   };
 
   let api = null;
@@ -148,6 +149,7 @@
     weatherText: $('weatherText'),
     clockTime: $('clockTime'),
     clockDate: $('clockDate'),
+    greetTitle: $('greetTitle'),
     cpuNum: $('cpuNum'),
     cpuRing: $('cpuRing'),
     ramNum: $('ramNum'),
@@ -162,7 +164,6 @@
     gamingText: $('gamingText'),
     coreWrap: $('coreWrap'),
     core: $('core'),
-    field: $('field'),
     stateLabel: $('stateLabel'),
     stateHint: $('stateHint'),
     status: document.querySelector('.status'),
@@ -252,7 +253,7 @@
   function hintFor(state) {
     if (state === 'idle' && S.voice === false) return 'Kein Mikrofon gefunden. Du kannst Jarvis unten schreiben.';
     return {
-      idle: 'Sag „Hey Jarvis“, klick auf den Kern oder schreib unten',
+      idle: 'Sag „Hey Jarvis“, klick auf die Kugel oder schreib unten',
       listening: 'Ich höre …',
       thinking: 'Einen Moment …',
       speaking: 'Sag „Stopp“, um mich zu unterbrechen',
@@ -430,6 +431,7 @@
   }
 
   function renderRecent() {
+    if (!el.recent) return; // die Spalte "Zuletzt" gibt es nicht mehr; der Verlauf steht in der Schublade
     const items = S.history.filter((h) => h.role !== 'info' && h.text).slice(-5);
     el.recent.replaceChildren(...items.map((h) => {
       const li = document.createElement('li');
@@ -610,15 +612,26 @@
     }, 300);
   }
 
+  const KINDS = { termin: 'Termin', erinnerung: 'Erinnerung', wecker: 'Wecker', timer: 'Timer' };
+
   function renderToday(list) {
-    el.today.replaceChildren(...list.slice(0, 5).map((r) => {
+    el.today.replaceChildren(...list.slice(0, 6).map((r) => {
       const li = document.createElement('li');
       const time = document.createElement('time');
-      time.textContent = String(r.uhr || '');
-      const span = document.createElement('span');
-      span.textContent = String(r.text || '') + (r.tag && r.tag !== 'heute' ? ' (' + r.tag + ')' : '');
-      span.title = span.textContent;
-      li.append(time, span);
+      const uhr = String(r.uhr || '');
+      time.textContent = uhr === 'Tag' ? 'ganz' : uhr;
+      li.classList.toggle('all-day', uhr === 'Tag');
+      const what = document.createElement('span');
+      what.className = 'what';
+      const b = document.createElement('b');
+      b.textContent = String(r.text || '');
+      b.title = b.textContent;
+      const small = document.createElement('small');
+      const kind = KINDS[String(r.art || '')] || 'Erinnerung';
+      const day = r.tag && r.tag !== 'heute' ? String(r.tag) : '';
+      small.textContent = [uhr === 'Tag' ? 'ganztägig' : '', kind, day].filter(Boolean).join(' · ');
+      what.append(b, small);
+      li.append(time, what);
       return li;
     }));
     el.todayEmpty.hidden = list.length > 0;
@@ -626,13 +639,13 @@
 
   // ------------------------------------------------------------------ System, Mikrofon, Gaming
 
-  function setGauge(num, ring, value) {
+  // Ein Balken je Wert (Prozessor, Speicher, Grafik); ab 85 % orange
+  function setGauge(num, bar, value) {
     if (typeof value !== 'number' || !isFinite(value)) return;
     const v = clamp(value, 0, 100);
     num.textContent = String(Math.round(v));
-    num.dataset.v = '1';
-    ring.style.strokeDasharray = v.toFixed(1) + ' 100';
-    ring.classList.toggle('high', v >= 85);
+    bar.style.width = v.toFixed(1) + '%';
+    bar.classList.toggle('high', v >= 85);
   }
 
   async function sendText(text) {
@@ -672,17 +685,14 @@
     }));
   }
 
-  // Grafikkarte (nur mit NVIDIA): Auslastung im Ring, Temperatur darunter
+  // Grafikkarte (nur mit NVIDIA): Auslastung als Balken, Temperatur im Namen
   function renderGpu(gpu) {
     const box = document.getElementById('gpuGauge');
     if (!box || !gpu || typeof gpu.load !== 'number') return;
-    if (box.hidden) {
-      box.hidden = false;
-      box.parentElement.classList.add('three');
-    }
+    box.hidden = false;
     setGauge(document.getElementById('gpuNum'), document.getElementById('gpuRing'), gpu.load);
     const name = document.getElementById('gpuName');
-    name.textContent = typeof gpu.temp === 'number' ? 'Grafik · ' + gpu.temp + '°' : 'Grafik';
+    name.textContent = typeof gpu.temp === 'number' ? 'Grafikkarte · ' + gpu.temp + ' °C' : 'Grafikkarte';
     name.classList.toggle('hot', gpu.temp >= 85);
     box.title = 'Grafikkarte: ' + gpu.load + ' % Last, ' + gpu.temp + ' °C, Grafikspeicher ' + gpu.mem + ' % belegt';
   }
@@ -693,7 +703,7 @@
     S.cpuHistory.push(clamp(value, 0, 100));
     if (S.cpuHistory.length > 60) S.cpuHistory.shift();
     const n = S.cpuHistory.length;
-    if (n < 2) return;
+    if (n < 6) return; // erst nach ein paar Werten zeichnen, sonst ist es nur ein Strich
     const step = 120 / 59;
     const pts = S.cpuHistory.map((v, i) => [120 - (n - 1 - i) * step, 27 - (v / 100) * 24]);
     const line = pts.map((pt, i) => (i ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1)).join(' ');
@@ -730,6 +740,10 @@
       el.gamingText.textContent = S.gaming ? 'An' : 'Aus';
     }
     if (typeof c.version === 'string' && c.version) el.linkText.title = 'Jarvis ' + c.version;
+    if (typeof c.name === 'string') {
+      S.name = c.name.trim();
+      renderGreeting(new Date());
+    }
   }
 
   function setLink(link) {
@@ -740,10 +754,20 @@
 
   // ------------------------------------------------------------------ Uhr
 
+  // "Guten Abend, Georg" je nach Tageszeit
+  function renderGreeting(d) {
+    if (!el.greetTitle) return;
+    const h = d.getHours();
+    const part = h >= 5 && h < 11 ? 'Guten Morgen' : h >= 11 && h < 18 ? 'Guten Tag' : 'Guten Abend';
+    const text = S.name ? part + ', ' + S.name : part;
+    if (el.greetTitle.textContent !== text) el.greetTitle.textContent = text;
+  }
+
   function tickClock() {
     const d = new Date();
     el.clockTime.textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
     el.clockDate.textContent = WEEKDAYS[d.getDay()] + ', ' + d.getDate() + '. ' + MONTHS[d.getMonth()];
+    renderGreeting(d);
     setTimeout(tickClock, 1000 - (d.getMilliseconds() % 1000) + 5);
   }
 
@@ -946,47 +970,44 @@
   };
 
   // ==================================================================
-  //   Der Kern: Ringe, Stimm-Kranz, Wellen und Glühen (Canvas)
+  //   Die Kugel: Jarvis' Gesicht. Eine weiche, leuchtende Kugel, in der
+  //   langsam Licht fließt. Hört sie zu oder spricht sie, wird sie heller
+  //   und atmet mit der Stimme. Keine Ringe, keine Skalen.
   // ==================================================================
 
   const Core = (() => {
+    // Farben je Zustand: hell (Glanz), Mitte, Rand; dazu wie lebhaft das Licht fließt
     const LOOK = {
-      idle:      { color: [76, 157, 255],  spin: 0.22, energy: 0.25, wave: 0.12, ripple: 0, scan: 0 },
-      listening: { color: [86, 214, 255],  spin: 0.5,  energy: 0.7,  wave: 0.75, ripple: 1, scan: 0 },
-      thinking:  { color: [123, 140, 255], spin: 1.7,  energy: 0.55, wave: 0.2,  ripple: 0, scan: 1 },
-      speaking:  { color: [76, 157, 255],  spin: 0.7,  energy: 0.9,  wave: 1.0,  ripple: 0, scan: 0 },
-      muted:     { color: [240, 85, 90],   spin: 0.04, energy: 0.08, wave: 0.0,  ripple: 0, scan: 0 },
-      error:     { color: [240, 85, 90],   spin: 0.5,  energy: 0.4,  wave: 0.1,  ripple: 0, scan: 0 },
+      idle:      { a: [176, 190, 255], b: [110, 140, 255], c: [40, 52, 150], energy: 0.3, speed: 0.35, halo: 0.16 },
+      listening: { a: [190, 232, 255], b: [104, 176, 255], c: [36, 78, 178], energy: 0.75, speed: 0.75, halo: 0.3 },
+      thinking:  { a: [206, 198, 255], b: [138, 128, 255], c: [56, 46, 160], energy: 0.6, speed: 1.25, halo: 0.22 },
+      speaking:  { a: [186, 200, 255], b: [112, 142, 255], c: [40, 54, 172], energy: 0.95, speed: 0.85, halo: 0.32 },
+      muted:     { a: [150, 154, 166], b: [92, 97, 110], c: [36, 39, 47], energy: 0.06, speed: 0.12, halo: 0.04 },
+      error:     { a: [255, 190, 186], b: [242, 100, 95], c: [120, 32, 36], energy: 0.45, speed: 0.6, halo: 0.24 },
     };
-    const look = { color: [76, 157, 255], spin: 0.22, energy: 0.25, wave: 0.12, ripple: 0, scan: 0 };
+    const look = JSON.parse(JSON.stringify(LOOK.idle));
     let target = LOOK.idle;
     let canvas = null;
     let ctx = null;
     let size = 0;
     let dpr = 1;
-    let angle = 0;
     let t = 0;
+    let flow = 0;
     let last = 0;
     let level = 0;
     let levelTarget = 0;
     let levelAt = 0;
     let bootT = 0;
     let pulseT = -10;
-    let ripples = [];
-    let lastRipple = 0;
-    const PARTICLES = Array.from({ length: 54 }, () => ({
-      r: 0.42 + Math.random() * 0.62,
-      a: Math.random() * Math.PI * 2,
-      s: (0.04 + Math.random() * 0.12) * (Math.random() < 0.5 ? -1 : 1),
-      z: 0.4 + Math.random() * 0.9,
-      p: Math.random() * Math.PI * 2,
-    }));
-    const BARS = 96;
-    const seeds = Array.from({ length: BARS }, () => Math.random() * 1000);
-    const RING_TEXT = 'J.A.R.V.I.S. · JUST A RATHER VERY INTELLIGENT SYSTEM ·'.split('');
-    const MONO = '"Cascadia Mono", Consolas, ui-monospace, monospace';
+    // Drei Lichtflecken, die in der Kugel kreisen (Lissajous-Bahnen)
+    const BLOBS = [
+      { fx: 0.71, fy: 0.53, px: 0.0, py: 1.7, r: 0.62, mix: 0.0 },
+      { fx: 0.43, fy: 0.89, px: 2.1, py: 0.4, r: 0.55, mix: 0.6 },
+      { fx: 0.97, fy: 0.61, px: 4.2, py: 3.3, r: 0.48, mix: 1.0 },
+    ];
 
     const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
+    const mix = (x, y, k) => [lerp(x[0], y[0], k), lerp(x[1], y[1], k), lerp(x[2], y[2], k)];
 
     function resize() {
       if (!canvas) return;
@@ -1017,14 +1038,9 @@
       pulseT = t;
     }
 
-    function noise(i, time) {
-      const s = seeds[i];
-      return 0.5 + 0.25 * Math.sin(time * 5.1 + s) + 0.15 * Math.sin(time * 9.7 + s * 1.7) + 0.1 * Math.sin(time * 2.3 + s * 0.3);
-    }
-
     function frame(now) {
-      if (document.body.dataset.view !== 'hud') {
-        // Die Werkstatt liegt darüber: nicht zeichnen, nur ab und zu nachsehen
+      if (document.body.dataset.view !== 'hud' || document.hidden) {
+        // Werkstatt liegt darüber oder das Fenster ist versteckt: nicht zeichnen, nur ab und zu nachsehen
         last = now;
         setTimeout(() => requestAnimationFrame(frame), 250);
         return;
@@ -1032,234 +1048,105 @@
       const dt = Math.min(0.05, (now - (last || now)) / 1000);
       last = now;
       t += dt;
-      bootT = Math.min(1, bootT + dt / 1.4);
-      // sanft zum Ziel-Aussehen
-      const k = Math.min(1, dt * 4);
-      for (let i = 0; i < 3; i += 1) look.color[i] = lerp(look.color[i], target.color[i], k);
-      for (const key of ['spin', 'energy', 'wave', 'ripple', 'scan']) look[key] = lerp(look[key], target[key], k);
+      bootT = Math.min(1, bootT + dt / 1.2);
+      const k = Math.min(1, dt * 3.5);
+      for (const key of ['a', 'b', 'c']) look[key] = mix(look[key], target[key], k);
+      for (const key of ['energy', 'speed', 'halo']) look[key] = lerp(look[key], target[key], k);
       // Pegel: schnell rauf, langsam runter; nach 300 ms ohne Meldung abklingen
       const stale = performance.now() - levelAt > 300;
       const want = stale ? 0 : levelTarget;
-      level += (want - level) * Math.min(1, dt * (want > level ? 18 : 5));
-      angle += dt * look.spin;
+      level += (want - level) * Math.min(1, dt * (want > level ? 16 : 4));
+      flow += dt * look.speed * (reducedMotion() ? 0.2 : 1) * (1 + level * 0.8);
       draw();
-      // Ruhig: 30 Bilder pro Sekunde reichen, sonst 60
       const calm = target === LOOK.idle || target === LOOK.muted;
       if (calm && !reducedMotion()) {
-        setTimeout(() => requestAnimationFrame(frame), 33);
+        setTimeout(() => requestAnimationFrame(frame), 33); // ruhig: 30 Bilder pro Sekunde reichen
       } else {
         requestAnimationFrame(frame);
       }
     }
 
-    function arc(r, a0, a1, width, color) {
-      ctx.beginPath();
-      ctx.arc(0, 0, r, a0, a1);
-      ctx.lineWidth = width;
-      ctx.strokeStyle = color;
-      ctx.stroke();
-    }
-
     function draw() {
       if (!ctx) return;
-      const c = look.color;
-      const R = size * 0.47;
       const ease = 1 - Math.pow(1 - bootT, 3);
       const lv = level;
+      const breath = Math.sin(t * 1.15) * 0.012;
+      const click = t - pulseT < 0.45 ? Math.sin(((t - pulseT) / 0.45) * Math.PI) * 0.05 : 0;
+      const R = size * 0.34 * (0.92 + 0.08 * ease) * (1 + breath + click + lv * 0.06 * look.energy);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, size, size);
       ctx.translate(size / 2, size / 2);
-      ctx.lineCap = 'round';
+      ctx.globalAlpha = ease;
 
-      // Glühen hinter allem
-      const glow = ctx.createRadialGradient(0, 0, R * 0.1, 0, 0, R * 1.02);
-      glow.addColorStop(0, rgba(c, 0.32 * (0.5 + look.energy * 0.6 + lv * 0.4) * ease));
-      glow.addColorStop(0.45, rgba(c, 0.08 * ease));
-      glow.addColorStop(1, rgba(c, 0));
-      ctx.fillStyle = glow;
+      // Weiches Licht um die Kugel (wird mit der Stimme stärker)
+      const haloA = look.halo * (0.7 + lv * 0.9);
+      const halo = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 1.45);
+      halo.addColorStop(0, rgba(look.b, haloA));
+      halo.addColorStop(1, rgba(look.b, 0));
+      ctx.fillStyle = halo;
       ctx.beginPath();
-      ctx.arc(0, 0, R * 1.02, 0, Math.PI * 2);
+      ctx.arc(0, 0, R * 1.45, 0, Math.PI * 2);
       ctx.fill();
 
-      // Skala ganz außen: 120 Striche
+      // Die Kugel selbst
       ctx.save();
-      ctx.rotate(angle * 0.08);
-      const ticks = 120;
-      const shownTicks = Math.floor(ticks * ease);
-      for (let i = 0; i < shownTicks; i += 1) {
-        const a = (i / ticks) * Math.PI * 2;
-        const long = i % 10 === 0;
-        const r0 = R * (long ? 0.915 : 0.94);
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
-        ctx.lineTo(Math.cos(a) * R * 0.965, Math.sin(a) * R * 0.965);
-        ctx.lineWidth = (long ? 1.6 : 1) * dpr;
-        ctx.strokeStyle = rgba(c, long ? 0.5 : 0.2);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // Umlaufende Schrift ganz außen
-      if (ease > 0.6) {
-        const fontPx = Math.max(7, R * 0.032);
-        ctx.save();
-        ctx.rotate(-angle * 0.05 - 2.2);
-        ctx.font = `600 ${fontPx.toFixed(1)}px ${MONO}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = rgba(c, 0.42 * (ease - 0.6) / 0.4);
-        const rr = R * 0.992;
-        const stepA = (fontPx * 0.95) / rr;
-        for (let i = 0; i < RING_TEXT.length; i += 1) {
-          ctx.save();
-          ctx.rotate(i * stepA);
-          ctx.translate(0, -rr);
-          ctx.fillText(RING_TEXT[i], 0, 0);
-          ctx.restore();
-        }
-        ctx.restore();
-      }
-
-      // Segment-Ring
-      ctx.save();
-      ctx.rotate(angle * 0.45);
-      const segs = 8;
-      for (let i = 0; i < segs; i += 1) {
-        const a0 = (i / segs) * Math.PI * 2;
-        const len = (Math.PI * 2 / segs) * 0.62 * ease;
-        arc(R * 0.86, a0, a0 + len, 2.4 * dpr, rgba(c, 0.55));
-      }
-      ctx.restore();
-
-      // Gegenläufige Bögen
-      ctx.save();
-      ctx.rotate(-angle * 0.95);
-      arc(R * 0.775, 0, Math.PI * 2, 1 * dpr, rgba(c, 0.12));
-      arc(R * 0.775, 0, 1.25 * ease, 3 * dpr, rgba(c, 0.9));
-      arc(R * 0.775, 2.2, 2.2 + 0.7 * ease, 2 * dpr, rgba(c, 0.55));
-      arc(R * 0.775, 4.1, 4.1 + 0.32 * ease, 2 * dpr, rgba(c, 0.4));
-      ctx.restore();
-
-      // Suchstrahl beim Nachdenken
-      if (look.scan > 0.02 && ctx.createConicGradient) {
-        ctx.save();
-        // Radar: die helle Kante läuft vorn, dahinter klingt der Schein aus.
-        const a = angle * 2.4;
-        const cone = ctx.createConicGradient(a, 0, 0);
-        cone.addColorStop(0, rgba(c, 0));
-        cone.addColorStop(0.86, rgba(c, 0));
-        cone.addColorStop(0.995, rgba(c, 0.34 * look.scan));
-        cone.addColorStop(1, rgba(c, 0));
-        ctx.fillStyle = cone;
-        ctx.beginPath();
-        ctx.arc(0, 0, R * 0.86, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-        // umlaufende Punkte
-        for (let i = 0; i < 3; i += 1) {
-          const a2 = angle * (2.2 + i * 0.4) + i * 2.1;
-          const rr = R * (0.66 + i * 0.05);
-          ctx.beginPath();
-          ctx.arc(Math.cos(a2) * rr, Math.sin(a2) * rr, 2.6 * dpr, 0, Math.PI * 2);
-          ctx.fillStyle = rgba(c, 0.9 * look.scan);
-          ctx.fill();
-        }
-      }
-
-      // Wellen beim Zuhören
-      if (look.ripple > 0.05 && t - lastRipple > 0.85 && !reducedMotion()) {
-        lastRipple = t;
-        ripples.push(t);
-      }
-      ripples = ripples.filter((born) => t - born < 1.7);
-      for (const born of ripples) {
-        const p = (t - born) / 1.7;
-        arc(lerp(R * 0.34, R * 0.95, p), 0, Math.PI * 2, 1.5 * dpr, rgba(c, 0.5 * (1 - p) * look.ripple));
-      }
-      // Klick-Puls
-      if (t - pulseT < 0.6) {
-        const p = (t - pulseT) / 0.6;
-        arc(lerp(R * 0.3, R * 0.9, p), 0, Math.PI * 2, 3 * dpr * (1 - p), rgba(c, 0.8 * (1 - p)));
-      }
-
-      // Stimm-Kranz: 96 Balken
-      const base = R * 0.6;
-      ctx.save();
-      ctx.rotate(-Math.PI / 2 + angle * 0.12);
-      const amp = 0.04 + look.wave * (0.15 + lv * 0.85);
-      for (let i = 0; i < BARS; i += 1) {
-        if (i / BARS > ease) break;
-        const a = (i / BARS) * Math.PI * 2;
-        const v = noise(i, t * (0.6 + look.energy)) * amp;
-        const len = R * (0.012 + 0.16 * v);
-        const cos = Math.cos(a);
-        const sin = Math.sin(a);
-        ctx.beginPath();
-        ctx.moveTo(cos * base, sin * base);
-        ctx.lineTo(cos * (base + len), sin * (base + len));
-        ctx.lineWidth = 2 * dpr;
-        ctx.strokeStyle = rgba(lerpColor(c, [255, 255, 255], 0.25 * v), 0.35 + 0.6 * Math.min(1, v * 2.2));
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // Funken auf ihren Bahnen
-      for (const p of PARTICLES) {
-        p.a += p.s * 0.016 * (0.6 + look.spin);
-        const rr = R * p.r;
-        const tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.3 + p.p));
-        ctx.beginPath();
-        ctx.arc(Math.cos(p.a) * rr, Math.sin(p.a) * rr, 1.1 * dpr * p.z, 0, Math.PI * 2);
-        ctx.fillStyle = rgba(lerpColor(c, [255, 255, 255], 0.4), 0.55 * tw * ease);
-        ctx.fill();
-      }
-
-      // Spulenring wie beim Arc-Reaktor: zehn Blöcke, leuchten mit der Stimme
-      ctx.save();
-      ctx.rotate(-angle * 0.18);
-      ctx.lineCap = 'butt';
-      const coils = 10;
-      for (let i = 0; i < coils; i += 1) {
-        const a0 = (i / coils) * Math.PI * 2 + 0.05;
-        const glowK = 0.16 + 0.22 * look.energy + 0.3 * lv * look.wave;
-        arc(R * 0.555, a0, a0 + (Math.PI * 2 / coils) * 0.72 * ease, R * 0.04, rgba(c, glowK * ease));
-      }
-      ctx.restore();
-
-      // Innerer Kern
-      const breath = 0.5 + 0.5 * Math.sin(t * 1.8);
-      const coreR = R * (0.3 + 0.035 * breath * look.energy + 0.07 * lv * look.wave) * (0.6 + 0.4 * ease);
-      arc(coreR * 1.32, 0, Math.PI * 2, 1 * dpr, rgba(c, 0.32));
-      arc(coreR * 1.18, -angle * 1.6, -angle * 1.6 + 1.1, 2 * dpr, rgba(c, 0.6));
-      const g = ctx.createRadialGradient(-coreR * 0.25, -coreR * 0.3, coreR * 0.05, 0, 0, coreR);
-      g.addColorStop(0, 'rgba(255,255,255,0.98)');
-      g.addColorStop(0.28, rgba(lerpColor(c, [255, 255, 255], 0.55), 0.95));
-      g.addColorStop(0.75, rgba(c, 0.85));
-      g.addColorStop(1, rgba(c, 0.15));
-      ctx.fillStyle = g;
-      ctx.shadowColor = rgba(c, 0.9);
-      ctx.shadowBlur = 40 * dpr * (0.6 + lv);
       ctx.beginPath();
-      ctx.arc(0, 0, coreR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      // feine Linien im Kern
-      ctx.save();
-      ctx.rotate(angle * 0.6);
-      for (let i = 0; i < 6; i += 1) {
-        const a = (i / 6) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * coreR * 0.35, Math.sin(a) * coreR * 0.35);
-        ctx.lineTo(Math.cos(a) * coreR * 0.92, Math.sin(a) * coreR * 0.92);
-        ctx.lineWidth = 1 * dpr;
-        ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
+      ctx.arc(0, 0, R, 0, Math.PI * 2);
+      ctx.clip();
+      const base = ctx.createRadialGradient(-R * 0.3, -R * 0.36, R * 0.05, 0, 0, R * 1.02);
+      base.addColorStop(0, rgba(look.a, 1));
+      base.addColorStop(0.42, rgba(look.b, 1));
+      base.addColorStop(1, rgba(look.c, 1));
+      ctx.fillStyle = base;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
 
-    function lerpColor(a, b, k) {
-      return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
+      // Fließendes Licht
+      ctx.globalCompositeOperation = 'screen';
+      const reach = 0.28 + look.energy * 0.22 + lv * 0.18;
+      for (const blob of BLOBS) {
+        const x = Math.cos(flow * blob.fx + blob.px) * R * reach;
+        const y = Math.sin(flow * blob.fy + blob.py) * R * reach;
+        const r = R * blob.r * (1 + lv * 0.25);
+        const color = mix(look.a, look.b, blob.mix);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, rgba(color, 0.42 + look.energy * 0.18));
+        g.addColorStop(1, rgba(color, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(-R, -R, R * 2, R * 2);
+      }
+      // Beim Nachdenken wandert ein sanfter Schimmer im Kreis
+      if (ctx.createConicGradient && look.speed > 1) {
+        const sheen = ctx.createConicGradient(flow * 1.4, 0, 0);
+        const a = clamp((look.speed - 1) * 0.5, 0, 0.16);
+        sheen.addColorStop(0, 'rgba(255,255,255,0)');
+        sheen.addColorStop(0.12, `rgba(255,255,255,${a.toFixed(3)})`);
+        sheen.addColorStop(0.3, 'rgba(255,255,255,0)');
+        sheen.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sheen;
+        ctx.fillRect(-R, -R, R * 2, R * 2);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Schatten unten, Glanz oben: so wirkt sie rund
+      const shade = ctx.createRadialGradient(R * 0.1, R * 0.55, R * 0.1, 0, R * 0.2, R * 1.1);
+      shade.addColorStop(0, 'rgba(4,6,14,0)');
+      shade.addColorStop(1, 'rgba(4,6,14,0.38)');
+      ctx.fillStyle = shade;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
+      const gloss = ctx.createRadialGradient(-R * 0.34, -R * 0.42, 0, -R * 0.34, -R * 0.42, R * 0.62);
+      gloss.addColorStop(0, 'rgba(255,255,255,0.34)');
+      gloss.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gloss;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
+      ctx.restore();
+
+      // Feine Kante
+      ctx.beginPath();
+      ctx.arc(0, 0, R - 0.5 * dpr, 0, Math.PI * 2);
+      ctx.lineWidth = 1 * dpr;
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     function start(node) {
@@ -1272,82 +1159,6 @@
     }
 
     return { start, setState, level: levelIn, boot, pulse };
-  })();
-
-  // ==================================================================
-  //   Hintergrund: ruhiges Feld aus Staub und feinen Kreisen
-  // ==================================================================
-
-  const Field = (() => {
-    let canvas = null;
-    let ctx = null;
-    let w = 0;
-    let h = 0;
-    let dpr = 1;
-    let last = 0;
-    const dust = Array.from({ length: 70 }, () => ({
-      x: Math.random(), y: Math.random(), z: 0.3 + Math.random() * 0.7,
-      vx: (Math.random() - 0.5) * 0.004, vy: -0.002 - Math.random() * 0.004, p: Math.random() * 6,
-    }));
-
-    function resize() {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
-      w = Math.round(window.innerWidth * dpr);
-      h = Math.round(window.innerHeight * dpr);
-      canvas.width = w;
-      canvas.height = h;
-    }
-
-    function frame(now) {
-      const dt = Math.min(0.1, (now - (last || now)) / 1000);
-      last = now;
-      if (document.body.dataset.view !== 'hud') {
-        setTimeout(() => requestAnimationFrame(frame), 250);
-        return;
-      }
-      ctx.clearRect(0, 0, w, h);
-      const core = el.coreWrap.getBoundingClientRect();
-      const cx = (core.left + core.width / 2) * dpr;
-      const cy = (core.top + core.height / 2) * dpr;
-      const coreSize = Math.min(core.width, core.height);
-      const color = getComputedStyle(document.body).getPropertyValue('--glow').trim() || '76, 157, 255';
-      // feine Kreise um den Kern
-      ctx.lineWidth = 1 * dpr;
-      for (let i = 1; i <= 4; i += 1) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, coreSize * dpr * (0.5 + i * 0.28), 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${color}, ${0.05 - i * 0.008})`;
-        ctx.stroke();
-      }
-      // Staub, der langsam nach oben treibt
-      for (const d of dust) {
-        d.x += d.vx * dt;
-        d.y += d.vy * dt;
-        if (d.y < -0.02) {
-          d.y = 1.02;
-          d.x = Math.random();
-        }
-        if (d.x < -0.02) d.x = 1.02;
-        if (d.x > 1.02) d.x = -0.02;
-        const tw = 0.4 + 0.6 * Math.abs(Math.sin(now / 1000 * 0.8 + d.p));
-        ctx.beginPath();
-        ctx.arc(d.x * w, d.y * h, 1.2 * dpr * d.z, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${color}, ${0.28 * tw * d.z})`;
-        ctx.fill();
-      }
-      setTimeout(() => requestAnimationFrame(frame), 40);
-    }
-
-    function start(node) {
-      if (reducedMotion()) return;
-      canvas = node;
-      ctx = canvas.getContext('2d');
-      resize();
-      window.addEventListener('resize', resize);
-      requestAnimationFrame(frame);
-    }
-
-    return { start };
   })();
 
   // ==================================================================
@@ -1469,7 +1280,7 @@
     return {
       hello: () => Promise.resolve({
         hotkey: 'ctrl+alt+m', listen_hotkey: 'ctrl+alt+j', mic: 'Headset (Arctis 7 Chat)', muted: false,
-        version: '2.0.0', weather: '14° · leicht bewölkt · Wien', voice: true, gaming: false,
+        version: '2.0.0', weather: '14° · leicht bewölkt · Wien', voice: true, gaming: false, name: 'Georg',
       }),
       poll: () => Promise.resolve(queue.splice(0)),
       send_text: (text) => {
@@ -1679,7 +1490,6 @@
     bindUi();
     tickClock();
     Core.start(el.core);
-    Field.start(el.field);
     renderState(true);
     renderRecent();
     setLink('wait');

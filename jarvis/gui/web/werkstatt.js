@@ -1,7 +1,7 @@
 /* ==========================================================================
-   J.A.R.V.I.S. – Werkstatt-Ansicht
-   Ein Programmier-Auftrag als Blaupause: Plan (A), Ablauf (B), Konstrukt (C),
-   Dateien (D), Befehle (E). app.js reicht die Ereignisse weiter:
+   Jarvis – Werkstatt-Ansicht
+   Ein Programmier-Auftrag auf einen Blick: Plan, Ablauf, Fortschritt,
+   Dateien und Befehle. app.js reicht die Ereignisse weiter:
      progress  mit step.workshop = true   -> step()
      workshop  start | text | done | error | cancelled -> handle()
    und beim Verbinden den ganzen Stand (workshop_state) -> load().
@@ -41,10 +41,10 @@
   const CHIP = { running: 'Arbeitet', done: 'Fertig', error: 'Fehler', cancelled: 'Abgebrochen' };
   const STAMP = { done: 'Fertig', error: 'Fehler', cancelled: 'Abgebrochen' };
   const COLORS = {
-    running: [124, 196, 255],
-    done: [96, 214, 146],
-    error: [240, 85, 90],
-    cancelled: [128, 148, 176],
+    running: [110, 140, 255],
+    done: [63, 191, 133],
+    error: [242, 100, 95],
+    cancelled: [108, 114, 130],
   };
 
   function svg(paths, cls) {
@@ -120,64 +120,18 @@
     return out;
   }
 
-  // ==================================================================
-  //   Konstrukt: eine geodätische Kugel aus Drahtlinien, die sich mit dem
-  //   Fortschritt von unten nach oben aufbaut (wie ein 3D-Drucker).
-  // ==================================================================
-
-  function geodesic() {
-    const p = (1 + Math.sqrt(5)) / 2;
-    const norm = (v) => {
-      const l = Math.hypot(v[0], v[1], v[2]);
-      return [v[0] / l, v[1] / l, v[2] / l];
-    };
-    const v = [[-1, p, 0], [1, p, 0], [-1, -p, 0], [1, -p, 0], [0, -1, p], [0, 1, p], [0, -1, -p], [0, 1, -p],
-      [p, 0, -1], [p, 0, 1], [-p, 0, -1], [-p, 0, 1]].map(norm);
-    const faces = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2],
-      [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10],
-      [8, 6, 7], [9, 8, 1]];
-    const cache = new Map();
-    const mid = (a, b) => {
-      const key = a < b ? a + '_' + b : b + '_' + a;
-      if (cache.has(key)) return cache.get(key);
-      v.push(norm([(v[a][0] + v[b][0]) / 2, (v[a][1] + v[b][1]) / 2, (v[a][2] + v[b][2]) / 2]));
-      cache.set(key, v.length - 1);
-      return v.length - 1;
-    };
-    const edges = new Map();
-    const edge = (a, b) => {
-      const key = a < b ? a + '_' + b : b + '_' + a;
-      if (!edges.has(key)) edges.set(key, [a, b]);
-    };
-    for (const [a, b, c] of faces) {
-      const ab = mid(a, b);
-      const bc = mid(b, c);
-      const ca = mid(c, a);
-      for (const [x, y, z] of [[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]]) {
-        edge(x, y);
-        edge(y, z);
-        edge(z, x);
-      }
-    }
-    // Aufbau von unten nach oben
-    const list = [...edges.values()].sort((e1, e2) => (v[e1[0]][1] + v[e1[1]][1]) - (v[e2[0]][1] + v[e2[1]][1]));
-    return { v, e: list };
-  }
-
+  // Fortschritt als ruhiger Ring: grauer Grund, farbiger Bogen (Arbeitet blau, Fertig grün,
+  // Fehler rot). Die Zahl in der Mitte steht als Text darüber (wsPercent).
   const Construct = (() => {
-    const geo = geodesic();
     let canvas = null;
     let ctx = null;
-    let w = 0;
-    let h = 0;
+    let size = 0;
     let dpr = 1;
     let running = false;
     let last = 0;
-    let t = 0;
     let shown = 0;
     let goal = 0;
     let state = 'running';
-    let flashT = -10;
     const color = COLORS.running.slice();
 
     const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
@@ -186,132 +140,41 @@
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       dpr = Math.min(2, window.devicePixelRatio || 1);
-      const nw = Math.max(1, Math.round(rect.width * dpr));
-      const nh = Math.max(1, Math.round(rect.height * dpr));
-      if (nw !== w || nh !== h) {
-        w = nw;
-        h = nh;
-        canvas.width = w;
-        canvas.height = h;
+      const s = Math.max(1, Math.round(Math.min(rect.width, rect.height) * dpr));
+      if (s !== size) {
+        size = s;
+        canvas.width = s;
+        canvas.height = s;
         if (!running) draw();
       }
     }
 
     function attach(node) {
       canvas = node;
+      if (!canvas) return;
       ctx = canvas.getContext('2d');
       if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
       else window.addEventListener('resize', resize);
-    }
-
-    function project(x, y, z, view) {
-      const x1 = x * view.cy + z * view.sy;
-      const z1 = -x * view.sy + z * view.cy;
-      const y2 = y * view.cp - z1 * view.sp;
-      const z2 = y * view.sp + z1 * view.cp;
-      const s = 3.4 / (3.4 + z2);
-      return [view.cx + x1 * view.R * s, view.cy0 - y2 * view.R * s, z2];
-    }
-
-    function ring(view, yLevel, radius, alpha, width, fill) {
-      ctx.beginPath();
-      for (let i = 0; i <= 48; i += 1) {
-        const a = (i / 48) * Math.PI * 2;
-        const [x, y] = project(Math.cos(a) * radius, yLevel, Math.sin(a) * radius, view);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      if (fill) {
-        ctx.fillStyle = rgba(color, fill);
-        ctx.fill();
-      }
-      ctx.lineWidth = width * dpr;
-      ctx.strokeStyle = rgba(color, alpha);
-      ctx.stroke();
+      resize();
     }
 
     function draw() {
-      if (!ctx || !w || !h) return;
+      if (!ctx || !size) return;
+      const r = size / 2 - 10 * dpr;
+      if (r < 8) return; // noch unsichtbar (Werkstatt zu), nichts zu zeichnen
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      const yaw = reducedMotion() ? 0.6 : t * 0.32;
-      const pitch = -0.36;
-      const view = {
-        cx: w / 2, cy0: h * 0.47, R: Math.min(w * 0.36, h * 0.38),
-        cy: Math.cos(yaw), sy: Math.sin(yaw), cp: Math.cos(pitch), sp: Math.sin(pitch),
-      };
-      const P = geo.v.map(([x, y, z]) => project(x, y, z, view));
-      const built = Math.floor(shown * geo.e.length);
-      const level = -1 + 2 * shown; // Höhe der Baukante
-      const flash = Math.max(0, 1 - (t - flashT) / 0.9);
+      ctx.clearRect(0, 0, size, size);
+      ctx.translate(size / 2, size / 2);
       ctx.lineCap = 'round';
-
-      // Bauplatte unter der Kugel
-      ctx.setLineDash([3 * dpr, 4 * dpr]);
-      ring(view, -1.12, 0.9, 0.22, 1, 0.03);
-      ctx.setLineDash([]);
-      // Gyroskop-Ringe
-      ctx.save();
-      ctx.translate(view.cx, view.cy0);
-      ctx.rotate(Math.sin(t * 0.21) * 0.18);
+      ctx.lineWidth = 8 * dpr;
       ctx.beginPath();
-      ctx.ellipse(0, 0, view.R * 1.28, view.R * 0.32, 0, 0, Math.PI * 2);
-      ctx.lineWidth = 1 * dpr;
-      ctx.strokeStyle = rgba(color, 0.16);
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
       ctx.stroke();
-      const dotA = t * 0.9;
-      ctx.beginPath();
-      ctx.arc(Math.cos(dotA) * view.R * 1.28, Math.sin(dotA) * view.R * 0.32, 2.2 * dpr, 0, Math.PI * 2);
-      ctx.fillStyle = rgba(color, 0.8);
-      ctx.fill();
-      ctx.restore();
-
-      // Drahtlinien: geplant (blass) und gebaut (hell, vorne heller)
-      for (let i = 0; i < geo.e.length; i += 1) {
-        const [a, b] = geo.e[i];
-        const pa = P[a];
-        const pb = P[b];
-        const near = 1 - ((pa[2] + pb[2]) / 2 + 1) / 2;
-        let alpha = 0.1;
-        let width = 1;
-        if (i < built) {
-          alpha = 0.28 + 0.52 * near + flash * 0.4;
-          if (state === 'running' && built - i <= 5) {
-            alpha = 1;
-            width = 1.6;
-          }
-        }
+      if (shown > 0.002) {
         ctx.beginPath();
-        ctx.moveTo(pa[0], pa[1]);
-        ctx.lineTo(pb[0], pb[1]);
-        ctx.lineWidth = width * dpr;
-        ctx.strokeStyle = rgba(color, alpha);
-        ctx.stroke();
-      }
-      // Knotenpunkte des gebauten Teils
-      for (let i = 0; i < P.length; i += 1) {
-        if (geo.v[i][1] > level) continue;
-        const near = 1 - (P[i][2] + 1) / 2;
-        ctx.beginPath();
-        ctx.arc(P[i][0], P[i][1], (1 + near) * dpr, 0, Math.PI * 2);
-        ctx.fillStyle = rgba(color, 0.35 + 0.5 * near);
-        ctx.fill();
-      }
-      // Laser-Ebene an der Baukante
-      if (state === 'running' && shown > 0.01 && shown < 0.995) {
-        const r = Math.sqrt(Math.max(0, 1 - level * level)) * 1.06;
-        ctx.save();
-        ctx.shadowColor = rgba(color, 0.9);
-        ctx.shadowBlur = 12 * dpr;
-        ring(view, level, r, 0.95, 1.6, 0.08);
-        ctx.restore();
-      }
-      // Fertig: ein Lichtring breitet sich aus
-      if (flash > 0) {
-        ctx.beginPath();
-        ctx.arc(view.cx, view.cy0, view.R * (1 + (1 - flash) * 0.7), 0, Math.PI * 2);
-        ctx.lineWidth = 2 * dpr;
-        ctx.strokeStyle = rgba(color, flash * 0.8);
+        ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * shown);
+        ctx.strokeStyle = rgba(color, 1);
         ctx.stroke();
       }
     }
@@ -320,12 +183,11 @@
       if (!running) return;
       const dt = Math.min(0.05, (now - (last || now)) / 1000);
       last = now;
-      t += dt;
-      shown += (goal - shown) * Math.min(1, dt * 2);
+      shown += (goal - shown) * Math.min(1, dt * (reducedMotion() ? 30 : 4));
       const want = COLORS[state] || COLORS.running;
-      for (let i = 0; i < 3; i += 1) color[i] += (want[i] - color[i]) * Math.min(1, dt * 3);
+      for (let i = 0; i < 3; i += 1) color[i] += (want[i] - color[i]) * Math.min(1, dt * 5);
       draw();
-      setTimeout(() => requestAnimationFrame(frame), document.hidden ? 500 : 33);
+      requestAnimationFrame(frame);
     }
 
     function start() {
@@ -342,9 +204,10 @@
 
     function set(progress, newState) {
       goal = clamp(progress, 0, 1);
-      if (newState && newState !== state) {
-        if (newState === 'done') flashT = t;
-        state = newState;
+      if (newState) state = newState;
+      if (!running) {
+        shown = goal;
+        draw();
       }
     }
 
@@ -352,7 +215,7 @@
       shown = 0;
       goal = 0;
       state = 'running';
-      flashT = -10;
+      draw();
     }
 
     return { attach, start, stop, set, reset };

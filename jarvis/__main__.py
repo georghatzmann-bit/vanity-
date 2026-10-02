@@ -26,7 +26,7 @@ import time
 from . import __version__
 from .assistant import Assistant
 from .brain import BrainError, ClaudeBrain
-from .config import HOME_DIR, LOG_DIR, STATE_DIR, load_config, upgrade_config
+from .config import HOME_DIR, LOG_DIR, STATE_DIR, load_config, upgrade_config, user_name
 from .logsetup import setup_logging
 from .mute import MuteSwitch, hotkey_label, register_hotkey
 from .persona import build_persona
@@ -467,7 +467,7 @@ def run_gui(cfg: dict, args) -> int:
         )
         ui.add(overlay)
     hotkey = register_mute_hotkey(cfg, assistant)
-    ui.config(hotkey=hotkey, version=__version__, muted=False)
+    ui.config(hotkey=hotkey, version=__version__, muted=False, name=user_name(cfg))
 
     def quit_all() -> None:
         stopped.set()
