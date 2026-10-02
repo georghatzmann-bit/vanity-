@@ -13,8 +13,8 @@ from unittest import mock
 from tests.helpers import RecordingUi, make_fake_claude
 from jarvis.brain import ClaudeBrain
 from jarvis.config import load_config
-from jarvis.workshop import (Workshop, hand_over, is_change_request, is_continue_request, is_workshop_request,
-                             looks_like_answer, project_folder)
+from jarvis.workshop import (Workshop, choose_effort, hand_over, is_change_request, is_continue_request, is_wish,
+                             is_workshop_request, looks_like_answer, project_folder)
 
 posix_only = unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
 
@@ -76,6 +76,24 @@ class RecognitionTest(unittest.TestCase):
         for said in ("Wie spät ist es?", "Öffne Spotify", "Erzähl mir einen Witz", "Was ist ein Token?"):
             with self.subTest(said=said):
                 self.assertFalse(looks_like_answer(said))
+
+    def test_wishes_while_the_workshop_works(self):
+        for said in ("Mach den Hintergrund blau", "Nimm lieber Python", "Füg noch einen Highscore hinzu",
+                     "Die Schrift soll größer sein", "Und mach die Gegner schneller"):
+            with self.subTest(said=said):
+                self.assertTrue(is_wish(said))
+        for said in ("Wie spät ist es?", "Mach das Licht an", "Erzähl mir einen Witz", "Öffne Spotify", "Danke",
+                     "Welche Sprache nimmst du?"):
+            with self.subTest(said=said):
+                self.assertFalse(is_wish(said))
+
+    def test_effort_for_the_workshop(self):
+        self.assertEqual(choose_effort("Bau mir ein Spiel, beste Qualität bitte", "opus"), "xhigh")
+        self.assertEqual(choose_effort("Denk richtig gründlich nach und bau mir einen Shop", "opus"), "xhigh")
+        self.assertEqual(choose_effort("Bau mir schnell mal ein Skript", "sonnet"), "low")
+        self.assertEqual(choose_effort("Bau mir einen Bot", "sonnet"), "medium")
+        self.assertEqual(choose_effort("Bau mir ein Multiplayer-Spiel mit Login", "opus"), "high")
+        self.assertEqual(choose_effort("Bau mir was", "opus", setting="opus", effort="medium"), "medium")
 
     def test_questions_about_the_workshop_are_status(self):
         from jarvis import intents
@@ -179,6 +197,50 @@ class WorkshopRunTest(unittest.TestCase):
         again.question = "Noch was?"
         self.workshop.forget_question()
         self.assertEqual(again.question, "")
+
+    def test_wish_during_the_work_goes_into_the_running_job(self):
+        self.workshop.start("Bau mir einen Discord-Bot, langsam")
+        end = time.monotonic() + 5
+        while not (self.workshop.job.live and self.workshop.job.sent == 1) and time.monotonic() < end:
+            time.sleep(0.05)
+        self.assertEqual(self.workshop.route("Mach den Hintergrund blau"), "tell")
+        self.assertIsNone(self.workshop.route("Wie spät ist es?", free=False))
+        answer = self.workshop.tell("Mach den Hintergrund blau")
+        self.assertIn(answer, ["Sehr wohl, Sir. Ich baue das gleich mit ein.", "Notiert, Sir. Das kommt mit hinein.",
+                               "Verstanden, Sir. Ich berücksichtige das."])
+        context = self.workshop.context()
+        self.assertIn("Bau mir einen Discord-Bot, langsam", context)
+        self.assertIn("Mach den Hintergrund blau", context)
+        self.wait(30)
+        job = self.workshop.job
+        self.assertEqual(job.state, "done")
+        calls = [json.loads(line) for line in (job.folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0]["pid"], calls[1]["pid"], "in die laufende Arbeit, kein neuer Auftrag")
+        self.assertEqual(calls[1]["prompt"], "Georg, während du arbeitest: Mach den Hintergrund blau")
+        self.assertIn("Ihr Wunsch: Mach den Hintergrund blau", [e[1]["label"] for e in self.ui.of("progress")])
+        self.assertEqual(self.workshop.context(), "", "danach läuft nichts mehr")
+
+    def test_offer_to_start_the_result(self):
+        from jarvis.workshop import Job
+
+        folder = self.home / "Werkstatt" / "spiel"
+        folder.mkdir(parents=True)
+        (folder / "start.bat").write_text("@echo off\n", encoding="utf-8")
+        job = Job("Bau mir ein Spiel", folder, model="sonnet")
+        self.workshop.job = job
+        self.workshop._finish(job, "done", "Das Spiel ist fertig, Sir.")
+        self.assertEqual(self.said[-1], "Aus der Werkstatt: Das Spiel ist fertig, Sir. Soll ich es gleich starten?")
+        self.assertEqual(self.workshop.route("Ja, bitte"), "run")
+        with mock.patch("jarvis.workshop._start_file") as start:
+            self.assertIn("startet", self.workshop.run_last())
+        start.assert_called_once()
+        self.assertIsNone(self.workshop.route("Ja"), "die Frage gilt nur einmal")
+
+    def test_blocked_model_is_not_tried_again(self):
+        self.brain.chooser.block("opus", 3600)
+        self.assertEqual(self.workshop._usable("opus"), "sonnet")
+        self.assertEqual(self.workshop._usable("sonnet"), "sonnet")
 
     def test_unknown_option_is_dropped_and_the_job_still_runs(self):
         with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "effort"}):

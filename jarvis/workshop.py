@@ -5,9 +5,15 @@ eigener Projektordner, gründlicheres Nachdenken, ein Plan mit Schritten (TodoWr
 Dateien schreiben, Pakete installieren, testen. Das Fenster zeigt alles als Blaupause.
 Währenddessen bleibt Jarvis ansprechbar; ist die Arbeit fertig, sagt er Bescheid.
 
+Während der Arbeit kann Georg mit Jarvis reden: "Wie weit bist du?" beantwortet Jarvis aus dem Plan,
+Wünsche ("Mach den Hintergrund blau", "Nimm lieber Python") gehen direkt in die laufende Arbeit (der
+Claude-Prozess liest weiter von stdin, --input-format stream-json), andere Fragen zum Projekt beantwortet
+das Gehirn mit dem Stand der Werkstatt im Blick (context()).
+
 Danach geht es am selben Projekt weiter: "Mach in der Werkstatt weiter ...", "Füg dem Bot
 noch einen Befehl hinzu", "Der Bot startet nicht" (dieselbe Claude-Sitzung, derselbe Ordner).
-Endet die Arbeit mit einer Frage, ist Georgs nächste Antwort für die Werkstatt.
+Endet die Arbeit mit einer Frage, ist Georgs nächste Antwort für die Werkstatt. Gibt es eine
+start.bat, fragt Jarvis, ob er das Ergebnis gleich starten soll.
 Erkennt Jarvis einen Bauauftrag nicht selbst, gibt das Gehirn ihn über
 `python -m jarvis.tool werkstatt "..."` weiter (Datei HANDOFF im Datenordner).
 """
@@ -19,6 +25,7 @@ import json
 import logging
 import os
 import queue
+import random
 import re
 import subprocess
 import sys
@@ -40,6 +47,9 @@ HANDOFF = "werkstatt-auftrag.json"
 FOLLOW_UP_WINDOW = 30 * 60
 # ... und so lange ist eine Antwort auf die Rückfrage am Ende für die Werkstatt.
 ANSWER_WINDOW = 10 * 60
+# Kommt nach dem Ergebnis so lange nichts mehr, obwohl Georg noch etwas geschickt hat, war es schon
+# in der Arbeit drin (Claude Code nimmt Nachrichten auch mitten im Lauf auf). Sekunden.
+AFTER_RESULT = 20.0
 
 WORKSHOP_PROMPT = """
 
@@ -54,17 +64,20 @@ nichts mit `jarvis.tool werkstatt` weiter.
   Er existiert schon. Lege alles dort an und arbeite nur dort.
 - Ein Ordner allein ist kein Ergebnis. Hör erst auf, wenn das Programm geschrieben und gestartet oder
   getestet ist.
-- Stell keine Rückfragen, Georg kann während der Arbeit nicht antworten. Triff vernünftige
-  Entscheidungen. Fehlt etwas, das nur Georg hat (Bot-Token, Passwort, API-Schlüssel), baue trotzdem
-  alles fertig, lege eine Vorlage an (zum Beispiel .env.beispiel) und sag am Ende in einem Satz, was er
-  wo eintragen muss.
+- Stell keine Rückfragen, triff vernünftige Entscheidungen. Georg kann dir aber während der Arbeit
+  Nachrichten schicken (Wünsche, Korrekturen, "nimm lieber ..."). Sie beginnen mit "Georg, während du
+  arbeitest:". Bau sie ein, ohne von vorn anzufangen, und arbeite weiter, bis alles fertig ist.
+- Fehlt etwas, das nur Georg hat (Bot-Token, Passwort, API-Schlüssel), baue trotzdem alles fertig,
+  lege eine Vorlage an (zum Beispiel .env.beispiel) und sag am Ende in einem Satz, was er wo eintragen
+  muss.
 - Mach zuerst mit TodoWrite einen kurzen Plan mit drei bis sieben Schritten und hake sie ab.
 - Teste, was du baust (starten, kurz ausprobieren, Tests). Scheitert ein Befehl, lies die Meldung und
   versuche einen anderen Weg, statt aufzugeben. Fehlen Pakete, installiere sie.
 {platform}
 - Lege eine kurze LIESMICH.txt an: was es ist und wie man es startet.
 - Zum Schluss genau zwei oder drei kurze Sätze für Georg, auf Deutsch, ohne Markdown, wie immer mit
-  "Sie" und "Sir": was du gebaut hast und wie er es startet. Das wird vorgelesen.
+  "Sie" und "Sir": was du gebaut hast und wie er es startet. Das wird vorgelesen. Hast du danach noch
+  einen Wunsch von Georg umgesetzt, endest du wieder so, mit dem ganzen Ergebnis.
 """
 
 WINDOWS_HINTS = """- Du bist unter Windows. Nutze PowerShell-Befehle und Windows-Pfade. Lege eine start.bat an, mit der
@@ -176,6 +189,28 @@ def is_change_request(text: str) -> bool:
     return bool(re.match(_CHANGE_VERB, norm)) and bool(re.search(_ARTIFACT, norm))
 
 
+# Ein Wunsch für die laufende Arbeit: "Mach den Hintergrund blau", "Nimm lieber Python", "Füg noch einen
+# Highscore hinzu", "Die Schrift soll größer sein" (nur, wenn kein anderer Sofort-Befehl passt)
+_WISH_VERB = re.compile(
+    r"^(?:und |aber |ach ja,? |ach,? |übrigens,? |noch was,? |außerdem,? )?(?:nimm|nehm|nehme|verwende|benutz|benutze|"
+    r"mach|mache|bau|baue|füg|füge|änder|ändere|pass|passe|ergänz|ergänze|setz|setze|gib|lass|lasse|schreib|"
+    r"schreibe|stell|stelle|tausch|tausche|ersetz|ersetze|entfern|entferne|lösch|lösche)\b")
+_WISH_WHAT = re.compile(
+    r"\b(?:lieber|stattdessen|statt|anstatt|auch|noch|zusätzlich|außerdem|dazu|rein|hinzu|weg|raus|blau|rot|grün|"
+    r"gelb|schwarz|weiß|lila|orange|grau|bunt|dunkel|hell|dunkler|heller|größer|kleiner|schneller|langsamer|"
+    r"hintergrund|farbe|farben|schrift|text|knopf|button|menü|level|highscore|punkte|sound|ton|geräusche|logo|"
+    r"design|layout|titel|name|sprache|python|javascript|html|befehl|befehle|funktion|seite|fenster|spieler|gegner)\b")
+_WISH_SHOULD = re.compile(r"^(?:der|die|das|den|es|er|sie|alles|man)\b.*\b(?:soll|sollte|sollen|muss|müssen)\b")
+
+
+def is_wish(text: str) -> bool:
+    """Klingt nach einem Wunsch zum Projekt, an dem die Werkstatt gerade arbeitet."""
+    norm = _norm(text)
+    if not norm or text.strip().endswith("?") or _NOT_AN_ANSWER.match(norm):
+        return False
+    return bool((_WISH_VERB.match(norm) and _WISH_WHAT.search(norm)) or _WISH_SHOULD.match(norm))
+
+
 # Keine Antwort auf eine Rückfrage, sondern etwas Neues: Fragen und andere Befehle
 _NOT_AN_ANSWER = re.compile(
     r"^(?:wie|was|wer|wo|wohin|woher|wann|warum|wieso|weshalb|welche|welcher|welches|wieviel|wie ?viel|"
@@ -239,6 +274,23 @@ def choose_model(task: str, setting: str = "auto") -> str:
     score = len({m.group(0).lower()[:6] for m in _BIG.finditer(task)})
     score += (len(task) > 160) + (len(task) > 320) + (len(re.findall(r",| und ", task)) >= 4)
     return "opus" if score >= 3 else "sonnet"
+
+
+def choose_effort(task: str, model: str, setting: str = "auto", effort: str = "medium") -> str:
+    """Wie viel die Werkstatt nachdenkt. "auto": große Aufträge (Opus) gründlich, "beste Qualität" oder
+    "denk richtig gründlich nach" sehr gründlich, "schnell mal" wenig; sonst wie in config.toml."""
+    effort = str(effort or "medium").strip().lower()
+    if str(setting or "auto").strip().lower() not in ("auto", ""):
+        return effort
+    from .modellwahl import classify
+
+    if classify(task)[0] == "maximal" or (_SAYS_OPUS.search(task) and model == "opus"):
+        return "xhigh"
+    if _SAYS_FAST.search(task):
+        return "low"
+    if model == "opus" and effort == "medium":
+        return "high"
+    return effort
 
 
 PROJECT_FILE = "projekt.json"
@@ -308,6 +360,13 @@ class Job:
     ended: float | None = None
     question: str = ""  # endet die Arbeit mit einer Frage, gilt die nächste Antwort der Werkstatt
     model: str = ""  # "opus" oder "sonnet" (choose_model)
+    effort: str = ""  # wie viel Claude nachdenkt (choose_effort)
+    live: bool = False  # Claude liest noch von stdin: Georgs Wünsche gehen in die laufende Arbeit
+    wishes: list = field(default_factory=list)  # was Georg während der Arbeit dazugesagt hat
+    sent: int = 0  # Nachrichten an Claude (der Auftrag und Georgs Wünsche)
+    results: int = 0  # fertige Antworten von Claude
+    start_offer: bool = False  # Jarvis hat gefragt, ob er das Ergebnis starten soll
+    proc: subprocess.Popen | None = field(default=None, repr=False)  # der laufende Claude-Prozess
 
     def status(self) -> str:
         """Ein Satz für "Wie weit bist du?"."""
@@ -322,6 +381,53 @@ class Job:
         if running:
             return f"Gerade: {running}. Seit {minutes} Minuten dabei, Sir." if minutes else f"Gerade: {running}, Sir."
         return "Ich plane noch, Sir."
+
+    def context(self) -> str:
+        """Der Stand für das Gehirn, damit es Fragen zur laufenden Arbeit beantworten kann."""
+        minutes = int((time.monotonic() - self.started) // 60)
+        marks = {"completed": "[x]", "in_progress": "[>]"}
+        plan = ", ".join(f"{marks.get(t.get('state'), '[ ]')} {t.get('text', '')}" for t in self.todos[:10])
+        current = next((s.label for s in reversed(self.steps) if getattr(s, "state", "") == "running"), "")
+        lines = [f"In deiner Werkstatt läuft gerade ein Auftrag (seit {minutes} Minuten, {self.model or 'Standardmodell'}): "
+                 f"„{self.task[:400]}“", f"Projektordner: {self.folder}"]
+        if plan:
+            lines.append(f"Plan: {plan}")
+        if current:
+            lines.append(f"Gerade: {current}")
+        if self.wishes:
+            lines.append("Georgs Wünsche während der Arbeit: " + "; ".join(w[:120] for w in self.wishes[-5:]))
+        return "\n".join(lines)
+
+    def message(self, text: str) -> bool:
+        """Schickt Claude eine Nachricht in die laufende Arbeit. False, wenn das nicht (mehr) geht."""
+        proc = getattr(self, "proc", None)
+        if not self.live or proc is None or proc.poll() is not None:
+            return False
+        data = {"type": "user", "message": {"role": "user", "content": text}}
+        try:
+            proc.stdin.write(json.dumps(data, ensure_ascii=False) + "\n")
+            proc.stdin.flush()
+        except (OSError, ValueError, AttributeError):
+            return False
+        self.sent += 1
+        return True
+
+
+@dataclass
+class _Wish:
+    """Georgs Wunsch während der Arbeit, als Zeile im Ablauf der Werkstatt."""
+
+    id: str
+    text: str
+    state: str = "done"
+
+    @property
+    def label(self) -> str:
+        return f"Ihr Wunsch: {self.text}"
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "tool": "Georg", "label": self.label, "detail": "", "kind": "message",
+                "state": "done", "seconds": 0, "workshop": True}
 
 
 class Workshop:
@@ -348,11 +454,25 @@ class Workshop:
     # ------------------------------------------------------------------ Wohin gehört ein Satz?
 
     def route(self, text: str, free: bool = True) -> str | None:
-        """"new" = neuer Auftrag, "continue" = am letzten Projekt weiter, None = nicht für die Werkstatt.
-        free: kein anderer Sofort-Befehl hat den Satz erkannt (nur dann zählt er als Antwort)."""
+        """"new" = neuer Auftrag, "continue" = am letzten Projekt weiter, "tell" = ein Wunsch für die gerade
+        laufende Arbeit, "run" = das fertige Ergebnis starten (Antwort auf "Soll ich es starten?"),
+        None = nicht für die Werkstatt. free: kein anderer Sofort-Befehl hat den Satz erkannt (nur dann
+        zählt er als Antwort oder Wunsch)."""
         job = self.job
         finished = job is not None and job.state != "running" and job.ended is not None
         since = time.monotonic() - job.ended if finished else 1e9
+        if job is not None and job.state == "running":
+            if is_continue_request(text) or is_change_request(text) or (free and is_wish(text)):
+                return "tell"
+            if is_workshop_request(text):
+                return "new"  # start() sagt, dass noch gearbeitet wird
+            return None
+        if finished and job.start_offer and since < ANSWER_WINDOW and free:
+            from .tool import confirmed
+
+            if confirmed(text):
+                return "run"
+            job.start_offer = False  # etwas anderes gesagt: die Frage gilt nicht mehr
         if job is not None and is_continue_request(text):
             return "continue"
         if finished and free and job.question and since < ANSWER_WINDOW and looks_like_answer(text):
@@ -373,7 +493,8 @@ class Workshop:
             if self._brain is None or not getattr(self._brain, "claude_path", ""):
                 return "Für die Werkstatt brauche ich mein Gehirn, Sir. Bitte öffnen Sie einmal die Einstellungen."
             folder = project_folder(task, self.base)
-            self.job = Job(task, folder, model=choose_model(task, self._cfg.get("modell", "auto")))
+            self.job = Job(task, folder, model=self._usable(choose_model(task, self._cfg.get("modell", "auto"))))
+            self.job.effort = self._effort(task, self.job.model)
             self._cancelled = False
         self._begin(self.job)
         if self.job.model == "opus":
@@ -398,12 +519,77 @@ class Workshop:
                 self.job = Job(text, last.folder, session=last.session, resume=True, model=model)
             else:
                 self.job = Job(text, project_folder(text, self.base), model=choose_model(text, setting))
+            self.job.model = self._usable(self.job.model)
+            self.job.effort = self._effort(text, self.job.model)
             self._cancelled = False
         self._begin(self.job)
         if self.job.resume:
             name = project_name(self.job.folder)
             return f"Sehr wohl, Sir. Ich mache am Projekt {name} weiter." if project else "Sehr wohl, Sir. Ich mache in der Werkstatt weiter."
         return "Sehr wohl, Sir. Ich gehe in die Werkstatt. Sie können mir im Fenster zusehen."
+
+    def _usable(self, model: str) -> str:
+        """Ein Modell, das gerade geht: hat das Gehirn gemerkt, dass Opus (oder Fable) im Abo fehlt oder
+        sein Kontingent leer ist, nimmt die Werkstatt gleich das nächstkleinere."""
+        chooser = getattr(self._brain, "chooser", None)
+        seen = set()
+        while chooser is not None and model and model not in seen and chooser.blocked(model) and chooser.smaller(model):
+            seen.add(model)
+            model = chooser.smaller(model)
+        return model
+
+    def _block(self, model: str) -> None:
+        """Dem Gehirn sagen, dass dieses Modell gerade nicht geht (gilt dann auch für Fragen)."""
+        chooser = getattr(self._brain, "chooser", None)
+        if chooser is not None:
+            chooser.block(model, 6 * 3600, "nicht verfügbar")
+
+    def _effort(self, task: str, model: str) -> str:
+        return choose_effort(task, model, self._cfg.get("modell", "auto"), self._cfg.get("effort", "medium"))
+
+    def tell(self, text: str) -> str:
+        """Ein Wunsch während der Arbeit ("Mach den Hintergrund blau"): geht sofort in die laufende Arbeit."""
+        with self._lock:
+            job = self.job
+            if job is None or job.state != "running":
+                return self.follow_up(text) if job is not None else self.start(text)
+            sent = job.message(f"Georg, während du arbeitest: {text}")
+            if sent:
+                wish = _Wish(f"wunsch-{len(job.wishes) + 1}", text.strip()[:300])
+                job.wishes.append(wish.text)
+                job.steps.append(wish)
+        if not sent:
+            return "Ich bin noch mitten in der Arbeit, Sir. Sagen Sie es mir gleich, wenn ich fertig bin."
+        self._ui.progress(wish.to_dict())
+        log.info("Werkstatt, Wunsch während der Arbeit: %s", text)
+        return random.choice(["Sehr wohl, Sir. Ich baue das gleich mit ein.", "Notiert, Sir. Das kommt mit hinein.",
+                              "Verstanden, Sir. Ich berücksichtige das."])
+
+    def context(self) -> str:
+        """Für das Gehirn: was in der Werkstatt gerade läuft (leer, wenn nichts läuft)."""
+        job = self.job
+        if job is None or job.state != "running":
+            return ""
+        return ("<werkstatt>\n" + job.context() + "\nFragt Georg nach der Arbeit, antworte kurz aus diesem Stand (bei "
+                "Bedarf liest du Dateien im Projektordner). Will er am Projekt etwas ändern, gib es mit "
+                "python -m jarvis.tool werkstatt-weiter \"<Wunsch>\" an die laufende Arbeit weiter und sag nur kurz, "
+                "dass du es einbaust.\n</werkstatt>")
+
+    def run_last(self) -> str:
+        """Das Ergebnis des letzten Auftrags starten (start.bat)."""
+        job = self.job
+        if job is None:
+            return "In der Werkstatt gibt es noch nichts zu starten, Sir."
+        job.start_offer = False
+        start = job.folder / "start.bat"
+        if not start.is_file():
+            return f"{project_name(job.folder)} hat keine start.bat, Sir."
+        try:
+            _start_file(start, job.folder)
+        except OSError as exc:
+            log.info("Start von %s: %s", job.folder, exc)
+            return f"Das Starten ging leider nicht, Sir: {exc}"
+        return random.choice([f"{project_name(job.folder)} startet, Sir.", "Bitte sehr, Sir. Es startet."])
 
     # ------------------------------------------------------------------ Projekte
 
@@ -540,7 +726,10 @@ class Workshop:
             return False
         log.info("Werkstatt-Auftrag vom Gehirn: %s", task)
         project = self.find_project(str(data.get("projekt") or "")) if data.get("projekt") else None
-        said = self.follow_up(task, project) if data.get("weiter") or project else self.start(task)
+        if self.busy and (data.get("weiter") or (project is not None and Path(project["folder"]) == self.job.folder)):
+            said = self.tell(task)  # ein Wunsch für die laufende Arbeit
+        else:
+            said = self.follow_up(task, project) if data.get("weiter") or project else self.start(task)
         if said.startswith("Ich ") or said.startswith("Für "):
             self._announce(said)  # noch beschäftigt oder kein Gehirn: das soll Georg hören
         return True
@@ -600,12 +789,12 @@ class Workshop:
         brain = self._brain
         unsupported = set(getattr(brain, "_unsupported", set()) or set())
         model = job.model or choose_model(job.task, self._cfg.get("modell", "auto"))
-        effort = str(self._cfg.get("effort", "medium") or "")
-        if model == "opus" and str(self._cfg.get("modell", "auto")).lower() == "auto" and effort == "medium":
-            effort = "high"  # großer Auftrag: gründlich nachdenken
+        effort = job.effort or self._effort(job.task, model)
         cmd = [brain.claude_path, "-p", "--output-format", "stream-json", "--verbose"]
         if "include-partial-messages" not in unsupported:
             cmd.append("--include-partial-messages")
+        if "input-format" not in unsupported:
+            cmd += ["--input-format", "stream-json"]  # Georgs Wünsche während der Arbeit
         if model:
             cmd += ["--model", model]
         if effort and "effort" not in unsupported:
@@ -663,11 +852,14 @@ class Workshop:
                 return
             stream, stderr, timed_out = outcome
             result = stream.result or {}
-            if job.model == "opus" and result.get("is_error") and re.search(
-                    r"model.*(?:not (?:available|found|supported)|invalid|access)|opus.*(?:pro|plan|upgrade)",
+            if job.model in ("opus", "fable") and result.get("is_error") and re.search(
+                    r"model.*(?:not (?:available|found|supported)|invalid|access)|(?:opus|fable).*(?:pro|plan|upgrade)|"
+                    r"usage limit|limit reached",
                     str(result.get("result", "")), re.I):
-                log.warning("Werkstatt: Opus geht mit diesem Konto nicht, nehme Sonnet.")
-                job.model = "sonnet"
+                smaller = "opus" if job.model == "fable" else "sonnet"
+                log.warning("Werkstatt: %s geht mit diesem Konto gerade nicht, nehme %s.", job.model, smaller)
+                self._block(job.model)
+                job.model = smaller
                 job.resume = False
                 job.session = str(uuid.uuid4())
                 job.steps.clear()
@@ -682,11 +874,14 @@ class Workshop:
                 log.warning("Werkstatt: Claude kennt --%s nicht, ohne diese Option nochmal.", unknown.group(1))
                 continue
             failure = f"{stderr or ''} {(stream.result or {}).get('result', '') if stream.result else ''}"
-            if job.model == "opus" and re.search(r"model.*(?:not (?:available|found|supported)|invalid|access)|"
-                                                 r"(?:not (?:available|allowed)|no access).*model|opus.*(?:pro|plan|upgrade)",
-                                                 failure, re.I):
-                log.warning("Werkstatt: Opus geht mit diesem Konto nicht, nehme Sonnet.")
-                job.model = "sonnet"
+            if job.model in ("opus", "fable") and re.search(
+                    r"model.*(?:not (?:available|found|supported)|invalid|access)|"
+                    r"(?:not (?:available|allowed)|no access).*model|(?:opus|fable).*(?:pro|plan|upgrade)",
+                    failure, re.I):
+                smaller = "opus" if job.model == "fable" else "sonnet"
+                log.warning("Werkstatt: %s geht mit diesem Konto nicht, nehme %s.", job.model, smaller)
+                self._block(job.model)
+                job.model = smaller
                 job.resume = False
                 job.session = str(uuid.uuid4())
                 continue
@@ -713,12 +908,17 @@ class Workshop:
         self._finish(job, "done", summary)
 
     def _run(self, job: Job, persona: Path):
-        """Ein Claude-Lauf. Gibt (Stream, stderr, zu lange still) zurück."""
+        """Ein Claude-Lauf. Gibt (Stream, stderr, zu lange still) zurück. Mit --input-format stream-json bleibt
+        stdin offen: Georgs Wünsche während der Arbeit kommen als weitere Nachrichten dazu (Job.message).
+        Fertig ist der Lauf, wenn auf jede Nachricht eine Antwort kam, oder wenn nach der letzten Antwort
+        eine Weile nichts mehr passiert (dann war der Wunsch schon in der Arbeit drin)."""
         from .brain import NO_WINDOW, _close, _kill, _pump, _StreamReader, with_time
 
         started = time.monotonic()
         cmd = self.command(job, persona)
-        log.info("Werkstatt %s in %s: %s", "weiter" if job.resume else "startet", job.folder, job.task)
+        live = "--input-format" in cmd
+        log.info("Werkstatt %s in %s (%s, Nachdenken %s): %s", "weiter" if job.resume else "startet", job.folder,
+                 job.model or "Standard", job.effort or "Standard", job.task)
         proc = subprocess.Popen(
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=job.folder,
             env=self.environment(job), text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
@@ -729,12 +929,18 @@ class Workshop:
         threading.Thread(target=_pump, args=(proc.stdout, lines.put), daemon=True).start()
         err_reader = threading.Thread(target=_pump, args=(proc.stderr, errors.append), daemon=True)
         err_reader.start()
-        try:
-            proc.stdin.write(with_time(job.task))
-        except OSError:
-            pass
-        finally:
-            _close(proc.stdin)
+        with self._lock:
+            job.proc, job.live, job.sent, job.results = proc, live, 0, 0
+            if live:
+                live = job.message(with_time(job.task))
+                job.live = live
+        if not live:
+            try:
+                proc.stdin.write(with_time(job.task))
+            except OSError:
+                pass
+            finally:
+                _close(proc.stdin)
 
         def on_text(chunk: str) -> None:
             job.text += chunk
@@ -755,11 +961,22 @@ class Workshop:
         last = time.monotonic()
         exited_at = None
         timed_out = False
-        while stream.result is None:
+        final: dict | None = None
+        waiting_since = None  # eine Antwort ist da, Georg hat aber noch etwas geschickt
+
+        def finish_input() -> None:
+            with self._lock:
+                job.live = False
+            _close(proc.stdin)
+
+        while True:
             try:
                 line = lines.get(timeout=0.25)
             except queue.Empty:
                 now = time.monotonic()
+                if waiting_since is not None and now - last > AFTER_RESULT:
+                    finish_input()  # der Wunsch war schon in der letzten Antwort enthalten
+                    break
                 if now - last > quiet_limit or now - started > total_limit:
                     timed_out = True
                     _kill(proc)
@@ -774,11 +991,26 @@ class Workshop:
                 break
             last = time.monotonic()
             stream.feed(line)
+            if stream.result is None:
+                continue
+            final, stream.result = stream.result, None
+            with self._lock:
+                job.results += 1
+                more = live and job.live and job.results < job.sent and not final.get("is_error")
+            if not more:
+                if live:
+                    finish_input()
+                break
+            waiting_since = time.monotonic()  # auf die Antwort zu Georgs Wunsch warten
+        stream.result = final
         try:
             proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             _kill(proc)
         err_reader.join(timeout=1.0)
+        with self._lock:
+            job.live = False
+            job.proc = None
         self._proc = None
         return stream, "".join(e for e in errors if e), timed_out
 
@@ -805,6 +1037,9 @@ class Workshop:
             spoken = " ".join(first[:3])
             if job.question and job.question not in spoken:
                 spoken = f"{spoken} {job.question}"
+            elif not job.question and (job.folder / "start.bat").is_file():
+                job.start_offer = True  # "Ja" startet es (route -> "run")
+                spoken = f"{spoken} Soll ich es gleich starten?"
             spoken = f"Aus der Werkstatt: {spoken}"
         self._announce(spoken)
         job.state = state  # erst jetzt: wer auf das Ende wartet, hat dann auch die Ansage

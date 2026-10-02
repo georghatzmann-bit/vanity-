@@ -334,6 +334,8 @@ class ClaudeBrain:
         self.context: Callable[[], str] | None = None
         # Setzt die Persönlichkeit neu zusammen, wenn Jarvis eine Fähigkeit gelernt hat (persona.persona_refresher).
         self.refresh_persona: Callable[[], None] | None = None
+        # Was gerade nebenher läuft (z. B. die Werkstatt): kommt vor jede Frage, solange es etwas gibt.
+        self.turn_context: Callable[[], str] | None = None
         self._load_state()
 
     # ------------------------------------------------------------------ Zustand
@@ -736,6 +738,15 @@ class ClaudeBrain:
             if known:
                 stamp, _, said = prompt.partition("\n")
                 prompt = f"{stamp}\n<gedaechtnis>\n{known}\n</gedaechtnis>\n{said}"
+        if self.turn_context is not None:
+            try:
+                extra = self.turn_context()
+            except Exception as exc:
+                log.debug("Kontext: %s", exc)
+                extra = ""
+            if extra:
+                stamp, _, said = prompt.partition("\n")
+                prompt = f"{stamp}\n{extra}\n{said}"
         for _ in range(5):
             if self._cancelled:
                 raise Cancelled("abgebrochen")

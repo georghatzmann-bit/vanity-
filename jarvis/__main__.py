@@ -164,6 +164,8 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
             assistant.window_control("show")
 
     assistant.workshop = Workshop(cfg, brain, ui, assistant.announce, show_window=show_window)
+    if brain is not None:
+        brain.turn_context = assistant.workshop.context  # Fragen zur laufenden Werkstatt-Arbeit
     from .push import Push
 
     assistant.push = Push(cfg)  # Benachrichtigungen aufs Handy (Verbinden > Handy)

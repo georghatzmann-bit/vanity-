@@ -193,6 +193,8 @@ class Assistant:
         als Benachrichtigung aufs Handy (wenn eingeschaltet, siehe push.py), und wenn er zurückkommt,
         erwähnt Jarvis es noch einmal kurz ("Während Sie weg waren ...")."""
         self.ui.message("jarvis", text)
+        if text.rstrip().endswith("?"):
+            self._follow_up = True  # eine Frage ("Soll ich es starten?"): die Antwort geht ohne "Hey Jarvis"
         self.say(text)
         self._push(text)
         self._note_missed(text)
@@ -397,6 +399,10 @@ class Assistant:
                 return self.workshop.start(text)
             if where == "continue":
                 return self.workshop.follow_up(text)
+            if where == "tell":
+                return self.workshop.tell(text)  # ein Wunsch für die laufende Arbeit
+            if where == "run":
+                return self.workshop.run_last()  # "Ja" auf "Soll ich es gleich starten?"
             self.workshop.forget_question()  # nur die direkte Antwort gehört zur Rückfrage
         if intent is None:
             parts = intents.match_parts(text) if self._local else None
