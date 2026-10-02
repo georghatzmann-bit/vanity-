@@ -635,7 +635,7 @@ def _next_birthday(birthday: dict, today: dt.date) -> dt.date | None:
 # ---------------------------------------------------------------------- Sätze
 
 _REMEMBER = re.compile(
-    r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte\s+)?(?:merk|merke)\s+(?:dir|es dir)\s*(?:bitte\s+)?[,:]?\s*"
+    r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte\s+)?(?:merk|merke)\s+(?:dir|es dir)\s*(?:bitte\b)?[,:]?\s*"
     r"(?P<dass>dass?\s+)?(?P<fact>.+)$",
     re.I,
 )
@@ -657,7 +657,9 @@ _RECALL = re.compile(
 )
 # "Merk dir das" oder "Merk dir, wo ich geparkt habe": ohne Zusammenhang nicht zu speichern,
 # das übernimmt Claude (kennt das Gespräch und hat den Befehl "merken").
-_NOT_A_FACT = re.compile(r"^(?:das|dies|dieses|es|was|wie|wo|wer|wann|warum|wieso|welche[nmrs]?|nicht|nichts|kein|keine)\b", re.I)
+_NOT_A_FACT = re.compile(
+    r"^(?:das|dies|dieses|es|was|wie|wo|wer|wann|warum|wieso|welche[nmrs]?|nicht|nichts|kein|keine|alles|du|dich|dir|"
+    r"mit (?:dem|der|den)|(?:den|die|der|dem|diesen|diese|dieses|diesem)(?:\s+\S+)?\s*$)", re.I)
 _LEAD = re.compile(r"^(?:das|dies|dieses)\s*[:,]\s*(?=\S)", re.I)
 _ONLY_FILLER = re.compile(r"^(?:bitte|mal|doch|jetzt|gut|schon|einfach|genau|auch)(?:\s+(?:bitte|mal|doch|jetzt|gut|schon|einfach|genau|auch))*[\s.!]*$", re.I)
 
@@ -666,9 +668,15 @@ def _first_to_third(fact: str, clause: bool = False) -> str:
     """"(dass) ich gern Rock höre" -> "Georg sagt: Ich höre gern Rock" (so ist klar, wer "ich" ist)."""
     fact = fact.strip().rstrip(".!")
     if clause:
-        from .messaging import direct_speech
+        from .messaging import _split_verb, direct_speech
 
-        fact = direct_speech("dass " + fact) or fact
+        converted = direct_speech("dass " + fact)
+        # "dass Max mein bester Freund ist" -> "Max ist mein bester Freund"
+        named = re.match(r"^([A-ZÄÖÜ][\wäöüß-]+)\s+(.+?)\s+([a-zäöüß]{2,})$", fact)
+        if converted is None and named and "," not in fact:
+            stem, particle = _split_verb(named.group(3))
+            converted = " ".join([named.group(1), stem, named.group(2), *([particle] if particle else [])])
+        fact = converted or fact
     if re.match(r"(?:ich|mein|meine|meinen|meinem|mir|mich)\b", fact, re.I):
         return f"{USER} sagt: {fact[:1].upper() + fact[1:]}"
     return fact[:1].upper() + fact[1:]

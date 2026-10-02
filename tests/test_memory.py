@@ -259,6 +259,18 @@ class SentenceTest(unittest.TestCase):
             self.assertEqual((found["shown"], found["name"], found["month"], found["day"]), (*expected, 4, 4), text)
         self.assertTrue(parse_birthday("Der Geburtstag von mir ist am 5. Juni")["own"])
 
+    def test_clauses_and_fragments(self):
+        cases = {
+            "Merk dir, dass Max mein bester Freund ist": "Max ist mein bester Freund",
+            "Merk dir, dass Tom morgen anruft": "Tom ruft morgen an",
+            "Merk dir bitte: ich hasse Montage": "Georg sagt: Ich hasse Montage",
+        }
+        for said, fact in cases.items():
+            self.assertEqual(match_memory(said), ("remember", fact), said)
+        for said in ("Merk dir alles", "Merk dir den Song", "Merk dir diesen Link", "Merk dir das mit dem Zahnarzt",
+                     "Merk dir, dass du nett bist"):
+            self.assertIsNone(match_memory(said), said)
+
     def test_recall(self):
         for said in ("Was weißt du über mich?", "Jarvis, was weißt du eigentlich alles über mich", "Was hast du dir gemerkt?",
                      "Welche Gewohnheiten habe ich?", "Was kennst du denn für Gewohnheiten?"):
