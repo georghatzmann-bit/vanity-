@@ -137,6 +137,12 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
             assistant.window_control("show")
 
     assistant.workshop = Workshop(cfg, brain, ui, assistant.announce, show_window=show_window)
+    if cfg.get("blaupause", {}).get("aktiv", True):
+        from .blaupause import Blueprint
+
+        # 3D-Modelle als Hologramm, gespeichert neben den Werkstatt-Projekten (Jarvis-Werkstatt\Blaupausen)
+        assistant.blueprint = Blueprint(cfg, brain, ui, assistant.workshop.base, assistant.announce,
+                                        show_window=show_window)
     if brain is not None:
         brain.turn_context = assistant.workshop.context  # Fragen zur laufenden Werkstatt-Arbeit
     from .push import Push
@@ -168,6 +174,11 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                     assistant.workshop.take_handoff(STATE_DIR)
                 except Exception:
                     log.exception("Werkstatt-Übergabe")
+            if getattr(assistant, "blueprint", None) is not None:
+                try:
+                    assistant.blueprint.take_handoff(STATE_DIR)  # 3D-Wünsche, die das Gehirn übergibt
+                except Exception:
+                    log.exception("Blaupausen-Übergabe")
             if tick % 5:
                 continue
             try:

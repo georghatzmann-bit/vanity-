@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="werkstatt.css">
+  <link rel="stylesheet" href="blaupause.css">
 </head>
 <body data-state="idle" data-link="wait" data-boot="1" data-view="hud">
   <div class="backdrop" aria-hidden="true"></div>
@@ -35,6 +36,10 @@
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0 5 5l-8.8 8.8a2.1 2.1 0 0 1-3-3l8.8-8.8a4 4 0 0 0-2-2z"/><path d="m16 3 1.5 3.5L21 8"/></svg>
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
+        </button>
+        <button type="button" class="top-btn bp-pill" id="bpPill" data-state="idle" title="Blaupause: 3D-Modelle als Hologramm bauen, drehen, zerlegen. Oder sagen Sie „Blaupause“.">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+          <span class="ws-pill-text">Blaupause</span>
         </button>
         <button type="button" class="top-btn phone-pill" id="phoneBtn" title="Handy und Alexa mit Jarvis verbinden, Konnektoren ansehen">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
@@ -263,6 +268,128 @@
         <div><dt>Gezeichnet</dt><dd>J.A.R.V.I.S.</dd></div>
       </dl>
     </footer>
+  </section>
+
+  <!-- Blaupause: 3D-Modelle als Hologramm auf echtem Blaupausen-Papier (blaupause.js, three.js) -->
+  <section class="bp" id="bp" aria-label="Blaupause" data-look="blau" hidden>
+    <div class="bp-paper" aria-hidden="true"></div>
+    <div class="bp-stage" id="bpStage">
+      <canvas id="bpCanvas" aria-label="3D-Modell. Ziehen dreht, Mausrad zoomt, rechte Maustaste verschiebt, Klick wählt ein Teil."></canvas>
+      <svg class="bp-overlay" id="bpOverlay" aria-hidden="true"></svg>
+      <div class="bp-labels" id="bpLabels" aria-hidden="true"></div>
+      <div class="bp-scan" id="bpScan" hidden aria-hidden="true"><span></span></div>
+      <div class="bp-empty" id="bpEmpty">
+        <b>Der Tisch ist frei</b>
+        <span>Sagen Sie „Generiere einen Iron-Man-Helm“ oder schreiben Sie unten, was ich konstruieren soll.</span>
+      </div>
+      <div class="bp-gizmo" aria-hidden="true"><canvas id="bpGizmo" width="96" height="96"></canvas></div>
+      <div class="bp-help" id="bpHelp">Ziehen: drehen · Rad: zoomen · Rechts ziehen: verschieben · Doppelklick: Teil heranholen</div>
+    </div>
+
+    <header class="bp-top">
+      <button type="button" class="ws-back bp-back" id="bpBack" title="Zurück zu Jarvis (Esc)">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>
+        <span>Jarvis</span>
+      </button>
+      <div class="bp-title">
+        <span class="bp-kicker">Blaupause · Stark Industries</span>
+        <h1 id="bpName">Neue Konstruktion</h1>
+      </div>
+      <span class="bp-chip" id="bpChip" data-state="idle"><i aria-hidden="true"></i><span id="bpChipText">Bereit</span></span>
+      <div class="bp-actions">
+        <button type="button" class="bp-btn" id="bpNew" title="Den Tisch freiräumen (Rückgängig geht)">Neu</button>
+        <button type="button" class="bp-btn" id="bpLibraryBtn" title="Gespeicherte Blaupausen">Blaupausen</button>
+        <button type="button" class="bp-btn" id="bpSave" title="Das Modell speichern">Speichern</button>
+        <button type="button" class="bp-btn primary" id="bpExport" title="Als STL-Datei für den 3D-Drucker speichern">STL</button>
+      </div>
+    </header>
+
+    <aside class="bp-panel bp-parts" aria-labelledby="bpPartsHead">
+      <h2 class="bp-h" id="bpPartsHead"><span class="bp-no">A</span>Teile<span class="bp-count" id="bpPartCount"></span></h2>
+      <ol class="bp-tree" id="bpTree"></ol>
+      <p class="bp-hint" id="bpTreeEmpty">Noch keine Teile. Jarvis zeichnet sie hier ein, sobald er konstruiert.</p>
+    </aside>
+
+    <aside class="bp-panel bp-controls" aria-labelledby="bpCtrlHead">
+      <h2 class="bp-h" id="bpCtrlHead"><span class="bp-no">B</span>Steuerung</h2>
+      <div class="bp-group" role="group" aria-label="Darstellung">
+        <span class="bp-label">Darstellung</span>
+        <div class="bp-seg" id="bpLook">
+          <button type="button" data-look="blau" aria-pressed="true" title="Weiße Linien auf Blaupause">Blaupause</button>
+          <button type="button" data-look="holo" aria-pressed="false" title="Leuchtendes Hologramm">Holo</button>
+          <button type="button" data-look="echt" aria-pressed="false" title="Echte Farben und Material">Echt</button>
+        </div>
+      </div>
+      <div class="bp-group" role="group" aria-label="Ansicht">
+        <span class="bp-label">Ansicht</span>
+        <div class="bp-seg" id="bpViews">
+          <button type="button" data-side="perspektive" title="Schräg von vorne (1)">3D</button>
+          <button type="button" data-side="vorne" title="Von vorne (2)">Vorne</button>
+          <button type="button" data-side="seite" title="Von der Seite (3)">Seite</button>
+          <button type="button" data-side="oben" title="Von oben (4)">Oben</button>
+        </div>
+      </div>
+      <div class="bp-toggles">
+        <button type="button" class="bp-toggle" id="bpSpin" aria-pressed="false" title="Langsam drehen lassen (R)">Drehen</button>
+        <button type="button" class="bp-toggle" id="bpExplode" aria-pressed="false" title="Explosionsansicht: alle Baugruppen auseinander (E)">Explosion</button>
+        <button type="button" class="bp-toggle" id="bpLabelsBtn" aria-pressed="false" title="Namen der Baugruppen anzeigen (L)">Namen</button>
+        <button type="button" class="bp-toggle" id="bpDims" aria-pressed="true" title="Maßlinien anzeigen (M)">Maße</button>
+      </div>
+      <div class="bp-row">
+        <button type="button" class="bp-btn" id="bpSmaller" title="Kleiner (−)">Kleiner</button>
+        <button type="button" class="bp-btn" id="bpBigger" title="Größer (+)">Größer</button>
+      </div>
+      <div class="bp-row">
+        <button type="button" class="bp-btn" id="bpUndo" title="Rückgängig (Strg+Z)">Rückgängig</button>
+        <button type="button" class="bp-btn" id="bpRedo" title="Wiederholen (Strg+Y)">Wiederholen</button>
+      </div>
+      <section class="bp-sel" id="bpSel" hidden aria-label="Ausgewähltes Teil">
+        <span class="bp-label">Ausgewählt</span>
+        <b id="bpSelName">Teil</b>
+        <small id="bpSelInfo"></small>
+        <div class="bp-swatches" id="bpSwatches" role="group" aria-label="Farbe"></div>
+        <div class="bp-row">
+          <button type="button" class="bp-btn" id="bpSelFocus">Heranholen</button>
+          <button type="button" class="bp-btn" id="bpSelHide">Ausblenden</button>
+          <button type="button" class="bp-btn danger" id="bpSelRemove">Entfernen</button>
+        </div>
+      </section>
+    </aside>
+
+    <footer class="bp-foot">
+      <div class="bp-console" aria-live="polite">
+        <span class="bp-who">J.A.R.V.I.S.</span>
+        <p id="bpSay">Bereit, Sir. Was soll ich konstruieren?</p>
+      </div>
+      <form class="bp-cmd" id="bpCmd" autocomplete="off">
+        <label class="bp-cmd-label" for="bpInput">Befehl</label>
+        <input id="bpInput" type="text" maxlength="600" spellcheck="false"
+               placeholder="Generiere einen Iron-Man-Helm · Mach die Flügel länger · Explosionsansicht">
+        <button type="submit" class="bp-btn primary" id="bpSend" disabled>Los</button>
+      </form>
+      <div class="bp-chips" id="bpChips" role="group" aria-label="Beispiele">
+        <button type="button">Generiere einen Iron-Man-Helm</button>
+        <button type="button">Bau mir eine Drohne</button>
+        <button type="button">Explosionsansicht</button>
+        <button type="button">Mach das größer</button>
+        <button type="button">Dreh es um 90 Grad</button>
+      </div>
+      <dl class="bp-block" aria-label="Schriftfeld">
+        <div class="bp-block-wide"><dt>Benennung</dt><dd id="bpBlockName">–</dd></div>
+        <div><dt>Maße</dt><dd id="bpBlockSize">–</dd></div>
+        <div><dt>Teile</dt><dd id="bpBlockParts">0</dd></div>
+        <div><dt>Datum</dt><dd id="bpBlockDate">–</dd></div>
+        <div><dt>Gezeichnet</dt><dd>J.A.R.V.I.S.</dd></div>
+        <div><dt>Blatt</dt><dd>1 / 1</dd></div>
+      </dl>
+    </footer>
+
+    <div class="bp-library" id="bpLibrary" hidden role="dialog" aria-labelledby="bpLibHead">
+      <header><h2 id="bpLibHead">Gespeicherte Blaupausen</h2><button type="button" class="bp-btn" id="bpLibClose">Schließen</button></header>
+      <ol id="bpLibList"></ol>
+      <p class="bp-hint" id="bpLibEmpty">Noch nichts gespeichert. „Speicher das als …“ legt eine Blaupause an.</p>
+      <button type="button" class="bp-btn" id="bpFolder">Ordner öffnen</button>
+    </div>
   </section>
 
   <!-- Werkstatt: alle Projekte -->
@@ -520,6 +647,7 @@
   <div class="toasts" id="toasts" aria-live="assertive"></div>
 
   <script src="werkstatt.js"></script>
+  <script src="blaupause.js"></script>
   <script src="projekte.js"></script>
   <script src="koppeln.js"></script>
   <script src="gedaechtnis.js"></script>

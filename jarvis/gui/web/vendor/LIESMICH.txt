@@ -1,0 +1,3 @@
+three.js 0.149.0 (MIT), aus dem npm-Paket three-0.149.0.tgz
+sha1 des Pakets: a9cf78b17d02f063ffe6dfca1e300eff2eab2927 (wie in der npm-Registry)
+Datei: package/build/three.min.js, unverändert.

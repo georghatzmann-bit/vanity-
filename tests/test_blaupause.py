@@ -1,0 +1,308 @@
+"""Die Blaupause: 3D-Modelle als Hologramm, Befehle per Sprache, Claude zeichnet Teil für Teil."""
+
+import base64
+import json
+import struct
+import sys
+import time
+import types
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from jarvis.blaupause import MAX_PARTS, Blueprint, clean_part, parse_ops
+from jarvis.brain import ClaudeBrain
+from jarvis.config import load_config
+from tests.helpers import RecordingUi, make_fake_claude
+
+posix_only = unittest.skipIf(sys.platform == "win32", "Test-Launcher ist ein Shell-Skript")
+
+
+def part(pid, form="quader", **extra):
+    data = {"op": "teil", "id": pid, "name": pid.title(), "form": form, "masse": [0.2, 0.2, 0.2], "pos": [0, 0.5, 0]}
+    data.update(extra)
+    return data
+
+
+def stl(triangles: int) -> str:
+    data = b"Jarvis".ljust(80, b" ") + struct.pack("<I", triangles) + b"\0" * (50 * triangles)
+    return base64.b64encode(data).decode("ascii")
+
+
+class CleanTest(unittest.TestCase):
+    def test_known_forms_and_limits(self):
+        p = clean_part({"id": "Flügel Links!", "form": "box", "masse": [1, "x", 500], "pos": [0, 1e9, float("nan")],
+                        "dreh": [0, 1000, 0], "farbe": "rot", "material": "plutonium", "skala": 2})
+        self.assertEqual(p["id"], "fluegel_links")
+        self.assertEqual(p["form"], "quader")
+        self.assertEqual(p["masse"], [1.0, 0.5, 100.0], "unlesbare Zahl: Standard, zu groß: Grenze")
+        self.assertEqual(p["pos"], [0.0, 100.0, 0.0])
+        self.assertEqual(p["dreh"][1], 720.0)
+        self.assertEqual(p["farbe"], "#e53935")
+        self.assertEqual(p["material"], "metall")
+        self.assertEqual(p["skala"], [2.0, 2.0, 2.0])
+        self.assertEqual(clean_part({"form": "kugel", "farbe": "#ABC"})["farbe"], "#aabbcc")
+        self.assertEqual(clean_part({"form": "kugel", "farbe": "url(javascript:x)"})["farbe"], "#7fd8ff")
+
+    def test_special_forms_need_their_points(self):
+        self.assertIsNone(clean_part({"form": "drehkoerper"}))
+        self.assertIsNone(clean_part({"form": "extrusion", "umriss": [[0, 0], [1, 0]]}), "zwei Punkte sind keine Fläche")
+        lathe = clean_part({"form": "lathe", "profil": [[-1, 0], [0.5, 1], [0.2, 2]]})
+        self.assertEqual(lathe["profil"][0], [0.0, 0.0], "kein negativer Radius")
+        tube = clean_part({"form": "rohr", "pfad": [[0, 0, 0], [1, 1, 1]], "radius": 99})
+        self.assertEqual(tube["radius"], 10.0)
+        self.assertIsNone(clean_part({"form": "teekanne"}))
+        self.assertIsNone(clean_part("quader"))
+
+    def test_parse_lines_arrays_and_whole_models(self):
+        text = '```jsonl\n{"op":"neu","name":"A"}\nkein json\n{"op":"teil","form":"kugel"},\n```'
+        self.assertEqual([o["op"] for o in parse_ops(text)], ["neu", "teil"])
+        whole = json.dumps({"name": "Rakete", "teile": [{"form": "kegel"}, {"form": "zylinder"}]})
+        self.assertEqual([o["op"] for o in parse_ops(whole)], ["neu", "teil", "teil"])
+        self.assertEqual(len(list(parse_ops(json.dumps([{"op": "teil", "form": "kugel"}] * 3)))), 3)
+
+
+class CommandTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.ui = RecordingUi()
+        self.said = []
+        self.bp = Blueprint({}, None, self.ui, Path(self.tmp.name), self.said.append)
+        for op in ({"op": "neu", "name": "Drohne", "groesse_m": 0.4},
+                   part("rumpf", gruppe="Rumpf", pos=[0, 0.5, 0]),
+                   part("fluegel_links", gruppe="Flügel", pos=[-0.6, 0.5, 0], name="Flügel links"),
+                   part("fluegel_rechts", gruppe="Flügel", pos=[0.6, 0.5, 0], name="Flügel rechts"),
+                   part("antenne", "zylinder", masse=[0.01, 0.01, 0.3], pos=[0, 0.9, 0], name="Antenne")):
+            self.bp.apply(op)
+
+    def views(self):
+        return [e[1] for e in self.ui.of("blueprint") if e[1]["action"] == "view"]
+
+    def test_closed_blueprint_ignores_everything_but_opening(self):
+        for said in ("Dreh es", "Mach das größer", "Explosionsansicht", "Zoom rein", "Mach die Musik lauter"):
+            with self.subTest(said=said):
+                self.assertIsNone(self.bp.command(said))
+        self.assertIn("Auf dem Tisch liegt Drohne", self.bp.open())
+        self.assertTrue(self.bp.active)
+        self.assertEqual(self.ui.of("blueprint")[-1][1]["action"], "open")
+        self.assertIn("geschlossen", self.bp.command("Blaupause schließen"))
+        self.assertFalse(self.bp.active)
+        self.assertIn("Blaupause ist offen", self.bp.command("Öffne die Blaupause"))
+
+    def test_view_commands_go_to_the_window(self):
+        self.bp.open()
+        self.assertEqual(self.bp.command("Explosionsansicht"), "Explosionsansicht, Sir.")
+        self.bp.command("Dreh es um 90 Grad nach links")
+        self.bp.command("Zoom rein")
+        self.bp.command("Von oben")
+        self.bp.command("Lass es drehen")
+        self.bp.command("Röntgenblick")
+        self.bp.command("Bau es wieder zusammen")
+        whats = [(v["what"], v.get("degrees"), v.get("side"), v.get("on"), v.get("mode")) for v in self.views()]
+        self.assertEqual(whats, [("explode", None, None, True, None), ("rotate", -90.0, None, None, None),
+                                 ("zoom", None, None, None, None), ("camera", None, "oben", None, None),
+                                 ("spin", None, None, True, None), ("look", None, None, None, "draht"),
+                                 ("explode", None, None, False, None)])
+
+    def test_bigger_smaller_keeps_the_model_on_the_floor(self):
+        self.bp.open()
+        self.assertIn("25 Prozent größer", self.bp.command("Mach das größer"))
+        rumpf = next(p for p in self.bp.scene["teile"] if p["id"] == "rumpf")
+        links = next(p for p in self.bp.scene["teile"] if p["id"] == "fluegel_links")
+        self.assertEqual(rumpf["skala"], [1.25, 1.25, 1.25])
+        self.assertEqual(links["pos"], [-0.75, 0.625, 0.0], "um die Mitte am Boden vergrößert")
+        self.assertIn("50 Prozent kleiner", self.bp.command("Mach es halb so groß"))
+        self.bp.command("Rückgängig")
+        self.bp.command("Rückgängig")
+        self.assertEqual(next(p for p in self.bp.scene["teile"] if p["id"] == "rumpf")["skala"], [1.0, 1.0, 1.0])
+        self.assertIn("Prozent größer", self.bp.command("Mach die Flügel doppelt so groß"))
+        self.assertEqual(next(p for p in self.bp.scene["teile"] if p["id"] == "rumpf")["skala"], [1.0, 1.0, 1.0],
+                         "nur die Flügel")
+
+    def test_color_remove_focus_hide_and_undo(self):
+        self.bp.open()
+        self.assertIn("rot", self.bp.command("Mach die Flügel rot"))
+        self.assertEqual({p["farbe"] for p in self.bp.scene["teile"] if p["gruppe"] == "Flügel"}, {"#e53935"})
+        self.assertIn("Entfernt", self.bp.command("Entferne die Antenne"))
+        self.assertNotIn("antenne", [p["id"] for p in self.bp.scene["teile"]])
+        self.assertEqual(self.bp.command("Rückgängig"), "Rückgängig gemacht, Sir.")
+        self.assertIn("antenne", [p["id"] for p in self.bp.scene["teile"]])
+        self.assertEqual(self.bp.command("Wiederherstellen"), "Wiederhergestellt, Sir.")
+        self.bp.command("Rückgängig")
+        self.assertIn("Flügel", self.bp.command("Zeig mir die Flügel genauer"))
+        self.assertEqual(self.views()[-1]["ids"], ["fluegel_links", "fluegel_rechts"])
+        self.assertIn("finde ich nicht", self.bp.command("Zeig mir das Triebwerk genauer"))
+        self.assertIn("Ausgeblendet", self.bp.command("Blende die Antenne aus"))
+        self.assertTrue(next(p for p in self.bp.scene["teile"] if p["id"] == "antenne").get("versteckt"))
+        self.bp.command("Zeig alles")
+        self.assertFalse(next(p for p in self.bp.scene["teile"] if p["id"] == "antenne").get("versteckt"))
+        self.bp.select("antenne")
+        self.assertIn("Antenne", self.bp.command("Was ist das?"))
+
+    def test_save_load_list_export(self):
+        self.bp.open()
+        self.assertIn("Gespeichert als Testdrohne", self.bp.command("Speicher das als Testdrohne"))
+        saved = self.bp.folder / "testdrohne.json"
+        self.assertTrue(saved.is_file())
+        self.bp.command("Leere Blaupause")
+        self.assertEqual(self.bp.scene["teile"], [])
+        self.assertIn("Testdrohne", self.bp.command("Lade die Blaupause Testdrohne"))
+        self.assertEqual(len(self.bp.scene["teile"]), 4)
+        self.assertEqual(self.bp.scene.get("groesse_m"), 0.4)
+        self.assertIn("1 Blaupause", self.bp.command("Zeig mir meine Blaupausen"))
+        self.assertIn("STL", self.bp.command("Exportier als STL"))
+        self.assertEqual(self.ui.of("blueprint")[-1][1]["action"], "export")
+        path = Path(self.bp.export_stl("Testdrohne", stl(2)))
+        self.assertEqual(path.name, "testdrohne.stl")
+        with self.assertRaises(ValueError):
+            self.bp.export_stl("x", stl(2)[:-8])
+        with self.assertRaises(ValueError):
+            self.bp.export_stl("x", "kein base64!")
+        self.assertTrue(self.bp.delete("Testdrohne"))
+        self.assertEqual(self.bp.saved(), [])
+
+    def test_window_edits_with_undo(self):
+        self.assertTrue(self.bp.edit_part("antenne", {"farbe": "blau", "script": "x"}))
+        antenne = next(p for p in self.bp.scene["teile"] if p["id"] == "antenne")
+        self.assertEqual(antenne["farbe"], "#1e88e5")
+        self.assertNotIn("script", antenne)
+        self.assertTrue(self.bp.edit_part("antenne", {"entfernen": True}))
+        self.assertFalse(self.bp.edit_part("gibtsnicht", {"farbe": "rot"}))
+        self.bp.undo()
+        self.assertIn("antenne", [p["id"] for p in self.bp.scene["teile"]])
+
+    def test_limits(self):
+        self.bp.apply({"op": "neu", "name": "Viel"})
+        for n in range(MAX_PARTS + 5):
+            self.bp.apply(part(f"t{n}"))
+        self.assertEqual(len(self.bp.scene["teile"]), MAX_PARTS)
+
+    def test_strong_verbs_open_the_blueprint_but_not_for_texts(self):
+        for said in ("Generiere ein Passwort", "Generiere mir eine Playlist", "Bau mir einen Tisch", "Mach mir ein Bild"):
+            with self.subTest(said=said):
+                self.assertIsNone(self.bp.command(said))
+        self.assertFalse(self.bp.active)
+        self.assertIsNotNone(self.bp.command("Generiere einen Iron-Man-Helm"))
+        self.assertTrue(self.bp.active)
+
+    def test_brain_hands_over_3d_wishes(self):
+        import datetime as dt
+
+        from jarvis.blaupause import HANDOFF, hand_over
+
+        state = Path(self.tmp.name) / "daten"
+        hand_over(state, "Ein Auto in 3D")
+        self.assertTrue(self.bp.take_handoff(state))
+        self.assertFalse((state / HANDOFF).exists(), "nur einmal")
+        self.assertTrue(self.bp.active)
+        self.assertIn("Gehirn", self.said[-1], "ohne Gehirn sagt Jarvis, was fehlt")
+        self.assertFalse(self.bp.take_handoff(state))
+        old = hand_over(state, "Alt")
+        data = json.loads(old.read_text(encoding="utf-8"))
+        data["zeit"] = (dt.datetime.now() - dt.timedelta(minutes=10)).isoformat(timespec="seconds")
+        old.write_text(json.dumps(data), encoding="utf-8")
+        self.assertFalse(self.bp.take_handoff(state), "zu alt")
+
+    def test_generation_needs_a_brain(self):
+        self.bp.open()
+        self.assertIn("Gehirn", self.bp.command("Generiere einen Iron-Man-Helm"))
+
+
+@posix_only
+class GenerateTest(unittest.TestCase):
+    """Claude zeichnet: Teile kommen einzeln ins Fenster, Unsinn wird verworfen, Änderungen bauen um."""
+
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        home = Path(self.tmp.name)
+        self.home = home
+        cfg = load_config()
+        cfg["brain"]["claude_path"] = str(make_fake_claude(home))
+        (home / "CLAUDE.md").write_text("# Jarvis", encoding="utf-8")
+        self.brain = ClaudeBrain(cfg["brain"], home, home / "daten")
+        self.addCleanup(self.brain.close)
+        self.ui = RecordingUi()
+        self.said = []
+        self.bp = Blueprint(cfg, self.brain, self.ui, home / "Werkstatt", self.said.append)
+
+    def wait(self):
+        end = time.monotonic() + 15
+        while self.bp.busy and time.monotonic() < end:
+            time.sleep(0.05)
+
+    def calls(self):
+        return [json.loads(line) for line in (self.home / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    def test_new_model_part_by_part_and_then_a_change(self):
+        answer = self.bp.command("Generiere einen Iron-Man-Helm")
+        self.assertIn("konstruiere", answer.lower() + " konstruiere")
+        self.assertTrue(self.bp.active, "die Blaupause geht dabei auf")
+        self.wait()
+        self.assertEqual(self.bp.scene["name"], "Testhelm")
+        self.assertEqual([p["id"] for p in self.bp.scene["teile"]], ["schale", "visier"])
+        self.assertEqual(self.bp.scene["groesse_m"], 0.3)
+        self.assertEqual(self.said, ["Der Testhelm steht, Sir."])
+        actions = [e[1]["action"] for e in self.ui.of("blueprint")]
+        self.assertIn("busy", actions)
+        self.assertEqual(actions[-1], "done")
+        added = [e[1]["op"]["teil"]["id"] for e in self.ui.of("blueprint")
+                 if e[1]["action"] == "op" and e[1]["op"]["op"] == "teil"]
+        self.assertEqual(added, ["schale", "visier"], "jedes Teil kommt einzeln ins Fenster")
+        call = self.calls()[-1]
+        self.assertIn("--system-prompt-file", call["args"])
+        self.assertIn("--strict-mcp-config", call["args"])
+        self.assertEqual(call["args"][call["args"].index("--tools") + 1], "")
+        self.assertEqual(call["no_claude_md"], "1")
+        self.assertTrue(call["prompt"].startswith("Blaupause: Neues Modell"))
+
+        self.bp.select("visier")
+        self.assertIsNotNone(self.bp.command("Füg noch eine Antenne hinzu"))
+        self.wait()
+        self.assertEqual([p["id"] for p in self.bp.scene["teile"]], ["schale", "visier", "antenne"])
+        self.assertEqual(next(p for p in self.bp.scene["teile"] if p["id"] == "visier")["farbe"], "#00ff00")
+        prompt = self.calls()[-1]["prompt"]
+        self.assertIn("Ändere das vorhandene Modell", prompt)
+        self.assertIn('"schale"', prompt, "Claude sieht das Modell")
+        self.assertIn('Ausgewählt ist das Teil mit id "visier"', prompt)
+        self.assertEqual(self.bp.command("Rückgängig"), "Rückgängig gemacht, Sir.")
+        self.assertEqual([p["id"] for p in self.bp.scene["teile"]], ["schale", "visier"], "eine Konstruktion, ein Rückgängig")
+
+    def test_stop_cancels(self):
+        self.bp.open()
+        self.bp.generate("langsam", fresh=True)
+        time.sleep(0.6)
+        self.assertTrue(self.bp.cancel())
+        self.wait()
+        self.assertFalse(self.bp.busy)
+        self.assertEqual(self.said, [], "abgebrochen: keine Ansage")
+
+
+class RoutingTest(unittest.TestCase):
+    """Bei offener Blaupause gehören "Mach das größer" und "Dreh es" zum Modell, sonst nicht."""
+
+    def test_assistant_routes_to_the_blueprint(self):
+        from tests.test_assistant import FakeBrain, make
+
+        with TemporaryDirectory() as tmp:
+            brain = FakeBrain()
+            assistant, ui, _speaker, _ = make(brain)
+            bp = Blueprint({}, types.SimpleNamespace(claude_path=""), ui, Path(tmp), lambda text: None)
+            assistant.blueprint = bp
+            bp.apply({"op": "neu", "name": "Helm"})
+            bp.apply(part("schale", "kugel", masse=[0.5]))
+            assistant.handle("Explosionsansicht")
+            self.assertEqual(brain.asked, ["Explosionsansicht"], "zu: geht an Claude")
+            self.assertIn("Blaupause", assistant.handle("Blaupause"))
+            self.assertEqual(assistant.handle("Explosionsansicht"), "Explosionsansicht, Sir.")
+            self.assertIn("Prozent größer", assistant.handle("Mach das größer"))
+            self.assertEqual(len(brain.asked), 1, "nichts davon ging an Claude")
+            # Ein Programm bleibt Sache der Werkstatt, auch bei offener Blaupause
+            from jarvis.blaupause import _SOFTWARE
+            self.assertTrue(_SOFTWARE.search("bau mir einen discord-bot"))
+            self.assertIsNone(bp.command("Bau mir einen Discord-Bot"))
+
+
+if __name__ == "__main__":
+    unittest.main()

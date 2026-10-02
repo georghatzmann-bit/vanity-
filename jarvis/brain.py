@@ -575,6 +575,86 @@ class ClaudeBrain:
             raise classify(result.stderr or result.stdout)(((result.stderr or result.stdout) or "Fehler").strip()[:300])
         return result.stdout.strip()
 
+    def stream_oneshot(self, prompt: str, system_file: Path, model: str = "sonnet", effort: str = "",
+                       on_text: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
+                       on_proc: Callable[[subprocess.Popen], None] | None = None, timeout: float = 300) -> str:
+        """Eine einzelne Aufgabe mit eigenem Systemprompt, ohne Werkzeuge, Konnektoren und Verlauf. Der Text
+        kommt laufend über on_text (die Blaupause zeichnet so Teil für Teil). Gibt den ganzen Text zurück."""
+        cmd = [self._claude, "-p", "--output-format", "stream-json", "--verbose"]
+        partial = "include-partial-messages" not in self._unsupported
+        if partial:
+            cmd.append("--include-partial-messages")
+        if model:
+            cmd += ["--model", model]
+        if effort and "effort" not in self._unsupported:
+            cmd += ["--effort", effort]
+        if "tools" not in self._unsupported:
+            cmd += ["--tools", ""]
+        if "strict-mcp-config" not in self._unsupported:
+            cmd.append("--strict-mcp-config")  # keine Konnektoren laden: schneller, und sie werden nicht gebraucht
+        cmd += ["--system-prompt-file", str(system_file)]
+        env = self.environment(prompt[:200])
+        env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+        try:
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    cwd=self._home, env=env, text=True, encoding="utf-8", errors="replace",
+                                    creationflags=NO_WINDOW)
+        except FileNotFoundError as exc:
+            raise NotInstalledError(f"Claude Code nicht startbar: {exc}") from exc
+        except OSError as exc:
+            raise BrainError(f"Claude Code nicht startbar: {exc}") from exc
+        if on_proc is not None:
+            on_proc(proc)
+        stderr_parts: list[str] = []
+        lines: queue.Queue = queue.Queue()
+        threading.Thread(target=_pump, args=(proc.stdout, lines.put), daemon=True).start()
+        err_reader = threading.Thread(target=_pump, args=(proc.stderr, stderr_parts.append), daemon=True)
+        err_reader.start()
+        try:
+            proc.stdin.write(prompt)
+        except OSError:
+            pass
+        finally:
+            _close(proc.stdin)
+        stream = _StreamReader(on_text, partial=partial)
+        deadline = time.monotonic() + timeout
+        try:
+            while stream.result is None:
+                if cancel is not None and cancel.is_set():
+                    raise Cancelled("abgebrochen")
+                if time.monotonic() > deadline:
+                    raise TooSlowError("Claude hat zu lange gebraucht.")
+                try:
+                    line = lines.get(timeout=0.2)
+                except queue.Empty:
+                    if proc.poll() is not None and lines.empty():
+                        break
+                    continue
+                if line is None:
+                    break
+                stream.feed(line)
+        finally:
+            if proc.poll() is None:
+                try:
+                    proc.wait(timeout=5 if stream.result is not None else 0.1)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
+            err_reader.join(timeout=1)
+        stderr = "".join(part for part in stderr_parts if part)
+        result = stream.result or {}
+        if result.get("is_error") or (not result and proc.returncode):
+            message = str(result.get("result") or "") or " ".join(stream.errors) or stderr.strip() or "Fehler"
+            unknown = re.search(r"unknown option '--([\w-]+)'", stderr)
+            if unknown and unknown.group(1) not in self._unsupported:
+                self._unsupported.add(unknown.group(1))
+                return self.stream_oneshot(prompt, system_file, model, effort, on_text, cancel, on_proc, timeout)
+            raise classify(message)(message.strip()[:300])
+        return str(result.get("result") or "")
+
     def environment(self, text: str) -> dict:
         """Umgebung für Claude: damit `python -m jarvis.tool ...` im Jarvis-Ordner
         mit Jarvis' eigenem Python funktioniert."""

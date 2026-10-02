@@ -84,6 +84,7 @@ class Assistant:
         self.open_setup = None
         # Die Werkstatt für Programmier- und Bauaufgaben (setzt __main__).
         self.workshop = None
+        self.blueprint = None  # die Blaupause: 3D-Modelle als Hologramm (blaupause.Blueprint, setzt __main__)
         self.gaming = False
         # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
         self.weathers: dict = {}
@@ -210,6 +211,9 @@ class Assistant:
             self.brain.cancel()
         if self.speaker is not None:
             self.speaker.stop()
+        blueprint = getattr(self, "blueprint", None)
+        if blueprint is not None:
+            blueprint.cancel()  # "Stopp" hält auch eine laufende Konstruktion an
 
     def new_conversation(self) -> None:
         if self.brain is not None:
@@ -398,6 +402,16 @@ class Assistant:
                 if on:
                     return "Sehr wohl, Sir. Ich sage wieder Bescheid, wenn mir etwas auffällt."
                 return "Sehr wohl, Sir. Ich melde mich nur noch, wenn es dringend ist. Mit „Hinweise an“ geht es wieder."
+        blueprint = getattr(self, "blueprint", None)
+        if blueprint is not None:
+            # Die Blaupause zuerst: Ist sie offen, gehören "Mach das größer" oder "Dreh es" zum Modell
+            try:
+                answer = blueprint.command(text)
+            except Exception:
+                log.exception("Blaupause")
+                answer = None
+            if answer is not None:
+                return answer
         if self.memory is not None:
             from .memory import match_memory
 

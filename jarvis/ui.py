@@ -46,6 +46,12 @@ class Ui:
         """Ein Vorschlag aus Georgs Routinen (memory.Routine.as_dict), None = keiner mehr."""
         pass
 
+    def blueprint(self, event: dict) -> None:
+        """Die Blaupause (blaupause.py): action "open"/"close"/"scene" (das ganze Modell), "op" (ein Teil kommt,
+        ändert sich oder geht), "busy"/"done" (Claude konstruiert), "view" (Ansicht: drehen, zoomen, Explosion,
+        Fokus ...), "export" (STL rechnen), "library", "saved"."""
+        pass
+
     def action(self, kind: str) -> None:
         """Was Jarvis gerade tut ("music", "weather", "timer", ...): Die Kugel zeigt dazu eine
         eigene kurze Bewegung (orb.js, gesture)."""
@@ -152,6 +158,9 @@ class MultiUi(Ui):
 
     def suggestion(self, offer):
         self._each("suggestion", offer)
+
+    def blueprint(self, event):
+        self._each("blueprint", event)
 
     def action(self, kind):
         self._each("action", kind)

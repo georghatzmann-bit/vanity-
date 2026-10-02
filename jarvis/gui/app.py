@@ -73,6 +73,9 @@ class GuiBridge(Ui):
                     self._events.remove(old)
         self._push({"type": "workshop", **event})
 
+    def blueprint(self, event: dict) -> None:
+        self._push({"type": "blueprint", **event})
+
     def stats(self, cpu: float, ram: float, gpu: dict | None = None) -> None:
         event = {"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)}
         if gpu:
@@ -703,6 +706,99 @@ class Api:
         except Exception as exc:
             log.info("Vorschau: %s", exc)
             return False
+
+    # ------------------------------------------------------------------ Blaupause
+
+    def _blueprint(self):
+        return getattr(self._assistant, "blueprint", None)
+
+    def blueprint_state(self) -> dict | None:
+        """Das Modell auf dem Tisch (nach dem Laden oder Neuladen des Fensters)."""
+        bp = self._blueprint()
+        return bp.state() if bp is not None else None
+
+    def blueprint_active(self, on) -> bool:
+        """Das Fenster meldet: Blaupause offen oder zu (dann gehen \"Dreh es\" & Co. dorthin)."""
+        bp = self._blueprint()
+        if bp is None:
+            return False
+        bp.set_active(bool(on))
+        return True
+
+    def blueprint_select(self, part_id) -> dict | None:
+        bp = self._blueprint()
+        return bp.select(str(part_id or "")) if bp is not None else None
+
+    def blueprint_edit(self, part_id, changes) -> dict | None:
+        """Aus der Teileliste: Farbe, Ausblenden, Entfernen (mit Rückgängig). Gibt den neuen Stand zurück."""
+        bp = self._blueprint()
+        if bp is None or not isinstance(changes, dict):
+            return None
+        bp.edit_part(str(part_id or ""), changes)
+        return bp.state()
+
+    def blueprint_undo(self, redo=False) -> str:
+        bp = self._blueprint()
+        if bp is None:
+            return ""
+        return bp.redo() if redo else bp.undo()
+
+    def blueprint_cancel(self) -> bool:
+        bp = self._blueprint()
+        return bool(bp is not None and bp.cancel())
+
+    def blueprint_save(self, name="") -> dict:
+        bp = self._blueprint()
+        if bp is None:
+            return {"ok": False, "error": "Die Blaupause ist aus."}
+        try:
+            path = bp.save(str(name or "")[:80])
+        except (OSError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "path": str(path), "name": bp.scene["name"]}
+
+    def blueprint_library(self) -> list:
+        bp = self._blueprint()
+        return bp.saved() if bp is not None else []
+
+    def blueprint_load(self, name) -> dict | None:
+        bp = self._blueprint()
+        if bp is None or not bp.load(str(name or "")):
+            return None
+        return bp.state()
+
+    def blueprint_delete(self, name) -> bool:
+        bp = self._blueprint()
+        return bool(bp is not None and bp.delete(str(name or "")))
+
+    def blueprint_export(self, name, data) -> dict:
+        """Die STL-Datei, die das Fenster gerechnet hat (base64), in den Blaupausen-Ordner."""
+        bp = self._blueprint()
+        if bp is None:
+            return {"ok": False, "error": "Die Blaupause ist aus."}
+        try:
+            path = bp.export_stl(str(name or ""), str(data or ""))
+        except (OSError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "path": path}
+
+    def blueprint_folder(self) -> bool:
+        """Den Blaupausen-Ordner im Explorer öffnen (STL-Dateien für den 3D-Drucker)."""
+        bp = self._blueprint()
+        if bp is None:
+            return False
+        try:
+            bp.folder.mkdir(parents=True, exist_ok=True)
+            if os.name == "nt":
+                os.startfile(str(bp.folder))  # type: ignore[attr-defined]
+            else:
+                import subprocess
+
+                subprocess.Popen(["xdg-open", str(bp.folder)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as exc:
+            log.info("Blaupausen-Ordner: %s", exc)
+            return False
+        return True
 
     def workshop_cancel(self) -> bool:
         """Stopp-Knopf in der Werkstatt."""

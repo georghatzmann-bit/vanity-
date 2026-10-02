@@ -66,6 +66,7 @@
   let Projekte = null; // alle Werkstatt-Projekte (projekte.js)
   let Gedaechtnis = null; // was Jarvis über Georg weiß, Vorschläge (gedaechtnis.js)
   let Koppeln = null; // Handy, Alexa, Konnektoren (koppeln.js)
+  let Blaupause = null; // 3D-Modelle als Hologramm (blaupause.js)
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -89,6 +90,18 @@
     workshop_continue: (folder, text) => window.pywebview.api.workshop_continue(folder, text),
     workshop_run: (folder) => window.pywebview.api.workshop_run(folder),
     workshop_project: (folder) => window.pywebview.api.workshop_project(folder),
+    blueprint_state: () => window.pywebview.api.blueprint_state(),
+    blueprint_active: (on) => window.pywebview.api.blueprint_active(on),
+    blueprint_select: (id) => window.pywebview.api.blueprint_select(id),
+    blueprint_edit: (id, changes) => window.pywebview.api.blueprint_edit(id, changes),
+    blueprint_undo: (redo) => window.pywebview.api.blueprint_undo(redo),
+    blueprint_cancel: () => window.pywebview.api.blueprint_cancel(),
+    blueprint_save: (name) => window.pywebview.api.blueprint_save(name),
+    blueprint_library: () => window.pywebview.api.blueprint_library(),
+    blueprint_load: (name) => window.pywebview.api.blueprint_load(name),
+    blueprint_delete: (name) => window.pywebview.api.blueprint_delete(name),
+    blueprint_export: (name, data) => window.pywebview.api.blueprint_export(name, data),
+    blueprint_folder: () => window.pywebview.api.blueprint_folder(),
     workshop_delete: (folder) => window.pywebview.api.workshop_delete(folder),
     workshop_tell: (text) => window.pywebview.api.workshop_tell(text),
     workshop_preview: (folder) => window.pywebview.api.workshop_preview(folder),
@@ -801,11 +814,17 @@
       case 'state': applyState(String(ev.value || '')); break;
       case 'message':
         addMessage(ev.role, ev.text, ev.id, ev.final, ev.model);
+        // In der Blaupause steht, was Jarvis zuletzt gesagt hat, unten neben der Befehlszeile
+        if (Blaupause && Blaupause.isOpen() && ev.role === 'jarvis' && ev.final !== false) Blaupause.say(ev.text);
         if (ev.model === 'Hinweis' && ev.final !== false) Core.gesture('hint');
         break;
       case 'action': Core.gesture(ev.kind); break;
       case 'progress': onProgress(ev.step); break;
+      case 'blueprint':
+        if (Blaupause) Blaupause.handle(ev);
+        break;
       case 'workshop':
+        if (Blaupause && Blaupause.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Blaupause.close();
         if (ev.state === 'projects') {
           if (Projekte) Projekte.open();
         } else if (ev.state === 'project') {
@@ -1060,6 +1079,9 @@
       ['Wer bist du eigentlich?', 'Jarvis, Sir. Butler, Techniker und gelegentlich die Stimme der Vernunft.'],
     ];
     const shopMode = (params.get('werkstatt') || '').toLowerCase();
+    // ?blaupause=bau (Drohne baut sich auf) oder =fertig (liegt schon da), dazu &ansicht=explosion|holo|echt|oben
+    const bpMode = (params.get('blaupause') || '').toLowerCase();
+    const bpDemo = window.JarvisBlaupause ? window.JarvisBlaupause.demoApi(push) : null;
     let shop = null;
     const startShop = (mode) => {
       if (!window.JarvisWerkstatt) return;
@@ -1166,6 +1188,14 @@
         gen += 1;
         const g = gen;
         const t = String(text || '').trim();
+        if (bpDemo && Blaupause && Blaupause.isOpen()) {
+          const said = bpDemo.handles(t);
+          if (said) {
+            push({ type: 'message', role: 'user', text: t });
+            push({ type: 'message', role: 'jarvis', id: 'bp' + g, text: said, final: true });
+            return Promise.resolve(true);
+          }
+        }
         if (/^(bau|programmier|schreib mir ein (skript|programm|tool))|werkstatt/i.test(t)) {
           // Bauaufträge gehen in die Werkstatt, wie bei Jarvis selbst
           exchange(g, t, 'Sehr wohl, Sir. Ich gehe in die Werkstatt. Sie können mir im Fenster zusehen.', false)
@@ -1268,6 +1298,7 @@
       schedule_forget: () => Promise.resolve(true),
       notebook_open: () => Promise.resolve({ ok: true, folder: 'C:\\Users\\Georg\\Jarvis-Notizbuch' }),
       answer_suggestion: () => Promise.resolve(true),
+      ...(bpDemo ? bpDemo.api : {}),
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
@@ -1275,6 +1306,23 @@
           push({ type: 'stats', cpu, ram, gpu: { load: Math.round(40 + 30 * Math.abs(Math.sin(Date.now() / 9000))), temp: 64, mem: 52 } });
         }, 2000);
         push({ type: 'stats', cpu, ram });
+        if (bpDemo && bpMode) {
+          const look = (params.get('ansicht') || '').toLowerCase();
+          setTimeout(() => {
+            if (bpMode === 'fertig') push(Object.assign({ type: 'blueprint', action: 'open' }, bpDemo.load()));
+            else {
+              push({ type: 'blueprint', action: 'open', scene: { name: '', teile: [] }, selected: '', busy: false });
+              setTimeout(() => bpDemo.build('Bau mir eine Aufklärungsdrohne'), 600);
+            }
+            if (look) {
+              setTimeout(() => {
+                if (look === 'explosion') push({ type: 'blueprint', action: 'view', what: 'explode', on: true });
+                else if (look === 'oben' || look === 'vorne' || look === 'seite') push({ type: 'blueprint', action: 'view', what: 'camera', side: look });
+                else push({ type: 'blueprint', action: 'view', what: 'look', mode: look });
+              }, bpMode === 'fertig' ? 900 : 5200);
+            }
+          }, 700);
+        }
         if (shopMode) {
           // ?werkstatt=live|running|done|error: ein Auftrag zum Zuschauen
           setTimeout(() => startShop(shopMode), ['running', 'done', 'error'].includes(shopMode) ? 0 : 900);
@@ -1429,6 +1477,15 @@
       if (Werkstatt) Werkstatt.renderPill();
     }
     if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });
+    if (window.JarvisBlaupause) {
+      Blaupause = window.JarvisBlaupause.create({
+        call, toast,
+        onOpen: () => {
+          if (Werkstatt && Werkstatt.isOpen()) Werkstatt.close();
+          if (Projekte && Projekte.isOpen()) Projekte.close();
+        },
+      });
+    }
     if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });
     if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
     refreshDeck();

@@ -48,6 +48,8 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   werkstatt-projekt "<name>" "<wunsch>"
                                arbeitet an einem bestimmten Werkstatt-Projekt weiter
   werkstatt-projekte           zeigt alle Werkstatt-Projekte
+  blaupause "<wunsch>"         baut ein 3D-Modell als Hologramm in der Blaupause (Gegenstände, Fahrzeuge, Rüstung ...)
+  blaupause-aendern "<wunsch>" ändert das Modell, das gerade in der Blaupause liegt
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
   vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
@@ -208,6 +210,18 @@ def _dispatch(command: str, rest: list[str]) -> int:
         hand_over(STATE_DIR, task, continue_last=command == "werkstatt-weiter")
         print(f"Die Werkstatt übernimmt (das Fenster zeigt die Arbeit). Sag {_user()} nur kurz, dass du in der "
               "Werkstatt bist, und mach den Auftrag nicht selbst.")
+        return 0
+
+    if command in ("blaupause", "blaupause-aendern"):
+        from .blaupause import hand_over as blueprint_hand_over
+
+        wish = " ".join(rest).strip()
+        if not wish:
+            print(f'Aufruf: {command} "<wunsch>"')
+            return 1
+        blueprint_hand_over(STATE_DIR, wish, change=command == "blaupause-aendern")
+        print(f"Die Blaupause übernimmt (das Hologramm baut sich im Fenster auf). Sag {_user()} nur kurz, dass du "
+              "konstruierst, und beschreib das Modell nicht selbst.")
         return 0
 
     if command in ("merken", "merke", "gedaechtnis", "gedächtnis", "vergessen", "vergiss"):

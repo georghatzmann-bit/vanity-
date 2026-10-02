@@ -243,6 +243,15 @@ max_minuten = 60
 # die sie zum Testen startet, poppen nicht auf deinem Bildschirm auf. Erst "Starte es" zeigt das Ergebnis.
 unsichtbar = true
 
+[blaupause]
+# "Blaupause" oder "Generiere einen Iron-Man-Helm": 3D-Modelle als Hologramm auf einer echten Blaupause.
+# Drehen, zoomen, Explosionsansicht, Teile genauer ansehen, als STL für den 3D-Drucker exportieren.
+# Gespeichert wird im Werkstatt-Ordner unter "Blaupausen".
+aktiv = true
+# Wer die Modelle zeichnet: "sonnet" (schnell) oder "opus" (aufwendiger, langsamer).
+modell = "sonnet"
+effort = "low"
+
 [gaming]
 # Diese Programme schließt "Gaming-Modus an" (Namen wie im Task-Manager, z. B. "OneDrive", "Teams").
 close_apps = []

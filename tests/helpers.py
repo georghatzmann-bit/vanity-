@@ -188,6 +188,27 @@ FAKE_CLAUDE = textwrap.dedent(
             say(text)
             result(text)
             raise Done(0)
+        if prompt.startswith("Blaupause:"):
+            # Die Blaupause: JSON-Zeilen, Teil für Teil (mit einem kaputten Teil dazwischen)
+            if "Neues Modell" in prompt:
+                lines = [{"op": "neu", "name": "Testhelm", "beschreibung": "Ein Helm.", "groesse_m": 0.3},
+                         {"op": "teil", "id": "schale", "name": "Schale", "gruppe": "Helm", "form": "kugel",
+                          "masse": [0.5], "pos": [0, 0.5, 0], "farbe": "#c62828", "material": "metall"},
+                         {"op": "teil", "id": "visier", "name": "Visier", "gruppe": "Helm", "form": "quader",
+                          "masse": [0.4, 0.1, 0.05], "pos": [0, 0.55, 0.45], "farbe": "gold"},
+                         {"op": "teil", "form": "unbekannt"},
+                         {"op": "sagen", "text": "Der Testhelm steht, Sir."}]
+            else:
+                lines = [{"op": "aendern", "id": "visier", "farbe": "#00ff00"},
+                         {"op": "teil", "id": "antenne", "name": "Antenne", "form": "zylinder",
+                          "masse": [0.01, 0.01, 0.3], "pos": [0, 1.1, 0]},
+                         {"op": "sagen", "text": "Umgebaut, Sir."}]
+            if "langsam" in prompt:
+                time.sleep(6)
+            text = "\\n".join(json.dumps(line) for line in lines) + "\\n"
+            say(text)
+            result(text)
+            raise Done(0)
         if prompt == "werkzeug":
             say("Einen Moment, ich schaue nach.")
             tool("toolu_1", "Bash", {"command": "date"}, output="Mi 1. Okt")
@@ -309,6 +330,9 @@ class RecordingUi:
 
     def workshop(self, event):
         self.events.append(("workshop", dict(event)))
+
+    def blueprint(self, event):
+        self.events.append(("blueprint", dict(event)))
 
     def of(self, kind):
         return [e for e in self.events if e[0] == kind]
