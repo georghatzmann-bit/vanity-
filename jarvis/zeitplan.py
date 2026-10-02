@@ -161,8 +161,8 @@ _DAY_PHRASE = (r"(?:jeden\s+(?:tag|morgen|abend|mittag|nachmittag)|jede\s+nacht|
 _SCHEDULE = re.compile(
     r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte\s+)?(?:ab\s+jetzt\s+)?"
     r"(?P<days>" + _DAY_PHRASE + r")\s+(?:(?P<part1>früh|morgens|abends|nachmittags)\s+)?um\s+"
-    r"(?P<clock>\d{1,2}(?:[:.]\d{2})?)\s*(?:uhr)?(?:\s+(?P<part2>früh|morgens|abends|nachmittags|nachts))?"
-    r"\s*[:,]?\s+(?:(?:sollst\s+du|möchte\s+ich|will\s+ich)\s+)?(?P<action>.{2,})$",
+    r"(?P<clock>\d{1,2}(?:[:.]\d{2})?)\s*(?:uhr)?(?:\s+(?P<part2>früh|morgens|vormittags|mittags|abends|nachmittags|nachts))?"
+    r"\s*[:,]?\s+(?:(?:sollst|kannst|könntest|würdest)\s+du\s+|(?:möchte|will)\s+ich,?\s+(?:dass\s+du\s+)?)?(?P<action>.{2,})$",
     re.I,
 )
 _LIST = re.compile(r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:welche|was\s+für)\s+zeitpläne\s+(?:habe|hab)\s+ich"
@@ -188,9 +188,14 @@ def parse_schedule(text: str):
     if not (0 <= hour < 24 and 0 <= minute < 60) or not days:
         return None
     action = found.group("action").strip(" .!")
-    if action.endswith("?") or len(action) < 2:
+    if action.endswith("?") or len(action) < 2 or _STATEMENT.match(action):
         return None
     return days, dt.time(hour, minute), action
+
+
+# "Freitags um 20 Uhr spiele ich Fußball", "Jeden Montag um 9 ist Meeting": Georg erzählt etwas, das ist
+# kein Befehl für Jarvis (sonst schickte Jarvis jede Woche "spiele ich Fußball" los). Das bekommt Claude.
+_STATEMENT = re.compile(r"^(?:[\wäöüß]+\s+(?:ich|wir|du|er|man)\b|(?:ist|sind|war|waren|hat|haben|gibt)\b)", re.I)
 
 
 def match_schedule(text: str):

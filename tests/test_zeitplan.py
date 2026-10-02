@@ -31,6 +31,14 @@ class SentenceTest(unittest.TestCase):
         for one_time in ("Samstag um 20 Uhr Kino mit Anna", "Am Freitag um 9 Uhr Meeting", "Am Wochenende um 10 Uhr Fußball",
                          "Erinnere mich morgen um 8 an den Müll", "Jeden Morgen um 8 Uhr, was machst du?"):
             self.assertIsNone(match_schedule(one_time), one_time)
+        # Georg erzählt etwas: kein Befehl, den Jarvis jede Woche losschickt
+        for statement in ("Freitags um 20 Uhr spiele ich Fußball", "Jeden Montag um 9 Uhr ist Meeting",
+                          "Werktags um 7 Uhr muss ich aufstehen", "Sonntags um 10 Uhr gehen wir brunchen"):
+            self.assertIsNone(match_schedule(statement), statement)
+        self.assertEqual(match_schedule("Jeden Abend um 10 kannst du das Licht ausmachen")[1][2], "das Licht ausmachen")
+        self.assertEqual(match_schedule("Jeden Tag um 12 Uhr mittags erinnere mich an Tabletten")[1][1:],
+                         (dt.time(12, 0), "erinnere mich an Tabletten"))
+        self.assertEqual(match_schedule("Täglich um 8 sag es mir")[1][2], "sag es mir")
         self.assertEqual(match_schedule("Welche Zeitpläne habe ich?"), ("list", ""))
         self.assertEqual(match_schedule("Lösch den Zeitplan Briefing"), ("remove", "Briefing"))
 
