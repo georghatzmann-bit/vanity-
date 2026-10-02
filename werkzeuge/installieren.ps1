@@ -159,7 +159,7 @@ trap {
     $meldung = ($_.Exception.Message -replace "[\r\n]+", " ").Trim()
     Write-Log "Unerwarteter Fehler: $meldung"
     Write-Log "$($_.ScriptStackTrace)"
-    Write-Marker "JARVIS-TIPP Klicken Sie auf „Nochmal versuchen“. Hilft das nicht, öffnen Sie das Protokoll und schicken Sie es an Claude im Jarvis-Projekt."
+    Write-Marker 'JARVIS-TIPP Klicken Sie auf „Nochmal versuchen“. Hilft das nicht, öffnen Sie das Protokoll und schicken Sie es an Claude im Jarvis-Projekt.'
     Write-Marker "JARVIS-FEHLER $($script:phase) 1 Unerwarteter Fehler: $meldung"
     Write-Host ""
     Write-Host "  Unerwarteter Fehler: $meldung" -ForegroundColor Red
@@ -385,7 +385,7 @@ $noetig = if (Test-Path $venvPy) { 512MB } else { 2GB }
 if ($frei -ge 0 -and $frei -lt $noetig) {
     $name = $laufwerk.TrimEnd("\")
     Stop-Install 11 ("Auf Laufwerk $name ist zu wenig Platz frei (noch {0:N1} GB)." -f ($frei / 1GB)) `
-        "Jarvis braucht etwa 3 GB. Leeren Sie zum Beispiel den Papierkorb oder deinstallieren Sie ein altes Spiel. Dann „Nochmal versuchen“."
+        'Jarvis braucht etwa 3 GB. Leeren Sie zum Beispiel den Papierkorb oder deinstallieren Sie ein altes Spiel. Dann „Nochmal versuchen“.'
 }
 Set-Share 75
 
@@ -417,13 +417,13 @@ function Test-Internet {
 $internet = Test-Internet
 if ($internet -eq "proxy") {
     Stop-Install 10 "Ihr Netzwerk verlangt eine Anmeldung am Proxy." `
-        "Melden Sie sich einmal im Browser an oder fragen Sie, wer Ihr Netzwerk betreut. Dann „Nochmal versuchen“."
+        'Melden Sie sich einmal im Browser an oder fragen Sie, wer Ihr Netzwerk betreut. Dann „Nochmal versuchen“.'
 } elseif ($internet -eq "tls") {
     Stop-Install 10 "Die sichere Verbindung zu den Download-Servern klappt nicht." `
-        "Prüfen Sie Datum und Uhrzeit des PCs und installieren Sie alle Windows-Updates. Dann „Nochmal versuchen“."
+        'Prüfen Sie Datum und Uhrzeit des PCs und installieren Sie alle Windows-Updates. Dann „Nochmal versuchen“.'
 } elseif ($internet) {
     Stop-Install 10 "Keine Verbindung zum Internet." `
-        "Prüfen Sie WLAN oder Netzwerkkabel und klicken Sie dann auf „Nochmal versuchen“."
+        'Prüfen Sie WLAN oder Netzwerkkabel und klicken Sie dann auf „Nochmal versuchen“.'
 }
 if ($frei -ge 0) { Write-Ok ("{0:N0} GB frei, Internet da" -f ($frei / 1GB)) } else { Write-Ok "Internet da" }
 Complete-Phase
@@ -517,7 +517,7 @@ if (-not $python) {
     }
     if (-not $python) {
         Stop-Install 12 "Python ließ sich nicht installieren." `
-            "Installieren Sie Python 3.12 von https://www.python.org/downloads/ (Haken bei „Add python.exe to PATH“). Dann „Nochmal versuchen“."
+            'Installieren Sie Python 3.12 von https://www.python.org/downloads/ (Haken bei „Add python.exe to PATH“). Dann „Nochmal versuchen“.'
     }
     $script:step--
     Start-Step "Python suchen"
@@ -552,7 +552,7 @@ if (-not (Test-Path $venvPy)) {
     $code = Invoke-Quiet $python @("-m", "venv", $venvDir) 600
     if ($code -ne 0 -or -not (Test-Path $venvPy)) {
         Stop-Install 13 "Die eigene Python-Umgebung ließ sich nicht anlegen." `
-            "Klicken Sie auf „Nochmal versuchen“. Hilft das nicht, starten Sie den PC neu und versuchen Sie es dann noch einmal."
+            'Klicken Sie auf „Nochmal versuchen“. Hilft das nicht, starten Sie den PC neu und versuchen Sie es dann noch einmal.'
     }
     Write-Ok "neu angelegt"
 } else {
@@ -573,19 +573,19 @@ function Stop-PipProblem([string]$was) {
     switch (Get-PipProblem) {
         "platz" {
             Stop-Install 14 "Beim Laden der $was war die Festplatte voll." `
-                "Jarvis braucht etwa 3 GB. Machen Sie Platz frei (Papierkorb, alte Spiele) und klicken Sie auf „Nochmal versuchen“."
+                'Jarvis braucht etwa 3 GB. Machen Sie Platz frei (Papierkorb, alte Spiele) und klicken Sie auf „Nochmal versuchen“.'
         }
         "gesperrt" {
             Stop-Install 14 "Eine Datei war gesperrt, die $was ließen sich nicht ersetzen." `
-                "Schließen Sie alle Jarvis-Fenster und klicken Sie auf „Nochmal versuchen“."
+                'Schließen Sie alle Jarvis-Fenster und klicken Sie auf „Nochmal versuchen“.'
         }
         "netz" {
             Stop-Install 14 "Die Verbindung ist beim Laden der $was abgebrochen." `
-                "Prüfen Sie das Internet und klicken Sie auf „Nochmal versuchen“. Was schon geladen ist, bleibt erhalten."
+                'Prüfen Sie das Internet und klicken Sie auf „Nochmal versuchen“. Was schon geladen ist, bleibt erhalten.'
         }
         default {
             Stop-Install 14 "Die $was ließen sich nicht installieren." `
-                "Klicken Sie auf „Nochmal versuchen“. Hilft das nicht, öffnen Sie das Protokoll und schicken Sie es an Claude im Jarvis-Projekt."
+                'Klicken Sie auf „Nochmal versuchen“. Hilft das nicht, öffnen Sie das Protokoll und schicken Sie es an Claude im Jarvis-Projekt.'
         }
     }
 }
@@ -645,13 +645,13 @@ Complete-Phase
 
 Enter-Phase 4 "Spracherkennung"
 Start-Step "Hey-Jarvis-Erkennung laden"
-Set-Detail "„Hey Jarvis“-Erkennung wird geladen"
+Set-Detail '„Hey Jarvis“-Erkennung wird geladen'
 $code = Invoke-Quiet $venvPy @("-c", "import openwakeword.utils as u; u.download_models(model_names=['hey_jarvis'])") 900
 if ($code -eq 0) {
     Write-Ok
 } else {
     Write-Warn "lädt Jarvis beim ersten Start"
-    Add-Warning "Die „Hey Jarvis“-Erkennung lädt Jarvis beim ersten Start nach."
+    Add-Warning 'Die „Hey Jarvis“-Erkennung lädt Jarvis beim ersten Start nach.'
 }
 Set-Share 8
 
@@ -806,7 +806,7 @@ if ($vc -and $vc -ge $vcNoetig) {
             param($geladen, $gesamt)
             if ($gesamt -gt 0) { Set-Share (5 + 30 * $geladen / $gesamt) }
         }
-        Set-Detail "Windows fragt gleich nach Administratorrechten. Bitte auf „Ja“ klicken."
+        Set-Detail 'Windows fragt gleich nach Administratorrechten. Bitte auf „Ja“ klicken.'
         $p = Start-Process -FilePath $vcSetup -ArgumentList "/install", "/quiet", "/norestart" -Verb RunAs -Wait -PassThru
         Write-Log "VC-Laufzeit beendet mit $($p.ExitCode)"
     } catch {
@@ -819,10 +819,10 @@ if ($vc -and $vc -ge $vcNoetig) {
         Write-Ok "installiert ($vc)"
     } elseif ($vc) {
         Write-Warn "veraltet ($vc)"
-        Add-Warning "Die Microsoft-Laufzeit ist veraltet. Stürzt die Spracherkennung ab: JarvisSetup.exe noch einmal starten und bei der Windows-Frage „Ja“ klicken."
+        Add-Warning 'Die Microsoft-Laufzeit ist veraltet. Stürzt die Spracherkennung ab: JarvisSetup.exe noch einmal starten und bei der Windows-Frage „Ja“ klicken.'
     } else {
         Write-Warn "fehlt"
-        Add-Warning "Die Microsoft-Laufzeit (Visual C++) fehlt, ohne sie geht die Spracherkennung nicht. JarvisSetup.exe noch einmal starten und bei der Windows-Frage „Ja“ klicken."
+        Add-Warning 'Die Microsoft-Laufzeit (Visual C++) fehlt, ohne sie geht die Spracherkennung nicht. JarvisSetup.exe noch einmal starten und bei der Windows-Frage „Ja“ klicken.'
     }
 }
 Set-Share 35
