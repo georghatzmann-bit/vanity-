@@ -498,12 +498,12 @@ class FakeImap:
             args = args[2:]
         uids = []
         for uid in self._ordered():
-            raw, flags, _ = self.box.messages[uid]
-            if self._matches(raw, flags, list(args), literal):
+            raw, flags, internal = self.box.messages[uid]
+            if self._matches(raw, flags, internal, list(args), literal):
                 uids.append(uid)
         return "OK", [" ".join(str(u) for u in uids).encode()]
 
-    def _matches(self, raw, flags, args, literal):
+    def _matches(self, raw, flags, internal, args, literal):
         text = _searchable(raw)
         index = 0
         while index < len(args):
@@ -514,6 +514,10 @@ class FakeImap:
                 if "\\Seen" in flags:
                     return False
                 index += 1
+            elif key == "SINCE":  # Tag der Ankunft, wie bei IMAP
+                if _imap_day(internal) < _imap_day(args[index + 1]):
+                    return False
+                index += 2
             elif key == "TEXT":
                 if index + 1 < len(args):
                     word = args[index + 1].strip('"')
@@ -572,6 +576,13 @@ def _section(raw, items):
     if "BODY.PEEK[]" in items:
         return "BODY[]", raw
     return "", None
+
+
+def _imap_day(text):
+    """"02-Oct-2026 08:00:00 +0200" oder "25-Sep-2026" -> (2026, 10, 2)."""
+    day, month, year = text.split()[0].split("-")
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return int(year), months.index(month) + 1, int(day)
 
 
 def _searchable(raw):

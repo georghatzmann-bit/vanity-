@@ -43,6 +43,7 @@ ANNOUNCE_EVERY = 10 * 60  # höchstens alle zehn Minuten eine Mail-Ansage
 PREVIEW_BYTES = 16384  # so viel einer Mail für Absender, Betreff und den Anfang des Textes
 FULL_BYTES = 2_000_000  # eine ganze Mail (ohne riesige Anhänge)
 SCAN = 300  # "Was schreibt Max?": so viele der neuesten Mails je Konto durchsehen
+NEW_DAYS = 7  # "Hab ich neue Mails?": ungelesen und aus den letzten sieben Tagen
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 
 PROVIDERS = {
@@ -407,6 +408,14 @@ def _quote(word: str) -> str:
     return '"' + word.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+_MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _imap_date(day: dt.date) -> str:
+    """IMAP will Datumsangaben englisch ("25-Sep-2026"), egal wie Windows eingestellt ist."""
+    return f"{day.day:02d}-{_MONTHS_EN[day.month - 1]}-{day.year}"
+
+
 def _ascii_part(word: str) -> str:
     """Für Server ohne UTF-8-Suche: der längste Teil ohne Umlaute ("Rücksendung" -> "cksendung")."""
     parts = re.findall(r"[A-Za-z0-9]{3,}", word)
@@ -539,10 +548,11 @@ class MailClient:
                        "\\seen" not in entry["flags"].lower(), _is_bulk(msg, address), snippet(body),
                        body[:60000] if text else "", _header(msg.get("To")))
 
-    def unread(self, limit: int = 5) -> tuple[int, list[Message]]:
-        """(Zahl der ungelesenen, die neuesten davon)."""
+    def unread(self, limit: int = 5, since: dt.date | None = None) -> tuple[int, list[Message]]:
+        """(Zahl der ungelesenen, die neuesten davon). since: nur die seit diesem Tag angekommen sind."""
+        criteria = ["UNSEEN"] + (["SINCE", _imap_date(since)] if since else [])
         with self._session() as session:
-            uids = self._uids(session.conn.uid("SEARCH", "UNSEEN"))
+            uids = self._uids(session.conn.uid("SEARCH", *criteria))
             return len(uids), self._fetch(session, uids[-limit:], HEADERS)
 
     def latest(self, count: int = 10) -> list[Message]:
@@ -769,8 +779,10 @@ class Mailbox:
 
     # ---------------------------------------------------------- Lesen
 
-    def unread(self, limit: int = 5) -> tuple[int, list[Message]]:
-        results = self._each(lambda client: client.unread(limit))
+    def unread(self, limit: int = 5, days: int | None = None) -> tuple[int, list[Message]]:
+        """(Zahl der ungelesenen, die neuesten davon) über alle Postfächer. days: nur aus den letzten Tagen."""
+        since = self._now().date() - dt.timedelta(days=days) if days else None
+        results = self._each(lambda client: client.unread(limit, since))
         count = sum(found[0] for _, found in results)
         messages = [m for _, found in results for m in found[1]]
         return count, _newest_first(messages)[:limit]
@@ -828,7 +840,8 @@ class Mailbox:
             if not self.accounts():
                 return "Ihre Mails sind noch nicht verbunden, Sir. Das geht im Jarvis-Fenster unter Verbinden."
             try:
-                count, messages = self.unread()
+                # "Neu" heißt: ungelesen aus der letzten Woche. Alte, nie geöffnete Newsletter zählen nicht.
+                count, messages = self.unread(15, days=NEW_DAYS)
             except MailError as exc:
                 return f"Die Mails kann ich gerade nicht abrufen, Sir. {exc}"
             said = spoken_unread(count, messages)
@@ -969,25 +982,35 @@ def _when(when: dt.datetime | None, now: dt.datetime) -> str:
     return f"am {when.day}.{when.month}."
 
 
+def _senders(messages: list[Message]) -> list[str]:
+    names: list[str] = []
+    for message in messages:
+        if message.who not in names:
+            names.append(message.who)
+    return names
+
+
 def spoken_unread(count: int, messages: list[Message]) -> str:
-    """"Drei neue, Sir: von Amazon, Max und Sparkasse." """
+    """"Drei neue, Sir: von Amazon, Max und Sparkasse." Bei vielen zuerst die Menschen:
+    "Zwölf neue, Sir, unter anderem von Max und Anna." (messages: die neuesten, neueste zuerst)"""
     if count <= 0:
         return "Keine neuen Mails, Sir."
     if count == 1 and messages:
         subject = _subject(messages[0].subject)
         about = f", Betreff: {subject}" if subject else ""
         return _sentence(f"Eine neue, Sir: von {messages[0].who}{about}")
-    names: list[str] = []
-    for message in messages:
-        if message.who not in names:
-            names.append(message.who)
     number = _number(count)
     number = number[:1].upper() + number[1:]
-    if not names:
+    if not messages:
         return f"{number} neue, Sir."
+    if count <= 3 and count <= len(messages):  # wenige: alle nennen
+        return f"{number} neue, Sir: von {_join(_senders(messages))}."
+    people = _senders([m for m in messages if not m.bulk])
+    if people:
+        return f"{number} neue, Sir, unter anderem von {_join(people[:3])}."
     if count <= len(messages):
-        return f"{number} neue, Sir: von {_join(names[:3])}."
-    return f"{number} neue, Sir, die neuesten von {_join(names[:3])}."
+        return f"{number} neue, Sir, nur Newsletter und Benachrichtigungen."
+    return f"{number} neue, Sir. Die neuesten sind Newsletter und Benachrichtigungen."
 
 
 def spoken_from(message: Message, who: str, now: dt.datetime) -> str:
@@ -1005,10 +1028,7 @@ def spoken_new(messages: list[Message]) -> str:
     """Die Ansage für neue wichtige Mails: "Sir, eine neue Mail von Max: Grillen am Samstag." """
     if not messages:
         return ""
-    names: list[str] = []
-    for message in messages:
-        if message.who not in names:
-            names.append(message.who)
+    names = _senders(messages)
     if len(messages) == 1:
         subject = _subject(messages[0].subject)
         about = f": {subject}" if subject else ""

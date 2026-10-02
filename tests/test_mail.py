@@ -199,7 +199,12 @@ class MailboxTest(unittest.TestCase):
         mailbox.add("gmail", "georg.test@gmail.com", "app-passwort")
         for uid in (105, 106):
             del self.gmail.messages[uid]
+        self.gmail.add(90, mail("Alt <alt@example.com>", "Vom Januar", "x", "Thu, 01 Jan 2026 10:00:00 +0100"),
+                       internal="01-Jan-2026 10:00:00 +0100")  # ungelesen, aber nicht neu
         self.assertEqual(mailbox.answer("neu"), "Drei neue, Sir: von Amazon, Max Mustermann und Sparkasse KölnBonn.")
+        search = [e for e in self.gmail.log if e[:2] == ("UID", "SEARCH")][-1]
+        self.assertEqual(search[2], ("UNSEEN", "SINCE", "25-Sep-2026"))
+        self.assertEqual(mailbox.overview()["ungelesen"], 4, "die Oberfläche zeigt alle ungelesenen")
         when = local(2026, 10, 2, 9, 15)
         self.assertEqual(mailbox.answer("von", "Max"),
                          f"Max hat heute um {when.hour}:{when.minute:02d} geschrieben, Sir. Betreff: Grillen am "
@@ -306,8 +311,12 @@ class SentenceTest(unittest.TestCase):
         one = self.message("Max Mustermann", "max@example.com", "Kino?")
         self.assertEqual(spoken_unread(1, [one]), "Eine neue, Sir: von Max Mustermann, Betreff: Kino?")
         many = [self.message("", "info@sparkasse.de", uid=2), self.message("Amazon.de", "a@amazon.de", uid=3), one]
-        self.assertEqual(spoken_unread(12, many), "Zwölf neue, Sir, die neuesten von Sparkasse, Amazon und Max Mustermann.")
-        self.assertEqual(spoken_unread(25, many[:1]), "25 neue, Sir, die neuesten von Sparkasse.")
+        self.assertEqual(spoken_unread(12, many), "Zwölf neue, Sir, unter anderem von Sparkasse, Amazon und Max Mustermann.")
+        self.assertEqual(spoken_unread(25, many[:1]), "25 neue, Sir, unter anderem von Sparkasse.")
+        news = [self.message("Spiele-News", "newsletter@spiele.example", bulk=True, uid=9), many[1]]
+        self.assertEqual(spoken_unread(5, news), "Fünf neue, Sir, unter anderem von Amazon.", "Menschen und Firmen vor Newslettern")
+        self.assertEqual(spoken_unread(2, news), "Zwei neue, Sir: von Spiele-News und Amazon.", "wenige: alle")
+        self.assertEqual(spoken_unread(9, news[:1]), "Neun neue, Sir. Die neuesten sind Newsletter und Benachrichtigungen.")
         self.assertEqual(spoken_new([one, self.message("Max Mustermann", "max@example.com", "Und?", uid=4)]),
                          "Sir, zwei neue Mails von Max Mustermann.")
         self.assertEqual(spoken_new([one, many[0]]), "Sir, neue Mails von Max Mustermann und Sparkasse.")

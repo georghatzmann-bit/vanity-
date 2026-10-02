@@ -56,7 +56,7 @@ class AssistantTest(ICloudSetup):
         self.assistant._disk_checked = float("inf")
         self.assistant.memory = Memory(self.state / "gedaechtnis.json")
         self.secrets.set("apple", PASSWORD)
-        self.assistant.mail = Mailbox(self.state, self.secrets, USER)
+        self.assistant.mail = Mailbox(self.state, self.secrets, USER, now=lambda: dt.datetime(2026, 10, 2, 12, 0))
         self.phone = ICloudCalendar(self.icloud.account(), self.state / "icloud")
         self.assistant.calendar = Calendar(self.state / "kalender.json", apple=self.phone)
         self.assistant.calendar.refresh()
