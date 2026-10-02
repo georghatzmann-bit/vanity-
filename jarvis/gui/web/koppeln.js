@@ -386,7 +386,8 @@
       if (mail.fehler) {
         el.appleMail.textContent = 'Mail: ' + mail.fehler;
       } else {
-        const latest = (mail.letzte || []).slice(0, 3).map((m) => (m.von || m.adresse) + ': ' + m.betreff);
+        const latest = (mail.letzte || []).filter((m) => !m.newsletter).slice(0, 3)
+          .map((m) => (m.von || m.adresse) + ': ' + m.betreff);
         el.appleMail.textContent = 'Mail: ' + (mail.ungelesen ? mail.ungelesen + ' ungelesen' : 'nichts Neues')
           + (latest.length ? ' · ' + latest.join(' · ') : '');
       }
