@@ -92,6 +92,13 @@ class RecognitionTest(unittest.TestCase):
                 found = intents.match(said)
                 self.assertTrue(found is None or found.name in ("open",), found)
 
+    def test_work_on_the_pc_is_no_web_search(self):
+        for said in ("Such den Fehler im Code", "Such nach Updates", "Such nach Treibern für die Grafikkarte"):
+            with self.subTest(said=said):
+                self.assertIsNone(intents.match(said))
+        self.assertEqual(intent_of("Zeig mir den Weg nach Graz"), ("route", "Graz"))
+        self.assertEqual(intent_of("Such ein Rezept für Lasagne"), ("search", "ein Rezept für Lasagne", {"site": "google"}))
+
     def test_no_means_no(self):
         """Mit "nicht" ist das Gegenteil gemeint: nichts öffnen, schließen oder ausschalten."""
         for said in ("Öffne nicht Discord", "Öffne Discord nicht", "Schließ Chrome nicht", "Mach den PC nicht aus",

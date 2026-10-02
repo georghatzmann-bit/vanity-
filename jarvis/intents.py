@@ -604,6 +604,8 @@ _WEB: list[tuple[str, re.Pattern]] = [
     ("route", re.compile(rf"^{_POLITE}(?:navigier|navigiere|führ|führe|bring|bringe)(?: mich)? {_PLEASE}"
                          rf"(?:nach|zu|zum|zur|in die|ins) (?P<q>.+)$", re.I)),
     ("route", re.compile(r"^(?:route|weg|navigation|wegbeschreibung) (?:nach|zu|zum|zur) (?P<q>.+)$", re.I)),
+    ("route", re.compile(rf"^{_POLITE}(?:zeig|zeige)(?: mir)? {_PLEASE}(?:den |die )?(?:weg|route|wegbeschreibung) "
+                         rf"(?:nach|zu|zum|zur|in die|ins) (?P<q>.+)$", re.I)),
     ("map", re.compile(rf"^{_POLITE}(?:zeig|zeige)(?: mir)? {_PLEASE}(?P<q>.+?) auf (?:der karte|google maps|maps)$", re.I)),
     # "Spiel Bohemian Rhapsody auf YouTube", "Spiel auf Spotify Queen", "Spiel Thunderstruck"
     ("play", re.compile(rf"^{_POLITE}(?:spiel|spiele|play)(?: mir)? {_PLEASE}(?:auf|bei|in|über) (?P<site>youtube|spotify) "
@@ -633,7 +635,9 @@ _NO_PLACE = re.compile(r"^(?:hause|haus|heim|lachen|weinen|nachdenken|schlafen|b
 _NOT_PLAYABLE = re.compile(r"\b(?:mit mir|mit uns|gegen mich|ein spiel|eine runde|meine|meinen|mein|was schönes|"
                            r"irgendwas|irgendetwas|etwas)\b", re.I)
 _LOCAL_SEARCH = re.compile(r"\b(?:datei|dateien|ordner|desktop|dokument|dokumente|download|downloads|festplatte|"
-                           r"laufwerk|pc|computer|rechner|papierkorb|e-?mails?|mails?|postfach)\b", re.I)
+                           r"laufwerk|pc|computer|rechner|papierkorb|e-?mails?|mails?|postfach|"
+                           # "Such den Fehler im Code", "Such nach Updates": das ist Arbeit am PC, keine Websuche
+                           r"code|programmcode|skript|script|projekt|updates?|treiber\w*|viren|virus|malware)\b", re.I)
 _MANY = re.compile(r"\b(?:und dann|und danach|dann|danach|anschließend)\b|\bund (?:öffne|starte|schließ|such|spiel|mach|geh)", re.I)
 
 
