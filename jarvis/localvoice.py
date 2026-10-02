@@ -48,6 +48,7 @@ PREVIEW_TEXT = "Guten Abend, Sir. Alle Systeme laufen einwandfrei. Womit kann ic
 
 def installed() -> dict:
     """Welche Teile da sind (ohne sie zu laden, also schnell)."""
+    importlib.invalidate_caches()  # gerade erst installiert (Einrichtung): sonst sieht Python es nicht sofort
     return {"tts": importlib.util.find_spec("pocket_tts") is not None,
             "stt": importlib.util.find_spec("onnx_asr") is not None}
 
