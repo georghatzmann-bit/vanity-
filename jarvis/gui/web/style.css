@@ -1698,6 +1698,11 @@ body[data-view="hub"] .backdrop {
 
 /* ------------------------------------------------------------------ Kleinere Fenster */
 
+/* Ohne rechte Spalte (schmales Fenster) kommt das Gedächtnis über einen Knopf oben */
+.top-btn.narrow-only {
+  display: none;
+}
+
 @media (max-width: 1180px) {
   :root {
     --rail-w: 288px;
@@ -1725,6 +1730,10 @@ body[data-view="hub"] .backdrop {
 
   .rail {
     display: none;
+  }
+
+  .top-btn.narrow-only {
+    display: inline-flex;
   }
 
   .backdrop {

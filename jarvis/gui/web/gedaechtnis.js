@@ -273,6 +273,8 @@
     function offer() {}
 
     el.open.addEventListener('click', () => openDrawer(true));
+    const openTop = $('memOpenTop'); // schmales Fenster: die rechte Spalte ist dann ausgeblendet
+    if (openTop) openTop.addEventListener('click', () => openDrawer(true));
     el.close.addEventListener('click', () => openDrawer(false));
     el.shade.addEventListener('click', () => openDrawer(false));
     document.addEventListener('keydown', (e) => {
