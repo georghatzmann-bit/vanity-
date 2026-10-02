@@ -20,14 +20,18 @@ class FakePocket:
 
     instances = []
 
-    def __init__(self, voice="george", fail=False):
+    def __init__(self, voice="george", fail=False, still_loading=False):
         self.voice = voice
         self.fail = fail
+        self.still_loading = still_loading
         self.started = False
         FakePocket.instances.append(self)
 
     def start(self):
         self.started = True
+
+    def loading(self):
+        return self.still_loading
 
     def usable(self, wait=0.0):
         return True
@@ -47,13 +51,13 @@ class VoiceTest(unittest.TestCase):
     def setUp(self):
         FakePocket.instances.clear()
 
-    def make(self, cfg=None, installed=True, fail=False):
+    def make(self, cfg=None, installed=True, fail=False, still_loading=False):
         from jarvis.tts import TextToSpeech
 
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         with mock.patch("jarvis.localvoice.installed", return_value={"tts": installed, "stt": installed}), \
-                mock.patch("jarvis.localvoice.PocketVoice", side_effect=lambda voice: FakePocket(voice, fail=fail)):
+                mock.patch("jarvis.localvoice.PocketVoice", side_effect=lambda voice: FakePocket(voice, fail=fail, still_loading=still_loading)):
             tts = TextToSpeech({"engine": "lokal", "lokal_stimme": "Charles", **(cfg or {})}, Path(folder.name))
         return tts
 
@@ -78,6 +82,51 @@ class VoiceTest(unittest.TestCase):
         offline.assert_called_once()
         self.assertEqual(rate, 22050)
         self.assertIn("lokale Stimme", problems[0])
+
+    def test_still_loading_is_no_problem_message(self):
+        """Gleich nach dem Start lädt die Stimme noch (auf langsamen PCs eine Minute). Der Satz kommt dann
+        von der Ersatzstimme, aber ohne Meldung „spricht gerade nicht“: Es ist ja nichts kaputt."""
+        problems = []
+        tts = self.make(fail=True, still_loading=True)
+        tts._on_problem = problems.append
+        with mock.patch.object(tts, "_offline", return_value=(np.zeros(10, dtype=np.int16), 22050)) as offline:
+            tts.synthesize("Guten Abend, Sir.")
+        offline.assert_called_once()
+        self.assertEqual(problems, [])
+
+    def test_loading_state_of_the_real_voice(self):
+        go = __import__("threading").Event()
+        with mock.patch.object(localvoice.PocketVoice, "_load", lambda voice: (go.wait(5), voice.ready.set())):
+            voice = localvoice.PocketVoice("george")
+            self.assertFalse(voice.loading(), "noch nicht gestartet")
+            voice.start()
+            self.assertTrue(voice.loading())
+            go.set()
+            self.assertTrue(voice.ready.wait(5))
+            self.assertFalse(voice.loading())
+
+    def test_selftest_waits_for_the_voice_to_load(self):
+        """Der Windows-Build lud die Stimme in 44 s, synthesize wartet nur 30 s: Der Selbsttest scheiterte."""
+        waits = []
+
+        class Slow(FakePocket):
+            error = None
+
+            def usable(self, wait=0.0):
+                waits.append(wait)
+                return False
+
+            def synthesize(self, text):
+                raise AssertionError("erst sprechen, wenn die Stimme geladen ist")
+
+        signal = types.ModuleType("scipy.signal")
+        signal.resample_poly = lambda *a, **k: None
+        with mock.patch.object(localvoice, "PocketVoice", Slow), \
+                mock.patch.dict(sys.modules, {"scipy": types.ModuleType("scipy"), "scipy.signal": signal}), \
+                mock.patch("builtins.print") as printed:
+            self.assertEqual(localvoice._selftest_main(), 1)
+        self.assertGreaterEqual(waits[0], 300)
+        self.assertIn("Stimme lädt nicht", printed.call_args.args[0])
 
     def test_not_installed_uses_the_other_voices(self):
         tts = self.make(installed=False)

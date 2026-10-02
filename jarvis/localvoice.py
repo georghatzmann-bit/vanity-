@@ -100,6 +100,10 @@ class PocketVoice:
         finally:
             self.ready.set()
 
+    def loading(self) -> bool:
+        """Lädt noch: die ersten Sekunden nach dem Start, auf langsamen PCs auch eine Minute."""
+        return self._started and not self.ready.is_set()
+
     def usable(self, wait: float = 0.0) -> bool:
         self.start()
         self.ready.wait(wait)

@@ -91,6 +91,9 @@ class TextToSpeech:
                 self.used_edge = True
                 return audio, audio.rate
             except Exception as exc:
+                if self._local.loading():  # gleich nach dem Start: kein Fehler, nur noch nicht fertig geladen
+                    log.info("Lokale Stimme lädt noch, dieser Satz kommt von der Ersatzstimme.")
+                    return self._offline(text)
                 log.warning("Lokale Stimme: %s. Nehme die Ersatzstimme.", exc)
                 if time.monotonic() - self._reported_at > 600:
                     self._reported_at = time.monotonic()
