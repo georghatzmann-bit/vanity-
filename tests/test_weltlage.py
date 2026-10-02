@@ -244,6 +244,24 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(world.command("Zeig mir Paris"), "Kurs auf Paris, Sir.", "bei offener Erde reicht zeig mir")
         self.assertIsNone(world.command("Zeig mir Quatschhausen"), "ohne bekannten Ort: weiter an Claude")
         self.assertIn("finde ich auf der Karte nicht", world.command("Flieg nach Quatschhausen"))
+        self.assertEqual(world.command("Navigiere nach München"), "Kurs auf München, Sir.")
+        self.assertEqual(world.command("Bring mich nach Japan"), "Kurs auf Japan, Sir.")
+
+    def test_everyday_commands_still_work_while_the_earth_is_open(self):
+        searched = []
+
+        def opener(request, timeout=0):  # die Ortssuche im Internet fände zu fast allem irgendetwas
+            searched.append(request.full_url)
+            raise OSError("nicht fragen")
+
+        world, ui, _ = make(opener)
+        world.active = True
+        for text in ("Geh in den Gaming-Modus", "Gehe zu Discord", "Geh auf YouTube", "Navigiere zu Google",
+                     "Spring zum Anfang", "Bring mich zu meinen Downloads", "Geh nach oben"):
+            self.assertIsNone(world.command(text), text)
+        self.assertEqual(searched, [])
+        self.assertEqual(world.command("Geh ins Hauptmenü"), "Sehr wohl, Sir.")
+        self.assertFalse(world.active)
 
     def test_iss(self):
         world, ui, _ = make()

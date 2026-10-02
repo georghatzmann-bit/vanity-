@@ -246,7 +246,7 @@ _VIEW = r"(?:weltlage|weltkarte|welt-?ansicht|erde|globus|gottes auge|god'?s eye
 _OPEN = re.compile(rf"^(?:(?:öffne|zeig|zeige|starte|start|aktivier|aktiviere)(?: mir)? )?(?:die |den |das )?{_VIEW}"
                    r"(?: an| auf| öffnen| starten| zeigen)?$")
 _CLOSE = re.compile(rf"^(?:(?:schließ|schließe|beende|verlass|verlasse)(?: die| den| das)? {_VIEW}|{_VIEW} (?:zu|aus|schließen)|"
-                    r"(?:zurück )?(?:zum|ins) hauptmenü|hauptmenü)$")
+                    r"(?:(?:geh|gehe|bring mich) )?(?:zurück )?(?:zum|ins) hauptmenü|hauptmenü)$")
 _WORLD = re.compile(r"^(?:(?:zeig|zeige|sag|sage|erzähl|erzähle)(?: mir)?(?: mal)? )?(?:was|was so) (?:gerade |heute |aktuell )?"
                     r"(?:in der welt|auf der welt|weltweit) (?:passiert|los ist|geschieht)$|"
                     r"^was (?:passiert|ist los|geschieht) (?:gerade |heute |aktuell )?(?:in der welt|auf der welt|weltweit)$|"
@@ -402,7 +402,9 @@ class Weltlage:
             return "Sehr wohl, Sir."
         flown = _FLY.match(norm) or _SHOW.match(norm)
         if flown and not _NOT_A_PLACE.search(flown.group("where")):
-            return self.fly(flown.group("where"), explicit=bool(_FLY.match(norm)))
+            # Nur "Flieg nach ..." sucht auch im Internet. "Geh in den Gaming-Modus", "Gehe zu Discord" oder
+            # "Navigiere zu Google" meinen meist etwas anderes: ohne bekannten Ort geht es normal weiter.
+            return self.fly(flown.group("where"), explicit=norm.startswith(("flieg ", "fliege ")))
         return None
 
     def fly(self, where: str, explicit: bool = True) -> str | None:
