@@ -6,6 +6,8 @@ Diese Anleitung ist für dich, Georg. Jarvis läuft danach unsichtbar im Hinterg
 
 Du brauchst: Windows 10 (ab Version 1809) oder Windows 11, Internet und etwa 3 GB freien Platz. Sonst nichts, auch keine Administratorrechte.
 
+![Der Installer bei der Arbeit](docs/bilder/installer.jpg)
+
 1. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
    Zeigt GitHub „Page not found“: erst oben rechts bei GitHub anmelden (das Projekt ist privat), dann den Link noch einmal öffnen.
 2. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.

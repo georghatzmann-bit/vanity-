@@ -42,7 +42,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt, ElevenLabs beginnt nach 0,25 s zu sprechen.
 - **Ruhiges, modernes Fenster:** eine leuchtende Kugel als Jarvis' Gesicht, darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
-- **Grafische Einrichtung** und ein **Installer im Jarvis-Look**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
+- **Installer mit eigenem Fenster:** eine Kugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
+- **Grafische Einrichtung**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
 
 | Werkstatt-Projekte | Handy-App |
 |---|---|
@@ -51,6 +52,10 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 | Verbinden: iPhone, Mail, Shop | Gedächtnis |
 |---|---|
 | ![Verbinden](docs/bilder/verbinden.jpg) | ![Gedächtnis](docs/bilder/gedaechtnis.jpg) |
+
+| Installer | Werkstatt |
+|---|---|
+| ![Der Installer](docs/bilder/installer.jpg) | ![Werkstatt bei der Arbeit](docs/bilder/werkstatt.jpg) |
 
 ## Kosten
 
