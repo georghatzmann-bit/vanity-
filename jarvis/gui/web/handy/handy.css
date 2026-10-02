@@ -1,19 +1,19 @@
 /* Jarvis auf dem Handy: dunkel, eine Akzentfarbe, große Flächen für den Daumen. */
 :root {
-  --bg: #0b0f17;
-  --bg-2: #111725;
-  --card: #151c2c;
-  --card-2: #1a2336;
-  --line: rgba(160, 190, 240, 0.12);
+  --bg: #0d0f13;
+  --bg-2: #111318;
+  --card: #15171c;
+  --card-2: #1b1e24;
+  --line: rgba(255, 255, 255, 0.08);
   --text: #e8eaf0;
-  --text-2: #a8b3c7;
-  --text-3: #6f7c93;
-  --accent: #5aa9ff;
-  --accent-strong: #2f7fe0;
-  --glow: 90, 169, 255;
-  --ok: #3fb968;
-  --warn: #f0a33a;
-  --err: #f0555a;
+  --text-2: #a0a6b4;
+  --text-3: #6c7282;
+  --accent: #6e8cff;
+  --accent-strong: #5873ee;
+  --glow: 110, 140, 255;
+  --ok: #3fbf85;
+  --warn: #f2a44b;
+  --err: #f2645f;
   --radius: 10px;
   --t: 160ms;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
@@ -41,7 +41,7 @@ body {
   margin: 0;
   overflow: hidden;
   background:
-    radial-gradient(600px 400px at 50% -120px, rgba(var(--glow), 0.16), transparent 70%),
+    radial-gradient(600px 400px at 50% -160px, rgba(var(--glow), 0.08), transparent 70%),
     var(--bg);
   color: var(--text);
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -123,8 +123,8 @@ button {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, #eaf5ff 0 18%, #8cc8ff 30%, rgba(var(--glow), 0.35) 56%, transparent 72%);
-  box-shadow: 0 0 0 1px rgba(var(--glow), 0.35), 0 0 18px rgba(var(--glow), 0.35);
+  background: radial-gradient(circle at 35% 30%, #dfe5ff, #6e8cff 55%, #3b4cc4);
+  box-shadow: 0 0 16px rgba(var(--glow), 0.3);
 }
 
 .orb span {
@@ -462,8 +462,8 @@ textarea:focus-visible {
 .msg.error {
   align-self: stretch;
   max-width: 100%;
-  border: 1px solid rgba(240, 85, 90, 0.4);
-  background: rgba(240, 85, 90, 0.08);
+  border: 1px solid rgba(242, 100, 95, 0.4);
+  background: rgba(242, 100, 95, 0.08);
   color: #ffb4b6;
   font-size: 14px;
 }
@@ -542,7 +542,7 @@ textarea:focus-visible {
 
 .tile.armed {
   border-color: var(--err);
-  background: rgba(240, 85, 90, 0.12);
+  background: rgba(242, 100, 95, 0.12);
 }
 
 .group-title {
@@ -582,12 +582,12 @@ textarea:focus-visible {
 }
 
 .pill.done {
-  background: rgba(63, 185, 104, 0.15);
+  background: rgba(63, 191, 133, 0.15);
   color: var(--ok);
 }
 
 .pill.error {
-  background: rgba(240, 85, 90, 0.15);
+  background: rgba(242, 100, 95, 0.15);
   color: var(--err);
 }
 

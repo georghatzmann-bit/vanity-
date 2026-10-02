@@ -30,18 +30,13 @@
   padding: 0 8px 20px;
 }
 
-.brand-mark {
-  width: 26px;
-  height: 26px;
+.brand-orb {
+  width: 18px;
+  height: 18px;
   flex: none;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.8;
-}
-
-.brand-mark circle:last-child {
-  fill: var(--accent);
-  stroke: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #dfe5ff, var(--accent) 55%, #3b4cc4);
+  box-shadow: 0 0 12px rgba(110, 140, 255, 0.35);
 }
 
 .rail-name {
@@ -1488,7 +1483,7 @@
 .chip[aria-pressed="true"] {
   background: var(--accent-soft);
   color: var(--accent-text);
-  box-shadow: inset 0 0 0 1px rgba(76, 157, 255, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(110, 140, 255, 0.4);
 }
 
 .voice.with-action {

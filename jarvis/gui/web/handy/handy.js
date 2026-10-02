@@ -16,8 +16,6 @@
     speakBtn: $('speakBtn'),
     speakText: $('speakText'),
     pair: $('pair'),
-    offer: $('offer'),
-    offerText: $('offerText'),
     tabs: $('tabs'),
     feed: $('feed'),
     feedEmpty: $('feedEmpty'),
@@ -152,14 +150,8 @@
     }
   }
 
-  function renderOffer(offer) {
-    if (!offer || !offer.frage) {
-      el.offer.hidden = true;
-      return;
-    }
-    el.offerText.textContent = String(offer.frage);
-    el.offer.hidden = false;
-  }
+  // Vorschläge stehen in Jarvis' Antwort ("Übrigens, Sir: ..."); ein "Ja" geht als normale Nachricht.
+  function renderOffer() {}
 
   // ------------------------------------------------------------------ Gespräch
 
@@ -632,17 +624,6 @@
     toast({ handy: 'Jarvis antwortet hier, in seiner Stimme.', pc: 'Jarvis antwortet am PC.', still: 'Antworten nur als Text.' }[S.ton], 'ok');
   });
   el.mic.addEventListener('click', () => Mic.toggle());
-  el.offer.addEventListener('click', async (e) => {
-    const b = e.target.closest('button[data-answer]');
-    if (!b) return;
-    el.offer.hidden = true;
-    try {
-      await api('/api/vorschlag', { antwort: b.dataset.answer });
-      setTimeout(pollFeed, 300);
-    } catch {
-      toast('Das ging gerade nicht.', 'error');
-    }
-  });
   document.addEventListener('click', (e) => {
     const chip = e.target.closest('[data-say]');
     if (chip) send(chip.dataset.say);

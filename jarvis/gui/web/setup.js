@@ -41,7 +41,7 @@
     {
       id: 'claude', nav: 'Gehirn',
       title: 'Das Gehirn verbinden',
-      lead: 'Jarvis denkt mit Claude, deinem Pro-Abo. Er prüft kurz, ob alles bereit ist.',
+      lead: 'Jarvis denkt mit Claude, deinem Pro- oder Max-Abo. Er prüft kurz, ob alles bereit ist.',
     },
     {
       id: 'extras', nav: 'Extras',
@@ -208,17 +208,19 @@
 
   const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
   const lighten = (c, t) => [c[0] + (255 - c[0]) * t, c[1] + (255 - c[1]) * t, c[2] + (255 - c[2]) * t];
-  const ACCENT = [76, 157, 255];
+  const ACCENT = [110, 140, 255];
 
+  // Jarvis' Kugel wie im Hauptfenster: weich, leuchtend, langsam fließendes Licht
   function orb(canvas) {
     if (!canvas) return null;
     const ctx = canvas.getContext('2d');
     let w = 0;
     let h = 0;
     let dpr = 1;
-    let angle = 0;
     let t = 0;
     let last = 0;
+    const LIGHT = [176, 190, 255];
+    const DEEP = [40, 52, 150];
     const fit = () => {
       const b = canvas.getBoundingClientRect();
       dpr = clamp(window.devicePixelRatio || 1, 1, 2);
@@ -237,54 +239,55 @@
       if (now - last < 1000 / 30 - 3) return; // 30 Bilder pro Sekunde reichen
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 30;
       last = now;
-      const motion = reducedMotion() ? 0.25 : 1;
-      t += dt * motion;
-      angle += dt * 0.12 * motion;
+      t += dt * (reducedMotion() ? 0.2 : 1);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       const cx = w / 2;
       const cy = h / 2;
-      const R = Math.min(w, h) * 0.46;
+      const R = Math.min(w, h) * 0.34 * (1 + Math.sin(t * 1.15) * 0.012);
       if (R < 10) return;
-      const breath = 0.5 + 0.5 * Math.sin(t * 1.6);
-      const glow = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.05);
-      glow.addColorStop(0, rgba(ACCENT, 0.12));
-      glow.addColorStop(1, rgba(ACCENT, 0));
-      ctx.fillStyle = glow;
+      const halo = ctx.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 1.45);
+      halo.addColorStop(0, rgba(ACCENT, 0.16));
+      halo.addColorStop(1, rgba(ACCENT, 0));
+      ctx.fillStyle = halo;
       ctx.fillRect(0, 0, w, h);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = rgba(ACCENT, 0.16);
+      ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.lineWidth = Math.max(2, R * 0.035);
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = rgba(ACCENT, 0.4);
-      for (let i = 0; i < 12; i++) {
-        const a0 = angle + (i / 12) * Math.PI * 2 + 0.09;
-        const a1 = angle + ((i + 1) / 12) * Math.PI * 2 - 0.09;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.8, a0, a1);
-        ctx.stroke();
+      ctx.clip();
+      const base = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.36, R * 0.05, cx, cy, R * 1.02);
+      base.addColorStop(0, rgba(LIGHT, 1));
+      base.addColorStop(0.42, rgba(ACCENT, 1));
+      base.addColorStop(1, rgba(DEEP, 1));
+      ctx.fillStyle = base;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.globalCompositeOperation = 'screen';
+      const blobs = [[0.71, 0.53, 0, 1.7, 0.62], [0.43, 0.89, 2.1, 0.4, 0.55], [0.97, 0.61, 4.2, 3.3, 0.48]];
+      for (const [fx, fy, px, py, r] of blobs) {
+        const x = cx + Math.cos(t * 0.35 * fx + px) * R * 0.35;
+        const y = cy + Math.sin(t * 0.35 * fy + py) * R * 0.35;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, R * r);
+        g.addColorStop(0, rgba(LIGHT, 0.45));
+        g.addColorStop(1, rgba(LIGHT, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
       }
-      const coreR = R * 0.38 * (1 + breath * 0.03);
-      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-      g.addColorStop(0, rgba(lighten(ACCENT, 0.8), 1));
-      g.addColorStop(0.45, rgba(lighten(ACCENT, 0.35), 0.95));
-      g.addColorStop(0.85, rgba(lighten(ACCENT, 0.02), 0.9));
-      g.addColorStop(1, rgba(ACCENT, 0.8));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      const shade = ctx.createRadialGradient(cx + R * 0.1, cy + R * 0.55, R * 0.1, cx, cy + R * 0.2, R * 1.1);
+      shade.addColorStop(0, 'rgba(4,6,14,0)');
+      shade.addColorStop(1, 'rgba(4,6,14,0.38)');
+      ctx.fillStyle = shade;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      const gloss = ctx.createRadialGradient(cx - R * 0.34, cy - R * 0.42, 0, cx - R * 0.34, cy - R * 0.42, R * 0.62);
+      gloss.addColorStop(0, 'rgba(255,255,255,0.34)');
+      gloss.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gloss;
+      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.restore();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
       ctx.beginPath();
-      ctx.arc(cx, cy, coreR * 0.62, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = rgba(lighten(ACCENT, 0.5), 0.3);
-      ctx.beginPath();
-      ctx.arc(cx, cy, coreR + 5, 0, Math.PI * 2);
+      ctx.arc(cx, cy, R - 0.5, 0, Math.PI * 2);
       ctx.stroke();
     };
     fit();
@@ -1456,7 +1459,7 @@
       'Du kannst trotzdem weitermachen. Die genaue Meldung steht unten, die kannst du kopieren und weitergeben.',
     ]],
     billing: ['So geht es:', [
-      'Claude Code ist mit einem API-Schlüssel angemeldet statt mit deinem Pro-Abo.',
+      'Claude Code ist mit einem API-Schlüssel angemeldet statt mit deinem Pro- oder Max-Abo.',
       'Auf „Bei Claude anmelden“ klicken, im Fenster /login eintippen und dein Claude-Konto (Pro) wählen.',
       'Danach hier „Nochmal prüfen“ klicken.',
     ]],
