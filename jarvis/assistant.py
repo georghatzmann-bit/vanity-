@@ -78,6 +78,15 @@ class Assistant:
         self._offer = None
         # Ein fälliger Vorschlag, der auf die nächste Antwort wartet (Routine, bis wann)
         self._tip = None
+        # Hinweise, die Jarvis von selbst sagt (hinweise.Watcher, setzt __main__), die wartenden und was
+        # Georg verpasst hat, während er nicht am PC war ("Während Sie weg waren ...")
+        self.hints = None
+        self._pending_hints: list = []
+        self._hint_lock = threading.Lock()
+        self._last_hint_at = 0.0
+        self._hint_delivery = threading.Lock()  # zwei Threads sollen nicht denselben Hinweis sagen
+        self._last_turn_end = 0.0  # wann Jarvis zuletzt etwas beantwortet hat
+        self._missed: list[tuple[float, str]] = []
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
@@ -181,10 +190,38 @@ class Assistant:
 
     def announce(self, text: str) -> None:
         """Sagt etwas von sich aus, z. B. eine Erinnerung. Sitzt Georg nicht am PC, kommt es auch
-        als Benachrichtigung aufs Handy (wenn eingeschaltet, siehe push.py)."""
+        als Benachrichtigung aufs Handy (wenn eingeschaltet, siehe push.py), und wenn er zurückkommt,
+        erwähnt Jarvis es noch einmal kurz ("Während Sie weg waren ...")."""
         self.ui.message("jarvis", text)
         self.say(text)
         self._push(text)
+        self._note_missed(text)
+
+    # So viel merkt sich Jarvis für "Während Sie weg waren" (Anzahl, Stunden)
+    MISSED_MAX = 8
+    MISSED_HOURS = 12
+
+    def _note_missed(self, text: str) -> None:
+        try:
+            if self._present():
+                return
+        except Exception:
+            return
+        short = missed_line(text)
+        if not short:
+            return
+        with self._hint_lock:
+            cutoff = time.monotonic() - self.MISSED_HOURS * 3600
+            self._missed = [(at, t) for at, t in self._missed if at > cutoff][-(self.MISSED_MAX - 1):]
+            self._missed.append((time.monotonic(), short))
+
+    def take_missed(self) -> list[str]:
+        """Was Georg verpasst hat (und vergessen, sobald er es gehört hat)."""
+        with self._hint_lock:
+            cutoff = time.monotonic() - self.MISSED_HOURS * 3600
+            items = [t for at, t in self._missed if at > cutoff]
+            self._missed = []
+        return items
 
     def speech_wav(self, text: str) -> bytes:
         """Ein Satz in Jarvis' Stimme als WAV-Datei (für die Handy-App)."""
@@ -297,6 +334,7 @@ class Assistant:
                 self.update_state()
         if speak and self.speaker is not None:
             self.speaker.wait(timeout=120)
+        self._last_turn_end = time.monotonic()
         self.update_state()
         return answer
 
@@ -1226,6 +1264,123 @@ class Assistant:
                             f"wie Steam, Papierkorb, Temp, ohne das ganze Laufwerk zu durchsuchen), und schlag vor, was weg kann")
         return None
 
+    # ------------------------------------------------------------------ Hinweise von selbst
+
+    # So viel Ruhe zwischen zwei Hinweisen, die nicht drängen, und nach einem Gespräch (Sekunden)
+    HINT_GAP = 8 * 60
+    AFTER_TALK = 20
+
+    def offer_hints(self, hints) -> None:
+        """Neue Hinweise vom Wächter (hinweise.py). Gesagt werden sie, wenn es passt (check_hints)."""
+        if not hints:
+            return
+        with self._hint_lock:
+            known = {h.key for h in self._pending_hints}
+            for hint in hints:
+                if hint.key not in known:
+                    self._pending_hints.append(hint)
+                    known.add(hint.key)
+        self.check_hints()
+
+    def check_hints(self) -> bool:
+        """Sagt höchstens einen wartenden Hinweis, wenn es passt: Georg sitzt am PC, zockt nicht, Jarvis ist
+        nicht mitten in etwas, und der letzte Hinweis ist ein paar Minuten her. Dringendes geht sonst aufs
+        Handy. True, wenn etwas gesagt wurde."""
+        with self._hint_lock:
+            self._pending_hints = [h for h in self._pending_hints if not h.expired()]
+            pending = sorted(self._pending_hints, key=lambda h: (-h.priority, h.created))
+        if not pending or not self._hint_delivery.acquire(blocking=False):
+            return False
+        try:
+            try:
+                present = self._present()
+                hidden = self.gaming or self._fullscreen()
+            except Exception:
+                present, hidden = True, False
+            occupied = self._busy or self._speaking or self._recording or self._transcribing or not self._queue.empty() \
+                or (self.speaker is not None and getattr(self.speaker, "busy", False))
+            muted = self.mute is not None and self.mute.muted
+            since_talk = time.monotonic() - self._last_turn_end
+            for hint in pending:
+                if present and not hidden and not occupied and not muted:
+                    if hint.priority < 2 and since_talk < self.AFTER_TALK:
+                        continue  # nicht gleich in ein Gespräch hinein
+                    if hint.priority == 0 and time.monotonic() - self._last_hint_at < self.HINT_GAP:
+                        continue
+                    self._deliver_hint(hint, speak=True)
+                    return True
+                if hint.priority >= 2 and (not present or hidden):
+                    # Dringend, aber Georg ist weg oder zockt: anzeigen, aufs Handy, später noch einmal erwähnen
+                    self._deliver_hint(hint, speak=False)
+                    return True
+            return False
+        finally:
+            self._hint_delivery.release()
+
+    def _deliver_hint(self, hint, speak: bool) -> None:
+        with self._hint_lock:
+            self._pending_hints = [h for h in self._pending_hints if h.key != hint.key]
+        if self.hints is not None:
+            self.hints.said(hint)
+        text = hint.question()
+        log.info("Hinweis (%s): %s", hint.key, text)
+        self.ui.message("jarvis", text)
+        self._last_hint_at = time.monotonic()
+        # "Ja", "Nein" und "Nie wieder" gelten zwei Minuten lang, ohne "Hey Jarvis"
+        self._offer = (hint, time.monotonic() + 120)
+        if speak:
+            self._follow_up = bool(hint.offer)
+            self.say(text)
+            return
+        push = getattr(self, "push", None)
+        if push is not None and push.enabled:
+            push.send(text, priority=4, click=self._phone_link())
+        self._note_missed(text)
+
+    def _push_at(self, when: dt.datetime, text: str) -> str:
+        """Eine Benachrichtigung zur Zeit `when` aufs Handy (kommt auch, wenn der PC dann aus ist)."""
+        push = getattr(self, "push", None)
+        if push is None or not push.enabled:
+            return "Die Benachrichtigungen aufs Handy sind nicht eingerichtet, Sir. Das geht unter Verbinden > Handy."
+        if not push.schedule(text, when):
+            return "Das ließ sich gerade nicht einplanen, Sir."
+        clock = f"{when.hour} Uhr" if when.minute == 0 else f"{when.hour}:{when.minute:02d} Uhr"
+        return f"Ist eingeplant, Sir. Um {clock} kommt die Erinnerung aufs Handy."
+
+    def run_hint_check(self, watcher, probe, stopped=None) -> None:
+        """Eine Runde des Wächters (alle 30 Sekunden aus __main__): messen, prüfen, anbieten."""
+        from .keys import idle_seconds
+
+        try:
+            idle = idle_seconds()
+        except Exception:
+            idle = 0.0
+        gpu = getattr(self, "gpu_now", None) or {}
+        lage = probe.measure(idle=idle, gpu_temp=gpu.get("temp"))
+        hints = watcher.check(lage, calendar=getattr(self, "calendar", None), reminders=self.reminders,
+                              memory=self.memory, weather=self._weather_today, away=self.take_missed,
+                              push_at=self._push_at if getattr(getattr(self, "push", None), "enabled", False) else None)
+        mail = getattr(self, "mail", None)
+        if mail is not None and lage.present:
+            people = self.memory.mail_people() if self.memory is not None else []
+            hints += watcher.post(lage.now, mail, people,
+                                  read=lambda who: self._mail_answer(f"Was schreibt {who}?"))
+        self.offer_hints(hints)
+
+    def _weather_today(self) -> str:
+        """Ein Satz zum Wetter heute für den Überblick am Morgen (leer, wenn keins da ist)."""
+        place = str(self._cfg.get("ich", {}).get("ort", "")).strip()
+        source = self.weathers.get(place.lower()) if place else None
+        if source is None:
+            return ""
+        try:
+            from .weather import spoken_weather
+
+            return spoken_weather(source.forecast(), "heute").replace(", Sir", "")
+        except Exception as exc:
+            log.debug("Wetter für den Überblick: %s", exc)
+            return ""
+
     def _present(self) -> bool:
         """Sitzt Georg am PC (Maus oder Tastatur in den letzten fünf Minuten)?"""
         try:
@@ -1251,18 +1406,37 @@ class Assistant:
 
     def _answer_offer(self, routine, text: str) -> str | None:
         """Georgs Antwort auf einen Vorschlag. None = war keine Antwort, normal weiter."""
+        from .hinweise import Hint
         from .tool import confirmed
 
         reply = intents.normalize(text)
-        if re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit)\b", reply):
-            self.memory.feedback(routine.key, "nie")
-            return "Verstanden, Sir. Das frage ich nicht mehr."
+        hint = isinstance(routine, Hint)
+
+        def feedback(answer: str) -> None:
+            if hint:
+                if self.hints is not None:
+                    self.hints.feedback(routine, answer)
+            elif self.memory is not None:
+                self.memory.feedback(routine.key, answer)
+
+        if re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit|sag (?:mir )?das nicht mehr|"
+                     r"will ich nicht (?:mehr )?(?:wissen|hören)|solche hinweise nicht)\b", reply):
+            feedback("nie")
+            return "Verstanden, Sir. Das sage ich Ihnen nicht mehr." if hint else "Verstanden, Sir. Das frage ich nicht mehr."
         if re.match(r"^(?:nein|nö|nee|ne|nicht jetzt|jetzt nicht|später|lass(?: es| mal)?|nein danke|danke nein)\b", reply):
-            self.memory.feedback(routine.key, "nein")
+            feedback("nein")
             return random.choice(["Sehr wohl, Sir.", "Wie Sie wünschen."])
+        if hint and not routine.offer:
+            return None  # ein Hinweis ohne Frage: alles andere ist ein neuer Befehl
         if not confirmed(text):
             return None
-        self.memory.feedback(routine.key, "ja")
+        feedback("ja")
+        if hint and routine.action is not None:
+            try:
+                return routine.action() or "Erledigt, Sir."
+            except Exception as exc:
+                log.warning("Hinweis %s: %s", routine.key, exc)
+                return "Das hat leider nicht geklappt, Sir."
         rest, said = [], []
         for command in routine.commands():
             intent = intents.match(command)
@@ -1275,7 +1449,7 @@ class Assistant:
             self._rest = " und ".join(rest)
         from .memory import Occasion
 
-        if isinstance(routine, Occasion):
+        if isinstance(routine, (Occasion, Hint)):
             return " ".join(said) or "Sehr wohl, Sir."  # "An Max ist raus, Sir." oder warum nicht
         return random.choice([f"Sehr wohl. {routine.label}, Sir.", f"Kommt sofort, Sir: {routine.label}."])
 
@@ -1538,6 +1712,19 @@ def _short_reason(exc: BrainError) -> str:
         "account": "Das Claude-Konto meldet ein Problem (claude.ai).",
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
+
+
+def missed_line(text: str) -> str:
+    """Eine Ansage, kurz, für "Während Sie weg waren": "Erinnerung, Sir: Tee" -> "Erinnerung: Tee",
+    bei langen Ansagen nur der erste Satz."""
+    text = " ".join(str(text or "").split())
+    if not text:
+        return ""
+    text = re.sub(r",? Sir(?=[.,!?:])", "", text)
+    text = re.sub(r"^Sir,\s*", "", text)
+    text = text[:1].upper() + text[1:]
+    first = re.split(r"(?<=[.!?])\s+", text)[0]
+    return first[:160]
 
 
 def tip_sentence(question: str) -> str:

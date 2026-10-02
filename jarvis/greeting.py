@@ -8,7 +8,7 @@ import threading
 
 
 def build_greeting(now: dt.datetime, weather: dict | None = None, upcoming: list[dict] | None = None,
-                   events: list[str] | None = None) -> str:
+                   events: list[str] | None = None, birthdays: list[str] | None = None) -> str:
     hour = now.hour
     if hour < 5:
         parts = ["Noch wach, Sir?"]
@@ -40,8 +40,12 @@ def build_greeting(now: dt.datetime, weather: dict | None = None, upcoming: list
     elif today:
         when, text = today[0]
         parts.append(f"Heute stehen noch {len(today)} Erinnerungen an, die nächste um {when:%H:%M}: {text}.")
-    elif not events:
+    elif not events and not birthdays:
         parts.append("Alle Systeme bereit.")
+    if birthdays:
+        names = birthdays[:3]
+        joined = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " und " + names[-1]
+        parts.append(f"Und {joined} {'hat' if len(names) == 1 else 'haben'} heute Geburtstag.")
     return " ".join(parts)
 
 

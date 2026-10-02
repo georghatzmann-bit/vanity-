@@ -167,6 +167,10 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .push import Push
 
     assistant.push = Push(cfg)  # Benachrichtigungen aufs Handy (Verbinden > Handy)
+    # Hinweise von selbst: Seltsames am PC, Vergessenes, "Während Sie weg waren" (hinweise.py)
+    from .hinweise import Watcher
+
+    assistant.hints = Watcher(cfg, STATE_DIR / "hinweise.json")
 
     def on_mute(muted: bool) -> None:
         assistant.update_state()
@@ -195,6 +199,10 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                 assistant.check_reminders()
             except Exception as exc:
                 log.debug("Erinnerungen: %s", exc)
+            try:
+                assistant.check_hints()  # ein wartender Hinweis, sobald es passt
+            except Exception:
+                log.exception("Hinweise")
             if tick % 60 == 30:
                 try:
                     assistant.check_suggestions()  # Routinen zur passenden Zeit anbieten
@@ -236,6 +244,24 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
 
     threading.Thread(target=reminders, name="jarvis-erinnerungen", daemon=True).start()
 
+    if getattr(assistant, "hints", None) is not None and assistant.hints.enabled:
+        from .hinweise import SystemProbe
+
+        def watch() -> None:
+            # Alle 30 Sekunden nachsehen, ob etwas seltsam ist oder Georg etwas zu vergessen droht.
+            probe = SystemProbe()
+            if stopped.wait(45):  # nach dem Start erst in Ruhe ankommen
+                return
+            while True:
+                try:
+                    assistant.run_hint_check(assistant.hints, probe)
+                except Exception:
+                    log.exception("Hinweise")
+                if stopped.wait(30):
+                    return
+
+        threading.Thread(target=watch, name="jarvis-hinweise", daemon=True).start()
+
     try:
         import psutil
 
@@ -249,6 +275,7 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                 tick += 1
                 if tick % 2 == 1:  # die Grafikkarte alle 4 Sekunden (nvidia-smi braucht etwas länger)
                     gpu = gpu_stats()
+                    assistant.gpu_now = gpu  # für die Hinweise (Grafikkarte sehr heiß)
                 ui.stats(psutil.cpu_percent(interval=None), psutil.virtual_memory().percent, gpu)
 
         threading.Thread(target=stats, name="jarvis-stats", daemon=True).start()
@@ -584,9 +611,18 @@ def run_gui(cfg: dict, args) -> int:
                 events = [e.spoken(now) for e in calendar.day(now.date()) if e.all_day or e.start > now]
             except Exception as exc:
                 log.debug("Kalender: %s", exc)
-        hello = build_greeting(now, current_weather(str(cfg.get("ich", {}).get("ort", "")).strip()), upcoming, events)
+        birthdays = []
+        if assistant.memory is not None:
+            try:
+                birthdays = [b["shown"] for b in assistant.memory.upcoming_birthdays(now, days=0) if not b.get("own")]
+            except Exception as exc:
+                log.debug("Geburtstage: %s", exc)
+        hello = build_greeting(now, current_weather(str(cfg.get("ich", {}).get("ort", "")).strip()), upcoming, events,
+                               birthdays=birthdays)
         ui.message("jarvis", hello, id="begruessung")
         assistant.say(hello)
+        if getattr(assistant, "hints", None) is not None and 5 <= now.hour < 13:
+            assistant.hints.mark_brief(now.date())  # der Überblick am Morgen war das schon
         assistant.update_state()
         if stopped.is_set():
             return

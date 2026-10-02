@@ -61,6 +61,19 @@ class Push:
         threading.Thread(target=self._post, args=(payload,), name="jarvis-push", daemon=True).start()
         return True
 
+    def schedule(self, text: str, when, title: str = "Jarvis") -> bool:
+        """Eine Benachrichtigung zur Zeit `when` (datetime): ntfy hält sie bis dahin zurück, sie kommt also
+        auch, wenn der PC dann aus ist. Höchstens drei Tage im Voraus (Grenze von ntfy.sh)."""
+        text = " ".join(str(text or "").split())
+        if not self.enabled or not text:
+            return False
+        stamp = int(when.timestamp())
+        if stamp < time.time() + 15 or stamp > time.time() + 3 * 24 * 3600:
+            return False
+        payload = {"topic": self.topic, "title": title, "message": text[:3500], "priority": 4, "tags": ["alarm_clock"],
+                   "delay": str(stamp)}
+        return self._post(payload)
+
     def _post(self, payload: dict) -> bool:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         for pause in (0.5, 1.5, 0):

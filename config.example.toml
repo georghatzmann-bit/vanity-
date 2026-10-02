@@ -110,6 +110,29 @@ vorschlaege = true
 # true = Jarvis lernt jede Nacht aus den Gesprächen des Vortags dazu (ein kurzer Aufruf beim kleinen Modell).
 lernen = true
 
+[hinweise]
+# Jarvis meldet sich von selbst, wenn etwas seltsam ist oder du etwas zu vergessen drohst. Er spricht
+# nur, wenn du am PC sitzt und nicht zockst, nie zweimal dasselbe, und "Nie wieder" stellt eine Art ab.
+aktiv = true
+# pc: ein Programm reagiert nicht mehr, Prozessor oder Arbeitsspeicher am Anschlag, Akku fast leer,
+# Grafikkarte sehr heiß
+pc = true
+# internet: die Verbindung ist weg (und wieder da)
+internet = true
+# sicherheit: ein neues Programm startet mit Windows, Windows wartet seit Tagen auf einen Neustart
+sicherheit = true
+# termine: abends der frühe Termin von morgen, spät nachts der Termin am Morgen, Überschneidungen
+termine = true
+# post: eine Mail von einem deiner Kontakte ist seit gestern ungelesen
+post = true
+# morgens: kurzer Überblick über den Tag, wenn du morgens an den PC kommst
+morgens = true
+# zurueck: "Während Sie weg waren ...", wenn du nach einer Weile wiederkommst
+zurueck = true
+# pausen: nach so vielen Stunden am Stück eine Pause vorschlagen (pause_nach_stunden = 0: nie)
+pausen = true
+pause_nach_stunden = 3
+
 [local]
 # Uhrzeit, Datum, Lautstärke, Musik pausieren und "Stopp" erledigt Jarvis sofort selbst,
 # ohne Claude zu fragen. Das ist schneller und schont dein Pro-Kontingent.
