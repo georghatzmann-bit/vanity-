@@ -158,6 +158,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           & $py -c "import piper; print('Offline-Stimme OK')"
           Push-Location $app
+          # Die Messwerte für die Hinweise (hängende Fenster, Prozesse, Akku, Internet, Neustart, Autostart)
+          # auf einem echten Windows: darf nicht abstürzen
+          & $py -c "import json, time; from jarvis.hinweise import SystemProbe; p = SystemProbe(); p.measure(idle=1.0); time.sleep(2); l = p.measure(idle=1.0); print('Hinweise-Messung:', json.dumps({'haengt': l.hung, 'cpu': (l.busy or [])[:3], 'ram': l.ram, 'ram_top': l.ram_top, 'akku': l.battery, 'online': l.online, 'neustart': l.reboot, 'autostart': sorted(l.autostart or {})[:8], 'vorne': l.foreground}, default=str))"
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
           & $py -m jarvis --selbsttest --schnell
           Write-Host "Selbsttest beendet mit $LASTEXITCODE (ohne Mikrofon und Claude sind Fehler dort normal)"
           Get-Content logs\selbsttest.txt -ErrorAction SilentlyContinue
