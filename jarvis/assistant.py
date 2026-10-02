@@ -1207,6 +1207,8 @@ class Assistant:
         self.reminders.add(when, intent.data["what"])
         if name == "timer":
             return random.choice([f"Timer läuft, Sir. {intent.arg}.", f"Sehr wohl. {intent.arg}, ab jetzt."])
+        if str(intent.data["what"]).startswith("Ihr Wecker"):
+            return f"Sehr wohl, Sir. Ich wecke Sie {spoken_when(when)}."
         return f"Sehr wohl, Sir. Ich erinnere Sie {spoken_when(when)}."
 
     def _install(self, known) -> None:

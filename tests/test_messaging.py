@@ -426,6 +426,7 @@ class ReminderRecognitionTest(unittest.TestCase):
             answer = assistant.handle("Erinnere mich in 20 Minuten an den Tee")
             self.assertTrue(answer.startswith("Sehr wohl, Sir. Ich erinnere Sie"))
             self.assertEqual([r["text"] for r in store.all()], ["den Tee"])
+            self.assertTrue(assistant.handle("Weck mich um 7").startswith("Sehr wohl, Sir. Ich wecke Sie"))
             self.assertEqual(brain.asked, [])
 
 
