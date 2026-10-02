@@ -113,6 +113,16 @@
     calendar_add: (url) => window.pywebview.api.calendar_add(url),
     calendar_remove: (url) => window.pywebview.api.calendar_remove(url),
     calendar_help: (which) => window.pywebview.api.calendar_help(which),
+    apple_info: () => window.pywebview.api.apple_info(),
+    apple_connect: (email, pass) => window.pywebview.api.apple_connect(email, pass),
+    apple_choose_calendar: (id) => window.pywebview.api.apple_choose_calendar(id),
+    apple_refresh: () => window.pywebview.api.apple_refresh(),
+    apple_disconnect: () => window.pywebview.api.apple_disconnect(),
+    apple_help: () => window.pywebview.api.apple_help(),
+    mail_accounts: () => window.pywebview.api.mail_accounts(),
+    mail_add: (provider, email, pass, server) => window.pywebview.api.mail_add(provider, email, pass, server),
+    mail_remove: (id) => window.pywebview.api.mail_remove(id),
+    mail_help: (provider) => window.pywebview.api.mail_help(provider),
     labor_info: () => window.pywebview.api.labor_info(),
     labor_open: () => window.pywebview.api.labor_open(),
     werkzeug_loeschen: (name) => window.pywebview.api.werkzeug_loeschen(name),
@@ -1405,6 +1415,19 @@
       },
       calendar_remove: (url) => { DEMO_CAL.feeds = DEMO_CAL.feeds.filter((f) => f.url !== url); return Promise.resolve({ ok: true }); },
       calendar_help: () => Promise.resolve(true),
+      apple_info: () => Promise.resolve(DEMO_APPLE),
+      apple_connect: () => Promise.resolve(Object.assign({ ok: true }, DEMO_APPLE)),
+      apple_choose_calendar: (id) => {
+        DEMO_APPLE.kalender.forEach((c) => { c.gewaehlt = c.id === id && c.schreibbar; });
+        return Promise.resolve({ ok: true, fehler: '', kalender: DEMO_APPLE.kalender });
+      },
+      apple_refresh: () => Promise.resolve(DEMO_APPLE),
+      apple_disconnect: () => Promise.resolve({ ok: true, fehler: '' }),
+      apple_help: () => Promise.resolve(true),
+      mail_accounts: () => Promise.resolve(DEMO_MAIL),
+      mail_add: () => Promise.resolve({ ok: true, fehler: '', konto: null }),
+      mail_remove: () => Promise.resolve({ ok: true, fehler: '' }),
+      mail_help: () => Promise.resolve(true),
       labor_info: () => Promise.resolve(DEMO_LABOR),
       labor_open: () => Promise.resolve({ ok: false, error: 'Im Demo-Modus öffnet sich kein Ordner.' }),
       werkzeug_loeschen: () => Promise.resolve(true),
@@ -1472,6 +1495,28 @@
   const DEMO_ALEXA = { enabled: true, connected: true };
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
   const DEMO_TS = { url: '' };
+
+  // wie apple_info() und mail_accounts() in gui/app.py (DEMO_APPLE, DEMO_MAIL_ACCOUNTS)
+  const DEMO_APPLE = {
+    verbunden: true, email: 'ge•••g@icloud.com', geburtstage: 14, fehler: '',
+    kalender: [
+      { id: 'home', name: 'Privat', farbe: '#FF2968', schreibbar: true, gewaehlt: true },
+      { id: 'work', name: 'Arbeit', farbe: '#1BADF8', schreibbar: true, gewaehlt: false },
+      { id: 'familie', name: 'Familie', farbe: '#63DA38', schreibbar: false, gewaehlt: false },
+    ],
+    mail: {
+      ungelesen: 3, fehler: '',
+      letzte: [
+        { id: 'icloud:4711', von: 'Max Mustermann', adresse: 'max@example.com', betreff: 'Grillen am Samstag?', ungelesen: true },
+        { id: 'icloud:4710', von: 'Amazon', adresse: 'versand-bestaetigung@amazon.de', betreff: 'Versandbestätigung', ungelesen: true },
+        { id: 'gmail:812', von: 'Sparkasse', adresse: 'info@sparkasse.de', betreff: 'Ihr Kontoauszug für Oktober', ungelesen: true },
+      ],
+    },
+  };
+  const DEMO_MAIL = [
+    { id: 'icloud', anbieter: 'icloud', name: 'iCloud', email: 'ge•••g@icloud.com', server: 'imap.mail.me.com', automatisch: true, fehler: '' },
+    { id: 'gmail', anbieter: 'gmail', name: 'Gmail', email: 'ge•••r@gmail.com', server: 'imap.gmail.com', automatisch: false, fehler: '' },
+  ];
 
   const DEMO_LABOR = {
     werkzeuge: [

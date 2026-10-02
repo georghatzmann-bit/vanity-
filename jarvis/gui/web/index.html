@@ -329,6 +329,7 @@
     </header>
     <div class="dlg-tabs" role="tablist" aria-label="Verbindungen">
       <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
+      <button type="button" role="tab" data-pane="apple" aria-selected="false">iPhone</button>
       <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
       <button type="button" role="tab" data-pane="discord" aria-selected="false">Discord</button>
       <button type="button" role="tab" data-pane="calendar" aria-selected="false">Kalender</button>
@@ -391,6 +392,59 @@
       </div>
     </div>
     </div>
+    <div class="dlg-pane" data-pane="apple" hidden>
+      <div class="row dlg-row">
+        <span class="row-text">
+          <b id="appleState">iPhone nicht verbunden</b>
+          <small id="appleHint">Mit Ihrer Apple-ID liest Jarvis Ihren iPhone-Kalender und trägt neue Termine dort ein, liest Ihre Mails (nur lesen, nichts wird gelöscht oder verschickt) und kennt die Geburtstage aus Ihren Kontakten.</small>
+        </span>
+        <span class="ts-actions">
+          <button type="button" class="btn small ghost" id="appleRefresh" hidden>Jetzt abrufen</button>
+          <button type="button" class="btn small ghost" id="appleOff" hidden>Trennen</button>
+        </span>
+      </div>
+      <div id="appleSetup">
+        <ol class="dlg-steps alexa-steps">
+          <li><b>App-Passwort erstellen</b><span>Apple-Konto › „Anmeldung und Sicherheit“ › „App-spezifische Passwörter“ › „+“, Name „Jarvis“. Ihr normales Apple-Passwort geht hier nicht.</span>
+            <button type="button" class="btn small" id="appleHelp">Öffnen</button></li>
+          <li><b>Hier eintragen</b><span>Apple-ID (die E-Mail-Adresse vom iPhone) und das neue Passwort (vier Gruppen aus je vier Buchstaben). Jarvis speichert es verschlüsselt nur auf diesem PC.</span></li>
+        </ol>
+        <form class="acct-form" id="appleForm" autocomplete="off">
+          <input class="input" id="appleId" type="email" placeholder="Apple-ID, z. B. name@icloud.com" spellcheck="false" aria-label="Apple-ID">
+          <input class="input" id="applePass" type="password" placeholder="App-spezifisches Passwort (xxxx-xxxx-xxxx-xxxx)" spellcheck="false" aria-label="App-spezifisches Passwort">
+          <div class="acct-actions"><button type="submit" class="btn small primary" id="appleSave">Prüfen und verbinden</button></div>
+        </form>
+      </div>
+      <div id="appleLinked" hidden>
+        <p class="mem-hint">Neue Termine („Trag morgen um 18 Uhr Training ein“) landen in diesem Kalender:</p>
+        <ul class="acct-list" id="appleCals"></ul>
+        <p class="mem-hint" id="appleMail"></p>
+      </div>
+      <div class="dlg-row mail-more">
+        <span class="row-text">
+          <b>Weitere Postfächer</b>
+          <small>Gmail, GMX, web.de, Yahoo oder ein eigener Server. Jeweils mit einem App-Passwort vom Anbieter.</small>
+        </span>
+      </div>
+      <ul class="acct-list" id="mailList"></ul>
+      <form class="acct-form" id="mailForm" autocomplete="off">
+        <select class="input" id="mailProvider" aria-label="Anbieter">
+          <option value="gmail">Gmail</option>
+          <option value="gmx">GMX</option>
+          <option value="webde">web.de</option>
+          <option value="yahoo">Yahoo</option>
+          <option value="icloud">iCloud (ohne iPhone-Verbindung)</option>
+          <option value="imap">Anderer Server (IMAP)</option>
+        </select>
+        <input class="input" id="mailEmail" type="email" placeholder="E-Mail-Adresse" spellcheck="false" aria-label="E-Mail-Adresse">
+        <input class="input" id="mailPass" type="password" placeholder="App-Passwort" spellcheck="false" aria-label="App-Passwort">
+        <input class="input" id="mailServer" type="text" placeholder="Server, z. B. imap.example.de" spellcheck="false" aria-label="IMAP-Server" hidden>
+        <div class="acct-actions">
+          <button type="submit" class="btn small" id="mailSave">Postfach hinzufügen</button>
+          <button type="button" class="btn small ghost" id="mailHelp">App-Passwort beim Anbieter</button>
+        </div>
+      </form>
+    </div>
     <div class="dlg-pane" data-pane="alexa" hidden>
       <label class="row toggle-row dlg-row">
         <span class="row-text">
@@ -446,7 +500,7 @@
       <div class="row dlg-row">
         <span class="row-text">
           <b id="calState">Kein Kalender verbunden</b>
-          <small>Jarvis liest Ihre Termine mit (nur lesen): sagt 15 Minuten vorher Bescheid, nennt sie morgens und merkt Absagen. Eigene Termine („Trag morgen um 18 Uhr Training ein“) gehen auch ohne.</small>
+          <small>Google oder Outlook über die geheime iCal-Adresse (nur lesen): Jarvis sagt 15 Minuten vorher Bescheid, nennt Termine morgens und merkt Absagen. Eigene Termine („Trag morgen um 18 Uhr Training ein“) gehen auch ohne.</small>
         </span>
       </div>
       <ol class="dlg-steps alexa-steps">
@@ -454,7 +508,7 @@
           <button type="button" class="btn small" id="calGoogle">Öffnen</button></li>
         <li><b>Outlook</b><span>outlook.com › Einstellungen › Kalender › Freigegebene Kalender › „Kalender veröffentlichen“ › ICS-Link kopieren.</span>
           <button type="button" class="btn small" id="calOutlook">Öffnen</button></li>
-        <li><b>iPhone / iCloud</b><span>Kalender-App › „Kalender“ › (i) neben dem Kalender › „Öffentlicher Kalender“ an › Link teilen und hier einfügen.</span></li>
+        <li><b>iPhone / iCloud</b><span>Besser im Bereich <b>iPhone</b> verbinden: Dort liest Jarvis alle Kalender und trägt auch neue Termine ein.</span></li>
       </ol>
       <form class="dlg-url discord-token" id="calForm" autocomplete="off">
         <input id="calUrl" type="url" placeholder="https://… .ics oder webcal://…" spellcheck="false" aria-label="iCal-Adresse">

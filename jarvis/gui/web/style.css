@@ -1634,6 +1634,48 @@ body[data-state="speaking"] .deck {
   background: var(--accent);
 }
 
+.acct-list button.pick {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.acct-list button.pick:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.acct-list li.chosen {
+  box-shadow: inset 0 0 0 1px rgba(110, 140, 255, 0.55);
+}
+
+.acct-list .check {
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+select.input {
+  appearance: none;
+  padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.mail-more {
+  margin-top: 8px;
+}
+
 .acct-list .name {
   flex: 1;
   min-width: 0;

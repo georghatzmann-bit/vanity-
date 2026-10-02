@@ -56,6 +56,27 @@
       calFeeds: $('calFeeds'),
       calGoogle: $('calGoogle'),
       calOutlook: $('calOutlook'),
+      appleState: $('appleState'),
+      appleHint: $('appleHint'),
+      appleRefresh: $('appleRefresh'),
+      appleOff: $('appleOff'),
+      appleSetup: $('appleSetup'),
+      appleLinked: $('appleLinked'),
+      appleForm: $('appleForm'),
+      appleId: $('appleId'),
+      applePass: $('applePass'),
+      appleSave: $('appleSave'),
+      appleHelp: $('appleHelp'),
+      appleCals: $('appleCals'),
+      appleMail: $('appleMail'),
+      mailList: $('mailList'),
+      mailForm: $('mailForm'),
+      mailProvider: $('mailProvider'),
+      mailEmail: $('mailEmail'),
+      mailPass: $('mailPass'),
+      mailServer: $('mailServer'),
+      mailSave: $('mailSave'),
+      mailHelp: $('mailHelp'),
       shopState: $('shopState'),
       shopHint: $('shopHint'),
       shopOff: $('shopOff'),
@@ -306,6 +327,194 @@
       el.calOutlook.addEventListener('click', () => call('calendar_help', 'outlook').catch(() => {}));
     }
 
+    // ---------- iPhone (iCloud): Kalender lesen und schreiben, Mail lesen, Geburtstage
+
+    function renderApple(info) {
+      if (!el.appleState) return;
+      const on = !!(info && info.verbunden);
+      el.appleOff.hidden = !on;
+      el.appleRefresh.hidden = !on;
+      el.appleSetup.hidden = on;
+      el.appleLinked.hidden = !on;
+      if (!on) {
+        el.appleState.textContent = info && info.fehler ? 'iPhone: ' + info.fehler : 'iPhone nicht verbunden';
+        return;
+      }
+      const cals = info.kalender || [];
+      const parts = ['Verbunden: ' + info.email];
+      if (cals.length) parts.push(cals.length === 1 ? '1 Kalender' : cals.length + ' Kalender');
+      if (info.geburtstage) parts.push(info.geburtstage + ' Geburtstage');
+      el.appleState.textContent = parts.join(' · ');
+      if (info.fehler) el.appleState.textContent += ' · ' + info.fehler;
+      el.appleCals.replaceChildren(...cals.map((c) => {
+        const li = document.createElement('li');
+        li.classList.toggle('chosen', !!c.gewaehlt);
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.className = 'pick';
+        pick.disabled = !c.schreibbar;
+        pick.title = c.schreibbar ? 'Neue Termine hier eintragen' : 'In diesen Kalender darf Jarvis nicht schreiben';
+        const swatch = document.createElement('span');
+        swatch.className = 'swatch';
+        swatch.style.background = /^#[0-9a-f]{3,8}$/i.test(String(c.farbe || '')) ? c.farbe : '';
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = String(c.name || c.id);
+        const note = document.createElement('small');
+        note.textContent = c.gewaehlt ? '' : c.schreibbar ? '' : 'nur lesen';
+        pick.append(swatch, name, note);
+        if (c.gewaehlt) {
+          const check = document.createElement('span');
+          check.className = 'check';
+          check.textContent = '✓ gewählt';
+          pick.append(check);
+        }
+        pick.addEventListener('click', async () => {
+          try {
+            const r = await call('apple_choose_calendar', c.id);
+            if (r && r.ok) toast('Neue Termine kommen jetzt in „' + c.name + '“.', 'ok');
+            else toast((r && r.fehler) || 'Das ging nicht.', 'error');
+            refreshApple();
+          } catch {
+            toast('Das ging gerade nicht.', 'error');
+          }
+        });
+        li.append(pick);
+        return li;
+      }));
+      const mail = info.mail || {};
+      if (mail.fehler) {
+        el.appleMail.textContent = 'Mail: ' + mail.fehler;
+      } else {
+        const latest = (mail.letzte || []).slice(0, 3).map((m) => (m.von || m.adresse) + ': ' + m.betreff);
+        el.appleMail.textContent = 'Mail: ' + (mail.ungelesen ? mail.ungelesen + ' ungelesen' : 'nichts Neues')
+          + (latest.length ? ' · ' + latest.join(' · ') : '');
+      }
+    }
+
+    function renderMail(accounts) {
+      if (!el.mailList) return;
+      el.mailList.replaceChildren(...(accounts || []).map((a) => {
+        const li = document.createElement('li');
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = a.name + ' · ' + a.email + (a.fehler ? ' · ' + a.fehler : '');
+        li.append(name);
+        if (a.automatisch) {
+          const small = document.createElement('small');
+          small.textContent = 'kommt mit dem iPhone';
+          li.append(small);
+        } else {
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'mem-del';
+          del.textContent = '×';
+          del.title = 'Postfach entfernen';
+          del.setAttribute('aria-label', 'Postfach ' + a.name + ' entfernen');
+          del.addEventListener('click', async () => {
+            try {
+              const r = await call('mail_remove', a.id);
+              toast(r && r.ok ? 'Postfach entfernt. Das Passwort ist gelöscht.' : (r && r.fehler) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
+            } catch {
+              toast('Das ging gerade nicht.', 'error');
+            }
+            refreshApple();
+          });
+          li.append(del);
+        }
+        return li;
+      }));
+    }
+
+    async function refreshApple() {
+      try {
+        renderApple(await call('apple_info'));
+        renderMail(await call('mail_accounts'));
+      } catch {
+        /* ältere Version */
+      }
+    }
+
+    if (el.appleForm) {
+      el.appleForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = el.appleId.value.trim();
+        const pass = el.applePass.value.trim();
+        if (!id || !pass) {
+          toast('Bitte Apple-ID und app-spezifisches Passwort eintragen.', 'info');
+          return;
+        }
+        el.appleSave.disabled = true;
+        el.appleSave.textContent = 'Prüfe bei Apple …';
+        try {
+          const r = await call('apple_connect', id, pass);
+          if (r && r.ok) {
+            el.applePass.value = '';
+            toast('iPhone verbunden. Neue Termine landen jetzt auf dem iPhone.' + (r.fehler ? ' ' + r.fehler : ''), 'ok');
+            renderApple(r);
+          } else {
+            toast((r && r.fehler) || 'Das ging nicht.', 'error');
+          }
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        } finally {
+          el.appleSave.disabled = false;
+          el.appleSave.textContent = 'Prüfen und verbinden';
+          refreshApple();
+        }
+      });
+      el.appleOff.addEventListener('click', async () => {
+        try {
+          const r = await call('apple_disconnect');
+          toast(r && r.ok ? 'iPhone getrennt. Das Passwort ist gelöscht.' : (r && r.fehler) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+        refreshApple();
+      });
+      el.appleRefresh.addEventListener('click', async () => {
+        try {
+          renderApple(await call('apple_refresh'));
+          toast('Kalender abgerufen, die Kontakte kommen gleich.', 'ok');
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+      });
+      el.appleHelp.addEventListener('click', () => call('apple_help').catch(() => {}));
+      el.mailProvider.addEventListener('change', () => {
+        el.mailServer.hidden = el.mailProvider.value !== 'imap';
+        el.mailHelp.hidden = el.mailProvider.value === 'imap';
+      });
+      el.mailHelp.addEventListener('click', () => call('mail_help', el.mailProvider.value).catch(() => {}));
+      el.mailForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = el.mailEmail.value.trim();
+        const pass = el.mailPass.value.trim();
+        if (!email || !pass) {
+          toast('Bitte E-Mail-Adresse und App-Passwort eintragen.', 'info');
+          return;
+        }
+        el.mailSave.disabled = true;
+        el.mailSave.textContent = 'Prüfe …';
+        try {
+          const r = await call('mail_add', el.mailProvider.value, email, pass, el.mailServer.value.trim());
+          if (r && r.ok) {
+            el.mailPass.value = '';
+            el.mailEmail.value = '';
+            toast('Postfach verbunden. Frag „Hab ich neue Mails?“.', 'ok');
+          } else {
+            toast((r && r.fehler) || 'Das ging nicht.', 'error');
+          }
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        } finally {
+          el.mailSave.disabled = false;
+          el.mailSave.textContent = 'Postfach hinzufügen';
+          refreshApple();
+        }
+      });
+    }
+
     // ---------- Shop (Shopify): lesen, Entwürfe, nie veröffentlichen
 
     const SHOP_SCOPES = 'read_orders,read_products,write_products,read_shopify_payments_payouts';
@@ -392,6 +601,7 @@
       if (pane === 'discord') refreshDiscord();
       if (pane === 'calendar') refreshCalendar();
       if (pane === 'shop') refreshShop();
+      if (pane === 'apple') refreshApple();
     }
 
     for (const b of el.tabs) b.addEventListener('click', () => showPane(b.dataset.pane));
