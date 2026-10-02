@@ -109,35 +109,69 @@ def _fit(text: str, font, width: float) -> str:
     return shown
 
 
-def _orb(color: tuple[int, int, int], radius: int):
-    """Jarvis' Kugel wie im Fenster: oben links hell, unten dunkler, außen ein weiches Licht."""
+# Dieselbe lebendige Kugel wie im Fenster (gui/web/orb.js): tief, mitte, hell, zwei Nebenfarben,
+# wie stark die Form atmet, wie stark sie mit der Stimme wellt und wie schnell der farbige Schein kreist
+ORB = {
+    "idle": ((16, 22, 84), (62, 92, 255), (196, 206, 255), (138, 92, 255), (48, 182, 255), 0.032, 0.06, 0.12),
+    "listening": ((12, 34, 104), (52, 128, 255), (204, 236, 255), (104, 112, 255), (40, 214, 255), 0.04, 0.085, 0.25),
+    "thinking": ((26, 16, 92), (98, 84, 255), (214, 204, 255), (170, 96, 255), (72, 148, 255), 0.04, 0.03, 1.6),
+    "speaking": ((16, 24, 100), (70, 104, 255), (204, 214, 255), (146, 98, 255), (52, 192, 255), 0.038, 0.1, 0.3),
+    "muted": ((26, 28, 36), (80, 85, 98), (150, 154, 166), (96, 100, 114), (90, 98, 112), 0.012, 0.0, 0.03),
+    "error": ((86, 18, 28), (226, 84, 84), (255, 204, 198), (255, 120, 104), (214, 70, 128), 0.035, 0.05, 0.2),
+}
+
+
+def _orb(state: str, radius: int, now: float, level: float = 0.0):
+    """Jarvis' Kugel wie im Fenster: eine weiche, flüssige Form mit fließendem Licht, Glanz und einem
+    farbigen Schein, der mit der Stimme stärker wird. Beim Nachdenken kreist der Schein schneller."""
     import numpy as np
     from PIL import Image
 
-    key = ("orb", color, radius)
-    if key in _static_cache:
-        return _static_cache[key]
-    size = radius * 2 + 1
-    y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-    nx, ny = (x - radius) / max(1, radius), (y - radius) / max(1, radius)
-    d = np.sqrt(nx ** 2 + ny ** 2)
-    ball = 0.72  # Rand der Kugel, außen nur noch Licht
-    inside = np.clip((ball - d) * radius, 0, 1)  # weiche, glatte Kante
-    light = np.clip(1.0 - np.sqrt((nx + 0.24) ** 2 + (ny + 0.28) ** 2) / (ball * 1.15), 0, 1)
-    deep = np.clip(d / ball, 0, 1) ** 2
-    rgb = np.zeros((size, size, 3), np.float32)
-    for i, c in enumerate(color):
-        shade = c * (1 - 0.55 * deep) + (255 - c) * 0.75 * light ** 1.4
-        rgb[..., i] = np.clip(shade, 0, 255)
-    halo = np.clip(1.0 - (d - ball) / (1 - ball), 0, 1) ** 2 * (d > ball)
-    alpha = np.clip(inside * 255 + halo * 70, 0, 255)
-    data = np.dstack([rgb, alpha]).astype(np.uint8)
-    img = Image.fromarray(data, "RGBA")
-    _static_cache[key] = img
-    return img
+    deep, mid, light, hue_a, hue_b, shape, ripple, spin = ORB.get(state, ORB["idle"])
+    deep, mid, light, hue_a, hue_b = (np.array(c, np.float32) for c in (deep, mid, light, hue_a, hue_b))
+    grid = _grids.get(radius)
+    if grid is None:  # Koordinaten je Größe nur einmal rechnen
+        size = radius * 2 + 1
+        y, x = np.mgrid[0:size, 0:size].astype(np.float32)
+        nx, ny = (x - radius) / max(1, radius), (y - radius) / max(1, radius)
+        grid = (nx, ny, np.hypot(nx, ny), np.arctan2(ny, nx))
+        if len(_grids) > 8:
+            _grids.clear()
+        _grids[radius] = grid
+    nx, ny, d, th = grid
+    t = float(now)
+    lv = max(0.0, min(1.0, level))
+    v = ripple * lv
+    # Rand der Form: langsame, weiche Wellen, mit der Stimme stärker und schneller (wie ein Tropfen)
+    edge = 0.66 * (1 + shape * (0.6 * np.sin(2 * th + t * 0.8) + 0.4 * np.sin(3 * th - t * 0.6 + 1.9))
+                   + v * (0.55 * np.sin(2 * th - t * 2.6 + 4.1) + 0.45 * np.sin(3 * th + t * 3.3 + 0.7)
+                          + 0.2 * np.sin(5 * th - t * 4.4 + 2.2)))
+    inside = np.clip((edge - d) * radius, 0, 1)  # weiche, glatte Kante
+    # Innen: Verlauf von der Mitte zum tiefen Rand, zwei wandernde farbige Lichter, Glanz oben links
+    k = np.clip(d / edge, 0, 1)[..., None] ** 1.5
+    rgb = mid * (1 - k) + deep * k
+    for color, fx, fy, px, py in ((hue_b, 0.71, 0.53, 0.0, 1.7), (hue_a, 0.43, 0.89, 2.1, 0.4)):
+        bx = np.cos(t * 0.8 * fx + px) * 0.3
+        by = np.sin(t * 0.8 * fy + py) * 0.3
+        glow = np.exp(-((nx - bx) ** 2 + (ny - by) ** 2) / 0.1)[..., None] * 0.8
+        rgb = 255 - (255 - rgb) * (1 - glow * color / 255)  # "screen": Licht addiert sich weich
+    gloss = np.clip(1 - np.hypot(nx + 0.22, ny + 0.26) / 0.4, 0, 1)[..., None] ** 2
+    rgb = rgb + (255 - rgb) * gloss * 0.45
+    rim = np.clip(1 - np.abs(d - edge) * radius * 0.8, 0, 1) * np.clip(0.55 - (nx + ny) * 0.6, 0, 1)
+    rgb = rgb + (light - rgb) * rim[..., None] * 0.5
+    # Außen: farbiger Schein, mal violett, mal türkis, der langsam kreist
+    turn = (0.5 + 0.5 * np.sin(th + t * spin))[..., None]
+    veil = (hue_a * (1 - turn) + hue_b * turn) * 0.55 + mid * 0.45  # bleibt im Blau der Kugel
+    out = np.clip((d - edge) / np.maximum(1.0 - edge, 1e-3), 0, 1)
+    halo = (1 - out) ** 2 * (d > edge) * (0.3 + 0.45 * lv)
+    color = rgb * inside[..., None] + veil * (1 - inside[..., None])
+    alpha = np.clip(inside * 255 + halo * 120 * (1 - inside), 0, 255)
+    data = np.dstack([np.clip(color, 0, 255), alpha]).astype(np.uint8)
+    return Image.fromarray(data, "RGBA")
 
 
 _static_cache: dict = {}
+_grids: dict = {}
 
 
 def _background(size: tuple[int, int], scale: float, color: tuple[int, int, int]):
@@ -182,19 +216,12 @@ def render(view: View, now: float | None = None, scale: float = 1.0):
     pad = PAD * scale
     inner_h = HEIGHT * scale
 
-    # --- Kreis links
+    # --- Kugel links: dieselbe lebendige Form wie im Fenster
     cx, cy = pad + inner_h / 2, pad + inner_h / 2
     r = inner_h * 0.3
-    level = max(0.0, min(1.0, view.level))
-    pulse = 0.5 + 0.5 * math.sin(now * 3.2)
-    if view.state == "thinking":
-        # Nur ein feiner Bogen läuft um die Kugel: "arbeitet"
-        rr = r * 1.18
-        start = (now * 300) % 360
-        draw.arc((cx - rr, cy - rr, cx + rr, cy + rr), start, start + 90, fill=color + (210,), width=max(1, round(2 * scale)))
-    grow = 0.22 * level if view.state in ("speaking", "listening") else 0.05 * pulse
-    orb_r = max(4, round(r * 1.32 * (1 + grow)))
-    sprite = _orb(color, orb_r)
+    level = max(0.0, min(1.0, view.level)) if view.state in ("speaking", "listening") else 0.0
+    orb_r = max(4, round(r * 1.5 * (1 + 0.06 * level)))
+    sprite = _orb(view.state, orb_r, now, level)
     img.alpha_composite(sprite, (round(cx - orb_r), round(cy - orb_r)))
 
     # --- Text rechts
