@@ -128,6 +128,9 @@ class GuiBridge(Ui):
     def suggestion(self, offer: dict | None) -> None:
         self._push({"type": "suggestion", "offer": offer})
 
+    def action(self, kind: str) -> None:
+        self._push({"type": "action", "kind": str(kind or "")})
+
 
 class Api:
     """Was die Seite in Python aufrufen darf (window.pywebview.api.*).

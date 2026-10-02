@@ -45,6 +45,11 @@ class Ui:
         """Ein Vorschlag aus Georgs Routinen (memory.Routine.as_dict), None = keiner mehr."""
         pass
 
+    def action(self, kind: str) -> None:
+        """Was Jarvis gerade tut ("music", "weather", "timer", ...): Die Kugel zeigt dazu eine
+        eigene kurze Bewegung (orb.js, gesture)."""
+        pass
+
 
 class ConsoleUi(Ui):
     """Schreibt das Gespräch ins Konsolenfenster."""

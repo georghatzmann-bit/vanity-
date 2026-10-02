@@ -42,6 +42,17 @@ _BEFORE_WORKSHOP = {"stop", "mute", "reset", "message", "remind", "timer", "work
                     "power_sleep", "power_logoff"}
 _POWER = {"power_off": "shutdown", "power_restart": "restart", "power_sleep": "sleep", "power_logoff": "logoff"}
 
+# Die Kugel zeigt mit einer eigenen Bewegung, was Jarvis gerade tut (orb.js, gesture). Befehle mit
+# eigenem Arbeitsschritt (Öffnen, Installieren, Suchen) zeigt sie schon über den Schritt.
+_ORB = {
+    "time": "time", "date": "calendar", "timer": "timer", "remind": "reminder", "weather": "weather",
+    "play": "music", "radio": "music", "media_play": "music", "media_pause": "music", "media_next": "music",
+    "media_prev": "music", "volume_up": "music", "volume_down": "music", "volume_set": "music",
+    "message": "message", "discord": "message", "thanks": "thanks", "bye": "bye", "good_night": "night",
+    "power_off": "power", "power_restart": "power", "power_sleep": "power", "power_logoff": "power",
+    "lock": "power", "screenshot": "screen", "workshop_status": "build",
+}
+
 
 class Assistant:
     def __init__(self, cfg: dict, brain, speaker, ui: Ui, mute=None, reminders=None) -> None:
@@ -452,6 +463,11 @@ class Assistant:
     def _do(self, intent, text: str) -> str | None:
         """Ein erkannter Befehl. None = das kann Jarvis nicht selbst, Claude soll es machen."""
         name = intent.name
+        kind = _ORB.get(name)
+        if kind:
+            show = getattr(self.ui, "action", None)
+            if show is not None:
+                show(kind)
         if name in ("workshop_status", "workshop_cancel"):
             if self.workshop is None:
                 return None

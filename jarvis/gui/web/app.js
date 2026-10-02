@@ -268,7 +268,7 @@
     if (state === 'idle' && S.voice === false) return 'Kein Mikrofon gefunden. Unten können Sie mir schreiben.';
     return {
       idle: '„Hey Jarvis“ sagen, auf die Kugel klicken oder unten schreiben',
-      listening: 'Ich höre …',
+      listening: S.talking ? 'Einfach weiterreden … „Danke“ beendet das Gespräch' : 'Ich höre …',
       thinking: 'Einen Moment …',
       speaking: '„Stopp“ unterbricht mich',
       muted: 'Das Mikrofon ist aus. Der Knopf unten links schaltet es wieder ein.',
@@ -615,9 +615,15 @@
     if (!step || typeof step !== 'object') return;
     if (step.workshop) {
       if (Werkstatt) Werkstatt.step(step);
+      Core.gesture('build', step.state === 'running');
       return;
     }
     Activity.update(step);
+    // Die Kugel zeigt, was gerade läuft: Suchen, Öffnen, Installieren ... (eigene Bewegung je Art)
+    const run = Activity.running();
+    if (run) Core.gesture(run.kind, true);
+    else if (step.state === 'done') Core.gesture(step.kind);
+    else Core.gesture(null);
   }
 
   // ------------------------------------------------------------------ Heute (Erinnerungen)
@@ -840,6 +846,12 @@
       el.weatherText.textContent = c.weather;
       el.weather.hidden = !c.weather;
     }
+    if ('gespraech' in c) {
+      // Gespräch: Jarvis hört nach der Antwort weiter zu, ohne "Hey Jarvis"
+      S.talking = !!c.gespraech;
+      Core.talk(S.talking);
+      if (!S.hintTimer) el.stateHint.textContent = hintFor(effectiveState());
+    }
     if ('gaming' in c) {
       S.gaming = !!c.gaming;
       el.gamingToggle.checked = S.gaming;
@@ -883,7 +895,11 @@
     if (!ev || typeof ev !== 'object') return;
     switch (ev.type) {
       case 'state': applyState(String(ev.value || '')); break;
-      case 'message': addMessage(ev.role, ev.text, ev.id, ev.final, ev.model); break;
+      case 'message':
+        addMessage(ev.role, ev.text, ev.id, ev.final, ev.model);
+        if (ev.model === 'Hinweis' && ev.final !== false) Core.gesture('hint');
+        break;
+      case 'action': Core.gesture(ev.kind); break;
       case 'progress': onProgress(ev.step); break;
       case 'workshop':
         if (ev.state === 'projects') {
@@ -1110,6 +1126,12 @@
       },
       pulse() {
         if (orb) orb.pulse();
+      },
+      gesture(kind, hold) {
+        if (orb && orb.gesture) orb.gesture(kind, hold);
+      },
+      talk(on) {
+        if (orb && orb.talk) orb.talk(on);
       },
     };
   })();

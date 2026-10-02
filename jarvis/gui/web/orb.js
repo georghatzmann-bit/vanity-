@@ -8,8 +8,18 @@
    Gemeinsam für Hauptfenster, Einrichtung und Handy-App (handy/orb.js ist eine Kopie, ein Test
    hält beide gleich). Zeichnet nur, wenn die Kugel zu sehen ist.
 
+   Dazu eine eigene kleine Bewegung je Aktion (orb.gesture): Beim Suchen kreist ein heller Meridian
+   wie ein Radar, beim Öffnen einer App läuft ein Ring nach außen, beim Installieren fließen Bänder
+   nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt
+   springen, beim Wetter wiegen sie sich im Wind, Timer und Termine zeigen einen Uhrzeiger, die
+   Werkstatt blendet ein Konstruktionsgitter ein, beim Lesen läuft eine Scanlinie, bei Hinweisen
+   klopft die Kugel zweimal an, und auf "Danke" nickt sie.
+   Mit der Maus lässt sie sich anfassen: Sie neigt sich zum Zeiger, wölbt sich ihm entgegen und
+   lässt sich mit gedrückter Taste drehen. Im Gespräch (orb.talk) zeigt ein ruhiger Ring: Jarvis hört weiter zu.
+
    const orb = JarvisOrb.create(canvas, { mode: 'hero' | 'mark', visible: () => true });
    orb.state('listening'); orb.level(0.6); orb.pulse(); orb.boot();
+   orb.gesture('search', true); orb.gesture(null); orb.talk(true);
 */
 (function () {
   'use strict';
@@ -55,6 +65,17 @@
   const NUMBERS = ['mix', 'alpha', 'glow', 'amp', 'ripple', 'spin', 'wave'];
   const TILT = -0.36; // leicht von oben gesehen: so erscheinen die Ringe als ruhige Ellipsen
 
+  // Welche Bewegung zu welcher Aktion gehört (Art der Schritte aus steps.py und der Sofort-Befehle)
+  const GESTURES = {
+    search: 'scan', web: 'scan', app: 'bloom', install: 'stream', message: 'orbit', music: 'beat',
+    weather: 'sway', timer: 'clock', calendar: 'clock', reminder: 'clock', time: 'clock',
+    build: 'grid', file: 'grid', command: 'grid', plan: 'grid', task: 'grid', read: 'scanline',
+    screen: 'scanline', hint: 'knock', thanks: 'nod', bye: 'nod', power: 'dim', night: 'dim',
+  };
+  // So lange (Sekunden) läuft eine Bewegung, wenn sie nicht gehalten wird
+  const GESTURE_SECONDS = 2.6;
+  const GESTURE_MAX = 30;
+
   function create(canvas, options) {
     if (!canvas || !canvas.getContext) return null;
     const opts = Object.assign({ mode: 'hero', visible: null }, options || {});
@@ -64,8 +85,6 @@
     const SEG = hero ? 72 : 30;
     // Punkte eines Rings: x, y auf dem Bild und z (Tiefe: vorn > 0, hinten < 0)
     const ring = new Float32Array((SEG + 1) * 3);
-    const sinT = Math.sin(TILT);
-    const cosT = Math.cos(TILT);
 
     const look = {};
     for (const key of COLORS) look[key] = LOOKS.idle[key].slice();
@@ -83,6 +102,29 @@
     let bootT = hero ? 0 : 1;
     let pulseT = -10;
     let running = true;
+    // Bewegung je Aktion: welche, seit wann, ob sie gehalten wird (läuft, solange der Schritt läuft)
+    let move = '';
+    let moveT = -100;
+    let moveHold = false;
+    let moveAmt = 0;
+    let talkOn = false;
+    let talkAmt = 0;
+    // Maus: Position (-1 bis 1 um die Mitte), wie nah (hover), Neigung zum Zeiger, Drehen per Ziehen
+    let px = 0;
+    let py = 0;
+    let hover = 0;
+    let hoverTarget = 0;
+    let leanX = 0;
+    let leanY = 0;
+    let dragging = false;
+    let dragged = false;
+    let dragX = 0;
+    let dragVel = 0;
+    let tilt = TILT;
+    let sinT = Math.sin(TILT);
+    let cosT = Math.cos(TILT);
+    let dragStart = 0;
+    let dragAt = 0;
 
     function resize() {
       // Layout-Größe ohne Transformationen (beim Einblenden ist die Kugel kurz skaliert)
@@ -104,29 +146,55 @@
     // (rho klein) bleibt sie glatt, sonst würden die kleinen Ringe dort knittern.
     function surface(phi, lam, rho) {
       const v = look.ripple * level;
-      return 1 + rho * (
+      let extra = 0;
+      if (moveAmt > 0.01) {
+        // Musik: die Ringe springen im Takt, jeder ein bisschen anders (wie ein Equalizer)
+        if (move === 'beat') extra += moveAmt * 0.07 * Math.pow(Math.abs(Math.sin(t * 4.2 + phi * 5)), 3);
+        // Ausschalten: die Kugel zieht sich leise zusammen
+        if (move === 'dim') extra -= moveAmt * 0.06;
+      }
+      return 1 + extra + rho * (
         look.amp * (0.55 * Math.sin(2 * lam + 3 * phi + t * 0.55) + 0.45 * Math.sin(3 * phi - lam - t * 0.4))
         // Die Stimme läuft als Welle von oben nach unten durch die Ringe, wie Schall
         + v * (0.7 * Math.sin(7 * phi - t * 6) + 0.3 * Math.sin(2 * lam + 3 * phi - t * 3)));
     }
 
+    // Bildpunkt eines Punkts der Kugel (Breite phi, Länge lam): drehen, neigen, zum Zeiger wölben
+    function project(phi, lam, R, out, k) {
+      const rho = Math.sin(phi);
+      const r = surface(phi, lam, rho);
+      const a = lam + spin + leanX;
+      let x = rho * Math.cos(a) * r;
+      const z = rho * Math.sin(a) * r;
+      const y = Math.cos(phi) * r;
+      // Wind: jeder Ring wiegt sich ein wenig seitlich
+      if (move === 'sway' && moveAmt > 0.01) x += moveAmt * 0.05 * Math.sin(t * 1.6 + phi * 3.2);
+      let y2 = y * cosT - z * sinT;
+      const z2 = y * sinT + z * cosT;
+      // Zum Zeiger hin wölbt sich die Oberfläche ein wenig (nur vorn)
+      if (hover > 0.01 && z2 > 0) {
+        const d2 = (x - px) * (x - px) + (y2 - py) * (y2 - py);
+        const bump = 1 + hover * 0.075 * Math.exp(-d2 / 0.09) * z2;
+        x *= bump;
+        y2 *= bump;
+      }
+      out[k] = x * R;
+      out[k + 1] = y2 * R;
+      out[k + 2] = z2;
+    }
+
     // Rechnet einen Ring (Breitengrad phi) in Bildpunkte um: drehen, neigen, abbilden
     function traceRing(phi, R) {
-      const y0 = Math.cos(phi);
-      const rho = Math.sin(phi);
+      for (let j = 0; j <= SEG; j += 1) project(phi, (j / SEG) * TAU, R, ring, j * 3);
+    }
+
+    // Ein Meridian (Längenkreis von Pol zu Pol, vorn und hinten) in dieselbe Punktliste
+    function traceMeridian(lam, R) {
       for (let j = 0; j <= SEG; j += 1) {
-        const lam = (j / SEG) * TAU;
-        const r = surface(phi, lam, rho);
-        const a = lam + spin;
-        const x = rho * Math.cos(a) * r;
-        const z = rho * Math.sin(a) * r;
-        const y = y0 * r;
-        // um die waagrechte Achse neigen
-        const y2 = y * cosT - z * sinT;
-        const z2 = y * sinT + z * cosT;
-        ring[j * 3] = x * R;
-        ring[j * 3 + 1] = y2 * R;
-        ring[j * 3 + 2] = z2;
+        const v = (j / SEG) * TAU;
+        // erst vorn hinunter, dann hinten wieder hinauf
+        if (v <= Math.PI) project(Math.max(0.0001, v), lam, R, ring, j * 3);
+        else project(Math.max(0.0001, TAU - v), lam + Math.PI, R, ring, j * 3);
       }
     }
 
@@ -149,12 +217,27 @@
       ctx.stroke();
     }
 
+    // Wie weit eine Bewegung schon läuft (Sekunden)
+    const since = () => t - moveT;
+
+    // Kurzer Schlag (0 bis 1 bis 0) ab Sekunde `at`, `len` Sekunden lang
+    const knock = (at, len) => {
+      const p = (since() - at) / len;
+      return p > 0 && p < 1 ? Math.sin(p * Math.PI) : 0;
+    };
+
     function draw() {
       const S = Math.min(canvas.width, canvas.height);
       if (S < 8) return;
       const ease = 1 - Math.pow(1 - bootT, 3);
       const click = t - pulseT < 0.6 ? Math.sin(((t - pulseT) / 0.6) * Math.PI) * 0.05 : 0;
-      const R = S * (hero ? 0.3 : 0.42) * (0.94 + 0.06 * ease) * (1 + click + level * 0.035);
+      // Anklopfen (Hinweis) und Aufblühen (App): kurze Schläge der ganzen Kugel
+      let beat = 0;
+      if (move === 'knock') beat = (knock(0, 0.28) + knock(0.36, 0.28)) * 0.045 * moveAmt;
+      if (move === 'bloom') beat = knock(0, 0.5) * 0.05 * moveAmt;
+      const R = S * (hero ? 0.3 : 0.42) * (0.94 + 0.06 * ease) * (1 + click + beat + level * 0.035);
+      sinT = Math.sin(tilt);
+      cosT = Math.cos(tilt);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -189,14 +272,91 @@
         const phi = v * Math.PI;
         traceRing(phi, R);
         // Der helle Streifen beim Nachdenken: läuft von oben nach unten durch die Ringe
-        const band = look.wave > 0.01 ? look.wave * Math.exp(-Math.pow(v - wave, 2) / 0.006) : 0;
+        let band = look.wave > 0.01 ? look.wave * Math.exp(-Math.pow(v - wave, 2) / 0.006) : 0;
+        if (moveAmt > 0.01) {
+          // Installieren: mehrere Bänder fließen nach unten, wie ein Download
+          if (move === 'stream') {
+            const f = (v - since() * 0.9) * 3;
+            band += moveAmt * 0.9 * Math.pow(Math.max(0, Math.cos((f - Math.floor(f)) * TAU)), 12);
+          }
+          // Lesen: eine Scanlinie fährt hinunter und wieder hinauf
+          if (move === 'scanline') {
+            const p = (since() * 0.45) % 2;
+            band += moveAmt * 1.2 * Math.exp(-Math.pow(v - (p < 1 ? p : 2 - p), 2) / 0.003);
+          }
+          // Hinweis: beim Anklopfen leuchten alle Ringe kurz auf
+          if (move === 'knock') band += (knock(0, 0.28) + knock(0.36, 0.28)) * 0.5 * moveAmt;
+        }
         const a = base * (1 + band * 1.4);
         // Hinten nur angedeutet, vorne klar: so wirkt sie räumlich
         strokeDepth(-2, -0.3, color, a * 0.16);
         strokeDepth(-0.3, 0.3, color, a * 0.45);
         strokeDepth(0.3, 2, color, a);
       }
+      if (hero && moveAmt > 0.01) drawMove(R, color, base);
+      if (hero && talkAmt > 0.01) drawTalk(R, color);
       ctx.globalAlpha = 1;
+    }
+
+    // Längenkreise, vorn klar und hinten nur angedeutet
+    function meridian(lam, R, color, alpha) {
+      traceMeridian(lam, R);
+      strokeDepth(-2, -0.3, color, alpha * 0.16);
+      strokeDepth(-0.3, 0.3, color, alpha * 0.45);
+      strokeDepth(0.3, 2, color, alpha);
+    }
+
+    function drawMove(R, color, base) {
+      const k = moveAmt;
+      if (move === 'scan') {
+        // Suchen: ein heller Meridian kreist wie ein Radar, ein schwächerer folgt
+        const lam = -spin - leanX + since() * 2.4;
+        meridian(lam, R, color, base * 1.5 * k);
+        meridian(lam - 0.28, R, color, base * 0.5 * k);
+      } else if (move === 'grid') {
+        // Werkstatt: ein Konstruktionsgitter aus Längenkreisen blendet sich ein
+        for (let i = 0; i < 12; i += 1) meridian((i / 12) * TAU, R, color, base * 0.55 * k);
+      } else if (move === 'clock') {
+        // Zeit: ein Zeiger springt im Sekundentakt weiter, der Äquator leuchtet als Zifferblatt
+        const tick = Math.floor(since() * 2) / 2;
+        meridian(-spin - leanX + tick * (TAU / 12), R, color, base * 1.6 * k);
+        traceRing(Math.PI / 2, R);
+        strokeDepth(0.3, 2, color, base * 0.9 * k);
+      } else if (move === 'bloom') {
+        // App öffnen: Ringe laufen von der Kugel nach außen und verblassen
+        for (let i = 0; i < 2; i += 1) {
+          const p = ((since() - i * 0.45) % 1.3) / 1.3;
+          if (since() < i * 0.45 || p < 0) continue;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, R * (1.02 + p * 0.5), R * (1.02 + p * 0.5) * 0.98, 0, 0, TAU);
+          ctx.strokeStyle = rgba(color, base * 0.9 * k * (1 - p));
+          ctx.stroke();
+        }
+      } else if (move === 'orbit') {
+        // Nachricht: ein Lichtpunkt umkreist die Kugel und zieht einen kurzen Schweif
+        for (let i = 0; i < 14; i += 1) {
+          const ang = since() * 3.2 - i * 0.07;
+          const x = Math.cos(ang) * R * 1.22;
+          const y = Math.sin(ang) * R * 0.34 - Math.cos(ang) * R * 0.12;
+          const front = Math.sin(ang) > -0.2;
+          ctx.beginPath();
+          ctx.arc(x, y, (i === 0 ? 2.6 : 2 - i * 0.12) * dpr, 0, TAU);
+          ctx.fillStyle = rgba(look.tint, k * (front ? 0.9 : 0.35) * (1 - i / 14));
+          ctx.fill();
+        }
+      }
+    }
+
+    // Gespräch: ein ruhiger, langsam drehender Ring um die Kugel zeigt "ich höre weiter zu"
+    function drawTalk(R, color) {
+      ctx.save();
+      ctx.rotate(t * 0.25);
+      ctx.setLineDash([R * 0.18, R * 0.1]);
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.24, 0, TAU);
+      ctx.strokeStyle = rgba(color, 0.32 * talkAmt);
+      ctx.stroke();
+      ctx.restore();
     }
 
     function frame(now) {
@@ -219,12 +379,80 @@
       level += (want - level) * Math.min(1, dt * (want > level ? 14 : 4));
       spin += dt * look.spin * slow * (1 + level * 0.5);
       wave = (wave + dt * 0.55 * slow) % 1.3;
+      // Bewegung je Aktion: an, solange gehalten (höchstens GESTURE_MAX) oder kurz, dann sanft aus
+      const live = move && (moveHold ? since() < GESTURE_MAX : since() < GESTURE_SECONDS);
+      moveAmt = lerp(moveAmt, live ? 1 : 0, Math.min(1, dt * (live ? 6 : 2.5)));
+      if (!live && moveAmt < 0.01) move = '';
+      if (move === 'scan' || move === 'grid') spin += dt * 0.35 * moveAmt;
+      talkAmt = lerp(talkAmt, talkOn ? 1 : 0, Math.min(1, dt * 4));
+      // Maus: zum Zeiger neigen, nach dem Ziehen mit Schwung weiterdrehen
+      hover = lerp(hover, hoverTarget, Math.min(1, dt * 6));
+      leanX = lerp(leanX, hoverTarget ? px * 0.22 : 0, Math.min(1, dt * 4));
+      leanY = lerp(leanY, hoverTarget ? py * 0.16 : 0, Math.min(1, dt * 4));
+      if (!dragging && Math.abs(dragVel) > 0.001) {
+        spin += dragVel * dt;
+        dragVel *= Math.exp(-dt * 2.2);
+      }
+      // "Danke": die Kugel nickt einmal
+      const nod = move === 'nod' ? -0.24 * knock(0, 0.8) : 0;
+      tilt = TILT + leanY + nod;
       draw();
       // Ruhig reichen 30 Bilder pro Sekunde (die kleine Marke 20), sonst flüssig
-      const calm = (current === 'idle' || current === 'muted') && level < 0.02;
+      const calm = (current === 'idle' || current === 'muted') && level < 0.02 && moveAmt < 0.01
+        && hover < 0.01 && talkAmt < 0.01 && Math.abs(dragVel) < 0.01;
       if (!hero) setTimeout(() => requestAnimationFrame(frame), 50);
       else if (calm || reduced()) setTimeout(() => requestAnimationFrame(frame), 33);
       else requestAnimationFrame(frame);
+    }
+
+    // Anfassen (nur die große Kugel): Zeiger, Ziehen zum Drehen. Wer gezogen hat, löst keinen Klick aus.
+    if (hero && canvas.addEventListener) {
+      const at = (e) => {
+        const box = canvas.getBoundingClientRect();
+        const rpx = Math.max(1, Math.min(box.width, box.height) * 0.3);
+        return [(e.clientX - box.left - box.width / 2) / rpx, (e.clientY - box.top - box.height / 2) / rpx, rpx];
+      };
+      canvas.addEventListener('pointermove', (e) => {
+        const [x, y, rpx] = at(e);
+        px = clamp(x, -1.4, 1.4);
+        py = clamp(y, -1.4, 1.4);
+        hoverTarget = x * x + y * y < 2.2 ? 1 : 0;
+        if (dragging) {
+          const dx = e.clientX - dragX;
+          const now = performance.now();
+          dragX = e.clientX;
+          spin += dx / rpx;
+          dragVel = (dx / rpx) / Math.max(0.016, (now - dragAt) / 1000);
+          dragAt = now;
+          if (Math.abs(e.clientX - dragStart) > 6) dragged = true;
+        }
+      });
+      canvas.addEventListener('pointerleave', () => {
+        hoverTarget = 0;
+        dragging = false;
+      });
+      canvas.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        dragged = false;
+        dragX = dragStart = e.clientX;
+        dragAt = performance.now();
+        dragVel = 0;
+        try {
+          canvas.setPointerCapture(e.pointerId);
+        } catch {
+          /* ältere Browser */
+        }
+      });
+      canvas.addEventListener('pointerup', () => {
+        dragging = false;
+        if (performance.now() - dragAt > 120) dragVel = 0; // losgelassen ohne Schwung
+      });
+      canvas.addEventListener('click', (e) => {
+        if (!dragged) return;
+        dragged = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }, true);
     }
 
     resize();
@@ -247,6 +475,22 @@
       boot() {
         bootT = 0;
       },
+      // Eigene Bewegung für eine Aktion ("search", "app", "music", ...). hold = läuft, bis
+      // gesture(null) kommt (z. B. solange ein Schritt läuft). Unbekannte Arten: keine Bewegung.
+      gesture(kind, hold) {
+        const name = GESTURES[String(kind || '')] || '';
+        if (!name) {
+          moveHold = false;
+          return '';
+        }
+        if (name !== move || !moveHold || since() > GESTURE_SECONDS) moveT = t;
+        move = name;
+        moveHold = !!hold;
+        return name;
+      },
+      talk(on) {
+        talkOn = !!on;
+      },
       resize,
       stop() {
         running = false;
@@ -254,5 +498,5 @@
     };
   }
 
-  window.JarvisOrb = { create, LOOKS };
+  window.JarvisOrb = { create, LOOKS, GESTURES };
 })();

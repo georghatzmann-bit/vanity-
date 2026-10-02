@@ -7,7 +7,7 @@ Dein eigener J.A.R.V.I.S. für Windows: Du sagst „Hey Jarvis“ oder drückst 
 ![Das Jarvis-Fenster](docs/bilder/hauptfenster.jpg)
 
 ```
-Mikrofon → "Hey Jarvis" (openWakeWord, lokal), "Jarvis" (Porcupine, gratis Schlüssel) oder Strg+Alt+J
+Mikrofon → "Hey Jarvis" (openWakeWord, lokal), "Jarvis"/"Hallo Jarvis" (halber Treffer + Prüfung per Spracherkennung, mit Schlüssel über Porcupine), Strg+Alt+J oder im Gespräch einfach weiterreden
 Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntfy.sh (verschlüsselt)
          → Satzende per Silero VAD (lokal)
          → Sprache zu Text: Groq Whisper large-v3-turbo (gratis Schlüssel), lokal Parakeet v3 oder faster-whisper
@@ -43,7 +43,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Große Aufträge mit Opus und viel Nachdenken, kleine mit Sonnet. Während der Arbeit kannst du mit Jarvis reden: Wünsche („Mach den Hintergrund blau“) gehen direkt in die laufende Arbeit, Fragen beantwortet er mit Blick auf den Plan, am Ende fragt er, ob er das Ergebnis starten soll. Das Fenster zeigt Plan, Ablauf, Fortschritt und Dateien und alle Projekte als Übersicht mit Starten und Weiterbauen.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt, ElevenLabs beginnt nach 0,25 s zu sprechen.
-- **Ruhiges, modernes Fenster:** eine ruhige Kugel aus feinen Linien als Jarvis' Gesicht (sie dreht sich langsam, mit der Stimme laufen Wellen hindurch), darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
+- **Gespräch ohne Weckwort:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, Ring um die Kugel). Weiterreden reicht; „Danke“, „Alles klar“, „Tschüss“ oder Stille beenden das Gespräch. „Jarvis“, „Okay Jarvis“ und „Hallo Jarvis“ wecken ihn auch.
+- **Ruhiges, modernes Fenster:** eine ruhige Kugel aus feinen Linien als Jarvis' Gesicht (sie dreht sich langsam, mit der Stimme laufen Wellen hindurch, jede Aktion hat eine eigene Bewegung: Radar beim Suchen, Lichtpunkt bei Nachrichten, Takt bei Musik, Uhrzeiger bei Timern, Bau-Gitter in der Werkstatt; mit der Maus lässt sie sich neigen und drehen), darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
 - **Installer mit eigenem Fenster:** dieselbe Linienkugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
 - **Grafische Einrichtung**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
 
@@ -113,7 +114,7 @@ Zum Ausprobieren im Jarvis-Ordner: `"%LOCALAPPDATA%\Jarvis\venv\Scripts\python.e
 - Endgültig löschen, formatieren und die Registry ausräumen sind für Claude gesperrt (`disallowed_tools`). Dateien gehen nur in den Papierkorb. Ganze Laufwerke, dein Benutzerordner sowie Desktop, Dokumente und Downloads selbst kommen nie hinein.
 - Ohne volle Freigabe tun `papierkorb`, `deinstallieren` und Herunterfahren erst nach deinem „Ja“ etwas. `admin`-Befehle, die endgültig löschen oder formatieren, fragen immer, auch mit voller Freigabe.
 - Die Handy-App braucht einen langen Schlüssel (steht im QR-Code), „Neu koppeln“ sperrt alte Handys aus. Der Alexa-Weg ist mit einem eigenen Schlüssel verschlüsselt und signiert, alte oder doppelte Nachrichten werden verworfen. Der Discord-Token bleibt auf deinem PC.
-- Wake Word und Satzende laufen lokal. An Groq geht nur die Aufnahme nach „Hey Jarvis“, an Claude nur der erkannte Text. Das Gedächtnis bleibt auf deinem PC.
+- Wake Word und Satzende laufen lokal. An Groq geht nur die Aufnahme nach „Hey Jarvis“ (und im Gespräch das Weiterreden; klingt etwas halb nach „Jarvis“, zur Prüfung dieser kurze Schnipsel), an Claude nur der erkannte Text. Das Gedächtnis bleibt auf deinem PC.
 
 ## Windows-Details
 

@@ -154,3 +154,22 @@ class WordsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OrbMovementTest(unittest.TestCase):
+    """Schnelle Befehle melden der Kugel, was Jarvis tut (eigene Bewegung je Aktion)."""
+
+    def test_quick_commands_tell_the_orb_what_happens(self):
+        assistant, ui, _speaker, _mute = make(FakeBrain())
+        shown = []
+        ui.action = shown.append
+        assistant.handle("Wie spät ist es?")
+        assistant.handle("Danke")
+        self.assertEqual(shown, ["time", "thanks"])
+
+    def test_window_gets_the_movement(self):
+        from jarvis.gui.app import GuiBridge
+
+        bridge = GuiBridge()
+        bridge.action("music")
+        self.assertIn({"type": "action", "kind": "music"}, bridge.drain())
