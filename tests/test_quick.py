@@ -107,6 +107,9 @@ class RecognitionTest(unittest.TestCase):
         # Ein Teil, den nur Claude kann: dann macht Claude den ganzen Satz
         self.assertIsNone(parts("Öffne Spotify und erzähl mir einen Witz"))
         self.assertIsNone(parts("Öffne Spotify"))
+        # "und" im Namen: nicht erst "Simon" und dann "Garfunkel" spielen
+        self.assertIsNone(parts("Spiel Simon und Garfunkel auf Spotify"))
+        self.assertIsNone(parts("Spiel Rock und Pop"))
 
 
 class WebTest(unittest.TestCase):

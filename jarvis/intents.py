@@ -841,6 +841,8 @@ def match_parts(text: str) -> list[tuple[str, Intent]] | None:
             # "Öffne Spotify und Discord": der zweite Teil bekommt das Verb vom ersten
             longer = f"{verb} {piece}"
             intent = match(longer)
+            if intent is not None and intent.name in ("play", "search"):
+                return None  # "Spiel Simon und Garfunkel": das "und" gehört zum Namen, nicht zwei Lieder
             if intent is not None:
                 piece = longer
         if intent is None or intent.name in ("stop", "reset", "workshop_cancel", "workshop_status"):
