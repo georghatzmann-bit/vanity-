@@ -83,9 +83,10 @@ class Assistant:
         self.hints = None
         self._pending_hints: list = []
         self._hint_lock = threading.Lock()
-        self._last_hint_at = 0.0
+        # "Noch nie" statt 0: time.monotonic() zählt ab dem Hochfahren, kurz nach dem Start wäre 0 sonst "gerade eben"
+        self._last_hint_at = float("-inf")
         self._hint_delivery = threading.Lock()  # zwei Threads sollen nicht denselben Hinweis sagen
-        self._last_turn_end = 0.0  # wann Jarvis zuletzt etwas beantwortet hat
+        self._last_turn_end = float("-inf")  # wann Jarvis zuletzt etwas beantwortet hat
         self._missed: list[tuple[float, str]] = []
         self._last_state = ""
         self._ids = itertools.count(1)
@@ -1425,15 +1426,23 @@ class Assistant:
             elif self.memory is not None:
                 self.memory.feedback(routine.key, answer)
 
-        if re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit|sag (?:mir )?das nicht mehr|"
-                     r"will ich nicht (?:mehr )?(?:wissen|hören)|solche hinweise nicht)\b", reply):
+        never = re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit|sag (?:mir )?das nicht mehr|"
+                          r"will ich nicht (?:mehr )?(?:wissen|hören)|solche hinweise nicht)\b", reply)
+        # "Nicht jetzt", "Jetzt nicht" und "Bitte nicht" kommen hier als "nicht" an (normalize streicht "jetzt" und "bitte")
+        refuse = re.match(r"^(?:nein|nö|nee|ne|nicht$|nicht jetzt|jetzt nicht|später|lass(?: es| mal)?|nein danke|danke nein)\b",
+                          reply)
+        if hint and not routine.offer:
+            # Ein Hinweis ohne Frage: nur eine kurze Antwort für sich ("Nie wieder", "Nicht jetzt") gilt ihm,
+            # alles andere ist ein neuer Befehl ("Lass mal Musik laufen", "Später erinnere mich an den Tee")
+            words = len(reply.split())
+            if not (never and words <= 6) and not (refuse and words <= 2):
+                return None
+        if never:
             feedback("nie")
             return "Verstanden, Sir. Das sage ich Ihnen nicht mehr." if hint else "Verstanden, Sir. Das frage ich nicht mehr."
-        if re.match(r"^(?:nein|nö|nee|ne|nicht jetzt|jetzt nicht|später|lass(?: es| mal)?|nein danke|danke nein)\b", reply):
+        if refuse:
             feedback("nein")
             return random.choice(["Sehr wohl, Sir.", "Wie Sie wünschen."])
-        if hint and not routine.offer:
-            return None  # ein Hinweis ohne Frage: alles andere ist ein neuer Befehl
         if not confirmed(text):
             return None
         feedback("ja")

@@ -336,6 +336,42 @@ class AssistantHintTest(unittest.TestCase):
         self.assistant.offer_hints([Hint("pause", "pausen", "Sir, Zeit für eine Pause.")])
         self.assistant.handle("Wie hoch ist der Eiffelturm?")
         self.assertEqual(brain.asked, ["Wie hoch ist der Eiffelturm?"])
+        # Klingt nur am Anfang wie "Nein" oder "Nie": trotzdem ein neuer Befehl
+        for command in ("Lass uns über das Wetter reden", "Später schreibst du mir ein Gedicht",
+                        "Nie wieder Montag, wie heißt der Song?"):
+            self.assistant._last_hint_at = float("-inf")
+            self.assistant._last_turn_end = float("-inf")
+            self.assistant.offer_hints([Hint("internet:" + command, "internet", "Das Internet ist wieder da, Sir.")])
+            self.assistant.handle(command)
+            self.assertEqual(brain.asked[-1], command)
+        self.assertEqual(self.assistant.hints.muted(), [])
+
+    def test_short_answer_to_a_hint_without_question(self):
+        self.assistant.offer_hints([Hint("pause", "pausen", "Sir, Zeit für eine Pause.")])
+        self.assertIn(self.assistant.handle("Nicht jetzt"), ("Sehr wohl, Sir.", "Wie Sie wünschen."))
+        self.assistant._last_hint_at = float("-inf")
+        self.assistant._last_turn_end = float("-inf")
+        self.assistant.offer_hints([Hint("pause2", "pausen", "Sir, Zeit für eine Pause.")])
+        self.assertEqual(self.assistant.handle("Sag mir das nicht mehr"), "Verstanden, Sir. Das sage ich Ihnen nicht mehr.")
+        self.assertEqual(self.assistant.hints.muted(), ["pausen"])
+
+    def test_not_now_to_a_question(self):
+        done = []
+        for number, answer in enumerate(("Nicht jetzt", "Jetzt nicht", "Bitte nicht", "Nein, jetzt nicht")):
+            self.assistant._last_hint_at = float("-inf")
+            self.assistant._last_turn_end = float("-inf")
+            self.assistant.offer_hints([Hint(f"haengt:{number}", "pc", "Sir, Discord reagiert nicht mehr.",
+                                             "Soll ich es neu starten?", action=lambda: done.append(1) or "Neu gestartet.")])
+            self.assertIn(self.assistant.handle(answer), ("Sehr wohl, Sir.", "Wie Sie wünschen."), answer)
+        self.assertEqual(done, [])
+        self.assertEqual(self.assistant.brain.asked, [], "ein „Nicht jetzt“ geht nicht an Claude")
+
+    def test_first_hint_right_after_the_pc_starts(self):
+        # time.monotonic() zählt ab dem Hochfahren. Jarvis startet mit Windows: eine Minute danach war
+        # noch kein Hinweis und kein Gespräch, der erste Hinweis darf also gleich kommen.
+        with mock.patch("jarvis.assistant.time.monotonic", return_value=10.0):
+            self.assistant.offer_hints([Hint("x", "pc", "Sir, etwas.")])
+        self.assertEqual(self.speaker.said, ["Sir, etwas."])
 
     def test_missed_announcements_are_kept_short(self):
         self.present = False
