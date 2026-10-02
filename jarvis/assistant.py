@@ -862,7 +862,10 @@ class Assistant:
             except (KeyError, ValueError):
                 continue
             if when.date() == day:
-                notes.append(f"um {when.hour}:{when.minute:02d} Uhr {item.get('text', '')}".strip())
+                # "Der Timer ist abgelaufen." und "Ihr Wecker. Zeit aufzustehen" klingen in der Liste schief
+                text = str(item.get("text", "")).strip().rstrip(".")
+                text = "Timer" if text == "Der Timer ist abgelaufen" else "Wecker" if text.startswith("Ihr Wecker") else text
+                notes.append(f"um {when.hour}:{when.minute:02d} Uhr {text}".strip())
         return notes[:5]
 
     def _schedule_command(self, action: str, data) -> str:

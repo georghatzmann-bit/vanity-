@@ -460,7 +460,7 @@ _REMIND = [
 # "Weck mich um 7", "Stell mir einen Wecker auf 6:30" (Uhrzeit, keine Dauer), auch "um halb sieben"
 _HOUR = r"(?:\d{1,2}|eins|ein|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)(?![\wäöüß])"
 _ALARM = [
-    re.compile(r"^(?:bitte\s+)?(?:weck|wecke)\s+mich\s+(?:bitte\s+)?(?:morgen\s+früh\s+|morgen\s+)?"
+    re.compile(r"^(?:bitte\s+)?(?:weck|wecke)\s+mich\s+(?:bitte\s+)?(?P<day>morgen\s+früh\s+|morgen\s+)?"
                r"(?P<when>(?:um\s+)?(?:halb\s+)?" + _HOUR + r"(?:[:.]\d{2})?(?:\s+uhr)?)(?:\s+(?:auf|bitte))?[.!]?$", re.I),
     re.compile(r"^(?:stell|stelle|setz|setze|mach|mache)\s+(?:mir\s+)?(?:bitte\s+)?(?:einen|nen)?\s*wecker\s+"
                r"(?:auf|für|um)\s+(?P<when>(?:halb\s+)?" + _HOUR + r"(?:[:.]\d{2})?(?:\s+uhr)?)[.!]?$", re.I),
@@ -521,8 +521,14 @@ def match_reminder(text: str, now: dt.datetime | None = None) -> Intent | None:
         if not found:
             continue
         clock = found.group("when").strip(" ,.").replace(".", ":")
+        clock = clock if clock.lower().startswith("um ") else "um " + clock
+        day = (found.groupdict().get("day") or "").lower()
+        if "früh" in day:
+            clock += " früh"  # "morgen früh um 7" ist nie 19 Uhr
+        if day and (now or dt.datetime.now()).hour >= 4:
+            clock = "morgen " + clock  # nachts um 2 heißt "morgen" noch: wenn ich aufwache
         try:
-            when = parse_when(clock if clock.lower().startswith("um ") else "um " + clock, now)
+            when = parse_when(clock, now)
         except ValueError:
             return None
         what = "Ihr Wecker. Zeit aufzustehen"

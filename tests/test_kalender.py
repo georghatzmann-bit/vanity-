@@ -249,6 +249,12 @@ class AssistantTest(unittest.TestCase):
         answer = self.assistant.handle("Was steht übermorgen an?")
         self.assertEqual(answer, "Übermorgen steht nichts im Kalender, Sir. Erinnerungen: um 14:00 Uhr Tee aufgießen.")
         self.assertEqual(self.brain.asked, [])
+        # Wecker und Timer heißen in der Liste einfach so
+        self.assistant.reminders.add(later.replace(hour=6, minute=30, second=0, microsecond=0), "Ihr Wecker. Zeit aufzustehen")
+        self.assistant.reminders.add(later.replace(hour=15, minute=0, second=0, microsecond=0), "Der Timer ist abgelaufen.")
+        self.assertEqual(self.assistant.handle("Was steht übermorgen an?"),
+                         "Übermorgen steht nichts im Kalender, Sir. Erinnerungen: um 6:30 Uhr Wecker, "
+                         "um 14:00 Uhr Tee aufgießen und um 15:00 Uhr Timer.")
 
     def test_warning_is_announced(self):
         now = dt.datetime.now()
