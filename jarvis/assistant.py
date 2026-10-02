@@ -450,9 +450,9 @@ class Assistant:
             return random.choice(["Gern geschehen, Sir.", "Stets zu Diensten, Sir.", "Immer gern, Sir.",
                                   "Keine Ursache, Sir."])
         if name == "help":
-            return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Erinnerungen, "
-                    "Wetter, Musik, Licht, den PC herunterfahren, und in der Werkstatt programmiere ich für Sie. "
-                    "Sagen Sie zum Beispiel: Schreib Max auf Discord, bin gleich da.")
+            return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Termine, "
+                    "Mails, Erinnerungen, Wetter, Musik, den PC herunterfahren, und in der Werkstatt programmiere ich "
+                    "für Sie. Sagen Sie zum Beispiel: Schreib Max auf Discord, bin gleich da.")
         if name == "time":
             return intents.spoken_time(now)
         if name == "date":
