@@ -322,3 +322,15 @@ class WindowTest(unittest.TestCase):
             with mock.patch("jarvis.config.STATE_DIR", state), mock.patch("jarvis.config.CONFIG_PATH", state / "config.toml"):
                 self.assertTrue(api.calendar_remove("webcal://calendar.google.com/calendar/ical/x/basic.ics")["ok"])
             self.assertEqual(api.calendar_info()["feeds"], [])
+
+
+class FirstStartTest(unittest.TestCase):
+    def test_first_download_after_the_first_look_is_not_news(self):
+        with tempfile.TemporaryDirectory() as folder:
+            clock = Clock(dt.datetime(2026, 10, 4, 20, 0))
+            calendar = Calendar(Path(folder) / "k.json", ["https://calendar.google.com/x/basic.ics"], now=clock,
+                                opener=FakeWeb(ICS))
+            self.assertEqual(calendar.changes(), [], "noch nichts geladen")
+            calendar.refresh()  # der erste Abruf kommt erst danach an (eigener Thread)
+            self.assertEqual(calendar.changes(), [], "alles, was jetzt erst da ist, ist nicht neu")
+            self.assertEqual(calendar.changes(), [])

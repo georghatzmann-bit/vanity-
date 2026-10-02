@@ -327,6 +327,7 @@ class Calendar:
         self._texts: dict[str, str] = {}
         self._errors: dict[str, str] = {}
         self._known: dict[str, Event] | None = None  # Stand beim letzten Vergleich (Änderungen ansagen)
+        self._known_sources: set[str] = set()  # welche Kalender dabei schon geladen waren
         self._warned: set[str] = set()
         for url in self._feeds:  # der letzte Stand von der Platte: sofort da, auch ohne Internet
             try:
@@ -475,13 +476,17 @@ class Calendar:
     def changes(self) -> list[str]:
         """Was sich in den Kalender-Abos seit dem letzten Blick geändert hat (nächste 48 Stunden)."""
         now = self._now()
-        current = {e.key: e for e in self.events(now, now + dt.timedelta(hours=WATCH_HOURS)) if e.source != "jarvis"}
+        # Nur Kalender, die schon einmal geladen sind. Kommt einer erst später dazu (erster Abruf beim
+        # Start), sind seine Termine nicht "neu", sondern einfach da.
+        loaded = {f"kalender{number + 1}" for number, url in enumerate(self._feeds) if self._texts.get(url)}
+        current = {e.key: e for e in self.events(now, now + dt.timedelta(hours=WATCH_HOURS)) if e.source in loaded}
         before, self._known = self._known, current
+        sources, self._known_sources = self._known_sources, loaded
         if before is None:
             return []
         said = []
         for key, old in before.items():
-            if old.start < now:
+            if old.start < now or old.source not in loaded:
                 continue
             new = current.get(key)
             if new is None:
@@ -491,6 +496,8 @@ class Calendar:
             elif new.start != old.start:
                 said.append(f"{old.title} wurde verschoben, jetzt {new.spoken(now, with_day=True).replace(new.title, '').strip()}.")
         for key, new in current.items():
+            if new.source not in sources:
+                continue
             if key not in before and new.start >= now and new.start - now > dt.timedelta(minutes=WARN_MINUTES):
                 if new.start < now + dt.timedelta(hours=WATCH_HOURS - 1):
                     said.append(f"Neu im Kalender: {new.spoken(now, with_day=True)}.")

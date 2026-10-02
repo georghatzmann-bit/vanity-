@@ -185,8 +185,11 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                 except Exception:
                     log.exception("Zeitpläne")
             if tick % 30 == 15 and getattr(assistant, "calendar", None) is not None:
+                # Kalender-Abos holen (höchstens alle 15 Minuten) in einem eigenen Thread: Ein langsamer
+                # Server darf Erinnerungen nicht aufhalten.
+                if not any(t.name == "jarvis-kalender" and t.is_alive() for t in threading.enumerate()):
+                    threading.Thread(target=assistant.calendar.refresh, name="jarvis-kalender", daemon=True).start()
                 try:
-                    assistant.calendar.refresh()  # Kalender-Abos (höchstens alle 15 Minuten)
                     assistant.check_calendar()
                 except Exception:
                     log.exception("Kalender")
