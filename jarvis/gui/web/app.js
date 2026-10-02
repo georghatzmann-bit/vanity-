@@ -109,24 +109,8 @@
     tailscale_info: () => window.pywebview.api.tailscale_info(),
     tailscale_enable: (on) => window.pywebview.api.tailscale_enable(on),
     tailscale_help: (which) => window.pywebview.api.tailscale_help(which),
-    calendar_info: () => window.pywebview.api.calendar_info(),
-    calendar_add: (url) => window.pywebview.api.calendar_add(url),
-    calendar_remove: (url) => window.pywebview.api.calendar_remove(url),
-    calendar_help: (which) => window.pywebview.api.calendar_help(which),
-    shop_info: () => window.pywebview.api.shop_info(),
-    shop_connect: (domain, client, secret) => window.pywebview.api.shop_connect(domain, client, secret),
-    shop_disconnect: () => window.pywebview.api.shop_disconnect(),
-    shop_help: (which) => window.pywebview.api.shop_help(which),
-    apple_info: () => window.pywebview.api.apple_info(),
-    apple_connect: (email, password) => window.pywebview.api.apple_connect(email, password),
-    apple_choose_calendar: (id) => window.pywebview.api.apple_choose_calendar(id),
-    apple_refresh: () => window.pywebview.api.apple_refresh(),
-    apple_disconnect: () => window.pywebview.api.apple_disconnect(),
-    apple_help: () => window.pywebview.api.apple_help(),
-    mail_accounts: () => window.pywebview.api.mail_accounts(),
-    mail_add: (provider, email, password, server) => window.pywebview.api.mail_add(provider, email, password, server || ''),
-    mail_remove: (id) => window.pywebview.api.mail_remove(id),
-    mail_help: (provider) => window.pywebview.api.mail_help(provider),
+    connectors: (fresh) => window.pywebview.api.connectors(!!fresh),
+    connectors_help: () => window.pywebview.api.connectors_help(),
     discord_portal: () => window.pywebview.api.discord_portal(),
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
@@ -689,86 +673,6 @@
     }
   }
 
-  // Shop-Karte rechts: nur wenn ein Shop verbunden ist (heute, diese Woche, was auf den Versand wartet)
-  async function refreshShopCard() {
-    const card = document.getElementById('shopCard');
-    if (!card) return;
-    let info = null;
-    try {
-      info = await call('shop_info');
-    } catch {
-      info = null;
-    }
-    const on = !!(info && info.verbunden && !info.fehler);
-    card.hidden = !on;
-    if (!on) return;
-    const count = (n) => n + (n === 1 ? ' Bestellung' : ' Bestellungen');
-    const short = (text) => String(text || '').replace(/ Euro$/, ' €');
-    document.getElementById('shopName').textContent = info.name || '';
-    document.getElementById('shopToday').textContent = short(info.heute.umsatz);
-    document.getElementById('shopTodayN').textContent = count(info.heute.anzahl);
-    document.getElementById('shopWeek').textContent = short(info.woche.umsatz);
-    document.getElementById('shopWeekN').textContent = count(info.woche.anzahl);
-    const open = document.getElementById('shopOpen');
-    open.hidden = !info.offen;
-    open.textContent = info.offen === 1 ? 'Eine Bestellung wartet auf den Versand.' : info.offen + ' Bestellungen warten auf den Versand.';
-  }
-
-  // Post: die letzten Mails (ohne Newsletter), nur wenn ein Postfach verbunden ist. Klick: Jarvis liest vor.
-  function mailWhen(iso) {
-    const text = String(iso || '');
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return '';
-    const now = new Date();
-    const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-'
-      + String(now.getDate()).padStart(2, '0');
-    return text.slice(0, 10) === today ? text.slice(11, 16) : Number(text.slice(8, 10)) + '.' + Number(text.slice(5, 7)) + '.';
-  }
-
-  async function refreshMailCard() {
-    const card = document.getElementById('mailCard');
-    if (!card) return;
-    let accounts = [];
-    let info = null;
-    try {
-      accounts = (await call('mail_accounts')) || [];
-      if (accounts.length) info = await call('apple_info');
-    } catch {
-      accounts = [];
-    }
-    const mail = info && info.mail;
-    card.hidden = !(accounts.length && mail);
-    if (card.hidden) return;
-    const unread = Number(mail.ungelesen) || 0;
-    document.getElementById('mailCount').textContent = unread ? (unread > 99 ? '99+' : unread) + ' ungelesen' : '';
-    const items = (mail.letzte || []).filter((m) => !m.newsletter).slice(0, 3);
-    document.getElementById('mailRail').replaceChildren(...items.map((m) => {
-      const li = document.createElement('li');
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'mail-item' + (m.ungelesen ? ' unread' : '');
-      const sender = String(m.von || m.adresse || 'Unbekannt');
-      btn.title = 'Von Jarvis vorlesen lassen';
-      btn.setAttribute('aria-label', (m.ungelesen ? 'Ungelesen: ' : '') + sender + ', ' + String(m.betreff || '') + '. Vorlesen lassen');
-      const time = document.createElement('time');
-      time.textContent = mailWhen(m.datum);
-      const what = document.createElement('span');
-      what.className = 'what';
-      const b = document.createElement('b');
-      b.textContent = sender;
-      const small = document.createElement('small');
-      small.textContent = String(m.betreff || '(ohne Betreff)');
-      what.append(b, small);
-      btn.append(time, what);
-      btn.addEventListener('click', () => sendText('Lies mir die letzte Mail von ' + sender + ' vor'));
-      li.append(btn);
-      return li;
-    }));
-    const empty = document.getElementById('mailEmpty');
-    empty.hidden = items.length > 0;
-    empty.textContent = mail.fehler ? String(mail.fehler)
-      : 'Nichts Wichtiges. Fragen Sie jederzeit „Hab ich neue Mails?“.';
-  }
-
   // Schnellbefehle unter dem Kern: die eigenen Befehle zuerst, dann die häufigsten
   const DECK_DEFAULT = [['Briefing', 'Briefing bitte'], ['Was steht heute an?', 'Was steht heute an?'],
     ['Gaming-Modus', 'Gaming-Modus an']];
@@ -954,13 +858,7 @@
     if (Koppeln && Koppeln.dots) Koppeln.dots();
     refreshDeck();
     refreshToday();
-    refreshShopCard();
-    refreshMailCard();
     setInterval(refreshToday, 60000);
-    setInterval(refreshShopCard, 300000);
-    setInterval(refreshMailCard, 300000);
-    document.addEventListener('jarvis-mail', refreshMailCard);
-    document.addEventListener('jarvis-shop', refreshShopCard);
     pollLoop(gen);
   }
 
@@ -1305,10 +1203,10 @@
         const now = new Date();
         const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
         return Promise.resolve([
-          { uhr: '12:00', text: 'Mittagessen mit Max · Pizzeria', tag: 'heute', art: 'termin' },
+          { uhr: '12:30', text: 'Pizza ist fertig', tag: 'heute', art: 'timer' },
           { uhr: '14:00', text: 'Tee aufgießen', tag: 'heute', art: 'erinnerung' },
-          { uhr: '18:30', text: 'Training', tag: 'heute', art: 'termin' },
-          { uhr: '21:00', text: 'Zocken mit Max · Discord', tag: 'heute', art: 'termin' },
+          { uhr: '18:30', text: 'Training', tag: 'heute', art: 'erinnerung' },
+          { uhr: '21:00', text: 'Zocken mit Max', tag: 'heute', art: 'erinnerung' },
           { uhr: '08:00', text: 'Zahnarzt anrufen', tag: 'morgen' },
         ].filter((r) => r.tag !== 'heute' || r.uhr >= hm));
       },
@@ -1331,7 +1229,7 @@
       workshop_run: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
       phone_info: () => Promise.resolve(DEMO_PHONE),
-      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, iphone: !!DEMO_APPLE.verbunden, alexa: !!DEMO_ALEXA.enabled, discord: true, mail: true }),
+      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled, discord: true }),
       push_info: () => Promise.resolve(DEMO_PUSH),
       push_enable: (on) => Promise.resolve(Object.assign(DEMO_PUSH, { enabled: !!on })),
       push_test: () => Promise.resolve({ ok: true, error: '' }),
@@ -1344,34 +1242,11 @@
       tailscale_info: () => Promise.resolve({ installed: true, running: true, name: 'georgs-pc.tail1234.ts.net', error: '', url: DEMO_TS.url }),
       tailscale_enable: (on) => { DEMO_TS.url = on ? 'https://georgs-pc.tail1234.ts.net/' : ''; return Promise.resolve({ ok: true, url: DEMO_TS.url, error: '' }); },
       tailscale_help: () => Promise.resolve(true),
-      calendar_info: () => Promise.resolve(DEMO_CAL),
-      calendar_add: (url) => {
-        if (!/^(https|webcal):\/\//.test(url)) return Promise.resolve({ ok: false, error: 'Das ist keine iCal-Adresse. Sie beginnt mit https:// oder webcal:// und endet meist auf .ics.' });
-        DEMO_CAL.feeds.push({ url, shown: url.replace(/^(\w+:\/\/[^/]+\/).*/, '$1…'), error: '' });
-        return Promise.resolve({ ok: true, error: '', count: 9, next: ['morgen um 9 Uhr Daily Standup', 'morgen um 18 Uhr Training'] });
-      },
-      calendar_remove: (url) => { DEMO_CAL.feeds = DEMO_CAL.feeds.filter((f) => f.url !== url); return Promise.resolve({ ok: true }); },
-      calendar_help: () => Promise.resolve(true),
-      apple_info: () => Promise.resolve(DEMO_APPLE),
-      apple_connect: () => Promise.resolve(Object.assign({ ok: true }, DEMO_APPLE)),
-      apple_choose_calendar: (id) => {
-        DEMO_APPLE.kalender.forEach((c) => { c.gewaehlt = c.id === id && c.schreibbar; });
-        return Promise.resolve({ ok: true, fehler: '', kalender: DEMO_APPLE.kalender });
-      },
-      apple_refresh: () => Promise.resolve(DEMO_APPLE),
-      apple_disconnect: () => Promise.resolve({ ok: true, fehler: '' }),
-      apple_help: () => Promise.resolve(true),
-      mail_accounts: () => Promise.resolve(DEMO_MAIL),
-      mail_add: () => Promise.resolve({ ok: true, fehler: '', konto: null }),
-      mail_remove: () => Promise.resolve({ ok: true, fehler: '' }),
-      mail_help: () => Promise.resolve(true),
+      connectors: (fresh) => new Promise((done) => setTimeout(() => done({ an: true, liste: DEMO_KONN, fehler: '' }), fresh ? 1200 : 80)),
+      connectors_help: () => Promise.resolve(true),
       labor_info: () => (/[?&]labor\b/.test(location.search) ? Promise.resolve(DEMO_LABOR) : Promise.reject(new Error('kein Labor'))),
       labor_open: () => Promise.resolve({ ok: false, error: 'Im Demo-Modus öffnet sich kein Ordner.' }),
       werkzeug_loeschen: () => Promise.resolve(true),
-      shop_info: () => Promise.resolve(DEMO_SHOP),
-      shop_connect: () => Promise.resolve({ ok: true, error: '', name: 'Georgs Laden' }),
-      shop_disconnect: () => Promise.resolve({ ok: true, error: '' }),
-      shop_help: () => Promise.resolve(true),
       discord_portal: () => Promise.resolve(true),
       alexa_enable: (on) => Promise.resolve(Object.assign(DEMO_ALEXA, { enabled: !!on, connected: !!on })),
       alexa_copy: () => Promise.resolve({ ok: true, text: '{}' }),
@@ -1433,32 +1308,10 @@
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
   const DEMO_TS = { url: '' };
 
-  // wie apple_info() und mail_accounts() in gui/app.py (DEMO_APPLE, DEMO_MAIL_ACCOUNTS)
-  // "2026-10-02T09:15" für heute (0) oder vor ein paar Tagen, wie mail.py es liefert
-  const demoStamp = (days, hm) => {
-    const d = new Date(Date.now() - days * 86400000);
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hm;
-  };
-  const DEMO_APPLE = {
-    verbunden: true, email: 'ge•••g@icloud.com', geburtstage: 14, fehler: '',
-    kalender: [
-      { id: 'home', name: 'Privat', farbe: '#FF2968', schreibbar: true, gewaehlt: true },
-      { id: 'work', name: 'Arbeit', farbe: '#1BADF8', schreibbar: true, gewaehlt: false },
-      { id: 'familie', name: 'Familie', farbe: '#63DA38', schreibbar: false, gewaehlt: false },
-    ],
-    mail: {
-      ungelesen: 3, fehler: '',
-      letzte: [
-        { id: 'icloud:4711', von: 'Max Mustermann', adresse: 'max@example.com', betreff: 'Grillen am Samstag?', datum: demoStamp(0, '09:15'), ungelesen: true, newsletter: false, vorschau: 'Hast du Lust, am Samstag zu grillen? Um sechs bei mir.' },
-        { id: 'icloud:4710', von: 'Amazon', adresse: 'versand-bestaetigung@amazon.de', betreff: 'Ihr Paket kommt heute', datum: demoStamp(0, '08:40'), ungelesen: true, newsletter: false, vorschau: 'Ihre Bestellung ist unterwegs: Controller für die Xbox.' },
-        { id: 'gmail:813', von: 'Steam', adresse: 'noreply@steampowered.com', betreff: 'Herbst-Sale: bis zu 90 %', datum: demoStamp(0, '07:02'), ungelesen: true, newsletter: true, vorschau: '' },
-        { id: 'gmail:812', von: 'Sparkasse', adresse: 'info@sparkasse.de', betreff: 'Ihr Kontoauszug für Oktober', datum: demoStamp(1, '18:05'), ungelesen: false, newsletter: false, vorschau: 'Ihr Kontoauszug für Oktober liegt bereit.' },
-      ],
-    },
-  };
-  const DEMO_MAIL = [
-    { id: 'icloud', anbieter: 'icloud', name: 'iCloud', email: 'ge•••g@icloud.com', server: 'imap.mail.me.com', automatisch: true, fehler: '' },
-    { id: 'gmail', anbieter: 'gmail', name: 'Gmail', email: 'ge•••r@gmail.com', server: 'imap.gmail.com', automatisch: false, fehler: '' },
+  // wie connectors() in gui/app.py: die Konnektoren, die Claude über Georgs Konto meldet
+  const DEMO_KONN = [
+    { name: 'Gmail', ok: true }, { name: 'Google Calendar', ok: true }, { name: 'Shopify', ok: true },
+    { name: 'Spotify', ok: true }, { name: 'Canva', ok: true },
   ];
 
   const DEMO_LABOR = {
@@ -1480,17 +1333,6 @@
       { wann: new Date(Date.now() - 9 * 3600e3).toISOString(), was: 'Versuch: import time; time.sleep(120)', ok: false, dauer: 60, abgebrochen: true },
     ],
     ordner: 'C:\\Users\\Georg\\AppData\\Local\\Programs\\Jarvis\\daten\\labor',
-  };
-
-  const DEMO_SHOP = {
-    verbunden: true, name: 'Georgs Laden', adresse: 'georg.myshopify.com', fehler: '',
-    heute: { anzahl: 2, umsatz: '58 Euro' }, woche: { anzahl: 7, umsatz: '203,50 Euro' }, offen: 3,
-    bestseller: ['Mauspad Jarvis'],
-  };
-
-  const DEMO_CAL = {
-    feeds: [{ url: 'https://calendar.google.com/calendar/ical/georg/private-abc/basic.ics', shown: 'https://calendar.google.com/…', error: '' }],
-    count: 6,
   };
 
   const DEMO_MEMORY = {

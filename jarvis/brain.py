@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from . import konnektoren
 from .modellwahl import Choice, Chooser, family
 
 log = logging.getLogger(__name__)
@@ -295,6 +296,9 @@ class ClaudeBrain:
         self._choice: Choice | None = None
         self._patience = 1.0
         self._isolated = cfg.get("isolated", True)
+        # Georgs Konnektoren (Gmail, Google Kalender, Shopify ...) über sein Claude-Konto, siehe konnektoren.py.
+        # --safe-mode schaltet sie ab, deshalb schottet Jarvis dann gezielter ab.
+        self._connectors = bool(cfg.get("konnektoren", True))
         # Abgebrochen wird nur, wenn Claude so lange gar nichts mehr meldet. Läuft gerade ein
         # Werkzeug (Installation, Build, Test), darf es deutlich länger still sein.
         self._idle_timeout = float(cfg.get("timeout_seconds", 120))
@@ -350,7 +354,26 @@ class ClaudeBrain:
 
     @property
     def isolated(self) -> bool:
-        return self._isolated and not ({"safe-mode", "system-prompt-file"} & self._unsupported)
+        if not self._isolated or "system-prompt-file" in self._unsupported:
+            return False
+        return self.connectors or "safe-mode" not in self._unsupported
+
+    @property
+    def connectors(self) -> bool:
+        """Mit Georgs Konnektoren: abgeschottet ohne --safe-mode (das würde sie abschalten)."""
+        return self._connectors
+
+    def isolation_flags(self) -> list[str]:
+        """Ohne Georgs persönliche Einstellungen, Hooks, Plugins und Skills, aber mit seinen Konnektoren.
+        Seine CLAUDE.md-Dateien schaltet die Umgebung ab (environment). Ohne Konnektoren: --safe-mode."""
+        if not self._connectors:
+            return [] if "safe-mode" in self._unsupported else ["--safe-mode"]
+        flags = []
+        if "setting-sources" not in self._unsupported:
+            flags += ["--setting-sources", "project"]
+        if "disable-slash-commands" not in self._unsupported:
+            flags.append("--disable-slash-commands")
+        return flags
 
     # Für die Werkstatt (eigener Claude-Prozess mit denselben Grundeinstellungen)
     @property
@@ -504,7 +527,7 @@ class ClaudeBrain:
         if effort and "effort" not in self._unsupported:
             cmd += ["--effort", effort]
         if isolated:
-            cmd.append("--safe-mode")
+            cmd += self.isolation_flags()
             if attempt.profile == "jarvis":
                 cmd += ["--system-prompt-file", str(self._persona)]
             else:
@@ -566,6 +589,9 @@ class ClaudeBrain:
         env["JARVIS_ROOT"] = str(ROOT)
         env["JARVIS_USER_SAID"] = text[:500]
         env["JARVIS_SAID_FILE"] = str(self._said_file)
+        if self.isolated and self._connectors:
+            # Georgs eigene CLAUDE.md-Dateien nicht laden (die Persönlichkeit kommt als Systemprompt)
+            env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
         if self._without_api_key:
             # Ein alter API-Schlüssel in den Windows-Umgebungsvariablen hat Vorrang vor dem
             # Pro-Abo. Ohne ihn meldet sich Claude Code mit dem Abo an.
@@ -766,7 +792,7 @@ class ClaudeBrain:
                     "Bitte in der Eingabeaufforderung 'claude update' ausführen.",
                     flag,
                 )
-                if flag in ("safe-mode", "system-prompt-file", "tools"):
+                if flag in ("safe-mode", "system-prompt-file", "tools", "setting-sources", "disable-slash-commands"):
                     self.alert(
                         "Claude Code ist veraltet, deshalb laufen deine eigenen Skills mit. "
                         "Bitte einmal 'claude update' in der Eingabeaufforderung ausführen."
@@ -902,6 +928,8 @@ class ClaudeBrain:
             if line is None:
                 break
             last = time.monotonic()
+            if konnektoren.answer(proc, line, self._connectors):
+                continue  # Claude fragt, ob es einen Konnektor benutzen darf: Jarvis hat geantwortet
             stream.feed(line)
         return False
 
@@ -1030,6 +1058,8 @@ class _StreamReader:
         subtype = event.get("subtype")
         if subtype == "init":
             self.model = event.get("model", "")
+            if "mcp_servers" in event:
+                konnektoren.note(event.get("mcp_servers"))
         elif subtype == "model_fallback" and event.get("fallback_model"):
             # Claude Code ist selbst auf ein anderes Modell ausgewichen.
             self.model = str(event["fallback_model"])

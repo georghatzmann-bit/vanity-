@@ -185,6 +185,13 @@ def describe(tool_id: str, tool: str, data: dict | None) -> Step:
         step = Step(tool_id, name, "Plant die Schritte", f"{len(todos)} Schritte", "plan", "")
         step.todos = todos
         return step
+    if lower.startswith("mcp__"):
+        # Ein Konnektor (Georgs claude.ai-Konnektoren wie Gmail, Google Kalender, Shopify)
+        from .konnektoren import display_name, kind_for, split
+
+        server, action = split(name)
+        shown = display_name(server)
+        return Step(tool_id, name, f"Nutzt {shown}", action.replace("_", " ").replace("-", " "), kind_for(server), "")
     if lower in ("task", "agent"):
         what = _short(data.get("description") or data.get("prompt") or "", 60)
         return Step(tool_id, name, f"Gibt ab: {what}" if what else "Gibt eine Teilaufgabe ab", what, "task", "")

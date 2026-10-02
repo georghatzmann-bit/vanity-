@@ -29,12 +29,10 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Discord ohne Maus:** „Schreib Max auf Discord, bin gleich da“, „Geh in den Sprachkanal Zocken“, „Ruf Max auf Discord an“, „Discord stumm“. Jarvis nutzt Discords Schnellsuche und Tastenkürzel, prüft am Fenstertitel, ob er richtig gelandet ist, versucht es bei einer Störung (Maus bewegt, anderes Fenster vorn) von selbst noch zweimal und bringt dich danach zurück ins Spiel. Auch WhatsApp und Telegram.
 - **Discord-Server gestalten im Hintergrund:** Jarvis' eigener Bot legt Kanäle, Rollen, Regeln und Begrüßung an, über die offizielle Discord-Schnittstelle, ohne dein Spiel zu stören.
 - **Wählt das passende Gehirn:** Für jede Aufgabe entscheidet Jarvis, welches Claude-Modell und wie viel Nachdenken sie braucht. Kurze Fragen schnell (Sonnet, wenig Nachdenken), Texte und Recherche mittel, Fehlersuche, Code, Analysen und Verträge gründlich (Opus), „maximal“ (Fable) nur auf Wunsch. Nachfragen bleiben auf der Stufe, „Das stimmt nicht“ geht eine Stufe hoch. Umgestellt wird im laufenden Claude-Prozess, ohne Wartezeit. Im Verlauf steht bei jeder Antwort, womit er gedacht hat.
-- **Meldet sich von selbst:** ein hängendes Programm (mit Angebot zum Neustart), ein Programm, das im Hintergrund den Prozessor frisst, voller Speicher, Akku, Internet weg, ein neues Programm im Autostart, Windows wartet auf einen Neustart, heiße Grafikkarte. Dazu ein Überblick am Morgen, abends der frühe Termin von morgen (auf Wunsch als Erinnerung aufs Handy), Überschneidungen, ungelesene Mails von Kontakten, „Während Sie weg waren …“ und nach drei Stunden eine Pause. Nie beim Zocken, nie mitten ins Gespräch, „Nie wieder“ stellt eine Art ab.
+- **Meldet sich von selbst:** ein hängendes Programm (mit Angebot zum Neustart), ein Programm, das im Hintergrund den Prozessor frisst, voller Speicher, Akku, Internet weg, ein neues Programm im Autostart, Windows wartet auf einen Neustart, heiße Grafikkarte. Dazu ein Überblick am Morgen (Wetter, Erinnerungen, Geburtstage, Vorhaben), „Während Sie weg waren …“ und nach drei Stunden eine Pause. Nie beim Zocken, nie mitten ins Gespräch, „Nie wieder“ stellt eine Art ab.
 - **Lernt dich kennen:** „Merk dir, …“, Kontakte mit ihrer App („Sag Max …“), Gewohnheiten auch mit Discord-Sprachkanal, Geburtstage mit Angebot zu gratulieren, jede Nacht ein kurzer Rückblick auf die Gespräche (auch was du vorhattest: „Ich muss morgen noch zur Post“ kommt am nächsten Morgen im Überblick). Vorschläge kommen ohne Fenster, nebenbei am Ende einer normalen Antwort („… Übrigens, Sir: Um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?“). Alles bleibt lokal (`daten\gedaechtnis.json`) und ist im Fenster einsehbar.
 - **Eigene Befehle und Zeitpläne:** „Wenn ich Zockmodus sage, öffne Discord und Steam“, danach reicht ein Wort. „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“: Jarvis erledigt es von selbst (beim Zocken wartet er).
-- **Kalender:** „Trag morgen um 18 Uhr Training ein“, „Was steht heute an?“. Sagt 15 Minuten vorher Bescheid und merkt Absagen und Verschiebungen. Liest Google oder Outlook mit (geheime iCal-Adresse).
-- **iPhone, Mail und Kontakte:** Mit Apple-ID und app-spezifischem Passwort liest Jarvis den iPhone-Kalender und trägt neue Termine direkt dort ein (CalDAV), liest die Mails („Hab ich neue Mails?“, „Was schreibt Max?“, nur lesen) und kennt die Geburtstage aus den Kontakten. Dazu weitere Postfächer (Gmail, GMX, web.de, Yahoo, eigener Server). Passwörter verschlüsselt mit Windows (DPAPI), nur auf dem PC.
-- **Shop-Hilfe (Shopify):** „Wie läuft der Shop?“, neue Bestellungen werden angesagt, die nächste Auszahlung genannt, Produkte als Entwurf angelegt. Veröffentlichen, Preise ändern, Geld ausgeben und Kunden schreiben nie.
+- **Termine, Mails und Shop über deine Konnektoren:** Jarvis benutzt die Dienste, die du auf claude.ai verbunden hast (Gmail, Google Kalender, Shopify, Spotify, Canva …): „Was steht heute an?“, „Trag morgen um 18 Uhr Training ein“, „Hab ich neue Mails?“, „Wie läuft der Shop?“. Keine eigenen Anbindungen, keine Passwörter in Jarvis. Claude Code fragt bei jedem Konnektor-Werkzeug nach, Jarvis antwortet selbst: lesen, suchen und eintragen ja, Löschen, Kaufen, Bezahlen und Veröffentlichen nie. Im Fenster unter Verbinden > Konnektoren steht, welche Jarvis sieht.
 - **Notizbuch und Fähigkeiten:** jedes Gespräch, Personen, Recherche-Berichte und Notizen als Markdown (in Obsidian verlinkt). Anleitungen für wiederkehrende Aufgaben (Discord-Server, Briefing, Recherche, PC-Pflege, Spiele), die Claude nur bei Bedarf liest; „Lern das“ legt neue an.
 - **Lokale Stimme:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo, mit einem Klick in der Einrichtung.
 - **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen und die Werkstatt verfolgen. Jarvis antwortet auf dem Handy in seiner eigenen Stimme. Mit Tailscale („Sicher von überall“) auch unterwegs, mit Sprechtaste und als installierbare App. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
@@ -52,7 +50,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 |---|---|
 | ![Werkstatt: alle Projekte](docs/bilder/projekte.jpg) | ![Jarvis auf dem Handy](docs/bilder/handy.jpg) |
 
-| Verbinden: iPhone, Mail, Shop | Gedächtnis |
+| Verbinden | Gedächtnis |
 |---|---|
 | ![Verbinden](docs/bilder/verbinden.jpg) | ![Gedächtnis](docs/bilder/gedaechtnis.jpg) |
 
@@ -65,8 +63,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Claude-Abo (Pro oder Max):** das Gehirn. Jarvis nimmt das große Modell nur, wo es sich lohnt, das schont das Kontingent. Fehlt ein Modell im Abo, nimmt er von selbst das nächstkleinere.
 - **Groq:** gratis (großzügiges Tageslimit, darüber übernimmt der eigene PC).
 - **ElevenLabs:** optional. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Ohne Schlüssel spricht die gratis Microsoft-Stimme.
-- **Alexa-Skill, ntfy.sh, Discord-Bot, Tailscale, iCloud und Mail:** gratis.
-- **Shopify:** nur für die Shop-Hilfe. Der Shop selbst kostet bei Shopify ein Monats-Abo, dazu Gebühren pro Verkauf.
+- **Alexa-Skill, ntfy.sh, Discord-Bot und Tailscale:** gratis.
+- **Konnektoren (Gmail, Google Kalender, Shopify …):** kommen mit deinem Claude-Konto, die Dienste selbst kosten, was sie eben kosten.
 
 ## Anpassen
 
@@ -74,14 +72,13 @@ Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden�
 
 - `[stt]` `groq_key`, `engine = "auto" | "groq" | "lokal"`
 - `[tts]` `engine = "elevenlabs" | "lokal" | "edge" | "windows"`, `lokal_stimme`, `elevenlabs_key`, `elevenlabs_voice`
-- `[kalender]` `abos` (geheime iCal-Adressen), `vorwarnung_minuten`; `[notizbuch]` `ordner`, `tagebuch`
-- `[apple]` `apple_id`, `kalender`, `ausblenden`, `geburtstage`, `mail`; `[mail]` `ansagen`, `abruf_minuten`; `[shop]` `adresse`, `client_id`, `bestellungen_ansagen` (Passwörter und Secrets nie hier, sondern verschlüsselt in `daten\geheim.json`)
+- `[notizbuch]` `ordner`, `tagebuch`
 - `[mute]` `hotkey` (Stumm), `listen_hotkey` (Zuhören, Standard Strg+Alt+J)
-- `[listen]` `silence_seconds`, `vad`; `[wakeword]` `picovoice_key` (dann reicht „Jarvis“)
+- `[listen]` `silence_seconds`, `vad`, `gespraech`, `gespraech_sekunden`; `[wakeword]` `picovoice_key`, `name_allein`
 - `[rechte]` `volle_freigabe`; `[gedaechtnis]` `vorschlaege`
-- `[hinweise]` `aktiv`, `pc`, `internet`, `sicherheit`, `termine`, `post`, `morgens`, `zurueck`, `pausen`, `pause_nach_stunden`
+- `[hinweise]` `aktiv`, `pc`, `internet`, `sicherheit`, `termine`, `morgens`, `zurueck`, `pausen`, `pause_nach_stunden`
 - `[gui]` `start_hidden`, `close_to_tray`, `overlay`, `on_wake`
-- `[brain]` `modellwahl = "auto" | "schnell" | "normal" | "gruendlich" | "maximal" | "aus"`, `stufe_schnell` … `stufe_maximal` (Modell und Nachdenken je Stufe, z. B. `"opus high"`), `models` (Ersatzreihe), `disallowed_tools`, `timeout_seconds`
+- `[brain]` `modellwahl = "auto" | "schnell" | "normal" | "gruendlich" | "maximal" | "aus"`, `stufe_schnell` … `stufe_maximal` (Modell und Nachdenken je Stufe, z. B. `"opus high"`), `models` (Ersatzreihe), `konnektoren` (claude.ai-Konnektoren an/aus), `disallowed_tools`, `timeout_seconds`
 - `[werkstatt]` `ordner`, `modell = "auto" | "opus" | "sonnet"`, `effort`
 - `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[alexa]` Skill, `[discord]` `bot_token`, `[homeassistant]` Echos und Licht
 - `[gaming]` `close_apps`, `power_plan`
@@ -132,6 +129,7 @@ jarvis/
   __main__.py     Start, Modi (Fenster, Hintergrund, Konsole, Text, Tests), Dienste (Handy, Alexa, Vorschläge)
   assistant.py    Kern: Befehl annehmen, Sofort-Befehle, Claude fragen, sprechen, Gedächtnis, Rechte
   brain.py        Claude Code dauerhaft (stream-json), Modell umstellen ohne Neustart, Fallback, Fehlerarten
+  konnektoren.py  Georgs claude.ai-Konnektoren: Rückfragen von Claude beantworten, was Jarvis sieht
   modellwahl.py   Welches Modell und wie viel Nachdenken pro Aufgabe (schnell, normal, gründlich, maximal)
   hinweise.py     Jarvis meldet sich von selbst: Wächter, Messwerte (psutil, Registry, Windows-API), Regeln
   intents.py      Sofort-Befehle erkennen (ohne Claude)

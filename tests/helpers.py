@@ -108,8 +108,12 @@ FAKE_CLAUDE = textwrap.dedent(
             f.write(json.dumps({"args": args, "prompt": prompt, "raw": raw, "stamp": stamp.group(1) if stamp else "",
                                 "said": said(), "pid": os.getpid(), "live": live, "cwd": os.getcwd(),
                                 "pythonpath": os.environ.get("PYTHONPATH", ""), "model": model, "effort": effort,
-                                "apikey": bool(os.environ.get("ANTHROPIC_API_KEY"))}) + "\\n")
-        out({"type": "system", "subtype": "init", "model": "claude-" + model + "-test", "session_id": session})
+                                "apikey": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                                "no_claude_md": os.environ.get("CLAUDE_CODE_DISABLE_CLAUDE_MDS", "")}) + "\\n")
+        init = {"type": "system", "subtype": "init", "model": "claude-" + model + "-test", "session_id": session}
+        if os.environ.get("FAKE_MCP"):
+            init["mcp_servers"] = [{"name": n, "status": "connected"} for n in os.environ["FAKE_MCP"].split(",")]
+        out(init)
         refused = prompt == "abgelehnt" or (prompt.startswith("nur-haiku") and model != "haiku") \\
             or model in os.environ.get("FAKE_REFUSE", "").split(",") \\
             or (prompt.startswith("nur-einfach") and "--append-system-prompt" not in args)
@@ -163,6 +167,27 @@ FAKE_CLAUDE = textwrap.dedent(
             # Wie "start notepad": ein Programm läuft weiter und erbt stdout und stderr.
             import subprocess
             subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"], close_fds=False)
+        if prompt.startswith("konnektor:"):
+            # Ein Werkzeug, das nicht freigegeben ist (z. B. ein Konnektor): Claude Code fragt den Host
+            name = prompt.split(":", 1)[1].strip()
+            if not live:
+                say("Kein Host für die Rückfrage.")
+                result("Kein Host für die Rückfrage.")
+                raise Done(0)
+            out({"type": "control_request", "request_id": "perm-1", "request": {
+                "subtype": "can_use_tool", "tool_name": name, "input": {"q": "neu"}, "tool_use_id": "toolu_k"}})
+            reply = json.loads(sys.stdin.readline())
+            with open("permissions.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(reply) + "\\n")
+            decision = reply["response"]["response"]
+            if decision.get("behavior") == "allow":
+                tool("toolu_k", name, decision.get("updatedInput") or {}, output="3 neue Mails")
+                text = "Erlaubt: " + name
+            else:
+                text = "Abgelehnt: " + decision.get("message", "")
+            say(text)
+            result(text)
+            raise Done(0)
         if prompt == "werkzeug":
             say("Einen Moment, ich schaue nach.")
             tool("toolu_1", "Bash", {"command": "date"}, output="Mi 1. Okt")

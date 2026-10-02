@@ -1,4 +1,4 @@
-/* Jarvis aufs Handy: Verbindung an/aus, QR-Code, Adresse. */
+/* Verbinden: Handy (Verbindung an/aus, QR-Code, Adresse), Alexa, Discord und Georgs Konnektoren. */
 (function () {
   'use strict';
 
@@ -49,45 +49,10 @@
       tsHint: $('tsHint'),
       tsHelp: $('tsHelp'),
       tsToggle: $('tsToggle'),
-      calState: $('calState'),
-      calForm: $('calForm'),
-      calUrl: $('calUrl'),
-      calSave: $('calSave'),
-      calFeeds: $('calFeeds'),
-      calGoogle: $('calGoogle'),
-      calOutlook: $('calOutlook'),
-      appleState: $('appleState'),
-      appleHint: $('appleHint'),
-      appleRefresh: $('appleRefresh'),
-      appleOff: $('appleOff'),
-      appleSetup: $('appleSetup'),
-      appleLinked: $('appleLinked'),
-      appleForm: $('appleForm'),
-      appleId: $('appleId'),
-      applePass: $('applePass'),
-      appleSave: $('appleSave'),
-      appleHelp: $('appleHelp'),
-      appleCals: $('appleCals'),
-      appleMail: $('appleMail'),
-      mailList: $('mailList'),
-      mailForm: $('mailForm'),
-      mailProvider: $('mailProvider'),
-      mailEmail: $('mailEmail'),
-      mailPass: $('mailPass'),
-      mailServer: $('mailServer'),
-      mailSave: $('mailSave'),
-      mailHelp: $('mailHelp'),
-      shopState: $('shopState'),
-      shopHint: $('shopHint'),
-      shopOff: $('shopOff'),
-      shopSetup: $('shopSetup'),
-      shopForm: $('shopForm'),
-      shopDomain: $('shopDomain'),
-      shopClient: $('shopClient'),
-      shopSecret: $('shopSecret'),
-      shopSave: $('shopSave'),
-      shopAdmin: $('shopAdmin'),
-      shopScopes: $('shopScopes'),
+      konnState: $('konnState'),
+      konnList: $('konnList'),
+      konnRefresh: $('konnRefresh'),
+      konnHelp: $('konnHelp'),
     };
     function el_tabs() {
       return document.querySelectorAll('.dlg-tabs button[data-pane]');
@@ -253,356 +218,49 @@
       }
     });
 
-    // ---------- Kalender (geheime iCal-Adresse, nur lesen)
+    // ---------- Konnektoren (Gmail, Google Kalender, Shopify ... über Georgs Claude-Konto)
 
-    function renderCalendar(cal) {
-      if (!el.calState) return;
-      const feeds = (cal && cal.feeds) || [];
-      const broken = feeds.filter((f) => f.error);
-      el.calState.textContent = !feeds.length ? 'Kein Kalender verbunden'
-        : broken.length ? 'Ein Kalender ist gerade nicht erreichbar'
-          : (feeds.length === 1 ? 'Kalender verbunden' : feeds.length + ' Kalender verbunden')
-            + (typeof cal.count === 'number' ? ' · ' + cal.count + ' Termine in den nächsten 7 Tagen' : '');
-      el.calFeeds.replaceChildren(...feeds.map((f) => {
-        const li = document.createElement('li');
-        const text = document.createElement('span');
-        text.className = 'cal-feed';
-        text.textContent = f.shown + (f.error ? ' · nicht erreichbar, es gilt der letzte Stand' : '');
-        const del = document.createElement('button');
-        del.type = 'button';
-        del.className = 'mem-del';
-        del.textContent = '×';
-        del.title = 'Kalender entfernen';
-        del.setAttribute('aria-label', 'Kalender entfernen');
-        del.addEventListener('click', async () => {
-          try {
-            await call('calendar_remove', f.url);
-            toast('Kalender entfernt.', 'ok');
-            refreshCalendar();
-          } catch {
-            toast('Das ging gerade nicht.', 'error');
-          }
-        });
-        li.append(text, del);
-        return li;
-      }));
-    }
-
-    async function refreshCalendar() {
-      try {
-        renderCalendar(await call('calendar_info'));
-      } catch {
-        /* ältere Version */
-      }
-    }
-
-    if (el.calForm) {
-      el.calForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const url = el.calUrl.value.trim();
-        if (!url) {
-          toast('Bitte zuerst die iCal-Adresse einfügen.', 'info');
-          return;
-        }
-        el.calSave.disabled = true;
-        el.calSave.textContent = 'Prüfe …';
-        try {
-          const r = await call('calendar_add', url);
-          if (r && r.ok) {
-            el.calUrl.value = '';
-            const next = (r.next || []).length ? ' Als Nächstes: ' + r.next.join('; ') + '.' : '';
-            toast('Kalender verbunden: ' + r.count + ' Termine in den nächsten zwei Wochen.' + next, 'ok');
-          } else {
-            toast((r && r.error) || 'Diese Adresse ging nicht.', 'error');
-          }
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        } finally {
-          el.calSave.disabled = false;
-          el.calSave.textContent = 'Prüfen';
-          refreshCalendar();
-        }
-      });
-      el.calGoogle.addEventListener('click', () => call('calendar_help', 'google').catch(() => {}));
-      el.calOutlook.addEventListener('click', () => call('calendar_help', 'outlook').catch(() => {}));
-    }
-
-    // ---------- iPhone (iCloud): Kalender lesen und schreiben, Mail lesen, Geburtstage
-
-    function renderApple(info) {
-      if (!el.appleState) return;
-      const on = !!(info && info.verbunden);
-      el.appleOff.hidden = !on;
-      el.appleRefresh.hidden = !on;
-      el.appleSetup.hidden = on;
-      el.appleLinked.hidden = !on;
-      if (!on) {
-        el.appleState.textContent = info && info.fehler ? 'iPhone: ' + info.fehler : 'iPhone nicht verbunden';
-        return;
-      }
-      const cals = info.kalender || [];
-      const parts = ['Verbunden: ' + info.email];
-      if (cals.length) parts.push(cals.length === 1 ? '1 Kalender' : cals.length + ' Kalender');
-      if (info.geburtstage) parts.push(info.geburtstage + ' Geburtstage');
-      el.appleState.textContent = parts.join(' · ');
-      if (info.fehler) el.appleState.textContent += ' · ' + info.fehler;
-      el.appleCals.replaceChildren(...cals.map((c) => {
-        const li = document.createElement('li');
-        li.classList.toggle('chosen', !!c.gewaehlt);
-        const pick = document.createElement('button');
-        pick.type = 'button';
-        pick.className = 'pick';
-        pick.disabled = !c.schreibbar;
-        pick.title = c.schreibbar ? 'Neue Termine hier eintragen' : 'In diesen Kalender darf Jarvis nicht schreiben';
-        const swatch = document.createElement('span');
-        swatch.className = 'swatch';
-        swatch.style.background = /^#[0-9a-f]{3,8}$/i.test(String(c.farbe || '')) ? c.farbe : '';
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = String(c.name || c.id);
-        const note = document.createElement('small');
-        note.textContent = c.gewaehlt ? '' : c.schreibbar ? '' : 'nur lesen';
-        pick.append(swatch, name, note);
-        if (c.gewaehlt) {
-          const check = document.createElement('span');
-          check.className = 'check';
-          check.textContent = '✓ gewählt';
-          pick.append(check);
-        }
-        pick.addEventListener('click', async () => {
-          try {
-            const r = await call('apple_choose_calendar', c.id);
-            if (r && r.ok) toast('Neue Termine kommen jetzt in „' + c.name + '“.', 'ok');
-            else toast((r && r.fehler) || 'Das ging nicht.', 'error');
-            refreshApple();
-          } catch {
-            toast('Das ging gerade nicht.', 'error');
-          }
-        });
-        li.append(pick);
-        return li;
-      }));
-      const mail = info.mail || {};
-      if (mail.fehler) {
-        el.appleMail.textContent = 'Mail: ' + mail.fehler;
+    function renderConnectors(info) {
+      if (!el.konnState) return;
+      const list = (info && info.liste) || [];
+      if (info && info.an === false) {
+        el.konnState.textContent = 'Abgeschaltet ([brain] konnektoren = false)';
+      } else if (info && info.fehler) {
+        el.konnState.textContent = info.fehler;
       } else {
-        const latest = (mail.letzte || []).filter((m) => !m.newsletter).slice(0, 3)
-          .map((m) => (m.von || m.adresse) + ': ' + m.betreff);
-        el.appleMail.textContent = 'Mail: ' + (mail.ungelesen ? mail.ungelesen + ' ungelesen' : 'nichts Neues')
-          + (latest.length ? ' · ' + latest.join(' · ') : '');
+        el.konnState.textContent = list.length
+          ? list.length + (list.length === 1 ? ' Konnektor' : ' Konnektoren') + ' über Ihr Claude-Konto'
+          : 'Noch keine gesehen. Fragen Sie Jarvis einmal etwas, oder auf „Neu prüfen“ klicken.';
       }
-    }
-
-    function renderMail(accounts) {
-      if (!el.mailList) return;
-      el.mailList.replaceChildren(...(accounts || []).map((a) => {
+      el.konnList.replaceChildren(...list.map((c) => {
         const li = document.createElement('li');
-        const name = document.createElement('span');
-        name.className = 'name';
-        name.textContent = a.name + ' · ' + a.email + (a.fehler ? ' · ' + a.fehler : '');
-        li.append(name);
-        if (a.automatisch) {
-          const small = document.createElement('small');
-          small.textContent = 'kommt mit dem iPhone';
-          li.append(small);
-        } else {
-          const del = document.createElement('button');
-          del.type = 'button';
-          del.className = 'mem-del';
-          del.textContent = '×';
-          del.title = 'Postfach entfernen';
-          del.setAttribute('aria-label', 'Postfach ' + a.name + ' entfernen');
-          del.addEventListener('click', async () => {
-            try {
-              const r = await call('mail_remove', a.id);
-              toast(r && r.ok ? 'Postfach entfernt. Das Passwort ist gelöscht.' : (r && r.fehler) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
-            } catch {
-              toast('Das ging gerade nicht.', 'error');
-            }
-            refreshApple();
-          });
-          li.append(del);
-        }
+        li.className = 'konn-item';
+        li.dataset.ok = c.ok ? '1' : '0';
+        const name = document.createElement('b');
+        name.textContent = c.name;
+        const state = document.createElement('small');
+        state.textContent = c.ok ? 'verbunden' : 'nicht verbunden';
+        li.append(name, state);
         return li;
       }));
     }
 
-    async function refreshApple() {
+    async function refreshConnectors(fresh) {
       try {
-        renderApple(await call('apple_info'));
-        renderMail(await call('mail_accounts'));
-        document.dispatchEvent(new CustomEvent('jarvis-mail'));
-      } catch (err) {
-        // Jarvis-Version ohne iPhone-Anbindung: den Reiter gar nicht erst anbieten
-        if (String((err && err.message) || '').startsWith('nicht verbunden')) hideTab('apple');
-      }
-    }
-
-    function hideTab(pane) {
-      for (const b of el.tabs) {
-        if (b.dataset.pane !== pane) continue;
-        b.hidden = true;
-        if (b.getAttribute('aria-selected') === 'true') showPane('phone');
-      }
-    }
-
-    if (el.appleForm) {
-      el.appleForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = el.appleId.value.trim();
-        const pass = el.applePass.value.trim();
-        if (!id || !pass) {
-          toast('Bitte Apple-ID und app-spezifisches Passwort eintragen.', 'info');
-          return;
-        }
-        el.appleSave.disabled = true;
-        el.appleSave.textContent = 'Prüfe bei Apple …';
-        try {
-          const r = await call('apple_connect', id, pass);
-          if (r && r.ok) {
-            el.applePass.value = '';
-            toast('iPhone verbunden. Neue Termine landen jetzt auf dem iPhone.' + (r.fehler ? ' ' + r.fehler : ''), 'ok');
-            renderApple(r);
-          } else {
-            toast((r && r.fehler) || 'Das ging nicht.', 'error');
-          }
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        } finally {
-          el.appleSave.disabled = false;
-          el.appleSave.textContent = 'Prüfen und verbinden';
-          refreshApple();
-        }
-      });
-      el.appleOff.addEventListener('click', async () => {
-        try {
-          const r = await call('apple_disconnect');
-          toast(r && r.ok ? 'iPhone getrennt. Das Passwort ist gelöscht.' : (r && r.fehler) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        }
-        refreshApple();
-      });
-      el.appleRefresh.addEventListener('click', async () => {
-        try {
-          renderApple(await call('apple_refresh'));
-          toast('Kalender abgerufen, die Kontakte kommen gleich.', 'ok');
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        }
-      });
-      el.appleHelp.addEventListener('click', () => call('apple_help').catch(() => {}));
-      el.mailProvider.addEventListener('change', () => {
-        el.mailServer.hidden = el.mailProvider.value !== 'imap';
-        el.mailHelp.hidden = el.mailProvider.value === 'imap';
-      });
-      el.mailHelp.addEventListener('click', () => call('mail_help', el.mailProvider.value).catch(() => {}));
-      el.mailForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = el.mailEmail.value.trim();
-        const pass = el.mailPass.value.trim();
-        if (!email || !pass) {
-          toast('Bitte E-Mail-Adresse und App-Passwort eintragen.', 'info');
-          return;
-        }
-        el.mailSave.disabled = true;
-        el.mailSave.textContent = 'Prüfe …';
-        try {
-          const r = await call('mail_add', el.mailProvider.value, email, pass, el.mailServer.value.trim());
-          if (r && r.ok) {
-            el.mailPass.value = '';
-            el.mailEmail.value = '';
-            toast('Postfach verbunden. Frag „Hab ich neue Mails?“.', 'ok');
-          } else {
-            toast((r && r.fehler) || 'Das ging nicht.', 'error');
-          }
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        } finally {
-          el.mailSave.disabled = false;
-          el.mailSave.textContent = 'Postfach hinzufügen';
-          refreshApple();
-        }
-      });
-    }
-
-    // ---------- Shop (Shopify): lesen, Entwürfe, nie veröffentlichen
-
-    const SHOP_SCOPES = 'read_orders,read_products,write_products,read_shopify_payments_payouts';
-
-    function renderShop(info) {
-      if (!el.shopState) return;
-      const on = !!(info && info.verbunden);
-      el.shopOff.hidden = !on;
-      el.shopSetup.hidden = on && !info.fehler;
-      if (!on) {
-        el.shopState.textContent = 'Kein Shop verbunden';
-        return;
-      }
-      if (info.fehler) {
-        el.shopState.textContent = (info.name || info.adresse) + ': ' + info.fehler;
-        return;
-      }
-      el.shopState.textContent = 'Verbunden mit ' + info.name + ' · heute ' + info.heute.anzahl + ' '
-        + (info.heute.anzahl === 1 ? 'Bestellung' : 'Bestellungen') + ', ' + info.heute.umsatz;
-    }
-
-    async function refreshShop() {
-      try {
-        renderShop(await call('shop_info'));
+        renderConnectors(await call('connectors', !!fresh));
       } catch {
-        /* ältere Version */
+        renderConnectors({ liste: [], fehler: 'Konnektoren sind im Demo-Modus nicht zu sehen.' });
       }
     }
 
-    if (el.shopForm) {
-      el.shopForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const domain = el.shopDomain.value.trim();
-        const client = el.shopClient.value.trim();
-        const secret = el.shopSecret.value.trim();
-        if (!domain || !client || !secret) {
-          toast('Bitte Shop-Adresse, Client-ID und Client-Secret eintragen.', 'info');
-          return;
-        }
-        el.shopSave.disabled = true;
-        el.shopSave.textContent = 'Prüfe …';
-        try {
-          const r = await call('shop_connect', domain, client, secret);
-          if (r && r.ok) {
-            el.shopSecret.value = '';
-            toast('Shop verbunden: ' + r.name + '. Fragen Sie „Wie läuft der Shop?“.', 'ok');
-            document.dispatchEvent(new CustomEvent('jarvis-shop'));
-          } else {
-            toast((r && r.error) || 'Das ging nicht.', 'error');
-          }
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        } finally {
-          el.shopSave.disabled = false;
-          el.shopSave.textContent = 'Prüfen und verbinden';
-          refreshShop();
-        }
+    if (el.konnRefresh) {
+      el.konnRefresh.addEventListener('click', async () => {
+        el.konnRefresh.disabled = true;
+        el.konnState.textContent = 'Frage Claude Code …';
+        await refreshConnectors(true);
+        el.konnRefresh.disabled = false;
       });
-      el.shopOff.addEventListener('click', async () => {
-        try {
-          const r = await call('shop_disconnect');
-          toast(r && r.ok ? 'Shop getrennt. Das Secret ist gelöscht.' : (r && r.error) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
-          document.dispatchEvent(new CustomEvent('jarvis-shop'));
-        } catch {
-          toast('Das ging gerade nicht.', 'error');
-        }
-        refreshShop();
-      });
-      el.shopAdmin.addEventListener('click', () => call('shop_help', 'admin').catch(() => {}));
-      el.shopScopes.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(SHOP_SCOPES);
-          toast('Kopiert: ' + SHOP_SCOPES, 'ok');
-        } catch {
-          toast('Kopieren ging nicht. Bitte abschreiben: ' + SHOP_SCOPES, 'info');
-        }
-      });
+      el.konnHelp.addEventListener('click', () => call('connectors_help').catch(() => {}));
     }
 
     function showPane(pane) {
@@ -610,9 +268,7 @@
       for (const p of el.dlg.querySelectorAll('.dlg-pane')) p.hidden = p.dataset.pane !== pane;
       if (pane === 'alexa') refreshAlexa();
       if (pane === 'discord') refreshDiscord();
-      if (pane === 'calendar') refreshCalendar();
-      if (pane === 'shop') refreshShop();
-      if (pane === 'apple') refreshApple();
+      if (pane === 'konnektoren') refreshConnectors(false);
     }
 
     for (const b of el.tabs) b.addEventListener('click', () => showPane(b.dataset.pane));
@@ -718,7 +374,7 @@
 
     // ------------------------------------------------------------ Punkte am Knopf
 
-    const NAMES = { phone: 'Handy', iphone: 'iPhone', alexa: 'Alexa', discord: 'Discord' };
+    const NAMES = { phone: 'Handy', alexa: 'Alexa', discord: 'Discord' };
 
     async function refreshDots() {
       let state = null;
@@ -735,8 +391,8 @@
         if (active) on.push(NAMES[dot.dataset.k]);
       });
       el.btn.dataset.on = state.phone ? '1' : '0';
-      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, iPhone, Alexa, Discord, Kalender und Shop.'
-        : 'Handy, iPhone, Alexa, Discord, Kalender und Shop mit Jarvis verbinden';
+      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, Alexa, Discord und Konnektoren.'
+        : 'Handy, Alexa und Discord mit Jarvis verbinden, Konnektoren ansehen';
       el.btn.setAttribute('aria-label', 'Verbinden' + (on.length ? ', verbunden: ' + on.join(', ') : ''));
     }
 

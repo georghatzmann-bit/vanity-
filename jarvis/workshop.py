@@ -36,6 +36,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from . import konnektoren
+
 log = logging.getLogger(__name__)
 
 WORKSHOP_TOOLS = [
@@ -804,8 +806,12 @@ class Workshop:
             cmd += ["--model", model]
         if effort and "effort" not in unsupported:
             cmd += ["--effort", effort]
-        if getattr(brain, "isolated", True) and "safe-mode" not in unsupported:
-            cmd.append("--safe-mode")
+        if getattr(brain, "isolated", True):
+            flags = getattr(brain, "isolation_flags", None)
+            if flags is not None:
+                cmd += flags()  # ohne Georgs Einstellungen, aber mit seinen Konnektoren (Logo, Deploy ...)
+            elif "safe-mode" not in unsupported:
+                cmd.append("--safe-mode")
         if "system-prompt-file" in unsupported:
             cmd += ["--append-system-prompt", persona.read_text(encoding="utf-8")[-12000:]]
         else:
@@ -997,6 +1003,8 @@ class Workshop:
             if line is None:
                 break
             last = time.monotonic()
+            if konnektoren.answer(proc, line, getattr(self._brain, "connectors", False)):
+                continue  # Claude fragt, ob es einen Konnektor benutzen darf
             stream.feed(line)
             if stream.result is None:
                 continue

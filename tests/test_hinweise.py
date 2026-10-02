@@ -8,8 +8,6 @@ from unittest import mock
 
 from jarvis.config import load_config
 from jarvis.hinweise import SOON, URGENT, Hint, Lage, Watcher, app_name, morning_brief
-from jarvis.kalender import Event
-from jarvis.mail import Message
 from tests.test_assistant import FakeBrain, make
 
 NOW = dt.datetime(2026, 10, 2, 15, 0)
@@ -17,18 +15,6 @@ NOW = dt.datetime(2026, 10, 2, 15, 0)
 
 def lage(now=NOW, idle=5.0, **values):
     return Lage(now, idle=idle, **values)
-
-
-class FakeCalendar:
-    def __init__(self, events):
-        self._events = events
-
-    def events(self, start, end):
-        return sorted([e for e in self._events if e.end > start and e.start < end], key=lambda e: e.start)
-
-    def day(self, day):
-        begin = dt.datetime.combine(day, dt.time())
-        return self.events(begin, begin + dt.timedelta(days=1))
 
 
 class FakeReminders:
@@ -45,10 +31,6 @@ class FakeMemory:
 
     def upcoming_birthdays(self, now=None, days=30):
         return [{"shown": name, "own": False} for name in self.birthdays]
-
-
-def event(title, start, minutes=60, place=""):
-    return Event(title, start, start + dt.timedelta(minutes=minutes), place=place, uid=title)
 
 
 class WatcherTest(unittest.TestCase):
@@ -147,47 +129,18 @@ class WatcherTest(unittest.TestCase):
         self.watcher.check(lage(now=NOW + dt.timedelta(minutes=20), idle=900))
         self.assertIsNone(self.watcher._active_since)
 
-    def test_evening_reminds_of_early_appointment_tomorrow(self):
-        calendar = FakeCalendar([event("Zahnarzt", dt.datetime(2026, 10, 3, 8, 0), place="Praxis Weber")])
-        evening = NOW.replace(hour=21, minute=10)
-        planned = []
-        hints = self.watcher.check(lage(now=evening), calendar=calendar,
-                                   push_at=lambda when, text: planned.append((when, text)) or "eingeplant")
-        self.assertEqual(hints[0].text, "Sir, morgen um 8 Uhr haben Sie Zahnarzt (Praxis Weber).")
-        self.assertEqual(hints[0].offer, "Soll ich Sie um 7 Uhr aufs Handy erinnern?")
-        self.assertEqual(hints[0].action(), "eingeplant")
-        self.assertEqual(planned[0][0], dt.datetime(2026, 10, 3, 7, 0))
-        self.assertIn("Zahnarzt", planned[0][1])
-        self.watcher.said(hints[0], evening)
-        self.assertEqual(self.watcher.check(lage(now=evening + dt.timedelta(minutes=5)), calendar=calendar), [])
-
-    def test_late_at_night_with_an_early_appointment(self):
-        calendar = FakeCalendar([event("Zahnarzt", dt.datetime(2026, 10, 3, 9, 0))])
-        night = dt.datetime(2026, 10, 3, 1, 35)
-        hints = self.watcher.check(lage(now=night), calendar=calendar)
-        self.assertEqual(hints[0].text, "Sir, es ist schon halb 2, und um 9 Uhr wartet Zahnarzt. Nur, damit Sie es wissen.")
-
-    def test_overlapping_appointments(self):
-        calendar = FakeCalendar([event("Training", dt.datetime(2026, 10, 3, 18, 0), 90),
-                                 event("Kino mit Lisa", dt.datetime(2026, 10, 3, 19, 0))])
-        hints = self.watcher.check(lage(), calendar=calendar)
-        self.assertIn("morgen überschneiden sich zwei Termine: um 18 Uhr Training und um 19 Uhr Kino mit Lisa", hints[0].text)
-
     def test_morning_overview_when_georg_comes_back_after_the_night(self):
-        calendar = FakeCalendar([event("Zahnarzt", dt.datetime(2026, 10, 2, 10, 0)),
-                                 event("Training", dt.datetime(2026, 10, 2, 18, 0))])
         reminders = FakeReminders([{"zeit": "2026-10-02T15:00:00", "text": "Mama anrufen"}])
         night, morning = dt.datetime(2026, 10, 1, 23, 50), dt.datetime(2026, 10, 2, 7, 45)
         self.watcher.check(lage(now=night, idle=600))
-        hints = self.watcher.check(lage(now=morning, idle=3.0), calendar=calendar, reminders=reminders,
+        hints = self.watcher.check(lage(now=morning, idle=3.0), reminders=reminders,
                                    memory=FakeMemory(["Max"]), weather=lambda: "Heute bis 17 Grad, später Regen")
         self.assertEqual(hints[0].priority, SOON)
-        self.assertEqual(hints[0].text, "Guten Morgen, Sir. Heute bis 17 Grad, später Regen. Heute steht an: um 10 Uhr "
-                                        "Zahnarzt und um 18 Uhr Training. Erinnerungen: um 15 Uhr Mama anrufen. Max hat "
-                                        "heute Geburtstag.")
+        self.assertEqual(hints[0].text, "Guten Morgen, Sir. Heute bis 17 Grad, später Regen. Erinnerungen: um 15 Uhr "
+                                        "Mama anrufen. Max hat heute Geburtstag.")
         # Einmal am Tag.
         self.watcher.check(lage(now=morning + dt.timedelta(hours=1), idle=5000))
-        later = self.watcher.check(lage(now=morning + dt.timedelta(hours=1, minutes=1), idle=2.0), calendar=calendar)
+        later = self.watcher.check(lage(now=morning + dt.timedelta(hours=1, minutes=1), idle=2.0), reminders=reminders)
         self.assertNotIn("morgens", " ".join(self.keys(later)))
 
     def test_plans_from_the_review_in_the_morning_and_the_afternoon(self):
@@ -209,7 +162,7 @@ class WatcherTest(unittest.TestCase):
         self.watcher.mark_brief(dt.date(2026, 10, 2))
         self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 6, 0), idle=20000))
         hints = self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 9, 0), idle=1.0),
-                                   calendar=FakeCalendar([event("Zahnarzt", dt.datetime(2026, 10, 2, 10, 0))]))
+                                   memory=FakeMemory(["Max"]), weather="Heute sonnig")
         self.assertEqual(hints, [])
 
     def test_while_you_were_away(self):
@@ -223,8 +176,7 @@ class WatcherTest(unittest.TestCase):
 
     def test_sleeping_pc_counts_as_away(self):
         self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 0, 30), idle=120))
-        hints = self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 8, 0), idle=3.0),
-                                   calendar=FakeCalendar([event("Zahnarzt", dt.datetime(2026, 10, 2, 10, 0))]))
+        hints = self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 8, 0), idle=3.0), weather="Heute sonnig")
         self.assertTrue(hints and hints[0].key.startswith("morgens:"))
 
     def test_never_again_mutes_that_kind_of_hint_for_good(self):
@@ -242,24 +194,6 @@ class WatcherTest(unittest.TestCase):
         watcher.check(lage(hung=hung))
         self.assertEqual(watcher.check(lage(hung=hung)), [])
         self.assertEqual(Watcher({"hinweise": {"aktiv": False}}).check(lage(online=False)), [])
-
-    def test_unread_mail_from_a_person(self):
-        old = Message("icloud:7", "icloud", 7, "Max Mustermann", "max@example.com", "Samstag?", NOW - dt.timedelta(days=1),
-                      True, False)
-        news = Message("icloud:8", "icloud", 8, "Shop", "news@shop.de", "Angebote", NOW - dt.timedelta(days=1), True, True)
-
-        class Mail:
-            configured = True
-
-            def unread(self, limit=5, days=None):
-                return 2, [news, old]
-
-        read = []
-        hints = self.watcher.post(NOW, Mail(), [{"name": "Max Mustermann", "mails": []}],
-                                  read=lambda who: read.append(who) or "Max schreibt: Samstag passt.")
-        self.assertEqual(hints[0].text, "Sir, die Mail von Max Mustermann von gestern ist noch ungelesen, Betreff: Samstag?.")
-        self.assertEqual(hints[0].action(), "Max schreibt: Samstag passt.")
-        self.assertEqual(self.watcher.post(NOW, Mail(), []), [], "höchstens alle zwei Stunden")
 
     def test_morning_brief_without_anything_is_empty(self):
         self.assertEqual(morning_brief(NOW.replace(hour=8)), "")

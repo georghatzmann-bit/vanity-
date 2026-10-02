@@ -191,14 +191,24 @@ if __name__ == "__main__":
 class ConnectionDotsTest(unittest.TestCase):
     """Die Punkte am Knopf "Verbinden": was läuft, ohne Netzwerkabfrage."""
 
+    def test_connectors_seen_by_claude(self):
+        from jarvis import konnektoren
+        from jarvis.gui.app import Api
+
+        konnektoren.note([{"name": "claude.ai Gmail", "status": "connected"},
+                          {"name": "claude.ai Shopify", "status": "needs-auth"}])
+        api = Api.__new__(Api)
+        api._assistant = mock.Mock(brain=mock.Mock(connectors=True, claude_path=""))
+        info = api.connectors()
+        self.assertTrue(info["an"])
+        self.assertEqual(info["liste"], [{"name": "Gmail", "ok": True}, {"name": "Shopify", "ok": False}])
+
     def test_connections(self):
         from jarvis.gui.app import Api
 
         api = Api.__new__(Api)
         api._assistant = mock.Mock(_cfg={"discord": {"bot_token": "x" * 72}},
                                    server=mock.Mock(running=True), alexa=mock.Mock(connected=False))
-        self.assertEqual(api.connections(), {"phone": True, "alexa": False, "discord": True, "iphone": False,
-                                             "mail": False})
+        self.assertEqual(api.connections(), {"phone": True, "alexa": False, "discord": True})
         api._assistant = mock.Mock(_cfg={}, server=None, alexa=None)
-        self.assertEqual(api.connections(), {"phone": False, "alexa": False, "discord": False, "iphone": False,
-                                             "mail": False})
+        self.assertEqual(api.connections(), {"phone": False, "alexa": False, "discord": False})

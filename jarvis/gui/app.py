@@ -16,51 +16,6 @@ log = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
-# Knöpfe "App-Passwort erstellen" in "Verbinden > Mail" (mail_help): nur diese Seiten
-MAIL_HELP = {
-    "icloud": "https://account.apple.com/",
-    "gmail": "https://myaccount.google.com/apppasswords",
-    "yahoo": "https://login.yahoo.com/account/security",
-    "gmx": "https://www.gmx.net/mail/sicherheit/zwei-faktor-authentifizierung/",
-    "webde": "https://web.de/email/sicherheit/zwei-faktor-authentifizierung/",
-}
-
-# Beispieldaten für den Demo-Modus der Oberfläche, in genau der Form von apple_info() und mail_accounts()
-# (gui/web/app.js braucht eine eigene Kopie davon).
-DEMO_APPLE = {
-    "verbunden": True,
-    "email": "ge•••g@icloud.com",
-    "kalender": [
-        {"id": "home", "name": "Privat", "farbe": "#FF2968", "schreibbar": True, "gewaehlt": True},
-        {"id": "work", "name": "Arbeit", "farbe": "#1BADF8", "schreibbar": True, "gewaehlt": False},
-        {"id": "familie", "name": "Familie", "farbe": "#63DA38", "schreibbar": False, "gewaehlt": False},
-    ],
-    "mail": {
-        "ungelesen": 3,
-        "letzte": [
-            {"id": "icloud:4711", "von": "Max Mustermann", "adresse": "max@example.com", "betreff": "Grillen am Samstag?",
-             "datum": "2026-10-02T09:15", "ungelesen": True, "newsletter": False,
-             "vorschau": "Hast du Lust, am Samstag zu grillen? Um sechs bei mir."},
-            {"id": "icloud:4710", "von": "Amazon", "adresse": "versand-bestaetigung@amazon.de",
-             "betreff": "Versandbestätigung", "datum": "2026-10-02T08:40", "ungelesen": True, "newsletter": False,
-             "vorschau": "Ihre Bestellung ist unterwegs: Controller für die Xbox."},
-            {"id": "gmail:812", "von": "Sparkasse", "adresse": "info@sparkasse.de", "betreff": "Ihr Kontoauszug für Oktober",
-             "datum": "2026-10-01T18:05", "ungelesen": True, "newsletter": False,
-             "vorschau": "Ihr Kontoauszug für Oktober liegt bereit."},
-        ],
-        "fehler": "",
-    },
-    "geburtstage": 14,
-    "fehler": "",
-}
-DEMO_MAIL_ACCOUNTS = [
-    {"id": "icloud", "anbieter": "icloud", "name": "iCloud", "email": "ge•••g@icloud.com", "server": "imap.mail.me.com",
-     "automatisch": True, "fehler": ""},
-    {"id": "gmail", "anbieter": "gmail", "name": "Gmail", "email": "ge•••r@gmail.com", "server": "imap.gmail.com",
-     "automatisch": False, "fehler": ""},
-]
-
-
 class GuiBridge(Ui):
     """Sammelt alles, was die Oberfläche anzeigen soll."""
 
@@ -183,7 +138,7 @@ class Api:
         return {"ok": True, "reason": ""}
 
     def reminders(self) -> list:
-        """Termine und Erinnerungen (heute und morgen) für die Spalte "Heute", der Zeit nach."""
+        """Erinnerungen, Wecker und Timer (heute und morgen) für die Spalte "Heute", der Zeit nach."""
         import datetime as dt
 
         now = dt.datetime.now()
@@ -199,407 +154,36 @@ class Api:
                 break
             rows.append({"uhr": when.strftime("%H:%M"), "text": str(r.get("text", "")),
                          "tag": "heute" if days == 0 else "morgen", "art": "erinnerung", "_at": when})
-        calendar = getattr(self._assistant, "calendar", None)
-        if calendar is not None:
-            try:
-                end = dt.datetime.combine(now.date() + dt.timedelta(days=2), dt.time())
-                for event in calendar.events(now, end):
-                    days = (event.start.date() - now.date()).days
-                    rows.append({"uhr": "Tag" if event.all_day else event.start.strftime("%H:%M"),
-                                 "text": event.title + (f" · {event.place}" if event.place else ""),
-                                 "tag": "heute" if days <= 0 else "morgen", "art": "termin",
-                                 "_at": event.start if not event.all_day else dt.datetime.combine(event.start.date(), dt.time())})
-            except Exception as exc:
-                log.debug("Kalender: %s", exc)
         rows.sort(key=lambda row: row["_at"])
         return [{k: v for k, v in row.items() if k != "_at"} for row in rows[:8]]
 
-    # ------------------------------------------------------------------ Shop (Shopify)
+    # ------------------------------------------------------------------ Konnektoren
 
-    def _shop_vault(self):
-        from ..config import STATE_DIR
-        from ..geheim import Secrets
+    def connectors(self, fresh=False) -> dict:
+        """Georgs Konnektoren von claude.ai (Gmail, Google Kalender, Shopify ...), die Jarvis über Claude
+        benutzen kann. Zuerst, was Claude zuletzt gemeldet hat; fresh=True fragt Claude Code direkt
+        (`claude mcp list`, dauert ein paar Sekunden)."""
+        from .. import konnektoren
 
-        return Secrets(STATE_DIR / "geheim.json")
+        brain = getattr(self._assistant, "brain", None)
+        on = bool(getattr(brain, "connectors", False))
+        found = konnektoren.seen()
+        error = ""
+        if fresh and brain is not None and getattr(brain, "claude_path", ""):
+            listed = konnektoren.listed(brain.claude_path, env=brain.environment(""))
+            if listed is None:
+                error = "Claude Code hat nicht geantwortet. Später noch einmal versuchen."
+            else:
+                found = listed
+        return {"an": on, "liste": found, "fehler": error}
 
-    def shop_info(self) -> dict:
-        """Für "Verbinden > Shop" und die Shop-Karte: verbunden, Name, heute, Woche, offen."""
-        from ..shop import ShopError, money
-
-        shop = getattr(self._assistant, "shop", None)
-        if shop is None or not shop.configured:
-            return {"verbunden": False, "adresse": getattr(shop, "domain", "") if shop else "", "fehler": ""}
+    def connectors_help(self) -> bool:
+        """Öffnet claude.ai bei den Konnektoren, dort verbindet Georg neue Dienste."""
         try:
-            info = shop.info()
-            summary = shop.summary()
-        except ShopError as exc:
-            return {"verbunden": True, "adresse": shop.domain, "name": shop.name or shop.domain, "fehler": str(exc)}
-        cur = summary["waehrung"]
-        return {"verbunden": True, "adresse": shop.domain, "name": info["name"], "fehler": "",
-                "heute": {"anzahl": summary["heute"]["anzahl"], "umsatz": money(summary["heute"]["umsatz"], cur)},
-                "woche": {"anzahl": summary["woche"]["anzahl"], "umsatz": money(summary["woche"]["umsatz"], cur)},
-                "offen": summary["offen"], "bestseller": [t for t, _ in summary["bestseller"]]}
-
-    def shop_connect(self, address, client_id, secret) -> dict:
-        """Shop-Adresse, Client-ID und Client-Secret prüfen (holt einen Token und den Shop-Namen) und
-        speichern: Adresse und ID in config.toml, das Secret verschlüsselt im Tresor."""
-        from ..config import STATE_DIR, save_setting
-        from ..shop import Shop, ShopError, normalize_domain
-
-        try:
-            domain = normalize_domain(address)
-        except ValueError as exc:
-            return {"ok": False, "error": str(exc)}
-        client_id, secret = str(client_id or "").strip(), str(secret or "").strip()
-        if len(client_id) < 8 or len(secret) < 8:
-            return {"ok": False, "error": "Bitte Client-ID und Client-Secret aus dem Dev Dashboard einfügen "
-                                         "(Einstellungen > Anmeldedaten)."}
-
-        class _Once:  # nur für die Probe: das Secret erst nach Erfolg speichern
-            def get(self, key):
-                return secret
-
-        probe = Shop({"shop": {"adresse": domain, "client_id": client_id}}, _Once())
-        try:
-            info = probe.info()
-        except ShopError as exc:
-            return {"ok": False, "error": str(exc)}
-        try:
-            vault = self._shop_vault()
-            vault.set("shopify", secret)
-            save_setting("shop", "adresse", domain)
-            save_setting("shop", "client_id", client_id)
-        except Exception as exc:
-            return {"ok": False, "error": f"Konnte nicht speichern: {exc}"}
-        section = self._assistant._cfg.setdefault("shop", {})
-        section.update({"adresse": domain, "client_id": client_id})
-        self._assistant.shop = Shop(self._assistant._cfg, vault, state_path=STATE_DIR / "shop.json")
-        return {"ok": True, "error": "", "name": info["name"]}
-
-    def shop_disconnect(self) -> dict:
-        from ..config import STATE_DIR, save_setting
-        from ..shop import Shop
-
-        try:
-            vault = self._shop_vault()
-            vault.delete("shopify")
-            save_setting("shop", "adresse", "")
-            save_setting("shop", "client_id", "")
-        except Exception as exc:
-            return {"ok": False, "error": f"Konnte nicht trennen: {exc}"}
-        self._assistant._cfg.setdefault("shop", {}).update({"adresse": "", "client_id": ""})
-        self._assistant.shop = Shop(self._assistant._cfg, vault, state_path=STATE_DIR / "shop.json")
-        return {"ok": True, "error": ""}
-
-    def shop_help(self, which="admin") -> bool:
-        """Knopf "Öffnen": der Shopify-Admin (dort geht es weiter ins Dev Dashboard)."""
-        from .. import pc
-
-        url = {"admin": "https://admin.shopify.com/", "dev": "https://dev.shopify.com/dashboard"}.get(str(which))
-        if not url:
-            return False
-        try:
-            pc.open_uri(url)
+            pc.open_uri("https://claude.ai/settings/connectors")
             return True
         except Exception as exc:
-            log.info("Shop-Hilfe: %s", exc)
-            return False
-
-    # ------------------------------------------------------------------ Kalender
-
-    def calendar_info(self) -> dict:
-        """Für "Verbinden > Kalender": eingetragene Abos (gekürzt) und ob sie gerade erreichbar sind."""
-        calendar = getattr(self._assistant, "calendar", None)
-        feeds = list(self._assistant._cfg.get("kalender", {}).get("abos", []) or [])
-        errors = calendar.errors if calendar is not None else {}
-        from ..kalender import _feed_url, _short
-
-        return {"feeds": [{"url": url, "shown": _short(_feed_url(url) or url),
-                           "error": errors.get(_feed_url(url), "")} for url in feeds],
-                "count": len(calendar.upcoming(24 * 7)) if calendar is not None else 0}
-
-    def calendar_add(self, url) -> dict:
-        """Eine geheime iCal-Adresse prüfen und speichern. Zeigt die nächsten Termine daraus."""
-        import datetime as dt
-
-        from ..config import save_setting
-        from ..kalender import Calendar, _feed_url
-
-        url = str(url or "").strip()
-        if not _feed_url(url):
-            return {"ok": False, "error": "Das ist keine iCal-Adresse. Sie beginnt mit https:// oder webcal:// und endet meist auf .ics."}
-        from ..config import STATE_DIR
-
-        probe = Calendar(STATE_DIR / "kalender.json", [url])
-        probe.refresh(force=True)
-        if probe.errors:
-            return {"ok": False, "error": "Diese Adresse liefert keinen Kalender: " + next(iter(probe.errors.values()))}
-        now = dt.datetime.now()
-        events = [e for e in probe.upcoming(24 * 14) if e.source != "jarvis"]
-        feeds = list(self._assistant._cfg.get("kalender", {}).get("abos", []) or [])
-        if url not in feeds:
-            feeds.append(url)
-        try:
-            save_setting("kalender", "abos", feeds)
-        except Exception as exc:
-            return {"ok": False, "error": f"Konnte nicht speichern: {exc}"}
-        self._assistant._cfg.setdefault("kalender", {})["abos"] = feeds
-        self._renew_calendar()
-        return {"ok": True, "error": "", "count": len(events),
-                "next": [e.spoken(now, with_day=True) for e in events[:3]]}
-
-    def calendar_help(self, which) -> bool:
-        """Knöpfe "Öffnen" bei Google und Outlook (nur diese beiden Seiten)."""
-        from .. import pc
-
-        url = {"google": "https://calendar.google.com/calendar/r/settings",
-               "outlook": "https://outlook.live.com/calendar/0/options/calendar/SharedCalendars"}.get(str(which))
-        if not url:
-            return False
-        try:
-            pc.open_uri(url)
-            return True
-        except Exception as exc:
-            log.info("Kalender-Hilfe: %s", exc)
-            return False
-
-    def calendar_remove(self, url) -> dict:
-        from ..config import save_setting
-
-        feeds = [f for f in self._assistant._cfg.get("kalender", {}).get("abos", []) or [] if f != url]
-        try:
-            save_setting("kalender", "abos", feeds)
-        except Exception as exc:
-            return {"ok": False, "error": f"Konnte nicht speichern: {exc}"}
-        self._assistant._cfg.setdefault("kalender", {})["abos"] = feeds
-        self._renew_calendar()
-        return {"ok": True, "error": ""}
-
-    def _icloud(self):
-        """Das verbundene iCloud-Konto (apple.AppleAccount) oder None."""
-        from ..apple import AppleAccount
-
-        account = getattr(self._assistant, "icloud", None)
-        return account if isinstance(account, AppleAccount) else None
-
-    def _phone(self):
-        """Der iPhone-Kalender (apple.ICloudCalendar) oder None."""
-        from ..apple import ICloudCalendar
-
-        phone = getattr(getattr(self._assistant, "calendar", None), "apple", None)
-        return phone if isinstance(phone, ICloudCalendar) else None
-
-    def _renew_calendar(self) -> None:
-        """Kalender neu aufbauen (nach einer Änderung der Abos oder der iPhone-Verbindung)."""
-        from ..config import STATE_DIR
-        from ..kalender import calendar_from_config
-
-        self._assistant.calendar = calendar_from_config(self._assistant._cfg, STATE_DIR, account=self._icloud())
-
-    # ------------------------------------------------------------------ iPhone (iCloud) und Mail
-
-    def apple_info(self) -> dict:
-        """Für "Verbinden > iPhone". Ohne Netzwerk außer der Mail-Übersicht (höchstens einmal pro Minute):
-        {verbunden, email (teilweise verdeckt), kalender: [{id, name, farbe, schreibbar, gewaehlt}],
-         mail: {ungelesen, letzte: [{id, von, adresse, betreff, datum, ungelesen, newsletter, vorschau}], fehler},
-         geburtstage: Zahl, fehler}"""
-        from ..apple import mask_email
-
-        cfg = getattr(self._assistant, "_cfg", {}) or {}
-        apple_id = str((cfg.get("apple") or {}).get("apple_id") or "").strip()
-        account, phone = self._icloud(), self._phone()
-        info = {"verbunden": account is not None, "email": mask_email(apple_id) if apple_id else "", "kalender": [],
-                "mail": {"ungelesen": 0, "letzte": [], "fehler": ""}, "geburtstage": 0, "fehler": ""}
-        if apple_id and account is None:
-            info["fehler"] = "Das gespeicherte Passwort fehlt oder lässt sich nicht lesen. Bitte neu verbinden."
-        if phone is not None:
-            info["kalender"] = [{key: c[key] for key in ("id", "name", "farbe", "schreibbar", "gewaehlt")}
-                                for c in phone.calendars() if c["sichtbar"]]
-            info["fehler"] = phone.error or info["fehler"]
-        mailbox = getattr(self._assistant, "mail", None)
-        if mailbox is not None and getattr(mailbox, "configured", False):
-            try:
-                info["mail"] = mailbox.overview()
-            except Exception as exc:
-                log.info("Mail-Übersicht: %s", exc)
-        memory = getattr(self._assistant, "memory", None)
-        if memory is not None and hasattr(memory, "address_book"):
-            info["geburtstage"] = len(memory.address_book())
-        return info
-
-    def apple_connect(self, email, passwort) -> dict:
-        """iPhone verbinden: Apple-ID und app-spezifisches Passwort. Prüft sofort bei iCloud, speichert das
-        Passwort verschlüsselt und holt Kalender, Kontakte und Mail. {ok, fehler, ...wie apple_info}"""
-        from ..apple import AppleAccount, AppleError, app_password, looks_like_app_password
-        from ..config import STATE_DIR, save_setting
-        from ..geheim import Secrets
-        from ..mail import mailbox_from_config
-
-        email = str(email or "").strip()
-        password = app_password(passwort)
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-            return {"ok": False, "fehler": "Bitte die Apple-ID eintragen: die E-Mail-Adresse, mit der Sie sich am iPhone "
-                                           "anmelden."}
-        if not password:
-            return {"ok": False, "fehler": "Bitte das app-spezifische Passwort eintragen."}
-        account = AppleAccount(email, password)
-        try:
-            calendars = account.calendars()
-        except AppleError as exc:
-            text = str(exc)
-            if exc.kind == "passwort" and not looks_like_app_password(password):
-                text += (" Das normale Apple-ID-Passwort geht hier nicht, nur ein app-spezifisches "
-                         "(vier Gruppen aus je vier Buchstaben).")
-            return {"ok": False, "fehler": text}
-        try:
-            Secrets(STATE_DIR / "geheim.json").set("apple", password)
-            save_setting("apple", "apple_id", email)
-        except Exception as exc:
-            log.warning("iCloud speichern: %s", exc)
-            return {"ok": False, "fehler": f"Konnte die Verbindung nicht speichern: {exc}"}
-        cfg = self._assistant._cfg
-        cfg.setdefault("apple", {})["apple_id"] = email
-        self._assistant.icloud = account
-        self._renew_calendar()
-        phone = self._phone()
-        if phone is not None:
-            phone.refresh(force=True)  # gleich die Termine, damit die Oberfläche sie zeigt
-        self._assistant.mail = mailbox_from_config(cfg, STATE_DIR)
-        self._sync_contacts_later()
-        result = self.apple_info()
-        result["ok"] = True
-        if not calendars:
-            result["fehler"] = "Verbunden, aber in iCloud ist noch kein Kalender eingeschaltet."
-        return result
-
-    def _sync_contacts_later(self) -> None:
-        from ..apple import sync_birthdays
-        from ..config import STATE_DIR
-
-        account, memory = self._icloud(), getattr(self._assistant, "memory", None)
-        wanted = (self._assistant._cfg.get("apple") or {}).get("geburtstage", True)
-        if account is None or memory is None or not wanted:
-            return
-        threading.Thread(target=lambda: sync_birthdays(account, memory, STATE_DIR, force=True),
-                         name="jarvis-kontakte", daemon=True).start()
-
-    def apple_choose_calendar(self, ident) -> dict:
-        """In welchen iPhone-Kalender neue Termine kommen. {ok, fehler, kalender: [...]}"""
-        from ..config import save_setting
-
-        phone = self._phone()
-        if phone is None:
-            return {"ok": False, "fehler": "Das iPhone ist nicht verbunden.", "kalender": []}
-        chosen = phone.choose(str(ident or ""))
-        if chosen is not None:
-            try:
-                save_setting("apple", "kalender", chosen.get("name", chosen["id"]))
-            except Exception as exc:
-                log.warning("Kalender-Wahl speichern: %s", exc)
-            self._assistant._cfg.setdefault("apple", {})["kalender"] = chosen.get("name", chosen["id"])
-        listed = [{key: c[key] for key in ("id", "name", "farbe", "schreibbar", "gewaehlt")} for c in phone.calendars()
-                  if c["sichtbar"]]
-        if chosen is None:
-            return {"ok": False, "fehler": "In diesen Kalender darf ich nicht schreiben.", "kalender": listed}
-        return {"ok": True, "fehler": "", "kalender": listed}
-
-    def apple_refresh(self) -> dict:
-        """Knopf "Jetzt abrufen": Kalender sofort, Kontakte im Hintergrund. Gibt apple_info() zurück."""
-        phone = self._phone()
-        if phone is not None:
-            phone.refresh(force=True)
-        self._sync_contacts_later()
-        mailbox = getattr(self._assistant, "mail", None)
-        if mailbox is not None and hasattr(mailbox, "forget_overview"):
-            mailbox.forget_overview()
-        return self.apple_info()
-
-    def apple_disconnect(self) -> dict:
-        """iPhone trennen: Passwort, Zwischenspeicher und Geburtstage aus den Kontakten sind weg. {ok, fehler}"""
-        from ..config import STATE_DIR, save_setting
-        from ..geheim import Secrets
-        from ..mail import mailbox_from_config
-
-        for thread in threading.enumerate():
-            if thread.name == "jarvis-kontakte":
-                thread.join(10)  # ein laufender Abgleich schriebe die Geburtstage sonst gleich wieder hinein
-        phone = self._phone()
-        if phone is not None:
-            phone.forget_cache()
-        try:
-            Secrets(STATE_DIR / "geheim.json").delete("apple")
-            save_setting("apple", "apple_id", "")
-        except Exception as exc:
-            return {"ok": False, "fehler": f"Konnte die Verbindung nicht löschen: {exc}"}
-        cfg = self._assistant._cfg
-        cfg.setdefault("apple", {})["apple_id"] = ""
-        self._assistant.icloud = None
-        memory = getattr(self._assistant, "memory", None)
-        if memory is not None and hasattr(memory, "set_address_book"):
-            memory.set_address_book([])
-        self._renew_calendar()
-        self._assistant.mail = mailbox_from_config(cfg, STATE_DIR)
-        return {"ok": True, "fehler": ""}
-
-    def apple_help(self) -> bool:
-        """Knopf "App-spezifisches Passwort erstellen": die Apple-Kontoseite (früher appleid.apple.com)."""
-        from .. import pc
-        from ..apple import ACCOUNT_URL
-
-        try:
-            pc.open_uri(ACCOUNT_URL)
-            return True
-        except Exception as exc:
-            log.info("Apple-Kontoseite: %s", exc)
-            return False
-
-    def mail_accounts(self) -> list:
-        """Alle Postfächer: [{id, anbieter, name, email (teilweise verdeckt), server, automatisch, fehler}].
-        automatisch = iCloud über die Apple-ID (kommt und geht mit dem iPhone)."""
-        mailbox = getattr(self._assistant, "mail", None)
-        if mailbox is None or not hasattr(mailbox, "accounts"):
-            return []
-        errors = getattr(mailbox, "errors", {}) or {}
-        return [dict(a.as_dict(), fehler=errors.get(a.id, "")) for a in mailbox.accounts()]
-
-    def mail_add(self, provider, email, passwort, server="") -> dict:
-        """Ein Postfach dazu: provider "icloud", "gmail", "gmx", "webde", "yahoo" oder "imap" (dann server
-        "imap.example.de" oder "imap.example.de:993"). Prüft die Anmeldung sofort. {ok, fehler, konto}"""
-        from ..config import STATE_DIR
-        from ..mail import MailError, mailbox_from_config
-
-        mailbox = getattr(self._assistant, "mail", None)
-        if mailbox is None or not hasattr(mailbox, "add"):
-            mailbox = self._assistant.mail = mailbox_from_config(self._assistant._cfg, STATE_DIR)
-        try:
-            account = mailbox.add(str(provider or ""), str(email or ""), str(passwort or ""), str(server or ""))
-        except MailError as exc:
-            return {"ok": False, "fehler": str(exc), "konto": None}
-        return {"ok": True, "fehler": "", "konto": account.as_dict()}
-
-    def mail_remove(self, ident) -> dict:
-        """Ein Postfach entfernen (das Passwort ist danach auch weg). {ok, fehler}"""
-        mailbox = getattr(self._assistant, "mail", None)
-        if mailbox is None or not hasattr(mailbox, "remove"):
-            return {"ok": False, "fehler": "Es ist kein Postfach verbunden."}
-        if str(ident) == "icloud" and any(a.id == "icloud" and a.auto for a in mailbox.accounts()):
-            return {"ok": False, "fehler": "iCloud-Mail kommt mit dem iPhone. Zum Abschalten das iPhone trennen."}
-        if not mailbox.remove(str(ident or "")):
-            return {"ok": False, "fehler": "Dieses Postfach gibt es nicht."}
-        return {"ok": True, "fehler": ""}
-
-    def mail_help(self, provider) -> bool:
-        """Knopf "App-Passwort erstellen" beim Anbieter (nur diese Seiten)."""
-        from .. import pc
-
-        url = MAIL_HELP.get(str(provider or ""))
-        if not url:
-            return False
-        try:
-            pc.open_uri(url)
-            return True
-        except Exception as exc:
-            log.info("Mail-Hilfe: %s", exc)
+            log.info("Konnektoren-Hilfe: %s", exc)
             return False
 
     # ------------------------------------------------------------------ Handy
@@ -777,12 +361,9 @@ class Api:
         server = getattr(self._assistant, "server", None)
         bridge = getattr(self._assistant, "alexa", None)
         token = str(((cfg.get("discord", {}) or {}).get("bot_token")) or "")
-        mailbox = getattr(self._assistant, "mail", None)
         return {"phone": bool(server is not None and server.running),
                 "alexa": bool(bridge is not None and bridge.connected),
-                "discord": len(token) > 50,
-                "iphone": self._icloud() is not None,
-                "mail": bool(mailbox is not None and getattr(mailbox, "configured", False) is True)}
+                "discord": len(token) > 50}
 
     def discord_info(self) -> dict:
         from ..discord_bot import DiscordBot, DiscordError

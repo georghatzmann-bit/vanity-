@@ -73,11 +73,9 @@ Die Alternative zu ElevenLabs: Eine natürliche deutsche Stimme, die ganz auf de
 
 **Geklappt, wenn:** oben „Aktiv“ steht und Jarvis mit der gewählten Stimme antwortet. Die Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben.
 
-## 3. Handy, iPhone, Alexa, Discord, Kalender und Shop verbinden (freiwillig)
+## 3. Handy, Alexa und Discord verbinden (freiwillig)
 
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, iPhone, Alexa, Discord, Kalender und Shop.
-
-![Verbinden: iPhone, Mail und mehr](docs/bilder/verbinden.jpg)
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa, Discord und Konnektoren.
 
 ### Handy
 
@@ -103,20 +101,16 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Hand
 3. In der App auf **+** tippen und den Kanalnamen eintragen, den Jarvis anzeigt (beginnt mit `jarvis-`).
 4. In Jarvis auf **Test schicken** klicken. Auf dem Handy erscheint sofort eine Nachricht.
 
-### iPhone: Kalender, Mails und Geburtstage
+### Termine, Mails und Shop: deine Konnektoren
 
-Mit deiner Apple-ID liest Jarvis deinen **iPhone-Kalender** und trägt neue Termine direkt dort ein („Trag morgen um 18 Uhr Training ein“ steht danach auf dem iPhone). Er liest deine **Mails** (nur lesen: nichts wird gelöscht, markiert oder verschickt) und kennt die **Geburtstage aus deinen Kontakten**.
+Dafür brauchst du in Jarvis nichts einzurichten. Jarvis denkt mit Claude, und Claude benutzt die Dienste, die du auf claude.ai verbunden hast: **Gmail**, **Google Kalender**, **Shopify**, **Spotify**, **Canva** und mehr. Ohne Passwörter in Jarvis.
 
-1. Am iPhone unter **Einstellungen** > dein Name > **iCloud** prüfen, dass **Kalender**, **Kontakte** und **iCloud Mail** an sind.
-2. Im Jarvis-Fenster im Bereich **iPhone** bei **App-Passwort erstellen** auf **Öffnen** klicken. Auf der Apple-Seite anmelden, dann **Anmeldung und Sicherheit** > **App-spezifische Passwörter** > **+**, Name „Jarvis“. Es sieht so aus: `abcd-efgh-ijkl-mnop`. Dein normales Apple-Passwort geht hier nicht.
-3. In Jarvis deine Apple-ID (die E-Mail-Adresse vom iPhone) und dieses Passwort eintragen, **Prüfen und verbinden** klicken.
-4. In der Liste den Kalender anklicken, in den neue Termine sollen.
+1. Auf claude.ai unter **Einstellungen** > **Konnektoren** die Dienste verbinden, die Jarvis nutzen soll (im Jarvis-Fenster: **Verbinden** > **Konnektoren** > **Öffnen**).
+2. Fertig. Frag zum Beispiel „Was steht heute an?“ oder „Hab ich neue Mails?“.
 
-**Geklappt, wenn:** „Verbunden: …“ mit der Zahl deiner Kalender erscheint. Frag dann „Hab ich neue Mails?“. Das Passwort speichert Jarvis mit Windows verschlüsselt, nur dein Windows-Benutzer kann es lesen.
+**Geklappt, wenn:** unter **Verbinden** > **Konnektoren** nach **Neu prüfen** deine Dienste mit „verbunden“ stehen. Steht dort nichts, einmal in der Eingabeaufforderung `claude` starten und `/login` eingeben (dann darf Claude Code deine Konnektoren sehen).
 
-**Weitere Postfächer** (Gmail, GMX, web.de, Yahoo oder ein eigener Server) fügst du im selben Bereich unten hinzu, jeweils mit einem App-Passwort des Anbieters (der Knopf **App-Passwort beim Anbieter** öffnet die richtige Seite). Bei GMX und web.de musst du in deren Einstellungen unter **POP3/IMAP** den Zugriff erlauben.
-
-Neue Mails von Leuten, die Jarvis kennt, sagt er kurz an (höchstens alle zehn Minuten, nie Newsletter). Beim Zocken kommt es nur aufs Handy. Änderst du später dein Apple-ID-Passwort, gilt das App-Passwort nicht mehr: einfach ein neues erstellen und neu verbinden.
+Löschen, Kaufen, Bezahlen und Veröffentlichen lässt Jarvis über Konnektoren nicht zu, auch wenn er dich falsch verstanden hat. Das machst du selbst in der App. Eine Mail in deinem Namen schickt er erst nach deinem „Ja“.
 
 ### Alexa
 
@@ -142,33 +136,6 @@ Jarvis' eigener Bot gestaltet deinen Server im Hintergrund: Kanäle, Rollen, Reg
 
 **Geklappt, wenn:** du sagst „Jarvis, gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen“ und die Kanäle erscheinen.
 
-### Kalender
-
-Jarvis liest deinen Kalender mit (nur lesen): Er sagt 15 Minuten vor einem Termin Bescheid, nennt die Termine morgens, zeigt sie rechts bei **Heute** und merkt, wenn ein Termin abgesagt oder verschoben wird. Eigene Termine („Trag morgen um 18 Uhr Training ein“) gehen auch ganz ohne.
-
-1. Bereich **Kalender**: Bei **Google** oder **Outlook** auf **Öffnen** klicken.
-   - Google: links deinen Kalender wählen, ganz unten **Privatadresse im iCal-Format** kopieren.
-   - Outlook: **Kalender veröffentlichen**, dann den **ICS**-Link kopieren.
-   - iPhone: besser über den Bereich **iPhone** (siehe oben), dann kann Jarvis auch eintragen.
-2. Die Adresse in Jarvis einfügen und **Prüfen** klicken.
-
-**Geklappt, wenn:** Jarvis „Kalender verbunden: … Termine“ meldet. Die Adresse ist geheim wie ein Passwort.
-
-### Shop (Shopify)
-
-![Verbinden: Shop](docs/bilder/verbinden-shop.jpg)
-
-Hast du einen Shopify-Shop, behält Jarvis ihn im Blick: **„Wie läuft der Shop?“** nennt Bestellungen und Umsatz von heute und dieser Woche, **„Wann kommt die nächste Auszahlung?“** das Geld von Shopify. Neue Bestellungen sagt er an (beim Zocken nur aufs Handy). Auf Wunsch legt er Produkte als **Entwurf** an („Leg im Shop ein Mauspad mit Jarvis-Logo für 19,90 an“). Veröffentlichen, Preise im Laden ändern, Geld ausgeben und Kunden schreiben macht er **nie**, das bleibt dein Klick.
-
-1. Bereich **Shop**: **Öffnen** klicken. Im Shopify-Admin: **Einstellungen** > **Apps** > **Apps entwickeln** > **Apps im Dev Dashboard erstellen**. Dann **App erstellen**, Name „Jarvis“.
-2. Unter **Zugriff** > **Bereiche** genau diese vier eintragen (der Knopf **Kopieren** hilft): `read_orders, read_products, write_products, read_shopify_payments_payouts`. Dann **Veröffentlichen**.
-3. **Installationen** > **App installieren** > deinen Shop wählen.
-4. **Einstellungen** > **Anmeldedaten**: Client-ID und Client-Secret kopieren, im Jarvis-Fenster mit der Shop-Adresse (`meinladen.myshopify.com`) einfügen, **Prüfen und verbinden**.
-
-**Geklappt, wenn:** „Verbunden mit …“ erscheint und rechts im Fenster die Shop-Karte mit Umsatz auftaucht. Das Secret speichert Jarvis verschlüsselt nur auf diesem PC.
-
-**Ehrlich gesagt:** Geld kommt nur, wenn echte Kunden kaufen. Niemand kann Einnahmen garantieren. Shop, Shopify Payments (ab 18, mit Ausweis und Konto), in Österreich ein Gewerbe, Impressum, Datenschutz und seit 1.10.2026 ein Widerrufsbutton im Shop richtest du einmal selbst ein. Danach nimmt Jarvis dir die Arbeit ab.
-
 ### PC per Handy einschalten (Wake-on-LAN)
 
 1. Bereich **Handy**: auf **PC fürs Einschalten per Netzwerk vorbereiten** klicken und bei Windows **Ja** sagen.
@@ -184,7 +151,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **Gespräch:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, ein gestrichelter Ring um die Kugel). Einfach weiterreden, ohne „Hey Jarvis“: „Und morgen?“ Schluss ist, wenn du nichts mehr sagst, oder mit **„Danke“**, **„Alles klar“** oder **„Tschüss“**. Beim Zocken (Gaming-Modus oder Vollbild) gibt es kein Gespräch, da redest du ja meist mit anderen. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Gespräch ohne Weckwort** ausschalten.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
-- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Verbinden**, **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht, die neueste **Post** (mit verbundenem Postfach: ein Klick, und Jarvis liest die Mail vor), wie ausgelastet der PC ist, der **Shop** (wenn verbunden) und das **Gedächtnis**.
+- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Verbinden** (Handy, Alexa, Discord, Konnektoren), **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht (Erinnerungen, Wecker, Timer), wie ausgelastet der PC ist, und das **Gedächtnis**.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
@@ -233,17 +200,11 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“, „Freitags um 20 Uhr: Zockmodus“
 - „Welche Zeitpläne habe ich?“, „Lösch den Zeitplan Briefing“
 
-**Termine:**
+**Termine, Mails und Shop** (über deine Konnektoren, siehe oben):
 
-- „Trag morgen um 18 Uhr Training ein“, „Trag Mittwoch von 18 bis 19 Uhr Sport ein“, „Trag am Sonntag Omas Geburtstag ein“
-- „Was steht heute an?“, „Was habe ich morgen vor?“, „Wann ist mein nächster Termin?“
-- „Sag den Termin Training ab“ (mit verbundenem iPhone auch dort)
-
-**Mails** (mit verbundenem iPhone oder Postfach, nur lesen):
-
-- „Hab ich neue Mails?“, „Check meine Mails“
-- „Was schreibt Max?“, „Lies mir die letzte Mail von Anna vor“
-- „Fass meine Mails von heute zusammen“ (mit Nachdenken)
+- „Was steht heute an?“, „Trag morgen um 18 Uhr Training ein“, „Wann ist mein nächster Termin?“
+- „Hab ich neue Mails?“, „Was schreibt Max?“, „Fass meine Mails von heute zusammen“
+- „Wie läuft der Shop?“, „Gibt es neue Bestellungen?“
 
 **Notizbuch:**
 
@@ -306,8 +267,7 @@ Jarvis wartet nicht nur auf Befehle. Wie ein guter Butler sagt er Bescheid, wenn
 
 - **Am PC:** Ein Programm reagiert nicht mehr („Discord reagiert seit einer halben Minute nicht mehr. Soll ich es neu starten?“). Ein Programm im Hintergrund frisst minutenlang den Prozessor. Der Arbeitsspeicher ist voll, der Akku fast leer, die Grafikkarte sehr heiß, das Internet weg (und wieder da).
 - **Sicherheit:** Ein neues Programm startet mit Windows. Auf „Ja“ schaut Jarvis nach, ob es harmlos ist. Und wenn Windows seit Tagen auf einen Neustart für Updates wartet.
-- **Termine:** Morgens ein kurzer Überblick über den Tag (Wetter, Termine, Erinnerungen, Geburtstage). Abends der frühe Termin von morgen, auf Wunsch mit einer Erinnerung aufs Handy, die auch kommt, wenn der PC dann aus ist. Spät nachts der Hinweis auf den Termin am Morgen. Und zwei Termine, die sich überschneiden.
-- **Post:** Eine Mail von einem deiner Kontakte ist seit gestern ungelesen. Auf „Ja“ liest Jarvis sie vor.
+- **Morgens:** Ein kurzer Überblick über den Tag (Wetter, Erinnerungen, Geburtstage und was du vorhattest). Termine und Mails sagt er dir, wenn du „Was steht heute an?“ fragst.
 - **Zurück am PC:** „Willkommen zurück, Sir. Während Sie weg waren: …“ mit allem, was du verpasst hast.
 - **Pause:** Nach drei Stunden am Stück schlägt er fünf Minuten Pause vor.
 

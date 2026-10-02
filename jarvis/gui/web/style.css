@@ -846,50 +846,10 @@ body[data-state="speaking"] .deck {
   font-size: 12px;
 }
 
-/* Post: nur sichtbar, wenn ein Postfach verbunden ist. Klick = Jarvis liest die Mail vor */
-.mail-rail li {
+/* Post: nur sichtbar{
   display: block;
   padding: 0;
 }
-
-.mail-item {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 12px;
-  align-items: baseline;
-  box-sizing: border-box;
-  width: calc(100% + 16px);
-  min-height: 44px;
-  margin: 0 -8px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: var(--r);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--t) var(--ease);
-}
-
-.mail-item:hover {
-  background: var(--surface-2);
-}
-
-.mail-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.mail-item .what b {
-  color: var(--text-2);
-}
-
-.mail-item.unread .what b {
-  color: var(--text);
-  font-weight: 600;
-}
-
 /* System */
 .meters {
   display: grid;
@@ -979,40 +939,6 @@ body[data-state="speaking"] .deck {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.shop-figures {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.shop-figures div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.shop-figures small {
-  color: var(--text-3);
-  font-size: 12px;
-}
-
-.shop-figures b {
-  font: 600 20px / 1.2 var(--font-display);
-  font-variant-numeric: tabular-nums;
-}
-
-.shop-figures span {
-  color: var(--text-2);
-  font-size: 12px;
-}
-
-.shop-open {
-  margin: 12px 0 0;
-  color: var(--text-2);
-  font-size: 13px;
-}
-
 /* Gedächtnis */
 .mem-sum {
   margin: 0;
@@ -1587,39 +1513,6 @@ body[data-state="speaking"] .deck {
 .alexa-link[data-ok="1"] {
   color: var(--ok);
 }
-
-/* Verbinden > Kalender: die eingetragenen Abos */
-.cal-feeds {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.cal-feeds:empty {
-  display: none;
-}
-
-.cal-feeds li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: var(--r);
-  background: var(--surface-2);
-}
-
-.cal-feed {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-2);
-  font: 13px / 1.4 var(--mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Verbinden > Handy: sicher von überall */
 .dlg-pair .ts-row {
   grid-column: 1 / -1;
@@ -1633,81 +1526,10 @@ body[data-state="speaking"] .deck {
   align-items: center;
 }
 
-/* Verbinden > iPhone: Konto, Kalender, Mail */
-.acct-form {
+/* Verbinden > iPhone: Konto, Kalender{
   display: grid;
   gap: 8px;
 }
-
-.acct-form .input {
-  min-height: 40px;
-}
-
-.acct-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.acct-list {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.acct-list:empty {
-  display: none;
-}
-
-.acct-list li {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  padding: 8px 12px;
-  border-radius: var(--r);
-  background: var(--surface-2);
-}
-
-.acct-list .swatch {
-  width: 10px;
-  height: 10px;
-  flex: none;
-  border-radius: 3px;
-  background: var(--accent);
-}
-
-.acct-list button.pick {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  min-height: 28px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  text-align: left;
-}
-
-.acct-list button.pick:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.acct-list li.chosen {
-  box-shadow: inset 0 0 0 1px rgba(110, 140, 255, 0.55);
-}
-
-.acct-list .check {
-  color: var(--accent-text);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 select.input {
   appearance: none;
   padding-right: 32px;
@@ -1716,24 +1538,6 @@ select.input {
   background-size: 5px 5px;
   background-repeat: no-repeat;
 }
-
-.mail-more {
-  margin-top: 8px;
-}
-
-.acct-list .name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.acct-list small {
-  color: var(--text-3);
-  font-size: 12px;
-}
-
 /* ------------------------------------------------------------------ Start: alles erscheint ruhig */
 
 body[data-boot="1"] .top > *,
@@ -1961,4 +1765,46 @@ body[data-view="hub"] .backdrop {
   .greet {
     display: none;
   }
+}
+
+/* Verbinden > Konnektoren: Georgs Dienste von claude.ai */
+.konn-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.konn-list:empty {
+  display: none;
+}
+
+.konn-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.konn-item b {
+  font-weight: 600;
+}
+
+.konn-item small {
+  color: var(--text-2);
+}
+
+.konn-item[data-ok="1"] small::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  vertical-align: 1px;
 }

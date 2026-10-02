@@ -7,8 +7,8 @@
 - Gewohnheiten: wann Georg welche Programme und Seiten öffnet. Nach ein paar Tagen erkennt
   Jarvis daraus Routinen ("werktags gegen 18 Uhr Discord und Spotify") und bietet sie zur
   passenden Zeit an. Sagt Georg nein, fragt er seltener, bei "nie" gar nicht mehr.
-- Adressbuch: die Geburtstage aus Georgs iPhone-Kontakten (apple.py), in einer eigenen Liste,
-  damit die Fakten nicht überlaufen. Sie laufen über dieselben Geburtstags-Hinweise wie die Fakten.
+- Adressbuch: Geburtstage, die früher aus Georgs iPhone-Kontakten kamen, in einer eigenen Liste
+  (nur noch gelesen). Sie laufen über dieselben Geburtstags-Hinweise wie die Fakten.
 
 Das Gehirn bekommt zu Beginn jeder Unterhaltung eine kurze Zusammenfassung (`context`).
 Alles bleibt auf dem PC, in daten/gedaechtnis.json.
@@ -484,42 +484,9 @@ class Memory:
 
     # ------------------------------------------------------------------ Adressbuch (iPhone-Kontakte)
 
-    def set_address_book(self, people: list[dict]) -> int:
-        """Übernimmt die Kontakte mit Geburtstag aus dem iPhone ({name, vorname, spitzname, jahr, monat,
-        tag, mails}). Ersetzt die alte Liste. Gibt zurück, wie viele es sind."""
-        clean = []
-        for person in people[:MAX_ADDRESS_BOOK]:
-            name = " ".join(str(person.get("name", "")).split())[:80]
-            try:
-                month, day, year = int(person.get("monat") or 0), int(person.get("tag") or 0), int(person.get("jahr") or 0)
-                dt.date(2000, month, day)
-            except (TypeError, ValueError):
-                continue
-            if not name:
-                continue
-            clean.append({"name": name, "vorname": " ".join(str(person.get("vorname", "")).split())[:40],
-                          "spitzname": " ".join(str(person.get("spitzname", "")).split())[:40],
-                          "monat": month, "tag": day, "jahr": year,
-                          "mails": [str(m).strip().lower() for m in person.get("mails", []) or [] if "@" in str(m)][:5]})
-        clean.sort(key=lambda p: (p["monat"], p["tag"], p["name"].lower()))
-        with self._lock:
-            data = self._load()
-            if data.get("adressbuch") != clean:  # unverändert: nicht neu schreiben
-                data["adressbuch"] = clean
-                self._save()
-        return len(clean)
-
     def address_book(self) -> list[dict]:
         with self._lock:
             return [dict(p) for p in self._load()["adressbuch"] if isinstance(p, dict)]
-
-    def mail_people(self) -> list[dict]:
-        """Wichtige Absender für die Mail-Ansagen: Kontakte, mit denen Georg schreibt, und das
-        iPhone-Adressbuch (Name und Adressen)."""
-        people = [{"name": str(c.get("name", "")), "mails": []} for c in self.contacts()[:80]
-                  if c.get("name") and not str(c["name"]).startswith("#")]
-        people += [{"name": p["name"], "mails": p.get("mails", [])} for p in self.address_book()]
-        return people
 
     def _book_birthday(self, person: dict) -> dict:
         """Ein Geburtstag aus dem iPhone im selben Format wie parse_birthday. Gratulieren bietet Jarvis

@@ -71,8 +71,12 @@ class ClaudeBrainTest(unittest.TestCase):
         call = self.calls()[0]
         self.assertEqual(call["prompt"], tricky)
         self.assertNotIn(tricky, call["args"])
-        for flag in ("--safe-mode", "--include-partial-messages", "--verbose"):
+        for flag in ("--disable-slash-commands", "--include-partial-messages", "--verbose"):
             self.assertIn(flag, call["args"])
+        # Abgeschottet von Georgs Einstellungen, aber nicht mit --safe-mode: das schaltet seine Konnektoren ab
+        self.assertNotIn("--safe-mode", call["args"])
+        self.assertEqual(arg(call, "--setting-sources"), "project")
+        self.assertEqual(call["no_claude_md"], "1")
         self.assertEqual(arg(call, "--output-format"), "stream-json")
         self.assertEqual(arg(call, "--model"), "sonnet")
         self.assertTrue(arg(call, "--system-prompt-file").endswith("CLAUDE.md"))
@@ -205,11 +209,30 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertEqual(len(self.calls()), 1)
 
     def test_old_claude_without_safe_mode_still_works(self):
+        self.cfg["konnektoren"] = False
+        self.brain = ClaudeBrain(self.cfg, self.home, self.state)
         with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "safe-mode"}), self.assertLogs("jarvis.brain", "WARNING"):
             answer = self.brain.ask("hallo")
         self.assertEqual(answer.text, "Sehr wohl, Sir. hallo")
         self.assertNotIn("--safe-mode", self.calls()[-1]["args"])
         self.assertFalse(self.brain.isolated)
+
+    def test_without_connectors_claude_runs_in_safe_mode(self):
+        self.cfg["konnektoren"] = False
+        self.brain = ClaudeBrain(self.cfg, self.home, self.state)
+        self.brain.ask("hallo")
+        call = self.calls()[-1]
+        self.assertIn("--safe-mode", call["args"])
+        self.assertNotIn("--setting-sources", call["args"])
+        self.assertEqual(call["no_claude_md"], "")
+
+    def test_old_claude_without_setting_sources_still_works(self):
+        with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "setting-sources"}), self.assertLogs("jarvis.brain", "WARNING"):
+            answer = self.brain.ask("hallo")
+        self.assertEqual(answer.text, "Sehr wohl, Sir. hallo")
+        self.assertNotIn("--setting-sources", self.calls()[-1]["args"])
+        self.assertIn("--disable-slash-commands", self.calls()[-1]["args"])
+        self.assertTrue(self.brain.isolated, "die Persönlichkeit kommt weiter als Systemprompt")
 
     def test_old_claude_without_partial_messages_still_streams_whole_blocks(self):
         chunks = []
@@ -270,8 +293,8 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertEqual(rows[0], ("sonnet", "mit deinen Einstellungen", "ABGELEHNT"))
         self.assertEqual(rows[3], ("haiku", "ohne Erweiterungen", "OK (claude-haiku-test)"))
         calls = self.calls()
-        self.assertNotIn("--safe-mode", calls[0]["args"])
-        self.assertIn("--safe-mode", calls[1]["args"])
+        self.assertNotIn("--disable-slash-commands", calls[0]["args"])
+        self.assertIn("--disable-slash-commands", calls[1]["args"])
         self.assertIsNone(arg(calls[0], "--session-id"))
 
     def test_missing_claude_is_explained(self):
@@ -368,6 +391,71 @@ class LiveBrainTest(ClaudeBrainTest):
 
 
 @posix_only
+class ConnectorTest(unittest.TestCase):
+    """Georgs Konnektoren: Claude fragt über die Steuerleitung, ob es ein Werkzeug benutzen darf."""
+
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self.cfg = load_config()["brain"]
+        self.cfg["claude_path"] = str(make_fake_claude(self.home))
+        self.cfg["live"] = True
+        (self.home / "CLAUDE.md").write_text("# Jarvis", encoding="utf-8")
+        self.brain = ClaudeBrain(self.cfg, self.home, self.home / "daten")
+
+    def tearDown(self):
+        self.brain.close()
+        self.tmp.cleanup()
+
+    def replies(self):
+        lines = (self.home / "permissions.jsonl").read_text(encoding="utf-8").splitlines()
+        return [json.loads(line)["response"]["response"] for line in lines]
+
+    def test_connector_is_allowed(self):
+        steps = []
+        answer = self.brain.ask("konnektor:mcp__claude_ai_Gmail__search_threads", on_step=steps.append)
+        self.assertEqual(answer.text, "Erlaubt: mcp__claude_ai_Gmail__search_threads")
+        self.assertEqual(self.replies()[0], {"behavior": "allow", "updatedInput": {"q": "neu"}})
+        self.assertEqual(steps[0].label, "Nutzt Gmail")
+        self.assertEqual(steps[0].kind, "message")
+
+    def test_deleting_buying_and_publishing_are_refused(self):
+        for tool in ("mcp__claude_ai_Gmail__trash_message", "mcp__claude_ai_Vercel__buy_domain",
+                     "mcp__claude_ai_Shopify__graphql_mutation"):
+            answer = self.brain.ask("konnektor:" + tool)
+            self.assertTrue(answer.text.startswith("Abgelehnt: Jarvis lässt Löschen"), answer.text)
+        self.assertEqual({r["behavior"] for r in self.replies()}, {"deny"})
+
+    def test_other_tools_stay_locked(self):
+        answer = self.brain.ask("konnektor:Agent")
+        self.assertEqual(answer.text, "Abgelehnt: Dieses Werkzeug ist für Jarvis nicht freigegeben.")
+
+    def test_connectors_can_be_switched_off(self):
+        self.brain.close()
+        self.cfg["konnektoren"] = False
+        self.brain = ClaudeBrain(self.cfg, self.home, self.home / "daten")
+        answer = self.brain.ask("konnektor:mcp__claude_ai_Gmail__search_threads")
+        self.assertTrue(answer.text.startswith("Abgelehnt"))
+
+    def test_jarvis_remembers_which_connectors_claude_has(self):
+        from jarvis import konnektoren
+
+        with mock.patch.dict("os.environ", {"FAKE_MCP": "claude.ai Gmail,claude.ai Google Calendar"}):
+            self.brain.ask("hallo")
+        self.assertEqual([c["name"] for c in konnektoren.seen()], ["Gmail", "Google Calendar"])
+        self.assertTrue(all(c["ok"] for c in konnektoren.seen()))
+
+    def test_mcp_list_is_understood(self):
+        from jarvis.konnektoren import parse_list
+
+        text = ("Checking MCP server health...\n\n"
+                "claude.ai Gmail: https://gmail.mcp.claude.com/mcp - ✓ Connected\n"
+                "claude.ai Shopify: https://shopify.example/mcp - ! Needs authentication\n"
+                "github: npx -y @modelcontextprotocol/server-github - ✗ Failed to connect\n")
+        self.assertEqual(parse_list(text), [{"name": "Gmail", "ok": True}, {"name": "Shopify", "ok": False},
+                                            {"name": "github", "ok": False}])
+
+
 class StepsAndPatienceTest(unittest.TestCase):
     """Arbeitsschritte kommen live an, und lange Arbeit ist kein Grund zum Abbrechen."""
 

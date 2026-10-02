@@ -39,7 +39,7 @@
         <button type="button" class="top-btn phone-pill" id="phoneBtn" title="Handy, iPhone, Alexa, Discord, Kalender und Shop mit Jarvis verbinden">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
           <span class="ws-pill-text">Verbinden</span>
-          <span class="conn" id="phoneConn" aria-hidden="true"><i data-k="phone"></i><i data-k="iphone"></i><i data-k="alexa"></i><i data-k="discord"></i></span>
+          <span class="conn" id="phoneConn" aria-hidden="true"><i data-k="phone"></i><i data-k="alexa"></i><i data-k="discord"></i></span>
         </button>
         <button type="button" class="top-btn narrow-only" id="memOpenTop" title="Gedächtnis: was Jarvis über Sie weiß, eigene Befehle, Zeitpläne">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>
@@ -117,15 +117,6 @@
         <p class="empty" id="todayEmpty">Nichts geplant. Sagen Sie zum Beispiel „Trag morgen um 18 Uhr Training ein“ oder „Erinnere mich in 20 Minuten an den Tee“.</p>
       </section>
 
-      <section class="card mail-card" id="mailCard" aria-labelledby="mailHead" hidden>
-        <header class="card-head">
-          <h2 id="mailHead">Post</h2>
-          <span class="card-meta" id="mailCount"></span>
-        </header>
-        <ul class="today mail-rail" id="mailRail"></ul>
-        <p class="empty" id="mailEmpty" hidden></p>
-      </section>
-
       <section class="card" aria-labelledby="sysHead">
         <header class="card-head"><h2 id="sysHead">System</h2></header>
         <div class="meters">
@@ -154,17 +145,6 @@
         </div>
       </section>
 
-      <section class="card shop-card" id="shopCard" aria-labelledby="shopHead" hidden>
-        <header class="card-head">
-          <h2 id="shopHead">Shop</h2>
-          <span class="card-meta" id="shopName"></span>
-        </header>
-        <div class="shop-figures">
-          <div><small>Heute</small><b id="shopToday">–</b><span id="shopTodayN"></span></div>
-          <div><small>Diese Woche</small><b id="shopWeek">–</b><span id="shopWeekN"></span></div>
-        </div>
-        <p class="shop-open" id="shopOpen" hidden></p>
-      </section>
       <section class="card mem-panel" aria-labelledby="memHead">
         <header class="card-head">
           <h2 id="memHead">Gedächtnis</h2>
@@ -338,11 +318,9 @@
     </header>
     <div class="dlg-tabs" role="tablist" aria-label="Verbindungen">
       <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
-      <button type="button" role="tab" data-pane="apple" aria-selected="false">iPhone</button>
       <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
       <button type="button" role="tab" data-pane="discord" aria-selected="false">Discord</button>
-      <button type="button" role="tab" data-pane="calendar" aria-selected="false">Kalender</button>
-      <button type="button" role="tab" data-pane="shop" aria-selected="false">Shop</button>
+      <button type="button" role="tab" data-pane="konnektoren" aria-selected="false">Konnektoren</button>
     </div>
     <div class="dlg-pane" data-pane="phone">
     <label class="row toggle-row dlg-row">
@@ -401,59 +379,6 @@
       </div>
     </div>
     </div>
-    <div class="dlg-pane" data-pane="apple" hidden>
-      <div class="row dlg-row">
-        <span class="row-text">
-          <b id="appleState">iPhone nicht verbunden</b>
-          <small id="appleHint">Mit Ihrer Apple-ID liest Jarvis Ihren iPhone-Kalender und trägt neue Termine dort ein, liest Ihre Mails (nur lesen, nichts wird gelöscht oder verschickt) und kennt die Geburtstage aus Ihren Kontakten.</small>
-        </span>
-        <span class="ts-actions">
-          <button type="button" class="btn small ghost" id="appleRefresh" hidden>Jetzt abrufen</button>
-          <button type="button" class="btn small ghost" id="appleOff" hidden>Trennen</button>
-        </span>
-      </div>
-      <div id="appleSetup">
-        <ol class="dlg-steps alexa-steps">
-          <li><b>App-Passwort erstellen</b><span>Apple-Konto › „Anmeldung und Sicherheit“ › „App-spezifische Passwörter“ › „+“, Name „Jarvis“. Ihr normales Apple-Passwort geht hier nicht.</span>
-            <button type="button" class="btn small" id="appleHelp">Öffnen</button></li>
-          <li><b>Hier eintragen</b><span>Apple-ID (die E-Mail-Adresse vom iPhone) und das neue Passwort (vier Gruppen aus je vier Buchstaben). Jarvis speichert es verschlüsselt nur auf diesem PC.</span></li>
-        </ol>
-        <form class="acct-form" id="appleForm" autocomplete="off">
-          <input class="input" id="appleId" type="email" placeholder="Apple-ID, z. B. name@icloud.com" spellcheck="false" aria-label="Apple-ID">
-          <input class="input" id="applePass" type="password" placeholder="App-spezifisches Passwort (xxxx-xxxx-xxxx-xxxx)" spellcheck="false" aria-label="App-spezifisches Passwort">
-          <div class="acct-actions"><button type="submit" class="btn small primary" id="appleSave">Prüfen und verbinden</button></div>
-        </form>
-      </div>
-      <div id="appleLinked" hidden>
-        <p class="mem-hint">Neue Termine („Trag morgen um 18 Uhr Training ein“) landen in diesem Kalender:</p>
-        <ul class="acct-list" id="appleCals"></ul>
-        <p class="mem-hint" id="appleMail"></p>
-      </div>
-      <div class="dlg-row mail-more">
-        <span class="row-text">
-          <b>Weitere Postfächer</b>
-          <small>Gmail, GMX, web.de, Yahoo oder ein eigener Server. Jeweils mit einem App-Passwort vom Anbieter.</small>
-        </span>
-      </div>
-      <ul class="acct-list" id="mailList"></ul>
-      <form class="acct-form" id="mailForm" autocomplete="off">
-        <select class="input" id="mailProvider" aria-label="Anbieter">
-          <option value="gmail">Gmail</option>
-          <option value="gmx">GMX</option>
-          <option value="webde">web.de</option>
-          <option value="yahoo">Yahoo</option>
-          <option value="icloud">iCloud (ohne iPhone-Verbindung)</option>
-          <option value="imap">Anderer Server (IMAP)</option>
-        </select>
-        <input class="input" id="mailEmail" type="email" placeholder="E-Mail-Adresse" spellcheck="false" aria-label="E-Mail-Adresse">
-        <input class="input" id="mailPass" type="password" placeholder="App-Passwort" spellcheck="false" aria-label="App-Passwort">
-        <input class="input" id="mailServer" type="text" placeholder="Server, z. B. imap.example.de" spellcheck="false" aria-label="IMAP-Server" hidden>
-        <div class="acct-actions">
-          <button type="submit" class="btn small" id="mailSave">Postfach hinzufügen</button>
-          <button type="button" class="btn small ghost" id="mailHelp">App-Passwort beim Anbieter</button>
-        </div>
-      </form>
-    </div>
     <div class="dlg-pane" data-pane="alexa" hidden>
       <label class="row toggle-row dlg-row">
         <span class="row-text">
@@ -505,52 +430,22 @@
         <button type="button" class="btn small primary" id="discordInvite">Einladen</button>
       </div>
     </div>
-    <div class="dlg-pane" data-pane="calendar" hidden>
+    <div class="dlg-pane" data-pane="konnektoren" hidden>
       <div class="row dlg-row">
         <span class="row-text">
-          <b id="calState">Kein Kalender verbunden</b>
-          <small>Google oder Outlook über die geheime iCal-Adresse (nur lesen): Jarvis sagt 15 Minuten vorher Bescheid, nennt Termine morgens und merkt Absagen. Eigene Termine („Trag morgen um 18 Uhr Training ein“) gehen auch ohne.</small>
+          <b id="konnState">Noch keine gesehen</b>
+          <small>Termine, Mails, Shop und mehr laufen über die Dienste, die Sie auf claude.ai verbunden haben (Gmail, Google Kalender, Shopify, Spotify …). Ohne Passwörter in Jarvis. Löschen, Kaufen und Veröffentlichen lässt Jarvis darüber nicht zu.</small>
         </span>
+        <button type="button" class="btn small ghost" id="konnRefresh">Neu prüfen</button>
       </div>
-      <ol class="dlg-steps alexa-steps">
-        <li><b>Google</b><span>calendar.google.com › Zahnrad › Einstellungen › links Ihren Kalender wählen › ganz unten „Privatadresse im iCal-Format“ kopieren.</span>
-          <button type="button" class="btn small" id="calGoogle">Öffnen</button></li>
-        <li><b>Outlook</b><span>outlook.com › Einstellungen › Kalender › Freigegebene Kalender › „Kalender veröffentlichen“ › ICS-Link kopieren.</span>
-          <button type="button" class="btn small" id="calOutlook">Öffnen</button></li>
-        <li><b>iPhone / iCloud</b><span>Besser im Bereich <b>iPhone</b> verbinden: Dort liest Jarvis alle Kalender und trägt auch neue Termine ein.</span></li>
-      </ol>
-      <form class="dlg-url discord-token" id="calForm" autocomplete="off">
-        <input id="calUrl" type="url" placeholder="https://… .ics oder webcal://…" spellcheck="false" aria-label="iCal-Adresse">
-        <button type="submit" class="btn small" id="calSave">Prüfen</button>
-      </form>
-      <p class="dlg-note" id="calNote">Die Adresse ist geheim wie ein Passwort: Wer sie hat, sieht Ihre Termine. Jarvis speichert sie nur auf diesem PC.</p>
-      <ul class="cal-feeds" id="calFeeds"></ul>
-    </div>
-    <div class="dlg-pane" data-pane="shop" hidden>
-      <div class="row dlg-row">
+      <ul class="konn-list" id="konnList" aria-label="Ihre Konnektoren"></ul>
+      <div class="dlg-row">
         <span class="row-text">
-          <b id="shopState">Kein Shop verbunden</b>
-          <small id="shopHint">Jarvis behält Ihren Shopify-Shop im Blick: sagt Umsatz und neue Bestellungen an, nennt die nächste Auszahlung und legt Produkte als Entwurf an. Veröffentlichen, Preise ändern und Geld ausgeben macht er nie.</small>
+          <b>Neuen Dienst verbinden</b>
+          <small>Auf claude.ai unter Einstellungen > Konnektoren. Danach weiß Jarvis beim nächsten Gespräch davon. Fehlen alle: einmal in der Eingabeaufforderung <code>claude</code> starten und <code>/login</code> eingeben.</small>
         </span>
-        <button type="button" class="btn small ghost" id="shopOff" hidden>Trennen</button>
+        <button type="button" class="btn small" id="konnHelp">Öffnen</button>
       </div>
-      <div id="shopSetup">
-        <ol class="dlg-steps alexa-steps">
-          <li><b>Dev Dashboard öffnen</b><span>Im Shopify-Admin: Einstellungen › Apps › „Apps entwickeln“ › „Apps im Dev Dashboard erstellen“. Dann „App erstellen“, Name „Jarvis“.</span>
-            <button type="button" class="btn small" id="shopAdmin">Öffnen</button></li>
-          <li><b>Rechte eintragen</b><span>Unter „Zugriff › Bereiche“ genau diese vier eintragen, dann „Veröffentlichen“: read_orders, read_products, write_products, read_shopify_payments_payouts.</span>
-            <button type="button" class="btn small" id="shopScopes">Kopieren</button></li>
-          <li><b>Installieren</b><span>„Installationen“ › „App installieren“ › Ihren Shop wählen.</span></li>
-          <li><b>Anmeldedaten einfügen</b><span>„Einstellungen › Anmeldedaten“: Client-ID und Client-Secret kopieren und unten einfügen. Das Secret speichert Jarvis verschlüsselt nur auf diesem PC.</span></li>
-        </ol>
-        <form class="acct-form" id="shopForm" autocomplete="off">
-          <input class="input" id="shopDomain" type="text" placeholder="Shop-Adresse, z. B. meinladen.myshopify.com" spellcheck="false" aria-label="Shop-Adresse">
-          <input class="input" id="shopClient" type="text" placeholder="Client-ID" spellcheck="false" aria-label="Client-ID">
-          <input class="input" id="shopSecret" type="password" placeholder="Client-Secret" spellcheck="false" aria-label="Client-Secret">
-          <div class="acct-actions"><button type="submit" class="btn small primary" id="shopSave">Prüfen und verbinden</button></div>
-        </form>
-      </div>
-      <p class="dlg-note">Ehrlich gesagt: Geld kommt nur, wenn echte Kunden kaufen. Shop, Zahlungen, Gewerbe und Rechtstexte richten Sie einmal selbst ein. Danach nimmt Jarvis Ihnen die Arbeit ab.</p>
     </div>
   </section>
 

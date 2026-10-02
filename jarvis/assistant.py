@@ -383,29 +383,12 @@ class Assistant:
             planned = match_schedule(text)
             if planned is not None:
                 return self._schedule_command(*planned)
-        if getattr(self, "calendar", None) is not None:
-            from .kalender import match_calendar
-
-            planned = match_calendar(text, dt.datetime.now())
-            if planned is not None:
-                return self._calendar_command(*planned)
         if getattr(self, "notebook", None) is not None:
             from .notebook import match_notebook
 
             noted = match_notebook(text)
             if noted is not None:
                 return self._notebook_command(*noted)
-        if getattr(self, "shop", None) is not None:
-            from .shop import match_shop
-
-            asked = match_shop(text)
-            # Ohne verbundenen Shop gehen nur Fragen mit "Shop" oder "Laden" hierher ("Neue
-            # Bestellungen?" kann auch Amazon meinen, das beantwortet dann Claude).
-            if asked is not None and (self.shop.configured or re.search(r"\b(?:shop|laden|shopify)\b", text, re.I)):
-                return self._shop_command(asked)
-        mailed = self._mail_answer(text)
-        if mailed is not None:
-            return mailed
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             projects = getattr(self.workshop, "project_command", None)
@@ -898,46 +881,6 @@ class Assistant:
             return "Die Notiz ging gerade nicht ins Notizbuch, Sir."
         return random.choice(["Notiert, Sir. Steht im Notizbuch.", "Ist im Notizbuch, Sir."])
 
-    def _calendar_command(self, action: str, data) -> str:
-        calendar = self.calendar
-        now = dt.datetime.now()
-        if action == "ask":
-            if data == "next":
-                event = calendar.next_event()
-                if event is None:
-                    return "In den nächsten 30 Tagen steht nichts im Kalender, Sir."
-                return f"Ihr nächster Termin, Sir: {event.spoken(now, with_day=True)}."
-            if data == "woche":
-                events = calendar.upcoming(24 * 7)
-                if not events:
-                    return "Diese Woche steht nichts im Kalender, Sir."
-                parts = [e.spoken(now, with_day=True) for e in events[:8]]
-                more = f" und {len(events) - 8} weitere" if len(events) > 8 else ""
-                return f"In den nächsten sieben Tagen, Sir: {'; '.join(parts)}{more}."
-            said = calendar.describe_day(data)
-            notes = self._reminders_on(data, now)
-            if notes:  # "Was steht heute an?" meint auch die Erinnerungen, nicht nur den Kalender
-                said += f" Erinnerungen: {_join_names(notes)}."
-            return said
-        if action == "remove":
-            from .kalender import CalendarError
-
-            try:
-                gone = calendar.remove(data)  # mit iPhone: auch dort, bei einer Serie nur den einen Termin
-            except CalendarError as exc:
-                return str(exc)
-            if not gone:
-                return calendar.not_found(data)
-            return f"Gestrichen, Sir: {gone[0].spoken(now, with_day=True)}."
-        title, start, end, all_day = data
-        event = calendar.add(title, start, end, all_day)
-        clash = [e for e in calendar.events(event.start, event.end) if e.id != event.id and not e.all_day
-                 and not event.all_day]
-        said = f"Eingetragen, Sir: {event.spoken(now, with_day=True)}."
-        if clash:
-            said += f" Achtung, da ist schon {clash[0].spoken(now)}."
-        return said
-
     def _reminders_on(self, day: dt.date, now: dt.datetime) -> list[str]:
         if self.reminders is None:
             return []
@@ -996,105 +939,6 @@ class Assistant:
         answer = self.handle(command, speak=present)
         if not present and answer:
             self._push(f"{command}: {answer}")
-
-    def _shop_command(self, kind: str) -> str:
-        """"Wie läuft der Shop?" und "Wann kommt die nächste Auszahlung?" sofort, ohne Claude."""
-        from .shop import ShopError, spoken_payout, spoken_summary
-
-        shop = self.shop
-        if not shop.configured:
-            return ("Der Shop ist noch nicht verbunden, Sir. Im Fenster unter Verbinden > Shop geht das in "
-                    "zwei Minuten.")
-        try:
-            if kind == "payout":
-                return spoken_payout(shop.payouts(), shop._now().date())
-            return spoken_summary(shop.summary())
-        except ShopError as exc:
-            log.warning("Shop: %s", exc)
-            return str(exc)
-
-    def check_shop(self) -> None:
-        """Neue Bestellungen ansagen ("Neue Bestellung im Shop, Sir: 29 Euro"), aufs Handy, wenn Georg
-        weg ist. Beim Zocken im Vollbild nur aufs Handy, nicht in die Ohren."""
-        shop = getattr(self, "shop", None)
-        if shop is None or not shop.configured or not shop.announce_orders:
-            return
-        from .shop import ShopError, spoken_order
-
-        try:
-            fresh = shop.new_orders()
-        except ShopError as exc:
-            log.info("Shop: %s", exc)
-            return
-        for order in fresh[:5]:
-            text = spoken_order(order)
-            if self.gaming or self._fullscreen():
-                self.ui.message("jarvis", text)
-                push = getattr(self, "push", None)
-                if push is not None and push.enabled:
-                    push.send(text, priority=3, click=self._phone_link())
-            else:
-                self.announce(text)
-
-    def check_calendar(self) -> None:
-        """Kurz vor einem Termin Bescheid sagen, und Änderungen im Kalender ansagen."""
-        calendar = getattr(self, "calendar", None)
-        if calendar is None:
-            return
-        minutes = int(self._cfg.get("kalender", {}).get("vorwarnung_minuten", 15) or 0)
-        if minutes > 0:
-            for event in calendar.due_warnings(minutes):
-                left = max(1, round((event.start - dt.datetime.now()).total_seconds() / 60))
-                where = f" ({event.place})" if event.place else ""
-                self.announce(f"Sir, in {left} Minuten: {event.title}{where}." if left > 1
-                              else f"Sir, jetzt: {event.title}{where}.")
-        for change in calendar.changes():
-            self.announce(f"Sir, eine Änderung im Kalender: {change}")
-
-    # ------------------------------------------------------------------ Mails (nur lesen)
-
-    def _mail_answer(self, text: str) -> str | None:
-        """"Hab ich neue Mails?" und "Was schreibt Max?" sofort, ohne Claude. Zusammenfassen und Antworten
-        formulieren macht Claude. None = keine solche Frage, oder keine Mail von dieser Person gefunden."""
-        mail = getattr(self, "mail", None)
-        if mail is None:
-            return None
-        from .mail import match_mail
-
-        found = match_mail(text)
-        if found is None:
-            return None
-        try:
-            with self._step("Schaut in die Mails", "message"):
-                return mail.answer(*found)
-        except Exception:
-            log.exception("Mails")
-            return None
-
-    def check_mail(self) -> None:
-        """Neue Mails von wichtigen Absendern (Kontakte im Gedächtnis) kurz ansagen: höchstens alle zehn
-        Minuten, keine Newsletter. Zockt Georg im Vollbild oder sitzt er nicht am PC, kommt es aufs Handy."""
-        mail = getattr(self, "mail", None)
-        if mail is None or not mail.configured or not self._cfg.get("mail", {}).get("ansagen", True):
-            return
-        people = self.memory.mail_people() if self.memory is not None else []
-        mail.poll(people)
-        if self.busy or self.speaking or self._recording:
-            return  # die Mails warten bis zum nächsten Mal
-        text = mail.take_announcement()
-        if not text:
-            return
-        try:
-            here = self._present() and not self._fullscreen() and not self.gaming
-        except Exception:
-            here = True
-        if here:
-            self.announce(text)
-            return
-        self.ui.message("jarvis", text)
-        push = getattr(self, "push", None)
-        if push is not None and push.enabled:
-            push.send(text, click=self._phone_link())
 
     def _commands_list(self) -> str:
         commands = self.memory.custom_commands()
@@ -1392,14 +1236,9 @@ class Assistant:
             idle = 0.0
         gpu = getattr(self, "gpu_now", None) or {}
         lage = probe.measure(idle=idle, gpu_temp=gpu.get("temp"))
-        hints = watcher.check(lage, calendar=getattr(self, "calendar", None), reminders=self.reminders,
-                              memory=self.memory, weather=self._weather_today, away=self.take_missed,
+        hints = watcher.check(lage, reminders=self.reminders, memory=self.memory, weather=self._weather_today,
+                              away=self.take_missed,
                               push_at=self._push_at if getattr(getattr(self, "push", None), "enabled", False) else None)
-        mail = getattr(self, "mail", None)
-        if mail is not None and lage.present:
-            people = self.memory.mail_people() if self.memory is not None else []
-            hints += watcher.post(lage.now, mail, people,
-                                  read=lambda who: self._mail_answer(f"Was schreibt {who}?"))
         self.offer_hints(hints)
 
     def _weather_today(self) -> str:

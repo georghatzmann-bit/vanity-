@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 # Was Jarvis beobachtet (alles in [hinweise] abschaltbar)
-KINDS = ("pc", "internet", "sicherheit", "termine", "post", "morgens", "zurueck", "pausen")
+KINDS = ("pc", "internet", "sicherheit", "termine", "morgens", "zurueck", "pausen")
 # Wichtigkeit: 2 = dringend (auch aufs Handy), 1 = bald (sobald Georg da ist), 0 = wenn es passt
 URGENT, SOON, NORMAL = 2, 1, 0
 
@@ -170,7 +170,6 @@ class Watcher:
         self._last_tick: dt.datetime | None = None
         self._active_since: float | None = None  # Sekunden-Zeitstempel (monotonic) seit Georg am Stück da ist
         self._session_said = False
-        self._post_next = 0.0
 
     # ------------------------------------------------------------------ Gedächtnis
 
@@ -268,9 +267,9 @@ class Watcher:
 
     # ------------------------------------------------------------------ Prüfungen
 
-    def check(self, lage: Lage, calendar=None, reminders=None, memory=None, weather: Callable[[], str] | str = "",
+    def check(self, lage: Lage, reminders=None, memory=None, weather: Callable[[], str] | str = "",
               away: Callable[[], list[str]] | None = None, push_at: Callable | None = None) -> list[Hint]:
-        """Neue Hinweise aus einer Messung (und dem, was Kalender, Erinnerungen und Gedächtnis wissen).
+        """Neue Hinweise aus einer Messung (und dem, was Erinnerungen und Gedächtnis wissen).
         `away` liefert die Ansagen, die Georg verpasst hat (nur gefragt, wenn er gerade zurückkommt)."""
         if not self.enabled:
             return []
@@ -284,15 +283,13 @@ class Watcher:
                 log.exception("Hinweis-Prüfung %s", check.__name__)
         try:
             hints += self._session(lage)
-            if calendar is not None:
-                hints += self._calendar(lage, calendar, push_at)
             if memory is not None:
                 hints += self._plans(lage, memory)
             if returned is not None:
                 missed = away() if away is not None else []
-                hints += self._welcome(lage, returned, calendar, reminders, memory, weather, missed)
+                hints += self._welcome(lage, returned, reminders, memory, weather, missed)
         except Exception:
-            log.exception("Hinweise aus Kalender und Gedächtnis")
+            log.exception("Hinweise aus Erinnerungen und Gedächtnis")
         return [h for h in hints if self.allowed(h, lage.now)]
 
     def _presence(self, lage: Lage) -> float | None:
@@ -480,52 +477,7 @@ class Watcher:
         return [Hint(f"pause:{lage.now:%Y%m%d%H}", "pausen", f"Sir, Sie sitzen seit {spoken} Stunden am Stück. "
                      "Fünf Minuten Pause würden Ihren Augen guttun.", repeat_hours=2, ttl=30 * 60, group="pausen")]
 
-    # ------------------------------------------------------------------ Termine
-
-    def _calendar(self, lage: Lage, calendar, push_at: Callable | None) -> list[Hint]:
-        if "termine" not in self.kinds:
-            return []
-        now = lage.now
-        hints = []
-        tomorrow = now.date() + dt.timedelta(days=1)
-        # Abends: der frühe Termin von morgen
-        if 20 <= now.hour < 24 and lage.present:
-            early = [e for e in calendar.day(tomorrow) if not e.all_day and e.start.hour < 10]
-            if early:
-                first = early[0]
-                where = f" ({first.place})" if first.place else ""
-                hint = Hint(f"morgen-frueh:{first.key}", "termine",
-                            f"Sir, morgen um {_clock(first.start)} haben Sie {first.title}{where}.",
-                            repeat_hours=20, ttl=60 * 60)
-                if push_at is not None:
-                    remind = first.start - dt.timedelta(hours=1)
-                    if remind > now + dt.timedelta(hours=1):
-                        hint.offer = f"Soll ich Sie um {_clock(remind)} aufs Handy erinnern?"
-                        hint.action = lambda when=remind, event=first: push_at(
-                            when, f"In einer Stunde: {event.title}" + (f" ({event.place})" if event.place else ""))
-                hints.append(hint)
-        # Spät nachts, und morgens wartet früh ein Termin
-        if 0 <= now.hour < 4 and lage.present and (now.hour > 0 or now.minute >= 30):
-            soon = [e for e in calendar.day(now.date()) if not e.all_day and now < e.start and e.start.hour < 11]
-            if soon:
-                first = soon[0]
-                clock = f"halb {now.hour + 1}" if now.minute >= 30 else f"{now.hour} Uhr" if now.hour else "nach Mitternacht"
-                hints.append(Hint(f"spaet:{now.date().isoformat()}", "termine",
-                                  f"Sir, es ist schon {clock}, und um {_clock(first.start)} wartet {first.title}. "
-                                  "Nur, damit Sie es wissen.", repeat_hours=20, ttl=60 * 60))
-        # Zwei Termine in den nächsten zwei Tagen überschneiden sich
-        events = [e for e in calendar.events(now, now + dt.timedelta(hours=48)) if not e.all_day and e.start > now]
-        for index, first in enumerate(events):
-            for second in events[index + 1:]:
-                if second.start < first.end and first.title != second.title:
-                    day = "heute" if first.start.date() == now.date() else "morgen" if first.start.date() == tomorrow \
-                        else f"am {first.start.day}.{first.start.month}."
-                    hints.append(Hint(f"ueberschneidung:{first.key}:{second.key}", "termine",
-                                      f"Sir, {day} überschneiden sich zwei Termine: um {_clock(first.start)} {first.title} "
-                                      f"und um {_clock(second.start)} {second.title}.", repeat_hours=24 * 7, ttl=2 * 3600,
-                                      group="ueberschneidung"))
-                    return hints
-        return hints
+    # ------------------------------------------------------------------ Vorhaben
 
     def _plans(self, lage: Lage, memory) -> list[Hint]:
         """Nachmittags, was Georg für heute vorhatte (aus dem Tagesrückblick), falls es morgens nicht schon
@@ -543,7 +495,7 @@ class Watcher:
 
     # ------------------------------------------------------------------ Willkommen (morgens, zurück)
 
-    def _welcome(self, lage: Lage, away_seconds: float, calendar, reminders, memory, weather,
+    def _welcome(self, lage: Lage, away_seconds: float, reminders, memory, weather,
                  away: list[str]) -> list[Hint]:
         """Georg kommt an den PC: morgens der Tagesüberblick, sonst (falls etwas war) "Während Sie weg waren"."""
         now = lage.now
@@ -555,7 +507,7 @@ class Watcher:
                 except Exception as exc:
                     log.debug("Überblick, Wetter: %s", exc)
                     weather = ""
-            brief = morning_brief(now, calendar, reminders, memory, str(weather or ""), away)
+            brief = morning_brief(now, reminders, memory, str(weather or ""), away)
             with self._lock:
                 self._state["ueberblick"] = now.date().isoformat()
                 self._save()
@@ -573,60 +525,12 @@ class Watcher:
         return []
 
 
-    # ------------------------------------------------------------------ Post
-
-    def post(self, now: dt.datetime, mail, people, read: Callable[[str], str | None] | None = None) -> list[Hint]:
-        """Eine Mail von einem Menschen aus Georgs Kontakten, die seit gestern ungelesen ist (höchstens alle
-        zwei Stunden nachgesehen, das braucht das Internet)."""
-        if not self.enabled or "post" not in self.kinds or mail is None or not getattr(mail, "configured", False):
-            return []
-        if time.monotonic() < self._post_next or not 9 <= now.hour < 22:
-            return []
-        self._post_next = time.monotonic() + 2 * 3600
-        from .mail import is_important
-
-        try:
-            _, messages = mail.unread(15, days=4)
-        except Exception as exc:
-            log.info("Hinweise, Mails: %s", exc)
-            return []
-        for message in messages:
-            if not message.unread or message.date is None or not is_important(message, people):
-                continue
-            age = now - message.date
-            if not dt.timedelta(hours=20) <= age <= dt.timedelta(days=4):
-                continue
-            days = (now.date() - message.date.date()).days
-            when = "von gestern" if days <= 1 else f"vom {WEEKDAYS[message.date.weekday()]}"
-            about = f", Betreff: {message.subject}" if message.subject else ""
-            hint = Hint(f"post:{message.id}", "post", f"Sir, die Mail von {message.who} {when} ist noch ungelesen{about}.",
-                        repeat_hours=24 * 30, ttl=2 * 3600, group="post")
-            if read is not None:
-                hint.offer = "Soll ich sie vorlesen?"
-                hint.action = lambda who=message.who: read(who) or "Die Mail finde ich gerade nicht, Sir."
-            if self.allowed(hint, now):
-                return [hint]
-        return []
-
-
-WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
-
-
-def morning_brief(now: dt.datetime, calendar=None, reminders=None, memory=None, weather: str = "",
+def morning_brief(now: dt.datetime, reminders=None, memory=None, weather: str = "",
                   away: list[str] | None = None) -> str:
-    """Der kurze Überblick am Morgen: Wetter, Termine, Erinnerungen, Geburtstage. Leer, wenn nichts ansteht."""
+    """Der kurze Überblick am Morgen: Wetter, Erinnerungen, Geburtstage, Vorhaben. Leer, wenn nichts ansteht.
+    (Termine und Mails holt Claude über Georgs Konnektoren, wenn er "Was steht heute an?" fragt.)"""
     parts: list[str] = []
     hello = "Guten Morgen, Sir." if now.hour < 11 else "Guten Tag, Sir."
-    events = []
-    if calendar is not None:
-        try:
-            events = [e for e in calendar.day(now.date()) if e.all_day or e.end > now]
-        except Exception as exc:
-            log.debug("Überblick, Kalender: %s", exc)
-    if events:
-        said = [e.title if e.all_day else f"um {_clock(e.start)} {e.title}" for e in events[:3]]
-        more = f", und noch {len(events) - 3} weitere" if len(events) > 3 else ""
-        parts.append(("Heute steht an: " if len(events) > 1 else "Heute: ") + _join(said) + more + ".")
     if reminders is not None:
         try:
             notes = []

@@ -130,10 +130,8 @@ pc = true
 internet = true
 # sicherheit: ein neues Programm startet mit Windows, Windows wartet seit Tagen auf einen Neustart
 sicherheit = true
-# termine: abends der frühe Termin von morgen, spät nachts der Termin am Morgen, Überschneidungen
+# termine: nachmittags, was du heute noch vorhattest ("Ich muss morgen noch zur Post")
 termine = true
-# post: eine Mail von einem deiner Kontakte ist seit gestern ungelesen
-post = true
 # morgens: kurzer Überblick über den Tag, wenn du morgens an den PC kommst
 morgens = true
 # zurueck: "Während Sie weg waren ...", wenn du nach einer Weile wiederkommst
@@ -188,9 +186,14 @@ stufe_maximal = "fable high"
 # Ersatzreihe: Lehnt ein Modell eine Anfrage ab, versucht Jarvis automatisch das nächste.
 # "sonnet" ist schnell und schont dein Pro-Limit, "haiku" ist am schnellsten, "opus" am klügsten.
 models = ["sonnet", "haiku", "opus"]
-# true = Claude Code startet für Jarvis ohne deine persönlichen Skills, Plugins,
-# MCP-Server und CLAUDE.md-Dateien. So stören sie Jarvis nicht.
+# true = Claude Code startet für Jarvis ohne deine persönlichen Einstellungen, Skills, Plugins, Hooks und
+# CLAUDE.md-Dateien. So stören sie Jarvis nicht.
 isolated = true
+# true = Jarvis benutzt deine Konnektoren von claude.ai (Gmail, Google Kalender, Shopify, Spotify ...):
+# Termine, Mails und Shop laufen darüber, ohne eigene Anbindung und ohne Passwörter. Neue verbindest du auf
+# claude.ai unter Einstellungen > Konnektoren. Löschen, Kaufen, Bezahlen und Veröffentlichen lässt Jarvis
+# darüber nicht zu. false = Claude Code läuft ganz abgeschottet (--safe-mode), ohne Konnektoren.
+konnektoren = true
 # Lehnen alle Modelle ab, probiert Jarvis sie noch einmal mit einer ganz kurzen Persönlichkeit.
 simple_fallback = true
 # true = Claude läuft dauerhaft im Hintergrund weiter. Jede Frage spart so den Start
@@ -308,50 +311,3 @@ ordner = ""
 # false = kein Tagebuch der Gespräche (Notizen und Berichte gehen trotzdem).
 tagebuch = true
 
-[kalender]
-# Termine aus deinem Kalender mitlesen (nur lesen): die geheime iCal-Adresse, die mit https:// oder webcal://
-# beginnt. Google: Kalender-Einstellungen > dein Kalender > "Privatadresse im iCal-Format". Outlook.com:
-# Einstellungen > Kalender > Freigegebene Kalender > "Kalender veröffentlichen" > ICS-Link. iCloud: Kalender teilen >
-# "Öffentlicher Kalender". Am einfachsten im Jarvis-Fenster unter "Verbinden", Bereich Kalender.
-abos = []
-# So viele Minuten vor einem Termin sagt Jarvis Bescheid (0 = nie).
-vorwarnung_minuten = 15
-
-[apple]
-# Dein iPhone direkt in Jarvis: der Kalender (lesen und eintragen), deine iCloud-Mail und die Geburtstage aus
-# deinen Kontakten. Am einfachsten im Jarvis-Fenster unter "Verbinden", Bereich iPhone.
-# Du brauchst deine Apple-ID (die E-Mail-Adresse, mit der du dich am iPhone anmeldest) und ein app-spezifisches
-# Passwort: account.apple.com (früher appleid.apple.com) > Anmeldung und Sicherheit > App-spezifische Passwörter.
-# Ein Passwort reicht für Kalender, Mail und Kontakte. Es steht nie hier: Jarvis speichert es verschlüsselt in
-# daten\geheim.json, nur dein Windows-Benutzer kann es lesen.
-apple_id = ""
-# In diesen iPhone-Kalender trägt Jarvis neue Termine ein (Name). Leer = ein Kalender namens Jarvis, Privat, Home
-# oder Zuhause, sonst der erste, in den Jarvis schreiben darf. Am einfachsten im Fenster auswählen.
-kalender = ""
-# Diese iPhone-Kalender liest Jarvis nicht mit (Namen), zum Beispiel ["Arbeit"].
-ausblenden = []
-# true = Geburtstage aus deinen iCloud-Kontakten: Jarvis sagt am Tag selbst Bescheid.
-geburtstage = true
-# true = deine iCloud-Mail mitlesen (nur lesen).
-mail = true
-
-[mail]
-# E-Mails lesen, und zwar nur lesen: Jarvis markiert nichts als gelesen, löscht nichts und sendet nichts.
-# iCloud-Mail ist dabei, sobald dein iPhone verbunden ist. Gmail, GMX, web.de und Yahoo verbindest du im
-# Jarvis-Fenster unter "Verbinden", Bereich Mail, mit einem App-Passwort des Anbieters (bei GMX und web.de
-# muss außerdem in deren Einstellungen unter POP3/IMAP der Zugriff erlaubt sein). Die Passwörter stehen nie
-# hier, sondern verschlüsselt in daten\geheim.json.
-# true = neue Mails von wichtigen Absendern (deine Kontakte) kurz ansagen, höchstens alle zehn Minuten und nie
-# Newsletter. Zockst du im Vollbild oder bist du nicht am PC, kommt es aufs Handy (Verbinden > Handy).
-ansagen = true
-# So oft schaut Jarvis nach neuen Mails (Minuten).
-abruf_minuten = 5
-
-[shop]
-# Shop-Hilfe für einen Shopify-Shop (im Fenster unter Verbinden > Shop einrichten).
-# Jarvis sagt Umsatz und neue Bestellungen an, nennt die nächste Auszahlung und legt Produkte
-# als Entwurf an. Veröffentlichen, Preise ändern und Geld ausgeben macht er nie.
-# Das Client-Secret steht nicht hier, sondern verschlüsselt im Tresor (daten/geheim.json).
-adresse = ""                  # z. B. "meinladen.myshopify.com"
-client_id = ""                # aus dem Shopify Dev Dashboard (Einstellungen > Anmeldedaten)
-bestellungen_ansagen = true   # neue Bestellungen ansagen (beim Zocken nur aufs Handy)
