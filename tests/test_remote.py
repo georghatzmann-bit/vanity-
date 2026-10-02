@@ -4,6 +4,7 @@ import json
 import unittest
 import urllib.error
 import urllib.request
+from pathlib import Path
 from unittest import mock
 
 import tests.helpers  # noqa: F401
@@ -207,8 +208,21 @@ class ConnectionDotsTest(unittest.TestCase):
         from jarvis.gui.app import Api
 
         api = Api.__new__(Api)
-        api._assistant = mock.Mock(_cfg={"discord": {"bot_token": "x" * 72}},
-                                   server=mock.Mock(running=True), alexa=mock.Mock(connected=False))
-        self.assertEqual(api.connections(), {"phone": True, "alexa": False, "discord": True})
+        api._assistant = mock.Mock(_cfg={}, server=mock.Mock(running=True), alexa=mock.Mock(connected=False))
+        self.assertEqual(api.connections(), {"phone": True, "alexa": False})
         api._assistant = mock.Mock(_cfg={}, server=None, alexa=None)
-        self.assertEqual(api.connections(), {"phone": False, "alexa": False, "discord": False})
+        self.assertEqual(api.connections(), {"phone": False, "alexa": False})
+
+    def test_no_discord_bot_anymore(self):
+        """Den eigenen Discord-Bot gibt es nicht mehr (vermischte sich mit Discord ohne Maus)."""
+        from jarvis.gui.app import Api
+
+        for name in ("discord_info", "discord_save", "discord_invite", "discord_portal"):
+            self.assertFalse(hasattr(Api, name), name)
+        root = Path(__file__).resolve().parent.parent
+        self.assertFalse((root / "jarvis" / "discord_bot.py").exists())
+        self.assertFalse((root / "jarvis_home" / "faehigkeiten" / "discord-server").exists())
+        page = (root / "jarvis" / "gui" / "web" / "index.html").read_text(encoding="utf-8")
+        script = (root / "jarvis" / "gui" / "web" / "koppeln.js").read_text(encoding="utf-8")
+        self.assertNotIn('data-pane="discord"', page)
+        self.assertNotIn("discord", script.lower())

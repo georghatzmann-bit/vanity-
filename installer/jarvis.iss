@@ -50,7 +50,7 @@ Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [Messages]
 de.WelcomeLabel1=Willkommen bei Jarvis
-de.WelcomeLabel2=Jarvis wird jetzt auf deinem PC eingerichtet.%n%nDer Installer holt alles Nötige selbst: Python, Spracherkennung, Stimmen und Jarvis' Gehirn (Claude Code). Das dauert beim ersten Mal ein paar Minuten.%n%nDanach läuft Jarvis im Hintergrund. Sag einfach „Hey Jarvis“. Handy, Alexa und Discord verbindest du später im Jarvis-Fenster unter „Verbinden“.
+de.WelcomeLabel2=Jarvis wird jetzt auf deinem PC eingerichtet.%n%nDer Installer holt alles Nötige selbst: Python, Spracherkennung, Stimmen und Jarvis' Gehirn (Claude Code). Das dauert beim ersten Mal ein paar Minuten.%n%nDanach läuft Jarvis im Hintergrund. Sag einfach „Hey Jarvis“. Handy und Alexa verbindest du später im Jarvis-Fenster unter „Verbinden“.
 de.FinishedHeadingLabel=Jarvis ist bereit
 de.FinishedLabel=Gleich öffnet sich die Einrichtung: Mikrofon, Stimme und die Anmeldung für das Gehirn. Danach sag einfach „Hey Jarvis“.
 de.WinVersionTooLowError=Jarvis braucht Windows 10 ab Version 1809 oder Windows 11.

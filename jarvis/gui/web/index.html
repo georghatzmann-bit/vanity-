@@ -36,10 +36,10 @@
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
         </button>
-        <button type="button" class="top-btn phone-pill" id="phoneBtn" title="Handy, iPhone, Alexa, Discord, Kalender und Shop mit Jarvis verbinden">
+        <button type="button" class="top-btn phone-pill" id="phoneBtn" title="Handy und Alexa mit Jarvis verbinden, Konnektoren ansehen">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
           <span class="ws-pill-text">Verbinden</span>
-          <span class="conn" id="phoneConn" aria-hidden="true"><i data-k="phone"></i><i data-k="alexa"></i><i data-k="discord"></i></span>
+          <span class="conn" id="phoneConn" aria-hidden="true"><i data-k="phone"></i><i data-k="alexa"></i></span>
         </button>
         <button type="button" class="top-btn narrow-only" id="memOpenTop" title="Gedächtnis: was Jarvis über Sie weiß, eigene Befehle, Zeitpläne">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>
@@ -319,7 +319,6 @@
     <div class="dlg-tabs" role="tablist" aria-label="Verbindungen">
       <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
       <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
-      <button type="button" role="tab" data-pane="discord" aria-selected="false">Discord</button>
       <button type="button" role="tab" data-pane="konnektoren" aria-selected="false">Konnektoren</button>
     </div>
     <div class="dlg-pane" data-pane="phone">
@@ -403,31 +402,6 @@
           <button type="button" class="btn small ghost" id="alexaTest">Verbindung testen</button>
         </div>
         <p class="dlg-note">Der Skill gehört nur Ihnen und läuft nur auf Ihren Echos. Die Nachrichten laufen verschlüsselt über ntfy.sh. Antwortet Jarvis nicht innerhalb von sechs Sekunden, sagt Alexa „Ich kümmere mich darum“ und Jarvis macht weiter.</p>
-      </div>
-    </div>
-    <div class="dlg-pane" data-pane="discord" hidden>
-      <div class="row dlg-row">
-        <span class="row-text">
-          <b id="discordState">Nicht eingerichtet</b>
-          <small id="discordHint">Jarvis' eigener Bot gestaltet Ihren Server im Hintergrund: Kanäle, Rollen, Regeln, Begrüßung. Ohne Maus, während Sie zocken.</small>
-        </span>
-      </div>
-      <ol class="dlg-steps alexa-steps" id="discordSteps">
-        <li><b>Developer Portal öffnen</b><span>Mit Ihrem Discord-Konto anmelden, dann „New Application“, Name „Jarvis“, „Create“.</span>
-          <button type="button" class="btn small" id="discordPortal">Öffnen</button></li>
-        <li><b>Token holen</b><span>Links „Bot“, dann „Reset Token“ und den Token kopieren.</span></li>
-        <li><b>Token einfügen</b><span>Jarvis prüft ihn sofort und speichert ihn nur auf diesem PC.</span></li>
-      </ol>
-      <form class="dlg-url discord-token" id="discordForm" autocomplete="off">
-        <input id="discordToken" type="password" placeholder="Bot-Token einfügen" spellcheck="false" aria-label="Discord-Bot-Token">
-        <button type="submit" class="btn small" id="discordSave">Prüfen</button>
-      </form>
-      <div class="dlg-row discord-invite" id="discordInviteRow" hidden>
-        <span class="row-text">
-          <b>Auf Ihren Server holen</b>
-          <small>Server auswählen, „Autorisieren“. Danach: „Jarvis, gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen.“</small>
-        </span>
-        <button type="button" class="btn small primary" id="discordInvite">Einladen</button>
       </div>
     </div>
     <div class="dlg-pane" data-pane="konnektoren" hidden>

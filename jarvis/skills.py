@@ -3,7 +3,7 @@
 Jede Fähigkeit ist ein Ordner mit einer SKILL.md, wie bei Claude Code: oben Name und eine Zeile
 Beschreibung, darunter die Anleitung. In Jarvis' Persönlichkeit steht nur die Liste (Name,
 Beschreibung, Pfad). So bleibt die Persönlichkeit kurz und schnell, und trotzdem weiß Claude bei
-Discord-Servern, Recherchen oder dem Morgen-Briefing genau, wie es geht.
+Recherchen, der PC-Pflege oder dem Morgen-Briefing genau, wie es geht.
 
 Mitgeliefert: jarvis_home/faehigkeiten. Selbst gelernt (Georg zeigt Jarvis etwas, Jarvis schreibt
 es auf): daten/faehigkeiten. Eine gelernte Fähigkeit mit gleichem Namen ersetzt die mitgelieferte.

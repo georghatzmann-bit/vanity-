@@ -1,4 +1,4 @@
-/* Verbinden: Handy (Verbindung an/aus, QR-Code, Adresse), Alexa, Discord und Georgs Konnektoren. */
+/* Verbinden: Handy (Verbindung an/aus, QR-Code, Adresse), Alexa und Georgs Konnektoren. */
 (function () {
   'use strict';
 
@@ -30,15 +30,6 @@
       alexaCode: $('alexaCode'),
       alexaLink: $('alexaLink'),
       alexaTest: $('alexaTest'),
-      discordState: $('discordState'),
-      discordHint: $('discordHint'),
-      discordSteps: $('discordSteps'),
-      discordPortal: $('discordPortal'),
-      discordForm: $('discordForm'),
-      discordToken: $('discordToken'),
-      discordSave: $('discordSave'),
-      discordInviteRow: $('discordInviteRow'),
-      discordInvite: $('discordInvite'),
       pushToggle: $('pushToggle'),
       pushState: $('pushState'),
       pushSetup: $('pushSetup'),
@@ -169,55 +160,6 @@
       }
     }
 
-    // ------------------------------------------------------------ Discord
-
-    function renderDiscord(info) {
-      const ok = !!(info && info.configured && info.name && !info.error);
-      el.discordState.textContent = ok ? 'Bot ' + info.name + (info.guilds.length ? ' ist auf: ' + info.guilds.join(', ') : ' (noch auf keinem Server)')
-        : info && info.error ? 'Problem: ' + info.error : 'Nicht eingerichtet';
-      el.discordSteps.hidden = ok;
-      el.discordForm.hidden = ok && info.guilds.length > 0;
-      el.discordInviteRow.hidden = !ok;
-    }
-
-    async function refreshDiscord() {
-      try {
-        renderDiscord(await call('discord_info'));
-      } catch {
-        renderDiscord(null);
-      }
-    }
-
-    el.discordPortal.addEventListener('click', () => call('discord_portal').catch(() => {}));
-    el.discordForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      el.discordSave.disabled = true;
-      try {
-        const info = await call('discord_save', el.discordToken.value);
-        renderDiscord(info);
-        if (info && info.configured && !info.error) {
-          el.discordToken.value = '';
-          toast('Der Bot ist eingerichtet. Jetzt auf Ihren Server holen.', 'ok');
-        } else {
-          toast((info && info.error) || 'Der Token geht nicht.', 'error');
-        }
-      } catch {
-        toast('Das ging gerade nicht.', 'error');
-      } finally {
-        el.discordSave.disabled = false;
-      }
-    });
-    el.discordInvite.addEventListener('click', async () => {
-      try {
-        const result = await call('discord_invite');
-        toast(result && result.ok ? 'Im Browser den Server wählen und „Autorisieren“.' : (result && result.error) || 'Das ging nicht.',
-          result && result.ok ? 'ok' : 'error');
-        setTimeout(refreshDiscord, 15000);
-      } catch {
-        toast('Im Demo-Modus geht das nicht.', 'info');
-      }
-    });
-
     // ---------- Konnektoren (Gmail, Google Kalender, Shopify ... über Georgs Claude-Konto)
 
     function renderConnectors(info) {
@@ -267,7 +209,6 @@
       for (const b of el.tabs) b.setAttribute('aria-selected', String(b.dataset.pane === pane));
       for (const p of el.dlg.querySelectorAll('.dlg-pane')) p.hidden = p.dataset.pane !== pane;
       if (pane === 'alexa') refreshAlexa();
-      if (pane === 'discord') refreshDiscord();
       if (pane === 'konnektoren') refreshConnectors(false);
     }
 
@@ -374,7 +315,7 @@
 
     // ------------------------------------------------------------ Punkte am Knopf
 
-    const NAMES = { phone: 'Handy', alexa: 'Alexa', discord: 'Discord' };
+    const NAMES = { phone: 'Handy', alexa: 'Alexa' };
 
     async function refreshDots() {
       let state = null;
@@ -391,8 +332,8 @@
         if (active) on.push(NAMES[dot.dataset.k]);
       });
       el.btn.dataset.on = state.phone ? '1' : '0';
-      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, Alexa, Discord und Konnektoren.'
-        : 'Handy, Alexa und Discord mit Jarvis verbinden, Konnektoren ansehen';
+      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, Alexa und Konnektoren.'
+        : 'Handy und Alexa mit Jarvis verbinden, Konnektoren ansehen';
       el.btn.setAttribute('aria-label', 'Verbinden' + (on.length ? ', verbunden: ' + on.join(', ') : ''));
     }
 

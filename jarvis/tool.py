@@ -43,14 +43,6 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
                                öffnet das in Discord über die Schnellsuche (ohne Maus)
   discord anrufen "<person>"   startet einen Discord-Anruf
   discord stumm|taub           schaltet Mikrofon oder Ton in Discord um (zurück ins Spiel)
-  discord-bot status           zeigt den Jarvis-Bot und seine Server
-  discord-bot struktur [server]  Kategorien, Kanäle und Rollen eines Servers
-  discord-bot plan <datei.json> [server]  setzt einen Server-Plan um (im Hintergrund, ohne Maus)
-  discord-bot kanal "<name>" [text|sprache|forum] ["<kategorie>"]
-  discord-bot rolle "<name>" [#farbe]
-  discord-bot nachricht "<kanal>" "<text>"  postet als Bot
-  discord-bot einladung ["<kanal>"]         erzeugt einen Einladungslink
-  discord-bot kanal-loeschen "<name>"       löscht einen Kanal (erst nach Georgs Ja)
   werkstatt "<auftrag>"        gibt einen Programmier- oder Bauauftrag an die Werkstatt
   werkstatt-weiter "<wunsch>"  arbeitet am letzten Werkstatt-Projekt weiter
   werkstatt-projekt "<name>" "<wunsch>"
@@ -439,65 +431,6 @@ def _dispatch(command: str, rest: list[str]) -> int:
                 return 1
             return 0
         except messaging.MessagingError as exc:
-            print(f"Nicht geklappt: {exc}")
-            return 1
-
-    if command == "discord-bot":
-        from .discord_bot import DiscordBot, DiscordError
-
-        bot = DiscordBot(cfg.get("discord", {}).get("bot_token", ""))
-        action = rest[0].lower() if rest else "status"
-        args = rest[1:]
-        try:
-            if action == "status":
-                me = bot.me()
-                names = ", ".join(g.get("name", "?") for g in bot.guilds()) or "noch keinem (einladen!)"
-                print(f"Bot {me.get('username', '?')} ist auf: {names}")
-            elif action == "struktur":
-                print(bot.structure(" ".join(args)))
-            elif action == "plan" and args:
-                plan = json.loads(Path(args[0]).read_text(encoding="utf-8"))
-                done = bot.apply_plan(plan, " ".join(args[1:]))
-                print("Erledigt: " + ("; ".join(done) if done else "alles war schon so."))
-            elif action == "kanal" and args:
-                guild = bot.guild()
-                kind = args[1] if len(args) > 1 else "text"
-                made = bot.create_channel(guild["id"], args[0], kind, args[2] if len(args) > 2 else "")
-                print(f"Kanal {made.get('name', args[0])} angelegt.")
-            elif action == "rolle" and args:
-                made = bot.create_role(bot.guild()["id"], args[0], args[1] if len(args) > 1 else "")
-                print(f"Rolle {made.get('name', args[0])} angelegt.")
-            elif action == "nachricht" and len(args) >= 2:
-                guild = bot.guild()
-                channel = bot.find_channel(guild["id"], args[0])
-                if channel is None:
-                    print(f"Kanal {args[0]} gibt es nicht.")
-                    return 1
-                bot.send(channel["id"], " ".join(args[1:]))
-                print(f"In {channel['name']} gepostet.")
-            elif action == "einladung":
-                guild = bot.guild()
-                channel = bot.find_channel(guild["id"], args[0]) if args else next(
-                    (c for c in bot.channels(guild["id"]) if c.get("type") == 0), None)
-                if channel is None:
-                    print("Kein Kanal für die Einladung gefunden.")
-                    return 1
-                print(f"Einladung: {bot.invite(channel['id'])}")
-            elif action in ("kanal-loeschen", "kanal-löschen") and args:
-                guild = bot.guild()
-                channel = bot.find_channel(guild["id"], args[0])
-                if channel is None:
-                    print(f"Kanal {args[0]} gibt es nicht.")
-                    return 1
-                if not confirmed():  # Nachrichten wären für immer weg: immer erst fragen
-                    return need_confirmation(f"den Discord-Kanal {channel['name']} samt allen Nachrichten löschen")
-                bot.delete_channel(channel["id"])
-                print(f"Kanal {channel['name']} gelöscht.")
-            else:
-                print("Aufruf: discord-bot status|struktur|plan|kanal|rolle|nachricht|einladung|kanal-loeschen ...")
-                return 1
-            return 0
-        except (DiscordError, ValueError, OSError) as exc:
             print(f"Nicht geklappt: {exc}")
             return 1
 

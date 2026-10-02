@@ -33,7 +33,8 @@ class SkillsTest(unittest.TestCase):
 
     def test_builtin_skills_all_have_a_description(self):
         skills = {s.path.parent.name: s for s in load_skills(HOME_DIR, self.state)}
-        for name in ("discord-server", "morgen-briefing", "recherche", "notizbuch", "faehigkeit-lernen", "pc-pflege",
+        self.assertNotIn("discord-server", skills, "den Discord-Bot gibt es nicht mehr")
+        for name in ("morgen-briefing", "recherche", "notizbuch", "faehigkeit-lernen", "pc-pflege",
                      "spiele", "smart-home", "bildschirm"):
             self.assertIn(name, skills)
             self.assertGreater(len(skills[name].description), 30, name)
@@ -57,7 +58,7 @@ class SkillsTest(unittest.TestCase):
         cfg = load_config()
         text = build_persona(HOME_DIR, self.state, cfg).read_text(encoding="utf-8")
         self.assertIn("## Deine Fähigkeiten", text)
-        self.assertIn("- discord-server: ", text)
+        self.assertIn("- morgen-briefing: ", text)
         self.assertIn("## Notizbuch", text)
         self.assertNotIn("Planformat", text, "die Einzelheiten stehen in der Fähigkeit, nicht im Grundtext")
         refresh = persona_refresher(HOME_DIR, self.state, cfg)
