@@ -40,7 +40,7 @@ USER = "Georg"  # wie der Nutzer heißt ([ich] name), siehe set_user
 
 
 _SECRET = re.compile(r"passw(?:or)?t|kennwort|password|\bpin\b|pin-?code|passcode|geheimzahl|\btan\b|"
-                     r"kreditkarte|iban|sicherheitscode|cvv|zugangsdaten|login-?daten", re.I)
+                     r"kreditkarte|\biban\b|sicherheitscode|cvv|zugangsdaten|login-?daten", re.I)
 
 
 def is_secret(text: str) -> bool:

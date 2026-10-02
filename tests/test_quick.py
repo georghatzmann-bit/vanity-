@@ -468,6 +468,9 @@ class RestartAndSecretsTest(unittest.TestCase):
                          ("restart_app", "discord"))
         self.assertEqual(intents.match("Kannst du Discord neu starten?").name, "restart_app")
         self.assertEqual(intents.match("Starte den PC neu").name, "power_restart")
+        # Vorher Programm-Neustart: "windows" passte auf WindowsTerminal.exe und hätte es beendet
+        for said in ("Starte Windows neu", "Windows neu starten", "Starte das System neu"):
+            self.assertEqual(intents.match(said).name, "power_restart", said)
         self.assertIsNone(intents.match("Geh auf den Server von Hypixel in Minecraft"), "kein Discord-Server")
         assistant, ui, speaker, _ = make()
         with mock.patch("jarvis.apps.close_app", return_value="Discord ist zu.") as closed, \
@@ -493,3 +496,11 @@ class RestartAndSecretsTest(unittest.TestCase):
             self.assertEqual(assistant.memory.facts(), [])
             self.assertEqual(assistant.memory.remember("Georgs PIN ist 0000", source="jarvis"), "", "auch nicht über Claude")
             self.assertTrue(assistant.memory.remember("Georg spielt gern Valorant"))
+
+
+class SecretWordsTest(unittest.TestCase):
+    def test_only_real_secrets(self):
+        from jarvis.memory import is_secret
+
+        self.assertTrue(is_secret("Meine IBAN ist AT12 3456"))
+        self.assertFalse(is_secret("Georg war im Libanon im Urlaub"), "Libanon enthält iban")

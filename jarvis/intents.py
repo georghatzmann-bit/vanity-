@@ -192,8 +192,8 @@ _RULES += [
         r"^(?:fahr|fahre) (?:dich |alles )?(?:herunter|runter)(?: bitte)?$"
     )),
     ("power_restart", re.compile(
-        r"^(?:starte|start) (?:den |meinen )?(?:pc|computer|rechner|laptop) neu$|"
-        r"^(?:den |meinen )?(?:pc|computer|rechner|laptop) neu ?starten$|^(?:neustart|neu starten|reboot)$"
+        r"^(?:starte|start) (?:den |meinen |das )?(?:pc|computer|rechner|laptop|windows|system) neu$|"
+        r"^(?:den |meinen |das )?(?:pc|computer|rechner|laptop|windows|system) neu ?starten$|^(?:neustart|neu starten|reboot)$"
     )),
     ("power_sleep", re.compile(
         r"^(?:(?:schick|schicke|versetz|versetze|setz|setze) )?(?:den |meinen )?(?:pc|computer|rechner|laptop) "
