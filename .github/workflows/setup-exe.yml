@@ -118,6 +118,36 @@ jobs:
           if (-not (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FERTIG" -Quiet)) { Write-Host "JARVIS-FERTIG fehlt"; exit 1 }
           if (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FEHLER" -Quiet) { Write-Host "Fehler im Fortschritt"; exit 1 }
 
+      - name: Probe Umlaute und Leerzeichen im Benutzerordner
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          # Wie ein Windows-Konto "Jörg Müller": Jarvis-Ordner, Python-Umgebung, Modelle und
+          # Claude Code liegen dann unter einem Pfad mit Umlauten und Leerzeichen.
+          $basis = "C:\Temp\Jörg Müller"
+          $app = "$basis\Programme\Jarvis"
+          New-Item -ItemType Directory -Force "$basis\AppData\Local", $app | Out-Null
+          Copy-Item jarvis, jarvis_home, werkzeuge -Destination $app -Recurse -Force
+          Copy-Item Jarvis.pyw, requirements.txt, requirements-extras.txt, config.example.toml -Destination $app -Force
+          $env:USERPROFILE = $basis
+          $env:LOCALAPPDATA = "$basis\AppData\Local"
+          $env:JARVIS_FORTSCHRITT = "$basis\fortschritt.txt"
+          & powershell -NoProfile -ExecutionPolicy Bypass -File "$app\werkzeuge\installieren.ps1" -Auto -OhneVerknuepfung
+          $code = $LASTEXITCODE
+          Write-Host "installieren.ps1 beendet mit $code"
+          Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -Last 30
+          if ($code -ne 0) { exit 1 }
+          Get-Content "$basis\fortschritt.txt" -Encoding UTF8 | Where-Object { $_ -match "^JARVIS-(SCHRITT|OK|WARNUNG|FEHLER|FERTIG)" }
+          if (-not (Select-String -Path "$basis\fortschritt.txt" -Pattern "^JARVIS-FERTIG" -Quiet)) { exit 1 }
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          & $py -c "import sys; print('Python-Umgebung:', sys.prefix)"
+          & $py -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8', local_files_only=True); print('Spracherkennung laedt aus dem Ordner mit Umlauten')"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -c "from openwakeword.model import Model; Model(wakeword_models=['hey_jarvis'], inference_framework='onnx'); print('Hey Jarvis laedt')"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Remove-Item -Recurse -Force $basis -ErrorAction SilentlyContinue
+
       - name: Probe-Start
         if: ${{ !inputs.nur_bilder }}
         shell: pwsh
