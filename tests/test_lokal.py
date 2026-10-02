@@ -1,6 +1,7 @@
 """Lokale Stimme (Pocket TTS) und lokale Spracherkennung (Parakeet), ohne die echten Modelle.
 Die echten Modelle prüft der Windows-Build (Schritt "Probe lokale Stimme")."""
 
+import re
 import sys
 import tempfile
 import types
@@ -209,6 +210,28 @@ class VoiceTest(unittest.TestCase):
             with mock.patch("builtins.open", wraps=open) as opened:
                 config.open(path, "rb").close()
             self.assertNotIn("encoding", opened.call_args.kwargs, "Binärdateien bleiben, wie sie sind")
+
+    def test_windows_build_sees_the_ready_line(self):
+        """Der Windows-Build wartet im Log auf "Lokale Stimme george ... bereit" (Schritt "Probe lokale Stimme").
+        Ändert sich der Text, scheitert der Build, obwohl die Stimme lädt: Text und Muster müssen zusammenpassen."""
+        workflow = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "setup-exe.yml"
+        pattern = re.search(r'jarvis\.log -Pattern "([^"]+)"', workflow.read_text(encoding="utf-8")).group(1)
+        torch, package = types.ModuleType("torch"), types.ModuleType("pocket_tts")
+        torch.set_num_threads = lambda count: None
+
+        class TTSModel:
+            @staticmethod
+            def load_model(language, quantize=False):
+                return types.SimpleNamespace(get_state_for_audio_prompt=lambda voice: "zustand")
+
+        package.TTSModel = TTSModel
+        for model in ("standard", "gross"):
+            with mock.patch.dict(sys.modules, {"torch": torch, "pocket_tts": package}), \
+                    mock.patch.object(localvoice, "_utf8_configs"), self.assertLogs("jarvis.localvoice", "INFO") as logs:
+                voice = localvoice.PocketVoice("george", model)
+                voice._load()
+            self.assertIsNone(voice.error, model)
+            self.assertTrue(any(re.search(pattern, line) for line in logs.output), f"{model}: {logs.output}")
 
     def test_voice_names(self):
         self.assertEqual(localvoice.voice_id("Stuart_Bell"), "stuart_bell")
