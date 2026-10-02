@@ -178,6 +178,11 @@ def _status(assistant, phone) -> dict:
         workshop = {"auftrag": job.task, "zustand": job.state, "schritte": len(job.todos), "erledigt": done,
                     "zusammenfassung": job.summary}
     mute = getattr(assistant, "mute", None)
+    memory = getattr(assistant, "memory", None)
+    try:
+        own = [{"name": c["name"], "aktion": c["aktion"]} for c in memory.custom_commands()[:24]] if memory else []
+    except Exception:
+        own = []
     return {
         "ok": True,
         "zustand": getattr(phone, "state_value", "idle") if phone is not None else "idle",
@@ -187,6 +192,7 @@ def _status(assistant, phone) -> dict:
         "wetter": getattr(phone, "weather", "") if phone is not None else "",
         "vorschlag": getattr(phone, "offer", None) if phone is not None else None,
         "werkstatt": workshop,
+        "befehle": own,
     }
 
 

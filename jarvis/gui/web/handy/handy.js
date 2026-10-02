@@ -134,6 +134,7 @@
       el.weather.hidden = !data.wetter;
       el.weather.textContent = String(data.wetter || '').split(' · ').slice(0, 2).join(' · ');
       renderOffer(data.vorschlag);
+      renderOwn(data.befehle);
       renderJob(data.werkstatt);
       renderState();
     } catch (err) {
@@ -258,6 +259,7 @@
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
     mute: '<path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 5 2.2"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M12 17.5V21M4 4l16 16"/>',
     brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.3A3 3 0 0 0 9 17.5V4.5zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.3 3 3 0 0 1-4.5 4.7V4.5z"/>',
+    star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   };
 
   const QUICK = [
@@ -283,9 +285,24 @@
     ['Was weißt du?', 'Gedächtnis', 'Was weißt du über mich?', 'brain'],
   ];
 
+  // Eigene Befehle ("Zockmodus") stehen oben bei den Schnellaktionen.
+  let own = [];
+  let ownShown = '';
+
+  function renderOwn(list) {
+    own = Array.isArray(list) ? list.filter((c) => c && c.name) : [];
+    const shown = JSON.stringify(own);
+    if (shown === ownShown) return;
+    ownShown = shown;
+    buildQuick();
+  }
+
   function buildQuick() {
     el.quickGrid.textContent = '';
-    for (const [label, hint, say, icon, danger] of QUICK) {
+    const items = own.length
+      ? [['Eigene Befehle'], ...own.map((c) => [c.name, c.aktion, c.name, 'star'])].concat(QUICK)
+      : QUICK;
+    for (const [label, hint, say, icon, danger] of items) {
       if (!say) {
         const h = document.createElement('h2');
         h.className = 'group-title';
@@ -516,6 +533,10 @@
           zustand: this.state, beschaeftigt: this.state !== 'idle', wetter: '14° · leicht bewölkt · Wien',
           vorschlag: /[?&]vorschlag\b/.test(location.search) ? { frage: 'Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?' } : null,
           werkstatt: { auftrag: 'Bau mir einen Discord-Bot, der jeden Morgen das Wetter postet', zustand: 'running', schritte: 5, erledigt: 2 },
+          befehle: [
+            { name: 'Zockmodus', aktion: 'öffne Discord und Steam und mach den Gaming-Modus an' },
+            { name: 'Feierabend', aktion: 'schließ Discord und spiel Lofi auf Spotify' },
+          ],
         });
       }
       if (path.startsWith('/api/verlauf')) {

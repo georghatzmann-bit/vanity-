@@ -108,6 +108,7 @@
     discord_portal: () => window.pywebview.api.discord_portal(),
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
+    command_forget: (key) => window.pywebview.api.command_forget(key),
     answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
   };
 
@@ -1496,6 +1497,7 @@
       alexa_test: () => Promise.resolve({ ok: true, answer: 'Es ist 22 Uhr 40, Sir.' }),
       remember: () => Promise.resolve(true),
       forget: () => Promise.resolve(true),
+      command_forget: () => Promise.resolve(true),
       answer_suggestion: () => Promise.resolve(true),
       start() {
         setInterval(() => {
@@ -1552,6 +1554,10 @@
       { text: 'Georg baut einen Discord-Bot für seinen Clan', source: 'jarvis' },
     ],
     contacts: [{ name: 'Max', app: 'discord', count: 14 }, { name: 'Anna', app: 'whatsapp', count: 6 }],
+    commands: [
+      { key: 'zockmodus', name: 'Zockmodus', action: 'öffne Discord und Steam und mach den Gaming-Modus an', count: 12 },
+      { key: 'feierabend', name: 'Feierabend', action: 'schließ Discord und Steam und spiel Lofi auf Spotify', count: 3 },
+    ],
     routines: [
       { key: 'a', label: 'Discord und Spotify', uhrzeit: '18:05', tage: 'werktags', anzahl: 7 },
       { key: 'b', label: 'YouTube', uhrzeit: '21:30', tage: 'täglich', anzahl: 9 },

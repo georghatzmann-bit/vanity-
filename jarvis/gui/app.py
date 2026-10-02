@@ -425,7 +425,7 @@ class Api:
         """Was Jarvis über Georg weiß: Fakten, Kontakte, Gewohnheiten (für die Gedächtnis-Ansicht)."""
         memory = getattr(self._assistant, "memory", None)
         if memory is None:
-            return {"facts": [], "contacts": [], "routines": [], "birthdays": []}
+            return {"facts": [], "contacts": [], "routines": [], "birthdays": [], "commands": []}
         try:
             return {
                 "facts": [{"text": f.get("text", ""), "source": f.get("quelle", ""), "since": f.get("seit", "")}
@@ -435,10 +435,12 @@ class Api:
                 "routines": [r.as_dict() for r in memory.routines()][:10],
                 "birthdays": [{"shown": b["shown"], "date": b["datum"], "days": b["in_tagen"], "own": b["own"]}
                               for b in memory.upcoming_birthdays(days=366)][:12],
+                "commands": [{"key": c["key"], "name": c.get("name", ""), "action": c.get("aktion", ""),
+                              "count": c.get("anzahl", 0)} for c in memory.custom_commands()][:40],
             }
         except Exception as exc:
             log.debug("Gedächtnis-Stand: %s", exc)
-            return {"facts": [], "contacts": [], "routines": [], "birthdays": []}
+            return {"facts": [], "contacts": [], "routines": [], "birthdays": [], "commands": []}
 
     def remember(self, text) -> bool:
         from ..memory import match_memory
@@ -449,6 +451,11 @@ class Api:
             return False
         # Wie gesprochen: "Merk dir, dass ich Pizza mag" -> "Georg sagt: Ich mag Pizza"
         found = match_memory(text)
+        if found and found[0] == "teach":  # "Wenn ich Zockmodus sage, öffne Discord"
+            try:
+                return bool(memory.teach(*found[1]))
+            except ValueError:
+                return False
         if not found or found[0] != "remember":
             found = match_memory("Merk dir " + text)
         return bool(memory.remember(found[1] if found and found[0] == "remember" else text))
@@ -456,6 +463,11 @@ class Api:
     def forget(self, text) -> bool:
         memory = getattr(self._assistant, "memory", None)
         return bool(memory is not None and str(text or "").strip() and memory.remove(str(text)))
+
+    def command_forget(self, key) -> bool:
+        """Mülleimer an einem eigenen Befehl in der Gedächtnis-Ansicht."""
+        memory = getattr(self._assistant, "memory", None)
+        return bool(memory is not None and str(key or "").strip() and memory.unteach(str(key)))
 
     def answer_suggestion(self, answer) -> bool:
         """Knöpfe am Vorschlag: "Ja", "Nein" oder "Nie wieder"."""

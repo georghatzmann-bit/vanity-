@@ -263,6 +263,9 @@ class Assistant:
             remembered = match_memory(text)
             if remembered is not None:
                 return self._memory_command(*remembered)
+            own = self.memory.command_for(text)
+            if isinstance(own, dict):
+                return self._custom(own)
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             projects = getattr(self.workshop, "project_command", None)
@@ -680,9 +683,53 @@ class Assistant:
 
     # ------------------------------------------------------------------ Gedächtnis und Vorschläge
 
-    def _memory_command(self, action: str, fact: str) -> str:
+    def _custom(self, own: dict) -> str:
+        """Ein eigener Befehl ("Zockmodus"): erledigt, was dahinter steht, als hätte Georg es gesagt.
+        Was Jarvis davon nicht selbst kann, macht Claude (self._rest)."""
+        action = own["aktion"]
+        self.memory.used_command(own["key"])
+        with self._step(f"Eigener Befehl: {own['name']}", "app", action):
+            intent = intents.match(action)
+            if intent is not None and intent.name != "stop":
+                answer = self._do(intent, action)
+            else:
+                parts = intents.match_parts(action) if self._local else None
+                answer = self._many(parts) if parts else None
+        if answer is None:
+            self._rest = action
+            return ""
+        return answer
+
+    def _commands_list(self) -> str:
+        commands = self.memory.custom_commands()
+        if not commands:
+            return ("Noch keine eigenen Befehle, Sir. Sagen Sie zum Beispiel: Wenn ich Zockmodus sage, "
+                    "öffne Discord und Steam. Danach reicht das eine Wort.")
+        if len(commands) == 1:
+            return f"Ein eigener Befehl, Sir: „{commands[0]['name']}“, das heißt: {commands[0]['aktion']}."
+        names = [f"„{c['name']}“" for c in commands[:12]]
+        return f"Sie haben {len(commands)} eigene Befehle, Sir: {_join_names(names)}."
+
+    def _memory_command(self, action: str, fact) -> str:
         if action == "recall":
             return self._recall()
+        if action == "commands":
+            return self._commands_list()
+        if action == "teach":
+            trigger, what = fact
+            try:
+                saved = self.memory.teach(trigger, what)
+            except ValueError as exc:
+                return str(exc)
+            return random.choice([
+                f"Verstanden, Sir. Ab jetzt reicht „{saved['name']}“, und ich erledige: {saved['aktion']}.",
+                f"Notiert, Sir. Sagen Sie „{saved['name']}“, dann heißt das: {saved['aktion']}.",
+            ])
+        if action == "unteach":
+            removed = self.memory.unteach(fact)
+            if removed is None:
+                return f"Einen eigenen Befehl „{fact}“ kenne ich nicht, Sir."
+            return f"Der Befehl „{removed['name']}“ ist gelöscht, Sir."
         if action == "remember":
             from .memory import is_secret
 
@@ -1130,6 +1177,10 @@ def _short_reason(exc: BrainError) -> str:
         "account": "Das Claude-Konto meldet ein Problem (claude.ai).",
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
+
+
+def _join_names(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " und " + names[-1]
 
 
 def _join(answers: list[str]) -> str:

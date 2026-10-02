@@ -1802,6 +1802,14 @@ body[data-view="workshop"] .holo-scan {
   font: 600 13px/1.45 var(--mono);
 }
 
+.mem-list .mem-cmd {
+  flex: none;
+  max-width: 40%;
+  color: var(--accent-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .mem-del {
   display: grid;
   flex: none;

@@ -59,6 +59,10 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
   vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
+  befehl "<name>" "<was>"      legt einen eigenen Befehl an: sagt Georg den Namen, erledigt Jarvis "<was>"
+                               (z. B. befehl "Zockmodus" "Öffne Discord und Steam und mach den Gaming-Modus an")
+  befehle                      zeigt Georgs eigene Befehle
+  befehl-loeschen "<name>"     löscht einen eigenen Befehl
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
@@ -219,6 +223,32 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print("Kontakte: " + ", ".join(f"{c['name']} ({c.get('app', '?')})" for c in contacts[:20]))
         for routine in routines:
             print(f"Gewohnheit: {routine.describe()}")
+        return 0
+
+    if command in ("befehl", "befehle", "befehl-loeschen", "befehl-löschen"):
+        from .memory import Memory
+
+        memory = Memory(STATE_DIR / "gedaechtnis.json")
+        if command == "befehle":
+            commands = memory.custom_commands()
+            if not commands:
+                print("Noch keine eigenen Befehle.")
+            for c in commands:
+                print(f"{c['name']}: {c['aktion']}")
+            return 0
+        if command in ("befehl-loeschen", "befehl-löschen"):
+            removed = memory.unteach(" ".join(rest))
+            print(f"Befehl gelöscht: {removed['name']}" if removed else "Diesen Befehl gibt es nicht.")
+            return 0 if removed else 1
+        if len(rest) < 2:
+            print('Aufruf: befehl "<name>" "<was jarvis dann tun soll>"')
+            return 1
+        try:
+            saved = memory.teach(rest[0], " ".join(rest[1:]))
+        except ValueError as exc:
+            print(f"Fehler: {exc}")
+            return 1
+        print(f"Eigener Befehl gespeichert: „{saved['name']}“ = {saved['aktion']}")
         return 0
 
     if command == "erinnern":

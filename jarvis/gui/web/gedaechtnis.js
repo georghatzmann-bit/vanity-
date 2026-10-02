@@ -22,6 +22,8 @@
       routinesEmpty: $('memRoutinesEmpty'),
       contacts: $('memContacts'),
       contactsEmpty: $('memContactsEmpty'),
+      commands: $('memCommands'),
+      commandsEmpty: $('memCommandsEmpty'),
       birthdays: $('memBirthdays'),
       birthdaysEmpty: $('memBirthdaysEmpty'),
       facts: $('memFacts'),
@@ -30,7 +32,7 @@
       offerText: $('offerText'),
     };
     if (!el.sum) return null;
-    let data = { facts: [], contacts: [], routines: [], birthdays: [] };
+    let data = { facts: [], contacts: [], routines: [], birthdays: [], commands: [] };
     const MONTHS = ['Jän.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.'];
 
     function when(days) {
@@ -61,6 +63,40 @@
       el.next.hidden = !first && !soon;
       if (soon) el.next.textContent = birthdayLine(soon);
       else if (first) el.next.textContent = first.tage + ' gegen ' + first.uhrzeit + ' Uhr: ' + first.label;
+
+      const commands = data.commands || [];
+      if (el.commands) {
+        el.commands.replaceChildren(...commands.map((c) => {
+          const li = document.createElement('li');
+          const name = document.createElement('b');
+          name.className = 'mem-cmd';
+          name.textContent = c.name;
+          const text = document.createElement('span');
+          text.className = 'mem-text';
+          text.textContent = c.action;
+          const small = document.createElement('small');
+          small.textContent = c.count ? (c.count === 1 ? 'einmal benutzt' : c.count + '-mal benutzt') : 'noch nicht benutzt';
+          text.appendChild(small);
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'mem-del';
+          del.textContent = '×';
+          del.title = 'Befehl löschen';
+          del.setAttribute('aria-label', 'Befehl löschen: ' + c.name);
+          del.addEventListener('click', async () => {
+            try {
+              await call('command_forget', c.key);
+              toast('Befehl gelöscht.', 'ok');
+              refresh();
+            } catch {
+              toast('Das ging gerade nicht.', 'error');
+            }
+          });
+          li.append(name, text, del);
+          return li;
+        }));
+        el.commandsEmpty.hidden = commands.length > 0;
+      }
 
       if (el.birthdays) {
         el.birthdays.replaceChildren(...birthdays.map((b) => {

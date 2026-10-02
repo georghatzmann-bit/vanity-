@@ -37,6 +37,11 @@ MIN_DAYS = 3  # ab so vielen Tagen ist es eine Gewohnheit
 SPREAD = 60  # Minuten: so nah müssen die Uhrzeiten beieinander liegen
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 USER = "Georg"  # wie der Nutzer heißt ([ich] name), siehe set_user
+MAX_COMMANDS = 60  # eigene Befehle ("Zockmodus")
+MAX_TRIGGER_WORDS = 6
+# Diese Wörter braucht Jarvis selbst ("Stopp" hält alles an, "Ja" beantwortet eine Frage).
+RESERVED_TRIGGERS = {"stopp", "stop", "halt", "abbrechen", "abbruch", "ja", "nein", "nie wieder", "jarvis"}
+_QUOTES = "\"'„“”‚‘’»«"
 
 
 _SECRET = re.compile(r"passw(?:or)?t|kennwort|password|\bpin\b|pin-?code|passcode|geheimzahl|\btan\b|"
@@ -175,7 +180,8 @@ class Memory:
                 log.warning("Gedächtnis nicht lesbar (%s), fange neu an.", exc)
             if not isinstance(data, dict):
                 data = {}
-            for name, empty in (("fakten", []), ("kontakte", {}), ("ereignisse", []), ("vorschlaege", {})):
+            for name, empty in (("fakten", []), ("kontakte", {}), ("ereignisse", []), ("vorschlaege", {}),
+                                ("befehle", {})):
                 if not isinstance(data.get(name), type(empty)):
                     data[name] = empty
             self._data = data
@@ -244,12 +250,78 @@ class Memory:
 
     def forget_all(self) -> None:
         with self._lock:
-            self._data = {"fakten": [], "kontakte": {}, "ereignisse": [], "vorschlaege": {}}
+            self._data = {"fakten": [], "kontakte": {}, "ereignisse": [], "vorschlaege": {}, "befehle": {}}
             self._save()
 
     def facts(self) -> list[dict]:
         with self._lock:
             return list(self._load()["fakten"])
+
+    # ------------------------------------------------------------------ Eigene Befehle
+
+    def teach(self, trigger: str, action: str) -> dict:
+        """Ein eigener Befehl: Sagt Georg "Zockmodus", erledigt Jarvis "Öffne Discord und Steam".
+        Derselbe Name ersetzt den alten. Geht der Name nicht, kommt ValueError mit dem Grund."""
+        name = " ".join(str(trigger).split()).strip(" .,;:!?" + _QUOTES)
+        key = command_key(name)
+        action = " ".join(str(action).split()).strip(" ,;:" + _QUOTES)
+        problem = trigger_problem(key)
+        if problem:
+            raise ValueError(problem)
+        if len(action) < 3 or action.endswith("?"):
+            raise ValueError("Was soll ich dann tun, Sir? Zum Beispiel: Wenn ich Zockmodus sage, öffne Discord und Steam.")
+        if is_secret(action):
+            raise ValueError("Passwörter und PINs gehören nicht in einen Befehl, Sir. Ein Passwort-Manager ist dafür der bessere Ort.")
+        with self._lock:
+            commands = self._load()["befehle"]
+            known = commands.get(key) or {}
+            commands[key] = {"name": name[:1].upper() + name[1:], "aktion": action[:500],
+                             "seit": self._now().isoformat(timespec="minutes"), "anzahl": int(known.get("anzahl", 0))}
+            for old in sorted(commands, key=lambda k: commands[k].get("seit", ""))[: max(0, len(commands) - MAX_COMMANDS)]:
+                del commands[old]
+            self._save()
+            return dict(commands[key], key=key)
+
+    def unteach(self, trigger: str) -> dict | None:
+        """Löscht einen eigenen Befehl. Gibt ihn zurück, None = gab es nicht."""
+        key = command_key(str(trigger).strip(_QUOTES))
+        with self._lock:
+            commands = self._load()["befehle"]
+            for candidate in _command_candidates(key):
+                if candidate in commands:
+                    removed = commands.pop(candidate)
+                    self._save()
+                    return dict(removed, key=candidate)
+        return None
+
+    def custom_commands(self) -> list[dict]:
+        with self._lock:
+            commands = self._load()["befehle"]
+            return sorted((dict(v, key=k) for k, v in commands.items() if isinstance(v, dict) and v.get("aktion")),
+                          key=lambda c: c.get("name", "").lower())
+
+    def command_for(self, text: str) -> dict | None:
+        """Der eigene Befehl, den Georg gerade gesagt hat ("Zockmodus", "Starte den Zockmodus"), sonst None."""
+        key = command_key(text)
+        if not key or len(key.split()) > MAX_TRIGGER_WORDS + 3:
+            return None
+        with self._lock:
+            commands = self._load()["befehle"]
+            if not commands:
+                return None
+            for candidate in _command_candidates(key):
+                found = commands.get(candidate)
+                if isinstance(found, dict) and found.get("aktion"):
+                    return dict(found, key=candidate)
+        return None
+
+    def used_command(self, key: str) -> None:
+        with self._lock:
+            found = self._load()["befehle"].get(key)
+            if isinstance(found, dict):
+                found["anzahl"] = int(found.get("anzahl", 0)) + 1
+                found["zuletzt"] = self._now().isoformat(timespec="minutes")
+                self._save()
 
     # ------------------------------------------------------------------ Gewohnheiten und Kontakte
 
@@ -472,6 +544,10 @@ class Memory:
         routines = self.routines(now)[:8]
         if routines:
             lines.append(f"Gewohnheiten von {USER}: " + "; ".join(r.describe() for r in routines) + ".")
+        commands = self.custom_commands()[:20]
+        if commands:
+            lines.append(f"Eigene Befehle von {USER} (sagt er den Namen, erledigst du, was dahinter steht): "
+                         + "; ".join(f"„{c['name']}“ = {c['aktion']}" for c in commands) + ".")
         if not lines:
             return ""
         lines.append("Nutze das unaufdringlich. Erfährst du etwas Neues, das auch morgen noch wichtig ist "
@@ -683,11 +759,98 @@ def _first_to_third(fact: str, clause: bool = False) -> str:
     return fact[:1].upper() + fact[1:]
 
 
+# ---------------------------------------------------------------------- Eigene Befehle erkennen
+
+_CALL = r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte[,\s]+)?"
+# "Wenn ich Zockmodus sage, öffne Discord und Steam", "Merk dir: Sobald ich Feierabend sage, ..."
+_TEACH = re.compile(
+    _CALL + r"(?:(?:merk|merke)\s+dir\s*[:,]?\s*)?(?:bitte\s+)?(?:immer\s+)?(?:wenn|sobald)\s+ich\s+"
+    r"(?:(?:in\s+zukunft|ab\s+jetzt|ab\s+sofort|künftig|jetzt|mal|nur|zu\s+dir|dir)\s+)*"
+    r"(?P<trigger>[^,:]{2,60}?)\s+(?:sage|sag|rufe|ruf)\s*(?:[,:]\s*|\s+)(?:dann\s+)?"
+    r"(?:(?:sollst|kannst)\s+du\s+|(?:möchte|will)\s+ich,?\s+dass\s+du\s+)?(?P<action>.{3,})$",
+    re.I,
+)
+# "Wenn ich sage: Zockmodus, dann öffne Discord"
+_TEACH_SAY_FIRST = re.compile(
+    _CALL + r"(?:(?:merk|merke)\s+dir\s*[:,]?\s*)?(?:immer\s+)?(?:wenn|sobald)\s+ich\s+(?:sage|sag)\s*[:,]?\s*"
+    r"(?P<trigger>[^,:]{2,60}?)\s*,\s*(?:dann\s+)?(?P<action>.{3,})$",
+    re.I,
+)
+# "Neuer Befehl Zockmodus: öffne Discord und Steam", "Lerne den Befehl Feierabend, schließ alles"
+_TEACH_NAMED = re.compile(
+    _CALL + r"(?:(?:lern|lerne|speicher|speichere|merk\s+dir)\s+(?:(?:einen|den|diesen)\s+)?(?:neuen\s+)?|neuer\s+|eigener\s+)"
+    r"(?:befehl|kommando|sprachbefehl|makro)\s*[:,]?\s*(?P<trigger>[^:=,]{2,60}?)\s*"
+    r"(?::|=|,|\s+heißt\s+|\s+bedeutet\s+)\s*(?P<action>.{3,})$",
+    re.I,
+)
+_UNTEACH = re.compile(
+    _CALL + r"(?:vergiss|vergesse|lösch|lösche|entferne|entfern)\s+(?:bitte\s+)?(?:den|meinen|diesen)\s+"
+    r"(?:eigenen\s+)?(?:befehl|kommando|sprachbefehl|makro)\s*[:,]?\s*(?P<trigger>.{2,60}?)\s*[.!]*$",
+    re.I,
+)
+_LIST_COMMANDS = re.compile(
+    _CALL + r"(?:(?:welche|was\s+für)\s+(?:eigenen\s+)?befehle\s+(?:kennst\s+du|hast\s+du|habe\s+ich|hab\s+ich|gibt\s+es)"
+    r"(?:\s+(?:von\s+mir|schon|alles|eigentlich|denn|so))*"
+    r"|(?:zeig|zeige|nenn|nenne|sag|sage)\s+(?:mir\s+)?(?:meine|alle\s+meine|die)\s+(?:eigenen\s+)?befehle"
+    r"|was\s+sind\s+meine\s+(?:eigenen\s+)?befehle)\s*[?.!]*$",
+    re.I,
+)
+_START_WORDS = re.compile(
+    r"^(?:starte|start|aktiviere|aktivier|mach|zeit\s+für|wechsle\s+in\s+den|wechsel\s+in\s+den)\s+"
+    r"(?:(?:den|die|das|mal|bitte|jetzt)\s+)*(?P<rest>.+?)(?:\s+(?:an|ein|bitte|jetzt))?$")
+_END_WORDS = re.compile(r"^(?P<rest>.+?)\s+(?:an|ein|starten|aktivieren|los|bitte|jetzt)$")
+_RUN_WORDS = re.compile(r"^(?:führe|führ)\s+(?:(?:den|die|das|mal|bitte)\s+)*(?P<rest>.+?)\s+aus$")
+
+
+# "Wenn ich dir sage, du sollst ...": kein Name für einen Befehl
+_NO_NAME = {"dir", "mir", "es", "das", "dies", "so", "was", "etwas", "nichts", "ihm", "ihr", "euch", "dann", "jetzt"}
+
+
+def command_key(text: str) -> str:
+    """"Hey Jarvis, „Zockmodus“!" -> "zockmodus": so vergleicht Jarvis eigene Befehle."""
+    words = _key(str(text)).split()
+    while words and words[0] in {"hey", "hi", "ok", "okay", "jarvis", "bitte"}:
+        words.pop(0)
+    while words and words[-1] in {"bitte", "jarvis", "jetzt", "mal"}:
+        words.pop()
+    return " ".join(words)
+
+
+def trigger_problem(key: str) -> str:
+    """Warum dieser Name kein eigener Befehl sein kann ("" = er geht)."""
+    if len(key) < 3:
+        return "Der Name ist zu kurz, Sir. Nehmen Sie ein Wort wie Zockmodus oder Feierabend."
+    if key in RESERVED_TRIGGERS:
+        return f"„{key.capitalize()}“ brauche ich selbst, Sir. Nehmen Sie bitte ein anderes Wort."
+    if len(key.split()) > MAX_TRIGGER_WORDS:
+        return "Das ist als Name zu lang, Sir. Ein bis drei Wörter sind ideal, zum Beispiel Zockmodus."
+    return ""
+
+
+def _command_candidates(key: str):
+    """"starte den zockmodus" -> "starte den zockmodus", "zockmodus" (so passt auch die freie Form)."""
+    yield key
+    for pattern in (_START_WORDS, _END_WORDS, _RUN_WORDS):
+        found = pattern.match(key)
+        if found and found.group("rest") != key:
+            yield found.group("rest")
+
+
 def match_memory(text: str):
-    """("remember", fakt) / ("forget", wörter) / ("recall", "") / None"""
+    """("remember", fakt) / ("forget", wörter) / ("recall", "") / ("teach", (name, aktion)) /
+    ("unteach", name) / ("commands", "") / None"""
     raw = " ".join(str(text).split()).strip()
     if _RECALL.match(raw):
         return "recall", ""
+    if _LIST_COMMANDS.match(raw):
+        return "commands", ""
+    found = _UNTEACH.match(raw)
+    if found:
+        return "unteach", found.group("trigger").strip(" .!" + _QUOTES)
+    for pattern in (_TEACH_SAY_FIRST, _TEACH_NAMED, _TEACH):
+        found = pattern.match(raw)
+        if found and not found.group("action").rstrip().endswith("?") and command_key(found.group("trigger")) not in _NO_NAME:
+            return "teach", (found.group("trigger").strip(" ,.!" + _QUOTES), found.group("action").strip())
     found = _REMEMBER.match(raw)
     if found:
         fact = _LEAD.sub("", found.group("fact").strip())  # "Merk dir das: Max hat ..." -> "Max hat ..."
