@@ -310,6 +310,7 @@ class PowerTest(unittest.TestCase):
             "Herunterfahren abbrechen": "power_abort", "Doch nicht": "power_abort",
             "Fahr herunter": "power_off", "Fahr dich runter": "power_off", "Ruhezustand": "power_sleep",
             "Was kannst du?": "help", "Was kannst du alles?": "help", "Hilfe": "help",
+            "Danke": "thanks", "Danke Jarvis": "thanks", "Super, danke": "thanks", "Vielen Dank": "thanks",
             "Energiesparmodus": "power_sleep",
         }
         for said, name in cases.items():

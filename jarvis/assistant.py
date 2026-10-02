@@ -363,6 +363,9 @@ class Assistant:
             return self._disk_free()
         if name == "good_night":
             return self._good_night()
+        if name == "thanks":
+            return random.choice(["Gern geschehen, Sir.", "Stets zu Diensten, Sir.", "Immer gern, Sir.",
+                                  "Keine Ursache, Sir."])
         if name == "help":
             return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Erinnerungen, "
                     "Wetter, Musik, Licht, den PC herunterfahren, und in der Werkstatt programmiere ich für Sie. "

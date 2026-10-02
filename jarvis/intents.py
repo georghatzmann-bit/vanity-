@@ -64,6 +64,11 @@ _RULES: list[tuple[str, re.Pattern]] = [
         r"^(?:gute nacht|nacht|n8)(?: jarvis)?$|^ich (?:geh|gehe) (?:jetzt |dann )?(?:schlafen|ins bett|pennen)$|"
         r"^ich (?:bin|leg mich) (?:jetzt |dann )?(?:weg|im bett|hin)$"
     )),
+    # "Danke": sofort, ohne Claude (spart Zeit und Kontingent)
+    ("thanks", re.compile(
+        r"^(?:(?:super|perfekt|top|cool|gut|ok|okay|alles klar)[, ]+)?(?:danke|danke schön|dankeschön|danke sehr|vielen dank|"
+        r"merci|thx|thanks)(?: dir)?(?: jarvis)?(?:,? (?:das war'?s|passt|super))?$|^(?:gut gemacht|sehr gut|perfekt)(?: jarvis)?$"
+    )),
     # "Was kannst du?" ist meist die erste Frage: sofort und kurz beantworten
     ("help", re.compile(
         r"^(?:was kannst du(?: (?:alles|so|eigentlich|denn|für mich))*(?: tun| machen)?|was kann ich (?:dich )?(?:alles )?(?:fragen|sagen)|"
