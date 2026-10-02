@@ -190,7 +190,20 @@
                 <Grid x:Name="SeiteFertig" Visibility="Collapsed">
                     <StackPanel>
                         <TextBlock x:Name="FertigTitel" Style="{StaticResource Titel}" Text="Jarvis ist bereit." />
-                        <TextBlock x:Name="FertigSatz" Style="{StaticResource Satz}" Margin="0,8,0,0"
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Width="16" Height="16" HorizontalAlignment="Left">
+                                <Ellipse Fill="#2E3FBF85" />
+                                <Path Data="M4.6,8.3 L7,10.6 L11.4,5.8" Stroke="{StaticResource Erfolg}" StrokeThickness="1.7"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                            </Grid>
+                            <TextBlock x:Name="FertigZeile" Grid.Column="1" FontSize="12" Foreground="{StaticResource Nebentext}" VerticalAlignment="Center"
+                                       Text="Alle sechs Schritte sind fertig." />
+                        </Grid>
+                        <TextBlock x:Name="FertigSatz" Style="{StaticResource Satz}" Margin="0,16,0,0"
                                    Text="Beim ersten Start öffnet sich die Einrichtung: Mikrofon, Stimme und die Anmeldung für das Gehirn." />
                         <ItemsControl x:Name="FertigHinweise" Margin="0,16,0,0" ItemTemplate="{StaticResource HinweisVorlage}" Focusable="False" Visibility="Collapsed" />
                         <Button x:Name="KnopfStarten" Style="{StaticResource KnopfPrimaer}" Margin="0,24,0,0" Content="Jarvis starten" Click="Starten_Click" />

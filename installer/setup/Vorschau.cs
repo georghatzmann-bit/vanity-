@@ -90,6 +90,28 @@ namespace JarvisSetup
             "Collecting tokenizers<1,>=0.13 (from faster-whisper>=1.0.0)",
         };
 
+        /// <summary>Für die Bilder: ein ruhiger, dunkler Hintergrund statt der Fenster auf dem Desktop.
+        /// Das Setup-Fenster gehört ihm und liegt deshalb immer darüber.</summary>
+        void KulisseZeigen()
+        {
+            var kulisse = new Window
+            {
+                WindowStyle = WindowStyle.None,
+                ResizeMode = ResizeMode.NoResize,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+                Background = new LinearGradientBrush(Color.FromRgb(0x2A, 0x2E, 0x3A), Color.FromRgb(0x14, 0x16, 0x1C), 45),
+                Left = SystemParameters.VirtualScreenLeft,
+                Top = SystemParameters.VirtualScreenTop,
+                Width = SystemParameters.VirtualScreenWidth,
+                Height = SystemParameters.VirtualScreenHeight,
+                Topmost = true,
+            };
+            kulisse.Show();
+            Owner = kulisse;
+            Topmost = true;
+        }
+
         void VorschauVorbereiten()
         {
             warInstalliert = false;
@@ -161,6 +183,8 @@ namespace JarvisSetup
             {
                 Directory.CreateDirectory(ordner);
                 Activate();
+                // Die Maus aus dem Bild (sonst zeigt eine Zeile ihren Hover-Zustand).
+                Native.SetCursorPos(0, 0);
 
                 // 1. Start (frischer PC), dann mit Hinweisen (Jarvis läuft, wenig Platz)
                 await Task.Delay(1600);
