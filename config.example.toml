@@ -261,6 +261,17 @@ close_apps = []
 # Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
 power_plan = true
 
+[telegram]
+# Jarvis vom Handy über Telegram, von überall: schreiben oder Sprachnachricht schicken, Jarvis antwortet mit
+# Text und in seiner Stimme. Einrichten im Fenster unter Verbinden > Telegram (Bot beim @BotFather anlegen).
+aktiv = false
+# Der Schlüssel vom @BotFather und der Chat, dem der Bot gehört (entsteht beim Verbinden). Nicht weitergeben.
+token = ""
+chat_id = 0
+name = ""
+# true = Antworten auf Sprachnachrichten kommen auch als Sprachnachricht in Jarvis' Stimme.
+sprache = true
+
 [alexa]
 # "Alexa, sag Jarvis, er soll Discord öffnen": ein eigener Alexa-Skill, ohne Home Assistant und
 # ohne Router-Einstellungen. Am einfachsten im Jarvis-Fenster oben rechts ("Verbinden", Bereich

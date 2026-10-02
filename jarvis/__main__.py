@@ -148,6 +148,13 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .push import Push
 
     assistant.push = Push(cfg)  # Benachrichtigungen aufs Handy (Verbinden > Handy)
+    # Telegram: Jarvis vom Handy von überall, Text und Sprachnachrichten (Verbinden > Telegram)
+    from .config import save_setting as _save_setting
+    from .telegram import TelegramBot
+
+    assistant.telegram = TelegramBot(cfg, assistant, save=_save_setting)
+    assistant.telegram.on_paired = lambda who: ui.toast("Telegram ist verbunden" + (f" ({who})" if who else "") + ".", "ok")
+    assistant.telegram.start()
     # Hinweise von selbst: Seltsames am PC, Vergessenes, "Während Sie weg waren" (hinweise.py)
     from .hinweise import Watcher
 

@@ -376,8 +376,100 @@ class Api:
         """Was gerade verbunden ist, für die Punkte am Knopf "Verbinden" (ohne Netzwerkabfrage)."""
         server = getattr(self._assistant, "server", None)
         bridge = getattr(self._assistant, "alexa", None)
+        bot = getattr(self._assistant, "telegram", None)
         return {"phone": bool(server is not None and server.running),
-                "alexa": bool(bridge is not None and bridge.connected)}
+                "alexa": bool(bridge is not None and bridge.connected),
+                "telegram": bool(bot is not None and bot.enabled and bot.chat_id)}
+
+    # ------------------------------------------------------------------ Telegram
+
+    def _telegram(self):
+        bot = getattr(self._assistant, "telegram", None)
+        if bot is None:
+            from ..config import save_setting
+            from ..telegram import TelegramBot
+
+            bot = TelegramBot(getattr(self._assistant, "_cfg", {}) or {}, self._assistant, save=save_setting)
+            bot.on_paired = lambda who: self._bridge.toast("Telegram ist verbunden" + (f" ({who})" if who else "") + ".", "ok")
+            self._assistant.telegram = bot
+        return bot
+
+    def telegram_info(self) -> dict:
+        """Stand für Verbinden > Telegram (der Schlüssel selbst geht nie ans Fenster)."""
+        bot = self._telegram()
+        return {"enabled": bool(bot.enabled), "has_token": bool(bot.token), "name": bot.username,
+                "paired": bool(bot.chat_id), "voice": bool(bot.voice), "running": bot.running, "error": bot.last_error}
+
+    def telegram_setup(self, token) -> dict:
+        """Schlüssel vom @BotFather: prüfen, speichern, einschalten und einen Link zum Verbinden zeigen."""
+        from ..config import save_setting
+
+        bot = self._telegram()
+        token = str(token or "").strip()
+        if token:
+            check = bot.check(token)
+            if not check["ok"]:
+                return {**self.telegram_info(), "ok": False, "error": check["error"]}
+            bot.use_token(token, check["name"])
+            save_setting("telegram", "token", token)
+            save_setting("telegram", "name", bot.username)
+        elif not bot.token:
+            return {**self.telegram_info(), "ok": False, "error": "Bitte zuerst den Schlüssel vom @BotFather einfügen."}
+        elif not bot.username:
+            bot.check()
+        bot.enabled = True
+        save_setting("telegram", "aktiv", True)
+        bot.start()
+        pair = bot.pairing() if not bot.chat_id else {"code": "", "link": "", "name": bot.username}
+        qr = ""
+        if pair["link"]:
+            try:
+                from ..remote import qr_svg
+
+                qr = qr_svg(pair["link"])
+            except Exception as exc:
+                log.debug("Telegram-QR: %s", exc)
+        return {**self.telegram_info(), "ok": True, "code": pair["code"], "link": pair["link"], "qr": qr, "error": ""}
+
+    def telegram_new_pairing(self) -> dict:
+        """Anderes Handy: die alte Verbindung lösen und einen neuen Link zeigen."""
+        bot = self._telegram()
+        bot.unpair()
+        return self.telegram_setup("")
+
+    def telegram_voice(self, on) -> dict:
+        from ..config import save_setting
+
+        bot = self._telegram()
+        bot.voice = bool(on)
+        save_setting("telegram", "sprache", bool(on))
+        return self.telegram_info()
+
+    def telegram_off(self) -> dict:
+        from ..config import save_setting
+
+        bot = self._telegram()
+        bot.enabled = False
+        bot.stop()
+        save_setting("telegram", "aktiv", False)
+        return self.telegram_info()
+
+    def telegram_help(self) -> bool:
+        """Den @BotFather in Telegram öffnen (dort legt Georg seinen Bot an)."""
+        import webbrowser
+
+        try:
+            return bool(webbrowser.open("https://t.me/BotFather"))
+        except Exception:
+            return False
+
+    def telegram_test(self) -> dict:
+        bot = self._telegram()
+        if not bot.chat_id:
+            return {"ok": False, "error": "Erst verbinden: den Link auf dem Handy öffnen und Starten tippen."}
+        ok = bot.send("Guten Tag, Sir. Telegram funktioniert. Schreiben Sie mir oder schicken Sie eine Sprachnachricht.",
+                      voice=True)
+        return {"ok": ok, "error": "" if ok else "Telegram war gerade nicht erreichbar."}
 
     # ------------------------------------------------------------------ Alexa
 

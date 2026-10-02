@@ -8,7 +8,7 @@ Dein eigener J.A.R.V.I.S. für Windows: Du sagst „Hey Jarvis“ oder drückst 
 
 ```
 Mikrofon → "Hey Jarvis" (openWakeWord, lokal), "Jarvis"/"Hallo Jarvis" (halber Treffer + Prüfung per Spracherkennung, mit Schlüssel über Porcupine), Strg+Alt+J oder im Gespräch einfach weiterreden
-Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntfy.sh (verschlüsselt)
+Handy    → eigene Web-App im WLAN (QR-Code) oder Telegram-Bot, Alexa → eigener Skill über ntfy.sh (verschlüsselt)
          → Satzende per Silero VAD (lokal)
          → Sprache zu Text auf dem PC: Parakeet v3 (Ersatz faster-whisper), schon in der Sprechpause vorab erkannt
          → Sofort-Befehle direkt: Programme, Webseiten, Chatnachrichten, Discord ohne Maus, Erinnerungen,
@@ -36,6 +36,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Stimme komplett lokal:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo. Der Installer richtet beides ein, fehlt es, holt Jarvis es im Hintergrund nach. Beim Start wärmt er beides vor, häufige Sätze liegen fertig bereit. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
 - **Versteht dich auch, wenn die Erkennung sich verhört:** Programme, Kontakte und eigene Befehle findet Jarvis auch nach Klang („Spottifei“ ist Spotify, „Maks“ ist Max), mit Kölner Phonetik (`klang.py`). Claude weiß, dass gesprochen wurde, und deutet Verhörer nach Zusammenhang.
 - **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen und die Werkstatt verfolgen. Jarvis antwortet auf dem Handy in seiner eigenen Stimme. Mit Tailscale („Sicher von überall“) auch unterwegs, mit Sprechtaste und als installierbare App. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
+- **Telegram:** von überall schreiben oder eine Sprachnachricht schicken, ohne Tailscale und ohne App-Store. Jarvis antwortet mit Text und als Sprachnachricht in seiner eigenen Stimme, Erinnerungen kommen auch dorthin. Eigener Bot vom @BotFather, gekoppelt per QR-Code, gehört danach nur deinem Chat.
 - **Alexa:** „Alexa, sag Jarvis, er soll Discord öffnen.“ Ein eigener Skill (Von Alexa gehostet), den Jarvis fertig zum Kopieren anbietet. Die Nachrichten laufen verschlüsselt über ntfy.sh, ohne Home Assistant und ohne Router-Einstellungen. Mit Home Assistant zusätzlich Ansagen auf Echos und Licht.
 - **Bildschirm lesen und Programme ohne Maus bedienen:** Texterkennung von Windows (in etwa einer Sekunde) und UI Automation: Knöpfe drücken und Felder ausfüllen, ohne Maus und Tastatur zu nehmen.
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Getestet wird auf einem unsichtbaren zweiten Windows-Desktop (`versteckt.py`), Testfenster poppen also nicht auf. Große Aufträge mit Opus und viel Nachdenken, kleine mit Sonnet. Während der Arbeit kannst du mit Jarvis reden: Wünsche („Mach den Hintergrund blau“) gehen direkt in die laufende Arbeit, Fragen beantwortet er mit Blick auf den Plan, am Ende fragt er, ob er das Ergebnis starten soll. Das Fenster zeigt die Arbeit als Blaupause: Plan, Ablauf, Dateien, Befehle und das Projekt als Hologramm, das sich von unten aufbaut, erst als passendes Drahtmodell, dann als eigenes Logo, das die Werkstatt zeichnet (`logo.svg`). Dazu alle Projekte als Übersicht mit Logo: Ansehen (Plan, Ablauf, Dateien, Verlauf), Starten, Vorschau, Weiterbauen und Löschen (in den Papierkorb, per Sprache mit Rückfrage). Unten in der Werkstatt ein Feld für Änderungen mitten in der Arbeit.
@@ -68,7 +69,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Claude-Abo (Pro oder Max):** das Gehirn. Jarvis nimmt das große Modell nur, wo es sich lohnt, das schont das Kontingent. Fehlt ein Modell im Abo, nimmt er von selbst das nächstkleinere.
 - **Stimme und Spracherkennung:** gratis, ganz auf dem PC (Pocket TTS und Parakeet).
 - **ElevenLabs:** freiwillig. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Fällt ElevenLabs aus, spricht die lokale Stimme.
-- **Alexa-Skill, ntfy.sh und Tailscale:** gratis.
+- **Alexa-Skill, Telegram-Bot, ntfy.sh und Tailscale:** gratis.
 - **Konnektoren (Gmail, Google Kalender, Shopify …):** kommen mit deinem Claude-Konto, die Dienste selbst kosten, was sie eben kosten.
 
 ## Anpassen
@@ -85,7 +86,7 @@ Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden�
 - `[gui]` `start_hidden`, `close_to_tray`, `overlay`, `on_wake`
 - `[brain]` `modellwahl = "auto" | "schnell" | "normal" | "gruendlich" | "maximal" | "aus"`, `stufe_schnell` … `stufe_maximal` (Modell und Nachdenken je Stufe, z. B. `"opus high"`), `models` (Ersatzreihe), `konnektoren` (claude.ai-Konnektoren an/aus), `disallowed_tools`, `timeout_seconds`
 - `[werkstatt]` `ordner`, `modell = "auto" | "opus" | "sonnet"`, `effort`
-- `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[alexa]` Skill, `[homeassistant]` Echos und Licht
+- `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[telegram]` Bot, `[alexa]` Skill, `[homeassistant]` Echos und Licht
 - `[gaming]` `close_apps`, `power_plan`
 - `jarvis_home/CLAUDE.md`: Jarvis' Persönlichkeit und seine Befehle
 
@@ -115,6 +116,7 @@ Zum Ausprobieren im Jarvis-Ordner: `"%LOCALAPPDATA%\Jarvis\venv\Scripts\python.e
 - Endgültig löschen, formatieren und die Registry ausräumen sind für Claude gesperrt (`disallowed_tools`). Dateien gehen nur in den Papierkorb. Ganze Laufwerke, dein Benutzerordner sowie Desktop, Dokumente und Downloads selbst kommen nie hinein.
 - Ohne volle Freigabe tun `papierkorb`, `deinstallieren` und Herunterfahren erst nach deinem „Ja“ etwas. `admin`-Befehle, die endgültig löschen oder formatieren, fragen immer, auch mit voller Freigabe.
 - Die Handy-App braucht einen langen Schlüssel (steht im QR-Code), „Neu koppeln“ sperrt alte Handys aus. Der Alexa-Weg ist mit einem eigenen Schlüssel verschlüsselt und signiert, alte oder doppelte Nachrichten werden verworfen.
+- Der Telegram-Bot gehört nur dem Chat, der den Code aus dem Fenster geschickt hat (sechs Ziffern, 15 Minuten gültig, nur einmal). Fremde bekommen eine einzige Antwort und sonst nichts. Der Bot-Schlüssel steht nur in `config.toml`, nie im Protokoll und nie im Fenster.
 - Weckwort, Satzende, Spracherkennung und Stimme laufen auf dem PC. An Claude geht nur der erkannte Text (an Groq nur, wenn du es ausdrücklich einschaltest). Das Gedächtnis bleibt auf deinem PC.
 
 ## Windows-Details
@@ -145,6 +147,7 @@ jarvis/
   screen.py       Bildschirmfoto, Texterkennung, UI Automation
   remote.py server.py        Handy-App: Verlauf, Zustand, QR-Code, Web-Eingang
   push.py         Benachrichtigungen aufs Handy (ntfy)
+  telegram.py     Telegram-Bot: Text und Sprachnachrichten von überall, Koppeln per Code
   alexa.py alexa_skill.py    Alexa: Brücke über ntfy.sh und der Skill-Code
   presence.py     Fenster beim Weckwort zeigen und danach wieder verstecken
   apps.py         Programme: Startmenü-Index, bekannte Apps, winget, Schließen
@@ -156,7 +159,7 @@ jarvis/
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause mit Hologramm, Projekt-Übersicht
-                  koppeln.js gedaechtnis.js       Verbinden (Handy, Alexa, Konnektoren), Gedächtnis
+                  koppeln.js gedaechtnis.js       Verbinden (Handy, Telegram, Alexa, Konnektoren), Gedächtnis
                   setup.html setup.js setup.css   Einrichtung (Api: setup_wizard.SetupApi)
                   handy/          die Handy-App (PWA)
                   Alle Seiten laufen auch im normalen Browser als Demo.
@@ -166,4 +169,4 @@ installer/      Inno-Setup-Kern (jarvis.iss), Bilder und Windows-Proben für den
 tests/          python -m unittest discover -s tests
 ```
 
-Die Tests laufen ohne Mikrofon, ohne echtes Claude und ohne Internet (nachgebautes `claude`, ElevenLabs, Groq und ntfy).
+Die Tests laufen ohne Mikrofon, ohne echtes Claude und ohne Internet (nachgebautes `claude`, ElevenLabs, Groq, ntfy und Telegram).

@@ -297,7 +297,10 @@ class Assistant:
 
     def _push(self, text: str) -> None:
         push = getattr(self, "push", None)
-        if push is None or not push.enabled or not text:
+        telegram = getattr(self, "telegram", None)
+        push_on = push is not None and push.enabled
+        telegram_on = telegram is not None and telegram.enabled and telegram.chat_id
+        if not text or not (push_on or telegram_on):
             return
         try:
             # Sitzt Georg am PC, hört er es. Mit Controller im Vollbild zählt Windows keine Eingaben,
@@ -306,7 +309,10 @@ class Assistant:
                 return
         except Exception:
             pass
-        push.send(text, priority=4 if text.startswith("Erinnerung") else 3, click=self._phone_link())
+        if telegram_on:
+            threading.Thread(target=telegram.notify, args=(text,), name="jarvis-telegram-hinweis", daemon=True).start()
+        if push_on:
+            push.send(text, priority=4 if text.startswith("Erinnerung") else 3, click=self._phone_link())
 
     def _phone_link(self) -> str:
         """Tippen auf die Benachrichtigung öffnet die Handy-App (ohne Schlüssel, den hat das Handy schon)."""
@@ -1262,6 +1268,9 @@ class Assistant:
         push = getattr(self, "push", None)
         if push is not None and push.enabled:
             push.send(text, priority=4, click=self._phone_link())
+        telegram = getattr(self, "telegram", None)
+        if telegram is not None and telegram.enabled and telegram.chat_id:
+            threading.Thread(target=telegram.notify, args=(text,), name="jarvis-telegram-hinweis", daemon=True).start()
         self._note_missed(text)
 
     def _push_at(self, when: dt.datetime, text: str) -> str:

@@ -90,6 +90,13 @@
     workshop_continue: (folder, text) => window.pywebview.api.workshop_continue(folder, text),
     workshop_run: (folder) => window.pywebview.api.workshop_run(folder),
     workshop_project: (folder) => window.pywebview.api.workshop_project(folder),
+    telegram_info: () => window.pywebview.api.telegram_info(),
+    telegram_setup: (token) => window.pywebview.api.telegram_setup(token),
+    telegram_new_pairing: () => window.pywebview.api.telegram_new_pairing(),
+    telegram_voice: (on) => window.pywebview.api.telegram_voice(on),
+    telegram_off: () => window.pywebview.api.telegram_off(),
+    telegram_test: () => window.pywebview.api.telegram_test(),
+    telegram_help: () => window.pywebview.api.telegram_help(),
     blueprint_state: () => window.pywebview.api.blueprint_state(),
     blueprint_active: (on) => window.pywebview.api.blueprint_active(on),
     blueprint_select: (id) => window.pywebview.api.blueprint_select(id),
@@ -1272,7 +1279,7 @@
       workshop_preview: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
       phone_info: () => Promise.resolve(DEMO_PHONE),
-      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled }),
+      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled, telegram: !!DEMO_TG.paired }),
       push_info: () => Promise.resolve(DEMO_PUSH),
       push_enable: (on) => Promise.resolve(Object.assign(DEMO_PUSH, { enabled: !!on })),
       push_test: () => Promise.resolve({ ok: true, error: '' }),
@@ -1284,6 +1291,19 @@
       tailscale_help: () => Promise.resolve(true),
       connectors: (fresh) => new Promise((done) => setTimeout(() => done({ an: true, liste: DEMO_KONN, fehler: '' }), fresh ? 1200 : 80)),
       connectors_help: () => Promise.resolve(true),
+      telegram_info: () => Promise.resolve(Object.assign({}, DEMO_TG)),
+      telegram_setup: (token) => {
+        if (token && !/^\d{5,12}:[A-Za-z0-9_-]{30,50}$/.test(token)) {
+          return Promise.resolve(Object.assign({}, DEMO_TG, { ok: false, error: 'Das sieht nicht wie ein Bot-Schlüssel aus (Zahl, Doppelpunkt, langer Text).' }));
+        }
+        Object.assign(DEMO_TG, { enabled: true, has_token: true, name: 'jarvis_georg_bot' });
+        return Promise.resolve(Object.assign({}, DEMO_TG, { ok: true, code: '482913', link: 'https://t.me/jarvis_georg_bot?start=482913', qr: DEMO_PHONE.qr }));
+      },
+      telegram_new_pairing: () => Promise.resolve(Object.assign(DEMO_TG, { paired: false }) && Object.assign({}, DEMO_TG, { ok: true, code: '771204', link: 'https://t.me/jarvis_georg_bot?start=771204', qr: DEMO_PHONE.qr })),
+      telegram_voice: (on) => Promise.resolve(Object.assign(DEMO_TG, { voice: !!on })),
+      telegram_off: () => Promise.resolve(Object.assign(DEMO_TG, { enabled: false })),
+      telegram_test: () => Promise.resolve({ ok: true, error: '' }),
+      telegram_help: () => Promise.resolve(true),
       labor_info: () => (/[?&]labor\b/.test(location.search) ? Promise.resolve(DEMO_LABOR) : Promise.reject(new Error('kein Labor'))),
       labor_open: () => Promise.resolve({ ok: false, error: 'Im Demo-Modus öffnet sich kein Ordner.' }),
       werkzeug_loeschen: () => Promise.resolve(true),
@@ -1404,6 +1424,8 @@
   const DEMO_ALEXA = { enabled: true, connected: true };
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
   const DEMO_TS = { url: '' };
+  const DEMO_TG = { enabled: /[?&]telegram\b/.test(location.search), has_token: true, name: 'jarvis_georg_bot',
+    paired: /[?&]telegram\b/.test(location.search), voice: true, running: true, error: '' };
 
   // wie connectors() in gui/app.py: die Konnektoren, die Claude über Georgs Konto meldet
   const DEMO_KONN = [

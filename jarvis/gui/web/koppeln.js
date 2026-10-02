@@ -1,4 +1,4 @@
-/* Verbinden: Handy (Verbindung an/aus, QR-Code, Adresse), Alexa und Georgs Konnektoren. */
+/* Verbinden: Handy (Verbindung an/aus, QR-Code, Adresse), Telegram, Alexa und Georgs Konnektoren. */
 (function () {
   'use strict';
 
@@ -44,6 +44,22 @@
       konnList: $('konnList'),
       konnRefresh: $('konnRefresh'),
       konnHelp: $('konnHelp'),
+      tgState: $('tgState'),
+      tgOff: $('tgOff'),
+      tgSetup: $('tgSetup'),
+      tgFather: $('tgFather'),
+      tgForm: $('tgForm'),
+      tgToken: $('tgToken'),
+      tgSave: $('tgSave'),
+      tgPair: $('tgPair'),
+      tgQr: $('tgQr'),
+      tgLink: $('tgLink'),
+      tgCopy: $('tgCopy'),
+      tgCode: $('tgCode'),
+      tgReady: $('tgReady'),
+      tgVoice: $('tgVoice'),
+      tgTest: $('tgTest'),
+      tgNew: $('tgNew'),
     };
     function el_tabs() {
       return document.querySelectorAll('.dlg-tabs button[data-pane]');
@@ -236,10 +252,137 @@
       el.konnHelp.addEventListener('click', () => call('connectors_help').catch(() => {}));
     }
 
+    // ---------- Telegram: Jarvis vom Handy von überall, Text und Sprachnachrichten
+
+    let tg = null;
+    let tgPoll = 0;
+
+    function renderTelegram(pair) {
+      if (!el.tgState) return;
+      const on = !!(tg && tg.enabled);
+      const paired = !!(tg && tg.paired);
+      const name = tg && tg.name ? '@' + tg.name : 'Ihr Bot';
+      el.tgState.textContent = !on ? 'Aus' : paired ? 'Verbunden mit ' + name : 'An: wartet auf Ihr Handy';
+      if (tg && tg.error && on) el.tgState.textContent += ' (' + tg.error + ')';
+      el.tgOff.hidden = !on;
+      el.tgSetup.hidden = on && (paired || !!pair);
+      el.tgReady.hidden = !(on && paired);
+      if (el.tgVoice) el.tgVoice.checked = !!(tg && tg.voice);
+      const showPair = !!(pair && pair.link) && !paired;
+      el.tgPair.hidden = !showPair;
+      if (showPair) {
+        el.tgLink.textContent = pair.link;
+        el.tgCode.textContent = 'Oder dem Bot diesen Code schicken: ' + pair.code + ' (gilt 15 Minuten).';
+        if (pair.qr && /^<svg[\s>]/.test(pair.qr) && !/<script|on\w+\s*=/i.test(pair.qr)) el.tgQr.innerHTML = pair.qr;
+        else el.tgQr.textContent = '';
+      }
+    }
+
+    async function refreshTelegram() {
+      try {
+        tg = await call('telegram_info');
+      } catch {
+        tg = { enabled: false };
+      }
+      renderTelegram(null);
+      return tg;
+    }
+
+    function waitForPairing() {
+      clearInterval(tgPoll);
+      const until = Date.now() + 15 * 60000;
+      tgPoll = setInterval(async () => {
+        const now = await refreshTelegram();
+        if ((now && now.paired) || Date.now() > until || el.dlg.hidden) {
+          clearInterval(tgPoll);
+          if (now && now.paired) toast('Telegram ist verbunden. Schreiben Sie Ihrem Bot.', 'ok');
+        }
+      }, 3000);
+    }
+
+    async function setupTelegram(token) {
+      el.tgSave.disabled = true;
+      try {
+        const r = await call('telegram_setup', token);
+        tg = r;
+        if (r && r.ok) {
+          el.tgToken.value = '';
+          renderTelegram(r);
+          if (!r.paired) {
+            toast('Der Schlüssel passt. Jetzt den Link auf dem Handy öffnen und Starten tippen.', 'ok');
+            waitForPairing();
+          }
+        } else {
+          renderTelegram(null);
+          toast((r && r.error) || 'Das ging nicht.', 'error');
+        }
+      } catch {
+        toast('Im Demo-Modus geht das nicht.', 'info');
+      } finally {
+        el.tgSave.disabled = false;
+      }
+    }
+
+    if (el.tgForm) {
+      el.tgForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        setupTelegram(el.tgToken.value.trim());
+      });
+      el.tgFather.addEventListener('click', () => call('telegram_help').catch(() => {}));
+      el.tgCopy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(el.tgLink.textContent);
+          toast('Link kopiert.', 'ok');
+        } catch {
+          toast('Kopieren ging nicht.', 'error');
+        }
+      });
+      el.tgOff.addEventListener('click', async () => {
+        try {
+          tg = await call('telegram_off');
+          clearInterval(tgPoll);
+          renderTelegram(null);
+          toast('Telegram ist aus.', 'ok');
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+      });
+      el.tgVoice.addEventListener('change', async () => {
+        try {
+          tg = await call('telegram_voice', el.tgVoice.checked);
+          renderTelegram(null);
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+      });
+      el.tgTest.addEventListener('click', async () => {
+        el.tgTest.disabled = true;
+        try {
+          const r = await call('telegram_test');
+          toast(r && r.ok ? 'Test ist unterwegs. Schauen Sie aufs Handy.' : (r && r.error) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
+        } catch {
+          toast('Im Demo-Modus geht keine Nachricht raus.', 'info');
+        } finally {
+          el.tgTest.disabled = false;
+        }
+      });
+      el.tgNew.addEventListener('click', async () => {
+        try {
+          const r = await call('telegram_new_pairing');
+          tg = r;
+          renderTelegram(r);
+          waitForPairing();
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+      });
+    }
+
     function showPane(pane) {
       for (const b of el.tabs) b.setAttribute('aria-selected', String(b.dataset.pane === pane));
       for (const p of el.dlg.querySelectorAll('.dlg-pane')) p.hidden = p.dataset.pane !== pane;
       if (pane === 'alexa') refreshAlexa();
+      if (pane === 'telegram') refreshTelegram();
       if (pane === 'konnektoren') refreshConnectors(false);
     }
 
@@ -346,7 +489,7 @@
 
     // ------------------------------------------------------------ Punkte am Knopf
 
-    const NAMES = { phone: 'Handy', alexa: 'Alexa' };
+    const NAMES = { phone: 'Handy', telegram: 'Telegram', alexa: 'Alexa' };
 
     async function refreshDots() {
       let state = null;
@@ -362,7 +505,7 @@
         dot.dataset.on = active ? '1' : '0';
         if (active) on.push(NAMES[dot.dataset.k]);
       });
-      el.btn.dataset.on = state.phone ? '1' : '0';
+      el.btn.dataset.on = state.phone || state.telegram ? '1' : '0';
       el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, Alexa und Konnektoren.'
         : 'Handy und Alexa mit Jarvis verbinden, Konnektoren ansehen';
       el.btn.setAttribute('aria-label', 'Verbinden' + (on.length ? ', verbunden: ' + on.join(', ') : ''));
