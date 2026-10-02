@@ -49,8 +49,8 @@ namespace JarvisSetup
             (8300, "JARVIS-ANTEIL 95"),
             (8700, "JARVIS-OK 3"),
             (8800, "JARVIS-SCHRITT 4/6 Spracherkennung"),
-            (8900, "JARVIS-DETAIL Spracherkennung wird geladen: 96 von etwa 460 MB"),
-            (9800, "JARVIS-DETAIL Spracherkennung wird geladen: 310 von etwa 460 MB"),
+            (8900, "JARVIS-DETAIL Spracherkennung wird geladen: 96 von 464 MB"),
+            (9800, "JARVIS-DETAIL Spracherkennung wird geladen: 310 von 464 MB"),
             (9900, "JARVIS-ANTEIL 70"),
             (10700, "JARVIS-OK 4"),
             (10800, "JARVIS-SCHRITT 5/6 Jarvis' Gehirn"),
@@ -203,7 +203,7 @@ namespace JarvisSetup
                 Installieren_Click(this, new RoutedEventArgs());
                 Einspielen("JARVIS-SCHRITT 1/6 Vorbereiten", "JARVIS-OK 1",
                     "JARVIS-SCHRITT 2/6 Python", "JARVIS-OK 2 Python 3.12",
-                    "JARVIS-SCHRITT 3/6 Pakete", "JARVIS-DETAIL Pakete werden geladen: 34 von etwa 60", "JARVIS-ANTEIL 57");
+                    "JARVIS-SCHRITT 3/6 Pakete", "JARVIS-DETAIL Pakete werden geladen: 36 von etwa 60", "JARVIS-ANTEIL 60");
                 RestText.Text = vorschauRest;
                 await Task.Delay(2200);
                 Foto(ordner, "fortschritt.png");
