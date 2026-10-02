@@ -2,6 +2,7 @@
 
 import datetime as dt
 import json
+import os
 import sys
 import time
 import types
@@ -174,6 +175,37 @@ class WorkshopRunTest(unittest.TestCase):
         self.assertEqual([t["text"] for t in snap["todos"]], ["Ordner anlegen", "Bot schreiben", "Testen"])
         self.assertEqual({s["state"] for s in snap["steps"]}, {"done"})
         self.assertTrue(snap["summary"].startswith("Der Bot ist fertig"))
+
+    def test_tests_run_on_the_invisible_desktop_and_connectors_stay_on(self):
+        from jarvis import versteckt
+
+        started = []
+        real = versteckt.popen
+
+        def popen(cmd, cwd=None, env=None, hidden=True):
+            started.append(hidden)
+            return real(cmd, cwd=cwd, env=env, hidden=hidden)
+
+        with mock.patch.object(versteckt, "popen", popen):
+            self.workshop.start("Bau mir einen Discord-Bot, der Hallo sagt")
+            self.wait()
+        self.assertEqual(self.workshop.job.state, "done")
+        self.assertEqual(started, [True], "die Werkstatt startet auf dem unsichtbaren Arbeitsplatz")
+        args = json.loads((self.workshop.job.folder / "calls.jsonl").read_text(encoding="utf-8").splitlines()[0])["args"]
+        self.assertNotIn("--safe-mode", args, "sonst wären Georgs Konnektoren aus (Logo, Deploy ...)")
+        self.assertIn("--disable-slash-commands", args)
+
+    def test_invisible_desktop_falls_back_to_a_normal_start(self):
+        from jarvis import versteckt
+
+        # Ohne Windows (oder wenn der Desktop nicht geht): ganz normal, mit denselben Leitungen
+        proc = versteckt.popen([sys.executable, "-c", "import sys; print('echo:' + sys.stdin.readline().strip())"])
+        proc.stdin.write("hallo\n")
+        proc.stdin.flush()
+        self.assertEqual(proc.stdout.readline().strip(), "echo:hallo")
+        self.assertEqual(proc.wait(timeout=10), 0)
+        if os.name != "nt":
+            self.assertFalse(versteckt.available())
 
     def test_question_at_the_end_and_answer_continues_the_same_project(self):
         self.workshop.start("Bau mir einen Bot mit Token")

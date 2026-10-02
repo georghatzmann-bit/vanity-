@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import konnektoren
+from . import konnektoren, versteckt
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +75,12 @@ nichts mit `jarvis.tool werkstatt` weiter.
 - Mach zuerst mit TodoWrite einen kurzen Plan mit drei bis sieben Schritten und hake sie ab.
 - Teste, was du baust (starten, kurz ausprobieren, Tests). Scheitert ein Befehl, lies die Meldung und
   versuche einen anderen Weg, statt aufzugeben. Fehlen Pakete, installiere sie.
+- Georg soll von deinen Tests nichts merken: Öffne nie den Browser, den Explorer oder Dateien und
+  Webseiten mit start, Start-Process oder Invoke-Item (das landet auf seinem Bildschirm). Prüfe Webseiten
+  mit einem kurzen Skript (Dateien, Links, HTML) oder einem Browser ohne Fenster (headless). Programme mit
+  Fenster startest du nur kurz, mit Zeitlimit, und beendest sie wieder; pygame-Spiele mit
+  SDL_VIDEODRIVER=dummy. Startet ein Fenster beim Test nicht, kann das am unsichtbaren Arbeitsplatz liegen,
+  nicht am Code: dann prüfe die Logik ohne Fenster.
 {platform}
 - Lege eine kurze LIESMICH.txt an: was es ist und wie man es startet.
 - Zum Schluss genau zwei oder drei kurze Sätze für Georg, auf Deutsch, ohne Markdown, wie immer mit
@@ -923,17 +929,17 @@ class Workshop:
         stdin offen: Georgs Wünsche während der Arbeit kommen als weitere Nachrichten dazu (Job.message).
         Fertig ist der Lauf, wenn auf jede Nachricht eine Antwort kam, oder wenn nach der letzten Antwort
         eine Weile nichts mehr passiert (dann war der Wunsch schon in der Arbeit drin)."""
-        from .brain import NO_WINDOW, _close, _kill, _pump, _StreamReader, with_time
+        from .brain import _close, _kill, _pump, _StreamReader, with_time
 
         started = time.monotonic()
         cmd = self.command(job, persona)
         live = "--input-format" in cmd
         log.info("Werkstatt %s in %s (%s, Nachdenken %s): %s", "weiter" if job.resume else "startet", job.folder,
                  job.model or "Standard", job.effort or "Standard", job.task)
-        proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=job.folder,
-            env=self.environment(job), text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
-        )
+        # Auf einem unsichtbaren Arbeitsplatz (eigener Windows-Desktop): Was Claude zum Testen startet,
+        # öffnet seine Fenster dort und nicht auf Georgs Bildschirm (versteckt.py).
+        proc = versteckt.popen(cmd, cwd=job.folder, env=self.environment(job),
+                               hidden=bool(self._cfg.get("unsichtbar", True)))
         self._proc = proc
         lines: queue.Queue = queue.Queue()
         errors: list = []
