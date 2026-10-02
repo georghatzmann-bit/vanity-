@@ -256,7 +256,7 @@ Die Regeln: Jarvis spricht nur, wenn du am PC sitzt, nie beim Zocken oder im Vol
 
 Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
 
-1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster zeigt den Auftrag: links den Plan, in der Mitte jeden Schritt mit Dauer, rechts den Fortschritt als Ring und die Dateien.
+1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster zeigt den Auftrag als Blaupause: links den Plan, in der Mitte jeden Schritt mit Dauer, rechts das Projekt als Hologramm und die Dateien. Das Hologramm baut sich mit der Arbeit von unten nach oben auf, zuerst als Drahtmodell, das zum Auftrag passt (Roboter für einen Bot, Controller für ein Spiel, Globus für eine Webseite …). Gleich nach dem Plan zeichnet Jarvis ein eigenes Logo für das Projekt (`logo.svg` im Projektordner), ab dann baut sich dieses Logo als Hologramm auf. Ist alles fertig, leuchtet es grün.
 2. Jarvis arbeitet im Hintergrund, und du kannst dabei mit ihm reden:
    - **„Wie weit bist du?“** nennt den aktuellen Schritt.
    - **Wünsche gehen direkt in die laufende Arbeit:** „Mach den Hintergrund blau“, „Nimm lieber Python“, „Füg noch einen Highscore hinzu“. Jarvis sagt „Ich baue das gleich mit ein“, im Ablauf steht dann „Ihr Wunsch: …“.
@@ -264,7 +264,7 @@ Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“*
 3. Ist er fertig, sagt er es dir und fragt: „Soll ich es gleich starten?“ Ein **„Ja“** genügt. **Ordner öffnen** zeigt das Projekt.
 
 - **Große Aufträge** (Spiele, Apps mit Login, Shops) baut Jarvis mit Opus und viel Nachdenken, kleine mit Sonnet. Sagst du „beste Qualität“, denkt er noch gründlicher.
-- **Alle Projekte auf einen Blick:** oben im Fenster **Werkstatt**, oder „Zeig mir meine Projekte“. Jede Karte zeigt den Stand, **Starten** und **Weiterbauen**.
+- **Alle Projekte auf einen Blick:** oben im Fenster **Werkstatt**, oder „Zeig mir meine Projekte“. Jede Karte zeigt das Logo des Projekts, den Stand, **Starten** und **Weiterbauen**.
 - **Weiter am selben Projekt:** „Arbeite am Discord-Bot weiter: füg einen Befehl hinzu“. Jarvis weiß noch, was er gebaut hat.
 - „Starte das Projekt Würfelspiel“, „Öffne den Ordner vom Discord-Bot“
 - Jedes Projekt hat einen eigenen Ordner unter `%USERPROFILE%\Jarvis-Werkstatt`.

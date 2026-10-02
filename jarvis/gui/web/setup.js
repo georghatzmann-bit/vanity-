@@ -606,7 +606,7 @@
     btn.textContent = L.busy ? 'Wird eingerichtet …' : L.error ? 'Nochmal versuchen' : 'Lokal einrichten';
     if (L.error) formMsg('localMsg', 'error', L.error);
     else if (L.busy) formMsg('localMsg', 'info', L.line || 'Lädt …');
-    else if (L.ready) formMsg('localMsg', 'ok', L.active ? 'Jarvis spricht mit der lokalen Stimme.' : 'Bereit. Wählen Sie unten eine Stimme, dann spricht Jarvis damit.');
+    else if (L.ready) formMsg('localMsg', 'ok', L.active ? 'Jarvis spricht mit der lokalen Stimme.' : 'Bereit. Wähl unten eine Stimme, dann spricht Jarvis damit.');
     else formMsg('localMsg', 'info', 'Noch nicht eingerichtet, bei der Installation fehlte wohl das Internet. Einmal klicken (etwa 1,3 GB, 5 bis 15 Minuten), oder einfach warten: Jarvis holt es beim Start von selbst nach.');
     const grid = $('localGrid');
     grid.replaceChildren();
