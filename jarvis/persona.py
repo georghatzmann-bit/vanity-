@@ -72,6 +72,11 @@ def _extras(home: Path, state_dir: Path, cfg: dict, name: str) -> str:
             f"Dein Notizbuch (Markdown, Obsidian-Tresor) liegt in `{folder_from_config(cfg)}`. Dort steht jedes Gespräch "
             "mit Datum, dazu Personen, Berichte und Notizen. Wie du es nutzt: Fähigkeit notizbuch.\n"
         )
+    brain = cfg.get("brain", {}) or {}
+    if brain.get("spezialisten", True) and "Agent" in (brain.get("tools") or ["Agent"]):
+        from .helfer import PERSONA
+
+        parts.append(PERSONA.strip() + "\n")
     try:
         skills = load_skills(home, state_dir)
     except Exception as exc:

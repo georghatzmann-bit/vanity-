@@ -47,7 +47,7 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 7
+CONFIG_VERSION = 8
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
@@ -84,6 +84,11 @@ _UPGRADES = {
 _LIST_REMOVALS = {
     4: [("brain", "disallowed_tools", ("Bash(winget install:*)", "PowerShell(winget install:*)"))],
 }
+# Einträge, die in Listen einer älteren config.toml dazukommen (die Liste ist sonst fest, nicht zusammengelegt).
+# 8: Jarvis darf Teilaufgaben an seine Spezialisten abgeben (Werkzeug Agent, helfer.py).
+_LIST_ADDITIONS = {
+    8: [("brain", "tools", ("Agent",))],
+}
 
 
 def upgrade_config(path: Path | None = None) -> list[str]:
@@ -111,6 +116,13 @@ def upgrade_config(path: Path | None = None) -> list[str]:
                     changed.pop(f"{section}.{key}", None)  # über Umwege wieder beim alten Wert
                 else:
                     changed[f"{section}.{key}"] = f"{section}.{key} = {new}"
+        for section, key, items in _LIST_ADDITIONS.get(target, []):
+            current = (data.get(section) or {}).get(key)
+            if isinstance(current, list) and current and any(item not in current for item in items):
+                grown = current + [item for item in items if item not in current]
+                save_setting(section, key, grown, path)
+                data[section][key] = grown
+                changed[f"{section}.{key}"] = f"{section}.{key}: mit {', '.join(items)}"
         for section, key, items in _LIST_REMOVALS.get(target, []):
             current = (data.get(section) or {}).get(key)
             if isinstance(current, list) and any(item in current for item in items):

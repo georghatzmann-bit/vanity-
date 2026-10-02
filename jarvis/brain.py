@@ -305,6 +305,8 @@ class ClaudeBrain:
         self._tool_timeout = float(cfg.get("tool_timeout_seconds", 660))
         self._max_seconds = float(cfg.get("max_seconds", 1800))
         self._tools = cfg.get("tools", [])
+        # Spezialisten (helfer.py): Teilaufgaben an Helfer abgeben, nur im Jarvis-Profil
+        self._helpers = bool(cfg.get("spezialisten", True))
         self._effort = str(cfg.get("effort", "") or "").strip()
         self._allowed = cfg.get("allowed_tools", [])
         self._disallowed = cfg.get("disallowed_tools", [])
@@ -545,6 +547,11 @@ class ClaudeBrain:
                 cmd += ["--allowedTools", *self._allowed]
         if self._disallowed and attempt.profile != "reden":
             cmd += ["--disallowedTools", *self._disallowed]
+        if attempt.profile == "jarvis" and self._helpers and "agents" not in self._unsupported \
+                and "Agent" in (self._tools or ["Agent"]):
+            from .helfer import agents_json
+
+            cmd += ["--agents", agents_json()]
         if session:
             if "session-id" in self._unsupported:
                 if resume:

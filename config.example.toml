@@ -191,6 +191,9 @@ isolated = true
 # claude.ai unter Einstellungen > Konnektoren. Löschen, Kaufen, Bezahlen und Veröffentlichen lässt Jarvis
 # darüber nicht zu. false = Claude Code läuft ganz abgeschottet (--safe-mode), ohne Konnektoren.
 konnektoren = true
+# true = Jarvis gibt größere Teilaufgaben an Spezialisten ab, die parallel arbeiten: Recherche, Texte
+# und Technik (nur lesend). Das Gespräch bleibt kurz, Georg hört nur das Ergebnis.
+spezialisten = true
 # Lehnen alle Modelle ab, probiert Jarvis sie noch einmal mit einer ganz kurzen Persönlichkeit.
 simple_fallback = true
 # true = Claude läuft dauerhaft im Hintergrund weiter. Jede Frage spart so den Start
@@ -209,10 +212,10 @@ max_seconds = 1800
 # "medium" oder "high" gründlicher. (Sonst bestimmt das die Stufe.)
 effort = "low"
 # Welche Werkzeuge Claude für Jarvis überhaupt bekommt.
-tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"]
+tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "Agent"]
 # Werkzeuge, die Claude ohne Nachfrage nutzen darf. (Diese und die nächste Liste
 # ergänzen in deiner config.toml die Vorgaben hier, sie ersetzen sie nicht.)
-allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write"]
+allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write", "Agent"]
 # Befehle, die komplett gesperrt sind. Zum Löschen und Deinstallieren gibt es eigene
 # Jarvis-Befehle, die erst nach deinem "Ja" etwas tun. Installieren darf Jarvis einfach so.
 disallowed_tools = [
