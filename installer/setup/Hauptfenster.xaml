@@ -1,0 +1,283 @@
+<!-- Das Fenster des Installers: 760 x 480, rahmenlos, Ecken 12 px rund, mit weichem Schatten.
+     Links Jarvis' Kern (Kugel mit Fortschrittsbogen), rechts die Seiten
+     Start, Fortschritt, Fertig und Fehler. -->
+<Window x:Class="JarvisSetup.Hauptfenster"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Jarvis Setup"
+        SizeToContent="WidthAndHeight"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+    <Window.Resources>
+        <ResourceDictionary Source="Design.xaml" />
+    </Window.Resources>
+    <Window.TaskbarItemInfo>
+        <TaskbarItemInfo x:Name="Taskleiste" />
+    </Window.TaskbarItemInfo>
+
+    <!-- Rand für den Schatten -->
+    <Grid x:Name="Wurzel" Margin="24"
+          TextElement.FontFamily="{StaticResource SchriftText}"
+          TextElement.FontSize="14"
+          TextElement.Foreground="{StaticResource Text}"
+          KeyboardNavigation.TabNavigation="Cycle">
+
+        <Border Width="760" Height="480" CornerRadius="12" Background="#0D0F13">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="32" ShadowDepth="8" Direction="270" Opacity="0.55" Color="Black" />
+            </Border.Effect>
+        </Border>
+
+        <Grid x:Name="Karte" Width="760" Height="480" RenderOptions.ClearTypeHint="Enabled">
+            <Grid.Clip>
+                <RectangleGeometry Rect="0,0,760,480" RadiusX="12" RadiusY="12" />
+            </Grid.Clip>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="44" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.RowSpan="2" Grid.ColumnSpan="2" Background="{StaticResource Hintergrund}" />
+
+            <!-- Links: Jarvis' Kern -->
+            <Grid x:Name="Buehne" Grid.RowSpan="2" Background="Transparent" MouseLeftButtonDown="Ziehen">
+                <Canvas x:Name="KernFlaeche" Width="240" Height="240" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,8,0,0">
+                    <Ellipse x:Name="KernGlanz" Width="240" Height="240" Fill="{StaticResource KernGlanzFarbe}" Opacity="0.8" />
+                    <Ellipse x:Name="BogenSpur" Canvas.Left="38" Canvas.Top="38" Width="164" Height="164" Stroke="#12FFFFFF" StrokeThickness="2" Opacity="0" />
+                    <Path x:Name="Bogen" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0">
+                        <Path.Stroke>
+                            <SolidColorBrush x:Name="BogenFarbe" Color="#9AABFF" />
+                        </Path.Stroke>
+                    </Path>
+                    <Grid x:Name="Kugel" Canvas.Left="60" Canvas.Top="60" Width="120" Height="120" RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="KugelSkala" />
+                        </Grid.RenderTransform>
+                        <Ellipse Fill="{StaticResource KugelFarbe}" />
+                        <Ellipse Fill="{StaticResource KugelTiefe}" />
+                        <Ellipse Fill="{StaticResource KugelLicht}" />
+                        <Ellipse Stroke="{StaticResource KugelRand}" StrokeThickness="1" />
+                    </Grid>
+                </Canvas>
+                <TextBlock x:Name="VersionText" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="24,0,0,24"
+                           Style="{StaticResource Klein}" Text="Version 2.0.0" />
+            </Grid>
+
+            <!-- Rechts: die Seiten -->
+            <Grid x:Name="Seiten" Grid.Row="1" Grid.Column="1" Margin="8,8,32,32">
+
+                <!-- Start -->
+                <Grid x:Name="SeiteStart">
+                    <StackPanel>
+                        <TextBlock x:Name="StartTitel" Style="{StaticResource Titel}" Text="Jarvis installieren" />
+                        <TextBlock x:Name="StartSatz" Style="{StaticResource Satz}" Margin="0,8,0,0"
+                                   Text="Der Installer holt alles Nötige selbst und richtet Jarvis in wenigen Minuten ein." />
+                        <Button x:Name="KnopfInstallieren" Style="{StaticResource KnopfPrimaer}" Margin="0,24,0,0" Content="Installieren"
+                                IsDefault="True" Click="Installieren_Click" />
+                        <Border Margin="0,16,0,0" Background="{StaticResource Flaeche1}" BorderBrush="{StaticResource Linie}" BorderThickness="1" CornerRadius="10">
+                            <StackPanel>
+                                <CheckBox x:Name="SchalterAutostart" Style="{StaticResource Schalter}" IsChecked="True"
+                                          AutomationProperties.Name="Mit Windows starten"
+                                          AutomationProperties.HelpText="Jarvis läuft unsichtbar im Hintergrund und hört auf Hey Jarvis.">
+                                    <StackPanel>
+                                        <TextBlock Text="Mit Windows starten" Foreground="{StaticResource Text}" />
+                                        <TextBlock Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource Nebentext}" TextWrapping="Wrap"
+                                                   Text="Jarvis läuft unsichtbar im Hintergrund und hört auf „Hey Jarvis“." />
+                                    </StackPanel>
+                                </CheckBox>
+                                <Border Height="1" Margin="16,0" Background="{StaticResource Linie}" />
+                                <CheckBox x:Name="SchalterDesktop" Style="{StaticResource Schalter}" IsChecked="False"
+                                          AutomationProperties.Name="Symbol auf dem Desktop"
+                                          AutomationProperties.HelpText="Für den schnellen Start per Doppelklick.">
+                                    <StackPanel>
+                                        <TextBlock Text="Symbol auf dem Desktop" Foreground="{StaticResource Text}" />
+                                        <TextBlock Margin="0,2,0,0" FontSize="12" Foreground="{StaticResource Nebentext}" TextWrapping="Wrap"
+                                                   Text="Für den schnellen Start per Doppelklick." />
+                                    </StackPanel>
+                                </CheckBox>
+                            </StackPanel>
+                        </Border>
+                        <Grid x:Name="LaeuftHinweis" Margin="0,16,0,0" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Canvas Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,1,0,0">
+                                <Ellipse Width="16" Height="16" Stroke="{StaticResource AkzentHell}" StrokeThickness="1.4" />
+                                <Path Data="M8,7.2 L8,11.6" Stroke="{StaticResource AkzentHell}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                <Ellipse Canvas.Left="7.1" Canvas.Top="3.9" Width="1.8" Height="1.8" Fill="{StaticResource AkzentHell}" />
+                            </Canvas>
+                            <TextBlock Grid.Column="1" FontSize="12" Foreground="{StaticResource Nebentext}" TextWrapping="Wrap"
+                                       Text="Jarvis läuft gerade. Er wird kurz beendet und danach neu gestartet." />
+                        </Grid>
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Canvas x:Name="PlatzSymbol" Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top" Visibility="Collapsed">
+                                <Ellipse Width="16" Height="16" Fill="#2EF2A44B" />
+                                <Path Data="M8,4.2 L8,9" Stroke="{StaticResource Warnung}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                <Ellipse Canvas.Left="7.05" Canvas.Top="10.6" Width="1.9" Height="1.9" Fill="{StaticResource Warnung}" />
+                            </Canvas>
+                            <TextBlock x:Name="PlatzText" Grid.Column="1" Style="{StaticResource Klein}" Text="Braucht etwa 3 GB Speicherplatz." />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Fortschritt -->
+                <Grid x:Name="SeiteFortschritt" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock x:Name="FortschrittTitel" Style="{StaticResource Titel}" Text="Jarvis wird installiert" />
+                        <TextBlock x:Name="FortschrittSatz" Style="{StaticResource Satz}" Margin="0,8,0,0"
+                                   Text="Das dauert beim ersten Mal ein paar Minuten." />
+                    </StackPanel>
+                    <Grid Grid.Row="1" Margin="0,16,0,0">
+                        <ItemsControl x:Name="SchrittListe" ItemTemplate="{StaticResource SchrittVorlage}" Focusable="False" />
+                        <Border x:Name="DetailsFlaeche" Background="{StaticResource Flaeche1}" BorderBrush="{StaticResource Linie}" BorderThickness="1"
+                                CornerRadius="10" Padding="12,8" Visibility="Collapsed" RenderTransformOrigin="0.5,1">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="DetailsSkala" ScaleY="0" />
+                            </Border.RenderTransform>
+                            <ItemsControl x:Name="DetailsZeilen" ItemTemplate="{StaticResource ProtokollVorlage}" Focusable="False" VerticalAlignment="Bottom" />
+                        </Border>
+                    </Grid>
+                    <Grid Grid.Row="2" Margin="0,12,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="ProzentText" Text="0 %" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" />
+                        <TextBlock x:Name="RestText" HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="12" Foreground="{StaticResource Nebentext}"
+                                   Text="Restzeit wird berechnet" />
+                        <Grid x:Name="BalkenSpur" Grid.Row="1" Height="4" Margin="0,8,0,0">
+                            <Border Background="#14FFFFFF" CornerRadius="2" />
+                            <Border x:Name="BalkenFuellung" HorizontalAlignment="Left" Width="0" CornerRadius="2" Background="{StaticResource Akzent}" />
+                        </Grid>
+                    </Grid>
+                    <Button x:Name="KnopfDetails" Grid.Row="3" Style="{StaticResource KnopfText}" HorizontalAlignment="Left" Margin="-8,4,0,-12"
+                            Click="Details_Click" AutomationProperties.Name="Details">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="DetailsKnopfText" Text="Details" VerticalAlignment="Center" />
+                            <Path Data="M0,0 L4,4 L8,0" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  Margin="8,2,0,0" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                                <Path.RenderTransform>
+                                    <RotateTransform x:Name="DetailsPfeil" />
+                                </Path.RenderTransform>
+                            </Path>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <!-- Fertig -->
+                <Grid x:Name="SeiteFertig" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="FertigTitel" Style="{StaticResource Titel}" Text="Jarvis ist bereit." />
+                        <TextBlock x:Name="FertigSatz" Style="{StaticResource Satz}" Margin="0,8,0,0"
+                                   Text="Beim ersten Start öffnet sich die Einrichtung: Mikrofon, Stimme und die Anmeldung für das Gehirn." />
+                        <ItemsControl x:Name="FertigHinweise" Margin="0,16,0,0" ItemTemplate="{StaticResource HinweisVorlage}" Focusable="False" Visibility="Collapsed" />
+                        <Button x:Name="KnopfStarten" Style="{StaticResource KnopfPrimaer}" Margin="0,24,0,0" Content="Jarvis starten" Click="Starten_Click" />
+                        <Button x:Name="KnopfFertigSchliessen" Style="{StaticResource KnopfSekundaer}" Margin="0,12,0,0" Content="Schließen" Click="Schliessen_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Fehler -->
+                <Grid x:Name="SeiteFehler" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Titel}" Text="Das hat nicht geklappt." />
+                        <Grid x:Name="FehlerSchrittZeile" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid Width="16" Height="16" HorizontalAlignment="Left">
+                                <Ellipse Fill="#2EF2645F" />
+                                <Path Data="M5.6,5.6 L10.4,10.4 M10.4,5.6 L5.6,10.4" Stroke="{StaticResource Fehler}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            </Grid>
+                            <TextBlock x:Name="FehlerSchrittText" Grid.Column="1" FontSize="12" Foreground="{StaticResource Nebentext}" VerticalAlignment="Center"
+                                       Text="Schritt 3 von 6: Pakete" />
+                        </Grid>
+                        <Border Margin="0,16,0,0" Background="{StaticResource Flaeche1}" BorderBrush="{StaticResource Linie}" BorderThickness="1" CornerRadius="10" Padding="16">
+                            <StackPanel>
+                                <TextBlock x:Name="FehlerMeldung" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="20" LineStackingStrategy="BlockLineHeight"
+                                           Text="Keine Verbindung zum Internet." />
+                                <TextBlock x:Name="FehlerTipp" Style="{StaticResource Satz}" Margin="0,8,0,0"
+                                           Text="Prüfen Sie WLAN oder Netzwerkkabel und klicken Sie dann auf „Nochmal versuchen“." />
+                            </StackPanel>
+                        </Border>
+                        <Grid Margin="0,24,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="KnopfNochmal" Style="{StaticResource KnopfPrimaer}" Padding="12,0" Content="Nochmal versuchen" Click="Nochmal_Click" />
+                            <Button x:Name="KnopfProtokoll" Grid.Column="2" Style="{StaticResource KnopfSekundaer}" Height="48" Padding="12,0"
+                                    Content="Protokoll öffnen" Click="Protokoll_Click" />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <!-- Titelleiste: ziehen, minimieren, schließen (im Baum nach den Seiten: Tab kommt zuletzt hierher) -->
+            <Grid x:Name="Titelleiste" Grid.ColumnSpan="2" Background="Transparent" MouseLeftButtonDown="Ziehen">
+                <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                    <Ellipse Width="8" Height="8" Fill="{StaticResource KugelFarbe}" VerticalAlignment="Center" />
+                    <TextBlock Margin="8,0,0,0" Style="{StaticResource Klein}" Text="Jarvis Setup" VerticalAlignment="Center" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource KnopfTitel}" Click="Minimieren_Click" ToolTip="Minimieren" AutomationProperties.Name="Minimieren">
+                        <Path Data="M0,0.5 L10,0.5" StrokeThickness="1" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Button>
+                    <Button Style="{StaticResource KnopfSchliessen}" Click="SchliessenTitel_Click" ToolTip="Schließen" AutomationProperties.Name="Schließen">
+                        <Path Data="M0,0 L10,10 M10,0 L0,10" StrokeThickness="1" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Rückfrage beim Abbrechen -->
+            <Grid x:Name="Rueckfrage" Grid.RowSpan="2" Grid.ColumnSpan="2" Visibility="Collapsed" Opacity="0">
+                <Border Background="#D90D0F13" />
+                <Border x:Name="RueckfrageKarte" Width="400" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="24"
+                        Background="{StaticResource Flaeche1}" BorderBrush="{StaticResource Linie}" BorderThickness="1" CornerRadius="12"
+                        RenderTransformOrigin="0.5,0.5" KeyboardNavigation.TabNavigation="Cycle">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="RueckfrageSkala" ScaleX="0.97" ScaleY="0.97" />
+                    </Border.RenderTransform>
+                    <StackPanel>
+                        <TextBlock x:Name="RueckfrageTitel" FontFamily="{StaticResource SchriftTitel}" FontSize="18" FontWeight="SemiBold"
+                                   TextOptions.TextFormattingMode="Ideal" Text="Installation abbrechen?" />
+                        <TextBlock x:Name="RueckfrageText" Style="{StaticResource Satz}" Margin="0,8,0,0"
+                                   Text="Was schon geladen ist, bleibt erhalten. Sie können später einfach weitermachen." />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,24,0,0">
+                            <Button x:Name="KnopfAbbrechenJa" Style="{StaticResource KnopfSekundaer}" Padding="16,0" Margin="0,0,12,0"
+                                    Content="Abbrechen" Click="AbbrechenJa_Click" />
+                            <Button x:Name="KnopfWeiter" Style="{StaticResource KnopfPrimaer}" Height="44" Padding="16,0"
+                                    Content="Weiter installieren" Click="Weiter_Click" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Feine Linie um das ganze Fenster -->
+            <Border Grid.RowSpan="2" Grid.ColumnSpan="2" CornerRadius="12" BorderThickness="1" BorderBrush="{StaticResource Linie}" IsHitTestVisible="False" />
+        </Grid>
+    </Grid>
+</Window>

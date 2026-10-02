@@ -1,0 +1,492 @@
+<!-- Aussehen des Installers: Farben, Schrift, Knöpfe, Schalter und die Schritt-Zeile.
+     Abstände nur 4/8/12/16/24/32, Übergänge 120 bis 200 ms, eine Akzentfarbe. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Farben -->
+    <SolidColorBrush x:Key="Hintergrund" Color="#0D0F13" />
+    <SolidColorBrush x:Key="Flaeche1" Color="#15171C" />
+    <SolidColorBrush x:Key="Flaeche2" Color="#1B1E24" />
+    <SolidColorBrush x:Key="Linie" Color="#12FFFFFF" />
+    <SolidColorBrush x:Key="Text" Color="#E8EAF0" />
+    <SolidColorBrush x:Key="Nebentext" Color="#A0A6B4" />
+    <SolidColorBrush x:Key="Schwach" Color="#6C7282" />
+    <SolidColorBrush x:Key="Akzent" Color="#6E8CFF" />
+    <SolidColorBrush x:Key="AkzentHell" Color="#9AABFF" />
+    <SolidColorBrush x:Key="Erfolg" Color="#3FBF85" />
+    <SolidColorBrush x:Key="Warnung" Color="#F2A44B" />
+    <SolidColorBrush x:Key="Fehler" Color="#F2645F" />
+    <SolidColorBrush x:Key="AufAkzent" Color="#0B0D12" />
+
+    <!-- Schrift: Segoe UI Variable (Windows 11), sonst Segoe UI (Windows 10) -->
+    <FontFamily x:Key="SchriftText">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="SchriftTitel">Segoe UI Variable Display, Segoe UI</FontFamily>
+    <FontFamily x:Key="SchriftMono">Cascadia Mono, Consolas</FontFamily>
+
+    <!-- Jarvis' Kern: eine weiche Kugel von #9AABFF nach #4C5BD8 -->
+    <RadialGradientBrush x:Key="KugelFarbe" GradientOrigin="0.38,0.30" Center="0.42,0.36" RadiusX="0.70" RadiusY="0.70">
+        <GradientStop Color="#C2CCFF" Offset="0" />
+        <GradientStop Color="#9AABFF" Offset="0.30" />
+        <GradientStop Color="#6E8CFF" Offset="0.66" />
+        <GradientStop Color="#4C5BD8" Offset="1" />
+    </RadialGradientBrush>
+    <LinearGradientBrush x:Key="KugelTiefe" StartPoint="0.5,0.35" EndPoint="0.5,1">
+        <GradientStop Color="#004C5BD8" Offset="0" />
+        <GradientStop Color="#552A3290" Offset="1" />
+    </LinearGradientBrush>
+    <RadialGradientBrush x:Key="KugelLicht" GradientOrigin="0.34,0.24" Center="0.36,0.26" RadiusX="0.30" RadiusY="0.22">
+        <GradientStop Color="#59FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="1" />
+    </RadialGradientBrush>
+    <LinearGradientBrush x:Key="KugelRand" StartPoint="0.5,0" EndPoint="0.5,1">
+        <GradientStop Color="#40FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="0.55" />
+    </LinearGradientBrush>
+    <RadialGradientBrush x:Key="KernGlanzFarbe">
+        <GradientStop Color="#476E8CFF" Offset="0" />
+        <GradientStop Color="#1A6E8CFF" Offset="0.5" />
+        <GradientStop Color="#006E8CFF" Offset="1" />
+    </RadialGradientBrush>
+
+    <!-- Sichtbarer Fokus (nur bei Bedienung mit der Tastatur) -->
+    <Style x:Key="FokusKnopf">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-4" CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource AkzentHell}" SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="FokusZeile">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="2" CornerRadius="8" BorderThickness="2" BorderBrush="{StaticResource AkzentHell}" SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="FokusTitel">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="4" CornerRadius="6" BorderThickness="2" BorderBrush="{StaticResource AkzentHell}" SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Texte -->
+    <Style x:Key="Titel" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource SchriftTitel}" />
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Text}" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="Satz" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource Nebentext}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+    </Style>
+    <Style x:Key="Klein" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource Schwach}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Großer Knopf in der Akzentfarbe -->
+    <Style x:Key="KnopfPrimaer" TargetType="Button">
+        <Setter Property="Height" Value="48" />
+        <Setter Property="Padding" Value="24,0" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource AufAkzent}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FokusKnopf}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Flaeche" CornerRadius="10" Padding="{TemplateBinding Padding}" RenderTransformOrigin="0.5,0.5">
+                        <Border.Background>
+                            <SolidColorBrush Color="#6E8CFF" />
+                        </Border.Background>
+                        <Border.RenderTransform>
+                            <ScaleTransform />
+                        </Border.RenderTransform>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#8399FF" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#6E8CFF" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.985" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.985" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.16" />
+                                        <DoubleAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Flaeche" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Zweiter Knopf: ruhige Fläche -->
+    <Style x:Key="KnopfSekundaer" TargetType="Button">
+        <Setter Property="Height" Value="44" />
+        <Setter Property="Padding" Value="24,0" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource Text}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FokusKnopf}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Flaeche" CornerRadius="10" BorderThickness="1" BorderBrush="{StaticResource Linie}" Padding="{TemplateBinding Padding}">
+                        <Border.Background>
+                            <SolidColorBrush Color="#1B1E24" />
+                        </Border.Background>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#252932" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Flaeche" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#1B1E24" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Flaeche" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Flaeche" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Knopf nur aus Text (Details) -->
+    <Style x:Key="KnopfText" TargetType="Button">
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{StaticResource Nebentext}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FokusZeile}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Flaeche" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Text}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Knöpfe in der eigenen Titelleiste -->
+    <Style x:Key="KnopfTitel" TargetType="Button">
+        <Setter Property="Width" Value="46" />
+        <Setter Property="Height" Value="44" />
+        <Setter Property="Foreground" Value="{StaticResource Nebentext}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FokusTitel}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Flaeche">
+                        <Border.Background>
+                            <SolidColorBrush Color="#00FFFFFF" />
+                        </Border.Background>
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Flaeche" Property="Background" Value="#14FFFFFF" />
+                            <Setter Property="Foreground" Value="{StaticResource Text}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Flaeche" Property="Background" Value="#0DFFFFFF" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="KnopfSchliessen" TargetType="Button" BasedOn="{StaticResource KnopfTitel}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Flaeche" Background="Transparent">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Flaeche" Property="Background" Value="{StaticResource Fehler}" />
+                            <Setter Property="Foreground" Value="#FFFFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Flaeche" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Schalter: die ganze Zeile ist klickbar, rechts der Schieber -->
+    <Style x:Key="Schalter" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource Text}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FokusZeile}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Grid Background="Transparent" MinHeight="60">
+                        <Border x:Name="Schwebe" Margin="4" CornerRadius="8">
+                            <Border.Background>
+                                <SolidColorBrush Color="#00FFFFFF" />
+                            </Border.Background>
+                        </Border>
+                        <Grid Margin="16,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="False" />
+                            <Grid Grid.Column="1" Width="40" Height="22" Margin="16,0,0,0" VerticalAlignment="Center">
+                                <Border x:Name="Bahn" CornerRadius="11" BorderThickness="1" BorderBrush="#1AFFFFFF">
+                                    <Border.Background>
+                                        <SolidColorBrush Color="#2A2E37" />
+                                    </Border.Background>
+                                </Border>
+                                <Ellipse x:Name="Knopf" Width="16" Height="16" Margin="3,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <Ellipse.Fill>
+                                        <SolidColorBrush Color="#A0A6B4" />
+                                    </Ellipse.Fill>
+                                    <Ellipse.RenderTransform>
+                                        <TranslateTransform />
+                                    </Ellipse.RenderTransform>
+                                </Ellipse>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Knopf" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="18" Duration="0:0:0.16">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <ColorAnimation Storyboard.TargetName="Bahn" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#6E8CFF" Duration="0:0:0.16" />
+                                        <ColorAnimation Storyboard.TargetName="Knopf" Storyboard.TargetProperty="(Shape.Fill).(SolidColorBrush.Color)" To="#FFFFFF" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Knopf" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="0" Duration="0:0:0.16">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <ColorAnimation Storyboard.TargetName="Bahn" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#2A2E37" Duration="0:0:0.16" />
+                                        <ColorAnimation Storyboard.TargetName="Knopf" Storyboard.TargetProperty="(Shape.Fill).(SolidColorBrush.Color)" To="#A0A6B4" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Schwebe" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#0AFFFFFF" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Schwebe" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#00FFFFFF" Duration="0:0:0.16" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Eine Zeile in der Schrittliste: Symbol, Name, Zustand als Wort, darunter die Detailzeile.
+         wartet = grauer Punkt, läuft = drehender Bogen, fertig = grünes Häkchen,
+         Hinweis = oranges Ausrufezeichen, Fehler = rotes X. -->
+    <DataTemplate x:Key="SchrittVorlage">
+        <Grid Margin="0,0,0,2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="28" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="28" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <Ellipse x:Name="Punkt" Width="6" Height="6" Fill="{StaticResource Schwach}" />
+                <Grid x:Name="Dreher" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+                    <Grid.RenderTransform>
+                        <RotateTransform />
+                    </Grid.RenderTransform>
+                    <Ellipse Stroke="#336E8CFF" StrokeThickness="2" />
+                    <Path Data="M8,1 A7,7 0 0 1 15,8" Stroke="{StaticResource Akzent}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                </Grid>
+                <Grid x:Name="Haken" Visibility="Collapsed">
+                    <Ellipse Fill="#2E3FBF85" />
+                    <Path Data="M4.6,8.3 L7,10.6 L11.4,5.8" Stroke="{StaticResource Erfolg}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+                </Grid>
+                <Canvas x:Name="Ausruf" Visibility="Collapsed" Width="16" Height="16">
+                    <Ellipse Width="16" Height="16" Fill="#2EF2A44B" />
+                    <Path Data="M8,4.2 L8,9" Stroke="{StaticResource Warnung}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <Ellipse Canvas.Left="7.05" Canvas.Top="10.6" Width="1.9" Height="1.9" Fill="{StaticResource Warnung}" />
+                </Canvas>
+                <Grid x:Name="Kreuz" Visibility="Collapsed">
+                    <Ellipse Fill="#2EF2645F" />
+                    <Path Data="M5.6,5.6 L10.4,10.4 M10.4,5.6 L5.6,10.4" Stroke="{StaticResource Fehler}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                </Grid>
+            </Grid>
+            <TextBlock x:Name="Name" Grid.Column="1" Text="{Binding Titel}" Foreground="{StaticResource Nebentext}" VerticalAlignment="Center" />
+            <TextBlock x:Name="Zustandstext" Grid.Column="2" Text="{Binding Status}" FontSize="12" Foreground="{StaticResource Schwach}" VerticalAlignment="Center" />
+            <TextBlock x:Name="Zeile" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Detail}" FontSize="12"
+                       Foreground="{StaticResource Nebentext}" TextTrimming="CharacterEllipsis" Margin="0,-4,0,8" Visibility="Collapsed" />
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding Zustand}" Value="Laeuft">
+                <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="Dreher" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource AkzentHell}" />
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard x:Name="Drehen">
+                        <Storyboard Timeline.DesiredFrameRate="30">
+                            <DoubleAnimation Storyboard.TargetName="Dreher" Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                             From="0" To="360" Duration="0:0:0.9" RepeatBehavior="Forever" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+                <DataTrigger.ExitActions>
+                    <StopStoryboard BeginStoryboardName="Drehen" />
+                </DataTrigger.ExitActions>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Zustand}" Value="Fertig">
+                <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="Haken" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource Erfolg}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Zustand}" Value="Hinweis">
+                <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="Ausruf" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource Warnung}" />
+                <Setter TargetName="Zeile" Property="Foreground" Value="{StaticResource Warnung}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Zustand}" Value="Fehler">
+                <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
+                <Setter TargetName="Kreuz" Property="Visibility" Value="Visible" />
+                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource Fehler}" />
+                <Setter TargetName="Zeile" Property="Foreground" Value="{StaticResource Fehler}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding DetailSichtbar}" Value="True">
+                <Setter TargetName="Zeile" Property="Visibility" Value="Visible" />
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetName="Zeile" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.18" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- Hinweis auf der Fertig-Seite -->
+    <DataTemplate x:Key="HinweisVorlage">
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="24" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Canvas Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,2,0,0">
+                <Ellipse Width="16" Height="16" Fill="#2EF2A44B" />
+                <Path Data="M8,4.2 L8,9" Stroke="{StaticResource Warnung}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                <Ellipse Canvas.Left="7.05" Canvas.Top="10.6" Width="1.9" Height="1.9" Fill="{StaticResource Warnung}" />
+            </Canvas>
+            <TextBlock Grid.Column="1" Text="{Binding}" FontSize="13" Foreground="{StaticResource Text}" TextWrapping="Wrap" LineHeight="18" LineStackingStrategy="BlockLineHeight" />
+        </Grid>
+    </DataTemplate>
+
+    <!-- Eine Zeile im Detail-Protokoll -->
+    <DataTemplate x:Key="ProtokollVorlage">
+        <TextBlock Text="{Binding}" FontFamily="{StaticResource SchriftMono}" FontSize="11" Foreground="{StaticResource Nebentext}"
+                   TextTrimming="CharacterEllipsis" Margin="0,1" />
+    </DataTemplate>
+</ResourceDictionary>
