@@ -32,7 +32,6 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Eigene Befehle und Zeitpläne:** „Wenn ich Zockmodus sage, öffne Discord und Steam“, danach reicht ein Wort. „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“: Jarvis erledigt es von selbst (beim Zocken wartet er).
 - **Kalender:** „Trag morgen um 18 Uhr Training ein“, „Was steht heute an?“. Sagt 15 Minuten vorher Bescheid und merkt Absagen und Verschiebungen. Liest Google oder Outlook mit (geheime iCal-Adresse).
 - **iPhone, Mail und Kontakte:** Mit Apple-ID und app-spezifischem Passwort liest Jarvis den iPhone-Kalender und trägt neue Termine direkt dort ein (CalDAV), liest die Mails („Hab ich neue Mails?“, „Was schreibt Max?“, nur lesen) und kennt die Geburtstage aus den Kontakten. Dazu weitere Postfächer (Gmail, GMX, web.de, Yahoo, eigener Server). Passwörter verschlüsselt mit Windows (DPAPI), nur auf dem PC.
-- **Eigenes Labor:** Jarvis baut sich eigene Werkzeuge in seiner Sandbox (eigenes Python, ohne Schlüssel, mit Zeit- und Speicherlimit), testet sie und benutzt nur, was alle Tests besteht. Im Werkstatt-Fenster sichtbar.
 - **Shop-Hilfe (Shopify):** „Wie läuft der Shop?“, neue Bestellungen werden angesagt, die nächste Auszahlung genannt, Produkte als Entwurf angelegt. Veröffentlichen, Preise ändern, Geld ausgeben und Kunden schreiben nie.
 - **Notizbuch und Fähigkeiten:** jedes Gespräch, Personen, Recherche-Berichte und Notizen als Markdown (in Obsidian verlinkt). Anleitungen für wiederkehrende Aufgaben (Discord-Server, Briefing, Recherche, PC-Pflege, Spiele), die Claude nur bei Bedarf liest; „Lern das“ legt neue an.
 - **Lokale Stimme:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo, mit einem Klick in der Einrichtung.
@@ -45,9 +44,9 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Ruhiges, modernes Fenster:** eine leuchtende Kugel als Jarvis' Gesicht, darunter das Gespräch, rechts was heute ansteht, die Auslastung des PCs und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
 - **Grafische Einrichtung** und ein **Installer im Jarvis-Look**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
 
-| Werkstatt und Labor | Handy-App |
+| Werkstatt-Projekte | Handy-App |
 |---|---|
-| ![Werkstatt: Projekte und Labor](docs/bilder/projekte.jpg) | ![Jarvis auf dem Handy](docs/bilder/handy.jpg) |
+| ![Werkstatt: alle Projekte](docs/bilder/projekte.jpg) | ![Jarvis auf dem Handy](docs/bilder/handy.jpg) |
 
 | Verbinden: iPhone, Mail, Shop | Gedächtnis |
 |---|---|

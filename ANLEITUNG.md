@@ -260,7 +260,7 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 ## Die Werkstatt: Jarvis programmiert für dich
 
-![Werkstatt-Projekte und Labor](docs/bilder/projekte.jpg)
+![Die Werkstatt-Projekte](docs/bilder/projekte.jpg)
 
 Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
 

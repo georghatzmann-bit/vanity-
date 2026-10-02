@@ -1417,7 +1417,7 @@
       mail_add: () => Promise.resolve({ ok: true, fehler: '', konto: null }),
       mail_remove: () => Promise.resolve({ ok: true, fehler: '' }),
       mail_help: () => Promise.resolve(true),
-      labor_info: () => Promise.resolve(DEMO_LABOR),
+      labor_info: () => (/[?&]labor\b/.test(location.search) ? Promise.resolve(DEMO_LABOR) : Promise.reject(new Error('kein Labor'))),
       labor_open: () => Promise.resolve({ ok: false, error: 'Im Demo-Modus öffnet sich kein Ordner.' }),
       werkzeug_loeschen: () => Promise.resolve(true),
       shop_info: () => Promise.resolve(DEMO_SHOP),
