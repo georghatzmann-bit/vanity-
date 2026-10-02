@@ -812,7 +812,11 @@ class Assistant:
                 parts = [e.spoken(now, with_day=True) for e in events[:8]]
                 more = f" und {len(events) - 8} weitere" if len(events) > 8 else ""
                 return f"In den nächsten sieben Tagen, Sir: {'; '.join(parts)}{more}."
-            return calendar.describe_day(data)
+            said = calendar.describe_day(data)
+            notes = self._reminders_on(data, now)
+            if notes:  # "Was steht heute an?" meint auch die Erinnerungen, nicht nur den Kalender
+                said += f" Erinnerungen: {_join_names(notes)}."
+            return said
         if action == "remove":
             gone = calendar.remove(data)
             if not gone:
@@ -827,6 +831,19 @@ class Assistant:
         if clash:
             said += f" Achtung, da ist schon {clash[0].spoken(now)}."
         return said
+
+    def _reminders_on(self, day: dt.date, now: dt.datetime) -> list[str]:
+        if self.reminders is None:
+            return []
+        notes = []
+        for item in self.reminders.upcoming(now):
+            try:
+                when = dt.datetime.fromisoformat(item["zeit"])
+            except (KeyError, ValueError):
+                continue
+            if when.date() == day:
+                notes.append(f"um {when.hour}:{when.minute:02d} Uhr {item.get('text', '')}".strip())
+        return notes[:5]
 
     def check_calendar(self) -> None:
         """Kurz vor einem Termin Bescheid sagen, und Änderungen im Kalender ansagen."""

@@ -562,7 +562,9 @@ _ASK = re.compile(
 )
 _ADD = re.compile(
     r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte\s+)?"
-    r"(?:(?:trag|trage|schreib|schreibe|setz|setze)\s+(?:mir\s+|bitte\s+)*(?P<a>.+?)\s+(?:in\s+(?:den|meinen)\s+kalender\s+)?(?:ein|an)"
+    # "Schreib Max morgen an" heißt Max anschreiben: "an" nur bei "setz ... an" (ansetzen)
+    r"(?:(?:trag|trage|schreib|schreibe)\s+(?:mir\s+|dir\s+|bitte\s+)*(?P<a>.+?)\s+(?:in\s+(?:den|meinen)\s+kalender\s+)?ein"
+    r"|(?:setz|setze)\s+(?:mir\s+|dir\s+|bitte\s+)*(?P<s>.+?)\s+(?:in\s+(?:den|meinen)\s+kalender\s+)?(?:ein|an)"
     r"|(?:neuer|neuen)\s+termin\s*[:,]?\s*(?P<b>.+)"
     r"|termin\s*[:,]\s*(?P<c>.+))\s*[.!]*$",
     re.I,
@@ -574,7 +576,7 @@ _REMOVE = re.compile(
     re.I,
 )
 _CLOCK = r"\d{1,2}(?::\d{2}|\.\d{2})?"
-_PART = r"(?:früh|morgens|vormittags?|mittags?|nachmittags?|abends?)"
+_PART = r"(?:früh|morgens|vormittags?|mittags?|nachmittags?|abends?)(?![\wäöüß])"  # nicht "Frühstück"
 _TIME = re.compile(
     r"(?P<when>(?:" + _DAY_WORDS + r"\s+)?(?:" + _PART + r"\s+)?(?:"
     # "von 18 bis 19 Uhr", "18-19 Uhr"
@@ -582,10 +584,13 @@ _TIME = re.compile(
     # "um 18 Uhr", "18:30", "um 8 Uhr abends", "um 18 Uhr bis 19:30"
     r"|(?:um\s+)?(?P<at>" + _CLOCK + r")\s*uhr(?:\s+" + _PART + r")?(?:\s*(?:bis|-)\s*(?P<until2>" + _CLOCK + r")\s*(?:uhr)?)?"
     r"|(?:um\s+)?(?P<at2>\d{1,2}:\d{2})(?:\s*(?:bis|-)\s*(?P<until3>" + _CLOCK + r")\s*(?:uhr)?)?"
+    # "heute Abend um 8 Kino": "um" und eine Zahl ohne "Uhr"
+    r"|um\s+(?P<at3>\d{1,2})(?![\d:.])(?:\s+" + _PART + r")?"
     r"))",
     re.I,
 )
-_ALL_DAY = re.compile(r"(?P<when>" + _DAY_WORDS + r")", re.I)
+# Ganze Wörter: "Morgenrunde" und "Sonntagsbraten" sind kein Tag
+_ALL_DAY = re.compile(r"(?<![\wäöüß])(?P<when>" + _DAY_WORDS + r")(?![\wäöüß])", re.I)
 _FILL = re.compile(r"^(?:(?:einen|ein|den|meinen|termin|für|fürs|am|um|noch)\s+)+|(?:\s+(?:ein|an|termin|für))+$", re.I)
 
 
@@ -622,12 +627,16 @@ def parse_event(text: str, now: dt.datetime) -> tuple[str, dt.datetime, dt.datet
     found = _TIME.search(text)
     if found:
         whole = found.group("when")
-        clock = (found.group("from") or found.group("at") or found.group("at2")).replace(".", ":")
+        clock = (found.group("from") or found.group("at") or found.group("at2") or found.group("at3")).replace(".", ":")
         until = found.group("until") or found.group("until2") or found.group("until3")
         day = _ALL_DAY.search(whole)
         part = re.search(_PART, whole, re.I)
-        phrase = " ".join(x for x in (day.group("when") if day else "", f"um {clock} uhr",
-                                      part.group(0) if part else "") if x)
+        rest = (text[: found.start()] + " " + text[found.end():]).strip()
+        later_day = None if day else _ALL_DAY.search(rest)  # "um 20 Uhr heute Kino": der Tag steht dahinter
+        later_part = None if part else re.search(r"\b" + _PART + r"\b", rest, re.I)
+        when_day = day.group("when") if day else later_day.group("when") if later_day else ""
+        when_part = part.group(0) if part else later_part.group(0) if later_part else ""
+        phrase = " ".join(x for x in (when_day, f"um {clock} uhr", when_part) if x)
         try:
             start = parse_when(phrase, now)
         except WhenError:
@@ -641,7 +650,10 @@ def parse_event(text: str, now: dt.datetime) -> tuple[str, dt.datetime, dt.datet
                 end = None
             if end is not None and end <= start:
                 end = end + dt.timedelta(hours=12) if end.hour < 12 and end + dt.timedelta(hours=12) > start else None
-        title = (text[: found.start()] + " " + text[found.end():]).strip()
+        title = rest
+        for extra in (later_day, later_part):
+            if extra is not None:
+                title = title.replace(extra.group(0), " ", 1)
         all_day = False
     else:
         found = _ALL_DAY.search(text)
@@ -656,6 +668,8 @@ def parse_event(text: str, now: dt.datetime) -> tuple[str, dt.datetime, dt.datet
     title = _FILL.sub("", title).strip(" ,.:")
     if len(title) < 2 or re.fullmatch(r"(?:ein|an|einen termin|termin)", title, re.I):
         return None
+    if re.match(r"(?:den\s+|einen\s+)?(?:wecker|timer|alarm|erinnerung)\b", title, re.I):
+        return None  # "Setz morgen um 7 Uhr den Wecker an" ist kein Termin
     return title[:1].upper() + title[1:], start, end, all_day
 
 
@@ -674,7 +688,7 @@ def match_calendar(text: str, now: dt.datetime):
         return "remove", (found.group("a") or found.group("b") or "").strip(" .")
     found = _ADD.match(raw)
     if found:
-        event = parse_event(found.group("a") or found.group("b") or found.group("c") or "", now)
+        event = parse_event(found.group("a") or found.group("s") or found.group("b") or found.group("c") or "", now)
         if event is not None:
             return "add", event
     return None

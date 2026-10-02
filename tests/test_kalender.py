@@ -191,6 +191,13 @@ class SentenceTest(unittest.TestCase):
             "Trag am Sonntag Omas Geburtstag ein": ("Omas Geburtstag", dt.datetime(2026, 10, 4), None, True),
             "Trag heute um 8 Uhr abends Kino ein": ("Kino", dt.datetime(2026, 10, 2, 20, 0), None, False),
             "Trag morgen um 18.30 Uhr Essen mit Lisa ein": ("Essen mit Lisa", dt.datetime(2026, 10, 3, 18, 30), None, False),
+            # Tag hinter der Uhrzeit, "um 8" ohne "Uhr", "dir", Wörter mit Tag oder Tageszeit darin
+            "Trag um 20 Uhr heute Kino ein": ("Kino", dt.datetime(2026, 10, 2, 20, 0), None, False),
+            "Trag heute Abend um 8 Kino ein": ("Kino", dt.datetime(2026, 10, 2, 20, 0), None, False),
+            "Schreib dir morgen um 10 Uhr Bewerbung ein": ("Bewerbung", dt.datetime(2026, 10, 3, 10, 0), None, False),
+            "Trag morgen um 7 Uhr Frühstück mit Max ein": ("Frühstück mit Max", dt.datetime(2026, 10, 3, 7, 0), None, False),
+            "Trag Sonntagsbraten am Samstag ein": ("Sonntagsbraten", dt.datetime(2026, 10, 3), None, True),
+            "Setz für Montag um 10 Uhr ein Meeting an": ("Meeting", dt.datetime(2026, 10, 5, 10, 0), None, False),
         }
         for said, expected in cases.items():
             self.assertEqual(match_calendar(said, self.NOW), ("add", expected), said)
@@ -205,7 +212,9 @@ class SentenceTest(unittest.TestCase):
 
     def test_not_calendar(self):
         for said in ("Trag das ein", "Trag mich bei Discord ein", "Schreib Max an", "Öffne den Kalender",
-                     "Erinnere mich morgen um 8 an den Müll"):
+                     "Erinnere mich morgen um 8 an den Müll",
+                     # "Schreib Max ... an" heißt anschreiben, ein Wecker ist kein Termin
+                     "Schreib Max morgen um 18 Uhr an", "Setz morgen um 7 Uhr den Wecker an", "Trag Sonntagsbraten ein"):
             self.assertIsNone(match_calendar(said, self.NOW), said)
 
 
@@ -229,6 +238,16 @@ class AssistantTest(unittest.TestCase):
         self.assertIn("Achtung, da ist schon um 18 Uhr Training.", answer)
         self.assertIn("um 18 Uhr Training", self.assistant.handle("Was steht übermorgen an?"))
         self.assertIn("Gestrichen, Sir:", self.assistant.handle("Lösch den Termin Kino"))
+        self.assertEqual(self.brain.asked, [])
+
+    def test_day_question_also_names_reminders(self):
+        from jarvis.reminders import ReminderStore
+
+        self.assistant.reminders = ReminderStore(Path(self.folder.name) / "erinnerungen.json")
+        later = dt.datetime.now() + dt.timedelta(days=2)
+        self.assistant.reminders.add(later.replace(hour=14, minute=0, second=0, microsecond=0), "Tee aufgießen")
+        answer = self.assistant.handle("Was steht übermorgen an?")
+        self.assertEqual(answer, "Übermorgen steht nichts im Kalender, Sir. Erinnerungen: um 14:00 Uhr Tee aufgießen.")
         self.assertEqual(self.brain.asked, [])
 
     def test_warning_is_announced(self):
