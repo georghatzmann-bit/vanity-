@@ -113,6 +113,10 @@
     calendar_add: (url) => window.pywebview.api.calendar_add(url),
     calendar_remove: (url) => window.pywebview.api.calendar_remove(url),
     calendar_help: (which) => window.pywebview.api.calendar_help(which),
+    shop_info: () => window.pywebview.api.shop_info(),
+    shop_connect: (domain, client, secret) => window.pywebview.api.shop_connect(domain, client, secret),
+    shop_disconnect: () => window.pywebview.api.shop_disconnect(),
+    shop_help: (which) => window.pywebview.api.shop_help(which),
     discord_portal: () => window.pywebview.api.discord_portal(),
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
@@ -659,6 +663,31 @@
     }
   }
 
+  // Shop-Karte rechts: nur wenn ein Shop verbunden ist (heute, diese Woche, was auf den Versand wartet)
+  async function refreshShopCard() {
+    const card = document.getElementById('shopCard');
+    if (!card) return;
+    let info = null;
+    try {
+      info = await call('shop_info');
+    } catch {
+      info = null;
+    }
+    const on = !!(info && info.verbunden && !info.fehler);
+    card.hidden = !on;
+    if (!on) return;
+    const count = (n) => n + (n === 1 ? ' Bestellung' : ' Bestellungen');
+    const short = (text) => String(text || '').replace(/ Euro$/, ' €');
+    document.getElementById('shopName').textContent = info.name || '';
+    document.getElementById('shopToday').textContent = short(info.heute.umsatz);
+    document.getElementById('shopTodayN').textContent = count(info.heute.anzahl);
+    document.getElementById('shopWeek').textContent = short(info.woche.umsatz);
+    document.getElementById('shopWeekN').textContent = count(info.woche.anzahl);
+    const open = document.getElementById('shopOpen');
+    open.hidden = !info.offen;
+    open.textContent = info.offen === 1 ? 'Eine Bestellung wartet auf den Versand.' : info.offen + ' Bestellungen warten auf den Versand.';
+  }
+
   // Schnellbefehle unter dem Kern: die eigenen Befehle zuerst, dann die häufigsten
   const DECK_DEFAULT = [['Briefing', 'Briefing bitte'], ['Was steht heute an?', 'Was steht heute an?'],
     ['Gaming-Modus', 'Gaming-Modus an']];
@@ -832,7 +861,10 @@
     if (Koppeln && Koppeln.dots) Koppeln.dots();
     refreshDeck();
     refreshToday();
+    refreshShopCard();
     setInterval(refreshToday, 60000);
+    setInterval(refreshShopCard, 300000);
+    document.addEventListener('jarvis-shop', refreshShopCard);
     pollLoop(gen);
   }
 
@@ -1370,6 +1402,10 @@
       },
       calendar_remove: (url) => { DEMO_CAL.feeds = DEMO_CAL.feeds.filter((f) => f.url !== url); return Promise.resolve({ ok: true }); },
       calendar_help: () => Promise.resolve(true),
+      shop_info: () => Promise.resolve(DEMO_SHOP),
+      shop_connect: () => Promise.resolve({ ok: true, error: '', name: 'Georgs Laden' }),
+      shop_disconnect: () => Promise.resolve({ ok: true, error: '' }),
+      shop_help: () => Promise.resolve(true),
       discord_portal: () => Promise.resolve(true),
       alexa_enable: (on) => Promise.resolve(Object.assign(DEMO_ALEXA, { enabled: !!on, connected: !!on })),
       alexa_copy: () => Promise.resolve({ ok: true, text: '{}' }),
@@ -1430,6 +1466,12 @@
   const DEMO_ALEXA = { enabled: true, connected: true };
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
   const DEMO_TS = { url: '' };
+
+  const DEMO_SHOP = {
+    verbunden: true, name: 'Georgs Laden', adresse: 'georg.myshopify.com', fehler: '',
+    heute: { anzahl: 2, umsatz: '58 Euro' }, woche: { anzahl: 7, umsatz: '203,50 Euro' }, offen: 3,
+    bestseller: ['Mauspad Jarvis'],
+  };
 
   const DEMO_CAL = {
     feeds: [{ url: 'https://calendar.google.com/calendar/ical/georg/private-abc/basic.ics', shown: 'https://calendar.google.com/…', error: '' }],

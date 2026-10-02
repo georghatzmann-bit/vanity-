@@ -271,3 +271,12 @@ tagebuch = true
 abos = []
 # So viele Minuten vor einem Termin sagt Jarvis Bescheid (0 = nie).
 vorwarnung_minuten = 15
+
+[shop]
+# Shop-Hilfe für einen Shopify-Shop (im Fenster unter Verbinden > Shop einrichten).
+# Jarvis sagt Umsatz und neue Bestellungen an, nennt die nächste Auszahlung und legt Produkte
+# als Entwurf an. Veröffentlichen, Preise ändern und Geld ausgeben macht er nie.
+# Das Client-Secret steht nicht hier, sondern verschlüsselt im Tresor (daten/geheim.json).
+adresse = ""                  # z. B. "meinladen.myshopify.com"
+client_id = ""                # aus dem Shopify Dev Dashboard (Einstellungen > Anmeldedaten)
+bestellungen_ansagen = true   # neue Bestellungen ansagen (beim Zocken nur aufs Handy)

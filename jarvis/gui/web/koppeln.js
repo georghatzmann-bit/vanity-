@@ -56,6 +56,17 @@
       calFeeds: $('calFeeds'),
       calGoogle: $('calGoogle'),
       calOutlook: $('calOutlook'),
+      shopState: $('shopState'),
+      shopHint: $('shopHint'),
+      shopOff: $('shopOff'),
+      shopSetup: $('shopSetup'),
+      shopForm: $('shopForm'),
+      shopDomain: $('shopDomain'),
+      shopClient: $('shopClient'),
+      shopSecret: $('shopSecret'),
+      shopSave: $('shopSave'),
+      shopAdmin: $('shopAdmin'),
+      shopScopes: $('shopScopes'),
     };
     function el_tabs() {
       return document.querySelectorAll('.dlg-tabs button[data-pane]');
@@ -295,12 +306,92 @@
       el.calOutlook.addEventListener('click', () => call('calendar_help', 'outlook').catch(() => {}));
     }
 
+    // ---------- Shop (Shopify): lesen, Entwürfe, nie veröffentlichen
+
+    const SHOP_SCOPES = 'read_orders,read_products,write_products,read_shopify_payments_payouts';
+
+    function renderShop(info) {
+      if (!el.shopState) return;
+      const on = !!(info && info.verbunden);
+      el.shopOff.hidden = !on;
+      el.shopSetup.hidden = on && !info.fehler;
+      if (!on) {
+        el.shopState.textContent = 'Kein Shop verbunden';
+        return;
+      }
+      if (info.fehler) {
+        el.shopState.textContent = (info.name || info.adresse) + ': ' + info.fehler;
+        return;
+      }
+      el.shopState.textContent = 'Verbunden mit ' + info.name + ' · heute ' + info.heute.anzahl + ' '
+        + (info.heute.anzahl === 1 ? 'Bestellung' : 'Bestellungen') + ', ' + info.heute.umsatz;
+    }
+
+    async function refreshShop() {
+      try {
+        renderShop(await call('shop_info'));
+      } catch {
+        /* ältere Version */
+      }
+    }
+
+    if (el.shopForm) {
+      el.shopForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const domain = el.shopDomain.value.trim();
+        const client = el.shopClient.value.trim();
+        const secret = el.shopSecret.value.trim();
+        if (!domain || !client || !secret) {
+          toast('Bitte Shop-Adresse, Client-ID und Client-Secret eintragen.', 'info');
+          return;
+        }
+        el.shopSave.disabled = true;
+        el.shopSave.textContent = 'Prüfe …';
+        try {
+          const r = await call('shop_connect', domain, client, secret);
+          if (r && r.ok) {
+            el.shopSecret.value = '';
+            toast('Shop verbunden: ' + r.name + '. Sag „Wie läuft der Shop?“.', 'ok');
+            document.dispatchEvent(new CustomEvent('jarvis-shop'));
+          } else {
+            toast((r && r.error) || 'Das ging nicht.', 'error');
+          }
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        } finally {
+          el.shopSave.disabled = false;
+          el.shopSave.textContent = 'Prüfen und verbinden';
+          refreshShop();
+        }
+      });
+      el.shopOff.addEventListener('click', async () => {
+        try {
+          const r = await call('shop_disconnect');
+          toast(r && r.ok ? 'Shop getrennt. Das Secret ist gelöscht.' : (r && r.error) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
+          document.dispatchEvent(new CustomEvent('jarvis-shop'));
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+        refreshShop();
+      });
+      el.shopAdmin.addEventListener('click', () => call('shop_help', 'admin').catch(() => {}));
+      el.shopScopes.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(SHOP_SCOPES);
+          toast('Kopiert: ' + SHOP_SCOPES, 'ok');
+        } catch {
+          toast('Kopieren ging nicht. Bitte abschreiben: ' + SHOP_SCOPES, 'info');
+        }
+      });
+    }
+
     function showPane(pane) {
       for (const b of el.tabs) b.setAttribute('aria-selected', String(b.dataset.pane === pane));
       for (const p of el.dlg.querySelectorAll('.dlg-pane')) p.hidden = p.dataset.pane !== pane;
       if (pane === 'alexa') refreshAlexa();
       if (pane === 'discord') refreshDiscord();
       if (pane === 'calendar') refreshCalendar();
+      if (pane === 'shop') refreshShop();
     }
 
     for (const b of el.tabs) b.addEventListener('click', () => showPane(b.dataset.pane));

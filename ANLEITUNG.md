@@ -64,9 +64,9 @@ Die Alternative zu ElevenLabs: Eine natürliche deutsche Stimme, die ganz auf de
 
 **Geklappt, wenn:** oben „Aktiv“ steht und Jarvis mit der gewählten Stimme antwortet. Die Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben.
 
-## 3. Handy, Alexa, Discord und Kalender verbinden (freiwillig)
+## 3. Handy, Alexa, Discord, Kalender und Shop verbinden (freiwillig)
 
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es vier Bereiche.
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa, Discord, Kalender und Shop.
 
 ![Verbinden: Handy, Alexa und Discord](docs/bilder/verbinden.jpg)
 
@@ -129,6 +129,19 @@ Jarvis liest deinen Kalender mit (nur lesen): Er sagt 15 Minuten vor einem Termi
 2. Die Adresse in Jarvis einfügen und **Prüfen** klicken.
 
 **Geklappt, wenn:** Jarvis „Kalender verbunden: … Termine“ meldet. Die Adresse ist geheim wie ein Passwort.
+
+### Shop (Shopify)
+
+Hast du einen Shopify-Shop, behält Jarvis ihn im Blick: **„Wie läuft der Shop?“** nennt Bestellungen und Umsatz von heute und dieser Woche, **„Wann kommt die nächste Auszahlung?“** das Geld von Shopify. Neue Bestellungen sagt er an (beim Zocken nur aufs Handy). Auf Wunsch legt er Produkte als **Entwurf** an („Leg im Shop ein Mauspad mit Jarvis-Logo für 19,90 an“). Veröffentlichen, Preise im Laden ändern, Geld ausgeben und Kunden schreiben macht er **nie**, das bleibt dein Klick.
+
+1. Bereich **Shop**: **Öffnen** klicken. Im Shopify-Admin: **Einstellungen** > **Apps** > **Apps entwickeln** > **Apps im Dev Dashboard erstellen**. Dann **App erstellen**, Name „Jarvis“.
+2. Unter **Zugriff** > **Bereiche** genau diese vier eintragen (der Knopf **Kopieren** hilft): `read_orders, read_products, write_products, read_shopify_payments_payouts`. Dann **Veröffentlichen**.
+3. **Installationen** > **App installieren** > deinen Shop wählen.
+4. **Einstellungen** > **Anmeldedaten**: Client-ID und Client-Secret kopieren, im Jarvis-Fenster mit der Shop-Adresse (`meinladen.myshopify.com`) einfügen, **Prüfen und verbinden**.
+
+**Geklappt, wenn:** „Verbunden mit …“ erscheint und rechts im Fenster die Shop-Karte mit Umsatz auftaucht. Das Secret speichert Jarvis verschlüsselt nur auf diesem PC.
+
+**Ehrlich gesagt:** Geld kommt nur, wenn echte Kunden kaufen. Niemand kann Einnahmen garantieren. Shop, Shopify Payments (ab 18, mit Ausweis und Konto), in Österreich ein Gewerbe, Impressum, Datenschutz und seit 1.10.2026 ein Widerrufsbutton im Shop richtest du einmal selbst ein. Danach nimmt Jarvis dir die Arbeit ab.
 
 ### PC per Handy einschalten (Wake-on-LAN)
 

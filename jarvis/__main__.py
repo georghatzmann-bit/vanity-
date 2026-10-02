@@ -117,6 +117,14 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .kalender import Calendar
 
     assistant.calendar = Calendar(STATE_DIR / "kalender.json", cfg.get("kalender", {}).get("abos", []))
+    try:
+        # Shop-Hilfe (Shopify): das Client-Secret liegt verschlüsselt im Tresor
+        from .geheim import Secrets
+        from .shop import Shop
+
+        assistant.shop = Shop(cfg, Secrets(STATE_DIR / "geheim.json"), state_path=STATE_DIR / "shop.json")
+    except Exception as exc:
+        log.info("Shop-Hilfe nicht verfügbar: %s", exc)
     if brain is not None:
         memory_context = assistant.memory.context
 
@@ -193,6 +201,16 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                     assistant.check_calendar()
                 except Exception:
                     log.exception("Kalender")
+            if tick % 300 == 200 and getattr(assistant, "shop", None) is not None:
+                # Neue Bestellungen alle 10 Minuten, im eigenen Thread (Shopify kann langsam sein)
+                if not any(t.name == "jarvis-shop" and t.is_alive() for t in threading.enumerate()):
+                    def shop_check() -> None:
+                        try:
+                            assistant.check_shop()
+                        except Exception:
+                            log.exception("Shop")
+
+                    threading.Thread(target=shop_check, name="jarvis-shop", daemon=True).start()
             if tick % 600 == 120:
                 learn_from_yesterday(assistant)
 

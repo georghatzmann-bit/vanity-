@@ -928,6 +928,48 @@ body[data-state="speaking"] .deck {
   font-size: 12px;
 }
 
+/* Shop: nur sichtbar, wenn ein Shop verbunden ist */
+.card-meta {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.shop-figures div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shop-figures small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.shop-figures b {
+  font: 600 20px / 1.2 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-figures span {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.shop-open {
+  margin: 12px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
 /* Gedächtnis */
 .mem-sum {
   margin: 0;

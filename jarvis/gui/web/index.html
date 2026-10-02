@@ -145,6 +145,17 @@
         </div>
       </section>
 
+      <section class="card shop-card" id="shopCard" aria-labelledby="shopHead" hidden>
+        <header class="card-head">
+          <h2 id="shopHead">Shop</h2>
+          <span class="card-meta" id="shopName"></span>
+        </header>
+        <div class="shop-figures">
+          <div><small>Heute</small><b id="shopToday">–</b><span id="shopTodayN"></span></div>
+          <div><small>Diese Woche</small><b id="shopWeek">–</b><span id="shopWeekN"></span></div>
+        </div>
+        <p class="shop-open" id="shopOpen" hidden></p>
+      </section>
       <section class="card mem-panel" aria-labelledby="memHead">
         <header class="card-head">
           <h2 id="memHead">Gedächtnis</h2>
@@ -294,7 +305,7 @@
     <header class="dlg-head">
       <div>
         <span class="dlg-kicker">Jarvis überall</span>
-        <h2 id="phoneTitle">Handy, Alexa, Discord und Kalender</h2>
+        <h2 id="phoneTitle">Verbinden</h2>
       </div>
       <button type="button" class="icon-btn" id="phoneClose" aria-label="Schließen">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -305,6 +316,7 @@
       <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
       <button type="button" role="tab" data-pane="discord" aria-selected="false">Discord</button>
       <button type="button" role="tab" data-pane="calendar" aria-selected="false">Kalender</button>
+      <button type="button" role="tab" data-pane="shop" aria-selected="false">Shop</button>
     </div>
     <div class="dlg-pane" data-pane="phone">
     <label class="row toggle-row dlg-row">
@@ -434,6 +446,32 @@
       </form>
       <p class="dlg-note" id="calNote">Die Adresse ist geheim wie ein Passwort: Wer sie hat, sieht Ihre Termine. Jarvis speichert sie nur auf diesem PC.</p>
       <ul class="cal-feeds" id="calFeeds"></ul>
+    </div>
+    <div class="dlg-pane" data-pane="shop" hidden>
+      <div class="row dlg-row">
+        <span class="row-text">
+          <b id="shopState">Kein Shop verbunden</b>
+          <small id="shopHint">Jarvis behält Ihren Shopify-Shop im Blick: sagt Umsatz und neue Bestellungen an, nennt die nächste Auszahlung und legt Produkte als Entwurf an. Veröffentlichen, Preise ändern und Geld ausgeben macht er nie.</small>
+        </span>
+        <button type="button" class="btn small ghost" id="shopOff" hidden>Trennen</button>
+      </div>
+      <div id="shopSetup">
+        <ol class="dlg-steps alexa-steps">
+          <li><b>Dev Dashboard öffnen</b><span>Im Shopify-Admin: Einstellungen › Apps › „Apps entwickeln“ › „Apps im Dev Dashboard erstellen“. Dann „App erstellen“, Name „Jarvis“.</span>
+            <button type="button" class="btn small" id="shopAdmin">Öffnen</button></li>
+          <li><b>Rechte eintragen</b><span>Unter „Zugriff › Bereiche“ genau diese vier eintragen, dann „Veröffentlichen“: read_orders, read_products, write_products, read_shopify_payments_payouts.</span>
+            <button type="button" class="btn small" id="shopScopes">Kopieren</button></li>
+          <li><b>Installieren</b><span>„Installationen“ › „App installieren“ › Ihren Shop wählen.</span></li>
+          <li><b>Anmeldedaten einfügen</b><span>„Einstellungen › Anmeldedaten“: Client-ID und Client-Secret kopieren und unten einfügen. Das Secret speichert Jarvis verschlüsselt nur auf diesem PC.</span></li>
+        </ol>
+        <form class="acct-form" id="shopForm" autocomplete="off">
+          <input class="input" id="shopDomain" type="text" placeholder="Shop-Adresse, z. B. meinladen.myshopify.com" spellcheck="false" aria-label="Shop-Adresse">
+          <input class="input" id="shopClient" type="text" placeholder="Client-ID" spellcheck="false" aria-label="Client-ID">
+          <input class="input" id="shopSecret" type="password" placeholder="Client-Secret" spellcheck="false" aria-label="Client-Secret">
+          <div class="acct-actions"><button type="submit" class="btn small primary" id="shopSave">Prüfen und verbinden</button></div>
+        </form>
+      </div>
+      <p class="dlg-note">Ehrlich gesagt: Geld kommt nur, wenn echte Kunden kaufen. Shop, Zahlungen, Gewerbe und Rechtstexte richten Sie einmal selbst ein. Danach nimmt Jarvis Ihnen die Arbeit ab.</p>
     </div>
   </section>
 

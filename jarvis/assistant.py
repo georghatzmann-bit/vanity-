@@ -339,7 +339,9 @@ class Assistant:
             from .shop import match_shop
 
             asked = match_shop(text)
-            if asked is not None:
+            # Ohne verbundenen Shop gehen nur Fragen mit "Shop" oder "Laden" hierher ("Neue
+            # Bestellungen?" kann auch Amazon meinen, das beantwortet dann Claude).
+            if asked is not None and (self.shop.configured or re.search(r"\b(?:shop|laden|shopify)\b", text, re.I)):
                 return self._shop_command(asked)
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):

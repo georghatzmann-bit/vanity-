@@ -166,6 +166,97 @@ class Api:
         rows.sort(key=lambda row: row["_at"])
         return [{k: v for k, v in row.items() if k != "_at"} for row in rows[:8]]
 
+    # ------------------------------------------------------------------ Shop (Shopify)
+
+    def _shop_vault(self):
+        from ..config import STATE_DIR
+        from ..geheim import Secrets
+
+        return Secrets(STATE_DIR / "geheim.json")
+
+    def shop_info(self) -> dict:
+        """Für "Verbinden > Shop" und die Shop-Karte: verbunden, Name, heute, Woche, offen."""
+        from ..shop import ShopError, money
+
+        shop = getattr(self._assistant, "shop", None)
+        if shop is None or not shop.configured:
+            return {"verbunden": False, "adresse": getattr(shop, "domain", "") if shop else "", "fehler": ""}
+        try:
+            info = shop.info()
+            summary = shop.summary()
+        except ShopError as exc:
+            return {"verbunden": True, "adresse": shop.domain, "name": shop.name or shop.domain, "fehler": str(exc)}
+        cur = summary["waehrung"]
+        return {"verbunden": True, "adresse": shop.domain, "name": info["name"], "fehler": "",
+                "heute": {"anzahl": summary["heute"]["anzahl"], "umsatz": money(summary["heute"]["umsatz"], cur)},
+                "woche": {"anzahl": summary["woche"]["anzahl"], "umsatz": money(summary["woche"]["umsatz"], cur)},
+                "offen": summary["offen"], "bestseller": [t for t, _ in summary["bestseller"]]}
+
+    def shop_connect(self, address, client_id, secret) -> dict:
+        """Shop-Adresse, Client-ID und Client-Secret prüfen (holt einen Token und den Shop-Namen) und
+        speichern: Adresse und ID in config.toml, das Secret verschlüsselt im Tresor."""
+        from ..config import STATE_DIR, save_setting
+        from ..shop import Shop, ShopError, normalize_domain
+
+        try:
+            domain = normalize_domain(address)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        client_id, secret = str(client_id or "").strip(), str(secret or "").strip()
+        if len(client_id) < 8 or len(secret) < 8:
+            return {"ok": False, "error": "Bitte Client-ID und Client-Secret aus dem Dev Dashboard einfügen "
+                                         "(Einstellungen > Anmeldedaten)."}
+
+        class _Once:  # nur für die Probe: das Secret erst nach Erfolg speichern
+            def get(self, key):
+                return secret
+
+        probe = Shop({"shop": {"adresse": domain, "client_id": client_id}}, _Once())
+        try:
+            info = probe.info()
+        except ShopError as exc:
+            return {"ok": False, "error": str(exc)}
+        try:
+            vault = self._shop_vault()
+            vault.set("shopify", secret)
+            save_setting("shop", "adresse", domain)
+            save_setting("shop", "client_id", client_id)
+        except Exception as exc:
+            return {"ok": False, "error": f"Konnte nicht speichern: {exc}"}
+        section = self._assistant._cfg.setdefault("shop", {})
+        section.update({"adresse": domain, "client_id": client_id})
+        self._assistant.shop = Shop(self._assistant._cfg, vault, state_path=STATE_DIR / "shop.json")
+        return {"ok": True, "error": "", "name": info["name"]}
+
+    def shop_disconnect(self) -> dict:
+        from ..config import STATE_DIR, save_setting
+        from ..shop import Shop
+
+        try:
+            vault = self._shop_vault()
+            vault.delete("shopify")
+            save_setting("shop", "adresse", "")
+            save_setting("shop", "client_id", "")
+        except Exception as exc:
+            return {"ok": False, "error": f"Konnte nicht trennen: {exc}"}
+        self._assistant._cfg.setdefault("shop", {}).update({"adresse": "", "client_id": ""})
+        self._assistant.shop = Shop(self._assistant._cfg, vault, state_path=STATE_DIR / "shop.json")
+        return {"ok": True, "error": ""}
+
+    def shop_help(self, which="admin") -> bool:
+        """Knopf "Öffnen": der Shopify-Admin (dort geht es weiter ins Dev Dashboard)."""
+        from .. import pc
+
+        url = {"admin": "https://admin.shopify.com/", "dev": "https://dev.shopify.com/dashboard"}.get(str(which))
+        if not url:
+            return False
+        try:
+            pc.open_uri(url)
+            return True
+        except Exception as exc:
+            log.info("Shop-Hilfe: %s", exc)
+            return False
+
     # ------------------------------------------------------------------ Kalender
 
     def calendar_info(self) -> dict:
