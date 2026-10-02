@@ -463,11 +463,16 @@ def run_gui(cfg: dict, args) -> int:
     gui_cfg = cfg.get("gui", {})
     hidden = bool(args.hintergrund and gui_cfg.get("start_hidden", True))
     desktop.set_app_id()
+    stopped = threading.Event()
+    # Gleich auf einen zweiten Start hören, nicht erst wenn alles geladen ist (Stimme und Claude
+    # brauchen auf langsamen PCs eine halbe Minute): Sonst meldet der Doppelklick in der Zeit nur
+    # "läuft schon". Das Fenster kommt dann, sobald es da ist.
+    show_requests = desktop.ShowRequests()
+    desktop.listen_for_show(show_requests.fire, stopped)
     bridge = GuiBridge()
     console = ConsoleUi()
     ui = MultiUi(console, bridge)
     assistant = build_core(cfg, ui, args.silent)
-    stopped = threading.Event()
     window: Window
     tray_ref: list[Tray] = []
     voice_ref: list[VoiceLoop] = []
@@ -502,10 +507,10 @@ def run_gui(cfg: dict, args) -> int:
         threading.Timer(0.6, quit_all).start()
 
     def background() -> None:
+        show_requests.connect(show_window)  # das Fenster ist da
         start_services(cfg, assistant, ui, stopped)
         if overlay is not None:
             overlay.start()
-        desktop.listen_for_show(show_window, stopped)
         if gui_cfg.get("tray", True):
             tray = Tray(
                 show_window, assistant.mute.toggle, quit_all, lambda: assistant.mute.muted,
@@ -851,7 +856,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.hintergrund:
             return 0  # Autostart, aber Jarvis läuft schon: nichts zu tun
-        if signal_running_instance():
+        if signal_running_instance(wait=5.0):
             return 0  # Der laufende Jarvis zeigt sein Fenster
         # Als Fenster, weil sich Jarvis.bat danach sofort schließt.
         tell(

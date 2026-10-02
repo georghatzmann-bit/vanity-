@@ -429,9 +429,78 @@ class SingleInstanceTest(unittest.TestCase):
             self.assertFalse(setup_wizard.jarvis_running(wait=3))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
+class SecondStartTest(unittest.TestCase):
+    """Doppelklick, während Jarvis noch lädt: Das Fenster kommt, sobald es da ist."""
+
+    def test_request_while_loading_waits_for_the_window(self):
+        from jarvis.desktop import ShowRequests
+
+        shown = []
+        requests = ShowRequests()
+        requests.fire()  # zweiter Start, das Fenster gibt es noch nicht
+        self.assertEqual(shown, [])
+        requests.connect(lambda: shown.append("zeigen"))
+        self.assertEqual(shown, ["zeigen"])
+        requests.fire()  # später: sofort
+        self.assertEqual(shown, ["zeigen", "zeigen"])
+
+    def test_no_request_no_window(self):
+        from jarvis.desktop import ShowRequests
+
+        shown = []
+        ShowRequests().connect(lambda: shown.append("zeigen"))
+        self.assertEqual(shown, [])  # der Autostart bleibt unsichtbar
+
+    def test_broken_show_does_not_stop_the_start(self):
+        from jarvis.desktop import ShowRequests
+
+        requests = ShowRequests()
+        requests.fire()
+
+        def broken():
+            raise RuntimeError("Fenster weg")
+
+        with self.assertLogs("jarvis.desktop", "ERROR"):
+            requests.connect(broken)  # kein Absturz: Sprachsteuerung und Tray starten trotzdem
+
+    def test_listening_starts_before_the_slow_part(self):
+        from types import SimpleNamespace
+
+        from jarvis import __main__ as main
+        from jarvis import desktop
+
+        order = []
+
+        class Loaded(Exception):
+            pass
+
+        def build_core(*_args, **_kwargs):
+            order.append("laden")
+            raise Loaded
+
+        args = SimpleNamespace(hintergrund=True, silent=True)
+        with mock.patch.object(desktop, "listen_for_show", lambda *_a: order.append("hoeren") or True), \
+                mock.patch.object(desktop, "set_app_id", lambda: None), \
+                mock.patch.object(main, "build_core", build_core):
+            with self.assertRaises(Loaded):
+                main.run_gui({"gui": {}}, args)
+        self.assertEqual(order, ["hoeren", "laden"])
+
+    def test_second_start_keeps_trying_while_the_first_starts(self):
+        from jarvis import desktop
+
+        tries = iter([False, False, True])
+        with mock.patch.object(desktop.os, "name", "nt"), \
+                mock.patch.object(desktop, "_signal_once", lambda: next(tries)), \
+                mock.patch.object(desktop.time, "sleep", lambda _s: None):
+            self.assertTrue(desktop.signal_running_instance(wait=5.0))
+
+        with mock.patch.object(desktop.os, "name", "nt"), \
+                mock.patch.object(desktop, "_signal_once", lambda: False), \
+                mock.patch.object(desktop.time, "sleep", lambda _s: None), \
+                mock.patch.object(desktop.time, "monotonic", side_effect=[0.0, 1.0, 6.0]):
+            self.assertFalse(desktop.signal_running_instance(wait=5.0))
 
 class WindowsDefaultMicTest(SetupTestCase):
     DEVICES = [
@@ -727,3 +796,7 @@ class PremiumSettingsTest(SetupTestCase):
             self.assertTrue(self.api.groq_check("gsk_gut")["ok"])
         self.assertEqual(self.saved()["stt"]["groq_key"], "gsk_gut")
         self.assertTrue(self.api.hello()["values"]["groq_key_set"])
+
+
+if __name__ == "__main__":
+    unittest.main()

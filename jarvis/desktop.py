@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 
 from .config import ROOT, STATE_DIR
@@ -50,11 +51,21 @@ def app_icon() -> str | None:
         return None
 
 
-def signal_running_instance() -> bool:
+def signal_running_instance(wait: float = 0.0) -> bool:
     """Ein zweiter Start (Doppelklick aufs Symbol) sagt dem laufenden Jarvis, dass er sein
-    Fenster zeigen soll. True, wenn das geklappt hat."""
+    Fenster zeigen soll. True, wenn das geklappt hat. `wait`: so lange es weiter versuchen,
+    falls der erste Jarvis gerade erst startet (Doppelklick kurz hintereinander)."""
     if os.name != "nt":
         return False
+    end = time.monotonic() + wait
+    while not _signal_once():
+        if time.monotonic() >= end:
+            return False
+        time.sleep(0.25)
+    return True
+
+
+def _signal_once() -> bool:
     try:
         import ctypes
 
@@ -73,6 +84,36 @@ def signal_running_instance() -> bool:
     except Exception as exc:
         log.debug("Laufenden Jarvis wecken: %s", exc)
         return False
+
+
+class ShowRequests:
+    """Ein zweiter Start will das Fenster sehen. Jarvis hört darauf gleich beim Start, auch wenn
+    das Fenster noch lädt (Stimme, Claude): Die Bitte wartet dann, bis es da ist."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._callback = None
+        self._waiting = False
+
+    def fire(self) -> None:
+        with self._lock:
+            callback = self._callback
+            if callback is None:
+                self._waiting = True
+                return
+        callback()
+
+    def connect(self, callback) -> None:
+        """Das Fenster ist da: ab jetzt direkt zeigen, und eine wartende Bitte gleich erfüllen."""
+        with self._lock:
+            self._callback = callback
+            waiting, self._waiting = self._waiting, False
+        if waiting:
+            log.info("Zweiter Start während des Ladens: Fenster jetzt nach vorn")
+            try:
+                callback()
+            except Exception:
+                log.exception("Fenster zeigen")
 
 
 def listen_for_show(callback, stopped: threading.Event) -> bool:
