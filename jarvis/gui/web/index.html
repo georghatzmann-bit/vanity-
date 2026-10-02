@@ -278,11 +278,12 @@
   <!-- Weltlage („Gottes Auge“): Satelliten-Erde mit Lagebericht (weltlage.js, three.js) -->
   <section class="wl" id="wl" aria-label="Weltlage" hidden>
     <div class="wl-stage" id="wlStage"><canvas id="wlCanvas" aria-label="Die Erde. Ziehen verschiebt, Mausrad zoomt, rechts ziehen dreht."></canvas></div>
+    <div class="wl-projector" id="wlProjector" aria-hidden="true"><i></i></div>
     <div class="wl-marks" id="wlMarks" aria-hidden="true"></div>
     <div class="wl-vignette" aria-hidden="true"></div>
     <header class="wl-brand">
       <b>J.A.R.V.I.S.</b>
-      <span>Gottes Auge · Satellitenansicht</span>
+      <span id="wlBrandSub">Gottes Auge · Satellitenansicht</span>
     </header>
     <dl class="wl-readout">
       <div><dt>Ziel</dt><dd id="wlTarget">Erde</dd></div>
@@ -309,6 +310,7 @@
     <p class="wl-status" id="wlStatus" role="status"></p>
     <footer class="wl-foot wl-panel">
       <form class="wl-search" id="wlSearch" autocomplete="off"><input id="wlSearchIn" type="search" placeholder="Ort suchen, z. B. Tokio" aria-label="Ort suchen"></form>
+      <button type="button" class="wl-btn" id="wlHolo" aria-pressed="false" title="Die Erde als Hologramm: leuchtende Kontinente, Lichtsäulen über den Meldungen. Taste H.">Hologramm</button>
       <button type="button" class="wl-btn" id="wlFlights" aria-pressed="false" title="Flugzeuge in der Luft, live (ab Landesgröße). Taste F.">Flugverkehr</button>
       <button type="button" class="wl-btn" id="wlHands" aria-pressed="false" title="Die Erde mit den Händen drehen und zoomen (Webcam)">Handsteuerung</button>
       <button type="button" class="wl-btn primary" id="wlClose" title="Zurück zum Hauptmenü (Esc)">Hauptmenü</button>

@@ -3,6 +3,8 @@
    Vollbild über dem Hauptfenster: die Satelliten-Erde (weltlage.js) und darüber ein HUD in einer Farbe
    (Cyan): oben links J.A.R.V.I.S. mit Ziel und Koordinaten, rechts die Meldungen, darunter die Märkte,
    unten Mitte der Satz, den Jarvis gerade sagt, unten links Suche und Schalter.
+   Die aktuelle Meldung klappt in der Liste auf (großes Foto, erster Satz, Bildquelle), am Ziel auf der
+   Erde steht ihr Foto klein dabei. Im Hologramm (.wl.holo) schwebt die Erde über einem Projektor.
    Status nie nur über Farbe: Kurse haben ▲/▼ und Text, Schalter aria-pressed und Beschriftung.
    ========================================================================== */
 
@@ -172,11 +174,42 @@
 .wl-mark.on .wl-mark-label {
   top: -46px;
   left: 42px;
-  padding: 8px 12px;
+  max-width: 440px;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: center;
+  padding: 8px 12px 8px 8px;
 }
 
 .wl-mark.on .wl-mark-label em {
+  display: -webkit-box;
+  max-width: 280px;
+  white-space: normal;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Das Foto der Meldung am Ziel: links neben Ort und Titel */
+.wl-mark-label .wl-pic {
+  display: none;
+}
+
+.wl-mark.on .wl-mark-label .wl-pic {
   display: block;
+  grid-row: span 2;
+  width: 112px;
+  height: 63px;
+  box-shadow: 0 0 0 1px var(--hud-line);
+}
+
+.wl-mark.on .wl-mark-label .wl-pic.none {
+  display: none;
+}
+
+.wl-mark.on .wl-mark-label:has(.wl-pic.none) {
+  grid-template-columns: minmax(0, 1fr);
+  padding-left: 12px;
 }
 
 @keyframes wl-ping {
@@ -353,40 +386,135 @@
   scrollbar-color: var(--hud-line) transparent;
 }
 
+.wl-list li {
+  margin: 0 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+/* Die aktuelle Meldung: aufgeklappt mit großem Foto */
+.wl-list li.on {
+  border-color: var(--hud-line);
+  background: rgba(126, 232, 255, 0.1);
+}
+
 .wl-item {
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   width: 100%;
-  margin: 0 0 4px;
   padding: 8px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: var(--r-s);
   color: inherit;
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+  transition: background var(--t) var(--ease);
 }
 
 .wl-item:hover {
   background: rgba(126, 232, 255, 0.07);
 }
 
-.wl-item.on {
-  border-color: var(--hud-line);
-  background: rgba(126, 232, 255, 0.12);
+.wl-list li.on .wl-item:hover {
+  background: transparent;
 }
 
-.wl-item img,
-.wl-thumb {
+/* Foto (oder Satellitenbild vom Ort), sonst eine ruhige Fläche mit Fadenkreuz */
+.wl-pic {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border-radius: 4px;
+  background: rgba(126, 232, 255, 0.08);
+}
+
+.wl-pic img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wl-pic.none::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--hud-line), var(--hud-line)) center / 14px 1px no-repeat,
+    linear-gradient(var(--hud-line), var(--hud-line)) center / 1px 14px no-repeat;
+}
+
+.wl-item > .wl-pic {
   width: 72px;
   height: 40px;
-  border-radius: 4px;
-  object-fit: cover;
-  background: rgba(126, 232, 255, 0.08);
-  filter: saturate(0.8);
+}
+
+.wl-item > .wl-pic img {
+  filter: saturate(0.85);
+}
+
+.wl-more-pic,
+.wl-more-text {
+  display: none;
+}
+
+.wl-list li.on .wl-item {
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: 4px;
+}
+
+.wl-list li.on .wl-item > .wl-pic {
+  display: none;
+}
+
+.wl-list li.on .wl-item-text b {
+  -webkit-line-clamp: 4;
+}
+
+.wl-list li.on .wl-more-pic {
+  display: block;
+  margin: 8px 8px 0;
+}
+
+.wl-more-pic .wl-pic {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+}
+
+/* Bildquelle klein unten rechts im Foto, wie bei Nachrichtenseiten */
+.wl-more-pic {
+  position: relative;
+}
+
+.wl-more-pic figcaption {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.82);
+  font: 10px / 1.3 var(--mono);
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+}
+
+.wl-more-pic figcaption[hidden] {
+  display: none;
+}
+
+.wl-list li.on .wl-more-text:not(:empty) {
+  display: block;
+  margin: 0 8px 12px;
+  padding: 0 8px;
+  color: var(--hud-2);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .wl-item-text {
@@ -477,7 +605,7 @@
 .wl-sub {
   position: absolute;
   bottom: 84px;
-  left: 50%;
+  left: calc(50% - 186px); /* Mitte des freien Bereichs links der Meldungen */
   max-width: min(760px, calc(100% - 820px));
   min-width: 320px;
   margin: 0;
@@ -588,6 +716,41 @@
   font: 10px / 1.3 var(--mono);
   text-align: right;
   pointer-events: none;
+}
+
+/* Hologramm: Projektor unter der schwebenden Erde. --r ist der Erdradius in Pixeln (weltlage.js),
+   der Punkt selbst liegt am unteren Rand der Erde. */
+.wl-projector {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wl-projector::before {
+  content: "";
+  position: absolute;
+  bottom: calc(var(--r, 200px) * -0.2);
+  left: calc(var(--r, 200px) * -0.55);
+  width: calc(var(--r, 200px) * 1.1);
+  height: calc(var(--r, 200px) * 0.75);
+  background: linear-gradient(0deg, rgba(126, 232, 255, 0.2), rgba(126, 232, 255, 0));
+  clip-path: polygon(36% 100%, 64% 100%, 100% 0, 0 0);
+}
+
+.wl-projector i {
+  position: absolute;
+  top: calc(var(--r, 200px) * 0.13);
+  left: calc(var(--r, 200px) * -0.36);
+  width: calc(var(--r, 200px) * 0.72);
+  height: calc(var(--r, 200px) * 0.13);
+  border: 1px solid rgba(126, 232, 255, 0.55);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(126, 232, 255, 0.4), rgba(126, 232, 255, 0.06) 70%, transparent);
+  box-shadow: 0 0 24px rgba(126, 232, 255, 0.3), inset 0 0 12px rgba(126, 232, 255, 0.35);
 }
 
 /* Start: "Satellitenverbindung wird aufgebaut" über dem Hologramm */
@@ -704,6 +867,35 @@
     top: 168px;
     white-space: normal;
     text-align: center;
+  }
+
+  .wl-list li.on .wl-more-pic,
+  .wl-mark.on .wl-mark-label .wl-pic {
+    display: none;
+  }
+
+  .wl-list li.on .wl-item {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .wl-list li.on .wl-item > .wl-pic {
+    display: block;
+  }
+
+  .wl-list li.on .wl-more-text:not(:empty) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+
+  .wl-mark.on .wl-mark-label {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 12px;
+  }
+
+  .wl-mark.on .wl-mark-label em {
+    max-width: 200px;
   }
 }
 

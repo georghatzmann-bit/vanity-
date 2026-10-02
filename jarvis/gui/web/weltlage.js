@@ -1,14 +1,16 @@
 /* ==========================================================================
    Jarvis – Weltlage („Gottes Auge“)
    Eine Satelliten-Erde wie in Google Earth, im Stil von J.A.R.V.I.S.: Python (weltlage.py) holt die
-   Meldungen samt Ort, diese Seite fliegt von Ort zu Ort, während Jarvis vorliest.
-     weltlage  open | close | loading | news | focus | fly | markets | layer | view | done
+   Meldungen samt Ort und Foto, diese Seite fliegt von Ort zu Ort, während Jarvis vorliest.
+     weltlage  open | close | loading | news | focus | fly | markets | layer | view | look | done
    Die Erde zeichnet three.js (vendor/three.min.js, erst beim ersten Öffnen geladen). Die grobe Karte liegt
    in Jarvis (vendor/erde.jpg), feinere Satellitenbilder kommen beim Heranzoomen von EOX (Sentinel-2
    cloudless). Ohne Internet bleibt die grobe Karte. Alle Flächen liegen auf einer Kugel und werden der
    Reihe nach gezeichnet (gröbere zuerst), darum braucht es keinen Tiefenpuffer und nichts flimmert.
-   Maus: ziehen verschiebt, Rad zoomt, rechts ziehen dreht und kippt, Doppelklick fliegt hin.
-   Texte aus Meldungen kommen nur als Klartext (textContent) auf die Seite.
+   Zwei Ansichten: Satellitenbild oder Hologramm (Kontinente aus Lichtpunkten, Lichtrand, Ringe, Lichtsäulen
+   über den Orten der Meldungen). Beide teilen sich Karte und Kacheln, nur die Farben rechnet ein Shader um.
+   Maus: ziehen verschiebt, Rad zoomt, rechts ziehen dreht und kippt, Doppelklick fliegt hin. Taste H: Hologramm.
+   Texte aus Meldungen kommen nur als Klartext (textContent) auf die Seite, Fotos nur von https-Adressen.
    ========================================================================== */
 (() => {
   'use strict';
@@ -29,6 +31,8 @@
   const MAX_ALT = 4.2;
   const FOV = 40;
   const PLANES_MAX = 700;
+  const GLOW = 0x7fe9ff; // Farbe des Hologramms (wie das HUD)
+  const LOOK_KEY = 'jarvis.weltlage.look';
   const motionMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const reducedMotion = () => !!(motionMQ && motionMQ.matches);
 
@@ -62,6 +66,7 @@
   // ------------------------------------------------------------------ Mathematik
 
   const mercLat = (yNorm) => Math.atan(Math.sinh(Math.PI * (1 - 2 * yNorm))) / DEG; // 0 = Norden, 1 = Süden
+  const mercY = (lat) => (1 - Math.log(Math.tan(Math.PI / 4 + (clamp(lat, -MERC_LAT, MERC_LAT) * DEG) / 2)) / Math.PI) / 2;
   const wrapLon = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
   const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -151,6 +156,74 @@
   const MONTHS = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'];
   const DAYS = ['SO', 'MO', 'DI', 'MI', 'DO', 'FR', 'SA'];
 
+  // Ein Satellitenbild vom Ort (eine Kachel von EOX), wenn eine Meldung kein Foto hat. Der Ort liegt
+  // irgendwo in der Kachel: object-position hält ihn im sichtbaren Ausschnitt.
+  function satImage(ort) {
+    if (!ort || ort.iss || !Number.isFinite(ort.lat) || !Number.isFinite(ort.lon)) return null;
+    const lat = clamp(ort.lat, -84, 84);
+    const km = Math.max(4, Number(ort.km) || 300);
+    const z = clamp(Math.round(Math.log2((40075 * Math.cos(lat * DEG)) / (km * 3))), 3, 13);
+    const n = 2 ** z;
+    const fx = ((wrapLon(ort.lon) + 180) / 360) * n;
+    const fy = mercY(lat) * n;
+    const x = Math.min(n - 1, Math.floor(fx));
+    const y = Math.min(n - 1, Math.floor(fy));
+    return { url: TILE_URL(z, x, y), pos: `${((fx - x) * 100).toFixed(1)}% ${((fy - y) * 100).toFixed(1)}%` };
+  }
+
+  // ------------------------------------------------------------------ Shader
+
+  // Karte und Kacheln: Satellitenbild oder Hologramm (holo 0 bis 1). Im Hologramm leuchtet Land je nach
+  // Helligkeit, Wasser (bläulich und dunkel) bleibt fast schwarz, Küsten und Kanten (Straßen, Felder,
+  // Ufer) glimmen als Linien, feine Zeilen laufen durch.
+  const SURF_VS = `varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+  const SURF_FS = `uniform sampler2D map; uniform float hasMap; uniform vec3 tint; uniform float holo; uniform float gain;
+    uniform float time; uniform vec3 glow; varying vec2 vUv;
+    void main() {
+      vec3 c = mix(tint, texture2D(map, vUv).rgb, hasMap);
+      if (holo > 0.002) {
+        float l = dot(c, vec3(0.299, 0.587, 0.114));
+        float water = smoothstep(0.015, 0.06, c.b - max(c.r, c.g)) * (1.0 - smoothstep(0.42, 0.5, l));
+        float coast = clamp(fwidth(water) * 2.5, 0.0, 1.0);
+        float edge = clamp(fwidth(l) * 2.5, 0.0, 1.0) * (1.0 - water);
+        float scan = 0.86 + 0.14 * sin(gl_FragCoord.y * 1.7 - time * 3.0);
+        vec3 h = glow * ((mix(0.03 + 1.5 * pow(l, 1.8), 0.015, water) + edge * 0.25) * gain * scan + coast * 0.85);
+        c = mix(c, h, holo);
+      }
+      gl_FragColor = vec4(c, 1.0);
+    }`;
+
+  // Lichtpunkte des Hologramms: nur auf der sichtbaren Seite, zum Rand hin schwächer
+  const DOTS_VS = `attribute float lum; uniform float size; varying float vA;
+    void main() {
+      vec4 w = modelMatrix * vec4(position, 1.0);
+      float facing = dot(normalize(w.xyz), normalize(cameraPosition - w.xyz));
+      vA = lum * smoothstep(-0.02, 0.35, facing);
+      gl_Position = facing < -0.02 ? vec4(0.0, 0.0, -2.0, 1.0) : projectionMatrix * viewMatrix * w;
+      gl_PointSize = size * (0.55 + 0.45 * lum);
+    }`;
+  const DOTS_FS = `uniform vec3 color; uniform float opacity; varying float vA;
+    void main() {
+      vec2 p = gl_PointCoord - 0.5;
+      float d = dot(p, p);
+      if (d > 0.25) discard;
+      gl_FragColor = vec4(color, vA * opacity * (1.0 - d * 3.0));
+    }`;
+
+  // Lichtsäule: unten hell, oben verblasst, in der Mitte dichter als am Rand
+  const BEAM_VS = `varying float vY; varying float vMid;
+    void main() {
+      vY = position.y;
+      vMid = abs(normalize(normalMatrix * normal).z);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`;
+  const BEAM_FS = `uniform vec3 glow; uniform float opacity; varying float vY; varying float vMid;
+    void main() {
+      float a = pow(1.0 - vY, 1.7) * (0.25 + 0.75 * vMid * vMid) * opacity;
+      gl_FragColor = vec4(mix(glow, vec3(1.0), 0.22 * (1.0 - vY)), a);
+    }`;
+
   // ------------------------------------------------------------------ Die Ansicht
 
   function create(opts) {
@@ -166,7 +239,7 @@
       markets: $('wlMarketList'), marketsBox: $('wlMarkets'), sub: $('wlSub'), status: $('wlStatus'),
       search: $('wlSearch'), searchIn: $('wlSearchIn'), flightsBtn: $('wlFlights'), handsBtn: $('wlHands'),
       closeBtn: $('wlClose'), kinds: root.querySelectorAll('.wl-kinds button'), newsBox: $('wlNewsBox'),
-      pill: $('wlPill'),
+      pill: $('wlPill'), holoBtn: $('wlHolo'), brandSub: $('wlBrandSub'), projector: $('wlProjector'),
     };
 
     let isOpen = false;
@@ -175,18 +248,26 @@
     let scene = null;
     let camera = null;
     let base = null; // die ganze Erde aus erde.jpg
-    let holo = null; // Hologramm-Punkte beim Start
+    let holo = null; // Hologramm: Lichtpunkte auf den Kontinenten
     let rings = null;
+    let shell = null; // Hologramm: Lichtrand und Scanstreifen
+    let pillars = null; // Hologramm: Lichtsäulen über den Orten der Meldungen
     let grid = null;
     let atmo = null;
     let planesMesh = null;
+    let U = null; // Werte, die sich alle Flächen-Shader teilen (Hologramm-Anteil, Zeit, Farbe)
     let ready = false;
     let raf = 0;
     let last = 0;
     let clock = 0;
     let fade = 1; // 0 = Hologramm, 1 = Satellitenbild
     let fadeGoal = 1;
+    let booting = false; // die ersten Augenblicke nach dem Öffnen: immer erst Hologramm
     let maxAniso = 1;
+    let look = 'satellit';
+    try {
+      if (localStorage.getItem(LOOK_KEY) === 'holo') look = 'holo';
+    } catch (e) { /* ohne Speicher: Satellitenbild */ }
 
     const cam = { lat: 47, lon: 12, alt: 3.0, heading: 0, tiltBias: 0 };
     let flight = null; // laufender Flug zu einem Ort
@@ -236,10 +317,13 @@
       maxAniso = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
       scene = new T.Scene();
       camera = new T.PerspectiveCamera(FOV, 1, 0.0001, 400);
+      U = { holo: { value: 0 }, gain: { value: 1 }, time: { value: 0 }, glow: { value: new T.Color(GLOW) } };
       buildStars();
       buildAtmosphere();
       buildBase();
       buildHolo();
+      buildShell();
+      buildPillars();
       buildGrid();
       buildPlanes();
       bindPointer();
@@ -249,35 +333,36 @@
     }
 
     // Alles ist "transparent": Dann zeichnet three.js streng nach renderOrder (Sterne, Lichtsaum, Karte,
-    // feinere Kacheln, Gitter, Flugzeuge) und nicht erst alles Undurchsichtige.
-    function surfaceMaterial(map) {
-      return new T.MeshBasicMaterial({ map, depthTest: false, depthWrite: false, transparent: true });
+    // feinere Kacheln, Gitter, Flugzeuge) und nicht erst alles Undurchsichtige. Karte und Kacheln teilen
+    // sich die Werte in U: Ein Regler schaltet die ganze Erde zwischen Satellitenbild und Hologramm um.
+    function surfaceMaterial(map, tint) {
+      return new T.ShaderMaterial({
+        uniforms: {
+          map: { value: map || null }, hasMap: { value: map ? 1 : 0 }, tint: { value: new T.Color(tint == null ? 0x0a1626 : tint) },
+          holo: U.holo, gain: U.gain, time: U.time, glow: U.glow,
+        },
+        vertexShader: SURF_VS, fragmentShader: SURF_FS,
+        depthTest: false, depthWrite: false, transparent: true, extensions: { derivatives: true },
+      });
     }
 
     function buildBase() {
-      const geo = tileGeometry(T, 0, 0, 0, 128);
-      const mat = surfaceMaterial(null);
-      mat.color = new T.Color(0x0a1626);
-      mat.opacity = 0;
-      base = new T.Mesh(geo, mat);
+      base = new T.Mesh(tileGeometry(T, 0, 0, 0, 128), surfaceMaterial(null));
       base.renderOrder = 0;
       scene.add(base);
       // Pole: Mercator reicht nur bis 85°, darüber zwei Kappen in der Farbe des Kartenrands
-      const capN = new T.Mesh(new T.SphereGeometry(1, 64, 4, 0, Math.PI * 2, 0, (90 - MERC_LAT) * DEG),
-        new T.MeshBasicMaterial({ color: 0x1b2b48, depthTest: false, depthWrite: false, transparent: true, opacity: 0 }));
+      const capN = new T.Mesh(new T.SphereGeometry(1, 64, 4, 0, Math.PI * 2, 0, (90 - MERC_LAT) * DEG), surfaceMaterial(null, 0x1b2b48));
       const capS = new T.Mesh(new T.SphereGeometry(1, 64, 4, 0, Math.PI * 2, Math.PI - (90 - MERC_LAT) * DEG, (90 - MERC_LAT) * DEG),
-        new T.MeshBasicMaterial({ color: 0xeef1f4, depthTest: false, depthWrite: false, transparent: true, opacity: 0 }));
+        surfaceMaterial(null, 0xeef1f4));
       capN.renderOrder = capS.renderOrder = 0;
-      base.userData.caps = [capN, capS];
       scene.add(capN, capS);
       const img = new Image();
       img.onload = () => {
         const tex = new T.Texture(img);
         tex.anisotropy = maxAniso;
         tex.needsUpdate = true;
-        base.material.map = tex;
-        base.material.color.set(0xffffff);
-        base.material.needsUpdate = true;
+        base.material.uniforms.map.value = tex;
+        base.material.uniforms.hasMap.value = 1;
         try { // die Kappen in der Farbe der obersten und untersten Bildzeile
           const c = document.createElement('canvas');
           c.width = 64;
@@ -291,9 +376,10 @@
             for (let i = 0; i < d.length; i += 4) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; }
             return new T.Color(r / n / 255, gg / n / 255, b / n / 255);
           };
-          capN.material.color.copy(avg(0));
-          capS.material.color.copy(avg(63));
+          capN.material.uniforms.tint.value.copy(avg(0));
+          capS.material.uniforms.tint.value.copy(avg(63));
         } catch (e) { /* Farben bleiben */ }
+        buildHoloLand(img);
       };
       img.src = BASE_URL;
     }
@@ -341,24 +427,37 @@
       scene.add(atmo);
     }
 
-    // Das Hologramm vom Start: eine Kugel aus Lichtpunkten mit zwei Ringen
-    function buildHolo() {
-      const n = 5200;
-      const pos = new Float32Array(n * 3);
+    // Punkte gleichmäßig auf der Kugel (Fibonacci-Spirale); keep(lat, lon) gibt die Helligkeit, 0 = weglassen
+    function fibonacciDots(n, keep) {
+      const pos = [];
+      const lum = [];
       const golden = Math.PI * (3 - Math.sqrt(5));
       for (let i = 0; i < n; i++) {
-        const y = 1 - (i / (n - 1)) * 2;
+        const y = 1 - ((i + 0.5) / n) * 2;
         const r = Math.sqrt(1 - y * y);
-        const a = golden * i;
-        pos[i * 3] = Math.cos(a) * r * 1.004;
-        pos[i * 3 + 1] = y * 1.004;
-        pos[i * 3 + 2] = Math.sin(a) * r * 1.004;
+        const x = Math.cos(golden * i) * r;
+        const z = Math.sin(golden * i) * r;
+        const l = keep ? keep(Math.asin(y) / DEG, Math.atan2(x, z) / DEG, i) : 1;
+        if (!l) continue;
+        pos.push(x * 1.0015, y * 1.0015, z * 1.0015);
+        lum.push(l);
       }
       const g = new T.BufferGeometry();
-      g.setAttribute('position', new T.BufferAttribute(pos, 3));
-      holo = new T.Points(g, new T.PointsMaterial({ color: 0x7fe9ff, size: 2.1, sizeAttenuation: false,
-        transparent: true, opacity: 1, depthTest: false, depthWrite: false, blending: T.AdditiveBlending }));
+      g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+      g.setAttribute('lum', new T.Float32BufferAttribute(lum, 1));
+      return g;
+    }
+
+    // Das Hologramm: eine Kugel aus Lichtpunkten mit zwei Ringen. Erst gleichmäßig, sobald erde.jpg da ist
+    // mit Kontinenten (buildHoloLand).
+    function buildHolo() {
+      holo = new T.Points(fibonacciDots(5200), new T.ShaderMaterial({
+        uniforms: { color: U.glow, opacity: { value: 1 }, size: { value: 2 } },
+        vertexShader: DOTS_VS, fragmentShader: DOTS_FS,
+        transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending,
+      }));
       holo.renderOrder = 40;
+      holo.frustumCulled = false;
       scene.add(holo);
       rings = new T.Group();
       for (const [r, tilt] of [[1.32, 0.42], [1.46, -0.25]]) {
@@ -368,12 +467,130 @@
           pts.push(new T.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
         }
         const line = new T.Line(new T.BufferGeometry().setFromPoints(pts),
-          new T.LineBasicMaterial({ color: 0x7fe9ff, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false }));
+          new T.LineBasicMaterial({ color: GLOW, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false }));
         line.rotation.x = tilt;
         line.renderOrder = 41;
         rings.add(line);
       }
       scene.add(rings);
+    }
+
+    // Die Kontinente fürs Hologramm: Lichtpunkte, wo erde.jpg Land zeigt (Wasser ist dort dunkel und bläulich),
+    // dazu ein dünnes Raster auf dem Meer, damit die Kugel als Kugel erkennbar bleibt
+    function buildHoloLand(img) {
+      const MW = 1024;
+      let mask = null;
+      try {
+        const c = document.createElement('canvas');
+        c.width = MW;
+        c.height = MW;
+        const g = c.getContext('2d', { willReadFrequently: true });
+        g.drawImage(img, 0, 0, MW, MW);
+        const d = g.getImageData(0, 0, MW, MW).data;
+        mask = new Uint8Array(MW * MW);
+        for (let i = 0; i < mask.length; i++) {
+          const r = d[i * 4];
+          const gg = d[i * 4 + 1];
+          const b = d[i * 4 + 2];
+          mask[i] = b - Math.max(r, gg) > 8 && r + gg + b < 360 ? 0 : 1;
+        }
+      } catch (e) {
+        return; // dann bleibt die gleichmäßige Lichtkugel
+      }
+      const geo = fibonacciDots(100000, (lat, lon, i) => {
+        let land;
+        if (lat > MERC_LAT) land = false;
+        else if (lat < -MERC_LAT) land = true;
+        else {
+          const x = Math.min(MW - 1, Math.floor(((lon + 180) / 360) * MW));
+          const y = Math.min(MW - 1, Math.floor(mercY(lat) * MW));
+          land = mask[y * MW + x] === 1;
+        }
+        if (land) return 1;
+        return i % 7 ? 0 : 0.26;
+      });
+      holo.geometry.dispose();
+      holo.geometry = geo;
+    }
+
+    // Hologramm: ein Lichtrand an der Kugel und ein Scanstreifen, der langsam von Süd nach Nord läuft
+    function buildShell() {
+      shell = new T.Mesh(new T.SphereGeometry(1.0025, 96, 64), new T.ShaderMaterial({
+        uniforms: { glow: U.glow, time: U.time, opacity: { value: 0 }, band: { value: 1 } },
+        vertexShader: `varying vec3 vWorld;
+          void main() { vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+        fragmentShader: `uniform vec3 glow; uniform float time; uniform float opacity; uniform float band; varying vec3 vWorld;
+          void main() {
+            vec3 n = normalize(vWorld);
+            float f = 1.0 - clamp(dot(n, normalize(cameraPosition - vWorld)), 0.0, 1.0);
+            float y = fract(time * 0.07) * 2.6 - 1.3;
+            float scan = smoothstep(0.05, 0.0, abs(n.y - y)) * band;
+            gl_FragColor = vec4(glow, (pow(f, 3.0) * 0.75 + scan * 0.3) * opacity);
+          }`,
+        transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending,
+      }));
+      shell.renderOrder = 35;
+      shell.visible = false;
+      scene.add(shell);
+    }
+
+    // Hologramm: Lichtsäulen über den Orten der Meldungen, am Fuß ein Ring. Die Säulen wachsen mit der
+    // Flughöhe mit, damit sie von weit oben wie aus der Nähe gleich groß wirken.
+    function buildPillars() {
+      pillars = new T.Group();
+      pillars.renderOrder = 45;
+      pillars.userData.beam = new T.CylinderGeometry(1, 1, 1, 14, 1, true).translate(0, 0.5, 0);
+      pillars.userData.ring = new T.RingGeometry(0.55, 1, 48);
+      scene.add(pillars);
+    }
+
+    function syncPillars() {
+      if (!pillars) return;
+      for (const p of [...pillars.children]) {
+        pillars.remove(p);
+        p.traverse((o) => o.material && o.material.dispose());
+      }
+      items.forEach((it, i) => {
+        const o = it.ort;
+        if (!o || o.iss || !Number.isFinite(o.lat) || !Number.isFinite(o.lon)) return;
+        const n = toVec(T, o.lat, o.lon);
+        const g = new T.Group();
+        g.position.copy(n);
+        g.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), n);
+        const beam = new T.Mesh(pillars.userData.beam, new T.ShaderMaterial({
+          uniforms: { glow: U.glow, opacity: { value: 0 } }, vertexShader: BEAM_VS, fragmentShader: BEAM_FS,
+          transparent: true, depthTest: false, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+        }));
+        const ring = new T.Mesh(pillars.userData.ring, new T.MeshBasicMaterial({ color: GLOW, transparent: true, opacity: 0,
+          depthTest: false, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide }));
+        ring.rotation.x = -Math.PI / 2; // flach auf dem Boden
+        beam.renderOrder = ring.renderOrder = 45;
+        beam.frustumCulled = ring.frustumCulled = false;
+        g.add(beam, ring);
+        g.userData = { index: i, beam, ring };
+        pillars.add(g);
+      });
+    }
+
+    function updatePillars(holoA) {
+      if (!pillars) return;
+      const C = camera.position;
+      const h = clamp(cam.alt * 0.16, 0.0008, 0.32);
+      const near = clamp(cam.alt / 0.04, 0.35, 1); // ganz nah verdeckt die Säule sonst das Ziel
+      for (const g of pillars.children) {
+        const { index, beam, ring } = g.userData;
+        const on = index === focusIndex;
+        const seen = holoA > 0.01 && g.position.dot(C) > 1.0;
+        g.visible = seen;
+        if (!seen) continue;
+        const w = h * (on ? 0.022 : 0.016);
+        beam.scale.set(w, h * (on ? 1.25 : 1), w);
+        beam.material.uniforms.opacity.value = holoA * near * (on ? 0.9 : 0.5);
+        const pulse = (clock * 0.6 + index * 0.17) % 1;
+        const r = h * (0.05 + pulse * 0.09) * (on ? 1.4 : 1);
+        ring.scale.set(r, r, r);
+        ring.material.opacity = holoA * (1 - pulse) * (on ? 0.9 : 0.5);
+      }
     }
 
     // Längen- und Breitengrade, nur von weit oben und nur auf der sichtbaren Seite
@@ -418,8 +635,33 @@
       const h = Math.max(1, el.stage.clientHeight);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      // Die Mitte des Bildes ist die Mitte des freien Bereichs: neben der Meldungsliste (rechts) oder
+      // über ihr (schmale Fenster), etwas über Untertitel und Schaltern
+      let ox = 0;
+      let oy = 0;
+      const r = el.newsBox ? el.newsBox.getBoundingClientRect() : null;
+      if (r && r.width && r.height) {
+        if (r.left > w * 0.55) ox = Math.round((w - r.left + 16) / 2);
+        else if (r.top > h * 0.4) oy = Math.round((h - r.top) / 2);
+      }
+      if (w > 900) oy += 36;
+      view.w = w;
+      view.h = h;
+      view.ox = ox;
+      view.oy = oy;
+      view.lift = -1;
+      liftView(0);
       lastSelect = 0;
+    }
+
+    // Im Hologramm von weit oben schwebt die Erde etwas höher: darunter Platz für Projektor und Untertitel
+    const view = { w: 1, h: 1, ox: 0, oy: 0, lift: -1 };
+    function liftView(holoA) {
+      const lift = view.w > 900 ? Math.round(64 * holoA * clamp((cam.alt - 1.6) / 0.8, 0, 1)) : 0;
+      if (lift === view.lift) return;
+      view.lift = lift;
+      camera.setViewOffset(view.w, view.h, view.ox, view.oy + lift, view.w, view.h);
+      camera.updateProjectionMatrix();
     }
 
     // ---------------------------------------------------------------- Kamera
@@ -750,7 +992,8 @@
         if (t.mesh) {
           scene.remove(t.mesh);
           t.mesh.geometry.dispose();
-          if (t.mesh.material.map) t.mesh.material.map.dispose();
+          const map = t.mesh.material.uniforms.map.value;
+          if (map) map.dispose();
           t.mesh.material.dispose();
         }
         tiles.delete(t.key);
@@ -766,7 +1009,55 @@
       el.newsTitle.textContent = title || 'Lage';
       renderList();
       renderMarks();
+      if (ready) syncPillars();
       el.kinds.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kind === kind)));
+    }
+
+    const httpsUrl = (u) => (typeof u === 'string' && /^https:\/\//.test(u) ? u : '');
+
+    // Das Foto zur Meldung (klein für Liste und Ziel, groß für die aufgeklappte Meldung). Fehlt es oder
+    // lädt es nicht, kommt ein Satellitenbild vom Ort, sonst eine leere Fläche. onSource('foto'|'sat'|'')
+    // sagt, was gerade zu sehen ist (für die Bildquelle).
+    function photo(it, big, onSource) {
+      const box = document.createElement('span');
+      box.className = 'wl-pic';
+      const sources = [];
+      const own = big ? httpsUrl(it.bild_gross) || httpsUrl(it.bild) : httpsUrl(it.bild);
+      if (own) sources.push({ src: own, kind: 'foto', pos: '' });
+      const sat = satImage(it.ort);
+      if (sat) sources.push({ src: sat.url, kind: 'sat', pos: sat.pos });
+      const report = (k) => {
+        box.classList.toggle('none', !k);
+        box.classList.toggle('sat', k === 'sat');
+        if (onSource) onSource(k);
+      };
+      if (!sources.length) {
+        report('');
+        return box;
+      }
+      const img = document.createElement('img');
+      img.alt = big && sources[0].kind === 'foto' ? String(it.bild_text || '') : '';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      let k = 0;
+      const show = () => {
+        const s = sources[k];
+        img.style.objectPosition = s.pos;
+        img.src = s.src;
+        if (s.kind === 'sat') img.alt = '';
+        report(s.kind);
+      };
+      img.addEventListener('error', () => {
+        k += 1;
+        if (k < sources.length) show();
+        else {
+          img.remove();
+          report('');
+        }
+      });
+      box.appendChild(img);
+      show();
+      return box;
     }
 
     function renderList() {
@@ -775,22 +1066,14 @@
       el.newsCount.textContent = items.length ? `${items.length} Meldungen` : '';
       items.forEach((it, i) => {
         const li = document.createElement('li');
+        li.dataset.index = String(i);
+        // Aufgeklappt (nur die aktuelle Meldung): großes Foto oben, darunter Titel und erster Satz
+        const more = document.createElement('figure');
+        more.className = 'wl-more-pic';
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'wl-item';
-        btn.dataset.index = String(i);
-        if (it.bild && /^https:\/\//.test(it.bild)) {
-          const img = document.createElement('img');
-          img.alt = '';
-          img.loading = 'lazy';
-          img.referrerPolicy = 'no-referrer';
-          img.src = it.bild;
-          btn.appendChild(img);
-        } else {
-          const ph = document.createElement('span');
-          ph.className = 'wl-thumb';
-          btn.appendChild(ph);
-        }
+        btn.appendChild(photo(it, false));
         const txt = document.createElement('span');
         txt.className = 'wl-item-text';
         const kicker = document.createElement('small');
@@ -803,17 +1086,38 @@
           focusItem(i);
           call('weltlage_focus', i).catch(() => {});
         });
-        li.appendChild(btn);
+        const sentence = document.createElement('p');
+        sentence.className = 'wl-more-text';
+        sentence.textContent = it.satz || '';
+        li.append(more, btn, sentence);
         el.list.appendChild(li);
       });
       markList();
     }
 
+    // Das große Foto erst laden, wenn die Meldung drankommt
+    function fillMore(li, it) {
+      const fig = li.querySelector('.wl-more-pic');
+      if (!fig || fig.childElementCount) return;
+      const cap = document.createElement('figcaption');
+      fig.appendChild(photo(it, true, (k) => {
+        const quelle = String(it.bild_quelle || '').trim();
+        cap.textContent = k === 'foto' ? (quelle ? `Bild: ${quelle}` : '') : k === 'sat' ? 'Satellitenbild: Sentinel-2 cloudless (EOX)' : '';
+        cap.hidden = !cap.textContent;
+      }));
+      fig.appendChild(cap);
+    }
+
     function markList() {
-      el.list.querySelectorAll('.wl-item').forEach((b) => {
-        const on = Number(b.dataset.index) === focusIndex;
-        b.classList.toggle('on', on);
-        if (on) b.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
+      el.list.querySelectorAll('li').forEach((li) => {
+        const i = Number(li.dataset.index);
+        const on = i === focusIndex;
+        li.classList.toggle('on', on);
+        const btn = li.querySelector('.wl-item');
+        if (btn) btn.setAttribute('aria-current', on ? 'true' : 'false');
+        if (!on) return;
+        fillMore(li, items[i]);
+        li.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
       });
     }
 
@@ -831,7 +1135,8 @@
         name.textContent = it.ort.iss ? 'ISS · live' : `Ziel · ${it.ort.name}`;
         const title = document.createElement('em');
         title.textContent = it.titel || '';
-        label.append(name, title);
+        // Am aktuellen Ziel steht das Foto der Meldung mit dabei
+        label.append(photo(it, false), name, title);
         const corners = document.createElement('span');
         corners.className = 'wl-mark-frame';
         m.append(corners, dot, label);
@@ -1009,7 +1314,7 @@
       const taken = [];
       shown.sort((a, b) => Number(b.on) - Number(a.on));
       for (const s of shown) {
-        const box = s.on ? { x: s.x + 40, y: s.y - 48, w: 360, h: 56 } : { x: s.x + 12, y: s.y - 12, w: 150, h: 22 };
+        const box = s.on ? { x: s.x + 40, y: s.y - 48, w: 440, h: 88 } : { x: s.x + 12, y: s.y - 12, w: 150, h: 22 };
         const hit = taken.some((t) => box.x < t.x + t.w && t.x < box.x + box.w && box.y < t.y + t.h && t.y < box.y + box.h);
         s.m.el.classList.toggle('quiet', hit && !s.on);
         if (!hit || s.on) taken.push(box);
@@ -1042,27 +1347,77 @@
       // Von weit oben dreht sich die Erde langsam, solange niemand sie anfasst
       if (!flight && clock - userAt > 9 && cam.alt > 1.6 && focusIndex < 0 && !reducedMotion()) cam.lon = wrapLon(cam.lon + dt * 2.2);
       fade += (fadeGoal - fade) * (1 - Math.exp(-dt * 2.2));
+      if (Math.abs(fadeGoal - fade) < 0.002) fade = fadeGoal;
       const holoA = 1 - fade;
-      base.material.opacity = clamp(fade * 1.15, 0, 1);
-      base.userData.caps.forEach((cap) => { cap.material.opacity = base.material.opacity; });
-      holo.material.opacity = holoA;
-      holo.visible = holoA > 0.01;
-      holo.rotation.y += dt * 0.25;
-      rings.visible = holoA > 0.01;
+      // Hologramm: von weit oben tragen die Lichtpunkte die Kontinente, aus der Nähe das eingefärbte Gelände
+      const far = clamp((cam.alt - 0.45) / 0.9, 0, 1);
+      U.holo.value = holoA;
+      U.gain.value = 1 - 0.7 * far;
+      U.time.value = clock;
+      holo.material.uniforms.opacity.value = holoA * far;
+      holo.material.uniforms.size.value = clamp(1.5 + (2.6 - cam.alt) * 0.45, 1.5, 2.4) * renderer.getPixelRatio();
+      holo.visible = holoA * far > 0.01;
+      const ringA = holoA * clamp((cam.alt - 0.9) / 0.9, 0, 1);
+      rings.visible = ringA > 0.01;
       rings.children.forEach((r, i) => {
-        r.material.opacity = 0.55 * holoA;
+        r.material.opacity = 0.55 * ringA;
         r.rotation.y += dt * (i ? -0.35 : 0.22);
       });
+      shell.visible = holoA > 0.01;
+      shell.material.uniforms.opacity.value = holoA;
+      shell.material.uniforms.band.value = clamp(cam.alt / 0.6, 0, 1);
       // Im Lichtsaum (unter etwa 480 km) leuchtet sonst der ganze Himmel: dann schwächer
-      atmo.material.uniforms.strength.value = fade * (cam.alt > 0.075 ? 0.95 : 0.45);
-      grid.material.uniforms.opacity.value = fade * clamp((cam.alt - 0.8) / 1.6, 0, 1) * 0.16 + holoA * 0.25;
+      atmo.material.uniforms.strength.value = fade * (cam.alt > 0.075 ? 0.95 : 0.45) + holoA * 0.8 * clamp(cam.alt / 0.5, 0, 1);
+      grid.material.uniforms.opacity.value = fade * clamp((cam.alt - 0.8) / 1.6, 0, 1) * 0.16 + holoA * 0.22;
+      liftView(holoA);
       placeCamera();
-      if (fade > 0.3) updateTiles(false);
+      updateTiles(false);
+      updatePillars(holoA);
       drawPlanes(dt);
       maybeFetchPlanes();
       renderer.render(scene, camera);
       placeMarks();
+      placeProjector(holoA);
       readout(now);
+    }
+
+    // Hologramm: unter der schwebenden Erde ein Projektor mit Lichtkegel (nur von weit oben, wenn die
+    // ganze Kugel zu sehen ist)
+    function placeProjector(holoA) {
+      const p = el.projector;
+      if (!p) return;
+      const show = holoA * clamp((cam.alt - 1.6) / 0.8, 0, 1);
+      if (show < 0.02) {
+        if (p.style.opacity !== '0') p.style.opacity = '0';
+        return;
+      }
+      const w = el.stage.clientWidth;
+      const h = el.stage.clientHeight;
+      const c = (proj.c || (proj.c = new T.Vector3())).set(0, 0, 0).project(camera);
+      const r = ((h / 2) * Math.tan(Math.asin(1 / Math.max(1.0001, camera.position.length())))) / Math.tan((FOV / 2) * DEG);
+      p.style.opacity = String(show);
+      p.style.transform = `translate(${((c.x + 1) / 2) * w}px, ${((1 - c.y) / 2) * h + r}px)`;
+      p.style.setProperty('--r', `${r.toFixed(1)}px`);
+    }
+
+    // Satellitenbild oder Hologramm. fromPython: Jarvis hat umgeschaltet (Sprache), dann nicht zurückmelden.
+    function setLook(mode, fromPython) {
+      const next = mode === 'holo' ? 'holo' : 'satellit';
+      const changed = next !== look;
+      look = next;
+      try {
+        localStorage.setItem(LOOK_KEY, look);
+      } catch (e) { /* egal */ }
+      root.classList.toggle('holo', look === 'holo');
+      if (el.holoBtn) el.holoBtn.setAttribute('aria-pressed', String(look === 'holo'));
+      if (el.brandSub) el.brandSub.textContent = look === 'holo' ? 'Gottes Auge · Hologramm' : 'Gottes Auge · Satellitenansicht';
+      if (!booting) fadeGoal = look === 'holo' ? 0 : 1;
+      if (!fromPython) {
+        call('weltlage_look', look).catch(() => {});
+        if (changed && isOpen) setStatus(look === 'holo' ? 'Hologramm-Ansicht' : 'Satellitenbild', 2500);
+      }
+      // Von weit oben etwas Abstand, damit die Erde ganz über dem Projektor schwebt
+      if (changed && ready && isOpen && look === 'holo' && cam.alt > 1.6 && !flight && focusIndex < 0) flyTo(cam.lat, cam.lon, 3.1, 1600);
     }
 
     // ---------------------------------------------------------------- Öffnen und Schließen
@@ -1075,6 +1430,7 @@
       document.body.classList.add('wl-open');
       requestAnimationFrame(() => root.classList.add('on'));
       if (!fromPython) call('weltlage_active', true).catch(() => {});
+      setLook(data && data.look ? data.look : look, true);
       if (data && Array.isArray(data.items) && data.items.length) {
         setItems(data.items, data.title, data.kind);
         if (data.index >= 0) focusIndex = data.index;
@@ -1082,15 +1438,18 @@
       if (!(await ensure3D())) return;
       if (!was) {
         resize();
-        // Start: Hologramm, dann die Satelliten-Erde
+        syncPillars();
+        // Start: immer erst das Hologramm, dann (wenn gewählt) die Satelliten-Erde
         el.boot.classList.add('on');
         fade = 0;
         fadeGoal = 0;
+        booting = true;
         cam.alt = 3.6;
         setTimeout(() => {
-          fadeGoal = 1;
+          booting = false;
+          fadeGoal = look === 'holo' ? 0 : 1;
           el.boot.classList.remove('on');
-          if (focusIndex < 0) flyTo(cam.lat, cam.lon, 2.6, 2400);
+          if (focusIndex < 0) flyTo(cam.lat, cam.lon, look === 'holo' ? 3.1 : 2.6, 2400);
         }, reducedMotion() ? 50 : 900);
         refreshMarkets();
         clearInterval(marketTimer);
@@ -1153,6 +1512,9 @@
         renderMarkets(ev.items);
       } else if (a === 'layer') {
         if (ev.name === 'flights') setFlights(!!ev.on);
+      } else if (a === 'look') {
+        if (!isOpen && !ev.quiet) open(null, true); // quiet: nur merken (Stand beim Verbinden)
+        setLook(ev.mode, true);
       } else if (a === 'view') {
         if (ev.what === 'zoom' && Number(ev.factor) > 0) {
           zoomGoal = clamp(cam.alt * Number(ev.factor), MIN_ALT, MAX_ALT);
@@ -1178,6 +1540,7 @@
     if (el.pill) el.pill.addEventListener('click', () => (isOpen ? close(false) : open(null, false)));
     el.closeBtn.addEventListener('click', () => close(false));
     el.flightsBtn.addEventListener('click', () => setFlights(!layers.flights));
+    if (el.holoBtn) el.holoBtn.addEventListener('click', () => setLook(look === 'holo' ? 'satellit' : 'holo', false));
     el.handsBtn.addEventListener('click', () => {
       if (opts.onHands) opts.onHands(el.handsBtn.getAttribute('aria-pressed') !== 'true');
     });
@@ -1216,6 +1579,7 @@
         ArrowUp: () => panBy(0, step),
         ArrowDown: () => panBy(0, -step),
         f: () => setFlights(!layers.flights),
+        h: () => setLook(look === 'holo' ? 'satellit' : 'holo', false),
       };
       const fn = keys[e.key];
       if (fn) {
@@ -1232,10 +1596,12 @@
       subTimer = setTimeout(() => showSub(''), 9000);
     }
 
+    setLook(look, true); // Knopf und Schriftzug passend zur gemerkten Ansicht
+
     return {
       handle, gesture, say, open: () => open(null, false), close: () => close(false), isOpen: () => isOpen,
       setHands: (on) => el.handsBtn.setAttribute('aria-pressed', String(!!on)),
-      flights: () => layers.flights,
+      flights: () => layers.flights, look: () => look,
     };
   }
 
@@ -1249,7 +1615,12 @@
     { titel: 'Frankreichs Regierung legt Sparhaushalt vor', oben: 'Haushalt', ort: { name: 'Paris', lat: 48.857, lon: 2.352, km: 30 } },
     { titel: 'Tag der Deutschen Einheit: Feier in Bremen', oben: 'Feiertag', ort: { name: 'Bremen', lat: 53.08, lon: 8.8, km: 20 } },
     { titel: 'Zwischenwahlen: Republikaner unter Druck', oben: 'USA', ort: { name: 'Washington', lat: 38.897, lon: -77.036, km: 25 } },
-  ].map((it, i) => ({ id: `demo-${i}`, satz: '', bild: '', link: '', zeit: '', sprechen: `${it.titel}.`, ...it }));
+  ].map((it, i) => ({ id: `demo-${i}`, satz: '', bild: '', bild_gross: '', bild_text: '', bild_quelle: '', link: '', zeit: '',
+    sprechen: `${it.titel}.`, ...it }));
+  // Für Bildschirmfotos mit echten Meldungen: window.JarvisWeltlageDemoItems (sonst die Beispiele oben,
+  // dort zeigt die Liste Satellitenbilder der Orte)
+  const demoItems = () => (Array.isArray(window.JarvisWeltlageDemoItems) && window.JarvisWeltlageDemoItems.length
+    ? window.JarvisWeltlageDemoItems : DEMO_ITEMS);
 
   function demoPlanes(box) {
     const [s, w, n, e] = box;
@@ -1269,7 +1640,9 @@
       clearInterval(timer);
       push({ type: 'weltlage', action: 'loading', kind: k, title: k === 'deutschland' ? 'Lage · Deutschland' : 'Lage · Welt' });
       setTimeout(() => {
-        const items = k === 'deutschland' ? DEMO_ITEMS.filter((it) => /Bremen/.test(it.ort.name)) : DEMO_ITEMS;
+        const all = demoItems();
+        const de = all.filter((it) => it.ort && /Bremen|Deutschland|Berlin|München|Hamburg/.test(it.ort.name));
+        const items = k === 'deutschland' && de.length ? de : all;
         push({ type: 'weltlage', action: 'news', kind: k, items, title: k === 'deutschland' ? 'Lage · Deutschland' : 'Lage · Welt' });
         let i = 0;
         const next = () => {
@@ -1288,8 +1661,10 @@
       return Promise.resolve('Lagebericht, Sir.');
     };
     return {
-      weltlage_state: () => Promise.resolve({ active: false, items: [], kind: '', index: -1, busy: false, title: 'Gottes Auge', hands_allowed: true }),
+      weltlage_state: () => Promise.resolve({ active: false, items: [], kind: '', index: -1, busy: false, title: 'Gottes Auge',
+        hands_allowed: true, look: '' }),
       weltlage_active: () => Promise.resolve(true),
+      weltlage_look: (mode) => Promise.resolve(mode === 'holo' ? 'holo' : 'satellit'),
       weltlage_briefing: (k) => brief(k || 'welt'),
       weltlage_focus: (i) => {
         clearInterval(timer);
@@ -1317,5 +1692,5 @@
     };
   }
 
-  window.JarvisWeltlage = { create, demoApi, DEMO_ITEMS, tileBounds, altFor, mercLat };
+  window.JarvisWeltlage = { create, demoApi, DEMO_ITEMS, demoItems, tileBounds, altFor, mercLat, satImage };
 })();

@@ -865,6 +865,14 @@ class Api:
             return {"ok": False, "ort": None, "error": f"„{name}“ finde ich nicht."}
         return {"ok": True, "ort": place.as_dict(), "error": ""}
 
+    def weltlage_look(self, mode) -> str:
+        """Knopf "Hologramm": die Erde als Hologramm oder als Satellitenbild (Jarvis merkt es sich)."""
+        world = self._world()
+        if world is None:
+            return ""
+        world.look = "holo" if mode == "holo" else "satellit"
+        return world.look
+
     def weltlage_markets(self) -> list:
         world = self._world()
         return world.markets() if world is not None else []

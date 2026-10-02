@@ -62,13 +62,22 @@ def _get(url: str, opener=None, timeout: float = 12, headers: dict | None = None
         return response.read()
 
 
-def _image(raw: dict) -> str:
-    variants = ((raw.get("teaserImage") or {}).get("imageVariants") or {})
-    for key in ("16x9-384", "16x9-256", "16x9-512", "1x1-144"):
-        url = str(variants.get(key) or "")
-        if url.startswith("https://"):
-            return url
-    return ""
+def _images(raw: dict) -> dict:
+    """Das Foto zur Meldung: klein für die Liste, groß für die Meldungskarte, dazu Bildtext und Quelle."""
+    teaser = raw.get("teaserImage") or {}
+    variants = teaser.get("imageVariants") or {}
+
+    def pick(keys) -> str:
+        for key in keys:
+            url = str(variants.get(key) or "")
+            if url.startswith("https://"):
+                return url
+        return ""
+
+    small = pick(("16x9-384", "16x9-256", "16x9-512", "1x1-144"))
+    return {"bild": small, "bild_gross": pick(("16x9-960", "16x9-640", "16x9-1280", "16x9-512")) or small,
+            "bild_text": " ".join(str(teaser.get("alttext") or "").split())[:200],
+            "bild_quelle": " ".join(str(teaser.get("copyright") or "").split())[:120]}
 
 
 def _sentence(text: str) -> str:
@@ -92,7 +101,7 @@ def to_item(raw: dict, ressort: str) -> dict | None:
         place = orte.lookup("Deutschland")
     item = {
         "id": str(raw.get("sophoraId") or raw.get("externalId") or title)[:120],
-        "titel": title, "oben": topline, "satz": first, "bild": _image(raw),
+        "titel": title, "oben": topline, "satz": first, **_images(raw),
         "link": str(raw.get("shareURL") or raw.get("detailsweb") or ""),
         "zeit": str(raw.get("date") or ""), "ort": None,
     }
@@ -265,6 +274,12 @@ _MARKETS = re.compile(r"^(?:wie (?:steht|stehen|läuft|laufen) (?:der |die )?(?:
 _FLY = re.compile(r"^(?:flieg|fliege|zoom|zoome|bring mich|geh|gehe|spring|springe|navigier|navigiere)(?: mir| uns)?"
                   r"(?: mal)? (?:nach|zu|zum|zur|auf|über|in|ins) (?P<where>.+?)(?: rein| ran| hin)?$")
 _SHOW = re.compile(r"^(?:zeig|zeige)(?: mir| uns)? (?:mal )?(?P<where>.+?)(?: auf der (?:karte|erde|weltkarte)| von oben| aus dem all)?$")
+_HOLO_WORDS = r"(?:hologramm|holo)(?:-?modus|-?ansicht|-?erde|-?globus)?"
+_SAT_WORDS = (r"(?:satellitenbild(?:er)?|satellitenansicht|satelliten-?modus|echte erde|echte ansicht|echtes bild|"
+              r"normale ansicht|normale erde|foto-?ansicht|foto-?modus)")
+_LOOK = re.compile(r"^(?:(?:zeig|zeige|mach|schalt|schalte|wechsel|wechsle|stell|stelle)(?: mir)? )?(?:die |das |den )?"
+                   r"(?:(?P<earth>erde|welt|weltkugel|weltlage|globus) )?(?:als |zum |zur |in den |in die |auf (?:den |die |das )?)?"
+                   rf"(?:(?P<holo>{_HOLO_WORDS})|(?P<sat>{_SAT_WORDS}))(?: (?P<sw>an|ein|aus|um))?$")
 _NEXT = re.compile(r"^(?:weiter|nächste(?: meldung| nachricht)?|die nächste|überspring\w*|skip)$")
 _BACK = re.compile(r"^(?:zurück|vorherige(?: meldung| nachricht)?|die vorherige|noch ?mal(?: die letzte)?)$")
 _FLIGHTS = re.compile(r"^(?:(?:zeig|zeige)(?: mir)? (?:den |die )?)?(?P<what>flugverkehr|flugzeuge|flüge|luftverkehr)"
@@ -298,6 +313,7 @@ class Weltlage:
         self._opener = opener
         self.active = False  # im Fenster offen
         self.items: list[dict] = []
+        self.look = ""  # "holo" oder "satellit", leer = wie das Fenster es zuletzt hatte
         self.kind = ""
         self.index = -1
         self._run = 0  # zählt die Lageberichte: ein neuer beendet den alten
@@ -321,7 +337,7 @@ class Weltlage:
 
     def state(self) -> dict:
         return {"active": self.active, "items": list(self.items), "kind": self.kind, "index": self.index,
-                "busy": self.busy, "title": KINDS.get(self.kind, ("", "Gottes Auge", ""))[1]}
+                "busy": self.busy, "title": KINDS.get(self.kind, ("", "Gottes Auge", ""))[1], "look": self.look}
 
     @property
     def busy(self) -> bool:
@@ -364,6 +380,13 @@ class Weltlage:
                 self.open(quiet=True)
             self._emit("hands", on=on)
             return "Sehr wohl, Sir. Handsteuerung aktiv." if on else "Handsteuerung aus, Sir."
+        look = _LOOK.match(norm)
+        # "Hologramm" allein gilt nur hier, wenn die Weltlage offen ist (sonst schaltet es die Blaupause um)
+        if look and (look.group("earth") or (self.active and not elsewhere)):
+            holo = bool(look.group("holo"))
+            if look.group("sw") == "aus":
+                holo = not holo  # "Hologramm aus" = Satellitenbild
+            return self.set_look("holo" if holo else "satellit")
         if _WORLD.match(norm):
             return self.briefing("welt")
         if _GERMANY.match(norm):
@@ -406,6 +429,14 @@ class Weltlage:
             # "Navigiere zu Google" meinen meist etwas anderes: ohne bekannten Ort geht es normal weiter.
             return self.fly(flown.group("where"), explicit=norm.startswith(("flieg ", "fliege ")))
         return None
+
+    def set_look(self, mode: str) -> str:
+        """Die Erde als Hologramm (leuchtende Kontinente, wie im Film) oder als Satellitenbild."""
+        self.look = "holo" if mode == "holo" else "satellit"
+        if not self.active:
+            self.open(quiet=True)
+        self._emit("look", mode=self.look)
+        return "Hologramm-Ansicht, Sir." if self.look == "holo" else "Satellitenbild, Sir."
 
     def fly(self, where: str, explicit: bool = True) -> str | None:
         where = re.sub(r"^(?:den |die |das |dem |der )", "", where.strip())

@@ -294,10 +294,11 @@ Sag **„Blaupause“** (oder oben im Fenster **Blaupause**), dann **„Generier
 
 ![Die Weltlage](docs/bilder/weltlage.jpg)
 
-Sag **„Zeig mir, was in der Welt passiert“** (oder oben im Fenster **Weltlage**). Eine Satelliten-Erde geht auf, Jarvis holt die neuesten Meldungen der Tagesschau, fliegt zu jedem Ort und liest die Meldung vor. Rechts stehen alle Meldungen (antippen: hinfliegen und vorlesen), darunter DAX, S&P 500 und Bitcoin.
+Sag **„Zeig mir, was in der Welt passiert“** (oder oben im Fenster **Weltlage**). Eine Satelliten-Erde geht auf, Jarvis holt die neuesten Meldungen der Tagesschau, fliegt zu jedem Ort und liest die Meldung vor. Rechts stehen alle Meldungen mit Foto (antippen: hinfliegen und vorlesen), darunter DAX, S&P 500 und Bitcoin. Die Meldung, die Jarvis gerade vorliest, klappt auf: großes Foto, erster Satz, Bildquelle. Am Ziel auf der Erde steht das Foto klein dabei. Hat eine Meldung kein Foto, zeigt Jarvis ein Satellitenbild vom Ort.
 
 - **Lageberichte:** „Was passiert in Deutschland?“, „Wirtschaftsnachrichten“, „Lagebericht“. Während des Berichts: **„Weiter“**, **„Zurück“**, **„Stopp“**. Fragst du zwischendurch etwas anderes, hört der Bericht auf.
 - **Hinfliegen:** „Flieg nach Tokio“, „Zeig mir Paris“, „Zoom rein“, „Weiter weg“, oder unten ins Suchfeld tippen. **„Wo ist die ISS gerade?“** fliegt zur Raumstation, live.
+- **Hologramm:** **„Zeig die Erde als Hologramm“** (oder unten **Hologramm**, Taste **H**). Die Kontinente leuchten als Lichtpunkte, über den Orten der Meldungen stehen Lichtsäulen, von weit oben schwebt die Erde über einem Projektor. Aus der Nähe wird das Gelände zum Hologramm. **„Satellitenbild“** oder **„Hologramm aus“** schaltet zurück. Jarvis merkt sich, was du zuletzt hattest.
 - **Flugverkehr:** „Flugverkehr an“ zeigt die Flugzeuge, die gerade in der Luft sind (ab Landesgröße, live über OpenSky).
 - **Börse:** „Wie steht der DAX?“ sagt die Kurse an.
 - **Maus:** ziehen verschiebt, Mausrad zoomt, rechte Maustaste dreht und kippt, Doppelklick fliegt hin. **Esc** oder **„Zurück zum Hauptmenü“** schließt.

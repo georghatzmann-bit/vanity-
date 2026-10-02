@@ -112,6 +112,7 @@
     weltlage_fly: (name) => window.pywebview.api.weltlage_fly(name),
     weltlage_markets: () => window.pywebview.api.weltlage_markets(),
     weltlage_flights: (box) => window.pywebview.api.weltlage_flights(box),
+    weltlage_look: (mode) => window.pywebview.api.weltlage_look(mode),
     workshop_delete: (folder) => window.pywebview.api.workshop_delete(folder),
     workshop_tell: (text) => window.pywebview.api.workshop_tell(text),
     workshop_preview: (folder) => window.pywebview.api.workshop_preview(folder),
@@ -898,6 +899,7 @@
       if (!s) return;
       handsAllowed = s.hands_allowed !== false;
       if (s.active && Weltlage && !Weltlage.isOpen()) Weltlage.handle(Object.assign({ action: 'open' }, s));
+      else if (s.look && Weltlage) Weltlage.handle({ action: 'look', mode: s.look, quiet: true });
     }).catch(() => {});
     if (Gedaechtnis) Gedaechtnis.refresh();
     if (Koppeln && Koppeln.dots) Koppeln.dots();
@@ -1384,6 +1386,8 @@
           }, 700);
         }
         if (wlDemo && wlMode) {
+          // &holo: gleich als Hologramm
+          if (params.has('holo')) push({ type: 'weltlage', action: 'look', mode: 'holo' });
           setTimeout(() => {
             const ziel = params.get('ziel');
             if (params.has('flug')) {
@@ -1393,9 +1397,13 @@
                 push({ type: 'weltlage', action: 'fly', ort: { name: 'Frankfurt', lat: 50.11, lon: 8.68, km: 220 } });
               }, 1500);
             } else if (ziel !== null) {
-              const items = window.JarvisWeltlage.DEMO_ITEMS;
+              const items = window.JarvisWeltlage.demoItems();
               push({ type: 'weltlage', action: 'news', items, kind: 'welt', title: 'Lage · Welt' });
-              setTimeout(() => push({ type: 'weltlage', action: 'focus', index: Number(ziel) || 0 }), 1500);
+              setTimeout(() => {
+                const i = Number(ziel) || 0;
+                push({ type: 'weltlage', action: 'focus', index: i });
+                if (items[i]) push({ type: 'message', role: 'jarvis', text: items[i].sprechen });
+              }, 1500);
             } else {
               wlDemo.demoBriefing(wlMode);
             }

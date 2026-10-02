@@ -128,6 +128,24 @@ class SourcesTest(unittest.TestCase):
         self.assertEqual((iss["lat"], iss["lon"], iss["iss"]), (51.77, -58.55, True), "die Raumstation, wo sie gerade ist")
         self.assertEqual(len(weltlage.fetch_news("welt", web(), limit=2)), 2)
 
+    def test_photos_small_big_caption_and_source(self):
+        raw = {"title": "Wahlsiegerin Andersson soll es noch mal versuchen", "topline": "Schweden", "teaserImage": {
+            "alttext": "Magdalena  Andersson\nim Parlament", "copyright": " AFP ", "imageVariants": {
+                "16x9-256": "https://images.tagesschau.de/klein.jpg", "16x9-384": "https://images.tagesschau.de/mittel.jpg",
+                "16x9-960": "https://images.tagesschau.de/gross.jpg", "1x1-144": "http://unsicher.example/bild.jpg"}}}
+        item = weltlage.to_item(raw, "ausland")
+        self.assertEqual(item["bild"], "https://images.tagesschau.de/mittel.jpg", "fürs Listenbild reicht 384 Pixel")
+        self.assertEqual(item["bild_gross"], "https://images.tagesschau.de/gross.jpg")
+        self.assertEqual(item["bild_text"], "Magdalena Andersson im Parlament")
+        self.assertEqual(item["bild_quelle"], "AFP")
+        bare = weltlage.to_item({"title": "Eine Meldung ohne Foto", "topline": "Schweden",
+                                 "teaserImage": {"imageVariants": {"1x1-144": "http://unsicher.example/bild.jpg"}}}, "ausland")
+        self.assertEqual((bare["bild"], bare["bild_gross"], bare["bild_text"], bare["bild_quelle"]), ("", "", "", ""),
+                         "nur https-Bilder, sonst zeigt das Fenster ein Satellitenbild vom Ort")
+        small_only = weltlage.to_item({"title": "Nur ein kleines Foto", "teaserImage": {"imageVariants": {
+            "16x9-256": "https://images.tagesschau.de/klein.jpg"}}}, "ausland")
+        self.assertEqual(small_only["bild_gross"], "https://images.tagesschau.de/klein.jpg", "groß = das größte, das es gibt")
+
     def test_inland_without_place_is_germany(self):
         items = weltlage.fetch_news("deutschland", web())
         self.assertEqual([i["ort"]["name"] for i in items], ["Deutschland", "München"])
@@ -297,6 +315,27 @@ class CommandTest(unittest.TestCase):
         other.command("Starte die Handsteuerung", elsewhere=True)
         self.assertFalse(other.active, "ist die Blaupause offen, steuern die Hände dort")
         self.assertEqual(self.actions(ui2), ["hands"])
+
+
+    def test_look_hologram_or_satellite(self):
+        world, ui, _ = make()
+        self.assertIsNone(world.command("Hologramm"), "allein und ohne offene Erde: das ist die Blaupause")
+        self.assertEqual(world.command("Zeig die Erde als Hologramm"), "Hologramm-Ansicht, Sir.")
+        self.assertTrue(world.active, "die Erde geht dafür auf")
+        self.assertEqual(self.actions(ui), ["open", "look"])
+        self.assertEqual(ui.of("world")[-1][1], {"action": "look", "mode": "holo"})
+        self.assertEqual(world.state()["look"], "holo", "Jarvis merkt sich die Ansicht fürs Fenster")
+        for text, mode in [("Satellitenbild", "satellit"), ("Hologramm", "holo"), ("Hologramm aus", "satellit"),
+                           ("Mach die Erde zum Hologramm", "holo"), ("Zeig mir das Satellitenbild", "satellit"),
+                           ("Hologramm-Modus", "holo"), ("Echte Erde", "satellit"), ("Zeig die Welt als Hologramm", "holo")]:
+            self.assertIn(", Sir.", world.command(text), text)
+            self.assertEqual(world.look, mode, text)
+        self.assertEqual(world.command("Hologramm-Modus aus"), "Satellitenbild, Sir.")
+        busy, ui2, _ = make(active=True)
+        self.assertIsNone(busy.command("Hologramm", elsewhere=True), "ist die Blaupause offen, schaltet sie um")
+        self.assertEqual(ui2.of("world"), [])
+        self.assertEqual(busy.command("Zeig die Erde als Hologramm", elsewhere=True), "Hologramm-Ansicht, Sir.",
+                         "mit Erde im Satz ist klar, was gemeint ist")
 
 
 class BriefingTest(unittest.TestCase):
@@ -472,9 +511,13 @@ class AssistantTest(unittest.TestCase):
             self.assertFalse(api.weltlage_fly("Atlantis")["ok"])
         self.assertFalse(api.weltlage_fly("")["ok"])
         self.assertEqual(api.weltlage_flights([47, 5, 55, 15])["planes"][0]["ruf"], "DLH4AB")
+        self.assertEqual(api.weltlage_look("holo"), "holo")
+        self.assertEqual(api.weltlage_state()["look"], "holo", "Knopf im Fenster und Sprache kennen dieselbe Ansicht")
+        self.assertEqual(api.weltlage_look("irgendwas"), "satellit")
         api._assistant = mock.Mock(_cfg={}, world=None)
         self.assertIsNone(api.weltlage_state())
         self.assertEqual(api.weltlage_markets(), [])
+        self.assertEqual(api.weltlage_look("holo"), "")
 
 
 if __name__ == "__main__":
