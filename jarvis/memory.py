@@ -39,6 +39,15 @@ WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Sam
 USER = "Georg"  # wie der Nutzer heißt ([ich] name), siehe set_user
 
 
+_SECRET = re.compile(r"passw(?:or)?t|kennwort|password|\bpin\b|pin-?code|passcode|geheimzahl|\btan\b|"
+                     r"kreditkarte|iban|sicherheitscode|cvv|zugangsdaten|login-?daten", re.I)
+
+
+def is_secret(text: str) -> bool:
+    """Passwort, PIN, Kreditkarte & Co.: gehört in einen Passwort-Manager, nicht ins Gedächtnis."""
+    return bool(_SECRET.search(str(text)))
+
+
 def set_user(name: str) -> None:
     global USER
     USER = str(name or "").strip() or "Georg"
@@ -186,9 +195,10 @@ class Memory:
     # ------------------------------------------------------------------ Fakten
 
     def remember(self, text: str, source: str = "georg") -> str:
-        """Speichert einen Fakt. Ähnliches wird ersetzt statt doppelt gespeichert."""
+        """Speichert einen Fakt. Ähnliches wird ersetzt statt doppelt gespeichert. Passwörter und
+        Ähnliches nie: das Gedächtnis liegt offen auf der Platte und geht mit jedem Gespräch an Claude."""
         fact = " ".join(str(text).split()).strip(" .,;:")
-        if len(fact) < 3:
+        if len(fact) < 3 or is_secret(fact):
             return ""
         fact = fact[:1].upper() + fact[1:]
         with self._lock:

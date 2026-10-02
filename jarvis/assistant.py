@@ -412,6 +412,8 @@ class Assistant:
                 return pc.open_folder(intent.arg).replace(" ist offen.", " ist offen, Sir.")
             if name in ("open", "close", "install"):
                 return self._app(name, intent.arg)
+            if name == "restart_app":
+                return self._restart_app(intent.arg)
             if name == "message":
                 return self._message(intent.arg, intent.data["person"], intent.data["text"])
             if name == "discord":
@@ -442,6 +444,23 @@ class Assistant:
             log.info("Schneller Befehl %s ging nicht (%s), frage Claude.", name, exc)
             return None
         return None
+
+    def _restart_app(self, target: str) -> str | None:
+        """"Starte Discord neu": schließen, kurz warten, wieder öffnen. None = Claude soll es versuchen."""
+        from . import apps
+
+        try:
+            with self._step(f"Startet {_display(target)} neu", "app"):
+                try:
+                    apps.close_app(target)
+                    time.sleep(1.5)
+                except apps.AppNotFound:
+                    pass  # lief nicht: einfach starten
+                said = apps.open_app(target)
+        except apps.AppNotFound:
+            return None
+        name = said.removesuffix(" startet.").removesuffix(" ist offen.")
+        return random.choice([f"{name} startet neu, Sir.", f"Sehr wohl, {name} kommt frisch."])
 
     def _app(self, action: str, target: str) -> str | None:
         """Programme öffnen, schließen und installieren. None = Claude soll es versuchen."""
@@ -662,6 +681,11 @@ class Assistant:
         if action == "recall":
             return self._recall()
         if action == "remember":
+            from .memory import is_secret
+
+            if is_secret(fact):
+                return ("Passwörter und PINs merke ich mir lieber nicht, Sir. Mein Gedächtnis ist dafür nicht "
+                        "sicher genug. Ein Passwort-Manager ist der bessere Ort.")
             self.memory.remember(fact)
             return random.choice(["Notiert, Sir.", "Ist gespeichert, Sir.", "Vermerkt, Sir. Ich vergesse es nicht."])
         if self.memory.forget(fact):

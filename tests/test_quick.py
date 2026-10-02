@@ -459,3 +459,36 @@ class FalseFriendsTest(unittest.TestCase):
         for said in ("Merk dir das nicht", "Merk dir nicht alles"):
             self.assertIsNone(match_memory(said), said)
         self.assertEqual(intents.match("Zeig mir, was du kannst").name, "help")
+
+
+class RestartAndSecretsTest(unittest.TestCase):
+    def test_restart_an_app(self):
+        self.assertEqual((intents.match("Starte Discord neu").name, intents.match("Starte Discord neu").arg),
+                         ("restart_app", "discord"))
+        self.assertEqual(intents.match("Kannst du Discord neu starten?").name, "restart_app")
+        self.assertEqual(intents.match("Starte den PC neu").name, "power_restart")
+        self.assertIsNone(intents.match("Geh auf den Server von Hypixel in Minecraft"), "kein Discord-Server")
+        assistant, ui, speaker, _ = make()
+        with mock.patch("jarvis.apps.close_app", return_value="Discord ist zu.") as closed, \
+                mock.patch("jarvis.apps.open_app", return_value="Discord startet.") as opened, \
+                mock.patch("jarvis.assistant.time.sleep"):
+            answer = assistant.handle("Starte Discord neu")
+        closed.assert_called_once_with("discord")
+        opened.assert_called_once_with("discord")
+        self.assertIn("Discord", answer)
+        self.assertEqual(assistant.brain.asked, [])
+
+    def test_passwords_are_never_remembered(self):
+        import tempfile
+        from pathlib import Path
+
+        from jarvis.memory import Memory
+
+        assistant, ui, speaker, _ = make()
+        with tempfile.TemporaryDirectory() as folder:
+            assistant.memory = Memory(Path(folder) / "g.json")
+            answer = assistant.handle("Merk dir, mein Passwort ist 1234")
+            self.assertIn("Passwort-Manager", answer)
+            self.assertEqual(assistant.memory.facts(), [])
+            self.assertEqual(assistant.memory.remember("Georgs PIN ist 0000", source="jarvis"), "", "auch nicht über Claude")
+            self.assertTrue(assistant.memory.remember("Georg spielt gern Valorant"))

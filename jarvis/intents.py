@@ -214,6 +214,10 @@ _RULES += [
         rf"^{_ASK}{_FILL}(.+?) (?:schließen|schliessen|beenden|zumachen)$|"
         rf"^(?:mach|mache) {_FILL}(.+?) (?:zu|aus)$"
     )),
+    ("restart_app", re.compile(
+        rf"^{_ASK}(?:starte|start) (?!(?:(?:den|meinen|das|mein) )?(?:pc|computer|rechner|laptop)\b){_FILL}([\wäöüß .+-]+?) neu$|"
+        rf"^{_ASK}(?!(?:(?:den|meinen|das|mein) )?(?:pc|computer|rechner|laptop)\b){_FILL}([\wäöüß .+-]+?) neu ?starten$"
+    )),
     ("open", re.compile(
         rf"^{_ASK}(?:öffne|öffnen|starte|start|launche|ruf|rufe) {_FILL}(.+?)(?: (?:auf|für mich))?$|"
         rf"^{_ASK}{_FILL}(.+?) (?:öffnen|starten|aufmachen|aufrufen)$|"
@@ -239,7 +243,7 @@ _RULES += [
 _NOT_FOR_QUESTIONS = {"mute", "reset", "window_hide", "lock", "close", "gaming_off", "dark_on", "dark_off", "radio",
                       "power_off", "power_restart", "power_sleep", "power_logoff", "light"}
 # Diese Absichten bekommen den Namen des Programms oder Ordners mit.
-_WITH_NAME = {"install", "close", "open", "open_known", "folder"}
+_WITH_NAME = {"install", "close", "open", "open_known", "folder", "restart_app"}
 # Wörter, die kein Programmname sind ("Öffne es", "Schließ das")
 _NOT_A_NAME = {"es", "das", "ihn", "sie", "alles", "dich", "mich", "den", "die", "das fenster", "fenster"}
 
@@ -362,7 +366,7 @@ _DISCORD: list[tuple[str, re.Pattern]] = [
     # "Geh auf den Server Gilde", "Öffne den Discord-Server Gilde"
     ("server", re.compile(
         r"^(?:öffne|geh|gehe|wechsel|wechsle|spring|zeig mir|zeige mir)\s+(?:auf|in|zu)?\s*(?:den|meinen)?\s*"
-        rf"(?:discord[ -]?)?server\s+(?P<x>.+?){_IN_DISCORD}$")),
+        rf"(?:discord[ -]?)?server\s+(?!von\b|für\b)(?P<x>.+?){_IN_DISCORD}$")),
     # "Geh in den Kanal allgemein", "Öffne den Kanal memes auf Discord"
     ("channel", re.compile(
         r"^(?:geh|gehe|wechsel|wechsle|spring)\s+(?:(?:in|auf|bei)\s+discord\s+)?(?:in|zu)\s+(?:den\s+)?(?:text)?(?:kanal|channel)\s+"
