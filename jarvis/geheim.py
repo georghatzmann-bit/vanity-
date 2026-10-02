@@ -28,6 +28,18 @@ class SecretError(RuntimeError):
     pass
 
 
+_LOCKS: dict[str, threading.Lock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_for(path: Path) -> threading.Lock:
+    """Ein Schloss pro Datei: iPhone, Mail und Shop haben je einen eigenen Tresor auf dieselbe Datei.
+    Speichern zwei gleichzeitig, darf keiner den Eintrag des anderen überschreiben."""
+    key = os.path.normcase(os.path.abspath(path))
+    with _LOCKS_GUARD:
+        return _LOCKS.setdefault(key, threading.Lock())
+
+
 class _Blob(ctypes.Structure):
     """DATA_BLOB aus der Windows-API: Länge und Zeiger auf die Bytes."""
 
@@ -94,7 +106,7 @@ class Secrets:
 
     def __init__(self, path: Path, dpapi=None) -> None:
         self._path = Path(path)
-        self._lock = threading.Lock()
+        self._lock = _lock_for(self._path)
         self._dpapi = dpapi
         self._windows = dpapi is not None or os.name == "nt"
         self._warned = False

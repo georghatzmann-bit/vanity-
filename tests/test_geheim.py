@@ -99,6 +99,24 @@ class SecretsTest(unittest.TestCase):
         self.assertEqual(again.keys(), ["apple"])
         self.assertNotIn(SECRET, repr(again))
 
+    def test_two_vaults_on_one_file_keep_each_others_entries(self):
+        # iPhone, Mail und Shop speichern über eigene Tresore in dieselbe Datei, auch gleichzeitig
+        import threading
+
+        vaults = [Secrets(self.path, dpapi=Dpapi(FakeCrypt32(), FakeKernel32())) for _ in range(4)]
+        self.assertIs(vaults[0]._lock, vaults[1]._lock)
+
+        def save(i):
+            for n in range(10):
+                vaults[i % 4].set(f"konto{i}-{n}", SECRET)
+
+        workers = [threading.Thread(target=save, args=(i,)) for i in range(8)]
+        for w in workers:
+            w.start()
+        for w in workers:
+            w.join()
+        self.assertEqual(len(Secrets(self.path, dpapi=Dpapi(FakeCrypt32(), FakeKernel32())).keys()), 80)
+
     def test_another_windows_user_gets_nothing_and_no_secret_in_the_log(self):
         Secrets(self.path, dpapi=Dpapi(FakeCrypt32("georg"), FakeKernel32())).set("apple", SECRET)
         other = Secrets(self.path, dpapi=Dpapi(FakeCrypt32("fremd"), FakeKernel32()))
