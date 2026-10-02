@@ -3,6 +3,11 @@
 # JarvisSetup.exe = die Oberfläche (installer/setup, WPF) mit dem Inno-Kern (installer/jarvis.iss) darin.
 name: JarvisSetup.exe bauen
 
+# Sparsam mit den Actions-Minuten (Georgs Konto: 2.000 im Monat, Windows zählt doppelt, ein Build dauert
+# etwa 15 Minuten): Nur Änderungen am Programm bauen, nicht an Anleitung und README (die kommen mit dem
+# nächsten Build mit). Kommen mehrere Änderungen kurz nacheinander, wartet nur die neueste: Läuft gerade ein
+# Build, wird ein noch wartender älterer übersprungen. Ein laufender Build wird nie abgebrochen (er
+# veröffentlicht am Ende das Release).
 on:
   push:
     branches: [main, claude/project-thread-0revfw]
@@ -15,8 +20,6 @@ on:
       - "Jarvis.bat"
       - "Jarvis.pyw"
       - "config.example.toml"
-      - "ANLEITUNG.md"
-      - "README.md"
       - ".github/workflows/setup-exe.yml"
   workflow_dispatch:
     inputs:
@@ -24,6 +27,10 @@ on:
         description: "Nur bauen und die Installer-Bilder machen (ohne Proben)"
         type: boolean
         default: false
+
+concurrency:
+  group: setup-exe-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
