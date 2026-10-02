@@ -390,7 +390,15 @@ _DISCORD_NOT_A_TARGET = {"es", "das", "den", "die", "der", "dem", "ihn", "sie", 
 
 
 _CALL_ANYONE = re.compile(r"^(?:ruf|rufe)\s+(?P<x>[\wäöüß][\wäöüß .-]{0,40}?)\s+an$")
-_NOT_CALLABLE = re.compile(r"\b(?:polizei|feuerwehr|notruf|notarzt|rettung|krankenwagen|ambulanz|hilfe|\d+)\b")
+# Kein Discord-Anruf: Notrufe, Telefonnummern, Familie und Firmen ("Ruf Mama an", "Ruf bei Pizza Hut an"),
+# "uns", "alle", und mit Zeit ("Ruf Max morgen an" ist eher eine Erinnerung). Das übernimmt Claude.
+_NOT_CALLABLE = re.compile(
+    r"\b(?:polizei|feuerwehr|notruf|notarzt|rettung|krankenwagen|ambulanz|hilfe|\d+|"
+    r"bei|mein|meine|meinen|meinem|meiner|uns|euch|jemand|jemanden|niemand|alle|allen|"
+    r"mama|mami|papa|papi|mutter|vater|oma|opa|eltern|tante|onkel|arzt|ärztin|doktor|praxis|firma|chef|chefin|"
+    r"hotline|support|kundendienst|taxi|pizza|lieferdienst|restaurant|schule|büro|amt|"
+    r"morgen|übermorgen|heute|später|gleich|nachher|abends|wieder|zurück|nochmal|noch)\b"
+)
 
 
 def match_discord(text: str) -> Intent | None:
@@ -705,7 +713,7 @@ def match(text: str) -> Intent | None:
                 arg = next((g for g in found.groups() if g), "").strip()
                 if not arg or arg in _NOT_A_NAME or re.search(r"\b(?:und|oder|dann|danach)\b", arg):
                     continue  # mehrere Dinge auf einmal: das kann Claude besser
-                if name == "open" and re.search(r"\san$", arg):
+                if name == "open" and re.search(r"(?:^|\s)an$", arg):
                     continue  # "Ruf die Polizei an", "Ruf mich an": kein Programm
                 if name == "open_known":
                     from .apps import find_known

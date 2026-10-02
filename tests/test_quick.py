@@ -412,6 +412,11 @@ class EverydayTest(unittest.TestCase):
         self.assertEqual((found.name, found.arg, found.data), ("discord", "call", {"target": "max", "any_app": True}))
         for said in ("Ruf die Polizei an", "Ruf 112 an", "Ruf mich an"):
             self.assertIsNone(intents.match(said), said)
+        # Vorher Discord-Anrufe bei "meine mutter", "bei pizza hut", "max morgen" und "alle"
+        for said in ("Ruf meine Mutter an", "Ruf Mama an", "Ruf bei Pizza Hut an", "Ruf Max morgen an", "Ruf alle an",
+                     "Ruf uns an", "Ruf jemanden an"):
+            self.assertIsNone(intents.match(said), said)
+        self.assertEqual(intents.match("Ruf bitte Tom Müller an").data["target"], "tom müller")
 
     def test_assistant_does_them(self):
         assistant, ui, speaker, _ = make()
