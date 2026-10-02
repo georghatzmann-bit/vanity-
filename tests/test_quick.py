@@ -58,6 +58,9 @@ class RecognitionTest(unittest.TestCase):
             "Brauche ich heute einen Schirm?": ("weather", "heute", {"place": "", "ask": "regen"}),
             "Wie warm ist es in Graz?": ("weather", "jetzt", {"place": "graz", "ask": "temperatur"}),
             "Wie wird das Wetter am Wochenende in Salzburg?": ("weather", "wochenende", {"place": "salzburg", "ask": ""}),
+            "Wird es am Montag regnen?": ("weather", "montag", {"place": "", "ask": "regen"}),
+            "Gibt es am Wochenende Regen?": ("weather", "wochenende", {"place": "", "ask": "regen"}),
+            "Wie viel Grad hat es in Berlin?": ("weather", "jetzt", {"place": "berlin", "ask": "temperatur"}),
             "Was ist 15 mal 23?": ("calc", "15 mal 23"),
             "Wie viel sind 20 Prozent von 80?": ("calc", "20 Prozent von 80"),
             "Was ist 1 durch 0": ("calc", "1 durch 0", {"error": "durch null"}),
@@ -81,7 +84,10 @@ class RecognitionTest(unittest.TestCase):
                 self.assertEqual(intent_of(said), expected)
         for said in ("Such auf meinem PC nach der Rechnung", "Spiel ein Spiel mit mir", "Spiel meine Playlist",
                      "Ist Bluetooth an?", "Was ist die Hauptstadt von Frankreich?", "Öffne die Wetter-App",
-                     "Wie spät ist es in New York?"):
+                     "Wie spät ist es in New York?",
+                     # Kein Wetter: Temperatur im Haus oder am PC weiß Claude (Sensoren, Home Assistant)
+                     "Wie viel Grad hat meine CPU?", "Wie viel Grad hat die Grafikkarte?", "Wie warm ist es im Wohnzimmer?",
+                     "Wie warm ist es in der Küche?", "Wie viel Grad hat das Wasser?"):
             with self.subTest(said=said):
                 found = intents.match(said)
                 self.assertTrue(found is None or found.name in ("open",), found)

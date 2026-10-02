@@ -688,10 +688,15 @@ _WEATHER_ASK = re.compile(
     r"^(?:(?:wie|was) (?:wird|ist|wirds|sagt|gibts|gibt es)\b.*\bwetter|wetter\b|wettervorhersage|wetterbericht|"
     r"(?:zeig|sag|gib) (?:mir )?(?:das |den )?wetter)|"
     r"^(?:wie )?(?:warm|kalt|heiß) (?:ist|wird|wirds) es\b|"
-    r"^wie ?viel(?:e)? grad (?:hat es|ist es|sind es|hat|wird es haben|haben wir|hats)\b|"
-    r"^(?:regnet|schneit) es\b|^wird es (?:\w+ )?(?:regnen|schneien)\b|^gibt es (?:\w+ )?(?:regen|schnee)\b|"
+    r"^wie ?viel(?:e)? grad (?:hat es|ist es|sind es|wird es haben|haben wir|hats|"
+    r"hat(?= (?:in|heute|morgen|draußen|gerade|aktuell)\b|$))\b|"
+    r"^(?:regnet|schneit) es\b|^wird es (?:\w+ ){0,2}(?:regnen|schneien)\b|^gibt es (?:\w+ ){0,2}(?:regen|schnee)\b|"
     r"^(?:brauche|brauch) ich (?:\w+ )?(?:einen |nen |ne |eine )?(?:regen)?(?:schirm|jacke)\b"
 )
+_NOT_OUTSIDE = re.compile(
+    r"\b(?:mein|meine|meinem|meinen|meiner|cpu|gpu|grafikkarte|prozessor|pc|computer|rechner|laptop|festplatte|"
+    r"wasser|pool|kaffee|tee|ofen|backofen|kühlschrank|gefrierschrank|heizung|drinnen|innen|zimmer|wohnzimmer|"
+    r"schlafzimmer|kinderzimmer|küche|bad|badezimmer|büro|keller|flur|garage|wohnung|haus|aquarium)\b")
 _WHEN = re.compile(r"\b(heute|morgen|übermorgen|wochenende|montag|dienstag|mittwoch|donnerstag|freitag|samstag|"
                    r"sonntag|gerade|aktuell|draußen)\b")
 _NOT_PLACE = r"(?!(?:heute|morgen|übermorgen|am|gerade|aktuell|draußen|der nähe)\b)"
@@ -705,6 +710,8 @@ def match_weather(text: str) -> Intent | None:
         return None
     if re.search(r"\b(?:öffne|app|karte|radar|seite)\b", norm):
         return None  # "Öffne die Wetter-App" ist ein Programm
+    if "wetter" not in norm and _NOT_OUTSIDE.search(norm):
+        return None  # "Wie viel Grad hat meine CPU?", "Wie warm ist es im Wohnzimmer?": das weiß Claude (Sensoren)
     when_found = _WHEN.search(norm)
     when = when_found.group(1) if when_found else ""
     if when in ("gerade", "aktuell", "draußen"):
