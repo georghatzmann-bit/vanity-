@@ -1305,13 +1305,15 @@ body[data-state="speaking"] .deck {
 
 .row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
 }
 
 .row-text {
   display: grid;
+  flex: 1 1 240px;
   gap: 2px;
   min-width: 0;
 }
@@ -1886,6 +1888,11 @@ body[data-view="hub"] .backdrop {
 
   .qr {
     justify-self: center;
+  }
+
+  .dlg-tabs {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
