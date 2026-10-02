@@ -77,17 +77,14 @@ def _device(value) -> int | None:
     return int(value)
 
 
-# Antwort-Tempo: welches Claude-Modell zuerst gefragt wird (die anderen sind Ersatz).
-SPEEDS = {
-    "schnell": ["haiku", "sonnet", "opus"],
-    "ausgewogen": ["sonnet", "haiku", "opus"],
-    "gruendlich": ["opus", "sonnet", "haiku"],
-}
+# Modellwahl: "auto" wählt Modell und Nachdenken pro Aufgabe (modellwahl.py), oder immer gleich.
+MODES = ("auto", "schnell", "gruendlich")
 
 
-def speed_of(models) -> str:
-    first = str((models or ["sonnet"])[0]).lower()
-    return "schnell" if "haiku" in first else "gruendlich" if "opus" in first else "ausgewogen"
+def mode_of(brain_cfg: dict) -> str:
+    """Die Modellwahl für die Einstellungen ("normal" und "maximal" zeigt sie als "auto")."""
+    mode = str((brain_cfg or {}).get("modellwahl", "auto") or "auto").strip().lower().replace("ü", "ue")
+    return mode if mode in MODES else "auto"
 
 
 def _forget_brain_state() -> None:
@@ -326,7 +323,7 @@ class ClaudeCheck:
             self._set(state="error", message="Unerwarteter Fehler in Jarvis.", detail=str(exc)[:700])
             return
         note = ""
-        speed = speed_of(cfg.get("models"))
+        speed = mode_of(cfg)
         if brain.attempt != first:
             note = (f"{first.label()} hat nicht geklappt, Jarvis nimmt deshalb {brain.attempt.label()}. "
                     "Das merkt er sich.")
@@ -336,7 +333,6 @@ class ClaudeCheck:
                 models = [working] + [m for m in (cfg.get("models") or []) if m != working]
                 try:
                     save_setting("brain", "models", models)
-                    speed = speed_of(models)
                 except OSError as exc:
                     log.warning("Modell-Reihenfolge nicht gespeichert: %s", exc)
         self._set(state="ok", message="Das Gehirn ist verbunden. Jarvis kann denken.", model=answer.model,
@@ -387,7 +383,7 @@ class SetupApi:
                 "full_permission": bool(cfg.get("rechte", {}).get("volle_freigabe", True)),
                 "ha_url": str(cfg.get("homeassistant", {}).get("url", "")),
                 "ha_token_set": bool(cfg.get("homeassistant", {}).get("token")),
-                "speed": speed_of(cfg["brain"].get("models")),
+                "speed": mode_of(cfg["brain"]),
                 "tts_engine": str(cfg["tts"].get("engine", "edge")),
                 "eleven_key_set": bool(str(cfg["tts"].get("elevenlabs_key", "") or "").strip()),
                 "eleven_voice": str(cfg["tts"].get("elevenlabs_voice", "") or ""),
@@ -913,12 +909,13 @@ class SetupApi:
         return self._save("mute", "hotkey", str(hotkey))
 
     def brain_speed(self, value) -> dict:
-        """Antwort-Tempo: "schnell" (Haiku zuerst), "ausgewogen" (Sonnet) oder "gruendlich" (Opus)."""
+        """Modellwahl: "auto" (Jarvis wählt pro Aufgabe), "schnell" (immer Sonnet mit wenig Nachdenken)
+        oder "gruendlich" (immer Opus mit viel Nachdenken). "ausgewogen" von früher heißt jetzt "auto"."""
         key = str(value or "").strip().lower().replace("ü", "ue")
-        models = SPEEDS.get(key)
-        if not models:
+        key = "auto" if key == "ausgewogen" else key
+        if key not in MODES:
             return {"ok": False, "error": "Unbekannte Auswahl.", "speed": ""}
-        result = self._save("brain", "models", models, extra={"speed": key})
+        result = self._save("brain", "modellwahl", key, extra={"speed": key})
         if result["ok"]:
             _forget_brain_state()
         return result

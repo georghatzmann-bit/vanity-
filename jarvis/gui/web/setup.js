@@ -70,7 +70,7 @@
     error:   ['Das hat nicht geklappt', ''],
   };
 
-  const SPEED_NAMES = { schnell: 'Schnell', ausgewogen: 'Ausgewogen', gruendlich: 'Gründlich' };
+  const SPEED_NAMES = { auto: 'Automatisch', schnell: 'Immer schnell', gruendlich: 'Immer gründlich' };
 
   // ------------------------------------------------------------------ Zustand
 
@@ -91,7 +91,7 @@
     pico: { keySet: false },
     place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
-    speed: 'ausgewogen',
+    speed: 'auto',
     hotkeys: [], hotkey: '', autostart: false, fullPermission: true,
     ha: { url: '', tokenSet: false, echos: [] },
     finishing: false,
@@ -1437,7 +1437,7 @@
     renderSpeed();
     try {
       const r = await call('brain_speed', key);
-      if (r && r.ok) toast('Antwort-Tempo: ' + SPEED_NAMES[key] + '.', 'ok');
+      if (r && r.ok) toast('Modellwahl: ' + SPEED_NAMES[key] + '.', 'ok');
       else {
         S.speed = before;
         renderSpeed();
@@ -1619,7 +1619,7 @@
       ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'Verbunden')
         : checking ? 'Wird geprüft …' : 'Noch nicht bereit', 'claude',
         claudeOk ? ['ok', 'Verbunden'] : checking ? null : ['warn', 'Prüfen']],
-      ['Antwort-Tempo', SPEED_NAMES[S.speed] || 'Ausgewogen', 'claude', null],
+      ['Modellwahl', SPEED_NAMES[S.speed] || 'Automatisch', 'claude', null],
       ['Stumm-Taste', S.hotkey ? hotkeyLabel(S.hotkey) : 'Keine', 'extras', null],
       ['Autostart', S.autostart ? 'Startet mit Windows' : 'Aus', 'extras', null],
       ['Freigabe', S.fullPermission ? 'Volle Freigabe' : 'Fragt vorher nach', 'extras', null],
@@ -1929,7 +1929,7 @@
         values: {
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',
           voice: 'de-DE-ConradNeural', hotkey: 'ctrl+alt+m', threshold: 0.5, autostart: false,
-          ha_url: '', ha_token_set: false, speed: 'ausgewogen',
+          ha_url: '', ha_token_set: false, speed: 'auto',
           tts_engine: params.get('eleven') === '1' ? 'elevenlabs' : 'edge', eleven_key_set: params.get('eleven') === '1',
           eleven_voice: params.get('eleven') === '1' ? 'v_george' : '', eleven_voice_name: params.get('eleven') === '1' ? 'George' : '',
           groq_key_set: params.get('groq') === '1',
@@ -2045,7 +2045,7 @@
           state: claudeMode, message: msg, model: claudeMode === 'ok' ? 'claude-haiku-4-5-20251001' : '',
           version: claudeMode === 'missing' ? '' : '2.1.286 (Claude Code)', detail,
           note: claudeMode === 'ok' ? 'Sonnet hat nicht geklappt, Jarvis nimmt deshalb Haiku. Das merkt er sich.' : '',
-          speed: claudeMode === 'ok' ? 'schnell' : undefined,
+          speed: claudeMode === 'ok' ? 'auto' : undefined,
         }, 30);
       },
       claude_install: () => later({ ok: true, error: '' }, 100),

@@ -143,7 +143,8 @@ class AssistantTest(unittest.TestCase):
         partial = [m for m in messages if m[1] == "jarvis" and not m[5]]
         final = [m for m in messages if m[1] == "jarvis" and m[5]]
         self.assertEqual(partial[0][2], "Guten Tag, Sir.")
-        self.assertEqual(final[-1][2:5], ("Guten Tag, Sir. Heute ist Mittwoch.", partial[0][3], "claude-sonnet-test"))
+        # Im Verlauf steht, womit Jarvis gedacht hat ("Sonnet", mit Modellwahl "Sonnet · schnell").
+        self.assertEqual(final[-1][2:5], ("Guten Tag, Sir. Heute ist Mittwoch.", partial[0][3], "Sonnet"))
         self.assertEqual(ui.states(), ["thinking", "idle"])
 
     def test_local_commands_do_not_ask_claude(self):

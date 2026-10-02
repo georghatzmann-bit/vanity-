@@ -382,7 +382,7 @@
     return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
-  function addMessage(role, text, id, final) {
+  function addMessage(role, text, id, final, model) {
     role = ['user', 'jarvis', 'info'].includes(role) ? role : 'info';
     text = String(text || '');
     if (role === 'user') {
@@ -398,8 +398,13 @@
     if (item) {
       item.text = text;
       if (item.el) item.el.querySelector('.text').textContent = text;
+      if (model && item.model !== model) {
+        // Womit Jarvis gedacht hat ("Opus · gründlich"), kommt mit der fertigen Antwort.
+        item.model = model;
+        if (item.el) item.el.querySelector('time').textContent = metaLine(item);
+      }
     } else {
-      item = { key, role, text, time: timeNow(), el: null };
+      item = { key, role, text, time: timeNow(), model: model || '', el: null };
       S.history.push(item);
       if (S.history.length > 300) {
         const old = S.history.shift();
@@ -438,10 +443,15 @@
     li.append(text);
     if (item.role !== 'info') {
       const time = document.createElement('time');
-      time.textContent = (item.role === 'user' ? 'Sie · ' : 'Jarvis · ') + item.time;
+      time.textContent = metaLine(item);
       li.append(time);
     }
     return li;
+  }
+
+  function metaLine(item) {
+    const who = (item.role === 'user' ? 'Sie · ' : 'Jarvis · ') + item.time;
+    return item.model ? who + ' · ' + item.model : who;
   }
 
   function renderRecent() {
@@ -873,7 +883,7 @@
     if (!ev || typeof ev !== 'object') return;
     switch (ev.type) {
       case 'state': applyState(String(ev.value || '')); break;
-      case 'message': addMessage(ev.role, ev.text, ev.id, ev.final); break;
+      case 'message': addMessage(ev.role, ev.text, ev.id, ev.final, ev.model); break;
       case 'progress': onProgress(ev.step); break;
       case 'workshop':
         if (ev.state === 'projects') {

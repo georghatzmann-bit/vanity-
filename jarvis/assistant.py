@@ -1506,9 +1506,10 @@ class Assistant:
         if not shown and full and speak:
             # Nichts kam gestreamt an (ältere Claude-Version): ganze Antwort vorlesen.
             self.say(full)
-        self.ui.message("jarvis", full or "(keine Antwort)", id=turn, model=answer.model, final=True)
+        label = getattr(answer, "label", "") or answer.model
+        self.ui.message("jarvis", full or "(keine Antwort)", id=turn, model=label, final=True)
         self.ui.config(model=answer.model)
-        log.info("Claude (%s) nach %.1f s", answer.model, time.monotonic() - started)
+        log.info("Claude (%s) nach %.1f s", label, time.monotonic() - started)
         return full
 
     # ------------------------------------------------------------------ Erinnerungen

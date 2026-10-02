@@ -140,9 +140,21 @@ minimize_to_background = true
 # Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
 # Windows-Pfade in einfache Anführungszeichen: claude_path = 'C:\Users\Georg\.local\bin\claude.exe'
 claude_path = ""
-# Welche Claude-Modelle Jarvis nutzt, der Reihe nach. Lehnt eins eine Anfrage ab,
-# versucht Jarvis automatisch das nächste. "sonnet" ist schnell und schont dein
-# Pro-Limit, "haiku" ist am schnellsten, "opus" am klügsten, aber langsamer.
+# Modell und Nachdenken wählt Jarvis für jede Aufgabe selbst ("auto"): kurze Fragen schnell
+# (Sonnet, wenig Nachdenken), Texte und Recherche mittel, knifflige Sachen wie Fehlersuche, Code,
+# Planung oder Verträge gründlich (Opus, viel Nachdenken). "Denk gründlich nach" oder "kurz und
+# knapp" geht immer. Fest geht auch: "schnell", "normal", "gruendlich", "maximal" (oder "aus",
+# dann wie früher: das erste Modell aus models mit effort).
+modellwahl = "auto"
+# Was die Stufen heißen: Modell und Nachdenken (low, medium, high, xhigh, max). "maximal" gibt es
+# nur, wenn du es sagst ("Denk richtig gründlich nach"). Fable ist das stärkste Modell; hat dein Abo
+# es nicht, nimmt Jarvis von selbst Opus.
+stufe_schnell = "sonnet low"
+stufe_normal = "sonnet medium"
+stufe_gruendlich = "opus high"
+stufe_maximal = "fable high"
+# Ersatzreihe: Lehnt ein Modell eine Anfrage ab, versucht Jarvis automatisch das nächste.
+# "sonnet" ist schnell und schont dein Pro-Limit, "haiku" ist am schnellsten, "opus" am klügsten.
 models = ["sonnet", "haiku", "opus"]
 # true = Claude Code startet für Jarvis ohne deine persönlichen Skills, Plugins,
 # MCP-Server und CLAUDE.md-Dateien. So stören sie Jarvis nicht.
@@ -161,7 +173,8 @@ timeout_seconds = 180
 tool_timeout_seconds = 660
 # Obergrenze für eine ganze Aufgabe (Sekunden). "Stopp" bricht jederzeit ab.
 max_seconds = 1800
-# Wie lange Claude nachdenkt: "low" antwortet am schnellsten, "medium" oder "high" gründlicher.
+# Wie lange Claude nachdenkt, wenn modellwahl = "aus" ist: "low" antwortet am schnellsten,
+# "medium" oder "high" gründlicher. (Sonst bestimmt das die Stufe.)
 effort = "low"
 # Welche Werkzeuge Claude für Jarvis überhaupt bekommt.
 tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"]

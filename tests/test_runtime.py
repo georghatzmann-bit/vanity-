@@ -238,7 +238,7 @@ class BrainFixesTest(unittest.TestCase):
     def test_stop_during_overload_pause(self):
         calls = []
 
-        def overloaded(text, on_text=None, on_step=None):
+        def overloaded(text, *args, **kwargs):
             calls.append(text)
             raise OverloadedError("529 Overloaded")
 

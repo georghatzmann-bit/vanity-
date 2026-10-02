@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from .modellwahl import Choice, Chooser, family
+
 log = logging.getLogger(__name__)
 
 # Unter Windows öffnet jeder Unterprozess sonst ein schwarzes Fenster,
@@ -175,6 +177,25 @@ class Answer:
     text: str
     model: str = ""
     session_id: str = ""
+    level: str = ""  # Stufe der Modellwahl (schnell, normal, gruendlich, maximal), leer = ohne Modellwahl
+
+    @property
+    def label(self) -> str:
+        """Für das Fenster: "Opus · gründlich" (ohne Modellwahl nur das Modell)."""
+        from .modellwahl import SPOKEN, model_name
+
+        if not self.model:
+            return ""
+        name = model_name(self.model)
+        return f"{name} · {SPOKEN.get(self.level, self.level)}" if self.level else name
+
+
+def _reset_in(text: str) -> float:
+    """Sekunden bis zum Ende einer Sperre ("Claude AI usage limit reached|1759248000"), 0 = unbekannt."""
+    found = re.search(r"\|(\d{10})\b", str(text or ""))
+    if not found:
+        return 0.0
+    return max(0.0, float(found.group(1)) - time.time())
 
 
 @dataclass(frozen=True)
@@ -268,6 +289,11 @@ class ClaudeBrain:
             # tun, aber wenigstens antworten.
             self.attempts.append(Attempt("haiku" if "haiku" in models else models[0], "reden"))
         self._index = 0
+        # Die Modellwahl: pro Aufgabe Modell und Nachdenken (modellwahl.py). Die Liste `models` bleibt die
+        # Ersatzreihe, falls ein Modell ablehnt.
+        self.chooser = Chooser(cfg)
+        self._choice: Choice | None = None
+        self._patience = 1.0
         self._isolated = cfg.get("isolated", True)
         # Abgebrochen wird nur, wenn Claude so lange gar nichts mehr meldet. Läuft gerade ein
         # Werkzeug (Installation, Build, Test), darf es deutlich länger still sein.
@@ -363,7 +389,15 @@ class ClaudeBrain:
         def warm() -> None:
             try:
                 with self._live_lock:
-                    self._ensure_live(self.attempt, None)
+                    if self._live is not None and self._live.alive():
+                        return
+                    attempt = self.attempt
+                    if self.chooser.enabled and self._index == 0 and attempt.profile == "jarvis":
+                        # Die nächste Frage ist meist kurz: mit der schnellen Stufe vorwärmen.
+                        warm_choice = self.chooser.make("schnell")
+                        self._ensure_live(Attempt(warm_choice.model, "jarvis"), None, effort=warm_choice.effort)
+                    else:
+                        self._ensure_live(attempt, None, effort=self._effort_for(attempt))
             except Exception as exc:
                 log.debug("Vorwärmen von Claude: %s", exc)
 
@@ -379,22 +413,36 @@ class ClaudeBrain:
         if live is not None:
             live.close()
 
-    def _ensure_live(self, attempt: Attempt, isolated: bool | None) -> "_LiveClaude":
+    def _ensure_live(self, attempt: Attempt, isolated: bool | None, effort: str | None = None) -> "_LiveClaude":
         """Der laufende Claude-Prozess für diesen Versuch; startet ihn bei Bedarf (mit dem
-        bisherigen Gespräch, falls es eins gibt)."""
+        bisherigen Gespräch, falls es eins gibt). Ein anderes Modell oder anderes Nachdenken stellt
+        Jarvis im laufenden Prozess um (das Gespräch bleibt), ältere Claude-Versionen starten neu."""
         isolated = self.isolated if isolated is None else isolated
-        key = (attempt, isolated)
+        effort = self._effort if effort is None else effort
+        key = (attempt.profile, isolated)
         live = self._live
         if live is not None and (not live.alive() or live.key != key or live.conversation != self._conversation):
             self._live = None
             live.close()
             live = None
+        if live is not None and (live.model, live.effort) != (attempt.model, effort):
+            outcome = "unsupported" if "apply_flag_settings" in self._unsupported else live.configure(attempt.model, effort)
+            if outcome == "ok":
+                log.debug("Claude umgestellt: %s, Nachdenken %s", attempt.model or "Standard", effort or "Standard")
+            else:
+                if outcome == "unsupported" and "apply_flag_settings" not in self._unsupported:
+                    self._unsupported.add("apply_flag_settings")
+                    log.info("Diese Claude-Version stellt das Modell nicht im laufenden Betrieb um, starte dafür neu.")
+                self._live = None
+                live.close()
+                live = None
         if live is None:
             resume = self._session is not None
             session = self._session or str(uuid.uuid4())
-            cmd = self.command(attempt, isolated, session, resume) + ["--input-format", "stream-json"]
+            cmd = self.command(attempt, isolated, session, resume, effort=effort) + ["--input-format", "stream-json"]
             log.debug("Claude-Prozess startet: %s", " ".join(cmd[1:]))
-            live = _LiveClaude(cmd, self._home, self.environment(""), key, self._conversation, session)
+            live = _LiveClaude(cmd, self._home, self.environment(""), key, self._conversation, session,
+                               model=attempt.model, effort=effort)
             self._live = live
         return live
 
@@ -436,9 +484,11 @@ class ClaudeBrain:
         isolated: bool | None = None,
         session: str | None = None,
         resume: bool = False,
+        effort: str | None = None,
     ) -> list[str]:
         attempt = attempt or self.attempt
         isolated = self.isolated if isolated is None else isolated
+        effort = self._effort if effort is None else effort
         if isolated and attempt.profile == "jarvis" and self.refresh_persona is not None:
             try:
                 self.refresh_persona()
@@ -449,8 +499,8 @@ class ClaudeBrain:
             cmd.append("--include-partial-messages")
         if attempt.model:
             cmd += ["--model", attempt.model]
-        if self._effort and "effort" not in self._unsupported:
-            cmd += ["--effort", self._effort]
+        if effort and "effort" not in self._unsupported:
+            cmd += ["--effort", effort]
         if isolated:
             cmd.append("--safe-mode")
             if attempt.profile == "jarvis":
@@ -521,19 +571,27 @@ class ClaudeBrain:
                 env.pop(name, None)
         return env
 
-    def ask(self, text: str, on_text: Callable[[str], None] | None = None, on_step=None) -> Answer:
+    def ask(self, text: str, on_text: Callable[[str], None] | None = None, on_step=None,
+            choice: Choice | None = None) -> Answer:
         """Fragt Claude. `on_text` bekommt die Antwort Stück für Stück, sobald sie
-        entsteht, `on_step` jeden Arbeitsschritt (Werkzeug) als `steps.Step`. Bei einer
-        Ablehnung kommt der nächste Versuch aus `attempts` dran, in einer neuen
-        Unterhaltung, und dabei bleibt es danach."""
+        entsteht, `on_step` jeden Arbeitsschritt (Werkzeug) als `steps.Step`. Modell und
+        Nachdenken wählt die Modellwahl (oder `choice`). Bei einer Ablehnung kommt der nächste
+        Versuch aus `attempts` dran, in einer neuen Unterhaltung, und dabei bleibt es danach."""
         self._cancelled = False
         if self._new_after > 0 and self._last_turn_at is not None and time.monotonic() - self._last_turn_at > self._new_after:
             log.info("Lange Pause: neue Unterhaltung.")
             self.new_conversation()
+        self._choice = choice if choice is not None else self.chooser.choose(text)
+        self._patience = self._choice.patience if self._choice is not None else 1.0
+        if self._choice is not None:
+            log.info("Modellwahl: %s, Nachdenken %s (%s)", self._choice.model, self._choice.effort or "Standard",
+                     self._choice.reason or self._choice.level)
         rescue_from: list[int] = []
         try:
             answer = self._ask_chain(text, on_text, rescue_from, on_step)
             self._last_turn_at = time.monotonic()
+            if self._choice is not None:
+                answer.level = self._choice.level
             return answer
         except BrainError:
             if rescue_from:
@@ -544,53 +602,111 @@ class ClaudeBrain:
             if self.live_enabled and self._live is None and not self._cancelled:
                 self.prewarm()  # nach einem Fehler gleich wieder bereit sein
 
+    def _effort_for(self, attempt: Attempt) -> str:
+        """Wie viel Claude nachdenkt: nach der Modellwahl, sonst wie in config.toml (`effort`)."""
+        if attempt.profile == "reden":
+            return self._effort or "low"
+        return self._choice.effort if self._choice is not None else self._effort
+
+    def _auto_attempt(self) -> Attempt | None:
+        """Der erste Versuch nach der Modellwahl. None = die übliche Reihe: ohne Modellwahl, oder
+        nachdem Modelle abgelehnt haben (dann bleibt Jarvis eine Weile beim Versuch, der klappte)."""
+        if self._choice is None or self._index != 0 or self.attempt.profile != "jarvis":
+            return None
+        return Attempt(self._choice.model, "jarvis")
+
+    def _auto_fallback(self, attempt: Attempt, exc: BrainError) -> Attempt | None:
+        """Das gewählte Modell geht gerade nicht (nicht im Abo, Kontingent dafür aufgebraucht,
+        überlastet): sofort mit dem nächstkleineren weiter, gleiches Nachdenken, und das Modell
+        eine Weile nicht mehr wählen. None = kein solcher Fall."""
+        big = family(attempt.model) in ("opus", "fable")
+        if isinstance(exc, ModelUnavailableError):
+            seconds, why = 12 * 3600, "nicht verfügbar"
+        elif isinstance(exc, LimitError) and big:
+            seconds, why = _reset_in(str(exc)) or 3 * 3600, "Kontingent dafür aufgebraucht"
+        elif isinstance(exc, OverloadedError) and big:
+            seconds, why = 10 * 60, "überlastet"
+        else:
+            return None
+        smaller = self.chooser.smaller(attempt.model)
+        self.chooser.block(attempt.model, seconds, why)
+        if not smaller:
+            return None
+        nxt = Attempt(smaller, attempt.profile)
+        self.notice(f"{attempt.label()} ist {why}, versuche {nxt.label()} ...")
+        return nxt
+
     def _ask_chain(self, text: str, on_text, rescue_from: list[int], on_step=None) -> Answer:
-        overload_retry = True
+        retry = {"overload": True}
+        auto = self._auto_attempt()
         while True:
             if self._cancelled:
                 raise Cancelled("abgebrochen")
+            attempt = auto or self.attempt
             try:
-                answer = self._ask_once(text, on_text=on_text, on_step=on_step)
-                self._save_state()
+                answer = self._ask_once(text, attempt, on_text=on_text, on_step=on_step, effort=self._effort_for(attempt))
+                if auto is None:
+                    self._save_state()
                 return answer
-            except NEXT_ATTEMPT as exc:
-                self._session = None
-                if self._index + 1 >= len(self.attempts):
-                    # Alles probiert: beim nächsten Mal wieder vorne anfangen.
-                    rescue_from[:] = [0]
-                    raise
-                failed = self.attempt
-                self._index += 1
-                why = "hat abgelehnt" if isinstance(exc, RefusalError) else "ist nicht verfügbar"
-                self.notice(f"{failed.label()} {why}, versuche {self.attempt.label()} ...")
-            except OverloadedError:
-                if not overload_retry:
-                    raise
-                overload_retry = False
-                self.notice("Claude ist überlastet, versuche es gleich noch einmal ...")
-                for _ in range(20):
-                    if self._cancelled:
-                        break
-                    time.sleep(0.1)
-            except (LoginError, BillingError):
-                if self._without_api_key or not _api_key_set():
-                    raise
-                # Ein API-Schlüssel aus den Umgebungsvariablen verdrängt das Pro-Abo.
-                self._without_api_key = True
-                self.notice("Claude Code nutzt einen API-Schlüssel statt deines Abos, versuche es mit dem Abo ...")
+            except Cancelled:
+                raise
             except BrainError as exc:
-                if type(exc) is not BrainError or rescue_from:
-                    raise  # Kontingent, Netz, Konto, Abbruch ...: ein anderer Versuch hilft nicht
-                # Unbekannter Fehler: einmal ganz einfach probieren (kurze Persönlichkeit, keine
-                # Werkzeuge). Klappt das, bleibt Jarvis dabei, bis wieder alles geht.
-                rescue = next((i for i, a in enumerate(self.attempts) if a.profile == "reden"), None)
-                if rescue is None or rescue == self._index:
-                    raise
-                rescue_from.append(self._index)
-                failed = self.attempt
-                self._session = None
-                self._index = rescue
-                self.notice(f"{failed.label()} meldet einen Fehler, versuche {self.attempt.label()} ...")
+                if auto is not None:
+                    smaller = self._auto_fallback(auto, exc)
+                    if smaller is not None:
+                        auto = smaller
+                        continue
+                    failed, auto = auto, None
+                    if isinstance(exc, NEXT_ATTEMPT) and failed != self.attempt:
+                        # Weiter mit der üblichen Reihe (die beginnt mit einem anderen Modell).
+                        why = "hat abgelehnt" if isinstance(exc, RefusalError) else "ist nicht verfügbar"
+                        self.notice(f"{failed.label()} {why}, versuche {self.attempt.label()} ...")
+                        continue
+                self._after_error(exc, rescue_from, retry)
+
+    def _after_error(self, exc: BrainError, rescue_from: list[int], retry: dict) -> None:
+        """Was nach einem Fehler in der üblichen Reihe passiert: nächster Versuch (dann zurück in die
+        Schleife) oder aufgeben (dann geht der Fehler weiter)."""
+        if isinstance(exc, NEXT_ATTEMPT):
+            self._session = None
+            if self._index + 1 >= len(self.attempts):
+                # Alles probiert: beim nächsten Mal wieder vorne anfangen.
+                rescue_from[:] = [0]
+                raise exc
+            failed = self.attempt
+            self._index += 1
+            why = "hat abgelehnt" if isinstance(exc, RefusalError) else "ist nicht verfügbar"
+            self.notice(f"{failed.label()} {why}, versuche {self.attempt.label()} ...")
+            return
+        if isinstance(exc, OverloadedError):
+            if not retry["overload"]:
+                raise exc
+            retry["overload"] = False
+            self.notice("Claude ist überlastet, versuche es gleich noch einmal ...")
+            for _ in range(20):
+                if self._cancelled:
+                    break
+                time.sleep(0.1)
+            return
+        if isinstance(exc, (LoginError, BillingError)):
+            if self._without_api_key or not _api_key_set():
+                raise exc
+            # Ein API-Schlüssel aus den Umgebungsvariablen verdrängt das Pro-Abo.
+            self._without_api_key = True
+            self.notice("Claude Code nutzt einen API-Schlüssel statt deines Abos, versuche es mit dem Abo ...")
+            return
+        if type(exc) is not BrainError or rescue_from:
+            raise exc  # Kontingent, Netz, Konto, Abbruch ...: ein anderer Versuch hilft nicht
+        # Unbekannter Fehler: einmal ganz einfach probieren (kurze Persönlichkeit, keine
+        # Werkzeuge). Klappt das, bleibt Jarvis dabei, bis wieder alles geht.
+        rescue = next((i for i, a in enumerate(self.attempts) if a.profile == "reden"), None)
+        if rescue is None or rescue == self._index:
+            raise exc
+        rescue_from.append(self._index)
+        failed = self.attempt
+        self._session = None
+        self._index = rescue
+        self.notice(f"{failed.label()} meldet einen Fehler, versuche {self.attempt.label()} ...")
 
     def _ask_once(
         self,
@@ -600,8 +716,10 @@ class ClaudeBrain:
         on_text: Callable[[str], None] | None = None,
         keep_session: bool = True,
         on_step=None,
+        effort: str | None = None,
     ) -> Answer:
         attempt = attempt or self.attempt
+        effort = self._effort_for(attempt) if effort is None else effort
         conversation = self._conversation
         resume = keep_session and self._session is not None
         session = self._session if resume else str(uuid.uuid4())
@@ -622,10 +740,10 @@ class ClaudeBrain:
             if self._cancelled:
                 raise Cancelled("abgebrochen")
             if live:
-                run = self._run_live(attempt, isolated, text, on_text, prompt=prompt, on_step=on_step)
+                run = self._run_live(attempt, isolated, text, on_text, prompt=prompt, on_step=on_step, effort=effort)
                 session = run.session or session
             else:
-                cmd = self.command(attempt, isolated, session if keep_session else None, resume)
+                cmd = self.command(attempt, isolated, session if keep_session else None, resume, effort=effort)
                 run = self._run(cmd, text, on_text, prompt=prompt, on_step=on_step)
             result, stderr = run.result, run.stderr
             unknown = UNKNOWN_OPTION.search(stderr or "")
@@ -754,7 +872,8 @@ class ClaudeBrain:
                 line = lines.get(timeout=0.25)
             except queue.Empty:
                 now = time.monotonic()
-                quiet = self._tool_timeout if stream.running else self._idle_timeout
+                # Gründliches Nachdenken ist lange still: dann länger warten.
+                quiet = self._tool_timeout if stream.running else self._idle_timeout * self._patience
                 if now - last > quiet or now - started > self._max_seconds:
                     log.warning(
                         "Claude meldet seit %.0f s nichts (läuft seit %.0f s, Werkzeug aktiv: %s), breche ab.",
@@ -777,12 +896,13 @@ class ClaudeBrain:
 
     # ------------------------------------------------------------------ Dauerhafter Prozess
 
-    def _run_live(self, attempt: Attempt, isolated: bool | None, text: str, on_text, prompt: str, on_step=None) -> Run:
+    def _run_live(self, attempt: Attempt, isolated: bool | None, text: str, on_text, prompt: str, on_step=None,
+                  effort: str | None = None) -> Run:
         """Wie `_run`, aber über den dauerhaft laufenden Claude-Prozess."""
         started = time.monotonic()
         with self._live_lock:
             try:
-                live = self._ensure_live(attempt, isolated)
+                live = self._ensure_live(attempt, isolated, effort=effort)
             except FileNotFoundError as exc:
                 raise NotInstalledError(f"Claude Code nicht startbar: {exc}") from exc
             except OSError as exc:
@@ -985,11 +1105,15 @@ class _LiveClaude:
     hinein (--input-format stream-json), die Antworten kommen wie gewohnt als Stream heraus,
     pro Frage mit einem eigenen result-Ereignis."""
 
-    def __init__(self, cmd: list[str], cwd: Path, env: dict, key, conversation: int, session: str) -> None:
+    def __init__(self, cmd: list[str], cwd: Path, env: dict, key, conversation: int, session: str,
+                 model: str = "", effort: str = "") -> None:
         self.key = key
         self.conversation = conversation
         self.session = session
         self.turns = 0
+        # Womit der Prozess gerade denkt (beim Start aus der Kommandozeile, danach umgestellt)
+        self.model = model
+        self.effort = effort
         self.proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -1022,6 +1146,50 @@ class _LiveClaude:
         self.proc.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
         self.proc.stdin.flush()
         self.turns += 1
+
+    def configure(self, model: str, effort: str, timeout: float = 4.0) -> str:
+        """Stellt Modell und Nachdenken um, ohne den Prozess neu zu starten (das Gespräch bleibt).
+        "ok", "unsupported" (diese Claude-Version kann das nicht) oder "failed"."""
+        settings: dict = {}
+        if model != self.model:
+            settings["model"] = model or None
+        if effort != self.effort:
+            settings["effortLevel"] = effort or None
+        if not settings:
+            return "ok"
+        request_id = f"jarvis-{uuid.uuid4().hex[:10]}"
+        request = {"type": "control_request", "request_id": request_id,
+                   "request": {"subtype": "apply_flag_settings", "settings": settings}}
+        try:
+            self.proc.stdin.write(json.dumps(request) + "\n")
+            self.proc.stdin.flush()
+        except (OSError, ValueError):
+            return "failed"
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                line = self.lines.get(timeout=0.1)
+            except queue.Empty:
+                if not self.alive():
+                    return "failed"
+                continue
+            if line is None:
+                return "failed"
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            response = event.get("response") if isinstance(event, dict) and event.get("type") == "control_response" else None
+            if not isinstance(response, dict) or response.get("request_id") != request_id:
+                continue  # anderes Ereignis (z. B. autocompact_state): egal
+            if response.get("subtype") == "success":
+                self.model, self.effort = model, effort
+                return "ok"
+            error = str(response.get("error") or "")
+            log.debug("Umstellen abgelehnt: %s", error)
+            return "unsupported" if re.search(r"unsupported|unknown|not supported", error, re.I) else "failed"
+        log.debug("Umstellen: keine Antwort von Claude")
+        return "unsupported"
 
     def close(self) -> None:
         _close(self.proc.stdin)

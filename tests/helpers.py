@@ -28,6 +28,7 @@ FAKE_CLAUDE = textwrap.dedent(
         return args[args.index(name) + 1] if name in args else ""
 
     model = arg("--model")
+    effort = arg("--effort")
     live = arg("--input-format") == "stream-json"
     for flag in os.environ.get("FAKE_UNKNOWN", "").split(","):
         if flag and "--" + flag in args:
@@ -106,7 +107,7 @@ FAKE_CLAUDE = textwrap.dedent(
         with open("calls.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps({"args": args, "prompt": prompt, "raw": raw, "stamp": stamp.group(1) if stamp else "",
                                 "said": said(), "pid": os.getpid(), "live": live, "cwd": os.getcwd(),
-                                "pythonpath": os.environ.get("PYTHONPATH", ""),
+                                "pythonpath": os.environ.get("PYTHONPATH", ""), "model": model, "effort": effort,
                                 "apikey": bool(os.environ.get("ANTHROPIC_API_KEY"))}) + "\\n")
         out({"type": "system", "subtype": "init", "model": "claude-" + model + "-test", "session_id": session})
         refused = prompt == "abgelehnt" or (prompt.startswith("nur-haiku") and model != "haiku") \\
@@ -133,6 +134,12 @@ FAKE_CLAUDE = textwrap.dedent(
         if prompt.startswith("modell-weg") and model != "haiku":
             api_error("There's an issue with the selected model (" + model + "). It may not exist or you "
                       "may not have access to it.", kind="model_not_found")
+        if model in os.environ.get("FAKE_NO_MODEL", "").split(","):
+            api_error("There's an issue with the selected model (" + model + "). It may not exist or you "
+                      "may not have access to it.", kind="model_not_found")
+        if model in os.environ.get("FAKE_LIMIT_MODEL", "").split(","):
+            result("Claude AI usage limit reached|" + str(int(time.time()) + 7200), error=True)
+            raise Done(1)
         if prompt.startswith("interner-fehler") and not no_tools:
             api_error("", subtype="error_during_execution", errors=["PowerShell-Werkzeug startet nicht"], show=False)
         if prompt.startswith("guthaben") and os.environ.get("ANTHROPIC_API_KEY"):
@@ -194,7 +201,25 @@ FAKE_CLAUDE = textwrap.dedent(
             line = line.strip()
             if not line:
                 continue
-            content = json.loads(line)["message"]["content"]
+            data = json.loads(line)
+            if data.get("type") == "control_request":
+                # Modell und Nachdenken im laufenden Prozess umstellen (wie Claude Code 2.1)
+                request = data["request"]
+                with open("controls.jsonl", "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"pid": os.getpid(), "request": request}) + "\\n")
+                if os.environ.get("FAKE_NO_CONTROL") or request.get("subtype") != "apply_flag_settings":
+                    out({"type": "control_response", "response": {"subtype": "error", "request_id": data["request_id"],
+                         "error": "Unsupported control request subtype: " + str(request.get("subtype"))}})
+                    continue
+                settings = request.get("settings") or {}
+                if "model" in settings:
+                    model = settings["model"] or ""
+                if "effortLevel" in settings:
+                    effort = settings["effortLevel"] or ""
+                out({"type": "autocompact_state", "value": {"enabled": True}})
+                out({"type": "control_response", "response": {"subtype": "success", "request_id": data["request_id"]}})
+                continue
+            content = data["message"]["content"]
             raw = content if isinstance(content, str) else "".join(b.get("text", "") for b in content)
             try:
                 turn(raw)

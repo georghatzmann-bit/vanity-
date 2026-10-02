@@ -510,15 +510,18 @@ class ClaudeCheckFallbackTest(SetupTestCase):
         self.assertIn("Sonnet hat nicht geklappt, Jarvis nimmt deshalb Haiku", result["note"])
         # Dauerhaft: Jarvis fragt ab jetzt zuerst Haiku.
         self.assertEqual(self.saved()["brain"]["models"], ["haiku", "sonnet", "opus"])
-        self.assertEqual(result["speed"], "schnell")
+        self.assertEqual(result["speed"], "auto")
 
-    def test_speed_choice_saves_the_model_order(self):
+    def test_model_choice_is_saved(self):
+        self.assertEqual(self.api.hello()["values"]["speed"], "auto", "ab Werk wählt Jarvis selbst")
         self.state.mkdir(parents=True, exist_ok=True)
         (self.state / "gehirn.json").write_text("{}", encoding="utf-8")
         self.assertTrue(self.api.brain_speed("gründlich")["ok"])
-        self.assertEqual(self.saved()["brain"]["models"], ["opus", "sonnet", "haiku"])
+        self.assertEqual(self.saved()["brain"]["modellwahl"], "gruendlich")
         self.assertFalse((self.state / "gehirn.json").exists(), "die alte Ersatz-Wahl darf nicht überstimmen")
         self.assertEqual(self.api.hello()["values"]["speed"], "gruendlich")
+        self.assertTrue(self.api.brain_speed("ausgewogen")["ok"], "die Auswahl von früher")
+        self.assertEqual(self.saved()["brain"]["modellwahl"], "auto")
         self.assertFalse(self.api.brain_speed("turbo")["ok"])
 
     def test_refusal_everywhere_shows_claudes_own_words(self):
