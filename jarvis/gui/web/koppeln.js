@@ -716,7 +716,7 @@
 
     // ------------------------------------------------------------ Punkte am Knopf
 
-    const NAMES = { phone: 'Handy', alexa: 'Alexa', discord: 'Discord' };
+    const NAMES = { phone: 'Handy', iphone: 'iPhone', alexa: 'Alexa', discord: 'Discord' };
 
     async function refreshDots() {
       let state = null;
@@ -733,8 +733,8 @@
         if (active) on.push(NAMES[dot.dataset.k]);
       });
       el.btn.dataset.on = state.phone ? '1' : '0';
-      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, Alexa und Discord.'
-        : 'Handy, Alexa und Discord mit Jarvis verbinden';
+      el.btn.title = on.length ? 'Verbunden: ' + on.join(', ') + '. Klicken für Handy, iPhone, Alexa, Discord, Kalender und Shop.'
+        : 'Handy, iPhone, Alexa, Discord, Kalender und Shop mit Jarvis verbinden';
       el.btn.setAttribute('aria-label', 'Verbinden' + (on.length ? ', verbunden: ' + on.join(', ') : ''));
     }
 

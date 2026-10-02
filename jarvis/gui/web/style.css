@@ -251,7 +251,7 @@ body[data-link="demo"] .link-dot {
   color: var(--text-3);
 }
 
-/* Drei Punkte: Handy, Alexa, Discord. Grün = verbunden (der Tooltip sagt es in Worten) */
+/* Vier Punkte: Handy, iPhone, Alexa, Discord. Grün = verbunden (der Tooltip sagt es in Worten) */
 .conn {
   display: inline-flex;
   gap: 3px;

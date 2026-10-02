@@ -64,9 +64,9 @@ Die Alternative zu ElevenLabs: Eine natürliche deutsche Stimme, die ganz auf de
 
 **Geklappt, wenn:** oben „Aktiv“ steht und Jarvis mit der gewählten Stimme antwortet. Die Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben.
 
-## 3. Handy, Alexa, Discord, Kalender und Shop verbinden (freiwillig)
+## 3. Handy, iPhone, Alexa, Discord, Kalender und Shop verbinden (freiwillig)
 
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa, Discord, Kalender und Shop.
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, iPhone, Alexa, Discord, Kalender und Shop.
 
 ![Verbinden: iPhone, Mail und mehr](docs/bilder/verbinden.jpg)
 
@@ -93,6 +93,21 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Hand
 2. Auf dem Handy die kostenlose App **ntfy** installieren.
 3. In der App auf **+** tippen und den Kanalnamen eintragen, den Jarvis anzeigt (beginnt mit `jarvis-`).
 4. In Jarvis auf **Test schicken** klicken. Auf dem Handy erscheint sofort eine Nachricht.
+
+### iPhone: Kalender, Mails und Geburtstage
+
+Mit deiner Apple-ID liest Jarvis deinen **iPhone-Kalender** und trägt neue Termine direkt dort ein („Trag morgen um 18 Uhr Training ein“ steht danach auf dem iPhone). Er liest deine **Mails** (nur lesen: nichts wird gelöscht, markiert oder verschickt) und kennt die **Geburtstage aus deinen Kontakten**.
+
+1. Am iPhone unter **Einstellungen** > dein Name > **iCloud** prüfen, dass **Kalender**, **Kontakte** und **iCloud Mail** an sind.
+2. Im Jarvis-Fenster im Bereich **iPhone** bei **App-Passwort erstellen** auf **Öffnen** klicken. Auf der Apple-Seite anmelden, dann **Anmeldung und Sicherheit** > **App-spezifische Passwörter** > **+**, Name „Jarvis“. Es sieht so aus: `abcd-efgh-ijkl-mnop`. Dein normales Apple-Passwort geht hier nicht.
+3. In Jarvis deine Apple-ID (die E-Mail-Adresse vom iPhone) und dieses Passwort eintragen, **Prüfen und verbinden** klicken.
+4. In der Liste den Kalender anklicken, in den neue Termine sollen.
+
+**Geklappt, wenn:** „Verbunden: …“ mit der Zahl deiner Kalender erscheint. Frag dann „Hab ich neue Mails?“. Das Passwort speichert Jarvis mit Windows verschlüsselt, nur dein Windows-Benutzer kann es lesen.
+
+**Weitere Postfächer** (Gmail, GMX, web.de, Yahoo oder ein eigener Server) fügst du im selben Bereich unten hinzu, jeweils mit einem App-Passwort des Anbieters (der Knopf **App-Passwort beim Anbieter** öffnet die richtige Seite). Bei GMX und web.de musst du in deren Einstellungen unter **POP3/IMAP** den Zugriff erlauben.
+
+Neue Mails von Leuten, die Jarvis kennt, sagt er kurz an (höchstens alle zehn Minuten, nie Newsletter). Beim Zocken kommt es nur aufs Handy. Änderst du später dein Apple-ID-Passwort, gilt das App-Passwort nicht mehr: einfach ein neues erstellen und neu verbinden.
 
 ### Alexa
 
@@ -125,7 +140,7 @@ Jarvis liest deinen Kalender mit (nur lesen): Er sagt 15 Minuten vor einem Termi
 1. Bereich **Kalender**: Bei **Google** oder **Outlook** auf **Öffnen** klicken.
    - Google: links deinen Kalender wählen, ganz unten **Privatadresse im iCal-Format** kopieren.
    - Outlook: **Kalender veröffentlichen**, dann den **ICS**-Link kopieren.
-   - iPhone: Kalender-App > Kalender > (i) > **Öffentlicher Kalender** > Link teilen.
+   - iPhone: besser über den Bereich **iPhone** (siehe oben), dann kann Jarvis auch eintragen.
 2. Die Adresse in Jarvis einfügen und **Prüfen** klicken.
 
 **Geklappt, wenn:** Jarvis „Kalender verbunden: … Termine“ meldet. Die Adresse ist geheim wie ein Passwort.
@@ -212,7 +227,13 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 
 - „Trag morgen um 18 Uhr Training ein“, „Trag Mittwoch von 18 bis 19 Uhr Sport ein“, „Trag am Sonntag Omas Geburtstag ein“
 - „Was steht heute an?“, „Was habe ich morgen vor?“, „Wann ist mein nächster Termin?“
-- „Sag den Termin Training ab“
+- „Sag den Termin Training ab“ (mit verbundenem iPhone auch dort)
+
+**Mails** (mit verbundenem iPhone oder Postfach, nur lesen):
+
+- „Hab ich neue Mails?“, „Check meine Mails“
+- „Was schreibt Max?“, „Lies mir die letzte Mail von Anna vor“
+- „Fass meine Mails von heute zusammen“ (mit Nachdenken)
 
 **Notizbuch:**
 
