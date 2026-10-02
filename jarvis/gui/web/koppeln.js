@@ -83,17 +83,44 @@
 
     let ts = null;
     let tsEnable = '';
+    let tsWaiting = '';  // Hinweis, solange Tailscale auf die Freigabe von HTTPS wartet
+    let tsPoll = 0;
 
     function renderTailscale() {
       if (!el.tsState) return;
       const on = !!(ts && ts.url);
-      el.tsState.textContent = on ? 'Sicher von überall: an' : 'Sicher von überall: aus';
-      el.tsToggle.textContent = on ? 'Ausschalten' : tsEnable ? 'Erlaubt, nochmal' : 'Einschalten';
+      if (on && tsPoll) stopWaiting();
+      el.tsState.textContent = on ? 'Sicher von überall: an' : tsWaiting ? 'Sicher von überall: wartet auf Freigabe' : 'Sicher von überall: aus';
+      el.tsToggle.textContent = on ? 'Ausschalten' : tsWaiting ? 'Wartet …' : tsEnable ? 'Erlaubt, nochmal' : 'Einschalten';
       el.tsHelp.hidden = !(ts && !ts.installed) && !tsEnable;
       el.tsHelp.textContent = tsEnable ? 'HTTPS erlauben' : 'Tailscale holen';
       if (on) el.tsHint.textContent = 'Die App läuft über ' + ts.url.replace(/^https:\/\//, '').replace(/\/$/, '') + '. Den QR-Code oben einmal neu scannen.';
+      else if (tsWaiting) el.tsHint.textContent = tsWaiting;
       else if (ts && !ts.installed) el.tsHint.textContent = 'Erst Tailscale holen (oder sagen Sie: „Jarvis, installiere Tailscale“), einmal anmelden, am Handy dieselbe App mit demselben Konto. Dann hier einschalten.';
       else if (ts && ts.error) el.tsHint.textContent = ts.error;
+    }
+
+    // Tailscale wartet, bis HTTPS im Konto erlaubt ist, und schaltet dann selbst ein: so lange nachsehen
+    function startWaiting(text) {
+      tsWaiting = text;
+      clearInterval(tsPoll);
+      const until = Date.now() + 10 * 60 * 1000;
+      tsPoll = setInterval(async () => {
+        if (Date.now() > until) {
+          stopWaiting();
+          renderTailscale();
+          return;
+        }
+        await refreshTailscale();
+        if (ts && ts.url) refresh();
+      }, 3000);
+    }
+
+    function stopWaiting() {
+      clearInterval(tsPoll);
+      tsPoll = 0;
+      tsWaiting = '';
+      tsEnable = '';
     }
 
     async function refreshTailscale() {
@@ -113,8 +140,12 @@
         try {
           const r = await call('tailscale_enable', want);
           tsEnable = r && r.enable_url ? r.enable_url : '';
+          if (!want) stopWaiting();
           if (r && r.ok) toast(want ? 'Sicher von überall ist an. Den QR-Code neu scannen.' : 'Sicher von überall ist aus.', 'ok');
-          else toast((r && r.error) || 'Das ging gerade nicht.', 'error');
+          else if (r && r.pending) {
+            startWaiting(r.error || 'Im Browser einmal HTTPS erlauben, dann schaltet Jarvis es von selbst ein.');
+            toast(r.error || 'Bitte im Browser HTTPS erlauben.', 'info');
+          } else toast((r && r.error) || 'Das ging gerade nicht.', 'error');
         } catch {
           toast('Das ging gerade nicht.', 'error');
         } finally {

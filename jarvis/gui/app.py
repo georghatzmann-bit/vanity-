@@ -233,10 +233,22 @@ class Api:
             return {"ok": True, "error": "", "url": ""}
         server = getattr(self._assistant, "server", None)
         port = server.port if server is not None and server.running else int(server_cfg.get("port", 8765) or 8765)
-        result = tailscale.serve(port)
+
+        def done(result: dict) -> None:
+            # Georg hat HTTPS im Tailscale-Konto erlaubt (oder nicht): Bescheid geben, Adresse merken
+            if result.get("ok"):
+                server_cfg["https"] = result["url"]
+                save_setting("server", "https", result["url"])
+                self._bridge.toast("Sicher von überall ist an. Den QR-Code unter Verbinden einmal neu scannen.", "ok")
+            else:
+                self._bridge.toast(result.get("error") or "Sicher von überall ging nicht.", "error")
+
+        result = tailscale.serve(port, on_done=done)
         if result["ok"]:
             server_cfg["https"] = result["url"]
             save_setting("server", "https", result["url"])
+        elif result.get("pending") and result.get("enable_url"):
+            self.tailscale_help(result["enable_url"])  # die Seite zum Erlauben gleich öffnen
         return result
 
     def tailscale_help(self, which) -> bool:
