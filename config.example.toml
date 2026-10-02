@@ -239,6 +239,9 @@ host = "0.0.0.0"
 port = 8765
 # Ein langes, geheimes Wort (mindestens 12 Zeichen), das auch in Home Assistant steht.
 token = ""
+# Sichere Adresse über Tailscale (https://<pc>.<netz>.ts.net/), entsteht unter Verbinden > Handy >
+# "Sicher von überall". Dann geht die App überall, mit Sprechtaste. Leer = nur im WLAN.
+https = ""
 
 [handy]
 # Benachrichtigungen aufs Handy mit der kostenlosen App "ntfy": Erinnerungen, "Aus der Werkstatt"
