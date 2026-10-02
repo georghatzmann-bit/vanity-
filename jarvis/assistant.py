@@ -654,21 +654,24 @@ class Assistant:
         if not ha.configured:
             return None
         room, on, pct = intent.arg, bool(intent.data.get("on", True)), intent.data.get("pct")
+        device = intent.data.get("device") or ""
         # "Licht in der Küche", nicht "Licht im Küche"
         where = f" {intent.data.get('prep') or 'im'} {room[:1].upper() + room[1:]}" if room else ""
-        label = f"Licht{where} " + ("aus" if not on else f"auf {pct} Prozent" if pct else "an")
+        what = device[:1].upper() + device[1:] if device else "Licht"
+        label = f"{what}{where} " + ("aus" if not on else f"auf {pct} Prozent" if pct else "an")
         with self._step(label, "app"):
             try:
-                ha.light(room, on, pct)
+                # "decke" findet "Deckenlicht" und "Küche Decke"
+                ha.light(" ".join(w for w in ({"deckenlicht": "decke"}.get(device, device), room) if w), on, pct)
             except HomeAssistantError:
                 if not ha.alexa:
                     raise
                 ha.alexa_command(room if ha.alexa_target_or_none(room) else ha.first_echo(), intent.data.get("said") or label)
         if not on:
-            return random.choice([f"Licht{where} ist aus, Sir.", "Erledigt, Sir. Gemütlich dunkel."])
+            return random.choice([f"{what}{where} ist aus, Sir.", "Erledigt, Sir. Gemütlich dunkel."])
         if pct:
-            return f"Licht{where} auf {pct} Prozent, Sir."
-        return random.choice([f"Licht{where} ist an, Sir.", "Es werde Licht, Sir."])
+            return f"{what}{where} auf {pct} Prozent, Sir."
+        return random.choice([f"{what}{where} ist an, Sir.", "Es werde Licht, Sir."])
 
     def _weather(self, intent) -> str | None:
         """Wetter sofort von Open-Meteo, ohne Claude. Ohne Ort fragt Claude nach."""

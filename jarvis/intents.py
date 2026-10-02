@@ -795,8 +795,10 @@ def match(text: str) -> Intent | None:
                 elif how == "dimmen" and not pct:
                     pct = "30"
                 on = how not in ("aus",) and pct not in ("0", "00", "000")  # "auf 0 Prozent" heißt aus
+                # "Mach die Stehlampe an": genau diese Lampe, nicht das erste Licht im Haus
+                device = groups.get("what") if groups.get("what") in ("stehlampe", "deckenlicht") else ""
                 return Intent("light", room, {"on": on, "pct": int(pct) if pct and on else None, "said": text.strip(),
-                                              "prep": groups.get("prep") or groups.get("prep2") or ""})
+                                              "prep": groups.get("prep") or groups.get("prep2") or "", "device": device})
             if name == "radio":
                 kind = "bluetooth" if "bluetooth" in norm else "wifi"
                 on = not re.search(r"\b(?:aus|ab|ausschalten|deaktivier|deaktiviere|deaktivieren)\b", norm)

@@ -128,6 +128,14 @@ class LightTest(unittest.TestCase):
             answer = assistant.handle("Mach das Licht in der Küche auf 40 Prozent")
             self.assertEqual(answer, "Licht in der Küche auf 40 Prozent, Sir.")
             light.assert_called_with("küche", True, 40)
+            # "Stehlampe": genau diese Lampe, nicht das erste Licht im Haus
+            self.assertIn(assistant.handle("Mach die Stehlampe im Wohnzimmer aus"),
+                          ("Stehlampe im Wohnzimmer ist aus, Sir.", "Erledigt, Sir. Gemütlich dunkel."))
+            light.assert_called_with("stehlampe wohnzimmer", False, None)
+            assistant.handle("Mach die Stehlampe an")
+            light.assert_called_with("stehlampe", True, None)
+            assistant.handle("Mach das Deckenlicht in der Küche an")
+            light.assert_called_with("decke küche", True, None)
             assistant.handle("Stell das Licht auf 0 Prozent")
             light.assert_called_with("", False, None)
 
