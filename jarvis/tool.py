@@ -50,6 +50,8 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   werkstatt-projekte           zeigt alle Werkstatt-Projekte
   blaupause "<wunsch>"         baut ein 3D-Modell als Hologramm in der Blaupause (Gegenstände, Fahrzeuge, Rüstung ...)
   blaupause-aendern "<wunsch>" ändert das Modell, das gerade in der Blaupause liegt
+  weltlage "<ort>"             zeigt einen Ort auf der Satelliten-Erde (die Erde fliegt hin)
+  weltlage-bericht <welt|deutschland|wirtschaft>   Lagebericht: Jarvis fliegt zu jeder Meldung und liest sie vor
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
   vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
@@ -222,6 +224,25 @@ def _dispatch(command: str, rest: list[str]) -> int:
         blueprint_hand_over(STATE_DIR, wish, change=command == "blaupause-aendern")
         print(f"Die Blaupause übernimmt (das Hologramm baut sich im Fenster auf). Sag {_user()} nur kurz, dass du "
               "konstruierst, und beschreib das Modell nicht selbst.")
+        return 0
+
+    if command in ("weltlage", "weltlage-bericht"):
+        from .weltlage import KINDS, hand_over as world_hand_over
+
+        what = " ".join(rest).strip()
+        if command == "weltlage-bericht":
+            kind = what.lower() or "welt"
+            if kind not in KINDS:
+                print("Aufruf: weltlage-bericht <welt|deutschland|wirtschaft>")
+                return 1
+            world_hand_over(STATE_DIR, kind=kind)
+            print(f"Die Weltlage übernimmt: Jarvis liest die Meldungen vor. Sag {_user()} nichts weiter dazu.")
+            return 0
+        if not what:
+            print('Aufruf: weltlage "<ort>"')
+            return 1
+        world_hand_over(STATE_DIR, where=what)
+        print(f"Die Erde fliegt hin. Sag {_user()} in einem Satz, was dort zu sehen ist oder wo es liegt.")
         return 0
 
     if command in ("merken", "merke", "gedaechtnis", "gedächtnis", "vergessen", "vergiss"):

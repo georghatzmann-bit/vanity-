@@ -52,6 +52,11 @@ class Ui:
         Fokus ...), "export" (STL rechnen), "library", "saved"."""
         pass
 
+    def world(self, event: dict) -> None:
+        """Die Weltlage (weltlage.py): action "open"/"close", "loading" (Lagebericht kommt), "news" (items),
+        "focus" (index: zu dieser Meldung fliegen), "fly" (ort), "markets", "layer", "view", "hands" (on), "done"."""
+        pass
+
     def action(self, kind: str) -> None:
         """Was Jarvis gerade tut ("music", "weather", "timer", ...): Die Kugel zeigt dazu eine
         eigene kurze Bewegung (orb.js, gesture)."""
@@ -161,6 +166,9 @@ class MultiUi(Ui):
 
     def blueprint(self, event):
         self._each("blueprint", event)
+
+    def world(self, event):
+        self._each("world", event)
 
     def action(self, kind):
         self._each("action", kind)

@@ -290,6 +290,30 @@ Sag **„Blaupause“** (oder oben im Fenster **Blaupause**), dann **„Generier
 - **Speichern und 3D-Druck:** „Speicher das als Drohne“, „Lade die Blaupause Drohne“, „Zeig mir meine Blaupausen“. **STL** oder „Exportier als STL“ legt eine Datei für den 3D-Drucker in `Jarvis-Werkstatt\Blaupausen` (in Millimetern, steht auf dem Boden).
 - **Stopp** hält eine laufende Konstruktion an. Gezeichnet wird mit Sonnet (`[blaupause] modell = "opus"` für aufwendigere Modelle).
 
+## Die Weltlage: Gottes Auge
+
+![Die Weltlage](docs/bilder/weltlage.jpg)
+
+Sag **„Zeig mir, was in der Welt passiert“** (oder oben im Fenster **Weltlage**). Eine Satelliten-Erde geht auf, Jarvis holt die neuesten Meldungen der Tagesschau, fliegt zu jedem Ort und liest die Meldung vor. Rechts stehen alle Meldungen (antippen: hinfliegen und vorlesen), darunter DAX, S&P 500 und Bitcoin.
+
+- **Lageberichte:** „Was passiert in Deutschland?“, „Wirtschaftsnachrichten“, „Lagebericht“. Während des Berichts: **„Weiter“**, **„Zurück“**, **„Stopp“**. Fragst du zwischendurch etwas anderes, hört der Bericht auf.
+- **Hinfliegen:** „Flieg nach Tokio“, „Zeig mir Paris“, „Zoom rein“, „Weiter weg“, oder unten ins Suchfeld tippen. **„Wo ist die ISS gerade?“** fliegt zur Raumstation, live.
+- **Flugverkehr:** „Flugverkehr an“ zeigt die Flugzeuge, die gerade in der Luft sind (ab Landesgröße, live über OpenSky).
+- **Börse:** „Wie steht der DAX?“ sagt die Kurse an.
+- **Maus:** ziehen verschiebt, Mausrad zoomt, rechte Maustaste dreht und kippt, Doppelklick fliegt hin. **Esc** oder **„Zurück zum Hauptmenü“** schließt.
+
+Die grobe Erde ist in Jarvis eingebaut. Die scharfen Satellitenbilder (Sentinel-2) lädt das Fenster beim Heranzoomen aus dem Internet.
+
+### Handsteuerung: wie Tony Stark
+
+Sag **„Starte die Handsteuerung“** (oder unten **Handsteuerung**). Unten links erscheint ein kleines Kamerabild, die Webcam erkennt deine Hände.
+
+1. **Greifen:** Daumen und Zeigefinger zusammen, dann die Hand bewegen. Die Erde verschiebt sich, in der Blaupause dreht sich das Modell.
+2. **Zoomen:** mit beiden Händen greifen und auseinanderziehen (näher) oder zusammenführen (weiter weg).
+3. **Drehen:** mit beiden Händen greifen und wie ein Lenkrad kippen.
+
+**Geklappt, wenn:** im Kamerafenster „Hand erkannt“ steht und auf dem Bildschirm ein heller Kreis deiner Hand folgt. Fragt das Fenster nach der Kamera: **Zulassen**. Kommt „Die Kamera ist nicht erlaubt“: Windows-Einstellungen > Datenschutz und Sicherheit > Kamera > **Desktop-Apps den Zugriff erlauben** einschalten. Das Kamerabild bleibt auf deinem PC, die Erkennung läuft im Fenster. Beim ersten Mal lädt sie etwa 10 MB aus dem Internet. **„Handsteuerung aus“** oder das **×** beendet sie, dann ist die Kamera wieder aus.
+
 ## Wenn etwas nicht klappt
 
 - **Jarvis reagiert nicht auf „Hey Jarvis“:** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob „Hey Jarvis“ ankommt. Klappt es nur knapp, „Empfindlicher“ einschalten. Strg + Alt + J geht immer.

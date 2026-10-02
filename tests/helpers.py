@@ -334,6 +334,9 @@ class RecordingUi:
     def blueprint(self, event):
         self.events.append(("blueprint", dict(event)))
 
+    def world(self, event):
+        self.events.append(("world", dict(event)))
+
     def of(self, kind):
         return [e for e in self.events if e[0] == kind]
 

@@ -249,6 +249,16 @@ max_minuten = 60
 # die sie zum Testen startet, poppen nicht auf deinem Bildschirm auf. Erst "Starte es" zeigt das Ergebnis.
 unsichtbar = true
 
+[weltlage]
+# "Zeig mir, was in der Welt passiert": eine Satelliten-Erde im Fenster, Jarvis fliegt zu jeder Meldung der
+# Tagesschau und liest sie vor ("Gottes Auge"). Auch "Was passiert in Deutschland", "Flieg nach Tokio",
+# "Flugverkehr an", "Wie steht der DAX" und "Starte die Handsteuerung" (Erde mit den Händen drehen, per Webcam).
+aktiv = true
+# So viele Meldungen liest Jarvis vor.
+meldungen = 7
+# Die Webcam für die Handsteuerung (false = nie). Sie wird nur benutzt, solange die Handsteuerung läuft.
+handsteuerung = true
+
 [blaupause]
 # "Blaupause" oder "Generiere einen Iron-Man-Helm": 3D-Modelle als Hologramm auf einer echten Blaupause.
 # Drehen, zoomen, Explosionsansicht, Teile genauer ansehen, als STL für den 3D-Drucker exportieren.

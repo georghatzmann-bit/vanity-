@@ -814,6 +814,21 @@
       }, { passive: false });
     }
 
+    // Handsteuerung (handsteuerung.js): greifen und ziehen dreht, zwei Hände zoomen, wie mit der Maus
+    function gesture(g) {
+      if (!isOpen || !ctl.goal) return;
+      ctl.touched = clock;
+      if (g.kind === 'drag') {
+        ctl.goal.theta -= g.dx * 0.0085;
+        ctl.goal.phi = clamp(ctl.goal.phi - g.dy * 0.0085, 0.02, Math.PI - 0.02);
+        markSide('');
+      } else if (g.kind === 'zoom' && g.factor > 0) {
+        ctl.goal.radius = clamp(ctl.goal.radius / g.factor, 0.3, 60);
+      } else if (g.kind === 'twist') {
+        ctl.goal.theta -= g.angle;
+      }
+    }
+
     function pan(dx, dy) {
       const h = Math.max(1, el.stage.clientHeight);
       const scale = (2 * ctl.radius * Math.tan(rad(camera.fov / 2))) / h;
@@ -1657,7 +1672,7 @@
     });
 
     renderPanels();
-    return { handle, open: () => open(null, false), close: () => close(false), isOpen: () => isOpen, say };
+    return { handle, gesture, open: () => open(null, false), close: () => close(false), isOpen: () => isOpen, say };
   }
 
   // ==================================================================

@@ -39,6 +39,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Alexa:** „Alexa, sag Jarvis, er soll Discord öffnen.“ Ein eigener Skill (Von Alexa gehostet), den Jarvis fertig zum Kopieren anbietet. Die Nachrichten laufen verschlüsselt über ntfy.sh, ohne Home Assistant und ohne Router-Einstellungen. Mit Home Assistant zusätzlich Ansagen auf Echos und Licht.
 - **Bildschirm lesen und Programme ohne Maus bedienen:** Texterkennung von Windows (in etwa einer Sekunde) und UI Automation: Knöpfe drücken und Felder ausfüllen, ohne Maus und Tastatur zu nehmen.
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Getestet wird auf einem unsichtbaren zweiten Windows-Desktop (`versteckt.py`), Testfenster poppen also nicht auf. Große Aufträge mit Opus und viel Nachdenken, kleine mit Sonnet. Während der Arbeit kannst du mit Jarvis reden: Wünsche („Mach den Hintergrund blau“) gehen direkt in die laufende Arbeit, Fragen beantwortet er mit Blick auf den Plan, am Ende fragt er, ob er das Ergebnis starten soll. Das Fenster zeigt die Arbeit als Blaupause: Plan, Ablauf, Dateien, Befehle und das Projekt als Hologramm, das sich von unten aufbaut, erst als passendes Drahtmodell, dann als eigenes Logo, das die Werkstatt zeichnet (`logo.svg`). Dazu alle Projekte als Übersicht mit Logo: Ansehen (Plan, Ablauf, Dateien, Verlauf), Starten, Vorschau, Weiterbauen und Löschen (in den Papierkorb, per Sprache mit Rückfrage). Unten in der Werkstatt ein Feld für Änderungen mitten in der Arbeit.
+- **Weltlage („Gottes Auge“):** „Zeig mir, was in der Welt passiert“ öffnet eine Satelliten-Erde (three.js, Sentinel-2-Bilder von EOX, grobe Karte eingebaut). Jarvis holt die neuesten Meldungen der Tagesschau, findet zu jeder den Ort (`orte.py`, ohne Internet und ohne Claude, darum sofort), fliegt hin und liest vor (`weltlage.py`, `weltlage.js`). Dazu „Was passiert in Deutschland“, „Flieg nach Tokio“, „Wo ist die ISS“ (live), Flugverkehr live über OpenSky, DAX, S&P 500 und Bitcoin. Claude kann selbst Orte zeigen (`jarvis.tool weltlage "<Ort>"`).
+- **Handsteuerung:** „Starte die Handsteuerung“: Die Webcam erkennt die Hände (MediaPipe, im Fenster, kein Bild verlässt den PC). Greifen und ziehen verschiebt die Erde oder dreht das Blaupausen-Modell, mit beiden Händen zoomen und drehen (`handsteuerung.js`).
 - **Blaupause: 3D-Modelle wie bei Tony Stark:** „Generiere einen Iron-Man-Helm“ und Claude zeichnet das Modell aus Grundformen Teil für Teil (`blaupause.py`), das Fenster baut es mit three.js als Hologramm auf echtem Blaupausen-Papier auf (`blaupause.js`). Drehen, zoomen, verschieben mit Maus, Finger und Sprache, Explosionsansicht mit Beschriftung, Maßlinien in echten Größen, Teile ansehen, färben, entfernen, Rückgängig, umbauen per Sprache („Füg noch zwei Raketen an die Flügel“), speichern und als STL für den 3D-Drucker exportieren. Ansichten: Blaupause, Holo, Echt.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** In der ersten Sprechpause erkennt Jarvis den Satz schon vorab. Ist es ein Sofort-Befehl („Öffne Spotify“), legt er nach knapp einer halben Sekunde Stille los statt nach einer. Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt. Im Protokoll steht pro Befehl eine Tempo-Zeile.
@@ -55,6 +57,10 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 |---|---|
 | ![Verbinden](docs/bilder/verbinden.jpg) | ![Gedächtnis](docs/bilder/gedaechtnis.jpg) |
 
+| Weltlage | Weltlage: die ganze Erde |
+|---|---|
+| ![Weltlage über Madrid](docs/bilder/weltlage.jpg) | ![Die Erde mit allen Meldungen](docs/bilder/weltlage-erde.jpg) |
+
 | Blaupause | Blaupause: Explosionsansicht |
 |---|---|
 | ![Blaupause](docs/bilder/blaupause.jpg) | ![Explosionsansicht](docs/bilder/blaupause-explosion.jpg) |
@@ -69,6 +75,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Stimme und Spracherkennung:** gratis, ganz auf dem PC (Pocket TTS und Parakeet).
 - **ElevenLabs:** freiwillig. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Fällt ElevenLabs aus, spricht die lokale Stimme.
 - **Alexa-Skill, ntfy.sh und Tailscale:** gratis.
+- **Weltlage:** gratis, ohne Schlüssel (tagesschau.de, Sentinel-2 cloudless von EOX, OpenSky Network, Yahoo Finance, OpenStreetMap, wheretheiss.at). Ohne Konto erlaubt OpenSky etwa 400 Abfragen am Tag, Jarvis fragt höchstens alle 45 Sekunden.
 - **Konnektoren (Gmail, Google Kalender, Shopify …):** kommen mit deinem Claude-Konto, die Dienste selbst kosten, was sie eben kosten.
 
 ## Anpassen
@@ -85,6 +92,7 @@ Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden�
 - `[gui]` `start_hidden`, `close_to_tray`, `overlay`, `on_wake`
 - `[brain]` `modellwahl = "auto" | "schnell" | "normal" | "gruendlich" | "maximal" | "aus"`, `stufe_schnell` … `stufe_maximal` (Modell und Nachdenken je Stufe, z. B. `"opus high"`), `models` (Ersatzreihe), `konnektoren` (claude.ai-Konnektoren an/aus), `disallowed_tools`, `timeout_seconds`
 - `[werkstatt]` `ordner`, `modell = "auto" | "opus" | "sonnet"`, `effort`
+- `[weltlage]` `aktiv`, `meldungen` (wie viele Jarvis vorliest), `handsteuerung` (Webcam erlaubt)
 - `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[alexa]` Skill, `[homeassistant]` Echos und Licht
 - `[gaming]` `close_apps`, `power_plan`
 - `jarvis_home/CLAUDE.md`: Jarvis' Persönlichkeit und seine Befehle
@@ -99,6 +107,7 @@ deinstallieren <id>   papierkorb "<pfad>"   admin "<PowerShell-Befehl>"
 nachricht <discord|whatsapp|telegram> "<person|#kanal>" "<text>"
 discord chat|kanal|server|sprachkanal|anrufen "<name>"   discord stumm|taub
 werkstatt "<auftrag>"   werkstatt-weiter "<wunsch>"   werkstatt-projekt "<name>" "<wunsch>"   werkstatt-projekte
+blaupause "<wunsch>"   blaupause-aendern "<wunsch>"   weltlage "<ort>"   weltlage-bericht welt|deutschland|wirtschaft
 merken "<fakt>"   vergessen "<wörter>"   gedaechtnis
 erinnern "in 20 minuten" "Tee"   erinnerungen   erinnerung-loeschen <id>
 bildschirm [fenster]   bildschirm-text [fenster]   fenster   ui "<fenster>"   ui-klick   ui-schreiben
@@ -115,6 +124,7 @@ Zum Ausprobieren im Jarvis-Ordner: `"%LOCALAPPDATA%\Jarvis\venv\Scripts\python.e
 - Endgültig löschen, formatieren und die Registry ausräumen sind für Claude gesperrt (`disallowed_tools`). Dateien gehen nur in den Papierkorb. Ganze Laufwerke, dein Benutzerordner sowie Desktop, Dokumente und Downloads selbst kommen nie hinein.
 - Ohne volle Freigabe tun `papierkorb`, `deinstallieren` und Herunterfahren erst nach deinem „Ja“ etwas. `admin`-Befehle, die endgültig löschen oder formatieren, fragen immer, auch mit voller Freigabe.
 - Die Handy-App braucht einen langen Schlüssel (steht im QR-Code), „Neu koppeln“ sperrt alte Handys aus. Der Alexa-Weg ist mit einem eigenen Schlüssel verschlüsselt und signiert, alte oder doppelte Nachrichten werden verworfen.
+- Die Handsteuerung nutzt die Webcam nur, solange sie läuft. Das Kamerabild wird im Fenster ausgewertet und nirgends hingeschickt. `[weltlage] handsteuerung = false` schaltet sie ganz ab.
 - Weckwort, Satzende, Spracherkennung und Stimme laufen auf dem PC. An Claude geht nur der erkannte Text (an Groq nur, wenn du es ausdrücklich einschaltest). Das Gedächtnis bleibt auf deinem PC.
 
 ## Windows-Details
@@ -152,10 +162,13 @@ jarvis/
   tts.py localvoice.py       Stimme auf dem PC (Pocket TTS, Reserve Piper), Einrichten im Hintergrund
   elevenlabs.py   Premium-Stimme auf Wunsch
   klang.py        Ähnlich klingende Namen finden (Kölner Phonetik): Programme, Kontakte, eigene Befehle
+  weltlage.py orte.py       Weltlage: Meldungen mit Ort, Lagebericht, Kurse, Flüge, Raumstation; Ortsverzeichnis
   overlay.py desktop.py tray.py autostart.py pc.py homeassistant.py persona.py reminders.py tool.py
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause mit Hologramm, Projekt-Übersicht
+                  weltlage.js weltlage.css   Weltlage: Satelliten-Erde, Meldungen, Flugverkehr, Märkte
+                  handsteuerung.js           Handsteuerung per Webcam (MediaPipe) für Weltlage und Blaupause
                   koppeln.js gedaechtnis.js       Verbinden (Handy, Alexa, Konnektoren), Gedächtnis
                   setup.html setup.js setup.css   Einrichtung (Api: setup_wizard.SetupApi)
                   handy/          die Handy-App (PWA)

@@ -85,6 +85,7 @@ class Assistant:
         # Die Werkstatt für Programmier- und Bauaufgaben (setzt __main__).
         self.workshop = None
         self.blueprint = None  # die Blaupause: 3D-Modelle als Hologramm (blaupause.Blueprint, setzt __main__)
+        self.world = None  # die Weltlage: Satelliten-Erde mit Lagebericht (weltlage.Weltlage, setzt __main__)
         self.gaming = False
         # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
         self.weathers: dict = {}
@@ -214,6 +215,9 @@ class Assistant:
         blueprint = getattr(self, "blueprint", None)
         if blueprint is not None:
             blueprint.cancel()  # "Stopp" hält auch eine laufende Konstruktion an
+        world = getattr(self, "world", None)
+        if world is not None:
+            world.cancel()  # und den Lagebericht
 
     def new_conversation(self) -> None:
         if self.brain is not None:
@@ -402,6 +406,18 @@ class Assistant:
                 if on:
                     return "Sehr wohl, Sir. Ich sage wieder Bescheid, wenn mir etwas auffällt."
                 return "Sehr wohl, Sir. Ich melde mich nur noch, wenn es dringend ist. Mit „Hinweise an“ geht es wieder."
+        world = getattr(self, "world", None)
+        if world is not None:
+            # Die Weltlage: "Zeig mir, was in der Welt passiert", "Flieg nach Tokio", "Weiter" im Lagebericht.
+            # Ist die Blaupause offen, steuert die Handsteuerung dort das Modell.
+            blueprint = getattr(self, "blueprint", None)
+            try:
+                answer = world.command(text, elsewhere=bool(blueprint is not None and blueprint.active))
+            except Exception:
+                log.exception("Weltlage")
+                answer = None
+            if answer is not None:
+                return answer
         blueprint = getattr(self, "blueprint", None)
         if blueprint is not None:
             # Die Blaupause zuerst: Ist sie offen, gehören "Mach das größer" oder "Dreh es" zum Modell

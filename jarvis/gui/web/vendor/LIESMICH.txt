@@ -1,3 +1,8 @@
 three.js 0.149.0 (MIT), aus dem npm-Paket three-0.149.0.tgz
 sha1 des Pakets: a9cf78b17d02f063ffe6dfca1e300eff2eab2927 (wie in der npm-Registry)
 Datei: package/build/three.min.js, unverändert.
+
+erde.jpg: die ganze Erde als Mercator-Karte (Zoomstufe 3, 8 x 8 Kacheln zu 256 Pixel), für die Weltlage
+zusammengesetzt aus "Sentinel-2 cloudless - https://s2maps.eu by EOX IT Services GmbH (Contains modified
+Copernicus Sentinel data 2016 & 2017)", Lizenz CC BY 4.0 (Ebene s2cloudless_3857). Nur zusammengesetzt und
+als JPEG (Qualität 82) gespeichert, sonst unverändert.

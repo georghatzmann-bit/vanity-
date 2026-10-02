@@ -67,6 +67,8 @@
   let Gedaechtnis = null; // was Jarvis über Georg weiß, Vorschläge (gedaechtnis.js)
   let Koppeln = null; // Handy, Alexa, Konnektoren (koppeln.js)
   let Blaupause = null; // 3D-Modelle als Hologramm (blaupause.js)
+  let Weltlage = null; // Satelliten-Erde mit Lagebericht (weltlage.js)
+  let handsAllowed = true; // [weltlage] handsteuerung in config.toml
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -102,6 +104,14 @@
     blueprint_delete: (name) => window.pywebview.api.blueprint_delete(name),
     blueprint_export: (name, data) => window.pywebview.api.blueprint_export(name, data),
     blueprint_folder: () => window.pywebview.api.blueprint_folder(),
+    weltlage_state: () => window.pywebview.api.weltlage_state(),
+    weltlage_active: (on) => window.pywebview.api.weltlage_active(on),
+    weltlage_briefing: (kind) => window.pywebview.api.weltlage_briefing(kind),
+    weltlage_focus: (index) => window.pywebview.api.weltlage_focus(index),
+    weltlage_stop: () => window.pywebview.api.weltlage_stop(),
+    weltlage_fly: (name) => window.pywebview.api.weltlage_fly(name),
+    weltlage_markets: () => window.pywebview.api.weltlage_markets(),
+    weltlage_flights: (box) => window.pywebview.api.weltlage_flights(box),
     workshop_delete: (folder) => window.pywebview.api.workshop_delete(folder),
     workshop_tell: (text) => window.pywebview.api.workshop_tell(text),
     workshop_preview: (folder) => window.pywebview.api.workshop_preview(folder),
@@ -816,6 +826,7 @@
         addMessage(ev.role, ev.text, ev.id, ev.final, ev.model);
         // In der Blaupause steht, was Jarvis zuletzt gesagt hat, unten neben der Befehlszeile
         if (Blaupause && Blaupause.isOpen() && ev.role === 'jarvis' && ev.final !== false) Blaupause.say(ev.text);
+        if (Weltlage && Weltlage.isOpen() && ev.role === 'jarvis' && ev.final !== false) Weltlage.say(ev.text);
         if (ev.model === 'Hinweis' && ev.final !== false) Core.gesture('hint');
         break;
       case 'action': Core.gesture(ev.kind); break;
@@ -823,8 +834,13 @@
       case 'blueprint':
         if (Blaupause) Blaupause.handle(ev);
         break;
+      case 'weltlage':
+        if (ev.action === 'hands') setHands(!!ev.on);
+        else if (Weltlage) Weltlage.handle(ev);
+        break;
       case 'workshop':
         if (Blaupause && Blaupause.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Blaupause.close();
+        if (Weltlage && Weltlage.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Weltlage.close();
         if (ev.state === 'projects') {
           if (Projekte) Projekte.open();
         } else if (ev.state === 'project') {
@@ -878,6 +894,11 @@
       /* egal, die Ereignisse kommen trotzdem */
     }
     syncWorkshop();
+    call('weltlage_state').then((s) => {
+      if (!s) return;
+      handsAllowed = s.hands_allowed !== false;
+      if (s.active && Weltlage && !Weltlage.isOpen()) Weltlage.handle(Object.assign({ action: 'open' }, s));
+    }).catch(() => {});
     if (Gedaechtnis) Gedaechtnis.refresh();
     if (Koppeln && Koppeln.dots) Koppeln.dots();
     refreshDeck();
@@ -887,6 +908,29 @@
   }
 
   // ------------------------------------------------------------------ Bedienung
+
+  // Handsteuerung (handsteuerung.js): steuert, was offen ist (Blaupause oder Erde), sonst geht die Erde auf
+  function setHands(want) {
+    const H = window.JarvisHands;
+    if (!H) return;
+    if (!want) {
+      H.stop();
+      if (Weltlage) Weltlage.setHands(false);
+      return;
+    }
+    if (!handsAllowed) {
+      toast('Die Handsteuerung ist ausgeschaltet (config.toml, [weltlage] handsteuerung).', 'info');
+      if (Weltlage) Weltlage.setHands(false);
+      return;
+    }
+    let target = Blaupause && Blaupause.isOpen() ? Blaupause : null;
+    if (!target && Weltlage) {
+      if (!Weltlage.isOpen()) Weltlage.open();
+      target = Weltlage;
+    }
+    if (!target) return;
+    H.start(target, { toast, onChange: (on) => Weltlage && Weltlage.setHands(on) });
+  }
 
   async function listenNow() {
     Core.pulse();
@@ -1082,6 +1126,9 @@
     // ?blaupause=bau (Drohne baut sich auf) oder =fertig (liegt schon da), dazu &ansicht=explosion|holo|echt|oben
     const bpMode = (params.get('blaupause') || '').toLowerCase();
     const bpDemo = window.JarvisBlaupause ? window.JarvisBlaupause.demoApi(push) : null;
+    // ?weltlage (Lagebericht Welt) oder =deutschland, &ziel=2 (bleibt bei Meldung 2), &flug (Flugverkehr)
+    const wlMode = params.has('weltlage') ? (params.get('weltlage') || 'welt').toLowerCase() : '';
+    const wlDemo = window.JarvisWeltlage ? window.JarvisWeltlage.demoApi(push) : null;
     let shop = null;
     const startShop = (mode) => {
       if (!window.JarvisWerkstatt) return;
@@ -1188,6 +1235,18 @@
         gen += 1;
         const g = gen;
         const t = String(text || '').trim();
+        if (wlDemo && /was in der welt|lagebericht|weltlage|was (?:passiert|ist los) in deutschland|handsteuerung/i.test(t)) {
+          push({ type: 'message', role: 'user', text: t });
+          if (/handsteuerung/i.test(t)) {
+            const off = /aus|beend|stopp/i.test(t);
+            push({ type: 'weltlage', action: 'hands', on: !off });
+            push({ type: 'message', role: 'jarvis', id: 'wl' + g, text: off ? 'Handsteuerung aus, Sir.' : 'Sehr wohl, Sir. Handsteuerung aktiv.', final: true });
+          } else {
+            wlDemo.demoBriefing(/deutschland/i.test(t) ? 'deutschland' : 'welt');
+            push({ type: 'message', role: 'jarvis', id: 'wl' + g, text: 'Lagebericht, Sir.', final: true });
+          }
+          return Promise.resolve(true);
+        }
         if (bpDemo && Blaupause && Blaupause.isOpen()) {
           const said = bpDemo.handles(t);
           if (said) {
@@ -1299,6 +1358,7 @@
       notebook_open: () => Promise.resolve({ ok: true, folder: 'C:\\Users\\Georg\\Jarvis-Notizbuch' }),
       answer_suggestion: () => Promise.resolve(true),
       ...(bpDemo ? bpDemo.api : {}),
+      ...(wlDemo || {}),
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
@@ -1320,6 +1380,24 @@
                 else if (look === 'oben' || look === 'vorne' || look === 'seite') push({ type: 'blueprint', action: 'view', what: 'camera', side: look });
                 else push({ type: 'blueprint', action: 'view', what: 'look', mode: look });
               }, bpMode === 'fertig' ? 900 : 5200);
+            }
+          }, 700);
+        }
+        if (wlDemo && wlMode) {
+          setTimeout(() => {
+            const ziel = params.get('ziel');
+            if (params.has('flug')) {
+              push({ type: 'weltlage', action: 'open', items: [], index: -1 });
+              setTimeout(() => {
+                push({ type: 'weltlage', action: 'layer', name: 'flights', on: true });
+                push({ type: 'weltlage', action: 'fly', ort: { name: 'Frankfurt', lat: 50.11, lon: 8.68, km: 220 } });
+              }, 1500);
+            } else if (ziel !== null) {
+              const items = window.JarvisWeltlage.DEMO_ITEMS;
+              push({ type: 'weltlage', action: 'news', items, kind: 'welt', title: 'Lage · Welt' });
+              setTimeout(() => push({ type: 'weltlage', action: 'focus', index: Number(ziel) || 0 }), 1500);
+            } else {
+              wlDemo.demoBriefing(wlMode);
             }
           }, 700);
         }
@@ -1483,7 +1561,25 @@
         onOpen: () => {
           if (Werkstatt && Werkstatt.isOpen()) Werkstatt.close();
           if (Projekte && Projekte.isOpen()) Projekte.close();
+          if (Weltlage && Weltlage.isOpen()) Weltlage.close();
+          // Läuft die Handsteuerung, dreht sie ab jetzt das Modell
+          if (window.JarvisHands && window.JarvisHands.isOn()) setTimeout(() => window.JarvisHands.retarget(Blaupause), 0);
         },
+      });
+    }
+    if (window.JarvisWeltlage) {
+      Weltlage = window.JarvisWeltlage.create({
+        call, toast,
+        onOpen: () => {
+          if (Werkstatt && Werkstatt.isOpen()) Werkstatt.close();
+          if (Projekte && Projekte.isOpen()) Projekte.close();
+          if (Blaupause && Blaupause.isOpen()) Blaupause.close();
+          if (window.JarvisHands && window.JarvisHands.isOn()) setTimeout(() => window.JarvisHands.retarget(Weltlage), 0);
+        },
+        onClose: () => {
+          if (window.JarvisHands && window.JarvisHands.target() === Weltlage) window.JarvisHands.stop();
+        },
+        onHands: (on) => setHands(on),
       });
     }
     if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });

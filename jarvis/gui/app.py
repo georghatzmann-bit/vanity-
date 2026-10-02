@@ -76,6 +76,9 @@ class GuiBridge(Ui):
     def blueprint(self, event: dict) -> None:
         self._push({"type": "blueprint", **event})
 
+    def world(self, event: dict) -> None:
+        self._push({"type": "weltlage", **event})
+
     def stats(self, cpu: float, ram: float, gpu: dict | None = None) -> None:
         event = {"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)}
         if gpu:
@@ -799,6 +802,88 @@ class Api:
             log.info("Blaupausen-Ordner: %s", exc)
             return False
         return True
+
+    # ------------------------------------------------------------------ Weltlage
+
+    def _world(self):
+        return getattr(self._assistant, "world", None)
+
+    def weltlage_state(self) -> dict | None:
+        """Die Meldungen und wo die Erde gerade ist (nach dem Laden oder Neuladen des Fensters)."""
+        world = self._world()
+        if world is None:
+            return None
+        hands = bool(((getattr(self._assistant, "_cfg", {}) or {}).get("weltlage") or {}).get("handsteuerung", True))
+        return {**world.state(), "hands_allowed": hands}
+
+    def weltlage_active(self, on) -> bool:
+        """Das Fenster meldet: Erde offen oder zu (zu beendet auch den Lagebericht)."""
+        world = self._world()
+        if world is None:
+            return False
+        world.set_active(bool(on))
+        return True
+
+    def weltlage_briefing(self, kind="welt") -> str:
+        """Knopf "Welt", "Deutschland" oder "Wirtschaft": Jarvis holt die Meldungen und liest sie vor."""
+        world = self._world()
+        if world is None:
+            return ""
+        answer = world.briefing(str(kind or "welt"))
+        self._speak_answer(answer)
+        return answer
+
+    def weltlage_focus(self, index) -> bool:
+        """Tippen auf eine Meldung: hinfliegen und vorlesen."""
+        world = self._world()
+        if world is None:
+            return False
+        try:
+            world.focus(int(index))
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    def weltlage_stop(self) -> bool:
+        world = self._world()
+        if world is None or not world.cancel():
+            return False
+        speaker = getattr(self._assistant, "speaker", None)
+        if speaker is not None:
+            speaker.stop()
+        return True
+
+    def weltlage_fly(self, name) -> dict:
+        """Suchfeld "Ort suchen": {"ok", "ort", "error"}."""
+        from ..weltlage import geocode
+
+        name = str(name or "").strip()[:80]
+        if not name:
+            return {"ok": False, "ort": None, "error": "Bitte einen Ort eingeben."}
+        place = geocode(name)
+        if place is None:
+            return {"ok": False, "ort": None, "error": f"„{name}“ finde ich nicht."}
+        return {"ok": True, "ort": place.as_dict(), "error": ""}
+
+    def weltlage_markets(self) -> list:
+        world = self._world()
+        return world.markets() if world is not None else []
+
+    def weltlage_flights(self, box) -> dict:
+        """Flugzeuge über dem Ausschnitt [Süden, Westen, Norden, Osten]."""
+        world = self._world()
+        if world is None:
+            return {"planes": [], "error": "Die Weltlage ist aus."}
+        return world.flights(box)
+
+    def _speak_answer(self, text: str) -> None:
+        if not text:
+            return
+        self._bridge.message("jarvis", text)
+        try:
+            self._assistant.say(text)
+        except Exception as exc:
+            log.debug("Weltlage, sagen: %s", exc)
 
     def workshop_cancel(self) -> bool:
         """Stopp-Knopf in der Werkstatt."""

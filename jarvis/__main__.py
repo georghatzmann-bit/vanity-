@@ -153,6 +153,22 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         # 3D-Modelle als Hologramm, gespeichert neben den Werkstatt-Projekten (Jarvis-Werkstatt\Blaupausen)
         assistant.blueprint = Blueprint(cfg, brain, ui, assistant.workshop.base, assistant.announce,
                                         show_window=show_window)
+    if cfg.get("weltlage", {}).get("aktiv", True):
+        from .weltlage import Weltlage
+
+        def tell(text: str) -> None:
+            ui.message("jarvis", text)
+            assistant.say(text)
+
+        def spoken(timeout: float | None = None) -> bool:
+            return assistant.speaker.wait(timeout=timeout) if assistant.speaker is not None else True
+
+        def hush() -> None:
+            if assistant.speaker is not None:
+                assistant.speaker.stop()
+
+        # Satelliten-Erde mit Lagebericht ("Gottes Auge"), Handsteuerung per Webcam
+        assistant.world = Weltlage(cfg, ui, tell, spoken, show_window=show_window, hush=hush)
     if brain is not None:
         brain.turn_context = assistant.workshop.context  # Fragen zur laufenden Werkstatt-Arbeit
     from .push import Push
@@ -196,6 +212,11 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                     assistant.workshop.take_handoff(STATE_DIR)
                 except Exception:
                     log.exception("Werkstatt-Übergabe")
+            if getattr(assistant, "world", None) is not None:
+                try:
+                    assistant.world.take_handoff(STATE_DIR)  # Orte und Lageberichte, die das Gehirn zeigen will
+                except Exception:
+                    log.exception("Weltlage-Übergabe")
             if getattr(assistant, "blueprint", None) is not None:
                 try:
                     assistant.blueprint.take_handoff(STATE_DIR)  # 3D-Wünsche, die das Gehirn übergibt
