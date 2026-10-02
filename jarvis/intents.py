@@ -767,6 +767,8 @@ def match(text: str) -> Intent | None:
                 arg = next((g for g in found.groups() if g), "").strip()
                 if not arg or arg in _NOT_A_NAME or re.search(r"\b(?:und|oder|dann|danach)\b", arg):
                     continue  # mehrere Dinge auf einmal: das kann Claude besser
+                if re.search(r"\b(?:nicht|nie|kein|keine|keinen)\b", arg):
+                    continue  # "Öffne nicht Discord", "Mach den PC nicht aus": genau das Gegenteil
                 if name == "open" and re.search(r"(?:^|\s)an$", arg):
                     continue  # "Ruf die Polizei an", "Ruf mich an": kein Programm
                 if name == "open_known":
