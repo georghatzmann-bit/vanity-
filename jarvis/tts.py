@@ -54,6 +54,7 @@ class TextToSpeech:
         # ElevenLabs da, als Reserve (dann lädt sie erst, wenn ElevenLabs einmal nicht geht).
         self._local = None
         self._local_voice = str(cfg.get("lokal_stimme", "") or "")  # die gewählte, auch wenn sie erst später kommt
+        self._local_quality = str(cfg.get("lokal_qualitaet", "auto") or "auto")  # auto, beste, schnell
         self._local_lock = threading.Lock()
         self.enable_local(cfg.get("lokal_stimme", ""), start=self._engine == "lokal")
         key = str(cfg.get("elevenlabs_key", "") or "").strip()
@@ -67,7 +68,7 @@ class TextToSpeech:
     def enable_local(self, voice: str = "", start: bool = True) -> bool:
         """Die lokale Stimme dazunehmen, sobald sie installiert ist (beim Start, oder wenn Jarvis
         sie gerade im Hintergrund nachgeholt hat). True = sie ist da."""
-        from .localvoice import PocketVoice, installed, voice_id
+        from .localvoice import PocketVoice, installed, model_for, voice_id
 
         with self._local_lock:
             if self._local is not None:
@@ -76,10 +77,52 @@ class TextToSpeech:
                 log.warning("Die lokale Stimme ist nicht installiert. Bis dahin spricht die Reservestimme (Piper).")
                 return False
             self._local_voice = voice_id(voice or self._local_voice)
-            self._local = PocketVoice(self._local_voice)
+            self._local = PocketVoice(self._local_voice, model_for(self._local_quality, self._cache_dir))
         if start:
             self._local.start()
         return True
+
+    def improve_local(self, idle: Callable[[], bool] = lambda: True) -> bool | None:
+        """Einmal pro PC (Einstellung "auto"): Reicht der Prozessor für das große, deutlichere Modell? Dann
+        lädt und misst Jarvis es in einem eigenen Prozess und wechselt ohne Neustart.
+        True = spricht jetzt mit dem großen Modell, False = bleibt so, None = gerade viel los, später nochmal."""
+        from .localvoice import decide_from_standard, measure, model_for, speed_of, worth_measuring
+
+        local, folder = self._local, self._cache_dir
+        if local is None or self._eleven is not None or folder is None:
+            return False
+        if getattr(local, "model", "standard") == "gross" or not worth_measuring(self._local_quality, folder):
+            return False
+        if not idle():  # neben einem Spiel gemessen, wäre jeder PC zu langsam
+            return None
+        if not local.usable(wait=600):
+            return False
+        local.synthesize("Sehr wohl, Sir.")  # das erste Mal ist immer langsamer
+        if not decide_from_standard(folder, speed_of(local)):
+            return False
+        if not idle():
+            return None
+        if measure(folder) != "gross":
+            return False
+        return self.switch_local(model_for(self._local_quality, folder))
+
+    def switch_local(self, model: str) -> bool:
+        """Lädt die lokale Stimme mit einem anderen Modell und wechselt erst, wenn sie bereit ist."""
+        from .localvoice import PocketVoice
+
+        voice = PocketVoice(self._local_voice, model)
+        voice.start()
+        if not voice.usable(wait=900) or voice.model != model:
+            log.warning("Lokale Stimme: Modell %s lädt nicht (%s), es bleibt beim alten.", model, voice.error)
+            return False
+        with self._local_lock:
+            self._local = voice
+        self.warm_up()
+        return True
+
+    @property
+    def local_model(self) -> str:
+        return getattr(self._local, "model", "") if self._local is not None else ""
 
     @property
     def local_ready(self) -> bool:
@@ -283,7 +326,8 @@ class TextToSpeech:
         if self._eleven is not None:
             key = "|".join(("elevenlabs", self._eleven_voice, self._eleven_model, text))
         elif self._local is not None:
-            key = "|".join(("lokal", self._local_voice, text))
+            model = getattr(self._local, "model", "standard")  # alte Sätze des Standardmodells bleiben gültig
+            key = "|".join(("lokal", self._local_voice, text) if model == "standard" else ("lokal", self._local_voice, model, text))
         else:
             return None
         return self._cache_dir / (hashlib.sha1(key.encode("utf-8")).hexdigest()[:24] + ".npz")

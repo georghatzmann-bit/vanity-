@@ -100,6 +100,16 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
             if ensure_installed(STATE_DIR / "stimmen") and tts.enable_local():
                 tts.warm_up()
                 ui.toast("Meine lokale Stimme ist eingerichtet, Sir. Ab jetzt spreche ich ganz ohne Internet.", "ok")
+            # Einmal pro PC: Reicht der Prozessor für das große, deutlichere Stimmmodell? Gemessen wird nur in
+            # ruhigen Momenten (neben einem Spiel wäre jeder PC zu langsam), höchstens eine Stunde lang probiert.
+            for _ in range(7):
+                better = tts.improve_local(idle=lambda: quiet_pc(speaker))
+                if better is not None:
+                    break
+                time.sleep(600)
+            if better:
+                ui.toast("Ich spreche jetzt mit meiner besten Stimme, Sir. Ihr PC schafft sie flüssig.", "ok")
+                tts.prepare(["Jarvis ist online, Sir.", *FILLERS, *PREPARED])
 
         threading.Thread(target=local_voice, name="jarvis-lokale-stimme-holen", daemon=True).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
@@ -166,6 +176,18 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
 
     mute.on_change(on_mute)
     return assistant
+
+
+def quiet_pc(speaker=None) -> bool:
+    """Gerade wenig los am PC (kein Spiel, Jarvis spricht nicht): ein guter Moment, die Stimme zu messen."""
+    if speaker is not None and speaker.busy:
+        return False
+    try:
+        import psutil
+
+        return psutil.cpu_percent(interval=3) < 35
+    except Exception:
+        return True
 
 
 def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.Event) -> None:

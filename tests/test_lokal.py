@@ -20,8 +20,9 @@ class FakePocket:
 
     instances = []
 
-    def __init__(self, voice="george", fail=False, still_loading=False):
+    def __init__(self, voice="george", fail=False, still_loading=False, model="standard"):
         self.voice = voice
+        self.model = model
         self.fail = fail
         self.still_loading = still_loading
         self.started = False
@@ -57,7 +58,8 @@ class VoiceTest(unittest.TestCase):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         with mock.patch("jarvis.localvoice.installed", return_value={"tts": installed, "stt": installed}), \
-                mock.patch("jarvis.localvoice.PocketVoice", side_effect=lambda voice: FakePocket(voice, fail=fail, still_loading=still_loading)):
+                mock.patch("jarvis.localvoice.PocketVoice",
+                           side_effect=lambda voice, model="standard": FakePocket(voice, fail=fail, still_loading=still_loading, model=model)):
             tts = TextToSpeech({"engine": "lokal", "lokal_stimme": "Charles", **(cfg or {})}, Path(folder.name))
         return tts
 
@@ -138,7 +140,7 @@ class VoiceTest(unittest.TestCase):
         dann sofort dazu, ohne Neustart."""
         tts = self.make(installed=False)
         with mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}), \
-                mock.patch("jarvis.localvoice.PocketVoice", side_effect=lambda voice: FakePocket(voice)):
+                mock.patch("jarvis.localvoice.PocketVoice", side_effect=lambda voice, model="standard": FakePocket(voice, model=model)):
             self.assertTrue(tts.enable_local())
             self.assertTrue(tts.enable_local(), "zweimal schadet nicht")
         self.assertEqual(len(FakePocket.instances), 1)
@@ -214,6 +216,179 @@ class VoiceTest(unittest.TestCase):
         self.assertEqual(len(localvoice.VOICES), 6)
 
 
+class ModelChoiceTest(unittest.TestCase):
+    """Das große deutsche Modell (deutlicher, halb so schnell): auf schnellen PCs von selbst, einmal gemessen."""
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        patcher = mock.patch.object(localvoice, "pocket_version", return_value=(3, 3, 0))
+        self.version = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_quality_setting(self):
+        self.assertEqual([localvoice.quality(v) for v in ("", "auto", "Beste", "groß", "schnell", "Standard", "quatsch")],
+                         ["auto", "auto", "beste", "beste", "schnell", "schnell", "auto"])
+
+    def test_model_for(self):
+        self.assertEqual(localvoice.model_for("auto", self.folder), "standard", "noch nicht gemessen")
+        self.assertEqual(localvoice.model_for("beste", self.folder), "gross")
+        self.assertEqual(localvoice.model_for("schnell", self.folder), "standard")
+        localvoice.write_choice(self.folder, modell="gross", tempo_gross=1.9)
+        self.assertEqual(localvoice.model_for("auto", self.folder), "gross")
+        self.assertEqual(localvoice.model_for("schnell", self.folder), "standard", "Georgs Einstellung geht vor")
+        self.version.return_value = (3, 2, 1)
+        self.assertEqual(localvoice.model_for("beste", self.folder), "standard", "alte pocket-tts kennt es nicht")
+
+    def test_other_pc_measures_again(self):
+        localvoice.write_choice(self.folder, modell="gross")
+        with mock.patch.object(localvoice, "_this_pc", return_value="Anderer Prozessor|4"):
+            self.assertEqual(localvoice.model_for("auto", self.folder), "standard")
+            self.assertTrue(localvoice.worth_measuring("auto", self.folder))
+
+    def test_worth_measuring_only_once(self):
+        self.assertTrue(localvoice.worth_measuring("auto", self.folder))
+        self.assertFalse(localvoice.worth_measuring("beste", self.folder))
+        self.assertFalse(localvoice.worth_measuring("auto", None))
+        localvoice.write_choice(self.folder, fehler=localvoice.time.time())  # kein Internet
+        self.assertFalse(localvoice.worth_measuring("auto", self.folder), "frühestens morgen wieder")
+        localvoice.write_choice(self.folder, fehler=localvoice.time.time() - 2 * 86400)
+        self.assertTrue(localvoice.worth_measuring("auto", self.folder))
+        self.version.return_value = ()
+        self.assertFalse(localvoice.worth_measuring("auto", self.folder), "pocket-tts fehlt oder ist alt")
+
+    def test_slow_pc_stays_standard_for_good(self):
+        self.assertTrue(localvoice.decide_from_standard(self.folder, 3.1))
+        self.assertTrue(localvoice.worth_measuring("auto", self.folder), "noch nichts festgehalten")
+        self.assertFalse(localvoice.decide_from_standard(self.folder, 1.7))
+        self.assertEqual(localvoice.read_choice(self.folder)["modell"], "standard")
+        self.assertFalse(localvoice.worth_measuring("auto", self.folder), "fragt nicht bei jedem Start neu")
+
+    def test_big_model_falls_back(self):
+        loaded = []
+
+        class TTSModel:
+            @staticmethod
+            def load_model(language, quantize=False):
+                loaded.append((language, quantize))
+                if language == "german_24l":
+                    raise RuntimeError("kein Internet")
+                return "standardmodell"
+
+        voice = localvoice.PocketVoice("george", "gross")
+        self.assertEqual(voice._load_model(TTSModel), "standardmodell")
+        self.assertEqual(loaded, [("german_24l", True), ("german_24l", False), ("german", False)])
+        self.assertEqual(voice.model, "standard", "ehrlich: es spricht das Standardmodell")
+        loaded.clear()
+        TTSModel.load_model = staticmethod(lambda language, quantize=False: loaded.append((language, quantize)) or "x")
+        voice = localvoice.PocketVoice("george", "gross")
+        voice._load_model(TTSModel)
+        self.assertEqual((loaded, voice.model), ([("german_24l", True)], "gross"))
+        self.assertEqual(localvoice.PocketVoice("george", "quatsch").model, "standard")
+
+    def test_measure_big_writes_choice_and_previews(self):
+        class Model:
+            def get_state_for_audio_prompt(self, voice):
+                return voice
+
+            def generate_audio(self, state, text):
+                return np.zeros(2400, dtype=np.float32)
+
+        class Fast(FakePocket):
+            error = None
+            _model = Model()
+
+            def synthesize(self, text):
+                return np.zeros(24000 * 3, dtype=np.int16), 24000  # 3 s Ton, sofort fertig
+
+        with mock.patch.object(localvoice, "PocketVoice", lambda voice, model: Fast(voice, model=model)), \
+                mock.patch("builtins.print"):
+            self.assertEqual(localvoice._measure_big(self.folder), "gross")
+        choice = localvoice.read_choice(self.folder)
+        self.assertEqual(choice["modell"], "gross")
+        self.assertGreater(choice["tempo_gross"], localvoice.BIG_MIN_SPEED)
+        for item in localvoice.VOICES:
+            self.assertTrue(localvoice.preview_file(self.folder, item["id"]).exists(), "Hörproben in der neuen Stimme")
+
+        class Slow(Fast):
+            def synthesize(self, text):
+                localvoice.time.sleep(0.05)
+                return np.zeros(2400, dtype=np.int16), 24000  # 0,1 s Ton in 0,05 s: nur doppelte Echtzeit ...
+
+        with mock.patch.object(localvoice, "BIG_MIN_SPEED", 5.0), \
+                mock.patch.object(localvoice, "PocketVoice", lambda voice, model: Slow(voice, model=model)), \
+                mock.patch("builtins.print"):
+            self.assertEqual(localvoice._measure_big(self.folder), "standard")  # ... zu langsam
+        self.assertEqual(localvoice.read_choice(self.folder)["modell"], "standard")
+
+    def test_measure_big_without_internet(self):
+        class Broken(FakePocket):
+            error = RuntimeError("kein Internet")
+
+            def usable(self, wait=0.0):
+                return False
+
+        with mock.patch.object(localvoice, "PocketVoice", lambda voice, model: Broken(voice, model=model)), \
+                mock.patch("builtins.print"):
+            self.assertEqual(localvoice._measure_big(self.folder), "standard")
+        choice = localvoice.read_choice(self.folder)
+        self.assertNotIn("modell", choice)
+        self.assertIn("kein Internet", choice["grund"])
+        self.assertFalse(localvoice.worth_measuring("auto", self.folder), "nicht gleich nochmal")
+
+    def make_tts(self, quality="auto"):
+        from jarvis.tts import TextToSpeech
+
+        with mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}), \
+                mock.patch("jarvis.localvoice.PocketVoice",
+                           side_effect=lambda voice, model="standard": FakePocket(voice, model=model)):
+            return TextToSpeech({"engine": "lokal", "lokal_qualitaet": quality}, self.folder)
+
+    def test_tts_starts_with_the_measured_model(self):
+        self.assertEqual(self.make_tts().local_model, "standard")
+        localvoice.write_choice(self.folder, modell="gross")
+        self.assertEqual(self.make_tts().local_model, "gross")
+        self.assertEqual(self.make_tts("schnell").local_model, "standard")
+
+    def test_improve_switches_without_restart(self):
+        tts = self.make_tts()
+        old_key = tts._cache_file("Sehr wohl, Sir.")
+
+        def measured(folder, *args, **kwargs):
+            localvoice.write_choice(folder, modell="gross", tempo_gross=1.8)
+            return "gross"
+
+        with mock.patch.object(localvoice, "speed_of", return_value=3.4), \
+                mock.patch.object(localvoice, "measure", side_effect=measured) as measure, \
+                mock.patch("jarvis.localvoice.PocketVoice",
+                           side_effect=lambda voice, model="standard": FakePocket(voice, model=model)):
+            self.assertTrue(tts.improve_local())
+        measure.assert_called_once()
+        self.assertEqual(tts.local_model, "gross")
+        self.assertNotEqual(tts._cache_file("Sehr wohl, Sir."), old_key, "alte Sätze nicht in der neuen Stimme ausgeben")
+        self.assertFalse(tts.improve_local(), "schon das große")
+
+    def test_improve_waits_for_a_quiet_moment_and_respects_slow_pcs(self):
+        tts = self.make_tts()
+        with mock.patch.object(localvoice, "measure") as measure:
+            self.assertIsNone(tts.improve_local(idle=lambda: False), "gerade ein Spiel: später")
+            with mock.patch.object(localvoice, "speed_of", return_value=1.9):
+                self.assertFalse(tts.improve_local())
+        measure.assert_not_called()
+        self.assertEqual(localvoice.read_choice(self.folder)["modell"], "standard")
+        self.assertFalse(tts.improve_local(), "kein zweites Mal")
+        self.assertEqual(tts.local_model, "standard")
+
+    def test_standard_cache_keys_stay_valid(self):
+        """Wer bleibt, wie er ist, behält seine fertigen Sätze (Schlüssel wie bisher)."""
+        import hashlib
+
+        tts = self.make_tts()
+        expected = hashlib.sha1("lokal|george|Sehr wohl, Sir.".encode()).hexdigest()[:24] + ".npz"
+        self.assertEqual(tts._cache_file("Sehr wohl, Sir.").name, expected)
+
+
 class RecognitionTest(unittest.TestCase):
     def test_local_engine_prefers_parakeet(self):
         from jarvis import stt
@@ -281,7 +456,7 @@ class InstallTest(unittest.TestCase):
             self.assertEqual(localvoice.install(), (True, "Successfully installed"))
         cmd = run.call_args.args[0]
         self.assertEqual(cmd[1:4], ["-m", "pip", "install"])
-        self.assertIn("pocket-tts", cmd)
+        self.assertIn("pocket-tts>=3.3.0", cmd, "erst ab 3.3 gibt es das große deutsche Modell")
         self.assertIn("onnx-asr[cpu,hub]", cmd)
         lines = []
         ok, last = localvoice._run([sys.executable, "-c", "print('eins'); print(''); print('zwei')"], lines.append, 60)

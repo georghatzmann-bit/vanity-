@@ -432,7 +432,7 @@ class VoiceCacheTest(unittest.TestCase):
             ready = __import__("threading").Event()
             error = None
 
-            def __init__(self, voice):
+            def __init__(self, voice, model="standard"):
                 self.ready.set()
 
             def start(self):

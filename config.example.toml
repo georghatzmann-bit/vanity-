@@ -87,6 +87,9 @@ beam_size = 1
 engine = "lokal"
 # Für "lokal": george (am klarsten), charles (am tiefsten), juergen, michael, javert, stuart_bell
 lokal_stimme = "george"
+# "auto" = Jarvis misst einmal, ob der PC das große, deutlichere Stimmmodell flüssig schafft, und nimmt es
+# dann von selbst (640 MB mehr). "beste" = immer das große, "schnell" = immer das kleine (langsame PCs).
+lokal_qualitaet = "auto"
 # ElevenLabs: Schlüssel von https://elevenlabs.io/app/settings/api-keys und die Stimme.
 # Am einfachsten in der Einrichtung (Schritt Stimme), dort gibt es Hörproben.
 elevenlabs_key = ""

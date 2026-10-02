@@ -380,10 +380,11 @@ if ($Neu -and (Test-Path $venvDir)) {
 $laufwerk = [IO.Path]::GetPathRoot($jarvisDir)
 $frei = [int64]-1
 try { $frei = (New-Object -TypeName IO.DriveInfo -ArgumentList $laufwerk).AvailableFreeSpace } catch {}
-# Neu: Python-Umgebung, lokale Stimme und Spracherkennung und Claude Code brauchen zusammen etwa 4 GB.
-# Fehlt nur die lokale Stimme (Update von einer älteren Version), etwa 1,5 GB.
+# Neu: Python-Umgebung, lokale Stimme und Spracherkennung und Claude Code brauchen zusammen etwa 4 GB
+# (schnelle PCs bekommen dazu das große Stimmmodell, 640 MB). Fehlt nur die lokale Stimme (Update von
+# einer älteren Version), etwa 2 GB.
 $lokalDa = Test-Path (Join-Path $venvDir "Lib\site-packages\pocket_tts")
-$noetig = if ((Test-Path $venvPy) -and $lokalDa) { 512MB } elseif (Test-Path $venvPy) { 1536MB } else { 3584MB }
+$noetig = if ((Test-Path $venvPy) -and $lokalDa) { 1024MB } elseif (Test-Path $venvPy) { 2048MB } else { 4096MB }
 if ($frei -ge 0 -and $frei -lt $noetig) {
     $name = $laufwerk.TrimEnd("\")
     Stop-Install 11 ("Auf Laufwerk $name ist zu wenig Platz frei (noch {0:N1} GB)." -f ($frei / 1GB)) `
@@ -663,7 +664,8 @@ Start-Step "Jarvis' Stimme und Spracherkennung (etwa 1,3 GB)"
 Set-Detail "Jarvis' Stimme wird installiert"
 $lokalOk = $false
 # Nur für den Build-Test des Ersatzwegs (Whisper): JARVIS_OHNE_LOKALE_STIMME=1
-$code = if ($env:JARVIS_OHNE_LOKALE_STIMME -eq "1") { 1 } else { Invoke-Quiet $venvPy @("-m", "pip", "install", "pocket-tts", "onnx-asr[cpu,hub]", "--disable-pip-version-check") 3600 {
+# pocket-tts ab 3.3: erst damit gibt es das große deutsche Modell (ältere Installationen holen es so nach).
+$code = if ($env:JARVIS_OHNE_LOKALE_STIMME -eq "1") { 1 } else { Invoke-Quiet $venvPy @("-m", "pip", "install", "pocket-tts>=3.3.0", "onnx-asr[cpu,hub]", "--disable-pip-version-check") 3600 {
     param($neu, $sekunden)
     foreach ($z in $neu) {
         if ($z -match '^Downloading\s+(\S+)') { Set-DetailLive ("Jarvis' Stimme wird installiert: " + ($Matches[1] -replace '-\d.*$', '')) }

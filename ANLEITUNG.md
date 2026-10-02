@@ -37,6 +37,8 @@ Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird
 
 Jarvis spricht mit seiner eigenen deutschen Stimme (Pocket TTS) und versteht dich mit Parakeet. Beides läuft auf deinem Prozessor: kein Abo, kein Schlüssel, nichts geht ins Internet, und eine Windows- oder Microsoft-Stimme gibt es nicht mehr. Der Installer lädt beides gleich mit (etwa 1,3 GB).
 
+**Beste Stimme auf schnellen PCs:** Jarvis misst einmal, ob dein Prozessor das große deutsche Stimmmodell flüssig schafft (es ist deutlich klarer, braucht aber doppelt so viel Rechenzeit und 640 MB mehr). Wenn ja, nimmt er es von selbst und sagt: „Ich spreche jetzt mit meiner besten Stimme.“ Gemessen wird nur, wenn am PC wenig los ist, nie neben einem Spiel. Immer das große: in `config.toml` bei `[tts]` `lokal_qualitaet = "beste"`, immer das kleine: `"schnell"`.
+
 **Geklappt, wenn:** in der Einrichtung bei **Stimme** > **Lokal** oben „Aktiv“ steht. Steht dort **Lokal einrichten**, ging das Laden bei der Installation nicht (meist kein Internet): einmal klicken, oder einfach warten, Jarvis holt es beim Start im Hintergrund nach und sagt Bescheid.
 
 Optional: **„Jarvis“ allein** geht auch ohne Schlüssel: Klingt etwas halb nach seinem Namen, prüft Jarvis kurz mit der Spracherkennung, ob „Jarvis“ vorn steht. Ganz zuverlässig wird es mit Picovoice: in der Einrichtung bei Mikrofon auf **Picovoice öffnen** klicken, gratis Konto anlegen, den **AccessKey** einfügen und **Prüfen** klicken. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Auch „Jarvis“ allein** ausschalten.

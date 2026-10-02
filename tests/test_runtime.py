@@ -218,7 +218,7 @@ class SpeakerFixesTest(unittest.TestCase):
     def test_local_voice_right_after_boot(self):
         """Gleich nach dem Hochfahren (monotonic noch klein) spricht die lokale Stimme, keine Reserve."""
         class Voice:
-            def __init__(self, voice):
+            def __init__(self, voice, model="standard"):
                 pass
 
             def start(self):
