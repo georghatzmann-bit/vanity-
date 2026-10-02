@@ -154,6 +154,12 @@ class NotebookTest(unittest.TestCase):
         self.assertEqual(match_notebook("Öffne mein Notizbuch"), ("open", ""))
         self.assertIsNone(match_notebook("Schreib Max auf Discord, bin gleich da"))
         self.assertIsNone(match_notebook("Notiere das"))
+        self.assertEqual(match_notebook("Notizbuch öffnen"), ("open", ""))
+        self.assertEqual(match_notebook("Schreib mir auf, wann der Zahnarzt ist"), ("note", "Wann der Zahnarzt ist"))
+        # Kein ganzes Wort, eine Frage oder eine Nachricht: keine Notiz
+        for said in ("Notizblock öffnen", "Notizen", "Notierst du das?", "Notiere das bitte",
+                     "Schreib auf WhatsApp an Max, dass ich später komme", "Schreibe auf Englisch: Hallo"):
+            self.assertIsNone(match_notebook(said), said)
 
 
 class AssistantNotebookTest(unittest.TestCase):

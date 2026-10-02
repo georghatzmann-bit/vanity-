@@ -289,12 +289,21 @@ def link_names(text: str, names: list[str]) -> str:
 # ---------------------------------------------------------------------- Sätze
 
 _CALL = r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte\s+)?"
+# "Notizblock öffnen" (Editor) und "Notierst du das?" sind keine Notiz; "Schreib auf WhatsApp an Max, ..." ist eine
+# Nachricht. Darum ein ganzes Wort und bei "schreib auf" ein Doppelpunkt, Komma oder "dass" danach.
 _NOTE = re.compile(
-    _CALL + r"(?:notiere|notier|notiz|schreib(?:e)?\s+(?:das\s+|es\s+|mir\s+)?(?:in|ins)\s+(?:mein\s+|das\s+|dein\s+)?notizbuch|"
-    r"schreib(?:e)?\s+(?:mir\s+)?auf)(?:\s+(?:bitte|mal|dir|mir))*\s*[:,]?\s*(?P<text>.{2,})$",
+    _CALL + r"(?:(?:notiere|notier|notiz|schreib(?:e)?\s+(?:das\s+|es\s+|mir\s+)?(?:in|ins)\s+(?:mein\s+|das\s+|dein\s+)?"
+    r"notizbuch)\b(?:\s+(?:bitte|mal|dir|mir))*\s*[:,]?|"
+    r"schreib(?:e)?\s+(?:mir\s+)?auf(?:\s+(?:bitte|mal))*(?:\s*[:,]|(?=\s+(?:dass|wann|wo|was|wie)\b)))"
+    r"\s*(?P<text>.{2,})$",
     re.I,
 )
-_OPEN = re.compile(_CALL + r"(?:öffne|öffn|zeig|zeige)(?:\s+mir)?\s+(?:mein|das|dein)\s+notizbuch[\s.!]*$", re.I)
+_OPEN = re.compile(
+    _CALL + r"(?:(?:öffne|öffn|zeig|zeige)(?:\s+mir)?\s+(?:(?:mein|das|dein)\s+)?notizbuch|"
+    r"(?:(?:mein|das|dein)\s+)?notizbuch\s+(?:öffnen|zeigen|anzeigen))(?:\s+bitte)?[\s.!]*$",
+    re.I,
+)
+_FILLER_END = re.compile(r"(?:\s+(?:bitte|mal|jetzt|auf))+$", re.I)
 
 
 def match_notebook(text: str):
@@ -304,7 +313,7 @@ def match_notebook(text: str):
         return "open", ""
     found = _NOTE.match(raw)
     if found:
-        note = found.group("text").strip(" .")
-        if len(note) >= 2 and note.lower() not in {"das", "es", "dies", "bitte"}:
+        note = found.group("text").strip(" .!")
+        if len(note) >= 2 and _FILLER_END.sub("", note).lower() not in {"das", "es", "dies", "bitte", "das hier"}:
             return "note", note[:1].upper() + note[1:]
     return None
