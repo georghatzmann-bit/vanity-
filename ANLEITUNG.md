@@ -4,14 +4,21 @@ Diese Anleitung ist für dich, Georg. Jarvis läuft danach unsichtbar im Hinterg
 
 ## 1. Installieren (5 Minuten)
 
+Du brauchst: Windows 10 (ab Version 1809) oder Windows 11, Internet und etwa 3 GB freien Platz. Sonst nichts, auch keine Administratorrechte.
+
 1. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
    Zeigt GitHub „Page not found“: erst oben rechts bei GitHub anmelden (das Projekt ist privat), dann den Link noch einmal öffnen.
 2. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
-3. Den Haken bei **„Jarvis mit Windows starten“** drin lassen und **Installieren** klicken.
+3. Im dunklen Jarvis-Fenster auf **Installieren** klicken. Die zwei Schalter darunter kannst du so lassen: **Mit Windows starten** ist an, **Symbol auf dem Desktop** ist aus (anschalten, wenn du eins willst).
+4. Warten oder nebenbei weiterspielen. Rechts siehst du sechs Schritte mit Häkchen, links läuft ein Bogen um Jarvis' Kern. Der Installer holt alles selbst: Python, die Pakete, die Spracherkennung und Claude Code (Jarvis' Gehirn). Beim ersten Mal dauert das ein paar Minuten, ein Update meist nur eine.
+5. Fragt Windows zwischendurch nach Administratorrechten: **Ja** klicken. Das kommt nur, wenn auf dem PC die Microsoft-Laufzeit (Visual C++) fehlt oder zu alt ist.
+6. Bei **„Jarvis ist bereit.“** auf **Jarvis starten** klicken.
 
-Der Installer holt selbst: Python, die Spracherkennung, die Stimmen und Claude Code (Jarvis' Gehirn). Beim ersten Mal dauert das ein paar Minuten. Läuft noch ein älteres Jarvis, beendet der Installer es selbst und startet danach das neue. Fehlt auf einem ganz frischen PC eine Microsoft-Laufzeit, fragt Windows einmal nach Administratorrechten: **Ja** klicken.
+**Geklappt, wenn:** „Jarvis ist bereit.“ erscheint und sich nach **Jarvis starten** die Einrichtung öffnet.
 
-**Geklappt, wenn:** sich am Ende die Einrichtung von selbst öffnet. Deine Einstellungen von vorher bleiben erhalten.
+**Läuft schon ein älteres Jarvis?** Dann steht das im Fenster. Der Installer beendet es kurz und startet es danach von selbst wieder. Deine Einstellungen und das Gedächtnis bleiben erhalten.
+
+**Hat etwas nicht geklappt?** Dann sagt der Installer, was los ist und was hilft, zum Beispiel „Keine Verbindung zum Internet“. Meist reicht **Nochmal versuchen**: Was schon geladen ist, bleibt. **Protokoll öffnen** zeigt alle Details. Das Protokoll kannst du Claude im Jarvis-Projekt schicken.
 
 ## 2. Einrichtung durchklicken (2 Minuten)
 

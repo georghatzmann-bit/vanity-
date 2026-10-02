@@ -109,10 +109,11 @@ Zum Ausprobieren im Jarvis-Ordner: `"%LOCALAPPDATA%\Jarvis\venv\Scripts\python.e
 
 ## Windows-Details
 
-- Installiert nach `%LOCALAPPDATA%\Programs\Jarvis`, die Python-Umgebung liegt unter `%LOCALAPPDATA%\Jarvis\venv`. Fehlt Python, holt der Installer es (winget, sonst python.org), ebenso Claude Code, die Microsoft-Laufzeit und WebView2.
+- Installiert nach `%LOCALAPPDATA%\Programs\Jarvis`, die Python-Umgebung liegt unter `%LOCALAPPDATA%\Jarvis\venv`. Fehlt Python, holt der Installer es direkt von python.org (ohne winget, ohne Administrator), ebenso Claude Code, die Microsoft-Laufzeit (ab 14.40) und WebView2. Git for Windows braucht Claude Code seit Version 2.1.120 nicht mehr (dann nimmt es PowerShell).
+- `JarvisSetup.exe` ist eine kleine WPF-Oberfläche (.NET Framework 4.7.2, auf Windows 10 ab 1809 und 11 schon da) mit dem Inno-Setup-Kern darin. Den Fortschritt melden der Kern und `werkzeuge\installieren.ps1` als Zeilen wie `JARVIS-SCHRITT 3/6 Pakete`. Mit `/VERYSILENT` läuft sie ohne Oberfläche (alle Inno-Schalter gehen durch), `/vorschau` zeigt die Seiten, ohne etwas zu installieren.
 - Start über `pythonw.exe Jarvis.pyw`: kein Konsolenfenster, eigenes Symbol, eigene Taskleisten-Gruppe (`Jarvis.Assistent`). Autostart über `HKCU\...\Run` mit `--hintergrund`.
 - Es läuft immer nur ein Jarvis. Ein zweiter Start holt das Fenster des laufenden nach vorn.
-- Der Build (`.github/workflows/setup-exe.yml`) installiert die EXE auf einem frischen Windows still zur Probe, prüft Startmenü-Suche, Anzeige, Texterkennung, Bedienung ohne Maus, unsichtbaren Start, zweiten Start, ein Update über ein laufendes Jarvis und die Deinstallation, und veröffentlicht sie dann als Release.
+- Der Build (`.github/workflows/setup-exe.yml`) macht Bilder aller Installer-Seiten (Artefakt `installer-bilder`), installiert die EXE auf einem frischen Windows still zur Probe, prüft Startmenü-Suche, Anzeige, Texterkennung, Bedienung ohne Maus, unsichtbaren Start, zweiten Start, ein Update über ein laufendes Jarvis, die Meldung ohne Internet und die Deinstallation, und veröffentlicht sie dann als Release.
 - Ein Update beendet ein laufendes Jarvis selbst, Einstellungen (`config.toml`) und Gedächtnis (`daten\`) bleiben. Tray-Menü > „Neueste Version laden“ holt die neueste `JarvisSetup.exe`.
 
 ## Für Entwickler
@@ -145,7 +146,8 @@ jarvis/
                   handy/          die Handy-App (PWA)
                   Alle Seiten laufen auch im normalen Browser als Demo.
 jarvis_home/CLAUDE.md   Jarvis' Persönlichkeit
-installer/      Inno-Setup-Skript, Bilder und Windows-Proben für den Build
+installer/      Inno-Setup-Kern (jarvis.iss), Bilder und Windows-Proben für den Build
+  setup/        die Installer-Oberfläche (WPF, C#): Seiten, Fortschritt, stiller Modus, Vorschau
 tests/          python -m unittest discover -s tests
 ```
 
