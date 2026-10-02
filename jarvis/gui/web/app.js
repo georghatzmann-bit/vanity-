@@ -113,6 +113,9 @@
     calendar_add: (url) => window.pywebview.api.calendar_add(url),
     calendar_remove: (url) => window.pywebview.api.calendar_remove(url),
     calendar_help: (which) => window.pywebview.api.calendar_help(which),
+    labor_info: () => window.pywebview.api.labor_info(),
+    labor_open: () => window.pywebview.api.labor_open(),
+    werkzeug_loeschen: (name) => window.pywebview.api.werkzeug_loeschen(name),
     shop_info: () => window.pywebview.api.shop_info(),
     shop_connect: (domain, client, secret) => window.pywebview.api.shop_connect(domain, client, secret),
     shop_disconnect: () => window.pywebview.api.shop_disconnect(),
@@ -1402,6 +1405,9 @@
       },
       calendar_remove: (url) => { DEMO_CAL.feeds = DEMO_CAL.feeds.filter((f) => f.url !== url); return Promise.resolve({ ok: true }); },
       calendar_help: () => Promise.resolve(true),
+      labor_info: () => Promise.resolve(DEMO_LABOR),
+      labor_open: () => Promise.resolve({ ok: false, error: 'Im Demo-Modus öffnet sich kein Ordner.' }),
+      werkzeug_loeschen: () => Promise.resolve(true),
       shop_info: () => Promise.resolve(DEMO_SHOP),
       shop_connect: () => Promise.resolve({ ok: true, error: '', name: 'Georgs Laden' }),
       shop_disconnect: () => Promise.resolve({ ok: true, error: '' }),
@@ -1466,6 +1472,27 @@
   const DEMO_ALEXA = { enabled: true, connected: true };
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
   const DEMO_TS = { url: '' };
+
+  const DEMO_LABOR = {
+    werkzeuge: [
+      { name: 'wetterradar', titel: 'Wetterradar', beschreibung: 'Regenradar für einen Ort als kurzer Satz, ohne Browser.',
+        aufruf: 'werkzeug wetterradar Wien', freigegeben: true, geaendert: false, test_ok: true, test_ergebnis: '4 Tests, alle grün',
+        laeufe: 14, zuletzt_benutzt: new Date(Date.now() - 3 * 3600e3).toISOString() },
+      { name: 'downloads-sortieren', titel: 'Downloads sortieren', beschreibung: 'Sortiert den Download-Ordner nach Dateityp in Unterordner.',
+        aufruf: 'werkzeug downloads-sortieren C:\\Users\\Georg\\Downloads', freigegeben: true, geaendert: false, test_ok: true,
+        test_ergebnis: '6 Tests, alle grün', laeufe: 3, zuletzt_benutzt: new Date(Date.now() - 26 * 3600e3).toISOString() },
+      { name: 'bild-verkleinern', titel: 'Bild verkleinern', beschreibung: 'Verkleinert Bilder für Discord auf höchstens 8 MB.',
+        aufruf: 'werkzeug bild-verkleinern <datei>', freigegeben: false, geaendert: false, test_ok: false,
+        test_ergebnis: '1 von 3 Tests fehlgeschlagen', laeufe: 1, zuletzt_benutzt: new Date(Date.now() - 1 * 3600e3).toISOString() },
+    ],
+    letzte_laeufe: [
+      { wann: new Date(Date.now() - 50 * 60e3).toISOString(), was: 'Tests: bild-verkleinern', ok: false, dauer: 1.2, abgebrochen: false },
+      { wann: new Date(Date.now() - 55 * 60e3).toISOString(), was: 'pip: pillow', ok: true, dauer: 6.4, abgebrochen: false },
+      { wann: new Date(Date.now() - 3 * 3600e3).toISOString(), was: 'werkzeug wetterradar Wien', ok: true, dauer: 0.8, abgebrochen: false },
+      { wann: new Date(Date.now() - 9 * 3600e3).toISOString(), was: 'Versuch: import time; time.sleep(120)', ok: false, dauer: 60, abgebrochen: true },
+    ],
+    ordner: 'C:\\Users\\Georg\\AppData\\Local\\Programs\\Jarvis\\daten\\labor',
+  };
 
   const DEMO_SHOP = {
     verbunden: true, name: 'Georgs Laden', adresse: 'georg.myshopify.com', fehler: '',

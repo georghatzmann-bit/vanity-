@@ -1141,6 +1141,135 @@
   font: 600 15px / 1.3 var(--font-display);
 }
 
+/* Labor: Jarvis' eigene Werkzeuge */
+.labor {
+  display: grid;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.labor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.labor-head h2 {
+  margin: 0 0 4px;
+  font: 600 15px / 1.3 var(--font-display);
+}
+
+.labor-head .hub-hint {
+  margin: 0;
+  max-width: 720px;
+}
+
+.labor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.labor-grid:empty {
+  display: none;
+}
+
+.tool-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--r-l);
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.tool-card h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font: 600 14px / 1.3 var(--font-display);
+}
+
+.tool-card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.tool-card code {
+  overflow: hidden;
+  padding: 6px 8px;
+  border-radius: var(--r-s);
+  background: var(--bg);
+  color: var(--text-2);
+  font: 12px / 1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-card small {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.tool-card .ws-chip {
+  height: 24px;
+  font-size: 12px;
+}
+
+.tool-card .mem-del {
+  justify-self: end;
+}
+
+.labor-sub {
+  margin: 0 0 8px;
+  color: var(--text-2);
+  font: 600 13px / 1.3 var(--font-display);
+}
+
+.labor-runs {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.labor-runs li {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: var(--r-s);
+  font-size: 13px;
+}
+
+.labor-runs li:hover {
+  background: var(--surface-1);
+}
+
+.labor-runs .what {
+  overflow: hidden;
+  color: var(--text-2);
+  font: 12px / 1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.labor-runs time,
+.labor-runs .took {
+  color: var(--text-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 body[data-view="hub"] .hud {
   visibility: hidden;
 }

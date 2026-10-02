@@ -50,6 +50,11 @@
       btn: $('hubNewBtn'),
       grid: $('hubGrid'),
       empty: $('hubEmpty'),
+      laborGrid: $('laborGrid'),
+      laborEmpty: $('laborEmpty'),
+      laborRuns: $('laborRuns'),
+      laborRunsBox: $('laborRunsBox'),
+      laborOpen: $('laborOpen'),
     };
     if (!el.hub) return null;
     let isOpen = false;
@@ -196,6 +201,114 @@
       return art;
     }
 
+    // ---------- Labor: Jarvis' eigene Werkzeuge (gebaut und getestet in seiner Sandbox)
+
+    const RUN_MARK = { ok: MARK.done, fail: MARK.error, stop: MARK.cancelled };
+
+    function toolCard(t) {
+      const art = document.createElement('article');
+      art.className = 'tool-card';
+      art.setAttribute('role', 'listitem');
+      const h = document.createElement('h3');
+      const name = document.createElement('span');
+      name.textContent = String(t.titel || t.name || 'Werkzeug');
+      const chip = document.createElement('span');
+      chip.className = 'ws-chip';
+      const ready = !!t.freigegeben && !t.geaendert;
+      chip.dataset.state = ready ? 'done' : t.test_ok === false ? 'error' : 'cancelled';
+      const mark = document.createElement('span');
+      mark.className = 'ws-chip-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.innerHTML = ready ? MARK.done : t.test_ok === false ? MARK.error : MARK.cancelled;
+      chip.append(mark, document.createTextNode(ready ? 'Freigegeben' : t.geaendert ? 'Geändert' : t.test_ok === false ? 'Tests rot' : 'In Arbeit'));
+      h.append(name, chip);
+      const desc = document.createElement('p');
+      desc.textContent = String(t.beschreibung || '');
+      const code = document.createElement('code');
+      code.textContent = String(t.aufruf || '');
+      code.title = code.textContent;
+      const meta = document.createElement('small');
+      const parts = [];
+      if (t.test_ergebnis) parts.push(String(t.test_ergebnis));
+      if (typeof t.laeufe === 'number') parts.push(t.laeufe === 1 ? '1 Lauf' : t.laeufe + ' Läufe');
+      if (t.zuletzt_benutzt) parts.push('zuletzt ' + when(t.zuletzt_benutzt));
+      meta.textContent = parts.join(' · ');
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'mem-del';
+      del.textContent = '×';
+      del.title = 'Werkzeug löschen (zweimal klicken)';
+      del.setAttribute('aria-label', 'Werkzeug ' + name.textContent + ' löschen');
+      let armed = 0;
+      del.addEventListener('click', async () => {
+        if (Date.now() - armed > 3000) {
+          armed = Date.now();
+          toast('Nochmal klicken, um „' + name.textContent + '“ zu löschen.', 'info');
+          return;
+        }
+        try {
+          const ok = await call('werkzeug_loeschen', t.name);
+          toast(ok ? 'Werkzeug gelöscht.' : 'Das ging nicht.', ok ? 'ok' : 'error');
+          refreshLabor();
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+      });
+      art.append(h, desc);
+      if (code.textContent) art.append(code);
+      art.append(meta, del);
+      return art;
+    }
+
+    function renderLabor(info) {
+      if (!el.laborGrid) return;
+      const tools = (info && info.werkzeuge) || [];
+      const runs = ((info && info.letzte_laeufe) || []).slice(0, 6);
+      el.laborGrid.replaceChildren(...tools.map(toolCard));
+      el.laborEmpty.hidden = tools.length > 0;
+      el.laborRunsBox.hidden = runs.length === 0;
+      el.laborRuns.replaceChildren(...runs.map((r) => {
+        const li = document.createElement('li');
+        const m = document.createElement('span');
+        m.className = 'ws-chip-mark';
+        m.setAttribute('role', 'img');
+        const kind = r.abgebrochen ? 'stop' : r.ok ? 'ok' : 'fail';
+        m.setAttribute('aria-label', { ok: 'ok', fail: 'Fehler', stop: 'abgebrochen' }[kind]);
+        m.innerHTML = RUN_MARK[kind];
+        m.style.color = kind === 'ok' ? 'var(--ok)' : kind === 'fail' ? 'var(--err)' : 'var(--text-3)';
+        const what = document.createElement('span');
+        what.className = 'what';
+        what.textContent = String(r.was || '');
+        what.title = what.textContent;
+        const took = document.createElement('span');
+        took.className = 'took';
+        took.textContent = typeof r.dauer === 'number' ? r.dauer.toFixed(1).replace('.', ',') + ' s' : '';
+        const t = document.createElement('time');
+        t.textContent = when(r.wann);
+        li.append(m, what, took, t);
+        return li;
+      }));
+    }
+
+    async function refreshLabor() {
+      try {
+        renderLabor(await call('labor_info'));
+      } catch {
+        /* ältere Version ohne Labor */
+      }
+    }
+
+    if (el.laborOpen) {
+      el.laborOpen.addEventListener('click', async () => {
+        try {
+          const r = await call('labor_open');
+          toast(r && r.ok ? 'Das Labor öffnet sich im Explorer.' : (r && r.error) || 'Das ging nicht.', r && r.ok ? 'ok' : 'error');
+        } catch {
+          toast('Im Demo-Modus öffnet sich kein Ordner.', 'info');
+        }
+      });
+    }
+
     function open() {
       clearTimeout(closeTimer);
       if (opts.werkstatt && opts.werkstatt.isOpen && opts.werkstatt.isOpen()) opts.werkstatt.close();
@@ -207,6 +320,7 @@
       el.body.dataset.view = 'hub';
       render();
       refresh();
+      refreshLabor();
       if (opts.onView) opts.onView('hub');
     }
 

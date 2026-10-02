@@ -296,6 +296,22 @@
         <b>Noch keine Projekte</b>
         <span>Sag „Hey Jarvis, bau mir …“ oder schreib oben einen Auftrag. Jedes Projekt bekommt einen eigenen Ordner.</span>
       </div>
+
+      <section class="labor" id="labor" aria-labelledby="laborHead">
+        <header class="labor-head">
+          <div>
+            <h2 id="laborHead">Labor: Jarvis' eigene Werkzeuge</h2>
+            <p class="hub-hint">Hier baut und testet Jarvis seine eigenen Werkzeuge, mit eigenem Python, ohne Ihre Schlüssel und mit Zeitlimit. Benutzen darf er nur, was alle Tests besteht und freigegeben ist.</p>
+          </div>
+          <button type="button" class="ws-btn" id="laborOpen">Labor-Ordner</button>
+        </header>
+        <div class="labor-grid" id="laborGrid" role="list"></div>
+        <p class="hub-empty labor-empty" id="laborEmpty" hidden><b>Noch keine eigenen Werkzeuge</b><span>Sag zum Beispiel „Bau dir ein Werkzeug, das mir das Regenradar für Wien sagt“. Jarvis baut es im Labor, testet es und benutzt es danach selbst.</span></p>
+        <div class="labor-runs-box" id="laborRunsBox" hidden>
+          <h3 class="labor-sub">Zuletzt im Labor</h3>
+          <ol class="labor-runs" id="laborRuns"></ol>
+        </div>
+      </section>
     </div>
   </section>
 
