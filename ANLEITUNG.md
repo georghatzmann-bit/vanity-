@@ -66,7 +66,7 @@ Die lokale Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der
 
 ## 3. Handy und Alexa verbinden (freiwillig)
 
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Telegram, Alexa und Konnektoren. Discord brauchst du nicht zu verbinden: Jarvis bedient einfach die Discord-App auf deinem PC.
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa und Konnektoren. Discord brauchst du nicht zu verbinden: Jarvis bedient einfach die Discord-App auf deinem PC.
 
 ### Handy
 
@@ -91,20 +91,6 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Hand
 2. Auf dem Handy die kostenlose App **ntfy** installieren.
 3. In der App auf **+** tippen und den Kanalnamen eintragen, den Jarvis anzeigt (beginnt mit `jarvis-`).
 4. In Jarvis auf **Test schicken** klicken. Auf dem Handy erscheint sofort eine Nachricht.
-
-### Telegram: Jarvis von überall, auch mit Sprachnachricht
-
-Der einfachste Weg unterwegs: ohne Tailscale, ohne WLAN, ohne App-Store. Du schreibst Jarvis in Telegram oder schickst eine Sprachnachricht. Er erledigt es auf dem PC und antwortet mit Text und in seiner eigenen Stimme. Erinnerungen und Hinweise kommen auch dorthin, wenn du nicht am PC sitzt.
-
-1. In Telegram den **@BotFather** öffnen (im Jarvis-Fenster: **Verbinden** > **Telegram** > **@BotFather öffnen**).
-2. `/newbot` schicken, einen Namen wählen (zum Beispiel „Mein Jarvis“) und einen Benutzernamen, der auf `bot` endet.
-3. Der BotFather schickt einen langen Schlüssel (Zahl, Doppelpunkt, Buchstaben). Den kopieren.
-4. In Jarvis bei **Telegram** einfügen und **Prüfen und verbinden** klicken.
-5. Mit der Handy-Kamera den QR-Code scannen (oder den Link öffnen) und in Telegram **Starten** tippen.
-
-**Geklappt, wenn:** in Telegram „Verbunden, Sir“ kommt und im Fenster „Verbunden mit @…“ steht. Mit **Test schicken** kommt eine Nachricht samt Sprachnachricht.
-
-Der Bot gehört danach nur deinem Chat. Schreibt ihm jemand anderes, antwortet er einmal „Dieser Jarvis gehört jemand anderem“ und tut sonst nichts. Ein neues Handy verbindest du mit **Anderes Handy verbinden**. Die Nachrichten laufen über die Server von Telegram. Den Schlüssel vom BotFather nie weitergeben.
 
 ### Termine, Mails und Shop: deine Konnektoren
 
