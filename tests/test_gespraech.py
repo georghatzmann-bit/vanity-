@@ -62,6 +62,13 @@ class ConversationTest(unittest.TestCase):
         submitted, *_ = self.run_loop(Said("Wie spät ist es?", "Danke dir", "Öffne Spotify"), frames)
         self.assertEqual(submitted, ["Wie spät ist es?", "Danke dir"])
 
+    def test_music_ends_the_conversation(self):
+        # Nach "Mach Musik an" würde Jarvis sonst das Lied hören und den Text für einen Befehl halten
+        frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3
+        submitted, events, _ui = self.run_loop(Said("Mach Musik an", "Never gonna give you up"), frames)
+        self.assertEqual(submitted, ["Mach Musik an"])
+        self.assertNotIn("again", events)
+
     def test_silence_ends_the_conversation(self):
         frames = [QUIET] + SENTENCE + [QUIET] * 12 + SENTENCE + [QUIET] * 3
         submitted, *_ = self.run_loop(Said("Wie spät ist es?", "Öffne Spotify"), frames, gespraech_sekunden=0.5)
@@ -135,14 +142,22 @@ class WordsTest(unittest.TestCase):
         self.assertIsNone(after_name("Ich habe Jarvis gesagt"))
         self.assertIsNone(after_name("Wie spät ist es?"))
         self.assertIsNone(after_name("Davis Cup"))
+        self.assertIsNone(after_name("Gewiss, das stimmt"))
+        self.assertIsNone(after_name("Ganz gewiss nicht"))
+        self.assertEqual(after_name("Garvis, wie spät ist es?"), "wie spät ist es?")
 
     def test_conversation_words(self):
         for text in ("Alles klar", "Okay.", "Nein danke", "Das war's", "Nichts mehr"):
             self.assertEqual(conversation_turn(text), "ende", text)
         for text in ("Danke!", "Tschüss", "Gute Nacht, Jarvis", "Stopp"):
             self.assertEqual(conversation_turn(text), "zuletzt", text)
-        for text in ("Und morgen?", "Ja", "Was ist mit Dienstag?"):
+        for text in ("Und morgen?", "Ja", "Was ist mit Dienstag?", "Öffne Discord"):
             self.assertEqual(conversation_turn(text), "weiter", text)
+        # Danach spielt Musik oder läuft ein Anruf: nicht weiter zuhören, sonst werden Liedtexte zu Befehlen
+        for text in ("Mach Musik an", "Spiel Thunderstruck", "Spiel Queen auf Spotify", "Nächstes Lied", "Lauter",
+                     "Lautstärke auf 50", "Ruf Max auf Discord an", "Geh in den Sprachkanal Zocken", "Gaming-Modus an",
+                     "Sperr den PC"):
+            self.assertEqual(conversation_turn(text), "zuletzt", text)
 
     def test_tschuess_is_answered_without_claude(self):
         brain = FakeBrain()

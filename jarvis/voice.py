@@ -31,6 +31,11 @@ _DONE = re.compile(
 )
 # Darauf antwortet Jarvis noch, hört danach aber nicht weiter zu.
 _LAST_WORDS = ("thanks", "good_night", "bye", "stop", "mute")
+# Danach läuft Musik, ein Anruf oder ein Spiel, oder der PC geht aus: auch dann nicht weiter zuhören,
+# sonst hält Jarvis Liedtexte oder das Gespräch mit Max für Befehle und antwortet darauf, immer wieder.
+_SOUND_AFTER = ("media_play", "media_next", "media_prev", "play", "volume_up", "volume_down", "volume_set",
+                "gaming_on", "lock", "power_off", "power_restart", "power_sleep", "power_logoff")
+_DISCORD_SOUND = ("voice", "call")
 
 
 def conversation_turn(text: str) -> str:
@@ -41,7 +46,8 @@ def conversation_turn(text: str) -> str:
     if _DONE.match(intents.normalize(text)):
         return "ende"
     found = intents.match(text)
-    if found is not None and found.name in _LAST_WORDS:
+    if found is not None and (found.name in _LAST_WORDS or found.name in _SOUND_AFTER
+                              or (found.name == "discord" and found.arg in _DISCORD_SOUND)):
         return "zuletzt"
     return "weiter"
 
@@ -55,7 +61,7 @@ NAME_WAIT_FRAMES = 5  # 0.4 s (ein Frame sind 80 ms)
 # So viel Ton von vor dem Treffer kommt mit in die Prüfung (der Name selbst).
 NAME_PREROLL_FRAMES = 25  # 2 s
 # Was Whisper aus "Jarvis" macht, je nach Aussprache.
-_NAME = r"(?:j|dsch|tsch|ch|sch|g)[aeä]h?r?[vw]i[sß]s?"
+_NAME = r"(?!gewi[sß])(?:j|dsch|tsch|ch|sch|g)[aeä]h?r?[vw]i[sß]s?"  # "Garvis" ja, "gewiss" nein
 _GREETING = r"(?:hey|hei|hi|hallo|halo|okay|ok|servus|moin|yo|na|he|ey|äh|ähm|also|jo)"
 _NAME_AT_START = re.compile(rf"^\W*(?:{_GREETING}\W+)*(?:\w+\W+)?{_NAME}\b\W*", re.I)
 
