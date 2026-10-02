@@ -53,6 +53,9 @@ follow_up = true
 # "auto" = Groq, wenn unten ein Schlüssel steht, sonst auf dem eigenen PC.
 # "groq" = immer Groq, "lokal" = immer auf dem eigenen PC (geht auch ohne Internet).
 engine = "auto"
+# Auf dem eigenen PC: "parakeet" (schnell und genau, kommt mit der lokalen Stimme aus der Einrichtung)
+# oder "whisper" (das Modell unten). Ist Parakeet nicht installiert, nimmt Jarvis Whisper.
+lokal_modell = "parakeet"
 # Kostenloser Schlüssel von https://console.groq.com/keys: Spracherkennung in Bestqualität
 # (Whisper large-v3-turbo), in einem Bruchteil einer Sekunde. Am einfachsten in der Einrichtung eintragen.
 groq_key = ""
@@ -67,9 +70,12 @@ beam_size = 1
 
 [tts]
 # "elevenlabs" = Premium-Stimmen von ElevenLabs (die besten, kostenpflichtig, Schlüssel unten)
+# "lokal" = natürliche deutsche Stimme auf dem eigenen PC (gratis, ohne Internet, Einrichtung > Stimme > Lokal)
 # "edge" = menschliche Microsoft-Stimme (gratis, braucht Internet)
 # "windows" = eingebaute Windows-Stimme (offline)
 engine = "edge"
+# Für "lokal": george (am klarsten), charles (am tiefsten), juergen, michael, javert, stuart_bell
+lokal_stimme = "george"
 # ElevenLabs: Schlüssel von https://elevenlabs.io/app/settings/api-keys und die Stimme.
 # Am einfachsten in der Einrichtung (Schritt Stimme), dort gibt es Hörproben.
 elevenlabs_key = ""

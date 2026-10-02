@@ -150,6 +150,40 @@ jobs:
           }
           Write-Host "Update ueber ein laufendes Jarvis: OK"
 
+      - name: Probe lokale Stimme (wie der Knopf "Lokal einrichten")
+        shell: pwsh
+        timeout-minutes: 30
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          Push-Location $app
+          & $py -c "from jarvis.localvoice import install; ok, last = install(print); print('pip fertig:', ok); raise SystemExit(0 if ok else 1)"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -m jarvis.localvoice vorbereiten "$app\daten\stimmen"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -m jarvis.localvoice selbsttest
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Nach dem Einrichten müssen alle anderen Teile weiter laden (pocket-tts bringt numpy 2 und torch mit)
+          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, edge_tts, miniaudio, pystray, psutil, piper, torch, onnx_asr; print('Alle Pakete OK, numpy', numpy.__version__, 'torch', torch.__version__)"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Jarvis mit der lokalen Stimme starten: Sie muss im laufenden Jarvis laden
+          & $py -c "from jarvis.config import save_setting; save_setting('tts', 'engine', 'lokal'); save_setting('stt', 'engine', 'lokal')"
+          New-Item -ItemType Directory -Force daten | Out-Null
+          Set-Content daten\einrichtung-fertig.txt "probe"
+          $run = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -WorkingDirectory $app -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 3
+            if ($run.HasExited) { break }
+            if (Select-String -Path logs\jarvis.log -Pattern "Lokale Stimme george bereit" -Quiet -ErrorAction SilentlyContinue) { $ok = $true; break }
+          }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Get-Content logs\jarvis.log -Tail 30 -ErrorAction SilentlyContinue
+          Pop-Location
+          if (-not $ok) { Write-Host "Die lokale Stimme hat im laufenden Jarvis nicht geladen"; exit 1 }
+          Write-Host "Lokale Stimme im laufenden Jarvis: OK"
+
       - name: Probe-Deinstallation
         shell: pwsh
         run: |

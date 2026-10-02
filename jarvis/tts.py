@@ -49,6 +49,18 @@ class TextToSpeech:
         # ist viel schneller geladen, als der davor gesprochen ist.
         self._eleven_slot = threading.BoundedSemaphore(1)
         self._previous = ""
+        # Lokal (Pocket TTS): natürliche deutsche Stimme ganz ohne Internet, siehe localvoice.py
+        self._local = None
+        self._local_voice = ""
+        if self._engine == "lokal":
+            from .localvoice import PocketVoice, installed, voice_id
+
+            if installed()["tts"]:
+                self._local_voice = voice_id(cfg.get("lokal_stimme", ""))
+                self._local = PocketVoice(self._local_voice)
+                self._local.start()
+            else:
+                log.warning("Lokale Stimme ist eingestellt, aber nicht installiert (Einrichtung, Schritt Stimme).")
         key = str(cfg.get("elevenlabs_key", "") or "").strip()
         if self._engine == "elevenlabs" and key and self._eleven_voice:
             from .elevenlabs import DEFAULT_MODEL, ElevenLabs
@@ -73,6 +85,19 @@ class TextToSpeech:
                     return data["samples"].copy(), int(data["rate"])
             except Exception as exc:
                 log.debug("Stimmen-Zwischenspeicher: %s", exc)
+        if self._local is not None:
+            try:
+                audio = self._local_stream(text)
+                if cached is not None:
+                    audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
+                self.used_edge = True
+                return audio, audio.rate
+            except Exception as exc:
+                log.warning("Lokale Stimme: %s. Nehme die Ersatzstimme.", exc)
+                if time.monotonic() - self._reported_at > 600:
+                    self._reported_at = time.monotonic()
+                    self._on_problem("Die lokale Stimme spricht gerade nicht. Jarvis nimmt so lange die Ersatzstimme.")
+                return self._offline(text)
         if self._eleven is not None and time.monotonic() >= self._eleven_paused_until:
             try:
                 audio = self._eleven_stream(text)
@@ -154,6 +179,32 @@ class TextToSpeech:
                 continue
             raise error
 
+    # Die lokale Stimme rechnet auf dem Prozessor. Etwas mehr Vorlauf, damit es auch auf
+    # langsameren PCs (oder neben einem Spiel) nicht stockt.
+    LOCAL_BUFFER_SECONDS = 0.6
+
+    def _local_stream(self, text: str) -> "StreamingAudio":
+        """Startet die lokale Stimme und kommt zurück, sobald genug Ton da ist. Lädt sie noch
+        (kurz nach dem Start), wartet Jarvis lieber, als mitten im Gespräch die Stimme zu wechseln."""
+        from .localvoice import RATE
+
+        audio = StreamingAudio(RATE)
+        audio.BUFFER_SECONDS = self.LOCAL_BUFFER_SECONDS
+
+        def run() -> None:
+            try:
+                self._local.stream(text, audio.feed)
+                audio.finish()
+            except Exception as exc:
+                audio.finish(exc)
+
+        threading.Thread(target=run, name="jarvis-lokale-stimme-satz", daemon=True).start()
+        if not audio.ready.wait(45):
+            raise RuntimeError("Die lokale Stimme antwortet nicht")
+        if audio.error is not None and audio.available() == 0:
+            raise audio.error
+        return audio
+
     def _eleven_problem(self, exc: Exception) -> None:
         kind = getattr(exc, "kind", "other")
         pause = {"key": 1800, "quota": 1800, "plan": 1800, "voice": 1800, "busy": 5, "net": 20}.get(kind, 60)
@@ -193,7 +244,9 @@ class TextToSpeech:
             if cached is None or cached.exists():
                 continue
             try:
-                if self._eleven is not None:
+                if self._local is not None:
+                    samples, rate = self._local.synthesize(text)
+                elif self._eleven is not None:
                     from .elevenlabs import RATE
 
                     with self._eleven_slot:  # nicht gleichzeitig mit dem, was Jarvis gerade sagt
@@ -209,7 +262,9 @@ class TextToSpeech:
     def _cache_file(self, text: str) -> Path | None:
         if self._cache_dir is None or not text or len(text) > self.CACHE_MAX_CHARS:
             return None
-        if self._eleven is not None:
+        if self._local is not None:
+            key = "|".join(("lokal", self._local_voice, text))
+        elif self._eleven is not None:
             key = "|".join(("elevenlabs", self._eleven_voice, self._eleven_model, text))
         elif self._engine == "edge":
             key = "|".join((self._voice, self._rate, self._pitch, text))

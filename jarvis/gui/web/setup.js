@@ -31,7 +31,7 @@
     {
       id: 'voice', nav: 'Stimme',
       title: 'Wie soll Jarvis klingen?',
-      lead: 'Premium klingt wie ein echter Mensch. Kostenlos geht auch, klingt aber nach Computer.',
+      lead: 'Premium klingt wie ein echter Mensch. Lokal läuft kostenlos auf Ihrem PC, auch ohne Internet. Microsoft geht auch, klingt aber nach Computer.',
     },
     {
       id: 'place', nav: 'Name und Ort',
@@ -87,6 +87,7 @@
     },
     voices: [], voice: '', playing: '',
     tts: { engine: 'edge', tab: 'premium' },
+    local: { installed: {}, ready: false, busy: false, line: '', error: '', voices: [], voice: 'george', active: false, allLocal: false, timer: 0 },
     eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false, blocked: new Set() },
     groq: { keySet: false },
     pico: { keySet: false },
@@ -346,6 +347,10 @@
 
   function voiceName() {
     if (S.tts.engine === 'elevenlabs' && S.eleven.name) return S.eleven.name + ' (Premium)';
+    if (S.tts.engine === 'lokal') {
+      const lv = (S.local.voices || []).find((x) => x.id === S.local.voice);
+      return (lv ? lv.name : 'Lokale Stimme') + ' (lokal)';
+    }
     const v = S.voices.find((x) => x.id === S.voice);
     return v ? v.name : (S.voice || '').replace(/^de-\w\w-|Neural$|Multilingual/g, '');
   }
@@ -670,7 +675,129 @@
     }
     $('premiumPanel').hidden = S.tts.tab !== 'premium';
     $('freePanel').hidden = S.tts.tab !== 'free';
+    $('localPanel').hidden = S.tts.tab !== 'local';
+    if (S.tts.tab === 'local') localRefresh();
     renderElevenState();
+  }
+
+  // ---------- Lokal (Stimme und Spracherkennung auf diesem PC)
+
+  async function localRefresh() {
+    clearTimeout(S.local.timer);
+    try {
+      const st = await call('local_state');
+      if (st) Object.assign(S.local, st, { allLocal: !!st.all_local });
+    } catch (err) {
+      failed(err);
+    }
+    renderLocal();
+    if (S.local.busy) S.local.timer = setTimeout(localRefresh, 1000);
+  }
+
+  function renderLocal() {
+    const L = S.local;
+    const state = $('localState');
+    state.textContent = L.active ? 'Aktiv' : L.ready ? 'Bereit' : L.busy ? 'Lädt …' : '';
+    state.dataset.tone = L.active || L.ready ? 'ok' : '';
+    const btn = $('localInstall');
+    btn.parentElement.hidden = L.ready && !L.error;
+    btn.disabled = L.busy;
+    btn.classList.toggle('busy', L.busy);
+    btn.textContent = L.busy ? 'Wird eingerichtet …' : L.error ? 'Nochmal versuchen' : 'Lokal einrichten';
+    if (L.error) formMsg('localMsg', 'error', L.error);
+    else if (L.busy) formMsg('localMsg', 'info', L.line || 'Lädt …');
+    else if (L.ready) formMsg('localMsg', 'ok', L.active ? 'Jarvis spricht mit der lokalen Stimme.' : 'Bereit. Wählen Sie unten eine Stimme, dann spricht Jarvis damit.');
+    else formMsg('localMsg', '', '');
+    const grid = $('localGrid');
+    grid.replaceChildren();
+    grid.hidden = !L.ready;
+    for (const v of L.voices || []) {
+      const card = el('div', 'voice');
+      card.setAttribute('role', 'radio');
+      card.setAttribute('aria-checked', String(L.active && L.voice === v.id));
+      card.tabIndex = 0;
+      if (S.playing === 'lokal-' + v.id) card.classList.add('playing');
+      const txt = el('span', 'voice-text');
+      txt.append(el('span', 'voice-name', v.name), el('span', 'voice-desc', v.desc));
+      const tags = el('span', 'voice-tags');
+      tags.append(el('span', 'badge' + (v.recommended ? ' accent' : ''), v.recommended ? 'Empfohlen' : 'Lokal'));
+      txt.append(tags);
+      const play = el('button', 'play');
+      play.type = 'button';
+      play.title = v.name + ' anhören';
+      play.setAttribute('aria-label', v.name + ' anhören');
+      play.append(svg(ICON.play));
+      const bars = el('span', 'bars');
+      bars.append(el('i'), el('i'), el('i'));
+      play.append(bars);
+      play.addEventListener('click', (e) => {
+        e.stopPropagation();
+        localPreview(v);
+      });
+      card.append(el('span', 'avatar', v.name.charAt(0)), txt, play);
+      const pick = () => localChoose(v);
+      card.addEventListener('click', pick);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pick();
+        }
+      });
+      grid.append(card);
+    }
+    $('localAllRow').hidden = !L.ready;
+    $('localAll').checked = !!L.allLocal;
+  }
+
+  async function localInstall() {
+    try {
+      const r = await call('local_install');
+      if (r && !r.ok) toast(r.error || 'Das Einrichten ließ sich nicht starten.', 'error');
+    } catch (err) {
+      failed(err);
+    }
+    S.local.busy = true;
+    S.local.error = '';
+    renderLocal();
+    S.local.timer = setTimeout(localRefresh, 600);
+  }
+
+  async function localChoose(v) {
+    const changed = !S.local.active || S.local.voice !== v.id;
+    try {
+      const r = await call('local_select', v.id);
+      if (r && !r.ok) {
+        toast(r.error || 'Die Stimme ließ sich nicht speichern.', 'error');
+        return;
+      }
+    } catch (err) {
+      failed(err);
+      return;
+    }
+    S.local.voice = v.id;
+    S.local.active = true;
+    S.tts.engine = 'lokal';
+    renderLocal();
+    renderElevenState();
+    renderRail();
+    if (changed && !S.playing) localPreview(v);
+  }
+
+  async function localPreview(v) {
+    if (S.playing) {
+      toast('Einen Moment, es spricht gerade noch eine Stimme.', 'info');
+      return;
+    }
+    S.playing = 'lokal-' + v.id;
+    renderLocal();
+    try {
+      const r = await call('local_preview', v.id);
+      if (r && !r.ok) toast(r.error || 'Die Hörprobe lässt sich gerade nicht abspielen.', 'error');
+    } catch (err) {
+      failed(err);
+    }
+    S.playing = '';
+    renderLocal();
   }
 
   function renderElevenState() {
@@ -1638,7 +1765,7 @@
     S.groq.keySet = !!v.groq_key_set;
     S.pico.keySet = !!v.pico_key_set;
     // Premium zuerst zeigen, außer jemand hat ElevenLabs schon und bewusst zurück auf Microsoft gestellt.
-    S.tts.tab = S.eleven.keySet && S.tts.engine !== 'elevenlabs' ? 'free' : 'premium';
+    S.tts.tab = S.tts.engine === 'lokal' ? 'local' : S.eleven.keySet && S.tts.engine !== 'elevenlabs' ? 'free' : 'premium';
     S.place.saved = String(v.ort || '');
     S.name = String(v.name || '');
     if ($('nameInput') && !$('nameInput').value) $('nameInput').value = S.name;
@@ -1666,6 +1793,22 @@
         renderVoiceKind();
       });
     }
+    $('localInstall').addEventListener('click', localInstall);
+    $('localAll').addEventListener('change', async () => {
+      const on = $('localAll').checked;
+      try {
+        const r = await call('local_all', on);
+        if (r && !r.ok) {
+          $('localAll').checked = !on;
+          toast(r.error || 'Das ließ sich nicht speichern.', 'error');
+          return;
+        }
+        S.local.allLocal = on;
+        toast(on ? 'Auch die Spracherkennung läuft jetzt auf dem PC.' : 'Die Spracherkennung nimmt wieder Groq, wenn ein Schlüssel da ist.', 'ok');
+      } catch (err) {
+        failed(err);
+      }
+    });
     $('elevenForm').addEventListener('submit', (e) => {
       e.preventDefault();
       const key = $('elevenKey').value.trim();
@@ -1841,6 +1984,17 @@
     const claudeMode = params.get('claude') || 'ok';
     let micOn = false;
     let micT0 = 0;
+    let localT0 = 0;
+    let localVoice = 'george';
+    let localActive = false;
+    const LOCAL_VOICES = [
+      { id: 'george', name: 'George', desc: 'Ruhig und klar, am besten verständlich', recommended: true },
+      { id: 'charles', name: 'Charles', desc: 'Die tiefste Stimme, sehr gelassen' },
+      { id: 'juergen', name: 'Jürgen', desc: 'Natürlich, mittlere Tonlage' },
+      { id: 'michael', name: 'Michael', desc: 'Tief und weich' },
+      { id: 'javert', name: 'Javert', desc: 'Ernst und bestimmt' },
+      { id: 'stuart_bell', name: 'Stuart', desc: 'Heller und freundlich' },
+    ];
     let best = 0;
     let threshold = 0.5;
     let claudeT0 = 0;
@@ -1896,6 +2050,22 @@
       voice_prepare: () => later(true, 20),
       voice_preview: () => later({ ok: true, error: '' }, 2600),
       voice_save: () => later({ ok: true, error: '' }, 80),
+      local_state: () => {
+        const t = localT0 ? (performance.now() - localT0) / 1000 : -1;
+        const busy = t >= 0 && t < 6;
+        const lines = ['Collecting pocket-tts', 'Downloading torch-2.14.1-cp311-cp311-win_amd64.whl (114.6 MB)',
+          'Installing collected packages: torch, pocket-tts, onnx-asr', 'Lade die Stimme (etwa 220 MB) ...',
+          'Hörprobe: George ...', 'Lade die Spracherkennung (etwa 670 MB) ...'];
+        return later({
+          installed: { tts: t >= 3 || params.get('lokal') === 'ja', stt: t >= 3 || params.get('lokal') === 'ja' },
+          ready: params.get('lokal') === 'ja' || t >= 6, busy, line: busy ? lines[Math.min(lines.length - 1, Math.floor(t))] : '',
+          error: '', voices: LOCAL_VOICES, voice: localVoice, active: localActive, all_local: false,
+        }, 40);
+      },
+      local_install: () => { localT0 = performance.now(); return later({ ok: true, error: '' }, 60); },
+      local_preview: () => later({ ok: true, error: '' }, 2200),
+      local_select: (id) => { localVoice = id; localActive = true; return later({ ok: true, error: '' }, 80); },
+      local_all: () => later({ ok: true, error: '' }, 80),
       eleven_check: (key) => later(key === 'falsch'
         ? { ok: false, error: 'Dieser Schlüssel stimmt nicht. Bitte noch einmal kopieren (er beginnt mit sk_).' }
         : {

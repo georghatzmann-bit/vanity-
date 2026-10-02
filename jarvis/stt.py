@@ -233,8 +233,21 @@ def make_transcriber(cfg: dict, ort: str = "", on_problem=None):
     # Eine Wortliste als Hinweis hat im Test mehr verdorben als geholfen, deshalb ohne.
     prompt = str(cfg.get("prompt", "") or "")
 
-    def local():
+    def whisper():
         return SpeechToText(cfg["model"], cfg["language"], cfg.get("device", "cpu"), cfg.get("beam_size", 1), prompt)
+
+    def local():
+        # Parakeet (lokale Spracherkennung aus der Einrichtung): auf dem Prozessor viel schneller als Whisper
+        from .localvoice import installed
+
+        if installed()["stt"] and cfg.get("lokal_modell", "parakeet") == "parakeet":
+            try:
+                from .localvoice import ParakeetSpeechToText
+
+                return ParakeetSpeechToText()
+            except Exception as exc:
+                log.warning("Parakeet lädt nicht (%s), nehme Whisper.", exc)
+        return whisper()
 
     if key and engine in ("auto", "groq", "cloud"):
         return CloudSpeechToText(key, cfg.get("groq_model", "whisper-large-v3-turbo"), cfg["language"], prompt,

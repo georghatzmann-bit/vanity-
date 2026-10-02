@@ -359,6 +359,9 @@ class SetupApi:
         self._playing = threading.Lock()
         self._previews_started = False
         self._eleven_tier: str | None = None  # Tarif von ElevenLabs, sobald einmal gelesen
+        self._local_job: threading.Thread | None = None  # Lokale Stimme einrichten (läuft im Hintergrund)
+        self._local_line = ""
+        self._local_error = ""
         self.finished: dict | None = None
 
     # ------------------------------------------------------------ Start
@@ -521,6 +524,97 @@ class SetupApi:
         if result["ok"]:
             result = self._save("tts", "engine", "edge")
         return result
+
+    # ------------------------------------------------------------ Lokale Stimme (ohne Internet)
+
+    def local_state(self) -> dict:
+        """Ist die lokale Stimme da, läuft gerade das Einrichten, welche Stimme ist gewählt?"""
+        from .localvoice import VOICES, installed, preview_file, voice_id
+
+        have = installed()
+        previews = STATE_DIR / "stimmen"
+        busy = self._local_job is not None and self._local_job.is_alive()
+        ready = have["tts"] and have["stt"] and all(preview_file(previews, v["id"]).exists() for v in VOICES)
+        tts, stt = self._cfg["tts"], self._cfg["stt"]
+        return {
+            "installed": have, "ready": ready and not busy, "busy": busy, "line": self._local_line,
+            "error": self._local_error, "voices": VOICES, "voice": voice_id(tts.get("lokal_stimme", "")),
+            "active": str(tts.get("engine", "")) == "lokal", "all_local": str(stt.get("engine", "")) == "lokal",
+        }
+
+    def local_install(self) -> dict:
+        """Einmalig: Pakete installieren, Modelle laden, Hörproben schreiben (eigene Prozesse)."""
+        if self._local_job is not None and self._local_job.is_alive():
+            return {"ok": True, "error": ""}
+        self._local_error = ""
+        self._local_line = "Starte …"
+
+        def line(text: str) -> None:
+            # pip schreibt viel; für die Anzeige reichen die Zeilen, die etwas sagen
+            if text.startswith(("Collecting", "Downloading", "Installing", "Successfully", "Lade", "Hörprobe",
+                                "Fertig", "Fehler", "ERROR")):
+                self._local_line = text[:160]
+
+        def work() -> None:
+            from .localvoice import install, installed, prepare
+
+            if not all(installed().values()):
+                ok, last = install(line)
+                if not ok:
+                    self._local_error = "Die Installation ging nicht. Ist das Internet an? (" + last[:200] + ")"
+                    return
+            ok, last = prepare(STATE_DIR / "stimmen", line)
+            if not ok:
+                self._local_error = "Die Modelle ließen sich nicht laden. Ist das Internet an? (" + last[:200] + ")"
+                return
+            self._local_line = "Fertig. Wählen Sie unten eine Stimme."
+
+        self._local_job = threading.Thread(target=work, name="einrichtung-lokale-stimme", daemon=True)
+        self._local_job.start()
+        return {"ok": True, "error": ""}
+
+    def local_preview(self, voice) -> dict:
+        import wave
+
+        import numpy as np
+
+        from .localvoice import preview_file
+        from .tts import Player
+
+        path = preview_file(STATE_DIR / "stimmen", str(voice))
+        if not path.exists():
+            return {"ok": False, "error": "Erst „Lokal einrichten“, dann gibt es Hörproben."}
+        if not self._playing.acquire(blocking=False):
+            return {"ok": False, "error": "Es spielt gerade schon eine Stimme."}
+        try:
+            with wave.open(str(path), "rb") as data:
+                rate = data.getframerate()
+                samples = np.frombuffer(data.readframes(data.getnframes()), dtype=np.int16)
+            Player().play(samples, rate, lambda level: None)
+            return {"ok": True, "error": ""}
+        except Exception as exc:
+            log.warning("Lokale Hörprobe: %s", exc)
+            return {"ok": False, "error": "Die Hörprobe lässt sich gerade nicht abspielen."}
+        finally:
+            self._playing.release()
+
+    def local_select(self, voice) -> dict:
+        from .localvoice import installed, voice_id
+
+        if not installed()["tts"]:
+            return {"ok": False, "error": "Die lokale Stimme ist noch nicht eingerichtet."}
+        result = self._save("tts", "lokal_stimme", voice_id(voice))
+        if result["ok"]:
+            result = self._save("tts", "engine", "lokal")
+        return result
+
+    def local_all(self, on) -> dict:
+        """Auch die Spracherkennung auf dem PC (nichts geht mehr ins Internet außer Claude)."""
+        from .localvoice import installed
+
+        if on and not installed()["stt"]:
+            return {"ok": False, "error": "Die lokale Spracherkennung ist noch nicht eingerichtet."}
+        return self._save("stt", "engine", "lokal" if on else "auto")
 
     # ------------------------------------------------------------ Premium-Stimmen (ElevenLabs)
 
