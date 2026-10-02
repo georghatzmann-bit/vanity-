@@ -63,7 +63,9 @@ NAME_PREROLL_FRAMES = 25  # 2 s
 # Was Whisper aus "Jarvis" macht, je nach Aussprache.
 _NAME = r"(?!gewi[sß])(?:j|dsch|tsch|ch|sch|g)[aeä]h?r?[vw]i[sß]s?"  # "Garvis" ja, "gewiss" nein
 _GREETING = r"(?:hey|hei|hi|hallo|halo|okay|ok|servus|moin|yo|na|he|ey|äh|ähm|also|jo)"
-_NAME_AT_START = re.compile(rf"^\W*(?:{_GREETING}\W+)*(?:\w+\W+)?{_NAME}\b\W*", re.I)
+# Vor dem Namen darf ein Wort stehen ("Danke, Jarvis") oder eine dieser Floskeln aus zwei Wörtern
+_POLITE = r"(?:gute[nr]?\W+(?:nacht|morgen|abend|tag)|vielen\W+dank|danke\W+(?:schön|sehr))"
+_NAME_AT_START = re.compile(rf"^\W*(?:{_GREETING}\W+)*(?:{_POLITE}\W+|\w+\W+)?{_NAME}\b\W*", re.I)
 
 
 def after_name(text: str) -> str | None:

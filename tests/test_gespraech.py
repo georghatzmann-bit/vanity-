@@ -120,6 +120,13 @@ class NameTest(unittest.TestCase):
         self.assertEqual(submitted, ["Danke, Jarvis."])
         self.assertNotIn("chime", events)
 
+    def test_gute_nacht_jarvis_is_answered_too(self):
+        frames = [LOUD] * 3 + [QUIET] * 3 + [QUIET] * 4
+        said = Said("Gute Nacht, Jarvis.")
+        submitted, events = self.run_loop(said, frames, [0.3])
+        self.assertEqual(submitted, ["Gute Nacht, Jarvis."])
+        self.assertNotIn("chime", events)
+
     def test_other_talk_costs_no_long_recording(self):
         # Ein Fernseher redet weiter: Jarvis prüft nur zwei Sekunden und hört gleich wieder
         # auf "Hey Jarvis", statt den ganzen Satz aufzunehmen.
@@ -163,6 +170,12 @@ class WordsTest(unittest.TestCase):
         self.assertIsNone(after_name("Gewiss, das stimmt"))
         self.assertIsNone(after_name("Ganz gewiss nicht"))
         self.assertEqual(after_name("Garvis, wie spät ist es?"), "wie spät ist es?")
+        # Floskeln aus zwei Wörtern vor dem Namen: sonst hört Jarvis "Gute Nacht, Jarvis" gar nicht
+        for text in ("Gute Nacht, Jarvis", "Vielen Dank, Jarvis", "Danke schön, Jarvis", "Guten Morgen, Jarvis"):
+            self.assertEqual(after_name(text), "", text)
+        self.assertEqual(after_name("Guten Abend Jarvis, mach das Licht aus"), "mach das Licht aus")
+        self.assertIsNone(after_name("Ich habe Jarvis gesagt"))
+        self.assertIsNone(after_name("Gute Leute kennen Jarvis"))
 
     def test_conversation_words(self):
         for text in ("Alles klar", "Okay.", "Nein danke", "Das war's", "Nichts mehr"):
