@@ -258,14 +258,14 @@ class InstallTest(Base):
         self.assertEqual(env.opened[-1], "steam://install/730")
         self.assertFalse(any("storesearch" in u for u in web.urls), "CS2 kennt Jarvis ohne Suche")
 
-    def test_unsure_name_asks_first(self):
-        web = FakeWeb(search=[("1928870", "Minecraft Dungeons")])
-        games, env = self.make(web=web)
-        answer = games.install("Minecraft", offer=self.offer)
-        self.assertEqual(answer, "Minecraft finde ich so nicht bei Steam, Sir. Meinen Sie Minecraft Dungeons?")
-        self.assertEqual(env.opened, [], "nichts Falsches installieren")
-        self.assertIn("Minecraft Dungeons", self.offers[-1][1]())
-        self.assertEqual(env.opened, ["steam://install/1928870"])
+    def test_unclear_names_go_to_claude(self):
+        for said, hits in [("Minecraft", [("1928870", "Minecraft Dungeons")]),
+                           ("Python", [("1882420", "Learn Programming: Python - Remake")]),
+                           ("VLC", [("2367420", "Kletba Vlčího Moru")])]:
+            games, env = self.make(web=FakeWeb(search=hits))
+            self.assertIsNone(games.install(said, offer=self.offer), said)
+            self.assertEqual(env.opened, [], f"{said}: nichts Falsches installieren")
+        self.assertEqual(self.offers, [])
 
     def test_not_enough_space_and_offline(self):
         games, env = self.make(web=FakeWeb(search=[("2", "Riesenspiel")], details=500))

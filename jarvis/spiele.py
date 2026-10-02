@@ -10,6 +10,8 @@
 - Epic Games: installierte Spiele aus den Manifesten des Launchers (ProgramData), starten über
   com.epicgames.launcher://apps/<AppName>?action=launch. Updates sieht nur der Launcher selbst.
 - Abkürzungen ("CS2", "GTA 5", "Repo") kennt Jarvis, alles andere sucht er im Steam-Shop und merkt es sich.
+  Passt der Name nicht eindeutig ("Minecraft", "Python"), übernimmt Claude (vielleicht ist es gar kein
+  Steam-Spiel, sondern ein Programm für winget).
 """
 
 from __future__ import annotations
@@ -495,16 +497,13 @@ class Games:
             return None
         appid, title, sure = found
         if not sure:
-            ask = f"Meinen Sie {title}?"
-            if offer:
-                offer(ask, lambda: self._install_steam(appid, title, remember=name))
-                return f"{name} finde ich so nicht bei Steam, Sir. {ask}"
+            # Nur ähnlich ("Minecraft" -> Minecraft Dungeons, "Python" -> ein Lernspiel): kein Spiel raten.
+            # Claude kennt auch Programme und Launcher außerhalb von Steam (winget).
+            log.info("Spiel %r: bei Steam nur %r gefunden, Claude übernimmt", name, title)
             return None
         return self._install_steam(appid, title)
 
-    def _install_steam(self, appid: str, title: str, remember: str = "") -> str:
-        if remember:
-            self._remember(remember, appid, title)
+    def _install_steam(self, appid: str, title: str) -> str:
         steam_was_running = self.env.running(("steam.exe",))
         size_box: list[int] = []
         sizer = threading.Thread(target=lambda: size_box.append(self.size_of(appid)), name="jarvis-spielgroesse",
