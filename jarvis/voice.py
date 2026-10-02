@@ -536,9 +536,9 @@ class VoiceLoop:
 
     @staticmethod
     def _is_command(text: str) -> bool:
-        from . import intents
+        from . import intents, spiele
 
-        return intents.match(text) is not None
+        return intents.match(text) is not None or spiele.is_command(text)
 
     def _transcribe(self, frames: list) -> str:
         import numpy as np

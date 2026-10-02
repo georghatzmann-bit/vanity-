@@ -171,6 +171,11 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         assistant.world = Weltlage(cfg, ui, tell, spoken, show_window=show_window, hush=hush)
     if brain is not None:
         brain.turn_context = assistant.workshop.context  # Fragen zur laufenden Werkstatt-Arbeit
+    # Spiele (Steam, Epic): "Installiere CS2", "Starte Rust", "Welche Spiele brauchen Updates?", ohne Claude
+    from .spiele import Games
+
+    assistant.games = Games(cfg, STATE_DIR, say=assistant.announce)
+    assistant.games.prewarm()
     from .push import Push
 
     assistant.push = Push(cfg)  # Benachrichtigungen aufs Handy (Verbinden > Handy)

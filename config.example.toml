@@ -259,6 +259,13 @@ meldungen = 7
 # Die Webcam für die Handsteuerung (false = nie). Sie wird nur benutzt, solange die Handsteuerung läuft.
 handsteuerung = true
 
+[spiele]
+# Spiele per Sprache, ohne Claude (darum in etwa einer Sekunde): "Installiere CS2", "Starte Lethal Company",
+# "Welche Spiele brauchen Updates?", "Welche Spiele habe ich?", "Deinstalliere Rust" (Steam fragt selbst nach).
+# true = Hat Steam nur eine Bibliothek, bestätigt Jarvis den Installieren-Dialog selbst. Bei mehreren
+# Laufwerken wählst du im Dialog, Jarvis sagt dir, wo am meisten Platz ist.
+steam_bestaetigen = true
+
 [blaupause]
 # "Blaupause" oder "Generiere einen Iron-Man-Helm": 3D-Modelle als Hologramm auf einer echten Blaupause.
 # Drehen, zoomen, Explosionsansicht, Teile genauer ansehen, als STL für den 3D-Drucker exportieren.

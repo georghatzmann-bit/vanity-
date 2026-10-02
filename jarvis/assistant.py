@@ -86,6 +86,7 @@ class Assistant:
         self.workshop = None
         self.blueprint = None  # die Blaupause: 3D-Modelle als Hologramm (blaupause.Blueprint, setzt __main__)
         self.world = None  # die Weltlage: Satelliten-Erde mit Lagebericht (weltlage.Weltlage, setzt __main__)
+        self.games = None  # Spiele auf Steam und Epic (spiele.Games, setzt __main__)
         self.gaming = False
         # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
         self.weathers: dict = {}
@@ -449,6 +450,16 @@ class Assistant:
             noted = match_notebook(text)
             if noted is not None:
                 return self._notebook_command(*noted)
+        games = getattr(self, "games", None)
+        if games is not None:
+            # "Welche Spiele brauchen Updates?", "Welche Spiele habe ich?", "Deinstalliere Rust"
+            try:
+                answer = games.command(text, offer=self._offer_action)
+            except Exception:
+                log.exception("Spiele")
+                answer = None
+            if answer is not None:
+                return answer
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             projects = getattr(self.workshop, "project_command", None)
@@ -564,9 +575,9 @@ class Assistant:
         if name == "bye":
             return random.choice(["Bis später, Sir.", "Bis bald, Sir.", "Ich bin hier, wenn Sie mich brauchen, Sir."])
         if name == "help":
-            return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Termine, "
-                    "Mails, Erinnerungen, Wetter, Musik, den PC herunterfahren, und in der Werkstatt programmiere ich "
-                    "für Sie. Sagen Sie zum Beispiel: Schreib Max auf Discord, bin gleich da.")
+            return ("Fast alles am PC, Sir: Programme und Spiele öffnen und installieren, Discord und Chats ohne Maus, "
+                    "Termine, Mails, Erinnerungen, Wetter, Musik, den PC herunterfahren, und in der Werkstatt programmiere "
+                    "ich für Sie. Sagen Sie zum Beispiel: Schreib Max auf Discord, bin gleich da.")
         if name == "time":
             return intents.spoken_time(now)
         if name == "date":
@@ -671,7 +682,7 @@ class Assistant:
                 with self._step(f"Öffnet {_display(target)}", "app"):
                     said = apps.open_app(target)
             except apps.AppNotFound:
-                return None
+                return self._game("launch", target)  # "Starte CS2": ein Spiel ohne Startmenü-Eintrag
             if said.endswith(" startet."):
                 name = said.removesuffix(" startet.")
                 self.learn("open", name)
@@ -687,13 +698,39 @@ class Assistant:
             return said.replace(" ist zu.", " ist zu, Sir.")
         known = apps.find_known(target)
         if known is None or not known.winget:
-            return None  # Claude sucht die passende winget-ID
+            # "Installiere CS2": ein Spiel (Steam, Epic). Sonst sucht Claude die passende winget-ID.
+            return self._game("install", target)
         self.ui.message("info", f"Installiere {known.name} ...")
         threading.Thread(target=self._install, args=(known,), name="jarvis-installieren", daemon=True).start()
         return random.choice([
             f"Ich installiere {known.name}, Sir. Einen Moment.",
             f"Sehr wohl. {known.name} wird installiert, ich sage Bescheid.",
         ])
+
+    def _game(self, action: str, target: str) -> str | None:
+        """Spiele installieren und starten (spiele.py). None = kein Spiel, das Jarvis findet."""
+        games = getattr(self, "games", None)
+        if games is None:
+            return None
+        started = time.monotonic()
+        try:
+            answer = games.install(target, offer=self._offer_action) if action == "install" else games.launch(target)
+        except Exception as exc:
+            log.info("Spiel %s (%s): %s", target, action, exc)
+            return None
+        if answer is not None:
+            label = f"Installiert {_display(target)}" if action == "install" else f"Startet {_display(target)}"
+            self.ui.progress({"id": f"q{next(self._ids)}", "tool": "Jarvis", "label": label, "detail": "", "kind": "app",
+                              "state": "done", "seconds": round(time.monotonic() - started, 1)})
+        return answer
+
+    def _offer_action(self, question: str, action) -> None:
+        """Eine Rückfrage mit Folge: "Soll ich es starten?" - "Ja" führt action aus (zwei Minuten lang,
+        ohne "Hey Jarvis")."""
+        from .hinweise import Hint
+
+        self._offer = (Hint(key="frage:" + question, kind="frage", text="", offer=question, action=action),
+                       time.monotonic() + 120)
 
     def _web(self, name: str, intent) -> str | None:
         """Webseiten, Suchen, Karten und Abspielen: ein Link, den Windows sofort öffnet."""

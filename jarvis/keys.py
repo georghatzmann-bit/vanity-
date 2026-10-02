@@ -191,9 +191,10 @@ def window_title(hwnd: int = 0) -> str:
         return ""
 
 
-def find_window(names, hint: str = "") -> int:
+def find_window(names, hint: str = "", dialogs: bool = False) -> int:
     """Das Hauptfenster eines laufenden Programms (z. B. Discord), auch minimiert. 0, wenn es
-    keins gibt oder es nur im Infobereich neben der Uhr sitzt (dann ist es unsichtbar)."""
+    keins gibt oder es nur im Infobereich neben der Uhr sitzt (dann ist es unsichtbar).
+    dialogs=True: auch Dialoge, aber nur solche mit hint im Titel (z. B. Steams "Installieren"-Fenster)."""
     try:
         ctypes, user32, _INPUT, _KB = _api()
         from ctypes import wintypes
@@ -207,7 +208,7 @@ def find_window(names, hint: str = "") -> int:
 
     def visit(hwnd, _param):
         try:
-            if not user32.IsWindowVisible(hwnd) or user32.GetWindow(hwnd, 4):  # GW_OWNER: Dialoge
+            if not user32.IsWindowVisible(hwnd) or (user32.GetWindow(hwnd, 4) and not dialogs):  # GW_OWNER: Dialoge
                 return True
             if user32.GetWindowTextLengthW(hwnd) == 0:
                 return True
@@ -223,7 +224,8 @@ def find_window(names, hint: str = "") -> int:
                 user32.GetWindowRect(hwnd, ctypes.byref(rect))
                 area = max(0, rect.right - rect.left) * max(0, rect.bottom - rect.top)
                 titled = bool(hint) and hint.lower() in window_title(hwnd).lower()
-                found.append((titled, area, int(hwnd)))
+                if titled or not dialogs:
+                    found.append((titled, area, int(hwnd)))
         except Exception:
             pass
         return True

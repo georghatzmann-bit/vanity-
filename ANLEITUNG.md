@@ -155,6 +155,13 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - „Erinnere mich in 20 Minuten an den Tee“, „Stell einen Timer auf 10 Minuten“
 - Mehrere auf einmal: „Öffne Spotify und Discord“
 
+**Spiele** (Steam und Epic Games, in etwa einer Sekunde, ohne Claude):
+
+- „Installiere CS2“, „Lad mal schnell Palworld herunter“: Der Steam-Dialog geht sofort auf. Hast du nur ein Steam-Laufwerk, bestätigt Jarvis ihn selbst. Bei mehreren sagt er dir, wo am meisten Platz ist, und du wählst im Dialog. Sobald der Download läuft, sagt er, auf welchem Laufwerk. Ist ein Name unklar („Installiere Minecraft“), fragt er erst: „Meinen Sie Minecraft Dungeons II?“
+- „Starte CS2“, „Starte Lethal Company“, „Starte Fortnite“ (auch Abkürzungen wie CS2, GTA 5, R6, BG3, Repo)
+- „Welche Spiele brauchen Updates?“: Jarvis sieht alle Steam-Bibliotheken durch und zählt auf, was ein Update braucht. „Ja“ öffnet die Steam-Downloads. Epic-Spiele aktualisiert der Epic-Launcher selbst.
+- „Welche Spiele habe ich?“, „Deinstalliere Rust“ (Steam fragt selbst noch einmal nach)
+
 **Discord und Chats** (ohne Maus, in ein, zwei Sekunden):
 
 - „Schreib Max auf Discord, bin gleich da“, „Schick Anna über WhatsApp: Ich komme später“ (auch Telegram)
