@@ -256,6 +256,17 @@
 
     let tg = null;
     let tgPoll = 0;
+    let tgPairing = null; // der gezeigte Link mit Code: bleibt stehen, bis das Handy verbunden ist (15 Minuten)
+
+    function keepPairing(pair) {
+      tgPairing = pair && pair.link ? Object.assign({ until: Date.now() + 15 * 60000 }, pair) : null;
+      return tgPairing;
+    }
+
+    function shownPairing() {
+      if (!tgPairing || !tg || !tg.enabled || tg.paired || Date.now() > tgPairing.until) tgPairing = null;
+      return tgPairing;
+    }
 
     function renderTelegram(pair) {
       if (!el.tgState) return;
@@ -284,7 +295,7 @@
       } catch {
         tg = { enabled: false };
       }
-      renderTelegram(null);
+      renderTelegram(shownPairing());
       return tg;
     }
 
@@ -307,7 +318,7 @@
         tg = r;
         if (r && r.ok) {
           el.tgToken.value = '';
-          renderTelegram(r);
+          renderTelegram(keepPairing(r) || r);
           if (!r.paired) {
             toast('Der Schlüssel passt. Jetzt den Link auf dem Handy öffnen und Starten tippen.', 'ok');
             waitForPairing();
@@ -341,7 +352,7 @@
         try {
           tg = await call('telegram_off');
           clearInterval(tgPoll);
-          renderTelegram(null);
+          renderTelegram(shownPairing());
           toast('Telegram ist aus.', 'ok');
         } catch {
           toast('Das ging gerade nicht.', 'error');
@@ -350,7 +361,7 @@
       el.tgVoice.addEventListener('change', async () => {
         try {
           tg = await call('telegram_voice', el.tgVoice.checked);
-          renderTelegram(null);
+          renderTelegram(shownPairing());
         } catch {
           toast('Das ging gerade nicht.', 'error');
         }
@@ -370,7 +381,7 @@
         try {
           const r = await call('telegram_new_pairing');
           tg = r;
-          renderTelegram(r);
+          renderTelegram(keepPairing(r) || r);
           waitForPairing();
         } catch {
           toast('Das ging gerade nicht.', 'error');

@@ -16,6 +16,7 @@ so auch im Fenster. Den Schlüssel schreibt Jarvis nie ins Protokoll.
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import logging
@@ -131,7 +132,7 @@ class TelegramBot:
                 reply = json.loads(exc.read().decode("utf-8"))
             except (ValueError, OSError):
                 raise TelegramError(f"Telegram antwortet mit Fehler {exc.code}.") from None
-        except (OSError, ValueError):
+        except (OSError, ValueError, http.client.HTTPException):
             # Der Schlüssel steht in der Adresse: nie die Ausnahme selbst weitergeben
             raise TelegramError("Telegram ist gerade nicht erreichbar.") from None
         if not isinstance(reply, dict) or not reply.get("ok"):
@@ -193,12 +194,16 @@ class TelegramBot:
 
     def use_token(self, token: str, name: str) -> None:
         """Ein anderer Bot: gehört noch niemandem, und seine Nachrichten fangen bei null an."""
+        restart = token != self.token and self.running
         if token != self.token:
             self._offset = 0
             self._strangers.clear()
             self.unpair()
         self.token = token
         self.username = name
+        if restart:  # nicht noch bis zu 50 s auf den alten Bot warten
+            self.stop()
+            self.start()
 
     def unpair(self) -> None:
         self.chat_id = 0
@@ -234,10 +239,13 @@ class TelegramBot:
     # ------------------------------------------------------------------ Nachrichten
 
     def start(self) -> bool:
-        if not self.enabled or (self._thread is not None and self._thread.is_alive()):
+        if not self.enabled or self.running:
             return False
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="jarvis-telegram", daemon=True)
+        # Jede Runde hat ihr eigenes Stopp-Signal: Eine gerade gestoppte Runde wartet vielleicht noch auf
+        # Telegram (bis zu 50 s) und hört danach auf, ohne etwas zu erledigen. Die neue fragt sofort.
+        self._stop.set()
+        self._stop = stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, args=(stop,), name="jarvis-telegram", daemon=True)
         self._thread.start()
         return True
 
@@ -248,23 +256,27 @@ class TelegramBot:
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive() and not self._stop.is_set()
 
-    def _loop(self) -> None:
-        if not self.username:
-            self.check()
+    def _loop(self, stop: threading.Event) -> None:
         pause = 2.0
-        while not self._stop.is_set():
+        while not stop.is_set():
             try:
+                if not self.username:
+                    self.check()
                 updates = self._call("getUpdates", {"offset": self._offset, "timeout": self._poll_timeout,
                                                     "allowed_updates": ["message"]}, timeout=self._poll_timeout + 15)
-                pause = 2.0
-                self.last_error = ""
-            except TelegramError as exc:
-                self.last_error = str(exc)
-                log.info("Telegram: %s (nächster Versuch in %.0f s)", exc, pause)
-                if self._stop.wait(pause):
+            except Exception as exc:
+                if stop.is_set():  # abgelöst (Telegram meldet dann "Conflict"): kein Fehler fürs Fenster
+                    return
+                self.last_error = str(exc) if isinstance(exc, TelegramError) else "Telegram ist gerade nicht erreichbar."
+                log.info("Telegram: %s (nächster Versuch in %.0f s)", self.last_error, pause)
+                if stop.wait(pause):
                     return
                 pause = min(120.0, pause * 2)
                 continue
+            if stop.is_set():  # ausgeschaltet oder anderer Bot: die nächste Runde holt die Nachrichten selbst
+                return
+            pause = 2.0
+            self.last_error = ""
             for update in updates or []:
                 if not isinstance(update, dict):
                     continue

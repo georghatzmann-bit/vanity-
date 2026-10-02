@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import threading
 import tomllib
 from pathlib import Path
 
@@ -165,6 +166,14 @@ def save_setting(section: str, key: str, value, path: Path | None = None) -> Non
     """Schreibt einen Wert (Text, Zahl, Ja/Nein) in config.toml und lässt Kommentare
     und den Rest stehen."""
     path = path or CONFIG_PATH
+    with _SAVE_LOCK:  # Fenster, Telegram und Hinweise speichern aus verschiedenen Threads
+        _save_setting(path, section, key, value)
+
+
+_SAVE_LOCK = threading.Lock()
+
+
+def _save_setting(path: Path, section: str, key: str, value) -> None:
     if not path.exists():
         path.write_text(EXAMPLE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     new_line = f"{key} = {toml_value(value)}"

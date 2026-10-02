@@ -368,6 +368,65 @@ class TelegramTest(unittest.TestCase):
         bot.stop()
         self.wait_until(lambda: not bot._thread.is_alive())
 
+    def test_off_and_on_again_keeps_answering(self):
+        bot = self.bot(chat_id=42)
+        self.assertTrue(bot.start())
+        self.api.wait_for("getUpdates")  # wartet gerade auf Telegram
+        bot.stop()
+        self.assertTrue(bot.start(), "gleich wieder an, ohne Jarvis neu zu starten")
+        self.assertTrue(bot.running)
+        self.api.push({"update_id": 600, "message": message(42, "Öffne Spotify")})
+        self.wait_until(lambda: "Spotify ist offen, Sir." in self.api.texts(42))
+        time.sleep(1.2)  # auch die alte Runde hat ihre Antwort von Telegram bekommen
+        self.assertEqual(self.assistant.commands, [("Öffne Spotify", False)], "nur einmal erledigt")
+        self.assertEqual(bot._offset, 601)
+
+    def test_dropped_connection_does_not_end_polling(self):
+        import http.client
+        import urllib.request
+        from unittest import mock
+
+        bot = self.bot(chat_id=42)
+        real = urllib.request.urlopen
+        dropped = []
+
+        def flaky(request, *args, **kwargs):
+            if not dropped:  # die Leitung bricht mitten in der Antwort ab
+                dropped.append(request.full_url)
+                raise http.client.IncompleteRead(b"")
+            return real(request, *args, **kwargs)
+
+        with mock.patch("urllib.request.urlopen", flaky):
+            self.assertTrue(bot.start())
+            self.wait_until(lambda: dropped)
+            self.api.push({"update_id": 700, "message": message(42, "Öffne Spotify")})
+            self.wait_until(lambda: "Spotify ist offen, Sir." in self.api.texts(42), timeout=10)
+        self.assertNotIn(TOKEN, bot.last_error)
+
+    def test_dropped_connection_is_a_telegram_error_without_the_key(self):
+        import http.client
+        from unittest import mock
+
+        bot = self.bot(chat_id=42)
+        with mock.patch("urllib.request.urlopen", side_effect=http.client.IncompleteRead(b"")):
+            with self.assertRaises(telegram.TelegramError) as caught:
+                bot._call("getMe")
+        self.assertNotIn(TOKEN, str(caught.exception))
+        self.assertIsNone(caught.exception.__cause__)
+
+    def test_new_bot_is_asked_right_away(self):
+        self.api.tokens.add(OTHER)
+        bot = self.bot(chat_id=42)
+        self.assertTrue(bot.start())
+        self.api.wait_for("getUpdates")
+        old = bot._thread
+        bot.use_token(OTHER, "anderer_bot")  # während die alte Runde noch auf Telegram wartet
+        self.assertIsNot(bot._thread, old, "eine neue Runde mit dem neuen Bot")
+        self.assertTrue(bot.running)
+        code = bot.pairing()["code"]
+        self.api.push({"update_id": 7, "message": message(43, f"/start {code}")})
+        self.wait_until(lambda: bot.chat_id == 43)
+
     def test_off_does_not_poll(self):
         bot = self.bot(aktiv=False)
         self.assertFalse(bot.start())
@@ -442,7 +501,12 @@ class WindowTest(unittest.TestCase):
             self.assertTrue(result["ok"], result)
             self.assertEqual(result["name"], "jarvis_georg_bot")
             self.assertTrue(result["link"].startswith("https://t.me/jarvis_georg_bot?start="))
-            self.assertIn("<svg", result["qr"])
+            try:
+                import qrcode  # noqa: F401
+            except ImportError:  # optional: ohne steht im Fenster der Link zum Antippen
+                self.assertEqual(result["qr"], "")
+            else:
+                self.assertIn("<svg", result["qr"])
             self.assertTrue(result["running"])
             self.assertNotIn(TOKEN, json.dumps(result), "der Schlüssel bleibt im PC")
             text = config.read_text(encoding="utf-8")
