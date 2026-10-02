@@ -310,6 +310,14 @@ class TextToSpeech:
         if self._local is None or self._eleven is not None:
             return
         try:
+            # Erst fertig laden lassen und einmal rechnen (das erste Mal ist langsamer), dann messen. Sonst zählt
+            # die Ladezeit mit: Im Windows-Build kam so 0,1-fach Echtzeit heraus statt 1,9-fach, und Jarvis
+            # wartete vor jeder Antwort eine volle Sekunde statt 0,4.
+            usable = getattr(self._local, "usable", None)
+            if usable is not None and not usable(wait=120):
+                log.info("Lokale Stimme vorwärmen: lädt noch")
+                return
+            self._local.synthesize("Sehr wohl.")
             started = time.monotonic()
             samples, rate = self._local.synthesize("Einen Moment, Sir.")
             took = max(1e-3, time.monotonic() - started)

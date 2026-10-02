@@ -4,6 +4,7 @@ Die echten Modelle prüft der Windows-Build (Schritt "Probe lokale Stimme")."""
 import re
 import sys
 import tempfile
+import time
 import types
 import unittest
 import wave
@@ -192,6 +193,29 @@ class VoiceTest(unittest.TestCase):
         tts.warm_up()  # FakePocket rechnet sofort: sehr schnell
         self.assertEqual(tts.LOCAL_BUFFER_SECONDS, 0.25)
         self.assertEqual(type(tts).LOCAL_BUFFER_SECONDS, 0.6, "nur diese Stimme, nicht alle")
+
+    def test_warm_up_does_not_count_the_loading(self):
+        """Die Ladezeit des Modells ist keine Rechenzeit: sonst gilt jeder PC als langsam (eine Sekunde Vorlauf)."""
+        tts = self.make()
+        voice = tts._local
+        clock = {"loaded": False, "calls": 0}
+
+        def usable(wait=0.0):
+            time.sleep(0.3)  # lädt noch
+            clock["loaded"] = True
+            return True
+
+        def synthesize(text):
+            clock["calls"] += 1
+            if clock["calls"] == 1:
+                time.sleep(0.3)  # das erste Mal nach dem Laden ist langsamer
+            return np.ones(24000, dtype=np.int16), 24000  # eine Sekunde Ton, sofort
+
+        voice.usable, voice.synthesize = usable, synthesize
+        tts.warm_up()
+        self.assertTrue(clock["loaded"])
+        self.assertEqual(clock["calls"], 2, "einmal zum Aufwärmen, einmal zum Messen")
+        self.assertEqual(tts.LOCAL_BUFFER_SECONDS, 0.25, "schneller PC: kaum Vorlauf")
 
     def test_config_is_read_as_utf8_on_windows(self):
         """Pocket TTS liest german.yaml mit open(pfad, "r"): Unter Windows (cp1252) scheiterte daran die Stimme."""
