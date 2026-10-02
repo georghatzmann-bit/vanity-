@@ -53,6 +53,22 @@
             <Grid x:Name="Buehne" Grid.RowSpan="2" Background="Transparent" MouseLeftButtonDown="Ziehen">
                 <Canvas x:Name="KernFlaeche" Width="240" Height="240" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,8,0,0">
                     <Ellipse x:Name="KernGlanz" Width="240" Height="240" Fill="{StaticResource KernGlanzFarbe}" Opacity="0.8" />
+                    <!-- Farbige Schleier hinter der Kugel, die langsam kreisen (wie im Jarvis-Fenster) -->
+                    <Canvas x:Name="Schleier" Width="240" Height="240" RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                        <Canvas.RenderTransform>
+                            <RotateTransform x:Name="SchleierDrehung" />
+                        </Canvas.RenderTransform>
+                        <Ellipse Canvas.Left="50" Canvas.Top="64" Width="116" Height="116" Fill="#8A6CFF" Opacity="0.5">
+                            <Ellipse.Effect>
+                                <BlurEffect Radius="34" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <Ellipse Canvas.Left="76" Canvas.Top="56" Width="110" Height="110" Fill="#30B6FF" Opacity="0.42">
+                            <Ellipse.Effect>
+                                <BlurEffect Radius="34" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                    </Canvas>
                     <Ellipse x:Name="BogenSpur" Canvas.Left="38" Canvas.Top="38" Width="164" Height="164" Stroke="#12FFFFFF" StrokeThickness="2" Opacity="0" />
                     <Path x:Name="Bogen" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Opacity="0">
                         <Path.Stroke>
@@ -63,10 +79,11 @@
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="KugelSkala" />
                         </Grid.RenderTransform>
-                        <Ellipse Fill="{StaticResource KugelFarbe}" />
-                        <Ellipse Fill="{StaticResource KugelTiefe}" />
-                        <Ellipse Fill="{StaticResource KugelLicht}" />
-                        <Ellipse Stroke="{StaticResource KugelRand}" StrokeThickness="1" />
+                        <!-- Keine starre Ellipse: die Form verformt sich langsam wie ein Tropfen (Hauptfenster.xaml.cs, KugelFormen) -->
+                        <Path x:Name="KugelForm" Fill="{StaticResource KugelFarbe}" />
+                        <Path x:Name="KugelFormTiefe" Fill="{StaticResource KugelTiefe}" />
+                        <Path x:Name="KugelFormLicht" Fill="{StaticResource KugelLicht}" />
+                        <Path x:Name="KugelFormRand" Stroke="{StaticResource KugelRand}" StrokeThickness="1" />
                     </Grid>
                 </Canvas>
                 <TextBlock x:Name="VersionText" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="24,0,0,24"
@@ -252,7 +269,8 @@
             <!-- Titelleiste: ziehen, minimieren, schließen (im Baum nach den Seiten: Tab kommt zuletzt hierher) -->
             <Grid x:Name="Titelleiste" Grid.ColumnSpan="2" Background="Transparent" MouseLeftButtonDown="Ziehen">
                 <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
-                    <Ellipse Width="8" Height="8" Fill="{StaticResource KugelFarbe}" VerticalAlignment="Center" />
+                    <Path Width="10" Height="10" Stretch="Uniform" Fill="{StaticResource KugelFarbe}" VerticalAlignment="Center"
+                          Data="M9.67,4.39 Q9.80,5.00 9.73,5.62 Q9.66,6.25 9.39,6.81 Q9.12,7.38 8.70,7.83 Q8.28,8.28 7.77,8.60 Q7.26,8.91 6.70,9.10 Q6.15,9.29 5.58,9.37 Q5.00,9.44 4.42,9.39 Q3.84,9.34 3.28,9.15 Q2.72,8.95 2.23,8.61 Q1.74,8.26 1.36,7.79 Q0.98,7.32 0.75,6.76 Q0.52,6.20 0.44,5.60 Q0.36,5.00 0.44,4.40 Q0.51,3.80 0.73,3.23 Q0.95,2.66 1.31,2.17 Q1.68,1.68 2.17,1.31 Q2.66,0.94 3.23,0.74 Q3.80,0.54 4.40,0.51 Q5.00,0.48 5.57,0.60 Q6.15,0.72 6.67,0.96 Q7.20,1.19 7.67,1.53 Q8.14,1.86 8.54,2.29 Q8.95,2.72 9.24,3.25 Q9.54,3.78 9.67,4.39 Z" />
                     <TextBlock Margin="8,0,0,0" Style="{StaticResource Klein}" Text="Jarvis Setup" VerticalAlignment="Center" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

@@ -54,6 +54,7 @@ namespace JarvisSetup
         {
             this.optionen = optionen;
             InitializeComponent();
+            KugelFormen(0);  // die Form steht schon vor dem ersten Bild
             SchrittListe.ItemsSource = fortschritt.Schritte;
             Version version = typeof(Hauptfenster).Assembly.GetName().Version;
             VersionText.Text = "Version " + version.Major + "." + version.Minor + "." + version.Build;
@@ -72,6 +73,7 @@ namespace JarvisSetup
         void Geladen(object sender, RoutedEventArgs e)
         {
             AnBildschirmAnpassen();
+            KugelStarten();
             KernAtmen(3.6);
             if (optionen.Vorschau)
                 VorschauVorbereiten();
@@ -704,6 +706,7 @@ namespace JarvisSetup
             Animieren(Bogen, OpacityProperty, 1, 200);
             Animieren(BogenSpur, OpacityProperty, 1, 200);
             Animieren(Kugel, OpacityProperty, 1, 200);
+            kugelTempo = 1.7;
             KernAtmen(2.6);
         }
 
@@ -725,6 +728,7 @@ namespace JarvisSetup
                 AutoReverse = true,
                 EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
             };
+            kugelTempo = 1.0;
             puls.Completed += (s, e) => KernAtmen(3.6);
             KugelSkala.BeginAnimation(ScaleTransform.ScaleXProperty, puls);
             KugelSkala.BeginAnimation(ScaleTransform.ScaleYProperty, puls);
@@ -740,7 +744,68 @@ namespace JarvisSetup
             Animieren(Bogen, OpacityProperty, 1, 200);
             Animieren(BogenSpur, OpacityProperty, 1, 200);
             Animieren(Kugel, OpacityProperty, 0.7, 200);
+            kugelTempo = 0.5;
             KernAtmen(4.2);
         }
+
+        // ------------------------------------------------------------------ Lebendige Kugel
+
+        // Dieselbe Form wie im Jarvis-Fenster (gui/web/orb.js): kein starrer Kreis, sondern langsame,
+        // weiche Wellen wie bei einem Tropfen. Dahinter kreisen zwei farbige Schleier.
+        readonly Stopwatch kugelUhr = Stopwatch.StartNew();
+        double kugelTempo = 1.0;
+        double kugelZeit;
+        double kugelLetzte = -1;
+
+        void KugelStarten()
+        {
+            KugelFormen(0);
+            if (!bewegung)
+                return;  // Windows-Einstellung "Animationen anzeigen" ist aus: Form bleibt still
+            CompositionTarget.Rendering += KugelBild;
+            Closed += (s, e) => CompositionTarget.Rendering -= KugelBild;
+            var drehen = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(26)) { RepeatBehavior = RepeatBehavior.Forever };
+            Timeline.SetDesiredFrameRate(drehen, 30);
+            SchleierDrehung.BeginAnimation(RotateTransform.AngleProperty, drehen);
+        }
+
+        void KugelBild(object sender, EventArgs e)
+        {
+            double jetzt = kugelUhr.Elapsed.TotalSeconds;
+            if (kugelLetzte >= 0 && jetzt - kugelLetzte < 1.0 / 40)
+                return;  // 40 Bilder pro Sekunde reichen
+            double dt = kugelLetzte < 0 ? 0 : Math.Min(0.1, jetzt - kugelLetzte);
+            kugelLetzte = jetzt;
+            kugelZeit += dt * kugelTempo;
+            KugelFormen(kugelZeit);
+        }
+
+        /// <summary>Formt die Kugel für den Zeitpunkt t: 72 Punkte, weich verbunden.</summary>
+        void KugelFormen(double t)
+        {
+            const int punkte = 72;
+            const double mitte = 60, grund = 57;
+            var p = new Point[punkte];
+            for (int i = 0; i < punkte; i++)
+            {
+                double winkel = i * 2 * Math.PI / punkte;
+                double r = grund * (1 + 0.045 * (0.6 * Math.Sin(2 * winkel + t * 0.8) + 0.4 * Math.Sin(3 * winkel - t * 0.6 + 1.9)));
+                p[i] = new Point(mitte + Math.Cos(winkel) * r, mitte + Math.Sin(winkel) * r);
+            }
+            var form = new StreamGeometry();
+            using (StreamGeometryContext stift = form.Open())
+            {
+                stift.BeginFigure(Mitte(p[punkte - 1], p[0]), true, true);
+                for (int i = 0; i < punkte; i++)
+                    stift.QuadraticBezierTo(p[i], Mitte(p[i], p[(i + 1) % punkte]), true, true);
+            }
+            form.Freeze();
+            KugelForm.Data = form;
+            KugelFormTiefe.Data = form;
+            KugelFormLicht.Data = form;
+            KugelFormRand.Data = form;
+        }
+
+        static Point Mitte(Point a, Point b) => new Point((a.X + b.X) / 2, (a.Y + b.Y) / 2);
     }
 }
