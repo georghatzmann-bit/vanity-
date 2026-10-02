@@ -103,6 +103,20 @@ def acronym(name: str) -> str:
     return out
 
 
+def _breaks(name: str) -> set[int]:
+    """Wo im zusammengeschriebenen Namen ein neues Wort beginnt ("Go Dot" -> {2})."""
+    ends, length = set(), 0
+    for word in tokens(name)[:-1]:
+        length += len(word)
+        ends.add(length)
+    return ends
+
+
+def _foreign(name: str) -> bool:
+    """Buchstaben, die tokens() nicht kennt (Chinesisch, Japanisch, Kyrillisch ...)."""
+    return any(ch.isalpha() and ord(ch) > 0x24F for ch in str(name or ""))
+
+
 def parse_vdf(text: str) -> dict:
     """Steams Textformat (KeyValues): "Schlüssel" "Wert" und "Schlüssel" { ... }. Schlüssel klein."""
     root: dict = {}
@@ -366,6 +380,13 @@ class Games:
         if not q or not n:
             return 0
         if q == n:
+            # Genau nur mit denselben Wortgrenzen: "Godot" ist nicht das Spiel "Go! Dot.". Bindestrich und
+            # Apostroph dürfen fehlen ("Counterstrike 2", "Baldurs Gate 3"). Ein Titel in anderer Schrift
+            # ("Git 傳說") hat nur Teile, die Jarvis lesen kann: auch nicht genau.
+            joined = re.sub(r"(?<=\w)[-'’](?=\w)", "", str(name))
+            words = _breaks(joined) if compact(joined) == n else _breaks(name)
+            if _foreign(name) or not words <= _breaks(query):
+                return 1
             return 3
         if q == acronym(name) and len(q) >= 2:
             return 2
@@ -373,13 +394,16 @@ class Games:
             return 1
         return 0
 
-    def find_installed(self, name: str) -> Game | None:
+    def find_installed(self, name: str, least: int = 1) -> Game | None:
+        """Das installierte Spiel zum Namen. least=2: nur genau, Abkürzung oder bekannter Kurzname."""
         want = self.wanted(name)
-        best, best_score = None, 0
+        best, best_score = None, least - 1
         for game in self.installed():
             if game.tool:
                 continue
             score = max(self.score(name, game.name), self.score(want, game.name))
+            if score == 1 and compact(want) != compact(name) and self.score(want, game.name):
+                score = 2  # bekannter Kurzname: "GTA" ist auch Grand Theft Auto V Enhanced
             if score > best_score:
                 best, best_score = game, score
         return best
@@ -569,7 +593,8 @@ class Games:
         return f"{game.name} startet, Sir.{extra}"
 
     def uninstall(self, name: str) -> str | None:
-        game = self.find_installed(name)
+        # Strenger als beim Starten: "Deinstalliere Steam" meint nicht SteamWorld Dig.
+        game = self.find_installed(name, least=2)
         if game is None:
             return None
         if game.store == "epic":

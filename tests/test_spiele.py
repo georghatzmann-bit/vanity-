@@ -149,6 +149,13 @@ class NamesTest(unittest.TestCase):
         self.assertEqual(Games.score("cs2", "Counter-Strike 2"), 2)
         self.assertEqual(Games.score("Lethal", "Lethal Company"), 1)
         self.assertEqual(Games.score("Minecraft", "Lethal Company"), 0)
+        for said, name in [("Counterstrike 2", "Counter-Strike 2"), ("Counter Strike 2", "Counter-Strike 2"),
+                           ("Baldurs Gate 3", "Baldur's Gate 3"), ("Repo", "R.E.P.O."), ("Pal World", "Palworld"),
+                           ("Grand Theft Auto 5", "Grand Theft Auto V")]:
+            self.assertEqual(Games.score(said, name), 3, said)
+        # Gleiche Buchstaben, aber andere Wörter oder fremde Schrift: nicht genau (sonst installiert Jarvis das)
+        self.assertEqual(Games.score("Godot", "Go! Dot."), 1)
+        self.assertEqual(Games.score("Git", "Git 傳說"), 1)
 
     def test_vdf_and_sizes(self):
         data = spiele.parse_vdf('"libraryfolders"\n{\n "0" { "path" "C:\\\\Program Files (x86)\\\\Steam" // Kommentar\n'
@@ -261,11 +268,26 @@ class InstallTest(Base):
     def test_unclear_names_go_to_claude(self):
         for said, hits in [("Minecraft", [("1928870", "Minecraft Dungeons")]),
                            ("Python", [("1882420", "Learn Programming: Python - Remake")]),
-                           ("VLC", [("2367420", "Kletba Vlčího Moru")])]:
+                           ("VLC", [("2367420", "Kletba Vlčího Moru")]),
+                           ("Godot", [("1", "Go! Dot."), ("404790", "Godot Engine")]),
+                           ("Git", [("2", "Git 傳說")])]:
             games, env = self.make(web=FakeWeb(search=hits))
             self.assertIsNone(games.install(said, offer=self.offer), said)
             self.assertEqual(env.opened, [], f"{said}: nichts Falsches installieren")
         self.assertEqual(self.offers, [])
+
+    def test_uninstall_only_sure_names(self):
+        games, env = self.make()
+        env.add(env.steam, "252410", "SteamWorld Dig")
+        games.installed(fresh=True)
+        for text in ("Deinstalliere Steam", "Deinstalliere Lethal", "Deinstalliere das Spiel Baldur"):
+            self.assertIsNone(games.command(text), text)
+        self.assertEqual(env.opened, [], "nur ähnlich: Steam nicht nach dem falschen Spiel fragen lassen")
+        for text, appid in [("Deinstalliere CS2", "730"), ("Deinstalliere GTA", "271590"),
+                            ("Deinstalliere Baldurs Gate 3", "1086940"), ("Deinstalliere SteamWorld Dig", "252410")]:
+            self.assertIn("wirklich weg soll", games.command(text), text)
+            self.assertEqual(env.opened[-1], f"steam://uninstall/{appid}", text)
+        self.assertEqual(games.launch("Lethal"), "Lethal Company startet, Sir.", "Starten darf ungefähr sein")
 
     def test_not_enough_space_and_offline(self):
         games, env = self.make(web=FakeWeb(search=[("2", "Riesenspiel")], details=500))
