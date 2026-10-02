@@ -20,6 +20,7 @@ lassen. Die Messwerte holt `SystemProbe` (psutil, Registry, Windows-API).
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import logging
 import os
@@ -40,6 +41,8 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 KINDS = ("pc", "internet", "sicherheit", "termine", "morgens", "zurueck", "pausen")
 # Wichtigkeit: 2 = dringend (auch aufs Handy), 1 = bald (sobald Georg da ist), 0 = wenn es passt
 URGENT, SOON, NORMAL = 2, 1, 0
+# Derselbe Satz kommt frühestens nach so vielen Stunden wieder, egal unter welchem Schlüssel
+SAME_TEXT_HOURS = 3.0
 
 # Programme, über die Jarvis nicht meckert (Windows selbst, Virenschutz, Updates, Jarvis' Helfer)
 _SYSTEM = {
@@ -77,6 +80,22 @@ class Hint:
     ttl: float = 30 * 60  # so lange darf er warten, bis es passt (Sekunden)
     group: str = ""  # "Nie wieder" gilt für alle Hinweise dieser Gruppe (leer = die Art)
     created: float = field(default_factory=time.monotonic)
+    valid: Callable[[], bool] | None = field(default=None, repr=False)  # stimmt es noch? (sonst nicht mehr sagen)
+
+    def still(self) -> bool:
+        """Stimmt der Hinweis noch? \"Das Internet ist weg\" nicht mehr sagen, wenn es schon wieder da ist."""
+        if self.valid is None:
+            return True
+        try:
+            return bool(self.valid())
+        except Exception:
+            return True
+
+    @property
+    def fingerprint(self) -> str:
+        """Der Satz ohne Zahlen und Satzzeichen: so erkennt Jarvis, dass er etwas schon gesagt hat."""
+        words = re.sub(r"[^a-zäöüß ]+", " ", self.text.lower())
+        return "text:" + hashlib.sha1(" ".join(words.split()).encode("utf-8")).hexdigest()[:16]
 
     @property
     def label(self) -> str:
@@ -165,6 +184,7 @@ class Watcher:
         self._gpu_seen = 0
         self._offline_seen = 0
         self._offline_said = False
+        self._offline_told = False  # \"Das Internet ist weg\" wurde wirklich gesagt (dann auch \"wieder da\")
         self._battery_said = 0  # Stufe, die in dieser Entladung schon gesagt wurde (1 = knapp, 2 = fast leer)
         self._last_idle = 0.0
         self._last_tick: dt.datetime | None = None
@@ -209,19 +229,35 @@ class Watcher:
                 return False  # "Hinweise aus": nur noch Dringendes
             if hint.mute_key in self._state["aus"] or hint.key in self._state["aus"]:
                 return False
+            quiet = self._state.get("ruhe", {})
+            until = quiet.get(hint.mute_key) or quiet.get(hint.key) if isinstance(quiet, dict) else ""
+            if until and str(until) > now.isoformat(timespec="seconds") and hint.priority < URGENT:
+                return False  # \"Weiß ich schon\": heute nicht mehr
             last = self._state["gesagt"].get(hint.key)
+            same = self._state["gesagt"].get(hint.fingerprint)
+        if not self._waited(last, now, hint.repeat_hours):
+            return False
+        # Derselbe Satz unter neuem Schlüssel (\"Willkommen zurück ...\", \"Das Internet ist wieder da\"):
+        # nicht alle paar Minuten, nur wenn es dringend ist
+        return hint.priority >= URGENT or self._waited(same, now, max(hint.repeat_hours, SAME_TEXT_HOURS))
+
+    @staticmethod
+    def _waited(last, now: dt.datetime, hours: float) -> bool:
         if not last:
             return True
         try:
-            return now - dt.datetime.fromisoformat(last) >= dt.timedelta(hours=hint.repeat_hours)
+            return now - dt.datetime.fromisoformat(str(last)) >= dt.timedelta(hours=hours)
         except ValueError:
             return True
 
     def said(self, hint: Hint, now: dt.datetime | None = None) -> None:
         now = now or dt.datetime.now()
+        if hint.key == "internet:weg":
+            self._offline_told = True
         with self._lock:
             said = self._state["gesagt"]
             said[hint.key] = now.isoformat(timespec="seconds")
+            said[hint.fingerprint] = now.isoformat(timespec="seconds")
             # Alte Einträge (älter als zwei Wochen) nicht ewig mitschleppen
             limit = (now - dt.timedelta(days=14)).isoformat(timespec="seconds")
             for key in [k for k, v in said.items() if str(v) < limit]:
@@ -236,6 +272,19 @@ class Watcher:
             if hint.mute_key not in self._state["aus"]:
                 self._state["aus"].append(hint.mute_key)
                 self._save()
+
+    def snooze(self, hint: Hint, hours: float = 24.0, now: dt.datetime | None = None) -> None:
+        """\"Weiß ich schon\": diese Art Hinweis so lange nicht mehr (Dringendes trotzdem)."""
+        now = now or dt.datetime.now()
+        with self._lock:
+            quiet = self._state.get("ruhe")
+            if not isinstance(quiet, dict):
+                quiet = self._state["ruhe"] = {}
+            quiet[hint.mute_key] = (now + dt.timedelta(hours=hours)).isoformat(timespec="seconds")
+            stamp = now.isoformat(timespec="seconds")
+            for key in [k for k, v in quiet.items() if str(v) < stamp]:
+                del quiet[key]
+            self._save()
 
     def muted(self) -> list[str]:
         with self._lock:
@@ -330,7 +379,8 @@ class Watcher:
             name = app_name(image)
             hints.append(Hint(f"haengt:{key}", "pc", f"Sir, {name} reagiert seit einer halben Minute nicht mehr.",
                               "Soll ich es neu starten?", action=lambda image=image, name=name: restart_hung(image, name),
-                              priority=SOON, repeat_hours=1, ttl=5 * 60, group=f"haengt:{key}"))
+                              priority=SOON, repeat_hours=1, ttl=5 * 60, group=f"haengt:{key}",
+                              valid=lambda key=key: key in self._hung_seen))  # reagiert es wieder: nichts sagen
         return hints
 
     def _busy(self, lage: Lage) -> list[Hint]:
@@ -401,16 +451,18 @@ class Watcher:
         if lage.online:
             self._offline_seen = 0
             if self._offline_said:
-                self._offline_said = False
-                return [Hint(f"internet:wieder:{lage.now:%Y%m%d%H%M}", "internet", "Das Internet ist wieder da, Sir.",
-                             repeat_hours=0, ttl=10 * 60, group="internet")]
+                told, self._offline_said, self._offline_told = self._offline_told, False, False
+                if told:  # nur, wenn \"weg\" auch wirklich gesagt wurde
+                    return [Hint("internet:wieder", "internet", "Das Internet ist wieder da, Sir.",
+                                 repeat_hours=0.5, ttl=10 * 60, group="internet")]
             return []
         self._offline_seen += 1
-        if self._offline_seen == 2:  # zwei Messungen hintereinander (etwa zwei Minuten)
+        if self._offline_seen == 2:  # zwei Messungen hintereinander (etwa eine Minute)
             self._offline_said = True
-            return [Hint(f"internet:weg:{lage.now:%Y%m%d%H%M}", "internet",
+            return [Hint("internet:weg", "internet",
                          "Sir, die Internetverbindung ist weg. Ich sage Bescheid, wenn sie wieder da ist.",
-                         priority=SOON, repeat_hours=0, ttl=15 * 60, group="internet")]
+                         priority=SOON, repeat_hours=0.5, ttl=15 * 60, group="internet",
+                         valid=lambda: self._offline_said)]
         return []
 
     def _reboot(self, lage: Lage) -> list[Hint]:

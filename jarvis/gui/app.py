@@ -112,6 +112,9 @@ class Api:
         text = str(text or "").strip()
         if not text:
             return False
+        noticed = getattr(self._assistant, "noticed", None)
+        if noticed is not None:
+            noticed()
         self._assistant.submit(text)
         return True
 

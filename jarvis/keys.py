@@ -249,6 +249,49 @@ def keys_held() -> bool:
         return False
 
 
+_pad_packets: dict[int, int] = {}
+
+
+def gamepad_moved() -> bool:
+    """Hat sich seit dem letzten Aufruf an einem Controller (XInput, auch PlayStation über Steam) etwas
+    getan? Windows zählt Controller nicht als Eingabe (GetLastInputInfo): Beim Zocken wäre Georg sonst "weg"."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        dll = None
+        for name in ("xinput1_4", "xinput1_3", "xinput9_1_0"):
+            try:
+                dll = getattr(ctypes.windll, name)  # type: ignore[attr-defined]
+                break
+            except (OSError, AttributeError):
+                continue
+        if dll is None:
+            return False
+
+        class GAMEPAD(ctypes.Structure):
+            _fields_ = [("wButtons", wintypes.WORD), ("bLeftTrigger", ctypes.c_ubyte), ("bRightTrigger", ctypes.c_ubyte),
+                        ("sThumbLX", ctypes.c_short), ("sThumbLY", ctypes.c_short), ("sThumbRX", ctypes.c_short),
+                        ("sThumbRY", ctypes.c_short)]
+
+        class STATE(ctypes.Structure):
+            _fields_ = [("dwPacketNumber", wintypes.DWORD), ("Gamepad", GAMEPAD)]
+
+        moved = False
+        for pad in range(4):
+            state = STATE()
+            if dll.XInputGetState(pad, ctypes.byref(state)) != 0:
+                _pad_packets.pop(pad, None)  # nicht angeschlossen
+                continue
+            last = _pad_packets.get(pad)
+            if last is not None and last != state.dwPacketNumber:
+                moved = True
+            _pad_packets[pad] = state.dwPacketNumber
+        return moved
+    except Exception:
+        return False
+
+
 def idle_seconds() -> float:
     """Wie lange Maus und Tastatur schon still sind. Unbekannt: sehr lange."""
     try:

@@ -95,10 +95,43 @@ class WatcherTest(unittest.TestCase):
         self.assertEqual(self.watcher.check(lage(online=False)), [])
         gone = self.watcher.check(lage(online=False))
         self.assertIn("Internetverbindung ist weg", gone[0].text)
+        self.watcher.said(gone[0])  # Jarvis hat es gesagt
         self.assertEqual(self.watcher.check(lage(online=False)), [])
         back = self.watcher.check(lage(online=True))
         self.assertEqual(back[0].text, "Das Internet ist wieder da, Sir.")
         self.assertEqual(self.watcher.check(lage(online=True)), [])
+
+    def test_internet_flapping_is_not_announced_again_and_again(self):
+        later = NOW + dt.timedelta(minutes=5)
+        self.watcher.check(lage(online=False))
+        gone = self.watcher.check(lage(online=False))
+        self.assertTrue(gone[0].still())
+        back = self.watcher.check(lage(online=True))
+        self.assertEqual(back, [], "\"wieder da\" nur, wenn \"weg\" wirklich gesagt wurde")
+        self.assertFalse(gone[0].still(), "der wartende Hinweis \"weg\" stimmt nicht mehr")
+        self.watcher.said(gone[0], NOW)
+        self.watcher.check(lage(online=False, now=later))
+        self.assertEqual(self.watcher.check(lage(online=False, now=later)), [], "nicht alle paar Minuten wieder")
+
+    def test_same_sentence_under_a_new_key_is_not_repeated(self):
+        first = Hint("zurueck:1", "zurueck", "Willkommen zurück, Sir. Während Sie weg waren: Erinnerung: Tee.", repeat_hours=0)
+        again = Hint("zurueck:2", "zurueck", "Willkommen zurück, Sir. Während Sie weg waren: Erinnerung: Tee.", repeat_hours=0)
+        self.assertTrue(self.watcher.allowed(first, NOW))
+        self.watcher.said(first, NOW)
+        self.assertFalse(self.watcher.allowed(again, NOW + dt.timedelta(minutes=30)), "schon gesagt")
+        self.assertTrue(self.watcher.allowed(again, NOW + dt.timedelta(hours=4)))
+        other = Hint("zurueck:3", "zurueck", "Willkommen zurück, Sir. Während Sie weg waren: Aus der Werkstatt: fertig.",
+                     repeat_hours=0)
+        self.assertTrue(self.watcher.allowed(other, NOW + dt.timedelta(minutes=30)), "etwas Neues schon")
+
+    def test_snooze_after_already_known(self):
+        hint = Hint("pause:1", "pausen", "Sir, Zeit für eine Pause.", repeat_hours=0)
+        self.watcher.snooze(hint, hours=24, now=NOW)
+        later = Hint("pause:2", "pausen", "Sir, Sie sitzen schon lange.", repeat_hours=0)
+        self.assertFalse(self.watcher.allowed(later, NOW + dt.timedelta(hours=2)))
+        self.assertTrue(self.watcher.allowed(later, NOW + dt.timedelta(hours=25)))
+        urgent = Hint("akku:leer", "pc", "Sir, der Akku ist fast leer.", priority=URGENT, group="pausen")
+        self.assertTrue(self.watcher.allowed(urgent, NOW + dt.timedelta(hours=2)), "Dringendes trotzdem")
 
     def test_windows_waiting_for_a_restart(self):
         self.assertEqual(self.watcher.check(lage(reboot=True)), [])
@@ -300,20 +333,40 @@ class AssistantHintTest(unittest.TestCase):
         self.assertIn(self.assistant.handle("Nicht jetzt"), ("Sehr wohl, Sir.", "Wie Sie wünschen."))
         self.assistant._last_hint_at = float("-inf")
         self.assistant._last_turn_end = float("-inf")
-        self.assistant.offer_hints([Hint("pause2", "pausen", "Sir, Zeit für eine Pause.")])
+        self.assistant.offer_hints([Hint("pause2", "pausen", "Sir, Sie sitzen schon lange am Stück.")])
         self.assertEqual(self.assistant.handle("Sag mir das nicht mehr"), "Verstanden, Sir. Das sage ich Ihnen nicht mehr.")
         self.assertEqual(self.assistant.hints.muted(), ["pausen"])
 
     def test_not_now_to_a_question(self):
         done = []
+        apps = ("Discord", "Steam", "Chrome", "Spotify")
         for number, answer in enumerate(("Nicht jetzt", "Jetzt nicht", "Bitte nicht", "Nein, jetzt nicht")):
             self.assistant._last_hint_at = float("-inf")
             self.assistant._last_turn_end = float("-inf")
-            self.assistant.offer_hints([Hint(f"haengt:{number}", "pc", "Sir, Discord reagiert nicht mehr.",
+            self.assistant.offer_hints([Hint(f"haengt:{number}", "pc", f"Sir, {apps[number]} reagiert nicht mehr.",
                                              "Soll ich es neu starten?", action=lambda: done.append(1) or "Neu gestartet.")])
             self.assertIn(self.assistant.handle(answer), ("Sehr wohl, Sir.", "Wie Sie wünschen."), answer)
         self.assertEqual(done, [])
         self.assertEqual(self.assistant.brain.asked, [], "ein „Nicht jetzt“ geht nicht an Claude")
+
+    def test_already_known_snoozes_the_hint(self):
+        self.assistant.offer_hints([Hint("pause:1", "pausen", "Sir, Zeit für eine Pause.")])
+        self.assertIn("nicht noch einmal", self.assistant.handle("Weiß ich schon") + " nicht noch einmal")
+        self.assertEqual(self.assistant.brain.asked, [], "geht nicht an Claude")
+        self.assistant._last_hint_at = float("-inf")
+        self.assistant._last_turn_end = float("-inf")
+        self.speaker.said.clear()
+        self.assistant.offer_hints([Hint("pause:2", "pausen", "Sir, Sie sitzen schon lange am Stück.")])
+        self.assertEqual(self.speaker.said, [], "heute nicht mehr")
+        # Auch ein paar Minuten später, ohne offene Frage
+        self.assistant.offer_hints([Hint("ram", "pc", "Sir, der Arbeitsspeicher ist fast voll.")])
+        self.assistant.handle("Wie spät ist es?")
+        self.assertIn("heute", self.assistant.handle("Das hast du schon gesagt").lower())
+        self.assertFalse(self.assistant.hints.allowed(Hint("ram2", "pc", "Sir, etwas anderes am PC.")))
+        # Ohne Hinweis vorher ist es ein ganz normaler Satz
+        fresh, _ui, _speaker, _ = make(FakeBrain())
+        fresh.handle("Weiß ich schon")
+        self.assertEqual(fresh.brain.asked, ["Weiß ich schon"])
 
     def test_first_hint_right_after_the_pc_starts(self):
         # time.monotonic() zählt ab dem Hochfahren. Jarvis startet mit Windows: eine Minute danach war
@@ -399,3 +452,40 @@ class GreetingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PresenceTest(unittest.TestCase):
+    """Wer mit Jarvis redet oder mit dem Controller zockt, ist da: kein "Während Sie weg waren" mit Dingen,
+    die Georg längst gehört hat."""
+
+    def setUp(self):
+        self.assistant, self.ui, self.speaker, _ = make(FakeBrain())
+
+    def test_voice_and_controller_count_as_being_there(self):
+        with mock.patch("jarvis.keys.idle_seconds", return_value=3600.0), \
+                mock.patch("jarvis.keys.gamepad_moved", return_value=False):
+            self.assertFalse(self.assistant._present())
+            self.assistant.noticed()  # Georg hat etwas gesagt
+            self.assertTrue(self.assistant._present())
+            self.assistant.announce("Aus der Werkstatt: Das Spiel ist fertig.")
+            self.assertEqual(self.assistant.take_missed(), [], "gehört, also nicht verpasst")
+        with mock.patch("jarvis.keys.idle_seconds", return_value=3600.0), \
+                mock.patch("jarvis.keys.gamepad_moved", return_value=True):
+            fresh, _ui, _speaker, _ = make(FakeBrain())
+            self.assertTrue(fresh._present(), "Controller zählt wie Maus und Tastatur")
+
+    def test_really_away_is_still_noted(self):
+        with mock.patch("jarvis.keys.idle_seconds", return_value=3600.0), \
+                mock.patch("jarvis.keys.gamepad_moved", return_value=False):
+            self.assistant.announce("Erinnerung, Sir: Tee")
+        self.assertEqual(self.assistant.take_missed(), ["Erinnerung: Tee"])
+
+    def test_progress_is_not_repeated_in_one_answer(self):
+        from jarvis import assistant as module
+
+        brain = FakeBrain(steps=[("WebSearch", {"query": "a"}, 1.8), ("WebSearch", {"query": "b"}, 1.8)])
+        helper, _ui, speaker, _ = make(brain)
+        with mock.patch.object(module, "PROGRESS_EVERY", 0.0), mock.patch.object(module, "PROGRESS_AFTER", 0.2):
+            helper.handle("Such mir zwei Sachen im Netz raus")
+        spoken = [s for s in speaker.said if "Netz" in s]
+        self.assertEqual(len(spoken), 1, spoken)

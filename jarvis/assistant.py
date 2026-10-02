@@ -37,8 +37,8 @@ PREPARED = [
 # Arbeitsschritte, die länger dauern, sagt Jarvis an ("Ich installiere Spotify."). Kurze nicht.
 PROGRESS_AFTER = 1.5
 # Bei langer Arbeit höchstens alle so viele Sekunden ein Zwischenstand, und höchstens so viele.
-PROGRESS_EVERY = 25.0
-PROGRESS_MAX = 3
+PROGRESS_EVERY = 40.0
+PROGRESS_MAX = 2
 
 
 # Diese Befehle gelten immer, auch wenn der Satz nach Werkstatt klingt ("Stopp", "Wie weit bist du?").
@@ -104,6 +104,11 @@ class Assistant:
         self._hint_delivery = threading.Lock()  # zwei Threads sollen nicht denselben Hinweis sagen
         self._last_turn_end = float("-inf")  # wann Jarvis zuletzt etwas beantwortet hat
         self._missed: list[tuple[float, str]] = []
+        # Wann Georg zuletzt mit Jarvis gesprochen, getippt oder am Controller gespielt hat (zählt wie Maus und
+        # Tastatur: wer mit Jarvis redet, sitzt am PC)
+        self._last_seen = float("-inf")
+        self._pad_checked = float("-inf")
+        self._last_hint: tuple = (None, float("-inf"))  # der zuletzt gesagte Hinweis, für "Weiß ich schon"
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
@@ -363,9 +368,23 @@ class Assistant:
         self.update_state()
         return answer
 
+    def _known_hint(self, hint) -> str:
+        """"Weiß ich schon", "Das hast du schon gesagt": diesen Hinweis heute nicht noch einmal."""
+        if self.hints is not None:
+            self.hints.snooze(hint, hours=24)
+            self.hints.feedback(hint, "nein")
+        self._last_hint = (None, float("-inf"))
+        return random.choice(["Verzeihung, Sir. Dann sage ich das heute nicht noch einmal.",
+                              "Verstanden, Sir. Heute erwähne ich es nicht mehr."])
+
     def _local_answer(self, text: str) -> str | None:
         """Erledigt schnelle Befehle selbst. None = Claude soll es machen,
         "" = erledigt, ohne etwas zu sagen."""
+        last, said_at = self._last_hint
+        if last is not None and time.monotonic() - said_at < 15 * 60 and _KNOWN.search(intents.normalize(text)) \
+                and len(text.split()) <= 8:
+            self._take_offer()
+            return self._known_hint(last)
         offer = self._take_offer()
         if offer is not None:
             answer = self._answer_offer(offer, text)
@@ -1179,7 +1198,7 @@ class Assistant:
         Handy. True, wenn etwas gesagt wurde."""
         with self._hint_lock:
             # Verfallen, inzwischen abgestellt ("Nie wieder", "Hinweise aus") oder schon gesagt: weg damit
-            self._pending_hints = [h for h in self._pending_hints if not h.expired()
+            self._pending_hints = [h for h in self._pending_hints if not h.expired() and h.still()
                                    and (self.hints is None or self.hints.allowed(h))]
             pending = sorted(self._pending_hints, key=lambda h: (-h.priority, h.created))
         if not pending or not self._hint_delivery.acquire(blocking=False):
@@ -1216,6 +1235,7 @@ class Assistant:
         if self.hints is not None:
             self.hints.said(hint)
         text = hint.question()
+        self._last_hint = (hint, time.monotonic())
         log.info("Hinweis (%s): %s", hint.key, text)
         self.ui.message("jarvis", text, model="Hinweis")  # im Verlauf: "Jarvis · 14:02 · Hinweis"
         self._last_hint_at = time.monotonic()
@@ -1242,10 +1262,8 @@ class Assistant:
 
     def run_hint_check(self, watcher, probe, stopped=None) -> None:
         """Eine Runde des Wächters (alle 30 Sekunden aus __main__): messen, prüfen, anbieten."""
-        from .keys import idle_seconds
-
         try:
-            idle = idle_seconds()
+            idle = self.idle()
         except Exception:
             idle = 0.0
         gpu = getattr(self, "gpu_now", None) or {}
@@ -1269,12 +1287,36 @@ class Assistant:
             log.debug("Wetter für den Überblick: %s", exc)
             return ""
 
-    def _present(self) -> bool:
-        """Sitzt Georg am PC (Maus oder Tastatur in den letzten fünf Minuten)?"""
+    def noticed(self) -> None:
+        """Georg hat am PC mit Jarvis gesprochen oder getippt: Er ist da, auch ohne Maus und Tastatur."""
+        self._last_seen = time.monotonic()
+
+    def idle(self) -> float:
+        """Wie lange Georg am PC schon nichts getan hat: Maus, Tastatur, Controller oder ein Wort an Jarvis.
+        Früher zählten nur Maus und Tastatur: Wer per Sprache oder mit dem Controller unterwegs war, galt nach
+        fünf Minuten als weg, und Jarvis wiederholte danach alles mit "Während Sie weg waren"."""
+        now = time.monotonic()
+        if now - self._pad_checked >= 5:
+            self._pad_checked = now
+            try:
+                from .keys import gamepad_moved
+
+                if gamepad_moved():
+                    self._last_seen = now
+            except Exception:
+                pass
         try:
             from .keys import idle_seconds
 
-            return idle_seconds() < 300
+            idle = idle_seconds()
+        except Exception:
+            idle = 999.0
+        return max(0.0, min(idle, now - self._last_seen))
+
+    def _present(self) -> bool:
+        """Sitzt Georg am PC (Maus, Tastatur, Controller oder ein Wort an Jarvis in den letzten fünf Minuten)?"""
+        try:
+            return self.idle() < 300
         except Exception:
             return False
 
@@ -1307,6 +1349,8 @@ class Assistant:
             elif self.memory is not None:
                 self.memory.feedback(routine.key, answer)
 
+        if hint and _KNOWN.search(reply):
+            return self._known_hint(routine)
         never = re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit|sag (?:mir )?das nicht mehr|"
                           r"will ich nicht (?:mehr )?(?:wissen|hören)|solche hinweise nicht)\b", reply)
         # "Nicht jetzt", "Jetzt nicht" und "Bitte nicht" kommen hier als "nicht" an (normalize streicht "jetzt" und "bitte")
@@ -1534,6 +1578,7 @@ class Assistant:
 
         # Was Claude gerade tut: in der Anzeige sofort, gesagt nur, wenn es dauert.
         said_progress: list[float] = []
+        said_lines: set[str] = set()
 
         def on_step(step) -> None:
             self.ui.progress(step.to_dict())
@@ -1550,6 +1595,9 @@ class Assistant:
                     return
                 if not said_progress and spoken_any.is_set() and now - started < PROGRESS_EVERY:
                     return  # Claude hat schon selbst etwas gesagt
+                if step.spoken in said_lines:
+                    return  # "Ich sehe im Netz nach" nicht zweimal
+                said_lines.add(step.spoken)
                 said_progress.append(now)
                 spoken_any.set()
                 self.say(step.spoken)
@@ -1628,6 +1676,13 @@ def _short_reason(exc: BrainError) -> str:
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
 
+
+# "Weiß ich schon", "Das hast du schon gesagt", "Hab ich schon gehört": den letzten Hinweis heute nicht mehr
+_KNOWN = re.compile(
+    r"^(?:ja,? |jaja,? |ok,? |okay,? )?(?:(?:das )?weiß ich(?: schon| doch| bereits)?|ich weiß(?: schon| doch| das| das schon)?|"
+    r"(?:das )?hast du (?:mir )?(?:\w+ )?(?:schon|bereits)(?: \w+)? gesagt|(?:das )?hab(?:e)? ich (?:schon|bereits) gehört|"
+    r"(?:das )?sagtest du (?:schon|bereits)|du wiederholst dich|nicht schon wieder|schon wieder)"
+    r"(?: sir| jarvis| danke| alter| digga| bruder)?$")
 
 # "Hinweise aus", "Keine Hinweise mehr", "Hinweise wieder an", "Sag mir wieder Bescheid"
 _HINTS_SWITCH = re.compile(

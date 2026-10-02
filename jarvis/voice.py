@@ -466,6 +466,9 @@ class VoiceLoop:
             log.info("Gespräch beendet: %s", text)
             self._end_conversation()
             return
+        noticed = getattr(self._assistant, "noticed", None)
+        if noticed is not None:
+            noticed()  # wer mit Jarvis spricht, sitzt am PC (auch ohne Maus und Tastatur)
         self._assistant.submit(text)
         self._talking = turn == "weiter"
         if not self._talking:
