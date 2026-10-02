@@ -20,7 +20,7 @@ Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen (siehe unten) und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
 2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen (siehe unten), **Prüfen**, Stimmen anhören und eine anklicken. Ohne Schlüssel spricht die kostenlose Microsoft-Stimme.
 3. **Name und Ort:** dein Vorname (damit Jarvis weiß, mit wem er spricht) und dein Wohnort für das Wetter.
-4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Claude ist verbunden“ erscheint. Dafür reicht dein Claude-Pro-Abo.
+4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Claude ist verbunden“ erscheint. Dafür reicht dein Claude-Abo (Pro oder Max).
 5. **Extras:** Stumm-Taste, Autostart und **Volle Freigabe** (siehe unten). Einfach so lassen, wie es ist.
 6. **Jarvis starten.**
 
@@ -144,6 +144,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **„Hey Jarvis“** sagen (englisch ausgesprochen), kurz warten, Befehl auf Deutsch sprechen. Mit Picovoice-Schlüssel reicht **„Jarvis“**.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
+- **Das Fenster:** In der Mitte Jarvis' Kugel. Sie leuchtet heller, wenn er zuhört oder spricht, und wird grau, wenn das Mikrofon aus ist. Ein Klick auf die Kugel, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Verbinden**, **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht, wie ausgelastet der PC ist, und das **Gedächtnis**.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
@@ -228,9 +229,9 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 - Was du sagst („Merk dir, …“), behält Jarvis für immer.
 - Er merkt sich, mit wem du über welche App schreibst. „Sag Max …“ nimmt dann die richtige App.
-- Er sieht, was du ungefähr zur selben Zeit öffnest und in welchen Discord-Sprachkanal du gehst. Nach ein paar Tagen fragt er zur passenden Zeit: **„Sir, um diese Zeit öffnen Sie meist Discord und gehen in den Sprachkanal Zocken. Soll ich?“** Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**. Beim Zocken und wenn du nicht am PC bist, fragt er nie.
-- **Festplatte fast voll:** Sind auf einem Laufwerk weniger als 10 Gigabyte frei, sagt Jarvis tagsüber Bescheid (höchstens alle drei Tage) und schaut auf „Ja“ nach, was am meisten Platz braucht.
-- **Geburtstage:** Sag „Merk dir, Max hat am 3. Mai Geburtstag“. Am 3. Mai sagt Jarvis: „Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?“ Ein „Ja“, und die Glückwünsche sind raus.
+- Er sieht, was du ungefähr zur selben Zeit öffnest und in welchen Discord-Sprachkanal du gehst. Nach ein paar Tagen sagt er es zur passenden Zeit nebenbei, am Ende einer normalen Antwort: **„Es ist 18 Uhr, Sir. Übrigens: Um diese Zeit öffnen Sie meist Discord und gehen in den Sprachkanal Zocken. Soll ich?“** Antworte einfach mit **„Ja“**, **„Nein“** oder **„Nie wieder“** (ohne „Hey Jarvis“). Es gibt kein Fenster dafür. Beim Zocken fragt er nie.
+- **Festplatte fast voll:** Sind auf einem Laufwerk weniger als 10 Gigabyte frei, erwähnt Jarvis es tagsüber in einer Antwort (höchstens alle drei Tage) und schaut auf „Ja“ nach, was am meisten Platz braucht.
+- **Geburtstage:** Sag „Merk dir, Max hat am 3. Mai Geburtstag“. Am 3. Mai sagt Jarvis bei der nächsten Antwort: „Übrigens, Sir: Heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?“ Ein „Ja“, und die Glückwünsche sind raus. Sprichst du den ganzen Tag nicht mit ihm, sagt er es abends von selbst.
 - Jede Nacht schaut er kurz auf die Gespräche vom Vortag und merkt sich, was wichtig war.
 - Alles bleibt auf deinem PC. Im Fenster rechts bei **Gedächtnis** > **Ansehen** siehst du alles und kannst mit × einzelne Sachen löschen.
 
@@ -248,7 +249,7 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
 
-1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster zeigt die **Blaupause**: Plan, jeden Schritt mit Dauer, ein Drahtgitter-Modell, das mit dem Fortschritt wächst, Dateien und Befehle.
+1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster zeigt den Auftrag: links den Plan, in der Mitte jeden Schritt mit Dauer, rechts den Fortschritt als Ring und die Dateien.
 2. Jarvis arbeitet im Hintergrund. Du kannst ihn währenddessen ganz normal fragen. **„Wie weit bist du?“** nennt den aktuellen Schritt.
 3. Ist er fertig, sagt er es dir. **Ordner öffnen** zeigt das Projekt, `start.bat` startet es.
 
