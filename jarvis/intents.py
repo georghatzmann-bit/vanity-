@@ -45,7 +45,8 @@ _RULES: list[tuple[str, re.Pattern]] = [
     ("stop", re.compile(
         r"^(?:(?:okay|ok|also|na|danke) )*"
         r"(?:stopp?|abbrechen|brich ab|sei (?:still|ruhig)|ruhe|halt|halt die klappe|schluss|genug|"
-        r"hör auf|höre auf|aufhören|(?:das|es) reicht|schon gut)(?: danke)?$"
+        r"hör auf|höre auf|aufhören|(?:das|es) reicht|schon gut|(?:hör|höre) auf zu (?:reden|sprechen|labern|quatschen)|"
+        r"(?:lass|vergiss) es(?: sein| gut sein)?)(?: danke)?$"
     )),
     # Verankert: "Ist mein Mikrofon aus?" oder "das Mikrofon aus dem Schrank" sind keine Befehle.
     ("mute", re.compile(

@@ -99,6 +99,12 @@ class RecognitionTest(unittest.TestCase):
         self.assertEqual(intent_of("Zeig mir den Weg nach Graz"), ("route", "Graz"))
         self.assertEqual(intent_of("Such ein Rezept für Lasagne"), ("search", "ein Rezept für Lasagne", {"site": "google"}))
 
+    def test_ways_to_say_stop(self):
+        for said in ("Stopp", "Sei still", "Halt die Klappe", "Schon gut", "Hör auf zu reden", "Hör auf zu sprechen",
+                     "Lass es", "Lass es sein", "Vergiss es"):
+            with self.subTest(said=said):
+                self.assertEqual(intent_of(said), ("stop", ""))
+
     def test_no_means_no(self):
         """Mit "nicht" ist das Gegenteil gemeint: nichts öffnen, schließen oder ausschalten."""
         for said in ("Öffne nicht Discord", "Öffne Discord nicht", "Schließ Chrome nicht", "Mach den PC nicht aus",
