@@ -588,6 +588,8 @@ class ClaudeBrain:
             cmd += ["--model", model]
         if effort and "effort" not in self._unsupported:
             cmd += ["--effort", effort]
+        if "safe-mode" not in self._unsupported:
+            cmd.append("--safe-mode")  # wie oneshot: ohne Georgs eigene Einstellungen, Hooks, Plugins und Skills
         if "tools" not in self._unsupported:
             cmd += ["--tools", ""]
         if "strict-mcp-config" not in self._unsupported:

@@ -226,6 +226,21 @@ class ClaudeBrainTest(unittest.TestCase):
         self.assertNotIn("--setting-sources", call["args"])
         self.assertEqual(call["no_claude_md"], "")
 
+    def test_blueprint_claude_is_shielded_from_personal_settings(self):
+        """Die Blaupause (stream_oneshot) läuft wie oneshot abgeschottet: ohne Georgs eigene Hooks, Plugins
+        und Skills, ohne Werkzeuge und Konnektoren."""
+        system = self.home / "blaupause.md"
+        system.write_text("Zeichne.", encoding="utf-8")
+        text = self.brain.stream_oneshot("hallo", system)
+        self.assertIn("hallo", text)
+        call = self.calls()[-1]
+        self.assertIn("--safe-mode", call["args"])
+        self.assertEqual(arg(call, "--tools"), "")
+        self.assertEqual(arg(call, "--system-prompt-file"), str(system))
+        with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "safe-mode"}):
+            self.assertIn("hallo", self.brain.stream_oneshot("hallo", system))
+        self.assertNotIn("--safe-mode", self.calls()[-1]["args"], "alte Claude-Versionen gehen weiter")
+
     def test_old_claude_without_setting_sources_still_works(self):
         with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "setting-sources"}), self.assertLogs("jarvis.brain", "WARNING"):
             answer = self.brain.ask("hallo")
