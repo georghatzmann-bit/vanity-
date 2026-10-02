@@ -62,6 +62,8 @@ def interaction_model() -> dict:
                     {"name": "AMAZON.HelpIntent", "samples": []},
                     {"name": "AMAZON.StopIntent", "samples": []},
                     {"name": "AMAZON.NavigateHomeIntent", "samples": []},
+                    {"name": "AMAZON.YesIntent", "samples": []},
+                    {"name": "AMAZON.NoIntent", "samples": []},
                     {
                         "name": "BefehlIntent",
                         "slots": [{"name": "befehl", "type": "BEFEHL"}],

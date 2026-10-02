@@ -183,6 +183,23 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual((said, acked), ("", False))
         self.assertLess(time.time() - start, 1.7)
 
+    def test_questions_keep_alexa_listening_and_yes_no_reach_jarvis(self):
+        question = {"request": {"type": "IntentRequest", "intent": {"name": "BefehlIntent",
+                                                                     "slots": {"befehl": {"value": "gute nacht"}}}}}
+        with mock.patch.object(alexa_skill, "frage_jarvis",
+                               return_value=("Gute Nacht, Sir. Soll ich den PC herunterfahren?", True)):
+            reply = alexa_skill.lambda_handler(question, None)
+        self.assertFalse(reply["response"]["shouldEndSession"], "Alexa hört weiter zu")
+        self.assertIn("reprompt", reply["response"])
+        yes = {"request": {"type": "IntentRequest", "intent": {"name": "AMAZON.YesIntent"}}}
+        with mock.patch.object(alexa_skill, "frage_jarvis", return_value=("Der PC fährt herunter, Sir.", True)) as asked:
+            reply = alexa_skill.lambda_handler(yes, None)
+        asked.assert_called_once_with("Ja")
+        self.assertTrue(reply["response"]["shouldEndSession"])
+        names = [i["name"] for i in alexa.interaction_model()["interactionModel"]["languageModel"]["intents"]]
+        self.assertIn("AMAZON.YesIntent", names)
+        self.assertIn("AMAZON.NoIntent", names)
+
     def test_pc_off_and_slow_answers(self):
         with mock.patch.object(alexa_skill, "KANAL", self.secret["kanal"]), \
                 mock.patch.object(alexa_skill, "SCHLUESSEL", self.secret["schluessel"]), \

@@ -165,7 +165,10 @@ def lambda_handler(event, context):
     if name == "AMAZON.HelpIntent":
         return antwort("Sagen Sie einfach, was ich am PC tun soll, zum Beispiel: Öffne Discord, oder: Wie wird das "
                        "Wetter morgen?", ende=False, nachfrage="Was soll ich tun?")
-    text = befehl_aus(request)
+    if name in ("AMAZON.YesIntent", "AMAZON.NoIntent"):
+        text = "Ja" if name == "AMAZON.YesIntent" else "Nein"  # Antwort auf Jarvis' Rückfrage
+    else:
+        text = befehl_aus(request)
     if not text:
         return antwort("Wie bitte, Sir?", ende=False, nachfrage="Was soll ich tun?")
     try:
@@ -173,7 +176,9 @@ def lambda_handler(event, context):
     except Exception:
         return antwort("Ich erreiche den Vermittlungsdienst gerade nicht. Bitte gleich noch einmal.")
     if said:
-        return antwort(said)
+        # Fragt Jarvis zurück ("Soll ich den PC herunterfahren?"), hört Alexa weiter zu: ein "Ja" genügt
+        frage = said.rstrip().endswith("?")
+        return antwort(said, ende=not frage, nachfrage="Ja oder nein, Sir?" if frage else None)
     if acked:
         return antwort("Ich kümmere mich darum, Sir. Das dauert einen Moment.")
     return antwort("Ihr PC antwortet nicht, Sir. Ist er an, und läuft Jarvis?")
