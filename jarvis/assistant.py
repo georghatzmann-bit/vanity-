@@ -1061,11 +1061,11 @@ class Assistant:
         return True
 
     def _announce_late(self, now=None) -> bool:
-        """Ein Geburtstag (nur eine Ansage, keine Frage), der bis zum Abend auf keine Antwort passte:
-        dann doch von selbst sagen, wenn Georg da ist und gerade nichts los ist."""
+        """Ein Geburtstag, der bis zum Abend auf keine Antwort passte: dann doch von selbst sagen
+        (mit "Soll ich gratulieren?", wenn Jarvis weiß, wie), wenn Georg da ist und nichts los ist."""
         routine = self._tip[0]
         now = now or dt.datetime.now()
-        if routine.commands() or now.hour < 18 or not getattr(routine, "key", "").startswith("geburtstag"):
+        if now.hour < 18 or not getattr(routine, "key", "").startswith("geburtstag"):
             return False
         if self.busy or self.speaking or self._recording or self.gaming:
             return False
@@ -1073,6 +1073,9 @@ class Assistant:
             return False
         self._tip = None
         self.memory.offered(routine, now)
+        if routine.commands():  # "Soll ich Max gratulieren?": das Ja geht ohne "Hey Jarvis"
+            self._offer = (routine, time.monotonic() + 120)
+            self._follow_up = True
         self.ui.message("jarvis", routine.question())
         self.say(routine.question())
         return True

@@ -356,6 +356,21 @@ class AssistantMemoryTest(unittest.TestCase):
         self.assertEqual(self.speaker.said[-1], "Sir, heute hat Ihre Oma Geburtstag.")
         self.assertNotIn("Übrigens", self.tip(), "nur einmal")
 
+    def test_friends_birthday_is_said_in_the_evening_with_the_offer(self):
+        """Wie in der Anleitung: Sprach Georg den ganzen Tag nicht mit Jarvis, kommt Max' Geburtstag abends
+        von selbst, mit der Frage, und das Ja geht ohne "Hey Jarvis"."""
+        self.assistant.memory.remember("Max hat am 1. Oktober Geburtstag")
+        self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
+        with mock.patch.object(self.assistant, "_present", return_value=True), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+            self.assertTrue(self.assistant.check_suggestions(dt.datetime(2026, 10, 1, 18, 30)))
+        self.assertEqual(self.speaker.said[-1], "Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?")
+        self.assertTrue(self.assistant.take_follow_up())
+        with mock.patch("jarvis.messaging.send", return_value="ok") as sent:
+            self.assistant.handle("Ja")
+        self.assertEqual(sent.call_args.args, ("discord", "Max", "Alles Gute zum Geburtstag, Max! 🎉"))
+
     def test_full_disk_is_mentioned_every_few_days(self):
         self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
         present = (mock.patch.object(self.assistant, "_present", return_value=True),
