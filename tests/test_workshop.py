@@ -79,11 +79,17 @@ class RecognitionTest(unittest.TestCase):
 
     def test_wishes_while_the_workshop_works(self):
         for said in ("Mach den Hintergrund blau", "Nimm lieber Python", "Füg noch einen Highscore hinzu",
-                     "Die Schrift soll größer sein", "Und mach die Gegner schneller"):
+                     "Die Schrift soll größer sein", "Und mach die Gegner schneller", "Der Spieler soll schneller laufen",
+                     "Füg dem Bot noch einen Befehl hinzu", "Bau noch ein Menü ein"):
             with self.subTest(said=said):
                 self.assertTrue(is_wish(said))
         for said in ("Wie spät ist es?", "Mach das Licht an", "Erzähl mir einen Witz", "Öffne Spotify", "Danke",
-                     "Welche Sprache nimmst du?"):
+                     "Welche Sprache nimmst du?",
+                     # Alltag, während die Werkstatt baut: das ist für Jarvis, nicht für das Projekt
+                     "Gib mir auch das Wetter für morgen", "Lösch noch die Downloads", "Mach den Bildschirm dunkler",
+                     "Schreib mir einen Text für Instagram", "Lass uns noch was anderes machen", "Mach mir noch einen Kaffee",
+                     "Nimm lieber den anderen Song", "Das muss ich mir merken", "Man sollte mal wieder aufräumen",
+                     "Es soll morgen regnen", "Mach das Fenster größer", "Mach noch ein Foto vom Bildschirm"):
             with self.subTest(said=said):
                 self.assertFalse(is_wish(said))
 
@@ -220,6 +226,21 @@ class WorkshopRunTest(unittest.TestCase):
         self.assertEqual(calls[1]["prompt"], "Georg, während du arbeitest: Mach den Hintergrund blau")
         self.assertIn("Ihr Wunsch: Mach den Hintergrund blau", [e[1]["label"] for e in self.ui.of("progress")])
         self.assertEqual(self.workshop.context(), "", "danach läuft nichts mehr")
+
+    def test_wish_with_a_long_silent_step_is_waited_for(self):
+        # Nach der ersten Antwort arbeitet Claude den Wunsch ab, darin eine Installation ohne Ausgabe.
+        # Das ist keine Stille "nach getaner Arbeit": die Werkstatt wartet auf die Antwort zum Wunsch.
+        with mock.patch("jarvis.workshop.AFTER_RESULT", 1.0):
+            self.workshop.start("Bau mir einen Discord-Bot, langsam")
+            end = time.monotonic() + 5
+            while not (self.workshop.job.live and self.workshop.job.sent == 1) and time.monotonic() < end:
+                time.sleep(0.05)
+            self.workshop.tell("lange-arbeit")
+            self.wait(40)
+        job = self.workshop.job
+        self.assertEqual(job.state, "done")
+        self.assertEqual((job.sent, job.results), (2, 2))
+        self.assertIn("Spotify ist installiert", self.said[-1])
 
     def test_offer_to_start_the_result(self):
         from jarvis.workshop import Job

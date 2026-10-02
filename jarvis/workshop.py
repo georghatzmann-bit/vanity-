@@ -195,20 +195,25 @@ _WISH_VERB = re.compile(
     r"^(?:und |aber |ach ja,? |ach,? |übrigens,? |noch was,? |außerdem,? )?(?:nimm|nehm|nehme|verwende|benutz|benutze|"
     r"mach|mache|bau|baue|füg|füge|änder|ändere|pass|passe|ergänz|ergänze|setz|setze|gib|lass|lasse|schreib|"
     r"schreibe|stell|stelle|tausch|tausche|ersetz|ersetze|entfern|entferne|lösch|lösche)\b")
+# Worum es im Projekt geht. Allgemeine Wörter ("noch", "auch", "lieber", "Text", "Fenster", "heller") reichen
+# nicht: "Gib mir auch das Wetter", "Lösch noch die Downloads" oder "Mach den Bildschirm dunkler" sind
+# Befehle für Jarvis, nicht für die Werkstatt. Was hier nicht erkannt wird, gibt das Gehirn weiter (context()).
 _WISH_WHAT = re.compile(
-    r"\b(?:lieber|stattdessen|statt|anstatt|auch|noch|zusätzlich|außerdem|dazu|rein|hinzu|weg|raus|blau|rot|grün|"
-    r"gelb|schwarz|weiß|lila|orange|grau|bunt|dunkel|hell|dunkler|heller|größer|kleiner|schneller|langsamer|"
-    r"hintergrund|farbe|farben|schrift|text|knopf|button|menü|level|highscore|punkte|sound|ton|geräusche|logo|"
-    r"design|layout|titel|name|sprache|python|javascript|html|befehl|befehle|funktion|seite|fenster|spieler|gegner)\b")
+    r"\b(?:hintergrund\w*|farbe|farben|schrift\w*|knopf|knöpfe|button|buttons|menü\w*|level|levels|highscore\w*|"
+    r"punkte\w*|sound|sounds|soundeffekt\w*|geräusch\w*|logo|icon|design|layout|titel\w*|python|javascript|html|css|"
+    r"befehl|befehle|funktion|funktionen|spieler\w*|gegner\w*|figur\w*|blau\w*|rot|rote[nmrs]?|grün\w*|gelb\w*|"
+    r"schwarz\w*|weiß\w*|lila|orange|grau\w*|bunt\w*)\b")
 _WISH_SHOULD = re.compile(r"^(?:der|die|das|den|es|er|sie|alles|man)\b.*\b(?:soll|sollte|sollen|muss|müssen)\b")
+# "Mach mir ...", "Gib mir ...", "Lass uns ...", "Das muss ich ...": das ist für Georg selbst
+_FOR_GEORG = re.compile(r"\b(?:ich|mir|mich|uns|wir)\b")
 
 
 def is_wish(text: str) -> bool:
     """Klingt nach einem Wunsch zum Projekt, an dem die Werkstatt gerade arbeitet."""
     norm = _norm(text)
-    if not norm or text.strip().endswith("?") or _NOT_AN_ANSWER.match(norm):
+    if not norm or text.strip().endswith("?") or _NOT_AN_ANSWER.match(norm) or _FOR_GEORG.search(norm):
         return False
-    return bool((_WISH_VERB.match(norm) and _WISH_WHAT.search(norm)) or _WISH_SHOULD.match(norm))
+    return bool((_WISH_VERB.match(norm) or _WISH_SHOULD.match(norm)) and _WISH_WHAT.search(norm))
 
 
 # Keine Antwort auf eine Rückfrage, sondern etwas Neues: Fragen und andere Befehle
@@ -974,8 +979,10 @@ class Workshop:
                 line = lines.get(timeout=0.25)
             except queue.Empty:
                 now = time.monotonic()
-                if waiting_since is not None and now - last > AFTER_RESULT:
-                    finish_input()  # der Wunsch war schon in der letzten Antwort enthalten
+                if waiting_since is not None and not stream.running and now - last > AFTER_RESULT:
+                    # Seit der Antwort ist es still (und kein Werkzeug läuft, eine Installation darf dauern):
+                    # der Wunsch war schon in der letzten Antwort enthalten
+                    finish_input()
                     break
                 if now - last > quiet_limit or now - started > total_limit:
                     timed_out = True
@@ -997,6 +1004,8 @@ class Workshop:
             with self._lock:
                 job.results += 1
                 more = live and job.live and job.results < job.sent and not final.get("is_error")
+                if not more:
+                    job.live = False  # im selben Schritt: ein Wunsch, der jetzt noch käme, ginge sonst verloren
             if not more:
                 if live:
                     finish_input()

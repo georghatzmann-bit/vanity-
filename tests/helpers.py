@@ -185,7 +185,7 @@ FAKE_CLAUDE = textwrap.dedent(
             say(text)
             result(text)
             raise Done(0)
-        if prompt == "lange-arbeit":
+        if prompt == "lange-arbeit" or prompt.endswith(": lange-arbeit"):
             # Ein Werkzeug, das eine Weile still arbeitet (z. B. eine Installation).
             tool("toolu_2", "Bash", {"command": "winget install --id Spotify.Spotify -e"}, pause=2.5)
             say("Spotify ist installiert, Sir.")
