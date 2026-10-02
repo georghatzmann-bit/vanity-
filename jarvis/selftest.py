@@ -360,6 +360,38 @@ def check_homeassistant(r: Report, cfg: dict) -> None:
         r.add("Web-Eingang", "fehler", "token zu kurz", "Unter [server] ein token mit mindestens 12 Zeichen eintragen.")
 
 
+def check_iphone(r: Report, cfg: dict) -> None:
+    """iPhone (iCloud) und Postfächer: verbunden, Passwort lesbar, Anmeldung geht? Alles optional."""
+    from .apple import AppleError, account_from_config
+    from .config import STATE_DIR
+    from .mail import mailbox_from_config
+
+    apple_id = str((cfg.get("apple") or {}).get("apple_id") or "").strip()
+    if not apple_id:
+        r.add("iPhone (iCloud)", "ok", "nicht verbunden (optional: im Jarvis-Fenster unter Verbinden > iPhone)")
+    else:
+        account = account_from_config(cfg, STATE_DIR)
+        if account is None:
+            r.add("iPhone (iCloud)", "fehler", "Das gespeicherte Passwort fehlt oder lässt sich nicht lesen.",
+                  "Im Jarvis-Fenster unter Verbinden > iPhone neu verbinden.")
+        else:
+            try:
+                calendars = account.calendars()
+                writable = sum(1 for c in calendars if c["schreibbar"])
+                r.add("iPhone (iCloud)", "ok", f"{len(calendars)} Kalender, in {writable} darf Jarvis eintragen")
+            except AppleError as exc:
+                hint = ("Auf account.apple.com ein neues app-spezifisches Passwort erstellen und im Jarvis-Fenster neu "
+                        "verbinden." if exc.kind == "passwort" else "Später noch einmal versuchen.")
+                r.add("iPhone (iCloud)", "fehler" if exc.kind == "passwort" else "warnung", str(exc), hint)
+    mailbox = mailbox_from_config(cfg, STATE_DIR)
+    labels = {a.id: a.label for a in mailbox.accounts()}
+    for ident, problem in mailbox.check_all().items():
+        if problem:
+            r.add(f"Mail {labels[ident]}", "fehler", problem, "Im Jarvis-Fenster unter Verbinden > Mail neu verbinden.")
+        else:
+            r.add(f"Mail {labels[ident]}", "ok", "Anmeldung geht (nur lesen)")
+
+
 def check_autostart(r: Report) -> None:
     if os.name != "nt":
         return
@@ -393,6 +425,7 @@ def run(cfg: dict, quick: bool = False, out=print) -> Report:
     r.run("Oberfläche", check_gui)
     r.run("Stumm-Taste", check_hotkey, cfg)
     r.run("Home Assistant", check_homeassistant, cfg)
+    r.run("iPhone und Mail", check_iphone, cfg)
     r.run("Autostart", check_autostart)
 
     out("")

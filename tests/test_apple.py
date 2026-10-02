@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 import tests.helpers  # noqa: F401
-from tests.fake_icloud import CARDS, ZAHNARZT, FakeICloud
+from tests.fake_icloud import CARDS, DSID, ZAHNARZT, FakeICloud
 from jarvis.apple import (AppleError, ICloudCalendar, _utc_text, app_password, build_event_ics, exclude_occurrence,
                           looks_like_app_password, mask_email, parse_vcards, sync_birthdays)
 from jarvis.kalender import Calendar, CalendarError, parse_ics
@@ -106,6 +106,14 @@ class AccountTest(unittest.TestCase):
         report = [r for r in self.icloud.requests if r[0] == "REPORT"][-1]
         self.assertIn(b'prop-filter name="BDAY"', report[4])
         self.assertNotIn(b"PHOTO", report[4], "keine Fotos anfordern")
+
+    def test_birthdays_without_the_search_one_by_one(self):
+        self.icloud.card_query = False
+        people = self.icloud.account().contacts()
+        self.assertEqual(sorted(p["name"] for p in people), ["Anna Schmidt", "Max Müller", "Tom Weber"])
+        multiget = [r for r in self.icloud.requests if r[0] == "REPORT" and b"addressbook-multiget" in r[4]]
+        self.assertEqual(len(multiget), 1)
+        self.assertIn(f"<d:href>/{DSID}/carddavhome/card/0.vcf</d:href>".encode(), multiget[0][4])
 
 
 class PhoneCalendarTest(unittest.TestCase):

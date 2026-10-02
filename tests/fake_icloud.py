@@ -145,6 +145,7 @@ class FakeICloud:
         self.requests = []  # (Methode, Host, Pfad, Kopfzeilen, Inhalt)
         self.throttle = False
         self.redirect_to = ""  # Eingang leitet woanders hin (fremde Adresse)
+        self.card_query = True  # False: die Suche nach Geburtstagen gibt es nicht (403), nur einzeln laden
         self.query_ranges = []
         self.calendars = {
             "home": {"name": "Privat", "color": "#FF2968FF", "comps": ["VEVENT", "VTODO"], "write": True, "ctag": 1,
@@ -262,10 +263,22 @@ class FakeICloud:
                        f"<response><href>/{DSID}/carddavhome/card/</href><propstat><prop><displayname>card</displayname>"
                        f"<resourcetype><collection/><CR:addressbook/></resourcetype></prop>{OK}</propstat></response>")
             return request._reply(207, MULTI.format(listing))
+        if request.command == "PROPFIND" and path == f"/{DSID}/carddavhome/card/":
+            members = "".join(f"<response><href>/{DSID}/carddavhome/card/{n}.vcf</href><propstat><prop>"
+                              f"<getetag>\"c{n}\"</getetag><resourcetype/></prop>{OK}</propstat></response>"
+                              for n in range(len(self.cards)))
+            return request._reply(207, MULTI.format(
+                f"<response><href>/{DSID}/carddavhome/card/</href><propstat><prop><resourcetype><collection/>"
+                f"<CR:addressbook/></resourcetype></prop>{OK}</propstat></response>{members}"))
         if request.command == "REPORT" and path == f"/{DSID}/carddavhome/card/":
+            numbers = list(range(len(self.cards)))
+            if b"addressbook-multiget" in body:
+                numbers = [int(n) for n in re.findall(rb"/card/(\d+)\.vcf</d:href>", body)]
+            elif not self.card_query:
+                return request._reply(403)  # "diese Suche gibt es hier nicht"
             cards = "".join(f"<response><href>/{DSID}/carddavhome/card/{n}.vcf</href><propstat><prop>"
-                            f"<getetag>\"c{n}\"</getetag><CR:address-data>{escape(card)}</CR:address-data></prop>{OK}"
-                            f"</propstat></response>" for n, card in enumerate(self.cards))
+                            f"<getetag>\"c{n}\"</getetag><CR:address-data>{escape(self.cards[n])}</CR:address-data>"
+                            f"</prop>{OK}</propstat></response>" for n in numbers)
             return request._reply(207, MULTI.format(cards))
         found = re.fullmatch(rf"/{DSID}/calendars/([^/]+)/(?:([^/]+\.ics))?", path)
         if not found or found.group(1) not in self.calendars:

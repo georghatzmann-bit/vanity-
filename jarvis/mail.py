@@ -724,6 +724,17 @@ class Mailbox:
         self._overview = (-1e9, None)
         return True
 
+    def check_all(self) -> dict[str, str]:
+        """Für den Selbsttest: Konto -> "" (Anmeldung geht) oder der Grund, warum nicht."""
+        found = {}
+        for account in self.accounts():
+            try:
+                self._client(account).check()
+                found[account.id] = ""
+            except MailError as exc:
+                found[account.id] = str(exc)
+        return found
+
     def _client(self, account: Account) -> MailClient:
         password = self._secrets.get("apple" if account.auto else f"mail:{account.id}")
         if not password:

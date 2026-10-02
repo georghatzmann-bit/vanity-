@@ -143,6 +143,29 @@ class AssistantTest(ICloudSetup):
         self.assertEqual(len(self.speaker.said), 1)
 
 
+class SelfTestTest(ICloudSetup):
+    def check(self, cfg):
+        from jarvis import selftest
+
+        report = selftest.Report(lambda line: None)
+        with mock.patch("jarvis.config.STATE_DIR", self.state):
+            selftest.check_iphone(report, cfg)
+        return [(c.name, c.status, c.detail) for c in report.checks]
+
+    def test_iphone_and_mail_in_the_self_test(self):
+        self.assertEqual(self.check({"apple": {"apple_id": ""}}),
+                         [("iPhone (iCloud)", "ok", "nicht verbunden (optional: im Jarvis-Fenster unter Verbinden > iPhone)")])
+        cfg = {"apple": {"apple_id": USER}}
+        self.assertEqual(self.check(cfg)[0][:2], ("iPhone (iCloud)", "fehler"), "Passwort fehlt")
+        self.secrets.set("apple", PASSWORD)
+        self.assertEqual(self.check(cfg), [("iPhone (iCloud)", "ok", "3 Kalender, in 2 darf Jarvis eintragen"),
+                                           ("Mail iCloud", "ok", "Anmeldung geht (nur lesen)")])
+        self.secrets.set("apple", "widerrufen")
+        checks = self.check(cfg)
+        self.assertEqual([c[:2] for c in checks], [("iPhone (iCloud)", "fehler"), ("Mail iCloud", "fehler")])
+        self.assertEqual(checks[0][2], "Apple lehnt das Passwort ab. Bitte ein neues app-spezifisches Passwort erstellen.")
+
+
 class ToolTest(ICloudSetup):
     def setUp(self):
         super().setUp()

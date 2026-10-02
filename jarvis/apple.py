@@ -418,8 +418,10 @@ class AppleAccount:
                 texts = [r.props[f"{{{CARDDAV}}}address-data"].text or "" for r in answers
                          if r.props.get(f"{{{CARDDAV}}}address-data") is not None]
             except AppleError as exc:
-                if exc.kind in ("passwort", "netz", "bremse"):
+                if exc.kind in ("passwort", "netz"):
                     raise
+                # Auch bei 403: das kann "diese Suche gibt es hier nicht" heißen. Bremst iCloud wirklich,
+                # scheitert der Ausweg genauso und meldet es.
                 log.info("Kontakte: Suche nach Geburtstagen ging nicht (%s), lade einzeln.", exc)
                 texts = self._all_cards(book)
             for text in texts:
