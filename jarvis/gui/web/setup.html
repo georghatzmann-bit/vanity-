@@ -46,7 +46,7 @@
             <ul class="plan">
               <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span><span><b>Mikrofon</b><small>Damit Jarvis dich hört</small></span></li>
               <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><span><b>Stimme</b><small>Wie Jarvis klingen soll</small></span></li>
-              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span><b>Wohnort</b><small>Für das Wetter</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span><b>Name und Ort</b><small>Damit Jarvis dich kennt, und für das Wetter</small></span></li>
               <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2.4 4.8.8.8 1.1 1.7 1.1 2.7V18h5v-1.5c0-1 .3-1.9 1.1-2.7C16.8 12.6 18 11.2 18 9a6 6 0 0 0-6-6zM10 21h4"/></svg></span><span><b>Gehirn</b><small>Dein Claude-Pro-Abo: denkt mit, beantwortet Fragen, erledigt Aufgaben</small></span></li>
               <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></span><span><b>Extras</b><small>Stumm-Taste, Autostart, Alexa</small></span></li>
             </ul>
@@ -181,8 +181,13 @@
           <p class="note" id="voiceNote">Ohne Internet spricht Jarvis mit einer Ersatzstimme. Ist das ElevenLabs-Guthaben leer, übernimmt die Microsoft-Stimme.</p>
         </section>
 
-        <!-- 4 Wohnort -->
+        <!-- 4 Name und Wohnort -->
         <section class="step" data-step="place" hidden>
+          <form class="place-form name-form" id="nameForm" autocomplete="off">
+            <input id="nameInput" class="input" type="text" maxlength="30" placeholder="Dein Vorname, z. B. Georg" aria-label="Dein Vorname" spellcheck="false">
+            <button type="submit" class="btn" id="nameSave">Speichern</button>
+          </form>
+          <p class="note name-note">Damit Jarvis weiß, mit wem er spricht. Anreden wird er dich trotzdem mit „Sir“.</p>
           <form class="place-form" id="placeForm" autocomplete="off">
             <input id="placeInput" class="input" type="text" maxlength="80" placeholder="z. B. Wien oder Graz, Österreich" aria-label="Wohnort" spellcheck="false">
             <button type="submit" class="btn" id="placeCheck">Prüfen</button>

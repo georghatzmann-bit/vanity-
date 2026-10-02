@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
+
+from .config import user_name
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +47,9 @@ def build_persona(home: Path, state_dir: Path, cfg: dict) -> Path:
         text = _permissions(base_file.read_text(encoding="utf-8"), full).rstrip() + "\n"
         if extra:
             text += "\n## Über Georg\n\n" + "\n".join(extra) + "\n"
+        name = user_name(cfg)
+        if name != "Georg":
+            text = re.sub(r"\bGeorg", name, text)  # Jarvis ist für Georg geschrieben, hier heißt der Nutzer anders
         target = state_dir / "persona.md"
         state_dir.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")

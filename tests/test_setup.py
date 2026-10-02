@@ -97,6 +97,13 @@ class SettingsTest(SetupTestCase):
         self.assertEqual(self.api.wake_sensitive(False)["threshold"], 0.5)
         self.assertEqual(self.saved()["wakeword"]["threshold"], 0.5)
 
+    def test_name_is_saved_and_checked(self):
+        self.assertTrue(self.api.name_save("  Lisa ")["ok"])
+        self.assertEqual(self.saved()["ich"]["name"], "Lisa")
+        self.assertEqual(self.api.hello()["values"]["name"], "Lisa")
+        self.assertFalse(self.api.name_save("Lisa Müller")["ok"], "nur der Vorname")
+        self.assertTrue(self.api.name_save("")["ok"], "leer = Georg")
+
     def test_full_permission_switch(self):
         # Ohne Eintrag gilt die volle Freigabe, der Schalter speichert [rechte] volle_freigabe.
         self.assertTrue(self.api.hello()["values"]["full_permission"])
@@ -120,7 +127,7 @@ class SettingsTest(SetupTestCase):
         self.assertIn("version", info)
         self.assertEqual(
             set(info["values"]),
-            {"mic", "ort", "voice", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
+            {"mic", "ort", "name", "voice", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
              "speed", "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set",
              "pico_key_set"},
         )

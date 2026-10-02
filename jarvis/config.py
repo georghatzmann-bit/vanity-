@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -189,3 +190,9 @@ def _value_end(lines: list[str], first: int) -> int:
         if depth <= 0:
             return i
     return first
+
+
+def user_name(cfg: dict | None = None) -> str:
+    """Wie der Nutzer heißt ([ich] name). Ohne Angabe "Georg": für ihn ist Jarvis gebaut."""
+    name = str((((cfg or {}).get("ich") or {}).get("name")) or "").strip()
+    return name if re.fullmatch(r"[A-Za-zÄÖÜäöüßéèáàÉÈ][\w\-ÄÖÜäöüßéèáà]{0,29}", name) else "Georg"

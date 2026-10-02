@@ -2,6 +2,8 @@
 # dort kannst du alles anpassen. Was in config.toml fehlt, kommt von hier.
 
 [ich]
+# Dein Vorname, damit Jarvis weiß, mit wem er spricht (leer = Georg). Er sagt trotzdem "Sir".
+name = ""
 # Dein Wohnort, damit Jarvis beim Wetter weiß, wo du bist (z. B. "Wien"). Das Fenster zeigt dann auch das aktuelle Wetter.
 ort = ""
 # Was Jarvis sonst über dich wissen soll, in einem Satz (optional).

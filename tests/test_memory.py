@@ -496,3 +496,31 @@ class GoodNightTest(unittest.TestCase):
 
         self.assertEqual(intents.match("Geh schlafen").name, "mute")
         self.assertEqual(intents.match("Ich geh jetzt schlafen").name, "good_night")
+
+
+class OtherUserTest(unittest.TestCase):
+    """Jarvis ist für Georg gebaut, aber jeder kann seinen Namen eintragen ([ich] name)."""
+
+    def tearDown(self):
+        from jarvis import memory
+
+        memory.set_user("Georg")
+
+    def test_name_in_memory_and_persona(self):
+        from jarvis import memory
+        from jarvis.config import user_name
+        from jarvis.persona import build_persona
+
+        self.assertEqual(user_name({}), "Georg")
+        self.assertEqual(user_name({"ich": {"name": "Lisa"}}), "Lisa")
+        self.assertEqual(user_name({"ich": {"name": "Lisa; rm -rf"}}), "Georg")
+        memory.set_user("Lisa")
+        self.assertEqual(match_memory("Merk dir, dass ich gern Pizza esse"), ("remember", "Lisa sagt: Ich esse gern Pizza"))
+        self.assertTrue(parse_birthday("Lisa sagt: Ich habe am 5. Juni Geburtstag")["own"])
+        self.assertFalse(parse_birthday("Georg hat am 5. Juni Geburtstag")["own"])
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder) / "home"
+            home.mkdir()
+            (home / "CLAUDE.md").write_text("Du bist Jarvis, Georgs Butler. Georg mag es kurz.", encoding="utf-8")
+            text = build_persona(home, Path(folder), {"ich": {"name": "Lisa"}}).read_text(encoding="utf-8")
+        self.assertEqual(text.strip(), "Du bist Jarvis, Lisas Butler. Lisa mag es kurz.")

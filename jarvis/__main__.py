@@ -96,6 +96,10 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .memory import Memory
 
     # Das Gedächtnis: Fakten, Kontakte, Gewohnheiten. Das Gehirn bekommt sie zu Beginn jeder Unterhaltung.
+    from .config import user_name
+    from .memory import set_user
+
+    set_user(user_name(cfg))
     assistant.memory = Memory(STATE_DIR / "gedaechtnis.json")
     if brain is not None:
         brain.context = assistant.memory.context

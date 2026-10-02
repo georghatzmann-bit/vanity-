@@ -717,7 +717,7 @@ class Assistant:
             return "Noch nicht viel, Sir. Sagen Sie „Merk dir, …“, und ich behalte es. Ihre Gewohnheiten lerne ich mit der Zeit von selbst."
 
         def spoken(text: str) -> str:
-            said = re.match(r"Georg sagt:\s*(.+)$", text)
+            said = re.match(r"[\wÄÖÜäöüß-]+ sagt:\s*(.+)$", text)
             return f"„{said.group(1)}“" if said else text
 
         parts = []

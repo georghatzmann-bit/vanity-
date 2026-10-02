@@ -122,10 +122,19 @@ def full_permission(cfg: dict | None = None) -> bool:
     return bool(cfg.get("rechte", {}).get("volle_freigabe", True))
 
 
+def _user() -> str:
+    from .config import user_name
+
+    try:
+        return user_name(load_config())
+    except Exception:
+        return "Georg"
+
+
 def need_confirmation(action: str) -> int:
     print(
-        f"Noch nicht bestätigt. Frag Georg zuerst, ob du {action} wirklich tun sollst, "
-        "und führe den Befehl erst nach seinem Ja noch einmal aus."
+        f"Noch nicht bestätigt. Frag {_user()} zuerst, ob du {action} wirklich tun sollst, "
+        "und führe den Befehl erst nach dem Ja noch einmal aus."
     )
     return 3
 
@@ -168,7 +177,7 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print("Du bist schon in der Werkstatt. Bau es selbst, hier im Projektordner.")
             return 1
         hand_over(STATE_DIR, " ".join(rest[1:]), continue_last=True, project=rest[0])
-        print("Die Werkstatt übernimmt. Sag Georg nur kurz, dass du am Projekt weitermachst.")
+        print(f"Die Werkstatt übernimmt. Sag {_user()} nur kurz, dass du am Projekt weitermachst.")
         return 0
 
     if command in ("werkstatt", "werkstatt-weiter"):
@@ -182,13 +191,14 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print("Du bist schon in der Werkstatt. Bau es selbst, hier im Projektordner.")
             return 1
         hand_over(STATE_DIR, task, continue_last=command == "werkstatt-weiter")
-        print("Die Werkstatt übernimmt (das Fenster zeigt die Arbeit). Sag Georg nur kurz, dass du in der "
+        print(f"Die Werkstatt übernimmt (das Fenster zeigt die Arbeit). Sag {_user()} nur kurz, dass du in der "
               "Werkstatt bist, und mach den Auftrag nicht selbst.")
         return 0
 
     if command in ("merken", "merke", "gedaechtnis", "gedächtnis", "vergessen", "vergiss"):
-        from .memory import Memory
+        from .memory import Memory, set_user
 
+        set_user(_user())
         memory = Memory(STATE_DIR / "gedaechtnis.json")
         what = " ".join(rest).strip()
         if command in ("merken", "merke"):
@@ -410,9 +420,9 @@ def _dispatch(command: str, rest: list[str]) -> int:
             return need_confirmation({"shutdown": "den PC herunterfahren", "restart": "den PC neu starten",
                                       "sleep": "den PC in den Energiesparmodus schicken",
                                       "hibernate": "den PC in den Ruhezustand schicken",
-                                      "logoff": "Georg abmelden"}[action])
+                                      "logoff": f"{_user()} abmelden"}[action])
         delay = int(rest[0]) if rest and rest[0].isdigit() else (15 if action in ("shutdown", "restart") else 5)
-        print(pc.power(action, delay) + " Georg kann bis dahin 'Jarvis, abbrechen' sagen.")
+        print(pc.power(action, delay) + f" {_user()} kann bis dahin 'Jarvis, abbrechen' sagen.")
         return 0
 
     if command in ("herunterfahren-abbrechen", "abbrechen"):

@@ -1515,3 +1515,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Name über dem Wohnort */
+.name-note {
+  margin: 8px 0 24px;
+}

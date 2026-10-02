@@ -376,6 +376,7 @@ class SetupApi:
             "values": {
                 "mic": str(cfg["audio"].get("input_device") or ""),
                 "ort": str(cfg.get("ich", {}).get("ort", "")),
+                "name": str(cfg.get("ich", {}).get("name", "")),
                 "voice": str(cfg["tts"].get("voice", "")),
                 "hotkey": str(cfg["mute"].get("hotkey", "")),
                 "threshold": float(cfg["wakeword"]["threshold"]),
@@ -757,6 +758,15 @@ class SetupApi:
 
     def place_save(self, text) -> dict:
         return self._save("ich", "ort", str(text or "").strip())
+
+    def name_save(self, text) -> dict:
+        """Wie der Nutzer heißt ([ich] name). Leer = Georg. Jarvis sagt trotzdem "Sir"."""
+        from .config import user_name
+
+        name = str(text or "").strip()
+        if name and user_name({"ich": {"name": name}}) != name:
+            return {"ok": False, "error": "Bitte nur den Vornamen, ohne Leerzeichen und Sonderzeichen."}
+        return self._save("ich", "name", name)
 
     # ------------------------------------------------------------ Claude
 

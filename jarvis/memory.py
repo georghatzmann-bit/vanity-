@@ -36,6 +36,12 @@ ROUTINE_DAYS = 21  # Routinen aus den letzten drei Wochen
 MIN_DAYS = 3  # ab so vielen Tagen ist es eine Gewohnheit
 SPREAD = 60  # Minuten: so nah müssen die Uhrzeiten beieinander liegen
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+USER = "Georg"  # wie der Nutzer heißt ([ich] name), siehe set_user
+
+
+def set_user(name: str) -> None:
+    global USER
+    USER = str(name or "").strip() or "Georg"
 
 
 def _key(text: str) -> str:
@@ -448,14 +454,14 @@ class Memory:
         lines = []
         facts = self.facts()[-40:]
         if facts:
-            lines.append("Was du über Georg weißt (aus früheren Gesprächen):")
+            lines.append(f"Was du über {USER} weißt (aus früheren Gesprächen):")
             lines += [f"- {f['text']}" for f in facts]
         contacts = [c for c in self.contacts()[:10] if c.get("app")]
         if contacts:
-            lines.append("Mit wem Georg schreibt: " + ", ".join(f"{c['name']} ({c['app']})" for c in contacts) + ".")
+            lines.append(f"Mit wem {USER} schreibt: " + ", ".join(f"{c['name']} ({c['app']})" for c in contacts) + ".")
         routines = self.routines(now)[:8]
         if routines:
-            lines.append("Georgs Gewohnheiten: " + "; ".join(r.describe() for r in routines) + ".")
+            lines.append(f"Gewohnheiten von {USER}: " + "; ".join(r.describe() for r in routines) + ".")
         if not lines:
             return ""
         lines.append("Nutze das unaufdringlich. Erfährst du etwas Neues, das auch morgen noch wichtig ist "
@@ -486,13 +492,13 @@ class Memory:
         said = [e["was"] for e in self.events("said") if done < e.get("t", "")[:10] <= day.isoformat()][-150:]
         known = "\n".join(f"- {f['text']}" for f in self.facts()[-60:]) or "- (noch nichts)"
         return (
-            "Du bist das Gedächtnis von Jarvis, Georgs persönlichem Assistenten. Hier ist, was Georg zuletzt zu "
+            f"Du bist das Gedächtnis von Jarvis, dem persönlichen Assistenten von {USER}. Hier ist, was {USER} zuletzt zu "
             "Jarvis gesagt hat, eine Zeile pro Befehl:\n\n" + "\n".join(f"- {s}" for s in said) +
             "\n\nDas weiß Jarvis schon:\n" + known +
-            "\n\nSchreib höchstens 8 neue, dauerhaft nützliche Fakten über Georg auf: Vorlieben, Hobbys, Spiele, "
+            f"\n\nSchreib höchstens 8 neue, dauerhaft nützliche Fakten über {USER} auf: Vorlieben, Hobbys, Spiele, "
             "Projekte, Personen in seinem Leben, wiederkehrende Termine, wie er angesprochen werden will. Keine "
             "einmaligen Befehle (\"hat Spotify geöffnet\"), nichts, was schon bekannt ist, nichts Erfundenes, nichts "
-            "Intimes. Jeder Fakt ein kurzer deutscher Satz in der dritten Person (\"Georg spielt gern Valorant.\"). "
+            f"Intimes. Jeder Fakt ein kurzer deutscher Satz in der dritten Person (\"{USER} spielt gern Valorant.\"). "
             "Antworte nur mit einem JSON-Array aus Strings, ohne Erklärung. Gibt es nichts Neues: []"
         )
 
@@ -570,7 +576,7 @@ def parse_birthday(text: str) -> dict | None:
     raw = " ".join(str(text).split()).strip(" .")
     if "geburtstag" not in raw.lower() and "geboren" not in raw.lower():
         return None
-    raw = re.sub(r"^Georg sagt:\s*", "", raw)
+    raw = re.sub(r"^[\wÄÖÜäöüß-]+ sagt:\s*", "", raw)
     for pattern in _BIRTHDAY:
         found = pattern.match(raw)
         if found:
@@ -596,7 +602,7 @@ def parse_birthday(text: str) -> dict | None:
             and who.lower() not in _S_NAMES and not who.lower().endswith(("us", "ss"))):
         who = who[:-1]  # "Annas Geburtstag ist am ..."
         words = [who]
-    own = who.lower() in ("ich", "georg", "mein", "meiner", "mir")
+    own = who.lower() in ("ich", USER.lower(), "mein", "meiner", "mir")
     owner = _OWNER.get(words[0].lower(), "")
     shown = " ".join(owner if i == 0 and owner else _relation(w, owner) for i, w in enumerate(words))
     name = " ".join(w for w in words if w.lower() not in _OWNER and _relation(w, owner).lower() not in _RELATION
@@ -654,7 +660,7 @@ def _first_to_third(fact: str, clause: bool = False) -> str:
 
         fact = direct_speech("dass " + fact) or fact
     if re.match(r"(?:ich|mein|meine|meinen|meinem|mir|mich)\b", fact, re.I):
-        return f"Georg sagt: {fact[:1].upper() + fact[1:]}"
+        return f"{USER} sagt: {fact[:1].upper() + fact[1:]}"
     return fact[:1].upper() + fact[1:]
 
 

@@ -19,7 +19,7 @@ Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird
 
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen (siehe unten) und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
 2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen (siehe unten), **Prüfen**, Stimmen anhören und eine anklicken. Ohne Schlüssel spricht die kostenlose Microsoft-Stimme.
-3. **Wohnort:** für das Wetter.
+3. **Name und Ort:** dein Vorname (damit Jarvis weiß, mit wem er spricht) und dein Wohnort für das Wetter.
 4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Claude ist verbunden“ erscheint. Dafür reicht dein Claude-Pro-Abo.
 5. **Extras:** Stumm-Taste, Autostart und **Volle Freigabe** (siehe unten). Einfach so lassen, wie es ist.
 6. **Jarvis starten.**

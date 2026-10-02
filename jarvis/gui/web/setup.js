@@ -34,9 +34,9 @@
       lead: 'Premium klingt wie ein echter Mensch. Kostenlos geht auch, klingt aber nach Computer.',
     },
     {
-      id: 'place', nav: 'Wohnort',
-      title: 'Wo wohnst du?',
-      lead: 'Für das Wetter und alles, was mit deiner Umgebung zu tun hat.',
+      id: 'place', nav: 'Name und Ort',
+      title: 'Wie heißt du, und wo wohnst du?',
+      lead: 'Dein Vorname, damit Jarvis dich kennt. Der Ort für das Wetter und alles, was mit deiner Umgebung zu tun hat.',
     },
     {
       id: 'claude', nav: 'Gehirn',
@@ -1113,7 +1113,7 @@
     renderVoices();
   }
 
-  // ------------------------------------------------------------------ 4 Wohnort
+  // ------------------------------------------------------------------ 4 Name und Wohnort
 
   function placeEnter() {
     const input = $('placeInput');
@@ -1550,6 +1550,7 @@
     const rows = [
       ['Mikrofon', micLabel() || 'Windows-Standard', 'mic', S.mic.detected ? ['ok', 'Getestet'] : null],
       ['Stimme', voiceName() || 'Standard', 'voice', null],
+      ['Name', S.name || 'Georg', 'place', null],
       ['Wohnort', S.place.saved || 'Nicht eingetragen', 'place', S.place.saved ? null : ['warn', 'Kein Wetter']],
       ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'Verbunden')
         : checking ? 'Wird geprüft …' : 'Noch nicht bereit', 'claude',
@@ -1617,6 +1618,8 @@
     // Premium zuerst zeigen, außer jemand hat ElevenLabs schon und bewusst zurück auf Microsoft gestellt.
     S.tts.tab = S.eleven.keySet && S.tts.engine !== 'elevenlabs' ? 'free' : 'premium';
     S.place.saved = String(v.ort || '');
+    S.name = String(v.name || '');
+    if ($('nameInput') && !$('nameInput').value) $('nameInput').value = S.name;
     S.hotkey = String(v.hotkey || '');
     S.autostart = !!v.autostart;
     S.fullPermission = v.full_permission !== false;
@@ -1682,6 +1685,21 @@
         const r = await call('wake_sensitive', e.target.checked);
         if (r && typeof r.threshold === 'number') S.mic.threshold = r.threshold;
         if (r && !r.ok) toast(r.error || 'Konnte das nicht speichern.', 'error');
+      } catch (err) {
+        failed(err);
+      }
+    });
+    $('nameForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const value = $('nameInput').value.trim();
+      try {
+        const r = await call('name_save', value);
+        if (r && r.ok) {
+          S.name = value;
+          toast(value ? 'Hallo ' + value + '. Jarvis merkt es sich.' : 'Gespeichert.', 'ok');
+        } else {
+          toast((r && r.error) || 'Das ging nicht.', 'error');
+        }
       } catch (err) {
         failed(err);
       }
@@ -1907,6 +1925,7 @@
         ? { ok: false, place: '', temp: null, text: '', error: `"${text}" kenne ich leider nicht. Vielleicht mit Land, z. B. "Wien, Österreich"?` }
         : { ok: true, place: String(text).split(',')[0].trim(), temp: 16, text: 'teils bewölkt', error: '' }, 600),
       place_save: () => later({ ok: true, error: '' }, 60),
+      name_save: () => later({ ok: true, error: '' }, 60),
       claude_check: () => { claudeT0 = performance.now(); return later({ started: true }, 50); },
       claude_poll: () => {
         const running = claudeMode === 'running' || performance.now() - claudeT0 < 2200;
