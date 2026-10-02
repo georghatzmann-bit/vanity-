@@ -410,17 +410,22 @@ def spoken_order(order: dict) -> str:
 
 
 _SUMMARY = re.compile(
-    r"\b(?:wie\s+(?:läuft|lief|geht'?s|geht\s+es)\s+(?:dem\s+|meinem\s+|der\s+|mein(?:em)?\s+|im\s+)?(?:shop|laden|onlineshop|store)"
+    r"\b(?:wie\s+(?:läuft|lief|geht'?s|geht\s+es)\s+(?:dem\s+|meinem\s+|der\s+|mein(?:em)?\s+|im\s+)?"
+    r"(?:shop|laden|online[-\s]?shop|store)\b(?!\s+(?:von|vom|bei)\b)"  # "der Shop von meinem Freund": nicht Georgs
     r"|was\s+(?:macht|tut\s+sich\s+(?:im|in\s+meinem))\s+(?:der\s+|mein\s+)?(?:shop|laden)"
     r"|(?:shop|laden)[-\s]?(?:bericht|stand|zahlen|umsatz)"
     r"|(?:wie\s+viel|wieviel)\s+(?:habe|hab)\s+ich\s+(?:heute|diese\s+woche|bisher)?\s*(?:verkauft|umgesetzt|eingenommen)"
-    r"|(?:wie\s+viel|wieviel|was)\s+(?:umsatz|verkauft)"
+    r"|(?:wie\s+viel|wieviel)\s+(?:umsatz|verkauft)"  # nicht "Was verkauft Aldi diese Woche?"
+    r"|was\s+(?:habe|hab)\s+ich\s+(?:heute\s+|diese\s+woche\s+|bisher\s+)?verkauft"
+    r"|was\s+hat\s+(?:der|mein)\s+(?:shop|laden)\s+(?:heute\s+|diese\s+woche\s+)?verkauft"
     r"|(?:umsatz|verkäufe)\s+(?:heute|diese\s+woche|im\s+shop)"
     r"|(?:gibt\s+es\s+|gab\s+es\s+|hab(?:e)?\s+ich\s+)?neue\s+bestellungen"
     r"|wie\s+viele\s+bestellungen)\b",
     re.I,
 )
-_PAYOUT = re.compile(r"\b(?:wann\s+kommt\s+(?:die\s+(?:nächste\s+)?auszahlung|(?:das|mein)\s+geld)"
+# "Wann kommt mein Geld?" ja, "Wann kommt das Geld von Max / vom Finanzamt?" nicht (das ist nicht der Shop).
+_PAYOUT = re.compile(r"\b(?:wann\s+kommt\s+(?:die\s+(?:nächste\s+)?auszahlung|(?:das|mein)\s+geld\b"
+                     r"(?!\s+(?:von|vom|aus|für|zurück)\b(?!\s+(?:dem\s+|meinem\s+|der\s+)?(?:shop|laden|shopify)\b)))"
                      r"|(?:nächste|letzte)\s+auszahlung|auszahlungen?\s+(?:von|im)\s+shop|shopify[-\s]auszahlung)\b", re.I)
 
 

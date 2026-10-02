@@ -132,6 +132,16 @@ class HelperTest(unittest.TestCase):
         for said in ("Bestell mir eine Pizza", "Öffne den Laden von Steam", "Wie läuft das Spiel?", "Wie läuft's?"):
             self.assertIsNone(match_shop(said), said)
 
+    def test_only_georgs_shop_and_money(self):
+        for said in ("Wie läuft der Online-Shop?", "Was hab ich heute verkauft?", "Was hat der Shop heute verkauft?"):
+            self.assertEqual(match_shop(said), "summary", said)
+        for said in ("Wann kommt das Geld vom Shop?", "Wann kommt mein Geld von Shopify?"):
+            self.assertEqual(match_shop(said), "payout", said)
+        # Das ist nicht Georgs Shop oder nicht das Geld aus dem Shop: das bekommt Claude.
+        for said in ("Wann kommt das Geld von Max?", "Wann kommt mein Geld vom Finanzamt?", "Wann kommt mein Geld zurück?",
+                     "Wie läuft der Shop von meinem Freund?", "Was verkauft Aldi diese Woche?"):
+            self.assertIsNone(match_shop(said), said)
+
 
 class ShopTest(unittest.TestCase):
     def setUp(self):
