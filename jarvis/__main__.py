@@ -109,6 +109,10 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     assistant.memory = Memory(STATE_DIR / "gedaechtnis.json")
     if brain is not None:
         brain.context = assistant.memory.context
+    # Zeitpläne: "Jeden Morgen um 8 Uhr: Briefing"
+    from .zeitplan import Schedules
+
+    assistant.schedules = Schedules(STATE_DIR / "zeitplaene.json")
     # Termine: eigene und (falls eingetragen) Google-, Outlook- oder iCloud-Kalender zum Mitlesen.
     from .kalender import Calendar
 
@@ -175,6 +179,11 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                     assistant.check_suggestions()  # Routinen zur passenden Zeit anbieten
                 except Exception:
                     log.exception("Vorschläge")
+            if tick % 30 == 25:
+                try:
+                    assistant.check_schedules()
+                except Exception:
+                    log.exception("Zeitpläne")
             if tick % 30 == 15 and getattr(assistant, "calendar", None) is not None:
                 try:
                     assistant.calendar.refresh()  # Kalender-Abos (höchstens alle 15 Minuten)
@@ -190,9 +199,16 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
         import psutil
 
         def stats() -> None:
+            from .pc import gpu_stats
+
             psutil.cpu_percent(interval=None)
+            tick = 0
+            gpu = None
             while not stopped.wait(2):
-                ui.stats(psutil.cpu_percent(interval=None), psutil.virtual_memory().percent)
+                tick += 1
+                if tick % 2 == 1:  # die Grafikkarte alle 4 Sekunden (nvidia-smi braucht etwas länger)
+                    gpu = gpu_stats()
+                ui.stats(psutil.cpu_percent(interval=None), psutil.virtual_memory().percent, gpu)
 
         threading.Thread(target=stats, name="jarvis-stats", daemon=True).start()
     except ImportError:

@@ -117,6 +117,7 @@
     forget: (text) => window.pywebview.api.forget(text),
     command_forget: (key) => window.pywebview.api.command_forget(key),
     skill_forget: (name) => window.pywebview.api.skill_forget(name),
+    schedule_forget: (id) => window.pywebview.api.schedule_forget(id),
     notebook_open: () => window.pywebview.api.notebook_open(),
     answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
   };
@@ -634,6 +635,58 @@
     ring.classList.toggle('high', v >= 85);
   }
 
+  async function sendText(text) {
+    addMessage('user', text);
+    S.pendingEchoes.push({ text, at: Date.now() });
+    try {
+      const ok = await call('send_text', text);
+      if (ok === false) toast('Das ließ sich nicht senden.', 'error');
+    } catch {
+      toast('Jarvis ist gerade nicht verbunden.', 'error');
+    }
+  }
+
+  // Schnellbefehle unter dem Kern: die eigenen Befehle zuerst, dann die häufigsten
+  const DECK_DEFAULT = [['Briefing', 'Briefing bitte'], ['Was steht heute an?', 'Was steht heute an?'],
+    ['Gaming-Modus', 'Gaming-Modus an']];
+
+  async function refreshDeck() {
+    const deck = document.getElementById('deck');
+    if (!deck) return;
+    let own = [];
+    try {
+      const state = await call('memory_state');
+      own = (state && state.commands) || [];
+    } catch {
+      own = [];
+    }
+    const items = own.slice(0, 4).map((c) => [c.name, c.name, c.action]).concat(DECK_DEFAULT).slice(0, 6);
+    deck.replaceChildren(...items.map(([label, say, hint]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'deck-chip';
+      b.textContent = label;
+      b.title = hint ? label + ': ' + hint : say;
+      b.addEventListener('click', () => sendText(say));
+      return b;
+    }));
+  }
+
+  // Grafikkarte (nur mit NVIDIA): Auslastung im Ring, Temperatur darunter
+  function renderGpu(gpu) {
+    const box = document.getElementById('gpuGauge');
+    if (!box || !gpu || typeof gpu.load !== 'number') return;
+    if (box.hidden) {
+      box.hidden = false;
+      box.parentElement.classList.add('three');
+    }
+    setGauge(document.getElementById('gpuNum'), document.getElementById('gpuRing'), gpu.load);
+    const name = document.getElementById('gpuName');
+    name.textContent = typeof gpu.temp === 'number' ? 'Grafik · ' + gpu.temp + '°' : 'Grafik';
+    name.classList.toggle('hot', gpu.temp >= 85);
+    box.title = 'Grafikkarte: ' + gpu.load + ' % Last, ' + gpu.temp + ' °C, Grafikspeicher ' + gpu.mem + ' % belegt';
+  }
+
   // Verlaufslinie des Prozessors: die neuesten Werte rechts
   function pushCpu(value) {
     if (typeof value !== 'number' || !isFinite(value)) return;
@@ -718,6 +771,7 @@
         setGauge(el.cpuNum, el.cpuRing, ev.cpu);
         setGauge(el.ramNum, el.ramRing, ev.ram);
         pushCpu(ev.cpu);
+        renderGpu(ev.gpu);
         break;
       default: break;
     }
@@ -752,6 +806,7 @@
     syncWorkshop();
     if (Gedaechtnis) Gedaechtnis.refresh();
     if (Koppeln && Koppeln.dots) Koppeln.dots();
+    refreshDeck();
     refreshToday();
     setInterval(refreshToday, 60000);
     pollLoop(gen);
@@ -789,14 +844,7 @@
       if (!text) return;
       el.input.value = '';
       el.sendBtn.disabled = true;
-      addMessage('user', text);
-      S.pendingEchoes.push({ text, at: Date.now() });
-      try {
-        const ok = await call('send_text', text);
-        if (ok === false) toast('Das ließ sich nicht senden.', 'error');
-      } catch {
-        toast('Jarvis ist gerade nicht verbunden.', 'error');
-      }
+      sendText(text);
     });
     el.micBtn.addEventListener('click', async () => {
       try {
@@ -1520,13 +1568,14 @@
       forget: () => Promise.resolve(true),
       command_forget: () => Promise.resolve(true),
       skill_forget: () => Promise.resolve(true),
+      schedule_forget: () => Promise.resolve(true),
       notebook_open: () => Promise.resolve({ ok: true, folder: 'C:\\Users\\Georg\\Jarvis-Notizbuch' }),
       answer_suggestion: () => Promise.resolve(true),
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
           ram = clamp(ram + (Math.random() - 0.5) * 2, 30, 80);
-          push({ type: 'stats', cpu, ram });
+          push({ type: 'stats', cpu, ram, gpu: { load: Math.round(40 + 30 * Math.abs(Math.sin(Date.now() / 9000))), temp: 64, mem: 52 } });
         }, 2000);
         push({ type: 'stats', cpu, ram });
         if (shopMode) {
@@ -1585,6 +1634,10 @@
     ],
     contacts: [{ name: 'Max', app: 'discord', count: 14 }, { name: 'Anna', app: 'whatsapp', count: 6 }],
     notebook: true,
+    schedules: [
+      { id: 'a1', days: 'täglich', time: '08:00', command: 'Briefing' },
+      { id: 'b2', days: 'Freitags', time: '20:00', command: 'Zockmodus' },
+    ],
     skills: [
       { name: 'discord-server', description: 'Einen Discord-Server gestalten oder umbauen, im Hintergrund ohne Maus.', learned: false },
       { name: 'morgen-briefing', description: 'Morgen-Briefing, wenn Sie „Guten Morgen“ oder „Briefing“ sagen.', learned: false },
@@ -1618,6 +1671,8 @@
     if (window.JarvisProjekte) Projekte = window.JarvisProjekte.create({ call, toast, werkstatt: Werkstatt });
     if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });
     if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
+    refreshDeck();
+    setInterval(refreshDeck, 60000);
     if (Gedaechtnis && /[?&]vorschlag\b/.test(location.search)) {
       Gedaechtnis.offer({ frage: 'Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?' });
     }

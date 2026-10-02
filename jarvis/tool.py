@@ -77,6 +77,10 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   termin "<wann>" "<titel>" [minuten]  trägt einen Termin ein ("morgen um 18 Uhr", "Freitag 9:30",
                                nur "Samstag" = ganztags), Dauer in Minuten (Vorgabe 60)
   termin-loeschen "<wörter>"   löscht einen eigenen Termin (Kalender-Abos nur lesen)
+  zeitplan "<wann>" "<befehl>" erledigt einen Befehl regelmäßig von selbst, wann z. B. "jeden Morgen um 8",
+                               "werktags um 18 Uhr", "freitags um 20 Uhr" (Befehl in Georgs Worten)
+  zeitplaene                   zeigt alle Zeitpläne
+  zeitplan-loeschen "<wörter>" löscht einen Zeitplan
   erinnerung-loeschen <id>     löscht eine Erinnerung
   medien pause|weiter|naechstes|voriges
   lautstaerke lauter|leiser|stumm [schritte]
@@ -372,6 +376,33 @@ def _dispatch(command: str, rest: list[str]) -> int:
         minutes = int(rest[2]) if len(rest) > 2 and rest[2].isdigit() else 60
         event = calendar.add(rest[1], start, start + dt.timedelta(minutes=minutes) if not all_day else None, all_day)
         print(f"Termin eingetragen: {event.spoken(now, with_day=True)}")
+        return 0
+
+    if command in ("zeitplan", "zeitplaene", "zeitpläne", "zeitplan-loeschen", "zeitplan-löschen"):
+        from .zeitplan import Schedules, describe, parse_schedule
+
+        schedules = Schedules(STATE_DIR / "zeitplaene.json")
+        if command in ("zeitplaene", "zeitpläne"):
+            items = schedules.all()
+            if not items:
+                print("Keine Zeitpläne.")
+            for item in items:
+                print(f"{item['id']}  {describe(item)}")
+            return 0
+        if command in ("zeitplan-loeschen", "zeitplan-löschen"):
+            gone = schedules.remove(" ".join(rest))
+            print(f"Gelöscht: {describe(gone)}" if gone else "Kein passender Zeitplan.")
+            return 0 if gone else 1
+        if len(rest) < 2:
+            print('Aufruf: zeitplan "<wann>" "<befehl>", z. B. zeitplan "werktags um 18 Uhr" "Öffne Discord"')
+            return 1
+        parsed = parse_schedule(f"{rest[0]} {' '.join(rest[1:])}")
+        if parsed is None:
+            print('Fehler: Zeit nicht verstanden. Beispiele: "jeden Morgen um 8", "werktags um 18 Uhr", '
+                  '"montags und donnerstags um 17:30", "am Wochenende um 10".')
+            return 1
+        item = schedules.add(*parsed)
+        print(f"Zeitplan eingerichtet: {describe(item)}")
         return 0
 
     if command == "erinnern":

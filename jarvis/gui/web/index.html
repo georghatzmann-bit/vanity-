@@ -69,6 +69,15 @@
             <span class="g-num" id="ramNum">–</span>
             <span class="g-name">Speicher</span>
           </div>
+          <div class="gauge" id="gpuGauge" hidden>
+            <svg viewBox="0 0 72 72" aria-hidden="true">
+              <circle class="g-ticks" cx="36" cy="36" r="34"/>
+              <circle class="g-track" cx="36" cy="36" r="28"/>
+              <circle class="g-val" id="gpuRing" cx="36" cy="36" r="28" pathLength="100"/>
+            </svg>
+            <span class="g-num" id="gpuNum">–</span>
+            <span class="g-name" id="gpuName">Grafik</span>
+          </div>
         </div>
         <div class="spark-box">
           <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
@@ -125,6 +134,7 @@
           </div>
         </div>
         <p class="hint" id="stateHint">Sag „Hey Jarvis“, klick auf den Kern oder schreib unten</p>
+        <div class="deck" id="deck" role="group" aria-label="Schnellbefehle"></div>
       </div>
     </main>
 
@@ -496,6 +506,12 @@
         <p class="mem-hint">Ein Wort für mehrere Befehle. Sagen oder schreiben Sie oben: „Wenn ich Zockmodus sage, öffne Discord und Steam“.</p>
         <ul class="mem-list" id="memCommands"></ul>
         <p class="empty" id="memCommandsEmpty">Noch keine. Danach reicht „Zockmodus“, und Jarvis erledigt alles auf einmal.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Zeitpläne</h3>
+        <p class="mem-hint">Was Jarvis regelmäßig von selbst erledigt. Sagen Sie zum Beispiel „Jeden Morgen um 8 Uhr Briefing“ oder „Werktags um 18 Uhr öffne Discord“.</p>
+        <ul class="mem-list" id="memSchedules"></ul>
+        <p class="empty" id="memSchedulesEmpty">Noch keine. Läuft ein Spiel im Vollbild, wartet Jarvis damit.</p>
       </section>
       <section class="mem-section">
         <h3>Gewohnheiten</h3>

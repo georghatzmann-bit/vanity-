@@ -306,6 +306,12 @@ class Assistant:
             own = self.memory.command_for(text)
             if isinstance(own, dict):
                 return self._custom(own)
+        if getattr(self, "schedules", None) is not None:
+            from .zeitplan import match_schedule
+
+            planned = match_schedule(text)
+            if planned is not None:
+                return self._schedule_command(*planned)
         if getattr(self, "calendar", None) is not None:
             from .kalender import match_calendar
 
@@ -844,6 +850,49 @@ class Assistant:
             if when.date() == day:
                 notes.append(f"um {when.hour}:{when.minute:02d} Uhr {item.get('text', '')}".strip())
         return notes[:5]
+
+    def _schedule_command(self, action: str, data) -> str:
+        from .zeitplan import describe
+
+        schedules = self.schedules
+        if action == "list":
+            items = schedules.all()
+            if not items:
+                return ("Noch keine Zeitpläne, Sir. Sagen Sie zum Beispiel: Jeden Morgen um 8 Uhr Briefing, "
+                        "oder: Werktags um 18 Uhr öffne Discord.")
+            return "Ihre Zeitpläne, Sir: " + "; ".join(describe(i) for i in items[:8]) + "."
+        if action == "remove":
+            gone = schedules.remove(data)
+            return f"Gelöscht, Sir: {describe(gone)}." if gone else f"Einen Zeitplan „{data}“ finde ich nicht, Sir."
+        days, clock, command = data
+        try:
+            item = schedules.add(days, clock, command)
+        except ValueError as exc:
+            return str(exc)
+        return f"Eingerichtet, Sir: {describe(item)}."
+
+    def check_schedules(self, now=None) -> None:
+        """Zeitpläne zur Zeit erledigen. Läuft gerade ein Spiel im Vollbild, kurz warten."""
+        schedules = getattr(self, "schedules", None)
+        if schedules is None:
+            return
+        try:
+            hold = bool(self._fullscreen()) or self.busy
+        except Exception:
+            hold = False
+        for item in schedules.due(now, hold=hold):
+            threading.Thread(target=self._run_scheduled, args=(item,), name="jarvis-zeitplan", daemon=True).start()
+
+    def _run_scheduled(self, item: dict) -> None:
+        command = item["befehl"]
+        log.info("Zeitplan: %s", command)
+        try:
+            present = self._present()
+        except Exception:
+            present = True
+        answer = self.handle(command, speak=present)
+        if not present and answer:
+            self._push(f"{command}: {answer}")
 
     def check_calendar(self) -> None:
         """Kurz vor einem Termin Bescheid sagen, und Änderungen im Kalender ansagen."""

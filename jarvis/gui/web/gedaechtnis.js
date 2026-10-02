@@ -22,6 +22,8 @@
       routinesEmpty: $('memRoutinesEmpty'),
       contacts: $('memContacts'),
       contactsEmpty: $('memContactsEmpty'),
+      schedules: $('memSchedules'),
+      schedulesEmpty: $('memSchedulesEmpty'),
       skills: $('memSkills'),
       skillsEmpty: $('memSkillsEmpty'),
       notebook: $('memNotebook'),
@@ -99,6 +101,40 @@
           return li;
         }));
         el.commandsEmpty.hidden = commands.length > 0;
+      }
+
+      const schedules = data.schedules || [];
+      if (el.schedules) {
+        el.schedules.replaceChildren(...schedules.map((z) => {
+          const li = document.createElement('li');
+          const time = document.createElement('span');
+          time.className = 'mem-time';
+          time.textContent = z.time;
+          const text = document.createElement('span');
+          text.className = 'mem-text';
+          text.textContent = z.command;
+          const small = document.createElement('small');
+          small.textContent = z.days;
+          text.appendChild(small);
+          const del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'mem-del';
+          del.textContent = '×';
+          del.title = 'Zeitplan löschen';
+          del.setAttribute('aria-label', 'Zeitplan löschen: ' + z.command);
+          del.addEventListener('click', async () => {
+            try {
+              await call('schedule_forget', z.id);
+              toast('Zeitplan gelöscht.', 'ok');
+              refresh();
+            } catch {
+              toast('Das ging gerade nicht.', 'error');
+            }
+          });
+          li.append(time, text, del);
+          return li;
+        }));
+        el.schedulesEmpty.hidden = schedules.length > 0;
       }
 
       const skills = data.skills || [];

@@ -28,7 +28,7 @@ class Ui:
     def config(self, **values) -> None:
         pass
 
-    def stats(self, cpu: float, ram: float) -> None:
+    def stats(self, cpu: float, ram: float, gpu: dict | None = None) -> None:
         pass
 
     def progress(self, step: dict) -> None:
@@ -134,8 +134,8 @@ class MultiUi(Ui):
     def config(self, **values):
         self._each("config", **values)
 
-    def stats(self, cpu, ram):
-        self._each("stats", cpu, ram)
+    def stats(self, cpu, ram, gpu=None):
+        self._each("stats", cpu, ram, gpu)
 
     def progress(self, step):
         self._each("progress", step)

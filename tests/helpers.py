@@ -244,7 +244,7 @@ class RecordingUi:
     def config(self, **values):
         self.events.append(("config", values))
 
-    def stats(self, cpu, ram):
+    def stats(self, cpu, ram, gpu=None):
         pass
 
     def progress(self, step):

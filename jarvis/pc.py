@@ -212,6 +212,33 @@ def wake(mac: str, broadcast: str = "255.255.255.255") -> str:
 
 # ---------------------------------------------------------------------- Zwischenablage
 
+_GPU_MISSING = False
+
+
+def gpu_stats() -> dict | None:
+    """Auslastung, Temperatur und Grafikspeicher der NVIDIA-Grafikkarte (über nvidia-smi, das der
+    Treiber mitbringt). None ohne NVIDIA-Karte; dann fragt Jarvis auch nicht mehr nach."""
+    global _GPU_MISSING
+    if _GPU_MISSING:
+        return None
+    exe = "nvidia-smi"
+    if os.name == "nt":
+        system = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "nvidia-smi.exe"
+        exe = str(system) if system.exists() else exe
+    try:
+        out = subprocess.run(
+            [exe, "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=4, creationflags=NO_WINDOW,
+        ).stdout
+        load, temp, used, total = (float(x) for x in out.strip().splitlines()[0].split(",")[:4])
+    except FileNotFoundError:
+        _GPU_MISSING = True
+        return None
+    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+        return None
+    return {"load": round(load), "temp": round(temp), "mem": round(100 * used / total) if total else 0}
+
+
 def low_disks(min_free_gb: float = 10.0, min_free_pct: float = 8.0) -> list[tuple[str, int]]:
     """Fest eingebaute Laufwerke, auf denen kaum noch Platz ist: [("C", 6), ...] (frei in GB).
     Kleine Partitionen (Wiederherstellung, Start) zählen nicht."""

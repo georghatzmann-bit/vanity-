@@ -74,8 +74,11 @@ class GuiBridge(Ui):
                     self._events.remove(old)
         self._push({"type": "workshop", **event})
 
-    def stats(self, cpu: float, ram: float) -> None:
-        self._push({"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)})
+    def stats(self, cpu: float, ram: float, gpu: dict | None = None) -> None:
+        event = {"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)}
+        if gpu:
+            event["gpu"] = gpu
+        self._push(event)
 
     def suggestion(self, offer: dict | None) -> None:
         self._push({"type": "suggestion", "offer": offer})
@@ -571,6 +574,7 @@ class Api:
                               "count": c.get("anzahl", 0)} for c in memory.custom_commands()][:40],
                 "skills": self._skills(),
                 "notebook": bool(getattr(self._assistant, "notebook", None)),
+                "schedules": self._schedules(),
             }
         except Exception as exc:
             log.debug("Gedächtnis-Stand: %s", exc)
@@ -609,6 +613,26 @@ class Api:
         except Exception as exc:
             log.debug("Fähigkeiten: %s", exc)
             return []
+
+    def _schedules(self) -> list[dict]:
+        from ..zeitplan import describe_days
+
+        schedules = getattr(self._assistant, "schedules", None)
+        if schedules is None:
+            return []
+        try:
+            return [{"id": i["id"], "days": describe_days(i["tage"]), "time": i["uhrzeit"], "command": i["befehl"]}
+                    for i in schedules.all()]
+        except Exception as exc:
+            log.debug("Zeitpläne: %s", exc)
+            return []
+
+    def schedule_forget(self, schedule_id) -> bool:
+        schedules = getattr(self._assistant, "schedules", None)
+        if schedules is None:
+            return False
+        item = next((i for i in schedules.all() if i["id"] == str(schedule_id)), None)
+        return bool(item and schedules.remove(item["befehl"] + " " + item["uhrzeit"]))
 
     def skill_forget(self, name) -> bool:
         """Mülleimer an einer selbst gelernten Fähigkeit."""
