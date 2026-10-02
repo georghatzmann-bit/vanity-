@@ -1,5 +1,6 @@
 # Baut JarvisSetup.exe auf Windows, installiert sie dort einmal still zur Probe
 # und stellt sie als Release bereit (Seite "Releases" > neueste Version).
+# JarvisSetup.exe = die Oberfläche (installer/setup, WPF) mit dem Inno-Kern (installer/jarvis.iss) darin.
 name: JarvisSetup.exe bauen
 
 on:
@@ -18,9 +19,18 @@ on:
       - "README.md"
       - ".github/workflows/setup-exe.yml"
   workflow_dispatch:
+    inputs:
+      nur_bilder:
+        description: "Nur bauen und die Installer-Bilder machen (ohne Proben)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
 
 jobs:
   setup-exe:
@@ -47,25 +57,69 @@ jobs:
       - name: Inno Setup
         run: choco install innosetup -y --no-progress
 
-      - name: JarvisSetup.exe bauen
+      - name: Inno-Kern bauen (JarvisKern.exe)
         shell: pwsh
         run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\jarvis.iss'
+
+      - name: JarvisSetup.exe bauen (Oberfläche mit eingebettetem Kern)
+        shell: pwsh
+        run: |
+          dotnet build installer\setup\JarvisSetup.csproj -c Release -p:Version=$env:JARVIS_VERSION -p:KernPflicht=true -o installer\Output\oberflaeche
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Copy-Item installer\Output\oberflaeche\JarvisSetup.exe installer\Output\JarvisSetup.exe -Force
+          $kern = (Get-Item installer\Output\JarvisKern.exe).Length
+          $setup = (Get-Item installer\Output\JarvisSetup.exe).Length
+          Write-Host "JarvisKern.exe: $kern Bytes, JarvisSetup.exe: $setup Bytes"
+          if ($setup -le $kern) { Write-Host "Der Kern ist nicht eingebettet"; exit 1 }
 
       - uses: actions/upload-artifact@v4
         with:
           name: JarvisSetup
           path: installer/Output/JarvisSetup.exe
 
-      - name: Probe-Installation (still)
+      - name: Installer-Bilder (Vorschau, installiert nichts)
         shell: pwsh
         run: |
+          $ziel = Join-Path $env:GITHUB_WORKSPACE "installer-bilder"
+          $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/vorschau", "/bilder=$ziel" -PassThru
+          if (-not $p.WaitForExit(180000)) { Stop-Process -Id $p.Id -Force; Write-Host "Die Vorschau hängt"; exit 1 }
+          Write-Host "Vorschau beendet mit $($p.ExitCode)"
+          Get-ChildItem $ziel -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
+          Get-Content "$ziel\fehler.txt" -ErrorAction SilentlyContinue
+          Get-Content "$env:TEMP\JarvisSetup-fehler.txt" -ErrorAction SilentlyContinue
+          foreach ($n in "start", "fortschritt", "fertig", "fehler") {
+            if (-not (Test-Path "$ziel\$n.png")) { Write-Host "$n.png fehlt"; exit 1 }
+          }
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-bilder
+          path: installer-bilder/
+          if-no-files-found: ignore
+
+      - name: Probe-Installation (still)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          # Wie die Oberfläche: Fortschritt in eine Datei, alle sechs Schritte müssen ankommen.
+          $env:JARVIS_FORTSCHRITT = "$pwd\fortschritt.txt"
           $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=setup.log" -PassThru -Wait
           Write-Host "Installer beendet mit $($p.ExitCode)"
           Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
           if ($p.ExitCode -ne 0) { Get-Content setup.log -Tail 60; exit 1 }
           if (-not (Test-Path "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe")) { Write-Host "venv fehlt"; exit 1 }
+          Write-Host "--- Fortschritt (für die Oberfläche)"
+          Get-Content fortschritt.txt | Where-Object { $_ -notmatch "^JARVIS-ANTEIL" } | Select-Object -First 60
+          foreach ($n in 1..6) {
+            if (-not (Select-String -Path fortschritt.txt -Pattern "^JARVIS-SCHRITT $n/6 " -Quiet)) { Write-Host "Schritt $n fehlt im Fortschritt"; exit 1 }
+          }
+          if (-not (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FERTIG" -Quiet)) { Write-Host "JARVIS-FERTIG fehlt"; exit 1 }
+          if (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FEHLER" -Quiet) { Write-Host "Fehler im Fortschritt"; exit 1 }
 
       - name: Probe-Start
+        if: ${{ !inputs.nur_bilder }}
         shell: pwsh
         run: |
           $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
@@ -81,6 +135,7 @@ jobs:
           exit 0
 
       - name: Probe Windows-Einbindung (Hintergrund, Anzeige, zweiter Start)
+        if: ${{ !inputs.nur_bilder }}
         shell: pwsh
         run: |
           $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
@@ -128,6 +183,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Probe-Update (über ein laufendes Jarvis, wie bei Georg)
+        if: ${{ !inputs.nur_bilder }}
         shell: pwsh
         run: |
           $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
@@ -151,6 +207,7 @@ jobs:
           Write-Host "Update ueber ein laufendes Jarvis: OK"
 
       - name: Probe lokale Stimme (wie der Knopf "Lokal einrichten")
+        if: ${{ !inputs.nur_bilder }}
         shell: pwsh
         timeout-minutes: 30
         run: |
@@ -184,7 +241,31 @@ jobs:
           if (-not $ok) { Write-Host "Die lokale Stimme hat im laufenden Jarvis nicht geladen"; exit 1 }
           Write-Host "Lokale Stimme im laufenden Jarvis: OK"
 
+      - name: Probe Fehlerweg (ohne Internet muss eine klare Meldung kommen)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          # Ein Proxy, den es nicht gibt: Für Windows PowerShell ist das Internet dann weg.
+          $ie = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+          $vorher = Get-ItemProperty $ie
+          $env:JARVIS_FORTSCHRITT = "$pwd\fehlerweg.txt"
+          try {
+            Set-ItemProperty $ie -Name ProxyEnable -Value 1 -Type DWord
+            Set-ItemProperty $ie -Name ProxyServer -Value "127.0.0.1:9"
+            $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=fehlerweg.log" -PassThru -Wait
+          } finally {
+            if ($null -ne $vorher.ProxyEnable) { Set-ItemProperty $ie -Name ProxyEnable -Value $vorher.ProxyEnable -Type DWord } else { Remove-ItemProperty $ie -Name ProxyEnable -ErrorAction SilentlyContinue }
+            if ($null -ne $vorher.ProxyServer) { Set-ItemProperty $ie -Name ProxyServer -Value $vorher.ProxyServer } else { Remove-ItemProperty $ie -Name ProxyServer -ErrorAction SilentlyContinue }
+          }
+          Write-Host "Installer beendet mit $($p.ExitCode) (erwartet: 110 = 100 + Code 10, kein Internet)"
+          Get-Content fehlerweg.txt -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "^JARVIS-ANTEIL" }
+          if ($p.ExitCode -ne 110) { Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -Tail 30; exit 1 }
+          if (-not (Select-String -Path fehlerweg.txt -Pattern "^JARVIS-FEHLER 1 10 Keine Verbindung zum Internet" -Quiet)) { Write-Host "Die Meldung fehlt"; exit 1 }
+          if (-not (Select-String -Path fehlerweg.txt -Pattern "^JARVIS-TIPP " -Quiet)) { Write-Host "Der Tipp fehlt"; exit 1 }
+          Write-Host "Fehlerweg: OK"
+
       - name: Probe-Deinstallation
+        if: ${{ !inputs.nur_bilder }}
         shell: pwsh
         run: |
           $uninst = "$env:LOCALAPPDATA\Programs\Jarvis\unins000.exe"
