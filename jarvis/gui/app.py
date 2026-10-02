@@ -6,7 +6,6 @@ from __future__ import annotations
 import collections
 import logging
 import os
-import re
 import threading
 from pathlib import Path
 
@@ -179,6 +178,8 @@ class Api:
 
     def connectors_help(self) -> bool:
         """Öffnet claude.ai bei den Konnektoren, dort verbindet Georg neue Dienste."""
+        from .. import pc
+
         try:
             pc.open_uri("https://claude.ai/settings/connectors")
             return True

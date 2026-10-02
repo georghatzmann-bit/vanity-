@@ -355,6 +355,15 @@ class GuiBridgeTest(unittest.TestCase):
         self.assertEqual(Api(bridge, None, mute).listen_now()["reason"], "novoice")
         self.assertEqual(Api(bridge, None, mute, None, lambda: False).listen_now()["reason"], "novoice")
 
+    def test_connectors_button_opens_claude_ai(self):
+        from unittest import mock
+
+        # Vorher fehlte der Import: der Knopf "Auf claude.ai verbinden" tat nichts
+        opened = []
+        with mock.patch("jarvis.pc.open_uri", opened.append):
+            self.assertTrue(Api(GuiBridge(), None, MuteSwitch()).connectors_help())
+        self.assertEqual(opened, ["https://claude.ai/settings/connectors"])
+
 
 class StopLoop(BaseException):  # kein Exception: die Sprachschleife fängt die ab
     pass
