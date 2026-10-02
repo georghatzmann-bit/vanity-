@@ -85,7 +85,7 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es drei Bereiche.
 5. In Jarvis bei „Code“ **Kopieren** klicken. In der Konsole oben **Code**, Datei `lambda_function.py`: alles ersetzen, **Speichern**, **Bereitstellen**.
 6. In der Konsole oben **Test**: „Entwicklung“ wählen.
 
-**Geklappt, wenn:** „Alexa, sag Jarvis, er soll Spotify öffnen“ Spotify am PC öffnet. Dauert etwas länger als sechs Sekunden, sagt Alexa „Ich kümmere mich darum“, und Jarvis macht trotzdem weiter.
+**Geklappt, wenn:** „Alexa, sag Jarvis, er soll Spotify öffnen“ Spotify am PC öffnet. Dauert etwas länger als sechs Sekunden, sagt Alexa „Ich kümmere mich darum“, und Jarvis macht trotzdem weiter. Fragt Jarvis zurück („Gute Nacht, Sir. Soll ich den PC herunterfahren?“), hört Alexa weiter zu: einfach „Ja“ sagen.
 
 ### Discord-Bot
 
