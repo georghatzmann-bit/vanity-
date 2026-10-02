@@ -45,6 +45,13 @@
       pushTopic: $('pushTopic'),
       pushCopy: $('pushCopy'),
       pushTest: $('pushTest'),
+      calState: $('calState'),
+      calForm: $('calForm'),
+      calUrl: $('calUrl'),
+      calSave: $('calSave'),
+      calFeeds: $('calFeeds'),
+      calGoogle: $('calGoogle'),
+      calOutlook: $('calOutlook'),
     };
     function el_tabs() {
       return document.querySelectorAll('.dlg-tabs button[data-pane]');
@@ -162,11 +169,86 @@
       }
     });
 
+    // ---------- Kalender (geheime iCal-Adresse, nur lesen)
+
+    function renderCalendar(cal) {
+      if (!el.calState) return;
+      const feeds = (cal && cal.feeds) || [];
+      const broken = feeds.filter((f) => f.error);
+      el.calState.textContent = !feeds.length ? 'Kein Kalender verbunden'
+        : broken.length ? 'Ein Kalender ist gerade nicht erreichbar'
+          : (feeds.length === 1 ? 'Kalender verbunden' : feeds.length + ' Kalender verbunden')
+            + (typeof cal.count === 'number' ? ' · ' + cal.count + ' Termine in den nächsten 7 Tagen' : '');
+      el.calFeeds.replaceChildren(...feeds.map((f) => {
+        const li = document.createElement('li');
+        const text = document.createElement('span');
+        text.className = 'cal-feed';
+        text.textContent = f.shown + (f.error ? ' · nicht erreichbar, es gilt der letzte Stand' : '');
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'mem-del';
+        del.textContent = '×';
+        del.title = 'Kalender entfernen';
+        del.setAttribute('aria-label', 'Kalender entfernen');
+        del.addEventListener('click', async () => {
+          try {
+            await call('calendar_remove', f.url);
+            toast('Kalender entfernt.', 'ok');
+            refreshCalendar();
+          } catch {
+            toast('Das ging gerade nicht.', 'error');
+          }
+        });
+        li.append(text, del);
+        return li;
+      }));
+    }
+
+    async function refreshCalendar() {
+      try {
+        renderCalendar(await call('calendar_info'));
+      } catch {
+        /* ältere Version */
+      }
+    }
+
+    if (el.calForm) {
+      el.calForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const url = el.calUrl.value.trim();
+        if (!url) {
+          toast('Bitte zuerst die iCal-Adresse einfügen.', 'info');
+          return;
+        }
+        el.calSave.disabled = true;
+        el.calSave.textContent = 'Prüfe …';
+        try {
+          const r = await call('calendar_add', url);
+          if (r && r.ok) {
+            el.calUrl.value = '';
+            const next = (r.next || []).length ? ' Als Nächstes: ' + r.next.join('; ') + '.' : '';
+            toast('Kalender verbunden: ' + r.count + ' Termine in den nächsten zwei Wochen.' + next, 'ok');
+          } else {
+            toast((r && r.error) || 'Diese Adresse ging nicht.', 'error');
+          }
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        } finally {
+          el.calSave.disabled = false;
+          el.calSave.textContent = 'Prüfen';
+          refreshCalendar();
+        }
+      });
+      el.calGoogle.addEventListener('click', () => call('calendar_help', 'google').catch(() => {}));
+      el.calOutlook.addEventListener('click', () => call('calendar_help', 'outlook').catch(() => {}));
+    }
+
     function showPane(pane) {
       for (const b of el.tabs) b.setAttribute('aria-selected', String(b.dataset.pane === pane));
       for (const p of el.dlg.querySelectorAll('.dlg-pane')) p.hidden = p.dataset.pane !== pane;
       if (pane === 'alexa') refreshAlexa();
       if (pane === 'discord') refreshDiscord();
+      if (pane === 'calendar') refreshCalendar();
     }
 
     for (const b of el.tabs) b.addEventListener('click', () => showPane(b.dataset.pane));

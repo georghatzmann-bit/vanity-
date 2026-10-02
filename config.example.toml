@@ -259,3 +259,12 @@ aktiv = true
 ordner = ""
 # false = kein Tagebuch der Gespräche (Notizen und Berichte gehen trotzdem).
 tagebuch = true
+
+[kalender]
+# Termine aus deinem Kalender mitlesen (nur lesen): die geheime iCal-Adresse, die mit https:// oder webcal://
+# beginnt. Google: Kalender-Einstellungen > dein Kalender > "Privatadresse im iCal-Format". Outlook.com:
+# Einstellungen > Kalender > Freigegebene Kalender > "Kalender veröffentlichen" > ICS-Link. iCloud: Kalender teilen >
+# "Öffentlicher Kalender". Am einfachsten im Jarvis-Fenster unter "Verbinden", Bereich Kalender.
+abos = []
+# So viele Minuten vor einem Termin sagt Jarvis Bescheid (0 = nie).
+vorwarnung_minuten = 15

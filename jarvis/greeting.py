@@ -7,7 +7,8 @@ import datetime as dt
 import threading
 
 
-def build_greeting(now: dt.datetime, weather: dict | None = None, upcoming: list[dict] | None = None) -> str:
+def build_greeting(now: dt.datetime, weather: dict | None = None, upcoming: list[dict] | None = None,
+                   events: list[str] | None = None) -> str:
     hour = now.hour
     if hour < 5:
         parts = ["Noch wach, Sir?"]
@@ -29,13 +30,17 @@ def build_greeting(now: dt.datetime, weather: dict | None = None, upcoming: list
         if when.date() == now.date() and when > now:
             today.append((when, str(r.get("text", "")).strip()))
     today.sort()
+    if events:  # aus dem Kalender, schon gesprochen: "um 18 Uhr Training"
+        shown = events[:3]
+        joined = shown[0] if len(shown) == 1 else ", ".join(shown[:-1]) + " und " + shown[-1]
+        parts.append(f"Im Kalender heute: {joined}.")
     if len(today) == 1:
         when, text = today[0]
         parts.append(f"Heute um {when:%H:%M} erinnere ich Sie an: {text}.")
     elif today:
         when, text = today[0]
         parts.append(f"Heute stehen noch {len(today)} Erinnerungen an, die nächste um {when:%H:%M}: {text}.")
-    else:
+    elif not events:
         parts.append("Alle Systeme bereit.")
     return " ".join(parts)
 

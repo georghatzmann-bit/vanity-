@@ -105,6 +105,10 @@
     discord_info: () => window.pywebview.api.discord_info(),
     discord_save: (token) => window.pywebview.api.discord_save(token),
     discord_invite: () => window.pywebview.api.discord_invite(),
+    calendar_info: () => window.pywebview.api.calendar_info(),
+    calendar_add: (url) => window.pywebview.api.calendar_add(url),
+    calendar_remove: (url) => window.pywebview.api.calendar_remove(url),
+    calendar_help: (which) => window.pywebview.api.calendar_help(which),
     discord_portal: () => window.pywebview.api.discord_portal(),
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
@@ -1459,8 +1463,9 @@
       new_conversation: () => Promise.resolve(true),
       open_setup: () => Promise.resolve(false),
       reminders: () => Promise.resolve([
-        { uhr: '14:00', text: 'Tee aufgießen', tag: 'heute' },
-        { uhr: '18:30', text: 'Training', tag: 'heute' },
+        { uhr: '12:00', text: 'Mittagessen mit Max · Pizzeria', tag: 'heute', art: 'termin' },
+        { uhr: '14:00', text: 'Tee aufgießen', tag: 'heute', art: 'erinnerung' },
+        { uhr: '18:30', text: 'Training', tag: 'heute', art: 'termin' },
         { uhr: '08:00', text: 'Zahnarzt anrufen', tag: 'morgen' },
       ]),
       toggle_gaming: () => {
@@ -1492,6 +1497,14 @@
       discord_info: () => Promise.resolve({ configured: true, name: 'Jarvis', guilds: ['Georgs Gaming-Zentrale'], error: '' }),
       discord_save: () => Promise.resolve({ configured: true, name: 'Jarvis', guilds: [], error: '' }),
       discord_invite: () => Promise.resolve({ ok: true }),
+      calendar_info: () => Promise.resolve(DEMO_CAL),
+      calendar_add: (url) => {
+        if (!/^(https|webcal):\/\//.test(url)) return Promise.resolve({ ok: false, error: 'Das ist keine iCal-Adresse. Sie beginnt mit https:// oder webcal:// und endet meist auf .ics.' });
+        DEMO_CAL.feeds.push({ url, shown: url.replace(/^(\w+:\/\/[^/]+\/).*/, '$1…'), error: '' });
+        return Promise.resolve({ ok: true, error: '', count: 9, next: ['morgen um 9 Uhr Daily Standup', 'morgen um 18 Uhr Training'] });
+      },
+      calendar_remove: (url) => { DEMO_CAL.feeds = DEMO_CAL.feeds.filter((f) => f.url !== url); return Promise.resolve({ ok: true }); },
+      calendar_help: () => Promise.resolve(true),
       discord_portal: () => Promise.resolve(true),
       alexa_enable: (on) => Promise.resolve(Object.assign(DEMO_ALEXA, { enabled: !!on, connected: !!on })),
       alexa_copy: () => Promise.resolve({ ok: true, text: '{}' }),
@@ -1550,6 +1563,11 @@
   };
   const DEMO_ALEXA = { enabled: true, connected: true };
   const DEMO_PUSH = { enabled: true, topic: 'jarvis-3f9c2a71b0d84e6c5a1f7d22', url: 'https://ntfy.sh/jarvis-3f9c2a71b0d84e6c5a1f7d22' };
+  const DEMO_CAL = {
+    feeds: [{ url: 'https://calendar.google.com/calendar/ical/georg/private-abc/basic.ics', shown: 'https://calendar.google.com/…', error: '' }],
+    count: 6,
+  };
+
   const DEMO_MEMORY = {
     facts: [
       { text: 'Georg spielt gern Valorant und Minecraft', source: 'gelernt' },

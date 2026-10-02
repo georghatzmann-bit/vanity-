@@ -9,7 +9,7 @@ Kurz und gesprochen, höchstens fünf Sätze, wie ein Butler beim Frühstück. K
 
 Sammle in einem Rutsch (parallel, wenn möglich):
 1. Wetter für Georgs Ort (steht in der Persönlichkeit) mit der Websuche: Temperatur jetzt und am Nachmittag, Regen ja oder nein.
-2. Erinnerungen von heute: `python -m jarvis.tool erinnerungen`.
+2. Termine und Erinnerungen von heute: `python -m jarvis.tool termine heute` und `python -m jarvis.tool erinnerungen`. Liegen zwei Termine zu dicht beieinander oder fehlt Zeit für die Fahrt, sag es.
 3. Geburtstage heute oder in den nächsten Tagen stehen in `<gedaechtnis>` oder in `python -m jarvis.tool gedaechtnis`.
 4. Zwei, drei Schlagzeilen mit der Websuche, bevorzugt zu Georgs Interessen (Spiele, Technik, was im Gedächtnis steht). Je eine halbe Zeile.
 5. Wenn es passt: ein Hinweis aus dem Tagebuch von gestern (`python -m jarvis.tool notizbuch-tag gestern`), z. B. eine offene Aufgabe.

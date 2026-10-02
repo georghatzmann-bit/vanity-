@@ -133,7 +133,7 @@
       <section class="panel">
         <h2 class="panel-title"><span class="panel-no">04</span>Heute</h2>
         <ul class="today" id="today"></ul>
-        <p class="empty" id="todayEmpty">Keine Erinnerungen. Sag zum Beispiel „Erinnere mich um 18 Uhr ans Training“.</p>
+        <p class="empty" id="todayEmpty">Nichts geplant. Sag zum Beispiel „Trag morgen um 18 Uhr Training ein“ oder „Erinnere mich in 20 Minuten an den Tee“.</p>
       </section>
 
       <section class="panel mem-panel">
@@ -318,7 +318,7 @@
     <header class="dlg-head">
       <div>
         <span class="dlg-kicker">Jarvis überall</span>
-        <h2 id="phoneTitle">Handy, Alexa und Discord</h2>
+        <h2 id="phoneTitle">Handy, Alexa, Discord und Kalender</h2>
       </div>
       <button type="button" class="icon-btn" id="phoneClose" aria-label="Schließen">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -328,6 +328,7 @@
       <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
       <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
       <button type="button" role="tab" data-pane="discord" aria-selected="false">Discord</button>
+      <button type="button" role="tab" data-pane="calendar" aria-selected="false">Kalender</button>
     </div>
     <div class="dlg-pane" data-pane="phone">
     <label class="row toggle-row dlg-row">
@@ -427,6 +428,27 @@
         </span>
         <button type="button" class="btn small primary" id="discordInvite">Einladen</button>
       </div>
+    </div>
+    <div class="dlg-pane" data-pane="calendar" hidden>
+      <div class="row dlg-row">
+        <span class="row-text">
+          <b id="calState">Kein Kalender verbunden</b>
+          <small>Jarvis liest Ihre Termine mit (nur lesen): sagt 15 Minuten vorher Bescheid, nennt sie morgens und merkt Absagen. Eigene Termine („Trag morgen um 18 Uhr Training ein“) gehen auch ohne.</small>
+        </span>
+      </div>
+      <ol class="dlg-steps alexa-steps">
+        <li><b>Google</b><span>calendar.google.com › Zahnrad › Einstellungen › links Ihren Kalender wählen › ganz unten „Privatadresse im iCal-Format“ kopieren.</span>
+          <button type="button" class="btn small" id="calGoogle">Öffnen</button></li>
+        <li><b>Outlook</b><span>outlook.com › Einstellungen › Kalender › Freigegebene Kalender › „Kalender veröffentlichen“ › ICS-Link kopieren.</span>
+          <button type="button" class="btn small" id="calOutlook">Öffnen</button></li>
+        <li><b>iPhone / iCloud</b><span>Kalender-App › „Kalender“ › (i) neben dem Kalender › „Öffentlicher Kalender“ an › Link teilen und hier einfügen.</span></li>
+      </ol>
+      <form class="dlg-url discord-token" id="calForm" autocomplete="off">
+        <input id="calUrl" type="url" placeholder="https://… .ics oder webcal://…" spellcheck="false" aria-label="iCal-Adresse">
+        <button type="submit" class="btn small" id="calSave">Prüfen</button>
+      </form>
+      <p class="dlg-note" id="calNote">Die Adresse ist geheim wie ein Passwort: Wer sie hat, sieht Ihre Termine. Jarvis speichert sie nur auf diesem PC.</p>
+      <ul class="cal-feeds" id="calFeeds"></ul>
     </div>
   </section>
 

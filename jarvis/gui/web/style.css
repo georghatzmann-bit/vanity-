@@ -584,7 +584,7 @@ body[data-link="offline"] .link-dot {
 
 .today li {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: minmax(48px, auto) minmax(0, 1fr);
   gap: 8px;
   align-items: baseline;
 }
@@ -1847,4 +1847,32 @@ body[data-view="workshop"] .holo-scan {
 
 .mem-chip small {
   color: var(--text-3);
+}
+
+/* Verbinden > Kalender: die eingetragenen Abos */
+.cal-feeds {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cal-feeds li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cal-feed {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font: 13px/1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

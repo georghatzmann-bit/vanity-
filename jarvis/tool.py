@@ -73,6 +73,10 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
+  termine [heute|morgen|woche|<tag>]   zeigt Termine (eigene und aus Georgs Kalender)
+  termin "<wann>" "<titel>" [minuten]  trägt einen Termin ein ("morgen um 18 Uhr", "Freitag 9:30",
+                               nur "Samstag" = ganztags), Dauer in Minuten (Vorgabe 60)
+  termin-loeschen "<wörter>"   löscht einen eigenen Termin (Kalender-Abos nur lesen)
   erinnerung-loeschen <id>     löscht eine Erinnerung
   medien pause|weiter|naechstes|voriges
   lautstaerke lauter|leiser|stumm [schritte]
@@ -326,6 +330,48 @@ def _dispatch(command: str, rest: list[str]) -> int:
             return 1
         path = save_skill(STATE_DIR, rest[0], rest[1], body)
         print(f"Fähigkeit gespeichert: {path}. Sie steht ab dem nächsten Gespräch in deiner Liste.")
+        return 0
+
+    if command in ("termine", "termin", "termin-loeschen", "termin-löschen"):
+        import datetime as dt
+
+        from .kalender import Calendar, _ask_day, parse_slot
+
+        calendar = Calendar(STATE_DIR / "kalender.json", cfg.get("kalender", {}).get("abos", []))
+        calendar.refresh_stale()
+        now = dt.datetime.now()
+        if command == "termine":
+            word = " ".join(rest).strip().lower() or "woche"
+            if word in ("woche", "diese woche", "7"):
+                events = calendar.upcoming(24 * 7)
+            else:
+                day = _ask_day(word, now)
+                if not isinstance(day, dt.date):
+                    print("Aufruf: termine [heute|morgen|woche|montag|15.10.]")
+                    return 1
+                events = calendar.day(day)
+            if not events:
+                print("Keine Termine.")
+            for event in events:
+                when = "ganztags" if event.all_day else f"{event.start:%H:%M}-{event.end:%H:%M}"
+                where = f" @ {event.place}" if event.place else ""
+                mark = "" if event.source == "jarvis" else f" [{event.source}]"
+                print(f"{event.start:%a %d.%m.} {when}  {event.title}{where}{mark}")
+            for url, error in calendar.errors.items():
+                print(f"Hinweis: Ein Kalender-Abo war nicht erreichbar ({error}), gezeigt wird der letzte Stand.")
+            return 0
+        if command in ("termin-loeschen", "termin-löschen"):
+            gone = calendar.remove(" ".join(rest))
+            print(f"Gelöscht: {gone[0].title} ({gone[0].start:%d.%m. %H:%M})" if gone
+                  else "Kein passender eigener Termin. Termine aus Google oder Outlook ändert Georg dort.")
+            return 0 if gone else 1
+        if len(rest) < 2:
+            print('Aufruf: termin "<wann>" "<titel>" [minuten]')
+            return 1
+        start, all_day = parse_slot(rest[0], now)
+        minutes = int(rest[2]) if len(rest) > 2 and rest[2].isdigit() else 60
+        event = calendar.add(rest[1], start, start + dt.timedelta(minutes=minutes) if not all_day else None, all_day)
+        print(f"Termin eingetragen: {event.spoken(now, with_day=True)}")
         return 0
 
     if command == "erinnern":

@@ -107,6 +107,22 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     assistant.memory = Memory(STATE_DIR / "gedaechtnis.json")
     if brain is not None:
         brain.context = assistant.memory.context
+    # Termine: eigene und (falls eingetragen) Google-, Outlook- oder iCloud-Kalender zum Mitlesen.
+    from .kalender import Calendar
+
+    assistant.calendar = Calendar(STATE_DIR / "kalender.json", cfg.get("kalender", {}).get("abos", []))
+    if brain is not None:
+        memory_context = assistant.memory.context
+
+        def context() -> str:
+            parts = [memory_context()]
+            try:
+                parts.append(assistant.calendar.context())
+            except Exception as exc:
+                log.debug("Kalender: %s", exc)
+            return "\n".join(p for p in parts if p)
+
+        brain.context = context
     # Das Notizbuch: jedes Gespräch, Berichte und Notizen als Markdown (in Obsidian zu öffnen).
     if cfg.get("notizbuch", {}).get("aktiv", True):
         from .notebook import Notebook, folder_from_config
@@ -157,6 +173,12 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                     assistant.check_suggestions()  # Routinen zur passenden Zeit anbieten
                 except Exception:
                     log.exception("Vorschläge")
+            if tick % 30 == 15 and getattr(assistant, "calendar", None) is not None:
+                try:
+                    assistant.calendar.refresh()  # Kalender-Abos (höchstens alle 15 Minuten)
+                    assistant.check_calendar()
+                except Exception:
+                    log.exception("Kalender")
             if tick % 600 == 120:
                 learn_from_yesterday(assistant)
 
@@ -476,7 +498,14 @@ def run_gui(cfg: dict, args) -> int:
 
         now = datetime.now()
         upcoming = assistant.reminders.upcoming(now) if assistant.reminders is not None else []
-        hello = build_greeting(now, current_weather(str(cfg.get("ich", {}).get("ort", "")).strip()), upcoming)
+        events = []
+        calendar = getattr(assistant, "calendar", None)
+        if calendar is not None:
+            try:  # der zwischengespeicherte Stand, frisch geholt wird gleich im Hintergrund
+                events = [e.spoken(now) for e in calendar.day(now.date()) if e.all_day or e.start > now]
+            except Exception as exc:
+                log.debug("Kalender: %s", exc)
+        hello = build_greeting(now, current_weather(str(cfg.get("ich", {}).get("ort", "")).strip()), upcoming, events)
         ui.message("jarvis", hello, id="begruessung")
         assistant.say(hello)
         assistant.update_state()

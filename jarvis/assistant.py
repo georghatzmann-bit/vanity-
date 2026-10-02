@@ -268,6 +268,12 @@ class Assistant:
             own = self.memory.command_for(text)
             if isinstance(own, dict):
                 return self._custom(own)
+        if getattr(self, "calendar", None) is not None:
+            from .kalender import match_calendar
+
+            planned = match_calendar(text, dt.datetime.now())
+            if planned is not None:
+                return self._calendar_command(*planned)
         if getattr(self, "notebook", None) is not None:
             from .notebook import match_notebook
 
@@ -751,6 +757,53 @@ class Assistant:
             log.warning("Notiz: %s", exc)
             return "Die Notiz ging gerade nicht ins Notizbuch, Sir."
         return random.choice(["Notiert, Sir. Steht im Notizbuch.", "Ist im Notizbuch, Sir."])
+
+    def _calendar_command(self, action: str, data) -> str:
+        calendar = self.calendar
+        now = dt.datetime.now()
+        if action == "ask":
+            if data == "next":
+                event = calendar.next_event()
+                if event is None:
+                    return "In den nächsten 30 Tagen steht nichts im Kalender, Sir."
+                return f"Ihr nächster Termin, Sir: {event.spoken(now, with_day=True)}."
+            if data == "woche":
+                events = calendar.upcoming(24 * 7)
+                if not events:
+                    return "Diese Woche steht nichts im Kalender, Sir."
+                parts = [e.spoken(now, with_day=True) for e in events[:8]]
+                more = f" und {len(events) - 8} weitere" if len(events) > 8 else ""
+                return f"In den nächsten sieben Tagen, Sir: {'; '.join(parts)}{more}."
+            return calendar.describe_day(data)
+        if action == "remove":
+            gone = calendar.remove(data)
+            if not gone:
+                return (f"Einen eigenen Termin „{data}“ finde ich nicht, Sir. Termine aus Ihrem Google- oder "
+                        "Outlook-Kalender ändern Sie bitte dort.")
+            return f"Gestrichen, Sir: {gone[0].spoken(now, with_day=True)}."
+        title, start, end, all_day = data
+        event = calendar.add(title, start, end, all_day)
+        clash = [e for e in calendar.events(event.start, event.end) if e.id != event.id and not e.all_day
+                 and not event.all_day]
+        said = f"Eingetragen, Sir: {event.spoken(now, with_day=True)}."
+        if clash:
+            said += f" Achtung, da ist schon {clash[0].spoken(now)}."
+        return said
+
+    def check_calendar(self) -> None:
+        """Kurz vor einem Termin Bescheid sagen, und Änderungen im Kalender ansagen."""
+        calendar = getattr(self, "calendar", None)
+        if calendar is None:
+            return
+        minutes = int(self._cfg.get("kalender", {}).get("vorwarnung_minuten", 15) or 0)
+        if minutes > 0:
+            for event in calendar.due_warnings(minutes):
+                left = max(1, round((event.start - dt.datetime.now()).total_seconds() / 60))
+                where = f" ({event.place})" if event.place else ""
+                self.announce(f"Sir, in {left} Minuten: {event.title}{where}." if left > 1
+                              else f"Sir, jetzt: {event.title}{where}.")
+        for change in calendar.changes():
+            self.announce(f"Sir, eine Änderung im Kalender: {change}")
 
     def _commands_list(self) -> str:
         commands = self.memory.custom_commands()

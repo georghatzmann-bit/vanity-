@@ -132,15 +132,13 @@ class Api:
         return {"ok": True, "reason": ""}
 
     def reminders(self) -> list:
-        """Die nächsten Erinnerungen (heute und morgen) für die Spalte "Heute"."""
+        """Termine und Erinnerungen (heute und morgen) für die Spalte "Heute", der Zeit nach."""
         import datetime as dt
 
-        store = getattr(self._assistant, "reminders", None)
-        if store is None:
-            return []
         now = dt.datetime.now()
         rows = []
-        for r in store.upcoming(now):
+        store = getattr(self._assistant, "reminders", None)
+        for r in store.upcoming(now) if store is not None else []:
             try:
                 when = dt.datetime.fromisoformat(r["zeit"])
             except (KeyError, ValueError):
@@ -149,8 +147,92 @@ class Api:
             if days > 1:
                 break
             rows.append({"uhr": when.strftime("%H:%M"), "text": str(r.get("text", "")),
-                         "tag": "heute" if days == 0 else "morgen"})
-        return rows[:8]
+                         "tag": "heute" if days == 0 else "morgen", "art": "erinnerung", "_at": when})
+        calendar = getattr(self._assistant, "calendar", None)
+        if calendar is not None:
+            try:
+                end = dt.datetime.combine(now.date() + dt.timedelta(days=2), dt.time())
+                for event in calendar.events(now, end):
+                    days = (event.start.date() - now.date()).days
+                    rows.append({"uhr": "Tag" if event.all_day else event.start.strftime("%H:%M"),
+                                 "text": event.title + (f" · {event.place}" if event.place else ""),
+                                 "tag": "heute" if days <= 0 else "morgen", "art": "termin",
+                                 "_at": event.start if not event.all_day else dt.datetime.combine(event.start.date(), dt.time())})
+            except Exception as exc:
+                log.debug("Kalender: %s", exc)
+        rows.sort(key=lambda row: row["_at"])
+        return [{k: v for k, v in row.items() if k != "_at"} for row in rows[:8]]
+
+    # ------------------------------------------------------------------ Kalender
+
+    def calendar_info(self) -> dict:
+        """Für "Verbinden > Kalender": eingetragene Abos (gekürzt) und ob sie gerade erreichbar sind."""
+        calendar = getattr(self._assistant, "calendar", None)
+        feeds = list(self._assistant._cfg.get("kalender", {}).get("abos", []) or [])
+        errors = calendar.errors if calendar is not None else {}
+        from ..kalender import _feed_url, _short
+
+        return {"feeds": [{"url": url, "shown": _short(_feed_url(url) or url),
+                           "error": errors.get(_feed_url(url), "")} for url in feeds],
+                "count": len(calendar.upcoming(24 * 7)) if calendar is not None else 0}
+
+    def calendar_add(self, url) -> dict:
+        """Eine geheime iCal-Adresse prüfen und speichern. Zeigt die nächsten Termine daraus."""
+        import datetime as dt
+
+        from ..config import save_setting
+        from ..kalender import Calendar, _feed_url
+
+        url = str(url or "").strip()
+        if not _feed_url(url):
+            return {"ok": False, "error": "Das ist keine iCal-Adresse. Sie beginnt mit https:// oder webcal:// und endet meist auf .ics."}
+        from ..config import STATE_DIR
+
+        probe = Calendar(STATE_DIR / "kalender.json", [url])
+        probe.refresh(force=True)
+        if probe.errors:
+            return {"ok": False, "error": "Diese Adresse liefert keinen Kalender: " + next(iter(probe.errors.values()))}
+        now = dt.datetime.now()
+        events = [e for e in probe.upcoming(24 * 14) if e.source != "jarvis"]
+        feeds = list(self._assistant._cfg.get("kalender", {}).get("abos", []) or [])
+        if url not in feeds:
+            feeds.append(url)
+        try:
+            save_setting("kalender", "abos", feeds)
+        except Exception as exc:
+            return {"ok": False, "error": f"Konnte nicht speichern: {exc}"}
+        self._assistant._cfg.setdefault("kalender", {})["abos"] = feeds
+        self._assistant.calendar = Calendar(STATE_DIR / "kalender.json", feeds)
+        return {"ok": True, "error": "", "count": len(events),
+                "next": [e.spoken(now, with_day=True) for e in events[:3]]}
+
+    def calendar_help(self, which) -> bool:
+        """Knöpfe "Öffnen" bei Google und Outlook (nur diese beiden Seiten)."""
+        from .. import pc
+
+        url = {"google": "https://calendar.google.com/calendar/r/settings",
+               "outlook": "https://outlook.live.com/calendar/0/options/calendar/SharedCalendars"}.get(str(which))
+        if not url:
+            return False
+        try:
+            pc.open_uri(url)
+            return True
+        except Exception as exc:
+            log.info("Kalender-Hilfe: %s", exc)
+            return False
+
+    def calendar_remove(self, url) -> dict:
+        from ..config import STATE_DIR, save_setting
+        from ..kalender import Calendar
+
+        feeds = [f for f in self._assistant._cfg.get("kalender", {}).get("abos", []) or [] if f != url]
+        try:
+            save_setting("kalender", "abos", feeds)
+        except Exception as exc:
+            return {"ok": False, "error": f"Konnte nicht speichern: {exc}"}
+        self._assistant._cfg.setdefault("kalender", {})["abos"] = feeds
+        self._assistant.calendar = Calendar(STATE_DIR / "kalender.json", feeds)
+        return {"ok": True, "error": ""}
 
     # ------------------------------------------------------------------ Handy
 
