@@ -430,8 +430,17 @@
       try {
         renderApple(await call('apple_info'));
         renderMail(await call('mail_accounts'));
-      } catch {
-        /* ältere Version */
+      } catch (err) {
+        // Jarvis-Version ohne iPhone-Anbindung: den Reiter gar nicht erst anbieten
+        if (String((err && err.message) || '').startsWith('nicht verbunden')) hideTab('apple');
+      }
+    }
+
+    function hideTab(pane) {
+      for (const b of el.tabs) {
+        if (b.dataset.pane !== pane) continue;
+        b.hidden = true;
+        if (b.getAttribute('aria-selected') === 'true') showPane('phone');
       }
     }
 
@@ -738,6 +747,10 @@
       render();
       refresh();
       refreshPush();
+      // Gibt es in dieser Jarvis-Version die iPhone-Anbindung? Sonst den Reiter nicht anbieten.
+      call('apple_info').catch((err) => {
+        if (String((err && err.message) || '').startsWith('nicht verbunden')) hideTab('apple');
+      });
       el.close.focus();
     }
 

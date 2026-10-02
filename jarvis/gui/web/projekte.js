@@ -291,10 +291,12 @@
     }
 
     async function refreshLabor() {
+      const box = document.getElementById('labor');
       try {
         renderLabor(await call('labor_info'));
+        if (box) box.hidden = false;
       } catch {
-        /* ältere Version ohne Labor */
+        if (box) box.hidden = true; // Jarvis-Version ohne Labor
       }
     }
 
