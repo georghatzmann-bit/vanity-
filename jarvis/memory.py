@@ -672,7 +672,8 @@ def _first_to_third(fact: str, clause: bool = False) -> str:
 
         converted = direct_speech("dass " + fact)
         # "dass Max mein bester Freund ist" -> "Max ist mein bester Freund"
-        named = re.match(r"^([A-ZÄÖÜ][\wäöüß-]+)\s+(.+?)\s+([a-zäöüß]{2,})$", fact)
+        # ("dass Max und Tom Brüder sind" -> "Max und Tom sind Brüder")
+        named = re.match(r"^([A-ZÄÖÜ][\wäöüß-]+(?:\s+(?:und|oder)\s+[A-ZÄÖÜ][\wäöüß-]+)?)\s+(.+?)\s+([a-zäöüß]{2,})$", fact)
         if converted is None and named and "," not in fact:
             stem, particle = _split_verb(named.group(3))
             converted = " ".join([named.group(1), stem, named.group(2), *([particle] if particle else [])])

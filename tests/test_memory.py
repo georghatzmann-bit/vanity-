@@ -264,6 +264,8 @@ class SentenceTest(unittest.TestCase):
             "Merk dir, dass Max mein bester Freund ist": "Max ist mein bester Freund",
             "Merk dir, dass Tom morgen anruft": "Tom ruft morgen an",
             "Merk dir bitte: ich hasse Montage": "Georg sagt: Ich hasse Montage",
+            # Vorher "Max sind und Tom Brüder"
+            "Merk dir, dass Max und Tom Brüder sind": "Max und Tom sind Brüder",
         }
         for said, fact in cases.items():
             self.assertEqual(match_memory(said), ("remember", fact), said)
