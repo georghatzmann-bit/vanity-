@@ -146,6 +146,7 @@ class VoiceTest(unittest.TestCase):
         audio, rate = tts.synthesize("Sehr wohl, Sir.")
         self.assertEqual(rate, 24000)
         self.assertTrue(tts.used_main)
+        self.assertTrue(audio.done.wait(5))  # erst fertig speichern, dann den Ordner aufräumen
 
     def test_never_a_windows_or_microsoft_voice(self):
         """Georg: "komplett lokal, keine Windows-Stimme". Alte Einstellungen werden zu lokal, und geht

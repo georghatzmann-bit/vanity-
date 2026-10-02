@@ -97,9 +97,9 @@ class TextToSpeech:
                 log.debug("Stimmen-Zwischenspeicher: %s", exc)
         if self._eleven is not None and time.monotonic() >= self._eleven_paused_until:
             try:
-                audio = self._eleven_stream(text)
-                if cached is not None:
-                    audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
+                store = None if cached is None else (
+                    lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate))
+                audio = self._eleven_stream(text, on_complete=store)
                 self._previous = text
                 self.used_main = True
                 return audio, audio.rate
@@ -125,8 +125,9 @@ class TextToSpeech:
     # Ist ElevenLabs kurz ausgelastet, lieber einen Moment warten als die Stimme wechseln.
     BUSY_RETRIES = (0.3, 0.6, 1.0, 1.5)
 
-    def _eleven_stream(self, text: str) -> "StreamingAudio":
-        """Startet ElevenLabs und kommt zurück, sobald die ersten Töne da sind."""
+    def _eleven_stream(self, text: str, on_complete: Callable[["StreamingAudio"], None] | None = None) -> "StreamingAudio":
+        """Startet ElevenLabs und kommt zurück, sobald die ersten Töne da sind. `on_complete` (Zwischenspeicher)
+        steht schon vor dem Start fest: Kurze Sätze sind oft fertig geladen, bevor diese Funktion zurückkommt."""
         from .elevenlabs import FALLBACK_MODEL, RATE, ElevenLabsError
 
         busy_waits = list(self.BUSY_RETRIES)
@@ -136,6 +137,7 @@ class TextToSpeech:
             if not self._eleven_slot.acquire(timeout=20):
                 raise ElevenLabsError("net", "Der Satz davor lädt nicht fertig")
             audio = StreamingAudio(RATE)
+            audio.on_complete = on_complete
             model, plain, previous = self._eleven_model, self._eleven_plain, self._previous
 
             def run(audio=audio, model=model, plain=plain, previous=previous) -> None:

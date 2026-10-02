@@ -346,6 +346,22 @@ class ElevenLabsVoiceTest(unittest.TestCase):
         self.assertEqual(self.fake.refused, 0, "ElevenLabs musste nichts ablehnen")
         self.assertEqual(self.problems, [])
 
+    def test_phrase_loaded_before_synthesize_returns_is_cached_too(self):
+        """Kurze Sätze sind oft schon fertig geladen, bevor synthesize zurückkommt. Früher kam der
+        Zwischenspeicher erst danach dazu, und diese Sätze wurden nie gespeichert."""
+        from jarvis import tts as tts_module
+
+        class AtOnce(threading.Thread):
+            def start(self):
+                self.run()  # lädt den ganzen Satz, bevor _eleven_stream zurückkommt
+
+        with mock.patch.object(tts_module, "threading", mock.Mock(wraps=threading, Thread=AtOnce)):
+            audio, _ = self.tts.synthesize("Sehr wohl, Sir.")
+        self.assertTrue(audio.done.is_set())
+        cached, _ = self.tts.synthesize("Sehr wohl, Sir.")
+        self.assertIsInstance(cached, np.ndarray, "aus dem Zwischenspeicher")
+        self.assertEqual(len([r for r in self.fake.requests if "/stream" in r[1]]), 1)
+
     def test_busy_server_is_retried_instead_of_switching_voices(self):
         self.fake.speech_error = (429, {"detail": {"status": "too_many_concurrent_requests", "message": "Busy"}})
 
