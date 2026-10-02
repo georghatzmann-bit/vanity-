@@ -15,7 +15,11 @@ import sys
 import time
 from ctypes import wintypes as w
 
-from jarvis import versteckt
+# Läuft aus dem Jarvis-Ordner (Push-Location im Workflow): das Skript liegt woanders, also den Ordner selbst
+# in den Suchpfad, sonst findet Python das Paket jarvis nicht
+sys.path.insert(0, os.getcwd())
+
+from jarvis import versteckt  # noqa: E402
 
 TITLE = "Jarvis-Probe-Unsichtbar"
 CHILD = r"""
