@@ -41,8 +41,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Große Aufträge mit Opus, kleine mit Sonnet. Das Fenster zeigt Plan, Ablauf, Fortschritt und Dateien und alle Projekte als Übersicht mit Starten und Weiterbauen.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt, ElevenLabs beginnt nach 0,25 s zu sprechen.
-- **Ruhiges, modernes Fenster:** eine lebendige, flüssige Glas-Kugel als Jarvis' Gesicht (sie verformt sich wie ein Tropfen und schwingt mit der Stimme), darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
-- **Installer mit eigenem Fenster:** dieselbe lebendige Kugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
+- **Ruhiges, modernes Fenster:** eine ruhige Kugel aus feinen Linien als Jarvis' Gesicht (sie dreht sich langsam, mit der Stimme laufen Wellen hindurch), darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
+- **Installer mit eigenem Fenster:** dieselbe Linienkugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
 - **Grafische Einrichtung**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
 
 | Werkstatt-Projekte | Handy-App |
