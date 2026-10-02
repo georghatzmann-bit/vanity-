@@ -57,16 +57,19 @@ follow_up = true
 gespraech = true
 # So viele Sekunden wartet Jarvis im Gespräch, ob du weiterredest.
 gespraech_sekunden = 8
+# true = Vorab-Erkennung: In der ersten kurzen Pause erkennt Jarvis den Satz schon. Ist das ein
+# Sofort-Befehl ("Öffne Spotify", "Lauter"), legt er nach einer halben Sekunde los statt nach einer.
+vorab = true
 
 [stt]
-# "auto" = Groq, wenn unten ein Schlüssel steht, sonst auf dem eigenen PC.
-# "groq" = immer Groq, "lokal" = immer auf dem eigenen PC (geht auch ohne Internet).
-engine = "auto"
-# Auf dem eigenen PC: "parakeet" (schnell und genau, kommt mit der lokalen Stimme aus der Einrichtung)
+# "lokal" = auf dem eigenen PC (Standard, geht ohne Internet, nichts verlässt den PC).
+# "auto" = Groq, wenn unten ein Schlüssel steht, sonst lokal. "groq" = immer Groq.
+engine = "lokal"
+# Auf dem eigenen PC: "parakeet" (schnell und genau, kommt mit der lokalen Stimme)
 # oder "whisper" (das Modell unten). Ist Parakeet nicht installiert, nimmt Jarvis Whisper.
 lokal_modell = "parakeet"
-# Kostenloser Schlüssel von https://console.groq.com/keys: Spracherkennung in Bestqualität
-# (Whisper large-v3-turbo), in einem Bruchteil einer Sekunde. Am einfachsten in der Einrichtung eintragen.
+# Kostenloser Schlüssel von https://console.groq.com/keys: Spracherkennung in der Cloud
+# (Whisper large-v3-turbo). Nur für engine = "auto" oder "groq".
 groq_key = ""
 groq_model = "whisper-large-v3-turbo"
 # Für die Erkennung auf dem eigenen PC: tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.
@@ -78,11 +81,10 @@ device = "cpu"
 beam_size = 1
 
 [tts]
-# "elevenlabs" = Premium-Stimmen von ElevenLabs (die besten, kostenpflichtig, Schlüssel unten)
-# "lokal" = natürliche deutsche Stimme auf dem eigenen PC (gratis, ohne Internet, Einrichtung > Stimme > Lokal)
-# "edge" = menschliche Microsoft-Stimme (gratis, braucht Internet)
-# "windows" = eingebaute Windows-Stimme (offline)
-engine = "edge"
+# "lokal" = Jarvis' natürliche deutsche Stimme auf dem eigenen PC (Standard: gratis, schnell, ohne Internet).
+# "elevenlabs" = Premium-Stimmen von ElevenLabs (kostenpflichtig, Schlüssel unten). Fällt ElevenLabs aus,
+# spricht die lokale Stimme. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
+engine = "lokal"
 # Für "lokal": george (am klarsten), charles (am tiefsten), juergen, michael, javert, stuart_bell
 lokal_stimme = "george"
 # ElevenLabs: Schlüssel von https://elevenlabs.io/app/settings/api-keys und die Stimme.
@@ -92,11 +94,6 @@ elevenlabs_voice = ""
 elevenlabs_voice_name = ""
 # eleven_v4_turbo = schnellstes und natürlichstes Modell, eleven_flash_v2_5 = Reserve
 elevenlabs_model = "eleven_v4_turbo"
-# Andere gute Stimmen: de-AT-JonasNeural (am natürlichsten), de-CH-JanNeural, de-DE-KatjaNeural.
-# Am einfachsten in der Einrichtung auswählen, dort gibt es Hörproben.
-voice = "de-DE-ConradNeural"
-rate = "-5%"
-pitch = "-8Hz"
 
 [answer]
 # Braucht Claude länger als so viele Sekunden, sagt Jarvis schon mal "Einen Moment, Sir".
@@ -242,18 +239,15 @@ effort = "medium"
 # Abbruch, wenn so viele Minuten gar nichts passiert, und Obergrenze für einen Auftrag.
 still_minuten = 12
 max_minuten = 60
+# true = Die Werkstatt testet auf einem eigenen, unsichtbaren Windows-Arbeitsplatz: Programme und Fenster,
+# die sie zum Testen startet, poppen nicht auf deinem Bildschirm auf. Erst "Starte es" zeigt das Ergebnis.
+unsichtbar = true
 
 [gaming]
 # Diese Programme schließt "Gaming-Modus an" (Namen wie im Task-Manager, z. B. "OneDrive", "Teams").
 close_apps = []
 # Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
 power_plan = true
-
-[discord]
-# Jarvis' eigener Discord-Bot: gestaltet deinen Server im Hintergrund (Kanäle, Rollen, Nachrichten),
-# ohne Maus, während du zockst. Am einfachsten im Jarvis-Fenster oben rechts ("Verbinden", Bereich
-# Discord) einrichten. Den Token nie weitergeben.
-bot_token = ""
 
 [alexa]
 # "Alexa, sag Jarvis, er soll Discord öffnen": ein eigener Alexa-Skill, ohne Home Assistant und
@@ -300,7 +294,7 @@ push_kanal = ""
 
 [intern]
 # Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
-config_version = 6
+config_version = 7
 
 [notizbuch]
 # Jarvis schreibt jedes Gespräch, Berichte (Recherchen) und Notizen als Markdown in einen Ordner. Den kannst du

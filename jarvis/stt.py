@@ -1,6 +1,6 @@
-"""Sprache zu Text: Groq (Whisper large-v3-turbo in der Cloud, gratis Schlüssel, sehr schnell
-und genau) oder faster-whisper auf dem eigenen PC. Ist Groq gerade nicht erreichbar,
-übernimmt der eigene PC, ohne dass Georg etwas merkt."""
+"""Sprache zu Text, standardmäßig ganz auf dem eigenen PC: Parakeet (localvoice.py), solange das
+fehlt faster-whisper. Wer will, nimmt Groq (Whisper large-v3-turbo in der Cloud, gratis Schlüssel);
+ist Groq nicht erreichbar, übernimmt der eigene PC, ohne dass Georg etwas merkt."""
 
 from __future__ import annotations
 
@@ -127,7 +127,9 @@ class CloudSpeechToText:
     def warm_up_fallback(self) -> None:
         """Den eigenen PC schon mal bereit machen (im Hintergrund), damit ein Ausfall nicht bremst."""
         try:
-            self._local()
+            local = self._local()
+            if hasattr(local, "warm_up"):
+                local.warm_up()
         except Exception as exc:
             log.warning("Spracherkennung auf dem eigenen PC lädt nicht: %s", exc)
 
@@ -226,9 +228,54 @@ def multipart(fields: dict, file: tuple[str, str, bytes, str]) -> tuple[bytes, s
     return b"".join(parts), f"multipart/form-data; boundary={boundary}"
 
 
+class LocalSpeechToText:
+    """Spracherkennung auf dem eigenen PC: Parakeet (schnell und genau), solange das fehlt Whisper.
+    Kommt Parakeet später dazu (Jarvis holt die lokale Stimme im Hintergrund nach), wechselt sie von
+    selbst, ohne Neustart."""
+
+    CHECK_EVERY = 60.0
+
+    def __init__(self, parakeet, whisper, want_parakeet: bool = True) -> None:
+        self._make_parakeet = parakeet
+        self._make_whisper = whisper
+        self._want_parakeet = want_parakeet
+        self._model = None
+        self._kind = ""
+        self._lock = threading.Lock()
+        self._checked_at = -1e9
+        self.last_engine = "lokal"
+
+    def _current(self):
+        with self._lock:
+            now = time.monotonic()
+            if self._kind != "parakeet" and self._want_parakeet and now - self._checked_at >= self.CHECK_EVERY:
+                self._checked_at = now
+                model = self._make_parakeet()
+                if model is not None:
+                    self._model, self._kind = model, "parakeet"
+            if self._model is None:
+                self._model, self._kind = self._make_whisper(), "whisper"
+            return self._model
+
+    def warm_up(self) -> None:
+        """Lädt das Modell und erkennt einmal eine Sekunde Rauschen: Der erste echte Befehl ist dann
+        nicht langsamer als die anderen (heute lud die Erkennung erst beim ersten Befehl)."""
+        started = time.monotonic()
+        model = self._current()
+        try:
+            rng = np.random.default_rng(0)
+            model.transcribe((rng.standard_normal(16000) * 0.003).astype(np.float32))
+        except Exception as exc:
+            log.debug("Spracherkennung vorwärmen: %s", exc)
+        log.info("Spracherkennung (%s) bereit in %.1f s.", self._kind, time.monotonic() - started)
+
+    def transcribe(self, audio: np.ndarray) -> str:
+        return self._current().transcribe(audio)
+
+
 def make_transcriber(cfg: dict, ort: str = "", on_problem=None):
-    """Die passende Spracherkennung laut config.toml ([stt])."""
-    engine = str(cfg.get("engine", "auto")).lower()
+    """Die passende Spracherkennung laut config.toml ([stt]). Standard: auf dem eigenen PC."""
+    engine = str(cfg.get("engine", "lokal")).lower()
     key = str(cfg.get("groq_key", "") or "").strip()
     # Eine Wortliste als Hinweis hat im Test mehr verdorben als geholfen, deshalb ohne.
     prompt = str(cfg.get("prompt", "") or "")
@@ -236,23 +283,25 @@ def make_transcriber(cfg: dict, ort: str = "", on_problem=None):
     def whisper():
         return SpeechToText(cfg["model"], cfg["language"], cfg.get("device", "cpu"), cfg.get("beam_size", 1), prompt)
 
-    def local():
-        # Parakeet (lokale Spracherkennung aus der Einrichtung): auf dem Prozessor viel schneller als Whisper
+    def parakeet():
+        # Parakeet (lokale Spracherkennung, kommt mit der lokalen Stimme): auf dem Prozessor viel schneller als Whisper
         from .localvoice import installed
 
-        if installed()["stt"] and cfg.get("lokal_modell", "parakeet") == "parakeet":
-            try:
-                from .localvoice import ParakeetSpeechToText
+        if not installed()["stt"]:
+            return None
+        try:
+            from .localvoice import ParakeetSpeechToText
 
-                return ParakeetSpeechToText()
-            except Exception as exc:
-                log.warning("Parakeet lädt nicht (%s), nehme Whisper.", exc)
-        return whisper()
+            return ParakeetSpeechToText()
+        except Exception as exc:
+            log.warning("Parakeet lädt nicht (%s), nehme Whisper.", exc)
+            return None
 
+    local = LocalSpeechToText(parakeet, whisper, cfg.get("lokal_modell", "parakeet") == "parakeet")
     if key and engine in ("auto", "groq", "cloud"):
         return CloudSpeechToText(key, cfg.get("groq_model", "whisper-large-v3-turbo"), cfg["language"], prompt,
-                                 fallback=local, on_problem=on_problem)
-    return local()
+                                 fallback=lambda: local, on_problem=on_problem)
+    return local
 
 
 def clean_transcript(text: str, prompt: str = "") -> str:

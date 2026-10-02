@@ -69,7 +69,7 @@ class VoiceTest(unittest.TestCase):
         self.assertEqual(rate, 24000)
         self.assertTrue(audio.done.wait(5))  # done kommt erst nach dem Speichern (siehe StreamingAudio.finish)
         self.assertGreater(audio.available(), 0)
-        self.assertTrue(tts.used_edge, "die gute Stimme, keine Ersatzstimme")
+        self.assertTrue(tts.used_main, "die gute Stimme, keine Reservestimme")
         cached, _ = tts.synthesize("Sehr wohl, Sir.")
         self.assertIsInstance(cached, np.ndarray, "kurze Sätze kommen beim zweiten Mal aus dem Zwischenspeicher")
 
@@ -133,6 +133,62 @@ class VoiceTest(unittest.TestCase):
         self.assertEqual(FakePocket.instances, [])
         self.assertIsNone(tts._local)
 
+    def test_voice_comes_later_without_restart(self):
+        """Fehlt die lokale Stimme beim Start, holt Jarvis sie nach (__main__.local_voice) und nimmt sie
+        dann sofort dazu, ohne Neustart."""
+        tts = self.make(installed=False)
+        with mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}), \
+                mock.patch("jarvis.localvoice.PocketVoice", side_effect=lambda voice: FakePocket(voice)):
+            self.assertTrue(tts.enable_local())
+            self.assertTrue(tts.enable_local(), "zweimal schadet nicht")
+        self.assertEqual(len(FakePocket.instances), 1)
+        self.assertEqual(FakePocket.instances[0].voice, "charles", "die gewählte Stimme")
+        audio, rate = tts.synthesize("Sehr wohl, Sir.")
+        self.assertEqual(rate, 24000)
+        self.assertTrue(tts.used_main)
+
+    def test_never_a_windows_or_microsoft_voice(self):
+        """Georg: "komplett lokal, keine Windows-Stimme". Alte Einstellungen werden zu lokal, und geht
+        gar keine lokale Stimme, schweigt Jarvis lieber (die Antwort steht im Fenster)."""
+        from jarvis import tts as tts_module
+
+        for old in ("edge", "windows", "", "quatsch"):
+            self.assertEqual(self.make({"engine": old})._engine, "lokal", old)
+        for name in ("synthesize_edge", "synthesize_windows", "_edge_mp3", "_com_ready"):
+            self.assertFalse(hasattr(tts_module, name), name)
+        problems = []
+        tts = self.make(installed=False)
+        tts._on_problem = problems.append
+        with mock.patch.object(tts_module, "piper_voice", return_value=None):
+            with self.assertRaises(RuntimeError):
+                tts.synthesize("Hallo.")
+        self.assertIn("im Fenster", problems[0])
+
+    def test_piper_is_the_local_reserve(self):
+        class FakePiper:
+            def synthesize(self, text):
+                return np.full(2205, 8000, np.int16), 22050
+
+        from jarvis import tts as tts_module
+
+        tts = self.make(installed=False)
+        with mock.patch.object(tts_module, "piper_voice", return_value=FakePiper()):
+            _samples, rate = tts.synthesize("Sehr wohl, Sir.")
+        self.assertEqual(rate, 22050)
+        self.assertFalse(tts.used_main)
+
+    def test_warm_up_shortens_the_lead_on_fast_pcs(self):
+        from jarvis.tts import local_buffer
+
+        self.assertEqual(local_buffer(5.0), 0.25)
+        self.assertEqual(local_buffer(2.0), 0.4)
+        self.assertEqual(local_buffer(1.3), 0.6)
+        self.assertEqual(local_buffer(0.8), 1.0, "langsamer PC: mehr Vorlauf, damit nichts stockt")
+        tts = self.make()
+        tts.warm_up()  # FakePocket rechnet sofort: sehr schnell
+        self.assertEqual(tts.LOCAL_BUFFER_SECONDS, 0.25)
+        self.assertEqual(type(tts).LOCAL_BUFFER_SECONDS, 0.6, "nur diese Stimme, nicht alle")
+
     def test_config_is_read_as_utf8_on_windows(self):
         """Pocket TTS liest german.yaml mit open(pfad, "r"): Unter Windows (cp1252) scheiterte daran die Stimme."""
         package, utils, config = (types.ModuleType(n) for n in ("pocket_tts", "pocket_tts.utils", "pocket_tts.utils.config"))
@@ -165,14 +221,40 @@ class RecognitionTest(unittest.TestCase):
         with mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}), \
                 mock.patch("jarvis.localvoice.ParakeetSpeechToText", return_value="parakeet") as parakeet, \
                 mock.patch.object(stt, "SpeechToText", return_value="whisper"):
-            self.assertEqual(stt.make_transcriber(cfg), "parakeet")
+            self.assertEqual(stt.make_transcriber(cfg)._current(), "parakeet")
             parakeet.assert_called_once()
         with mock.patch("jarvis.localvoice.installed", return_value={"tts": False, "stt": False}), \
                 mock.patch.object(stt, "SpeechToText", return_value="whisper"):
-            self.assertEqual(stt.make_transcriber(cfg), "whisper")
+            self.assertEqual(stt.make_transcriber(cfg)._current(), "whisper")
         with mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}), \
                 mock.patch.object(stt, "SpeechToText", return_value="whisper"):
-            self.assertEqual(stt.make_transcriber(dict(cfg, lokal_modell="whisper")), "whisper")
+            self.assertEqual(stt.make_transcriber(dict(cfg, lokal_modell="whisper"))._current(), "whisper")
+
+    def test_local_is_the_default_and_parakeet_comes_later(self):
+        """Ohne Angabe erkennt Jarvis auf dem PC (auch mit Groq-Schlüssel). Fehlt Parakeet erst und kommt
+        dann dazu, wechselt die Erkennung von selbst."""
+        from jarvis import stt
+
+        have = {"stt": False}
+        with mock.patch("jarvis.localvoice.installed", side_effect=lambda: {"tts": have["stt"], "stt": have["stt"]}), \
+                mock.patch("jarvis.localvoice.ParakeetSpeechToText", return_value="parakeet"), \
+                mock.patch.object(stt, "SpeechToText", return_value="whisper"):
+            local = stt.make_transcriber({"model": "small", "language": "de", "groq_key": "gsk_x"})
+            self.assertIsInstance(local, stt.LocalSpeechToText)
+            self.assertEqual(local._current(), "whisper")
+            have["stt"] = True
+            self.assertEqual(local._current(), "whisper", "prüft nur ab und zu")
+            local._checked_at -= stt.LocalSpeechToText.CHECK_EVERY
+            self.assertEqual(local._current(), "parakeet")
+
+    def test_warm_up_runs_the_model_once(self):
+        from jarvis import stt
+
+        heard = []
+        model = types.SimpleNamespace(transcribe=lambda audio: heard.append(audio.size) or "")
+        local = stt.LocalSpeechToText(lambda: model, lambda: None)
+        local.warm_up()
+        self.assertEqual(heard, [16000])
 
     def test_parakeet_gets_float_audio_and_filters_noise(self):
         heard = []

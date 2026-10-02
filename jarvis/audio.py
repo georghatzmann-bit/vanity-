@@ -82,6 +82,18 @@ class CommandRecorder:
     # Sprach-KI (Silero VAD): bekommt einen Frame, liefert die Wahrscheinlichkeit für Sprache.
     # Ohne sie entscheidet nur die Lautstärke.
     vad: object = None
+    # Vorab-Erkennung (voice.EarlyText): on_pause(frames) bei einer Pause, on_resume() wenn Georg
+    # weiterredet, early_end() = "der Vorab-Text ist ein fertiger Sofort-Befehl, nicht länger warten".
+    on_pause: object = None
+    on_resume: object = None
+    early_end: object = None
+
+    # Ab so viel Stille erkennt Jarvis den Satz schon mal vorab (im Hintergrund).
+    PAUSE_PEEK = 0.3
+    # So viel Stille reicht, wenn der Vorab-Text ein fertiger Sofort-Befehl ist ("Öffne Spotify").
+    EARLY_END = 0.45
+    # Nur bei kurzen Befehlen: Wer länger redet, hängt eher noch etwas an ("... und Discord").
+    EARLY_MAX_SPOKEN = 2.6
 
     # Ab hier beginnt Sprechen, und solange es darüber bleibt, spricht man noch.
     VAD_START = 0.5
@@ -98,6 +110,8 @@ class CommandRecorder:
         self.speech_started = False
         self.silent_frames = 0
         self.speech_frames = 0
+        self.peeked = False  # in dieser Pause schon vorab erkannt
+        self.ended_early = False
 
     @property
     def threshold(self) -> float:
@@ -111,6 +125,9 @@ class CommandRecorder:
         elapsed = len(self.frames) * FRAME_SECONDS
         loud = self._is_speech(frame)
         if loud and elapsed > self.ignore_seconds:
+            if self.peeked and self.on_resume is not None:
+                self.on_resume()  # Georg redet weiter: der Vorab-Text gilt nicht mehr
+            self.peeked = False
             self.speech_started = True
             self.silent_frames = 0
             self.speech_frames += 1
@@ -121,7 +138,17 @@ class CommandRecorder:
             return True
         if not self.speech_started:
             return elapsed >= self.start_timeout_seconds
-        return self.silent_frames * FRAME_SECONDS >= self.needed_silence
+        silence = self.silent_frames * FRAME_SECONDS
+        if not self.peeked and self.on_pause is not None and silence >= self.PAUSE_PEEK:
+            self.peeked = True
+            self.on_pause(list(self.frames))
+        if silence >= self.needed_silence:
+            return True
+        if (self.peeked and self.early_end is not None and silence >= self.EARLY_END
+                and self.speech_frames * FRAME_SECONDS <= self.EARLY_MAX_SPOKEN and self.early_end()):
+            self.ended_early = True
+            return True
+        return False
 
     @property
     def needed_silence(self) -> float:
@@ -514,8 +541,11 @@ class WakeWord:
 
 
 def record_command(
-    mic: Microphone, listen_cfg: dict, on_level=None, ignore_seconds: float = 0.0, vad: VoiceActivity | None = None
+    mic: Microphone, listen_cfg: dict, on_level=None, ignore_seconds: float = 0.0, vad: VoiceActivity | None = None,
+    early=None,
 ) -> np.ndarray | None:
+    """Nimmt einen Befehl bis zum Satzende auf. `early` (voice.EarlyText): erkennt in Pausen schon vorab
+    und beendet die Aufnahme früher, wenn ein fertiger Sofort-Befehl dasteht."""
     if vad is not None:
         vad.reset()
     recorder = CommandRecorder(
@@ -526,6 +556,9 @@ def record_command(
         noise_floor=mic.noise_floor,
         ignore_seconds=ignore_seconds,
         vad=vad,
+        on_pause=early.pause if early is not None else None,
+        on_resume=early.resume if early is not None else None,
+        early_end=early.complete if early is not None else None,
     )
     while True:
         frame = mic.read()

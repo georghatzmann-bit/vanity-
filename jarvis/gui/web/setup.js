@@ -29,7 +29,7 @@
     {
       id: 'voice', nav: 'Stimme',
       title: 'Wie soll Jarvis klingen?',
-      lead: 'Premium klingt wie ein echter Mensch. Lokal läuft kostenlos auf Ihrem PC, auch ohne Internet. Microsoft geht auch, klingt aber nach Computer.',
+      lead: 'Jarvis spricht und hört ganz auf deinem PC: kostenlos, schnell und ohne Internet. Wer mag, nimmt zusätzlich eine Premium-Stimme von ElevenLabs.',
     },
     {
       id: 'place', nav: 'Name und Ort',
@@ -83,8 +83,8 @@
       list: null, selected: undefined, savedName: '', loading: false,
       running: false, polling: false, startedAt: 0, maxLevel: 0, threshold: 0.5, detected: false,
     },
-    voices: [], voice: '', playing: '',
-    tts: { engine: 'edge', tab: 'premium' },
+    playing: '',
+    tts: { engine: 'lokal', tab: 'local' },
     local: { installed: {}, ready: false, busy: false, line: '', error: '', voices: [], voice: 'george', active: false, allLocal: false, timer: 0 },
     eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false, blocked: new Set() },
     groq: { keySet: false },
@@ -234,7 +234,7 @@
   function isComplete(id) {
     switch (id) {
       case 'mic': return S.mic.selected !== undefined;
-      case 'voice': return !!S.voice;
+      case 'voice': return S.tts.engine === 'lokal' ? !!S.local.active : !!S.eleven.selected;
       case 'place': return !!S.place.saved;
       case 'claude': return S.claude.state === 'ok';
       case 'extras': return !!S.hotkey;
@@ -262,12 +262,9 @@
 
   function voiceName() {
     if (S.tts.engine === 'elevenlabs' && S.eleven.name) return S.eleven.name + ' (Premium)';
-    if (S.tts.engine === 'lokal') {
-      const lv = (S.local.voices || []).find((x) => x.id === S.local.voice);
-      return (lv ? lv.name : 'Lokale Stimme') + ' (lokal)';
-    }
-    const v = S.voices.find((x) => x.id === S.voice);
-    return v ? v.name : (S.voice || '').replace(/^de-\w\w-|Neural$|Multilingual/g, '');
+    if (!S.local.active) return S.local.busy ? 'wird eingerichtet …' : '';
+    const lv = (S.local.voices || []).find((x) => x.id === S.local.voice);
+    return (lv ? lv.name : 'Lokale Stimme') + ' (lokal)';
   }
 
   function hotkeyLabel(id) {
@@ -566,22 +563,11 @@
   // ------------------------------------------------------------------ 3 Stimme
 
   async function voiceEnter() {
-    call('voice_prepare').catch(() => {});
-    if (!S.voices.length) {
-      try {
-        const list = await call('voices');
-        S.voices = Array.isArray(list) ? list : [];
-      } catch (err) {
-        failed(err);
-      }
-    }
-    if (!S.voice && S.voices.length) S.voice = S.voices[0].id;
-    renderVoices();
     renderVoiceKind();
     if (S.eleven.keySet && !S.eleven.checked) elevenCheck('');
   }
 
-  // ---------- Premium (ElevenLabs) und Kostenlos (Microsoft)
+  // ---------- Lokal (Standard) und Premium (ElevenLabs)
 
   function renderVoiceKind() {
     for (const b of document.querySelectorAll('#voiceKind button')) {
@@ -589,7 +575,6 @@
       b.setAttribute('aria-checked', String(on));
     }
     $('premiumPanel').hidden = S.tts.tab !== 'premium';
-    $('freePanel').hidden = S.tts.tab !== 'free';
     $('localPanel').hidden = S.tts.tab !== 'local';
     if (S.tts.tab === 'local') localRefresh();
     renderElevenState();
@@ -622,7 +607,7 @@
     if (L.error) formMsg('localMsg', 'error', L.error);
     else if (L.busy) formMsg('localMsg', 'info', L.line || 'Lädt …');
     else if (L.ready) formMsg('localMsg', 'ok', L.active ? 'Jarvis spricht mit der lokalen Stimme.' : 'Bereit. Wählen Sie unten eine Stimme, dann spricht Jarvis damit.');
-    else formMsg('localMsg', '', '');
+    else formMsg('localMsg', 'info', 'Noch nicht eingerichtet, bei der Installation fehlte wohl das Internet. Einmal klicken (etwa 1,3 GB, 5 bis 15 Minuten), oder einfach warten: Jarvis holt es beim Start von selbst nach.');
     const grid = $('localGrid');
     grid.replaceChildren();
     grid.hidden = !L.ready;
@@ -1079,82 +1064,6 @@
       btn.disabled = false;
       renderGroq();
     }
-  }
-
-  function renderVoices() {
-    const grid = $('voiceGrid');
-    grid.replaceChildren();
-    for (const v of S.voices) {
-      const card = el('div', 'voice');
-      card.setAttribute('role', 'radio');
-      card.setAttribute('aria-checked', String(S.voice === v.id));
-      card.tabIndex = 0;
-      if (S.playing === v.id) card.classList.add('playing');
-      const avatar = el('span', 'avatar', (v.name || '?').charAt(0));
-      const txt = el('span', 'voice-text');
-      txt.append(el('span', 'voice-name', v.name), el('span', 'voice-desc', v.desc));
-      const tags = el('span', 'voice-tags');
-      (Array.isArray(v.tags) ? v.tags : []).forEach((tag, i) => {
-        tags.append(el('span', 'badge' + (i === 0 && v.recommended ? ' accent' : ''), tag));
-      });
-      if (!tags.childElementCount) tags.append(el('span', 'badge', v.gender === 'w' ? 'weiblich' : 'männlich'));
-      txt.append(tags);
-      const play = el('button', 'play');
-      play.type = 'button';
-      play.title = v.name + ' anhören';
-      play.setAttribute('aria-label', v.name + ' anhören');
-      play.append(svg(ICON.play));
-      const bars = el('span', 'bars');
-      bars.append(el('i'), el('i'), el('i'));
-      play.append(bars);
-      play.addEventListener('click', (e) => {
-        e.stopPropagation();
-        preview(v);
-      });
-      card.append(avatar, txt, play);
-      const pick = () => chooseVoice(v, true);
-      card.addEventListener('click', pick);
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          pick();
-        }
-      });
-      grid.append(card);
-    }
-  }
-
-  function chooseVoice(v, andPreview) {
-    const changed = S.voice !== v.id;
-    S.voice = v.id;
-    renderVoices();
-    renderRail();
-    if (changed || S.tts.engine !== 'edge') {
-      call('voice_save', v.id).then((r) => {
-        if (r && !r.ok) toast(r.error || 'Die Stimme ließ sich nicht speichern.', 'error');
-        else S.tts.engine = 'edge';
-        renderElevenState();
-        renderRail();
-      }).catch(failed);
-    }
-    if (andPreview && changed && !S.playing) preview(v);
-  }
-
-  async function preview(v) {
-    if (S.playing) {
-      toast('Einen Moment, es spricht gerade noch eine Stimme.', 'info');
-      return;
-    }
-    S.playing = v.id;
-    renderVoices();
-    try {
-      const r = await call('voice_preview', v.id);
-      if (r && !r.ok) toast(r.error || 'Die Stimme lässt sich gerade nicht abspielen.', 'error');
-    } catch (err) {
-      failed(err);
-    }
-    S.playing = '';
-    renderVoices();
   }
 
   // ------------------------------------------------------------------ 4 Name und Wohnort
@@ -1674,15 +1583,14 @@
     $('sensitive').checked = S.mic.threshold <= 0.4;
     $('conversation').checked = v.gespraech !== false;
     $('nameWake').checked = v.name_allein !== false;
-    S.voice = String(v.voice || '');
-    S.tts.engine = String(v.tts_engine || 'edge');
+    S.tts.engine = String(v.tts_engine || 'lokal') === 'elevenlabs' ? 'elevenlabs' : 'lokal';
     S.eleven.keySet = !!v.eleven_key_set;
     S.eleven.selected = String(v.eleven_voice || '');
     S.eleven.name = String(v.eleven_voice_name || '');
     S.groq.keySet = !!v.groq_key_set;
     S.pico.keySet = !!v.pico_key_set;
-    // Premium zuerst zeigen, außer jemand hat ElevenLabs schon und bewusst zurück auf Microsoft gestellt.
-    S.tts.tab = S.tts.engine === 'lokal' ? 'local' : S.eleven.keySet && S.tts.engine !== 'elevenlabs' ? 'free' : 'premium';
+    // Lokal ist der Standard. Premium nur, wenn ElevenLabs gerade gewählt ist.
+    S.tts.tab = S.tts.engine === 'elevenlabs' ? 'premium' : 'local';
     S.place.saved = String(v.ort || '');
     S.name = String(v.name || '');
     if ($('nameInput') && !$('nameInput').value) $('nameInput').value = S.name;
@@ -1865,7 +1773,7 @@
     applyHello(info);
     // Stimmen und Tasten gleich laden, damit die Leiste links schöne Namen zeigt.
     await Promise.all([
-      call('voices').then((v) => { if (Array.isArray(v)) S.voices = v; }).catch(() => {}),
+      call('local_state').then((st) => { if (st) Object.assign(S.local, st, { allLocal: !!st.all_local }); }).catch(() => {}),
       call('hotkeys').then((h) => { if (Array.isArray(h)) S.hotkeys = h; }).catch(() => {}),
     ]);
     const want = params.get('step');
@@ -1922,7 +1830,9 @@
     let micT0 = 0;
     let localT0 = 0;
     let localVoice = 'george';
-    let localActive = false;
+    // Der Installer richtet die lokale Stimme gleich mit ein. ?lokal=nein zeigt den Fall, dass es nicht geklappt hat.
+    const localMissing = params.get('lokal') === 'nein';
+    let localActive = !localMissing && params.get('eleven') !== '1';
     const LOCAL_VOICES = [
       { id: 'george', name: 'George', desc: 'Ruhig und klar, am besten verständlich', recommended: true },
       { id: 'charles', name: 'Charles', desc: 'Die tiefste Stimme, sehr gelassen' },
@@ -1935,22 +1845,15 @@
     let threshold = 0.5;
     let claudeT0 = 0;
     const later = (v, ms) => sleep(ms).then(() => v);
-    const VOICES = [
-      { id: 'de-DE-ConradNeural', name: 'Conrad', desc: 'Tief und ruhig, der klassische Butler', gender: 'm', tags: ['Hochdeutsch', 'Standard'], recommended: true },
-      { id: 'de-AT-JonasNeural', name: 'Jonas', desc: 'Am natürlichsten und am schnellsten', gender: 'm', tags: ['Österreich'] },
-      { id: 'de-CH-JanNeural', name: 'Jan', desc: 'Sehr natürlich und freundlich', gender: 'm', tags: ['Schweiz'] },
-      { id: 'de-DE-KatjaNeural', name: 'Katja', desc: 'Klar und freundlich', gender: 'w', tags: ['Hochdeutsch', 'weiblich'] },
-      { id: 'de-AT-IngridNeural', name: 'Ingrid', desc: 'Warm und ruhig', gender: 'w', tags: ['Österreich', 'weiblich'] },
-    ];
     return {
       hello: () => later({
         version: '2.0.0',
         first_run: params.get('first') !== '0',
         values: {
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',
-          voice: 'de-DE-ConradNeural', hotkey: 'ctrl+alt+m', threshold: 0.5, autostart: false,
+          hotkey: 'ctrl+alt+m', threshold: 0.5, autostart: false,
           ha_url: '', ha_token_set: false, speed: 'auto',
-          tts_engine: params.get('eleven') === '1' ? 'elevenlabs' : 'edge', eleven_key_set: params.get('eleven') === '1',
+          tts_engine: params.get('eleven') === '1' ? 'elevenlabs' : 'lokal', eleven_key_set: params.get('eleven') === '1',
           eleven_voice: params.get('eleven') === '1' ? 'v_george' : '', eleven_voice_name: params.get('eleven') === '1' ? 'George' : '',
           groq_key_set: params.get('groq') === '1',
           pico_key_set: params.get('pico') === '1',
@@ -1985,20 +1888,17 @@
       conversation_mode: () => later({ ok: true, error: '' }, 80),
       name_wake: () => later({ ok: true, error: '' }, 80),
       wake_sensitive: (on) => { threshold = on ? 0.35 : 0.5; return later({ ok: true, error: '', threshold }, 80); },
-      voices: () => later(VOICES, 60),
-      voice_prepare: () => later(true, 20),
-      voice_preview: () => later({ ok: true, error: '' }, 2600),
-      voice_save: () => later({ ok: true, error: '' }, 80),
       local_state: () => {
         const t = localT0 ? (performance.now() - localT0) / 1000 : -1;
         const busy = t >= 0 && t < 6;
         const lines = ['Collecting pocket-tts', 'Downloading torch-2.14.1-cp311-cp311-win_amd64.whl (114.6 MB)',
           'Installing collected packages: torch, pocket-tts, onnx-asr', 'Lade die Stimme (etwa 220 MB) ...',
           'Hörprobe: George ...', 'Lade die Spracherkennung (etwa 670 MB) ...'];
+        const have = !localMissing || t >= 3;
         return later({
-          installed: { tts: t >= 3 || params.get('lokal') === 'ja', stt: t >= 3 || params.get('lokal') === 'ja' },
-          ready: params.get('lokal') === 'ja' || t >= 6, busy, line: busy ? lines[Math.min(lines.length - 1, Math.floor(t))] : '',
-          error: '', voices: LOCAL_VOICES, voice: localVoice, active: localActive, all_local: false,
+          installed: { tts: have, stt: have },
+          ready: !localMissing || t >= 6, busy, line: busy ? lines[Math.min(lines.length - 1, Math.floor(t))] : '',
+          error: '', voices: LOCAL_VOICES, voice: localVoice, active: localActive, all_local: localActive,
         }, 40);
       },
       local_install: () => { localT0 = performance.now(); return later({ ok: true, error: '' }, 60); },

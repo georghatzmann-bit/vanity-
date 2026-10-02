@@ -65,7 +65,7 @@
   let Werkstatt = null; // Ansicht für Programmier-Aufträge (werkstatt.js)
   let Projekte = null; // alle Werkstatt-Projekte (projekte.js)
   let Gedaechtnis = null; // was Jarvis über Georg weiß, Vorschläge (gedaechtnis.js)
-  let Koppeln = null; // Handy, Alexa, Discord (koppeln.js)
+  let Koppeln = null; // Handy, Alexa, Konnektoren (koppeln.js)
 
   // ------------------------------------------------------------------ Python-Brücke
 
@@ -103,15 +103,11 @@
     alexa_console: () => window.pywebview.api.alexa_console(),
     alexa_test: () => window.pywebview.api.alexa_test(),
     wol_prepare: () => window.pywebview.api.wol_prepare(),
-    discord_info: () => window.pywebview.api.discord_info(),
-    discord_save: (token) => window.pywebview.api.discord_save(token),
-    discord_invite: () => window.pywebview.api.discord_invite(),
     tailscale_info: () => window.pywebview.api.tailscale_info(),
     tailscale_enable: (on) => window.pywebview.api.tailscale_enable(on),
     tailscale_help: (which) => window.pywebview.api.tailscale_help(which),
     connectors: (fresh) => window.pywebview.api.connectors(!!fresh),
     connectors_help: () => window.pywebview.api.connectors_help(),
-    discord_portal: () => window.pywebview.api.discord_portal(),
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
     command_forget: (key) => window.pywebview.api.command_forget(key),
@@ -1229,16 +1225,13 @@
       workshop_run: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
       phone_info: () => Promise.resolve(DEMO_PHONE),
-      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled, discord: true }),
+      connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled }),
       push_info: () => Promise.resolve(DEMO_PUSH),
       push_enable: (on) => Promise.resolve(Object.assign(DEMO_PUSH, { enabled: !!on })),
       push_test: () => Promise.resolve({ ok: true, error: '' }),
       phone_enable: (on) => Promise.resolve(Object.assign(DEMO_PHONE, { enabled: !!on, running: !!on })),
       phone_new_key: () => Promise.resolve(DEMO_PHONE),
       alexa_info: () => Promise.resolve(DEMO_ALEXA),
-      discord_info: () => Promise.resolve({ configured: true, name: 'Jarvis', guilds: ['Georgs Gaming-Zentrale'], error: '' }),
-      discord_save: () => Promise.resolve({ configured: true, name: 'Jarvis', guilds: [], error: '' }),
-      discord_invite: () => Promise.resolve({ ok: true }),
       tailscale_info: () => Promise.resolve({ installed: true, running: true, name: 'georgs-pc.tail1234.ts.net', error: '', url: DEMO_TS.url }),
       tailscale_enable: (on) => { DEMO_TS.url = on ? 'https://georgs-pc.tail1234.ts.net/' : ''; return Promise.resolve({ ok: true, url: DEMO_TS.url, error: '' }); },
       tailscale_help: () => Promise.resolve(true),
@@ -1247,7 +1240,6 @@
       labor_info: () => (/[?&]labor\b/.test(location.search) ? Promise.resolve(DEMO_LABOR) : Promise.reject(new Error('kein Labor'))),
       labor_open: () => Promise.resolve({ ok: false, error: 'Im Demo-Modus öffnet sich kein Ordner.' }),
       werkzeug_loeschen: () => Promise.resolve(true),
-      discord_portal: () => Promise.resolve(true),
       alexa_enable: (on) => Promise.resolve(Object.assign(DEMO_ALEXA, { enabled: !!on, connected: !!on })),
       alexa_copy: () => Promise.resolve({ ok: true, text: '{}' }),
       alexa_console: () => Promise.resolve(true),
@@ -1349,7 +1341,6 @@
       { id: 'b2', days: 'Freitags', time: '20:00', command: 'Zockmodus' },
     ],
     skills: [
-      { name: 'discord-server', description: 'Einen Discord-Server gestalten oder umbauen, im Hintergrund ohne Maus.', learned: false },
       { name: 'morgen-briefing', description: 'Morgen-Briefing, wenn Sie „Guten Morgen“ oder „Briefing“ sagen.', learned: false },
       { name: 'recherche', description: 'Gründliche Recherche oder Vergleich, mit Bericht im Notizbuch.', learned: false },
       { name: 'obs-aufnahme', description: 'Ein Video mit OBS aufnehmen und für YouTube exportieren.', learned: true },

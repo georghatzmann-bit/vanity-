@@ -380,12 +380,14 @@ if ($Neu -and (Test-Path $venvDir)) {
 $laufwerk = [IO.Path]::GetPathRoot($jarvisDir)
 $frei = [int64]-1
 try { $frei = (New-Object -TypeName IO.DriveInfo -ArgumentList $laufwerk).AvailableFreeSpace } catch {}
-# Neu: Python-Umgebung, Spracherkennung und Claude Code brauchen zusammen etwa 2,5 GB.
-$noetig = if (Test-Path $venvPy) { 512MB } else { 2GB }
+# Neu: Python-Umgebung, lokale Stimme und Spracherkennung und Claude Code brauchen zusammen etwa 4 GB.
+# Fehlt nur die lokale Stimme (Update von einer älteren Version), etwa 1,5 GB.
+$lokalDa = Test-Path (Join-Path $venvDir "Lib\site-packages\pocket_tts")
+$noetig = if ((Test-Path $venvPy) -and $lokalDa) { 512MB } elseif (Test-Path $venvPy) { 1536MB } else { 3584MB }
 if ($frei -ge 0 -and $frei -lt $noetig) {
     $name = $laufwerk.TrimEnd("\")
     Stop-Install 11 ("Auf Laufwerk $name ist zu wenig Platz frei (noch {0:N1} GB)." -f ($frei / 1GB)) `
-        'Jarvis braucht etwa 3 GB. Leeren Sie zum Beispiel den Papierkorb oder deinstallieren Sie ein altes Spiel. Dann „Nochmal versuchen“.'
+        'Jarvis braucht etwa 4 GB. Leeren Sie zum Beispiel den Papierkorb oder deinstallieren Sie ein altes Spiel. Dann „Nochmal versuchen“.'
 }
 Set-Share 75
 
@@ -655,30 +657,41 @@ if ($code -eq 0) {
 }
 Set-Share 8
 
-Start-Step "Spracherkennung laden (460 MB)"
-Set-Detail "Spracherkennung wird geladen (etwa 460 MB)"
-# Den Fortschritt verrät die Größe des Modell-Ordners (die Dateien von Systran/faster-whisper-small
-# sind zusammen 486 215 847 Bytes). Ohne Xet lädt huggingface_hub die Datei am Stück
-# (kein zweiter Zwischenspeicher, der doppelt Platz kostet).
-$modellGroesse = [int64]486215847
-$hfHub = if ($env:HF_HUB_CACHE) { $env:HF_HUB_CACHE } elseif ($env:HF_HOME) { Join-Path $env:HF_HOME "hub" } else { Join-Path $env:USERPROFILE ".cache\huggingface\hub" }
-$modellDir = Join-Path $hfHub "models--Systran--faster-whisper-small"
-$script:modellVorher = Get-FolderSize $modellDir
-$env:HF_HUB_DISABLE_XET = "1"
-$code = Invoke-Quiet $venvPy @("-c", "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')") 1800 {
+# Jarvis' Stimme und Spracherkennung laufen ganz auf dem PC (Pocket TTS und Parakeet, jarvis\localvoice.py):
+# keine Windows- oder Microsoft-Stimme, kein Internet nötig. Erst die Pakete, dann die Modelle und Hörproben.
+Start-Step "Jarvis' Stimme und Spracherkennung (etwa 1,3 GB)"
+Set-Detail "Jarvis' Stimme wird installiert"
+$lokalOk = $false
+# Nur für den Build-Test des Ersatzwegs (Whisper): JARVIS_OHNE_LOKALE_STIMME=1
+$code = if ($env:JARVIS_OHNE_LOKALE_STIMME -eq "1") { 1 } else { Invoke-Quiet $venvPy @("-m", "pip", "install", "pocket-tts", "onnx-asr[cpu,hub]", "--disable-pip-version-check") 3600 {
     param($neu, $sekunden)
-    $geladen = (Get-FolderSize $modellDir) - $script:modellVorher
-    if ($geladen -gt 1MB) {
-        Set-Share (10 + 88 * [math]::Min(1, $geladen / $modellGroesse))
-        Set-DetailLive ("Spracherkennung wird geladen: {0} von {1} MB" -f (Format-MB ([math]::Min($geladen, $modellGroesse))), (Format-MB $modellGroesse))
+    foreach ($z in $neu) {
+        if ($z -match '^Downloading\s+(\S+)') { Set-DetailLive ("Jarvis' Stimme wird installiert: " + ($Matches[1] -replace '-\d.*$', '')) }
     }
-}
-Remove-Item Env:\HF_HUB_DISABLE_XET -ErrorAction SilentlyContinue
+    Set-Share ([math]::Min(45, 10 + $sekunden / 8))
+} }
 if ($code -eq 0) {
-    Write-Ok
+    Set-Share 50
+    Set-Detail "Stimme und Spracherkennung werden geladen (etwa 900 MB)"
+    $code = Invoke-Quiet $venvPy @("-m", "jarvis.localvoice", "vorbereiten", (Join-Path $root "daten\stimmen")) 3600 {
+        param($neu, $sekunden)
+        foreach ($z in $neu) {
+            if ($z -match '^(Lade|Hörprobe)') { Set-DetailLive $z.TrimEnd(".", " ") }
+        }
+        Set-Share ([math]::Min(97, 50 + $sekunden / 6))
+    }
+    $lokalOk = ($code -eq 0)
+}
+if ($lokalOk) {
+    Write-Ok "spricht und hört ohne Internet"
 } else {
-    Write-Warn "lädt Jarvis beim ersten Start"
-    Add-Warning "Die Spracherkennung lädt Jarvis beim ersten Start nach (etwa 460 MB)."
+    Write-Warn "holt Jarvis im Hintergrund nach"
+    Add-Warning "Jarvis' Stimme ließ sich gerade nicht ganz laden. Jarvis holt sie beim Start im Hintergrund nach (oder Einrichtung > Stimme > Lokal einrichten)."
+    # Bis dahin erkennt Whisper auf dem PC die Sprache: das Modell schon mal holen (etwa 460 MB).
+    Set-Detail "Ersatz-Spracherkennung wird geladen (etwa 460 MB)"
+    $env:HF_HUB_DISABLE_XET = "1"
+    $null = Invoke-Quiet $venvPy @("-c", "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8')") 1800
+    Remove-Item Env:\HF_HUB_DISABLE_XET -ErrorAction SilentlyContinue
 }
 Complete-Phase
 

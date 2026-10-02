@@ -215,13 +215,28 @@ class SpeakerFixesTest(unittest.TestCase):
         speaker.stop()
         self.assertTrue(player.should_stop())
 
-    def test_human_voice_right_after_boot(self):
-        tts = TextToSpeech({"engine": "edge"})
+    def test_local_voice_right_after_boot(self):
+        """Gleich nach dem Hochfahren (monotonic noch klein) spricht die lokale Stimme, keine Reserve."""
+        class Voice:
+            def __init__(self, voice):
+                pass
+
+            def start(self):
+                pass
+
+            def loading(self):
+                return False
+
+            def stream(self, text, feed):
+                feed(np.full(2400, 500, dtype=np.int16).tobytes())
+
+        with mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}), \
+                mock.patch("jarvis.localvoice.PocketVoice", Voice):
+            tts = TextToSpeech({"engine": "edge"})  # alte Einstellung: wird lokal
         with mock.patch("jarvis.tts.time.monotonic", return_value=35.0), \
-                mock.patch("jarvis.tts.synthesize_edge", return_value=(np.zeros(10, dtype=np.int16), 24000)) as edge, \
-                mock.patch("jarvis.tts.synthesize_windows", side_effect=AssertionError("Windows-Stimme")):
+                mock.patch.object(tts, "_offline", side_effect=AssertionError("Reservestimme")):
             tts.synthesize("Jarvis ist online, Sir.")
-        edge.assert_called_once()
+        self.assertTrue(tts.used_main)
 
 
 class BrainFixesTest(unittest.TestCase):

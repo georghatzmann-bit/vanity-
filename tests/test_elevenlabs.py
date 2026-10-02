@@ -260,7 +260,7 @@ class ElevenLabsVoiceTest(unittest.TestCase):
         self.fake = FakeElevenLabs()
         self.folder = TemporaryDirectory()
         self.problems = []
-        cfg = {"engine": "elevenlabs", "voice": "de-DE-ConradNeural", "elevenlabs_key": "sk_test",
+        cfg = {"engine": "elevenlabs", "elevenlabs_key": "sk_test",
                "elevenlabs_voice": "v_george", "elevenlabs_model": "eleven_v4_turbo"}
         self.tts = TextToSpeech(cfg, self.folder.name, on_problem=self.problems.append)
         self.tts._eleven.base = self.fake.url
@@ -291,22 +291,24 @@ class ElevenLabsVoiceTest(unittest.TestCase):
         self.tts.synthesize("Und noch einer.")
         self.assertEqual(self.fake.requests[-1][3]["model_id"], "eleven_flash_v2_5")
 
-    def test_empty_balance_switches_to_microsoft_and_tells_once(self):
+    def test_empty_balance_switches_to_the_local_voice_and_tells_once(self):
         self.fake.speech_error = (401, {"detail": {"status": "quota_exceeded", "message": "quota exceeded"}})
-        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+        with mock.patch.object(self.tts, "_offline", return_value=(tone(), 24000)) as local:
             samples, rate = self.tts.synthesize("Ein Satz.")
             self.tts.synthesize("Noch ein Satz.")
         self.assertIsInstance(samples, np.ndarray)
-        self.assertEqual(edge.call_count, 2)
+        self.assertEqual(local.call_count, 2)
         self.assertEqual(len([r for r in self.fake.requests if "/stream" in r[1]]), 1, "danach erst einmal Pause")
         self.assertEqual(len(self.problems), 1)
         self.assertIn("Guthaben", self.problems[0])
+        self.assertIn("lokalen Stimme", self.problems[0])
+        self.assertNotIn("Microsoft", self.problems[0])
 
-    def test_library_voice_on_free_plan_speaks_microsoft_and_explains_once(self):
+    def test_library_voice_on_free_plan_speaks_locally_and_explains_once(self):
         self.fake.tier = "free"
         self.fake.library_voices = [("v_lennard", "Lennard - Warm & Trustworthy")]
         self.tts._eleven_voice = "v_lennard"
-        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+        with mock.patch.object(self.tts, "_offline", return_value=(tone(), 24000)) as edge:
             samples, _ = self.tts.synthesize("Ein Satz.")
             self.tts.synthesize("Noch ein Satz.")
         self.assertIsInstance(samples, np.ndarray)
@@ -336,7 +338,7 @@ class ElevenLabsVoiceTest(unittest.TestCase):
                 pass
 
         speaker = Speaker(self.tts.synthesize, player=SlowPlayer())
-        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+        with mock.patch.object(self.tts, "_offline", return_value=(tone(), 24000)) as edge:
             for i in range(7):
                 speaker.say(f"Das hier ist der Satz Nummer {i} einer etwas längeren Antwort von Jarvis, Sir.")
             self.assertTrue(speaker.wait(40))
@@ -352,17 +354,17 @@ class ElevenLabsVoiceTest(unittest.TestCase):
             self.fake.speech_error = None
 
         threading.Thread(target=free_again, daemon=True).start()
-        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+        with mock.patch.object(self.tts, "_offline", return_value=(tone(), 24000)) as edge:
             audio, _ = self.tts.synthesize("Ein Satz, während ElevenLabs kurz ausgelastet ist.")
         self.assertIsInstance(audio, StreamingAudio)
         edge.assert_not_called()
 
-    def test_without_voice_or_key_it_is_plain_microsoft(self):
+    def test_without_voice_or_key_it_is_the_local_voice(self):
         tts = TextToSpeech({"engine": "elevenlabs", "elevenlabs_key": "sk_test"}, None)
         self.assertIsNone(tts._eleven)
-        with mock.patch("jarvis.tts.synthesize_edge", return_value=(tone(), 24000)) as edge:
+        with mock.patch.object(tts, "_offline", return_value=(tone(), 24000)) as local:
             tts.synthesize("Hallo.")
-        edge.assert_called_once()
+        local.assert_called_once()
 
 
 if __name__ == "__main__":

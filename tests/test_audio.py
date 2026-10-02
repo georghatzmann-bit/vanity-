@@ -72,6 +72,80 @@ class CommandRecorderTest(unittest.TestCase):
         self.assertGreater(done, 15 * 25, "nicht vor dem Ende des Diktats abgeschnitten")
         self.assertLess(done * 0.08, 60)
 
+    def test_pause_starts_early_recognition_and_speech_cancels_it(self):
+        events = []
+        rec = CommandRecorder(silence_seconds=0.9, energy_threshold=1000,
+                              on_pause=lambda frames: events.append(("pause", len(frames))),
+                              on_resume=lambda: events.append(("weiter",)))
+        # reden, 0,4 s Pause (Vorab-Erkennung), weiterreden (verfällt), dann Schluss
+        done = self.run_frames(rec, [5000] * 10 + [10] * 5 + [5000] * 10 + [10] * 20)
+        self.assertEqual(events[0], ("pause", 14), "nach 4 x 80 ms Stille, mit allem bis dahin")
+        self.assertEqual(events[1], ("weiter",))
+        self.assertEqual(events[2][0], "pause")
+        self.assertEqual(len(events), 3, "pro Pause nur einmal")
+        self.assertFalse(rec.ended_early)
+        self.assertEqual(done, 25 + 14)  # nach 1,6 s Sprechen wartet Jarvis 1,1 s
+
+    def test_finished_instant_command_ends_after_half_a_second(self):
+        # "Öffne Spotify": Der Vorab-Text ist ein fertiger Sofort-Befehl, also nicht 0,9 s warten
+        rec = CommandRecorder(silence_seconds=0.9, energy_threshold=1000,
+                              on_pause=lambda frames: None, early_end=lambda: True)
+        done = self.run_frames(rec, [5000] * 8 + [10] * 40)
+        self.assertEqual(done, 8 + 6)  # 6 x 80 ms = 0,48 s statt 0,96 s
+        self.assertTrue(rec.ended_early)
+
+    def test_no_early_end_for_questions_or_long_sentences(self):
+        rec = CommandRecorder(silence_seconds=0.9, energy_threshold=1000,
+                              on_pause=lambda frames: None, early_end=lambda: False)
+        self.assertEqual(self.run_frames(rec, [5000] * 8 + [10] * 40), 8 + 12, "kein Sofort-Befehl: normale Pause")
+        rec = CommandRecorder(silence_seconds=0.9, energy_threshold=1000,
+                              on_pause=lambda frames: None, early_end=lambda: True)
+        done = self.run_frames(rec, [5000] * 40 + [10] * 40)
+        self.assertFalse(rec.ended_early, "wer länger redet, hängt eher noch etwas an")
+        self.assertGreater(done, 40 + 6)
+
+
+class EarlyTextTest(unittest.TestCase):
+    def make(self, transcribe, commands=("öffne spotify",)):
+        from jarvis.voice import EarlyText
+
+        return EarlyText(transcribe, lambda text: text.lower().strip(" .") in commands)
+
+    def test_text_from_the_pause_is_the_result(self):
+        calls = []
+        early = self.make(lambda audio: calls.append(audio.size) or "Öffne Spotify.")
+        early.pause([frame(5000), frame(5000)])
+        self.assertEqual(early.result(), "Öffne Spotify.")
+        self.assertTrue(early.used)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(early.complete())
+
+    def test_speaking_on_makes_it_invalid(self):
+        early = self.make(lambda audio: "Öffne Spotify")
+        early.pause([frame(5000)])
+        early.resume()
+        self.assertIsNone(early.result(), "Georg hat weitergeredet: neu erkennen")
+        self.assertFalse(early.complete())
+
+    def test_unfinished_sentences_and_questions_do_not_end_early(self):
+        early = self.make(lambda audio: "Öffne Spotify und")
+        early.pause([frame(5000)])
+        early.result()
+        self.assertFalse(early.complete(), "nach „und“ kommt noch etwas")
+        early = self.make(lambda audio: "Wie wird das Wetter morgen in Wien")
+        early.pause([frame(5000)])
+        early.result()
+        self.assertFalse(early.complete(), "keine Sofort-Befehl: normale Pause")
+
+    def test_failed_recognition_falls_back_to_the_normal_way(self):
+        def broken(audio):
+            raise RuntimeError("kaputt")
+
+        early = self.make(broken)
+        early.pause([frame(5000)])
+        self.assertIsNone(early.result())
+        self.assertIsNone(self.make(lambda audio: "x").result(), "ohne Pause gibt es nichts")
+
 
 class ResampleTest(unittest.TestCase):
     def test_48k_block_becomes_16k_block(self):
@@ -354,50 +428,38 @@ class VoiceCacheTest(unittest.TestCase):
 
         calls = []
 
-        def fake_edge(text, voice, rate="+0%", pitch="+0Hz"):
-            calls.append(text)
-            return (np.full(2400, 9000, np.int16), 24000)
+        class Voice:
+            ready = __import__("threading").Event()
+            error = None
 
-        with TemporaryDirectory() as folder, mock.patch.object(tts, "synthesize_edge", fake_edge):
-            speech = tts.TextToSpeech({"voice": "de-DE-ConradNeural"}, folder)
+            def __init__(self, voice):
+                self.ready.set()
+
+            def start(self):
+                pass
+
+            def loading(self):
+                return False
+
+            def usable(self, wait=0.0):
+                return True
+
+            def stream(self, text, feed):
+                calls.append(text)
+                feed(np.full(2400, 9000, np.int16).tobytes())
+
+        with TemporaryDirectory() as folder, mock.patch("jarvis.localvoice.PocketVoice", Voice), \
+                mock.patch("jarvis.localvoice.installed", return_value={"tts": True, "stt": True}):
+            speech = tts.TextToSpeech({"engine": "lokal"}, folder)
             first, _ = speech.synthesize("Einen Moment, Sir.")
+            first = tts.materialize(first)
             again, rate = speech.synthesize("Einen Moment, Sir.")
-            speech.synthesize("Ein sehr langer Satz, " * 5)
-            speech.synthesize("Ein sehr langer Satz, " * 5)
+            for _ in range(2):
+                tts.materialize(speech.synthesize("Ein sehr langer Satz, " * 5)[0])
         self.assertEqual(calls.count("Einen Moment, Sir."), 1)
         self.assertEqual(calls.count("Ein sehr langer Satz, " * 5), 2, "lange Sätze werden nicht gespeichert")
         self.assertTrue(np.array_equal(first, again))
         self.assertEqual(rate, 24000)
-
-
-class OfflineVoiceTest(unittest.TestCase):
-    def test_piper_comes_before_the_windows_voice(self):
-        from jarvis import tts
-
-        class FakePiper:
-            def synthesize(self, text):
-                return np.full(2205, 8000, np.int16), 22050
-
-        problems = []
-        speech = tts.TextToSpeech({"voice": "de-DE-ConradNeural"}, on_problem=problems.append)
-        with mock.patch.object(tts, "synthesize_edge", side_effect=OSError("SSL: CERTIFICATE_VERIFY_FAILED")), \
-                mock.patch.object(tts, "piper_voice", return_value=FakePiper()), \
-                mock.patch.object(tts, "synthesize_windows") as windows:
-            samples, rate = speech.synthesize("Sehr wohl, Sir.")
-        self.assertEqual(rate, 22050)
-        windows.assert_not_called()
-        self.assertFalse(speech.used_edge)
-        self.assertIn("Virenscanner", problems[0])
-
-    def test_windows_voice_is_the_last_resort(self):
-        from jarvis import tts
-
-        speech = tts.TextToSpeech({"voice": "de-DE-ConradNeural"})
-        with mock.patch.object(tts, "synthesize_edge", side_effect=TimeoutError()), \
-                mock.patch.object(tts, "piper_voice", return_value=None), \
-                mock.patch.object(tts, "synthesize_windows", return_value=(np.full(100, 5000, np.int16), 16000)):
-            _samples, rate = speech.synthesize("Hallo.")
-        self.assertEqual(rate, 16000)
 
 
 class ChimeTest(unittest.TestCase):
@@ -560,12 +622,17 @@ class CloudSpeechTest(unittest.TestCase):
     def test_engine_choice(self):
         from jarvis.stt import CloudSpeechToText, make_transcriber
 
+        from jarvis.stt import LocalSpeechToText
+
         cfg = {"engine": "auto", "groq_key": "gsk_x", "model": "small", "language": "de"}
-        self.assertIsInstance(make_transcriber(cfg), CloudSpeechToText)
-        with mock.patch("jarvis.stt.SpeechToText") as local:
-            make_transcriber(dict(cfg, groq_key=""))
-            make_transcriber(dict(cfg, engine="lokal"))
-        self.assertEqual(local.call_count, 2)
+        self.assertIsInstance(make_transcriber(cfg), CloudSpeechToText, "Groq nur, wenn ausdrücklich gewählt")
+        with mock.patch("jarvis.stt.SpeechToText") as whisper, \
+                mock.patch("jarvis.localvoice.installed", return_value={"tts": False, "stt": False}):
+            for chosen in (dict(cfg, groq_key=""), dict(cfg, engine="lokal"), {"groq_key": "gsk_x", "model": "small", "language": "de"}):
+                local = make_transcriber(chosen)
+                self.assertIsInstance(local, LocalSpeechToText)
+                local._current()  # lädt erst bei Bedarf (oder beim Vorwärmen)
+        self.assertEqual(whisper.call_count, 3)
 
     def test_whisper_repeating_the_hint_is_ignored(self):
         from jarvis.stt import clean_transcript

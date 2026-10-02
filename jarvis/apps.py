@@ -163,7 +163,13 @@ def find_known(name: str) -> KnownApp | None:
     if wanted in table:
         return table[wanted]
     close = difflib.get_close_matches(wanted, list(table), n=1, cutoff=0.85)
-    return table[close[0]] if close else None
+    if close:
+        return table[close[0]]
+    # Wie es klingt: "Spottifei" ist Spotify, "Diskort" ist Discord (klang.py)
+    from .klang import closest
+
+    heard = closest(wanted, list(table), cutoff=0.86, same_start=True)  # "Reddit" ist nicht "regedit"
+    return table[heard] if heard else None
 
 
 # ---------------------------------------------------------------------- Startmenü
@@ -270,7 +276,13 @@ def best_match(name: str, apps: list[tuple[str, str]], strict: bool = False) -> 
         return min(contains)[1]
     by_norm = {norm: entry for entry, norm in candidates}
     close = difflib.get_close_matches(wanted, list(by_norm), n=1, cutoff=0.8)
-    return by_norm[close[0]] if close else None
+    if close:
+        return by_norm[close[0]]
+    # Zuletzt nach Klang: Die Spracherkennung schreibt Namen oft, wie sie klingen ("Spottifei")
+    from .klang import closest
+
+    heard = closest(wanted, list(by_norm), cutoff=0.86, same_start=True)
+    return by_norm[heard] if heard else None
 
 
 def load_start_apps() -> list[tuple[str, str]]:

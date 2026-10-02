@@ -47,7 +47,7 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 6
+CONFIG_VERSION = 7
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
@@ -68,6 +68,16 @@ _UPGRADES = {
     ],
     # Die Werkstatt wählt selbst: Opus für große Aufträge, Sonnet für kleine.
     6: [("werkstatt", "modell", "sonnet", "auto")],
+    # Georg: "Voice komplett lokal, keine Windows-Stimme". Stimme und Erkennung laufen auf dem PC
+    # (die Schlüssel für ElevenLabs und Groq bleiben gespeichert, in der Einrichtung wieder wählbar).
+    7: [
+        ("tts", "engine", "edge", "lokal"),
+        ("tts", "engine", "windows", "lokal"),
+        ("tts", "engine", "elevenlabs", "lokal"),
+        ("stt", "engine", "auto", "lokal"),
+        ("stt", "engine", "groq", "lokal"),
+        ("stt", "engine", "cloud", "lokal"),
+    ],
 }
 # Einträge, die aus Listen in einer älteren config.toml verschwinden (Version, Abschnitt, Schlüssel, Einträge).
 # Jarvis 2 darf Programme ohne Nachfrage installieren.

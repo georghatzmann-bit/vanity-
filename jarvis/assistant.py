@@ -28,6 +28,11 @@ FILLERS = [
     "Ich kümmere mich darum.",
     "Einen Augenblick.",
 ]
+# Häufige kurze Antworten: Die Stimme rechnet sie einmal im Voraus (tts.prepare), dann kommen sie sofort.
+PREPARED = [
+    "Erledigt, Sir.", "Gern geschehen, Sir.", "Abgebrochen, Sir.", "Lauter.", "Leiser.",
+    "Das hat leider nicht geklappt, Sir.", "Sehr wohl. Ich bin im Hintergrund.", "Gute Nacht, Sir.",
+]
 
 # Arbeitsschritte, die länger dauern, sagt Jarvis an ("Ich installiere Spotify."). Kurze nicht.
 PROGRESS_AFTER = 1.5
@@ -133,6 +138,12 @@ class Assistant:
     def set_speaking(self, value: bool) -> None:
         """Wird vom Speaker gemeldet, wenn er anfängt oder aufhört zu sprechen."""
         self._speaking = value
+        timing = getattr(self, "timing", None)
+        if value and isinstance(timing, dict) and timing.get("heard_at"):
+            # Tempo messbar: vom Satzende bis zum ersten Ton der Antwort (logs\jarvis.log)
+            self.timing = None
+            log.info("Tempo: erkannt in %.2f s, erster Ton nach %.2f s ab Satzende",
+                     float(timing.get("recognized", 0.0)), time.monotonic() - float(timing["heard_at"]))
         self.update_state()
 
     def update_state(self) -> None:
@@ -765,6 +776,7 @@ class Assistant:
         App die, über die Georg mit der Person sonst schreibt, sonst Discord."""
         from . import messaging
 
+        person = self.known_person(person)
         app = app or self.contact_app(person) or "discord"
         found = messaging.find_app(app)
         where = "Discord" if person.startswith("#") else (found.name if found else app)
@@ -790,6 +802,8 @@ class Assistant:
         from . import messaging
 
         kind, target = intent.arg, intent.data.get("target", "")
+        if kind in ("person", "call"):
+            target = self.known_person(target)
         if intent.data.get("any_app") and self.contact_app(target) in ("whatsapp", "telegram"):
             return None  # "Ruf Max an", Max schreibt aber über WhatsApp: das versucht Claude
         shown = target[:1].upper() + target[1:]
@@ -1334,6 +1348,25 @@ class Assistant:
         if isinstance(routine, (Occasion, Hint)):
             return " ".join(said) or "Sehr wohl, Sir."  # "An Max ist raus, Sir." oder warum nicht
         return random.choice([f"Sehr wohl. {routine.label}, Sir.", f"Kommt sofort, Sir: {routine.label}."])
+
+    def known_person(self, person: str) -> str:
+        """Ein gehörter Name, so wie die Person in Georgs Kontakten heißt ("Maks" -> "Max",
+        "Lucka" -> "Luca"), damit die Nachricht beim Richtigen landet. Unbekannt: unverändert."""
+        memory = getattr(self, "memory", None)
+        if memory is None or not person or person.startswith("#"):
+            return person
+        try:
+            names = [str(c.get("name", "")) for c in memory.contacts() if c.get("name")]
+        except Exception:
+            return person
+        if any(name.lower() == person.lower() for name in names):
+            return person
+        from .klang import closest
+
+        heard = closest(person, names, cutoff=0.8, same_start=True)
+        if heard:
+            log.info("Name nach Klang: %s -> %s", person, heard)
+        return heard or person
 
     def contact_app(self, person: str) -> str:
         """Über welche App Georg mit dieser Person sonst schreibt (aus dem Gedächtnis)."""

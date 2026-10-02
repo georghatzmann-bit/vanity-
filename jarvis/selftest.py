@@ -73,11 +73,11 @@ REQUIRED = {
     "openwakeword": "openwakeword",
     "onnxruntime": "onnxruntime",
     "faster_whisper": "faster-whisper",
-    "edge_tts": "edge-tts",
-    "miniaudio": "miniaudio",
 }
 OPTIONAL = {
-    "pyttsx3": ("pyttsx3", "Windows-Stimme als Reserve ohne Internet"),
+    "pocket_tts": ("pocket-tts", "Jarvis' lokale Stimme"),
+    "onnx_asr": ("onnx-asr", "lokale Spracherkennung (Parakeet)"),
+    "piper": ("piper-tts", "lokale Reservestimme"),
     "keyboard": ("keyboard", "Tastenkürzel zum Stummschalten und Musiktasten"),
     "webview": ("pywebview", "Jarvis-Fenster"),
     "psutil": ("psutil", "CPU- und RAM-Anzeige"),
@@ -176,21 +176,25 @@ def check_speakers(r: Report, play_sound: bool) -> None:
 
 
 def check_voice(r: Report, cfg: dict) -> None:
-    from .tts import synthesize_edge, synthesize_windows
+    """Spricht Jarvis mit seiner lokalen Stimme? (Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.)"""
+    from .localvoice import installed
+    from .tts import TextToSpeech, materialize
 
-    tts = cfg["tts"]
-    if tts.get("engine", "edge") == "edge":
-        try:
-            samples, rate = synthesize_edge("Selbsttest", tts["voice"], tts["rate"], tts["pitch"])
-            r.add("Jarvis-Stimme", "ok", f"{tts['voice']} ({len(samples) / rate:.1f} s Testsatz)")
-            return
-        except Exception as exc:
-            r.add("Jarvis-Stimme", "warnung", f"Microsoft-Stimme nicht erreichbar ({exc})", "Internet prüfen. Solange spricht Jarvis mit der Windows-Stimme.")
+    if not installed()["tts"]:
+        r.add("Jarvis-Stimme", "warnung", "die lokale Stimme ist nicht eingerichtet, Jarvis spricht mit der Reservestimme",
+              "Einrichtung > Stimme > Lokal > „Lokal einrichten“ klicken (oder werkzeuge\\Neu-installieren.bat).")
+        return
     try:
-        samples, rate = synthesize_windows("Selbsttest")
-        r.add("Windows-Stimme", "ok", f"{len(samples) / rate:.1f} s Testsatz")
+        started = time.monotonic()
+        speech = TextToSpeech(dict(cfg["tts"], engine="lokal"))
+        samples, rate = speech.synthesize("Selbsttest")
+        samples = materialize(samples)
+        if not speech.used_main:
+            raise RuntimeError("nur die Reservestimme hat geantwortet")
+        r.add("Jarvis-Stimme", "ok", f"lokal ({len(samples) / rate:.1f} s Testsatz, {time.monotonic() - started:.0f} s mit Laden)")
     except Exception as exc:
-        r.add("Windows-Stimme", "warnung", f"nicht verfügbar ({exc})")
+        r.add("Jarvis-Stimme", "warnung", f"die lokale Stimme spricht nicht ({exc})",
+              "Einrichtung > Stimme > Lokal > „Nochmal versuchen“ (lädt die Stimme neu).")
 
 
 def check_microphone(r: Report, cfg: dict, seconds: float) -> None:

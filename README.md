@@ -1,6 +1,6 @@
 # Jarvis
 
-Dein eigener J.A.R.V.I.S. für Windows: Du sagst „Hey Jarvis“ oder drückst Strg + Alt + J, sprichst deinen Befehl, und Jarvis erledigt ihn auf deinem PC. Er antwortet wie der Butler aus Iron Man, mit einer menschlichen Stimme, lernt deine Gewohnheiten und ist auch über Handy, Alexa und Discord erreichbar. Er läuft unsichtbar im Hintergrund, mit einer kleinen Anzeige oben am Bildschirm und einem großen HUD-Fenster auf Wunsch.
+Dein eigener J.A.R.V.I.S. für Windows: Du sagst „Hey Jarvis“ oder drückst Strg + Alt + J, sprichst deinen Befehl, und Jarvis erledigt ihn auf deinem PC. Er antwortet wie der Butler aus Iron Man, mit einer menschlichen Stimme, lernt deine Gewohnheiten und ist auch über Handy und Alexa erreichbar. Er läuft unsichtbar im Hintergrund, mit einer kleinen Anzeige oben am Bildschirm und einem großen HUD-Fenster auf Wunsch.
 
 **Schnellstart:** [JarvisSetup.exe](https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe) laden, doppelklicken, die Einrichtung durchklicken. Klappt auch auf einem leeren PC: Python, Spracherkennung, Stimmen und Claude Code holt der Installer selbst. Schritt für Schritt in der [ANLEITUNG.md](ANLEITUNG.md).
 
@@ -10,13 +10,13 @@ Dein eigener J.A.R.V.I.S. für Windows: Du sagst „Hey Jarvis“ oder drückst 
 Mikrofon → "Hey Jarvis" (openWakeWord, lokal), "Jarvis"/"Hallo Jarvis" (halber Treffer + Prüfung per Spracherkennung, mit Schlüssel über Porcupine), Strg+Alt+J oder im Gespräch einfach weiterreden
 Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntfy.sh (verschlüsselt)
          → Satzende per Silero VAD (lokal)
-         → Sprache zu Text: Groq Whisper large-v3-turbo (gratis Schlüssel), lokal Parakeet v3 oder faster-whisper
+         → Sprache zu Text auf dem PC: Parakeet v3 (Ersatz faster-whisper), schon in der Sprechpause vorab erkannt
          → Sofort-Befehle direkt: Programme, Webseiten, Chatnachrichten, Discord ohne Maus, Erinnerungen,
            Termine, Zeitpläne, eigene Befehle, Notizen, Herunterfahren, Licht, Gedächtnis, Werkstatt, Musik
          → Bauaufträge ("Bau mir …"): Werkstatt mit eigenem Claude-Prozess (Opus/Sonnet) und Projektordner
          → alles andere: Claude Code (dein Claude-Abo), läuft dauerhaft, Antwort wird gestreamt,
            mit Fähigkeiten (SKILL.md, nur bei Bedarf gelesen) und Notizbuch (Markdown, Obsidian)
-         → Stimme: ElevenLabs (Premium) oder lokal Pocket TTS (gratis, ohne Internet), Microsoft Neural, Piper
+         → Stimme auf dem PC: Pocket TTS (Reserve Piper), auf Wunsch ElevenLabs. Keine Windows-/Microsoft-Stimme
          → Anzeige oben am Bildschirm, Jarvis-Fenster, Tray-Symbol, Handy-App, Alexa
 ```
 
@@ -27,20 +27,20 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Volle Freigabe:** Jarvis installiert, deinstalliert, räumt in den Papierkorb, führt Administrator-Befehle aus (Windows fragt einmal), fährt herunter und startet neu, ohne nachzufragen. Herunterfahren hat 15 Sekunden Vorlauf, „Stopp“ hält es auf. Nur vor Käufen und vor Nachrichten, deren Inhalt du nicht selbst gesagt hast, fragt er. Abschaltbar in der Einrichtung (`[rechte] volle_freigabe`).
 - **Sofort-Befehle ohne Claude** (unter einer Sekunde): „Was kannst du?“, „Öffne Spotify“, „Schließ Discord“, „Installier mir Steam“, „Geh auf Reddit“, „Spiel Thunderstruck“, „Dunkelmodus an“, „Wie wird das Wetter morgen?“, „Was ist 15 mal 23?“, „Fahr den PC herunter“, „Gute Nacht“ (bietet das Herunterfahren an), „Weck mich um 7“, „Mach einen Screenshot“, „Minimiere alles“, „Wie viel Speicher ist frei?“, „Mach das Licht im Wohnzimmer an“, Lautstärke, Musik, Erinnerungen, Timer, mehrere Befehle auf einmal.
 - **Discord ohne Maus:** „Schreib Max auf Discord, bin gleich da“, „Geh in den Sprachkanal Zocken“, „Ruf Max auf Discord an“, „Discord stumm“. Jarvis nutzt Discords Schnellsuche und Tastenkürzel, prüft am Fenstertitel, ob er richtig gelandet ist, versucht es bei einer Störung (Maus bewegt, anderes Fenster vorn) von selbst noch zweimal und bringt dich danach zurück ins Spiel. Auch WhatsApp und Telegram.
-- **Discord-Server gestalten im Hintergrund:** Jarvis' eigener Bot legt Kanäle, Rollen, Regeln und Begrüßung an, über die offizielle Discord-Schnittstelle, ohne dein Spiel zu stören.
 - **Wählt das passende Gehirn:** Für jede Aufgabe entscheidet Jarvis, welches Claude-Modell und wie viel Nachdenken sie braucht. Kurze Fragen schnell (Sonnet, wenig Nachdenken), Texte und Recherche mittel, Fehlersuche, Code, Analysen und Verträge gründlich (Opus), „maximal“ (Fable) nur auf Wunsch. Nachfragen bleiben auf der Stufe, „Das stimmt nicht“ geht eine Stufe hoch. Umgestellt wird im laufenden Claude-Prozess, ohne Wartezeit. Im Verlauf steht bei jeder Antwort, womit er gedacht hat.
 - **Meldet sich von selbst:** ein hängendes Programm (mit Angebot zum Neustart), ein Programm, das im Hintergrund den Prozessor frisst, voller Speicher, Akku, Internet weg, ein neues Programm im Autostart, Windows wartet auf einen Neustart, heiße Grafikkarte. Dazu ein Überblick am Morgen (Wetter, Erinnerungen, Geburtstage, Vorhaben), „Während Sie weg waren …“ und nach drei Stunden eine Pause. Nie beim Zocken, nie mitten ins Gespräch, „Nie wieder“ stellt eine Art ab.
 - **Lernt dich kennen:** „Merk dir, …“, Kontakte mit ihrer App („Sag Max …“), Gewohnheiten auch mit Discord-Sprachkanal, Geburtstage mit Angebot zu gratulieren, jede Nacht ein kurzer Rückblick auf die Gespräche (auch was du vorhattest: „Ich muss morgen noch zur Post“ kommt am nächsten Morgen im Überblick). Vorschläge kommen ohne Fenster, nebenbei am Ende einer normalen Antwort („… Übrigens, Sir: Um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?“). Alles bleibt lokal (`daten\gedaechtnis.json`) und ist im Fenster einsehbar.
 - **Eigene Befehle und Zeitpläne:** „Wenn ich Zockmodus sage, öffne Discord und Steam“, danach reicht ein Wort. „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“: Jarvis erledigt es von selbst (beim Zocken wartet er).
 - **Termine, Mails und Shop über deine Konnektoren:** Jarvis benutzt die Dienste, die du auf claude.ai verbunden hast (Gmail, Google Kalender, Shopify, Spotify, Canva …): „Was steht heute an?“, „Trag morgen um 18 Uhr Training ein“, „Hab ich neue Mails?“, „Wie läuft der Shop?“. Keine eigenen Anbindungen, keine Passwörter in Jarvis. Claude Code fragt bei jedem Konnektor-Werkzeug nach, Jarvis antwortet selbst: lesen, suchen und eintragen ja, Löschen, Kaufen, Bezahlen und Veröffentlichen nie. Im Fenster unter Verbinden > Konnektoren steht, welche Jarvis sieht.
-- **Notizbuch und Fähigkeiten:** jedes Gespräch, Personen, Recherche-Berichte und Notizen als Markdown (in Obsidian verlinkt). Anleitungen für wiederkehrende Aufgaben (Discord-Server, Briefing, Recherche, PC-Pflege, Spiele), die Claude nur bei Bedarf liest; „Lern das“ legt neue an.
-- **Lokale Stimme:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo, mit einem Klick in der Einrichtung.
+- **Notizbuch und Fähigkeiten:** jedes Gespräch, Personen, Recherche-Berichte und Notizen als Markdown (in Obsidian verlinkt). Anleitungen für wiederkehrende Aufgaben (Briefing, Recherche, PC-Pflege, Spiele), die Claude nur bei Bedarf liest; „Lern das“ legt neue an.
+- **Stimme komplett lokal:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo. Der Installer richtet beides ein, fehlt es, holt Jarvis es im Hintergrund nach. Beim Start wärmt er beides vor, häufige Sätze liegen fertig bereit. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
+- **Versteht dich auch, wenn die Erkennung sich verhört:** Programme, Kontakte und eigene Befehle findet Jarvis auch nach Klang („Spottifei“ ist Spotify, „Maks“ ist Max), mit Kölner Phonetik (`klang.py`). Claude weiß, dass gesprochen wurde, und deutet Verhörer nach Zusammenhang.
 - **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen und die Werkstatt verfolgen. Jarvis antwortet auf dem Handy in seiner eigenen Stimme. Mit Tailscale („Sicher von überall“) auch unterwegs, mit Sprechtaste und als installierbare App. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
 - **Alexa:** „Alexa, sag Jarvis, er soll Discord öffnen.“ Ein eigener Skill (Von Alexa gehostet), den Jarvis fertig zum Kopieren anbietet. Die Nachrichten laufen verschlüsselt über ntfy.sh, ohne Home Assistant und ohne Router-Einstellungen. Mit Home Assistant zusätzlich Ansagen auf Echos und Licht.
 - **Bildschirm lesen und Programme ohne Maus bedienen:** Texterkennung von Windows (in etwa einer Sekunde) und UI Automation: Knöpfe drücken und Felder ausfüllen, ohne Maus und Tastatur zu nehmen.
-- **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Große Aufträge mit Opus und viel Nachdenken, kleine mit Sonnet. Während der Arbeit kannst du mit Jarvis reden: Wünsche („Mach den Hintergrund blau“) gehen direkt in die laufende Arbeit, Fragen beantwortet er mit Blick auf den Plan, am Ende fragt er, ob er das Ergebnis starten soll. Das Fenster zeigt Plan, Ablauf, Fortschritt und Dateien und alle Projekte als Übersicht mit Starten und Weiterbauen.
+- **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Getestet wird auf einem unsichtbaren zweiten Windows-Desktop (`versteckt.py`), Testfenster poppen also nicht auf. Große Aufträge mit Opus und viel Nachdenken, kleine mit Sonnet. Während der Arbeit kannst du mit Jarvis reden: Wünsche („Mach den Hintergrund blau“) gehen direkt in die laufende Arbeit, Fragen beantwortet er mit Blick auf den Plan, am Ende fragt er, ob er das Ergebnis starten soll. Das Fenster zeigt Plan, Ablauf, Fortschritt und Dateien und alle Projekte als Übersicht mit Starten und Weiterbauen.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
-- **Schnell:** Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt, ElevenLabs beginnt nach 0,25 s zu sprechen.
+- **Schnell:** In der ersten Sprechpause erkennt Jarvis den Satz schon vorab. Ist es ein Sofort-Befehl („Öffne Spotify“), legt er nach knapp einer halben Sekunde Stille los statt nach einer. Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt. Im Protokoll steht pro Befehl eine Tempo-Zeile.
 - **Gespräch ohne Weckwort:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, Ring um die Kugel). Weiterreden reicht; „Danke“, „Alles klar“, „Tschüss“ oder Stille beenden das Gespräch. „Jarvis“, „Okay Jarvis“ und „Hallo Jarvis“ wecken ihn auch.
 - **Ruhiges, modernes Fenster:** eine ruhige Kugel aus feinen Linien als Jarvis' Gesicht (sie dreht sich langsam, mit der Stimme laufen Wellen hindurch, jede Aktion hat eine eigene Bewegung: Radar beim Suchen, Lichtpunkt bei Nachrichten, Takt bei Musik, Uhrzeiger bei Timern, Bau-Gitter in der Werkstatt; mit der Maus lässt sie sich neigen und drehen), darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
 - **Installer mit eigenem Fenster:** dieselbe Linienkugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
@@ -61,26 +61,26 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 ## Kosten
 
 - **Claude-Abo (Pro oder Max):** das Gehirn. Jarvis nimmt das große Modell nur, wo es sich lohnt, das schont das Kontingent. Fehlt ein Modell im Abo, nimmt er von selbst das nächstkleinere.
-- **Groq:** gratis (großzügiges Tageslimit, darüber übernimmt der eigene PC).
-- **ElevenLabs:** optional. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Ohne Schlüssel spricht die gratis Microsoft-Stimme.
-- **Alexa-Skill, ntfy.sh, Discord-Bot und Tailscale:** gratis.
+- **Stimme und Spracherkennung:** gratis, ganz auf dem PC (Pocket TTS und Parakeet).
+- **ElevenLabs:** freiwillig. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Fällt ElevenLabs aus, spricht die lokale Stimme.
+- **Alexa-Skill, ntfy.sh und Tailscale:** gratis.
 - **Konnektoren (Gmail, Google Kalender, Shopify …):** kommen mit deinem Claude-Konto, die Dienste selbst kosten, was sie eben kosten.
 
 ## Anpassen
 
 Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden“ ein. Alles steht in `config.toml` (Vorlage mit Erklärungen: `config.example.toml`):
 
-- `[stt]` `groq_key`, `engine = "auto" | "groq" | "lokal"`
-- `[tts]` `engine = "elevenlabs" | "lokal" | "edge" | "windows"`, `lokal_stimme`, `elevenlabs_key`, `elevenlabs_voice`
+- `[stt]` `engine = "lokal" | "auto" | "groq"`, `lokal_modell`, `groq_key`
+- `[tts]` `engine = "lokal" | "elevenlabs"`, `lokal_stimme`, `elevenlabs_key`, `elevenlabs_voice`
 - `[notizbuch]` `ordner`, `tagebuch`
 - `[mute]` `hotkey` (Stumm), `listen_hotkey` (Zuhören, Standard Strg+Alt+J)
-- `[listen]` `silence_seconds`, `vad`, `gespraech`, `gespraech_sekunden`; `[wakeword]` `picovoice_key`, `name_allein`
+- `[listen]` `silence_seconds`, `vad`, `gespraech`, `gespraech_sekunden`, `vorab`; `[wakeword]` `picovoice_key`, `name_allein`
 - `[rechte]` `volle_freigabe`; `[gedaechtnis]` `vorschlaege`
 - `[hinweise]` `aktiv`, `pc`, `internet`, `sicherheit`, `termine`, `morgens`, `zurueck`, `pausen`, `pause_nach_stunden`
 - `[gui]` `start_hidden`, `close_to_tray`, `overlay`, `on_wake`
 - `[brain]` `modellwahl = "auto" | "schnell" | "normal" | "gruendlich" | "maximal" | "aus"`, `stufe_schnell` … `stufe_maximal` (Modell und Nachdenken je Stufe, z. B. `"opus high"`), `models` (Ersatzreihe), `konnektoren` (claude.ai-Konnektoren an/aus), `disallowed_tools`, `timeout_seconds`
 - `[werkstatt]` `ordner`, `modell = "auto" | "opus" | "sonnet"`, `effort`
-- `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[alexa]` Skill, `[discord]` `bot_token`, `[homeassistant]` Echos und Licht
+- `[server]` Handy-App, `[handy]` Benachrichtigungen (ntfy), `[alexa]` Skill, `[homeassistant]` Echos und Licht
 - `[gaming]` `close_apps`, `power_plan`
 - `jarvis_home/CLAUDE.md`: Jarvis' Persönlichkeit und seine Befehle
 
@@ -93,7 +93,6 @@ oeffnen "<name>"   schliessen "<name>"   programme [filter]   installieren "<nam
 deinstallieren <id>   papierkorb "<pfad>"   admin "<PowerShell-Befehl>"
 nachricht <discord|whatsapp|telegram> "<person|#kanal>" "<text>"
 discord chat|kanal|server|sprachkanal|anrufen "<name>"   discord stumm|taub
-discord-bot status|struktur|plan|kanal|rolle|nachricht|einladung|kanal-loeschen
 werkstatt "<auftrag>"   werkstatt-weiter "<wunsch>"   werkstatt-projekt "<name>" "<wunsch>"   werkstatt-projekte
 merken "<fakt>"   vergessen "<wörter>"   gedaechtnis
 erinnern "in 20 minuten" "Tee"   erinnerungen   erinnerung-loeschen <id>
@@ -110,8 +109,8 @@ Zum Ausprobieren im Jarvis-Ordner: `"%LOCALAPPDATA%\Jarvis\venv\Scripts\python.e
 
 - Endgültig löschen, formatieren und die Registry ausräumen sind für Claude gesperrt (`disallowed_tools`). Dateien gehen nur in den Papierkorb. Ganze Laufwerke, dein Benutzerordner sowie Desktop, Dokumente und Downloads selbst kommen nie hinein.
 - Ohne volle Freigabe tun `papierkorb`, `deinstallieren` und Herunterfahren erst nach deinem „Ja“ etwas. `admin`-Befehle, die endgültig löschen oder formatieren, fragen immer, auch mit voller Freigabe.
-- Die Handy-App braucht einen langen Schlüssel (steht im QR-Code), „Neu koppeln“ sperrt alte Handys aus. Der Alexa-Weg ist mit einem eigenen Schlüssel verschlüsselt und signiert, alte oder doppelte Nachrichten werden verworfen. Der Discord-Token bleibt auf deinem PC.
-- Wake Word und Satzende laufen lokal. An Groq geht nur die Aufnahme nach „Hey Jarvis“ (und im Gespräch das Weiterreden; klingt etwas halb nach „Jarvis“, zur Prüfung dieser kurze Schnipsel), an Claude nur der erkannte Text. Das Gedächtnis bleibt auf deinem PC.
+- Die Handy-App braucht einen langen Schlüssel (steht im QR-Code), „Neu koppeln“ sperrt alte Handys aus. Der Alexa-Weg ist mit einem eigenen Schlüssel verschlüsselt und signiert, alte oder doppelte Nachrichten werden verworfen.
+- Weckwort, Satzende, Spracherkennung und Stimme laufen auf dem PC. An Claude geht nur der erkannte Text (an Groq nur, wenn du es ausdrücklich einschaltest). Das Gedächtnis bleibt auf deinem PC.
 
 ## Windows-Details
 
@@ -130,6 +129,7 @@ jarvis/
   assistant.py    Kern: Befehl annehmen, Sofort-Befehle, Claude fragen, sprechen, Gedächtnis, Rechte
   brain.py        Claude Code dauerhaft (stream-json), Modell umstellen ohne Neustart, Fallback, Fehlerarten
   konnektoren.py  Georgs claude.ai-Konnektoren: Rückfragen von Claude beantworten, was Jarvis sieht
+  versteckt.py    Unsichtbarer Arbeitsplatz (eigener Windows-Desktop) für die Tests der Werkstatt
   modellwahl.py   Welches Modell und wie viel Nachdenken pro Aufgabe (schnell, normal, gründlich, maximal)
   hinweise.py     Jarvis meldet sich von selbst: Wächter, Messwerte (psutil, Registry, Windows-API), Regeln
   intents.py      Sofort-Befehle erkennen (ohne Claude)
@@ -137,20 +137,21 @@ jarvis/
   steps.py        Arbeitsschritte: aus Claudes Werkzeugen wird "Installiert Spotify"
   workshop.py     Werkstatt: Bauaufträge im Hintergrund, Wünsche während der Arbeit, Projekte, Opus/Sonnet
   messaging.py keys.py       Chatnachrichten und Discord ohne Maus (Tastatur, Fenstertitel, Wiederholung)
-  discord_bot.py  Jarvis' Discord-Bot (REST): Server gestalten im Hintergrund
   screen.py       Bildschirmfoto, Texterkennung, UI Automation
   remote.py server.py        Handy-App: Verlauf, Zustand, QR-Code, Web-Eingang
   push.py         Benachrichtigungen aufs Handy (ntfy)
   alexa.py alexa_skill.py    Alexa: Brücke über ntfy.sh und der Skill-Code
   presence.py     Fenster beim Weckwort zeigen und danach wieder verstecken
   apps.py         Programme: Startmenü-Index, bekannte Apps, winget, Schließen
-  voice.py audio.py stt.py   Sprachschleife, Mikrofon, Silero VAD, Groq und faster-whisper
-  tts.py elevenlabs.py       Stimme: ElevenLabs-Streaming, Microsoft, Piper, Windows
+  voice.py audio.py stt.py   Sprachschleife, Vorab-Erkennung, Mikrofon, Silero VAD, Parakeet/Whisper (Groq auf Wunsch)
+  tts.py localvoice.py       Stimme auf dem PC (Pocket TTS, Reserve Piper), Einrichten im Hintergrund
+  elevenlabs.py   Premium-Stimme auf Wunsch
+  klang.py        Ähnlich klingende Namen finden (Kölner Phonetik): Programme, Kontakte, eigene Befehle
   overlay.py desktop.py tray.py autostart.py pc.py homeassistant.py persona.py reminders.py tool.py
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause, Projekt-Übersicht
-                  koppeln.js gedaechtnis.js       Verbinden (Handy, Alexa, Discord), Gedächtnis
+                  koppeln.js gedaechtnis.js       Verbinden (Handy, Alexa, Konnektoren), Gedächtnis
                   setup.html setup.js setup.css   Einrichtung (Api: setup_wizard.SetupApi)
                   handy/          die Handy-App (PWA)
                   Alle Seiten laufen auch im normalen Browser als Demo.
@@ -160,4 +161,4 @@ installer/      Inno-Setup-Kern (jarvis.iss), Bilder und Windows-Proben für den
 tests/          python -m unittest discover -s tests
 ```
 
-Die Tests laufen ohne Mikrofon, ohne echtes Claude und ohne Internet (nachgebautes `claude`, ElevenLabs, Groq, Discord und ntfy).
+Die Tests laufen ohne Mikrofon, ohne echtes Claude und ohne Internet (nachgebautes `claude`, ElevenLabs, Groq und ntfy).

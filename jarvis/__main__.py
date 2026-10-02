@@ -79,21 +79,29 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
             on_level=ui.level,
             on_speaking=lambda value: assistant_ref and assistant_ref[0].set_speaking(value),
         )
-        from .assistant import FILLERS
+        from .assistant import FILLERS, PREPARED
 
-        # Die festen Sätze schon mal vorbereiten, dann kommen sie später ohne Verzögerung.
-        threading.Thread(
-            target=tts.prepare, args=(["Jarvis ist online, Sir.", *FILLERS],), name="jarvis-stimmen", daemon=True
-        ).start()
+        def voice_ready() -> None:
+            # Erst einmal vorwärmen (der erste echte Satz ist dann nicht langsamer), dann die festen
+            # Sätze vorbereiten: Die kommen später sofort, ohne dass die Stimme rechnen muss.
+            tts.warm_up()
+            tts.prepare(["Jarvis ist online, Sir.", *FILLERS, *PREPARED])
 
-        def offline_voice() -> None:
-            # Die Offline-Ersatzstimme einmalig im Hintergrund holen (63 MB), wenn der Start durch ist.
-            time.sleep(30)
+        threading.Thread(target=voice_ready, name="jarvis-stimmen", daemon=True).start()
+
+        def local_voice() -> None:
+            # Fehlt die lokale Stimme (der Installer konnte sie nicht laden), holt Jarvis sie im
+            # Hintergrund nach. Die Reservestimme (Piper, 63 MB) lädt er ebenfalls einmalig.
+            time.sleep(20)
+            from .localvoice import ensure_installed
             from .tts import ensure_piper_model
 
             ensure_piper_model()
+            if ensure_installed(STATE_DIR / "stimmen") and tts.enable_local():
+                tts.warm_up()
+                ui.toast("Meine lokale Stimme ist eingerichtet, Sir. Ab jetzt spreche ich ganz ohne Internet.", "ok")
 
-        threading.Thread(target=offline_voice, name="jarvis-offline-stimme", daemon=True).start()
+        threading.Thread(target=local_voice, name="jarvis-lokale-stimme-holen", daemon=True).start()
     assistant = Assistant(cfg, brain, speaker, ui, mute, reminders)
     assistant.phone = phone
     assistant.server = None
@@ -378,6 +386,10 @@ def load_voice(
         if isinstance(stt, CloudSpeechToText):
             # Die Ersatz-Erkennung auf dem eigenen PC in Ruhe vorbereiten.
             threading.Timer(45.0, stt.warm_up_fallback).start()
+        else:
+            # Die Erkennung auf dem PC gleich laden und einmal rechnen lassen (parallel zum Weckwort):
+            # Sonst wäre der erste Befehl nach dem Start spürbar langsamer.
+            threading.Thread(target=stt.warm_up, name="jarvis-erkennung-vorwaermen", daemon=True).start()
         wake = WakeWord(cfg["wakeword"]["model"], cfg["wakeword"]["threshold"], cfg["wakeword"].get("picovoice_key", ""))
     except Exception as exc:
         log.exception("Spracherkennung lädt nicht")

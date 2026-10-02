@@ -319,6 +319,16 @@ class Memory:
                 found = commands.get(candidate)
                 if isinstance(found, dict) and found.get("aktion"):
                     return dict(found, key=candidate)
+            # Nach Klang, aber nur, wenn der ganze Satz wie der Befehl klingt ("Zogmodus" -> "Zockmodus"),
+            # gleich viele Wörter: "Zockmodus aus" ist nicht "Zockmodus".
+            if len(key.split()) <= 2:
+                from .klang import closest
+
+                usable = [k for k, v in commands.items() if isinstance(v, dict) and v.get("aktion")
+                          and len(k.split()) == len(key.split())]
+                heard = closest(key, usable, cutoff=0.86, same_start=True)
+                if heard:
+                    return dict(commands[heard], key=heard)
         return None
 
     def used_command(self, key: str) -> None:

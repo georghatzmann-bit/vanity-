@@ -1,4 +1,6 @@
-"""Text zu Sprache: menschliche Microsoft-Stimme über edge-tts, Windows-Stimme als Reserve.
+"""Text zu Sprache, ganz auf dem eigenen PC: die lokale Jarvis-Stimme (Pocket TTS, localvoice.py),
+als Reserve Piper (auch lokal). ElevenLabs nur, wenn Georg es ausdrücklich wählt. Eine Windows- oder
+Microsoft-Stimme gibt es nicht mehr.
 
 `Speaker` spricht Sätze nacheinander im Hintergrund und erzeugt den nächsten
 Satz schon, während der aktuelle noch läuft.
@@ -6,17 +8,14 @@ Satz schon, während der aktuelle noch läuft.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 import os
 import queue
 import re
-import tempfile
 import threading
 import time
 import urllib.request
-import wave
 from pathlib import Path
 from typing import Callable
 
@@ -34,10 +33,9 @@ class TextToSpeech:
     CACHE_MAX_FILES = 400
 
     def __init__(self, cfg: dict, cache_dir: Path | None = None, on_problem: Callable[[str], None] | None = None) -> None:
-        self._engine = cfg.get("engine", "edge")
-        self._voice = cfg.get("voice", "de-DE-ConradNeural")
-        self._rate = cfg.get("rate", "+0%")
-        self._pitch = cfg.get("pitch", "+0Hz")
+        # "lokal" (Standard) oder "elevenlabs". Alte Einträge ("edge", "windows") heißen jetzt lokal.
+        engine = str(cfg.get("engine", "lokal") or "lokal").strip().lower()
+        self._engine = engine if engine == "elevenlabs" else "lokal"
         # ElevenLabs (Premium): Schlüssel, Stimme und Modell
         self._eleven = None
         self._eleven_voice = str(cfg.get("elevenlabs_voice", "") or "").strip()
@@ -49,31 +47,43 @@ class TextToSpeech:
         # ist viel schneller geladen, als der davor gesprochen ist.
         self._eleven_slot = threading.BoundedSemaphore(1)
         self._previous = ""
-        # Lokal (Pocket TTS): natürliche deutsche Stimme ganz ohne Internet, siehe localvoice.py
+        self._reported_at = -1e9
+        self._on_problem = on_problem or (lambda _text: None)
+        self._cache_dir = Path(cache_dir) if cache_dir else None
+        # Lokal (Pocket TTS): Jarvis' Stimme ganz ohne Internet, siehe localvoice.py. Auch bei
+        # ElevenLabs da, als Reserve (dann lädt sie erst, wenn ElevenLabs einmal nicht geht).
         self._local = None
-        self._local_voice = ""
-        if self._engine == "lokal":
-            from .localvoice import PocketVoice, installed, voice_id
-
-            if installed()["tts"]:
-                self._local_voice = voice_id(cfg.get("lokal_stimme", ""))
-                self._local = PocketVoice(self._local_voice)
-                self._local.start()
-            else:
-                log.warning("Lokale Stimme ist eingestellt, aber nicht installiert (Einrichtung, Schritt Stimme).")
+        self._local_voice = str(cfg.get("lokal_stimme", "") or "")  # die gewählte, auch wenn sie erst später kommt
+        self._local_lock = threading.Lock()
+        self.enable_local(cfg.get("lokal_stimme", ""), start=self._engine == "lokal")
         key = str(cfg.get("elevenlabs_key", "") or "").strip()
         if self._engine == "elevenlabs" and key and self._eleven_voice:
             from .elevenlabs import DEFAULT_MODEL, ElevenLabs
 
             self._eleven = ElevenLabs(key)
             self._eleven_model = self._eleven_model or DEFAULT_MODEL
-        # None statt 0.0: time.monotonic() zählt unter Windows ab dem Hochfahren, sonst
-        # käme nach einem Neustart eine Minute lang die Ersatzstimme.
-        self._edge_failed_at: float | None = None
-        self._reported_at = -1e9
-        self._on_problem = on_problem or (lambda _text: None)
-        self._cache_dir = Path(cache_dir) if cache_dir else None
-        self.used_edge = False  # kam der letzte Satz von der Microsoft-Stimme (oder der Ersatzstimme)?
+        self.used_main = False  # kam der letzte Satz von der gewählten Stimme (nicht von der Reserve)?
+
+    def enable_local(self, voice: str = "", start: bool = True) -> bool:
+        """Die lokale Stimme dazunehmen, sobald sie installiert ist (beim Start, oder wenn Jarvis
+        sie gerade im Hintergrund nachgeholt hat). True = sie ist da."""
+        from .localvoice import PocketVoice, installed, voice_id
+
+        with self._local_lock:
+            if self._local is not None:
+                return True
+            if not installed()["tts"]:
+                log.warning("Die lokale Stimme ist nicht installiert. Bis dahin spricht die Reservestimme (Piper).")
+                return False
+            self._local_voice = voice_id(voice or self._local_voice)
+            self._local = PocketVoice(self._local_voice)
+        if start:
+            self._local.start()
+        return True
+
+    @property
+    def local_ready(self) -> bool:
+        return self._local is not None and self._local.ready.is_set() and self._local.error is None
 
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
         """Gibt die gesprochene Fassung von `text` als int16-Samples und Abtastrate zurück."""
@@ -81,54 +91,35 @@ class TextToSpeech:
         if cached is not None and cached.exists():
             try:
                 with np.load(cached) as data:
-                    self.used_edge = True
+                    self.used_main = True
                     return data["samples"].copy(), int(data["rate"])
             except Exception as exc:
                 log.debug("Stimmen-Zwischenspeicher: %s", exc)
-        if self._local is not None:
-            try:
-                audio = self._local_stream(text, cached)
-                self.used_edge = True
-                return audio, audio.rate
-            except Exception as exc:
-                if self._local.loading():  # gleich nach dem Start: kein Fehler, nur noch nicht fertig geladen
-                    log.info("Lokale Stimme lädt noch, dieser Satz kommt von der Ersatzstimme.")
-                    return self._offline(text)
-                log.warning("Lokale Stimme: %s. Nehme die Ersatzstimme.", exc)
-                if time.monotonic() - self._reported_at > 600:
-                    self._reported_at = time.monotonic()
-                    self._on_problem("Die lokale Stimme spricht gerade nicht. Jarvis nimmt so lange die Ersatzstimme.")
-                return self._offline(text)
         if self._eleven is not None and time.monotonic() >= self._eleven_paused_until:
             try:
                 audio = self._eleven_stream(text)
                 if cached is not None:
                     audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
                 self._previous = text
-                self.used_edge = True
+                self.used_main = True
                 return audio, audio.rate
             except Exception as exc:
                 self._eleven_problem(exc)
-        # Nach einem Fehler (z. B. kein Internet) eine Minute lang direkt die Ersatzstimme nehmen.
-        failed = self._edge_failed_at
-        if self._engine in ("edge", "elevenlabs") and (failed is None or time.monotonic() - failed > 60):
+        if self._local is not None:
             try:
-                samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
-                samples = trim_silence(samples, rate)
-                if cached is not None:
-                    self._store(cached, samples, rate)
-                self.used_edge = True
-                return samples, rate
+                # Nur Sätze der Hauptstimme kommen in den Zwischenspeicher (sonst spräche ElevenLabs
+                # später mit der lokalen Stimme).
+                audio = self._local_stream(text, cached if self._eleven is None else None)
+                self.used_main = self._eleven is None
+                return audio, audio.rate
             except Exception as exc:
-                self._edge_failed_at = time.monotonic()
-                reason = _short_reason(exc)
-                log.warning("Microsoft-Stimme nicht erreichbar (%s), nutze die Ersatzstimme.", reason)
+                if self._local.loading():  # lädt nach 30 s noch (sehr langsamer PC): kein Fehler
+                    log.info("Lokale Stimme lädt noch, dieser Satz kommt von der Reservestimme.")
+                    return self._offline(text)
+                log.warning("Lokale Stimme: %s. Nehme die Reservestimme.", exc)
                 if time.monotonic() - self._reported_at > 600:
                     self._reported_at = time.monotonic()
-                    self._on_problem(
-                        f"Die Microsoft-Stimme ist gerade nicht erreichbar ({reason}). "
-                        "Jarvis spricht so lange mit der Ersatzstimme."
-                    )
+                    self._on_problem("Die lokale Stimme spricht gerade nicht. Jarvis nimmt so lange die Reservestimme.")
         return self._offline(text)
 
     # Ist ElevenLabs kurz ausgelastet, lieber einen Moment warten als die Stimme wechseln.
@@ -212,12 +203,14 @@ class TextToSpeech:
         kind = getattr(exc, "kind", "other")
         pause = {"key": 1800, "quota": 1800, "plan": 1800, "voice": 1800, "busy": 5, "net": 20}.get(kind, 60)
         self._eleven_paused_until = time.monotonic() + pause
-        log.warning("ElevenLabs: %s (Pause %d s, solange spricht die Microsoft-Stimme)", exc, pause)
+        log.warning("ElevenLabs: %s (Pause %d s, solange spricht die lokale Stimme)", exc, pause)
+        if self._local is not None:
+            self._local.start()  # als Reserve laden, falls noch nicht geschehen
         tell = {
-            "key": "Der ElevenLabs-Schlüssel stimmt nicht. Ich spreche so lange mit der Microsoft-Stimme.",
-            "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Ich spreche so lange mit der Microsoft-Stimme.",
+            "key": "Der ElevenLabs-Schlüssel stimmt nicht. Ich spreche so lange mit meiner lokalen Stimme.",
+            "quota": "Das ElevenLabs-Guthaben ist aufgebraucht. Ich spreche so lange mit meiner lokalen Stimme.",
             "plan": (
-                "Diese ElevenLabs-Stimme gibt es nur mit Abo. Ich spreche so lange mit der Microsoft-Stimme. "
+                "Diese ElevenLabs-Stimme gibt es nur mit Abo. Ich spreche so lange mit meiner lokalen Stimme. "
                 "Kostenlos geht eine Stimme, die du in ElevenLabs selbst entwirfst. Mehr dazu in den Einstellungen unter Stimme."
             ),
             "voice": "Die gewählte ElevenLabs-Stimme gibt es nicht mehr. Bitte in den Einstellungen eine andere wählen.",
@@ -227,17 +220,20 @@ class TextToSpeech:
             self._on_problem(tell)
 
     def _offline(self, text: str) -> tuple[np.ndarray, int]:
-        """Ohne Internet: erst Piper (natürliche Offline-Stimme), zuletzt die Windows-Stimme."""
-        self.used_edge = False
+        """Die Reservestimme: Piper, auch auf dem PC. Geht auch die nicht, schweigt Jarvis lieber
+        (die Antwort steht im Fenster), als mit einer Windows-Stimme zu sprechen."""
+        self.used_main = False
         voice = piper_voice()
         if voice is not None:
             try:
                 samples, rate = voice.synthesize(text)
                 return trim_silence(samples, rate), rate
             except Exception as exc:
-                log.warning("Offline-Stimme (Piper): %s", exc)
-        samples, rate = synthesize_windows(text)
-        return trim_silence(samples, rate), rate
+                log.warning("Reservestimme (Piper): %s", exc)
+        if time.monotonic() - self._reported_at > 600:
+            self._reported_at = time.monotonic()
+            self._on_problem("Die lokale Stimme ist noch nicht bereit. Die Antworten stehen so lange im Fenster.")
+        raise RuntimeError("keine lokale Stimme bereit")
 
     def prepare(self, texts) -> None:
         """Legt feste Sätze im Voraus in den Zwischenspeicher (im Hintergrund aufrufen)."""
@@ -247,30 +243,45 @@ class TextToSpeech:
             if cached is None or cached.exists():
                 continue
             try:
-                if self._local is not None:
-                    samples, rate = self._local.synthesize(text)
-                elif self._eleven is not None:
+                if self._eleven is not None:
                     from .elevenlabs import RATE
 
                     with self._eleven_slot:  # nicht gleichzeitig mit dem, was Jarvis gerade sagt
                         pcm = self._eleven.speak(text, self._eleven_voice, self._eleven_model, plain=self._eleven_plain)
                     samples, rate = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16), RATE
+                elif self._local is not None:
+                    samples, rate = self._local.synthesize(text)
                 else:
-                    samples, rate = synthesize_edge(text, self._voice, self._rate, self._pitch)
+                    return
                 self._store(cached, trim_silence(samples, rate), rate)
             except Exception as exc:
                 log.debug("Vorbereiten von %r: %s", text, exc)
                 return
 
+    def warm_up(self) -> None:
+        """Rechnet einmal einen kurzen Satz (im Hintergrund, gleich nach dem Start): Der erste echte Satz
+        ist dann nicht langsamer als die anderen. Dabei misst Jarvis, wie schnell der Prozessor die Stimme
+        rechnet, und braucht auf schnellen PCs weniger Vorlauf (die Stimme setzt früher ein)."""
+        if self._local is None or self._eleven is not None:
+            return
+        try:
+            started = time.monotonic()
+            samples, rate = self._local.synthesize("Einen Moment, Sir.")
+            took = max(1e-3, time.monotonic() - started)
+        except Exception as exc:
+            log.info("Lokale Stimme vorwärmen: %s", exc)
+            return
+        speed = (len(samples) / rate) / took  # > 1: schneller als Echtzeit
+        self.LOCAL_BUFFER_SECONDS = local_buffer(speed)
+        log.info("Lokale Stimme bereit: %.1f-fach Echtzeit, %.2f s Vorlauf.", speed, self.LOCAL_BUFFER_SECONDS)
+
     def _cache_file(self, text: str) -> Path | None:
         if self._cache_dir is None or not text or len(text) > self.CACHE_MAX_CHARS:
             return None
-        if self._local is not None:
-            key = "|".join(("lokal", self._local_voice, text))
-        elif self._eleven is not None:
+        if self._eleven is not None:
             key = "|".join(("elevenlabs", self._eleven_voice, self._eleven_model, text))
-        elif self._engine == "edge":
-            key = "|".join((self._voice, self._rate, self._pitch, text))
+        elif self._local is not None:
+            key = "|".join(("lokal", self._local_voice, text))
         else:
             return None
         return self._cache_dir / (hashlib.sha1(key.encode("utf-8")).hexdigest()[:24] + ".npz")
@@ -294,10 +305,21 @@ class TextToSpeech:
             play(samples, rate)
 
 
+def local_buffer(speed: float) -> float:
+    """Wie viel Ton da sein muss, bevor die lokale Stimme losspricht, je nachdem, wie viel schneller
+    als Echtzeit der Prozessor sie rechnet. Schnell: kaum Vorlauf. Langsam: mehr, damit nichts stockt."""
+    if speed >= 3.0:
+        return 0.25
+    if speed >= 1.8:
+        return 0.4
+    if speed >= 1.2:
+        return 0.6
+    return 1.0
+
+
 def trim_silence(samples: np.ndarray, rate: int, lead: float = 0.05, trail: float = 0.18) -> np.ndarray:
-    """Schneidet die Stille vor und nach einem Satz auf ein natürliches Maß.
-    Die Microsoft-Stimmen liefern vorn etwa 0,2 s und hinten bis zu 0,9 s Stille mit.
-    Satz für Satz gesprochen, wirkt Jarvis dadurch zäh."""
+    """Schneidet die Stille vor und nach einem Satz auf ein natürliches Maß. Manche Stimmen liefern
+    vorn und hinten viel Stille mit. Satz für Satz gesprochen, wirkt Jarvis dadurch zäh."""
     samples = np.asarray(samples)
     if samples.size == 0 or rate <= 0:
         return samples
@@ -311,104 +333,7 @@ def trim_silence(samples: np.ndarray, rate: int, lead: float = 0.05, trail: floa
     return samples[start:end]
 
 
-def _short_reason(exc: Exception) -> str:
-    text = str(exc) or type(exc).__name__
-    if "CERTIFICATE" in text.upper() or "SSL" in text.upper():
-        return "Zertifikat wird nicht akzeptiert, oft wegen eines Virenscanners"
-    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) or "timeout" in text.lower():
-        return "keine Antwort"
-    return text.splitlines()[0][:120]
-
-
-def synthesize_edge(text: str, voice: str, rate: str = "+0%", pitch: str = "+0Hz") -> tuple[np.ndarray, int]:
-    import miniaudio
-
-    mp3 = asyncio.run(_edge_mp3(text, voice, rate, pitch))
-    # Die Microsoft-Stimmen kommen mit 24 kHz. Ohne Angabe würde miniaudio auf 44,1 kHz umrechnen.
-    decoded = miniaudio.decode(mp3, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=1, sample_rate=24000)
-    return np.frombuffer(decoded.samples, dtype=np.int16).copy(), decoded.sample_rate
-
-
-_EDGE_SSL_READY = False
-
-
-def _edge_ssl() -> None:
-    """edge-tts vertraut nur den Zertifikaten aus certifi. Prüft ein Virenscanner HTTPS
-    (Avast, Kaspersky, ESET ...), scheitert dann jede Verbindung und Jarvis spräche immer
-    mit der Ersatzstimme. Darum zusätzlich den Zertifikatsspeicher von Windows nutzen."""
-    global _EDGE_SSL_READY
-    if _EDGE_SSL_READY:
-        return
-    _EDGE_SSL_READY = True
-    try:
-        import ssl
-
-        from edge_tts import communicate
-
-        context = ssl.create_default_context()  # unter Windows mit den Windows-Zertifikaten
-        try:
-            import certifi
-
-            context.load_verify_locations(cafile=certifi.where())
-        except Exception:
-            pass
-        if hasattr(communicate, "_SSL_CTX"):
-            communicate._SSL_CTX = context
-    except Exception as exc:
-        log.debug("Zertifikate für die Microsoft-Stimme: %s", exc)
-
-
-async def _edge_mp3(text: str, voice: str, rate: str, pitch: str) -> bytes:
-    import edge_tts
-
-    _edge_ssl()
-    # Kurze Zeitlimits: Lieber schnell auf die Ersatzstimme als lange Stille.
-    communicate = edge_tts.Communicate(
-        text, voice=voice, rate=rate, pitch=pitch, connect_timeout=5, receive_timeout=12
-    )
-    audio = bytearray()
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio.extend(chunk["data"])
-    if not audio:
-        raise RuntimeError("keine Audiodaten erhalten")
-    return bytes(audio)
-
-
-def synthesize_windows(text: str) -> tuple[np.ndarray, int]:
-    """Eingebaute Windows-Stimme (offline). Schreibt eine WAV-Datei und liest sie ein."""
-    import pyttsx3
-
-    _com_ready()
-    engine = pyttsx3.init()
-    for voice in engine.getProperty("voices"):
-        if "de" in (voice.id or "").lower() or "german" in (voice.name or "").lower():
-            engine.setProperty("voice", voice.id)
-            break
-    handle, path = tempfile.mkstemp(suffix=".wav", prefix="jarvis-")
-    os.close(handle)
-    try:
-        engine.save_to_file(text, path)
-        engine.runAndWait()
-        with wave.open(path, "rb") as wav:
-            rate = wav.getframerate()
-            channels = wav.getnchannels()
-            width = wav.getsampwidth()
-            data = wav.readframes(wav.getnframes())
-        if width != 2:
-            raise RuntimeError(f"unerwartetes WAV-Format ({width * 8} Bit)")
-        samples = np.frombuffer(data, dtype=np.int16)
-        if channels > 1:
-            samples = samples.reshape(-1, channels).mean(axis=1).astype(np.int16)
-        return samples.copy(), rate
-    finally:
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-
-
-# ------------------------------------------------------------------ Offline-Stimme (Piper)
+# ------------------------------------------------------------------ Reservestimme (Piper, auch lokal)
 
 PIPER_MODEL = "de_DE-thorsten-medium"
 PIPER_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/"
@@ -487,20 +412,6 @@ def piper_voice():
             log.warning("Offline-Stimme lässt sich nicht laden: %s", exc)
             _piper_failed = True
         return _piper
-
-
-def _com_ready() -> None:
-    """Die Windows-Stimme (SAPI) braucht COM im aufrufenden Thread. pyttsx3 richtet das
-    nicht selbst ein, und Jarvis spricht aus einem eigenen Thread: ohne diesen Aufruf
-    käme dort "CoInitialize wurde nicht aufgerufen"."""
-    if os.name != "nt":
-        return
-    try:
-        import ctypes
-
-        ctypes.windll.ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED, schon aktiv = egal
-    except Exception as exc:
-        log.debug("COM: %s", exc)
 
 
 def play(samples: np.ndarray, rate: int) -> None:
@@ -635,7 +546,7 @@ class _ArraySource:
 class Speaker:
     """Spricht Sätze nacheinander im Hintergrund.
 
-    Zwei Threads: einer erzeugt die Sprache (dauert bei edge-tts etwa eine halbe
+    Zwei Threads: einer erzeugt die Sprache (dauert je nach Stimme eine Zehntel- bis eine halbe
     Sekunde), der andere spielt ab. So entsteht der zweite Satz, während der
     erste noch läuft. `stop()` bricht alles sofort ab.
     """

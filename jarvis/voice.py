@@ -77,6 +77,77 @@ def after_name(text: str) -> str | None:
     return text[found.end():].strip()
 
 
+# Endet der Vorab-Text so, kommt sicher noch etwas ("Öffne Spotify und ..."): nicht früher aufhören.
+_UNFINISHED = re.compile(r"\b(?:und|oder|aber|dann|mit|für|von|auf|in|an|zu|bis|ob|dass|weil|wenn|noch|auch)\W*$", re.I)
+
+
+class EarlyText:
+    """Vorab-Erkennung: In der ersten kurzen Pause (0,3 s) erkennt Jarvis den Satz schon im Hintergrund.
+    Redet Georg weiter, verfällt das. Sonst ist der Text fertig, sobald die Aufnahme endet: Die ganze
+    Erkennungszeit fällt weg. Ist der Text ein fertiger Sofort-Befehl ("Öffne Spotify", "Lauter"),
+    endet die Aufnahme schon nach knapp einer halben Sekunde Stille statt nach fast einer."""
+
+    WAIT = 2.5  # so lange wartet result() höchstens auf eine Vorab-Erkennung, die noch läuft
+
+    def __init__(self, transcribe, is_command) -> None:
+        self._transcribe = transcribe
+        self._is_command = is_command
+        self._lock = threading.Lock()
+        self._generation = 0
+        self._pending: threading.Event | None = None  # die gültige Vorab-Erkennung (läuft oder fertig)
+        self._text: str | None = None
+        self.used = False
+
+    def pause(self, frames: list) -> None:
+        import numpy as np
+
+        with self._lock:
+            self._generation += 1
+            generation, done = self._generation, threading.Event()
+            self._pending, self._text = done, None
+
+        def run() -> None:
+            try:
+                text = self._transcribe(np.concatenate(frames).astype(np.float32) / 32768.0) or ""
+            except Exception as exc:
+                log.debug("Vorab-Erkennung: %s", exc)
+                text = None
+            with self._lock:
+                if generation == self._generation:
+                    self._text = text
+            done.set()
+
+        threading.Thread(target=run, name="jarvis-vorab", daemon=True).start()
+
+    def resume(self) -> None:
+        with self._lock:
+            self._generation += 1
+            self._pending, self._text = None, None
+
+    def complete(self) -> bool:
+        """Steht vorab schon ein fertiger Sofort-Befehl da?"""
+        with self._lock:
+            text = self._text
+        if not text or _UNFINISHED.search(text):
+            return False
+        try:
+            return bool(self._is_command(text))
+        except Exception:
+            return False
+
+    def result(self) -> str | None:
+        """Der vorab erkannte Text, wenn er noch gilt (seit der Pause kam keine Sprache mehr), sonst None."""
+        with self._lock:
+            done, generation = self._pending, self._generation
+        if done is None or not done.wait(self.WAIT):
+            return None
+        with self._lock:
+            if generation != self._generation or self._text is None:
+                return None
+            self.used = True
+            return self._text
+
+
 PRIVACY_HINT = (
     "Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff: "
     "Einstellungen > Datenschutz und Sicherheit > Mikrofon > "
@@ -342,9 +413,11 @@ class VoiceLoop:
             if assistant.speaking:
                 spoke.append(True)
 
+        early = EarlyText(self._stt.transcribe, self._is_command) if listen_cfg.get("vorab", True) else None
         assistant.set_recording(True)
         try:
-            audio = record_command(mic, listen_cfg, on_level=level, ignore_seconds=CHIME_ECHO_SECONDS, vad=self._vad)
+            audio = record_command(mic, listen_cfg, on_level=level, ignore_seconds=CHIME_ECHO_SECONDS, vad=self._vad,
+                                   early=early)
         finally:
             assistant.set_recording(False)
         if audio is not None and follow_up and spoke:
@@ -360,11 +433,15 @@ class VoiceLoop:
             assistant.set_transcribing(True)
             started = time.monotonic()
             try:
-                text = self._stt.transcribe(audio)
+                text = early.result() if early is not None else None
+                if text is None:
+                    text = self._stt.transcribe(audio)
                 log.info(
-                    "Erkannt in %.2f s (%s, %.1f s Aufnahme): %s", time.monotonic() - started,
-                    getattr(self._stt, "last_engine", "") or "lokal", len(audio) / 16000, text,
+                    "Erkannt in %.2f s (%s%s, %.1f s Aufnahme): %s", time.monotonic() - started,
+                    getattr(self._stt, "last_engine", "") or "lokal", ", vorab" if early is not None and early.used else "",
+                    len(audio) / 16000, text,
                 )
+                assistant.timing = {"heard_at": started, "recognized": time.monotonic() - started}
             except Exception:
                 log.exception("Spracherkennung")
                 ui.message("info", "Nicht verstanden (Fehler in der Spracherkennung, Details in logs\\jarvis.log).")

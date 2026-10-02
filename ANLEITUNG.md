@@ -26,26 +26,24 @@ Du brauchst: Windows 10 (ab Version 1809) oder Windows 11, Internet und etwa 3 G
 
 Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird sofort gespeichert. Später kommst du wieder hin: Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Einstellungen**, oder das Zahnrad im Jarvis-Fenster.
 
-1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Darunter den **Groq-Schlüssel** einfügen (siehe unten) und **Prüfen** klicken. Es klappt, wenn „Aktiv“ erscheint.
-2. **Stimme:** **Premium** wählen, den **ElevenLabs-Schlüssel** einfügen (siehe unten), **Prüfen**, Stimmen anhören und eine anklicken. Ohne Schlüssel spricht die kostenlose Microsoft-Stimme.
+1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Es klappt, wenn „Hey Jarvis erkannt“ erscheint.
+2. **Stimme:** Unter **Lokal** die sechs Stimmen anhören (▶) und eine anklicken. **George** ist am klarsten, **Charles** am tiefsten. Stimme und Spracherkennung laufen ganz auf deinem PC, der Installer hat sie schon eingerichtet.
 3. **Name und Ort:** dein Vorname (damit Jarvis weiß, mit wem er spricht) und dein Wohnort für das Wetter.
 4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Claude ist verbunden“ erscheint. Dafür reicht dein Claude-Abo (Pro oder Max).
 5. **Extras:** Stumm-Taste, Autostart und **Volle Freigabe** (siehe unten). Einfach so lassen, wie es ist.
 6. **Jarvis starten.**
 
-### Gratis-Schlüssel für die Spracherkennung (Groq)
+### Stimme und Spracherkennung: ganz auf deinem PC
 
-Damit versteht Jarvis dich viel besser und schneller. Kostet nichts.
+Jarvis spricht mit seiner eigenen deutschen Stimme (Pocket TTS) und versteht dich mit Parakeet. Beides läuft auf deinem Prozessor: kein Abo, kein Schlüssel, nichts geht ins Internet, und eine Windows- oder Microsoft-Stimme gibt es nicht mehr. Der Installer lädt beides gleich mit (etwa 1,3 GB).
 
-1. https://console.groq.com/keys öffnen und mit Google anmelden.
-2. **Create API Key** klicken, einen Namen eingeben (zum Beispiel „Jarvis“), **Submit**.
-3. Den Schlüssel (beginnt mit `gsk_`) kopieren. Er wird nur einmal angezeigt.
+**Geklappt, wenn:** in der Einrichtung bei **Stimme** > **Lokal** oben „Aktiv“ steht. Steht dort **Lokal einrichten**, ging das Laden bei der Installation nicht (meist kein Internet): einmal klicken, oder einfach warten, Jarvis holt es beim Start im Hintergrund nach und sagt Bescheid.
 
-Optional: **„Jarvis“ allein** geht auch ohne Schlüssel: Klingt etwas halb nach seinem Namen, prüft Jarvis kurz mit der Spracherkennung, ob „Jarvis“ vorn steht (dafür geht dieser kurze Schnipsel an die Spracherkennung, mit Groq also ins Netz). Ganz zuverlässig und nur auf dem PC wird es mit Picovoice: in der Einrichtung bei Mikrofon auf **Picovoice öffnen** klicken, gratis Konto anlegen, den **AccessKey** einfügen und **Prüfen** klicken. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Auch „Jarvis“ allein** ausschalten.
+Optional: **„Jarvis“ allein** geht auch ohne Schlüssel: Klingt etwas halb nach seinem Namen, prüft Jarvis kurz mit der Spracherkennung, ob „Jarvis“ vorn steht. Ganz zuverlässig wird es mit Picovoice: in der Einrichtung bei Mikrofon auf **Picovoice öffnen** klicken, gratis Konto anlegen, den **AccessKey** einfügen und **Prüfen** klicken. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Auch „Jarvis“ allein** ausschalten.
 
-### Premium-Stimme (ElevenLabs, gratis möglich)
+### Premium-Stimme (ElevenLabs, freiwillig)
 
-Das ist der große Unterschied: Jarvis klingt dann wie ein Mensch.
+Wer mag, nimmt statt der lokalen Stimme eine von ElevenLabs. Die braucht Internet. Ist das Guthaben leer oder das Internet weg, spricht Jarvis mit seiner lokalen Stimme weiter.
 
 1. https://elevenlabs.io öffnen und ein Konto anlegen.
 2. https://elevenlabs.io/app/settings/api-keys öffnen > **Create API Key** > Namen eingeben > ohne Einschränkungen erstellen.
@@ -62,20 +60,11 @@ Das ist der große Unterschied: Jarvis klingt dann wie ein Mensch.
 
 Fertige Stimmen aus der Bibliothek (zum Beispiel Lennard) gehen ab dem Abo **Starter** (etwa 6 $ im Monat).
 
-### Lokale Stimme (kostenlos, ohne Internet)
+Die lokale Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben. Beim Start rechnet Jarvis einmal einen Probesatz: Auf schnellen PCs setzt die Stimme dann noch früher ein.
 
-Die Alternative zu ElevenLabs: Eine natürliche deutsche Stimme, die ganz auf deinem PC läuft. Kein Abo, kein Schlüssel, nichts geht ins Internet.
+## 3. Handy und Alexa verbinden (freiwillig)
 
-1. Einrichtung (Zahnrad im Jarvis-Fenster) > **Stimme** > Reiter **Lokal**.
-2. **Lokal einrichten** klicken. Jarvis lädt einmalig etwa 1,3 GB (Stimme und Spracherkennung). Das dauert je nach Internet 5 bis 15 Minuten.
-3. Die sechs Stimmen anhören (▶) und eine anklicken. **George** ist am klarsten, **Charles** am tiefsten.
-4. Wer möchte: **Auch die Spracherkennung auf dem PC** einschalten. Dann geht außer den Fragen an Claude gar nichts mehr ins Internet.
-
-**Geklappt, wenn:** oben „Aktiv“ steht und Jarvis mit der gewählten Stimme antwortet. Die Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben.
-
-## 3. Handy, Alexa und Discord verbinden (freiwillig)
-
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa, Discord und Konnektoren.
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa und Konnektoren. Discord brauchst du nicht zu verbinden: Jarvis bedient einfach die Discord-App auf deinem PC.
 
 ### Handy
 
@@ -124,17 +113,6 @@ Löschen, Kaufen, Bezahlen und Veröffentlichen lässt Jarvis über Konnektoren 
 6. In der Konsole oben **Test**: „Entwicklung“ wählen.
 
 **Geklappt, wenn:** „Alexa, sag Jarvis, er soll Spotify öffnen“ Spotify am PC öffnet. Dauert etwas länger als sechs Sekunden, sagt Alexa „Ich kümmere mich darum“, und Jarvis macht trotzdem weiter. Fragt Jarvis zurück („Gute Nacht, Sir. Soll ich den PC herunterfahren?“), hört Alexa weiter zu: einfach „Ja“ sagen.
-
-### Discord-Bot
-
-Jarvis' eigener Bot gestaltet deinen Server im Hintergrund: Kanäle, Rollen, Regeln, Begrüßung. Ohne Maus, während du zockst.
-
-1. Bereich **Discord**: **Öffnen** klicken, mit deinem Discord-Konto anmelden, **New Application**, Name „Jarvis“, **Create**.
-2. Links **Bot** > **Reset Token** > Token kopieren.
-3. In Jarvis den Token einfügen und **Prüfen** klicken.
-4. **Einladen** klicken, deinen Server auswählen, **Autorisieren**.
-
-**Geklappt, wenn:** du sagst „Jarvis, gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen“ und die Kanäle erscheinen.
 
 ### PC per Handy einschalten (Wake-on-LAN)
 
@@ -220,7 +198,6 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - „Was gibt es Neues?“, „Wann spielt Rapid heute?“, „Guten Morgen“
 - „Was steht gerade auf meinem Bildschirm?“ (Jarvis liest den Text in etwa einer Sekunde)
 - „Schreib Max auf Discord, dass ich später komme, und entschuldige dich“ (Jarvis formuliert selbst)
-- „Gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen“ (mit Discord-Bot)
 
 ## Volle Freigabe
 
@@ -246,7 +223,7 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 **Notizbuch:** Jarvis schreibt jedes Gespräch mit Datum in einen Ordner (`%USERPROFILE%\Jarvis-Notizbuch`): ein Tagebuch pro Tag, eine Seite pro Person (mit Geburtstag und allem, was er über sie weiß), Berichte von Recherchen und deine Notizen. Mit dem kostenlosen Programm **Obsidian** („Ordner als Tresor öffnen“) siehst du alles verlinkt. Eigene Notizen in den Seiten bleiben erhalten. Passwörter schreibt er nie hinein.
 
-**Fähigkeiten:** Für wiederkehrende Aufgaben hat Jarvis genaue Anleitungen, die er nur liest, wenn er sie braucht: Discord-Server gestalten, Morgen-Briefing, Recherche mit Bericht, PC aufräumen und aktualisieren, Spiele starten (auch Steam und Epic), Smart Home, Bildschirm lesen. Zeigst du ihm etwas Neues und sagst **„Lern das“**, schreibt er sich selbst eine neue Fähigkeit. Alle stehen unter **Gedächtnis** > **Ansehen**.
+**Fähigkeiten:** Für wiederkehrende Aufgaben hat Jarvis genaue Anleitungen, die er nur liest, wenn er sie braucht: Morgen-Briefing, Recherche mit Bericht, PC aufräumen und aktualisieren, Spiele starten (auch Steam und Epic), Smart Home, Bildschirm lesen. Zeigst du ihm etwas Neues und sagst **„Lern das“**, schreibt er sich selbst eine neue Fähigkeit. Alle stehen unter **Gedächtnis** > **Ansehen**.
 
 ## Gehirn: Jarvis wählt das passende Modell
 
@@ -291,6 +268,8 @@ Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“*
 - **Weiter am selben Projekt:** „Arbeite am Discord-Bot weiter: füg einen Befehl hinzu“. Jarvis weiß noch, was er gebaut hat.
 - „Starte das Projekt Würfelspiel“, „Öffne den Ordner vom Discord-Bot“
 - Jedes Projekt hat einen eigenen Ordner unter `%USERPROFILE%\Jarvis-Werkstatt`.
+- **Tests stören dich nicht:** Die Werkstatt testet auf einem eigenen, unsichtbaren Windows-Arbeitsplatz. Fenster von Spielen und Programmen, die sie zum Ausprobieren startet, poppen nicht auf deinem Bildschirm auf, auch nicht beim Zocken. Erst „Starte es“ zeigt dir das Ergebnis. (Abschalten: `unsichtbar = false` unter `[werkstatt]`.)
+- **Mit deinen Konnektoren:** Die Werkstatt darf deine claude.ai-Konnektoren benutzen, zum Beispiel Canva für ein Logo.
 - **Stopp** (zweimal klicken) oder **„Brich die Werkstatt ab“** beendet die Arbeit. Was schon gebaut ist, bleibt.
 
 ## Wenn etwas nicht klappt

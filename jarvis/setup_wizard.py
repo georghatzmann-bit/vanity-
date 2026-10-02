@@ -33,21 +33,7 @@ def windows_powershell_env(environ) -> dict:
     return env
 
 
-# Nur Stimmen, die Deutsch sauber aussprechen. Die "Multilingual"-Stimmen (Florian,
-# Seraphina) sprechen kurze Antworten oft englisch aus ("Earl Digt" statt "Erledigt").
-# rate/pitch: jeweils die natürlichste Einstellung (gemessen).
-VOICES = [
-    {"id": "de-DE-ConradNeural", "name": "Conrad", "desc": "Tief und ruhig, der klassische Butler",
-     "gender": "m", "tags": ["Hochdeutsch", "Standard"], "recommended": True, "rate": "-5%", "pitch": "-8Hz"},
-    {"id": "de-AT-JonasNeural", "name": "Jonas", "desc": "Am natürlichsten und am schnellsten",
-     "gender": "m", "tags": ["Österreich"], "rate": "+0%", "pitch": "+0Hz"},
-    {"id": "de-CH-JanNeural", "name": "Jan", "desc": "Sehr natürlich und freundlich",
-     "gender": "m", "tags": ["Schweiz"], "rate": "+0%", "pitch": "+0Hz"},
-    {"id": "de-DE-KatjaNeural", "name": "Katja", "desc": "Klar und freundlich",
-     "gender": "w", "tags": ["Hochdeutsch", "weiblich"], "rate": "+0%", "pitch": "+0Hz"},
-    {"id": "de-AT-IngridNeural", "name": "Ingrid", "desc": "Warm und ruhig",
-     "gender": "w", "tags": ["Österreich", "weiblich"], "rate": "+0%", "pitch": "+0Hz"},
-]
+# Hörprobe für die Premium-Stimmen (die lokalen haben fertige Hörproben, localvoice.PREVIEW_TEXT)
 PREVIEW_TEXT = "Guten Tag, Sir. Alle Systeme sind bereit. Womit darf ich dienen?"
 
 HOTKEYS = [
@@ -353,7 +339,6 @@ class SetupApi:
         self._claude = ClaudeCheck(cfg)
         self._devices: dict[int, str] = {}
         self._playing = threading.Lock()
-        self._previews_started = False
         self._eleven_tier: str | None = None  # Tarif von ElevenLabs, sobald einmal gelesen
         self._local_job: threading.Thread | None = None  # Lokale Stimme einrichten (läuft im Hintergrund)
         self._local_line = ""
@@ -376,7 +361,6 @@ class SetupApi:
                 "mic": str(cfg["audio"].get("input_device") or ""),
                 "ort": str(cfg.get("ich", {}).get("ort", "")),
                 "name": str(cfg.get("ich", {}).get("name", "")),
-                "voice": str(cfg["tts"].get("voice", "")),
                 "hotkey": str(cfg["mute"].get("hotkey", "")),
                 "threshold": float(cfg["wakeword"]["threshold"]),
                 "autostart": enabled(),
@@ -384,7 +368,7 @@ class SetupApi:
                 "ha_url": str(cfg.get("homeassistant", {}).get("url", "")),
                 "ha_token_set": bool(cfg.get("homeassistant", {}).get("token")),
                 "speed": mode_of(cfg["brain"]),
-                "tts_engine": str(cfg["tts"].get("engine", "edge")),
+                "tts_engine": "elevenlabs" if str(cfg["tts"].get("engine", "")) == "elevenlabs" else "lokal",
                 "eleven_key_set": bool(str(cfg["tts"].get("elevenlabs_key", "") or "").strip()),
                 "eleven_voice": str(cfg["tts"].get("elevenlabs_voice", "") or ""),
                 "eleven_voice_name": str(cfg["tts"].get("elevenlabs_voice_name", "") or ""),
@@ -470,68 +454,7 @@ class SetupApi:
         result["threshold"] = threshold
         return result
 
-    # ------------------------------------------------------------ Stimme
-
-    def voices(self) -> list:
-        return VOICES
-
-    def voice_prepare(self) -> bool:
-        """Holt die Hörproben im Hintergrund, sobald der Stimmen-Schritt offen ist.
-        Dann spielt jeder Klick sofort."""
-        if not self._previews_started:
-            self._previews_started = True
-            threading.Thread(target=self._prepare_previews, name="einrichtung-stimmen", daemon=True).start()
-        return True
-
-    def _speech(self, voice: str):
-        from .tts import TextToSpeech
-
-        known = next((v for v in VOICES if v["id"] == voice), {})
-        tts = self._cfg["tts"]
-        return TextToSpeech(
-            {"engine": "edge", "voice": voice, "rate": known.get("rate", tts.get("rate", "+0%")),
-             "pitch": known.get("pitch", tts.get("pitch", "+0Hz"))},
-            STATE_DIR / "stimmen",
-        )
-
-    def _prepare_previews(self) -> None:
-        for v in VOICES:
-            self._speech(v["id"]).prepare([PREVIEW_TEXT])
-
-    def voice_preview(self, voice) -> dict:
-        from .tts import Player
-
-        if not self._playing.acquire(blocking=False):
-            return {"ok": False, "error": "Es spielt gerade schon eine Stimme."}
-        try:
-            speech = self._speech(str(voice))
-            samples, rate = speech.synthesize(PREVIEW_TEXT)
-            if not speech.used_edge:
-                return {"ok": False, "error": "Die Stimme lässt sich gerade nicht laden. Ist das Internet an?"}
-            Player().play(samples, rate, lambda level: None)
-            return {"ok": True, "error": ""}
-        except Exception as exc:
-            log.warning("Stimmprobe: %s", exc)
-            return {"ok": False, "error": "Die Stimme lässt sich gerade nicht abspielen. Ist das Internet an?"}
-        finally:
-            self._playing.release()
-
-    def voice_save(self, voice) -> dict:
-        """Eine der kostenlosen Microsoft-Stimmen nehmen (auch als Ersatz für ElevenLabs)."""
-        voice = str(voice)
-        known = next((v for v in VOICES if v["id"] == voice), None)
-        if known:
-            # Tempo und Tonhöhe passend zur Stimme, sonst klingt z. B. Jonas zu tief.
-            for key in ("rate", "pitch"):
-                result = self._save("tts", key, known[key])
-                if not result["ok"]:
-                    return result
-        result = self._save("tts", "voice", voice)
-        if result["ok"]:
-            result = self._save("tts", "engine", "edge")
-        return result
-
-    # ------------------------------------------------------------ Lokale Stimme (ohne Internet)
+    # ------------------------------------------------------------ Lokale Stimme (Standard, ohne Internet)
 
     def local_state(self) -> dict:
         """Ist die lokale Stimme da, läuft gerade das Einrichten, welche Stimme ist gewählt?"""

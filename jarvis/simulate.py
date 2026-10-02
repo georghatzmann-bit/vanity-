@@ -1,6 +1,6 @@
-"""Simuliert die ganze Kette ohne Mikrofon: erzeugt "Hey Jarvis" und einen
-Befehl mit der Computerstimme und schickt beides durch Wake Word,
-Aufnahme, Spracherkennung, Befehl und Sprachausgabe."""
+"""Simuliert die ganze Kette ohne Mikrofon: erzeugt "Hey Jarvis" mit einer Teststimme und einen
+Befehl mit Jarvis' Stimme und schickt beides durch Wake Word, Aufnahme, Spracherkennung, Befehl
+und Sprachausgabe."""
 
 from __future__ import annotations
 
@@ -68,11 +68,32 @@ class FakeMic:
         pass
 
 
-def build_recording(synthesize, wake_phrase: str = "Hey Jarvis", command: str = "Wie spät ist es?", german_voice: str = "de-DE-ConradNeural") -> np.ndarray:
-    from .tts import materialize, synthesize_edge
+def test_voice(text: str, voice: str, rate: str = "+0%") -> tuple[np.ndarray, int]:
+    """Eine Computerstimme, die nur für diesen Test "Hey Jarvis" sagt (englisch ausgesprochen, so wie
+    Georg es sagt). Jarvis selbst spricht nie damit. Braucht das Zusatzpaket edge-tts und Internet."""
+    import asyncio
 
-    wake, wake_rate = synthesize_edge(wake_phrase, WAKE_VOICE, "-5%")
-    cmd, cmd_rate = synthesize(command) if synthesize else synthesize_edge(command, german_voice)
+    import edge_tts
+    import miniaudio
+
+    async def fetch() -> bytes:
+        audio = bytearray()
+        async for chunk in edge_tts.Communicate(text, voice=voice, rate=rate).stream():
+            if chunk["type"] == "audio":
+                audio.extend(chunk["data"])
+        return bytes(audio)
+
+    decoded = miniaudio.decode(asyncio.run(fetch()), output_format=miniaudio.SampleFormat.SIGNED16,
+                               nchannels=1, sample_rate=24000)
+    return np.frombuffer(decoded.samples, dtype=np.int16).copy(), decoded.sample_rate
+
+
+def build_recording(synthesize, wake_phrase: str = "Hey Jarvis", command: str = "Wie spät ist es?",
+                    german_voice: str = "de-DE-ConradNeural") -> np.ndarray:
+    from .tts import materialize
+
+    wake, wake_rate = test_voice(wake_phrase, WAKE_VOICE, "-5%")
+    cmd, cmd_rate = synthesize(command) if synthesize else test_voice(command, german_voice)
     cmd = materialize(cmd)
     parts = [
         noise(1.0),
@@ -93,8 +114,11 @@ def run_chain(
     try:
         audio = recording if recording is not None else build_recording(synthesize)
         steps.append(Step("Testsprache erzeugen", True, f"{len(audio) / SAMPLE_RATE:.1f} s"))
+    except ImportError:
+        steps.append(Step("Testsprache erzeugen", True, "übersprungen (für den Test fehlt das Zusatzpaket edge-tts)"))
+        return steps
     except Exception as exc:
-        steps.append(Step("Testsprache erzeugen", False, f"Microsoft-Stimme nicht erreichbar: {exc}"))
+        steps.append(Step("Testsprache erzeugen", False, f"Teststimme nicht erreichbar: {exc}"))
         return steps
 
     mic = FakeMic(audio)

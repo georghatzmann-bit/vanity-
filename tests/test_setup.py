@@ -83,17 +83,16 @@ class SetupTestCase(unittest.TestCase):
 
 class SettingsTest(SetupTestCase):
     def test_choices_are_saved_to_config(self):
-        self.assertTrue(self.api.voice_save("de-DE-KillianNeural")["ok"])
         self.assertTrue(self.api.place_save("  Graz, Österreich ")["ok"])
         self.assertTrue(self.api.hotkey_save("f9")["ok"])
         self.assertEqual(self.api.wake_sensitive(True)["threshold"], setup_wizard.SENSITIVE_THRESHOLD)
         saved = self.saved()
-        self.assertEqual(saved["tts"]["voice"], "de-DE-KillianNeural")
         self.assertEqual(saved["ich"]["ort"], "Graz, Österreich")
         self.assertEqual(saved["mute"]["hotkey"], "f9")
         self.assertEqual(saved["wakeword"]["threshold"], 0.35)
         # Die Einrichtung kennt danach die neuen Werte.
-        self.assertEqual(self.api.hello()["values"]["voice"], "de-DE-KillianNeural")
+        self.assertEqual(self.api.hello()["values"]["ort"], "Graz, Österreich")
+        self.assertEqual(self.api.hello()["values"]["tts_engine"], "lokal", "Standard: die lokale Stimme")
         self.assertEqual(self.api.wake_sensitive(False)["threshold"], 0.5)
         self.assertEqual(self.saved()["wakeword"]["threshold"], 0.5)
 
@@ -126,13 +125,10 @@ class SettingsTest(SetupTestCase):
         self.assertTrue(self.api.permission_set(True)["ok"])
         self.assertIs(self.saved()["rechte"]["volle_freigabe"], True)
 
-    def test_only_voices_that_speak_clean_german(self):
-        ids = [v["id"] for v in setup_wizard.VOICES]
-        self.assertFalse([i for i in ids if "Multilingual" in i], "Multilingual-Stimmen sprechen kurze Antworten englisch aus")
-        with mock.patch.object(self.api, "_reload"):
-            self.assertTrue(self.api.voice_save("de-AT-JonasNeural")["ok"])
-        tts = self.saved()["tts"]
-        self.assertEqual((tts["voice"], tts["rate"], tts["pitch"]), ("de-AT-JonasNeural", "+0%", "+0Hz"))
+    def test_old_microsoft_voice_setting_reads_as_local(self):
+        self.api._cfg["tts"]["engine"] = "edge"
+        self.assertEqual(self.api.hello()["values"]["tts_engine"], "lokal")
+        self.assertFalse(hasattr(setup_wizard, "VOICES"), "keine Microsoft-Stimmen mehr zur Auswahl")
 
     def test_hello_describes_the_start(self):
         info = self.api.hello()
@@ -140,12 +136,10 @@ class SettingsTest(SetupTestCase):
         self.assertIn("version", info)
         self.assertEqual(
             set(info["values"]),
-            {"mic", "ort", "name", "voice", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
+            {"mic", "ort", "name", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
              "speed", "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set",
              "pico_key_set", "gespraech", "name_allein"},
         )
-        self.assertEqual(len(self.api.voices()), len(setup_wizard.VOICES))
-        self.assertTrue(all(v["id"].endswith("Neural") for v in self.api.voices()))
 
     def test_microphones_are_listed_once_and_saved_by_name(self):
         with mock.patch("jarvis.audio.input_devices", return_value=DEVICES):
@@ -322,10 +316,30 @@ class UpgradeConfigTest(unittest.TestCase):
 
         with TemporaryDirectory() as folder:
             path = Path(folder) / "config.toml"
-            text = EXAMPLE_PATH.read_text(encoding="utf-8").replace('rate = "-5%"', 'rate = "+5%"')
-            text = text.replace('pitch = "-8Hz"', 'pitch = "-4Hz"')
+            # Die Microsoft-Stimme gibt es nicht mehr, alte Dateien haben die Zeilen aber noch.
+            text = EXAMPLE_PATH.read_text(encoding="utf-8").replace("[tts]\n", '[tts]\nrate = "+5%"\npitch = "-4Hz"\n')
             path.write_text(text.split("[intern]")[0], encoding="utf-8")
             self.assertEqual(upgrade_config(path), ['tts.rate = -5%', 'tts.pitch = -8Hz'])
+
+    def test_voice_and_recognition_become_local(self):
+        """Georg: "Voice komplett lokal, keine Windows-Stimme". Version 7 stellt alte Dateien um, die
+        Schlüssel bleiben."""
+        from jarvis.config import EXAMPLE_PATH, load_config, upgrade_config
+
+        for tts_engine, stt_engine in (("edge", "auto"), ("windows", "groq"), ("elevenlabs", "auto")):
+            with self.subTest(tts=tts_engine, stt=stt_engine), TemporaryDirectory() as folder:
+                path = Path(folder) / "config.toml"
+                text = EXAMPLE_PATH.read_text(encoding="utf-8").split("[intern]")[0]
+                text = text.replace('engine = "lokal"\n# Für "lokal"', f'engine = "{tts_engine}"\n# Für "lokal"')
+                text = text.replace('engine = "lokal"\n# Auf dem eigenen PC', f'engine = "{stt_engine}"\n# Auf dem eigenen PC')
+                text = text.replace('groq_key = ""', 'groq_key = "gsk_behalten"')
+                path.write_text(text + '\n[intern]\nconfig_version = 6\n', encoding="utf-8")
+                self.assertEqual(load_config(path)["tts"]["engine"], tts_engine)
+                changes = upgrade_config(path)
+                self.assertEqual(sorted(changes), ["stt.engine = lokal", "tts.engine = lokal"])
+                cfg = load_config(path)
+                self.assertEqual((cfg["tts"]["engine"], cfg["stt"]["engine"]), ("lokal", "lokal"))
+                self.assertEqual(cfg["stt"]["groq_key"], "gsk_behalten")
 
     def test_changed_value_is_kept(self):
         from jarvis.config import EXAMPLE_PATH, upgrade_config
@@ -606,9 +620,10 @@ class PremiumSettingsTest(SetupTestCase):
         values = self.api.hello()["values"]
         self.assertTrue(values["eleven_key_set"])
         self.assertEqual(values["eleven_voice_name"], "George")
-        # Zurück zur kostenlosen Stimme
-        self.assertTrue(self.api.voice_save("de-DE-ConradNeural")["ok"])
-        self.assertEqual(self.saved()["tts"]["engine"], "edge")
+        self.assertEqual(values["tts_engine"], "elevenlabs")
+        # Eine Microsoft-Stimme gibt es nicht mehr: zurück geht es nur zur lokalen Stimme
+        self.assertFalse(hasattr(self.api, "voice_save"))
+        self.assertFalse(hasattr(self.api, "voices"))
 
     def test_library_voice_is_added_and_chosen(self):
         self.api.eleven_check("sk_test")

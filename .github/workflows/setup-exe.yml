@@ -117,6 +117,12 @@ jobs:
           }
           if (-not (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FERTIG" -Quiet)) { Write-Host "JARVIS-FERTIG fehlt"; exit 1 }
           if (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FEHLER" -Quiet) { Write-Host "Fehler im Fortschritt"; exit 1 }
+          # Jarvis' Stimme und Spracherkennung richtet der Installer gleich mit ein (komplett lokal)
+          & "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe" -c "import pocket_tts, onnx_asr; print('Lokale Stimme und Erkennung installiert')"
+          if ($LASTEXITCODE -ne 0) { Write-Host "Die lokale Stimme fehlt nach der Installation"; exit 1 }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Jarvis\daten\stimmen\lokal-george.wav")) { Write-Host "Hörproben der lokalen Stimme fehlen"; exit 1 }
+          $cfg = Get-Content "$env:LOCALAPPDATA\Programs\Jarvis\config.toml" -Raw -Encoding UTF8
+          if ($cfg -notmatch '(?m)^engine = "lokal"') { Write-Host "config.toml steht nicht auf lokal"; exit 1 }
 
       - name: Probe Umlaute und Leerzeichen im Benutzerordner
         if: ${{ !inputs.nur_bilder }}
@@ -133,6 +139,8 @@ jobs:
           $env:USERPROFILE = $basis
           $env:LOCALAPPDATA = "$basis\AppData\Local"
           $env:JARVIS_FORTSCHRITT = "$basis\fortschritt.txt"
+          # Hier der Ersatzweg ohne lokale Stimme (Whisper), die lokale prüft die Installation davor.
+          $env:JARVIS_OHNE_LOKALE_STIMME = "1"
           & powershell -NoProfile -ExecutionPolicy Bypass -File "$app\werkzeuge\installieren.ps1" -Auto -OhneVerknuepfung
           $code = $LASTEXITCODE
           Write-Host "installieren.ps1 beendet mit $code"
@@ -154,9 +162,10 @@ jobs:
         run: |
           $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
           $app = "$env:LOCALAPPDATA\Programs\Jarvis"
-          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, edge_tts, miniaudio, pystray, psutil; print('Kern-Pakete OK')"
+          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, pystray, psutil, pocket_tts, onnx_asr; print('Kern-Pakete und lokale Stimme OK')"
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          & $py -c "import piper; print('Offline-Stimme OK')"
+          & $py -c "import importlib.util as u; bad = [m for m in ('edge_tts', 'pyttsx3') if u.find_spec(m)]; print('Keine Windows-/Microsoft-Stimme' if not bad else 'noch da: ' + ', '.join(bad))"
+          & $py -c "import piper; print('Reservestimme OK')"
           Push-Location $app
           # Die Messwerte für die Hinweise (hängende Fenster, Prozesse, Akku, Internet, Neustart, Autostart)
           # auf einem echten Windows: darf nicht abstürzen
@@ -167,6 +176,17 @@ jobs:
           Get-Content logs\selbsttest.txt -ErrorAction SilentlyContinue
           Pop-Location
           exit 0
+
+      - name: Probe unsichtbarer Arbeitsplatz (Werkstatt-Tests poppen nicht auf)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          Push-Location "$env:LOCALAPPDATA\Programs\Jarvis"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_versteckt.py"
+          $ok = $LASTEXITCODE
+          Pop-Location
+          exit $ok
 
       - name: Probe Windows-Einbindung (Hintergrund, Anzeige, zweiter Start)
         if: ${{ !inputs.nur_bilder }}
@@ -332,7 +352,7 @@ jobs:
           path: installer-bilder-echt/
           if-no-files-found: ignore
 
-      - name: Probe lokale Stimme (wie der Knopf "Lokal einrichten")
+      - name: Probe lokale Stimme (vom Installer eingerichtet, Knopf "Lokal einrichten" als Reparatur)
         if: ${{ !inputs.nur_bilder }}
         shell: pwsh
         timeout-minutes: 30
@@ -348,7 +368,7 @@ jobs:
           & $py -m jarvis.localvoice selbsttest
           if ($LASTEXITCODE -ne 0) { exit 1 }
           # Nach dem Einrichten müssen alle anderen Teile weiter laden (pocket-tts bringt numpy 2 und torch mit)
-          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, edge_tts, miniaudio, pystray, psutil, piper, torch, onnx_asr; print('Alle Pakete OK, numpy', numpy.__version__, 'torch', torch.__version__)"
+          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, pystray, psutil, piper, torch, onnx_asr; print('Alle Pakete OK, numpy', numpy.__version__, 'torch', torch.__version__)"
           if ($LASTEXITCODE -ne 0) { exit 1 }
           # Jarvis mit der lokalen Stimme starten: Sie muss im laufenden Jarvis laden
           & $py -c "from jarvis.config import save_setting; save_setting('tts', 'engine', 'lokal'); save_setting('stt', 'engine', 'lokal')"

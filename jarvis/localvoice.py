@@ -5,9 +5,10 @@
 - Spracherkennung: Parakeet TDT 0.6B v3 von NVIDIA über onnx-asr (etwa 670 MB, CC-BY-4.0). Im Test
   sechsmal so schnell wie Whisper small auf dem Prozessor und mindestens so genau.
 
-Beides kommt erst auf Wunsch dazu (Einrichtung, Schritt Stimme, "Lokal"): pip-Pakete und Modelle
-zusammen etwa 1,3 GB. Installieren, Modelle laden und Hörproben laufen in eigenen Prozessen
-(`python -m jarvis.localvoice ...`), damit ein neues numpy nie in ein laufendes Jarvis gerät.
+Das ist Jarvis' Standard: Der Installer richtet beides gleich mit ein (pip-Pakete und Modelle zusammen
+etwa 1,3 GB). Ging das nicht (kein Internet), holt Jarvis es im Hintergrund nach (ensure_installed),
+in der Einrichtung geht es auch per Klick. Installieren, Modelle laden und Hörproben laufen in eigenen
+Prozessen (`python -m jarvis.localvoice ...`), damit ein neues numpy nie in ein laufendes Jarvis gerät.
 """
 
 from __future__ import annotations
@@ -199,6 +200,35 @@ def prepare(previews: Path, on_line: Callable[[str], None] | None = None, timeou
 
 def preview_file(previews: Path, voice: str) -> Path:
     return Path(previews) / f"lokal-{voice_id(voice)}.wav"
+
+
+_ensuring = threading.Lock()
+
+
+def ensure_installed(previews: Path, on_line: Callable[[str], None] | None = None) -> bool:
+    """Holt Stimme und Spracherkennung nach, wenn sie fehlen (der Installer richtet sie sonst gleich mit
+    ein, ohne Internet ging das aber nicht). Läuft in eigenen Prozessen, im Hintergrund.
+    True = gerade frisch eingerichtet (vorher fehlte etwas, jetzt ist alles da)."""
+    have = installed()
+    if all(have.values()) and all(preview_file(previews, v["id"]).exists() for v in VOICES):
+        return False
+    if not _ensuring.acquire(blocking=False):
+        return False  # läuft schon (z. B. aus der Einrichtung)
+    try:
+        fresh = not all(have.values())
+        if fresh:
+            log.info("Lokale Stimme fehlt, Jarvis richtet sie im Hintergrund ein.")
+            ok, last = install(on_line)
+            if not ok:
+                log.warning("Lokale Stimme ließ sich nicht installieren: %s", last)
+                return False
+        ok, last = prepare(previews, on_line)
+        if not ok:
+            log.warning("Modelle der lokalen Stimme ließen sich nicht laden: %s", last)
+            return False
+        return fresh and all(installed().values())
+    finally:
+        _ensuring.release()
 
 
 def _python() -> str:
