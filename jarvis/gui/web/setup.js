@@ -411,6 +411,8 @@
 
   async function leave(id) {
     if (id === 'mic') await micStop();
+    // Den Vornamen auch ohne "Speichern" behalten, wenn man gleich auf "Weiter" klickt
+    if (id === 'place') await nameCommit(false);
   }
 
   async function enter(id) {
@@ -1115,6 +1117,25 @@
 
   // ------------------------------------------------------------------ 4 Name und Wohnort
 
+  async function nameCommit(always) {
+    const input = $('nameInput');
+    if (!input) return true;
+    const value = input.value.trim();
+    if (!always && value === (S.name || '')) return true;
+    try {
+      const r = await call('name_save', value);
+      if (r && r.ok) {
+        S.name = value;
+        if (always) toast(value ? 'Hallo ' + value + '. Jarvis merkt es sich.' : 'Gespeichert.', 'ok');
+        return true;
+      }
+      toast((r && r.error) || 'Das ging nicht.', 'error');
+    } catch (err) {
+      failed(err);
+    }
+    return false;
+  }
+
   function placeEnter() {
     const input = $('placeInput');
     if (!S.place.result) showWeather(null);
@@ -1550,8 +1571,9 @@
     const rows = [
       ['Mikrofon', micLabel() || 'Windows-Standard', 'mic', S.mic.detected ? ['ok', 'Getestet'] : null],
       ['Stimme', voiceName() || 'Standard', 'voice', null],
-      ['Name', S.name || 'Georg', 'place', null],
-      ['Wohnort', S.place.saved || 'Nicht eingetragen', 'place', S.place.saved ? null : ['warn', 'Kein Wetter']],
+      // Name und Ort in einer Zeile (ein Schritt): so passt die Übersicht weiter ohne Scrollen ins Fenster
+      ['Name und Ort', (S.name || 'Georg') + ', ' + (S.place.saved || 'kein Ort'), 'place',
+        S.place.saved ? null : ['warn', 'Kein Wetter']],
       ['Claude', claudeOk ? (S.claude.model ? prettyModel(S.claude.model) : 'Verbunden')
         : checking ? 'Wird geprüft …' : 'Noch nicht bereit', 'claude',
         claudeOk ? ['ok', 'Verbunden'] : checking ? null : ['warn', 'Prüfen']],
@@ -1689,20 +1711,9 @@
         failed(err);
       }
     });
-    $('nameForm').addEventListener('submit', async (e) => {
+    $('nameForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      const value = $('nameInput').value.trim();
-      try {
-        const r = await call('name_save', value);
-        if (r && r.ok) {
-          S.name = value;
-          toast(value ? 'Hallo ' + value + '. Jarvis merkt es sich.' : 'Gespeichert.', 'ok');
-        } else {
-          toast((r && r.error) || 'Das ging nicht.', 'error');
-        }
-      } catch (err) {
-        failed(err);
-      }
+      nameCommit(true);
     });
     $('placeForm').addEventListener('submit', (e) => {
       e.preventDefault();
