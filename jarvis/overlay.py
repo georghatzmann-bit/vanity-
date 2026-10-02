@@ -109,69 +109,103 @@ def _fit(text: str, font, width: float) -> str:
     return shown
 
 
-# Dieselbe lebendige Kugel wie im Fenster (gui/web/orb.js): tief, mitte, hell, zwei Nebenfarben,
-# wie stark die Form atmet, wie stark sie mit der Stimme wellt und wie schnell der farbige Schein kreist
+# Dieselbe Kugel wie im Fenster (gui/web/orb.js): feine Linien, ruhig, leicht von oben gesehen.
+# Je Zustand: Linienfarbe, Tönung, wie stark sie einfließt, Helligkeit, wie stark die Oberfläche
+# atmet und mit der Stimme schwingt, Drehtempo und ob beim Nachdenken ein heller Streifen durchläuft
 ORB = {
-    "idle": ((16, 22, 84), (62, 92, 255), (196, 206, 255), (138, 92, 255), (48, 182, 255), 0.032, 0.06, 0.12),
-    "listening": ((12, 34, 104), (52, 128, 255), (204, 236, 255), (104, 112, 255), (40, 214, 255), 0.04, 0.085, 0.25),
-    "thinking": ((26, 16, 92), (98, 84, 255), (214, 204, 255), (170, 96, 255), (72, 148, 255), 0.04, 0.03, 1.6),
-    "speaking": ((16, 24, 100), (70, 104, 255), (204, 214, 255), (146, 98, 255), (52, 192, 255), 0.038, 0.1, 0.3),
-    "muted": ((26, 28, 36), (80, 85, 98), (150, 154, 166), (96, 100, 114), (90, 98, 112), 0.012, 0.0, 0.03),
-    "error": ((86, 18, 28), (226, 84, 84), (255, 204, 198), (255, 120, 104), (214, 70, 128), 0.035, 0.05, 0.2),
+    "idle": ((226, 230, 240), (150, 168, 255), 0.14, 0.55, 0.035, 0.05, 0.1, 0.0),
+    "listening": ((236, 240, 252), (150, 176, 255), 0.42, 0.78, 0.045, 0.09, 0.16, 0.0),
+    "thinking": ((232, 232, 250), (172, 164, 255), 0.34, 0.7, 0.04, 0.03, 0.34, 1.0),
+    "speaking": ((236, 240, 252), (142, 166, 255), 0.4, 0.8, 0.045, 0.1, 0.18, 0.0),
+    "muted": ((118, 122, 134), (118, 122, 134), 0.0, 0.4, 0.012, 0.0, 0.03, 0.0),
+    "error": ((238, 206, 204), (242, 100, 95), 0.55, 0.7, 0.03, 0.04, 0.08, 0.0),
 }
+ORB_TILT = -0.36
+ORB_RINGS = 11
+ORB_SEG = 44
+ORB_SUPERSAMPLE = 3  # PIL zeichnet Linien ohne Glättung: groß zeichnen, dann weich verkleinern
 
 
 def _orb(state: str, radius: int, now: float, level: float = 0.0):
-    """Jarvis' Kugel wie im Fenster: eine weiche, flüssige Form mit fließendem Licht, Glanz und einem
-    farbigen Schein, der mit der Stimme stärker wird. Beim Nachdenken kreist der Schein schneller."""
+    """Jarvis' Kugel wie im Fenster: eine ruhige Kugel aus feinen Linien, die sich langsam dreht.
+    Mit der Stimme laufen Wellen durch die Ringe, beim Nachdenken ein heller Streifen."""
+    import numpy as np
+    from PIL import Image, ImageDraw
+
+    ink, tint, mix, alpha, amp, ripple, spin, wave = ORB.get(state, ORB["idle"])
+    lv = max(0.0, min(1.0, level))
+    ss = ORB_SUPERSAMPLE
+    size = radius * 2 + 1
+    big = size * ss
+    img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    c = big / 2
+    big_r = radius * ss * 0.72 * (1 + 0.035 * lv)
+    k = mix * (0.7 + lv * 0.6)
+    color = tuple(round(a + (b - a) * k) for a, b in zip(ink, tint))
+    t = float(now)
+    v = (np.arange(ORB_RINGS) + 0.5) / ORB_RINGS
+    phi = (v * math.pi)[:, None]
+    lam = (np.arange(ORB_SEG + 1) / ORB_SEG * 2 * math.pi)[None, :]
+    rho = np.sin(phi)
+    surface = 1 + rho * (amp * (0.55 * np.sin(2 * lam + 3 * phi + t * 0.55) + 0.45 * np.sin(3 * phi - lam - t * 0.4))
+                         + ripple * lv * (0.7 * np.sin(7 * phi - t * 6) + 0.3 * np.sin(2 * lam + 3 * phi - t * 3)))
+    turn = lam + t * spin
+    x = rho * np.cos(turn) * surface
+    z = rho * np.sin(turn) * surface
+    y = np.cos(phi) * surface
+    y2 = y * math.cos(ORB_TILT) - z * math.sin(ORB_TILT)
+    z2 = y * math.sin(ORB_TILT) + z * math.cos(ORB_TILT)
+    px, py = c + x * big_r, c + y2 * big_r
+    depth = (z2[:, :-1] + z2[:, 1:]) / 2
+    base = alpha * (0.85 + lv * 0.3)
+    stripe = (t * 0.55) % 1.3
+    width = max(1, round(0.9 * ss))
+    # Hinten nur angedeutet, vorne klar: so wirkt sie räumlich
+    for lo, hi, strength in ((-2.0, -0.3, 0.16), (-0.3, 0.3, 0.45), (0.3, 2.0, 1.0)):
+        for i in range(ORB_RINGS):
+            band = wave * math.exp(-((v[i] - stripe) ** 2) / 0.006) if wave else 0.0
+            fill = color + (max(0, min(255, round(255 * base * (1 + band * 1.4) * strength))),)
+            run: list = []
+            for j in range(ORB_SEG):
+                if lo <= depth[i, j] < hi:
+                    if not run:
+                        run.append((px[i, j], py[i, j]))
+                    run.append((px[i, j + 1], py[i, j + 1]))
+                elif run:
+                    if len(run) > 1:
+                        draw.line(run, fill=fill, width=width)
+                    run = []
+            if len(run) > 1:
+                draw.line(run, fill=fill, width=width)
+    lines = img.resize((size, size), Image.LANCZOS)
+    out = _orb_glow(size, tint, lv, alpha).copy()
+    out.alpha_composite(lines)
+    return out
+
+
+def _orb_glow(size: int, tint: tuple, level: float, alpha: float):
+    """Leiser Schein hinter der Kugel und ein wenig Licht innen (je Größe und Stärke zwischengespeichert)."""
     import numpy as np
     from PIL import Image
 
-    deep, mid, light, hue_a, hue_b, shape, ripple, spin = ORB.get(state, ORB["idle"])
-    deep, mid, light, hue_a, hue_b = (np.array(c, np.float32) for c in (deep, mid, light, hue_a, hue_b))
-    grid = _grids.get(radius)
-    if grid is None:  # Koordinaten je Größe nur einmal rechnen
-        size = radius * 2 + 1
-        y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-        nx, ny = (x - radius) / max(1, radius), (y - radius) / max(1, radius)
-        grid = (nx, ny, np.hypot(nx, ny), np.arctan2(ny, nx))
-        if len(_grids) > 8:
-            _grids.clear()
-        _grids[radius] = grid
-    nx, ny, d, th = grid
-    t = float(now)
-    lv = max(0.0, min(1.0, level))
-    v = ripple * lv
-    # Rand der Form: langsame, weiche Wellen, mit der Stimme stärker und schneller (wie ein Tropfen)
-    edge = 0.66 * (1 + shape * (0.6 * np.sin(2 * th + t * 0.8) + 0.4 * np.sin(3 * th - t * 0.6 + 1.9))
-                   + v * (0.55 * np.sin(2 * th - t * 2.6 + 4.1) + 0.45 * np.sin(3 * th + t * 3.3 + 0.7)
-                          + 0.2 * np.sin(5 * th - t * 4.4 + 2.2)))
-    inside = np.clip((edge - d) * radius, 0, 1)  # weiche, glatte Kante
-    # Innen: Verlauf von der Mitte zum tiefen Rand, zwei wandernde farbige Lichter, Glanz oben links
-    k = np.clip(d / edge, 0, 1)[..., None] ** 1.5
-    rgb = mid * (1 - k) + deep * k
-    for color, fx, fy, px, py in ((hue_b, 0.71, 0.53, 0.0, 1.7), (hue_a, 0.43, 0.89, 2.1, 0.4)):
-        bx = np.cos(t * 0.8 * fx + px) * 0.3
-        by = np.sin(t * 0.8 * fy + py) * 0.3
-        glow = np.exp(-((nx - bx) ** 2 + (ny - by) ** 2) / 0.1)[..., None] * 0.8
-        rgb = 255 - (255 - rgb) * (1 - glow * color / 255)  # "screen": Licht addiert sich weich
-    gloss = np.clip(1 - np.hypot(nx + 0.22, ny + 0.26) / 0.4, 0, 1)[..., None] ** 2
-    rgb = rgb + (255 - rgb) * gloss * 0.45
-    rim = np.clip(1 - np.abs(d - edge) * radius * 0.8, 0, 1) * np.clip(0.55 - (nx + ny) * 0.6, 0, 1)
-    rgb = rgb + (light - rgb) * rim[..., None] * 0.5
-    # Außen: farbiger Schein, mal violett, mal türkis, der langsam kreist
-    turn = (0.5 + 0.5 * np.sin(th + t * spin))[..., None]
-    veil = (hue_a * (1 - turn) + hue_b * turn) * 0.55 + mid * 0.45  # bleibt im Blau der Kugel
-    out = np.clip((d - edge) / np.maximum(1.0 - edge, 1e-3), 0, 1)
-    halo = (1 - out) ** 2 * (d > edge) * (0.3 + 0.45 * lv)
-    color = rgb * inside[..., None] + veil * (1 - inside[..., None])
-    alpha = np.clip(inside * 255 + halo * 120 * (1 - inside), 0, 255)
-    data = np.dstack([np.clip(color, 0, 255), alpha]).astype(np.uint8)
-    return Image.fromarray(data, "RGBA")
+    key = ("glow", size, tint, round(level, 1), round(alpha, 2))
+    if key in _static_cache:
+        return _static_cache[key]
+    r = size / 2
+    y, x = np.mgrid[0:size, 0:size].astype(np.float32)
+    d = np.hypot(x - r + 0.5, y - r + 0.5) / max(r, 1)
+    glow = np.clip(1 - d, 0, 1) ** 2 * (0.16 + 0.3 * level) * min(1.0, alpha * 1.6)
+    rgb = np.zeros((size, size, 3), np.float32) + np.array(tint, np.float32)
+    data = np.dstack([rgb, np.clip(glow * 255, 0, 255)]).astype(np.uint8)
+    img = Image.fromarray(data, "RGBA")
+    if len(_static_cache) > 48:
+        _static_cache.clear()
+    _static_cache[key] = img
+    return img
 
 
 _static_cache: dict = {}
-_grids: dict = {}
 
 
 def _background(size: tuple[int, int], scale: float, color: tuple[int, int, int]):
@@ -250,7 +284,7 @@ def render(view: View, now: float | None = None, scale: float = 1.0):
             height = (6 + (10 + 14 * level) * wave) * scale
             x = base_x + i * 6 * scale
             draw.rounded_rectangle(
-                (x, cy - height / 2, x + 3 * scale, cy + height / 2), radius=1.5 * scale, fill=color + (220,)
+                (x, cy - height / 2, x + 3 * scale, cy + height / 2), radius=1.5 * scale, fill=(196, 206, 240, 200)
             )
     return img
 
