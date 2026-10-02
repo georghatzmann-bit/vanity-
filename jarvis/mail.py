@@ -638,6 +638,7 @@ class Mailbox:
         self._said_at = -1e9
         self._waiting: list[Message] = []
         self._overview: tuple[float, dict | None] = (-1e9, None)
+        self._paused: dict[str, float] = {}  # Konto -> bis wann keine Ansage-Abrufe (abgelehntes Passwort)
         self.errors: dict[str, str] = {}
 
     def __repr__(self) -> str:
@@ -784,6 +785,10 @@ class Mailbox:
             raise MailError(f"Die Mail {message_id} gibt es nicht mehr.")
         return found
 
+    def forget_overview(self) -> None:
+        """Beim nächsten overview() frisch abrufen ("Jetzt abrufen")."""
+        self._overview = (-1e9, None)
+
     def overview(self, limit: int = 5, max_age: float = 60.0) -> dict:
         """Für die Oberfläche: {ungelesen, letzte: [...], fehler}. Höchstens einmal pro Minute frisch."""
         stamp, cached = self._overview
@@ -813,7 +818,11 @@ class Mailbox:
                 count, messages = self.unread()
             except MailError as exc:
                 return f"Die Mails kann ich gerade nicht abrufen, Sir. {exc}"
-            return spoken_unread(count, messages)
+            said = spoken_unread(count, messages)
+            missing = [a.label for a in self.accounts() if a.id in self.errors]
+            if missing:  # ein Postfach war nicht erreichbar: dann zählt Jarvis nur die anderen
+                said += f" {_join(missing)} {'war' if len(missing) == 1 else 'waren'} gerade nicht erreichbar."
+            return said
         if kind == "von" and self.accounts():
             try:
                 message = self.latest_from(who)
@@ -836,6 +845,8 @@ class Mailbox:
         found: list[Message] = []
         unseen: dict[str, set[int]] = {}
         for account in self.accounts():
+            if time.monotonic() < self._paused.get(account.id, 0.0):
+                continue  # Passwort abgelehnt: nicht alle paar Minuten wieder anklopfen
             known = state.get(account.id) or {}
             try:
                 validity, top, unseen[account.id], fresh = self._client(account).new_unseen(
@@ -843,7 +854,10 @@ class Mailbox:
             except MailError as exc:
                 self.errors[account.id] = str(exc)
                 log.info("Mail %s: %s", account.id, exc)
+                if exc.kind == "passwort":
+                    self._paused[account.id] = time.monotonic() + 3600
                 continue
+            self._paused.pop(account.id, None)
             self.errors.pop(account.id, None)
             state[account.id] = {"uidvalidity": validity, "letzte": top}
             found += [m for m in fresh if m.unread and is_important(m, people)]
@@ -987,11 +1001,11 @@ _MAILS = r"(?:e-?mails?|mails?)"
 _CALL = r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?"
 _NEW = re.compile(
     _CALL + r"(?:"
-    rf"(?:hab|habe|hast|hätte)\s+(?:ich|du)\s+(?:(?:irgendwelche|neue|ungelesene|eine\s+neue|ne\s+neue|noch|schon)\s+)*"
+    rf"(?:hab|habe|hast|hätte)\s+(?:ich|du)\s+(?:(?:irgendwelche|neue|neuen|ungelesene|eine\s+neue|ne\s+neue|noch|schon)\s+)*"
     rf"(?:{_MAILS}|post)(?:\s+(?:bekommen|gekriegt|für\s+mich))?"
     rf"|(?:sind|gibt\s+es|gibt's|gibts|kamen|kam|ist)\s+(?:(?:irgendwelche|neue|ungelesene|eine|noch)\s+)*"
     rf"{_MAILS}(?:\s+(?:da|gekommen|reingekommen|angekommen|für\s+mich))?"
-    rf"|(?:irgendwelche\s+)?(?:neue|ungelesene)\s+{_MAILS}"
+    rf"|(?:irgendwelche\s+)?(?:neue|neuen|ungelesene|ungelesenen)\s+{_MAILS}"
     rf"|wie\s+viele\s+(?:neue|ungelesene)\s+{_MAILS}(?:\s+(?:hab|habe)\s+ich)?"
     rf"|(?:schau|guck|sieh|check|checke|prüf|prüfe)\s+(?:mal\s+)?(?:bitte\s+)?(?:nach\s+)?(?:meine|die|nach\s+neuen)\s+{_MAILS}"
     r")(?:\s+(?:da|noch|schon|heute|eigentlich|denn|bitte))*\s*[?.!]*$",

@@ -1,8 +1,8 @@
 """Mails lesen über IMAP (nur lesen): Kodierungen, Suche, Konten, Ansagen und Sätze."""
 
 import datetime as dt
-import imaplib
 import json
+import logging
 import tempfile
 import time
 import unittest
@@ -147,9 +147,9 @@ class MailboxTest(unittest.TestCase):
         imap.start()
         self.addCleanup(imap.stop)
         self.clock = Clock(dt.datetime(2026, 10, 2, 12, 0))
-        logs = self.assertLogs("jarvis.geheim", level="WARNING")  # Linux: einfach kodiert, mit Warnung
-        logs.__enter__()
-        self.addCleanup(logs.__exit__, None, None, None)
+        quiet = mock.patch.object(logging.getLogger("jarvis.geheim"), "level", logging.ERROR)  # Linux: nur kodiert
+        quiet.start()
+        self.addCleanup(quiet.stop)
 
     def tearDown(self):
         self.folder.cleanup()
@@ -252,6 +252,23 @@ class MailboxTest(unittest.TestCase):
         state = json.loads((self.state / "mail-stand.json").read_text(encoding="utf-8"))
         self.assertEqual(state["gmail"], {"uidvalidity": "7", "letzte": 111})
 
+    def test_rejected_password_pauses_and_a_missing_mailbox_is_named(self):
+        mailbox = self.mailbox()
+        mailbox.add("gmail", "georg.test@gmail.com", "app-passwort")
+        self.secrets.set("apple", "abcd-efgh-ijkl-mnop")
+        both = self.mailbox("beispiel@icloud.com")
+        self.gmail.down = True
+        self.assertEqual(both.answer("neu"), "Keine neuen Mails, Sir. Gmail war gerade nicht erreichbar.")
+        self.gmail.down = False
+        self.gmail.logins.clear()  # Passwort beim Anbieter widerrufen
+        logins = lambda: sum(1 for e in self.gmail.log if e[0] == "LOGIN")  # noqa: E731
+        both.poll([], force=True)
+        tried = logins()
+        self.assertIn("Gmail lehnt das Passwort ab", both.errors["gmail"])
+        both.poll([], force=True)
+        self.assertEqual(logins(), tried, "eine Stunde Ruhe, statt alle paar Minuten abgelehnt zu werden")
+        self.assertIn("icloud", json.loads((self.state / "mail-stand.json").read_text(encoding="utf-8")))
+
     def test_renumbered_mailbox_is_a_first_look_again(self):
         mailbox = self.mailbox()
         mailbox.add("gmail", "georg.test@gmail.com", "app-passwort")
@@ -270,6 +287,7 @@ class SentenceTest(unittest.TestCase):
             "Hab ich neue Mails?": ("neu", ""), "Neue E-Mails?": ("neu", ""), "Habe ich ungelesene E-Mails?": ("neu", ""),
             "Sind neue Mails da?": ("neu", ""), "Gibt es neue E-Mails?": ("neu", ""), "Jarvis, hab ich Post?": ("neu", ""),
             "Check mal meine Mails": ("neu", ""), "Wie viele ungelesene Mails habe ich?": ("neu", ""),
+            "Irgendwelche neuen Mails?": ("neu", ""), "Hab ich neue Mails bekommen?": ("neu", ""),
             "Was schreibt Max?": ("von", "Max"), "Was hat mir Max geschrieben?": ("von", "Max"),
             "Hat Anna geschrieben?": ("von", "Anna"), "Was schreibt die Sparkasse?": ("von", "Sparkasse"),
             "Lies mir die letzte Mail von Max vor": ("von", "Max"),

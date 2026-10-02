@@ -814,6 +814,8 @@ class ICloudCalendar:
         except AppleError as exc:
             self.error = str(exc)
             log.info("iCloud-Kalender: %s", exc)
+            # Abgelehntes Passwort: nicht alle fünf Minuten wieder anklopfen. Bremst iCloud: länger warten.
+            self._fetched += {"passwort": 55 * 60, "bremse": 10 * 60}.get(exc.kind, 0)
             return False
         with self._lock:
             gone = set(self._objects) - {c["id"] for c in calendars}

@@ -254,6 +254,17 @@ class PhoneCalendarTest(unittest.TestCase):
         self.assertIn("Zahnarzt", [e.title for e in calendar.events(dt.datetime(2026, 10, 1), dt.datetime(2026, 10, 9))])
         self.icloud = FakeICloud()
 
+    def test_rejected_password_waits_an_hour(self):
+        import time
+
+        revoked = ICloudCalendar(self.icloud.account(password="widerrufen"), self.state / "icloud", now=self.clock)
+        self.assertFalse(revoked.refresh(force=True))
+        self.assertEqual(revoked.error, "Apple lehnt das Passwort ab. Bitte ein neues app-spezifisches Passwort erstellen.")
+        self.assertGreater(revoked._fetched - time.monotonic(), 50 * 60)
+        before = len(self.icloud.requests)
+        self.assertFalse(revoked.refresh())
+        self.assertEqual(len(self.icloud.requests), before)
+
     def test_another_apple_id_does_not_see_the_old_cache(self):
         other = ICloudCalendar(self.icloud.account(user="andere@icloud.com"), self.state / "icloud", now=self.clock)
         self.assertEqual(other.sources(), {})

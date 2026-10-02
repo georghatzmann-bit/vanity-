@@ -272,6 +272,36 @@ abos = []
 # So viele Minuten vor einem Termin sagt Jarvis Bescheid (0 = nie).
 vorwarnung_minuten = 15
 
+[apple]
+# Dein iPhone direkt in Jarvis: der Kalender (lesen und eintragen), deine iCloud-Mail und die Geburtstage aus
+# deinen Kontakten. Am einfachsten im Jarvis-Fenster unter "Verbinden", Bereich iPhone.
+# Du brauchst deine Apple-ID (die E-Mail-Adresse, mit der du dich am iPhone anmeldest) und ein app-spezifisches
+# Passwort: account.apple.com (früher appleid.apple.com) > Anmeldung und Sicherheit > App-spezifische Passwörter.
+# Ein Passwort reicht für Kalender, Mail und Kontakte. Es steht nie hier: Jarvis speichert es verschlüsselt in
+# daten\geheim.json, nur dein Windows-Benutzer kann es lesen.
+apple_id = ""
+# In diesen iPhone-Kalender trägt Jarvis neue Termine ein (Name). Leer = ein Kalender namens Jarvis, Privat, Home
+# oder Zuhause, sonst der erste, in den Jarvis schreiben darf. Am einfachsten im Fenster auswählen.
+kalender = ""
+# Diese iPhone-Kalender liest Jarvis nicht mit (Namen), zum Beispiel ["Arbeit"].
+ausblenden = []
+# true = Geburtstage aus deinen iCloud-Kontakten: Jarvis sagt am Tag selbst Bescheid.
+geburtstage = true
+# true = deine iCloud-Mail mitlesen (nur lesen).
+mail = true
+
+[mail]
+# E-Mails lesen, und zwar nur lesen: Jarvis markiert nichts als gelesen, löscht nichts und sendet nichts.
+# iCloud-Mail ist dabei, sobald dein iPhone verbunden ist. Gmail, GMX, web.de und Yahoo verbindest du im
+# Jarvis-Fenster unter "Verbinden", Bereich Mail, mit einem App-Passwort des Anbieters (bei GMX und web.de
+# muss außerdem in deren Einstellungen unter POP3/IMAP der Zugriff erlaubt sein). Die Passwörter stehen nie
+# hier, sondern verschlüsselt in daten\geheim.json.
+# true = neue Mails von wichtigen Absendern (deine Kontakte) kurz ansagen, höchstens alle zehn Minuten und nie
+# Newsletter. Zockst du im Vollbild oder bist du nicht am PC, kommt es aufs Handy (Verbinden > Handy).
+ansagen = true
+# So oft schaut Jarvis nach neuen Mails (Minuten).
+abruf_minuten = 5
+
 [shop]
 # Shop-Hilfe für einen Shopify-Shop (im Fenster unter Verbinden > Shop einrichten).
 # Jarvis sagt Umsatz und neue Bestellungen an, nennt die nächste Auszahlung und legt Produkte

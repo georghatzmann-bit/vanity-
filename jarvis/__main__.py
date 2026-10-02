@@ -113,10 +113,23 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .zeitplan import Schedules
 
     assistant.schedules = Schedules(STATE_DIR / "zeitplaene.json")
-    # Termine: eigene und (falls eingetragen) Google-, Outlook- oder iCloud-Kalender zum Mitlesen.
-    from .kalender import Calendar
+    # Georgs iPhone über iCloud (Apple-ID und app-spezifisches Passwort, verschlüsselt in daten/geheim.json)
+    from .apple import account_from_config
 
-    assistant.calendar = Calendar(STATE_DIR / "kalender.json", cfg.get("kalender", {}).get("abos", []))
+    try:
+        assistant.icloud = account_from_config(cfg, STATE_DIR)
+    except Exception as exc:
+        log.warning("iCloud: %s", exc)
+        assistant.icloud = None
+    # Termine: eigene, (falls eingetragen) Google-, Outlook- oder iCloud-Abos zum Mitlesen und, wenn
+    # verbunden, der iPhone-Kalender (lesen und eintragen).
+    from .kalender import calendar_from_config
+
+    assistant.calendar = calendar_from_config(cfg, STATE_DIR, account=assistant.icloud)
+    # Mails, nur lesen: iCloud-Mail mit dem iPhone, dazu Gmail, GMX, web.de, Yahoo.
+    from .mail import mailbox_from_config
+
+    assistant.mail = mailbox_from_config(cfg, STATE_DIR)
     try:
         # Shop-Hilfe (Shopify): das Client-Secret liegt verschlüsselt im Tresor
         from .geheim import Secrets
@@ -211,6 +224,13 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                             log.exception("Shop")
 
                     threading.Thread(target=shop_check, name="jarvis-shop", daemon=True).start()
+            if tick % 60 == 45 and getattr(assistant, "mail", None) is not None:
+                # Neue Mails von wichtigen Absendern (abgerufen höchstens alle paar Minuten, eigener Thread)
+                if not any(t.name == "jarvis-mail" and t.is_alive() for t in threading.enumerate()):
+                    threading.Thread(target=check_mail, args=(assistant,), name="jarvis-mail", daemon=True).start()
+            if tick % 600 == 90 and getattr(assistant, "icloud", None) is not None:
+                # Geburtstage aus den iCloud-Kontakten (höchstens alle sechs Stunden)
+                threading.Thread(target=sync_contacts, args=(assistant,), name="jarvis-kontakte", daemon=True).start()
             if tick % 600 == 120:
                 learn_from_yesterday(assistant)
 
@@ -305,6 +325,25 @@ def start_server(cfg: dict, assistant: Assistant, ui: Ui) -> str:
         log.error("Web-Eingang startet nicht: %s", exc)
         ui.toast(f"Die Handy-Verbindung startet nicht: {exc}", "error")
         return ""
+
+
+def check_mail(assistant: Assistant) -> None:
+    try:
+        assistant.check_mail()
+    except Exception:
+        log.exception("Mails")
+
+
+def sync_contacts(assistant: Assistant) -> None:
+    """Geburtstage aus den iCloud-Kontakten ins Gedächtnis (abschalten mit [apple] geburtstage = false)."""
+    if not (assistant._cfg.get("apple") or {}).get("geburtstage", True):
+        return
+    from .apple import sync_birthdays
+
+    try:
+        sync_birthdays(getattr(assistant, "icloud", None), assistant.memory, STATE_DIR)
+    except Exception:
+        log.exception("iCloud-Kontakte")
 
 
 def learn_from_yesterday(assistant: Assistant) -> None:

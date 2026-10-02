@@ -343,6 +343,9 @@ class Assistant:
             # Bestellungen?" kann auch Amazon meinen, das beantwortet dann Claude).
             if asked is not None and (self.shop.configured or re.search(r"\b(?:shop|laden|shopify)\b", text, re.I)):
                 return self._shop_command(asked)
+        mailed = self._mail_answer(text)
+        if mailed is not None:
+            return mailed
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             projects = getattr(self.workshop, "project_command", None)
@@ -846,10 +849,14 @@ class Assistant:
                 said += f" Erinnerungen: {_join_names(notes)}."
             return said
         if action == "remove":
-            gone = calendar.remove(data)
+            from .kalender import CalendarError
+
+            try:
+                gone = calendar.remove(data)  # mit iPhone: auch dort, bei einer Serie nur den einen Termin
+            except CalendarError as exc:
+                return str(exc)
             if not gone:
-                return (f"Einen eigenen Termin „{data}“ finde ich nicht, Sir. Termine aus Ihrem Google- oder "
-                        "Outlook-Kalender ändern Sie bitte dort.")
+                return calendar.not_found(data)
             return f"Gestrichen, Sir: {gone[0].spoken(now, with_day=True)}."
         title, start, end, all_day = data
         event = calendar.add(title, start, end, all_day)
@@ -972,6 +979,51 @@ class Assistant:
                               else f"Sir, jetzt: {event.title}{where}.")
         for change in calendar.changes():
             self.announce(f"Sir, eine Änderung im Kalender: {change}")
+
+    # ------------------------------------------------------------------ Mails (nur lesen)
+
+    def _mail_answer(self, text: str) -> str | None:
+        """"Hab ich neue Mails?" und "Was schreibt Max?" sofort, ohne Claude. Zusammenfassen und Antworten
+        formulieren macht Claude. None = keine solche Frage, oder keine Mail von dieser Person gefunden."""
+        mail = getattr(self, "mail", None)
+        if mail is None:
+            return None
+        from .mail import match_mail
+
+        found = match_mail(text)
+        if found is None:
+            return None
+        try:
+            with self._step("Schaut in die Mails", "message"):
+                return mail.answer(*found)
+        except Exception:
+            log.exception("Mails")
+            return None
+
+    def check_mail(self) -> None:
+        """Neue Mails von wichtigen Absendern (Kontakte im Gedächtnis) kurz ansagen: höchstens alle zehn
+        Minuten, keine Newsletter. Zockt Georg im Vollbild oder sitzt er nicht am PC, kommt es aufs Handy."""
+        mail = getattr(self, "mail", None)
+        if mail is None or not mail.configured or not self._cfg.get("mail", {}).get("ansagen", True):
+            return
+        people = self.memory.mail_people() if self.memory is not None else []
+        mail.poll(people)
+        if self.busy or self.speaking or self._recording:
+            return  # die Mails warten bis zum nächsten Mal
+        text = mail.take_announcement()
+        if not text:
+            return
+        try:
+            here = self._present() and not self._fullscreen() and not self.gaming
+        except Exception:
+            here = True
+        if here:
+            self.announce(text)
+            return
+        self.ui.message("jarvis", text)
+        push = getattr(self, "push", None)
+        if push is not None and push.enabled:
+            push.send(text, click=self._phone_link())
 
     def _commands_list(self) -> str:
         commands = self.memory.custom_commands()

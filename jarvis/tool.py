@@ -79,10 +79,17 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
-  termine [heute|morgen|woche|<tag>]   zeigt Termine (eigene und aus Georgs Kalender)
+  termine [heute|morgen|woche|<tag>]   zeigt Termine (iPhone-Kalender, eigene und Kalender-Abos)
   termin "<wann>" "<titel>" [minuten]  trägt einen Termin ein ("morgen um 18 Uhr", "Freitag 9:30",
-                               nur "Samstag" = ganztags), Dauer in Minuten (Vorgabe 60)
-  termin-loeschen "<wörter>"   löscht einen eigenen Termin (Kalender-Abos nur lesen)
+                               nur "Samstag" = ganztags), Dauer in Minuten (Vorgabe 60). Ist das iPhone
+                               verbunden, landet er im iPhone-Kalender.
+  termin-loeschen "<wörter>"   löscht den nächsten passenden Termin (auch im iPhone, bei einer Serie nur
+                               diesen einen; Kalender-Abos nur lesen)
+  kalender-liste               zeigt Georgs iPhone-Kalender (in welchen neue Termine kommen)
+  mails [anzahl]               die neuesten Mails aller Postfächer (Vorgabe 10), mit Kennung und Anfang
+  mail <kennung>               liest eine Mail ganz (Kennung aus der Liste, z. B. icloud:4711)
+  mail-suche "<wörter>"        sucht in den Mails (Absender, Betreff, Text)
+                               Mails nur lesen: Jarvis markiert nichts als gelesen und sendet nichts.
   zeitplan "<wann>" "<befehl>" erledigt einen Befehl regelmäßig von selbst, wann z. B. "jeden Morgen um 8",
                                "werktags um 18 Uhr", "freitags um 20 Uhr" (Befehl in Georgs Worten)
   zeitplaene                   zeigt alle Zeitpläne
@@ -162,6 +169,14 @@ def _shop(cfg: dict):
     from .shop import Shop
 
     return Shop(cfg, Secrets(STATE_DIR / "geheim.json"), state_path=STATE_DIR / "shop.json")
+
+
+def _birthday_line(birthday: dict) -> str:
+    """"Max Müller am 03.10. (in 2 Tagen)" für die Gedächtnis-Übersicht."""
+    days = birthday["in_tagen"]
+    when = "heute" if days == 0 else "morgen" if days == 1 else f"in {days} Tagen"
+    day = birthday["datum"]
+    return f"{birthday['shown']} am {day[8:10]}.{day[5:7]}. ({when})"
 
 
 def need_confirmation(action: str) -> int:
@@ -252,6 +267,9 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print("Kontakte: " + ", ".join(f"{c['name']} ({c.get('app', '?')})" for c in contacts[:20]))
         for routine in routines:
             print(f"Gewohnheit: {routine.describe()}")
+        soon = memory.upcoming_birthdays(days=30)
+        if soon:  # aus den Fakten und aus den iPhone-Kontakten
+            print("Geburtstage in den nächsten 30 Tagen: " + "; ".join(_birthday_line(b) for b in soon[:10]))
         return 0
 
     if command in ("befehl", "befehle", "befehl-loeschen", "befehl-löschen"):
@@ -350,12 +368,83 @@ def _dispatch(command: str, rest: list[str]) -> int:
         print(f"Fähigkeit gespeichert: {path}. Sie steht ab dem nächsten Gespräch in deiner Liste.")
         return 0
 
+    if command in ("kalender-liste", "kalenderliste", "kalender"):
+        from .kalender import calendar_from_config
+
+        phone = calendar_from_config(cfg, STATE_DIR).apple
+        if phone is None:
+            print(f"Das iPhone ist nicht verbunden. {_user()} verbindet es im Jarvis-Fenster unter Verbinden > iPhone.")
+            return 1
+        phone.refresh_stale()
+        calendars = phone.calendars()
+        if not calendars:
+            print("Keine iPhone-Kalender gefunden" + (f" ({phone.error})." if phone.error else "."))
+            return 1
+        for item in calendars:
+            marks = ["schreibbar" if item["schreibbar"] else "nur lesen"]
+            if item["gewaehlt"]:
+                marks.append("neue Termine landen hier")
+            if not item["sichtbar"]:
+                marks.append("ausgeblendet")
+            print(f"{item['name']}  [{', '.join(marks)}]")
+        if phone.error:
+            print(f"Hinweis: {phone.error} Gezeigt wird der letzte Stand.")
+        return 0
+
+    if command in ("mails", "mail", "mail-suche", "mailsuche", "mail-lesen"):
+        from .mail import MailError, mailbox_from_config
+
+        mailbox = mailbox_from_config(cfg, STATE_DIR)
+        if not mailbox.configured:
+            print(f"Noch kein Postfach verbunden. {_user()} verbindet iCloud (mit dem iPhone), Gmail, GMX, web.de "
+                  "oder Yahoo im Jarvis-Fenster unter Verbinden.")
+            return 1
+        try:
+            if command in ("mail", "mail-lesen"):
+                if not rest:
+                    print("Aufruf: mail <kennung> (die Kennung steht bei mails, z. B. icloud:4711)")
+                    return 1
+                found = mailbox.read(rest[0])
+                print(f"Von: {found.sender} <{found.address}>" if found.sender else f"Von: {found.address}")
+                if found.to:
+                    print(f"An: {found.to}")
+                print(f"Datum: {found.date:%a %d.%m.%Y %H:%M}" if found.date else "Datum: unbekannt")
+                print(f"Betreff: {found.subject or '(ohne Betreff)'}")
+                print("Ungelesen (bleibt es auch)." if found.unread else "Gelesen.")
+                print()
+                text = found.text or "(kein Text, vielleicht nur ein Anhang)"
+                print(text[:12000] + ("\n[... gekürzt]" if len(text) > 12000 else ""))
+                return 0
+            if command in ("mail-suche", "mailsuche"):
+                words = [w for w in " ".join(rest).replace('"', " ").split() if len(w) >= 2]
+                if not words:
+                    print('Aufruf: mail-suche "<wörter>"')
+                    return 1
+                messages = mailbox.search(words, 15)
+                if not messages:
+                    print("Keine passende Mail gefunden.")
+            else:
+                count = int(rest[0]) if rest and rest[0].isdigit() else 10
+                messages = mailbox.latest(max(1, min(count, 50)))
+                if not messages:
+                    print("Der Posteingang ist leer.")
+        except MailError as exc:
+            print(f"Nicht geklappt: {exc}")
+            return 1
+        for message in messages:
+            print(message.line())
+            if message.snippet:
+                print(f"    {message.snippet}")
+        for ident, error in mailbox.errors.items():
+            print(f"Hinweis: {ident} war nicht erreichbar ({error}).")
+        return 0
+
     if command in ("termine", "termin", "termin-loeschen", "termin-löschen"):
         import datetime as dt
 
-        from .kalender import Calendar, _ask_day, parse_slot
+        from .kalender import CalendarError, _ask_day, calendar_from_config, parse_slot
 
-        calendar = Calendar(STATE_DIR / "kalender.json", cfg.get("kalender", {}).get("abos", []))
+        calendar = calendar_from_config(cfg, STATE_DIR)
         calendar.refresh_stale()
         now = dt.datetime.now()
         if command == "termine":
@@ -373,23 +462,39 @@ def _dispatch(command: str, rest: list[str]) -> int:
             for event in events:
                 when = "ganztags" if event.all_day else f"{event.start:%H:%M}-{event.end:%H:%M}"
                 where = f" @ {event.place}" if event.place else ""
-                mark = "" if event.source == "jarvis" else f" [{event.source}]"
+                source = calendar.source_name(event.source)
+                mark = f" [{source}]" if source else ""
                 print(f"{event.start:%a %d.%m.} {when}  {event.title}{where}{mark}")
             for url, error in calendar.errors.items():
-                print(f"Hinweis: Ein Kalender-Abo war nicht erreichbar ({error}), gezeigt wird der letzte Stand.")
+                if url == "icloud":
+                    print(f"Hinweis: iCloud war nicht erreichbar ({error}), gezeigt wird der letzte Stand.")
+                else:
+                    print(f"Hinweis: Ein Kalender-Abo war nicht erreichbar ({error}), gezeigt wird der letzte Stand.")
             return 0
         if command in ("termin-loeschen", "termin-löschen"):
-            gone = calendar.remove(" ".join(rest))
-            print(f"Gelöscht: {gone[0].title} ({gone[0].start:%d.%m. %H:%M})" if gone
-                  else "Kein passender eigener Termin. Termine aus Google oder Outlook ändert Georg dort.")
-            return 0 if gone else 1
+            try:
+                gone = calendar.remove(" ".join(rest))
+            except CalendarError as exc:
+                print(f"Nicht gelöscht: {exc}")
+                return 1
+            if not gone:
+                print("Kein passender Termin." + (f" Termine aus Kalender-Abos ändert {_user()} dort." if calendar.apple
+                      else f" Termine aus Google oder Outlook ändert {_user()} dort."))
+                return 1
+            source = calendar.source_name(gone[0].source)
+            print(f"Gelöscht: {gone[0].title} ({gone[0].start:%d.%m. %H:%M})" + (f" aus dem iPhone-Kalender {source}"
+                                                                               if source else ""))
+            return 0
         if len(rest) < 2:
             print('Aufruf: termin "<wann>" "<titel>" [minuten]')
             return 1
         start, all_day = parse_slot(rest[0], now)
         minutes = int(rest[2]) if len(rest) > 2 and rest[2].isdigit() else 60
         event = calendar.add(rest[1], start, start + dt.timedelta(minutes=minutes) if not all_day else None, all_day)
-        print(f"Termin eingetragen: {event.spoken(now, with_day=True)}")
+        source = calendar.source_name(event.source)
+        where = f" (iPhone-Kalender {source})" if source else (
+            " (erst einmal bei Jarvis, ins iPhone kommt er, sobald iCloud erreichbar ist)" if calendar.apple else "")
+        print(f"Termin eingetragen: {event.spoken(now, with_day=True)}{where}")
         return 0
 
     if command in ("shop", "shop-bestellungen", "shop-auszahlung", "shop-entwurf"):
