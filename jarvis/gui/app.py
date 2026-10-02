@@ -464,7 +464,9 @@ class Api:
         self._assistant.mail = mailbox_from_config(cfg, STATE_DIR)
         self._sync_contacts_later()
         result = self.apple_info()
-        result.update(ok=True, fehler="" if calendars else "In iCloud ist noch kein Kalender eingeschaltet.")
+        result["ok"] = True
+        if not calendars:
+            result["fehler"] = "Verbunden, aber in iCloud ist noch kein Kalender eingeschaltet."
         return result
 
     def _sync_contacts_later(self) -> None:
@@ -472,7 +474,8 @@ class Api:
         from ..config import STATE_DIR
 
         account, memory = self._icloud(), getattr(self._assistant, "memory", None)
-        if account is None or memory is None:
+        wanted = (self._assistant._cfg.get("apple") or {}).get("geburtstage", True)
+        if account is None or memory is None or not wanted:
             return
         threading.Thread(target=lambda: sync_birthdays(account, memory, STATE_DIR, force=True),
                          name="jarvis-kontakte", daemon=True).start()
