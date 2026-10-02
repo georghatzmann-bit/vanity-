@@ -495,6 +495,11 @@ class FalseFriendsTest(unittest.TestCase):
         for said in ("Spiel nicht so laut", "Spiel keine Musik mehr", "Wie fahre ich den PC herunter?",
                      "Wie mache ich einen Screenshot unter Windows?", "Ruf mich morgen an", "Minimiere das Risiko"):
             self.assertIsNone(intents.match(said), said)
+        # Nur Füllwörter nach "Spiel": Georg sucht noch den Titel. Mit der Vorab-Erkennung in der Pause
+        # hätte Jarvis sonst gleich ein Lied namens "mal" gesucht und nicht mehr weiter zugehört.
+        for said in ("Spiel mal", "Spiel doch", "Spiel bitte", "Spiel jetzt", "Spiel einfach", "Spiel doch mal"):
+            self.assertIsNone(intents.match(said), said)
+        self.assertEqual(intents.match("Spiel mal Thunderstruck").arg, "Thunderstruck")
         for said in ("Merk dir das nicht", "Merk dir nicht alles"):
             self.assertIsNone(match_memory(said), said)
         self.assertEqual(intents.match("Zeig mir, was du kannst").name, "help")

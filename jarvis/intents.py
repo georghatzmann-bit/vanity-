@@ -689,6 +689,8 @@ def match_web(text: str) -> Intent | None:
                 continue
             if re.match(r"(?:nicht|kein|keine|keinen|nichts|bitte nicht)\b", query, re.I):
                 continue  # "Spiel nicht so laut", "Spiel keine Musik mehr": kein Titel
+            if re.fullmatch(r"(?:(?:bitte|mal|kurz|schnell|doch|gleich|jetzt|einfach|halt|eben)\W*)+", query, re.I):
+                continue  # "Spiel mal …" (Georg sucht noch den Titel): kein Lied namens "mal"
             query = re.sub(r"^(?:das lied|den song|das video|das album|die playlist|musik von|lieder von|songs von|"
                            r"etwas von|was von|ein lied von|einen song von)\s+", "", query, flags=re.I)
             return Intent("play", query, {"site": site.lower()})
