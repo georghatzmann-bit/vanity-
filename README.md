@@ -42,11 +42,11 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Ruhiges, modernes Fenster:** eine leuchtende Kugel als Jarvis' Gesicht, darunter das Gespräch, rechts was heute ansteht, die Auslastung des PCs und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
 - **Grafische Einrichtung** und ein **Installer im Jarvis-Look**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
 
-| Werkstatt-Projekte | Handy-App |
+| Werkstatt und Labor | Handy-App |
 |---|---|
-| ![Werkstatt: alle Projekte](docs/bilder/projekte.jpg) | ![Jarvis auf dem Handy](docs/bilder/handy.jpg) |
+| ![Werkstatt: Projekte und Labor](docs/bilder/projekte.jpg) | ![Jarvis auf dem Handy](docs/bilder/handy.jpg) |
 
-| Verbinden: Handy, Alexa, Discord | Gedächtnis |
+| Verbinden: iPhone, Mail, Shop | Gedächtnis |
 |---|---|
 | ![Verbinden](docs/bilder/verbinden.jpg) | ![Gedächtnis](docs/bilder/gedaechtnis.jpg) |
 

@@ -68,7 +68,7 @@ Die Alternative zu ElevenLabs: Eine natürliche deutsche Stimme, die ganz auf de
 
 Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa, Discord, Kalender und Shop.
 
-![Verbinden: Handy, Alexa und Discord](docs/bilder/verbinden.jpg)
+![Verbinden: iPhone, Mail und mehr](docs/bilder/verbinden.jpg)
 
 ### Handy
 
@@ -131,6 +131,8 @@ Jarvis liest deinen Kalender mit (nur lesen): Er sagt 15 Minuten vor einem Termi
 **Geklappt, wenn:** Jarvis „Kalender verbunden: … Termine“ meldet. Die Adresse ist geheim wie ein Passwort.
 
 ### Shop (Shopify)
+
+![Verbinden: Shop](docs/bilder/verbinden-shop.jpg)
 
 Hast du einen Shopify-Shop, behält Jarvis ihn im Blick: **„Wie läuft der Shop?“** nennt Bestellungen und Umsatz von heute und dieser Woche, **„Wann kommt die nächste Auszahlung?“** das Geld von Shopify. Neue Bestellungen sagt er an (beim Zocken nur aufs Handy). Auf Wunsch legt er Produkte als **Entwurf** an („Leg im Shop ein Mauspad mit Jarvis-Logo für 19,90 an“). Veröffentlichen, Preise im Laden ändern, Geld ausgeben und Kunden schreiben macht er **nie**, das bleibt dein Klick.
 
@@ -258,7 +260,7 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 ## Die Werkstatt: Jarvis programmiert für dich
 
-![Die Werkstatt-Projekte](docs/bilder/projekte.jpg)
+![Werkstatt-Projekte und Labor](docs/bilder/projekte.jpg)
 
 Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
 

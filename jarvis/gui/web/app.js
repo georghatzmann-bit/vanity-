@@ -746,6 +746,8 @@
     if (S.cpuHistory.length > 60) S.cpuHistory.shift();
     const n = S.cpuHistory.length;
     if (n < 6) return; // erst nach ein paar Werten zeichnen, sonst ist es nur ein Strich
+    const box = document.getElementById('sparkBox');
+    if (box && box.hidden) box.hidden = false;
     const step = 120 / 59;
     const pts = S.cpuHistory.map((v, i) => [120 - (n - 1 - i) * step, 27 - (v / 100) * 24]);
     const line = pts.map((pt, i) => (i ? 'L' : 'M') + pt[0].toFixed(1) + ' ' + pt[1].toFixed(1)).join(' ');
