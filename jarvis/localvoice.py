@@ -88,6 +88,7 @@ class PocketVoice:
             from pocket_tts import TTSModel
 
             torch.set_num_threads(_threads())
+            _utf8_configs()
             started = time.monotonic()
             self._model = TTSModel.load_model(language="german")
             self._state = self._model.get_state_for_audio_prompt(self.voice)
@@ -117,6 +118,26 @@ class PocketVoice:
         with self._lock:
             for chunk in self._model.generate_audio_stream(self._state, text):
                 feed(_pcm16(chunk).tobytes())
+
+
+def _utf8_configs() -> None:
+    """Pocket TTS liest seine YAML-Datei ohne Angabe der Kodierung. Unter Windows ist das cp1252, und
+    das deutsche Modell scheitert an den Anführungszeichen „“ darin ('charmap' codec can't decode).
+    Nur in diesem Modul liest open() darum Text als UTF-8, der Rest von Jarvis bleibt, wie er ist."""
+    try:
+        from pocket_tts.utils import config as module
+    except Exception:
+        return
+    if getattr(module, "_jarvis_utf8", False):
+        return
+
+    def utf8_open(file, mode="r", *args, **kwargs):
+        if "b" not in mode and len(args) < 2 and kwargs.get("encoding") is None:
+            kwargs["encoding"] = "utf-8"
+        return open(file, mode, *args, **kwargs)
+
+    module.open = utf8_open
+    module._jarvis_utf8 = True
 
 
 def _pcm16(audio) -> np.ndarray:

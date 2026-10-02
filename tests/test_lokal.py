@@ -84,6 +84,24 @@ class VoiceTest(unittest.TestCase):
         self.assertEqual(FakePocket.instances, [])
         self.assertIsNone(tts._local)
 
+    def test_config_is_read_as_utf8_on_windows(self):
+        """Pocket TTS liest german.yaml mit open(pfad, "r"): Unter Windows (cp1252) scheiterte daran die Stimme."""
+        package, utils, config = (types.ModuleType(n) for n in ("pocket_tts", "pocket_tts.utils", "pocket_tts.utils.config"))
+        exec("def load(path):\n    with open(path, 'r') as f:\n        return f.read()\n", config.__dict__)
+        package.utils, utils.config = utils, config
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(
+                sys.modules, {"pocket_tts": package, "pocket_tts.utils": utils, "pocket_tts.utils.config": config}):
+            path = Path(folder) / "german.yaml"
+            path.write_text("remove_characters:\n  '„': ''\n  '“': ''\n", encoding="utf-8")
+            localvoice._utf8_configs()
+            localvoice._utf8_configs()  # zweimal schadet nicht
+            with mock.patch("builtins.open", wraps=open) as opened:
+                self.assertIn("„", config.load(path))
+            self.assertEqual(opened.call_args.kwargs.get("encoding"), "utf-8")
+            with mock.patch("builtins.open", wraps=open) as opened:
+                config.open(path, "rb").close()
+            self.assertNotIn("encoding", opened.call_args.kwargs, "Binärdateien bleiben, wie sie sind")
+
     def test_voice_names(self):
         self.assertEqual(localvoice.voice_id("Stuart_Bell"), "stuart_bell")
         self.assertEqual(localvoice.voice_id("unbekannt"), "george")
