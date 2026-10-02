@@ -335,6 +335,12 @@ class Assistant:
             noted = match_notebook(text)
             if noted is not None:
                 return self._notebook_command(*noted)
+        if getattr(self, "shop", None) is not None:
+            from .shop import match_shop
+
+            asked = match_shop(text)
+            if asked is not None:
+                return self._shop_command(asked)
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             projects = getattr(self.workshop, "project_command", None)
@@ -910,6 +916,45 @@ class Assistant:
         answer = self.handle(command, speak=present)
         if not present and answer:
             self._push(f"{command}: {answer}")
+
+    def _shop_command(self, kind: str) -> str:
+        """"Wie läuft der Shop?" und "Wann kommt die nächste Auszahlung?" sofort, ohne Claude."""
+        from .shop import ShopError, spoken_payout, spoken_summary
+
+        shop = self.shop
+        if not shop.configured:
+            return ("Der Shop ist noch nicht verbunden, Sir. Im Fenster unter Verbinden > Shop geht das in "
+                    "zwei Minuten.")
+        try:
+            if kind == "payout":
+                return spoken_payout(shop.payouts(), shop._now().date())
+            return spoken_summary(shop.summary())
+        except ShopError as exc:
+            log.warning("Shop: %s", exc)
+            return str(exc)
+
+    def check_shop(self) -> None:
+        """Neue Bestellungen ansagen ("Neue Bestellung im Shop, Sir: 29 Euro"), aufs Handy, wenn Georg
+        weg ist. Beim Zocken im Vollbild nur aufs Handy, nicht in die Ohren."""
+        shop = getattr(self, "shop", None)
+        if shop is None or not shop.configured or not shop.announce_orders:
+            return
+        from .shop import ShopError, spoken_order
+
+        try:
+            fresh = shop.new_orders()
+        except ShopError as exc:
+            log.info("Shop: %s", exc)
+            return
+        for order in fresh[:5]:
+            text = spoken_order(order)
+            if self.gaming or self._fullscreen():
+                self.ui.message("jarvis", text)
+                push = getattr(self, "push", None)
+                if push is not None and push.enabled:
+                    push.send(text, priority=3, click=self._phone_link())
+            else:
+                self.announce(text)
 
     def check_calendar(self) -> None:
         """Kurz vor einem Termin Bescheid sagen, und Änderungen im Kalender ansagen."""

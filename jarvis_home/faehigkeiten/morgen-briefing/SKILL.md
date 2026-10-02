@@ -12,6 +12,7 @@ Sammle in einem Rutsch (parallel, wenn möglich):
 2. Termine und Erinnerungen von heute: `python -m jarvis.tool termine heute` und `python -m jarvis.tool erinnerungen`. Liegen zwei Termine zu dicht beieinander oder fehlt Zeit für die Fahrt, sag es.
 3. Geburtstage heute oder in den nächsten Tagen stehen in `<gedaechtnis>` oder in `python -m jarvis.tool gedaechtnis`.
 4. Zwei, drei Schlagzeilen mit der Websuche, bevorzugt zu Georgs Interessen (Spiele, Technik, was im Gedächtnis steht). Je eine halbe Zeile.
-5. Wenn es passt: ein Hinweis aus dem Tagebuch von gestern (`python -m jarvis.tool notizbuch-tag gestern`), z. B. eine offene Aufgabe.
+5. Ist der Shop verbunden: `python -m jarvis.tool shop` und ein Satz dazu (neue Bestellungen, was auf den Versand wartet). Meldet der Befehl, dass kein Shop verbunden ist, lass es weg.
+6. Wenn es passt: ein Hinweis aus dem Tagebuch von gestern (`python -m jarvis.tool notizbuch-tag gestern`), z. B. eine offene Aufgabe.
 
-Reihenfolge beim Sprechen: Begrüßung mit Wetter, dann Termine und Geburtstage, dann Schlagzeilen, zum Schluss ein Angebot ("Soll ich Discord und Spotify öffnen, Sir?"), wenn es zu seinen Gewohnheiten passt.
+Reihenfolge beim Sprechen: Begrüßung mit Wetter, dann Termine und Geburtstage, dann Schlagzeilen und der Shop, zum Schluss ein Angebot ("Soll ich Discord und Spotify öffnen, Sir?"), wenn es zu seinen Gewohnheiten passt.
