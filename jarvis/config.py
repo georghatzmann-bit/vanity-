@@ -166,7 +166,7 @@ def save_setting(section: str, key: str, value, path: Path | None = None) -> Non
     """Schreibt einen Wert (Text, Zahl, Ja/Nein) in config.toml und lässt Kommentare
     und den Rest stehen."""
     path = path or CONFIG_PATH
-    with _SAVE_LOCK:  # Fenster, Telegram und Hinweise speichern aus verschiedenen Threads
+    with _SAVE_LOCK:  # Fenster, Einrichtung, Stimme und Hinweise speichern aus verschiedenen Threads
         _save_setting(path, section, key, value)
 
 

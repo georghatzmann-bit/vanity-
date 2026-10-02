@@ -290,23 +290,23 @@ class TomlValueTest(unittest.TestCase):
 
 class SaveFromManyThreadsTest(unittest.TestCase):
     def test_nothing_lost_and_the_file_stays_readable(self):
-        # Fenster, Telegram und Hinweise speichern gleichzeitig: ohne Sperre gingen Werte verloren
+        # Fenster, Stimme und Hinweise speichern gleichzeitig: ohne Sperre gingen Werte verloren
         # oder config.toml war danach kaputt (Jarvis startet dann nicht mehr)
         with TemporaryDirectory() as folder:
             path = Path(folder) / "config.toml"
-            path.write_text("[telegram]\n", encoding="utf-8")
+            path.write_text("[test]\n", encoding="utf-8")
             start = threading.Barrier(30)
 
             def save(i):
                 start.wait()
-                save_setting("telegram", f"wert{i}", i, path)
+                save_setting("test", f"wert{i}", i, path)
 
             threads = [threading.Thread(target=save, args=(i,)) for i in range(30)]
             for thread in threads:
                 thread.start()
             for thread in threads:
                 thread.join()
-            self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["telegram"],
+            self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["test"],
                              {f"wert{i}": i for i in range(30)})
 
 
