@@ -276,6 +276,12 @@ def _selftest_main() -> int:
     sentence = "Guten Abend, Sir. Die Erinnerung für morgen ist eingetragen."
     voice = PocketVoice(DEFAULT_VOICE)
     started = time.monotonic()
+    # Erster Start nach der Installation: Windows prüft die frischen Dateien (torch), das kann
+    # länger dauern als die 30 s, die ein Satz im Gespräch höchstens wartet.
+    if not voice.usable(wait=600):
+        print(f"Fehler: Stimme lädt nicht: {voice.error or 'nach 10 Minuten noch nicht fertig'}", flush=True)
+        return 1
+    print(f"Stimme geladen in {time.monotonic() - started:.1f} s", flush=True)
     samples, rate = voice.synthesize(sentence)
     seconds = samples.size / rate
     print(f"Stimme: {seconds:.1f} s Sprache in {time.monotonic() - started:.1f} s (mit Laden)", flush=True)
