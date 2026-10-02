@@ -174,7 +174,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **„Hey Jarvis“** sagen (englisch ausgesprochen), kurz warten, Befehl auf Deutsch sprechen. Mit Picovoice-Schlüssel reicht **„Jarvis“**.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
-- **Das Fenster:** In der Mitte Jarvis' Kugel. Sie leuchtet heller, wenn er zuhört oder spricht, und wird grau, wenn das Mikrofon aus ist. Ein Klick auf die Kugel, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Verbinden**, **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht, wie ausgelastet der PC ist, und das **Gedächtnis**.
+- **Das Fenster:** In der Mitte Jarvis' Kugel. Sie leuchtet heller, wenn er zuhört oder spricht, und wird grau, wenn das Mikrofon aus ist. Ein Klick auf die Kugel, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Verbinden**, **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht, die neueste **Post** (mit verbundenem Postfach: ein Klick, und Jarvis liest die Mail vor), wie ausgelastet der PC ist, der **Shop** (wenn verbunden) und das **Gedächtnis**.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.

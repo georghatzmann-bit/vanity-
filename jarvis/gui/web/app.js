@@ -698,6 +698,61 @@
     open.textContent = info.offen === 1 ? 'Eine Bestellung wartet auf den Versand.' : info.offen + ' Bestellungen warten auf den Versand.';
   }
 
+  // Post: die letzten Mails (ohne Newsletter), nur wenn ein Postfach verbunden ist. Klick: Jarvis liest vor.
+  function mailWhen(iso) {
+    const text = String(iso || '');
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) return '';
+    const now = new Date();
+    const today = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-'
+      + String(now.getDate()).padStart(2, '0');
+    return text.slice(0, 10) === today ? text.slice(11, 16) : Number(text.slice(8, 10)) + '.' + Number(text.slice(5, 7)) + '.';
+  }
+
+  async function refreshMailCard() {
+    const card = document.getElementById('mailCard');
+    if (!card) return;
+    let accounts = [];
+    let info = null;
+    try {
+      accounts = (await call('mail_accounts')) || [];
+      if (accounts.length) info = await call('apple_info');
+    } catch {
+      accounts = [];
+    }
+    const mail = info && info.mail;
+    card.hidden = !(accounts.length && mail);
+    if (card.hidden) return;
+    const unread = Number(mail.ungelesen) || 0;
+    document.getElementById('mailCount').textContent = unread ? (unread > 99 ? '99+' : unread) + ' ungelesen' : '';
+    const items = (mail.letzte || []).filter((m) => !m.newsletter).slice(0, 3);
+    document.getElementById('mailRail').replaceChildren(...items.map((m) => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mail-item' + (m.ungelesen ? ' unread' : '');
+      const sender = String(m.von || m.adresse || 'Unbekannt');
+      btn.title = 'Von Jarvis vorlesen lassen';
+      btn.setAttribute('aria-label', (m.ungelesen ? 'Ungelesen: ' : '') + sender + ', ' + String(m.betreff || '') + '. Vorlesen lassen');
+      const time = document.createElement('time');
+      time.textContent = mailWhen(m.datum);
+      const what = document.createElement('span');
+      what.className = 'what';
+      const b = document.createElement('b');
+      b.textContent = sender;
+      const small = document.createElement('small');
+      small.textContent = String(m.betreff || '(ohne Betreff)');
+      what.append(b, small);
+      btn.append(time, what);
+      btn.addEventListener('click', () => sendText('Lies mir die letzte Mail von ' + sender + ' vor'));
+      li.append(btn);
+      return li;
+    }));
+    const empty = document.getElementById('mailEmpty');
+    empty.hidden = items.length > 0;
+    empty.textContent = mail.fehler ? String(mail.fehler)
+      : 'Nichts Wichtiges. Fragen Sie jederzeit „Hab ich neue Mails?“.';
+  }
+
   // Schnellbefehle unter dem Kern: die eigenen Befehle zuerst, dann die häufigsten
   const DECK_DEFAULT = [['Briefing', 'Briefing bitte'], ['Was steht heute an?', 'Was steht heute an?'],
     ['Gaming-Modus', 'Gaming-Modus an']];
@@ -874,8 +929,11 @@
     refreshDeck();
     refreshToday();
     refreshShopCard();
+    refreshMailCard();
     setInterval(refreshToday, 60000);
     setInterval(refreshShopCard, 300000);
+    setInterval(refreshMailCard, 300000);
+    document.addEventListener('jarvis-mail', refreshMailCard);
     document.addEventListener('jarvis-shop', refreshShopCard);
     pollLoop(gen);
   }
@@ -1496,6 +1554,11 @@
   const DEMO_TS = { url: '' };
 
   // wie apple_info() und mail_accounts() in gui/app.py (DEMO_APPLE, DEMO_MAIL_ACCOUNTS)
+  // "2026-10-02T09:15" für heute (0) oder vor ein paar Tagen, wie mail.py es liefert
+  const demoStamp = (days, hm) => {
+    const d = new Date(Date.now() - days * 86400000);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + 'T' + hm;
+  };
   const DEMO_APPLE = {
     verbunden: true, email: 'ge•••g@icloud.com', geburtstage: 14, fehler: '',
     kalender: [
@@ -1506,9 +1569,10 @@
     mail: {
       ungelesen: 3, fehler: '',
       letzte: [
-        { id: 'icloud:4711', von: 'Max Mustermann', adresse: 'max@example.com', betreff: 'Grillen am Samstag?', ungelesen: true },
-        { id: 'icloud:4710', von: 'Amazon', adresse: 'versand-bestaetigung@amazon.de', betreff: 'Versandbestätigung', ungelesen: true },
-        { id: 'gmail:812', von: 'Sparkasse', adresse: 'info@sparkasse.de', betreff: 'Ihr Kontoauszug für Oktober', ungelesen: true },
+        { id: 'icloud:4711', von: 'Max Mustermann', adresse: 'max@example.com', betreff: 'Grillen am Samstag?', datum: demoStamp(0, '09:15'), ungelesen: true, newsletter: false, vorschau: 'Hast du Lust, am Samstag zu grillen? Um sechs bei mir.' },
+        { id: 'icloud:4710', von: 'Amazon', adresse: 'versand-bestaetigung@amazon.de', betreff: 'Ihr Paket kommt heute', datum: demoStamp(0, '08:40'), ungelesen: true, newsletter: false, vorschau: 'Ihre Bestellung ist unterwegs: Controller für die Xbox.' },
+        { id: 'gmail:813', von: 'Steam', adresse: 'noreply@steampowered.com', betreff: 'Herbst-Sale: bis zu 90 %', datum: demoStamp(0, '07:02'), ungelesen: true, newsletter: true, vorschau: '' },
+        { id: 'gmail:812', von: 'Sparkasse', adresse: 'info@sparkasse.de', betreff: 'Ihr Kontoauszug für Oktober', datum: demoStamp(1, '18:05'), ungelesen: false, newsletter: false, vorschau: 'Ihr Kontoauszug für Oktober liegt bereit.' },
       ],
     },
   };

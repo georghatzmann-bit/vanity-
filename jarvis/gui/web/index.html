@@ -109,12 +109,21 @@
       </div>
     </main>
 
-    <!-- Rechts: Heute, System, Gedächtnis -->
-    <aside class="rail" aria-label="Heute, System und Gedächtnis">
+    <!-- Rechts: Heute, Post, System, Shop, Gedächtnis -->
+    <aside class="rail" aria-label="Heute, Post, System und Gedächtnis">
       <section class="card today-card" aria-labelledby="todayHead">
         <header class="card-head"><h2 id="todayHead">Heute</h2></header>
         <ul class="today" id="today"></ul>
         <p class="empty" id="todayEmpty">Nichts geplant. Sagen Sie zum Beispiel „Trag morgen um 18 Uhr Training ein“ oder „Erinnere mich in 20 Minuten an den Tee“.</p>
+      </section>
+
+      <section class="card mail-card" id="mailCard" aria-labelledby="mailHead" hidden>
+        <header class="card-head">
+          <h2 id="mailHead">Post</h2>
+          <span class="card-meta" id="mailCount"></span>
+        </header>
+        <ul class="today mail-rail" id="mailRail"></ul>
+        <p class="empty" id="mailEmpty" hidden></p>
       </section>
 
       <section class="card" aria-labelledby="sysHead">

@@ -430,6 +430,7 @@
       try {
         renderApple(await call('apple_info'));
         renderMail(await call('mail_accounts'));
+        document.dispatchEvent(new CustomEvent('jarvis-mail'));
       } catch (err) {
         // Jarvis-Version ohne iPhone-Anbindung: den Reiter gar nicht erst anbieten
         if (String((err && err.message) || '').startsWith('nicht verbunden')) hideTab('apple');
