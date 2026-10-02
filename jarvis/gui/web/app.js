@@ -1188,7 +1188,8 @@
         push({ type: 'level', value: 0.4 + Math.random() * 0.5 });
         await sleep(170);
       }
-      push({ type: 'message', role: 'jarvis', id, text: answer, final: true });
+      push({ type: 'message', role: 'jarvis', id, text: answer, final: true,
+        model: steps && steps.length ? 'Sonnet · normal' : 'Sonnet · schnell' });
       await levels(700, 0.6);
       state(muted ? 'muted' : 'idle');
     }
