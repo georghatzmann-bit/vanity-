@@ -64,7 +64,7 @@ namespace JarvisSetup
             Loaded += Geladen;
             PreviewKeyDown += Taste;
             if (optionen.BilderOrdner != null)
-                Topmost = true;
+                KulisseZeigen();
         }
 
         // ------------------------------------------------------------------ Start
@@ -140,7 +140,7 @@ namespace JarvisSetup
             PlatzText.Foreground = (Brush)FindResource(knapp ? "Warnung" : "Schwach");
             PlatzText.Text = knapp
                 ? string.Format(Deutsch, "Auf Laufwerk {0} sind nur noch {1:0.0} GB frei. Jarvis braucht etwa 3 GB.", laufwerk, gb)
-                : string.Format(Deutsch, "Braucht etwa 3 GB. Frei auf Laufwerk {0}: {1:N0} GB.", laufwerk, gb);
+                : string.Format(Deutsch, "Braucht etwa 3 GB. Auf Laufwerk {0} sind {1:N0} GB frei.", laufwerk, gb);
         }
 
         // ------------------------------------------------------------------ Installieren
@@ -252,6 +252,9 @@ namespace JarvisSetup
             }
             FertigHinweise.ItemsSource = fortschritt.Hinweise.ToArray();
             FertigHinweise.Visibility = fortschritt.Hinweise.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            FertigZeile.Text = fortschritt.Hinweise.Count == 0
+                ? "Alle sechs Schritte sind fertig."
+                : "Fertig. Bitte lesen Sie einmal die Hinweise unten.";
 
             // Erst den vollen Bogen zeigen, dann die Fertig-Seite.
             var pause = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(bewegung ? 700 : 0) };
@@ -704,10 +707,13 @@ namespace JarvisSetup
             KernAtmen(2.6);
         }
 
-        /// <summary>Fertig: der Bogen schließt sich grün, die Kugel pulsiert einmal und atmet ruhig weiter.</summary>
+        /// <summary>Fertig: der Bogen schließt sich grün und tritt dann leise zurück,
+        /// die Kugel pulsiert einmal und atmet ruhig weiter.</summary>
         void KernFertig()
         {
             BogenSetzen(1);
+            Animieren(Bogen, OpacityProperty, 0.35, 700, null, 1200);
+            Animieren(BogenSpur, OpacityProperty, 0, 700, null, 1200);
             if (bewegung)
                 BogenFarbe.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(FarbeErfolg, TimeSpan.FromMilliseconds(200)));
             else
@@ -731,7 +737,9 @@ namespace JarvisSetup
                 BogenFarbe.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(FarbeFehler, TimeSpan.FromMilliseconds(200)));
             else
                 BogenFarbe.Color = FarbeFehler;
-            Animieren(Kugel, OpacityProperty, 0.55, 200);
+            Animieren(Bogen, OpacityProperty, 1, 200);
+            Animieren(BogenSpur, OpacityProperty, 1, 200);
+            Animieren(Kugel, OpacityProperty, 0.7, 200);
             KernAtmen(4.2);
         }
     }

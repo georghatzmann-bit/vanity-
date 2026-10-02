@@ -324,6 +324,9 @@ namespace JarvisSetup
         [DllImport("user32.dll")]
         public static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
 
+        [DllImport("user32.dll")]
+        public static extern bool SetCursorPos(int x, int y);
+
         [DllImport("gdi32.dll")]
         public static extern bool BitBlt(IntPtr ziel, int x, int y, int breite, int hoehe, IntPtr quelle, int qx, int qy, int art);
 
