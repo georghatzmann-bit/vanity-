@@ -10,12 +10,13 @@ Dein eigener J.A.R.V.I.S. für Windows: Du sagst „Hey Jarvis“ oder drückst 
 Mikrofon → "Hey Jarvis" (openWakeWord, lokal), "Jarvis" (Porcupine, gratis Schlüssel) oder Strg+Alt+J
 Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntfy.sh (verschlüsselt)
          → Satzende per Silero VAD (lokal)
-         → Sprache zu Text: Groq Whisper large-v3-turbo (gratis Schlüssel), Ersatz faster-whisper lokal
+         → Sprache zu Text: Groq Whisper large-v3-turbo (gratis Schlüssel), lokal Parakeet v3 oder faster-whisper
          → Sofort-Befehle direkt: Programme, Webseiten, Chatnachrichten, Discord ohne Maus, Erinnerungen,
-           Herunterfahren, Licht, Gedächtnis, Werkstatt-Projekte, Lautstärke, Musik, Uhrzeit
+           Termine, Zeitpläne, eigene Befehle, Notizen, Herunterfahren, Licht, Gedächtnis, Werkstatt, Musik
          → Bauaufträge ("Bau mir …"): Werkstatt mit eigenem Claude-Prozess (Opus/Sonnet) und Projektordner
-         → alles andere: Claude Code (dein Claude-Pro-Abo), läuft dauerhaft, Antwort wird gestreamt
-         → Stimme: ElevenLabs (Premium, Streaming), Ersatz Microsoft Neural (gratis), offline Piper
+         → alles andere: Claude Code (dein Claude-Abo), läuft dauerhaft, Antwort wird gestreamt,
+           mit Fähigkeiten (SKILL.md, nur bei Bedarf gelesen) und Notizbuch (Markdown, Obsidian)
+         → Stimme: ElevenLabs (Premium) oder lokal Pocket TTS (gratis, ohne Internet), Microsoft Neural, Piper
          → Anzeige oben am Bildschirm, HUD-Fenster, Tray-Symbol, Handy-App, Alexa
 ```
 
@@ -28,7 +29,11 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Discord ohne Maus:** „Schreib Max auf Discord, bin gleich da“, „Geh in den Sprachkanal Zocken“, „Ruf Max auf Discord an“, „Discord stumm“. Jarvis nutzt Discords Schnellsuche und Tastenkürzel, prüft am Fenstertitel, ob er richtig gelandet ist, versucht es bei einer Störung (Maus bewegt, anderes Fenster vorn) von selbst noch zweimal und bringt dich danach zurück ins Spiel. Auch WhatsApp und Telegram.
 - **Discord-Server gestalten im Hintergrund:** Jarvis' eigener Bot legt Kanäle, Rollen, Regeln und Begrüßung an, über die offizielle Discord-Schnittstelle, ohne dein Spiel zu stören.
 - **Lernt dich kennen:** „Merk dir, …“, Kontakte mit ihrer App („Sag Max …“), Gewohnheiten auch mit Discord-Sprachkanal („Sir, um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?“), Geburtstage mit Angebot zu gratulieren, jede Nacht ein kurzer Rückblick auf die Gespräche. Alles bleibt lokal (`daten\gedaechtnis.json`) und ist im Fenster einsehbar.
-- **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen, Vorschläge beantworten und die Werkstatt verfolgen. Von unterwegs mit Tailscale. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
+- **Eigene Befehle und Zeitpläne:** „Wenn ich Zockmodus sage, öffne Discord und Steam“, danach reicht ein Wort. „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“: Jarvis erledigt es von selbst (beim Zocken wartet er).
+- **Kalender:** „Trag morgen um 18 Uhr Training ein“, „Was steht heute an?“. Liest Google, Outlook oder iCloud mit (geheime iCal-Adresse), sagt 15 Minuten vorher Bescheid und merkt Absagen und Verschiebungen.
+- **Notizbuch und Fähigkeiten:** jedes Gespräch, Personen, Recherche-Berichte und Notizen als Markdown (in Obsidian verlinkt). Anleitungen für wiederkehrende Aufgaben (Discord-Server, Briefing, Recherche, PC-Pflege, Spiele), die Claude nur bei Bedarf liest; „Lern das“ legt neue an.
+- **Lokale Stimme:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo, mit einem Klick in der Einrichtung.
+- **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen, Vorschläge beantworten und die Werkstatt verfolgen. Jarvis antwortet auf dem Handy in seiner eigenen Stimme. Mit Tailscale („Sicher von überall“) auch unterwegs, mit Sprechtaste und als installierbare App. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
 - **Alexa:** „Alexa, sag Jarvis, er soll Discord öffnen.“ Ein eigener Skill (Von Alexa gehostet), den Jarvis fertig zum Kopieren anbietet. Die Nachrichten laufen verschlüsselt über ntfy.sh, ohne Home Assistant und ohne Router-Einstellungen. Mit Home Assistant zusätzlich Ansagen auf Echos und Licht.
 - **Bildschirm lesen und Programme ohne Maus bedienen:** Texterkennung von Windows (in etwa einer Sekunde) und UI Automation: Knöpfe drücken und Felder ausfüllen, ohne Maus und Tastatur zu nehmen.
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Große Aufträge mit Opus, kleine mit Sonnet. Das Fenster zeigt alles als Blaupause und alle Projekte als Übersicht mit Starten und Weiterbauen.
@@ -46,7 +51,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 
 ## Kosten
 
-- **Claude-Pro-Abo:** das Gehirn.
+- **Claude-Abo (Pro oder Max):** das Gehirn. Mit Max lohnt Einrichtung > Gehirn > „Gründlich“ (immer Opus).
 - **Groq:** gratis (großzügiges Tageslimit, darüber übernimmt der eigene PC).
 - **ElevenLabs:** optional. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Ohne Schlüssel spricht die gratis Microsoft-Stimme.
 - **Alexa-Skill, ntfy.sh, Discord-Bot, Tailscale:** gratis.
@@ -56,7 +61,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden“ ein. Alles steht in `config.toml` (Vorlage mit Erklärungen: `config.example.toml`):
 
 - `[stt]` `groq_key`, `engine = "auto" | "groq" | "lokal"`
-- `[tts]` `engine = "elevenlabs" | "edge" | "windows"`, `elevenlabs_key`, `elevenlabs_voice`
+- `[tts]` `engine = "elevenlabs" | "lokal" | "edge" | "windows"`, `lokal_stimme`, `elevenlabs_key`, `elevenlabs_voice`
+- `[kalender]` `abos` (geheime iCal-Adressen), `vorwarnung_minuten`; `[notizbuch]` `ordner`, `tagebuch`
 - `[mute]` `hotkey` (Stumm), `listen_hotkey` (Zuhören, Standard Strg+Alt+J)
 - `[listen]` `silence_seconds`, `vad`; `[wakeword]` `picovoice_key` (dann reicht „Jarvis“)
 - `[rechte]` `volle_freigabe`; `[gedaechtnis]` `vorschlaege`

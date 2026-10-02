@@ -1912,7 +1912,9 @@ body[data-view="workshop"] .holo-scan {
   justify-content: center;
   gap: 8px;
   max-width: 560px;
+  max-height: 34px; /* immer nur eine Zeile: was nicht passt, bleibt weg */
   margin: 4px auto 0;
+  overflow: hidden;
 }
 
 .deck:empty {
@@ -1939,4 +1941,9 @@ body[data-view="workshop"] .holo-scan {
 
 .status.busy .deck {
   visibility: hidden;
+}
+
+/* Während ein Vorschlag offen ist, reicht der Platz nicht für beides */
+.offer:not([hidden]) ~ .deck {
+  display: none;
 }

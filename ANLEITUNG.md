@@ -53,9 +53,20 @@ Das ist der große Unterschied: Jarvis klingt dann wie ein Mensch.
 
 Fertige Stimmen aus der Bibliothek (zum Beispiel Lennard) gehen ab dem Abo **Starter** (etwa 6 $ im Monat).
 
-## 3. Handy, Alexa und Discord verbinden (freiwillig)
+### Lokale Stimme (kostenlos, ohne Internet)
 
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es drei Bereiche.
+Die Alternative zu ElevenLabs: Eine natürliche deutsche Stimme, die ganz auf deinem PC läuft. Kein Abo, kein Schlüssel, nichts geht ins Internet.
+
+1. Einrichtung (Zahnrad im Jarvis-Fenster) > **Stimme** > Reiter **Lokal**.
+2. **Lokal einrichten** klicken. Jarvis lädt einmalig etwa 1,3 GB (Stimme und Spracherkennung). Das dauert je nach Internet 5 bis 15 Minuten.
+3. Die sechs Stimmen anhören (▶) und eine anklicken. **George** ist am klarsten, **Charles** am tiefsten.
+4. Wer möchte: **Auch die Spracherkennung auf dem PC** einschalten. Dann geht außer den Fragen an Claude gar nichts mehr ins Internet.
+
+**Geklappt, wenn:** oben „Aktiv“ steht und Jarvis mit der gewählten Stimme antwortet. Die Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben.
+
+## 3. Handy, Alexa, Discord und Kalender verbinden (freiwillig)
+
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es vier Bereiche.
 
 ![Verbinden: Handy, Alexa und Discord](docs/bilder/verbinden.jpg)
 
@@ -65,7 +76,16 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es drei Bereiche.
 2. Mit der Handy-Kamera den QR-Code scannen und den Link öffnen.
 3. Im Browser-Menü **Zum Startbildschirm hinzufügen** (iPhone: Teilen-Knopf). Jetzt ist Jarvis eine App auf deinem Handy.
 
-**Geklappt, wenn:** oben in der App „Bereit“ steht. Du kannst schreiben, mit dem Mikrofon der Handy-Tastatur diktieren, Schnellaktionen antippen und die Werkstatt verfolgen. Das Handy muss im selben WLAN sein. Von unterwegs: **Tailscale** (kostenlos) auf PC und Handy installieren.
+**Geklappt, wenn:** oben in der App „Bereit“ steht. Du kannst schreiben, mit dem Mikrofon der Handy-Tastatur diktieren, Schnellaktionen (auch deine eigenen Befehle) antippen und die Werkstatt verfolgen. Das Handy muss im selben WLAN sein.
+
+**Jarvis' Stimme auf dem Handy:** Oben rechts in der App steht, wo Jarvis antwortet. Tippen wechselt zwischen **Handy** (Jarvis spricht auf dem Handy, in derselben Stimme wie am PC), **PC** und **Still**.
+
+**Sicher von überall, mit Sprechtaste:** Mit **Tailscale** (kostenlos) geht die App auch unterwegs, über eine verschlüsselte Adresse. Dann funktioniert auch die **Sprechtaste** in der App (antippen, sprechen, nochmal tippen), und die App lässt sich richtig installieren.
+
+1. Tailscale auf dem PC installieren (oder sag „Jarvis, installiere Tailscale“) und einmal anmelden (Symbol unten rechts neben der Uhr).
+2. Auf dem Handy die App **Tailscale** installieren und mit demselben Konto anmelden.
+3. Im Bereich **Handy** bei **Sicher von überall** auf **Einschalten** klicken. Kommt der Knopf **HTTPS erlauben**: anklicken, im Browser bestätigen, dann nochmal **Einschalten**.
+4. Den QR-Code neu scannen. Die Adresse beginnt jetzt mit `https://`.
 
 **Benachrichtigungen aufs Handy** (Erinnerungen, „Aus der Werkstatt: fertig“), wenn du nicht am PC sitzt:
 
@@ -97,6 +117,18 @@ Jarvis' eigener Bot gestaltet deinen Server im Hintergrund: Kanäle, Rollen, Reg
 4. **Einladen** klicken, deinen Server auswählen, **Autorisieren**.
 
 **Geklappt, wenn:** du sagst „Jarvis, gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen“ und die Kanäle erscheinen.
+
+### Kalender
+
+Jarvis liest deinen Kalender mit (nur lesen): Er sagt 15 Minuten vor einem Termin Bescheid, nennt die Termine morgens, zeigt sie rechts bei **Heute** und merkt, wenn ein Termin abgesagt oder verschoben wird. Eigene Termine („Trag morgen um 18 Uhr Training ein“) gehen auch ganz ohne.
+
+1. Bereich **Kalender**: Bei **Google** oder **Outlook** auf **Öffnen** klicken.
+   - Google: links deinen Kalender wählen, ganz unten **Privatadresse im iCal-Format** kopieren.
+   - Outlook: **Kalender veröffentlichen**, dann den **ICS**-Link kopieren.
+   - iPhone: Kalender-App > Kalender > (i) > **Öffentlicher Kalender** > Link teilen.
+2. Die Adresse in Jarvis einfügen und **Prüfen** klicken.
+
+**Geklappt, wenn:** Jarvis „Kalender verbunden: … Termine“ meldet. Die Adresse ist geheim wie ein Passwort.
 
 ### PC per Handy einschalten (Wake-on-LAN)
 
@@ -153,6 +185,24 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - „Merk dir, dass ich gern Pizza esse“, „Merk dir: Max hat am 3. Mai Geburtstag“
 - „Was weißt du über mich?“, „Vergiss das mit der Pizza“
 
+**Eigene Befehle und Zeitpläne:**
+
+- „Wenn ich Zockmodus sage, öffne Discord und Steam und mach den Gaming-Modus an“, danach reicht **„Zockmodus“**
+- „Welche Befehle kennst du?“, „Lösch den Befehl Zockmodus“
+- „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“, „Freitags um 20 Uhr: Zockmodus“
+- „Welche Zeitpläne habe ich?“, „Lösch den Zeitplan Briefing“
+
+**Termine:**
+
+- „Trag morgen um 18 Uhr Training ein“, „Trag Mittwoch von 18 bis 19 Uhr Sport ein“, „Trag am Sonntag Omas Geburtstag ein“
+- „Was steht heute an?“, „Was habe ich morgen vor?“, „Wann ist mein nächster Termin?“
+- „Sag den Termin Training ab“
+
+**Notizbuch:**
+
+- „Notiere: Milch kaufen“, „Schreib in mein Notizbuch, dass ich Max anrufen muss“
+- „Öffne mein Notizbuch“, „Was haben wir gestern gemacht?“, „Recherchiere die besten Gaming-Mäuse“ (der Bericht landet im Notizbuch)
+
 **Licht** (wenn Home Assistant eingerichtet ist, siehe ganz unten):
 
 - „Mach das Licht im Wohnzimmer an“, „Dimm das Licht auf 30 Prozent“, „Licht aus“
@@ -183,6 +233,14 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 - **Geburtstage:** Sag „Merk dir, Max hat am 3. Mai Geburtstag“. Am 3. Mai sagt Jarvis: „Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?“ Ein „Ja“, und die Glückwünsche sind raus.
 - Jede Nacht schaut er kurz auf die Gespräche vom Vortag und merkt sich, was wichtig war.
 - Alles bleibt auf deinem PC. Im Fenster rechts bei **Gedächtnis** > **Ansehen** siehst du alles und kannst mit × einzelne Sachen löschen.
+
+## Notizbuch und Fähigkeiten
+
+**Notizbuch:** Jarvis schreibt jedes Gespräch mit Datum in einen Ordner (`%USERPROFILE%\Jarvis-Notizbuch`): ein Tagebuch pro Tag, eine Seite pro Person (mit Geburtstag und allem, was er über sie weiß), Berichte von Recherchen und deine Notizen. Mit dem kostenlosen Programm **Obsidian** („Ordner als Tresor öffnen“) siehst du alles verlinkt. Eigene Notizen in den Seiten bleiben erhalten. Passwörter schreibt er nie hinein.
+
+**Fähigkeiten:** Für wiederkehrende Aufgaben hat Jarvis genaue Anleitungen, die er nur liest, wenn er sie braucht: Discord-Server gestalten, Morgen-Briefing, Recherche mit Bericht, PC aufräumen und aktualisieren, Spiele starten (auch Steam und Epic), Smart Home, Bildschirm lesen. Zeigst du ihm etwas Neues und sagst **„Lern das“**, schreibt er sich selbst eine neue Fähigkeit. Alle stehen unter **Gedächtnis** > **Ansehen**.
+
+**Mit dem Claude-Max-Abo:** Einstellungen > **Gehirn** > **Gründlich**, dann denkt Jarvis immer mit Opus, dem klügsten Modell.
 
 ## Die Werkstatt: Jarvis programmiert für dich
 
