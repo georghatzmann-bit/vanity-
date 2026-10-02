@@ -747,10 +747,6 @@
       render();
       refresh();
       refreshPush();
-      // Gibt es in dieser Jarvis-Version die iPhone-Anbindung? Sonst den Reiter nicht anbieten.
-      call('apple_info').catch((err) => {
-        if (String((err && err.message) || '').startsWith('nicht verbunden')) hideTab('apple');
-      });
       el.close.focus();
     }
 
