@@ -5,6 +5,10 @@ Jarvis sagt kurz vorher Bescheid ("Sir, in 15 Minuten: Zahnarzt"), nennt die Ter
 und merkt, wenn sich im Kalender etwas ändert ("Ihr Termin morgen um 12 wurde abgesagt").
 Eigene Termine liegen in daten/kalender.json, die Kalender-Abos werden alle 15 Minuten gelesen
 und für unterwegs ohne Internet zwischengespeichert.
+
+Ist Georgs iPhone verbunden (apple.py), ist der iPhone-Kalender die Quelle: Jarvis liest ihn alle
+fünf Minuten, neue Termine landen im gewählten iPhone-Kalender, und "Lösch den Termin ..." löscht
+dort. Ist iCloud gerade nicht erreichbar, merkt sich Jarvis den Termin und trägt ihn nach.
 """
 
 from __future__ import annotations
@@ -242,16 +246,22 @@ def parse_ics(text: str, source: str, start: dt.datetime, end: dt.datetime) -> l
     """Alle Termine zwischen start und end (Ortszeit), mit Wiederholungen, Ausnahmen und Absagen."""
     blocks: list[list[tuple[str, dict, str]]] = []
     current: list | None = None
+    nested = 0  # Erinnerungen (VALARM) im Termin haben eigene UID und Beschreibung: überspringen
     for line in _unfold(text):
         name, params, value = _parse_line(line)
         if name == "BEGIN" and value.upper() == "VEVENT":
-            current = []
-        elif name == "END" and value.upper() == "VEVENT":
+            current, nested = [], 0
+        elif name == "END" and value.upper() == "VEVENT" and not nested:
             if current is not None:
                 blocks.append(current)
             current = None
         elif current is not None:
-            current.append((name, params, value))
+            if name == "BEGIN":
+                nested += 1
+            elif name == "END":
+                nested = max(0, nested - 1)
+            elif not nested:
+                current.append((name, params, value))
 
     events: list[Event] = []
     overridden: set[tuple[str, dt.datetime]] = set()
@@ -291,7 +301,8 @@ def parse_ics(text: str, source: str, start: dt.datetime, end: dt.datetime) -> l
         if cancelled:
             continue
         title = _unescape(props.get("SUMMARY", ({}, ""))[1]).strip() or "Termin"
-        place = _unescape(props.get("LOCATION", ({}, ""))[1]).strip()
+        # Das iPhone schreibt die ganze Adresse in mehreren Zeilen: gesagt wird nur die erste
+        place = (_unescape(props.get("LOCATION", ({}, ""))[1]).strip().splitlines() or [""])[0].strip()
         length = finish - begin
         rule = _rrule(props["RRULE"][1]) if "RRULE" in props and "RECURRENCE-ID" not in props else {}
         series.append((uid, begin, length, all_day, title, place, rule, exdates))
@@ -316,8 +327,12 @@ def parse_ics(text: str, source: str, start: dt.datetime, end: dt.datetime) -> l
 # ---------------------------------------------------------------------- Der Kalender
 
 
+class CalendarError(RuntimeError):
+    """Ein Satz für Georg, warum es mit dem Kalender gerade nicht geht."""
+
+
 class Calendar:
-    def __init__(self, path: Path, feeds: list[str] | None = None, now=None, opener=None) -> None:
+    def __init__(self, path: Path, feeds: list[str] | None = None, now=None, opener=None, apple=None) -> None:
         self._path = Path(path)
         self._feeds = [_feed_url(u) for u in (feeds or []) if _feed_url(u)]
         self._now = now or dt.datetime.now
@@ -329,11 +344,26 @@ class Calendar:
         self._known: dict[str, Event] | None = None  # Stand beim letzten Vergleich (Änderungen ansagen)
         self._known_sources: set[str] = set()  # welche Kalender dabei schon geladen waren
         self._warned: set[str] = set()
+        # Georgs iPhone-Kalender (apple.ICloudCalendar), None = nicht verbunden
+        self._apple = apple
         for url in self._feeds:  # der letzte Stand von der Platte: sofort da, auch ohne Internet
             try:
                 self._texts[url] = self._cache(url).read_text(encoding="utf-8")
             except OSError:
                 pass
+
+    @property
+    def apple(self):
+        """Der iPhone-Kalender (apple.ICloudCalendar) oder None."""
+        return self._apple
+
+    def source_name(self, source: str) -> str:
+        """So heißt die Quelle in Listen: "" für eigene Termine, der iPhone-Kalender beim Namen."""
+        if source == "jarvis":
+            return ""
+        if source.startswith("icloud:") and self._apple is not None:
+            return self._apple.name_of(source)
+        return source
 
     # ---------------------------------------------------------- eigene Termine
 
@@ -352,41 +382,122 @@ class Calendar:
 
     def add(self, title: str, start: dt.datetime, end: dt.datetime | None = None, all_day: bool = False,
             place: str = "") -> Event:
+        """Trägt einen Termin ein: ins iPhone, wenn verbunden, sonst bei Jarvis. Ist iCloud gerade nicht
+        erreichbar, steht er erst einmal bei Jarvis und wird nachgetragen (refresh)."""
         title = " ".join(str(title).split()).strip(" .,")
         if not title:
             raise ValueError("Der Termin braucht einen Namen.")
         if end is None or end <= start:
             end = start + (dt.timedelta(days=1) if all_day else dt.timedelta(hours=1))
-        event = Event(title[:1].upper() + title[1:200], start, end, all_day, place.strip()[:120])
+        title, place = title[:1].upper() + title[1:200], place.strip()[:120]
+        pending = ""
+        if self._apple is not None and self._apple.account is not None:
+            from .apple import AppleError
+
+            pending = str(uuid.uuid4()).upper()
+            try:
+                source, uid = self._apple.add(title, start, end, all_day, place, uid=pending)
+                event = Event(title, start, end, all_day, place, uid, source)
+                event.id = _stable_id(event)
+                return event
+            except AppleError as exc:
+                log.info("iCloud: %s Der Termin steht erst einmal bei Jarvis und wird nachgetragen.", exc)
+        event = Event(title, start, end, all_day, place)
+        item = event.as_dict()
+        if pending:
+            item.update(icloud="offen", uid=pending)  # ins iPhone nachtragen, sobald iCloud erreichbar ist
         with self._lock:
             items = [i for i in self._read() if _still_relevant(i, self._now())]
-            items.append(event.as_dict())
+            items.append(item)
             self._write(items)
         return event
 
     def remove(self, words: str) -> list[Event]:
-        """Löscht eigene Termine, in deren Namen alle Wörter vorkommen (die nächsten zuerst)."""
+        """Löscht den nächsten Termin, in dessen Namen alle Wörter vorkommen: eigene und, wenn verbunden,
+        aus dem iPhone (bei einer Serie nur diesen einen). Klappt es mit iCloud nicht: CalendarError."""
         wanted = [w for w in re.findall(r"[\wäöüß]+", str(words).lower()) if len(w) > 1
                   and w not in {"den", "die", "das", "der", "termin", "mein", "meinen", "am", "um", "mit"}]
         if not wanted:
             return []
+        now = self._now()
+        phone = self._phone_match(wanted, now)
         with self._lock:
             items = self._read()
             gone = [i for i in items if all(w in str(i.get("titel", "")).lower() for w in wanted)
-                    and _still_relevant(i, self._now())]
-            if not gone:
-                return []
-            gone.sort(key=lambda i: i.get("start", ""))
-            first = gone[0]
-            self._write([i for i in items if i is not first])
-        return [_from_dict(first)]
+                    and _still_relevant(i, now)]
+            if gone:
+                gone.sort(key=lambda i: i.get("start", ""))
+                first = gone[0]
+                own = _from_dict(first)
+                # Ein vergangener eigener Termin geht nur vor, wenn im iPhone nichts Passendes kommt.
+                if phone is None or (own.end > now and own.start <= phone.start):
+                    self._write([i for i in items if i is not first])
+                    return [own]
+        if phone is None:
+            return []
+        from .apple import AppleError
+
+        try:
+            self._apple.delete(phone.source, phone.uid, phone.start)
+        except AppleError as exc:
+            raise CalendarError(f"Den Termin konnte ich im iPhone nicht löschen, Sir. {exc}") from None
+        return [phone]
+
+    def _phone_match(self, wanted: list[str], now: dt.datetime) -> Event | None:
+        """Der nächste Termin aus einem beschreibbaren iPhone-Kalender, der zu den Wörtern passt."""
+        if self._apple is None or self._apple.account is None:
+            return None
+        found = []
+        for event in self._apple_events(now - dt.timedelta(hours=1), now + dt.timedelta(days=366)):
+            calendar = self._apple.calendar_of(event.source)
+            if calendar is None or not calendar.get("schreibbar") or event.end <= now:
+                continue
+            if all(w in event.title.lower() for w in wanted):
+                found.append(event)
+        return min(found, key=lambda e: e.start) if found else None
+
+    def not_found(self, words: str) -> str:
+        """Der Satz, wenn "Lösch den Termin ..." nichts findet."""
+        if self._apple is not None and self._apple.account is not None:
+            return f"Einen Termin „{words}“ finde ich nicht, Sir. Termine aus Kalender-Abos ändern Sie bitte dort."
+        return (f"Einen eigenen Termin „{words}“ finde ich nicht, Sir. Termine aus Ihrem Google- oder "
+                "Outlook-Kalender ändern Sie bitte dort.")
 
     def own(self) -> list[Event]:
         return [_from_dict(i) for i in self._read() if i.get("start")]
 
+    def _upload_pending(self) -> None:
+        """Termine, die beim Eintragen nicht ins iPhone kamen (kein Internet), jetzt nachtragen."""
+        if self._apple is None or not self._apple.writable:
+            return
+        from .apple import AppleError
+
+        with self._lock:
+            pending = [i for i in self._read() if i.get("icloud") == "offen" and _still_relevant(i, self._now())]
+        for item in pending:
+            event = _from_dict(item)
+            try:
+                self._apple.add(event.title, event.start, event.end, event.all_day, event.place,
+                                uid=str(item.get("uid") or ""))
+            except AppleError as exc:
+                log.info("Nachtragen ins iPhone später: %s", exc)
+                return
+            with self._lock:
+                self._write([i for i in self._read() if i.get("id") != item.get("id")])
+            log.info("Ins iPhone nachgetragen: %s", event.title)
+
     # ---------------------------------------------------------- Kalender-Abos
 
     def refresh(self, force: bool = False) -> None:
+        self._refresh_feeds(force)
+        if self._apple is not None:
+            try:
+                self._apple.refresh(force)  # höchstens alle fünf Minuten, nur geänderte Kalender
+                self._upload_pending()
+            except Exception:
+                log.exception("iPhone-Kalender")
+
+    def _refresh_feeds(self, force: bool = False) -> None:
         import time
 
         for url in self._feeds:
@@ -412,7 +523,8 @@ class Calendar:
                         pass
 
     def refresh_stale(self) -> None:
-        """Nur abrufen, was älter als 15 Minuten ist (für kurze Aufrufe wie jarvis.tool)."""
+        """Nur abrufen, was älter als 15 Minuten ist (für kurze Aufrufe wie jarvis.tool).
+        Den iPhone-Kalender, wenn sein Stand älter als fünf Minuten ist."""
         import time
 
         for url in self._feeds:
@@ -422,7 +534,13 @@ class Calendar:
                 age = float("inf")
             if age >= FETCH_EVERY:
                 self._fetched.pop(url, None)
-        self.refresh()
+        self._refresh_feeds()
+        if self._apple is not None:
+            try:
+                self._apple.refresh_stale()
+                self._upload_pending()
+            except Exception:
+                log.exception("iPhone-Kalender")
 
     def _cache(self, url: str) -> Path:
         name = hashlib.sha1(url.encode("utf-8")).hexdigest()[:12]
@@ -431,20 +549,42 @@ class Calendar:
 
     @property
     def errors(self) -> dict[str, str]:
-        return dict(self._errors)
+        """Adresse -> Fehler je Kalender-Abo, "icloud" -> Fehler beim iPhone-Kalender."""
+        errors = dict(self._errors)
+        if self._apple is not None and self._apple.error:
+            errors["icloud"] = self._apple.error
+        return errors
 
     # ---------------------------------------------------------- Abfragen
 
     def events(self, start: dt.datetime, end: dt.datetime) -> list[Event]:
         found = [e for e in self.own() if e.end > start and e.start < end]
+        phone = self._apple_events(start, end)
+        # Ist derselbe Kalender auch noch als Abo eingetragen, zählt der Termin aus dem iPhone.
+        seen = {(e.uid, e.start) for e in phone if e.uid}
         for number, url in enumerate(self._feeds):
             text = self._texts.get(url)
             if text:
                 try:
-                    found += parse_ics(text, f"kalender{number + 1}", start, end)
+                    found += [e for e in parse_ics(text, f"kalender{number + 1}", start, end)
+                              if (e.uid, e.start) not in seen]
                 except Exception as exc:
                     log.warning("Kalender %s nicht lesbar: %s", _short(url), exc)
-        return sorted(found, key=lambda e: (e.start, e.title))
+        return sorted(found + phone, key=lambda e: (e.start, e.title))
+
+    def _apple_events(self, start: dt.datetime, end: dt.datetime) -> list[Event]:
+        """Termine aus den iPhone-Kalendern (Zwischenspeicher, auch ohne Internet)."""
+        if self._apple is None:
+            return []
+        found = []
+        for source, text in self._apple.sources().items():
+            try:
+                for event in parse_ics(text, source, start, end):
+                    event.id = _stable_id(event)
+                    found.append(event)
+            except Exception as exc:
+                log.warning("iPhone-Kalender %s nicht lesbar: %s", source, exc)
+        return found
 
     def day(self, day: dt.date) -> list[Event]:
         begin = dt.datetime.combine(day, dt.time())
@@ -479,6 +619,10 @@ class Calendar:
         # Nur Kalender, die schon einmal geladen sind. Kommt einer erst später dazu (erster Abruf beim
         # Start), sind seine Termine nicht "neu", sondern einfach da.
         loaded = {f"kalender{number + 1}" for number, url in enumerate(self._feeds) if self._texts.get(url)}
+        own: set[str] = set()
+        if self._apple is not None:
+            loaded |= set(self._apple.sources())
+            own = self._apple.own_keys()  # was Jarvis selbst eingetragen oder gelöscht hat, ist keine Neuigkeit
         current = {e.key: e for e in self.events(now, now + dt.timedelta(hours=WATCH_HOURS)) if e.source in loaded}
         before, self._known = self._known, current
         sources, self._known_sources = self._known_sources, loaded
@@ -486,7 +630,7 @@ class Calendar:
             return []
         said = []
         for key, old in before.items():
-            if old.start < now or old.source not in loaded:
+            if old.start < now or old.source not in loaded or key in own:
                 continue
             new = current.get(key)
             if new is None:
@@ -496,7 +640,7 @@ class Calendar:
             elif new.start != old.start:
                 said.append(f"{old.title} wurde verschoben, jetzt {new.spoken(now, with_day=True).replace(new.title, '').strip()}.")
         for key, new in current.items():
-            if new.source not in sources:
+            if new.source not in sources or key in own:
                 continue
             if key not in before and new.start >= now and new.start - now > dt.timedelta(minutes=WARN_MINUTES):
                 if new.start < now + dt.timedelta(hours=WATCH_HOURS - 1):
@@ -532,6 +676,25 @@ def _from_dict(item: dict) -> Event:
     end = dt.datetime.fromisoformat(item.get("ende") or item["start"])
     return Event(str(item.get("titel", "Termin")), start, end, bool(item.get("ganztags")), str(item.get("ort", "")),
                  "", "jarvis", str(item.get("id") or uuid.uuid4().hex[:8]))
+
+
+def _stable_id(event: Event) -> str:
+    """Termine aus dem iPhone behalten bei jedem Lesen dieselbe Kennung (wichtig für "Achtung, da ist schon ...")."""
+    mark = f"{event.source}|{event.uid or event.title}|{event.start.isoformat()}"
+    return hashlib.sha1(mark.encode("utf-8")).hexdigest()[:8]
+
+
+def calendar_from_config(cfg: dict, state_dir: Path, account=None) -> Calendar:
+    """Der Kalender wie eingestellt: eigene Termine, Abos und, wenn verbunden, Georgs iPhone."""
+    from .apple import account_from_config, calendar_for
+
+    if account is None:
+        try:
+            account = account_from_config(cfg, state_dir)
+        except Exception as exc:
+            log.warning("iCloud-Konto nicht lesbar: %s", exc)
+    return Calendar(Path(state_dir) / "kalender.json", (cfg.get("kalender") or {}).get("abos", []),
+                    apple=calendar_for(account, cfg, state_dir))
 
 
 def _still_relevant(item: dict, now: dt.datetime) -> bool:

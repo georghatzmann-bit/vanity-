@@ -7,6 +7,8 @@
 - Gewohnheiten: wann Georg welche Programme und Seiten öffnet. Nach ein paar Tagen erkennt
   Jarvis daraus Routinen ("werktags gegen 18 Uhr Discord und Spotify") und bietet sie zur
   passenden Zeit an. Sagt Georg nein, fragt er seltener, bei "nie" gar nicht mehr.
+- Adressbuch: die Geburtstage aus Georgs iPhone-Kontakten (apple.py), in einer eigenen Liste,
+  damit die Fakten nicht überlaufen. Sie laufen über dieselben Geburtstags-Hinweise wie die Fakten.
 
 Das Gehirn bekommt zu Beginn jeder Unterhaltung eine kurze Zusammenfassung (`context`).
 Alles bleibt auf dem PC, in daten/gedaechtnis.json.
@@ -36,9 +38,12 @@ ROUTINE_DAYS = 21  # Routinen aus den letzten drei Wochen
 MIN_DAYS = 3  # ab so vielen Tagen ist es eine Gewohnheit
 SPREAD = 60  # Minuten: so nah müssen die Uhrzeiten beieinander liegen
 WEEKDAY_NAMES = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+               "November", "Dezember"]
 USER = "Georg"  # wie der Nutzer heißt ([ich] name), siehe set_user
 MAX_COMMANDS = 60  # eigene Befehle ("Zockmodus")
 MAX_TRIGGER_WORDS = 6
+MAX_ADDRESS_BOOK = 500  # Geburtstage aus den iPhone-Kontakten
 # Diese Wörter braucht Jarvis selbst ("Stopp" hält alles an, "Ja" beantwortet eine Frage).
 RESERVED_TRIGGERS = {"stopp", "stop", "halt", "abbrechen", "abbruch", "ja", "nein", "nie wieder", "jarvis"}
 _QUOTES = "\"'„“”‚‘’»«"
@@ -181,7 +186,7 @@ class Memory:
             if not isinstance(data, dict):
                 data = {}
             for name, empty in (("fakten", []), ("kontakte", {}), ("ereignisse", []), ("vorschlaege", {}),
-                                ("befehle", {})):
+                                ("befehle", {}), ("adressbuch", [])):
                 if not isinstance(data.get(name), type(empty)):
                     data[name] = empty
             self._data = data
@@ -250,7 +255,8 @@ class Memory:
 
     def forget_all(self) -> None:
         with self._lock:
-            self._data = {"fakten": [], "kontakte": {}, "ereignisse": [], "vorschlaege": {}, "befehle": {}}
+            self._data = {"fakten": [], "kontakte": {}, "ereignisse": [], "vorschlaege": {}, "befehle": {},
+                          "adressbuch": []}
             self._save()
 
     def facts(self) -> list[dict]:
@@ -476,16 +482,76 @@ class Memory:
                 state[answer] = int(state.get(answer, 0)) + 1
             self._save()
 
+    # ------------------------------------------------------------------ Adressbuch (iPhone-Kontakte)
+
+    def set_address_book(self, people: list[dict]) -> int:
+        """Übernimmt die Kontakte mit Geburtstag aus dem iPhone ({name, vorname, spitzname, jahr, monat,
+        tag, mails}). Ersetzt die alte Liste. Gibt zurück, wie viele es sind."""
+        clean = []
+        for person in people[:MAX_ADDRESS_BOOK]:
+            name = " ".join(str(person.get("name", "")).split())[:80]
+            try:
+                month, day, year = int(person.get("monat") or 0), int(person.get("tag") or 0), int(person.get("jahr") or 0)
+                dt.date(2000, month, day)
+            except (TypeError, ValueError):
+                continue
+            if not name:
+                continue
+            clean.append({"name": name, "vorname": " ".join(str(person.get("vorname", "")).split())[:40],
+                          "spitzname": " ".join(str(person.get("spitzname", "")).split())[:40],
+                          "monat": month, "tag": day, "jahr": year,
+                          "mails": [str(m).strip().lower() for m in person.get("mails", []) or [] if "@" in str(m)][:5]})
+        clean.sort(key=lambda p: (p["monat"], p["tag"], p["name"].lower()))
+        with self._lock:
+            data = self._load()
+            if data.get("adressbuch") != clean:  # unverändert: nicht neu schreiben
+                data["adressbuch"] = clean
+                self._save()
+        return len(clean)
+
+    def address_book(self) -> list[dict]:
+        with self._lock:
+            return [dict(p) for p in self._load()["adressbuch"] if isinstance(p, dict)]
+
+    def mail_people(self) -> list[dict]:
+        """Wichtige Absender für die Mail-Ansagen: Kontakte, mit denen Georg schreibt, und das
+        iPhone-Adressbuch (Name und Adressen)."""
+        people = [{"name": str(c.get("name", "")), "mails": []} for c in self.contacts()[:80]
+                  if c.get("name") and not str(c["name"]).startswith("#")]
+        people += [{"name": p["name"], "mails": p.get("mails", [])} for p in self.address_book()]
+        return people
+
+    def _book_birthday(self, person: dict) -> dict:
+        """Ein Geburtstag aus dem iPhone im selben Format wie parse_birthday. Gratulieren bietet Jarvis
+        nur an, wenn er weiß, wie Georg mit der Person schreibt (Kontakt im Gedächtnis)."""
+        name = ""
+        for candidate in (person.get("spitzname"), person.get("vorname"), person.get("name")):
+            if candidate and self.contact_app(str(candidate)):
+                name = str(candidate)
+                break
+        return {"who": person["name"], "shown": person["name"], "name": name, "own": False,
+                "month": int(person["monat"]), "day": int(person["tag"]), "year": int(person.get("jahr") or 0),
+                "iphone": True}
+
     # ------------------------------------------------------------------ Geburtstage
 
     def birthdays(self) -> list[dict]:
-        """Alle Geburtstage, die in den Fakten stehen ("Max hat am 3. Mai Geburtstag")."""
+        """Alle Geburtstage: aus den Fakten ("Max hat am 3. Mai Geburtstag") und aus dem iPhone-Adressbuch.
+        Steht jemand in beiden, zählt der Fakt."""
         found, seen = [], set()
         for fact in self.facts():
             birthday = parse_birthday(fact.get("text", ""))
             if birthday and (birthday["who"], birthday["month"], birthday["day"]) not in seen:
                 seen.add((birthday["who"], birthday["month"], birthday["day"]))
                 found.append(birthday)
+        known = {(_key(b["who"]), b["month"], b["day"]) for b in found} | \
+                {(_key(b["name"]), b["month"], b["day"]) for b in found if b.get("name")}
+        for person in self.address_book():
+            names = {_key(str(person.get(k) or "")) for k in ("name", "vorname", "spitzname")} - {""}
+            if any((name, person["monat"], person["tag"]) in known for name in names):
+                continue
+            found.append(self._book_birthday(person))
+            known.add((_key(person["name"]), person["monat"], person["tag"]))
         return found
 
     def upcoming_birthdays(self, now: dt.datetime | None = None, days: int = 30) -> list[dict]:
@@ -548,6 +614,10 @@ class Memory:
         if commands:
             lines.append(f"Eigene Befehle von {USER} (sagt er den Namen, erledigst du, was dahinter steht): "
                          + "; ".join(f"„{c['name']}“ = {c['aktion']}" for c in commands) + ".")
+        soon = [b for b in self.upcoming_birthdays(now, days=14) if b.get("iphone")][:6]
+        if soon:  # die aus den Fakten stehen oben schon
+            lines.append("Geburtstage bald (aus dem iPhone): " + "; ".join(
+                f"{b['shown']} am {int(b['datum'][8:10])}. {MONTH_NAMES[int(b['datum'][5:7]) - 1]}" for b in soon) + ".")
         if not lines:
             return ""
         lines.append("Nutze das unaufdringlich. Erfährst du etwas Neues, das auch morgen noch wichtig ist "
