@@ -460,3 +460,39 @@ class BrainContextTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GoodNightTest(unittest.TestCase):
+    """"Gute Nacht": Jarvis bietet an, den PC herunterzufahren."""
+
+    def setUp(self):
+        from tests.test_assistant import FakeBrain, make
+
+        self.folder = tempfile.TemporaryDirectory()
+        self.brain = FakeBrain()
+        self.assistant, self.ui, self.speaker, _ = make(self.brain)
+        self.assistant.memory = Memory(Path(self.folder.name) / "g.json")
+
+    def tearDown(self):
+        self.folder.cleanup()
+
+    def test_yes_shuts_down_with_lead_time(self):
+        answer = self.assistant.handle("Gute Nacht")
+        self.assertTrue(answer.endswith("Soll ich den PC herunterfahren?"))
+        self.assertTrue(self.assistant.take_follow_up(), "das Ja geht ohne Hey Jarvis")
+        with mock.patch("jarvis.pc.power", return_value="ok") as power:
+            self.assistant.handle("Ja")
+        power.assert_called_once()
+        self.assertEqual(power.call_args.args[0], "shutdown")
+        self.assertEqual(self.brain.asked, [])
+
+    def test_never_stops_asking(self):
+        self.assistant.handle("Gute Nacht")
+        self.assistant.handle("Nie wieder")
+        self.assertIn(self.assistant.handle("Gute Nacht"), ("Gute Nacht, Sir.", "Schlafen Sie gut, Sir."))
+
+    def test_go_to_sleep_still_mutes_jarvis(self):
+        from jarvis import intents
+
+        self.assertEqual(intents.match("Geh schlafen").name, "mute")
+        self.assertEqual(intents.match("Ich geh jetzt schlafen").name, "good_night")

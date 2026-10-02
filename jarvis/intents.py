@@ -59,6 +59,11 @@ _RULES: list[tuple[str, re.Pattern]] = [
         r"(?: (?:starten|beginnen|anfangen))?$|"
         r"^(?:vergiss alles|(?:fang|fange) (?:nochmal |noch mal |neu )?(?:von )?vorne an)$"
     )),
+    # "Gute Nacht": Jarvis bietet an, den PC herunterzufahren ("Geh schlafen" heißt dagegen: Mikrofon aus)
+    ("good_night", re.compile(
+        r"^(?:gute nacht|nacht|n8)(?: jarvis)?$|^ich (?:geh|gehe) (?:jetzt |dann )?(?:schlafen|ins bett|pennen)$|"
+        r"^ich (?:bin|leg mich) (?:jetzt |dann )?(?:weg|im bett|hin)$"
+    )),
     # "Was kannst du?" ist meist die erste Frage: sofort und kurz beantworten
     ("help", re.compile(
         r"^(?:was kannst du(?: (?:alles|so|eigentlich|denn|für mich))*(?: tun| machen)?|was kann ich (?:dich )?(?:alles )?(?:fragen|sagen)|"

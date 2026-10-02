@@ -146,6 +146,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 **PC** (mit 15 Sekunden Vorlauf, „Stopp“ oder „Abbrechen“ hält es auf):
 
 - „Fahr den PC herunter“, „Starte den PC neu“, „Energiesparmodus“, „Melde mich ab“
+- „Gute Nacht“: Jarvis fragt, ob er den PC herunterfahren soll. „Ja“ genügt.
 
 **Gedächtnis:**
 

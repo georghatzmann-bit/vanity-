@@ -359,6 +359,8 @@ class Assistant:
         now = dt.datetime.now()
         if name == "disk_free":
             return self._disk_free()
+        if name == "good_night":
+            return self._good_night()
         if name == "help":
             return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Erinnerungen, "
                     "Wetter, Musik, Licht, den PC herunterfahren, und in der Werkstatt programmiere ich für Sie. "
@@ -663,6 +665,21 @@ class Assistant:
         if self.memory.forget(fact):
             return random.choice(["Vergessen, Sir.", "Gelöscht, Sir. Als hätten Sie es nie gesagt."])
         return "Dazu hatte ich mir nichts gemerkt, Sir."
+
+    def _good_night(self) -> str:
+        """"Gute Nacht": kurz verabschieden und anbieten, den PC herunterzufahren. Ein "Ja" fährt ihn
+        mit Vorlauf herunter ("Stopp" hält es auf), "Nie wieder" stellt die Frage ab."""
+        from .memory import Occasion
+
+        hello = random.choice(["Gute Nacht, Sir.", "Schlafen Sie gut, Sir."])
+        key = "gute-nacht:herunterfahren"
+        if self.memory is None or not self.memory.may_offer(key, every_days=0):
+            return hello
+        occasion = Occasion(key, "PC herunterfahren", hello, "Soll ich den PC herunterfahren?", "Fahr den PC herunter")
+        self.memory.offered(occasion)
+        self._offer = (occasion, time.monotonic() + 60)
+        self.ui.suggestion(occasion.as_dict())
+        return occasion.question()
 
     def _disk_free(self) -> str:
         """"Wie viel Speicher ist frei?" sofort: freie Gigabyte auf jedem eingebauten Laufwerk."""
