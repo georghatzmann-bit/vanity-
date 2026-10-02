@@ -22,13 +22,18 @@ class ParseTest(unittest.TestCase):
             ("Neuer Befehl Zockmodus: öffne Discord", ("Zockmodus", "öffne Discord")),
             ("Lerne den Befehl Feierabend, schließ alles", ("Feierabend", "schließ alles")),
             ("Wenn ich Zockmodus sage, sollst du Discord öffnen", ("Zockmodus", "Discord öffnen")),
+            ("Wenn ich das nächste Mal Kino sage, mach das Licht aus", ("Kino", "mach das Licht aus")),
+            ("Wenn ich nicht stören sage, schalte Discord stumm", ("nicht stören", "schalte Discord stumm")),
         ]:
             self.assertEqual(match_memory(said), ("teach", expected), said)
 
     def test_not_a_command(self):
         for said in ("Wenn ich nach Hause komme, mach das Licht an", "Wenn ich morgen aufstehe, sag mir das Wetter",
                      "Wenn ich Hallo sage, was machst du dann?", "Wenn ich dir sage, du sollst leiser sein, dann hör auf",
-                     "Wenn ich es dir sage, dann mach es", "Wenn ich morgen Bescheid sage, mach das Licht an"):
+                     "Wenn ich es dir sage, dann mach es", "Wenn ich morgen Bescheid sage, mach das Licht an",
+                     "Wenn ich Licht sage, meine ich die Stehlampe", "Wenn ich etwas Falsches sage, korrigier mich",
+                     "Wenn ich sage, dass es kalt ist, mach die Heizung an", "Wenn ich irgendwas sage, antworte kurz",
+                     "Wenn ich nicht sage, dass du aufhören sollst, mach weiter"):
             self.assertIsNone(match_memory(said), said)
         self.assertEqual(match_memory("Merk dir, dass ich Pizza mag")[0], "remember")
 

@@ -765,7 +765,7 @@ _CALL = r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:bitte[,\s]+)?"
 # "Wenn ich Zockmodus sage, öffne Discord und Steam", "Merk dir: Sobald ich Feierabend sage, ..."
 _TEACH = re.compile(
     _CALL + r"(?:(?:merk|merke)\s+dir\s*[:,]?\s*)?(?:bitte\s+)?(?:immer\s+)?(?:wenn|sobald)\s+ich\s+"
-    r"(?:(?:in\s+zukunft|ab\s+jetzt|ab\s+sofort|künftig|jetzt|mal|nur|zu\s+dir|dir)\s+)*"
+    r"(?:(?:in\s+zukunft|ab\s+jetzt|ab\s+sofort|künftig|jetzt|mal|nur|zu\s+dir|dir|(?:das\s+)?nächste\s+mal|nächstes\s+mal)\s+)*"
     r"(?P<trigger>[^,:]{2,60}?)\s+(?:sage|sag|rufe|ruf)\s*(?:[,:]\s*|\s+)(?:dann\s+)?"
     r"(?:(?:sollst|kannst)\s+du\s+|(?:möchte|will)\s+ich,?\s+dass\s+du\s+)?(?P<action>.{3,})$",
     re.I,
@@ -803,14 +803,20 @@ _RUN_WORDS = re.compile(r"^(?:führe|führ)\s+(?:(?:den|die|das|mal|bitte)\s+)*(
 
 
 # "Wenn ich dir sage, du sollst ...": kein Name für einen Befehl
-_NO_NAME = {"dir", "mir", "es", "das", "dies", "so", "was", "etwas", "nichts", "ihm", "ihr", "euch", "dann", "jetzt"}
+_NO_NAME = {"dir", "mir", "es", "das", "dies", "so", "was", "etwas", "nichts", "ihm", "ihr", "euch", "dann", "jetzt",
+            "nicht", "irgendwas", "irgendetwas"}
 # "Wenn ich morgen Bescheid sage, ...": eine Zeit oder "Bescheid" ist kein Name, das ist ein Gespräch für Claude
 _NOT_IN_NAME = {"morgen", "heute", "später", "gleich", "nachher", "nochmal", "wieder", "bescheid"}
+# "Wenn ich etwas Falsches sage, ...", "Wenn ich sage, dass es kalt ist, ...": auch kein Name
+_NOT_FIRST = {"dass", "etwas", "irgendwas", "irgendetwas"}
+# "Wenn ich Licht sage, meine ich die Stehlampe": erklärt ein Wort, ist kein Befehl
+_MEANING = re.compile(r"^(?:meine|meinte|mein)\s+ich\b", re.I)
 
 
 def _is_name(key: str) -> bool:
     words = key.split()
-    return bool(words) and not all(w in _NO_NAME for w in words) and not any(w in _NOT_IN_NAME for w in words)
+    return (bool(words) and not all(w in _NO_NAME for w in words) and words[0] not in _NOT_FIRST
+            and not any(w in _NOT_IN_NAME for w in words))
 
 
 def command_key(text: str) -> str:
@@ -856,7 +862,8 @@ def match_memory(text: str):
         return "unteach", found.group("trigger").strip(" .!" + _QUOTES)
     for pattern in (_TEACH_SAY_FIRST, _TEACH_NAMED, _TEACH):
         found = pattern.match(raw)
-        if found and not found.group("action").rstrip().endswith("?") and _is_name(command_key(found.group("trigger"))):
+        if (found and not found.group("action").rstrip().endswith("?") and not _MEANING.match(found.group("action"))
+                and _is_name(command_key(found.group("trigger")))):
             return "teach", (found.group("trigger").strip(" ,.!" + _QUOTES), found.group("action").strip())
     found = _REMEMBER.match(raw)
     if found:
