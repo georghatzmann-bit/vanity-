@@ -265,12 +265,12 @@
   }
 
   function hintFor(state) {
-    if (state === 'idle' && S.voice === false) return 'Kein Mikrofon gefunden. Du kannst Jarvis unten schreiben.';
+    if (state === 'idle' && S.voice === false) return 'Kein Mikrofon gefunden. Unten können Sie mir schreiben.';
     return {
-      idle: 'Sag „Hey Jarvis“, klick auf die Kugel oder schreib unten',
+      idle: '„Hey Jarvis“ sagen, auf die Kugel klicken oder unten schreiben',
       listening: 'Ich höre …',
       thinking: 'Einen Moment …',
-      speaking: 'Sag „Stopp“, um mich zu unterbrechen',
+      speaking: '„Stopp“ unterbricht mich',
       muted: 'Das Mikrofon ist aus. Der Knopf unten links schaltet es wieder ein.',
       error: 'Da ist etwas schiefgelaufen. Einzelheiten stehen im Protokoll.',
     }[state];
@@ -438,7 +438,7 @@
     li.append(text);
     if (item.role !== 'info') {
       const time = document.createElement('time');
-      time.textContent = (item.role === 'user' ? 'Du · ' : 'Jarvis · ') + item.time;
+      time.textContent = (item.role === 'user' ? 'Sie · ' : 'Jarvis · ') + item.time;
       li.append(time);
     }
     return li;
@@ -452,7 +452,7 @@
       li.className = h.role;
       const who = document.createElement('span');
       who.className = 'who';
-      who.textContent = h.role === 'user' ? 'Du' : 'Jarvis';
+      who.textContent = h.role === 'user' ? 'Sie' : 'Jarvis';
       const what = document.createElement('span');
       what.className = 'what';
       what.textContent = h.text;
@@ -946,7 +946,7 @@
       const r = await call('listen_now');
       if (r && r.ok === false) {
         if (r.reason === 'muted') toast('Das Mikrofon ist aus. Schalte es unten links wieder ein.', 'info');
-        else toast('Kein Mikrofon bereit. Schreib Jarvis einfach unten.', 'info');
+        else toast('Kein Mikrofon bereit. Schreiben Sie Jarvis einfach unten.', 'info');
       }
     } catch {
       toast('Jarvis ist gerade nicht verbunden.', 'error');
@@ -957,7 +957,7 @@
     // Schmales Fenster: kürzerer Platzhalter, damit er nicht abgeschnitten wird
     const narrow = window.matchMedia ? window.matchMedia('(max-width: 480px)') : null;
     const placeholder = () => {
-      el.input.placeholder = narrow && narrow.matches ? 'Nachricht …' : 'Schreib Jarvis etwas …';
+      el.input.placeholder = narrow && narrow.matches ? 'Nachricht …' : 'Nachricht an Jarvis …';
     };
     placeholder();
     if (narrow && narrow.addEventListener) narrow.addEventListener('change', placeholder);

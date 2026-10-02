@@ -26,7 +26,7 @@
         <span class="link" id="link"><span class="link-dot" aria-hidden="true"></span><span id="linkText">Verbinde …</span></span>
       </div>
       <nav class="top-actions" aria-label="Bereiche">
-        <label class="chip-toggle" title="Gaming-Modus: volle Leistung, keine Einblendungen. Oder sag „Gaming-Modus an“.">
+        <label class="chip-toggle" title="Gaming-Modus: volle Leistung, keine Einblendungen. Oder sagen Sie „Gaming-Modus an“.">
           <input type="checkbox" class="sr-input" id="gamingToggle">
           <span class="chip-switch" aria-hidden="true"></span>
           <span class="chip-text">Gaming <b id="gamingText">Aus</b></span>
@@ -78,7 +78,7 @@
           <p class="sub-jarvis" id="subJarvis"></p>
         </div>
         <ol class="activity" id="activity" aria-label="Was Jarvis gerade tut"></ol>
-        <p class="hint" id="stateHint">Sag „Hey Jarvis“, klick auf die Kugel oder schreib unten</p>
+        <p class="hint" id="stateHint">„Hey Jarvis“ sagen, auf die Kugel klicken oder unten schreiben</p>
       </div>
 
       <div class="dock">
@@ -90,7 +90,7 @@
               <svg class="ico ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 5 2.2"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16"/></svg>
               <span class="sr-only" id="micBtnText">Mikrofon stumm schalten</span>
             </button>
-            <input id="cmdInput" type="text" placeholder="Schreib Jarvis etwas …" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
+            <input id="cmdInput" type="text" placeholder="Nachricht an Jarvis …" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
             <button type="button" class="cmd-btn stop" id="stopBtn" title="Stopp: Jarvis hört sofort auf" disabled>
               <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
               <span class="sr-only">Stopp</span>
@@ -303,7 +303,7 @@
       <div class="hub-grid" id="hubGrid" role="list"></div>
       <div class="hub-empty" id="hubEmpty" hidden>
         <b>Noch keine Projekte</b>
-        <span>Sag „Hey Jarvis, bau mir …“ oder schreib oben einen Auftrag. Jedes Projekt bekommt einen eigenen Ordner.</span>
+        <span>Sagen Sie „Hey Jarvis, bau mir …“ oder schreiben Sie oben einen Auftrag. Jedes Projekt bekommt einen eigenen Ordner.</span>
       </div>
 
       <section class="labor" id="labor" aria-labelledby="laborHead">
@@ -315,7 +315,7 @@
           <button type="button" class="ws-btn" id="laborOpen">Labor-Ordner</button>
         </header>
         <div class="labor-grid" id="laborGrid" role="list"></div>
-        <p class="hub-empty labor-empty" id="laborEmpty" hidden><b>Noch keine eigenen Werkzeuge</b><span>Sag zum Beispiel „Bau dir ein Werkzeug, das mir das Regenradar für Wien sagt“. Jarvis baut es im Labor, testet es und benutzt es danach selbst.</span></p>
+        <p class="hub-empty labor-empty" id="laborEmpty" hidden><b>Noch keine eigenen Werkzeuge</b><span>Sagen Sie zum Beispiel „Bau dir ein Werkzeug, das mir das Regenradar für Wien sagt“. Jarvis baut es im Labor, testet es und benutzt es danach selbst.</span></p>
         <div class="labor-runs-box" id="laborRunsBox" hidden>
           <h3 class="labor-sub">Zuletzt im Labor</h3>
           <ol class="labor-runs" id="laborRuns"></ol>
@@ -348,7 +348,7 @@
     <label class="row toggle-row dlg-row">
       <span class="row-text">
         <b id="phoneState">Aus</b>
-        <small>Dein Handy steuert Jarvis im selben WLAN: schreiben, diktieren, Schnellaktionen, Werkstatt.</small>
+        <small>Ihr Handy steuert Jarvis im selben WLAN: schreiben, diktieren, Schnellaktionen, Werkstatt.</small>
       </span>
       <input type="checkbox" class="sr-input" id="phoneToggle"><span class="switch" aria-hidden="true"></span>
     </label>
@@ -458,37 +458,37 @@
       <label class="row toggle-row dlg-row">
         <span class="row-text">
           <b id="alexaState">Aus</b>
-          <small>„Alexa, sag Jarvis, er soll Discord öffnen.“ Dein eigener Alexa-Skill, ohne Home Assistant und ohne Router-Einstellungen.</small>
+          <small>„Alexa, sag Jarvis, er soll Discord öffnen.“ Ihr eigener Alexa-Skill, ohne Home Assistant und ohne Router-Einstellungen.</small>
         </span>
         <input type="checkbox" class="sr-input" id="alexaToggle"><span class="switch" aria-hidden="true"></span>
       </label>
       <div class="dlg-alexa" id="alexaSetup" hidden>
         <ol class="dlg-steps alexa-steps">
-          <li><b>Entwicklerkonsole öffnen</b><span>Mit dem Amazon-Konto anmelden, mit dem auch dein Echo läuft.</span>
+          <li><b>Entwicklerkonsole öffnen</b><span>Mit dem Amazon-Konto anmelden, mit dem auch Ihr Echo läuft.</span>
             <button type="button" class="btn small" id="alexaConsole">Öffnen</button></li>
           <li><b>Skill erstellen</b><span>Name „Jarvis“, Sprache Deutsch, Modell „Benutzerdefiniert“, Hosting „Von Alexa gehostet (Python)“, Vorlage „Von Grund auf neu“.</span></li>
           <li><b>Sprachmodell einfügen</b><span>Links „Interaktionsmodell“, dann „JSON-Editor“: alles ersetzen, „Modell speichern“, „Modell erstellen“.</span>
             <button type="button" class="btn small" id="alexaModel">Kopieren</button></li>
           <li><b>Code einfügen</b><span>Oben „Code“, Datei lambda_function.py: alles ersetzen, „Speichern“, dann „Bereitstellen“.</span>
             <button type="button" class="btn small" id="alexaCode">Kopieren</button></li>
-          <li><b>Testen einschalten</b><span>Oben „Test“: „Entwicklung“ wählen. Fertig. Sag: „Alexa, sag Jarvis, er soll Spotify öffnen.“</span></li>
+          <li><b>Testen einschalten</b><span>Oben „Test“: „Entwicklung“ wählen. Fertig. Sagen Sie: „Alexa, sag Jarvis, er soll Spotify öffnen.“</span></li>
         </ol>
         <div class="dlg-url">
           <span class="alexa-link" id="alexaLink">Verbindung wird aufgebaut …</span>
           <button type="button" class="btn small ghost" id="alexaTest">Verbindung testen</button>
         </div>
-        <p class="dlg-note">Der Skill gehört nur dir und läuft nur auf deinen Echos. Die Nachrichten laufen verschlüsselt über ntfy.sh. Antwortet Jarvis nicht innerhalb von sechs Sekunden, sagt Alexa „Ich kümmere mich darum“ und Jarvis macht weiter.</p>
+        <p class="dlg-note">Der Skill gehört nur Ihnen und läuft nur auf Ihren Echos. Die Nachrichten laufen verschlüsselt über ntfy.sh. Antwortet Jarvis nicht innerhalb von sechs Sekunden, sagt Alexa „Ich kümmere mich darum“ und Jarvis macht weiter.</p>
       </div>
     </div>
     <div class="dlg-pane" data-pane="discord" hidden>
       <div class="row dlg-row">
         <span class="row-text">
           <b id="discordState">Nicht eingerichtet</b>
-          <small id="discordHint">Jarvis' eigener Bot gestaltet deinen Server im Hintergrund: Kanäle, Rollen, Regeln, Begrüßung. Ohne Maus, während du zockst.</small>
+          <small id="discordHint">Jarvis' eigener Bot gestaltet Ihren Server im Hintergrund: Kanäle, Rollen, Regeln, Begrüßung. Ohne Maus, während Sie zocken.</small>
         </span>
       </div>
       <ol class="dlg-steps alexa-steps" id="discordSteps">
-        <li><b>Developer Portal öffnen</b><span>Mit deinem Discord-Konto anmelden, dann „New Application“, Name „Jarvis“, „Create“.</span>
+        <li><b>Developer Portal öffnen</b><span>Mit Ihrem Discord-Konto anmelden, dann „New Application“, Name „Jarvis“, „Create“.</span>
           <button type="button" class="btn small" id="discordPortal">Öffnen</button></li>
         <li><b>Token holen</b><span>Links „Bot“, dann „Reset Token“ und den Token kopieren.</span></li>
         <li><b>Token einfügen</b><span>Jarvis prüft ihn sofort und speichert ihn nur auf diesem PC.</span></li>
@@ -499,7 +499,7 @@
       </form>
       <div class="dlg-row discord-invite" id="discordInviteRow" hidden>
         <span class="row-text">
-          <b>Auf deinen Server holen</b>
+          <b>Auf Ihren Server holen</b>
           <small>Server auswählen, „Autorisieren“. Danach: „Jarvis, gestalte meinen Discord-Server für Gaming mit Regeln und Sprachkanälen.“</small>
         </span>
         <button type="button" class="btn small primary" id="discordInvite">Einladen</button>
@@ -606,7 +606,7 @@
         <h3>Geburtstage</h3>
         <p class="mem-hint">Jarvis erinnert Sie am Tag selbst und bietet an zu gratulieren.</p>
         <ul class="mem-list" id="memBirthdays"></ul>
-        <p class="empty" id="memBirthdaysEmpty">Noch keine. Sag „Merk dir, Max hat am 3. Mai Geburtstag“.</p>
+        <p class="empty" id="memBirthdaysEmpty">Noch keine. Sagen Sie „Merk dir, Max hat am 3. Mai Geburtstag“.</p>
       </section>
       <section class="mem-section">
         <h3>Kontakte</h3>
@@ -629,7 +629,7 @@
         <h3>Was Jarvis über Sie weiß</h3>
         <p class="mem-hint">Was Sie gesagt haben und was Jarvis jede Nacht aus den Gesprächen lernt. × löscht es.</p>
         <ul class="mem-list facts" id="memFacts"></ul>
-        <p class="empty" id="memFactsEmpty">Noch nichts. Sag „Merk dir, …“ oder schreib es oben hinein.</p>
+        <p class="empty" id="memFactsEmpty">Noch nichts. Sagen Sie „Merk dir, …“ oder schreiben Sie es oben hinein.</p>
       </section>
     </div>
   </aside>

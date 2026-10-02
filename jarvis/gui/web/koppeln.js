@@ -136,7 +136,7 @@
       el.tsHelp.hidden = !(ts && !ts.installed) && !tsEnable;
       el.tsHelp.textContent = tsEnable ? 'HTTPS erlauben' : 'Tailscale holen';
       if (on) el.tsHint.textContent = 'Die App läuft über ' + ts.url.replace(/^https:\/\//, '').replace(/\/$/, '') + '. Den QR-Code oben einmal neu scannen.';
-      else if (ts && !ts.installed) el.tsHint.textContent = 'Erst Tailscale holen (oder sag: „Jarvis, installiere Tailscale“), einmal anmelden, am Handy dieselbe App mit demselben Konto. Dann hier einschalten.';
+      else if (ts && !ts.installed) el.tsHint.textContent = 'Erst Tailscale holen (oder sagen Sie: „Jarvis, installiere Tailscale“), einmal anmelden, am Handy dieselbe App mit demselben Konto. Dann hier einschalten.';
       else if (ts && ts.error) el.tsHint.textContent = ts.error;
     }
 
@@ -232,7 +232,7 @@
         renderDiscord(info);
         if (info && info.configured && !info.error) {
           el.discordToken.value = '';
-          toast('Der Bot ist eingerichtet. Jetzt auf deinen Server holen.', 'ok');
+          toast('Der Bot ist eingerichtet. Jetzt auf Ihren Server holen.', 'ok');
         } else {
           toast((info && info.error) || 'Der Token geht nicht.', 'error');
         }
@@ -571,7 +571,7 @@
           const r = await call('shop_connect', domain, client, secret);
           if (r && r.ok) {
             el.shopSecret.value = '';
-            toast('Shop verbunden: ' + r.name + '. Sag „Wie läuft der Shop?“.', 'ok');
+            toast('Shop verbunden: ' + r.name + '. Fragen Sie „Wie läuft der Shop?“.', 'ok');
             document.dispatchEvent(new CustomEvent('jarvis-shop'));
           } else {
             toast((r && r.error) || 'Das ging nicht.', 'error');
