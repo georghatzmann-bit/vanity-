@@ -112,12 +112,13 @@ class MultiUi(Ui):
     def add(self, ui: Ui) -> None:
         self.uis.append(ui)
 
-    def _each(self, name: str, *args, **kwargs) -> None:
+    def _each(self, method: str, /, *args, **kwargs) -> None:
+        # "/": config(name="Georg") darf ein Feld "name" haben, ohne mit dem Methodennamen zu kollidieren
         for ui in self.uis:
             try:
-                getattr(ui, name)(*args, **kwargs)
+                getattr(ui, method)(*args, **kwargs)
             except Exception as exc:
-                log.debug("Anzeige %s.%s fehlgeschlagen: %s", type(ui).__name__, name, exc)
+                log.debug("Anzeige %s.%s fehlgeschlagen: %s", type(ui).__name__, method, exc)
 
     def state(self, value):
         self._each("state", value)
