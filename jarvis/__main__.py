@@ -619,8 +619,13 @@ def run_gui(cfg: dict, args) -> int:
                 birthdays = [b["shown"] for b in assistant.memory.upcoming_birthdays(now, days=0) if not b.get("own")]
             except Exception as exc:
                 log.debug("Geburtstage: %s", exc)
+        plans = []
+        if assistant.memory is not None and 5 <= now.hour < 13:
+            from .hinweise import plans_sentence
+
+            plans = plans_sentence(assistant.memory, now.date())  # "Sie wollten heute: zur Post gehen."
         hello = build_greeting(now, current_weather(str(cfg.get("ich", {}).get("ort", "")).strip()), upcoming, events,
-                               birthdays=birthdays)
+                               birthdays=birthdays, plans=plans)
         ui.message("jarvis", hello, id="begruessung")
         assistant.say(hello)
         if getattr(assistant, "hints", None) is not None and 5 <= now.hour < 13:

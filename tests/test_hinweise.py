@@ -190,6 +190,21 @@ class WatcherTest(unittest.TestCase):
         later = self.watcher.check(lage(now=morning + dt.timedelta(hours=1, minutes=1), idle=2.0), calendar=calendar)
         self.assertNotIn("morgens", " ".join(self.keys(later)))
 
+    def test_plans_from_the_review_in_the_morning_and_the_afternoon(self):
+        from jarvis.memory import Memory
+
+        memory = Memory(Path(self.tmp.name) / "gedaechtnis.json", now=lambda: dt.datetime(2026, 10, 2, 7, 0))
+        memory.add_plans([{"was": "zur Post gehen", "tag": "2026-10-02"}], dt.date(2026, 10, 1))
+        self.watcher.check(lage(now=dt.datetime(2026, 10, 1, 23, 0), idle=900))
+        hints = self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 7, 30), idle=2.0), memory=memory)
+        self.assertIn("Sie wollten heute: zur Post gehen.", hints[0].text)
+        later = self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 15, 0), idle=2.0), memory=memory)
+        self.assertEqual(later, [], "morgens schon erwähnt")
+        # Ohne Überblick am Morgen (z. B. erst nachmittags eingeschaltet): dann nachmittags
+        memory.add_plans([{"was": "das Auto waschen", "tag": "2026-10-02"}], dt.date(2026, 10, 1))
+        hints = self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 15, 1), idle=2.0), memory=memory)
+        self.assertEqual(hints[0].text, "Übrigens, Sir: Sie wollten heute noch das Auto waschen.")
+
     def test_greeting_at_start_counts_as_the_overview(self):
         self.watcher.mark_brief(dt.date(2026, 10, 2))
         self.watcher.check(lage(now=dt.datetime(2026, 10, 2, 6, 0), idle=20000))
@@ -444,6 +459,8 @@ class GreetingTest(unittest.TestCase):
 
         text = build_greeting(dt.datetime(2026, 10, 2, 8, 0), birthdays=["Max"])
         self.assertEqual(text, "Guten Morgen, Sir. Und Max hat heute Geburtstag.")
+        text = build_greeting(dt.datetime(2026, 10, 2, 8, 0), plans=["Sie wollten heute: zur Post gehen."])
+        self.assertEqual(text, "Guten Morgen, Sir. Sie wollten heute: zur Post gehen.")
 
 
 if __name__ == "__main__":

@@ -277,7 +277,7 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 - Er sieht, was du ungefähr zur selben Zeit öffnest und in welchen Discord-Sprachkanal du gehst. Nach ein paar Tagen sagt er es zur passenden Zeit nebenbei, am Ende einer normalen Antwort: **„Es ist 18 Uhr, Sir. Übrigens: Um diese Zeit öffnen Sie meist Discord und gehen in den Sprachkanal Zocken. Soll ich?“** Antworte einfach mit **„Ja“**, **„Nein“** oder **„Nie wieder“** (ohne „Hey Jarvis“). Es gibt kein Fenster dafür. Beim Zocken fragt er nie.
 - **Festplatte fast voll:** Sind auf einem Laufwerk weniger als 10 Gigabyte frei, erwähnt Jarvis es tagsüber in einer Antwort (höchstens alle drei Tage) und schaut auf „Ja“ nach, was am meisten Platz braucht.
 - **Geburtstage:** Sag „Merk dir, Max hat am 3. Mai Geburtstag“. Am 3. Mai sagt Jarvis bei der nächsten Antwort: „Übrigens, Sir: Heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?“ Ein „Ja“, und die Glückwünsche sind raus. Sprichst du den ganzen Tag nicht mit ihm, sagt er es abends von selbst.
-- Jede Nacht schaut er kurz auf die Gespräche vom Vortag und merkt sich, was wichtig war.
+- Jede Nacht schaut er kurz auf die Gespräche vom Vortag und merkt sich, was wichtig war. Auch was du vorhattest: Sagst du nebenbei „Ich muss morgen noch zur Post“, erinnert er dich am nächsten Morgen im Überblick daran („Sie wollten heute: zur Post gehen.“), sonst am Nachmittag.
 - Alles bleibt auf deinem PC. Im Fenster rechts bei **Gedächtnis** > **Ansehen** siehst du alles und kannst mit × einzelne Sachen löschen.
 
 ## Notizbuch und Fähigkeiten

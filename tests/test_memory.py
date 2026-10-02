@@ -184,6 +184,28 @@ class MemoryTest(unittest.TestCase):
         self.assertIsNone(self.memory.digest_due(), "für gestern schon erledigt")
         self.assertEqual(self.memory.facts()[0]["quelle"], "gelernt")
 
+    def test_daily_review_also_notes_plans(self):
+        for number in range(6):
+            self.clock.when = dt.datetime(2026, 9, 30, 10 + number, 0)
+            self.memory.record("said", "Ich muss morgen noch zur Post" if number == 2 else f"Starte Valorant, Runde {number}")
+        self.clock.when = dt.datetime(2026, 10, 1, 7, 0)
+        day = self.memory.digest_due()
+        prompt = self.memory.digest_prompt(day)
+        self.assertIn("(Mi 2026-09-30) Ich muss morgen noch zur Post", prompt)
+        self.assertIn("vorhaben", prompt)
+        answer = ('{"fakten": ["Georg spielt gern Valorant."], "vorhaben": [{"was": "Zur Post gehen.", "tag": "2026-10-01"}, '
+                  '{"was": "Steuer machen", "tag": ""}, {"was": "Mein Passwort ändern", "tag": ""}, "kaputt"]}')
+        self.assertEqual(self.memory.apply_digest(day, answer), ["Georg spielt gern Valorant"])
+        plans = self.memory.plans_for(dt.date(2026, 10, 1))
+        self.assertEqual([p["was"] for p in plans], ["Zur Post gehen", "Steuer machen"], "kein Passwort")
+        self.assertIn("Was Georg heute vorhatte (aus früheren Gesprächen): Zur Post gehen; Steuer machen.",
+                      self.memory.context(dt.datetime(2026, 10, 1, 8, 0)))
+        self.memory.plans_mentioned(plans, dt.date(2026, 10, 1))
+        self.assertEqual([p["was"] for p in self.memory.plans_for(dt.date(2026, 10, 2))], [],
+                         "die mit Tag gelten nur an dem Tag, die ohne Tag nur bis zur ersten Erwähnung")
+        # Dasselbe Vorhaben nicht doppelt
+        self.assertEqual(self.memory.add_plans([{"was": "Zur Post gehen", "tag": "2026-10-01"}], dt.date(2026, 9, 30)), [])
+
     def test_other_processes_writing_the_file_are_seen(self):
         self.memory.remember("Erster Fakt")
         other = Memory(self.path)

@@ -186,7 +186,7 @@ class Memory:
             if not isinstance(data, dict):
                 data = {}
             for name, empty in (("fakten", []), ("kontakte", {}), ("ereignisse", []), ("vorschlaege", {}),
-                                ("befehle", {}), ("adressbuch", [])):
+                                ("befehle", {}), ("adressbuch", []), ("vorhaben", [])):
                 if not isinstance(data.get(name), type(empty)):
                     data[name] = empty
             self._data = data
@@ -618,6 +618,9 @@ class Memory:
         if soon:  # die aus den Fakten stehen oben schon
             lines.append("Geburtstage bald (aus dem iPhone): " + "; ".join(
                 f"{b['shown']} am {int(b['datum'][8:10])}. {MONTH_NAMES[int(b['datum'][5:7]) - 1]}" for b in soon) + ".")
+        plans = self.plans_for(now.date())
+        if plans:
+            lines.append(f"Was {USER} heute vorhatte (aus früheren Gesprächen): " + "; ".join(p["was"] for p in plans) + ".")
         if not lines:
             return ""
         lines.append("Nutze das unaufdringlich. Erfährst du etwas Neues, das auch morgen noch wichtig ist "
@@ -645,33 +648,114 @@ class Memory:
     def digest_prompt(self, day: dt.date) -> str:
         with self._lock:
             done = str(self._load().get("rueckblick", ""))
-        said = [e["was"] for e in self.events("said") if done < e.get("t", "")[:10] <= day.isoformat()][-150:]
+        said = [e for e in self.events("said") if done < e.get("t", "")[:10] <= day.isoformat()][-150:]
+        lines = []
+        for event in said:
+            try:
+                when = dt.date.fromisoformat(str(event.get("t", ""))[:10])
+                stamp = f"({WEEKDAY_NAMES[when.weekday()][:2]} {when.isoformat()}) "
+            except ValueError:
+                stamp = ""
+            lines.append(f"- {stamp}{event['was']}")
         known = "\n".join(f"- {f['text']}" for f in self.facts()[-60:]) or "- (noch nichts)"
         return (
             f"Du bist das Gedächtnis von Jarvis, dem persönlichen Assistenten von {USER}. Hier ist, was {USER} zuletzt zu "
-            "Jarvis gesagt hat, eine Zeile pro Befehl:\n\n" + "\n".join(f"- {s}" for s in said) +
+            "Jarvis gesagt hat, eine Zeile pro Befehl, mit dem Tag davor:\n\n" + "\n".join(lines) +
             "\n\nDas weiß Jarvis schon:\n" + known +
             f"\n\nSchreib höchstens 8 neue, dauerhaft nützliche Fakten über {USER} auf: Vorlieben, Hobbys, Spiele, "
             "Projekte, Personen in seinem Leben, wiederkehrende Termine, wie er angesprochen werden will. Keine "
             "einmaligen Befehle (\"hat Spotify geöffnet\"), nichts, was schon bekannt ist, nichts Erfundenes, nichts "
-            f"Intimes. Jeder Fakt ein kurzer deutscher Satz in der dritten Person (\"{USER} spielt gern Valorant.\"). "
-            "Antworte nur mit einem JSON-Array aus Strings, ohne Erklärung. Gibt es nichts Neues: []"
+            f"Intimes. Jeder Fakt ein kurzer deutscher Satz in der dritten Person (\"{USER} spielt gern Valorant.\").\n"
+            f"Dazu höchstens 5 Vorhaben: was {USER} gesagt hat, dass er noch tun muss oder will (\"Ich muss morgen noch "
+            "zur Post\", \"Am Freitag wollte ich das Auto waschen\"), kurz und ohne \"Georg\" (\"zur Post gehen\"), mit "
+            "dem Tag als JJJJ-MM-TT, falls er einen nennt (\"morgen\" vom Tag aus gerechnet, an dem er es sagte), sonst "
+            "\"\". Nicht: Bitten an Jarvis (Erinnerungen, Timer, Termine eintragen erledigt Jarvis selbst), Erledigtes.\n"
+            "Antworte nur mit einem JSON-Objekt, ohne Erklärung: "
+            "{\"fakten\": [\"...\"], \"vorhaben\": [{\"was\": \"...\", \"tag\": \"JJJJ-MM-TT\"}]}. "
+            "Gibt es nichts Neues: {\"fakten\": [], \"vorhaben\": []}"
         )
 
     def apply_digest(self, day: dt.date, answer: str) -> list[str]:
-        """Übernimmt die Fakten aus der Antwort des Tagesrückblicks."""
-        found = re.search(r"\[.*\]", str(answer), re.S)
-        learned: list[str] = []
+        """Übernimmt Fakten (und Vorhaben) aus der Antwort des Tagesrückblicks. Versteht das Objekt
+        {"fakten": [...], "vorhaben": [...]} und, wie früher, ein bloßes Array aus Fakten."""
+        text = str(answer)
+        facts: list = []
+        plans: list = []
+        found = re.search(r"\{.*\}", text, re.S)
+        data = None
         if found:
             try:
-                items = json.loads(found.group(0))
+                data = json.loads(found.group(0))
             except ValueError:
-                items = []
-            for item in items[:8] if isinstance(items, list) else []:
-                if isinstance(item, str) and 5 <= len(item.strip()) <= 200:
-                    learned.append(self.remember(item, source="gelernt"))
+                data = None
+        if isinstance(data, dict):
+            facts = data.get("fakten") if isinstance(data.get("fakten"), list) else []
+            plans = data.get("vorhaben") if isinstance(data.get("vorhaben"), list) else []
+        else:
+            found = re.search(r"\[.*\]", text, re.S)
+            if found:
+                try:
+                    items = json.loads(found.group(0))
+                except ValueError:
+                    items = []
+                facts = items if isinstance(items, list) else []
+        learned: list[str] = []
+        for item in facts[:8]:
+            if isinstance(item, str) and 5 <= len(item.strip()) <= 200:
+                learned.append(self.remember(item, source="gelernt"))
+        self.add_plans(plans, day)
         self.mark_digest(day)
         return [fact for fact in learned if fact]
+
+    # ------------------------------------------------------------------ Vorhaben
+
+    def add_plans(self, items, said_on: dt.date) -> list[str]:
+        """Vorhaben aus dem Tagesrückblick ({"was": "zur Post gehen", "tag": "2026-10-03"}), höchstens fünf."""
+        clean = []
+        for item in list(items or [])[:5]:
+            if not isinstance(item, dict):
+                continue
+            what = " ".join(str(item.get("was", "")).split()).rstrip(".")[:120]
+            if len(what) < 4 or is_secret(what):
+                continue
+            day = str(item.get("tag") or "").strip()
+            try:
+                day = dt.date.fromisoformat(day).isoformat() if day else ""
+            except ValueError:
+                day = ""
+            clean.append({"was": what, "tag": day, "gesagt": said_on.isoformat()})
+        if not clean:
+            return []
+        today = self._now().date()
+        with self._lock:
+            data = self._load()
+            known = {(p.get("was", "").lower(), p.get("tag", "")) for p in data["vorhaben"] if isinstance(p, dict)}
+            fresh = [p for p in clean if (p["was"].lower(), p["tag"]) not in known]
+            keep = [p for p in data["vorhaben"] if isinstance(p, dict) and (
+                (p.get("tag") or "") >= (today - dt.timedelta(days=7)).isoformat() if p.get("tag")
+                else str(p.get("gesagt", "")) >= (today - dt.timedelta(days=14)).isoformat())]
+            data["vorhaben"] = (keep + fresh)[-30:]
+            self._save()
+        return [p["was"] for p in fresh]
+
+    def plans_for(self, day: dt.date) -> list[dict]:
+        """Was Georg für diesen Tag vorhatte, und was er ohne Tag vor Kurzem vorhatte und Jarvis noch nicht
+        erwähnt hat."""
+        with self._lock:
+            items = [dict(p) for p in self._load()["vorhaben"] if isinstance(p, dict)]
+        recent = (day - dt.timedelta(days=3)).isoformat()
+        return [p for p in items if p.get("tag") == day.isoformat()
+                or (not p.get("tag") and not p.get("erwaehnt") and str(p.get("gesagt", "")) >= recent)]
+
+    def plans_mentioned(self, plans: list[dict], day: dt.date) -> None:
+        """Jarvis hat diese Vorhaben erwähnt: die ohne Tag nicht noch einmal."""
+        wanted = {(p.get("was"), p.get("tag", "")) for p in plans}
+        with self._lock:
+            data = self._load()
+            for p in data["vorhaben"]:
+                if isinstance(p, dict) and (p.get("was"), p.get("tag", "")) in wanted:
+                    p["erwaehnt"] = day.isoformat()
+            self._save()
 
     def mark_digest(self, day: dt.date) -> None:
         with self._lock:

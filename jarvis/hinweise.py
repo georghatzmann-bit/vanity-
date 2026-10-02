@@ -286,6 +286,8 @@ class Watcher:
             hints += self._session(lage)
             if calendar is not None:
                 hints += self._calendar(lage, calendar, push_at)
+            if memory is not None:
+                hints += self._plans(lage, memory)
             if returned is not None:
                 missed = away() if away is not None else []
                 hints += self._welcome(lage, returned, calendar, reminders, memory, weather, missed)
@@ -525,6 +527,20 @@ class Watcher:
                     return hints
         return hints
 
+    def _plans(self, lage: Lage, memory) -> list[Hint]:
+        """Nachmittags, was Georg für heute vorhatte (aus dem Tagesrückblick), falls es morgens nicht schon
+        im Überblick oder in der Begrüßung war."""
+        plans_for = getattr(memory, "plans_for", None)
+        if "termine" not in self.kinds or plans_for is None or not lage.present or not 13 <= lage.now.hour < 21:
+            return []
+        today = lage.now.date()
+        plans = [p for p in plans_for(today) if p.get("erwaehnt") != today.isoformat()][:3]
+        if not plans:
+            return []
+        memory.plans_mentioned(plans, today)
+        return [Hint(f"vorhaben:{today.isoformat()}", "termine", "Übrigens, Sir: Sie wollten heute noch "
+                     + _join([p["was"] for p in plans]) + ".", repeat_hours=20, ttl=2 * 3600, group="vorhaben")]
+
     # ------------------------------------------------------------------ Willkommen (morgens, zurück)
 
     def _welcome(self, lage: Lage, away_seconds: float, calendar, reminders, memory, weather,
@@ -631,6 +647,7 @@ def morning_brief(now: dt.datetime, calendar=None, reminders=None, memory=None, 
                 parts.append(f"{_join(names)} {'hat' if len(names) == 1 else 'haben'} heute Geburtstag.")
         except Exception as exc:
             log.debug("Überblick, Geburtstage: %s", exc)
+        parts += plans_sentence(memory, now.date())
     for item in (away or [])[:2]:
         parts.append(item if item.endswith(".") else item + ".")
     if not parts and not weather:
@@ -638,6 +655,22 @@ def morning_brief(now: dt.datetime, calendar=None, reminders=None, memory=None, 
     if weather:
         parts.insert(0, weather.rstrip(".") + ".")
     return " ".join([hello] + parts)
+
+
+def plans_sentence(memory, day: dt.date) -> list[str]:
+    """"Sie wollten heute: zur Post gehen." aus den Vorhaben im Gedächtnis (danach als erwähnt markiert)."""
+    plans_for = getattr(memory, "plans_for", None)
+    if plans_for is None:
+        return []
+    try:
+        plans = plans_for(day)[:3]
+        if not plans:
+            return []
+        memory.plans_mentioned(plans, day)
+    except Exception as exc:
+        log.debug("Vorhaben: %s", exc)
+        return []
+    return ["Sie wollten heute: " + _join([p["was"] for p in plans]) + "."]
 
 
 # ---------------------------------------------------------------------- Messen (Windows)
