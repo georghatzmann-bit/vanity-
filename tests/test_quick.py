@@ -445,3 +445,17 @@ class EverydayTest(unittest.TestCase):
             assistant.handle("Ruf Anna an")
         called.assert_not_called()
         self.assertEqual(assistant.brain.asked[-1], "Ruf Anna an")
+
+
+class FalseFriendsTest(unittest.TestCase):
+    """Sätze, die nach Befehl klingen, aber keiner sind: lieber Claude als etwas Falsches tun."""
+
+    def test_negations_and_questions_are_not_commands(self):
+        from jarvis.memory import match_memory
+
+        for said in ("Spiel nicht so laut", "Spiel keine Musik mehr", "Wie fahre ich den PC herunter?",
+                     "Wie mache ich einen Screenshot unter Windows?", "Ruf mich morgen an", "Minimiere das Risiko"):
+            self.assertIsNone(intents.match(said), said)
+        for said in ("Merk dir das nicht", "Merk dir nicht alles"):
+            self.assertIsNone(match_memory(said), said)
+        self.assertEqual(intents.match("Zeig mir, was du kannst").name, "help")

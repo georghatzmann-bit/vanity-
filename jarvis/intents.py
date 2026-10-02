@@ -67,6 +67,7 @@ _RULES: list[tuple[str, re.Pattern]] = [
     # "Was kannst du?" ist meist die erste Frage: sofort und kurz beantworten
     ("help", re.compile(
         r"^(?:was kannst du(?: (?:alles|so|eigentlich|denn|für mich))*(?: tun| machen)?|was kann ich (?:dich )?(?:alles )?(?:fragen|sagen)|"
+        r"(?:zeig|zeige|sag|sage) mir,? was du (?:alles )?kannst|"
         r"hilfe|wobei kannst du (?:mir )?helfen|was sind deine (?:funktionen|befehle))$"
     )),
     ("time", re.compile(
@@ -626,6 +627,8 @@ def match_web(text: str) -> Intent | None:
         if name == "play":
             if not query or _MEDIA_WORDS.match(query) or (not site and _NOT_PLAYABLE.search(query)):
                 continue
+            if re.match(r"(?:nicht|kein|keine|keinen|nichts|bitte nicht)\b", query, re.I):
+                continue  # "Spiel nicht so laut", "Spiel keine Musik mehr": kein Titel
             query = re.sub(r"^(?:das lied|den song|das video|das album|die playlist|musik von|lieder von|songs von|"
                            r"etwas von|was von|ein lied von|einen song von)\s+", "", query, flags=re.I)
             return Intent("play", query, {"site": site.lower()})

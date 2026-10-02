@@ -647,7 +647,7 @@ _RECALL = re.compile(
 )
 # "Merk dir das" oder "Merk dir, wo ich geparkt habe": ohne Zusammenhang nicht zu speichern,
 # das übernimmt Claude (kennt das Gespräch und hat den Befehl "merken").
-_NOT_A_FACT = re.compile(r"^(?:das|dies|dieses|es|was|wie|wo|wer|wann|warum|wieso|welche[nmrs]?)\b", re.I)
+_NOT_A_FACT = re.compile(r"^(?:das|dies|dieses|es|was|wie|wo|wer|wann|warum|wieso|welche[nmrs]?|nicht|nichts|kein|keine)\b", re.I)
 _LEAD = re.compile(r"^(?:das|dies|dieses)\s*[:,]\s*(?=\S)", re.I)
 _ONLY_FILLER = re.compile(r"^(?:bitte|mal|doch|jetzt|gut|schon|einfach|genau|auch)(?:\s+(?:bitte|mal|doch|jetzt|gut|schon|einfach|genau|auch))*[\s.!]*$", re.I)
 
