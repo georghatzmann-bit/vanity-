@@ -2,6 +2,7 @@
 
 import datetime as dt
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -311,13 +312,22 @@ class AssistantMemoryTest(unittest.TestCase):
         self.assertIn("Discord", answer)
         self.assertEqual(self.brain.asked, [])
 
+    def tip(self, command="Wie spät ist es?"):
+        """Der Vorschlag kommt als Ergänzung zur nächsten normalen Antwort."""
+        with mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            return self.assistant.handle(command)
+
     def test_birthday_offer_sends_congratulations(self):
         self.assistant.memory.remember("Max hat am 1. Oktober Geburtstag")
         self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
         with mock.patch.object(self.assistant, "_present", return_value=True), \
                 mock.patch.object(self.assistant, "_fullscreen", return_value=False):
             self.assertTrue(self.assistant.check_suggestions(self.clock.when))
-        self.assertEqual(self.speaker.said[-1], "Sir, heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?")
+        self.assertEqual(self.speaker.said, [], "kein Unterbrechen, kein Fenster")
+        self.assertNotIn("suggestion", [e[0] for e in self.ui.events])
+        answer = self.tip()
+        self.assertTrue(answer.endswith("Übrigens, Sir: Heute hat Max Geburtstag. Soll ich Max auf Discord gratulieren?"), answer)
+        self.assertTrue(self.assistant.take_follow_up(), "das Ja geht ohne Hey Jarvis")
         # Die Bestätigung ist zufällig ("Gesendet, Sir." nennt Max nicht): hier immer die erste
         with mock.patch("jarvis.messaging.send", return_value="ok") as sent, \
                 mock.patch("jarvis.assistant.random.choice", side_effect=lambda options: options[0]):
@@ -332,8 +342,19 @@ class AssistantMemoryTest(unittest.TestCase):
         with mock.patch.object(self.assistant, "_present", return_value=True), \
                 mock.patch.object(self.assistant, "_fullscreen", return_value=False):
             self.assertTrue(self.assistant.check_suggestions(self.clock.when))
-        self.assertEqual(self.speaker.said[-1], "Sir, heute hat Ihre Oma Geburtstag.")
+        self.assertTrue(self.tip().endswith("Übrigens, Sir: Heute hat Ihre Oma Geburtstag."))
         self.assertIsNone(self.assistant._offer, "nichts zu beantworten")
+
+    def test_birthday_is_said_in_the_evening_if_nothing_fitted(self):
+        self.assistant.memory.remember("Georg sagt: Meine Oma hat am 1. Oktober Geburtstag")
+        self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
+        with mock.patch.object(self.assistant, "_present", return_value=True), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+            self.assertFalse(self.assistant.check_suggestions(dt.datetime(2026, 10, 1, 15, 0)), "tagsüber wartet er")
+            self.assertTrue(self.assistant.check_suggestions(dt.datetime(2026, 10, 1, 18, 30)))
+        self.assertEqual(self.speaker.said[-1], "Sir, heute hat Ihre Oma Geburtstag.")
+        self.assertNotIn("Übrigens", self.tip(), "nur einmal")
 
     def test_full_disk_is_mentioned_every_few_days(self):
         self.clock.when = dt.datetime(2026, 10, 1, 10, 0)
@@ -342,8 +363,8 @@ class AssistantMemoryTest(unittest.TestCase):
         with present[0], present[1], mock.patch("jarvis.pc.low_disks", return_value=[("C", 6)]):
             self.assistant._disk_checked = 0.0
             self.assertTrue(self.assistant.check_suggestions(self.clock.when))
-            self.assertEqual(self.speaker.said[-1], "Sir, auf Laufwerk C sind nur noch 6 Gigabyte frei. "
-                                                    "Soll ich nachsehen, was dort am meisten Platz braucht?")
+            self.assertTrue(self.tip().endswith("Übrigens, Sir: Auf Laufwerk C sind nur noch 6 Gigabyte frei. "
+                                                "Soll ich nachsehen, was dort am meisten Platz braucht?"))
             self.brain.chunks = ["Am meisten Platz brauchen Ihre Spiele, Sir."]
             answer = self.assistant.handle("Ja, bitte")
             self.assertIn("Laufwerk C am meisten Platz", self.brain.asked[-1])
@@ -368,11 +389,15 @@ class AssistantMemoryTest(unittest.TestCase):
         self.clock.when = dt.datetime(2026, 10, 1, 18, 1)
         with mock.patch.object(self.assistant, "_present", return_value=True), \
                 mock.patch.object(self.assistant, "_fullscreen", return_value=False):
-            return self.assistant.check_suggestions(self.clock.when)
+            if not self.assistant.check_suggestions(self.clock.when):
+                return False
+        self.answer = self.tip()
+        return True
 
     def test_suggestion_yes_opens_everything(self):
         self.assertTrue(self.offer())
-        self.assertIn("Discord und Spotify", self.speaker.said[-1])
+        self.assertIn("Übrigens, Sir: Um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?", self.answer)
+        self.assertEqual(self.speaker.said[-1], self.answer, "eine Antwort, ein Satz hintereinander")
         self.assertTrue(self.assistant.take_follow_up(), "die Antwort geht ohne Hey Jarvis")
         with mock.patch("jarvis.apps.open_app", side_effect=lambda name: f"{name.capitalize()} startet.") as opened:
             answer = self.assistant.handle("Ja, gerne")
@@ -390,6 +415,34 @@ class AssistantMemoryTest(unittest.TestCase):
         self.assertTrue(self.offer())
         self.assistant.handle("Wie spät ist es?")
         self.assertIsNone(self.assistant._offer)
+
+    def test_tip_waits_for_a_fitting_answer_and_expires(self):
+        week_of_habits(self.assistant.memory, self.clock)
+        self.clock.when = dt.datetime(2026, 10, 1, 18, 1)
+        with mock.patch.object(self.assistant, "_present", return_value=True), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+            self.assertFalse(self.assistant.check_suggestions(self.clock.when), "einer reicht")
+        with mock.patch.object(self.assistant, "_fullscreen", return_value=True):
+            self.assertNotIn("Übrigens", self.assistant.handle("Wie spät ist es?"), "nicht mitten im Spiel")
+        self.brain.chunks = ["Soll ich Ihnen auch die Wetterkarte zeigen?"]
+        self.assertNotIn("Übrigens", self.tip("Wie wird das Wetter auf Mallorca?"), "Jarvis fragt selbst schon etwas")
+        with mock.patch("jarvis.assistant.time.monotonic", return_value=time.monotonic() + 31 * 60):
+            self.assertNotIn("Übrigens", self.tip(), "nach einer halben Stunde verfallen")
+        self.assertIsNone(self.assistant._tip)
+
+    def test_tip_after_a_claude_answer(self):
+        week_of_habits(self.assistant.memory, self.clock)
+        self.clock.when = dt.datetime(2026, 10, 1, 18, 1)
+        with mock.patch.object(self.assistant, "_present", return_value=True), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False):
+            self.assertTrue(self.assistant.check_suggestions(self.clock.when))
+        self.brain.chunks = ["Morgen wird es sonnig, Sir."]
+        answer = self.tip("Wie wird das Wetter auf Mallorca?")
+        self.assertEqual(answer, "Morgen wird es sonnig, Sir. Übrigens, Sir: Um diese Zeit öffnen Sie meist "
+                                 "Discord und Spotify. Soll ich?")
+        self.assertEqual(self.speaker.said[-1], "Übrigens, Sir: Um diese Zeit öffnen Sie meist Discord und Spotify. Soll ich?")
+        self.assertTrue(self.assistant.take_follow_up())
 
     def test_no_suggestions_while_gaming_or_away(self):
         week_of_habits(self.assistant.memory, self.clock)

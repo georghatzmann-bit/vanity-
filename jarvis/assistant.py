@@ -76,6 +76,8 @@ class Assistant:
         # Das Gedächtnis (memory.Memory, setzt __main__) und ein offener Vorschlag (Routine, bis wann)
         self.memory = None
         self._offer = None
+        # Ein fälliger Vorschlag, der auf die nächste Antwort wartet (Routine, bis wann)
+        self._tip = None
         self._last_state = ""
         self._ids = itertools.count(1)
         self._worker: threading.Thread | None = None
@@ -269,7 +271,16 @@ class Assistant:
                 rest, self._rest = self._rest, ""
                 if answer is None:
                     answer = self._ask_claude(text, speak)
+                    tip = self._take_tip(answer)
+                    if tip:
+                        self.ui.message("jarvis", tip)
+                        if speak:
+                            self.say(tip)
+                        answer = f"{answer} {tip}"
                 else:
+                    tip = "" if rest else self._take_tip(answer)
+                    if tip:
+                        answer = f"{answer} {tip}"
                     if answer:
                         self.ui.message("jarvis", answer)
                         if speak:
@@ -963,7 +974,6 @@ class Assistant:
         occasion = Occasion(key, "PC herunterfahren", hello, "Soll ich den PC herunterfahren?", "Fahr den PC herunter")
         self.memory.offered(occasion)
         self._offer = (occasion, time.monotonic() + 60)
-        self.ui.suggestion(occasion.as_dict())
         return occasion.question()
 
     def _disk_free(self) -> str:
@@ -1021,32 +1031,64 @@ class Assistant:
         parts.append("Alles steht im Fenster unter Gedächtnis.")
         return " ".join(parts)
 
+    # So lange wartet ein Vorschlag auf die nächste Antwort, danach verfällt er (eine Routine hat
+    # ihre Zeit sowieso nur ungefähr eine halbe Stunde lang).
+    TIP_MINUTES = 30
+
     def check_suggestions(self, now=None) -> bool:
-        """Bietet eine Routine an, wenn gerade ihre Zeit ist ("Sir, um diese Zeit öffnen Sie meist
-        Discord und Spotify. Soll ich?"). Nie beim Zocken, nie wenn Georg nicht am PC ist."""
+        """Merkt sich, was gerade passt: eine Routine ("um diese Zeit öffnen Sie meist Discord und
+        Spotify"), einen Geburtstag oder eine fast volle Festplatte. Jarvis zeigt dafür kein Fenster
+        und unterbricht nicht, sondern sagt es als Ergänzung zu seiner nächsten Antwort ("..., Sir.
+        Übrigens: ... Soll ich?"). Nur ein Geburtstag ohne Frage wird abends notfalls von selbst gesagt,
+        damit er nicht untergeht. Nie beim Zocken, nie wenn Georg nicht am PC ist."""
         if self.memory is None or not self._cfg.get("gedaechtnis", {}).get("vorschlaege", True):
             return False
-        if self.busy or self.speaking or self._recording or self.gaming:
-            return False
-        if self.mute is not None and self.mute.muted:
-            return False
-        if not self._present() or self._fullscreen():
+        if self._tip is not None and time.monotonic() < self._tip[1]:
+            return self._announce_late(now)
+        self._tip = None
+        if self.gaming or not self._present() or self._fullscreen():
             return False
         routine = self.memory.due(now) or self._disk_notice(now)
         if routine is None:
             return False
+        self._tip = (routine, time.monotonic() + self.TIP_MINUTES * 60)
+        return True
+
+    def _announce_late(self, now=None) -> bool:
+        """Ein Geburtstag (nur eine Ansage, keine Frage), der bis zum Abend auf keine Antwort passte:
+        dann doch von selbst sagen, wenn Georg da ist und gerade nichts los ist."""
+        routine = self._tip[0]
+        now = now or dt.datetime.now()
+        if routine.commands() or now.hour < 18 or not getattr(routine, "key", "").startswith("geburtstag"):
+            return False
+        if self.busy or self.speaking or self._recording or self.gaming:
+            return False
+        if (self.mute is not None and self.mute.muted) or not self._present() or self._fullscreen():
+            return False
+        self._tip = None
         self.memory.offered(routine, now)
-        if not routine.commands():
-            # Nur eine Ansage ("Sir, heute hat Ihre Mutter Geburtstag."), nichts zu beantworten
-            self.ui.message("jarvis", routine.question())
-            self.say(routine.question())
-            return True
-        self._offer = (routine, time.monotonic() + 120)
-        self.ui.suggestion(routine.as_dict())
         self.ui.message("jarvis", routine.question())
-        self._follow_up = True  # die Antwort geht ohne "Hey Jarvis"
         self.say(routine.question())
         return True
+
+    def _take_tip(self, answer: str) -> str:
+        """Der wartende Vorschlag als Ergänzung zur Antwort ("Übrigens, Sir: ..."), oder "".
+        Nicht, wenn Jarvis selbst gerade etwas fragt, wenn schon ein Vorschlag offen ist oder
+        Georg zockt. Mit Frage darin geht Georgs "Ja" ohne "Hey Jarvis" (die Antwort endet auf "?")."""
+        if self._tip is None or self.memory is None:
+            return ""
+        routine, until = self._tip
+        if time.monotonic() > until:
+            self._tip = None
+            return ""
+        answer = str(answer or "").strip()
+        if not answer or answer.endswith("?") or self._offer is not None or self.gaming or self._fullscreen():
+            return ""
+        self._tip = None
+        self.memory.offered(routine)
+        if routine.commands():
+            self._offer = (routine, time.monotonic() + 120)
+        return tip_sentence(routine.question())
 
     def _disk_notice(self, now=None):
         """Eine fast volle Festplatte (bei Spielen schnell passiert), höchstens alle drei Tage und
@@ -1104,7 +1146,6 @@ class Assistant:
         from .tool import confirmed
 
         reply = intents.normalize(text)
-        self.ui.suggestion(None)
         if re.search(r"\b(?:nie|niemals|nicht mehr fragen|frag (?:mich )?nicht mehr|hör auf damit)\b", reply):
             self.memory.feedback(routine.key, "nie")
             return "Verstanden, Sir. Das frage ich nicht mehr."
@@ -1386,6 +1427,18 @@ def _short_reason(exc: BrainError) -> str:
         "account": "Das Claude-Konto meldet ein Problem (claude.ai).",
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
+
+
+def tip_sentence(question: str) -> str:
+    """Ein Vorschlag als Ergänzung zur Antwort: "Sir, um diese Zeit ... Soll ich?" wird
+    "Übrigens, Sir: Um diese Zeit ... Soll ich?"."""
+    text = str(question or "").strip()
+    if not text:
+        return ""
+    if text.startswith("Sir, "):
+        text = text[5:]
+        return "Übrigens, Sir: " + text[:1].upper() + text[1:]
+    return "Übrigens: " + text
 
 
 def _join_names(names: list[str]) -> str:
