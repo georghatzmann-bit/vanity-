@@ -447,6 +447,10 @@
         dragging = false;
         if (performance.now() - dragAt > 120) dragVel = 0; // losgelassen ohne Schwung
       });
+      canvas.addEventListener('pointercancel', () => {
+        dragging = false;
+        hoverTarget = 0;
+      });
       canvas.addEventListener('click', (e) => {
         if (!dragged) return;
         dragged = false;

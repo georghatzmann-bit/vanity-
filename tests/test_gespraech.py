@@ -97,19 +97,37 @@ class NameTest(unittest.TestCase):
         return submitted, events
 
     def test_jarvis_with_a_command(self):
-        # Halber Treffer (0.3), dann redet Georg weiter: "Jarvis, wie spät ist es?"
+        # Halber Treffer (0.3), Georg redet weiter: Erst sind nur zwei Sekunden geprüft
+        # ("Jarvis, wie"), dann hört Jarvis bis zum Satzende zu und erkennt alles neu.
         frames = [LOUD] * 9 + [QUIET] * 6
-        said = Said("Jarvis, wie spät ist es?")
+        said = Said("Jarvis, wie", "Jarvis, wie spät ist es?")
         submitted, events = self.run_loop(said, frames, [0.3])
         self.assertEqual(submitted, ["wie spät ist es?"])
         self.assertNotIn("chime", events, "der Befehl war schon dabei, kein Ton nötig")
 
     def test_jarvis_alone_gives_the_tone_and_listens(self):
-        frames = [LOUD] * 6 + [QUIET] * 14 + SENTENCE + [QUIET] * 2
+        frames = [LOUD] * 3 + [QUIET] * 3 + SENTENCE + [QUIET] * 2
         said = Said("Jarvis.", "Öffne Spotify")
         submitted, events = self.run_loop(said, frames, [0.3])
         self.assertEqual(submitted, ["Öffne Spotify"])
         self.assertIn("chime", events)
+        self.assertEqual(said.calls, 2, "nur der Name: gleich der Ton, keine zweite Prüfung")
+
+    def test_danke_jarvis_is_answered_without_the_tone(self):
+        frames = [LOUD] * 3 + [QUIET] * 3 + [QUIET] * 4
+        said = Said("Danke, Jarvis.")
+        submitted, events = self.run_loop(said, frames, [0.3])
+        self.assertEqual(submitted, ["Danke, Jarvis."])
+        self.assertNotIn("chime", events)
+
+    def test_other_talk_costs_no_long_recording(self):
+        # Ein Fernseher redet weiter: Jarvis prüft nur zwei Sekunden und hört gleich wieder
+        # auf "Hey Jarvis", statt den ganzen Satz aufzunehmen.
+        frames = [LOUD] * 6 + [LOUD] * 3 + [QUIET] * 2 + SENTENCE + [QUIET] * 2
+        said = Said("Wir gehen morgen", "Öffne Spotify")
+        submitted, _events = self.run_loop(said, frames, [0.3] + [0.0] * 5 + [0.0] * 4 + [0.9])
+        self.assertEqual(submitted, ["Öffne Spotify"])
+        self.assertEqual(said.calls, 2)
 
     def test_other_talk_is_ignored_and_checked_less_often(self):
         frames = [LOUD] * 6 + [QUIET] * 14 + [LOUD] * 6 + [QUIET] * 14
@@ -169,6 +187,50 @@ class WordsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GuardTest(unittest.TestCase):
+    def cfg(self):
+        cfg = load_config()
+        cfg["listen"].update(silence_seconds=0.24, energy_threshold=1000)
+        return cfg
+
+    def test_no_conversation_while_gaming(self):
+        events = []
+        assistant, _ui, _speaker, mute = make(FakeBrain())
+        assistant.gaming = True
+        submitted = []
+        assistant.submit = submitted.append
+        frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3
+        loop = VoiceLoop(self.cfg(), FakeMic(frames, events), FakeWake([0.9], events),
+                         Said("Wie spät ist es?", "Und in Tokio?"), assistant, mute, Sounds(events), "X", hints=None)
+        with self.assertRaises(StopLoop):
+            loop.run()
+        self.assertEqual(submitted, ["Wie spät ist es?"], "beim Zocken redet Georg meist mit anderen")
+
+    def test_own_voice_is_not_a_command(self):
+        events = []
+        assistant, _ui, speaker, mute = make(FakeBrain())
+        submitted = []
+        assistant.submit = submitted.append
+
+        class Mic(FakeMic):
+            reads = 0
+
+            def read(self):
+                Mic.reads += 1
+                # Während des Gesprächs meldet sich eine Erinnerung: Jarvis spricht selbst
+                assistant._speaking = 14 <= Mic.reads <= 20
+                return super().read()
+
+        frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3
+        loop = VoiceLoop(self.cfg(), Mic(frames, events), FakeWake([0.9], events),
+                         Said("Wie spät ist es?", "Ihr Timer ist abgelaufen, Sir."), assistant, mute, Sounds(events),
+                         "X", hints=None)
+        with self.assertRaises(StopLoop):
+            loop.run()
+        self.assertIn("again", events, "das Gespräch lief")
+        self.assertEqual(submitted, ["Wie spät ist es?"])
 
 
 class OrbMovementTest(unittest.TestCase):

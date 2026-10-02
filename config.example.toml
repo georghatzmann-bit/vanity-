@@ -53,7 +53,7 @@ barge_in = true
 follow_up = true
 # true = Gespräch: Nach jeder Antwort auf einen gesprochenen Befehl hört Jarvis kurz weiter zu
 # (leiser Ton). Dann einfach weiterreden, ohne "Hey Jarvis". Schluss ist nach ein paar Sekunden
-# Stille oder mit "Danke", "Alles klar", "Tschüss".
+# Stille oder mit "Danke", "Alles klar", "Tschüss". Beim Zocken (Gaming-Modus, Vollbild) nicht.
 gespraech = true
 # So viele Sekunden wartet Jarvis im Gespräch, ob du weiterredest.
 gespraech_sekunden = 8

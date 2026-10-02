@@ -258,6 +258,8 @@ class VoiceLoop:
             # Jarvis hat eine Frage gestellt ("Soll ich ... löschen?") oder wir sind im Gespräch:
             # Die Antwort geht ohne "Hey Jarvis".
             question = bool(assistant.take_follow_up()) and self._follow_up
+            if self._talking and not self._may_talk():
+                self._end_conversation()
             if question or (self._talking and self._conversation):
                 self._was_active = False
                 self._listen(follow_up=True, question=question)
@@ -270,7 +272,8 @@ class VoiceLoop:
 
         score = wake.score(frame)
         threshold = wake.threshold
-        self._recent.append(frame)
+        if not active:
+            self._recent.append(frame)  # während Jarvis spricht, nicht: das wäre seine eigene Stimme
         clicked = self._trigger.is_set()
         if clicked:
             self._trigger.clear()
@@ -328,11 +331,23 @@ class VoiceLoop:
         if talking:
             self._shown_talking = True
             ui.config(gespraech=True)
+        # Spricht Jarvis währenddessen selbst (eine Erinnerung meldet sich), darf seine eigene
+        # Stimme im Gespräch nicht als Befehl zählen.
+        spoke = []
+
+        def level(value: float) -> None:
+            ui.level(value)
+            if assistant.speaking:
+                spoke.append(True)
+
         assistant.set_recording(True)
         try:
-            audio = record_command(mic, listen_cfg, on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS, vad=self._vad)
+            audio = record_command(mic, listen_cfg, on_level=level, ignore_seconds=CHIME_ECHO_SECONDS, vad=self._vad)
         finally:
             assistant.set_recording(False)
+        if audio is not None and follow_up and spoke:
+            log.info("Verworfen: Jarvis hat während der Aufnahme selbst gesprochen")
+            audio = None
         if audio is None:
             if not follow_up:
                 ui.message("info", "Nichts gehört. Sprich direkt nach dem Ton.")
@@ -387,39 +402,72 @@ class VoiceLoop:
             self._shown_talking = False
             self._assistant.ui.config(gespraech=False)
 
-    def _check_name(self) -> None:
-        """Zweite Stufe für "Jarvis" allein, "Hallo Jarvis" und Co.: kurz weiterhören, alles in
-        Text umwandeln und schauen, ob der Name vorn steht. Wenn nicht, passiert nichts
-        (und Jarvis prüft eine Weile seltener, damit Fernseher und Gespräche nicht ständig zählen)."""
-        import numpy as np
+    def _may_talk(self) -> bool:
+        """Beim Zocken (Gaming-Modus, Vollbild) kein Gespräch: Dann redet Georg meist mit anderen."""
+        assistant = self._assistant
+        if getattr(assistant, "gaming", False):
+            return False
+        fullscreen = getattr(assistant, "_fullscreen", None)
+        try:
+            return not (fullscreen is not None and fullscreen())
+        except Exception:
+            return True
 
+    def _check_name(self) -> None:
+        """Zweite Stufe für "Jarvis" allein, "Hallo Jarvis" und Co.: Erst nur die letzten zwei
+        Sekunden in Text umwandeln. Steht der Name nicht vorn, passiert nichts (und Jarvis prüft
+        eine Weile seltener, damit Fernseher und Gespräche ihn nicht ständig beschäftigen).
+        Steht er vorn und Georg redet weiter, hört Jarvis bis zum Satzende zu."""
         from .audio import record_more, rms
 
         mic = self._mic
         frames = list(self._recent)
         self._recent.clear()
-        frames += record_more(mic, self._cfg["listen"], vad=self._vad)
         loud = max(300.0, float(getattr(mic, "noise_floor", 200.0)) * 2.5)
-        text = ""
+        rest = None
+        said = ""
         if any(rms(f) >= loud for f in frames):
-            try:
-                text = self._stt.transcribe(np.concatenate(frames).astype(np.float32) / 32768.0) or ""
-            except Exception as exc:
-                log.debug("Namensprüfung: %s", exc)
-        rest = after_name(text)
-        self._wake.reset()
-        mic.drain()
+            said = self._transcribe(frames)
+            rest = after_name(said)
         if rest is None:
             self._name_misses = min(self._name_misses + 1, 5)
             self._name_pause_until = time.monotonic() + 4 * 2 ** (self._name_misses - 1)
-            log.debug("Kein Jarvis gemeint: %r", text)
+            self._wake.reset()
+            mic.drain()
             return
         self._name_misses = 0
-        log.info("Angesprochen mit Namen: %s", text)
+        if rest or any(rms(f) >= loud for f in frames[-3:]):
+            # "Jarvis, wie spät ..." geht noch weiter: bis zum Satzende aufnehmen, alles neu erkennen
+            more = record_more(mic, self._cfg["listen"], vad=self._vad)
+            full = after_name(self._transcribe(frames + more))
+            if full is not None and len(full) >= len(rest):
+                rest = full
+        self._wake.reset()
+        mic.drain()
+        log.info("Mit Namen angesprochen: %s", rest or said)
         if rest:
             self._take(rest)
+        elif self._is_command(said):
+            self._take(said)  # "Danke, Jarvis", "Gute Nacht, Jarvis": gleich antworten, ohne Ton
         else:
             self._listen()
+
+    @staticmethod
+    def _is_command(text: str) -> bool:
+        from . import intents
+
+        return intents.match(text) is not None
+
+    def _transcribe(self, frames: list) -> str:
+        import numpy as np
+
+        if not frames:
+            return ""
+        try:
+            return self._stt.transcribe(np.concatenate(frames).astype(np.float32) / 32768.0) or ""
+        except Exception as exc:
+            log.debug("Namensprüfung: %s", exc)
+            return ""
 
     def _wait_until_idle(self) -> None:
         # Kurz warten, bis der Befehl angenommen ist, dann bis alles gesagt ist.
