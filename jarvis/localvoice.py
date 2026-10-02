@@ -298,6 +298,9 @@ def _selftest_main() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    for stream in (sys.stdout, sys.stderr):  # Umlaute in der Ausgabe dürfen nie abbrechen
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     logging.basicConfig(level=logging.WARNING)
     if args[:1] == ["vorbereiten"] and len(args) > 1:
         return _prepare_main(Path(args[1]))

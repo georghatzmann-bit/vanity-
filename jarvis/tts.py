@@ -87,9 +87,7 @@ class TextToSpeech:
                 log.debug("Stimmen-Zwischenspeicher: %s", exc)
         if self._local is not None:
             try:
-                audio = self._local_stream(text)
-                if cached is not None:
-                    audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
+                audio = self._local_stream(text, cached)
                 self.used_edge = True
                 return audio, audio.rate
             except Exception as exc:
@@ -183,13 +181,15 @@ class TextToSpeech:
     # langsameren PCs (oder neben einem Spiel) nicht stockt.
     LOCAL_BUFFER_SECONDS = 0.6
 
-    def _local_stream(self, text: str) -> "StreamingAudio":
+    def _local_stream(self, text: str, cached: Path | None = None) -> "StreamingAudio":
         """Startet die lokale Stimme und kommt zurück, sobald genug Ton da ist. Lädt sie noch
         (kurz nach dem Start), wartet Jarvis lieber, als mitten im Gespräch die Stimme zu wechseln."""
         from .localvoice import RATE
 
         audio = StreamingAudio(RATE)
         audio.BUFFER_SECONDS = self.LOCAL_BUFFER_SECONDS
+        if cached is not None:  # vor dem Start setzen: Kurze Sätze sind fertig, bevor synthesize zurückkommt
+            audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
 
         def run() -> None:
             try:

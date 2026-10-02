@@ -63,7 +63,7 @@ class VoiceTest(unittest.TestCase):
         self.assertTrue(FakePocket.instances[0].started, "lädt schon beim Start im Hintergrund")
         audio, rate = tts.synthesize("Sehr wohl, Sir.")
         self.assertEqual(rate, 24000)
-        self.assertTrue(audio.done.wait(5))
+        self.assertTrue(audio.done.wait(5))  # done kommt erst nach dem Speichern (siehe StreamingAudio.finish)
         self.assertGreater(audio.available(), 0)
         self.assertTrue(tts.used_edge, "die gute Stimme, keine Ersatzstimme")
         cached, _ = tts.synthesize("Sehr wohl, Sir.")
