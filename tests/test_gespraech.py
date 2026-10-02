@@ -185,10 +185,6 @@ class WordsTest(unittest.TestCase):
         self.assertEqual(brain.asked, [], "ohne Claude")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class GuardTest(unittest.TestCase):
     def cfg(self):
         cfg = load_config()
@@ -250,3 +246,7 @@ class OrbMovementTest(unittest.TestCase):
         bridge = GuiBridge()
         bridge.action("music")
         self.assertIn({"type": "action", "kind": "music"}, bridge.drain())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -46,6 +46,21 @@ class MultiUiTest(unittest.TestCase):
         MultiUi(rec).message("jarvis", "Guten Morgen, Sir.", id="a1", model="lokal")
         self.assertEqual(rec.calls, [("message", "jarvis", "Guten Morgen, Sir.", "a1", "lokal", True)])
 
+    def test_every_display_method_is_forwarded(self):
+        # Fehlt eine Methode hier, landet sie still bei Ui (tut nichts): So kam die Bewegung der Kugel
+        # ("action") nie im Fenster an, weil der Start das Fenster in MultiUi steckt.
+        methods = [n for n, v in vars(Ui).items() if callable(v) and not n.startswith("_")]
+        self.assertIn("action", methods)
+        for name in methods:
+            self.assertIn(name, vars(MultiUi), f"MultiUi reicht {name}() nicht weiter")
+
+    def test_orb_movement_reaches_the_window(self):
+        from jarvis.gui.app import GuiBridge
+
+        bridge = GuiBridge()
+        MultiUi(Ui(), bridge).action("music")
+        self.assertIn({"type": "action", "kind": "music"}, bridge.drain())
+
 
 if __name__ == "__main__":
     unittest.main()

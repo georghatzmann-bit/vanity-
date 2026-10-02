@@ -151,3 +151,6 @@ class MultiUi(Ui):
 
     def suggestion(self, offer):
         self._each("suggestion", offer)
+
+    def action(self, kind):
+        self._each("action", kind)
