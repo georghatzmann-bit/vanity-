@@ -412,7 +412,7 @@
                     <Path Data="M5.6,5.6 L10.4,10.4 M10.4,5.6 L5.6,10.4" Stroke="{StaticResource Fehler}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                 </Grid>
             </Grid>
-            <TextBlock x:Name="Name" Grid.Column="1" Text="{Binding Titel}" Foreground="{StaticResource Nebentext}" VerticalAlignment="Center" />
+            <TextBlock x:Name="Titelzeile" Grid.Column="1" Text="{Binding Titel}" Foreground="{StaticResource Nebentext}" VerticalAlignment="Center" />
             <TextBlock x:Name="Zustandstext" Grid.Column="2" Text="{Binding Status}" FontSize="12" Foreground="{StaticResource Schwach}" VerticalAlignment="Center" />
             <TextBlock x:Name="Zeile" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Detail}" FontSize="12"
                        Foreground="{StaticResource Nebentext}" TextTrimming="CharacterEllipsis" Margin="0,-4,0,8" Visibility="Collapsed" />
@@ -421,7 +421,7 @@
             <DataTrigger Binding="{Binding Zustand}" Value="Laeuft">
                 <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
                 <Setter TargetName="Dreher" Property="Visibility" Value="Visible" />
-                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Titelzeile" Property="Foreground" Value="{StaticResource Text}" />
                 <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource AkzentHell}" />
                 <DataTrigger.EnterActions>
                     <BeginStoryboard x:Name="Drehen">
@@ -438,20 +438,20 @@
             <DataTrigger Binding="{Binding Zustand}" Value="Fertig">
                 <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
                 <Setter TargetName="Haken" Property="Visibility" Value="Visible" />
-                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Titelzeile" Property="Foreground" Value="{StaticResource Text}" />
                 <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource Erfolg}" />
             </DataTrigger>
             <DataTrigger Binding="{Binding Zustand}" Value="Hinweis">
                 <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
                 <Setter TargetName="Ausruf" Property="Visibility" Value="Visible" />
-                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Titelzeile" Property="Foreground" Value="{StaticResource Text}" />
                 <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource Warnung}" />
                 <Setter TargetName="Zeile" Property="Foreground" Value="{StaticResource Warnung}" />
             </DataTrigger>
             <DataTrigger Binding="{Binding Zustand}" Value="Fehler">
                 <Setter TargetName="Punkt" Property="Visibility" Value="Collapsed" />
                 <Setter TargetName="Kreuz" Property="Visibility" Value="Visible" />
-                <Setter TargetName="Name" Property="Foreground" Value="{StaticResource Text}" />
+                <Setter TargetName="Titelzeile" Property="Foreground" Value="{StaticResource Text}" />
                 <Setter TargetName="Zustandstext" Property="Foreground" Value="{StaticResource Fehler}" />
                 <Setter TargetName="Zeile" Property="Foreground" Value="{StaticResource Fehler}" />
             </DataTrigger>

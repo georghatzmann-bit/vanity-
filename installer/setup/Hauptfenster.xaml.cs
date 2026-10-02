@@ -57,14 +57,7 @@ namespace JarvisSetup
             SchrittListe.ItemsSource = fortschritt.Schritte;
             Version version = typeof(Hauptfenster).Assembly.GetName().Version;
             VersionText.Text = "Version " + version.Major + "." + version.Minor + "." + version.Build;
-            try
-            {
-                Icon = BitmapFrame.Create(new Uri("pack://application:,,,/jarvis.ico"));
-            }
-            catch (Exception)
-            {
-                // Ohne Symbol (lokaler Bau ohne jarvis.ico): Windows nimmt das des Programms.
-            }
+            // Kein eigenes Icon setzen: Ohne nimmt WPF das Symbol der EXE in allen Größen (scharf in der Taskleiste).
             aktuelleSeite = SeiteStart;
             takt = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
             takt.Tick += Takt;
@@ -515,7 +508,7 @@ namespace JarvisSetup
                 RueckfrageZeigen();
                 return;
             }
-            if (seite == Seite.Start)
+            if (seite == Seite.Start && optionen.BilderOrdner == null)
                 Rueckgabe = 0;
             base.OnClosing(e);
         }

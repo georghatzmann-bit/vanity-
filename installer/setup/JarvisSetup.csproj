@@ -42,7 +42,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\Output\JarvisKern.exe" LogicalName="JarvisKern.exe" Condition="Exists('..\Output\JarvisKern.exe')" />
-    <Resource Include="..\jarvis.ico" Link="jarvis.ico" Condition="Exists('..\jarvis.ico')" />
   </ItemGroup>
 
   <!-- Im Build auf GitHub muss der Kern dabei sein, sonst wäre JarvisSetup.exe leer. -->
