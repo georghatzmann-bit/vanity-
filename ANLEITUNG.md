@@ -286,7 +286,31 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 **Fähigkeiten:** Für wiederkehrende Aufgaben hat Jarvis genaue Anleitungen, die er nur liest, wenn er sie braucht: Discord-Server gestalten, Morgen-Briefing, Recherche mit Bericht, PC aufräumen und aktualisieren, Spiele starten (auch Steam und Epic), Smart Home, Bildschirm lesen. Zeigst du ihm etwas Neues und sagst **„Lern das“**, schreibt er sich selbst eine neue Fähigkeit. Alle stehen unter **Gedächtnis** > **Ansehen**.
 
-**Mit dem Claude-Max-Abo:** Einstellungen > **Gehirn** > **Gründlich**, dann denkt Jarvis immer mit Opus, dem klügsten Modell.
+## Gehirn: Jarvis wählt das passende Modell
+
+Für jede Aufgabe entscheidet Jarvis selbst, wie viel Denkleistung sie braucht:
+
+- **Kurze Fragen und einfache Befehle:** Sonnet mit wenig Nachdenken. Die Antwort kommt schnell.
+- **Texte, Recherche, Erklärungen:** Sonnet mit mittlerem Nachdenken.
+- **Knifflige Sachen** (Fehlersuche am PC, Code, Analysen, Planung, Geld und Verträge): Opus mit viel Nachdenken.
+- **Maximal** nur, wenn du es sagst: „Denk richtig gründlich nach“ oder „Nimm dein stärkstes Modell“.
+
+Du kannst jederzeit mitreden: „kurz und knapp“, „denk gründlich nach“, „mit Opus“. Sagst du „Das stimmt nicht“, denkt er beim nächsten Mal gründlicher. Im Verlauf steht bei jeder Antwort, womit er gedacht hat, zum Beispiel „Opus · gründlich“. Fehlt ein Modell in deinem Abo oder ist das Kontingent dafür aufgebraucht, nimmt Jarvis von selbst das nächstkleinere.
+
+Lieber immer gleich? Einstellungen > **Gehirn** > **Modellwahl**: Automatisch (empfohlen), Immer schnell oder Immer gründlich.
+
+## Jarvis meldet sich von selbst
+
+Jarvis wartet nicht nur auf Befehle. Wie ein guter Butler sagt er Bescheid, wenn etwas seltsam ist oder du etwas zu vergessen drohst:
+
+- **Am PC:** Ein Programm reagiert nicht mehr („Discord reagiert seit einer halben Minute nicht mehr. Soll ich es neu starten?“). Ein Programm im Hintergrund frisst minutenlang den Prozessor. Der Arbeitsspeicher ist voll, der Akku fast leer, die Grafikkarte sehr heiß, das Internet weg (und wieder da).
+- **Sicherheit:** Ein neues Programm startet mit Windows. Auf „Ja“ schaut Jarvis nach, ob es harmlos ist. Und wenn Windows seit Tagen auf einen Neustart für Updates wartet.
+- **Termine:** Morgens ein kurzer Überblick über den Tag (Wetter, Termine, Erinnerungen, Geburtstage). Abends der frühe Termin von morgen, auf Wunsch mit einer Erinnerung aufs Handy, die auch kommt, wenn der PC dann aus ist. Spät nachts der Hinweis auf den Termin am Morgen. Und zwei Termine, die sich überschneiden.
+- **Post:** Eine Mail von einem deiner Kontakte ist seit gestern ungelesen. Auf „Ja“ liest Jarvis sie vor.
+- **Zurück am PC:** „Willkommen zurück, Sir. Während Sie weg waren: …“ mit allem, was du verpasst hast.
+- **Pause:** Nach drei Stunden am Stück schlägt er fünf Minuten Pause vor.
+
+Die Regeln: Jarvis spricht nur, wenn du am PC sitzt, nie beim Zocken oder im Vollbild, nie mitten in ein Gespräch, und zwischen zwei Hinweisen bleiben ein paar Minuten Ruhe. Dringendes (Akku fast leer) kommt sonst aufs Handy. Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**, ohne „Hey Jarvis“. „Nie wieder“ stellt diese Art Hinweis für immer ab. Ganze Bereiche schaltest du in der `config.toml` unter `[hinweise]` ab, zum Beispiel `pausen = false`.
 
 ## Die Werkstatt: Jarvis programmiert für dich
 
@@ -295,10 +319,13 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“**, **„Programmier mir ein kleines Spiel“** oder **„Schreib mir ein Python-Skript, das meine Downloads sortiert“**.
 
 1. Jarvis sagt „Ich gehe in die Werkstatt“ und das Fenster zeigt den Auftrag: links den Plan, in der Mitte jeden Schritt mit Dauer, rechts den Fortschritt als Ring und die Dateien.
-2. Jarvis arbeitet im Hintergrund. Du kannst ihn währenddessen ganz normal fragen. **„Wie weit bist du?“** nennt den aktuellen Schritt.
-3. Ist er fertig, sagt er es dir. **Ordner öffnen** zeigt das Projekt, `start.bat` startet es.
+2. Jarvis arbeitet im Hintergrund, und du kannst dabei mit ihm reden:
+   - **„Wie weit bist du?“** nennt den aktuellen Schritt.
+   - **Wünsche gehen direkt in die laufende Arbeit:** „Mach den Hintergrund blau“, „Nimm lieber Python“, „Füg noch einen Highscore hinzu“. Jarvis sagt „Ich baue das gleich mit ein“, im Ablauf steht dann „Ihr Wunsch: …“.
+   - **Fragen zur Arbeit** („Welche Sprache nimmst du?“, „Was hast du schon fertig?“) beantwortet er mit Blick auf seinen Plan.
+3. Ist er fertig, sagt er es dir und fragt: „Soll ich es gleich starten?“ Ein **„Ja“** genügt. **Ordner öffnen** zeigt das Projekt.
 
-- **Große Aufträge** (Spiele, Apps mit Login, Shops) baut Jarvis mit dem klügsten Modell (Opus), kleine mit dem schnelleren (Sonnet).
+- **Große Aufträge** (Spiele, Apps mit Login, Shops) baut Jarvis mit Opus und viel Nachdenken, kleine mit Sonnet. Sagst du „beste Qualität“, denkt er noch gründlicher.
 - **Alle Projekte auf einen Blick:** oben im Fenster **Werkstatt**, oder „Zeig mir meine Projekte“. Jede Karte zeigt den Stand, **Starten** und **Weiterbauen**.
 - **Weiter am selben Projekt:** „Arbeite am Discord-Bot weiter: füg einen Befehl hinzu“. Jarvis weiß noch, was er gebaut hat.
 - „Starte das Projekt Würfelspiel“, „Öffne den Ordner vom Discord-Bot“
