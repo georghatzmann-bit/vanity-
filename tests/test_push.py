@@ -74,6 +74,7 @@ class AnnounceTest(unittest.TestCase):
 
     def test_away_gets_a_notification(self):
         with mock.patch.object(self.assistant, "_present", return_value=False), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=False), \
                 mock.patch.object(self.push, "send", wraps=self.push.send) as sent:
             self.assistant.announce("Erinnerung, Sir: Tee")
         self.assertEqual(self.speaker.said[-1], "Erinnerung, Sir: Tee", "am PC wird es trotzdem gesagt")
@@ -84,6 +85,12 @@ class AnnounceTest(unittest.TestCase):
         with mock.patch.object(self.assistant, "_present", return_value=True), \
                 mock.patch.object(self.push, "send") as sent:
             self.assistant.announce("Spotify ist installiert, Sir.")
+        sent.assert_not_called()
+        # Zocken mit Controller: keine Eingaben, aber ein Spiel im Vollbild
+        with mock.patch.object(self.assistant, "_present", return_value=False), \
+                mock.patch.object(self.assistant, "_fullscreen", return_value=True), \
+                mock.patch.object(self.push, "send") as sent:
+            self.assistant.announce("Erinnerung, Sir: Tee")
         sent.assert_not_called()
 
 

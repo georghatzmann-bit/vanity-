@@ -188,8 +188,10 @@ class Assistant:
         if push is None or not push.enabled or not text:
             return
         try:
-            if self._present():
-                return  # Georg sitzt am PC und hört es
+            # Sitzt Georg am PC, hört er es. Mit Controller im Vollbild zählt Windows keine Eingaben,
+            # er ist aber trotzdem da.
+            if self._present() or self._fullscreen():
+                return
         except Exception:
             pass
         push.send(text, priority=4 if text.startswith("Erinnerung") else 3, click=self._phone_link())
