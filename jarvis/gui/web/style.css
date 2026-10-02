@@ -98,13 +98,12 @@ body[data-state="muted"] .backdrop {
   min-width: 0;
 }
 
+/* Jarvis' Zeichen: dieselbe lebendige Form wie die große Kugel, nur klein (orb.js) */
 .brand-orb {
-  width: 14px;
-  height: 14px;
+  display: block;
+  width: 18px;
+  height: 18px;
   flex: none;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #dfe5ff, var(--accent) 55%, #3b4cc4);
-  box-shadow: 0 0 12px rgba(110, 140, 255, 0.35);
 }
 
 .brand-name {

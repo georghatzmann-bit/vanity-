@@ -65,6 +65,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn("Mit Jarvis verbinden", page)
         self.assertEqual(self.request("/app/handy.js", token="")[0], 200)
+        self.assertEqual(self.request("/app/orb.js", token="")[0], 200)
         self.assertEqual(self.request("/app/manifest.webmanifest", token="")[0], 200)
         self.assertEqual(self.request("/app/../../server.py", token="")[0], 404)
         self.assertEqual(self.request("/app/%2e%2e/%2e%2e/server.py", token="")[0], 404)

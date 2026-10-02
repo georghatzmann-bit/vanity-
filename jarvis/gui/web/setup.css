@@ -30,13 +30,12 @@
   padding: 0 8px 20px;
 }
 
+/* Jarvis' Zeichen: dieselbe lebendige Form wie die große Kugel (orb.js) */
 .brand-orb {
-  width: 18px;
-  height: 18px;
+  display: block;
+  width: 22px;
+  height: 22px;
   flex: none;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #dfe5ff, var(--accent) 55%, #3b4cc4);
-  box-shadow: 0 0 12px rgba(110, 140, 255, 0.35);
 }
 
 .rail-name {

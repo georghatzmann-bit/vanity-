@@ -115,42 +115,17 @@ button {
   white-space: nowrap;
 }
 
+/* Jarvis' lebendige Kugel wie am PC (orb.js): bewegt sich je nach Zustand selbst */
 .orb {
-  position: relative;
-  display: grid;
+  display: block;
   flex: none;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #dfe5ff, #6e8cff 55%, #3b4cc4);
-  box-shadow: 0 0 16px rgba(var(--glow), 0.3);
-}
-
-.orb span {
-  position: absolute;
-  inset: -4px;
-  border: 1.5px solid rgba(var(--glow), 0.45);
-  border-top-color: transparent;
-  border-radius: 50%;
+  width: 40px;
+  height: 40px;
 }
 
 .orb.big {
-  width: 88px;
-  height: 88px;
-}
-
-body[data-state="thinking"] .orb span,
-body[data-state="listening"] .orb span {
-  animation: spin 1s linear infinite;
-}
-
-body[data-state="speaking"] .orb {
-  animation: pulse 0.9s var(--ease) infinite alternate;
-}
-
-body[data-link="off"] .orb {
-  filter: grayscale(1) brightness(0.6);
+  width: 120px;
+  height: 120px;
 }
 
 .top-side {
@@ -764,18 +739,6 @@ textarea:focus-visible {
 
 .toast.error {
   background: #4a2026;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  to {
-    box-shadow: 0 0 0 1px rgba(var(--glow), 0.6), 0 0 28px rgba(var(--glow), 0.7);
-  }
 }
 
 @keyframes rise {

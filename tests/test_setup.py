@@ -462,12 +462,24 @@ class SetupPageTest(unittest.TestCase):
         self.assertGreater(len(called), 15)
         missing = sorted(name for name in called if not callable(getattr(setup_wizard.SetupApi, name, None)))
         self.assertEqual(missing, [])
-        for page, assets in (("setup.html", ("base.css", "setup.css", "setup.js")),
-                             ("index.html", ("base.css", "style.css", "werkstatt.css", "werkstatt.js", "app.js"))):
+        for page, assets in (("setup.html", ("base.css", "setup.css", "orb.js", "setup.js")),
+                             ("index.html", ("base.css", "style.css", "werkstatt.css", "werkstatt.js", "orb.js", "app.js"))):
             html = (WEB_DIR / page).read_text(encoding="utf-8")
             for asset in assets:
                 self.assertIn(asset, html, page)
                 self.assertTrue((WEB_DIR / asset).exists(), asset)
+
+    def test_orb_is_one_renderer_for_pc_and_phone(self):
+        # Die Handy-App bekommt nur ihren eigenen Ordner ausgeliefert, darum liegt dort eine Kopie
+        from jarvis.gui.app import WEB_DIR
+
+        pc = (WEB_DIR / "orb.js").read_text(encoding="utf-8")
+        self.assertEqual((WEB_DIR / "handy" / "orb.js").read_text(encoding="utf-8"), pc,
+                         "handy/orb.js muss eine Kopie von gui/web/orb.js sein")
+        self.assertIn("window.JarvisOrb", pc)
+        handy = (WEB_DIR / "handy" / "index.html").read_text(encoding="utf-8")
+        self.assertLess(handy.index("orb.js"), handy.index("handy.js"))
+        self.assertIn("'orb.js'", (WEB_DIR / "handy" / "sw.js").read_text(encoding="utf-8"))
 
     def test_main_window_calls_exist(self):
         import re

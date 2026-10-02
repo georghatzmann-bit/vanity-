@@ -1072,195 +1072,36 @@
   };
 
   // ==================================================================
-  //   Die Kugel: Jarvis' Gesicht. Eine weiche, leuchtende Kugel, in der
-  //   langsam Licht fließt. Hört sie zu oder spricht sie, wird sie heller
-  //   und atmet mit der Stimme. Keine Ringe, keine Skalen.
+  //   Die Kugel: Jarvis' Gesicht. Eine lebendige, flüssige Form (orb.js):
+  //   innen fließendes Licht, außen farbige Schleier, die mit der Stimme
+  //   aufblühen. Hier nur die Verbindung zum Fenster.
   // ==================================================================
 
   const Core = (() => {
-    // Farben je Zustand: hell (Glanz), Mitte, Rand; dazu wie lebhaft das Licht fließt
-    const LOOK = {
-      idle:      { a: [176, 190, 255], b: [110, 140, 255], c: [40, 52, 150], energy: 0.3, speed: 0.35, halo: 0.16 },
-      listening: { a: [190, 232, 255], b: [104, 176, 255], c: [36, 78, 178], energy: 0.75, speed: 0.75, halo: 0.3 },
-      thinking:  { a: [206, 198, 255], b: [138, 128, 255], c: [56, 46, 160], energy: 0.6, speed: 1.25, halo: 0.22 },
-      speaking:  { a: [186, 200, 255], b: [112, 142, 255], c: [40, 54, 172], energy: 0.95, speed: 0.85, halo: 0.32 },
-      muted:     { a: [150, 154, 166], b: [92, 97, 110], c: [36, 39, 47], energy: 0.06, speed: 0.12, halo: 0.04 },
-      error:     { a: [255, 190, 186], b: [242, 100, 95], c: [120, 32, 36], energy: 0.45, speed: 0.6, halo: 0.24 },
+    let orb = null;
+    let state = 'idle';
+    return {
+      start(node) {
+        if (!window.JarvisOrb) return;
+        // Liegt die Werkstatt darüber, muss die Kugel nicht zeichnen
+        orb = window.JarvisOrb.create(node, { mode: 'hero', visible: () => document.body.dataset.view === 'hud' });
+        if (orb) orb.state(state);
+        document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark' }));
+      },
+      setState(value) {
+        state = value;
+        if (orb) orb.state(value);
+      },
+      level(value) {
+        if (orb) orb.level(value);
+      },
+      boot() {
+        if (orb) orb.boot();
+      },
+      pulse() {
+        if (orb) orb.pulse();
+      },
     };
-    const look = JSON.parse(JSON.stringify(LOOK.idle));
-    let target = LOOK.idle;
-    let canvas = null;
-    let ctx = null;
-    let size = 0;
-    let dpr = 1;
-    let t = 0;
-    let flow = 0;
-    let last = 0;
-    let level = 0;
-    let levelTarget = 0;
-    let levelAt = 0;
-    let bootT = 0;
-    let pulseT = -10;
-    // Drei Lichtflecken, die in der Kugel kreisen (Lissajous-Bahnen)
-    const BLOBS = [
-      { fx: 0.71, fy: 0.53, px: 0.0, py: 1.7, r: 0.62, mix: 0.0 },
-      { fx: 0.43, fy: 0.89, px: 2.1, py: 0.4, r: 0.55, mix: 0.6 },
-      { fx: 0.97, fy: 0.61, px: 4.2, py: 3.3, r: 0.48, mix: 1.0 },
-    ];
-
-    const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
-    const mix = (x, y, k) => [lerp(x[0], y[0], k), lerp(x[1], y[1], k), lerp(x[2], y[2], k)];
-
-    function resize() {
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      dpr = Math.min(2, window.devicePixelRatio || 1);
-      const s = Math.max(120, Math.round(Math.min(rect.width, rect.height) * dpr));
-      if (s !== size) {
-        size = s;
-        canvas.width = s;
-        canvas.height = s;
-      }
-    }
-
-    function setState(state) {
-      target = LOOK[state] || LOOK.idle;
-    }
-
-    function levelIn(v) {
-      levelTarget = v;
-      levelAt = performance.now();
-    }
-
-    function boot() {
-      bootT = 0;
-    }
-
-    function pulse() {
-      pulseT = t;
-    }
-
-    function frame(now) {
-      if (document.body.dataset.view !== 'hud' || document.hidden) {
-        // Werkstatt liegt darüber oder das Fenster ist versteckt: nicht zeichnen, nur ab und zu nachsehen
-        last = now;
-        setTimeout(() => requestAnimationFrame(frame), 250);
-        return;
-      }
-      const dt = Math.min(0.05, (now - (last || now)) / 1000);
-      last = now;
-      t += dt;
-      bootT = Math.min(1, bootT + dt / 1.2);
-      const k = Math.min(1, dt * 3.5);
-      for (const key of ['a', 'b', 'c']) look[key] = mix(look[key], target[key], k);
-      for (const key of ['energy', 'speed', 'halo']) look[key] = lerp(look[key], target[key], k);
-      // Pegel: schnell rauf, langsam runter; nach 300 ms ohne Meldung abklingen
-      const stale = performance.now() - levelAt > 300;
-      const want = stale ? 0 : levelTarget;
-      level += (want - level) * Math.min(1, dt * (want > level ? 16 : 4));
-      flow += dt * look.speed * (reducedMotion() ? 0.2 : 1) * (1 + level * 0.8);
-      draw();
-      const calm = target === LOOK.idle || target === LOOK.muted;
-      if (calm && !reducedMotion()) {
-        setTimeout(() => requestAnimationFrame(frame), 33); // ruhig: 30 Bilder pro Sekunde reichen
-      } else {
-        requestAnimationFrame(frame);
-      }
-    }
-
-    function draw() {
-      if (!ctx) return;
-      const ease = 1 - Math.pow(1 - bootT, 3);
-      const lv = level;
-      const breath = Math.sin(t * 1.15) * 0.012;
-      const click = t - pulseT < 0.45 ? Math.sin(((t - pulseT) / 0.45) * Math.PI) * 0.05 : 0;
-      const R = size * 0.34 * (0.92 + 0.08 * ease) * (1 + breath + click + lv * 0.06 * look.energy);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, size, size);
-      ctx.translate(size / 2, size / 2);
-      ctx.globalAlpha = ease;
-
-      // Weiches Licht um die Kugel (wird mit der Stimme stärker)
-      const haloA = look.halo * (0.7 + lv * 0.9);
-      const halo = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 1.45);
-      halo.addColorStop(0, rgba(look.b, haloA));
-      halo.addColorStop(1, rgba(look.b, 0));
-      ctx.fillStyle = halo;
-      ctx.beginPath();
-      ctx.arc(0, 0, R * 1.45, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Die Kugel selbst
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(0, 0, R, 0, Math.PI * 2);
-      ctx.clip();
-      const base = ctx.createRadialGradient(-R * 0.3, -R * 0.36, R * 0.05, 0, 0, R * 1.02);
-      base.addColorStop(0, rgba(look.a, 1));
-      base.addColorStop(0.42, rgba(look.b, 1));
-      base.addColorStop(1, rgba(look.c, 1));
-      ctx.fillStyle = base;
-      ctx.fillRect(-R, -R, R * 2, R * 2);
-
-      // Fließendes Licht
-      ctx.globalCompositeOperation = 'screen';
-      const reach = 0.28 + look.energy * 0.22 + lv * 0.18;
-      for (const blob of BLOBS) {
-        const x = Math.cos(flow * blob.fx + blob.px) * R * reach;
-        const y = Math.sin(flow * blob.fy + blob.py) * R * reach;
-        const r = R * blob.r * (1 + lv * 0.25);
-        const color = mix(look.a, look.b, blob.mix);
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, rgba(color, 0.42 + look.energy * 0.18));
-        g.addColorStop(1, rgba(color, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(-R, -R, R * 2, R * 2);
-      }
-      // Beim Nachdenken wandert ein sanfter Schimmer im Kreis
-      if (ctx.createConicGradient && look.speed > 1) {
-        const sheen = ctx.createConicGradient(flow * 1.4, 0, 0);
-        const a = clamp((look.speed - 1) * 0.5, 0, 0.16);
-        sheen.addColorStop(0, 'rgba(255,255,255,0)');
-        sheen.addColorStop(0.12, `rgba(255,255,255,${a.toFixed(3)})`);
-        sheen.addColorStop(0.3, 'rgba(255,255,255,0)');
-        sheen.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = sheen;
-        ctx.fillRect(-R, -R, R * 2, R * 2);
-      }
-      ctx.globalCompositeOperation = 'source-over';
-
-      // Schatten unten, Glanz oben: so wirkt sie rund
-      const shade = ctx.createRadialGradient(R * 0.1, R * 0.55, R * 0.1, 0, R * 0.2, R * 1.1);
-      shade.addColorStop(0, 'rgba(4,6,14,0)');
-      shade.addColorStop(1, 'rgba(4,6,14,0.38)');
-      ctx.fillStyle = shade;
-      ctx.fillRect(-R, -R, R * 2, R * 2);
-      const gloss = ctx.createRadialGradient(-R * 0.34, -R * 0.42, 0, -R * 0.34, -R * 0.42, R * 0.62);
-      gloss.addColorStop(0, 'rgba(255,255,255,0.34)');
-      gloss.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gloss;
-      ctx.fillRect(-R, -R, R * 2, R * 2);
-      ctx.restore();
-
-      // Feine Kante
-      ctx.beginPath();
-      ctx.arc(0, 0, R - 0.5 * dpr, 0, Math.PI * 2);
-      ctx.lineWidth = 1 * dpr;
-      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    function start(node) {
-      canvas = node;
-      ctx = canvas.getContext('2d');
-      resize();
-      if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
-      else window.addEventListener('resize', resize);
-      requestAnimationFrame(frame);
-    }
-
-    return { start, setState, level: levelIn, boot, pulse };
   })();
 
   // ==================================================================

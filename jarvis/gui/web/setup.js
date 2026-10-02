@@ -11,8 +11,6 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   const params = new URLSearchParams(location.search);
-  const motionMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-  const reducedMotion = () => !!(motionMQ && motionMQ.matches);
 
   // ------------------------------------------------------------------ Schritte
 
@@ -204,96 +202,10 @@
     dot: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></svg>',
   };
 
-  // ------------------------------------------------------------------ Kreis (nur auf der Begrüßungsseite)
+  // ------------------------------------------------------------------ Jarvis' Kugel (orb.js, wie im Hauptfenster)
 
-  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${clamp(a, 0, 1).toFixed(3)})`;
-  const lighten = (c, t) => [c[0] + (255 - c[0]) * t, c[1] + (255 - c[1]) * t, c[2] + (255 - c[2]) * t];
-  const ACCENT = [110, 140, 255];
-
-  // Jarvis' Kugel wie im Hauptfenster: weich, leuchtend, langsam fließendes Licht
   function orb(canvas) {
-    if (!canvas) return null;
-    const ctx = canvas.getContext('2d');
-    let w = 0;
-    let h = 0;
-    let dpr = 1;
-    let t = 0;
-    let last = 0;
-    const LIGHT = [176, 190, 255];
-    const DEEP = [40, 52, 150];
-    const fit = () => {
-      const b = canvas.getBoundingClientRect();
-      dpr = clamp(window.devicePixelRatio || 1, 1, 2);
-      w = Math.max(1, b.width);
-      h = Math.max(1, b.height);
-      const cw = Math.round(w * dpr);
-      const ch = Math.round(h * dpr);
-      if (canvas.width !== cw || canvas.height !== ch) {
-        canvas.width = cw;
-        canvas.height = ch;
-      }
-    };
-    const draw = (now) => {
-      requestAnimationFrame(draw);
-      if (document.hidden || canvas.offsetParent === null) return;
-      if (now - last < 1000 / 30 - 3) return; // 30 Bilder pro Sekunde reichen
-      const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 30;
-      last = now;
-      t += dt * (reducedMotion() ? 0.2 : 1);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      const cx = w / 2;
-      const cy = h / 2;
-      const R = Math.min(w, h) * 0.34 * (1 + Math.sin(t * 1.15) * 0.012);
-      if (R < 10) return;
-      const halo = ctx.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 1.45);
-      halo.addColorStop(0, rgba(ACCENT, 0.16));
-      halo.addColorStop(1, rgba(ACCENT, 0));
-      ctx.fillStyle = halo;
-      ctx.fillRect(0, 0, w, h);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.clip();
-      const base = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.36, R * 0.05, cx, cy, R * 1.02);
-      base.addColorStop(0, rgba(LIGHT, 1));
-      base.addColorStop(0.42, rgba(ACCENT, 1));
-      base.addColorStop(1, rgba(DEEP, 1));
-      ctx.fillStyle = base;
-      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-      ctx.globalCompositeOperation = 'screen';
-      const blobs = [[0.71, 0.53, 0, 1.7, 0.62], [0.43, 0.89, 2.1, 0.4, 0.55], [0.97, 0.61, 4.2, 3.3, 0.48]];
-      for (const [fx, fy, px, py, r] of blobs) {
-        const x = cx + Math.cos(t * 0.35 * fx + px) * R * 0.35;
-        const y = cy + Math.sin(t * 0.35 * fy + py) * R * 0.35;
-        const g = ctx.createRadialGradient(x, y, 0, x, y, R * r);
-        g.addColorStop(0, rgba(LIGHT, 0.45));
-        g.addColorStop(1, rgba(LIGHT, 0));
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      const shade = ctx.createRadialGradient(cx + R * 0.1, cy + R * 0.55, R * 0.1, cx, cy + R * 0.2, R * 1.1);
-      shade.addColorStop(0, 'rgba(4,6,14,0)');
-      shade.addColorStop(1, 'rgba(4,6,14,0.38)');
-      ctx.fillStyle = shade;
-      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-      const gloss = ctx.createRadialGradient(cx - R * 0.34, cy - R * 0.42, 0, cx - R * 0.34, cy - R * 0.42, R * 0.62);
-      gloss.addColorStop(0, 'rgba(255,255,255,0.34)');
-      gloss.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gloss;
-      ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-      ctx.restore();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-      ctx.beginPath();
-      ctx.arc(cx, cy, R - 0.5, 0, Math.PI * 2);
-      ctx.stroke();
-    };
-    fit();
-    if (window.ResizeObserver) new ResizeObserver(fit).observe(canvas);
-    requestAnimationFrame(draw);
-    return { fit };
+    return window.JarvisOrb ? window.JarvisOrb.create(canvas, { mode: 'hero' }) : null;
   }
 
   // ------------------------------------------------------------------ Navigation
@@ -1945,6 +1857,7 @@
   function boot() {
     bind();
     orb($('bigReactor'));
+    document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb && window.JarvisOrb.create(mark, { mode: 'mark' }));
     renderRail();
 
     let connected = false;

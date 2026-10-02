@@ -96,6 +96,13 @@
     return res.json();
   }
 
+  // Jarvis' Kugeln (Kopf und Koppeln), gezeichnet von orb.js
+  const ORBS = window.JarvisOrb
+    ? [...document.querySelectorAll('canvas.orb')].map((node) => window.JarvisOrb.create(node, {
+      mode: node.classList.contains('big') ? 'hero' : 'mark',
+    })).filter(Boolean)
+    : [];
+
   const S = { link: 'wait', state: 'idle', last: 0, start: '', busy: false, waiting: 0, tab: 'talk', speakFrom: Infinity,
     ton: storage('get', TON) || (storage('get', SPEAK) === '1' ? 'pc' : 'handy') };
 
@@ -114,6 +121,9 @@
     else if (S.link === 'pair') text = 'Nicht verbunden';
     el.stateText.textContent = text;
     el.body.dataset.state = S.link === 'ok' ? S.state : 'idle';
+    // Die Kugel zeigt den Zustand selbst: grau, wenn der PC nicht erreichbar ist
+    const look = S.link === 'off' ? 'muted' : S.link === 'ok' ? S.state : 'idle';
+    for (const orb of ORBS) orb.state(look);
     const busy = S.link === 'ok' && (S.busy || S.state === 'thinking' || S.state === 'speaking');
     el.stop.hidden = !busy;
     el.send.hidden = busy && !el.input.value.trim();

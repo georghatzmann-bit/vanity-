@@ -19,7 +19,7 @@
   <!-- Kopf: wer, Zustand, Wetter -->
   <header class="top">
     <div class="brand">
-      <span class="orb" id="orb" aria-hidden="true"><span></span></span>
+      <canvas class="orb" id="orb" aria-hidden="true"></canvas>
       <div class="brand-text">
         <b>Jarvis</b>
         <small id="stateText">Verbinde …</small>
@@ -36,7 +36,7 @@
 
   <!-- Koppeln: ohne Schlüssel geht nichts -->
   <section class="pair" id="pair" hidden>
-    <span class="orb big" aria-hidden="true"><span></span></span>
+    <canvas class="orb big" aria-hidden="true"></canvas>
     <h1>Mit Jarvis verbinden</h1>
     <p>Öffne am PC das Jarvis-Fenster, klick oben auf <b>Verbinden</b> und scanne den QR-Code mit der Kamera.</p>
     <p class="hint">Handy und PC müssen im selben WLAN sein.</p>
@@ -100,6 +100,7 @@
   </form>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="orb.js"></script>
   <script src="handy.js"></script>
 </body>
 </html>

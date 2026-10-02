@@ -1,7 +1,7 @@
 /* Jarvis als App: macht sie installierbar und lädt das Gerüst auch ohne Netz (mit Hinweis
    "PC nicht erreichbar"). Befehle (/api) gehen immer direkt an den PC, nie aus dem Speicher. */
-const CACHE = 'jarvis-app-v1';
-const SHELL = ['./', 'index.html', 'handy.css', 'handy.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
+const CACHE = 'jarvis-app-v2';
+const SHELL = ['./', 'index.html', 'handy.css', 'handy.js', 'orb.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
