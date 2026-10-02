@@ -315,6 +315,18 @@ namespace JarvisSetup
         [DllImport("user32.dll")]
         static extern bool FlashWindowEx(ref FLASHWINFO info);
 
+        public const int SRCCOPY = 0x00CC0020;
+        public const int CAPTUREBLT = 0x40000000;
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetDC(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool BitBlt(IntPtr ziel, int x, int y, int breite, int hoehe, IntPtr quelle, int qx, int qy, int art);
+
         /// <summary>Taskleisten-Knopf blinken lassen, bis das Fenster nach vorn kommt.</summary>
         public static void Blinken(IntPtr fenster)
         {

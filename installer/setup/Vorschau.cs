@@ -246,11 +246,23 @@ namespace JarvisSetup
             if (!Native.GetWindowRect(fenster, out Native.RECT r))
                 return;
             int breite = r.Right - r.Left, hoehe = r.Bottom - r.Top;
-            using (var bild = new System.Drawing.Bitmap(breite, hoehe))
+            using (var bild = new System.Drawing.Bitmap(breite, hoehe, System.Drawing.Imaging.PixelFormat.Format32bppRgb))
             {
                 using (var grafik = System.Drawing.Graphics.FromImage(bild))
-                    grafik.CopyFromScreen(r.Left, r.Top, 0, 0, new System.Drawing.Size(breite, hoehe),
-                        System.Drawing.CopyPixelOperation.SourceCopy | System.Drawing.CopyPixelOperation.CaptureBlt);
+                {
+                    // BitBlt mit CAPTUREBLT: so kommt auch ein durchsichtiges (geschichtetes) Fenster mit aufs Bild.
+                    IntPtr ziel = grafik.GetHdc();
+                    IntPtr bildschirm = Native.GetDC(IntPtr.Zero);
+                    try
+                    {
+                        Native.BitBlt(ziel, 0, 0, breite, hoehe, bildschirm, r.Left, r.Top, Native.SRCCOPY | Native.CAPTUREBLT);
+                    }
+                    finally
+                    {
+                        Native.ReleaseDC(IntPtr.Zero, bildschirm);
+                        grafik.ReleaseHdc(ziel);
+                    }
+                }
                 bild.Save(Path.Combine(ordner, name), System.Drawing.Imaging.ImageFormat.Png);
             }
         }
