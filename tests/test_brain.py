@@ -441,6 +441,29 @@ class ConnectorTest(unittest.TestCase):
             self.assertTrue(answer.text.startswith("Abgelehnt: Jarvis lässt Löschen"), answer.text)
         self.assertEqual({r["behavior"] for r in self.replies()}, {"deny"})
 
+    def test_sending_needs_georgs_yes(self):
+        answer = self.brain.ask("konnektor:mcp__claude_ai_Gmail__send_message")
+        self.assertTrue(answer.text.startswith("Abgelehnt: Das schickt oder ändert etwas nach außen"), answer.text)
+        self.assertEqual(self.replies()[-1]["behavior"], "deny")
+
+    def test_which_tools_need_a_yes(self):
+        from jarvis.konnektoren import may_use
+
+        for tool in ("mcp__claude_ai_Gmail__send_message", "mcp__claude_ai_Gmail__reply", "mcp__claude_ai_Gmail__forward",
+                     "mcp__claude_ai_Shopify__update-product", "mcp__claude_ai_Shopify__create-discount",
+                     "mcp__claude_ai_Shopify__set-inventory", "mcp__claude_ai_Google_Calendar__respond_to_event"):
+            with self.subTest(tool=tool):
+                self.assertFalse(may_use(tool, True, "Schick Max eine Mail, dass ich später komme")[0])
+                self.assertFalse(may_use(tool, True, None)[0], "ohne Gesagtes: nein")
+                self.assertTrue(may_use(tool, True, "Ja, mach das")[0])
+                self.assertFalse(may_use(tool, True, "Ja? Wer ist das?")[0])
+        for tool in ("mcp__claude_ai_Gmail__search_threads", "mcp__claude_ai_Gmail__create_draft",
+                     "mcp__claude_ai_Google_Calendar__create_event", "mcp__claude_ai_Shopify__list-orders",
+                     "mcp__claude_ai_Canva__create-design"):
+            with self.subTest(tool=tool):
+                self.assertTrue(may_use(tool, True, "Trag morgen um 18 Uhr Training ein")[0])
+        self.assertFalse(may_use("mcp__claude_ai_Gmail__trash_message", True, "Ja")[0], "Löschen nie, auch nicht mit Ja")
+
     def test_other_tools_stay_locked(self):
         answer = self.brain.ask("konnektor:Agent")
         self.assertEqual(answer.text, "Abgelehnt: Dieses Werkzeug ist für Jarvis nicht freigegeben.")

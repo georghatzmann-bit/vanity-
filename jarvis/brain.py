@@ -472,6 +472,7 @@ class ClaudeBrain:
         return live
 
     def _write_said(self, text: str) -> None:
+        self._said_text = text[:500]  # für Konnektoren: Senden nur direkt nach Georgs "Ja"
         try:
             self._said_file.parent.mkdir(parents=True, exist_ok=True)
             self._said_file.write_text(text[:500], encoding="utf-8")
@@ -1010,7 +1011,7 @@ class ClaudeBrain:
             if line is None:
                 break
             last = time.monotonic()
-            if konnektoren.answer(proc, line, self._connectors):
+            if konnektoren.answer(proc, line, self._connectors, getattr(self, "_said_text", "")):
                 continue  # Claude fragt, ob es einen Konnektor benutzen darf: Jarvis hat geantwortet
             stream.feed(line)
         return False

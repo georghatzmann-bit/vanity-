@@ -5,7 +5,8 @@ Claude-Konto angemeldet ist. Jarvis braucht dafür keine eigenen Anbindungen und
 Damit Claude sie im Hintergrund benutzen darf, beantwortet Jarvis die Rückfragen von Claude Code
 ("Darf ich mcp__claude_ai_Gmail__search_threads benutzen?", Steuerleitung can_use_tool) selbst:
 Konnektoren ja, außer wenn das Werkzeug löscht, kauft, bezahlt, veröffentlicht oder Ähnliches.
-Das macht Georg selbst in der App. Alles andere, das nicht freigegeben ist, bleibt gesperrt.
+Das macht Georg selbst in der App. Senden, Antworten, Weiterleiten und Shop-Änderungen nur direkt nach
+Georgs "Ja" (needs_yes). Alles andere, das nicht freigegeben ist, bleibt gesperrt.
 """
 
 from __future__ import annotations
@@ -26,6 +27,17 @@ BLOCKED_WORDS = {
     "buy", "purchase", "pay", "checkout", "refund", "transfer",
     "publish", "unpublish", "cancel", "merge", "mutation",
 }
+
+# Werkzeuge, die etwas nach außen schicken (Mail senden, antworten, weiterleiten, einladen) oder im Shop
+# etwas ändern: nur direkt nach Georgs "Ja". Claude fragt vorher ("Soll ich sie so abschicken?"). Sonst
+# könnte eine präparierte Mail oder Webseite Claude dazu bringen, etwas zu verschicken oder zu ändern.
+CONFIRM_WORDS = {"send", "reply", "forward", "share", "invite", "post", "comment", "respond"}
+SHOP_SERVERS = re.compile(r"shopify|woocommerce|stripe|paypal|ebay|etsy|amazon|gemini|coinbase", re.I)
+SHOP_WRITE_WORDS = {"create", "update", "set", "add", "bulk", "upload", "import", "remove", "edit", "modify", "order"}
+CONFIRM_MESSAGE = (
+    "Das schickt oder ändert etwas nach außen. Das geht nur direkt nach Georgs Ja: Sag ihm in einem Satz, "
+    "was genau du tun willst (an wen, was), frag ihn, und warte auf seine Antwort."
+)
 
 BLOCKED_MESSAGE = (
     "Jarvis lässt Löschen, Kaufen, Bezahlen, Veröffentlichen und Ähnliches über Konnektoren nicht zu. "
@@ -69,18 +81,31 @@ def kind_for(server: str) -> str:
     return "web"
 
 
-def may_use(tool: str, connectors: bool = True) -> tuple[bool, str]:
-    """Darf Claude dieses Werkzeug benutzen? (ja/nein, Begründung für Claude bei nein)"""
+def needs_yes(tool: str) -> bool:
+    """Schickt dieses Werkzeug etwas nach außen oder ändert es etwas im Shop?"""
+    server, name = split(tool)
+    words = set(re.split(r"[^a-z]+", name.lower()))
+    return bool(words & CONFIRM_WORDS) or bool(SHOP_SERVERS.search(server) and words & SHOP_WRITE_WORDS)
+
+
+def may_use(tool: str, connectors: bool = True, said: str | None = None) -> tuple[bool, str]:
+    """Darf Claude dieses Werkzeug benutzen? (ja/nein, Begründung für Claude bei nein)
+    said: was Georg zuletzt gesagt hat. Senden und Shop-Änderungen nur, wenn das ein klares "Ja" war."""
     server, name = split(tool)
     if not server or not connectors:
         return False, NOT_ALLOWED_MESSAGE
     words = set(re.split(r"[^a-z]+", name.lower()))
     if words & BLOCKED_WORDS:
         return False, BLOCKED_MESSAGE
+    if needs_yes(tool):
+        from .tool import confirmed
+
+        if not confirmed(said or ""):
+            return False, CONFIRM_MESSAGE
     return True, ""
 
 
-def permission_reply(line: str, connectors: bool = True) -> dict | None:
+def permission_reply(line: str, connectors: bool = True, said: str | None = None) -> dict | None:
     """Die Antwort auf eine Rückfrage von Claude Code (control_request can_use_tool), oder None,
     wenn die Zeile keine solche Rückfrage ist."""
     if '"can_use_tool"' not in line:
@@ -95,7 +120,7 @@ def permission_reply(line: str, connectors: bool = True) -> dict | None:
     if not isinstance(request, dict) or request.get("subtype") != "can_use_tool":
         return None
     tool = str(request.get("tool_name") or "")
-    allowed, why = may_use(tool, connectors)
+    allowed, why = may_use(tool, connectors, said)
     if allowed:
         data = request.get("input")
         answer = {"behavior": "allow", "updatedInput": data if isinstance(data, dict) else {}}
@@ -106,10 +131,10 @@ def permission_reply(line: str, connectors: bool = True) -> dict | None:
             "response": {"subtype": "success", "request_id": event.get("request_id"), "response": answer}}
 
 
-def answer(proc, line: str, connectors: bool = True) -> bool:
+def answer(proc, line: str, connectors: bool = True, said: str | None = None) -> bool:
     """Beantwortet eine Rückfrage über stdin des Claude-Prozesses. True, wenn die Zeile eine war
     (dann gehört sie nicht in die Antwort)."""
-    reply = permission_reply(line, connectors)
+    reply = permission_reply(line, connectors, said)
     if reply is None:
         return False
     try:
