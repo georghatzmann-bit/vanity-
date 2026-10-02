@@ -533,3 +533,23 @@ def record_command(
             on_level(min(1.0, rms(frame) / 3000))
         if recorder.add(frame):
             return recorder.audio()
+
+
+def record_more(mic: Microphone, listen_cfg: dict, vad: VoiceActivity | None = None, start_timeout: float = 1.0,
+                max_seconds: float = 12.0) -> list[np.ndarray]:
+    """Nach einem unsicheren Weckwort ("Jarvis" allein) kurz weiterhören: Redet Georg gleich
+    weiter, bis zum Satzende, sonst nach `start_timeout` Sekunden Schluss. Gibt alle Frames
+    zurück, auch die stillen (der Name davor soll mit in die Prüfung)."""
+    if vad is not None:
+        vad.reset()
+    recorder = CommandRecorder(
+        silence_seconds=listen_cfg["silence_seconds"],
+        max_seconds=min(max_seconds, float(listen_cfg["max_seconds"])),
+        start_timeout_seconds=start_timeout,
+        energy_threshold=listen_cfg["energy_threshold"],
+        noise_floor=mic.noise_floor,
+        vad=vad,
+    )
+    while not recorder.add(mic.read()):
+        pass
+    return recorder.frames

@@ -502,6 +502,8 @@ class Assistant:
         if name == "thanks":
             return random.choice(["Gern geschehen, Sir.", "Stets zu Diensten, Sir.", "Immer gern, Sir.",
                                   "Keine Ursache, Sir."])
+        if name == "bye":
+            return random.choice(["Bis später, Sir.", "Bis bald, Sir.", "Ich bin hier, wenn Sie mich brauchen, Sir."])
         if name == "help":
             return ("Fast alles am PC, Sir: Programme öffnen und installieren, Discord und Chats ohne Maus, Termine, "
                     "Mails, Erinnerungen, Wetter, Musik, den PC herunterfahren, und in der Werkstatt programmiere ich "

@@ -15,9 +15,12 @@ model = "hey_jarvis"
 # 0.0 bis 1.0. Höher = seltener aus Versehen aktiv, aber schwerer auszulösen.
 # Wenn Jarvis öfter "fast erkannt" meldet, hier z. B. 0.35 eintragen.
 threshold = 0.5
-# Kostenloser Schlüssel von console.picovoice.ai: Dann reicht auch "Jarvis" allein.
+# Kostenloser Schlüssel von console.picovoice.ai: Dann reicht auch "Jarvis" allein, ganz sicher.
 # Am einfachsten in der Einrichtung beim Mikrofon eintragen.
 picovoice_key = ""
+# true = Auch ohne Schlüssel versucht Jarvis, "Jarvis", "Hallo Jarvis" und "Okay Jarvis" zu erkennen:
+# Klingt etwas halb nach seinem Namen, prüft er kurz per Spracherkennung, ob der Name vorn steht.
+name_allein = true
 
 [audio]
 # Welches Mikrofon Jarvis nutzt. Leer = Windows-Standardmikrofon.
@@ -48,6 +51,12 @@ barge_in = true
 # true = Endet Jarvis mit einer Frage ("Soll ich die Datei löschen, Sir?"), hört er danach
 # kurz ohne "Hey Jarvis" zu, damit ein einfaches "Ja" reicht.
 follow_up = true
+# true = Gespräch: Nach jeder Antwort auf einen gesprochenen Befehl hört Jarvis kurz weiter zu
+# (leiser Ton). Dann einfach weiterreden, ohne "Hey Jarvis". Schluss ist nach ein paar Sekunden
+# Stille oder mit "Danke", "Alles klar", "Tschüss".
+gespraech = true
+# So viele Sekunden wartet Jarvis im Gespräch, ob du weiterredest.
+gespraech_sekunden = 8
 
 [stt]
 # "auto" = Groq, wenn unten ein Schlüssel steht, sonst auf dem eigenen PC.

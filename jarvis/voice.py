@@ -1,10 +1,13 @@
-"""Die Sprachschleife: wartet auf "Hey Jarvis", nimmt den Befehl auf und gibt ihn weiter."""
+"""Die Sprachschleife: wartet auf "Hey Jarvis", nimmt den Befehl auf und gibt ihn weiter.
+Im Gespräch hört Jarvis nach jeder Antwort kurz weiter zu, dann reicht einfaches Weiterreden."""
 
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
+from collections import deque
 
 from .mute import MuteSwitch
 
@@ -16,6 +19,55 @@ NEAR_MISS = 0.2
 # Der Signalton nach "Hey Jarvis" dauert knapp 0.2 s. Mit der Verzögerung der
 # Lautsprecher kommt sein Echo bis etwa 0.45 s danach im Mikrofon an.
 CHIME_ECHO_SECONDS = 0.45
+
+# Gespräch: So viele Sekunden hört Jarvis nach einer Antwort weiter zu, ohne "Hey Jarvis".
+CONVERSATION_SECONDS = 8.0
+
+# "Alles klar", "Okay", "Nein danke": kein Befehl, das Gespräch ist einfach zu Ende.
+_DONE = re.compile(
+    r"^(?:ok|okay|alles klar|passt|passt schon|gut|super|cool|top|prima|nein|ne|nee|nö|nicht|nichts|nix|"
+    r"nein danke|danke nein|das (?:war|wär|wäre) ?s|mehr nicht|nichts mehr|erst mal nicht|erstmal nicht|"
+    r"nicht nötig|ich melde mich)$"
+)
+# Darauf antwortet Jarvis noch, hört danach aber nicht weiter zu.
+_LAST_WORDS = ("thanks", "good_night", "bye", "stop", "mute")
+
+
+def conversation_turn(text: str) -> str:
+    """Was ein Satz im Gespräch bedeutet: "ende" (nur "Alles klar": kein Befehl, Schluss),
+    "zuletzt" ("Danke", "Gute Nacht", "Stopp": noch erledigen, dann Schluss) oder "weiter"."""
+    from . import intents
+
+    if _DONE.match(intents.normalize(text)):
+        return "ende"
+    found = intents.match(text)
+    if found is not None and found.name in _LAST_WORDS:
+        return "zuletzt"
+    return "weiter"
+
+
+# "Jarvis" allein, "Hallo Jarvis", "Okay Jarvis": Das Weckwort-Modell kennt nur "Hey Jarvis"
+# sicher. Bei einem halben Treffer hört Jarvis kurz weiter und prüft per Spracherkennung,
+# ob sein Name am Anfang steht. Ab diesem Wert lohnt die Prüfung.
+NAME_CANDIDATE = 0.12
+# So lange wartet Jarvis nach einem halben Treffer, ob doch noch ein sicheres "Hey Jarvis" kommt.
+NAME_WAIT_FRAMES = 5  # 0.4 s (ein Frame sind 80 ms)
+# So viel Ton von vor dem Treffer kommt mit in die Prüfung (der Name selbst).
+NAME_PREROLL_FRAMES = 25  # 2 s
+# Was Whisper aus "Jarvis" macht, je nach Aussprache.
+_NAME = r"(?:j|dsch|tsch|ch|sch|g)[aeä]h?r?[vw]i[sß]s?"
+_GREETING = r"(?:hey|hei|hi|hallo|halo|okay|ok|servus|moin|yo|na|he|ey|äh|ähm|also|jo)"
+_NAME_AT_START = re.compile(rf"^\W*(?:{_GREETING}\W+)*(?:\w+\W+)?{_NAME}\b\W*", re.I)
+
+
+def after_name(text: str) -> str | None:
+    """Der Befehl nach "Jarvis" ("Jarvis, wie spät ist es?" -> "wie spät ist es?").
+    "" = nur der Name, None = der Name steht nicht am Anfang (dann war nichts)."""
+    found = _NAME_AT_START.match(str(text or ""))
+    if not found:
+        return None
+    return text[found.end():].strip()
+
 
 PRIVACY_HINT = (
     "Vom Mikrofon kommt absolute Stille. Meist blockiert Windows den Zugriff: "
@@ -30,6 +82,12 @@ class Sounds:
         from .tts import chime
 
         chime((880, 1320))
+
+    def again(self) -> None:
+        """Im Gespräch: ein einzelner, leiser Ton statt des vollen Signals."""
+        from .tts import chime
+
+        chime((1320,))
 
     def muted(self) -> None:
         from .tts import chime
@@ -57,6 +115,17 @@ class VoiceLoop:
         self._hints = hints or (lambda _text: None)
         self._barge_in = cfg["listen"].get("barge_in", True)
         self._follow_up = cfg["listen"].get("follow_up", True)
+        # Gespräch: Nach einer Antwort auf einen gesprochenen Befehl hört Jarvis kurz weiter zu.
+        self._conversation = bool(cfg["listen"].get("gespraech", True))
+        self._conversation_seconds = float(cfg["listen"].get("gespraech_sekunden", CONVERSATION_SECONDS))
+        self._talking = False
+        self._shown_talking = False
+        # "Jarvis" allein und andere Anreden (zweite Stufe, siehe after_name)
+        self._by_name = bool(cfg.get("wakeword", {}).get("name_allein", True))
+        self._recent: deque = deque(maxlen=NAME_PREROLL_FRAMES)
+        self._name_wait: int | None = None
+        self._name_pause_until = 0.0
+        self._name_misses = 0
         self._warned_silence = False
         self._last_hint = 0.0
         self._level_tick = 0
@@ -179,12 +248,14 @@ class VoiceLoop:
             self._warned_silence = True
 
         active = assistant.busy or assistant.speaking
-        if self._was_active and not active and assistant.take_follow_up() and self._follow_up:
-            # Jarvis hat eine Frage gestellt ("Soll ich ... löschen?"): Die Antwort
-            # geht ohne "Hey Jarvis".
-            self._was_active = False
-            self._listen(follow_up=True)
-            return
+        if self._was_active and not active:
+            # Jarvis hat eine Frage gestellt ("Soll ich ... löschen?") oder wir sind im Gespräch:
+            # Die Antwort geht ohne "Hey Jarvis".
+            question = bool(assistant.take_follow_up()) and self._follow_up
+            if question or (self._talking and self._conversation):
+                self._was_active = False
+                self._listen(follow_up=True, question=question)
+                return
         self._was_active = active
         if not active:
             self._level_tick += 1
@@ -193,6 +264,7 @@ class VoiceLoop:
 
         score = wake.score(frame)
         threshold = wake.threshold
+        self._recent.append(frame)
         clicked = self._trigger.is_set()
         if clicked:
             self._trigger.clear()
@@ -208,27 +280,48 @@ class VoiceLoop:
             if not active and score >= NEAR_MISS and now - self._last_hint > 2:
                 self._hints(f"  (fast erkannt: {score:.2f}, nötig sind {wake.threshold:.2f})")
                 self._last_hint = now
+            if active or not self._by_name:
+                self._name_wait = None
+            elif self._name_wait is not None:
+                self._name_wait += 1
+                if self._name_wait >= NAME_WAIT_FRAMES:
+                    self._name_wait = None
+                    self._check_name()
+            elif score >= NAME_CANDIDATE and now >= self._name_pause_until:
+                self._name_wait = 0
             return
+        self._name_wait = None
 
         if active:
             log.info("Unterbrochen durch %s (%.2f)", "Klick" if clicked else "Hey Jarvis", score)
             assistant.stop()
         self._listen()
 
-    def _listen(self, follow_up: bool = False) -> None:
-        """Ton, Befehl aufnehmen, in Text umwandeln und an Jarvis geben."""
+    def _listen(self, follow_up: bool = False, question: bool = False) -> None:
+        """Ton, Befehl aufnehmen, in Text umwandeln und an Jarvis geben.
+        follow_up: ohne "Hey Jarvis" nach einer Antwort (question: Jarvis hat etwas gefragt)."""
         from .audio import record_command
 
         mic, wake, assistant, ui = self._mic, self._wake, self._assistant, self._assistant.ui
         # Was sich bis hierhin angestaut hat, ist noch "Hey Jarvis" selbst.
         mic.drain()
+        self._recent.clear()
+        talking = follow_up and not question
         # Den Ton nebenher abspielen und sofort aufnehmen: Wer gleich weiterredet
         # ("Hey Jarvis, wie spät ist es?"), verliert so kein Wort. Das Echo des Tons
-        # startet die Aufnahme nicht (ignore_seconds).
-        threading.Thread(target=self._sounds.listening, name="jarvis-ton", daemon=True).start()
+        # startet die Aufnahme nicht (ignore_seconds). Im Gespräch ein leiserer Ton.
+        sound = getattr(self._sounds, "again", None) if talking else None
+        threading.Thread(target=sound or self._sounds.listening, name="jarvis-ton", daemon=True).start()
         listen_cfg = self._cfg["listen"]
         if follow_up:
-            listen_cfg = dict(listen_cfg, start_timeout_seconds=min(5.0, float(listen_cfg["start_timeout_seconds"])))
+            if self._talking and self._conversation:
+                seconds = self._conversation_seconds
+            else:
+                seconds = min(5.0, float(listen_cfg["start_timeout_seconds"]))
+            listen_cfg = dict(listen_cfg, start_timeout_seconds=seconds)
+        if talking:
+            self._shown_talking = True
+            ui.config(gespraech=True)
         assistant.set_recording(True)
         try:
             audio = record_command(mic, listen_cfg, on_level=ui.level, ignore_seconds=CHIME_ECHO_SECONDS, vad=self._vad)
@@ -237,6 +330,9 @@ class VoiceLoop:
         if audio is None:
             if not follow_up:
                 ui.message("info", "Nichts gehört. Sprich direkt nach dem Ton.")
+            elif self._talking:
+                log.info("Gespräch zu Ende (nichts mehr gesagt)")
+            self._end_conversation()
         else:
             assistant.set_transcribing(True)
             started = time.monotonic()
@@ -252,16 +348,72 @@ class VoiceLoop:
                 text = None
             finally:
                 assistant.set_transcribing(False)
-            if text == "":
-                ui.message("info", "Nichts verstanden.")
-            elif text:
-                assistant.submit(text)
-                # Auch bei einer ganz schnellen Antwort zählt: Jarvis war dran (für die Rückfrage).
-                self._was_active = True
-                if not self._barge_in:
-                    self._wait_until_idle()
+            if not text:
+                if text == "" and not follow_up:
+                    ui.message("info", "Nichts verstanden.")
+                self._end_conversation()
+            else:
+                self._take(text, talking)
         wake.reset()
         mic.drain()
+        self._recent.clear()
+
+    def _take(self, text: str, talking: bool = False) -> None:
+        """Gibt einen gesprochenen Befehl weiter. Danach geht das Gespräch weiter, außer bei
+        "Danke", "Tschüss" oder "Stopp". Ein bloßes "Alles klar" im Gespräch ist kein Befehl."""
+        turn = conversation_turn(text) if self._conversation else "zuletzt"
+        if talking and turn == "ende":
+            log.info("Gespräch beendet: %s", text)
+            self._end_conversation()
+            return
+        self._assistant.submit(text)
+        self._talking = turn == "weiter"
+        if not self._talking:
+            self._end_conversation()
+        # Auch bei einer ganz schnellen Antwort zählt: Jarvis war dran (für die Rückfrage).
+        self._was_active = True
+        if not self._barge_in:
+            self._wait_until_idle()
+
+    def _end_conversation(self) -> None:
+        self._talking = False
+        if self._shown_talking:
+            self._shown_talking = False
+            self._assistant.ui.config(gespraech=False)
+
+    def _check_name(self) -> None:
+        """Zweite Stufe für "Jarvis" allein, "Hallo Jarvis" und Co.: kurz weiterhören, alles in
+        Text umwandeln und schauen, ob der Name vorn steht. Wenn nicht, passiert nichts
+        (und Jarvis prüft eine Weile seltener, damit Fernseher und Gespräche nicht ständig zählen)."""
+        import numpy as np
+
+        from .audio import record_more, rms
+
+        mic = self._mic
+        frames = list(self._recent)
+        self._recent.clear()
+        frames += record_more(mic, self._cfg["listen"], vad=self._vad)
+        loud = max(300.0, float(getattr(mic, "noise_floor", 200.0)) * 2.5)
+        text = ""
+        if any(rms(f) >= loud for f in frames):
+            try:
+                text = self._stt.transcribe(np.concatenate(frames).astype(np.float32) / 32768.0) or ""
+            except Exception as exc:
+                log.debug("Namensprüfung: %s", exc)
+        rest = after_name(text)
+        self._wake.reset()
+        mic.drain()
+        if rest is None:
+            self._name_misses = min(self._name_misses + 1, 5)
+            self._name_pause_until = time.monotonic() + 4 * 2 ** (self._name_misses - 1)
+            log.debug("Kein Jarvis gemeint: %r", text)
+            return
+        self._name_misses = 0
+        log.info("Angesprochen mit Namen: %s", text)
+        if rest:
+            self._take(rest)
+        else:
+            self._listen()
 
     def _wait_until_idle(self) -> None:
         # Kurz warten, bis der Befehl angenommen ist, dann bis alles gesagt ist.
@@ -272,6 +424,8 @@ class VoiceLoop:
             time.sleep(0.1)
 
     def _sleep_while_muted(self) -> None:
+        self._end_conversation()
+        self._name_wait = None
         self._mic.stop()
         self._assistant.update_state()
         self._sounds.muted()
