@@ -26,13 +26,15 @@ HEIGHT = 64
 PAD = 18
 TOP_MARGIN = 14
 
+# Dieselben Farben wie im Fenster: eine Akzentfarbe, beim Nachdenken etwas violetter,
+# stumm grau, Fehler rot (immer mit Wort daneben)
 ACCENT = {
-    "listening": (76, 212, 255),
-    "thinking": (140, 124, 255),
-    "speaking": (76, 157, 255),
-    "idle": (76, 157, 255),
-    "muted": (240, 85, 90),
-    "error": (240, 85, 90),
+    "listening": (104, 176, 255),
+    "thinking": (138, 128, 255),
+    "speaking": (110, 140, 255),
+    "idle": (110, 140, 255),
+    "muted": (108, 114, 130),
+    "error": (242, 100, 95),
 }
 LABELS = {
     "listening": "Hört zu",
@@ -108,7 +110,7 @@ def _fit(text: str, font, width: float) -> str:
 
 
 def _orb(color: tuple[int, int, int], radius: int):
-    """Leuchtender Kern: hell in der Mitte, nach außen in die Farbe und ins Durchsichtige."""
+    """Jarvis' Kugel wie im Fenster: oben links hell, unten dunkler, außen ein weiches Licht."""
     import numpy as np
     from PIL import Image
 
@@ -117,13 +119,18 @@ def _orb(color: tuple[int, int, int], radius: int):
         return _static_cache[key]
     size = radius * 2 + 1
     y, x = np.mgrid[0:size, 0:size].astype(np.float32)
-    d = np.sqrt((x - radius) ** 2 + (y - radius) ** 2) / max(1, radius)
-    core = np.clip(1.0 - d / 0.38, 0, 1) ** 1.6
-    halo = np.clip(1.0 - d, 0, 1) ** 2.2
+    nx, ny = (x - radius) / max(1, radius), (y - radius) / max(1, radius)
+    d = np.sqrt(nx ** 2 + ny ** 2)
+    ball = 0.72  # Rand der Kugel, außen nur noch Licht
+    inside = np.clip((ball - d) * radius, 0, 1)  # weiche, glatte Kante
+    light = np.clip(1.0 - np.sqrt((nx + 0.24) ** 2 + (ny + 0.28) ** 2) / (ball * 1.15), 0, 1)
+    deep = np.clip(d / ball, 0, 1) ** 2
     rgb = np.zeros((size, size, 3), np.float32)
     for i, c in enumerate(color):
-        rgb[..., i] = c * (1 - core) + 245 * core
-    alpha = np.clip(core * 255 + halo * 150, 0, 255)
+        shade = c * (1 - 0.55 * deep) + (255 - c) * 0.75 * light ** 1.4
+        rgb[..., i] = np.clip(shade, 0, 255)
+    halo = np.clip(1.0 - (d - ball) / (1 - ball), 0, 1) ** 2 * (d > ball)
+    alpha = np.clip(inside * 255 + halo * 70, 0, 255)
     data = np.dstack([rgb, alpha]).astype(np.uint8)
     img = Image.fromarray(data, "RGBA")
     _static_cache[key] = img
@@ -145,16 +152,16 @@ def _background(size: tuple[int, int], scale: float, color: tuple[int, int, int]
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     glow = Image.new("RGBA", size, (0, 0, 0, 0))
     ImageDraw.Draw(glow).rounded_rectangle(
-        (pad, pad, w - pad - 1, h - pad - 1), radius=(h - 2 * pad) // 2, fill=color + (70,)
+        (pad, pad, w - pad - 1, h - pad - 1), radius=(h - 2 * pad) // 2, fill=(0, 0, 0, 110)
     )
-    glow = glow.filter(ImageFilter.GaussianBlur(radius=10 * scale))
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=10 * scale))  # weicher Schatten statt Leuchten
     img.alpha_composite(glow)
     pill = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(pill)
     radius = (h - 2 * pad) // 2
-    draw.rounded_rectangle((pad, pad, w - pad - 1, h - pad - 1), radius=radius, fill=(11, 15, 23, 235))
+    draw.rounded_rectangle((pad, pad, w - pad - 1, h - pad - 1), radius=radius, fill=(20, 22, 27, 240))
     draw.rounded_rectangle(
-        (pad, pad, w - pad - 1, h - pad - 1), radius=radius, outline=color + (60,), width=max(1, round(scale))
+        (pad, pad, w - pad - 1, h - pad - 1), radius=radius, outline=(255, 255, 255, 30), width=max(1, round(scale))
     )
     img.alpha_composite(pill)
     if len(_static_cache) > 24:
@@ -180,18 +187,13 @@ def render(view: View, now: float | None = None, scale: float = 1.0):
     r = inner_h * 0.3
     level = max(0.0, min(1.0, view.level))
     pulse = 0.5 + 0.5 * math.sin(now * 3.2)
-    if view.state == "listening":
-        ring = r * (1.12 + 0.35 * level + 0.06 * pulse)
-        draw.ellipse((cx - ring, cy - ring, cx + ring, cy + ring), outline=color + (110,), width=max(1, round(1.5 * scale)))
-    for i, (span, speed, alpha) in enumerate(((120, 1.4, 235), (80, -2.1, 165), (50, 3.0, 120))):
-        if view.state == "thinking":
-            speed *= 2.4
-        start = (now * speed * 90 + i * 120) % 360
-        rr = r * (1.0 + i * 0.2)
-        width = max(1, round((2.6 - i * 0.6) * scale))
-        draw.arc((cx - rr, cy - rr, cx + rr, cy + rr), start, start + span, fill=color + (alpha,), width=width)
-    grow = 0.25 * level if view.state in ("speaking", "listening") else 0.08 * pulse
-    orb_r = max(4, round(r * (0.85 + grow)))
+    if view.state == "thinking":
+        # Nur ein feiner Bogen läuft um die Kugel: "arbeitet"
+        rr = r * 1.18
+        start = (now * 300) % 360
+        draw.arc((cx - rr, cy - rr, cx + rr, cy + rr), start, start + 90, fill=color + (210,), width=max(1, round(2 * scale)))
+    grow = 0.22 * level if view.state in ("speaking", "listening") else 0.05 * pulse
+    orb_r = max(4, round(r * 1.32 * (1 + grow)))
     sprite = _orb(color, orb_r)
     img.alpha_composite(sprite, (round(cx - orb_r), round(cy - orb_r)))
 
@@ -203,10 +205,10 @@ def render(view: View, now: float | None = None, scale: float = 1.0):
         right -= 34 * scale
     label_font = _font(round(11 * scale), bold=True)
     text_font = _font(round(15 * scale))
-    label = LABELS.get(view.state, "Jarvis").upper()
+    label = LABELS.get(view.state, "Jarvis")
     if view.state == "thinking" and view.activity:
-        label = _fit(view.activity.upper(), label_font, right - left)
-    draw.text((left, pad + inner_h * 0.17), label, font=label_font, fill=color + (230,))
+        label = _fit(view.activity, label_font, right - left)
+    draw.text((left, pad + inner_h * 0.17), label, font=label_font, fill=(160, 166, 180, 255))
     text = view.text.strip() or {"listening": "Ich höre …", "thinking": "Einen Moment …"}.get(view.state, "")
     if view.state == "thinking" and view.text.strip():
         text = view.text.strip()
