@@ -97,6 +97,19 @@ class SettingsTest(SetupTestCase):
         self.assertEqual(self.api.wake_sensitive(False)["threshold"], 0.5)
         self.assertEqual(self.saved()["wakeword"]["threshold"], 0.5)
 
+    def test_conversation_and_name_switches(self):
+        values = self.api.hello()["values"]
+        self.assertTrue(values["gespraech"], "Gespräch ist von Anfang an an")
+        self.assertTrue(values["name_allein"])
+        self.assertTrue(self.api.conversation_mode(False)["ok"])
+        self.assertTrue(self.api.name_wake(False)["ok"])
+        saved = self.saved()
+        self.assertIs(saved["listen"]["gespraech"], False)
+        self.assertIs(saved["wakeword"]["name_allein"], False)
+        values = self.api.hello()["values"]
+        self.assertFalse(values["gespraech"])
+        self.assertFalse(values["name_allein"])
+
     def test_name_is_saved_and_checked(self):
         self.assertTrue(self.api.name_save("  Lisa ")["ok"])
         self.assertEqual(self.saved()["ich"]["name"], "Lisa")
@@ -129,7 +142,7 @@ class SettingsTest(SetupTestCase):
             set(info["values"]),
             {"mic", "ort", "name", "voice", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
              "speed", "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set",
-             "pico_key_set"},
+             "pico_key_set", "gespraech", "name_allein"},
         )
         self.assertEqual(len(self.api.voices()), len(setup_wizard.VOICES))
         self.assertTrue(all(v["id"].endswith("Neural") for v in self.api.voices()))

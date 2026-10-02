@@ -390,6 +390,8 @@ class SetupApi:
                 "eleven_voice_name": str(cfg["tts"].get("elevenlabs_voice_name", "") or ""),
                 "groq_key_set": bool(str(cfg["stt"].get("groq_key", "") or "").strip()),
                 "pico_key_set": bool(str(cfg["wakeword"].get("picovoice_key", "") or "").strip()),
+                "gespraech": bool(cfg["listen"].get("gespraech", True)),
+                "name_allein": bool(cfg["wakeword"].get("name_allein", True)),
             },
             "claude": {"installed": bool(claude), "path": claude or ""},
         }
@@ -452,6 +454,14 @@ class SetupApi:
         if name is None:
             return {"ok": False, "name": "", "error": "Dieses Mikrofon gibt es nicht mehr."}
         return self._save("audio", "input_device", name.strip(), extra={"name": name.strip()})
+
+    def conversation_mode(self, on) -> dict:
+        """Gespräch: nach jeder Antwort ohne "Hey Jarvis" weiterreden (voice.py)."""
+        return self._save("listen", "gespraech", bool(on))
+
+    def name_wake(self, on) -> dict:
+        """"Jarvis" allein und andere Anreden über die zweite Prüfung (voice.py, after_name)."""
+        return self._save("wakeword", "name_allein", bool(on))
 
     def wake_sensitive(self, on) -> dict:
         threshold = SENSITIVE_THRESHOLD if on else 0.5

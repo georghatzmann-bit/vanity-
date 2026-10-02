@@ -1672,6 +1672,8 @@
     S.mic.savedName = String(v.mic || '');
     S.mic.threshold = Number(v.threshold) || 0.5;
     $('sensitive').checked = S.mic.threshold <= 0.4;
+    $('conversation').checked = v.gespraech !== false;
+    $('nameWake').checked = v.name_allein !== false;
     S.voice = String(v.voice || '');
     S.tts.engine = String(v.tts_engine || 'edge');
     S.eleven.keySet = !!v.eleven_key_set;
@@ -1769,6 +1771,24 @@
         failed(err);
       }
     });
+    // Schalter, die nur einen Wert speichern: Rückmeldung als kurzer Hinweis
+    const toggle = (id, method, label) => $(id).addEventListener('change', async (e) => {
+      const on = e.target.checked;
+      try {
+        const r = await call(method, on);
+        if (r && !r.ok) {
+          e.target.checked = !on;
+          toast(r.error || 'Konnte das nicht speichern.', 'error');
+        } else {
+          toast(`${label}: ${on ? 'an' : 'aus'}. Gilt ab dem nächsten Start von Jarvis.`, 'info');
+        }
+      } catch (err) {
+        e.target.checked = !on;
+        failed(err);
+      }
+    });
+    toggle('conversation', 'conversation_mode', 'Gespräch ohne Weckwort');
+    toggle('nameWake', 'name_wake', '„Jarvis“ allein');
     $('nameForm').addEventListener('submit', (e) => {
       e.preventDefault();
       nameCommit(true);
@@ -1934,6 +1954,7 @@
           eleven_voice: params.get('eleven') === '1' ? 'v_george' : '', eleven_voice_name: params.get('eleven') === '1' ? 'George' : '',
           groq_key_set: params.get('groq') === '1',
           pico_key_set: params.get('pico') === '1',
+          gespraech: true, name_allein: true,
         },
         claude: { installed: claudeMode !== 'missing', path: 'C:\\Users\\Georg\\.local\\bin\\claude.exe' },
       }, 60),
@@ -1961,6 +1982,8 @@
       },
       mic_stop: () => { micOn = false; return later(true, 20); },
       mic_save: (id) => later({ ok: true, error: '', name: String(id) }, 80),
+      conversation_mode: () => later({ ok: true, error: '' }, 80),
+      name_wake: () => later({ ok: true, error: '' }, 80),
       wake_sensitive: (on) => { threshold = on ? 0.35 : 0.5; return later({ ok: true, error: '', threshold }, 80); },
       voices: () => later(VOICES, 60),
       voice_prepare: () => later(true, 20),
