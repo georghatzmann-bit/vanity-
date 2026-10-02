@@ -41,7 +41,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Große Aufträge mit Opus, kleine mit Sonnet. Das Fenster zeigt Plan, Ablauf, Fortschritt und Dateien und alle Projekte als Übersicht mit Starten und Weiterbauen.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt, ElevenLabs beginnt nach 0,25 s zu sprechen.
-- **Ruhiges, modernes Fenster:** eine leuchtende Kugel als Jarvis' Gesicht, darunter das Gespräch, rechts was heute ansteht, die Auslastung des PCs und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
+- **Ruhiges, modernes Fenster:** eine leuchtende Kugel als Jarvis' Gesicht, darunter das Gespräch, rechts was heute ansteht, die neueste Post (ein Klick, und Jarvis liest vor), die Auslastung des PCs, der Shop und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel.
 - **Grafische Einrichtung** und ein **Installer im Jarvis-Look**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
 
 | Werkstatt-Projekte | Handy-App |
@@ -57,7 +57,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Claude-Abo (Pro oder Max):** das Gehirn. Mit Max lohnt Einrichtung > Gehirn > „Gründlich“ (immer Opus).
 - **Groq:** gratis (großzügiges Tageslimit, darüber übernimmt der eigene PC).
 - **ElevenLabs:** optional. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Ohne Schlüssel spricht die gratis Microsoft-Stimme.
-- **Alexa-Skill, ntfy.sh, Discord-Bot, Tailscale:** gratis.
+- **Alexa-Skill, ntfy.sh, Discord-Bot, Tailscale, iCloud und Mail:** gratis.
+- **Shopify:** nur für die Shop-Hilfe. Der Shop selbst kostet bei Shopify ein Monats-Abo, dazu Gebühren pro Verkauf.
 
 ## Anpassen
 
@@ -66,6 +67,7 @@ Das Wichtigste stellst du in der Einrichtung und im Fenster unter „Verbinden�
 - `[stt]` `groq_key`, `engine = "auto" | "groq" | "lokal"`
 - `[tts]` `engine = "elevenlabs" | "lokal" | "edge" | "windows"`, `lokal_stimme`, `elevenlabs_key`, `elevenlabs_voice`
 - `[kalender]` `abos` (geheime iCal-Adressen), `vorwarnung_minuten`; `[notizbuch]` `ordner`, `tagebuch`
+- `[apple]` `apple_id`, `kalender`, `ausblenden`, `geburtstage`, `mail`; `[mail]` `ansagen`, `abruf_minuten`; `[shop]` `adresse`, `client_id`, `bestellungen_ansagen` (Passwörter und Secrets nie hier, sondern verschlüsselt in `daten\geheim.json`)
 - `[mute]` `hotkey` (Stumm), `listen_hotkey` (Zuhören, Standard Strg+Alt+J)
 - `[listen]` `silence_seconds`, `vad`; `[wakeword]` `picovoice_key` (dann reicht „Jarvis“)
 - `[rechte]` `volle_freigabe`; `[gedaechtnis]` `vorschlaege`
