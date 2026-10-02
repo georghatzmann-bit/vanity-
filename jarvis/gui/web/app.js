@@ -1426,12 +1426,18 @@
       },
       new_conversation: () => Promise.resolve(true),
       open_setup: () => Promise.resolve(false),
-      reminders: () => Promise.resolve([
-        { uhr: '12:00', text: 'Mittagessen mit Max · Pizzeria', tag: 'heute', art: 'termin' },
-        { uhr: '14:00', text: 'Tee aufgießen', tag: 'heute', art: 'erinnerung' },
-        { uhr: '18:30', text: 'Training', tag: 'heute', art: 'termin' },
-        { uhr: '08:00', text: 'Zahnarzt anrufen', tag: 'morgen' },
-      ]),
+      // wie gui/app.py: nur, was heute noch kommt, und morgen
+      reminders: () => {
+        const now = new Date();
+        const hm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+        return Promise.resolve([
+          { uhr: '12:00', text: 'Mittagessen mit Max · Pizzeria', tag: 'heute', art: 'termin' },
+          { uhr: '14:00', text: 'Tee aufgießen', tag: 'heute', art: 'erinnerung' },
+          { uhr: '18:30', text: 'Training', tag: 'heute', art: 'termin' },
+          { uhr: '21:00', text: 'Zocken mit Max · Discord', tag: 'heute', art: 'termin' },
+          { uhr: '08:00', text: 'Zahnarzt anrufen', tag: 'morgen' },
+        ].filter((r) => r.tag !== 'heute' || r.uhr >= hm));
+      },
       toggle_gaming: () => {
         gaming = !gaming;
         push({ type: 'config', gaming });
