@@ -236,6 +236,98 @@ jobs:
           }
           Write-Host "Update ueber ein laufendes Jarvis: OK"
 
+      - name: Probe Oberfläche (Update über das Fenster, Jarvis läuft dabei)
+        if: ${{ !inputs.nur_bilder }}
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          # Wie Georg: Jarvis laeuft unsichtbar, JarvisSetup.exe doppelklicken, "Aktualisieren" klicken.
+          # Bedient wird das Fenster ueber UI Automation. Am Ende muss Jarvis wieder laufen.
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $AE = [System.Windows.Automation.AutomationElement]
+          $alle = [System.Windows.Automation.TreeScope]::Descendants
+          function Find-Fenster {
+            $AE::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,
+              (New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, "Jarvis Setup")))
+          }
+          function Find-Id($wurzel, $id) {
+            $wurzel.FindFirst($alle, (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, $id)))
+          }
+          function Test-Sichtbar($wurzel, $id) {
+            $el = Find-Id $wurzel $id
+            return ($el -ne $null -and -not $el.Current.IsOffscreen)
+          }
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $bilder = "$env:GITHUB_WORKSPACE\installer-bilder-echt"
+          New-Item -ItemType Directory -Force $bilder | Out-Null
+          function Save-Bild($fenster, $name) {
+            try {
+              $r = $fenster.Current.BoundingRectangle
+              & $py -c "import sys; from PIL import ImageGrab; b = [int(float(x)) for x in sys.argv[1:5]]; ImageGrab.grab(bbox=(b[0], b[1], b[0] + b[2], b[1] + b[3]), include_layered_windows=True).save(sys.argv[5])" $r.X $r.Y $r.Width $r.Height "$bilder\$name"
+            } catch { Write-Host "Bild $name ging nicht: $_" }
+          }
+
+          $alt = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -WorkingDirectory $app -PassThru
+          Start-Sleep -Seconds 15
+          if ($alt.HasExited) { Write-Host "Jarvis lief nicht"; exit 1 }
+          $setup = Start-Process installer\Output\JarvisSetup.exe -PassThru
+          $fenster = $null
+          for ($i = 0; $i -lt 30 -and -not $fenster; $i++) { Start-Sleep -Seconds 1; $fenster = Find-Fenster }
+          if (-not $fenster) { Write-Host "Das Setup-Fenster erscheint nicht"; exit 1 }
+          Start-Sleep -Seconds 3
+          $hinweis = Test-Sichtbar $fenster "LaeuftHinweisText"
+          Write-Host "Hinweis 'Jarvis laeuft gerade' sichtbar: $hinweis"
+          Save-Bild $fenster "1-start.png"
+          $knopf = Find-Id $fenster "KnopfInstallieren"
+          Write-Host "Knopf: $($knopf.Current.Name)"
+          $knopf.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+
+          $ergebnis = ""
+          $ende = (Get-Date).AddMinutes(12)
+          $n = 2
+          while ((Get-Date) -lt $ende) {
+            Start-Sleep -Seconds 4
+            if ($setup.HasExited) { $ergebnis = "beendet"; break }
+            try {
+              if (Test-Sichtbar $fenster "FertigTitel") { $ergebnis = "fertig"; break }
+              if (Test-Sichtbar $fenster "FehlerMeldung") { $ergebnis = "fehler"; break }
+              $prozent = Find-Id $fenster "ProzentText"
+              Write-Host "Fortschritt: $($prozent.Current.Name)"
+              if ($n -le 9) { Save-Bild $fenster "$n-fortschritt.png"; $n++ }
+            } catch { Write-Host "UI Automation: $_" }
+          }
+          Write-Host "Ergebnis: $ergebnis"
+          Start-Sleep -Seconds 3
+          Save-Bild $fenster "9-ende.png"
+          if ($ergebnis -eq "fehler") { Write-Host "Meldung: $((Find-Id $fenster 'FehlerMeldung').Current.Name)" }
+          Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -Last 15
+          $ok = $ergebnis -eq "fertig" -and $hinweis
+          # Jarvis muss vom Setup wieder gestartet worden sein (unsichtbar wie vorher)
+          Start-Sleep -Seconds 8
+          $neu = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' })
+          Write-Host "Jarvis-Prozesse danach: $($neu.Count)"
+          $neu | ForEach-Object { Write-Host "  $($_.ProcessId): $($_.CommandLine)" }
+          if (-not ($neu | Where-Object { $_.CommandLine -like '*--hintergrund*' -and $_.ProcessId -ne $alt.Id })) { Write-Host "Jarvis wurde nicht neu gestartet"; $ok = $false }
+          if ($ergebnis -eq "fertig") {
+            $zu = Find-Id $fenster "KnopfFertigSchliessen"
+            $zu.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            if (-not $setup.WaitForExit(15000)) { Write-Host "Das Setup schliesst nicht"; $ok = $false }
+            else { Write-Host "Setup beendet mit $($setup.ExitCode)"; if ($setup.ExitCode -ne 0) { $ok = $false } }
+          }
+          if (-not $setup.HasExited) { Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          if (-not $ok) { exit 1 }
+          Write-Host "Update ueber das Fenster: OK"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-bilder-echt
+          path: installer-bilder-echt/
+          if-no-files-found: ignore
+
       - name: Probe lokale Stimme (wie der Knopf "Lokal einrichten")
         if: ${{ !inputs.nur_bilder }}
         shell: pwsh

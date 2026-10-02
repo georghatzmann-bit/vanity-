@@ -327,6 +327,24 @@ namespace JarvisSetup
         [DllImport("user32.dll")]
         public static extern bool SetCursorPos(int x, int y);
 
+        public const byte VK_TAB = 0x09;
+        const byte VK_SHIFT = 0x10;
+        const uint KEYEVENTF_KEYUP = 0x0002;
+
+        [DllImport("user32.dll")]
+        static extern void keybd_event(byte taste, byte scan, uint art, UIntPtr extra);
+
+        /// <summary>Eine Taste drücken und loslassen (für die Bilder: sichtbarer Tastatur-Fokus).</summary>
+        public static void TasteDruecken(byte taste, bool mitUmschalt)
+        {
+            if (mitUmschalt)
+                keybd_event(VK_SHIFT, 0, 0, UIntPtr.Zero);
+            keybd_event(taste, 0, 0, UIntPtr.Zero);
+            keybd_event(taste, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            if (mitUmschalt)
+                keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        }
+
         [DllImport("gdi32.dll")]
         public static extern bool BitBlt(IntPtr ziel, int x, int y, int breite, int hoehe, IntPtr quelle, int qx, int qy, int art);
 

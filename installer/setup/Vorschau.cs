@@ -244,6 +244,14 @@ namespace JarvisSetup
                 Foto(ordner, "fehler.png");
                 Rendern(ordner, "fehler-150.png", 1.5);
 
+                // 5. Sichtbarer Fokus: Tab und Umschalt+Tab, wie bei Bedienung mit der Tastatur
+                Activate();
+                Native.TasteDruecken(Native.VK_TAB, false);
+                await Task.Delay(200);
+                Native.TasteDruecken(Native.VK_TAB, true);
+                await Task.Delay(500);
+                Foto(ordner, "fehler-fokus.png");
+
                 Rueckgabe = 0;
             }
             catch (Exception ex)
