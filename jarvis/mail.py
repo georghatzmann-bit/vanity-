@@ -256,7 +256,7 @@ def html_text(html: str) -> str:
     return _tidy(text)
 
 
-_INVISIBLE = dict.fromkeys(map(ord, "​‌‍⁠﻿­͏"), None)
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00ad\u034f"), None)  # unsichtbare Zeichen in Newslettern
 
 
 def _tidy(text: str) -> str:
@@ -700,6 +700,8 @@ class Mailbox:
                 raise MailError("Diesen Anbieter kenne ich nicht. Bitte den IMAP-Server angeben, z. B. imap.example.de.")
             provider, port = "imap", int(port_text) if port_text.isdigit() else 993
         with self._lock:
+            if any(a.email.lower() == address.lower() for a in self.accounts()):
+                raise MailError("Dieses Postfach ist schon verbunden.")
             taken = {a.id for a in self.accounts()}
             ident = provider
             number = 2
@@ -945,6 +947,14 @@ def _sentence(text: str) -> str:
     return text if not text or text[-1] in ".!?…" else text + "."
 
 
+_REPLY = re.compile(r"^(?:(?:re|aw|antw|wg|fw|fwd)\s*(?:\[\d+\])?\s*:\s*)+", re.I)
+
+
+def _subject(subject: str) -> str:
+    """Zum Vorlesen ohne "Re:", "AW:" und "Fwd:" davor."""
+    return _REPLY.sub("", subject or "").strip()
+
+
 def _when(when: dt.datetime | None, now: dt.datetime) -> str:
     if when is None:
         return "neulich"
@@ -964,7 +974,8 @@ def spoken_unread(count: int, messages: list[Message]) -> str:
     if count <= 0:
         return "Keine neuen Mails, Sir."
     if count == 1 and messages:
-        about = f", Betreff: {messages[0].subject}" if messages[0].subject else ""
+        subject = _subject(messages[0].subject)
+        about = f", Betreff: {subject}" if subject else ""
         return _sentence(f"Eine neue, Sir: von {messages[0].who}{about}")
     names: list[str] = []
     for message in messages:
@@ -983,8 +994,8 @@ def spoken_from(message: Message, who: str, now: dt.datetime) -> str:
     """"Max hat heute um 14:05 geschrieben, Sir. Betreff: Grillen. Hast du Lust ...?" """
     name = " ".join(str(who or "").split()) or message.who
     parts = [f"{name[:1].upper() + name[1:]} hat {_when(message.date, now)} geschrieben, Sir."]
-    if message.subject:
-        parts.append(_sentence(f"Betreff: {message.subject}"))
+    if _subject(message.subject):
+        parts.append(_sentence(f"Betreff: {_subject(message.subject)}"))
     if message.snippet:
         parts.append(_sentence(message.snippet))
     return " ".join(parts)
@@ -999,7 +1010,8 @@ def spoken_new(messages: list[Message]) -> str:
         if message.who not in names:
             names.append(message.who)
     if len(messages) == 1:
-        about = f": {messages[0].subject}" if messages[0].subject else ""
+        subject = _subject(messages[0].subject)
+        about = f": {subject}" if subject else ""
         return _sentence(f"Sir, eine neue Mail von {names[0]}{about}")
     if len(names) == 1:
         return f"Sir, {_number(len(messages))} neue Mails von {names[0]}."

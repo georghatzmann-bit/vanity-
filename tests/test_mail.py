@@ -175,6 +175,8 @@ class MailboxTest(unittest.TestCase):
         self.assertEqual(account.as_dict()["email"], "ge•••t@gmail.com")
         with self.assertRaisesRegex(MailError, "IMAP-Server angeben"):
             mailbox.add("andere", "georg@firma.example", "pw")
+        with self.assertRaisesRegex(MailError, "schon verbunden"):
+            mailbox.add("icloud", "Beispiel@iCloud.com", "abcd-efgh-ijkl-mnop")
         with self.assertRaisesRegex(MailError, "keine E-Mail-Adresse"):
             mailbox.add("gmail", "georg", "pw")
         self.assertTrue(mailbox.remove("gmail"))
@@ -200,7 +202,7 @@ class MailboxTest(unittest.TestCase):
         self.assertEqual(mailbox.answer("neu"), "Drei neue, Sir: von Amazon, Max Mustermann und Sparkasse KölnBonn.")
         when = local(2026, 10, 2, 9, 15)
         self.assertEqual(mailbox.answer("von", "Max"),
-                         f"Max hat heute um {when.hour}:{when.minute:02d} geschrieben, Sir. Betreff: Re: Grillen am "
+                         f"Max hat heute um {when.hour}:{when.minute:02d} geschrieben, Sir. Betreff: Grillen am "
                          "Samstag? Hi Georg, alles klar, ich bringe den Grill mit. Grüße aus Köln!")
         self.assertIsNone(mailbox.answer("von", "Lisa"))
         self.gmail.down = True
@@ -309,6 +311,8 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(spoken_new([one, self.message("Max Mustermann", "max@example.com", "Und?", uid=4)]),
                          "Sir, zwei neue Mails von Max Mustermann.")
         self.assertEqual(spoken_new([one, many[0]]), "Sir, neue Mails von Max Mustermann und Sparkasse.")
+        answer = self.message("Anna", "anna@example.org", "AW: Re: WG: Treffen")
+        self.assertEqual(spoken_new([answer]), "Sir, eine neue Mail von Anna: Treffen.")
 
     def test_senders_and_importance(self):
         self.assertEqual(speakable_sender("Amazon.de", "versand@amazon.de"), "Amazon")

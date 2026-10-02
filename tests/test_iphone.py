@@ -66,7 +66,7 @@ class AssistantTest(ICloudSetup):
         self.assertEqual(answer, "Drei neue, Sir: von Amazon, Max Mustermann und Sparkasse KölnBonn.")
         answer = self.assistant.handle("Was schreibt Max?")
         self.assertTrue(answer.startswith("Max hat "), answer)
-        self.assertIn("Betreff: Re: Grillen am Samstag? Hi Georg, alles klar, ich bringe den Grill mit.", answer)
+        self.assertIn("Betreff: Grillen am Samstag? Hi Georg, alles klar, ich bringe den Grill mit.", answer, "ohne Re:")
         self.assertEqual(self.brain.asked, [])
         self.assertEqual(self.inbox.marked_read, [])
         labels = [e[1]["label"] for e in self.ui.of("progress")]
