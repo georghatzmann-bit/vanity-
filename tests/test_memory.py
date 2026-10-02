@@ -537,4 +537,5 @@ class OtherUserTest(unittest.TestCase):
             home.mkdir()
             (home / "CLAUDE.md").write_text("Du bist Jarvis, Georgs Butler. Georg mag es kurz.", encoding="utf-8")
             text = build_persona(home, Path(folder), {"ich": {"name": "Lisa"}}).read_text(encoding="utf-8")
-        self.assertEqual(text.strip(), "Du bist Jarvis, Lisas Butler. Lisa mag es kurz.")
+        self.assertTrue(text.startswith("Du bist Jarvis, Lisas Butler. Lisa mag es kurz.\n"), text)
+        self.assertIn("## Notizbuch", text, "Notizbuch und Fähigkeiten kommen dahinter")

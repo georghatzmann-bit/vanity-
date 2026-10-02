@@ -437,6 +437,8 @@ class Api:
                               for b in memory.upcoming_birthdays(days=366)][:12],
                 "commands": [{"key": c["key"], "name": c.get("name", ""), "action": c.get("aktion", ""),
                               "count": c.get("anzahl", 0)} for c in memory.custom_commands()][:40],
+                "skills": self._skills(),
+                "notebook": bool(getattr(self._assistant, "notebook", None)),
             }
         except Exception as exc:
             log.debug("Gedächtnis-Stand: %s", exc)
@@ -463,6 +465,38 @@ class Api:
     def forget(self, text) -> bool:
         memory = getattr(self._assistant, "memory", None)
         return bool(memory is not None and str(text or "").strip() and memory.remove(str(text)))
+
+    @staticmethod
+    def _skills() -> list[dict]:
+        from ..config import HOME_DIR, STATE_DIR
+        from ..skills import load_skills
+
+        try:
+            return [{"name": k.path.parent.name, "description": k.description, "learned": k.learned}
+                    for k in load_skills(HOME_DIR, STATE_DIR)]
+        except Exception as exc:
+            log.debug("Fähigkeiten: %s", exc)
+            return []
+
+    def skill_forget(self, name) -> bool:
+        """Mülleimer an einer selbst gelernten Fähigkeit."""
+        from ..config import STATE_DIR
+        from ..skills import remove_skill
+
+        return bool(str(name or "").strip()) and remove_skill(STATE_DIR, str(name))
+
+    def notebook_open(self) -> dict:
+        """Knopf "Notizbuch öffnen": der Ordner im Explorer (oder in Obsidian, wenn so eingestellt)."""
+        notebook = getattr(self._assistant, "notebook", None)
+        if notebook is None:
+            return {"ok": False, "error": "Das Notizbuch ist in den Einstellungen ausgeschaltet."}
+        try:
+            notebook.sync(getattr(self._assistant, "memory", None))
+            if os.name == "nt":
+                os.startfile(str(notebook.folder))
+            return {"ok": True, "folder": str(notebook.folder)}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
 
     def command_forget(self, key) -> bool:
         """Mülleimer an einem eigenen Befehl in der Gedächtnis-Ansicht."""

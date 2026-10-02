@@ -22,6 +22,9 @@
       routinesEmpty: $('memRoutinesEmpty'),
       contacts: $('memContacts'),
       contactsEmpty: $('memContactsEmpty'),
+      skills: $('memSkills'),
+      skillsEmpty: $('memSkillsEmpty'),
+      notebook: $('memNotebook'),
       commands: $('memCommands'),
       commandsEmpty: $('memCommandsEmpty'),
       birthdays: $('memBirthdays'),
@@ -32,7 +35,7 @@
       offerText: $('offerText'),
     };
     if (!el.sum) return null;
-    let data = { facts: [], contacts: [], routines: [], birthdays: [], commands: [] };
+    let data = { facts: [], contacts: [], routines: [], birthdays: [], commands: [], skills: [], notebook: false };
     const MONTHS = ['Jän.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sep.', 'Okt.', 'Nov.', 'Dez.'];
 
     function when(days) {
@@ -97,6 +100,46 @@
         }));
         el.commandsEmpty.hidden = commands.length > 0;
       }
+
+      const skills = data.skills || [];
+      if (el.skills) {
+        el.skills.replaceChildren(...skills.map((k) => {
+          const li = document.createElement('li');
+          const name = document.createElement('b');
+          name.className = 'mem-cmd';
+          name.textContent = k.name + (k.learned ? ' ★' : '');
+          const text = document.createElement('span');
+          text.className = 'mem-text';
+          text.textContent = k.description;
+          if (k.learned) {
+            const small = document.createElement('small');
+            small.textContent = 'selbst gelernt';
+            text.appendChild(small);
+          }
+          li.append(name, text);
+          if (k.learned) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'mem-del';
+            del.textContent = '×';
+            del.title = 'Fähigkeit löschen';
+            del.setAttribute('aria-label', 'Fähigkeit löschen: ' + k.name);
+            del.addEventListener('click', async () => {
+              try {
+                await call('skill_forget', k.name);
+                toast('Fähigkeit gelöscht.', 'ok');
+                refresh();
+              } catch {
+                toast('Das ging gerade nicht.', 'error');
+              }
+            });
+            li.appendChild(del);
+          }
+          return li;
+        }));
+        el.skillsEmpty.hidden = skills.length > 0;
+      }
+      if (el.notebook) el.notebook.disabled = !data.notebook;
 
       if (el.birthdays) {
         el.birthdays.replaceChildren(...birthdays.map((b) => {
@@ -223,6 +266,17 @@
         toast('Das ging gerade nicht.', 'error');
       }
     });
+    if (el.notebook) {
+      el.notebook.addEventListener('click', async () => {
+        try {
+          const res = await call('notebook_open');
+          if (res && res.ok) toast('Notizbuch geöffnet: ' + res.folder, 'ok');
+          else toast((res && res.error) || 'Das ging gerade nicht.', 'error');
+        } catch {
+          toast('Das ging gerade nicht.', 'error');
+        }
+      });
+    }
     el.offer.addEventListener('click', async (e) => {
       const b = e.target.closest('button[data-answer]');
       if (!b) return;

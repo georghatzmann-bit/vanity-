@@ -306,6 +306,8 @@ class ClaudeBrain:
         self.alert: Callable[[str], None] = lambda text: log.warning("%s", text)
         # Was Jarvis über Georg weiß (memory.Memory.context): kommt an den Anfang jeder Unterhaltung.
         self.context: Callable[[], str] | None = None
+        # Setzt die Persönlichkeit neu zusammen, wenn Jarvis eine Fähigkeit gelernt hat (persona.persona_refresher).
+        self.refresh_persona: Callable[[], None] | None = None
         self._load_state()
 
     # ------------------------------------------------------------------ Zustand
@@ -437,6 +439,11 @@ class ClaudeBrain:
     ) -> list[str]:
         attempt = attempt or self.attempt
         isolated = self.isolated if isolated is None else isolated
+        if isolated and attempt.profile == "jarvis" and self.refresh_persona is not None:
+            try:
+                self.refresh_persona()
+            except Exception as exc:
+                log.debug("Persönlichkeit: %s", exc)
         cmd = [self._claude, "-p", "--output-format", "stream-json", "--verbose"]
         if "include-partial-messages" not in self._unsupported:
             cmd.append("--include-partial-messages")

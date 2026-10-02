@@ -56,6 +56,10 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     try:
         persona = build_persona(HOME_DIR, STATE_DIR, cfg)
         brain = ClaudeBrain(cfg["brain"], HOME_DIR, STATE_DIR, persona=persona)
+        # Neue Fähigkeiten (Jarvis hat etwas gelernt) kommen beim nächsten Claude-Start mit.
+        from .persona import persona_refresher
+
+        brain.refresh_persona = persona_refresher(HOME_DIR, STATE_DIR, cfg)
         # Claude schon jetzt starten: Die erste Frage kommt dann ohne Startzeit an.
         brain.prewarm()
     except BrainError as exc:
@@ -103,6 +107,13 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     assistant.memory = Memory(STATE_DIR / "gedaechtnis.json")
     if brain is not None:
         brain.context = assistant.memory.context
+    # Das Notizbuch: jedes Gespräch, Berichte und Notizen als Markdown (in Obsidian zu öffnen).
+    if cfg.get("notizbuch", {}).get("aktiv", True):
+        from .notebook import Notebook, folder_from_config
+
+        assistant.notebook = Notebook(folder_from_config(cfg), user=user_name(cfg))
+        threading.Thread(target=assistant.notebook.sync, args=(assistant.memory,), name="jarvis-notizbuch",
+                         daemon=True).start()
     from .workshop import Workshop
 
     def show_window() -> None:
@@ -256,6 +267,13 @@ def learn_from_yesterday(assistant: Assistant) -> None:
         if learned:
             log.info("Gelernt: %s", "; ".join(learned))
             assistant.ui.toast(f"Jarvis hat dazugelernt: {len(learned)} neue Dinge über Sie.", "info")
+        notebook = getattr(assistant, "notebook", None)
+        if notebook is not None:
+            try:
+                notebook.learned(day, learned)
+                notebook.sync(memory)
+            except Exception as exc:
+                log.debug("Notizbuch: %s", exc)
 
     threading.Thread(target=work, name="jarvis-rueckblick", daemon=True).start()
 

@@ -63,6 +63,13 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
                                (z. B. befehl "Zockmodus" "Öffne Discord und Steam und mach den Gaming-Modus an")
   befehle                      zeigt Georgs eigene Befehle
   befehl-loeschen "<name>"     löscht einen eigenen Befehl
+  notiz "<text>" ["<titel>"]   schreibt eine Notiz ins Notizbuch (ohne Titel: Schnellnotizen)
+  bericht "<titel>" "<datei.md>"  legt einen Bericht (Recherche) ins Notizbuch
+  notizbuch-suchen "<wörter>"  sucht im Notizbuch (Tagebuch, Personen, Berichte, Notizen)
+  notizbuch-tag heute|gestern|<JJJJ-MM-TT>   zeigt die Gespräche eines Tages
+  faehigkeiten                 zeigt alle Fähigkeiten (Anleitungen für wiederkehrende Aufgaben)
+  faehigkeit "<name>" "<wann sie passt>" "<datei.md>"   speichert eine gelernte Fähigkeit
+  faehigkeit-loeschen "<name>" löscht eine gelernte Fähigkeit
   erinnern "<wann>" "<text>"   wann: "in 20 minuten", "in 1 stunde 30 minuten", "18:30",
                                "um 8 uhr abends", "morgen um 8", "Montag um 9", "2026-10-01 08:00"
   erinnerungen                 zeigt alle geplanten Erinnerungen
@@ -249,6 +256,76 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print(f"Fehler: {exc}")
             return 1
         print(f"Eigener Befehl gespeichert: „{saved['name']}“ = {saved['aktion']}")
+        return 0
+
+    if command in ("notiz", "bericht", "notizbuch-suchen", "notizbuch-tag"):
+        from .notebook import Notebook, folder_from_config
+
+        notebook = Notebook(folder_from_config(cfg), user=_user())
+        if command == "notiz":
+            if not rest:
+                print('Aufruf: notiz "<text>" ["<titel>"]')
+                return 1
+            path = notebook.note(rest[0], rest[1] if len(rest) > 1 else "Schnellnotizen")
+            print(f"Notiert in {path}")
+            return 0
+        if command == "bericht":
+            if len(rest) < 2:
+                print('Aufruf: bericht "<titel>" "<datei.md>"')
+                return 1
+            source = Path(rest[1])
+            text = source.read_text(encoding="utf-8-sig") if source.exists() else " ".join(rest[1:])
+            path = notebook.report(rest[0], text)
+            print(f"Bericht liegt im Notizbuch: {path}")
+            return 0
+        if command == "notizbuch-suchen":
+            hits = notebook.search(" ".join(rest))
+            if not hits:
+                print("Nichts gefunden.")
+            for name, number, line in hits:
+                print(f"{name}:{number}: {line}")
+            return 0
+        import datetime as dt
+
+        word = (rest[0] if rest else "heute").lower()
+        today = dt.date.today()
+        day = {"heute": today, "gestern": today - dt.timedelta(days=1),
+               "vorgestern": today - dt.timedelta(days=2)}.get(word)
+        if day is None:
+            try:
+                day = dt.date.fromisoformat(word)
+            except ValueError:
+                print("Aufruf: notizbuch-tag heute|gestern|JJJJ-MM-TT")
+                return 1
+        text = notebook.day_text(day)
+        print(text[-12000:] if text else f"Am {day:%d.%m.%Y} steht nichts im Tagebuch.")
+        return 0
+
+    if command in ("faehigkeiten", "fähigkeiten", "faehigkeit", "fähigkeit", "faehigkeit-loeschen", "fähigkeit-löschen"):
+        from .config import HOME_DIR
+        from .skills import load_skills, remove_skill, save_skill
+
+        if command in ("faehigkeiten", "fähigkeiten"):
+            for skill in load_skills(HOME_DIR, STATE_DIR):
+                mark = " [gelernt]" if skill.learned else ""
+                print(f"{skill.name}{mark}: {skill.description}  ({skill.path})")
+            return 0
+        if command in ("faehigkeit-loeschen", "fähigkeit-löschen"):
+            done = remove_skill(STATE_DIR, " ".join(rest))
+            print("Fähigkeit gelöscht." if done else "Diese gelernte Fähigkeit gibt es nicht (mitgelieferte bleiben).")
+            return 0 if done else 1
+        if len(rest) < 3:
+            print('Aufruf: faehigkeit "<name>" "<wann sie passt, ein Satz>" "<datei.md>"')
+            return 1
+        source = Path(rest[2])
+        body = source.read_text(encoding="utf-8-sig") if source.exists() else " ".join(rest[2:])
+        from .memory import is_secret
+
+        if is_secret(body) and re.search(r"(?:passwort|kennwort|password|pin)\s*[:=]\s*\S+", body, re.I):
+            print("Fehler: In der Anleitung steht ein Passwort. Das gehört nicht hinein.")
+            return 1
+        path = save_skill(STATE_DIR, rest[0], rest[1], body)
+        print(f"Fähigkeit gespeichert: {path}. Sie steht ab dem nächsten Gespräch in deiner Liste.")
         return 0
 
     if command == "erinnern":

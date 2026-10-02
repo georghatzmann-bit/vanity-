@@ -109,6 +109,8 @@
     remember: (text) => window.pywebview.api.remember(text),
     forget: (text) => window.pywebview.api.forget(text),
     command_forget: (key) => window.pywebview.api.command_forget(key),
+    skill_forget: (name) => window.pywebview.api.skill_forget(name),
+    notebook_open: () => window.pywebview.api.notebook_open(),
     answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
   };
 
@@ -1498,6 +1500,8 @@
       remember: () => Promise.resolve(true),
       forget: () => Promise.resolve(true),
       command_forget: () => Promise.resolve(true),
+      skill_forget: () => Promise.resolve(true),
+      notebook_open: () => Promise.resolve({ ok: true, folder: 'C:\\Users\\Georg\\Jarvis-Notizbuch' }),
       answer_suggestion: () => Promise.resolve(true),
       start() {
         setInterval(() => {
@@ -1554,6 +1558,13 @@
       { text: 'Georg baut einen Discord-Bot für seinen Clan', source: 'jarvis' },
     ],
     contacts: [{ name: 'Max', app: 'discord', count: 14 }, { name: 'Anna', app: 'whatsapp', count: 6 }],
+    notebook: true,
+    skills: [
+      { name: 'discord-server', description: 'Einen Discord-Server gestalten oder umbauen, im Hintergrund ohne Maus.', learned: false },
+      { name: 'morgen-briefing', description: 'Morgen-Briefing, wenn Sie „Guten Morgen“ oder „Briefing“ sagen.', learned: false },
+      { name: 'recherche', description: 'Gründliche Recherche oder Vergleich, mit Bericht im Notizbuch.', learned: false },
+      { name: 'obs-aufnahme', description: 'Ein Video mit OBS aufnehmen und für YouTube exportieren.', learned: true },
+    ],
     commands: [
       { key: 'zockmodus', name: 'Zockmodus', action: 'öffne Discord und Steam und mach den Gaming-Modus an', count: 12 },
       { key: 'feierabend', name: 'Feierabend', action: 'schließ Discord und Steam und spiel Lofi auf Spotify', count: 3 },

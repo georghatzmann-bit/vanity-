@@ -7,6 +7,7 @@ import contextlib
 import datetime as dt
 import itertools
 import logging
+import os
 import queue
 import random
 import re
@@ -240,6 +241,7 @@ class Assistant:
                         later = self._ask_claude(rest, speak)
                         answer = " ".join(a for a in (answer, later) if a)
                 log.info("Antwort: %s", answer)
+                self._journal(text, answer)
                 self._follow_up = bool(speak and answer and answer.rstrip().endswith("?"))
             finally:
                 self._busy -= 1
@@ -266,6 +268,12 @@ class Assistant:
             own = self.memory.command_for(text)
             if isinstance(own, dict):
                 return self._custom(own)
+        if getattr(self, "notebook", None) is not None:
+            from .notebook import match_notebook
+
+            noted = match_notebook(text)
+            if noted is not None:
+                return self._notebook_command(*noted)
         intent = intents.match(text)
         if self.workshop is not None and (intent is None or intent.name not in _BEFORE_WORKSHOP):
             projects = getattr(self.workshop, "project_command", None)
@@ -699,6 +707,50 @@ class Assistant:
             self._rest = action
             return ""
         return answer
+
+    def _journal(self, said: str, answer: str) -> None:
+        """Jedes Gespräch ins Tagebuch des Notizbuchs (Passwörter und Ähnliches nicht)."""
+        notebook = getattr(self, "notebook", None)
+        if notebook is None or not self._cfg.get("notizbuch", {}).get("tagebuch", True):
+            return
+        try:
+            from .memory import is_secret
+
+            if is_secret(said) or is_secret(answer):
+                said, answer = "(etwas Vertrauliches, nicht notiert)", ""
+            names = [c.get("name", "") for c in self.memory.contacts()[:40]] if self.memory is not None else []
+            notebook.log(said, answer, names)
+            if time.monotonic() - notebook.last_sync > 600:
+                notebook.last_sync = time.monotonic()
+                threading.Thread(target=notebook.sync, args=(self.memory,), name="jarvis-notizbuch", daemon=True).start()
+        except Exception as exc:
+            log.debug("Notizbuch: %s", exc)
+
+    def _notebook_command(self, action: str, text: str) -> str:
+        notebook = self.notebook
+        if action == "open":
+            try:
+                notebook.sync(self.memory)
+                if os.name == "nt":
+                    os.startfile(str(notebook.folder))  # Explorer, oder Obsidian, wenn Georg es so eingestellt hat
+            except Exception as exc:
+                log.warning("Notizbuch öffnen: %s", exc)
+                return f"Das Notizbuch liegt in {notebook.folder}, Sir. Öffnen ging gerade nicht."
+            return "Das Notizbuch ist offen, Sir."
+        from .memory import is_secret
+
+        if is_secret(text):
+            return "Passwörter und PINs schreibe ich lieber nicht auf, Sir. Ein Passwort-Manager ist dafür der bessere Ort."
+        if text.lower().startswith("dass "):
+            from .messaging import direct_speech
+
+            text = direct_speech(text) or text[5:]
+        try:
+            notebook.note(text[:1].upper() + text[1:])
+        except Exception as exc:
+            log.warning("Notiz: %s", exc)
+            return "Die Notiz ging gerade nicht ins Notizbuch, Sir."
+        return random.choice(["Notiert, Sir. Steht im Notizbuch.", "Ist im Notizbuch, Sir."])
 
     def _commands_list(self) -> str:
         commands = self.memory.custom_commands()

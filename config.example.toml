@@ -244,3 +244,12 @@ push_kanal = ""
 [intern]
 # Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
 config_version = 6
+
+[notizbuch]
+# Jarvis schreibt jedes Gespräch, Berichte (Recherchen) und Notizen als Markdown in einen Ordner. Den kannst du
+# in Obsidian (kostenlos) mit "Ordner als Tresor öffnen" ansehen, dann ist alles verlinkt. Alles bleibt auf dem PC.
+aktiv = true
+# Leer = %USERPROFILE%\Jarvis-Notizbuch
+ordner = ""
+# false = kein Tagebuch der Gespräche (Notizen und Berichte gehen trotzdem).
+tagebuch = true
