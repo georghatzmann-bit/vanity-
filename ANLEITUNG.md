@@ -310,7 +310,7 @@ Jarvis wartet nicht nur auf Befehle. Wie ein guter Butler sagt er Bescheid, wenn
 - **Zurück am PC:** „Willkommen zurück, Sir. Während Sie weg waren: …“ mit allem, was du verpasst hast.
 - **Pause:** Nach drei Stunden am Stück schlägt er fünf Minuten Pause vor.
 
-Die Regeln: Jarvis spricht nur, wenn du am PC sitzt, nie beim Zocken oder im Vollbild, nie mitten in ein Gespräch, und zwischen zwei Hinweisen bleiben ein paar Minuten Ruhe. Dringendes (Akku fast leer) kommt sonst aufs Handy. Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**, ohne „Hey Jarvis“. „Nie wieder“ stellt diese Art Hinweis für immer ab. Ganze Bereiche schaltest du in der `config.toml` unter `[hinweise]` ab, zum Beispiel `pausen = false`.
+Die Regeln: Jarvis spricht nur, wenn du am PC sitzt, nie beim Zocken oder im Vollbild, nie mitten in ein Gespräch, und zwischen zwei Hinweisen bleiben ein paar Minuten Ruhe. Dringendes (Akku fast leer) kommt sonst aufs Handy. Antworte mit **„Ja“**, **„Nein“** oder **„Nie wieder“**, ohne „Hey Jarvis“. „Nie wieder“ stellt diese Art Hinweis für immer ab. Sagst du **„Hinweise aus“**, meldet er sich nur noch bei Dringendem, **„Hinweise an“** schaltet alles wieder ein (auch was du mit „Nie wieder“ abgestellt hast). Im Verlauf stehen Hinweise mit „Hinweis“ hinter der Uhrzeit. Ganze Bereiche schaltest du in der `config.toml` unter `[hinweise]` ab, zum Beispiel `pausen = false`.
 
 ## Die Werkstatt: Jarvis programmiert für dich
 

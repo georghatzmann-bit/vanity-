@@ -349,6 +349,14 @@ class Assistant:
             answer = self._answer_offer(offer, text)
             if answer is not None:
                 return answer
+        if self.hints is not None:
+            switched = _HINTS_SWITCH.match(intents.normalize(text))
+            if switched:
+                on = bool(switched.group("on"))
+                self.hints.pause(not on)
+                if on:
+                    return "Sehr wohl, Sir. Ich sage wieder Bescheid, wenn mir etwas auffällt."
+                return "Sehr wohl, Sir. Ich melde mich nur noch, wenn es dringend ist. Mit „Hinweise an“ geht es wieder."
         if self.memory is not None:
             from .memory import match_memory
 
@@ -1294,7 +1302,9 @@ class Assistant:
         nicht mitten in etwas, und der letzte Hinweis ist ein paar Minuten her. Dringendes geht sonst aufs
         Handy. True, wenn etwas gesagt wurde."""
         with self._hint_lock:
-            self._pending_hints = [h for h in self._pending_hints if not h.expired()]
+            # Verfallen, inzwischen abgestellt ("Nie wieder", "Hinweise aus") oder schon gesagt: weg damit
+            self._pending_hints = [h for h in self._pending_hints if not h.expired()
+                                   and (self.hints is None or self.hints.allowed(h))]
             pending = sorted(self._pending_hints, key=lambda h: (-h.priority, h.created))
         if not pending or not self._hint_delivery.acquire(blocking=False):
             return False
@@ -1331,7 +1341,7 @@ class Assistant:
             self.hints.said(hint)
         text = hint.question()
         log.info("Hinweis (%s): %s", hint.key, text)
-        self.ui.message("jarvis", text)
+        self.ui.message("jarvis", text, model="Hinweis")  # im Verlauf: "Jarvis · 14:02 · Hinweis"
         self._last_hint_at = time.monotonic()
         # "Ja", "Nein" und "Nie wieder" gelten zwei Minuten lang, ohne "Hey Jarvis"
         self._offer = (hint, time.monotonic() + 120)
@@ -1727,6 +1737,13 @@ def _short_reason(exc: BrainError) -> str:
         "account": "Das Claude-Konto meldet ein Problem (claude.ai).",
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
+
+
+# "Hinweise aus", "Keine Hinweise mehr", "Hinweise wieder an", "Sag mir wieder Bescheid"
+_HINTS_SWITCH = re.compile(
+    r"^(?:(?P<off>(?:keine|schluss mit|stopp mit|hör auf mit) (?:den |deinen )?hinweise\w*(?: mehr)?|hinweise (?:aus|ausschalten|abschalten|stumm)|"
+    r"(?:sag|sage|melde dich) (?:mir )?(?:erst ?mal |vorerst )?nichts mehr von (?:dir aus|selbst|allein))|"
+    r"(?P<on>hinweise (?:wieder )?(?:an|einschalten|anschalten)|(?:sag|sage) (?:mir )?wieder (?:alles|bescheid)))$")
 
 
 def missed_line(text: str) -> str:

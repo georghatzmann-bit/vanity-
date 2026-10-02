@@ -373,6 +373,22 @@ class AssistantHintTest(unittest.TestCase):
             self.assistant.offer_hints([Hint("x", "pc", "Sir, etwas.")])
         self.assertEqual(self.speaker.said, ["Sir, etwas."])
 
+    def test_hints_off_and_on_by_voice(self):
+        self.assertIn("nur noch, wenn es dringend ist", self.assistant.handle("Hinweise aus"))
+        self.assertTrue(self.assistant.hints.paused)
+        self.assistant.offer_hints([Hint("x", "pc", "Sir, etwas.")])
+        self.assertNotIn("Sir, etwas.", self.speaker.said)
+        self.assertTrue(self.assistant.hints.allowed(Hint("akku:leer", "pc", "Akku!", priority=URGENT)))
+        self.assistant.hints.feedback(Hint("y", "pc", "y", group="cpu:chrome.exe"), "nie")
+        self.assertIn("wieder Bescheid", self.assistant.handle("Hinweise wieder an"))
+        self.assertFalse(self.assistant.hints.paused)
+        self.assertEqual(self.assistant.hints.muted(), [], "auch Abgestelltes kommt wieder")
+        self.assistant._last_turn_end -= self.assistant.AFTER_TALK + 1
+        self.assistant.offer_hints([Hint("z", "pc", "Sir, wieder da.")])
+        self.assertEqual(self.speaker.said[-1], "Sir, wieder da.")
+        hint_messages = [m for m in self.ui.of("message") if m[4] == "Hinweis"]
+        self.assertEqual(hint_messages[-1][2], "Sir, wieder da.")
+
     def test_missed_announcements_are_kept_short(self):
         self.present = False
         self.assistant.announce("Erinnerung, Sir: Tee")

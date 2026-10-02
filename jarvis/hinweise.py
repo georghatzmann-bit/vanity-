@@ -206,6 +206,8 @@ class Watcher:
             return False
         now = now or dt.datetime.now()
         with self._lock:
+            if self._state.get("pausiert") and hint.priority < URGENT:
+                return False  # "Hinweise aus": nur noch Dringendes
             if hint.mute_key in self._state["aus"] or hint.key in self._state["aus"]:
                 return False
             last = self._state["gesagt"].get(hint.key)
@@ -244,6 +246,19 @@ class Watcher:
         with self._lock:
             self._state["aus"] = []
             self._save()
+
+    def pause(self, on: bool) -> None:
+        """"Hinweise aus" (nur noch Dringendes) und "Hinweise wieder an" (dann auch alles Abgestellte)."""
+        with self._lock:
+            self._state["pausiert"] = bool(on)
+            if not on:
+                self._state["aus"] = []
+            self._save()
+
+    @property
+    def paused(self) -> bool:
+        with self._lock:
+            return bool(self._state.get("pausiert"))
 
     def mark_brief(self, day: dt.date) -> None:
         """Der Überblick für heute ist schon gesagt (z. B. in der Begrüßung beim Start)."""
@@ -432,8 +447,9 @@ class Watcher:
         current = {name: str(value)[:300] for name, value in lage.autostart.items() if "jarvis" not in name.lower()}
         with self._lock:
             known = self._state.get("autostart")
-            self._state["autostart"] = sorted(current)
-            self._save()
+            if known != sorted(current):
+                self._state["autostart"] = sorted(current)
+                self._save()
         if not isinstance(known, list):
             return []
         hints = []
