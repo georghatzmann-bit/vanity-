@@ -85,8 +85,9 @@ beam_size = 1
 # "elevenlabs" = Premium-Stimmen von ElevenLabs (kostenpflichtig, Schlüssel unten). Fällt ElevenLabs aus,
 # spricht die lokale Stimme. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
 engine = "lokal"
-# Für "lokal": george (am klarsten), charles (am tiefsten), juergen, michael, javert, stuart_bell
-lokal_stimme = "george"
+# Für "lokal": thorsten (deutscher Sprecher, sehr deutlich, bricht nie ab), george (natürlicher, etwas
+# langsamer), charles (am tiefsten), juergen, michael, javert, stuart_bell
+lokal_stimme = "thorsten"
 # "auto" = Jarvis misst einmal, ob der PC das große, deutlichere Stimmmodell flüssig schafft, und nimmt es
 # dann von selbst (640 MB mehr). "beste" = immer das große, "schnell" = immer das kleine (langsame PCs).
 lokal_qualitaet = "auto"

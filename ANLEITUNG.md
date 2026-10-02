@@ -27,7 +27,7 @@ Du brauchst: Windows 10 (ab Version 1809) oder Windows 11, Internet und etwa 3 G
 Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird sofort gespeichert. Später kommst du wieder hin: Rechtsklick aufs Jarvis-Symbol neben der Uhr > **Einstellungen**, oder das Zahnrad im Jarvis-Fenster.
 
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Es klappt, wenn „Hey Jarvis erkannt“ erscheint.
-2. **Stimme:** Unter **Lokal** die sechs Stimmen anhören (▶) und eine anklicken. **George** ist am klarsten, **Charles** am tiefsten. Stimme und Spracherkennung laufen ganz auf deinem PC, der Installer hat sie schon eingerichtet.
+2. **Stimme:** Unter **Lokal** die Stimmen anhören (▶) und eine anklicken. **Thorsten** ist der Standard: ein deutscher Sprecher, sehr deutlich, bricht nie ab. **George** klingt natürlicher, **Charles** am tiefsten. Stimme und Spracherkennung laufen ganz auf deinem PC, der Installer hat sie schon eingerichtet.
 3. **Name und Ort:** dein Vorname (damit Jarvis weiß, mit wem er spricht) und dein Wohnort für das Wetter.
 4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Claude ist verbunden“ erscheint. Dafür reicht dein Claude-Abo (Pro oder Max).
 5. **Extras:** Stumm-Taste, Autostart und **Volle Freigabe** (siehe unten). Einfach so lassen, wie es ist.
@@ -35,7 +35,7 @@ Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird
 
 ### Stimme und Spracherkennung: ganz auf deinem PC
 
-Jarvis spricht mit seiner eigenen deutschen Stimme (Pocket TTS) und versteht dich mit Parakeet. Beides läuft auf deinem Prozessor: kein Abo, kein Schlüssel, nichts geht ins Internet, und eine Windows- oder Microsoft-Stimme gibt es nicht mehr. Der Installer lädt beides gleich mit (etwa 1,3 GB).
+Jarvis spricht mit seiner eigenen deutschen Stimme (Thorsten, oder eine Pocket-TTS-Stimme wie George) und versteht dich mit Parakeet. Zahlen, Uhrzeiten, Daten, Kürzel wie „z. B.“ und englische Wörter wie „Mails“ oder „Update“ liest er so, wie man sie sagt. Beides läuft auf deinem Prozessor: kein Abo, kein Schlüssel, nichts geht ins Internet, und eine Windows- oder Microsoft-Stimme gibt es nicht mehr. Der Installer lädt beides gleich mit (etwa 1,3 GB).
 
 **Beste Stimme auf schnellen PCs:** Jarvis misst einmal, ob dein Prozessor das große deutsche Stimmmodell flüssig schafft (es ist deutlich klarer, braucht aber doppelt so viel Rechenzeit und 640 MB mehr). Wenn ja, nimmt er es von selbst und sagt: „Ich spreche jetzt mit meiner besten Stimme.“ Gemessen wird nur, wenn am PC wenig los ist, nie neben einem Spiel. Immer das große: in `config.toml` bei `[tts]` `lokal_qualitaet = "beste"`, immer das kleine: `"schnell"`.
 

@@ -40,6 +40,7 @@ class FakePocket:
         return True
 
     def stream(self, text, feed):
+        self.texts = getattr(self, "texts", []) + [text]
         if self.fail:
             raise RuntimeError("kaputt")
         tone = (np.sin(np.arange(24000 * 0.8) / 8) * 8000).astype(np.int16)
@@ -256,11 +257,194 @@ class VoiceTest(unittest.TestCase):
                 voice._load()
             self.assertIsNone(voice.error, model)
             self.assertTrue(any(re.search(pattern, line) for line in logs.output), f"{model}: {logs.output}")
+        # Thorsten (seit Version 9 Georgs Stimme) meldet sich genauso
+        from jarvis import tts as tts_module
+
+        with mock.patch.object(tts_module, "piper_model_ready", return_value=True), \
+                mock.patch.object(tts_module, "piper_voice", return_value=object()), \
+                self.assertLogs("jarvis.tts", "INFO") as logs:
+            thorsten = tts_module.ThorstenVoice()
+            thorsten._load()
+        self.assertIsNone(thorsten.error)
+        self.assertTrue(any(re.search(pattern, line) for line in logs.output), logs.output)
 
     def test_voice_names(self):
         self.assertEqual(localvoice.voice_id("Stuart_Bell"), "stuart_bell")
         self.assertEqual(localvoice.voice_id("unbekannt"), "george")
-        self.assertEqual(len(localvoice.VOICES), 6)
+        self.assertEqual(localvoice.voice_id("Thorsten"), "thorsten")
+        self.assertEqual(len(localvoice.VOICES), 7)
+        self.assertNotIn("thorsten", [v["id"] for v in localvoice.POCKET_VOICES], "Thorsten ist Piper")
+
+    def test_the_voice_reads_numbers_and_english_words_as_words(self):
+        """Georg: "sie kann Sachen nicht aussprechen". Ziffern las Pocket TTS als Kauderwelsch."""
+        tts = self.make()
+        audio, _ = tts.synthesize("Der DAX steht bei 25.231 Punkten, Sir. 3 neue Mails.")
+        self.assertTrue(audio.done.wait(5))
+        self.assertEqual(FakePocket.instances[0].texts,
+                         ["Der Dax steht bei fünfundzwanzigtausendzweihunderteinunddreißig Punkten, Sir. drei neue Mehls."])
+
+    def test_old_cached_sentences_are_not_reused(self):
+        """Kurze Sätze kamen aus dem Zwischenspeicher, auch die alten mit Ziffern gesprochenen ("Es ist 18:30 Uhr")."""
+        tts = self.make()
+        import hashlib
+
+        old_key = "|".join(("lokal", "charles", "Es ist 18:30 Uhr."))
+        old_name = hashlib.sha1(old_key.encode("utf-8")).hexdigest()[:24] + ".npz"
+        self.assertNotEqual(tts._cache_file("Es ist 18:30 Uhr.").name, old_name)
+
+    def test_pocket_speaks_in_short_pieces(self):
+        """Mit 50 Tokens pro Stück ließ das Modell im Test bei 5 von 10 Sätzen das Ende weg, mit 25 bei einem."""
+        calls = []
+
+        class Model:
+            def generate_audio(self, state, text, max_tokens=50):
+                calls.append(("ganz", max_tokens))
+                return np.zeros(240, dtype=np.float32)
+
+            def generate_audio_stream(self, state, text, max_tokens=50):
+                calls.append(("stream", max_tokens))
+                yield np.zeros(240, dtype=np.float32)
+
+        voice = localvoice.PocketVoice("george")
+        voice._model, voice._state, voice._started = Model(), "zustand", True
+        voice.ready.set()
+        voice.synthesize("Ein langer Satz.")
+        voice.stream("Ein langer Satz.", lambda chunk: None)
+        self.assertEqual(calls, [("ganz", localvoice.CHUNK_TOKENS), ("stream", localvoice.CHUNK_TOKENS)])
+        self.assertEqual(localvoice.CHUNK_TOKENS, 25)
+
+        class OldModel:  # ältere pocket-tts ohne max_tokens
+            def generate_audio(self, state, text):
+                return np.zeros(240, dtype=np.float32)
+
+        self.assertEqual(localvoice.generate(OldModel(), "zustand", "Hallo.").size, 240)
+
+
+class ThorstenTest(unittest.TestCase):
+    """Thorsten (Piper): Georgs andere Stimme, die nie abbricht. Braucht pocket-tts nicht."""
+
+    def test_thorsten_without_pocket_tts(self):
+        from jarvis import tts as tts_module
+
+        class FakePiper:
+            rate = 22050
+
+            def __init__(self):
+                self.texts = []
+
+            def synthesize(self, text):
+                self.texts.append(text)
+                return np.full(22050, 8000, np.int16), 22050
+
+        piper = FakePiper()
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch("jarvis.localvoice.installed", return_value={"tts": False, "stt": False}), \
+                mock.patch.object(tts_module, "piper_voice", return_value=piper), \
+                mock.patch.object(tts_module, "piper_model_ready", return_value=True):
+            tts = tts_module.TextToSpeech({"engine": "lokal", "lokal_stimme": "thorsten"}, Path(folder))
+            self.assertIsInstance(tts._local, tts_module.ThorstenVoice)
+            self.assertTrue(tts._local.usable(wait=5))
+            audio, rate = tts.synthesize("Am 3.10. um 18:30 Uhr, Sir, ist Ihr Termin beim Zahnarzt in der Stadt, danach Training.")
+            self.assertEqual(rate, 22050)
+            self.assertTrue(audio.done.wait(5))
+            self.assertTrue(tts.used_main)
+            self.assertEqual(piper.texts, ["Am dritten Oktober um achtzehn Uhr dreißig, Sir,",
+                                           "ist Ihr Termin beim Zahnarzt in der Stadt,", "danach Training."],
+                             "lange Sätze Teilsatz für Teilsatz: Jarvis spricht früher los")
+            self.assertFalse(tts.improve_local(), "das große Pocket-Modell ist für Thorsten egal")
+
+    def test_installer_prepares_thorsten_first(self):
+        """Der Installer (localvoice vorbereiten) lädt Thorsten zuerst: Er spricht auch, wenn Pocket TTS scheitert."""
+        from jarvis import tts as tts_module
+
+        class FakePiper:
+            def __init__(self, path):
+                pass
+
+            def synthesize(self, text):
+                return np.zeros(2205, dtype=np.int16), 22050
+
+        ready = {"high": False}
+
+        def download(name):
+            ready["high"] = True
+            return True
+
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(tts_module, "piper_model_ready", side_effect=lambda name=None: ready["high"]), \
+                mock.patch.object(tts_module, "ensure_piper_model", side_effect=download) as fetched, \
+                mock.patch.object(tts_module, "_PiperVoice", FakePiper), \
+                mock.patch.object(localvoice, "PocketVoice", side_effect=RuntimeError("pocket-tts kaputt")), \
+                mock.patch("builtins.print"):
+            with self.assertRaises(RuntimeError):
+                localvoice._prepare_main(Path(folder))
+            fetched.assert_called_once_with(tts_module.PIPER_HIGH)
+            self.assertTrue(localvoice.preview_file(Path(folder), "thorsten").exists(), "Hörprobe von Thorsten")
+
+    def test_thorsten_speaks_while_the_better_model_loads(self):
+        """Erster Start nach dem Update: Die hohe Qualität lädt noch (114 MB). Thorsten wartet nicht 30 s, sondern
+        spricht gleich in mittlerer Qualität (gleicher Sprecher)."""
+        from jarvis import tts as tts_module
+
+        class Medium:
+            rate = 22050
+
+            def synthesize(self, text):
+                return np.full(2205, 8000, np.int16), 22050
+
+        voice = tts_module.ThorstenVoice()
+        voice._started = True  # lädt gerade (ready nicht gesetzt)
+        with mock.patch.object(tts_module, "piper_voice", return_value=Medium()):
+            started = time.monotonic()
+            samples, rate = voice.synthesize("Jarvis ist online, Sir.")
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertEqual(rate, 22050)
+        self.assertTrue(voice.loading())
+
+    def test_clauses(self):
+        from jarvis.tts import clauses
+
+        self.assertEqual(clauses("Sehr wohl, Sir."), ["Sehr wohl, Sir."])
+        self.assertEqual(clauses(""), [])
+        long = ("Die Werkstatt ist fertig, Sir: Das Spiel läuft, die Tests sind grün, und eine Verknüpfung liegt "
+                "auf Ihrem Desktop, damit Sie es jederzeit starten können.")
+        parts = clauses(long)
+        self.assertEqual(" ".join(parts), long)
+        self.assertTrue(all(len(p) >= 15 for p in parts), parts)
+
+    def test_best_piper_model_wins(self):
+        from jarvis import tts as tts_module
+
+        loaded = []
+
+        class Voice:
+            def __init__(self, path):
+                loaded.append(Path(path).name)
+
+        with tempfile.TemporaryDirectory() as folder, \
+                mock.patch.object(tts_module, "piper_dir", return_value=Path(folder)), \
+                mock.patch.object(tts_module, "_PiperVoice", Voice), \
+                mock.patch.object(tts_module, "_piper", None), mock.patch.object(tts_module, "_piper_name", ""), \
+                mock.patch.object(tts_module, "_piper_failed", set()):
+            self.assertIsNone(tts_module.piper_voice(), "noch keine Stimme heruntergeladen")
+            for name, size in ((tts_module.PIPER_MODEL, 50_000_001),):
+                (Path(folder) / f"{name}.onnx").write_bytes(b"")
+                os_truncate(Path(folder) / f"{name}.onnx", size)
+                (Path(folder) / f"{name}.onnx.json").write_text("{}")
+            self.assertIsNotNone(tts_module.piper_voice())
+            self.assertEqual(loaded, ["de_DE-thorsten-medium.onnx"])
+            (Path(folder) / f"{tts_module.PIPER_HIGH}.onnx").write_bytes(b"")
+            os_truncate(Path(folder) / f"{tts_module.PIPER_HIGH}.onnx", 100_000_001)
+            (Path(folder) / f"{tts_module.PIPER_HIGH}.onnx.json").write_text("{}")
+            tts_module.piper_voice()
+            tts_module.piper_voice()
+            self.assertEqual(loaded, ["de_DE-thorsten-medium.onnx", "de_DE-thorsten-high.onnx"],
+                             "sobald Thorsten in hoher Qualität da ist, ohne Neustart, und nur einmal geladen")
+
+
+def os_truncate(path, size):
+    with open(path, "r+b") as f:
+        f.truncate(size)
 
 
 class ModelChoiceTest(unittest.TestCase):
@@ -355,7 +539,7 @@ class ModelChoiceTest(unittest.TestCase):
         choice = localvoice.read_choice(self.folder)
         self.assertEqual(choice["modell"], "gross")
         self.assertGreater(choice["tempo_gross"], localvoice.BIG_MIN_SPEED)
-        for item in localvoice.VOICES:
+        for item in localvoice.POCKET_VOICES:
             self.assertTrue(localvoice.preview_file(self.folder, item["id"]).exists(), "Hörproben in der neuen Stimme")
 
         class Slow(Fast):
@@ -427,12 +611,13 @@ class ModelChoiceTest(unittest.TestCase):
         self.assertFalse(tts.improve_local(), "kein zweites Mal")
         self.assertEqual(tts.local_model, "standard")
 
-    def test_standard_cache_keys_stay_valid(self):
-        """Wer bleibt, wie er ist, behält seine fertigen Sätze (Schlüssel wie bisher)."""
+    def test_cache_keys_since_the_pronunciation_fix(self):
+        """Seit aussprache.py und den kürzeren Stücken gelten neue Schlüssel (Modell immer dabei): Alte Sätze waren
+        mit Ziffern gesprochen oder ohne Ende und sollen nicht wiederkommen."""
         import hashlib
 
         tts = self.make_tts()
-        expected = hashlib.sha1("lokal|george|Sehr wohl, Sir.".encode()).hexdigest()[:24] + ".npz"
+        expected = hashlib.sha1("lokal2|george|standard|Sehr wohl, Sir.".encode()).hexdigest()[:24] + ".npz"
         self.assertEqual(tts._cache_file("Sehr wohl, Sir.").name, expected)
 
 
@@ -581,6 +766,9 @@ class SetupTest(unittest.TestCase):
             self.assertFalse(state["busy"])
             self.assertIn("Installation ging nicht", state["error"])
             self.assertFalse(api.local_select("george")["ok"], "nicht installiert")
+            with mock.patch("jarvis.tts.ensure_piper_model", return_value=True):
+                self.assertTrue(api.local_select("thorsten")["ok"], "Thorsten braucht pocket-tts nicht")
+            self.assertEqual(api._cfg["tts"]["lokal_stimme"], "thorsten")
 
 
 if __name__ == "__main__":

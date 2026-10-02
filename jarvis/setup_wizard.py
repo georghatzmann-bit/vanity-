@@ -458,12 +458,12 @@ class SetupApi:
 
     def local_state(self) -> dict:
         """Ist die lokale Stimme da, läuft gerade das Einrichten, welche Stimme ist gewählt?"""
-        from .localvoice import VOICES, installed, preview_file, voice_id
+        from .localvoice import POCKET_VOICES, VOICES, installed, preview_file, voice_id
 
         have = installed()
         previews = STATE_DIR / "stimmen"
         busy = self._local_job is not None and self._local_job.is_alive()
-        ready = have["tts"] and have["stt"] and all(preview_file(previews, v["id"]).exists() for v in VOICES)
+        ready = have["tts"] and have["stt"] and all(preview_file(previews, v["id"]).exists() for v in POCKET_VOICES)
         tts, stt = self._cfg["tts"], self._cfg["stt"]
         return {
             "installed": have, "ready": ready and not busy, "busy": busy, "line": self._local_line,
@@ -507,10 +507,15 @@ class SetupApi:
 
         import numpy as np
 
-        from .localvoice import preview_file
+        from .localvoice import preview_file, voice_id
         from .tts import Player
 
         path = preview_file(STATE_DIR / "stimmen", str(voice))
+        if voice_id(voice) == "thorsten" and not path.exists():
+            from .localvoice import thorsten_preview
+
+            if thorsten_preview(STATE_DIR / "stimmen") is None:
+                return {"ok": False, "error": "Thorsten wird gerade geladen (etwa 114 MB). Gleich noch einmal tippen."}
         if not path.exists():
             return {"ok": False, "error": "Erst „Lokal einrichten“, dann gibt es Hörproben."}
         if not self._playing.acquire(blocking=False):
@@ -530,7 +535,12 @@ class SetupApi:
     def local_select(self, voice) -> dict:
         from .localvoice import installed, voice_id
 
-        if not installed()["tts"]:
+        if voice_id(voice) == "thorsten":
+            # Thorsten ist Piper (immer dabei) und braucht pocket-tts nicht. Sein Modell lädt schon mal im Hintergrund.
+            from .tts import PIPER_HIGH, ensure_piper_model
+
+            threading.Thread(target=ensure_piper_model, args=(PIPER_HIGH,), name="thorsten-laden", daemon=True).start()
+        elif not installed()["tts"]:
             return {"ok": False, "error": "Die lokale Stimme ist noch nicht eingerichtet."}
         result = self._save("tts", "lokal_stimme", voice_id(voice))
         if result["ok"]:

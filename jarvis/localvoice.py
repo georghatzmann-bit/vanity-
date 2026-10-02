@@ -50,9 +50,13 @@ BIG_MIN_SPEED = 1.4
 CHOICE_FILE = "modell.json"  # im Ordner daten/stimmen: was die Messung auf diesem PC ergab
 RETRY_AFTER = 24 * 3600  # Messen ging nicht (kein Internet): frühestens morgen wieder
 
-# Im Test (Rückübersetzung mit Parakeet) waren alle gut verständlich; George am klarsten.
+# Im Test (Rückübersetzung mit Parakeet) waren alle gut verständlich; George am klarsten. Thorsten ist keine
+# Pocket-TTS-Stimme, sondern Piper (tts.ThorstenVoice): ein deutscher Sprecher, etwas weniger lebendig, aber er
+# bricht nie ab und liest Zahlen sicher. Er braucht pocket-tts nicht und lädt sein Modell selbst (114 MB).
 VOICES = [
-    {"id": "george", "name": "George", "desc": "Ruhig und klar, am besten verständlich", "recommended": True},
+    {"id": "thorsten", "name": "Thorsten", "desc": "Deutscher Sprecher, sehr deutlich, bricht nie ab", "engine": "piper",
+     "recommended": True},
+    {"id": "george", "name": "George", "desc": "Ruhig und natürlich, etwas langsamer"},
     {"id": "charles", "name": "Charles", "desc": "Die tiefste Stimme, sehr gelassen"},
     {"id": "juergen", "name": "Jürgen", "desc": "Natürlich, mittlere Tonlage"},
     {"id": "michael", "name": "Michael", "desc": "Tief und weich"},
@@ -60,7 +64,12 @@ VOICES = [
     {"id": "stuart_bell", "name": "Stuart", "desc": "Heller und freundlich"},
 ]
 VOICE_IDS = {v["id"] for v in VOICES}
+POCKET_VOICES = [v for v in VOICES if v.get("engine") != "piper"]  # die Hörproben schreibt Pocket TTS
 DEFAULT_VOICE = "george"
+# Pocket TTS rechnet einen Satz in Stücken von höchstens so vielen Text-Tokens. Mit dem Standard (50) ließ das
+# Modell im Test bei 5 von 10 typischen Jarvis-Sätzen das Ende weg ("... auf Ihrem Desktop" statt "... damit Sie
+# es jederzeit starten können"). Mit 25 kam bei 9 von 10 alles an, gleich schnell.
+CHUNK_TOKENS = 25
 PREVIEW_TEXT = "Guten Abend, Sir. Alle Systeme laufen einwandfrei. Womit kann ich dienen?"
 
 
@@ -231,11 +240,13 @@ class PocketVoice:
         self.ready.wait(wait)
         return self.ready.is_set() and self.error is None and self._model is not None
 
+    rate = RATE
+
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
         if not self.usable(wait=30):
             raise RuntimeError(f"Lokale Stimme nicht bereit: {self.error or 'lädt noch'}")
         with self._lock:
-            audio = self._model.generate_audio(self._state, text)
+            audio = generate(self._model, self._state, text)
         return _pcm16(audio), RATE
 
     def stream(self, text: str, feed: Callable[[bytes], None]) -> None:
@@ -243,8 +254,20 @@ class PocketVoice:
         if not self.usable(wait=30):
             raise RuntimeError(f"Lokale Stimme nicht bereit: {self.error or 'lädt noch'}")
         with self._lock:
-            for chunk in self._model.generate_audio_stream(self._state, text):
+            try:
+                chunks = self._model.generate_audio_stream(self._state, text, max_tokens=CHUNK_TOKENS)
+            except TypeError:  # ältere pocket-tts-Version ohne max_tokens
+                chunks = self._model.generate_audio_stream(self._state, text)
+            for chunk in chunks:
                 feed(_pcm16(chunk).tobytes())
+
+
+def generate(model, state, text: str):
+    """Ein ganzer Satz in kurzen Stücken (CHUNK_TOKENS), damit das Modell kein Satzende verschluckt."""
+    try:
+        return model.generate_audio(state, text, max_tokens=CHUNK_TOKENS)
+    except TypeError:  # ältere pocket-tts-Version ohne max_tokens
+        return model.generate_audio(state, text)
 
 
 def _utf8_configs() -> None:
@@ -332,6 +355,25 @@ def preview_file(previews: Path, voice: str) -> Path:
     return Path(previews) / f"lokal-{voice_id(voice)}.wav"
 
 
+def thorsten_preview(previews: Path, download: bool = False) -> Path | None:
+    """Die Hörprobe von Thorsten (Piper, hohe Qualität). None = sein Modell ist noch nicht da: Dann lädt es jetzt
+    im Hintergrund, und beim nächsten Tippen gibt es die Probe (download=True: gleich hier laden, für den Installer)."""
+    from .tts import PIPER_HIGH, _PiperVoice, ensure_piper_model, piper_dir, piper_model_ready
+
+    target = preview_file(previews, "thorsten")
+    if target.exists():
+        return target
+    if not piper_model_ready(PIPER_HIGH):
+        if not download:
+            threading.Thread(target=ensure_piper_model, args=(PIPER_HIGH,), name="thorsten-laden", daemon=True).start()
+            return None
+        if not ensure_piper_model(PIPER_HIGH):
+            return None
+    samples, rate = _PiperVoice(piper_dir() / f"{PIPER_HIGH}.onnx").synthesize(PREVIEW_TEXT)
+    _write_wav(target, samples, rate)
+    return target
+
+
 _ensuring = threading.Lock()
 
 
@@ -340,7 +382,7 @@ def ensure_installed(previews: Path, on_line: Callable[[str], None] | None = Non
     ein, ohne Internet ging das aber nicht). Läuft in eigenen Prozessen, im Hintergrund.
     True = gerade frisch eingerichtet (vorher fehlte etwas, jetzt ist alles da)."""
     have = installed()
-    if all(have.values()) and all(preview_file(previews, v["id"]).exists() for v in VOICES):
+    if all(have.values()) and all(preview_file(previews, v["id"]).exists() for v in POCKET_VOICES):
         return False
     if not _ensuring.acquire(blocking=False):
         return False  # läuft schon (z. B. aus der Einrichtung)
@@ -431,10 +473,10 @@ def _measure_big(folder: Path) -> str:
         print(f"Die beste Stimme wäre auf diesem PC zu langsam ({speed:.1f}-fach Echtzeit), es bleibt beim Standard.",
               flush=True)
         return model
-    for item in VOICES:
+    for item in POCKET_VOICES:
         print(f"Hörprobe: {item['name']} ...", flush=True)
         state = voice._model.get_state_for_audio_prompt(item["id"])
-        _write_wav(preview_file(folder, item["id"]), _pcm16(voice._model.generate_audio(state, PREVIEW_TEXT)), RATE)
+        _write_wav(preview_file(folder, item["id"]), _pcm16(generate(voice._model, state, PREVIEW_TEXT)), RATE)
     print(f"Beste Stimme läuft flüssig ({speed:.1f}-fach Echtzeit), Jarvis nimmt sie.", flush=True)
     return model
 
@@ -449,19 +491,27 @@ def _configured_quality() -> str:
 
 
 def _prepare_main(previews: Path) -> int:
+    # Zuerst Thorsten (Piper, Jarvis' Standardstimme): Der braucht pocket-tts nicht und spricht auch dann, wenn
+    # unten etwas schiefgeht.
+    print("Lade Thorsten (etwa 114 MB) ...", flush=True)
+    try:
+        if thorsten_preview(previews, download=True) is None:
+            print("Thorsten ließ sich gerade nicht laden, Jarvis holt ihn beim Start nach.", flush=True)
+    except Exception as exc:
+        print(f"Thorsten: {exc}", flush=True)
     print("Lade die Stimme (etwa 220 MB) ...", flush=True)
     voice = PocketVoice(DEFAULT_VOICE)
     voice.start()
     if not voice.usable(wait=1800):
         print(f"Fehler: Stimme lädt nicht: {voice.error}", flush=True)
         return 1
-    for item in VOICES:
+    for item in POCKET_VOICES:
         target = preview_file(previews, item["id"])
         if target.exists():
             continue
         print(f"Hörprobe: {item['name']} ...", flush=True)
         state = voice._model.get_state_for_audio_prompt(item["id"])
-        _write_wav(target, _pcm16(voice._model.generate_audio(state, PREVIEW_TEXT)), RATE)
+        _write_wav(target, _pcm16(generate(voice._model, state, PREVIEW_TEXT)), RATE)
     print("Lade die Spracherkennung (etwa 670 MB) ...", flush=True)
     try:
         ParakeetSpeechToText()

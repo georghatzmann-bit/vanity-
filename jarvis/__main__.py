@@ -91,12 +91,13 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
 
         def local_voice() -> None:
             # Fehlt die lokale Stimme (der Installer konnte sie nicht laden), holt Jarvis sie im
-            # Hintergrund nach. Die Reservestimme (Piper, 63 MB) lädt er ebenfalls einmalig.
+            # Hintergrund nach. Thorsten (Piper, 114 MB) lädt er ebenfalls einmalig: als Reservestimme und
+            # damit er in der Einrichtung gleich wählbar ist. Geht das nicht, reicht Thorsten in mittlerer Qualität.
             time.sleep(20)
             from .localvoice import ensure_installed
-            from .tts import ensure_piper_model
+            from .tts import PIPER_HIGH, ensure_piper_model
 
-            ensure_piper_model()
+            ensure_piper_model(PIPER_HIGH) or ensure_piper_model()
             if ensure_installed(STATE_DIR / "stimmen") and tts.enable_local():
                 tts.warm_up()
                 ui.toast("Meine lokale Stimme ist eingerichtet, Sir. Ab jetzt spreche ich ganz ohne Internet.", "ok")

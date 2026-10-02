@@ -85,7 +85,7 @@
     },
     playing: '',
     tts: { engine: 'lokal', tab: 'local' },
-    local: { installed: {}, ready: false, busy: false, line: '', error: '', voices: [], voice: 'george', active: false, allLocal: false, timer: 0 },
+    local: { installed: {}, ready: false, busy: false, line: '', error: '', voices: [], voice: 'thorsten', active: false, allLocal: false, timer: 0 },
     eleven: { keySet: false, voices: [], selected: '', name: '', plan: null, library: [], gender: 'male', checked: false, busy: false, blocked: new Set() },
     groq: { keySet: false },
     pico: { keySet: false },
@@ -1829,12 +1829,13 @@
     let micOn = false;
     let micT0 = 0;
     let localT0 = 0;
-    let localVoice = 'george';
+    let localVoice = 'thorsten';
     // Der Installer richtet die lokale Stimme gleich mit ein. ?lokal=nein zeigt den Fall, dass es nicht geklappt hat.
     const localMissing = params.get('lokal') === 'nein';
     let localActive = !localMissing && params.get('eleven') !== '1';
     const LOCAL_VOICES = [
-      { id: 'george', name: 'George', desc: 'Ruhig und klar, am besten verständlich', recommended: true },
+      { id: 'thorsten', name: 'Thorsten', desc: 'Deutscher Sprecher, sehr deutlich, bricht nie ab', recommended: true },
+      { id: 'george', name: 'George', desc: 'Ruhig und natürlich, etwas langsamer' },
       { id: 'charles', name: 'Charles', desc: 'Die tiefste Stimme, sehr gelassen' },
       { id: 'juergen', name: 'Jürgen', desc: 'Natürlich, mittlere Tonlage' },
       { id: 'michael', name: 'Michael', desc: 'Tief und weich' },

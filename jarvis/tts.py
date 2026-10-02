@@ -3,7 +3,8 @@ als Reserve Piper (auch lokal). ElevenLabs nur, wenn Georg es ausdrücklich wäh
 Microsoft-Stimme gibt es nicht mehr.
 
 `Speaker` spricht Sätze nacheinander im Hintergrund und erzeugt den nächsten
-Satz schon, während der aktuelle noch läuft.
+Satz schon, während der aktuelle noch läuft. Was die Stimmen auf dem PC vorlesen, schreibt aussprache.py vorher
+aus ("25.231" -> fünfundzwanzigtausend..., "18:30 Uhr" -> achtzehn Uhr dreißig, "Mails" -> Mehls).
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from typing import Callable
 
 import numpy as np
 
+from .aussprache import speak
 from .text import speakable
 
 log = logging.getLogger(__name__)
@@ -73,6 +75,12 @@ class TextToSpeech:
         with self._local_lock:
             if self._local is not None:
                 return True
+            if voice_id(voice or self._local_voice) == "thorsten":
+                self._local_voice = "thorsten"
+                self._local = ThorstenVoice()
+                if start:
+                    self._local.start()
+                return True
             if not installed()["tts"]:
                 log.warning("Die lokale Stimme ist nicht installiert. Bis dahin spricht die Reservestimme (Piper).")
                 return False
@@ -91,7 +99,7 @@ class TextToSpeech:
         local, folder = self._local, self._cache_dir
         if local is None or self._eleven is not None or folder is None:
             return False
-        if getattr(local, "model", "standard") == "gross" or not worth_measuring(self._local_quality, folder):
+        if getattr(local, "model", "standard") in ("gross", "thorsten") or not worth_measuring(self._local_quality, folder):
             return False
         if not idle():  # neben einem Spiel gemessen, wäre jeder PC zu langsam
             return None
@@ -152,18 +160,18 @@ class TextToSpeech:
             try:
                 # Nur Sätze der Hauptstimme kommen in den Zwischenspeicher (sonst spräche ElevenLabs
                 # später mit der lokalen Stimme).
-                audio = self._local_stream(text, cached if self._eleven is None else None)
+                audio = self._local_stream(spoken(text), cached if self._eleven is None else None)
                 self.used_main = self._eleven is None
                 return audio, audio.rate
             except Exception as exc:
                 if self._local.loading():  # lädt nach 30 s noch (sehr langsamer PC): kein Fehler
                     log.info("Lokale Stimme lädt noch, dieser Satz kommt von der Reservestimme.")
-                    return self._offline(text)
+                    return self._offline(spoken(text))
                 log.warning("Lokale Stimme: %s. Nehme die Reservestimme.", exc)
                 if time.monotonic() - self._reported_at > 600:
                     self._reported_at = time.monotonic()
                     self._on_problem("Die lokale Stimme spricht gerade nicht. Jarvis nimmt so lange die Reservestimme.")
-        return self._offline(text)
+        return self._offline(spoken(text))
 
     # Ist ElevenLabs kurz ausgelastet, lieber einen Moment warten als die Stimme wechseln.
     BUSY_RETRIES = (0.3, 0.6, 1.0, 1.5)
@@ -225,7 +233,7 @@ class TextToSpeech:
         (kurz nach dem Start), wartet Jarvis lieber, als mitten im Gespräch die Stimme zu wechseln."""
         from .localvoice import RATE
 
-        audio = StreamingAudio(RATE)
+        audio = StreamingAudio(int(getattr(self._local, "rate", RATE) or RATE))
         audio.BUFFER_SECONDS = self.LOCAL_BUFFER_SECONDS
         if cached is not None:  # vor dem Start setzen: Kurze Sätze sind fertig, bevor synthesize zurückkommt
             audio.on_complete = lambda done: self._store(cached, trim_silence(done.samples(), done.rate), done.rate)
@@ -295,7 +303,7 @@ class TextToSpeech:
                         pcm = self._eleven.speak(text, self._eleven_voice, self._eleven_model, plain=self._eleven_plain)
                     samples, rate = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16), RATE
                 elif self._local is not None:
-                    samples, rate = self._local.synthesize(text)
+                    samples, rate = self._local.synthesize(spoken(text))
                 else:
                     return
                 self._store(cached, trim_silence(samples, rate), rate)
@@ -334,8 +342,9 @@ class TextToSpeech:
         if self._eleven is not None:
             key = "|".join(("elevenlabs", self._eleven_voice, self._eleven_model, text))
         elif self._local is not None:
-            model = getattr(self._local, "model", "standard")  # alte Sätze des Standardmodells bleiben gültig
-            key = "|".join(("lokal", self._local_voice, text) if model == "standard" else ("lokal", self._local_voice, model, text))
+            # "2": seit aussprache.py und den kürzeren Stücken. Ältere Sätze waren mit Ziffern gesprochen oder ohne
+            # Satzende ("Es ist 18:30 Uhr" als Kauderwelsch), die sollen nicht wiederkommen.
+            key = "|".join(("lokal2", self._local_voice, getattr(self._local, "model", "standard"), text))
         else:
             return None
         return self._cache_dir / (hashlib.sha1(key.encode("utf-8")).hexdigest()[:24] + ".npz")
@@ -357,6 +366,16 @@ class TextToSpeech:
         if text:
             samples, rate = self.synthesize(text)
             play(samples, rate)
+
+
+def spoken(text: str) -> str:
+    """Der Text für die Stimmen auf dem PC: Zahlen, Kürzel und englische Wörter ausgeschrieben (aussprache.py).
+    Geht dabei etwas schief, spricht Jarvis lieber den Text, wie er ist, als gar nicht."""
+    try:
+        return speak(text) or text
+    except Exception as exc:
+        log.debug("Aussprache: %s", exc)
+        return text
 
 
 def local_buffer(speed: float) -> float:
@@ -387,13 +406,19 @@ def trim_silence(samples: np.ndarray, rate: int, lead: float = 0.05, trail: floa
     return samples[start:end]
 
 
-# ------------------------------------------------------------------ Reservestimme (Piper, auch lokal)
+# ------------------------------------------------------------------ Piper (auch lokal): Thorsten und die Reserve
 
+# Thorsten in hoher Qualität (114 MB): als eigene Stimme wählbar ("thorsten") und, sobald geladen, auch die Reserve.
+# Bis dahin ist die Reserve Thorsten in mittlerer Qualität (63 MB, seit Langem dabei).
+PIPER_HIGH = "de_DE-thorsten-high"
 PIPER_MODEL = "de_DE-thorsten-medium"
-PIPER_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/"
+PIPER_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/"
+PIPER_MIN_BYTES = {PIPER_HIGH: 100_000_000, PIPER_MODEL: 50_000_000}
 _piper = None
-_piper_failed = False
+_piper_name = ""
+_piper_failed: set[str] = set()
 _piper_lock = threading.Lock()
+_download_lock = threading.Lock()
 
 
 def piper_dir() -> Path:
@@ -407,30 +432,38 @@ def piper_dir() -> Path:
     return STATE_DIR / "stimmen"
 
 
-def ensure_piper_model() -> bool:
-    """Lädt die Offline-Stimme einmalig herunter (63 MB). Ohne piper-tts: nichts tun."""
+def piper_model_ready(name: str = PIPER_MODEL) -> bool:
+    model = piper_dir() / f"{name}.onnx"
+    return model.exists() and model.stat().st_size >= PIPER_MIN_BYTES.get(name, 1) and \
+        model.with_name(model.name + ".json").exists()
+
+
+def ensure_piper_model(name: str = PIPER_MODEL) -> bool:
+    """Lädt eine Piper-Stimme einmalig herunter (mittel 63 MB, hoch 114 MB). Ohne piper-tts: nichts tun."""
     try:
         import piper  # noqa: F401
     except Exception:
         return False
     folder = piper_dir()
+    url = PIPER_BASE + name.rsplit("-", 1)[-1] + "/"
     try:
-        folder.mkdir(parents=True, exist_ok=True)
-        for name, minimum in ((f"{PIPER_MODEL}.onnx.json", 1000), (f"{PIPER_MODEL}.onnx", 50_000_000)):
-            target = folder / name
-            if target.exists() and target.stat().st_size >= minimum:
-                continue
-            part = target.with_name(target.name + ".part")
-            with urllib.request.urlopen(PIPER_URL + name, timeout=30) as response, open(part, "wb") as out:
-                while chunk := response.read(1 << 16):
-                    out.write(chunk)
-            if part.stat().st_size < minimum:
-                raise OSError(f"{name} ist unvollständig")
-            os.replace(part, target)
-            log.info("Offline-Stimme geladen: %s", target)
+        with _download_lock:  # Einrichtung und Hintergrund laden nie dieselbe Datei gleichzeitig
+            folder.mkdir(parents=True, exist_ok=True)
+            for file, minimum in ((f"{name}.onnx.json", 1000), (f"{name}.onnx", PIPER_MIN_BYTES.get(name, 1))):
+                target = folder / file
+                if target.exists() and target.stat().st_size >= minimum:
+                    continue
+                part = target.with_name(target.name + ".part")
+                with urllib.request.urlopen(url + file, timeout=30) as response, open(part, "wb") as out:
+                    while chunk := response.read(1 << 16):
+                        out.write(chunk)
+                if part.stat().st_size < minimum:
+                    raise OSError(f"{file} ist unvollständig")
+                os.replace(part, target)
+                log.info("Piper-Stimme geladen: %s", target)
         return True
     except Exception as exc:
-        log.warning("Offline-Stimme nicht geladen: %s", exc)
+        log.warning("Piper-Stimme %s nicht geladen: %s", name, exc)
         return False
 
 
@@ -440,6 +473,7 @@ class _PiperVoice:
 
         self._voice = PiperVoice.load(str(model))
         self._lock = threading.Lock()
+        self.rate = int(getattr(getattr(self._voice, "config", None), "sample_rate", 22050) or 22050)
 
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
         # espeak liest das englische "Sir" als "Sieh-er". "Sörr" klingt richtig.
@@ -448,24 +482,113 @@ class _PiperVoice:
             chunks = list(self._voice.synthesize(text))
         if not chunks:
             raise RuntimeError("keine Audiodaten")
-        return np.concatenate([c.audio_int16_array for c in chunks]), int(chunks[0].sample_rate)
+        self.rate = int(chunks[0].sample_rate)
+        return np.concatenate([c.audio_int16_array for c in chunks]), self.rate
 
 
 def piper_voice():
-    """Die geladene Offline-Stimme oder None (nicht installiert oder noch nicht heruntergeladen)."""
-    global _piper, _piper_failed
+    """Die geladene Piper-Stimme oder None (nicht installiert oder noch nicht heruntergeladen). Thorsten in hoher
+    Qualität, sobald er da ist (dann ohne Neustart), sonst in mittlerer."""
+    global _piper, _piper_name
     with _piper_lock:
-        if _piper is not None or _piper_failed:
+        if _piper is not None and (_piper_name == PIPER_HIGH or not piper_model_ready(PIPER_HIGH)):
             return _piper
-        model = piper_dir() / f"{PIPER_MODEL}.onnx"
-        if not model.exists() or not model.with_name(model.name + ".json").exists():
-            return None
-        try:
-            _piper = _PiperVoice(model)
-        except Exception as exc:
-            log.warning("Offline-Stimme lässt sich nicht laden: %s", exc)
-            _piper_failed = True
+        for name in (PIPER_HIGH, PIPER_MODEL):
+            if name in _piper_failed or not piper_model_ready(name):
+                continue
+            if _piper is not None and _piper_name == name:
+                return _piper
+            try:
+                _piper, _piper_name = _PiperVoice(piper_dir() / f"{name}.onnx"), name
+                return _piper
+            except Exception as exc:
+                log.warning("Piper-Stimme %s lässt sich nicht laden: %s", name, exc)
+                _piper_failed.add(name)
         return _piper
+
+
+class ThorstenVoice:
+    """Thorsten (Piper, hohe Qualität) als Jarvis' Stimme: wie localvoice.PocketVoice, aber ohne pocket-tts.
+    Lädt sein Modell beim ersten Start selbst (114 MB). Bis es da ist, spricht er in mittlerer Qualität
+    (die Reserve, gleicher Sprecher), danach ohne Neustart in hoher."""
+
+    model = "thorsten"
+
+    def __init__(self) -> None:
+        self.voice = "thorsten"
+        self.ready = threading.Event()
+        self.error: Exception | None = None
+        self._started = False
+
+    @property
+    def rate(self) -> int:
+        voice = piper_voice()
+        return voice.rate if voice is not None else 22050
+
+    def start(self) -> None:
+        if not self._started:
+            self._started = True
+            threading.Thread(target=self._load, name="jarvis-thorsten", daemon=True).start()
+
+    def _load(self) -> None:
+        started = time.monotonic()
+        try:
+            if not piper_model_ready(PIPER_HIGH):
+                ensure_piper_model(PIPER_HIGH)
+            if piper_voice() is None:
+                ensure_piper_model(PIPER_MODEL)
+            voice = piper_voice()
+            if voice is None:
+                raise RuntimeError("Piper-Stimme fehlt (kein Internet beim ersten Start?)")
+            log.info("Lokale Stimme thorsten (%s) bereit (%.1f s).", _piper_name or "Piper", time.monotonic() - started)
+        except Exception as exc:
+            self.error = exc
+            log.warning("Lokale Stimme Thorsten lädt nicht: %s", exc)
+        finally:
+            self.ready.set()
+
+    def loading(self) -> bool:
+        return self._started and not self.ready.is_set()
+
+    def usable(self, wait: float = 0.0) -> bool:
+        self.start()
+        self.ready.wait(wait)
+        return self.ready.is_set() and self.error is None and piper_voice() is not None
+
+    def synthesize(self, text: str) -> tuple[np.ndarray, int]:
+        # Lädt die hohe Qualität noch (erster Start nach dem Update, 114 MB), spricht Thorsten sofort in mittlerer:
+        # Warten müsste Georg nur, wenn noch gar keine Piper-Stimme da ist.
+        voice = piper_voice()
+        if voice is None and self.usable(wait=30):
+            voice = piper_voice()
+        if voice is None:
+            raise RuntimeError(f"Thorsten nicht bereit: {self.error or 'lädt noch'}")
+        self.start()
+        samples, rate = voice.synthesize(text)
+        return trim_silence(samples, rate), rate
+
+    def stream(self, text: str, feed: Callable[[bytes], None]) -> None:
+        """Piper rechnet ein Stück immer im Ganzen. Lange Sätze kommen darum Teilsatz für Teilsatz (am Komma, das
+        Komma bleibt dran und klingt wie eins): Jarvis spricht los, während der Rest noch entsteht."""
+        for part in clauses(text):
+            samples, _ = self.synthesize(part)
+            feed(np.asarray(samples, dtype=np.int16).tobytes())
+
+
+def clauses(text: str, longer_than: int = 70, at_least: int = 30) -> list[str]:
+    """Ein langer Satz in Teilsätze (an Komma, Semikolon, Doppelpunkt), jeder mindestens at_least Zeichen lang."""
+    text = str(text or "").strip()
+    if len(text) <= longer_than:
+        return [text] if text else []
+    parts: list[str] = []
+    for piece in re.split(r"(?<=[,;:])\s+", text):
+        if parts and (len(parts[-1]) < at_least or len(piece) < at_least // 2):
+            parts[-1] += " " + piece
+        else:
+            parts.append(piece)
+    if len(parts) > 1 and len(parts[-1]) < at_least // 2:
+        parts[-2] += " " + parts.pop()
+    return parts
 
 
 def play(samples: np.ndarray, rate: int) -> None:

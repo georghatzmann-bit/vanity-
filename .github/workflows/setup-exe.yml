@@ -386,7 +386,7 @@ jobs:
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep -Seconds 3
             if ($run.HasExited) { break }
-            if (Select-String -Path logs\jarvis.log -Pattern "Lokale Stimme george \(.+\) bereit" -Quiet -ErrorAction SilentlyContinue) { $ok = $true; break }
+            if (Select-String -Path logs\jarvis.log -Pattern "Lokale Stimme \w+ \(.+\) bereit" -Quiet -ErrorAction SilentlyContinue) { $ok = $true; break }
           }
           Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
           Get-Content logs\jarvis.log -Tail 30 -ErrorAction SilentlyContinue

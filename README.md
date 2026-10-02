@@ -16,7 +16,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
          → Bauaufträge ("Bau mir …"): Werkstatt mit eigenem Claude-Prozess (Opus/Sonnet) und Projektordner
          → alles andere: Claude Code (dein Claude-Abo), läuft dauerhaft, Antwort wird gestreamt,
            mit Fähigkeiten (SKILL.md, nur bei Bedarf gelesen) und Notizbuch (Markdown, Obsidian)
-         → Stimme auf dem PC: Pocket TTS (Reserve Piper), auf Wunsch ElevenLabs. Keine Windows-/Microsoft-Stimme
+         → Stimme auf dem PC: Thorsten (Piper) oder Pocket TTS, auf Wunsch ElevenLabs. Keine Windows-/Microsoft-Stimme
          → Anzeige oben am Bildschirm, Jarvis-Fenster, Tray-Symbol, Handy-App, Alexa
 ```
 
@@ -33,7 +33,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Eigene Befehle und Zeitpläne:** „Wenn ich Zockmodus sage, öffne Discord und Steam“, danach reicht ein Wort. „Jeden Morgen um 8 Uhr: Briefing“, „Werktags um 18 Uhr öffne Discord“: Jarvis erledigt es von selbst (beim Zocken wartet er).
 - **Termine, Mails und Shop über deine Konnektoren:** Jarvis benutzt die Dienste, die du auf claude.ai verbunden hast (Gmail, Google Kalender, Shopify, Spotify, Canva …): „Was steht heute an?“, „Trag morgen um 18 Uhr Training ein“, „Hab ich neue Mails?“, „Wie läuft der Shop?“. Keine eigenen Anbindungen, keine Passwörter in Jarvis. Claude Code fragt bei jedem Konnektor-Werkzeug nach, Jarvis antwortet selbst: lesen, suchen und eintragen ja, Löschen, Kaufen, Bezahlen und Veröffentlichen nie. Im Fenster unter Verbinden > Konnektoren steht, welche Jarvis sieht.
 - **Notizbuch und Fähigkeiten:** jedes Gespräch, Personen, Recherche-Berichte und Notizen als Markdown (in Obsidian verlinkt). Anleitungen für wiederkehrende Aufgaben (Briefing, Recherche, PC-Pflege, Spiele), die Claude nur bei Bedarf liest; „Lern das“ legt neue an.
-- **Stimme komplett lokal:** natürliche deutsche Stimme (Pocket TTS) und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo. Der Installer richtet beides ein, fehlt es, holt Jarvis es im Hintergrund nach. Beim Start wärmt er beides vor, häufige Sätze liegen fertig bereit. Auf schnellen PCs nimmt er von selbst das große deutsche Stimmmodell (im Test 7 bis 10 % falsch verstandene Wörter statt 11 bis 15 %), gemessen einmal pro PC in einem ruhigen Moment. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
+- **Stimme komplett lokal:** deutsche Stimme und Spracherkennung (Parakeet) ganz auf dem PC, ohne Internet und ohne Abo. Standard ist **Thorsten** (Piper): ein deutscher Sprecher, der nie mitten im Satz abbricht. Die Pocket-TTS-Stimmen (George und andere) sind natürlicher, aber langsamer und bleiben wählbar. Vor dem Sprechen schreibt Jarvis Zahlen, Uhrzeiten, Daten, Kürzel und englische Wörter aus („25.231“ wird „fünfundzwanzigtausendzweihunderteinunddreißig“, „18:30 Uhr“ wird „achtzehn Uhr dreißig“, „Mails“ klingt wie Mails), sonst las die Stimme Kauderwelsch und ließ oft das Satzende weg. Der Installer richtet beides ein, fehlt es, holt Jarvis es im Hintergrund nach. Beim Start wärmt er beides vor, häufige Sätze liegen fertig bereit. Auf schnellen PCs nimmt er von selbst das große deutsche Stimmmodell (im Test 7 bis 10 % falsch verstandene Wörter statt 11 bis 15 %), gemessen einmal pro PC in einem ruhigen Moment. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
 - **Versteht dich auch, wenn die Erkennung sich verhört:** Programme, Kontakte und eigene Befehle findet Jarvis auch nach Klang („Spottifei“ ist Spotify, „Maks“ ist Max), mit Kölner Phonetik (`klang.py`). Claude weiß, dass gesprochen wurde, und deutet Verhörer nach Zusammenhang.
 - **Handy-App:** im WLAN per QR-Code koppeln, dann schreiben, diktieren, Schnellaktionen und die Werkstatt verfolgen. Jarvis antwortet auf dem Handy in seiner eigenen Stimme. Mit Tailscale („Sicher von überall“) auch unterwegs, mit Sprechtaste und als installierbare App. Dazu Wake-on-LAN: den PC per Handy einschalten, und Benachrichtigungen über die App ntfy: Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn du nicht am PC sitzt.
 - **Alexa:** „Alexa, sag Jarvis, er soll Discord öffnen.“ Ein eigener Skill (Von Alexa gehostet), den Jarvis fertig zum Kopieren anbietet. Die Nachrichten laufen verschlüsselt über ntfy.sh, ohne Home Assistant und ohne Router-Einstellungen. Mit Home Assistant zusätzlich Ansagen auf Echos und Licht.
@@ -73,7 +73,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 ## Kosten
 
 - **Claude-Abo (Pro oder Max):** das Gehirn. Jarvis nimmt das große Modell nur, wo es sich lohnt, das schont das Kontingent. Fehlt ein Modell im Abo, nimmt er von selbst das nächstkleinere.
-- **Stimme und Spracherkennung:** gratis, ganz auf dem PC (Pocket TTS und Parakeet).
+- **Stimme und Spracherkennung:** gratis, ganz auf dem PC (Thorsten/Piper oder Pocket TTS, Parakeet).
 - **ElevenLabs:** freiwillig. Gratis-Konto mit 10.000 Credits im Monat und einer selbst entworfenen Stimme. Fertige Stimmen ab Starter (etwa 6 $ im Monat). Fällt ElevenLabs aus, spricht die lokale Stimme.
 - **Alexa-Skill, ntfy.sh und Tailscale:** gratis.
 - **Weltlage:** gratis, ohne Schlüssel (tagesschau.de, Sentinel-2 cloudless von EOX, OpenSky Network, Yahoo Finance, OpenStreetMap, wheretheiss.at). Ohne Konto erlaubt OpenSky etwa 400 Abfragen am Tag, Jarvis fragt höchstens alle 45 Sekunden.
@@ -161,7 +161,8 @@ jarvis/
   presence.py     Fenster beim Weckwort zeigen und danach wieder verstecken
   apps.py         Programme: Startmenü-Index, bekannte Apps, winget, Schließen
   voice.py audio.py stt.py   Sprachschleife, Vorab-Erkennung, Mikrofon, Silero VAD, Parakeet/Whisper (Groq auf Wunsch)
-  tts.py localvoice.py       Stimme auf dem PC (Pocket TTS, Reserve Piper), Einrichten im Hintergrund
+  tts.py localvoice.py       Stimme auf dem PC (Thorsten/Piper, Pocket TTS), Einrichten im Hintergrund
+  aussprache.py              Zahlen, Uhrzeiten, Kürzel und Englisch ausgeschrieben, bevor die Stimme spricht
   elevenlabs.py   Premium-Stimme auf Wunsch
   klang.py        Ähnlich klingende Namen finden (Kölner Phonetik): Programme, Kontakte, eigene Befehle
   weltlage.py orte.py       Weltlage: Meldungen mit Ort, Lagebericht, Kurse, Flüge, Raumstation; Ortsverzeichnis
