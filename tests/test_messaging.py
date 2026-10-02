@@ -302,6 +302,8 @@ class RecognitionTest(unittest.TestCase):
             "Richte Anna aus, dass wir heute zocken": ("", "Anna", "Wir zocken heute"),
             "Sag Lisa, ich bin in zehn Minuten da": ("", "Lisa", "ich bin in zehn Minuten da"),
             "Schreib in den Kanal allgemein: Wer ist heute online?": ("discord", "#allgemein", "Wer ist heute online?"),
+            "Schreib Max zurück: ok": ("", "Max", "ok"),
+            "Schreib Max: Lisa und ich kommen später": ("", "Max", "Lisa und ich kommen später"),
         }
         for said, (app, person, text) in cases.items():
             with self.subTest(said=said):
@@ -322,6 +324,11 @@ class RecognitionTest(unittest.TestCase):
             "Schreib Python-Code, der Dateien sortiert",
             "Schreib meinem Bruder auf WhatsApp, bin da",
             "Schreib auf Discord an Tom bin gleich da",  # ohne Komma unklar, wo der Name aufhört
+            # Keine Person: andere Sprachassistenten, Merkzettel, Zeitangaben
+            "Sag Alexa, Licht aus", "Sag Siri, sie soll leise sein", "Schreib Notiz: Milch kaufen",
+            "Schreib Folgendes: Hallo Welt", "Sag Folgendes: ich bin Jarvis", "Schreib morgen Max: hallo",
+            "Sag Max morgen, dass ich komme",  # erst morgen schicken: das macht Claude
+            "Schreib Tom, Lisa und Max: Treffen um 8",  # an mehrere, nicht "Lisa und Max: ..." an Tom
         ):
             with self.subTest(said=said):
                 intent = match(said)

@@ -265,8 +265,9 @@ _MSG_VIA = r"(?:auf|über|ueber|in|per|via|bei)"
 _MSG_WORD = r"[A-Za-zÄÖÜäöüß][\wÄÖÜäöüß.\-]*"
 # Zweites Wort eines Namens ("Max Müller"), aber nicht "Max bitte" oder "Max Bescheid"
 _MSG_NAME = (rf"(?P<person>{_MSG_WORD}"
-             rf"(?:\s+(?!(?:bitte|bescheid|mal|kurz|schnell|noch|auch|gleich|jetzt|sofort)\b){_MSG_WORD})?)"
-             r"(?:\s+(?:bitte|mal|kurz|schnell|noch|gleich))*")
+             rf"(?:\s+(?!(?:bitte|bescheid|mal|kurz|schnell|noch|auch|gleich|jetzt|sofort|zurück|morgen|heute|"
+             rf"übermorgen|später|nachher|nochmal|einfach|doch)\b){_MSG_WORD})?)"
+             r"(?:\s+(?:bitte|mal|kurz|schnell|noch|gleich|zurück))*")
 _MESSAGE = [
     # Name vor der App: Die App trennt Name und Text, ein Satzzeichen ist nicht nötig.
     re.compile(
@@ -312,6 +313,10 @@ _NOT_A_PERSON = {
     "einem", "einer", "kein", "keine", "noch", "zuerst", "dann", "danach", "lass", "uns",
     # "Sag gute Nacht, Jarvis", "Sag nichts, ich denke nach"
     "gute", "guten", "gutes", "nichts", "nix", "servus", "tschüss", "tschau",
+    # "Sag Alexa, Licht aus" (andere Sprachassistenten), "Schreib Folgendes: ...", "Schreib Notiz: Milch"
+    "alexa", "siri", "google", "cortana", "chatgpt", "claude", "spotify", "youtube",
+    "folgendes", "folgende", "notiz", "notizen", "liste", "ergebnis", "zusammenfassung", "antwort", "text",
+    "brief", "mail", "email", "e-mail", "morgen", "heute", "übermorgen", "später", "nachher",
 }
 # Text, der mit einem Relativwort anfängt, ist keine Nachricht ("Schreib Python-Code, der ...")
 _NOT_A_TEXT = re.compile(r"^(?:der|die|den|dem|welche|welcher|welches|wo|womit|was)\b", re.I)
@@ -350,6 +355,8 @@ def match_message(text: str) -> Intent | None:
             person = found.group("person").strip(" .,")
             if person.split()[0].lower() in _NOT_A_PERSON:
                 continue
+            if re.match(r"[\wÄÖÜäöüß]+(?:\s*,\s*[\wÄÖÜäöüß]+)*\s+(?:und|&)\s+[\wÄÖÜäöüß]+\s*:", found.group("text")):
+                return None  # "Schreib Tom, Lisa und Max: ..." geht an mehrere, das macht Claude
             body = _message_text(found.group("text"))
             if body is None:
                 return None  # das formuliert Claude besser
