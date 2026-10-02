@@ -105,15 +105,16 @@ namespace JarvisSetup
     /// <summary>Der Stand der ganzen Installation: Schritte, Gesamtfortschritt, Restzeit, Fehler.</summary>
     sealed class Fortschritt
     {
-        // Gewichte und Dauer grob nach einer Installation auf einem frischen PC mit gutem Internet.
+        // Gewichte und Dauer grob nach einer Installation auf einem frischen PC mit 50 MBit/s:
+        // Python 25 MB, Pakete rund 250 MB, Spracherkennung 464 MB, Claude Code 236 MB.
         public ObservableCollection<Schritt> Schritte { get; } = new ObservableCollection<Schritt>
         {
             new Schritt(1, "Vorbereiten", 4, 10),
-            new Schritt(2, "Python", 10, 45),
-            new Schritt(3, "Pakete", 46, 200),
-            new Schritt(4, "Spracherkennung", 18, 80),
-            new Schritt(5, "Jarvis' Gehirn", 14, 60),
-            new Schritt(6, "Windows-Bausteine", 8, 20),
+            new Schritt(2, "Python", 12, 60),
+            new Schritt(3, "Pakete", 40, 150),
+            new Schritt(4, "Spracherkennung", 22, 90),
+            new Schritt(5, "Jarvis' Gehirn", 15, 50),
+            new Schritt(6, "Windows-Bausteine", 7, 20),
         };
 
         public List<string> Hinweise { get; } = new List<string>();

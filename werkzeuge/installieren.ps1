@@ -655,10 +655,12 @@ if ($code -eq 0) {
 }
 Set-Share 8
 
-Start-Step "Spracherkennung laden (500 MB)"
+Start-Step "Spracherkennung laden (460 MB)"
 Set-Detail "Spracherkennung wird geladen (etwa 460 MB)"
-# Den Fortschritt verrät die Größe des Modell-Ordners. Ohne Xet lädt huggingface_hub die Datei
-# am Stück (kein zweiter Zwischenspeicher, der doppelt Platz kostet).
+# Den Fortschritt verrät die Größe des Modell-Ordners (die Dateien von Systran/faster-whisper-small
+# sind zusammen 486 215 847 Bytes). Ohne Xet lädt huggingface_hub die Datei am Stück
+# (kein zweiter Zwischenspeicher, der doppelt Platz kostet).
+$modellGroesse = [int64]486215847
 $hfHub = if ($env:HF_HUB_CACHE) { $env:HF_HUB_CACHE } elseif ($env:HF_HOME) { Join-Path $env:HF_HOME "hub" } else { Join-Path $env:USERPROFILE ".cache\huggingface\hub" }
 $modellDir = Join-Path $hfHub "models--Systran--faster-whisper-small"
 $script:modellVorher = Get-FolderSize $modellDir
@@ -667,8 +669,8 @@ $code = Invoke-Quiet $venvPy @("-c", "from faster_whisper import WhisperModel; W
     param($neu, $sekunden)
     $geladen = (Get-FolderSize $modellDir) - $script:modellVorher
     if ($geladen -gt 1MB) {
-        Set-Share (10 + 88 * [math]::Min(1, $geladen / 486MB))
-        Set-DetailLive ("Spracherkennung wird geladen: {0} von etwa 460 MB" -f (Format-MB ([math]::Min($geladen, 486MB))))
+        Set-Share (10 + 88 * [math]::Min(1, $geladen / $modellGroesse))
+        Set-DetailLive ("Spracherkennung wird geladen: {0} von {1} MB" -f (Format-MB ([math]::Min($geladen, $modellGroesse))), (Format-MB $modellGroesse))
     }
 }
 Remove-Item Env:\HF_HUB_DISABLE_XET -ErrorAction SilentlyContinue
