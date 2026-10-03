@@ -221,11 +221,13 @@ max_seconds = 1800
 # Wie lange Claude nachdenkt, wenn modellwahl = "aus" ist: "low" antwortet am schnellsten,
 # "medium" oder "high" gründlicher. (Sonst bestimmt das die Stufe.)
 effort = "low"
-# Welche Werkzeuge Claude für Jarvis überhaupt bekommt.
-tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "Agent"]
+# Welche Werkzeuge Claude für Jarvis überhaupt bekommt. ToolSearch lädt Konnektor-Werkzeuge erst, wenn Claude sie
+# braucht: Bei vielen Konnektoren gehen sonst bei jeder Frage alle ihre Beschreibungen mit (langsamer, teurer).
+tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "Agent", "ToolSearch"]
 # Werkzeuge, die Claude ohne Nachfrage nutzen darf. (Diese und die nächste Liste
 # ergänzen in deiner config.toml die Vorgaben hier, sie ersetzen sie nicht.)
-allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write", "Agent"]
+allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write", "Agent",
+                 "ToolSearch"]
 # Befehle, die komplett gesperrt sind. Zum Löschen und Deinstallieren gibt es eigene
 # Jarvis-Befehle, die erst nach deinem "Ja" etwas tun. Installieren darf Jarvis einfach so.
 disallowed_tools = [

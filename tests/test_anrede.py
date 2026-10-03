@@ -133,7 +133,7 @@ class EverywhereTest(unittest.TestCase):
 
 class UpgradeTest(unittest.TestCase):
     def test_existing_setup_gets_chef_and_the_loose_tone(self):
-        from jarvis.config import EXAMPLE_PATH, load_config, upgrade_config
+        from jarvis.config import CONFIG_VERSION, EXAMPLE_PATH, load_config, upgrade_config
 
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "config.toml"
@@ -143,7 +143,7 @@ class UpgradeTest(unittest.TestCase):
             self.assertEqual(sorted(upgrade_config(path)), ["ich.anrede = Chef", "ich.ton = locker"])
             cfg = load_config(path)
             self.assertEqual((cfg["ich"]["anrede"], cfg["ich"]["ton"]), ("Chef", "locker"))
-            self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["intern"]["config_version"], 10)
+            self.assertEqual(tomllib.loads(path.read_text(encoding="utf-8"))["intern"]["config_version"], CONFIG_VERSION)
 
     def test_new_setup_keeps_sir(self):
         from jarvis.config import EXAMPLE_PATH, load_config, upgrade_config

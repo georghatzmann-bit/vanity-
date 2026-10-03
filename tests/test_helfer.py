@@ -53,13 +53,23 @@ class HelferTest(unittest.TestCase):
         with TemporaryDirectory() as folder:
             path = Path(folder) / "config.toml"
             text = EXAMPLE_PATH.read_text(encoding="utf-8").split("[intern]")[0]
-            text = text.replace('"WebSearch", "WebFetch", "Agent"]', '"WebSearch", "WebFetch"]', 1)
+            old = '"WebSearch", "WebFetch", "Agent", "ToolSearch"]'
+            self.assertIn(old, text)
+            text = text.replace(old, '"WebSearch", "WebFetch"]', 1)
             path.write_text(text + "\n[intern]\nconfig_version = 7\n", encoding="utf-8")
             self.assertNotIn("Agent", load_config(path)["brain"]["tools"])
-            self.assertIn("brain.tools: mit Agent", upgrade_config(path))
+            self.assertIn("brain.tools: mit Agent, ToolSearch", upgrade_config(path))
             data = tomllib.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(data["brain"]["tools"][-1], "Agent")
+            self.assertEqual(data["brain"]["tools"][-2:], ["Agent", "ToolSearch"])
             self.assertEqual(upgrade_config(path), [], "nur einmal")
+
+    def test_tool_search_keeps_requests_small(self):
+        """Ohne ToolSearch schickt Claude Code alle Konnektor-Werkzeuge bei jeder Frage mit."""
+        cmd = self.brain().command(Attempt("sonnet", "jarvis"))
+        tools = cmd[cmd.index("--tools") + 1:cmd.index("--allowedTools")]
+        self.assertIn("ToolSearch", tools)
+        allowed = cmd[cmd.index("--allowedTools") + 1:]
+        self.assertIn("ToolSearch", allowed[:allowed.index("--disallowedTools")] if "--disallowedTools" in allowed else allowed)
 
     def test_persona_mentions_the_helpers(self):
         from jarvis.persona import build_persona

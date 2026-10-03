@@ -48,7 +48,7 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 10
+CONFIG_VERSION = 11
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
@@ -95,6 +95,10 @@ _LIST_REMOVALS = {
 # 8: Jarvis darf Teilaufgaben an seine Spezialisten abgeben (Werkzeug Agent, helfer.py).
 _LIST_ADDITIONS = {
     8: [("brain", "tools", ("Agent",))],
+    # 11: Werkzeugsuche. Ohne sie schickt Claude Code bei jeder Frage die Beschreibungen aller Konnektor-Werkzeuge
+    # mit (bei Georgs vielen Konnektoren über 1 MB), mit ihr nur die, die er gerade braucht (getestet mit echtem
+    # Claude Code: 810 statt 9 Werkzeuge bei 800 Konnektor-Werkzeugen).
+    11: [("brain", "tools", ("ToolSearch",))],
 }
 
 
@@ -126,10 +130,13 @@ def upgrade_config(path: Path | None = None) -> list[str]:
         for section, key, items in _LIST_ADDITIONS.get(target, []):
             current = (data.get(section) or {}).get(key)
             if isinstance(current, list) and current and any(item not in current for item in items):
-                grown = current + [item for item in items if item not in current]
+                new_items = [item for item in items if item not in current]
+                grown = current + new_items
                 save_setting(section, key, grown, path)
                 data[section][key] = grown
-                changed[f"{section}.{key}"] = f"{section}.{key}: mit {', '.join(items)}"
+                earlier = changed.get(f"{section}.{key}", "")
+                added = (earlier.split(": mit ", 1)[1] + ", " if ": mit " in earlier else "") + ", ".join(new_items)
+                changed[f"{section}.{key}"] = f"{section}.{key}: mit {added}"
         for section, key, items in _LIST_REMOVALS.get(target, []):
             current = (data.get(section) or {}).get(key)
             if isinstance(current, list) and any(item in current for item in items):
