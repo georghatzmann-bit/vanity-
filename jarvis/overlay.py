@@ -452,6 +452,27 @@ def _fullscreen_app() -> bool:
         return False
 
 
+def _foreground_is_ours() -> bool:
+    """True, wenn das Fenster ganz vorne zu Jarvis selbst gehört (sein Fenster im Vollbild ist kein Spiel)."""
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.WinDLL("user32")
+        user32.GetForegroundWindow.restype = wintypes.HWND
+        user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return False
+        pid = wintypes.DWORD(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        return pid.value == os.getpid()
+    except Exception:
+        return False
+
+
 # ---------------------------------------------------------------------- Windows
 
 class _LayeredWindow:

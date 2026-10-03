@@ -402,7 +402,7 @@ class VoiceLoop:
         threading.Thread(target=sound or self._sounds.listening, name="jarvis-ton", daemon=True).start()
         listen_cfg = self._cfg["listen"]
         if follow_up:
-            if self._conversation and self._blueprint_open():
+            if self._conversation and self._blueprint_open() and self._may_talk():
                 seconds = max(self._conversation_seconds, BLUEPRINT_SECONDS)
             elif self._talking and self._conversation:
                 seconds = self._conversation_seconds
@@ -498,17 +498,22 @@ class VoiceLoop:
 
     def _may_talk(self) -> bool:
         """Beim Zocken (Gaming-Modus, Vollbild) kein Gespräch: Dann redet Georg meist mit anderen. Am offenen
-        Blueprint zählt Vollbild nicht (das ist dann Jarvis' eigenes Fenster)."""
+        Blueprint zählt Vollbild nicht, wenn vorne Jarvis' eigenes Fenster ist. Ist Georg vom Blueprint ins Spiel
+        gewechselt (der Blueprint bleibt dabei offen), gilt wieder: kein Gespräch."""
         assistant = self._assistant
         if getattr(assistant, "gaming", False):
             return False
-        if self._blueprint_open():
-            return True
         fullscreen = getattr(assistant, "_fullscreen", None)
         try:
-            return not (fullscreen is not None and fullscreen())
+            if not (fullscreen is not None and fullscreen()):
+                return True
         except Exception:
             return True
+        own_window = getattr(assistant, "_own_window_in_front", None)
+        try:
+            return self._blueprint_open() and own_window is not None and bool(own_window())
+        except Exception:
+            return False
 
     def _check_name(self) -> None:
         """Zweite Stufe für "Jarvis" allein, "Hallo Jarvis" und Co.: Erst nur die letzten zwei

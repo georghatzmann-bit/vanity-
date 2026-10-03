@@ -84,6 +84,7 @@ class ConversationTest(unittest.TestCase):
         assistant, _ui, _speaker, mute = make(FakeBrain())
         assistant.blueprint = type("Open", (), {"active": True})()
         assistant._fullscreen = lambda: True  # Jarvis' eigenes Fenster im Vollbild zählt am Blueprint nicht
+        assistant._own_window_in_front = lambda: True
         submitted = []
         assistant.submit = submitted.append
         loop = VoiceLoop(cfg, FakeMic(frames, events), FakeWake([0.9], events),
@@ -92,6 +93,26 @@ class ConversationTest(unittest.TestCase):
         with self.assertRaises(StopLoop):
             loop.run()
         self.assertEqual(submitted, ["Bau mir eine Drohne", "Mach die Arme länger"])
+
+    def test_blueprint_left_open_while_gaming_is_no_conversation(self):
+        """Georg wechselt vom Blueprint in ein Spiel im Vollbild, der Blueprint bleibt offen: Dann redet er mit
+        anderen. Ohne "Hey Jarvis" geht nichts an Jarvis (sonst 90 Sekunden offenes Mikrofon im Spiel)."""
+        frames = [QUIET] + SENTENCE + [QUIET] * 3 + SENTENCE + [QUIET] * 3
+        events = []
+        cfg = load_config()
+        cfg["listen"].update(silence_seconds=0.24, energy_threshold=1000, gespraech_sekunden=0.5)
+        assistant, _ui, _speaker, mute = make(FakeBrain())
+        assistant.blueprint = type("Open", (), {"active": True})()
+        assistant._fullscreen = lambda: True
+        assistant._own_window_in_front = lambda: False  # vorne ist das Spiel
+        submitted = []
+        assistant.submit = submitted.append
+        loop = VoiceLoop(cfg, FakeMic(frames, events), FakeWake([0.9], events),
+                         Said("Bau mir eine Drohne", "Rechts ist einer, pass auf"), assistant, mute, Sounds(events), "X",
+                         hints=None)
+        with self.assertRaises(StopLoop):
+            loop.run()
+        self.assertEqual(submitted, ["Bau mir eine Drohne"])
 
     def test_can_be_switched_off(self):
         frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3

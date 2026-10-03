@@ -1395,6 +1395,15 @@ class Assistant:
         except Exception:
             return False
 
+    def _own_window_in_front(self) -> bool:
+        """Ist das Fenster ganz vorne Jarvis' eigenes (etwa der Blueprint im Vollbild) und kein Spiel?"""
+        try:
+            from .overlay import _foreground_is_ours
+
+            return bool(_foreground_is_ours())
+        except Exception:
+            return False
+
     def _take_offer(self):
         offer, self._offer = self._offer, None
         if offer is None or time.monotonic() > offer[1]:
