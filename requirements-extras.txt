@@ -11,3 +11,6 @@ Send2Trash>=1.8
 piper-tts>=1.8,<2
 # QR-Code zum Koppeln der Handy-App
 qrcode>=7.4
+# Videos ansehen (TikTok, YouTube, Instagram ...): herunterladen, Bilder und Ton macht Jarvis selbst (video.py).
+# [default] bringt den Baustein für YouTube mit (yt-dlp-ejs; YouTube braucht dazu Deno oder Node.js).
+yt-dlp[default]>=2025.11

@@ -3,8 +3,8 @@ Claude-App), nicht für Jarvis.
 
 Georg zu den Videos: "Adde das bitte alles als Plugins zu Claude, nicht zu Jarvis". Der Marktplatz "jarvis-plugins"
 liegt im Jarvis-Ordner (.claude-plugin/marketplace.json, die Plugins unter claude-plugins/): Gedächtnis, Lernen,
-Assistent, Körper und Geld. Jarvis meldet ihn beim Start einmal bei Claude Code an und installiert die Plugins, die
-Ordner für Körper, Assistent und Geld liegen im Notizbuch. Claude Code lädt Plugins aus einem lokalen Marktplatz
+Assistent, Körper, Geld und Video. Jarvis meldet ihn beim Start einmal bei Claude Code an und installiert die Plugins,
+die Ordner für Körper, Assistent und Geld liegen im Notizbuch. Video nutzt Jarvis' eigenes Python (jarvis/video.py). Claude Code lädt Plugins aus einem lokalen Marktplatz
 direkt aus dem Ordner, ein Jarvis-Update bringt neue Fassungen also von selbst mit.
 
 Das offizielle "claude-code-setup" von Anthropic und die fremden Plugins aus den Videos (Everything Claude Code,
@@ -30,8 +30,9 @@ from .config import ROOT, STATE_DIR
 log = logging.getLogger(__name__)
 
 MARKETPLACE = "jarvis-plugins"
-OWN = ("gedaechtnis", "lernen", "assistent", "koerper", "geld")
+OWN = ("gedaechtnis", "lernen", "assistent", "koerper", "geld", "video")
 NAMES = {"gedaechtnis": "Gedächtnis", "lernen": "Lernen", "assistent": "Assistent", "koerper": "Körper", "geld": "Geld",
+         "video": "Video",
          "claude-code-setup": "Claude Code Setup", "ecc": "Everything Claude Code", "task-observer": "Task Observer",
          "mem-thedotmack": "Claude Mem"}
 FOLDERS = {"assistent": "Assistent", "koerper": "Körper", "geld": "Geld"}  # userConfig "ordner" im Notizbuch
@@ -70,6 +71,15 @@ def photo_hint(cfg: dict, root: Path | None = None) -> str:
             '<Eiweiß g> <Kohlenhydrate g> <Fett g>` aufrufen, die Werte für die ganze Menge. Die Ausgabe nennt die '
             "Tagessumme. Antworte kurz: was du erkannt hast, die Summe der Mahlzeit, der Tag bisher, und wo du unsicher "
             "bist.")
+
+
+def jarvis_python() -> str:
+    """Jarvis' eigenes Python für das Video-Plugin: python.exe, nicht pythonw.exe (Jarvis läuft ohne Konsole, Claude
+    braucht aber die Ausgabe)."""
+    exe = Path(sys.executable)
+    if exe.name.lower() == "pythonw.exe" and (exe.parent / "python.exe").exists():
+        return str(exe.parent / "python.exe")
+    return str(exe)
 
 
 def find_git() -> str | None:
@@ -160,6 +170,8 @@ class Plugins:
         args = ["install", f"{plugin}@{market}", "--scope", "user"]
         if market == MARKETPLACE and plugin in FOLDERS:
             args += ["--config", f"ordner={self._folder(plugin)}"]
+        if market == MARKETPLACE and plugin == "video":
+            args += ["--config", f"python={jarvis_python()}", "--config", f"jarvis={self._root}"]
         return self._cli(*args)
 
     def setup(self, extras: tuple[str, ...] = ()) -> dict:

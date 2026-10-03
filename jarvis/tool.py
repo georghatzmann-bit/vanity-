@@ -58,7 +58,7 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
   claude-plugins [einrichten|status] [ecc task-observer mem-thedotmack]
                                richtet Georgs Plugins für sein Claude ein (Gedächtnis, Lernen, Assistent, Körper,
-                               Geld; die drei Namen danach sind die fremden Extras aus den Videos)
+                               Geld, Video; die drei Namen danach sind die fremden Extras aus den Videos)
   einkauf                      zeigt Georgs Einkaufsliste
   einkauf dazu "<ding>" ["<ding>" ...]   setzt etwas auf die Einkaufsliste ("Mandelmus")
   einkauf weg "<ding>" ["<ding>" ...]    hakt etwas ab (gekauft)
@@ -66,6 +66,9 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
                                trägt ein Lebensmittel ins Ernährungs-Tagebuch ein (Notizbuch, Ordner Körper, wie das
                                Claude-Plugin Körper) und nennt die Tagessumme; Werte für die ganze Menge
   essen heute|gestern|<JJJJ-MM-TT>   zeigt, was an dem Tag gegessen wurde
+  video "<link|datei>" [--bilder N] [--ohne-ton] [--neu]
+                               sieht sich ein Video an (TikTok, YouTube, Instagram ... oder eine Datei): Übersichts-
+                               bilder mit Zeit und das Transkript; die Übersichtsbilder danach mit Read ansehen
   befehl "<name>" "<was>"      legt einen eigenen Befehl an: sagt Georg den Namen, erledigt Jarvis "<was>"
                                (z. B. befehl "Zockmodus" "Öffne Discord und Steam und mach den Gaming-Modus an")
   befehle                      zeigt Georgs eigene Befehle
@@ -355,6 +358,11 @@ def _dispatch(command: str, rest: list[str]) -> int:
             return 1
         print(koerper.describe(result))
         return 0
+
+    if command in ("video", "video-ansehen"):
+        from . import video
+
+        return video.main(rest, cfg, prog="python -m jarvis.tool video")
 
     if command in ("befehl", "befehle", "befehl-loeschen", "befehl-löschen"):
         from .memory import Memory

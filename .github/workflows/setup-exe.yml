@@ -214,6 +214,13 @@ jobs:
           Pop-Location
           & $claude plugin list
           if ($ok -ne 0) { Write-Host "Die Plugins ließen sich nicht einrichten"; exit 1 }
+          # Das Video-Plugin braucht Jarvis' python.exe (nicht pythonw.exe) und den Jarvis-Ordner
+          $settings = Get-Content "$env:CLAUDE_CONFIG_DIR\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+          $video = $settings.pluginConfigs.'video@jarvis-plugins'.options
+          Write-Host "Video-Plugin: python=$($video.python) jarvis=$($video.jarvis)"
+          if (-not $video -or -not (Test-Path $video.python) -or $video.python -match "pythonw" -or -not (Test-Path "$($video.jarvis)\jarvis\video.py")) {
+            Write-Host "Das Video-Plugin hat Python oder den Jarvis-Ordner nicht"; exit 1
+          }
 
       - name: Probe unsichtbarer Arbeitsplatz (Werkstatt-Tests poppen nicht auf)
         if: ${{ !inputs.nur_bilder }}
@@ -455,6 +462,18 @@ jobs:
           Pop-Location
           if (-not $ok) { Write-Host "Die lokale Stimme hat im laufenden Jarvis nicht geladen"; exit 1 }
           Write-Host "Lokale Stimme im laufenden Jarvis: OK"
+
+      - name: Probe Video ansehen (yt-dlp, Bilder, Ton mit Parakeet, Umlaute im Dateinamen)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          Push-Location "$env:LOCALAPPDATA\Programs\Jarvis"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_video.py"
+          $ok = $LASTEXITCODE
+          Pop-Location
+          exit $ok
 
       - name: Probe Fehlerweg (ohne Internet muss eine klare Meldung kommen)
         if: ${{ !inputs.nur_bilder }}

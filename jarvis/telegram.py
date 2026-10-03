@@ -47,7 +47,9 @@ API = "https://api.telegram.org"
 PAIR_MINUTES = 15
 MAX_VOICE_BYTES = 20 * 1024 * 1024  # mehr liefert Telegram Bots ohnehin nicht aus
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
+MAX_VIDEO_BYTES = 20 * 1024 * 1024  # mehr gibt Telegram einem Bot nicht heraus (getFile)
 PHOTO_DAYS = 30  # so lange bleiben geschickte Fotos auf dem PC
+VIDEO_DAYS = 14  # Videos sind größer: kürzer
 VOICE_CHARS = 900  # so viel liest Jarvis in einer Sprachnachricht vor
 TOKEN_FORMAT = re.compile(r"^\d{5,12}:[A-Za-z0-9_-]{30,50}$")
 # Live-Standort: so selten fragt Jarvis nach Supermärkten, und so nah muss einer sein
@@ -63,7 +65,8 @@ COMMANDS = [
     {"command": "hilfe", "description": "Was Jarvis hier kann"},
 ]
 HELP = ("Schreiben Sie mir, was ich tun soll, oder schicken Sie eine Sprachnachricht, Sir. Ich erledige es wie am PC. "
-        "Fotos sehe ich mir an (Essen trage ich ins Ernährungs-Tagebuch ein). Schicken Sie mir Ihren Standort, sage ich "
+        "Fotos und Videos sehe ich mir an, auch einen TikTok- oder YouTube-Link (Essen trage ich ins "
+        "Ernährungs-Tagebuch ein). Schicken Sie mir Ihren Standort, sage ich "
         "Ihnen, wo der nächste Supermarkt ist und was auf der Einkaufsliste steht. /einkauf zeigt die Liste, "
         "/briefing das Briefing für heute.")
 PLACE_HELP = ("Tippen Sie unten auf die Büroklammer, dann auf Standort, Sir. „Live-Standort teilen“ heißt: Ich melde "
@@ -446,6 +449,11 @@ class TelegramBot:
             caption = str(message.get("caption") or "").strip()
             self._spawn(self._photo, photo, caption, "jarvis-telegram-foto")
             return
+        clip = _video_file(message)
+        if clip is not None:
+            caption = str(message.get("caption") or "").strip()
+            self._spawn(self._video, clip, caption, "jarvis-telegram-video")
+            return
         if isinstance(location, dict) and "latitude" in location:
             self._spawn(self.place, location, False, "jarvis-telegram-standort")
             return
@@ -543,10 +551,31 @@ class TelegramBot:
                 f"{path}. Antworte kurz wie in einem Chat.{(' ' + self.photo_hint) if self.photo_hint else ''})")
         self._answer(caption or "Was sagst du zu dem Foto?", False, extra=note)
 
-    def _keep_photo(self, data: bytes, suffix: str) -> Path:
-        folder = self._folder / "fotos"
+    def _video(self, clip: dict, caption: str) -> None:
+        """Ein Video (auch eine runde Videonachricht): ablegen, dann sieht Claude es sich mit jarvis.video an."""
+        if self._folder is None:
+            self.send("Videos kann ich hier gerade nicht ansehen, Sir.")
+            return
+        try:
+            if int(clip.get("file_size") or 0) > MAX_VIDEO_BYTES:
+                self.send("Das Video ist mir zu groß, Sir (Telegram gibt mir höchstens 20 MB). Schicken Sie mir "
+                          "lieber den Link, zum Beispiel aus TikTok über Teilen.")
+                return
+            data = self._download(clip["file_id"], MAX_VIDEO_BYTES)
+            path = self._keep_photo(data, clip.get("suffix") or ".mp4", "videos")
+        except Exception as exc:
+            log.info("Telegram, Video: %s", type(exc).__name__)
+            self.send("Das Video konnte ich leider nicht laden, Sir.")
+            return
+        note = (f'(Dazu hat Georg dir über Telegram ein Video geschickt: {path}. Sieh es dir mit `python -m jarvis.tool '
+                f'video "{path}"` an (timeout 600000), dann die Übersichtsbilder mit dem Read-Werkzeug. Antworte kurz '
+                f"wie in einem Chat.)")
+        self._answer(caption or "Was passiert in dem Video?", False, extra=note)
+
+    def _keep_photo(self, data: bytes, suffix: str, kind: str = "fotos") -> Path:
+        folder = self._folder / kind
         folder.mkdir(parents=True, exist_ok=True)
-        cutoff = time.time() - PHOTO_DAYS * 86400
+        cutoff = time.time() - (VIDEO_DAYS if kind == "videos" else PHOTO_DAYS) * 86400
         for old in folder.glob("*"):
             try:
                 if old.is_file() and old.stat().st_mtime < cutoff:
@@ -554,7 +583,8 @@ class TelegramBot:
             except OSError:
                 pass
         stamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        suffix = suffix if re.fullmatch(r"\.(?:jpe?g|png|webp|gif|heic)", suffix.lower()) else ".jpg"
+        allowed = r"\.(?:mp4|mov|webm|mkv|m4v|3gp)" if kind == "videos" else r"\.(?:jpe?g|png|webp|gif|heic)"
+        suffix = suffix if re.fullmatch(allowed, suffix.lower()) else (".mp4" if kind == "videos" else ".jpg")
         path = folder / f"{stamp}_{secrets.token_hex(2)}{suffix.lower()}"
         path.write_bytes(data)
         return path
@@ -654,6 +684,20 @@ class TelegramBot:
                                      "title": shop["name"], "address": shop.get("adresse") or "Supermarkt"}, timeout=15)
         except TelegramError as exc:
             log.info("Telegram, Ort: %s", exc)
+
+
+def _video_file(message: dict) -> dict | None:
+    """Ein Video, eine runde Videonachricht oder ein Video als Datei."""
+    for key in ("video", "video_note", "animation"):
+        item = message.get(key)
+        if isinstance(item, dict) and item.get("file_id"):
+            name = str(item.get("file_name") or "")
+            return {**item, "suffix": ("." + name.rsplit(".", 1)[-1]) if "." in name else ".mp4"}
+    document = message.get("document")
+    if isinstance(document, dict) and str(document.get("mime_type") or "").startswith("video/") and document.get("file_id"):
+        name = str(document.get("file_name") or "")
+        return {**document, "suffix": ("." + name.rsplit(".", 1)[-1]) if "." in name else ".mp4"}
+    return None
 
 
 def _photo_file(message: dict) -> dict | None:

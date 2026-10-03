@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "jarvis-plugins",
-  "description": "Georgs Plugins für Claude: Gedächtnis über Sitzungen, Lernen aus Korrekturen, Assistent mit Spezialisten, Körper-Tagebuch und Geld-Check. Dazu geprüfte fremde Plugins aus den Videos als Option.",
+  "description": "Georgs Plugins für Claude: Gedächtnis über Sitzungen, Lernen aus Korrekturen, Assistent mit Spezialisten, Körper-Tagebuch, Geld-Check und Videos ansehen. Dazu geprüfte fremde Plugins aus den Videos als Option.",
   "owner": {
     "name": "Georg"
   },
@@ -40,6 +40,13 @@
       "description": "Geld-Check für Shop und Werbung mit konkreten Vorschlägen, Produkttexte und ehrliche Ideen. Umgesetzt wird nur nach deinem Ja.",
       "category": "productivity",
       "tags": ["shop", "werbung", "umsatz"]
+    },
+    {
+      "name": "video",
+      "source": "./claude-plugins/video",
+      "description": "Claude sieht Videos wirklich an: TikTok, YouTube, Instagram oder eine Datei. Übersichtsbilder mit Zeitstempel und Transkript, sparsam mit Tokens, alles auf dem PC.",
+      "category": "productivity",
+      "tags": ["video", "tiktok", "youtube"]
     },
     {
       "name": "ecc",

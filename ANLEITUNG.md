@@ -114,6 +114,7 @@ Was du damit machen kannst:
 - **Schreiben oder sprechen:** einfach eine Nachricht oder eine Sprachnachricht schicken, zum Beispiel „Was steht heute an?“ oder „Installiere CS2“. Auf eine Sprachnachricht antwortet Jarvis auch gesprochen.
 - **Jarvis meldet sich von selbst:** Erinnerungen, Hinweise und das Briefing kommen zu dir, wenn du nicht am PC sitzt, auch als kurze Sprachnachricht, wie ein Anruf. Fragt er etwas mit Ja oder Nein („Soll ich den PC herunterfahren?“), tippst du einfach auf **Ja** oder **Nein**.
 - **Fotos:** Schick ein Foto vom Essen, und Jarvis schätzt Mengen und Nährwerte und trägt sie ins Ernährungs-Tagebuch ein (Notizbuch, Ordner `Körper`). Er sagt dir auch, wo du heute stehst. Andere Fotos sieht er sich an und sagt etwas dazu. Schreib eine Frage dazu, wenn du etwas Bestimmtes wissen willst.
+- **Videos:** In TikTok, Instagram oder YouTube auf **Teilen**, dann Telegram und deinen Jarvis-Bot wählen, und eine Frage dazuschreiben („Was zeigt er da?“, „Bau das nach“, „Lohnt sich das?“). Jarvis lädt das Video, sieht sich die Bilder an und hört mit. Ein Video direkt aus der Galerie geht auch (bis 20 MB, sonst den Link schicken).
 - **Standort und Einkaufsliste:** unten auf die Büroklammer, dann **Standort**. Jarvis nennt den nächsten Supermarkt mit Weg und was auf deiner Einkaufsliste steht. Mit **Live-Standort teilen** meldet er sich unterwegs, wenn du an einem Supermarkt vorbeikommst und etwas auf der Liste steht („Ach, und wo Sie gerade eh unterwegs sind, Chef: …“). Höchstens alle halbe Stunde, und für denselben Laden höchstens alle vier Stunden.
 - **Menü im Chat:** /einkauf (die Liste), /briefing (der Tag), /standort (so geht das mit dem Standort), /hilfe.
 
@@ -320,7 +321,7 @@ Oben auf **System** klicken oder sagen: **„Zeig mir das System“** (auch „�
 
 Was in den Videos Claude besser gemacht hat, bekommt **dein Claude** (Claude Code in der Eingabeaufforderung und im Code-Bereich der Claude-App), nicht Jarvis. Das richtet Jarvis beim ersten Start von selbst ein, du musst nichts tun.
 
-**Geklappt, wenn:** in der Eingabeaufforderung `claude plugin list` die Plugins `gedaechtnis`, `lernen`, `assistent`, `koerper` und `geld` (jeweils `@jarvis-plugins`) mit „enabled“ zeigt. In Claude Code siehst du sie auch mit `/plugin`. Fehlt etwas, sag **„Richte die Claude-Plugins ein“**, dann macht Jarvis es noch einmal und sagt, was geklappt hat.
+**Geklappt, wenn:** in der Eingabeaufforderung `claude plugin list` die Plugins `gedaechtnis`, `lernen`, `assistent`, `koerper`, `geld` und `video` (jeweils `@jarvis-plugins`) mit „enabled“ zeigt. In Claude Code siehst du sie auch mit `/plugin`. Fehlt etwas, sag **„Richte die Claude-Plugins ein“**, dann macht Jarvis es noch einmal und sagt, was geklappt hat.
 
 So benutzt du sie in Claude Code (neue Sitzung starten, damit sie geladen sind):
 
@@ -329,6 +330,7 @@ So benutzt du sie in Claude Code (neue Sitzung starten, damit sie geladen sind):
 3. **Assistent:** `/assistent:briefing` für deinen Tag, `/assistent:faq` für Kundenfragen, `/assistent:dashboard` mit einem Bild von einem Dashboard, das dir gefällt. Für Mails, Kalender, Shop und Werbung hat er eigene Spezialisten. Senden und Buchen nur nach deinem Ja.
 4. **Körper:** ein Foto vom Essen in Claude Code ziehen und „Trag das ein“ sagen, Trainingssätze nennen („Bankdrücken 3x8 mit 80 kg“) oder Schlaf und Puls. `/koerper:koerper-dashboard` zeigt alles als Seite. Dasselbe Tagebuch füllt Jarvis über Telegram.
 5. **Geld:** `/geld:geld-check` sieht sich Shop und Werbung an und macht genau drei Vorschläge mit ehrlicher Schätzung. `/geld:produkt-texte` verbessert Produkttexte, `/geld:ideen` sammelt ehrlich, womit du zusätzlich Geld verdienen kannst. Umgesetzt wird nur, was du bestätigst.
+6. **Video:** Schick Claude einen Link (TikTok, YouTube, Instagram) oder den Pfad zu einer Videodatei und frag, was du wissen willst („Was sind die zwei Tools in dem Video?“). Claude lädt das Video, liest das Transkript und sieht sich Übersichtsbilder mit Zeitstempel an, Einzelbilder nur, wenn er etwas genau lesen muss. Das läuft auf deinem PC, kostet nichts extra und spart Kontingent: ein Übersichtsbild zeigt neun Szenen und kostet so viel wie ein Foto.
 
 Die Tabellen und Seiten von Assistent, Körper und Geld liegen im Notizbuch unter `Assistent`, `Körper` und `Geld`, also auch in Obsidian.
 
@@ -339,6 +341,20 @@ Die Tabellen und Seiten von Assistent, Körper und Geld liegen im Notizbuch unte
 **Die Plugins aus den Videos** gibt es nur, wenn du sie willst: **„Installiere Everything Claude Code“** (fast 300 Skills fürs Programmieren, kostet viel Kontext), **„Installiere Task Observer“** (das Original zu Lernen) oder **„Installiere Claude Mem“** (Gedächtnis mit eigenem Hintergrunddienst, braucht Node.js und kostet Kontingent). Für den Alltag reichen Gedächtnis und Lernen. Wieder weg: in der Eingabeaufforderung `claude plugin uninstall ecc@jarvis-plugins` (bei den anderen `task-observer@jarvis-plugins` und `mem-thedotmack@jarvis-plugins`).
 
 **Nicht dabei:** OmniRoute schickt deine Anfragen an über 200 fremde KI-Dienste, sobald dein Claude-Kontingent leer ist; Headroom kürzt als Zwischendienst deinen Verlauf. Beides lässt fremde Software alles mitlesen, was du schreibst, und bei OmniRoute antwortet dann gar nicht mehr Claude. Darum ist es nicht eingebaut.
+
+## Videos ansehen: Jarvis guckt mit
+
+Claude konnte bisher keine Videos ansehen, nur Titel und Beschreibung lesen. Jetzt lädt Jarvis das Video, holt Bilder mit Zeitstempel heraus und schreibt mit, was gesagt wird. So geht's:
+
+1. **Vom Handy:** In TikTok, Instagram oder YouTube auf **Teilen**, dann **Telegram** und deinen Jarvis-Bot. Schreib eine Frage dazu, zum Beispiel „Was zeigt er da?“.
+2. **Am PC:** Den Link kopieren und sagen **„Schau dir das Video an“** (Jarvis nimmt den Link aus der Zwischenablage) oder den Link ins Eingabefeld im Fenster einfügen.
+3. Jarvis antwortet auf deine Frage, mit Zeitstempeln („bei 0:41 zeigt er …“).
+
+**Geklappt, wenn:** Jarvis Dinge nennt, die nur im Bild zu sehen sind (ein Programm, Text auf dem Bildschirm), nicht nur den Titel.
+
+Ein kurzes TikTok dauert etwa 15 Sekunden, ein langes YouTube-Video ein paar Minuten (der Ton wird auf deinem PC mitgeschrieben). Dasselbe Video ein zweites Mal geht sofort, es bleibt zwei Wochen im Zwischenspeicher (`%LOCALAPPDATA%\Jarvis\videos`). Private oder gelöschte Videos lassen sich nicht laden, Instagram verlangt manchmal eine Anmeldung: Dann das Video aufs Handy speichern und direkt an den Telegram-Bot schicken.
+
+**YouTube** braucht ein kleines Zusatzprogramm namens Deno. Klappt ein YouTube-Video nicht, installiert Jarvis es von selbst (oder du sagst **„Installiere Deno“**) und versucht es noch einmal.
 
 ## Gehirn: Jarvis wählt das passende Modell
 

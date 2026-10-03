@@ -543,6 +543,43 @@ class TelegramTest(unittest.TestCase):
         self.assertFalse(old.exists())
         self.assertEqual(len(list((folder / "fotos").iterdir())), 1)
 
+    def test_video_goes_to_claude_with_the_video_tool(self):
+        bot, folder = self.photo_bot()
+        self.api.files["voice/clip.oga"] = b"MP4-Daten"
+        clip = telegram._video_file(message(42, video={"file_id": "clip", "file_size": 9, "mime_type": "video/mp4"}))
+        bot._video(clip, "Was zeigt er da?")
+        saved = list((folder / "videos").glob("*.mp4"))
+        self.assertEqual([p.read_bytes() for p in saved], [b"MP4-Daten"])
+        self.assertEqual(self.assistant.commands, [("Was zeigt er da?", False)])
+        self.assertIn(f'python -m jarvis.tool video "{saved[0]}"', self.assistant.extras[0])
+        self.assertIn("Read-Werkzeug", self.assistant.extras[0])
+
+    def test_round_video_notes_and_video_files(self):
+        bot, folder = self.photo_bot()
+        self.api.files["voice/rund.oga"] = b"x"
+        self.api.files["voice/datei.oga"] = b"y"
+        bot.handle(message(42, video_note={"file_id": "rund", "length": 240, "duration": 5}))
+        self.wait_until(lambda: self.api.texts(42))
+        self.assertEqual(self.assistant.commands, [("Was passiert in dem Video?", False)])
+        clip = telegram._video_file(message(42, document={"file_id": "datei", "mime_type": "video/quicktime",
+                                                          "file_name": "Urlaub.MOV"}))
+        self.assertEqual(clip["suffix"], ".MOV")
+        bot._video(clip, "")
+        self.assertIn(".mov", sorted(p.suffix for p in (folder / "videos").iterdir()))
+        self.assertIsNone(telegram._video_file(message(42, document={"file_id": "x", "mime_type": "application/zip"})))
+
+    def test_video_failures(self):
+        bot, folder = self.photo_bot()
+        bot._video({"file_id": "riesig", "file_size": telegram.MAX_VIDEO_BYTES + 1}, "")
+        bot._video({"file_id": "fehlt"}, "")
+        bot._folder = None
+        bot._video({"file_id": "egal"}, "")
+        texts = self.api.texts(42)
+        self.assertIn("Schicken Sie mir lieber den Link", texts[0])
+        self.assertEqual(texts[1:], ["Das Video konnte ich leider nicht laden, Sir.",
+                                     "Videos kann ich hier gerade nicht ansehen, Sir."])
+        self.assertEqual(self.assistant.commands, [])
+
     def test_location_names_the_nearest_supermarket_and_the_list(self):
         bot = self.bot(chat_id=42)
         bot._nearby = FakeNearby([ALDI, REWE])
@@ -667,7 +704,8 @@ class TelegramTest(unittest.TestCase):
         bot.handle(message(42, "/standort"))
         self.wait_until(lambda: len(self.assistant.commands) == 2)
         self.assertEqual(sorted(self.assistant.commands), [("Briefing", False), ("Was steht auf der Einkaufsliste?", False)])
-        self.assertIn("Live-Standort", self.api.texts(42)[0])
+        # Die beiden Befehle laufen nebenher: ihre Antwort kann vor der Standort-Hilfe ankommen
+        self.assertTrue(any("Live-Standort" in t for t in self.api.texts(42)), self.api.texts(42))
 
     def test_menu_is_set_after_pairing(self):
         bot = self.bot()

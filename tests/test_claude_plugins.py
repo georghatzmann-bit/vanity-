@@ -59,14 +59,17 @@ class PluginsTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(cli.calls[0], ["marketplace", "add", str(ROOT)])
         installs = [c for c in cli.calls if c[0] == "install"]
-        self.assertEqual([c[1] for c in installs][:5], [f"{p}@{MARKETPLACE}" for p in OWN])
+        self.assertEqual([c[1] for c in installs][:len(OWN)], [f"{p}@{MARKETPLACE}" for p in OWN])
         koerper = next(c for c in installs if c[1].startswith("koerper@"))
         self.assertEqual(koerper[-2:], ["--config", f"ordner={self.tmp / 'Notizbuch' / 'Körper'}"])
         self.assertIn("--scope", koerper)
         self.assertNotIn("--config", next(c for c in installs if c[1].startswith("gedaechtnis@")))
+        video = next(c for c in installs if c[1].startswith("video@"))
+        self.assertEqual(video[-4:], ["--config", f"python={claude_plugins.jarvis_python()}", "--config",
+                                      f"jarvis={ROOT}"], "das Video-Plugin nimmt Jarvis' Python und Ordner")
         self.assertIn(["marketplace", "add", "anthropics/claude-plugins-official"], cli.calls)
         self.assertIn("claude-code-setup@claude-plugins-official", cli.installed)
-        self.assertEqual(result["text"], "Claude hat jetzt Gedächtnis, Lernen, Assistent, Körper und Geld. "
+        self.assertEqual(result["text"], "Claude hat jetzt Gedächtnis, Lernen, Assistent, Körper, Geld und Video. "
                                          "Dazu Claude Code Setup.")
 
     def test_without_git_only_the_own_plugins(self):
@@ -128,7 +131,7 @@ class PluginsTest(unittest.TestCase):
     def test_status_and_broken_cli(self):
         cli = FakeCli(installed={f"gedaechtnis@{MARKETPLACE}", "claude-code-setup@claude-plugins-official"})
         status = self.plugins(cli).status()
-        self.assertEqual([p["installiert"] for p in status["plugins"]], [True, False, False, False, False])
+        self.assertEqual([p["installiert"] for p in status["plugins"]], [True] + [False] * (len(OWN) - 1))
         self.assertTrue(status["offiziell"][0]["installiert"])
 
         def broken(cmd, **kwargs):
@@ -236,6 +239,30 @@ class MarketplaceTest(unittest.TestCase):
             texts = [p.read_text(encoding="utf-8") for p in (ROOT / "claude-plugins" / plugin / "skills").glob("*/SKILL.md")]
             self.assertTrue(texts)
             self.assertTrue(any("${user_config.ordner}" in t for t in texts), plugin)
+
+    def test_video_skill_runs_jarvis_own_python(self):
+        manifest = json.loads((ROOT / "claude-plugins" / "video" / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(manifest["userConfig"]), {"python", "jarvis"})
+        skill = (ROOT / "claude-plugins" / "video" / "skills" / "ansehen" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn('& "${user_config.python}" -m jarvis.video', skill, "PowerShell")
+        self.assertIn('(cd "${user_config.jarvis}" && "${user_config.python}" -m jarvis.video', skill, "Bash")
+        self.assertIn('Push-Location "${user_config.jarvis}"', skill, "zurück in den alten Ordner danach")
+        self.assertIn("timeout 600000", skill)
+        self.assertTrue((ROOT / "jarvis" / "video.py").is_file())
+
+    def test_python_for_the_plugin_is_never_pythonw(self):
+        folder = self.tmp_scripts()
+        with mock.patch.object(claude_plugins.sys, "executable", str(folder / "pythonw.exe")):
+            self.assertEqual(claude_plugins.jarvis_python(), str(folder / "python.exe"))
+        with mock.patch.object(claude_plugins.sys, "executable", str(folder / "python.exe")):
+            self.assertEqual(claude_plugins.jarvis_python(), str(folder / "python.exe"))
+
+    def tmp_scripts(self):
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder, True)
+        for name in ("python.exe", "pythonw.exe"):
+            (folder / name).write_bytes(b"")
+        return folder
 
     def test_installer_ships_the_plugins_without_tests(self):
         iss = (ROOT / "installer" / "jarvis.iss").read_text(encoding="utf-8")
