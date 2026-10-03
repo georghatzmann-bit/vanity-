@@ -131,11 +131,31 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **Gespräch:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, ein gestrichelter Ring um die Kugel). Einfach weiterreden, ohne „Hey Jarvis“: „Und morgen?“ Schluss ist, wenn du nichts mehr sagst, oder mit **„Danke“**, **„Alles klar“** oder **„Tschüss“**. Beim Zocken (Gaming-Modus oder Vollbild) gibt es kein Gespräch, da redest du ja meist mit anderen. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Gespräch ohne Weckwort** ausschalten.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
-- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Blueprint**, **Verbinden** (Handy, Alexa, Discord, Konnektoren), **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht (Erinnerungen, Wecker, Timer), wie ausgelastet der PC ist, und das **Gedächtnis**.
+- **Das Fenster** hat zwei Ansichten, oben links umschaltbar: die **Zentrale** (dein Tag auf einen Blick, siehe unten) und das **Gespräch**. Im Gespräch steht in der Mitte Jarvis' Energie-Kugel in leuchtenden Ringen: Plasma-Bänder kreisen darin, beim Zuhören wird sie heller und schneller, beim Nachdenken blau-violett mit wirbelnden Bändern, beim Sprechen pulsiert sie mit der Stimme, ohne Mikrofon wird sie grau. Ein Klick, und er hört sofort zu. Links das Menü, was **heute** ansteht und die **aktuelle Aufgabe**, rechts der **Assistent** (es leuchtet, was er gerade macht: Verstehen, Denken, Erledigen, Sprechen), das **System** und das **Gedächtnis**. Darunter das Gespräch, Schnellbefehle und das Eingabefeld. Oben: **Werkstatt**, **Blueprint**, **Weltlage**, der **Gaming**-Schalter, **Verbinden** (Handy, Alexa, Konnektoren), **Verlauf** und die Einstellungen. Fährst du mit der Maus über ein Symbol, steht dort, was es tut.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
 - **„Stopp“** oder der Stopp-Knopf unterbricht Jarvis sofort, auch ein angekündigtes Herunterfahren.
+
+## Die Kommandozentrale: dein Tag auf einen Blick
+
+![Die Kommandozentrale beim Briefing](docs/bilder/zentrale.jpg)
+
+So startet das Fenster. Oben links schaltest du zwischen **Zentrale** und **Gespräch** um, Jarvis merkt sich die Wahl.
+
+- **Aktivität:** was Jarvis heute schon erledigt hat, das Neueste oben, dazu Haken für Posteingang, Kalender, Shop, Briefing und den wichtigsten Termin.
+- **Kennzahlen:** mit Shopify Umsatz, Bestellungen, Warenkorb und was auf den Versand wartet, mit Windsor.ai deine Werbekonten (ROAS, Ausgaben). Ganz rechts **Rückfragen an Sie**: was gerade auf deine Antwort wartet. Ohne diese Konnektoren zeigt Jarvis seinen eigenen Tag und deine Spiele.
+- **Tagesplan:** deine Termine aus Google Kalender als Zeitleiste, dazu deine Erinnerungen. Der rote Strich ist jetzt. Für den wichtigsten Termin stellt Jarvis von selbst eine Erinnerung eine Viertelstunde vorher.
+- **Posteingang:** die neuen Mails aus Gmail, das Wichtige oben (orange), daneben „offen“, „beantwortet“ oder „Werbung“. Ein Klick öffnet die Mail im Browser.
+- **Nachrichten:** tagesschau24 live, ohne Ton (das Lautsprecher-Symbol schaltet ihn an). Geht der Livestream nicht, kommt „tagesschau in 100 Sekunden“, sonst die wichtigste Schlagzeile. Unten laufen die Schlagzeilen, ein Klick öffnet sie auf tagesschau.de. Ist das Fenster versteckt oder du spielst, läuft kein Video.
+- **Spezialisten:** Posteingang, Kalender, Shop, Recherche, Texte und Technik mit ihrem Stand („Arbeitet“, „Schreibt“, „Wartet auf Sie“, „Fertig“).
+- **Mit Jarvis chatten** unten rechts bringt dich ins Gespräch, die lila Kugel daneben lässt ihn sofort zuhören.
+
+**Briefing:** Sag **„Briefing“**, **„Was steht heute an?“** oder morgens **„Guten Morgen“** (oder oben **Briefing**). Jarvis fängt sofort an: Mails, Shop, Termine, was heute dich braucht, eine Schlagzeile. Was er gerade vorliest, leuchtet orange auf, oben in der Aktivität steht es groß dabei. **„Stopp“** beendet es. Läuft gerade ein Spiel, holt er das Fenster dafür nicht nach vorne.
+
+**Wie aktuell ist das?** Oben rechts steht **Live**, wenn Mails, Termine und Shop jünger als eine halbe Stunde sind. Jarvis holt sie alle 30 Minuten neu, solange du am PC sitzt und nicht spielst, und sofort mit dem Pfeil oben oder **„Aktualisiere die Zentrale“**. Dafür liest ein eigener Claude-Prozess über deine Konnektoren, **nur lesend**: Er darf nichts senden, keine Entwürfe anlegen, nichts markieren und nichts ändern. Jede Runde ist eine kleine Claude-Anfrage und zählt zu deinem Abo. Seltener geht es in `config.toml` mit `[zentrale] aktualisieren_minuten = 60`.
+
+**Geklappt, wenn:** etwa eine Minute nach dem Start oben „Live“ steht und im Posteingang deine Mails sind. Steht dort „Gmail ist nicht verbunden“: auf claude.ai unter Einstellungen › Konnektoren Gmail verbinden (für Termine Google Kalender, für den Shop Shopify).
 
 ## Was du sagen kannst
 

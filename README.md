@@ -24,6 +24,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 
 - **Immer da, nie im Weg:** Autostart unsichtbar (nur das Symbol neben der Uhr). Beim Weckwort erscheint das Fenster ganz vorn, ohne den Fokus zu stehlen, und verschwindet nach dem Gespräch wieder. Bei Vollbild-Spielen und im Gaming-Modus bleibt es weg.
 - **Wie Jarvis aus dem Film:** kurz, ruhig, trockener britischer Humor, kein „Als KI …“. Für dich ist er einfach Jarvis, Claude bleibt unsichtbar.
+- **Kommandozentrale:** Das Fenster startet mit deinem Tag auf einen Blick (`zentrale.py`, `zentrale.js`): was Jarvis heute erledigt hat, Kennzahlen (Shop über Shopify, Werbekonten über Windsor.ai, sonst Jarvis' eigener Tag), Tagesplan als Zeitleiste mit roter Jetzt-Linie, Posteingang mit „wichtig“, „offen“, „beantwortet“ und „Werbung“, tagesschau24 live (hls.js, sonst „tagesschau in 100 Sekunden“ oder die Schlagzeile mit Foto) und die Spezialisten mit ihrem Stand. Mails, Termine und Shop holt alle 30 Minuten ein eigener Claude-Prozess über deine Konnektoren (`lage.py`, `brain.connector_job`), streng nur lesend: Jede Rückfrage von Claude Code beantwortet Jarvis selbst, senden, entwerfen, markieren, ändern und die Shell sind gesperrt. „Briefing“, „Was steht heute an?“ oder morgens „Guten Morgen“ liest Jarvis sofort vor, ohne auf Claude zu warten, und das Fenster hebt orange hervor, wovon er gerade spricht. Für den wichtigsten Termin stellt er eine Erinnerung eine Viertelstunde vorher.
 - **Volle Freigabe:** Jarvis installiert, deinstalliert, räumt in den Papierkorb, führt Administrator-Befehle aus (Windows fragt einmal), fährt herunter und startet neu, ohne nachzufragen. Herunterfahren hat 15 Sekunden Vorlauf, „Stopp“ hält es auf. Nur vor Käufen und vor Nachrichten, deren Inhalt du nicht selbst gesagt hast, fragt er. Abschaltbar in der Einrichtung (`[rechte] volle_freigabe`).
 - **Sofort-Befehle ohne Claude** (unter einer Sekunde): „Was kannst du?“, „Öffne Spotify“, „Schließ Discord“, „Installier mir Steam“, „Geh auf Reddit“, „Spiel Thunderstruck“, „Dunkelmodus an“, „Wie wird das Wetter morgen?“, „Was ist 15 mal 23?“, „Fahr den PC herunter“, „Gute Nacht“ (bietet das Herunterfahren an), „Weck mich um 7“, „Mach einen Screenshot“, „Minimiere alles“, „Wie viel Speicher ist frei?“, „Mach das Licht im Wohnzimmer an“, Lautstärke, Musik, Erinnerungen, Timer, mehrere Befehle auf einmal.
 - **Discord ohne Maus:** „Schreib Max auf Discord, bin gleich da“, „Geh in den Sprachkanal Zocken“, „Ruf Max auf Discord an“, „Discord stumm“. Jarvis nutzt Discords Schnellsuche und Tastenkürzel, prüft am Fenstertitel, ob er richtig gelandet ist, versucht es bei einer Störung (Maus bewegt, anderes Fenster vorn) von selbst noch zweimal und bringt dich danach zurück ins Spiel. Auch WhatsApp und Telegram.
@@ -46,9 +47,13 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** In der ersten Sprechpause erkennt Jarvis den Satz schon vorab. Ist es ein Sofort-Befehl („Öffne Spotify“), legt er nach knapp einer halben Sekunde Stille los statt nach einer. Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt. Im Protokoll steht pro Befehl eine Tempo-Zeile.
 - **Gespräch ohne Weckwort:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, Ring um die Kugel). Weiterreden reicht; „Danke“, „Alles klar“, „Tschüss“ oder Stille beenden das Gespräch. „Jarvis“, „Okay Jarvis“ und „Hallo Jarvis“ wecken ihn auch.
-- **Ruhiges, modernes Fenster:** eine ruhige Kugel aus feinen Linien als Jarvis' Gesicht (sie dreht sich langsam, mit der Stimme laufen Wellen hindurch, jede Aktion hat eine eigene Bewegung: Radar beim Suchen, Lichtpunkt bei Nachrichten, Takt bei Musik, Uhrzeiger bei Timern, Bau-Gitter in der Werkstatt; mit der Maus lässt sie sich neigen und drehen), darunter das Gespräch, rechts was heute ansteht, die Auslastung des PCs und das Gedächtnis. Keine Sci-Fi-Effekte, eine Akzentfarbe, dunkel. Nur die Werkstatt ist mit Absicht eine Blaupause mit Hologramm.
+- **Zwei Ansichten im Fenster:** oben umschalten zwischen **Zentrale** und **Gespräch**. Das Gespräch ist ein HUD: in der Mitte eine Energie-Kugel mit kreisenden Plasma-Bändern in leuchtenden Ringen (`plasma.js`, ein WebGL-Shader; ohne WebGL die ruhige Linien-Kugel aus `orb.js`), links Menü, was heute ansteht und die aktuelle Aufgabe, rechts der Assistent mit Verstehen, Denken, Erledigen und Sprechen (leuchtet, was gerade läuft), das System und das Gedächtnis. Darunter das Gespräch, Schnellbefehle und das Eingabefeld. Dunkel, eine Akzentfarbe, Orange nur für das, was dich angeht.
 - **Installer mit eigenem Fenster:** dieselbe Linienkugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
 - **Grafische Einrichtung**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
+
+| Kommandozentrale beim Briefing | Gespräch: Energie-Kugel im HUD |
+|---|---|
+| ![Die Kommandozentrale, die wichtige Mail leuchtet orange](docs/bilder/zentrale.jpg) | ![Das Gespräch mit der Energie-Kugel](docs/bilder/gespraech.jpg) |
 
 | Werkstatt-Projekte | Handy-App |
 |---|---|
@@ -169,6 +174,7 @@ jarvis/
   aussprache.py              Zahlen, Uhrzeiten, Kürzel und Englisch ausgeschrieben, bevor die Stimme spricht
   elevenlabs.py   Premium-Stimme auf Wunsch
   klang.py        Ähnlich klingende Namen finden (Kölner Phonetik): Programme, Kontakte, eigene Befehle
+  zentrale.py lage.py       Kommandozentrale: Aktivität, Kennzahlen, Tagesplan, Briefing; Lagebild über die Konnektoren (nur lesend)
   weltlage.py orte.py       Weltlage: Meldungen mit Ort, Lagebericht, Kurse, Flüge, Raumstation; Ortsverzeichnis
   spiele.py                 Spiele: Steam- und Epic-Bibliotheken, installieren, starten, Updates
   blaupause.py              Blueprint: 3D-Modelle aus Grundformen, Befehle per Sprache, Warteschlange, Speichern
@@ -176,6 +182,7 @@ jarvis/
   overlay.py desktop.py tray.py autostart.py pc.py homeassistant.py persona.py reminders.py tool.py
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
+                  zentrale.js zentrale.css plasma.js   Kommandozentrale und Gespräch im HUD, die Energie-Kugel (WebGL)
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause mit Hologramm, Projekt-Übersicht
                   blaupause.js blaupause.css Blueprint: Hologramm mit three.js, Explosionsansicht, STL, Foto aus Blender
                   weltlage.js weltlage.css   Weltlage: Satelliten-Erde oder Hologramm, Meldungen mit Foto, Flugverkehr, Märkte

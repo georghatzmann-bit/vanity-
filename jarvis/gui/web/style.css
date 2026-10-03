@@ -1529,7 +1529,7 @@ body[data-boot="2"] .rail > * {
   animation: rise 420ms var(--ease) both;
 }
 
-body[data-boot="2"] .stage > :nth-child(2) {
+body[data-boot="2"] .stage > :nth-child(1) {
   animation: orb-in 700ms var(--ease) both;
 }
 
@@ -1545,7 +1545,7 @@ body[data-boot="2"] .rail > :nth-child(4) {
   animation-delay: 180ms;
 }
 
-body[data-boot="2"] .stage > :nth-child(4) {
+body[data-boot="2"] .stage > :nth-child(3) {
   animation-delay: 160ms;
 }
 
@@ -1631,13 +1631,6 @@ body[data-view="hub"] .backdrop {
 }
 
 @media (max-width: 900px) {
-  .hud {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "top"
-      "stage";
-  }
-
   .rail {
     display: none;
   }

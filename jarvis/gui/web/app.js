@@ -68,6 +68,7 @@
   let Koppeln = null; // Handy, Alexa, Konnektoren (koppeln.js)
   let Blaupause = null; // 3D-Modelle als Hologramm (blaupause.js)
   let Weltlage = null; // Satelliten-Erde mit Lagebericht (weltlage.js)
+  let Zentrale = null; // Kommandozentrale und Gespräch im HUD (zentrale.js)
   let handsAllowed = true; // [weltlage] handsteuerung in config.toml
 
   // ------------------------------------------------------------------ Python-Brücke
@@ -143,6 +144,11 @@
     schedule_forget: (id) => window.pywebview.api.schedule_forget(id),
     notebook_open: () => window.pywebview.api.notebook_open(),
     answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
+    zentrale_state: () => window.pywebview.api.zentrale_state(),
+    zentrale_refresh: () => window.pywebview.api.zentrale_refresh(),
+    zentrale_briefing: () => window.pywebview.api.zentrale_briefing(),
+    zentrale_stop: () => window.pywebview.api.zentrale_stop(),
+    zentrale_open: (kind, ident) => window.pywebview.api.zentrale_open(kind, ident || ''),
   };
 
   function call(name, ...args) {
@@ -308,6 +314,7 @@
     if (!S.hintTimer) el.stateHint.textContent = hintFor(state);
     el.stopBtn.disabled = !(state === 'speaking' || state === 'thinking');
     Core.setState(state);
+    if (Zentrale) Zentrale.state(state);
     if (Blaupause && Blaupause.mic) Blaupause.mic(state, S.talking);
     if (state === 'listening') {
       // Neue Frage: alte Untertitel und Schritte weg
@@ -628,6 +635,7 @@
       return;
     }
     Activity.update(step);
+    if (Zentrale) Zentrale.step(step);
     // Die Kugel zeigt, was gerade läuft: Suchen, Öffnen, Installieren ... (eigene Bewegung je Art)
     const run = Activity.running();
     if (run) Core.gesture(run.kind, true);
@@ -759,6 +767,7 @@
       el.micBtn.setAttribute('aria-pressed', String(S.muted));
       el.micBtn.title = S.muted ? 'Mikrofon wieder einschalten' : 'Mikrofon stumm schalten';
       el.micBtnText.textContent = el.micBtn.title;
+      if (Zentrale) Zentrale.muted(S.muted);
       renderState();
     }
     if (typeof c.mic === 'string' && c.mic) el.micName.textContent = c.mic;
@@ -786,6 +795,7 @@
       S.gaming = !!c.gaming;
       el.gamingToggle.checked = S.gaming;
       el.gamingText.textContent = S.gaming ? 'An' : 'Aus';
+      if (Zentrale) Zentrale.gaming(S.gaming);
     }
     if (typeof c.version === 'string' && c.version) el.linkText.title = 'Jarvis ' + c.version;
     if (typeof c.name === 'string') {
@@ -841,6 +851,10 @@
         if (ev.action === 'hands') setHands(!!ev.on);
         else if (Weltlage) Weltlage.handle(ev);
         break;
+      case 'zentrale':
+        if (ev.action === 'show') showZentrale();
+        if (Zentrale) Zentrale.handle(ev);
+        break;
       case 'workshop':
         if (Blaupause && Blaupause.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Blaupause.close();
         if (Weltlage && Weltlage.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Weltlage.close();
@@ -856,7 +870,12 @@
           Werkstatt.handle(ev);
         }
         break;
-      case 'level': S.level = clamp(Number(ev.value) || 0, 0, 1); Core.level(S.level); break;
+      case 'level':
+        S.level = clamp(Number(ev.value) || 0, 0, 1);
+        Core.level(S.level);
+        if (Zentrale) Zentrale.level(S.level);
+        levelVar(S.level);
+        break;
       case 'toast': toast(ev.text, ev.kind); break;
       case 'suggestion': if (Gedaechtnis) Gedaechtnis.offer(ev.offer); break;
       case 'config': applyConfig(ev); break;
@@ -865,9 +884,31 @@
         setGauge(el.ramNum, el.ramRing, ev.ram);
         pushCpu(ev.cpu);
         renderGpu(ev.gpu);
+        if (Zentrale) Zentrale.stats(ev);
         break;
       default: break;
     }
+  }
+
+  // Die HUD-Ringe atmen mit der Stimme (zentrale.css: --lvl), höchstens einmal pro Bild
+  let levelFrame = 0;
+  let levelNow = 0;
+  function levelVar(value) {
+    levelNow = value;
+    if (levelFrame || !el.coreWrap) return;
+    levelFrame = requestAnimationFrame(() => {
+      levelFrame = 0;
+      el.coreWrap.style.setProperty('--lvl', levelNow.toFixed(3));
+    });
+  }
+
+  // "Briefing" oder "Zeig die Zentrale": was davor liegt (Blueprint, Erde, Werkstatt) geht zur Seite
+  function showZentrale() {
+    if (Blaupause && Blaupause.isOpen()) Blaupause.close();
+    if (Weltlage && Weltlage.isOpen()) Weltlage.close();
+    if (Werkstatt && Werkstatt.isOpen()) Werkstatt.close();
+    if (Projekte && Projekte.isOpen()) Projekte.close();
+    openDrawer(false);
   }
 
   async function pollLoop(gen) {
@@ -905,6 +946,7 @@
     }).catch(() => {});
     if (Gedaechtnis) Gedaechtnis.refresh();
     if (Koppeln && Koppeln.dots) Koppeln.dots();
+    if (Zentrale) call('zentrale_state').then((d) => Zentrale.load(d)).catch(() => {});
     refreshDeck();
     refreshToday();
     setInterval(refreshToday, 60000);
@@ -1078,11 +1120,13 @@
     let state = 'idle';
     return {
       start(node) {
-        if (!window.JarvisOrb) return;
-        // Liegt die Werkstatt darüber, muss die Kugel nicht zeichnen
-        orb = window.JarvisOrb.create(node, { mode: 'hero', visible: () => document.body.dataset.view === 'hud' });
+        // Liegt die Werkstatt darüber oder ist die Zentrale vorne, muss die Kugel nicht zeichnen
+        const visible = () => document.body.dataset.view === 'hud' && document.body.dataset.home === 'gespraech';
+        // Die Energie-Kugel im HUD (plasma.js, WebGL), ohne WebGL die ruhige Linien-Kugel (orb.js)
+        if (window.JarvisPlasma) orb = window.JarvisPlasma.create(node, { size: 'hero', visible });
+        if (!orb && window.JarvisOrb) orb = window.JarvisOrb.create(node, { mode: 'hero', visible });
         if (orb) orb.state(state);
-        document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark' }));
+        if (window.JarvisOrb) document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark' }));
       },
       setState(value) {
         state = value;
@@ -1133,6 +1177,8 @@
     // ?weltlage (Lagebericht Welt) oder =deutschland, &ziel=2 (bleibt bei Meldung 2), &flug (Flugverkehr)
     const wlMode = params.has('weltlage') ? (params.get('weltlage') || 'welt').toLowerCase() : '';
     const wlDemo = window.JarvisWeltlage ? window.JarvisWeltlage.demoApi(push) : null;
+    // ?briefing (Jarvis liest vor und hebt hervor), &bereich=2 (bleibt beim dritten Abschnitt stehen)
+    const ztDemo = window.JarvisZentrale ? window.JarvisZentrale.demo(push) : null;
     let shop = null;
     const startShop = (mode) => {
       if (!window.JarvisWerkstatt) return;
@@ -1239,6 +1285,11 @@
         gen += 1;
         const g = gen;
         const t = String(text || '').trim();
+        if (ztDemo && /^(?:briefing|guten morgen|was steht (?:heute )?an\??)$/i.test(t)) {
+          push({ type: 'message', role: 'user', text: t });
+          ztDemo.briefing();
+          return Promise.resolve(true);
+        }
         if (wlDemo && /was in der welt|lagebericht|weltlage|was (?:passiert|ist los) in deutschland|handsteuerung/i.test(t)) {
           push({ type: 'message', role: 'user', text: t });
           if (/handsteuerung/i.test(t)) {
@@ -1363,6 +1414,7 @@
       answer_suggestion: () => Promise.resolve(true),
       ...(bpDemo ? bpDemo.api : {}),
       ...(wlDemo || {}),
+      ...(ztDemo ? ztDemo.api : {}),
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
@@ -1410,6 +1462,10 @@
               wlDemo.demoBriefing(wlMode);
             }
           }, 700);
+        }
+        if (ztDemo && (params.has('briefing') || params.has('bereich'))) {
+          if (params.has('bereich')) setTimeout(() => ztDemo.focusOnly(Number(params.get('bereich')) || 0), 600);
+          else setTimeout(() => ztDemo.briefing(), 900);
         }
         if (shopMode) {
           // ?werkstatt=live|running|done|error: ein Auftrag zum Zuschauen
@@ -1594,6 +1650,7 @@
     }
     if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });
     if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
+    if (window.JarvisZentrale) Zentrale = window.JarvisZentrale.create({ call, toast, listenNow });
     refreshDeck();
     setInterval(refreshDeck, 60000);
     if (Gedaechtnis && /[?&]vorschlag\b/.test(location.search)) {

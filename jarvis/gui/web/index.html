@@ -11,12 +11,13 @@
   <link rel="stylesheet" href="werkstatt.css">
   <link rel="stylesheet" href="blaupause.css">
   <link rel="stylesheet" href="weltlage.css">
+  <link rel="stylesheet" href="zentrale.css">
 </head>
-<body data-state="idle" data-link="wait" data-boot="1" data-view="hud">
+<body data-state="idle" data-link="wait" data-boot="1" data-view="hud" data-home="zentrale">
   <div class="backdrop" aria-hidden="true"></div>
 
   <div class="hud" id="hud">
-    <!-- Kopfzeile: wer, wie es ihm geht, wohin -->
+    <!-- Kopfzeile: wer, wie es ihm geht, welche Ansicht, wohin -->
     <header class="top">
       <div class="brand">
         <canvas class="brand-orb" aria-hidden="true"></canvas>
@@ -27,12 +28,12 @@
         </span>
         <span class="link" id="link"><span class="link-dot" aria-hidden="true"></span><span id="linkText">Verbinde …</span></span>
       </div>
-      <nav class="top-actions" aria-label="Bereiche">
-        <label class="chip-toggle" title="Gaming-Modus: volle Leistung, keine Einblendungen. Oder sagen Sie „Gaming-Modus an“.">
-          <input type="checkbox" class="sr-input" id="gamingToggle">
-          <span class="chip-switch" aria-hidden="true"></span>
-          <span class="chip-text">Gaming <b id="gamingText">Aus</b></span>
-        </label>
+      <nav class="view-switch" aria-label="Ansichten">
+        <div class="view-tabs" role="tablist" aria-label="Ansicht">
+          <button type="button" role="tab" class="view-tab" id="tabZentrale" data-home="zentrale" aria-selected="true" aria-controls="zt" title="Kommandozentrale: Ihr Tag auf einen Blick. Oder sagen Sie „Briefing“.">Zentrale</button>
+          <button type="button" role="tab" class="view-tab" id="tabTalk" data-home="gespraech" aria-selected="false" aria-controls="talk" title="Gespräch mit Jarvis: die Energie-Kugel, was er gerade tut, Schnellbefehle">Gespräch</button>
+        </div>
+        <span class="view-sep" aria-hidden="true"></span>
         <button type="button" class="top-btn ws-pill" id="workshopPill" data-state="idle" title="Werkstatt: alle Projekte">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0 5 5l-8.8 8.8a2.1 2.1 0 0 1-3-3l8.8-8.8a4 4 0 0 0-2-2z"/><path d="m16 3 1.5 3.5L21 8"/></svg>
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
@@ -46,6 +47,26 @@
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
           <span class="ws-pill-text">Weltlage</span>
         </button>
+      </nav>
+      <div class="top-live" id="topLive">
+        <span class="live-mark" id="liveMark" data-state="aus" title="Wie aktuell Post, Kalender und Shop sind"><i aria-hidden="true"></i><span id="liveText">Lagebild</span></span>
+        <span class="top-events" title="Was Jarvis heute schon erledigt hat">Ereignisse heute <b id="topEvents">0</b></span>
+        <span class="top-clock" id="topClock">--:--</span>
+        <button type="button" class="top-btn" id="ztBriefing" title="Briefing: Jarvis liest Ihren Tag vor und zeigt, wovon er spricht. Oder sagen Sie „Briefing“ oder morgens „Guten Morgen“.">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <span class="ws-pill-text">Briefing</span>
+        </button>
+        <button type="button" class="icon-btn" id="ztRefresh" title="Post, Kalender und Shop jetzt neu holen (über Ihre Konnektoren, nur lesend)">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg>
+          <span class="sr-only">Lagebild aktualisieren</span>
+        </button>
+      </div>
+      <nav class="top-actions" aria-label="Bereiche">
+        <label class="chip-toggle" title="Gaming-Modus: volle Leistung, keine Einblendungen. Oder sagen Sie „Gaming-Modus an“.">
+          <input type="checkbox" class="sr-input" id="gamingToggle">
+          <span class="chip-switch" aria-hidden="true"></span>
+          <span class="chip-text">Gaming <b id="gamingText">Aus</b></span>
+        </label>
         <button type="button" class="top-btn phone-pill" id="phoneBtn" title="Handy und Alexa mit Jarvis verbinden, Konnektoren ansehen">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
           <span class="ws-pill-text">Verbinden</span>
@@ -66,105 +87,235 @@
       </nav>
     </header>
 
-    <!-- Mitte: Begrüßung, die Kugel, das Gespräch, Eingabe -->
-    <main class="stage">
-      <div class="greet">
-        <h1 class="greet-title" id="greetTitle">Guten Tag</h1>
-        <p class="greet-sub">
-          <span id="clockDate"></span>
-          <span class="sep" aria-hidden="true"></span>
-          <span class="clock-time" id="clockTime">--:--</span>
-          <span class="weather" id="weather" hidden><span class="sep" aria-hidden="true"></span><span id="weatherText"></span></span>
-        </p>
-      </div>
-
-      <div class="core-wrap" id="coreWrap" role="button" tabindex="0" aria-label="Jarvis sofort zuhören lassen" title="Klicken: Jarvis hört sofort zu. Mit gedrückter Maustaste drehen.">
-        <canvas id="core" aria-hidden="true"></canvas>
-      </div>
-
-      <div class="status">
-        <div class="subtitles" id="subtitles" aria-live="polite">
-          <p class="sub-user" id="subUser"></p>
-          <p class="sub-jarvis" id="subJarvis"></p>
-        </div>
-        <ol class="activity" id="activity" aria-label="Was Jarvis gerade tut"></ol>
-        <p class="hint" id="stateHint">„Hey Jarvis“ sagen, auf die Kugel klicken oder unten schreiben</p>
-      </div>
-
-      <div class="dock">
-        <div class="deck" id="deck" role="group" aria-label="Schnellbefehle"></div>
-        <div class="bottom">
-          <form class="command" id="cmdForm" autocomplete="off">
-            <button type="button" class="cmd-btn" id="micBtn" aria-pressed="false" title="Mikrofon stumm schalten">
-              <svg class="ico ico-on" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
-              <svg class="ico ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 5 2.2"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16"/></svg>
-              <span class="sr-only" id="micBtnText">Mikrofon stumm schalten</span>
-            </button>
-            <input id="cmdInput" type="text" placeholder="Nachricht an Jarvis …" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
-            <button type="button" class="cmd-btn stop" id="stopBtn" title="Stopp: Jarvis hört sofort auf" disabled>
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
-              <span class="sr-only">Stopp</span>
-            </button>
-            <button type="submit" class="send" id="sendBtn" title="Senden (Enter)" aria-label="Senden" disabled>
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
-            </button>
-          </form>
-          <p class="mic-line">
-            <span id="micName">Mikrofon wird geladen …</span>
-            <span class="sep" aria-hidden="true"></span>
-            <span id="micHint">„Hey Jarvis“ oder <kbd id="listenKey">Strg + Alt + J</kbd></span>
-            <button type="button" class="link-btn" id="micChange">Ändern</button>
-          </p>
-        </div>
-      </div>
-    </main>
-
-    <!-- Rechts: Heute, Post, System, Shop, Gedächtnis -->
-    <aside class="rail" aria-label="Heute, Post, System und Gedächtnis">
-      <section class="card today-card" aria-labelledby="todayHead">
-        <header class="card-head"><h2 id="todayHead">Heute</h2></header>
-        <ul class="today" id="today"></ul>
-        <p class="empty" id="todayEmpty">Nichts geplant. Sagen Sie zum Beispiel „Trag morgen um 18 Uhr Training ein“ oder „Erinnere mich in 20 Minuten an den Tee“.</p>
-      </section>
-
-      <section class="card" aria-labelledby="sysHead">
-        <header class="card-head"><h2 id="sysHead">System</h2></header>
-        <div class="meters">
-          <div class="meter" id="cpuGauge">
-            <span class="meter-name">Prozessor</span>
-            <span class="meter-num"><span id="cpuNum">–</span> %</span>
-            <span class="meter-bar" aria-hidden="true"><i id="cpuRing"></i></span>
+    <!-- Die Kommandozentrale: Georgs Tag auf einen Blick (zentrale.js) -->
+    <section class="zt" id="zt" role="tabpanel" aria-labelledby="tabZentrale">
+      <div class="zt-grid">
+        <article class="zt-card zt-konto" data-area="konto" aria-labelledby="ztKontoTitle">
+          <canvas class="zt-stars" id="ztStars" aria-hidden="true"></canvas>
+          <div class="zt-konto-body">
+            <h2 class="zt-head" id="ztKontoTitle">Kennzahlen</h2>
+            <dl class="zt-konto-werte" id="ztKontoWerte"></dl>
+            <table class="zt-konto-zeilen" id="ztKontoZeilen" hidden><tbody></tbody></table>
+            <p class="zt-empty" id="ztKontoEmpty">Verbinden Sie Shopify oder Windsor.ai auf claude.ai (Einstellungen › Konnektoren), dann stehen hier Umsatz, Bestellungen und Werbekonten.</p>
           </div>
-          <div class="meter" id="ramGauge">
-            <span class="meter-name">Arbeitsspeicher</span>
-            <span class="meter-num"><span id="ramNum">–</span> %</span>
-            <span class="meter-bar" aria-hidden="true"><i id="ramRing"></i></span>
+        </article>
+
+        <article class="zt-card zt-akt" data-area="aktivitaet" aria-labelledby="ztAktHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztAktHead">Aktivität</h2><span class="zt-meta" id="ztAktCount">0 heute</span></header>
+          <ol class="zt-feed" id="ztFeed" aria-live="polite"></ol>
+          <ul class="zt-chips" id="ztChips" aria-label="Heute schon erledigt"></ul>
+        </article>
+
+        <article class="zt-card zt-orb" data-area="orb" aria-label="Jarvis">
+          <button type="button" class="zt-orb-ball" id="ztOrbBtn" title="Klicken: Jarvis hört sofort zu" aria-label="Jarvis sofort zuhören lassen">
+            <canvas id="ztOrb" aria-hidden="true"></canvas>
+          </button>
+          <canvas class="zt-wave" id="ztWave" aria-hidden="true"></canvas>
+          <b class="zt-orb-state" id="ztOrbState">Bereit</b>
+          <small class="zt-meta" id="ztWissen">Wissensnetz</small>
+        </article>
+
+        <article class="zt-card zt-pc" data-area="rechner" aria-labelledby="ztPcHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztPcHead">Rechner</h2><span class="zt-meta">live</span></header>
+          <div class="zt-pc-body">
+            <svg class="zt-rings" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="zt-ring-bg" cx="50" cy="50" r="42"/><circle class="zt-ring zt-ring-cpu" id="ztRingCpu" cx="50" cy="50" r="42"/>
+              <circle class="zt-ring-bg" cx="50" cy="50" r="31"/><circle class="zt-ring zt-ring-ram" id="ztRingRam" cx="50" cy="50" r="31"/>
+              <circle class="zt-ring-bg" cx="50" cy="50" r="20"/><circle class="zt-ring zt-ring-gpu" id="ztRingGpu" cx="50" cy="50" r="20"/>
+            </svg>
+            <dl class="zt-pc-werte">
+              <div><dt><i class="zt-key zt-key-cpu" aria-hidden="true"></i>Prozessor</dt><dd id="ztCpu">–</dd></div>
+              <div><dt><i class="zt-key zt-key-ram" aria-hidden="true"></i>Speicher</dt><dd id="ztRam">–</dd></div>
+              <div id="ztGpuRow" hidden><dt><i class="zt-key zt-key-gpu" aria-hidden="true"></i>Grafik</dt><dd id="ztGpu">–</dd></div>
+            </dl>
           </div>
-          <div class="meter" id="gpuGauge" hidden>
-            <span class="meter-name" id="gpuName">Grafikkarte</span>
-            <span class="meter-num"><span id="gpuNum">–</span> %</span>
-            <span class="meter-bar" aria-hidden="true"><i id="gpuRing"></i></span>
+          <p class="zt-pc-note" id="ztPcNote">Läuft ruhig.</p>
+        </article>
+
+        <div class="zt-kpis" id="ztKpis" data-area="kennzahlen" role="list" aria-label="Kennzahlen"></div>
+
+        <article class="zt-card zt-plan" data-area="tagesplan" aria-labelledby="ztPlanHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztPlanHead">Tagesplan</h2><span class="zt-meta" id="ztPlanWeek"></span></header>
+          <div class="zt-allday" id="ztAllday" hidden></div>
+          <div class="zt-timeline" id="ztTimeline" role="list" aria-label="Termine und Erinnerungen heute"></div>
+          <p class="zt-empty" id="ztPlanEmpty" hidden></p>
+        </article>
+
+        <article class="zt-card zt-post" data-area="post" aria-labelledby="ztPostHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztPostHead">Posteingang</h2><span class="zt-meta" id="ztPostCount"></span></header>
+          <ul class="zt-mails" id="ztMails"></ul>
+          <p class="zt-empty" id="ztPostEmpty" hidden></p>
+        </article>
+
+        <article class="zt-card zt-news" data-area="nachrichten" aria-label="Nachrichten">
+          <video class="zt-video" id="ztVideo" muted playsinline preload="none" aria-hidden="true"></video>
+          <img class="zt-news-img" id="ztNewsImg" alt="" hidden>
+          <div class="zt-news-shade" aria-hidden="true"></div>
+          <p class="zt-news-headline" id="ztNewsHeadline"></p>
+          <span class="zt-news-label"><i aria-hidden="true"></i><span id="ztNewsLabel">Nachrichten</span></span>
+          <button type="button" class="zt-sound" id="ztSound" aria-pressed="false" title="Ton an oder aus">
+            <svg class="ico ico-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><svg class="ico ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
+            <span class="sr-only" id="ztSoundText">Ton einschalten</span>
+          </button>
+          <button type="button" class="zt-ticker" id="ztTicker" title="Die Meldung auf tagesschau.de öffnen"><span id="ztTickerText">Nachrichten werden geladen …</span></button>
+        </article>
+
+        <article class="zt-card zt-notes" data-area="notizen" aria-labelledby="ztNotesHead">
+          <h2 class="zt-head" id="ztNotesHead">Notizen</h2>
+          <ul class="zt-notes-list" id="ztNotes"></ul>
+          <p class="zt-empty" id="ztNotesEmpty">Noch nichts notiert. Sagen Sie „Notiere: …“.</p>
+        </article>
+
+        <div class="zt-agents" id="ztAgents" data-area="agenten" role="list" aria-label="Spezialisten"></div>
+
+        <div class="zt-chat">
+          <button type="button" class="zt-chat-btn" id="ztChat" title="Zum Gespräch: schreiben oder sprechen"><i aria-hidden="true"></i>Mit Jarvis chatten</button>
+          <button type="button" class="zt-chat-orb" id="ztListen" title="Jarvis hört sofort zu" aria-label="Jarvis sofort zuhören lassen"><canvas class="brand-orb" aria-hidden="true"></canvas></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Das Gespräch: die Energie-Kugel im HUD, links Menü und Aufgabe, rechts Assistent und System -->
+    <section class="talk" id="talk" role="tabpanel" aria-labelledby="tabTalk">
+      <aside class="talk-left" aria-label="Menü und heute">
+        <div class="talk-head">
+          <p class="talk-title">Jarvis <span>Assistent</span></p>
+          <div class="greet">
+            <h1 class="greet-title" id="greetTitle">Guten Tag</h1>
+            <p class="greet-sub">
+              <span id="clockDate"></span>
+              <span class="sep" aria-hidden="true"></span>
+              <span class="clock-time" id="clockTime">--:--</span>
+              <span class="weather" id="weather" hidden><span class="sep" aria-hidden="true"></span><span id="weatherText"></span></span>
+            </p>
           </div>
         </div>
-        <div class="spark-box" id="sparkBox" hidden>
-          <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
-            <path class="spark-fill" id="sparkFill" d=""/>
-            <path class="spark-line" id="sparkLine" d=""/>
+        <nav class="hud-nav" aria-label="Menü">
+          <button type="button" class="hud-nav-item" data-go="gespraech" aria-current="page"><i aria-hidden="true"></i><span>Gespräch</span></button>
+          <button type="button" class="hud-nav-item" data-go="zentrale"><i aria-hidden="true"></i><span>Zentrale</span></button>
+          <button type="button" class="hud-nav-item" data-go="wissen"><i aria-hidden="true"></i><span>Wissen</span></button>
+          <button type="button" class="hud-nav-item" data-go="einstellungen"><i aria-hidden="true"></i><span>Einstellungen</span></button>
+        </nav>
+        <section class="hud-card today-card" aria-labelledby="todayHead">
+          <header class="card-head"><h2 id="todayHead">Heute</h2></header>
+          <ul class="today" id="today"></ul>
+          <p class="empty" id="todayEmpty">Nichts geplant. Sagen Sie zum Beispiel „Trag morgen um 18 Uhr Training ein“ oder „Erinnere mich in 20 Minuten an den Tee“.</p>
+        </section>
+        <section class="hud-card task-card" aria-labelledby="taskHead">
+          <span class="task-ring" id="taskRing" aria-hidden="true"></span>
+          <div class="task-body">
+            <h2 class="hud-label" id="taskHead">Aktuelle Aufgabe</h2>
+            <p class="task-title" id="taskTitle">Bereit für Ihren nächsten Befehl</p>
+            <p class="task-detail" id="taskDetail">„Hey Jarvis“ sagen oder unten schreiben</p>
+          </div>
+        </section>
+      </aside>
+
+      <main class="stage">
+        <div class="core-wrap" id="coreWrap" role="button" tabindex="0" aria-label="Jarvis sofort zuhören lassen" title="Klicken: Jarvis hört sofort zu. Mit gedrückter Maustaste drehen.">
+          <svg class="hud-rings" viewBox="0 0 400 400" aria-hidden="true">
+            <g class="ring ring-outer"><circle cx="200" cy="200" r="194"/></g>
+            <g class="ring ring-ticks"><circle cx="200" cy="200" r="180" pathLength="360"/></g>
+            <g class="ring ring-arcs"><circle class="arc-a" cx="200" cy="200" r="166" pathLength="100"/><circle class="arc-b" cx="200" cy="200" r="166" pathLength="100"/></g>
+            <g class="ring ring-seg"><circle cx="200" cy="200" r="152" pathLength="120"/></g>
+            <g class="ring ring-inner"><circle cx="200" cy="200" r="140"/></g>
+            <g class="ring-cross"><path d="M200 0v26M200 374v26M0 200h26M374 200h26"/><circle cx="200" cy="12" r="4"/><circle cx="200" cy="388" r="4"/></g>
           </svg>
-          <small class="spark-label">Prozessor, letzte zwei Minuten</small>
+          <canvas id="core" aria-hidden="true"></canvas>
         </div>
-      </section>
 
-      <section class="card mem-panel" aria-labelledby="memHead">
-        <header class="card-head">
-          <h2 id="memHead">Gedächtnis</h2>
-          <button type="button" class="link-btn" id="memOpen">Ansehen</button>
-        </header>
-        <p class="mem-sum" id="memSum">Jarvis lernt Sie kennen. Sagen Sie zum Beispiel „Merk dir, dass ich gern Rock höre“.</p>
-        <p class="mem-next" id="memNext" hidden></p>
-      </section>
+        <div class="status">
+          <div class="subtitles" id="subtitles" aria-live="polite">
+            <p class="sub-user" id="subUser"></p>
+            <p class="sub-jarvis" id="subJarvis"></p>
+          </div>
+          <ol class="activity" id="activity" aria-label="Was Jarvis gerade tut"></ol>
+          <p class="hint" id="stateHint">„Hey Jarvis“ sagen, auf die Kugel klicken oder unten schreiben</p>
+        </div>
 
-    </aside>
+        <div class="dock">
+          <div class="deck" id="deck" role="group" aria-label="Schnellbefehle"></div>
+          <div class="bottom">
+            <form class="command" id="cmdForm" autocomplete="off">
+              <button type="button" class="cmd-btn" id="micBtn" aria-pressed="false" title="Mikrofon stumm schalten">
+                <svg class="ico ico-on" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+                <svg class="ico ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 5 2.2"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16"/></svg>
+                <span class="sr-only" id="micBtnText">Mikrofon stumm schalten</span>
+              </button>
+              <input id="cmdInput" type="text" placeholder="Nachricht an Jarvis …" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
+              <button type="button" class="cmd-btn stop" id="stopBtn" title="Stopp: Jarvis hört sofort auf" disabled>
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+                <span class="sr-only">Stopp</span>
+              </button>
+              <button type="submit" class="send" id="sendBtn" title="Senden (Enter)" aria-label="Senden" disabled>
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+              </button>
+            </form>
+            <p class="mic-line">
+              <span id="micName">Mikrofon wird geladen …</span>
+              <span class="sep" aria-hidden="true"></span>
+              <span id="micHint">„Hey Jarvis“ oder <kbd id="listenKey">Strg + Alt + J</kbd></span>
+              <button type="button" class="link-btn" id="micChange">Ändern</button>
+            </p>
+          </div>
+        </div>
+      </main>
+
+      <aside class="rail" aria-label="Assistent, System und Gedächtnis">
+        <button type="button" class="mic-pill" id="micPill" aria-pressed="false" title="Mikrofon an oder aus"><i aria-hidden="true"></i><span id="micPillText">Mikrofon an</span></button>
+        <section class="hud-card assist-card" aria-labelledby="assistHead">
+          <h2 class="hud-label" id="assistHead">Assistent</h2>
+          <div class="assist-id">
+            <span class="assist-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="assist-name"><b>Jarvis</b><small>Ihr persönlicher Butler</small></span>
+          </div>
+          <ol class="pipe" id="pipe" aria-label="Was Jarvis gerade macht">
+            <li data-phase="verstehen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H9l-4 4z"/><path d="M9 10h6"/></svg><span>Verstehen</span></li>
+            <li data-phase="denken"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5-8 4.5-8-4.5z"/><path d="m4 12 8 4.5 8-4.5M4 16.5 12 21l8-4.5"/></svg><span>Denken</span></li>
+            <li data-phase="erledigen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Erledigen</span></li>
+            <li data-phase="sprechen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><span>Sprechen</span></li>
+          </ol>
+        </section>
+        <section class="card hud-card sys-card" aria-labelledby="sysHead">
+          <header class="card-head"><h2 id="sysHead">System</h2></header>
+          <div class="meters">
+            <div class="meter" id="cpuGauge">
+              <span class="meter-name">Prozessor</span>
+              <span class="meter-num"><span id="cpuNum">–</span> %</span>
+              <span class="meter-bar" aria-hidden="true"><i id="cpuRing"></i></span>
+            </div>
+            <div class="meter" id="ramGauge">
+              <span class="meter-name">Arbeitsspeicher</span>
+              <span class="meter-num"><span id="ramNum">–</span> %</span>
+              <span class="meter-bar" aria-hidden="true"><i id="ramRing"></i></span>
+            </div>
+            <div class="meter" id="gpuGauge" hidden>
+              <span class="meter-name" id="gpuName">Grafikkarte</span>
+              <span class="meter-num"><span id="gpuNum">–</span> %</span>
+              <span class="meter-bar" aria-hidden="true"><i id="gpuRing"></i></span>
+            </div>
+          </div>
+          <div class="spark-box" id="sparkBox" hidden>
+            <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
+              <path class="spark-fill" id="sparkFill" d=""/>
+              <path class="spark-line" id="sparkLine" d=""/>
+            </svg>
+            <small class="spark-label">Prozessor, letzte zwei Minuten</small>
+          </div>
+        </section>
+
+        <section class="card hud-card mem-panel" aria-labelledby="memHead">
+          <header class="card-head">
+            <h2 id="memHead">Gedächtnis</h2>
+            <button type="button" class="link-btn" id="memOpen">Ansehen</button>
+          </header>
+          <p class="mem-sum" id="memSum">Jarvis lernt Sie kennen. Sagen Sie zum Beispiel „Merk dir, dass ich gern Rock höre“.</p>
+          <p class="mem-next" id="memNext" hidden></p>
+        </section>
+
+
+      </aside>
+    </section>
   </div>
 
   <!-- Werkstatt: Programmier-Aufträge als Blaupause, das Projekt als Hologramm -->
@@ -733,6 +884,8 @@
   <script src="koppeln.js"></script>
   <script src="gedaechtnis.js"></script>
   <script src="orb.js"></script>
+  <script src="plasma.js"></script>
+  <script src="zentrale.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
