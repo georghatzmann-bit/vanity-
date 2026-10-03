@@ -14,7 +14,7 @@ Nachsehen (alles ohne Adminrechte):
 
 Handeln:
 - Programme aktualisieren: `winget upgrade` zeigt, was veraltet ist; `winget upgrade --all --silent --accept-package-agreements --accept-source-agreements` aktualisiert alles (dauert, vorher ansagen).
-- Speicher freimachen: Windows-Speicheroptimierung öffnen (`Start-Process ms-settings:storagesense`) oder die Datenträgerbereinigung (`cleanmgr`). Selbst löschst du nichts; Dateien höchstens mit `python -m jarvis.tool papierkorb "<pfad>"`, nach Georgs Ja.
+- Speicher freimachen: Windows-Speicheroptimierung öffnen (`Start-Process ms-settings:storagesense`) oder die Datenträgerbereinigung (`cleanmgr`). Dateien legst du mit `python -m jarvis.tool papierkorb "<pfad>"` in den Papierkorb (lässt sich wiederherstellen). Ob du vorher fragst, steht oben bei deinen Rechten: Mit voller Freigabe machst du es einfach, sonst fragt der Befehl selbst nach. Endgültig löschst du nie.
 - Autostart aufräumen: Task-Manager auf der Seite Autostart öffnen (`Start-Process taskmgr -ArgumentList '/0 /startup'`) und sagen, welche Einträge entbehrlich sind.
 - Treiber: Für die Grafikkarte die Hersteller-App (NVIDIA App, AMD Adrenalin) öffnen.
 
