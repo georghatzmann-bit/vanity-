@@ -374,6 +374,21 @@ class SessionTest(unittest.TestCase):
             self.assertEqual(match_memory(question), ("session", ""), question)
         self.assertIsNone(match_memory("Was haben wir zuletzt gekauft?"))
 
+    def test_schedules_are_not_a_session(self):
+        from tests.test_assistant import FakeBrain, make
+
+        assistant, *_ = make(FakeBrain())
+        assistant.memory = self.memory
+        assistant._disk_checked = float("inf")
+        with mock.patch.object(assistant, "_present", return_value=True):
+            assistant._run_scheduled({"befehl": "Wie spät ist es?"})
+            assistant._run_scheduled({"befehl": "Öffne den Rechner"})
+        self.assertEqual(self.memory.sessions(), [], "Georg war gar nicht dabei")
+        self.assertIn("Öffne den Rechner", [e["was"] for e in self.memory.events("said")], "für den Tagesrückblick bleibt es")
+        assistant.handle("Wie spät ist es?")
+        assistant.handle("Öffne den Rechner")
+        self.assertEqual(self.memory.sessions()[0]["themen"], ["Öffne den Rechner"])
+
     def test_assistant_answers_without_claude(self):
         from tests.test_assistant import FakeBrain, make
 

@@ -363,7 +363,7 @@ class Memory:
                 contact.update(name=what, app=data.get("app") or contact.get("app", ""),
                                zuletzt=now.isoformat(timespec="minutes"))
                 contact["anzahl"] = int(contact.get("anzahl", 0)) + 1
-            if kind == "said":
+            if kind == "said" and not data.get("geplant"):
                 self._track_session(memory, now, what)
             self._prune(now)
             self._save()

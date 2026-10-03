@@ -72,6 +72,7 @@ class Assistant:
         self._local = cfg.get("local", {}).get("enabled", True)
         self._queue: queue.Queue = queue.Queue()
         self._lock = threading.Lock()  # immer nur ein Befehl gleichzeitig
+        self._flags = threading.local()  # planned: der Befehl kommt aus einem Zeitplan, nicht von Georg
         self._busy = 0
         self._recording = False
         self._transcribing = False
@@ -349,7 +350,9 @@ class Assistant:
             try:
                 log.info("Befehl: %s", text)
                 self.ui.message("user", text)
-                self.learn("said", text)
+                flags = getattr(self, "_flags", None)
+                # Ein Zeitplan ("Jeden Morgen um 8: Briefing") ist keine Sitzung mit Georg
+                self.learn("said", text, **({"geplant": True} if getattr(flags, "planned", False) else {}))
                 self._rest = ""
                 self._end_briefing(text)
                 answer = self._local_answer(text, speak)
@@ -1119,7 +1122,11 @@ class Assistant:
             present = self._present()
         except Exception:
             present = True
-        answer = self.handle(command, speak=present)
+        self._flags.planned = True
+        try:
+            answer = self.handle(command, speak=present)
+        finally:
+            self._flags.planned = False
         if not present and answer:
             self._push(f"{command}: {answer}")
 
