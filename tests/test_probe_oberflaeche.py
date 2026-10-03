@@ -9,6 +9,7 @@ import json
 import socket
 import struct
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -153,6 +154,9 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(len(value["gross"]), 70000)
         self.assertEqual(probe.errors(self.tools.events), ["TypeError: el.ticker is null (zentrale.js:42)"])
         self.assertEqual(probe.console_errors(self.tools.events), ["hls.js: Zugriff verweigert"])
+        deadline = time.monotonic() + 5
+        while self.devtools.pongs < 1 and time.monotonic() < deadline:
+            time.sleep(0.01)  # der Server liest das Pong erst nach seiner Antwort
         self.assertEqual(self.devtools.pongs, 1, "auf Ping kommt Pong")
         self.assertNotIn(b"origin:", self.devtools.headers.lower(), "ohne Origin braucht Chromium kein --remote-allow-origins")
 
