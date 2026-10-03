@@ -98,7 +98,9 @@ class Nearby:
         with self._lock:
             hit = self._cache.get(cell)
             if hit is not None and now - hit[0] < CACHE_SECONDS:
-                return [dict(s, meter=distance(lat, lon, s["lat"], s["lon"])) for s in hit[1]]
+                # von hier aus neu gemessen: ein paar Schritte weiter ist vielleicht ein anderer der nächste
+                return sorted((dict(s, meter=distance(lat, lon, s["lat"], s["lon"])) for s in hit[1]),
+                              key=lambda s: s["meter"])
         try:
             shops = parse(self._fetch(self._url, _query(lat, lon, radius), self._timeout), lat, lon)
         except Exception as exc:  # kein Netz, Overpass überlastet: dann eben ohne

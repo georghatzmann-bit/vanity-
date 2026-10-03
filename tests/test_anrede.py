@@ -21,6 +21,8 @@ class AddressTest(unittest.TestCase):
         self.assertEqual(anrede.word(), "Chef")
         self.assertEqual(apply("Sehr wohl, Sir. Die Sirene ist aus, Sir!"), "Sehr wohl, Chef. Die Sirene ist aus, Chef!")
         self.assertEqual(apply(""), "")
+        self.assertEqual(apply("Sir Lewis Hamilton hat gewonnen, Sir."), "Sir Lewis Hamilton hat gewonnen, Chef.",
+                         "der Titel vor einem Namen bleibt")
 
     def test_clean_falls_back_to_sir(self):
         self.assertEqual(clean("  boss "), "Boss")
@@ -38,7 +40,8 @@ class AddressTest(unittest.TestCase):
         self.assertEqual(match_talk("Sprich lockerer"), ("ton", "locker"))
         self.assertEqual(match_talk("Rede wie im Video"), ("ton", "locker"))
         self.assertEqual(match_talk("Sei wieder förmlich"), ("ton", "butler"))
-        for other in ("Nenn mich nicht so", "Sag mir das Wetter", "Öffne Spotify", "Sprich lauter"):
+        for other in ("Nenn mich nicht so", "Sag mir das Wetter", "Öffne Spotify", "Sprich lauter", "Sag Hallo zu mir",
+                      "Nenn mich bitte"):
             self.assertIsNone(match_talk(other), other)
 
     def test_persona_section(self):

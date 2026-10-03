@@ -48,6 +48,17 @@ class NearbyTest(unittest.TestCase):
         nearby.nearest(48.137, 11.575)
         self.assertEqual(len(queries), 2)
 
+    def test_cache_measures_from_the_new_place(self):
+        both = {"elements": [
+            {"type": "node", "id": 1, "lat": 52.5212, "lon": 13.4050, "tags": {"name": "Nord"}},
+            {"type": "node", "id": 2, "lat": 52.5188, "lon": 13.4050, "tags": {"name": "Süd"}},
+        ]}
+        nearby = Nearby(fetch=lambda url, query, timeout: both)
+        self.assertEqual(nearby.nearest(52.5208, 13.4050)["name"], "Nord")
+        shops = nearby.supermarkets(52.5192, 13.4050)  # gleiches Feld im Speicher, aber jetzt im Süden
+        self.assertEqual([s["name"] for s in shops], ["Süd", "Nord"])
+        self.assertEqual(nearby.nearest(52.5192, 13.4050)["name"], "Süd")
+
     def test_without_network_nothing(self):
         def broken(url, query, timeout):
             raise OSError("kein Netz")

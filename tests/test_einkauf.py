@@ -37,12 +37,24 @@ class MatchTest(unittest.TestCase):
         self.assertEqual(match_einkauf("Streich Milch von der Einkaufsliste"), ("remove", ["Milch"]))
         self.assertEqual(match_einkauf("Einkaufsliste leeren"), ("clear", []))
         self.assertEqual(match_einkauf("Alles gekauft"), ("clear", []))
+        self.assertEqual(match_einkauf("Alles erledigt von der Einkaufsliste"), ("clear", []))
+        self.assertIsNone(match_einkauf("Alles erledigt"), "sagt man auch nach der Arbeit: Liste bleibt")
 
     def test_not_for_the_list(self):
         for said in ("Der Akku ist leer", "Das Licht ist aus", "Das ist alle", "Meine Nerven sind alle",
                      "Hast du Milch gekauft?", "Öffne Spotify", "Setz Max auf die Gästeliste",
                      "Wie spät ist es?", ""):
             self.assertIsNone(match_einkauf(said), said)
+
+    def test_missing_but_not_from_the_supermarket(self):
+        # Probleme am PC und Gefühle gehen an Claude, nicht auf die Einkaufsliste
+        for said in ("Ich habe keinen Ton mehr", "Ich hab kein Internet mehr", "Wir haben kein WLAN mehr",
+                     "Ich habe keine Lust mehr", "Ich habe keine Fragen mehr", "Mein Handy-Akku ist alle",
+                     "Das Datenvolumen ist alle"):
+            self.assertIsNone(match_einkauf(said), said)
+        self.assertEqual(match_einkauf("Die Tinte ist alle"), ("add", ["Tinte"]))
+        self.assertEqual(match_einkauf("Setz Brot für die Kinder auf die Einkaufsliste"),
+                         ("add", ["Brot für die Kinder"]), "ausdrücklich auf die Liste: immer")
 
     def test_split_items(self):
         self.assertEqual(split_items("die Milch, ein paar Eier sowie 6 Brötchen und noch Käse"),

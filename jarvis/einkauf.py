@@ -23,6 +23,9 @@ _ADD = [
                rf"(?:\s+bitte)?$", re.I),
     # "Auf die Einkaufsliste: Milch", "Einkaufsliste: Milch und Eier"
     re.compile(rf"^(?:auf |zur )?{_LIST}\s*[:,-]\s*(?P<items>.+)$", re.I),
+]
+# Ohne das Wort Einkaufsliste: nur, wenn es nach etwas zum Kaufen klingt (_NOT_GOODS)
+_GONE = [
     # "Mandelmus ist alle", "Die Eier sind aufgebraucht", "Der Kaffee ist fast alle"
     re.compile(r"^(?:(?:oh|ach|übrigens|und)[, ]+)?(?P<items>.+?)\s+(?:ist|sind)\s+(?:fast\s+|schon\s+|gleich\s+)?"
                r"(?:alle|aufgebraucht|alle geworden)$", re.I),
@@ -38,11 +41,13 @@ _REMOVE = [
     # "Mandelmus gekauft", "Hab die Milch geholt", "Ich habe Eier und Brot gekauft"
     re.compile(r"^(?:ich )?(?:habe |hab )?(?P<items>.+?)\s+(?:gekauft|geholt|besorgt|eingekauft|mitgebracht)$", re.I),
     # "Streich Milch von der Einkaufsliste", "Nimm Brot von der Liste"
-    re.compile(rf"^(?:streich|streiche|lösch|lösche|nimm|entfern|entferne|hak|hake)\s+(?P<items>.+?)\s+"
-               rf"(?:von|aus|auf)\s+(?:der |meiner )?(?:einkaufs)?liste(?:\s+(?:runter|ab|weg))?$", re.I),
+    re.compile(r"^(?:streich|streiche|lösch|lösche|nimm|entfern|entferne|hak|hake)\s+(?P<items>.+?)\s+"
+               r"(?:von|aus|auf)\s+(?:der |meiner )?(?:einkaufs)?liste(?:\s+(?:runter|ab|weg))?$", re.I),
 ]
 _CLEAR = re.compile(rf"^(?:{_LIST} (?:leeren|löschen|ist erledigt|zurücksetzen)|(?:leer|lösch|leere|lösche) {_LIST}|"
-                    r"alles (?:gekauft|eingekauft|besorgt|erledigt)(?: von der (?:einkaufs)?liste)?)$", re.I)
+                    r"alles (?:gekauft|eingekauft|besorgt)(?: von der (?:einkaufs)?liste)?|"
+                    # "Alles erledigt" allein sagt man auch nach der Arbeit: dann bleibt die Liste
+                    r"alles erledigt (?:von|auf) der (?:einkaufs)?liste)$", re.I)
 
 
 def _clean(text: str) -> str:
@@ -86,10 +91,12 @@ def match_einkauf(text: str) -> tuple[str, list[str]] | None:
             items = split_items(found.group("items"))
             if items:
                 return "remove", items
-    for pattern in _ADD:
+    for pattern in _ADD + _GONE:
         found = pattern.match(raw)
         if found:
             items = [i for i in split_items(found.group("items")) if not _NOT_AN_ITEM.match(i)]
+            if pattern in _GONE and any(_NOT_GOODS.match(word) for item in items for word in re.split(r"[\s-]+", item)):
+                return None  # "Ich habe keinen Ton mehr" ist ein Problem am PC, "keine Lust mehr" ein Gefühl
             if items:
                 return "add", items
     return None
@@ -98,6 +105,12 @@ def match_einkauf(text: str) -> tuple[str, list[str]] | None:
 # "Das ist alle" oder "Es ist alle" sagt nicht, was fehlt
 _NOT_AN_ITEM = re.compile(r"^(?:das|es|alles|der|die|alle|sie|er|wir|ihr|nichts|zeit|geld|akku|batterie|nerven|"
                           r"kräfte|kraft|ideen|leute|kinder|gäste)$", re.I)
+# Was fehlen kann, aber nicht in den Supermarkt gehört (Technik, Gefühle, Gesundheit)
+_NOT_GOODS = re.compile(r"^(?:ton|sound|audio|bild|internet|wlan|wifi|netz|netzwerk|empfang|signal|verbindung|strom|"
+                        r"speicher|speicherplatz|platz|akku|batterie|datenvolumen|daten|guthaben|mikro|mikrofon|"
+                        r"lust|bock|hunger|durst|ahnung|plan|idee|ideen|frage|fragen|angst|energie|kraft|kräfte|nerven|"
+                        r"geduld|motivation|schmerzen|kopfschmerzen|fieber|problem|probleme|sorgen|stress|zeit|geld|"
+                        r"termin|termine|spaß|hoffnung|schlaf|ruhe|freunde|leute|kinder|gäste)$", re.I)
 
 
 def join(items: list[str]) -> str:

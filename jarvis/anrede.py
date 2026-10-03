@@ -10,7 +10,8 @@ import re
 
 DEFAULT = "Sir"
 _word = DEFAULT
-_SIR = re.compile(r"\bSir\b")
+# Nicht der Titel vor einem Namen: "Sir Lewis Hamilton" bleibt, wenn Claude von ihm erzählt
+_SIR = re.compile(r"\bSir\b(?![ \t]+[A-ZÄÖÜ][a-zäöüß])")
 
 
 def clean(word: str) -> str:
@@ -79,7 +80,10 @@ _LOOSE = re.compile(r"^(?:(?:sprich|rede|red|sei)(?: ab jetzt| ab sofort| bitte|
 _FORMAL = re.compile(r"^(?:(?:sprich|rede|red|sei)(?: ab jetzt| ab sofort| bitte| mal| doch| wieder)* "
                      r"(?:förmlich|förmlicher|wie ein butler|vornehm|vornehmer|seriös|seriöser|wieder normal)|"
                      r"(?:butler ton|ton butler|förmlicher ton))$", re.I)
-_NOT_WORDS = {"an", "so", "mal", "nicht", "nie", "nochmal", "später", "morgen", "jetzt", "das", "es", "dich", "dir"}
+_NOT_WORDS = {"an", "so", "mal", "nicht", "nie", "nochmal", "später", "morgen", "jetzt", "das", "es", "dich", "dir",
+              # "Sag Hallo zu mir" ist ein Gruß, keine neue Anrede
+              "hallo", "hi", "hey", "servus", "moin", "tschüss", "tschüs", "tschau", "ciao", "danke", "bitte",
+              "was", "etwas", "nichts", "ja", "nein"}
 
 
 def match_talk(text: str) -> tuple[str, str] | None:
