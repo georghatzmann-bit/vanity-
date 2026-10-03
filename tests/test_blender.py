@@ -40,7 +40,14 @@ if job.get("blend"):
     open(job["blend"], "wb").write(b"BLENDER-v402")
     report("gespeichert", blend=job["blend"])
 if job.get("bild"):
+    if mode == "blender5":  # Blender 5 schreibt den Fortschritt nicht mehr selbst, blender_szene.py meldet ihn
+        report("kerne")
+        for k in (1, 8, 16):
+            report("fortschritt", prozent=round(k * 100 / 16), rest=float(16 - k))
+            report("fortschritt", prozent=round(k * 100 / 16), rest=float(16 - k))
     for k in (1, 8, 16):
+        if mode == "blender5":
+            break
         print("Fra:1 Mem:12M | Time:00:01.00 | Remaining:00:%02d.00 | Mem:1M | Scene, ViewLayer | Sample %d/16"
               % (16 - k, k), flush=True)
         if mode == "langsam":
@@ -108,6 +115,13 @@ class JobTest(unittest.TestCase):
         self.assertEqual([s["prozent"] for s in steps], [6, 50, 100])
         self.assertEqual(steps[0]["rest"], 15.0)
         self.assertEqual(list(self.work.glob("blender-auftrag-*.json")), [], "der Auftrag wird aufgeräumt")
+
+    def test_progress_from_blender_5(self):
+        steps = []
+        blender.render(fake_blender(self.base, "blender5"), SCENE, self.base, "Drohne", self.work, on_progress=steps.append)
+        self.assertEqual(steps[0], {"prozent": None, "rest": None, "hinweis": "kerne"}, "erst die Rechenkerne")
+        self.assertEqual([s["prozent"] for s in steps[1:]], [6, 50, 100], "jeder Stand einmal")
+        self.assertEqual(steps[1]["rest"], 15.0)
 
     def test_graphics_card_trouble_falls_back_to_the_processor(self):
         photo = blender.render(fake_blender(self.base, "gpu-kaputt"), SCENE, self.base, "Drohne", self.work)

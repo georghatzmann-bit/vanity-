@@ -1119,7 +1119,8 @@ class Blueprint:
             self._emit("render", state="start", kind=kind, name=str(scene.get("name") or ""))
 
             def progress(step: dict) -> None:
-                self._emit("render", state="progress", kind=kind, percent=step.get("prozent"), rest=step.get("rest"))
+                self._emit("render", state="progress", kind=kind, percent=step.get("prozent"), rest=step.get("rest"),
+                           note=step.get("hinweis") or "")
 
             photo = blender.render(path, scene, self.folder, name, self._scratch(), on_progress=progress,
                                    cancel=self._blender_cancel)

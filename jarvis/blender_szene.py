@@ -15,6 +15,8 @@ Blender seine echte Größe. Was Jarvis wissen muss, steht in Zeilen "JARVIS-BLE
 
 import json
 import math
+import os
+import re
 import sys
 import time
 
@@ -317,10 +319,8 @@ def put(node, names, value):
 
 
 def node_tree(owner):
-    try:
-        owner.use_nodes = True  # ab Blender 5.0 immer an
-    except AttributeError:
-        pass
+    if bpy.app.version < (5, 0, 0):  # ab Blender 5.0 immer an (und das Umschalten veraltet)
+        owner.use_nodes = True
     return owner.node_tree
 
 
@@ -568,6 +568,14 @@ def glare():
     """Leuchtende Teile strahlen etwas (Compositor). Geht das in dieser Blender-Version nicht, eben ohne."""
     scene = bpy.context.scene
     try:
+        # Auf dem Prozessor: Blender 5 nimmt sonst die Grafikkarte und bricht ohne passenden Treiber hart ab.
+        # Für ein Bild dauert das Leuchten so oder so nur Sekundenbruchteile.
+        scene.render.compositor_device = "CPU"
+    except (AttributeError, TypeError, ValueError):
+        pass
+    if hasattr(scene, "compositing_node_group"):
+        return glare_5(scene)
+    try:
         scene.use_nodes = True
         tree = scene.node_tree
         if tree is None:
@@ -589,6 +597,59 @@ def glare():
         except Exception:
             pass
         return False
+
+
+def glare_5(scene):
+    """Ab Blender 5.0 ist der Compositor eine Knotengruppe, die Einstellungen des Leuchtens sind Eingänge."""
+    try:
+        tree = bpy.data.node_groups.new("Jarvis Leuchten", "CompositorNodeTree")
+        tree.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+        layers = tree.nodes.new("CompositorNodeRLayers")
+        node = tree.nodes.new("CompositorNodeGlare")
+        out = tree.nodes.new("NodeGroupOutput")
+        for name, values in (("Type", ("Bloom", "Fog Glow")), ("Quality", ("High",)), ("Threshold", (2.5,)),
+                             ("Strength", (0.45,)), ("Size", (0.6,))):
+            socket = node.inputs.get(name)
+            for value in values:
+                try:
+                    socket.default_value = value
+                    break
+                except (AttributeError, TypeError, ValueError):
+                    continue
+        tree.links.new(layers.outputs["Image"], node.inputs["Image"])
+        tree.links.new(node.outputs["Image"], out.inputs[0])
+        scene.compositing_node_group = tree
+        return True
+    except Exception as exc:
+        report("ohne_glanz", text=str(exc)[:200])
+        try:
+            scene.compositing_node_group = None
+        except Exception:
+            pass
+        return False
+
+
+_SAMPLE = re.compile(r"Sample (\d+)/(\d+)")
+_REMAINING = re.compile(r"Remaining:\s*(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)")
+_shown = {"prozent": -1, "kerne": False}
+
+
+def on_stats(stats, *_):
+    """Fortschritt beim Rendern. Blender 5 schreibt ihn nicht mehr von selbst auf stdout, darum über den Handler."""
+    text = str(stats or "")
+    if not _shown["kerne"] and "kernel" in text.lower():
+        _shown["kerne"] = True  # "Loading render kernels (may take a few minutes the first time)"
+        report("kerne")
+    found = _SAMPLE.search(text)
+    if not found:
+        return
+    percent = min(100, round(int(found.group(1)) * 100 / max(1, int(found.group(2)))))
+    if percent == _shown["prozent"]:
+        return
+    _shown["prozent"] = percent
+    rest = _REMAINING.search(text)
+    seconds = int(rest.group(1) or 0) * 3600 + int(rest.group(2)) * 60 + float(rest.group(3)) if rest else None
+    report("fortschritt", prozent=percent, rest=seconds)
 
 
 def use_gpu(wanted):
@@ -714,18 +775,19 @@ def main():
         scene.cycles.samples = min(scene.cycles.samples, int(num(job.get("samples_cpu"), 48)))
     report("gebaut", teile=len(objects), geraet=device, sekunden=round(time.time() - START, 1))
     if job.get("blend"):
-        bpy.ops.wm.save_as_mainfile(filepath=str(job["blend"]), check_existing=False, compress=True)
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(job["blend"]), check_existing=False, compress=True)
         report("gespeichert", blend=str(job["blend"]))
     if job.get("bild"):
         began = time.time()
+        bpy.app.handlers.render_stats.append(on_stats)
         bpy.ops.render.render(write_still=False)
         image = bpy.data.images.get("Render Result")
         if image is None:
             report("fehler", text="Blender hat kein Bild geliefert.")
             return 4
-        save_image(image, str(job["bild"]), "PNG", scene)
+        save_image(image, os.path.abspath(job["bild"]), "PNG", scene)
         if job.get("vorschau"):
-            save_image(image, str(job["vorschau"]), "JPEG", scene)
+            save_image(image, os.path.abspath(job["vorschau"]), "JPEG", scene)
         report("fertig", bild=str(job["bild"]), geraet=device, sekunden=round(time.time() - began, 1))
     return 0
 

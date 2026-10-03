@@ -31,7 +31,7 @@ SCRIPT = Path(__file__).with_name("blender_szene.py")
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LINE = "JARVIS-BLENDER "
 _SAMPLE = re.compile(r"\|\s*Sample (\d+)/(\d+)")
-_REMAINING = re.compile(r"Remaining:(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)")
+_REMAINING = re.compile(r"Remaining:\s*(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)")
 _VERSION = re.compile(r"(\d+)(?:\.(\d+))?")
 
 
@@ -158,7 +158,8 @@ def _remaining(line: str) -> float | None:
 def run_job(blender: Path, job: dict, work_dir: Path, on_progress: Callable[[dict], None] | None = None,
             cancel: threading.Event | None = None, timeout: float = 900) -> list[dict]:
     """Blender ohne Fenster mit blender_szene.py starten. Gibt die JARVIS-BLENDER-Meldungen zurück.
-    on_progress bekommt {"prozent": 0..100, "rest": Sekunden oder None} beim Rendern."""
+    on_progress bekommt beim Rendern {"prozent": 0..100, "rest": Sekunden oder None}, während Blender beim ersten
+    Mal die Rechenkerne der Grafikkarte lädt {"prozent": None, "rest": None, "hinweis": "kerne"}."""
     work_dir.mkdir(parents=True, exist_ok=True)
     job_file = work_dir / f"blender-auftrag-{os.getpid()}-{threading.get_ident()}.json"
     job_file.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
@@ -188,28 +189,39 @@ def run_job(blender: Path, job: dict, work_dir: Path, on_progress: Callable[[dic
 
     threading.Thread(target=watchdog, name="jarvis-blender-wache", daemon=True).start()
     last = -1
+
+    def progress(step: dict) -> None:
+        nonlocal last
+        if on_progress is None or (step.get("prozent") is not None and step["prozent"] == last):
+            return
+        if step.get("prozent") is not None:
+            last = step["prozent"]
+        try:
+            on_progress(step)
+        except Exception as exc:
+            log.debug("Blender, Fortschritt: %s", exc)
+
     try:
         for raw in proc.stdout:  # type: ignore[union-attr]
             line = raw.rstrip()
             if line.startswith(LINE):
                 try:
-                    reports.append(json.loads(line[len(LINE):]))
+                    report = json.loads(line[len(LINE):])
                 except ValueError:
-                    pass
+                    continue
+                reports.append(report)
+                if report.get("schritt") == "fortschritt":  # aus blender_szene.py (Blender 5 schreibt sonst nichts)
+                    progress({"prozent": report.get("prozent"), "rest": report.get("rest")})
+                elif report.get("schritt") == "kerne":  # beim ersten Mal auf der Grafikkarte: dauert
+                    progress({"prozent": None, "rest": None, "hinweis": "kerne"})
                 continue
             if line:
                 tail.append(line)
                 del tail[:-25]
-            sample = _SAMPLE.search(line)
-            if sample and on_progress is not None:
+            sample = _SAMPLE.search(line)  # Blender bis 4.x schreibt den Fortschritt selbst
+            if sample:
                 done, total = int(sample.group(1)), max(1, int(sample.group(2)))
-                percent = min(100, round(done * 100 / total))
-                if percent != last:
-                    last = percent
-                    try:
-                        on_progress({"prozent": percent, "rest": _remaining(line)})
-                    except Exception as exc:
-                        log.debug("Blender, Fortschritt: %s", exc)
+                progress({"prozent": min(100, round(done * 100 / total)), "rest": _remaining(line)})
         code = proc.wait()
     finally:
         if proc.poll() is None:
@@ -225,7 +237,9 @@ def run_job(blender: Path, job: dict, work_dir: Path, on_progress: Callable[[dic
     if errors:
         raise BlenderError(str(errors[-1]))
     if code != 0:
-        reason = next((t for t in reversed(tail) if re.search(r"error|fehler|exception", t, re.I)), "")
+        # Die echte Ursache, nicht Warnungen wie "CUEW initialization failed: Error opening the library"
+        reason = next((t for t in reversed(tail) if re.search(r"^Error:|\bERROR\b|Exception|Traceback|Fehler", t)
+                       and "WARNING" not in t), "")
         raise BlenderError(reason[:200] or f"Blender endete mit Code {code}.")
     return reports
 
@@ -263,7 +277,8 @@ def render(blender: Path, scene: dict, folder: Path, name: str, work_dir: Path,
            "samples": samples, "samples_cpu": 48, "sekunden": seconds, "gpu": gpu}
     started = time.monotonic()
     try:
-        reports = run_job(blender, job, work_dir, on_progress, cancel, timeout=seconds + 240)
+        # Großzügig: Beim ersten Mal lädt Blender die Rechenkerne der Grafikkarte, das kann Minuten dauern
+        reports = run_job(blender, job, work_dir, on_progress, cancel, timeout=seconds + 600)
     except BlenderError as exc:
         if not gpu or str(exc) == "abgebrochen" or "keine Teile" in str(exc):
             raise

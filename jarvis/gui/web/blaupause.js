@@ -1930,6 +1930,13 @@
           photoProgress('Blender rendert …', 0, PHOTO_INFO);
           break;
         case 'progress': {
+          if (ev.note === 'kerne') {
+            // Blender lädt seine Rechenkerne (auf der Grafikkarte beim ersten Mal langsam)
+            renderBusy(true);
+            photoProgress('Blender bereitet das Rendern vor …', null,
+              'Beim ersten Mal kann das ein paar Minuten dauern, danach geht es schnell.');
+            break;
+          }
           const p = clamp(Number(ev.percent) || 0, 0, 100);
           renderBusy(true, p);
           const rest = Number(ev.rest);
