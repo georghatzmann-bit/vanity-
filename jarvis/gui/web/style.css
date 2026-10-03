@@ -1394,6 +1394,38 @@ body[data-state="speaking"] .deck {
   white-space: nowrap;
 }
 
+.tg-form {
+  margin-top: 12px;
+}
+
+.tg-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 13px / 1.4 var(--mono);
+}
+
+.tg-form input::placeholder {
+  color: var(--text-3);
+  font-family: var(--font);
+}
+
+.tg-form:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+#tgReady .dlg-url {
+  margin-top: 12px;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+}
+
 .dlg-note {
   grid-column: 1 / -1;
   margin: 0;
@@ -1464,18 +1496,22 @@ body[data-state="speaking"] .deck {
   gap: 16px;
 }
 
-.alexa-steps li {
+.alexa-steps li,
+.tg-steps li {
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 12px;
   align-items: start;
 }
 
 .alexa-steps li b,
-.alexa-steps li span {
+.alexa-steps li span,
+.tg-steps li b,
+.tg-steps li span {
   grid-column: 1;
 }
 
-.alexa-steps li .btn {
+.alexa-steps li .btn,
+.tg-steps li .btn {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: center;
@@ -1709,7 +1745,32 @@ body[data-view="hub"] .backdrop {
 
   .dlg-tabs {
     grid-auto-flow: row;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alexa-steps li,
+  .tg-steps li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .alexa-steps li .btn,
+  .tg-steps li .btn {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+    margin-top: 8px;
+  }
+
+  .tg-form {
+    flex-wrap: wrap;
+  }
+
+  .tg-form input {
+    flex-basis: 100%;
+  }
+
+  .tg-form .btn {
+    flex: 1;
   }
 }
 

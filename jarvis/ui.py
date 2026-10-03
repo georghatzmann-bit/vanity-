@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import threading
 
+from .anrede import apply as anrede
+
 log = logging.getLogger("jarvis")
 
 STATES = ("idle", "listening", "thinking", "speaking", "muted", "error")
@@ -154,13 +156,15 @@ class MultiUi(Ui):
         self._each("state", value)
 
     def message(self, role, text, id=None, model="", final=True):
+        if role != "user":
+            text = anrede(text)  # "Sir" oder z. B. "Chef" ([ich] anrede)
         self._each("message", role, text, id=id, model=model, final=final)
 
     def level(self, value):
         self._each("level", value)
 
     def toast(self, text, kind="info"):
-        self._each("toast", text, kind)
+        self._each("toast", anrede(text), kind)
 
     def config(self, **values):
         self._each("config", **values)

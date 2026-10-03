@@ -16,6 +16,8 @@ import time
 import urllib.error
 import urllib.request
 
+from .anrede import apply as anrede
+
 log = logging.getLogger(__name__)
 
 RELAY = "https://ntfy.sh"
@@ -43,7 +45,7 @@ class Push:
 
     def send(self, text: str, title: str = "Jarvis", priority: int = 3, click: str = "", wait: bool = False) -> bool:
         """Schickt eine Benachrichtigung. Ohne wait im Hintergrund (True heißt dann nur: unterwegs)."""
-        text = " ".join(str(text or "").split())
+        text = anrede(" ".join(str(text or "").split()))
         if not self.enabled or not text:
             return False
         now = time.monotonic()
@@ -64,7 +66,7 @@ class Push:
     def schedule(self, text: str, when, title: str = "Jarvis") -> bool:
         """Eine Benachrichtigung zur Zeit `when` (datetime): ntfy hält sie bis dahin zurück, sie kommt also
         auch, wenn der PC dann aus ist. Höchstens drei Tage im Voraus (Grenze von ntfy.sh)."""
-        text = " ".join(str(text or "").split())
+        text = anrede(" ".join(str(text or "").split()))
         if not self.enabled or not text:
             return False
         stamp = int(when.timestamp())

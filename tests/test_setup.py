@@ -138,8 +138,19 @@ class SettingsTest(SetupTestCase):
             set(info["values"]),
             {"mic", "ort", "name", "hotkey", "threshold", "autostart", "full_permission", "ha_url", "ha_token_set",
              "speed", "tts_engine", "eleven_key_set", "eleven_voice", "eleven_voice_name", "groq_key_set",
-             "pico_key_set", "gespraech", "name_allein"},
+             "pico_key_set", "gespraech", "name_allein", "ton", "anrede"},
         )
+
+    def test_talk_style_sets_tone_and_address(self):
+        self.assertEqual(self.api.hello()["values"]["ton"], "butler")
+        result = self.api.talk_save("locker")
+        self.assertEqual((result["ok"], result["anrede"]), (True, "Chef"))
+        self.assertEqual((self.saved()["ich"]["ton"], self.saved()["ich"]["anrede"]), ("locker", "Chef"))
+        self.api.talk_save("butler")
+        self.assertEqual(self.saved()["ich"]["anrede"], "Sir")
+        self.api._cfg["ich"]["anrede"] = "Boss"
+        self.assertEqual(self.api.talk_save("locker")["anrede"], "Boss", "ein eigenes Wort bleibt")
+        self.assertFalse(self.api.talk_save("frech")["ok"])
 
     def test_microphones_are_listed_once_and_saved_by_name(self):
         with mock.patch("jarvis.audio.input_devices", return_value=DEVICES):

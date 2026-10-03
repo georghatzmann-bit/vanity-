@@ -92,6 +92,7 @@
     place: { saved: '', lastChecked: '', result: null, seq: 0 },
     claude: { state: 'idle', message: '', model: '', version: '', detail: '', note: '', polling: false },
     speed: 'auto',
+    talk: 'butler',
     hotkeys: [], hotkey: '', autostart: false, fullPermission: true,
     ha: { url: '', tokenSet: false, echos: [] },
     finishing: false,
@@ -1087,6 +1088,32 @@
     return false;
   }
 
+  function renderTalk() {
+    document.querySelectorAll('#talkStyle [data-style]').forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.style === S.talk));
+    });
+  }
+
+  async function chooseTalk(style) {
+    if (!style || style === S.talk) return;
+    const before = S.talk;
+    S.talk = style;
+    renderTalk();
+    try {
+      const r = await call('talk_save', style);
+      if (r && r.ok) toast(style === 'locker' ? 'Jarvis sagt ab jetzt „' + (r.anrede || 'Chef') + '“.' : 'Jarvis sagt ab jetzt „' + (r.anrede || 'Sir') + '“.', 'ok');
+      else {
+        S.talk = before;
+        renderTalk();
+        toast((r && r.error) || 'Das ließ sich nicht speichern.', 'error');
+      }
+    } catch (err) {
+      S.talk = before;
+      renderTalk();
+      failed(err);
+    }
+  }
+
   function placeEnter() {
     const input = $('placeInput');
     if (!S.place.result) showWeather(null);
@@ -1593,6 +1620,8 @@
     S.tts.tab = S.tts.engine === 'elevenlabs' ? 'premium' : 'local';
     S.place.saved = String(v.ort || '');
     S.name = String(v.name || '');
+    S.talk = v.ton === 'locker' ? 'locker' : 'butler';
+    renderTalk();
     if ($('nameInput') && !$('nameInput').value) $('nameInput').value = S.name;
     S.hotkey = String(v.hotkey || '');
     S.autostart = !!v.autostart;
@@ -1709,6 +1738,9 @@
     $('claudeCopy').addEventListener('click', copyDetail);
     document.querySelectorAll('#speed [data-speed]').forEach((b) => {
       b.addEventListener('click', () => chooseSpeed(b.dataset.speed));
+    });
+    document.querySelectorAll('#talkStyle [data-style]').forEach((b) => {
+      b.addEventListener('click', () => chooseTalk(b.dataset.style));
     });
     $('claudeInstall').addEventListener('click', async () => {
       try {
@@ -1853,7 +1885,7 @@
         values: {
           mic: params.get('first') === '0' ? 'Headset (Arctis 7 Chat)' : '', ort: params.get('first') === '0' ? 'Wien' : '',
           hotkey: 'ctrl+alt+m', threshold: 0.5, autostart: false,
-          ha_url: '', ha_token_set: false, speed: 'auto',
+          ha_url: '', ha_token_set: false, speed: 'auto', ton: params.get('ton') || 'butler',
           tts_engine: params.get('eleven') === '1' ? 'elevenlabs' : 'lokal', eleven_key_set: params.get('eleven') === '1',
           eleven_voice: params.get('eleven') === '1' ? 'v_george' : '', eleven_voice_name: params.get('eleven') === '1' ? 'George' : '',
           groq_key_set: params.get('groq') === '1',
@@ -1982,6 +2014,7 @@
       ], 40),
       hotkey_save: () => later({ ok: true, error: '' }, 60),
       brain_speed: (key) => later({ ok: true, error: '', speed: key }, 80),
+      talk_save: (style) => later({ ok: true, error: '', ton: style, anrede: style === 'locker' ? 'Chef' : 'Sir' }, 80),
       autostart_set: (on) => later({ ok: true, enabled: !!on, error: '' }, 120),
       permission_set: () => later({ ok: true, error: '' }, 80),
       ha_check: () => later({

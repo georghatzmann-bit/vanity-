@@ -208,10 +208,12 @@ class ConnectionDotsTest(unittest.TestCase):
         from jarvis.gui.app import Api
 
         api = Api.__new__(Api)
-        api._assistant = mock.Mock(_cfg={}, server=mock.Mock(running=True), alexa=mock.Mock(connected=False))
-        self.assertEqual(api.connections(), {"phone": True, "alexa": False})
-        api._assistant = mock.Mock(_cfg={}, server=None, alexa=None)
-        self.assertEqual(api.connections(), {"phone": False, "alexa": False})
+        api._assistant = mock.Mock(_cfg={}, server=mock.Mock(running=True), alexa=mock.Mock(connected=False), telegram=None)
+        self.assertEqual(api.connections(), {"phone": True, "alexa": False, "telegram": False})
+        api._assistant = mock.Mock(_cfg={}, server=None, alexa=None, telegram=mock.Mock(enabled=True, chat_id=0))
+        self.assertEqual(api.connections(), {"phone": False, "alexa": False, "telegram": False}, "noch nicht gekoppelt")
+        api._assistant.telegram.chat_id = 42
+        self.assertTrue(api.connections()["telegram"])
 
     def test_no_discord_bot_anymore(self):
         """Den eigenen Discord-Bot gibt es nicht mehr (vermischte sich mit Discord ohne Maus)."""

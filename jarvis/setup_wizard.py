@@ -14,6 +14,7 @@ import threading
 import time
 from pathlib import Path
 
+from .anrede import TONES, from_config, tone_from_config
 from .config import CONFIG_PATH, HOME_DIR, ROOT, STATE_DIR, load_config, save_setting
 
 log = logging.getLogger(__name__)
@@ -361,6 +362,8 @@ class SetupApi:
                 "mic": str(cfg["audio"].get("input_device") or ""),
                 "ort": str(cfg.get("ich", {}).get("ort", "")),
                 "name": str(cfg.get("ich", {}).get("name", "")),
+                "ton": tone_from_config(cfg),
+                "anrede": from_config(cfg),
                 "hotkey": str(cfg["mute"].get("hotkey", "")),
                 "threshold": float(cfg["wakeword"]["threshold"]),
                 "autostart": enabled(),
@@ -792,8 +795,22 @@ class SetupApi:
     def place_save(self, text) -> dict:
         return self._save("ich", "ort", str(text or "").strip())
 
+    def talk_save(self, style) -> dict:
+        """Wie Jarvis redet: "butler" (Sir, förmlich wie im Film) oder "locker" (Chef, wie im Video)."""
+        style = str(style or "").strip().lower()
+        if style not in TONES:
+            return {"ok": False, "error": "Unbekannter Ton."}
+        word = "Chef" if style == "locker" else "Sir"
+        current = from_config(self._cfg)
+        if current not in ("Sir", "Chef"):
+            word = current  # ein eigenes Wort ("Boss") bleibt
+        result = self._save("ich", "ton", style)
+        if result.get("ok"):
+            result = self._save("ich", "anrede", word, {"anrede": word, "ton": style})
+        return result
+
     def name_save(self, text) -> dict:
-        """Wie der Nutzer heißt ([ich] name). Leer = Georg. Jarvis sagt trotzdem "Sir"."""
+        """Wie der Nutzer heißt ([ich] name). Leer = Georg. Die Anrede ("Sir", "Chef") ist extra (talk_save)."""
         from .config import user_name
 
         name = str(text or "").strip()

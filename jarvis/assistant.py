@@ -16,6 +16,8 @@ import time
 import urllib.parse
 
 from . import intents
+from .anrede import apply as anrede
+from .anrede import match_talk
 from .brain import BrainError, Cancelled, RefusalError
 from .text import SentenceSplitter, speakable, strip_sources
 from .ui import Ui
@@ -271,8 +273,8 @@ class Assistant:
             self._missed = []
         return items
 
-    def speech_wav(self, text: str) -> bytes:
-        """Ein Satz in Jarvis' Stimme als WAV-Datei (für die Handy-App)."""
+    def speech_wav(self, text: str, limit: int = 600) -> bytes:
+        """Ein Satz in Jarvis' Stimme als WAV-Datei (für die Handy-App und Sprachnachrichten in Telegram)."""
         import io
         import wave
 
@@ -280,7 +282,7 @@ class Assistant:
         from .tts import materialize
 
         tts = getattr(self, "tts", None)
-        text = speakable(text)[:600]
+        text = speakable(text)[:limit]
         if tts is None or not text:
             raise RuntimeError("Keine Stimme verfügbar")
         samples, rate = tts.synthesize(text)
@@ -311,7 +313,10 @@ class Assistant:
 
     def _push(self, text: str) -> None:
         push = getattr(self, "push", None)
-        if push is None or not push.enabled or not text:
+        telegram = getattr(self, "telegram", None)
+        push_on = push is not None and push.enabled
+        telegram_on = telegram is not None and telegram.enabled and telegram.chat_id
+        if not text or not (push_on or telegram_on):
             return
         try:
             # Sitzt Georg am PC, hört er es. Mit Controller im Vollbild zählt Windows keine Eingaben,
@@ -320,7 +325,10 @@ class Assistant:
                 return
         except Exception:
             pass
-        push.send(text, priority=4 if text.startswith("Erinnerung") else 3, click=self._phone_link())
+        if telegram_on:
+            threading.Thread(target=telegram.notify, args=(text,), name="jarvis-telegram-hinweis", daemon=True).start()
+        if push_on:
+            push.send(text, priority=4 if text.startswith("Erinnerung") else 3, click=self._phone_link())
 
     def _phone_link(self) -> str:
         """Tippen auf die Benachrichtigung öffnet die Handy-App (ohne Schlüssel, den hat das Handy schon)."""
@@ -336,10 +344,11 @@ class Assistant:
 
     def say(self, text: str) -> None:
         if self.speaker is not None:
-            self.speaker.say(text)
+            self.speaker.say(anrede(text))
 
-    def handle(self, text: str, speak: bool = True) -> str:
-        """Erledigt einen Befehl und gibt die Antwort als Text zurück."""
+    def handle(self, text: str, speak: bool = True, extra: str = "") -> str:
+        """Erledigt einen Befehl und gibt die Antwort als Text zurück. extra: geht nur an Claude, nicht in den Verlauf
+        (z. B. "Dazu ein Foto: <pfad>" aus Telegram). Dann erledigt immer Claude den Befehl, nie ein Sofort-Befehl."""
         text = text.strip()
         if not text:
             return ""
@@ -355,10 +364,10 @@ class Assistant:
                 self.learn("said", text, **({"geplant": True} if getattr(flags, "planned", False) else {}))
                 self._rest = ""
                 self._end_briefing(text)
-                answer = self._local_answer(text, speak)
+                answer = None if extra else self._local_answer(text, speak)
                 rest, self._rest = self._rest, ""
                 if answer is None:
-                    answer = self._ask_claude(text, speak)
+                    answer = self._ask_claude(f"{text}\n\n{extra}" if extra else text, speak)
                     tip = self._take_tip(answer)
                     if tip:
                         self.ui.message("jarvis", tip)
@@ -387,7 +396,7 @@ class Assistant:
             self.speaker.wait(timeout=120)
         self._last_turn_end = time.monotonic()
         self.update_state()
-        return answer
+        return anrede(answer)  # für Telegram, Alexa und das Handy: "Chef" statt "Sir", wenn Georg es so will
 
     def _end_briefing(self, text: str) -> None:
         """Georg sagt mitten im Briefing etwas anderes: Das Briefing hört auf (wie der Lagebericht), sonst liest
@@ -493,6 +502,20 @@ class Assistant:
                 answer = None
             if answer is not None:
                 return answer
+        talk = match_talk(text)
+        if talk is not None:
+            # "Nenn mich Chef", "Sprich lockerer", "Sei wieder förmlich"
+            return self._talk(*talk)
+        if self.memory is not None:
+            # "Mandelmus ist alle", "Was steht auf der Einkaufsliste?", "Milch gekauft"
+            from .einkauf import answer as shopping_answer
+            from .einkauf import match_einkauf
+
+            shopping = match_einkauf(text)
+            if shopping is not None:
+                done = shopping_answer(self.memory, *shopping)
+                if done is not None:
+                    return done
         if self.memory is not None:
             from .memory import match_memory
 
@@ -1130,6 +1153,41 @@ class Assistant:
         if not present and answer:
             self._push(f"{command}: {answer}")
 
+    def _talk(self, what: str, value: str) -> str:
+        """Anrede und Ton: sofort für Jarvis' eigene Sätze, für Claude ab der nächsten Antwort."""
+        from .anrede import DEFAULT, set_word, word
+        from .config import HOME_DIR, STATE_DIR, save_setting
+        from .persona import build_persona
+
+        me = self._cfg.setdefault("ich", {})
+        changes = {}
+        if what == "anrede":
+            changes["anrede"] = set_word(value)
+        else:
+            changes["ton"] = value
+            if value == "locker" and word() == DEFAULT:
+                changes["anrede"] = set_word("Chef")  # wie im Video
+            elif value == "butler" and word() == "Chef":
+                changes["anrede"] = set_word(DEFAULT)
+        for key, saved in changes.items():
+            me[key] = saved
+            try:
+                save_setting("ich", key, saved)
+            except OSError as exc:
+                log.warning("Anrede speichern: %s", exc)
+        if self.brain is not None:
+            try:
+                build_persona(HOME_DIR, STATE_DIR, self._cfg)
+                self.brain.new_conversation()  # Claude startet mit der neuen Persönlichkeit
+            except Exception as exc:
+                log.debug("Persönlichkeit neu: %s", exc)
+        now = word()
+        if what == "anrede":
+            return f"Sehr gern, {now}. Ab jetzt sage ich {now}."
+        if value == "locker":
+            return f"Alles klar, {now}. Ab jetzt etwas lockerer."
+        return f"Sehr wohl, {now}. Wieder ganz Butler."
+
     def _commands_list(self) -> str:
         commands = self.memory.custom_commands()
         if not commands:
@@ -1407,6 +1465,11 @@ class Assistant:
         push = getattr(self, "push", None)
         if push is not None and push.enabled:
             push.send(text, priority=4, click=self._phone_link())
+        telegram = getattr(self, "telegram", None)
+        if telegram is not None and telegram.enabled and telegram.chat_id:
+            # Unterwegs tippt Georg "Ja" vielleicht erst später: dann gilt das Angebot eine halbe Stunde
+            self._offer = (hint, time.monotonic() + 30 * 60)
+            threading.Thread(target=telegram.notify, args=(text,), name="jarvis-telegram-hinweis", daemon=True).start()
         self._note_missed(text)
 
     def _push_at(self, when: dt.datetime, text: str) -> str:

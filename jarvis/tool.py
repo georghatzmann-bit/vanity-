@@ -56,6 +56,9 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
   vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
+  einkauf                      zeigt Georgs Einkaufsliste
+  einkauf dazu "<ding>" ["<ding>" ...]   setzt etwas auf die Einkaufsliste ("Mandelmus")
+  einkauf weg "<ding>" ["<ding>" ...]    hakt etwas ab (gekauft)
   befehl "<name>" "<was>"      legt einen eigenen Befehl an: sagt Georg den Namen, erledigt Jarvis "<was>"
                                (z. B. befehl "Zockmodus" "Öffne Discord und Steam und mach den Gaming-Modus an")
   befehle                      zeigt Georgs eigene Befehle
@@ -275,6 +278,36 @@ def _dispatch(command: str, rest: list[str]) -> int:
         soon = memory.upcoming_birthdays(days=30)
         if soon:  # aus den Fakten und aus den iPhone-Kontakten
             print("Geburtstage in den nächsten 30 Tagen: " + "; ".join(_birthday_line(b) for b in soon[:10]))
+        return 0
+
+    if command in ("einkauf", "einkaufsliste"):
+        from .einkauf import join
+        from .memory import Memory, set_user
+
+        set_user(_user())
+        memory = Memory(STATE_DIR / "gedaechtnis.json")
+        action = (rest[0].lower() if rest else "")
+        items = [i.strip() for i in rest[1:] if i.strip()]
+        if action in ("dazu", "add", "neu", "auf"):
+            if not items:
+                print('Aufruf: einkauf dazu "<ding>"')
+                return 1
+            added = memory.shop_add(items)
+            print(f"Auf der Einkaufsliste: {join(added)}." if added else "Stand schon auf der Liste.")
+        elif action in ("weg", "gekauft", "ab", "loeschen", "löschen"):
+            if not items:
+                print('Aufruf: einkauf weg "<ding>"')
+                return 1
+            removed = memory.shop_remove(items)
+            print(f"Abgehakt: {join(removed)}." if removed else "Das stand nicht auf der Liste.")
+        elif action in ("leeren", "alles-gekauft"):
+            memory.shop_clear()
+            print("Die Einkaufsliste ist leer.")
+        elif action:
+            print('Aufruf: einkauf | einkauf dazu "<ding>" | einkauf weg "<ding>" | einkauf leeren')
+            return 1
+        listed = memory.shopping()
+        print("Einkaufsliste: " + (join(listed) + "." if listed else "leer."))
         return 0
 
     if command in ("befehl", "befehle", "befehl-loeschen", "befehl-löschen"):

@@ -47,6 +47,12 @@ def build_persona(home: Path, state_dir: Path, cfg: dict) -> Path:
         text = _permissions(base_file.read_text(encoding="utf-8"), full).rstrip() + "\n"
         if extra:
             text += "\n## Über Georg\n\n" + "\n".join(extra) + "\n"
+        from .anrede import DEFAULT, from_config, persona_section, tone_from_config
+
+        word = from_config(cfg)
+        if word != DEFAULT:
+            text = re.sub(r"\bSir\b", word, text)  # "Sprich Georg mit "Chef" an", auch in den Beispielen
+        text += ("\n" + persona_section(tone_from_config(cfg), word)) if tone_from_config(cfg) != "butler" else ""
         name = user_name(cfg)
         if name != "Georg":
             text = re.sub(r"\bGeorg", name, text)  # Jarvis ist für Georg geschrieben, hier heißt der Nutzer anders

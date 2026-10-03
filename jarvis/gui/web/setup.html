@@ -223,7 +223,11 @@
             <input id="nameInput" class="input" type="text" maxlength="30" placeholder="Dein Vorname, z. B. Georg" aria-label="Dein Vorname" spellcheck="false">
             <button type="submit" class="btn" id="nameSave">Speichern</button>
           </form>
-          <p class="note name-note">Damit Jarvis weiß, mit wem er spricht. Anreden wird er dich trotzdem mit „Sir“.</p>
+          <p class="note name-note">Damit Jarvis weiß, mit wem er spricht.</p>
+          <div class="segmented two talk-style" id="talkStyle" role="radiogroup" aria-label="Wie Jarvis redet">
+            <button type="button" role="radio" data-style="butler"><b>Butler wie im Film</b><small>Sagt „Sir“, ruhig und förmlich, mit trockenem Humor.</small></button>
+            <button type="button" role="radio" data-style="locker"><b>Locker wie im Video</b><small>Sagt „Chef“, warm und alltäglich, denkt mit und schlägt Dinge vor.</small></button>
+          </div>
           <form class="place-form" id="placeForm" autocomplete="off">
             <input id="placeInput" class="input" type="text" maxlength="80" placeholder="z. B. Wien oder Graz, Österreich" aria-label="Wohnort" spellcheck="false">
             <button type="submit" class="btn" id="placeCheck">Prüfen</button>

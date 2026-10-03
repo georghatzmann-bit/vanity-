@@ -125,6 +125,9 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .memory import set_user
 
     set_user(user_name(cfg))
+    from .anrede import from_config, set_word
+
+    set_word(from_config(cfg))  # "Sir" wie im Film oder z. B. "Chef" ([ich] anrede, "Nenn mich Chef")
     assistant.memory = Memory(STATE_DIR / "gedaechtnis.json")
     if brain is not None:
         brain.context = assistant.memory.context
@@ -180,6 +183,13 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .push import Push
 
     assistant.push = Push(cfg)  # Benachrichtigungen aufs Handy (Verbinden > Handy)
+    # Telegram: Jarvis vom Handy von überall, Text und Sprachnachrichten (Verbinden > Telegram)
+    from .config import save_setting as _save_setting
+    from .telegram import TelegramBot
+
+    assistant.telegram = TelegramBot(cfg, assistant, save=_save_setting, folder=STATE_DIR / "telegram")
+    assistant.telegram.on_paired = lambda who: ui.toast("Telegram ist verbunden" + (f" ({who})" if who else "") + ".", "ok")
+    assistant.telegram.start()
     # Hinweise von selbst: Seltsames am PC, Vergessenes, "Während Sie weg waren" (hinweise.py)
     from .hinweise import Watcher
 

@@ -13,6 +13,9 @@
   Das Gesagte selbst ist nach drei Tagen weg, die Sitzungen mit ihren Themen bleiben. So weiß Jarvis auch
   nächste Woche noch, woran sie zuletzt gearbeitet haben ("Was haben wir zuletzt gemacht?").
 
+- Einkaufsliste: "Mandelmus ist alle", "Milch gekauft" (einkauf.py). Mit Standort über Telegram sagt Jarvis,
+  wo der nächste Supermarkt ist.
+
 Das Gehirn bekommt zu Beginn jeder Unterhaltung eine kurze Zusammenfassung (`context`).
 Alles bleibt auf dem PC, in daten/gedaechtnis.json.
 """
@@ -49,6 +52,7 @@ MAX_TRIGGER_WORDS = 6
 MAX_ADDRESS_BOOK = 500  # Geburtstage aus den iPhone-Kontakten
 SESSION_GAP = 20  # Minuten Pause: danach beginnt eine neue Sitzung
 MAX_SESSIONS = 60  # so viele abgeschlossene Sitzungen bleiben gespeichert
+MAX_SHOPPING = 60  # Einträge auf der Einkaufsliste
 MAX_THEMES = 6  # Themen je Sitzung
 SESSION_DAYS = 7  # die Sitzungen dieser Tage bekommt das Gehirn zu Beginn mit
 # Diese Wörter braucht Jarvis selbst ("Stopp" hält alles an, "Ja" beantwortet eine Frage).
@@ -72,6 +76,16 @@ def set_user(name: str) -> None:
 
 def _key(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\wäöüß ]+", " ", str(text).lower())).strip()
+
+
+def _same_item(listed: str, said: str) -> bool:
+    """"Milch" hakt "Hafermilch" nicht ab, aber "das Mandelmus" das "Mandelmus" und "Eier" die "Eier (10 Stück)"."""
+    a, b = listed.split(), said.split()
+    if not a or not b:
+        return False
+    if a[0] == b[0] or a[-1] == b[-1]:
+        return set(a) <= set(b) or set(b) <= set(a)
+    return False
 
 
 def _minutes(when: dt.datetime) -> int:
@@ -193,7 +207,8 @@ class Memory:
             if not isinstance(data, dict):
                 data = {}
             for name, empty in (("fakten", []), ("kontakte", {}), ("ereignisse", []), ("vorschlaege", {}),
-                                ("befehle", {}), ("adressbuch", []), ("vorhaben", []), ("sitzungen", [])):
+                                ("befehle", {}), ("adressbuch", []), ("vorhaben", []), ("sitzungen", []),
+                                ("einkauf", [])):
                 if not isinstance(data.get(name), type(empty)):
                     data[name] = empty
             self._data = data
@@ -263,12 +278,66 @@ class Memory:
     def forget_all(self) -> None:
         with self._lock:
             self._data = {"fakten": [], "kontakte": {}, "ereignisse": [], "vorschlaege": {}, "befehle": {},
-                          "adressbuch": [], "sitzungen": []}
+                          "adressbuch": [], "sitzungen": [], "einkauf": []}
             self._save()
 
     def facts(self) -> list[dict]:
         with self._lock:
             return list(self._load()["fakten"])
+
+    # ------------------------------------------------------------------ Einkaufsliste
+
+    def shopping(self) -> list[str]:
+        """Was auf der Einkaufsliste steht ("Mandelmus ist alle"), älteste zuerst."""
+        with self._lock:
+            return [str(item.get("text", "")) for item in self._load()["einkauf"] if item.get("text")]
+
+    def shop_add(self, items: list[str]) -> list[str]:
+        """Setzt Dinge auf die Einkaufsliste. Was schon draufsteht, kommt nicht doppelt. Gibt die neuen zurück."""
+        added = []
+        with self._lock:
+            listed = self._load()["einkauf"]
+            known = {_key(item.get("text", "")) for item in listed}
+            stamp = self._now().isoformat(timespec="minutes")
+            for raw in items:
+                text = " ".join(str(raw).split()).strip(" .,;:!?")[:80]
+                if len(text) < 2 or _key(text) in known or is_secret(text):
+                    continue
+                text = text[:1].upper() + text[1:]
+                listed.append({"text": text, "seit": stamp})
+                known.add(_key(text))
+                added.append(text)
+            if added:
+                del listed[:-MAX_SHOPPING]
+                self._save()
+        return added
+
+    def shop_remove(self, items: list[str]) -> list[str]:
+        """Hakt Dinge ab ("Mandelmus gekauft"). Gibt zurück, was wirklich auf der Liste stand."""
+        wanted = [_key(i) for i in items if _key(i)]
+        removed = []
+        with self._lock:
+            listed = self._load()["einkauf"]
+            keep = []
+            for item in listed:
+                key = _key(item.get("text", ""))
+                if key and any(key == w or _same_item(key, w) for w in wanted):
+                    removed.append(str(item.get("text", "")))
+                else:
+                    keep.append(item)
+            if removed:
+                listed[:] = keep
+                self._save()
+        return removed
+
+    def shop_clear(self) -> int:
+        with self._lock:
+            listed = self._load()["einkauf"]
+            count = len(listed)
+            if count:
+                listed.clear()
+                self._save()
+        return count
 
     # ------------------------------------------------------------------ Eigene Befehle
 
@@ -674,6 +743,10 @@ class Memory:
         if soon:  # die aus den Fakten stehen oben schon
             lines.append("Geburtstage bald (aus dem iPhone): " + "; ".join(
                 f"{b['shown']} am {int(b['datum'][8:10])}. {MONTH_NAMES[int(b['datum'][5:7]) - 1]}" for b in soon) + ".")
+        shopping = self.shopping()
+        if shopping:
+            lines.append(f"Auf {USER}s Einkaufsliste: " + ", ".join(shopping[:30]) + ". Ändern mit: python -m jarvis.tool "
+                         "einkauf dazu \"<Ding>\" oder einkauf weg \"<Ding>\".")
         plans = self.plans_for(now.date())
         if plans:
             lines.append(f"Was {USER} heute vorhatte (aus früheren Gesprächen): " + "; ".join(p["was"] for p in plans) + ".")

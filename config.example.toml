@@ -2,8 +2,14 @@
 # dort kannst du alles anpassen. Was in config.toml fehlt, kommt von hier.
 
 [ich]
-# Dein Vorname, damit Jarvis weiß, mit wem er spricht (leer = Georg). Er sagt trotzdem "Sir".
+# Dein Vorname, damit Jarvis weiß, mit wem er spricht (leer = Georg). Wie er dich anspricht, steht bei anrede.
 name = ""
+# Wie Jarvis dich anspricht: "Sir" wie im Film, "Chef" wie im Video oder ein eigenes Wort.
+# Per Sprache: "Nenn mich Chef", "Nenn mich wieder Sir".
+anrede = "Sir"
+# "butler" = ruhig und förmlich wie im Film, "locker" = warm und alltäglich wie ein persönlicher Assistent.
+# Per Sprache: "Sprich lockerer", "Sei wieder förmlich".
+ton = "butler"
 # Dein Wohnort, damit Jarvis beim Wetter weiß, wo du bist (z. B. "Wien"). Das Fenster zeigt dann auch das aktuelle Wetter.
 ort = ""
 # Was Jarvis sonst über dich wissen soll, in einem Satz (optional).
@@ -307,6 +313,23 @@ blender_pfad = ""
 close_apps = []
 # Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
 power_plan = true
+
+[telegram]
+# Jarvis vom Handy über Telegram, von überall: schreiben, Sprachnachricht, Foto oder Standort schicken. Jarvis
+# antwortet mit Text und in seiner Stimme und schreibt von selbst (Erinnerungen, Hinweise, Briefing), wenn Sie
+# nicht am PC sitzen. Einrichten im Fenster unter Verbinden > Telegram (Bot beim @BotFather anlegen).
+aktiv = false
+# Der Schlüssel vom @BotFather und der Chat, dem der Bot gehört (entsteht beim Verbinden). Nicht weitergeben.
+token = ""
+chat_id = 0
+name = ""
+# true = Antworten auf Sprachnachrichten kommen auch als Sprachnachricht in Jarvis' Stimme.
+sprache = true
+# true = Erinnerungen und Hinweise kommen zusätzlich als Sprachnachricht (wie ein kurzer Anruf von Jarvis).
+sprache_hinweise = true
+# true = Schicken Sie Ihren Standort, nennt Jarvis den nächsten Supermarkt und die Einkaufsliste. Mit
+# Live-Standort meldet er sich unterwegs, wenn Sie an einem vorbeikommen. Die Suche läuft über OpenStreetMap.
+standort = true
 
 [alexa]
 # "Alexa, sag Jarvis, er soll Discord öffnen": ein eigener Alexa-Skill, ohne Home Assistant und
