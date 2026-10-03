@@ -502,6 +502,11 @@ class Assistant:
                 answer = None
             if answer is not None:
                 return answer
+        from . import verbrauch
+
+        if verbrauch.is_question(text):
+            # "Wie viel Claude habe ich noch?": steht schon da, Claude muss dafür nicht gefragt werden
+            return verbrauch.describe()
         plugins = _plugin_command(text)
         if plugins is not None:
             # "Richte die Claude-Plugins ein", "Installiere Everything Claude Code" (für Georgs Claude, nicht für Jarvis)

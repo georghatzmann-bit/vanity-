@@ -578,6 +578,10 @@ def run_gui(cfg: dict, args) -> int:
     bridge = GuiBridge()
     console = ConsoleUi()
     ui = MultiUi(console, bridge)
+    # Claude-Kontingent wie im Video: meldet Claude Code einen neuen Stand, zeigt das Fenster ihn sofort
+    from . import verbrauch
+
+    verbrauch.listeners.append(bridge.usage)
     assistant = build_core(cfg, ui, args.silent)
     window: Window
     tray_ref: list[Tray] = []

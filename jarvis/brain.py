@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import konnektoren
+from . import konnektoren, verbrauch
 from .modellwahl import Choice, Chooser, family
 
 log = logging.getLogger(__name__)
@@ -1302,6 +1302,13 @@ class _StreamReader:
             self._assistant(message)
         elif kind == "user":
             self._tool_results(event.get("message") or {})
+        elif kind == "rate_limit_event":
+            # Wie viel vom Claude-Kontingent weg ist (Fünf-Stunden- und Wochenfenster), fürs Fenster und
+            # "Wie viel Claude habe ich noch?"
+            try:
+                verbrauch.note(event.get("rate_limit_info"))
+            except Exception as exc:
+                log.debug("Claude-Verbrauch: %s", exc)
 
     def _system(self, event: dict) -> None:
         subtype = event.get("subtype")

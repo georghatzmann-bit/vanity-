@@ -296,6 +296,18 @@ GESPRAECH = r"""
 """
 
 
+KERN = r"""
+(() => {
+  const pick = document.querySelector('.kern-pick[data-kern="partikel"]');
+  if (pick) pick.click();
+  const r = document.getElementById('kern').getBoundingClientRect();
+  return { kern: document.body.dataset.kern || '', rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+           zustaende: document.querySelectorAll('#kernStates li').length,
+           karte: !!document.getElementById('usageCard') };
+})()
+"""
+
+
 SYSTEM = r"""
 (() => {
   const q = (s) => document.querySelector(s);
@@ -488,6 +500,20 @@ def main() -> int:
         check("Peitsche da", bool(g.get("peitsche")))
         note("Energie-Kugel in WebView2",
              f"Art: {g.get('kugel') or 'keine'}, {bright:.0%} der Fläche hell, {moved:.0%} bewegt sich in 0,7 s")
+        # Der Partikel-Kern wie im Video „Claude OS“ (kern.js, Canvas 2D: braucht kein WebGL)
+        k = tools.evaluate(KERN)
+        tools.pump(1.5)
+        first = tools.screenshot("oberflaeche-partikel.png")
+        bright, a = orb_numbers(first, k["rect"], dpr)
+        tools.pump(0.7)
+        second = tools.screenshot("oberflaeche-partikel-2.png")
+        _, b = orb_numbers(second, k["rect"], dpr)
+        moved = float((abs(a - b).max(axis=2) > 12).mean()) if a.shape == b.shape and a.size else 0.0
+        check("Partikel-Kern eingeschaltet", k.get("kern") == "partikel", k.get("kern") or "keiner")
+        check("Partikel-Kern leuchtet", bright > 0.01, f"{bright:.1%} hell")
+        check("Partikel-Kern bewegt sich", moved > 0.003, f"{moved:.1%} anders nach 0,7 s")
+        check("Zustände und Kontingent-Karte da", k.get("zustaende") == 5 and k.get("karte"), json.dumps(k))
+        tools.evaluate("document.querySelector('.kern-pick[data-kern=\"plasma\"]').click(), true")
         system_check(tools)
         tools.evaluate("document.getElementById('tabZentrale').click(), true")
         tools.pump(1)

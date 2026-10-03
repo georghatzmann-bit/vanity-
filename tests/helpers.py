@@ -1,6 +1,9 @@
 """Gemeinsame Hilfen für die Tests: ein falsches `claude` und kleine Attrappen."""
 
+import atexit
+import shutil
 import sys
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -11,6 +14,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from jarvis.audio import FRAME_SAMPLES  # noqa: E402
+from jarvis import verbrauch as _verbrauch  # noqa: E402
+
+# Ein echter Claude-Verbrauch in daten/ (Jarvis lief schon aus diesem Ordner) darf keinen Test beeinflussen
+_verbrauch.DIR = Path(tempfile.mkdtemp(prefix="jarvis-test-verbrauch-"))
+atexit.register(shutil.rmtree, _verbrauch.DIR, True)
 
 
 def frame(level: int) -> np.ndarray:

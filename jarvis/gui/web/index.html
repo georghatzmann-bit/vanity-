@@ -289,6 +289,11 @@
       </aside>
 
       <main class="stage">
+        <div class="kern-floor" aria-hidden="true"></div>
+        <div class="kern-switch" role="group" aria-label="Aussehen des Kerns">
+          <button type="button" class="kern-pick" data-kern="plasma" aria-pressed="true" title="Die Energie-Kugel in den HUD-Ringen">Energie-Kugel</button>
+          <button type="button" class="kern-pick" data-kern="partikel" aria-pressed="false" title="Der Partikel-Kern wie im Video „Claude OS“">Partikel-Kern</button>
+        </div>
         <div class="core-wrap" id="coreWrap" role="button" tabindex="0" aria-label="Jarvis sofort zuhören lassen" title="Klicken: Jarvis hört sofort zu. Mit gedrückter Maustaste drehen.">
           <svg class="hud-rings" viewBox="0 0 400 400" aria-hidden="true">
             <g class="ring ring-outer"><circle cx="200" cy="200" r="194"/></g>
@@ -299,7 +304,19 @@
             <g class="ring-cross"><path d="M200 0v26M200 374v26M0 200h26M374 200h26"/><circle cx="200" cy="12" r="4"/><circle cx="200" cy="388" r="4"/></g>
           </svg>
           <canvas id="core" aria-hidden="true"></canvas>
+          <canvas id="kern" class="kern" aria-hidden="true"></canvas>
         </div>
+        <div class="kern-name" aria-hidden="true">
+          <p class="kern-word">Jarvis</p>
+          <p class="kern-mode" id="kernMode">Partikel-Kern · bereit</p>
+        </div>
+        <ol class="kern-states" id="kernStates" aria-label="Zustand">
+          <li data-state="idle">Bereit</li>
+          <li data-state="listening">Hört zu</li>
+          <li data-state="thinking">Arbeitet</li>
+          <li data-state="speaking">Spricht</li>
+          <li data-state="error">Störung</li>
+        </ol>
         <div class="feedback-btns" role="group" aria-label="Peitsche und Lob">
           <button type="button" class="feedback-btn" id="whipBtn" data-tool="peitsche" aria-pressed="false" title="Antreiben: Peitsche in die Hand nehmen, klicken lässt sie knallen. Jarvis antwortet eine Viertelstunde lang flotter. Oder sagen Sie „Schneller!“.">
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20 9 13"/><path d="M9 13c3-6 9-8 11-5 2 3-3 6-6 4"/></svg>
@@ -389,6 +406,16 @@
             </svg>
             <small class="spark-label">Prozessor, letzte zwei Minuten</small>
           </div>
+        </section>
+
+        <section class="card hud-card usage-card" id="usageCard" aria-labelledby="usageHead" data-knapp="0" data-da="0">
+          <header class="card-head">
+            <h2 id="usageHead">Kontingent</h2>
+            <span class="usage-num"><b id="usageWeek">–</b> %</span>
+          </header>
+          <div class="usage-bar" aria-hidden="true"><i id="usageBar"></i></div>
+          <p class="usage-note" id="usageNote" hidden></p>
+          <p class="usage-line" id="usageLine">Noch keine Werte. Nach der nächsten Frage an Claude steht hier, wie viel vom Wochenkontingent weg ist.</p>
         </section>
 
         <section class="card hud-card mem-panel" aria-labelledby="memHead">
@@ -1058,6 +1085,7 @@
   <script src="gedaechtnis.js"></script>
   <script src="orb.js"></script>
   <script src="plasma.js"></script>
+  <script src="kern.js"></script>
   <script src="zentrale.js"></script>
   <script src="system.js"></script>
   <script src="antreiber.js"></script>

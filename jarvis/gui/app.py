@@ -102,6 +102,13 @@ class GuiBridge(Ui):
     def suggestion(self, offer: dict | None) -> None:
         self._push({"type": "suggestion", "offer": offer})
 
+    def usage(self, shown: dict) -> None:
+        """Neuer Stand vom Claude-Kontingent (verbrauch.view). Nur der neueste zählt."""
+        with self._lock:
+            for old in [e for e in self._events if e.get("type") == "usage"]:
+                self._events.remove(old)
+        self._push({"type": "usage", **(shown or {})})
+
     def action(self, kind: str) -> None:
         self._push({"type": "action", "kind": str(kind or "")})
 
@@ -1071,6 +1078,12 @@ class Api:
 
     def _zentrale(self):
         return getattr(self._assistant, "zentrale", None)
+
+    def usage_state(self) -> dict:
+        """Kontingent-Karte beim Laden des Fensters: wie viel vom Claude-Abo diese Woche weg ist."""
+        from ..verbrauch import view
+
+        return view()
 
     def zentrale_state(self) -> dict | None:
         """Alles, was die Zentrale zeigt (beim Laden des Fensters; danach kommen Änderungen als Ereignis)."""

@@ -129,6 +129,7 @@
     workshop_preview: (folder) => window.pywebview.api.workshop_preview(folder),
     open_folder: (path) => window.pywebview.api.open_folder(path),
     memory_state: () => window.pywebview.api.memory_state(),
+    usage_state: () => window.pywebview.api.usage_state(),
     phone_info: () => window.pywebview.api.phone_info(),
     connections: () => window.pywebview.api.connections(),
     push_info: () => window.pywebview.api.push_info(),
@@ -200,6 +201,13 @@
     ramRing: $('ramRing'),
     sparkLine: $('sparkLine'),
     sparkFill: $('sparkFill'),
+    usageCard: $('usageCard'),
+    usageWeek: $('usageWeek'),
+    usageBar: $('usageBar'),
+    usageLine: $('usageLine'),
+    usageNote: $('usageNote'),
+    kernStates: $('kernStates'),
+    kernMode: $('kernMode'),
     micName: $('micName'),
     micHint: $('micHint'),
     listenKey: $('listenKey'),
@@ -330,6 +338,7 @@
     if (!S.hintTimer) el.stateHint.textContent = hintFor(state);
     el.stopBtn.disabled = !(state === 'speaking' || state === 'thinking');
     Core.setState(state);
+    renderKernState(state);
     if (Zentrale) Zentrale.state(state);
     if (Antreiber) Antreiber.state(state);
     if (Blaupause && Blaupause.mic) Blaupause.mic(state, S.talking);
@@ -905,6 +914,7 @@
       case 'toast': toast(ev.text, ev.kind); break;
       case 'suggestion': if (Gedaechtnis) Gedaechtnis.offer(ev.offer); break;
       case 'config': applyConfig(ev); break;
+      case 'usage': renderUsage(ev); break;
       case 'stats':
         setGauge(el.cpuNum, el.cpuRing, ev.cpu);
         setGauge(el.ramNum, el.ramRing, ev.ram);
@@ -974,6 +984,7 @@
     if (Gedaechtnis) Gedaechtnis.refresh();
     if (Koppeln && Koppeln.dots) Koppeln.dots();
     if (Zentrale) call('zentrale_state').then((d) => Zentrale.load(d)).catch(() => {});
+    call('usage_state').then(renderUsage).catch(() => {});
     if (System) System.connected();
     refreshDeck();
     refreshToday();
@@ -1049,7 +1060,11 @@
     el.stopBtn.addEventListener('click', () => call('stop').catch(() => {}));
     el.setupBtn.addEventListener('click', openSetup);
     el.micChange.addEventListener('click', openSetup);
-    el.coreWrap.addEventListener('click', listenNow);
+    el.coreWrap.addEventListener('click', () => {
+      if (Core.dragged()) return; // den Partikel-Kern gedreht, nicht geklickt
+      listenNow();
+    });
+    document.querySelectorAll('.kern-pick').forEach((b) => b.addEventListener('click', () => setKern(b.dataset.kern)));
     el.coreWrap.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -1150,46 +1165,123 @@
   //   aufblühen. Hier nur die Verbindung zum Fenster.
   // ==================================================================
 
+  const KERN_KEY = 'jarvis.kern';
+
+  function kernLook() {
+    return document.body.dataset.kern === 'partikel' ? 'partikel' : 'plasma';
+  }
+
   const Core = (() => {
     let orb = null;
+    let kern = null;
     let state = 'idle';
+    const both = (fn) => {
+      if (orb) fn(orb);
+      if (kern) fn(kern);
+    };
     return {
       start(node) {
         // Liegt die Werkstatt darüber oder ist die Zentrale vorne, muss die Kugel nicht zeichnen
         const visible = () => document.body.dataset.view === 'hud' && document.body.dataset.home === 'gespraech'
           && document.body.dataset.fenster !== 'zu';
         // Die Energie-Kugel im HUD (plasma.js, WebGL), ohne WebGL die ruhige Linien-Kugel (orb.js)
-        if (window.JarvisPlasma) orb = window.JarvisPlasma.create(node, { size: 'hero', visible });
+        const orbVisible = () => visible() && kernLook() === 'plasma';
+        if (window.JarvisPlasma) orb = window.JarvisPlasma.create(node, { size: 'hero', visible: orbVisible });
         if (orb) document.body.dataset.kugel = 'plasma';
         if (!orb && window.JarvisOrb) {
-          orb = window.JarvisOrb.create(node, { mode: 'hero', visible });
+          orb = window.JarvisOrb.create(node, { mode: 'hero', visible: orbVisible });
           if (orb) document.body.dataset.kugel = 'linien';
         }
-        if (orb) orb.state(state);
+        // Der Partikel-Kern wie im Video „Claude OS“ (kern.js), auf seiner eigenen Leinwand
+        const canvas = document.getElementById('kern');
+        if (window.JarvisKern && canvas) {
+          kern = window.JarvisKern.create(canvas, { visible: () => visible() && kernLook() === 'partikel' });
+        }
+        both((c) => c.state(state));
         const shown = () => document.body.dataset.fenster !== 'zu';
         if (window.JarvisOrb) document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark', visible: shown }));
       },
       setState(value) {
         state = value;
-        if (orb) orb.state(value);
+        both((c) => c.state(value));
       },
       level(value) {
-        if (orb) orb.level(value);
+        both((c) => c.level(value));
       },
       boot() {
-        if (orb) orb.boot();
+        both((c) => c.boot());
       },
       pulse() {
-        if (orb) orb.pulse();
+        both((c) => c.pulse());
       },
       gesture(kind, hold) {
-        if (orb && orb.gesture) orb.gesture(kind, hold);
+        both((c) => c.gesture && c.gesture(kind, hold));
       },
       talk(on) {
-        if (orb && orb.talk) orb.talk(on);
+        both((c) => c.talk && c.talk(on));
+      },
+      dragged() {
+        return !!(kern && kernLook() === 'partikel' && kern.dragged && kern.dragged());
+      },
+      hasKern() {
+        return !!kern;
       },
     };
   })();
+
+  // Energie-Kugel oder Partikel-Kern (Knöpfe über der Kugel), gemerkt für den nächsten Start
+  function setKern(name, remember) {
+    const want = name === 'partikel' && Core.hasKern() ? 'partikel' : 'plasma';
+    document.body.dataset.kern = want;
+    document.querySelectorAll('.kern-pick').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.kern === want)));
+    if (remember !== false) {
+      try { localStorage.setItem(KERN_KEY, want); } catch { /* egal */ }
+    }
+    Core.boot();
+  }
+
+  const KERN_WORDS = {
+    idle: 'bereit', listening: 'hört zu', thinking: 'arbeitet', speaking: 'spricht', muted: 'stumm', error: 'Störung',
+  };
+
+  function renderKernState(state) {
+    if (el.kernStates) {
+      el.kernStates.querySelectorAll('li').forEach((li) => {
+        if (li.dataset.state === state) li.dataset.on = '1';
+        else delete li.dataset.on;
+      });
+    }
+    if (el.kernMode) el.kernMode.textContent = 'Partikel-Kern · ' + (KERN_WORDS[state] || 'bereit');
+  }
+
+  // Kontingent: wie viel vom Claude-Abo diese Woche weg ist (verbrauch.py)
+  function renderUsage(u) {
+    if (!el.usageCard || !u) return;
+    const has = !!u.da && u.woche !== null && u.woche !== undefined;
+    el.usageCard.dataset.da = has ? '1' : '0';
+    el.usageCard.dataset.knapp = u.knapp || u.status === 'rejected' ? '1' : '0';
+    const note = u.status === 'rejected' ? 'Aufgebraucht. Jarvis antwortet, sobald es wieder frei ist.'
+      : u.knapp ? 'Knapp: Schwere Aufgaben macht Jarvis jetzt sparsamer.' : '';
+    el.usageNote.textContent = note;
+    el.usageNote.hidden = !note;
+    if (!has) {
+      el.usageWeek.textContent = '–';
+      el.usageBar.style.width = '0%';
+      el.usageLine.textContent = u.fuenf_stunden !== null && u.fuenf_stunden !== undefined
+        ? 'Fünf-Stunden-Fenster: ' + u.fuenf_stunden + ' %. Die Woche meldet Claude bei der nächsten Frage.'
+        : 'Noch keine Werte. Nach der nächsten Frage an Claude steht hier, wie viel vom Wochenkontingent weg ist.';
+      return;
+    }
+    const week = clamp(Number(u.woche) || 0, 0, 100);
+    el.usageWeek.textContent = String(Math.round(week));
+    el.usageBar.style.width = week + '%';
+    const parts = ['Claude-Abo, diese Woche' + (u.woche_endet ? ', neu ' + u.woche_endet : '') + '.'];
+    if (u.fuenf_stunden !== null && u.fuenf_stunden !== undefined) {
+      parts.push('Fünf Stunden: ' + u.fuenf_stunden + ' %' + (u.fuenf_endet ? ', frei ' + u.fuenf_endet : '') + '.');
+    }
+    el.usageLine.textContent = parts.join(' ');
+    el.usageCard.title = 'Wie viel vom Claude-Kontingent diese Woche verbraucht ist. Fragen Sie auch: „Wie viel Claude habe ich noch?“';
+  }
 
   // ==================================================================
   //   Demo-Modus: gleiche Methoden wie die Python-Api, mit Beispieldaten
@@ -1444,6 +1536,11 @@
       workshop_tell: () => Promise.resolve(true),
       workshop_preview: () => Promise.reject(new Error('Demo')),
       memory_state: () => Promise.resolve(DEMO_MEMORY),
+      usage_state: () => Promise.resolve({
+        da: true, woche: 34, fuenf_stunden: 12, woche_endet: 'Donnerstag um 16 Uhr', fuenf_endet: 'um 19 Uhr',
+        status: 'allowed', knapp: /[?&]knapp\b/.test(location.search), extra: false, stand: Date.now() / 1000,
+        verlauf: [4, 6, 9, 12, 15, 17, 21, 24, 26, 29, 31, 34],
+      }),
       phone_info: () => Promise.resolve(DEMO_PHONE),
       connections: () => Promise.resolve({ phone: !!DEMO_PHONE.enabled, alexa: !!DEMO_ALEXA.enabled, telegram: !!DEMO_TG.paired }),
       push_info: () => Promise.resolve(DEMO_PUSH),
@@ -1747,6 +1844,9 @@
     bindUi();
     tickClock();
     Core.start(el.core);
+    let kernWanted = params.get('kern') || 'plasma';
+    try { kernWanted = params.get('kern') || localStorage.getItem(KERN_KEY) || 'plasma'; } catch { /* egal */ }
+    setKern(kernWanted, false);
     renderState(true);
     renderRecent();
     setLink('wait');

@@ -53,6 +53,7 @@ Handy    → eigene Web-App im WLAN (QR-Code) oder Telegram-Bot von überall, Al
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** In der ersten Sprechpause erkennt Jarvis den Satz schon vorab. Ist es ein Sofort-Befehl („Öffne Spotify“), legt er nach knapp einer halben Sekunde Stille los statt nach einer. Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt. Im Protokoll steht pro Befehl eine Tempo-Zeile.
 - **Gespräch ohne Weckwort:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, Ring um die Kugel). Weiterreden reicht; „Danke“, „Alles klar“, „Tschüss“ oder Stille beenden das Gespräch. „Jarvis“, „Okay Jarvis“ und „Hallo Jarvis“ wecken ihn auch.
+- **Wie im Video „Claude OS“:** Über der Kugel umschaltbar der **Partikel-Kern**, eine Wolke aus verbundenen Lichtpunkten über einem Linienboden, mit eigener Farbe je Zustand und einer Leiste Bereit · Hört zu · Arbeitet · Spricht · Störung (`kern.js`, Canvas ohne Bibliothek). Rechts die Karte **Kontingent**: wie viel vom Claude-Abo diese Woche weg ist, mit Fünf-Stunden-Fenster und Zurücksetzen. Die Zahlen meldet Claude Code selbst (`rate_limit_event` im stream-json, mit echtem Claude Code nachgeprüft), Jarvis liest sie mit (`verbrauch.py`). „Wie viel Claude habe ich noch?“ beantwortet er sofort, und ab 90 Prozent nimmt er für schwere Aufgaben von selbst das sparsamere Modell.
 - **Drei Ansichten im Fenster:** oben umschalten zwischen **Zentrale**, **Gespräch** und **System**. Das Gespräch ist ein HUD: in der Mitte eine Energie-Kugel mit kreisenden Plasma-Bändern in leuchtenden Ringen (`plasma.js`, ein WebGL-Shader; ohne WebGL die ruhige Linien-Kugel aus `orb.js`), links Menü, was heute ansteht und die aktuelle Aufgabe, rechts der Assistent mit Verstehen, Denken, Erledigen und Sprechen (leuchtet, was gerade läuft), das System und das Gedächtnis. Darunter das Gespräch, Schnellbefehle und das Eingabefeld. Dunkel, eine Akzentfarbe, Orange nur für das, was dich angeht.
 - **Installer mit eigenem Fenster:** dieselbe Linienkugel mit Fortschrittsbogen, sechs Schritte mit Häkchen und Restzeit. Holt auf jedem Windows 10 (ab 1809) und 11 alles selbst, ohne Administratorrechte, und sagt bei Problemen klar, was hilft („Nochmal versuchen“, Protokoll).
 - **Grafische Einrichtung**, Selbsttest (`werkzeuge\Selbsttest.bat`) und Protokoll (`logs\jarvis.log`).
@@ -80,7 +81,7 @@ Die Ordner von Assistent, Körper und Geld liegen im Notizbuch (`Jarvis-Notizbuc
 
 Jarvis' eigenes Gehirn lädt keins dieser Plugins (es nutzt nur seine eigenen Einstellungen), damit er schnell bleibt. In Claude Code siehst du sie mit `/plugin`.
 
-**Nicht gebaut, mit Grund:** OmniRoute (aus einem der Videos) schickt deine Anfragen, sobald das Claude-Kontingent leer ist, an über 200 kostenlose fremde KI-Dienste. Dann antwortet nicht mehr Claude, und dein Code und deine Texte landen bei Anbietern, die niemand geprüft hat. Headroom schiebt sich als Zwischendienst zwischen Claude Code und Claude und kürzt den Verlauf, damit er weniger kostet. Dabei kann genau das wegfallen, was Claude braucht, und alles läuft durch fremde Software. Wird das Kontingent knapp, wählt Jarvis lieber selbst ein sparsameres Modell. Den Anthropic-Telegram-Kanal haben wir auch weggelassen: Jarvis' eigener Bot kann mehr (Stimme, Fotos, Standort) und braucht kein Bun.
+**Nicht gebaut, mit Grund:** OmniRoute (aus einem der Videos) schickt deine Anfragen, sobald das Claude-Kontingent leer ist, an über 200 kostenlose fremde KI-Dienste. Dann antwortet nicht mehr Claude, und dein Code und deine Texte landen bei Anbietern, die niemand geprüft hat. Headroom schiebt sich als Zwischendienst zwischen Claude Code und Claude und kürzt den Verlauf, damit er weniger kostet. Dabei kann genau das wegfallen, was Claude braucht, und alles läuft durch fremde Software. Wird das Kontingent knapp (ab 90 Prozent der Woche), wählt Jarvis lieber selbst ein sparsameres Modell. Den Anthropic-Telegram-Kanal haben wir auch weggelassen: Jarvis' eigener Bot kann mehr (Stimme, Fotos, Standort) und braucht kein Bun.
 
 | Kommandozentrale beim Briefing | Gespräch: Energie-Kugel im HUD |
 |---|---|
@@ -201,6 +202,7 @@ jarvis/
   intents.py      Sofort-Befehle erkennen (ohne Claude)
   memory.py       Gedächtnis: Fakten, Kontakte, Gewohnheiten, Vorschläge, Einkaufsliste, nächtlicher Rückblick
   einkauf.py      Einkaufsliste per Sprache erkennen ("Milch ist alle", "Was steht auf der Liste?")
+  verbrauch.py    Claude-Kontingent (Woche, fünf Stunden) aus Claude Codes rate_limit_event, sparsam ab 90 Prozent
   koerper.py      Ernährungs-Tagebuch im Notizbuch (dieselben Dateien wie das Claude-Plugin Körper), für Essensfotos
   video.py        Videos ansehen: yt-dlp, Bilder mit Zeitstempel (PyAV), Übersichtsbilder, Transkript (Parakeet/Whisper)
   anrede.py       Anrede ("Sir", "Chef" …) und Ton (Butler oder locker), per Sprache umstellbar
@@ -230,6 +232,7 @@ jarvis/
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
                   zentrale.js zentrale.css plasma.js   Kommandozentrale und Gespräch im HUD, die Energie-Kugel (WebGL)
+                  kern.js                    Partikel-Kern wie im Video „Claude OS“ (Canvas, umschaltbar über der Kugel)
                   antreiber.js               Peitsche und Lob: Seil-Physik, Knall, Hand mit Herzen
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause mit Hologramm, Projekt-Übersicht
                   blaupause.js blaupause.css Blueprint: Hologramm mit three.js, Explosionsansicht, STL, Foto aus Blender

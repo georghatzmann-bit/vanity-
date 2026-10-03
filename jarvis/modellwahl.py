@@ -11,7 +11,8 @@ Korrigiert er Jarvis ("Das stimmt nicht"), denkt Jarvis beim nächsten Mal eine 
 eine kurze Nachfrage zu einer gründlichen Antwort bleibt gründlich.
 
 Geht ein Modell mit Georgs Abo nicht (oder ist sein Kontingent dafür aufgebraucht), merkt sich Jarvis das
-für ein paar Stunden und nimmt das nächstkleinere.
+für ein paar Stunden und nimmt das nächstkleinere. Wird das Wochenkontingent knapp (ab 90 Prozent oder wenn
+Claude warnt, siehe verbrauch.py), denkt Jarvis eine Stufe sparsamer, außer Georg will es ausdrücklich gründlich.
 """
 
 from __future__ import annotations
@@ -207,8 +208,9 @@ class Chooser:
     oder "aus" (dann wie früher: das erste Modell aus `models` mit `effort`).
     """
 
-    def __init__(self, cfg: dict | None = None) -> None:
+    def __init__(self, cfg: dict | None = None, sparing=None) -> None:
         cfg = cfg or {}
+        self._sparing = sparing  # () -> bool: Kontingent knapp? (Standard: verbrauch.sparing)
         mode = str(cfg.get("modellwahl", "auto") or "auto").strip().lower().replace("ü", "ue")
         self.mode = mode if mode in LEVELS or mode in ("auto", "aus") else "auto"
         self.levels: dict[str, tuple[str, str]] = {}
@@ -239,6 +241,8 @@ class Chooser:
             level, reason = self._in_context(text, level, reason, now)
             if self.hurried(now) and level in ("normal", "gruendlich") and reason != "ausdrücklich gewünscht":
                 level, reason = LEVELS[LEVELS.index(level) - 1], "angetrieben"
+            if level in ("gruendlich", "maximal") and reason != "ausdrücklich gewünscht" and self.sparing():
+                level, reason = LEVELS[LEVELS.index(level) - 1], "Kontingent knapp"
         choice = self.make(level, reason)
         self.last, self._last_at = choice, now
         return choice
@@ -279,6 +283,17 @@ class Chooser:
     def relax(self) -> None:
         """Georg lobt: wieder so gründlich wie die Aufgabe es braucht."""
         self._hurry_until = 0.0
+
+    def sparing(self) -> bool:
+        """Ist das Claude-Kontingent knapp? Ein kaputter Zähler bremst nie."""
+        try:
+            if self._sparing is not None:
+                return bool(self._sparing())
+            from .verbrauch import sparing
+
+            return sparing()
+        except Exception:
+            return False
 
     def hurried(self, now: float | None = None) -> bool:
         now = time.monotonic() if now is None else now
