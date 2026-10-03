@@ -275,6 +275,9 @@ aktiv = true
 # Wer die Modelle zeichnet: "sonnet" (schnell) oder "opus" (aufwendiger, langsamer).
 modell = "sonnet"
 effort = "low"
+# "Render das" und "Öffne das in Blender": Jarvis sucht Blender selbst (Programme, Steam) und installiert es,
+# wenn es fehlt. Nur nötig, wenn Blender woanders liegt, z. B. "D:\\Tools\\Blender\\blender.exe".
+blender_pfad = ""
 
 [gaming]
 # Diese Programme schließt "Gaming-Modus an" (Namen wie im Task-Manager, z. B. "OneDrive", "Teams").

@@ -1247,3 +1247,165 @@
   background: rgba(5, 14, 24, 0.62);
   backdrop-filter: blur(10px);
 }
+
+/* ------------------------------------------------------------------ Foto aus Blender */
+
+.bp-photo {
+  position: absolute;
+  inset: 76px 24px 24px;
+  z-index: 4;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid var(--rule-strong);
+  background: rgba(10, 30, 60, 0.97);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  animation: bp-photo-in 180ms var(--ease, ease-out);
+}
+
+.bp-photo[hidden] {
+  display: none;
+}
+
+.bp-photo header,
+.bp-photo footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.bp-photo-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bp-photo h2 {
+  margin: 0;
+  overflow: hidden;
+  font: 600 18px/1.2 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bp-photo-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #05080d;
+}
+
+.bp-photo-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.bp-photo-frame img[hidden] {
+  display: none;
+}
+
+.bp-photo-wait {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  width: min(420px, calc(100% - 32px));
+  text-align: center;
+}
+
+.bp-photo-wait[hidden] {
+  display: none;
+}
+
+.bp-photo-wait b {
+  font: 600 16px/1.3 var(--font);
+}
+
+.bp-photo-wait small,
+.bp-photo footer small {
+  color: var(--ink-3);
+  font: 400 12px/1.5 var(--font);
+}
+
+.bp-photo-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bp-photo-bar[hidden] {
+  display: none;
+}
+
+.bp-photo-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4fc3f7, #9ce6ff);
+  box-shadow: 0 0 12px rgba(111, 214, 255, 0.6);
+}
+
+/* Noch kein Prozentwert (Installation, Szene wird aufgebaut): ein Lichtstreifen wandert */
+.bp-photo-bar[data-state="wait"] i {
+  width: 32%;
+  animation: bp-photo-wait 1.3s ease-in-out infinite;
+}
+
+.bp-btn[data-state="busy"] {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes bp-photo-wait {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(320%); }
+}
+
+@keyframes bp-photo-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+.bp[data-look="holo"] .bp-photo,
+.bp[data-look="echt"] .bp-photo {
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  background: rgba(3, 8, 14, 0.94);
+  backdrop-filter: blur(16px);
+}
+
+@media (max-width: 760px) {
+  .bp-photo {
+    inset: 8px;
+    padding: 12px;
+  }
+
+  .bp-photo footer .bp-row {
+    grid-template-columns: 1fr 1fr;
+    grid-auto-flow: row;
+    width: 100%;
+  }
+
+  .bp-photo footer .bp-btn {
+    min-height: 44px;
+  }
+
+  .bp-photo footer .bp-btn.primary {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-photo { animation: none; }
+  .bp-photo-bar[data-state="wait"] i { animation: none; transform: none; width: 100%; opacity: 0.5; }
+}

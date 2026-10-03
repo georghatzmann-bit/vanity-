@@ -3,12 +3,13 @@
    3D-Modelle als Hologramm, wie in Tony Starks Werkstatt: dunkler Raum, leuchtende Linien, Projektor mit
    Lichtkegel und Funken, Scan-Linie, Leuchten (Bloom). Auf Wunsch weiter als Zeichnung auf Blaupausen-Papier.
    Python (blaupause.py) hält das Modell und schickt Ereignisse:
-     blueprint  open | close | scene | op | busy | done | view | export | library | saved
+     blueprint  open | close | scene | op | busy | done | view | export | library | saved | render (Blender)
    Diese Seite zeichnet es mit three.js (vendor/three.min.js, erst beim ersten Öffnen geladen):
    als leuchtendes Hologramm (Holo, Standard), in echten Farben (Echt) oder als weiße Zeichnung (Papier).
    Jedes Teil baut sich mit einem Laser von unten nach oben auf. Maus: ziehen dreht, Rad zoomt,
    rechts ziehen verschiebt, Klick wählt ein Teil, Doppelklick holt es heran. Finger: einer dreht,
-   zwei zoomen und verschieben. Dazu Maßlinien, Beschriftung, Explosionsansicht und STL-Export.
+   zwei zoomen und verschieben. Dazu Maßlinien, Beschriftung, Explosionsansicht, STL-Export und Blender:
+   „Foto“ zeigt Fortschritt und Bild aus Blender, „Blender“ öffnet das Modell dort.
    Texte aus dem Modell kommen nur als Klartext (textContent) auf die Seite.
    ========================================================================== */
 (() => {
@@ -452,6 +453,20 @@
       pill: $('bpPill'),
       mic: $('bpMic'),
       micText: $('bpMicText'),
+      render: $('bpRender'),
+      blender: $('bpBlender'),
+      photo: $('bpPhoto'),
+      photoHead: $('bpPhotoHead'),
+      photoImg: $('bpPhotoImg'),
+      photoWait: $('bpPhotoWait'),
+      photoState: $('bpPhotoState'),
+      photoBar: $('bpPhotoBar'),
+      photoInfo: $('bpPhotoInfo'),
+      photoMeta: $('bpPhotoMeta'),
+      photoClose: $('bpPhotoClose'),
+      photoFolder: $('bpPhotoFolder'),
+      photoBlender: $('bpPhotoBlender'),
+      photoAgain: $('bpPhotoAgain'),
     };
     if (!el.bp) return null;
 
@@ -1709,6 +1724,7 @@
 
     function showLibrary(items) {
       const list = Array.isArray(items) ? items : [];
+      photoHide();
       el.lib.hidden = false;
       el.libEmpty.hidden = list.length > 0;
       el.libList.replaceChildren(...list.map((it) => {
@@ -1819,7 +1835,165 @@
         case 'saved':
           toast('Gespeichert: ' + (ev.name || 'Blueprint'), 'ok');
           break;
+        case 'render':
+          photoEvent(ev);
+          break;
         default:
+      }
+    }
+
+    // ------------------------------------------------------------ Foto aus Blender
+
+    // Python schickt render: install | start | progress | done | error | cancelled (Foto), blend | opened (Blender)
+    let photoBusy = false;
+    const PHOTO_INFO = 'Mit Grafikkarte dauert es Sekunden, nur mit Prozessor bis zu zwei Minuten. Sie können derweil weiterbauen.';
+
+    function duration(s) {
+      const n = Math.max(0, Math.round(Number(s) || 0));
+      return n < 60 ? n + ' s' : Math.floor(n / 60) + ' min' + (n % 60 ? ' ' + (n % 60) + ' s' : '');
+    }
+
+    function deviceName(d) {
+      const text = String(d || '');
+      if (!text) return '';
+      if (/^CPU/i.test(text)) return 'Prozessor';
+      const inner = text.match(/\((.+)\)/);
+      return 'Grafikkarte' + (inner ? ' ' + inner[1] : '');
+    }
+
+    function photoShow(waiting) {
+      el.lib.hidden = true;
+      el.photo.hidden = false;
+      el.photoWait.hidden = !waiting;
+      el.photoImg.hidden = waiting;
+      el.photoAgain.disabled = photoBusy;
+      stop(); // das Foto deckt das Modell zu: die Grafikkarte gehört solange Blender
+    }
+
+    function photoHide() {
+      if (el.photo.hidden) return;
+      el.photo.hidden = true;
+      if (isOpen) start();
+    }
+
+    function photoProgress(text, percent, info) {
+      el.photoState.textContent = text;
+      el.photoBar.hidden = false;
+      el.photoBar.dataset.state = percent == null ? 'wait' : 'run';
+      const p = clamp(Number(percent) || 0, 0, 100);
+      el.photoBar.firstElementChild.style.width = percent == null ? '' : p + '%';
+      el.photoBar.setAttribute('aria-valuenow', String(Math.round(p)));
+      if (info != null) el.photoInfo.textContent = info;
+    }
+
+    function renderBusy(on, percent) {
+      photoBusy = on;
+      el.render.dataset.state = on ? 'busy' : '';
+      el.render.textContent = on ? (percent == null ? 'Foto …' : 'Foto ' + Math.round(percent) + ' %') : 'Foto';
+      el.photoAgain.disabled = on;
+    }
+
+    async function photoDone(ev) {
+      el.photoHead.textContent = ev.name || scene.name || 'Foto';
+      try {
+        const r = await call('blueprint_photo');
+        if (!r || !r.ok || !/^data:image\/(?:jpeg|png);base64,/.test(String(r.src || ''))) throw new Error((r && r.error) || '');
+        el.photoImg.src = r.src;
+        const device = deviceName(r.device || ev.device);
+        const took = Number(r.seconds || ev.seconds) > 0 ? 'Gerendert in ' + duration(r.seconds || ev.seconds) : '';
+        const meta = [took, device, 'liegt im Blueprint-Ordner unter „Fotos“'].filter(Boolean).join(' · ');
+        el.photoMeta.textContent = meta.charAt(0).toUpperCase() + meta.slice(1);
+        photoShow(false);
+      } catch (err) {
+        photoShow(true);
+        photoProgress('Das Foto ließ sich nicht anzeigen', null, (err && err.message) || 'Es liegt trotzdem im Ordner „Fotos“.');
+        el.photoBar.hidden = true;
+      }
+    }
+
+    function photoEvent(ev) {
+      const blend = ev.kind === 'blend';
+      switch (ev.state) {
+        case 'install':
+          renderBusy(true);
+          if (blend) {
+            toast('Blender wird installiert. Das dauert ein paar Minuten.', 'info');
+            break;
+          }
+          photoShow(true);
+          photoProgress('Blender wird installiert …', null, 'Einmalig, dauert ein paar Minuten. Windows fragt vielleicht nach Ihrer Erlaubnis.');
+          break;
+        case 'start':
+          renderBusy(true, 0);
+          el.photoHead.textContent = ev.name || scene.name || 'Foto';
+          photoShow(true);
+          photoProgress('Blender rendert …', 0, PHOTO_INFO);
+          break;
+        case 'progress': {
+          const p = clamp(Number(ev.percent) || 0, 0, 100);
+          renderBusy(true, p);
+          const rest = Number(ev.rest);
+          photoProgress('Blender rendert … ' + Math.round(p) + ' %', p, rest > 0 ? 'Noch etwa ' + duration(rest) + '.' : null);
+          break;
+        }
+        case 'done':
+          renderBusy(false);
+          photoDone(ev);
+          break;
+        case 'error':
+          renderBusy(false);
+          el.blender.disabled = false;
+          if (blend) {
+            toast('Blender: ' + (ev.error || 'Das ging nicht.'), 'error');
+            break;
+          }
+          photoShow(true);
+          photoProgress('Das ging nicht', null, ev.error || 'Einzelheiten stehen im Protokoll.');
+          el.photoBar.hidden = true;
+          break;
+        case 'cancelled':
+          renderBusy(false);
+          el.blender.disabled = false;
+          photoHide();
+          break;
+        case 'blend':
+          renderBusy(false);
+          el.blender.disabled = true;
+          toast('Blender öffnet sich gleich mit dem Modell.', 'info');
+          break;
+        case 'opened':
+          el.blender.disabled = false;
+          toast('In Blender geöffnet. Die Datei liegt im Blueprint-Ordner unter „Blender“.', 'ok');
+          break;
+        default:
+      }
+    }
+
+    async function renderPhoto() {
+      if (photoBusy) {
+        photoShow(true);
+        return;
+      }
+      if (!scene.teile.length) {
+        toast('Auf dem Tisch liegt noch nichts.', 'info');
+        return;
+      }
+      try {
+        say(await call('blueprint_render'));
+      } catch {
+        toast('Im Demo-Modus gibt es kein Blender.', 'info');
+      }
+    }
+
+    async function openBlender() {
+      if (!scene.teile.length) {
+        toast('Auf dem Tisch liegt noch nichts.', 'info');
+        return;
+      }
+      try {
+        say(await call('blueprint_blender'));
+      } catch {
+        toast('Im Demo-Modus gibt es kein Blender.', 'info');
       }
     }
 
@@ -1871,6 +2045,7 @@
       if (!isOpen) return;
       isOpen = false;
       el.lib.hidden = true;
+      el.photo.hidden = true;
       el.bp.classList.add('closing');
       closeTimer = setTimeout(() => {
         if (isOpen) return;
@@ -1948,6 +2123,19 @@
       }
     });
     el.exportBtn.addEventListener('click', exportStl);
+    el.render.addEventListener('click', renderPhoto);
+    el.photoAgain.addEventListener('click', renderPhoto);
+    el.blender.addEventListener('click', openBlender);
+    el.photoBlender.addEventListener('click', openBlender);
+    el.photoClose.addEventListener('click', photoHide);
+    el.photoFolder.addEventListener('click', async () => {
+      try {
+        const ok = await call('blueprint_folder', 'Fotos');
+        toast(ok ? 'Der Fotos-Ordner öffnet sich.' : 'Das ging nicht.', ok ? 'ok' : 'error');
+      } catch {
+        toast('Im Demo-Modus öffnet sich kein Ordner.', 'info');
+      }
+    });
     el.libBtn.addEventListener('click', () => (el.lib.hidden ? library() : (el.lib.hidden = true)));
     el.libClose.addEventListener('click', () => { el.lib.hidden = true; });
     el.folder.addEventListener('click', async () => {
@@ -1986,7 +2174,8 @@
     document.addEventListener('keydown', (e) => {
       if (!isOpen || e.defaultPrevented) return;
       if (e.key === 'Escape') {
-        if (!el.lib.hidden) el.lib.hidden = true;
+        if (!el.photo.hidden) photoHide();
+        else if (!el.lib.hidden) el.lib.hidden = true;
         else close(false);
         e.preventDefault();
         return;
@@ -2172,6 +2361,18 @@
         blueprint_delete: () => Promise.resolve(true),
         blueprint_export: () => Promise.reject(new Error('Demo')),
         blueprint_folder: () => Promise.reject(new Error('Demo')),
+        blueprint_render: () => {
+          if (!window.JarvisDemoPhoto) return Promise.reject(new Error('Demo'));
+          ev('render', { state: 'start', kind: 'foto', name: scene.name });
+          [18, 46, 73, 100].forEach((p, i) => setTimeout(() => ev('render', { state: 'progress', kind: 'foto', percent: p,
+            rest: (3 - i) * 2 }), 300 + i * 300));
+          setTimeout(() => ev('render', { state: 'done', kind: 'foto', name: scene.name }), 1500);
+          return Promise.resolve('Ich rendere es, Sir.');
+        },
+        blueprint_photo: () => (window.JarvisDemoPhoto
+          ? Promise.resolve({ ok: true, src: window.JarvisDemoPhoto })
+          : Promise.reject(new Error('Demo'))),
+        blueprint_blender: () => Promise.reject(new Error('Demo')),
       },
       build,
       load: () => {

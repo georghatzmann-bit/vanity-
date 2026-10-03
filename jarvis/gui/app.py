@@ -785,23 +785,54 @@ class Api:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "path": path}
 
-    def blueprint_folder(self) -> bool:
-        """Den Blaupausen-Ordner im Explorer öffnen (STL-Dateien für den 3D-Drucker)."""
+    def blueprint_folder(self, sub="") -> bool:
+        """Den Blaupausen-Ordner im Explorer öffnen (STL-Dateien für den 3D-Drucker), mit sub="Fotos" die Fotos
+        aus Blender."""
         bp = self._blueprint()
         if bp is None:
             return False
+        folder = bp.folder / "Fotos" if str(sub or "") == "Fotos" else bp.folder
         try:
-            bp.folder.mkdir(parents=True, exist_ok=True)
+            folder.mkdir(parents=True, exist_ok=True)
             if os.name == "nt":
-                os.startfile(str(bp.folder))  # type: ignore[attr-defined]
+                os.startfile(str(folder))  # type: ignore[attr-defined]
             else:
                 import subprocess
 
-                subprocess.Popen(["xdg-open", str(bp.folder)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(["xdg-open", str(folder)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except OSError as exc:
             log.info("Blaupausen-Ordner: %s", exc)
             return False
         return True
+
+    def blueprint_render(self) -> str:
+        """Knopf „Foto“: Blender rendert das Modell (der Fortschritt kommt als blueprint-Ereignis „render“)."""
+        bp = self._blueprint()
+        return bp.render_photo() if bp is not None else "Der Blueprint ist aus."
+
+    def blueprint_blender(self) -> str:
+        """Knopf „Blender“: das Modell als .blend-Datei in Blender öffnen."""
+        bp = self._blueprint()
+        return bp.open_in_blender() if bp is not None else "Der Blueprint ist aus."
+
+    def blueprint_photo(self) -> dict:
+        """Das letzte Foto aus Blender fürs Fenster, als data-URL (JPEG, sonst das PNG)."""
+        import base64
+
+        bp = self._blueprint()
+        photo = getattr(bp, "photo", None) if bp is not None else None
+        if photo is None:
+            return {"ok": False, "error": "Noch kein Foto."}
+        source = photo.preview if photo.preview is not None and photo.preview.is_file() else photo.image
+        try:
+            data = source.read_bytes()
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+        if len(data) > 15 * 1024 * 1024:
+            return {"ok": False, "error": "Das Foto ist zu groß für die Anzeige."}
+        mime = "image/png" if source.suffix.lower() == ".png" else "image/jpeg"
+        return {"ok": True, "src": f"data:{mime};base64," + base64.b64encode(data).decode("ascii"),
+                "path": str(photo.image), "seconds": photo.seconds, "device": photo.device}
 
     # ------------------------------------------------------------------ Weltlage
 

@@ -349,7 +349,9 @@
         <button type="button" class="bp-btn" id="bpNew" title="Den Tisch freiräumen (Rückgängig geht)">Neu</button>
         <button type="button" class="bp-btn" id="bpLibraryBtn" title="Gespeicherte Blueprints">Gespeichert</button>
         <button type="button" class="bp-btn" id="bpSave" title="Das Modell speichern">Speichern</button>
-        <button type="button" class="bp-btn primary" id="bpExport" title="Als STL-Datei für den 3D-Drucker speichern">STL</button>
+        <button type="button" class="bp-btn" id="bpExport" title="Als STL-Datei für den 3D-Drucker speichern">STL</button>
+        <button type="button" class="bp-btn" id="bpBlender" title="Als .blend-Datei in Blender öffnen und dort weiterbauen">Blender</button>
+        <button type="button" class="bp-btn primary" id="bpRender" title="Blender macht ein fotorealistisches Bild vom Modell (oder sagen Sie „Render das“)">Foto</button>
       </div>
     </header>
 
@@ -439,6 +441,33 @@
       <ol id="bpLibList"></ol>
       <p class="bp-hint" id="bpLibEmpty">Noch nichts gespeichert. „Speicher das als …“ legt einen Blueprint an.</p>
       <button type="button" class="bp-btn" id="bpFolder">Ordner öffnen</button>
+    </div>
+
+    <!-- Foto aus Blender: Fortschritt, dann das Bild -->
+    <div class="bp-photo" id="bpPhoto" hidden role="dialog" aria-labelledby="bpPhotoHead">
+      <header>
+        <div class="bp-photo-title">
+          <span class="bp-kicker">Blender · Fotostudio</span>
+          <h2 id="bpPhotoHead">Foto</h2>
+        </div>
+        <button type="button" class="bp-btn" id="bpPhotoClose" title="Zurück zum Modell (Esc)">Schließen</button>
+      </header>
+      <div class="bp-photo-frame">
+        <img id="bpPhotoImg" alt="Fotorealistisches Bild des Modells aus Blender" hidden>
+        <div class="bp-photo-wait" id="bpPhotoWait">
+          <b id="bpPhotoState">Blender rendert …</b>
+          <div class="bp-photo-bar" id="bpPhotoBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+          <small id="bpPhotoInfo">Mit Grafikkarte dauert es Sekunden, nur mit Prozessor bis zu zwei Minuten. Sie können derweil weiterbauen.</small>
+        </div>
+      </div>
+      <footer>
+        <small id="bpPhotoMeta"></small>
+        <div class="bp-row">
+          <button type="button" class="bp-btn" id="bpPhotoFolder" title="Der Ordner mit allen Fotos (PNG)">Ordner öffnen</button>
+          <button type="button" class="bp-btn" id="bpPhotoBlender" title="Das Modell mit Licht und Kamera in Blender öffnen">In Blender öffnen</button>
+          <button type="button" class="bp-btn primary" id="bpPhotoAgain" title="Das Modell, wie es jetzt ist, noch einmal rendern">Neu rendern</button>
+        </div>
+      </footer>
     </div>
   </section>
 

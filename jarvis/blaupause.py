@@ -9,6 +9,8 @@ Hologramm auf. Danach geht alles per Sprache:
   "Zeig mir das Triebwerk genauer", "Nur den Rumpf", "Mach die Flügel rot", "Entferne die Antenne",
   "Rückgängig", "Von oben", "Drahtmodell", "Speicher das als Drohne", "Exportier als STL"
 - mit Claude: "Füg noch zwei Raketen an die Flügel", "Mach den Rumpf schlanker", "Setz ein Cockpit drauf"
+- mit Blender (blender.py): "Render das" macht ein Foto wie aus dem Fotostudio, "Öffne das in Blender" eine
+  .blend-Datei zum Weiterbauen. Fehlt Blender, installiert Jarvis es.
 
 Solange der Blueprint offen ist, hört Jarvis ohne "Hey Jarvis" weiter zu (voice.BLUEPRINT_SECONDS) und antwortet
 knapp: "Sofort, Sir." und danach "Erledigt, Sir.". Was Georg sagt, während Claude noch baut, kommt in eine
@@ -29,6 +31,7 @@ import logging
 import math
 import re
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -300,6 +303,25 @@ _EDIT = re.compile(r"^(?:und |noch |jetzt )?(?:füg|füge|setz|setze|häng|häng
                    r"montier|montiere|pack|packe|leg|lege|stell|stelle|verschieb|verschiebe|beweg|bewege|richte|"
                    r"richt|kombinier|kombiniere|verbinde|verbind|spiegel|spiegle|dupliziere|duplizier|kopier|kopiere)\b")
 
+# Blender: "Render das", "Mach ein Foto davon", "Zeig es mir fotorealistisch"
+_RENDER = re.compile(
+    r"^(?:render|rendere|rendern|ränder|rändere|rendre)(?: mir)?(?: (?:das|es|ihn|sie|das modell|das ganze|den "
+    rf"{_BLUEPRINT}|das objekt))?(?: (?:mal|jetzt|noch))?(?: (?:in|mit) blender)?(?: (?:fotorealistisch|in echt|"
+    r"als foto|realistisch))?$|"
+    r"^(?:mach|mache|schieß|schiess|erstell|erstelle|knips|knipse)(?: mir)?(?: (?:mal|noch))? (?:ein |einen |ne |n )?"
+    r"(?:foto|fotos|bild|render|rendering|produktfoto|fotorealistisches bild|richtiges foto|echtes foto)"
+    r"(?: (?:davon|vom modell|von dem modell|von ihm|von ihr|vom objekt))?(?: (?:in|mit) blender)?$|"
+    r"^(?:zeig|zeige)(?: mir)? (?:das|es|das modell|ihn|sie)(?: mir)?(?: mal)? (?:fotorealistisch|als foto|als echtes foto|"
+    r"in blender gerendert)$|^(?:fotorealistisch|foto davon|rendering starten|in blender rendern)$")
+# "Öffne das in Blender", "Bearbeite es in Blender", "Blender öffnen" (bei offenem Blueprint: mit dem Modell)
+_IN_BLENDER = re.compile(
+    r"^(?:öffne|öffnen|zeig|zeige|schick|schicke|lade|lad|bring|exportier|exportiere|übergib|gib|mach|mache)"
+    r"(?: mir)?(?: (?:das|es|ihn|sie|das modell|das ganze|das objekt|den "
+    rf"{_BLUEPRINT}))? (?:in|nach|an|zu|mit) blender(?: (?:öffnen|auf|rüber|weiter))?$|"
+    r"^(?:in|mit) blender (?:öffnen|bearbeiten|weiterarbeiten|weitermachen|aufmachen)$|"
+    r"^(?:bearbeite|bearbeiten|bearbeit)(?: (?:das|es|ihn|sie|das modell))? (?:in|mit) blender$|"
+    r"^(?:(?:öffne|starte|start) )?blender(?: (?:öffnen|starten|auf))?$")
+
 _WORD_NUMBERS = {"einmal": 1, "zweimal": 2, "dreimal": 3, "doppelt": 2, "halb": 0.5, "dreifach": 3, "zehnmal": 10}
 
 
@@ -361,6 +383,12 @@ class Blueprint:
         self._last_spoken = ""
         # Was Georg sagt, während Claude noch baut: (Wunsch, neu?) der Reihe nach, direkt danach
         self._queue: list[tuple[str, bool]] = []
+        # Blender (Foto und .blend-Datei): läuft im Hintergrund, das letzte Foto zeigt das Fenster
+        self.blender_setting = str(section.get("blender_pfad", "") or "")
+        self.photo = None  # blender.Photo
+        self._blender_thread: threading.Thread | None = None
+        self._blender_cancel = threading.Event()
+        self._blender_after = ""  # "Render das", während Claude noch baut: gleich danach ("foto" oder "blend")
 
     # ------------------------------------------------------------------ Anzeige
 
@@ -594,6 +622,18 @@ class Blueprint:
             return self.open()
         if self.active and _CLOSE.match(norm):
             return self.close()
+        if self.active and _RENDER.match(norm):
+            return self.render_photo()
+        if self.active and _IN_BLENDER.match(norm):
+            return self.open_in_blender()
+        if not self.active and self.scene["teile"]:
+            # Blueprint zu, Modell noch da: nur eindeutige Sätze ("Render das", "Öffne das Modell in Blender"),
+            # "Mach ein Foto" oder "Öffne Blender" bleiben, was sie sonst sind
+            if _RENDER.match(norm) and re.search(r"\b(?:render\w*|ränder\w*|rendre|blender)\b", norm):
+                self.open()
+                return self.render_photo()
+            if _IN_BLENDER.match(norm) and re.search(r"\b(?:das|es|ihn|sie|modell|objekt|ganze)\b", norm):
+                return self.open_in_blender()
         made = self._make_request(text, norm)
         if made is not None:
             return made
@@ -840,11 +880,17 @@ class Blueprint:
         return random_choice(["Sofort, Sir.", "Sehr wohl, Sir.", "Wird gemacht, Sir."])
 
     def _after(self) -> None:
-        """Nach einer Konstruktion: der nächste Wunsch aus der Warteschlange, sonst den Prozess vorwärmen."""
+        """Nach einer Konstruktion: der nächste Wunsch aus der Warteschlange, sonst das gewünschte Foto aus Blender,
+        sonst den Prozess vorwärmen."""
         if self._queue:
             self._next()
-        else:
-            self._warm()
+            return
+        kind, self._blender_after = self._blender_after, ""
+        if kind:
+            said = self._blender_start(kind)
+            if said not in ("Ich rendere es, Sir.", "Ich öffne es in Blender, Sir."):
+                self._announce(said)  # z. B. "Blender fehlt noch, Sir. Ich installiere es ..."
+        self._warm()
 
     def _next(self) -> None:
         """Der nächste Wunsch aus der Warteschlange, ohne dass Georg nochmal fragen muss."""
@@ -857,10 +903,14 @@ class Blueprint:
 
     def cancel(self) -> bool:
         with self._lock:
-            had_queue = bool(self._queue)
+            had_queue = bool(self._queue or self._blender_after)
             self._queue.clear()
+            self._blender_after = ""
+        rendering = self._blender_busy()
+        if rendering:
+            self._blender_cancel.set()  # "Stopp" hält auch Blender an
         if not self.busy:
-            return had_queue
+            return had_queue or rendering
         self._cancel.set()
         proc = self._proc
         if proc is not None and proc.poll() is None:
@@ -942,6 +992,7 @@ class Blueprint:
                     self.scene = self._undo.pop()
             self._emit("done", ok=False, error=error, **self.state())
             self._announce("Das ging leider nicht, Sir. " + _explain(error))
+            self._blender_after = ""  # kein Foto vom alten Modell
             self._after()
             return
         name = self.scene["name"] or "Das Modell"
@@ -998,6 +1049,94 @@ class Blueprint:
         except OSError as exc:
             log.debug("Blaupause, Anleitung: %s", exc)
         return path
+
+    # ------------------------------------------------------------------ Blender: Foto und .blend-Datei
+
+    def _blender_busy(self) -> bool:
+        return self._blender_thread is not None and self._blender_thread.is_alive()
+
+    def render_photo(self) -> str:
+        """\"Render das\": Blender macht ein Foto vom Modell. Läuft im Hintergrund, das Fenster zeigt den Fortschritt
+        und danach das Bild."""
+        return self._blender_start("foto")
+
+    def open_in_blender(self) -> str:
+        """\"Öffne das in Blender\": eine .blend-Datei mit Modell, Licht und Kamera, dann Blender mit Fenster."""
+        return self._blender_start("blend")
+
+    def _blender_start(self, kind: str) -> str:
+        from . import blender
+
+        with self._lock:
+            if self.busy:
+                self._blender_after = kind  # erst fertig bauen, dann das Foto vom ganzen Modell
+                return "Sobald es steht, Sir."
+            if not self.scene["teile"]:
+                return "Auf dem Tisch liegt noch nichts, Sir."
+            if self._blender_busy():
+                return "Blender ist noch beschäftigt, Sir."
+            scene = copy.deepcopy(self.scene)
+        found = blender.find_blender(self.blender_setting)
+        if found is None and not blender.can_install():
+            return "Blender ist auf diesem Rechner nicht installiert, Sir."
+        self._blender_cancel.clear()
+        thread = threading.Thread(target=self._blender_work, args=(kind, scene, found), name="jarvis-blender",
+                                  daemon=True)
+        self._blender_thread = thread
+        thread.start()
+        if found is None:
+            return ("Blender fehlt noch, Sir. Ich installiere es, das dauert ein paar Minuten. "
+                    "Windows fragt dabei vielleicht nach Ihrer Erlaubnis.")
+        return "Ich rendere es, Sir." if kind == "foto" else "Ich öffne es in Blender, Sir."
+
+    def _scratch(self) -> Path:
+        return Path(getattr(self._brain, "state_dir", "") or Path(tempfile.gettempdir()) / "jarvis") / "blender"
+
+    def _blender_work(self, kind: str, scene: dict, path) -> None:
+        from . import blender
+
+        name = blender.file_name(scene.get("name") or "Blueprint")
+        try:
+            if path is None:
+                self._emit("render", state="install", kind=kind)
+                try:
+                    blender.install()
+                except Exception as exc:
+                    raise blender.BlenderError(f"Die Installation ging nicht. {exc}") from None
+                path = blender.find_blender(self.blender_setting)
+                if path is None:
+                    raise blender.BlenderError("Blender ist installiert, aber ich finde es nicht. Der Pfad lässt sich "
+                                               "in config.toml unter [blaupause] blender_pfad eintragen.")
+            if kind == "blend":
+                self._emit("render", state="blend", kind=kind)
+                file = blender.make_blend(path, scene, self.folder, name, self._scratch(), cancel=self._blender_cancel)
+                blender.open_blend(path, file)
+                log.info("Blueprint in Blender: %s", file)
+                self._emit("render", state="opened", kind=kind, path=str(file))
+                return
+            self._emit("render", state="start", kind=kind, name=str(scene.get("name") or ""))
+
+            def progress(step: dict) -> None:
+                self._emit("render", state="progress", kind=kind, percent=step.get("prozent"), rest=step.get("rest"))
+
+            photo = blender.render(path, scene, self.folder, name, self._scratch(), on_progress=progress,
+                                   cancel=self._blender_cancel)
+            self.photo = photo
+            log.info("Blueprint-Foto nach %.0f s (%s): %s", photo.seconds, photo.device or "?", photo.image)
+            self._emit("render", state="done", kind=kind, path=str(photo.image), seconds=photo.seconds,
+                       device=photo.device, name=str(scene.get("name") or ""))
+            self._announce("Das Foto ist fertig, Sir.")
+        except blender.BlenderError as exc:
+            if str(exc) == "abgebrochen":
+                self._emit("render", state="cancelled", kind=kind)
+                return
+            log.info("Blender: %s", exc)
+            self._emit("render", state="error", kind=kind, error=str(exc)[:300])
+            self._announce("Blender hat nicht mitgespielt, Sir. " + str(exc)[:160])
+        except Exception as exc:
+            log.exception("Blender")
+            self._emit("render", state="error", kind=kind, error=str(exc)[:300] or type(exc).__name__)
+            self._announce("Blender hat nicht mitgespielt, Sir. Einzelheiten stehen im Protokoll.")
 
     # ------------------------------------------------------------------ Speichern, Laden, Export
 

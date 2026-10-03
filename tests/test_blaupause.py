@@ -10,6 +10,7 @@ import types
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 from jarvis.blaupause import MAX_PARTS, Blueprint, clean_part, parse_ops
 from jarvis.brain import ClaudeBrain
@@ -374,6 +375,156 @@ class GenerateTest(unittest.TestCase):
         self.wait()
         self.assertFalse(self.bp.busy)
         self.assertEqual(self.said, [], "abgebrochen: keine Ansage")
+
+
+class BlenderTest(unittest.TestCase):
+    """\"Render das\" und \"Öffne das in Blender\": Blender arbeitet im Hintergrund, das Fenster zeigt Fortschritt und Foto."""
+
+    def setUp(self):
+        from jarvis import blender
+
+        self.blender = blender
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.ui = RecordingUi()
+        self.said = []
+        self.bp = Blueprint({}, None, self.ui, Path(self.tmp.name), self.said.append)
+        self.bp.apply({"op": "neu", "name": "Drohne"})
+        self.bp.apply(part("rumpf"))
+        self.bp.open()
+        self.exe = Path(self.tmp.name) / "blender"
+        self.photo = blender.Photo(Path(self.tmp.name) / "foto.png", None, "OPTIX (RTX)", 4.2)
+
+    def renders(self):
+        return [(e[1]["state"], e[1]) for e in self.ui.of("blueprint") if e[1]["action"] == "render"]
+
+    def wait(self):
+        if self.bp._blender_thread is not None:
+            self.bp._blender_thread.join(5)
+
+    def test_voice_commands_reach_blender(self):
+        for said in ("Render das", "Rendere es mal", "Mach ein Foto davon", "Zeig es mir fotorealistisch"):
+            with self.subTest(said=said), mock.patch("jarvis.blender.find_blender", return_value=self.exe), \
+                    mock.patch("jarvis.blender.render", return_value=self.photo) as render:
+                self.assertEqual(self.bp.command(said), "Ich rendere es, Sir.")
+                self.wait()
+                self.assertEqual(render.call_args.args[:2], (self.exe, self.bp.scene))
+        for said in ("Öffne das in Blender", "Bearbeite es in Blender", "Blender öffnen"):
+            with self.subTest(said=said), mock.patch("jarvis.blender.find_blender", return_value=self.exe), \
+                    mock.patch("jarvis.blender.make_blend", return_value=Path("modell.blend")), \
+                    mock.patch("jarvis.blender.open_blend") as opened:
+                self.assertEqual(self.bp.command(said), "Ich öffne es in Blender, Sir.")
+                self.wait()
+                opened.assert_called_once_with(self.exe, Path("modell.blend"))
+        self.assertIsNone(self.bp.command("Wie spät ist es?"))
+
+    def test_closed_blueprint_only_takes_clear_words(self):
+        self.bp.close()
+        with mock.patch("jarvis.blender.find_blender", return_value=self.exe), \
+                mock.patch("jarvis.blender.render", return_value=self.photo):
+            for said in ("Mach ein Foto", "Öffne Blender", "Blender"):
+                with self.subTest(said=said):
+                    self.assertIsNone(self.bp.command(said), "Kamera, App: nicht der Blueprint")
+            self.assertEqual(self.bp.command("Render das"), "Ich rendere es, Sir.")
+            self.assertTrue(self.bp.active, "das Foto erscheint im Blueprint")
+            self.wait()
+
+    def test_photo_shows_up_and_jarvis_says_so(self):
+        steps = [{"prozent": 50, "rest": 3.0}, {"prozent": 100, "rest": None}]
+
+        def render(*args, on_progress=None, **kwargs):
+            for step in steps:
+                on_progress(step)
+            return self.photo
+
+        with mock.patch("jarvis.blender.find_blender", return_value=self.exe), mock.patch("jarvis.blender.render", render):
+            self.bp.render_photo()
+            self.wait()
+        states = [s for s, _ in self.renders()]
+        self.assertEqual(states, ["start", "progress", "progress", "done"])
+        self.assertEqual(self.renders()[1][1]["percent"], 50)
+        self.assertEqual(self.renders()[-1][1]["device"], "OPTIX (RTX)")
+        self.assertIs(self.bp.photo, self.photo)
+        self.assertEqual(self.said, ["Das Foto ist fertig, Sir."])
+
+    def test_nothing_on_the_table(self):
+        empty = Blueprint({}, None, self.ui, Path(self.tmp.name), self.said.append)
+        empty.open()
+        self.assertEqual(empty.command("Mach ein Foto davon"), "Auf dem Tisch liegt noch nichts, Sir.")
+        self.assertFalse(empty.busy, "kein neues Modell namens Foto")
+        self.assertEqual(empty.command("Öffne das in Blender"), "Auf dem Tisch liegt noch nichts, Sir.")
+
+    def test_missing_blender_gets_installed_first(self):
+        with mock.patch("jarvis.blender.find_blender", side_effect=[None, self.exe]), \
+                mock.patch("jarvis.blender.can_install", return_value=True), \
+                mock.patch("jarvis.blender.install", return_value="Blender ist installiert.") as install, \
+                mock.patch("jarvis.blender.render", return_value=self.photo):
+            self.assertIn("Ich installiere es", self.bp.command("Render das"))
+            self.wait()
+        install.assert_called_once()
+        self.assertEqual([s for s, _ in self.renders()], ["install", "start", "done"])
+        with mock.patch("jarvis.blender.find_blender", return_value=None), \
+                mock.patch("jarvis.blender.can_install", return_value=False):
+            self.assertEqual(self.bp.command("Render das"), "Blender ist auf diesem Rechner nicht installiert, Sir.")
+
+    def test_failure_and_stop(self):
+        with mock.patch("jarvis.blender.find_blender", return_value=self.exe), \
+                mock.patch("jarvis.blender.render", side_effect=self.blender.BlenderError("Blender endete mit Code 1.")):
+            self.bp.render_photo()
+            self.wait()
+        self.assertEqual(self.renders()[-1][0], "error")
+        self.assertEqual(self.said, ["Blender hat nicht mitgespielt, Sir. Blender endete mit Code 1."])
+
+        started = threading.Event()
+
+        def slow(*args, cancel=None, **kwargs):
+            started.set()
+            cancel.wait(5)
+            raise self.blender.BlenderError("abgebrochen")
+
+        with mock.patch("jarvis.blender.find_blender", return_value=self.exe), mock.patch("jarvis.blender.render", slow):
+            self.bp.render_photo()
+            started.wait(5)
+            self.assertEqual(self.bp.render_photo(), "Blender ist noch beschäftigt, Sir.")
+            self.assertTrue(self.bp.cancel(), "\"Stopp\" hält auch Blender an")
+            self.wait()
+        self.assertEqual(self.renders()[-1][0], "cancelled")
+        self.assertEqual(len(self.said), 1, "abgebrochen: keine Ansage")
+
+    def test_photo_wish_while_building_comes_right_after(self):
+        """\"Render das\", während Claude noch baut: erst fertig bauen, dann das Foto vom ganzen Modell."""
+        self.bp.busy = True
+        self.assertEqual(self.bp.command("Render das"), "Sobald es steht, Sir.")
+        self.assertIsNone(self.bp._blender_thread)
+        self.bp.busy = False
+        self.bp.apply(part("fluegel"))
+        with mock.patch("jarvis.blender.find_blender", return_value=self.exe), \
+                mock.patch("jarvis.blender.render", return_value=self.photo) as render:
+            self.bp._after()
+            self.wait()
+        self.assertEqual(len(render.call_args.args[1]["teile"]), 2, "mit dem neuen Teil")
+        self.assertEqual(self.said, ["Das Foto ist fertig, Sir."])
+        self.bp.busy = True
+        self.bp.command("Render das")
+        self.assertTrue(self.bp.cancel())
+        self.assertEqual(self.bp._blender_after, "", "Stopp vergisst auch das Foto")
+        self.bp.busy = False
+
+    def test_window_gets_the_photo(self):
+        from jarvis.gui.app import Api, GuiBridge
+
+        api = Api(GuiBridge(), types.SimpleNamespace(blueprint=self.bp), mute=None)
+        self.assertFalse(api.blueprint_photo()["ok"])
+        self.photo.image.write_bytes(b"\x89PNG Foto")
+        self.bp.photo = self.photo
+        shown = api.blueprint_photo()
+        self.assertTrue(shown["ok"])
+        self.assertEqual(base64.b64decode(shown["src"].split(",", 1)[1]), b"\x89PNG Foto")
+        self.assertTrue(shown["src"].startswith("data:image/png;base64,"))
+        preview = Path(self.tmp.name) / "vorschau.jpg"
+        preview.write_bytes(b"\xff\xd8 klein")
+        self.bp.photo = self.blender.Photo(self.photo.image, preview, "CPU", 60.0)
+        self.assertTrue(api.blueprint_photo()["src"].startswith("data:image/jpeg;base64,"), "fürs Fenster das JPEG")
 
 
 class RoutingTest(unittest.TestCase):

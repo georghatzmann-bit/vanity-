@@ -42,7 +42,7 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Spiele (Steam, Epic):** „Installiere CS2“, „Starte Lethal Company“, „Welche Spiele brauchen Updates?“ erledigt Jarvis selbst in etwa einer Sekunde (`spiele.py`): Er liest die Steam-Bibliotheken (`libraryfolders.vdf`, `appmanifest_*.acf`) und die Manifeste des Epic-Launchers, kennt Abkürzungen (CS2, GTA 5, R6 …), sucht Unbekanntes im Steam-Shop (und merkt es sich), öffnet `steam://install/<id>`, sagt, auf welchem Laufwerk Platz ist, und meldet, wo der Download wirklich läuft.
 - **Weltlage („Gottes Auge“):** „Zeig mir, was in der Welt passiert“ öffnet eine Satelliten-Erde (three.js, Sentinel-2-Bilder von EOX, grobe Karte eingebaut). Jarvis holt die neuesten Meldungen der Tagesschau, findet zu jeder den Ort (`orte.py`, ohne Internet und ohne Claude, darum sofort), fliegt hin und liest vor (`weltlage.py`, `weltlage.js`). Jede Meldung mit Foto (fehlt eins: Satellitenbild vom Ort), die aktuelle groß mit erstem Satz. „Zeig die Erde als Hologramm“ schaltet auf leuchtende Kontinente aus Lichtpunkten mit Lichtsäulen über den Meldungen (ein Shader färbt dieselben Karten und Kacheln um). Dazu „Was passiert in Deutschland“, „Flieg nach Tokio“, „Wo ist die ISS“ (live), Flugverkehr live über OpenSky, DAX, S&P 500 und Bitcoin. Claude kann selbst Orte zeigen (`jarvis.tool weltlage "<Ort>"`).
 - **Handsteuerung:** „Starte die Handsteuerung“: Die Webcam erkennt die Hände (MediaPipe, im Fenster, kein Bild verlässt den PC). Greifen und ziehen verschiebt die Erde oder dreht das Blueprint-Modell, mit beiden Händen zoomen und drehen (`handsteuerung.js`).
-- **Blueprint: 3D-Modelle wie bei Tony Stark:** „Generiere einen Iron-Man-Helm“ und Claude zeichnet das Modell aus Grundformen Teil für Teil (`blaupause.py`), das Fenster baut es mit three.js als leuchtendes Hologramm über einem Projektor auf, mit Lichtkegel, Funken, Scan-Linie und Leuchten (`blaupause.js`, eigenes Bloom ohne Zusatzdateien). Solange der Blueprint offen ist, redet Georg ohne „Hey Jarvis“ weiter: Jarvis sagt nur „Sofort, Sir.“ und „Erledigt, Sir.“, hört direkt wieder zu und merkt sich Wünsche, während er noch baut (Warteschlange). Drehen, zoomen, verschieben mit Maus, Finger und Sprache, Explosionsansicht mit Beschriftung, Maßlinien in echten Größen, Teile ansehen, färben, entfernen, Rückgängig, umbauen per Sprache („Füg noch zwei Raketen an die Flügel“), speichern und als STL für den 3D-Drucker exportieren. Ansichten: Holo, Echt (mit Spiegelungen), Papier.
+- **Blueprint: 3D-Modelle wie bei Tony Stark:** „Generiere einen Iron-Man-Helm“ und Claude zeichnet das Modell aus Grundformen Teil für Teil (`blaupause.py`), das Fenster baut es mit three.js als leuchtendes Hologramm über einem Projektor auf, mit Lichtkegel, Funken, Scan-Linie und Leuchten (`blaupause.js`, eigenes Bloom ohne Zusatzdateien). Solange der Blueprint offen ist, redet Georg ohne „Hey Jarvis“ weiter: Jarvis sagt nur „Sofort, Sir.“ und „Erledigt, Sir.“, hört direkt wieder zu und merkt sich Wünsche, während er noch baut (Warteschlange). Drehen, zoomen, verschieben mit Maus, Finger und Sprache, Explosionsansicht mit Beschriftung, Maßlinien in echten Größen, Teile ansehen, färben, entfernen, Rückgängig, umbauen per Sprache („Füg noch zwei Raketen an die Flügel“), speichern und als STL für den 3D-Drucker exportieren. Ansichten: Holo, Echt (mit Spiegelungen), Papier. **Mit Blender:** „Render das“ baut das Modell in Blender nach (echte Materialien, Fotostudio, Cycles auf der Grafikkarte) und zeigt das Foto im Blueprint, „Öffne das in Blender“ legt eine .blend-Datei mit Licht und Kamera an und öffnet sie (`blender.py`, `blender_szene.py`). Fehlt Blender, installiert Jarvis es über winget.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** In der ersten Sprechpause erkennt Jarvis den Satz schon vorab. Ist es ein Sofort-Befehl („Öffne Spotify“), legt er nach knapp einer halben Sekunde Stille los statt nach einer. Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt. Im Protokoll steht pro Befehl eine Tempo-Zeile.
 - **Gespräch ohne Weckwort:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, Ring um die Kugel). Weiterreden reicht; „Danke“, „Alles klar“, „Tschüss“ oder Stille beenden das Gespräch. „Jarvis“, „Okay Jarvis“ und „Hallo Jarvis“ wecken ihn auch.
@@ -65,6 +65,10 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 | Blueprint | Blueprint: Explosionsansicht |
 |---|---|
 | ![Blueprint](docs/bilder/blaupause.jpg) | ![Explosionsansicht](docs/bilder/blaupause-explosion.jpg) |
+
+| Blueprint: Foto aus Blender („Render das“) |
+|---|
+| ![Das Modell als Foto aus Blender, im Blueprint](docs/bilder/blueprint-foto.jpg) |
 
 | Installer | Werkstatt |
 |---|---|
@@ -167,10 +171,13 @@ jarvis/
   klang.py        Ähnlich klingende Namen finden (Kölner Phonetik): Programme, Kontakte, eigene Befehle
   weltlage.py orte.py       Weltlage: Meldungen mit Ort, Lagebericht, Kurse, Flüge, Raumstation; Ortsverzeichnis
   spiele.py                 Spiele: Steam- und Epic-Bibliotheken, installieren, starten, Updates
+  blaupause.py              Blueprint: 3D-Modelle aus Grundformen, Befehle per Sprache, Warteschlange, Speichern
+  blender.py blender_szene.py   Blueprint in Blender: Foto (Cycles) und .blend-Datei; das zweite läuft in Blender
   overlay.py desktop.py tray.py autostart.py pc.py homeassistant.py persona.py reminders.py tool.py
   gui/app.py      Fenster (pywebview), Api für die Seite, Ereignis-Brücke
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause mit Hologramm, Projekt-Übersicht
+                  blaupause.js blaupause.css Blueprint: Hologramm mit three.js, Explosionsansicht, STL, Foto aus Blender
                   weltlage.js weltlage.css   Weltlage: Satelliten-Erde oder Hologramm, Meldungen mit Foto, Flugverkehr, Märkte
                   handsteuerung.js           Handsteuerung per Webcam (MediaPipe) für Weltlage und Blueprint
                   koppeln.js gedaechtnis.js       Verbinden (Handy, Alexa, Konnektoren), Gedächtnis
