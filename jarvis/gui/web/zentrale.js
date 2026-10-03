@@ -561,7 +561,13 @@
       T.box.hidden = false;
       stopVideo(); // die Nachrichten schweigen solange
       S.news.mode = '';
-      const play = () => T.video.play().catch(() => {});
+      T.video.muted = false;
+      const play = () => T.video.play().catch((err) => {
+        // Kam der Befehl per Stimme, fehlt dem Fenster der Klick: dann ohne Ton starten, unten lässt er sich einschalten
+        if (!err || err.name !== 'NotAllowedError' || T.box.hidden) return;
+        T.video.muted = true;
+        T.video.play().then(() => toast('Der Trailer läuft ohne Ton. Unten am Lautsprecher schalten Sie ihn ein.', 'info')).catch(() => {});
+      });
       if (!/\.m3u8(\?|$)/.test(url) || T.video.canPlayType('application/vnd.apple.mpegurl')) {
         T.video.src = url;
         play();

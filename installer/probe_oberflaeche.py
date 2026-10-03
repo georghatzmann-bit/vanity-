@@ -256,6 +256,11 @@ ZENTRALE = r"""
     kennzahlen: all('#ztKpis > *'),
     lage: text('#liveText'),
     schlagzeile: text('#ztNewsHeadline'),
+    nachrichten: (() => {
+      const v = q('#ztVideo');
+      return { modus: (q('.zt-news') || { dataset: {} }).dataset.mode || '', zeit: v ? v.currentTime : 0,
+               laeuft: !!(v && !v.paused), fehler: v && v.error ? v.error.code : 0, quelle: v ? (v.currentSrc || '').slice(0, 80) : '' };
+    })(),
     ereignisse: text('#topEvents'),
     uhr: text('#topClock'),
     webgl,
@@ -278,6 +283,51 @@ GESPRAECH = r"""
 """
 
 
+TRAILER = r"""
+(() => {
+  const box = document.getElementById('trailer');
+  const v = document.getElementById('trailerVideo');
+  return {
+    offen: !!(box && !box.hidden), titel: ((document.getElementById('trailerTitle') || {}).textContent || '').trim(),
+    zeit: v ? v.currentTime : 0, bereit: v ? v.readyState : 0, breite: v ? v.videoWidth : 0,
+    pausiert: v ? v.paused : true, stumm: v ? v.muted : false, fehler: v && v.error ? v.error.code : 0,
+    quelle: v ? (v.currentSrc || '').slice(0, 80) : '',
+  };
+})()
+"""
+
+TRAILER_SENTENCE = "Zeig mir den Trailer von Cyberpunk 2077"
+
+
+def trailer_check(tools: DevTools) -> None:
+    """Wie per Stimme: Python fragt Steam, das Fenster spielt den Trailer (HLS über hls.js)."""
+    sent = tools.evaluate(
+        "window.pywebview && window.pywebview.api && window.pywebview.api.send_text ? "
+        f"(window.pywebview.api.send_text({json.dumps(TRAILER_SENTENCE)}), true) : false"
+    )
+    if not sent:
+        check("Trailer per Befehl", False, "keine Verbindung zu Python")
+        return
+    t: dict = {}
+    deadline = time.monotonic() + 40
+    while time.monotonic() < deadline:
+        tools.pump(1)
+        t = tools.evaluate(TRAILER) or {}
+        if t.get("offen") and (t.get("zeit") or 0) > 2 or t.get("fehler"):
+            break
+    print("Trailer:", json.dumps(t, ensure_ascii=False), flush=True)
+    if t.get("offen"):
+        tools.screenshot("oberflaeche-trailer.png")
+    check("Trailer öffnet sich im Fenster", bool(t.get("offen")), t.get("titel", ""))
+    check("Trailer läuft", (t.get("zeit") or 0) > 2, f"{(t.get('zeit') or 0):.1f} s, Bild {t.get('breite')} Pixel breit")
+    note("Trailer in WebView2",
+         f"{t.get('titel') or 'kein Trailer'}: {(t.get('zeit') or 0):.1f} s gespielt, "
+         f"{'ohne Ton (Autoplay)' if t.get('stumm') else 'mit Ton'}, Bild {t.get('breite')} breit, "
+         f"Fehler {t.get('fehler') or 'keiner'}, {t.get('quelle') or '-'}",
+         "notice" if (t.get("zeit") or 0) > 2 else "warning")
+    tools.evaluate("document.getElementById('trailerClose') && document.getElementById('trailerClose').click(), true")
+
+
 def main() -> int:
     target = page_target()
     print("Seite:", target.get("url"), flush=True)
@@ -297,6 +347,10 @@ def main() -> int:
              f"{z.get('karten')} Karten, {z.get('spezialisten')} Spezialisten, Lagebild: {z.get('lage') or '-'}, "
              f"Schlagzeile: {z.get('schlagzeile') or '-'}, WebGL: {'ja' if z.get('webgl') else 'nein'}, "
              f"Fenster {z.get('breite')}x{z.get('hoehe')} bei {z.get('dpr')}x")
+        n = z.get("nachrichten") or {}
+        note("Nachrichten-Kachel in WebView2",
+             f"Modus {n.get('modus') or '-'}, {'läuft' if n.get('laeuft') else 'steht'} bei {(n.get('zeit') or 0):.1f} s, "
+             f"Fehler {n.get('fehler') or 'keiner'}, {n.get('quelle') or '-'}")
         tools.screenshot("oberflaeche-zentrale.png")
 
         tools.evaluate("document.getElementById('tabTalk').click(), true")
@@ -325,6 +379,7 @@ def main() -> int:
              f"Art: {g.get('kugel') or 'keine'}, {bright:.0%} der Fläche hell, {moved:.0%} bewegt sich in 0,7 s")
         tools.evaluate("document.getElementById('tabZentrale').click(), true")
         tools.pump(1)
+        trailer_check(tools)
     finally:
         found = errors(tools.events)
         for text in found[:8]:
