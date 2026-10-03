@@ -297,6 +297,26 @@ class ZentraleTest(unittest.TestCase):
         self.assertIsNone(z.briefed)
         self.assertFalse(z.cancel(), "läuft keins mehr")
 
+    def test_another_question_ends_the_briefing(self):
+        """Wie beim Lagebericht: Fragt Georg mitten im Briefing etwas anderes, liest Jarvis danach nicht weiter."""
+        from tests.test_assistant import make
+
+        assistant, _ui, _speaker, _ = make()
+        z = self.with_lage(Zentrale({}, None, self.ui, self.folder, assistant, tell=self.said.append,
+                                    now=lambda: self.now, opener=tagesschau))
+        assistant.zentrale = z
+        gate = threading.Event()
+        z._spoken = lambda timeout=None: gate.wait(2)
+        assistant.handle("Briefing")
+        self.assertTrue(z.briefing_running)
+        assistant.handle("Gut gemacht")
+        self.assertTrue(z.briefing_running, "ein Lob ist keine neue Frage")
+        assistant.handle("Wie spät ist es?")
+        self.assertFalse(z.briefing_running)
+        gate.set()
+        time.sleep(0.3)
+        self.assertEqual(self.said, [], "kein Abschnitt mehr nach der Uhrzeit")
+
     def test_sentences_for_the_zentrale(self):
         for text in ("Briefing", "Gib mir das Briefing", "Was steht heute an?", "Jarvis, wie sieht mein Tag aus"):
             self.assertTrue(wants_briefing(text, 15), text)
@@ -308,6 +328,8 @@ class ZentraleTest(unittest.TestCase):
         self.assertTrue(wants_refresh("Aktualisiere die Zentrale"))
         self.assertTrue(wants_refresh("Hol die neuesten Mails"))
         self.assertFalse(wants_refresh("Schreib Max eine Mail"))
+        self.assertTrue(wants_refresh("Aktualisiere") and wants_refresh("Aktualisiere das Lagebild"))
+        self.assertFalse(wants_refresh("Aktualisiere das"), "das Projekt von eben, nicht die Zentrale")
 
     def test_refresh_reads_in_background_and_reminds_before_the_important_event(self):
         answer = "```json\n" + json.dumps(LAGE) + "\n```"

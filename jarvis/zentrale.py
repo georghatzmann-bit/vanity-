@@ -1025,6 +1025,10 @@ class Zentrale:
         self.briefed = self._now().date()
         self.log("briefing", "Briefing gehalten")
 
+    @property
+    def briefing_running(self) -> bool:
+        return self._briefing
+
     def cancel(self) -> bool:
         """"Stopp": das Briefing nach dem Satz, der gerade läuft, beenden. True = es lief eins."""
         with self._lock:
@@ -1110,7 +1114,8 @@ _BRIEFING = re.compile(
 _MORNING = re.compile(r"^(?:(?:hey |hallo )?jarvis[, ]+)?guten morgen(?: jarvis)?$", re.I)
 _SHOW = re.compile(r"^(?:(?:zeig|zeige|öffne|öffnen)(?: mir)? )?(?:die |das )?(?:kommandozentrale|zentrale|dashboard)"
                    r"(?: an| öffnen| zeigen)?$", re.I)
-_REFRESH = re.compile(r"^(?:aktualisier\w*|lade neu|neu laden)(?: die| das)?(?: zentrale| lagebild| dashboard)?$|"
+# "Aktualisiere das" allein meint meist etwas anderes (das Projekt von eben), darum mit Artikel nur samt Zentrale
+_REFRESH = re.compile(r"^(?:aktualisier\w*|lade neu|neu laden)(?:(?: die| das)? (?:zentrale|lagebild|dashboard))?$|"
                       r"^(?:hol|hole)(?: mir)? (?:die )?(?:neuesten |aktuellen )?(?:mails|post|zahlen) ?(?:rein|neu)?$", re.I)
 
 

@@ -350,6 +350,7 @@ class Assistant:
                 self.ui.message("user", text)
                 self.learn("said", text)
                 self._rest = ""
+                self._end_briefing(text)
                 answer = self._local_answer(text, speak)
                 rest, self._rest = self._rest, ""
                 if answer is None:
@@ -383,6 +384,18 @@ class Assistant:
         self._last_turn_end = time.monotonic()
         self.update_state()
         return answer
+
+    def _end_briefing(self, text: str) -> None:
+        """Georg sagt mitten im Briefing etwas anderes: Das Briefing hört auf (wie der Lagebericht), sonst liest
+        Jarvis nach der neuen Antwort einfach weiter vor. Lob und "Schneller" sind keine neue Frage."""
+        zentrale = getattr(self, "zentrale", None)
+        if zentrale is None or not getattr(zentrale, "briefing_running", False):
+            return
+        from .zentrale import wants_briefing
+
+        spoken = intents.normalize(text)
+        if not (wants_briefing(text) or _WHIP.match(spoken) or _PRAISE.match(spoken)):
+            zentrale.cancel()
 
     def _known_hint(self, hint) -> str:
         """"Weiß ich schon", "Das hast du schon gesagt": diesen Hinweis heute nicht noch einmal."""
