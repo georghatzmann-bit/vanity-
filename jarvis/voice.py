@@ -299,6 +299,7 @@ class VoiceLoop:
             else:
                 self._mic.start()
             self._assistant.ui.config(mic=getattr(self._mic, "name", None))
+            self._assistant.mic_name = getattr(self._mic, "name", "") or ""
         except Exception as exc:
             log.warning("Mikrofon lässt sich noch nicht öffnen: %s", exc)
 

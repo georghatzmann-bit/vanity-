@@ -858,6 +858,9 @@
         if (ev.action === 'show') showZentrale();
         if (Zentrale) Zentrale.handle(ev);
         break;
+      case 'trailer':
+        if (Zentrale) Zentrale.trailer(ev);
+        break;
       case 'workshop':
         if (Blaupause && Blaupause.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Blaupause.close();
         if (Weltlage && Weltlage.isOpen() && ['projects', 'project', 'start'].includes(ev.state)) Weltlage.close();
@@ -1288,6 +1291,17 @@
         gen += 1;
         const g = gen;
         const t = String(text || '').trim();
+        if (/trailer/i.test(t)) {
+          push({ type: 'message', role: 'user', text: t });
+          push({ type: 'trailer', titel: 'Demo-Spiel', url: 'https://example.invalid/trailer.mp4', bild: '' });
+          push({ type: 'message', role: 'jarvis', text: 'Sehr wohl, Sir. Der Trailer zu Demo-Spiel.' });
+          return Promise.resolve(true);
+        }
+        if (/streamen|stream (?:fertig|vorbereiten)/i.test(t)) {
+          push({ type: 'message', role: 'user', text: t });
+          push({ type: 'message', role: 'jarvis', text: 'Verstanden, Sir, machen wir uns bereit. Ihr OBS steht auf der Szene Gameplay. Mikrofon und Kamera sind verbunden. Ihr Twitch ist offen. Sagen Sie Bescheid, wenn es live gehen soll, Sir.' });
+          return Promise.resolve(true);
+        }
         if (ztDemo && /^(?:briefing|guten morgen|was steht (?:heute )?an\??)$/i.test(t)) {
           push({ type: 'message', role: 'user', text: t });
           ztDemo.briefing();

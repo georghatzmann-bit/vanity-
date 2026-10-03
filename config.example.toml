@@ -272,6 +272,16 @@ aktualisieren_minuten = 30
 modell = "sonnet"
 effort = "low"
 
+[stream]
+# Stream-Modus: "Ich will streamen" (oder "Ich streame gleich CS2") stellt OBS auf die Spiel-Szene, prüft Mikrofon
+# und Kamera, öffnet Twitch und nennt ein angesagtes Spiel. "Geh live", "Beende den Stream", "Zeig mir den Trailer".
+# Szene in OBS, leer = Jarvis sucht sie selbst (eine mit "Gameplay", "Game", "Spiel" oder dem Spiel im Namen).
+szene = ""
+# Was Jarvis für den Stream öffnet.
+twitch = "https://dashboard.twitch.tv/stream-manager"
+# Ein angesagtes Spiel aus den Steam-Bestsellern dazusagen.
+tipps = true
+
 [spiele]
 # Spiele per Sprache, ohne Claude (darum in etwa einer Sekunde): "Installiere CS2", "Starte Lethal Company",
 # "Welche Spiele brauchen Updates?", "Welche Spiele habe ich?", "Deinstalliere Rust" (Steam fragt selbst nach).

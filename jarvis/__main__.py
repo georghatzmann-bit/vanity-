@@ -191,6 +191,10 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         assistant.zentrale = Zentrale(cfg, brain, ui, STATE_DIR, assistant, tell=tell, spoken=spoken,
                                       show_window=show_window)
         ui.add(Listener(assistant.zentrale))  # trägt ein, was Jarvis erledigt (Aktivität)
+    from .stream import Stream
+
+    # Stream-Modus wie im Video: "Ich will streamen", "Geh live", "Zeig mir den Trailer"
+    assistant.stream = Stream(cfg, assistant, ui, show_window=show_window)
 
     def on_mute(muted: bool) -> None:
         assistant.update_state()
@@ -439,6 +443,7 @@ def load_voice(
             "error",
         )
     ui.config(mic=mic.name)
+    assistant.mic_name = mic.name
     hints(f"Mikrofon: {mic.name}   (falsches Mikrofon? werkzeuge\\Einrichtung.bat)")
     # Nur wenn es dauert (beim ersten Start wird das Modell heruntergeladen), Bescheid sagen.
     slow = threading.Timer(

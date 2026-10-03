@@ -350,6 +350,19 @@ Sag **„Starte die Handsteuerung“** (oder unten **Handsteuerung**). Unten lin
 
 **Geklappt, wenn:** im Kamerafenster „Hand erkannt“ steht und auf dem Bildschirm ein heller Kreis deiner Hand folgt. Fragt das Fenster nach der Kamera: **Zulassen**. Kommt „Die Kamera ist nicht erlaubt“: Windows-Einstellungen > Datenschutz und Sicherheit > Kamera > **Desktop-Apps den Zugriff erlauben** einschalten. Das Kamerabild bleibt auf deinem PC, die Erkennung läuft im Fenster. Beim ersten Mal lädt sie etwa 10 MB aus dem Internet. **„Handsteuerung aus“** oder das **×** beendet sie, dann ist die Kamera wieder aus.
 
+## Stream-Modus: bereit in einem Satz
+
+Sag **„Ich will streamen“** oder **„Ich streame gleich CS2“**. Jarvis erledigt in etwa zwei Sekunden, ohne Claude:
+
+1. **OBS** auf die Spiel-Szene stellen: eine mit „Gameplay“, „Game“, „Spiel“ oder dem Spiel im Namen (fest einstellen: `config.toml`, `[stream] szene = "..."`). Ist OBS zu, startet er es gleich mit dieser Szene.
+2. **Mikrofon und Kamera** prüfen.
+3. Dein **Twitch**-Dashboard öffnen.
+4. Sagen, dass alles bereit ist, und ein Spiel nennen, das gerade oben bei den **Steam-Bestsellern** steht (eins, das du noch nicht hast).
+
+Danach: **„Geh live“** startet den Stream in OBS, **„Beende den Stream“** hört auf. **„Zeig mir den Trailer“** spielt den Trailer zu dem Spiel, das Jarvis genannt hat, direkt im Jarvis-Fenster (aus dem Steam-Shop). Geht auch mit Namen: „Zeig mir den Trailer von Crimson Desert“. **Esc** schließt ihn. Und **„Wach auf“** begrüßt dich wie im Video: „Willkommen zurück, Sir. Was machen wir heute?“
+
+**Einmal einrichten, damit Jarvis OBS steuern darf:** OBS öffnen, oben **Werkzeuge**, **WebSocket-Server-Einstellungen**, **WebSocket-Server aktivieren** anhaken, **Authentifizierung aktivieren** angehakt lassen, **OK**. Geklappt, wenn Jarvis nach „Ich will streamen“ sagt „Ihr OBS steht auf der Szene …“. Ist OBS zu, wenn du das sagst, schaltet Jarvis den Server selbst ein, aber nur, wenn OBS ein Passwort dafür hat. Ohne Passwort könnte sonst jeder in deinem Netz OBS steuern.
+
 ## Wenn etwas nicht klappt
 
 - **Jarvis reagiert nicht auf „Hey Jarvis“:** Einstellungen > Mikrofon. Dort siehst du den Pegel und ob „Hey Jarvis“ ankommt. Klappt es nur knapp, „Empfindlicher“ einschalten. Strg + Alt + J geht immer.

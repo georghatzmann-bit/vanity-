@@ -57,6 +57,10 @@ class Ui:
         "focus" (index: zu dieser Meldung fliegen), "fly" (ort), "markets", "layer", "view", "hands" (on), "done"."""
         pass
 
+    def trailer(self, event: dict) -> None:
+        """Ein Trailer im Fenster abspielen (stream.py): titel, url (HLS oder MP4 aus dem Steam-Shop), bild."""
+        pass
+
     def zentrale(self, event: dict) -> None:
         """Die Kommandozentrale (zentrale.py): action "update" (data: alles, was sie zeigt), "focus" (bereich:
         beim Briefing hervorheben, was Jarvis gerade vorliest), "show" (die Zentrale nach vorne holen)."""
@@ -177,6 +181,9 @@ class MultiUi(Ui):
 
     def zentrale(self, event):
         self._each("zentrale", event)
+
+    def trailer(self, event):
+        self._each("trailer", event)
 
     def action(self, kind):
         self._each("action", kind)

@@ -88,6 +88,8 @@ class Assistant:
         self.world = None  # die Weltlage: Satelliten-Erde mit Lagebericht (weltlage.Weltlage, setzt __main__)
         self.games = None  # Spiele auf Steam und Epic (spiele.Games, setzt __main__)
         self.zentrale = None  # die Kommandozentrale mit Lagebild und Briefing (zentrale.Zentrale, setzt __main__)
+        self.stream = None  # Stream-Modus: OBS, Twitch, Trailer (stream.Stream, setzt __main__)
+        self.mic_name = ""  # das Mikrofon, über das Jarvis hört (setzt __main__)
         self.gaming = False
         # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
         self.weathers: dict = {}
@@ -434,6 +436,9 @@ class Assistant:
             if answer is not None:
                 return answer
         spoken = intents.normalize(text)
+        if _WAKE.match(spoken):
+            # "Wach auf" wie im Video: kurz begrüßen und gleich weiter zuhören (die Antwort ist eine Frage)
+            return random.choice(WAKE_LINES)
         if _WHIP.match(spoken):
             # "Schneller!", "Beeil dich": ab jetzt eine Stufe flotter (dieser Satz selbst zählt nicht als Arbeit)
             return self.feedback("peitsche", working=self._busy > 1)
@@ -446,6 +451,16 @@ class Assistant:
                 answer = zentrale.command(text, speak=speak)
             except Exception:
                 log.exception("Zentrale")
+                answer = None
+            if answer is not None:
+                return answer
+        stream = getattr(self, "stream", None)
+        if stream is not None:
+            # "Ich will streamen", "Geh live", "Beende den Stream", "Zeig mir den Trailer"
+            try:
+                answer = stream.command(text)
+            except Exception:
+                log.exception("Stream")
                 answer = None
             if answer is not None:
                 return answer
@@ -1806,6 +1821,11 @@ def _short_reason(exc: BrainError) -> str:
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
 
+
+# "Wach auf", "Wake up", "Bist du da?": Jarvis meldet sich und fragt, was ansteht
+_WAKE = re.compile(r"^(?:wach auf|wake up|aufwachen|zeit aufzuwachen|bist du (?:da|wach)|wach)$")
+WAKE_LINES = ("Willkommen zurück, Sir. Was machen wir heute?", "Zu Diensten, Sir. Was steht an?",
+              "Ich bin da, Sir. Was machen wir heute?")
 
 # Die Peitsche ("Schneller!") und ein Lob ("Gut gemacht"): kurze Antworten wie ein Butler
 _WHIP = re.compile(

@@ -79,6 +79,9 @@ class GuiBridge(Ui):
     def world(self, event: dict) -> None:
         self._push({"type": "weltlage", **event})
 
+    def trailer(self, event: dict) -> None:
+        self._push({"type": "trailer", **event})
+
     def zentrale(self, event: dict) -> None:
         # Der ganze Stand kommt oft: nur der neueste zählt, sonst läuft die Warteschlange voll.
         if event.get("action") == "update":

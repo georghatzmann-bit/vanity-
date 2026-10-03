@@ -895,6 +895,20 @@
     <span>Dauert es? Antreiben</span>
   </button>
 
+  <!-- Trailer aus dem Steam-Shop ("Zeig mir den Trailer", stream.py) -->
+  <section class="trailer" id="trailer" role="dialog" aria-modal="true" aria-labelledby="trailerTitle" hidden>
+    <div class="trailer-box">
+      <header class="trailer-head">
+        <b id="trailerTitle">Trailer</b>
+        <button type="button" class="icon-btn" id="trailerClose" title="Schließen (Esc)">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          <span class="sr-only">Trailer schließen</span>
+        </button>
+      </header>
+      <video class="trailer-video" id="trailerVideo" controls playsinline></video>
+    </div>
+  </section>
+
   <div class="toasts" id="toasts" aria-live="assertive"></div>
 
   <script src="werkstatt.js"></script>

@@ -496,7 +496,7 @@
 
     function syncVideo() {
       const n = (S.data && S.data.nachrichten) || null;
-      const want = visible() && !S.gaming && n && window.JarvisDemoNews !== false;
+      const want = visible() && !S.gaming && n && window.JarvisDemoNews !== false && !(T.box && !T.box.hidden);
       if (!want) {
         if (S.news.src) {
           stopVideo();
@@ -522,6 +522,74 @@
       const first = headlines()[0];
       if (first && first.link) call('zentrale_open', 'nachrichten').catch(() => {});
     });
+
+    // ---------------------------------------------------------------- Trailer ("Zeig mir den Trailer")
+
+    const T = { box: $('trailer'), title: $('trailerTitle'), video: $('trailerVideo'), close: $('trailerClose'), hls: null };
+
+    function trailerClose() {
+      if (!T.box || T.box.hidden) return;
+      if (T.hls) {
+        try { T.hls.destroy(); } catch { /* egal */ }
+        T.hls = null;
+      }
+      try {
+        T.video.pause();
+        T.video.removeAttribute('src');
+        T.video.load();
+      } catch { /* egal */ }
+      T.box.hidden = true;
+      syncVideo();
+    }
+
+    function trailer(ev) {
+      const url = String(ev.url || '');
+      if (!T.box || !/^https:\/\//.test(url)) return;
+      trailerClose();
+      T.title.textContent = ev.titel ? 'Trailer: ' + ev.titel : 'Trailer';
+      T.video.poster = /^https:\/\//.test(String(ev.bild || '')) ? ev.bild : '';
+      T.box.hidden = false;
+      stopVideo(); // die Nachrichten schweigen solange
+      S.news.mode = '';
+      const play = () => T.video.play().catch(() => {});
+      if (!/\.m3u8(\?|$)/.test(url) || T.video.canPlayType('application/vnd.apple.mpegurl')) {
+        T.video.src = url;
+        play();
+      } else {
+        loadHls().then((Hls) => {
+          if (T.box.hidden) return;
+          if (!Hls.isSupported()) {
+            toast('Diesen Trailer kann das Fenster nicht abspielen.', 'error');
+            trailerClose();
+            return;
+          }
+          T.hls = new Hls({ capLevelToPlayerSize: true });
+          T.hls.on(Hls.Events.ERROR, (_e, data) => {
+            if (data && data.fatal) {
+              toast('Der Trailer lädt gerade nicht.', 'error');
+              trailerClose();
+            }
+          });
+          T.hls.loadSource(url);
+          T.hls.attachMedia(T.video);
+          T.hls.on(Hls.Events.MANIFEST_PARSED, play);
+        }).catch(() => trailerClose());
+      }
+      setTimeout(() => T.close && T.close.focus(), 50);
+    }
+
+    if (T.close) T.close.addEventListener('click', trailerClose);
+    if (T.box) {
+      T.box.addEventListener('click', (e) => {
+        if (e.target === T.box) trailerClose();
+      });
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && T.box && !T.box.hidden) {
+        e.stopPropagation();
+        trailerClose();
+      }
+    }, true);
 
     // ---------------------------------------------------------------- Notizen und Spezialisten
 
@@ -920,6 +988,7 @@
       muted,
       gaming,
       step,
+      trailer,
       setHome,
       home,
       shown() {
