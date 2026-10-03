@@ -48,7 +48,7 @@ def _read_toml(path: Path) -> dict:
 
 # Vorgaben, die sich geändert haben. Steht in einer älteren config.toml noch die alte
 # Vorgabe, bekommt sie einmalig die neue. Was du danach selbst einträgst, bleibt.
-CONFIG_VERSION = 11
+CONFIG_VERSION = 12
 _UPGRADES = {
     2: [("listen", "silence_seconds", 1.2, 0.9)],
     # Conrad klingt mit etwas langsamerem Tempo und tieferer Stimme natürlicher (gemessen).
@@ -85,6 +85,9 @@ _UPGRADES = {
     # Georg zum Video: "er soll genau so reden". Wer schon eingerichtet hat, bekommt "Chef" und den lockeren Ton
     # (zurück mit "Nenn mich wieder Sir" oder "Sei wieder förmlich"). Neue Einrichtungen fragen im Schritt Name.
     10: [("ich", "anrede", None, "Chef"), ("ich", "ton", None, "locker")],
+    # Georg: "dauert lange, bis er antwortet". Braucht Claude länger, sagt Jarvis schon nach 2 statt 3 Sekunden
+    # "Einen Moment", damit klar ist, dass er dran ist.
+    12: [("answer", "ack_after_seconds", 3.0, 2.0)],
 }
 # Einträge, die aus Listen in einer älteren config.toml verschwinden (Version, Abschnitt, Schlüssel, Einträge).
 # Jarvis 2 darf Programme ohne Nachfrage installieren.

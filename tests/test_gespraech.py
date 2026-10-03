@@ -257,6 +257,43 @@ class GuardTest(unittest.TestCase):
             loop.run()
         self.assertEqual(submitted, ["Wie spät ist es?"], "beim Zocken redet Georg meist mit anderen")
 
+    def test_no_conversation_while_discord_has_the_mic(self):
+        """Georg: "bin parallel im Discord, und dann denkt er, ich rede mit ihm"."""
+        from unittest import mock
+
+        events = []
+        assistant, ui, _speaker, mute = make(FakeBrain())
+        submitted = []
+        assistant.submit = submitted.append
+        frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3
+        loop = VoiceLoop(self.cfg(), FakeMic(frames, events), FakeWake([0.9], events),
+                         Said("Wie spät ist es?", "Und in Tokio?"), assistant, mute, Sounds(events), "X", hints=None)
+        with mock.patch("jarvis.mikrofon.in_use_by_others", return_value=["Discord"]):
+            with self.assertRaises(StopLoop):
+                loop.run()
+        self.assertEqual(submitted, ["Wie spät ist es?"], "was danach kommt, ging an die Leute im Discord")
+        toasts = [e for e in ui.events if e[0] == "toast"]
+        self.assertEqual(len(toasts), 1, toasts)
+        self.assertIn("Discord", str(toasts[0]))
+
+    def test_conversation_goes_on_without_a_voice_chat_or_when_switched_off(self):
+        from unittest import mock
+
+        for others, setting, expected in (([], True, 2), (["Discord"], False, 2)):
+            events = []
+            assistant, _ui, _speaker, mute = make(FakeBrain())
+            submitted = []
+            assistant.submit = submitted.append
+            cfg = self.cfg()
+            cfg["listen"]["sprachchat_erkennen"] = setting
+            frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3
+            loop = VoiceLoop(cfg, FakeMic(frames, events), FakeWake([0.9], events),
+                             Said("Wie spät ist es?", "Und in Tokio?"), assistant, mute, Sounds(events), "X", hints=None)
+            with mock.patch("jarvis.mikrofon.in_use_by_others", return_value=others):
+                with self.assertRaises(StopLoop):
+                    loop.run()
+            self.assertEqual(len(submitted), expected, (others, setting))
+
     def test_own_voice_is_not_a_command(self):
         events = []
         assistant, _ui, speaker, mute = make(FakeBrain())
@@ -299,6 +336,26 @@ class OrbMovementTest(unittest.TestCase):
         bridge = GuiBridge()
         bridge.action("music")
         self.assertIn({"type": "action", "kind": "music"}, bridge.drain())
+
+
+class QuickerAckTest(unittest.TestCase):
+    def test_existing_setup_says_one_moment_sooner(self):
+        """Georg: "dauert lange, bis er antwortet". Wer noch die alten 3 Sekunden hat, bekommt 2."""
+        import tempfile
+        from pathlib import Path
+
+        from jarvis.config import EXAMPLE_PATH, upgrade_config
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "config.toml"
+            text = EXAMPLE_PATH.read_text(encoding="utf-8").split("[intern]")[0]
+            text = text.replace("ack_after_seconds = 2.0", "ack_after_seconds = 3.0")
+            path.write_text(text + "\n[intern]\nconfig_version = 11\n", encoding="utf-8")
+            self.assertEqual(upgrade_config(path), ["answer.ack_after_seconds = 2.0"])
+            self.assertEqual(load_config(path)["answer"]["ack_after_seconds"], 2.0)
+            path.write_text(text.replace("ack_after_seconds = 3.0", "ack_after_seconds = 5.0")
+                            + "\n[intern]\nconfig_version = 11\n", encoding="utf-8")
+            self.assertEqual(upgrade_config(path), [], "selbst eingestellt bleibt")
 
 
 if __name__ == "__main__":

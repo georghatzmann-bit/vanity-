@@ -63,6 +63,9 @@ follow_up = true
 gespraech = true
 # So viele Sekunden wartet Jarvis im Gespräch, ob du weiterredest.
 gespraech_sekunden = 8
+# true = Hat ein anderes Programm das Mikrofon offen (Discord, TeamSpeak, ein Spiel mit Sprachchat),
+# hört Jarvis nach einer Antwort nicht ohne Weckwort weiter. "Jarvis" geht weiter.
+sprachchat_erkennen = true
 # true = Vorab-Erkennung: In der ersten kurzen Pause erkennt Jarvis den Satz schon. Ist das ein
 # Sofort-Befehl ("Öffne Spotify", "Lauter"), legt er nach einer halben Sekunde los statt nach einer.
 vorab = true
@@ -108,7 +111,7 @@ elevenlabs_model = "eleven_v4_turbo"
 [answer]
 # Braucht Claude länger als so viele Sekunden, sagt Jarvis schon mal "Einen Moment, Sir".
 # 0 = nie.
-ack_after_seconds = 3.0
+ack_after_seconds = 2.0
 
 [rechte]
 # true = volle Freigabe: Jarvis fragt nicht nach, bevor er herunterfährt, neu startet, ein Programm

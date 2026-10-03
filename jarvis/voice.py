@@ -202,6 +202,9 @@ class VoiceLoop:
         self._conversation_seconds = float(cfg["listen"].get("gespraech_sekunden", CONVERSATION_SECONDS))
         self._talking = False
         self._shown_talking = False
+        # Sprachchat (Discord und Co.): solange ein anderes Programm das Mikrofon offen hat, kein Gespräch.
+        self._watch_calls = bool(cfg["listen"].get("sprachchat_erkennen", True))
+        self._call_noted = False
         # "Jarvis" allein und andere Anreden (zweite Stufe, siehe after_name)
         self._by_name = bool(cfg.get("wakeword", {}).get("name_allein", True))
         self._recent: deque = deque(maxlen=NAME_PREROLL_FRAMES)
@@ -504,6 +507,8 @@ class VoiceLoop:
         assistant = self._assistant
         if getattr(assistant, "gaming", False):
             return False
+        if self._in_call():
+            return False
         fullscreen = getattr(assistant, "_fullscreen", None)
         try:
             if not (fullscreen is not None and fullscreen()):
@@ -515,6 +520,31 @@ class VoiceLoop:
             return self._blueprint_open() and own_window is not None and bool(own_window())
         except Exception:
             return False
+
+    def _in_call(self) -> bool:
+        """Hat gerade ein anderes Programm das Mikrofon offen (Discord, TeamSpeak, ein Spiel mit Sprachchat)? Dann
+        redet Georg mit anderen: kein Weiterhören ohne Weckwort. Einmal pro Sprachchat sagt das Fenster Bescheid."""
+        if not self._watch_calls:
+            return False
+        try:
+            from .mikrofon import in_use_by_others
+
+            others = in_use_by_others()
+        except Exception as exc:
+            log.debug("Sprachchat erkennen: %s", exc)
+            return False
+        if not others:
+            self._call_noted = False
+            return False
+        if not self._call_noted:
+            self._call_noted = True
+            log.info("Sprachchat erkannt (%s): kein Gespräch ohne Weckwort", ", ".join(others))
+            try:
+                self._assistant.ui.toast(f"{others[0]} hat das Mikrofon offen. Solange höre ich nur auf „Jarvis“.",
+                                         "info")
+            except Exception:
+                pass
+        return True
 
     def _check_name(self) -> None:
         """Zweite Stufe für "Jarvis" allein, "Hallo Jarvis" und Co.: Erst nur die letzten zwei

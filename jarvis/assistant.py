@@ -70,7 +70,7 @@ class Assistant:
         self.mute = mute
         self.reminders = reminders
         answer_cfg = cfg.get("answer", {})
-        self._ack_after = float(answer_cfg.get("ack_after_seconds", 3.0))
+        self._ack_after = float(answer_cfg.get("ack_after_seconds", 2.0))
         self._local = cfg.get("local", {}).get("enabled", True)
         self._queue: queue.Queue = queue.Queue()
         self._lock = threading.Lock()  # immer nur ein Befehl gleichzeitig
