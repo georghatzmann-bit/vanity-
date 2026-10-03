@@ -222,7 +222,8 @@ def speak(text: str) -> str:
     text = re.sub(r"\b(1[1-9]\d{2}|20\d{2})\b(?![.,]\d)", lambda m: year(int(m.group(1))), text)
 
     # Kommazahlen, große Zahlen mit Punkt, Minus, Plus
-    text = re.sub(rf"(?<![\d.,])({_NUM}),(\d+)(?![\d.])", lambda m: _decimal(m.group(1), m.group(2)), text)
+    # (ein Punkt danach ist meist das Satzende: "Der ROAS liegt bei 3,9.")
+    text = re.sub(rf"(?<![\d.,])({_NUM}),(\d+)(?!\d|\.\d)", lambda m: _decimal(m.group(1), m.group(2)), text)
     text = re.sub(r"(?<![\d.,])(\d+)\.(\d{1,2})(?![\d.])", lambda m: _decimal(m.group(1), m.group(2)), text)  # 1.5 GB
     text = re.sub(r"(?<![\w.,])[-−](?=\d)", "minus ", text)
     text = re.sub(r"(?<=\d)\s?\+\s?(?=\d)", " plus ", text)

@@ -111,6 +111,12 @@ def may_use(tool: str, connectors: bool = True, said: str | None = None) -> tupl
 def permission_reply(line: str, connectors: bool = True, said: str | None = None) -> dict | None:
     """Die Antwort auf eine Rückfrage von Claude Code (control_request can_use_tool), oder None,
     wenn die Zeile keine solche Rückfrage ist."""
+    return reply_for(line, lambda tool: may_use(tool, connectors, said))
+
+
+def reply_for(line: str, decide) -> dict | None:
+    """Wie permission_reply, aber `decide(werkzeug) -> (erlaubt?, warum)` entscheidet (der Hintergrund-Prozess
+    der Kommandozentrale darf zum Beispiel nur lesen, lage.read_only)."""
     if '"can_use_tool"' not in line:
         return None
     try:
@@ -123,7 +129,10 @@ def permission_reply(line: str, connectors: bool = True, said: str | None = None
     if not isinstance(request, dict) or request.get("subtype") != "can_use_tool":
         return None
     tool = str(request.get("tool_name") or "")
-    allowed, why = may_use(tool, connectors, said)
+    try:
+        allowed, why = decide(tool)
+    except Exception as exc:  # lieber ablehnen als hängen
+        allowed, why = False, f"Jarvis konnte das nicht prüfen: {exc}"
     if allowed:
         data = request.get("input")
         answer = {"behavior": "allow", "updatedInput": data if isinstance(data, dict) else {}}

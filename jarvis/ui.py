@@ -57,6 +57,11 @@ class Ui:
         "focus" (index: zu dieser Meldung fliegen), "fly" (ort), "markets", "layer", "view", "hands" (on), "done"."""
         pass
 
+    def zentrale(self, event: dict) -> None:
+        """Die Kommandozentrale (zentrale.py): action "update" (data: alles, was sie zeigt), "focus" (bereich:
+        beim Briefing hervorheben, was Jarvis gerade vorliest), "show" (die Zentrale nach vorne holen)."""
+        pass
+
     def action(self, kind: str) -> None:
         """Was Jarvis gerade tut ("music", "weather", "timer", ...): Die Kugel zeigt dazu eine
         eigene kurze Bewegung (orb.js, gesture)."""
@@ -169,6 +174,9 @@ class MultiUi(Ui):
 
     def world(self, event):
         self._each("world", event)
+
+    def zentrale(self, event):
+        self._each("zentrale", event)
 
     def action(self, kind):
         self._each("action", kind)

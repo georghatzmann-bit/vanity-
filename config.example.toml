@@ -260,6 +260,18 @@ meldungen = 7
 # Die Webcam für die Handsteuerung (false = nie). Sie wird nur benutzt, solange die Handsteuerung läuft.
 handsteuerung = true
 
+[zentrale]
+# Die Kommandozentrale im Fenster: Ihr Tag auf einen Blick (Aktivität, Kennzahlen, Tagesplan, Posteingang,
+# Nachrichten live, Spezialisten). "Briefing", morgens "Guten Morgen" oder "Was steht heute an?": Jarvis liest
+# sofort vor und das Fenster hebt hervor, wovon er spricht. "Zeig die Zentrale", "Aktualisiere die Zentrale".
+aktiv = true
+# So oft holt Jarvis Mails, Termine und Shop über Ihre Konnektoren neu (nur lesend, nur wenn Sie am PC sitzen und
+# nicht spielen). Jede Runde ist eine kleine Anfrage an Claude und zählt zu Ihrem Kontingent.
+aktualisieren_minuten = 30
+# Welches Modell das Lagebild liest (sonnet ist schnell genug, opus gründlicher, haiku sparsam).
+modell = "sonnet"
+effort = "low"
+
 [spiele]
 # Spiele per Sprache, ohne Claude (darum in etwa einer Sekunde): "Installiere CS2", "Starte Lethal Company",
 # "Welche Spiele brauchen Updates?", "Welche Spiele habe ich?", "Deinstalliere Rust" (Steam fragt selbst nach).

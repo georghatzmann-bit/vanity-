@@ -154,19 +154,19 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
         # 3D-Modelle als Hologramm, gespeichert neben den Werkstatt-Projekten (Jarvis-Werkstatt\Blaupausen)
         assistant.blueprint = Blueprint(cfg, brain, ui, assistant.workshop.base, assistant.announce,
                                         show_window=show_window)
+    def tell(text: str) -> None:
+        ui.message("jarvis", text)
+        assistant.say(text)
+
+    def spoken(timeout: float | None = None) -> bool:
+        return assistant.speaker.wait(timeout=timeout) if assistant.speaker is not None else True
+
+    def hush() -> None:
+        if assistant.speaker is not None:
+            assistant.speaker.stop()
+
     if cfg.get("weltlage", {}).get("aktiv", True):
         from .weltlage import Weltlage
-
-        def tell(text: str) -> None:
-            ui.message("jarvis", text)
-            assistant.say(text)
-
-        def spoken(timeout: float | None = None) -> bool:
-            return assistant.speaker.wait(timeout=timeout) if assistant.speaker is not None else True
-
-        def hush() -> None:
-            if assistant.speaker is not None:
-                assistant.speaker.stop()
 
         # Satelliten-Erde mit Lagebericht ("Gottes Auge"), Handsteuerung per Webcam
         assistant.world = Weltlage(cfg, ui, tell, spoken, show_window=show_window, hush=hush)
@@ -184,6 +184,13 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .hinweise import Watcher
 
     assistant.hints = Watcher(cfg, STATE_DIR / "hinweise.json")
+    if cfg.get("zentrale", {}).get("aktiv", True):
+        from .zentrale import Listener, Zentrale
+
+        # Die Kommandozentrale: Mails, Termine, Shop (über die Konnektoren, nur lesend), Aktivität, Briefing
+        assistant.zentrale = Zentrale(cfg, brain, ui, STATE_DIR, assistant, tell=tell, spoken=spoken,
+                                      show_window=show_window)
+        ui.add(Listener(assistant.zentrale))  # trägt ein, was Jarvis erledigt (Aktivität)
 
     def on_mute(muted: bool) -> None:
         assistant.update_state()
@@ -252,6 +259,8 @@ def start_services(cfg: dict, assistant: Assistant, ui: Ui, stopped: threading.E
                 learn_from_yesterday(assistant)
 
     threading.Thread(target=reminders, name="jarvis-erinnerungen", daemon=True).start()
+    if getattr(assistant, "zentrale", None) is not None:
+        assistant.zentrale.start()  # das erste Lagebild kurz nach dem Start, danach alle halbe Stunde
 
     if getattr(assistant, "hints", None) is not None and assistant.hints.enabled:
         from .hinweise import SystemProbe

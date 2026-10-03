@@ -740,6 +740,82 @@ class ClaudeBrain:
             raise classify(message)(message.strip()[:300])
         return str(result.get("result") or "")
 
+    def connector_job(self, prompt: str, system_file: Path, model: str = "sonnet", effort: str = "low",
+                      allow: Callable[[str], tuple[bool, str]] | None = None, cancel: threading.Event | None = None,
+                      timeout: float = 180) -> str:
+        """Eine Aufgabe im Hintergrund MIT Georgs Konnektoren, in einem eigenen Claude-Prozess neben dem Gespräch
+        (die Kommandozentrale liest so Mails, Termine und Shop, lage.py). Jede Rückfrage von Claude Code ("Darf ich
+        ... benutzen?") entscheidet `allow(werkzeug) -> (erlaubt?, warum)`; ohne `allow` wird alles abgelehnt.
+        Gibt den Antworttext zurück."""
+        if not self._claude:
+            raise NotInstalledError("Claude Code fehlt.")
+        if {"input-format", "permission-prompt-tool"} & self._unsupported:
+            raise BrainError("Diese Claude-Version kann im Hintergrund keine Konnektoren benutzen.")
+        decide = allow or (lambda tool: (False, "Im Hintergrund ist nichts freigegeben."))
+        cmd = [self._claude, "-p", "--output-format", "stream-json", "--verbose", "--input-format", "stream-json",
+               "--permission-prompt-tool", "stdio"]
+        if model:
+            cmd += ["--model", model]
+        if effort and "effort" not in self._unsupported:
+            cmd += ["--effort", effort]
+        cmd += self.isolation_flags() if self._connectors else []
+        if self._disallowed:
+            cmd += ["--disallowedTools", *self._disallowed]
+        cmd += ["--system-prompt-file", str(system_file)]
+        env = self.environment(prompt[:200])
+        env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+        run = self._start_oneshot(cmd, env)
+        proc, lines, stderr_parts, err_reader = run["proc"], run["lines"], run["stderr"], run["err"]
+        message = {"type": "user", "message": {"role": "user", "content": prompt}}
+        try:
+            proc.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
+            proc.stdin.flush()
+        except OSError:
+            pass
+        stream = _StreamReader(None, partial=False)
+        deadline = time.monotonic() + timeout
+        try:
+            while stream.result is None:
+                if cancel is not None and cancel.is_set():
+                    raise Cancelled("abgebrochen")
+                if time.monotonic() > deadline:
+                    raise TooSlowError("Claude hat im Hintergrund zu lange gebraucht.")
+                try:
+                    line = lines.get(timeout=0.25)
+                except queue.Empty:
+                    if proc.poll() is not None and lines.empty():
+                        break
+                    continue
+                if line is None:
+                    break
+                reply = konnektoren.reply_for(line, decide)
+                if reply is not None:
+                    try:
+                        proc.stdin.write(json.dumps(reply, ensure_ascii=False) + "\n")
+                        proc.stdin.flush()
+                    except (OSError, ValueError):
+                        pass
+                    continue
+                stream.feed(line)
+        finally:
+            _close(proc.stdin)  # fertig: Claude beendet sich, sobald stdin zu ist
+            if proc.poll() is None:
+                try:
+                    proc.wait(timeout=5 if stream.result is not None else 0.1)
+                except subprocess.TimeoutExpired:
+                    _kill(proc)
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
+            err_reader.join(timeout=1)
+        result = stream.result or {}
+        if result.get("is_error") or not result:
+            stderr = "".join(part for part in stderr_parts if part)
+            message_text = str(result.get("result") or "") or " ".join(stream.errors) or stderr.strip() or "Fehler"
+            raise classify(message_text)(message_text.strip()[:300])
+        return str(result.get("result") or "")
+
     def environment(self, text: str) -> dict:
         """Umgebung für Claude: damit `python -m jarvis.tool ...` im Jarvis-Ordner
         mit Jarvis' eigenem Python funktioniert."""

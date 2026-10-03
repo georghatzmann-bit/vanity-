@@ -79,6 +79,14 @@ class GuiBridge(Ui):
     def world(self, event: dict) -> None:
         self._push({"type": "weltlage", **event})
 
+    def zentrale(self, event: dict) -> None:
+        # Der ganze Stand kommt oft: nur der neueste zählt, sonst läuft die Warteschlange voll.
+        if event.get("action") == "update":
+            with self._lock:
+                for old in [e for e in self._events if e.get("type") == "zentrale" and e.get("action") == "update"]:
+                    self._events.remove(old)
+        self._push({"type": "zentrale", **event})
+
     def stats(self, cpu: float, ram: float, gpu: dict | None = None) -> None:
         event = {"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)}
         if gpu:
@@ -920,6 +928,63 @@ class Api:
             return {"planes": [], "error": "Die Weltlage ist aus."}
         return world.flights(box)
 
+    # ------------------------------------------------------------------ Kommandozentrale
+
+    ZENTRALE_LINKS = {
+        "posteingang": "https://mail.google.com/mail/u/0/#inbox",
+        "kalender": "https://calendar.google.com/calendar/r/day",
+        "shop": "https://admin.shopify.com/",
+        "nachrichten": "https://www.tagesschau.de/",
+    }
+
+    def _zentrale(self):
+        return getattr(self._assistant, "zentrale", None)
+
+    def zentrale_state(self) -> dict | None:
+        """Alles, was die Zentrale zeigt (beim Laden des Fensters; danach kommen Änderungen als Ereignis)."""
+        zentrale = self._zentrale()
+        return zentrale.snapshot() if zentrale is not None else None
+
+    def zentrale_refresh(self) -> bool:
+        """Knopf „Aktualisieren“: das Lagebild über die Konnektoren neu holen."""
+        zentrale = self._zentrale()
+        return bool(zentrale is not None and zentrale.refresh("Fenster"))
+
+    def zentrale_briefing(self) -> bool:
+        """Knopf „Briefing“: wie gesagt."""
+        if self._zentrale() is None:
+            return False
+        self._assistant.submit("Briefing")
+        return True
+
+    def zentrale_stop(self) -> bool:
+        zentrale = self._zentrale()
+        if zentrale is None or not zentrale.cancel():
+            return False
+        speaker = getattr(self._assistant, "speaker", None)
+        if speaker is not None:
+            speaker.stop()
+        return True
+
+    def zentrale_open(self, kind, ident="") -> bool:
+        """Eine Mail, den Kalender, den Shop oder die Nachrichten im Browser öffnen. Nur feste Adressen."""
+        import re
+        import webbrowser
+
+        kind = str(kind or "")
+        if kind == "mail":
+            ident = re.sub(r"[^A-Za-z0-9_-]", "", str(ident or ""))[:40]
+            url = f"https://mail.google.com/mail/u/0/#all/{ident}" if ident else self.ZENTRALE_LINKS["posteingang"]
+        else:
+            url = self.ZENTRALE_LINKS.get(kind, "")
+        if not url:
+            return False
+        try:
+            return bool(webbrowser.open(url))
+        except Exception as exc:
+            log.info("Zentrale, öffnen: %s", exc)
+            return False
+
     def _speak_answer(self, text: str) -> None:
         if not text:
             return
@@ -1194,6 +1259,10 @@ class Window:
     def hide(self) -> None:
         if self._window is not None:
             self.settle()  # nicht als "immer oben" verstecken, sonst bleibt es beim nächsten Zeigen so
+            try:
+                self._window.evaluate_js("window.jarvisHidden && window.jarvisHidden()")  # z. B. Livestream anhalten
+            except Exception:
+                pass
             self._window.hide()
             self._hidden = True
 

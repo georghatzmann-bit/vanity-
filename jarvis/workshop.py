@@ -501,6 +501,13 @@ class Workshop:
     def busy(self) -> bool:
         return self.job is not None and self.job.state == "running"
 
+    def waits_for_answer(self) -> bool:
+        """Endete die letzte Arbeit mit einer Frage an Georg ("Soll ich es starten?"), die noch gilt?"""
+        job = self.job
+        if job is None or job.state == "running" or job.ended is None:
+            return False
+        return bool(job.question or job.start_offer) and time.monotonic() - job.ended < ANSWER_WINDOW
+
     # ------------------------------------------------------------------ Wohin gehört ein Satz?
 
     def route(self, text: str, free: bool = True) -> str | None:

@@ -190,6 +190,32 @@ FAKE_CLAUDE = textwrap.dedent(
             say(text)
             result(text)
             raise Done(0)
+        if prompt.startswith("Heute ist ") and "Konnektoren:" in prompt:
+            # Das Lagebild der Kommandozentrale: drei Rückfragen (lesen, senden, Shell), dann JSON in Markdown
+            replies = []
+            for number, name in enumerate(("mcp__claude_ai_Gmail__search_threads", "mcp__claude_ai_Gmail__send_message",
+                                           "Bash")):
+                out({"type": "control_request", "request_id": "lage-" + str(number), "request": {
+                    "subtype": "can_use_tool", "tool_name": name, "input": {"query": "in:inbox newer_than:2d"},
+                    "tool_use_id": "toolu_l" + str(number)}})
+                replies.append({"tool": name, "reply": json.loads(sys.stdin.readline())})
+            with open("permissions.jsonl", "a", encoding="utf-8") as f:
+                for item in replies:
+                    f.write(json.dumps(item) + "\\n")
+            if "kaputt" in os.environ.get("FAKE_LAGE", ""):
+                say("Leider konnte ich nichts finden.")
+                result("Leider konnte ich nichts finden.")
+                raise Done(0)
+            data = {"post": {"neu": 3, "ungelesen": 2, "zahlen": {"wichtig": 1, "offen": 1, "beantwortet": 1, "werbung": 0},
+                             "mails": [{"von": "Max", "betreff": "Samstag?", "zeit": "07:10", "status": "wichtig", "id": "m1"},
+                                       {"von": "Anna", "betreff": "Fotos", "zeit": "gestern", "status": "beantwortet", "id": "m2"},
+                                       {"von": "Bank", "betreff": "Kontoauszug", "zeit": "06:00", "status": "offen", "id": "m3"}]},
+                    "kalender": {"heute": [{"start": "23:50", "ende": "23:55", "titel": "Spätes Telefonat", "wichtig": True}],
+                                 "woche": 4}}
+            text = "Hier das Lagebild:\\n```json\\n" + json.dumps(data, ensure_ascii=False) + "\\n```"
+            say(text)
+            result(text)
+            raise Done(0)
         if prompt.startswith("Blaupause:"):
             # Die Blaupause: JSON-Zeilen, Teil für Teil (mit einem kaputten Teil dazwischen)
             if "Neues Modell" in prompt:

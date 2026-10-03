@@ -26,6 +26,7 @@ class Step:
     started: float = field(default_factory=time.monotonic)
     ended: float | None = None
     todos: list[dict] | None = None  # bei TodoWrite: die geplanten Schritte
+    agent: str = ""  # bei Agent/Task: welcher Spezialist (helfer.py: recherche, texte, technik)
 
     def finish(self, error: bool = False) -> None:
         self.state = "error" if error else "done"
@@ -39,6 +40,8 @@ class Step:
         }
         if self.todos is not None:
             data["todos"] = self.todos
+        if self.agent:
+            data["agent"] = self.agent
         return data
 
 
@@ -194,5 +197,7 @@ def describe(tool_id: str, tool: str, data: dict | None) -> Step:
         return Step(tool_id, name, f"Nutzt {shown}", action.replace("_", " ").replace("-", " "), kind_for(server), "")
     if lower in ("task", "agent"):
         what = _short(data.get("description") or data.get("prompt") or "", 60)
-        return Step(tool_id, name, f"Gibt ab: {what}" if what else "Gibt eine Teilaufgabe ab", what, "task", "")
+        step = Step(tool_id, name, f"Gibt ab: {what}" if what else "Gibt eine Teilaufgabe ab", what, "task", "")
+        step.agent = re.sub(r"[^a-z_-]", "", str(data.get("subagent_type") or "").lower())[:30]
+        return step
     return Step(tool_id, name, name or "Arbeitet", "", "other", "")

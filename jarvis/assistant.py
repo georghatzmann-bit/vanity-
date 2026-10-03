@@ -87,6 +87,7 @@ class Assistant:
         self.blueprint = None  # die Blaupause: 3D-Modelle als Hologramm (blaupause.Blueprint, setzt __main__)
         self.world = None  # die Weltlage: Satelliten-Erde mit Lagebericht (weltlage.Weltlage, setzt __main__)
         self.games = None  # Spiele auf Steam und Epic (spiele.Games, setzt __main__)
+        self.zentrale = None  # die Kommandozentrale mit Lagebild und Briefing (zentrale.Zentrale, setzt __main__)
         self.gaming = False
         # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
         self.weathers: dict = {}
@@ -219,6 +220,9 @@ class Assistant:
         world = getattr(self, "world", None)
         if world is not None:
             world.cancel()  # und den Lagebericht
+        zentrale = getattr(self, "zentrale", None)
+        if zentrale is not None:
+            zentrale.cancel()  # und das Briefing
 
     def new_conversation(self) -> None:
         if self.brain is not None:
@@ -343,7 +347,7 @@ class Assistant:
                 self.ui.message("user", text)
                 self.learn("said", text)
                 self._rest = ""
-                answer = self._local_answer(text)
+                answer = self._local_answer(text, speak)
                 rest, self._rest = self._rest, ""
                 if answer is None:
                     answer = self._ask_claude(text, speak)
@@ -386,9 +390,9 @@ class Assistant:
         return random.choice(["Verzeihung, Sir. Dann sage ich das heute nicht noch einmal.",
                               "Verstanden, Sir. Heute erwähne ich es nicht mehr."])
 
-    def _local_answer(self, text: str) -> str | None:
+    def _local_answer(self, text: str, speak: bool = True) -> str | None:
         """Erledigt schnelle Befehle selbst. None = Claude soll es machen,
-        "" = erledigt, ohne etwas zu sagen."""
+        "" = erledigt, ohne etwas zu sagen. speak=False: niemand hört zu (Alexa), alles muss in die Antwort."""
         last, said_at = self._last_hint
         if last is not None and time.monotonic() - said_at < 15 * 60 and _KNOWN.search(intents.normalize(text)) \
                 and len(text.split()) <= 8:
@@ -426,6 +430,16 @@ class Assistant:
                 answer = blueprint.command(text)
             except Exception:
                 log.exception("Blaupause")
+                answer = None
+            if answer is not None:
+                return answer
+        zentrale = getattr(self, "zentrale", None)
+        if zentrale is not None:
+            # Die Kommandozentrale: "Briefing", morgens "Guten Morgen", "Zeig die Zentrale", "Aktualisiere die Zentrale"
+            try:
+                answer = zentrale.command(text, speak=speak)
+            except Exception:
+                log.exception("Zentrale")
                 answer = None
             if answer is not None:
                 return answer
@@ -1335,12 +1349,12 @@ class Assistant:
             idle = 0.0
         gpu = getattr(self, "gpu_now", None) or {}
         lage = probe.measure(idle=idle, gpu_temp=gpu.get("temp"))
-        hints = watcher.check(lage, reminders=self.reminders, memory=self.memory, weather=self._weather_today,
+        hints = watcher.check(lage, reminders=self.reminders, memory=self.memory, weather=self.weather_today,
                               away=self.take_missed,
                               push_at=self._push_at if getattr(getattr(self, "push", None), "enabled", False) else None)
         self.offer_hints(hints)
 
-    def _weather_today(self) -> str:
+    def weather_today(self) -> str:
         """Ein Satz zum Wetter heute für den Überblick am Morgen (leer, wenn keins da ist)."""
         place = str(self._cfg.get("ich", {}).get("ort", "")).strip()
         source = self.weathers.get(place.lower()) if place else None
@@ -1403,6 +1417,11 @@ class Assistant:
             return bool(_foreground_is_ours())
         except Exception:
             return False
+
+    def offer_open(self) -> bool:
+        """Wartet ein Vorschlag von Jarvis noch auf Georgs Antwort (für die Rückfragen in der Zentrale)?"""
+        offer = self._offer
+        return offer is not None and time.monotonic() <= offer[1]
 
     def _take_offer(self):
         offer, self._offer = self._offer, None
