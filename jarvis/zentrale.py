@@ -914,7 +914,11 @@ class Zentrale:
                     if self.reminded(important):
                         sentence += " Und ich erinnere Sie rechtzeitig daran."
             if reminders:
-                sentence += f" Dazu {'eine Erinnerung' if len(reminders) == 1 else f'{len(reminders)} Erinnerungen'}."
+                # "Dazu eine Erinnerung um 17:30 Uhr: Paket abholen." statt nur "Dazu eine Erinnerung."
+                first = reminders[0]
+                what = f"um {_spoken_clock(first['start'])}: {first['titel'].rstrip('.')}"
+                sentence += (f" Dazu eine Erinnerung {what}." if len(reminders) == 1
+                             else f" Dazu {len(reminders)} Erinnerungen, die nächste {what}.")
             if important is not None and events:
                 add("tagesplan", sentence, f"{important['titel']}", "Der wichtigste Termin des Tages.", important["start"],
                     f"{important['start']} {important['titel']}")

@@ -251,6 +251,12 @@ class ZentraleTest(unittest.TestCase):
         self.assertIn("Heute stehen 2 Termine an. Der wichtigste um 14 Uhr: Vertragsabschluss.", parts[3]["text"])
         self.assertEqual(parts[3]["ziel"], "14:00 Vertragsabschluss")
         self.assertEqual(parts[-1]["text"], "Das wäre alles für den Moment, Sir. Was kann ich für Sie tun?")
+        self.assistant.reminders.add(dt.datetime(2026, 10, 3, 17, 30), "Paket abholen.")
+        plan = [p for p in z.briefing() if p["bereich"] == "tagesplan"][0]["text"]
+        self.assertTrue(plan.endswith(" Dazu eine Erinnerung um 17:30 Uhr: Paket abholen."), plan)
+        self.assistant.reminders.add(dt.datetime(2026, 10, 3, 16, 0), "Zahnarzt anrufen")
+        plan = [p for p in z.briefing() if p["bereich"] == "tagesplan"][0]["text"]
+        self.assertTrue(plan.endswith(" Dazu 2 Erinnerungen, die nächste um 16 Uhr: Zahnarzt anrufen."), plan)
 
     def test_briefing_without_voice_is_one_answer(self):
         z = self.with_lage(self.make())
