@@ -1130,7 +1130,11 @@
         const visible = () => document.body.dataset.view === 'hud' && document.body.dataset.home === 'gespraech';
         // Die Energie-Kugel im HUD (plasma.js, WebGL), ohne WebGL die ruhige Linien-Kugel (orb.js)
         if (window.JarvisPlasma) orb = window.JarvisPlasma.create(node, { size: 'hero', visible });
-        if (!orb && window.JarvisOrb) orb = window.JarvisOrb.create(node, { mode: 'hero', visible });
+        if (orb) document.body.dataset.kugel = 'plasma';
+        if (!orb && window.JarvisOrb) {
+          orb = window.JarvisOrb.create(node, { mode: 'hero', visible });
+          if (orb) document.body.dataset.kugel = 'linien';
+        }
         if (orb) orb.state(state);
         if (window.JarvisOrb) document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark' }));
       },

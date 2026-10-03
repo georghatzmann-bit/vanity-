@@ -236,6 +236,29 @@ jobs:
           Pop-Location
           exit $probe
 
+      - name: Probe im echten Fenster (Zentrale, Energie-Kugel, Skriptfehler)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        # Neu: meldet sich erst nur als Annotation (Ergebnis oben im Lauf), haelt den Build nicht auf
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          # Jarvis sichtbar starten, WebView2 mit DevTools-Port. Die Probe liest die Oberflaeche wie
+          # bei Georg (echtes Python dahinter): Skriptfehler, Zentrale, Kugel mit WebGL.
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9229"
+          $env:PROBE_OUT = "$env:GITHUB_WORKSPACE\probe-bilder"
+          $jarvis = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"" -WorkingDirectory $app -PassThru
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_oberflaeche.py" 9229
+          $probe = $LASTEXITCODE
+          if ($jarvis.HasExited) { Write-Host "Jarvis hat sich beendet (Code $($jarvis.ExitCode))" }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Write-Host "--- jarvis.log"
+          Get-Content "$app\logs\jarvis.log" -Tail 30 -ErrorAction SilentlyContinue
+          exit $probe
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
