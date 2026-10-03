@@ -742,10 +742,11 @@ class ClaudeBrain:
 
     def connector_job(self, prompt: str, system_file: Path, model: str = "sonnet", effort: str = "low",
                       allow: Callable[[str], tuple[bool, str]] | None = None, cancel: threading.Event | None = None,
-                      timeout: float = 180) -> str:
+                      timeout: float = 180, max_turns: int = 30) -> str:
         """Eine Aufgabe im Hintergrund MIT Georgs Konnektoren, in einem eigenen Claude-Prozess neben dem Gespräch
         (die Kommandozentrale liest so Mails, Termine und Shop, lage.py). Jede Rückfrage von Claude Code ("Darf ich
         ... benutzen?") entscheidet `allow(werkzeug) -> (erlaubt?, warum)`; ohne `allow` wird alles abgelehnt.
+        max_turns begrenzt die Schritte, damit ein verirrter Lauf nicht Georgs Kontingent leert.
         Gibt den Antworttext zurück."""
         if not self._claude:
             raise NotInstalledError("Claude Code fehlt.")
@@ -758,6 +759,8 @@ class ClaudeBrain:
             cmd += ["--model", model]
         if effort and "effort" not in self._unsupported:
             cmd += ["--effort", effort]
+        if max_turns and "max-turns" not in self._unsupported:
+            cmd += ["--max-turns", str(max_turns)]
         cmd += self.isolation_flags() if self._connectors else []
         if self._disallowed:
             cmd += ["--disallowedTools", *self._disallowed]
@@ -812,6 +815,11 @@ class ClaudeBrain:
         result = stream.result or {}
         if result.get("is_error") or not result:
             stderr = "".join(part for part in stderr_parts if part)
+            unknown = UNKNOWN_OPTION.search(stderr)
+            if unknown and unknown.group(1) not in self._unsupported:
+                # Eine ältere Claude-Version kennt eine Option nicht: ohne sie noch einmal
+                self._unsupported.add(unknown.group(1))
+                return self.connector_job(prompt, system_file, model, effort, allow, cancel, timeout, max_turns)
             message_text = str(result.get("result") or "") or " ".join(stream.errors) or stderr.strip() or "Fehler"
             raise classify(message_text)(message_text.strip()[:300])
         return str(result.get("result") or "")

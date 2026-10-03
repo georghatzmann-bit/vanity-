@@ -543,10 +543,21 @@ class ConnectorJobTest(unittest.TestCase):
         self.assertEqual(args[args.index("--input-format") + 1], "stream-json")
         self.assertIn("--system-prompt-file", args)
         self.assertNotIn("--safe-mode", args, "das würde die Konnektoren abschalten")
+        self.assertEqual(args[args.index("--max-turns") + 1], "30", "ein verirrter Lauf leert nicht das Kontingent")
         self.assertEqual(call["no_claude_md"], "1")
         self.assertEqual(call["model"], "sonnet")
         reminder = assistant.reminders.upcoming(dt.datetime(2026, 10, 3, 8, 0))
         self.assertEqual([r["text"] for r in reminder], ["In einer Viertelstunde: Spätes Telefonat"])
+
+    def test_older_claude_without_max_turns(self):
+        z = Zentrale({}, self.brain, RecordingZentraleUi(), self.home / "daten", FakeAssistant(self.home),
+                     now=lambda: dt.datetime(2026, 10, 3, 8, 0), opener=tagesschau)
+        with mock.patch.dict("os.environ", {"FAKE_UNKNOWN": "max-turns"}):
+            self.assertTrue(z.refresh())
+            self.assertTrue(z.wait_lage(30))
+        self.assertEqual(z.lage_error, "", "ohne die Option noch einmal")
+        call = json.loads((self.home / "calls.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+        self.assertNotIn("--max-turns", call["args"])
 
     def test_answer_without_data_is_an_error(self):
         z = Zentrale({}, self.brain, RecordingZentraleUi(), self.home / "daten", FakeAssistant(self.home))
