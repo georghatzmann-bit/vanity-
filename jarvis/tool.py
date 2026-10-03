@@ -389,7 +389,9 @@ def _dispatch(command: str, rest: list[str]) -> int:
         if len(rest) < 2:
             print('Aufruf: zeitplan "<wann>" "<befehl>", z. B. zeitplan "werktags um 18 Uhr" "Öffne Discord"')
             return 1
-        parsed = parse_schedule(f"{rest[0]} {' '.join(rest[1:])}")
+        # Gesprochen ist "am Wochenende" auch ein Termin, hier hat Claude schon "regelmäßig" gewählt
+        when = re.sub(r"^\s*am\s+wochenende\b", "jedes Wochenende", rest[0], flags=re.I)
+        parsed = parse_schedule(f"{when} {' '.join(rest[1:])}")
         if parsed is None:
             print('Fehler: Zeit nicht verstanden. Beispiele: "jeden Morgen um 8", "werktags um 18 Uhr", '
                   '"montags und donnerstags um 17:30", "am Wochenende um 10".')

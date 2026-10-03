@@ -125,6 +125,28 @@ class ToolTest(unittest.TestCase):
             self.assertIn("Zeitplan eingerichtet: täglich um 7:30 Uhr: Briefing", text)
             self.assertIn("Gelöscht: täglich um 7:30 Uhr: Briefing", text)
 
+    def test_the_examples_in_the_error_work(self):
+        """Claude nimmt nach einem Fehler eines der Beispiele: "am Wochenende um 10" ging selbst nicht."""
+        import re
+
+        from jarvis import tool
+
+        with tempfile.TemporaryDirectory() as folder:
+            out = io.StringIO()
+            with mock.patch.object(tool, "STATE_DIR", Path(folder)), redirect_stdout(out):
+                self.assertEqual(tool.main(["zeitplan", "irgendwann", "Briefing"]), 1)
+                examples = re.findall(r'"([^"]+)"', out.getvalue().split("Beispiele:", 1)[1])
+                self.assertGreaterEqual(len(examples), 4)
+                for when in examples:
+                    self.assertEqual(tool.main(["zeitplan", when, "Spotify starten"]), 0, when)
+                self.assertEqual(tool.main(["zeitplan", "Am Wochenende um 10 Uhr", "Discord"]), 0)
+            self.assertIn("Zeitplan eingerichtet: am Wochenende um 10 Uhr: Spotify starten", out.getvalue())
+            self.assertIn("Zeitplan eingerichtet: am Wochenende um 10 Uhr: Discord", out.getvalue())
+
+    def test_spoken_weekend_stays_an_appointment(self):
+        """"Am Wochenende um 10 erinnere mich ans Auto" ist einmalig: das darf kein Zeitplan für jedes Wochenende werden."""
+        self.assertIsNone(match_schedule("Am Wochenende um 10 erinnere mich ans Autowaschen"))
+
 
 class GpuTest(unittest.TestCase):
     def test_nvidia_smi_values_and_no_card(self):
