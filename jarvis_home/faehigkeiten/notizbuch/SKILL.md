@@ -17,7 +17,10 @@ Befehle:
 - Suchen: `python -m jarvis.tool notizbuch-suchen "<wörter>"` (alle Wörter in einer Zeile, neueste Dateien zuerst).
 - Ein Tag: `python -m jarvis.tool notizbuch-tag heute|gestern|JJJJ-MM-TT`.
 - Notiz: `python -m jarvis.tool notiz "<text>" ["<titel>"]` (ohne Titel in die Schnellnotizen).
-- Bericht: `python -m jarvis.tool bericht "<titel>" "<datei.md>"`.
+- Bericht: `python -m jarvis.tool bericht "<titel>" "<datei.md>"` (Jarvis schreibt "Verwandt: [[...]]" selbst darunter).
+- Verknüpft: `python -m jarvis.tool notizbuch-netz "<titel oder wörter>"` zeigt, womit eine Seite im Wissensnetz
+  zusammenhängt (Links, Erwähnungen, automatisch über gemeinsame Begriffe, jeweils mit Grund). Gut für "Was gehört
+  alles zu ...?" und bevor du etwas Neues anlegst, das es vielleicht schon gibt.
 
 Bei Fragen nach früher: erst suchen oder den Tag lesen, dann in ein, zwei Sätzen antworten. Nichts erfinden: Steht es nicht drin, sag das.
 Links im Obsidian-Stil: `[[Max]]` verlinkt auf die Seite einer Person, `[[2026-10-02]]` auf einen Tag.

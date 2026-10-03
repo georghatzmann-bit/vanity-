@@ -64,6 +64,8 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   bericht "<titel>" "<datei.md>"  legt einen Bericht (Recherche) ins Notizbuch
   notizbuch-suchen "<wörter>"  sucht im Notizbuch (Tagebuch, Personen, Berichte, Notizen)
   notizbuch-tag heute|gestern|<JJJJ-MM-TT>   zeigt die Gespräche eines Tages
+  notizbuch-netz "<titel oder wörter>"   zeigt, womit eine Seite im Wissensnetz verknüpft ist (mit Grund),
+                               sonst die Seiten, die zu den Wörtern passen
   faehigkeiten                 zeigt alle Fähigkeiten (Anleitungen für wiederkehrende Aufgaben)
   faehigkeit "<name>" "<wann sie passt>" "<datei.md>"   speichert eine gelernte Fähigkeit
   faehigkeit-loeschen "<name>" löscht eine gelernte Fähigkeit
@@ -301,7 +303,7 @@ def _dispatch(command: str, rest: list[str]) -> int:
         print(f"Eigener Befehl gespeichert: „{saved['name']}“ = {saved['aktion']}")
         return 0
 
-    if command in ("notiz", "bericht", "notizbuch-suchen", "notizbuch-tag"):
+    if command in ("notiz", "bericht", "notizbuch-suchen", "notizbuch-tag", "notizbuch-netz"):
         from .notebook import Notebook, folder_from_config
 
         notebook = Notebook(folder_from_config(cfg), user=_user())
@@ -320,6 +322,15 @@ def _dispatch(command: str, rest: list[str]) -> int:
             text = source.read_text(encoding="utf-8-sig") if source.exists() else " ".join(rest[1:])
             path = notebook.report(rest[0], text)
             print(f"Bericht liegt im Notizbuch: {path}")
+            return 0
+        if command == "notizbuch-netz":
+            from .wissensnetz import network_text
+
+            words = " ".join(rest).strip()
+            if not words:
+                print('Aufruf: notizbuch-netz "<titel oder wörter>"')
+                return 1
+            print(network_text(notebook.folder, words))
             return 0
         if command == "notizbuch-suchen":
             hits = notebook.search(" ".join(rest))

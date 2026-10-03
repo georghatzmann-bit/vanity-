@@ -436,3 +436,45 @@ class Netz:
             if name not in out:
                 out.append(name)
         return out
+
+
+KIND_NAMES = {"gedaechtnis": "Gedächtnis", "person": "Person", "projekt": "Projekt", "recherche": "Recherche",
+              "notiz": "Notiz", "tag": "Tagebuch", "sitzung": "Sitzung"}
+EDGE_NAMES = {"link": "verlinkt", "auto": "automatisch verknüpft", "gedaechtnis": "im Gedächtnis",
+              "erwaehnt": "beim Namen genannt"}
+
+
+def network_text(folder: Path, words: str, limit: int = 12) -> str:
+    """Für Claude (jarvis.tool notizbuch-netz): Womit ist diese Seite verknüpft? Ohne passende Seite: die Seiten,
+    die zu den Wörtern passen."""
+    netz = Netz(folder)
+    graph = netz.build(fresh=True)
+    nodes = {n["id"]: n for n in graph["knoten"]}
+    wanted = " ".join(str(words).split()).lower()
+    hit = next((n for n in graph["knoten"] if n["titel"].lower() == wanted or n["id"].lower() == wanted), None)
+    if hit is None:
+        candidates = [n for n in graph["knoten"] if wanted and wanted in n["titel"].lower()]
+        hit = max(candidates, key=lambda n: n["grad"]) if candidates else None
+    if hit is None:
+        found = netz.related(words, words, limit=5)
+        if not found:
+            return "Dazu ist im Notizbuch nichts verknüpft."
+        return "Passende Seiten: " + ", ".join(found)
+    lines = [f"{hit['titel']} ({KIND_NAMES.get(hit['art'], hit['art'])}" + (f", {hit['datei']}" if hit.get("datei") else "")
+             + f"): {hit['auszug']}"]
+    links = []
+    for edge in graph["kanten"]:
+        if hit["id"] not in (edge["a"], edge["b"]):
+            continue
+        other = nodes[edge["b"] if edge["a"] == hit["id"] else edge["a"]]
+        links.append((other, edge))
+    links.sort(key=lambda item: (ART_ORDER.index(item[0]["art"]) if item[0]["art"] in ART_ORDER else 9, -item[0]["grad"]))
+    for other, edge in links[:limit]:
+        why = edge.get("warum") or EDGE_NAMES.get(edge["art"], edge["art"])
+        lines.append(f"- {other['titel']} ({KIND_NAMES.get(other['art'], other['art'])}): {why}")
+    if not links:
+        lines.append("- Noch mit nichts verknüpft.")
+    elif len(links) > limit:
+        lines.append(f"- und {len(links) - limit} weitere")
+    return "\n".join(lines)
+

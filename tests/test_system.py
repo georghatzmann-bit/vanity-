@@ -202,6 +202,32 @@ class WissensnetzTest(unittest.TestCase):
         graph = Netz(self.folder, Broken(), Broken()).build()
         self.assertIn("Max", {n["id"] for n in graph["knoten"]})
 
+    def test_network_for_claude(self):
+        from jarvis.wissensnetz import network_text
+
+        text = network_text(self.folder, "Stream-Ideen")
+        first, *rest = text.splitlines()
+        self.assertTrue(first.startswith("Stream-Ideen (Notiz, Notizen/Stream-Ideen.md): "), first)
+        self.assertIn("- Streaming-Setup (Recherche): gemeinsam: ", text)
+        self.assertIn("Max (Person", network_text(self.folder, "max"))
+        found = network_text(self.folder, "Twitch Overlay Mikrofon")
+        self.assertTrue(found.startswith("Passende Seiten: "), found)
+        self.assertIn("Streaming-Setup", found)
+        self.assertIn("Stream-Ideen", found)
+        self.assertEqual(network_text(self.folder, "Kuchenrezept Mehl Zucker"), "Dazu ist im Notizbuch nichts verknüpft.")
+
+    def test_tool_command(self):
+        import contextlib
+        import io
+
+        from jarvis import tool
+
+        out = io.StringIO()
+        with mock.patch("jarvis.notebook.folder_from_config", return_value=self.folder), contextlib.redirect_stdout(out):
+            code = tool.main(["notizbuch-netz", "Streaming-Setup"])
+        self.assertEqual(code, 0)
+        self.assertIn("Streaming-Setup (Recherche", out.getvalue())
+
     def test_words_and_clean_text(self):
         self.assertEqual(words("Stream-Overlays für Twitch und Streaming"),
                          ["stream-overlay", "stream", "overlay", "twitch", "stream"])
