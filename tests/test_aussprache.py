@@ -57,6 +57,38 @@ class SpeakTest(unittest.TestCase):
         self.assertEqual(speak("Counter-Strike läuft, das WLAN auch."), "Kaunter-Streik läuft, das Weh-Lahn auch.")
         self.assertEqual(speak("Mailbox und Steamdeck"), "Mailbox und Steamdeck", "nur ganze Wörter")
 
+    def test_so_is_only_sunday_before_a_date(self):
+        # "so." mitten im Satz wurde zu "Sonntag", sobald im Text irgendwo eine Zahl stand
+        cases = {"Genau so. Um 18 Uhr geht es los.": "Genau so. Um achtzehn Uhr geht es los.",
+                 "So. Morgen hat es 12 Grad.": "So. Morgen hat es zwölf Grad.",
+                 "Termin am So. 5.10. um 18 Uhr.": "Termin am Sonntag fünfter Oktober um achtzehn Uhr.",
+                 "Mo., 6.10. um 9:30 Uhr": "Montag, sechster Oktober um neun Uhr dreißig"}
+        for text, words in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(speak(text), words)
+
+    def test_day_before_a_month_name(self):
+        # "am 3. Oktober" klang wie "am drei. Oktober"
+        cases = {"Am 3. Oktober ist frei.": "Am dritten Oktober ist frei.",
+                 "Bis zum 24. Dezember.": "Bis zum vierundzwanzigsten Dezember.",
+                 "Heute ist der 3. Oktober.": "Heute ist der dritte Oktober.",
+                 "Heute ist der 3.10.": "Heute ist der dritte Oktober",
+                 "Freitag, 1. Mai": "Freitag, erster Mai"}
+        for text, words in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(speak(text), words)
+
+    def test_one_before_a_word(self):
+        # nicht "eins Uhr", "eins Minute", "eins neue Mail"
+        cases = {"Es ist 1 Uhr.": "Es ist ein Uhr.", "Es ist 1:05 Uhr.": "Es ist ein Uhr fünf.",
+                 "Sie haben 1 neue Mail.": "Sie haben eine neue Mehl.", "In 1 Minute.": "In einer Minute.",
+                 "Vor 1 Jahr.": "Vor einem Jahr.", "Es sind -1 °C.": "Es sind minus ein Grad.",
+                 "Das kostet 1,50 €.": "Das kostet ein Euro fünfzig.", "Ich habe 1 Spiel gefunden.": "Ich habe ein Spiel gefunden.",
+                 "Seite 1 von 3": "Seite eins von drei", "Das Update ist 1,5 GB groß.": "Das Apdäit ist eins Komma fünf Gigabyte groß."}
+        for text, words in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(speak(text), words)
+
     def test_version_numbers_and_dates_without_day_stay_readable(self):
         self.assertEqual(speak("Version 2.0.0 ist da."), "Version 2.0.0 ist da.")
         self.assertEqual(speak("Nr. 7"), "Nummer sieben")

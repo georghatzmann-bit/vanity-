@@ -115,9 +115,15 @@ _ABBREVIATIONS = [
     (r"\bSek\.", "Sekunden"), (r"\binkl\.", "inklusive"), (r"\bexkl\.", "exklusive"), (r"\bevtl\.", "eventuell"),
     (r"\bggf\.", "gegebenenfalls"), (r"\bvs\.", "gegen"), (r"\bSt\.(?= [A-ZÄÖÜ])", "Sankt"), (r"\bStr\.", "Straße"),
     (r"\bo\.\s?ä\.", "oder ähnlich"), (r"\bs\.\s?o\.", "siehe oben"), (r"\bv\.\s?a\.", "vor allem"),
-    (r"\bMo\.(?= )", "Montag"), (r"\bDi\.(?= )", "Dienstag"), (r"\bMi\.(?= )", "Mittwoch"), (r"\bDo\.(?= )", "Donnerstag"),
-    (r"\bFr\.(?= )", "Freitag"), (r"\bSa\.(?= )", "Samstag"), (r"\bSo\.(?= )", "Sonntag"),
+    # Wochentage nur groß und vor einem Datum oder einer Uhrzeit ("So., 5.10."): "Genau so. Um 18 Uhr" bleibt "so"
+    (r"(?-i:\bMo)\.(?=,? ?\d)", "Montag"), (r"(?-i:\bDi)\.(?=,? ?\d)", "Dienstag"), (r"(?-i:\bMi)\.(?=,? ?\d)", "Mittwoch"),
+    (r"(?-i:\bDo)\.(?=,? ?\d)", "Donnerstag"), (r"(?-i:\bFr)\.(?=,? ?\d)", "Freitag"), (r"(?-i:\bSa)\.(?=,? ?\d)", "Samstag"),
+    (r"(?-i:\bSo)\.(?=,? ?\d)", "Sonntag"),
 ]
+# "1" vor einem Wort: ein Uhr, ein Grad, eine Minute, eine neue Mail, in einer Stunde (nicht "eins Uhr", "eins Minute")
+_ONE_EIN = (r"(?:Grad|Euro|Dollar|Prozent|Terabyte|Gigabyte|Megabyte|Kilobyte|Kilometer|Kilo|Zentimeter|Millimeter|"
+            r"Watt|Tag|Monat|Jahr|Mal|Termin|Spiel|Apdäit|Daunlohd|Programm|Fenster|Ordner|Fehler|Punkt)")
+_ONE_EINE = r"(?:Minute|Stunde|Sekunde|Woche|Nachricht|I-Mehl|Mehl|Erinnerung|Datei|Aufgabe|Frage|Meldung|Sache)"
 # Englische Wörter, die Georg oft hört: so geschrieben, wie man sie auf Deutsch ausspricht. Sonst liest die
 # Stimme sie deutsch ("Mails" wie Mais, "Counter-Strike" wie Konterstriche).
 _ENGLISH = {
@@ -159,7 +165,7 @@ def speak(text: str) -> str:
         hours, minutes = int(m.group(1)), int(m.group(2))
         if hours > 24 or minutes > 59:
             return m.group(0)
-        spoken = f"{number(hours)} Uhr"
+        spoken = f"{'ein' if hours == 1 else number(hours)} Uhr"
         return spoken + (f" {number(minutes)}" if minutes else "")
 
     text = re.sub(r"\b(\d{1,2}):(\d{2})(?:\s?Uhr)?\b", clock, text)
@@ -169,23 +175,26 @@ def speak(text: str) -> str:
         before, day, month, yr = m.group(1) or "", int(m.group(2)), int(m.group(3)), m.group(4)
         if not (1 <= day <= 31 and 1 <= month <= 12):
             return m.group(0)
-        bound = bool(re.search(r"(?:\bam|\bvom|\bzum|\bbis|\bseit|\bab|\bdem|\bden)\s*$", before, re.I))
-        spoken = f"{ordinal(day, 'en' if bound else 'er')} {_MONTHS[month - 1]}"
+        spoken = f"{ordinal(day, _date_ending(before))} {_MONTHS[month - 1]}"
         if yr:
             number_year = int(yr) if len(yr) == 4 else 2000 + int(yr)
             spoken += f" {year(number_year)}"
         return before + spoken
 
     text = re.sub(r"((?:\b\w+\s)?)\b(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2}(?!\d))?(?!\d)", date, text)
+    # am 3. Oktober -> am dritten Oktober (sonst "am drei. Oktober")
+    text = re.sub(rf"((?:\b\w+\s)?)\b(\d{{1,2}})\.\s?(?=(?:{'|'.join(_MONTHS)})\b)",
+                  lambda m: m.group(1) + ordinal(int(m.group(2)), _date_ending(m.group(1))) + " "
+                  if 1 <= int(m.group(2)) <= 31 else m.group(0), text)
 
     # Grad: 14 °C, -5°, 21,5 °C
     text = re.sub(r"((?<![\w,.])[-−])?(\d+(?:,\d+)?)\s?°(?:\s?C\b)?",
-                  lambda m: ("minus " if m.group(1) else "") + _plain_number(m.group(2)) + " Grad", text)
+                  lambda m: ("minus " if m.group(1) else "") + _plain_number(m.group(2), "ein") + " Grad", text)
 
     # Geld mit Cent: 9,99 € -> neun Euro neunundneunzig
     def money(m: re.Match) -> str:
         whole, cents = _digits_to_int(m.group(1)), int(m.group(2))
-        spoken = f"{number(whole)} Euro"
+        spoken = f"{'ein' if whole == 1 else number(whole)} Euro"
         return spoken + (f" {number(cents)}" if cents else "")
 
     text = re.sub(rf"\b({_NUM}),(\d{{2}})\s?(?:€|EUR\b|Euro\b)", money, text)
@@ -193,6 +202,11 @@ def speak(text: str) -> str:
     # Einheiten hinter Zahlen: 85 GB, 120 km/h, 1,2 %
     for unit, word in _UNITS:
         text = re.sub(rf"(?<=\d)\s?{unit}(?![A-Za-zÄÖÜäöü])", f" {word}", text)
+
+    text = re.sub(r"(?<![\d.,])1\s(?=Uhr\b)", "ein ", text)
+    for nouns, plain, after_preposition in ((_ONE_EINE, "eine ", "einer "), (_ONE_EIN, "ein ", "einem ")):
+        text = re.sub(rf"(\b(?i:in|vor|nach|mit|seit|bei|von|aus|zu)\s)?(?<![\d.,])1\s(?=(?:[a-zäöüß]+\s)?{nouns}\b)",
+                      lambda m, p=plain, d=after_preposition: m.group(1) + d if m.group(1) else p, text)
 
     # Kürzel mit & und Zahlen: S&P 500 -> S und P fünfhundert, CS2 -> C S zwei
     text = re.sub(r"\b([A-Z])&([A-Z])\b", r"\1 und \2", text)
@@ -219,11 +233,21 @@ def speak(text: str) -> str:
     return re.sub(r"\s{2,}", " ", text).strip()
 
 
-def _plain_number(text: str) -> str:
+def _plain_number(text: str, one: str = "eins") -> str:
     if "," in text:
         whole, fraction = text.split(",", 1)
         return _decimal(whole, fraction)
-    return number(_digits_to_int(text))
+    value = _digits_to_int(text)
+    return one if value == 1 else number(value)
+
+
+def _date_ending(before: str) -> str:
+    """am/vom/bis zum dritten Oktober, der dritte Oktober, Freitag, dritter Oktober."""
+    if re.search(r"(?:\bam|\bvom|\bzum|\bbis|\bseit|\bab|\bdem|\bden|\bim)\s*$", before, re.I):
+        return "en"
+    if re.search(r"\b(?:der|die)\s*$", before, re.I):
+        return "e"
+    return "er"
 
 
 def _spell(letters: str) -> str:
