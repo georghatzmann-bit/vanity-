@@ -374,6 +374,27 @@ class ZentraleTest(unittest.TestCase):
         z.tick()
         self.assertEqual(len(brain.jobs), 1, "frisch genug")
 
+    def test_window_closed_means_fewer_runs(self):
+        brain = FakeBrain("{}")
+        z = self.make(brain)
+        z.tick()
+        self.assertTrue(z.wait_lage(5))
+        self.assistant.window_visible = lambda: False
+        self.now = MORNING + dt.timedelta(minutes=45)
+        z.tick()
+        self.assertEqual(len(brain.jobs), 1, "Fenster zu: niemand sieht die Zentrale, das schont das Claude-Abo")
+        self.now = MORNING + dt.timedelta(minutes=125)
+        z._next_try = 0  # die fünf Minuten Abstand zwischen zwei Versuchen sind hier egal
+        z.tick()
+        self.assertTrue(z.wait_lage(5))
+        self.assertEqual(len(brain.jobs), 2, "nach zwei Stunden auch im Hintergrund")
+        self.assistant.window_visible = lambda: True
+        self.now = MORNING + dt.timedelta(minutes=160)
+        z._next_try = 0
+        z.tick()
+        self.assertTrue(z.wait_lage(5))
+        self.assertEqual(len(brain.jobs), 3, "Fenster offen: alle 30 Minuten")
+
     def test_listener_logs_what_jarvis_did(self):
         z = self.make()
         listener = Listener(z)

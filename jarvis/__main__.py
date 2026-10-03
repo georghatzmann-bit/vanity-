@@ -698,6 +698,7 @@ def run_gui(cfg: dict, args) -> int:
         return True
 
     assistant.window_control = window_control
+    assistant.window_visible = lambda: not window.hidden
     assistant.open_setup = open_setup
     print("Jarvis läuft im Hintergrund." if hidden else "Jarvis-Fenster wird geöffnet.")
     window.start()

@@ -49,6 +49,7 @@ AGENTS = (
 AGENT_STATES = ("bereit", "arbeitet", "schreibt", "wartet", "fertig", "fehler")
 LAGE_AGENTS = ("post", "kalender", "shop")
 HELPER_RESET_MINUTES = 30
+HIDDEN_FACTOR = 4  # Fenster zu: das Lagebild nur alle 4 x aktualisieren_minuten (schont Georgs Claude-Abo)
 KEEP_DAYS = 14  # so lange bleibt die Aktivität der letzten Tage liegen
 REMIND_PREFIX = "In einer Viertelstunde: "
 
@@ -467,8 +468,19 @@ class Zentrale:
         flagged = [e for e in upcoming if e.get("wichtig")]
         return (flagged or upcoming or [None])[0]
 
+    def _window_open(self) -> bool:
+        check = getattr(self._assistant, "window_visible", None)
+        if not callable(check):
+            return True
+        try:
+            return bool(check())
+        except Exception:
+            return True
+
     def tick(self) -> None:
-        """Einmal pro Minute (aus __main__): Lagebild auffrischen, wenn es alt ist, Georg am PC sitzt und nicht spielt."""
+        """Einmal pro Minute (aus __main__): Lagebild auffrischen, wenn es alt ist, Georg am PC sitzt und nicht spielt.
+        Jeder Lauf kostet etwas von Georgs Claude-Abo: Ist das Fenster zu, sieht niemand die Zentrale, dann nur
+        alle HIDDEN_FACTOR x aktualisieren_minuten (das Briefing holt sich ein altes Lagebild ohnehin neu)."""
         assistant = self._assistant
         gaming = bool(getattr(assistant, "gaming", False))
         away = False
@@ -477,7 +489,8 @@ class Zentrale:
                 away = assistant.idle() > 30 * 60
             except Exception:
                 away = False
-        stale = self.lage_at is None or (self._now() - self.lage_at).total_seconds() > self.minutes * 60
+        every = self.minutes * 60 * (1 if self._window_open() else HIDDEN_FACTOR)
+        stale = self.lage_at is None or (self._now() - self.lage_at).total_seconds() > every
         if stale and not gaming and not away and time.monotonic() > self._next_try:
             self._next_try = time.monotonic() + 5 * 60  # nicht jede Minute neu anstoßen
             self.refresh("Zeitplan")

@@ -81,6 +81,7 @@ class Assistant:
         self.hotkey = ""
         # Vom Fenster gesetzt: "show"/"hide" zeigt oder versteckt es, open_setup öffnet die Einstellungen.
         self.window_control = None
+        self.window_visible = None  # () -> bool, setzt __main__ (ist das Fenster offen?)
         self.open_setup = None
         # Die Werkstatt für Programmier- und Bauaufgaben (setzt __main__).
         self.workshop = None

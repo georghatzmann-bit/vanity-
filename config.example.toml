@@ -266,7 +266,8 @@ handsteuerung = true
 # sofort vor und das Fenster hebt hervor, wovon er spricht. "Zeig die Zentrale", "Aktualisiere die Zentrale".
 aktiv = true
 # So oft holt Jarvis Mails, Termine und Shop über Ihre Konnektoren neu (nur lesend, nur wenn Sie am PC sitzen und
-# nicht spielen). Jede Runde ist eine kleine Anfrage an Claude und zählt zu Ihrem Kontingent.
+# nicht spielen). Ist das Fenster zu, nur ein Viertel so oft (bei 30 also alle zwei Stunden); das Briefing holt
+# ein altes Lagebild ohnehin neu. Jede Runde ist eine kleine Anfrage an Claude und zählt zu Ihrem Kontingent.
 aktualisieren_minuten = 30
 # Welches Modell das Lagebild liest (sonnet ist schnell genug, opus gründlicher, haiku sparsam).
 modell = "sonnet"
