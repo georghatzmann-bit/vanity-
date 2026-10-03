@@ -734,9 +734,19 @@
     toast(`${v.name} gibt ElevenLabs erst ab dem Starter-Abo an Jarvis heraus. Kostenlos geht eine Stimme, die du selbst entwirfst (siehe oben).`, 'info');
   }
 
-  // Beschreibung und Probetext für Voice Design: eine eigene Jarvis-Stimme, auch im Gratis-Konto
-  const DESIGN_PROMPT = 'Perfect audio quality. Middle-aged British man, calm, deep and warm voice, refined and polite like a loyal butler, dry wit, measured pace, speaks fluent German with a slight British accent.';
-  const DESIGN_TEXT = 'Guten Abend, Sir. Ich habe alle Systeme überprüft, es läuft alles einwandfrei. Ihr Kaffee ist in fünf Minuten fertig, und das Wetter bleibt bis morgen freundlich.';
+  // Beschreibung und Probetext für Voice Design: eine eigene Jarvis-Stimme, auch im Gratis-Konto. Passend zum Ton:
+  // der Butler aus dem Film oder wie im Video (dort eine eher tiefe, warme deutsche Männerstimme am Telefon).
+  const DESIGN = {
+    butler: {
+      prompt: 'Perfect audio quality. Middle-aged British man, calm, deep and warm voice, refined and polite like a loyal butler, dry wit, measured pace, speaks fluent German with a slight British accent.',
+      text: 'Guten Abend, Sir. Ich habe alle Systeme überprüft, es läuft alles einwandfrei. Ihr Kaffee ist in fünf Minuten fertig, und das Wetter bleibt bis morgen freundlich.',
+    },
+    locker: {
+      prompt: 'Perfect audio quality. German man in his thirties, native speaker with clear standard German, warm, calm and fairly deep voice, relaxed and friendly like a personal assistant calling on the phone, natural conversational pace, a slight smile in the voice.',
+      text: 'Moin Chef, kurzes Update: Ihr Termin um 18 Uhr wurde auf nächsten Dienstag verschoben, ich habe ihn schon eingetragen. Ach, und wo Sie gerade eh unterwegs sind: Beim Rewe um die Ecke gibt es Mandelmus. Gute Fahrt, Chef. Tschau, tschau.',
+    },
+  };
+  const design = () => DESIGN[S.talk === 'locker' ? 'locker' : 'butler'];
 
   async function copyText(text, done) {
     try {
@@ -1675,8 +1685,8 @@
     for (const b of document.querySelectorAll('#libraryGender .chip')) {
       b.addEventListener('click', () => elevenLibrary(b.dataset.gender));
     }
-    $('designPrompt').addEventListener('click', () => copyText(DESIGN_PROMPT, 'Beschreibung kopiert. In Voice Design einfügen.'));
-    $('designText').addEventListener('click', () => copyText(DESIGN_TEXT, 'Probetext kopiert. In Voice Design als Text einfügen.'));
+    $('designPrompt').addEventListener('click', () => copyText(design().prompt, 'Beschreibung kopiert. In Voice Design einfügen.'));
+    $('designText').addEventListener('click', () => copyText(design().text, 'Probetext kopiert. In Voice Design als Text einfügen.'));
     $('picoForm').addEventListener('submit', (e) => {
       e.preventDefault();
       picoCheck($('picoKey').value.trim());

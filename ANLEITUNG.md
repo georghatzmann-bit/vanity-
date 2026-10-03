@@ -60,6 +60,11 @@ Wer mag, nimmt statt der lokalen Stimme eine von ElevenLabs. Die braucht Interne
    `Guten Abend, Sir. Ich habe alle Systeme überprüft, es läuft alles einwandfrei. Ihr Kaffee ist in fünf Minuten fertig, und das Wetter bleibt bis morgen freundlich.`
 4. **Generate** klicken, die drei Vorschläge anhören und den besten speichern, zum Beispiel als „Jarvis“.
 
+**Lieber wie im Video?** Dort spricht eine eher tiefe, warme deutsche Männerstimme, wie ein Assistent am Telefon. Kopieren lässt sich diese Stimme nicht (sie gehört jemand anderem), aber Voice Design trifft den Klang. Die Einrichtung kopiert dir diese Texte von selbst, wenn du „Locker wie im Video“ gewählt hast:
+
+- Beschreibung: `Perfect audio quality. German man in his thirties, native speaker with clear standard German, warm, calm and fairly deep voice, relaxed and friendly like a personal assistant calling on the phone, natural conversational pace, a slight smile in the voice.`
+- Text: `Moin Chef, kurzes Update: Ihr Termin um 18 Uhr wurde auf nächsten Dienstag verschoben, ich habe ihn schon eingetragen. Ach, und wo Sie gerade eh unterwegs sind: Beim Rewe um die Ecke gibt es Mandelmus. Gute Fahrt, Chef. Tschau, tschau.`
+
 Fertige Stimmen aus der Bibliothek (zum Beispiel Lennard) gehen ab dem Abo **Starter** (etwa 6 $ im Monat).
 
 Die lokale Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der Kerne, damit Spiele flüssig bleiben. Beim Start rechnet Jarvis einmal einen Probesatz: Auf schnellen PCs setzt die Stimme dann noch früher ein.
