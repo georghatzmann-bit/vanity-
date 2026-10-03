@@ -41,6 +41,9 @@ OFFICIAL = ("claude-code-setup",)
 EXTRAS = ("ecc", "task-observer", "mem-thedotmack")  # nur auf Wunsch: brauchen Node.js, Bash oder viel Kontext
 STATE_FILE = "claude-plugins.json"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+# Einrichten beim Start, "Richte die Claude-Plugins ein" und das Nachholen nach Git laufen nacheinander:
+# zwei gleichzeitige `claude plugin install` schreiben sonst in dieselben Einstellungen von Claude Code.
+_SETUP_LOCK = threading.Lock()
 
 
 def marketplace_root(root: Path | None = None) -> Path:
@@ -97,7 +100,6 @@ class Plugins:
         self._claude = claude
         self._run = runner or subprocess.run
         self._git = git
-        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ Claude Code
 
@@ -162,7 +164,7 @@ class Plugins:
 
     def setup(self, extras: tuple[str, ...] = ()) -> dict:
         """Marktplatz anmelden (oder auf den Jarvis-Ordner umstellen) und alles installieren. Doppelt schadet nicht."""
-        with self._lock:
+        with _SETUP_LOCK:
             result = {"ok": False, "installiert": [], "fehler": [], "ohne_git": [], "text": ""}
             if not self.claude:
                 result["text"] = "Claude Code ist nicht installiert, Sir. Das richtet die Einrichtung ein."

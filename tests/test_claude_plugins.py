@@ -182,6 +182,26 @@ class PluginsTest(unittest.TestCase):
         said = [e[2] for e in ui.events if e[0] == "message"]
         self.assertEqual(said[-2:], ["Git ist installiert, Sir.", "Dazu Claude Code Setup."])
 
+    def test_two_setups_at_once_run_one_after_the_other(self):
+        import threading
+
+        running, overlap = [], []
+
+        def slow(cmd, **kwargs):
+            running.append(1)
+            if len(running) > 1:
+                overlap.append(cmd)
+            __import__("time").sleep(0.002)
+            running.pop()
+            return FakeCli()(cmd, **kwargs)
+
+        jobs = [threading.Thread(target=self.plugins(slow).setup) for _ in range(2)]
+        for job in jobs:
+            job.start()
+        for job in jobs:
+            job.join(10)
+        self.assertEqual(overlap, [], "nie zwei claude-plugin-Aufrufe gleichzeitig")
+
     def test_waiting_for_git_comes_from_the_last_setup(self):
         plugins = self.plugins(FakeCli(), git=False)
         self.assertEqual(plugins.waiting_for_git(), [])
