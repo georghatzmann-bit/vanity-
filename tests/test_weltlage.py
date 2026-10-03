@@ -265,6 +265,13 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(world.command("Navigiere nach München"), "Kurs auf München, Sir.")
         self.assertEqual(world.command("Bring mich nach Japan"), "Kurs auf Japan, Sir.")
 
+    def test_fly_home(self):
+        world, ui, _ = make(cfg={"ort": "Wien"})
+        self.assertEqual(world.command("Flieg nach Hause"), "Kurs auf Wien, Sir.", "nicht nach Aglasterhausen")
+        self.assertIsNone(world.command("Bring mich nach Hause"), "das ist die Route nach Hause")
+        nowhere, _, _ = make()
+        self.assertIn("Wohnort kenne ich noch nicht", nowhere.command("Flieg nach Hause"))
+
     def test_everyday_commands_still_work_while_the_earth_is_open(self):
         searched = []
 

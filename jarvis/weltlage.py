@@ -305,6 +305,7 @@ class Weltlage:
         """say: sagen (und im Fenster zeigen), wait(timeout): warten, bis es gesagt ist, hush: sofort still."""
         section = cfg.get("weltlage", {}) or {}
         self.limit = int(section.get("meldungen", MAX_ITEMS) or MAX_ITEMS)
+        self._cfg = cfg  # der Wohnort ("Flieg nach Hause"), die Einstellungen können ihn ändern
         self._ui = ui
         self._say = say
         self._wait = wait
@@ -440,6 +441,13 @@ class Weltlage:
 
     def fly(self, where: str, explicit: bool = True) -> str | None:
         where = re.sub(r"^(?:den |die |das |dem |der )", "", where.strip())
+        if re.fullmatch(r"(?:hause|zuhause|heim|daheim)", where.lower()):
+            # "Flieg nach Hause": zum Wohnort, nicht nach Aglasterhausen. "Bring mich nach Hause" bleibt die Route.
+            if not explicit:
+                return None
+            where = str(self._cfg.get("ort", "") or "").strip()
+            if not where:
+                return "Ihren Wohnort kenne ich noch nicht, Sir. Er steht in den Einstellungen."
         place = geocode(where, self._opener) if explicit else orte.lookup(where)
         if place is None:
             return f"{where[:1].upper() + where[1:]} finde ich auf der Karte nicht, Sir." if explicit else None
