@@ -602,9 +602,14 @@ class Blueprint:
         local = self._local(norm)
         if local is not None:
             return local
-        if self.scene["teile"] and _EDIT.match(norm) and not _SOFTWARE.search(norm):
+        if self._has_model() and _EDIT.match(norm) and not _SOFTWARE.search(norm):
             return self.generate(text, fresh=False)
         return None
+
+    def _has_model(self) -> bool:
+        """Liegt ein Modell auf dem Tisch oder baut Claude gerade eins? Solange noch kein Teil da ist, ist
+        "Mach sie rot" trotzdem eine Änderung für die Warteschlange und kein neues Modell."""
+        return bool(self.scene["teile"]) or self.busy
 
     def _make_request(self, text: str, norm: str) -> str | None:
         shown = _SHOW_AS.match(norm)
@@ -617,7 +622,7 @@ class Blueprint:
         explicit = bool(_EXPLICIT.search(norm)) or (bool(_STRONG_VERB.match(norm)) and not _NOT_AN_OBJECT.search(norm))
         if not explicit and not self.active:
             return None
-        if self.active and not explicit and self.scene["teile"]:
+        if self.active and not explicit and self._has_model():
             # Bei offenem Modell ist "Mach ..." meist eine Änderung ("Mach den Rumpf schlanker"),
             # nur "Bau/Generiere mir ein(e/n) ..." ein neues Modell
             if not re.match(rf"^{_MAKE_VERB}(?: mir| uns)? (?:ein|eine|einen|neue|neuen|neues)\b", norm) or \
@@ -924,6 +929,13 @@ class Blueprint:
         if self._cancel.is_set():
             self._emit("done", ok=False, cancelled=True, **self.state())
             return
+        if fresh and not added:
+            # Das neue Modell ist nicht entstanden: Änderungen, die Georg dafür schon gesagt hat, passen nicht mehr
+            with self._lock:
+                kept = [item for item in self._queue if item[1]]
+                if len(kept) != len(self._queue):
+                    self._queue = kept
+                    self._emit("queue", items=[w for w, _ in self._queue])
         if error and not added:
             with self._lock:
                 if self._undo:

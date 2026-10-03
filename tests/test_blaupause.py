@@ -4,6 +4,7 @@ import base64
 import json
 import struct
 import sys
+import threading
 import time
 import types
 import unittest
@@ -127,6 +128,40 @@ class CommandTest(unittest.TestCase):
         self.bp.generate("Noch eine Antenne", fresh=False)
         self.assertTrue(self.bp.cancel(), "Stopp leert auch die Warteschlange")
         self.assertEqual(self.bp._queue, [])
+
+    def test_wishes_before_the_first_part_are_changes(self):
+        """Georg sagt "Mach sie rot", während Claude die Drohne baut, aber noch kein Teil da ist. Das ist eine
+        Änderung für danach, kein neues Modell "sie rot" und nichts für den normalen Chat. Entsteht die Drohne
+        nicht, fallen die Änderungen dafür weg, ein neues Modell bleibt dran."""
+        gate = threading.Event()
+        prompts = []
+
+        def stream(prompt, on_text=None, **_):
+            prompts.append(prompt)
+            if len(prompts) == 1:
+                gate.wait(5)  # Claude liefert für die Drohne nichts
+            else:
+                on_text(json.dumps(part("rad", form="zylinder")) + "\n")
+
+        brain = types.SimpleNamespace(claude_path="claude", stream_oneshot=stream)
+        bp = Blueprint({}, brain, self.ui, Path(self.tmp.name) / "leer", self.said.append)
+        bp.open()
+        bp.command("Bau mir eine Drohne")
+        self.assertTrue(bp.busy)
+        for said in ("Mach sie rot", "Füg noch zwei Raketen an", "Bau mir ein Auto"):
+            with self.subTest(said=said):
+                self.assertIsNotNone(bp.command(said))
+        self.assertEqual(bp._queue, [("Mach sie rot", False), ("Füg noch zwei Raketen an", False),
+                                     ("Bau mir ein Auto", True)])
+        gate.set()
+        end = time.monotonic() + 10
+        while (bp.busy or len(prompts) < 2) and time.monotonic() < end:
+            time.sleep(0.02)
+        self.assertEqual(len(prompts), 2)
+        self.assertIn("Bau mir ein Auto", prompts[1], "das neue Modell kommt direkt danach")
+        self.assertEqual(bp._queue, [])
+        self.assertEqual([p["id"] for p in bp.scene["teile"]], ["rad"])
+        self.assertIn("Das hat nicht geklappt", self.said[0])
 
     def test_view_commands_go_to_the_window(self):
         self.bp.open()
