@@ -206,6 +206,8 @@
     usageBar: $('usageBar'),
     usageLine: $('usageLine'),
     usageNote: $('usageNote'),
+    ztClaude: $('ztClaude'),
+    ztClaudeNum: $('ztClaudeNum'),
     kernStates: $('kernStates'),
     kernMode: $('kernMode'),
     micName: $('micName'),
@@ -1258,6 +1260,12 @@
   function renderUsage(u) {
     if (!el.usageCard || !u) return;
     const has = !!u.da && u.woche !== null && u.woche !== undefined;
+    if (el.ztClaude) {
+      // Dasselbe klein in der Zentrale, unter dem Rechner
+      el.ztClaude.hidden = !has;
+      el.ztClaude.dataset.knapp = u.knapp || u.status === 'rejected' ? '1' : '0';
+      if (has) el.ztClaudeNum.textContent = Math.round(Number(u.woche) || 0) + ' %';
+    }
     el.usageCard.dataset.da = has ? '1' : '0';
     el.usageCard.dataset.knapp = u.knapp || u.status === 'rejected' ? '1' : '0';
     const note = u.status === 'rejected' ? 'Aufgebraucht. Jarvis antwortet, sobald es wieder frei ist.'

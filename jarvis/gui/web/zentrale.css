@@ -667,6 +667,22 @@ body[data-state="error"] .zt-orb-state {
   white-space: nowrap;
 }
 
+.zt-pc-claude {
+  margin: 4px 0 0;
+  text-align: center;
+  color: var(--zt-text-3);
+  font-size: 11px;
+}
+
+.zt-pc-claude b {
+  color: var(--zt-text-1, #e8eaf0);
+  font-weight: 600;
+}
+
+.zt-pc-claude[data-knapp="1"] b {
+  color: var(--warn);
+}
+
 .zt-pc-note[data-warn="1"] {
   color: var(--warn);
   font-weight: 600;
