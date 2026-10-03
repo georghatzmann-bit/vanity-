@@ -19,6 +19,7 @@ log = logging.getLogger(__name__)
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
 RADIUS = 1500  # Meter
+LIMIT = 250  # Overpass liefert nicht nach Entfernung sortiert: genug holen, damit der nächste sicher dabei ist
 CACHE_SECONDS = 30 * 60
 WALK_METERS_PER_MINUTE = 80
 
@@ -45,7 +46,7 @@ def walk_minutes(meters: float) -> int:
 
 def _query(lat: float, lon: float, radius: int) -> str:
     return (f"[out:json][timeout:10];(node[\"shop\"=\"supermarket\"](around:{radius},{lat:.4f},{lon:.4f});"
-            f"way[\"shop\"=\"supermarket\"](around:{radius},{lat:.4f},{lon:.4f}););out center 40;")
+            f"way[\"shop\"=\"supermarket\"](around:{radius},{lat:.4f},{lon:.4f}););out center {LIMIT};")
 
 
 def _post(url: str, query: str, timeout: float) -> dict:
@@ -91,6 +92,7 @@ class Nearby:
         self._timeout = timeout
         self._cache: dict[tuple, tuple[float, list[dict]]] = {}
         self._lock = threading.Lock()
+        self.failed = False  # die letzte Suche kam nicht durch (kein Netz, Overpass überlastet), nicht "keiner da"
 
     def supermarkets(self, lat: float, lon: float, radius: int = RADIUS) -> list[dict]:
         cell = (round(lat * 500), round(lon * 500), radius)  # etwa 200 x 150 Meter
@@ -99,13 +101,16 @@ class Nearby:
             hit = self._cache.get(cell)
             if hit is not None and now - hit[0] < CACHE_SECONDS:
                 # von hier aus neu gemessen: ein paar Schritte weiter ist vielleicht ein anderer der nächste
+                self.failed = False
                 return sorted((dict(s, meter=distance(lat, lon, s["lat"], s["lon"])) for s in hit[1]),
                               key=lambda s: s["meter"])
         try:
             shops = parse(self._fetch(self._url, _query(lat, lon, radius), self._timeout), lat, lon)
         except Exception as exc:  # kein Netz, Overpass überlastet: dann eben ohne
             log.info("Supermärkte in der Nähe: %s", type(exc).__name__)
+            self.failed = True
             return []
+        self.failed = False
         with self._lock:
             if len(self._cache) > 200:
                 self._cache.clear()

@@ -560,9 +560,19 @@ class TelegramTest(unittest.TestCase):
         bot = self.bot(chat_id=42)
         bot._nearby = FakeNearby([])
         bot.place({"latitude": HOME[0], "longitude": HOME[1]}, False)
-        self.assertEqual(self.api.texts(42), ["In der Nähe finde ich gerade keinen Supermarkt, Sir. "
+        self.assertEqual(self.api.texts(42), ["Im Umkreis von 1,5 Kilometern finde ich keinen Supermarkt. "
                                               "Ihre Einkaufsliste ist leer, Sir."])
         self.assertEqual(self.api.sent("sendVenue"), [])
+
+    def test_location_when_openstreetmap_does_not_answer(self):
+        bot = self.bot(chat_id=42)
+        bot._nearby = FakeNearby([])
+        bot._nearby.failed = True
+        self.assistant.memory.items = ["Mandelmus"]
+        bot.place({"latitude": HOME[0], "longitude": HOME[1]}, False)
+        self.assertEqual(self.api.texts(42), ["Die Supermarkt-Suche von OpenStreetMap antwortet gerade nicht. Schicken "
+                                              "Sie mir den Standort später noch einmal. Auf Ihrer Einkaufsliste: Mandelmus."],
+                         "kein falsches \"hier gibt es keinen\"")
 
     def test_location_switched_off(self):
         bot = self.bot(chat_id=42, standort=False)

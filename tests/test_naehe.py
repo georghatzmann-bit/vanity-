@@ -66,6 +66,16 @@ class NearbyTest(unittest.TestCase):
         nearby = Nearby(fetch=broken)
         self.assertEqual(nearby.supermarkets(*HERE), [])
         self.assertIsNone(nearby.nearest(*HERE))
+        self.assertTrue(nearby.failed, "nicht durchgekommen ist etwas anderes als keiner da")
+        nearby._fetch = lambda url, query, timeout: {"elements": []}
+        self.assertEqual(nearby.supermarkets(*HERE), [])
+        self.assertFalse(nearby.failed)
+
+    def test_enough_results_for_the_nearest_in_a_city(self):
+        """Overpass sortiert nicht nach Entfernung: mit nur 40 Treffern fehlte in der Innenstadt der nächste."""
+        queries = []
+        Nearby(fetch=lambda url, query, timeout: queries.append(query) or {"elements": []}).supermarkets(*HERE)
+        self.assertIn("out center 250;", queries[0])
 
 
 if __name__ == "__main__":

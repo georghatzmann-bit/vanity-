@@ -592,7 +592,7 @@ class TelegramBot:
             self._nudge(lat, lon)
             return
         from .einkauf import join
-        from .naehe import spoken_distance, walk_minutes
+        from .naehe import RADIUS, spoken_distance, walk_minutes
 
         listed = self._shopping()
         shop = self._places().nearest(lat, lon)
@@ -602,7 +602,11 @@ class TelegramBot:
                 self._nudged[shop["id"]] = time.monotonic()  # gerade erst gesagt: nicht gleich noch einmal
         wish = f" Auf Ihrer Einkaufsliste: {join(listed)}." if listed else " Ihre Einkaufsliste ist leer, Sir."
         if shop is None:
-            self.send("In der Nähe finde ich gerade keinen Supermarkt, Sir." + wish)
+            if getattr(self._places(), "failed", False):
+                self.send("Die Supermarkt-Suche von OpenStreetMap antwortet gerade nicht. Schicken Sie mir den Standort "
+                          "später noch einmal." + wish)
+            else:
+                self.send(f"Im Umkreis von {spoken_distance(RADIUS)}n finde ich keinen Supermarkt." + wish)
             return
         later = (" Solange Sie den Live-Standort teilen, sage ich Bescheid, wenn Sie an einem Supermarkt vorbeikommen."
                  if live and listed else "")
