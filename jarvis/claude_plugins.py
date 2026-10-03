@@ -275,7 +275,7 @@ def summary(result: dict) -> str:
     if result.get("ohne_git"):
         names = [NAMES.get(p, p) for p in result["ohne_git"]]
         parts.append(_join(names) + (" braucht" if len(names) == 1 else " brauchen") + " Git, das fehlt noch. "
-                     "Sagen Sie „Installiere Git“ und danach „Richte die Claude-Plugins ein“.")
+                     "Sagen Sie „Installiere Git“, dann kommt das gleich hinterher.")
     return " ".join(parts) or "Nichts zu tun."
 
 

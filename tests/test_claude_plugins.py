@@ -76,7 +76,7 @@ class PluginsTest(unittest.TestCase):
         self.assertNotIn(["marketplace", "add", "anthropics/claude-plugins-official"], cli.calls)
         self.assertEqual(result["ohne_git"], ["claude-code-setup", "ecc"])
         self.assertIn("Claude Code Setup und Everything Claude Code brauchen Git", result["text"])
-        self.assertIn("Installiere Git", result["text"])
+        self.assertIn("Sagen Sie „Installiere Git“, dann kommt das gleich hinterher.", result["text"])
         self.assertIn("Claude Code Setup braucht Git", self.plugins(FakeCli(), git=False).setup()["text"])
 
     def test_git_right_after_installing_it(self):
