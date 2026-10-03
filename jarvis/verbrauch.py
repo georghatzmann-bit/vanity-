@@ -129,15 +129,27 @@ def sparing(data: dict | None = None, now: float | None = None) -> bool:
     """Wird das Kontingent knapp (Woche ab 90 Prozent, oder Claude warnt)? Dann lieber ein sparsameres Modell."""
     data = load() if data is None else data
     week = share(data, "woche", now)
-    return bool((week is not None and week >= SPARING) or data.get("status") == "allowed_warning")
+    return bool((week is not None and week >= SPARING) or status(data, now) == "allowed_warning")
+
+
+def status(data: dict, now: float | None = None) -> str:
+    """Was Claude zuletzt gemeldet hat ("allowed", "allowed_warning", "rejected"). Ist das Fenster, für das es galt,
+    inzwischen zurückgesetzt, gilt es nicht mehr: Nach dem Zurücksetzen ist nichts mehr "aufgebraucht" oder "knapp",
+    auch wenn seitdem noch keine Frage an Claude ging."""
+    now = time.time() if now is None else now
+    said = str(data.get("status") or "")
+    if said in ("rejected", "allowed_warning") and data.get("endet") and data["endet"] <= now:
+        return ""
+    return said
 
 
 def when(stamp: int | None, now: float | None = None) -> str:
     """Zurücksetzen gesprochen: "um 18 Uhr", "morgen um 7:30", "Donnerstag um 16 Uhr"."""
-    if not stamp:
-        return ""
+    now = time.time() if now is None else now
+    if not stamp or stamp <= now:
+        return ""  # schon vorbei: "setzt sich um 16 Uhr zurück" wäre falsch
     moment = dt.datetime.fromtimestamp(stamp)
-    today = dt.datetime.fromtimestamp(time.time() if now is None else now).date()
+    today = dt.datetime.fromtimestamp(now).date()
     clock = f"{moment.hour} Uhr" if moment.minute == 0 else f"{moment.hour}:{moment.minute:02d}"
     days = (moment.date() - today).days
     if days <= 0:
@@ -159,7 +171,7 @@ def view(data: dict | None = None, now: float | None = None) -> dict:
             "fuenf_stunden": None if five is None else round(five * 100),
             "woche_endet": when((data.get("woche") or {}).get("endet"), now),
             "fuenf_endet": when((data.get("fuenf_stunden") or {}).get("endet"), now),
-            "status": data.get("status") or "", "knapp": sparing(data, now), "extra": bool(data.get("extra")),
+            "status": status(data, now), "knapp": sparing(data, now), "extra": bool(data.get("extra")),
             "verlauf": [round(p[1] * 100, 1) for p in data.get("verlauf") or []][-60:],
             "stand": data.get("stand") or 0}
 

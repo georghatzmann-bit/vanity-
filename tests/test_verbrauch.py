@@ -91,12 +91,31 @@ class UsageTest(Base):
         self.assertEqual(verbrauch.describe(now=NOW),
                          "Das Claude-Kontingent ist gerade aufgebraucht, Sir. Es geht um 19 Uhr weiter.")
 
+    def test_after_the_reset_nothing_is_used_up_or_short(self):
+        gone = json.loads(json.dumps(REAL))
+        five = gone["unifiedWindows"]["five_hour"]["resetsAt"]
+        gone.update(status="rejected", rateLimitType="five_hour", resetsAt=five)
+        gone["unifiedWindows"]["five_hour"]["utilization"] = 1.0
+        verbrauch.note(gone, now=NOW)
+        self.assertIn("aufgebraucht", verbrauch.describe(now=NOW))
+        later = NOW + 8 * 3600  # 20 Uhr: das Fünf-Stunden-Fenster ist um 19 Uhr frei geworden, Claude noch nicht gefragt
+        said = verbrauch.describe(now=later)
+        self.assertNotIn("aufgebraucht", said)
+        self.assertIn("Im Fünf-Stunden-Fenster sind es 0 Prozent.", said)
+        self.assertEqual(verbrauch.view(now=later)["status"], "")
+        warned = dict(REAL, status="allowed_warning")
+        verbrauch.note(warned, now=NOW)
+        self.assertTrue(verbrauch.sparing(now=NOW))
+        self.assertFalse(verbrauch.sparing(now=NOW + 5 * 86400), "nach dem Wochenwechsel wieder gründlich")
+        self.assertEqual(verbrauch.view(now=NOW + 5 * 86400)["woche_endet"], "", "kein Zurücksetzen in der Vergangenheit")
+
     def test_reset_times_in_words(self):
         base = dt.datetime(2026, 10, 3, 12, 0)
         self.assertEqual(verbrauch.when(int((base + dt.timedelta(hours=6, minutes=30)).timestamp()), NOW), "um 18:30")
         self.assertEqual(verbrauch.when(int((base + dt.timedelta(days=1, hours=-5)).timestamp()), NOW), "morgen um 7 Uhr")
         self.assertEqual(verbrauch.when(int((base + dt.timedelta(days=10)).timestamp()), NOW), "am 13.10. um 12 Uhr")
         self.assertEqual(verbrauch.when(None, NOW), "")
+        self.assertEqual(verbrauch.when(int(NOW - 3600), NOW), "", "schon vorbei")
 
     def test_questions(self):
         for text in ("Wie viel Claude habe ich noch?", "Jarvis, wie viel Kontingent habe ich noch?",
