@@ -229,6 +229,41 @@ class BriefingCheckTest(unittest.TestCase):
         self.assertEqual(probe.failed, [], "hält das Release nicht auf")
 
 
+class WaitForPythonTest(unittest.TestCase):
+    """Build 204: die Seite war da, die Brücke zu Python kam erst nach 11 s. Die Probe wartet darauf."""
+
+    class Tools:
+        def __init__(self, waiting):
+            self.waiting = waiting
+            self.pumped = 0
+
+        def pump(self, seconds):
+            self.pumped += 1
+
+        def evaluate(self, expression):
+            if self.pumped <= self.waiting:
+                return {"verbindung": "Verbinde …", "spezialisten": 0}
+            return {"verbindung": "Online", "spezialisten": 5}
+
+    def test_waits_until_python_is_there(self):
+        tools = self.Tools(waiting=14)
+        with unittest.mock.patch.object(probe.time, "monotonic", side_effect=range(100)):
+            waited = probe.wait_for_python(tools)
+        self.assertEqual(tools.pumped, 15, "nach 8 s war es zu früh")
+        self.assertEqual(waited, 15)
+
+    def test_gives_up_without_python(self):
+        tools = self.Tools(waiting=1000)
+        with unittest.mock.patch.object(probe.time, "monotonic", side_effect=range(100)):
+            waited = probe.wait_for_python(tools)
+        self.assertEqual(waited, probe.CONNECT_SECONDS)
+        self.assertFalse(probe.connected(tools.evaluate(probe.ZENTRALE)))
+
+    def test_specialists_belong_to_the_connection(self):
+        self.assertFalse(probe.connected({"verbindung": "Online", "spezialisten": 0}), "Zentrale-Daten noch unterwegs")
+        self.assertTrue(probe.connected({"verbindung": "Online", "spezialisten": 7}))
+
+
 class DevToolsPortTest(unittest.TestCase):
     """Jarvis öffnet den DevTools-Port nur, wenn die Probe es mit JARVIS_DEVTOOLS_PORT verlangt."""
 

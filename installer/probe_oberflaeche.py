@@ -377,6 +377,24 @@ def briefing_check(tools: DevTools) -> None:
          "notice" if len(seen) >= 2 else "warning")
 
 
+CONNECT_SECONDS = 45
+
+
+def connected(z: dict) -> bool:
+    return z.get("verbindung") in ("Online", "Verbunden") and (z.get("spezialisten") or 0) >= 5
+
+
+def wait_for_python(tools: DevTools, seconds: float = CONNECT_SECONDS) -> float:
+    """Wartet, bis die Seite mit Python verbunden ist und die Zentrale-Daten hat. Auf einem vollen Runner kam
+    die pywebview-Brücke erst 11 s nach der Seite (Build 204), bei Georg zeigt das Fenster solange "Verbinde …"."""
+    start = time.monotonic()
+    while True:
+        tools.pump(1)
+        waited = time.monotonic() - start
+        if connected(tools.evaluate(ZENTRALE) or {}) or waited >= seconds:
+            return waited
+
+
 def main() -> int:
     target = page_target()
     print("Seite:", target.get("url"), flush=True)
@@ -385,10 +403,12 @@ def main() -> int:
     try:
         # Runtime.enable meldet auch die Fehler, die schon beim Laden passiert sind
         tools.call("Runtime.enable")
-        tools.pump(8)  # Zentrale-Daten aus Python, Nachrichten, Uhr
+        waited = wait_for_python(tools)
+        tools.pump(5)  # Nachrichten-Video und Uhr nach den Zentrale-Daten
         z = tools.evaluate(ZENTRALE)
         print("Zentrale:", json.dumps(z, ensure_ascii=False), flush=True)
-        check("Mit Python verbunden", z.get("verbindung") in ("Online", "Verbunden"), z.get("verbindung", ""))
+        check("Mit Python verbunden", z.get("verbindung") in ("Online", "Verbunden"),
+              f"{z.get('verbindung', '')} nach {waited:.0f} s")
         check("Zentrale ist die Startansicht", z.get("start") == "zentrale", z.get("start", ""))
         check("Zentrale hat ihre Karten", (z.get("karten") or 0) >= 8, str(z.get("karten")))
         check("Spezialisten aus Python", (z.get("spezialisten") or 0) >= 5, str(z.get("spezialisten")))
