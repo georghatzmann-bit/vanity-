@@ -991,8 +991,10 @@
 
     // Fenster versteckt (Tray) oder wieder da: der Livestream läuft nur, wenn man ihn sieht
     const shownBefore = window.jarvisShown;
+    const hiddenBefore = window.jarvisHidden;
     window.jarvisHidden = () => {
       S.hidden = true;
+      if (typeof hiddenBefore === 'function') hiddenBefore();
       syncVideo();
     };
     window.jarvisShown = () => {

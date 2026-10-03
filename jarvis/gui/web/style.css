@@ -1778,3 +1778,10 @@ body[data-view="hub"] .backdrop {
   background: var(--ok);
   vertical-align: 1px;
 }
+
+/* Fenster versteckt (Tray, unsichtbarer Start mit Windows): keine Animation im Hintergrund */
+body[data-fenster="zu"] *,
+body[data-fenster="zu"] *::before,
+body[data-fenster="zu"] *::after {
+  animation-play-state: paused !important;
+}

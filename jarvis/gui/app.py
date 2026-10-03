@@ -1198,6 +1198,10 @@ class Window:
         self._window.events.closing += self._closing
         self._window.events.closed += self._closed
         try:
+            self._window.events.loaded += self._loaded
+        except AttributeError:
+            pass
+        try:
             self._window.events.minimized += self._minimized
         except AttributeError:
             pass
@@ -1220,6 +1224,15 @@ class Window:
             # Aufräumen, bevor das Programm endet (das closed-Ereignis läuft in einem
             # eigenen Thread und käme sonst evtl. zu spät).
             self._closed()
+
+    def _loaded(self) -> None:
+        """Startet Jarvis unsichtbar (mit Windows), sagt das der Seite: Sie zeichnet dann nichts, bis das Fenster
+        erscheint. Ob WebView2 das selbst meldet, hängt davon ab, wie das Fenster versteckt wurde."""
+        if self._hidden and self._window is not None:
+            try:
+                self._window.evaluate_js("window.jarvisHidden && window.jarvisHidden()")
+            except Exception:
+                pass
 
     def _closed(self) -> None:
         with self._closed_lock:

@@ -901,7 +901,7 @@
   let levelNow = 0;
   function levelVar(value) {
     levelNow = value;
-    if (levelFrame || !el.coreWrap) return;
+    if (levelFrame || !el.coreWrap || document.body.dataset.fenster === 'zu') return;
     levelFrame = requestAnimationFrame(() => {
       levelFrame = 0;
       el.coreWrap.style.setProperty('--lvl', levelNow.toFixed(3));
@@ -1108,8 +1108,15 @@
     }
   }
 
+  // Python ruft das auf, wenn das Fenster versteckt wird (auch beim unsichtbaren Start mit Windows):
+  // dann zeichnet nichts mehr, das spart Grafikleistung im Spiel.
+  window.jarvisHidden = () => {
+    document.body.dataset.fenster = 'zu';
+  };
+
   // Python ruft das auf, wenn das versteckte Fenster wieder erscheint.
   window.jarvisShown = () => {
+    delete document.body.dataset.fenster;
     Core.boot();
     renderRecent();
     syncWorkshop();
@@ -1127,7 +1134,8 @@
     return {
       start(node) {
         // Liegt die Werkstatt darüber oder ist die Zentrale vorne, muss die Kugel nicht zeichnen
-        const visible = () => document.body.dataset.view === 'hud' && document.body.dataset.home === 'gespraech';
+        const visible = () => document.body.dataset.view === 'hud' && document.body.dataset.home === 'gespraech'
+          && document.body.dataset.fenster !== 'zu';
         // Die Energie-Kugel im HUD (plasma.js, WebGL), ohne WebGL die ruhige Linien-Kugel (orb.js)
         if (window.JarvisPlasma) orb = window.JarvisPlasma.create(node, { size: 'hero', visible });
         if (orb) document.body.dataset.kugel = 'plasma';
@@ -1136,7 +1144,8 @@
           if (orb) document.body.dataset.kugel = 'linien';
         }
         if (orb) orb.state(state);
-        if (window.JarvisOrb) document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark' }));
+        const shown = () => document.body.dataset.fenster !== 'zu';
+        if (window.JarvisOrb) document.querySelectorAll('canvas.brand-orb').forEach((mark) => window.JarvisOrb.create(mark, { mode: 'mark', visible: shown }));
       },
       setState(value) {
         state = value;
