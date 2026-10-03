@@ -188,7 +188,7 @@ class Netz:
             except OSError:
                 continue
         return (tuple(marks), tuple((p.get("name"), p.get("updated"), p.get("state")) for p in projects),
-                len(facts), tuple((s.get("start"), s.get("ende")) for s in sessions))
+                hash("\n".join(facts)), tuple((s.get("start"), s.get("ende"), bool(s.get("laufend"))) for s in sessions))
 
     # ------------------------------------------------------------------ Netz
 

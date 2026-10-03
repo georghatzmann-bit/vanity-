@@ -173,8 +173,11 @@ class WissensnetzTest(unittest.TestCase):
             self.assertIs(self.netz.build(), first, "nichts geändert")
             write(self.folder, "Notizen/Neue Idee.md", "# Neue Idee\n\nEin Overlay für Twitch mit Umfragen")
             second = self.netz.build()
+            self.memory._facts[0] = {"text": "Georgs bester Freund heißt Tom."}  # gleich viele Fakten, anderer Text
+            third = self.netz.build()
         self.assertIsNot(second, first)
         self.assertIn("Neue Idee", {n["id"] for n in second["knoten"]})
+        self.assertIsNot(third, second, "ein geänderter Fakt zählt auch")
 
     def test_related_pages_for_a_new_report(self):
         found = self.netz.related("Die besten Streaming-Mikrofone",
