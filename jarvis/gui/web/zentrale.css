@@ -415,6 +415,10 @@ body[data-home="gespraech"] .top-live {
   list-style: none;
 }
 
+.zt-feed li[hidden] {
+  display: none;
+}
+
 .zt-feed li {
   position: relative;
   padding-left: 16px;

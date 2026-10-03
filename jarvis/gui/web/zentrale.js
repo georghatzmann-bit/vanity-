@@ -209,6 +209,19 @@
         li.title = c.ok ? 'Erledigt' : 'Noch offen';
         el.chips.append(li);
       });
+      fitFeed();
+    }
+
+    // Was nicht ganz in die Karte passt, fällt weg, statt halb abgeschnitten dazustehen
+    function fitFeed() {
+      const items = Array.from(el.feed.children);
+      items.forEach((li) => { li.hidden = false; });
+      const bottom = el.feed.getBoundingClientRect().bottom + 1;
+      let full = false;
+      items.forEach((li, i) => {
+        if (!full && i > 0 && li.getBoundingClientRect().bottom > bottom) full = true;
+        if (full) li.hidden = true;
+      });
     }
 
     // ---------------------------------------------------------------- Kennzahlen
@@ -962,6 +975,16 @@
           layoutTimeline();
         });
       }).observe(el.timeline);
+    }
+    if (window.ResizeObserver && el.feed) {
+      let pending = 0;
+      new ResizeObserver(() => {
+        if (pending) return;
+        pending = requestAnimationFrame(() => {
+          pending = 0;
+          fitFeed();
+        });
+      }).observe(el.feed);
     }
     document.addEventListener('visibilitychange', syncVideo);
     setInterval(syncVideo, 4000);
