@@ -458,7 +458,7 @@ class Assistant:
         if stream is not None:
             # "Ich will streamen", "Geh live", "Beende den Stream", "Zeig mir den Trailer"
             try:
-                answer = stream.command(text)
+                answer = stream.command(text, speak=speak)
             except Exception:
                 log.exception("Stream")
                 answer = None

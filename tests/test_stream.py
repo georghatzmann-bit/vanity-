@@ -401,6 +401,26 @@ class StreamTest(unittest.TestCase):
         self.assertIn("OBS startet auf der Szene Gameplay.", answer)
         self.assertEqual(assistant.brain.asked, [], "ohne Claude")
 
+    def test_the_first_sentence_comes_at_once(self):
+        from tests.test_assistant import make
+
+        assistant, ui, speaker, _ = make()
+        obs_folder(self.root)
+        env = FakeEnv(self.root)
+        heard_before_obs = []
+        launch = env.launch
+        env.launch = lambda *args: (heard_before_obs.append(list(speaker.said)), launch(*args))[1]
+        assistant.stream = Stream({}, assistant, ui, env=env, opener=steam)
+        assistant.mic_name = "Headset"
+        answer = assistant.handle("Ich will streamen")
+        first = heard_before_obs[0]
+        self.assertEqual(len(first), 1, "Jarvis sagt schon etwas, bevor OBS startet")
+        self.assertIn(first[0], ("Verstanden, Sir, machen wir uns bereit.", "Sehr wohl, Sir. Alles für den Stream."))
+        self.assertTrue(answer.startswith("OBS startet auf der Szene Gameplay."), "und sagt es nicht zweimal")
+        self.assertEqual(speaker.said, [first[0], answer])
+        shown = [e[2] for e in ui.events if e[0] == "message" and e[1] == "jarvis"]
+        self.assertEqual(shown, [first[0], answer])
+
     def test_weather_question_is_no_trailer(self):
         from tests.test_assistant import make
 

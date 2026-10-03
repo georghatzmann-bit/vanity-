@@ -551,8 +551,25 @@ class Stream:
 
     # ---------------------------------------------------------------- vorbereiten, live, Ende
 
-    def prepare(self, game: str = "") -> str:
-        """Alles für den Stream, gleichzeitig: OBS, Kamera, Twitch, ein Tipp. Ein Satz zurück."""
+    def _say_now(self, text: str) -> bool:
+        """Sofort sagen, während die Arbeit weiterläuft (wie im Video). False: kommt mit der Antwort."""
+        say = getattr(self._assistant, "say", None)
+        if say is None:
+            return False
+        try:
+            say(text)
+        except Exception as exc:
+            log.debug("Stream, sofort sagen: %s", exc)
+            return False
+        if self._ui is not None:
+            self._ui.message("jarvis", text)
+        return True
+
+    def prepare(self, game: str = "", speak: bool = False) -> str:
+        """Alles für den Stream, gleichzeitig: OBS, Kamera, Twitch, ein Tipp. Ein Satz zurück.
+        speak=True: "Verstanden, Sir" kommt sofort, der Rest, sobald OBS und Kamera geprüft sind."""
+        start = random.choice(["Verstanden, Sir, machen wir uns bereit.", "Sehr wohl, Sir. Alles für den Stream."])
+        said = speak and self._say_now(start)
         results: dict = {}
 
         def cameras() -> None:
@@ -581,8 +598,7 @@ class Stream:
             devices = "Mikrofon und Kamera sind verbunden" if mic else "Die Kamera ist verbunden, ein Mikrofon finde ich nicht"
         else:
             devices = "Das Mikrofon ist verbunden, eine Kamera finde ich nicht" if mic else "Mikrofon und Kamera finde ich nicht"
-        start = random.choice(["Verstanden, Sir, machen wir uns bereit.", "Sehr wohl, Sir. Alles für den Stream."])
-        parts = [start, obs_line] + [p + "." for p in (devices, twitch) if p]
+        parts = ([] if said else [start]) + [obs_line] + [p + "." for p in (devices, twitch) if p]
         parts.append("Sagen Sie Bescheid, wenn es live gehen soll, Sir.")
         tip = results.get("tipp") or ""
         if tip:
@@ -678,10 +694,10 @@ class Stream:
 
     # ---------------------------------------------------------------- Sätze
 
-    def command(self, text: str) -> str | None:
+    def command(self, text: str, speak: bool = False) -> str | None:
         game = wants_prepare(text)
         if game is not None:
-            return self.prepare(game)
+            return self.prepare(game, speak=speak)
         if wants_live(text):
             return self.go_live()
         if wants_end(text):
