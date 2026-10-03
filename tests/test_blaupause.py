@@ -239,6 +239,17 @@ class CommandTest(unittest.TestCase):
         self.bp.open()
         self.assertIn("rot", self.bp.command("Mach die Flügel rot"))
         self.assertEqual({p["farbe"] for p in self.bp.scene["teile"] if p["gruppe"] == "Flügel"}, {"#e53935"})
+        before = [p["farbe"] for p in self.bp.scene["teile"]]
+        wishes = []
+        self.bp.generate = lambda wish, fresh=True: wishes.append(wish) or "Sehr wohl, Sir."
+        self.bp.command("Mach den Hintergrund blau")
+        self.assertEqual([p["farbe"] for p in self.bp.scene["teile"]], before, "kein Teil heißt Hintergrund")
+        self.assertEqual(wishes, ["Mach den Hintergrund blau"], "das macht Claude")
+        self.bp.command("Mach den Schornstein doppelt so groß")
+        self.assertEqual(len(wishes), 2)
+        del self.bp.generate
+        self.assertIn("Das Modell ist jetzt grün", self.bp.command("Mach das ganze Modell grün"))
+        self.bp.command("Rückgängig")
         self.assertIn("Entfernt", self.bp.command("Entferne die Antenne"))
         self.assertNotIn("antenne", [p["id"] for p in self.bp.scene["teile"]])
         self.assertEqual(self.bp.command("Rückgängig"), "Rückgängig gemacht, Sir.")

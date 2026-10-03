@@ -330,6 +330,11 @@ _OBJECT = re.compile(r"^(?:ein|eine|einen|einem|einer|der|die|das|den|dem|des|zw
                      r"neue[nrs]?|kleine[nmrs]?|große[nmrs]?|meine[nmrs]?)\b")
 
 
+# "Mach es rot", "Mach das ganze Modell rot": gemeint ist das ausgewählte Teil oder alles
+_WHOLE_WORDS = {"den", "die", "das", "dem", "der", "es", "ihn", "sie", "ihm", "alles", "alle", "ganz", "ganze", "ganzen",
+                "ganzes", "komplett", "modell", "objekt", "ding", "teil", "teile"}
+
+
 def _everyday(text: str) -> bool:
     """"Mach lauter", "Mach den PC aus", "Mach Spotify auf", "Stell einen Timer": ein Sofort-Befehl wie sonst
     auch, keine Änderung am Modell (beginnt nur zufällig mit "Mach" oder "Stell")."""
@@ -496,6 +501,9 @@ class Blueprint:
             label = found[0]["gruppe"] if len({p.get("gruppe") for p in found}) == 1 and found[0].get("gruppe") \
                 and len(found) > 1 else found[0]["name"]
             return found, label
+        if not set(_norm(words).split()) <= _WHOLE_WORDS:
+            # "Mach den Hintergrund blau": ein Teil, das es nicht gibt. Nicht einfach alles umfärben, das macht Claude.
+            return [], words
         if self.selected and not re.search(r"\b(?:alles|ganze|modell|objekt)\b", _norm(words)):
             chosen = [p for p in self.scene["teile"] if p["id"] == self.selected]
             if chosen:
@@ -802,7 +810,8 @@ class Blueprint:
             words = focus.group("what") or focus.group("what2") or focus.group("what3") or focus.group("what4")
             parts = self._find(words)
             if not parts:
-                return f"Ein Teil namens {words} finde ich nicht, Sir."
+                shown = re.sub(r"^(?:den|die|das|dem|der)\s+", "", words)  # "das triebwerk" -> "Triebwerk"
+                return f"Ein Teil namens {shown[:1].upper() + shown[1:]} finde ich nicht, Sir."
             self.selected = parts[0]["id"]
             self._emit("view", what="focus", ids=[p["id"] for p in parts])
             name = parts[0]["gruppe"] if len(parts) > 1 and parts[0].get("gruppe") else parts[0]["name"]
