@@ -478,7 +478,25 @@ jobs:
           name: JarvisSetup
           path: out
 
+      - name: Noch der neueste Stand? (sonst veröffentlicht der neuere Bau)
+        id: stand
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Kam während des Baus ein neuerer Stand mit geänderter Bau-Anleitung (.github/workflows) dazu, lehnt
+          # GitHub das Release-Tag für diesen älteren Stand ab ("Resource not accessible by integration"): so bei
+          # Bau 188, 192, 194 und 195, jedes Mal nach d680199, b79f98d, 697459e und 8027832; ging dazwischen nur
+          # ein Stand ohne Workflow-Änderung ein (184, 187, 191), klappte es. Der neuere Stand baut dann ohnehin
+          # selbst (die Workflow-Datei steht in den Pfaden) und wird veröffentlicht.
+          changed=$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$GITHUB_REF_NAME" \
+            --jq '[.files[]?.filename | select(startswith(".github/workflows/"))] | length' 2>/dev/null || echo 0)
+          if [ "${changed:-0}" -gt 0 ] 2>/dev/null; then
+            echo "::notice::Inzwischen gibt es einen neueren Stand mit geänderter Bau-Anleitung, der wird veröffentlicht. Dieser Bau ist geprüft, aber ohne Release."
+            echo "ueberholt=ja" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Release
+        if: steps.stand.outputs.ueberholt != 'ja'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: jarvis-${{ needs.setup-exe.outputs.version }}-build${{ github.run_number }}
