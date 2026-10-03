@@ -365,6 +365,9 @@ class RecordingUi:
     def world(self, event):
         self.events.append(("world", dict(event)))
 
+    def system(self, event):
+        self.events.append(("system", dict(event)))
+
     def of(self, kind):
         return [e for e in self.events if e[0] == kind]
 

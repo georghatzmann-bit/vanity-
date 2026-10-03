@@ -90,6 +90,7 @@ class Assistant:
         self.games = None  # Spiele auf Steam und Epic (spiele.Games, setzt __main__)
         self.zentrale = None  # die Kommandozentrale mit Lagebild und Briefing (zentrale.Zentrale, setzt __main__)
         self.stream = None  # Stream-Modus: OBS, Twitch, Trailer (stream.Stream, setzt __main__)
+        self.system = None  # das System wie im Video "AgenticOS": Agents, Skills, Wissensnetz (system.System)
         self.mic_name = ""  # das Mikrofon, über das Jarvis hört (setzt __main__)
         self.gaming = False
         # Wetter-Quellen je Ort (merkt sich die Koordinaten und die Vorhersage)
@@ -437,6 +438,16 @@ class Assistant:
             return self.feedback("peitsche", working=self._busy > 1)
         if _PRAISE.match(spoken):
             return self.feedback("lob")
+        system = getattr(self, "system", None)
+        if system is not None:
+            # "Zeig mir das System", "Öffne das Wissensnetz", "Welche Agents laufen gerade?"
+            try:
+                answer = system.command(text)
+            except Exception:
+                log.exception("System")
+                answer = None
+            if answer is not None:
+                return answer
         world = getattr(self, "world", None)
         if world is not None:
             # Die Weltlage: "Zeig mir, was in der Welt passiert", "Flieg nach Tokio", "Weiter" im Lagebericht.
@@ -1125,6 +1136,8 @@ class Assistant:
     def _memory_command(self, action: str, fact) -> str:
         if action == "recall":
             return self._recall()
+        if action == "session":
+            return self.memory.session_answer()
         if action == "commands":
             return self._commands_list()
         if action == "teach":

@@ -195,6 +195,10 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
 
     # Stream-Modus wie im Video: "Ich will streamen", "Geh live", "Zeig mir den Trailer"
     assistant.stream = Stream(cfg, assistant, ui, show_window=show_window)
+    from .system import System
+
+    # Das System wie im Video "AgenticOS": alle Agents mit ihren Skills, das Wissensnetz, Sitzung für Sitzung
+    assistant.system = System(assistant, HOME_DIR, STATE_DIR, ui, show_window=show_window)
 
     def on_mute(muted: bool) -> None:
         assistant.update_state()

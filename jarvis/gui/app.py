@@ -90,6 +90,9 @@ class GuiBridge(Ui):
                     self._events.remove(old)
         self._push({"type": "zentrale", **event})
 
+    def system(self, event: dict) -> None:
+        self._push({"type": "system", **event})
+
     def stats(self, cpu: float, ram: float, gpu: dict | None = None) -> None:
         event = {"type": "stats", "cpu": round(cpu, 1), "ram": round(ram, 1)}
         if gpu:
@@ -1004,6 +1007,83 @@ class Api:
         except Exception as exc:
             log.info("Zentrale, öffnen: %s", exc)
             return False
+
+    # ------------------------------------------------------------------ System (AgenticOS)
+
+    def _system(self):
+        return getattr(self._assistant, "system", None)
+
+    def system_state(self) -> dict | None:
+        """Agents mit Stand, Skill-Knöpfe, Automationen und Sitzungen (die Ansicht fragt alle paar Sekunden)."""
+        system = self._system()
+        if system is None:
+            return None
+        try:
+            return system.snapshot()
+        except Exception as exc:
+            log.debug("System-Stand: %s", exc)
+            return None
+
+    def system_graph(self, fresh=False) -> dict | None:
+        """Das Wissensnetz: Knoten und Kanten (wird nur neu gerechnet, wenn sich etwas geändert hat)."""
+        system = self._system()
+        if system is None:
+            return None
+        try:
+            return system.graph(fresh=bool(fresh))
+        except Exception as exc:
+            log.warning("Wissensnetz: %s", exc)
+            return None
+
+    def system_skill(self, skill_id, text="") -> dict:
+        """Ein Skill-Knopf: der passende Satz geht an Jarvis, als hätte Georg ihn gesagt."""
+        system = self._system()
+        sentence = system.skill_sentence(str(skill_id or ""), str(text or "")) if system is not None else None
+        if not sentence:
+            return {"ok": False, "error": "Dafür fehlt noch, was Jarvis tun soll."}
+        self.send_text(sentence)
+        return {"ok": True, "satz": sentence}
+
+    def system_agent(self, agent_id, text) -> dict:
+        """Ein Auftrag an einen Agent. Die Werkstatt startet den Bau direkt (oder nimmt den Wunsch in die laufende
+        Arbeit), alle anderen bekommen einen Satz an Jarvis."""
+        text = " ".join(str(text or "").split())
+        if not text:
+            return {"ok": False, "error": "Schreiben Sie, was zu tun ist."}
+        if str(agent_id) == "werkstatt":
+            shop = getattr(self._assistant, "workshop", None)
+            if shop is None:
+                return {"ok": False, "error": "Die Werkstatt ist ausgeschaltet."}
+            learn = getattr(self._assistant, "learn", None)
+            if learn is not None:
+                learn("said", f"Werkstatt: {text}")  # gehört zur Sitzung wie ein gesagter Auftrag
+            if shop.busy:
+                self._speak_later(lambda: shop.tell(text))
+                return {"ok": True, "satz": text, "laufend": True}
+            self._speak_later(lambda: shop.start(text))
+            return {"ok": True, "satz": text}
+        system = self._system()
+        sentence = system.agent_sentence(str(agent_id or ""), text) if system is not None else None
+        if not sentence:
+            return {"ok": False, "error": "Diesen Agent gibt es nicht."}
+        self.send_text(sentence)
+        return {"ok": True, "satz": sentence}
+
+    def _speak_later(self, work) -> None:
+        def run() -> None:
+            try:
+                self._assistant.announce(work())
+            except Exception as exc:
+                log.warning("System, Auftrag: %s", exc)
+
+        threading.Thread(target=run, name="jarvis-system-auftrag", daemon=True).start()
+
+    def system_open(self, node_id) -> dict:
+        """Klick auf „Öffnen“ an einem Knoten: die Seite in Obsidian oder den Projektordner."""
+        system = self._system()
+        if system is None:
+            return {"ok": False, "error": "Das System ist aus."}
+        return system.open_node(str(node_id or ""))
 
     def _speak_answer(self, text: str) -> None:
         if not text:

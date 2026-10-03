@@ -9,6 +9,9 @@
   passenden Zeit an. Sagt Georg nein, fragt er seltener, bei "nie" gar nicht mehr.
 - Adressbuch: Geburtstage, die früher aus Georgs iPhone-Kontakten kamen, in einer eigenen Liste
   (nur noch gelesen). Sie laufen über dieselben Geburtstags-Hinweise wie die Fakten.
+- Sitzungen: Sitzung für Sitzung, was Georg in einem Rutsch mit Jarvis gemacht hat (bis 20 Minuten Pause).
+  Das Gesagte selbst ist nach drei Tagen weg, die Sitzungen mit ihren Themen bleiben. So weiß Jarvis auch
+  nächste Woche noch, woran sie zuletzt gearbeitet haben ("Was haben wir zuletzt gemacht?").
 
 Das Gehirn bekommt zu Beginn jeder Unterhaltung eine kurze Zusammenfassung (`context`).
 Alles bleibt auf dem PC, in daten/gedaechtnis.json.
@@ -44,6 +47,10 @@ USER = "Georg"  # wie der Nutzer heißt ([ich] name), siehe set_user
 MAX_COMMANDS = 60  # eigene Befehle ("Zockmodus")
 MAX_TRIGGER_WORDS = 6
 MAX_ADDRESS_BOOK = 500  # Geburtstage aus den iPhone-Kontakten
+SESSION_GAP = 20  # Minuten Pause: danach beginnt eine neue Sitzung
+MAX_SESSIONS = 60  # so viele abgeschlossene Sitzungen bleiben gespeichert
+MAX_THEMES = 6  # Themen je Sitzung
+SESSION_DAYS = 7  # die Sitzungen dieser Tage bekommt das Gehirn zu Beginn mit
 # Diese Wörter braucht Jarvis selbst ("Stopp" hält alles an, "Ja" beantwortet eine Frage).
 RESERVED_TRIGGERS = {"stopp", "stop", "halt", "abbrechen", "abbruch", "ja", "nein", "nie wieder", "jarvis"}
 _QUOTES = "\"'„“”‚‘’»«"
@@ -186,7 +193,7 @@ class Memory:
             if not isinstance(data, dict):
                 data = {}
             for name, empty in (("fakten", []), ("kontakte", {}), ("ereignisse", []), ("vorschlaege", {}),
-                                ("befehle", {}), ("adressbuch", []), ("vorhaben", [])):
+                                ("befehle", {}), ("adressbuch", []), ("vorhaben", []), ("sitzungen", [])):
                 if not isinstance(data.get(name), type(empty)):
                     data[name] = empty
             self._data = data
@@ -256,7 +263,7 @@ class Memory:
     def forget_all(self) -> None:
         with self._lock:
             self._data = {"fakten": [], "kontakte": {}, "ereignisse": [], "vorschlaege": {}, "befehle": {},
-                          "adressbuch": []}
+                          "adressbuch": [], "sitzungen": []}
             self._save()
 
     def facts(self) -> list[dict]:
@@ -356,8 +363,80 @@ class Memory:
                 contact.update(name=what, app=data.get("app") or contact.get("app", ""),
                                zuletzt=now.isoformat(timespec="minutes"))
                 contact["anzahl"] = int(contact.get("anzahl", 0)) + 1
+            if kind == "said":
+                self._track_session(memory, now, what)
             self._prune(now)
             self._save()
+
+    # ------------------------------------------------------------------ Sitzungen
+
+    def _track_session(self, memory: dict, now: dt.datetime, what: str) -> None:
+        """Sitzung für Sitzung: Ein Befehl gehört zur laufenden Sitzung, nach 20 Minuten Pause beginnt eine neue."""
+        stamp = now.isoformat(timespec="minutes")
+        current = memory.get("sitzung")
+        if isinstance(current, dict):
+            try:
+                last = dt.datetime.fromisoformat(str(current.get("ende")))
+            except ValueError:
+                last = None
+            if last is None or now < last or now - last > dt.timedelta(minutes=SESSION_GAP):
+                self._close_session(memory)
+                current = None
+        if not isinstance(current, dict):
+            current = memory["sitzung"] = {"start": stamp, "ende": stamp, "anzahl": 0, "themen": []}
+        current["ende"] = stamp
+        current["anzahl"] = int(current.get("anzahl", 0)) + 1
+        themes = current.setdefault("themen", [])
+        theme = session_theme(what)
+        if theme and len(themes) < MAX_THEMES and _key(theme) not in {_key(t) for t in themes}:
+            themes.append(theme)
+
+    @staticmethod
+    def _close_session(memory: dict) -> None:
+        current = memory.get("sitzung")
+        memory["sitzung"] = None
+        if isinstance(current, dict) and current.get("start"):
+            closed = memory.setdefault("sitzungen", [])
+            closed.append({k: current.get(k) for k in ("start", "ende", "anzahl", "themen")})
+            del closed[:-MAX_SESSIONS]
+
+    def sessions(self, now: dt.datetime | None = None) -> list[dict]:
+        """Die Sitzungen, älteste zuerst: {"start", "ende", "anzahl", "themen", "laufend"}. Die letzte läuft
+        noch, solange die Pause kürzer als 20 Minuten ist."""
+        now = now or self._now()
+        with self._lock:
+            data = self._load()
+            items = [dict(s) for s in data.get("sitzungen") or [] if isinstance(s, dict) and s.get("start")]
+            current = data.get("sitzung")
+            if isinstance(current, dict) and current.get("start"):
+                items.append({**current, "_aktuell": True})
+        out = []
+        for item in items:
+            is_current = item.pop("_aktuell", False)
+            try:
+                end = dt.datetime.fromisoformat(str(item.get("ende") or item["start"]))
+                dt.datetime.fromisoformat(str(item["start"]))
+            except ValueError:
+                continue
+            item["themen"] = [str(t) for t in item.get("themen") or [] if str(t).strip()]
+            item["anzahl"] = int(item.get("anzahl") or 0)
+            item["laufend"] = bool(is_current) and dt.timedelta(0) <= now - end <= dt.timedelta(minutes=SESSION_GAP)
+            out.append(item)
+        return out
+
+    def last_session(self, now: dt.datetime | None = None) -> dict | None:
+        """Die letzte Sitzung mit Themen vor der laufenden ("Was haben wir zuletzt gemacht?"). Gibt es keine
+        frühere, die laufende."""
+        items = self.sessions(now)
+        done = [s for s in items if not s["laufend"] and s["themen"]]
+        if done:
+            return done[-1]
+        running = [s for s in items if s["laufend"] and s["themen"]]
+        return running[-1] if running else None
+
+    def session_answer(self, now: dt.datetime | None = None) -> str:
+        now = now or self._now()
+        return spoken_session(self.last_session(now), now)
 
     def _prune(self, now: dt.datetime) -> None:
         events = self._load()["ereignisse"]
@@ -598,6 +677,11 @@ class Memory:
         plans = self.plans_for(now.date())
         if plans:
             lines.append(f"Was {USER} heute vorhatte (aus früheren Gesprächen): " + "; ".join(p["was"] for p in plans) + ".")
+        oldest = (now - dt.timedelta(days=SESSION_DAYS)).isoformat(timespec="minutes")
+        recent = [s for s in self.sessions(now) if not s["laufend"] and s["themen"] and s["start"] >= oldest][-3:]
+        if recent:
+            lines.append(f"Die letzten Sitzungen mit {USER} (Sitzung für Sitzung, damit du weißt, woran ihr zuletzt "
+                         "wart): " + " | ".join(describe_session(s) for s in recent) + ".")
         if not lines:
             return ""
         lines.append("Nutze das unaufdringlich. Erfährst du etwas Neues, das auch morgen noch wichtig ist "
@@ -980,12 +1064,81 @@ def _command_candidates(key: str):
             yield found.group("rest")
 
 
+# Kein Thema einer Sitzung: Antworten, Lob, Stopp, Uhrzeit, Grüße und die Frage nach der letzten Sitzung selbst
+_TRIVIAL = re.compile(
+    r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]*)?(?:ja|nein|nö|jo|jep|klar|genau|danke(?:\s+schön|\s+dir)?|bitte|okay|ok|"
+    r"stopp?|halt|abbrechen|weiter|nochmal|noch\s+mal|lauter|leiser|schneller|langsamer|gut|super|perfekt|cool|nice|"
+    r"(?:gut|sehr)\s+gemacht|hallo|hi|hey|moin|servus|guten\s+(?:morgen|tag|abend)|gute\s+nacht|tschüss|bis\s+später|"
+    r"nie\s+wieder|wie\s+spät\s+ist\s+es|wie\s+viel\s+uhr\s+ist\s+es|was\s+haben\s+wir\s+(?:zuletzt|"
+    r"als\s+letztes|letztes\s+mal)\b.*|woran\s+haben\s+wir\s+zuletzt\b.*)?[\s,.!?]*$", re.I)
+_RECALL_SESSION = re.compile(
+    r"^(?:(?:hey|ok|okay)\s+)?(?:jarvis[,\s]+)?(?:"
+    r"was\s+haben\s+wir\s+(?:zuletzt|als\s+letztes|das\s+letzte\s+mal|letztes\s+mal|beim\s+letzten\s+mal)"
+    r"(?:\s+(?:zusammen|gemeinsam|so))?\s+(?:gemacht|besprochen|gemacht\s+zusammen)"
+    r"|woran\s+(?:haben\s+wir|hab\s+ich|habe\s+ich)\s+(?:zuletzt|als\s+letztes|letztes\s+mal)\s+gearbeitet"
+    r"|wo\s+(?:waren|sind)\s+wir\s+(?:stehen\s*geblieben|stehengeblieben)"
+    r"|(?:was\s+war|zeig\s+mir)\s+(?:unsere|die)\s+letzte\s+sitzung)\s*[?.!]*$",
+    re.I,
+)
+
+
+def session_theme(text: str) -> str:
+    """Was von einem Befehl als Thema der Sitzung bleibt: kurz, ohne "Jarvis", ohne Passwörter."""
+    text = " ".join(str(text or "").split())
+    text = re.sub(r"^(?:(?:hey|ok|okay)\s+)?jarvis[,\s]+", "", text, flags=re.I).strip(" ,")
+    if len(text) < 3 or _TRIVIAL.match(text) or is_secret(text):
+        return ""
+    text = text.rstrip(" .!")
+    if len(text) > 70:
+        text = text[:69].rstrip(" ,") + "…"
+    return text[:1].upper() + text[1:]
+
+
+def describe_session(session: dict) -> str:
+    """"Fr 2.10. 20:00–20:40 (5 Befehle): Recherchiere …; Öffne Spotify" fürs Gehirn."""
+    start = dt.datetime.fromisoformat(session["start"])
+    try:
+        end = dt.datetime.fromisoformat(str(session.get("ende") or session["start"]))
+    except ValueError:
+        end = start
+    day = f"{WEEKDAY_NAMES[start.weekday()][:2]} {start.day}.{start.month}."
+    count = int(session.get("anzahl") or 0)
+    themes = "; ".join(session.get("themen") or [])
+    return f"{day} {start:%H:%M}–{end:%H:%M} ({count} {'Befehl' if count == 1 else 'Befehle'}): {themes}"
+
+
+def spoken_session(session: dict | None, now: dt.datetime) -> str:
+    """Die Antwort auf "Was haben wir zuletzt gemacht?"."""
+    if not session:
+        return ("Dazu habe ich noch nichts, Sir. Ab jetzt merke ich mir Sitzung für Sitzung, woran wir arbeiten.")
+    start = dt.datetime.fromisoformat(session["start"])
+    days = (now.date() - start.date()).days
+    if days == 0:
+        when = f"heute ab {start:%H:%M} Uhr"
+    elif days == 1:
+        when = f"gestern ab {start:%H:%M} Uhr"
+    elif days < 7:
+        when = f"am {WEEKDAY_NAMES[start.weekday()]} ab {start:%H:%M} Uhr"
+    else:
+        when = f"am {start.day}. {MONTH_NAMES[start.month - 1]} ab {start:%H:%M} Uhr"
+    themes = list(session.get("themen") or [])
+    shown = themes[:4]
+    more = len(themes) - len(shown)
+    lead = "Gerade eben" if session.get("laufend") else "Zuletzt"
+    text = f"{lead}, {when}, Sir: " + "; ".join(shown)
+    if more > 0:
+        text += f"; und {more} {'weiteres' if more == 1 else 'weitere'}"
+    return text + "."
+
+
 def match_memory(text: str):
     """("remember", fakt) / ("forget", wörter) / ("recall", "") / ("teach", (name, aktion)) /
-    ("unteach", name) / ("commands", "") / None"""
+    ("unteach", name) / ("commands", "") / ("session", "") / None"""
     raw = " ".join(str(text).split()).strip()
     if _RECALL.match(raw):
         return "recall", ""
+    if _RECALL_SESSION.match(raw):
+        return "session", ""
     if _LIST_COMMANDS.match(raw):
         return "commands", ""
     found = _UNTEACH.match(raw)

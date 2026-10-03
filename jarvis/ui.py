@@ -66,6 +66,10 @@ class Ui:
         beim Briefing hervorheben, was Jarvis gerade vorliest), "show" (die Zentrale nach vorne holen)."""
         pass
 
+    def system(self, event: dict) -> None:
+        """Das System (system.py, wie im Video "AgenticOS"): action "show" (die Ansicht nach vorne holen)."""
+        pass
+
     def action(self, kind: str) -> None:
         """Was Jarvis gerade tut ("music", "weather", "timer", ...): Die Kugel zeigt dazu eine
         eigene kurze Bewegung (orb.js, gesture)."""
@@ -181,6 +185,9 @@ class MultiUi(Ui):
 
     def zentrale(self, event):
         self._each("zentrale", event)
+
+    def system(self, event):
+        self._each("system", event)
 
     def trailer(self, event):
         self._each("trailer", event)

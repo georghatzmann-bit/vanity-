@@ -4,7 +4,9 @@ Tresor öffnen kann. Dann ist alles verlinkt und als Netz zu sehen.
 - Tagebuch/2026-10-02.md: jedes Gespräch des Tages (wer was gesagt hat) und was Jarvis nachts gelernt hat
 - Gedächtnis.md: was Jarvis über Georg weiß, seine eigenen Befehle und Gewohnheiten
 - Personen/Max.md: alles zu einer Person (App, Geburtstag, Fakten), mit Platz für eigene Notizen
-- Recherchen/<Titel>.md: ausführliche Antworten, die Claude als Bericht ablegt
+- Recherchen/<Titel>.md: ausführliche Antworten, die Claude als Bericht ablegt. Darunter verlinkt Jarvis von
+  selbst die verwandten Seiten ("Verwandt: [[Streaming-Setup]] · [[Max]]", siehe wissensnetz.py) und trägt den
+  Bericht im Tagebuch des Tages ein. So ist alles verknüpft, ohne dass Georg Links setzen muss.
 - Notizen/Schnellnotizen.md: "Notiere: Milch kaufen"
 
 Alles bleibt auf dem PC. Was Jarvis selbst schreibt, steht zwischen <!-- jarvis:anfang --> und
@@ -106,8 +108,7 @@ class Notebook:
         answer = _one_line(answer, MAX_ANSWER)
         if answer:
             line += f"\n  - Jarvis: {answer}"
-        head = f"# {spoken_day(now.date())}\n\nAlle Gespräche des Tages. Zurück zum [[Start]].\n\n## Gespräche"
-        self._append(self.day_path(now.date()), head, line)
+        self._append(self.day_path(now.date()), self._day_head(now.date()), line)
 
     def learned(self, day: dt.date, facts: list[str]) -> None:
         """Was Jarvis nachts aus dem Tag gelernt hat, unter den Tag."""
@@ -129,7 +130,8 @@ class Notebook:
         return path
 
     def report(self, title: str, text: str) -> Path:
-        """Ein Bericht (Recherche, Vergleich, Anleitung). Gleicher Titel: eine zweite Datei."""
+        """Ein Bericht (Recherche, Vergleich, Anleitung). Gleicher Titel: eine zweite Datei. Darunter stehen die
+        verwandten Seiten, und das Tagebuch verlinkt den Bericht."""
         text = str(text or "").strip()
         if len(text) < 20:
             raise ValueError("Der Bericht ist zu kurz.")
@@ -141,13 +143,31 @@ class Notebook:
             while path.exists():
                 path = folder / f"{name} ({number}).md"
                 number += 1
+            related = self._related(path.stem, text)
             if not text.lstrip().startswith("#"):
                 text = f"# {name}\n\n{text}"
             now = self._now()
             first, _, rest = text.partition("\n")
             text = f"{first}\n\n*Von Jarvis, {spoken_day(now.date())}. Zurück zum [[Start]].*\n{rest}"
+            if related:
+                text = text.rstrip() + "\n\nVerwandt: " + " · ".join(f"[[{page}]]" for page in related)
             self._write(path, text.rstrip() + "\n")
+            self._append(self.day_path(now.date()), self._day_head(now.date()),
+                         f"- **{now:%H:%M}** Neuer Bericht: [[{path.stem}]]")
         return path
+
+    def _related(self, title: str, text: str) -> list[str]:
+        """Die Seiten, die zu einem neuen Bericht passen (Recherchen, Notizen, Personen)."""
+        try:
+            from .wissensnetz import Netz
+
+            return Netz(self.folder, now=self._now).related(title, text, arts=("recherche", "notiz", "person"))
+        except Exception as exc:
+            log.debug("Notizbuch, verwandte Seiten: %s", exc)
+            return []
+
+    def _day_head(self, day: dt.date) -> str:
+        return f"# {spoken_day(day)}\n\nAlle Gespräche des Tages. Zurück zum [[Start]].\n\n## Gespräche"
 
     # ------------------------------------------------------------------ Lesen
 
@@ -218,6 +238,14 @@ class Notebook:
         if routines:
             lines += ["", "## Gewohnheiten"]
             lines += [f"- {r.describe()}" for r in routines]
+        sessions = [x for x in (memory.sessions() if hasattr(memory, "sessions") else []) if x.get("themen")][-12:]
+        if sessions:
+            lines += ["", "## Sitzung für Sitzung"]
+            for session in reversed(sessions):
+                start = dt.datetime.fromisoformat(session["start"])
+                end = str(session.get("ende") or session["start"])[11:16]
+                lines.append(f"- [[{start.date().isoformat()}]] {start:%H:%M}–{end}"
+                             + (" (läuft)" if session.get("laufend") else "") + ": " + "; ".join(session["themen"]))
         self._page(self.folder / "Gedächtnis.md", "# Gedächtnis", "\n".join(lines))
 
     def _sync_people(self, memory) -> list[str]:

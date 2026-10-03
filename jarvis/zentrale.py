@@ -276,6 +276,25 @@ class Zentrale:
             entry["fortschritt"] = None if progress is None else max(0.0, min(1.0, float(progress)))
         self.changed()
 
+    def agent_states(self) -> dict[str, dict]:
+        """Stand aller Spezialisten ({id: {status, text, zeit, fortschritt}}). Was ein Helfer vor mehr als einer
+        halben Stunde erledigt hat, steht wieder auf "bereit"."""
+        now = self._now()
+        out = {}
+        with self._lock:
+            for spec in AGENTS:
+                state = dict(self._agents[spec["id"]])
+                at = state.pop("at", None)
+                if spec["id"] not in LAGE_AGENTS and state["status"] in ("fertig", "fehler") and at is not None \
+                        and (now - at).total_seconds() > HELPER_RESET_MINUTES * 60:
+                    state.update(status="bereit", text="", zeit="", fortschritt=None)  # längst erledigt
+                out[spec["id"]] = state
+        return out
+
+    def has_shop(self) -> bool:
+        """Kommt im Lagebild ein Shop vor (Shopify-Konnektor)?"""
+        return "shop" in (self.lage or {})
+
     def helper_step(self, step: dict) -> None:
         """Ein Arbeitsschritt von Claude (progress): gibt Claude einem Helfer etwas ab (Werkzeug Agent/Task),
         steht das auf der Karte des Spezialisten."""
@@ -779,14 +798,10 @@ class Zentrale:
             facts = 0
         with self._lock:
             agents = []
+            states = self.agent_states()
             for spec in AGENTS:
-                state = dict(self._agents[spec["id"]])
-                at = state.pop("at", None)
-                if spec["id"] not in LAGE_AGENTS and state["status"] in ("fertig", "fehler") and at is not None \
-                        and (now - at).total_seconds() > HELPER_RESET_MINUTES * 60:
-                    state.update(status="bereit", text="", zeit="", fortschritt=None)  # längst erledigt
-                if spec["id"] == "shop" and "shop" not in (self.lage or {}) and state["status"] == "bereit" \
-                        and not state["text"]:
+                state = states[spec["id"]]
+                if spec["id"] == "shop" and not self.has_shop() and state["status"] == "bereit" and not state["text"]:
                     continue  # ohne Shop-Konnektor keine Shop-Karte
                 agents.append({**spec, **state, "text": state["text"] or spec["leer"]})
             age = round((self._now() - self.lage_at).total_seconds() / 60) if self.lage_at else None
