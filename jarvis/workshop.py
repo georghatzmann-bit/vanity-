@@ -126,6 +126,12 @@ _THING = (
 )
 _FILLERS = r"(?:(?:bitte|mal|schnell|kurz|noch|jetzt|gleich|doch|eben|einfach) )*"
 _ARTICLE = r"(?:ein|eine|einen|nen|ne|n)"
+# "Werkstatt: ein Taschenrechner", "Ab in die Werkstatt: ...", "Bau mir in der Werkstatt ...", aber nicht die
+# Autowerkstatt: "Ich muss das Auto in die Werkstatt bringen", "Ruf die Werkstatt an", "Bring mich zur Werkstatt"
+_WORKSHOP_WORD = re.compile(
+    r"^(?:ab |zurück )?(?:in die )?werkstatt \S|"
+    r"^(?:schreib|schreibe|bau|baue|erstell|erstelle|mach|mache|programmier|programmiere|entwickel|entwickle)\b"
+    r".*\bin (?:der|die) werkstatt\b")
 _WORKSHOP = [
     re.compile(r"^(?:(?:kannst|könntest) du (?:mir )?)?" + _FILLERS + r"(?:programmier|programmiere|entwickel|entwickle|code|coden)\b"),
     re.compile(
@@ -147,7 +153,7 @@ _WORKSHOP = [
     ),
     # "Schreib mir Code für ...", "Programmier mir was, das ..."
     re.compile(r"^(?:schreib|schreibe)\s+(?:mir |uns )?" + _FILLERS + r"(?:den |einen )?(?:code|quellcode|programmcode)\b"),
-    re.compile(r"\bwerkstatt\b"),
+    _WORKSHOP_WORD,
     re.compile(r"^(?:fix|fixe|behebe|reparier|repariere)\s+(?:den |die |das )?(?:code|skript|script|programm)\b"),
     # "Behebe den Fehler in meinem Skript", aber nicht "Behebe den Fehler mit dem Sound"
     re.compile(r"^(?:fix|fixe|behebe|reparier|repariere)\s+(?:den |die |das )?(?:fehler|bug)"
@@ -161,7 +167,10 @@ _CONTINUE = re.compile(
     r"(?:$| (?:am|an dem|an der|mit dem|mit der|beim) " + _ARTIFACT_WORDS + r")|"
     r"^werkstatt\b(?! (?:abbrechen|stoppen|stopp|beenden|status))|"
     r"^(?:zurück )?in die werkstatt\b|"
-    r"\bin der werkstatt\b(?!.*\?$)"
+    r"^in der werkstatt\b|"
+    # "Füg in der Werkstatt noch einen Highscore hinzu", nicht "Mein Auto ist in der Werkstatt"
+    r"^(?:füg|füge|mach|mache|änder|ändere|setz|setze|nimm|arbeite|arbeit|ergänz|ergänze|reparier|repariere|behebe|"
+    r"fix|fixe|teste|test|verbesser|verbessere)\b.*\bin der werkstatt\b"
 )
 # Wünsche zum gerade gebauten Projekt, ohne die Werkstatt zu nennen (nur kurz nach dem Ende)
 _CHANGE_VERB = (r"^(?:füg|füge|bau|baue|mach|mache|änder|ändere|reparier|repariere|fix|fixe|verbesser|verbessere|"
@@ -186,7 +195,7 @@ def is_workshop_request(text: str) -> bool:
         return False
     # Fragen ("Wie weit ist die Werkstatt?") starten keinen neuen Auftrag.
     if text.strip().endswith("?") or re.match(r"^(?:wie|was|wo|wann|warum|ist|bist|läuft|hast)\b", norm):
-        return any(p.search(norm) for p in _WORKSHOP if p.pattern != r"\bwerkstatt\b")
+        return any(p.search(norm) for p in _WORKSHOP if p is not _WORKSHOP_WORD)
     return any(p.search(norm) for p in _WORKSHOP)
 
 

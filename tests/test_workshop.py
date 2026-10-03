@@ -60,6 +60,22 @@ class RecognitionTest(unittest.TestCase):
             with self.subTest(said=said):
                 self.assertFalse(is_workshop_request(said))
 
+    def test_the_car_workshop_is_no_job(self):
+        """"Werkstatt" allein ist kein Auftrag: Georgs Auto kommt auch mal in die Werkstatt."""
+        for said in ("Ich gehe in die Werkstatt", "Ich muss mein Auto in die Werkstatt bringen", "Ruf die Werkstatt an",
+                     "Mein Auto ist in der Werkstatt", "Bring mich zur Werkstatt", "Hol das Auto aus der Werkstatt",
+                     "Aus der Werkstatt", "Werkstatt, wie weit bist du?"):
+            with self.subTest(said=said):
+                self.assertFalse(is_workshop_request(said))
+                self.assertFalse(is_continue_request(said))
+        for said in ("Werkstatt: bau mir einen Timer", "Bau mir in der Werkstatt einen Taschenrechner",
+                     "In die Werkstatt: ein Würfelspiel"):
+            with self.subTest(said=said):
+                self.assertTrue(is_workshop_request(said))
+        for said in ("In der Werkstatt: noch ein Highscore", "Mach den Bot in der Werkstatt schneller"):
+            with self.subTest(said=said):
+                self.assertTrue(is_continue_request(said))
+
     def test_continue_change_and_answer(self):
         for said in ("Mach in der Werkstatt weiter", "Werkstatt, füg noch einen Befehl hinzu",
                      "Arbeite weiter", "Füg in der Werkstatt noch einen Highscore hinzu"):
