@@ -72,6 +72,8 @@ Was in den Videos Claude besser gemacht hat, gibt es als **Plugins für dein Cla
 
 Die Ordner von Assistent, Körper und Geld liegen im Notizbuch (`Jarvis-Notizbuch\Assistent`, `\Körper`, `\Geld`), also auch in Obsidian. Dazu installiert Jarvis Anthropics offizielles **claude-code-setup** (schaut sich ein Projekt an und schlägt passende Hooks, Skills, MCP-Server und Subagents vor).
 
+**Graphify** (aus dem Video, Graphify Labs, Apache-2.0) richtet Jarvis auch ein: `/graphify .` in Claude Code baut aus einem Projekt einmal eine Karte (jede Datei, jede Funktion, jede Verbindung, dazu `graph.html` zum Anklicken), und Claude schlägt danach darin nach, statt viele Dateien zu lesen. Das spart vor allem in großen Projekten Kontingent. Bei Code läuft das ganz lokal ohne KI; Dokumente und Bilder liest Claude dafür einmal. Keine Telemetrie. Zwei Dinge stimmen im Video nicht ganz: Graphify ist kein Plugin („/plugin, Link einfügen“ geht mit dem Projekt nicht), sondern ein Programm mit Skill, und Claude Code liest nicht bei jedem Start das ganze Projekt. Jarvis holt dafür uv (winget), installiert die geprüfte Fassung (`graphifyy==0.9.74`) und lässt `graphify install` den Skill unter `~/.claude/skills/graphify` anlegen (plus drei Zeilen in `~/.claude/CLAUDE.md`). „Installiere Graphify“ macht es noch einmal.
+
 **Aus den Videos, nur auf Wunsch:** „Installiere Everything Claude Code“, „Installiere Task Observer“, „Installiere Claude Mem“ (oder „Installiere alle Plugins aus den Videos“). Sie sind auf den geprüften Stand festgelegt und haben Haken: **Everything Claude Code** bringt fast 300 Skills und 70 Agents fürs Programmieren mit (kostet viel Kontext, die Hooks brauchen Node.js), **Task Observer** ist ein großer Skill mit Bash-Befehlen, **Claude Mem** braucht Node.js 20, Bun und Git Bash und fasst jede Sitzung mit Claude zusammen (kostet Kontingent). Für den Alltag reichen Gedächtnis und Lernen.
 
 **Git:** Das offizielle Plugin und die aus den Videos kommen von GitHub, das kann Claude Code nur mit Git. Fehlt es, sagt Jarvis das; nach „Installiere Git“ holt er sie von selbst nach. Die eigenen sechs Plugins brauchen kein Git.
@@ -209,7 +211,7 @@ jarvis/
   remote.py server.py        Handy-App: Verlauf, Zustand, QR-Code, Web-Eingang
   push.py         Benachrichtigungen aufs Handy (ntfy)
   telegram.py naehe.py       Telegram-Bot: Text, Sprachnachrichten, Fotos, Standort, Ja/Nein-Knöpfe; nächster Supermarkt (OpenStreetMap)
-  claude_plugins.py         Plugins für Georgs Claude: Marktplatz anmelden, installieren, Git-Plugins, Sprachbefehle
+  claude_plugins.py         Plugins für Georgs Claude: Marktplatz anmelden, installieren, Git-Plugins, Graphify (uv), Sprachbefehle
   alexa.py alexa_skill.py    Alexa: Brücke über ntfy.sh und der Skill-Code
   presence.py     Fenster beim Weckwort zeigen und danach wieder verstecken
   apps.py         Programme: Startmenü-Index, bekannte Apps, winget, Schließen

@@ -321,7 +321,7 @@ Oben auf **System** klicken oder sagen: **„Zeig mir das System“** (auch „�
 
 Was in den Videos Claude besser gemacht hat, bekommt **dein Claude** (Claude Code in der Eingabeaufforderung und im Code-Bereich der Claude-App), nicht Jarvis. Das richtet Jarvis beim ersten Start von selbst ein, du musst nichts tun.
 
-**Geklappt, wenn:** in der Eingabeaufforderung `claude plugin list` die Plugins `gedaechtnis`, `lernen`, `assistent`, `koerper`, `geld` und `video` (jeweils `@jarvis-plugins`) mit „enabled“ zeigt. In Claude Code siehst du sie auch mit `/plugin`. Fehlt etwas, sag **„Richte die Claude-Plugins ein“**, dann macht Jarvis es noch einmal und sagt, was geklappt hat.
+**Geklappt, wenn:** in der Eingabeaufforderung `claude plugin list` die Plugins `gedaechtnis`, `lernen`, `assistent`, `koerper`, `geld` und `video` (jeweils `@jarvis-plugins`) mit „enabled“ zeigt und `graphify --version` eine Versionsnummer nennt (in einem neuen Fenster der Eingabeaufforderung). In Claude Code siehst du sie auch mit `/plugin`. Fehlt etwas, sag **„Richte die Claude-Plugins ein“**, dann macht Jarvis es noch einmal und sagt, was geklappt hat.
 
 So benutzt du sie in Claude Code (neue Sitzung starten, damit sie geladen sind):
 
@@ -330,7 +330,8 @@ So benutzt du sie in Claude Code (neue Sitzung starten, damit sie geladen sind):
 3. **Assistent:** `/assistent:briefing` für deinen Tag, `/assistent:faq` für Kundenfragen, `/assistent:dashboard` mit einem Bild von einem Dashboard, das dir gefällt. Für Mails, Kalender, Shop und Werbung hat er eigene Spezialisten. Senden und Buchen nur nach deinem Ja.
 4. **Körper:** ein Foto vom Essen in Claude Code ziehen und „Trag das ein“ sagen, Trainingssätze nennen („Bankdrücken 3x8 mit 80 kg“) oder Schlaf und Puls. `/koerper:koerper-dashboard` zeigt alles als Seite. Dasselbe Tagebuch füllt Jarvis über Telegram.
 5. **Geld:** `/geld:geld-check` sieht sich Shop und Werbung an und macht genau drei Vorschläge mit ehrlicher Schätzung. `/geld:produkt-texte` verbessert Produkttexte, `/geld:ideen` sammelt ehrlich, womit du zusätzlich Geld verdienen kannst. Umgesetzt wird nur, was du bestätigst.
-6. **Video:** Schick Claude einen Link (TikTok, YouTube, Instagram) oder den Pfad zu einer Videodatei und frag, was du wissen willst („Was sind die zwei Tools in dem Video?“). Claude lädt das Video, liest das Transkript und sieht sich Übersichtsbilder mit Zeitstempel an, Einzelbilder nur, wenn er etwas genau lesen muss. Das läuft auf deinem PC, kostet nichts extra und spart Kontingent: ein Übersichtsbild zeigt neun Szenen und kostet so viel wie ein Foto.
+6. **Graphify:** Öffne in Claude Code dein Projekt und tipp `/graphify .`. Beim ersten Mal baut Claude eine Karte des Projekts (bei Code in Sekunden und ohne Kontingent, Dokumente liest er einmal). Danach schaut er bei Fragen wie „Wie hängt der Shop mit dem Lager zusammen?“ zuerst in die Karte. `graphify-out\graph.html` im Browser zeigt sie zum Anklicken. Nach größeren Änderungen: `/graphify . --update`.
+7. **Video:** Schick Claude einen Link (TikTok, YouTube, Instagram) oder den Pfad zu einer Videodatei und frag, was du wissen willst („Was sind die zwei Tools in dem Video?“). Claude lädt das Video, liest das Transkript und sieht sich Übersichtsbilder mit Zeitstempel an, Einzelbilder nur, wenn er etwas genau lesen muss. Das läuft auf deinem PC, kostet nichts extra und spart Kontingent: ein Übersichtsbild zeigt neun Szenen und kostet so viel wie ein Foto.
 
 Die Tabellen und Seiten von Assistent, Körper und Geld liegen im Notizbuch unter `Assistent`, `Körper` und `Geld`, also auch in Obsidian.
 

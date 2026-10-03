@@ -10,6 +10,10 @@ direkt aus dem Ordner, ein Jarvis-Update bringt neue Fassungen also von selbst m
 Das offizielle "claude-code-setup" von Anthropic und die fremden Plugins aus den Videos (Everything Claude Code,
 Task Observer, Claude Mem) kommen von GitHub. Das kann Claude Code nur mit Git, darum gibt es sie nur, wenn Git da
 ist ("Installiere Git"). Jarvis' eigenes Gehirn lädt keins davon (--setting-sources project).
+
+Graphify (Graphify Labs, Apache-2.0) ist kein Plugin, auch wenn das Video "/plugin, Link einfügen" sagt: Es ist ein
+Programm mit Skill. Jarvis holt uv (winget), installiert damit die geprüfte Fassung und lässt `graphify install` den
+Skill unter ~/.claude/skills/graphify anlegen. Danach baut `/graphify .` in Claude Code eine Karte des Projekts.
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ log = logging.getLogger(__name__)
 MARKETPLACE = "jarvis-plugins"
 OWN = ("gedaechtnis", "lernen", "assistent", "koerper", "geld", "video")
 NAMES = {"gedaechtnis": "Gedächtnis", "lernen": "Lernen", "assistent": "Assistent", "koerper": "Körper", "geld": "Geld",
-         "video": "Video",
+         "video": "Video", "graphify": "Graphify",
          "claude-code-setup": "Claude Code Setup", "ecc": "Everything Claude Code", "task-observer": "Task Observer",
          "mem-thedotmack": "Claude Mem"}
 FOLDERS = {"assistent": "Assistent", "koerper": "Körper", "geld": "Geld"}  # userConfig "ordner" im Notizbuch
@@ -40,6 +44,8 @@ OFFICIAL_MARKET = "claude-plugins-official"
 OFFICIAL_SOURCE = "anthropics/claude-plugins-official"
 OFFICIAL = ("claude-code-setup",)
 EXTRAS = ("ecc", "task-observer", "mem-thedotmack")  # nur auf Wunsch: brauchen Node.js, Bash oder viel Kontext
+GRAPHIFY_VERSION = "0.9.74"  # Paket graphifyy, geprüfter Stand vom 3.10.2026 (keine Telemetrie, Abfragen bleiben lokal)
+UV_PACKAGE = "astral-sh.uv"
 STATE_FILE = "claude-plugins.json"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 # Einrichten beim Start, "Richte die Claude-Plugins ein" und das Nachholen nach Git laufen nacheinander:
@@ -82,6 +88,35 @@ def jarvis_python() -> str:
     return str(exe)
 
 
+def _found(name: str, places: list[Path]) -> str | None:
+    found = shutil.which(name)
+    if found:
+        return found
+    for place in places:
+        for candidate in (place / f"{name}.exe", place / name):
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def find_uv() -> str | None:
+    """uv auf PATH oder dort, wo winget und der uv-Installer es hinlegen (gerade installiert: PATH noch alt)."""
+    local = os.environ.get("LOCALAPPDATA")
+    places = [Path(local) / "Microsoft" / "WinGet" / "Links"] if local else []
+    return _found("uv", places + [Path.home() / ".local" / "bin", Path.home() / ".cargo" / "bin"])
+
+
+def find_graphify() -> str | None:
+    """Das Programm graphify, das `uv tool install` in seinen Ordner für Programme legt (meist ~/.local/bin)."""
+    return _found("graphify", [Path(os.environ.get("UV_TOOL_BIN_DIR") or Path.home() / ".local" / "bin")])
+
+
+def graphify_skill() -> Path:
+    """Wo `graphify install` den Skill für Claude Code anlegt (wie Graphify: CLAUDE_CONFIG_DIR zählt)."""
+    config = os.environ.get("CLAUDE_CONFIG_DIR")
+    return (Path(config) if config else Path.home() / ".claude") / "skills" / "graphify" / "SKILL.md"
+
+
 def find_git() -> str | None:
     """Git auf PATH oder an den üblichen Orten. Direkt nach "Installiere Git" kennt der laufende Jarvis den neuen PATH
     noch nicht, Claude Code bekommt den Ordner dann über _environment() mit."""
@@ -103,13 +138,15 @@ class Plugins:
     """Meldet den Marktplatz an und installiert die Plugins über `claude plugin ...` (ohne Fenster, ohne Anmeldung)."""
 
     def __init__(self, cfg: dict, state_dir: Path | None = None, claude: str | None = None, root: Path | None = None,
-                 runner=None, git: bool | None = None) -> None:
+                 runner=None, git: bool | None = None, tools=None, get_uv=None) -> None:
         self._cfg = cfg or {}
         self._state = Path(state_dir or STATE_DIR) / STATE_FILE
         self._root = marketplace_root(root)
         self._claude = claude
         self._run = runner or subprocess.run
         self._git = git
+        self._tools = tools or subprocess.run  # uv und graphify (nicht claude)
+        self._get_uv = get_uv or _install_uv
 
     # ------------------------------------------------------------------ Claude Code
 
@@ -200,11 +237,17 @@ class Plugins:
                 for market, plugin in github:
                     done = self.install(plugin, market)
                     (result["installiert"] if done.get("ok") else result["fehler"]).append(plugin)
+            graph = self.graphify()
+            (result["installiert"] if graph["ok"] else result["fehler"]).append("graphify")
+            if not graph["ok"]:
+                result["graphify"] = graph["text"]
             result["ok"] = not [p for p in result["fehler"] if p in OWN]
             result["text"] = summary(result)
-            self._save({"root": str(self._root), "plugins": list(OWN), "ok": result["ok"],
-                        "zeit": dt.datetime.now().isoformat(timespec="minutes"), "installiert": result["installiert"],
-                        "ohne_git": result["ohne_git"]})
+            now = dt.datetime.now().isoformat(timespec="minutes")
+            self._save({"root": str(self._root), "plugins": list(OWN), "ok": result["ok"], "zeit": now,
+                        "installiert": result["installiert"], "ohne_git": result["ohne_git"],
+                        "graphify": GRAPHIFY_VERSION if graph["ok"] else "",
+                        "graphify_fehler": "" if graph["ok"] else GRAPHIFY_VERSION, "graphify_versuch": now})
             log.info("Claude-Plugins: %s", result["text"])
             return result
 
@@ -214,12 +257,55 @@ class Plugins:
         return not (state.get("ok") and state.get("root") == str(self._root)
                     and set(OWN) <= set(state.get("plugins") or []))
 
+    def graphify_due(self) -> bool:
+        """Graphify fehlt oder ist nicht die geprüfte Fassung. Ging es schief (kein Internet), erst am nächsten Tag
+        wieder, sonst lädt Jarvis bei jedem Start erneut."""
+        state = self._load()
+        if state.get("graphify") == GRAPHIFY_VERSION and graphify_skill().is_file():
+            return False
+        if state.get("graphify_fehler") != GRAPHIFY_VERSION:  # noch nie, neue Fassung, oder der Skill ist weg
+            return True
+        try:
+            last = dt.datetime.fromisoformat(str(state.get("graphify_versuch") or ""))
+        except ValueError:
+            return True
+        return (dt.datetime.now() - last).total_seconds() > 86400
+
+    def graphify(self) -> dict:
+        """Graphify für Georgs Claude: uv (holt Jarvis mit winget, wenn es fehlt), damit die geprüfte Fassung, dann
+        `graphify install` (Skill unter ~/.claude/skills/graphify und ein kurzer Eintrag in ~/.claude/CLAUDE.md)."""
+        uv = find_uv() or self._get_uv()
+        if not uv:
+            return {"ok": False, "text": "uv fehlt und ließ sich nicht installieren"}
+        done = self._tool(uv, "tool", "install", f"graphifyy=={GRAPHIFY_VERSION}", timeout=900)
+        if done.returncode != 0:
+            return {"ok": False, "text": "uv konnte Graphify nicht installieren: " + _last_line(done)}
+        self._tool(uv, "tool", "update-shell", timeout=60)  # ~/.local/bin auf PATH (dort liegt meist auch claude)
+        where = self._tool(uv, "tool", "dir", "--bin", timeout=60)
+        folder = Path((where.stdout or "").strip().splitlines()[-1]) if where.returncode == 0 and where.stdout.strip() else None
+        exe = (_found("graphify", [folder]) if folder else None) or find_graphify()
+        if not exe:
+            return {"ok": False, "text": "Graphify ist installiert, aber das Programm graphify fehlt"}
+        done = self._tool(exe, "install", timeout=300)
+        if done.returncode != 0 or not graphify_skill().is_file():
+            return {"ok": False, "text": "graphify install hat nicht geklappt: " + _last_line(done)}
+        return {"ok": True, "text": "Graphify ist eingerichtet"}
+
+    def _tool(self, *cmd: str, timeout: float) -> subprocess.CompletedProcess:
+        env = _environment()
+        env.update(PYTHONUTF8="1", PYTHONIOENCODING="utf-8")  # graphify schreibt Sonderzeichen, Windows sonst cp1252
+        try:
+            return self._tools(list(cmd), capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=timeout, creationflags=NO_WINDOW, env=env)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return subprocess.CompletedProcess(list(cmd), -1, "", f"{type(exc).__name__}: {exc}")
+
     def waiting_for_git(self) -> list[str]:
         """Was beim letzten Einrichten auf Git gewartet hat (offizielles Plugin, gewünschte fremde)."""
         return [str(p) for p in self._load().get("ohne_git") or []]
 
     def auto(self) -> dict | None:
-        if not self.claude or not has_marketplace(self._root) or not self.due():
+        if not self.claude or not has_marketplace(self._root) or not (self.due() or self.graphify_due()):
             return None
         return self.setup()
 
@@ -233,7 +319,9 @@ class Plugins:
                 "offiziell": [{"name": p, "titel": NAMES.get(p, p), "installiert": f"{p}@{OFFICIAL_MARKET}" in mine}
                               for p in OFFICIAL],
                 "extras": [{"name": p, "titel": NAMES.get(p, p), "installiert": f"{p}@{MARKETPLACE}" in mine}
-                           for p in EXTRAS]}
+                           for p in EXTRAS],
+                "graphify": {"installiert": graphify_skill().is_file(), "version": state.get("graphify", ""),
+                             "uv": bool(find_uv())}}
 
     def _load(self) -> dict:
         try:
@@ -256,7 +344,8 @@ _SETUP = re.compile(
     r"(?:claude[- ]?plugins|plugins für claude) (?:einrichten|installieren|aktualisieren))$", re.I)
 _EXTRA = re.compile(
     r"^(?:bitte )?(?:installier|installiere|hol|hole)\s+(?:mir\s+)?(?:auch\s+)?(?:das\s+plugin\s+)?"
-    r"(?P<name>everything claude code|ecc|task observer|claude mem|alle (?:claude[- ]?)?plugins(?: aus den videos)?)"
+    r"(?P<name>everything claude code|ecc|task observer|claude mem|graphify|graph[iy] ?f[iy]|grafify|"
+    r"alle (?:claude[- ]?)?plugins(?: aus den videos)?)"
     r"(?:\s+(?:für|fuer|in) claude)?$", re.I)
 
 
@@ -272,6 +361,8 @@ def match_command(text: str) -> tuple[str, ...] | None:
     name = found.group("name").lower()
     if name.startswith("alle"):
         return EXTRAS
+    if name.startswith(("graph", "graf")):
+        return ("graphify",)
     return ({"everything claude code": "ecc", "ecc": "ecc", "task observer": "task-observer",
              "claude mem": "mem-thedotmack"}[name],)
 
@@ -285,7 +376,9 @@ def summary(result: dict) -> str:
     if others:
         parts.append("Dazu " + _join(others) + ".")
     if result.get("fehler"):
-        parts.append("Nicht geklappt: " + _join([NAMES.get(p, p) for p in result["fehler"]]) + ".")
+        names = [NAMES.get(p, p) + (f" ({result['graphify']})" if p == "graphify" and result.get("graphify") else "")
+                 for p in result["fehler"]]
+        parts.append("Nicht geklappt: " + _join(names) + ".")
     if result.get("ohne_git"):
         names = [NAMES.get(p, p) for p in result["ohne_git"]]
         parts.append(_join(names) + (" braucht" if len(names) == 1 else " brauchen") + " Git, das fehlt noch. "
@@ -309,6 +402,22 @@ def _last_json(text: str):
         return json.loads(text)
     except (TypeError, ValueError):
         return None
+
+
+def _last_line(done: subprocess.CompletedProcess) -> str:
+    lines = [line.strip() for line in ((done.stderr or "") + "\n" + (done.stdout or "")).splitlines() if line.strip()]
+    return (lines[-1] if lines else f"Code {done.returncode}")[:200]
+
+
+def _install_uv() -> str | None:
+    """uv mit winget, nur für Georg (ohne Administratorrechte), wie "Installiere uv"."""
+    from . import apps
+
+    try:
+        apps.install(UV_PACKAGE, timeout=600)
+    except Exception as exc:
+        log.info("uv für Graphify: %s", exc)
+    return find_uv()
 
 
 def _environment() -> dict:

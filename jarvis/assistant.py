@@ -1170,6 +1170,8 @@ class Assistant:
             self.announce(result["text"])
 
         threading.Thread(target=work, name="jarvis-claude-plugins", daemon=True).start()
+        if extras == ("graphify",):
+            return "Sehr wohl, Sir. Ich hole Graphify für Claude, das dauert einen Moment."
         if len(extras) == 1:
             return "Sehr wohl, Sir. Ich hole das Plugin für Claude, das dauert einen Moment."
         if extras:

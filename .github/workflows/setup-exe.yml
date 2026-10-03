@@ -205,6 +205,11 @@ jobs:
           Write-Host "Claude Code: $claude"
           # Ein eigener Claude-Ordner, damit die Probe nichts vom Runner benutzt
           $env:CLAUDE_CONFIG_DIR = "$env:RUNNER_TEMP\claude-probe"
+          # Graphify: uv holt Jarvis bei Georg mit winget. Hat der Runner kein winget, kommt uv hier aus pip.
+          if (-not (Get-Command uv -ErrorAction SilentlyContinue) -and -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            & $py -m pip install --quiet --disable-pip-version-check uv
+            $env:PATH = "$env:LOCALAPPDATA\Jarvis\venv\Scripts;$env:PATH"
+          }
           & $claude plugin validate $app
           if ($LASTEXITCODE -ne 0) { Write-Host "Der Marktplatz ist ungültig"; exit 1 }
           Push-Location $app
@@ -220,6 +225,13 @@ jobs:
           Write-Host "Video-Plugin: python=$($video.python) jarvis=$($video.jarvis)"
           if (-not $video -or -not (Test-Path $video.python) -or $video.python -match "pythonw" -or -not (Test-Path "$($video.jarvis)\jarvis\video.py")) {
             Write-Host "Das Video-Plugin hat Python oder den Jarvis-Ordner nicht"; exit 1
+          }
+          # Graphify (Skill von "graphify install") nur als Warnung: winget und PyPI auf dem Runner sind nicht Georgs PC
+          if (Test-Path "$env:CLAUDE_CONFIG_DIR\skills\graphify\SKILL.md") {
+            Write-Host "Graphify: Skill da"
+            Get-Content "$env:CLAUDE_CONFIG_DIR\CLAUDE.md" -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -First 4
+          } else {
+            Write-Host "::warning::Graphify wurde auf dem Runner nicht eingerichtet (siehe Ausgabe von einrichten)"
           }
 
       - name: Probe unsichtbarer Arbeitsplatz (Werkstatt-Tests poppen nicht auf)

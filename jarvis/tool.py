@@ -58,7 +58,7 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
   claude-plugins [einrichten|status] [ecc task-observer mem-thedotmack]
                                richtet Georgs Plugins für sein Claude ein (Gedächtnis, Lernen, Assistent, Körper,
-                               Geld, Video; die drei Namen danach sind die fremden Extras aus den Videos)
+                               Geld, Video und Graphify; die drei Namen danach sind die fremden Extras aus den Videos)
   einkauf                      zeigt Georgs Einkaufsliste
   einkauf dazu "<ding>" ["<ding>" ...]   setzt etwas auf die Einkaufsliste ("Mandelmus")
   einkauf weg "<ding>" ["<ding>" ...]    hakt etwas ab (gekauft)

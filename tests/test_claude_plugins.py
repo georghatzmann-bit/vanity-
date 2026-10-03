@@ -44,14 +44,46 @@ class FakeCli:
         return subprocess.CompletedProcess(cmd, code, "Fortschritt …\n" + json.dumps(out), "")
 
 
+class FakeTools:
+    """Statt uv und graphify: merkt sich die Aufrufe, legt Programm und Skill an wie die echten."""
+
+    def __init__(self, bin_dir: Path, fail: str = ""):
+        self.calls = []
+        self.bin_dir = bin_dir
+        self.fail = fail
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append(cmd)
+        args = cmd[1:]
+        if self.fail and self.fail in " ".join(args):
+            return subprocess.CompletedProcess(cmd, 2, "", "error: Failed to fetch: `https://pypi.org/simple/graphifyy/`")
+        if args[:3] == ["tool", "dir", "--bin"]:
+            return subprocess.CompletedProcess(cmd, 0, str(self.bin_dir) + "\n", "")
+        if args[:2] == ["tool", "install"]:
+            self.bin_dir.mkdir(parents=True, exist_ok=True)
+            (self.bin_dir / "graphify.exe").write_bytes(b"")
+        if args == ["install"]:
+            skill = claude_plugins.graphify_skill()
+            skill.parent.mkdir(parents=True, exist_ok=True)
+            skill.write_text("---\nname: graphify\n---\n", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0, "ok\n", "")
+
+
 class PluginsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.cfg = {"brain": {}, "notizbuch": {"ordner": str(self.tmp / "Notizbuch")}}
+        # Nie das echte uv oder das echte ~/.claude: Graphify landet im Test-Ordner
+        for patcher in (mock.patch.dict(claude_plugins.os.environ, {"CLAUDE_CONFIG_DIR": str(self.tmp / "claude")}),
+                        mock.patch.object(claude_plugins, "find_uv", return_value="uv")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.tools = FakeTools(self.tmp / "bin")
 
-    def plugins(self, cli, git=True, root=ROOT):
-        return Plugins(self.cfg, state_dir=self.tmp / "daten", claude="claude", root=root, runner=cli, git=git)
+    def plugins(self, cli, git=True, root=ROOT, tools=None, get_uv=None):
+        return Plugins(self.cfg, state_dir=self.tmp / "daten", claude="claude", root=root, runner=cli, git=git,
+                       tools=tools or self.tools, get_uv=get_uv or (lambda: None))
 
     def test_setup_installs_everything_with_folders(self):
         cli = FakeCli()
@@ -70,7 +102,7 @@ class PluginsTest(unittest.TestCase):
         self.assertIn(["marketplace", "add", "anthropics/claude-plugins-official"], cli.calls)
         self.assertIn("claude-code-setup@claude-plugins-official", cli.installed)
         self.assertEqual(result["text"], "Claude hat jetzt Gedächtnis, Lernen, Assistent, Körper, Geld und Video. "
-                                         "Dazu Claude Code Setup.")
+                                         "Dazu Claude Code Setup und Graphify.")
 
     def test_without_git_only_the_own_plugins(self):
         cli = FakeCli()
@@ -92,6 +124,48 @@ class PluginsTest(unittest.TestCase):
             self.assertTrue(Plugins(self.cfg, state_dir=self.tmp, claude="claude", runner=FakeCli()).git)
             path = claude_plugins._environment()["PATH"]
         self.assertTrue(path.startswith(str(program_files / "Git" / "cmd")), "Claude Code findet Git auch")
+
+    def test_graphify_with_uv_in_the_checked_version(self):
+        plugins = self.plugins(FakeCli())
+        self.assertTrue(plugins.graphify_due())
+        result = plugins.setup()
+        self.assertIn("graphify", result["installiert"])
+        calls = [c[1:] for c in self.tools.calls]
+        self.assertEqual(calls[0], ["tool", "install", f"graphifyy=={claude_plugins.GRAPHIFY_VERSION}"],
+                         "auf den geprüften Stand festgelegt")
+        self.assertIn(["tool", "update-shell"], calls, "graphify auch in neuen Fenstern auf PATH")
+        self.assertEqual(self.tools.calls[-1], [str(self.tmp / "bin" / "graphify.exe"), "install"])
+        self.assertTrue((self.tmp / "claude" / "skills" / "graphify" / "SKILL.md").is_file())
+        self.assertFalse(plugins.graphify_due(), "eingerichtet")
+        self.assertTrue(plugins.status()["graphify"]["installiert"])
+
+    def test_graphify_gets_uv_first(self):
+        got = []
+        with mock.patch.object(claude_plugins, "find_uv", return_value=None):
+            result = self.plugins(FakeCli(), get_uv=lambda: got.append(1) or str(self.tmp / "uv.exe")).graphify()
+        self.assertTrue(result["ok"])
+        self.assertEqual(got, [1])
+        self.assertEqual(self.tools.calls[0][0], str(self.tmp / "uv.exe"))
+        with mock.patch.object(claude_plugins, "find_uv", return_value=None):
+            result = self.plugins(FakeCli(), get_uv=lambda: None).setup()
+        self.assertIn("Nicht geklappt: Graphify (uv fehlt und ließ sich nicht installieren).", result["text"])
+        self.assertTrue(result["ok"], "die eigenen Plugins sind trotzdem da")
+
+    def test_graphify_failure_waits_a_day_but_not_after_an_update(self):
+        plugins = self.plugins(FakeCli(), tools=FakeTools(self.tmp / "bin", fail="graphifyy=="))
+        result = plugins.setup()
+        self.assertIn("uv konnte Graphify nicht installieren: error: Failed to fetch", result["text"])
+        self.assertFalse(plugins.graphify_due(), "kein Internet: nicht bei jedem Start wieder")
+        self.assertIsNone(plugins.auto())
+        state_file = self.tmp / "daten" / "claude-plugins.json"
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        state["graphify_versuch"] = "2026-01-01T08:00"
+        state_file.write_text(json.dumps(state), encoding="utf-8")
+        self.assertTrue(plugins.graphify_due(), "am nächsten Tag noch einmal")
+        state["graphify_versuch"] = __import__("datetime").datetime.now().isoformat(timespec="minutes")
+        state_file.write_text(json.dumps(state), encoding="utf-8")
+        with mock.patch.object(claude_plugins, "GRAPHIFY_VERSION", "9.9.9"):
+            self.assertTrue(plugins.graphify_due(), "eine neue geprüfte Fassung kommt sofort")
 
     def test_extras_only_on_request(self):
         cli = FakeCli(markets={"claude-plugins-official"})
@@ -145,6 +219,7 @@ class PluginsTest(unittest.TestCase):
         self.assertEqual(match_command("Claude Plugins aktualisieren"), ())
         self.assertEqual(match_command("Installiere Everything Claude Code"), ("ecc",))
         self.assertEqual(match_command("Installiere alle Plugins aus den Videos"), EXTRAS)
+        self.assertEqual(match_command("Jarvis, installier mir Graphify für Claude"), ("graphify",))
         for other in ("Installiere Spotify", "Öffne Claude", "Was sind Plugins?"):
             self.assertIsNone(match_command(other), other)
 
