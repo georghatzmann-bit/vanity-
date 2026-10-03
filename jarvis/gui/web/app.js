@@ -69,6 +69,7 @@
   let Blaupause = null; // 3D-Modelle als Hologramm (blaupause.js)
   let Weltlage = null; // Satelliten-Erde mit Lagebericht (weltlage.js)
   let Zentrale = null; // Kommandozentrale und Gespräch im HUD (zentrale.js)
+  let System = null; // System wie im Video "AgenticOS": Agents, Wissensnetz, Skills (system.js)
   let Antreiber = null; // Peitsche und Lob (antreiber.js)
   let handsAllowed = true; // [weltlage] handsteuerung in config.toml
 
@@ -151,6 +152,11 @@
     zentrale_briefing: () => window.pywebview.api.zentrale_briefing(),
     zentrale_stop: () => window.pywebview.api.zentrale_stop(),
     zentrale_open: (kind, ident) => window.pywebview.api.zentrale_open(kind, ident || ''),
+    system_state: () => window.pywebview.api.system_state(),
+    system_graph: (fresh) => window.pywebview.api.system_graph(!!fresh),
+    system_skill: (id, text) => window.pywebview.api.system_skill(id, text || ''),
+    system_agent: (id, text) => window.pywebview.api.system_agent(id, text || ''),
+    system_open: (id) => window.pywebview.api.system_open(id),
   };
 
   function call(name, ...args) {
@@ -858,6 +864,12 @@
         if (ev.action === 'show') showZentrale();
         if (Zentrale) Zentrale.handle(ev);
         break;
+      case 'system':
+        // "Zeig mir das System": was davor liegt, geht zur Seite, dann die Ansicht System
+        if (ev.action === 'show') showZentrale();
+        if (System) System.handle(ev);
+        else if (ev.action === 'show' && Zentrale) Zentrale.setHome('system');
+        break;
       case 'trailer':
         if (Zentrale) Zentrale.trailer(ev);
         break;
@@ -954,6 +966,7 @@
     if (Gedaechtnis) Gedaechtnis.refresh();
     if (Koppeln && Koppeln.dots) Koppeln.dots();
     if (Zentrale) call('zentrale_state').then((d) => Zentrale.load(d)).catch(() => {});
+    if (System) System.connected();
     refreshDeck();
     refreshToday();
     setInterval(refreshToday, 60000);
@@ -1199,6 +1212,7 @@
     const wlDemo = window.JarvisWeltlage ? window.JarvisWeltlage.demoApi(push) : null;
     // ?briefing (Jarvis liest vor und hebt hervor), &bereich=2 (bleibt beim dritten Abschnitt stehen)
     const ztDemo = window.JarvisZentrale ? window.JarvisZentrale.demo(push) : null;
+    const syDemo = window.JarvisSystem ? window.JarvisSystem.demo(push) : null;
     let shop = null;
     const startShop = (mode) => {
       if (!window.JarvisWerkstatt) return;
@@ -1314,6 +1328,12 @@
         if (/streamen|stream (?:fertig|vorbereiten)/i.test(t)) {
           push({ type: 'message', role: 'user', text: t });
           push({ type: 'message', role: 'jarvis', text: 'Verstanden, Sir, machen wir uns bereit. Ihr OBS steht auf der Szene Gameplay. Mikrofon und Kamera sind verbunden. Ihr Twitch ist offen. Sagen Sie Bescheid, wenn es live gehen soll, Sir.' });
+          return Promise.resolve(true);
+        }
+        if (syDemo && /^(?:zeig (?:mir )?|öffne )?(?:das |die |den )?(?:system|wissensnetz|agents|agenten|graph)$/i.test(t)) {
+          push({ type: 'message', role: 'user', text: t });
+          push({ type: 'system', action: 'show' });
+          push({ type: 'message', role: 'jarvis', text: 'Das System, Sir. 39 Knoten im Wissensnetz, davon 10 Verbindungen von selbst geknüpft.' });
           return Promise.resolve(true);
         }
         if (ztDemo && /^(?:briefing|guten morgen|was steht (?:heute )?an\??)$/i.test(t)) {
@@ -1446,6 +1466,7 @@
       ...(bpDemo ? bpDemo.api : {}),
       ...(wlDemo || {}),
       ...(ztDemo ? ztDemo.api : {}),
+      ...(syDemo ? syDemo.api : {}),
       feedback: (kind) => {
         const lines = kind === 'lob'
           ? ['Danke, Sir. Das freut mich.', 'Zu gütig, Sir.', 'Danke, Sir. Ich mache genau so weiter.']
@@ -1690,6 +1711,9 @@
     if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });
     if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
     if (window.JarvisZentrale) Zentrale = window.JarvisZentrale.create({ call, toast, listenNow });
+    if (window.JarvisSystem) {
+      System = window.JarvisSystem.create({ call, toast, setHome: (name) => { if (Zentrale) Zentrale.setHome(name); } });
+    }
     if (window.JarvisAntreiber) Antreiber = window.JarvisAntreiber.create({ call, toast, gesture: (kind) => Core.gesture(kind) });
     refreshDeck();
     setInterval(refreshDeck, 60000);

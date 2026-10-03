@@ -296,6 +296,48 @@ GESPRAECH = r"""
 """
 
 
+SYSTEM = r"""
+(() => {
+  const q = (s) => document.querySelector(s);
+  const c = q('#syCanvas');
+  let drawn = 0;
+  try {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let lit = 0;
+    for (let i = 3; i < d.length; i += 64) if (d[i] > 0) lit += 1;
+    drawn = lit / Math.max(1, d.length / 64);
+  } catch (e) { drawn = -1; }
+  const empty = q('#syGraphEmpty');
+  return {
+    start: document.body.dataset.home,
+    agents: document.querySelectorAll('#syAgents .sy-agent').length,
+    skills: document.querySelectorAll('#sySkills .sy-skill').length,
+    netz: ((q('#syGraphMeta') || {}).textContent || '').trim(),
+    leer: empty && !empty.hidden ? (empty.textContent || '').trim() : '',
+    breite: c ? c.width : 0, hoehe: c ? c.height : 0, gezeichnet: drawn,
+  };
+})()
+"""
+
+
+def system_check(tools: DevTools) -> None:
+    """Die Ansicht System (wie im Video "AgenticOS"): Agents und Skills aus Python, das Wissensnetz gezeichnet.
+    Nicht kritisch: Auf dem frischen Rechner hat das Netz nur das Gedächtnis."""
+    tools.evaluate("document.getElementById('tabSystem').click(), true")
+    tools.pump(4)
+    s = tools.evaluate(SYSTEM) or {}
+    print("System:", json.dumps(s, ensure_ascii=False), flush=True)
+    check("System öffnet sich", s.get("start") == "system", s.get("start", ""), critical=False)
+    check("System: Agents aus Python", (s.get("agents") or 0) >= 6, str(s.get("agents")), critical=False)
+    check("System: Skill-Knöpfe", (s.get("skills") or 0) >= 9, str(s.get("skills")), critical=False)
+    check("System: Wissensnetz gezeichnet", (s.get("gezeichnet") or 0) > 0,
+          f"{(s.get('gezeichnet') or 0):.1%} der Fläche, {s.get('netz') or s.get('leer') or '-'}", critical=False)
+    note("System in WebView2",
+         f"{s.get('agents')} Agents, {s.get('skills')} Skills, Netz: {s.get('netz') or s.get('leer') or '-'}, "
+         f"Zeichenfläche {s.get('breite')}x{s.get('hoehe')}")
+    tools.screenshot("oberflaeche-system.png")
+
+
 TRAILER = r"""
 (() => {
   const box = document.getElementById('trailer');
@@ -446,6 +488,7 @@ def main() -> int:
         check("Peitsche da", bool(g.get("peitsche")))
         note("Energie-Kugel in WebView2",
              f"Art: {g.get('kugel') or 'keine'}, {bright:.0%} der Fläche hell, {moved:.0%} bewegt sich in 0,7 s")
+        system_check(tools)
         tools.evaluate("document.getElementById('tabZentrale').click(), true")
         tools.pump(1)
         trailer_check(tools)
@@ -467,7 +510,7 @@ def main() -> int:
     elif warned:
         note("Fenster-Probe", "In Ordnung, nur was am Netz hängt, ging nicht: " + ", ".join(warned), "warning")
     else:
-        note("Fenster-Probe", "Alles in Ordnung: Zentrale, Kugel, keine Skriptfehler")
+        note("Fenster-Probe", "Alles in Ordnung: Zentrale, Kugel, System, keine Skriptfehler")
     return 1 if failed else 0
 
 

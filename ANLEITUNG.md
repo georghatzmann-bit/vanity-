@@ -131,7 +131,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **Gespräch:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, ein gestrichelter Ring um die Kugel). Einfach weiterreden, ohne „Hey Jarvis“: „Und morgen?“ Schluss ist, wenn du nichts mehr sagst, oder mit **„Danke“**, **„Alles klar“** oder **„Tschüss“**. Beim Zocken (Gaming-Modus oder Vollbild) gibt es kein Gespräch, da redest du ja meist mit anderen. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Gespräch ohne Weckwort** ausschalten.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
-- **Das Fenster** hat zwei Ansichten, oben links umschaltbar: die **Zentrale** (dein Tag auf einen Blick, siehe unten) und das **Gespräch**. Im Gespräch steht in der Mitte Jarvis' Energie-Kugel in leuchtenden Ringen: Plasma-Bänder kreisen darin, beim Zuhören wird sie heller und schneller, beim Nachdenken blau-violett mit wirbelnden Bändern, beim Sprechen pulsiert sie mit der Stimme, ohne Mikrofon wird sie grau. Ein Klick, und er hört sofort zu. Links das Menü, was **heute** ansteht und die **aktuelle Aufgabe**, rechts der **Assistent** (es leuchtet, was er gerade macht: Verstehen, Denken, Erledigen, Sprechen), das **System** und das **Gedächtnis**. Darunter das Gespräch, Schnellbefehle und das Eingabefeld. Oben: **Werkstatt**, **Blueprint**, **Weltlage**, der **Gaming**-Schalter, **Verbinden** (Handy, Alexa, Konnektoren), **Verlauf** und die Einstellungen. Fährst du mit der Maus über ein Symbol, steht dort, was es tut.
+- **Das Fenster** hat drei Ansichten, oben links umschaltbar: die **Zentrale** (dein Tag auf einen Blick, siehe unten), das **Gespräch** und das **System** (alle Agents, das Wissensnetz und die Skills, siehe unten). Im Gespräch steht in der Mitte Jarvis' Energie-Kugel in leuchtenden Ringen: Plasma-Bänder kreisen darin, beim Zuhören wird sie heller und schneller, beim Nachdenken blau-violett mit wirbelnden Bändern, beim Sprechen pulsiert sie mit der Stimme, ohne Mikrofon wird sie grau. Ein Klick, und er hört sofort zu. Links das Menü, was **heute** ansteht und die **aktuelle Aufgabe**, rechts der **Assistent** (es leuchtet, was er gerade macht: Verstehen, Denken, Erledigen, Sprechen), das **System** und das **Gedächtnis**. Darunter das Gespräch, Schnellbefehle und das Eingabefeld. Oben: **Werkstatt**, **Blueprint**, **Weltlage**, der **Gaming**-Schalter, **Verbinden** (Handy, Alexa, Konnektoren), **Verlauf** und die Einstellungen. Fährst du mit der Maus über ein Symbol, steht dort, was es tut.
 - **Peitsche und Lob:** Links neben der Kugel liegt die **Peitsche**, rechts die **Hand**. Braucht Jarvis länger als 8 Sekunden, erscheint unten „Dauert es? Antreiben“. Klick auf die Peitsche, dann hängt sie an der Maus; noch ein Klick lässt sie knallen. Jarvis antwortet („Autsch. Ich lege einen Zahn zu, Sir.“) und denkt eine Viertelstunde lang eine Stufe flotter. Mit der Hand tätschelst du ihn: Herzen, ein Dank, und er denkt wieder so gründlich wie nötig. Per Sprache: **„Schneller!“**, **„Beeil dich“** und **„Gut gemacht“**. Esc oder Rechtsklick legt Peitsche oder Hand weg.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
@@ -142,7 +142,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 
 ![Die Kommandozentrale beim Briefing](docs/bilder/zentrale.jpg)
 
-So startet das Fenster. Oben links schaltest du zwischen **Zentrale** und **Gespräch** um, Jarvis merkt sich die Wahl.
+So startet das Fenster. Oben links schaltest du zwischen **Zentrale**, **Gespräch** und **System** um, Jarvis merkt sich die Wahl.
 
 - **Aktivität:** was Jarvis heute schon erledigt hat, das Neueste oben, dazu Haken für Posteingang, Kalender, Shop, Briefing und den wichtigsten Termin.
 - **Kennzahlen:** mit Shopify Umsatz, Bestellungen, Warenkorb und was auf den Versand wartet, mit Windsor.ai deine Werbekonten (ROAS, Ausgaben). Ganz rechts **Rückfragen an Sie**: was gerade auf deine Antwort wartet. Ohne diese Konnektoren zeigt Jarvis seinen eigenen Tag und deine Spiele.
@@ -200,6 +200,12 @@ So startet das Fenster. Oben links schaltest du zwischen **Zentrale** und **Gesp
 
 - „Merk dir, dass ich gern Pizza esse“, „Merk dir: Max hat am 3. Mai Geburtstag“
 - „Was weißt du über mich?“, „Vergiss das mit der Pizza“
+- „Was haben wir zuletzt gemacht?“, „Woran haben wir zuletzt gearbeitet?“, „Wo waren wir stehen geblieben?“ (Sitzung für Sitzung, sofort)
+
+**System:**
+
+- „Zeig mir das System“, „Öffne das Wissensnetz“, „Zeig mir alle Agents“
+- „Welche Agents laufen gerade?“, „Wer arbeitet gerade?“
 
 **Eigene Befehle und Zeitpläne:**
 
@@ -237,6 +243,20 @@ Nur zwei Dinge fragt er immer: bevor er **etwas kauft** und bevor er **in deinem
 
 Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** ausschalten.
 
+## Das System: alles aus einem Fenster
+
+![Das System mit Agents, Wissensnetz und Skills](docs/bilder/system.jpg)
+
+Oben auf **System** klicken oder sagen: **„Zeig mir das System“** (auch „Öffne das Wissensnetz“).
+
+1. **Links: deine Agents.** Jarvis und seine Spezialisten (Recherche, Texte, Technik, Posteingang, Kalender, Werkstatt, Blueprint, Stream) mit dem, was sie gerade tun: „Bereit“, „Arbeitet“, „Wartet auf Sie“, „Fertig“. Klick auf einen Agent: Du siehst seine Skills und Werkzeuge und kannst ihm direkt einen Auftrag schreiben, zum Beispiel an **Recherche**: „Die besten Gaming-Mäuse unter 100 Euro“. Geklappt, wenn unten kurz „Auftrag an Recherche“ steht und der Agent auf „Arbeitet“ springt.
+2. **Mitte: das Wissensnetz.** Alles, was Jarvis weiß, als Netz: das Gedächtnis in der Mitte, Personen, Projekte aus der Werkstatt, Recherchen, Notizen, die letzten Tage und Sitzungen. Was zusammengehört, verbindet Jarvis **von selbst** (gestrichelte Linien), auch ohne dass du Links setzt. Klick auf einen Punkt zeigt, was drinsteht und womit er verbunden ist, und warum („gemeinsam: Overlay, OBS“). **In Obsidian öffnen** öffnet die Seite (ohne Obsidian im normalen Editor). Mausrad zoomt, Ziehen verschiebt, oben suchst du, unten blendest du Arten aus.
+3. **Rechts: Skills, Automationen, Sitzungen.** Ein Klick auf **Heute planen**, **Mails prüfen** oder **Tiefenrecherche** startet die Aufgabe, als hättest du sie gesagt. Darunter deine Zeitpläne und eigenen Befehle, ganz unten **Sitzung für Sitzung**: woran du mit Jarvis gearbeitet hast. Das vergisst er nicht: Sag nächste Woche **„Was haben wir zuletzt gemacht?“**, und er weiß es.
+
+**Sitzung:** Alles, was du sagst, bis du 20 Minuten Pause machst. Danach beginnt eine neue. Was ihr gemacht habt, bleibt gespeichert, das Gesagte selbst nur drei Tage (wie bisher). Passwörter und PINs schreibt Jarvis nie hinein.
+
+**Welche Agents laufen gerade?** Frag einfach so, Jarvis sagt, wer arbeitet und wer auf dich wartet.
+
 ## Gedächtnis: Jarvis lernt dich kennen
 
 ![Das Gedächtnis](docs/bilder/gedaechtnis.jpg)
@@ -251,7 +271,7 @@ Lieber vorher gefragt werden? Einstellungen > Extras > **Volle Freigabe** aussch
 
 ## Notizbuch und Fähigkeiten
 
-**Notizbuch:** Jarvis schreibt jedes Gespräch mit Datum in einen Ordner (`%USERPROFILE%\Jarvis-Notizbuch`): ein Tagebuch pro Tag, eine Seite pro Person (mit Geburtstag und allem, was er über sie weiß), Berichte von Recherchen und deine Notizen. Mit dem kostenlosen Programm **Obsidian** („Ordner als Tresor öffnen“) siehst du alles verlinkt. Eigene Notizen in den Seiten bleiben erhalten. Passwörter schreibt er nie hinein.
+**Notizbuch:** Jarvis schreibt jedes Gespräch mit Datum in einen Ordner (`%USERPROFILE%\Jarvis-Notizbuch`): ein Tagebuch pro Tag, eine Seite pro Person (mit Geburtstag und allem, was er über sie weiß), Berichte von Recherchen und deine Notizen. Unter jeden neuen Bericht schreibt er von selbst, was dazu passt („Verwandt: [[Streaming-Setup]] · [[Max]]“), und trägt ihn im Tagebuch des Tages ein. Auf der Seite **Gedächtnis** stehen die letzten Sitzungen mit Link zum Tag. Mit dem kostenlosen Programm **Obsidian** („Ordner als Tresor öffnen“) siehst du alles verlinkt. Eigene Notizen in den Seiten bleiben erhalten. Passwörter schreibt er nie hinein.
 
 **Fähigkeiten:** Für wiederkehrende Aufgaben hat Jarvis genaue Anleitungen, die er nur liest, wenn er sie braucht: Morgen-Briefing, Recherche mit Bericht, PC aufräumen und aktualisieren, Spiele starten (auch Steam und Epic), Smart Home, Bildschirm lesen. Zeigst du ihm etwas Neues und sagst **„Lern das“**, schreibt er sich selbst eine neue Fähigkeit. Alle stehen unter **Gedächtnis** > **Ansehen**.
 

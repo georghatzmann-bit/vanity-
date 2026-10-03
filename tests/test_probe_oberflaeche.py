@@ -229,6 +229,53 @@ class BriefingCheckTest(unittest.TestCase):
         self.assertEqual(probe.failed, [], "hält das Release nicht auf")
 
 
+class SystemCheckTest(unittest.TestCase):
+    """Die Ansicht System im echten Fenster: nicht kritisch, aber sichtbar in der Probe."""
+
+    class Tools:
+        def __init__(self, result):
+            self.result = result
+            self.clicked = []
+            self.shots = []
+
+        def evaluate(self, expression):
+            if "click()" in expression:
+                self.clicked.append(expression)
+                return True
+            return self.result
+
+        def pump(self, seconds):
+            pass
+
+        def screenshot(self, name):
+            self.shots.append(name)
+
+    def setUp(self):
+        probe.failed.clear()
+        probe.warned.clear()
+
+    def run_check(self, tools):
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            probe.system_check(tools)
+
+    def test_system_view_is_fine(self):
+        tools = self.Tools({"start": "system", "agents": 9, "skills": 12, "netz": "1 Knoten", "gezeichnet": 0.02,
+                            "breite": 900, "hoehe": 600})
+        self.run_check(tools)
+        self.assertIn("tabSystem", tools.clicked[0])
+        self.assertEqual(tools.shots, ["oberflaeche-system.png"])
+        self.assertEqual((probe.failed, probe.warned), ([], []))
+
+    def test_problems_only_warn(self):
+        tools = self.Tools({"start": "zentrale", "agents": 0, "skills": 0, "gezeichnet": 0})
+        self.run_check(tools)
+        self.assertEqual(probe.failed, [], "das System hält das Release nicht auf")
+        self.assertEqual(len(probe.warned), 4)
+
+
 class WaitForPythonTest(unittest.TestCase):
     """Build 204: die Seite war da, die Brücke zu Python kam erst nach 11 s. Die Probe wartet darauf."""
 

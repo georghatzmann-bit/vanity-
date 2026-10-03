@@ -63,7 +63,7 @@ QUICK = (
     {"id": "heute", "name": "Heute planen", "satz": "Plan meinen Tag", "hinweis": "Termine und Vorhaben als Tagesplan"},
     {"id": "woche", "name": "Woche planen", "satz": "Plan meine Woche", "hinweis": "Die nächsten sieben Tage im Überblick"},
     {"id": "mails", "name": "Mails prüfen", "satz": "Prüf meine Mails und sag mir, was wichtig ist", "hinweis": "Nur lesend, über Ihren Gmail-Konnektor"},
-    {"id": "recherche", "name": "Tiefenrecherche", "satz": "Recherchiere gründlich: {}", "frage": "Was soll ich recherchieren?",
+    {"id": "recherche", "name": "Tiefen\u00adrecherche", "satz": "Recherchiere gründlich: {}", "frage": "Was soll ich recherchieren?",
      "hinweis": "Mehrere Quellen, mit Bericht im Notizbuch"},
     {"id": "notiz", "name": "Notiz", "satz": "Notiere: {}", "frage": "Was soll ich notieren?", "hinweis": "Landet im Notizbuch, verknüpft sich von selbst"},
     {"id": "weltlage", "name": "Weltlage", "satz": "Zeig mir, was in der Welt passiert", "hinweis": "Die Erde mit den neuesten Meldungen"},

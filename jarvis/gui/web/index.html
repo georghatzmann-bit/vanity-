@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="blaupause.css">
   <link rel="stylesheet" href="weltlage.css">
   <link rel="stylesheet" href="zentrale.css">
+  <link rel="stylesheet" href="system.css">
 </head>
 <body data-state="idle" data-link="wait" data-boot="1" data-view="hud" data-home="zentrale">
   <div class="backdrop" aria-hidden="true"></div>
@@ -32,6 +33,7 @@
         <div class="view-tabs" role="tablist" aria-label="Ansicht">
           <button type="button" role="tab" class="view-tab" id="tabZentrale" data-home="zentrale" aria-selected="true" aria-controls="zt" title="Kommandozentrale: Ihr Tag auf einen Blick. Oder sagen Sie „Briefing“.">Zentrale</button>
           <button type="button" role="tab" class="view-tab" id="tabTalk" data-home="gespraech" aria-selected="false" aria-controls="talk" title="Gespräch mit Jarvis: die Energie-Kugel, was er gerade tut, Schnellbefehle">Gespräch</button>
+          <button type="button" role="tab" class="view-tab" id="tabSystem" data-home="system" aria-selected="false" aria-controls="sy" title="System: alle Agents mit ihren Skills, das Wissensnetz, Automationen und Sitzung für Sitzung. Oder sagen Sie „Zeig mir das System“.">System</button>
         </div>
         <span class="view-sep" aria-hidden="true"></span>
         <button type="button" class="top-btn ws-pill" id="workshopPill" data-state="idle" title="Werkstatt: alle Projekte">
@@ -112,7 +114,7 @@
           </button>
           <canvas class="zt-wave" id="ztWave" aria-hidden="true"></canvas>
           <b class="zt-orb-state" id="ztOrbState">Bereit</b>
-          <small class="zt-meta" id="ztWissen">Wissensnetz</small>
+          <button type="button" class="zt-meta zt-wissen" id="ztWissen" title="Das Wissensnetz öffnen: alles, was Jarvis weiß, verknüpft">Wissensnetz</button>
         </article>
 
         <article class="zt-card zt-pc" data-area="rechner" aria-labelledby="ztPcHead">
@@ -175,6 +177,80 @@
       </div>
     </section>
 
+    <!-- Das System wie im Video "AgenticOS": links die Agents mit ihren Skills und Werkzeugen, in der Mitte das
+         Wissensnetz, rechts Skill-Knöpfe, Automationen und das Gedächtnis Sitzung für Sitzung (system.js) -->
+    <section class="sy" id="sy" role="tabpanel" aria-labelledby="tabSystem">
+      <aside class="sy-col sy-agents" aria-labelledby="syAgentsHead">
+        <header class="sy-head"><h2 class="zt-head" id="syAgentsHead">Agents</h2><span class="zt-meta" id="syAgentsMeta"></span></header>
+        <ol class="sy-agent-list" id="syAgents"></ol>
+      </aside>
+
+      <article class="sy-graph" aria-labelledby="syGraphHead">
+        <header class="sy-graph-head">
+          <div class="sy-graph-title">
+            <h2 class="zt-head" id="syGraphHead">Wissensnetz</h2>
+            <span class="zt-meta" id="syGraphMeta">Wird aufgebaut …</span>
+          </div>
+          <div class="sy-search">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input type="search" id="sySearch" placeholder="Im Netz suchen" aria-label="Im Wissensnetz suchen" aria-controls="syHits" autocomplete="off" spellcheck="false">
+            <ul class="sy-hits" id="syHits" role="listbox" aria-label="Treffer" hidden></ul>
+          </div>
+        </header>
+        <div class="sy-canvas-wrap" id="syCanvasWrap">
+          <canvas class="sy-canvas" id="syCanvas" tabindex="0" role="img" aria-label="Wissensnetz. Ziehen verschiebt, Mausrad zoomt, Klick zeigt Einzelheiten. Mit der Tastatur: Pfeiltasten verschieben, Plus und Minus zoomen, Null zeigt alles."></canvas>
+          <div class="sy-zoom" role="group" aria-label="Zoom">
+            <button type="button" class="icon-btn" id="syZoomIn" title="Näher ran (+)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg><span class="sr-only">Näher ran</span></button>
+            <button type="button" class="icon-btn" id="syZoomOut" title="Weiter weg (−)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg><span class="sr-only">Weiter weg</span></button>
+            <button type="button" class="icon-btn" id="syFit" title="Alles zeigen (0)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="sr-only">Alles zeigen</span></button>
+          </div>
+          <section class="sy-detail" id="syDetail" aria-live="polite" hidden>
+            <header class="sy-detail-head">
+              <span class="sy-kind" id="syDetailKind"></span>
+              <button type="button" class="icon-btn" id="syDetailClose" title="Schließen (Esc)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span class="sr-only">Schließen</span></button>
+            </header>
+            <h3 class="sy-detail-title" id="syDetailTitle"></h3>
+            <p class="sy-detail-text" id="syDetailText"></p>
+            <p class="sy-detail-file" id="syDetailFile"></p>
+            <ul class="sy-detail-links" id="syDetailLinks" aria-label="Verbunden mit"></ul>
+            <div class="sy-detail-actions">
+              <button type="button" class="btn primary small" id="syDetailOpen">In Obsidian öffnen</button>
+              <button type="button" class="btn small" id="syDetailAsk">Jarvis fragen</button>
+            </div>
+          </section>
+          <p class="sy-graph-empty" id="syGraphEmpty" hidden></p>
+        </div>
+        <footer class="sy-graph-foot">
+          <ul class="sy-legend" id="syLegend" aria-label="Arten im Netz, zum Ein- und Ausblenden klicken"></ul>
+        </footer>
+      </article>
+
+      <aside class="sy-col sy-side" aria-label="Skills, Automationen und Gedächtnis">
+        <section class="sy-block" aria-labelledby="sySkillsHead">
+          <header class="sy-head"><h2 class="zt-head" id="sySkillsHead">Skills bereit</h2><span class="zt-meta" id="sySkillsMeta"></span></header>
+          <div class="sy-skills" id="sySkills"></div>
+          <form class="sy-ask" id="syAsk" hidden>
+            <label class="sy-ask-label" for="syAskInput" id="syAskLabel">Was soll ich recherchieren?</label>
+            <div class="sy-ask-row">
+              <input class="sy-input" id="syAskInput" type="text" autocomplete="off" spellcheck="true" maxlength="400">
+              <button type="submit" class="btn primary small">Los</button>
+              <button type="button" class="btn ghost small" id="syAskCancel">Abbrechen</button>
+            </div>
+          </form>
+        </section>
+        <section class="sy-block" aria-labelledby="syAutoHead">
+          <header class="sy-head"><h2 class="zt-head" id="syAutoHead">Automationen</h2><span class="zt-meta" id="syAutoMeta"></span></header>
+          <ul class="sy-auto" id="syAuto"></ul>
+          <p class="zt-empty" id="syAutoEmpty" hidden>Noch keine. Sagen Sie zum Beispiel „Jeden Morgen um 8 Uhr: Briefing“ oder „Wenn ich Zockmodus sage, öffne Discord und Steam“.</p>
+        </section>
+        <section class="sy-block sy-block-sessions" aria-labelledby="sySessHead">
+          <header class="sy-head"><h2 class="zt-head" id="sySessHead">Sitzung für Sitzung</h2><span class="zt-meta" id="sySessMeta"></span></header>
+          <ol class="sy-sessions" id="sySessions"></ol>
+          <p class="zt-empty" id="sySessEmpty" hidden>Noch keine Sitzung. Ab dem ersten Befehl merkt sich Jarvis, woran Sie arbeiten, auch über Tage.</p>
+        </section>
+      </aside>
+    </section>
+
     <!-- Das Gespräch: die Energie-Kugel im HUD, links Menü und Aufgabe, rechts Assistent und System -->
     <section class="talk" id="talk" role="tabpanel" aria-labelledby="tabTalk">
       <aside class="talk-left" aria-label="Menü und heute">
@@ -193,6 +269,7 @@
         <nav class="hud-nav" aria-label="Menü">
           <button type="button" class="hud-nav-item" data-go="gespraech" aria-current="page"><i aria-hidden="true"></i><span>Gespräch</span></button>
           <button type="button" class="hud-nav-item" data-go="zentrale"><i aria-hidden="true"></i><span>Zentrale</span></button>
+          <button type="button" class="hud-nav-item" data-go="system"><i aria-hidden="true"></i><span>System</span></button>
           <button type="button" class="hud-nav-item" data-go="wissen"><i aria-hidden="true"></i><span>Wissen</span></button>
           <button type="button" class="hud-nav-item" data-go="einstellungen"><i aria-hidden="true"></i><span>Einstellungen</span></button>
         </nav>
@@ -921,6 +998,7 @@
   <script src="orb.js"></script>
   <script src="plasma.js"></script>
   <script src="zentrale.js"></script>
+  <script src="system.js"></script>
   <script src="antreiber.js"></script>
   <script src="app.js"></script>
 </body>

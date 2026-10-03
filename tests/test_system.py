@@ -547,6 +547,34 @@ class SystemTest(unittest.TestCase):
             self.assertEqual(self.system.open_node("Max"), {"ok": True, "wie": "obsidian"})
         self.assertEqual(opened.call_args[0][0], self.folder / "Notizbuch" / "Personen" / "Max.md")
 
+    def test_show_reaches_the_window(self):
+        from jarvis.gui.app import GuiBridge
+        from jarvis.ui import MultiUi, Ui
+
+        bridge = GuiBridge()
+        system = System(self.assistant, Path(__file__).resolve().parents[1] / "jarvis_home", self.state_dir,
+                        MultiUi(Ui(), bridge), now=self.clock)
+        system.bring_up()
+        self.assertIn({"type": "system", "action": "show"}, bridge.drain())
+
+    def test_page_has_the_view(self):
+        web = Path(__file__).resolve().parents[1] / "jarvis" / "gui" / "web"
+        page = (web / "index.html").read_text(encoding="utf-8")
+        for needle in ('id="tabSystem"', 'id="sy"', 'id="syCanvas"', 'src="system.js"', 'href="system.css"',
+                       'data-go="system"'):
+            self.assertIn(needle, page)
+        script = (web / "system.js").read_text(encoding="utf-8")
+        import re
+
+        for ident in set(re.findall(r"\$\('([A-Za-z]+)'\)", script)):
+            self.assertIn(f'id="{ident}"', page, f"system.js sucht #{ident}")
+        app = (web / "app.js").read_text(encoding="utf-8")
+        for name in ("system_state", "system_graph", "system_skill", "system_agent", "system_open"):
+            self.assertIn(f"{name}:", app, f"app.js reicht {name} an Python")
+            from jarvis.gui.app import Api
+
+            self.assertTrue(hasattr(Api, name), name)
+
     def test_window_api(self):
         from jarvis.gui.app import Api
 

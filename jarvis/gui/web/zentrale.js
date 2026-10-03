@@ -81,12 +81,15 @@
 
     // ---------------------------------------------------------------- Ansicht: Zentrale oder Gespräch
 
+    const HOMES = ['zentrale', 'gespraech', 'system'];
+
     function home() {
-      return body.dataset.home === 'gespraech' ? 'gespraech' : 'zentrale';
+      return HOMES.includes(body.dataset.home) ? body.dataset.home : 'zentrale';
     }
 
     function setHome(name, remember) {
-      const want = name === 'gespraech' ? 'gespraech' : 'zentrale';
+      const want = HOMES.includes(name) ? name : 'zentrale';
+      const before = body.dataset.home;
       body.dataset.home = want;
       el.tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.home === want)));
       el.nav.forEach((n) => {
@@ -98,6 +101,8 @@
       }
       if (want === 'zentrale') layoutTimeline();
       syncVideo();
+      // system.js zeichnet sein Netz nur, solange die Ansicht vorne ist
+      if (before !== want || remember === false) document.dispatchEvent(new CustomEvent('jarvis:home', { detail: { home: want } }));
     }
 
     function visible() {
@@ -917,18 +922,19 @@
     // ---------------------------------------------------------------- Bedienung
 
     el.tabs.forEach((t) => t.addEventListener('click', () => setHome(t.dataset.home)));
-    el.tabs.forEach((t) => t.addEventListener('keydown', (e) => {
+    el.tabs.forEach((t, i) => t.addEventListener('keydown', (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       e.preventDefault();
-      const other = el.tabs.find((x) => x !== t);
+      const other = el.tabs[(i + (e.key === 'ArrowRight' ? 1 : el.tabs.length - 1)) % el.tabs.length];
       if (other) {
         setHome(other.dataset.home);
         other.focus();
       }
     }));
+    if (el.wissen) el.wissen.addEventListener('click', () => setHome('system'));
     el.nav.forEach((n) => n.addEventListener('click', () => {
       const go = n.dataset.go;
-      if (go === 'gespraech' || go === 'zentrale') setHome(go);
+      if (HOMES.includes(go)) setHome(go);
       else if (go === 'wissen') {
         const open = $('memOpenTop') || $('memOpen');
         if (open) open.click();
