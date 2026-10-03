@@ -43,6 +43,8 @@ APP_DETAILS = "https://store.steampowered.com/api/appdetails"
 STORE_SEARCH = "https://store.steampowered.com/api/storesearch/"
 USER_AGENT = "Jarvis/2.0 (Stream-Modus)"
 TREND_SECONDS = 60 * 60
+# Gerade gestartetes OBS ("Öffne OBS und geh live"): so lange auf seinen WebSocket-Server warten
+OBS_WAIT_SECONDS = 10
 # Keine Spiele: Hardware und Zubehör aus den Bestsellern
 NOT_GAMES = re.compile(r"steam (?:deck|machine|controller|frame|link)|valve index|soundtrack|\bdlc\b|season pass", re.I)
 # Woran man die Szene zum Spielen erkennt, und welche es sicher nicht ist
@@ -53,6 +55,10 @@ SCENE_AVOID = ("start", "soon", "gleich", "pause", "brb", "break", "end", "ende"
 
 class ObsError(RuntimeError):
     pass
+
+
+class ObsNotListening(ObsError):
+    """Niemand nimmt die Verbindung an: OBS lädt noch, oder der WebSocket-Server ist aus."""
 
 
 # ---------------------------------------------------------------------- OBS-WebSocket (Version 5, ohne Zusatzpaket)
@@ -79,7 +85,7 @@ class ObsClient:
         try:
             self._sock = self._connect((self.host, self.port), self.timeout)
         except OSError as exc:
-            raise ObsError("OBS antwortet nicht (WebSocket-Server aus?)") from exc
+            raise ObsNotListening("OBS antwortet nicht (WebSocket-Server aus?)") from exc
         try:
             self._handshake()
         except OSError as exc:
@@ -383,9 +389,13 @@ _LIVE = re.compile(r"^(?:jetzt )?(?:(?:geh|gehen wir|wir gehen|lass uns)(?: jetz
                    r"(?:starte|start) (?:den |meinen )?stream|stream starten|live gehen)(?: jetzt)?(?: bitte)?$")
 _END = re.compile(r"^(?:beende|stopp|stoppe|stop) (?:den |meinen )?stream$|^stream (?:beenden|stoppen|aus)$|"
                   r"^(?:geh|gehen wir) offline$")
-_TRAILER = re.compile(r"^(?:zeig|zeige|spiel|spiele|öffne)(?: mir| uns)? (?:den |mal den )?(?:game |spiel |offiziellen )?trailer"
-                      r"(?: (?:von|zu|zum|für|vom) (?P<game>.+?))?(?: an| ab)?$|"
-                      r"^(?:zeig|zeige)(?: mir| uns)? (?:den |das )?(?P<game2>.+?)[ -]trailer$")
+_TRAILER = re.compile(r"^(?:zeig|zeige|spiel|spiele|öffne)(?: mir| uns)? (?:den |mal den |einen |mal einen )?"
+                      r"(?:game |spiel |offiziellen |neuen |neuesten )?trailer"
+                      r"(?: (?:von|zu|zum|für|vom) (?P<game>.+?))?(?: an| ab| vor)?(?: nochmal| noch mal| bitte)?$|"
+                      r"^(?:zeig|zeige)(?: mir| uns)? (?:den |das |einen |ein )?(?P<game2>.+?)[ -]trailer(?: nochmal| noch mal| bitte)?$")
+# "Zeig mir den neuen Trailer", "den Trailer von dem neuen Battlefield": Artikel und "neu" sind kein Spielname
+_TRAILER_FILLER = re.compile(r"^(?:(?:dem|den|der|des|die|das|einem|einen|ein|eine|neuen|neue|neuer|neues|neuesten|"
+                             r"neueste|aktuellen|letzten|ersten|offiziellen|spiel|game)\b ?)+")
 # "Ich will heute nicht streamen", "Ich streame morgen", "Ich streame gerade": jetzt nichts vorbereiten
 _NOT_NOW = re.compile(r"\b(?:nicht|nie|niemals|kein|keine|keinen|morgen|übermorgen|später|nächste[nrs]?|wochenende|"
                       r"gerade|schon|bereits)\b")
@@ -415,12 +425,17 @@ def wants_end(text: str) -> bool:
     return bool(_END.match(_norm(text)))
 
 
+def is_command(text: str) -> bool:
+    """Ein Satz für den Stream-Modus? (Für Teile wie in "Öffne Discord und geh live".)"""
+    return wants_prepare(text) is not None or wants_live(text) or wants_end(text) or wants_trailer(text) is not None
+
+
 def wants_trailer(text: str) -> str | None:
     """"Zeig mir den Trailer" -> "", "Zeig mir den Trailer von Crimson Desert" -> "crimson desert"."""
     found = _TRAILER.match(_norm(text))
     if not found:
         return None
-    return (found.group("game") or found.group("game2") or "").strip()
+    return _TRAILER_FILLER.sub("", (found.group("game") or found.group("game2") or "").strip()).strip(" -")
 
 
 # ---------------------------------------------------------------------- der Stream-Modus
@@ -441,6 +456,7 @@ class Stream:
         self._opener = opener or urllib.request.urlopen
         self._client = client or ObsClient
         self._show_window = show_window
+        self._sleep = time.sleep
         self._trend: tuple[float, list[dict]] = (0.0, [])
         self.last_game: dict | None = None  # zuletzt erwähnt (für "Zeig mir den Trailer")
         self.live = False
@@ -507,20 +523,30 @@ class Stream:
             if not setup.enabled:
                 return ("OBS läuft schon. Die Szene stelle ich um, sobald in OBS unter Werkzeuge, WebSocket-Server-"
                         "Einstellungen der Server an ist.", scene)
-            try:
-                with self._client("127.0.0.1", setup.port, setup.password) as obs:
-                    if not scene:
-                        scenes = [s.get("sceneName") for s in obs.request("GetSceneList").get("scenes") or []]
-                        scene = gameplay_scene([s for s in reversed(scenes) if s], game)
-                    if scene:
-                        obs.request("SetCurrentProgramScene", {"sceneName": scene})
-                    if start_streaming:
-                        status = obs.request("GetStreamStatus")
-                        if not status.get("outputActive"):
-                            obs.request("StartStream")
-            except ObsError as exc:
-                log.info("OBS: %s", exc)
-                return f"OBS hört gerade nicht auf mich: {exc}", scene
+            waited = 0.0
+            while True:
+                try:
+                    with self._client("127.0.0.1", setup.port, setup.password) as obs:
+                        if not scene:
+                            scenes = [s.get("sceneName") for s in obs.request("GetSceneList").get("scenes") or []]
+                            scene = gameplay_scene([s for s in reversed(scenes) if s], game)
+                        if scene:
+                            obs.request("SetCurrentProgramScene", {"sceneName": scene})
+                        if start_streaming:
+                            status = obs.request("GetStreamStatus")
+                            if not status.get("outputActive"):
+                                obs.request("StartStream")
+                    break
+                except ObsNotListening as exc:
+                    # OBS läuft, der Server ist eingeschaltet, nimmt aber nichts an: OBS lädt meist noch
+                    if waited >= OBS_WAIT_SECONDS:
+                        log.info("OBS: %s", exc)
+                        return f"OBS hört gerade nicht auf mich: {exc}", scene
+                    self._sleep(2)
+                    waited += 2
+                except ObsError as exc:
+                    log.info("OBS: %s", exc)
+                    return f"OBS hört gerade nicht auf mich: {exc}", scene
             return (f"Ihr OBS steht auf der Szene {scene}." if scene else "OBS ist bereit."), scene
         exe = env.obs_exe()
         if exe is None:

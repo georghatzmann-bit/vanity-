@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 from jarvis import stream
-from jarvis.stream import ObsClient, ObsError, Stream, gameplay_scene, read_setup, wants_end, wants_live, \
+from jarvis.stream import ObsClient, ObsError, Stream, gameplay_scene, is_command, read_setup, wants_end, wants_live, \
     wants_prepare, wants_trailer
 
 PASSWORD = "geheim123"
@@ -227,6 +227,18 @@ class SentenceTest(unittest.TestCase):
                      "Zeig mir die Datei aus"):
             self.assertIsNone(wants_trailer(text), text)
 
+    def test_trailer_names_without_filler(self):
+        """"Den neuen Trailer" ist kein Spiel namens "neuen" (das wäre ein falscher Trailer aus der Steam-Suche)."""
+        for text in ("Zeig mir den neuen Trailer", "Zeig mir einen Trailer", "Spiel mir den Trailer vor",
+                     "Zeig mir den Trailer nochmal", "Zeig mir den Trailer bitte"):
+            self.assertEqual(wants_trailer(text), "", text)
+        self.assertEqual(wants_trailer("Zeig mir den Trailer von dem neuen Battlefield"), "battlefield")
+        self.assertEqual(wants_trailer("Zeig mir den neuen Battlefield Trailer"), "battlefield")
+        self.assertEqual(wants_trailer("Zeig mir den Trailer zum Spiel Elden Ring"), "elden ring")
+        self.assertEqual(wants_trailer("Zeig mir den GTA 6 Trailer"), "gta 6")
+        self.assertTrue(is_command("geh live") and is_command("starte den Stream") and is_command("zeig mir den Trailer"))
+        self.assertFalse(is_command("Öffne Spotify") or is_command("starte Steam"))
+
     def test_gameplay_scene(self):
         self.assertEqual(gameplay_scene(["Starting Soon", "Gameplay", "BRB", "Ende"]), "Gameplay")
         self.assertEqual(gameplay_scene(["Startet gleich", "CS2 Szene", "Chat"], "cs2"), "CS2 Szene")
@@ -342,6 +354,34 @@ class StreamTest(unittest.TestCase):
         self.assertEqual(live.command("Beende den Stream"), "Der Stream ist beendet, Sir. Gut gemacht.")
         self.assertFalse(fake.streaming)
 
+    def test_just_started_obs_gets_a_moment(self):
+        """"Öffne OBS und geh live": OBS läuft schon, sein Server nimmt aber erst nach ein paar Sekunden an."""
+        fake = FakeObs()
+        self.addCleanup(fake.close)
+        obs_folder(self.root, enabled=True, port=fake.port)
+        tries = []
+
+        def refuse(address, timeout):
+            raise ConnectionRefusedError(10061, "Es konnte keine Verbindung hergestellt werden")
+
+        def client(host, port, password):
+            tries.append(port)
+            return ObsClient(host, port, password, connect=refuse if len(tries) <= 2 else None)
+
+        live = self.make(FakeEnv(self.root, running=True), client=client)
+        slept = []
+        live._sleep = slept.append
+        self.assertEqual(live.go_live(), "Sie sind live, Sir. Viel Erfolg.")
+        self.assertTrue(fake.streaming)
+        self.assertEqual(slept, [2, 2])
+
+        never = self.make(FakeEnv(self.root, running=True),
+                          client=lambda host, port, password: ObsClient(host, port, password, connect=refuse))
+        slept = []
+        never._sleep = slept.append
+        self.assertTrue(never.go_live().startswith("OBS hört gerade nicht auf mich"))
+        self.assertEqual(sum(slept), stream.OBS_WAIT_SECONDS, "wartet nicht ewig")
+
     def test_running_obs_without_websocket_is_honest(self):
         obs_folder(self.root, enabled=False)
         env = FakeEnv(self.root, running=True)
@@ -420,6 +460,25 @@ class StreamTest(unittest.TestCase):
         self.assertEqual(speaker.said, [first[0], answer])
         shown = [e[2] for e in ui.events if e[0] == "message" and e[1] == "jarvis"]
         self.assertEqual(shown, [first[0], answer])
+
+    def test_stream_part_in_a_longer_sentence(self):
+        """"Öffne Spotify und geh live": den zweiten Teil macht der Stream-Modus, nicht "Öffne das Programm live"."""
+        from jarvis import intents
+        from tests.test_assistant import make
+
+        found = intents.match_parts("Öffne Spotify und starte den Stream", is_command)
+        self.assertEqual([i.name for _p, i in found], ["open", "extern"])
+        fake = FakeObs()
+        self.addCleanup(fake.close)
+        obs_folder(self.root, enabled=True, port=fake.port)
+        assistant, _ui, _speaker, _ = make()
+        assistant.stream = Stream({}, assistant, None, env=FakeEnv(self.root, running=True), opener=steam)
+        with mock.patch("jarvis.apps.open_app", return_value="Spotify startet.") as opened:
+            answer = assistant.handle("Öffne Spotify und geh live", speak=False)
+        opened.assert_called_once()
+        self.assertIn("Sie sind live, Sir.", answer)
+        self.assertTrue(fake.streaming)
+        self.assertEqual(assistant.brain.asked, [], "ohne Claude")
 
     def test_weather_question_is_no_trailer(self):
         from tests.test_assistant import make

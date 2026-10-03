@@ -515,18 +515,37 @@ class Assistant:
                 return self.workshop.run_last()  # "Ja" auf "Soll ich es gleich starten?"
             self.workshop.forget_question()  # nur die direkte Antwort gehört zur Rückfrage
         if intent is None:
-            parts = intents.match_parts(text) if self._local else None
+            parts = intents.match_parts(text, self._extern_part()) if self._local else None
             if parts:
                 return self._many(parts)
             return None
         return self._do(intent, text)
+
+    def _extern_part(self):
+        """Welche Teile von "Öffne Discord und geh live" der Stream-Modus erledigt (für intents.match_parts)."""
+        if getattr(self, "stream", None) is None:
+            return None
+        from .stream import is_command
+
+        return is_command
+
+    def _extern(self, text: str) -> str | None:
+        """Ein Teil, den intents.match_parts als "extern" erkannt hat: der Stream-Modus."""
+        stream = getattr(self, "stream", None)
+        if stream is None:
+            return None
+        try:
+            return stream.command(text)
+        except Exception:
+            log.exception("Stream")
+            return None
 
     def _many(self, parts) -> str | None:
         """Mehrere Befehle in einem Satz, nacheinander. Was Jarvis davon nicht selbst kann,
         macht danach Claude (self._rest)."""
         said = []
         for number, (piece, intent) in enumerate(parts):
-            answer = self._do(intent, piece)
+            answer = self._extern(piece) if intent.name == "extern" else self._do(intent, piece)
             if answer is None:
                 if not said and number == 0:
                     return None  # schon der erste Teil geht nicht: Claude macht alles
@@ -963,10 +982,13 @@ class Assistant:
         self.memory.used_command(own["key"])
         with self._step(f"Eigener Befehl: {own['name']}", "app", action):
             intent = intents.match(action)
-            if intent is not None and intent.name != "stop":
+            extern = self._extern_part()
+            if extern is not None and extern(action):
+                answer = self._extern(action)  # "Geh live" ist nicht "Öffne das Programm live"
+            elif intent is not None and intent.name != "stop":
                 answer = self._do(intent, action)
             else:
-                parts = intents.match_parts(action) if self._local else None
+                parts = intents.match_parts(action, self._extern_part()) if self._local else None
                 answer = self._many(parts) if parts else None
         if answer is None:
             self._rest = action

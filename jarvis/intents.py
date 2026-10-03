@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 from dataclasses import dataclass, field
+from typing import Callable
 
 WEEKDAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
 MONTHS = [
@@ -844,9 +845,11 @@ _SEARCHABLE = {"youtube", "amazon", "ebay", "willhaben", "geizhals", "idealo", "
                "netflix", "tiktok", "spotify", "google"}
 
 
-def match_parts(text: str) -> list[tuple[str, Intent]] | None:
+def match_parts(text: str, extern: Callable[[str], bool] | None = None) -> list[tuple[str, Intent]] | None:
     """"Öffne Spotify und Discord", "Mach den Gaming-Modus an und öffne Steam": jeder Teil
-    einzeln. Nur wenn Jarvis jeden Teil selbst kann, sonst None (dann macht es Claude ganz)."""
+    einzeln. Nur wenn Jarvis jeden Teil selbst kann, sonst None (dann macht es Claude ganz).
+    extern(teil): Diesen Teil erledigt ein anderer Teil von Jarvis (der Stream-Modus bei "und geh live"),
+    er kommt als Intent("extern") zurück."""
     raw = _raw(text)
     pieces = [p.strip(" ,.") for p in _SPLIT.split(raw) if p and p.strip(" ,.")]
     if not 2 <= len(pieces) <= 5:
@@ -857,6 +860,10 @@ def match_parts(text: str) -> list[tuple[str, Intent]] | None:
         verb = first
     parts: list[tuple[str, Intent]] = []
     for piece in pieces:
+        if extern is not None and extern(piece):
+            # Vor match(): "starte den Stream" wäre sonst "Öffne das Programm Stream"
+            parts.append((piece, Intent("extern", piece)))
+            continue
         intent = match(piece)
         words = piece.lower().split()
         if intent is None and verb and len(words) <= 4 and words[0] not in _OWN_VERB:
