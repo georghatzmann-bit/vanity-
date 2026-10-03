@@ -188,6 +188,24 @@ def build_core(cfg: dict, ui: Ui, silent: bool = False) -> Assistant:
     from .telegram import TelegramBot
 
     assistant.telegram = TelegramBot(cfg, assistant, save=_save_setting, folder=STATE_DIR / "telegram")
+    from .claude_plugins import Plugins, photo_hint
+
+    assistant.telegram.photo_hint = photo_hint(cfg)  # Essensfotos ins Körper-Tagebuch (Claude-Plugin Körper)
+
+    def claude_plugins() -> None:
+        # Georg: "Adde das alles als Plugins zu Claude". Einmal von selbst, danach nur nach einem Umzug oder
+        # wenn ein neues Plugin dazukommt (claude_plugins.py). Mit "Richte die Claude-Plugins ein" jederzeit.
+        try:
+            result = Plugins(cfg).auto()
+        except Exception as exc:
+            log.warning("Claude-Plugins: %s", exc)
+            return
+        if result and result.get("installiert"):
+            ui.toast(result["text"].replace(", Sir", ""), "ok")
+
+    later = threading.Timer(25, claude_plugins)
+    later.daemon = True
+    later.start()
     assistant.telegram.on_paired = lambda who: ui.toast("Telegram ist verbunden" + (f" ({who})" if who else "") + ".", "ok")
     assistant.telegram.start()
     # Hinweise von selbst: Seltsames am PC, Vergessenes, "Während Sie weg waren" (hinweise.py)

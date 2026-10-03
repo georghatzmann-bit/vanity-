@@ -502,6 +502,10 @@ class Assistant:
                 answer = None
             if answer is not None:
                 return answer
+        plugins = _plugin_command(text)
+        if plugins is not None:
+            # "Richte die Claude-Plugins ein", "Installiere Everything Claude Code" (für Georgs Claude, nicht für Jarvis)
+            return self._claude_plugins(plugins)
         talk = match_talk(text)
         if talk is not None:
             # "Nenn mich Chef", "Sprich lockerer", "Sei wieder förmlich"
@@ -1153,6 +1157,37 @@ class Assistant:
         if not present and answer:
             self._push(f"{command}: {answer}")
 
+    def _claude_plugins(self, extras: tuple[str, ...]) -> str:
+        """Richtet die Plugins für Georgs Claude im Hintergrund ein und sagt danach, was geklappt hat."""
+        from .claude_plugins import Plugins
+
+        def work() -> None:
+            try:
+                result = Plugins(self._cfg).setup(extras=extras)
+            except Exception as exc:
+                log.warning("Claude-Plugins: %s", exc)
+                result = {"text": "Die Plugins für Claude ließen sich gerade nicht einrichten, Sir."}
+            self.announce(result["text"])
+
+        threading.Thread(target=work, name="jarvis-claude-plugins", daemon=True).start()
+        if len(extras) == 1:
+            return "Sehr wohl, Sir. Ich hole das Plugin für Claude, das dauert einen Moment."
+        if extras:
+            return "Sehr wohl, Sir. Ich hole die Plugins für Claude, das dauert einen Moment."
+        return "Sehr wohl, Sir. Ich richte die Plugins für Claude ein, das dauert einen Moment."
+
+    def _plugins_after_git(self) -> None:
+        """Nach "Installiere Git": was beim Einrichten der Claude-Plugins auf Git gewartet hat, gleich nachholen."""
+        from .claude_plugins import EXTRAS, Plugins
+
+        try:
+            plugins = Plugins(self._cfg)
+            waiting = plugins.waiting_for_git()
+            if waiting:
+                self.announce(plugins.setup(extras=tuple(p for p in waiting if p in EXTRAS))["text"])
+        except Exception as exc:
+            log.warning("Claude-Plugins nach Git: %s", exc)
+
     def _talk(self, what: str, value: str) -> str:
         """Anrede und Ton: sofort für Jarvis' eigene Sätze, für Claude ab der nächsten Antwort."""
         from .anrede import DEFAULT, set_word, word
@@ -1729,6 +1764,8 @@ class Assistant:
             self.announce(f"{known.name} war schon installiert, Sir." + (" Ich habe es gestartet." if started else ""))
         else:
             self.announce(f"{known.name} ist installiert, Sir." + (" Es startet gerade." if started else ""))
+        if known.name == "Git":
+            self._plugins_after_git()
 
     @property
     def full_permission(self) -> bool:
@@ -1925,6 +1962,12 @@ class Assistant:
         self.reminders.remove({r["id"] for r in due})
         for r in due:
             self.announce(f"Erinnerung, Sir: {r['text']}")
+
+
+def _plugin_command(text: str):
+    from .claude_plugins import match_command
+
+    return match_command(text)
 
 
 def _short_reason(exc: BrainError) -> str:

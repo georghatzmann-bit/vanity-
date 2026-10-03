@@ -14,6 +14,8 @@ on:
     paths:
       - "jarvis/**"
       - "jarvis_home/**"
+      - "claude-plugins/**"
+      - ".claude-plugin/**"
       - "werkzeuge/**"
       - "installer/**"
       - "requirements*.txt"
@@ -187,6 +189,31 @@ jobs:
           Get-Content logs\selbsttest.txt -ErrorAction SilentlyContinue
           Pop-Location
           exit 0
+
+      - name: Probe Claude-Plugins (Marktplatz aus dem Jarvis-Ordner, wie bei Georg)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $claude = @("$env:USERPROFILE\.local\bin\claude.exe", (Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source)) |
+            Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not (Test-Path "$app\.claude-plugin\marketplace.json")) { Write-Host "Der Installer hat den Plugin-Marktplatz nicht mitgebracht"; exit 1 }
+          if (-not (Test-Path "$app\claude-plugins\koerper\skills\ernaehrung\naehrwerte.md")) { Write-Host "Die Nährwert-Tabelle fehlt"; exit 1 }
+          if (Test-Path "$app\claude-plugins\gedaechtnis\tests") { Write-Host "Die Plugin-Tests gehören nicht in die Installation"; exit 1 }
+          if (-not $claude) { Write-Host "Claude Code fehlt, Probe übersprungen"; exit 0 }
+          Write-Host "Claude Code: $claude"
+          # Ein eigener Claude-Ordner, damit die Probe nichts vom Runner benutzt
+          $env:CLAUDE_CONFIG_DIR = "$env:RUNNER_TEMP\claude-probe"
+          & $claude plugin validate $app
+          if ($LASTEXITCODE -ne 0) { Write-Host "Der Marktplatz ist ungültig"; exit 1 }
+          Push-Location $app
+          & $py -m jarvis.claude_plugins einrichten
+          $ok = $LASTEXITCODE
+          & $py -m jarvis.claude_plugins status
+          Pop-Location
+          & $claude plugin list
+          if ($ok -ne 0) { Write-Host "Die Plugins ließen sich nicht einrichten"; exit 1 }
 
       - name: Probe unsichtbarer Arbeitsplatz (Werkstatt-Tests poppen nicht auf)
         if: ${{ !inputs.nur_bilder }}

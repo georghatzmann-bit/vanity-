@@ -316,8 +316,8 @@ power_plan = true
 
 [telegram]
 # Jarvis vom Handy über Telegram, von überall: schreiben, Sprachnachricht, Foto oder Standort schicken. Jarvis
-# antwortet mit Text und in seiner Stimme und schreibt von selbst (Erinnerungen, Hinweise, Briefing), wenn Sie
-# nicht am PC sitzen. Einrichten im Fenster unter Verbinden > Telegram (Bot beim @BotFather anlegen).
+# antwortet mit Text und in seiner Stimme und schreibt von selbst (Erinnerungen, Hinweise, Briefing), wenn du
+# nicht am PC sitzt. Einrichten im Fenster unter Verbinden > Telegram (Bot beim @BotFather anlegen).
 aktiv = false
 # Der Schlüssel vom @BotFather und der Chat, dem der Bot gehört (entsteht beim Verbinden). Nicht weitergeben.
 token = ""
@@ -327,8 +327,8 @@ name = ""
 sprache = true
 # true = Erinnerungen und Hinweise kommen zusätzlich als Sprachnachricht (wie ein kurzer Anruf von Jarvis).
 sprache_hinweise = true
-# true = Schicken Sie Ihren Standort, nennt Jarvis den nächsten Supermarkt und die Einkaufsliste. Mit
-# Live-Standort meldet er sich unterwegs, wenn Sie an einem vorbeikommen. Die Suche läuft über OpenStreetMap.
+# true = Schickst du deinen Standort, nennt Jarvis den nächsten Supermarkt und die Einkaufsliste. Mit
+# Live-Standort meldet er sich unterwegs, wenn du an einem vorbeikommst. Die Suche läuft über OpenStreetMap.
 standort = true
 
 [alexa]

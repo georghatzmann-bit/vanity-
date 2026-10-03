@@ -62,6 +62,9 @@ Name: "desktopicon"; Description: "Symbol auf dem Desktop"; Flags: unchecked
 [Files]
 Source: "..\jarvis\*"; DestDir: "{app}\jarvis"; Excludes: "__pycache__,*.pyc"; Flags: recursesubdirs ignoreversion
 Source: "..\jarvis_home\*"; DestDir: "{app}\jarvis_home"; Flags: recursesubdirs ignoreversion
+; Plugins für Georgs Claude (claude_plugins.py meldet den Marktplatz aus diesem Ordner an)
+Source: "..\.claude-plugin\*"; DestDir: "{app}\.claude-plugin"; Flags: recursesubdirs ignoreversion
+Source: "..\claude-plugins\*"; DestDir: "{app}\claude-plugins"; Excludes: "tests"; Flags: recursesubdirs ignoreversion
 Source: "..\werkzeuge\*"; DestDir: "{app}\werkzeuge"; Flags: recursesubdirs ignoreversion
 Source: "..\Jarvis.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Jarvis.pyw"; DestDir: "{app}"; Flags: ignoreversion

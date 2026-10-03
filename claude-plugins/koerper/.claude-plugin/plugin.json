@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "koerper",
+  "displayName": "Körper",
+  "version": "1.0.0",
+  "description": "Körper-Tagebuch wie im Video: Essensfoto schicken, Claude schätzt Mengen und Nährwerte und trägt sie ein. Trainingssätze mit Fortschritt zum Vorjahr, Schlaf, HRV und Ruhepuls mit Erholung, dazu ein Dashboard. Keine Diagnosen.",
+  "author": { "name": "Georg" },
+  "license": "MIT",
+  "keywords": ["ernährung", "training", "fitness", "gesundheit", "dashboard"],
+  "userConfig": {
+    "ordner": {
+      "type": "directory",
+      "title": "Ordner für das Körper-Tagebuch",
+      "description": "Hier liegen Ernährung, Training und Gesundheit als Tabellen (CSV) und das Dashboard. Gibt es Jarvis' Notizbuch, liegt der Ordner darin, dann sieht Jarvis die Werte auch.",
+      "default": "~/Jarvis-Notizbuch/Körper"
+    }
+  }
+}

@@ -28,7 +28,7 @@ Die Einrichtung führt dich in sieben kurzen Schritten durch. Jeder Schritt wird
 
 1. **Mikrofon:** dein Mikrofon anklicken und „Hey Jarvis“ sagen. Es klappt, wenn „Hey Jarvis erkannt“ erscheint.
 2. **Stimme:** Unter **Lokal** die Stimmen anhören (▶) und eine anklicken. **Thorsten** ist der Standard: ein deutscher Sprecher, sehr deutlich, bricht nie ab. **George** klingt natürlicher, **Charles** am tiefsten. Stimme und Spracherkennung laufen ganz auf deinem PC, der Installer hat sie schon eingerichtet.
-3. **Name und Ort:** dein Vorname (damit Jarvis weiß, mit wem er spricht) und dein Wohnort für das Wetter.
+3. **Name und Ort:** dein Vorname (damit Jarvis weiß, mit wem er spricht) und dein Wohnort für das Wetter. Dazwischen wählst du, wie Jarvis redet: **Butler wie im Film** (sagt „Sir“, ruhig und förmlich) oder **Locker wie im Video** (sagt „Chef“, warm und alltäglich, denkt mit). Umstellen geht auch später per Sprache, siehe „Wie Jarvis redet“ unten.
 4. **Gehirn:** **Bei Claude anmelden** klicken. Im schwarzen Fenster Enter drücken, bis sich der Browser öffnet (fragt es nach der Anmeldeart: die erste nehmen, „Claude account with subscription“). Im Browser mit deinem Claude-Konto anmelden. Dann das schwarze Fenster schließen und **Nochmal prüfen** klicken. Es klappt, wenn „Claude ist verbunden“ erscheint. Dafür reicht dein Claude-Abo (Pro oder Max).
 5. **Extras:** Stumm-Taste, Autostart und **Volle Freigabe** (siehe unten). Einfach so lassen, wie es ist.
 6. **Jarvis starten.**
@@ -66,7 +66,7 @@ Die lokale Stimme rechnet auf dem Prozessor und nimmt höchstens die Hälfte der
 
 ## 3. Handy und Alexa verbinden (freiwillig)
 
-Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Alexa und Konnektoren. Discord brauchst du nicht zu verbinden: Jarvis bedient einfach die Discord-App auf deinem PC.
+Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Handy, Telegram, Alexa und Konnektoren. Discord brauchst du nicht zu verbinden: Jarvis bedient einfach die Discord-App auf deinem PC.
 
 ### Handy
 
@@ -91,6 +91,30 @@ Im Jarvis-Fenster oben auf **Verbinden** klicken. Dort gibt es die Bereiche Hand
 2. Auf dem Handy die kostenlose App **ntfy** installieren.
 3. In der App auf **+** tippen und den Kanalnamen eintragen, den Jarvis anzeigt (beginnt mit `jarvis-`).
 4. In Jarvis auf **Test schicken** klicken. Auf dem Handy erscheint sofort eine Nachricht.
+
+### Telegram: Jarvis schreibt dir, du schreibst ihm
+
+Wie im Video: Jarvis meldet sich bei dir auf dem Handy, und du schickst ihm Nachrichten, Sprachnachrichten, Fotos oder deinen Standort. Von überall, ohne Tailscale, ohne WLAN, ohne App-Store. Er erledigt alles wie am PC und antwortet mit Text und in seiner eigenen Stimme.
+
+1. In Telegram den **@BotFather** öffnen (im Jarvis-Fenster: **Verbinden** > **Telegram** > **@BotFather öffnen**).
+2. `/newbot` schicken, einen Namen wählen (zum Beispiel „Mein Jarvis“) und einen Benutzernamen, der auf `bot` endet.
+3. Der BotFather schickt einen langen Schlüssel (Zahl, Doppelpunkt, Buchstaben). Den kopieren.
+4. In Jarvis bei **Telegram** einfügen und **Prüfen und verbinden** klicken.
+5. Mit der Handy-Kamera den QR-Code scannen (oder den Link öffnen) und in Telegram **Starten** tippen.
+
+**Geklappt, wenn:** in Telegram „Verbunden, …“ kommt und im Fenster „Verbunden mit @…“ steht. Mit **Test schicken** kommt eine Nachricht samt Sprachnachricht.
+
+Was du damit machen kannst:
+
+- **Schreiben oder sprechen:** einfach eine Nachricht oder eine Sprachnachricht schicken, zum Beispiel „Was steht heute an?“ oder „Installiere CS2“. Auf eine Sprachnachricht antwortet Jarvis auch gesprochen.
+- **Jarvis meldet sich von selbst:** Erinnerungen, Hinweise und das Briefing kommen zu dir, wenn du nicht am PC sitzt, auch als kurze Sprachnachricht, wie ein Anruf. Fragt er etwas mit Ja oder Nein („Soll ich den PC herunterfahren?“), tippst du einfach auf **Ja** oder **Nein**.
+- **Fotos:** Schick ein Foto vom Essen, und Jarvis schätzt Mengen und Nährwerte und trägt sie ins Ernährungs-Tagebuch ein (Notizbuch, Ordner `Körper`). Er sagt dir auch, wo du heute stehst. Andere Fotos sieht er sich an und sagt etwas dazu. Schreib eine Frage dazu, wenn du etwas Bestimmtes wissen willst.
+- **Standort und Einkaufsliste:** unten auf die Büroklammer, dann **Standort**. Jarvis nennt den nächsten Supermarkt mit Weg und was auf deiner Einkaufsliste steht. Mit **Live-Standort teilen** meldet er sich unterwegs, wenn du an einem Supermarkt vorbeikommst und etwas auf der Liste steht („Ach, und wo Sie gerade eh unterwegs sind, Chef: …“). Höchstens alle halbe Stunde, und für denselben Laden höchstens alle vier Stunden.
+- **Menü im Chat:** /einkauf (die Liste), /briefing (der Tag), /standort (so geht das mit dem Standort), /hilfe.
+
+Der Bot gehört danach nur deinem Chat. Schreibt ihm jemand anderes, antwortet er einmal „Dieser Jarvis gehört jemand anderem“ und tut sonst nichts. Ein neues Handy verbindest du mit **Anderes Handy verbinden**. Die Schalter darunter stellen Sprachnachrichten und Standort ab. Die Nachrichten laufen über die Server von Telegram, die Supermarkt-Suche über OpenStreetMap (nur der Standort, ohne deinen Namen, gespeichert wird er nicht). Den Schlüssel vom BotFather nie weitergeben.
+
+**Echte Anrufe** wie im Video gehen nur über einen bezahlten Telefondienst. Die Sprachnachricht ist der kostenlose Weg dahin: Du hörst Jarvis' Stimme, sobald du aufs Handy schaust.
 
 ### Termine, Mails und Shop: deine Konnektoren
 
@@ -196,6 +220,18 @@ So startet das Fenster. Oben links schaltest du zwischen **Zentrale**, **Gesprä
 - „Fahr den PC herunter“, „Starte den PC neu“, „Energiesparmodus“, „Melde mich ab“
 - „Gute Nacht“: Jarvis fragt, ob er den PC herunterfahren soll. „Ja“ genügt.
 
+**Einkaufsliste** (sofort, auch über Telegram):
+
+- „Setz Milch auf die Einkaufsliste“, „Die Eier sind alle“, „Wir haben keinen Kaffee mehr“
+- „Was steht auf der Einkaufsliste?“, „Was muss ich noch einkaufen?“
+- „Milch gekauft“, „Streich die Eier von der Liste“, „Leere die Einkaufsliste“
+
+**Wie Jarvis redet** (gilt sofort, auch für Handy und Telegram):
+
+- „Sprich lockerer“, „Rede wie im Video“: Jarvis sagt „Chef“, redet warm und alltäglich und schlägt von selbst Dinge vor.
+- „Sei wieder förmlich“: zurück zum Butler aus dem Film, mit „Sir“.
+- „Nenn mich Boss“, „Sag Georg zu mir“, „Nenn mich wieder Sir“: nur die Anrede ändern.
+
 **Gedächtnis:**
 
 - „Merk dir, dass ich gern Pizza esse“, „Merk dir: Max hat am 3. Mai Geburtstag“
@@ -274,6 +310,30 @@ Oben auf **System** klicken oder sagen: **„Zeig mir das System“** (auch „�
 **Notizbuch:** Jarvis schreibt jedes Gespräch mit Datum in einen Ordner (`%USERPROFILE%\Jarvis-Notizbuch`): ein Tagebuch pro Tag, eine Seite pro Person (mit Geburtstag und allem, was er über sie weiß), Berichte von Recherchen und deine Notizen. Unter jeden neuen Bericht schreibt er von selbst, was dazu passt („Verwandt: [[Streaming-Setup]] · [[Max]]“), und trägt ihn im Tagebuch des Tages ein. Auf der Seite **Gedächtnis** stehen die letzten Sitzungen mit Link zum Tag. Mit dem kostenlosen Programm **Obsidian** („Ordner als Tresor öffnen“) siehst du alles verlinkt. Eigene Notizen in den Seiten bleiben erhalten. Passwörter schreibt er nie hinein.
 
 **Fähigkeiten:** Für wiederkehrende Aufgaben hat Jarvis genaue Anleitungen, die er nur liest, wenn er sie braucht: Morgen-Briefing, Recherche mit Bericht, PC aufräumen und aktualisieren, Spiele starten (auch Steam und Epic), Smart Home, Bildschirm lesen. Zeigst du ihm etwas Neues und sagst **„Lern das“**, schreibt er sich selbst eine neue Fähigkeit. Alle stehen unter **Gedächtnis** > **Ansehen**.
+
+## Plugins für dein Claude
+
+Was in den Videos Claude besser gemacht hat, bekommt **dein Claude** (Claude Code in der Eingabeaufforderung und im Code-Bereich der Claude-App), nicht Jarvis. Das richtet Jarvis beim ersten Start von selbst ein, du musst nichts tun.
+
+**Geklappt, wenn:** in der Eingabeaufforderung `claude plugin list` die Plugins `gedaechtnis`, `lernen`, `assistent`, `koerper` und `geld` (jeweils `@jarvis-plugins`) mit „enabled“ zeigt. In Claude Code siehst du sie auch mit `/plugin`. Fehlt etwas, sag **„Richte die Claude-Plugins ein“**, dann macht Jarvis es noch einmal und sagt, was geklappt hat.
+
+So benutzt du sie in Claude Code (neue Sitzung starten, damit sie geladen sind):
+
+1. **Gedächtnis:** einfach arbeiten. Claude weiß in der nächsten Sitzung, woran ihr zuletzt gearbeitet habt. „Merk dir, dass der Shop auf Shopify läuft“ behält er für immer, „Was haben wir letztes Mal gemacht?“ sucht auch ältere Sitzungen. `/gedaechtnis` zeigt alles.
+2. **Lernen:** Korrigier Claude ruhig („Nein, kürzer“, „Ab jetzt immer auf Deutsch“). Nach einer Woche bietet er an, daraus feste Regeln zu machen, oder du sagst `/lernen:auswerten`. Es ändert sich nichts ohne dein Ja. `/lernen` zeigt, was er beobachtet hat.
+3. **Assistent:** `/assistent:briefing` für deinen Tag, `/assistent:faq` für Kundenfragen, `/assistent:dashboard` mit einem Bild von einem Dashboard, das dir gefällt. Für Mails, Kalender, Shop und Werbung hat er eigene Spezialisten. Senden und Buchen nur nach deinem Ja.
+4. **Körper:** ein Foto vom Essen in Claude Code ziehen und „Trag das ein“ sagen, Trainingssätze nennen („Bankdrücken 3x8 mit 80 kg“) oder Schlaf und Puls. `/koerper:koerper-dashboard` zeigt alles als Seite. Dasselbe Tagebuch füllt Jarvis über Telegram.
+5. **Geld:** `/geld:geld-check` sieht sich Shop und Werbung an und macht genau drei Vorschläge mit ehrlicher Schätzung. `/geld:produkt-texte` verbessert Produkttexte, `/geld:ideen` sammelt ehrlich, womit du zusätzlich Geld verdienen kannst. Umgesetzt wird nur, was du bestätigst.
+
+Die Tabellen und Seiten von Assistent, Körper und Geld liegen im Notizbuch unter `Assistent`, `Körper` und `Geld`, also auch in Obsidian.
+
+**Geld ohne etwas zu tun?** Ehrlich: Das kann kein Programm versprechen. Was geht: Jarvis und Claude nehmen dir die Arbeit ab, die Geld bringt (Shop-Texte, Werbung prüfen, Kundenfragen, Ideen mit Zahlen), und du sagst nur noch Ja oder Nein. Ausgeben, verkaufen und veröffentlichen tun sie nie allein.
+
+**Mit Git kommt mehr:** Das offizielle Plugin **claude-code-setup** von Anthropic (schlägt für ein Projekt passende Automationen vor) und die Plugins aus den Videos kommen von GitHub. Dafür braucht Claude Code Git. Sag **„Installiere Git“**: Danach holt Jarvis das offizielle Plugin von selbst nach.
+
+**Die Plugins aus den Videos** gibt es nur, wenn du sie willst: **„Installiere Everything Claude Code“** (fast 300 Skills fürs Programmieren, kostet viel Kontext), **„Installiere Task Observer“** (das Original zu Lernen) oder **„Installiere Claude Mem“** (Gedächtnis mit eigenem Hintergrunddienst, braucht Node.js und kostet Kontingent). Für den Alltag reichen Gedächtnis und Lernen. Wieder weg: in der Eingabeaufforderung `claude plugin uninstall ecc@jarvis-plugins` (bei den anderen `task-observer@jarvis-plugins` und `mem-thedotmack@jarvis-plugins`).
+
+**Nicht dabei:** OmniRoute schickt deine Anfragen an über 200 fremde KI-Dienste, sobald dein Claude-Kontingent leer ist; Headroom kürzt als Zwischendienst deinen Verlauf. Beides lässt fremde Software alles mitlesen, was du schreibst, und bei OmniRoute antwortet dann gar nicht mehr Claude. Darum ist es nicht eingebaut.
 
 ## Gehirn: Jarvis wählt das passende Modell
 
@@ -390,6 +450,8 @@ Danach: **„Geh live“** startet den Stream in OBS, **„Beende den Stream“*
 - **Das Handy verbindet nicht:** Handy und PC im selben WLAN? Jarvis läuft? Hat Windows nach der Firewall gefragt, „Zulassen“ wählen. Hat der PC eine neue Adresse bekommen, den QR-Code noch einmal scannen.
 - **Alexa sagt „Ihr PC antwortet nicht“:** Läuft Jarvis? Im Fenster unter Verbinden > Alexa auf **Verbindung testen** klicken.
 - **Die Alexa-Konsole will beim Aufrufnamen „jarvis“ nicht:** links unter **Invocations** > **Skill Invocation Name** `mein jarvis` eintragen, **Save**, **Build**. Dann heißt es „Alexa, sag mein Jarvis, …“.
+- **Telegram antwortet nicht:** Läuft Jarvis am PC? Unter Verbinden > Telegram muss „Verbunden mit @…“ stehen. Steht dort etwas von einem falschen Schlüssel, beim @BotFather mit `/token` einen neuen holen und neu verbinden.
+- **„… braucht Git“ bei den Plugins:** „Installiere Git“ sagen. Danach holt Jarvis die fehlenden Plugins von selbst nach.
 - **Die Stimme klingt wieder nach Computer:** Dann ist das ElevenLabs-Guthaben aufgebraucht, die gewählte Stimme braucht ein Abo, oder das Internet ist weg. Unter Einstellungen > Stimme steht, wie viele Credits übrig sind.
 - **Jarvis schneidet dich ab:** In `config.toml` im Jarvis-Ordner (`%LOCALAPPDATA%\Programs\Jarvis`) unter `[listen]` die Zeile `silence_seconds = 1.2` eintragen und Jarvis neu starten.
 - **Jarvis lehnt etwas ab:** Anders formulieren hilft meistens. Unter Einstellungen > Gehirn steht Claudes genaue Meldung.

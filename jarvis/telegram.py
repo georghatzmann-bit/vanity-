@@ -68,7 +68,8 @@ HELP = ("Schreiben Sie mir, was ich tun soll, oder schicken Sie eine Sprachnachr
         "/briefing das Briefing für heute.")
 PLACE_HELP = ("Tippen Sie unten auf die Büroklammer, dann auf Standort, Sir. „Live-Standort teilen“ heißt: Ich melde "
               "mich unterwegs, wenn Sie an einem Supermarkt vorbeikommen und etwas auf der Einkaufsliste steht. "
-              "Der Standort bleibt auf Ihrem PC, nur die Supermarkt-Suche (OpenStreetMap) bekommt ihn.")
+              "Ihren Standort speichere ich nicht. Außer Telegram sieht ihn nur die Supermarkt-Suche (OpenStreetMap), "
+              "ohne Ihren Namen.")
 _W_WORDS = re.compile(r"^(?:was|wie|wann|wo|wer|wen|wem|wessen|welche[rsnm]?|warum|wieso|weshalb|weswegen|wohin|"
                       r"woher|womit|wofür|worüber|wozu|wieviel|wie viel)\b", re.I)
 

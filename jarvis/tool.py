@@ -56,9 +56,16 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
   vergessen "<wörter>"         vergisst Gemerktes, in dem diese Wörter vorkommen
   gedaechtnis                  zeigt, was Jarvis über Georg weiß, seine Kontakte und Gewohnheiten
+  claude-plugins [einrichten|status] [ecc task-observer mem-thedotmack]
+                               richtet Georgs Plugins für sein Claude ein (Gedächtnis, Lernen, Assistent, Körper,
+                               Geld; die drei Namen danach sind die fremden Extras aus den Videos)
   einkauf                      zeigt Georgs Einkaufsliste
   einkauf dazu "<ding>" ["<ding>" ...]   setzt etwas auf die Einkaufsliste ("Mandelmus")
   einkauf weg "<ding>" ["<ding>" ...]    hakt etwas ab (gekauft)
+  essen "<lebensmittel>" <gramm> <kcal> <eiweiß_g> <kohlenhydrate_g> <fett_g> ["<mahlzeit>"] ["<quelle>"]
+                               trägt ein Lebensmittel ins Ernährungs-Tagebuch ein (Notizbuch, Ordner Körper, wie das
+                               Claude-Plugin Körper) und nennt die Tagessumme; Werte für die ganze Menge
+  essen heute|gestern|<JJJJ-MM-TT>   zeigt, was an dem Tag gegessen wurde
   befehl "<name>" "<was>"      legt einen eigenen Befehl an: sagt Georg den Namen, erledigt Jarvis "<was>"
                                (z. B. befehl "Zockmodus" "Öffne Discord und Steam und mach den Gaming-Modus an")
   befehle                      zeigt Georgs eigene Befehle
@@ -280,6 +287,11 @@ def _dispatch(command: str, rest: list[str]) -> int:
             print("Geburtstage in den nächsten 30 Tagen: " + "; ".join(_birthday_line(b) for b in soon[:10]))
         return 0
 
+    if command in ("claude-plugins", "plugins"):
+        from .claude_plugins import main as plugins_main
+
+        return plugins_main(rest or ["einrichten"])
+
     if command in ("einkauf", "einkaufsliste"):
         from .einkauf import join
         from .memory import Memory, set_user
@@ -308,6 +320,40 @@ def _dispatch(command: str, rest: list[str]) -> int:
             return 1
         listed = memory.shopping()
         print("Einkaufsliste: " + (join(listed) + "." if listed else "leer."))
+        return 0
+
+    if command in ("essen", "ernaehrung", "ernährung"):
+        import datetime as dt
+
+        from . import koerper
+
+        folder = koerper.folder_from_config(cfg)
+        if len(rest) <= 1:
+            when = (rest[0].strip().lower() if rest else "heute")
+            today = dt.date.today()
+            try:
+                day = {"heute": today, "gestern": today - dt.timedelta(days=1)}.get(when) or dt.date.fromisoformat(when)
+            except ValueError:
+                print('Aufruf: essen "<lebensmittel>" <gramm> <kcal> <eiweiß_g> <kohlenhydrate_g> <fett_g> | essen heute')
+                return 1
+            rows = koerper.day_rows(folder, day)
+            for row in rows:
+                print(f"{row.get('uhrzeit', '')} {row.get('mahlzeit', '')}: {row.get('lebensmittel', '')}, "
+                      f"{row.get('menge_g', '')} g, {row.get('kcal', '')} kcal")
+            if not rows:
+                print("An dem Tag ist nichts eingetragen.")
+            print(koerper.day_text(koerper.totals(rows), koerper.goals(folder)).replace("Heute bisher", "Summe"))
+            return 0
+        if len(rest) < 6:
+            print('Aufruf: essen "<lebensmittel>" <gramm> <kcal> <eiweiß_g> <kohlenhydrate_g> <fett_g> ["<mahlzeit>"] ["<quelle>"]')
+            return 1
+        try:
+            result = koerper.add(folder, rest[0], *rest[1:6], meal=rest[6] if len(rest) > 6 else "",
+                                 source=rest[7] if len(rest) > 7 else "")
+        except (ValueError, OSError) as exc:
+            print(f"Nicht eingetragen: {exc}")
+            return 1
+        print(koerper.describe(result))
         return 0
 
     if command in ("befehl", "befehle", "befehl-loeschen", "befehl-löschen"):

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "gedaechtnis",
+  "displayName": "Gedächtnis",
+  "version": "1.0.0",
+  "description": "Claude merkt sich Sitzung für Sitzung, woran ihr gearbeitet habt, und was du ihm sagst (\"Merk dir ...\"). Ohne Zusatzprogramme, alles bleibt auf dem PC.",
+  "author": { "name": "Georg" },
+  "license": "MIT",
+  "keywords": ["gedächtnis", "memory", "sitzungen"]
+}

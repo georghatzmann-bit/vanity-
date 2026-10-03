@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "assistent",
+  "displayName": "Assistent",
+  "version": "1.0.0",
+  "description": "Ein Team aus Spezialisten (Posteingang, Kalender, Shop, Werbung, Recherche, Texte), das Claude selbst einsetzt, dazu Tagesbriefing, FAQ-Datei für Kundenfragen und Dashboard aus einem Vorlagebild.",
+  "author": { "name": "Georg" },
+  "license": "MIT",
+  "keywords": ["assistent", "briefing", "subagents", "faq", "dashboard"],
+  "userConfig": {
+    "ordner": {
+      "type": "directory",
+      "title": "Ordner für Briefings, FAQ und Dashboards",
+      "description": "Hier legt der Assistent seine Dateien ab. Gibt es Jarvis' Notizbuch, liegt der Ordner darin.",
+      "default": "~/Jarvis-Notizbuch/Assistent"
+    }
+  }
+}
