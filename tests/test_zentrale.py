@@ -117,12 +117,18 @@ class LageTest(unittest.TestCase):
     def test_only_reading_connector_tools(self):
         allowed = ["mcp__claude_ai_Gmail__search_threads", "mcp__claude_ai_Gmail__get_thread",
                    "mcp__claude_ai_Google_Calendar__list_events", "mcp__claude_ai_Shopify__list-orders",
-                   "mcp__claude_ai_Shopify__run-analytics-query", "mcp__claude_ai_Windsor_ai__get_data", "ToolSearch"]
+                   "mcp__claude_ai_Shopify__run-analytics-query", "mcp__claude_ai_Windsor_ai__get_data", "ToolSearch",
+                   "mcp__claude_ai_Shopify__get-shop-info", "mcp__claude_ai_Google_Calendar__list_calendars",
+                   "mcp__x__listEvents", "mcp__claude_ai_Shopify__graphql_query"]
         denied = ["mcp__claude_ai_Gmail__send_message", "mcp__claude_ai_Gmail__create_draft",
                   "mcp__claude_ai_Gmail__label_thread", "mcp__claude_ai_Gmail__trash_thread",
                   "mcp__claude_ai_Google_Calendar__create_event", "mcp__claude_ai_Google_Calendar__respond_to_event",
                   "mcp__claude_ai_Shopify__update-product", "mcp__claude_ai_Shopify__graphql_mutation",
-                  "mcp__claude_ai_Windsor_ai__execute_action", "Bash", "PowerShell", "Write", "WebFetch", ""]
+                  "mcp__claude_ai_Windsor_ai__execute_action", "Bash", "PowerShell", "Write", "WebFetch", "",
+                  # nur ein Hauptwort wie "shop" oder "messages" reicht nicht, es braucht ein lesendes Verb
+                  "mcp__claude_ai_Shopify__switch-shop", "mcp__claude_ai_Shopify__open-digital-products-install",
+                  "mcp__claude_ai_Gmail__clear_messages", "mcp__claude_ai_Gmail__star_messages",
+                  "mcp__claude_ai_Gmail__batchModifyMessages", "mcp__x__createEvent"]
         for tool in allowed:
             self.assertTrue(lage.read_only(tool)[0], tool)
         for tool in denied:
@@ -332,6 +338,23 @@ class ZentraleTest(unittest.TestCase):
         self.assertEqual({a["status"] for a in z.snapshot()["agenten"] if a["id"] in ("post", "kalender")}, {"fehler"})
         self.assertEqual(z.lage, {})
         z.briefing()  # geht trotzdem
+
+    def test_failing_refresh_waits_longer_each_time(self):
+        brain = FakeBrain(error=RuntimeError("Limit erreicht"))
+        z = self.make(brain)
+        waits = []
+        for _ in range(6):
+            z._next_try = 0.0
+            z.tick()
+            self.assertTrue(z.wait_lage(5))
+            waits.append(round((z._next_try - time.monotonic()) / 60))
+        self.assertEqual(waits, [5, 10, 20, 40, 60, 60], "Minuten bis zum nächsten Versuch")
+        z.tick()
+        self.assertEqual(len(brain.jobs), 6, "vor Ablauf der Wartezeit kein neuer Versuch")
+        brain.error, brain.answer = None, "{}"
+        self.assertTrue(z.refresh("Georg fragt"), "von Hand geht es jederzeit")
+        self.assertTrue(z.wait_lage(5))
+        self.assertEqual((z._failures, z.lage_error), (0, ""))
 
     def test_tick_refreshes_only_when_sensible(self):
         brain = FakeBrain("{}")

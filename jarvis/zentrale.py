@@ -141,6 +141,8 @@ class Zentrale:
         self.lage_error = ""
         self._lage_running = threading.Event()
         self._lage_done = threading.Event()
+        self._next_try = 0.0  # time.monotonic(), vorher holt tick() kein neues Lagebild
+        self._failures = 0  # Fehlschläge hintereinander, danach wartet tick() immer länger
         self._load_lage()
         self._news: dict = {}
         self._news_at = 0.0
@@ -352,6 +354,10 @@ class Zentrale:
             log.info("Lagebild: %s", reason_text)
             with self._lock:
                 self.lage_error = reason_text
+                self._failures += 1
+                # Klappt es immer wieder nicht (Limit erreicht, keine Antwort), nicht alle paar Minuten
+                # von vorn: 5, 10, 20, 40, dann höchstens jede Stunde
+                self._next_try = time.monotonic() + min(60, 5 * 2 ** (self._failures - 1)) * 60
             for key in LAGE_AGENTS:
                 self.agent(key, "fehler", "Kam gerade nicht durch")
             self._lage_running.clear()
@@ -362,6 +368,7 @@ class Zentrale:
             self.lage = data
             self.lage_at = self._now()
             self.lage_error = ""
+            self._failures = 0
             self._save_lage()
         seconds = time.monotonic() - started
         post, calendar, shop = data.get("post"), data.get("kalender"), data.get("shop")
@@ -457,9 +464,9 @@ class Zentrale:
             except Exception:
                 away = False
         stale = self.lage_at is None or (self._now() - self.lage_at).total_seconds() > self.minutes * 60
-        if stale and not gaming and not away and time.monotonic() > getattr(self, "_next_try", 0.0):
-            if self.refresh("Zeitplan"):
-                self._next_try = time.monotonic() + 5 * 60  # nach einem Fehler nicht sofort wieder
+        if stale and not gaming and not away and time.monotonic() > self._next_try:
+            self._next_try = time.monotonic() + 5 * 60  # nicht jede Minute neu anstoßen
+            self.refresh("Zeitplan")
 
     def start(self) -> None:
         """Erstes Lagebild kurz nach dem Start, danach tick() jede Minute."""

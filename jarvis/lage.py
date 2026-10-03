@@ -22,17 +22,20 @@ log = logging.getLogger(__name__)
 MAX_MAILS = 12
 MAX_EVENTS = 12
 
-# Wörter in Werkzeugnamen, die nur lesen (search_threads, list_events, get-order, run-analytics-query ...)
+# Verben in Werkzeugnamen, die nur lesen (search_threads, list_events, list-orders, run-analytics-query ...).
+# Nur Verben: ein Hauptwort wie "shop" oder "messages" steckt auch in switch-shop oder clear_messages.
 READ_WORDS = {
-    "get", "list", "search", "read", "query", "find", "fetch", "show", "describe", "count", "lookup", "analytics",
-    "inventory", "info", "status", "view", "retrieve", "explore", "stats", "data", "fields", "options", "connectors",
-    "accounts", "calendars", "events", "threads", "messages", "orders", "products", "customers", "shop", "insights",
+    "get", "list", "search", "read", "query", "find", "fetch", "show", "describe", "count", "lookup", "view",
+    "retrieve", "explore",
 }
 # ... und solche, die schreiben, verschicken oder etwas auslösen: im Hintergrund nie
 WRITE_WORDS = (konnektoren.BLOCKED_WORDS | konnektoren.CONFIRM_WORDS | konnektoren.SHOP_WRITE_WORDS | {
     "draft", "label", "unlabel", "mark", "unmark", "move", "archive", "spam", "untrash", "trash", "respond",
     "execute", "action", "run_action", "apply", "upsert", "write", "insert", "save", "schedule", "suggest", "copy",
     "generate", "connect", "manage", "deploy", "submit", "upload", "rename", "pause", "restore", "reset", "create",
+    "replace", "clear", "close", "star", "unstar", "snooze", "mute", "approve", "reject", "accept", "decline",
+    "assign", "enable", "disable", "start", "stop", "trigger", "invoke", "duplicate", "install", "uninstall",
+    "fulfill", "switch", "subscribe", "unsubscribe", "block", "unblock", "revoke", "grant",
 })
 # Eigene Werkzeuge von Claude Code, die nur Werkzeuge nachladen oder Konnektor-Inhalte lesen
 INTERNAL_OK = {"ToolSearch", "MCPSearch", "ListMcpResourcesTool", "ReadMcpResourceTool"}
@@ -49,6 +52,7 @@ def read_only(tool: str) -> tuple[bool, str]:
     server, name = konnektoren.split(tool)
     if not server or not name:
         return False, "Im Hintergrund liest Jarvis nur über Konnektoren."
+    name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)  # listEvents -> list_Events
     words = {w for w in re.split(r"[^a-z]+", name.lower()) if w}
     if words & WRITE_WORDS:
         return False, "Im Hintergrund wird nur gelesen, nichts verschickt oder geändert."
