@@ -326,6 +326,9 @@ class ClaudeBrain:
         self._live_wanted = bool(cfg.get("live", True))
         self._live: _LiveClaude | None = None
         self._live_lock = threading.RLock()
+        # Vorgestartet für die nächste Blueprint-Aufgabe (prestart_oneshot)
+        self._spare: dict | None = None
+        self._spare_lock = threading.Lock()
         # Nach so langer Pause beginnt eine neue Unterhaltung: kleiner Verlauf, schnellere Antworten.
         self._new_after = float(cfg.get("new_after_minutes", 30)) * 60
         self._last_turn_at: float | None = None
@@ -443,6 +446,7 @@ class ClaudeBrain:
     def close(self) -> None:
         """Beim Beenden von Jarvis: den laufenden Claude-Prozess mitnehmen."""
         self._drop_live()
+        self.drop_spare()
 
     def _drop_live(self) -> None:
         with self._live_lock:
@@ -593,14 +597,9 @@ class ClaudeBrain:
             raise classify(result.stderr or result.stdout)(((result.stderr or result.stdout) or "Fehler").strip()[:300])
         return result.stdout.strip()
 
-    def stream_oneshot(self, prompt: str, system_file: Path, model: str = "sonnet", effort: str = "",
-                       on_text: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
-                       on_proc: Callable[[subprocess.Popen], None] | None = None, timeout: float = 300) -> str:
-        """Eine einzelne Aufgabe mit eigenem Systemprompt, ohne Werkzeuge, Konnektoren und Verlauf. Der Text
-        kommt laufend über on_text (die Blaupause zeichnet so Teil für Teil). Gibt den ganzen Text zurück."""
+    def _oneshot_cmd(self, system_file: Path, model: str, effort: str) -> list[str]:
         cmd = [self._claude, "-p", "--output-format", "stream-json", "--verbose"]
-        partial = "include-partial-messages" not in self._unsupported
-        if partial:
+        if "include-partial-messages" not in self._unsupported:
             cmd.append("--include-partial-messages")
         if model:
             cmd += ["--model", model]
@@ -612,9 +611,9 @@ class ClaudeBrain:
             cmd += ["--tools", ""]
         if "strict-mcp-config" not in self._unsupported:
             cmd.append("--strict-mcp-config")  # keine Konnektoren laden: schneller, und sie werden nicht gebraucht
-        cmd += ["--system-prompt-file", str(system_file)]
-        env = self.environment(prompt[:200])
-        env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+        return cmd + ["--system-prompt-file", str(system_file)]
+
+    def _start_oneshot(self, cmd: list[str], env: dict) -> dict:
         try:
             proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     cwd=self._home, env=env, text=True, encoding="utf-8", errors="replace",
@@ -623,15 +622,81 @@ class ClaudeBrain:
             raise NotInstalledError(f"Claude Code nicht startbar: {exc}") from exc
         except OSError as exc:
             raise BrainError(f"Claude Code nicht startbar: {exc}") from exc
-        if on_proc is not None:
-            on_proc(proc)
         stderr_parts: list[str] = []
         lines: queue.Queue = queue.Queue()
         threading.Thread(target=_pump, args=(proc.stdout, lines.put), daemon=True).start()
         err_reader = threading.Thread(target=_pump, args=(proc.stderr, stderr_parts.append), daemon=True)
         err_reader.start()
+        return {"proc": proc, "lines": lines, "stderr": stderr_parts, "err": err_reader, "at": time.monotonic()}
+
+    # Ein vorgestarteter Prozess für die nächste Blueprint-Aufgabe gilt so lange (danach lieber frisch)
+    SPARE_SECONDS = 600
+
+    def prestart_oneshot(self, system_file: Path, model: str = "sonnet", effort: str = "") -> bool:
+        """Startet den Claude-Prozess für die nächste stream_oneshot-Aufgabe schon jetzt: Er lädt und wartet dann auf
+        die Aufgabe (--input-format stream-json). Unter Windows spart das 2 bis 3 Sekunden Start pro Wunsch im
+        Blueprint (Georg: "er macht das schnell"). True = einer steht bereit."""
+        if "input-format" in self._unsupported:
+            return False
+        key = (str(system_file), model or "", effort or "")
+        with self._spare_lock:
+            spare = self._spare
+            if spare is not None and spare["key"] == key and spare["proc"].poll() is None \
+                    and time.monotonic() - spare["at"] < self.SPARE_SECONDS:
+                return True
+            self._spare = None
+            if spare is not None:
+                _discard(spare)
+            env = self.environment("")
+            env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+            try:
+                started = self._start_oneshot(self._oneshot_cmd(system_file, model, effort) + ["--input-format", "stream-json"], env)
+            except BrainError as exc:
+                log.debug("Vorstart: %s", exc)
+                return False
+            started["key"] = key
+            self._spare = started
+            return True
+
+    def drop_spare(self) -> None:
+        with self._spare_lock:
+            spare, self._spare = self._spare, None
+        if spare is not None:
+            _discard(spare)
+
+    def _take_spare(self, system_file: Path, model: str, effort: str) -> dict | None:
+        key = (str(system_file), model or "", effort or "")
+        with self._spare_lock:
+            spare, self._spare = self._spare, None
+        if spare is None:
+            return None
+        if spare["key"] != key or spare["proc"].poll() is not None or time.monotonic() - spare["at"] >= self.SPARE_SECONDS:
+            _discard(spare)
+            return None
+        return spare
+
+    def stream_oneshot(self, prompt: str, system_file: Path, model: str = "sonnet", effort: str = "",
+                       on_text: Callable[[str], None] | None = None, cancel: threading.Event | None = None,
+                       on_proc: Callable[[subprocess.Popen], None] | None = None, timeout: float = 300) -> str:
+        """Eine einzelne Aufgabe mit eigenem Systemprompt, ohne Werkzeuge, Konnektoren und Verlauf. Der Text
+        kommt laufend über on_text (der Blueprint zeichnet so Teil für Teil). Gibt den ganzen Text zurück.
+        Steht ein vorgestarteter Prozess bereit (prestart_oneshot), nimmt sie den."""
+        partial = "include-partial-messages" not in self._unsupported
+        run = self._take_spare(system_file, model, effort)
+        if run is not None:
+            log.debug("Vorgestarteter Claude-Prozess übernimmt.")
+            message = {"type": "user", "message": {"role": "user", "content": prompt}}
+            text_in = json.dumps(message, ensure_ascii=False) + "\n"
+        else:
+            env = self.environment(prompt[:200])
+            env["CLAUDE_CODE_DISABLE_CLAUDE_MDS"] = "1"
+            run = self._start_oneshot(self._oneshot_cmd(system_file, model, effort), env)
+            text_in = prompt
+        proc, lines, stderr_parts, err_reader = run["proc"], run["lines"], run["stderr"], run["err"]
+        if on_proc is not None:
+            on_proc(proc)
         try:
-            proc.stdin.write(prompt)
+            proc.stdin.write(text_in)
         except OSError:
             pass
         finally:
@@ -1391,6 +1456,19 @@ def _close(pipe) -> None:
         pipe.close()
     except (OSError, ValueError):
         pass
+
+
+def _discard(run: dict) -> None:
+    """Einen vorgestarteten Claude-Prozess wegwerfen (anderes Modell, zu alt, Blueprint zu)."""
+    proc = run["proc"]
+    _close(proc.stdin)
+    if proc.poll() is None:
+        _kill(proc)
+    try:
+        proc.wait(timeout=3)
+    except Exception:
+        pass
+    run["err"].join(timeout=0.5)
 
 
 def _kill(proc: subprocess.Popen) -> None:

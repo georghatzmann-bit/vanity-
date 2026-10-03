@@ -53,12 +53,45 @@
 
   // ------------------------------------------------------------------ Formen
 
+  // Quader mit abgerundeten Kanten, wie RoundedBoxGeometry aus den three.js-Beispielen (ohne Texturkoordinaten):
+  // Ein fein unterteilter Würfel, dessen Randpunkte auf Viertelkreise um die inneren Kanten geschoben werden.
+  function roundedBox(T, w, h, d, r) {
+    const seg = 5;
+    const geo = new T.BoxGeometry(1, 1, 1, seg, seg, seg).toNonIndexed();
+    const pos = geo.attributes.position.array;
+    const nor = geo.attributes.normal.array;
+    const half = 0.5 / seg;
+    const bx = w / 2 - r;
+    const by = h / 2 - r;
+    const bz = d / 2 - r;
+    const n = new T.Vector3();
+    for (let i = 0; i < pos.length; i += 3) {
+      const sx = Math.sign(pos[i]);
+      const sy = Math.sign(pos[i + 1]);
+      const sz = Math.sign(pos[i + 2]);
+      n.set(pos[i] - sx * half, pos[i + 1] - sy * half, pos[i + 2] - sz * half).normalize();
+      pos[i] = bx * sx + n.x * r;
+      pos[i + 1] = by * sy + n.y * r;
+      pos[i + 2] = bz * sz + n.z * r;
+      nor[i] = n.x;
+      nor[i + 1] = n.y;
+      nor[i + 2] = n.z;
+    }
+    return geo;
+  }
+
   function geometryFor(T, p) {
     const m = Array.isArray(p.masse) ? p.masse : [];
     const n = (i, d) => (Number.isFinite(Number(m[i])) && Number(m[i]) > 0 ? Number(m[i]) : d);
     try {
       switch (p.form) {
-        case 'quader': return new T.BoxGeometry(n(0, 0.5), n(1, 0.5), n(2, 0.5));
+        case 'quader': {
+          const w = n(0, 0.5);
+          const h = n(1, 0.5);
+          const d = n(2, 0.5);
+          const r = Math.min(Number(p.rundung) || 0, w / 2, h / 2, d / 2);
+          return r > 0.0005 ? roundedBox(T, w, h, d, r) : new T.BoxGeometry(w, h, d);
+        }
         case 'kugel': return new T.SphereGeometry(n(0, 0.3), 40, 24);
         case 'zylinder': return new T.CylinderGeometry(Math.max(0, Number(m[0]) || 0), Math.max(0, Number(m[1]) || 0) || 0.0001,
           n(2, 0.5), 48, 1);
@@ -74,7 +107,12 @@
           if (pts.length < 3) return null;
           const depth = Number(p.tiefe) || 0.1;
           const bevel = Math.min(Number(p.fase) || 0, depth / 3);
-          const geo = new T.ExtrudeGeometry(new T.Shape(pts), {
+          const shape = new T.Shape(pts);
+          for (const hole of Array.isArray(p.loecher) ? p.loecher : []) {
+            const hp = (Array.isArray(hole) ? hole : []).map(([x, y]) => new T.Vector2(Number(x) || 0, Number(y) || 0));
+            if (hp.length >= 3) shape.holes.push(new T.Path(hp));
+          }
+          const geo = new T.ExtrudeGeometry(shape, {
             depth, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 3, curveSegments: 16,
           });
           geo.translate(0, 0, -depth / 2);
@@ -2001,15 +2039,21 @@
       farbe: '#90a4ae', material: 'glas' });
     add({ id: 'reaktor', name: 'Energiekern', gruppe: 'Rumpf', form: 'zylinder', masse: [0.08, 0.08, 0.04], pos: [0, 0.73, 0],
       farbe: '#7fd8ff', material: 'leuchten' });
-    add({ id: 'akku', name: 'Akku', gruppe: 'Elektronik', form: 'quader', masse: [0.3, 0.09, 0.46], pos: [0, 0.44, 0],
+    add({ id: 'akku', name: 'Akku', gruppe: 'Elektronik', form: 'quader', masse: [0.3, 0.09, 0.46], rundung: 0.02, pos: [0, 0.44, 0],
       farbe: '#37474f', material: 'matt' });
+    // Kühlrippen hinten: eine Platte mit Schlitzen (extrusion mit loecher)
+    const slots = [-0.075, -0.025, 0.025, 0.075].map((x) => [[x - 0.012, -0.03], [x + 0.012, -0.03], [x + 0.012, 0.03], [x - 0.012, 0.03]]);
+    add({ id: 'kuehlung', name: 'Kühlrippen', gruppe: 'Elektronik', form: 'extrusion', umriss: [[-0.12, -0.05], [0.12, -0.05], [0.12, 0.05], [-0.12, 0.05]],
+      loecher: slots, tiefe: 0.012, fase: 0.004, pos: [0, 0.47, -0.235], farbe: '#546e7a' });
+    add({ id: 'anzeige', name: 'Statusanzeige', gruppe: 'Elektronik', form: 'quader', masse: [0.1, 0.012, 0.05], rundung: 0.005,
+      pos: [0, 0.69, -0.17], farbe: '#7fd8ff', material: 'leuchten' });
     add({ id: 'platine', name: 'Flugsteuerung', gruppe: 'Elektronik', form: 'quader', masse: [0.22, 0.02, 0.22], pos: [0, 0.505, 0],
       farbe: '#2e7d32', material: 'matt' });
     const corners = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
     corners.forEach(([sx, sz], i) => {
       const n = i + 1;
       const yaw = sx * sz > 0 ? -45 : 45;
-      add({ id: `arm_${n}`, name: `Arm ${n}`, gruppe: 'Arme', form: 'quader', masse: [0.62, 0.05, 0.08],
+      add({ id: `arm_${n}`, name: `Arm ${n}`, gruppe: 'Arme', form: 'quader', masse: [0.62, 0.05, 0.08], rundung: 0.022,
         pos: [sx * 0.42, 0.55, sz * 0.42], dreh: [0, yaw, 0], farbe: '#455a64' });
       add({ id: `motor_${n}`, name: `Motor ${n}`, gruppe: 'Antrieb', form: 'zylinder', masse: [0.075, 0.075, 0.12],
         pos: [sx * 0.74, 0.6, sz * 0.74], farbe: '#b0bec5' });

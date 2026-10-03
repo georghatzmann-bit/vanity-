@@ -54,6 +54,16 @@ class CleanTest(unittest.TestCase):
         self.assertIsNone(clean_part({"form": "teekanne"}))
         self.assertIsNone(clean_part("quader"))
 
+    def test_rounded_edges_and_cutouts(self):
+        """Hochwertiger aussehende Modelle: abgerundete Kanten an Quadern, Aussparungen in Extrusionen."""
+        box = clean_part({"form": "quader", "masse": [0.4, 0.06, 0.3], "rundung": 0.5})
+        self.assertEqual(box["rundung"], 0.03, "höchstens halb so dick wie die dünnste Seite")
+        self.assertNotIn("rundung", clean_part({"form": "quader", "rundung": "rund"}))
+        plate = clean_part({"form": "extrusion", "umriss": [[0, 0], [1, 0], [1, 1], [0, 1]],
+                            "loecher": [[[0.2, 0.2], [0.4, 0.2], [0.3, 0.4]], [[0, 0]], "quatsch"]})
+        self.assertEqual(plate["loecher"], [[[0.2, 0.2], [0.4, 0.2], [0.3, 0.4]]], "nur echte Flächen")
+        self.assertNotIn("loecher", clean_part({"form": "extrusion", "umriss": [[0, 0], [1, 0], [1, 1]], "loecher": {"a": 1}}))
+
     def test_parse_lines_arrays_and_whole_models(self):
         text = '```jsonl\n{"op":"neu","name":"A"}\nkein json\n{"op":"teil","form":"kugel"},\n```'
         self.assertEqual([o["op"] for o in parse_ops(text)], ["neu", "teil"])
@@ -263,6 +273,28 @@ class GenerateTest(unittest.TestCase):
 
     def calls(self):
         return [json.loads(line) for line in (self.home / "calls.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    def test_a_prestarted_claude_takes_the_next_wish(self):
+        """Georg: "er macht das schnell". Der Claude-Prozess für den nächsten Wunsch läuft schon (unter Windows
+        2 bis 3 Sekunden Start gespart): Er bekommt die Aufgabe als JSON-Zeile, ein zweiter Prozess startet nicht."""
+        path = self.bp._system_file()
+        self.assertTrue(self.brain.prestart_oneshot(path, "sonnet", "low"))
+        spare_pid = self.brain._spare["proc"].pid
+        self.assertTrue(self.brain.prestart_oneshot(path, "sonnet", "low"), "zweimal schadet nicht")
+        self.assertEqual(self.brain._spare["proc"].pid, spare_pid, "kein zweiter Prozess")
+        text = self.brain.stream_oneshot("Blaupause: Neues Modell. Georg sagt: „Helm“", path, model="sonnet", effort="low")
+        self.assertIn("schale", text)
+        call = self.calls()[-1]
+        self.assertEqual(call["pid"], spare_pid, "der vorgestartete Prozess hat gearbeitet")
+        self.assertTrue(call["live"], "mit --input-format stream-json")
+        self.assertTrue(call["prompt"].startswith("Blaupause: Neues Modell"))
+        self.assertIsNone(self.brain._spare, "verbraucht")
+        self.brain.prestart_oneshot(path, "opus", "high")
+        self.brain.stream_oneshot("Blaupause: Neues Modell. Georg sagt: „Helm“", path, model="sonnet", effort="low")
+        self.assertNotEqual(self.calls()[-1]["model"], "opus", "anderes Modell: frisch gestartet statt falsch vorgewärmt")
+        self.bp.open()
+        self.bp.close()
+        self.assertIsNone(self.brain._spare, "zu: kein Prozess bleibt hängen")
 
     def test_new_model_part_by_part_and_then_a_change(self):
         answer = self.bp.command("Generiere einen Iron-Man-Helm")

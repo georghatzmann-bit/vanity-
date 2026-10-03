@@ -68,20 +68,21 @@ Anweisungen:
 {"op":"aendern","id":"...", ...nur die geänderten Felder...}
 {"op":"entfernen","id":"..."}
 {"op":"name","name":"...","beschreibung":"..."}
-{"op":"sagen","text":"Ein kurzer Satz an Georg (Sie-Form, Butler-Ton), was du gebaut oder geändert hast"}  (immer als letzte Zeile)
+{"op":"sagen","text":"Höchstens ein kurzer Satz (Sie-Form, Butler-Ton)"}  (nur bei einem neuen Modell, als letzte Zeile; bei Änderungen weglassen: Jarvis sagt dann nur "Erledigt")
 
 Ein Teil:
 {"op":"teil","id":"triebwerk_links","name":"Triebwerk links","gruppe":"Antrieb","form":"zylinder","masse":[0.12,0.15,0.5],"pos":[-0.6,0.8,0],"dreh":[90,0,0],"farbe":"#b0bec5","material":"metall"}
 
 Formen und ihre Maße ("masse"):
-- quader: [breite, höhe, tiefe]
+- quader: [breite, höhe, tiefe]  (mit "rundung": r abgerundete Kanten, z. B. 0.02: wirkt hochwertig bei Gehäusen, Panzerplatten, Displays)
 - kugel: [radius]  (mit "skala":[x,y,z] zu einem Ellipsoid strecken)
 - zylinder: [radius_oben, radius_unten, höhe]
 - kegel: [radius, höhe]
 - ring: [radius, dicke]  (Torus in der x-y-Ebene; mit dreh [90,0,0] liegt er flach)
 - kapsel: [radius, länge]
 - drehkoerper: statt masse "profil":[[r,y],[r,y],...]  (Umriss rechts der y-Achse, um y gedreht: Rümpfe, Helme, Vasen, Düsen, Flaschen)
-- extrusion: statt masse "umriss":[[x,y],...] und "tiefe":d  (flaches Profil in z ausgezogen: Flügel, Flossen, Platten, Zahnräder, Embleme)
+- extrusion: statt masse "umriss":[[x,y],...] und "tiefe":d  (flaches Profil in z ausgezogen: Flügel, Flossen, Platten, Zahnräder, Embleme); \
+optional "loecher":[[[x,y],...],...] für Aussparungen (Fenster, Lüftungsschlitze, Speichen)
 - rohr: statt masse "pfad":[[x,y,z],...] und "radius":r  (Kabel, Rohre, Bögen, Griffe, Kufen)
 Optional bei jedem Teil: "skala":[x,y,z]; bei extrusion "fase" (Kantenrundung 0 bis 0.05).
 
@@ -89,7 +90,11 @@ Regeln:
 - Das ganze Modell ist etwa 2 Einheiten groß, steht auf dem Boden (y=0) und ist um x=0, z=0 zentriert. \
 y zeigt nach oben, z nach vorne zum Betrachter. "dreh" in Grad.
 - "pos" ist die Mitte des Teils. Bei drehkoerper, extrusion und rohr gelten die Koordinaten relativ zu "pos".
-- Baue detailliert und glaubwürdig wie ein echter Ingenieur: 15 bis 60 Teile, je nach Objekt. Symmetrische \
+- Baue wie ein Industriedesigner in Tony Starks Werkstatt, detailliert und glaubwürdig: erst die Hauptformen \
+(Rumpf, Hülle, Rahmen) in richtigen Proportionen, dann Details: Fugen und Panellinien (dünne Quader), Schrauben \
+und Nieten (kleine Zylinder), Lüftungsschlitze, Lichter und Displays (material leuchten), Kabel und Leitungen (rohr), \
+Gelenke. 30 bis 120 Teile, je nach Objekt. Organische Formen (Helme, Köpfe, Rümpfe, Karosserien) als drehkoerper \
+mit 8 bis 16 Profilpunkten, mit "skala" oval gemacht. Kanten von Gehäusen abrunden ("rundung"). Symmetrische \
 Teile links und rechts spiegeln. Teile sollen sich berühren oder leicht überlappen, nichts schwebt lose.
 - "gruppe" für Baugruppen (z. B. "Rumpf", "Antrieb", "Cockpit", "Elektronik"): Explosionsansicht und Fokus \
 arbeiten mit den Gruppen.
@@ -98,7 +103,7 @@ arbeiten mit den Gruppen.
 Displays, Düsenglühen), holo.
 - Farben realistisch und stimmig; leuchtende Teile hell (z. B. #7fd8ff, #ffb74d).
 - Beim Ändern eines vorhandenen Modells nur die nötigen Anweisungen (teil, aendern, entfernen), nicht alles \
-neu. Ist ein Teil ausgewählt und sagt Georg "das", "es" oder "hier", meint er dieses Teil.
+neu, und schnell: keine Erklärungen. Ist ein Teil ausgewählt und sagt Georg "das", "es" oder "hier", meint er dieses Teil.
 - Höchstens 200 Teile. Keine Erklärungen außerhalb von "sagen".
 """
 
@@ -178,6 +183,9 @@ def clean_part(raw: dict, fallback_id: str = "") -> dict | None:
     sizes = raw.get("masse")
     if form in ("quader",):
         part["masse"] = _vec(sizes, [0.5, 0.5, 0.5], 0.001, 100)
+        rounding = _num(raw.get("rundung"), 0.0, 0.0, 0.5)
+        if rounding > 0:
+            part["rundung"] = min(rounding, min(part["masse"]) / 2)
     elif form in ("kugel",):
         part["masse"] = _vec(sizes, [0.3], 0.001, 100, size=1)
     elif form == "zylinder":
@@ -203,6 +211,10 @@ def clean_part(raw: dict, fallback_id: str = "") -> dict | None:
         part["umriss"] = outline
         part["tiefe"] = _num(raw.get("tiefe"), 0.1, 0.001, 20)
         part["fase"] = _num(raw.get("fase"), 0.0, 0.0, 0.2)
+        raw_holes = raw.get("loecher") if isinstance(raw.get("loecher"), list) else []
+        holes = [h for h in (_points(x, 2, -100, 100, 3, 64) for x in raw_holes[:24]) if h]
+        if holes:
+            part["loecher"] = holes
     elif form == "rohr":
         path = _points(raw.get("pfad"), 3, -100, 100, 2, 64)
         if path is None:
@@ -372,6 +384,7 @@ class Blueprint:
     def open(self, announce: bool = False) -> str:
         self.active = True
         self._emit("open", **self.state())
+        self._warm()
         if self._show_window is not None:
             try:
                 self._show_window()
@@ -385,11 +398,30 @@ class Blueprint:
         self.active = False
         self._queue.clear()
         self._emit("close")
+        drop = getattr(self._brain, "drop_spare", None)
+        if drop is not None:
+            drop()
         return "Blueprint geschlossen, Sir."
 
     def set_active(self, on: bool) -> None:
-        """Das Fenster meldet, ob die Blaupause offen ist (dann gehen \"Mach das größer\" & Co. hierher)."""
-        self.active = bool(on)
+        """Das Fenster meldet, ob der Blueprint offen ist (dann gehen \"Mach das größer\" & Co. hierher)."""
+        was, self.active = self.active, bool(on)
+        if self.active and not was:
+            self._warm()
+
+    def _warm(self) -> None:
+        """Den Claude-Prozess für den nächsten Wunsch schon starten: Unter Windows spart das 2 bis 3 Sekunden."""
+        prestart = getattr(self._brain, "prestart_oneshot", None)
+        if prestart is None or not self.active or not getattr(self._brain, "claude_path", ""):
+            return
+
+        def run() -> None:
+            try:
+                prestart(self._system_file(), self.model, self.effort)
+            except Exception as exc:
+                log.debug("Blueprint, Vorstart: %s", exc)
+
+        threading.Thread(target=run, name="jarvis-blueprint-vorstart", daemon=True).start()
 
     # ------------------------------------------------------------------ Modell ändern
 
@@ -802,6 +834,13 @@ class Blueprint:
         threading.Thread(target=self._work, args=(str(wish), fresh), name="jarvis-blaupause", daemon=True).start()
         return random_choice(["Sofort, Sir.", "Sehr wohl, Sir.", "Wird gemacht, Sir."])
 
+    def _after(self) -> None:
+        """Nach einer Konstruktion: der nächste Wunsch aus der Warteschlange, sonst den Prozess vorwärmen."""
+        if self._queue:
+            self._next()
+        else:
+            self._warm()
+
     def _next(self) -> None:
         """Der nächste Wunsch aus der Warteschlange, ohne dass Georg nochmal fragen muss."""
         with self._lock:
@@ -891,7 +930,7 @@ class Blueprint:
                     self.scene = self._undo.pop()
             self._emit("done", ok=False, error=error, **self.state())
             self._announce("Das ging leider nicht, Sir. " + _explain(error))
-            self._next()
+            self._after()
             return
         name = self.scene["name"] or "Das Modell"
         count = len(self.scene["teile"])
@@ -906,7 +945,7 @@ class Blueprint:
             short = "Erledigt, Sir." if added else "Daran hat sich nichts geändert, Sir."
         self._last_spoken = short
         self._announce(short)
-        self._next()
+        self._after()
 
     def take_handoff(self, state_dir: Path) -> bool:
         """Holt einen Wunsch ab, den das Gehirn über jarvis.tool übergeben hat. True = übernommen."""
