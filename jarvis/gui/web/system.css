@@ -1096,7 +1096,10 @@ body[data-fenster="zu"] .sy * {
     max-height: none;
   }
 
+  /* Untereinander: jede Zeile so hoch wie ihr Inhalt (mit min-height: 0 schrumpfte sie auf ein paar Pixel,
+     und Skills und Automationen lagen über den Agents) */
   .sy-side {
+    min-height: auto;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
@@ -1116,6 +1119,7 @@ body[data-fenster="zu"] .sy * {
   }
 
   .sy-agents {
+    min-height: auto;
     overflow: visible;
   }
 

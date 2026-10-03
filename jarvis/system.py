@@ -409,10 +409,13 @@ class System:
             self.bring_up()
             graph = self.graph()
             count = graph["zahlen"]["knoten"]
-            if count <= 1:
+            edges, auto = graph["zahlen"]["kanten"], graph["zahlen"]["auto"]
+            if count <= 1 or not edges:
                 return "Das System, Sir. Das Wissensnetz wächst mit jedem Gespräch."
-            return (f"Das System, Sir. {count} Knoten im Wissensnetz, {graph['zahlen']['kanten']} Verbindungen, "
-                    f"davon {graph['zahlen']['auto']} von selbst geknüpft.")
+            answer = f"Das System, Sir. {count} Knoten im Wissensnetz, {edges} {'Verbindung' if edges == 1 else 'Verbindungen'}"
+            if auto:
+                answer += f", davon {auto} von selbst geknüpft"
+            return answer + "."
         working = [a for a in self.agents() if a["status"] in ("arbeitet", "schreibt") and a["id"] != "jarvis"]
         waiting = [a for a in self.agents() if a["status"] == "wartet" and a["id"] != "jarvis"]
         if not working and not waiting:

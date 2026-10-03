@@ -569,6 +569,18 @@ class SystemTest(unittest.TestCase):
         for said in ("Öffne die Systemsteuerung", "Zeig mir das Wetter", "Wie läuft das System?", "Systemsteuerung"):
             self.assertIsNone(match_system(said), said)
 
+    def test_spoken_numbers_of_the_net(self):
+        """Am Anfang: Gedächtnis und eine Sitzung. "1 Verbindungen, davon 0 von selbst geknüpft" klang kaputt."""
+        def answer(knoten, kanten, auto):
+            graph = {"zahlen": {"knoten": knoten, "kanten": kanten, "auto": auto}}
+            with mock.patch.object(self.system, "graph", return_value=graph), mock.patch.object(self.system, "bring_up"):
+                return self.system.command("Zeig mir das System")
+
+        self.assertEqual(answer(2, 1, 0), "Das System, Sir. 2 Knoten im Wissensnetz, 1 Verbindung.")
+        self.assertEqual(answer(40, 52, 9),
+                         "Das System, Sir. 40 Knoten im Wissensnetz, 52 Verbindungen, davon 9 von selbst geknüpft.")
+        self.assertEqual(answer(3, 0, 0), "Das System, Sir. Das Wissensnetz wächst mit jedem Gespräch.")
+
     def test_who_is_working(self):
         answer = self.assistant.handle("Welche Agents laufen gerade?")
         self.assertEqual(answer, "Gerade arbeiten Recherche (Gaming-Mäuse) und Werkstatt (Baut: Discord Bot), Sir.")
