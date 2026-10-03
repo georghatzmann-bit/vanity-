@@ -210,6 +210,22 @@ class SentenceTest(unittest.TestCase):
         self.assertEqual(wants_trailer("Zeig mir den Trailer"), "")
         self.assertEqual(wants_trailer("Kannst du"), None)
         self.assertEqual(wants_trailer("Zeig mir den Trailer von Crimson Desert"), "crimson desert")
+        self.assertEqual(wants_trailer("Zeig mir den Crimson Desert Trailer"), "crimson desert")
+
+    def test_sentences_that_are_no_stream_command(self):
+        for text in ("Ich will heute nicht streamen", "Ich streame heute nicht", "Ich werde morgen streamen",
+                     "Ich will lieber nicht streamen", "Ich streame gerade", "Ich will einen Film streamen"):
+            self.assertIsNone(wants_prepare(text), text)
+        self.assertEqual(wants_prepare("Ich streame gleich"), "", "gleich ist kein Spiel")
+        self.assertEqual(wants_prepare("Ich will heute Abend streamen"), "")
+        self.assertEqual(wants_prepare("Ich will eine Runde Valorant streamen"), "valorant")
+        for text in ("Lass uns Livemusik hören", "Lass uns livestream schauen", "Geh live auf Instagram"):
+            self.assertFalse(wants_live(text), text)
+        self.assertTrue(wants_live("Lass uns live gehen"))
+        self.assertTrue(wants_live("Wir gehen jetzt live"))
+        for text in ("Wie sieht das Wetter morgen aus?", "Wie sieht es aus?", "Wie sieht mein Kalender aus",
+                     "Zeig mir die Datei aus"):
+            self.assertIsNone(wants_trailer(text), text)
 
     def test_gameplay_scene(self):
         self.assertEqual(gameplay_scene(["Starting Soon", "Gameplay", "BRB", "Ende"]), "Gameplay")
@@ -249,6 +265,29 @@ class ObsClientTest(unittest.TestCase):
         free.close()
         with self.assertRaises(ObsError):
             ObsClient("127.0.0.1", port, PASSWORD, timeout=1).open()
+
+    def test_connection_reset_is_an_obs_error(self):
+        class Reset:
+            def settimeout(self, _seconds):
+                pass
+
+            def sendall(self, _data):
+                pass
+
+            def recv(self, _size):
+                raise ConnectionResetError(10054, "Eine vorhandene Verbindung wurde vom Remotehost geschlossen")
+
+            def close(self):
+                pass
+
+        with self.assertRaises(ObsError) as caught:
+            ObsClient(connect=lambda address, timeout: Reset()).open()
+        self.assertEqual(str(caught.exception), "OBS hat die Verbindung unterbrochen.")
+        with ObsClient("127.0.0.1", self.obs.port, PASSWORD) as client:
+            client._sock.close()
+            client._sock = Reset()  # OBS geht gerade zu
+            with self.assertRaises(ObsError):
+                client.request("GetStreamStatus")
 
 
 class StreamTest(unittest.TestCase):
@@ -361,6 +400,19 @@ class StreamTest(unittest.TestCase):
         answer = assistant.handle("Ich will streamen", speak=False)
         self.assertIn("OBS startet auf der Szene Gameplay.", answer)
         self.assertEqual(assistant.brain.asked, [], "ohne Claude")
+
+    def test_weather_question_is_no_trailer(self):
+        from tests.test_assistant import make
+
+        assistant, _ui, _speaker, _ = make()
+        env = FakeEnv(self.root)
+        ui = mock.Mock()
+        assistant.stream = Stream({}, assistant, ui, env=env, opener=steam)
+        with mock.patch("jarvis.web.first_video", return_value="abcdefghijk"):
+            answer = assistant.handle("Wie sieht das Wetter morgen aus?", speak=False)
+        self.assertNotIn("Trailer", answer)
+        self.assertEqual(env.opened, [], "kein YouTube-Trailer zu \"Das Wetter Morgen\"")
+        ui.trailer.assert_not_called()
 
 
 if __name__ == "__main__":

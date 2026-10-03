@@ -82,6 +82,9 @@ class ObsClient:
             raise ObsError("OBS antwortet nicht (WebSocket-Server aus?)") from exc
         try:
             self._handshake()
+        except OSError as exc:
+            self.close()
+            raise ObsError("OBS hat die Verbindung unterbrochen.") from exc
         except BaseException:
             self.close()
             raise
@@ -127,6 +130,12 @@ class ObsClient:
             self._sock = None
 
     def request(self, kind: str, data: dict | None = None) -> dict:
+        try:
+            return self._request(kind, data)
+        except OSError as exc:  # zum Beispiel WinError 10054, wenn OBS gerade zugeht
+            raise ObsError("OBS hat die Verbindung unterbrochen.") from exc
+
+    def _request(self, kind: str, data: dict | None) -> dict:
         rid = uuid.uuid4().hex
         self._send_json({"op": 6, "d": {"requestType": kind, "requestId": rid, "requestData": data or {}}})
         deadline = time.monotonic() + self.timeout
@@ -365,19 +374,26 @@ def _norm(text: str) -> str:
 
 
 _PREPARE = re.compile(
-    r"^(?:ich (?:will|möchte|werde|wollte|würde gern|würde gerne) (?:gleich |jetzt |heute )?(?:(?P<a>.+?) )?streamen|"
-    r"ich streame (?:gleich |jetzt |heute )?(?P<b>.+?)?|"
+    r"^(?:ich (?:will|möchte|werde|wollte|würde gern|würde gerne) (?:(?P<a>.+?) )?streamen|"
+    r"ich streame(?: (?P<b>.+))?|"
     r"(?:mach|bereite|richte)(?: mir)? (?:den |alles für den |meinen )?stream (?:fertig|bereit|vor)|"
     r"stream (?:vorbereiten|fertig machen)|stream ?modus(?: an)?|(?:ich bin|wir sind) gleich live|"
     r"bereit (?:machen )?(?:zum|für den) streamen|lass uns (?:streamen|(?:den )?stream (?:vorbereiten|starten)))$")
-_LIVE = re.compile(r"^(?:geh|gehen wir|wir gehen|lass uns) live|^(?:starte|start) (?:den |meinen )?stream$|^stream starten$|"
-                   r"^live gehen$")
+_LIVE = re.compile(r"^(?:jetzt )?(?:(?:geh|gehen wir|wir gehen|lass uns)(?: jetzt)? live(?: gehen)?(?: auf twitch)?|"
+                   r"(?:starte|start) (?:den |meinen )?stream|stream starten|live gehen)(?: jetzt)?(?: bitte)?$")
 _END = re.compile(r"^(?:beende|stopp|stoppe|stop) (?:den |meinen )?stream$|^stream (?:beenden|stoppen|aus)$|"
                   r"^(?:geh|gehen wir) offline$")
 _TRAILER = re.compile(r"^(?:zeig|zeige|spiel|spiele|öffne)(?: mir| uns)? (?:den |mal den )?(?:game |spiel |offiziellen )?trailer"
                       r"(?: (?:von|zu|zum|für|vom) (?P<game>.+?))?(?: an| ab)?$|"
-                      r"^(?:wie sieht|zeig mir) (?P<game2>.+?) (?:aus|trailer)$")
-_GAME_WORDS = re.compile(r"\b(?:noch |mal |ein bisschen |eine runde |eine partie |etwas |was )", re.I)
+                      r"^(?:zeig|zeige)(?: mir| uns)? (?:den |das )?(?P<game2>.+?)[ -]trailer$")
+# "Ich will heute nicht streamen", "Ich streame morgen", "Ich streame gerade": jetzt nichts vorbereiten
+_NOT_NOW = re.compile(r"\b(?:nicht|nie|niemals|kein|keine|keinen|morgen|übermorgen|später|nächste[nrs]?|wochenende|"
+                      r"gerade|schon|bereits)\b")
+# "Ich will einen Film streamen": Georg will etwas anschauen, nicht selbst senden
+_WATCH = re.compile(r"\b(?:film|filme|filmen|serie|serien|folge|folgen|musik|song|songs|podcast|video|videos|netflix|"
+                    r"disney|prime|youtube|spotify|fußball|bundesliga)\b")
+_GAME_WORDS = re.compile(r"\b(?:gleich|jetzt|heute|abend|nachher|noch|mal|eigentlich|gern|gerne|auch|bald|endlich|wieder|"
+                         r"lieber|ein bisschen|ein wenig|eine runde|eine partie|etwas|was)\b")
 
 
 def wants_prepare(text: str) -> str | None:
@@ -386,8 +402,9 @@ def wants_prepare(text: str) -> str | None:
     if not found:
         return None
     game = (found.group("a") or found.group("b") or "").strip()
-    game = _GAME_WORDS.sub(" ", " " + game).strip()
-    return "" if game in ("", "was", "etwas", "eine runde", "noch") else game
+    if _NOT_NOW.search(game) or _WATCH.search(game):
+        return None
+    return " ".join(_GAME_WORDS.sub(" ", game).split())
 
 
 def wants_live(text: str) -> bool:
