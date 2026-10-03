@@ -442,7 +442,10 @@
       else if (mode === 'bild') el.newsLabel.textContent = (items[0] && items[0].oben) || 'Nachrichten';
       else el.newsLabel.textContent = 'Nachrichten';
       el.video.dataset.on = mode === 'live' || mode === 'video' ? '1' : '0';
-      el.newsHeadline.textContent = items[0] ? items[0].titel : 'Die Schlagzeilen kommen, sobald Jarvis online ist.';
+      const n = (S.data && S.data.nachrichten) || {};
+      el.newsHeadline.textContent = items[0] ? items[0].titel
+        : n.geladen === false ? 'Die Schlagzeilen werden geladen\u00a0…'
+          : 'Die Tagesschau ist gerade nicht erreichbar. Jarvis versucht es gleich noch einmal.';
       const img = mode === 'bild' ? (items.find((h) => h.bild) || {}).bild : '';
       if (img) {
         if (el.newsImg.src !== img) el.newsImg.src = img;
@@ -1136,7 +1139,7 @@
       ],
       tagesplan: { eintraege: [], woche: 0, verbunden: false },
       post: { verbunden: false, neu: null, mails: [] },
-      nachrichten: { live: '', video: '', video_titel: '', video_bild: '', schlagzeilen: [] },
+      nachrichten: { live: '', video: '', video_titel: '', video_bild: '', schlagzeilen: [], geladen: false },
       agenten: d.agenten.filter((a) => a.id !== 'shop').map((a) => Object.assign({}, a, {
         status: 'bereit', zeit: '', fortschritt: null,
         text: { post: 'Sichtet Ihre Mails', kalender: 'Hält Ihren Tag im Blick', recherche: 'Bereit für Ihre Fragen',

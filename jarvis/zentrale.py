@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 
 MAX_EVENTS = 300
 NEWS_SECONDS = 15 * 60
+NEWS_RETRY_SECONDS = 60  # keine Schlagzeilen bekommen: so bald noch einmal
 FRESH_MINUTES = 25  # so alt darf das Lagebild fürs Briefing sein
 LIVE_STREAM = "https://tagesschau-live.ard-mcdn.de/tagesschau/live/hls/de/master.m3u8"
 CHANNELS_API = "https://www.tagesschau.de/api2u/channels"
@@ -534,18 +535,23 @@ class Zentrale:
             return json.loads(response.read().decode("utf-8"))
 
     def cached_news(self) -> dict:
-        """Was die Nachrichten-Kachel gerade zeigen kann, ohne ins Netz zu gehen."""
+        """Was die Nachrichten-Kachel gerade zeigen kann, ohne ins Netz zu gehen. "geladen": schon einmal versucht
+        (sonst steht in der Kachel "werden geladen" statt "nicht erreichbar")."""
         with self._lock:
             if self._news:
                 return dict(self._news)
-        return {"live": LIVE_STREAM, "video": "", "video_titel": "", "video_bild": "", "schlagzeilen": []}
+        return {"live": LIVE_STREAM, "video": "", "video_titel": "", "video_bild": "", "schlagzeilen": [],
+                "geladen": False}
 
     def news(self, fresh: bool = False) -> dict:
-        """Live-Stream, das neueste Video ("tagesschau in 100 Sekunden") und die Schlagzeilen, alle 15 Minuten neu."""
+        """Live-Stream, das neueste Video ("tagesschau in 100 Sekunden") und die Schlagzeilen, alle 15 Minuten neu.
+        Kam nichts (beim Start mit Windows ist das WLAN oft noch nicht da), nach einer Minute noch einmal."""
         with self._lock:
-            if self._news and not fresh and time.monotonic() - self._news_at < NEWS_SECONDS:
+            keep = NEWS_SECONDS if self._news and self._news.get("schlagzeilen") else NEWS_RETRY_SECONDS
+            if self._news and not fresh and time.monotonic() - self._news_at < keep:
                 return dict(self._news)
-        result = {"live": LIVE_STREAM, "video": "", "video_titel": "", "video_bild": "", "schlagzeilen": []}
+        result = {"live": LIVE_STREAM, "video": "", "video_titel": "", "video_bild": "", "schlagzeilen": [],
+                  "geladen": True}
         try:
             data = self._get(CHANNELS_API)
             for channel in data.get("channels") or []:

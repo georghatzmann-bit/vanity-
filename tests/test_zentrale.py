@@ -449,6 +449,30 @@ class ZentraleTest(unittest.TestCase):
         self.assertFalse(old.exists())
         self.assertTrue(recent.exists())
 
+    def test_headlines_retry_soon_after_a_failure(self):
+        calls = []
+
+        def offline_then_online(request, timeout=6):
+            calls.append(request.full_url)
+            if len(calls) <= 2:
+                raise OSError("Das WLAN ist noch nicht da")
+            return tagesschau(request, timeout)
+
+        z = Zentrale({}, None, RecordingZentraleUi(), self.folder, self.assistant, now=lambda: self.now,
+                     opener=offline_then_online)
+        self.assertFalse(z.cached_news()["geladen"], "noch nie versucht: die Kachel sagt \"werden geladen\"")
+        first = z.news()
+        self.assertEqual(first["schlagzeilen"], [])
+        self.assertTrue(first["geladen"])
+        self.assertEqual(len(calls), 2)
+        z.news()
+        self.assertEqual(len(calls), 2, "nicht jede Sekunde")
+        z._news_at -= 61  # eine Minute später
+        self.assertEqual([h["titel"] for h in z.news()["schlagzeilen"]], ["Erste Meldung", "Zweite Meldung"])
+        z._news_at -= 61
+        z.news()
+        self.assertEqual(len(calls), 4, "mit Schlagzeilen wieder nur alle 15 Minuten")
+
     def test_new_day_starts_empty(self):
         z = self.make()
         z.log("befehl", "Gestern")
