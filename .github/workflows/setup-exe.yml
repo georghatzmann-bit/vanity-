@@ -43,6 +43,8 @@ jobs:
   setup-exe:
     runs-on: windows-latest
     timeout-minutes: 60
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,10 +53,12 @@ jobs:
           python-version: "3.12"
 
       - name: Version
+        id: version
         shell: pwsh
         run: |
           $v = (python -c "import jarvis; print(jarvis.__version__)").Trim()
           "JARVIS_VERSION=$v" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "version=$v" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
 
       - name: Symbol
         run: |
@@ -460,40 +464,36 @@ jobs:
           if (Test-Path "$env:LOCALAPPDATA\Programs\Jarvis\jarvis") { Write-Host "Programmordner ist noch da"; exit 1 }
           Write-Host "Sauber deinstalliert"
 
-      - name: Release
-        id: release
-        if: github.event_name == 'push'
-        # Scheitert manchmal mit "Resource not accessible by integration" (Builds 188 und 192, dazwischen
-        # ging es): dann versucht es der naechste Schritt noch einmal mit gh
-        continue-on-error: true
-        uses: softprops/action-gh-release@v2
+  # Eigener kleiner Job fürs Veröffentlichen, mit eigenem frischen Schlüssel (GITHUB_TOKEN). Im Windows-Job
+  # scheiterte das Release mit "Resource not accessible by integration", wenn der Build vorher lange in der
+  # Warteschlange stand (Builds 188, 192 und 194, je 5 bis 8 Minuten; die anderen warteten unter 2 Minuten).
+  release:
+    needs: setup-exe
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
         with:
-          tag_name: jarvis-${{ env.JARVIS_VERSION }}-build${{ github.run_number }}
-          name: Jarvis ${{ env.JARVIS_VERSION }} (Build ${{ github.run_number }})
-          target_commitish: ${{ github.sha }}
-          make_latest: true
-          files: installer/Output/JarvisSetup.exe
-          body: |
-            JarvisSetup.exe herunterladen und doppelklicken. Der Installer lädt alles Nötige selbst herunter.
-            Windows fragt beim ersten Start vielleicht nach: "Weitere Informationen" und dann "Trotzdem ausführen".
+          name: JarvisSetup
+          path: out
 
-      - name: Release, zweiter Versuch
-        if: github.event_name == 'push' && steps.release.outcome == 'failure'
-        shell: pwsh
+      - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: jarvis-${{ needs.setup-exe.outputs.version }}-build${{ github.run_number }}
+          TITLE: Jarvis ${{ needs.setup-exe.outputs.version }} (Build ${{ github.run_number }})
         run: |
-          $tag = "jarvis-$env:JARVIS_VERSION-build${{ github.run_number }}"
-          $notes = "JarvisSetup.exe herunterladen und doppelklicken. Der Installer laedt alles Noetige selbst herunter."
-          for ($i = 1; $i -le 3; $i++) {
-            Start-Sleep -Seconds (20 * $i)
-            gh release view $tag --repo "${{ github.repository }}" *> $null
-            if ($LASTEXITCODE -eq 0) {
-              gh release upload $tag installer/Output/JarvisSetup.exe --clobber --repo "${{ github.repository }}"
-            } else {
-              gh release create $tag installer/Output/JarvisSetup.exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Jarvis $env:JARVIS_VERSION (Build ${{ github.run_number }})" --notes $notes --latest
-            }
-            if ($LASTEXITCODE -eq 0) { Write-Host "Release $tag steht (Versuch $i)"; exit 0 }
-            Write-Host "Versuch $i ging nicht"
-          }
+          notes='JarvisSetup.exe herunterladen und doppelklicken. Der Installer lädt alles Nötige selbst herunter.
+          Windows fragt beim ersten Start vielleicht nach: "Weitere Informationen" und dann "Trotzdem ausführen".'
+          for i in 1 2 3; do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$TAG" out/JarvisSetup.exe --clobber --repo "$GITHUB_REPOSITORY" && exit 0
+            else
+              gh release create "$TAG" out/JarvisSetup.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                --title "$TITLE" --notes "$notes" --latest && exit 0
+            fi
+            echo "Versuch $i ging nicht"
+            sleep $((20 * i))
+          done
           exit 1
