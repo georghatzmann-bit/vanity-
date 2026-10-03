@@ -4,7 +4,7 @@ jarvis/blender.py startet: blender -b --factory-startup --python blender_szene.p
 
 auftrag.json: {"szene": {...wie im Blueprint...}, "bild": ".../foto.png", "vorschau": ".../foto.jpg",
 "blend": ".../modell.blend", "breite": 1600, "hoehe": 900, "samples": 128, "samples_cpu": 48, "sekunden": 150,
-"gpu": true}
+"gpu": true, "kamera": {"azimut": 34, "hoehe": 17}}
 Ohne "bild" wird nicht gerendert, ohne "blend" nichts gespeichert.
 
 Jedes Teil entsteht aus seinen Maßen wie in blaupause.js (dort zeigt y nach oben, in Blender z) und bekommt ein
@@ -459,8 +459,9 @@ def bounds(objects):
     return low, high, corners
 
 
-def backdrop(center, radius, floor):
-    """Hohlkehle wie im Fotostudio: Boden, der hinten in einer Rundung zur Wand wird."""
+def backdrop(center, radius, floor, turn=0.0):
+    """Hohlkehle wie im Fotostudio: Boden, der hinten in einer Rundung zur Wand wird. `turn` dreht das Studio mit
+    der Kamera um das Modell, damit die Wand immer hinter dem Modell steht."""
     r = radius
     back = center.y + 2.5 * r
     bend = 6 * r
@@ -477,6 +478,8 @@ def backdrop(center, radius, floor):
     mesh.materials.append(studio_material())
     obj = bpy.data.objects.new("Studio", mesh)
     bpy.context.scene.collection.objects.link(obj)
+    pivot = Vector((center.x, center.y, 0.0))
+    obj.matrix_world = Matrix.Translation(pivot) @ Matrix.Rotation(turn, 4, "Z") @ Matrix.Translation(-pivot)
     return obj
 
 
@@ -484,9 +487,11 @@ def aim(obj, target):
     obj.rotation_euler = (target - obj.location).to_track_quat("-Z", "Y").to_euler()
 
 
-def lights(center, radius):
-    """Hauptlicht vorne links, Aufheller rechts, kühles Kantenlicht von hinten, weiches Licht von oben."""
+def lights(center, radius, turn=0.0):
+    """Hauptlicht vorne links, Aufheller rechts, kühles Kantenlicht von hinten, weiches Licht von oben. Gedacht für
+    die Kamera vorne rechts; `turn` dreht alles mit, wenn die Kamera woanders steht."""
     r = radius
+    spin = Matrix.Rotation(turn, 3, "Z")
     setups = (
         ("Hauptlicht", (-2.4, -2.6, 2.4), 2.2, 1.0, (1.0, 0.97, 0.92)),
         ("Aufheller", (3.0, -1.6, 0.9), 3.0, 0.3, (0.86, 0.93, 1.0)),
@@ -503,21 +508,25 @@ def lights(center, radius):
         light.energy = 45 * share * distance * distance
         obj = bpy.data.objects.new(name, light)
         bpy.context.scene.collection.objects.link(obj)
-        obj.location = center + Vector(offset) * r
+        obj.location = center + spin @ Vector(offset) * r
         aim(obj, center)
         made.append(obj)
     return made
 
 
-def camera(center, corners, aspect):
-    """Schräg von vorne rechts, leicht von oben, das Modell füllt das Bild (mit Rand)."""
+CAMERA = (34.0, 17.0)  # Grad: rechts von vorne, über dem Boden (ohne Angabe aus dem Fenster)
+
+
+def camera(center, corners, aspect, azimuth=CAMERA[0], elevation=CAMERA[1]):
+    """Standardmäßig schräg von vorne rechts, leicht von oben, sonst aus dem Blickwinkel, den Georg im Blueprint
+    gerade hat (azimuth: 0 = vorne, 90 = rechts; elevation: über dem Boden). Das Modell füllt das Bild mit Rand."""
     data = bpy.data.cameras.new("Kamera")
     data.lens = 55
     data.sensor_fit = "HORIZONTAL"
     data.sensor_width = 36
     tan_h = 18 / data.lens
     tan_v = tan_h / aspect
-    az, el = math.radians(34), math.radians(17)
+    az, el = math.radians(azimuth), math.radians(elevation)
     forward = Vector((-math.sin(az) * math.cos(el), math.cos(az) * math.cos(el), -math.sin(el)))
     right = forward.cross(Vector((0, 0, 1))).normalized()
     up = right.cross(forward).normalized()
@@ -765,10 +774,14 @@ def main():
     low, high, corners = bounds(objects)
     center = (low + high) / 2
     radius = max((high - low).length / 2, 1e-3)
-    backdrop(center, radius, min(0.0, low.z))
-    lights(center, radius)
+    view = job.get("kamera") if isinstance(job.get("kamera"), dict) else {}
+    azimuth = min(180.0, max(-180.0, num(view.get("azimut"), CAMERA[0])))
+    elevation = min(80.0, max(3.0, num(view.get("hoehe"), CAMERA[1])))  # nicht unter den Boden, nicht senkrecht
+    turn = math.radians(azimuth - CAMERA[0])
+    backdrop(center, radius, min(0.0, low.z), turn)
+    lights(center, radius, turn)
     aspect = scene.render.resolution_x / max(1, scene.render.resolution_y)
-    camera(center, corners, aspect)
+    camera(center, corners, aspect, azimuth, elevation)
     glare()
     device = use_gpu(bool(job.get("gpu", True)))
     if device == "CPU":  # auf dem Prozessor weniger Durchgänge: der Entrauscher glättet den Rest

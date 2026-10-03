@@ -128,6 +128,21 @@ class JobTest(unittest.TestCase):
         self.assertEqual(photo.device, "CPU")
         self.assertTrue(photo.image.is_file())
 
+    def test_the_view_goes_into_the_job(self):
+        jobs = []
+
+        def run(exe, job, work, *args, **kwargs):
+            jobs.append(job)
+            Path(job.get("bild") or job["blend"]).write_bytes(b"x")
+            return [{"schritt": "fertig", "geraet": "CPU"}]
+
+        with mock.patch("jarvis.blender.run_job", run):
+            blender.render(Path("blender"), SCENE, self.base, "Drohne", self.work, view={"azimut": 90, "hoehe": 10})
+            blender.make_blend(Path("blender"), SCENE, self.base, "Drohne", self.work, view={"azimut": -45, "hoehe": 30})
+            blender.render(Path("blender"), SCENE, self.base, "Drohne", self.work)
+        self.assertEqual([j.get("kamera") for j in jobs],
+                         [{"azimut": 90, "hoehe": 10}, {"azimut": -45, "hoehe": 30}, None])
+
     def test_blenders_reason_comes_through(self):
         with self.assertRaises(blender.BlenderError) as caught:
             blender.render(fake_blender(self.base, "fehler"), SCENE, self.base, "Drohne", self.work)
@@ -209,6 +224,20 @@ print("BBOX " + json.dumps(out))
 '''
 
 
+CAMERA_CHECK = r'''
+import json
+import bpy
+from mathutils import Vector
+cam = bpy.data.objects["Kamera"].matrix_world.translation
+parts = [o for o in bpy.data.objects if o.type == "MESH" and o.name != "Studio"]
+corners = [o.matrix_world @ Vector(c) for o in parts for c in o.bound_box]
+center = sum(corners, Vector()) / len(corners)
+studio = bpy.data.objects["Studio"]
+wall = min((studio.matrix_world @ v.co for v in studio.data.vertices), key=lambda p: -p.z)  # oberster Punkt der Wand
+print("KAMERA " + json.dumps([list(cam), list(center), wall.x]))
+'''
+
+
 @unittest.skipUnless(os.environ.get("JARVIS_TEST_BLENDER"), "nur mit echtem Blender (JARVIS_TEST_BLENDER=Pfad)")
 class RealBlenderTest(unittest.TestCase):
     def setUp(self):
@@ -233,6 +262,25 @@ class RealBlenderTest(unittest.TestCase):
                 size = max(h - lo for lo, h in zip(low, high))
                 worst = max(abs(a - b) for want, got in zip((low, high), boxes[pid]) for a, b in zip(want, got))
                 self.assertLess(worst / size, 0.04, f"{pid}: {boxes[pid]} statt {[low, high]}")
+
+    def test_camera_and_studio_follow_the_view(self):
+        """Von rechts gesehen (azimut 90): Kamera rechts vom Modell, die Studiowand dahinter links."""
+        import subprocess
+
+        scene = {"name": "Probe", "teile": [clean_part(p) for p in SAMPLER]}
+        blend = blender.make_blend(self.exe, scene, self.base, "Probe", self.base / "arbeit",
+                                   view={"azimut": 90, "hoehe": 10})
+        script = self.base / "kamera.py"
+        script.write_text(CAMERA_CHECK, encoding="utf-8")
+        out = subprocess.run([str(self.exe), "-b", "--factory-startup", str(blend), "--python", str(script)],
+                             capture_output=True, text=True, timeout=300)
+        line = next(x for x in out.stdout.splitlines() if x.startswith("KAMERA "))
+        cam, center, wall = json.loads(line[7:])
+        dx, dy, dz = (c - m for c, m in zip(cam, center))
+        self.assertGreater(dx, 0, "rechts vom Modell")
+        self.assertLess(abs(dy), 0.05 * dx, "genau von der Seite")
+        self.assertGreater(dz, 0, "leicht von oben")
+        self.assertLess(wall, center[0], "die Studiowand steht hinter dem Modell")
 
     def test_photo_and_blend_file(self):
         scene = {"name": "Probe", "groesse_m": 0.5, "teile": [clean_part(p) for p in SAMPLER]}

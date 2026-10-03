@@ -810,6 +810,11 @@ class Api:
         bp = self._blueprint()
         return bp.render_photo() if bp is not None else "Der Blueprint ist aus."
 
+    def blueprint_view(self, view) -> bool:
+        """Das Fenster meldet den Blickwinkel aufs Modell, damit „Render das“ genau so fotografiert."""
+        bp = self._blueprint()
+        return bool(bp is not None and bp.set_view(view))
+
     def blueprint_blender(self) -> str:
         """Knopf „Blender“: das Modell als .blend-Datei in Blender öffnen."""
         bp = self._blueprint()

@@ -267,14 +267,18 @@ def file_name(name: str) -> str:
 
 def render(blender: Path, scene: dict, folder: Path, name: str, work_dir: Path,
            on_progress: Callable[[dict], None] | None = None, cancel: threading.Event | None = None,
-           size: tuple[int, int] = (1600, 900), samples: int = 128, seconds: float = 150, gpu: bool = True) -> Photo:
-    """Ein Foto vom Modell: PNG in folder/Fotos, dazu ein JPEG fürs Fenster in work_dir."""
+           size: tuple[int, int] = (1600, 900), samples: int = 128, seconds: float = 150, gpu: bool = True,
+           view: dict | None = None) -> Photo:
+    """Ein Foto vom Modell: PNG in folder/Fotos, dazu ein JPEG fürs Fenster in work_dir. view = Blickwinkel aus dem
+    Blueprint ({"azimut": Grad, "hoehe": Grad}), sonst schräg von vorne rechts."""
     photos = folder / "Fotos"
     photos.mkdir(parents=True, exist_ok=True)
     image = _unique(photos / f"{name} {_stamp()}.png")
     preview = work_dir / "blueprint-foto.jpg"
     job = {"szene": scene, "bild": str(image), "vorschau": str(preview), "breite": size[0], "hoehe": size[1],
            "samples": samples, "samples_cpu": 48, "sekunden": seconds, "gpu": gpu}
+    if view:
+        job["kamera"] = dict(view)
     started = time.monotonic()
     try:
         # Großzügig: Beim ersten Mal lädt Blender die Rechenkerne der Grafikkarte, das kann Minuten dauern
@@ -293,13 +297,16 @@ def render(blender: Path, scene: dict, folder: Path, name: str, work_dir: Path,
 
 
 def make_blend(blender: Path, scene: dict, folder: Path, name: str, work_dir: Path,
-               cancel: threading.Event | None = None) -> Path:
+               cancel: threading.Event | None = None, view: dict | None = None) -> Path:
     """Eine .blend-Datei mit Modell, Studio, Licht und Kamera (F12 rendert dasselbe Foto). Jedes Mal eine neue
     Datei mit Datum, damit nichts überschrieben wird, woran Georg in Blender weitergebaut hat."""
     target = folder / "Blender"
     target.mkdir(parents=True, exist_ok=True)
     path = _unique(target / f"{name} {_stamp()}.blend")
-    run_job(blender, {"szene": scene, "blend": str(path), "gpu": True}, work_dir, cancel=cancel, timeout=180)
+    job = {"szene": scene, "blend": str(path), "gpu": True}
+    if view:
+        job["kamera"] = dict(view)
+    run_job(blender, job, work_dir, cancel=cancel, timeout=180)
     if not path.is_file():
         raise BlenderError("Blender hat die Datei nicht gespeichert.")
     return path

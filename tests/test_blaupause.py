@@ -510,6 +510,24 @@ class BlenderTest(unittest.TestCase):
         self.assertEqual(self.bp._blender_after, "", "Stopp vergisst auch das Foto")
         self.bp.busy = False
 
+    def test_photo_from_the_angle_georg_is_looking_from(self):
+        self.assertTrue(self.bp.set_view({"azimut": 270.5, "hoehe": 95}))
+        self.assertEqual(self.bp.view, {"azimut": -89.5, "hoehe": 89.0})
+        for bad in (None, {"azimut": "links"}, {"azimut": float("nan"), "hoehe": 1}, {"hoehe": 3}):
+            with self.subTest(view=bad):
+                self.assertFalse(self.bp.set_view(bad))
+        self.assertEqual(self.bp.view, {"azimut": -89.5, "hoehe": 89.0}, "Unsinn ändert nichts")
+        with mock.patch("jarvis.blender.find_blender", return_value=self.exe), \
+                mock.patch("jarvis.blender.render", return_value=self.photo) as render, \
+                mock.patch("jarvis.blender.make_blend", return_value=Path("m.blend")) as make, \
+                mock.patch("jarvis.blender.open_blend"):
+            self.bp.render_photo()
+            self.wait()
+            self.bp.open_in_blender()
+            self.wait()
+        self.assertEqual(render.call_args.kwargs["view"], {"azimut": -89.5, "hoehe": 89.0})
+        self.assertEqual(make.call_args.kwargs["view"], {"azimut": -89.5, "hoehe": 89.0})
+
     def test_window_gets_the_photo(self):
         from jarvis.gui.app import Api, GuiBridge
 

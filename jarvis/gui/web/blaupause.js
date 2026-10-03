@@ -1301,6 +1301,25 @@
       else renderer.render(world, camera);
       drawOverlay();
       drawGizmo();
+      reportView();
+    }
+
+    // Den Blickwinkel aufs Modell an Jarvis melden: "Render das" fotografiert dann genau so.
+    // Azimut 0 = von vorne, 90 = von rechts; Höhe in Grad über dem Boden (Drehung des Modells eingerechnet).
+    let viewSent = { az: null, el: 0, checked: -10 };
+    function reportView() {
+      if (clock - viewSent.checked < 0.5) return;
+      viewSent.checked = clock;
+      const sp = Math.sin(ctl.phi);
+      const d = new T.Vector3(sp * Math.sin(ctl.theta), Math.cos(ctl.phi), sp * Math.cos(ctl.theta));
+      d.applyQuaternion(new T.Quaternion().setFromEuler(new T.Euler(turn.x, turn.y, 0)).invert());
+      const az = Math.atan2(d.x, d.z) * 180 / Math.PI;
+      const el = Math.asin(clamp(d.y, -1, 1)) * 180 / Math.PI;
+      const moved = viewSent.az === null ? 999 : Math.abs(((az - viewSent.az + 540) % 360) - 180) + Math.abs(el - viewSent.el);
+      if (moved < 2) return;
+      viewSent.az = az;
+      viewSent.el = el;
+      call('blueprint_view', { azimut: Math.round(az * 10) / 10, hoehe: Math.round(el * 10) / 10 }).catch(() => {});
     }
 
     function start() {
@@ -2380,6 +2399,10 @@
           ? Promise.resolve({ ok: true, src: window.JarvisDemoPhoto })
           : Promise.reject(new Error('Demo'))),
         blueprint_blender: () => Promise.reject(new Error('Demo')),
+        blueprint_view: (v) => {
+          window.JarvisDemoView = v; // für Tests: der zuletzt gemeldete Blickwinkel
+          return Promise.resolve(true);
+        },
       },
       build,
       load: () => {

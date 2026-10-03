@@ -386,6 +386,7 @@ class Blueprint:
         # Blender (Foto und .blend-Datei): läuft im Hintergrund, das letzte Foto zeigt das Fenster
         self.blender_setting = str(section.get("blender_pfad", "") or "")
         self.photo = None  # blender.Photo
+        self.view: dict | None = None  # Blickwinkel im Fenster, aus dem auch das Foto kommt (set_view)
         self._blender_thread: threading.Thread | None = None
         self._blender_cancel = threading.Event()
         self._blender_after = ""  # "Render das", während Claude noch baut: gleich danach ("foto" oder "blend")
@@ -1054,6 +1055,21 @@ class Blueprint:
 
     # ------------------------------------------------------------------ Blender: Foto und .blend-Datei
 
+    def set_view(self, view) -> bool:
+        """Das Fenster meldet, aus welchem Winkel Georg das Modell ansieht: {"azimut": Grad (0 = vorne, 90 = rechts),
+        "hoehe": Grad über dem Boden}. "Render das" fotografiert dann genau so."""
+        if not isinstance(view, dict):
+            return False
+        try:
+            azimuth, height = float(view.get("azimut")), float(view.get("hoehe"))
+        except (TypeError, ValueError):
+            return False
+        if not (math.isfinite(azimuth) and math.isfinite(height)):
+            return False
+        azimuth = (azimuth + 180.0) % 360.0 - 180.0
+        self.view = {"azimut": round(azimuth, 1), "hoehe": round(min(89.0, max(-89.0, height)), 1)}
+        return True
+
     def _blender_busy(self) -> bool:
         return self._blender_thread is not None and self._blender_thread.is_alive()
 
@@ -1082,7 +1098,8 @@ class Blueprint:
         if found is None and not blender.can_install():
             return "Blender ist auf diesem Rechner nicht installiert, Sir."
         self._blender_cancel.clear()
-        thread = threading.Thread(target=self._blender_work, args=(kind, scene, found), name="jarvis-blender",
+        view = dict(self.view) if self.view else None
+        thread = threading.Thread(target=self._blender_work, args=(kind, scene, found, view), name="jarvis-blender",
                                   daemon=True)
         self._blender_thread = thread
         thread.start()
@@ -1094,7 +1111,7 @@ class Blueprint:
     def _scratch(self) -> Path:
         return Path(getattr(self._brain, "state_dir", "") or Path(tempfile.gettempdir()) / "jarvis") / "blender"
 
-    def _blender_work(self, kind: str, scene: dict, path) -> None:
+    def _blender_work(self, kind: str, scene: dict, path, view: dict | None = None) -> None:
         from . import blender
 
         name = blender.file_name(scene.get("name") or "Blueprint")
@@ -1111,7 +1128,8 @@ class Blueprint:
                                                "in config.toml unter [blaupause] blender_pfad eintragen.")
             if kind == "blend":
                 self._emit("render", state="blend", kind=kind)
-                file = blender.make_blend(path, scene, self.folder, name, self._scratch(), cancel=self._blender_cancel)
+                file = blender.make_blend(path, scene, self.folder, name, self._scratch(), cancel=self._blender_cancel,
+                                          view=view)
                 blender.open_blend(path, file)
                 log.info("Blueprint in Blender: %s", file)
                 self._emit("render", state="opened", kind=kind, path=str(file))
@@ -1123,7 +1141,7 @@ class Blueprint:
                            note=step.get("hinweis") or "")
 
             photo = blender.render(path, scene, self.folder, name, self._scratch(), on_progress=progress,
-                                   cancel=self._blender_cancel)
+                                   cancel=self._blender_cancel, view=view)
             self.photo = photo
             log.info("Blueprint-Foto nach %.0f s (%s): %s", photo.seconds, photo.device or "?", photo.image)
             self._emit("render", state="done", kind=kind, path=str(photo.image), seconds=photo.seconds,
