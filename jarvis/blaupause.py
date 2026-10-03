@@ -325,6 +325,19 @@ _IN_BLENDER = re.compile(
 _WORD_NUMBERS = {"einmal": 1, "zweimal": 2, "dreimal": 3, "doppelt": 2, "halb": 0.5, "dreifach": 3, "zehnmal": 10}
 
 
+# Ein Gegenstand fängt mit Artikel oder Zahl an: "Bau ein Auto", "Mach den Millennium Falcon", nicht "Mach weiter"
+_OBJECT = re.compile(r"^(?:ein|eine|einen|einem|einer|der|die|das|den|dem|des|zwei|drei|vier|fünf|sechs|zehn|\d+|"
+                     r"neue[nrs]?|kleine[nmrs]?|große[nmrs]?|meine[nmrs]?)\b")
+
+
+def _everyday(text: str) -> bool:
+    """"Mach lauter", "Mach den PC aus", "Mach Spotify auf", "Stell einen Timer": ein Sofort-Befehl wie sonst
+    auch, keine Änderung am Modell (beginnt nur zufällig mit "Mach" oder "Stell")."""
+    from . import intents
+
+    return intents.match(text) is not None
+
+
 def _factor(norm: str) -> float | None:
     """"größer" 1.25, "viel größer" 1.6, "doppelt so groß" 2, "um 50 prozent größer" 1.5, "halb so groß" 0.5."""
     percent = re.search(r"(\d+(?:[.,]\d+)?) ?(?:prozent|%)", norm)
@@ -643,7 +656,7 @@ class Blueprint:
         local = self._local(norm)
         if local is not None:
             return local
-        if self._has_model() and _EDIT.match(norm) and not _SOFTWARE.search(norm):
+        if self._has_model() and _EDIT.match(norm) and not _SOFTWARE.search(norm) and not _everyday(text):
             return self.generate(text, fresh=False)
         return None
 
@@ -662,6 +675,9 @@ class Blueprint:
         what = made.group("what")
         explicit = bool(_EXPLICIT.search(norm)) or (bool(_STRONG_VERB.match(norm)) and not _NOT_AN_OBJECT.search(norm))
         if not explicit and not self.active:
+            return None
+        if not explicit and (_everyday(text) or not _OBJECT.match(what)):
+            # Auch bei leerem Tisch kein Modell aus "Mach den PC aus", "Mach das Licht an", "Mach weiter"
             return None
         if self.active and not explicit and self._has_model():
             # Bei offenem Modell ist "Mach ..." meist eine Änderung ("Mach den Rumpf schlanker"),

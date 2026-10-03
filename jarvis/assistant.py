@@ -414,6 +414,16 @@ class Assistant:
                 if on:
                     return "Sehr wohl, Sir. Ich sage wieder Bescheid, wenn mir etwas auffällt."
                 return "Sehr wohl, Sir. Ich melde mich nur noch, wenn es dringend ist. Mit „Hinweise an“ geht es wieder."
+        spoken = intents.normalize(text)
+        if _WAKE.match(spoken):
+            # "Wach auf" wie im Video: kurz begrüßen und gleich weiter zuhören (die Antwort ist eine Frage)
+            return random.choice(WAKE_LINES)
+        if _WHIP.match(spoken):
+            # "Schneller!", "Beeil dich": ab jetzt eine Stufe flotter (dieser Satz selbst zählt nicht als Arbeit).
+            # Vor der Blaupause: Bei offenem Blueprint ist "Mach schneller" kein Wunsch an das Modell.
+            return self.feedback("peitsche", working=self._busy > 1)
+        if _PRAISE.match(spoken):
+            return self.feedback("lob")
         world = getattr(self, "world", None)
         if world is not None:
             # Die Weltlage: "Zeig mir, was in der Welt passiert", "Flieg nach Tokio", "Weiter" im Lagebericht.
@@ -436,15 +446,6 @@ class Assistant:
                 answer = None
             if answer is not None:
                 return answer
-        spoken = intents.normalize(text)
-        if _WAKE.match(spoken):
-            # "Wach auf" wie im Video: kurz begrüßen und gleich weiter zuhören (die Antwort ist eine Frage)
-            return random.choice(WAKE_LINES)
-        if _WHIP.match(spoken):
-            # "Schneller!", "Beeil dich": ab jetzt eine Stufe flotter (dieser Satz selbst zählt nicht als Arbeit)
-            return self.feedback("peitsche", working=self._busy > 1)
-        if _PRAISE.match(spoken):
-            return self.feedback("lob")
         zentrale = getattr(self, "zentrale", None)
         if zentrale is not None:
             # Die Kommandozentrale: "Briefing", morgens "Guten Morgen", "Zeig die Zentrale", "Aktualisiere die Zentrale"

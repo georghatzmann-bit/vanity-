@@ -108,6 +108,47 @@ class CommandTest(unittest.TestCase):
                 self.assertTrue(self.bp.active)
         self.assertIn("geschlossen", self.bp.command("Blueprint schließen"))
 
+    def test_everyday_commands_stay_everyday_commands(self):
+        """Bei offener Blaupause ist "Mach lauter" oder "Mach den PC aus" keine Änderung am Modell für Claude."""
+        self.bp.open()
+        wishes = []
+        self.bp.generate = lambda wish, fresh=True: wishes.append(wish) or "Sehr wohl, Sir."
+        for said in ("Mach lauter", "Mach den PC aus", "Mach einen Screenshot", "Mach Spotify auf",
+                     "Stell einen Timer auf 5 Minuten", "Mach die Musik aus", "Gib mir das Wetter"):
+            with self.subTest(said=said):
+                self.assertIsNone(self.bp.command(said))
+        self.assertEqual(wishes, [])
+        for said in ("Füg noch zwei Antennen hinzu", "Gib ihm Räder", "Häng einen Greifarm dran", "Mach ein Fenster rein"):
+            self.bp.command(said)
+        self.assertEqual(len(wishes), 4, "Wünsche zum Modell gehen weiter an Claude")
+
+    def test_empty_table_builds_only_things(self):
+        """Offener Blueprint, noch nichts auf dem Tisch: "Mach das Licht an" oder "Mach weiter" ist kein neues Modell."""
+        empty = Blueprint({}, None, self.ui, Path(self.tmp.name) / "leer", self.said.append)
+        empty.open()
+        built = []
+        empty.generate = lambda wish, fresh=True: built.append(wish) or "Sehr wohl, Sir."
+        for said in ("Mach lauter", "Mach den PC aus", "Mach das Licht an", "Mach die Musik aus", "Mach weiter",
+                     "Mach Pause", "Mach Spotify auf"):
+            with self.subTest(said=said):
+                self.assertIsNone(empty.command(said))
+        for said in ("Bau ein Auto", "Bau mir den Eiffelturm", "Zeichne einen Stuhl", "Generiere Iron Man Helm",
+                     "Bau Raumschiff in 3D"):
+            empty.command(said)
+        self.assertEqual(len(built), 5)
+
+    def test_whip_with_the_blueprint_open(self):
+        from tests.test_assistant import make
+
+        assistant, _ui, _speaker, _ = make()
+        assistant.blueprint = self.bp
+        self.bp.open()
+        wishes = []
+        self.bp.generate = lambda wish, fresh=True: wishes.append(wish) or "Sehr wohl, Sir."
+        assistant.handle("Mach schneller", speak=False)
+        self.assertEqual(wishes, [], "die Peitsche, kein Wunsch an das Modell")
+        self.assertEqual(assistant.brain.asked, [])
+
     def test_wishes_while_building_are_queued_and_done_right_after(self):
         """Georg: "ich sag was, dann macht er direkt weiter". Während Claude baut, kommt der nächste Wunsch in die
         Warteschlange statt "Ich konstruiere noch"."""
