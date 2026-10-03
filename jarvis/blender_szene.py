@@ -290,6 +290,12 @@ def geometry(part):
         return extrusion(name, part)
     if form == "rohr":
         return tube(name, part)
+    if form == "weich":
+        net = part.get("netz") if isinstance(part.get("netz"), dict) else {}
+        verts = points(net.get("punkte"), 3, 4)
+        faces = [f[:3] for f in net.get("flaechen") or [] if isinstance(f, list) and len(f) >= 3
+                 and all(isinstance(i, int) and 0 <= i < len(verts or []) for i in f[:3])]
+        return mesh_from(name, (verts, faces)) if verts and faces else None
     return None
 
 

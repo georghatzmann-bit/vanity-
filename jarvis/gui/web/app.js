@@ -1312,7 +1312,7 @@
       ['Wer bist du eigentlich?', 'Jarvis, Sir. Butler, Techniker und gelegentlich die Stimme der Vernunft.'],
     ];
     const shopMode = (params.get('werkstatt') || '').toLowerCase();
-    // ?blaupause=bau (Drohne baut sich auf) oder =fertig (liegt schon da), dazu &ansicht=explosion|holo|echt|oben
+    // ?blaupause=bau (Drohne baut sich auf), =fertig (liegt schon da) oder =herz, dazu &ansicht=explosion|holo|echt|oben
     const bpMode = (params.get('blaupause') || '').toLowerCase();
     const bpDemo = window.JarvisBlaupause ? window.JarvisBlaupause.demoApi(push) : null;
     // ?weltlage (Lagebericht Welt) oder =deutschland, &ziel=2 (bleibt bei Meldung 2), &flug (Flugverkehr)
@@ -1613,6 +1613,7 @@
           const look = (params.get('ansicht') || '').toLowerCase();
           setTimeout(() => {
             if (bpMode === 'fertig') push(Object.assign({ type: 'blueprint', action: 'open' }, bpDemo.load()));
+            else if (bpMode === 'herz') push(Object.assign({ type: 'blueprint', action: 'open' }, bpDemo.loadHeart()));
             else {
               push({ type: 'blueprint', action: 'open', scene: { name: '', teile: [] }, selected: '', busy: false });
               setTimeout(() => bpDemo.build('Bau mir eine Aufklärungsdrohne'), 600);
@@ -1622,8 +1623,11 @@
                 if (look === 'explosion') push({ type: 'blueprint', action: 'view', what: 'explode', on: true });
                 else if (look === 'oben' || look === 'vorne' || look === 'seite') push({ type: 'blueprint', action: 'view', what: 'camera', side: look });
                 else push({ type: 'blueprint', action: 'view', what: 'look', mode: look });
-              }, bpMode === 'fertig' ? 900 : 5200);
+              }, bpMode === 'fertig' || bpMode === 'herz' ? 900 : 5200);
             }
+            // &anim=verschmelzen|schmelzen|pulsieren|schweben|aufloesen
+            const art = (params.get('anim') || '').toLowerCase();
+            if (art) setTimeout(() => push({ type: 'blueprint', action: 'view', what: 'anim', art }), 1000);
           }, 700);
         }
         if (wlDemo && wlMode) {

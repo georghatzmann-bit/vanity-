@@ -1,13 +1,16 @@
 """Blueprint (früher "Blaupause"): 3D-Modelle als Hologramm, wie in Tony Starks Werkstatt.
 
 Georg sagt "Generiere einen Iron-Man-Helm" oder "Bau mir eine Drohne als Hologramm". Claude zeichnet das
-Modell aus Grundformen (Quader, Kugel, Zylinder, Kegel, Ring, Kapsel, Drehkörper, Extrusion, Rohr) und
-schickt es Teil für Teil als JSON-Zeilen. Jedes Teil erscheint sofort im Fenster und baut sich als
+Modell aus Grundformen (Quader, Kugel, Zylinder, Kegel, Ring, Kapsel, Drehkörper, Extrusion, Rohr) und weichen
+Formen für Organisches (Herz, Tiere, Figuren: Kugeln und Stäbe, die ineinanderfließen, weich.py) und schickt es Teil
+für Teil als JSON-Zeilen. Jedes Teil erscheint sofort im Fenster und baut sich als
 Hologramm auf. Danach geht alles per Sprache:
 
 - sofort, ohne Claude: "Mach das größer", "Dreh das Objekt", "Zoom rein", "Explosionsansicht",
   "Zeig mir das Triebwerk genauer", "Nur den Rumpf", "Mach die Flügel rot", "Entferne die Antenne",
-  "Rückgängig", "Von oben", "Drahtmodell", "Speicher das als Drohne", "Exportier als STL"
+  "Rückgängig", "Von oben", "Drahtmodell", "Speicher das als Drohne", "Exportier als STL", "Hol das Herz"
+- Animationen, sofort: "Animier das so, dass es verschmilzt", "Lass es schmelzen", "Lass das Herz schlagen",
+  "Lass es schweben", "Lös es auf", "Animation aus"
 - mit Claude: "Füg noch zwei Raketen an die Flügel", "Mach den Rumpf schlanker", "Setz ein Cockpit drauf"
 - mit Blender (blender.py): "Render das" macht ein Foto wie aus dem Fotostudio, "Öffne das in Blender" eine
   .blend-Datei zum Weiterbauen. Fehlt Blender, installiert Jarvis es.
@@ -44,11 +47,17 @@ MAX_UNDO = 40
 STL_MAX_BYTES = 40 * 1024 * 1024
 FOLDER = "Blaupausen"
 
-FORMS = ("quader", "kugel", "zylinder", "kegel", "ring", "kapsel", "drehkoerper", "extrusion", "rohr")
+FORMS = ("quader", "kugel", "zylinder", "kegel", "ring", "kapsel", "drehkoerper", "extrusion", "rohr", "weich")
 _FORM_ALIASES = {
     "box": "quader", "würfel": "quader", "cube": "quader", "sphere": "kugel", "ball": "kugel",
     "cylinder": "zylinder", "cone": "kegel", "torus": "ring", "capsule": "kapsel", "lathe": "drehkoerper",
     "drehkörper": "drehkoerper", "extrude": "extrusion", "tube": "rohr", "pipe": "rohr",
+    "blob": "weich", "organisch": "weich", "metaball": "weich", "metaballs": "weich", "soft": "weich",
+}
+# Animationen, die Jarvis sofort zeigt (blaupause.js), mit seiner Antwort. "" = Animation aus.
+ANIMATIONS = {
+    "verschmelzen": "Es verschmilzt, Sir.", "schmelzen": "Es schmilzt, Sir.", "pulsieren": "Es schlägt, Sir.",
+    "schweben": "Es schwebt, Sir.", "aufloesen": "Es löst sich auf, Sir.", "": "Animation aus, Sir.",
 }
 MATERIALS = ("metall", "matt", "glas", "leuchten", "holo")
 DEFAULT_COLOR = "#7fd8ff"
@@ -71,6 +80,7 @@ Anweisungen:
 {"op":"aendern","id":"...", ...nur die geänderten Felder...}
 {"op":"entfernen","id":"..."}
 {"op":"name","name":"...","beschreibung":"..."}
+{"op":"animation","art":"verschmelzen"}  (nur wenn Georg eine Bewegung will: verschmelzen, schmelzen, pulsieren, schweben, aufloesen; "" = aus)
 {"op":"sagen","text":"Höchstens ein kurzer Satz (Sie-Form, Butler-Ton)"}  (nur bei einem neuen Modell, als letzte Zeile; bei Änderungen weglassen: Jarvis sagt dann nur "Erledigt")
 
 Ein Teil:
@@ -87,6 +97,11 @@ Formen und ihre Maße ("masse"):
 - extrusion: statt masse "umriss":[[x,y],...] und "tiefe":d  (flaches Profil in z ausgezogen: Flügel, Flossen, Platten, Zahnräder, Embleme); \
 optional "loecher":[[[x,y],...],...] für Aussparungen (Fenster, Lüftungsschlitze, Speichen)
 - rohr: statt masse "pfad":[[x,y,z],...] und "radius":r  (Kabel, Rohre, Bögen, Griffe, Kufen)
+- weich: statt masse "kugeln":[[x,y,z,r],...] und/oder "staebe":[[x1,y1,z1,x2,y2,z2,r],...], dazu "glaette":k \
+(0.05 bis 0.4). Die Kugeln und Stäbe fließen wie flüssiges Metall glatt ineinander, je größer k, desto weicher. \
+Für alles Organische: Herz, Organe, Tiere, Köpfe, Figuren, Hände, Früchte, Pflanzen, Wolken, Tropfen, Schleim. \
+Beispiel Herz: {"op":"teil","id":"herz","name":"Herz","form":"weich","kugeln":[[-0.28,1.3,0,0.36],[0.28,1.3,0,0.36],\
+[0,1.0,0,0.36],[0,0.65,0,0.24],[0,0.35,0,0.12]],"glaette":0.25,"skala":[1,1,0.75],"pos":[0,0,0],"farbe":"#c62828","material":"matt"}
 Optional bei jedem Teil: "skala":[x,y,z]; bei extrusion "fase" (Kantenrundung 0 bis 0.05).
 
 Regeln:
@@ -96,8 +111,9 @@ y zeigt nach oben, z nach vorne zum Betrachter. "dreh" in Grad.
 - Baue wie ein Industriedesigner in Tony Starks Werkstatt, detailliert und glaubwürdig: erst die Hauptformen \
 (Rumpf, Hülle, Rahmen) in richtigen Proportionen, dann Details: Fugen und Panellinien (dünne Quader), Schrauben \
 und Nieten (kleine Zylinder), Lüftungsschlitze, Lichter und Displays (material leuchten), Kabel und Leitungen (rohr), \
-Gelenke. 30 bis 120 Teile, je nach Objekt. Organische Formen (Helme, Köpfe, Rümpfe, Karosserien) als drehkoerper \
-mit 8 bis 16 Profilpunkten, mit "skala" oval gemacht. Kanten von Gehäusen abrunden ("rundung"). Symmetrische \
+Gelenke. 30 bis 120 Teile, je nach Objekt. Lebendiges und Weiches (Herz, Tiere, Figuren, Organe, Früchte) als \
+weich, das sieht echt aus statt aus Klötzen gebaut; dazu passende Details (Adern als rohr, Augen als kugel). Glatte \
+technische Rundungen (Helme, Rümpfe, Karosserien) als drehkoerper mit 8 bis 16 Profilpunkten, mit "skala" oval gemacht. Kanten von Gehäusen abrunden ("rundung"). Symmetrische \
 Teile links und rechts spiegeln. Teile sollen sich berühren oder leicht überlappen, nichts schwebt lose.
 - "gruppe" für Baugruppen (z. B. "Rumpf", "Antrieb", "Cockpit", "Elektronik"): Explosionsansicht und Fokus \
 arbeiten mit den Gruppen.
@@ -224,6 +240,16 @@ def clean_part(raw: dict, fallback_id: str = "") -> dict | None:
             return None
         part["pfad"] = path
         part["radius"] = _num(raw.get("radius"), 0.03, 0.001, 10)
+    elif form == "weich":
+        balls = [b[:3] + [max(0.005, b[3])] for b in _points(raw.get("kugeln"), 4, -100, 100, 0, 32) or []]
+        rods = [r[:6] + [max(0.005, r[6])] for r in _points(raw.get("staebe"), 7, -100, 100, 0, 16) or []]
+        if not balls and not rods:
+            return None
+        if balls:
+            part["kugeln"] = balls
+        if rods:
+            part["staebe"] = rods
+        part["glaette"] = _num(raw.get("glaette"), 0.12, 0.0, 1.0)
     return part
 
 
@@ -257,6 +283,43 @@ def _ops_from(data) -> Iterable[dict]:
             yield {"op": "teil", **data}
 
 
+_ANIM_STOP = re.compile(
+    r"^(?:(?:die )?animation (?:aus|stopp|stop|beenden|anhalten)|(?:stopp?|beende|halt)(?: die)? animation|"
+    r"keine animation(?: mehr)?|(?:hör|höre) auf (?:zu |mit dem )?(?:schlagen|pulsieren|schweben|schmelzen|"
+    r"verschmelzen|bewegen)|nicht mehr (?:schlagen|pulsieren|schweben|schmelzen|bewegen))$")
+_ANIM_KINDS = (
+    ("verschmelzen", re.compile(r"\b(?:verschmel\w*|verschmilzt|zusammen ?fließ\w*|fließ\w* (?:\w+ )?zusammen|"
+                                r"zusammen ?schmelz\w*|ineinander ?fließ\w*)")),
+    ("schmelzen", re.compile(r"\b(?:schmelz\w*|schmilzt|zerfließ\w*|zerläuft|zerlaufen|wie wachs)")),
+    ("aufloesen", re.compile(r"\b(?:auflös\w*|löst? (?:es |das |ihn |sie )?(?:sich )?auf\b|zerfall\w*|zerfällt|"
+                             r"in (?:partikel|staub)|zerbrösel\w*)")),
+    ("pulsieren", re.compile(r"\b(?:pulsier\w*|herzschlag|schlagen|schlägt|pochen|pocht|pumpen|pumpt)\b")),
+    ("schweben", re.compile(r"\b(?:schweb\w*|levitier\w*)")),
+)
+_ANIM_CUE = re.compile(r"\b(?:animier\w*|animation|lass|lasse|soll|mach|mache|zeig|zeige)\b")
+_ANIM_ASK = re.compile(r"^(?:animier\w*|animation)(?: (?:das|es|ihn|sie|das modell|das ganze|mal))?(?: an)?$")
+
+
+def animation_name(value) -> str | None:
+    """Der Name einer Animation, wie das Fenster ihn kennt, oder None."""
+    text = str(value or "").strip().lower().replace("ö", "oe").replace("ä", "ae").replace("ü", "ue")
+    text = {"aus": "", "stopp": "", "keine": "", "pulsiert": "pulsieren", "schlagen": "pulsieren",
+            "herzschlag": "pulsieren", "aufloesung": "aufloesen", "zerfallen": "aufloesen"}.get(text, text)
+    return text if text in ANIMATIONS else None
+
+
+def animation_for(norm: str) -> str | None:
+    """"Animier das so, dass es verschmilzt" -> "verschmelzen", "Lass es schlagen" -> "pulsieren",
+    "Animation aus" -> "", sonst None. Das Wort allein ("Verschmelzen") reicht auch."""
+    if _ANIM_STOP.match(norm):
+        return ""
+    for art, pattern in _ANIM_KINDS:
+        hit = pattern.search(norm)
+        if hit and (_ANIM_CUE.search(norm) or hit.start() == 0):
+            return art
+    return None
+
+
 def empty_scene() -> dict:
     return {"name": "", "beschreibung": "", "teile": []}
 
@@ -288,6 +351,8 @@ _MAKE_VERB = (r"(?:generier|generiere|erstell|erstelle|bau|baue|konstruier|konst
 _MAKE = re.compile(rf"^{_MAKE_VERB}(?: mir| uns)? (?P<what>.+)$")
 # "Generiere/Konstruiere/Modelliere ..." meint (fast) immer ein Modell, auch bei geschlossener Blaupause,
 # außer bei Texten, Bildern und Ähnlichem ("Generiere ein Passwort", "Generiere eine Playlist")
+# "Hol das Herz": ein Teil mit dem Namen nach vorne holen, sonst das Ding als neues Modell
+_FETCH = re.compile(r"^(?:hol|hole|holt)(?: mir| uns)?(?: mal)? (?P<what>.+?)(?: her| hervor| raus| heran| ran| nach vorne)?$")
 _STRONG_VERB = re.compile(r"^(?:generier|generiere|konstruier|konstruiere|modellier|modelliere)\b")
 _NOT_AN_OBJECT = re.compile(r"\b(?:passwort\w*|text\w*|bild\w*|foto\w*|lied\w*|song\w*|gedicht\w*|liste\w*|name\w*|"
                             r"zusammenfassung\w*|mail\w*|nachricht\w*|antwort\w*|idee\w*|plan|pläne|witz\w*|zitat\w*|"
@@ -656,6 +721,9 @@ class Blueprint:
                 return self.render_photo()
             if _IN_BLENDER.match(norm) and re.search(r"\b(?:das|es|ihn|sie|modell|objekt|ganze)\b", norm):
                 return self.open_in_blender()
+        fetched = self._fetch(text, norm)
+        if fetched is not None:
+            return fetched
         made = self._make_request(text, norm)
         if made is not None:
             return made
@@ -695,6 +763,26 @@ class Blueprint:
                 return None
         return self._start(text, what)
 
+    def _fetch(self, text: str, norm: str) -> str | None:
+        """"Hol das Herz": Gibt es ein Teil so (im Körper das Herz), kommt es nach vorne, sonst baut Claude es neu.
+        "Hol noch ein Rad dazu" ist eine Änderung. Nur bei offenem Blueprint ("Hol mir ein Glas Wasser" sonst nicht)."""
+        hit = _FETCH.match(norm)
+        if not hit or not self.active or _SOFTWARE.search(norm) or _everyday(text):
+            return None
+        what = hit.group("what")
+        parts = self._find(what) if self.scene["teile"] else []
+        if parts:
+            return self._focus_on(parts)
+        if self._has_model() and re.search(r"\b(?:noch|dazu|daneben|hinzu|zusätzlich|dran)\b", what):
+            return self.generate(text, fresh=False)
+        return self._start(text, what)
+
+    def _focus_on(self, parts: list[dict]) -> str:
+        self.selected = parts[0]["id"]
+        self._emit("view", what="focus", ids=[p["id"] for p in parts])
+        name = parts[0]["gruppe"] if len(parts) > 1 and parts[0].get("gruppe") else parts[0]["name"]
+        return f"{name}, Sir."
+
     def _start(self, text: str, what: str) -> str:
         if not self.active:
             self.open()
@@ -702,6 +790,13 @@ class Blueprint:
 
     def _local(self, norm: str) -> str | None:
         """Alles, was ohne Claude sofort geht."""
+        if self.scene["teile"]:
+            art = animation_for(norm)
+            if art is not None:
+                self._emit("view", what="anim", art=art)
+                return ANIMATIONS[art]
+            if _ANIM_ASK.match(norm):
+                return "Wie soll es sich bewegen, Sir? Verschmelzen, schmelzen, schlagen, schweben oder auflösen."
         if re.match(r"^(?:mach(?: das| es)? )?rückgängig$|^(?:mach )?(?:das|es) rückgängig(?: machen)?$|^undo$", norm):
             return self.undo()
         if re.match(r"^(?:wiederherstellen|stell (?:es|das) wieder her|doch wieder|redo)$", norm):
@@ -722,6 +817,7 @@ class Blueprint:
         if re.match(r"^(?:hör auf (?:zu|mit dem) drehen|nicht mehr drehen|drehung (?:aus|stopp|stop|anhalten)|"
                     r"rotation (?:aus|stopp)|halt (?:es )?still|stillhalten|anhalten)$", norm):
             self._emit("view", what="spin", on=False)
+            self._emit("view", what="anim", art="")  # still heißt: auch keine Animation mehr
             return "Steht still, Sir."
         if spin and not re.search(r"\b(?:musik|lauter|leiser|heizung|licht)\b", norm):
             rest = spin.group("rest")
@@ -812,10 +908,7 @@ class Blueprint:
             if not parts:
                 shown = re.sub(r"^(?:den|die|das|dem|der)\s+", "", words)  # "das triebwerk" -> "Triebwerk"
                 return f"Ein Teil namens {shown[:1].upper() + shown[1:]} finde ich nicht, Sir."
-            self.selected = parts[0]["id"]
-            self._emit("view", what="focus", ids=[p["id"] for p in parts])
-            name = parts[0]["gruppe"] if len(parts) > 1 and parts[0].get("gruppe") else parts[0]["name"]
-            return f"{name}, Sir."
+            return self._focus_on(parts)
         only = re.match(r"^(?:zeig(?: mir)? nur|nur (?:noch )?)(?: den| die| das)? ?(?P<what>.+?)(?: zeigen| anzeigen)?$", norm)
         if only:
             parts = self._find(only.group("what"))
@@ -967,6 +1060,11 @@ class Blueprint:
                 kind = str(op.get("op") or "").lower()
                 if kind == "sagen":
                     spoken = str(op.get("text") or "")[:300]
+                    continue
+                if kind == "animation":
+                    art = animation_name(op.get("art"))
+                    if art is not None:
+                        self._emit("view", what="anim", art=art)
                     continue
                 if kind == "neu" and not fresh:
                     continue  # eine Änderung: das Modell bleibt

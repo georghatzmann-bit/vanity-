@@ -56,6 +56,19 @@ class CleanTest(unittest.TestCase):
         self.assertIsNone(clean_part({"form": "teekanne"}))
         self.assertIsNone(clean_part("quader"))
 
+    def test_soft_forms(self):
+        """Georg: "die Modelle sehen so arsch aus". Herz, Tiere, Figuren als weiche Form statt aus Klötzen."""
+        heart = clean_part({"id": "herz", "form": "blob", "kugeln": [[0, 1, 0, 0.3], [0.2, 1.2, 0, -1], [1, 2], "x"],
+                            "staebe": [[0, 0, 0, 0, 1, 0, 0.1]], "glaette": 9})
+        self.assertEqual(heart["form"], "weich")
+        self.assertEqual(heart["kugeln"], [[0.0, 1.0, 0.0, 0.3], [0.2, 1.2, 0.0, 0.005]], "kein negativer Radius")
+        self.assertEqual(heart["staebe"], [[0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.1]])
+        self.assertEqual(heart["glaette"], 1.0)
+        self.assertEqual(clean_part({"form": "weich", "kugeln": [[0, 1, 0, 0.3]]})["glaette"], 0.12)
+        self.assertIsNone(clean_part({"form": "weich"}), "ohne Kugeln und Stäbe keine Form")
+        many = clean_part({"form": "weich", "kugeln": [[0, i / 10, 0, 0.1] for i in range(100)]})
+        self.assertEqual(len(many["kugeln"]), 32)
+
     def test_rounded_edges_and_cutouts(self):
         """Hochwertiger aussehende Modelle: abgerundete Kanten an Quadern, Aussparungen in Extrusionen."""
         box = clean_part({"form": "quader", "masse": [0.4, 0.06, 0.3], "rundung": 0.5})
@@ -107,6 +120,42 @@ class CommandTest(unittest.TestCase):
                 self.assertIn("Blueprint, Sir", self.bp.command(said))
                 self.assertTrue(self.bp.active)
         self.assertIn("geschlossen", self.bp.command("Blueprint schließen"))
+
+    def test_animations_by_voice(self):
+        """Georg: "animier das so, dass es verschmilzt". Sofort, ohne Claude."""
+        from jarvis.blaupause import animation_for
+
+        self.bp.open()
+        for said, art, answer in (("Animier das so, dass es verschmilzt", "verschmelzen", "Es verschmilzt, Sir."),
+                                  ("Lass das Herz schlagen", "pulsieren", "Es schlägt, Sir."),
+                                  ("Lass es schmelzen", "schmelzen", "Es schmilzt, Sir."),
+                                  ("Jarvis, lass es schweben", "schweben", "Es schwebt, Sir."),
+                                  ("Lös es auf", "aufloesen", "Es löst sich auf, Sir."),
+                                  ("Verschmelzen", "verschmelzen", "Es verschmilzt, Sir."),
+                                  ("Animation aus", "", "Animation aus, Sir.")):
+            with self.subTest(said=said):
+                self.assertEqual(self.bp.command(said), answer)
+                self.assertEqual(self.views()[-1], {"action": "view", "what": "anim", "art": art})
+        self.assertIn("Wie soll es sich bewegen", self.bp.command("Animier das"))
+        self.assertEqual(self.bp.command("Halt still"), "Steht still, Sir.")
+        self.assertEqual(self.views()[-1]["art"], "", "still heißt: auch keine Animation")
+        for said in ("Schlag mir eine Farbe vor", "Mach den Rumpf schlanker", "Mach die Flügel länger"):
+            with self.subTest(said=said):
+                self.assertIsNone(animation_for(said.lower()))
+
+    def test_fetch_a_part_or_a_new_model(self):
+        """Georg: "hol das Herz". Ein Teil mit dem Namen kommt nach vorne, sonst baut Claude es."""
+        wishes = []
+        self.bp.generate = lambda wish, fresh=True: wishes.append((wish, fresh)) or "Sehr wohl, Sir."
+        self.assertIsNone(self.bp.command("Hol mir ein Glas Wasser"), "Blueprint zu: kein Modell")
+        self.bp.open()
+        self.assertEqual(self.bp.command("Hol die Antenne"), "Antenne, Sir.")
+        self.assertEqual(self.views()[-1], {"action": "view", "what": "focus", "ids": ["antenne"]})
+        self.assertEqual(self.bp.command("Hol die Flügel her"), "Flügel, Sir.")
+        self.bp.command("Hol das Herz")
+        self.assertEqual(wishes[-1], ("Hol das Herz", True), "kein Teil so: ein neues Modell")
+        self.bp.command("Hol noch eine Antenne dazu")
+        self.assertEqual(wishes[-1], ("Hol noch eine Antenne dazu", False), "noch eins dazu: eine Änderung")
 
     def test_everyday_commands_stay_everyday_commands(self):
         """Bei offener Blaupause ist "Mach lauter" oder "Mach den PC aus" keine Änderung am Modell für Claude."""

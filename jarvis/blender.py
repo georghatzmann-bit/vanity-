@@ -155,12 +155,30 @@ def _remaining(line: str) -> float | None:
     return int(found.group(1) or 0) * 3600 + int(found.group(2)) * 60 + float(found.group(3))
 
 
+def with_soft_meshes(scene: dict) -> dict:
+    """Weiche Teile (Herz, Tiere, Figuren) rechnet Blender nicht selbst: Jarvis legt ihr Netz bei (weich.py)."""
+    from . import weich
+
+    parts = []
+    for part in scene.get("teile") or []:
+        if isinstance(part, dict) and part.get("form") == "weich" and "netz" not in part:
+            try:
+                net = weich.blender_mesh(part)
+            except Exception as exc:  # ein kaputtes Teil hält das Bild nicht auf
+                log.info("Weiches Teil %s: %s", part.get("id"), exc)
+                net = None
+            part = dict(part, netz=net) if net else part
+        parts.append(part)
+    return dict(scene, teile=parts)
+
+
 def run_job(blender: Path, job: dict, work_dir: Path, on_progress: Callable[[dict], None] | None = None,
             cancel: threading.Event | None = None, timeout: float = 900) -> list[dict]:
     """Blender ohne Fenster mit blender_szene.py starten. Gibt die JARVIS-BLENDER-Meldungen zurück.
     on_progress bekommt beim Rendern {"prozent": 0..100, "rest": Sekunden oder None}, während Blender beim ersten
     Mal die Rechenkerne der Grafikkarte lädt {"prozent": None, "rest": None, "hinweis": "kerne"}."""
     work_dir.mkdir(parents=True, exist_ok=True)
+    job = dict(job, szene=with_soft_meshes(job.get("szene") or {}))
     job_file = work_dir / f"blender-auftrag-{os.getpid()}-{threading.get_ident()}.json"
     job_file.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
     cmd = [str(blender), "-b", "--factory-startup", "--python-exit-code", "3", "--python", str(SCRIPT), "--",

@@ -18,6 +18,7 @@
   const $ = (id) => document.getElementById(id);
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   const rad = (d) => (Number(d) || 0) * Math.PI / 180;
+  const SOFT_RES = 56; // Gitterzellen der weichen Formen entlang der längsten Seite (beim Verschmelzen weniger)
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const HOT = '#ffcf6e';
   const motionMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -81,6 +82,155 @@
     return geo;
   }
 
+  // ------------------------------------------------------------------ Weiche Formen
+  // Wie jarvis/weich.py: Kugeln [x,y,z,r] und Stäbe [x1,y1,z1,x2,y2,z2,r] fließen ineinander wie flüssiges Metall
+  // (weiches Minimum ihrer Abstandsfelder, "glaette"). Das Netz entsteht über ein Gitter (Surface Nets): ein Punkt pro
+  // Zelle, durch die die Oberfläche geht, ein Viereck um jede geschnittene Gitterkante. So wird ein Herz ein Herz.
+  function softParts(p) {
+    const ok = (a, len) => Array.isArray(a) && a.length >= len && a.slice(0, len).every((v) => Number.isFinite(Number(v)));
+    const balls = (Array.isArray(p.kugeln) ? p.kugeln : []).filter((b) => ok(b, 4)).slice(0, 32)
+      .map((b) => b.slice(0, 4).map(Number));
+    const rods = (Array.isArray(p.staebe) ? p.staebe : []).filter((r) => ok(r, 7)).slice(0, 16)
+      .map((r) => r.slice(0, 7).map(Number));
+    const k = Number.isFinite(Number(p.glaette)) ? clamp(Number(p.glaette), 0, 1) : 0.12;
+    return { balls, rods, k };
+  }
+
+  function softDist(x, y, z, balls, rods, k) {
+    let d = 1e9;
+    const blend = (v) => {
+      if (k <= 0) { d = Math.min(d, v); return; }
+      const h = Math.max(k - Math.abs(d - v), 0) / k;
+      d = Math.min(d, v) - h * h * k * 0.25;
+    };
+    for (let i = 0; i < balls.length; i += 1) {
+      const b = balls[i];
+      const dx = x - b[0];
+      const dy = y - b[1];
+      const dz = z - b[2];
+      blend(Math.sqrt(dx * dx + dy * dy + dz * dz) - b[3]);
+    }
+    for (let i = 0; i < rods.length; i += 1) {
+      const r = rods[i];
+      const ax = r[3] - r[0];
+      const ay = r[4] - r[1];
+      const az = r[5] - r[2];
+      const len = ax * ax + ay * ay + az * az || 1e-12;
+      const t = clamp(((x - r[0]) * ax + (y - r[1]) * ay + (z - r[2]) * az) / len, 0, 1);
+      const dx = x - (r[0] + ax * t);
+      const dy = y - (r[1] + ay * t);
+      const dz = z - (r[2] + az * t);
+      blend(Math.sqrt(dx * dx + dy * dy + dz * dz) - r[6]);
+    }
+    return d;
+  }
+
+  const CORNERS = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+  const CELL_EDGES = [];
+  for (let a = 0; a < 8; a += 1) {
+    for (let b = a + 1; b < 8; b += 1) {
+      const diff = Math.abs(CORNERS[a][0] - CORNERS[b][0]) + Math.abs(CORNERS[a][1] - CORNERS[b][1])
+        + Math.abs(CORNERS[a][2] - CORNERS[b][2]);
+      if (diff === 1) CELL_EDGES.push([a, b]);
+    }
+  }
+
+  function softGeometry(T, shape, res) {
+    const { balls, rods, k } = shape;
+    if (!balls.length && !rods.length) return null;
+    const lo = [Infinity, Infinity, Infinity];
+    const hi = [-Infinity, -Infinity, -Infinity];
+    const grow = (x, y, z, r) => {
+      lo[0] = Math.min(lo[0], x - r); lo[1] = Math.min(lo[1], y - r); lo[2] = Math.min(lo[2], z - r);
+      hi[0] = Math.max(hi[0], x + r); hi[1] = Math.max(hi[1], y + r); hi[2] = Math.max(hi[2], z + r);
+    };
+    for (const b of balls) grow(b[0], b[1], b[2], b[3]);
+    for (const r of rods) { grow(r[0], r[1], r[2], r[6]); grow(r[3], r[4], r[5], r[6]); }
+    const pad = k * 0.5 + 0.02;
+    for (let i = 0; i < 3; i += 1) { lo[i] -= pad; hi[i] += pad; }
+    const step = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / Math.max(8, res);
+    const n = [0, 1, 2].map((i) => Math.max(2, Math.ceil((hi[i] - lo[i]) / step)));
+    const sx = n[0] + 1;
+    const sxy = sx * (n[1] + 1);
+    const values = new Float32Array(sxy * (n[2] + 1));
+    for (let l = 0; l <= n[2]; l += 1) {
+      for (let j = 0; j <= n[1]; j += 1) {
+        for (let i = 0; i <= n[0]; i += 1) {
+          values[i + sx * j + sxy * l] = softDist(lo[0] + i * step, lo[1] + j * step, lo[2] + l * step, balls, rods, k);
+        }
+      }
+    }
+    const cellIndex = new Int32Array(n[0] * n[1] * n[2]).fill(-1);
+    const pos = [];
+    const corner = new Float32Array(8);
+    for (let l = 0; l < n[2]; l += 1) {
+      for (let j = 0; j < n[1]; j += 1) {
+        for (let i = 0; i < n[0]; i += 1) {
+          let inside = 0;
+          for (let c = 0; c < 8; c += 1) {
+            const v = values[(i + CORNERS[c][0]) + sx * (j + CORNERS[c][1]) + sxy * (l + CORNERS[c][2])];
+            corner[c] = v;
+            if (v < 0) inside += 1;
+          }
+          if (inside === 0 || inside === 8) continue;
+          let px = 0; let py = 0; let pz = 0; let count = 0;
+          for (const [a, b] of CELL_EDGES) {
+            const va = corner[a];
+            const vb = corner[b];
+            if ((va < 0) === (vb < 0)) continue;
+            const t = va / (va - vb || 1e-12);
+            px += CORNERS[a][0] + t * (CORNERS[b][0] - CORNERS[a][0]);
+            py += CORNERS[a][1] + t * (CORNERS[b][1] - CORNERS[a][1]);
+            pz += CORNERS[a][2] + t * (CORNERS[b][2] - CORNERS[a][2]);
+            count += 1;
+          }
+          cellIndex[i + n[0] * (j + n[1] * l)] = pos.length / 3;
+          pos.push(lo[0] + (i + px / count) * step, lo[1] + (j + py / count) * step, lo[2] + (l + pz / count) * step);
+        }
+      }
+    }
+    const index = [];
+    const cellAt = (c) => cellIndex[c[0] + n[0] * (c[1] + n[1] * c[2])];
+    for (let axis = 0; axis < 3; axis += 1) {
+      const u = (axis + 1) % 3;
+      const v = (axis + 2) % 3;
+      const g = [0, 0, 0];
+      for (g[2] = 0; g[2] <= n[2]; g[2] += 1) {
+        for (g[1] = 0; g[1] <= n[1]; g[1] += 1) {
+          for (g[0] = 0; g[0] <= n[0]; g[0] += 1) {
+            if (g[axis] >= n[axis] || g[u] < 1 || g[u] >= n[u] || g[v] < 1 || g[v] >= n[v]) continue;
+            const here = values[g[0] + sx * g[1] + sxy * g[2]] < 0;
+            const e = [0, 0, 0];
+            e[axis] = 1;
+            const there = values[(g[0] + e[0]) + sx * (g[1] + e[1]) + sxy * (g[2] + e[2])] < 0;
+            if (here === there) continue;
+            const cell = (du, dv) => { const c = g.slice(); c[u] -= du; c[v] -= dv; return cellAt(c); };
+            const q = [cell(1, 1), cell(0, 1), cell(0, 0), cell(1, 0)];
+            if (q.some((x) => x < 0)) continue;
+            if (here) index.push(q[0], q[1], q[2], q[0], q[2], q[3]);
+            else index.push(q[0], q[2], q[1], q[0], q[3], q[2]);
+          }
+        }
+      }
+    }
+    if (!index.length) return null;
+    const nor = new Float32Array(pos.length);
+    const h = step * 0.5;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i]; const y = pos[i + 1]; const z = pos[i + 2];
+      const gx = softDist(x + h, y, z, balls, rods, k) - softDist(x - h, y, z, balls, rods, k);
+      const gy = softDist(x, y + h, z, balls, rods, k) - softDist(x, y - h, z, balls, rods, k);
+      const gz = softDist(x, y, z + h, balls, rods, k) - softDist(x, y, z - h, balls, rods, k);
+      const len = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
+      nor[i] = gx / len; nor[i + 1] = gy / len; nor[i + 2] = gz / len;
+    }
+    const geo = new T.BufferGeometry();
+    geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new T.BufferAttribute(nor, 3));
+    geo.setIndex(pos.length / 3 > 65535 ? new T.Uint32BufferAttribute(index, 1) : new T.Uint16BufferAttribute(index, 1));
+    return geo;
+  }
+
   function geometryFor(T, p) {
     const m = Array.isArray(p.masse) ? p.masse : [];
     const n = (i, d) => (Number.isFinite(Number(m[i])) && Number(m[i]) > 0 ? Number(m[i]) : d);
@@ -125,6 +275,7 @@
           const curve = new T.CatmullRomCurve3(pts, false, 'centripetal');
           return new T.TubeGeometry(curve, Math.max(24, pts.length * 12), Number(p.radius) || 0.03, 14, false);
         }
+        case 'weich': return softGeometry(T, softParts(p), SOFT_RES);
         default: return null;
       }
     } catch {
@@ -154,13 +305,32 @@
     echt: { edge: '#0b1d36', edgeOpacity: 0.22 },
   };
 
+  // Schmelzen ("Animier das so, dass es schmilzt"): Was oben ist, sackt nach unten, was am Boden ankommt, läuft nach
+  // außen weg wie Wachs. Im Shader, damit es bei jedem Modell flüssig läuft (uMelt 0 = fest, 1 = ganz geschmolzen).
+  const MELT_GLSL = `
+    uniform float uMelt;
+    uniform float uFloor;
+    uniform float uMeltT;
+    uniform float uSpread;
+    vec4 jarvisMelt(vec4 w) {
+      if (uMelt <= 0.0) return w;
+      float hgt = max(w.y - uFloor, 0.0);
+      float wob = 0.5 + 0.5 * sin(w.x * 6.0 + uMeltT * 1.3) * sin(w.z * 5.0 - uMeltT * 0.9);
+      float y = uFloor + hgt * (1.0 - uMelt * (0.78 + 0.22 * wob));
+      float low = 1.0 - smoothstep(0.0, 0.25 * uSpread, y - uFloor);
+      float r = length(w.xz) + 1e-4;
+      w.xz += w.xz / r * uMelt * uMelt * low * (0.35 + 0.4 * wob) * uSpread;
+      w.y = y;
+      return w;
+    }`;
   const VERT = `
     #include <clipping_planes_pars_vertex>
+    ${MELT_GLSL}
     varying vec3 vN;
     varying vec3 vV;
     varying float vY;
     void main() {
-      vec4 worldPos = modelMatrix * vec4(position, 1.0);
+      vec4 worldPos = jarvisMelt(modelMatrix * vec4(position, 1.0));
       vec4 mvPosition = viewMatrix * worldPos;
       vN = normalize(mat3(modelMatrix) * normal);
       vV = normalize(cameraPosition - worldPos.xyz);
@@ -477,6 +647,9 @@
     let isOpen = false;
     let closeTimer = 0;
     const view = { look: 'holo', spin: false, explode: false, labels: false, dims: true, isolate: null, focus: null };
+    // Animationen per Sprache ("Lass es schlagen", "Animier das so, dass es verschmilzt"), bis "Animation aus"
+    const anim = { art: '', since: 0, reset: false, soft: 0 };
+    const MELT = { uMelt: { value: 0 }, uFloor: { value: 0 }, uMeltT: { value: 0 }, uSpread: { value: 1 } };
 
     // three.js
     let T = null;
@@ -808,6 +981,7 @@
           side: T.DoubleSide,
           clippingPlanes: planes,
         });
+        meltify(solid);
       } else {
         const base = new T.Color(look.face);
         if (look.tint) base.lerp(new T.Color(p.farbe || look.face), 1 - look.tint);
@@ -822,6 +996,7 @@
             uSel: { value: 0 },
             uDim: { value: 0 },
             uTop: { value: 2 },
+            ...MELT,
           },
           vertexShader: VERT,
           fragmentShader: FRAG,
@@ -839,7 +1014,19 @@
         color: edgeColor, transparent: true, opacity: look.edgeOpacity, depthWrite: false,
         blending: look.additive ? T.AdditiveBlending : T.NormalBlending, clippingPlanes: planes,
       });
+      meltify(edges);
       return { solid, edges };
+    }
+
+    // three.js-Materialien (echte Farben, Kanten) bekommen das Schmelzen in ihren Vertex-Shader
+    function meltify(mat) {
+      mat.onBeforeCompile = (shader) => {
+        Object.assign(shader.uniforms, MELT);
+        shader.vertexShader = MELT_GLSL + '\n' + shader.vertexShader.replace('#include <project_vertex>',
+          'vec4 jw = jarvisMelt(modelMatrix * vec4(transformed, 1.0));\n  vec4 mvPosition = viewMatrix * jw;\n'
+          + '  gl_Position = projectionMatrix * mvPosition;');
+      };
+      mat.customProgramCacheKey = () => 'jarvis-melt';
     }
 
     function paint(o) {
@@ -868,7 +1055,7 @@
       const mats = materialsFor(p, plane);
       const solid = new T.Mesh(geo, mats.solid);
       solid.userData.partId = p.id;
-      const edges = new T.LineSegments(new T.EdgesGeometry(geo, 24), mats.edges);
+      const edges = new T.LineSegments(new T.EdgesGeometry(geo, p.form === 'weich' ? 60 : 24), mats.edges);
       group.add(solid, edges);
       group.position.set(...p.pos);
       group.rotation.set(rad(p.dreh[0]), rad(p.dreh[1]), rad(p.dreh[2]), 'XYZ');
@@ -877,7 +1064,7 @@
       const box = geo.boundingBox.clone().applyMatrix4(group.matrix);
       const o = {
         part: p, group, solid, edges, plane, born: clock, box, center: box.getCenter(new T.Vector3()),
-        base: group.position.clone(), offset: new T.Vector3(),
+        base: group.position.clone(), offset: new T.Vector3(), soft: p.form === 'weich' ? softParts(p) : null,
       };
       group.visible = !p.versteckt && (!view.isolate || view.isolate.has(p.id));
       model.add(group);
@@ -933,6 +1120,7 @@
       if (!op || typeof op !== 'object') return;
       if (op.op === 'neu') {
         sync({ name: op.name, beschreibung: op.beschreibung, groesse_m: op.groesse_m, teile: [] }, false);
+        setAnim('');
         view.isolate = null;
         view.focus = null;
         return;
@@ -1022,6 +1210,141 @@
           o.offset.copy(dg).add(spread);
         }
         n += 1;
+      }
+    }
+
+    // ------------------------------------------------------------ Animationen
+
+    const ease = (t) => t * t * (3 - 2 * t);
+    const ANIMS = ['verschmelzen', 'schmelzen', 'pulsieren', 'schweben', 'aufloesen'];
+
+    function setAnim(art) {
+      anim.art = ANIMS.includes(art) && !reducedMotion() ? art : '';
+      anim.since = clock;
+      anim.reset = true;
+      anim.center = null;
+    }
+
+    // Jedes Teil bekommt eine Richtung von der Mitte des Modells weg (zum Auseinander- und Zusammenfließen)
+    function prepareAnim() {
+      const all = modelBox(false, false);
+      const C = all.isEmpty() ? new T.Vector3(0, 1, 0) : all.getCenter(new T.Vector3());
+      const R = all.isEmpty() ? 1 : Math.max(0.3, all.getSize(new T.Vector3()).length() / 2);
+      anim.center = C;
+      anim.radius = R;
+      const away = anim.art === 'aufloesen' ? 1.1 : 0.6;
+      for (const o of objs.values()) {
+        const d = o.center.clone().sub(C);
+        if (d.length() < 1e-3) d.set(Math.sin(o.born * 7), 0.7, Math.cos(o.born * 5));
+        o.animDir = d.normalize().multiplyScalar(R * away);
+        if (anim.art === 'aufloesen') o.animDir.y += R * 0.35;
+        o.animSpin = new T.Vector3(Math.sin(o.born * 13), Math.cos(o.born * 11), Math.sin(o.born * 3)).multiplyScalar(2.2);
+      }
+    }
+
+    // Wie weit die Teile gerade auseinander sind: 0 = zusammen, 1 = ganz verteilt
+    function scatterAt(t) {
+      if (anim.art === 'verschmelzen') {
+        const c = t % 5.8; // auseinander, 2,8 s zusammenfließen, 1,8 s halten, 1 s wieder auseinander
+        if (c < 2.8) return 1 - ease(c / 2.8);
+        if (c < 4.6) return 0;
+        return ease((c - 4.6) / 1.2);
+      }
+      if (anim.art === 'aufloesen') {
+        const c = t % 6.4; // 2,4 s auflösen, kurz verteilt, 2,4 s wieder zusammen, kurz ganz
+        if (c < 2.4) return ease(c / 2.4);
+        if (c < 3.2) return 1;
+        if (c < 5.6) return 1 - ease((c - 3.2) / 2.4);
+        return 0;
+      }
+      return 0;
+    }
+
+    // Ganzes Modell: Herzschlag, Schweben, Schmelzen. Gibt zurück, wie weit die Teile verteilt sind.
+    function animStep() {
+      if (!anim.center) prepareAnim();
+      const t = clock - anim.since;
+      const R = anim.radius || 1;
+      let s = 1;
+      let lift = 0;
+      let sway = 0;
+      if (anim.art === 'pulsieren') {
+        const ph = t % 0.95; // zwei Schläge kurz hintereinander, dann Pause, wie ein Herz
+        s = 1 + 0.075 * Math.exp(-(((ph - 0.08) / 0.05) ** 2)) + 0.05 * Math.exp(-(((ph - 0.3) / 0.06) ** 2));
+      } else if (anim.art === 'schweben') {
+        lift = (0.12 + 0.06 * Math.sin(t * 1.6)) * R * Math.min(1, t / 1.2);
+        sway = 0.05 * Math.sin(t * 1.1);
+      }
+      model.scale.setScalar(s);
+      model.position.set(0, anim.center.y * (1 - s) + lift, 0);
+      model.rotation.z = sway;
+      let melt = 0;
+      if (anim.art === 'schmelzen') {
+        const c = t % 7.2; // 3,2 s schmelzen, kurz liegen, 2,2 s wieder hoch
+        melt = c < 3.2 ? ease(c / 3.2) : c < 4.4 ? 1 : c < 6.6 ? 1 - ease((c - 4.4) / 2.2) : 0;
+      }
+      MELT.uMelt.value = melt;
+      MELT.uMeltT.value = clock;
+      MELT.uFloor.value = model.position.y;
+      MELT.uSpread.value = R * 0.9;
+      return scatterAt(t);
+    }
+
+    function resetAnim() {
+      anim.reset = false;
+      model.scale.setScalar(1);
+      model.position.set(0, 0, 0);
+      model.rotation.z = 0;
+      MELT.uMelt.value = 0;
+      return 0;
+    }
+
+    // Weiche Teile fließen beim Verschmelzen wirklich ineinander: ihre Kugeln rücken zusammen, das Netz entsteht
+    // dabei neu (gröber, höchstens 40 Stufen). Fest sind sie wieder fein und mit Kanten.
+    function morphSoft(o, amount) {
+      const key = Math.round(amount * 40);
+      if (o.softKey === key || (key === 0 && o.softKey === undefined)) return;
+      o.softKey = key;
+      const { balls, rods, k } = o.soft;
+      const all = balls.map((b) => b.slice(0, 3)).concat(rods.map((r) => [(r[0] + r[3]) / 2, (r[1] + r[4]) / 2, (r[2] + r[5]) / 2]));
+      const c = [0, 1, 2].map((i) => all.reduce((sum, q) => sum + q[i], 0) / all.length);
+      const f = 1 + 1.4 * amount;
+      const out = (x, i) => c[i] + (x - c[i]) * f;
+      const shape = key === 0 ? o.soft : {
+        balls: balls.map((b) => [out(b[0], 0), out(b[1], 1), out(b[2], 2), b[3] * (1 - 0.2 * amount)]),
+        rods: rods.map((r) => [out(r[0], 0), out(r[1], 1), out(r[2], 2), out(r[3], 0), out(r[4], 1), out(r[5], 2), r[6]]),
+        k,
+      };
+      const geo = softGeometry(T, shape, key === 0 ? SOFT_RES : 36);
+      if (!geo) return;
+      o.solid.geometry.dispose();
+      o.solid.geometry = geo;
+      o.edges.visible = key === 0;
+      if (key === 0) {
+        o.edges.geometry.dispose();
+        o.edges.geometry = new T.EdgesGeometry(geo, 60);
+        o.softKey = undefined;
+      }
+    }
+
+    function animatePart(o, scatter) {
+      const p = o.part;
+      if (scatter > 0 && o.animDir) {
+        const flows = o.soft && o.soft.balls.length + o.soft.rods.length > 1;
+        if (flows) morphSoft(o, scatter);
+        if (!flows || anim.art === 'aufloesen') o.group.position.addScaledVector(o.animDir, scatter);
+        if (anim.art === 'aufloesen') {
+          const shrink = 1 - 0.6 * scatter;
+          o.group.scale.set(p.skala[0] * shrink, p.skala[1] * shrink, p.skala[2] * shrink);
+          o.group.rotation.set(rad(p.dreh[0]) + o.animSpin.x * scatter, rad(p.dreh[1]) + o.animSpin.y * scatter,
+            rad(p.dreh[2]) + o.animSpin.z * scatter, 'XYZ');
+        }
+        o.animated = true;
+      } else if (o.animated) {
+        o.animated = false;
+        if (o.soft) morphSoft(o, 0);
+        o.group.scale.set(...p.skala);
+        o.group.rotation.set(rad(p.dreh[0]), rad(p.dreh[1]), rad(p.dreh[2]), 'XYZ');
       }
     }
 
@@ -1242,6 +1565,7 @@
       turn.y += (turn.goalY - turn.y) * k;
       turn.x += (turn.goalX - turn.x) * k;
       model.rotation.set(turn.x, turn.y, 0);
+      const scatter = anim.art ? animStep() : anim.reset ? resetAnim() : 0;
       model.updateMatrixWorld(true);
       // Explosion
       const want = view.explode ? 1 : 0;
@@ -1251,6 +1575,7 @@
       const top = objs.size ? modelTop() : 2;
       for (const o of objs.values()) {
         o.group.position.copy(o.base).addScaledVector(o.offset, explodeNow);
+        if (scatter > 0 || o.animated) animatePart(o, scatter);
         if (o.plane) {
           const t = clamp((clock - o.born) / 0.75, 0, 1);
           const wb = o.box.clone().translate(o.offset.clone().multiplyScalar(explodeNow)).applyMatrix4(model.matrixWorld);
@@ -1704,6 +2029,9 @@
         }
         case 'isolate':
           isolate(new Set((ev.ids || []).map(String)));
+          break;
+        case 'anim':
+          setAnim(String(ev.art || ''));
           break;
         default:
       }
@@ -2302,6 +2630,26 @@
   }
 
   // Wie blaupause.py, nur im Browser: für den Demo-Modus und die Bildschirmfotos
+  // Ein Herz aus weichen Formen, mit Adern (für die Vorschau und den Test im echten Fenster)
+  function heartScene() {
+    const P = [];
+    const add = (p) => P.push(Object.assign({ dreh: [0, 0, 0], skala: [1, 1, 1], material: 'matt', gruppe: 'Herz' }, p));
+    add({ id: 'herz', name: 'Herzmuskel', form: 'weich', pos: [0, 0, 0], skala: [1, 1, 0.78], farbe: '#c62828',
+      kugeln: [[-0.3, 1.3, 0, 0.38], [0.3, 1.3, 0, 0.38], [0, 1.02, 0, 0.4], [0, 0.66, 0, 0.26], [0, 0.36, 0, 0.12]],
+      glaette: 0.26 });
+    add({ id: 'aorta', name: 'Aorta', gruppe: 'Gefäße', form: 'rohr', pos: [0, 0, 0], farbe: '#e05252', radius: 0.085,
+      pfad: [[0.06, 1.5, 0], [0.1, 1.82, 0], [0.32, 1.92, 0], [0.48, 1.74, 0], [0.5, 1.5, 0]] });
+    add({ id: 'hohlvene', name: 'Hohlvene', gruppe: 'Gefäße', form: 'rohr', pos: [0, 0, 0], farbe: '#5c6bc0', radius: 0.07,
+      pfad: [[-0.34, 1.45, -0.08], [-0.36, 1.7, -0.08], [-0.38, 1.95, -0.06]] });
+    add({ id: 'lungenarterie', name: 'Lungenarterie', gruppe: 'Gefäße', form: 'rohr', pos: [0, 0, 0], farbe: '#7986cb',
+      radius: 0.06, pfad: [[-0.08, 1.52, 0.12], [-0.12, 1.74, 0.16], [-0.32, 1.82, 0.18]] });
+    add({ id: 'kranz_links', name: 'Herzkranzgefäß links', gruppe: 'Gefäße', form: 'rohr', pos: [0, 0, 0], farbe: '#ffcdd2',
+      radius: 0.016, pfad: [[0.05, 1.42, 0.3], [0.2, 1.1, 0.31], [0.14, 0.75, 0.22], [0.04, 0.48, 0.1]] });
+    add({ id: 'kranz_rechts', name: 'Herzkranzgefäß rechts', gruppe: 'Gefäße', form: 'rohr', pos: [0, 0, 0], farbe: '#ffcdd2',
+      radius: 0.014, pfad: [[-0.06, 1.4, 0.3], [-0.24, 1.12, 0.3], [-0.2, 0.82, 0.2]] });
+    return { name: 'Herz', beschreibung: 'Ein menschliches Herz mit den großen Gefäßen', groesse_m: 0.12, teile: P };
+  }
+
   function demoApi(push) {
     let scene = { name: '', beschreibung: '', teile: [] };
     let selected = '';
@@ -2328,6 +2676,16 @@
     };
     const local = (t) => {
       const n = t.toLowerCase();
+      const arts = [['verschmelzen', /verschmel|verschmilzt|zusammenfließ/], ['schmelzen', /schmelz|schmilzt/],
+        ['pulsieren', /schlag|schlägt|puls/], ['schweben', /schweb/], ['aufloesen', /auflös|löst sich auf|zerfall/]];
+      if (/animation aus|keine animation/.test(n)) return ev('view', { what: 'anim', art: '' }) || 'Animation aus, Sir.';
+      const art = arts.find(([, re]) => re.test(n));
+      if (art && scene.teile.length) return ev('view', { what: 'anim', art: art[0] }) || 'Sehr wohl, Sir.';
+      if (/herz/.test(n)) {
+        scene = heartScene();
+        ev('scene', state());
+        return 'Das Herz, Sir.';
+      }
       if (/explosion|zerleg|auseinander/.test(n)) return ev('view', { what: 'explode', on: true }) || 'Explosionsansicht, Sir.';
       if (/zusammen/.test(n)) return ev('view', { what: 'explode', on: false }) || 'Wieder zusammengesetzt, Sir.';
       if (/^dreh/.test(n)) return ev('view', { what: 'rotate', axis: 'y', degrees: Number((n.match(/(\d+) ?grad/) || [])[1]) || 45 }) || 'Gedreht, Sir.';
@@ -2409,8 +2767,12 @@
         scene = demoScene();
         return state();
       },
+      loadHeart: () => {
+        scene = heartScene();
+        return state();
+      },
     };
   }
 
-  window.JarvisBlaupause = { create, demoScene, demoApi, stlFromParts, geometryFor };
+  window.JarvisBlaupause = { create, demoScene, heartScene, demoApi, stlFromParts, geometryFor, softGeometry, softParts };
 })();
