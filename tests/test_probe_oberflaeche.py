@@ -11,6 +11,7 @@ import struct
 import threading
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -179,6 +180,51 @@ class ProbeTest(unittest.TestCase):
         self.assertAlmostEqual(bright, 0.25, places=2)
         _, b = probe.orb_numbers(dark, rect, 2.0)
         self.assertEqual(a.shape, b.shape)
+
+
+class BriefingCheckTest(unittest.TestCase):
+    """Die Probe schreibt mit, welche Bereiche beim Briefing nacheinander leuchten."""
+
+    class Tools:
+        def __init__(self, focus):
+            self.focus = list(focus)
+            self.sent = []
+            self.shots = []
+
+        def evaluate(self, expression):
+            if "send_text" in expression:
+                self.sent.append(expression)
+                return True
+            return self.focus.pop(0) if self.focus else ""
+
+        def pump(self, seconds):
+            pass
+
+        def screenshot(self, name):
+            self.shots.append(name)
+
+    def setUp(self):
+        probe.failed.clear()
+
+    def run_check(self, tools):
+        import contextlib
+        import io
+
+        with contextlib.redirect_stdout(io.StringIO()):  # die Probe schreibt für GitHub, hier nur Lärm
+            probe.briefing_check(tools)
+
+    def test_highlights_in_order(self):
+        tools = self.Tools(["", "aktivitaet", "aktivitaet", "post", "kennzahlen", "nachrichten", "orb", ""])
+        self.run_check(tools)
+        self.assertIn("Briefing", tools.sent[0])
+        self.assertEqual(tools.shots, ["oberflaeche-briefing.png"], "ein Bild beim ersten Leuchten")
+        self.assertEqual(probe.failed, [])
+
+    def test_nothing_lights_up(self):
+        tools = self.Tools([])
+        with unittest.mock.patch.object(probe.time, "monotonic", side_effect=[0, 0, 50]):
+            self.run_check(tools)
+        self.assertEqual(probe.failed, ["Briefing hebt hervor"])
 
 
 class DevToolsPortTest(unittest.TestCase):

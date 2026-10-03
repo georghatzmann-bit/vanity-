@@ -313,11 +313,7 @@ TRAILER_SENTENCE = "Zeig mir den Trailer von Cyberpunk 2077"
 
 def trailer_check(tools: DevTools) -> None:
     """Wie per Stimme: Python fragt Steam, das Fenster spielt den Trailer (HLS über hls.js)."""
-    sent = tools.evaluate(
-        "window.pywebview && window.pywebview.api && window.pywebview.api.send_text ? "
-        f"(window.pywebview.api.send_text({json.dumps(TRAILER_SENTENCE)}), true) : false"
-    )
-    if not sent:
+    if not send(tools, TRAILER_SENTENCE):
         check("Trailer per Befehl", False, "keine Verbindung zu Python")
         return
     t: dict = {}
@@ -338,6 +334,45 @@ def trailer_check(tools: DevTools) -> None:
          f"Fehler {t.get('fehler') or 'keiner'}, {t.get('quelle') or '-'}",
          "notice" if (t.get("zeit") or 0) > 2 else "warning")
     tools.evaluate("document.getElementById('trailerClose') && document.getElementById('trailerClose').click(), true")
+
+
+FOCUS = r"""
+(() => {
+  const f = document.querySelector('#zt .is-focus');
+  return f ? (f.dataset.area || f.className || 'ja') : '';
+})()
+"""
+
+
+def send(tools: DevTools, sentence: str) -> bool:
+    """Ein Satz an Jarvis wie getippt (pywebview-Brücke zu Python)."""
+    return bool(tools.evaluate(
+        "window.pywebview && window.pywebview.api && window.pywebview.api.send_text ? "
+        f"(window.pywebview.api.send_text({json.dumps(sentence)}), true) : false"
+    ))
+
+
+def briefing_check(tools: DevTools) -> None:
+    """Wie im ersten Video: "Briefing", und die Zentrale hebt nacheinander hervor, wovon Jarvis spricht."""
+    if not send(tools, "Briefing"):
+        check("Briefing per Befehl", False, "keine Verbindung zu Python")
+        return
+    seen: list[str] = []
+    shot = False
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        tools.pump(0.5)
+        area = tools.evaluate(FOCUS) or ""
+        if area and (not seen or seen[-1] != area):
+            seen.append(area)
+            if not shot:
+                tools.screenshot("oberflaeche-briefing.png")
+                shot = True
+        if not area and len(seen) >= 2:
+            break  # das Briefing ist durch, nichts mehr hervorgehoben
+    check("Briefing hebt hervor", len(seen) >= 2, " -> ".join(seen) or "nichts")
+    note("Briefing in WebView2", "Hervorgehoben, in dieser Reihenfolge: " + (" -> ".join(seen) or "nichts"),
+         "notice" if len(seen) >= 2 else "warning")
 
 
 def main() -> int:
@@ -392,6 +427,7 @@ def main() -> int:
         tools.evaluate("document.getElementById('tabZentrale').click(), true")
         tools.pump(1)
         trailer_check(tools)
+        briefing_check(tools)
     finally:
         found = errors(tools.events)
         for text in found[:8]:
