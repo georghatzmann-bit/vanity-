@@ -364,9 +364,13 @@ class SessionTest(unittest.TestCase):
 
 
 class FakeZentrale:
-    def __init__(self, states=None, shop=False):
+    def __init__(self, states=None, shop=False, events=()):
         self.states = states or {}
         self.shop = shop
+        self.events = list(events)
+
+    def events_today(self):
+        return self.events
 
     def agent_states(self):
         base = {k: {"status": "bereit", "text": "", "zeit": "", "fortschritt": None}
@@ -452,6 +456,17 @@ class SystemTest(unittest.TestCase):
         self.assertEqual(self.system.snapshot()["zahlen"]["aktiv"], 2)
         self.assistant.zentrale.shop = True
         self.assertIn("shop", self.agents())
+        self.assistant.zentrale.events = [
+            {"zeit": "08:00", "art": "lage", "text": "Lagebild aktualisiert: 3 Mails"},
+            {"zeit": "09:00", "art": "werkstatt", "text": "Werkstatt: Discord-Bot fertig"},
+            {"zeit": "09:10", "art": "befehl", "text": "Öffnet Spotify"},
+            {"zeit": "09:20", "art": "werkstatt", "text": "Werkstatt: Würfel ergänzt"}]
+        agents = self.agents()
+        self.assertEqual([v["text"] for v in agents["werkstatt"]["verlauf"]],
+                         ["Werkstatt: Würfel ergänzt", "Werkstatt: Discord-Bot fertig"], "das Neueste zuerst")
+        self.assertEqual(agents["jarvis"]["verlauf"], [{"zeit": "09:10", "text": "Öffnet Spotify"}])
+        self.assertEqual(agents["post"]["verlauf"][0]["text"], "Lagebild aktualisiert: 3 Mails")
+        self.assertEqual(agents["texte"]["verlauf"], [])
 
     def test_learned_skills_belong_to_jarvis_and_get_a_button(self):
         from jarvis.skills import save_skill
@@ -574,6 +589,26 @@ class SystemTest(unittest.TestCase):
             from jarvis.gui.app import Api
 
             self.assertTrue(hasattr(Api, name), name)
+
+    def test_obsidian_only_for_a_vault(self):
+        from jarvis import system
+
+        page = self.folder / "Notizbuch" / "Recherchen" / "Test.md"
+        page.parent.mkdir(parents=True)
+        page.write_text("# Test", encoding="utf-8")
+        self.assertFalse(system.in_vault(page), "Obsidian kennt den Ordner noch nicht")
+        (self.folder / "Notizbuch" / ".obsidian").mkdir()
+        self.assertTrue(system.in_vault(page))
+        started = []
+        with mock.patch.object(system, "_windows", return_value=True), \
+                mock.patch.object(system, "obsidian_installed", return_value=True), \
+                mock.patch.object(system.os, "startfile", started.append, create=True):
+            self.assertEqual(system.open_path(page), "obsidian")
+            self.assertTrue(started[-1].startswith("obsidian://open?path="))
+            self.assertEqual(system.open_path(page.parent), "programm", "Ordner im Explorer")
+        with mock.patch.object(system, "_windows", return_value=False):
+            with self.assertRaises(OSError):
+                system.open_path(page)
 
     def test_window_api(self):
         from jarvis.gui.app import Api

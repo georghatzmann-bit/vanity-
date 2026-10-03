@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import os
 import re
 import threading
 from pathlib import Path
@@ -55,6 +56,13 @@ AGENTS = (
      "auftrag": "Ich will {} streamen", "beispiel": "Valorant"},
 )
 LAGE_AGENTS = ("post", "kalender", "shop")
+# Welche Einträge der Aktivität (zentrale.log) zu welchem Agent gehören: sein Verlauf von heute
+AGENT_ARTS = {
+    "jarvis": ("befehl", "konnektor", "claude", "briefing", "weltlage", "lob", "peitsche"),
+    "recherche": ("recherche",), "texte": ("texte",), "technik": ("technik",),
+    "post": ("lage",), "kalender": ("lage",), "shop": ("lage",),
+    "werkstatt": ("werkstatt",), "blueprint": ("blueprint",), "stream": ("stream",),
+}
 HELPERS = ("recherche", "texte", "technik")
 
 # Die Skill-Knöpfe wie im Video ("9 Skills bereit"). "frage": erst etwas eintippen, {} kommt in den Satz.
@@ -118,6 +126,7 @@ class System:
         self._lock = threading.Lock()
         self._netz = None
         self._netz_folder: Path | None = None
+        self._skill_cache: tuple[float, list] = (-1e9, [])
 
     # ------------------------------------------------------------------ Wissensnetz
 
@@ -155,13 +164,21 @@ class System:
     # ------------------------------------------------------------------ Stand
 
     def _skills(self) -> list:
+        """Die Fähigkeiten (höchstens alle 20 Sekunden von der Platte, die Ansicht fragt alle paar Sekunden)."""
+        import time
+
         from .skills import load_skills
 
+        at, cached = self._skill_cache
+        if time.monotonic() - at < 20:
+            return cached
         try:
-            return load_skills(self._home, self._state_dir)
+            found = load_skills(self._home, self._state_dir)
         except Exception as exc:
             log.debug("System, Fähigkeiten: %s", exc)
-            return []
+            found = []
+        self._skill_cache = (time.monotonic(), found)
+        return found
 
     def _jarvis_state(self) -> tuple[str, str]:
         assistant = self._assistant
@@ -225,6 +242,10 @@ class System:
         from . import zentrale as zentrale_module
 
         empty = {a["id"]: a["leer"] for a in zentrale_module.AGENTS}
+        try:
+            events = list(reversed(zentrale.events_today())) if zentrale is not None else []
+        except Exception:
+            events = []
         skills = {s.path.parent.name: s for s in self._skills()}
         learned = [s for s in skills.values() if s.learned]
         connectors = self._connectors()
@@ -262,6 +283,8 @@ class System:
                 "zeit": str(state.get("zeit") or ""), "fortschritt": state.get("fortschritt"),
                 "skills": own, "werkzeuge": tools, "beispiel": spec["beispiel"],
                 "auftrag": key == "werkstatt" or bool(spec["auftrag"]),
+                "verlauf": [{"zeit": e.get("zeit", ""), "text": e.get("text", "")}
+                            for e in events if e.get("art") in AGENT_ARTS.get(key, ())][:3],
             })
         return out
 
@@ -431,16 +454,28 @@ def obsidian_installed() -> bool:
         return False
 
 
+def _windows() -> bool:
+    return os.name == "nt"
+
+
+def in_vault(path: Path) -> bool:
+    """Liegt die Seite in einem Ordner, den Obsidian schon als Tresor kennt (dort gibt es .obsidian)? Sonst meldet
+    Obsidian beim obsidian://-Link nur "Tresor nicht gefunden"."""
+    for folder in list(Path(path).parents)[:5]:
+        if (folder / ".obsidian").is_dir():
+            return True
+    return False
+
+
 def open_path(path: Path) -> str:
-    """Öffnet eine Notizbuch-Seite in Obsidian (wenn installiert) oder sonst im Standardprogramm, einen Ordner im
-    Explorer. Gibt zurück, womit ("obsidian", "programm")."""
-    import os
+    """Öffnet eine Notizbuch-Seite in Obsidian (wenn installiert und der Ordner ein Tresor ist) oder sonst im
+    Standardprogramm, einen Ordner im Explorer. Gibt zurück, womit ("obsidian", "programm")."""
     import urllib.parse
 
     path = Path(path)
-    if os.name != "nt":
+    if not _windows():
         raise OSError("Öffnen geht nur unter Windows.")
-    if path.is_file() and path.suffix.lower() == ".md" and obsidian_installed():
+    if path.is_file() and path.suffix.lower() == ".md" and in_vault(path) and obsidian_installed():
         os.startfile("obsidian://open?path=" + urllib.parse.quote(str(path), safe=""))
         return "obsidian"
     os.startfile(str(path))

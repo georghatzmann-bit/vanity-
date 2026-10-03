@@ -236,16 +236,34 @@
       const tools = node('ul', 'sy-chips');
       (a.werkzeuge || []).forEach((t) => tools.append(node('li', 'sy-chip tool', t)));
       more.append(tools);
+      if ((a.verlauf || []).length) {
+        more.append(node('h4', '', 'Heute'));
+        const log = node('ul', 'sy-log');
+        a.verlauf.forEach((v) => {
+          const li = node('li');
+          li.append(node('time', '', v.zeit), node('span', '', v.text));
+          log.append(li);
+        });
+        more.append(log);
+      }
       if (a.auftrag && a.status !== 'aus') {
         const form = node('form', 'sy-order');
+        const row = node('div', 'sy-order-row');
         const input = node('input', 'sy-input');
         input.type = 'text';
         input.maxLength = 400;
-        input.placeholder = a.beispiel ? 'z. B. ' + a.beispiel : 'Auftrag';
+        input.placeholder = 'Ihr Auftrag';
         input.setAttribute('aria-label', 'Auftrag an ' + a.name);
         const send = node('button', 'btn primary small', 'Senden');
         send.type = 'submit';
-        form.append(input, send);
+        row.append(input, send);
+        form.append(row);
+        if (a.beispiel) {
+          const hint = node('small', 'sy-order-hint', 'Zum Beispiel: ' + a.beispiel);
+          hint.id = 'syOrderHint-' + a.id;
+          input.setAttribute('aria-describedby', hint.id);
+          form.append(hint);
+        }
         form.addEventListener('submit', (e) => {
           e.preventDefault();
           const value = input.value.trim();
@@ -284,7 +302,7 @@
       const p = a.fortschritt;
       card.bar.dataset.openEnded = p === null || p === undefined ? '1' : '0';
       card.bar.firstChild.style.setProperty('--p', Math.round(clamp(Number(p) || 0, 0, 1) * 100) + '%');
-      const key = JSON.stringify([a.skills, a.werkzeuge, a.auftrag, a.status === 'aus', a.rolle]);
+      const key = JSON.stringify([a.skills, a.werkzeuge, a.auftrag, a.status === 'aus', a.rolle, a.verlauf]);
       if (force || key !== card.key) {
         card.key = key;
         card.chipSlot.textContent = '';
@@ -1356,7 +1374,8 @@
       { id: 'recherche', name: 'Recherche', kuerzel: 'RE', rolle: 'Sucht gründlich, vergleicht, legt einen Bericht ab', status: 'arbeitet',
         text: 'Vergleicht Gaming-Mäuse unter 100 Euro', zeit: '09:41', fortschritt: null,
         skills: [skill('recherche', 'Gründliche Recherche mit Bericht im Notizbuch'), skill('nachrichten', 'Nachrichten und Börse')],
-        werkzeuge: ['Websuche', 'Webseiten', 'Notizbuch'], beispiel: 'Die besten Gaming-Mäuse unter 100 Euro', auftrag: true },
+        werkzeuge: ['Websuche', 'Webseiten', 'Notizbuch'], beispiel: 'Die besten Gaming-Mäuse unter 100 Euro', auftrag: true,
+        verlauf: [{ zeit: '09:41', text: 'Sucht im Netz: Gaming-Maus unter 100 Euro Test' }, { zeit: '08:12', text: 'Recherche: Mikrofone für Twitch, Bericht im Notizbuch' }] },
       { id: 'texte', name: 'Texte', kuerzel: 'TX', rolle: 'Schreibt Mails, Nachrichten und Posts, verschickt nie selbst', status: 'fertig',
         text: 'Absage an den Vermieter liegt bereit', zeit: '09:12', skills: [], werkzeuge: ['Entwürfe', 'Websuche'],
         beispiel: 'Eine freundliche Absage an den Vermieter', auftrag: true },

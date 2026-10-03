@@ -361,9 +361,49 @@ body[data-home="system"] .view-switch {
   font-weight: 600;
 }
 
+.sy-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-log li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 8px;
+  color: var(--zt-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sy-log time {
+  color: var(--zt-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
 .sy-order {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sy-order-row {
+  display: flex;
   gap: 8px;
+}
+
+.sy-order-row .btn.small {
+  min-height: 40px;
+}
+
+.sy-order-hint {
+  color: var(--zt-text-3);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .sy-input {
