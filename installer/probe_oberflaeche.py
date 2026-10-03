@@ -27,7 +27,8 @@ from pathlib import Path
 
 PORT = int(os.environ.get("PROBE_PORT", "9229"))  # oder als erstes Argument
 OUT = Path(os.environ.get("PROBE_OUT", "probe-bilder"))
-failed: list[str] = []
+failed: list[str] = []  # wichtig: hält das Release auf (Skriptfehler, Zentrale, Kugel)
+warned: list[str] = []  # hängt am Netz oder an der Stimme (Steam, Tagesschau, Briefing): nur ein Hinweis
 
 
 def note(title: str, text: str, kind: str = "notice") -> None:
@@ -47,10 +48,10 @@ def log_tail(lines: int = 8) -> str:
     return " | ".join(line.strip() for line in text[-lines:] if line.strip())
 
 
-def check(name: str, ok: bool, detail: str = "") -> None:
-    print(f"{'OK  ' if ok else 'FEHL'} {name} {detail}", flush=True)
+def check(name: str, ok: bool, detail: str = "", critical: bool = True) -> None:
+    print(f"{'OK  ' if ok else ('FEHL' if critical else 'NAJA')} {name} {detail}", flush=True)
     if not ok:
-        failed.append(name)
+        (failed if critical else warned).append(name)
 
 
 # ---------------------------------------------------------------- WebSocket (RFC 6455, nur Client)
@@ -314,7 +315,7 @@ TRAILER_SENTENCE = "Zeig mir den Trailer von Cyberpunk 2077"
 def trailer_check(tools: DevTools) -> None:
     """Wie per Stimme: Python fragt Steam, das Fenster spielt den Trailer (HLS über hls.js)."""
     if not send(tools, TRAILER_SENTENCE):
-        check("Trailer per Befehl", False, "keine Verbindung zu Python")
+        check("Trailer per Befehl", False, "keine Verbindung zu Python", critical=False)
         return
     t: dict = {}
     deadline = time.monotonic() + 40
@@ -326,8 +327,9 @@ def trailer_check(tools: DevTools) -> None:
     print("Trailer:", json.dumps(t, ensure_ascii=False), flush=True)
     if t.get("offen"):
         tools.screenshot("oberflaeche-trailer.png")
-    check("Trailer öffnet sich im Fenster", bool(t.get("offen")), t.get("titel", ""))
-    check("Trailer läuft", (t.get("zeit") or 0) > 2, f"{(t.get('zeit') or 0):.1f} s, Bild {t.get('breite')} Pixel breit")
+    check("Trailer öffnet sich im Fenster", bool(t.get("offen")), t.get("titel", ""), critical=False)  # Steam im Netz
+    check("Trailer läuft", (t.get("zeit") or 0) > 2, f"{(t.get('zeit') or 0):.1f} s, Bild {t.get('breite')} Pixel breit",
+          critical=False)
     note("Trailer in WebView2",
          f"{t.get('titel') or 'kein Trailer'}: {(t.get('zeit') or 0):.1f} s gespielt, "
          f"{'ohne Ton (Autoplay)' if t.get('stumm') else 'mit Ton'}, Bild {t.get('breite')} breit, "
@@ -355,7 +357,7 @@ def send(tools: DevTools, sentence: str) -> bool:
 def briefing_check(tools: DevTools) -> None:
     """Wie im ersten Video: "Briefing", und die Zentrale hebt nacheinander hervor, wovon Jarvis spricht."""
     if not send(tools, "Briefing"):
-        check("Briefing per Befehl", False, "keine Verbindung zu Python")
+        check("Briefing per Befehl", False, "keine Verbindung zu Python", critical=False)
         return
     seen: list[str] = []
     shot = False
@@ -370,7 +372,7 @@ def briefing_check(tools: DevTools) -> None:
                 shot = True
         if not area and len(seen) >= 2:
             break  # das Briefing ist durch, nichts mehr hervorgehoben
-    check("Briefing hebt hervor", len(seen) >= 2, " -> ".join(seen) or "nichts")
+    check("Briefing hebt hervor", len(seen) >= 2, " -> ".join(seen) or "nichts", critical=False)  # Takt der Stimme
     note("Briefing in WebView2", "Hervorgehoben, in dieser Reihenfolge: " + (" -> ".join(seen) or "nichts"),
          "notice" if len(seen) >= 2 else "warning")
 
@@ -438,10 +440,12 @@ def main() -> int:
         check("Keine Skriptfehler", not found, f"{len(found)} Fehler")
         ws.close()
     if failed:
-        note("Fenster-Probe", "Nicht in Ordnung: " + ", ".join(failed), "error")
+        note("Fenster-Probe", "Nicht in Ordnung (kein Release): " + ", ".join(failed), "error")
         tail = log_tail()
         if tail:
             note("jarvis.log (Ende)", tail, "warning")
+    elif warned:
+        note("Fenster-Probe", "In Ordnung, nur was am Netz hängt, ging nicht: " + ", ".join(warned), "warning")
     else:
         note("Fenster-Probe", "Alles in Ordnung: Zentrale, Kugel, keine Skriptfehler")
     return 1 if failed else 0
@@ -456,9 +460,9 @@ if __name__ == "__main__":
         PORT = int(sys.argv[1])
     try:
         sys.exit(main())
-    except Exception as exc:  # die Probe selbst ging nicht (kein DevTools-Port o. ä.)
+    except Exception as exc:  # die Probe selbst ging nicht (kein DevTools-Port o. ä.): Hinweis, kein rotes Release
         note("Fenster-Probe", f"Probe ging nicht: {type(exc).__name__}: {exc}", "warning")
         tail = log_tail()
         if tail:
             note("jarvis.log (Ende)", tail, "warning")
-        sys.exit(2)
+        sys.exit(0)

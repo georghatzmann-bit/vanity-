@@ -205,6 +205,7 @@ class BriefingCheckTest(unittest.TestCase):
 
     def setUp(self):
         probe.failed.clear()
+        probe.warned.clear()
 
     def run_check(self, tools):
         import contextlib
@@ -218,13 +219,14 @@ class BriefingCheckTest(unittest.TestCase):
         self.run_check(tools)
         self.assertIn("Briefing", tools.sent[0])
         self.assertEqual(tools.shots, ["oberflaeche-briefing.png"], "ein Bild beim ersten Leuchten")
-        self.assertEqual(probe.failed, [])
+        self.assertEqual((probe.failed, probe.warned), ([], []))
 
     def test_nothing_lights_up(self):
         tools = self.Tools([])
         with unittest.mock.patch.object(probe.time, "monotonic", side_effect=[0, 0, 50]):
             self.run_check(tools)
-        self.assertEqual(probe.failed, ["Briefing hebt hervor"])
+        self.assertEqual(probe.warned, ["Briefing hebt hervor"], "hängt am Takt der Stimme: nur ein Hinweis")
+        self.assertEqual(probe.failed, [], "hält das Release nicht auf")
 
 
 class DevToolsPortTest(unittest.TestCase):

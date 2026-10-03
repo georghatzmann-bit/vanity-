@@ -243,8 +243,9 @@ jobs:
       - name: Probe im echten Fenster (Zentrale, Energie-Kugel, Skriptfehler)
         if: ${{ !inputs.nur_bilder }}
         shell: pwsh
-        # Neu: meldet sich erst nur als Annotation (Ergebnis oben im Lauf), haelt den Build nicht auf
-        continue-on-error: true
+        # Skriptfehler, kaputte Zentrale oder stehende Kugel halten das Release auf. Was am Netz haengt (Trailer,
+        # Tagesschau) und das Briefing (Takt der Stimme) melden sich nur als Hinweis, ebenso eine Probe, die gar
+        # nicht ans Fenster kam. Das Ergebnis steht als Annotation oben im Lauf.
         timeout-minutes: 6
         run: |
           # Jarvis sichtbar starten, WebView2 mit DevTools-Port (JARVIS_DEVTOOLS_PORT, gui/app.py). Die Probe
