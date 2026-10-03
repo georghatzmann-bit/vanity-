@@ -123,6 +123,19 @@ class WatchTest(Base):
             with_sound = video.watch(str(clip))
         self.assertEqual(with_sound["transkript"][0]["text"], "Hallo", "mit Ton: neu angesehen")
 
+    def test_pictures_stay_when_the_sound_fails(self):
+        clip = make_video(self.tmp / "clip.mp4", seconds=6)
+        with mock.patch.object(video, "transcribe", side_effect=RuntimeError("Modell fehlt, kein Internet")):
+            result = video.watch(str(clip))
+        self.assertTrue(result["bilder"] and all(Path(p).is_file() for p in result["bilder"]), "Bilder trotzdem da")
+        said = video.describe(result)
+        self.assertIn("Der Ton ließ sich nicht mitschreiben (RuntimeError: Modell fehlt, kein Internet)", said)
+        report = (Path(result["ordner"]) / "bericht.md").read_text(encoding="utf-8")
+        self.assertIn("(Der Ton ließ sich nicht mitschreiben", report)
+        with mock.patch.object(video, "transcribe", return_value=([{"von": 0.0, "bis": 6.0, "text": "Hallo"}], "de")):
+            again = video.watch(str(clip))
+        self.assertEqual(again["transkript"][0]["text"], "Hallo", "beim nächsten Mal noch einmal versucht")
+
     def test_sound_with_jarvis_own_speech_recognition(self):
         clip = make_video(self.tmp / "clip.mp4", seconds=40)
         heard = []

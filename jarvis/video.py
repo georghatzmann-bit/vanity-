@@ -404,10 +404,16 @@ def watch(source: str, max_frames: int = MAX_FRAMES, with_sound: bool = True, mo
     if not frames:
         raise VideoError("Aus dem Video ließen sich keine Bilder holen.")
     overview = sheets(frames, folder)
-    parts, language = transcribe(video, model) if with_sound else ([], "")
+    parts, language, heard, trouble = [], "", bool(with_sound), ""
+    if with_sound:
+        try:
+            parts, language = transcribe(video, model)
+        except Exception as exc:  # die Bilder sind schon da: ohne Transkript weiter, beim nächsten Mal noch einmal
+            log.warning("Video, Ton nicht mitgeschrieben: %s", exc)
+            heard, trouble = False, f"{type(exc).__name__}: {exc}"[:200]
     result = {**meta, "ordner": str(folder), "datei": str(video), "bilder": [str(p) for p in overview],
               "einzelbilder": [{"zeit": clock(t), "datei": str(p)} for t, p in frames], "transkript": parts,
-              "sprache": language, "mit_ton": bool(with_sound), "max_bilder": max_frames,
+              "sprache": language, "mit_ton": heard, "ton_fehler": trouble, "max_bilder": max_frames,
               "angesehen": dt.datetime.now().isoformat(timespec="minutes")}
     (folder / "bericht.md").write_text(report(result), encoding="utf-8")
     saved.write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -450,7 +456,7 @@ def report(result: dict) -> str:
         lines += ["", "## Beschreibung", "", result["beschreibung"]]
     lines += ["", "## Übersichtsbilder", ""] + [f"- {p}" for p in result.get("bilder", [])]
     lines += ["", "## Transkript" + (f" ({result['sprache']})" if result.get("sprache") else ""), ""]
-    lines.append(transcript_text(result.get("transkript") or []) or "(kein Ton oder nichts gesprochen)")
+    lines.append(transcript_text(result.get("transkript") or []) or f"({_no_transcript(result)})")
     return "\n".join(lines) + "\n"
 
 
@@ -470,8 +476,14 @@ def describe(result: dict) -> str:
         head.append("Transkript" + (f" ({result['sprache']})" if result.get("sprache") else "") + ":")
         head.append(text[:TRANSCRIPT_CHARS] + (f"\n... (ganz in {Path(result['ordner']) / 'bericht.md'})" if more else ""))
     else:
-        head.append("Transkript: kein Ton oder nichts gesprochen.")
+        head.append("Transkript: " + _no_transcript(result) + ".")
     return "\n".join(head)
+
+
+def _no_transcript(result: dict) -> str:
+    if result.get("ton_fehler"):
+        return f"Der Ton ließ sich nicht mitschreiben ({result['ton_fehler']}), die Bilder sind trotzdem da"
+    return "kein Ton oder nichts gesprochen"
 
 
 def main(argv: list[str] | None = None, cfg: dict | None = None, prog: str = "python -m jarvis.video") -> int:
