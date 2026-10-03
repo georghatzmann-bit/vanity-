@@ -980,7 +980,9 @@ class Blueprint:
             self._emit("done", ok=False, cancelled=True, **self.state())
             return
         if fresh and not added:
-            # Das neue Modell ist nicht entstanden: Änderungen, die Georg dafür schon gesagt hat, passen nicht mehr
+            # Das neue Modell ist nicht entstanden: Änderungen, die Georg dafür schon gesagt hat, passen nicht mehr,
+            # ein gewünschtes Foto auch nicht
+            self._blender_after = ""
             with self._lock:
                 kept = [item for item in self._queue if item[1]]
                 if len(kept) != len(self._queue):
