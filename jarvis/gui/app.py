@@ -1171,6 +1171,14 @@ class Window:
     def start(self) -> None:
         import webview
 
+        # Nur für die Fenster-Probe des Windows-Builds (installer/probe_oberflaeche.py): WebView2 mit DevTools-Port.
+        # Ohne diese Umgebungsvariable (bei Georg) bleibt der Port zu.
+        port = os.environ.get("JARVIS_DEVTOOLS_PORT", "").strip()
+        if port.isdigit():
+            try:
+                webview.settings["REMOTE_DEBUGGING_PORT"] = int(port)
+            except Exception as exc:
+                log.debug("DevTools-Port: %s", exc)
         place = place_on_screen(int(self._cfg.get("width", 1280)), int(self._cfg.get("height", 800)))
         width, height = place["width"], place["height"]
         self._window = webview.create_window(

@@ -35,6 +35,18 @@ def note(title: str, text: str, kind: str = "notice") -> None:
     print(f"::{kind} title={title}::{text}", flush=True)
 
 
+def log_tail(lines: int = 8) -> str:
+    """Das Ende von jarvis.log (PROBE_LOG), damit man ohne die Bilder sieht, woran es lag."""
+    path = os.environ.get("PROBE_LOG", "")
+    if not path:
+        return ""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    return " | ".join(line.strip() for line in text[-lines:] if line.strip())
+
+
 def check(name: str, ok: bool, detail: str = "") -> None:
     print(f"{'OK  ' if ok else 'FEHL'} {name} {detail}", flush=True)
     if not ok:
@@ -391,16 +403,26 @@ def main() -> int:
         ws.close()
     if failed:
         note("Fenster-Probe", "Nicht in Ordnung: " + ", ".join(failed), "error")
+        tail = log_tail()
+        if tail:
+            note("jarvis.log (Ende)", tail, "warning")
     else:
         note("Fenster-Probe", "Alles in Ordnung: Zentrale, Kugel, keine Skriptfehler")
     return 1 if failed else 0
 
 
 if __name__ == "__main__":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # Umlaute auch in den Annotations
+    except (AttributeError, ValueError):
+        pass
     if len(sys.argv) > 1:
         PORT = int(sys.argv[1])
     try:
         sys.exit(main())
     except Exception as exc:  # die Probe selbst ging nicht (kein DevTools-Port o. ä.)
         note("Fenster-Probe", f"Probe ging nicht: {type(exc).__name__}: {exc}", "warning")
+        tail = log_tail()
+        if tail:
+            note("jarvis.log (Ende)", tail, "warning")
         sys.exit(2)

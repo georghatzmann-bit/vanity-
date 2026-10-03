@@ -181,5 +181,48 @@ class ProbeTest(unittest.TestCase):
         self.assertEqual(a.shape, b.shape)
 
 
+class DevToolsPortTest(unittest.TestCase):
+    """Jarvis öffnet den DevTools-Port nur, wenn die Probe es mit JARVIS_DEVTOOLS_PORT verlangt."""
+
+    def start_window(self, env):
+        import collections
+        import os
+        import sys
+        import types
+        from unittest import mock
+
+        from jarvis.gui.app import Window
+
+        class Settings(collections.UserDict):
+            def __init__(self, initial):
+                super().__init__()
+                self.data.update(initial)
+
+            def __setitem__(self, key, value):
+                if key not in self.data:
+                    raise KeyError(key)  # wie pywebview: nur vorhandene Schlüssel
+                super().__setitem__(key, value)
+
+        class Event:
+            def __iadd__(self, handler):
+                return self
+
+        fake = types.ModuleType("webview")
+        fake.settings = Settings({"REMOTE_DEBUGGING_PORT": None})
+        fake.create_window = lambda *args, **kwargs: types.SimpleNamespace(
+            events=types.SimpleNamespace(closing=Event(), closed=Event(), minimized=Event(), before_show=Event()))
+        fake.start = lambda *args, **kwargs: None
+        with mock.patch.dict(sys.modules, {"webview": fake}), mock.patch.dict(os.environ, env, clear=False):
+            if not env:
+                os.environ.pop("JARVIS_DEVTOOLS_PORT", None)
+            Window(object(), lambda: None, lambda: None, {}).start()
+        return fake.settings["REMOTE_DEBUGGING_PORT"]
+
+    def test_port_only_on_request(self):
+        self.assertEqual(self.start_window({"JARVIS_DEVTOOLS_PORT": "9229"}), 9229)
+        self.assertIsNone(self.start_window({}), "bei Georg bleibt der Port zu")
+        self.assertIsNone(self.start_window({"JARVIS_DEVTOOLS_PORT": "an"}))
+
+
 if __name__ == "__main__":
     unittest.main()
