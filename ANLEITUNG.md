@@ -131,7 +131,7 @@ Das geht nur, wenn der PC per Kabel am Router hängt und ausgeschaltet (nicht st
 - **Gespräch:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, ein gestrichelter Ring um die Kugel). Einfach weiterreden, ohne „Hey Jarvis“: „Und morgen?“ Schluss ist, wenn du nichts mehr sagst, oder mit **„Danke“**, **„Alles klar“** oder **„Tschüss“**. Beim Zocken (Gaming-Modus oder Vollbild) gibt es kein Gespräch, da redest du ja meist mit anderen. Abschalten: in den Einstellungen beim Mikrofon den Schalter **Gespräch ohne Weckwort** ausschalten.
 - Oder **Strg + Alt + J** drücken: Jarvis hört sofort zu.
 - Beim Weckwort erscheint **das Jarvis-Fenster** ganz vorn, ohne dir die Tastatur wegzunehmen. 6 Sekunden nach dem Gespräch verschwindet es wieder. Beim Spielen (Vollbild, Gaming-Modus) bleibt es weg.
-- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Blaupause**, **Verbinden** (Handy, Alexa, Discord, Konnektoren), **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht (Erinnerungen, Wecker, Timer), wie ausgelastet der PC ist, und das **Gedächtnis**.
+- **Das Fenster:** In der Mitte Jarvis' Kugel: eine ruhige Kugel aus feinen Linien, die sich langsam dreht. Hört er zu oder spricht er, laufen Wellen durch die Linien. Beim Nachdenken zieht ein heller Streifen hindurch, ohne Mikrofon wird sie grau. Jede Aktion hat ihre eigene Bewegung: Beim Suchen kreist ein Radar-Strich, beim Öffnen läuft ein Ring nach außen, beim Installieren fließen Bänder nach unten, eine Nachricht umkreist die Kugel als Lichtpunkt, Musik lässt die Ringe im Takt springen, Timer und Termine zeigen einen Uhrzeiger, die Werkstatt blendet ein Bau-Gitter ein, Hinweise klopfen zweimal an, auf „Danke“ nickt sie. Die Kugel lässt sich anfassen: Sie neigt und wölbt sich zur Maus, mit gedrückter Maustaste drehst du sie. Ein Klick, und er hört sofort zu. Darunter das Gespräch und das Eingabefeld. Oben: **Gaming**-Schalter, **Werkstatt**, **Blueprint**, **Verbinden** (Handy, Alexa, Discord, Konnektoren), **Verlauf** und die Einstellungen. Rechts: was **heute** ansteht (Erinnerungen, Wecker, Timer), wie ausgelastet der PC ist, und das **Gedächtnis**.
 - **Minimieren oder Schließen** lässt Jarvis ganz verschwinden. Er hört trotzdem weiter zu. Beenden: Rechtsklick aufs Symbol neben der Uhr > Jarvis beenden.
 - Unter der Antwort steht, **was Jarvis gerade tut** („Installiert Spotify“), mit einem Haken, wenn es fertig ist.
 - **Strg + Alt + M** schaltet das Mikrofon stumm und wieder an.
@@ -284,17 +284,19 @@ Sag zum Beispiel **„Bau mir einen Discord-Bot, der jeden Morgen Hallo sagt“*
 - **Mit deinen Konnektoren:** Die Werkstatt darf deine claude.ai-Konnektoren benutzen, zum Beispiel Canva für ein Logo.
 - **Stopp** (zweimal klicken) oder **„Brich die Werkstatt ab“** beendet die Arbeit. Was schon gebaut ist, bleibt.
 
-## Die Blaupause: 3D-Modelle wie bei Tony Stark
+## Der Blueprint: 3D-Modelle wie bei Tony Stark
 
-![Die Blaupause](docs/bilder/blaupause.jpg)
+![Der Blueprint](docs/bilder/blaupause.jpg)
 
-Sag **„Blaupause“** (oder oben im Fenster **Blaupause**), dann **„Generiere einen Iron-Man-Helm“**, **„Bau mir eine Drohne“** oder **„Konstruiere ein Raumschiff“**. Jarvis zeichnet das Modell Teil für Teil, jedes Teil baut sich mit einem Laser von unten nach oben auf. Der Hintergrund ist echtes Blaupausen-Papier mit Raster, Maßlinien in echten Größen und Schriftfeld.
+Sag **„Blueprint“** (oder oben im Fenster **Blueprint**), dann **„Generiere einen Iron-Man-Helm“**, **„Bau mir eine Drohne“** oder **„Konstruiere ein Raumschiff“**. Jarvis zeichnet das Modell Teil für Teil als leuchtendes Hologramm über einem Projektor, jedes Teil baut sich mit einem Laser von unten nach oben auf. Dazu Maßlinien in echten Größen.
+
+**Einfach weiterreden:** Solange der Blueprint offen ist, brauchst du kein „Hey Jarvis“. Jarvis antwortet kurz („Sofort, Sir.“, danach „Erledigt, Sir.“) und hört gleich wieder zu, auch wenn du dir das Modell eine Weile ansiehst (bis anderthalb Minuten Pause). Sagst du etwas, während er noch baut, merkt er es sich und macht es direkt danach. Unten im Blueprint steht, ob er gerade zuhört.
 
 - **Ansehen:** Ziehen dreht, das Mausrad zoomt, rechte Maustaste verschiebt, Doppelklick holt ein Teil heran. Auf dem Touchscreen: ein Finger dreht, zwei zoomen.
 - **Sofort per Sprache:** „Dreh es um 90 Grad“, „Lass es drehen“, „Zoom rein“, „Von oben“, „Explosionsansicht“ (alle Baugruppen auseinander, mit Namen), „Bau es wieder zusammen“, „Zeig mir das Triebwerk genauer“, „Nur den Rumpf“, „Zeig alles“, „Mach das größer“, „Mach die Flügel doppelt so groß“, „Mach die Flügel rot“, „Entferne die Antenne“, „Rückgängig“, „Drahtmodell“, „Hologramm“, „Echte Farben“.
 - **Umbauen mit Jarvis:** „Füg noch zwei Raketen an die Flügel“, „Mach den Rumpf schlanker“, „Setz ein Cockpit drauf“. Hast du ein Teil angeklickt, meint „das“ dieses Teil.
-- **Darstellung:** **Blaupause** (weiße Zeichnung), **Holo** (leuchtendes Hologramm), **Echt** (Farben und Material).
-- **Speichern und 3D-Druck:** „Speicher das als Drohne“, „Lade die Blaupause Drohne“, „Zeig mir meine Blaupausen“. **STL** oder „Exportier als STL“ legt eine Datei für den 3D-Drucker in `Jarvis-Werkstatt\Blaupausen` (in Millimetern, steht auf dem Boden).
+- **Darstellung:** **Holo** (leuchtendes Hologramm, Standard), **Echt** (Farben und Material, mit Spiegelungen), **Papier** (weiße Zeichnung auf Blaupausen-Papier).
+- **Speichern und 3D-Druck:** „Speicher das als Drohne“, „Lade den Blueprint Drohne“, „Zeig mir meine Blueprints“. **STL** oder „Exportier als STL“ legt eine Datei für den 3D-Drucker in `Jarvis-Werkstatt\Blaupausen` (in Millimetern, steht auf dem Boden).
 - **Stopp** hält eine laufende Konstruktion an. Gezeichnet wird mit Sonnet (`[blaupause] modell = "opus"` für aufwendigere Modelle).
 
 ## Die Weltlage: Gottes Auge
@@ -316,7 +318,7 @@ Die grobe Erde ist in Jarvis eingebaut. Die scharfen Satellitenbilder (Sentinel-
 
 Sag **„Starte die Handsteuerung“** (oder unten **Handsteuerung**). Unten links erscheint ein kleines Kamerabild, die Webcam erkennt deine Hände.
 
-1. **Greifen:** Daumen und Zeigefinger zusammen, dann die Hand bewegen. Die Erde verschiebt sich, in der Blaupause dreht sich das Modell.
+1. **Greifen:** Daumen und Zeigefinger zusammen, dann die Hand bewegen. Die Erde verschiebt sich, im Blueprint dreht sich das Modell.
 2. **Zoomen:** mit beiden Händen greifen und auseinanderziehen (näher) oder zusammenführen (weiter weg).
 3. **Drehen:** mit beiden Händen greifen und wie ein Lenkrad kippen.
 

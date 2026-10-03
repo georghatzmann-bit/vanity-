@@ -753,7 +753,7 @@ class Api:
     def blueprint_save(self, name="") -> dict:
         bp = self._blueprint()
         if bp is None:
-            return {"ok": False, "error": "Die Blaupause ist aus."}
+            return {"ok": False, "error": "Der Blueprint ist aus."}
         try:
             path = bp.save(str(name or "")[:80])
         except (OSError, ValueError) as exc:
@@ -778,7 +778,7 @@ class Api:
         """Die STL-Datei, die das Fenster gerechnet hat (base64), in den Blaupausen-Ordner."""
         bp = self._blueprint()
         if bp is None:
-            return {"ok": False, "error": "Die Blaupause ist aus."}
+            return {"ok": False, "error": "Der Blueprint ist aus."}
         try:
             path = bp.export_stl(str(name or ""), str(data or ""))
         except (OSError, ValueError) as exc:

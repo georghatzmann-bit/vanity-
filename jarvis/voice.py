@@ -22,6 +22,9 @@ CHIME_ECHO_SECONDS = 0.45
 
 # Gespräch: So viele Sekunden hört Jarvis nach einer Antwort weiter zu, ohne "Hey Jarvis".
 CONVERSATION_SECONDS = 8.0
+# Ist der Blueprint offen, redet Georg mit Jarvis am Modell (Georg: "dauerhaft reden, er macht es schnell, sagt
+# Erledigt, ich sag was, dann macht er direkt weiter"): nach jeder Antwort so lange ohne "Hey Jarvis" zuhören.
+BLUEPRINT_SECONDS = 90.0
 
 # "Alles klar", "Okay", "Nein danke": kein Befehl, das Gespräch ist einfach zu Ende.
 _DONE = re.compile(
@@ -333,7 +336,10 @@ class VoiceLoop:
             question = bool(assistant.take_follow_up()) and self._follow_up
             if self._talking and not self._may_talk():
                 self._end_conversation()
-            if question or (self._talking and self._conversation):
+            # Am Blueprint geht es nach jedem "Erledigt" ohne Weckwort weiter, auch wenn Georg auf das Modell
+            # gewartet und dazwischen nichts gesagt hat.
+            working = self._conversation and self._blueprint_open() and self._may_talk()
+            if question or (self._talking and self._conversation) or working:
                 self._was_active = False
                 self._listen(follow_up=True, question=question)
                 return
@@ -396,7 +402,9 @@ class VoiceLoop:
         threading.Thread(target=sound or self._sounds.listening, name="jarvis-ton", daemon=True).start()
         listen_cfg = self._cfg["listen"]
         if follow_up:
-            if self._talking and self._conversation:
+            if self._conversation and self._blueprint_open():
+                seconds = max(self._conversation_seconds, BLUEPRINT_SECONDS)
+            elif self._talking and self._conversation:
                 seconds = self._conversation_seconds
             else:
                 seconds = min(5.0, float(listen_cfg["start_timeout_seconds"]))
@@ -484,11 +492,18 @@ class VoiceLoop:
             self._shown_talking = False
             self._assistant.ui.config(gespraech=False)
 
+    def _blueprint_open(self) -> bool:
+        blueprint = getattr(self._assistant, "blueprint", None)
+        return bool(blueprint is not None and getattr(blueprint, "active", False))
+
     def _may_talk(self) -> bool:
-        """Beim Zocken (Gaming-Modus, Vollbild) kein Gespräch: Dann redet Georg meist mit anderen."""
+        """Beim Zocken (Gaming-Modus, Vollbild) kein Gespräch: Dann redet Georg meist mit anderen. Am offenen
+        Blueprint zählt Vollbild nicht (das ist dann Jarvis' eigenes Fenster)."""
         assistant = self._assistant
         if getattr(assistant, "gaming", False):
             return False
+        if self._blueprint_open():
+            return True
         fullscreen = getattr(assistant, "_fullscreen", None)
         try:
             return not (fullscreen is not None and fullscreen())

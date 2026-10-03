@@ -48,8 +48,9 @@ HELP = """Jarvis-Befehle (python -m jarvis.tool <befehl>):
   werkstatt-projekt "<name>" "<wunsch>"
                                arbeitet an einem bestimmten Werkstatt-Projekt weiter
   werkstatt-projekte           zeigt alle Werkstatt-Projekte
-  blaupause "<wunsch>"         baut ein 3D-Modell als Hologramm in der Blaupause (Gegenstände, Fahrzeuge, Rüstung ...)
-  blaupause-aendern "<wunsch>" ändert das Modell, das gerade in der Blaupause liegt
+  blueprint "<wunsch>"         baut ein 3D-Modell als Hologramm im Blueprint (Gegenstände, Fahrzeuge, Rüstung ...)
+  blueprint-aendern "<wunsch>" ändert das Modell, das gerade im Blueprint liegt
+                               (alte Namen: blaupause, blaupause-aendern)
   weltlage "<ort>"             zeigt einen Ort auf der Satelliten-Erde (die Erde fliegt hin)
   weltlage-bericht <welt|deutschland|wirtschaft>   Lagebericht: Jarvis fliegt zu jeder Meldung und liest sie vor
   merken "<fakt>"              merkt sich etwas über Georg für immer ("Georg spielt gern Valorant")
@@ -214,16 +215,16 @@ def _dispatch(command: str, rest: list[str]) -> int:
               "Werkstatt bist, und mach den Auftrag nicht selbst.")
         return 0
 
-    if command in ("blaupause", "blaupause-aendern"):
+    if command in ("blueprint", "blueprint-aendern", "blaupause", "blaupause-aendern"):
         from .blaupause import hand_over as blueprint_hand_over
 
         wish = " ".join(rest).strip()
         if not wish:
             print(f'Aufruf: {command} "<wunsch>"')
             return 1
-        blueprint_hand_over(STATE_DIR, wish, change=command == "blaupause-aendern")
-        print(f"Die Blaupause übernimmt (das Hologramm baut sich im Fenster auf). Sag {_user()} nur kurz, dass du "
-              "konstruierst, und beschreib das Modell nicht selbst.")
+        blueprint_hand_over(STATE_DIR, wish, change=command.endswith("-aendern"))
+        print(f"Der Blueprint übernimmt (das Hologramm baut sich im Fenster auf). Sag {_user()} nur kurz, dass du "
+              "es baust, und beschreib das Modell nicht selbst.")
         return 0
 
     if command in ("weltlage", "weltlage-bericht"):

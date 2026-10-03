@@ -1,4 +1,4 @@
-"""Blaupause: 3D-Modelle als Hologramm, wie in Tony Starks Werkstatt.
+"""Blueprint (früher "Blaupause"): 3D-Modelle als Hologramm, wie in Tony Starks Werkstatt.
 
 Georg sagt "Generiere einen Iron-Man-Helm" oder "Bau mir eine Drohne als Hologramm". Claude zeichnet das
 Modell aus Grundformen (Quader, Kugel, Zylinder, Kegel, Ring, Kapsel, Drehkörper, Extrusion, Rohr) und
@@ -9,6 +9,10 @@ Hologramm auf. Danach geht alles per Sprache:
   "Zeig mir das Triebwerk genauer", "Nur den Rumpf", "Mach die Flügel rot", "Entferne die Antenne",
   "Rückgängig", "Von oben", "Drahtmodell", "Speicher das als Drohne", "Exportier als STL"
 - mit Claude: "Füg noch zwei Raketen an die Flügel", "Mach den Rumpf schlanker", "Setz ein Cockpit drauf"
+
+Solange der Blueprint offen ist, hört Jarvis ohne "Hey Jarvis" weiter zu (voice.BLUEPRINT_SECONDS) und antwortet
+knapp: "Sofort, Sir." und danach "Erledigt, Sir.". Was Georg sagt, während Claude noch baut, kommt in eine
+Warteschlange und wird direkt danach erledigt.
 
 Python hält das Modell (die Wahrheit für Speichern, Rückgängig und Claude), das Fenster zeichnet es
 (blaupause.js mit three.js). Alles, was von Claude kommt, wird geprüft (clean_part): nur bekannte Formen,
@@ -255,11 +259,13 @@ def _norm(text: str) -> str:
     return re.sub(r"^(?:bitte |mal |jetzt |also |okay |ok |und )+", "", norm).replace(" bitte", "")
 
 
-_OPEN = re.compile(r"^(?:(?:öffne|zeig|zeige|starte|start|aktivier|aktiviere|geh in|wechsel in|wechsle in)(?: mir)? )?"
-                   r"(?:die |den |in die |in den )?(?:blaupause|blaupausen[- ]?modus|blueprint(?:[- ]?modus)?|"
+# "Blueprint" schreibt die Spracherkennung auch "Blue Print", "Bluprint" oder "Blu-Print"
+_BLUEPRINT = r"(?:blue[- ]?prints?|blu[- ]?prints?|blaupause|blaupausen)(?:[- ]?modus)?"
+_OPEN = re.compile(r"^(?:(?:öffne|zeig|zeige|starte|start|aktivier|aktiviere|geh in|wechsel in|wechsle in|mach)(?: mir)? )?"
+                   rf"(?:die |den |das |in die |in den |in das )?(?:{_BLUEPRINT}|"
                    r"hologramm[- ]?modus|konstruktions[- ]?modus|3d[- ]?modus|holo[- ]?modus)(?: an| auf| öffnen| starten)?$")
-_CLOSE = re.compile(r"^(?:(?:schließ|schließe|beende|verlass|verlasse)(?: die| den)? (?:blaupause|blaupausen[- ]?modus|"
-                    r"blueprint|hologramm[- ]?modus|konstruktions[- ]?modus)|(?:blaupause|blaupausen[- ]?modus|blueprint|"
+_CLOSE = re.compile(rf"^(?:(?:schließ|schließe|beende|verlass|verlasse)(?: die| den| das)? (?:{_BLUEPRINT}|"
+                    rf"hologramm[- ]?modus|konstruktions[- ]?modus)|(?:{_BLUEPRINT}|"
                     r"hologramm[- ]?modus)(?: schließen| beenden| aus| zu))$")
 # "Generiere einen Iron-Man-Helm", "Bau mir ein 3D-Modell von einem Auto", "Zeig mir eine Rakete als Hologramm"
 _MAKE_VERB = (r"(?:generier|generiere|erstell|erstelle|bau|baue|konstruier|konstruiere|entwirf|entwerf|zeichne|"
@@ -271,7 +277,7 @@ _STRONG_VERB = re.compile(r"^(?:generier|generiere|konstruier|konstruiere|modell
 _NOT_AN_OBJECT = re.compile(r"\b(?:passwort\w*|text\w*|bild\w*|foto\w*|lied\w*|song\w*|gedicht\w*|liste\w*|name\w*|"
                             r"zusammenfassung\w*|mail\w*|nachricht\w*|antwort\w*|idee\w*|plan|pläne|witz\w*|zitat\w*|"
                             r"rezept\w*|playlist\w*|tabelle\w*|präsentation\w*|video\w*|musik|beat\w*|qr[- ]?code)\b")
-_EXPLICIT = re.compile(r"\b(?:3d[- ]?modell\w*|3d|hologramm\w*|blaupause|blueprint|in 3d|als modell)\b")
+_EXPLICIT = re.compile(r"\b(?:3d[- ]?modell\w*|3d|hologramm\w*|blaupause|blue[- ]?print|blu[- ]?print|in 3d|als modell)\b")
 _SHOW_AS = re.compile(r"^(?:zeig|zeige)(?: mir)? (?P<what>.+?) (?:als hologramm|in 3d|als 3d[- ]?modell)$")
 # Was eher ein Programm ist als ein Gegenstand: gehört in die Werkstatt
 _SOFTWARE = re.compile(r"\b(?:bot|discord|programm\w*|skript\w*|script|app|apps|webseite\w*|website|tool|code|plugin|"
@@ -341,6 +347,8 @@ class Blueprint:
         self._proc: subprocess.Popen | None = None
         self._cancel = threading.Event()
         self._last_spoken = ""
+        # Was Georg sagt, während Claude noch baut: (Wunsch, neu?) der Reihe nach, direkt danach
+        self._queue: list[tuple[str, bool]] = []
 
     # ------------------------------------------------------------------ Anzeige
 
@@ -370,13 +378,14 @@ class Blueprint:
             except Exception as exc:
                 log.debug("Blaupause, Fenster: %s", exc)
         if self.scene["teile"]:
-            return f"Die Blaupause ist offen, Sir. Auf dem Tisch liegt {self.scene['name'] or 'das letzte Modell'}."
-        return "Blaupausen-Modus, Sir. Was soll ich konstruieren?"
+            return f"Blueprint, Sir. Auf dem Tisch: {self.scene['name'] or 'das letzte Modell'}."
+        return "Blueprint, Sir. Was soll ich bauen?"
 
     def close(self) -> str:
         self.active = False
+        self._queue.clear()
         self._emit("close")
-        return "Blaupause geschlossen, Sir."
+        return "Blueprint geschlossen, Sir."
 
     def set_active(self, on: bool) -> None:
         """Das Fenster meldet, ob die Blaupause offen ist (dann gehen \"Mach das größer\" & Co. hierher)."""
@@ -655,15 +664,15 @@ class Blueprint:
         if re.match(r"^(?:beschriftung\w* (?:aus|weg)|keine beschriftung\w*|namen (?:aus|weg))$", norm):
             self._emit("view", what="labels", on=False)
             return "Ohne Beschriftung, Sir."
-        if re.match(r"^(?:(?:leere|neue) blaupause|alles (?:löschen|weg)|tisch (?:leer|frei)|fang (?:neu|von vorne) an|"
-                    r"neues modell)$", norm):
+        if re.match(rf"^(?:(?:leere|leerer|neue|neuer) {_BLUEPRINT}|alles (?:löschen|weg)|tisch (?:leer|frei)|"
+                    r"fang (?:neu|von vorne) an|neues modell)$", norm):
             with self._lock:
                 self._remember()
                 self.scene = empty_scene()
                 self.selected = ""
             self._push_scene()
             return "Der Tisch ist frei, Sir. Was soll ich konstruieren?"
-        saved = re.match(r"^(?:speicher|speichere|sicher|sichere)(?: mir)?(?: (?:das|es|die blaupause|das modell))?"
+        saved = re.match(rf"^(?:speicher|speichere|sicher|sichere)(?: mir)?(?: (?:das|es|die blaupause|den {_BLUEPRINT}|das modell))?"
                          r"(?: (?:als|unter) (?P<name>.+))?$", norm)
         if saved:
             return self.save_spoken(saved.group("name") or "")
@@ -671,18 +680,18 @@ class Blueprint:
                     r"^(?:als stl (?:speichern|exportieren)|(?:mach|mache) (?:es|das) (?:für den )?3d[- ]?druck(?:fertig| bereit)?)$", norm):
             if not self.scene["teile"]:
                 return "Auf dem Tisch liegt noch nichts, Sir."
-            self._emit("export", name=self.scene["name"] or "Blaupause")
-            return "Ich exportiere es als STL-Datei für den 3D-Drucker, Sir."
-        load = re.match(r"^(?:lade|lad|öffne|hol|hole)(?: mir)? (?:die )?blaupause (?P<name>.+)$", norm)
+            self._emit("export", name=self.scene["name"] or "Blueprint")
+            return "STL für den 3D-Drucker kommt, Sir."
+        load = re.match(rf"^(?:lade|lad|öffne|hol|hole)(?: mir)? (?:die |den |das )?{_BLUEPRINT} (?P<name>.+)$", norm)
         if load:
             return self.load_spoken(load.group("name"))
-        if re.match(r"^(?:zeig|zeige|welche|was für)(?: mir)?(?: meine| alle)? blaupausen(?: habe ich| hab ich)?$", norm):
+        if re.match(rf"^(?:zeig|zeige|welche|was für)(?: mir)?(?: meine| alle)? {_BLUEPRINT}(?: habe ich| hab ich)?$", norm):
             items = self.saved()
             self._emit("library", items=items)
             if not items:
-                return "Noch keine gespeicherten Blaupausen, Sir."
+                return "Noch keine gespeicherten Blueprints, Sir."
             names = [i["name"] for i in items[:4]]
-            return f"{len(items)} Blaupause{'n' if len(items) != 1 else ''}, Sir: " + ", ".join(names) + "."
+            return f"{len(items)} Blueprint{'s' if len(items) != 1 else ''}, Sir: " + ", ".join(names) + "."
         if not self.scene["teile"]:
             return None
         if re.match(r"^(?:was ist das|was ist (?:dieses|das) teil|was hab ich (?:da )?ausgewählt)$", norm):
@@ -772,27 +781,42 @@ class Blueprint:
 
     # ------------------------------------------------------------------ Claude zeichnet
 
+    QUEUE_MAX = 5
+
     def generate(self, wish: str, fresh: bool = True) -> str:
-        """Claude konstruiert (fresh) oder ändert das Modell. Die Teile kommen einzeln ins Fenster."""
+        """Claude konstruiert (fresh) oder ändert das Modell. Die Teile kommen einzeln ins Fenster. Baut Claude
+        gerade, kommt der Wunsch in die Warteschlange und ist direkt danach dran."""
         with self._lock:
-            if self.busy:
-                return "Ich konstruiere noch, Sir. Einen Moment."
             if self._brain is None or not getattr(self._brain, "claude_path", ""):
                 return "Dafür brauche ich mein Gehirn, Sir. Bitte öffnen Sie einmal die Einstellungen."
+            if self.busy:
+                if len(self._queue) >= self.QUEUE_MAX:
+                    return "Einen Moment, Sir, ich bin noch dran."
+                self._queue.append((str(wish), fresh))
+                self._emit("queue", items=[w for w, _ in self._queue])
+                return random_choice(["Danach, Sir.", "Kommt gleich, Sir.", "Notiert, Sir."])
             self.busy = True
             self._cancel.clear()
             self._remember()
         self._emit("busy", text=str(wish)[:200], fresh=fresh)
         threading.Thread(target=self._work, args=(str(wish), fresh), name="jarvis-blaupause", daemon=True).start()
-        if fresh:
-            return random_choice(["Sehr wohl, Sir. Ich konstruiere es. Sehen Sie zu.",
-                                  "Sofort, Sir. Das Hologramm baut sich gleich auf.",
-                                  "Mit Vergnügen, Sir. Ich lege los."])
-        return random_choice(["Sehr wohl, Sir.", "Wird gemacht, Sir.", "Ich baue es um, Sir."])
+        return random_choice(["Sofort, Sir.", "Sehr wohl, Sir.", "Wird gemacht, Sir."])
+
+    def _next(self) -> None:
+        """Der nächste Wunsch aus der Warteschlange, ohne dass Georg nochmal fragen muss."""
+        with self._lock:
+            if not self._queue or self.busy or self._cancel.is_set():
+                return
+            wish, fresh = self._queue.pop(0)
+            self._emit("queue", items=[w for w, _ in self._queue])
+        self.generate(wish, fresh=fresh)
 
     def cancel(self) -> bool:
+        with self._lock:
+            had_queue = bool(self._queue)
+            self._queue.clear()
         if not self.busy:
-            return False
+            return had_queue
         self._cancel.set()
         proc = self._proc
         if proc is not None and proc.poll() is None:
@@ -866,16 +890,23 @@ class Blueprint:
                 if self._undo:
                     self.scene = self._undo.pop()
             self._emit("done", ok=False, error=error, **self.state())
-            self._announce("Die Konstruktion ging leider nicht, Sir. " + _explain(error))
+            self._announce("Das ging leider nicht, Sir. " + _explain(error))
+            self._next()
             return
         name = self.scene["name"] or "Das Modell"
         count = len(self.scene["teile"])
-        log.info("Blaupause fertig nach %d s: %s, %d Teile (%d Änderungen)", seconds, name, count, added)
+        log.info("Blueprint fertig nach %d s: %s, %d Teile (%d Änderungen)", seconds, name, count, added)
         self._emit("done", ok=True, seconds=seconds, said=spoken, **self.state())
-        if not spoken:
-            spoken = f"{name} steht, Sir: {count} Teile." if fresh else "Erledigt, Sir."
-        self._last_spoken = spoken
-        self._announce(spoken)
+        # Georg: "nicht alles erklären, schnell machen und Erledigt sagen". Claudes Satz steht im Fenster.
+        if fresh and not added:
+            short = "Das hat nicht geklappt, Sir. Sagen Sie es bitte noch einmal anders."
+        elif fresh:
+            short = random_choice([f"Fertig, Sir. {name}.", f"{name} steht, Sir."])
+        else:
+            short = "Erledigt, Sir." if added else "Daran hat sich nichts geändert, Sir."
+        self._last_spoken = short
+        self._announce(short)
+        self._next()
 
     def take_handoff(self, state_dir: Path) -> bool:
         """Holt einen Wunsch ab, den das Gehirn über jarvis.tool übergeben hat. True = übernommen."""
@@ -988,7 +1019,7 @@ class Blueprint:
     def load_spoken(self, name: str) -> str:
         if self.load(name):
             return f"{self.scene['name']} liegt auf dem Tisch, Sir."
-        return f"Eine Blaupause namens {name} finde ich nicht, Sir."
+        return f"Einen Blueprint namens {name} finde ich nicht, Sir."
 
     def delete(self, name: str) -> bool:
         path = self._file(name)

@@ -74,6 +74,25 @@ class ConversationTest(unittest.TestCase):
         submitted, *_ = self.run_loop(Said("Wie spät ist es?", "Öffne Spotify"), frames, gespraech_sekunden=0.5)
         self.assertEqual(submitted, ["Wie spät ist es?"])
 
+    def test_blueprint_keeps_listening_through_long_pauses(self):
+        """Georg am Blueprint: "dauerhaft reden, ... ich sag was, dann macht er direkt weiter". Eine längere Pause
+        (er schaut sich das Modell an) beendet das Gespräch nicht."""
+        frames = [QUIET] + SENTENCE + [QUIET] * 12 + SENTENCE + [QUIET] * 3
+        events = []
+        cfg = load_config()
+        cfg["listen"].update(silence_seconds=0.24, energy_threshold=1000, gespraech_sekunden=0.5)
+        assistant, _ui, _speaker, mute = make(FakeBrain())
+        assistant.blueprint = type("Open", (), {"active": True})()
+        assistant._fullscreen = lambda: True  # Jarvis' eigenes Fenster im Vollbild zählt am Blueprint nicht
+        submitted = []
+        assistant.submit = submitted.append
+        loop = VoiceLoop(cfg, FakeMic(frames, events), FakeWake([0.9], events),
+                         Said("Bau mir eine Drohne", "Mach die Arme länger"), assistant, mute, Sounds(events), "X",
+                         hints=None)
+        with self.assertRaises(StopLoop):
+            loop.run()
+        self.assertEqual(submitted, ["Bau mir eine Drohne", "Mach die Arme länger"])
+
     def test_can_be_switched_off(self):
         frames = [QUIET] + SENTENCE + [QUIET] + SENTENCE + [QUIET] * 3
         submitted, events, _ui = self.run_loop(Said("Wie spät ist es?", "Und in Tokio?"), frames, gespraech=False)

@@ -83,12 +83,40 @@ class CommandTest(unittest.TestCase):
         for said in ("Dreh es", "Mach das größer", "Explosionsansicht", "Zoom rein", "Mach die Musik lauter"):
             with self.subTest(said=said):
                 self.assertIsNone(self.bp.command(said))
-        self.assertIn("Auf dem Tisch liegt Drohne", self.bp.open())
+        self.assertIn("Auf dem Tisch: Drohne", self.bp.open())
         self.assertTrue(self.bp.active)
         self.assertEqual(self.ui.of("blueprint")[-1][1]["action"], "open")
         self.assertIn("geschlossen", self.bp.command("Blaupause schließen"))
         self.assertFalse(self.bp.active)
-        self.assertIn("Blaupause ist offen", self.bp.command("Öffne die Blaupause"))
+        self.assertIn("Auf dem Tisch: Drohne", self.bp.command("Öffne die Blaupause"))
+        for said in ("Öffne den Blueprint", "Blue Print", "Blueprint Modus", "Blueprint", "Öffne das Bluprint"):
+            with self.subTest(said=said):
+                self.bp.close()
+                self.assertIn("Blueprint, Sir", self.bp.command(said))
+                self.assertTrue(self.bp.active)
+        self.assertIn("geschlossen", self.bp.command("Blueprint schließen"))
+
+    def test_wishes_while_building_are_queued_and_done_right_after(self):
+        """Georg: "ich sag was, dann macht er direkt weiter". Während Claude baut, kommt der nächste Wunsch in die
+        Warteschlange statt "Ich konstruiere noch"."""
+        self.bp.open()
+        started = []
+        self.bp._brain = type("Brain", (), {"claude_path": "claude"})()
+
+        def work(wish, fresh):
+            started.append((wish, fresh))
+
+        self.bp._work = work
+        self.bp.generate("Mach die Arme länger", fresh=False)
+        self.assertTrue(self.bp.busy)
+        self.assertIn(self.bp.generate("Und die Rotoren rot", fresh=False), ["Danach, Sir.", "Kommt gleich, Sir.", "Notiert, Sir."])
+        self.assertEqual(self.bp._queue, [("Und die Rotoren rot", False)])
+        self.bp.busy = False  # die erste Änderung ist fertig
+        self.bp._next()
+        self.assertEqual(started[-1], ("Und die Rotoren rot", False), "direkt danach, ohne nochmal zu fragen")
+        self.bp.generate("Noch eine Antenne", fresh=False)
+        self.assertTrue(self.bp.cancel(), "Stopp leert auch die Warteschlange")
+        self.assertEqual(self.bp._queue, [])
 
     def test_view_commands_go_to_the_window(self):
         self.bp.open()
@@ -150,7 +178,8 @@ class CommandTest(unittest.TestCase):
         self.assertIn("Testdrohne", self.bp.command("Lade die Blaupause Testdrohne"))
         self.assertEqual(len(self.bp.scene["teile"]), 4)
         self.assertEqual(self.bp.scene.get("groesse_m"), 0.4)
-        self.assertIn("1 Blaupause", self.bp.command("Zeig mir meine Blaupausen"))
+        self.assertIn("1 Blueprint", self.bp.command("Zeig mir meine Blaupausen"))
+        self.assertIn("1 Blueprint", self.bp.command("Zeig mir meine Blueprints"))
         self.assertIn("STL", self.bp.command("Exportier als STL"))
         self.assertEqual(self.ui.of("blueprint")[-1][1]["action"], "export")
         path = Path(self.bp.export_stl("Testdrohne", stl(2)))
@@ -243,7 +272,7 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual(self.bp.scene["name"], "Testhelm")
         self.assertEqual([p["id"] for p in self.bp.scene["teile"]], ["schale", "visier"])
         self.assertEqual(self.bp.scene["groesse_m"], 0.3)
-        self.assertEqual(self.said, ["Der Testhelm steht, Sir."])
+        self.assertIn(self.said[0], ["Fertig, Sir. Testhelm.", "Testhelm steht, Sir."], "kurz, ohne Erklärung")
         actions = [e[1]["action"] for e in self.ui.of("blueprint")]
         self.assertIn("busy", actions)
         self.assertEqual(actions[-1], "done")
@@ -262,6 +291,7 @@ class GenerateTest(unittest.TestCase):
         self.wait()
         self.assertEqual([p["id"] for p in self.bp.scene["teile"]], ["schale", "visier", "antenne"])
         self.assertEqual(next(p for p in self.bp.scene["teile"] if p["id"] == "visier")["farbe"], "#00ff00")
+        self.assertEqual(self.said[-1], "Erledigt, Sir.", "Änderungen: nur Erledigt, ohne Erklärung")
         prompt = self.calls()[-1]["prompt"]
         self.assertIn("Ändere das vorhandene Modell", prompt)
         self.assertIn('"schale"', prompt, "Claude sieht das Modell")
@@ -294,7 +324,7 @@ class RoutingTest(unittest.TestCase):
             bp.apply(part("schale", "kugel", masse=[0.5]))
             assistant.handle("Explosionsansicht")
             self.assertEqual(brain.asked, ["Explosionsansicht"], "zu: geht an Claude")
-            self.assertIn("Blaupause", assistant.handle("Blaupause"))
+            self.assertIn("Blueprint", assistant.handle("Blaupause"))
             self.assertEqual(assistant.handle("Explosionsansicht"), "Explosionsansicht, Sir.")
             self.assertIn("Prozent größer", assistant.handle("Mach das größer"))
             self.assertEqual(len(brain.asked), 1, "nichts davon ging an Claude")

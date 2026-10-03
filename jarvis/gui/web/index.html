@@ -38,9 +38,9 @@
           <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
           <span class="ws-pill-time" id="workshopPillTime"></span>
         </button>
-        <button type="button" class="top-btn bp-pill" id="bpPill" data-state="idle" title="Blaupause: 3D-Modelle als Hologramm bauen, drehen, zerlegen. Oder sagen Sie „Blaupause“.">
+        <button type="button" class="top-btn bp-pill" id="bpPill" data-state="idle" title="Blueprint: 3D-Modelle als Hologramm bauen, drehen, zerlegen. Oder sagen Sie „Blueprint“.">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
-          <span class="ws-pill-text">Blaupause</span>
+          <span class="ws-pill-text">Blueprint</span>
         </button>
         <button type="button" class="top-btn wl-pill" id="wlPill" title="Weltlage: die Erde mit den neuesten Meldungen. Oder sagen Sie „Zeig mir, was in der Welt passiert“.">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
@@ -319,8 +319,8 @@
     <div class="wl-boot" id="wlBoot" aria-hidden="true"><span>Satellitenverbindung wird aufgebaut</span></div>
   </section>
 
-  <!-- Blaupause: 3D-Modelle als Hologramm auf echtem Blaupausen-Papier (blaupause.js, three.js) -->
-  <section class="bp" id="bp" aria-label="Blaupause" data-look="blau" hidden>
+  <!-- Blueprint: 3D-Modelle als Hologramm wie in Tony Starks Werkstatt (blaupause.js, three.js) -->
+  <section class="bp" id="bp" aria-label="Blueprint" data-look="holo" hidden>
     <div class="bp-paper" aria-hidden="true"></div>
     <div class="bp-stage" id="bpStage">
       <canvas id="bpCanvas" aria-label="3D-Modell. Ziehen dreht, Mausrad zoomt, rechte Maustaste verschiebt, Klick wählt ein Teil."></canvas>
@@ -341,13 +341,13 @@
         <span>Jarvis</span>
       </button>
       <div class="bp-title">
-        <span class="bp-kicker">Blaupause · Stark Industries</span>
+        <span class="bp-kicker">Blueprint · Stark Industries</span>
         <h1 id="bpName">Neue Konstruktion</h1>
       </div>
       <span class="bp-chip" id="bpChip" data-state="idle"><i aria-hidden="true"></i><span id="bpChipText">Bereit</span></span>
       <div class="bp-actions">
         <button type="button" class="bp-btn" id="bpNew" title="Den Tisch freiräumen (Rückgängig geht)">Neu</button>
-        <button type="button" class="bp-btn" id="bpLibraryBtn" title="Gespeicherte Blaupausen">Blaupausen</button>
+        <button type="button" class="bp-btn" id="bpLibraryBtn" title="Gespeicherte Blueprints">Gespeichert</button>
         <button type="button" class="bp-btn" id="bpSave" title="Das Modell speichern">Speichern</button>
         <button type="button" class="bp-btn primary" id="bpExport" title="Als STL-Datei für den 3D-Drucker speichern">STL</button>
       </div>
@@ -364,9 +364,9 @@
       <div class="bp-group" role="group" aria-label="Darstellung">
         <span class="bp-label">Darstellung</span>
         <div class="bp-seg" id="bpLook">
-          <button type="button" data-look="blau" aria-pressed="true" title="Weiße Linien auf Blaupause">Blaupause</button>
-          <button type="button" data-look="holo" aria-pressed="false" title="Leuchtendes Hologramm">Holo</button>
+          <button type="button" data-look="holo" aria-pressed="true" title="Leuchtendes Hologramm wie in Tony Starks Werkstatt">Holo</button>
           <button type="button" data-look="echt" aria-pressed="false" title="Echte Farben und Material">Echt</button>
+          <button type="button" data-look="blau" aria-pressed="false" title="Weiße Linien auf Blaupausen-Papier">Papier</button>
         </div>
       </div>
       <div class="bp-group" role="group" aria-label="Ansicht">
@@ -408,7 +408,8 @@
     <footer class="bp-foot">
       <div class="bp-console" aria-live="polite">
         <span class="bp-who">J.A.R.V.I.S.</span>
-        <p id="bpSay">Bereit, Sir. Was soll ich konstruieren?</p>
+        <p id="bpSay">Bereit, Sir. Was soll ich bauen?</p>
+        <span class="bp-mic" id="bpMic" data-state="idle" title="Am Blueprint hört Jarvis nach jeder Antwort ohne „Hey Jarvis“ weiter zu"><i aria-hidden="true"></i><span id="bpMicText">Sag „Jarvis“</span></span>
       </div>
       <form class="bp-cmd" id="bpCmd" autocomplete="off">
         <label class="bp-cmd-label" for="bpInput">Befehl</label>
@@ -434,9 +435,9 @@
     </footer>
 
     <div class="bp-library" id="bpLibrary" hidden role="dialog" aria-labelledby="bpLibHead">
-      <header><h2 id="bpLibHead">Gespeicherte Blaupausen</h2><button type="button" class="bp-btn" id="bpLibClose">Schließen</button></header>
+      <header><h2 id="bpLibHead">Gespeicherte Blueprints</h2><button type="button" class="bp-btn" id="bpLibClose">Schließen</button></header>
       <ol id="bpLibList"></ol>
-      <p class="bp-hint" id="bpLibEmpty">Noch nichts gespeichert. „Speicher das als …“ legt eine Blaupause an.</p>
+      <p class="bp-hint" id="bpLibEmpty">Noch nichts gespeichert. „Speicher das als …“ legt einen Blueprint an.</p>
       <button type="button" class="bp-btn" id="bpFolder">Ordner öffnen</button>
     </div>
   </section>

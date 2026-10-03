@@ -308,6 +308,7 @@
     if (!S.hintTimer) el.stateHint.textContent = hintFor(state);
     el.stopBtn.disabled = !(state === 'speaking' || state === 'thinking');
     Core.setState(state);
+    if (Blaupause && Blaupause.mic) Blaupause.mic(state, S.talking);
     if (state === 'listening') {
       // Neue Frage: alte Untertitel und Schritte weg
       clearTimeout(S.subtitleTimer);
@@ -778,6 +779,7 @@
       // Gespräch: Jarvis hört nach der Antwort weiter zu, ohne "Hey Jarvis"
       S.talking = !!c.gespraech;
       Core.talk(S.talking);
+      if (Blaupause && Blaupause.mic) Blaupause.mic(undefined, S.talking);
       if (!S.hintTimer) el.stateHint.textContent = hintFor(effectiveState());
     }
     if ('gaming' in c) {

@@ -1,10 +1,11 @@
 /* ==========================================================================
-   Jarvis – Blaupause
-   3D-Modelle als Hologramm auf echtem Blaupausen-Papier, wie in Tony Starks Werkstatt.
+   Jarvis – Blueprint (früher Blaupause)
+   3D-Modelle als Hologramm, wie in Tony Starks Werkstatt: dunkler Raum, leuchtende Linien, Projektor mit
+   Lichtkegel und Funken, Scan-Linie, Leuchten (Bloom). Auf Wunsch weiter als Zeichnung auf Blaupausen-Papier.
    Python (blaupause.py) hält das Modell und schickt Ereignisse:
      blueprint  open | close | scene | op | busy | done | view | export | library | saved
    Diese Seite zeichnet es mit three.js (vendor/three.min.js, erst beim ersten Öffnen geladen):
-   als weiße Zeichnung (Blaupause), als leuchtendes Hologramm (Holo) oder in echten Farben (Echt).
+   als leuchtendes Hologramm (Holo, Standard), in echten Farben (Echt) oder als weiße Zeichnung (Papier).
    Jedes Teil baut sich mit einem Laser von unten nach oben auf. Maus: ziehen dreht, Rad zoomt,
    rechts ziehen verschiebt, Klick wählt ein Teil, Doppelklick holt es heran. Finger: einer dreht,
    zwei zoomen und verschieben. Dazu Maßlinien, Beschriftung, Explosionsansicht und STL-Export.
@@ -109,7 +110,7 @@
     // Weiße Zeichnung auf Blaupause
     blau: { edge: '#f4f8ff', edgeOpacity: 0.92, face: '#ffffff', faceOpacity: 0.035, rim: 0.32, scan: 0, additive: false, tint: 0 },
     // Leuchtendes Hologramm, die Farben ins Blaue gezogen
-    holo: { edge: '#8fe3ff', edgeOpacity: 0.85, face: '#7fd8ff', faceOpacity: 0.06, rim: 0.95, scan: 0.55, additive: true, tint: 0.7 },
+    holo: { edge: '#9eeaff', edgeOpacity: 0.7, face: '#6fd6ff', faceOpacity: 0.035, rim: 0.7, scan: 0.6, additive: true, tint: 0.78 },
     // Echte Farben und Material
     echt: { edge: '#0b1d36', edgeOpacity: 0.22 },
   };
@@ -137,18 +138,130 @@
     uniform float uTime;
     uniform float uSel;
     uniform float uDim;
+    uniform float uTop;
     varying vec3 vN;
     varying vec3 vV;
     varying float vY;
     void main() {
       #include <clipping_planes_fragment>
       float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
-      float rim = pow(f, 2.2);
-      float scan = 1.0 - uScan * (0.5 + 0.5 * sin(vY * 150.0 - uTime * 4.0));
-      vec3 col = mix(uColor, vec3(1.0, 0.81, 0.43), uSel * 0.85);
-      float a = (uOpacity + rim * uRim + uSel * 0.12) * scan * (1.0 - uDim * 0.82);
-      gl_FragColor = vec4(col * (0.55 + rim * 0.9), clamp(a, 0.0, 1.0));
+      float rim = pow(f, 2.0);
+      // feine Linien wie bei einem Projektor, ein helles Band läuft alle paar Sekunden durchs Modell
+      float lines = 1.0 - uScan * 0.35 * (0.5 + 0.5 * sin(gl_FragCoord.y * 1.7 - uTime * 5.0));
+      float h = max(uTop, 0.5) + 0.8;
+      float sweep = uScan * smoothstep(0.09, 0.0, abs(vY - (mod(uTime * 0.55, h) - 0.4)));
+      float flick = 1.0 - uScan * 0.04 * (0.5 + 0.5 * sin(uTime * 37.0 + vY * 9.0));
+      vec3 col = mix(uColor, vec3(1.0, 0.72, 0.32), uSel * 0.9);
+      float a = (uOpacity + rim * uRim + sweep * 0.28 + uSel * 0.14) * lines * flick * (1.0 - uDim * 0.82);
+      gl_FragColor = vec4(col * (0.55 + rim * 0.9 + sweep * 1.1), clamp(a, 0.0, 1.0));
     }`;
+
+  // ------------------------------------------------------------------ Leuchten (Bloom)
+  // Das Bild erst in eine Textur, helle Stellen herausziehen, zweimal weichzeichnen (halbe und viertel Größe) und
+  // wieder darüberlegen. Dazu ein leichtes Vignettieren. Ohne Erweiterungen von three.js, damit nichts nachzuladen ist.
+  const QUAD_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+  const BRIGHT_FRAG = `
+    uniform sampler2D tDiffuse; uniform float uThreshold; varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float l = max(c.r, max(c.g, c.b));
+      gl_FragColor = vec4(c * smoothstep(uThreshold, uThreshold + 0.35, l), 1.0);
+    }`;
+  const BLUR_FRAG = `
+    uniform sampler2D tDiffuse; uniform vec2 uDir; varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb * 0.2270270270;
+      c += texture2D(tDiffuse, vUv + uDir * 1.3846153846).rgb * 0.3162162162;
+      c += texture2D(tDiffuse, vUv - uDir * 1.3846153846).rgb * 0.3162162162;
+      c += texture2D(tDiffuse, vUv + uDir * 3.2307692308).rgb * 0.0702702703;
+      c += texture2D(tDiffuse, vUv - uDir * 3.2307692308).rgb * 0.0702702703;
+      gl_FragColor = vec4(c, 1.0);
+    }`;
+  const COMPOSE_FRAG = `
+    uniform sampler2D tScene; uniform sampler2D tGlow1; uniform sampler2D tGlow2;
+    uniform float uStrength; uniform float uVignette; uniform float uTime; varying vec2 vUv;
+    void main(){
+      vec3 c = texture2D(tScene, vUv).rgb;
+      c += texture2D(tGlow1, vUv).rgb * uStrength + texture2D(tGlow2, vUv).rgb * uStrength * 1.4;
+      vec2 d = vUv - 0.5;
+      c *= 1.0 - uVignette * smoothstep(0.25, 0.85, length(d * vec2(1.25, 1.0)));
+      float grain = fract(sin(dot(vUv * (uTime + 1.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+      gl_FragColor = vec4(c + grain * 0.012, 1.0);
+    }`;
+
+  function makeGlow(T, renderer) {
+    const webgl2 = !!(renderer.capabilities && renderer.capabilities.isWebGL2);
+    const target = (w, h, samples) => {
+      const rt = new T.WebGLRenderTarget(Math.max(1, w), Math.max(1, h), { samples: webgl2 ? samples : 0 });
+      rt.texture.encoding = T.sRGBEncoding; // three.js rechnet dann wie auf dem Bildschirm
+      return rt;
+    };
+    let w = 1;
+    let h = 1;
+    let full = target(1, 1, 4);
+    let half = [target(1, 1, 0), target(1, 1, 0)];
+    let quarter = [target(1, 1, 0), target(1, 1, 0)];
+    const cam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const quad = new T.Mesh(new T.PlaneGeometry(2, 2));
+    const pass = new T.Scene();
+    pass.add(quad);
+    const bright = new T.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BRIGHT_FRAG, depthTest: false, depthWrite: false,
+      uniforms: { tDiffuse: { value: null }, uThreshold: { value: 0.7 } } });
+    const blur = new T.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: BLUR_FRAG, depthTest: false, depthWrite: false,
+      uniforms: { tDiffuse: { value: null }, uDir: { value: new T.Vector2() } } });
+    const compose = new T.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: COMPOSE_FRAG, depthTest: false, depthWrite: false,
+      uniforms: { tScene: { value: null }, tGlow1: { value: null }, tGlow2: { value: null }, uStrength: { value: 0.9 },
+        uVignette: { value: 0.55 }, uTime: { value: 0 } } });
+    function draw(material, into) {
+      quad.material = material;
+      renderer.setRenderTarget(into);
+      renderer.render(pass, cam);
+    }
+    function blurInto(src, pair, rw, rh) {
+      blur.uniforms.tDiffuse.value = src.texture;
+      blur.uniforms.uDir.value.set(1 / rw, 0);
+      draw(blur, pair[1]);
+      blur.uniforms.tDiffuse.value = pair[1].texture;
+      blur.uniforms.uDir.value.set(0, 1 / rh);
+      draw(blur, pair[0]);
+    }
+    return {
+      setSize(width, height) {
+        w = Math.max(1, Math.round(width));
+        h = Math.max(1, Math.round(height));
+        full.setSize(w, h);
+        for (const rt of half) rt.setSize(Math.ceil(w / 2), Math.ceil(h / 2));
+        for (const rt of quarter) rt.setSize(Math.ceil(w / 4), Math.ceil(h / 4));
+      },
+      render(world, camera, time, strength, threshold) {
+        bright.uniforms.uThreshold.value = threshold;
+        renderer.setRenderTarget(full);
+        renderer.clear();
+        renderer.render(world, camera);
+        bright.uniforms.tDiffuse.value = full.texture;
+        draw(bright, half[0]);
+        blurInto(half[0], half, Math.ceil(w / 2), Math.ceil(h / 2));
+        blur.uniforms.tDiffuse.value = half[0].texture;
+        blur.uniforms.uDir.value.set(2 / Math.ceil(w / 2), 0);
+        draw(blur, quarter[1]);
+        blur.uniforms.tDiffuse.value = quarter[1].texture;
+        blur.uniforms.uDir.value.set(0, 1 / Math.ceil(h / 4));
+        draw(blur, quarter[0]);
+        blurInto(quarter[0], quarter, Math.ceil(w / 4), Math.ceil(h / 4));
+        compose.uniforms.tScene.value = full.texture;
+        compose.uniforms.tGlow1.value = half[0].texture;
+        compose.uniforms.tGlow2.value = quarter[0].texture;
+        compose.uniforms.uStrength.value = strength;
+        compose.uniforms.uTime.value = time % 100;
+        draw(compose, null);
+      },
+      dispose() {
+        for (const rt of [full, ...half, ...quarter]) rt.dispose();
+        for (const m of [bright, blur, compose]) m.dispose();
+        quad.geometry.dispose();
+      },
+    };
+  }
 
   function fmtLen(units, scale) {
     // scale: Meter pro Einheit (aus "groesse_m"), sonst Einheiten
@@ -212,7 +325,7 @@
     }
     const buf = new ArrayBuffer(84 + tris.length * 50);
     const view = new DataView(buf);
-    const head = 'Jarvis Blaupause ' + String((scene && scene.name) || '').slice(0, 50);
+    const head = 'Jarvis Blueprint ' + String((scene && scene.name) || '').slice(0, 50);
     for (let i = 0; i < Math.min(80, head.length); i += 1) view.setUint8(i, head.charCodeAt(i) & 0x7f);
     view.setUint32(80, tris.length, true);
     let o = 84;
@@ -299,6 +412,8 @@
       libClose: $('bpLibClose'),
       folder: $('bpFolder'),
       pill: $('bpPill'),
+      mic: $('bpMic'),
+      micText: $('bpMicText'),
     };
     if (!el.bp) return null;
 
@@ -308,7 +423,7 @@
     let busy = false;
     let isOpen = false;
     let closeTimer = 0;
-    const view = { look: 'blau', spin: false, explode: false, labels: false, dims: true, isolate: null, focus: null };
+    const view = { look: 'holo', spin: false, explode: false, labels: false, dims: true, isolate: null, focus: null };
 
     // three.js
     let T = null;
@@ -319,6 +434,8 @@
     let floor = null;
     let laser = null;
     let raycaster = null;
+    let glow = null; // Leuchten (Bloom) für Holo und Echt
+    let sparks = null; // Funken im Lichtkegel
     let frame = 0;
     let last = 0;
     let clock = 0;
@@ -350,6 +467,11 @@
       renderer.setClearColor(0x000000, 0);
       renderer.localClippingEnabled = true;
       if ('outputEncoding' in renderer) renderer.outputEncoding = T.sRGBEncoding;
+      try {
+        glow = makeGlow(T, renderer);
+      } catch {
+        glow = null; // dann eben ohne Leuchten
+      }
       world = new T.Scene();
       camera = new T.PerspectiveCamera(35, 1, 0.01, 500);
       ctl.target = new T.Vector3(0, 0.8, 0);
@@ -377,9 +499,130 @@
       return true;
     }
 
+    function disposeTree(root) {
+      root.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        });
+      });
+    }
+
+    // Weicher runder Punkt für die Funken
+    function sparkTexture() {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.35, 'rgba(160,230,255,0.55)');
+      grad.addColorStop(1, 'rgba(120,210,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 64, 64);
+      return new T.CanvasTexture(c);
+    }
+
+    const HOLO = 0x6fd6ff;
+    const FLOOR_VERT = 'varying vec2 vP; void main(){ vP = (modelMatrix * vec4(position, 1.0)).xz; ' +
+      'gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+
+    // Der Projektor im Hologramm-Raum: Raster, das zur Mitte hin aufleuchtet, Ringe mit drehenden Bögen,
+    // ein Lichtkegel nach oben und Funken, die darin aufsteigen
+    function buildHoloFloor() {
+      const color = new T.Color(HOLO);
+      const shared = { uColor: { value: color }, uTime: { value: 0 } };
+      const grid = new T.Mesh(new T.PlaneGeometry(14, 14), new T.ShaderMaterial({
+        uniforms: shared, vertexShader: FLOOR_VERT, transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+        extensions: { derivatives: true },
+        fragmentShader: `uniform vec3 uColor; uniform float uTime; varying vec2 vP;
+          void main(){
+            vec2 q = vP * 2.5; vec2 g = abs(fract(q - 0.5) - 0.5) / fwidth(q);
+            float fine = 1.0 - min(min(g.x, g.y), 1.0);
+            vec2 Q = vP * 0.5; vec2 G = abs(fract(Q - 0.5) - 0.5) / fwidth(Q);
+            float major = 1.0 - min(min(G.x, G.y), 1.0);
+            float r = length(vP);
+            float pulse = 0.65 + 0.35 * sin(r * 2.6 - uTime * 1.5);
+            float a = (fine * 0.07 + major * 0.2) * smoothstep(6.5, 1.0, r) * pulse;
+            gl_FragColor = vec4(uColor, a);
+          }`,
+      }));
+      grid.rotation.x = -Math.PI / 2;
+      floor.add(grid);
+      const disc = new T.Mesh(new T.PlaneGeometry(4.6, 4.6), new T.ShaderMaterial({
+        uniforms: shared, vertexShader: FLOOR_VERT, transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+        extensions: { derivatives: true },
+        fragmentShader: `uniform vec3 uColor; uniform float uTime; varying vec2 vP;
+          float ring(float r, float c, float w){ return smoothstep(w, 0.0, abs(r - c)); }
+          void main(){
+            float r = length(vP); float a = atan(vP.y, vP.x) / 6.28318 + 0.5;
+            float v = ring(r, 1.42, 0.014) * 0.95 + ring(r, 1.49, 0.006) * 0.5 + ring(r, 0.42, 0.01) * 0.55;
+            v += ring(r, 1.64, 0.02) * step(0.45, fract(a * 5.0 + uTime * 0.05)) * 0.75;
+            v += ring(r, 1.84, 0.01) * step(0.62, fract(a * 16.0 - uTime * 0.09)) * 0.6;
+            v += ring(r, 2.02, 0.005) * step(0.3, fract(a * 48.0 + uTime * 0.02)) * 0.35;
+            v += step(0.9, fract(a * 72.0)) * step(1.52, r) * step(r, 1.58) * 0.75;
+            v += smoothstep(1.4, 0.0, r) * 0.08;
+            v += ring(r, mod(uTime * 0.7, 2.3), 0.06) * 0.22 * smoothstep(2.3, 0.2, r);
+            gl_FragColor = vec4(uColor, v * smoothstep(2.3, 2.05, r));
+          }`,
+      }));
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.002;
+      floor.add(disc);
+      const H = 2.8;
+      const cone = new T.Mesh(new T.CylinderGeometry(1.3, 1.42, H, 72, 1, true), new T.ShaderMaterial({
+        uniforms: { ...shared, uH: { value: H } }, transparent: true, depthWrite: false, side: T.DoubleSide,
+        blending: T.AdditiveBlending,
+        vertexShader: 'uniform float uH; varying float vH; varying float vA; void main(){ vH = position.y / uH + 0.5; ' +
+          'vA = atan(position.z, position.x); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `uniform vec3 uColor; uniform float uTime; varying float vH; varying float vA;
+          void main(){
+            float streak = 0.55 + 0.45 * sin(vA * 37.0 + uTime * 0.6) * sin(vA * 11.0 - uTime * 0.35);
+            float a = 0.085 * pow(1.0 - vH, 2.2) * streak;
+            gl_FragColor = vec4(uColor, a);
+          }`,
+      }));
+      cone.position.y = H / 2;
+      floor.add(cone);
+      // Funken: steigen langsam im Lichtkegel auf
+      const N = 240;
+      const pos = new Float32Array(N * 3);
+      const speed = new Float32Array(N);
+      for (let i = 0; i < N; i += 1) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * 1.3;
+        pos[i * 3] = Math.cos(a) * r;
+        pos[i * 3 + 1] = Math.random() * H;
+        pos[i * 3 + 2] = Math.sin(a) * r;
+        speed[i] = 0.05 + Math.random() * 0.18;
+      }
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+      const points = new T.Points(geo, new T.PointsMaterial({
+        size: 0.045, map: sparkTexture(), color: HOLO, transparent: true, opacity: 0.75, depthWrite: false,
+        blending: T.AdditiveBlending, sizeAttenuation: true,
+      }));
+      floor.add(points);
+      sparks = { points, speed, H };
+      floor.userData.uniforms = shared;
+    }
+
     function buildFloor() {
-      if (floor) world.remove(floor);
+      if (floor) {
+        world.remove(floor);
+        disposeTree(floor);
+      }
       floor = new T.Group();
+      sparks = null;
+      // Hologramm und Echt: dunkler Raum im Bild selbst (für das Leuchten), Papier: das Blatt dahinter scheint durch
+      renderer.setClearColor(view.look === 'blau' ? 0x000000 : 0x03070c, view.look === 'blau' ? 0 : 1);
+      renderer.toneMapping = view.look === 'echt' ? T.ACESFilmicToneMapping : T.NoToneMapping;
+      world.environment = view.look === 'echt' ? studioEnvironment() : null;
+      if (view.look === 'holo') {
+        buildHoloFloor();
+        world.add(floor);
+        return;
+      }
       const look = view.look;
       const color = look === 'holo' ? 0x7fd8ff : look === 'echt' ? 0x9fb6d6 : 0xffffff;
       const grid = new T.GridHelper(8, 32, color, color);
@@ -440,6 +683,27 @@
       world.add(floor);
     }
 
+    let studio = null;
+    function studioEnvironment() {
+      if (studio) return studio;
+      const pmrem = new T.PMREMGenerator(renderer);
+      const env = new T.Scene();
+      env.add(new T.Mesh(new T.BoxGeometry(14, 9, 14), new T.MeshBasicMaterial({ color: 0x0d1724, side: T.BackSide })));
+      const box = new T.BoxGeometry(1, 1, 1);
+      for (const [color, x, y, z, sx, sy, sz] of [
+        [0xffffff, 0, 4.3, 0, 7, 0.1, 3.5], [0x9fd8ff, -6.8, 1.6, 0, 0.1, 3.4, 7], [0xffd6a8, 6.8, 1.2, 1.2, 0.1, 2.4, 4.5],
+        [0x6fb8ff, 0, 1.2, -6.8, 6, 1.6, 0.1],
+      ]) {
+        const m = new T.Mesh(box, new T.MeshBasicMaterial({ color }));
+        m.position.set(x, y, z);
+        m.scale.set(sx, sy, sz);
+        env.add(m);
+      }
+      studio = pmrem.fromScene(env, 0.04).texture;
+      pmrem.dispose();
+      return studio;
+    }
+
     function resize() {
       if (!renderer) return;
       const w = Math.max(1, el.stage.clientWidth);
@@ -467,6 +731,7 @@
       if (Math.abs(dx) > 1 || Math.abs(dy) > 1) camera.setViewOffset(w, h, -dx, -dy, w, h);
       else camera.clearViewOffset();
       camera.updateProjectionMatrix();
+      if (glow) glow.setSize(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
     }
 
     // ------------------------------------------------------------ Teile
@@ -485,7 +750,8 @@
           transparent: kind === 'glas' || kind === 'holo',
           opacity: kind === 'glas' ? 0.38 : kind === 'holo' ? 0.55 : 1,
           emissive: kind === 'leuchten' ? color : new T.Color(0x000000),
-          emissiveIntensity: kind === 'leuchten' ? 1.4 : 0,
+          emissiveIntensity: kind === 'leuchten' ? 0.8 : 0,
+          envMapIntensity: 1.6,
           side: T.DoubleSide,
           clippingPlanes: planes,
         });
@@ -502,6 +768,7 @@
             uTime: { value: 0 },
             uSel: { value: 0 },
             uDim: { value: 0 },
+            uTop: { value: 2 },
           },
           vertexShader: VERT,
           fragmentShader: FRAG,
@@ -530,7 +797,7 @@
         o.solid.material.uniforms.uDim.value = dim ? 1 : 0;
       } else {
         o.solid.material.emissive = sel ? new T.Color(HOT) : o.part.material === 'leuchten' ? new T.Color(o.part.farbe) : new T.Color(0);
-        o.solid.material.emissiveIntensity = sel ? 0.35 : o.part.material === 'leuchten' ? 1.4 : 0;
+        o.solid.material.emissiveIntensity = sel ? 0.35 : o.part.material === 'leuchten' ? 0.8 : 0;
         o.solid.material.opacity = dim ? 0.15 : (o.part.material === 'glas' ? 0.38 : o.part.material === 'holo' ? 0.55 : 1);
         o.solid.material.transparent = dim || o.part.material === 'glas' || o.part.material === 'holo';
       }
@@ -649,6 +916,15 @@
 
     // ------------------------------------------------------------ Explosionsansicht
 
+    let topCache = { n: -1, y: 2 };
+    function modelTop() {
+      if (topCache.n !== objs.size + scene.teile.length) {
+        const b = modelBox(false, false);
+        topCache = { n: objs.size + scene.teile.length, y: Number.isFinite(b.max.y) ? b.max.y : 2 };
+      }
+      return topCache.y;
+    }
+
     function modelBox(onlyVisible, withOffset) {
       const box = new T.Box3();
       for (const o of objs.values()) {
@@ -661,6 +937,7 @@
     }
 
     function layoutExplode() {
+      topCache.n = -1;
       if (!T || !objs.size) return;
       const all = modelBox(false, false);
       const C = all.getCenter(new T.Vector3());
@@ -918,6 +1195,7 @@
       explodeNow += (want - explodeNow) * (1 - Math.exp(-dt * 5));
       // Teile: Lage, Aufbau mit dem Laser, Zeit für die Scanlinien
       let newest = null;
+      const top = objs.size ? modelTop() : 2;
       for (const o of objs.values()) {
         o.group.position.copy(o.base).addScaledVector(o.offset, explodeNow);
         if (o.plane) {
@@ -934,7 +1212,10 @@
             o.edges.material.needsUpdate = true;
           }
         }
-        if (o.solid.material.uniforms) o.solid.material.uniforms.uTime.value = clock;
+        if (o.solid.material.uniforms) {
+          o.solid.material.uniforms.uTime.value = clock;
+          o.solid.material.uniforms.uTop.value = top;
+        }
       }
       if (newest) {
         const s = newest.box.getSize(new T.Vector3());
@@ -948,12 +1229,23 @@
       }
       const ticks = floor.getObjectByName('ticks');
       if (ticks && !reducedMotion()) ticks.rotation.y += dt * 0.12;
+      if (floor.userData.uniforms && !reducedMotion()) floor.userData.uniforms.uTime.value = clock;
+      if (sparks && !reducedMotion()) {
+        const attr = sparks.points.geometry.attributes.position;
+        for (let i = 0; i < sparks.speed.length; i += 1) {
+          let y = attr.array[i * 3 + 1] + sparks.speed[i] * dt;
+          if (y > sparks.H) y -= sparks.H;
+          attr.array[i * 3 + 1] = y;
+        }
+        attr.needsUpdate = true;
+      }
       // Nach neuen Teilen das Bild nachführen, solange Georg nicht selbst dreht
       if (fitAfter && clock > fitAfter) {
         fitAfter = 0;
         if (clock - ctl.touched > 4) fit(view.focus || view.isolate);
       }
-      renderer.render(world, camera);
+      if (glow && view.look !== 'blau') glow.render(world, camera, clock, view.look === 'holo' ? 0.7 : 0.4, view.look === 'holo' ? 0.72 : 0.85);
+      else renderer.render(world, camera);
       drawOverlay();
       drawGizmo();
     }
@@ -1266,12 +1558,28 @@
       el.chipText.textContent = busy ? 'Konstruiert' : scene.teile.length ? 'Fertig' : 'Bereit';
       el.scan.hidden = !busy;
       if (el.pill) el.pill.dataset.state = busy ? 'busy' : 'idle';
+      mic();
       if (busy && text) say('Konstruiere: „' + text + '“ …');
       renderPanels();
     }
 
     function say(text) {
       if (text) el.say.textContent = String(text);
+    }
+
+    // Hört Jarvis gerade zu? Am offenen Blueprint redet Georg ohne "Hey Jarvis" weiter (app.js meldet Zustand
+    // und Gespräch). Nie nur Farbe: immer ein Wort dazu.
+    let micState = 'idle';
+    let micTalking = false;
+    function mic(state, talking) {
+      if (state !== undefined) micState = String(state || 'idle');
+      if (talking !== undefined) micTalking = !!talking;
+      if (!el.mic) return;
+      const listening = micState === 'listening';
+      const working = micState === 'thinking' || busy;
+      el.mic.dataset.state = listening ? 'listening' : working ? 'working' : 'idle';
+      el.micText.textContent = listening ? 'Ich höre zu' : micState === 'speaking' ? 'Spricht'
+        : working ? 'Arbeitet' : micTalking ? 'Sprich einfach' : 'Sag „Jarvis“';
     }
 
     // ------------------------------------------------------------ Befehle aus Python
@@ -1330,7 +1638,7 @@
     }
 
     function setLook(mode) {
-      const m = { draht: 'blau', blau: 'blau', holo: 'holo', echt: 'echt' }[mode] || 'blau';
+      const m = { draht: 'blau', blau: 'blau', papier: 'blau', holo: 'holo', echt: 'echt' }[mode] || 'holo';
       view.look = m;
       el.bp.dataset.look = m;
       for (const b of el.look.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.look === m));
@@ -1344,10 +1652,10 @@
       }
       const buf = stlFromParts(T, scene.teile, scene);
       try {
-        const r = await call('blueprint_export', scene.name || 'Blaupause', toBase64(buf));
+        const r = await call('blueprint_export', scene.name || 'Blueprint', toBase64(buf));
         if (r && r.ok) {
           toast('STL gespeichert: ' + r.path, 'ok');
-          say('Die STL-Datei liegt im Blaupausen-Ordner, Sir. Bereit für den 3D-Drucker.');
+          say('Die STL-Datei liegt im Blueprint-Ordner, Sir. Bereit für den 3D-Drucker.');
         } else {
           toast((r && r.error) || 'Der Export ging nicht.', 'error');
         }
@@ -1384,7 +1692,7 @@
               el.lib.hidden = true;
               say(it.name + ' liegt auf dem Tisch, Sir.');
             } else {
-              toast('Die Blaupause ließ sich nicht laden.', 'error');
+              toast('Der Blueprint ließ sich nicht laden.', 'error');
             }
           } catch {
             toast('Jarvis ist gerade nicht verbunden.', 'error');
@@ -1471,7 +1779,7 @@
           showLibrary(ev.items);
           break;
         case 'saved':
-          toast('Gespeichert: ' + (ev.name || 'Blaupause'), 'ok');
+          toast('Gespeichert: ' + (ev.name || 'Blueprint'), 'ok');
           break;
         default:
       }
@@ -1592,7 +1900,7 @@
       }
       edit(selected, { entfernen: true });
     });
-    el.newBtn.addEventListener('click', () => send('Leere Blaupause'));
+    el.newBtn.addEventListener('click', () => send('Neuer Blueprint'));
     el.save.addEventListener('click', async () => {
       try {
         const r = await call('blueprint_save', scene.name || '');
@@ -1607,7 +1915,7 @@
     el.folder.addEventListener('click', async () => {
       try {
         const ok = await call('blueprint_folder');
-        toast(ok ? 'Der Blaupausen-Ordner öffnet sich.' : 'Das ging nicht.', ok ? 'ok' : 'error');
+        toast(ok ? 'Der Blueprint-Ordner öffnet sich.' : 'Das ging nicht.', ok ? 'ok' : 'error');
       } catch {
         toast('Im Demo-Modus öffnet sich kein Ordner.', 'info');
       }
@@ -1672,7 +1980,7 @@
     });
 
     renderPanels();
-    return { handle, gesture, open: () => open(null, false), close: () => close(false), isOpen: () => isOpen, say };
+    return { handle, gesture, open: () => open(null, false), close: () => close(false), isOpen: () => isOpen, say, mic };
   }
 
   // ==================================================================
@@ -1810,7 +2118,7 @@
           return Promise.resolve('Rückgängig gemacht, Sir.');
         },
         blueprint_cancel: () => Promise.resolve(false),
-        blueprint_save: () => Promise.resolve({ ok: true, name: scene.name || 'Blaupause', path: 'Demo' }),
+        blueprint_save: () => Promise.resolve({ ok: true, name: scene.name || 'Blueprint', path: 'Demo' }),
         blueprint_library: () => Promise.resolve([{ name: 'Aufklärungsdrohne MK II', datei: 'drohne.json', teile: 41, gespeichert: '2026-10-02T16:10' },
           { name: 'Arc-Reaktor', datei: 'arc-reaktor.json', teile: 18, gespeichert: '2026-10-01T21:40' }]),
         blueprint_load: () => {

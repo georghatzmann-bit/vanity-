@@ -41,8 +41,8 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 - **Werkstatt für Programmier-Aufträge:** „Bau mir einen Discord-Bot, der …“ läuft im Hintergrund in einem eigenen Projektordner, mit Plan, Tests, `LIESMICH.txt` und `start.bat`. Getestet wird auf einem unsichtbaren zweiten Windows-Desktop (`versteckt.py`), Testfenster poppen also nicht auf. Große Aufträge mit Opus und viel Nachdenken, kleine mit Sonnet. Während der Arbeit kannst du mit Jarvis reden: Wünsche („Mach den Hintergrund blau“) gehen direkt in die laufende Arbeit, Fragen beantwortet er mit Blick auf den Plan, am Ende fragt er, ob er das Ergebnis starten soll. Das Fenster zeigt die Arbeit als Blaupause: Plan, Ablauf, Dateien, Befehle und das Projekt als Hologramm, das sich von unten aufbaut, erst als passendes Drahtmodell, dann als eigenes Logo, das die Werkstatt zeichnet (`logo.svg`). Dazu alle Projekte als Übersicht mit Logo: Ansehen (Plan, Ablauf, Dateien, Verlauf), Starten, Vorschau, Weiterbauen und Löschen (in den Papierkorb, per Sprache mit Rückfrage). Unten in der Werkstatt ein Feld für Änderungen mitten in der Arbeit.
 - **Spiele (Steam, Epic):** „Installiere CS2“, „Starte Lethal Company“, „Welche Spiele brauchen Updates?“ erledigt Jarvis selbst in etwa einer Sekunde (`spiele.py`): Er liest die Steam-Bibliotheken (`libraryfolders.vdf`, `appmanifest_*.acf`) und die Manifeste des Epic-Launchers, kennt Abkürzungen (CS2, GTA 5, R6 …), sucht Unbekanntes im Steam-Shop (und merkt es sich), öffnet `steam://install/<id>`, sagt, auf welchem Laufwerk Platz ist, und meldet, wo der Download wirklich läuft.
 - **Weltlage („Gottes Auge“):** „Zeig mir, was in der Welt passiert“ öffnet eine Satelliten-Erde (three.js, Sentinel-2-Bilder von EOX, grobe Karte eingebaut). Jarvis holt die neuesten Meldungen der Tagesschau, findet zu jeder den Ort (`orte.py`, ohne Internet und ohne Claude, darum sofort), fliegt hin und liest vor (`weltlage.py`, `weltlage.js`). Jede Meldung mit Foto (fehlt eins: Satellitenbild vom Ort), die aktuelle groß mit erstem Satz. „Zeig die Erde als Hologramm“ schaltet auf leuchtende Kontinente aus Lichtpunkten mit Lichtsäulen über den Meldungen (ein Shader färbt dieselben Karten und Kacheln um). Dazu „Was passiert in Deutschland“, „Flieg nach Tokio“, „Wo ist die ISS“ (live), Flugverkehr live über OpenSky, DAX, S&P 500 und Bitcoin. Claude kann selbst Orte zeigen (`jarvis.tool weltlage "<Ort>"`).
-- **Handsteuerung:** „Starte die Handsteuerung“: Die Webcam erkennt die Hände (MediaPipe, im Fenster, kein Bild verlässt den PC). Greifen und ziehen verschiebt die Erde oder dreht das Blaupausen-Modell, mit beiden Händen zoomen und drehen (`handsteuerung.js`).
-- **Blaupause: 3D-Modelle wie bei Tony Stark:** „Generiere einen Iron-Man-Helm“ und Claude zeichnet das Modell aus Grundformen Teil für Teil (`blaupause.py`), das Fenster baut es mit three.js als Hologramm auf echtem Blaupausen-Papier auf (`blaupause.js`). Drehen, zoomen, verschieben mit Maus, Finger und Sprache, Explosionsansicht mit Beschriftung, Maßlinien in echten Größen, Teile ansehen, färben, entfernen, Rückgängig, umbauen per Sprache („Füg noch zwei Raketen an die Flügel“), speichern und als STL für den 3D-Drucker exportieren. Ansichten: Blaupause, Holo, Echt.
+- **Handsteuerung:** „Starte die Handsteuerung“: Die Webcam erkennt die Hände (MediaPipe, im Fenster, kein Bild verlässt den PC). Greifen und ziehen verschiebt die Erde oder dreht das Blueprint-Modell, mit beiden Händen zoomen und drehen (`handsteuerung.js`).
+- **Blueprint: 3D-Modelle wie bei Tony Stark:** „Generiere einen Iron-Man-Helm“ und Claude zeichnet das Modell aus Grundformen Teil für Teil (`blaupause.py`), das Fenster baut es mit three.js als leuchtendes Hologramm über einem Projektor auf, mit Lichtkegel, Funken, Scan-Linie und Leuchten (`blaupause.js`, eigenes Bloom ohne Zusatzdateien). Solange der Blueprint offen ist, redet Georg ohne „Hey Jarvis“ weiter: Jarvis sagt nur „Sofort, Sir.“ und „Erledigt, Sir.“, hört direkt wieder zu und merkt sich Wünsche, während er noch baut (Warteschlange). Drehen, zoomen, verschieben mit Maus, Finger und Sprache, Explosionsansicht mit Beschriftung, Maßlinien in echten Größen, Teile ansehen, färben, entfernen, Rückgängig, umbauen per Sprache („Füg noch zwei Raketen an die Flügel“), speichern und als STL für den 3D-Drucker exportieren. Ansichten: Holo, Echt (mit Spiegelungen), Papier.
 - **Gaming-Modus:** Energieplan Höchstleistung, ausgewählte Programme zu, Jarvis selbst mit niedriger Priorität und ohne Einblendungen, keine Vorschläge.
 - **Schnell:** In der ersten Sprechpause erkennt Jarvis den Satz schon vorab. Ist es ein Sofort-Befehl („Öffne Spotify“), legt er nach knapp einer halben Sekunde Stille los statt nach einer. Claude läuft dauerhaft im Hintergrund (keine Startzeit pro Frage), der erste Satz wird gesprochen, während Claude noch schreibt. Im Protokoll steht pro Befehl eine Tempo-Zeile.
 - **Gespräch ohne Weckwort:** Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu (leiser Ton, Ring um die Kugel). Weiterreden reicht; „Danke“, „Alles klar“, „Tschüss“ oder Stille beenden das Gespräch. „Jarvis“, „Okay Jarvis“ und „Hallo Jarvis“ wecken ihn auch.
@@ -62,9 +62,9 @@ Handy    → eigene Web-App im WLAN (QR-Code), Alexa → eigener Skill über ntf
 |---|---|
 | ![Weltlage über Washington, Meldung mit Foto](docs/bilder/weltlage.jpg) | ![Die Erde als Hologramm mit allen Meldungen](docs/bilder/weltlage-erde.jpg) |
 
-| Blaupause | Blaupause: Explosionsansicht |
+| Blueprint | Blueprint: Explosionsansicht |
 |---|---|
-| ![Blaupause](docs/bilder/blaupause.jpg) | ![Explosionsansicht](docs/bilder/blaupause-explosion.jpg) |
+| ![Blueprint](docs/bilder/blaupause.jpg) | ![Explosionsansicht](docs/bilder/blaupause-explosion.jpg) |
 
 | Installer | Werkstatt |
 |---|---|
@@ -109,7 +109,7 @@ deinstallieren <id>   papierkorb "<pfad>"   admin "<PowerShell-Befehl>"
 nachricht <discord|whatsapp|telegram> "<person|#kanal>" "<text>"
 discord chat|kanal|server|sprachkanal|anrufen "<name>"   discord stumm|taub
 werkstatt "<auftrag>"   werkstatt-weiter "<wunsch>"   werkstatt-projekt "<name>" "<wunsch>"   werkstatt-projekte
-blaupause "<wunsch>"   blaupause-aendern "<wunsch>"   weltlage "<ort>"   weltlage-bericht welt|deutschland|wirtschaft
+blueprint "<wunsch>"   blueprint-aendern "<wunsch>"   weltlage "<ort>"   weltlage-bericht welt|deutschland|wirtschaft
 merken "<fakt>"   vergessen "<wörter>"   gedaechtnis
 erinnern "in 20 minuten" "Tee"   erinnerungen   erinnerung-loeschen <id>
 bildschirm [fenster]   bildschirm-text [fenster]   fenster   ui "<fenster>"   ui-klick   ui-schreiben
@@ -172,7 +172,7 @@ jarvis/
   gui/web/        index.html app.js style.css     Jarvis-Fenster; orb.js zeichnet die Kugel (auch Einrichtung und Handy)
                   werkstatt.js projekte.js werkstatt.css   Werkstatt als Blaupause mit Hologramm, Projekt-Übersicht
                   weltlage.js weltlage.css   Weltlage: Satelliten-Erde oder Hologramm, Meldungen mit Foto, Flugverkehr, Märkte
-                  handsteuerung.js           Handsteuerung per Webcam (MediaPipe) für Weltlage und Blaupause
+                  handsteuerung.js           Handsteuerung per Webcam (MediaPipe) für Weltlage und Blueprint
                   koppeln.js gedaechtnis.js       Verbinden (Handy, Alexa, Konnektoren), Gedächtnis
                   setup.html setup.js setup.css   Einrichtung (Api: setup_wizard.SetupApi)
                   handy/          die Handy-App (PWA)
