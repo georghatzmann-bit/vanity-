@@ -291,7 +291,7 @@ _ANIM_KINDS = (
     ("verschmelzen", re.compile(r"\b(?:verschmel\w*|verschmilzt|zusammen ?fließ\w*|fließ\w* (?:\w+ )?zusammen|"
                                 r"zusammen ?schmelz\w*|ineinander ?fließ\w*)")),
     ("schmelzen", re.compile(r"\b(?:schmelz\w*|schmilzt|zerfließ\w*|zerläuft|zerlaufen|wie wachs)")),
-    ("aufloesen", re.compile(r"\b(?:auflös\w*|löst? (?:es |das |ihn |sie )?(?:sich )?auf\b|zerfall\w*|zerfällt|"
+    ("aufloesen", re.compile(r"\b(?:auflös(?!ung)\w*|lös[et]? (?:es |das |ihn |sie )?(?:sich )?auf\b|zerfall\w*|zerfällt|"
                              r"in (?:partikel|staub)|zerbrösel\w*)")),
     ("pulsieren", re.compile(r"\b(?:pulsier\w*|herzschlag|schlagen|schlägt|pochen|pocht|pumpen|pumpt)\b")),
     ("schweben", re.compile(r"\b(?:schweb\w*|levitier\w*)")),
@@ -353,6 +353,10 @@ _MAKE = re.compile(rf"^{_MAKE_VERB}(?: mir| uns)? (?P<what>.+)$")
 # außer bei Texten, Bildern und Ähnlichem ("Generiere ein Passwort", "Generiere eine Playlist")
 # "Hol das Herz": ein Teil mit dem Namen nach vorne holen, sonst das Ding als neues Modell
 _FETCH = re.compile(r"^(?:hol|hole|holt)(?: mir| uns)?(?: mal)? (?P<what>.+?)(?: her| hervor| raus| heran| ran| nach vorne)?$")
+# "Hol mir das Wetter", "Hol mir die Nachrichten", "Hol das Fenster nach vorne": nichts zum Bauen
+_NOT_TO_FETCH = re.compile(r"\b(?:wetter\w*|news|neuigkeiten|schlagzeile\w*|termin\w*|kalender\w*|uhrzeit|datum|"
+                           r"briefing|infos?|information\w*|bericht\w*|verkehr\w*|kurs\w*|aktie\w*|ergebnis\w*|"
+                           r"fenster|browser)\b")
 _STRONG_VERB = re.compile(r"^(?:generier|generiere|konstruier|konstruiere|modellier|modelliere)\b")
 _NOT_AN_OBJECT = re.compile(r"\b(?:passwort\w*|text\w*|bild\w*|foto\w*|lied\w*|song\w*|gedicht\w*|liste\w*|name\w*|"
                             r"zusammenfassung\w*|mail\w*|nachricht\w*|antwort\w*|idee\w*|plan|pläne|witz\w*|zitat\w*|"
@@ -775,6 +779,9 @@ class Blueprint:
             return self._focus_on(parts)
         if self._has_model() and re.search(r"\b(?:noch|dazu|daneben|hinzu|zusätzlich|dran)\b", what):
             return self.generate(text, fresh=False)
+        if not _OBJECT.match(what) or _NOT_AN_OBJECT.search(what) or _NOT_TO_FETCH.search(what):
+            # "Hol mir das Wetter", "Hol mir Spotify": kein neues Modell, Jarvis macht weiter wie sonst
+            return None
         return self._start(text, what)
 
     def _focus_on(self, parts: list[dict]) -> str:

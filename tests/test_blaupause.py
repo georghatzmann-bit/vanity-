@@ -131,6 +131,7 @@ class CommandTest(unittest.TestCase):
                                   ("Lass es schmelzen", "schmelzen", "Es schmilzt, Sir."),
                                   ("Jarvis, lass es schweben", "schweben", "Es schwebt, Sir."),
                                   ("Lös es auf", "aufloesen", "Es löst sich auf, Sir."),
+                                  ("Löse es auf", "aufloesen", "Es löst sich auf, Sir."),
                                   ("Verschmelzen", "verschmelzen", "Es verschmilzt, Sir."),
                                   ("Animation aus", "", "Animation aus, Sir.")):
             with self.subTest(said=said):
@@ -139,7 +140,8 @@ class CommandTest(unittest.TestCase):
         self.assertIn("Wie soll es sich bewegen", self.bp.command("Animier das"))
         self.assertEqual(self.bp.command("Halt still"), "Steht still, Sir.")
         self.assertEqual(self.views()[-1]["art"], "", "still heißt: auch keine Animation")
-        for said in ("Schlag mir eine Farbe vor", "Mach den Rumpf schlanker", "Mach die Flügel länger"):
+        for said in ("Schlag mir eine Farbe vor", "Mach den Rumpf schlanker", "Mach die Flügel länger",
+                     "Mach die Auflösung höher", "Mach ein Foto in hoher Auflösung"):
             with self.subTest(said=said):
                 self.assertIsNone(animation_for(said.lower()))
 
@@ -156,6 +158,12 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(wishes[-1], ("Hol das Herz", True), "kein Teil so: ein neues Modell")
         self.bp.command("Hol noch eine Antenne dazu")
         self.assertEqual(wishes[-1], ("Hol noch eine Antenne dazu", False), "noch eins dazu: eine Änderung")
+        built = len(wishes)
+        for said in ("Hol mir das Wetter", "Hol mir die Nachrichten", "Hol mir die News", "Hol mir Spotify",
+                     "Hol das Fenster nach vorne", "Hol mir meine Termine"):
+            with self.subTest(said=said):
+                self.assertIsNone(self.bp.command(said), "kein Gegenstand: Jarvis macht weiter wie sonst")
+        self.assertEqual(len(wishes), built, "aus dem Wetter wird kein 3D-Modell")
 
     def test_everyday_commands_stay_everyday_commands(self):
         """Bei offener Blaupause ist "Mach lauter" oder "Mach den PC aus" keine Änderung am Modell für Claude."""
