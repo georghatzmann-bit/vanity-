@@ -928,7 +928,8 @@
         pollFails += 1;
         if (pollFails >= 25) setLink('offline');
       }
-      await sleep(document.hidden ? 300 : 80);
+      // Versteckt (Tray, beim Spielen) reicht seltener nachfragen: weniger Rechenzeit im Spiel
+      await sleep(document.hidden || document.body.dataset.fenster === 'zu' ? 300 : 80);
     }
   }
 
