@@ -1,0 +1,1249 @@
+/* ==========================================================================
+   Jarvis – System (wie im Video "AgenticOS", system.js)
+   Drei Spalten: links die Agents mit Stand, Skills und Werkzeugen, in der Mitte das Wissensnetz,
+   rechts Skill-Knöpfe, Automationen und das Gedächtnis Sitzung für Sitzung. Dieselben ruhigen Karten
+   wie die Zentrale, eine Akzentfarbe (Blau), Status immer mit Wort, Abstände im 4er-Raster.
+   ========================================================================== */
+
+:root {
+  --sy-person: #c48bff;
+  --sy-projekt: #ff9f43;
+  --sy-recherche: #5ad1ff;
+  --sy-notiz: #d9dde8;
+  --sy-tag: #7b869e;
+  --sy-sitzung: #f2c94c;
+  --sy-gedaechtnis: #6e8cff;
+}
+
+/* ------------------------------------------------------------------ Ansicht */
+
+body[data-home="system"] .zt,
+body[data-home="system"] .talk,
+body:not([data-home="system"]) .sy {
+  display: none;
+}
+
+body[data-home="system"] {
+  background: var(--zt-bg);
+}
+
+body[data-home="system"] .backdrop {
+  background: var(--bg);
+}
+
+body[data-home="system"] .top {
+  border-bottom-color: var(--zt-line);
+  background: var(--zt-bg);
+}
+
+body[data-home="system"] .view-switch {
+  background: var(--zt-card);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+}
+
+.sy {
+  grid-area: main;
+  display: grid;
+  grid-template-columns: 296px minmax(0, 1fr) 320px;
+  grid-template-areas: "agents graph side";
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  overflow: hidden;
+  background: var(--zt-bg);
+}
+
+.sy-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sy-agents {
+  grid-area: agents;
+  padding: 16px 12px 12px;
+  border-radius: var(--r-l);
+  background: var(--zt-card);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+}
+
+.sy-side {
+  grid-area: side;
+}
+
+.sy-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.sy-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r-l);
+  background: var(--zt-card);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+}
+
+.sy-block .sy-head {
+  padding: 0;
+}
+
+/* "Wissensnetz · 182 Notizen" unter der Kugel in der Zentrale öffnet das System */
+.zt-wissen {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.zt-wissen:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.zt-wissen:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ Agents */
+
+.sy-agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-agent {
+  border-radius: var(--r);
+  background: var(--zt-card-2);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+  transition: box-shadow var(--t) var(--ease), background var(--t) var(--ease);
+}
+
+.sy-agent[data-open="1"] {
+  box-shadow: inset 0 0 0 1px var(--zt-line-strong);
+}
+
+.sy-agent-main {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: start;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  transition: background var(--t) var(--ease);
+}
+
+.sy-agent-main:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.sy-agent-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sy-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  grid-row: span 2;
+  place-items: center;
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: 700 11px / 1 var(--font);
+  letter-spacing: 0.04em;
+}
+
+.sy-agent[data-status="aus"] .sy-avatar {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--zt-text-3);
+}
+
+.sy-agent-name {
+  overflow: hidden;
+  font: 600 14px / 1.3 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-agent-text {
+  grid-column: 2 / -1;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--zt-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Stand: Punkt und Wort (nie nur Farbe) */
+.sy-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--zt-text-3);
+  font: 600 11px / 1.3 var(--font);
+  white-space: nowrap;
+}
+
+.sy-status i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--zt-text-3);
+}
+
+[data-status="arbeitet"] .sy-status,
+[data-status="schreibt"] .sy-status {
+  color: var(--accent-text);
+}
+
+[data-status="arbeitet"] .sy-status i,
+[data-status="schreibt"] .sy-status i {
+  background: var(--accent);
+  animation: sy-pulse 1.2s ease-in-out infinite alternate;
+}
+
+[data-status="wartet"] .sy-status { color: var(--warn); }
+[data-status="wartet"] .sy-status i { background: var(--warn); }
+[data-status="fertig"] .sy-status { color: var(--ok); }
+[data-status="fertig"] .sy-status i { background: var(--ok); }
+[data-status="fehler"] .sy-status { color: var(--err); }
+[data-status="fehler"] .sy-status i { background: var(--err); }
+[data-status="bereit"] .sy-status i { background: var(--ok); opacity: 0.55; }
+
+@keyframes sy-pulse {
+  from { opacity: 0.35; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.1); }
+}
+
+.sy-bar {
+  position: relative;
+  height: 2px;
+  margin: 0 12px 8px;
+  overflow: hidden;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sy-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--p, 0%);
+  border-radius: 1px;
+  background: var(--accent);
+  transition: width 400ms var(--ease);
+}
+
+.sy-bar[data-open-ended="1"] i {
+  width: 36%;
+  animation: agent-run 1.6s var(--ease) infinite;
+}
+
+/* Skills (grün, wie im Video) und Werkzeuge (Akzent) */
+.sy-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0 12px 12px 56px;
+  list-style: none;
+}
+
+.sy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 2px 8px;
+  overflow: hidden;
+  border-radius: var(--r-s);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--zt-text-2);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-chip b {
+  font-weight: 600;
+}
+
+.sy-chip.skill::before {
+  content: "✦";
+  color: var(--ok);
+  font-size: 9px;
+}
+
+.sy-chip.tool::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+
+.sy-chip.learned {
+  box-shadow: inset 0 0 0 1px rgba(63, 191, 133, 0.35);
+}
+
+.sy-chip.more {
+  color: var(--zt-text-3);
+}
+
+.sy-agent-more {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px 56px;
+}
+
+.sy-agent-more h4 {
+  margin: 4px 0 0;
+  color: var(--zt-text-3);
+  font: 600 11px / 1.3 var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sy-agent-more .sy-chips {
+  padding: 0;
+}
+
+.sy-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-skill-list li {
+  color: var(--zt-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sy-skill-list li b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sy-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-log li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 8px;
+  color: var(--zt-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sy-log time {
+  color: var(--zt-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.sy-order {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sy-order-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sy-order-row .btn.small {
+  min-height: 40px;
+}
+
+.sy-order-hint {
+  color: var(--zt-text-3);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sy-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--zt-line-strong);
+  border-radius: var(--r);
+  background: var(--zt-bg);
+  color: var(--text);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+  user-select: text;
+}
+
+.sy-input::placeholder {
+  color: var(--zt-text-3);
+}
+
+.sy-input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ------------------------------------------------------------------ Wissensnetz */
+
+.sy-graph {
+  grid-area: graph;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--r-l);
+  background:
+    radial-gradient(900px 600px at 50% 45%, rgba(110, 140, 255, 0.06), transparent 70%),
+    var(--zt-card);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+}
+
+.sy-graph-head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+}
+
+.sy-graph-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sy-graph-title .zt-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sy-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 280px;
+  min-width: 160px;
+}
+
+.sy-search .ico {
+  position: absolute;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  color: var(--zt-text-3);
+  pointer-events: none;
+}
+
+.sy-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 36px;
+  border: 1px solid var(--zt-line-strong);
+  border-radius: var(--r);
+  background: var(--zt-bg);
+  color: var(--text);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+  user-select: text;
+}
+
+.sy-search input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.sy-hits {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 5;
+  max-height: 300px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  border-radius: var(--r);
+  background: var(--surface-3);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 0 0 1px var(--line-strong);
+  list-style: none;
+}
+
+.sy-hits button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.sy-hits button:hover,
+.sy-hits button[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.sy-hits small {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.sy-hits .sy-none {
+  padding: 8px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.sy-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--kind, var(--zt-text-3));
+}
+
+.sy-dot[data-shape="projekt"] { border-radius: 3px; }
+.sy-dot[data-shape="sitzung"] { border-radius: 2px; transform: rotate(45deg) scale(0.85); }
+.sy-dot[data-shape="tag"] { border-radius: 2px; transform: scale(0.8); }
+
+.sy-canvas-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sy-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.sy-canvas.is-dragging {
+  cursor: grabbing;
+}
+
+.sy-canvas.is-pointing {
+  cursor: pointer;
+}
+
+.sy-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sy-graph-foot {
+  position: relative;
+  z-index: 2;
+  padding: 8px 12px 12px;
+  box-shadow: 0 -1px 0 var(--zt-line);
+}
+
+.sy-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--zt-text-2);
+  font-size: 12px;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease), opacity var(--t) var(--ease);
+}
+
+.sy-legend button:not([aria-disabled]):hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sy-legend button:hover {
+  color: var(--text);
+}
+
+.sy-legend button[aria-pressed="false"] {
+  opacity: 0.45;
+}
+
+.sy-legend button[aria-pressed="false"] .sy-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--kind);
+}
+
+.sy-legend button:focus-visible,
+.sy-zoom .icon-btn:focus-visible,
+.sy-skill:focus-visible,
+.sy-detail-links button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sy-legend b {
+  color: var(--zt-text-3);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sy-legend .sy-line-key {
+  width: 18px;
+  height: 0;
+  border-top: 1.5px dashed var(--accent);
+}
+
+.sy-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r);
+  background: rgba(10, 15, 25, 0.78);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+}
+
+.sy-zoom .icon-btn {
+  width: 36px;
+  height: 36px;
+}
+
+.sy-graph-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: min(420px, calc(100% - 48px));
+  margin: 0;
+  color: var(--zt-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+/* Einzelheiten zum gewählten Knoten */
+.sy-detail {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(320px, calc(100% - 24px));
+  max-height: calc(100% - 76px);
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+  border-radius: var(--r-l);
+  background: rgba(19, 28, 44, 0.96);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 0 0 1px var(--zt-line-strong);
+  animation: sy-in 160ms var(--ease);
+}
+
+.sy-detail[hidden] {
+  display: none;
+}
+
+@keyframes sy-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.sy-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-right: -8px;
+}
+
+.sy-detail-head .icon-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.sy-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--zt-text-2);
+  font: 600 11px / 1.3 var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sy-detail-title {
+  margin: 0;
+  font: 600 16px / 1.3 var(--font);
+  overflow-wrap: anywhere;
+}
+
+.sy-detail-text {
+  margin: 0;
+  color: var(--zt-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sy-detail-file {
+  margin: 0;
+  color: var(--zt-text-3);
+  font: 400 11px / 1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.sy-detail-file:empty {
+  display: none;
+}
+
+.sy-detail-links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-detail-links:empty {
+  display: none;
+}
+
+.sy-detail-links button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  transition: background var(--t) var(--ease);
+}
+
+.sy-detail-links button:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sy-detail-links span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-detail-links small {
+  grid-column: 2;
+  color: var(--zt-text-3);
+  font-size: 11px;
+}
+
+.sy-detail-links small.auto {
+  color: var(--accent-text);
+}
+
+.sy-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sy-detail-actions .btn.small {
+  min-height: 36px;
+}
+
+/* ------------------------------------------------------------------ Skills, Automationen, Sitzungen */
+
+.sy-skills {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sy-skill {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--zt-card-2);
+  box-shadow: inset 0 0 0 1px var(--zt-line);
+  color: var(--text);
+  text-align: left;
+  transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.sy-skill:hover {
+  background: #17223a;
+  box-shadow: inset 0 0 0 1px var(--zt-line-strong);
+}
+
+.sy-skill:active {
+  transform: translateY(1px);
+}
+
+.sy-skill b {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font: 600 13px / 1.3 var(--font);
+}
+
+.sy-skill b span {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sy-skill b::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sy-skill.learned b::before {
+  background: var(--ok);
+}
+
+.sy-skill small {
+  overflow: hidden;
+  color: var(--zt-text-3);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-skill[data-busy="1"] {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.sy-skill[data-busy="1"] b::before {
+  animation: sy-pulse 0.6s ease-in-out infinite alternate;
+}
+
+.sy-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sy-ask[hidden] {
+  display: none;
+}
+
+.sy-ask-label {
+  color: var(--zt-text-2);
+  font-size: 12px;
+}
+
+.sy-ask-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sy-ask-row .btn.small {
+  min-height: 40px;
+}
+
+.sy-auto,
+.sy-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sy-auto li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-items: center;
+}
+
+.sy-auto .sy-auto-ico {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  grid-row: span 2;
+  place-items: center;
+  border-radius: var(--r-s);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--zt-text-2);
+}
+
+.sy-auto .sy-auto-ico .ico {
+  width: 16px;
+  height: 16px;
+}
+
+.sy-auto b {
+  overflow: hidden;
+  font: 600 13px / 1.3 var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-auto small {
+  overflow: hidden;
+  color: var(--zt-text-3);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-sessions li {
+  position: relative;
+  padding: 0 0 0 20px;
+}
+
+.sy-sessions li::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sy-sitzung);
+  opacity: 0.7;
+}
+
+.sy-sessions li::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: -8px;
+  left: 6.5px;
+  width: 1px;
+  background: var(--zt-line-strong);
+}
+
+.sy-sessions li:last-child::after {
+  display: none;
+}
+
+.sy-sessions li[data-live="1"]::before {
+  opacity: 1;
+  box-shadow: 0 0 0 4px rgba(242, 201, 76, 0.16);
+}
+
+.sy-session-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 600 13px / 1.4 var(--font);
+}
+
+.sy-session-head small {
+  color: var(--zt-text-3);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.sy-live {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(242, 201, 76, 0.14);
+  color: var(--sy-sitzung);
+  font: 600 10px / 18px var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sy-themes {
+  margin: 2px 0 0;
+  padding: 0;
+  color: var(--zt-text-2);
+  font-size: 12px;
+  line-height: 1.45;
+  list-style: none;
+}
+
+.sy-themes li {
+  overflow: hidden;
+  padding: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sy-themes li::before,
+.sy-themes li::after {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ Bewegung, schmale Fenster */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-status] .sy-status i,
+  .sy-bar[data-open-ended="1"] i,
+  .sy-skill[data-busy="1"] b::before,
+  .sy-detail {
+    animation: none;
+  }
+}
+
+body[data-fenster="zu"] .sy * {
+  animation-play-state: paused !important;
+}
+
+@media (max-width: 1380px) {
+  .sy {
+    grid-template-columns: 272px minmax(0, 1fr) 296px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .sy {
+    grid-template-columns: 264px minmax(0, 1fr);
+    grid-template-rows: minmax(520px, 1fr) auto;
+    grid-template-areas:
+      "agents graph"
+      "side side";
+    overflow-y: auto;
+  }
+
+  .sy-agents {
+    max-height: none;
+  }
+
+  /* Untereinander: jede Zeile so hoch wie ihr Inhalt (mit min-height: 0 schrumpfte sie auf ein paar Pixel,
+     und Skills und Automationen lagen über den Agents) */
+  .sy-side {
+    min-height: auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 900px) {
+  .sy {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(440px, 64vh) auto auto;
+    grid-template-areas:
+      "graph"
+      "side"
+      "agents";
+    padding: 12px 16px 16px;
+  }
+
+  .sy-agents {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .sy-agent-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .sy-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sy-block-sessions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .sy-graph-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .sy-search {
+    flex: 1 1 100%;
+  }
+
+  .sy-agent-list,
+  .sy-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sy-detail {
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 70%;
+  }
+}
+
+/* Der dritte Reiter (System) braucht Platz in der Kopfzeile: "Online" steht schon im Zustand daneben,
+   "Ereignisse heute" und die Beschriftung von "Briefing" gehen früher, damit sich nichts überlappt. */
+@media (max-width: 1600px) {
+  body[data-link="live"] .link,
+  body[data-link="demo"] .link {
+    display: none;
+  }
+}
+
+@media (max-width: 1500px) {
+  .top-events {
+    display: none;
+  }
+}
+
+@media (max-width: 1320px) {
+  .top-live .top-btn .ws-pill-text {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) {
+  .live-mark #liveText,
+  .brand-name {
+    display: none;
+  }
+
+  .view-tab {
+    padding: 0 12px;
+  }
+
+  .top-live {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 1060px) {
+  .top-clock {
+    display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  /* "Briefing" gibt es auch als Skill-Knopf im System und per Sprache */
+  .top-live #ztBriefing {
+    display: none;
+  }
+
+  /* Der Zustand bleibt als Punkt (das Wort steht in jeder Ansicht noch einmal groß, Vorleser hören es weiter) */
+  .state-pill {
+    padding: 0 10px;
+  }
+
+  .state-pill #stateLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 820px) {
+  .top-live,
+  .brand-orb {
+    display: none;
+  }
+
+  .view-tab {
+    padding: 0 8px;
+  }
+
+  .view-sep {
+    margin: 0 2px;
+  }
+}
+
+@media (max-width: 560px) {
+  .view-switch .top-btn,
+  .view-sep {
+    display: none;
+  }
+}

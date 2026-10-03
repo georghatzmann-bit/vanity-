@@ -1,0 +1,16 @@
+# Extras: Oberfläche, Tray-Icon, Systemanzeige, Papierkorb, Bildschirmfotos.
+# Fehlt eins davon, läuft Jarvis trotzdem (dann eben ohne diese Funktion).
+pywebview>=5.0
+# "Jarvis" allein als Weckwort (nur mit kostenlosem Picovoice-Schlüssel aktiv)
+pvporcupine>=3.0
+pystray>=0.19
+pillow>=10.0
+psutil>=5.9
+Send2Trash>=1.8
+# Reservestimme auf dem PC, falls die lokale Jarvis-Stimme einmal nicht spricht (lädt einmalig 63 MB).
+piper-tts>=1.8,<2
+# QR-Code zum Koppeln der Handy-App
+qrcode>=7.4
+# Videos ansehen (TikTok, YouTube, Instagram ...): herunterladen, Bilder und Ton macht Jarvis selbst (video.py).
+# [default] bringt den Baustein für YouTube mit (yt-dlp-ejs; YouTube braucht dazu Deno oder Node.js).
+yt-dlp[default]>=2025.11

@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Jarvis</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="werkstatt.css">
+  <link rel="stylesheet" href="blaupause.css">
+  <link rel="stylesheet" href="weltlage.css">
+  <link rel="stylesheet" href="zentrale.css">
+  <link rel="stylesheet" href="system.css">
+</head>
+<body data-state="idle" data-link="wait" data-boot="1" data-view="hud" data-home="zentrale">
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <div class="hud" id="hud">
+    <!-- Kopfzeile: wer, wie es ihm geht, welche Ansicht, wohin -->
+    <header class="top">
+      <div class="brand">
+        <canvas class="brand-orb" aria-hidden="true"></canvas>
+        <span class="brand-name">Jarvis</span>
+        <span class="state-pill" id="statePill">
+          <span class="state-dot" aria-hidden="true"></span>
+          <span class="state" id="stateLabel" aria-live="polite">Bereit</span>
+        </span>
+        <span class="link" id="link"><span class="link-dot" aria-hidden="true"></span><span id="linkText">Verbinde …</span></span>
+      </div>
+      <nav class="view-switch" aria-label="Ansichten">
+        <div class="view-tabs" role="tablist" aria-label="Ansicht">
+          <button type="button" role="tab" class="view-tab" id="tabZentrale" data-home="zentrale" aria-selected="true" aria-controls="zt" title="Kommandozentrale: Ihr Tag auf einen Blick. Oder sagen Sie „Briefing“.">Zentrale</button>
+          <button type="button" role="tab" class="view-tab" id="tabTalk" data-home="gespraech" aria-selected="false" aria-controls="talk" title="Gespräch mit Jarvis: die Energie-Kugel, was er gerade tut, Schnellbefehle">Gespräch</button>
+          <button type="button" role="tab" class="view-tab" id="tabSystem" data-home="system" aria-selected="false" aria-controls="sy" title="System: alle Agents mit ihren Skills, das Wissensnetz, Automationen und Sitzung für Sitzung. Oder sagen Sie „Zeig mir das System“.">System</button>
+        </div>
+        <span class="view-sep" aria-hidden="true"></span>
+        <button type="button" class="top-btn ws-pill" id="workshopPill" data-state="idle" title="Werkstatt: alle Projekte">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0 5 5l-8.8 8.8a2.1 2.1 0 0 1-3-3l8.8-8.8a4 4 0 0 0-2-2z"/><path d="m16 3 1.5 3.5L21 8"/></svg>
+          <span class="ws-pill-text" id="workshopPillText">Werkstatt</span>
+          <span class="ws-pill-time" id="workshopPillTime"></span>
+        </button>
+        <button type="button" class="top-btn bp-pill" id="bpPill" data-state="idle" title="Blueprint: 3D-Modelle als Hologramm bauen, drehen, zerlegen. Oder sagen Sie „Blueprint“.">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+          <span class="ws-pill-text">Blueprint</span>
+        </button>
+        <button type="button" class="top-btn wl-pill" id="wlPill" title="Weltlage: die Erde mit den neuesten Meldungen. Oder sagen Sie „Zeig mir, was in der Welt passiert“.">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span class="ws-pill-text">Weltlage</span>
+        </button>
+      </nav>
+      <div class="top-live" id="topLive">
+        <span class="live-mark" id="liveMark" data-state="aus" title="Wie aktuell Post, Kalender und Shop sind"><i aria-hidden="true"></i><span id="liveText">Lagebild</span></span>
+        <span class="top-events" title="Was Jarvis heute schon erledigt hat">Ereignisse heute <b id="topEvents">0</b></span>
+        <span class="top-clock" id="topClock">--:--</span>
+        <button type="button" class="top-btn" id="ztBriefing" title="Briefing: Jarvis liest Ihren Tag vor und zeigt, wovon er spricht. Oder sagen Sie „Briefing“ oder morgens „Guten Morgen“.">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <span class="ws-pill-text">Briefing</span>
+        </button>
+        <button type="button" class="icon-btn" id="ztRefresh" title="Post, Kalender und Shop jetzt neu holen (über Ihre Konnektoren, nur lesend)">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20v-4h-4"/></svg>
+          <span class="sr-only">Lagebild aktualisieren</span>
+        </button>
+      </div>
+      <nav class="top-actions" aria-label="Bereiche">
+        <label class="chip-toggle" title="Gaming-Modus: volle Leistung, keine Einblendungen. Oder sagen Sie „Gaming-Modus an“.">
+          <input type="checkbox" class="sr-input" id="gamingToggle">
+          <span class="chip-switch" aria-hidden="true"></span>
+          <span class="chip-text">Gaming <b id="gamingText">Aus</b></span>
+        </label>
+        <button type="button" class="top-btn phone-pill" id="phoneBtn" title="Handy und Alexa mit Jarvis verbinden, Konnektoren ansehen">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+          <span class="ws-pill-text">Verbinden</span>
+          <span class="conn" id="phoneConn" aria-hidden="true"><i data-k="phone"></i><i data-k="telegram"></i><i data-k="alexa"></i></span>
+        </button>
+        <button type="button" class="top-btn narrow-only" id="memOpenTop" title="Gedächtnis: was Jarvis über Sie weiß, eigene Befehle, Zeitpläne">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></svg>
+          <span class="ws-pill-text">Gedächtnis</span>
+        </button>
+        <button type="button" class="top-btn" id="historyOpen" title="Verlauf: alles, was Sie und Jarvis gesagt haben">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4M12 8v4.5l3 1.8"/></svg>
+          <span class="ws-pill-text">Verlauf</span>
+        </button>
+        <button type="button" class="icon-btn" id="setupBtn" title="Einstellungen: Mikrofon, Stimme, Wohnort, Gehirn">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+          <span class="sr-only">Einstellungen</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- Die Kommandozentrale: Georgs Tag auf einen Blick (zentrale.js) -->
+    <section class="zt" id="zt" role="tabpanel" aria-labelledby="tabZentrale">
+      <div class="zt-grid">
+        <article class="zt-card zt-konto" data-area="konto" aria-labelledby="ztKontoTitle">
+          <canvas class="zt-stars" id="ztStars" aria-hidden="true"></canvas>
+          <div class="zt-konto-body">
+            <h2 class="zt-head" id="ztKontoTitle">Kennzahlen</h2>
+            <dl class="zt-konto-werte" id="ztKontoWerte"></dl>
+            <table class="zt-konto-zeilen" id="ztKontoZeilen" hidden><tbody></tbody></table>
+            <p class="zt-empty" id="ztKontoEmpty">Verbinden Sie Shopify oder Windsor.ai auf claude.ai (Einstellungen › Konnektoren), dann stehen hier Umsatz, Bestellungen und Werbekonten.</p>
+          </div>
+        </article>
+
+        <article class="zt-card zt-akt" data-area="aktivitaet" aria-labelledby="ztAktHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztAktHead">Aktivität</h2><span class="zt-meta" id="ztAktCount">0 heute</span></header>
+          <ol class="zt-feed" id="ztFeed" aria-live="polite"></ol>
+          <ul class="zt-chips" id="ztChips" aria-label="Heute schon erledigt"></ul>
+        </article>
+
+        <article class="zt-card zt-orb" data-area="orb" aria-label="Jarvis">
+          <button type="button" class="zt-orb-ball" id="ztOrbBtn" title="Klicken: Jarvis hört sofort zu" aria-label="Jarvis sofort zuhören lassen">
+            <canvas id="ztOrb" aria-hidden="true"></canvas>
+          </button>
+          <canvas class="zt-wave" id="ztWave" aria-hidden="true"></canvas>
+          <b class="zt-orb-state" id="ztOrbState">Bereit</b>
+          <button type="button" class="zt-meta zt-wissen" id="ztWissen" title="Das Wissensnetz öffnen: alles, was Jarvis weiß, verknüpft">Wissensnetz</button>
+        </article>
+
+        <article class="zt-card zt-pc" data-area="rechner" aria-labelledby="ztPcHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztPcHead">Rechner</h2><span class="zt-meta">live</span></header>
+          <div class="zt-pc-body">
+            <svg class="zt-rings" viewBox="0 0 100 100" aria-hidden="true">
+              <circle class="zt-ring-bg" cx="50" cy="50" r="42"/><circle class="zt-ring zt-ring-cpu" id="ztRingCpu" cx="50" cy="50" r="42"/>
+              <circle class="zt-ring-bg" cx="50" cy="50" r="31"/><circle class="zt-ring zt-ring-ram" id="ztRingRam" cx="50" cy="50" r="31"/>
+              <circle class="zt-ring-bg" cx="50" cy="50" r="20"/><circle class="zt-ring zt-ring-gpu" id="ztRingGpu" cx="50" cy="50" r="20"/>
+            </svg>
+            <dl class="zt-pc-werte">
+              <div title="Prozessor: äußerer Ring"><dt><i class="zt-key zt-key-cpu" aria-hidden="true"></i>CPU</dt><dd id="ztCpu">–</dd></div>
+              <div title="Arbeitsspeicher: mittlerer Ring"><dt><i class="zt-key zt-key-ram" aria-hidden="true"></i>RAM</dt><dd id="ztRam">–</dd></div>
+              <div id="ztGpuRow" title="Grafikkarte: innerer Ring" hidden><dt><i class="zt-key zt-key-gpu" aria-hidden="true"></i>GPU</dt><dd id="ztGpu">–</dd></div>
+            </dl>
+          </div>
+          <p class="zt-pc-note" id="ztPcNote">Läuft ruhig.</p>
+          <p class="zt-pc-claude" id="ztClaude" hidden title="Wie viel vom Claude-Abo diese Woche verbraucht ist. Oder fragen Sie: „Wie viel Claude habe ich noch?“">Claude-Abo diese Woche: <b id="ztClaudeNum">–</b></p>
+        </article>
+
+        <div class="zt-kpis" id="ztKpis" data-area="kennzahlen" role="list" aria-label="Kennzahlen"></div>
+
+        <article class="zt-card zt-plan" data-area="tagesplan" aria-labelledby="ztPlanHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztPlanHead">Tagesplan</h2><span class="zt-meta" id="ztPlanWeek"></span></header>
+          <div class="zt-allday" id="ztAllday" hidden></div>
+          <div class="zt-timeline" id="ztTimeline" role="list" aria-label="Termine und Erinnerungen heute"></div>
+          <p class="zt-empty" id="ztPlanEmpty" hidden></p>
+        </article>
+
+        <article class="zt-card zt-post" data-area="post" aria-labelledby="ztPostHead">
+          <header class="zt-card-head"><h2 class="zt-head" id="ztPostHead">Posteingang</h2><span class="zt-meta" id="ztPostCount"></span></header>
+          <ul class="zt-mails" id="ztMails"></ul>
+          <p class="zt-empty" id="ztPostEmpty" hidden></p>
+        </article>
+
+        <article class="zt-card zt-news" data-area="nachrichten" aria-label="Nachrichten">
+          <video class="zt-video" id="ztVideo" muted playsinline preload="none" aria-hidden="true"></video>
+          <img class="zt-news-img" id="ztNewsImg" alt="" hidden>
+          <div class="zt-news-shade" aria-hidden="true"></div>
+          <p class="zt-news-headline" id="ztNewsHeadline"></p>
+          <span class="zt-news-label"><i aria-hidden="true"></i><span id="ztNewsLabel">Nachrichten</span></span>
+          <button type="button" class="zt-sound" id="ztSound" aria-pressed="false" title="Ton an oder aus">
+            <svg class="ico ico-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><svg class="ico ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
+            <span class="sr-only" id="ztSoundText">Ton einschalten</span>
+          </button>
+          <button type="button" class="zt-ticker" id="ztTicker" title="Die Meldung auf tagesschau.de öffnen"><span id="ztTickerText">Nachrichten werden geladen …</span></button>
+        </article>
+
+        <article class="zt-card zt-notes" data-area="notizen" aria-labelledby="ztNotesHead">
+          <h2 class="zt-head" id="ztNotesHead">Notizen</h2>
+          <ul class="zt-notes-list" id="ztNotes"></ul>
+          <p class="zt-empty" id="ztNotesEmpty">Noch nichts notiert. Sagen Sie „Notiere: …“.</p>
+        </article>
+
+        <div class="zt-agents" id="ztAgents" data-area="agenten" role="list" aria-label="Spezialisten"></div>
+
+        <div class="zt-chat">
+          <button type="button" class="zt-chat-btn" id="ztChat" title="Zum Gespräch: schreiben oder sprechen"><i aria-hidden="true"></i>Mit Jarvis chatten</button>
+          <button type="button" class="zt-chat-orb" id="ztListen" title="Jarvis hört sofort zu" aria-label="Jarvis sofort zuhören lassen"><canvas class="brand-orb" aria-hidden="true"></canvas></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Das System wie im Video "AgenticOS": links die Agents mit ihren Skills und Werkzeugen, in der Mitte das
+         Wissensnetz, rechts Skill-Knöpfe, Automationen und das Gedächtnis Sitzung für Sitzung (system.js) -->
+    <section class="sy" id="sy" role="tabpanel" aria-labelledby="tabSystem">
+      <aside class="sy-col sy-agents" aria-labelledby="syAgentsHead">
+        <header class="sy-head"><h2 class="zt-head" id="syAgentsHead">Agents</h2><span class="zt-meta" id="syAgentsMeta"></span></header>
+        <ol class="sy-agent-list" id="syAgents"></ol>
+      </aside>
+
+      <article class="sy-graph" aria-labelledby="syGraphHead">
+        <header class="sy-graph-head">
+          <div class="sy-graph-title">
+            <h2 class="zt-head" id="syGraphHead">Wissensnetz</h2>
+            <span class="zt-meta" id="syGraphMeta">Wird aufgebaut …</span>
+          </div>
+          <div class="sy-search">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input type="search" id="sySearch" placeholder="Im Netz suchen" aria-label="Im Wissensnetz suchen" aria-controls="syHits" autocomplete="off" spellcheck="false">
+            <ul class="sy-hits" id="syHits" role="listbox" aria-label="Treffer" hidden></ul>
+          </div>
+        </header>
+        <div class="sy-canvas-wrap" id="syCanvasWrap">
+          <canvas class="sy-canvas" id="syCanvas" tabindex="0" role="img" aria-label="Wissensnetz. Ziehen verschiebt, Mausrad zoomt, Klick zeigt Einzelheiten. Mit der Tastatur: Pfeiltasten verschieben, Plus und Minus zoomen, Null zeigt alles."></canvas>
+          <div class="sy-zoom" role="group" aria-label="Zoom">
+            <button type="button" class="icon-btn" id="syZoomIn" title="Näher ran (+)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg><span class="sr-only">Näher ran</span></button>
+            <button type="button" class="icon-btn" id="syZoomOut" title="Weiter weg (−)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg><span class="sr-only">Weiter weg</span></button>
+            <button type="button" class="icon-btn" id="syFit" title="Alles zeigen (0)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span class="sr-only">Alles zeigen</span></button>
+          </div>
+          <section class="sy-detail" id="syDetail" aria-live="polite" hidden>
+            <header class="sy-detail-head">
+              <span class="sy-kind" id="syDetailKind"></span>
+              <button type="button" class="icon-btn" id="syDetailClose" title="Schließen (Esc)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg><span class="sr-only">Schließen</span></button>
+            </header>
+            <h3 class="sy-detail-title" id="syDetailTitle"></h3>
+            <p class="sy-detail-text" id="syDetailText"></p>
+            <p class="sy-detail-file" id="syDetailFile"></p>
+            <ul class="sy-detail-links" id="syDetailLinks" aria-label="Verbunden mit"></ul>
+            <div class="sy-detail-actions">
+              <button type="button" class="btn primary small" id="syDetailOpen">In Obsidian öffnen</button>
+              <button type="button" class="btn small" id="syDetailAsk">Jarvis fragen</button>
+            </div>
+          </section>
+          <p class="sy-graph-empty" id="syGraphEmpty" hidden></p>
+        </div>
+        <footer class="sy-graph-foot">
+          <ul class="sy-legend" id="syLegend" aria-label="Arten im Netz, zum Ein- und Ausblenden klicken"></ul>
+        </footer>
+      </article>
+
+      <aside class="sy-col sy-side" aria-label="Skills, Automationen und Gedächtnis">
+        <section class="sy-block" aria-labelledby="sySkillsHead">
+          <header class="sy-head"><h2 class="zt-head" id="sySkillsHead">Skills bereit</h2><span class="zt-meta" id="sySkillsMeta"></span></header>
+          <div class="sy-skills" id="sySkills"></div>
+          <form class="sy-ask" id="syAsk" hidden>
+            <label class="sy-ask-label" for="syAskInput" id="syAskLabel">Was soll ich recherchieren?</label>
+            <div class="sy-ask-row">
+              <input class="sy-input" id="syAskInput" type="text" autocomplete="off" spellcheck="true" maxlength="400">
+              <button type="submit" class="btn primary small">Los</button>
+              <button type="button" class="btn ghost small" id="syAskCancel">Abbrechen</button>
+            </div>
+          </form>
+        </section>
+        <section class="sy-block" aria-labelledby="syAutoHead">
+          <header class="sy-head"><h2 class="zt-head" id="syAutoHead">Automationen</h2><span class="zt-meta" id="syAutoMeta"></span></header>
+          <ul class="sy-auto" id="syAuto"></ul>
+          <p class="zt-empty" id="syAutoEmpty" hidden>Noch keine. Sagen Sie zum Beispiel „Jeden Morgen um 8 Uhr: Briefing“ oder „Wenn ich Zockmodus sage, öffne Discord und Steam“.</p>
+        </section>
+        <section class="sy-block sy-block-sessions" aria-labelledby="sySessHead">
+          <header class="sy-head"><h2 class="zt-head" id="sySessHead">Sitzung für Sitzung</h2><span class="zt-meta" id="sySessMeta"></span></header>
+          <ol class="sy-sessions" id="sySessions"></ol>
+          <p class="zt-empty" id="sySessEmpty" hidden>Noch keine Sitzung. Ab dem ersten Befehl merkt sich Jarvis, woran Sie arbeiten, auch über Tage.</p>
+        </section>
+      </aside>
+    </section>
+
+    <!-- Das Gespräch: die Energie-Kugel im HUD, links Menü und Aufgabe, rechts Assistent und System -->
+    <section class="talk" id="talk" role="tabpanel" aria-labelledby="tabTalk">
+      <aside class="talk-left" aria-label="Menü und heute">
+        <div class="talk-head">
+          <p class="talk-title">Jarvis <span>Assistent</span></p>
+          <div class="greet">
+            <h1 class="greet-title" id="greetTitle">Guten Tag</h1>
+            <p class="greet-sub">
+              <span id="clockDate"></span>
+              <span class="sep" aria-hidden="true"></span>
+              <span class="clock-time" id="clockTime">--:--</span>
+              <span class="weather" id="weather" hidden><span class="sep" aria-hidden="true"></span><span id="weatherText"></span></span>
+            </p>
+          </div>
+        </div>
+        <nav class="hud-nav" aria-label="Menü">
+          <button type="button" class="hud-nav-item" data-go="gespraech" aria-current="page"><i aria-hidden="true"></i><span>Gespräch</span></button>
+          <button type="button" class="hud-nav-item" data-go="zentrale"><i aria-hidden="true"></i><span>Zentrale</span></button>
+          <button type="button" class="hud-nav-item" data-go="system"><i aria-hidden="true"></i><span>System</span></button>
+          <button type="button" class="hud-nav-item" data-go="wissen"><i aria-hidden="true"></i><span>Wissen</span></button>
+          <button type="button" class="hud-nav-item" data-go="einstellungen"><i aria-hidden="true"></i><span>Einstellungen</span></button>
+        </nav>
+        <section class="hud-card today-card" aria-labelledby="todayHead">
+          <header class="card-head"><h2 id="todayHead">Heute</h2></header>
+          <ul class="today" id="today"></ul>
+          <p class="empty" id="todayEmpty">Nichts geplant. Sagen Sie zum Beispiel „Trag morgen um 18 Uhr Training ein“ oder „Erinnere mich in 20 Minuten an den Tee“.</p>
+        </section>
+        <section class="hud-card task-card" aria-labelledby="taskHead">
+          <span class="task-ring" id="taskRing" aria-hidden="true"></span>
+          <div class="task-body">
+            <h2 class="hud-label" id="taskHead">Aktuelle Aufgabe</h2>
+            <p class="task-title" id="taskTitle">Bereit für Ihren nächsten Befehl</p>
+            <p class="task-detail" id="taskDetail">„Hey Jarvis“ sagen oder unten schreiben</p>
+          </div>
+        </section>
+      </aside>
+
+      <main class="stage">
+        <div class="kern-floor" aria-hidden="true"></div>
+        <div class="kern-switch" role="group" aria-label="Aussehen des Kerns">
+          <button type="button" class="kern-pick" data-kern="plasma" aria-pressed="true" title="Die Energie-Kugel in den HUD-Ringen">Energie-Kugel</button>
+          <button type="button" class="kern-pick" data-kern="partikel" aria-pressed="false" title="Der Partikel-Kern wie im Video „Claude OS“">Partikel-Kern</button>
+        </div>
+        <div class="core-wrap" id="coreWrap" role="button" tabindex="0" aria-label="Jarvis sofort zuhören lassen" title="Klicken: Jarvis hört sofort zu. Mit gedrückter Maustaste drehen.">
+          <svg class="hud-rings" viewBox="0 0 400 400" aria-hidden="true">
+            <g class="ring ring-outer"><circle cx="200" cy="200" r="194"/></g>
+            <g class="ring ring-ticks"><circle cx="200" cy="200" r="180" pathLength="360"/></g>
+            <g class="ring ring-arcs"><circle class="arc-a" cx="200" cy="200" r="166" pathLength="100"/><circle class="arc-b" cx="200" cy="200" r="166" pathLength="100"/></g>
+            <g class="ring ring-seg"><circle cx="200" cy="200" r="152" pathLength="120"/></g>
+            <g class="ring ring-inner"><circle cx="200" cy="200" r="140"/></g>
+            <g class="ring-cross"><path d="M200 0v26M200 374v26M0 200h26M374 200h26"/><circle cx="200" cy="12" r="4"/><circle cx="200" cy="388" r="4"/></g>
+          </svg>
+          <canvas id="core" aria-hidden="true"></canvas>
+          <canvas id="kern" class="kern" aria-hidden="true"></canvas>
+        </div>
+        <div class="kern-name" aria-hidden="true">
+          <p class="kern-word">Jarvis</p>
+          <p class="kern-mode" id="kernMode">Partikel-Kern · bereit</p>
+        </div>
+        <ol class="kern-states" id="kernStates" aria-label="Zustand">
+          <li data-state="idle">Bereit</li>
+          <li data-state="listening">Hört zu</li>
+          <li data-state="thinking">Arbeitet</li>
+          <li data-state="speaking">Spricht</li>
+          <li data-state="error">Störung</li>
+        </ol>
+        <div class="feedback-btns" role="group" aria-label="Peitsche und Lob">
+          <button type="button" class="feedback-btn" id="whipBtn" data-tool="peitsche" aria-pressed="false" title="Antreiben: Peitsche in die Hand nehmen, klicken lässt sie knallen. Jarvis antwortet eine Viertelstunde lang flotter. Oder sagen Sie „Schneller!“.">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20 9 13"/><path d="M9 13c3-6 9-8 11-5 2 3-3 6-6 4"/></svg>
+            <span class="sr-only">Antreiben</span>
+          </button>
+          <button type="button" class="feedback-btn" id="patBtn" data-tool="lob" aria-pressed="false" title="Loben: Hand nehmen, klicken tätschelt. Jarvis denkt dann wieder so gründlich wie nötig. Oder sagen Sie „Gut gemacht“.">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6 7-2.6 0-4-1.2-5.5-3.5L4 14.6a1.5 1.5 0 0 1 2.4-1.8L8 15"/></svg>
+            <span class="sr-only">Loben</span>
+          </button>
+        </div>
+
+        <div class="status">
+          <div class="subtitles" id="subtitles" aria-live="polite">
+            <p class="sub-user" id="subUser"></p>
+            <p class="sub-jarvis" id="subJarvis"></p>
+          </div>
+          <ol class="activity" id="activity" aria-label="Was Jarvis gerade tut"></ol>
+          <p class="hint" id="stateHint">„Hey Jarvis“ sagen, auf die Kugel klicken oder unten schreiben</p>
+        </div>
+
+        <div class="dock">
+          <div class="deck" id="deck" role="group" aria-label="Schnellbefehle"></div>
+          <div class="bottom">
+            <form class="command" id="cmdForm" autocomplete="off">
+              <button type="button" class="cmd-btn" id="micBtn" aria-pressed="false" title="Mikrofon stumm schalten">
+                <svg class="ico ico-on" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+                <svg class="ico ico-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 5 2.2"/><path d="M5.5 11a6.5 6.5 0 0 0 10.6 5M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M9 21h6M4 4l16 16"/></svg>
+                <span class="sr-only" id="micBtnText">Mikrofon stumm schalten</span>
+              </button>
+              <input id="cmdInput" type="text" placeholder="Nachricht an Jarvis …" maxlength="2000" spellcheck="false" aria-label="Nachricht an Jarvis">
+              <button type="button" class="cmd-btn stop" id="stopBtn" title="Stopp: Jarvis hört sofort auf" disabled>
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+                <span class="sr-only">Stopp</span>
+              </button>
+              <button type="submit" class="send" id="sendBtn" title="Senden (Enter)" aria-label="Senden" disabled>
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+              </button>
+            </form>
+            <p class="mic-line">
+              <span id="micName">Mikrofon wird geladen …</span>
+              <span class="sep" aria-hidden="true"></span>
+              <span id="micHint">„Hey Jarvis“ oder <kbd id="listenKey">Strg + Alt + J</kbd></span>
+              <button type="button" class="link-btn" id="micChange">Ändern</button>
+            </p>
+          </div>
+        </div>
+      </main>
+
+      <aside class="rail" aria-label="Assistent, System und Gedächtnis">
+        <button type="button" class="mic-pill" id="micPill" aria-pressed="false" title="Mikrofon an oder aus"><i aria-hidden="true"></i><span id="micPillText">Mikrofon an</span></button>
+        <section class="hud-card assist-card" aria-labelledby="assistHead">
+          <h2 class="hud-label" id="assistHead">Assistent</h2>
+          <div class="assist-id">
+            <span class="assist-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="assist-name"><b>Jarvis</b><small>Ihr persönlicher Butler</small></span>
+          </div>
+          <ol class="pipe" id="pipe" aria-label="Was Jarvis gerade macht">
+            <li data-phase="verstehen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v10H9l-4 4z"/><path d="M9 10h6"/></svg><span>Verstehen</span></li>
+            <li data-phase="denken"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 4.5-8 4.5-8-4.5z"/><path d="m4 12 8 4.5 8-4.5M4 16.5 12 21l8-4.5"/></svg><span>Denken</span></li>
+            <li data-phase="erledigen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Erledigen</span></li>
+            <li data-phase="sprechen"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><span>Sprechen</span></li>
+          </ol>
+        </section>
+        <section class="card hud-card sys-card" aria-labelledby="sysHead">
+          <header class="card-head"><h2 id="sysHead">System</h2></header>
+          <div class="meters">
+            <div class="meter" id="cpuGauge">
+              <span class="meter-name">Prozessor</span>
+              <span class="meter-num"><span id="cpuNum">–</span> %</span>
+              <span class="meter-bar" aria-hidden="true"><i id="cpuRing"></i></span>
+            </div>
+            <div class="meter" id="ramGauge">
+              <span class="meter-name">Arbeitsspeicher</span>
+              <span class="meter-num"><span id="ramNum">–</span> %</span>
+              <span class="meter-bar" aria-hidden="true"><i id="ramRing"></i></span>
+            </div>
+            <div class="meter" id="gpuGauge" hidden>
+              <span class="meter-name" id="gpuName">Grafikkarte</span>
+              <span class="meter-num"><span id="gpuNum">–</span> %</span>
+              <span class="meter-bar" aria-hidden="true"><i id="gpuRing"></i></span>
+            </div>
+          </div>
+          <div class="spark-box" id="sparkBox" hidden>
+            <svg class="spark" viewBox="0 0 120 28" preserveAspectRatio="none" aria-hidden="true">
+              <path class="spark-fill" id="sparkFill" d=""/>
+              <path class="spark-line" id="sparkLine" d=""/>
+            </svg>
+            <small class="spark-label">Prozessor, letzte zwei Minuten</small>
+          </div>
+        </section>
+
+        <section class="card hud-card usage-card" id="usageCard" aria-labelledby="usageHead" data-knapp="0" data-da="0">
+          <header class="card-head">
+            <h2 id="usageHead">Kontingent</h2>
+            <span class="usage-num"><b id="usageWeek">–</b> %</span>
+          </header>
+          <div class="usage-bar" aria-hidden="true"><i id="usageBar"></i></div>
+          <p class="usage-note" id="usageNote" hidden></p>
+          <p class="usage-line" id="usageLine">Noch keine Werte. Nach der nächsten Frage an Claude steht hier, wie viel vom Wochenkontingent weg ist.</p>
+        </section>
+
+        <section class="card hud-card mem-panel" aria-labelledby="memHead">
+          <header class="card-head">
+            <h2 id="memHead">Gedächtnis</h2>
+            <button type="button" class="link-btn" id="memOpen">Ansehen</button>
+          </header>
+          <p class="mem-sum" id="memSum">Jarvis lernt Sie kennen. Sagen Sie zum Beispiel „Merk dir, dass ich gern Rock höre“.</p>
+          <p class="mem-next" id="memNext" hidden></p>
+        </section>
+
+
+      </aside>
+    </section>
+  </div>
+
+  <!-- Werkstatt: Programmier-Aufträge als Blaupause, das Projekt als Hologramm -->
+  <section class="ws" id="ws" aria-label="Werkstatt" hidden>
+    <header class="ws-top">
+      <button type="button" class="ws-back" id="wsBack" title="Zurück zu Jarvis (Esc). Die Arbeit läuft weiter.">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>
+        <span>Jarvis</span>
+      </button>
+      <div class="ws-title">
+        <span class="ws-kicker">Werkstatt</span>
+        <h1 class="ws-task" id="wsTask">Auftrag</h1>
+      </div>
+      <div class="ws-status">
+        <span class="ws-chip" id="wsChip" data-state="running">
+          <span class="ws-chip-mark" aria-hidden="true"></span>
+          <span id="wsChipText">Arbeitet</span>
+        </span>
+        <span class="ws-timer" id="wsTimer" title="Dauer">00:00</span>
+      </div>
+      <div class="ws-actions">
+        <button type="button" class="ws-btn" id="wsProjects" title="Alle Projekte der Werkstatt">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+          <span>Projekte</span>
+        </button>
+        <button type="button" class="ws-btn" id="wsFolder" title="Den Projektordner im Explorer öffnen">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2l2 2h8.8A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/></svg>
+          <span>Ordner öffnen</span>
+        </button>
+        <button type="button" class="ws-btn danger" id="wsStop" title="Die Arbeit abbrechen. Was schon gebaut ist, bleibt im Ordner.">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+          <span id="wsStopText">Stopp</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="ws-body">
+      <section class="ws-card ws-plan" aria-labelledby="wsPlanHead">
+        <h2 class="ws-h" id="wsPlanHead"><span class="ws-no">A</span>Plan<span class="ws-count" id="wsPlanCount"></span></h2>
+        <div class="ws-progress" aria-hidden="true"><span id="wsPlanBar"></span></div>
+        <ol class="ws-todos" id="wsTodos"></ol>
+        <p class="ws-empty" id="wsTodosEmpty">Jarvis legt gleich einen Plan mit den Arbeitsschritten an.</p>
+      </section>
+
+      <section class="ws-card ws-flow" aria-labelledby="wsFlowHead">
+        <h2 class="ws-h" id="wsFlowHead"><span class="ws-no">B</span>Ablauf<span class="ws-count" id="wsStepCount"></span></h2>
+        <div class="ws-result" id="wsResult" hidden>
+          <span class="ws-stamp" id="wsStamp">Fertig</span>
+          <p class="ws-summary" id="wsSummary"></p>
+          <p class="ws-answer" id="wsAnswer" hidden>Antworten Sie einfach mit „Hey Jarvis, …“. Die Antwort geht direkt in die Werkstatt.</p>
+          <pre class="ws-detail" id="wsDetail" hidden></pre>
+          <div class="ws-history" id="wsHistoryBox" hidden>
+            <span class="ws-history-h">Bisherige Aufträge</span>
+            <ol id="wsHistory"></ol>
+          </div>
+          <div class="ws-result-actions">
+            <button type="button" class="ws-btn primary" id="wsResultRun" hidden title="start.bat ausführen: das Programm starten">Starten</button>
+            <button type="button" class="ws-btn" id="wsResultPreview" hidden title="Die Webseite des Projekts im Browser ansehen">Vorschau</button>
+            <button type="button" class="ws-btn" id="wsResultFolder">Ordner öffnen</button>
+            <button type="button" class="ws-btn" id="wsResultBack">Zurück zu Jarvis</button>
+            <button type="button" class="ws-btn danger" id="wsResultDelete" hidden title="Das Projekt löschen (kommt in den Papierkorb)">Löschen</button>
+          </div>
+        </div>
+        <ol class="ws-steps" id="wsSteps"></ol>
+        <p class="ws-empty" id="wsStepsEmpty">Noch keine Schritte. Jarvis liest sich gerade in den Auftrag ein.</p>
+      </section>
+
+      <section class="ws-card ws-model" aria-label="Hologramm">
+        <h2 class="ws-h"><span class="ws-no">C</span>Hologramm</h2>
+        <div class="ws-model-stage">
+          <canvas id="wsConstruct" aria-hidden="true"></canvas>
+          <div class="ws-model-read">
+            <b id="wsPercent">0 %</b>
+            <small id="wsPercentHint">wird gebaut</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="ws-card ws-files" aria-labelledby="wsFilesHead">
+        <h2 class="ws-h" id="wsFilesHead"><span class="ws-no">D</span>Dateien<span class="ws-count" id="wsFileCount"></span></h2>
+        <ul class="ws-list" id="wsFiles"></ul>
+        <p class="ws-empty" id="wsFilesEmpty">Noch keine Dateien geschrieben.</p>
+      </section>
+
+      <section class="ws-card ws-cmds" aria-labelledby="wsCmdsHead">
+        <h2 class="ws-h" id="wsCmdsHead"><span class="ws-no">E</span>Befehle<span class="ws-count" id="wsCmdCount"></span></h2>
+        <ul class="ws-list" id="wsCmds"></ul>
+        <p class="ws-empty" id="wsCmdsEmpty">Noch keine Befehle ausgeführt.</p>
+      </section>
+    </div>
+
+    <footer class="ws-foot">
+      <form class="ws-tell" id="wsTell" autocomplete="off">
+        <label class="ws-tell-label" for="wsTellInput" id="wsTellLabel">Ändern</label>
+        <input id="wsTellInput" type="text" maxlength="1500" spellcheck="false"
+               placeholder="Etwas ändern? Zum Beispiel: Mach den Hintergrund blau">
+        <button type="submit" class="ws-btn primary" id="wsTellBtn" disabled>Einbauen</button>
+      </form>
+      <div class="ws-console">
+        <span class="ws-console-who">Jarvis</span>
+        <p class="ws-console-text" id="wsText">Ich sehe mir den Auftrag an …</p>
+      </div>
+      <dl class="ws-block" aria-label="Schriftfeld">
+        <div class="ws-block-wide"><dt>Ordner</dt><dd id="wsPath" title="">–</dd></div>
+        <div><dt>Begonnen</dt><dd id="wsBegun">–</dd></div>
+        <div><dt>Gezeichnet</dt><dd>J.A.R.V.I.S.</dd></div>
+      </dl>
+    </footer>
+  </section>
+
+  <!-- Weltlage („Gottes Auge“): Satelliten-Erde mit Lagebericht (weltlage.js, three.js) -->
+  <section class="wl" id="wl" aria-label="Weltlage" hidden>
+    <div class="wl-stage" id="wlStage"><canvas id="wlCanvas" aria-label="Die Erde. Ziehen verschiebt, Mausrad zoomt, rechts ziehen dreht."></canvas></div>
+    <div class="wl-projector" id="wlProjector" aria-hidden="true"><i></i></div>
+    <div class="wl-marks" id="wlMarks" aria-hidden="true"></div>
+    <div class="wl-vignette" aria-hidden="true"></div>
+    <header class="wl-brand">
+      <b>J.A.R.V.I.S.</b>
+      <span id="wlBrandSub">Gottes Auge · Satellitenansicht</span>
+    </header>
+    <dl class="wl-readout">
+      <div><dt>Ziel</dt><dd id="wlTarget">Erde</dd></div>
+      <div><dt>Breite</dt><dd id="wlLat">–</dd></div>
+      <div><dt>Länge</dt><dd id="wlLon">–</dd></div>
+      <div><dt>Höhe</dt><dd id="wlAlt">–</dd></div>
+    </dl>
+    <div class="wl-clock" id="wlClock"></div>
+    <aside class="wl-news wl-panel" id="wlNewsBox" aria-label="Meldungen">
+      <header><span id="wlNewsTitle">Lage</span><span class="wl-count" id="wlNewsCount"></span></header>
+      <div class="wl-kinds" role="group" aria-label="Lagebericht holen">
+        <button type="button" data-kind="welt" aria-pressed="false">Welt</button>
+        <button type="button" data-kind="deutschland" aria-pressed="false">Deutschland</button>
+        <button type="button" data-kind="wirtschaft" aria-pressed="false">Wirtschaft</button>
+      </div>
+      <ol class="wl-list" id="wlList"></ol>
+      <p class="wl-empty" id="wlEmpty">Noch keine Meldungen. Sagen Sie „Zeig mir, was in der Welt passiert“ oder tippen Sie oben auf „Welt“. Jarvis fliegt dann zu jedem Ort und liest vor.</p>
+    </aside>
+    <aside class="wl-markets wl-panel" id="wlMarkets" aria-label="Märkte" hidden>
+      <header><span>Märkte</span><span class="wl-count">Veränderung zum Vortag</span></header>
+      <ul id="wlMarketList"></ul>
+    </aside>
+    <p class="wl-sub" id="wlSub" aria-live="polite"></p>
+    <p class="wl-status" id="wlStatus" role="status"></p>
+    <footer class="wl-foot wl-panel">
+      <form class="wl-search" id="wlSearch" autocomplete="off"><input id="wlSearchIn" type="search" placeholder="Ort suchen, z. B. Tokio" aria-label="Ort suchen"></form>
+      <button type="button" class="wl-btn" id="wlHolo" aria-pressed="false" title="Die Erde als Hologramm: leuchtende Kontinente, Lichtsäulen über den Meldungen. Taste H.">Hologramm</button>
+      <button type="button" class="wl-btn" id="wlFlights" aria-pressed="false" title="Flugzeuge in der Luft, live (ab Landesgröße). Taste F.">Flugverkehr</button>
+      <button type="button" class="wl-btn" id="wlHands" aria-pressed="false" title="Die Erde mit den Händen drehen und zoomen (Webcam)">Handsteuerung</button>
+      <button type="button" class="wl-btn primary" id="wlClose" title="Zurück zum Hauptmenü (Esc)">Hauptmenü</button>
+    </footer>
+    <p class="wl-credit">Satellitenbild: Sentinel-2 cloudless by EOX (Copernicus-Daten) · Nachrichten: tagesschau.de · Flüge: OpenSky Network · Kurse: Yahoo Finance</p>
+    <div class="wl-boot" id="wlBoot" aria-hidden="true"><span>Satellitenverbindung wird aufgebaut</span></div>
+  </section>
+
+  <!-- Blueprint: 3D-Modelle als Hologramm wie in Tony Starks Werkstatt (blaupause.js, three.js) -->
+  <section class="bp" id="bp" aria-label="Blueprint" data-look="holo" hidden>
+    <div class="bp-paper" aria-hidden="true"></div>
+    <div class="bp-stage" id="bpStage">
+      <canvas id="bpCanvas" aria-label="3D-Modell. Ziehen dreht, Mausrad zoomt, rechte Maustaste verschiebt, Klick wählt ein Teil."></canvas>
+      <svg class="bp-overlay" id="bpOverlay" aria-hidden="true"></svg>
+      <div class="bp-labels" id="bpLabels" aria-hidden="true"></div>
+      <div class="bp-scan" id="bpScan" hidden aria-hidden="true"><span></span></div>
+      <div class="bp-empty" id="bpEmpty">
+        <b>Der Tisch ist frei</b>
+        <span>Sagen Sie „Generiere einen Iron-Man-Helm“ oder schreiben Sie unten, was ich konstruieren soll.</span>
+      </div>
+      <div class="bp-gizmo" aria-hidden="true"><canvas id="bpGizmo" width="96" height="96"></canvas></div>
+      <div class="bp-help" id="bpHelp">Ziehen: drehen · Rad: zoomen · Rechts ziehen: verschieben · Doppelklick: Teil heranholen</div>
+    </div>
+
+    <header class="bp-top">
+      <button type="button" class="ws-back bp-back" id="bpBack" title="Zurück zu Jarvis (Esc)">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>
+        <span>Jarvis</span>
+      </button>
+      <div class="bp-title">
+        <span class="bp-kicker">Blueprint · Stark Industries</span>
+        <h1 id="bpName">Neue Konstruktion</h1>
+      </div>
+      <span class="bp-chip" id="bpChip" data-state="idle"><i aria-hidden="true"></i><span id="bpChipText">Bereit</span></span>
+      <div class="bp-actions">
+        <button type="button" class="bp-btn" id="bpNew" title="Den Tisch freiräumen (Rückgängig geht)">Neu</button>
+        <button type="button" class="bp-btn" id="bpLibraryBtn" title="Gespeicherte Blueprints">Gespeichert</button>
+        <button type="button" class="bp-btn" id="bpSave" title="Das Modell speichern">Speichern</button>
+        <button type="button" class="bp-btn" id="bpExport" title="Als STL-Datei für den 3D-Drucker speichern">STL</button>
+        <button type="button" class="bp-btn" id="bpBlender" title="Als .blend-Datei in Blender öffnen und dort weiterbauen">Blender</button>
+        <button type="button" class="bp-btn primary" id="bpRender" title="Blender macht ein fotorealistisches Bild vom Modell (oder sagen Sie „Render das“)">Foto</button>
+      </div>
+    </header>
+
+    <aside class="bp-panel bp-parts" aria-labelledby="bpPartsHead">
+      <h2 class="bp-h" id="bpPartsHead"><span class="bp-no">A</span>Teile<span class="bp-count" id="bpPartCount"></span></h2>
+      <ol class="bp-tree" id="bpTree"></ol>
+      <p class="bp-hint" id="bpTreeEmpty">Noch keine Teile. Jarvis zeichnet sie hier ein, sobald er konstruiert.</p>
+    </aside>
+
+    <aside class="bp-panel bp-controls" aria-labelledby="bpCtrlHead">
+      <h2 class="bp-h" id="bpCtrlHead"><span class="bp-no">B</span>Steuerung</h2>
+      <div class="bp-group" role="group" aria-label="Darstellung">
+        <span class="bp-label">Darstellung</span>
+        <div class="bp-seg" id="bpLook">
+          <button type="button" data-look="holo" aria-pressed="true" title="Leuchtendes Hologramm wie in Tony Starks Werkstatt">Holo</button>
+          <button type="button" data-look="echt" aria-pressed="false" title="Echte Farben und Material">Echt</button>
+          <button type="button" data-look="blau" aria-pressed="false" title="Weiße Linien auf Blaupausen-Papier">Papier</button>
+        </div>
+      </div>
+      <div class="bp-group" role="group" aria-label="Ansicht">
+        <span class="bp-label">Ansicht</span>
+        <div class="bp-seg" id="bpViews">
+          <button type="button" data-side="perspektive" title="Schräg von vorne (1)">3D</button>
+          <button type="button" data-side="vorne" title="Von vorne (2)">Vorne</button>
+          <button type="button" data-side="seite" title="Von der Seite (3)">Seite</button>
+          <button type="button" data-side="oben" title="Von oben (4)">Oben</button>
+        </div>
+      </div>
+      <div class="bp-toggles">
+        <button type="button" class="bp-toggle" id="bpSpin" aria-pressed="false" title="Langsam drehen lassen (R)">Drehen</button>
+        <button type="button" class="bp-toggle" id="bpExplode" aria-pressed="false" title="Explosionsansicht: alle Baugruppen auseinander (E)">Explosion</button>
+        <button type="button" class="bp-toggle" id="bpLabelsBtn" aria-pressed="false" title="Namen der Baugruppen anzeigen (L)">Namen</button>
+        <button type="button" class="bp-toggle" id="bpDims" aria-pressed="true" title="Maßlinien anzeigen (M)">Maße</button>
+      </div>
+      <div class="bp-row">
+        <button type="button" class="bp-btn" id="bpSmaller" title="Kleiner (−)">Kleiner</button>
+        <button type="button" class="bp-btn" id="bpBigger" title="Größer (+)">Größer</button>
+      </div>
+      <div class="bp-row">
+        <button type="button" class="bp-btn" id="bpUndo" title="Rückgängig (Strg+Z)">Rückgängig</button>
+        <button type="button" class="bp-btn" id="bpRedo" title="Wiederholen (Strg+Y)">Wiederholen</button>
+      </div>
+      <section class="bp-sel" id="bpSel" hidden aria-label="Ausgewähltes Teil">
+        <span class="bp-label">Ausgewählt</span>
+        <b id="bpSelName">Teil</b>
+        <small id="bpSelInfo"></small>
+        <div class="bp-swatches" id="bpSwatches" role="group" aria-label="Farbe"></div>
+        <div class="bp-row">
+          <button type="button" class="bp-btn" id="bpSelFocus">Heranholen</button>
+          <button type="button" class="bp-btn" id="bpSelHide">Ausblenden</button>
+          <button type="button" class="bp-btn danger" id="bpSelRemove">Entfernen</button>
+        </div>
+      </section>
+    </aside>
+
+    <footer class="bp-foot">
+      <div class="bp-console" aria-live="polite">
+        <span class="bp-who">J.A.R.V.I.S.</span>
+        <p id="bpSay">Bereit, Sir. Was soll ich bauen?</p>
+        <span class="bp-mic" id="bpMic" data-state="idle" title="Am Blueprint hört Jarvis nach jeder Antwort ohne „Hey Jarvis“ weiter zu"><i aria-hidden="true"></i><span id="bpMicText">Sag „Jarvis“</span></span>
+      </div>
+      <form class="bp-cmd" id="bpCmd" autocomplete="off">
+        <label class="bp-cmd-label" for="bpInput">Befehl</label>
+        <input id="bpInput" type="text" maxlength="600" spellcheck="false"
+               placeholder="Generiere einen Iron-Man-Helm · Mach die Flügel länger · Explosionsansicht">
+        <button type="submit" class="bp-btn primary" id="bpSend" disabled>Los</button>
+      </form>
+      <div class="bp-chips" id="bpChips" role="group" aria-label="Beispiele">
+        <button type="button">Generiere einen Iron-Man-Helm</button>
+        <button type="button">Bau mir eine Drohne</button>
+        <button type="button">Explosionsansicht</button>
+        <button type="button">Mach das größer</button>
+        <button type="button">Dreh es um 90 Grad</button>
+      </div>
+      <dl class="bp-block" aria-label="Schriftfeld">
+        <div class="bp-block-wide"><dt>Benennung</dt><dd id="bpBlockName">–</dd></div>
+        <div><dt>Maße</dt><dd id="bpBlockSize">–</dd></div>
+        <div><dt>Teile</dt><dd id="bpBlockParts">0</dd></div>
+        <div><dt>Datum</dt><dd id="bpBlockDate">–</dd></div>
+        <div><dt>Gezeichnet</dt><dd>J.A.R.V.I.S.</dd></div>
+        <div><dt>Blatt</dt><dd>1 / 1</dd></div>
+      </dl>
+    </footer>
+
+    <div class="bp-library" id="bpLibrary" hidden role="dialog" aria-labelledby="bpLibHead">
+      <header><h2 id="bpLibHead">Gespeicherte Blueprints</h2><button type="button" class="bp-btn" id="bpLibClose">Schließen</button></header>
+      <ol id="bpLibList"></ol>
+      <p class="bp-hint" id="bpLibEmpty">Noch nichts gespeichert. „Speicher das als …“ legt einen Blueprint an.</p>
+      <button type="button" class="bp-btn" id="bpFolder">Ordner öffnen</button>
+    </div>
+
+    <!-- Foto aus Blender: Fortschritt, dann das Bild -->
+    <div class="bp-photo" id="bpPhoto" hidden role="dialog" aria-labelledby="bpPhotoHead">
+      <header>
+        <div class="bp-photo-title">
+          <span class="bp-kicker">Blender · Fotostudio</span>
+          <h2 id="bpPhotoHead">Foto</h2>
+        </div>
+        <button type="button" class="bp-btn" id="bpPhotoClose" title="Zurück zum Modell (Esc)">Schließen</button>
+      </header>
+      <div class="bp-photo-frame">
+        <img id="bpPhotoImg" alt="Fotorealistisches Bild des Modells aus Blender" hidden>
+        <div class="bp-photo-wait" id="bpPhotoWait">
+          <b id="bpPhotoState">Blender rendert …</b>
+          <div class="bp-photo-bar" id="bpPhotoBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+          <small id="bpPhotoInfo">Mit Grafikkarte dauert es Sekunden, nur mit Prozessor bis zu zwei Minuten. Sie können derweil weiterbauen.</small>
+        </div>
+      </div>
+      <footer>
+        <small id="bpPhotoMeta"></small>
+        <div class="bp-row">
+          <button type="button" class="bp-btn" id="bpPhotoFolder" title="Der Ordner mit allen Fotos (PNG)">Ordner öffnen</button>
+          <button type="button" class="bp-btn" id="bpPhotoBlender" title="Das Modell mit Licht und Kamera in Blender öffnen">In Blender öffnen</button>
+          <button type="button" class="bp-btn primary" id="bpPhotoAgain" title="Das Modell, wie es jetzt ist, noch einmal rendern">Neu rendern</button>
+        </div>
+      </footer>
+    </div>
+  </section>
+
+  <!-- Werkstatt: alle Projekte -->
+  <section class="ws hub" id="hub" aria-label="Werkstatt-Projekte" hidden>
+    <header class="ws-top">
+      <button type="button" class="ws-back" id="hubBack" title="Zurück zu Jarvis (Esc)">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H6M11 6l-6 6 6 6"/></svg>
+        <span>Jarvis</span>
+      </button>
+      <div class="ws-title">
+        <span class="ws-kicker">Werkstatt</span>
+        <h1 class="ws-task">Projekte</h1>
+      </div>
+      <div class="ws-status"><span class="hub-count" id="hubCount"></span></div>
+      <div class="ws-actions">
+        <button type="button" class="ws-btn" id="hubJob" hidden title="Den laufenden Auftrag ansehen">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5a4 4 0 0 0 5 5l-8.8 8.8a2.1 2.1 0 0 1-3-3l8.8-8.8a4 4 0 0 0-2-2z"/></svg>
+          <span id="hubJobText">Laufender Auftrag</span>
+        </button>
+      </div>
+    </header>
+    <div class="hub-body">
+      <form class="hub-new" id="hubNew" autocomplete="off">
+        <label class="hub-new-label" for="hubNewInput">Neuer Auftrag</label>
+        <div class="hub-new-row">
+          <input id="hubNewInput" type="text" maxlength="1500" spellcheck="false"
+                 placeholder="Was soll ich bauen? Zum Beispiel: einen Discord-Bot, der jeden Morgen das Wetter postet">
+          <button type="submit" class="ws-btn primary" id="hubNewBtn" disabled>Bauen</button>
+        </div>
+        <small class="hub-hint">Große Aufträge (Spiele, Apps mit Login, Shops) baut Jarvis mit Opus, kleine mit Sonnet. „Gründlich“ nimmt immer Opus.</small>
+      </form>
+      <div class="hub-grid" id="hubGrid" role="list"></div>
+      <div class="hub-empty" id="hubEmpty" hidden>
+        <b>Noch keine Projekte</b>
+        <span>Sagen Sie „Hey Jarvis, bau mir …“ oder schreiben Sie oben einen Auftrag. Jedes Projekt bekommt einen eigenen Ordner.</span>
+      </div>
+
+      <section class="labor" id="labor" aria-labelledby="laborHead">
+        <header class="labor-head">
+          <div>
+            <h2 id="laborHead">Labor: Jarvis' eigene Werkzeuge</h2>
+            <p class="hub-hint">Hier baut und testet Jarvis seine eigenen Werkzeuge, mit eigenem Python, ohne Ihre Schlüssel und mit Zeitlimit. Benutzen darf er nur, was alle Tests besteht und freigegeben ist.</p>
+          </div>
+          <button type="button" class="ws-btn" id="laborOpen">Labor-Ordner</button>
+        </header>
+        <div class="labor-grid" id="laborGrid" role="list"></div>
+        <p class="hub-empty labor-empty" id="laborEmpty" hidden><b>Noch keine eigenen Werkzeuge</b><span>Sagen Sie zum Beispiel „Bau dir ein Werkzeug, das mir das Regenradar für Wien sagt“. Jarvis baut es im Labor, testet es und benutzt es danach selbst.</span></p>
+        <div class="labor-runs-box" id="laborRunsBox" hidden>
+          <h3 class="labor-sub">Zuletzt im Labor</h3>
+          <ol class="labor-runs" id="laborRuns"></ol>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- Jarvis aufs Handy -->
+  <div class="dlg-shade" id="phoneShade" hidden></div>
+  <section class="dlg" id="phoneDlg" role="dialog" aria-modal="true" aria-labelledby="phoneTitle" hidden>
+    <header class="dlg-head">
+      <div>
+        <span class="dlg-kicker">Jarvis überall</span>
+        <h2 id="phoneTitle">Verbinden</h2>
+      </div>
+      <button type="button" class="icon-btn" id="phoneClose" aria-label="Schließen">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+    <div class="dlg-tabs" role="tablist" aria-label="Verbindungen">
+      <button type="button" role="tab" data-pane="phone" aria-selected="true">Handy</button>
+      <button type="button" role="tab" data-pane="telegram" aria-selected="false">Telegram</button>
+      <button type="button" role="tab" data-pane="alexa" aria-selected="false">Alexa</button>
+      <button type="button" role="tab" data-pane="konnektoren" aria-selected="false">Konnektoren</button>
+    </div>
+    <div class="dlg-pane" data-pane="phone">
+    <label class="row toggle-row dlg-row">
+      <span class="row-text">
+        <b id="phoneState">Aus</b>
+        <small>Ihr Handy steuert Jarvis im selben WLAN: schreiben, diktieren, Schnellaktionen, Werkstatt.</small>
+      </span>
+      <input type="checkbox" class="sr-input" id="phoneToggle"><span class="switch" aria-hidden="true"></span>
+    </label>
+    <div class="dlg-pair" id="phonePair" hidden>
+      <div class="qr" id="phoneQr" aria-label="QR-Code zum Koppeln"></div>
+      <ol class="dlg-steps">
+        <li><b>Kamera aufs Bild halten</b><span>und den Link öffnen. Das Handy merkt sich den Schlüssel.</span></li>
+        <li><b>Zum Startbildschirm hinzufügen</b><span>im Browser-Menü (iPhone: Teilen). Dann ist Jarvis eine App.</span></li>
+        <li><b>Sprechen</b><span>mit dem Mikrofon auf der Handy-Tastatur, mit sicherer Verbindung (unten) auch direkt in der App.</span></li>
+      </ol>
+      <div class="dlg-url">
+        <code id="phoneUrl"></code>
+        <button type="button" class="btn small ghost" id="phoneCopy">Kopieren</button>
+      </div>
+      <div class="row dlg-row ts-row">
+        <span class="row-text">
+          <b id="tsState">Sicher von überall: aus</b>
+          <small id="tsHint">Mit Tailscale (kostenlos) geht die App auch unterwegs, über eine verschlüsselte Adresse. Dann gibt es in der App eine Sprechtaste und sie lässt sich als echte App installieren.</small>
+        </span>
+        <span class="ts-actions">
+          <button type="button" class="btn small ghost" id="tsHelp" hidden>Tailscale holen</button>
+          <button type="button" class="btn small" id="tsToggle">Einschalten</button>
+        </span>
+      </div>
+      <p class="dlg-note">Fragt Windows nach der Firewall, „Zulassen“ wählen. Tailscale braucht es auf PC und Handy, mit demselben Konto.</p>
+      <p class="dlg-note" id="phoneMac" hidden></p>
+      <button type="button" class="link-btn" id="phoneWol">PC fürs Einschalten per Netzwerk vorbereiten (fragt nach Administratorrechten)</button>
+      <button type="button" class="link-btn" id="phoneNew">Neu koppeln (alte Handys ausschließen)</button>
+    </div>
+    <div class="dlg-push">
+      <label class="row toggle-row dlg-row">
+        <span class="row-text">
+          <b id="pushState">Benachrichtigungen: aus</b>
+          <small>Erinnerungen und „Aus der Werkstatt“ kommen aufs Handy, wenn Sie nicht am PC sitzen. Mit der kostenlosen App ntfy.</small>
+        </span>
+        <input type="checkbox" class="sr-input" id="pushToggle"><span class="switch" aria-hidden="true"></span>
+      </label>
+      <div id="pushSetup" hidden>
+        <ol class="dlg-steps">
+          <li><b>App „ntfy“ installieren</b><span>Kostenlos im App Store oder bei Google Play.</span></li>
+          <li><b>Kanal abonnieren</b><span>In der App auf „+“ tippen und genau diesen Namen eintragen.</span></li>
+          <li><b>Testen</b><span>Dann kommt sofort eine Nachricht von Jarvis.</span></li>
+        </ol>
+        <div class="dlg-url">
+          <code id="pushTopic"></code>
+          <button type="button" class="btn small ghost" id="pushCopy">Kopieren</button>
+          <button type="button" class="btn small" id="pushTest">Test schicken</button>
+        </div>
+        <p class="dlg-note">Der Kanalname ist geheim und zufällig. Die Nachrichten selbst laufen unverschlüsselt über ntfy.sh, wie eine SMS.</p>
+      </div>
+    </div>
+    </div>
+    <div class="dlg-pane" data-pane="telegram" hidden>
+      <div class="row dlg-row">
+        <span class="row-text">
+          <b id="tgState">Aus</b>
+          <small>Von überall schreiben, Sprachnachrichten, Fotos oder den Standort schicken, ohne Tailscale und ohne App-Store. Jarvis antwortet mit Text und in seiner Stimme und meldet sich von selbst, wenn Sie nicht am PC sind.</small>
+        </span>
+        <button type="button" class="btn small ghost" id="tgOff" hidden>Ausschalten</button>
+      </div>
+      <div id="tgSetup">
+        <ol class="dlg-steps tg-steps">
+          <li><b>Bot anlegen</b><span>In Telegram den @BotFather öffnen, „/newbot“ schicken, einen Namen und einen Benutzernamen wählen (endet auf „bot“). Er schickt einen Schlüssel.</span>
+            <button type="button" class="btn small" id="tgFather">@BotFather öffnen</button></li>
+          <li><b>Schlüssel hier einfügen</b><span>Die lange Zeile mit Zahl und Doppelpunkt, zum Beispiel 123456789:AAH…</span></li>
+        </ol>
+        <form class="dlg-url tg-form" id="tgForm" autocomplete="off">
+          <input id="tgToken" type="password" spellcheck="false" placeholder="Schlüssel vom @BotFather" aria-label="Schlüssel vom BotFather">
+          <button type="submit" class="btn small" id="tgSave">Prüfen und verbinden</button>
+        </form>
+      </div>
+      <div class="dlg-pair" id="tgPair" hidden>
+        <div class="qr" id="tgQr" aria-label="QR-Code zum Verbinden mit Telegram"></div>
+        <ol class="dlg-steps">
+          <li><b>Kamera aufs Bild halten</b><span>oder den Link unten auf dem Handy öffnen. Telegram geht auf.</span></li>
+          <li><b>„Starten“ tippen</b><span>Ab dann gehört der Bot nur diesem Chat. Hier steht gleich „Verbunden“.</span></li>
+        </ol>
+        <div class="dlg-url">
+          <code id="tgLink"></code>
+          <button type="button" class="btn small ghost" id="tgCopy">Kopieren</button>
+        </div>
+        <p class="dlg-note" id="tgCode"></p>
+      </div>
+      <div id="tgReady" hidden>
+        <label class="row toggle-row dlg-row">
+          <span class="row-text">
+            <b>Antworten auch als Sprachnachricht</b>
+            <small>Auf eine Sprachnachricht antwortet Jarvis zusätzlich in seiner eigenen Stimme.</small>
+          </span>
+          <input type="checkbox" class="sr-input" id="tgVoice"><span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="row toggle-row dlg-row">
+          <span class="row-text">
+            <b>Hinweise als Sprachnachricht</b>
+            <small>Erinnerungen, Hinweise und das Briefing kommen zusätzlich gesprochen, wie ein kurzer Anruf von Jarvis.</small>
+          </span>
+          <input type="checkbox" class="sr-input" id="tgVoiceNotes"><span class="switch" aria-hidden="true"></span>
+        </label>
+        <label class="row toggle-row dlg-row">
+          <span class="row-text">
+            <b>Standort für die Einkaufsliste</b>
+            <small>Schicken Sie Ihren Standort, nennt Jarvis den nächsten Supermarkt. Mit Live-Standort meldet er sich unterwegs, wenn Sie an einem vorbeikommen und etwas auf der Liste steht.</small>
+          </span>
+          <input type="checkbox" class="sr-input" id="tgPlaces"><span class="switch" aria-hidden="true"></span>
+        </label>
+        <div class="dlg-url">
+          <button type="button" class="btn small" id="tgTest">Test schicken</button>
+          <button type="button" class="btn small ghost" id="tgNew">Anderes Handy verbinden</button>
+        </div>
+      </div>
+      <p class="dlg-note">Die Nachrichten laufen über die Server von Telegram, die Supermarkt-Suche über OpenStreetMap (nur der Standort). Fremde Chats bekommen von Jarvis nur „Dieser Jarvis gehört jemand anderem“. Den Schlüssel nie weitergeben.</p>
+    </div>
+    <div class="dlg-pane" data-pane="alexa" hidden>
+      <label class="row toggle-row dlg-row">
+        <span class="row-text">
+          <b id="alexaState">Aus</b>
+          <small>„Alexa, sag Jarvis, er soll Discord öffnen.“ Ihr eigener Alexa-Skill, ohne Home Assistant und ohne Router-Einstellungen.</small>
+        </span>
+        <input type="checkbox" class="sr-input" id="alexaToggle"><span class="switch" aria-hidden="true"></span>
+      </label>
+      <div class="dlg-alexa" id="alexaSetup" hidden>
+        <ol class="dlg-steps alexa-steps">
+          <li><b>Entwicklerkonsole öffnen</b><span>Mit dem Amazon-Konto anmelden, mit dem auch Ihr Echo läuft.</span>
+            <button type="button" class="btn small" id="alexaConsole">Öffnen</button></li>
+          <li><b>Skill erstellen</b><span>Name „Jarvis“, Sprache Deutsch, Modell „Benutzerdefiniert“, Hosting „Von Alexa gehostet (Python)“, Vorlage „Von Grund auf neu“.</span></li>
+          <li><b>Sprachmodell einfügen</b><span>Links „Interaktionsmodell“, dann „JSON-Editor“: alles ersetzen, „Modell speichern“, „Modell erstellen“.</span>
+            <button type="button" class="btn small" id="alexaModel">Kopieren</button></li>
+          <li><b>Code einfügen</b><span>Oben „Code“, Datei lambda_function.py: alles ersetzen, „Speichern“, dann „Bereitstellen“.</span>
+            <button type="button" class="btn small" id="alexaCode">Kopieren</button></li>
+          <li><b>Testen einschalten</b><span>Oben „Test“: „Entwicklung“ wählen. Fertig. Sagen Sie: „Alexa, sag Jarvis, er soll Spotify öffnen.“</span></li>
+        </ol>
+        <div class="dlg-url">
+          <span class="alexa-link" id="alexaLink">Verbindung wird aufgebaut …</span>
+          <button type="button" class="btn small ghost" id="alexaTest">Verbindung testen</button>
+        </div>
+        <p class="dlg-note">Der Skill gehört nur Ihnen und läuft nur auf Ihren Echos. Die Nachrichten laufen verschlüsselt über ntfy.sh. Antwortet Jarvis nicht innerhalb von sechs Sekunden, sagt Alexa „Ich kümmere mich darum“ und Jarvis macht weiter.</p>
+      </div>
+    </div>
+    <div class="dlg-pane" data-pane="konnektoren" hidden>
+      <div class="row dlg-row">
+        <span class="row-text">
+          <b id="konnState">Noch keine gesehen</b>
+          <small>Termine, Mails, Shop und mehr laufen über die Dienste, die Sie auf claude.ai verbunden haben (Gmail, Google Kalender, Shopify, Spotify …). Ohne Passwörter in Jarvis. Löschen, Kaufen und Veröffentlichen lässt Jarvis darüber nicht zu.</small>
+        </span>
+        <button type="button" class="btn small ghost" id="konnRefresh">Neu prüfen</button>
+      </div>
+      <ul class="konn-list" id="konnList" aria-label="Ihre Konnektoren"></ul>
+      <div class="dlg-row">
+        <span class="row-text">
+          <b>Neuen Dienst verbinden</b>
+          <small>Auf claude.ai unter Einstellungen > Konnektoren. Danach weiß Jarvis beim nächsten Gespräch davon. Fehlen alle: einmal in der Eingabeaufforderung <code>claude</code> starten und <code>/login</code> eingeben.</small>
+        </span>
+        <button type="button" class="btn small" id="konnHelp">Öffnen</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Verlauf als Schublade -->
+  <div class="drawer-shade" id="drawerShade" hidden></div>
+  <aside class="drawer" id="drawer" aria-label="Verlauf" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Verlauf</h2>
+      <div class="drawer-actions">
+        <button type="button" class="btn small ghost" id="newBtn" title="Neue Unterhaltung: Jarvis vergisst das bisherige Gespräch">Neu beginnen</button>
+        <button type="button" class="icon-btn" id="historyClose" aria-label="Verlauf schließen">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <ol class="history" id="history"></ol>
+    <p class="empty" id="historyEmpty">Noch keine Unterhaltung.</p>
+  </aside>
+
+  <!-- Gedächtnis als Schublade -->
+  <div class="drawer-shade" id="memShade" hidden></div>
+  <aside class="drawer mem-drawer" id="memDrawer" aria-label="Gedächtnis" aria-hidden="true">
+    <div class="drawer-head">
+      <h2>Gedächtnis</h2>
+      <button type="button" class="icon-btn" id="memClose" aria-label="Gedächtnis schließen">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="mem-body">
+      <form class="mem-add" id="memAdd" autocomplete="off">
+        <input id="memInput" type="text" maxlength="300" placeholder="Merk dir … (z. B. Max hat am 3. Mai Geburtstag)" aria-label="Etwas, das Jarvis sich merken soll">
+        <button type="submit" class="btn small primary">Merken</button>
+      </form>
+      <section class="mem-section">
+        <h3>Eigene Befehle</h3>
+        <p class="mem-hint">Ein Wort für mehrere Befehle. Sagen oder schreiben Sie oben: „Wenn ich Zockmodus sage, öffne Discord und Steam“.</p>
+        <ul class="mem-list" id="memCommands"></ul>
+        <p class="empty" id="memCommandsEmpty">Noch keine. Danach reicht „Zockmodus“, und Jarvis erledigt alles auf einmal.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Zeitpläne</h3>
+        <p class="mem-hint">Was Jarvis regelmäßig von selbst erledigt. Sagen Sie zum Beispiel „Jeden Morgen um 8 Uhr Briefing“ oder „Werktags um 18 Uhr öffne Discord“.</p>
+        <ul class="mem-list" id="memSchedules"></ul>
+        <p class="empty" id="memSchedulesEmpty">Noch keine. Läuft ein Spiel im Vollbild, wartet Jarvis damit.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Gewohnheiten</h3>
+        <p class="mem-hint">Was Sie ungefähr zur selben Zeit tun. Jarvis erwähnt es zur passenden Zeit nebenbei in einer Antwort („Übrigens, Sir: …“).</p>
+        <ul class="mem-list" id="memRoutines"></ul>
+        <p class="empty" id="memRoutinesEmpty">Noch keine. Nach ein paar Tagen erkennt Jarvis, was Sie regelmäßig öffnen.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Geburtstage</h3>
+        <p class="mem-hint">Jarvis erinnert Sie am Tag selbst und bietet an zu gratulieren.</p>
+        <ul class="mem-list" id="memBirthdays"></ul>
+        <p class="empty" id="memBirthdaysEmpty">Noch keine. Sagen Sie „Merk dir, Max hat am 3. Mai Geburtstag“.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Kontakte</h3>
+        <p class="mem-hint">Mit wem Sie über welche App schreiben. „Sag Max …“ nimmt dann die richtige App.</p>
+        <div class="mem-chips" id="memContacts"></div>
+        <p class="empty" id="memContactsEmpty">Noch keine Nachrichten verschickt.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Fähigkeiten</h3>
+        <p class="mem-hint">Anleitungen, die Jarvis nur liest, wenn er sie braucht. Zeigen Sie ihm etwas und sagen „Lern das“, dann kommt eine dazu (mit Stern).</p>
+        <ul class="mem-list" id="memSkills"></ul>
+        <p class="empty" id="memSkillsEmpty">Keine Fähigkeiten gefunden.</p>
+      </section>
+      <section class="mem-section">
+        <h3>Notizbuch</h3>
+        <p class="mem-hint">Jedes Gespräch, Berichte und Notizen als Textdateien. In Obsidian (kostenlos) als Tresor geöffnet, ist alles verlinkt.</p>
+        <button type="button" class="btn small" id="memNotebook">Notizbuch öffnen</button>
+      </section>
+      <section class="mem-section">
+        <h3>Was Jarvis über Sie weiß</h3>
+        <p class="mem-hint">Was Sie gesagt haben und was Jarvis jede Nacht aus den Gesprächen lernt. × löscht es.</p>
+        <ul class="mem-list facts" id="memFacts"></ul>
+        <p class="empty" id="memFactsEmpty">Noch nichts. Sagen Sie „Merk dir, …“ oder schreiben Sie es oben hinein.</p>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Peitsche und Lob (antreiber.js) -->
+  <canvas class="tool-layer" id="toolLayer" aria-hidden="true" hidden></canvas>
+  <div class="pat-hand" id="patHand" aria-hidden="true" hidden>
+    <svg viewBox="0 0 56 60"><path d="M17 31V12a4 4 0 0 1 8 0v15M25 26V8a4 4 0 0 1 8 0v18M33 26V11a4 4 0 0 1 8 0v22c0 13-7 22-17 22-7 0-11-3-15-9l-6-9a4 4 0 0 1 6.5-4.6L17 37" fill="#f5c9a4" stroke="#7a4a2a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+  </div>
+  <div class="tool-hint" id="toolHint" role="status" hidden></div>
+  <button type="button" class="slow-chip" id="slowChip" hidden title="Jarvis braucht gerade länger. Mit der Peitsche antworten seine nächsten Aufgaben eine Viertelstunde lang flotter.">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20 9 13"/><path d="M9 13c3-6 9-8 11-5 2 3-3 6-6 4"/></svg>
+    <span>Dauert es? Antreiben</span>
+  </button>
+
+  <!-- Trailer aus dem Steam-Shop ("Zeig mir den Trailer", stream.py) -->
+  <section class="trailer" id="trailer" role="dialog" aria-modal="true" aria-labelledby="trailerTitle" hidden>
+    <div class="trailer-box">
+      <header class="trailer-head">
+        <b id="trailerTitle">Trailer</b>
+        <button type="button" class="icon-btn" id="trailerClose" title="Schließen (Esc)">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          <span class="sr-only">Trailer schließen</span>
+        </button>
+      </header>
+      <video class="trailer-video" id="trailerVideo" controls playsinline></video>
+    </div>
+  </section>
+
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+
+  <script src="werkstatt.js"></script>
+  <script src="blaupause.js"></script>
+  <script src="weltlage.js"></script>
+  <script src="handsteuerung.js"></script>
+  <script src="projekte.js"></script>
+  <script src="koppeln.js"></script>
+  <script src="gedaechtnis.js"></script>
+  <script src="orb.js"></script>
+  <script src="plasma.js"></script>
+  <script src="kern.js"></script>
+  <script src="zentrale.js"></script>
+  <script src="system.js"></script>
+  <script src="antreiber.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

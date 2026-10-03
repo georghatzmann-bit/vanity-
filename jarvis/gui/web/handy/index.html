@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0f17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Jarvis">
+  <title>Jarvis</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="handy.css">
+</head>
+<body data-view="talk" data-link="wait">
+  <!-- Kopf: wer, Zustand, Wetter -->
+  <header class="top">
+    <div class="brand">
+      <canvas class="orb" id="orb" aria-hidden="true"></canvas>
+      <div class="brand-text">
+        <b>Jarvis</b>
+        <small id="stateText">Verbinde …</small>
+      </div>
+    </div>
+    <div class="top-side">
+      <span class="weather" id="weather" hidden></span>
+      <button type="button" class="ton-btn" id="speakBtn" aria-label="Wo Jarvis antwortet">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+        <span id="speakText">Handy</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Koppeln: ohne Schlüssel geht nichts -->
+  <section class="pair" id="pair" hidden>
+    <canvas class="orb big" aria-hidden="true"></canvas>
+    <h1>Mit Jarvis verbinden</h1>
+    <p>Öffne am PC das Jarvis-Fenster, klick oben auf <b>Verbinden</b> und scanne den QR-Code mit der Kamera.</p>
+    <p class="hint">Handy und PC müssen im selben WLAN sein.</p>
+  </section>
+
+  <!-- Umschalter -->
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Bereiche">
+    <button type="button" role="tab" data-tab="talk" aria-selected="true">Gespräch</button>
+    <button type="button" role="tab" data-tab="quick" aria-selected="false">Schnell</button>
+    <button type="button" role="tab" data-tab="shop" aria-selected="false">Werkstatt</button>
+  </nav>
+
+  <main class="views">
+    <!-- Gespräch -->
+    <section class="view talk" data-view="talk" aria-label="Gespräch">
+      <ol class="feed" id="feed" aria-live="polite"></ol>
+      <div class="empty" id="feedEmpty">
+        <b>Sag Jarvis, was er tun soll</b>
+        <span>Tipp unten und sprich mit dem Mikrofon deiner Tastatur. Zum Beispiel:</span>
+        <div class="chips">
+          <button type="button" class="chip" data-say="Öffne Spotify">Öffne Spotify</button>
+          <button type="button" class="chip" data-say="Wie wird das Wetter morgen?">Wetter morgen</button>
+          <button type="button" class="chip" data-say="Sag Max, dass ich gleich online komme">Max Bescheid sagen</button>
+          <button type="button" class="chip" data-say="Was weißt du über mich?">Was weißt du über mich?</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Schnellaktionen -->
+    <section class="view quick" data-view="quick" aria-label="Schnellaktionen" hidden>
+      <div class="grid" id="quickGrid"></div>
+    </section>
+
+    <!-- Werkstatt -->
+    <section class="view shop" data-view="shop" aria-label="Werkstatt" hidden>
+      <div class="job" id="job" hidden>
+        <div class="job-head"><b id="jobTask"></b><span class="pill" id="jobState"></span></div>
+        <div class="bar" aria-hidden="true"><span id="jobBar"></span></div>
+        <small id="jobHint"></small>
+      </div>
+      <ol class="projects" id="projects"></ol>
+      <div class="empty" id="projectsEmpty" hidden>
+        <b>Noch keine Projekte</b>
+        <span>Schreib zum Beispiel „Bau mir einen Discord-Bot, der würfelt“.</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Eingabe -->
+  <form class="composer" id="composer" autocomplete="off">
+    <button type="button" class="mic" id="mic" aria-label="Sprechen" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></svg>
+    </button>
+    <textarea id="input" rows="1" maxlength="2000" placeholder="Schreib oder diktier Jarvis etwas …" aria-label="Nachricht an Jarvis"></textarea>
+    <button type="submit" class="send" id="send" aria-label="Senden" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+    </button>
+    <button type="button" class="stop" id="stop" aria-label="Stopp" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+    </button>
+  </form>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="orb.js"></script>
+  <script src="handy.js"></script>
+</body>
+</html>

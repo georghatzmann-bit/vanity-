@@ -1,0 +1,394 @@
+# Jarvis Einstellungen. Die Installation kopiert diese Datei nach config.toml,
+# dort kannst du alles anpassen. Was in config.toml fehlt, kommt von hier.
+
+[ich]
+# Dein Vorname, damit Jarvis weiß, mit wem er spricht (leer = Georg). Wie er dich anspricht, steht bei anrede.
+name = ""
+# Wie Jarvis dich anspricht: "Sir" wie im Film, "Chef" wie im Video oder ein eigenes Wort.
+# Per Sprache: "Nenn mich Chef", "Nenn mich wieder Sir".
+anrede = "Sir"
+# "butler" = ruhig und förmlich wie im Film, "locker" = warm und alltäglich wie ein persönlicher Assistent.
+# Per Sprache: "Sprich lockerer", "Sei wieder förmlich".
+ton = "butler"
+# Dein Wohnort, damit Jarvis beim Wetter weiß, wo du bist (z. B. "Wien"). Das Fenster zeigt dann auch das aktuelle Wetter.
+ort = ""
+# Was Jarvis sonst über dich wissen soll, in einem Satz (optional).
+notizen = ""
+
+[wakeword]
+# Fertiges openWakeWord-Modell, "Hey Jarvis" auf Englisch ausgesprochen.
+model = "hey_jarvis"
+# 0.0 bis 1.0. Höher = seltener aus Versehen aktiv, aber schwerer auszulösen.
+# Wenn Jarvis öfter "fast erkannt" meldet, hier z. B. 0.35 eintragen.
+threshold = 0.5
+# Kostenloser Schlüssel von console.picovoice.ai: Dann reicht auch "Jarvis" allein, ganz sicher.
+# Am einfachsten in der Einrichtung beim Mikrofon eintragen.
+picovoice_key = ""
+# true = Auch ohne Schlüssel versucht Jarvis, "Jarvis", "Hallo Jarvis" und "Okay Jarvis" zu erkennen:
+# Klingt etwas halb nach seinem Namen, prüft er kurz per Spracherkennung, ob der Name vorn steht.
+name_allein = true
+
+[audio]
+# Welches Mikrofon Jarvis nutzt. Leer = Windows-Standardmikrofon.
+# Am einfachsten in der Einrichtung auswählen (Zahnrad im Jarvis-Fenster).
+input_device = ""
+
+[mute]
+# Tastenkürzel, das das Mikrofon aus- und wieder einschaltet (funktioniert überall in Windows).
+hotkey = "ctrl+alt+m"
+# Tastenkürzel: Jarvis hört sofort zu, ohne "Hey Jarvis" (wie ein Klick auf den Kreis).
+listen_hotkey = "ctrl+alt+j"
+
+[listen]
+# Wie lange nach dem letzten Wort Stille sein muss, bis Jarvis loslegt (Sekunden), bei
+# kurzen Befehlen. Redest du länger, wartet Jarvis von selbst bis zu 0.8 Sekunden mehr,
+# damit Denkpausen nicht abschneiden. Schneidet er dich trotzdem ab: auf 1.2 erhöhen.
+silence_seconds = 0.9
+# true = eine kleine KI erkennt, wann du sprichst (genauer als nur die Lautstärke).
+vad = true
+# Maximale Länge eines Befehls (Sekunden). Reicht auch für lange Werkstatt-Aufträge.
+max_seconds = 60
+# Wenn nach "Hey Jarvis" so lange nichts gesagt wird, bricht Jarvis ab (Sekunden).
+start_timeout_seconds = 6
+# Mindestlautstärke für Sprache. 0 = automatisch an Hintergrundgeräusche anpassen.
+energy_threshold = 0
+# true = "Hey Jarvis" unterbricht Jarvis, auch während er spricht oder nachdenkt.
+barge_in = true
+# true = Endet Jarvis mit einer Frage ("Soll ich die Datei löschen, Sir?"), hört er danach
+# kurz ohne "Hey Jarvis" zu, damit ein einfaches "Ja" reicht.
+follow_up = true
+# true = Gespräch: Nach jeder Antwort auf einen gesprochenen Befehl hört Jarvis kurz weiter zu
+# (leiser Ton). Dann einfach weiterreden, ohne "Hey Jarvis". Schluss ist nach ein paar Sekunden
+# Stille oder mit "Danke", "Alles klar", "Tschüss". Beim Zocken (Gaming-Modus, Vollbild) nicht.
+gespraech = true
+# So viele Sekunden wartet Jarvis im Gespräch, ob du weiterredest.
+gespraech_sekunden = 8
+# true = Hat ein anderes Programm das Mikrofon offen (Discord, TeamSpeak, ein Spiel mit Sprachchat),
+# hört Jarvis nach einer Antwort nicht ohne Weckwort weiter. "Jarvis" geht weiter.
+sprachchat_erkennen = true
+# true = Vorab-Erkennung: In der ersten kurzen Pause erkennt Jarvis den Satz schon. Ist das ein
+# Sofort-Befehl ("Öffne Spotify", "Lauter"), legt er nach einer halben Sekunde los statt nach einer.
+vorab = true
+
+[stt]
+# "lokal" = auf dem eigenen PC (Standard, geht ohne Internet, nichts verlässt den PC).
+# "auto" = Groq, wenn unten ein Schlüssel steht, sonst lokal. "groq" = immer Groq.
+engine = "lokal"
+# Auf dem eigenen PC: "parakeet" (schnell und genau, kommt mit der lokalen Stimme)
+# oder "whisper" (das Modell unten). Ist Parakeet nicht installiert, nimmt Jarvis Whisper.
+lokal_modell = "parakeet"
+# Kostenloser Schlüssel von https://console.groq.com/keys: Spracherkennung in der Cloud
+# (Whisper large-v3-turbo). Nur für engine = "auto" oder "groq".
+groq_key = ""
+groq_model = "whisper-large-v3-turbo"
+# Für die Erkennung auf dem eigenen PC: tiny, base, small, medium, large-v3. Größer = genauer, aber langsamer.
+model = "small"
+language = "de"
+# "cpu" läuft überall. "cuda" ist schneller, braucht aber eine Nvidia-Karte mit CUDA 12 und cuDNN.
+device = "cpu"
+# 1 = schnell (reicht für kurze Befehle), 5 = gründlicher, aber langsamer.
+beam_size = 1
+
+[tts]
+# "lokal" = Jarvis' natürliche deutsche Stimme auf dem eigenen PC (Standard: gratis, schnell, ohne Internet).
+# "elevenlabs" = Premium-Stimmen von ElevenLabs (kostenpflichtig, Schlüssel unten). Fällt ElevenLabs aus,
+# spricht die lokale Stimme. Eine Windows- oder Microsoft-Stimme gibt es nicht mehr.
+engine = "lokal"
+# Für "lokal": thorsten (deutscher Sprecher, sehr deutlich, bricht nie ab), george (natürlicher, etwas
+# langsamer), charles (am tiefsten), juergen, michael, javert, stuart_bell
+lokal_stimme = "thorsten"
+# "auto" = Jarvis misst einmal, ob der PC das große, deutlichere Stimmmodell flüssig schafft, und nimmt es
+# dann von selbst (640 MB mehr). "beste" = immer das große, "schnell" = immer das kleine (langsame PCs).
+lokal_qualitaet = "auto"
+# ElevenLabs: Schlüssel von https://elevenlabs.io/app/settings/api-keys und die Stimme.
+# Am einfachsten in der Einrichtung (Schritt Stimme), dort gibt es Hörproben.
+elevenlabs_key = ""
+elevenlabs_voice = ""
+elevenlabs_voice_name = ""
+# eleven_v4_turbo = schnellstes und natürlichstes Modell, eleven_flash_v2_5 = Reserve
+elevenlabs_model = "eleven_v4_turbo"
+
+[answer]
+# Braucht Claude länger als so viele Sekunden, sagt Jarvis schon mal "Einen Moment, Sir".
+# 0 = nie.
+ack_after_seconds = 2.0
+
+[rechte]
+# true = volle Freigabe: Jarvis fragt nicht nach, bevor er herunterfährt, neu startet, ein Programm
+# deinstalliert, etwas mit Administratorrechten ausführt oder etwas in den Papierkorb legt.
+# Herunterfahren und Neustart haben 15 Sekunden Vorlauf, "Jarvis, abbrechen" hält sie auf.
+# Nur vor endgültigem Löschen, Formatieren und Käufen fragt Jarvis trotzdem einmal nach.
+volle_freigabe = true
+
+[gedaechtnis]
+# Jarvis merkt sich, was du ihm sagst ("Merk dir, ..."), mit wem du über welche App schreibst
+# und wann du was öffnest. Alles bleibt auf deinem PC (daten\gedaechtnis.json).
+# true = Gewohnheiten zur passenden Zeit anbieten ("Sir, um diese Zeit öffnen Sie meist Discord
+# und Spotify. Soll ich?"). Nie beim Zocken, und "Nie wieder" stellt den Vorschlag ab.
+vorschlaege = true
+# true = Jarvis lernt jede Nacht aus den Gesprächen des Vortags dazu (ein kurzer Aufruf beim kleinen Modell).
+lernen = true
+
+[hinweise]
+# Jarvis meldet sich von selbst, wenn etwas seltsam ist oder du etwas zu vergessen drohst. Er spricht
+# nur, wenn du am PC sitzt und nicht zockst, nie zweimal dasselbe, und "Nie wieder" stellt eine Art ab.
+aktiv = true
+# pc: ein Programm reagiert nicht mehr, Prozessor oder Arbeitsspeicher am Anschlag, Akku fast leer,
+# Grafikkarte sehr heiß
+pc = true
+# internet: die Verbindung ist weg (und wieder da)
+internet = true
+# sicherheit: ein neues Programm startet mit Windows, Windows wartet seit Tagen auf einen Neustart
+sicherheit = true
+# termine: nachmittags, was du heute noch vorhattest ("Ich muss morgen noch zur Post")
+termine = true
+# morgens: kurzer Überblick über den Tag, wenn du morgens an den PC kommst
+morgens = true
+# zurueck: "Während Sie weg waren ...", wenn du nach einer Weile wiederkommst
+zurueck = true
+# pausen: nach so vielen Stunden am Stück eine Pause vorschlagen (pause_nach_stunden = 0: nie)
+pausen = true
+pause_nach_stunden = 3
+
+[local]
+# Uhrzeit, Datum, Lautstärke, Musik pausieren und "Stopp" erledigt Jarvis sofort selbst,
+# ohne Claude zu fragen. Das ist schneller und schont dein Pro-Kontingent.
+enabled = true
+
+[gui]
+# Das Jarvis-Fenster. false = nur Konsolenfenster (wie werkzeuge\Konsole.bat).
+enabled = true
+width = 1280
+height = 800
+# true = Jarvis startet unsichtbar im Hintergrund. Das Fenster öffnest du über das Symbol
+# unten rechts neben der Uhr oder mit "Hey Jarvis, zeig dich".
+start_hidden = true
+# Symbol unten rechts neben der Uhr (anzeigen, stumm, beenden).
+tray = true
+# true = Fenster schließen versteckt Jarvis nur, er hört weiter zu. Beenden über das Tray-Symbol.
+close_to_tray = true
+# true = Beim Zuhören und Sprechen erscheint oben am Bildschirm eine kleine Jarvis-Anzeige.
+overlay = true
+# Was beim Weckwort ("Hey Jarvis", Strg+Alt+J) erscheint, wenn Jarvis im Hintergrund ist:
+# "fenster" = das Jarvis-Fenster (ohne dir die Tastatur wegzunehmen), nach dem Gespräch
+# verschwindet es wieder; "anzeige" = nur die kleine Anzeige oben; "nichts".
+on_wake = "fenster"
+# true = Minimieren lässt Jarvis ganz verschwinden (auch aus der Taskleiste), er hört weiter zu.
+minimize_to_background = true
+
+[brain]
+# Pfad zu Claude Code. Leer lassen, dann wird "claude" im PATH gesucht.
+# Windows-Pfade in einfache Anführungszeichen: claude_path = 'C:\Users\Georg\.local\bin\claude.exe'
+claude_path = ""
+# Modell und Nachdenken wählt Jarvis für jede Aufgabe selbst ("auto"): kurze Fragen schnell
+# (Sonnet, wenig Nachdenken), Texte und Recherche mittel, knifflige Sachen wie Fehlersuche, Code,
+# Planung oder Verträge gründlich (Opus, viel Nachdenken). "Denk gründlich nach" oder "kurz und
+# knapp" geht immer. Fest geht auch: "schnell", "normal", "gruendlich", "maximal" (oder "aus",
+# dann wie früher: das erste Modell aus models mit effort).
+modellwahl = "auto"
+# Was die Stufen heißen: Modell und Nachdenken (low, medium, high, xhigh, max). "maximal" gibt es
+# nur, wenn du es sagst ("Denk richtig gründlich nach"). Fable ist das stärkste Modell; hat dein Abo
+# es nicht, nimmt Jarvis von selbst Opus.
+stufe_schnell = "sonnet low"
+stufe_normal = "sonnet medium"
+stufe_gruendlich = "opus high"
+stufe_maximal = "fable high"
+# Ersatzreihe: Lehnt ein Modell eine Anfrage ab, versucht Jarvis automatisch das nächste.
+# "sonnet" ist schnell und schont dein Pro-Limit, "haiku" ist am schnellsten, "opus" am klügsten.
+models = ["sonnet", "haiku", "opus"]
+# true = Claude Code startet für Jarvis ohne deine persönlichen Einstellungen, Skills, Plugins, Hooks und
+# CLAUDE.md-Dateien. So stören sie Jarvis nicht.
+isolated = true
+# true = Jarvis benutzt deine Konnektoren von claude.ai (Gmail, Google Kalender, Shopify, Spotify ...):
+# Termine, Mails und Shop laufen darüber, ohne eigene Anbindung und ohne Passwörter. Neue verbindest du auf
+# claude.ai unter Einstellungen > Konnektoren. Löschen, Kaufen, Bezahlen und Veröffentlichen lässt Jarvis
+# darüber nicht zu. false = Claude Code läuft ganz abgeschottet (--safe-mode), ohne Konnektoren.
+konnektoren = true
+# true = Jarvis gibt größere Teilaufgaben an Spezialisten ab, die parallel arbeiten: Recherche, Texte
+# und Technik (nur lesend). Das Gespräch bleibt kurz, Georg hört nur das Ergebnis.
+spezialisten = true
+# Lehnen alle Modelle ab, probiert Jarvis sie noch einmal mit einer ganz kurzen Persönlichkeit.
+simple_fallback = true
+# true = Claude läuft dauerhaft im Hintergrund weiter. Jede Frage spart so den Start
+# von Claude Code (unter Windows 2 bis 3 Sekunden).
+live = true
+# Nach so vielen Minuten Pause beginnt eine neue Unterhaltung (0 = nie). Ein kurzer
+# Verlauf macht die Antworten schneller.
+new_after_minutes = 30
+# Jarvis bricht nur ab, wenn Claude so viele Sekunden gar nichts mehr meldet ...
+timeout_seconds = 180
+# ... oder ein Werkzeug (Installation, Build, Test) so lange still läuft.
+tool_timeout_seconds = 660
+# Obergrenze für eine ganze Aufgabe (Sekunden). "Stopp" bricht jederzeit ab.
+max_seconds = 1800
+# Wie lange Claude nachdenkt, wenn modellwahl = "aus" ist: "low" antwortet am schnellsten,
+# "medium" oder "high" gründlicher. (Sonst bestimmt das die Stufe.)
+effort = "low"
+# Welche Werkzeuge Claude für Jarvis überhaupt bekommt. ToolSearch lädt Konnektor-Werkzeuge erst, wenn Claude sie
+# braucht: Bei vielen Konnektoren gehen sonst bei jeder Frage alle ihre Beschreibungen mit (langsamer, teurer).
+tools = ["Bash", "PowerShell", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "Agent", "ToolSearch"]
+# Werkzeuge, die Claude ohne Nachfrage nutzen darf. (Diese und die nächste Liste
+# ergänzen in deiner config.toml die Vorgaben hier, sie ersetzen sie nicht.)
+allowed_tools = ["WebSearch", "WebFetch", "Read", "Glob", "Grep", "Bash", "PowerShell", "Edit", "Write", "Agent",
+                 "ToolSearch"]
+# Befehle, die komplett gesperrt sind. Zum Löschen und Deinstallieren gibt es eigene
+# Jarvis-Befehle, die erst nach deinem "Ja" etwas tun. Installieren darf Jarvis einfach so.
+disallowed_tools = [
+    "Bash(rm:*)", "Bash(del:*)", "Bash(rmdir:*)", "Bash(rd:*)",
+    "Bash(Remove-Item:*)", "Bash(format:*)", "Bash(shutdown:*)",
+    "Bash(Stop-Computer:*)", "Bash(Restart-Computer:*)", "Bash(reg delete:*)",
+    "Bash(winget uninstall:*)", "Bash(msiexec:*)",
+    "PowerShell(Remove-Item:*)", "PowerShell(rm:*)", "PowerShell(del:*)", "PowerShell(ri:*)",
+    "PowerShell(rmdir:*)", "PowerShell(rd:*)", "PowerShell(erase:*)", "PowerShell(Clear-RecycleBin:*)",
+    "PowerShell(Stop-Computer:*)", "PowerShell(Restart-Computer:*)", "PowerShell(Format-Volume:*)",
+    "PowerShell(winget uninstall:*)", "PowerShell(msiexec:*)",
+]
+
+[werkstatt]
+# Programmier- und Bauaufträge ("Bau mir einen Discord-Bot ...") erledigt Jarvis im
+# Hintergrund in einem eigenen Ordner und zeigt jeden Schritt im Fenster.
+# Leer = %USERPROFILE%\Jarvis-Werkstatt
+ordner = ""
+# Modell für die Werkstatt: "auto" nimmt Opus (das klügste) für große Aufträge wie Spiele, Apps mit
+# Login oder Shops und Sonnet (schneller) für kleine. Sagst du "gründlich" oder "mit Opus", nimmt er Opus.
+# Geht Opus mit deinem Konto nicht, nimmt er von selbst Sonnet. Fest: "opus" oder "sonnet".
+modell = "auto"
+effort = "medium"
+# Abbruch, wenn so viele Minuten gar nichts passiert, und Obergrenze für einen Auftrag.
+still_minuten = 12
+max_minuten = 60
+# true = Die Werkstatt testet auf einem eigenen, unsichtbaren Windows-Arbeitsplatz: Programme und Fenster,
+# die sie zum Testen startet, poppen nicht auf deinem Bildschirm auf. Erst "Starte es" zeigt das Ergebnis.
+unsichtbar = true
+
+[weltlage]
+# "Zeig mir, was in der Welt passiert": eine Satelliten-Erde im Fenster, Jarvis fliegt zu jeder Meldung der
+# Tagesschau und liest sie vor ("Gottes Auge"). Auch "Was passiert in Deutschland", "Flieg nach Tokio",
+# "Flugverkehr an", "Wie steht der DAX" und "Starte die Handsteuerung" (Erde mit den Händen drehen, per Webcam).
+aktiv = true
+# So viele Meldungen liest Jarvis vor.
+meldungen = 7
+# Die Webcam für die Handsteuerung (false = nie). Sie wird nur benutzt, solange die Handsteuerung läuft.
+handsteuerung = true
+
+[zentrale]
+# Die Kommandozentrale im Fenster: Ihr Tag auf einen Blick (Aktivität, Kennzahlen, Tagesplan, Posteingang,
+# Nachrichten live, Spezialisten). "Briefing", morgens "Guten Morgen" oder "Was steht heute an?": Jarvis liest
+# sofort vor und das Fenster hebt hervor, wovon er spricht. "Zeig die Zentrale", "Aktualisiere die Zentrale".
+aktiv = true
+# So oft holt Jarvis Mails, Termine und Shop über Ihre Konnektoren neu (nur lesend, nur wenn Sie am PC sitzen und
+# nicht spielen). Ist das Fenster zu, nur ein Viertel so oft (bei 30 also alle zwei Stunden); das Briefing holt
+# ein altes Lagebild ohnehin neu. Jede Runde ist eine kleine Anfrage an Claude und zählt zu Ihrem Kontingent.
+aktualisieren_minuten = 30
+# Welches Modell das Lagebild liest (sonnet ist schnell genug, opus gründlicher, haiku sparsam).
+modell = "sonnet"
+effort = "low"
+
+[stream]
+# Stream-Modus: "Ich will streamen" (oder "Ich streame gleich CS2") stellt OBS auf die Spiel-Szene, prüft Mikrofon
+# und Kamera, öffnet Twitch und nennt ein angesagtes Spiel. "Geh live", "Beende den Stream", "Zeig mir den Trailer".
+# Szene in OBS, leer = Jarvis sucht sie selbst (eine mit "Gameplay", "Game", "Spiel" oder dem Spiel im Namen).
+szene = ""
+# Was Jarvis für den Stream öffnet.
+twitch = "https://dashboard.twitch.tv/stream-manager"
+# Ein angesagtes Spiel aus den Steam-Bestsellern dazusagen.
+tipps = true
+
+[spiele]
+# Spiele per Sprache, ohne Claude (darum in etwa einer Sekunde): "Installiere CS2", "Starte Lethal Company",
+# "Welche Spiele brauchen Updates?", "Welche Spiele habe ich?", "Deinstalliere Rust" (Steam fragt selbst nach).
+# true = Hat Steam nur eine Bibliothek, bestätigt Jarvis den Installieren-Dialog selbst. Bei mehreren
+# Laufwerken wählst du im Dialog, Jarvis sagt dir, wo am meisten Platz ist.
+steam_bestaetigen = true
+
+[blaupause]
+# "Blaupause" oder "Generiere einen Iron-Man-Helm": 3D-Modelle als Hologramm auf einer echten Blaupause.
+# Drehen, zoomen, Explosionsansicht, Teile genauer ansehen, als STL für den 3D-Drucker exportieren.
+# Gespeichert wird im Werkstatt-Ordner unter "Blaupausen".
+aktiv = true
+# Wer die Modelle zeichnet: "sonnet" (schnell) oder "opus" (aufwendiger, langsamer).
+modell = "sonnet"
+effort = "low"
+# "Render das" und "Öffne das in Blender": Jarvis sucht Blender selbst (Programme, Steam) und installiert es,
+# wenn es fehlt. Nur nötig, wenn Blender woanders liegt, z. B. "D:\\Tools\\Blender\\blender.exe".
+blender_pfad = ""
+
+[gaming]
+# Diese Programme schließt "Gaming-Modus an" (Namen wie im Task-Manager, z. B. "OneDrive", "Teams").
+close_apps = []
+# Energieplan auf Höchstleistung stellen (und bei "aus" zurück auf Ausbalanciert).
+power_plan = true
+
+[telegram]
+# Jarvis vom Handy über Telegram, von überall: schreiben, Sprachnachricht, Foto oder Standort schicken. Jarvis
+# antwortet mit Text und in seiner Stimme und schreibt von selbst (Erinnerungen, Hinweise, Briefing), wenn du
+# nicht am PC sitzt. Einrichten im Fenster unter Verbinden > Telegram (Bot beim @BotFather anlegen).
+aktiv = false
+# Der Schlüssel vom @BotFather und der Chat, dem der Bot gehört (entsteht beim Verbinden). Nicht weitergeben.
+token = ""
+chat_id = 0
+name = ""
+# true = Antworten auf Sprachnachrichten kommen auch als Sprachnachricht in Jarvis' Stimme.
+sprache = true
+# true = Erinnerungen und Hinweise kommen zusätzlich als Sprachnachricht (wie ein kurzer Anruf von Jarvis).
+sprache_hinweise = true
+# true = Schickst du deinen Standort, nennt Jarvis den nächsten Supermarkt und die Einkaufsliste. Mit
+# Live-Standort meldet er sich unterwegs, wenn du an einem vorbeikommst. Die Suche läuft über OpenStreetMap.
+standort = true
+
+[alexa]
+# "Alexa, sag Jarvis, er soll Discord öffnen": ein eigener Alexa-Skill, ohne Home Assistant und
+# ohne Router-Einstellungen. Am einfachsten im Jarvis-Fenster oben rechts ("Verbinden", Bereich
+# Alexa) einschalten, dort steht jeder Schritt mit Knöpfen zum Kopieren.
+aktiv = false
+# Kanal und Schlüssel entstehen beim Einschalten von selbst. Nicht weitergeben.
+kanal = ""
+schluessel = ""
+# Vermittlungsdienst zwischen Alexa und dem PC (kostenlos, die Nachrichten sind verschlüsselt).
+vermittlung = "https://ntfy.sh"
+
+[homeassistant]
+# Für Alexa und Smart Home. Adresse deines Home Assistant, z. B. "http://homeassistant.local:8123".
+url = ""
+# Langlebiges Zugriffstoken: in Home Assistant unten links auf deinen Namen >
+# Sicherheit > "Langlebige Zugriffstoken" > Token erstellen.
+token = ""
+
+[homeassistant.alexa]
+# Deine Echo-Geräte: Raumname = Entität aus Home Assistant (Alexa Media Player).
+# wohnzimmer = "media_player.echo_wohnzimmer"
+# kueche = "media_player.echo_dot_kueche"
+
+[server]
+# Web-Eingang für die Handy-App und für Home Assistant/Alexa. Am einfachsten im Jarvis-Fenster
+# oben über "Verbinden", Bereich Handy, einschalten: Dann entsteht der Schlüssel von selbst, und ein QR-Code
+# verbindet dein Handy. Handy und PC müssen im selben WLAN sein (von unterwegs: Tailscale).
+enabled = false
+host = "0.0.0.0"
+port = 8765
+# Ein langes, geheimes Wort (mindestens 12 Zeichen), das auch in Home Assistant steht.
+token = ""
+# Sichere Adresse über Tailscale (https://<pc>.<netz>.ts.net/), entsteht unter Verbinden > Handy >
+# "Sicher von überall". Dann geht die App überall, mit Sprechtaste. Leer = nur im WLAN.
+https = ""
+
+[handy]
+# Benachrichtigungen aufs Handy mit der kostenlosen App "ntfy": Erinnerungen, "Aus der Werkstatt"
+# und andere Ansagen kommen aufs Handy, wenn du nicht am PC sitzt. Am einfachsten im Jarvis-Fenster
+# unter "Verbinden", Bereich Handy, einschalten. Der Kanal entsteht dabei von selbst (geheim halten).
+push = false
+push_kanal = ""
+
+[intern]
+# Bitte nicht ändern: So erkennt Jarvis ältere Einstellungsdateien und passt sie einmalig an.
+config_version = 7
+
+[notizbuch]
+# Jarvis schreibt jedes Gespräch, Berichte (Recherchen) und Notizen als Markdown in einen Ordner. Den kannst du
+# in Obsidian (kostenlos) mit "Ordner als Tresor öffnen" ansehen, dann ist alles verlinkt. Alles bleibt auf dem PC.
+aktiv = true
+# Leer = %USERPROFILE%\Jarvis-Notizbuch
+ordner = ""
+# false = kein Tagebuch der Gespräche (Notizen und Berichte gehen trotzdem).
+tagebuch = true
+

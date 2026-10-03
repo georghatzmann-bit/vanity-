@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "geld",
+  "displayName": "Geld",
+  "version": "1.0.0",
+  "description": "Geld-Check für Shop und Werbung mit drei konkreten Vorschlägen am Tag, bessere Produkttexte und ehrliche Ideen für Nebeneinkünfte. Claude rechnet und bereitet vor, umgesetzt wird nur nach deinem Ja.",
+  "author": { "name": "Georg" },
+  "license": "MIT",
+  "keywords": ["geld", "shop", "werbung", "umsatz", "shopify"],
+  "userConfig": {
+    "ordner": {
+      "type": "directory",
+      "title": "Ordner für Geld-Berichte",
+      "description": "Hier legt das Plugin seine Berichte und Vorschlagslisten ab.",
+      "default": "~/Jarvis-Notizbuch/Geld"
+    }
+  }
+}

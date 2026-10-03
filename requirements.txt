@@ -1,0 +1,11 @@
+# Kern: ohne diese Pakete läuft Jarvis nicht.
+numpy>=1.24
+sounddevice>=0.4.6
+openwakeword>=0.6.0
+onnxruntime>=1.16
+faster-whisper>=1.0.0
+keyboard>=0.13.5
+# Jarvis' Stimme und Spracherkennung auf dem PC (pocket-tts, onnx-asr) holt der Installer in einem
+# eigenen Schritt (groß, etwa 1,3 GB mit Modellen), siehe jarvis/localvoice.py.
+# Zeitzonen für Termine aus Google- oder Outlook-Kalendern (Windows bringt keine eigene Liste mit)
+tzdata>=2024.1
