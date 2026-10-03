@@ -48,6 +48,8 @@ AGENTS = (
 )
 AGENT_STATES = ("bereit", "arbeitet", "schreibt", "wartet", "fertig", "fehler")
 LAGE_AGENTS = ("post", "kalender", "shop")
+HELPER_RESET_MINUTES = 30
+KEEP_DAYS = 14  # so lange bleibt die Aktivität der letzten Tage liegen
 REMIND_PREFIX = "In einer Viertelstunde: "
 
 _ART = re.compile(r"^[a-z]{2,16}$")
@@ -150,6 +152,7 @@ class Zentrale:
         self._brief_run = 0  # zählt jedes Briefing, ein altes hört dann auf
         self._briefing = False
         self.stats: dict = {}
+        self._note_count: tuple[float, int] = (-1e9, 0)
         self._emit_at = 0.0
         self._emit_timer: threading.Timer | None = None
         self._stop = threading.Event()
@@ -193,6 +196,16 @@ class Zentrale:
         return self.folder / f"aktivitaet-{day.isoformat()}.json"
 
     def _load_events(self) -> None:
+        try:
+            cutoff = self._day - dt.timedelta(days=KEEP_DAYS)
+            for old in self.folder.glob("aktivitaet-*.json"):
+                try:
+                    if dt.date.fromisoformat(old.stem.removeprefix("aktivitaet-")) < cutoff:
+                        old.unlink()
+                except (ValueError, OSError):
+                    continue
+        except OSError:
+            pass
         try:
             data = json.loads(self._events_file(self._day).read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -257,6 +270,7 @@ class Zentrale:
             entry["status"] = status
             entry["text"] = " ".join(str(text or "").split())[:80]
             entry["zeit"] = _clock(self._now())
+            entry["at"] = self._now()
             entry["fortschritt"] = None if progress is None else max(0.0, min(1.0, float(progress)))
         self.changed()
 
@@ -472,12 +486,13 @@ class Zentrale:
         """Erstes Lagebild kurz nach dem Start, danach tick() jede Minute."""
 
         def loop() -> None:
+            self._refresh_news()  # gleich: die Kachel soll nicht leer sein
             if self._stop.wait(45):
                 return
             while not self._stop.is_set():
                 try:
                     self.tick()
-                    self.news()
+                    self._refresh_news()
                 except Exception as exc:
                     log.debug("Zentrale: %s", exc)
                 if self._stop.wait(60):
@@ -488,12 +503,29 @@ class Zentrale:
     def stop(self) -> None:
         self._stop.set()
 
+    def _refresh_news(self) -> None:
+        before = [h["titel"] for h in (self._news or {}).get("schlagzeilen") or []]
+        try:
+            after = [h["titel"] for h in self.news().get("schlagzeilen") or []]
+        except Exception as exc:
+            log.debug("Zentrale, Nachrichten: %s", exc)
+            return
+        if after != before:
+            self.changed()
+
     # ------------------------------------------------------------------ Nachrichten
 
     def _get(self, url: str, timeout: float = 6) -> dict:
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         with self._opener(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
+
+    def cached_news(self) -> dict:
+        """Was die Nachrichten-Kachel gerade zeigen kann, ohne ins Netz zu gehen."""
+        with self._lock:
+            if self._news:
+                return dict(self._news)
+        return {"live": LIVE_STREAM, "video": "", "video_titel": "", "video_bild": "", "schlagzeilen": []}
 
     def news(self, fresh: bool = False) -> dict:
         """Live-Stream, das neueste Video ("tagesschau in 100 Sekunden") und die Schlagzeilen, alle 15 Minuten neu."""
@@ -563,7 +595,11 @@ class Zentrale:
         folder = getattr(notebook, "folder", None)
         if folder is not None:
             try:
-                count = sum(1 for _ in Path(folder).rglob("*.md"))
+                at, cached = self._note_count
+                if time.monotonic() - at > 120:
+                    cached = sum(1 for _ in Path(folder).rglob("*.md"))
+                    self._note_count = (time.monotonic(), cached)
+                count = cached
                 quick = Path(folder) / "Notizen" / "Schnellnotizen.md"
                 if quick.is_file():
                     lines = [line for line in quick.read_text(encoding="utf-8").splitlines() if line.startswith("- ")]
@@ -726,6 +762,10 @@ class Zentrale:
             agents = []
             for spec in AGENTS:
                 state = dict(self._agents[spec["id"]])
+                at = state.pop("at", None)
+                if spec["id"] not in LAGE_AGENTS and state["status"] in ("fertig", "fehler") and at is not None \
+                        and (now - at).total_seconds() > HELPER_RESET_MINUTES * 60:
+                    state.update(status="bereit", text="", zeit="", fortschritt=None)  # längst erledigt
                 if spec["id"] == "shop" and "shop" not in (self.lage or {}) and state["status"] == "bereit" \
                         and not state["text"]:
                     continue  # ohne Shop-Konnektor keine Shop-Karte
@@ -744,7 +784,7 @@ class Zentrale:
             "tagesplan": self._plan(),
             "post": {"verbunden": post is not None, "neu": (post or {}).get("neu"),
                      "mails": (post or {}).get("mails") or []},
-            "nachrichten": self.news(),
+            "nachrichten": self.cached_news(),
             "agenten": agents,
             "notizen": notes,
             "hinweise": (self.lage or {}).get("hinweise") or [],

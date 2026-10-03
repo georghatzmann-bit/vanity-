@@ -199,6 +199,8 @@ class ZentraleTest(unittest.TestCase):
     def test_snapshot_shows_the_day(self):
         z = self.with_lage(self.make())
         self.assistant.reminders.add(dt.datetime(2026, 10, 3, 17, 30), "Paket abholen")
+        self.assertEqual(z.snapshot()["nachrichten"]["schlagzeilen"], [], "das Fenster wartet nie auf die Tagesschau")
+        z.news()
         data = z.snapshot()
         self.assertEqual([k["name"] for k in data["kennzahlen"]][0], "Umsatz heute")
         self.assertEqual(data["kennzahlen"][0]["wert"], "312,50 €")
@@ -402,6 +404,23 @@ class ZentraleTest(unittest.TestCase):
         card = {a["id"]: a for a in z.snapshot()["agenten"]}["recherche"]
         self.assertEqual(card["status"], "fertig")
         self.assertEqual(z.events_today()[-1]["text"], "Recherche: Preise vergleichen")
+
+    def test_helpers_rest_after_half_an_hour_and_old_days_are_tidied(self):
+        z = self.make()
+        z.agent("recherche", "fertig", "Preise verglichen")
+        z.agent("post", "fertig", "3 neue Mails")
+        self.now = MORNING + dt.timedelta(minutes=45)
+        cards = {a["id"]: a for a in z.snapshot()["agenten"]}
+        self.assertEqual((cards["recherche"]["status"], cards["recherche"]["text"]), ("bereit", "Bereit für Ihre Fragen"))
+        self.assertEqual(cards["post"]["status"], "fertig", "das Lagebild bleibt bis zum nächsten")
+        old = self.folder / "zentrale" / "aktivitaet-2026-09-01.json"
+        recent = self.folder / "zentrale" / "aktivitaet-2026-10-01.json"
+        old.parent.mkdir(parents=True, exist_ok=True)
+        for path in (old, recent):
+            path.write_text("[]", encoding="utf-8")
+        self.make()
+        self.assertFalse(old.exists())
+        self.assertTrue(recent.exists())
 
     def test_new_day_starts_empty(self):
         z = self.make()

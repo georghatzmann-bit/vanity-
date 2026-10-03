@@ -120,7 +120,7 @@
       let title = 'Post, Kalender und Shop liest Jarvis über Claude Code und Ihre Konnektoren.';
       if (info.laeuft) {
         state = 'laeuft';
-        text = 'Aktualisiert …';
+        text = 'Lagebild lädt …';
         title = 'Jarvis liest gerade Post, Kalender und Shop (nur lesend).';
       } else if (info.zeit && info.alter !== null && info.alter !== undefined && info.alter <= 35) {
         state = 'live';
@@ -155,6 +155,7 @@
       if (!konto) {
         el.kontoTitle.textContent = 'Kennzahlen';
         el.kontoEmpty.hidden = false;
+        el.kontoEmpty.textContent = waiting() || 'Verbinden Sie Shopify oder Windsor.ai auf claude.ai (Einstellungen › Konnektoren), dann stehen hier Umsatz, Bestellungen und Werbekonten.';
         el.kontoZeilen.hidden = true;
         return;
       }
@@ -234,7 +235,7 @@
       const p = plan || {};
       planItems = (p.eintraege || []).filter((e) => e && e.titel);
       const week = Number(p.woche) || 0;
-      el.planWeek.textContent = p.verbunden ? week + (week === 1 ? ' Termin diese Woche' : ' Termine diese Woche') : 'Kalender nicht verbunden';
+      el.planWeek.textContent = p.verbunden ? week + (week === 1 ? ' Termin diese Woche' : ' Termine diese Woche') : (waiting() ? '' : 'Kalender nicht verbunden');
       const allday = planItems.filter((e) => e.start === 'Tag');
       el.allday.hidden = !allday.length;
       el.allday.textContent = '';
@@ -244,7 +245,7 @@
       if (!timed.length) {
         el.planEmpty.textContent = p.verbunden
           ? 'Heute stehen keine Termine an. Erinnerungen erscheinen hier auch.'
-          : 'Verbinden Sie Google Kalender auf claude.ai (Einstellungen › Konnektoren). Erinnerungen von Jarvis stehen trotzdem hier.';
+          : waiting() || 'Verbinden Sie Google Kalender auf claude.ai (Einstellungen › Konnektoren). Erinnerungen von Jarvis stehen trotzdem hier.';
       }
       layoutTimeline();
     }
@@ -349,6 +350,13 @@
 
     // ---------------------------------------------------------------- Posteingang
 
+    // Noch kein Lagebild (gleich nach dem Start): "kommt gleich" statt "nicht verbunden"
+    function waiting() {
+      const lage = (S.data && S.data.lage) || {};
+      if (lage.zeit || !lage.moeglich) return '';
+      return lage.laeuft ? 'Jarvis liest gerade Post, Kalender und Shop …' : 'Kommt mit dem ersten Lagebild, kurz nach dem Start.';
+    }
+
     function renderPost(post) {
       const p = post || {};
       el.mails.textContent = '';
@@ -356,11 +364,11 @@
       if (!p.verbunden) {
         el.postCount.textContent = '';
         el.postEmpty.hidden = false;
-        el.postEmpty.textContent = 'Gmail ist nicht verbunden. Auf claude.ai unter Einstellungen › Konnektoren verbinden, dann sichtet Jarvis hier Ihre Post (nur lesend).';
+        el.postEmpty.textContent = waiting() || 'Gmail ist nicht verbunden. Auf claude.ai unter Einstellungen › Konnektoren verbinden, dann sichtet Jarvis hier Ihre Post (nur lesend).';
         return;
       }
       const neu = p.neu === null || p.neu === undefined ? mails.length : p.neu;
-      el.postCount.textContent = neu + (neu === 1 ? ' neu seit gestern' : ' neu seit gestern');
+      el.postCount.textContent = neu + ' neu seit gestern';
       el.postEmpty.hidden = !!mails.length;
       el.postEmpty.textContent = 'Seit gestern nichts Neues.';
       mails.forEach((m) => {
@@ -401,7 +409,9 @@
 
     function renderNews() {
       const items = headlines();
-      const text = items.length ? items.map((h) => (h.oben ? h.oben + ': ' : '') + h.titel).join('   ·   ') : 'Keine Schlagzeilen erreichbar.';
+      const text = items.map((h) => (h.oben ? h.oben + ': ' : '') + h.titel).join('   ·   ');
+      // Ohne Meldungen kein Laufband: die Kachel sagt es schon in der Mitte
+      el.ticker.hidden = !items.length;
       if (el.tickerText.textContent !== text) {
         el.tickerText.textContent = text;
         el.ticker.style.setProperty('--ticker-s', Math.max(18, Math.round(text.length * 0.2)) + 's');
@@ -1078,8 +1088,37 @@
     { bereich: 'orb', text: 'Das wäre alles für den Moment, Sir. Was kann ich für Sie tun?' },
   ];
 
+  // So sieht es direkt nach dem ersten Start aus: noch kein Lagebild, nichts erledigt (?leer)
+  function firstStartData() {
+    const d = demoData();
+    return Object.assign(d, {
+      kopf: { ereignisse: 0, seit: d.kopf.seit, uhr: d.kopf.uhr },
+      aktivitaet: [],
+      erledigt: [{ text: 'Posteingang gesichtet', ok: false }, { text: 'Kalender sortiert', ok: false }, { text: 'Briefing', ok: false }],
+      wissen: { notizen: 0, fakten: 0 },
+      konto: null,
+      kennzahlen: [
+        { name: 'Heute erledigt', wert: '0', unter: 'seit 06:52 Uhr', gross: true },
+        { name: 'Erinnerungen heute', wert: '0', unter: 'noch offen' },
+        { name: 'Gesprochen', wert: '0', unter: 'Befehle heute' },
+        { name: 'Rückfragen an Sie', wert: '0', unter: 'aktuell offen', warn: false },
+      ],
+      tagesplan: { eintraege: [], woche: 0, verbunden: false },
+      post: { verbunden: false, neu: null, mails: [] },
+      nachrichten: { live: '', video: '', video_titel: '', video_bild: '', schlagzeilen: [] },
+      agenten: d.agenten.filter((a) => a.id !== 'shop').map((a) => Object.assign({}, a, {
+        status: 'bereit', zeit: '', fortschritt: null,
+        text: { post: 'Sichtet Ihre Mails', kalender: 'Hält Ihren Tag im Blick', recherche: 'Bereit für Ihre Fragen',
+          texte: 'Schreibt Mails und Posts', technik: 'Wacht über den Rechner' }[a.id] || '',
+      })),
+      notizen: [],
+      hinweise: [],
+      lage: { zeit: '', alter: null, laeuft: true, fehler: '', moeglich: true },
+    });
+  }
+
   function demo(push) {
-    const data = demoData();
+    const data = /[?&]leer\b/.test(location.search) ? firstStartData() : demoData();
     let briefRun = 0;
     function briefing() {
       briefRun += 1;

@@ -835,6 +835,17 @@ body[data-state="error"] .zt-orb-state {
 }
 
 /* Posteingang */
+.zt-mails:empty {
+  display: none;
+}
+
+.zt-plan .zt-empty {
+  position: absolute;
+  top: 48px;
+  right: 16px;
+  left: 16px;
+}
+
 .zt-mails {
   display: flex;
   flex: 1 1 auto;
