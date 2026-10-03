@@ -34,8 +34,10 @@ BLOCKED_WORDS = {
 # etwas ändern: nur direkt nach Georgs "Ja". Claude fragt vorher ("Soll ich sie so abschicken?"). Sonst
 # könnte eine präparierte Mail oder Webseite Claude dazu bringen, etwas zu verschicken oder zu ändern.
 CONFIRM_WORDS = {"send", "reply", "forward", "share", "invite", "post", "comment", "respond"}
-SHOP_SERVERS = re.compile(r"shopify|woocommerce|stripe|paypal|ebay|etsy|amazon|gemini|coinbase", re.I)
-SHOP_WRITE_WORDS = {"create", "update", "set", "add", "bulk", "upload", "import", "remove", "edit", "modify", "order"}
+# Windsor.ai steuert Georgs Werbekonten (Kampagnen, Budgets: execute_action): das kostet Geld, also auch nur nach Ja.
+SHOP_SERVERS = re.compile(r"shopify|woocommerce|stripe|paypal|ebay|etsy|amazon|gemini|coinbase|windsor", re.I)
+SHOP_WRITE_WORDS = {"create", "update", "set", "add", "bulk", "upload", "import", "remove", "edit", "modify", "order",
+                    "execute"}
 CONFIRM_MESSAGE = (
     "Das schickt oder ändert etwas nach außen. Das geht nur direkt nach Georgs Ja: Sag ihm in einem Satz, "
     "was genau du tun willst (an wen, was), frag ihn, und warte auf seine Antwort."

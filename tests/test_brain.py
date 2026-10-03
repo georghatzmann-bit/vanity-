@@ -464,7 +464,8 @@ class ConnectorTest(unittest.TestCase):
 
         for tool in ("mcp__claude_ai_Gmail__send_message", "mcp__claude_ai_Gmail__reply", "mcp__claude_ai_Gmail__forward",
                      "mcp__claude_ai_Shopify__update-product", "mcp__claude_ai_Shopify__create-discount",
-                     "mcp__claude_ai_Shopify__set-inventory", "mcp__claude_ai_Google_Calendar__respond_to_event"):
+                     "mcp__claude_ai_Shopify__set-inventory", "mcp__claude_ai_Google_Calendar__respond_to_event",
+                     "mcp__claude_ai_Windsor_ai__execute_action"):
             with self.subTest(tool=tool):
                 self.assertFalse(may_use(tool, True, "Schick Max eine Mail, dass ich später komme")[0])
                 self.assertFalse(may_use(tool, True, None)[0], "ohne Gesagtes: nein")
@@ -472,7 +473,7 @@ class ConnectorTest(unittest.TestCase):
                 self.assertFalse(may_use(tool, True, "Ja? Wer ist das?")[0])
         for tool in ("mcp__claude_ai_Gmail__search_threads", "mcp__claude_ai_Gmail__create_draft",
                      "mcp__claude_ai_Google_Calendar__create_event", "mcp__claude_ai_Shopify__list-orders",
-                     "mcp__claude_ai_Canva__create-design"):
+                     "mcp__claude_ai_Canva__create-design", "mcp__claude_ai_Windsor_ai__get_data"):
             with self.subTest(tool=tool):
                 self.assertTrue(may_use(tool, True, "Trag morgen um 18 Uhr Training ein")[0])
         self.assertFalse(may_use("mcp__claude_ai_Gmail__trash_message", True, "Ja")[0], "Löschen nie, auch nicht mit Ja")
