@@ -223,6 +223,16 @@
           </svg>
           <canvas id="core" aria-hidden="true"></canvas>
         </div>
+        <div class="feedback-btns" role="group" aria-label="Peitsche und Lob">
+          <button type="button" class="feedback-btn" id="whipBtn" data-tool="peitsche" aria-pressed="false" title="Antreiben: Peitsche in die Hand nehmen, klicken lässt sie knallen. Jarvis antwortet eine Viertelstunde lang flotter. Oder sagen Sie „Schneller!“.">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20 9 13"/><path d="M9 13c3-6 9-8 11-5 2 3-3 6-6 4"/></svg>
+            <span class="sr-only">Antreiben</span>
+          </button>
+          <button type="button" class="feedback-btn" id="patBtn" data-tool="lob" aria-pressed="false" title="Loben: Hand nehmen, klicken tätschelt. Jarvis denkt dann wieder so gründlich wie nötig. Oder sagen Sie „Gut gemacht“.">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12M11 11V5a1.5 1.5 0 0 1 3 0v6M14 11V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6 7-2.6 0-4-1.2-5.5-3.5L4 14.6a1.5 1.5 0 0 1 2.4-1.8L8 15"/></svg>
+            <span class="sr-only">Loben</span>
+          </button>
+        </div>
 
         <div class="status">
           <div class="subtitles" id="subtitles" aria-live="polite">
@@ -874,6 +884,17 @@
     </div>
   </aside>
 
+  <!-- Peitsche und Lob (antreiber.js) -->
+  <canvas class="tool-layer" id="toolLayer" aria-hidden="true" hidden></canvas>
+  <div class="pat-hand" id="patHand" aria-hidden="true" hidden>
+    <svg viewBox="0 0 56 60"><path d="M17 31V12a4 4 0 0 1 8 0v15M25 26V8a4 4 0 0 1 8 0v18M33 26V11a4 4 0 0 1 8 0v22c0 13-7 22-17 22-7 0-11-3-15-9l-6-9a4 4 0 0 1 6.5-4.6L17 37" fill="#f5c9a4" stroke="#7a4a2a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+  </div>
+  <div class="tool-hint" id="toolHint" role="status" hidden></div>
+  <button type="button" class="slow-chip" id="slowChip" hidden title="Jarvis braucht gerade länger. Mit der Peitsche antworten seine nächsten Aufgaben eine Viertelstunde lang flotter.">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20 9 13"/><path d="M9 13c3-6 9-8 11-5 2 3-3 6-6 4"/></svg>
+    <span>Dauert es? Antreiben</span>
+  </button>
+
   <div class="toasts" id="toasts" aria-live="assertive"></div>
 
   <script src="werkstatt.js"></script>
@@ -886,6 +907,7 @@
   <script src="orb.js"></script>
   <script src="plasma.js"></script>
   <script src="zentrale.js"></script>
+  <script src="antreiber.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

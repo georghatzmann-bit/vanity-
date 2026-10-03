@@ -928,6 +928,23 @@ class Api:
             return {"planes": [], "error": "Die Weltlage ist aus."}
         return world.flights(box)
 
+    # ------------------------------------------------------------------ Peitsche und Lob
+
+    def feedback(self, kind) -> str:
+        """Die Peitsche oder die Hand im Fenster: Jarvis antwortet sofort (auch mitten im Nachdenken)."""
+        kind = "lob" if str(kind or "") == "lob" else "peitsche"
+        handler = getattr(self._assistant, "feedback", None)
+        if handler is None:
+            return ""
+        line = handler(kind)
+        if line:
+            self._bridge.message("jarvis", line, model="Antreiber" if kind == "peitsche" else "")
+            try:
+                self._assistant.say(line)
+            except Exception as exc:
+                log.debug("Rückmeldung, sagen: %s", exc)
+        return line
+
     # ------------------------------------------------------------------ Kommandozentrale
 
     ZENTRALE_LINKS = {

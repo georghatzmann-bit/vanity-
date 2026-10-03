@@ -219,6 +219,7 @@ class Chooser:
         self._lock = threading.Lock()
         self.last: Choice | None = None
         self._last_at = 0.0
+        self._hurry_until = 0.0  # Georg hat angetrieben ("Schneller!", die Peitsche): bis dahin eine Stufe flotter
 
     @property
     def enabled(self) -> bool:
@@ -236,6 +237,8 @@ class Chooser:
         else:
             level, reason = classify(text)
             level, reason = self._in_context(text, level, reason, now)
+            if self.hurried(now) and level in ("normal", "gruendlich") and reason != "ausdrücklich gewünscht":
+                level, reason = LEVELS[LEVELS.index(level) - 1], "angetrieben"
         choice = self.make(level, reason)
         self.last, self._last_at = choice, now
         return choice
@@ -264,6 +267,22 @@ class Chooser:
             seen.add(model)
             model = SMALLER[family(model)]
         return Choice(level, model, effort, reason)
+
+    # ------------------------------------------------------------------ Antreiben und Loben
+
+    def hurry(self, seconds: float = 15 * 60, now: float | None = None) -> None:
+        """Georg treibt an: eine Weile denkt Jarvis eine Stufe flotter (gründlich wird normal, normal wird schnell).
+        Was Georg ausdrücklich gründlich will, bleibt gründlich."""
+        now = time.monotonic() if now is None else now
+        self._hurry_until = now + max(60.0, seconds)
+
+    def relax(self) -> None:
+        """Georg lobt: wieder so gründlich wie die Aufgabe es braucht."""
+        self._hurry_until = 0.0
+
+    def hurried(self, now: float | None = None) -> bool:
+        now = time.monotonic() if now is None else now
+        return now < self._hurry_until
 
     # ------------------------------------------------------------------ Gesperrte Modelle
 
@@ -294,4 +313,4 @@ class Chooser:
         with self._lock:
             blocked = {k: why for k, (until, why) in self._blocked.items() if until > time.monotonic()}
         return {"mode": self.mode, "levels": {k: " ".join(v).strip() for k, v in self.levels.items()},
-                "blocked": blocked, "last": self.last.label() if self.last else ""}
+                "blocked": blocked, "last": self.last.label() if self.last else "", "eilig": self.hurried()}

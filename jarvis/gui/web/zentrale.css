@@ -1817,6 +1817,209 @@ body[data-state="error"] .hud-rings path {
   box-shadow: 0 0 8px rgba(var(--hud-cyan), 0.6);
 }
 
+/* ------------------------------------------------------------------ Peitsche und Lob (antreiber.js) */
+
+.feedback-btns {
+  position: absolute;
+  top: calc(16px + var(--orb) * 0.8);
+  left: 50%;
+  display: flex;
+  justify-content: space-between;
+  width: calc(var(--orb) + 112px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.feedback-btn {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(var(--hud-cyan), 0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--hud-cyan), 0.35);
+  color: var(--hud-text);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background var(--t) var(--ease), box-shadow var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.feedback-btn:hover {
+  background: rgba(var(--hud-cyan), 0.18);
+  transform: scale(1.05);
+}
+
+.feedback-btn:focus-visible {
+  outline: 2px solid rgba(var(--hud-cyan), 0.9);
+  outline-offset: 2px;
+}
+
+.feedback-btn[aria-pressed="true"] {
+  background: rgba(242, 164, 75, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(242, 164, 75, 0.7);
+  color: var(--warn);
+}
+
+body[data-tool],
+body[data-tool] * {
+  cursor: none !important;
+}
+
+body[data-tool] .feedback-btn,
+body[data-tool] .slow-chip {
+  cursor: pointer !important;
+}
+
+.tool-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pat-hand {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 61;
+  width: 56px;
+  height: 60px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+.pat-hand svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 90%;
+}
+
+.pat-hand.is-patting svg {
+  animation: pat 260ms var(--ease);
+}
+
+.pat-heart {
+  position: fixed;
+  z-index: 62;
+  width: 28px;
+  height: 28px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21s-7.5-4.6-9.5-9.2C1 8.3 3 5 6.4 5c2 0 3.4 1.1 4.1 2.4h3C14.2 6.1 15.6 5 17.6 5 21 5 23 8.3 21.5 11.8 19.5 16.4 12 21 12 21z' fill='%23ff5f87'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+  animation: heart-up 1.3s var(--ease) both;
+}
+
+.tool-hint {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 62;
+  padding: 4px 10px;
+  border-radius: var(--r-s);
+  background: rgba(10, 15, 25, 0.85);
+  box-shadow: inset 0 0 0 1px var(--zt-line-strong);
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hit-text {
+  position: fixed;
+  z-index: 63;
+  max-width: min(420px, 80vw);
+  color: #8ef0b4;
+  font: 700 22px / 1.25 var(--font-display);
+  text-align: center;
+  text-shadow: 0 0 14px rgba(63, 191, 133, 0.85), 0 2px 6px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  animation: hit-up 2.2s var(--ease) both;
+}
+
+.slow-chip {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 22px;
+  background: rgba(242, 164, 75, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(242, 164, 75, 0.55), 0 10px 30px rgba(0, 0, 0, 0.4);
+  color: var(--warn);
+  font: 600 13px / 1 var(--font);
+  cursor: pointer;
+  transform: translateX(-50%);
+  animation: rise 200ms var(--ease) both;
+}
+
+.slow-chip:hover {
+  background: rgba(242, 164, 75, 0.26);
+}
+
+.slow-chip:focus-visible {
+  outline: 2px solid var(--warn);
+  outline-offset: 2px;
+}
+
+.hud.is-shaken {
+  animation: shake 240ms linear;
+}
+
+@keyframes pat {
+  0% { transform: rotate(0) scale(1); }
+  40% { transform: rotate(-14deg) scale(0.86) translateY(6px); }
+  100% { transform: rotate(0) scale(1); }
+}
+
+@keyframes heart-up {
+  0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+  20% { opacity: 1; transform: translateY(-6px) scale(1); }
+  100% { opacity: 0; transform: translateY(-70px) scale(0.9); }
+}
+
+@keyframes hit-up {
+  0% { opacity: 0; transform: translate(-50%, -80%) scale(0.92); }
+  12% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -150%); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-6px, 2px); }
+  40% { transform: translate(5px, -3px); }
+  60% { transform: translate(-4px, 1px); }
+  80% { transform: translate(3px, -1px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hit-text,
+  .pat-heart,
+  .pat-hand.is-patting svg {
+    animation-duration: 1ms;
+  }
+
+  .hit-text {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .feedback-btns {
+    width: calc(var(--orb) + 72px);
+  }
+}
+
 /* ------------------------------------------------------------------ Start: erscheint ruhig */
 
 body[data-boot="1"] .zt-grid > *,

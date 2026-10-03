@@ -69,6 +69,7 @@
   let Blaupause = null; // 3D-Modelle als Hologramm (blaupause.js)
   let Weltlage = null; // Satelliten-Erde mit Lagebericht (weltlage.js)
   let Zentrale = null; // Kommandozentrale und Gespräch im HUD (zentrale.js)
+  let Antreiber = null; // Peitsche und Lob (antreiber.js)
   let handsAllowed = true; // [weltlage] handsteuerung in config.toml
 
   // ------------------------------------------------------------------ Python-Brücke
@@ -144,6 +145,7 @@
     schedule_forget: (id) => window.pywebview.api.schedule_forget(id),
     notebook_open: () => window.pywebview.api.notebook_open(),
     answer_suggestion: (answer) => window.pywebview.api.answer_suggestion(answer),
+    feedback: (kind) => window.pywebview.api.feedback(kind),
     zentrale_state: () => window.pywebview.api.zentrale_state(),
     zentrale_refresh: () => window.pywebview.api.zentrale_refresh(),
     zentrale_briefing: () => window.pywebview.api.zentrale_briefing(),
@@ -315,6 +317,7 @@
     el.stopBtn.disabled = !(state === 'speaking' || state === 'thinking');
     Core.setState(state);
     if (Zentrale) Zentrale.state(state);
+    if (Antreiber) Antreiber.state(state);
     if (Blaupause && Blaupause.mic) Blaupause.mic(state, S.talking);
     if (state === 'listening') {
       // Neue Frage: alte Untertitel und Schritte weg
@@ -1415,6 +1418,14 @@
       ...(bpDemo ? bpDemo.api : {}),
       ...(wlDemo || {}),
       ...(ztDemo ? ztDemo.api : {}),
+      feedback: (kind) => {
+        const lines = kind === 'lob'
+          ? ['Danke, Sir. Das freut mich.', 'Zu gütig, Sir.', 'Danke, Sir. Ich mache genau so weiter.']
+          : ['Autsch. Ich lege einen Zahn zu, Sir.', 'Qualität vor Tempo, Sir. Aber bitte, ich beeile mich.', 'Sehr wohl, Sir. Volle Kraft voraus.'];
+        const line = lines[Math.floor(Math.random() * lines.length)];
+        push({ type: 'message', role: 'jarvis', text: line });
+        return Promise.resolve(line);
+      },
       start() {
         setInterval(() => {
           cpu = clamp(cpu + (Math.random() - 0.5) * 9, 4, 96);
@@ -1651,6 +1662,7 @@
     if (window.JarvisKoppeln) Koppeln = window.JarvisKoppeln.create({ call, toast });
     if (window.JarvisGedaechtnis) Gedaechtnis = window.JarvisGedaechtnis.create({ call, toast });
     if (window.JarvisZentrale) Zentrale = window.JarvisZentrale.create({ call, toast, listenNow });
+    if (window.JarvisAntreiber) Antreiber = window.JarvisAntreiber.create({ call, toast, gesture: (kind) => Core.gesture(kind) });
     refreshDeck();
     setInterval(refreshDeck, 60000);
     if (Gedaechtnis && /[?&]vorschlag\b/.test(location.search)) {

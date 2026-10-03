@@ -433,6 +433,12 @@ class Assistant:
                 answer = None
             if answer is not None:
                 return answer
+        spoken = intents.normalize(text)
+        if _WHIP.match(spoken):
+            # "Schneller!", "Beeil dich": ab jetzt eine Stufe flotter (dieser Satz selbst zählt nicht als Arbeit)
+            return self.feedback("peitsche", working=self._busy > 1)
+        if _PRAISE.match(spoken):
+            return self.feedback("lob")
         zentrale = getattr(self, "zentrale", None)
         if zentrale is not None:
             # Die Kommandozentrale: "Briefing", morgens "Guten Morgen", "Zeig die Zentrale", "Aktualisiere die Zentrale"
@@ -1418,6 +1424,35 @@ class Assistant:
         except Exception:
             return False
 
+    def feedback(self, kind: str, working: bool | None = None) -> str:
+        """Die Peitsche oder ein Lob, wie im Video "Response Accelerator" (im Fenster oder "Schneller!",
+        "Gut gemacht"). Jarvis antwortet kurz. Angetrieben denkt er eine Viertelstunde lang eine Stufe flotter
+        (modellwahl.Chooser.hurry), ein Lob nimmt das zurück. Gibt den Satz zurück, gesagt wird er vom Aufrufer."""
+        chooser = getattr(self.brain, "chooser", None)
+        zentrale = getattr(self, "zentrale", None)
+        if kind == "lob":
+            if chooser is not None:
+                chooser.relax()
+            line = random.choice(PRAISE)
+            entry = "Gelobt"
+        else:
+            if working is None:
+                working = self.busy and not self._speaking
+            if chooser is not None:
+                chooser.hurry()
+            line = random.choice(WHIP_BUSY if working else WHIP_IDLE)
+            entry = "Angetrieben, beim Nachdenken" if working else "Angetrieben: ab jetzt flotter"
+        if zentrale is not None:
+            try:
+                zentrale.log("lob" if kind == "lob" else "peitsche", entry)
+            except Exception as exc:
+                log.debug("Zentrale: %s", exc)
+        action = getattr(self.ui, "action", None)
+        if action is not None:
+            action("thanks" if kind == "lob" else "whip")  # die Kugel nickt oder zuckt
+        log.info("Rückmeldung: %s", kind)
+        return line
+
     def offer_open(self) -> bool:
         """Wartet ein Vorschlag von Jarvis noch auf Georgs Antwort (für die Rückfragen in der Zentrale)?"""
         offer = self._offer
@@ -1771,6 +1806,21 @@ def _short_reason(exc: BrainError) -> str:
         "billing": "Abgerechnet wird über einen API-Schlüssel statt über das Abo.",
     }.get(exc.kind, "Fehler: " + (str(exc).strip().splitlines() or ["unbekannt"])[0][:160])
 
+
+# Die Peitsche ("Schneller!") und ein Lob ("Gut gemacht"): kurze Antworten wie ein Butler
+_WHIP = re.compile(
+    r"^(?:(?:los|komm|jetzt|na|jarvis)[, ]+)?(?:schneller|beeil dich|mach schneller|mach hin|mach hinne|gib gas|"
+    r"tempo|zack|dalli|hopp|nicht so lahm|du bist zu langsam|das dauert zu lange)"
+    r"(?: jarvis)?(?: bitte)?$")
+_PRAISE = re.compile(
+    r"^(?:(?:das )?hast du |du hast das )?(?:gut|super|klasse|toll|stark|prima|sauber|großartig) gemacht(?: jarvis)?$|"
+    r"^(?:braver|guter|starker)(?: jarvis| junge)?$|^(?:das war|war) (?:super|klasse|top|stark|großartig|gut)(?: jarvis)?$")
+WHIP_BUSY = ("Autsch. Ich lege einen Zahn zu, Sir.", "Qualität vor Tempo, Sir. Aber bitte, ich beeile mich.",
+             "Sehr wohl, Sir. Volle Kraft voraus.", "Verstanden, Sir. Ich bin gleich so weit.")
+WHIP_IDLE = ("Ich bin bereit, Sir. Ab jetzt halte ich mich kürzer.",
+             "Gerade gibt es nichts anzutreiben, Sir. Aber ich antworte ab jetzt flotter.")
+PRAISE = ("Danke, Sir. Das freut mich.", "Zu gütig, Sir.", "Danke, Sir. Ich mache genau so weiter.",
+          "Stets zu Diensten, Sir.")
 
 # "Weiß ich schon", "Das hast du schon gesagt", "Hab ich schon gehört": den letzten Hinweis heute nicht mehr
 _KNOWN = re.compile(
