@@ -30,6 +30,10 @@ await win.waitForSelector('.modal', { timeout: 20000 });
 await win.click('.modal .btn-primary');
 await win.waitForSelector('.step-card');
 await win.click('.switch'); // Seiten nicht automatisch öffnen
+// Effekte aus: Hier werden Abläufe geprüft, keine Animationen (die prüft der Rauchtest).
+// Mit Effekten an kann eine Karte unter dem Mauszeiger kippen, und Klicks warten dann vergeblich auf Ruhe.
+if (await win.evaluate(() => Boolean(window.FX) && window.FX.enabled())) await win.click('#fx-toggle');
+await win.waitForTimeout(200);
 
 const title = () => win.locator('.step-title').innerText();
 const storeData = () => win.evaluate(() => window.Store.get().data);
