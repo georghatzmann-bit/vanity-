@@ -387,7 +387,8 @@
 
   function paymentMethod(text) {
     const kw = /\b(PayPal|Visa|Master[Cc]ard|American\s+Express|Amex|Maestro|Apple\s+Pay|Google\s+Pay|Amazon\s+Pay|paysafecard|Klarna|Sofort(?:überweisung)?|giropay|iDEAL|Bancontact|Skrill)\b/i.exec(text);
-    const last4 = /(?:ending\s+(?:in|with)|endet\s+(?:auf|mit)|Endziffern|(?:[*•xX]{2,}[\s-]*){1,4})\s*:?\s*(\d{4})(?!\d)/i.exec(text);
+    // Begrenzte Wiederholungen, damit präparierte Texte (z. B. tausende Sternchen) nichts einfrieren
+    const last4 = /(?:ending\s{1,3}(?:in|with)|endet\s{1,3}(?:auf|mit)|Endziffern|[*•xX]{2}[*•xX \t-]{0,24})[ \t]{0,3}:?[ \t]{0,3}(\d{4})(?!\d)/i.exec(text);
     if (!kw && !last4) return null;
     let name = kw ? kw[1] : 'Karte';
     if (/^paysafecard$/i.test(name)) name = 'paysafecard';
@@ -399,8 +400,14 @@
 
   // ---------------------------------------------------------------- Hauptfunktion
 
+  // Obergrenzen schützen vor riesigen oder präparierten Dateien
+  const MAX_CHARS = 1500000;
+  const MAX_LINE = 1000;
+
   function extractFields(rawText) {
-    const allLines = toLines(rawText);
+    const capped = String(rawText || '').slice(0, MAX_CHARS);
+    const allLines = toLines(capped).map((l) => (l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l));
+    rawText = capped;
     const lines = repairWrappedDates(withoutNoise(allLines));
     const text = lines.join('\n');
     const kind = detectKind(normalize(rawText));
@@ -499,8 +506,14 @@
       add({ key: 'email_other', label: 'Weitere E-Mail-Adresse', target: 'emails_old', value: e, confidence: 'medium', note: 'Nur übernehmen, wenn die Adresse dir gehört.' });
     }
     if (kind === 'account-page' && !accountEmail) {
-      const masked = /[A-Za-z0-9._%+-]*[*•]{2,}[A-Za-z0-9._%+*•-]*@[A-Za-z0-9.*•-]+\.[A-Za-z]{2,24}/.exec(text);
-      if (masked) add({ key: 'email_masked', label: 'E-Mail-Adresse (teilweise verdeckt)', target: null, value: masked[0], info: true, note: 'Epic zeigt die Adresse nur teilweise. Prüfe, ob das deine ist.' });
+      for (const line of lines) {
+        if (!line.includes('@') || !/[*•]{2}/.test(line)) continue;
+        const masked = /(?<![A-Za-z0-9._%+*•-])[A-Za-z0-9._%+-]{0,64}[*•]{2,64}[A-Za-z0-9._%+-]{0,64}[*•]{0,64}@[A-Za-z0-9*•-]{1,64}(?:\.[A-Za-z0-9*•-]{1,64}){0,4}\.[A-Za-z]{2,24}/.exec(line);
+        if (masked) {
+          add({ key: 'email_masked', label: 'E-Mail-Adresse (teilweise verdeckt)', target: null, value: masked[0], info: true, note: 'Epic zeigt die Adresse nur teilweise. Prüfe, ob das deine ist.' });
+          break;
+        }
+      }
     }
 
     // --- Rechnungs- und Bestellnummern (Bestellnummern zuerst, damit sie nicht als Rechnungsnummer zählen)

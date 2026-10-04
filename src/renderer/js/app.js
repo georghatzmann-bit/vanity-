@@ -67,6 +67,25 @@
     window.Store.update((s) => { s.ui.welcomeSeen = true; }, 'welcome');
   }
 
+  // Gespeicherte Daten ließen sich nicht öffnen: klar sagen, was passiert ist und dass nichts gelöscht wurde
+  function storeProblemNotice(problem) {
+    if (problem.kind === 'restored-backup') {
+      toast('Der letzte Speicherstand war beschädigt. Die vorherige Sicherung wurde geladen.', 'warning');
+      return Promise.resolve();
+    }
+    const kept = problem.kept && problem.kept.length ? problem.kept : [];
+    return confirmDialog({
+      title: 'Gespeicherte Daten ließen sich nicht öffnen',
+      body: el('div', { class: 'stack-sm' }, [
+        el('p', { class: 'muted', text: 'Das passiert zum Beispiel, wenn das Windows-Passwort zurückgesetzt wurde oder die Daten von einem anderen PC stammen. Deshalb startet der Konto-Retter leer.' }),
+        el('p', { class: 'muted', text: kept.length ? 'Nichts wurde gelöscht. Die alte Datei wurde aufbewahrt:' : 'Die alte Datei wurde nicht verändert.' }),
+        ...kept.map((k) => el('div', { class: 'url mono hint', text: k })),
+      ]),
+      confirmText: 'Verstanden',
+      cancelText: null,
+    });
+  }
+
   async function boot() {
     let info = null;
     try {
@@ -82,6 +101,7 @@
     window.Store.subscribe(() => renderNav());
     const s = window.Store.get();
     go(ORDER.includes(s.ui.view) ? s.ui.view : 'recovery');
+    if (info && info.storeProblem) await storeProblemNotice(info.storeProblem);
     if (!s.ui.welcomeSeen) welcome();
   }
 

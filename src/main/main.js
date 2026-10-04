@@ -5,7 +5,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, shell, clipboard, dialog, safeStorage, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, clipboard, dialog, safeStorage, Menu, screen } = require('electron');
 
 const { createStore } = require('./store');
 const { isAllowedUrl } = require('./links');
@@ -84,11 +84,13 @@ function resourcesDir() {
 }
 
 function createWindow() {
+  // Auf kleinen Bildschirmen (z. B. 1366 x 768) nicht größer als der Bildschirm öffnen
+  const area = screen.getPrimaryDisplay().workAreaSize;
   mainWindow = new BrowserWindow({
-    width: 1240,
-    height: 840,
-    minWidth: 960,
-    minHeight: 640,
+    width: Math.min(1240, area.width),
+    height: Math.min(840, area.height),
+    minWidth: Math.min(900, area.width),
+    minHeight: Math.min(600, area.height),
     show: false,
     backgroundColor: '#0F1115',
     title: 'Konto-Retter',
@@ -143,6 +145,7 @@ function registerIpc() {
     platform: process.platform,
     dataFile: store.file,
     encrypted: store.encrypted(),
+    storeProblem: store.problem(),
   }));
 
   handle('state:load', () => ok(store.load()));

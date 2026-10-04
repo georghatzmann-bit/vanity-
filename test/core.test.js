@@ -59,6 +59,34 @@ test('Kaputte Datei: Sicherung wird benutzt', async () => {
   assert.equal(loaded.data.display_name, 'Erste');
 });
 
+test('Nicht entschlüsselbare Daten werden nie überschrieben, sondern aufbewahrt', async () => {
+  const dir = tmpDir();
+  const s1 = createStore({ dir, crypto: fakeCrypto, defaults: DEFAULTS });
+  const st = s1.load();
+  st.data.account_id = 'geheim-1234';
+  await s1.save(st);
+  await s1.save(st); // jetzt gibt es auch eine .bak-Datei
+  const original = fs.readFileSync(path.join(dir, FILE_NAME), 'utf8');
+
+  // Anderer Schlüssel (z. B. nach Zurücksetzen des Windows-Passworts)
+  const otherKey = { isAvailable: () => true, encrypt: fakeCrypto.encrypt, decrypt: () => { throw new Error('falscher Schlüssel'); } };
+  const s2 = createStore({ dir, crypto: otherKey, defaults: DEFAULTS });
+  const fresh = s2.load();
+  assert.equal(fresh.data.account_id, '');
+  assert.equal(s2.problem().kind, 'unreadable');
+  assert.equal(s2.problem().kept.length, 2);
+  await s2.save(fresh);
+  await s2.save(fresh);
+  const kept = fs.readdirSync(dir).filter((f) => f.startsWith('konto-retter-daten.unlesbar-'));
+  assert.equal(kept.length, 2);
+  assert.ok(kept.some((f) => fs.readFileSync(path.join(dir, f), 'utf8') === original), 'Originaldatei muss unverändert aufbewahrt sein');
+  // Mit dem richtigen Schlüssel lässt sich die aufbewahrte Datei weiter lesen
+  const keptMain = kept.find((f) => !f.endsWith('.bak.json'));
+  const restoreDir = tmpDir();
+  fs.copyFileSync(path.join(dir, keptMain), path.join(restoreDir, FILE_NAME));
+  assert.equal(createStore({ dir: restoreDir, crypto: fakeCrypto, defaults: DEFAULTS }).load().data.account_id, 'geheim-1234');
+});
+
 test('Standardwerte werden nicht zwischen Ladevorgängen geteilt', () => {
   const dir = tmpDir();
   const store = createStore({ dir, crypto: null, defaults: DEFAULTS });

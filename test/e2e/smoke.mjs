@@ -90,10 +90,12 @@ await shot('07-discord');
 await app.close();
 const app2 = await electron.launch({ ...launch, timeout: 60000 });
 const win2 = await app2.firstWindow();
-await win2.waitForSelector('.nav');
-await win2.waitForTimeout(800);
+await win2.setViewportSize({ width: 1280, height: 860 });
+await win2.waitForSelector('.nav-item .nav-badge', { timeout: 20000 });
+await win2.waitForTimeout(500);
 check((await win2.locator('.modal').count()) === 0, 'Begrüßung kam nach Neustart erneut');
-const badge = await win2.locator('.nav-item').first().innerText();
+// textContent statt innerText: bei kleinen Bildschirmen ist die Beschriftung ausgeblendet
+const badge = await win2.locator('.nav-item').first().locator('.nav-badge').textContent();
 check(badge.includes('1/20'), 'Fortschritt nach Neustart verloren: ' + badge);
 await win2.screenshot({ path: path.join(outDir, '08-nach-neustart.png') });
 await app2.close();

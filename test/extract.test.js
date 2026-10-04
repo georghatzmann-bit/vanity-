@@ -151,3 +151,21 @@ test('Sonderzeichen aus PDFs (geschützte Leerzeichen, Ligaturen) stören nicht'
   assert.deepEqual(values(found, 'account_id'), ['94b1569506b04f9f8557af611e8c5e47']);
   assert.deepEqual(values(found, 'display_name'), ['GeorgZockt']);
 });
+
+test('Präparierte oder riesige Texte frieren die Erkennung nicht ein', () => {
+  const cases = {
+    'PayPal und viele Sternchen': 'PayPal PAID FROM ' + '*'.repeat(100000),
+    'Zeilen voller x': 'INVOICE ID PAID FROM ' + ('xX'.repeat(150) + '\n').repeat(2000),
+    'verdeckte Mail-Muster': 'Kontoinformationen\n' + ('a'.repeat(60) + '*'.repeat(200) + '@').repeat(500),
+    'sehr lange Adresse': 'Account Information ' + 'a'.repeat(500000) + '@b',
+    'IPv6-Muster': 'HISTORY_ACCOUNT_X ' + '1:2:3:4:'.repeat(50000),
+    'viele Beschriftungen': 'Display Name\n'.repeat(50000),
+    '3 MB Text': 'INVOICE ID ' + 'abc def 0123 @ * x\n'.repeat(160000),
+  };
+  for (const [name, text] of Object.entries(cases)) {
+    const start = Date.now();
+    extractFields(text);
+    const ms = Date.now() - start;
+    assert.ok(ms < 3000, name + ' dauerte ' + ms + ' ms');
+  }
+});

@@ -3,6 +3,9 @@
 // in einer Datei im Benutzerordner. Unter Windows wird der Inhalt mit
 // Electron safeStorage (Windows-Datenschutz DPAPI) verschlüsselt, damit andere
 // Benutzerkonten auf dem PC die Daten nicht lesen können.
+//
+// Wichtig: Eine vorhandene Datei, die sich nicht lesen lässt (z. B. weil Windows den
+// Schlüssel verloren hat), wird NIE überschrieben, sondern beiseitegelegt.
 
 const fs = require('fs');
 const path = require('path');
@@ -24,10 +27,18 @@ function withDefaults(value, defaults) {
   return out;
 }
 
+function timestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
 function createStore({ dir, crypto, defaults }) {
   const file = path.join(dir, FILE_NAME);
   const backup = file + '.bak';
   let writing = Promise.resolve();
+  // Darf die aktuelle Datei als Sicherung (.bak) weitergereicht werden?
+  // Nur wenn sie in dieser Sitzung gelesen oder von uns geschrieben wurde.
+  let fileTrusted = false;
+  let loadProblem = null;
 
   function encode(state) {
     const json = JSON.stringify(state);
@@ -44,31 +55,75 @@ function createStore({ dir, crypto, defaults }) {
       if (!crypto || !crypto.isAvailable()) throw new Error('Verschlüsselung auf diesem PC nicht verfügbar');
       return JSON.parse(crypto.decrypt(Buffer.from(wrapper.data, 'base64')));
     }
+    if (!isPlainObject(wrapper.data)) throw new Error('Leerer Speicherstand');
     return wrapper.data;
   }
 
+  // Ergebnis: { state } wenn lesbar, { missing: true } wenn nicht vorhanden, { error } wenn kaputt
   function readFileState(f) {
+    let raw;
     try {
-      return decode(fs.readFileSync(f, 'utf8'));
+      raw = fs.readFileSync(f, 'utf8');
     } catch (err) {
-      if (err.code !== 'ENOENT') console.warn('[store] Datei nicht lesbar:', f, err.message);
+      if (err.code === 'ENOENT') return { missing: true };
+      return { error: err };
+    }
+    try {
+      return { state: decode(raw) };
+    } catch (err) {
+      return { error: err };
+    }
+  }
+
+  // Unlesbare Datei umbenennen, damit sie garantiert nie überschrieben wird.
+  function setAside(f) {
+    const target = path.join(dir, 'konto-retter-daten.unlesbar-' + timestamp() + (f === backup ? '.bak' : '') + '.json');
+    try {
+      fs.renameSync(f, target);
+      return target;
+    } catch (err) {
+      console.warn('[store] Konnte unlesbare Datei nicht beiseitelegen:', err.message);
       return null;
     }
   }
 
   function load() {
-    const state = readFileState(file) || readFileState(backup) || {};
-    return withDefaults(state, structuredClone(defaults));
+    loadProblem = null;
+    const main = readFileState(file);
+    if (main.state) {
+      fileTrusted = true;
+      return withDefaults(main.state, structuredClone(defaults));
+    }
+    const bak = readFileState(backup);
+    const kept = [];
+    if (main.error) {
+      const moved = setAside(file);
+      if (moved) kept.push(moved);
+    }
+    if (bak.state) {
+      // Hauptdatei kaputt, Sicherung gut: mit der Sicherung weitermachen
+      fileTrusted = false;
+      if (main.error) loadProblem = { kind: 'restored-backup', kept };
+      return withDefaults(bak.state, structuredClone(defaults));
+    }
+    if (bak.error) {
+      const moved = setAside(backup);
+      if (moved) kept.push(moved);
+    }
+    if (main.error || bak.error) loadProblem = { kind: 'unreadable', kept };
+    fileTrusted = false;
+    return withDefaults({}, structuredClone(defaults));
   }
 
   function writeNow(state) {
     fs.mkdirSync(dir, { recursive: true });
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, encode(state), 'utf8');
-    if (fs.existsSync(file)) {
+    if (fileTrusted && fs.existsSync(file)) {
       try { fs.copyFileSync(file, backup); } catch (_) { /* Sicherung ist nur ein Extra */ }
     }
     fs.renameSync(tmp, file);
+    fileTrusted = true;
   }
 
   // Schreibvorgänge nacheinander ausführen, damit sich zwei Speicherungen nie überholen.
@@ -82,10 +137,18 @@ function createStore({ dir, crypto, defaults }) {
     for (const f of [file, backup]) {
       try { fs.unlinkSync(f); } catch (_) { /* nicht vorhanden */ }
     }
+    fileTrusted = false;
     return withDefaults({}, structuredClone(defaults));
   }
 
-  return { file, load, save, reset, encrypted: () => Boolean(crypto && crypto.isAvailable()) };
+  return {
+    file,
+    load,
+    save,
+    reset,
+    problem: () => loadProblem,
+    encrypted: () => Boolean(crypto && crypto.isAvailable()),
+  };
 }
 
 module.exports = { createStore, withDefaults, FILE_NAME };
