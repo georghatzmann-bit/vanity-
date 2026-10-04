@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('kr', {
   findEpicAccountIds: () => call('epic:find-account-ids'),
   epicAccounts: {
     status: () => call('epic:accounts:status'),
-    save: (label) => call('epic:accounts:save', label),
+    save: (label, targetId) => call('epic:accounts:save', label, targetId),
     switchTo: (id) => call('epic:accounts:switch', id),
     remove: (id) => call('epic:accounts:remove', id),
     rename: (id, label) => call('epic:accounts:rename', id, label),

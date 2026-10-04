@@ -5,8 +5,8 @@
 //   %LOCALAPPDATA%\EpicGamesLauncher\Saved\Config\WindowsEditor\GameUserSettings.ini   (ab Launcher 19, Nov. 2025)
 //   %LOCALAPPDATA%\EpicGamesLauncher\Saved\Config\Windows\GameUserSettings.ini         (ältere Launcher)
 // und die Konto-ID unter HKCU\Software\Epic Games\Unreal Engine\Identifiers (Wert AccountId).
-// Der Konto-Retter sichert beides pro Konto und spielt es beim Wechsel wieder ein – so machen es
-// auch bekannte Konto-Wechsler wie der TcNo Account Switcher. Danach startet der Launcher neu.
+// Der Konto-Retter sichert beides pro Konto und spielt es beim Wechsel wieder ein – so macht es
+// auch der TcNo Account Switcher. Danach startet der Launcher neu.
 //
 // Wichtig: "Abmelden" im Launcher macht den gespeicherten Zugang auf Epic-Seite ungültig.
 // Für ein weiteres Konto deshalb addNew() benutzen: Das leert nur die lokale Anmeldung.
@@ -29,20 +29,24 @@ const FILE_NAME = 'epic-konten.json';
 const REG_KEY = 'HKCU\\Software\\Epic Games\\Unreal Engine\\Identifiers';
 const REG_VALUE = 'AccountId';
 const RE_ACCOUNT_ID = /^[0-9a-f]{32}$/i;
+const EMPTY_LOGIN = 'Enable=True\nData=';
 
 let dataDir = null;
 let crypto = null;        // { isAvailable, encrypt, decrypt } (Electron safeStorage) oder null
 let iniOverride = null;   // für Tests: eigene GameUserSettings.ini
 let exeOverride = null;   // für Tests
-let noProcess = false;    // für Tests: Launcher nicht schließen/starten
-let registry = null;      // { get(): Promise<string|null>, set(v): Promise<boolean> }
+let noProcess = false;    // für Tests: Launcher nicht suchen/beenden
+let registry = null;      // { get(): Promise<string|null>, set(v): Promise<boolean>, del(): Promise<boolean> }
+let launchOverride = null; // für Tests: async (exe) => '' oder Fehlermeldung
+let openFallback = null;  // Electron shell.openPath: startet über Windows selbst (auch mit Administrator-Abfrage)
+let writeHook = null;     // für Tests: simuliert Schreibfehler
 
 function isWindows() {
   return process.platform === 'win32';
 }
 
 function ok(message, extra) { return Object.assign({ ok: true, message }, extra || {}); }
-function fail(message) { return { ok: false, message }; }
+function fail(message, extra) { return Object.assign({ ok: false, message }, extra || {}); }
 
 function init(opts) {
   dataDir = opts.dataDir;
@@ -50,6 +54,9 @@ function init(opts) {
   iniOverride = opts.ini || null;
   exeOverride = opts.exe || null;
   noProcess = Boolean(opts.noProcess);
+  launchOverride = opts.launch || null;
+  openFallback = opts.openFallback || null;
+  writeHook = null;
   if (opts.registry) registry = opts.registry;
   else if (opts.noProcess) registry = memoryRegistry();
   else if (isWindows()) registry = regExeRegistry(opts.regKey || REG_KEY);
@@ -70,6 +77,10 @@ function savedDir() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
 function run(file, args, timeout) {
@@ -101,6 +112,11 @@ function regExeRegistry(key) {
       const r = await run('reg', ['add', key, '/v', REG_VALUE, '/t', 'REG_SZ', '/d', String(value), '/f']);
       return r.code === 0;
     },
+    async del() {
+      // Fehlt der Wert schon, meldet reg einen Fehler – das ist in Ordnung
+      await run('reg', ['delete', key, '/v', REG_VALUE, '/f']);
+      return true;
+    },
   };
 }
 
@@ -109,10 +125,11 @@ function memoryRegistry() {
   return {
     async get() { return value; },
     async set(v) { value = v; return true; },
+    async del() { value = null; return true; },
   };
 }
 
-async function readRegistryAccountId() {
+async function registryAccountId() {
   if (!registry) return null;
   try {
     const v = await registry.get();
@@ -122,9 +139,20 @@ async function readRegistryAccountId() {
   }
 }
 
-// Ersatz, falls die Registry leer ist: der Launcher legt pro angemeldetem Konto
-// Saved\Data\<Konto-ID>.dat an (manchmal mit "OC_" davor); die neueste Datei gehört zum letzten Konto.
-function newestDataAccountId() {
+// Stellt die Konto-ID des Ziels ein. Hat das Ziel keine, wird der Wert gelöscht, damit nie die ID
+// eines anderen Kontos stehen bleibt (der Launcher schreibt sie beim Anmelden selbst neu).
+async function applyRegistry(accountId) {
+  if (!registry) return;
+  try {
+    if (accountId) await registry.set(accountId);
+    else if (registry.del) await registry.del();
+  } catch (_) { /* nur Hilfe für den Launcher */ }
+}
+
+// Nur als Hinweis (Anzeige, Vorschlag für den Namen), nie zum Zuordnen: Der Launcher legt pro
+// angemeldetem Konto Saved\Data\<Konto-ID>.dat an (manchmal mit "OC_" davor).
+function dataFolderAccountId() {
+  if (iniOverride) return null;
   const dir = path.join(savedDir(), 'Data');
   let best = null;
   try {
@@ -138,29 +166,32 @@ function newestDataAccountId() {
   return best ? best.id : null;
 }
 
-async function currentAccountId() {
-  return (await readRegistryAccountId()) || (iniOverride ? null : newestDataAccountId());
-}
-
 // ---------- Einstellungsdateien des Launchers ----------
 
-// Alle GameUserSettings.ini unter Saved\Config\<Ordner>\. Reihenfolge: WindowsEditor (aktueller Launcher),
-// Windows (älterer Launcher), dann alle anderen.
-function loginFiles() {
-  if (iniOverride) return exists(iniOverride) ? [iniOverride] : [];
-  const base = path.join(savedDir(), 'Config');
-  let dirs = [];
-  try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch (_) { return []; }
-  const rank = (d) => (d === 'WindowsEditor' ? 0 : d === 'Windows' ? 1 : 2);
-  dirs.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  return dirs.map((d) => path.join(base, d, SETTINGS_NAME)).filter(exists);
+function configDir() {
+  return path.join(savedDir(), 'Config');
 }
 
-// Wo der Launcher die Datei anlegen würde (nur für Meldungen und die Diagnose)
-function expectedFile() {
+// Alle GameUserSettings.ini unter Saved\Config\<Ordner>\ (für Diagnose und zum Aufräumen alter Kopien).
+// Reihenfolge: WindowsEditor (aktueller Launcher), Windows (älterer Launcher), dann alle anderen.
+function allLoginFiles() {
+  if (iniOverride) return exists(iniOverride) ? [iniOverride] : [];
+  let dirs = [];
+  try { dirs = fs.readdirSync(configDir(), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch (_) { return []; }
+  const rank = (d) => (d === 'WindowsEditor' ? 0 : d === 'Windows' ? 1 : 2);
+  dirs.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  return dirs.map((d) => path.join(configDir(), d, SETTINGS_NAME)).filter(exists);
+}
+
+// Die Datei, die der installierte Launcher liest: WindowsEditor, sobald es den Ordner gibt (Launcher 19+),
+// sonst Windows. Nur diese zählt – Kopien in anderen Ordnern werden ignoriert.
+function launcherFile() {
   if (iniOverride) return iniOverride;
-  const editor = path.join(savedDir(), 'Config', 'WindowsEditor', SETTINGS_NAME);
-  return exists(path.dirname(editor)) ? editor : path.join(savedDir(), 'Config', 'Windows', SETTINGS_NAME);
+  const editor = path.join(configDir(), 'WindowsEditor', SETTINGS_NAME);
+  const legacy = path.join(configDir(), 'Windows', SETTINGS_NAME);
+  if (exists(path.dirname(editor))) return editor;
+  if (exists(path.dirname(legacy))) return legacy;
+  return allLoginFiles()[0] || editor;
 }
 
 // Launcher-Version aus dem Anfang der Logdatei (nur für die Diagnose)
@@ -192,19 +223,38 @@ function readIni(file) {
     if (err.code === 'ENOENT') return null;
     throw err;
   }
-  if (buf[0] === 0xff && buf[1] === 0xfe) return { text: buf.subarray(2).toString('utf16le'), enc: 'utf16le', bom: true };
-  if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return { text: buf.subarray(3).toString('utf8'), enc: 'utf8', bom: true };
-  return { text: buf.toString('utf8'), enc: 'utf8', bom: false };
+  if (buf[0] === 0xff && buf[1] === 0xfe) return { text: buf.subarray(2).toString('utf16le'), enc: 'utf16le', bom: true, raw: buf };
+  if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return { text: buf.subarray(3).toString('utf8'), enc: 'utf8', bom: true, raw: buf };
+  return { text: buf.toString('utf8'), enc: 'utf8', bom: false, raw: buf };
+}
+
+// Ersetzt eine Datei atomar. Hält ein anderes Programm (Virenscanner, Launcher-Rest) sie kurz fest,
+// wird bis zu ~2 Sekunden erneut versucht.
+function replaceFile(file, bytes) {
+  if (writeHook) writeHook(file);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = file + '.kr-tmp';
+  fs.writeFileSync(tmp, bytes);
+  for (let i = 0; ; i++) {
+    try {
+      fs.renameSync(tmp, file);
+      return;
+    } catch (err) {
+      if (i < 10 && ['EPERM', 'EBUSY', 'EACCES'].includes(err.code)) {
+        sleepSync(200);
+        continue;
+      }
+      try { fs.unlinkSync(tmp); } catch (_) { /* schon weg */ }
+      throw err;
+    }
+  }
 }
 
 function writeIni(file, ini, text) {
   let out;
   if (ini.enc === 'utf16le') out = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
   else out = Buffer.concat([ini.bom ? Buffer.from([0xef, 0xbb, 0xbf]) : Buffer.alloc(0), Buffer.from(text, 'utf8')]);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = file + '.kr-tmp';
-  fs.writeFileSync(tmp, out);
-  fs.renameSync(tmp, file);
+  replaceFile(file, out);
 }
 
 function newlineOf(text) {
@@ -267,16 +317,34 @@ function parseKeys(body) {
   return o;
 }
 
-// Schreibt denselben [RememberMe]-Abschnitt in alle Einstellungsdateien des Launchers.
-// Welche Datei ein Launcher liest, hängt von seiner Version ab – in die andere zu schreiben schadet nicht.
-function writeLoginSection(body) {
-  const files = loginFiles();
-  if (!files.length) return false;
-  for (const file of files) {
-    const ini = readIni(file);
-    if (ini) writeIni(file, ini, setSection(ini.text, SECTION, body));
+// Schreibt die Anmeldung in die Datei des Launchers und leert alte Kopien in anderen Ordnern
+// (damit kein überflüssiger Zugang auf der Platte liegt). Geht dabei etwas schief, werden alle
+// schon geänderten Dateien wiederhergestellt.
+function writeLogin(body) {
+  const target = launcherFile();
+  const plan = [{ file: target, body }];
+  for (const f of allLoginFiles()) {
+    if (f === target) continue;
+    const ini = readIni(f);
+    const sec = ini ? getSection(ini.text, SECTION) : null;
+    if (sec !== null && parseKeys(sec).Data) plan.push({ file: f, body: 'Enable=False\nData=' });
   }
-  return true;
+  const done = [];
+  try {
+    for (const step of plan) {
+      const ini = readIni(step.file);
+      if (!ini) continue;
+      writeIni(step.file, ini, setSection(ini.text, SECTION, step.body));
+      done.push({ file: step.file, raw: ini.raw });
+    }
+  } catch (err) {
+    for (const d of done.reverse()) {
+      try { replaceFile(d.file, d.raw); } catch (_) { /* nichts mehr zu machen */ }
+    }
+    const e = new Error('Die Launcher-Einstellungen konnten nicht geschrieben werden (' + (err.code || err.message) + '). Es wurde nichts verändert.');
+    e.userMessage = e.message;
+    throw e;
+  }
 }
 
 // ---------- Was ist gerade im Launcher angemeldet? ----------
@@ -294,27 +362,28 @@ function readLoginFile(file) {
 }
 
 async function readCurrent() {
-  const files = loginFiles();
-  const reads = files.map(readLoginFile).filter(Boolean);
-  // Mit Anmeldung: die zuletzt geschriebene Datei gewinnt. Sonst die erste mit Abschnitt, sonst die erste.
-  const withLogin = reads.filter((r) => r.remembered).sort((a, b) => b.mtime - a.mtime);
-  const pick = withLogin[0] || reads.find((r) => r.sectionFound) || reads[0] || null;
-  const accountId = await currentAccountId();
-  if (!pick) {
-    return { found: false, file: expectedFile(), sectionFound: false, enable: '', dataLength: 0, remembered: false, email: '', data: '', section: '', accountId, files: reads };
+  const file = launcherFile();
+  const r = readLoginFile(file);
+  const accountId = await registryAccountId();
+  const others = allLoginFiles().filter((f) => f !== file).map(readLoginFile).filter(Boolean);
+  const files = (r ? [r] : []).concat(others);
+  const hint = accountId || dataFolderAccountId();
+  if (!r) {
+    return { found: false, file, sectionFound: false, enable: '', dataLength: 0, remembered: false, email: '', data: '', section: '', accountId, accountIdHint: hint, files };
   }
   return {
     found: true,
-    file: pick.file,
-    sectionFound: pick.sectionFound,
-    enable: pick.enable,
-    dataLength: pick.data.length,
-    remembered: pick.remembered,
-    email: pick.email,
-    data: pick.data,
-    section: pick.section,
+    file,
+    sectionFound: r.sectionFound,
+    enable: r.enable,
+    dataLength: r.data.length,
+    remembered: r.remembered,
+    email: r.email,
+    data: r.data,
+    section: r.section,
     accountId,
-    files: reads,
+    accountIdHint: hint,
+    files,
   };
 }
 
@@ -350,24 +419,34 @@ function saveProfiles(list) {
   const w = encrypted()
     ? { format: 'konto-retter-epic', version: 1, enc: 'safeStorage', data: crypto.encrypt(json).toString('base64') }
     : { format: 'konto-retter-epic', version: 1, enc: 'none', data: list };
-  const file = profilesFile();
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(w), 'utf8');
-  fs.renameSync(tmp, file);
+  replaceFile(profilesFile(), Buffer.from(JSON.stringify(w), 'utf8'));
 }
 
 function profileData(p) {
   return parseKeys(p.section).Data || '';
 }
 
-// Welches gespeicherte Konto ist gerade angemeldet?
+function sameEmail(a, b) {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+// Welches gespeicherte Konto ist gerade angemeldet? Ergebnis { profile, how } oder null.
 // 1. exakt derselbe Zugang, 2. dieselbe Konto-ID (Epic hat den Zugang erneuert), 3. dieselbe E-Mail-Adresse.
+// Widersprechen sich E-Mail-Adresse und Konto-ID, wird nichts zugeordnet – lieber ein Eintrag zu viel
+// als der Zugang eines Kontos unter dem Namen eines anderen.
 function matchProfile(list, cur) {
   if (!cur || !cur.remembered) return null;
-  return list.find((p) => cur.data && profileData(p) === cur.data)
-    || (cur.accountId ? list.find((p) => p.accountId && p.accountId === cur.accountId) : null)
-    || (cur.email ? list.find((p) => p.email && p.email.toLowerCase() === cur.email.toLowerCase()) : null)
-    || null;
+  const byData = cur.data ? list.find((p) => profileData(p) === cur.data) : null;
+  if (byData) return { profile: byData, how: 'data' };
+  if (cur.accountId) {
+    const p = list.find((x) => x.accountId === cur.accountId && !(x.email && cur.email && !sameEmail(x.email, cur.email)));
+    if (p) return { profile: p, how: 'id' };
+  }
+  if (cur.email) {
+    const p = list.find((x) => x.email && sameEmail(x.email, cur.email) && !(x.accountId && cur.accountId && x.accountId !== cur.accountId));
+    if (p) return { profile: p, how: 'email' };
+  }
+  return null;
 }
 
 function shortId(id) {
@@ -375,15 +454,16 @@ function shortId(id) {
 }
 
 // Nur das, was die Oberfläche sehen darf (nie den Zugang selbst)
-function publicView(p, current) {
+function publicView(p, currentId) {
   return {
     id: p.id,
     label: p.label,
     email: p.email || '',
     accountIdShort: shortId(p.accountId),
+    legacy: !p.accountId,
     savedAt: p.savedAt || null,
     lastUsed: p.lastUsed || null,
-    isCurrent: Boolean(current && current.id === p.id),
+    isCurrent: p.id === currentId,
   };
 }
 
@@ -393,29 +473,34 @@ function newId() {
 
 function defaultLabel(cur, list) {
   if (cur.email) return cur.email;
-  if (cur.accountId) return 'Epic-Konto ' + shortId(cur.accountId);
+  if (cur.accountIdHint) return 'Epic-Konto ' + shortId(cur.accountIdHint);
   return 'Epic-Konto ' + (list.length + 1);
 }
 
-// Aktuelle Anmeldung in die Liste übernehmen: vorhandenes Konto auffrischen oder neu anlegen.
+// Übernimmt die aktuelle Anmeldung in ein vorhandenes Konto.
+// Eine gespeicherte Konto-ID wird nur ersetzt, wenn der Nutzer das Konto ausdrücklich gewählt hat.
+function applyCurrent(p, cur, how) {
+  p.section = cur.section;
+  if (cur.email) p.email = cur.email;
+  if (cur.accountId && (!p.accountId || how === 'explicit')) p.accountId = cur.accountId;
+  p.savedAt = new Date().toISOString();
+}
+
+// Aktuelle Anmeldung in die Liste übernehmen: passendes Konto auffrischen oder neu anlegen.
 // Gibt { profile, created } zurück. Ändert nur die Liste im Speicher.
 function upsertCurrent(list, cur, label) {
-  const now = new Date().toISOString();
-  const existing = matchProfile(list, cur);
-  if (existing) {
-    existing.section = cur.section;
-    if (cur.email) existing.email = cur.email;
-    if (cur.accountId) existing.accountId = cur.accountId;
-    existing.savedAt = now;
-    if (label) existing.label = label.slice(0, 60);
-    return { profile: existing, created: false };
+  const m = matchProfile(list, cur);
+  if (m) {
+    applyCurrent(m.profile, cur, m.how);
+    if (label) m.profile.label = label.slice(0, 60);
+    return { profile: m.profile, created: false };
   }
   const p = {
     id: newId(),
     label: (label || defaultLabel(cur, list)).slice(0, 60),
     email: cur.email || '',
     accountId: cur.accountId || '',
-    savedAt: now,
+    savedAt: new Date().toISOString(),
     lastUsed: null,
     section: cur.section,
   };
@@ -434,22 +519,19 @@ async function isRunning() {
 async function waitGone(ms) {
   const until = Date.now() + ms;
   while (Date.now() < until) {
-    await sleep(250);
     if (!(await isRunning())) return true;
+    await sleep(250);
   }
   return !(await isRunning());
 }
 
-// Erst höflich (Fenster schließen, damit der Launcher seine Einstellungen schreibt),
-// dann hart, falls er sich nur in den Infobereich zurückzieht. Danach die Hilfsprogramme.
+// Der Launcher reagiert nicht auf "Fenster schließen" (er zieht sich nur in den Infobereich zurück).
+// Deshalb sofort hart beenden – genau wie der TcNo Account Switcher. Danach die Hilfsprogramme.
 async function stopLauncher() {
   if (noProcess) return true;
   if (await isRunning()) {
-    await run('taskkill', ['/IM', LAUNCHER_EXE]);
-    if (!(await waitGone(6000))) {
-      await run('taskkill', ['/IM', LAUNCHER_EXE, '/T', '/F']);
-      if (!(await waitGone(10000))) return false;
-    }
+    await run('taskkill', ['/IM', LAUNCHER_EXE, '/T', '/F']);
+    if (!(await waitGone(10000))) return false;
   }
   for (const exe of HELPER_EXES) await run('taskkill', ['/IM', exe, '/T', '/F'], 8000);
   await sleep(500);
@@ -473,17 +555,49 @@ async function findExe() {
   return cands.find(exists) || null;
 }
 
-function startLauncher(exe) {
-  if (noProcess || !exe) return;
-  const child = spawn(exe, [], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) });
-  child.unref();
+function spawnDetached(exe) {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(exe, [], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) });
+      child.once('error', (err) => resolve((err && (err.code || err.message)) || 'unbekannter Fehler'));
+      child.once('spawn', () => {
+        child.unref();
+        resolve('');
+      });
+    } catch (err) {
+      resolve(err.code || err.message);
+    }
+  });
+}
+
+// Startet den Launcher. Ergebnis: '' = gestartet, sonst Fehlerbeschreibung.
+// Klappt der direkte Start nicht (z. B. "Als Administrator ausführen" ist eingestellt), startet Windows ihn selbst.
+async function startLauncher(exe) {
+  const msg = (v) => (v ? String(v) : '');
+  if (launchOverride) {
+    try { return msg(await launchOverride(exe)); } catch (err) { return err.message; }
+  }
+  if (noProcess) return '';
+  if (!exe) return 'Launcher nicht gefunden';
+  const err = await spawnDetached(exe);
+  if (!err) return '';
+  if (openFallback) {
+    try { return msg(await openFallback(exe)); } catch (e) { return e.message; }
+  }
+  return err;
+}
+
+function startedMessage(text, startErr) {
+  return startErr
+    ? fail(text + ' Der Launcher konnte aber nicht automatisch gestartet werden (' + startErr + '). Starte ihn bitte selbst.', { code: 'start-failed' })
+    : ok(text);
 }
 
 // ---------- Öffentliche Funktionen ----------
 
 async function getStatus() {
   const sup = supported();
-  let cur = { found: false, file: '', sectionFound: false, enable: '', dataLength: 0, remembered: false, email: '', accountId: null, files: [] };
+  let cur = { found: false, file: '', sectionFound: false, enable: '', dataLength: 0, remembered: false, email: '', accountId: null, accountIdHint: null, files: [] };
   let problem = null;
   let accounts = [];
   let exe = null;
@@ -493,7 +607,8 @@ async function getStatus() {
     exe = await findExe();
   }
   const running = sup ? await isRunning() : false;
-  const current = matchProfile(accounts, cur);
+  const m = matchProfile(accounts, cur);
+  const currentId = m ? m.profile.id : null;
   return {
     supported: sup,
     launcherInstalled: Boolean(exe) || cur.found,
@@ -501,10 +616,11 @@ async function getStatus() {
     settingsFound: cur.found,
     remembered: Boolean(cur.remembered),
     currentEmail: cur.email || '',
-    currentAccountIdShort: shortId(cur.accountId),
+    currentAccountIdShort: shortId(cur.accountIdHint),
+    currentMatchId: currentId,
     encrypted: encrypted(),
     problem,
-    accounts: accounts.map((p) => publicView(p, current)),
+    accounts: accounts.map((p) => publicView(p, currentId)),
     // Was der Konto-Retter auf diesem PC sieht (ohne den Zugang selbst): hilft, wenn etwas nicht klappt
     diag: {
       localAppData: localAppData(),
@@ -515,6 +631,7 @@ async function getStatus() {
       dataLength: cur.dataLength || 0,
       email: cur.email || '',
       accountId: cur.accountId || '',
+      accountIdHint: cur.accountIdHint || '',
       launcherExe: exe || '',
       launcherVersion: sup && !noProcess ? launcherVersion() : '',
       configFiles: (cur.files || []).map((f) => ({
@@ -522,12 +639,13 @@ async function getStatus() {
         hasSection: f.sectionFound,
         dataLength: f.data ? f.data.length : 0,
         modified: f.mtime ? new Date(f.mtime).toISOString() : null,
+        used: f.file === cur.file,
       })),
     },
   };
 }
 
-// Launcher sauber beenden (für "Konto speichern", wenn er die Anmeldung noch nicht geschrieben hat)
+// Launcher beenden (wird von außen nur noch selten gebraucht)
 async function closeLauncher() {
   if (!supported()) return fail('Nur unter Windows verfügbar.');
   if (!(await isRunning())) return ok('Der Launcher war schon beendet.');
@@ -539,19 +657,26 @@ async function closeLauncher() {
 const NOT_FOUND = 'Die Einstellungen des Epic Games Launchers wurden nicht gefunden. Ist der Launcher installiert und wurde er schon einmal gestartet?';
 const NOT_CLOSED = 'Der Launcher ließ sich nicht schließen. Bitte schließ ihn von Hand (unten rechts im Infobereich: Rechtsklick auf das Epic-Symbol, "Beenden") und versuch es nochmal.';
 
-async function saveCurrent(label) {
+// targetId: Der Nutzer hat ausdrücklich gewählt, welchen Eintrag die aktuelle Anmeldung ersetzen soll
+// (z. B. einen alten Eintrag, der nicht mehr funktioniert).
+async function saveCurrent(label, targetId) {
   if (!supported()) return fail('Nur unter Windows verfügbar.');
   const cur = await readCurrent();
   if (!cur.found) return fail(NOT_FOUND);
   if (!cur.remembered) {
-    const running = await isRunning();
-    return Object.assign(fail(running
-      ? 'Der Launcher läuft, aber in seiner Einstellungsdatei steht noch keine Anmeldung. Er schreibt sie oft erst beim Beenden.'
-      : 'In der Einstellungsdatei des Launchers steht keine Anmeldung. Starte den Launcher, melde dich an und setz den Haken bei "Angemeldet bleiben". Beende ihn dann über das Symbol unten rechts (Rechtsklick, "Beenden") und speichere hier erneut.'),
-    { code: 'not-remembered', running });
+    return fail('Im Launcher ist gerade niemand mit "Angemeldet bleiben" angemeldet. Melde dich im Launcher an, setz den Haken bei "Angemeldet bleiben" und speichere dann hier.', { code: 'not-remembered', running: await isRunning() });
   }
   const list = loadProfiles();
-  const { profile, created } = upsertCurrent(list, cur, String(label || '').trim());
+  const name = String(label || '').trim();
+  if (targetId) {
+    const p = list.find((x) => x.id === targetId);
+    if (!p) return fail('Dieses Konto ist nicht mehr gespeichert.');
+    applyCurrent(p, cur, 'explicit');
+    if (name) p.label = name.slice(0, 60);
+    saveProfiles(list);
+    return ok('"' + p.label + '" wurde mit der aktuellen Anmeldung aktualisiert.', { id: p.id });
+  }
+  const { profile, created } = upsertCurrent(list, cur, name);
   saveProfiles(list);
   return ok('"' + profile.label + '" wurde ' + (created ? 'gespeichert.' : 'aktualisiert.'), { id: profile.id });
 }
@@ -564,30 +689,30 @@ async function switchTo(id) {
   if (!profileData(p)) return fail('Für "' + p.label + '" ist kein Zugang gespeichert. Melde dich im Launcher mit diesem Konto an und speichere es neu.');
   const exe = await findExe();
   if (!exe && !noProcess) return fail('Der Epic Games Launcher wurde auf diesem PC nicht gefunden.');
-  if (!loginFiles().length) return fail(NOT_FOUND);
+  if (!exists(launcherFile())) return fail(NOT_FOUND);
 
   if (!(await stopLauncher())) return fail(NOT_CLOSED);
 
-  // Erst nach dem Schließen lesen: Der Launcher schreibt beim Beenden seinen aktuellen (evtl. erneuerten) Zugang.
-  // Das bisher angemeldete Konto wird so aufgefrischt bzw. mitgesichert und geht nie verloren.
+  // Erst nach dem Beenden lesen. Die aktuelle Anmeldung geht nie verloren: Sie frischt das passende
+  // Konto auf (auch das Ziel selbst, wenn sein Zugang inzwischen erneuert wurde) oder wird neu gesichert.
   const cur = await readCurrent();
   let kept = null;
   if (cur.remembered) {
-    const before = matchProfile(list, cur);
-    if (before !== p) {
-      const r = upsertCurrent(list, cur, '');
-      if (r.created) kept = r.profile;
-    }
-  }
-
-  writeLoginSection(p.section);
-  if (p.accountId && registry) {
-    try { await registry.set(p.accountId); } catch (_) { /* nur Hilfe für den Launcher */ }
+    const r = upsertCurrent(list, cur, '');
+    if (r.created) kept = r.profile;
   }
   p.lastUsed = new Date().toISOString();
+  // Zuerst die Liste sichern, erst dann die Launcher-Datei ändern
   saveProfiles(list);
-  startLauncher(exe);
-  return ok('Der Launcher startet jetzt mit "' + p.label + '".' + (kept ? ' Dein bisheriges Konto wurde als "' + kept.label + '" mitgesichert.' : ''), { id: p.id });
+  try {
+    writeLogin(p.section);
+  } catch (err) {
+    await startLauncher(exe);
+    return fail(err.userMessage || err.message);
+  }
+  await applyRegistry(p.accountId);
+  const startErr = await startLauncher(exe);
+  return startedMessage('Der Launcher startet jetzt mit "' + p.label + '".' + (kept ? ' Dein bisheriges Konto wurde als "' + kept.label + '" mitgesichert.' : ''), startErr);
 }
 
 // "Weiteres Konto hinzufügen": aktuelles Konto sichern, nur die lokale Anmeldung leeren (NICHT abmelden –
@@ -596,21 +721,24 @@ async function addNew() {
   if (!supported()) return fail('Nur unter Windows verfügbar.');
   const exe = await findExe();
   if (!exe && !noProcess) return fail('Der Epic Games Launcher wurde auf diesem PC nicht gefunden.');
-  if (!loginFiles().length) return fail(NOT_FOUND);
+  if (!exists(launcherFile())) return fail(NOT_FOUND);
   if (!(await stopLauncher())) return fail(NOT_CLOSED);
 
   const list = loadProfiles();
   const cur = await readCurrent();
   let kept = null;
-  if (cur.remembered) {
-    const r = upsertCurrent(list, cur, '');
-    kept = r.profile;
-    saveProfiles(list);
+  if (cur.remembered) kept = upsertCurrent(list, cur, '').profile;
+  saveProfiles(list);
+  try {
+    writeLogin(EMPTY_LOGIN);
+  } catch (err) {
+    await startLauncher(exe);
+    return fail(err.userMessage || err.message);
   }
-  writeLoginSection('Enable=True\nData=');
-  startLauncher(exe);
-  return ok('Der Launcher zeigt gleich die Anmeldung. Melde dich mit dem nächsten Konto an (Haken bei "Angemeldet bleiben") und klick dann hier auf "Aktuelles Konto speichern".'
-    + (kept ? ' Dein bisheriges Konto ist als "' + kept.label + '" gesichert.' : ''));
+  await applyRegistry(null);
+  const startErr = await startLauncher(exe);
+  return startedMessage('Der Launcher zeigt gleich die Anmeldung. Melde dich mit dem nächsten Konto an (Haken bei "Angemeldet bleiben") und klick dann hier auf "Aktuelles Konto speichern".'
+    + (kept ? ' Dein bisheriges Konto ist als "' + kept.label + '" gesichert.' : ''), startErr);
 }
 
 async function remove(id) {
@@ -641,4 +769,5 @@ module.exports = {
   init, getStatus, saveCurrent, switchTo, addNew, remove, rename, removeAll, closeLauncher,
   // für Tests
   _ini: { readIni, writeIni, getSection, setSection, parseKeys },
+  _test: { setWriteHook: (fn) => { writeHook = fn || null; } },
 };

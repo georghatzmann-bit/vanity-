@@ -61,46 +61,74 @@
     return yes ? text.trim() : null;
   }
 
-  // Erklärt, was zu tun ist, wenn der Launcher die Anmeldung noch nicht in seine Datei geschrieben hat.
-  // Läuft der Launcher, bietet der Dialog an, ihn sauber zu beenden und danach erneut zu lesen.
-  async function notRememberedDialog(running) {
+  // Erklärt, was zu tun ist, wenn im Launcher niemand mit "Angemeldet bleiben" angemeldet ist.
+  async function notRememberedDialog() {
     const body = el('div', { class: 'stack' }, [
-      el('p', { class: 'muted', text: running
-        ? 'Der Launcher läuft, aber in seiner Einstellungsdatei steht noch keine Anmeldung. Der Launcher schreibt sie oft erst, wenn er beendet wird – das Fenster zu schließen reicht nicht.'
-        : 'In der Einstellungsdatei des Launchers steht keine Anmeldung.' }),
+      el('p', { class: 'muted', text: 'In der Einstellungsdatei des Launchers steht gerade keine Anmeldung.' }),
       el('ol', { class: 'todo-list' }, [
         el('li', { text: 'Im Launcher anmelden und den Haken bei "Angemeldet bleiben" setzen.' }),
-        el('li', { text: 'Den Launcher beenden: unten rechts neben der Uhr auf das Epic-Symbol rechtsklicken und "Beenden" wählen.' }),
         el('li', { text: 'Dann hier erneut auf "Aktuelles Konto speichern" klicken.' }),
       ]),
       el('p', { class: 'hint', text: 'Zwei-Faktor-Schutz (2FA) muss dafür NICHT aus. Klappt es trotzdem nicht: unter "Was der Konto-Retter sieht" die Diagnose kopieren und melden.' }),
     ]);
-    return confirmDialog({
-      title: 'Noch keine Anmeldung gefunden',
-      body,
-      confirmText: running ? 'Launcher jetzt beenden und nochmal lesen' : 'Verstanden',
-      cancelText: running ? 'Abbrechen' : null,
-    });
+    return confirmDialog({ title: 'Noch keine Anmeldung gefunden', body, confirmText: 'Verstanden', cancelText: null });
+  }
+
+  // Speichern-Dialog. Erkennt der Konto-Retter das angemeldete Konto nicht von selbst, kann man hier
+  // einen vorhandenen Eintrag wählen, der damit ersetzt wird (z. B. einen alten Eintrag, der nicht mehr geht).
+  // Ergebnis: { name, targetId } oder null (abgebrochen).
+  async function askSave() {
+    const accounts = status.accounts || [];
+    const matched = accounts.find((a) => a.id === status.currentMatchId);
+    let name = matched ? matched.label : (status.currentEmail || (status.currentAccountIdShort ? 'Epic-Konto ' + status.currentAccountIdShort : ''));
+    let target = null;
+    const input = el('input', { class: 'input', type: 'text', value: name, placeholder: 'z. B. Hauptkonto', 'aria-label': 'Name für dieses Konto', spellcheck: 'false' });
+    input.addEventListener('input', () => { name = input.value; });
+    const parts = [
+      el('div', { class: 'field' }, [
+        el('label', { class: 'field-label', text: 'Name für dieses Konto' }),
+        input,
+        el('div', { class: 'field-hint', text: 'Nur für dich, damit du die Konten auseinanderhältst.' }),
+      ]),
+    ];
+    if (matched) {
+      parts.push(el('p', { class: 'hint', text: 'Das angemeldete Konto ist schon als "' + matched.label + '" gespeichert. Der Eintrag wird aufgefrischt.' }));
+    } else if (accounts.length) {
+      const list = el('div', { class: 'stack-sm' });
+      const option = (label, hint, value, checked) => {
+        const radio = el('input', { type: 'radio', name: 'save-target', checked });
+        radio.addEventListener('change', () => {
+          if (!radio.checked) return;
+          target = value;
+          input.disabled = value !== null;
+        });
+        return el('label', { class: 'check' }, [radio, el('span', { class: 'stack-sm' }, [el('span', { text: label }), hint ? el('span', { class: 'hint', text: hint }) : null])]);
+      };
+      list.appendChild(option('Als neues Konto speichern', null, null, true));
+      for (const a of accounts) {
+        list.appendChild(option('Eintrag "' + a.label + '" ersetzen', a.legacy ? 'Alter Eintrag ohne Konto-ID – wenn "Wechseln" zu ihm nur die Anmeldeseite zeigt, hier ersetzen.' : (a.email || ''), a.id, false));
+      }
+      parts.push(el('div', { class: 'field' }, [
+        el('div', { class: 'field-label', text: 'Wohin speichern?' }),
+        el('div', { class: 'field-hint', text: 'Ist das angemeldete Konto schon in der Liste, aber der Eintrag funktioniert nicht mehr? Dann wähle ihn hier aus.' }),
+        list,
+      ]));
+    }
+    const dialog = confirmDialog({ title: matched ? 'Konto auffrischen' : 'Aktuelles Konto speichern', body: el('div', { class: 'stack' }, parts), confirmText: 'Speichern' });
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+    const yes = await dialog;
+    return yes ? { name: target ? '' : name.trim(), targetId: target } : null;
   }
 
   async function saveCurrent() {
     if (!status || !status.supported) return;
     if (!status.remembered) {
-      const yes = await notRememberedDialog(status.running);
-      if (!yes || !status.running) return;
-      // Launcher beenden, kurz warten, dann erneut lesen
-      await act('close', () => window.kr.epicAccounts.closeLauncher());
-      await refresh();
-      if (!status || !status.remembered) {
-        toast('Auch nach dem Beenden steht keine Anmeldung in der Datei. Bitte die Diagnose unter "Was der Konto-Retter sieht" kopieren und melden.', 'warning');
-        return;
-      }
-      toast('Anmeldung gefunden. Jetzt kannst du sie speichern.', 'success');
+      await notRememberedDialog();
+      return;
     }
-    const preset = status.currentEmail || (status.currentAccountIdShort ? 'Epic-Konto ' + status.currentAccountIdShort : '');
-    const name = await askName('Aktuelles Konto speichern', preset);
-    if (name === null) return;
-    act('save', () => window.kr.epicAccounts.save(name));
+    const choice = await askSave();
+    if (!choice) return;
+    act('save', () => window.kr.epicAccounts.save(choice.name, choice.targetId));
   }
 
   // Weiteres Konto: Launcher zur Anmeldung öffnen, OHNE abzumelden (Abmelden macht den gespeicherten Zugang ungültig)
@@ -130,12 +158,12 @@
       'Einstellungsdatei: ' + (d.file || '?') + ' – ' + (d.fileFound ? 'gefunden' : 'FEHLT'),
       '[RememberMe]-Abschnitt: ' + (d.sectionFound ? 'vorhanden' : 'FEHLT'),
       'Enable: ' + (d.enable || '(leer)') + ' · Data: ' + (d.dataLength ? d.dataLength + ' Zeichen' : 'LEER') + ' · Email: ' + (d.email || '(leer)'),
-      'Konto-ID (Registry/Launcher): ' + (d.accountId || '(keine)'),
+      'Konto-ID (Registry): ' + (d.accountId || '(keine)') + (d.accountIdHint && d.accountIdHint !== d.accountId ? ' · Hinweis aus Saved\\Data: ' + d.accountIdHint : ''),
       'Verschlüsselung: ' + (status.encrypted ? 'an' : 'aus'),
       'Gespeicherte Konten: ' + ((status.accounts || []).length),
       'Einstellungsdateien des Launchers:',
       ...(d.configFiles && d.configFiles.length
-        ? d.configFiles.map((c) => '  - ' + c.file + (c.hasSection ? '  [RememberMe: ' + (c.dataLength ? c.dataLength + ' Zeichen' : 'leer') + ']' : '  [kein RememberMe]') + (c.modified ? '  geändert ' + c.modified : ''))
+        ? d.configFiles.map((c) => '  - ' + c.file + (c.used ? '  (benutzt)' : '') + (c.hasSection ? '  [RememberMe: ' + (c.dataLength ? c.dataLength + ' Zeichen' : 'leer') + ']' : '  [kein RememberMe]') + (c.modified ? '  geändert ' + c.modified : ''))
         : ['  (keine gefunden)']),
     ];
     return lines.join('\n');
@@ -156,7 +184,7 @@
         row('Einstellungsdatei:', (d.file || '?') + (d.fileFound ? '' : ' (fehlt)'), !d.fileFound),
         row('[RememberMe]:', d.sectionFound ? 'vorhanden' : 'fehlt', !d.sectionFound),
         row('Enable / Data / Email:', (d.enable || '–') + ' / ' + (d.dataLength ? d.dataLength + ' Zeichen' : 'leer') + ' / ' + (d.email || '–'), !d.dataLength),
-        row('Konto-ID:', d.accountId || 'keine', !d.accountId),
+        row('Konto-ID (Registry):', d.accountId || 'keine', !d.accountId),
         el('div', { class: 'hint', text: 'Der Zugang selbst wird nie angezeigt oder kopiert – nur, ob er da ist.' }),
         el('div', null, window.UI.copyButton(diagText, 'Diagnose', { small: true, text: 'Diagnose kopieren' })),
       ]),
@@ -171,7 +199,7 @@
     });
     if (!yes) return;
     const res = await act('switch-' + acc.id, () => window.kr.epicAccounts.switchTo(acc.id));
-    if (res && res.ok) toast('Zeigt der Launcher nur die Anmeldeseite? Dann ist der gespeicherte Zugang ungültig (z. B. nach "Abmelden" im Launcher). Einmal mit diesem Konto anmelden ("Angemeldet bleiben") und hier "Aktuelles Konto speichern" – der Eintrag wird aktualisiert.', 'info');
+    if (res && res.ok) toast('Zeigt der Launcher nur die Anmeldeseite? Dann ist der gespeicherte Zugang ungültig (z. B. nach "Abmelden" im Launcher). Einmal mit diesem Konto anmelden ("Angemeldet bleiben"), dann hier "Aktuelles Konto speichern" und den Eintrag "' + acc.label + '" ersetzen.', 'info');
   }
 
   async function renameAccount(acc) {
@@ -220,9 +248,7 @@
           : el('span', { class: 'badge badge-warning' }, [icon('warning', 'icon-sm'), 'Niemand mit "Angemeldet bleiben" angemeldet']),
       ]),
       status.problem ? callout('danger', 'Gespeicherte Konten nicht lesbar', status.problem) : null,
-      !status.remembered ? callout('warning', 'Noch keine Anmeldung gefunden', status.running
-        ? 'Der Launcher läuft, aber er hat die Anmeldung noch nicht in seine Datei geschrieben. Das passiert oft erst beim Beenden (unten rechts: Rechtsklick auf das Epic-Symbol, "Beenden"). Oder klick auf "Aktuelles Konto speichern" – der Konto-Retter bietet dann an, den Launcher für dich zu beenden.'
-        : 'Starte den Launcher, melde dich mit dem Haken "Angemeldet bleiben" an und beende ihn danach über das Symbol unten rechts. 2FA muss dafür nicht aus.') : null,
+      !status.remembered ? callout('warning', 'Noch keine Anmeldung gefunden', 'Melde dich im Launcher an und setz den Haken bei "Angemeldet bleiben". Dann hier "Aktuelles Konto speichern". 2FA muss dafür nicht aus.') : null,
       el('p', { class: 'hint', text: status.encrypted
         ? 'Gespeicherte Zugänge liegen verschlüsselt auf diesem PC und funktionieren nur hier.'
         : 'Hinweis: Die Windows-Verschlüsselung ist auf diesem PC nicht verfügbar. Die Zugänge sind trotzdem an deinen Windows-Benutzer gebunden.' }),
@@ -239,6 +265,11 @@
         el('div', { class: 'row' }, [
           el('span', { class: 'account-name', text: acc.label }),
           acc.isCurrent ? el('span', { class: 'badge badge-success', text: 'Gerade angemeldet' }) : null,
+          acc.legacy ? el('span', {
+            class: 'badge badge-warning',
+            title: 'Mit einer älteren Version ohne Konto-ID gespeichert. Führt "Wechseln" nur zur Anmeldeseite: mit diesem Konto anmelden, "Aktuelles Konto speichern" und diesen Eintrag ersetzen.',
+            text: 'Alter Eintrag',
+          }) : null,
         ]),
         el('div', { class: 'account-meta', text: [
           acc.email && acc.email !== acc.label ? acc.email : '',
@@ -311,7 +342,7 @@
         el('li', { text: 'Ab jetzt: "Wechseln" klicken. Der Launcher wird geschlossen und startet mit dem gewählten Konto neu.' }),
       ]),
       callout('danger', 'Im Launcher nie auf "Abmelden" klicken', 'Abmelden meldet den gespeicherten Zugang auch bei Epic ab. Danach führt "Wechseln" zu diesem Konto nur noch zur Anmeldeseite. Für ein anderes Konto immer "Weiteres Konto hinzufügen" benutzen.'),
-      callout('warning', 'Wechsel zeigt nur die Anmeldeseite?', 'Dann ist der gespeicherte Zugang ungültig – zum Beispiel nach "Abmelden" im Launcher, einer Passwortänderung oder langer Zeit. Einmal mit diesem Konto anmelden ("Angemeldet bleiben") und "Aktuelles Konto speichern". Der vorhandene Eintrag wird dabei aktualisiert, nicht doppelt angelegt.'),
+      callout('warning', 'Wechsel zeigt nur die Anmeldeseite?', 'Dann ist der gespeicherte Zugang ungültig – zum Beispiel nach "Abmelden" im Launcher, einer Passwortänderung oder langer Zeit. Einmal mit diesem Konto anmelden ("Angemeldet bleiben"), dann "Aktuelles Konto speichern". Erkennt der Konto-Retter das Konto nicht von selbst, wählst du dort den alten Eintrag zum Ersetzen aus.'),
       callout('info', 'Nur für deine eigenen Konten', 'Der Konto-Retter sichert nur die "Angemeldet bleiben"-Anmeldung, die der Launcher selbst auf diesem PC speichert. Sie funktioniert auf keinem anderen PC. Passwörter werden nie gelesen.'),
     ]);
   }

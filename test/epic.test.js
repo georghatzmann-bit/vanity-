@@ -19,6 +19,7 @@ function fakeRegistry(initial) {
   const reg = { value: initial || null };
   reg.get = async () => reg.value;
   reg.set = async (v) => { reg.value = v; return true; };
+  reg.del = async () => { reg.value = null; return true; };
   return reg;
 }
 
@@ -139,26 +140,24 @@ test('Diagnose zeigt, was gefunden wurde – aber nie den Zugang selbst', async 
   assert.ok(!JSON.stringify(st).includes('ABC123'), 'Der Zugang darf die Oberfläche nie erreichen');
 });
 
-test('Anmeldung wird auch in einer anderen Einstellungsdatei des Launchers gefunden', async () => {
+test('Nur die Datei, die der Launcher liest, zählt – Kopien in anderen Ordnern nicht', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-epic-la-'));
   const cfg = path.join(base, 'EpicGamesLauncher', 'Saved', 'Config');
   fs.mkdirSync(path.join(cfg, 'Windows'), { recursive: true });
   fs.mkdirSync(path.join(cfg, 'WindowsNoEditor'), { recursive: true });
   fs.writeFileSync(path.join(cfg, 'Windows', 'GameUserSettings.ini'), '[Core]\r\nFoo=1\r\n', 'utf8');
-  fs.writeFileSync(path.join(cfg, 'WindowsNoEditor', 'GameUserSettings.ini'), '[RememberMe]\r\nEnable=True\r\nData=ANDERSWO\r\nEmail=x@beispiel.de\r\n', 'utf8');
+  fs.writeFileSync(path.join(cfg, 'WindowsNoEditor', 'GameUserSettings.ini'), '[RememberMe]\r\nEnable=True\r\nData=ANDERSWO\r\n', 'utf8');
   const before = process.env.LOCALAPPDATA;
   process.env.LOCALAPPDATA = base;
   try {
-    epic.init({ dataDir: path.join(base, 'data'), crypto: null, noProcess: true });
+    epic.init({ dataDir: path.join(base, 'data'), crypto: null, noProcess: true, registry: fakeRegistry() });
     const st = await epic.getStatus();
-    assert.equal(st.remembered, true);
-    assert.equal(st.currentEmail, 'x@beispiel.de');
-    assert.equal(st.diag.file, path.join(cfg, 'WindowsNoEditor', 'GameUserSettings.ini'));
-    assert.equal(st.diag.configFiles.length, 2);
-    assert.equal(st.diag.configFiles[0].file, path.join(cfg, 'Windows', 'GameUserSettings.ini'), 'übliche Datei zuerst');
-    assert.equal(st.diag.configFiles[0].hasSection, false);
-    assert.equal(st.diag.configFiles[1].hasSection, true);
-    assert.equal((await epic.saveCurrent('B')).ok, true);
+    assert.equal(st.remembered, false, 'eine Kopie in einem fremden Ordner ist keine Anmeldung');
+    assert.equal(st.diag.file, path.join(cfg, 'Windows', 'GameUserSettings.ini'));
+    assert.equal(st.diag.configFiles.length, 2, 'die Diagnose zeigt trotzdem alle Dateien');
+    assert.equal(st.diag.configFiles[0].used, true);
+    assert.equal(st.diag.configFiles[1].used, false);
+    assert.equal(st.diag.configFiles[1].dataLength, 8);
   } finally {
     if (before === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = before;
   }
@@ -307,34 +306,36 @@ test('"Weiteres Konto hinzufügen" leert nur die Anmeldung, alles andere bleibt'
   assert.equal(st.accounts[0].email, 'eins@beispiel.de');
 });
 
-test('Launcher ab Version 19: Ordner WindowsEditor hat Vorrang, gewechselt wird in beiden Dateien', async () => {
+test('Launcher ab Version 19: nur WindowsEditor wird benutzt, die alte Kopie in Windows wird geleert', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-epic-we-'));
   const cfg = path.join(base, 'EpicGamesLauncher', 'Saved', 'Config');
   const oldFile = path.join(cfg, 'Windows', 'GameUserSettings.ini');
   const newFile = path.join(cfg, 'WindowsEditor', 'GameUserSettings.ini');
   fs.mkdirSync(path.dirname(oldFile), { recursive: true });
   fs.mkdirSync(path.dirname(newFile), { recursive: true });
-  fs.writeFileSync(oldFile, '[RememberMe]\r\nEnable=True\r\nData=VERALTET\r\n', 'utf8');
+  fs.writeFileSync(oldFile, '[Core]\r\nAlt=1\r\n\r\n[RememberMe]\r\nEnable=True\r\nData=VERALTET\r\n', 'utf8');
   fs.writeFileSync(newFile, '[Launcher]\r\nX=1\r\n\r\n[RememberMe]\r\nEnable=True\r\nData=AKTUELL\r\n', 'utf8');
-  const past = new Date(Date.now() - 3600 * 1000);
-  fs.utimesSync(oldFile, past, past);
+  // Auch wenn die alte Datei neuer aussieht: Der Launcher 19+ liest nur WindowsEditor
+  const future = new Date(Date.now() + 3600 * 1000);
+  fs.utimesSync(oldFile, future, future);
   const before = process.env.LOCALAPPDATA;
   process.env.LOCALAPPDATA = base;
   try {
     const reg = fakeRegistry(ID_A);
     epic.init({ dataDir: path.join(base, 'data'), crypto: null, noProcess: true, registry: reg });
     let st = await epic.getStatus();
-    assert.equal(st.diag.file, newFile, 'die zuletzt geschriebene Datei mit Anmeldung gewinnt');
+    assert.equal(st.diag.file, newFile);
     assert.equal(st.diag.configFiles[0].file, newFile, 'WindowsEditor zuerst');
-    assert.equal(st.diag.configFiles[1].file, oldFile);
     assert.equal(st.diag.accountId, ID_A);
     assert.equal((await epic.saveCurrent('A')).ok, true);
-    // Weiteres Konto: beide Dateien werden geleert
+    // Weiteres Konto: WindowsEditor geleert, die alte Kopie ebenfalls (kein überflüssiger Zugang auf der Platte)
     assert.equal((await epic.addNew()).ok, true);
     assert.equal(epic._ini.getSection(fs.readFileSync(newFile, 'utf8'), 'RememberMe'), 'Enable=True\nData=');
-    assert.equal(epic._ini.getSection(fs.readFileSync(oldFile, 'utf8'), 'RememberMe'), 'Enable=True\nData=');
+    assert.equal(epic._ini.getSection(fs.readFileSync(oldFile, 'utf8'), 'RememberMe'), 'Enable=False\nData=');
+    assert.equal(epic._ini.getSection(fs.readFileSync(oldFile, 'utf8'), 'Core'), 'Alt=1');
     assert.equal(epic._ini.getSection(fs.readFileSync(newFile, 'utf8'), 'Launcher'), 'X=1');
-    // B meldet sich an (neuer Launcher schreibt nur WindowsEditor)
+    assert.equal(reg.value, null, '"Weiteres Konto" löscht die Konto-ID wie der TcNo-Wechsler');
+    // B meldet sich an
     fs.writeFileSync(newFile, '[Launcher]\r\nX=1\r\n\r\n[RememberMe]\r\nEnable=True\r\nData=KONTO_B\r\n', 'utf8');
     reg.value = ID_B;
     assert.equal((await epic.saveCurrent('B')).ok, true);
@@ -342,14 +343,14 @@ test('Launcher ab Version 19: Ordner WindowsEditor hat Vorrang, gewechselt wird 
     const a = st.accounts.find((x) => x.label === 'A');
     assert.equal((await epic.switchTo(a.id)).ok, true);
     assert.match(fs.readFileSync(newFile, 'utf8'), /Data=AKTUELL/);
-    assert.match(fs.readFileSync(oldFile, 'utf8'), /Data=AKTUELL/);
+    assert.doesNotMatch(fs.readFileSync(oldFile, 'utf8'), /Data=AKTUELL/, 'der Zugang wird nicht in die alte Datei kopiert');
     assert.equal(reg.value, ID_A);
   } finally {
     if (before === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = before;
   }
 });
 
-test('Ohne Registry-Eintrag kommt die Konto-ID aus Saved\\Data (neueste Datei, auch mit "OC_")', async () => {
+test('Saved\\Data liefert nur einen Hinweis auf die Konto-ID (Name, Diagnose), nie die Zuordnung', async () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-epic-dat-'));
   const saved = path.join(base, 'EpicGamesLauncher', 'Saved');
   fs.mkdirSync(path.join(saved, 'Config', 'WindowsEditor'), { recursive: true });
@@ -366,8 +367,14 @@ test('Ohne Registry-Eintrag kommt die Konto-ID aus Saved\\Data (neueste Datei, a
   try {
     epic.init({ dataDir: path.join(base, 'data'), crypto: null, noProcess: true, registry: fakeRegistry(null) });
     const st = await epic.getStatus();
-    assert.equal(st.diag.accountId, ID_B);
+    assert.equal(st.diag.accountId, '', 'ohne Registry-Wert keine Konto-ID');
+    assert.equal(st.diag.accountIdHint, ID_B, 'neueste Datei, auch mit "OC_"');
     assert.equal(st.currentAccountIdShort, 'bbbbbbbb');
+    assert.equal((await epic.saveCurrent('')).ok, true);
+    const acc = (await epic.getStatus()).accounts[0];
+    assert.equal(acc.label, 'Epic-Konto bbbbbbbb', 'der Hinweis dient als Namensvorschlag');
+    assert.equal(acc.accountIdShort, '', 'aber nicht als gespeicherte Konto-ID');
+    assert.equal(acc.legacy, true);
   } finally {
     if (before === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = before;
   }
@@ -385,4 +392,129 @@ test('Gespeichertes Konto ohne Zugang lässt sich nicht "wechseln" (klare Meldun
   const res = await epic.switchTo(a.id);
   assert.equal(res.ok, false);
   assert.match(res.message, /kein Zugang gespeichert/);
+});
+
+// ---------- Fälle aus der Gegenprüfung (Version 1.2.3) ----------
+
+// Baut A und B sauber über "Weiteres Konto hinzufügen" auf. Ergebnis: { ini, reg, a, b }
+async function twoAccounts() {
+  const { ini, reg } = setup({ text: '[RememberMe]\r\nEnable=True\r\nData=A1\r\n' });
+  reg.value = ID_A;
+  await epic.saveCurrent('A');
+  await epic.addNew();
+  loginAs(ini, 'B1', '', false, reg, ID_B);
+  await epic.saveCurrent('B');
+  const st = await epic.getStatus();
+  return { ini, reg, a: st.accounts.find((x) => x.label === 'A'), b: st.accounts.find((x) => x.label === 'B') };
+}
+
+test('Wechsel zum Ziel, dessen Zugang inzwischen erneuert wurde: der neue Zugang wird eingespielt, nicht der alte', async () => {
+  const { ini, reg, a, b } = await twoAccounts();
+  assert.equal((await epic.switchTo(a.id)).ok, true);
+  // Der Nutzer meldet sich im Launcher von Hand wieder als B an; der Launcher schreibt B_NEU
+  loginAs(ini, 'B_NEU', '', false, reg, ID_B);
+  const sw = await epic.switchTo(b.id);
+  assert.equal(sw.ok, true, sw.message);
+  assert.match(fs.readFileSync(ini, 'utf8'), /Data=B_NEU/, 'der frische Zugang von B wurde überschrieben');
+  assert.equal(reg.value, ID_B);
+  // Hin und zurück: B kommt mit B_NEU wieder, nicht mit B1
+  assert.equal((await epic.switchTo(a.id)).ok, true);
+  assert.equal((await epic.switchTo(b.id)).ok, true);
+  assert.match(fs.readFileSync(ini, 'utf8'), /Data=B_NEU/);
+  assert.equal((await epic.getStatus()).accounts.length, 2, 'keine doppelten Einträge');
+});
+
+test('Wechsel zu einem Eintrag ohne Konto-ID löscht die Konto-ID in der Registry', async () => {
+  const { ini, reg } = setup({ text: '[RememberMe]\r\nEnable=True\r\nData=ALT\r\n' });
+  reg.value = null;
+  await epic.saveCurrent('Alt ohne ID');
+  await epic.addNew();
+  loginAs(ini, 'B1', '', false, reg, ID_B);
+  await epic.saveCurrent('B');
+  const st = await epic.getStatus();
+  const legacy = st.accounts.find((x) => x.label === 'Alt ohne ID');
+  assert.equal(legacy.legacy, true);
+  assert.equal((await epic.switchTo(legacy.id)).ok, true);
+  assert.equal(reg.value, null, 'die Konto-ID von B darf nicht stehen bleiben');
+});
+
+test('Alten Eintrag (ohne Konto-ID) gezielt durch die aktuelle Anmeldung ersetzen', async () => {
+  const { ini, reg } = setup({ text: '[RememberMe]\r\nEnable=True\r\nData=TOT\r\n' });
+  reg.value = null;
+  await epic.saveCurrent('Hauptkonto');
+  // Der alte Zugang ist ungültig; der Nutzer meldet sich neu an, Epic gibt einen neuen Zugang
+  loginAs(ini, 'FRISCH', '', false, reg, ID_A);
+  let st = await epic.getStatus();
+  assert.equal(st.currentMatchId, null, 'ohne Konto-ID kann der Eintrag nicht von selbst erkannt werden');
+  const haupt = st.accounts[0];
+  const res = await epic.saveCurrent('', haupt.id);
+  assert.equal(res.ok, true, res.message);
+  st = await epic.getStatus();
+  assert.equal(st.accounts.length, 1, 'kein zweiter Eintrag');
+  assert.equal(st.accounts[0].label, 'Hauptkonto', 'Name bleibt');
+  assert.equal(st.accounts[0].accountIdShort, 'aaaaaaaa', 'Konto-ID wird übernommen');
+  assert.equal(st.accounts[0].isCurrent, true);
+  assert.equal(st.currentMatchId, haupt.id);
+});
+
+test('Alter Eintrag bekommt seine Konto-ID, sobald genau sein Zugang mit Konto-ID angemeldet ist', async () => {
+  const { reg } = setup({ text: '[RememberMe]\r\nEnable=True\r\nData=GLEICH\r\n' });
+  reg.value = null;
+  await epic.saveCurrent('Alt');
+  reg.value = ID_A; // der Launcher hat sich mit genau diesem Zugang angemeldet
+  assert.equal((await epic.saveCurrent('')).ok, true);
+  const acc = (await epic.getStatus()).accounts[0];
+  assert.equal(acc.accountIdShort, 'aaaaaaaa');
+  assert.equal(acc.legacy, false);
+});
+
+test('Widersprechen sich E-Mail-Adresse und Konto-ID, wird kein fremder Eintrag überschrieben', async () => {
+  const { ini, reg, base } = setup({ text: '[RememberMe]\r\nEnable=True\r\nData=A1\r\nEmail=a@beispiel.de\r\n' });
+  reg.value = ID_A;
+  await epic.saveCurrent('A');
+  // Registry ist veraltet (zeigt noch auf A), angemeldet ist aber ein anderes Konto
+  loginAs(ini, 'X1', 'x@beispiel.de', false, reg, ID_A);
+  assert.equal((await epic.getStatus()).currentMatchId, null);
+  assert.equal((await epic.saveCurrent('X')).ok, true);
+  const st = await epic.getStatus();
+  assert.equal(st.accounts.length, 2);
+  const raw = JSON.parse(fs.readFileSync(path.join(base, 'data', 'epic-konten.json'), 'utf8')).data;
+  assert.match(raw.find((p) => p.label === 'A').section, /Data=A1/, 'der Zugang von A wurde überschrieben');
+});
+
+test('Schreibfehler beim Wechsel: nichts geht verloren, die Launcher-Datei bleibt unverändert', async () => {
+  const { ini, reg, a } = await twoAccounts();
+  // Ein drittes Konto C ist angemeldet und noch nicht gespeichert
+  loginAs(ini, 'C1', '', false, reg, 'c'.repeat(32));
+  const before = fs.readFileSync(ini, 'utf8');
+  epic._test.setWriteHook((file) => {
+    if (file === ini) throw Object.assign(new Error('Datei gesperrt'), { code: 'EBUSY' });
+  });
+  try {
+    const res = await epic.switchTo(a.id);
+    assert.equal(res.ok, false);
+    assert.match(res.message, /nicht geschrieben/);
+  } finally {
+    epic._test.setWriteHook(null);
+  }
+  assert.equal(fs.readFileSync(ini, 'utf8'), before, 'die Launcher-Datei wurde verändert');
+  const st = await epic.getStatus();
+  assert.equal(st.accounts.length, 3, 'das angemeldete Konto C wurde vor dem Schreiben gesichert');
+});
+
+test('Startet der Launcher nicht, ist das Konto trotzdem umgestellt und die Meldung sagt, was zu tun ist', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-epic-start-'));
+  const ini = path.join(base, 'GameUserSettings.ini');
+  fs.writeFileSync(ini, '[RememberMe]\r\nEnable=True\r\nData=A1\r\n', 'utf8');
+  const reg = fakeRegistry(ID_A);
+  epic.init({ dataDir: path.join(base, 'data'), crypto: null, ini, noProcess: true, registry: reg, exe: 'C:\\x\\EpicGamesLauncher.exe', launch: async () => 'EACCES' });
+  await epic.saveCurrent('A');
+  loginAs(ini, 'B1', '', false, reg, ID_B);
+  const a = (await epic.getStatus()).accounts.find((x) => x.label === 'A');
+  const res = await epic.switchTo(a.id);
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'start-failed');
+  assert.match(res.message, /EACCES/);
+  assert.match(res.message, /Starte ihn bitte selbst/);
+  assert.match(fs.readFileSync(ini, 'utf8'), /Data=A1/, 'das Konto wurde trotzdem umgestellt');
 });

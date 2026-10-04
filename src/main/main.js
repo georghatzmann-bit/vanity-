@@ -64,6 +64,8 @@ function start() {
   // Gespeicherte Launcher-Zugänge werden mit Windows-Datenschutz (DPAPI) verschlüsselt abgelegt
   epic.init({
     dataDir: app.getPath('userData'),
+    // Ersatzweg, falls der direkte Start scheitert (z. B. "Als Administrator ausführen"): Windows startet ihn selbst
+    openFallback: (exe) => shell.openPath(exe),
     crypto: {
       isAvailable: () => { try { return safeStorage.isEncryptionAvailable(); } catch (_) { return false; } },
       encrypt: (text) => safeStorage.encryptString(text),
@@ -258,7 +260,7 @@ function registerIpc() {
 
   // Konten-Schnellwechsel (Epic Games Launcher). Die Oberfläche bekommt den Zugang selbst nie zu sehen.
   handle('epic:accounts:status', async () => ok(await epic.getStatus()));
-  handle('epic:accounts:save', async (label) => epic.saveCurrent(String(label || '')));
+  handle('epic:accounts:save', async (label, targetId) => epic.saveCurrent(String(label || ''), targetId ? String(targetId) : null));
   handle('epic:accounts:switch', async (id) => epic.switchTo(String(id || '')));
   handle('epic:accounts:remove', async (id) => epic.remove(String(id || '')));
   handle('epic:accounts:rename', async (id, label) => epic.rename(String(id || ''), String(label || '')));

@@ -145,6 +145,11 @@ test('Windows: Konten-Wechsel beendet den laufenden Launcher und startet ihn neu
     assert.equal(res.ok, true, res.message);
     assert.match(fs.readFileSync(ini, 'utf8'), /Data=EINS/);
     assert.equal(getRegId(), ID_A, 'Konto-ID in der Registry wurde beim Wechsel nicht zurückgestellt');
+    // "Weiteres Konto hinzufügen": Anmeldung geleert, Konto-ID gelöscht (wie beim TcNo-Wechsler)
+    const added = await epic.addNew();
+    assert.equal(added.ok, true, added.message);
+    assert.match(fs.readFileSync(ini, 'utf8'), /\[RememberMe\]\r\nEnable=True\r\nData=\r\n/);
+    assert.equal(getRegId(), null, 'Konto-ID wurde bei "Weiteres Konto" nicht gelöscht');
     // Der wartende Prozess wurde beendet (der Neustart startet die Kopie ohne Argumente, die sofort endet)
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal(child.exitCode !== null || child.killed, true, 'Launcher-Prozess läuft noch');
