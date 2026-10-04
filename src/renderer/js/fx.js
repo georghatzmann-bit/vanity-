@@ -464,7 +464,7 @@
     canvas: null, ctx: null, w: 0, h: 0, dpr: 1,
     n: 0, bx: null, by: null, bz: null, ph: null, inner: null,
     px: null, py: null, pd: null, ps: null, ox: null, oy: null, glow: null, scan: null,
-    pairs: null, pairCount: 0, adj: null, buckets: null, counts: new Int32Array(5),
+    pairs: null, pairCount: 0, adj: null, buckets: null, counts: new Int32Array(6),
     stars: null, starCount: 0,
     signals: [],
     yaw: 0.6, spin: 0, lookX: 0, lookY: 0,
@@ -475,6 +475,9 @@
   };
 
   const PALETTE_STEPS = 8;
+  // Linien nach Tiefe (hinten -> vorne), dann Lichtband, dann Maus-Nähe
+  const LINE_A = [0.05, 0.1, 0.17, 0.26, 0.34, 0.5];
+  const LINE_W = [0.6, 0.7, 0.8, 0.9, 1, 1];
   const RING_SEG = 72;
   const ringX = new Float32Array(RING_SEG + 1);
   const ringY = new Float32Array(RING_SEG + 1);
@@ -637,7 +640,7 @@
       n, bx, by, bz, ph, inner, pairs, pairCount, adj,
       px: new Float32Array(n), py: new Float32Array(n), pd: new Float32Array(n), ps: new Float32Array(n),
       ox: new Float32Array(n), oy: new Float32Array(n), glow: new Float32Array(n), scan: new Float32Array(n),
-      buckets: [0, 1, 2, 3, 4].map(() => new Uint16Array(pairCount)),
+      buckets: [0, 1, 2, 3, 4, 5].map(() => new Uint16Array(pairCount)),
     });
     scene.signals = [];
     for (let s = 0; s < 9; s++) scene.signals.push(newSignal());
@@ -905,16 +908,15 @@
       const d = (pd[a] + pd[b]) * 0.5;
       if (d < 0.2) continue;
       let bk;
-      if (glow[a] + glow[b] > 0.55 || scan[a] + scan[b] > 0.9) bk = 4;
+      if (d > 0.45 && glow[a] + glow[b] > 0.55) bk = 5;
+      else if (d > 0.55 && scan[a] + scan[b] > 0.9) bk = 4;
       else bk = d < 0.42 ? 0 : d < 0.6 ? 1 : d < 0.76 ? 2 : 3;
       B[bk][cnt[bk]++] = q;
     }
     const grad = ctx.createLinearGradient(cx - R, cy + R, cx + R, cy - R);
     grad.addColorStop(0, rgb(c0));
     grad.addColorStop(1, rgb(c1));
-    const LA = [0.05, 0.1, 0.17, 0.26, 0.5];
-    const LW = [0.6, 0.7, 0.8, 0.9, 1];
-    for (let bk = 0; bk < 5; bk++) {
+    for (let bk = 0; bk < 6; bk++) {
       const c = cnt[bk];
       if (!c) continue;
       const arr = B[bk];
@@ -926,9 +928,9 @@
         ctx.moveTo(px[a], py[a]);
         ctx.lineTo(px[b], py[b]);
       }
-      ctx.globalAlpha = Math.min(1, LA[bk] * bright);
-      ctx.strokeStyle = bk === 4 ? 'rgb(170,225,255)' : grad;
-      ctx.lineWidth = LW[bk];
+      ctx.globalAlpha = Math.min(1, LINE_A[bk] * bright);
+      ctx.strokeStyle = bk === 5 ? 'rgb(190,230,255)' : bk === 4 ? 'rgb(90,215,250)' : grad;
+      ctx.lineWidth = LINE_W[bk];
       ctx.stroke();
     }
 
@@ -940,7 +942,7 @@
     for (let i = 0; i < n; i++) {
       const d = pd[i];
       const g = glow[i];
-      let a = (0.1 + 0.9 * d * d) * (inner[i] ? 0.55 : 1) * (1 + g * 1.6 + scan[i] * 0.9) * bright;
+      let a = (0.1 + 0.9 * d * d) * (inner[i] ? 0.55 : 1) * (1 + g * 1.6 + (d > 0.5 ? scan[i] * 0.9 : 0)) * bright;
       if (a > 1) a = 1;
       if (a < 0.02) continue;
       const size = (0.7 + 1.8 * d) * ps[i] * (inner[i] ? 0.75 : 1) * (1 + g * 0.9) * sizeK;
@@ -1116,6 +1118,7 @@
   const RING = 3;
   const ROCKET = 4;
   const TRAIL = 5;
+  const FLASH = 6;
 
   function ensureOverlay() {
     if (overlay.canvas) return true;
@@ -1190,14 +1193,16 @@
 
   function spawnBurst(x, y, count, colors, scale, ring) {
     for (let i = 0; i < count; i++) {
-      const a = Math.random() * TAU;
-      const sp = (110 + Math.pow(Math.random(), 0.7) * 330) * scale;
+      const a = (i / count) * TAU + Math.random() * 0.5;
+      const sp = (130 + Math.pow(Math.random(), 0.6) * 380) * scale;
       const col = colors[i % colors.length];
-      addPart(makeSpark(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 60 * scale, col,
-        0.65 + Math.random() * 0.35, (1.1 + Math.random() * 1.6) * (0.8 + scale * 0.25), 2.2, 520));
+      addPart(makeSpark(x, y, Math.cos(a) * sp, Math.sin(a) * sp - 50 * scale, col,
+        0.6 + Math.random() * 0.4, (1.3 + Math.random() * 1.9) * (0.75 + scale * 0.3), 2.1, 480));
     }
+    // Heller Blitz in der Mitte
+    addPart({ type: FLASH, x, y, vx: 0, vy: 0, g: 0, drag: 0, age: 0, life: 0.28, size: 26 * scale, sprite: spriteFor('255,255,255', [255, 255, 255]) });
     if (ring) {
-      addPart({ type: RING, x, y, vx: 0, vy: 0, age: 0, life: 0.55, size: 14 * scale, r1: 70 * scale, col: rgb(parseRgb(colors[1 % colors.length])) });
+      addPart({ type: RING, x, y, vx: 0, vy: 0, g: 0, drag: 0, age: 0, life: 0.6, size: 10 * scale, r1: 80 * scale, col: rgb(parseRgb(colors[1 % colors.length])) });
     }
   }
 
@@ -1214,7 +1219,7 @@
     const colStr = PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
     addPart({
       type: CONFETTI, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      age: 0, life: 2.4 + Math.random() * 1.2, size: 5 + Math.random() * 5, drag: 1.5, g: 820,
+      age: 0, life: 2.6 + Math.random() * 1.2, size: 5 + Math.random() * 5, drag: 0.9, g: 820,
       col: rgb(parseRgb(colStr)), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 14,
       flip: Math.random() * TAU, vf: 6 + Math.random() * 10,
     });
@@ -1247,12 +1252,12 @@
       for (let i = 0; i < 4; i++) {
         const spread = 0.12 + Math.random() * 0.5;
         const a = -Math.PI / 2 + (left ? spread : -spread);
-        spawnConfetti(x, y, a, (900 + Math.random() * 650) * power);
+        spawnConfetti(x, y, a, (1050 + Math.random() * 650) * power);
       }
       for (let i = 0; i < 2; i++) {
         const spread = 0.15 + Math.random() * 0.45;
         const a = -Math.PI / 2 + (left ? spread : -spread);
-        const sp = (850 + Math.random() * 700) * power;
+        const sp = (1000 + Math.random() * 700) * power;
         const col = PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
         addPart(makeSpark(x, y, Math.cos(a) * sp, Math.sin(a) * sp, col, 0.9 + Math.random() * 0.5, 1.4 + Math.random() * 1.4, 1.6, 700));
       }
@@ -1286,7 +1291,7 @@
       q.age += dt;
       if (q.type === ROCKET) {
         if (q.age >= q.life || q.vy > -40) {
-          spawnBurst(q.x, q.y, 46, q.colors, 1.25, true);
+          spawnBurst(q.x, q.y, 60, q.colors, 1.5, true);
           continue;
         }
         if (Math.random() < 0.8) addPart(makeSpark(q.x, q.y, (Math.random() - 0.5) * 40, 40 + Math.random() * 40, '255,220,180', 0.35, 1, 3, 200));
@@ -1302,10 +1307,13 @@
       q.x += q.vx * dt;
       q.y += q.vy * dt;
       if (q.type === CONFETTI) {
+        q.drag = q.vy < 0 ? 0.9 : 2.6;
         q.rot += q.vr * dt;
         q.flip += q.vf * dt;
         q.x += Math.sin(q.flip * 0.5) * 18 * dt;
       }
+      // Aus dem Bild gefallen: weg damit
+      if ((q.y > overlay.h + 40 && q.vy > 0) || q.x < -300 || q.x > overlay.w + 300) continue;
       parts[j++] = q;
     }
     parts.length = j;
@@ -1340,6 +1348,12 @@
         ctx.beginPath();
         ctx.arc(q.x, q.y, r, 0, TAU);
         ctx.stroke();
+        continue;
+      }
+      if (q.type === FLASH) {
+        const e = q.size * (0.6 + (1 - k) * 0.9) * 2.5;
+        ctx.globalAlpha = k * k;
+        ctx.drawImage(q.sprite, q.x - e, q.y - e, e * 2, e * 2);
         continue;
       }
       if (q.type === ROCKET) {
