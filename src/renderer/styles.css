@@ -834,6 +834,13 @@ body {
   color: transparent;
 }
 .finish p { margin: 0; color: var(--muted); max-width: 520px; }
+.finish ul { list-style: none; margin: 4px 0 8px; padding: 0; max-width: 620px; width: 100%; }
+.finish li {
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  box-shadow: 0 0 0 1px var(--hair) inset;
+}
 
 /* ---------- Meine Daten ---------- */
 
