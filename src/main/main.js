@@ -263,6 +263,7 @@ function registerIpc() {
   handle('epic:accounts:remove', async (id) => epic.remove(String(id || '')));
   handle('epic:accounts:rename', async (id, label) => epic.rename(String(id || ''), String(label || '')));
   handle('epic:accounts:close-launcher', async () => epic.closeLauncher());
+  handle('epic:accounts:add-new', async () => epic.addNew());
 
   handle('windows:notification-settings', async () => {
     if (process.platform !== 'win32') return fail('Nur unter Windows verfügbar.');

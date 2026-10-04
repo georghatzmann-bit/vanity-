@@ -7,6 +7,12 @@
 3. Zeigt Windows „Der Computer wurde durch Windows geschützt“: auf **Weitere Informationen** klicken, dann auf **Trotzdem ausführen**. (Das kommt, weil das Programm nicht bei Microsoft gekauft-signiert ist.)
 4. Fertig: Der Konto-Retter startet von selbst. Auf dem Desktop liegt ein Symbol, im Startmenü ein Eintrag.
 
+**Neu in Version 1.2.2:**
+
+- **Konten-Wechsel repariert:** Der Konto-Retter liest und schreibt jetzt die Datei, die der Epic Games Launcher seit Version 19 benutzt (Ordner „WindowsEditor"). Beim Wechsel wird zusätzlich die Konto-ID zurückgestellt, und die Hilfsprogramme des Launchers werden mit beendet – so, wie es bekannte Konto-Wechsler auch machen.
+- **Neuer Knopf „Weiteres Konto hinzufügen":** öffnet den Launcher mit der Anmeldeseite, **ohne** dich abzumelden. Wichtig: Im Launcher nie auf „Abmelden" klicken – das macht den gespeicherten Zugang bei Epic ungültig, und „Wechseln" führt dann nur zur Anmeldeseite.
+- Erneuert Epic einen Zugang, wird der gespeicherte Eintrag beim nächsten Wechsel automatisch aufgefrischt statt doppelt angelegt.
+
 **Neu in Version 1.2.1:**
 
 - **Konten:** Wird die Anmeldung nicht gefunden, zeigt der Konto-Retter jetzt genau, was er auf dem PC sieht („Was der Konto-Retter sieht"), mit Knopf zum Kopieren. Dazu bietet er an, den Launcher für dich zu beenden und danach erneut zu lesen – der Launcher schreibt die Anmeldung oft erst beim Beenden. 2FA muss dafür nicht aus.

@@ -113,7 +113,22 @@ test('Windows: Konten-Wechsel beendet den laufenden Launcher und startet ihn neu
   // Kopie von node.exe unter dem Namen des Launchers, die einfach wartet
   const fake = path.join(base, 'EpicGamesLauncher.exe');
   fs.copyFileSync(process.execPath, fake);
-  epic.init({ dataDir: path.join(base, 'data'), crypto: null, ini, exe: fake });
+  // Eigener Test-Schlüssel in der Registry: der echte Epic-Schlüssel des Testrechners bleibt unberührt
+  const TEST_KEY = 'HKCU\\Software\\Konto-Retter-Test\\Identifiers';
+  const setRegId = (id) => execFileSync('reg', ['add', TEST_KEY, '/v', 'AccountId', '/t', 'REG_SZ', '/d', id, '/f'], { stdio: 'ignore', windowsHide: true });
+  const getRegId = () => {
+    try {
+      const out = execFileSync('reg', ['query', TEST_KEY, '/v', 'AccountId'], { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      const m = /AccountId\s+REG_SZ\s+(\S+)/i.exec(out);
+      return m ? m[1] : null;
+    } catch (_) {
+      return null;
+    }
+  };
+  const ID_A = 'a'.repeat(32);
+  const ID_B = 'b'.repeat(32);
+  setRegId(ID_A);
+  epic.init({ dataDir: path.join(base, 'data'), crypto: null, ini, exe: fake, regKey: TEST_KEY });
   const child = spawn(fake, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'ignore', windowsHide: true });
   try {
     await new Promise((r) => setTimeout(r, 1500));
@@ -121,12 +136,15 @@ test('Windows: Konten-Wechsel beendet den laufenden Launcher und startet ihn neu
     const st = await epic.getStatus();
     assert.equal(st.running, true);
     assert.equal(st.launcherInstalled, true);
-    // Zweites Konto anmelden und zurück zum ersten wechseln
+    assert.equal(st.diag.accountId, ID_A, 'Konto-ID aus der Registry nicht gelesen');
+    // Zweites Konto anmelden (der Launcher schreibt dann auch dessen Konto-ID) und zurück zum ersten wechseln
     fs.writeFileSync(ini, '[RememberMe]\r\nEnable=True\r\nData=ZWEI\r\nEmail=zwei@beispiel.de\r\n', 'utf8');
+    setRegId(ID_B);
     const a = st.accounts[0];
     const res = await epic.switchTo(a.id);
     assert.equal(res.ok, true, res.message);
     assert.match(fs.readFileSync(ini, 'utf8'), /Data=EINS/);
+    assert.equal(getRegId(), ID_A, 'Konto-ID in der Registry wurde beim Wechsel nicht zurückgestellt');
     // Der wartende Prozess wurde beendet (der Neustart startet die Kopie ohne Argumente, die sofort endet)
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal(child.exitCode !== null || child.killed, true, 'Launcher-Prozess läuft noch');
@@ -145,5 +163,6 @@ test('Windows: Konten-Wechsel beendet den laufenden Launcher und startet ihn neu
   } finally {
     try { child.kill(); } catch (_) { /* schon beendet */ }
     try { execFileSync('taskkill', ['/IM', 'EpicGamesLauncher.exe', '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch (_) { /* nichts mehr da */ }
+    try { execFileSync('reg', ['delete', 'HKCU\\Software\\Konto-Retter-Test', '/f'], { stdio: 'ignore', windowsHide: true }); } catch (_) { /* schon weg */ }
   }
 });

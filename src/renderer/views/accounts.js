@@ -23,13 +23,15 @@
     render();
   }
 
+  // Führt eine Aktion aus und gibt ihr Ergebnis zurück (null, wenn schon etwas läuft oder es abstürzt)
   async function act(name, fn) {
-    if (pending) return;
+    if (pending) return null;
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null;
     pending = name;
     render();
+    let res = null;
     try {
-      const res = await fn();
+      res = await fn();
       if (res && res.ok) toast(res.message || 'Erledigt.', 'success');
       else toast((res && res.message) || 'Das hat nicht geklappt.', 'error');
     } catch (err) {
@@ -40,6 +42,7 @@
       const again = root && focusKey ? root.querySelector('[data-fk="' + CSS.escape(focusKey) + '"]') : null;
       if (again) again.focus();
     }
+    return res;
   }
 
   // Fragt nach einem Namen für ein Konto. null = abgebrochen.
@@ -94,9 +97,25 @@
       }
       toast('Anmeldung gefunden. Jetzt kannst du sie speichern.', 'success');
     }
-    const name = await askName('Aktuelles Konto speichern', status.currentEmail);
+    const preset = status.currentEmail || (status.currentAccountIdShort ? 'Epic-Konto ' + status.currentAccountIdShort : '');
+    const name = await askName('Aktuelles Konto speichern', preset);
     if (name === null) return;
     act('save', () => window.kr.epicAccounts.save(name));
+  }
+
+  // Weiteres Konto: Launcher zur Anmeldung öffnen, OHNE abzumelden (Abmelden macht den gespeicherten Zugang ungültig)
+  async function addNew() {
+    if (!status || !status.supported) return;
+    const body = el('div', { class: 'stack' }, [
+      el('p', { class: 'muted', text: 'Der Konto-Retter schließt den Launcher, sichert das gerade angemeldete Konto und öffnet den Launcher dann mit der Anmeldeseite.' }),
+      el('ol', { class: 'todo-list' }, [
+        el('li', { text: 'Im Launcher mit dem nächsten Konto anmelden und den Haken bei "Angemeldet bleiben" setzen.' }),
+        el('li', { text: 'Hier auf "Aktuelles Konto speichern" klicken.' }),
+      ]),
+      callout('warning', 'Im Launcher nie auf "Abmelden" klicken', 'Abmelden meldet den Zugang auch bei Epic ab. Dann führt "Wechseln" zu diesem Konto nur noch zur Anmeldeseite.'),
+    ]);
+    const yes = await confirmDialog({ title: 'Weiteres Konto hinzufügen', body, confirmText: 'Launcher zur Anmeldung öffnen' });
+    if (yes) act('add-new', () => window.kr.epicAccounts.addNew());
   }
 
   function diagText() {
@@ -111,9 +130,13 @@
       'Einstellungsdatei: ' + (d.file || '?') + ' – ' + (d.fileFound ? 'gefunden' : 'FEHLT'),
       '[RememberMe]-Abschnitt: ' + (d.sectionFound ? 'vorhanden' : 'FEHLT'),
       'Enable: ' + (d.enable || '(leer)') + ' · Data: ' + (d.dataLength ? d.dataLength + ' Zeichen' : 'LEER') + ' · Email: ' + (d.email || '(leer)'),
+      'Konto-ID (Registry/Launcher): ' + (d.accountId || '(keine)'),
       'Verschlüsselung: ' + (status.encrypted ? 'an' : 'aus'),
-      'Alle Einstellungsdateien des Launchers:',
-      ...(d.configFiles && d.configFiles.length ? d.configFiles.map((c) => '  - ' + c.file + (c.hasSection ? '  [RememberMe: ja]' : '')) : ['  (keine gefunden)']),
+      'Gespeicherte Konten: ' + ((status.accounts || []).length),
+      'Einstellungsdateien des Launchers:',
+      ...(d.configFiles && d.configFiles.length
+        ? d.configFiles.map((c) => '  - ' + c.file + (c.hasSection ? '  [RememberMe: ' + (c.dataLength ? c.dataLength + ' Zeichen' : 'leer') + ']' : '  [kein RememberMe]') + (c.modified ? '  geändert ' + c.modified : ''))
+        : ['  (keine gefunden)']),
     ];
     return lines.join('\n');
   }
@@ -133,6 +156,7 @@
         row('Einstellungsdatei:', (d.file || '?') + (d.fileFound ? '' : ' (fehlt)'), !d.fileFound),
         row('[RememberMe]:', d.sectionFound ? 'vorhanden' : 'fehlt', !d.sectionFound),
         row('Enable / Data / Email:', (d.enable || '–') + ' / ' + (d.dataLength ? d.dataLength + ' Zeichen' : 'leer') + ' / ' + (d.email || '–'), !d.dataLength),
+        row('Konto-ID:', d.accountId || 'keine', !d.accountId),
         el('div', { class: 'hint', text: 'Der Zugang selbst wird nie angezeigt oder kopiert – nur, ob er da ist.' }),
         el('div', null, window.UI.copyButton(diagText, 'Diagnose', { small: true, text: 'Diagnose kopieren' })),
       ]),
@@ -145,7 +169,9 @@
       text: 'Der Epic Games Launcher wird geschlossen und mit diesem Konto neu gestartet. Läuft gerade ein Spiel über den Launcher, speichere es vorher.',
       confirmText: 'Wechseln',
     });
-    if (yes) act('switch-' + acc.id, () => window.kr.epicAccounts.switchTo(acc.id));
+    if (!yes) return;
+    const res = await act('switch-' + acc.id, () => window.kr.epicAccounts.switchTo(acc.id));
+    if (res && res.ok) toast('Zeigt der Launcher nur die Anmeldeseite? Dann ist der gespeicherte Zugang ungültig (z. B. nach "Abmelden" im Launcher). Einmal mit diesem Konto anmelden ("Angemeldet bleiben") und hier "Aktuelles Konto speichern" – der Eintrag wird aktualisiert.', 'info');
   }
 
   async function renameAccount(acc) {
@@ -216,6 +242,7 @@
         ]),
         el('div', { class: 'account-meta', text: [
           acc.email && acc.email !== acc.label ? acc.email : '',
+          acc.accountIdShort ? 'ID ' + acc.accountIdShort + '…' : '',
           acc.lastUsed ? 'zuletzt benutzt ' + formatDate(acc.lastUsed) : (acc.savedAt ? 'gespeichert ' + formatDate(acc.savedAt) : ''),
         ].filter(Boolean).join(' · ') }),
       ]),
@@ -243,20 +270,30 @@
           el('h2', { class: 'card-title', text: 'Gespeicherte Konten' }),
           el('p', { class: 'card-sub', text: 'Jedes Konto, das du hier speicherst, startest du später mit einem Klick.' }),
         ]),
-        el('button', {
-          class: 'btn btn-primary',
-          type: 'button',
-          fk: 'save-current',
-          disabled: !supported || Boolean(pending),
-          onclick: saveCurrent,
-        }, [icon(pending === 'save' ? 'refresh' : 'plus'), 'Aktuelles Konto speichern']),
+        el('div', { class: 'row' }, [
+          el('button', {
+            class: 'btn',
+            type: 'button',
+            fk: 'add-new',
+            disabled: !supported || Boolean(pending),
+            title: 'Launcher zur Anmeldung öffnen, ohne dich abzumelden',
+            onclick: addNew,
+          }, [icon(pending === 'add-new' ? 'refresh' : 'users'), 'Weiteres Konto hinzufügen']),
+          el('button', {
+            class: 'btn btn-primary',
+            type: 'button',
+            fk: 'save-current',
+            disabled: !supported || Boolean(pending),
+            onclick: saveCurrent,
+          }, [icon(pending === 'save' ? 'refresh' : 'plus'), 'Aktuelles Konto speichern']),
+        ]),
       ]),
     ]);
     if (!accounts.length) {
       card.appendChild(el('div', { class: 'empty' }, [
         icon('users'),
         el('div', { class: 'empty-title', text: 'Noch kein Konto gespeichert' }),
-        el('div', { text: 'Melde dich im Epic Games Launcher mit dem Haken "Angemeldet bleiben" an und klick dann auf "Aktuelles Konto speichern". Dann das nächste Konto genauso.' }),
+        el('div', { text: 'Melde dich im Epic Games Launcher mit dem Haken "Angemeldet bleiben" an und klick dann auf "Aktuelles Konto speichern". Für das nächste Konto: "Weiteres Konto hinzufügen".' }),
       ]));
     } else {
       card.appendChild(el('div', { class: 'account-list' }, accounts.map(accountRow)));
@@ -270,11 +307,12 @@
       el('ol', { class: 'todo-list' }, [
         el('li', { text: 'Im Epic Games Launcher anmelden und den Haken bei "Angemeldet bleiben" setzen.' }),
         el('li', { text: 'Hier auf "Aktuelles Konto speichern" klicken und einen Namen vergeben.' }),
-        el('li', { text: 'Im Launcher abmelden, mit dem nächsten Konto anmelden, wieder speichern.' }),
+        el('li', { text: 'Für das nächste Konto hier auf "Weiteres Konto hinzufügen" klicken. Der Launcher öffnet die Anmeldung – mit dem nächsten Konto anmelden ("Angemeldet bleiben") und wieder speichern.' }),
         el('li', { text: 'Ab jetzt: "Wechseln" klicken. Der Launcher wird geschlossen und startet mit dem gewählten Konto neu.' }),
       ]),
-      callout('info', 'Nur für deine eigenen Konten', 'Der Konto-Retter sichert nur die "Angemeldet bleiben"-Anmeldung, die der Launcher selbst auf diesem PC speichert. Sie ist an deinen Windows-Benutzer gebunden und funktioniert auf keinem anderen PC. Passwörter werden nie gelesen.'),
-      callout('warning', 'Zugang abgelaufen?', 'Meldet dich der Launcher nach dem Wechsel nicht automatisch an, ist der gespeicherte Zugang abgelaufen (das passiert nach längerer Zeit oder nach einer Passwortänderung). Dann einmal von Hand anmelden und das Konto hier neu speichern.'),
+      callout('danger', 'Im Launcher nie auf "Abmelden" klicken', 'Abmelden meldet den gespeicherten Zugang auch bei Epic ab. Danach führt "Wechseln" zu diesem Konto nur noch zur Anmeldeseite. Für ein anderes Konto immer "Weiteres Konto hinzufügen" benutzen.'),
+      callout('warning', 'Wechsel zeigt nur die Anmeldeseite?', 'Dann ist der gespeicherte Zugang ungültig – zum Beispiel nach "Abmelden" im Launcher, einer Passwortänderung oder langer Zeit. Einmal mit diesem Konto anmelden ("Angemeldet bleiben") und "Aktuelles Konto speichern". Der vorhandene Eintrag wird dabei aktualisiert, nicht doppelt angelegt.'),
+      callout('info', 'Nur für deine eigenen Konten', 'Der Konto-Retter sichert nur die "Angemeldet bleiben"-Anmeldung, die der Launcher selbst auf diesem PC speichert. Sie funktioniert auf keinem anderen PC. Passwörter werden nie gelesen.'),
     ]);
   }
 

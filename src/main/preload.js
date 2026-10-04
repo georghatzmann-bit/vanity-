@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('kr', {
     remove: (id) => call('epic:accounts:remove', id),
     rename: (id, label) => call('epic:accounts:rename', id, label),
     closeLauncher: () => call('epic:accounts:close-launcher'),
+    addNew: () => call('epic:accounts:add-new'),
   },
   discord: {
     status: () => call('discord:status'),
