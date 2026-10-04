@@ -7,6 +7,14 @@
 3. Zeigt Windows „Der Computer wurde durch Windows geschützt“: auf **Weitere Informationen** klicken, dann auf **Trotzdem ausführen**. (Das kommt, weil das Programm nicht bei Microsoft gekauft-signiert ist.)
 4. Fertig: Der Konto-Retter startet von selbst. Auf dem Desktop liegt ein Symbol, im Startmenü ein Eintrag.
 
+**Neu in Version 1.2.4:**
+
+- **Konten springen nicht mehr zurück:** Epic erneuert den gespeicherten Zugang bei jedem Start des Launchers. Der Konto-Retter ordnet den erneuerten Zugang jetzt dem zuletzt eingewechselten Konto zu, auch ohne E-Mail-Adresse oder Konto-ID. Vorher blieb dort ein veralteter Zugang stehen, und der nächste Wechsel landete auf der Anmeldeseite.
+- Lehnt Epic einen gespeicherten Zugang trotzdem ab, zeigt der Konto-Retter das an und sagt, was zu tun ist.
+- Beim „Aktuelles Konto speichern" werden zum Ersetzen nur noch Einträge angeboten, die zum angemeldeten Konto passen. Ein doppelter Eintrag fällt dabei automatisch weg.
+- Kopien der Launcher-Einstellungen in anderen Ordnern werden nicht mehr angefasst. Die richtige Datei wird zuverlässiger erkannt.
+- Klappt das Speichern der Kontenliste nicht, bleibt der Launcher unverändert und startet wieder. Das Programm friert beim Speichern nicht mehr kurz ein.
+
 **Neu in Version 1.2.3:**
 
 - **Konten-Wechsel sicherer:** Ein von Epic erneuerter Zugang wird nicht mehr durch einen älteren überschrieben. Die gespeicherte Liste wird gesichert, bevor die Launcher-Datei geändert wird; schlägt das Schreiben fehl, bleibt alles, wie es war.

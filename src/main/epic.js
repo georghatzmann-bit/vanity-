@@ -6,7 +6,8 @@
 //   %LOCALAPPDATA%\EpicGamesLauncher\Saved\Config\Windows\GameUserSettings.ini         (ältere Launcher)
 // und die Konto-ID unter HKCU\Software\Epic Games\Unreal Engine\Identifiers (Wert AccountId).
 // Der Konto-Retter sichert beides pro Konto und spielt es beim Wechsel wieder ein – so macht es
-// auch der TcNo Account Switcher. Danach startet der Launcher neu.
+// auch der TcNo Account Switcher. Danach startet der Launcher neu. Geschrieben wird nur die Datei,
+// die der Launcher wirklich liest; Kopien in anderen Ordnern bleiben unberührt.
 //
 // Wichtig: "Abmelden" im Launcher macht den gespeicherten Zugang auf Epic-Seite ungültig.
 // Für ein weiteres Konto deshalb addNew() benutzen: Das leert nur die lokale Anmeldung.
@@ -79,10 +80,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function sleepSync(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
 function run(file, args, timeout) {
   return new Promise((resolve) => {
     execFile(file, args, { windowsHide: true, timeout: timeout || 15000, encoding: 'utf8' }, (error, stdout, stderr) => {
@@ -141,29 +138,31 @@ async function registryAccountId() {
 
 // Stellt die Konto-ID des Ziels ein. Hat das Ziel keine, wird der Wert gelöscht, damit nie die ID
 // eines anderen Kontos stehen bleibt (der Launcher schreibt sie beim Anmelden selbst neu).
+// Klappt das Setzen nicht, wird der alte Wert trotzdem gelöscht.
 async function applyRegistry(accountId) {
   if (!registry) return;
-  try {
-    if (accountId) await registry.set(accountId);
-    else if (registry.del) await registry.del();
-  } catch (_) { /* nur Hilfe für den Launcher */ }
+  let done = false;
+  if (accountId) {
+    try { done = Boolean(await registry.set(accountId)); } catch (_) { done = false; }
+  }
+  if (!done && registry.del) {
+    try { await registry.del(); } catch (_) { /* nur Hilfe für den Launcher */ }
+  }
 }
 
 // Nur als Hinweis (Anzeige, Vorschlag für den Namen), nie zum Zuordnen: Der Launcher legt pro
-// angemeldetem Konto Saved\Data\<Konto-ID>.dat an (manchmal mit "OC_" davor).
+// angemeldetem Konto Saved\Data\<Konto-ID>.dat an (manchmal mit "OC_" davor). Liegen dort Dateien
+// mehrerer Konten, ist unklar, welches gerade angemeldet ist – dann gibt es keinen Hinweis.
 function dataFolderAccountId() {
   if (iniOverride) return null;
-  const dir = path.join(savedDir(), 'Data');
-  let best = null;
+  const ids = new Set();
   try {
-    for (const n of fs.readdirSync(dir)) {
+    for (const n of fs.readdirSync(path.join(savedDir(), 'Data'))) {
       const m = /^(?:OC_)?([0-9a-f]{32})\.dat$/i.exec(n);
-      if (!m) continue;
-      const t = mtimeOf(path.join(dir, n));
-      if (!best || t > best.t) best = { id: m[1].toLowerCase(), t };
+      if (m) ids.add(m[1].toLowerCase());
     }
   } catch (_) { /* Ordner fehlt */ }
-  return best ? best.id : null;
+  return ids.size === 1 ? [...ids][0] : null;
 }
 
 // ---------- Einstellungsdateien des Launchers ----------
@@ -172,7 +171,7 @@ function configDir() {
   return path.join(savedDir(), 'Config');
 }
 
-// Alle GameUserSettings.ini unter Saved\Config\<Ordner>\ (für Diagnose und zum Aufräumen alter Kopien).
+// Alle GameUserSettings.ini unter Saved\Config\<Ordner>\ (nur für die Diagnose).
 // Reihenfolge: WindowsEditor (aktueller Launcher), Windows (älterer Launcher), dann alle anderen.
 function allLoginFiles() {
   if (iniOverride) return exists(iniOverride) ? [iniOverride] : [];
@@ -183,12 +182,15 @@ function allLoginFiles() {
   return dirs.map((d) => path.join(configDir(), d, SETTINGS_NAME)).filter(exists);
 }
 
-// Die Datei, die der installierte Launcher liest: WindowsEditor, sobald es den Ordner gibt (Launcher 19+),
-// sonst Windows. Nur diese zählt – Kopien in anderen Ordnern werden ignoriert.
+// Die Datei, die der installierte Launcher liest: WindowsEditor (Launcher 19+), sonst Windows.
+// Zuerst zählt, wo die Datei wirklich liegt, erst danach, welcher Ordner da ist.
+// Nur diese Datei zählt – Kopien in anderen Ordnern werden ignoriert.
 function launcherFile() {
   if (iniOverride) return iniOverride;
   const editor = path.join(configDir(), 'WindowsEditor', SETTINGS_NAME);
   const legacy = path.join(configDir(), 'Windows', SETTINGS_NAME);
+  if (exists(editor)) return editor;
+  if (exists(legacy)) return legacy;
   if (exists(path.dirname(editor))) return editor;
   if (exists(path.dirname(legacy))) return legacy;
   return allLoginFiles()[0] || editor;
@@ -229,32 +231,37 @@ function readIni(file) {
 }
 
 // Ersetzt eine Datei atomar. Hält ein anderes Programm (Virenscanner, Launcher-Rest) sie kurz fest,
-// wird bis zu ~2 Sekunden erneut versucht.
-function replaceFile(file, bytes) {
-  if (writeHook) writeHook(file);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+// wird bis zu ~2 Sekunden erneut versucht – ohne das Programm dabei einzufrieren.
+// Schlägt es ganz fehl, bleibt die alte Datei unverändert.
+async function replaceFile(file, bytes) {
   const tmp = file + '.kr-tmp';
-  fs.writeFileSync(tmp, bytes);
-  for (let i = 0; ; i++) {
-    try {
-      fs.renameSync(tmp, file);
-      return;
-    } catch (err) {
-      if (i < 10 && ['EPERM', 'EBUSY', 'EACCES'].includes(err.code)) {
-        sleepSync(200);
-        continue;
+  try {
+    if (writeHook) writeHook(file);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(tmp, bytes);
+    for (let i = 0; ; i++) {
+      try {
+        fs.renameSync(tmp, file);
+        return;
+      } catch (err) {
+        if (i < 10 && ['EPERM', 'EBUSY', 'EACCES'].includes(err.code)) {
+          await sleep(200);
+          continue;
+        }
+        throw err;
       }
-      try { fs.unlinkSync(tmp); } catch (_) { /* schon weg */ }
-      throw err;
     }
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch (_) { /* gab es nicht */ }
+    throw err;
   }
 }
 
-function writeIni(file, ini, text) {
+async function writeIni(file, ini, text) {
   let out;
   if (ini.enc === 'utf16le') out = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
   else out = Buffer.concat([ini.bom ? Buffer.from([0xef, 0xbb, 0xbf]) : Buffer.alloc(0), Buffer.from(text, 'utf8')]);
-  replaceFile(file, out);
+  await replaceFile(file, out);
 }
 
 function newlineOf(text) {
@@ -317,33 +324,23 @@ function parseKeys(body) {
   return o;
 }
 
-// Schreibt die Anmeldung in die Datei des Launchers und leert alte Kopien in anderen Ordnern
-// (damit kein überflüssiger Zugang auf der Platte liegt). Geht dabei etwas schief, werden alle
-// schon geänderten Dateien wiederhergestellt.
-function writeLogin(body) {
+function userError(message) {
+  const e = new Error(message);
+  e.userMessage = message;
+  return e;
+}
+
+// Schreibt die Anmeldung in die Datei, die der Launcher liest. Alles andere in der Datei bleibt.
+// Klappt das nicht, ist die Datei unverändert (sie wird atomar ersetzt).
+async function writeLogin(body) {
   const target = launcherFile();
-  const plan = [{ file: target, body }];
-  for (const f of allLoginFiles()) {
-    if (f === target) continue;
-    const ini = readIni(f);
-    const sec = ini ? getSection(ini.text, SECTION) : null;
-    if (sec !== null && parseKeys(sec).Data) plan.push({ file: f, body: 'Enable=False\nData=' });
-  }
-  const done = [];
+  let ini;
   try {
-    for (const step of plan) {
-      const ini = readIni(step.file);
-      if (!ini) continue;
-      writeIni(step.file, ini, setSection(ini.text, SECTION, step.body));
-      done.push({ file: step.file, raw: ini.raw });
-    }
+    ini = readIni(target);
+    if (!ini) throw Object.assign(new Error('Datei fehlt'), { code: 'ENOENT' });
+    await writeIni(target, ini, setSection(ini.text, SECTION, body));
   } catch (err) {
-    for (const d of done.reverse()) {
-      try { replaceFile(d.file, d.raw); } catch (_) { /* nichts mehr zu machen */ }
-    }
-    const e = new Error('Die Launcher-Einstellungen konnten nicht geschrieben werden (' + (err.code || err.message) + '). Es wurde nichts verändert.');
-    e.userMessage = e.message;
-    throw e;
+    throw userError('Die Launcher-Einstellungen konnten nicht geschrieben werden (' + (err.code || err.message) + '). Es wurde nichts verändert.');
   }
 }
 
@@ -413,13 +410,22 @@ function loadProfiles() {
   return Array.isArray(list) ? list.filter((p) => p && typeof p === 'object' && p.id && typeof p.section === 'string') : [];
 }
 
-function saveProfiles(list) {
+async function saveProfiles(list) {
   fs.mkdirSync(dataDir, { recursive: true });
   const json = JSON.stringify(list);
   const w = encrypted()
     ? { format: 'konto-retter-epic', version: 1, enc: 'safeStorage', data: crypto.encrypt(json).toString('base64') }
     : { format: 'konto-retter-epic', version: 1, enc: 'none', data: list };
-  replaceFile(profilesFile(), Buffer.from(JSON.stringify(w), 'utf8'));
+  await replaceFile(profilesFile(), Buffer.from(JSON.stringify(w), 'utf8'));
+}
+
+// Wie saveProfiles, aber mit verständlicher Meldung, falls es nicht klappt
+async function saveProfilesOrExplain(list) {
+  try {
+    await saveProfiles(list);
+  } catch (err) {
+    throw userError('Die Liste der Konten konnte nicht gespeichert werden (' + (err.code || err.message) + '). Im Launcher wurde nichts verändert.');
+  }
 }
 
 function profileData(p) {
@@ -430,8 +436,14 @@ function sameEmail(a, b) {
   return a.toLowerCase() === b.toLowerCase();
 }
 
+function conflicts(p, cur) {
+  return Boolean((p.email && cur.email && !sameEmail(p.email, cur.email)) || (p.accountId && cur.accountId && p.accountId !== cur.accountId));
+}
+
 // Welches gespeicherte Konto ist gerade angemeldet? Ergebnis { profile, how } oder null.
-// 1. exakt derselbe Zugang, 2. dieselbe Konto-ID (Epic hat den Zugang erneuert), 3. dieselbe E-Mail-Adresse.
+// 1. exakt derselbe Zugang, 2. dieselbe Konto-ID (Epic hat den Zugang erneuert), 3. dieselbe E-Mail-Adresse,
+// 4. das zuletzt eingewechselte Konto: Epic erneuert den Zugang bei jedem Start des Launchers. Ohne Konto-ID
+//    und E-Mail-Adresse wäre der neue Zugang sonst keinem Konto zuzuordnen, und der gespeicherte veraltet.
 // Widersprechen sich E-Mail-Adresse und Konto-ID, wird nichts zugeordnet – lieber ein Eintrag zu viel
 // als der Zugang eines Kontos unter dem Namen eines anderen.
 function matchProfile(list, cur) {
@@ -446,15 +458,40 @@ function matchProfile(list, cur) {
     const p = list.find((x) => x.email && sameEmail(x.email, cur.email) && !(x.accountId && cur.accountId && x.accountId !== cur.accountId));
     if (p) return { profile: p, how: 'email' };
   }
+  const active = list.find((x) => x.active);
+  if (active && !conflicts(active, cur) && !(cur.accountId && list.some((x) => x !== active && x.accountId === cur.accountId))) {
+    return { profile: active, how: 'last' };
+  }
   return null;
+}
+
+// Merkt sich, welches Konto gerade im Launcher steckt (null = keins, z. B. nach "Weiteres Konto hinzufügen")
+function setActive(list, p) {
+  for (const x of list) {
+    if (x === p) x.active = true;
+    else delete x.active;
+  }
+}
+
+// Der Wechsel hat nicht geklappt: im Launcher steckt weiter das bisherige Konto
+async function restoreActive(list, p) {
+  setActive(list, p);
+  try { await saveProfiles(list); } catch (_) { /* die Liste war schon nicht speicherbar */ }
 }
 
 function shortId(id) {
   return id ? id.slice(0, 8) : '';
 }
 
+// Darf die aktuelle Anmeldung diesen Eintrag ausdrücklich ersetzen? Nur wenn nichts dagegen spricht:
+// Ein alter Eintrag ohne Konto-ID oder einer mit genau dieser Konto-ID, und keine andere E-Mail-Adresse.
+function canReplace(p, cur) {
+  if (!cur || !cur.remembered || conflicts(p, cur)) return false;
+  return !p.accountId || p.accountId === cur.accountId;
+}
+
 // Nur das, was die Oberfläche sehen darf (nie den Zugang selbst)
-function publicView(p, currentId) {
+function publicView(p, currentId, cur) {
   return {
     id: p.id,
     label: p.label,
@@ -464,6 +501,7 @@ function publicView(p, currentId) {
     savedAt: p.savedAt || null,
     lastUsed: p.lastUsed || null,
     isCurrent: p.id === currentId,
+    canReplace: p.id !== currentId && canReplace(p, cur),
   };
 }
 
@@ -609,6 +647,9 @@ async function getStatus() {
   const running = sup ? await isRunning() : false;
   const m = matchProfile(accounts, cur);
   const currentId = m ? m.profile.id : null;
+  // Der Launcher läuft, aber die Anmeldung ist leer: Epic hat den eingewechselten Zugang vermutlich abgelehnt
+  const active = accounts.find((p) => p.active);
+  const rejected = running && cur.found && !cur.remembered && active ? active.label : '';
   return {
     supported: sup,
     launcherInstalled: Boolean(exe) || cur.found,
@@ -618,9 +659,10 @@ async function getStatus() {
     currentEmail: cur.email || '',
     currentAccountIdShort: shortId(cur.accountIdHint),
     currentMatchId: currentId,
+    loginRejected: rejected,
     encrypted: encrypted(),
     problem,
-    accounts: accounts.map((p) => publicView(p, currentId)),
+    accounts: accounts.map((p) => publicView(p, currentId, cur)),
     // Was der Konto-Retter auf diesem PC sieht (ohne den Zugang selbst): hilft, wenn etwas nicht klappt
     diag: {
       localAppData: localAppData(),
@@ -658,7 +700,8 @@ const NOT_FOUND = 'Die Einstellungen des Epic Games Launchers wurden nicht gefun
 const NOT_CLOSED = 'Der Launcher ließ sich nicht schließen. Bitte schließ ihn von Hand (unten rechts im Infobereich: Rechtsklick auf das Epic-Symbol, "Beenden") und versuch es nochmal.';
 
 // targetId: Der Nutzer hat ausdrücklich gewählt, welchen Eintrag die aktuelle Anmeldung ersetzen soll
-// (z. B. einen alten Eintrag, der nicht mehr funktioniert).
+// (z. B. einen alten Eintrag, der nicht mehr funktioniert). War die Anmeldung schon unter einem anderen
+// Eintrag gespeichert, ist der doppelt und fällt weg.
 async function saveCurrent(label, targetId) {
   if (!supported()) return fail('Nur unter Windows verfügbar.');
   const cur = await readCurrent();
@@ -671,13 +714,21 @@ async function saveCurrent(label, targetId) {
   if (targetId) {
     const p = list.find((x) => x.id === targetId);
     if (!p) return fail('Dieses Konto ist nicht mehr gespeichert.');
+    const m = matchProfile(list, cur);
+    if (!(m && m.profile === p) && !canReplace(p, cur)) {
+      return fail('"' + p.label + '" gehört zu einem anderen Epic-Konto und wurde nicht verändert. Speichere die Anmeldung als neues Konto.');
+    }
     applyCurrent(p, cur, 'explicit');
     if (name) p.label = name.slice(0, 60);
-    saveProfiles(list);
-    return ok('"' + p.label + '" wurde mit der aktuellen Anmeldung aktualisiert.', { id: p.id });
+    const dup = m && m.profile !== p ? m.profile : null;
+    if (dup) list.splice(list.indexOf(dup), 1);
+    setActive(list, p);
+    await saveProfiles(list);
+    return ok('"' + p.label + '" wurde mit der aktuellen Anmeldung aktualisiert.' + (dup ? ' Der doppelte Eintrag "' + dup.label + '" ist weg.' : ''), { id: p.id });
   }
   const { profile, created } = upsertCurrent(list, cur, name);
-  saveProfiles(list);
+  setActive(list, profile);
+  await saveProfiles(list);
   return ok('"' + profile.label + '" wurde ' + (created ? 'gespeichert.' : 'aktualisiert.'), { id: profile.id });
 }
 
@@ -697,16 +748,21 @@ async function switchTo(id) {
   // Konto auf (auch das Ziel selbst, wenn sein Zugang inzwischen erneuert wurde) oder wird neu gesichert.
   const cur = await readCurrent();
   let kept = null;
+  let before = null; // das Konto, das bisher im Launcher steckt
   if (cur.remembered) {
     const r = upsertCurrent(list, cur, '');
+    before = r.profile;
     if (r.created) kept = r.profile;
   }
   p.lastUsed = new Date().toISOString();
-  // Zuerst die Liste sichern, erst dann die Launcher-Datei ändern
-  saveProfiles(list);
+  setActive(list, p);
+  // Zuerst die Liste sichern, erst dann die Launcher-Datei ändern. Klappt etwas nicht,
+  // startet der Launcher wieder mit dem bisherigen Konto.
   try {
-    writeLogin(p.section);
+    await saveProfilesOrExplain(list);
+    await writeLogin(p.section);
   } catch (err) {
+    await restoreActive(list, before);
     await startLauncher(exe);
     return fail(err.userMessage || err.message);
   }
@@ -728,10 +784,12 @@ async function addNew() {
   const cur = await readCurrent();
   let kept = null;
   if (cur.remembered) kept = upsertCurrent(list, cur, '').profile;
-  saveProfiles(list);
+  setActive(list, null);
   try {
-    writeLogin(EMPTY_LOGIN);
+    await saveProfilesOrExplain(list);
+    await writeLogin(EMPTY_LOGIN);
   } catch (err) {
+    await restoreActive(list, kept);
     await startLauncher(exe);
     return fail(err.userMessage || err.message);
   }
@@ -745,7 +803,7 @@ async function remove(id) {
   const list = loadProfiles();
   const p = list.find((x) => x.id === id);
   if (!p) return fail('Dieses Konto ist nicht mehr gespeichert.');
-  saveProfiles(list.filter((x) => x.id !== id));
+  await saveProfiles(list.filter((x) => x.id !== id));
   return ok('"' + p.label + '" wurde entfernt. Im Launcher ändert sich dadurch nichts.');
 }
 
@@ -756,7 +814,7 @@ async function rename(id, label) {
   const p = list.find((x) => x.id === id);
   if (!p) return fail('Dieses Konto ist nicht mehr gespeichert.');
   p.label = name.slice(0, 60);
-  saveProfiles(list);
+  await saveProfiles(list);
   return ok('Umbenannt in "' + p.label + '".');
 }
 

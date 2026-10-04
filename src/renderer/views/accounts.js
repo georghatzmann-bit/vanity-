@@ -75,11 +75,13 @@
   }
 
   // Speichern-Dialog. Erkennt der Konto-Retter das angemeldete Konto nicht von selbst, kann man hier
-  // einen vorhandenen Eintrag wählen, der damit ersetzt wird (z. B. einen alten Eintrag, der nicht mehr geht).
+  // einen passenden vorhandenen Eintrag wählen, der damit ersetzt wird (z. B. einen alten Eintrag, der nicht mehr geht).
+  // Angeboten werden nur Einträge, die zur Anmeldung passen können (canReplace kommt vom Hauptprozess).
   // Ergebnis: { name, targetId } oder null (abgebrochen).
   async function askSave() {
     const accounts = status.accounts || [];
     const matched = accounts.find((a) => a.id === status.currentMatchId);
+    const candidates = accounts.filter((a) => a.canReplace);
     let name = matched ? matched.label : (status.currentEmail || (status.currentAccountIdShort ? 'Epic-Konto ' + status.currentAccountIdShort : ''));
     let target = null;
     const input = el('input', { class: 'input', type: 'text', value: name, placeholder: 'z. B. Hauptkonto', 'aria-label': 'Name für dieses Konto', spellcheck: 'false' });
@@ -91,9 +93,7 @@
         el('div', { class: 'field-hint', text: 'Nur für dich, damit du die Konten auseinanderhältst.' }),
       ]),
     ];
-    if (matched) {
-      parts.push(el('p', { class: 'hint', text: 'Das angemeldete Konto ist schon als "' + matched.label + '" gespeichert. Der Eintrag wird aufgefrischt.' }));
-    } else if (accounts.length) {
+    if (candidates.length) {
       const list = el('div', { class: 'stack-sm' });
       const option = (label, hint, value, checked) => {
         const radio = el('input', { type: 'radio', name: 'save-target', checked });
@@ -104,15 +104,21 @@
         });
         return el('label', { class: 'check' }, [radio, el('span', { class: 'stack-sm' }, [el('span', { text: label }), hint ? el('span', { class: 'hint', text: hint }) : null])]);
       };
-      list.appendChild(option('Als neues Konto speichern', null, null, true));
-      for (const a of accounts) {
-        list.appendChild(option('Eintrag "' + a.label + '" ersetzen', a.legacy ? 'Alter Eintrag ohne Konto-ID – wenn "Wechseln" zu ihm nur die Anmeldeseite zeigt, hier ersetzen.' : (a.email || ''), a.id, false));
+      list.appendChild(matched
+        ? option('"' + matched.label + '" auffrischen', 'Der Konto-Retter hat das angemeldete Konto als diesen Eintrag erkannt.', null, true)
+        : option('Als neues Konto speichern', null, null, true));
+      for (const a of candidates) {
+        const hint = (a.legacy ? 'Alter Eintrag ohne Konto-ID – wenn "Wechseln" zu ihm nur die Anmeldeseite zeigt, hier ersetzen.' : (a.email || ''))
+          + (matched ? ' "' + matched.label + '" fällt dann als doppelter Eintrag weg.' : '');
+        list.appendChild(option('Eintrag "' + a.label + '" ersetzen', hint.trim(), a.id, false));
       }
       parts.push(el('div', { class: 'field' }, [
         el('div', { class: 'field-label', text: 'Wohin speichern?' }),
         el('div', { class: 'field-hint', text: 'Ist das angemeldete Konto schon in der Liste, aber der Eintrag funktioniert nicht mehr? Dann wähle ihn hier aus.' }),
         list,
       ]));
+    } else if (matched) {
+      parts.push(el('p', { class: 'hint', text: 'Das angemeldete Konto ist schon als "' + matched.label + '" gespeichert. Der Eintrag wird aufgefrischt.' }));
     }
     const dialog = confirmDialog({ title: matched ? 'Konto auffrischen' : 'Aktuelles Konto speichern', body: el('div', { class: 'stack' }, parts), confirmText: 'Speichern' });
     setTimeout(() => { input.focus(); input.select(); }, 30);
@@ -248,7 +254,10 @@
           : el('span', { class: 'badge badge-warning' }, [icon('warning', 'icon-sm'), 'Niemand mit "Angemeldet bleiben" angemeldet']),
       ]),
       status.problem ? callout('danger', 'Gespeicherte Konten nicht lesbar', status.problem) : null,
-      !status.remembered ? callout('warning', 'Noch keine Anmeldung gefunden', 'Melde dich im Launcher an und setz den Haken bei "Angemeldet bleiben". Dann hier "Aktuelles Konto speichern". 2FA muss dafür nicht aus.') : null,
+      status.loginRejected
+        ? callout('warning', 'Epic hat den Zugang von "' + status.loginRejected + '" nicht angenommen', 'Zeigt der Launcher die Anmeldeseite? Dann melde dich dort einmal mit "' + status.loginRejected + '" an (Haken bei "Angemeldet bleiben"). Der Konto-Retter erkennt das Konto dann wieder und frischt den Eintrag beim nächsten Wechsel auf. Im Launcher nie auf "Abmelden" klicken.')
+        : null,
+      !status.remembered && !status.loginRejected ? callout('warning', 'Noch keine Anmeldung gefunden', 'Melde dich im Launcher an und setz den Haken bei "Angemeldet bleiben". Dann hier "Aktuelles Konto speichern". 2FA muss dafür nicht aus.') : null,
       el('p', { class: 'hint', text: status.encrypted
         ? 'Gespeicherte Zugänge liegen verschlüsselt auf diesem PC und funktionieren nur hier.'
         : 'Hinweis: Die Windows-Verschlüsselung ist auf diesem PC nicht verfügbar. Die Zugänge sind trotzdem an deinen Windows-Benutzer gebunden.' }),
