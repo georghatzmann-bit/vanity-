@@ -1,0 +1,90 @@
+{
+  "name": "konto-retter",
+  "productName": "Konto-Retter",
+  "version": "1.0.0",
+  "description": "Hilft Schritt für Schritt, ein gehacktes Epic-Games-Konto zurückzuholen.",
+  "main": "src/main/main.js",
+  "author": "Georg Hatzmann",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "icons": "python3 build/make-icon.py",
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "homepage": "https://github.com/georghatzmann-bit/vanity-",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/georghatzmann-bit/vanity-.git"
+  },
+  "build": {
+    "appId": "de.kontoretter.app",
+    "productName": "Konto-Retter",
+    "copyright": "Konto-Retter – kein offizielles Programm von Epic Games oder Discord",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!node_modules/@napi-rs/**",
+      "!node_modules/pdfjs-dist/{web,types,image_decoders,iccs,build}/**",
+      "!node_modules/pdfjs-dist/legacy/{web,image_decoders}/**",
+      "!node_modules/pdfjs-dist/legacy/build/*.{map,min.mjs,d.mts}",
+      "!node_modules/pdfjs-dist/legacy/build/pdf.sandbox*",
+      "!node_modules/pdfjs-dist/**/*.{map,md}"
+    ],
+    "asarUnpack": [
+      "node_modules/pdfjs-dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/scripts",
+        "to": "scripts"
+      }
+    ],
+    "electronLanguages": [
+      "de",
+      "en-US"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Konto-Retter-Setup-${version}.${ext}",
+      "executableName": "Konto-Retter"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Konto-Retter",
+      "uninstallDisplayName": "Konto-Retter",
+      "installerLanguages": [
+        "de_DE"
+      ],
+      "language": "1031",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "publish": null
+  }
+}

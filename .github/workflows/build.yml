@@ -1,0 +1,98 @@
+name: Installer bauen
+
+# Baut den Windows-Installer auf einem echten Windows-PC, installiert ihn testweise,
+# klickt das installierte Programm einmal komplett durch und stellt die Setup.exe bereit.
+on:
+  push:
+    branches: [main, claude/epic-account-recovery-tool-h5v2re]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Tests (inklusive Windows-Tests für die Discord-Steuerung)
+        run: npm test
+
+      - name: Installer bauen
+        run: npm run dist
+
+      - name: Installer testweise installieren
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\Konto-Retter-Setup-*.exe | Select-Object -First 1
+          Write-Host "Installiere $($setup.Name) ($([math]::Round($setup.Length / 1MB)) MB)"
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer-Exitcode $($p.ExitCode)" }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Konto-Retter\Konto-Retter.exe'
+          if (-not (Test-Path $exe)) { throw "Programm nicht installiert: $exe" }
+          $desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Konto-Retter.lnk'
+          if (-not (Test-Path $desktop)) { throw "Desktop-Verknüpfung fehlt: $desktop" }
+          $startMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Konto-Retter.lnk'
+          if (-not (Test-Path $startMenu)) { throw "Startmenü-Eintrag fehlt: $startMenu" }
+          $uninstall = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
+            Get-ItemProperty | Where-Object { $_.DisplayName -like 'Konto-Retter*' }
+          if (-not $uninstall) { throw 'Eintrag unter "Programme" fehlt' }
+          Write-Host "OK: $exe"
+          Write-Host "OK: Desktop-Verknüpfung, Startmenü und Eintrag '$($uninstall.DisplayName)' unter Programme"
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Konto-Retter\resources\scripts\DiscordAudio.ps1'))) { throw 'Discord-Hilfsskript fehlt im installierten Programm' }
+
+      - name: Installiertes Programm durchklicken
+        shell: pwsh
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          SHOTS_DIR: test-results/screenshots
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          node test/e2e/smoke.mjs (Join-Path $env:LOCALAPPDATA 'Programs\Konto-Retter\Konto-Retter.exe')
+
+      - name: Bildschirmfotos hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bildschirmfotos
+          path: test-results/screenshots
+          if-no-files-found: ignore
+
+      - name: Installer hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Konto-Retter-Setup
+          path: dist/Konto-Retter-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Als Download (Release) bereitstellen
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          $setup = Get-ChildItem dist\Konto-Retter-Setup-*.exe | Select-Object -First 1
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --title "Konto-Retter $version" --notes-file RELEASE_NOTES.md
+            if ($LASTEXITCODE -ne 0) { throw 'Release konnte nicht erstellt werden' }
+          }
+          gh release upload $tag $setup.FullName --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Upload der Setup.exe fehlgeschlagen' }
