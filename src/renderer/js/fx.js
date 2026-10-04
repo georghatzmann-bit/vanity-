@@ -35,6 +35,8 @@
   let lastTime = 0;
   let windowFocused = true;
   let clock = 0;           // Sekunden Animationszeit (läuft nur, solange aktiv)
+  // Automatische Qualität: 0 = voll, 1 = einfache Pixeldichte, 2 = sparsam (ohne Boden, weniger Sterne)
+  const quality = { level: 0, ema: 16.7, frames: 0 };
 
   function isOn() {
     return wanted && (!reduceMotion || forced);
@@ -327,6 +329,7 @@
 
   // Pro Bild: erst alle Maße lesen, dann schreiben (kein Layout-Hin-und-Her)
   const readBuf = [];
+  const trail = { x: 0, y: 0 };
   function updateUi(dt) {
     if (pointer.refresh) {
       pointer.refresh = false;
@@ -341,10 +344,12 @@
         cursor.gx = cursor.dx = pointer.x;
         cursor.gy = cursor.dy = pointer.y;
         cursor.placed = true;
+        trail.x = pointer.x;
+        trail.y = pointer.y;
         moveCursor(cursor.glow, cursor.gx, cursor.gy);
         moveCursor(cursor.dot, cursor.dx, cursor.dy);
       } else {
-        const kg = 1 - Math.exp(-dt * 9);
+        const kg = 1 - Math.exp(-dt * 12);
         const kd = 1 - Math.exp(-dt * 38);
         const ngx = cursor.gx + (pointer.x - cursor.gx) * kg;
         const ngy = cursor.gy + (pointer.y - cursor.gy) * kg;
@@ -421,14 +426,17 @@
       if (settled) pulling.delete(el);
     }
 
-    // Feine Leuchtspur bei schnellen Mausbewegungen
-    if (pointer.inside && !pointer.touch && pointer.speed > 900 && !cursor.hidden) {
-      const s = pointer.speed;
-      pointer.speed *= 0.9;
-      if (Math.random() < Math.min(0.9, s / 3000)) spawnTrail(pointer.x, pointer.y);
-    } else {
-      pointer.speed *= 0.85;
+    // Leuchtspur hinter der Maus, nur bei schnellen Bewegungen
+    if (pointer.inside && !pointer.touch && !cursor.hidden && pointer.speed > 650) {
+      const n = pointer.speed > 2200 ? 3 : pointer.speed > 1300 ? 2 : 1;
+      for (let i = 1; i <= n; i++) {
+        const f = i / n;
+        spawnTrail(trail.x + (pointer.x - trail.x) * f, trail.y + (pointer.y - trail.y) * f);
+      }
     }
+    pointer.speed *= 0.8;
+    trail.x = pointer.x;
+    trail.y = pointer.y;
   }
 
   function moveCursor(node, x, y) {
@@ -464,12 +472,13 @@
     canvas: null, ctx: null, w: 0, h: 0, dpr: 1,
     n: 0, bx: null, by: null, bz: null, ph: null, inner: null,
     px: null, py: null, pd: null, ps: null, ox: null, oy: null, glow: null, scan: null,
-    pairs: null, pairCount: 0, adj: null, buckets: null, counts: new Int32Array(6),
+    pairs: null, pairCount: 0, adj: null, buckets: null, counts: new Int32Array(14),
     stars: null, starCount: 0,
     signals: [],
     yaw: 0.6, spin: 0, lookX: 0, lookY: 0,
     gx: 0, gy: 0, R: 100,
     dots: null, starDot: null, hotDot: null, blobs: null,
+    aur: null, actx: null, aScale: 1,
     gridV: null, gridH: null, horizon: null,
     pulse: null,
   };
@@ -490,6 +499,9 @@
     scene.starDot = dotSprite([225, 232, 255]);
     scene.hotDot = dotSprite([190, 240, 255]);
     scene.blobs = [blobSprite(VIOLET), blobSprite(CYAN), blobSprite([92, 62, 220])];
+    // Polarlicht in einem winzigen Puffer: weiche Flecken brauchen keine volle Auflösung
+    scene.aur = makeCanvas(8);
+    scene.actx = scene.aur.getContext('2d');
   }
 
   function attachCanvas(canvas) {
@@ -522,7 +534,7 @@
     if (!c || !scene.ctx) return;
     const w = Math.max(1, c.clientWidth || window.innerWidth || 1);
     const h = Math.max(1, c.clientHeight || window.innerHeight || 1);
-    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    const dpr = Math.min(window.devicePixelRatio || 1, quality.level ? 1 : MAX_DPR);
     scene.w = w;
     scene.h = h;
     scene.dpr = dpr;
@@ -536,6 +548,11 @@
     const want = pointCountFor(w, h);
     if (!scene.n || Math.abs(want - scene.n) > 40) buildGlobe(want);
     if (!scene.stars) buildStars(150);
+    if (scene.actx) {
+      scene.aScale = Math.min(1, 220 / Math.max(w, h));
+      scene.aur.width = Math.ceil(w * scene.aScale);
+      scene.aur.height = Math.ceil(h * scene.aScale);
+    }
     buildGrid();
     if (!isOn()) scene.ctx.clearRect(0, 0, c.width, c.height);
   }
@@ -640,7 +657,7 @@
       n, bx, by, bz, ph, inner, pairs, pairCount, adj,
       px: new Float32Array(n), py: new Float32Array(n), pd: new Float32Array(n), ps: new Float32Array(n),
       ox: new Float32Array(n), oy: new Float32Array(n), glow: new Float32Array(n), scan: new Float32Array(n),
-      buckets: [0, 1, 2, 3, 4, 5].map(() => new Uint16Array(pairCount)),
+      buckets: Array.from({ length: 14 }, () => new Uint16Array(pairCount)),
     });
     scene.signals = [];
     for (let s = 0; s < 9; s++) scene.signals.push(newSignal());
@@ -710,9 +727,7 @@
     if (!ctx || !scene.n) return;
     const { w, h, dpr } = scene;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, w, h);
 
     // Wohin die Kugel schaut: Maus, oder kurz ein Fokuspunkt (z. B. Reiter-Wechsel)
     let tx = 0;
@@ -730,10 +745,18 @@
     scene.lookY += (ty - scene.lookY) * kl;
 
     const p = pulseAmount(ms);
+    // Polarlicht ersetzt das Löschen: ein einziges Kopieren über die ganze Fläche
+    if (scene.actx) {
+      drawAurora(scene.actx, t, p);
+      ctx.globalCompositeOperation = 'copy';
+      ctx.drawImage(scene.aur, 0, 0, scene.aur.width / scene.aScale, scene.aur.height / scene.aScale);
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, w, h);
+    }
     ctx.globalCompositeOperation = 'lighter';
-    drawAurora(ctx, t, p);
     drawStars(ctx, dt, t, p);
-    drawGrid(ctx, t, p);
+    if (quality.level < 2) drawGrid(ctx, t, p);
     drawGlobe(ctx, dt, t, p);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
@@ -748,6 +771,11 @@
   function drawAurora(ctx, t, p) {
     const { w, h } = scene;
     const m = Math.max(w, h);
+    ctx.setTransform(scene.aScale, 0, 0, scene.aScale, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < AURORA.length; i++) {
       const b = AURORA[i];
       const x = (b.x + Math.sin(t * b.sp * TAU * 0.5 + b.ph) * 0.07) * w - scene.lookX * 26;
@@ -770,7 +798,8 @@
     const lx = scene.lookX * 26;
     const ly = scene.lookY * 16;
     const glowBoost = 1 + p * 0.5;
-    for (let i = 0; i < scene.starCount; i++) {
+    const step = quality.level > 1 ? 2 : 1;
+    for (let i = 0; i < scene.starCount; i += step) {
       const z = st.z[i];
       let x = st.x[i] - dt * z * 0.004;
       if (x < -0.02) x += 1.04;
@@ -897,7 +926,8 @@
     const c0 = pc ? mix(VIOLET, pc, p * 0.8) : VIOLET;
     const c1 = pc ? mix(CYAN, pc, p * 0.8) : CYAN;
 
-    // Verbindungslinien, nach Tiefe gebündelt (wenige Zeichenaufrufe)
+    // Verbindungslinien, gebündelt nach Tiefe (4) x Farbe (3), dazu Lichtband und
+    // Maus-Nähe. Feste Farben statt Verlauf: deutlich schneller, wenn ohne Grafikkarte gemalt wird.
     const B = S.buckets;
     const cnt = S.counts;
     cnt.fill(0);
@@ -908,15 +938,16 @@
       const d = (pd[a] + pd[b]) * 0.5;
       if (d < 0.2) continue;
       let bk;
-      if (d > 0.45 && glow[a] + glow[b] > 0.55) bk = 5;
-      else if (d > 0.55 && scan[a] + scan[b] > 0.9) bk = 4;
-      else bk = d < 0.42 ? 0 : d < 0.6 ? 1 : d < 0.76 ? 2 : 3;
+      if (d > 0.45 && glow[a] + glow[b] > 0.55) bk = 13;
+      else if (d > 0.55 && scan[a] + scan[b] > 0.9) bk = 12;
+      else {
+        const u = ((px[a] + px[b]) * 0.5 - cx - (py[a] + py[b]) * 0.5 + cy) / (4 * R) + 0.5;
+        bk = (d < 0.42 ? 0 : d < 0.6 ? 3 : d < 0.76 ? 6 : 9) + (u < 0.4 ? 0 : u < 0.62 ? 1 : 2);
+      }
       B[bk][cnt[bk]++] = q;
     }
-    const grad = ctx.createLinearGradient(cx - R, cy + R, cx + R, cy - R);
-    grad.addColorStop(0, rgb(c0));
-    grad.addColorStop(1, rgb(c1));
-    for (let bk = 0; bk < 6; bk++) {
+    const bandCol = [rgb(mix(c0, c1, 0.12)), rgb(mix(c0, c1, 0.5)), rgb(mix(c0, c1, 0.88))];
+    for (let bk = 0; bk < 14; bk++) {
       const c = cnt[bk];
       if (!c) continue;
       const arr = B[bk];
@@ -928,9 +959,10 @@
         ctx.moveTo(px[a], py[a]);
         ctx.lineTo(px[b], py[b]);
       }
-      ctx.globalAlpha = Math.min(1, LINE_A[bk] * bright);
-      ctx.strokeStyle = bk === 5 ? 'rgb(190,230,255)' : bk === 4 ? 'rgb(90,215,250)' : grad;
-      ctx.lineWidth = LINE_W[bk];
+      const layer = bk < 12 ? Math.floor(bk / 3) : bk - 8;
+      ctx.globalAlpha = Math.min(1, LINE_A[layer] * bright);
+      ctx.strokeStyle = bk === 13 ? 'rgb(190,230,255)' : bk === 12 ? 'rgb(90,215,250)' : bandCol[bk % 3];
+      ctx.lineWidth = LINE_W[layer];
       ctx.stroke();
     }
 
@@ -1210,7 +1242,7 @@
     if (!ensureOverlay()) return;
     const col = Math.random() < 0.5 ? '124,108,255' : '34,211,238';
     const a = Math.random() * TAU;
-    const q = makeSpark(x, y, Math.cos(a) * 24, Math.sin(a) * 24, col, 0.45 + Math.random() * 0.2, 0.9 + Math.random() * 0.8, 3, 0);
+    const q = makeSpark(x, y, Math.cos(a) * 18, Math.sin(a) * 18 + 10, col, 0.55 + Math.random() * 0.25, 1.3 + Math.random() * 1.2, 2.5, 0);
     q.type = TRAIL;
     addPart(q);
   }
@@ -1362,7 +1394,7 @@
         ctx.drawImage(scene.hotDot || spriteFor('255,255,255', [255, 255, 255]), q.x - e, q.y - e, e * 2, e * 2);
         continue;
       }
-      const a = q.type === TRAIL ? k * k * 0.55 : Math.pow(k, 1.4);
+      const a = q.type === TRAIL ? k * 0.75 : Math.pow(k, 1.4);
       if (q.type === SPARK) {
         ctx.globalAlpha = a * 0.9;
         ctx.strokeStyle = q.col;
@@ -1399,12 +1431,26 @@
     rafId = requestAnimationFrame(frame);
     // Fenster ohne Fokus: nur ~30 Bilder pro Sekunde
     if (!windowFocused && lastTime && ms - lastTime < 31) return;
+    if (lastTime && windowFocused) watchSpeed(ms - lastTime);
     const dt = lastTime ? clamp((ms - lastTime) / 1000, 0, 0.05) : 1 / 60;
     lastTime = ms;
     clock += dt;
     updateUi(dt);
     drawScene(dt, clock, ms);
     stepOverlay(dt, ms);
+  }
+
+  // Läuft es dauerhaft zäh (z. B. ohne Grafikkarte), eine Stufe einfacher zeichnen
+  function watchSpeed(interval) {
+    if (interval > 100 || quality.level >= 2 || !scene.ctx) return;
+    quality.ema += (interval - quality.ema) * 0.03;
+    quality.frames++;
+    if (quality.frames > 150 && quality.ema > 22) {
+      quality.level++;
+      quality.frames = 0;
+      quality.ema = 16.7;
+      resizeScene();
+    }
   }
 
   function applyState() {
