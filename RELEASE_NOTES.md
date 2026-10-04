@@ -9,7 +9,7 @@
 
 **Was drin ist:**
 
-- **Konto retten:** 20 Schritte, jeder öffnet automatisch die richtige Epic-Seite. Wichtige Daten groß mit Kopieren-Knopf. Fortschritt wird gespeichert.
+- **Konto retten:** 21 Schritte, jeder öffnet automatisch die richtige Epic-Seite. Wichtige Daten groß mit Kopieren-Knopf. Fortschritt wird gespeichert.
 - **PDF auslesen:** Epic-Konto-PDF oder Kaufbelege hineinziehen, die Daten werden automatisch erkannt (auch die passwortgeschützte Epic-PDF).
 - **Support-Text:** Fertiger Text für den Epic-Support auf Deutsch und Englisch, füllt sich automatisch.
 - **Discord:** Starten, beenden, Benachrichtigungen stumm schalten – per Klick.

@@ -78,6 +78,7 @@
         status.muted.toasts ? el('span', { class: 'hint', text: 'Windows-Benachrichtigungen aus' }) : null,
         status.muted.sound ? el('span', { class: 'hint', text: 'Töne aus' + (status.muted.since ? ' seit ' + formatDate(status.muted.since) : '') }) : null,
       ]),
+      status.muted.restorePending ? callout('info', 'Ton wird gleich wieder eingeschaltet', 'Sobald Discord läuft, schaltet der Konto-Retter den Ton automatisch wieder an. Lass den Konto-Retter dafür kurz geöffnet.') : null,
       el('p', { class: 'hint', text: 'Gefunden: ' + status.installed.join(', ') + '. Der Status wird alle paar Sekunden aktualisiert.' }),
     ];
     return el('section', { class: 'card stack-sm' }, lines);

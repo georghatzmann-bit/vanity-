@@ -103,8 +103,8 @@
     },
     {
       key: 'recovery_id', label: 'Wiederherstellungs-ID (Recovery ID)', type: 'text', group: 'hack', important: true, mono: true,
-      hint: 'Kommt per Mail an deine neue Adresse, nachdem du das Wiederherstellungsformular abgeschickt hast.',
-      placeholder: 'aus der Mail "Your Epic account recovery request"',
+      hint: 'Kommt per Mail an deine neue Adresse, nachdem du das Wiederherstellungsformular abgeschickt hast. Beginnt mit "AR".',
+      placeholder: 'z. B. AR0A1B2C3D4E5F6G7H8J',
     },
     {
       key: 'ticket_number', label: 'Ticket- oder Fallnummer vom Epic-Support', type: 'text', group: 'hack', mono: true,

@@ -74,7 +74,9 @@ function itemsToLines(items) {
 
 async function extractText(bytes, { maxPages = 200, password } = {}) {
   const { lib, dir } = await loadPdfjs();
-  const toDirUrl = (sub) => pathToFileURL(path.join(dir, sub) + path.sep).href;
+  // pdf.js liest diese Ordner in Node mit fs: also echte Pfade (keine file://-Adressen),
+  // und am Ende ein "/" – das verlangt pdf.js, Windows akzeptiert es ebenfalls.
+  const toDirUrl = (sub) => path.join(dir, sub) + '/';
   const task = lib.getDocument({
     data: bytes,
     password: password || undefined,

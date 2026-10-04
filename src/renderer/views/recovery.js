@@ -170,6 +170,64 @@
     ]);
   }
 
+  // ---------- Sonderknöpfe in einzelnen Schritten ----------
+
+  async function runAction(action) {
+    if (action === 'windows-security') {
+      const res = await window.kr.openWindowsSecurity();
+      if (!res || !res.ok) window.UI.toast((res && res.message) || 'Windows-Sicherheit konnte nicht geöffnet werden.', 'error');
+      return;
+    }
+    if (action === 'find-account-id') findAccountIds();
+  }
+
+  async function findAccountIds() {
+    const res = await window.kr.findEpicAccountIds();
+    if (!res || !res.ok) {
+      window.UI.toast((res && res.message) || 'Suche hat nicht geklappt.', 'error');
+      return;
+    }
+    const { found, launcherFound } = res.value;
+    if (!found.length) {
+      await window.UI.confirmDialog({
+        title: 'Keine Konto-ID gefunden',
+        text: launcherFound
+          ? 'Der Epic Games Launcher ist installiert, hat aber noch keine Konto-ID gespeichert.'
+          : 'Auf diesem PC wurde der Epic Games Launcher nicht gefunden. Die Konto-ID steht dann in der Konto-PDF oder in Epic-Mails.',
+        confirmText: 'OK',
+        cancelText: null,
+      });
+      return;
+    }
+    const current = F.valueAsText(data(), 'account_id');
+    let chosen = null;
+    const list = el('div', { class: 'stack-sm' });
+    const body = el('div', { class: 'stack' }, [
+      el('p', { class: 'muted', text: found.length === 1
+        ? 'Auf diesem PC hat sich dieses Epic-Konto angemeldet:'
+        : 'Auf diesem PC haben sich mehrere Epic-Konten angemeldet. Das oberste wurde zuletzt benutzt. Wähle deins:' }),
+      list,
+      el('p', { class: 'hint', text: 'Nicht sicher, welches deins ist? Die Konto-ID steht auch in deiner Konto-PDF oder auf epicgames.com unter Kontoinformationen.' }),
+    ]);
+    found.forEach((f, i) => {
+      const input = el('input', { type: 'radio', name: 'acc', checked: i === 0 });
+      if (i === 0) chosen = f.id;
+      input.addEventListener('change', () => { if (input.checked) chosen = f.id; });
+      list.appendChild(el('label', { class: 'check' }, [
+        input,
+        el('span', { class: 'stack-sm' }, [
+          el('span', { class: 'mono', text: f.id }),
+          el('span', { class: 'hint', text: (f.modified ? 'Zuletzt benutzt: ' + window.UI.formatDate(f.modified) : '') + (f.id === current ? ' · schon eingetragen' : '') }),
+        ]),
+      ]));
+    });
+    const yes = await window.UI.confirmDialog({ title: 'Konto-ID gefunden', body, confirmText: 'Als meine Konto-ID übernehmen' });
+    if (!yes || !chosen) return;
+    window.Store.update((s) => { s.data.account_id = chosen; }, 'recovery');
+    window.UI.toast('Konto-ID übernommen.', 'success');
+    render();
+  }
+
   // ---------- Aufbau ----------
 
   function stepsList(active) {
@@ -257,6 +315,10 @@
       el('h3', { class: 'card-title', text: 'So geht\'s' }),
       el('ol', { class: 'todo-list' }, step.todo.map((t) => el('li', { text: t }))),
     ]));
+
+    if (step.actions && step.actions.length) {
+      card.appendChild(el('div', { class: 'row' }, step.actions.map((a) => el('button', { class: 'btn btn-primary', type: 'button', onclick: () => runAction(a.action) }, [icon(a.icon || 'arrowRight'), a.label]))));
+    }
 
     for (const w of step.warnings || []) card.appendChild(callout(w.kind, w.title, w.text));
 

@@ -18,7 +18,7 @@
   },
   "devDependencies": {
     "electron": "44.5.1",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.17.0"
   },
   "homepage": "https://github.com/georghatzmann-bit/vanity-",
   "repository": {
@@ -83,7 +83,9 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "differentialPackage": false,
+      "include": "build/installer.nsh"
     },
     "publish": null
   }

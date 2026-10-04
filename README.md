@@ -12,13 +12,15 @@ Hilfe nach einem Epic-Games-Hack – Schritt für Schritt, auf Deutsch, für Win
 
 Du merkst, dass es geklappt hat, wenn auf dem Desktop das lila Schild-Symbol **Konto-Retter** liegt.
 
+> Windows 11 mit eingeschalteter **intelligenter App-Steuerung** (Smart App Control) blockiert Programme ohne gekaufte Signatur ganz, ohne „Trotzdem ausführen“. Dann hilft nur: Windows-Sicherheit > App- & Browsersteuerung > Intelligente App-Steuerung > Aus. Bei den meisten PCs ist sie aber aus.
+
 **Deinstallieren:** Einstellungen > Apps > Installierte Apps > Konto-Retter > Deinstallieren.
 
 ## Was der Konto-Retter kann
 
 | Bereich | Was er macht |
 |---|---|
-| **Konto retten** | 20 Schritte von „E-Mail-Postfach sichern“ bis „Konto absichern“. Jeder Schritt öffnet automatisch die richtige Epic-Seite. Die Daten, die du gerade brauchst, stehen groß da und lassen sich mit einem Klick kopieren. Der Fortschritt wird gespeichert. |
+| **Konto retten** | 21 Schritte von „E-Mail-Postfach sichern“ bis „Konto absichern“. Jeder Schritt öffnet automatisch die richtige Epic-Seite. Die Konto-ID findet er auf Wunsch direkt auf deinem PC (Epic Games Launcher). Die Daten, die du gerade brauchst, stehen groß da und lassen sich mit einem Klick kopieren. Der Fortschritt wird gespeichert. |
 | **PDF auslesen** | Epic-Konto-PDF („Kontoinformationen herunterladen“), Epic-Kaufbelege, gespeicherte Epic-Seiten oder Epic-Mails hineinziehen. Konto-ID, Anzeigename, Rechnungsnummern, verknüpfte Konsolen, Zeitpunkt des Hacks und mehr werden automatisch erkannt. Die passwortgeschützte Epic-PDF wird unterstützt (Passwort steht in der zweiten Epic-Mail und wird nicht gespeichert). |
 | **Meine Daten** | Alle Nachweise an einer Stelle, jeweils mit Kopieren-Knopf. Als Textdatei speicherbar. |
 | **Support-Text** | Fertiger Text für den Epic-Support auf Deutsch und Englisch: erste Anfrage, Nachfrage oder Kurzfassung. Füllt sich automatisch und zeigt, welche Angaben noch fehlen. |
@@ -27,6 +29,8 @@ Du merkst, dass es geklappt hat, wenn auf dem Desktop das lila Schild-Symbol **K
 ### Gut zu wissen
 
 - **Discord-Töne stumm** heißt: Auch der Sprachchat ist stumm. Beim Schließen des Konto-Retters geht der Ton automatisch wieder an. Willst du nur die Pings stumm haben, stell in Discord den Status „Bitte nicht stören“ ein – das darf aus Sicherheitsgründen nur Discord selbst.
+- Lief Discord beim Wieder-Einschalten gerade nicht, schaltet der Konto-Retter den Ton automatisch ein, sobald Discord wieder läuft. Notfalls geht es auch von Hand: Rechtsklick auf das Lautsprecher-Symbol > Lautstärkemixer > bei Discord den Ton einschalten.
+- Bei der Deinstallation werden die Windows-Benachrichtigungen von Discord wieder eingeschaltet, falls der Konto-Retter sie ausgeschaltet hatte.
 - Der Konto-Retter fasst dein Discord-Konto nie an und liest keine Discord-Anmeldedaten.
 - Epic ändert seine Hilfe-Seiten gelegentlich. Öffnet ein Link nicht die richtige Seite, findest du alles auch über epicgames.com/help.
 - Gespeichert wird in `%APPDATA%\Konto-Retter` – verschlüsselt mit dem Windows-Datenschutz (nur dein Windows-Benutzer kann die Daten lesen).

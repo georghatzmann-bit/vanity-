@@ -106,6 +106,8 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  // Windows fährt herunter oder meldet ab: before-quit kommt dann nicht, also hier Ton zurückgeben
+  mainWindow.on('session-end', () => discord.restoreSoundOnSessionEnd());
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Links aus der Oberfläche nie im Programmfenster öffnen, sondern geprüft im Browser.
@@ -202,7 +204,7 @@ function registerIpc() {
   handle('export:text', async (suggestedName, text) => {
     const res = await dialog.showSaveDialog(mainWindow, {
       title: 'Speichern unter',
-      defaultPath: path.join(app.getPath('documents'), String(suggestedName || 'Konto-Retter.txt')),
+      defaultPath: path.join(app.getPath('documents'), path.basename(String(suggestedName || 'Konto-Retter.txt')).replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')),
       filters: [{ name: 'Textdatei', extensions: ['txt'] }],
     });
     if (res.canceled || !res.filePath) return ok(null);
@@ -215,11 +217,55 @@ function registerIpc() {
   handle('discord:start', async () => discord.start());
   handle('discord:stop', async () => discord.stop());
   handle('discord:mute', async (muted, options) => discord.setMuted(Boolean(muted), options || {}));
+  handle('windows:security', async () => {
+    if (process.platform !== 'win32') return fail('Nur unter Windows verfügbar.');
+    await shell.openExternal('windowsdefender://threat/');
+    return ok(true);
+  });
+
+  // Der Epic Games Launcher legt für jedes Konto, das sich auf diesem PC angemeldet hat,
+  // eine Datei an, deren Name die Konto-ID ist (laut Epic-Hilfe).
+  handle('epic:find-account-ids', async () => {
+    const base = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+    const dir = path.join(base, 'EpicGamesLauncher', 'Saved', 'Data');
+    let names = [];
+    try { names = fs.readdirSync(dir); } catch (_) { return ok({ found: [], dir, launcherFound: false }); }
+    const found = names
+      .map((n) => /^([0-9a-f]{32})\.dat$/i.exec(n))
+      .filter(Boolean)
+      .map((m) => {
+        let modified = null;
+        try { modified = fs.statSync(path.join(dir, m[0])).mtime.toISOString(); } catch (_) { /* egal */ }
+        return { id: m[1].toLowerCase(), modified };
+      })
+      .sort((a, b) => String(b.modified).localeCompare(String(a.modified)));
+    return ok({ found, dir, launcherFound: true });
+  });
+
   handle('windows:notification-settings', async () => {
     if (process.platform !== 'win32') return fail('Nur unter Windows verfügbar.');
     await shell.openExternal('ms-settings:notifications');
     return ok(true);
   });
+}
+
+// Textdateien: UTF-8 oder UTF-16 (Windows-Editor), gespeicherte Mails oft "quoted-printable".
+function decodeTextFile(buf) {
+  let text;
+  if (buf[0] === 0xff && buf[1] === 0xfe) text = buf.subarray(2).toString('utf16le');
+  else if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) text = buf.subarray(3).toString('utf8');
+  else {
+    text = buf.toString('utf8');
+    // Kein gültiges UTF-8 (viele Ersatzzeichen)? Dann ist es vermutlich Windows-1252.
+    if ((text.match(/\uFFFD/g) || []).length > 3) text = buf.toString('latin1');
+  }
+  if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(text)) {
+    text = text.replace(/=\r?\n/g, '').replace(/((?:=[0-9A-F]{2})+)/gi, (m) => {
+      const bytes = Buffer.from(m.split('=').filter(Boolean).map((h) => parseInt(h, 16)));
+      return bytes.toString('utf8');
+    });
+  }
+  return text;
 }
 
 // Liest eine PDF- oder Textdatei und sucht darin nach Kontodaten.
@@ -236,7 +282,7 @@ async function readDocument(fileName, bytes, password) {
     pages = res.pages;
     scanned = res.scanned;
   } else if (/\.(txt|eml)$/i.test(fileName)) {
-    text = Buffer.from(bytes).toString('utf8');
+    text = decodeTextFile(Buffer.from(bytes));
   } else {
     const err = new Error('not a pdf');
     err.userMessage = 'Das ist keine PDF-Datei. Bitte eine PDF (oder .txt) hineinziehen.';

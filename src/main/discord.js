@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 
 const VARIANTS = [
   { key: 'stable', name: 'Discord', folder: 'Discord', exe: 'Discord.exe', aumid: 'com.squirrel.Discord.Discord' },
@@ -26,9 +26,13 @@ function isWindows() {
 function init(opts) {
   dataDir = opts.dataDir;
   resourcesDir = opts.resourcesDir;
-  // War beim letzten Mal der Ton stumm, die Stummschaltung weiter auffrischen
+  stopSoundTimer();
+  // Offener Auftrag vom letzten Mal (stumm halten oder Ton wieder einschalten)?
   const st = readMuteState();
-  if (st && st.sound && isWindows()) startReapply();
+  soundMode = null;
+  if (st && (st.sound === 'muted' || st.sound === true)) soundMode = 'muted';
+  else if (st && st.sound === 'restore') soundMode = 'restore';
+  if (soundMode && isWindows()) startSoundTimer();
 }
 
 function ok(message, extra) { return Object.assign({ ok: true, message }, extra || {}); }
@@ -116,46 +120,89 @@ async function setToastEnabled(aumid, value) {
 }
 
 // ---------- Discord-Töne (Lautstärkemixer über PowerShell) ----------
+//
+// Zustand der Töne (im Speicher und in discord-stumm.json):
+//   'muted'   = Discord soll stumm sein (wird alle 10 s neu angewendet, z. B. nach Discord-Neustart)
+//   'restore' = Ton soll wieder an, ist aber noch nicht bestätigt (z. B. weil Discord gerade nicht lief)
+//   null      = nichts zu tun
+// Windows merkt sich die Stummschaltung pro Programm. Deshalb wird "restore" erst gelöscht,
+// wenn das Wiedereinschalten wirklich bei Discord angekommen ist.
+
+let soundMode = null;
+let audioQueue = Promise.resolve();
 
 function audioScript() {
   return path.join(resourcesDir || '', 'scripts', 'DiscordAudio.ps1');
 }
 
-async function runAudio(action) {
-  const script = audioScript();
-  if (!fs.existsSync(script)) return { ok: false, sessions: 0, message: 'Hilfsskript fehlt: ' + script };
-  const cacheDir = path.join(dataDir || '.', 'cache');
-  const res = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-Action', action, '-CacheDir', cacheDir], 30000);
-  if (res.code === 2 || /NO_SESSION/.test(res.stdout)) return { ok: true, sessions: 0 };
-  if (res.code !== 0) return { ok: false, sessions: 0, message: (res.stderr || res.stdout || 'PowerShell-Fehler').trim().split(/\r?\n/)[0] };
-  const lines = res.stdout.split(/\r?\n/).filter((l) => l.split('\t').length >= 4);
-  const muted = lines.filter((l) => l.split('\t')[3] === '1').length;
-  return { ok: true, sessions: lines.length, muted };
+function audioArgs(action) {
+  return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', audioScript(), '-Action', action, '-CacheDir', path.join(dataDir || '.', 'cache')];
 }
 
-function startReapply() {
-  stopReapply();
-  // Neue Audiositzungen (z. B. nach Discord-Neustart) werden sonst nicht stumm
+function parseAudio(code, stdout, stderr) {
+  if (code === 2 || /NO_SESSION/.test(stdout)) return { ok: true, sessions: 0 };
+  if (code !== 0) return { ok: false, sessions: 0, message: (stderr || stdout || 'PowerShell-Fehler').trim().split(/\r?\n/)[0] };
+  const lines = stdout.split(/\r?\n/).filter((l) => l.split('\t').length >= 4);
+  return { ok: true, sessions: lines.length, muted: lines.filter((l) => l.split('\t')[3] === '1').length };
+}
+
+// Alle Ton-Aktionen laufen nacheinander, damit ein altes "stumm" nie ein neueres "an" überholt.
+function runAudio(action) {
+  const job = audioQueue.then(async () => {
+    if (!fs.existsSync(audioScript())) return { ok: false, sessions: 0, message: 'Hilfsskript fehlt: ' + audioScript() };
+    const res = await run('powershell.exe', audioArgs(action), 30000);
+    return parseAudio(res.code, res.stdout, res.stderr);
+  });
+  audioQueue = job.catch(() => {});
+  return job;
+}
+
+function saveSoundMode(mode) {
+  soundMode = mode;
+  const st = readMuteState() || {};
+  if (mode) st.sound = mode; else delete st.sound;
+  if (mode === 'muted') st.at = st.at || new Date().toISOString();
+  writeMuteState(st.sound || st.toasts ? st : null);
+  if (mode) startSoundTimer(); else stopSoundTimer();
+}
+
+// Versucht, den Ton wieder einzuschalten. Gelöscht wird der Auftrag nur bei Erfolg.
+async function tryRestoreSound() {
+  const res = await runAudio('unmute');
+  if (soundMode !== 'restore') return res; // inzwischen wieder stumm geschaltet
+  if (res.ok && res.sessions > 0) saveSoundMode(null);
+  return res;
+}
+
+function startSoundTimer() {
+  if (reapplyTimer) return;
   reapplyTimer = setInterval(async () => {
-    const st = readMuteState();
-    if (!st || !st.sound) return stopReapply();
+    if (!soundMode) return stopSoundTimer();
     try {
-      if ((await runningVariants()).length) await runAudio('mute');
+      if (!(await runningVariants()).length) return;
+      if (soundMode === 'muted') await runAudio('mute');
+      else if (soundMode === 'restore') await tryRestoreSound();
     } catch (_) { /* nächster Versuch */ }
   }, 10000);
   if (reapplyTimer.unref) reapplyTimer.unref();
 }
 
-function stopReapply() {
+function stopSoundTimer() {
   if (reapplyTimer) clearInterval(reapplyTimer);
   reapplyTimer = null;
+}
+
+// Merker in der Registry, damit die Deinstallation die Discord-Popups wieder einschalten kann
+async function setToastMarker(on) {
+  if (on) await run('reg', ['add', 'HKCU\\Software\\Konto-Retter', '/v', 'DiscordToastsMuted', '/t', 'REG_DWORD', '/d', '1', '/f'], 8000);
+  else await run('reg', ['delete', 'HKCU\\Software\\Konto-Retter', '/v', 'DiscordToastsMuted', '/f'], 8000);
 }
 
 // ---------- Öffentliche Funktionen ----------
 
 async function getStatus() {
   if (!isWindows()) {
-    return { supported: false, installed: [], running: false, runningNames: [], muted: { toasts: false, sound: false } };
+    return { supported: false, installed: [], running: false, runningNames: [], muted: { toasts: false, sound: false, restorePending: false } };
   }
   const installed = installedVariants();
   const running = await runningVariants();
@@ -170,7 +217,7 @@ async function getStatus() {
     installed: installed.map((v) => v.name),
     running: running.length > 0,
     runningNames: running.map((v) => v.name),
-    muted: { toasts: toastsMuted, sound: Boolean(st && st.sound), since: st ? st.at : null },
+    muted: { toasts: toastsMuted, sound: soundMode === 'muted', restorePending: soundMode === 'restore', since: st ? st.at : null },
   };
 }
 
@@ -186,8 +233,7 @@ async function start() {
   } catch (err) {
     return fail('Discord konnte nicht gestartet werden: ' + err.message);
   }
-  const st = readMuteState();
-  if (st && st.sound) setTimeout(() => runAudio('mute').catch(() => {}), 8000);
+  // Stumm- oder Wieder-an-Auftrag erledigt der 10-Sekunden-Takt, sobald Discord läuft
   return ok(v.name + ' wird gestartet. Das kann ein paar Sekunden dauern.');
 }
 
@@ -218,31 +264,33 @@ async function setMuted(muted, options) {
   const messages = [];
 
   if (muted) {
-    const prev = readMuteState() || { toasts: null, sound: false };
-    const state = { at: new Date().toISOString(), toasts: prev.toasts, sound: prev.sound };
+    if (wantSound) saveSoundMode('muted'); // sofort, damit kein älteres "an" dazwischenfunkt
     if (wantToasts && installed.length) {
+      const st = readMuteState() || {};
       // Vorherigen Zustand nur beim ersten Stummschalten merken
-      if (!state.toasts) {
-        state.toasts = {};
-        for (const v of installed) state.toasts[v.aumid] = await readToastEnabled(v.aumid);
+      if (!st.toasts) {
+        st.toasts = {};
+        for (const v of installed) st.toasts[v.aumid] = await readToastEnabled(v.aumid);
+        st.at = st.at || new Date().toISOString();
+        writeMuteState(st);
       }
       let good = true;
       for (const v of installed) good = (await setToastEnabled(v.aumid, 0)) && good;
+      await setToastMarker(true);
       messages.push(good ? 'Windows-Benachrichtigungen von Discord sind aus.' : 'Windows-Benachrichtigungen konnten nicht ganz ausgeschaltet werden.');
     }
     if (wantSound) {
-      state.sound = true;
       const res = await runAudio('mute');
       if (!res.ok) messages.push('Töne: ' + res.message);
       else if (res.sessions === 0) messages.push('Discord-Töne werden stumm geschaltet, sobald Discord den ersten Ton abspielt.');
       else messages.push('Discord-Töne sind stumm.');
-      startReapply();
     }
-    writeMuteState(state);
     return ok(messages.join(' ') || 'Erledigt.');
   }
 
   // Wieder einschalten: alles genau so zurückstellen, wie es vorher war
+  const hadSound = soundMode === 'muted' || soundMode === 'restore';
+  if (hadSound) saveSoundMode('restore');
   const st = readMuteState();
   let good = true;
   if (st && st.toasts) {
@@ -252,23 +300,39 @@ async function setMuted(muted, options) {
       if ((await readToastEnabled(v.aumid)) === 0) good = (await setToastEnabled(v.aumid, 1)) && good;
     }
   }
+  await setToastMarker(false);
+  const after = readMuteState();
+  if (after) { delete after.toasts; writeMuteState(after.sound ? after : null); }
   messages.push(good ? 'Windows-Benachrichtigungen von Discord sind wieder an.' : 'Windows-Benachrichtigungen konnten nicht ganz zurückgestellt werden.');
-  stopReapply();
-  const res = await runAudio('unmute');
-  if (!res.ok) messages.push('Töne: ' + res.message);
+
+  const res = hadSound ? await tryRestoreSound() : await runAudio('unmute');
+  if (!res.ok) messages.push('Töne: ' + res.message + ' Es wird automatisch weiter versucht.');
+  else if (soundMode === 'restore') messages.push('Discord läuft gerade nicht oder spielt nichts ab. Der Ton wird automatisch wieder eingeschaltet, sobald Discord läuft.');
   else messages.push('Discord-Töne sind wieder an.');
-  writeMuteState(null);
   return ok(messages.join(' '));
 }
 
 // Beim Schließen des Konto-Retters: Ton wieder anschalten, damit Discord nicht dauerhaft stumm bleibt.
+// Klappt das nicht (Discord läuft nicht), bleibt der Auftrag gespeichert und wird beim nächsten Start erledigt.
 async function restoreSoundOnExit() {
-  const st = readMuteState();
-  stopReapply();
-  if (!st || !st.sound || !isWindows()) return;
-  try { await runAudio('unmute'); } catch (_) { /* egal */ }
-  st.sound = false;
-  if (st.toasts) writeMuteState(st); else writeMuteState(null);
+  stopSoundTimer();
+  if (!isWindows() || !soundMode) return;
+  saveSoundMode('restore');
+  stopSoundTimer();
+  try { await tryRestoreSound(); } catch (_) { /* nächster Start */ }
+  stopSoundTimer();
 }
 
-module.exports = { init, getStatus, start, stop, setMuted, restoreSoundOnExit, VARIANTS };
+// Windows wird heruntergefahren: Es bleiben nur wenige Sekunden, deshalb synchron.
+function restoreSoundOnSessionEnd() {
+  if (!isWindows() || !soundMode) return;
+  saveSoundMode('restore');
+  stopSoundTimer();
+  try {
+    const out = execFileSync('powershell.exe', audioArgs('unmute'), { windowsHide: true, timeout: 4000, encoding: 'utf8' });
+    if (parseAudio(0, String(out || ''), '').sessions > 0) saveSoundMode(null);
+  } catch (_) { /* bleibt "restore", wird beim nächsten Start erledigt */ }
+  stopSoundTimer();
+}
+
+module.exports = { init, getStatus, start, stop, setMuted, restoreSoundOnExit, restoreSoundOnSessionEnd, VARIANTS };

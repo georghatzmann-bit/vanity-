@@ -101,7 +101,7 @@ test('Gespeicherte Epic-Kontoseite (deutsch, mit Druck-Kopfzeile)', async () => 
 test('Mail zur Wiederherstellung: Recovery ID und neue Adresse', async () => {
   const { found } = await read('recovery-mail.pdf');
   assert.equal(found.kind, 'recovery-mail');
-  assert.deepEqual(values(found, 'recovery_id'), ['7XK2-9QPL-4421']);
+  assert.deepEqual(values(found, 'recovery_id'), ['AR7XK29QPL4421ABCDEF']);
   assert.deepEqual(values(found, 'email_new'), ['neu-und-sicher@beispiel.de']);
   assert.equal(values(found, 'emails_old').length, 0);
 });

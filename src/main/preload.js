@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('kr', {
     parsePicked: (token, password) => call('pdf:parse-picked', token, password),
   },
   exportText: (suggestedName, text) => call('export:text', suggestedName, text),
+  openWindowsSecurity: () => call('windows:security'),
+  findEpicAccountIds: () => call('epic:find-account-ids'),
   discord: {
     status: () => call('discord:status'),
     start: () => call('discord:start'),

@@ -112,7 +112,7 @@ const fixtures = {
     <p>An: neu-und-sicher@beispiel.de</p>
     <h1>Your Epic account recovery request</h1>
     <p>We have received your account recovery request. We usually respond within 48 hours.</p>
-    <p><b>Recovery ID:</b> 7XK2-9QPL-4421</p>
+    <p><b>Recovery ID:</b> AR7XK29QPL4421ABCDEF</p>
     <p>You can check your account recovery status at any time.</p>`,
 
   'psn-receipt.pdf': `

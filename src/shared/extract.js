@@ -576,8 +576,12 @@
     }
 
     // --- Wiederherstellungs-ID und Ticketnummer
+    // Laut Epic beginnt die Recovery ID mit "AR", danach 18 Buchstaben oder Ziffern
+    const RE_RECOVERY_AR = /(?<![A-Za-z0-9])AR[A-Za-z0-9]{18}(?![A-Za-z0-9])/;
     const rid = findLabeled(lines, /(?:Account\s*)?Recovery\s*(?:Request\s*)?ID|Wiederherstellungs-?(?:ID|nummer)/i, V.code, { lookahead: 2 });
-    if (rid) add({ key: 'recovery_id', label: 'Wiederherstellungs-ID', target: 'recovery_id', value: rid.value, auto: true });
+    const ridAr = epic ? RE_RECOVERY_AR.exec(text) : null;
+    if (ridAr) add({ key: 'recovery_id', label: 'Wiederherstellungs-ID', target: 'recovery_id', value: ridAr[0], auto: true });
+    else if (rid) add({ key: 'recovery_id', label: 'Wiederherstellungs-ID', target: 'recovery_id', value: rid.value, auto: true, confidence: /^AR/i.test(rid.value) ? 'high' : 'medium', note: /^AR/i.test(rid.value) ? '' : 'Normalerweise beginnt die Recovery ID mit "AR". Bitte prüfen.' });
     const tk = findLabeled(lines, /Case\s*(?:Number|No\.?|ID|#)|Ticket\s*(?:Number|Nr\.?|ID|#)|Ticketnummer|Fallnummer|Vorgangsnummer|Anfragenummer|Request\s*#/i, V.code, { lookahead: 1 });
     if (tk && epic) add({ key: 'ticket_number', label: 'Ticket- oder Fallnummer', target: 'ticket_number', value: tk.value, confidence: 'medium', note: 'Bitte prüfen, ob das wirklich die Ticketnummer ist.' });
 
