@@ -53,27 +53,38 @@
   //   Datum:  "2026-10-" / "02T19:13:02Z"
   //   E-Mail: "jan-" / "georg.max@gmx.de"  oder  "max@t-" / "online.de"
   // Solche Stücke werden wieder zusammengesetzt.
-  function repairWrapped(lines) {
+  function lastToken(line) {
+    const k = Math.max(line.lastIndexOf(' '), line.lastIndexOf('\t'));
+    return line.slice(k + 1);
+  }
+
+  function firstToken(line) {
+    const m = /^\S+/.exec(line);
+    return m ? m[0] : '';
+  }
+
+  // joined: hier werden die zusammengesetzten E-Mail-Adressen gesammelt (die gelten dann als "bitte prüfen")
+  function repairWrapped(lines, joined) {
     const out = lines.slice();
     for (let i = 0; i < out.length - 1; i++) {
       const m = /((?:19|20)\d{2}-\d{1,2}-)(?=\s|$)/.exec(out[i]);
-      if (m) {
-        const n = /^(\d{1,2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?)(?=\s|$)/.exec(out[i + 1]);
-        if (n) {
-          out[i] = out[i].slice(0, m.index) + m[1] + n[1] + out[i].slice(m.index + m[1].length);
-          out[i + 1] = out[i + 1].slice(n[0].length).trim();
-        }
-      }
-      const last = /(\S+)$/.exec(out[i]);
-      const first = /^(\S+)/.exec(out[i + 1] || '');
-      if (last && first && /[-.@]$/.test(last[1])) {
-        const joined = last[1] + first[1];
-        const lastPart = /[A-Za-z0-9._%+-]*@?[A-Za-z0-9.-]*$/.exec(last[1]);
-        const candidate = (lastPart ? lastPart[0] : last[1]) + first[1];
-        if (RE_EMAIL_FULL.test(candidate) && (last[1].includes('@') || first[1].includes('@'))) {
-          out[i] = out[i].slice(0, out[i].length - last[1].length) + joined;
-          out[i + 1] = out[i + 1].slice(first[1].length).trim();
-        }
+      if (!m) continue;
+      const n = /^(\d{1,2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?)(?=\s|$)/.exec(out[i + 1]);
+      if (!n) continue;
+      out[i] = out[i].slice(0, m.index) + m[1] + n[1] + out[i].slice(m.index + m[1].length);
+      out[i + 1] = out[i + 1].slice(n[0].length).trim();
+    }
+    // E-Mail-Adressen von hinten nach vorne zusammensetzen, damit auch dreiteilige Umbrüche klappen
+    for (let i = out.length - 2; i >= 0; i--) {
+      const last = lastToken(out[i]);
+      const first = firstToken(out[i + 1] || '');
+      if (!last || !first || !/[-.@]$/.test(last) || !/[A-Za-z0-9]/.test(last.replace(/[-.@]$/, ''))) continue;
+      const tail = /[A-Za-z0-9._%+-]*@?[A-Za-z0-9.-]*$/.exec(last);
+      const candidate = (tail ? tail[0] : last) + first;
+      if (RE_EMAIL_FULL.test(candidate) && (last.includes('@') || first.includes('@'))) {
+        out[i] = out[i].slice(0, out[i].length - last.length) + last + first;
+        out[i + 1] = out[i + 1].slice(first.length).trim();
+        if (joined) joined.add(candidate.toLowerCase());
       }
     }
     return out.filter((l) => l.length > 0);
@@ -211,7 +222,7 @@
   const RE_DATE_ONLY = /^(?:(?:19|20)\d{2}-\d{2}-\d{2}|\d{1,2}[./]\d{1,2}[./]\d{2,4})$/;
 
   // Wörter, die selbst Beschriftungen oder Menüpunkte sind und nie als Wert gelten dürfen
-  const LABEL_WORDS = /^(?:e-?mail(?:[ -]?adresse)?(?: address)?|display name|anzeigename|first name|last name|vorname|nachname|account id|konto-?id|id|country|land|region|land\/region|country\/region|creation date|last login|account status|status|type|bill to|order id|order date|source|invoice id|phone|telefon|name|password|passwort|ja|nein|yes|no|connected|verbunden|disconnect|trennen|edit|bearbeiten|adresse|address|stadt|city|postleitzahl|postal code|abmelden|sign out|hilfe|help|support|datenschutz|privacy|transaktionen|transactions|einstellungen|settings|konto|account|kontoeinstellungen|account settings|kontoinformationen|account information|passwort und sicherheit|password & security|verbindungen|connections|apps|jugendschutz|parental controls|zahlungsverwaltung|payment management|rücknahme|keine angabe|none)$/i;
+  const LABEL_WORDS = /^(?:e-?mail(?:[ -]?adresse)?(?: address)?|display name|anzeigename|first name|last name|vorname|nachname|account id|konto-?id|id|country|land|region|land\/region|country\/region|creation date|last login|account status|status|type|bill to|order id|order date|source|invoice id|phone|telefon|name|password|passwort|ja|nein|yes|no|connected|verbunden|disconnect|trennen|edit|bearbeiten|adresse|address|stadt|city|postleitzahl|postal code|abmelden|sign out|hilfe|help|support|datenschutz|privacy|transaktionen|transactions|einstellungen|settings|konto|account|kontoeinstellungen|account settings|kontoinformationen|account information|passwort und sicherheit|password & security|verbindungen|connections|apps|jugendschutz|parental controls|zahlungsverwaltung|payment management|rücknahme|keine angabe|none|straße|strasse|hausnummer|ort|plz|bundesland|geburtsdatum|date of birth|sprache|language|speichern|änderungen speichern|save|save changes|verwerfen|discard|abbrechen|cancel|code einlösen|redeem code|epic-belohnungen|epic rewards|wunschliste|wishlist|bibliothek|library|mehr anzeigen|show more)$/i;
 
   // Füllwörter: kommen sie vor, ist es ein Satz und kein Name
   const SENTENCE_WORDS = /(?:^|\s)(?:und|oder|bitte|deinen?|dein|uns|the|and|or|please|your|you|are|ist|sind|as|they|wie|mit|with|für|for|von|from|an|to|auf|on|in|im|der|die|das|des|dem|ein|eine|grüße|regards|hallo|hello)(?=\s|$|[.,!?])/i;
@@ -491,7 +502,10 @@
   function extractFields(rawInput) {
     const rawText = String(rawInput || '').slice(0, MAX_CHARS);
     const allLines = toLines(rawText).map((l) => (l.length > MAX_LINE ? l.slice(0, MAX_LINE) : l));
-    const lines = repairWrapped(withoutNoise(allLines));
+    const joinedEmails = new Set();
+    const lines = repairWrapped(withoutNoise(allLines), joinedEmails);
+    // Eine zusammengesetzte Adresse lieber vorschlagen als still eintragen
+    const isJoined = (e) => [...joinedEmails].some((j) => j.endsWith(e) || e.endsWith(j));
     const text = lines.join('\n');
     const kind = detectKind(text);
     const epic = EPIC_KINDS.has(kind);
@@ -514,7 +528,7 @@
       exclude: /(?:External|Auth|Session|Client|Recovery|Invoice|Order|Transaction|Request)\s*ID/i,
       skipLine: NOT_ACCOUNT_LINE,
     });
-    if (idLabeled) accountId = { value: idLabeled.value, confidence: 'high', auto: epic };
+    if (idLabeled) accountId = { value: idLabeled.value, confidence: 'high', auto: epic && (idLabeled.where !== 'below' || kind === 'account-export' || /^[0-9a-f]{32}$/i.test(idLabeled.value)) };
     if (!accountId && epic) {
       // Ohne Beschriftung: die häufigste 32-stellige Hex-Kennung, aber nie aus Zeilen mit Client/Session/...
       const counts = new Map();
@@ -532,22 +546,24 @@
 
     // --- Angaben, die nur in Epic-Kontodaten und auf Epic-Kontoseiten stehen
     const accountDoc = kind === 'account-export' || kind === 'account-page';
+    // Auf gespeicherten Webseiten kann "darunter" auch ein Menüpunkt stehen: dann nur vorschlagen
+    const sure = (hit) => hit.where !== 'below' || kind === 'account-export';
     if (accountDoc) {
       const dn = findLabeled(lines, /(?:Epic[\s-]*)?Display\s*Name|Anzeigename/i, V.displayName, { exclude: /External/i });
-      if (dn) add({ key: 'display_name', label: 'Anzeigename', target: 'display_name', value: dn.value, auto: true, note: 'Falls der Hacker den Namen geändert hat, ist das vielleicht nicht dein Name.' });
+      if (dn) add({ key: 'display_name', label: 'Anzeigename', target: 'display_name', value: dn.value, auto: sure(dn), note: 'Falls der Hacker den Namen geändert hat, ist das vielleicht nicht dein Name.' });
       const fn = findLabeled(lines, /First\s*Name|Vorname/i, V.personName);
-      if (fn) add({ key: 'first_name', label: 'Vorname', target: 'first_name', value: fn.value, auto: true });
+      if (fn) add({ key: 'first_name', label: 'Vorname', target: 'first_name', value: fn.value, auto: sure(fn) });
       const ln = findLabeled(lines, /Last\s*Name|Nachname|Familienname/i, V.personName);
-      if (ln) add({ key: 'last_name', label: 'Nachname', target: 'last_name', value: ln.value, auto: true });
+      if (ln) add({ key: 'last_name', label: 'Nachname', target: 'last_name', value: ln.value, auto: sure(ln) });
       const co = findLabeled(lines, /Country(?:\s*\/\s*Region)?|Land(?:\s*\/\s*Region)?/i, V.country);
-      if (co) add({ key: 'country', label: 'Land', target: 'country', value: co.value, auto: true });
+      if (co) add({ key: 'country', label: 'Land', target: 'country', value: co.value, auto: sure(co) });
       const ph = findLabeled(lines, /Phone(?:\s*Number)?|Telefon(?:nummer)?|Handy(?:nummer)?|Mobil(?:nummer)?/i, V.phone);
       if (ph) {
         if (/[*•xX]{2,}/.test(ph.value)) add({ key: 'phone_masked', label: 'Handynummer (teilweise verdeckt)', target: null, value: ph.value, info: true });
-        else add({ key: 'phone', label: 'Handynummer', target: 'phone', value: ph.value, auto: true });
+        else add({ key: 'phone', label: 'Handynummer', target: 'phone', value: ph.value, auto: sure(ph) });
       }
       const cd = findLabeled(lines, /Creation\s*Date|Date\s*Created|Account\s*created|Konto\s*erstellt(?:\s*am)?|Erstellungsdatum|Erstellt\s*am/i, (s) => V.date(s, usDates));
-      if (cd) add({ key: 'account_created', label: 'Konto erstellt am', target: 'account_created', value: cd.value.replace(/,.*$/, ''), auto: true });
+      if (cd) add({ key: 'account_created', label: 'Konto erstellt am', target: 'account_created', value: cd.value.replace(/,.*$/, ''), auto: sure(cd) });
       const ll = findLabeled(lines, /Last\s*Log(?:in|ged\s*in)|Letzte\s*Anmeldung|Zuletzt\s*angemeldet/i, (s) => V.date(s, usDates));
       if (ll) add({ key: 'last_login', label: 'Letzte Anmeldung', target: null, value: ll.value, info: true, note: 'Wenn du dich zu dieser Zeit nicht angemeldet hast, war es vermutlich der Hacker.' });
       const st = findLabeled(lines, /Account\s*Status|Kontostatus/i, (s) => (/^(ACTIVE|INACTIVE|DISABLED|LOCKED|BANNED|DELETED|PENDING_DELETION|Aktiv|Gesperrt|Deaktiviert)$/i.test(s.trim()) ? s.trim() : null));
@@ -564,7 +580,8 @@
       const em = findLabeled(lines, /Bill\s*To|Rechnung\s*an/i, V.email);
       if (em) {
         accountEmail = em.value;
-        add({ key: 'email', label: 'E-Mail-Adresse im Konto (beim Kauf)', target: 'email_original', value: em.value, auto: true });
+        const joinedHere = isJoined(em.value);
+        add({ key: 'email', label: 'E-Mail-Adresse im Konto (beim Kauf)', target: 'email_original', value: em.value, auto: !joinedHere, confidence: joinedHere ? 'medium' : 'high', note: joinedHere ? 'Die Adresse war im Beleg umgebrochen. Bitte prüfen, ob sie stimmt.' : '' });
       }
     } else if (accountDoc) {
       const em = findLabeled(lines, /E-?Mail(?:[\s-]*Adresse|\s*Address)?/i, V.email);

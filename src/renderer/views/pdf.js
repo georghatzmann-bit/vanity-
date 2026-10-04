@@ -8,6 +8,7 @@
   let busy = false;
   const results = []; // nur für diese Sitzung, der Text der PDFs wird nicht gespeichert
   let resultCounter = 0;
+  let generation = 0; // steigt bei "Alle Daten löschen": noch laufende Lesevorgänge werden dann verworfen
 
   function data() {
     return window.Store.get().data;
@@ -156,8 +157,9 @@
     try {
       while (queue.length) {
         const source = queue.shift();
+        const gen = generation;
         const value = await readOne(source);
-        if (value) addResult(value);
+        if (value && gen === generation) addResult(value);
         render();
       }
     } finally {
@@ -363,6 +365,7 @@
   // "Alle Daten löschen": auch die erkannten Werte und den PDF-Text dieser Sitzung vergessen
   window.Store.subscribe((_state, source) => {
     if (source !== 'reset') return;
+    generation += 1;
     results.length = 0;
     queue.length = 0;
     render();

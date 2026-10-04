@@ -31,6 +31,7 @@
 
   async function act(name, fn) {
     if (pending) return;
+    const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null;
     pending = name;
     render();
     try {
@@ -42,6 +43,9 @@
     } finally {
       pending = null;
       await refresh();
+      // Fokus zurück auf den Knopf (oder seinen Nachfolger, z. B. "wieder an" statt "stumm")
+      const again = root && focusKey ? (root.querySelector('[data-fk="' + CSS.escape(focusKey) + '"]') || root.querySelector('.big-action:not([disabled])')) : null;
+      if (again) again.focus();
     }
   }
 

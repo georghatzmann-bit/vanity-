@@ -261,3 +261,17 @@ test('Zeitangaben mit "UTC" werden in deutsche Zeit umgerechnet', () => {
   assert.equal(parseDate('10/02/2026 7:13 PM UTC', true), '02.10.2026, 21:13 Uhr');
   assert.equal(parseDate('2026-01-10T10:00:00Z'), '10.01.2026, 11:00 Uhr');
 });
+
+test('Dreiteilig umgebrochene Adresse wird ganz zusammengesetzt und nur vorgeschlagen', () => {
+  const found = extractFields('Your Epic Games Receipt\nINVOICE ID:\nA812855087\nBill To:\ngeorg-\nmax.mustermann@t-\nonline.de');
+  assert.deepEqual(values(found, 'email_original'), ['georg-max.mustermann@t-online.de']);
+  assert.equal(autoValues(found, 'email_original').length, 0);
+});
+
+test('Gespeicherte Kontoseite: Werte unter der Beschriftung nur als Vorschlag, Menüwörter nie', () => {
+  const below = extractFields('Kontoeinstellungen\nVorname\nMax');
+  assert.deepEqual(values(below, 'first_name'), ['Max']);
+  assert.equal(autoValues(below, 'first_name').length, 0);
+  const menu = extractFields('Kontoeinstellungen\nVorname\nSpeichern');
+  assert.equal(values(menu, 'first_name').length, 0);
+});

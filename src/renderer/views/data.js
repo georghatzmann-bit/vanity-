@@ -37,20 +37,40 @@
   }
 
   function fieldBlock(field) {
+    // Für Listen: Stand beim Hineinklicken. Was währenddessen von anderswo dazukommt
+    // (z. B. aus einer PDF), wird beim Speichern dazugemischt statt überschrieben.
+    let base = null;
+    let atFocus = null;
+    const mergedList = (text) => {
+      const user = text.split(/\r?\n/);
+      const userClean = user.map((x) => x.trim()).filter(Boolean);
+      const extra = F.listValue(data(), field.key).filter((v) => !(base || []).includes(v) && !userClean.includes(v));
+      return { raw: user.concat(extra), clean: userClean.concat(extra), extra };
+    };
     const control = fieldControl(field, data()[field.key], (text) => {
       // Listen erst beim Verlassen säubern, damit Leerzeilen beim Tippen nicht verschwinden.
-      window.Store.update((s) => { s.data[field.key] = field.type === 'list' ? text.split(/\r?\n/) : text; }, 'data');
+      if (field.type === 'list') {
+        const m = mergedList(text);
+        window.Store.update((s) => { s.data[field.key] = m.raw; }, 'data');
+      } else {
+        window.Store.update((s) => { s.data[field.key] = text; }, 'data');
+      }
     });
     control.dataset.field = field.key;
     if (field.type === 'list') {
-      let atFocus = null;
-      control.addEventListener('focus', () => { atFocus = control.value; });
+      control.addEventListener('focus', () => {
+        atFocus = control.value;
+        base = F.listValue(data(), field.key);
+      });
       control.addEventListener('blur', () => {
-        // Nur speichern, wenn der Nutzer hier wirklich etwas geändert hat
-        if (atFocus !== null && control.value !== atFocus) {
-          window.Store.update((s) => { s.data[field.key] = fromInputValue(field, control.value); }, 'data');
+        const m = mergedList(control.value);
+        // Nur speichern, wenn der Nutzer etwas geändert hat oder etwas dazugekommen ist
+        if ((atFocus !== null && control.value !== atFocus) || m.extra.length) {
+          window.Store.update((s) => { s.data[field.key] = m.clean; }, 'data');
+          control.value = m.clean.join('\n');
         }
         atFocus = null;
+        base = null;
       });
     }
     return el('div', { class: 'field' }, [

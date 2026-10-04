@@ -170,6 +170,7 @@
     return el('button', {
       class: 'btn btn-sm ' + (ghost ? 'btn-ghost' : ''),
       type: 'button',
+      fk: 'edit-' + key,
       onclick: async () => {
         const changed = await window.Views.data.editFieldDialog(key);
         if (changed) render();
@@ -399,7 +400,17 @@
       right.appendChild(el('button', { class: 'btn btn-ghost', type: 'button', fk: 'skip', onclick: () => skip(step) }, 'Überspringen'));
     }
     if (doneAt || isSkipped) {
-      right.appendChild(el('button', { class: 'btn btn-ghost', type: 'button', fk: 'reopen', onclick: () => { markDone(step.id, false); render(); } }, 'Wieder als offen markieren'));
+      right.appendChild(el('button', {
+        class: 'btn btn-ghost',
+        type: 'button',
+        fk: 'reopen',
+        onclick: () => {
+          markDone(step.id, false);
+          render();
+          const next = root && root.querySelector('[data-fk="next"]');
+          if (next) next.focus();
+        },
+      }, 'Wieder als offen markieren'));
     }
     if (doneAt) {
       right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: () => completeAndContinue(step) }, ['Weiter', icon('arrowRight')]));
