@@ -85,13 +85,17 @@
       }
     }
     result.autoCount = count;
+    result.fresh = true;
     results.unshift(result);
     window.Store.update((s) => {
       s.pdf.imports.unshift({ fileName: res.fileName, at: new Date().toISOString(), kind: res.found.kindLabel, found: res.found.items.length, applied: count });
       s.pdf.imports = s.pdf.imports.slice(0, 20);
     }, 'pdf');
     const n = res.found.items.filter((i) => i.target).length;
-    if (count) toast(count + (count === 1 ? ' Angabe' : ' Angaben') + ' erkannt und unter "Meine Daten" eingetragen.', 'success');
+    if (count) {
+      toast(count + (count === 1 ? ' Angabe' : ' Angaben') + ' erkannt und unter "Meine Daten" eingetragen.', 'success');
+      celebrateDrop();
+    }
     else if (n) toast(n + (n === 1 ? ' Angabe' : ' Angaben') + ' erkannt. Bitte prüfen und übernehmen.', 'info');
     else toast('In "' + res.fileName + '" wurden keine Kontodaten erkannt.', 'warning');
   }
@@ -191,6 +195,18 @@
       return;
     }
     await handleSources(res.value);
+  }
+
+  // Funken aus dem Ablagefeld, wenn Daten übernommen wurden
+  function celebrateDrop() {
+    const fx = window.FX;
+    if (!fx || !fx.enabled()) return;
+    const zone = root && root.querySelector('.drop');
+    if (zone) {
+      const r = zone.getBoundingClientRect();
+      if (r.width) fx.burst(r.left + r.width / 2, r.top + r.height / 2);
+    }
+    fx.pulse('success');
   }
 
   // ---------- Darstellung ----------
@@ -356,7 +372,14 @@
         callout('info', 'Kommst du nicht mehr ins Konto?', 'Dann such in deinem Postfach nach "Your Epic Games Receipt" und speichere die Mails als PDF (Drucken > Als PDF speichern). Die Rechnungsnummern darin sind der beste Beweis.'),
       ]));
     }
-    for (const r of results) page.appendChild(resultCard(r));
+    for (const r of results) {
+      const card = resultCard(r);
+      if (r.fresh) {
+        r.fresh = false;
+        window.UI.animateIn(card);
+      }
+      page.appendChild(card);
+    }
     const hist = historyCard();
     if (hist) page.appendChild(hist);
     clear(root).appendChild(page);

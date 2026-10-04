@@ -7,6 +7,14 @@
 3. Zeigt Windows „Der Computer wurde durch Windows geschützt“: auf **Weitere Informationen** klicken, dann auf **Trotzdem ausführen**. (Das kommt, weil das Programm nicht bei Microsoft gekauft-signiert ist.)
 4. Fertig: Der Konto-Retter startet von selbst. Auf dem Desktop liegt ein Symbol, im Startmenü ein Eintrag.
 
+**Neu in Version 1.1:**
+
+- Komplett neues Aussehen: Tabs oben, Glas-Optik und ein bewegter 3D-Hintergrund.
+- Viele Animationen: Karten neigen sich zur Maus, Knöpfe ziehen die Maus leicht an, Klick-Wellen, Funken beim Abhaken eines Schritts und ein Feuerwerk am Ende.
+- Zu viel Bewegung? Oben rechts das Funkel-Symbol anklicken, dann ist alles ruhig.
+
+Schon installiert? Einfach die neue Setup-Datei doppelklicken. Dein Fortschritt und deine Daten bleiben erhalten.
+
 **Was drin ist:**
 
 - **Konto retten:** 21 Schritte, jeder öffnet automatisch die richtige Epic-Seite. Wichtige Daten groß mit Kopieren-Knopf. Fortschritt wird gespeichert.

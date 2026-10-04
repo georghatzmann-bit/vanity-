@@ -6,7 +6,7 @@ Hilfe nach einem Epic-Games-Hack – Schritt für Schritt, auf Deutsch, für Win
 
 ## Installieren
 
-1. Auf GitHub rechts auf **Releases** klicken und dort **Konto-Retter-Setup-1.0.0.exe** herunterladen.
+1. Auf GitHub rechts auf **Releases** klicken und dort **Konto-Retter-Setup-1.1.0.exe** herunterladen.
 2. Die Datei doppelklicken. Mehr ist nicht nötig: Das Programm installiert sich, legt ein Symbol auf den Desktop und einen Eintrag ins Startmenü und startet von selbst.
 3. Falls Windows **„Der Computer wurde durch Windows geschützt“** zeigt: auf **Weitere Informationen** und dann auf **Trotzdem ausführen** klicken. Das kommt bei jedem Programm, das nicht mit einem gekauften Zertifikat signiert ist.
 

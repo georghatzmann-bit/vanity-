@@ -8,26 +8,34 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!-- 3D-Hintergrund (Partikel-Schild, Sterne, Polarlicht) -->
+  <canvas id="fx-bg" aria-hidden="true"></canvas>
+  <div class="bg-vignette" aria-hidden="true"></div>
+
   <div class="app">
-    <aside class="sidebar" aria-label="Hauptmenü">
+    <header class="topbar">
       <div class="brand">
-        <img src="img/icon.png" alt="" width="36" height="36">
-        <div>
-          <div class="brand-name">Konto-Retter</div>
-          <div class="brand-sub">Hilfe nach einem Epic-Hack</div>
-        </div>
+        <span class="brand-logo"><img src="img/icon.png" alt="" width="34" height="34"></span>
+        <span class="brand-text">
+          <span class="brand-name">Konto-Retter</span>
+          <span class="brand-sub">Hilfe nach einem Epic-Hack</span>
+        </span>
       </div>
-      <nav class="nav" id="nav"></nav>
-      <div class="sidebar-foot" id="sidebar-foot"></div>
-    </aside>
+      <nav class="nav" id="nav" aria-label="Hauptmenü">
+        <span class="nav-indicator" id="nav-indicator" aria-hidden="true"></span>
+      </nav>
+      <div class="topbar-right" id="topbar-right"></div>
+    </header>
     <main class="main" id="main" tabindex="-1"></main>
   </div>
+
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
   <div class="modal-root" id="modal-root"></div>
 
   <script src="../shared/fields.js"></script>
   <script src="../shared/steps.js"></script>
   <script src="../shared/supportText.js"></script>
+  <script src="js/fx.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/state.js"></script>
   <script src="views/recovery.js"></script>

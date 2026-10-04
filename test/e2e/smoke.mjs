@@ -105,6 +105,16 @@ await win.evaluate(() => window.App.go('discord'));
 await win.waitForTimeout(2500);
 await shot('07-discord');
 
+// 6b) Effekte: 3D-Hintergrund läuft, Schalter oben rechts schaltet aus und wieder ein
+check(await win.evaluate(() => Boolean(window.FX) && window.FX.enabled()), 'Effekte sind beim Start nicht an');
+await win.click('#fx-toggle');
+check(await win.evaluate(() => document.documentElement.classList.contains('fx-off')), 'Effekte ließen sich nicht ausschalten');
+await win.click('#fx-toggle');
+check(await win.evaluate(() => !document.documentElement.classList.contains('fx-off')), 'Effekte ließen sich nicht wieder einschalten');
+// Für den Neustart ausgeschaltet lassen: die Einstellung muss gespeichert bleiben
+await win.click('#fx-toggle');
+await win.waitForTimeout(800);
+
 // 7) Fortschritt bleibt nach Neustart erhalten
 await app.close();
 const app2 = await electron.launch({ ...launch, timeout: 60000 });
@@ -113,6 +123,8 @@ await win2.setViewportSize({ width: 1280, height: 860 });
 await win2.waitForSelector('.nav-item .nav-badge', { timeout: 20000 });
 await win2.waitForTimeout(500);
 check((await win2.locator('.modal').count()) === 0, 'Begrüßung kam nach Neustart erneut');
+check(await win2.evaluate(() => document.documentElement.classList.contains('fx-off')), 'Ausgeschaltete Effekte waren nach Neustart wieder an');
+check((await win2.getAttribute('#fx-toggle', 'aria-pressed')) === 'false', 'Effekte-Schalter zeigt nach Neustart den falschen Stand');
 // textContent statt innerText: bei kleinen Bildschirmen ist die Beschriftung ausgeblendet
 const badge = await win2.locator('.nav-item').first().locator('.nav-badge').textContent();
 check(badge.includes('2/21'), 'Fortschritt nach Neustart verloren: ' + badge);

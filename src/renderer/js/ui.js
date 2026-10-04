@@ -32,6 +32,7 @@
     flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9s1-6.5 3.5-9z"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
+    sparkles: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/><path d="M5 15.5l.6 1.4 1.4.6-1.4.6L5 19.5l-.6-1.4L3 17.5l1.4-.6z"/>',
   };
 
   function icon(name, extraClass) {
@@ -163,19 +164,21 @@
 
   function copyButton(getText, label, opts) {
     opts = opts || {};
+    // Eigene Referenz auf die Beschriftung: Die Klick-Welle hängt kurz ein weiteres Element an den Knopf
+    const caption = el('span', { text: opts.text || 'Kopieren' });
     const btn = el('button', {
       class: 'btn copy-btn ' + (opts.small ? 'btn-sm' : '') + (opts.primary ? ' btn-primary' : ''),
       type: 'button',
       title: (label || 'Wert') + ' kopieren',
-    }, [icon(opts.small ? 'copy' : 'copy', opts.small ? 'icon-sm' : ''), el('span', { text: opts.text || 'Kopieren' })]);
+    }, [icon(opts.small ? 'copy' : 'copy', opts.small ? 'icon-sm' : ''), caption]);
     btn.addEventListener('click', async () => {
       const ok = await copyText(typeof getText === 'function' ? getText() : getText, label);
       if (ok) {
         btn.classList.add('copied');
-        btn.lastChild.textContent = 'Kopiert';
+        caption.textContent = 'Kopiert';
         setTimeout(() => {
           btn.classList.remove('copied');
-          btn.lastChild.textContent = opts.text || 'Kopieren';
+          caption.textContent = opts.text || 'Kopieren';
         }, 1600);
       }
     });
@@ -243,5 +246,23 @@
     }
   }
 
-  window.UI = { icon, el, clear, toast, confirmDialog, copyText, copyButton, openUrl, callout, switchControl, segmented, formatDate, pageHead, keepFocus };
+  // Lässt ein einzelnes neues Element weich hereinfliegen (z. B. ein neues PDF-Ergebnis).
+  // Die Klasse wird danach wieder entfernt, damit das 3D-Neigen weiter funktioniert.
+  function animateIn(node, cls, delayMs) {
+    cls = cls || 'fx-enter';
+    if (!node || document.documentElement.classList.contains('fx-off')) return node;
+    if (delayMs) node.style.setProperty('--fx-delay', delayMs + 'ms');
+    node.classList.add(cls);
+    const done = (e) => {
+      if (e.target !== node) return;
+      node.classList.remove(cls);
+      node.removeEventListener('animationend', done);
+      node.removeEventListener('animationcancel', done);
+    };
+    node.addEventListener('animationend', done);
+    node.addEventListener('animationcancel', done);
+    return node;
+  }
+
+  window.UI = { icon, el, clear, toast, confirmDialog, copyText, copyButton, openUrl, callout, switchControl, segmented, formatDate, pageHead, keepFocus, animateIn };
 })();

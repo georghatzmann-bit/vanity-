@@ -23,7 +23,7 @@ const DEFAULT_STATE = {
   pdf: { imports: [] },
   support: { lang: 'de', variant: 'first', edited: {}, facts: {} },
   discord: { toasts: true, sound: true },
-  ui: { view: 'recovery', welcomeSeen: false },
+  ui: { view: 'recovery', welcomeSeen: false, effects: true },
 };
 
 let mainWindow = null;
@@ -92,7 +92,7 @@ function createWindow() {
     minWidth: Math.min(900, area.width),
     minHeight: Math.min(600, area.height),
     show: false,
-    backgroundColor: '#0F1115',
+    backgroundColor: '#07080F',
     title: 'Konto-Retter',
     icon: path.join(__dirname, '..', 'renderer', 'img', 'icon.png'),
     autoHideMenuBar: true,

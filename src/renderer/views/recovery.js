@@ -6,6 +6,9 @@
   const F = window.KR_FIELDS;
 
   let root = null;
+  // Für Animationen: welcher Schritt und welcher Fortschritt zuletzt zu sehen war
+  let lastShown = null;
+  let lastPct = 0;
 
   function rec() {
     return window.Store.get().recovery;
@@ -93,7 +96,28 @@
     return STEPS.find((s) => !handled(s.id) && !s.optional) || null;
   }
 
-  function completeAndContinue(step) {
+  // Wo soll der Funkenregen starten? Bei Mausklick an der Maus, sonst in der Mitte des Knopfes.
+  function pointFrom(e) {
+    if (!e) return null;
+    if (e.clientX || e.clientY) return { x: e.clientX, y: e.clientY };
+    const t = e.currentTarget;
+    if (t && t.getBoundingClientRect) {
+      const r = t.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    return null;
+  }
+
+  function cheer(e) {
+    const fx = window.FX;
+    if (!fx || !fx.enabled()) return;
+    const p = pointFrom(e);
+    if (p) fx.burst(p.x, p.y);
+    fx.pulse('success');
+  }
+
+  function completeAndContinue(step, e) {
+    if (!rec().done[step.id]) cheer(e);
     markDone(step.id, true);
     const next = nextOpenAfter(step.id);
     if (next) goTo(next.id);
@@ -108,7 +132,8 @@
   }
 
   // "Hat geklappt, ich bin wieder drin": die übrigen Schritte zum Zurückholen sind nicht mehr nötig
-  function jumpAfterSuccess(step) {
+  function jumpAfterSuccess(step, e) {
+    cheer(e);
     markDone(step.id, true);
     const from = indexOf(step.id);
     const to = indexOf(step.success.jumpTo);
@@ -122,6 +147,7 @@
   function finish() {
     window.Store.update((s) => { s.recovery.finished = true; }, 'recovery');
     render();
+    if (window.FX && window.FX.enabled()) window.FX.celebrate();
   }
 
   // ---------- Daten groß anzeigen ----------
@@ -285,7 +311,7 @@
           onclick: () => goTo(step.id),
         }, [
           el('span', { class: 'step-num' }, done ? icon('check', 'icon-sm') : skipped ? '–' : String(number)),
-          el('span', { class: 'step-name' }, [step.title, step.optional ? el('span', { class: 'hint', text: ' (nur wenn nötig)' }) : null, skipped ? el('span', { class: 'hint', text: ' (übersprungen)' }) : null]),
+          el('span', { class: 'step-name' }, [step.title, step.optional && !/nur wenn nötig/i.test(step.title) ? el('span', { class: 'hint', text: ' (nur wenn nötig)' }) : null, skipped ? el('span', { class: 'hint', text: ' (übersprungen)' }) : null]),
         ]);
         if (done) btn.appendChild(el('span', { class: 'sr-only', text: ' erledigt' }));
         list.appendChild(btn);
@@ -392,7 +418,7 @@
         class: 'btn btn-success',
         type: 'button',
         fk: 'success',
-        onclick: () => jumpAfterSuccess(step),
+        onclick: (e) => jumpAfterSuccess(step, e),
       }, [icon('checkCircle'), step.success.label]));
     }
     const isSkipped = !doneAt && Boolean(skippedMap()[step.id]);
@@ -413,9 +439,9 @@
       }, 'Wieder als offen markieren'));
     }
     if (doneAt) {
-      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: () => completeAndContinue(step) }, ['Weiter', icon('arrowRight')]));
+      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: (e) => completeAndContinue(step, e) }, ['Weiter', icon('arrowRight')]));
     } else {
-      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: () => completeAndContinue(step) }, [icon('check'), 'Erledigt, weiter']));
+      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: (e) => completeAndContinue(step, e) }, [icon('check'), 'Erledigt, weiter']));
     }
     card.appendChild(el('div', { class: 'step-foot' }, [left, right]));
     return card;
@@ -468,12 +494,25 @@
         }, 'Beim Wechsel zu einem Schritt öffnet sich die passende Seite im Browser.', 'auto-open'),
       ]),
       el('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), 'aria-label': 'Fortschritt' }, [
-        (() => { const b = el('div', { class: 'progress-bar' + (pct === 100 ? ' complete' : '') }); b.style.width = pct + '%'; return b; })(),
+        // Startet beim alten Stand und wächst danach sichtbar zum neuen
+        (() => { const b = el('div', { class: 'progress-bar' + (pct === 100 ? ' complete' : '') }); b.style.width = lastPct + '%'; return b; })(),
       ]),
     ]);
 
-    const wizard = el('div', { class: 'wizard' }, [stepsList(step), r.finished ? finishCard() : stepCard(step)]);
+    const shown = r.finished ? 'finish' : step.id;
+    const main = r.finished ? finishCard() : stepCard(step);
+    const wizard = el('div', { class: 'wizard' }, [stepsList(step), main]);
     clear(root).appendChild(el('div', { class: 'page' }, [head, progress, wizard]));
+
+    const bar = progress.querySelector('.progress-bar');
+    if (bar && lastPct !== pct) {
+      void bar.offsetWidth;
+      bar.style.width = pct + '%';
+    }
+    lastPct = pct;
+    // Neuer Schritt: Karte schwingt in 3D herein (beim Öffnen der Seite übernimmt das der Seitenwechsel)
+    if (lastShown !== null && lastShown !== shown) window.UI.animateIn(main, 'step-swap');
+    lastShown = shown;
   }
 
   window.Views = window.Views || {};
@@ -484,6 +523,8 @@
     icon: 'shield',
     mount(container) {
       root = container;
+      lastShown = null;
+      lastPct = 0;
       render();
     },
     unmount() { root = null; },
