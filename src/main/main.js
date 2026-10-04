@@ -21,7 +21,7 @@ const DEFAULT_STATE = {
   data: fields.emptyData(),
   recovery: { current: null, done: {}, skipped: {}, autoOpen: true, startedAt: null, notes: {} },
   pdf: { imports: [] },
-  support: { lang: 'de', variant: 'first', edited: {} },
+  support: { lang: 'de', variant: 'first', edited: {}, facts: {} },
   discord: { toasts: true, sound: true },
   ui: { view: 'recovery', welcomeSeen: false },
 };

@@ -58,7 +58,7 @@
     },
     {
       key: 'email_new', label: 'Neue sichere E-Mail-Adresse', type: 'text', group: 'email', important: true, mono: true,
-      hint: 'Eine Adresse, auf die der Hacker sicher keinen Zugriff hat. An diese Adresse schickt Epic die Antwort.',
+      hint: 'Eine Adresse, auf die nur du Zugriff hast und die noch mit keinem anderen Epic-Konto verbunden ist (auch nicht mit einem Zweitkonto oder dem Konto von Geschwistern). An diese Adresse schickt Epic die Antwort.',
       placeholder: 'z. B. neu-und-sicher@beispiel.de',
     },
     {

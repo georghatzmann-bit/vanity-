@@ -59,7 +59,7 @@
       el('ol', { class: 'todo-list' }, [
         el('li', { text: 'Zieh unter "PDF auslesen" deine Epic-Konto-PDF oder Kaufbelege hinein. Die Daten werden automatisch erkannt.' }),
         el('li', { text: 'Geh unter "Konto retten" die Schritte durch. Jede Epic-Seite öffnet sich automatisch, die nötigen Daten kopierst du mit einem Klick.' }),
-        el('li', { text: 'Brauchst du den Support? Unter "Support-Text" liegt ein fertiger Text auf Deutsch und Englisch.' }),
+        el('li', { text: 'Fremde Käufe oder andere Probleme? Unter "Support-Text" liegt ein fertiger Text für den Epic-Support auf Deutsch und Englisch.' }),
       ]),
       window.UI.callout('info', 'Deine Daten bleiben bei dir', 'Alles wird nur auf diesem PC gespeichert. Der Konto-Retter schickt nichts ins Internet und ist kein offizielles Programm von Epic Games.'),
     ]);

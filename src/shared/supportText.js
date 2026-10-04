@@ -7,48 +7,45 @@
 })(typeof self !== 'undefined' ? self : this, function (F) {
   'use strict';
 
+  // Wichtig: Das Konto selbst gibt Epic nur über das Wiederherstellungsformular zurück.
+  // Diese Texte sind für alles andere: Hack melden, fremde Käufe, fremde verknüpfte Konten, Nachfragen.
   const VARIANTS = [
-    { key: 'first', label: 'Erste Anfrage', hint: 'Ausführlicher Text mit allen Nachweisen für das Support-Formular.' },
+    { key: 'first', label: 'Hack melden', hint: 'Ausführlicher Text mit allen Nachweisen: Hack, fremde Käufe oder Änderungen melden.' },
     { key: 'followup', label: 'Nachfrage', hint: 'Wenn du schon eine Ticket- oder Recovery-Nummer hast und nachhaken willst.' },
     { key: 'short', label: 'Kurzfassung', hint: 'Für den Support-Chat oder Felder mit wenig Platz.' },
   ];
 
   // Wichtige Angaben je Textart. Fehlen sie, zeigt die Oberfläche einen Hinweis.
   const IMPORTANT = {
-    first: ['account_id', 'display_name', 'email_original', 'email_new', 'invoice_ids', 'hack_date'],
+    first: ['account_id', 'display_name', 'email_original', 'email_new', 'invoice_ids', 'hack_date', 'recovery_id'],
     followup: ['ticket_number', 'recovery_id', 'account_id', 'display_name'],
     short: ['account_id', 'display_name', 'email_original', 'email_new'],
   };
 
   // ---------- Kleine Übersetzungshilfe für eigene Eingaben im englischen Text ----------
+  // Übersetzt werden nur Datumsangaben und einige feste Wörter. E-Mail-Adressen, Namen und
+  // Kennungen bleiben unverändert (z. B. "juli.schmidt@gmx.de" oder ein Gamertag "Winter Wolf").
   const MONTHS = {
-    januar: 'January', februar: 'February', 'märz': 'March', maerz: 'March', april: 'April', mai: 'May', juni: 'June',
+    januar: 'January', 'jänner': 'January', februar: 'February', 'märz': 'March', maerz: 'March', april: 'April', mai: 'May', juni: 'June',
     juli: 'July', august: 'August', september: 'September', oktober: 'October', november: 'November', dezember: 'December',
   };
+  const SEASONS = { sommer: 'summer', 'frühjahr': 'spring', 'frühling': 'spring', herbst: 'autumn', winter: 'winter' };
   const WORDS = [
     [/\bca\.\s*/gi, 'approx. '],
     [/\bungefähr\b/gi, 'approximately'],
-    [/\bgegen\b/gi, 'around'],
-    [/\bseit\b/gi, 'since'],
-    [/\bverknüpft\b/gi, 'linked'],
+    [/\bgegen(?=\s+\d)/gi, 'around'],
+    [/\bverknüpft seit\b/gi, 'linked since'],
+    [/\bseit(?=\s+\d)/gi, 'since'],
     [/\bnoch verbunden\b/gi, 'still linked'],
     [/\bnicht mehr verbunden\b/gi, 'no longer linked'],
     [/\bendet auf\b/gi, 'ending in'],
     [/\bKreditkarte\b/gi, 'credit card'],
-    [/\bSommer\b/gi, 'summer'],
-    [/\bFrühjahr\b|\bFrühling\b/gi, 'spring'],
-    [/\bHerbst\b/gi, 'autumn'],
-    [/\bWinter\b/gi, 'winter'],
-    [/\bAnfang\b/gi, 'early'],
-    [/\bEnde\b/gi, 'late'],
-    [/\bMitte\b/gi, 'mid'],
-    [/\bmorgens\b/gi, 'in the morning'],
-    [/\babends\b/gi, 'in the evening'],
-    [/\bnachts\b/gi, 'at night'],
-    [/\bheute\b/gi, 'today'],
-    [/\bgestern\b/gi, 'yesterday'],
-    [/\bund\b/gi, 'and'],
-    [/\boder\b/gi, 'or'],
+    [/\bAnfang(?=\s+(?:\d|[A-Z][a-z]+\s+\d))/g, 'early'],
+    [/\bMitte(?=\s+(?:\d|[A-Z][a-z]+\s+\d))/g, 'mid'],
+    [/\bEnde(?=\s+(?:\d|[A-Z][a-z]+\s+\d))/g, 'late'],
+    [/(\d)\s+morgens\b/gi, '$1 in the morning'],
+    [/(\d)\s+abends\b/gi, '$1 in the evening'],
+    [/(\d)\s+nachts\b/gi, '$1 at night'],
   ];
   const COUNTRIES = {
     deutschland: 'Germany', 'österreich': 'Austria', oesterreich: 'Austria', schweiz: 'Switzerland', niederlande: 'Netherlands',
@@ -56,22 +53,39 @@
     'vereinigtes königreich': 'United Kingdom', 'vereinigte staaten': 'United States', usa: 'United States', 'türkei': 'Turkey',
   };
 
-  function toEnglish(text) {
-    let s = String(text || '');
+  function translatePart(part) {
+    let s = part;
     // 02.10.2026 -> 2026-10-02 (eindeutig für alle Länder)
-    s = s.replace(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g, (m, d, mo, y) => y + '-' + mo.padStart(2, '0') + '-' + d.padStart(2, '0'));
+    s = s.replace(/(?<![\w.])(\d{1,2})\.(\d{1,2})\.(\d{4})(?![\w.])/g, (m, d, mo, y) => y + '-' + mo.padStart(2, '0') + '-' + d.padStart(2, '0'));
     // 21 Uhr / 21:30 Uhr -> 21:00 / 21:30
     s = s.replace(/\b(\d{1,2}):(\d{2})\s*Uhr\b/gi, '$1:$2');
     s = s.replace(/\b(\d{1,2})\s*Uhr\b/gi, '$1:00');
-    s = s.replace(/\b([A-Za-zäöüÄÖÜ]+)\b/g, (w) => MONTHS[w.toLowerCase()] || w);
+    // Monate und Jahreszeiten nur in Datumsangaben ("März 2019", "4. März 2019", "Sommer 2018")
+    s = s.replace(/(?:(\d{1,2})\.\s*)?\b([A-Za-zäöüÄÖÜ]+)(?=\s+\d{4}\b)/g, (m, day, w) => {
+      const month = MONTHS[w.toLowerCase()];
+      if (month) return day ? month + ' ' + Number(day) + ',' : month;
+      const season = SEASONS[w.toLowerCase()];
+      if (season) return (day ? day + '. ' : '') + season;
+      return m;
+    });
     for (const [re, rep] of WORDS) s = s.replace(re, rep);
     return s;
+  }
+
+  function toEnglish(text) {
+    // Teile mit "@" (E-Mail-Adressen) nie verändern
+    return String(text || '').split(/(\S*@\S*)/).map((part, i) => (i % 2 ? part : translatePart(part))).join('');
   }
 
   // Bei Konten wie "PlayStation: WinterWolf (seit 2019)" nur die Klammer übersetzen,
   // damit Namen und Gamertags nie verändert werden.
   function toEnglishParens(text) {
     return String(text || '').replace(/\(([^)]*)\)/g, (m, inner) => '(' + toEnglish(inner) + ')');
+  }
+
+  // Zahlungsart: nur die festen Wendungen übersetzen (die PayPal-Adresse bleibt, wie sie ist)
+  function paymentEn(text) {
+    return String(text || '').replace(/\bendet auf\b/gi, 'ending in').replace(/\bKreditkarte\b/gi, 'credit card');
   }
 
   function countryEn(text) {
@@ -129,8 +143,8 @@
     bullet(lines, L.country, en ? countryEn(v(data, 'country')) : v(data, 'country'));
     bullet(lines, L.created, t(v(data, 'account_created')));
     bulletList(lines, L.linked, list(data, 'platforms').map(en ? toEnglishParens : t));
-    bulletList(lines, L.invoices, list(data, 'invoice_ids').map(t));
-    bullet(lines, L.payment, t(v(data, 'payment_method')));
+    bulletList(lines, L.invoices, list(data, 'invoice_ids'));
+    bullet(lines, L.payment, en ? paymentEn(v(data, 'payment_method')) : v(data, 'payment_method'));
     bullet(lines, L.phone, v(data, 'phone'));
     bullet(lines, L.recovery, v(data, 'recovery_id'));
     bullet(lines, L.ticket, v(data, 'ticket_number'));
@@ -138,12 +152,43 @@
   }
 
   // ---------- Texte ----------
-  function firstDe(data) {
-    const id = v(data, 'account_id');
-    const subject = 'Gehacktes Epic-Konto – Bitte um Wiederherstellung' + (id ? ' (Konto-ID ' + id + ')' : '');
+  // Satz zur Wiederherstellung: Das Formular ist der einzige Weg zurück ins Konto.
+  function recoveryLine(data, lang) {
+    const rid = v(data, 'recovery_id');
+    if (lang === 'en') {
+      return rid
+        ? 'I have already submitted an account recovery request through the official form (Recovery ID: ' + rid + ').'
+        : 'I am recovering access through the official account recovery form.';
+    }
+    return rid
+      ? 'Die Wiederherstellung habe ich bereits über das offizielle Formular beantragt (Recovery ID: ' + rid + ').'
+      : 'Die Wiederherstellung beantrage ich über das offizielle Formular.';
+  }
+
+  // Bitten an den Support, passend zu dem, was passiert ist
+  function requestsFor(data, lang) {
+    const set = new Set(data.hack_changes || []);
+    const out = [];
+    if (set.has('purchases_made')) out.push(lang === 'en' ? 'Please review the purchases I did not make and refund them if possible.' : 'Bitte prüft die Käufe, die nicht von mir stammen, und erstattet sie, wenn möglich.');
+    if (set.has('connections_changed')) out.push(lang === 'en' ? 'Please remove any linked accounts that do not belong to me.' : 'Bitte entfernt verknüpfte Konten, die nicht mir gehören.');
+    if (set.has('twofa_changed')) out.push(lang === 'en' ? 'Please remove the two-factor authentication method the attacker added.' : 'Bitte entfernt die Zwei-Faktor-Methode, die der Angreifer eingerichtet hat.');
+    if (!out.length) out.push(lang === 'en' ? 'Please check my account and help me undo the changes the attacker made.' : 'Bitte prüft mein Konto und helft mir, die Änderungen des Angreifers rückgängig zu machen.');
+    return out;
+  }
+
+  function factLines(facts, lang) {
+    const out = [];
+    if (facts.emailSecured) out.push(lang === 'en' ? 'I have already secured my email account.' : 'Mein E-Mail-Postfach habe ich bereits abgesichert.');
+    if (facts.notShared) out.push(lang === 'en' ? 'I have never shared my password with anyone.' : 'Ich habe mein Passwort nie weitergegeben.');
+    return out;
+  }
+
+  function firstDe(data, facts) {
+    const ref = v(data, 'recovery_id') ? 'Recovery ID ' + v(data, 'recovery_id') : (v(data, 'account_id') ? 'Konto-ID ' + v(data, 'account_id') : '');
+    const subject = 'Gehacktes Epic-Konto – Änderungen durch einen Angreifer' + (ref ? ' (' + ref + ')' : '');
     const lines = ['Hallo Epic-Games-Support-Team,', ''];
     const when = v(data, 'hack_date');
-    lines.push('mein Epic-Games-Konto wurde gehackt' + (when ? ' (bemerkt am ' + when + ')' : '') + '. Ich bitte euch, mir das Konto zurückzugeben und es abzusichern.');
+    lines.push('mein Epic-Games-Konto wurde gehackt' + (when ? ' (bemerkt am ' + when + ')' : '') + '. ' + recoveryLine(data, 'de'));
     lines.push('');
     const changes = changesFor(data, 'de');
     lines.push('Was passiert ist:');
@@ -151,21 +196,20 @@
     else lines.push('- Jemand hat sich ohne meine Erlaubnis in mein Konto eingeloggt.');
     if (v(data, 'email_hacker')) lines.push('- Die jetzt eingetragene E-Mail-Adresse ' + v(data, 'email_hacker') + ' gehört nicht mir.');
     lines.push('');
+    lines.push(...requestsFor(data, 'de'));
+    lines.push('');
     const ev = evidence(data, 'de');
     if (ev.length) {
       lines.push('Meine Angaben als Nachweis, dass das Konto mir gehört:');
       lines.push(...ev);
       lines.push('');
     }
-    if ((data.hack_changes || []).includes('purchases_made')) {
-      lines.push('Außerdem wurden Käufe getätigt, die nicht von mir stammen. Bitte prüft diese Käufe und erstattet sie, wenn möglich.');
-      lines.push('');
-    }
     if (v(data, 'email_new')) {
       lines.push('Bitte schreibt mir an diese E-Mail-Adresse, auf die nur ich Zugriff habe: ' + v(data, 'email_new'));
       lines.push('');
     }
-    lines.push('Mein E-Mail-Postfach habe ich bereits abgesichert. Ich habe mein Passwort niemandem weitergegeben.');
+    const fl = factLines(facts, 'de');
+    if (fl.length) lines.push(...fl);
     lines.push('Wenn ihr weitere Nachweise braucht, schicke ich sie gerne nach.');
     lines.push('');
     lines.push('Vielen Dank für eure Hilfe!');
@@ -176,12 +220,12 @@
     return { subject, body: lines.join('\n') };
   }
 
-  function firstEn(data) {
-    const id = v(data, 'account_id');
-    const subject = 'Compromised Epic account – request for account recovery' + (id ? ' (Account ID ' + id + ')' : '');
+  function firstEn(data, facts) {
+    const ref = v(data, 'recovery_id') ? 'Recovery ID ' + v(data, 'recovery_id') : (v(data, 'account_id') ? 'Account ID ' + v(data, 'account_id') : '');
+    const subject = 'Compromised Epic account – changes made by an attacker' + (ref ? ' (' + ref + ')' : '');
     const lines = ['Hello Epic Games Support,', ''];
     const when = toEnglish(v(data, 'hack_date'));
-    lines.push('My Epic Games account has been compromised' + (when ? ' (noticed on ' + when + ')' : '') + '. I kindly ask you to help me recover my account and secure it.');
+    lines.push('My Epic Games account has been compromised' + (when ? ' (noticed on ' + when + ')' : '') + '. ' + recoveryLine(data, 'en'));
     lines.push('');
     const changes = changesFor(data, 'en');
     lines.push('What happened:');
@@ -189,21 +233,20 @@
     else lines.push('- Someone signed in to my account without my permission.');
     if (v(data, 'email_hacker')) lines.push('- The email address now on the account, ' + v(data, 'email_hacker') + ', does not belong to me.');
     lines.push('');
+    lines.push(...requestsFor(data, 'en'));
+    lines.push('');
     const ev = evidence(data, 'en');
     if (ev.length) {
       lines.push('Account details to verify that I am the owner:');
       lines.push(...ev);
       lines.push('');
     }
-    if ((data.hack_changes || []).includes('purchases_made')) {
-      lines.push('In addition, purchases were made that I did not make. Please review these purchases and refund them if possible.');
-      lines.push('');
-    }
     if (v(data, 'email_new')) {
       lines.push('Please contact me at this email address, which only I have access to: ' + v(data, 'email_new'));
       lines.push('');
     }
-    lines.push('I have already secured my email account. I have not shared my password with anyone.');
+    const fl = factLines(facts, 'en');
+    if (fl.length) lines.push(...fl);
     lines.push('If you need any further proof, I am happy to provide it.');
     lines.push('');
     lines.push('Thank you very much for your help!');
@@ -283,7 +326,7 @@
   }
 
   function shortDe(data) {
-    const parts = ['Hallo, mein Epic-Konto wurde gehackt' + (v(data, 'hack_date') ? ' (am ' + v(data, 'hack_date') + ')' : '') + '.'];
+    const parts = ['Hallo, mein Epic-Konto wurde gehackt' + (v(data, 'hack_date') ? ' (am ' + v(data, 'hack_date') + ')' : '') + '. ' + recoveryLine(data, 'de')];
     const changes = changesFor(data, 'de');
     if (changes.length) parts.push(changes.join(' '));
     const facts = [];
@@ -291,25 +334,23 @@
     if (v(data, 'display_name')) facts.push('Anzeigename: ' + v(data, 'display_name'));
     if (v(data, 'email_original')) facts.push('E-Mail vor dem Hack: ' + v(data, 'email_original'));
     if (list(data, 'invoice_ids').length) facts.push('Rechnungsnummer: ' + list(data, 'invoice_ids').slice(0, 3).join(', '));
-    if (v(data, 'recovery_id')) facts.push('Recovery ID: ' + v(data, 'recovery_id'));
     if (facts.length) parts.push(facts.join(' | '));
-    parts.push('Bitte helft mir, das Konto zurückzubekommen' + (v(data, 'email_new') ? ', und schreibt mir an ' + v(data, 'email_new') : '') + '. Danke!');
+    parts.push(requestsFor(data, 'de').join(' ') + (v(data, 'email_new') ? ' Bitte schreibt mir an ' + v(data, 'email_new') + '.' : '') + ' Danke!');
     return { subject: 'Gehacktes Epic-Konto', body: parts.join('\n') };
   }
 
   function shortEn(data) {
     const when = toEnglish(v(data, 'hack_date'));
-    const parts = ['Hello, my Epic account was compromised' + (when ? ' (on ' + when + ')' : '') + '.'];
+    const parts = ['Hello, my Epic account was compromised' + (when ? ' (on ' + when + ')' : '') + '. ' + recoveryLine(data, 'en')];
     const changes = changesFor(data, 'en');
     if (changes.length) parts.push(changes.join(' '));
     const facts = [];
     if (v(data, 'account_id')) facts.push('Account ID: ' + v(data, 'account_id'));
     if (v(data, 'display_name')) facts.push('Display name: ' + v(data, 'display_name'));
     if (v(data, 'email_original')) facts.push('Email before the hack: ' + v(data, 'email_original'));
-    if (list(data, 'invoice_ids').length) facts.push('Invoice ID: ' + list(data, 'invoice_ids').slice(0, 3).map(toEnglish).join(', '));
-    if (v(data, 'recovery_id')) facts.push('Recovery ID: ' + v(data, 'recovery_id'));
+    if (list(data, 'invoice_ids').length) facts.push('Invoice ID: ' + list(data, 'invoice_ids').slice(0, 3).join(', '));
     if (facts.length) parts.push(facts.join(' | '));
-    parts.push('Please help me recover my account' + (v(data, 'email_new') ? ' and contact me at ' + v(data, 'email_new') : '') + '. Thank you!');
+    parts.push(requestsFor(data, 'en').join(' ') + (v(data, 'email_new') ? ' Please contact me at ' + v(data, 'email_new') + '.' : '') + ' Thank you!');
     return { subject: 'Compromised Epic account', body: parts.join('\n') };
   }
 
@@ -320,10 +361,11 @@
   };
 
   // Liefert { subject, body, missing } – missing sind die Schlüssel wichtiger fehlender Angaben.
-  function build(data, { lang = 'de', variant = 'first' } = {}) {
+  // facts: { emailSecured, notShared } – Aussagen, die nur rein dürfen, wenn sie stimmen.
+  function build(data, { lang = 'de', variant = 'first', facts = {} } = {}) {
     const d = data || F.emptyData();
     const builder = (BUILDERS[variant] || BUILDERS.first)[lang === 'en' ? 'en' : 'de'];
-    const out = builder(d);
+    const out = builder(d, facts || {});
     let missing = (IMPORTANT[variant] || IMPORTANT.first).filter((k) => !F.hasValue(d, k));
     // Bei der Nachfrage reicht eine der beiden Nummern.
     if (variant === 'followup' && (F.hasValue(d, 'ticket_number') || F.hasValue(d, 'recovery_id'))) {

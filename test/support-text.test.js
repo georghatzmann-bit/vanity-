@@ -45,9 +45,12 @@ test('Kein Text enthält "undefined", "null" oder "[object"', () => {
   }
 });
 
-test('Erste Anfrage (deutsch) enthält alle Nachweise', () => {
+test('Hack melden (deutsch) enthält alle Nachweise und verweist auf das Formular', () => {
   const out = S.build(fullData(), { lang: 'de', variant: 'first' });
-  assert.match(out.subject, /94b1569506b04f9f8557af611e8c5e47/);
+  assert.match(out.subject, /Recovery ID 7XK2-9QPL-4421/);
+  assert.match(out.body, /über das offizielle Formular beantragt \(Recovery ID: 7XK2-9QPL-4421\)/);
+  assert.ok(!/zurückzugeben/.test(out.body), 'Der Support kann das Konto nicht zurückgeben – Text darf das nicht verlangen');
+  assert.match(out.body, /Bitte prüft die Käufe/);
   for (const needle of ['GeorgZockt', 'Georg2018', 'WinterWolf', 'max.mustermann@beispiel.de', 'alt@beispiel.de', 'neu-und-sicher@beispiel.de', 'hacker@fremd.example', 'A812855087', 'F1156160356', 'Visa, endet auf 4242', '7XK2-9QPL-4421', 'Max Mustermann', 'Käufe getätigt']) {
     assert.ok(out.body.includes(needle), 'fehlt: ' + needle);
   }
@@ -66,7 +69,8 @@ test('Englischer Text übersetzt Datum und Land, aber keine Namen', () => {
 
 test('Fehlende Angaben werden gemeldet', () => {
   const out = S.build(F.emptyData(), { lang: 'de', variant: 'first' });
-  assert.deepEqual(out.missing, ['account_id', 'display_name', 'email_original', 'email_new', 'invoice_ids', 'hack_date']);
+  assert.deepEqual(out.missing, ['account_id', 'display_name', 'email_original', 'email_new', 'invoice_ids', 'hack_date', 'recovery_id']);
+  assert.match(out.body, /beantrage ich über das offizielle Formular/);
   assert.match(out.body, /Jemand hat sich ohne meine Erlaubnis/);
 });
 
@@ -88,4 +92,25 @@ test('toEnglish', () => {
   assert.equal(S.toEnglish('02.10.2026 gegen 21 Uhr'), '2026-10-02 around 21:00');
   assert.equal(S.toEnglish('ca. März 2019'), 'approx. March 2019');
   assert.equal(S.toEnglish('Visa, endet auf 1234'), 'Visa, ending in 1234');
+});
+
+test('Aussagen über Postfach und Passwort nur, wenn bestätigt', () => {
+  const without = S.build(fullData(), { lang: 'de', variant: 'first' });
+  assert.ok(!/abgesichert/.test(without.body));
+  assert.ok(!/nie weitergegeben/.test(without.body));
+  const withFacts = S.build(fullData(), { lang: 'en', variant: 'first', facts: { emailSecured: true, notShared: true } });
+  assert.match(withFacts.body, /I have already secured my email account\./);
+  assert.match(withFacts.body, /I have never shared my password with anyone\./);
+});
+
+test('Englische Übersetzung verändert keine E-Mail-Adressen und Namen', () => {
+  const d = fullData();
+  d.payment_method = 'PayPal (juli.schmidt@gmx.de)';
+  d.platforms = ['Xbox: Mai Sommer (verknüpft seit 02.03.2019)'];
+  d.emails_old = ['heute.und.morgen@gmx.de'];
+  const out = S.build(d, { lang: 'en', variant: 'first' });
+  assert.ok(out.body.includes('PayPal (juli.schmidt@gmx.de)'), out.body);
+  assert.ok(out.body.includes('Xbox: Mai Sommer (linked since 2019-03-02)'), out.body);
+  assert.ok(out.body.includes('heute.und.morgen@gmx.de'), out.body);
+  assert.equal(S.toEnglish('mail: juli.mai@web.de, seit 2019'), 'mail: juli.mai@web.de, since 2019');
 });

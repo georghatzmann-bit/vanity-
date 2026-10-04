@@ -32,9 +32,40 @@
     return window.Store.get().support;
   }
 
+  // Aussagen wie "Postfach abgesichert" kommen nur in den Text, wenn sie stimmen
+  function facts() {
+    const st = window.Store.get();
+    const f = st.support.facts || {};
+    return {
+      emailSecured: f.emailSecured != null ? f.emailSecured : Boolean(st.recovery && st.recovery.done && st.recovery.done.email),
+      notShared: Boolean(f.notShared),
+    };
+  }
+
   function generated() {
     const s = settings();
-    return S.build(window.Store.get().data, { lang: s.lang, variant: s.variant });
+    return S.build(window.Store.get().data, { lang: s.lang, variant: s.variant, facts: facts() });
+  }
+
+  function factsPicker() {
+    const f = facts();
+    const wrap = el('div', { class: 'stack-sm' });
+    const items = [
+      { key: 'emailSecured', label: 'Ich habe mein E-Mail-Postfach abgesichert' },
+      { key: 'notShared', label: 'Ich habe mein Passwort nie weitergegeben' },
+    ];
+    for (const it of items) {
+      const input = el('input', { type: 'checkbox', checked: f[it.key], fk: 'fact-' + it.key });
+      input.addEventListener('change', () => {
+        window.Store.update((st) => {
+          if (!st.support.facts) st.support.facts = {};
+          st.support.facts[it.key] = input.checked;
+        }, 'support');
+        render();
+      });
+      wrap.appendChild(el('label', { class: 'check' }, [input, el('span', { text: it.label })]));
+    }
+    return wrap;
   }
 
   function setSetting(key, value) {
@@ -111,7 +142,9 @@
     const own = editedText();
     const body = own !== null ? own : out.body;
 
-    const head = pageHead('Support-Text', 'Fertiger Text für den Epic-Support. Er füllt sich automatisch mit deinen Daten. Kopieren, auf der Epic-Seite einfügen, fertig.');
+    const head = pageHead('Support-Text', 'Fertiger Text für den Epic-Support. Er füllt sich automatisch mit deinen Daten.');
+    const important = callout('warning', 'Wichtig: Dein Konto bekommst du nur über das Wiederherstellungsformular zurück',
+      'Das beantragst du unter "Konto retten" im Schritt "Wiederherstellung bei Epic beantragen". Der Support kann das nicht abkürzen. Diesen Text brauchst du für alles andere: fremde Käufe, ein fremdes verknüpftes Konto oder Probleme nach der Rettung.');
 
     const settingsCard = el('section', { class: 'card stack' }, [
       el('div', { class: 'stack-sm' }, [
@@ -121,6 +154,11 @@
       ]),
       el('div', { class: 'stack-sm' }, [el('h2', { class: 'card-title', text: 'Art des Textes' }), variantPicker()]),
       el('div', { class: 'stack-sm' }, [el('h2', { class: 'card-title', text: 'Was ist passiert?' }), changesPicker()]),
+      el('div', { class: 'stack-sm' }, [
+        el('h2', { class: 'card-title', text: 'Stimmt das?' }),
+        el('p', { class: 'hint', text: 'Nur was du anhakst, steht im Text. Schreib nichts, was nicht stimmt.' }),
+        factsPicker(),
+      ]),
     ]);
 
     const subjectInput = el('input', { class: 'input', type: 'text', value: out.subject, readonly: true, 'aria-label': 'Betreff' });
@@ -183,7 +221,7 @@
       callout('danger', 'Niemals Passwort oder Codes mitschicken', 'Der Text enthält absichtlich kein Passwort. Epic fragt nie danach. Wer danach fragt, ist ein Betrüger.'),
     ]);
 
-    clear(root).appendChild(el('div', { class: 'page' }, [head, el('div', { class: 'support-layout' }, [settingsCard, textCard])]));
+    clear(root).appendChild(el('div', { class: 'page' }, [head, important, el('div', { class: 'support-layout' }, [settingsCard, textCard])]));
   }
 
   window.Views = window.Views || {};

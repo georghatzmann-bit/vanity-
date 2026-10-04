@@ -89,7 +89,8 @@
       title: 'Zuerst dein E-Mail-Postfach sichern',
       why: 'Wer in dein Postfach kommt, kann dein Epic-Konto immer wieder übernehmen. Deshalb kommt das E-Mail-Konto zuerst.',
       todo: [
-        'Melde dich bei deinem E-Mail-Anbieter an. Die Seite öffnet sich automatisch.',
+        'Mach diesen Schritt am besten am Handy oder an einem anderen Gerät. Auf diesem PC könnte ein Schadprogramm mitlesen.',
+        'Trag unten deine E-Mail-Adresse ein oder klick auf deinen Anbieter. Dann öffnet sich dessen Sicherheitsseite. Melde dich dort an.',
         'Ändere dort das Passwort. Nimm ein neues, das du nirgendwo sonst benutzt.',
         'Schalte dort die Zwei-Faktor-Anmeldung (Bestätigung per App oder SMS) ein.',
         'Prüfe die Ersatz-Telefonnummer und die Ersatz-E-Mail-Adresse. Fremde Einträge löschen.',
@@ -114,7 +115,7 @@
         'Öffne "Windows-Sicherheit" mit dem Knopf unten und starte unter "Viren- & Bedrohungsschutz" > "Scanoptionen" die "Vollständige Überprüfung".',
         'Deinstalliere Programme, die du nicht kennst, besonders angebliche "Gratis-V-Bucks"-, Cheat- oder Skin-Programme.',
         'Entferne Browser-Erweiterungen, die du nicht selbst installiert hast.',
-        'Erst wenn der PC sauber ist, Passwörter ändern.',
+        'Hat der Scan etwas gefunden und du hast in Schritt 1 dein E-Mail-Passwort an diesem PC geändert? Dann ändere es jetzt noch einmal, am besten vom Handy aus.',
       ],
       url: URLS.securingArticle,
       urlLabel: 'Epic-Hilfe: Konto absichern',
@@ -128,7 +129,7 @@
       todo: [
         'Hast du auf diesem PC mal mit dem Epic Games Launcher gespielt? Dann klick auf "Konto-ID auf diesem PC suchen". Der Konto-Retter findet sie automatisch.',
         'Hast du die Konto-PDF von Epic? Zieh sie unter "PDF auslesen" hinein.',
-        'Such in deinem Postfach nach "Your Epic Games Receipt" oder "Epic Games-Beleg". Dort steht die Rechnungsnummer (Invoice-ID, beginnt mit A oder F).',
+        'Such in deinem Postfach nach "Your Epic Games Receipt" oder "Epic Games-Beleg". Kopiere die Nummer bei "INVOICE ID" bzw. "Rechnungsnummer": A oder F und danach 8 bis 9 Ziffern (z. B. A123456789). Nicht die lange "Order ID" mit 16 Ziffern nehmen.',
         'Trag unter "Meine Daten" alles ein, was du weißt: frühere Namen, E-Mail-Adressen, verknüpfte Konsolen, Zahlungsart.',
       ],
       url: URLS.invoiceArticle,
@@ -187,7 +188,7 @@
       todo: [
         'Schalte VPN oder Proxy aus. Nimm deinen normalen PC und dein WLAN von zu Hause.',
         'Die Seite "Probleme bei der Anmeldung?" öffnet sich automatisch. Gib deine alte E-Mail-Adresse ein und klick auf "Konto wiederherstellen".',
-        'Gib deine neue sichere E-Mail-Adresse ein und bestätige sie mit dem Code, den Epic schickt.',
+        'Gib die E-Mail-Adresse ein, die du ab jetzt für das Konto benutzen willst (nur du hast Zugriff, noch mit keinem anderen Epic-Konto verbunden), und bestätige sie mit dem Code, den Epic schickt.',
         'Fülle das Formular so vollständig wie möglich aus. Die Daten unten kannst du einzeln kopieren. Bei den E-Mail-Adressen die neueste zuerst.',
         'Alles, was nirgends passt, schreibst du ins freie Textfeld am Ende. Nach dem Absenden kannst du nichts mehr ergänzen.',
         'Prüfe alles und klick auf "Absenden".',
@@ -221,7 +222,7 @@
       data: ['email_new'],
       inputs: ['recovery_id'],
       warnings: [
-        { kind: 'danger', title: 'Vorsicht vor falschen Mails', text: 'Echte Epic-Mails kommen nur von Adressen, die auf "epicgames.com" enden, z. B. @support.epicgames.com oder @acct.epicgames.com.' },
+        { kind: 'danger', title: 'Vorsicht vor falschen Mails', text: 'Echte Epic-Mails kommen nur von Adressen, bei denen direkt vor "epicgames.com" ein @ oder ein Punkt steht, z. B. @acct.epicgames.com, @support.epicgames.com oder @mail.epicgames.com. Steht davor ein Bindestrich oder ein anderes Wort (z. B. @secure-epicgames.com), ist es eine Fälschung.' },
       ],
     },
     {
@@ -457,7 +458,7 @@
   // Allgemeine Sicherheitstipps (Anzeige im Abschluss und in der Seitenleiste)
   const TIPS = [
     'Gib niemals dein Passwort oder Codes weiter, auch nicht an angebliche Epic-Mitarbeiter.',
-    'Echte Epic-Mails kommen nur von Adressen, die auf "epicgames.com" enden.',
+    'Echte Epic-Mails kommen nur von Adressen wie …@acct.epicgames.com oder …@support.epicgames.com. Adressen wie …@epicgames-support.com sind Fälschungen.',
     'Es gibt keine Gratis-V-Bucks. Solche Seiten stehlen Konten.',
   ];
 
