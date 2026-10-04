@@ -208,13 +208,24 @@
     });
   }
 
+  // Gespeicherte Wahl anwenden: true = vom Nutzer eingeschaltet (gilt auch, wenn Windows
+  // "Animationen anzeigen" aus hat), false = ausgeschaltet, sonst automatisch
+  // (an, außer Windows wünscht weniger Bewegung).
+  function applyEffectsPref(pref) {
+    const f = fx();
+    if (!f) return;
+    if (pref === true) f.setEnabled(true, { force: true });
+    else if (pref === false) f.setEnabled(false);
+    else f.setEnabled(true);
+  }
+
   // Effekte starten. Ein Fehler hier darf das Programm nie aufhalten.
-  function startEffects(enabled) {
+  function startEffects(pref) {
     const f = fx();
     if (!f) return;
     try {
       f.init({ canvas: document.getElementById('fx-bg') });
-      f.setEnabled(enabled);
+      applyEffectsPref(pref);
     } catch (err) {
       console.warn('[fx] Effekte konnten nicht gestartet werden:', err && err.message);
     }
@@ -230,14 +241,14 @@
       return;
     }
     const s = window.Store.get();
-    startEffects(s.ui.effects !== false);
+    startEffects(s.ui.effects);
     renderTopbarRight();
     watchTilt();
     // Tabs aktuell halten (z. B. Zähler), egal wo etwas geändert wurde
     window.Store.subscribe((state, source) => {
       renderNav();
       if (source === 'reset' && fx()) {
-        fx().setEnabled(state.ui.effects !== false);
+        applyEffectsPref(state.ui.effects);
         renderTopbarRight();
       }
     });

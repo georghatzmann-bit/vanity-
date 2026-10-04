@@ -24,7 +24,8 @@ const DEFAULT_STATE = {
   pdf: { imports: [] },
   support: { lang: 'de', variant: 'first', edited: {}, facts: {} },
   discord: { toasts: true, sound: true },
-  ui: { view: 'recovery', welcomeSeen: false, effects: true },
+  // effects: null = automatisch (an, außer Windows wünscht weniger Bewegung), true/false = Wahl des Nutzers
+  ui: { view: 'recovery', welcomeSeen: false, effects: null },
 };
 
 let mainWindow = null;

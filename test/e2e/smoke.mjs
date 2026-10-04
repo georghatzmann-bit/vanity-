@@ -126,17 +126,21 @@ await win.evaluate(() => window.App.go('discord'));
 await win.waitForTimeout(2500);
 await shot('08-discord');
 
-// 8b) Effekte: 3D-Hintergrund läuft, Schalter oben rechts schaltet aus und wieder ein
-check(await win.evaluate(() => Boolean(window.FX) && window.FX.enabled()), 'Effekte sind beim Start nicht an');
+// 8b) Effekte: Schalter oben rechts. Ob sie beim allerersten Start an sind, entscheidet Windows
+// ("Animationen anzeigen"). Geprüft wird deshalb nur das Umschalten und dass die Wahl gemerkt wird.
+const fxOn = (w) => w.evaluate(() => Boolean(window.FX) && window.FX.enabled() && !document.documentElement.classList.contains('fx-off'));
+check(await win.evaluate(() => Boolean(window.FX)), 'Effekte-Modul fehlt');
+const fxBefore = await fxOn(win);
 await win.click('#fx-toggle');
-check(await win.evaluate(() => document.documentElement.classList.contains('fx-off')), 'Effekte ließen sich nicht ausschalten');
+check((await fxOn(win)) === !fxBefore, 'Effekte-Schalter schaltet nicht um');
 await win.click('#fx-toggle');
-check(await win.evaluate(() => !document.documentElement.classList.contains('fx-off')), 'Effekte ließen sich nicht wieder einschalten');
-// Für den Neustart ausgeschaltet lassen: die Einstellung muss gespeichert bleiben
-await win.click('#fx-toggle');
+check((await fxOn(win)) === fxBefore, 'Effekte-Schalter schaltet nicht zurück');
+// Ausschalten und Neustart: muss aus bleiben
+if (await fxOn(win)) await win.click('#fx-toggle');
+check(!(await fxOn(win)), 'Effekte ließen sich nicht ausschalten');
 await win.waitForTimeout(800);
 
-// 9) Fortschritt bleibt nach Neustart erhalten
+// 9) Fortschritt und Einstellungen bleiben nach Neustart erhalten
 await app.close();
 const app2 = await electron.launch({ ...launch, timeout: 60000 });
 const win2 = await app2.firstWindow();
@@ -144,13 +148,24 @@ await win2.setViewportSize({ width: 1280, height: 860 });
 await win2.waitForSelector('.nav-item .nav-badge', { timeout: 20000 });
 await win2.waitForTimeout(500);
 check((await win2.locator('.modal').count()) === 0, 'Begrüßung kam nach Neustart erneut');
-check(await win2.evaluate(() => document.documentElement.classList.contains('fx-off')), 'Ausgeschaltete Effekte waren nach Neustart wieder an');
+check(!(await fxOn(win2)), 'Ausgeschaltete Effekte waren nach Neustart wieder an');
 check((await win2.getAttribute('#fx-toggle', 'aria-pressed')) === 'false', 'Effekte-Schalter zeigt nach Neustart den falschen Stand');
 // textContent statt innerText: bei kleinen Bildschirmen ist die Beschriftung ausgeblendet
 const badge = await win2.locator('.nav-item').first().locator('.nav-badge').textContent();
 check(badge.includes('2/6'), 'Fortschritt nach Neustart verloren: ' + badge);
 await win2.screenshot({ path: path.join(outDir, '09-nach-neustart.png') });
+// Vom Nutzer eingeschaltet: muss nach dem Neustart an sein, egal was Windows wünscht
+await win2.click('#fx-toggle');
+check(await fxOn(win2), 'Effekte ließen sich nicht einschalten');
+await win2.waitForTimeout(800);
 await app2.close();
+const app3 = await electron.launch({ ...launch, timeout: 60000 });
+const win3 = await app3.firstWindow();
+await win3.waitForSelector('#fx-toggle', { timeout: 20000 });
+await win3.waitForTimeout(500);
+check(await fxOn(win3), 'Eingeschaltete Effekte waren nach Neustart wieder aus');
+check((await win3.getAttribute('#fx-toggle', 'aria-pressed')) === 'true', 'Effekte-Schalter zeigt nach Neustart "aus", obwohl eingeschaltet');
+await app3.close();
 
 if (errors.length) {
   console.error('FEHLER:\n' + errors.join('\n'));
