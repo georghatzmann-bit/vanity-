@@ -236,7 +236,7 @@ body {
   cursor: pointer;
   overflow: hidden;
   transform: translate(var(--tx, 0px), var(--ty, 0px));
-  transition: color var(--t-fast), background var(--t-fast), transform 260ms var(--ease-out);
+  transition: color var(--t-fast), background var(--t-fast);
 }
 .nav-item:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -297,7 +297,7 @@ body {
   cursor: pointer;
   overflow: hidden;
   transform: translate(var(--tx, 0px), var(--ty, 0px));
-  transition: color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast), transform 260ms var(--ease-out);
+  transition: color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
 }
 .icon-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -441,7 +441,7 @@ body {
   overflow: hidden;
   isolation: isolate;
   transform: translate(var(--tx, 0px), var(--ty, 0px));
-  transition: background var(--t-fast), box-shadow 220ms, transform 260ms var(--ease-out), opacity var(--t-fast), color var(--t-fast);
+  transition: background var(--t-fast), box-shadow 220ms, opacity var(--t-fast), color var(--t-fast);
 }
 .btn:hover { background: rgba(255, 255, 255, 0.11); box-shadow: 0 0 0 1px var(--hair-strong) inset; }
 .btn:active { transform: translate(var(--tx, 0px), var(--ty, 0px)) scale(0.97); }
@@ -469,7 +469,7 @@ body {
   background-position: 0% 50%;
   color: #fff;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14) inset, 0 10px 26px -10px rgba(var(--accent-rgb), 0.9);
-  transition: background-position 500ms var(--ease-out), box-shadow 220ms, transform 260ms var(--ease-out), opacity var(--t-fast);
+  transition: background-position 500ms var(--ease-out), box-shadow 220ms, opacity var(--t-fast);
 }
 .btn-primary:hover {
   background: var(--accent-grad);
@@ -1085,11 +1085,12 @@ details > summary:focus-visible { outline: 2px solid var(--accent); outline-offs
 
 /* ---------- Effekte (Klassen kommen aus fx.js) ---------- */
 
-/* 3D-Neigen zur Maus hin: --rx/--ry Winkel, --tx/--ty kleine Verschiebung */
+/* 3D-Neigen zur Maus hin: --rx/--ry Winkel, --tx/--ty kleine Verschiebung.
+   fx.js glättet die Werte selbst bei jedem Bild, deshalb hier keine Übergangszeit für transform. */
 .fx-tilt {
   transform: perspective(900px) translate(var(--tx, 0px), var(--ty, 0px)) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transform-style: preserve-3d;
-  transition: transform 240ms var(--ease-out), --spot 360ms ease, box-shadow var(--t-fast), background var(--t-fast);
+  transition: --spot 360ms ease, box-shadow var(--t-fast), background var(--t-fast);
   will-change: transform;
 }
 .fx-tilt:hover { box-shadow: 0 0 0 1px var(--hair-strong) inset, 0 24px 50px -24px rgba(var(--accent-rgb), 0.55); }
