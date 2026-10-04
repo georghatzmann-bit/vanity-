@@ -41,7 +41,8 @@
   let windowFocused = true;
   let clock = 0;           // Sekunden Animationszeit (läuft nur, solange aktiv)
   // Automatische Qualität: 0 = voll, 1 = einfache Pixeldichte, 2 = sparsam (ohne Boden,
-  // weniger Sterne), 3 = sparsam mit ~30 Bildern pro Sekunde. Geht auch wieder hoch.
+  // Polarlicht und hintere Linien, weniger Sterne), 3 = sparsam mit ~30 Bildern pro Sekunde.
+  // Geht auch wieder hoch, wenn genug Luft ist.
   const quality = {
     level: 0,
     // Messfenster (~2,5 s): Bildwechsel, davon zu langsame, gezeichnete Bilder, deren Kosten
@@ -612,6 +613,7 @@
       st.width = '100%';
       st.height = '100%';
       st.pointerEvents = 'none';
+      st.transition = 'opacity 1.2s ease';
       scene.aur = a;
       scene.actx = a.getContext('2d');
     }
@@ -685,6 +687,9 @@
       if (scene.aur.height !== ah) scene.aur.height = ah;
     }
     buildGrid();
+    // Sparsam (Stufe 2 und 3): Polarlicht ausblenden, das spart das Zusammensetzen einer ganzen
+    // Fläche pro Bild. Der Seitenhintergrund hat eigene, ruhige Farbverläufe.
+    if (scene.aurLayer) scene.aur.style.opacity = quality.level >= 2 ? '0' : '';
     if (!isOn()) scene.ctx.clearRect(0, 0, c.width, c.height);
     quiet(1000);
   }
@@ -926,8 +931,9 @@
     scene.turnY += (ty * pitchK - scene.turnY) * kl;
 
     const p = pulseAmount(ms);
-    if (scene.actx) drawAurora(scene.actx, t, p);
-    if (scene.aurLayer || !scene.actx) {
+    const aurora = scene.actx && quality.level < 2;
+    if (aurora) drawAurora(scene.actx, t, p);
+    if (scene.aurLayer || !aurora) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalCompositeOperation = 'source-over';
       ctx.clearRect(0, 0, scene.canvas.width, scene.canvas.height);
