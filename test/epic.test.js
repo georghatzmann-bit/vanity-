@@ -94,9 +94,60 @@ test('Ohne "Angemeldet bleiben" wird nichts gespeichert', async () => {
   setup({ text: '[RememberMe]\r\nEnable=False\r\nData=\r\n' });
   const st = await epic.getStatus();
   assert.equal(st.remembered, false);
+  assert.equal(st.diag.sectionFound, true);
+  assert.equal(st.diag.dataLength, 0);
   const res = await epic.saveCurrent('x');
   assert.equal(res.ok, false);
+  assert.equal(res.code, 'not-remembered');
+  assert.equal(res.running, false);
   assert.match(res.message, /Angemeldet bleiben/);
+});
+
+test('Erkennung ist tolerant: Data ohne Enable zählt, Enable=False nicht', async () => {
+  setup({ text: '[RememberMe]\r\nData=NURDATEN\r\n' });
+  let st = await epic.getStatus();
+  assert.equal(st.remembered, true, 'Data ohne Enable-Zeile muss als angemeldet gelten');
+  assert.equal((await epic.saveCurrent('A')).ok, true);
+  setup({ text: '[RememberMe]\r\nEnable=false\r\nData=NURDATEN\r\n' });
+  st = await epic.getStatus();
+  assert.equal(st.remembered, false);
+});
+
+test('Diagnose zeigt, was gefunden wurde – aber nie den Zugang selbst', async () => {
+  const { ini } = setup();
+  const st = await epic.getStatus();
+  assert.equal(st.diag.file, ini);
+  assert.equal(st.diag.fileFound, true);
+  assert.equal(st.diag.sectionFound, true);
+  assert.equal(st.diag.enable, 'True');
+  assert.equal(st.diag.dataLength, 6);
+  assert.equal(st.diag.email, 'eins@beispiel.de');
+  assert.ok(!JSON.stringify(st).includes('ABC123'), 'Der Zugang darf die Oberfläche nie erreichen');
+});
+
+test('Anmeldung wird auch in einer anderen Einstellungsdatei des Launchers gefunden', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-epic-la-'));
+  const cfg = path.join(base, 'EpicGamesLauncher', 'Saved', 'Config');
+  fs.mkdirSync(path.join(cfg, 'Windows'), { recursive: true });
+  fs.mkdirSync(path.join(cfg, 'WindowsNoEditor'), { recursive: true });
+  fs.writeFileSync(path.join(cfg, 'Windows', 'GameUserSettings.ini'), '[Core]\r\nFoo=1\r\n', 'utf8');
+  fs.writeFileSync(path.join(cfg, 'WindowsNoEditor', 'GameUserSettings.ini'), '[RememberMe]\r\nEnable=True\r\nData=ANDERSWO\r\nEmail=x@beispiel.de\r\n', 'utf8');
+  const before = process.env.LOCALAPPDATA;
+  process.env.LOCALAPPDATA = base;
+  try {
+    epic.init({ dataDir: path.join(base, 'data'), crypto: null, noProcess: true });
+    const st = await epic.getStatus();
+    assert.equal(st.remembered, true);
+    assert.equal(st.currentEmail, 'x@beispiel.de');
+    assert.equal(st.diag.file, path.join(cfg, 'WindowsNoEditor', 'GameUserSettings.ini'));
+    assert.equal(st.diag.configFiles.length, 2);
+    assert.equal(st.diag.configFiles[0].file, path.join(cfg, 'Windows', 'GameUserSettings.ini'), 'übliche Datei zuerst');
+    assert.equal(st.diag.configFiles[0].hasSection, false);
+    assert.equal(st.diag.configFiles[1].hasSection, true);
+    assert.equal((await epic.saveCurrent('B')).ok, true);
+  } finally {
+    if (before === undefined) delete process.env.LOCALAPPDATA; else process.env.LOCALAPPDATA = before;
+  }
 });
 
 test('Ohne Launcher-Einstellungen: klare Meldung statt Absturz', async () => {

@@ -1003,6 +1003,10 @@ details > summary:focus-visible { outline: 2px solid var(--accent); outline-offs
 .account-name { font-weight: 650; font-size: 15px; }
 .account-meta { font-size: 12px; color: var(--muted); word-break: break-all; }
 .account-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.diag { padding: 8px 12px; border-radius: var(--radius); background: rgba(5, 6, 14, 0.45); box-shadow: 0 0 0 1px var(--hair) inset; }
+.diag > summary { font-size: 13px; }
+.diag .mono { font-size: 12px; word-break: break-all; }
+.diag-bad { color: var(--warning); }
 
 @media (max-width: 920px) {
   .account-item { grid-template-columns: auto minmax(0, 1fr); }

@@ -130,6 +130,18 @@ test('Windows: Konten-Wechsel beendet den laufenden Launcher und startet ihn neu
     // Der wartende Prozess wurde beendet (der Neustart startet die Kopie ohne Argumente, die sofort endet)
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal(child.exitCode !== null || child.killed, true, 'Launcher-Prozess läuft noch');
+    // "Launcher beenden" aus der Konten-Ansicht: erst höflich, dann hart – der Prozess ist danach weg
+    const child2 = spawn(fake, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'ignore', windowsHide: true });
+    try {
+      await new Promise((r) => setTimeout(r, 1500));
+      assert.equal((await epic.getStatus()).running, true);
+      const closed = await epic.closeLauncher();
+      assert.equal(closed.ok, true, closed.message);
+      assert.equal((await epic.getStatus()).running, false);
+      assert.equal((await epic.closeLauncher()).ok, true, 'nochmal beenden ist harmlos');
+    } finally {
+      try { child2.kill(); } catch (_) { /* schon beendet */ }
+    }
   } finally {
     try { child.kill(); } catch (_) { /* schon beendet */ }
     try { execFileSync('taskkill', ['/IM', 'EpicGamesLauncher.exe', '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch (_) { /* nichts mehr da */ }

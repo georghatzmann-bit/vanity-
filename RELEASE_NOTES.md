@@ -7,6 +7,11 @@
 3. Zeigt Windows „Der Computer wurde durch Windows geschützt“: auf **Weitere Informationen** klicken, dann auf **Trotzdem ausführen**. (Das kommt, weil das Programm nicht bei Microsoft gekauft-signiert ist.)
 4. Fertig: Der Konto-Retter startet von selbst. Auf dem Desktop liegt ein Symbol, im Startmenü ein Eintrag.
 
+**Neu in Version 1.2.1:**
+
+- **Konten:** Wird die Anmeldung nicht gefunden, zeigt der Konto-Retter jetzt genau, was er auf dem PC sieht („Was der Konto-Retter sieht"), mit Knopf zum Kopieren. Dazu bietet er an, den Launcher für dich zu beenden und danach erneut zu lesen – der Launcher schreibt die Anmeldung oft erst beim Beenden. 2FA muss dafür nicht aus.
+- Die Anmeldung wird in allen Einstellungsdateien des Launchers gesucht, nicht nur in der üblichen.
+
 **Neu in Version 1.2:**
 
 - **Kurze Anleitung statt 21 Schritten:** SMS und Authenticator einrichten, E-Mail-2FA aus, abmelden und „Passwort vergessen“, „Kein Zugriff auf diese E-Mail“, Codes eingeben, neue E-Mail eintragen.

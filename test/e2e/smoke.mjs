@@ -119,6 +119,14 @@ await win.waitForSelector('.status-line', { timeout: 10000 });
 await win.waitForTimeout(800);
 check(await win.locator('main').innerText().then((t) => /Nur unter Windows|nicht gefunden|Launcher/.test(t)), 'Konten-Ansicht zeigt keinen Stand an');
 check((await win.locator('button:has-text("Aktuelles Konto speichern")').count()) === 1, 'Knopf "Aktuelles Konto speichern" fehlt');
+// Die Diagnose gibt es nur, wo der Konten-Wechsel unterstützt wird (Windows)
+const accountsSupported = await win.evaluate(async () => { const r = await window.kr.epicAccounts.status(); return Boolean(r && r.ok && r.value.supported); });
+if (accountsSupported) {
+  check((await win.locator('.diag').count()) === 1, 'Diagnose-Block fehlt in der Konten-Ansicht');
+  await win.click('.diag > summary');
+  await win.waitForTimeout(200);
+  check(await win.locator('.diag').innerText().then((t) => t.includes('Einstellungsdatei')), 'Diagnose zeigt die Einstellungsdatei nicht');
+}
 await shot('07-konten');
 
 // 8) Discord

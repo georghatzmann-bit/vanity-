@@ -49,8 +49,66 @@ function localAppData() {
   return process.env.LOCALAPPDATA || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'AppData', 'Local') : '');
 }
 
+function savedDir() {
+  return path.join(localAppData(), 'EpicGamesLauncher', 'Saved');
+}
+
+function primarySettingsFile() {
+  return path.join(savedDir(), 'Config', 'Windows', 'GameUserSettings.ini');
+}
+
+// Alle Einstellungsdateien des Launchers (Saved\Config\<Plattform>\*.ini) mit dem Hinweis,
+// ob darin ein [RememberMe]-Abschnitt steht. So finden wir die Anmeldung auch, wenn eine
+// neue Launcher-Version sie in eine andere Datei schreibt.
+function configCandidates() {
+  if (iniOverride) return exists(iniOverride) ? [{ file: iniOverride, hasSection: hasRememberMe(iniOverride) }] : [];
+  const out = [];
+  const base = path.join(savedDir(), 'Config');
+  let dirs = [];
+  try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch (_) { return out; }
+  // Die übliche Datei zuerst
+  dirs.sort((a, b) => (a === 'Windows' ? -1 : b === 'Windows' ? 1 : a.localeCompare(b)));
+  for (const d of dirs) {
+    let names = [];
+    try { names = fs.readdirSync(path.join(base, d)).filter((n) => /\.ini$/i.test(n)); } catch (_) { continue; }
+    names.sort((a, b) => (/^GameUserSettings\.ini$/i.test(a) ? -1 : /^GameUserSettings\.ini$/i.test(b) ? 1 : a.localeCompare(b)));
+    for (const n of names) {
+      const file = path.join(base, d, n);
+      out.push({ file, hasSection: hasRememberMe(file) });
+    }
+  }
+  return out;
+}
+
+function hasRememberMe(file) {
+  try {
+    const ini = readIni(file);
+    return Boolean(ini && getSection(ini.text, SECTION) !== null);
+  } catch (_) {
+    return false;
+  }
+}
+
+// Die Datei, in der die Anmeldung steht: zuerst eine mit [RememberMe], sonst die übliche
 function settingsFile() {
-  return iniOverride || path.join(localAppData(), 'EpicGamesLauncher', 'Saved', 'Config', 'Windows', 'GameUserSettings.ini');
+  if (iniOverride) return iniOverride;
+  const hit = configCandidates().find((c) => c.hasSection);
+  return hit ? hit.file : primarySettingsFile();
+}
+
+// Launcher-Version aus dem Anfang der Logdatei (nur für die Diagnose)
+function launcherVersion() {
+  try {
+    const fd = fs.openSync(path.join(savedDir(), 'Logs', 'EpicGamesLauncher.log'), 'r');
+    const buf = Buffer.alloc(16384);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    const head = buf.subarray(0, n).toString('utf8');
+    const m = /Build:\s*(\S+)/.exec(head) || /Version:\s*([^\r\n]{1,80})/.exec(head);
+    return m ? m[1].trim().slice(0, 80) : '';
+  } catch (_) {
+    return '';
+  }
 }
 
 function profilesFile() {
@@ -161,13 +219,17 @@ function parseKeys(body) {
 // ---------- Was ist gerade im Launcher angemeldet? ----------
 
 function readCurrent() {
-  const ini = readIni(settingsFile());
-  if (!ini) return { found: false, remembered: false, email: '', data: '', section: '' };
+  const file = settingsFile();
+  const empty = { found: false, file, sectionFound: false, enable: '', dataLength: 0, remembered: false, email: '', data: '', section: '' };
+  const ini = readIni(file);
+  if (!ini) return empty;
   const body = getSection(ini.text, SECTION);
-  if (!body) return { found: true, remembered: false, email: '', data: '', section: '' };
+  if (body === null) return Object.assign(empty, { found: true });
   const k = parseKeys(body);
-  const remembered = /^true$/i.test(k.Enable || '') && Boolean(k.Data);
-  return { found: true, remembered, email: k.Email || '', data: k.Data || '', section: body };
+  const data = k.Data || '';
+  // "Angemeldet bleiben" gilt, sobald ein Zugang (Data) da ist und Enable nicht ausdrücklich auf False steht
+  const remembered = data.length > 0 && !/^false$/i.test(k.Enable || '');
+  return { found: true, file, sectionFound: true, enable: k.Enable || '', dataLength: data.length, remembered, email: k.Email || '', data, section: body };
 }
 
 // ---------- Gespeicherte Konten (verschlüsselt) ----------
@@ -229,15 +291,24 @@ async function isRunning() {
   return r.code === 0 && r.stdout.toLowerCase().includes(LAUNCHER_EXE.toLowerCase());
 }
 
-async function stopLauncher() {
-  if (noProcess) return true;
-  if (!(await isRunning())) return true;
-  await run('taskkill', ['/IM', LAUNCHER_EXE, '/T', '/F']);
-  for (let i = 0; i < 40; i++) {
+async function waitGone(ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
     await sleep(250);
     if (!(await isRunning())) return true;
   }
-  return false;
+  return !(await isRunning());
+}
+
+// Erst höflich (Fenster schließen, damit der Launcher seine Einstellungen schreibt),
+// dann hart, falls er sich nur in den Infobereich zurückzieht.
+async function stopLauncher() {
+  if (noProcess) return true;
+  if (!(await isRunning())) return true;
+  await run('taskkill', ['/IM', LAUNCHER_EXE]);
+  if (await waitGone(6000)) return true;
+  await run('taskkill', ['/IM', LAUNCHER_EXE, '/T', '/F']);
+  return waitGone(10000);
 }
 
 async function findExe() {
@@ -267,26 +338,51 @@ function startLauncher(exe) {
 
 async function getStatus() {
   const sup = supported();
-  let cur = { found: false, remembered: false, email: '' };
+  let cur = { found: false, file: '', sectionFound: false, enable: '', dataLength: 0, remembered: false, email: '' };
   let problem = null;
   let accounts = [];
   let exe = null;
+  let candidates = [];
   if (sup) {
     try { cur = readCurrent(); } catch (err) { problem = 'Die Launcher-Einstellungen konnten nicht gelesen werden: ' + err.message; }
     try { accounts = loadProfiles(); } catch (err) { problem = err.message; }
     exe = await findExe();
+    try { candidates = configCandidates(); } catch (_) { /* nur Diagnose */ }
   }
+  const running = sup ? await isRunning() : false;
   return {
     supported: sup,
-    launcherInstalled: Boolean(exe) || cur.found,
-    running: sup ? await isRunning() : false,
+    launcherInstalled: Boolean(exe) || cur.found || candidates.length > 0,
+    running,
     settingsFound: cur.found,
     remembered: Boolean(cur.remembered),
     currentEmail: cur.email || '',
     encrypted: encrypted(),
     problem,
     accounts: accounts.map((p) => publicView(p, cur)),
+    // Was der Konto-Retter auf diesem PC sieht (ohne den Zugang selbst): hilft, wenn etwas nicht klappt
+    diag: {
+      localAppData: localAppData(),
+      file: cur.file || '',
+      fileFound: Boolean(cur.found),
+      sectionFound: Boolean(cur.sectionFound),
+      enable: cur.enable || '',
+      dataLength: cur.dataLength || 0,
+      email: cur.email || '',
+      launcherExe: exe || '',
+      launcherVersion: sup && !noProcess ? launcherVersion() : '',
+      configFiles: candidates.map((c) => ({ file: c.file, hasSection: c.hasSection })),
+    },
   };
+}
+
+// Launcher sauber beenden (für "Konto speichern", wenn er die Anmeldung noch nicht geschrieben hat)
+async function closeLauncher() {
+  if (!supported()) return fail('Nur unter Windows verfügbar.');
+  if (!(await isRunning())) return ok('Der Launcher war schon beendet.');
+  const closed = await stopLauncher();
+  if (!closed) return fail('Der Launcher ließ sich nicht beenden. Bitte beende ihn von Hand: unten rechts im Infobereich Rechtsklick auf das Epic-Symbol, dann "Beenden".');
+  return ok('Der Launcher wurde beendet.');
 }
 
 const NOT_FOUND = 'Die Einstellungen des Epic Games Launchers wurden nicht gefunden. Ist der Launcher installiert und wurde er schon einmal gestartet?';
@@ -295,7 +391,13 @@ async function saveCurrent(label) {
   if (!supported()) return fail('Nur unter Windows verfügbar.');
   const cur = readCurrent();
   if (!cur.found) return fail(NOT_FOUND);
-  if (!cur.remembered) return fail('Im Launcher ist gerade niemand mit "Angemeldet bleiben" angemeldet. Starte den Launcher, melde dich an und setz den Haken bei "Angemeldet bleiben". Dann hier speichern.');
+  if (!cur.remembered) {
+    const running = await isRunning();
+    return Object.assign(fail(running
+      ? 'Der Launcher läuft, aber in seiner Einstellungsdatei steht noch keine Anmeldung. Er schreibt sie oft erst beim Beenden.'
+      : 'In der Einstellungsdatei des Launchers steht keine Anmeldung. Starte den Launcher, melde dich an und setz den Haken bei "Angemeldet bleiben". Beende ihn dann über das Symbol unten rechts (Rechtsklick, "Beenden") und speichere hier erneut.'),
+    { code: 'not-remembered', running });
+  }
   const list = loadProfiles();
   const name = String(label || '').trim() || cur.email || 'Epic-Konto ' + (list.length + 1);
   const now = new Date().toISOString();
@@ -371,7 +473,7 @@ function removeAll() {
 }
 
 module.exports = {
-  init, getStatus, saveCurrent, switchTo, remove, rename, removeAll,
+  init, getStatus, saveCurrent, switchTo, remove, rename, removeAll, closeLauncher,
   // für Tests
   _ini: { readIni, writeIni, getSection, setSection, parseKeys },
 };

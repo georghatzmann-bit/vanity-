@@ -58,15 +58,85 @@
     return yes ? text.trim() : null;
   }
 
+  // Erklärt, was zu tun ist, wenn der Launcher die Anmeldung noch nicht in seine Datei geschrieben hat.
+  // Läuft der Launcher, bietet der Dialog an, ihn sauber zu beenden und danach erneut zu lesen.
+  async function notRememberedDialog(running) {
+    const body = el('div', { class: 'stack' }, [
+      el('p', { class: 'muted', text: running
+        ? 'Der Launcher läuft, aber in seiner Einstellungsdatei steht noch keine Anmeldung. Der Launcher schreibt sie oft erst, wenn er beendet wird – das Fenster zu schließen reicht nicht.'
+        : 'In der Einstellungsdatei des Launchers steht keine Anmeldung.' }),
+      el('ol', { class: 'todo-list' }, [
+        el('li', { text: 'Im Launcher anmelden und den Haken bei "Angemeldet bleiben" setzen.' }),
+        el('li', { text: 'Den Launcher beenden: unten rechts neben der Uhr auf das Epic-Symbol rechtsklicken und "Beenden" wählen.' }),
+        el('li', { text: 'Dann hier erneut auf "Aktuelles Konto speichern" klicken.' }),
+      ]),
+      el('p', { class: 'hint', text: 'Zwei-Faktor-Schutz (2FA) muss dafür NICHT aus. Klappt es trotzdem nicht: unter "Was der Konto-Retter sieht" die Diagnose kopieren und melden.' }),
+    ]);
+    return confirmDialog({
+      title: 'Noch keine Anmeldung gefunden',
+      body,
+      confirmText: running ? 'Launcher jetzt beenden und nochmal lesen' : 'Verstanden',
+      cancelText: running ? 'Abbrechen' : null,
+    });
+  }
+
   async function saveCurrent() {
     if (!status || !status.supported) return;
     if (!status.remembered) {
-      toast('Im Launcher ist gerade niemand mit "Angemeldet bleiben" angemeldet. Melde dich im Launcher an und setz den Haken bei "Angemeldet bleiben".', 'warning');
-      return;
+      const yes = await notRememberedDialog(status.running);
+      if (!yes || !status.running) return;
+      // Launcher beenden, kurz warten, dann erneut lesen
+      await act('close', () => window.kr.epicAccounts.closeLauncher());
+      await refresh();
+      if (!status || !status.remembered) {
+        toast('Auch nach dem Beenden steht keine Anmeldung in der Datei. Bitte die Diagnose unter "Was der Konto-Retter sieht" kopieren und melden.', 'warning');
+        return;
+      }
+      toast('Anmeldung gefunden. Jetzt kannst du sie speichern.', 'success');
     }
     const name = await askName('Aktuelles Konto speichern', status.currentEmail);
     if (name === null) return;
     act('save', () => window.kr.epicAccounts.save(name));
+  }
+
+  function diagText() {
+    const d = status && status.diag;
+    if (!d) return '';
+    const lines = [
+      'Konto-Retter Diagnose Konten-Wechsel',
+      'Launcher gefunden (EXE): ' + (d.launcherExe || 'nein'),
+      'Launcher-Version (Log): ' + (d.launcherVersion || 'unbekannt'),
+      'Launcher läuft: ' + (status.running ? 'ja' : 'nein'),
+      'LOCALAPPDATA: ' + (d.localAppData || '?'),
+      'Einstellungsdatei: ' + (d.file || '?') + ' – ' + (d.fileFound ? 'gefunden' : 'FEHLT'),
+      '[RememberMe]-Abschnitt: ' + (d.sectionFound ? 'vorhanden' : 'FEHLT'),
+      'Enable: ' + (d.enable || '(leer)') + ' · Data: ' + (d.dataLength ? d.dataLength + ' Zeichen' : 'LEER') + ' · Email: ' + (d.email || '(leer)'),
+      'Verschlüsselung: ' + (status.encrypted ? 'an' : 'aus'),
+      'Alle Einstellungsdateien des Launchers:',
+      ...(d.configFiles && d.configFiles.length ? d.configFiles.map((c) => '  - ' + c.file + (c.hasSection ? '  [RememberMe: ja]' : '')) : ['  (keine gefunden)']),
+    ];
+    return lines.join('\n');
+  }
+
+  function diagBlock() {
+    if (!status || !status.diag) return null;
+    const d = status.diag;
+    const row = (label, value, bad) => el('div', { class: 'row' }, [
+      el('span', { class: 'hint', text: label }),
+      el('span', { class: 'mono' + (bad ? ' diag-bad' : ''), text: value }),
+    ]);
+    return el('details', { class: 'diag' }, [
+      el('summary', { text: 'Was der Konto-Retter sieht (Diagnose)' }),
+      el('div', { class: 'stack-sm' }, [
+        row('Launcher-Programm:', d.launcherExe || 'nicht gefunden', !d.launcherExe),
+        row('Launcher-Version:', d.launcherVersion || 'unbekannt'),
+        row('Einstellungsdatei:', (d.file || '?') + (d.fileFound ? '' : ' (fehlt)'), !d.fileFound),
+        row('[RememberMe]:', d.sectionFound ? 'vorhanden' : 'fehlt', !d.sectionFound),
+        row('Enable / Data / Email:', (d.enable || '–') + ' / ' + (d.dataLength ? d.dataLength + ' Zeichen' : 'leer') + ' / ' + (d.email || '–'), !d.dataLength),
+        el('div', { class: 'hint', text: 'Der Zugang selbst wird nie angezeigt oder kopiert – nur, ob er da ist.' }),
+        el('div', null, window.UI.copyButton(diagText, 'Diagnose', { small: true, text: 'Diagnose kopieren' })),
+      ]),
+    ]);
   }
 
   async function switchTo(acc) {
@@ -110,6 +180,7 @@
       return el('section', { class: 'card stack-sm' }, [
         el('div', { class: 'status-line' }, [el('span', { class: 'dot warn' }), 'Epic Games Launcher nicht gefunden']),
         el('p', { class: 'muted', text: 'Auf diesem PC wurde der Epic Games Launcher nicht gefunden. Installiere ihn und starte ihn einmal, dann klappt der Konten-Wechsel.' }),
+        diagBlock(),
       ]);
     }
     const lines = [
@@ -123,9 +194,13 @@
           : el('span', { class: 'badge badge-warning' }, [icon('warning', 'icon-sm'), 'Niemand mit "Angemeldet bleiben" angemeldet']),
       ]),
       status.problem ? callout('danger', 'Gespeicherte Konten nicht lesbar', status.problem) : null,
+      !status.remembered ? callout('warning', 'Noch keine Anmeldung gefunden', status.running
+        ? 'Der Launcher läuft, aber er hat die Anmeldung noch nicht in seine Datei geschrieben. Das passiert oft erst beim Beenden (unten rechts: Rechtsklick auf das Epic-Symbol, "Beenden"). Oder klick auf "Aktuelles Konto speichern" – der Konto-Retter bietet dann an, den Launcher für dich zu beenden.'
+        : 'Starte den Launcher, melde dich mit dem Haken "Angemeldet bleiben" an und beende ihn danach über das Symbol unten rechts. 2FA muss dafür nicht aus.') : null,
       el('p', { class: 'hint', text: status.encrypted
         ? 'Gespeicherte Zugänge liegen verschlüsselt auf diesem PC und funktionieren nur hier.'
         : 'Hinweis: Die Windows-Verschlüsselung ist auf diesem PC nicht verfügbar. Die Zugänge sind trotzdem an deinen Windows-Benutzer gebunden.' }),
+      diagBlock(),
     ];
     return el('section', { class: 'card stack-sm' }, lines);
   }
