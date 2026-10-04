@@ -81,9 +81,15 @@ function createStore({ dir, crypto, defaults }) {
     try {
       fs.renameSync(f, target);
       return target;
-    } catch (err) {
-      console.warn('[store] Konnte unlesbare Datei nicht beiseitelegen:', err.message);
-      return null;
+    } catch (_) {
+      // Umbenennen gesperrt (z. B. Virenscanner hält die Datei offen): dann wenigstens kopieren
+      try {
+        fs.copyFileSync(f, target);
+        return target;
+      } catch (err) {
+        console.warn('[store] Konnte unlesbare Datei nicht sichern:', err.message);
+        return null;
+      }
     }
   }
 

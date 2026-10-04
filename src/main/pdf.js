@@ -68,7 +68,7 @@ function itemsToLines(items) {
       out += p.str;
       lastEnd = p.x + p.w;
     }
-    return out.replace(/[ \t]+$/g, '');
+    return out.trimEnd();
   }).filter((l) => l.trim().length > 0);
 }
 

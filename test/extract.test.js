@@ -162,6 +162,7 @@ test('Präparierte oder riesige Texte frieren die Erkennung nicht ein', () => {
     'IPv6-Muster': 'HISTORY_ACCOUNT_X ' + '1:2:3:4:'.repeat(50000),
     'viele Beschriftungen': 'Display Name\n'.repeat(50000),
     '3 MB Text': 'INVOICE ID ' + 'abc def 0123 @ * x\n'.repeat(160000),
+    'lange Leerzeichen-Kette': 'x' + ' '.repeat(1000000) + 'y\n' + ' '.repeat(400000),
   };
   for (const [name, text] of Object.entries(cases)) {
     const start = Date.now();

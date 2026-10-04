@@ -39,7 +39,7 @@
   function toLines(text) {
     return normalize(text)
       .split('\n')
-      .map((l) => l.replace(/^[ \t]+|[ \t]+$/g, ''))
+      .map((l) => l.trim()) // trim() statt regulärer Ausdruck: bleibt auch bei langen Leerzeichen-Ketten schnell
       .filter((l) => l.length > 0);
   }
 

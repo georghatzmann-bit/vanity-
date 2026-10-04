@@ -170,7 +170,7 @@ function saveSoundMode(mode) {
 async function tryRestoreSound() {
   const res = await runAudio('unmute');
   if (soundMode !== 'restore') return res; // inzwischen wieder stumm geschaltet
-  if (res.ok && res.sessions > 0) saveSoundMode(null);
+  if (res.ok && res.sessions > 0 && res.muted === 0) saveSoundMode(null);
   return res;
 }
 

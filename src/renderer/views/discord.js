@@ -138,7 +138,7 @@
         switchControl('Discord-Töne stumm schalten', opts.sound, (v) => {
           window.Store.update((s) => { options().sound = v; }, 'discord');
           render();
-        }, 'Achtung: Dann ist auch der Sprachchat stumm (du hörst niemanden). Beim Schließen des Konto-Retters geht der Ton automatisch wieder an.', 'opt-sound'),
+        }, 'Achtung: Dann ist auch der Sprachchat stumm (du hörst niemanden). Beim Schließen des Konto-Retters wird der Ton wieder eingeschaltet (läuft Discord gerade nicht, beim nächsten Start).', 'opt-sound'),
       ]),
     ]);
     return card;
