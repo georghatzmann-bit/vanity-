@@ -308,7 +308,8 @@
           type: 'button',
           fk: 'step-' + step.id,
           'aria-current': isActive ? 'step' : null,
-          onclick: () => goTo(step.id),
+          // Nur den Schritt anzeigen, NICHT automatisch die Seite im Browser öffnen.
+          onclick: () => goTo(step.id, { open: false }),
         }, [
           el('span', { class: 'step-num' }, done ? icon('check', 'icon-sm') : skipped ? '–' : String(number)),
           el('span', { class: 'step-name' }, [step.title, step.optional && !/nur wenn nötig/i.test(step.title) ? el('span', { class: 'hint', text: ' (nur wenn nötig)' }) : null, skipped ? el('span', { class: 'hint', text: ' (übersprungen)' }) : null]),

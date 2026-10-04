@@ -13,8 +13,12 @@
   const PARTY_COLORS = ['124,108,255', '34,211,238', '255,255,255', '52,211,153', '244,114,182', '250,204,21'];
   const MAX_DPR = 1.5;
   const TILT_MAX = 6;    // Grad
-  const MAGNET_MAX = 6;  // Pixel
+  // Magnet in Pixeln (waagrecht, senkrecht). Tabs nur ganz leicht, der aktive gar nicht:
+  // sonst rutscht die Schrift in der feststehenden Leuchtfläche aus der Mitte.
+  const MAGNET_BTN = [6, 3];
+  const MAGNET_NAV = [2.5, 1];
   const MAX_PARTS = 1600;
+  const SPIN_MAX = 0.9;  // zusätzlicher Schwung der Kugel höchstens (rad/s)
   const TAU = Math.PI * 2;
 
   const SEL_HOVER = 'a, button, input, textarea, select, [role=button], label.check, .switch, .step-item, .nav-item';
@@ -32,11 +36,32 @@
   let forced = false;      // trotz "Bewegung reduzieren" erzwungen
   let initialized = false;
   let rafId = 0;
-  let lastTime = 0;
+  let lastTime = 0;        // letztes Bild (Maus-Effekte, Funken)
+  let lastScene = 0;       // letztes Bild des Hintergrunds
   let windowFocused = true;
   let clock = 0;           // Sekunden Animationszeit (läuft nur, solange aktiv)
-  // Automatische Qualität: 0 = voll, 1 = einfache Pixeldichte, 2 = sparsam (ohne Boden, weniger Sterne)
-  const quality = { level: 0, ema: 16.7, frames: 0 };
+  // Automatische Qualität: 0 = voll, 1 = einfache Pixeldichte, 2 = sparsam (ohne Boden,
+  // weniger Sterne), 3 = sparsam mit ~30 Bildern pro Sekunde. Geht auch wieder hoch.
+  const quality = {
+    level: 0,
+    // Messfenster (~2,5 s): Bildwechsel, davon zu langsame, gezeichnete Bilder, deren Kosten
+    time: 0, frames: 0, slow: 0, drawn: 0, work: 0, workN: 0, win: 0,
+    bad: 0, good: 0,         // Fenster hintereinander zu langsam / mit viel Luft
+    upNeed: 4,               // so viele gute Fenster bis zum Hochschalten (wächst nach Fehlversuchen)
+    lastUp: -1e9, quietUntil: 0,
+  };
+
+  // --rx/--ry/--tx/--ty wirken nur auf das Element selbst. Nicht vererbt muss der Browser
+  // bei jeder Änderung nicht alle Kinder neu berechnen. --mx/--my bleiben vererbt (::before).
+  if (window.CSS && typeof window.CSS.registerProperty === 'function') {
+    for (const name of ['--rx', '--ry', '--tx', '--ty']) {
+      try {
+        window.CSS.registerProperty({ name, syntax: '*', inherits: false });
+      } catch (err) {
+        // schon angemeldet
+      }
+    }
+  }
 
   function isOn() {
     return wanted && (!reduceMotion || forced);
@@ -133,10 +158,13 @@
   // ---------- Maus ----------
   const pointer = {
     x: 0, y: 0, inside: false, touch: false, seen: false,
-    target: null, dirty: false, refresh: false,
+    target: null, dirty: false, refresh: false, checked: 0, lastInput: 0,
     lastX: 0, lastY: 0, lastT: 0, speed: 0,
   };
-  const cursor = { glow: null, dot: null, gx: 0, gy: 0, dx: 0, dy: 0, hover: false, hidden: true, placed: false };
+  const cursor = {
+    glow: null, dot: null, gx: 0, gy: 0, dx: 0, dy: 0,
+    hover: false, hidden: true, placed: false, classes: false, glowT: '', dotT: '',
+  };
   let spotEls = [];
   let tiltEl = null;
   let magnetEl = null;
@@ -148,10 +176,17 @@
   function stateOf(el) {
     let s = elState.get(el);
     if (!s) {
-      s = { rx: 0, ry: 0, tx: 0, ty: 0 };
+      // Zuletzt geschriebene Werte merken: Unverändertes wird nicht neu gesetzt
+      s = { rx: 0, ry: 0, tx: 0, ty: 0, mx: NaN, my: NaN, rxs: '', rys: '', txs: '', tys: '' };
       elState.set(el, s);
     }
     return s;
+  }
+
+  function setVar(el, s, key, name, value) {
+    if (s[key] === value) return;
+    s[key] = value;
+    el.style.setProperty(name, value);
   }
 
   function elementOf(t) {
@@ -160,7 +195,7 @@
     return t.parentElement || null;
   }
 
-  // Wird nur aufgerufen, wenn sich das Element unter der Maus ändert
+  // Wird nur aufgerufen, wenn sich das Element unter der Maus ändert (oder zur Kontrolle)
   function setTarget(t) {
     pointer.target = t;
     const el = elementOf(t);
@@ -182,23 +217,27 @@
     setHover(Boolean(el && pointer.inside && el.closest(SEL_HOVER)));
   }
 
+  // Klassen am Lichtschein erst im nächsten Bild setzen (zusammen mit den anderen Schreibzugriffen)
   function setHover(on) {
     if (cursor.hover === on) return;
     cursor.hover = on;
-    if (cursor.glow) {
-      cursor.glow.classList.toggle('fx-cursor-hover', on);
-      cursor.dot.classList.toggle('fx-cursor-hover', on);
-    }
+    cursor.classes = true;
   }
 
   function setCursorHidden(hidden) {
     if (cursor.hidden === hidden) return;
     cursor.hidden = hidden;
-    if (cursor.glow) {
-      cursor.glow.classList.toggle('fx-cursor-hidden', hidden);
-      cursor.dot.classList.toggle('fx-cursor-hidden', hidden);
-    }
+    cursor.classes = true;
     if (hidden) cursor.placed = false;
+  }
+
+  function flushCursorClasses() {
+    if (!cursor.classes || !cursor.glow) return;
+    cursor.classes = false;
+    for (const node of [cursor.glow, cursor.dot]) {
+      node.classList.toggle('fx-cursor-hover', cursor.hover);
+      node.classList.toggle('fx-cursor-hidden', cursor.hidden);
+    }
   }
 
   function makeCursorEl(cls) {
@@ -223,10 +262,8 @@
     if (!cursor.dot.isConnected) host.appendChild(cursor.dot);
     cursor.hidden = true;
     cursor.placed = false;
-    cursor.glow.classList.add('fx-cursor-hidden');
-    cursor.dot.classList.add('fx-cursor-hidden');
-    cursor.glow.classList.toggle('fx-cursor-hover', cursor.hover);
-    cursor.dot.classList.toggle('fx-cursor-hover', cursor.hover);
+    cursor.classes = true;
+    flushCursorClasses();
   }
 
   function detachCursor() {
@@ -237,6 +274,7 @@
     cursor.dot.classList.remove('fx-cursor-hover');
     cursor.hidden = true;
     cursor.placed = false;
+    cursor.classes = false;
   }
 
   function onPointerMove(e) {
@@ -249,6 +287,7 @@
     pointer.lastX = e.clientX;
     pointer.lastY = e.clientY;
     pointer.lastT = t;
+    pointer.lastInput = t;
     pointer.x = e.clientX;
     pointer.y = e.clientY;
     pointer.seen = true;
@@ -280,12 +319,14 @@
 
   function onScroll() {
     if (!isOn() || !pointer.inside) return;
+    pointer.lastInput = now();
     pointer.refresh = true;
   }
 
   // Welle beim Drücken
   function onPointerDown(e) {
     if (!isOn() || !e.target || !e.target.closest) return;
+    pointer.lastInput = now();
     const el = e.target.closest(SEL_RIPPLE);
     if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
     const r = el.getBoundingClientRect();
@@ -327,40 +368,42 @@
     burst(x, y, { count: 18, small: true });
   }
 
-  // Pro Bild: erst alle Maße lesen, dann schreiben (kein Layout-Hin-und-Her)
+  // Pro Bild: erst alle Maße lesen, dann alles schreiben (kein Layout-Hin-und-Her)
   const readBuf = [];
   const trail = { x: 0, y: 0 };
-  function updateUi(dt) {
+  function updateUi(dt, ms) {
+    // Seite unter der stehenden Maus neu gezeichnet oder Klassen geändert: Ziel neu bestimmen,
+    // sonst hängen Neigung und Spotlight am alten, schon entfernten Element
+    if (pointer.inside && !pointer.touch && !pointer.refresh) {
+      pointer.refresh = (pointer.target && !pointer.target.isConnected) ||
+        (tiltEl && !tiltEl.isConnected) || (magnetEl && !magnetEl.isConnected) || ms - pointer.checked > 250;
+    }
     if (pointer.refresh) {
       pointer.refresh = false;
-      const t = document.elementFromPoint(pointer.x, pointer.y);
-      if (t !== pointer.target) setTarget(t);
-      pointer.dirty = true;
+      pointer.checked = ms;
+      if (pointer.inside) {
+        setTarget(document.elementFromPoint(pointer.x, pointer.y));
+        pointer.dirty = true;
+      }
     }
 
-    // Lichtschein folgt weich, der Punkt eng
+    // Lichtschein folgt weich, der Punkt eng (hier nur rechnen, geschrieben wird unten)
+    let moveGlow = false;
     if (cursor.glow && !cursor.hidden) {
+      moveGlow = true;
       if (!cursor.placed) {
         cursor.gx = cursor.dx = pointer.x;
         cursor.gy = cursor.dy = pointer.y;
         cursor.placed = true;
         trail.x = pointer.x;
         trail.y = pointer.y;
-        moveCursor(cursor.glow, cursor.gx, cursor.gy);
-        moveCursor(cursor.dot, cursor.dx, cursor.dy);
       } else {
         const kg = 1 - Math.exp(-dt * 12);
         const kd = 1 - Math.exp(-dt * 38);
-        const ngx = cursor.gx + (pointer.x - cursor.gx) * kg;
-        const ngy = cursor.gy + (pointer.y - cursor.gy) * kg;
-        const ndx = cursor.dx + (pointer.x - cursor.dx) * kd;
-        const ndy = cursor.dy + (pointer.y - cursor.dy) * kd;
-        if (Math.abs(ngx - cursor.gx) + Math.abs(ngy - cursor.gy) > 0.05) moveCursor(cursor.glow, ngx, ngy);
-        if (Math.abs(ndx - cursor.dx) + Math.abs(ndy - cursor.dy) > 0.05) moveCursor(cursor.dot, ndx, ndy);
-        cursor.gx = ngx;
-        cursor.gy = ngy;
-        cursor.dx = ndx;
-        cursor.dy = ndy;
+        cursor.gx += (pointer.x - cursor.gx) * kg;
+        cursor.gy += (pointer.y - cursor.gy) * kg;
+        cursor.dx += (pointer.x - cursor.dx) * kd;
+        cursor.dy += (pointer.y - cursor.dy) * kd;
       }
     }
 
@@ -369,22 +412,39 @@
     if (pointer.dirty && pointer.inside && !pointer.touch) {
       for (let i = 0; i < spotEls.length; i++) readBuf.push(spotEls[i], spotEls[i].getBoundingClientRect());
     }
+    pointer.dirty = false;
     const tiltRect = tiltEl ? tiltEl.getBoundingClientRect() : null;
     const magRect = magnetEl ? (magnetEl === tiltEl ? tiltRect : magnetEl.getBoundingClientRect()) : null;
 
-    // Schreiben: Spotlight
+    // Schreiben: Lichtschein
+    if (moveGlow) {
+      moveCursor(cursor.glow, 'glowT', cursor.gx, cursor.gy);
+      moveCursor(cursor.dot, 'dotT', cursor.dx, cursor.dy);
+    }
+    flushCursorClasses();
+
+    // Schreiben: Spotlight (erst ab einem halben Pixel Unterschied)
     for (let i = 0; i < readBuf.length; i += 2) {
       const el = readBuf[i];
       const r = readBuf[i + 1];
-      el.style.setProperty('--mx', (pointer.x - r.left).toFixed(1) + 'px');
-      el.style.setProperty('--my', (pointer.y - r.top).toFixed(1) + 'px');
+      const s = stateOf(el);
+      const mx = pointer.x - r.left;
+      const my = pointer.y - r.top;
+      if (Math.abs(mx - s.mx) < 0.5 && Math.abs(my - s.my) < 0.5) continue;
+      s.mx = mx;
+      s.my = my;
+      el.style.setProperty('--mx', mx.toFixed(1) + 'px');
+      el.style.setProperty('--my', my.toFixed(1) + 'px');
     }
-    pointer.dirty = false;
 
     const k = 1 - Math.exp(-dt * 10);
 
     // 3D-Neigung: die Seite unter der Maus gibt nach (wie gedrückt)
     for (const el of tilting) {
+      if (!el.isConnected) {
+        tilting.delete(el);
+        continue;
+      }
       const s = stateOf(el);
       let trx = 0;
       let try_ = 0;
@@ -399,30 +459,39 @@
       const settled = el !== tiltEl && Math.abs(nrx) < 0.02 && Math.abs(nry) < 0.02;
       s.rx = settled ? 0 : nrx;
       s.ry = settled ? 0 : nry;
-      el.style.setProperty('--rx', s.rx.toFixed(2) + 'deg');
-      el.style.setProperty('--ry', s.ry.toFixed(2) + 'deg');
+      setVar(el, s, 'rxs', '--rx', s.rx.toFixed(2) + 'deg');
+      setVar(el, s, 'rys', '--ry', s.ry.toFixed(2) + 'deg');
       if (settled) tilting.delete(el);
     }
 
-    // Magnet: Knopf rückt bis zu 6 px zur Maus
+    // Magnet: Knopf rückt etwas zur Maus (Tabs kaum, der aktive Tab gar nicht)
     for (const el of pulling) {
+      if (!el.isConnected) {
+        pulling.delete(el);
+        continue;
+      }
       const s = stateOf(el);
       let ttx = 0;
       let tty = 0;
       if (el === magnetEl && magRect && magRect.width > 0 && magRect.height > 0) {
-        // Mitte ohne die eigene Verschiebung, sonst schaukelt es sich auf
-        const cx = magRect.left + magRect.width / 2 - s.tx;
-        const cy = magRect.top + magRect.height / 2 - s.ty;
-        ttx = clamp((pointer.x - cx) / (magRect.width / 2), -1, 1) * MAGNET_MAX;
-        tty = clamp((pointer.y - cy) / (magRect.height / 2), -1, 1) * MAGNET_MAX;
+        const nav = el.classList.contains('nav-item');
+        const still = nav && (el.classList.contains('active') || el.hasAttribute('aria-current'));
+        if (!still) {
+          const m = nav ? MAGNET_NAV : MAGNET_BTN;
+          // Mitte ohne die eigene Verschiebung, sonst schaukelt es sich auf
+          const cx = magRect.left + magRect.width / 2 - s.tx;
+          const cy = magRect.top + magRect.height / 2 - s.ty;
+          ttx = clamp((pointer.x - cx) / (magRect.width / 2), -1, 1) * m[0];
+          tty = clamp((pointer.y - cy) / (magRect.height / 2), -1, 1) * m[1];
+        }
       }
       const ntx = s.tx + (ttx - s.tx) * k;
       const nty = s.ty + (tty - s.ty) * k;
       const settled = el !== magnetEl && Math.abs(ntx) < 0.03 && Math.abs(nty) < 0.03;
       s.tx = settled ? 0 : ntx;
       s.ty = settled ? 0 : nty;
-      el.style.setProperty('--tx', s.tx.toFixed(2) + 'px');
-      el.style.setProperty('--ty', s.ty.toFixed(2) + 'px');
+      setVar(el, s, 'txs', '--tx', s.tx.toFixed(2) + 'px');
+      setVar(el, s, 'tys', '--ty', s.ty.toFixed(2) + 'px');
       if (settled) pulling.delete(el);
     }
 
@@ -439,8 +508,11 @@
     trail.y = pointer.y;
   }
 
-  function moveCursor(node, x, y) {
-    node.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-50%)';
+  function moveCursor(node, key, x, y) {
+    const v = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0) translate(-50%,-50%)';
+    if (cursor[key] === v) return;
+    cursor[key] = v;
+    node.style.transform = v;
   }
 
   function resetElements() {
@@ -448,15 +520,15 @@
       const s = stateOf(el);
       s.rx = 0;
       s.ry = 0;
-      el.style.setProperty('--rx', '0deg');
-      el.style.setProperty('--ry', '0deg');
+      setVar(el, s, 'rxs', '--rx', '0.00deg');
+      setVar(el, s, 'rys', '--ry', '0.00deg');
     }
     for (const el of pulling) {
       const s = stateOf(el);
       s.tx = 0;
       s.ty = 0;
-      el.style.setProperty('--tx', '0px');
-      el.style.setProperty('--ty', '0px');
+      setVar(el, s, 'txs', '--tx', '0.00px');
+      setVar(el, s, 'tys', '--ty', '0.00px');
     }
     tilting.clear();
     pulling.clear();
@@ -475,22 +547,24 @@
     pairs: null, pairCount: 0, adj: null, buckets: null, counts: new Int32Array(14),
     stars: null, starCount: 0,
     signals: [],
-    yaw: 0.6, spin: 0, lookX: 0, lookY: 0,
+    yaw: 0.6, spin: 0, lookX: 0, lookY: 0, turnX: 0, turnY: 0,
     gx: 0, gy: 0, R: 100,
     dots: null, starDot: null, hotDot: null, blobs: null,
-    aur: null, actx: null, aScale: 1,
-    gridV: null, gridH: null, horizon: null,
+    aur: null, actx: null, aScale: 1, aurLayer: false,
+    grid: null, gridX: 0, gridH: null, horizon: null,
     pulse: null,
   };
 
   const PALETTE_STEPS = 8;
   // Linien nach Tiefe (hinten -> vorne), dann Lichtband, dann Maus-Nähe
-  const LINE_A = [0.05, 0.1, 0.17, 0.26, 0.34, 0.5];
+  const LINE_A = [0.05, 0.1, 0.17, 0.26, 0.34, 0.38];
   const LINE_W = [0.6, 0.7, 0.8, 0.9, 1, 1];
   const RING_SEG = 72;
   const ringX = new Float32Array(RING_SEG + 1);
   const ringY = new Float32Array(RING_SEG + 1);
   const ringZ = new Float32Array(RING_SEG + 1);
+  const GRID_Y = 0.8;     // Horizont des Gitterbodens (Anteil der Höhe)
+  const GRID_SHIFT = 60;  // so weit wandert der Fluchtpunkt mit der Maus (Pixel)
 
   function ensureSprites() {
     if (scene.dots) return;
@@ -499,9 +573,6 @@
     scene.starDot = dotSprite([225, 232, 255]);
     scene.hotDot = dotSprite([190, 240, 255]);
     scene.blobs = [blobSprite(VIOLET), blobSprite(CYAN), blobSprite([92, 62, 220])];
-    // Polarlicht in einem winzigen Puffer: weiche Flecken brauchen keine volle Auflösung
-    scene.aur = makeCanvas(8);
-    scene.actx = scene.aur.getContext('2d');
   }
 
   function attachCanvas(canvas) {
@@ -517,11 +588,64 @@
     canvas.style.pointerEvents = 'none';
     canvas.setAttribute('aria-hidden', 'true');
     ensureSprites();
+    attachAurora();
     resizeScene();
     if (typeof ResizeObserver === 'function') {
       const ro = new ResizeObserver(scheduleResize);
       ro.observe(canvas);
     }
+    watchDpr();
+  }
+
+  // Polarlicht auf einer eigenen, winzigen Leinwand direkt unter dem Hintergrund. Der Browser
+  // vergrößert sie beim Zusammensetzen; so muss pro Bild nicht die ganze Fläche kopiert werden.
+  // Geht das nicht (Leinwand nicht im Dokument), wird sie wie früher hineinkopiert.
+  function attachAurora() {
+    if (!scene.aur) {
+      const a = document.createElement('canvas');
+      a.className = 'fx-aurora';
+      a.setAttribute('aria-hidden', 'true');
+      const st = a.style;
+      st.position = 'fixed';
+      st.left = '0';
+      st.top = '0';
+      st.width = '100%';
+      st.height = '100%';
+      st.pointerEvents = 'none';
+      scene.aur = a;
+      scene.actx = a.getContext('2d');
+    }
+    const c = scene.canvas;
+    const parent = c && c.parentNode;
+    scene.aurLayer = false;
+    if (!parent || !scene.actx) return;
+    try {
+      if (scene.aur.nextSibling !== c) parent.insertBefore(scene.aur, c);
+      const z = getComputedStyle(c).zIndex;
+      scene.aur.style.zIndex = z && z !== 'auto' ? z : '';
+      scene.aur.style.display = isOn() ? '' : 'none';
+      scene.aurLayer = true;
+    } catch (err) {
+      scene.aurLayer = false;
+    }
+  }
+
+  // Wechsel auf einen Bildschirm mit anderer Skalierung (ohne Größenänderung) erkennen
+  let dprQuery = null;
+  function watchDpr() {
+    if (!window.matchMedia) return;
+    if (dprQuery) {
+      if (dprQuery.removeEventListener) dprQuery.removeEventListener('change', onDprChange);
+      else if (dprQuery.removeListener) dprQuery.removeListener(onDprChange);
+    }
+    dprQuery = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+    if (dprQuery.addEventListener) dprQuery.addEventListener('change', onDprChange);
+    else if (dprQuery.addListener) dprQuery.addListener(onDprChange);
+  }
+
+  function onDprChange() {
+    watchDpr();
+    scheduleResize();
   }
 
   function pointCountFor(w, h) {
@@ -529,12 +653,16 @@
     return Math.round(450 + t * 250);
   }
 
+  function sceneDpr() {
+    return Math.min(window.devicePixelRatio || 1, quality.level ? 1 : MAX_DPR);
+  }
+
   function resizeScene() {
     const c = scene.canvas;
     if (!c || !scene.ctx) return;
     const w = Math.max(1, c.clientWidth || window.innerWidth || 1);
     const h = Math.max(1, c.clientHeight || window.innerHeight || 1);
-    const dpr = Math.min(window.devicePixelRatio || 1, quality.level ? 1 : MAX_DPR);
+    const dpr = sceneDpr();
     scene.w = w;
     scene.h = h;
     scene.dpr = dpr;
@@ -542,24 +670,29 @@
     const ch = Math.round(h * dpr);
     if (c.width !== cw) c.width = cw;
     if (c.height !== ch) c.height = ch;
-    scene.gx = w * 0.68;
-    scene.gy = h * 0.52;
     scene.R = Math.min(w, h) * 0.36;
+    // Schmale Fenster: Kugel weiter nach rechts, damit sie nicht durch die Überschrift läuft
+    scene.gx = w < 1100 ? Math.max(w * 0.68, w * 0.5 + scene.R * 0.9) : w * 0.68;
+    scene.gy = h * 0.52;
     const want = pointCountFor(w, h);
     if (!scene.n || Math.abs(want - scene.n) > 40) buildGlobe(want);
     if (!scene.stars) buildStars(150);
     if (scene.actx) {
       scene.aScale = Math.min(1, 220 / Math.max(w, h));
-      scene.aur.width = Math.ceil(w * scene.aScale);
-      scene.aur.height = Math.ceil(h * scene.aScale);
+      const aw = Math.ceil(w * scene.aScale);
+      const ah = Math.ceil(h * scene.aScale);
+      if (scene.aur.width !== aw) scene.aur.width = aw;
+      if (scene.aur.height !== ah) scene.aur.height = ah;
     }
     buildGrid();
     if (!isOn()) scene.ctx.clearRect(0, 0, c.width, c.height);
+    quiet(1000);
   }
 
   let resizeTimer = 0;
   function scheduleResize() {
     clearTimeout(resizeTimer);
+    quiet(1200);
     resizeTimer = setTimeout(() => {
       resizeScene();
       if (overlay.canvas && overlay.parts.length) sizeOverlay();
@@ -664,8 +797,18 @@
   }
 
   function newSignal() {
-    const q = Math.floor(Math.random() * Math.max(1, scene.pairCount));
-    return { q, dir: Math.random() < 0.5 ? 0 : 1, t: Math.random(), speed: 1.1 + Math.random() * 1.2, hops: 4 + Math.floor(Math.random() * 6) };
+    const S = scene;
+    const q = Math.floor(Math.random() * Math.max(1, S.pairCount));
+    const sg = { q, dir: Math.random() < 0.5 ? 0 : 1, t: Math.random(), speed: 1.1 + Math.random() * 1.2, hops: 4 + Math.floor(Math.random() * 6), age: 0 };
+    if (S.pairs && deadEnd(sg)) sg.hops = 1;
+    return sg;
+  }
+
+  // Endet die Kante in einer Sackgasse? Dann ist es die letzte (sie blendet aus)
+  function deadEnd(sg) {
+    const end = scene.pairs[sg.q * 2 + (sg.dir ? 0 : 1)];
+    const opts = scene.adj[end];
+    return !opts || opts.length < 2;
   }
 
   function buildStars(count) {
@@ -685,26 +828,58 @@
     scene.starCount = count;
   }
 
-  // Gitterboden: Verläufe hängen nur von der Fenstergröße ab
+  // Gitterboden: die Linien in die Tiefe werden einmal pro Fenstergröße vorgezeichnet und pro
+  // Bild nur verschoben hineinkopiert (Linien mit Verlauf sind ohne Grafikkarte teuer)
   function buildGrid() {
     const ctx = scene.ctx;
-    const { w, h } = scene;
-    const y0 = h * 0.74;
-    const gv = ctx.createLinearGradient(0, y0, 0, h);
-    gv.addColorStop(0, rgb(VIOLET, 0));
-    gv.addColorStop(0.45, rgb(VIOLET, 0.35));
-    gv.addColorStop(1, rgb([110, 130, 255], 0.75));
+    const { w, h, dpr, gx, gy, R } = scene;
+    const y0 = h * GRID_Y;
+    const fh = h - y0;
+    const bw = w + GRID_SHIFT * 2;
+    if (!scene.grid) scene.grid = makeCanvas(1);
+    const g = scene.grid;
+    const pw = Math.max(1, Math.ceil(bw * dpr));
+    const ph = Math.max(1, Math.ceil(fh * dpr));
+    if (g.width !== pw) g.width = pw;
+    if (g.height !== ph) g.height = ph;
+    const gc = g.getContext('2d');
+    if (gc) {
+      gc.setTransform(1, 0, 0, 1, 0, 0);
+      gc.clearRect(0, 0, pw, ph);
+      gc.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const gv = gc.createLinearGradient(0, 0, 0, fh);
+      gv.addColorStop(0, rgb(VIOLET, 0));
+      gv.addColorStop(0.45, rgb(VIOLET, 0.35));
+      gv.addColorStop(1, rgb([110, 130, 255], 0.75));
+      gc.globalCompositeOperation = 'lighter';
+      gc.strokeStyle = gv;
+      gc.lineWidth = 1;
+      gc.beginPath();
+      const vx = bw / 2;
+      const spread = w * 0.11;
+      for (let k = -16; k <= 16; k++) {
+        gc.moveTo(vx + k * spread * 0.02, 0);
+        gc.lineTo(vx + k * spread * 1.25, fh * 1.25);
+      }
+      gc.stroke();
+    }
     const gh = ctx.createLinearGradient(0, 0, w, 0);
     gh.addColorStop(0, rgb(VIOLET, 0));
     gh.addColorStop(0.3, rgb(VIOLET, 1));
     gh.addColorStop(0.65, rgb(CYAN, 1));
     gh.addColorStop(1, rgb(CYAN, 0));
-    const hz = ctx.createLinearGradient(0, 0, w, 0);
-    hz.addColorStop(0, rgb(CYAN, 0));
-    hz.addColorStop(0.5, rgb(CYAN, 1));
-    hz.addColorStop(1, rgb(CYAN, 0));
-    scene.gridV = gv;
     scene.gridH = gh;
+    // Horizont: in der Mitte am hellsten, hinter der Kugel ausgeblendet
+    const dy = Math.abs(y0 - gy);
+    const half = R > dy ? Math.sqrt(R * R - dy * dy) + 30 : 0;
+    const hz = ctx.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i <= 24; i++) {
+      const u = i / 24;
+      const x = u * w;
+      const bell = Math.sin(u * Math.PI);
+      const gap = half ? clamp((Math.abs(x - gx) - half) / 70, 0, 1) : 1;
+      hz.addColorStop(u, rgb(CYAN, +(bell * gap).toFixed(3)));
+    }
     scene.horizon = hz;
   }
 
@@ -726,34 +901,45 @@
     const ctx = scene.ctx;
     if (!ctx || !scene.n) return;
     const { w, h, dpr } = scene;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalAlpha = 1;
 
-    // Wohin die Kugel schaut: Maus, oder kurz ein Fokuspunkt (z. B. Reiter-Wechsel)
+    // Wohin die Kugel schaut: ruhig zur Maus, oder kurz deutlich zu einem Fokuspunkt (Tab-Wechsel)
     let tx = 0;
     let ty = 0;
+    let yawK = 0.35;
+    let pitchK = 0.2;
+    let rate = 1.4;
     if (focusPt && ms < focusPt.until) {
       tx = clamp((focusPt.x / w) * 2 - 1, -1, 1);
       ty = clamp((focusPt.y / h) * 2 - 1, -1, 1);
+      yawK = 0.6;
+      pitchK = 0.36;
+      rate = 2.2;
     } else if (pointer.inside && !pointer.touch) {
       focusPt = null;
       tx = clamp((pointer.x / w) * 2 - 1, -1, 1);
       ty = clamp((pointer.y / h) * 2 - 1, -1, 1);
     }
-    const kl = 1 - Math.exp(-dt * 2.2);
+    const kl = 1 - Math.exp(-dt * rate);
     scene.lookX += (tx - scene.lookX) * kl;
     scene.lookY += (ty - scene.lookY) * kl;
+    scene.turnX += (tx * yawK - scene.turnX) * kl;
+    scene.turnY += (ty * pitchK - scene.turnY) * kl;
 
     const p = pulseAmount(ms);
-    // Polarlicht ersetzt das Löschen: ein einziges Kopieren über die ganze Fläche
-    if (scene.actx) {
-      drawAurora(scene.actx, t, p);
+    if (scene.actx) drawAurora(scene.actx, t, p);
+    if (scene.aurLayer || !scene.actx) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, scene.canvas.width, scene.canvas.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      // Ersatzweg: Polarlicht ersetzt das Löschen (ein einziges Kopieren über die ganze Fläche)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'copy';
       ctx.drawImage(scene.aur, 0, 0, scene.aur.width / scene.aScale, scene.aur.height / scene.aScale);
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.clearRect(0, 0, w, h);
     }
+    ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'lighter';
     drawStars(ctx, dt, t, p);
     if (quality.level < 2) drawGrid(ctx, t, p);
@@ -771,10 +957,11 @@
   function drawAurora(ctx, t, p) {
     const { w, h } = scene;
     const m = Math.max(w, h);
-    ctx.setTransform(scene.aScale, 0, 0, scene.aScale, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, scene.aur.width, scene.aur.height);
+    ctx.setTransform(scene.aScale, 0, 0, scene.aScale, 0, 0);
     ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < AURORA.length; i++) {
       const b = AURORA[i];
@@ -790,6 +977,8 @@
       ctx.globalAlpha = 0.4 * p;
       ctx.drawImage(scene.pulse.blob, scene.gx - r, scene.gy - r, r * 2, r * 2);
     }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
   }
 
   function drawStars(ctx, dt, t, p) {
@@ -818,24 +1007,20 @@
 
   // Leicht leuchtender Perspektiv-Boden unten, läuft langsam auf einen zu
   function drawGrid(ctx, t, p) {
-    const { w, h } = scene;
-    const y0 = h * 0.74;
+    const { w, h, dpr } = scene;
+    const y0 = h * GRID_Y;
     const fh = h - y0;
-    const vx = w * 0.5 - scene.lookX * 60;
-    const base = 0.16 * (1 + p * 0.6);
-    // Linien in die Tiefe
-    ctx.globalAlpha = base;
-    ctx.strokeStyle = scene.gridV;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    const spread = w * 0.11;
-    for (let k = -16; k <= 16; k++) {
-      ctx.moveTo(vx + k * spread * 0.02, y0);
-      ctx.lineTo(vx + k * spread * 1.25, h + fh * 0.25);
+    const base = 0.12 * (1 + p * 0.6);
+    // Linien in die Tiefe (vorgezeichnet, Fluchtpunkt folgt der Maus)
+    if (scene.grid) {
+      // Auf ganze Bildpunkte gerundet: dann wird nur kopiert, nicht umgerechnet
+      const ox = Math.round((-GRID_SHIFT - scene.lookX * GRID_SHIFT) * dpr) / dpr;
+      const oy = Math.round(y0 * dpr) / dpr;
+      ctx.globalAlpha = base;
+      ctx.drawImage(scene.grid, ox, oy, scene.grid.width / dpr, scene.grid.height / dpr);
     }
-    ctx.stroke();
     // Querlinien
-    ctx.strokeStyle = scene.gridH;
+    ctx.fillStyle = scene.gridH;
     const scroll = (t * 0.22) % 1;
     for (let k = 0; k < 24; k++) {
       const z = 0.82 + (k + 1 - scroll) * 0.55;
@@ -843,18 +1028,12 @@
       if (y > h + 1) continue;
       const fade = Math.min(1, 1.6 / z) * Math.min(1, (y - y0) / (fh * 0.08));
       ctx.globalAlpha = base * fade * 0.9;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+      ctx.fillRect(0, y - 0.5, w, 1);
     }
     // Horizont
-    ctx.strokeStyle = scene.horizon;
-    ctx.globalAlpha = 0.22 * (1 + p);
-    ctx.beginPath();
-    ctx.moveTo(0, y0);
-    ctx.lineTo(w, y0);
-    ctx.stroke();
+    ctx.fillStyle = scene.horizon;
+    ctx.globalAlpha = 0.12 * (1 + p);
+    ctx.fillRect(0, y0 - 0.5, w, 1);
   }
 
   function drawGlobe(ctx, dt, t, p) {
@@ -862,15 +1041,15 @@
     const n = S.n;
     S.spin *= Math.exp(-dt * 1.3);
     S.yaw += dt * (0.075 + S.spin);
-    const yaw = S.yaw + S.lookX * 0.6;
-    const pitch = -0.24 + S.lookY * 0.36;
+    const yaw = S.yaw + S.turnX;
+    const pitch = -0.24 + S.turnY;
     const cyw = Math.cos(yaw);
     const syw = Math.sin(yaw);
     const cp = Math.cos(pitch);
     const sp = Math.sin(pitch);
     const R = S.R * (1 + 0.012 * Math.sin(t * 0.9)) * (1 + p * 0.035);
-    const cx = S.gx - S.lookX * 22;
-    const cy = S.gy - S.lookY * 14;
+    const cx = S.gx - S.lookX * 14;
+    const cy = S.gy - S.lookY * 9;
     const D = R * 3.2;
     const repel = pointer.inside && !pointer.touch;
     const mx = pointer.x;
@@ -880,9 +1059,10 @@
     const PUSH = R * 0.12;
     const k = 1 - Math.exp(-dt * 7);
     const scanY = ((t * 0.14) % 1.6) * 2 - 1.3;
+    const lean = quality.level >= 2; // sparsam: hintere Linien und Punkte weglassen
     const { bx, by, bz, ph, px, py, pd, ps, ox, oy, glow, scan, inner } = S;
 
-    // Projektion, Abstoßen von der Maus, Lichtband
+    // Projektion, Abstoßen von der Maus (nur vordere Punkte), Lichtband
     for (let i = 0; i < n; i++) {
       const wob = 1 + 0.022 * Math.sin(by[i] * 5 + t * 1.2 + ph[i] * 0.35);
       const x = bx[i] * wob;
@@ -898,15 +1078,16 @@
       let tx = 0;
       let ty = 0;
       let tg = 0;
-      if (repel && z2 > -0.25) {
+      if (repel && z2 > 0.15) {
         const dx = sx - mx;
         const dy = sy - my;
         const d2 = dx * dx + dy * dy;
         if (d2 < RAD2) {
           const d = Math.sqrt(d2) || 1;
           const f = 1 - d / RAD;
-          tx = (dx / d) * f * f * PUSH;
-          ty = (dy / d) * f * f * PUSH;
+          const push = f * f * PUSH * (0.4 + 0.6 * (z2 + 1) * 0.5);
+          tx = (dx / d) * push;
+          ty = (dy / d) * push;
           tg = f;
         }
       }
@@ -936,9 +1117,9 @@
       const a = pairs[q * 2];
       const b = pairs[q * 2 + 1];
       const d = (pd[a] + pd[b]) * 0.5;
-      if (d < 0.2) continue;
+      if (d < (lean ? 0.42 : 0.2)) continue;
       let bk;
-      if (d > 0.45 && glow[a] + glow[b] > 0.55) bk = 13;
+      if (d > 0.62 && glow[a] + glow[b] > 0.55) bk = 13;
       else if (d > 0.55 && scan[a] + scan[b] > 0.9) bk = 12;
       else {
         const u = ((px[a] + px[b]) * 0.5 - cx - (py[a] + py[b]) * 0.5 + cy) / (4 * R) + 0.5;
@@ -966,7 +1147,7 @@
       ctx.stroke();
     }
 
-    // Punkte
+    // Punkte (die hellsten bleiben dunkler als normaler Text)
     const dots = S.dots;
     const sizeK = clamp(R / 300, 0.8, 1.35);
     const inv4R = 1 / (4 * R);
@@ -974,9 +1155,9 @@
     for (let i = 0; i < n; i++) {
       const d = pd[i];
       const g = glow[i];
-      let a = (0.1 + 0.9 * d * d) * (inner[i] ? 0.55 : 1) * (1 + g * 1.6 + (d > 0.5 ? scan[i] * 0.9 : 0)) * bright;
+      let a = (0.08 + 0.72 * d * d) * (inner[i] ? 0.55 : 1) * (1 + g * 1.6 + (d > 0.5 ? scan[i] * 0.9 : 0)) * bright;
       if (a > 1) a = 1;
-      if (a < 0.02) continue;
+      if (a < 0.02 || (lean && d < 0.3)) continue;
       const size = (0.7 + 1.8 * d) * ps[i] * (inner[i] ? 0.75 : 1) * (1 + g * 0.9) * sizeK;
       let ci = Math.round(((px[i] - cx) - (py[i] - cy)) * inv4R * (PALETTE_STEPS - 1) + (PALETTE_STEPS - 1) * 0.5);
       ci = ci < 0 ? 0 : ci >= PALETTE_STEPS ? PALETTE_STEPS - 1 : ci;
@@ -993,10 +1174,10 @@
     }
 
     drawSignals(ctx, dt, R);
-    drawRings(ctx, t, R, cx, cy, D, cyw, syw, cp, sp, p, c1);
+    drawRings(ctx, t, R, cx, cy, D, cyw, syw, cp, sp, p, c1, lean);
   }
 
-  // Lichtimpulse, die über das Netz wandern
+  // Lichtimpulse, die über das Netz wandern (weich ein- und ausgeblendet)
   function drawSignals(ctx, dt, R) {
     const S = scene;
     const { px, py, pd, pairs, adj } = S;
@@ -1006,6 +1187,7 @@
     for (let i = 0; i < S.signals.length; i++) {
       const sg = S.signals[i];
       sg.t += dt * sg.speed;
+      sg.age += dt;
       if (sg.t >= 1) {
         const end = pairs[sg.q * 2 + (sg.dir ? 0 : 1)];
         const opts = adj[end];
@@ -1020,12 +1202,16 @@
         sg.q = next;
         sg.dir = pairs[next * 2] === end ? 0 : 1;
         sg.t = 0;
+        if (deadEnd(sg)) sg.hops = 1;
       }
       const a = pairs[sg.q * 2 + (sg.dir ? 1 : 0)];
       const b = pairs[sg.q * 2 + (sg.dir ? 0 : 1)];
-      const d = (pd[a] + pd[b]) * 0.5;
-      if (d < 0.5) continue;
-      const vis = Math.min(1, (d - 0.5) * 3);
+      // Sichtbarkeit nach Tiefe an der aktuellen Stelle, nicht nach der Kantenmitte
+      const dHere = pd[a] + (pd[b] - pd[a]) * sg.t;
+      if (dHere < 0.5) continue;
+      let vis = Math.min(1, (dHere - 0.5) * 3) * Math.min(1, sg.age / 0.3);
+      if (sg.hops === 1) vis *= Math.min(1, (1 - sg.t) / 0.4);
+      if (vis < 0.01) continue;
       const x = px[a] + (px[b] - px[a]) * sg.t;
       const y = py[a] + (py[b] - py[a]) * sg.t;
       ctx.globalAlpha = 0.55 * vis;
@@ -1040,13 +1226,14 @@
   }
 
   // HUD-Ringe: zwei schräge Umlaufbahnen in 3D und feine Skalen-Bögen
-  function drawRings(ctx, t, R, cx, cy, D, cyw, syw, cp, sp, p, cAccent) {
+  // (sparsam ohne die gestrichelte Bahn und die Skala: Striche sind ohne Grafikkarte teuer)
+  function drawRings(ctx, t, R, cx, cy, D, cyw, syw, cp, sp, p, cAccent, lean) {
     const S = scene;
     const bright = 1 + p * 0.8;
     const accent = rgb(cAccent);
     ctx.strokeStyle = accent;
     ringPath(ctx, R * 1.24, 1.15, 0.32, t * 0.22, R, cx, cy, D, cyw, syw, cp, sp, 0.26 * bright, 0.05, false);
-    ringPath(ctx, R * 1.42, 1.38, -0.5, -t * 0.14, R, cx, cy, D, cyw, syw, cp, sp, 0.16 * bright, 0.035, true);
+    if (!lean) ringPath(ctx, R * 1.42, 1.38, -0.5, -t * 0.14, R, cx, cy, D, cyw, syw, cp, sp, 0.16 * bright, 0.035, true);
 
     // Satelliten auf den Ringen
     satellite(ctx, R * 1.24, 1.15, 0.32, t * 0.22 + t * 0.55, R, cx, cy, D, cyw, syw, cp, sp, bright);
@@ -1069,7 +1256,7 @@
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.11 * bright;
     ctx.beginPath();
-    for (let k = 0; k < 90; k++) {
+    for (let k = 0; k < (lean ? 0 : 90); k++) {
       const a = rot2 + (k / 90) * TAU;
       const len = k % 15 === 0 ? 9 : k % 5 === 0 ? 5 : 2.5;
       const ca = Math.cos(a);
@@ -1144,7 +1331,7 @@
   }
 
   // ---------- Partikel-Ebene (Funken, Konfetti) ----------
-  const overlay = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, parts: [], visible: false, partyUntil: 0, nextEmit: 0, rockets: [] };
+  const overlay = { canvas: null, ctx: null, w: 0, h: 0, dpr: 1, parts: [], visible: false, partyUntil: 0, fountainUntil: 0, nextEmit: 0, rockets: [] };
   const SPARK = 1;
   const CONFETTI = 2;
   const RING = 3;
@@ -1182,10 +1369,14 @@
     return true;
   }
 
+  function overlayDpr() {
+    return Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  }
+
   function sizeOverlay() {
     const w = Math.max(1, window.innerWidth || 1);
     const h = Math.max(1, window.innerHeight || 1);
-    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    const dpr = overlayDpr();
     overlay.w = w;
     overlay.h = h;
     overlay.dpr = dpr;
@@ -1198,7 +1389,7 @@
   function showOverlay() {
     if (overlay.visible) return;
     overlay.visible = true;
-    if (overlay.w !== window.innerWidth || overlay.h !== window.innerHeight) sizeOverlay();
+    if (overlay.w !== window.innerWidth || overlay.h !== window.innerHeight || overlay.dpr !== overlayDpr()) sizeOverlay();
     overlay.canvas.style.display = 'block';
   }
 
@@ -1251,7 +1442,7 @@
     const colStr = PARTY_COLORS[Math.floor(Math.random() * PARTY_COLORS.length)];
     addPart({
       type: CONFETTI, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      age: 0, life: 2.6 + Math.random() * 1.2, size: 5 + Math.random() * 5, drag: 0.9, g: 820,
+      age: 0, life: 1.6 + Math.random() * 0.8, size: 5 + Math.random() * 5, drag: 0.9, g: 820,
       col: rgb(parseRgb(colStr)), rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 14,
       flip: Math.random() * TAU, vf: 6 + Math.random() * 10,
     });
@@ -1271,13 +1462,14 @@
     });
   }
 
-  // Nachschub während FX.celebrate läuft: Fontänen aus beiden unteren Ecken
+  // Nachschub während FX.celebrate läuft: Fontänen aus beiden unteren Ecken (1,6 s),
+  // Raketen bis zum Ende (2 s)
   function emitParty(ms) {
     if (ms < overlay.nextEmit) return;
     overlay.nextEmit = ms + 45;
     const { w, h } = overlay;
     const power = clamp(h / 800, 0.75, 1.4);
-    for (let side = 0; side < 2; side++) {
+    for (let side = 0; side < 2 && ms < overlay.fountainUntil; side++) {
       const left = side === 0;
       const x = left ? -4 : w + 4;
       const y = h + 4;
@@ -1355,7 +1547,7 @@
       const q = parts[i];
       if (q.type !== CONFETTI) continue;
       const k = q.age / q.life;
-      ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1;
+      ctx.globalAlpha = k > 0.55 ? (1 - k) / 0.45 : 1;
       const cr = Math.cos(q.rot);
       const sr = Math.sin(q.rot);
       const fy = Math.cos(q.flip);
@@ -1417,6 +1609,9 @@
     if (rafId || !initialized || document.hidden) return;
     attachCursor();
     lastTime = 0;
+    lastScene = 0;
+    pointer.lastInput = now();
+    quiet(1000);
     rafId = requestAnimationFrame(frame);
   }
 
@@ -1429,34 +1624,145 @@
     rafId = 0;
     if (!isOn() || !initialized || document.hidden) return;
     rafId = requestAnimationFrame(frame);
-    // Fenster ohne Fokus: nur ~30 Bilder pro Sekunde
-    if (!windowFocused && lastTime && ms - lastTime < 31) return;
-    if (lastTime && windowFocused) watchSpeed(ms - lastTime);
-    const dt = lastTime ? clamp((ms - lastTime) / 1000, 0, 0.05) : 1 / 60;
+    const t0 = now();
+    const interval = lastTime ? ms - lastTime : 0;
+    const dt = interval ? clamp(interval / 1000, 0, 0.05) : 1 / 60;
     lastTime = ms;
-    clock += dt;
-    updateUi(dt);
-    drawScene(dt, clock, ms);
+    updateUi(dt, ms);
     stepOverlay(dt, ms);
+    // Hintergrund höchstens ~95 Bilder pro Sekunde; nur ~30 ohne Fokus, in Stufe 3 und in Ruhe
+    const gap = !windowFocused || quality.level >= 3 || isCalm(t0) ? 31 : 10.5;
+    const drew = !lastScene || ms - lastScene >= gap;
+    if (drew) {
+      const sdt = lastScene ? clamp((ms - lastScene) / 1000, 0, 0.05) : 1 / 60;
+      lastScene = ms;
+      clock += sdt;
+      drawScene(sdt, clock, ms);
+    }
+    if (interval) watchSpeed(t0, interval, drew);
   }
 
-  // Läuft es dauerhaft zäh (z. B. ohne Grafikkarte), eine Stufe einfacher zeichnen
-  function watchSpeed(interval) {
-    if (interval > 100 || quality.level >= 2 || !scene.ctx) return;
-    quality.ema += (interval - quality.ema) * 0.03;
-    quality.frames++;
-    if (quality.frames > 150 && quality.ema > 22) {
-      quality.level++;
-      quality.frames = 0;
-      quality.ema = 16.7;
-      resizeScene();
+  // Ruhe: ein paar Sekunden keine Maus, keine Funken, kein Schwung und kein Aufleuchten
+  function isCalm(t) {
+    return t - pointer.lastInput > 4000 && !overlay.parts.length && scene.spin < 0.05 &&
+      !scene.pulse && !(focusPt && t < focusPt.until);
+  }
+
+  // ---------- Automatische Qualität ----------
+  // Gemessen wird in Fenstern von ~2,5 s: wie viele Bildwechsel zu spät kommen und wie lange ein
+  // gezeichnetes Bild den Hauptthread belegt, bis die Seite fertig gemalt ist (ohne Grafikkarte
+  // ist das Malen der Leinwand der teure Teil). Erst wenn zwei Fenster hintereinander klemmen,
+  // eine Stufe herunter; nach längerer Zeit mit viel Luft wieder eine hinauf. Kurz nach
+  // Größenänderung, Seitenwechsel, Funken usw. wird nicht gemessen.
+  const WIN_MS = 2500;
+  let workChannel = null;
+  let workT0 = 0;
+  let workWin = -1;
+
+  function quiet(ms) {
+    const until = now() + ms;
+    if (until > quality.quietUntil) quality.quietUntil = until;
+  }
+
+  function resetWindow() {
+    const q = quality;
+    q.time = 0;
+    q.frames = 0;
+    q.slow = 0;
+    q.drawn = 0;
+    q.work = 0;
+    q.workN = 0;
+    q.win++;
+  }
+
+  // Zeit vom Bildanfang bis zur nächsten Aufgabe danach = Kosten des ganzen Bildes
+  function measureWork(t0) {
+    if (workWin >= 0) return;
+    if (workChannel === null) {
+      try {
+        workChannel = new MessageChannel();
+        workChannel.port1.onmessage = onWorkDone;
+      } catch (err) {
+        workChannel = false;
+      }
     }
+    if (!workChannel) return;
+    workT0 = t0;
+    workWin = quality.win;
+    workChannel.port2.postMessage(0);
+  }
+
+  function onWorkDone() {
+    const w = now() - workT0;
+    if (workWin === quality.win && w < 1000) {
+      quality.work += w;
+      quality.workN++;
+    }
+    workWin = -1;
+  }
+
+  function watchSpeed(t0, interval, drew) {
+    const q = quality;
+    if (!scene.ctx || !windowFocused || t0 < q.quietUntil || interval > 1000) return;
+    q.time += interval;
+    q.frames++;
+    if (interval > 22) q.slow++;
+    if (drew) {
+      q.drawn++;
+      measureWork(t0);
+    }
+    if (q.time < WIN_MS || (workChannel && q.workN < 3)) return;
+    const slowFrac = q.slow / q.frames;
+    const perFrame = q.workN ? q.work / q.workN : 0;
+    const hz = Math.min(95, (q.frames * 1000) / q.time);
+    // Anteil am Hauptthread, wenn diese Stufe mit ihrer vollen Bildrate läuft
+    const cost = (perFrame * (q.level >= 3 ? 30 : hz)) / 1000;
+    resetWindow();
+    if (slowFrac > 0.6 || cost > 0.42) {
+      q.good = 0;
+      q.bad++;
+      // Zwei Fenster hintereinander, oder eins, wenn es ganz klar ist
+      const sure = slowFrac > 0.9 || cost > 0.75;
+      if ((q.bad >= 2 || sure) && q.level < 3) setQuality(q.level === 0 && (window.devicePixelRatio || 1) <= 1 ? 2 : q.level + 1);
+      return;
+    }
+    q.bad = 0;
+    if (q.level === 0) return;
+    // Was würde die nächstbessere Stufe kosten? (gemessen ohne Grafikkarte: Stufe 2 spart ~1/3)
+    const dpr0 = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+    const up = q.level === 2 && dpr0 <= 1 ? 0 : q.level - 1;
+    let next = cost;
+    if (q.level === 3) next = (perFrame * hz) / 1000;
+    else if (q.level === 2) next = cost * 1.45;
+    else next = cost * dpr0 * dpr0;
+    if (slowFrac < 0.1 && next < 0.36) {
+      q.good++;
+      if (q.good >= q.upNeed) setQuality(up);
+    } else {
+      q.good = 0;
+    }
+  }
+
+  function setQuality(level) {
+    const q = quality;
+    const t = now();
+    if (level > q.level && t - q.lastUp < 20000) {
+      // Das letzte Hochschalten war zu viel: nächstes Mal länger warten
+      q.upNeed = Math.min(q.upNeed * 2, 48);
+    }
+    if (level < q.level) q.lastUp = t;
+    q.level = level;
+    q.bad = 0;
+    q.good = 0;
+    resetWindow();
+    resizeScene();
   }
 
   function applyState() {
     const on = isOn();
     document.documentElement.classList.toggle('fx-off', !on);
     if (!initialized) return;
+    if (scene.aur && scene.aurLayer) scene.aur.style.display = on ? '' : 'none';
     if (on) {
       start();
     } else {
@@ -1464,6 +1770,10 @@
       if (scene.ctx) {
         scene.ctx.setTransform(1, 0, 0, 1, 0, 0);
         scene.ctx.clearRect(0, 0, scene.canvas.width, scene.canvas.height);
+      }
+      if (scene.actx) {
+        scene.actx.setTransform(1, 0, 0, 1, 0, 0);
+        scene.actx.clearRect(0, 0, scene.aur.width, scene.aur.height);
       }
       overlay.parts.length = 0;
       overlay.partyUntil = 0;
@@ -1499,6 +1809,7 @@
     }, passive);
     window.addEventListener('focus', () => {
       windowFocused = true;
+      quiet(1000);
     }, passive);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) stop();
@@ -1555,7 +1866,9 @@
         el.removeEventListener('animationend', onEnterEnd);
       }
     }, Math.min(list.length * 40, 600) + 1800);
-    scene.spin += 0.55; // kleiner Schwung für die Kugel
+    // Kleiner Schwung für die Kugel (begrenzt, auch bei schnellem Tab-Wechsel)
+    scene.spin = Math.min(scene.spin + 0.55, SPIN_MAX);
+    quiet(Math.min(list.length * 40, 600) + 1000);
   }
 
   function burst(x, y, opts) {
@@ -1569,6 +1882,7 @@
     const count = clamp(Math.round(Number(o.count) || 40), 1, 300);
     const small = o.small || count < 25;
     spawnBurst(x, y, count, colors, small ? 0.6 : 1, true);
+    quiet(1200);
     showOverlay();
     start();
   }
@@ -1578,12 +1892,14 @@
     sizeOverlay();
     const ms = now();
     overlay.partyUntil = ms + 2000;
+    overlay.fountainUntil = ms + 1600;
     overlay.nextEmit = 0;
     overlay.rockets = [
       { at: ms + 80, left: true }, { at: ms + 380, left: false }, { at: ms + 760, left: true },
       { at: ms + 1100, left: false }, { at: ms + 1450, left: true }, { at: ms + 1700, left: false },
     ];
     pulse('success');
+    quiet(4500);
     showOverlay();
     start();
   }
@@ -1603,7 +1919,7 @@
   function focusPoint(x, y) {
     if (!isOn() || !Number.isFinite(x) || !Number.isFinite(y)) return;
     focusPt = { x, y, until: now() + 1400 };
-    scene.spin += 0.25;
+    scene.spin = Math.min(scene.spin + 0.25, SPIN_MAX);
   }
 
   document.documentElement.classList.toggle('fx-off', !isOn());

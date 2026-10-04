@@ -44,35 +44,47 @@ function check(cond, message) {
   if (!cond) errors.push(message);
 }
 
+const title = () => win.locator('.step-title').innerText();
+
 // 1) Begrüßung
 await win.waitForSelector('.modal', { timeout: 20000 });
 await shot('01-begruessung');
 await win.click('.modal .btn-primary');
 
-// 2) Konto retten: Daten im Schritt eintragen, Schritt abhaken (Seiten nicht automatisch öffnen)
+// 2) Konto retten: die kurze Anleitung (6 Schritte), Seiten nicht automatisch öffnen
 await win.waitForSelector('.step-card');
 await win.click('.switch');
-await win.fill('.step-card input.input', 'max.mustermann@gmx.de');
+check((await title()).includes('SMS und Authenticator'), 'Schritt 1 fehlt: ' + (await title()));
+check((await win.locator('.step-item').count()) === 6, 'Es müssen genau 6 Schritte sein');
 await shot('02-konto-retten');
-check(await win.locator('.open-box').innerText().then((t) => t.includes('Sicherheitsseite von GMX')), 'E-Mail-Anbieter wurde nicht erkannt');
 await win.click('.step-foot .btn-primary');
 await win.waitForTimeout(300);
-check(await win.locator('.step-title').innerText().then((t) => t.includes('Schadprogramme')), 'Weiter zu Schritt 2 hat nicht geklappt');
+check((await title()).includes('E-Mail-Bestätigung'), 'Weiter zu Schritt 2 hat nicht geklappt: ' + (await title()));
 await win.click('.step-foot .btn-primary');
 await win.waitForTimeout(300);
-check(await win.locator('.step-title').innerText().then((t) => t.includes('Beweise sammeln')), 'Weiter zu Schritt 3 hat nicht geklappt');
+check((await title()).includes('Passwort vergessen'), 'Weiter zu Schritt 3 hat nicht geklappt: ' + (await title()));
+// Klick in der Liste zeigt nur den Schritt an (öffnet keine Seite im Browser)
+await win.click('.step-item[data-fk="step-twofa-setup"]');
+await win.waitForTimeout(200);
+check((await title()).includes('SMS und Authenticator'), 'Klick auf Schritt 1 in der Liste zeigt ihn nicht an');
+await win.click('.step-item[data-fk="step-forgot"]');
+await win.waitForTimeout(200);
+await shot('03-schritt-3');
 
-// Konto-ID aus dem (nachgebauten) Epic Games Launcher übernehmen
+// 3) Meine Daten: Konto-ID aus dem (nachgebauten) Epic Games Launcher übernehmen, E-Mail eintragen
+await win.evaluate(() => window.App.go('data'));
+await win.waitForSelector('#f-account_id');
 await win.click('button:has-text("Konto-ID auf diesem PC suchen")');
 await win.waitForSelector('.modal');
 check(await win.locator('.modal').innerText().then((t) => t.includes(FAKE_ID)), 'Konto-ID aus dem Launcher-Ordner wurde nicht gefunden');
 await shot('03-konto-id-gefunden');
 await win.click('.modal .btn-primary');
 await win.waitForTimeout(400);
-check(await win.locator('.step-card').innerText().then((t) => t.includes(FAKE_ID)), 'Gefundene Konto-ID wird im Schritt nicht angezeigt');
-await shot('03-schritt-3');
+check((await win.inputValue('#f-account_id')) === FAKE_ID, 'Gefundene Konto-ID steht nicht unter Meine Daten');
+await win.fill('#f-email_original', 'max.mustermann@gmx.de');
+check((await win.locator('#f-first_purchase_date').count()) === 1, 'Feld "Datum der ersten Zahlung" fehlt');
 
-// 3) PDF auslesen: Beispiel-PDF über die Oberfläche hineinziehen
+// 4) PDF auslesen: Beispiel-PDF über die Oberfläche hineinziehen
 await win.evaluate(() => window.App.go('pdf'));
 const pdfBytes = fs.readFileSync(path.join(root, 'test', 'fixtures', 'epic-receipt-en.pdf'));
 await win.evaluate(async (b64) => {
@@ -84,15 +96,16 @@ await win.evaluate(async (b64) => {
 await win.waitForSelector('.found-list', { timeout: 30000 });
 await shot('04-pdf-ergebnis');
 check(await win.locator('main').innerText().then((t) => t.includes('A812855087')), 'Rechnungsnummer wurde nicht angezeigt');
+check(await win.locator('main').innerText().then((t) => t.includes('Kaufdatum')), 'Kaufdatum (Vorschlag für die erste Zahlung) wurde nicht angezeigt');
 
-// 4) Meine Daten: übernommene Werte sind da
+// 5) Meine Daten: übernommene Werte sind da, eigene Eingaben wurden nicht überschrieben
 await win.evaluate(() => window.App.go('data'));
 await win.waitForSelector('#f-invoice_ids');
 check((await win.inputValue('#f-invoice_ids')).includes('A812855087'), 'Rechnungsnummer nicht unter Meine Daten');
 check((await win.inputValue('#f-email_original')) === 'max.mustermann@gmx.de', 'Eingetragene E-Mail wurde überschrieben');
 await shot('05-meine-daten');
 
-// 5) Support-Text auf Englisch
+// 6) Support-Text auf Englisch
 await win.evaluate(() => window.App.go('support'));
 await win.click('.segmented button:nth-child(2)');
 await win.waitForTimeout(300);
@@ -100,12 +113,20 @@ const text = await win.inputValue('.support-text');
 check(text.includes('Hello Epic Games Support') && text.includes('A812855087'), 'Englischer Support-Text unvollständig');
 await shot('06-support-text');
 
-// 6) Discord
+// 7) Konten-Wechsel: Ansicht öffnet sich und meldet den Stand (ohne echten Launcher: Hinweis)
+await win.evaluate(() => window.App.go('accounts'));
+await win.waitForSelector('.status-line', { timeout: 10000 });
+await win.waitForTimeout(800);
+check(await win.locator('main').innerText().then((t) => /Nur unter Windows|nicht gefunden|Launcher/.test(t)), 'Konten-Ansicht zeigt keinen Stand an');
+check((await win.locator('button:has-text("Aktuelles Konto speichern")').count()) === 1, 'Knopf "Aktuelles Konto speichern" fehlt');
+await shot('07-konten');
+
+// 8) Discord
 await win.evaluate(() => window.App.go('discord'));
 await win.waitForTimeout(2500);
-await shot('07-discord');
+await shot('08-discord');
 
-// 6b) Effekte: 3D-Hintergrund läuft, Schalter oben rechts schaltet aus und wieder ein
+// 8b) Effekte: 3D-Hintergrund läuft, Schalter oben rechts schaltet aus und wieder ein
 check(await win.evaluate(() => Boolean(window.FX) && window.FX.enabled()), 'Effekte sind beim Start nicht an');
 await win.click('#fx-toggle');
 check(await win.evaluate(() => document.documentElement.classList.contains('fx-off')), 'Effekte ließen sich nicht ausschalten');
@@ -115,7 +136,7 @@ check(await win.evaluate(() => !document.documentElement.classList.contains('fx-
 await win.click('#fx-toggle');
 await win.waitForTimeout(800);
 
-// 7) Fortschritt bleibt nach Neustart erhalten
+// 9) Fortschritt bleibt nach Neustart erhalten
 await app.close();
 const app2 = await electron.launch({ ...launch, timeout: 60000 });
 const win2 = await app2.firstWindow();
@@ -127,8 +148,8 @@ check(await win2.evaluate(() => document.documentElement.classList.contains('fx-
 check((await win2.getAttribute('#fx-toggle', 'aria-pressed')) === 'false', 'Effekte-Schalter zeigt nach Neustart den falschen Stand');
 // textContent statt innerText: bei kleinen Bildschirmen ist die Beschriftung ausgeblendet
 const badge = await win2.locator('.nav-item').first().locator('.nav-badge').textContent();
-check(badge.includes('2/21'), 'Fortschritt nach Neustart verloren: ' + badge);
-await win2.screenshot({ path: path.join(outDir, '08-nach-neustart.png') });
+check(badge.includes('2/6'), 'Fortschritt nach Neustart verloren: ' + badge);
+await win2.screenshot({ path: path.join(outDir, '09-nach-neustart.png') });
 await app2.close();
 
 if (errors.length) {

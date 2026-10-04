@@ -132,9 +132,58 @@
     return F.FIELDS.filter((f) => f.key !== 'notes' && F.hasValue(d, f.key)).length;
   }
 
+  // Der Epic Games Launcher legt für jedes Konto, das sich auf diesem PC angemeldet hat,
+  // eine Datei an, deren Name die Konto-ID ist. Die lässt sich hier mit einem Klick übernehmen.
+  async function findAccountIds() {
+    const res = await window.kr.findEpicAccountIds();
+    if (!res || !res.ok) {
+      toast((res && res.message) || 'Suche hat nicht geklappt.', 'error');
+      return;
+    }
+    const { found, launcherFound } = res.value;
+    if (!found.length) {
+      await confirmDialog({
+        title: 'Keine Konto-ID gefunden',
+        text: launcherFound
+          ? 'Der Epic Games Launcher ist installiert, hat aber noch keine Konto-ID gespeichert.'
+          : 'Auf diesem PC wurde der Epic Games Launcher nicht gefunden. Die Konto-ID steht dann in der Konto-PDF oder in Epic-Mails.',
+        confirmText: 'OK',
+        cancelText: null,
+      });
+      return;
+    }
+    const current = F.valueAsText(data(), 'account_id');
+    let chosen = null;
+    const list = el('div', { class: 'stack-sm' });
+    const body = el('div', { class: 'stack' }, [
+      el('p', { class: 'muted', text: found.length === 1
+        ? 'Auf diesem PC hat sich dieses Epic-Konto angemeldet:'
+        : 'Auf diesem PC haben sich mehrere Epic-Konten angemeldet. Das oberste wurde zuletzt benutzt. Wähle deins:' }),
+      list,
+      el('p', { class: 'hint', text: 'Nicht sicher, welches deins ist? Die Konto-ID steht auch in deiner Konto-PDF oder auf epicgames.com unter Kontoinformationen.' }),
+    ]);
+    found.forEach((f, i) => {
+      const input = el('input', { type: 'radio', name: 'acc', checked: i === 0 });
+      if (i === 0) chosen = f.id;
+      input.addEventListener('change', () => { if (input.checked) chosen = f.id; });
+      list.appendChild(el('label', { class: 'check' }, [
+        input,
+        el('span', { class: 'stack-sm' }, [
+          el('span', { class: 'mono', text: f.id }),
+          el('span', { class: 'hint', text: (f.modified ? 'Zuletzt benutzt: ' + window.UI.formatDate(f.modified) : '') + (f.id === current ? ' · schon eingetragen' : '') }),
+        ]),
+      ]));
+    });
+    const yes = await confirmDialog({ title: 'Konto-ID gefunden', body, confirmText: 'Als meine Konto-ID übernehmen' });
+    if (!yes || !chosen) return;
+    window.Store.update((s) => { s.data.account_id = chosen; }, 'data-find');
+    toast('Konto-ID übernommen.', 'success');
+  }
+
   function render() {
     if (!root) return;
-    const head = pageHead('Meine Daten', 'Alles, was Epic als Beweis braucht. Was die PDF-Auslese findet, landet automatisch hier. Gespeichert wird nur auf diesem PC.', [
+    const head = pageHead('Meine Daten', 'Alles, was Epic als Beweis braucht, dass das Konto dir gehört: Namen, E-Mail-Adressen, Käufe und erste Zahlung. Was die PDF-Auslese findet, landet automatisch hier. Gespeichert wird nur auf diesem PC.', [
+      el('button', { class: 'btn btn-primary', type: 'button', onclick: findAccountIds }, [icon('user'), 'Konto-ID auf diesem PC suchen']),
       el('button', {
         class: 'btn',
         type: 'button',
@@ -171,7 +220,7 @@
         onclick: async () => {
           const yes = await confirmDialog({
             title: 'Wirklich alles löschen?',
-            text: 'Alle Daten, Notizen und der Fortschritt werden von diesem PC gelöscht.',
+            text: 'Alle Daten, Notizen und der Fortschritt werden von diesem PC gelöscht – ebenso die für den Konten-Wechsel gespeicherten Zugänge.',
             confirmText: 'Ja, alles löschen',
             danger: true,
           });

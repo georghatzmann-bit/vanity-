@@ -103,3 +103,35 @@ test('Windows: laufendes "Discord" wird erkannt und beendet', opts, async () => 
     try { child.kill(); } catch (_) { /* schon beendet */ }
   }
 });
+
+test('Windows: Konten-Wechsel beendet den laufenden Launcher und startet ihn neu', opts, async () => {
+  const epic = require('../src/main/epic');
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'kr-epic-win-'));
+  const ini = path.join(base, 'Config', 'GameUserSettings.ini');
+  fs.mkdirSync(path.dirname(ini), { recursive: true });
+  fs.writeFileSync(ini, '[RememberMe]\r\nEnable=True\r\nData=EINS\r\nEmail=eins@beispiel.de\r\n', 'utf8');
+  // Kopie von node.exe unter dem Namen des Launchers, die einfach wartet
+  const fake = path.join(base, 'EpicGamesLauncher.exe');
+  fs.copyFileSync(process.execPath, fake);
+  epic.init({ dataDir: path.join(base, 'data'), crypto: null, ini, exe: fake });
+  const child = spawn(fake, ['-e', 'setTimeout(() => {}, 120000)'], { stdio: 'ignore', windowsHide: true });
+  try {
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal((await epic.saveCurrent('A')).ok, true);
+    const st = await epic.getStatus();
+    assert.equal(st.running, true);
+    assert.equal(st.launcherInstalled, true);
+    // Zweites Konto anmelden und zurück zum ersten wechseln
+    fs.writeFileSync(ini, '[RememberMe]\r\nEnable=True\r\nData=ZWEI\r\nEmail=zwei@beispiel.de\r\n', 'utf8');
+    const a = st.accounts[0];
+    const res = await epic.switchTo(a.id);
+    assert.equal(res.ok, true, res.message);
+    assert.match(fs.readFileSync(ini, 'utf8'), /Data=EINS/);
+    // Der wartende Prozess wurde beendet (der Neustart startet die Kopie ohne Argumente, die sofort endet)
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(child.exitCode !== null || child.killed, true, 'Launcher-Prozess läuft noch');
+  } finally {
+    try { child.kill(); } catch (_) { /* schon beendet */ }
+    try { execFileSync('taskkill', ['/IM', 'EpicGamesLauncher.exe', '/T', '/F'], { stdio: 'ignore', windowsHide: true }); } catch (_) { /* nichts mehr da */ }
+  }
+});

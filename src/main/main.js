@@ -11,6 +11,7 @@ const { createStore } = require('./store');
 const { isAllowedUrl } = require('./links');
 const pdf = require('./pdf');
 const discord = require('./discord');
+const epic = require('./epic');
 const fields = require('../shared/fields');
 const extract = require('../shared/extract');
 
@@ -59,6 +60,15 @@ function start() {
   });
 
   discord.init({ dataDir: app.getPath('userData'), resourcesDir: resourcesDir() });
+  // Gespeicherte Launcher-Zugänge werden mit Windows-Datenschutz (DPAPI) verschlüsselt abgelegt
+  epic.init({
+    dataDir: app.getPath('userData'),
+    crypto: {
+      isAvailable: () => { try { return safeStorage.isEncryptionAvailable(); } catch (_) { return false; } },
+      encrypt: (text) => safeStorage.encryptString(text),
+      decrypt: (buf) => safeStorage.decryptString(buf),
+    },
+  });
   registerIpc();
   createWindow();
 
@@ -156,7 +166,10 @@ function registerIpc() {
     await store.save(state);
     return ok(true);
   });
-  handle('state:reset', () => ok(store.reset()));
+  handle('state:reset', () => {
+    epic.removeAll(); // "Alle Daten löschen" vergisst auch die gespeicherten Launcher-Zugänge
+    return ok(store.reset());
+  });
 
   handle('open-url', async (url) => {
     if (!isAllowedUrl(url)) return fail('Dieser Link ist nicht freigegeben und wurde aus Sicherheitsgründen nicht geöffnet.');
@@ -241,6 +254,13 @@ function registerIpc() {
       .sort((a, b) => String(b.modified).localeCompare(String(a.modified)));
     return ok({ found, dir, launcherFound: true });
   });
+
+  // Konten-Schnellwechsel (Epic Games Launcher). Die Oberfläche bekommt den Zugang selbst nie zu sehen.
+  handle('epic:accounts:status', async () => ok(await epic.getStatus()));
+  handle('epic:accounts:save', async (label) => epic.saveCurrent(String(label || '')));
+  handle('epic:accounts:switch', async (id) => epic.switchTo(String(id || '')));
+  handle('epic:accounts:remove', async (id) => epic.remove(String(id || '')));
+  handle('epic:accounts:rename', async (id, label) => epic.rename(String(id || ''), String(label || '')));
 
   handle('windows:notification-settings', async () => {
     if (process.platform !== 'win32') return fail('Nur unter Windows verfügbar.');

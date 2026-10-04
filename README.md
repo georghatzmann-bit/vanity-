@@ -6,7 +6,7 @@ Hilfe nach einem Epic-Games-Hack – Schritt für Schritt, auf Deutsch, für Win
 
 ## Installieren
 
-1. Auf GitHub rechts auf **Releases** klicken und dort **Konto-Retter-Setup-1.1.0.exe** herunterladen.
+1. Auf GitHub rechts auf **Releases** klicken und dort **Konto-Retter-Setup-1.2.0.exe** herunterladen.
 2. Die Datei doppelklicken. Mehr ist nicht nötig: Das Programm installiert sich, legt ein Symbol auf den Desktop und einen Eintrag ins Startmenü und startet von selbst.
 3. Falls Windows **„Der Computer wurde durch Windows geschützt“** zeigt: auf **Weitere Informationen** und dann auf **Trotzdem ausführen** klicken. Das kommt bei jedem Programm, das nicht mit einem gekauften Zertifikat signiert ist.
 
@@ -20,7 +20,8 @@ Du merkst, dass es geklappt hat, wenn auf dem Desktop das lila Schild-Symbol **K
 
 | Bereich | Was er macht |
 |---|---|
-| **Konto retten** | 21 Schritte von „E-Mail-Postfach sichern“ bis „Konto absichern“. Jeder Schritt öffnet automatisch die richtige Epic-Seite. Die Konto-ID findet er auf Wunsch direkt auf deinem PC (Epic Games Launcher). Die Daten, die du gerade brauchst, stehen groß da und lassen sich mit einem Klick kopieren. Der Fortschritt wird gespeichert. |
+| **Konto retten** | Kurze Anleitung in 6 Schritten: SMS und Authenticator einrichten, E-Mail-2FA aus, abmelden und „Passwort vergessen“, „Kein Zugriff auf diese E-Mail“, Codes eingeben, neue E-Mail eintragen. Jeder Schritt hat die passende Epic-Seite zum Öffnen. Der Fortschritt wird gespeichert. |
+| **Konten** | Mehrere Epic-Konten im Launcher? Mit einem Klick wechseln: Der Konto-Retter schließt den Epic Games Launcher, setzt den gespeicherten „Angemeldet bleiben“-Zugang ein und startet ihn neu. Zugänge bleiben verschlüsselt auf diesem PC. |
 | **PDF auslesen** | Epic-Konto-PDF („Kontoinformationen herunterladen“), Epic-Kaufbelege, gespeicherte Epic-Seiten oder Epic-Mails hineinziehen. Konto-ID, Anzeigename, Rechnungsnummern, verknüpfte Konsolen, Zeitpunkt des Hacks und mehr werden automatisch erkannt. Die passwortgeschützte Epic-PDF wird unterstützt (Passwort steht in der zweiten Epic-Mail und wird nicht gespeichert). |
 | **Meine Daten** | Alle Nachweise an einer Stelle, jeweils mit Kopieren-Knopf. Als Textdatei speicherbar. |
 | **Support-Text** | Fertiger Text für den Epic-Support auf Deutsch und Englisch: erste Anfrage, Nachfrage oder Kurzfassung. Füllt sich automatisch und zeigt, welche Angaben noch fehlen. |

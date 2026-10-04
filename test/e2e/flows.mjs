@@ -44,29 +44,21 @@ async function dropPdf(name, displayName) {
   }, { b64, displayName });
 }
 
-// ---- 1) Abkürzung "Hat geklappt" führt am Ende zu "Geschafft!" ----
-await win.click('.step-item[data-fk="step-reset"]');
-await win.waitForTimeout(200);
-check((await title()).includes('Passwort zurücksetzen'), 'Schritt "Passwort zurücksetzen" nicht erreicht');
-await win.click('[data-fk="success"]');
-await win.waitForTimeout(300);
-check((await title()).includes('Neues Passwort setzen'), 'Abkürzung springt nicht zu "Neues Passwort setzen": ' + (await title()));
-for (let i = 0; i < 15; i++) {
-  if (await win.locator('.finish').count()) break;
-  await win.click('[data-fk="next"]');
-  await win.waitForTimeout(150);
-}
-// Schritte 1-3 (Vorbereiten) sind noch offen: Danach müssen sie kommen, nicht der Einspruch
-const afterSecure = await win.locator('.finish').count() ? 'FINISH' : await title();
-check(!/Einspruch|anmelden|Support/.test(afterSecure), 'Nach dem Absichern wurde ein übersprungener Schritt geöffnet: ' + afterSecure);
-for (let i = 0; i < 5; i++) {
+// ---- 1) Alle 6 Schritte der Reihe nach führen zu "Geschafft!" ----
+for (let i = 0; i < 10; i++) {
   if (await win.locator('.finish').count()) break;
   await win.click('[data-fk="next"]');
   await win.waitForTimeout(150);
 }
 check(await win.locator('.finish').count() === 1, '"Geschafft!" wurde nicht angezeigt');
 const badge = await win.locator('.nav-item').first().locator('.nav-badge').textContent();
-check(badge === '21/21', 'Fortschritt am Ende falsch: ' + badge);
+check(badge === '6/6', 'Fortschritt am Ende falsch: ' + badge);
+// Schritte nochmal ansehen: Klick in der Liste zeigt den Schritt, ohne eine Seite zu öffnen
+await win.click('button:has-text("Schritte nochmal ansehen")');
+await win.waitForTimeout(200);
+await win.click('.step-item[data-fk="step-codes"]');
+await win.waitForTimeout(200);
+check((await title()).includes('Codes aus Authenticator'), 'Klick auf einen Schritt in der Liste zeigt ihn nicht an: ' + (await title()));
 
 // ---- 2) Rückgängig nimmt nur die eigene Übernahme zurück ----
 await win.evaluate(() => window.App.go('pdf'));

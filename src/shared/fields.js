@@ -97,6 +97,16 @@
       placeholder: 'z. B. Visa, endet auf 1234',
     },
     {
+      key: 'first_purchase_date', label: 'Datum der ersten Zahlung', type: 'text', group: 'kaeufe',
+      hint: 'Ungefähres Datum deines allerersten Kaufs bei Epic. Steht auf dem ältesten Kaufbeleg. Epic fragt danach, um dich als Eigentümer zu bestätigen.',
+      placeholder: 'z. B. 15.12.2019',
+    },
+    {
+      key: 'first_purchase_amount', label: 'Betrag der ersten Zahlung', type: 'text', group: 'kaeufe',
+      hint: 'Ungefährer Betrag des ersten Kaufs. Steht auf demselben Beleg.',
+      placeholder: 'z. B. 9,99 €',
+    },
+    {
       key: 'hack_date', label: 'Wann wurde das Konto gehackt?', type: 'text', group: 'hack', important: true,
       hint: 'Datum und ungefähre Uhrzeit, ab wann du nicht mehr reinkamst oder komische Mails bekommen hast.',
       placeholder: 'z. B. 02.10.2026 gegen 21 Uhr',

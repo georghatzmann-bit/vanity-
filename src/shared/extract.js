@@ -629,10 +629,12 @@
       add({ key: 'order_id', label: 'Bestellnummer (Order-ID)', target: null, value: ord, info: true, note: 'Für das Formular brauchst du die Rechnungsnummer, nicht die Bestellnummer.' });
     }
     if (kind === 'epic-receipt') {
+      // Kaufdatum und Betrag: Vorschlag für "erste Zahlung" (Epic fragt danach, um den Eigentümer zu bestätigen).
+      // Nur vorschlagen, nicht automatisch eintragen – der Beleg muss nicht der erste Kauf sein.
       const od = findLabeled(lines, /Order\s*Date|Bestelldatum|Kaufdatum/i, (s) => V.date(s, false));
-      if (od) add({ key: 'order_date', label: 'Kaufdatum', target: null, value: od.value, info: true });
+      if (od) add({ key: 'order_date', label: 'Kaufdatum (dieser Beleg)', target: 'first_purchase_date', value: od.value.replace(/,.*$/, ''), confidence: 'medium', note: 'War das dein allererster Kauf bei Epic? Dann als "Datum der ersten Zahlung" übernehmen.' });
       const tot = /(?:TOTAL|GESAMT)(?:\s*\[\s*[A-Z]{3}\s*\])?\s*:?\s*\n?\s*((?:[A-Z]{3}\s*)?[€$£]?\s*\d[\d.,]*(?:\s*(?:€|EUR|USD|GBP|CHF))?)/i.exec(text);
-      if (tot) add({ key: 'total', label: 'Betrag', target: null, value: tot[1].trim(), info: true });
+      if (tot) add({ key: 'total', label: 'Betrag (dieser Beleg)', target: 'first_purchase_amount', value: tot[1].trim(), confidence: 'medium', note: 'Gehört zum Kaufdatum oben. Nur übernehmen, wenn es der erste Kauf war.' });
     }
 
     // --- Zahlungsart

@@ -112,7 +112,8 @@ test('Link-Freigabe: nur https und bekannte Seiten', () => {
 
 test('Alle Links der Schritte sind freigegeben', () => {
   for (const step of STEPS.STEPS) {
-    assert.ok(isAllowedUrl(step.url), step.id + ': ' + step.url);
+    // Nicht jeder Schritt hat eine Webseite (z. B. "Codes eingeben" läuft auf der Seite davor weiter)
+    if (step.url) assert.ok(isAllowedUrl(step.url), step.id + ': ' + step.url);
     for (const l of step.links || []) assert.ok(isAllowedUrl(l.url), step.id + ': ' + l.url);
   }
   for (const p of STEPS.EMAIL_PROVIDERS) assert.ok(isAllowedUrl(p.url), p.url);
@@ -131,8 +132,10 @@ test('Schritte sind vollständig und verweisen nur auf vorhandene Felder', () =>
   }
   for (const step of STEPS.STEPS) {
     if (step.success) assert.ok(ids.has(step.success.jumpTo), step.id + ' springt ins Leere');
-    for (const it of step.internal || []) assert.ok(['pdf', 'data', 'support', 'discord', 'recovery'].includes(it.view));
+    for (const it of step.internal || []) assert.ok(['pdf', 'data', 'support', 'accounts', 'discord', 'recovery'].includes(it.view));
   }
+  // Die kurze Anleitung: genau die sechs gewünschten Schritte in dieser Reihenfolge
+  assert.deepEqual(STEPS.STEPS.map((s) => s.id), ['twofa-setup', 'email-2fa-off', 'forgot', 'lost-access', 'codes', 'new-email']);
 });
 
 test('lang=de wird richtig angehängt', () => {

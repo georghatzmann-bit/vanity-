@@ -129,8 +129,8 @@
     const en = lang === 'en';
     const t = en ? toEnglish : (x) => x;
     const L = en
-      ? { id: 'Account ID', name: 'Display name (most recent)', orig: 'Original display name', oldNames: 'Previous display names', email: 'Email address before the hack', oldEmails: 'Other email addresses previously on the account', first: 'First name', last: 'Last name', country: 'Country at account creation', created: 'Account created (approx.)', linked: 'Linked accounts', invoices: 'Invoice IDs (Epic receipts)', payment: 'Payment method used', phone: 'Phone number used for 2FA', recovery: 'Account Recovery ID', ticket: 'Support case / ticket number' }
-      : { id: 'Konto-ID', name: 'Anzeigename (zuletzt benutzt)', orig: 'Erster Anzeigename', oldNames: 'Frühere Anzeigenamen', email: 'E-Mail-Adresse vor dem Hack', oldEmails: 'Weitere frühere E-Mail-Adressen im Konto', first: 'Vorname', last: 'Nachname', country: 'Land bei der Kontoerstellung', created: 'Konto erstellt (ungefähr)', linked: 'Verknüpfte Konten', invoices: 'Rechnungsnummern (Invoice-ID)', payment: 'Benutzte Zahlungsart', phone: 'Handynummer für die Zwei-Faktor-Anmeldung', recovery: 'Wiederherstellungs-ID (Recovery ID)', ticket: 'Ticket- bzw. Fallnummer' };
+      ? { id: 'Account ID', name: 'Display name (most recent)', orig: 'Original display name', oldNames: 'Previous display names', email: 'Email address before the hack', oldEmails: 'Other email addresses previously on the account', first: 'First name', last: 'Last name', country: 'Country at account creation', created: 'Account created (approx.)', linked: 'Linked accounts', invoices: 'Invoice IDs (Epic receipts)', payment: 'Payment method used', firstPay: 'First purchase (approx. date)', firstAmt: 'Amount of the first purchase', phone: 'Phone number used for 2FA', recovery: 'Account Recovery ID', ticket: 'Support case / ticket number' }
+      : { id: 'Konto-ID', name: 'Anzeigename (zuletzt benutzt)', orig: 'Erster Anzeigename', oldNames: 'Frühere Anzeigenamen', email: 'E-Mail-Adresse vor dem Hack', oldEmails: 'Weitere frühere E-Mail-Adressen im Konto', first: 'Vorname', last: 'Nachname', country: 'Land bei der Kontoerstellung', created: 'Konto erstellt (ungefähr)', linked: 'Verknüpfte Konten', invoices: 'Rechnungsnummern (Invoice-ID)', payment: 'Benutzte Zahlungsart', firstPay: 'Erste Zahlung (ungefähres Datum)', firstAmt: 'Betrag der ersten Zahlung', phone: 'Handynummer für die Zwei-Faktor-Anmeldung', recovery: 'Wiederherstellungs-ID (Recovery ID)', ticket: 'Ticket- bzw. Fallnummer' };
     const lines = [];
     bullet(lines, L.id, v(data, 'account_id'));
     bullet(lines, L.name, v(data, 'display_name'));
@@ -145,6 +145,8 @@
     bulletList(lines, L.linked, list(data, 'platforms').map(en ? toEnglishParens : t));
     bulletList(lines, L.invoices, list(data, 'invoice_ids'));
     bullet(lines, L.payment, en ? paymentEn(v(data, 'payment_method')) : v(data, 'payment_method'));
+    bullet(lines, L.firstPay, t(v(data, 'first_purchase_date')));
+    bullet(lines, L.firstAmt, v(data, 'first_purchase_amount'));
     bullet(lines, L.phone, v(data, 'phone'));
     bullet(lines, L.recovery, v(data, 'recovery_id'));
     bullet(lines, L.ticket, v(data, 'ticket_number'));

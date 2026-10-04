@@ -23,6 +23,13 @@ contextBridge.exposeInMainWorld('kr', {
   exportText: (suggestedName, text) => call('export:text', suggestedName, text),
   openWindowsSecurity: () => call('windows:security'),
   findEpicAccountIds: () => call('epic:find-account-ids'),
+  epicAccounts: {
+    status: () => call('epic:accounts:status'),
+    save: (label) => call('epic:accounts:save', label),
+    switchTo: (id) => call('epic:accounts:switch', id),
+    remove: (id) => call('epic:accounts:remove', id),
+    rename: (id, label) => call('epic:accounts:rename', id, label),
+  },
   discord: {
     status: () => call('discord:status'),
     start: () => call('discord:start'),

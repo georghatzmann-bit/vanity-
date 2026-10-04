@@ -3,7 +3,7 @@
   'use strict';
   const { el, icon, clear, toast, confirmDialog } = window.UI;
 
-  const ORDER = ['recovery', 'pdf', 'data', 'support', 'discord'];
+  const ORDER = ['recovery', 'pdf', 'data', 'support', 'accounts', 'discord'];
   // Diese Flächen neigen sich in 3D zur Maus hin
   const TILT = '.big-action, .data-tile, .drop, .finish';
   let current = null;
