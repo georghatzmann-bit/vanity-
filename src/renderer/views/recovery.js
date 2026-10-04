@@ -15,16 +15,26 @@
     return window.Store.get().data;
   }
 
+  function skippedMap() {
+    const r = rec();
+    if (!r.skipped) r.skipped = {};
+    return r.skipped;
+  }
+
+  // Erledigt oder bewusst übersprungen
+  function handled(id) {
+    return Boolean(rec().done[id] || skippedMap()[id]);
+  }
+
   function currentStep() {
     const r = rec();
     const byId = r.current && stepById(r.current);
     if (byId) return byId;
-    return STEPS.find((s) => !r.done[s.id]) || STEPS[0];
+    return STEPS.find((s) => !handled(s.id)) || STEPS[0];
   }
 
   function doneCount() {
-    const r = rec();
-    return STEPS.filter((s) => r.done[s.id]).length;
+    return STEPS.filter((s) => handled(s.id)).length;
   }
 
   // Welche Seite gehört zu diesem Schritt? Beim E-Mail-Schritt die Sicherheitsseite des eigenen Anbieters.
@@ -54,20 +64,33 @@
     }
     const main = document.getElementById('main');
     if (main) main.scrollTop = 0;
+    // Für Tastatur und Bildschirmleser: zum neuen Schritt springen
+    const title = document.getElementById('step-title');
+    if (title) title.focus({ preventScroll: true });
   }
 
   function markDone(id, done) {
     window.Store.update((s) => {
+      if (!s.recovery.skipped) s.recovery.skipped = {};
       if (done) s.recovery.done[id] = new Date().toISOString();
       else delete s.recovery.done[id];
+      delete s.recovery.skipped[id];
     }, 'recovery');
   }
 
+  function markSkipped(ids) {
+    window.Store.update((s) => {
+      if (!s.recovery.skipped) s.recovery.skipped = {};
+      for (const id of ids) if (!s.recovery.done[id]) s.recovery.skipped[id] = new Date().toISOString();
+    }, 'recovery');
+  }
+
+  // Nächster offener Schritt: erst vorwärts, dann nur noch Pflichtschritte weiter vorne.
+  // Gibt es keinen mehr, ist die Rettung fertig.
   function nextOpenAfter(id) {
-    const r = rec();
     const start = indexOf(id);
-    for (let i = start + 1; i < STEPS.length; i++) if (!r.done[STEPS[i].id]) return STEPS[i];
-    return STEPS.find((s) => !r.done[s.id]) || null;
+    for (let i = start + 1; i < STEPS.length; i++) if (!handled(STEPS[i].id)) return STEPS[i];
+    return STEPS.find((s) => !handled(s.id) && !s.optional) || null;
   }
 
   function completeAndContinue(step) {
@@ -78,9 +101,21 @@
   }
 
   function skip(step) {
-    const i = indexOf(step.id);
-    const next = STEPS[i + 1];
+    markSkipped([step.id]);
+    const next = nextOpenAfter(step.id);
     if (next) goTo(next.id);
+    else finish();
+  }
+
+  // "Hat geklappt, ich bin wieder drin": die übrigen Schritte zum Zurückholen sind nicht mehr nötig
+  function jumpAfterSuccess(step) {
+    markDone(step.id, true);
+    const from = indexOf(step.id);
+    const to = indexOf(step.success.jumpTo);
+    markSkipped(STEPS.slice(from + 1, to).map((s) => s.id));
+    window.Store.update((s) => { s.recovery.recovered = true; }, 'recovery');
+    const target = handled(step.success.jumpTo) ? nextOpenAfter(step.success.jumpTo) : stepById(step.success.jumpTo);
+    if (target) goTo(target.id);
     else finish();
   }
 
@@ -239,15 +274,17 @@
       for (const step of STEPS.filter((s) => s.phase === phase.key)) {
         number += 1;
         const done = Boolean(r.done[step.id]);
+        const skipped = !done && Boolean(skippedMap()[step.id]);
         const isActive = !r.finished && step.id === active.id;
         const btn = el('button', {
-          class: 'step-item' + (isActive ? ' active' : '') + (done ? ' done' : ''),
+          class: 'step-item' + (isActive ? ' active' : '') + (done ? ' done' : '') + (skipped ? ' skipped' : ''),
           type: 'button',
+          fk: 'step-' + step.id,
           'aria-current': isActive ? 'step' : null,
           onclick: () => goTo(step.id),
         }, [
-          el('span', { class: 'step-num' }, done ? icon('check', 'icon-sm') : String(number)),
-          el('span', { class: 'step-name' }, [step.title, step.optional ? el('span', { class: 'hint', text: ' (nur wenn nötig)' }) : null]),
+          el('span', { class: 'step-num' }, done ? icon('check', 'icon-sm') : skipped ? '–' : String(number)),
+          el('span', { class: 'step-name' }, [step.title, step.optional ? el('span', { class: 'hint', text: ' (nur wenn nötig)' }) : null, skipped ? el('span', { class: 'hint', text: ' (übersprungen)' }) : null]),
         ]);
         if (done) btn.appendChild(el('span', { class: 'sr-only', text: ' erledigt' }));
         list.appendChild(btn);
@@ -304,8 +341,9 @@
         el('span', { class: 'step-kicker', text: 'Schritt ' + (i + 1) + ' von ' + STEPS.length + ' · ' + phase.title }),
         step.optional ? el('span', { class: 'badge badge-warning', text: 'Nur wenn nötig' }) : null,
         doneAt ? el('span', { class: 'badge badge-success' }, [icon('check', 'icon-sm'), 'Erledigt am ' + formatDate(doneAt)]) : null,
+        !doneAt && skippedMap()[step.id] ? el('span', { class: 'badge', text: 'Übersprungen' }) : null,
       ]),
-      el('h2', { class: 'step-title', id: 'step-title', text: step.title }),
+      el('h2', { class: 'step-title', id: 'step-title', tabindex: '-1', text: step.title }),
       el('p', { class: 'step-why', text: step.why }),
     ]));
 
@@ -345,28 +383,28 @@
     if (extras.length) card.appendChild(el('div', { class: 'row' }, extras));
 
     const left = el('div', { class: 'row' }, [
-      el('button', { class: 'btn btn-ghost', type: 'button', disabled: i === 0, onclick: () => goTo(STEPS[i - 1].id, { open: false }) }, [icon('arrowLeft'), 'Zurück']),
+      el('button', { class: 'btn btn-ghost', type: 'button', fk: 'back', disabled: i === 0, onclick: () => goTo(STEPS[i - 1].id, { open: false }) }, [icon('arrowLeft'), 'Zurück']),
     ]);
     const right = el('div', { class: 'row' });
     if (step.success) {
       right.appendChild(el('button', {
         class: 'btn btn-success',
         type: 'button',
-        onclick: () => {
-          markDone(step.id, true);
-          window.Store.update((s) => { s.recovery.recovered = true; }, 'recovery');
-          goTo(step.success.jumpTo);
-        },
+        fk: 'success',
+        onclick: () => jumpAfterSuccess(step),
       }, [icon('checkCircle'), step.success.label]));
     }
-    if (step.optional && !doneAt) {
-      right.appendChild(el('button', { class: 'btn btn-ghost', type: 'button', onclick: () => skip(step) }, 'Überspringen'));
+    const isSkipped = !doneAt && Boolean(skippedMap()[step.id]);
+    if (step.optional && !doneAt && !isSkipped) {
+      right.appendChild(el('button', { class: 'btn btn-ghost', type: 'button', fk: 'skip', onclick: () => skip(step) }, 'Überspringen'));
+    }
+    if (doneAt || isSkipped) {
+      right.appendChild(el('button', { class: 'btn btn-ghost', type: 'button', fk: 'reopen', onclick: () => { markDone(step.id, false); render(); } }, 'Wieder als offen markieren'));
     }
     if (doneAt) {
-      right.appendChild(el('button', { class: 'btn btn-ghost', type: 'button', onclick: () => { markDone(step.id, false); render(); } }, 'Wieder als offen markieren'));
-      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', onclick: () => completeAndContinue(step) }, ['Weiter', icon('arrowRight')]));
+      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: () => completeAndContinue(step) }, ['Weiter', icon('arrowRight')]));
     } else {
-      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', onclick: () => completeAndContinue(step) }, [icon('check'), 'Erledigt, weiter']));
+      right.appendChild(el('button', { class: 'btn btn-primary btn-lg', type: 'button', fk: 'next', onclick: () => completeAndContinue(step) }, [icon('check'), 'Erledigt, weiter']));
     }
     card.appendChild(el('div', { class: 'step-foot' }, [left, right]));
     return card;
@@ -391,7 +429,7 @@
               danger: true,
             });
             if (!yes) return;
-            window.Store.update((s) => { s.recovery.done = {}; s.recovery.current = STEPS[0].id; s.recovery.finished = false; s.recovery.recovered = false; }, 'recovery');
+            window.Store.update((s) => { s.recovery.done = {}; s.recovery.skipped = {}; s.recovery.current = STEPS[0].id; s.recovery.finished = false; s.recovery.recovered = false; }, 'recovery');
             render();
           },
         }, 'Fortschritt zurücksetzen'),
@@ -401,6 +439,10 @@
 
   function render() {
     if (!root) return;
+    window.UI.keepFocus(root, draw);
+  }
+
+  function draw() {
     const r = rec();
     const step = currentStep();
     const count = doneCount();
@@ -412,7 +454,7 @@
         el('strong', { text: count + ' von ' + STEPS.length + ' Schritten erledigt' }),
         switchControl('Seiten automatisch öffnen', r.autoOpen, (v) => {
           window.Store.update((s) => { s.recovery.autoOpen = v; }, 'recovery');
-        }, 'Beim Wechsel zu einem Schritt öffnet sich die passende Seite im Browser.'),
+        }, 'Beim Wechsel zu einem Schritt öffnet sich die passende Seite im Browser.', 'auto-open'),
       ]),
       el('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(pct), 'aria-label': 'Fortschritt' }, [
         (() => { const b = el('div', { class: 'progress-bar' + (pct === 100 ? ' complete' : '') }); b.style.width = pct + '%'; return b; })(),

@@ -7,7 +7,26 @@
   const { URLS } = window.KR_STEPS;
 
   let root = null;
-  let edited = null; // { lang, variant, body } wenn der Nutzer den Text selbst geändert hat
+
+  // Selbst geänderte Texte werden pro Sprache und Textart gespeichert (überleben auch einen Neustart)
+  function editKey() {
+    const s = settings();
+    return s.lang + ':' + s.variant;
+  }
+
+  function editedText() {
+    const e = settings().edited || {};
+    return Object.prototype.hasOwnProperty.call(e, editKey()) ? e[editKey()] : null;
+  }
+
+  function setEdited(text) {
+    const key = editKey();
+    window.Store.update((st) => {
+      if (!st.support.edited) st.support.edited = {};
+      if (text === null) delete st.support.edited[key];
+      else st.support.edited[key] = text;
+    }, 'support-edit');
+  }
 
   function settings() {
     return window.Store.get().support;
@@ -27,7 +46,7 @@
     const s = settings();
     const wrap = el('div', { class: 'stack-sm', role: 'radiogroup', 'aria-label': 'Art des Textes' });
     for (const v of S.VARIANTS) {
-      const input = el('input', { type: 'radio', name: 'variant', checked: s.variant === v.key });
+      const input = el('input', { type: 'radio', name: 'variant', checked: s.variant === v.key, fk: 'variant-' + v.key });
       input.addEventListener('change', () => { if (input.checked) setSetting('variant', v.key); });
       wrap.appendChild(el('label', { class: 'check' }, [
         input,
@@ -41,7 +60,7 @@
     const d = window.Store.get().data;
     const wrap = el('div', { class: 'stack-sm' });
     for (const c of F.HACK_CHANGES) {
-      const input = el('input', { type: 'checkbox', checked: (d.hack_changes || []).includes(c.key) });
+      const input = el('input', { type: 'checkbox', checked: (d.hack_changes || []).includes(c.key), fk: 'change-' + c.key });
       input.addEventListener('change', () => {
         window.Store.update((st) => {
           const set = new Set(st.data.hack_changes || []);
@@ -67,7 +86,7 @@
         type: 'button',
         onclick: async () => {
           const changed = await window.Views.data.editFieldDialog(key);
-          if (changed) { edited = null; render(); }
+          if (changed) render();
         },
       }, [icon('plus', 'icon-sm'), f ? f.label : key]));
     }
@@ -83,10 +102,14 @@
 
   function render() {
     if (!root) return;
+    window.UI.keepFocus(root, draw);
+  }
+
+  function draw() {
     const s = settings();
     const out = generated();
-    const isEdited = edited && edited.lang === s.lang && edited.variant === s.variant;
-    const body = isEdited ? edited.body : out.body;
+    const own = editedText();
+    const body = own !== null ? own : out.body;
 
     const head = pageHead('Support-Text', 'Fertiger Text für den Epic-Support. Er füllt sich automatisch mit deinen Daten. Kopieren, auf der Epic-Seite einfügen, fertig.');
 
@@ -106,15 +129,29 @@
     const editNote = el('div', { class: 'row row-between' });
     function updateEditNote() {
       clear(editNote);
-      if (edited && edited.lang === s.lang && edited.variant === s.variant) {
-        editNote.appendChild(el('span', { class: 'hint', text: 'Du hast den Text selbst geändert. Neue Daten werden erst übernommen, wenn du ihn neu erstellst.' }));
-        editNote.appendChild(el('button', { class: 'btn btn-sm btn-ghost', type: 'button', onclick: () => { edited = null; render(); } }, [icon('refresh', 'icon-sm'), 'Text neu erstellen']));
+      if (editedText() !== null) {
+        editNote.appendChild(el('span', { class: 'hint', text: 'Du hast den Text selbst geändert. Neue Daten aus "Meine Daten" kommen erst rein, wenn du ihn neu erstellst.' }));
+        editNote.appendChild(el('button', {
+          class: 'btn btn-sm btn-ghost',
+          type: 'button',
+          onclick: async () => {
+            const yes = await window.UI.confirmDialog({
+              title: 'Text neu erstellen?',
+              text: 'Deine eigenen Änderungen an diesem Text gehen dabei verloren.',
+              confirmText: 'Neu erstellen',
+              danger: true,
+            });
+            if (!yes) return;
+            setEdited(null);
+            render();
+          },
+        }, [icon('refresh', 'icon-sm'), 'Text neu erstellen']));
       }
     }
     textarea.addEventListener('input', () => {
-      const wasEdited = Boolean(edited);
-      edited = { lang: s.lang, variant: s.variant, body: textarea.value };
-      if (!wasEdited) updateEditNote();
+      const first = editedText() === null;
+      setEdited(textarea.value);
+      if (first) updateEditNote();
     });
     updateEditNote();
 

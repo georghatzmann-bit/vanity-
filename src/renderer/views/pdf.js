@@ -32,39 +32,49 @@
     return 'conflict';
   }
 
-  // Trägt einen Wert ein. Merkt sich vorher den alten Stand, damit "Rückgängig" geht.
+  // Trägt einen Wert ein und merkt sich genau diese Änderung, damit "Rückgängig" nur sie zurücknimmt.
   function applyValue(result, target, value) {
     const field = F.byKey(target);
     if (!field) return;
-    if (!(target in result.undo)) {
-      const before = window.Store.get().data[target];
-      result.undo[target] = Array.isArray(before) ? before.slice() : before;
-    }
+    let change = null;
     window.Store.update((s) => {
       if (field.type === 'list') {
         const list = F.listValue(s.data, target);
-        if (!list.some((v) => same(v, value))) list.push(value);
+        if (!list.some((v) => same(v, value))) {
+          list.push(value);
+          change = { target, value, list: true };
+        }
         s.data[target] = list;
       } else {
+        change = { target, value, before: F.valueAsText(s.data, target) };
         s.data[target] = value;
       }
     }, 'pdf');
-    result.applied.push({ target, value });
+    if (change) result.applied.push(change);
   }
 
   function undo(result) {
+    let kept = 0;
     window.Store.update((s) => {
-      for (const [key, before] of Object.entries(result.undo)) s.data[key] = before;
+      // In umgekehrter Reihenfolge zurücknehmen
+      for (const c of result.applied.slice().reverse()) {
+        if (c.list) {
+          s.data[c.target] = F.listValue(s.data, c.target).filter((v) => !same(v, c.value));
+        } else if (same(F.valueAsText(s.data, c.target), c.value)) {
+          s.data[c.target] = c.before;
+        } else {
+          kept += 1; // inzwischen von Hand geändert: so lassen
+        }
+      }
     }, 'pdf');
-    result.undo = {};
     result.applied = [];
     result.undone = true;
-    toast('Übernahme aus "' + result.fileName + '" rückgängig gemacht.', 'info');
+    toast('Übernahme aus "' + result.fileName + '" rückgängig gemacht.' + (kept ? ' Von dir geänderte Werte wurden behalten.' : ''), 'info');
     render();
   }
 
   function addResult(res) {
-    const result = { id: ++resultCounter, ...res, undo: {}, applied: [], undone: false };
+    const result = { id: ++resultCounter, ...res, applied: [], undone: false };
     // Sichere Werte sofort in leere Felder eintragen
     let count = 0;
     for (const item of res.found.items) {
@@ -97,28 +107,28 @@
     ]);
     const pending = confirmDialog({ title: '"' + fileName + '" ist geschützt', body, confirmText: 'PDF öffnen' });
     setTimeout(() => input.focus(), 30);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const btn = document.querySelector('.modal .btn-primary');
-        if (btn) btn.click();
-      }
-    });
     const yes = await pending;
     return yes && value.trim() ? value.trim() : null;
   }
 
   // Liest eine Datei – entweder als Bytes (Drag and Drop) oder über die Dateiauswahl.
+  const MAX_PASSWORD_TRIES = 5;
+
   async function readOne(source) {
     let password;
-    let wrong = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    let wrongTries = 0;
+    for (;;) {
       const res = source.bytes
         ? await window.kr.pdf.parseBytes(source.fileName, source.bytes, password)
         : await window.kr.pdf.parsePicked(source.token, password);
       if (res && res.ok) return res.value;
       if (res && (res.code === 'NEED_PASSWORD' || res.code === 'WRONG_PASSWORD')) {
-        wrong = res.code === 'WRONG_PASSWORD';
+        const wrong = res.code === 'WRONG_PASSWORD';
+        if (wrong) wrongTries += 1;
+        if (wrongTries >= MAX_PASSWORD_TRIES) {
+          toast('Das Passwort für "' + source.fileName + '" hat ' + MAX_PASSWORD_TRIES + '-mal nicht gepasst. Zieh die PDF nochmal hinein und kopiere das Passwort genau aus der Epic-Mail.', 'error');
+          return null;
+        }
         password = await askPassword(source.fileName, wrong);
         if (!password) {
           toast('"' + source.fileName + '" wurde nicht geöffnet (kein Passwort).', 'warning');
@@ -129,15 +139,23 @@
       toast('"' + source.fileName + '": ' + ((res && res.message) || 'Datei konnte nicht gelesen werden.'), 'error');
       return null;
     }
-    return null;
   }
 
+  // Dateien, die während des Lesens dazukommen, werden hinten angestellt statt verworfen
+  const queue = [];
+
   async function handleSources(sources) {
-    if (busy || !sources.length) return;
+    if (!sources.length) return;
+    queue.push(...sources);
+    if (busy) {
+      toast(sources.length === 1 ? '"' + sources[0].fileName + '" wird gleich gelesen.' : sources.length + ' Dateien werden gleich gelesen.', 'info');
+      return;
+    }
     busy = true;
     render();
     try {
-      for (const source of sources) {
+      while (queue.length) {
+        const source = queue.shift();
         const value = await readOne(source);
         if (value) addResult(value);
         render();
@@ -165,7 +183,6 @@
   }
 
   async function onPick() {
-    if (busy) return;
     const res = await window.kr.pdf.pick();
     if (!res || !res.ok) {
       toast((res && res.message) || 'Dateiauswahl hat nicht geklappt.', 'error');
@@ -342,6 +359,14 @@
     if (hist) page.appendChild(hist);
     clear(root).appendChild(page);
   }
+
+  // "Alle Daten löschen": auch die erkannten Werte und den PDF-Text dieser Sitzung vergessen
+  window.Store.subscribe((_state, source) => {
+    if (source !== 'reset') return;
+    results.length = 0;
+    queue.length = 0;
+    render();
+  });
 
   // Dateien, die irgendwo im Fenster fallen gelassen werden, nicht im Programm öffnen
   window.addEventListener('dragover', (e) => e.preventDefault());

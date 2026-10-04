@@ -52,6 +52,7 @@
         if (key === 'class') node.className = value;
         else if (key === 'text') node.textContent = value;
         else if (key === 'dataset') Object.assign(node.dataset, value);
+        else if (key === 'fk') node.dataset.fk = value; // Kennung, damit der Fokus nach dem Neuzeichnen zurückfindet
         else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2).toLowerCase(), value);
         else if (key === 'value') node.value = value;
         else if (key === 'checked') node.checked = Boolean(value);
@@ -99,14 +100,25 @@
     return new Promise((resolve) => {
       const root = document.getElementById('modal-root');
       const previous = document.activeElement;
+      let closed = false;
       const close = (result) => {
+        if (closed) return;
+        closed = true;
         document.removeEventListener('keydown', onKey, true);
         backdrop.remove();
-        if (previous && previous.focus) previous.focus();
+        if (previous && previous.focus && document.contains(previous)) previous.focus();
         resolve(result);
       };
+      // Nur der oberste Dialog reagiert auf Tasten
+      const isTop = () => root.lastElementChild === backdrop;
       const onKey = (e) => {
-        if (e.key === 'Escape') { e.preventDefault(); close(false); }
+        if (!isTop()) return;
+        if (e.key === 'Escape' && cancelText !== null) { e.preventDefault(); e.stopPropagation(); close(false); }
+        if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT' && modal.contains(e.target) && e.target.type !== 'checkbox' && e.target.type !== 'radio') {
+          e.preventDefault();
+          e.stopPropagation();
+          close(true);
+        }
       };
       const confirmBtn = el('button', { class: 'btn ' + (danger ? 'btn-danger' : 'btn-primary'), type: 'button', onclick: () => close(true) }, confirmText || 'OK');
       const actions = [];
@@ -118,7 +130,15 @@
         body || null,
         el('div', { class: 'row row-end' }, actions),
       ]);
-      const backdrop = el('div', { class: 'modal-backdrop', onclick: (e) => { if (e.target === backdrop && cancelText !== null) close(false); } }, modal);
+      // Schließen per Klick daneben nur, wenn der Klick auch daneben begonnen hat
+      // (sonst schließt z. B. ein Markieren von Text, das außerhalb endet, den Dialog)
+      let downOnBackdrop = false;
+      const backdrop = el('div', { class: 'modal-backdrop' }, modal);
+      backdrop.addEventListener('pointerdown', (e) => { downOnBackdrop = e.target === backdrop; });
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop && downOnBackdrop && cancelText !== null) close(false);
+        downOnBackdrop = false;
+      });
       root.appendChild(backdrop);
       document.addEventListener('keydown', onKey, true);
       confirmBtn.focus();
@@ -177,8 +197,8 @@
     ]);
   }
 
-  function switchControl(label, checked, onChange, hint) {
-    const input = el('input', { type: 'checkbox', checked });
+  function switchControl(label, checked, onChange, hint, fk) {
+    const input = el('input', { type: 'checkbox', checked, fk });
     input.addEventListener('change', () => onChange(input.checked));
     return el('label', { class: 'switch' }, [
       input,
@@ -190,7 +210,7 @@
   function segmented(options, value, onChange) {
     const wrap = el('div', { class: 'segmented', role: 'tablist' });
     for (const opt of options) {
-      const b = el('button', { type: 'button', role: 'tab', class: opt.value === value ? 'active' : '', 'aria-selected': opt.value === value ? 'true' : 'false' }, opt.label);
+      const b = el('button', { type: 'button', role: 'tab', class: opt.value === value ? 'active' : '', 'aria-selected': opt.value === value ? 'true' : 'false', fk: 'seg-' + opt.value }, opt.label);
       b.addEventListener('click', () => onChange(opt.value));
       wrap.appendChild(b);
     }
@@ -212,5 +232,16 @@
     ]);
   }
 
-  window.UI = { icon, el, clear, toast, confirmDialog, copyText, copyButton, openUrl, callout, switchControl, segmented, formatDate, pageHead };
+  // Zeichnet neu und gibt danach dem gleichen Bedienelement wieder den Fokus (für Tastatur-Nutzer)
+  function keepFocus(root, renderFn) {
+    const active = document.activeElement;
+    const key = active && root && root.contains(active) && active.dataset ? active.dataset.fk : null;
+    renderFn();
+    if (key) {
+      const again = root.querySelector('[data-fk="' + CSS.escape(key) + '"]');
+      if (again) again.focus({ preventScroll: true });
+    }
+  }
+
+  window.UI = { icon, el, clear, toast, confirmDialog, copyText, copyButton, openUrl, callout, switchControl, segmented, formatDate, pageHead, keepFocus };
 })();

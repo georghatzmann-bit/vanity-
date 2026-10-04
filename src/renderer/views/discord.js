@@ -8,6 +8,8 @@
   let pending = null; // gerade laufende Aktion
   let timer = null;
   let platform = 'win32';
+  let mountId = 0;
+  let refreshing = false;
 
   function options() {
     const s = window.Store.get();
@@ -16,8 +18,14 @@
   }
 
   async function refresh() {
-    const res = await window.kr.discord.status();
-    if (res && res.ok) status = res.value;
+    if (refreshing) return; // keine überlappenden Abfragen
+    refreshing = true;
+    try {
+      const res = await window.kr.discord.status();
+      if (res && res.ok) status = res.value;
+    } finally {
+      refreshing = false;
+    }
     render();
   }
 
@@ -42,6 +50,7 @@
     return el('button', {
       class: 'big-action' + (kind ? ' ' + kind : ''),
       type: 'button',
+      fk: 'action-' + id,
       disabled: disabled || Boolean(pending),
       onclick: onClick,
     }, [
@@ -125,11 +134,11 @@
         switchControl('Windows-Benachrichtigungen von Discord ausblenden', opts.toasts, (v) => {
           window.Store.update((s) => { options().toasts = v; }, 'discord');
           render();
-        }, 'Keine Popups mehr unten rechts. Bleibt aus, bis du sie hier wieder einschaltest.'),
+        }, 'Keine Popups mehr unten rechts. Bleibt aus, bis du sie hier wieder einschaltest.', 'opt-toasts'),
         switchControl('Discord-Töne stumm schalten', opts.sound, (v) => {
           window.Store.update((s) => { options().sound = v; }, 'discord');
           render();
-        }, 'Achtung: Dann ist auch der Sprachchat stumm (du hörst niemanden). Beim Schließen des Konto-Retters geht der Ton automatisch wieder an.'),
+        }, 'Achtung: Dann ist auch der Sprachchat stumm (du hörst niemanden). Beim Schließen des Konto-Retters geht der Ton automatisch wieder an.', 'opt-sound'),
       ]),
     ]);
     return card;
@@ -156,6 +165,10 @@
 
   function render() {
     if (!root) return;
+    window.UI.keepFocus(root, draw);
+  }
+
+  function draw() {
     const head = pageHead('Discord', 'Discord starten, beenden und stumm schalten – mit einem Klick. Dein Discord-Konto wird dabei nicht angefasst.');
     clear(root).appendChild(el('div', { class: 'page' }, [head, statusCard(), actionsCard(), tipsCard()]));
   }
@@ -168,15 +181,22 @@
     icon: 'headset',
     async mount(container) {
       root = container;
+      const myId = ++mountId;
+      if (timer) clearInterval(timer);
+      timer = null;
+      render();
       try {
         const info = await window.kr.appInfo();
         if (info && info.ok) platform = info.value.platform;
       } catch (_) { /* egal */ }
+      // Wurde die Ansicht inzwischen verlassen? Dann keinen Takt mehr starten.
+      if (myId !== mountId || root !== container) return;
       render();
       refresh();
       timer = setInterval(() => { if (!pending) refresh(); }, 4000);
     },
     unmount() {
+      mountId += 1;
       root = null;
       if (timer) clearInterval(timer);
       timer = null;

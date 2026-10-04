@@ -383,6 +383,9 @@ a { color: var(--accent-hover); }
 .step-item.active .step-num { background: var(--accent); color: #fff; }
 .step-item.done .step-num { background: var(--success-soft); color: var(--success); }
 .step-item.done .step-name { color: var(--muted); }
+.step-item.skipped .step-num { background: var(--surface-2); color: var(--faint); }
+.step-item.skipped .step-name { color: var(--faint); }
+.step-title:focus { outline: none; }
 .step-name { line-height: 1.3; }
 .step-phase { padding: 12px 12px 4px; font-size: 12px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.6px; }
 

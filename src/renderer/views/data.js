@@ -41,9 +41,16 @@
       // Listen erst beim Verlassen säubern, damit Leerzeilen beim Tippen nicht verschwinden.
       window.Store.update((s) => { s.data[field.key] = field.type === 'list' ? text.split(/\r?\n/) : text; }, 'data');
     });
+    control.dataset.field = field.key;
     if (field.type === 'list') {
+      let atFocus = null;
+      control.addEventListener('focus', () => { atFocus = control.value; });
       control.addEventListener('blur', () => {
-        window.Store.update((s) => { s.data[field.key] = fromInputValue(field, control.value); }, 'data');
+        // Nur speichern, wenn der Nutzer hier wirklich etwas geändert hat
+        if (atFocus !== null && control.value !== atFocus) {
+          window.Store.update((s) => { s.data[field.key] = fromInputValue(field, control.value); }, 'data');
+        }
+        atFocus = null;
       });
     }
     return el('div', { class: 'field' }, [
@@ -179,6 +186,23 @@
     return true;
   }
 
+  // Wurde etwas anderswo geändert (z. B. eine PDF fertig gelesen), die Felder auffrischen –
+  // aber nie das Feld, in dem gerade getippt wird.
+  function syncFromStore() {
+    if (!root) return;
+    const d = data();
+    for (const control of root.querySelectorAll('[data-field]')) {
+      if (control === document.activeElement) continue;
+      const field = F.byKey(control.dataset.field);
+      const value = toInputValue(field, d[field.key]);
+      if (field.type === 'list' ? F.listValue({ v: control.value }, 'v').join('\n') !== F.listValue(d, field.key).join('\n') : control.value !== value) {
+        control.value = field.type === 'list' ? F.listValue(d, field.key).join('\n') : value;
+      }
+    }
+  }
+
+  let unsubscribe = null;
+
   window.Views = window.Views || {};
   window.Views.data = {
     id: 'data',
@@ -188,8 +212,16 @@
     mount(container) {
       root = container;
       render();
+      unsubscribe = window.Store.subscribe((_s, source) => {
+        if (source === 'reset') render();
+        else if (source !== 'data' && source !== 'nav') syncFromStore();
+      });
     },
-    unmount() { root = null; },
+    unmount() {
+      root = null;
+      if (unsubscribe) unsubscribe();
+      unsubscribe = null;
+    },
     refresh: render,
     editFieldDialog,
     summaryText,

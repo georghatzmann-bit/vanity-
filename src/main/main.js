@@ -19,9 +19,9 @@ const MAX_PDF_BYTES = 50 * 1024 * 1024;
 const DEFAULT_STATE = {
   version: 1,
   data: fields.emptyData(),
-  recovery: { current: null, done: {}, autoOpen: true, startedAt: null, notes: {} },
+  recovery: { current: null, done: {}, skipped: {}, autoOpen: true, startedAt: null, notes: {} },
   pdf: { imports: [] },
-  support: { lang: 'de', variant: 'first' },
+  support: { lang: 'de', variant: 'first', edited: {} },
   discord: { toasts: true, sound: true },
   ui: { view: 'recovery', welcomeSeen: false },
 };

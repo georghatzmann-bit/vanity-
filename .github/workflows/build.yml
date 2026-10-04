@@ -63,7 +63,11 @@ jobs:
           SHOTS_DIR: test-results/screenshots
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
-          node test/e2e/smoke.mjs (Join-Path $env:LOCALAPPDATA 'Programs\Konto-Retter\Konto-Retter.exe')
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\Konto-Retter\Konto-Retter.exe'
+          node test/e2e/smoke.mjs $exe
+          if ($LASTEXITCODE -ne 0) { throw 'Rauchtest fehlgeschlagen' }
+          node test/e2e/flows.mjs $exe
+          if ($LASTEXITCODE -ne 0) { throw 'Ablauf-Tests fehlgeschlagen' }
 
       - name: Bildschirmfotos hochladen
         if: always()
