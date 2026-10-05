@@ -39,6 +39,7 @@
       "kind": "toggle",
       "impact": 2,
       "risk": "moderate",
+      "situational": true,
       "warning": "Randlose Spiele und Videos können etwas mehr Verzögerung und Stromverbrauch haben. Nur sinnvoll, wenn du Flackern oder Ruckler hast.",
       "needs": "reboot",
       "tags": [
@@ -101,6 +102,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Einzelne Spiele können damit in Menüs oder Ladebildschirmen flackern. Dann wieder ausschalten.",
       "needs": "none",
       "tags": [
@@ -128,6 +130,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Hängt die Grafikkarte wirklich, bleibt das Bild bis zu 10 Sekunden eingefroren, bevor Windows den Treiber neu startet.",
       "needs": "reboot",
       "tags": [

@@ -40,6 +40,24 @@ function ConvertTo-VxQuotedArg([string]$Value) {
     return ('"' + $v.Replace('"', '\"') + '"')
 }
 
+# A path on a mapped network drive (Z:\...) as UNC path: the elevated process after the UAC prompt
+# does not see drive letters mapped in the normal session (EnableLinkedConnections is off).
+function ConvertTo-VxUncPath([string]$Path) {
+    try {
+        if ($Path -notmatch '^([A-Za-z]):\\') { return $Path }
+        $letter = $Matches[1]
+        $di = New-Object IO.DriveInfo(($letter + ':\'))
+        if ($di.DriveType -ne [IO.DriveType]::Network) { return $Path }
+        $root = $null
+        try { $root = [string](Get-PSDrive -Name $letter -PSProvider FileSystem -ErrorAction Stop).DisplayRoot } catch { $root = $null }
+        if (-not $root) {
+            try { $root = [string](Get-ItemProperty -LiteralPath ('HKCU:\Network\' + $letter) -Name 'RemotePath' -ErrorAction Stop).RemotePath } catch { $root = $null }
+        }
+        if ($root -and $root.StartsWith('\\')) { return ($root.TrimEnd('\') + $Path.Substring(2)) }
+    } catch { $null = $_ }
+    return $Path
+}
+
 # ------------------------------------------------------------------ basic checks
 
 if ($PSVersionTable.PSVersion.Major -lt 5 -or ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -lt 1)) {
@@ -66,7 +84,9 @@ if ($VxIsWindows -and -not $Simulate) {
     } catch { $isAdmin = $false }
     if (-not $isAdmin) {
         $hostExe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-        $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-VxQuotedArg $PSCommandPath))
+        $scriptPath = ConvertTo-VxUncPath $PSCommandPath
+        $workDir = ConvertTo-VxUncPath $VxRoot
+        $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (ConvertTo-VxQuotedArg $scriptPath))
         foreach ($k in @($PSBoundParameters.Keys)) {
             $v = $PSBoundParameters[$k]
             if ($v -is [System.Management.Automation.SwitchParameter]) {
@@ -77,32 +97,73 @@ if ($VxIsWindows -and -not $Simulate) {
             }
         }
         Write-VxConsole 'VELOX braucht Administratorrechte, um Windows-Einstellungen zu aendern. Bitte die Windows-Abfrage bestaetigen ...'
+        $elevated = $null
         try {
-            Start-Process -FilePath $hostExe -ArgumentList ($argList -join ' ') -Verb RunAs -WorkingDirectory $VxRoot -ErrorAction Stop
-            exit 0
+            $elevated = Start-Process -FilePath $hostExe -ArgumentList ($argList -join ' ') -Verb RunAs -WorkingDirectory $workDir -PassThru -ErrorAction Stop
         } catch {
-            Write-VxConsole ''
-            Write-VxConsole 'Die Administrator-Abfrage wurde abgelehnt oder ist fehlgeschlagen.'
-            Write-VxConsole 'Ohne Adminrechte kann VELOX nichts an Windows aendern.'
-            Write-VxConsole 'Tipp: Mit "Start-Testmodus.bat" kannst du VELOX gefahrlos ausprobieren -'
-            Write-VxConsole 'im Testmodus wird nichts an deinem PC veraendert.'
-            Wait-VxEnter ''
-            exit 2
+            $elevated = $null
         }
+        if ($null -ne $elevated) {
+            # The elevated window closes at once when it cannot even start the script (e.g. the
+            # folder is on a network drive the admin session cannot reach). Say so instead of
+            # vanishing: VELOX itself always returns 0 or 2 (2 = error already shown there).
+            $quick = $false
+            try { $quick = $elevated.WaitForExit(8000) } catch { $quick = $false }
+            if ($quick) {
+                $code = 0
+                try { $code = [int]$elevated.ExitCode } catch { $code = 0 }
+                if ($code -ne 0 -and $code -ne 2) {
+                    Write-VxConsole ''
+                    Write-VxConsole ('VELOX konnte mit Administratorrechten nicht gestartet werden (Code ' + $code + ').')
+                    if ($scriptPath.StartsWith('\\')) {
+                        Write-VxConsole 'VELOX liegt auf einem Netzlaufwerk - das sieht Windows mit Administratorrechten oft nicht.'
+                        Write-VxConsole 'Kopiere den VELOX-Ordner auf ein lokales Laufwerk (z. B. den Desktop) und starte ihn dort.'
+                    }
+                    Wait-VxEnter ''
+                    exit 2
+                }
+            }
+            exit 0
+        }
+        Write-VxConsole ''
+        Write-VxConsole 'Die Administrator-Abfrage wurde abgelehnt oder ist fehlgeschlagen.'
+        Write-VxConsole 'Ohne Adminrechte kann VELOX nichts an Windows aendern.'
+        Write-VxConsole 'Tipp: Mit "Start-Testmodus.bat" kannst du VELOX gefahrlos ausprobieren -'
+        Write-VxConsole 'im Testmodus wird nichts an deinem PC veraendert.'
+        Wait-VxEnter ''
+        exit 2
     }
 }
 
-# Files from a downloaded ZIP carry the Mark-of-the-Web; unblock them so 5.1 loads them silently.
+# Files from a downloaded ZIP carry the Mark-of-the-Web; unblock VELOX's OWN files so 5.1 loads them
+# silently. Never the whole start folder: unpacked straight into Downloads or onto the Desktop that
+# would strip the download marker from every unrelated file (SmartScreen / Office macro protection).
 if ($VxIsWindows) {
-    try { Get-ChildItem -LiteralPath $VxRoot -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue } catch { $null = $_ }
+    try {
+        $own = New-Object System.Collections.Generic.List[string]
+        foreach ($f in @(Get-ChildItem -LiteralPath $VxRoot -File -ErrorAction SilentlyContinue)) {
+            if ($f.Name -ieq 'Velox.ps1' -or $f.Name -like 'Start*.bat' -or $f.Name -ieq 'README.md') { $own.Add($f.FullName) }
+        }
+        foreach ($sub in @('core', 'ui', 'data', 'tools')) {
+            $d = Join-Path $VxRoot $sub
+            if (Test-Path -LiteralPath $d) { foreach ($f in @(Get-ChildItem -LiteralPath $d -Recurse -File -ErrorAction SilentlyContinue)) { $own.Add($f.FullName) } }
+        }
+        foreach ($f in $own) { try { Unblock-File -LiteralPath $f -ErrorAction SilentlyContinue } catch { $null = $_ } }
+    } catch { $null = $_ }
 }
 
 # ------------------------------------------------------------------ load core
 
+# Each core file is read once; the job runspaces get exactly this text later (Get-VxCoreSources),
+# never a fresh read of files the normal user could change while VELOX runs as admin.
 $VxCoreNames = @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs', 'Server')
+$VxCoreText = @{}
 foreach ($n in $VxCoreNames) {
     $f = Join-Path (Join-Path $VxRoot 'core') ($n + '.ps1')
-    try { . $f } catch {
+    try {
+        $VxCoreText[$n] = [IO.File]::ReadAllText($f, [Text.Encoding]::UTF8)
+        . ([scriptblock]::Create($VxCoreText[$n]))
+    } catch {
         Wait-VxEnter ('VELOX konnte core\' + $n + '.ps1 nicht laden: ' + $_.Exception.Message)
         exit 2
     }
@@ -110,14 +171,21 @@ foreach ($n in $VxCoreNames) {
 
 Initialize-VxRuntime
 # VELOX_DATA_DIR (tests only) points the catalog at another data folder, e.g. tests/fixtures/data.
-$ctx = New-VxContext -AppRoot $VxRoot -DataRoot $DataRoot -Simulate ([bool]$Simulate) -SimProfile $SimProfile -DataDir ([string][Environment]::GetEnvironmentVariable('VELOX_DATA_DIR'))
+# Honoured only in the Testmodus: in real mode a value planted in the user environment would make
+# the elevated process run another catalog's scripts.
+$VxDataDir = ''
+if ($Simulate -or -not $VxIsWindows) { $VxDataDir = [string][Environment]::GetEnvironmentVariable('VELOX_DATA_DIR') }
+$ctx = New-VxContext -AppRoot $VxRoot -DataRoot $DataRoot -Simulate ([bool]$Simulate) -SimProfile $SimProfile -DataDir $VxDataDir
+$ctx.CoreSources = @(Get-VxCoreNames | ForEach-Object { [string]$VxCoreText[$_] })
 
 # ------------------------------------------------------------------ app window
 
+# Only browsers in places a normal user cannot change (HKLM App Paths, Program Files): this is
+# started from the elevated process, so an exe from HKCU or %LOCALAPPDATA% would run as admin.
 function Find-VxBrowser {
     $cands = New-Object System.Collections.Generic.List[string]
     foreach ($exe in @('msedge.exe', 'chrome.exe', 'brave.exe')) {
-        foreach ($hk in @('HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\', 'HKCU\Software\Microsoft\Windows\CurrentVersion\App Paths\', 'HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\')) {
+        foreach ($hk in @('HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\', 'HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths\')) {
             try {
                 $v = Get-VxRealRegValue ($hk + $exe) ''
                 if ($v.exists -and $v.value) { $cands.Add(([Environment]::ExpandEnvironmentVariables([string]$v.value)).Trim('"')) }
@@ -128,12 +196,26 @@ function Find-VxBrowser {
             'chrome.exe' { 'Google\Chrome\Application\chrome.exe' }
             'brave.exe' { 'BraveSoftware\Brave-Browser\Application\brave.exe' }
         }
-        foreach ($base in @(${env:ProgramFiles(x86)}, $env:ProgramFiles, $env:LOCALAPPDATA)) {
+        foreach ($base in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
             if ($base) { $cands.Add((Join-Path $base $rel)) }
         }
     }
-    foreach ($c in $cands) { if ($c -and [IO.File]::Exists($c)) { return $c } }
+    $pf = @(${env:ProgramFiles(x86)}, $env:ProgramFiles, $env:ProgramW6432, $env:SystemRoot) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') + '\' }
+    foreach ($c in $cands) {
+        if (-not $c -or -not [IO.File]::Exists($c)) { continue }
+        # an App Paths entry may point anywhere - accept it only inside the protected folders
+        if (@($pf | Where-Object { $c.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }).Count -eq 0) { continue }
+        return $c
+    }
     return $null
+}
+
+# Profile folder of the app window: in the desktop user's own LOCALAPPDATA when VELOX runs as a
+# different account, because the browser drops admin rights and runs as that desktop user.
+function Get-VxEdgeProfileDir {
+    $du = $global:VxCtx.DesktopUser
+    if ($null -ne $du -and $du.localAppData) { return [IO.Path]::Combine([IO.Path]::Combine([string]$du.localAppData, 'Velox'), 'edge-profile') }
+    return (Get-VxDataPath 'edge-profile')
 }
 
 function Open-VxAppWindow([string]$Url) {
@@ -141,36 +223,47 @@ function Open-VxAppWindow([string]$Url) {
     try {
         $browser = Find-VxBrowser
         if ($browser) {
-            $profileDir = Get-VxDataPath 'edge-profile'
+            $profileDir = Get-VxEdgeProfileDir
             $a = @(('--app=' + $Url), ('--user-data-dir=' + (ConvertTo-VxQuotedArg $profileDir)), '--no-first-run', '--no-default-browser-check', '--window-size=1360,880')
             Start-Process -FilePath $browser -ArgumentList ($a -join ' ') -ErrorAction Stop
             return
         }
     } catch { Write-VxLog 'warn' ('App-Fenster konnte nicht geoeffnet werden: ' + $_.Exception.Message) }
-    try { Start-Process -FilePath $Url -ErrorAction Stop } catch {
+    # No browser in a protected folder: let the running (non-elevated) Explorer open the address in
+    # the default browser - started from here, the user-chosen browser would run as admin.
+    try {
+        $explorer = [IO.Path]::Combine([string]$env:SystemRoot, 'explorer.exe')
+        if ((Test-VxAdmin) -and [IO.File]::Exists($explorer)) { Start-Process -FilePath $explorer -ArgumentList ('"' + $Url + '"') -ErrorAction Stop }
+        else { Start-Process -FilePath $Url -ErrorAction Stop }
+    } catch {
         Write-VxConsole ('Bitte diese Adresse im Browser oeffnen: ' + $Url)
     }
 }
 
 # ------------------------------------------------------------------ single instance
 
+# Testmodus and real mode are separate instances (own lock, own state, own instance file): a
+# Testmodus window must never be mistaken for real mode, or the other way round.
 $VxMutex = $null
 $VxOwnsMutex = $false
 try {
-    $mutexName = 'Local\VELOX-' + (Get-VxShortHash $ctx.DataRoot.ToLowerInvariant())
+    $mutexName = 'Local\VELOX-' + (Get-VxModeTag) + '-' + (Get-VxShortHash $ctx.DataRoot.ToLowerInvariant())
     $created = $false
     $VxMutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$created)
     if ($created) { $VxOwnsMutex = $true }
     else {
         try { $VxOwnsMutex = $VxMutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $VxOwnsMutex = $true }
     }
+} catch [System.UnauthorizedAccessException] {
+    # the lock exists but belongs to an elevated instance: that instance is running
+    $VxOwnsMutex = $false
 } catch {
     Write-VxLog 'warn' ('Mutex nicht verfuegbar: ' + $_.Exception.Message)
     $VxOwnsMutex = $true
 }
 
 if (-not $VxOwnsMutex) {
-    $instFile = Get-VxDataPath 'instance.json'
+    $instFile = Get-VxDataPath (Get-VxInstanceFileName)
     $url = $null
     for ($i = 0; $i -lt 20 -and -not $url; $i++) {
         try { if ([IO.File]::Exists($instFile)) { $url = [string](Read-VxJsonFile $instFile).url } } catch { $null = $_ }
@@ -201,7 +294,9 @@ try {
     }
     Save-VxState
     $ctx.OsText = Get-VxOsText
-    $ctx.UserMismatch = Test-VxUserMismatch
+    $ctx.DesktopUser = Get-VxDesktopUser
+    $ctx.UserMismatch = ($null -ne $ctx.DesktopUser)
+    if ($ctx.UserMismatch) { Write-VxLog 'warn' ('VELOX läuft als anderes Konto als der angemeldete Benutzer (' + $ctx.DesktopUser.name + '). Benutzer-Einstellungen werden in dessen Profil geschrieben.') }
     if ([string]::IsNullOrEmpty($Token)) { $Token = New-VxRandomHex 32 }
     $ctx.Token = $Token
     $ctx.Life = New-VxLifecycle
@@ -209,7 +304,11 @@ try {
     $VxListener = $srv.listener
     $ctx.Port = $srv.port
     $appUrl = $srv.url + '?t=' + $Token
-    Write-VxJsonFile -Path (Get-VxDataPath 'instance.json') -InputObject ([ordered]@{ url = $appUrl; pid = $PID; started = (Get-VxNowIso) })
+    $instPath = Get-VxDataPath (Get-VxInstanceFileName)
+    Write-VxJsonFile -Path $instPath -InputObject ([ordered]@{ url = $appUrl; pid = $PID; started = (Get-VxNowIso) })
+    # the URL carries the API token: in real mode only administrators may read it (the second
+    # instance that reads it runs elevated as well)
+    if (-not $ctx.Simulate) { Protect-VxAdminOnlyFile $instPath }
 } catch {
     Write-VxLog 'error' ('Start fehlgeschlagen: ' + $_.Exception.Message)
     if ($null -ne $VxListener) { try { $VxListener.Close() } catch { $null = $_ } }
@@ -249,7 +348,7 @@ try {
     try { Save-VxState } catch { $null = $_ }
     try { Save-VxSim } catch { $null = $_ }
     try {
-        $instFile = Get-VxDataPath 'instance.json'
+        $instFile = Get-VxDataPath (Get-VxInstanceFileName)
         if ([IO.File]::Exists($instFile)) {
             $inst = Read-VxJsonFile $instFile
             if ([int]$inst.pid -eq $PID) { [IO.File]::Delete($instFile) }

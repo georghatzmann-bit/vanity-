@@ -157,6 +157,34 @@ function Get-VxQuickFolderMB([string[]]$Paths, [int]$MaxFiles = 20000, [int]$Max
     return [math]::Round($total / 1MB)
 }
 
+# ------------------------------------------------------------------ form factor
+
+# Decides desktop vs. laptop. The chassis type wins: a desktop with a USB UPS (which Windows lists
+# as Win32_Battery) stays a desktop. Batteries only decide when the chassis is unknown, and
+# batteries that look like a UPS are ignored. Returns @{ formFactor; battery }.
+function Get-VxFormFactor([object[]]$ChassisTypes, [object[]]$Batteries) {
+    $laptopTypes = @(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32)
+    $desktopTypes = @(3, 4, 5, 6, 7, 13, 15, 16, 17, 23, 24, 28, 29, 34, 35, 36)
+    $realBat = @(@($Batteries) | Where-Object {
+            $null -ne $_ -and -not (([string](Get-VxProp $_ 'name') + ' ' + [string](Get-VxProp $_ 'deviceId')) -match '(?i)\bups\b|apc|eaton|cyberpower|back-?ups|smart-?ups|powerwalker|riello|salicru|bluewalker')
+        })
+    $hasBattery = ($realBat.Count -gt 0)
+    $isLaptop = $false; $isDesktop = $false
+    foreach ($ct in @($ChassisTypes)) {
+        $n = 0
+        if (-not [int]::TryParse([string]$ct, [ref]$n)) { continue }
+        if ($laptopTypes -contains $n) { $isLaptop = $true }
+        elseif ($desktopTypes -contains $n) { $isDesktop = $true }
+    }
+    $ff = 'desktop'
+    if ($isLaptop) { $ff = 'laptop' }
+    elseif (-not $isDesktop -and $hasBattery) { $ff = 'laptop' }
+    # a battery in a desktop chassis is a UPS or similar - it must not count as "on battery" either
+    $bat = $hasBattery
+    if ($ff -eq 'desktop') { $bat = $false }
+    return @{ formFactor = $ff; battery = $bat }
+}
+
 # ------------------------------------------------------------------ real profile
 
 function Get-VxRealProfile {
@@ -268,14 +296,13 @@ function Get-VxRealProfile {
     } catch { $null = $_ }
     Set-VxProgress -Step 'Lese Gehäuse, Akku und Bildschirm ...'
     try {
-        $bat = @(Get-VxCim 'Win32_Battery')
-        $p.battery = ($bat.Count -gt 0)
+        $bat = @()
+        try { $bat = @(Get-VxCim 'Win32_Battery') } catch { $null = $_ }
         $chassis = @()
         foreach ($e in @(Get-VxCim 'Win32_SystemEnclosure')) { $chassis += @($e.ChassisTypes) }
-        $laptopTypes = @(8, 9, 10, 11, 12, 14, 18, 21, 30, 31, 32)
-        $isLaptop = $p.battery
-        foreach ($ct in $chassis) { if ($laptopTypes -contains [int]$ct) { $isLaptop = $true } }
-        if ($isLaptop) { $p.formFactor = 'laptop' }
+        $ff = Get-VxFormFactor $chassis @($bat | ForEach-Object { @{ name = [string]$_.Name; deviceId = [string]$_.DeviceID; chemistry = [int]$_.Chemistry } })
+        $p.formFactor = $ff.formFactor
+        $p.battery = $ff.battery
     } catch { Write-VxLog 'warn' ('Gehäusetyp nicht lesbar: ' + $_.Exception.Message) }
     try { $p.display = Get-VxDisplayInfo } catch { Write-VxLog 'warn' ('Bildschirm über user32 nicht lesbar: ' + $_.Exception.Message) }
     if ($null -eq $p.display) {
@@ -343,7 +370,7 @@ function Get-VxProfile {
     } else {
         $p = Get-VxRealProfile
         try {
-            $tmp = @($env:TEMP, [IO.Path]::Combine([string]$env:SystemRoot, 'Temp'))
+            $tmp = @((Get-VxUserFolder 'temp'), [IO.Path]::Combine([string]$env:SystemRoot, 'Temp'))
             $p.tempMB = Get-VxQuickFolderMB $tmp
         } catch { $null = $_ }
     }
@@ -395,19 +422,96 @@ function Get-VxOsText {
     } catch { return ('Windows (Build {0})' -f $ctx.Build) }
 }
 
-# True when VELOX runs elevated as a different account than the logged-in desktop user
-# (then HKCU tweaks would land in the wrong profile).
-function Test-VxUserMismatch {
+# The account that owns the desktop (explorer.exe in VELOX's own session) when VELOX runs elevated
+# as a DIFFERENT account - e.g. a child's standard account where a parent typed the admin password
+# into the UAC prompt. Returns $null when it is the same account or cannot be determined, otherwise
+# @{ name; sid; profile; localAppData; appData; temp; startup }. HKCU access, user folders (cleanup,
+# game detection, autostart folder) and the app window profile are then redirected to this user.
+function Get-VxDesktopUser {
     $ctx = $global:VxCtx
-    if (-not $ctx.Windows -or -not $ctx.Admin) { return $false }
+    if (-not $ctx.Windows -or -not $ctx.Admin) { return $null }
     try {
-        $exp = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='explorer.exe'" -OperationTimeoutSec 5 -ErrorAction Stop)
-        if ($exp.Count -eq 0) { return $false }
-        $owner = Invoke-CimMethod -InputObject $exp[0] -MethodName GetOwner -ErrorAction Stop
-        if (-not $owner.User) { return $false }
-        $me = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-        return (-not [string]::Equals($me, ([string]$owner.Domain + '\' + [string]$owner.User), [StringComparison]::OrdinalIgnoreCase))
-    } catch { return $false }
+        $session = [Diagnostics.Process]::GetCurrentProcess().SessionId
+        $exp = @(Get-CimInstance -ClassName Win32_Process -Filter ("Name='explorer.exe' AND SessionId={0}" -f [int]$session) -OperationTimeoutSec 5 -ErrorAction Stop)
+        if ($exp.Count -eq 0) { return $null }
+        $o = Invoke-CimMethod -InputObject $exp[0] -MethodName GetOwnerSid -ErrorAction Stop
+        $sid = [string]$o.Sid
+        if ($sid -notmatch '^S-1-5-21-[0-9-]+$') { return $null }
+        $me = [string][Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        if ([string]::Equals($me, $sid, [StringComparison]::OrdinalIgnoreCase)) { return $null }
+        return (New-VxDesktopUserInfo $sid)
+    } catch {
+        Write-VxLog 'warn' ('Angemeldeter Benutzer nicht ermittelbar: ' + $_.Exception.Message)
+        return $null
+    }
+}
+
+# Folders of the user with the given SID, from that user's own registry hive.
+function New-VxDesktopUserInfo([string]$Sid) {
+    $name = $Sid
+    try { $name = [string](New-Object Security.Principal.SecurityIdentifier($Sid)).Translate([Security.Principal.NTAccount]).Value } catch { $null = $_ }
+    $prof = $null
+    try {
+        $v = Get-VxRealRegValue ('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\' + $Sid) 'ProfileImagePath'
+        if ($v.exists -and $v.value) { $prof = [Environment]::ExpandEnvironmentVariables([string]$v.value) }
+    } catch { $null = $_ }
+    if (-not $prof) { return $null }
+    $expand = {
+        param([string]$raw, [string]$fallback)
+        if (-not $raw) { return $fallback }
+        $x = [regex]::Replace($raw, '%USERPROFILE%', $prof.Replace('$', '$$'), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        return [Environment]::ExpandEnvironmentVariables($x)
+    }
+    $usf = 'HKU\' + $Sid + '\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+    $read = {
+        param([string]$key, [string]$name)
+        try { $r = Get-VxRealRegValue $key $name; if ($r.exists) { return [string]$r.value } } catch { $null = $_ }
+        return ''
+    }
+    $local = & $expand (& $read $usf 'Local AppData') ([IO.Path]::Combine($prof, 'AppData\Local'))
+    $roaming = & $expand (& $read $usf 'AppData') ([IO.Path]::Combine($prof, 'AppData\Roaming'))
+    $startup = & $expand (& $read $usf 'Startup') ([IO.Path]::Combine($roaming, 'Microsoft\Windows\Start Menu\Programs\Startup'))
+    $temp = & $expand (& $read ('HKU\' + $Sid + '\Environment') 'TEMP') ([IO.Path]::Combine($local, 'Temp'))
+    return @{ name = $name; sid = $Sid; profile = $prof; localAppData = $local; appData = $roaming; temp = $temp; startup = $startup }
+}
+
+# Kept for callers that only need the yes/no answer.
+function Test-VxUserMismatch {
+    return ($null -ne $global:VxCtx.DesktopUser)
+}
+
+# A per-user folder of the person sitting at the desktop: the desktop user's when VELOX runs as
+# another account, otherwise this process's own. Kind: profile, localAppData, appData, temp, startup.
+function Get-VxUserFolder([string]$Kind) {
+    $du = $global:VxCtx.DesktopUser
+    if ($null -ne $du -and $du.ContainsKey($Kind) -and $du[$Kind]) { return [string]$du[$Kind] }
+    switch ($Kind) {
+        'profile' { return [string]$env:USERPROFILE }
+        'localAppData' { return [string]$env:LOCALAPPDATA }
+        'appData' { return [string]$env:APPDATA }
+        'temp' { return [string]$env:TEMP }
+        'startup' { try { return [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup) } catch { return '' } }
+    }
+    return ''
+}
+
+# Expands %VARS% in a path; the per-user ones point at the desktop user (see Get-VxDesktopUser).
+function Expand-VxUserPath([string]$Raw) {
+    $x = [string]$Raw
+    if ($null -ne $global:VxCtx.DesktopUser) {
+        $map = @{ 'TEMP' = 'temp'; 'TMP' = 'temp'; 'LOCALAPPDATA' = 'localAppData'; 'APPDATA' = 'appData'; 'USERPROFILE' = 'profile' }
+        foreach ($k in @($map.Keys)) {
+            $val = [string](Get-VxUserFolder $map[$k])
+            $x = [regex]::Replace($x, ('%' + $k + '%'), $val.Replace('$', '$$'), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        }
+    }
+    return [Environment]::ExpandEnvironmentVariables($x)
+}
+
+# $true when a ps script works on per-user data (HKCU, user folders) and would therefore hit the
+# wrong account while VELOX runs as a different user than the one at the desktop.
+function Test-VxPerUserScript([string]$Source) {
+    return ([string]$Source -match '(?i)HKCU:|HKEY_CURRENT_USER|Registry::HKCU|\$env:(LOCALAPPDATA|APPDATA|TEMP|TMP|USERPROFILE)\b|SpecialFolder\]::(LocalApplicationData|ApplicationData|UserProfile|Startup)|GetTempPath')
 }
 
 # Identifies the current boot; "needs reboot" flags are cleared when it changes.

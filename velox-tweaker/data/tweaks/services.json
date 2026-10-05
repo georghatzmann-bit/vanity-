@@ -121,6 +121,7 @@
       "kind": "toggle",
       "impact": 2,
       "risk": "moderate",
+      "situational": true,
       "warning": "Suche in Startmenü, Explorer und Einstellungen wird langsam und findet keine Inhalte in Dateien mehr. Die Suche in Outlook geht nicht mehr richtig.",
       "needs": "none",
       "tags": [

@@ -6,7 +6,7 @@
 .EXAMPLE
   pwsh tests/Run-Tests.ps1
   pwsh tests/Run-Tests.ps1 -Strict          # also fail when the real data/ catalog has errors
-  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, server)
+  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, server, review)
 #>
 param(
     [switch]$Strict,
@@ -980,6 +980,7 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         $bs = $r.json
         foreach ($k in @('app', 'mode', 'categories', 'tweaks', 'presets', 'settings', 'state', 'busy')) { Assert-True ($null -ne $bs.PSObject.Properties[$k]) "bootstrap.$k" }
         Assert-True ($bs.app.name -eq 'VELOX' -and $bs.mode.simulate -eq $true -and $bs.mode.os) 'app/mode'
+        Assert-True ($null -ne $bs.mode.PSObject.Properties['desktopUser'] -and $bs.mode.userMismatch -eq $false) 'mode.desktopUser/userMismatch'
         $tw = @($bs.tweaks | Where-Object { $_.id -eq 'gaming.gamedvr-off' })[0]
         Assert-True ($tw.category -eq 'gaming' -and $tw.applicable -eq $true -and $null -ne $tw.PSObject.Properties['naReason']) 'tweak-Felder'
         $w10 = @($bs.tweaks | Where-Object { $_.id -eq 'system.win10-only' })[0]
@@ -1098,7 +1099,8 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         Assert-True ($sd.status -eq 200 -and $sd.json.ok) 'shutdown angenommen'
         Assert-True ($proc.WaitForExit(20000)) 'Prozess beendet sich nach dem Shutdown'
         Assert-Equal 0 $proc.ExitCode 'Exit-Code 0'
-        Assert-True (-not [IO.File]::Exists((Join-Path $dataRoot 'instance.json'))) 'instance.json aufgeräumt'
+        Assert-True (-not [IO.File]::Exists((Join-Path $dataRoot 'instance-sim.json'))) 'instance-sim.json aufgeräumt'
+        Assert-True (-not [IO.File]::Exists((Join-Path $dataRoot 'state.json')) -and [IO.File]::Exists((Join-Path $dataRoot 'state-sim.json'))) 'Testmodus schreibt nur state-sim.json'
         $ready = @($lines | Where-Object { $_ -match '^VELOX_READY ' })
         Assert-Equal 1 $ready.Count 'genau eine VELOX_READY-Zeile'
     } finally {
@@ -1124,6 +1126,397 @@ Test-Case 'server' 'Shutdown wird durch einen Heartbeat abgebrochen; Heartbeat-T
     $life.lastHeartbeat = [DateTime]::UtcNow.AddSeconds(-151)
     Test-VxLifecycle
     Assert-True ($life.stop -and $life.reason -eq 'timeout') 'Timeout nach 150 s'
+}
+
+# ==================================================================== review fixes (regression tests)
+$PwsSub = '54533251-82be-4824-96c1-47b60b740d00'
+$PwsPark = '0cc5b647-c1df-4637-891a-dec35c318583'
+$PwsUsbSub = '2a737441-1930-4402-8d77-b2bebba308a3'
+$PwsUsb = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
+$GuidBalanced = '381b4222-f694-41f0-9685-ff5bb260df2e'
+$GuidUltimate = 'e9a42b02-d5df-448d-aa00-03f14749eb61'
+$GuidHigh = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+
+Test-Case 'review' 'Testmodus und echter Modus: getrennte state-/instance-Dateien, getrennte Sperre' {
+    $ctx = New-TestContext
+    $ctx.State.statuses['gaming.gamedvr-off'] = 'applied'
+    $ctx.State.needs.reboot = $true
+    $ctx.State.lastScan = Get-VxNowIso
+    Save-VxState
+    Assert-Equal 'state-sim.json' (Get-VxStateFileName) 'Testmodus-Datei'
+    Assert-Equal 'instance-sim.json' (Get-VxInstanceFileName) 'Testmodus-Instanzdatei'
+    Assert-Equal 'sim' (Get-VxModeTag) 'Modus-Kennung'
+    Assert-True ([IO.File]::Exists((Get-VxDataPath 'state-sim.json'))) 'state-sim.json geschrieben'
+    Assert-True (-not [IO.File]::Exists((Get-VxDataPath 'state.json'))) 'state.json nicht angefasst'
+    # the real mode (same data root) starts clean and never sees the simulated statuses
+    Write-VxJsonFile -Path (Get-VxDataPath 'state.json') -InputObject @{ ultimateGuid = 'aaaaaaaa-1111-2222-3333-444444444444'; statuses = @{ 'x.y' = 'default' } }
+    $ctx.Simulate = $false
+    $real = Import-VxState
+    Assert-True (-not $real.statuses.ContainsKey('gaming.gamedvr-off') -and -not $real.needs.reboot -and -not $real.lastScan) 'echter Modus ohne Testmodus-Status'
+    Assert-Equal 'state.json' (Get-VxStateFileName) 'echte Datei'
+    Assert-Equal 'real' (Get-VxModeTag) 'echte Kennung'
+    # the Testmodus may reuse the plan copies real mode created (read-only)
+    $ctx.Simulate = $true
+    Remove-Item -LiteralPath (Get-VxDataPath 'state-sim.json') -Force
+    $sim = Import-VxState
+    Assert-Equal 'aaaaaaaa-1111-2222-3333-444444444444' $sim.ultimateGuid 'Plan-Kopie aus dem echten Modus bekannt'
+    Assert-True (-not $sim.statuses.ContainsKey('x.y')) 'aber keine echten Statuswerte'
+    $velox = [IO.File]::ReadAllText((Join-Path $AppRoot 'Velox.ps1'))
+    Assert-True ($velox -match "'Local\\VELOX-' \+ \(Get-VxModeTag\)" -and $velox -match 'catch \[System\.UnauthorizedAccessException\]') 'Sperre pro Modus, fremde Admin-Sperre = läuft schon'
+}
+
+Test-Case 'review' 'Energie: Plan zuerst, Einstellungen landen im aktiven Plan, Journal merkt sich den Plan' {
+    $ctx = New-TestContext
+    $ids = @('power.core-parking-off', 'power.usb-suspend-off', 'power.ultimate-plan')
+    Assert-Equal @('power.ultimate-plan', 'power.core-parking-off', 'power.usb-suspend-off') @(Get-VxPowerOrderedIds $ids 'apply') 'Plan zuerst beim Anwenden'
+    Assert-Equal @('power.core-parking-off', 'power.usb-suspend-off', 'power.ultimate-plan') @(Get-VxPowerOrderedIds $ids 'revert') 'Plan zuletzt beim Zurücksetzen'
+    $res = Invoke-VxApplyJob ([pscustomobject]@{ ids = $ids; label = 'Plan-Test' }) 'apply'
+    Assert-Equal $GuidUltimate (Get-VxActivePlan).guid 'Ultimate aktiv'
+    foreach ($r in $res.results) { Assert-True ($r.ok -and $r.status -eq 'applied') ("{0} angewendet: {1} {2}" -f $r.id, $r.status, $r.error) }
+    Assert-Equal 100 ([int](Get-VxPowerSetting $PwsSub $PwsPark $null $GuidUltimate).ac) 'Wert im neuen Plan'
+    Assert-Equal 10 ([int](Get-VxPowerSetting $PwsSub $PwsPark @{ ac = 10; dc = 10 } $GuidBalanced).ac) 'Ausbalanciert unverändert'
+    $doc = Read-VxBackup $res.backupId
+    $pe = @($doc.entries | Where-Object { $_.op -eq 'powersetting' })
+    Assert-True ($pe.Count -eq 2 -and @($pe | Where-Object { $_.scheme -ne $GuidUltimate }).Count -eq 0) 'Journal kennt den Plan'
+    Assert-True ([string]$doc.entries[0].op -eq 'powerplan') 'Planwechsel steht vorne im Journal'
+    # a later plan switch does not redirect a restore: the values go back into Ultimate
+    Set-VxActivePlanGuid $GuidHigh
+    $rr = Invoke-VxRestoreJob ([pscustomobject]@{ backupId = $res.backupId })
+    Assert-Equal 0 $rr.failed ('Restore ohne Fehler: ' + ($rr.errors -join '; '))
+    Assert-Equal 10 ([int](Get-VxPowerSetting $PwsSub $PwsPark @{ ac = 10; dc = 10 } $GuidUltimate).ac) 'Ultimate wieder auf dem alten Wert'
+    Assert-Equal $null (Get-VxProp $ctx.Sim.pws ($GuidHigh + '|' + $PwsSub + '|' + $PwsPark).ToLowerInvariant()) 'Höchstleistung nie angefasst'
+    # revert batch: the plan goes last, the settings are reverted in the plan they were applied to
+    Set-VxActivePlanGuid $GuidBalanced
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $ids }) 'apply'
+    $rv = Invoke-VxApplyJob ([pscustomobject]@{ ids = $ids }) 'revert'
+    Assert-Equal $GuidBalanced (Get-VxActivePlan).guid 'zurück auf Ausbalanciert'
+    Assert-Equal 10 ([int](Get-VxPowerSetting $PwsSub $PwsPark @{ ac = 10; dc = 10 } $GuidUltimate).ac) 'Ultimate-Wert zurückgesetzt'
+    foreach ($r in $rv.results) { Assert-Equal 'default' $r.status ("{0} nach revert" -f $r.id) }
+    # older overlays without a scheme are moved to the plan that was active then
+    $ctx.Sim.pws = @{ ($PwsSub + '|' + $PwsPark).ToLowerInvariant() = @{ ac = 77; dc = 77 } }
+    $ctx.Sim.power.active = $GuidHigh
+    Repair-VxSimPowerSettings
+    Assert-Equal 77 ([int](Get-VxPowerSetting $PwsSub $PwsPark $null $GuidHigh).ac) 'alte Overlay-Werte übernommen'
+}
+
+Test-Case 'review' 'Energieoption: AC und DC zusammen gemerkt, AC-only-Tweaks lassen DC in Ruhe' {
+    $null = New-TestContext
+    # usb suspend (ac 0 / dc 0): AC already 0, DC custom 3 -> remembered as a whole, DC comes back
+    Set-VxPowerSetting $PwsUsbSub $PwsUsb 0 3
+    $null = Invoke-Change 'power.usb-suspend-off' 'apply'
+    Assert-Equal 'applied' (Get-Status 'power.usb-suspend-off') 'angewendet'
+    $null = Invoke-Change 'power.usb-suspend-off' 'revert'
+    $v = Get-VxPowerSetting $PwsUsbSub $PwsUsb $null
+    Assert-True ([int]$v.ac -eq 0 -and [int]$v.dc -eq 3) ("eigener DC-Wert zurück: {0}/{1}" -f $v.ac, $v.dc)
+    # core parking (ac only): DC is never written, also not on revert
+    Set-VxPowerSetting $PwsSub $PwsPark 10 0
+    $null = Invoke-Change 'power.core-parking-off' 'apply'
+    Set-VxPowerSetting $PwsSub $PwsPark $null 5
+    $null = Invoke-Change 'power.core-parking-off' 'revert'
+    $p = Get-VxPowerSetting $PwsSub $PwsPark $null
+    Assert-True ([int]$p.ac -eq 10 -and [int]$p.dc -eq 5) ("AC zurück, DC unberührt: {0}/{1}" -f $p.ac, $p.dc)
+}
+
+Test-Case 'review' 'Testmodus: Standardwert ("") eines Schlüssels übersteht Speichern und Laden' {
+    $ctx = New-TestContext
+    $null = Invoke-Change 'system.classic-context-menu' 'apply'
+    $ctx.Sim.svc['xyz'] = 'Disabled'
+    Save-VxSim
+    $text = [IO.File]::ReadAllText((Get-VxDataPath 'sim-state.json'))
+    Assert-True ($text -notmatch '"":') 'kein leerer JSON-Schlüssel'
+    Import-VxSim
+    Assert-Equal 'Disabled' $ctx.Sim.svc['xyz'] 'Overlay nicht verworfen'
+    Assert-Equal 'applied' (Get-Status 'system.classic-context-menu') 'Tweak nach dem Laden noch aktiv'
+    # overlays of older versions (raw value names) are re-keyed on load
+    $ck = 'HKCU\Software\VeloxFixture\Legacy'
+    $ctx.Sim.reg[$ck.ToLowerInvariant()] = @{ path = $ck; exists = $true; cleared = $false; values = @{ 'mixedcase' = @{ name = 'MixedCase'; kind = 'DWord'; value = 7; deleted = $false } } }
+    Repair-VxSimRegValues
+    Assert-Equal 7 ([int](Get-VxRegValue $ck 'MixedCase').value) 'alter Overlay-Wert lesbar'
+}
+
+Test-Case 'review' 'ps-Aktionen: schon erreichter Zustand wird weder ausgeführt noch gesichert' {
+    $null = New-TestContext
+    $r1 = Invoke-Change 'memory.compression-off' 'apply'
+    Assert-True ($r1.changed -gt 0 -and $null -ne $r1.backupId) 'erstes Anwenden gesichert'
+    $r2 = Invoke-Change 'memory.compression-off' 'apply'
+    Assert-True ($r2.changed -eq 0 -and $null -eq $r2.backupId) 'zweites Anwenden ohne Journal'
+    $rr = Invoke-VxRestoreJob ([pscustomobject]@{ backupId = $r1.backupId })
+    Assert-Equal 0 $rr.failed 'Restore ok'
+    Assert-Equal 'default' (Get-Status 'memory.compression-off') 'Restore stellt den alten Zustand her'
+    $r3 = Invoke-Change 'memory.compression-off' 'revert'
+    Assert-True ($r3.changed -eq 0 -and $null -eq $r3.backupId) 'Zurücksetzen eines Standardzustands ohne Journal'
+}
+
+Test-Case 'review' 'Spiele-Boost teilt sich den IFEO-Wert sauber mit Katalog-Tweaks' {
+    $ctx = New-TestContext
+    $exePath = 'C:\Users\Gamer\AppData\Local\FiveM\FiveM.app\data\cache\subprocess\FiveM_GTAProcess.exe'
+    $ifeo = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions'
+    $null = Invoke-Change 'games.fivem-priority' 'apply'
+    $st = Get-VxGameBoostState $exePath
+    Assert-True ($st.priority -and $st.priorityTweak -eq 'games.fivem-priority') 'Boost zeigt, woher die Priorität kommt'
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = $exePath; priority = $false; gpu = $true; fso = $false })
+    Assert-Equal 3 ([int](Get-VxRegValue $ifeo 'CpuPriorityClass').value) 'Katalog-Tweak bleibt unangetastet'
+    Assert-Equal 'applied' (Get-Status 'games.fivem-priority') 'Tweak weiter aktiv'
+    # reverting the tweak takes the priority away -> the remembered boost follows and says so
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = $exePath; priority = $true; gpu = $true; fso = $false })
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('games.fivem-priority') }) 'revert'
+    $g = @($ctx.Settings.games | Where-Object { $_.path -eq $exePath })[0]
+    Assert-True ($null -ne $g -and -not $g.boost.priority -and $g.boost.gpu) 'settings.games nachgezogen'
+    # a priority that existed before the boost comes back on un-boost; the key stays
+    $other = 'C:\Games\Other\Other.exe'
+    $oifeo = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\Other.exe\PerfOptions'
+    Set-VxRegValue $oifeo 'CpuPriorityClass' 'DWord' 5
+    Set-VxRegValue $oifeo 'IoPriority' 'DWord' 3
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = $other; priority = $true })
+    Assert-Equal 3 ([int](Get-VxRegValue $oifeo 'CpuPriorityClass').value) 'geboostet'
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = $other; priority = $false })
+    Assert-Equal 5 ([int](Get-VxRegValue $oifeo 'CpuPriorityClass').value) 'alter Wert zurück statt gelöscht'
+    Assert-Equal 3 ([int](Get-VxRegValue $oifeo 'IoPriority').value) 'fremder Wert im Schlüssel bleibt'
+    # un-ticking something unrelated never deletes another tool's priority
+    Set-VxRegValue $oifeo 'CpuPriorityClass' 'DWord' 1
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = $other; priority = $false; gpu = $true })
+    Assert-Equal 1 ([int](Get-VxRegValue $oifeo 'CpuPriorityClass').value) 'fremde Priorität bleibt'
+}
+
+Test-Case 'review' 'Detweak: IFEO-Schlüssel von VELOX-Tweaks und Spiele-Boosts sind keine Fremd-Tweaks' {
+    $ctx = New-TestContext -Seed
+    $null = Invoke-Change 'games.fivem-priority' 'apply'
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = 'C:\Riot Games\VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe'; priority = $true })
+    $keys = @((Invoke-VxDetweakScanJob ([pscustomobject]@{})).items | ForEach-Object { $_.key })
+    Assert-True (@($keys | Where-Object { $_ -match 'regkey\|.*FiveM_GTAProcess' }).Count -eq 0) 'Katalog-IFEO nicht als Fremd-Tweak'
+    Assert-True (@($keys | Where-Object { $_ -match 'regkey\|.*VALORANT' }).Count -eq 0) 'Boost-IFEO nicht als Fremd-Tweak'
+    Assert-True ($keys -contains 'regkey|HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\GTA5.exe\PerfOptions') 'echter Fremd-Schlüssel weiter gelistet'
+    Assert-True ($keys -contains 'tweak|games.fivem-priority') 'eigener Tweak als Katalog-Eintrag'
+    Set-VxRegValue 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\FiveM_GTAProcess.exe\PerfOptions' 'IoPriority' 'DWord' 3
+    $keys2 = @((Invoke-VxDetweakScanJob ([pscustomobject]@{})).items | ForEach-Object { $_.key })
+    Assert-True (@($keys2 | Where-Object { $_ -match 'regkey\|.*FiveM_GTAProcess' }).Count -eq 1) 'fremder Wert im selben Schlüssel wird gemeldet'
+}
+
+Test-Case 'review' 'Smart-Analyse: Kompromiss-Tweaks nur aus dem Preset, passend zur Hardware oder auf Wunsch' {
+    $ctx = New-TestContext
+    $desk = Get-VxSimProfile 'desktop'
+    $ctx.State.profile = $desk
+    $ids = @((Invoke-VxAdvisor 'gaming' '' $desk).plan | ForEach-Object { $_.id })
+    Assert-True ($ids -notcontains 'memory.compression-off') 'kein ungefragter Kompromiss'
+    Assert-True ($ids -contains 'latency.timer-bcd') 'Kompromiss aus dem Gaming-Preset bleibt'
+    Assert-True ($ids -contains 'services.sysmain-off') 'Kompromiss passend zur SSD bleibt'
+    $kw = @((Invoke-VxAdvisor 'gaming' 'Mein Spiel ruckelt' $desk).plan | ForEach-Object { $_.id })
+    Assert-True ($kw -contains 'memory.compression-off') 'auf Wunsch (Freitext) dabei'
+    # catalog flag "situational": only with free text
+    $t = Get-VxTweak 'latency.timer-bcd'
+    Add-Member -InputObject $t -NotePropertyName 'situational' -NotePropertyValue $true -Force
+    try {
+        Assert-True (@((Invoke-VxAdvisor 'gaming' '' $desk).plan | ForEach-Object { $_.id }) -notcontains 'latency.timer-bcd') 'situational ohne Freitext raus'
+        Assert-True (@((Invoke-VxAdvisor 'gaming' 'input lag und Verzögerung' $desk).plan | ForEach-Object { $_.id }) -contains 'latency.timer-bcd') 'situational mit Freitext drin'
+        Assert-True ((Get-VxCatalogDigest) -match 'latency\.timer-bcd \|.*\| nur bei passendem Problem') 'Claude sieht den Hinweis'
+    } finally { $t.PSObject.Properties.Remove('situational') }
+    # per-game priority only for installed games
+    Assert-True (@((Invoke-VxAdvisor 'fivem' '' $desk).plan | ForEach-Object { $_.id }) -contains 'games.fivem-priority') 'FiveM gefunden -> Tweak'
+    $ctx.Cache.detectedGames = @{ exes = @{}; fivem = $false }
+    Assert-True (@((Invoke-VxAdvisor 'fivem' '' $desk).plan | ForEach-Object { $_.id }) -notcontains 'games.fivem-priority') 'ohne FiveM kein FiveM-Tweak'
+    $ctx.Cache.Remove('detectedGames')
+    # reasons: neutral wording, WLAN only for WLAN tweaks
+    $r = Get-VxPlanReason (Get-VxTweak 'latency.timer-bcd') $desk 'gaming'
+    Assert-True ($r -match '^Weniger Verzögerung' -and $r -notmatch 'Maus') ('Latenz-Begründung: ' + $r)
+    Assert-True ((Get-VxPlanReason (Get-VxTweak 'latency.mouse-accel-off') $desk 'gaming') -match 'Maus') 'Eingabe-Begründung'
+    Assert-True ((Get-VxPlanReason (Get-VxTweak 'gaming.mmcss-games') $desk 'gaming') -notmatch 'GB RAM') 'RAM nur bei Speicher-Tweaks'
+    $wifi = [pscustomobject]@{ id = 'network.wifi-roaming-low'; name = 'WLAN-Roaming niedrig'; desc = 'x'; tags = @('network', 'ping'); category = 'network'; actions = @() }
+    Assert-True ((Get-VxPlanReason $wifi $desk 'gaming') -match 'WLAN') 'WLAN-Tweak auf LAN-PC sagt WLAN'
+    Assert-True (Test-VxWifiTweak $wifi) 'WLAN-Tweak erkannt'
+}
+
+Test-Case 'review' 'Ryzen X3D mit zwei Chiplets: kein Energieplan-/Core-Parking-Vorschlag; Befund und Plan nennen denselben Plan' {
+    $ctx = New-TestContext
+    $p = Get-VxSimProfile 'desktop'
+    $p.cpu.name = 'AMD Ryzen 9 7950X3D 16-Core Processor'
+    $ctx.State.profile = $p
+    $r = Invoke-VxAdvisor 'gaming' '' $p
+    $ids = @($r.plan | ForEach-Object { $_.id })
+    Assert-True (@($ids | Where-Object { $_ -like 'power.*-plan' -or $_ -eq 'power.core-parking-off' }).Count -eq 0) ('keine Plan-/Parking-Tweaks: ' + ($ids -join ','))
+    $pp = @($r.findings | Where-Object { $_.id -eq 'power-plan' })[0]
+    Assert-True ($null -ne $pp -and $pp.severity -eq 'good' -and $null -eq $pp.fix) 'Ausbalanciert als richtig erklärt'
+    $sel = Select-VxClaudePlan @([pscustomobject]@{ id = 'power.ultimate-plan'; reason = 'x' }) $false $p
+    Assert-True (@($sel.plan).Count -eq 0) 'Claude-Vorschlag ebenfalls verworfen'
+    # single-CCD X3D (5800X3D in the sim profile) keeps the normal advice, finding = plan
+    $d = Get-VxSimProfile 'desktop'
+    $ctx.State.profile = $d
+    $r2 = Invoke-VxAdvisor 'gaming' '' $d
+    $planPlan = @($r2.plan | ForEach-Object { $_.id } | Where-Object { $_ -like 'power.*-plan' })
+    $pp2 = @($r2.findings | Where-Object { $_.id -eq 'power-plan' })[0]
+    Assert-True ($planPlan.Count -eq 1 -and @($pp2.fix.ids).Count -eq 1 -and $pp2.fix.ids[0] -eq $planPlan[0]) 'Befund-Fix = Plan-Eintrag'
+}
+
+Test-Case 'review' 'Gehäusetyp entscheidet: USV-Akku macht keinen Laptop' {
+    $ff = Get-VxFormFactor @(3) @(@{ name = 'Back-UPS XS 700U'; deviceId = 'APC'; chemistry = 3 })
+    Assert-True ($ff.formFactor -eq 'desktop' -and -not $ff.battery) 'Desktop mit USV'
+    $ff = Get-VxFormFactor @(3) @(@{ name = 'Interner Akku'; deviceId = 'BAT0'; chemistry = 6 })
+    Assert-Equal 'desktop' $ff.formFactor 'Desktop-Gehäuse gewinnt'
+    Assert-Equal 'laptop' (Get-VxFormFactor @(10) @()).formFactor 'Notebook-Gehäuse'
+    Assert-Equal 'laptop' (Get-VxFormFactor @(2) @(@{ name = 'Akku'; deviceId = 'BAT0' })).formFactor 'unbekanntes Gehäuse + Akku'
+    Assert-Equal 'desktop' (Get-VxFormFactor @(2) @(@{ name = 'Smart-UPS 1500'; deviceId = 'x' })).formFactor 'unbekanntes Gehäuse + USV'
+    Assert-True (-not (Test-VxIsLaptop @{ formFactor = 'desktop'; battery = $true })) 'Advisor folgt nur formFactor'
+}
+
+Test-Case 'review' 'Restore: nur Einträge, die VELOX selbst schreibt, werden wiederhergestellt' {
+    $ctx = New-TestContext
+    Set-VxRegValue 'HKCU\System\GameConfigStore' 'GameDVR_Enabled' 'DWord' 0
+    $evil = [ordered]@{
+        id = '20261005-120000-apply'; label = 'Gepflanzt'; kind = 'apply'; created = '2026-10-05T12:00:00'; simulate = $true; restorePoint = $false
+        entries = @(
+            [ordered]@{ op = 'reg'; path = 'HKCU\System\GameConfigStore'; name = 'GameDVR_Enabled'; before = @{ exists = $true; kind = 'DWord'; value = 1 }; after = @{ exists = $true; kind = 'DWord'; value = 0 } },
+            [ordered]@{ op = 'reg'; path = 'HKLM\SYSTEM\CurrentControlSet\Services\Evil'; name = 'ImagePath'; before = @{ exists = $true; kind = 'ExpandString'; value = 'C:\evil.exe' }; after = @{ exists = $false } },
+            [ordered]@{ op = 'bcd'; name = 'testsigning'; before = 'Yes'; after = $null },
+            [ordered]@{ op = 'regkey'; path = 'HKLM\SYSTEM\CurrentControlSet\Services'; before = $false; after = $true },
+            [ordered]@{ op = 'regkey'; path = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\x.exe\PerfOptions'; before = $true; after = $false
+                tree = [ordered]@{ path = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\x.exe\PerfOptions'; values = @(); keys = @([ordered]@{ path = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\x.exe\Debugger'; values = @(); keys = @() }) } },
+            [ordered]@{ op = 'service'; name = 'EvilSvc'; before = 'Automatic'; after = 'Disabled' }
+        )
+    }
+    Write-VxJsonFile -Path (Join-Path $ctx.BackupDir '20261005-120000-apply.json') -InputObject $evil
+    $rr = Invoke-VxRestoreJob ([pscustomobject]@{ backupId = '20261005-120000-apply' })
+    Assert-Equal 1 $rr.restored 'nur der echte VELOX-Eintrag'
+    Assert-Equal 5 $rr.failed 'fünf Einträge verweigert'
+    Assert-True (@($rr.errors | Where-Object { $_ -match 'Sicherheitsgründen' }).Count -eq 5) 'deutscher Grund'
+    Assert-Equal 1 ([int](Get-VxRegValue 'HKCU\System\GameConfigStore' 'GameDVR_Enabled').value) 'erlaubter Eintrag wiederhergestellt'
+    Assert-True (-not (Get-VxRegValue 'HKLM\SYSTEM\CurrentControlSet\Services\Evil' 'ImagePath').exists) 'Dienst-Pfad nicht geschrieben'
+    Assert-True ($null -eq (Get-VxBcdValue 'testsigning')) 'testsigning nicht gesetzt'
+    Assert-True (-not (Test-VxRegKey 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\x.exe\Debugger')) 'Baum außerhalb des Schlüssels verweigert'
+}
+
+Test-Case 'review' 'Reinigung: Verknüpfungen (Junction/Symlink) werden nie verfolgt' {
+    $null = New-TestContext
+    $base = New-TempDir 'clean'
+    $outside = Join-Path $base 'outside'
+    $cache = Join-Path $base 'cache'
+    [void][IO.Directory]::CreateDirectory($outside)
+    [void][IO.Directory]::CreateDirectory((Join-Path $cache 'sub'))
+    [IO.File]::WriteAllText((Join-Path $outside 'wichtig.txt'), 'x')
+    [IO.File]::WriteAllText((Join-Path $cache 'a.tmp'), 'abc')
+    [IO.File]::WriteAllText((Join-Path (Join-Path $cache 'sub') 'b.tmp'), 'abcd')
+    $linkOk = $true
+    try { $null = New-Item -ItemType SymbolicLink -Path (Join-Path $cache 'link') -Target $outside -ErrorAction Stop } catch { $linkOk = $false }
+    if (-not $linkOk) { Add-Note 'Symlinks nicht erlaubt - Verknüpfungstest übersprungen.'; return }
+    $r = Resolve-VxCleanPath $cache
+    $items = @(Get-VxCleanTopItems $r @())
+    $w = Invoke-VxCleanWalk $items $true 30000 (Get-VxCleanRootFinal $r.root)
+    Assert-Equal 2 $w.deleted 'beide Cache-Dateien gelöscht'
+    Assert-True ([IO.File]::Exists((Join-Path $outside 'wichtig.txt'))) 'Ziel der Verknüpfung unberührt'
+    # the cleaned folder itself (or a folder above it) is a link -> refused
+    $linkRoot = Join-Path $base 'cache-link'
+    $null = New-Item -ItemType SymbolicLink -Path $linkRoot -Target $outside
+    $refused = $false
+    try { $null = Get-VxCleanTopItems (Resolve-VxCleanPath $linkRoot) @() } catch { $refused = ([string]$_.Exception.Message -match 'Verknüpfung') }
+    Assert-True $refused 'Wurzel als Verknüpfung verweigert'
+    $refused2 = $false
+    try { $null = Get-VxCleanTopItems (Resolve-VxCleanPath (Join-Path $linkRoot 'x')) @() } catch { $refused2 = ([string]$_.Exception.Message -match 'Verknüpfung') }
+    Assert-True $refused2 'Verknüpfung weiter oben verweigert'
+    Assert-True ([IO.File]::Exists((Join-Path $outside 'wichtig.txt'))) 'nichts außerhalb gelöscht'
+}
+
+Test-Case 'review' 'Cache: jeder Job und jedes Skript liest Energieplan/BCD neu' {
+    $ctx = New-TestContext
+    $ctx.Cache.activePlan = @{ guid = 'stale'; name = 'alt' }
+    $ctx.Cache.bcd = @{ useplatformclock = 'Yes' }
+    $null = Invoke-VxPsSource '$null = 1'
+    Assert-True (-not $ctx.Cache.ContainsKey('activePlan') -and -not $ctx.Cache.ContainsKey('bcd')) 'nach Skript geleert'
+    $ctx.Cache.activePlan = @{ guid = 'stale'; name = 'alt' }
+    $job = [hashtable]::Synchronized(@{ id = 'x'; type = 'startup-list'; status = 'running'; progress = 0.0; step = ''; log = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); nextIndex = 0; result = $null; error = $null; cancel = $false; lockObj = (New-Object object); params = @{} })
+    $global:VxJob = $job
+    try { Invoke-VxJobBody } finally { $global:VxJob = $null }
+    Assert-Equal 'done' $job.status 'Job lief'
+    Assert-True (-not $ctx.Cache.ContainsKey('activePlan')) 'Job startet ohne alten Cache'
+}
+
+Test-Case 'review' 'Anderes Admin-Konto: HKCU, Benutzerordner und Skripte zielen auf den angemeldeten Benutzer' {
+    $ctx = New-TestContext
+    Assert-Equal 'HKCU' (Resolve-VxRealRegTarget 'HKCU\Software\X').Hive 'ohne Fremdkonto unverändert'
+    $ctx.DesktopUser = @{ name = 'PC\Kind'; sid = 'S-1-5-21-1-2-3-1001'; profile = 'C:\Users\Kind'; localAppData = 'C:\Users\Kind\AppData\Local'; appData = 'C:\Users\Kind\AppData\Roaming'; temp = 'C:\Users\Kind\AppData\Local\Temp'; startup = 'C:\Users\Kind\Start' }
+    try {
+        $t = Resolve-VxRealRegTarget 'HKCU\System\GameConfigStore'
+        Assert-True ($t.Hive -eq 'HKU' -and $t.Sub -eq 'S-1-5-21-1-2-3-1001\System\GameConfigStore') 'HKCU -> HKU\<SID>'
+        $c = Resolve-VxRealRegTarget 'HKCU\Software\Classes\CLSID\{x}'
+        Assert-Equal 'S-1-5-21-1-2-3-1001_Classes\CLSID\{x}' $c.Sub 'Klassen -> HKU\<SID>_Classes'
+        Assert-Equal 'HKLM' (Resolve-VxRealRegTarget 'HKLM\SOFTWARE\X').Hive 'HKLM unverändert'
+        Assert-Equal 'C:\Users\Kind\AppData\Local\Temp\x' (Expand-VxUserPath '%TEMP%\x') 'TEMP des angemeldeten Benutzers'
+        Assert-Equal 'C:\Users\Kind\AppData\Local\D3DSCache' (Expand-VxUserPath '%localappdata%\D3DSCache') 'LOCALAPPDATA (Groß/klein egal)'
+        Assert-Equal 'C:\Users\Kind\Start' (Get-VxUserFolder 'startup') 'Autostart-Ordner'
+        $r = Invoke-Change 'memory.compression-off' 'apply'
+        Assert-True ($r.ok) 'Skript ohne Benutzerdaten läuft'
+        Assert-True (Test-VxPerUserScript 'Set-ItemProperty -Path HKCU:\Software\X -Name A -Value 1') 'HKCU-Skript erkannt'
+        Assert-True (-not (Test-VxPerUserScript 'Disable-MMAgent -MemoryCompression')) 'Maschinen-Skript nicht betroffen'
+        $act = [pscustomobject]@{ type = 'ps'; apply = 'Set-ItemProperty -Path HKCU:\Software\X -Name A -Value 1'; revert = $null; detect = $null }
+        $tw = [pscustomobject]@{ id = 'test.per-user'; name = 'x'; actions = @($act) }
+        $blocked = $false
+        try { $null = Invoke-VxPsAction $null $act $tw 0 'apply' } catch { $blocked = ([string]$_.Exception.Message -match 'anderen Konto') }
+        Assert-True $blocked 'Benutzer-Skript im falschen Konto verweigert'
+    } finally { $ctx.DesktopUser = $null }
+}
+
+Test-Case 'review' 'Kleinkram: BitLocker-Liste, Codepage, Wildcard ohne Leserecht, Baum-Restore, Claude, Wiederherstellungspunkte' {
+    $ctx = New-TestContext
+    # BitLocker validates loadoptions/debug/nointegritychecks, not the timer values of the catalog
+    Assert-True (Test-VxBcdNeedsBitLockerSuspend 'loadoptions') 'loadoptions -> BitLocker pausieren'
+    Assert-True (Test-VxBcdNeedsBitLockerSuspend 'nointegritychecks') 'nointegritychecks -> BitLocker pausieren'
+    Assert-True (-not (Test-VxBcdNeedsBitLockerSuspend 'disabledynamictick')) 'Timer-Wert ohne BitLocker'
+    # code page from the system setting
+    $e = ConvertTo-VxCodePageEncoding '65001'
+    Assert-True ($null -ne $e -and $e.WebName -eq 'utf-8' -and $e.GetPreamble().Length -eq 0) 'OEMCP 65001 = UTF-8'
+    Assert-True ($null -eq (ConvertTo-VxCodePageEncoding 'abc')) 'Unsinn -> Fallback'
+    # a '*' level with a subkey only SYSTEM may read
+    $cls = 'HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+    New-VxSimRegKey ($cls + '\Properties')
+    Set-VxRegValue ($cls + '\0000') 'EnableUlps' 'DWord' 1
+    $orig = ${function:Get-VxRegValue}
+    ${function:Get-VxRegValue} = { param([string]$Path, [string]$Name) if ($Path -match '\\Properties$') { throw (New-Object System.Security.SecurityException 'Der angeforderte Registrierungszugriff ist unzulässig.') }; & $orig $Path $Name }.GetNewClosure()
+    try {
+        $prof = $ctx.State.profile
+        $ctx.State.profile = ConvertTo-VxHashtable (ConvertFrom-VxJsonText (ConvertTo-VxJson $prof))
+        $ctx.State.profile.gpus = @(@{ name = 'Radeon'; vendor = 'amd' })
+        Assert-True ((Get-Status 'gaming.amd-ulps-off') -ne 'unknown') 'Status nicht unknown'
+        $r = Invoke-Change 'gaming.amd-ulps-off' 'apply'
+        Assert-True ($r.ok -and $r.status -eq 'applied') ('Anwenden ok: ' + $r.error)
+        $null = Get-VxDetweakScan
+    } finally { ${function:Get-VxRegValue} = $orig; $ctx.State.profile = Get-VxSimProfile 'desktop' }
+    # restoring a deleted key that exists again journals what it overwrites
+    $tk = 'HKCU\Software\VeloxFixture\Tree'
+    Set-VxRegValue $tk 'A' 'DWord' 1
+    $r1 = Invoke-Change 'system.remove-tree' 'apply'
+    Set-VxRegValue $tk 'A' 'DWord' 5
+    $rr = Invoke-VxRestoreJob ([pscustomobject]@{ backupId = $r1.backupId })
+    Assert-Equal 1 ([int](Get-VxRegValue $tk 'A').value) 'Baum-Wert zurück'
+    $restoreId = @(Get-VxBackupList | Where-Object { $_.kind -eq 'restore' })[0].id
+    $doc = Read-VxBackup $restoreId
+    Assert-True (@($doc.entries | Where-Object { $_.op -eq 'reg' -and $_.name -eq 'A' -and [int]$_.before.value -eq 5 }).Count -eq 1) 'überschriebener Wert im Journal'
+    $null = Invoke-VxRestoreJob ([pscustomobject]@{ backupId = $restoreId })
+    Assert-Equal 5 ([int](Get-VxRegValue $tk 'A').value) 'Restore selbst rückgängig machbar'
+    # Claude: more time, warnings in the digest, laptop-bad / security-off filtered locally
+    Assert-True ((Get-VxClaudeTimeoutSec) -ge 600) 'Zeitlimit für effort high'
+    Assert-True ((Get-VxCatalogDigest) -match 'latency\.timer-bcd \|.*\| Etwas mehr Stromverbrauch\.') 'Warnung im Digest'
+    $lap = Get-VxSimProfile 'laptop'
+    $sel = Select-VxClaudePlan @([pscustomobject]@{ id = 'power.ultimate-plan'; reason = 'x' }, [pscustomobject]@{ id = 'gaming.gamedvr-off'; reason = 'y' }) $false $lap
+    Assert-Equal @('gaming.gamedvr-off') @($sel.plan | ForEach-Object { $_.id }) 'laptop-bad auf dem Laptop verworfen'
+    $ctx.Simulate = $false; $ctx.Windows = $true
+    [Environment]::SetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL', 'http://evil.example')
+    try { Assert-Equal 'https://api.anthropic.com' (Get-VxClaudeBaseUrl) 'Test-Umleitung im echten Modus ignoriert' }
+    finally { [Environment]::SetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL', $null); $ctx.Simulate = $true; $ctx.Windows = $false }
+    # automatic restore point also before boost / autostart / cleanup jobs
+    foreach ($case in @('game', 'startup', 'clean')) {
+        $ctx.RestorePointDone = $false
+        switch ($case) {
+            'game' { $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = 'C:\Games\X\x.exe'; priority = $true }) }
+            'startup' { $it = @(Get-VxStartupItems)[0]; if ($null -eq $it) { Initialize-VxSimSeed; $it = @(Get-VxStartupItems)[0] }; $null = Invoke-VxStartupSetJob ([pscustomobject]@{ id = $it.id; enabled = $false }) }
+            'clean' { $null = Invoke-VxRunActionJob ([pscustomobject]@{ ids = @('cleanup.temp') }) }
+        }
+        Assert-True $ctx.RestorePointDone ("Wiederherstellungspunkt vor '{0}'" -f $case)
+    }
+    # core text is read once and reused by job runspaces
+    $ctx.CoreSources = @('function Get-VxMarker { 1 }')
+    Assert-Equal @('function Get-VxMarker { 1 }') @(Get-VxCoreSources) 'gespeicherter Quelltext'
+    $ctx.CoreSources = $null
+    Assert-Equal 10 @(Get-VxCoreSources).Count 'einmal gelesen'
+    $vx = [IO.File]::ReadAllText((Join-Path $AppRoot 'Velox.ps1'))
+    Assert-True ($vx -notmatch 'LiteralPath \$VxRoot -Recurse') 'Unblock nicht rekursiv über den Startordner'
+    Assert-True ($vx -notmatch "'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths") 'kein Browser aus HKCU'
 }
 
 # ------------------------------------------------------------------ summary

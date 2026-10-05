@@ -101,6 +101,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Programme mit Speicherfehlern werden nicht mehr automatisch abgesichert und stürzen eventuell öfter ab.",
       "needs": "reboot",
       "tags": [
@@ -164,6 +165,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Aufnahme und Übertragung über die Game Bar sind für alle Benutzer gesperrt, bis du das zurücknimmst.",
       "needs": "logoff",
       "tags": [

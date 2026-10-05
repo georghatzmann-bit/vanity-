@@ -282,6 +282,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Laufwerksoptimierung (TRIM), regelmäßige Virenscans von Microsoft Defender und automatische Aufräumarbeiten laufen nicht mehr von selbst. Starte sie ab und zu manuell.",
       "needs": "none",
       "tags": [

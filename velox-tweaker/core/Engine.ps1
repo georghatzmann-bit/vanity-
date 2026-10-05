@@ -144,7 +144,9 @@ function Set-VxRegJ($J, [string]$Path, [string]$Name, [string]$Kind, $Value, [st
 function Set-VxRegKeyJ($J, [string]$Path, [bool]$Present, [string]$TweakId = $null, $Tree = $null) {
     $exists = Test-VxRegKey $Path
     if ($exists -eq $Present) {
-        if ($Present -and $null -ne $Tree) { Import-VxRegTree $Tree }
+        # the key is back (e.g. re-created by a later tweak): overwrite its values journalled, so this
+        # restore can itself be undone and nothing newer is lost silently
+        if ($Present -and $null -ne $Tree) { Import-VxRegTree $Tree $J $TweakId }
         return $false
     }
     if ($Present) {
@@ -195,8 +197,11 @@ function Set-VxPlanJ($J, [string]$Guid, [string]$TweakId = $null) {
     return $true
 }
 
-function Set-VxPowerSettingJ($J, [string]$Subgroup, [string]$Setting, $Ac, $Dc, $Default, [string]$TweakId = $null) {
-    $before = Get-VxPowerSetting $Subgroup $Setting $Default
+# Changes a power setting in one scheme ('' = the active one). The journal records the scheme GUID,
+# so a restore writes the old value back into the plan it came from, whatever plan is active then.
+function Set-VxPowerSettingJ($J, [string]$Subgroup, [string]$Setting, $Ac, $Dc, $Default, [string]$TweakId = $null, [string]$Scheme = '') {
+    if (-not $Scheme) { $Scheme = Get-VxActiveSchemeGuid }
+    $before = Get-VxPowerSetting $Subgroup $Setting $Default $Scheme
     if ($null -eq $before) { throw 'Diese Energieoption gibt es auf diesem PC nicht.' }
     $sameAc = ($null -eq $Ac -or [long]$before.ac -eq [long]$Ac)
     $sameDc = ($null -eq $Dc -or ($null -ne $before.dc -and [long]$before.dc -eq [long]$Dc))
@@ -205,11 +210,13 @@ function Set-VxPowerSettingJ($J, [string]$Subgroup, [string]$Setting, $Ac, $Dc, 
     if ($null -eq $afterDc) { $afterDc = $before.dc }
     $afterAc = $Ac
     if ($null -eq $afterAc) { $afterAc = $before.ac }
+    $schemeOut = $null
+    if ($Scheme) { $schemeOut = $Scheme.ToLowerInvariant() }
     Add-VxJournalEntry $J ([ordered]@{
-            op = 'powersetting'; subgroup = $Subgroup; setting = $Setting
+            op = 'powersetting'; subgroup = $Subgroup; setting = $Setting; scheme = $schemeOut
             before = [ordered]@{ ac = $before.ac; dc = $before.dc }; after = [ordered]@{ ac = $afterAc; dc = $afterDc }; tweakId = $TweakId
         })
-    Set-VxPowerSetting $Subgroup $Setting $Ac $Dc
+    Set-VxPowerSetting $Subgroup $Setting $Ac $Dc $Scheme
     return $true
 }
 
@@ -224,9 +231,20 @@ function Set-VxFeatureJ($J, [string]$Name, [bool]$Enabled, [string]$TweakId = $n
 
 # ================================================================== ps scripts
 
+# Runs catalog/detweak script source. A script can change anything (powercfg, bcdedit, features),
+# so the provider cache is dropped afterwards - later reads must see the real state again.
 function Invoke-VxPsSource([string]$Source) {
     $sb = [scriptblock]::Create($Source)
-    return @(& $sb)
+    try { return @(& $sb) }
+    finally { try { $global:VxCtx.Cache.Clear() } catch { $null = $_ } }
+}
+
+# German error when a per-user script would hit the wrong account (see Get-VxDesktopUser).
+function Get-VxPerUserBlockText {
+    $du = $global:VxCtx.DesktopUser
+    $n = ''
+    if ($null -ne $du) { $n = [string]$du.name }
+    return ("VELOX läuft mit einem anderen Konto als dem angemeldeten ({0}). Diese Einstellung gilt nur für ein Benutzerkonto und würde im falschen Konto landen. Melde dich mit einem Administratorkonto an und starte VELOX dort." -f $n)
 }
 
 function Get-VxPsKey($Tweak, [int]$Index) { return ([string]$Tweak.id + '#' + $Index) }
@@ -237,6 +255,16 @@ function Invoke-VxPsAction($J, $Action, $Tweak, [int]$Index, [string]$Mode) {
         if ($Mode -eq 'revert') { throw 'Für diesen Tweak gibt es kein Zurücksetzen.' }
         return $false
     }
+    if ($null -ne $global:VxCtx.DesktopUser -and ((Test-VxPerUserScript $src) -or (Test-VxPerUserScript ([string](Get-VxProp $Action 'detect'))))) {
+        throw (Get-VxPerUserBlockText)
+    }
+    # Scripts run blind, so ask "detect" first: an already-reached target is neither run nor
+    # journalled - otherwise restoring this backup later would undo a state that existed before.
+    $want = 'default'
+    if ($Mode -eq 'apply') { $want = 'applied' }
+    $now = 'unknown'
+    try { $now = Get-VxPsState $Action $Tweak $Index } catch { $now = 'unknown' }
+    if ($now -eq $want) { return $false }
     Add-VxJournalEntry $J ([ordered]@{ op = 'ps'; tweakId = [string]$Tweak.id; index = $Index; mode = $Mode })
     $ctx = $global:VxCtx
     if ($ctx.Simulate) {
@@ -261,6 +289,8 @@ function Get-VxPsState($Action, $Tweak, [int]$Index) {
     }
     $src = [string](Get-VxProp $Action 'detect')
     if ([string]::IsNullOrWhiteSpace($src)) { return 'unknown' }
+    # it would read the elevated account's data, not the desktop user's
+    if ($null -ne $ctx.DesktopUser -and (Test-VxPerUserScript $src)) { return 'unknown' }
     $out = @(Invoke-VxPsSource $src)
     if ($out.Count -eq 0) { return 'unknown' }
     $last = $out[$out.Count - 1]
@@ -281,8 +311,16 @@ function Get-VxActionState($Action, $Tweak, [int]$Index = 0) {
             $def = Get-VxActionDefault $Action
             $kind = [string]$Action.kind
             $out = @()
+            $wild = ([string]$Action.path).Contains('*')
             foreach ($t in $targets) {
-                $cur = Get-VxRegValue $t ([string]$Action.name)
+                $cur = $null
+                try { $cur = Get-VxRegValue $t ([string]$Action.name) }
+                catch {
+                    # one unreadable subkey of a '*' level (e.g. the SYSTEM-only display class key
+                    # 'Properties') must not make the whole tweak unknown
+                    if ($wild -and (Test-VxAccessDenied $_)) { $out += 'na'; continue }
+                    throw
+                }
                 if (-not $cur.exists) {
                     if ($only) { $out += 'na' } else { $out += 'default' }
                     continue
@@ -383,11 +421,18 @@ function Invoke-VxAction($J, $Action, $Tweak, [int]$Index, [string]$Mode) {
             $name = [string]$Action.name
             $target = $Action.value
             if (-not $apply) { $target = Get-VxActionDefault $Action }
+            $wild = ([string]$Action.path).Contains('*')
             foreach ($t in @(Resolve-VxRegPattern ([string]$Action.path))) {
-                if ($only -and -not (Get-VxRegValue $t $name).exists) { continue }
                 try {
+                    if ($only -and -not (Get-VxRegValue $t $name).exists) { continue }
                     if (Set-VxRegJ $J $t $name $kind $target $tid) { $changed++ }
-                } catch { throw (Get-VxErrorText $_ ("Registry {0}\{1}" -f $t, $name)) }
+                } catch {
+                    if ($wild -and (Test-VxAccessDenied $_)) {
+                        Write-VxLog 'info' ("{0}: übersprungen, nur für Windows selbst lesbar" -f $t)
+                        continue
+                    }
+                    throw (Get-VxErrorText $_ ("Registry {0}\{1}" -f $t, $name))
+                }
             }
         }
         'regkey' {
@@ -431,25 +476,38 @@ function Invoke-VxAction($J, $Action, $Tweak, [int]$Index, [string]$Mode) {
             $sub = [string]$Action.subgroup
             $set = [string]$Action.setting
             $def = Get-VxProp $Action 'default'
-            $key = ($sub + '|' + $set).ToLowerInvariant()
+            $wantAc = Get-VxProp $Action 'ac'
+            $wantDc = Get-VxProp $Action 'dc'
+            # the value lives in the active plan - remember it per plan
+            $scheme = Get-VxActiveSchemeGuid
+            $legacyKey = ($sub + '|' + $set).ToLowerInvariant()
+            $key = ($scheme + '|' + $legacyKey).ToLowerInvariant()
             $st = $global:VxCtx.State
             if ($apply) {
-                $cur = Get-VxPowerSetting $sub $set $def
+                $cur = Get-VxPowerSetting $sub $set $def $scheme
                 if ($null -ne $cur -and -not $st.powersettingBefore.ContainsKey($key)) {
-                    $isApplied = ([long]$cur.ac -eq [long]$Action.ac)
-                    if (-not $isApplied) { $st.powersettingBefore[$key] = @{ ac = $cur.ac; dc = $cur.dc } }
+                    # already applied only when every half the tweak sets matches; otherwise keep the
+                    # complete previous state (also a custom DC value the tweak does not change)
+                    $okAc = ($null -eq $wantAc -or ($null -ne $cur.ac -and [long]$cur.ac -eq [long]$wantAc))
+                    $okDc = ($null -eq $wantDc -or ($null -ne $cur.dc -and [long]$cur.dc -eq [long]$wantDc))
+                    if (-not ($okAc -and $okDc)) { $st.powersettingBefore[$key] = @{ ac = $cur.ac; dc = $cur.dc } }
                 }
-                if (Set-VxPowerSettingJ $J $sub $set (Get-VxProp $Action 'ac') (Get-VxProp $Action 'dc') $def $tid) { $changed++ }
+                if (Set-VxPowerSettingJ $J $sub $set $wantAc $wantDc $def $tid $scheme) { $changed++ }
             } else {
-                $ac = Get-VxProp $def 'ac'
-                $dc = Get-VxProp $def 'dc'
-                if ($st.powersettingBefore.ContainsKey($key)) {
-                    $prev = $st.powersettingBefore[$key]
-                    $ac = Get-VxProp $prev 'ac'
-                    $dc = Get-VxProp $prev 'dc'
+                # only the halves the tweak changes are written back - an AC-only tweak never touches DC
+                $ac = $null; $dc = $null
+                if ($null -ne $wantAc) { $ac = Get-VxProp $def 'ac' }
+                if ($null -ne $wantDc) { $dc = Get-VxProp $def 'dc' }
+                $prev = $null
+                if ($st.powersettingBefore.ContainsKey($key)) { $prev = $st.powersettingBefore[$key] }
+                elseif ($st.powersettingBefore.ContainsKey($legacyKey)) { $prev = $st.powersettingBefore[$legacyKey] }
+                if ($null -ne $prev) {
+                    if ($null -ne $wantAc -and $null -ne (Get-VxProp $prev 'ac')) { $ac = Get-VxProp $prev 'ac' }
+                    if ($null -ne $wantDc -and $null -ne (Get-VxProp $prev 'dc')) { $dc = Get-VxProp $prev 'dc' }
                 }
-                if (Set-VxPowerSettingJ $J $sub $set $ac $dc $def $tid) { $changed++ }
+                if (Set-VxPowerSettingJ $J $sub $set $ac $dc $def $tid $scheme) { $changed++ }
                 $st.powersettingBefore.Remove($key)
+                $st.powersettingBefore.Remove($legacyKey)
             }
         }
         'feature' {
@@ -602,9 +660,45 @@ function Get-VxNeedsOf($Tweaks) {
     return $n
 }
 
+function Test-VxTweakHasAction($Tweak, [string]$Type) {
+    if ($null -eq $Tweak) { return $false }
+    return (@(@($Tweak.actions) | Where-Object { [string](Get-VxProp $_ 'type') -eq $Type }).Count -gt 0)
+}
+
+# Power settings are stored per plan. Applying them before a plan switch in the same batch would
+# write them into the plan that is about to be deactivated - so plans go first on apply and last
+# on revert (the settings are then reverted in the plan they were applied to). Otherwise the
+# order is kept.
+function Get-VxPowerOrderedIds([string[]]$Ids, [string]$Mode) {
+    $plans = New-Object System.Collections.Generic.List[string]
+    $rest = New-Object System.Collections.Generic.List[string]
+    foreach ($id in @($Ids)) {
+        if (Test-VxTweakHasAction (Get-VxTweak $id) 'powerplan') { $plans.Add($id) } else { $rest.Add($id) }
+    }
+    if ($Mode -eq 'apply') { return @(@($plans) + @($rest)) }
+    return @(@($rest) + @($plans))
+}
+
+# Re-reads the status of every power-plan / power-setting tweak of a finished batch: a plan switch
+# later in the batch changes what the settings read back as.
+function Update-VxPowerStatuses([string[]]$Ids, $Results = $null) {
+    $ctx = $global:VxCtx
+    $pw = @(@($Ids) | Where-Object { $t = Get-VxTweak $_; (Test-VxTweakHasAction $t 'powersetting') -or (Test-VxTweakHasAction $t 'powerplan') })
+    if ($pw.Count -eq 0) { return }
+    foreach ($id in $pw) {
+        try {
+            $st = Get-VxTweakStatus (Get-VxTweak $id)
+            if ($null -eq $st) { continue }
+            $ctx.State.statuses[$id] = $st.status
+            if ($null -ne $Results) { foreach ($r in @($Results)) { if ([string]$r.id -eq $id) { $r.status = $st.status } } }
+        } catch { $null = $_ }
+    }
+}
+
 function Invoke-VxApplyJob($Params, [string]$Mode) {
     $ctx = $global:VxCtx
     $ids = @(@(Get-VxProp $Params 'ids' @()) | ForEach-Object { [string]$_ } | Where-Object { $_ } | Select-Object -Unique)
+    $ids = @(Get-VxPowerOrderedIds $ids $Mode)
     $label = [string](Get-VxProp $Params 'label' '')
     if (-not $label) { if ($Mode -eq 'apply') { $label = 'Tweaks anwenden' } else { $label = 'Tweaks zurücksetzen' } }
     $results = New-Object System.Collections.ArrayList
@@ -637,6 +731,8 @@ function Invoke-VxApplyJob($Params, [string]$Mode) {
         }
     } finally {
         $backupId = Complete-VxJournal $J
+        try { Update-VxPowerStatuses $ids $results } catch { $null = $_ }
+        try { Sync-VxBoostedGames } catch { $null = $_ }
         $needs = Get-VxNeedsOf $changedTweaks.ToArray()
         foreach ($k in @('explorer', 'reboot', 'logoff')) { if ($needs[$k]) { Add-VxNeeds $k } }
         Save-VxState
@@ -678,7 +774,8 @@ function Restore-VxEntry($J, $E) {
         'bcd' { $null = Set-VxBcdJ $J ([string]$E.name) $before 'restore' }
         'powerplan' { if ($before) { $null = Set-VxPlanJ $J ([string]$before) 'restore' } }
         'powersetting' {
-            $null = Set-VxPowerSettingJ $J ([string]$E.subgroup) ([string]$E.setting) (Get-VxProp $before 'ac') (Get-VxProp $before 'dc') $null 'restore'
+            # back into the plan it was changed in (older journals have no scheme: the active plan)
+            $null = Set-VxPowerSettingJ $J ([string]$E.subgroup) ([string]$E.setting) (Get-VxProp $before 'ac') (Get-VxProp $before 'dc') $null 'restore' ([string](Get-VxProp $E 'scheme' ''))
         }
         'feature' { $null = Set-VxFeatureJ $J ([string]$E.name) ([bool]$before) 'restore' }
         'ps' {
@@ -709,6 +806,9 @@ function Invoke-VxRestoreJob($Params) {
         throw 'Diese Sicherung stammt aus dem Testmodus - dort wurde am PC nichts verändert.'
     }
     $entries = @(Get-VxProp $b 'entries' @())
+    # backups live in a user-writable folder, so a journal is untrusted input: only entries that
+    # VELOX itself can produce are replayed with admin rights
+    $allow = Get-VxRestoreAllowList
     $J = New-VxJournal 'restore' ('Wiederherstellung: ' + [string]$b.label)
     Invoke-VxAutoRestorePoint ('Wiederherstellung ' + $id) $J
     $restored = 0
@@ -723,6 +823,14 @@ function Invoke-VxRestoreJob($Params) {
             $n++
             $e = $entries[$i]
             Set-VxProgress (0.05 + 0.9 * $n / $total) ('Stelle wieder her: ' + (Get-VxEntryLabel $e))
+            $deny = Test-VxEntryAllowed $e $allow
+            if ($deny) {
+                $failed++
+                $msg = (Get-VxEntryLabel $e) + ': ' + $deny
+                $errors.Add($msg)
+                Write-VxLog 'warn' $msg
+                continue
+            }
             if (-not (Test-VxEntryRestorable $e)) {
                 $failed++
                 $msg = 'Nicht wiederherstellbar: ' + (Get-VxEntryLabel $e)
@@ -747,6 +855,7 @@ function Invoke-VxRestoreJob($Params) {
     } finally {
         $null = Complete-VxJournal $J
         try { Update-VxStatuses -Ids @($touched.Keys) } catch { $null = $_ }
+        try { Sync-VxBoostedGames } catch { $null = $_ }
         Save-VxState
         Save-VxSim
     }
@@ -771,6 +880,111 @@ function Get-VxEntryLabel($E) {
         'cmd' { return ('Befehl ' + $E.id) }
     }
     return $op
+}
+
+# ================================================================== restore: what may be replayed
+
+# Everything a VELOX journal can legitimately contain, built from the loaded catalog + detweak list
+# and the fixed places the startup manager and game booster write to.
+function Get-VxRestoreAllowList {
+    $ctx = $global:VxCtx
+    $a = @{
+        reg = (New-Object System.Collections.ArrayList); keys = (New-Object System.Collections.ArrayList)
+        svc = @{}; task = @{}; bcd = @{}; feature = @{}; pws = @{}
+    }
+    $addReg = { param([string]$path, [string]$name) [void]$a.reg.Add(@{ rx = (ConvertTo-VxKeyRegex $path); name = $name }) }
+    foreach ($t in @($ctx.Catalog.tweaks)) {
+        foreach ($x in @($t.actions)) {
+            switch ([string](Get-VxProp $x 'type')) {
+                'reg' { & $addReg ([string]$x.path) ([string]$x.name) }
+                'regkey' { [void]$a.keys.Add((ConvertTo-VxKeyRegex ([string]$x.path))) }
+                'service' { $a.svc[([string]$x.name).ToLowerInvariant()] = $true }
+                'task' { $a.task[([string]$x.path).ToLowerInvariant()] = $true }
+                'bcd' { $a.bcd[([string]$x.name).ToLowerInvariant()] = $true }
+                'feature' { $a.feature[([string]$x.name).ToLowerInvariant()] = $true }
+                'powersetting' { $a.pws[([string]$x.subgroup + '|' + [string]$x.setting).ToLowerInvariant()] = $true }
+            }
+        }
+    }
+    $dt = $ctx.Catalog.detweak
+    if ($null -ne $dt) {
+        foreach ($r in @(Get-VxProp $dt 'registry' @())) { & $addReg ([string]$r.path) ([string]$r.name) }
+        foreach ($r in @(Get-VxProp $dt 'registryKeys' @())) { [void]$a.keys.Add((ConvertTo-VxKeyRegex ([string]$r.path))) }
+        foreach ($r in @(Get-VxProp $dt 'services' @())) { $a.svc[([string]$r.name).ToLowerInvariant()] = $true }
+        foreach ($r in @(Get-VxProp $dt 'tasks' @())) { $a.task[([string]$r.path).ToLowerInvariant()] = $true }
+        foreach ($r in @(Get-VxProp $dt 'bcd' @())) { $a.bcd[([string]$r.name).ToLowerInvariant()] = $true }
+    }
+    # startup manager (Task-Manager style StartupApproved values)
+    [void]$a.reg.Add(@{ rx = '^(hkcu|hklm)\\software\\microsoft\\windows\\currentversion\\explorer\\startupapproved\\[^\\]+$'; name = $null })
+    # game booster: IFEO priority, GPU preference, fullscreen optimisation flag
+    $ifeo = '^hklm\\software\\microsoft\\windows nt\\currentversion\\image file execution options\\[^\\]+\\perfoptions$'
+    [void]$a.reg.Add(@{ rx = $ifeo; name = 'CpuPriorityClass' })
+    [void]$a.keys.Add($ifeo)
+    [void]$a.reg.Add(@{ rx = '^hkcu\\software\\microsoft\\directx\\usergpupreferences$'; name = $null })
+    [void]$a.reg.Add(@{ rx = '^hkcu\\software\\microsoft\\windows nt\\currentversion\\appcompatflags\\layers$'; name = $null })
+    return $a
+}
+
+function Test-VxAllowedRegKey([string]$Path, $Allow) {
+    $lp = ([string]$Path).ToLowerInvariant()
+    foreach ($rx in $Allow.keys) { if ($lp -match $rx) { return $true } }
+    return $false
+}
+
+# $null when the journal entry may be replayed, else a German reason why it is refused.
+function Test-VxEntryAllowed($E, $Allow) {
+    $no = 'passt zu keiner VELOX-Einstellung und wird aus Sicherheitsgründen nicht wiederhergestellt.'
+    $op = [string](Get-VxProp $E 'op')
+    switch ($op) {
+        'reg' {
+            $lp = ([string](Get-VxProp $E 'path')).ToLowerInvariant()
+            $nm = [string](Get-VxProp $E 'name')
+            foreach ($r in $Allow.reg) {
+                if ($lp -match $r.rx -and ($null -eq $r.name -or [string]::Equals([string]$r.name, $nm, [StringComparison]::OrdinalIgnoreCase))) { return $null }
+            }
+            # values inside a key tree VELOX deletes / re-creates (journalled when a restore overwrites them)
+            $k = $lp
+            while ($k) {
+                if (Test-VxAllowedRegKey $k $Allow) { return $null }
+                $k = Get-VxRegParent $k
+            }
+            return $no
+        }
+        'regkey' {
+            $path = [string](Get-VxProp $E 'path')
+            if (-not (Test-VxAllowedRegKey $path $Allow)) { return $no }
+            # a journalled tree may only re-create keys below that same key
+            $tree = Get-VxProp $E 'tree'
+            $stack = New-Object System.Collections.Stack
+            if ($null -ne $tree) { $stack.Push($tree) }
+            $root = $path.ToLowerInvariant()
+            while ($stack.Count -gt 0) {
+                $n = $stack.Pop()
+                $tp = ([string](Get-VxProp $n 'path')).ToLowerInvariant()
+                if ($tp -ne $root -and -not $tp.StartsWith($root + '\')) { return $no }
+                foreach ($k in @(Get-VxProp $n 'keys' @())) { if ($null -ne $k) { $stack.Push($k) } }
+            }
+            return $null
+        }
+        'service' { if ($Allow.svc.ContainsKey(([string](Get-VxProp $E 'name')).ToLowerInvariant())) { return $null }; return $no }
+        'task' { if ($Allow.task.ContainsKey(([string](Get-VxProp $E 'path')).ToLowerInvariant())) { return $null }; return $no }
+        'bcd' { if ($Allow.bcd.ContainsKey(([string](Get-VxProp $E 'name')).ToLowerInvariant())) { return $null }; return $no }
+        'feature' { if ($Allow.feature.ContainsKey(([string](Get-VxProp $E 'name')).ToLowerInvariant())) { return $null }; return $no }
+        'powersetting' {
+            $k = ([string](Get-VxProp $E 'subgroup') + '|' + [string](Get-VxProp $E 'setting')).ToLowerInvariant()
+            if (-not $Allow.pws.ContainsKey($k)) { return $no }
+            $sch = [string](Get-VxProp $E 'scheme' '')
+            if ($sch -and $sch -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') { return $no }
+            return $null
+        }
+        'powerplan' {
+            $b = [string](Get-VxProp $E 'before' '')
+            if ($b -and $b -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') { return $no }
+            return $null
+        }
+        # resolved through the catalog by id; the not-restorable kinds are reported separately
+        default { return $null }
+    }
 }
 
 # ================================================================== simulate overlay persistence
@@ -799,6 +1013,9 @@ function Import-VxSim([bool]$Reset = $false) {
     foreach ($k in @('reg', 'svc', 'task', 'bcd', 'power', 'pws', 'feature', 'appx', 'ps')) {
         if (-not ($ctx.Sim[$k] -is [hashtable])) { $ctx.Sim[$k] = @{} }
     }
+    # overlays written by older versions
+    Repair-VxSimRegValues
+    Repair-VxSimPowerSettings
     if (-not $ctx.Windows -and -not $ctx.Sim.ContainsKey('seeded')) {
         Initialize-VxSimSeed
         $ctx.Sim.seeded = $true

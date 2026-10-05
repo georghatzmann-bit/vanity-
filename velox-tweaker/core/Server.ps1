@@ -175,6 +175,7 @@ function Get-VxModeDto {
     return [ordered]@{
         simulate = [bool]$ctx.Simulate; admin = [bool]$ctx.Admin; windows = [bool]$ctx.Windows
         os = [string]$ctx.OsText; ps = $PSVersionTable.PSVersion.ToString(); userMismatch = [bool]$ctx.UserMismatch
+        desktopUser = $(if ($null -ne $ctx.DesktopUser) { [string]$ctx.DesktopUser.name } else { $null })
     }
 }
 

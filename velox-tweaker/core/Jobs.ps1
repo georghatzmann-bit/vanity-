@@ -9,10 +9,25 @@ function Get-VxJobTypes {
         'explorer-restart', 'reboot')
 }
 
+function Get-VxCoreNames {
+    return @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs')
+}
+
 function Get-VxCoreFiles {
     $dir = $global:VxCtx.CoreDir
-    return @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs') |
-        ForEach-Object { [IO.Path]::Combine($dir, $_ + '.ps1') }
+    return @(Get-VxCoreNames | ForEach-Object { [IO.Path]::Combine($dir, $_ + '.ps1') })
+}
+
+# Source text of the core files, read ONCE (Velox.ps1 stores what it loaded at startup). Job
+# runspaces run with admin rights and dot-source this text - never the files again, which sit in
+# a folder the normal user (and anything running as that user) can change while VELOX runs.
+function Get-VxCoreSources {
+    $ctx = $global:VxCtx
+    if ($ctx.ContainsKey('CoreSources') -and $null -ne $ctx.CoreSources -and @($ctx.CoreSources).Count -gt 0) { return @($ctx.CoreSources) }
+    $list = New-Object System.Collections.Generic.List[string]
+    foreach ($f in @(Get-VxCoreFiles)) { $list.Add([IO.File]::ReadAllText($f, [Text.Encoding]::UTF8)) }
+    $ctx.CoreSources = $list.ToArray()
+    return @($ctx.CoreSources)
 }
 
 function Test-VxBusy {
@@ -47,8 +62,8 @@ function Start-VxJob([string]$Type, $Params) {
     $ctx.Jobs[$id] = $job
     $ctx.CurrentJobId = $id
     $bootstrap = @'
-param($ctx, $job, $files)
-foreach ($f in $files) { . ([scriptblock]::Create([IO.File]::ReadAllText($f, [Text.Encoding]::UTF8))) }
+param($ctx, $job, $sources)
+foreach ($src in $sources) { . ([scriptblock]::Create($src)) }
 Initialize-VxRuntime
 $global:VxCtx = $ctx
 $global:VxJob = $job
@@ -67,7 +82,7 @@ Invoke-VxJobBody
         $rs.Open()
         $ps = [PowerShell]::Create()
         $ps.Runspace = $rs
-        $null = $ps.AddScript($bootstrap).AddArgument($ctx).AddArgument($job).AddArgument((Get-VxCoreFiles))
+        $null = $ps.AddScript($bootstrap).AddArgument($ctx).AddArgument($job).AddArgument((Get-VxCoreSources))
         $handle = $ps.BeginInvoke()
         (Get-VxJobHandles)[$id] = @{ ps = $ps; rs = $rs; handle = $handle }
     } catch {
@@ -83,6 +98,9 @@ Invoke-VxJobBody
 function Invoke-VxJobBody {
     $job = $global:VxJob
     $p = $job.params
+    # Power plan, BCD, feature and app lists may have changed outside VELOX since the last job
+    # (Windows settings, another tool): every job starts from fresh reads.
+    try { $global:VxCtx.Cache.Clear() } catch { $null = $_ }
     try {
         $r = $null
         switch ($job.type) {

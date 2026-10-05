@@ -109,6 +109,21 @@ function Write-VxJsonFile([string]$Path, $InputObject) {
     Write-VxTextFile -Path $Path -Text (ConvertTo-VxJson $InputObject)
 }
 
+# Restricts a file to Administrators and SYSTEM (Windows only, never fatal). Used for files that
+# hold the API token in real mode, where the normal user's processes must not read them.
+function Protect-VxAdminOnlyFile([string]$Path) {
+    if (-not (Test-VxWindows)) { return }
+    try {
+        $acl = New-Object System.Security.AccessControl.FileSecurity
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($sid in @('S-1-5-32-544', 'S-1-5-18')) {
+            $id = New-Object System.Security.Principal.SecurityIdentifier($sid)
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($id, [System.Security.AccessControl.FileSystemRights]::FullControl, [System.Security.AccessControl.AccessControlType]::Allow)))
+        }
+        Set-Acl -LiteralPath $Path -AclObject $acl -ErrorAction Stop
+    } catch { Write-VxLog 'warn' ('Zugriffsrechte für ' + [IO.Path]::GetFileName($Path) + ' konnten nicht gesetzt werden: ' + $_.Exception.Message) }
+}
+
 # ------------------------------------------------------------------ context
 
 function Get-VxDefaultDataRoot {
@@ -159,6 +174,11 @@ function New-VxContext {
     $ctx.Catalog = $null
     $ctx.Settings = $null
     $ctx.State = $null
+    # set by Velox.ps1: the desktop user when VELOX runs elevated as another account (Get-VxDesktopUser)
+    $ctx.DesktopUser = $null
+    $ctx.UserMismatch = $false
+    # core file text read once at startup (Get-VxCoreSources)
+    $ctx.CoreSources = $null
     $global:VxCtx = $ctx
     return $ctx
 }
@@ -242,7 +262,25 @@ function ConvertTo-VxArgument([string]$Arg) {
     return $sb.ToString()
 }
 
+# Encoding for a code page number given as text ('850', '65001'); $null when unusable.
+function ConvertTo-VxCodePageEncoding($CodePage) {
+    $n = 0
+    if (-not [int]::TryParse(([string]$CodePage).Trim(), [ref]$n) -or $n -le 0) { return $null }
+    if ($n -eq 65001) { return (New-Object System.Text.UTF8Encoding($false)) }
+    try { return [Text.Encoding]::GetEncoding($n) } catch { return $null }
+}
+
+# The OEM code page console tools (powercfg, bcdedit, sc ...) really print with. It is a system
+# setting (Nls\CodePage\OEMCP, 65001 with "Unicode UTF-8 for worldwide language support"), not
+# culture data, so it is read from the registry first and the culture is only the fallback.
 function Get-VxOemEncoding {
+    if (Test-VxWindows) {
+        try {
+            $raw = [Microsoft.Win32.Registry]::GetValue('HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage', 'OEMCP', $null)
+            $e = ConvertTo-VxCodePageEncoding $raw
+            if ($null -ne $e) { return $e }
+        } catch { $null = $_ }
+    }
     try {
         $cp = [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage
         return [Text.Encoding]::GetEncoding($cp)
@@ -335,6 +373,19 @@ function Format-VxBytes([double]$Bytes) {
     if ($Bytes -ge 1MB) { return ('{0:N0} MB' -f ($Bytes / 1MB)) }
     if ($Bytes -ge 1KB) { return ('{0:N0} KB' -f ($Bytes / 1KB)) }
     return ('{0:N0} B' -f $Bytes)
+}
+
+# $true when an error (ErrorRecord or Exception, possibly wrapped) is "access denied": a registry key
+# only SYSTEM may read (e.g. the display class key 'Properties'), a protected file and the like.
+function Test-VxAccessDenied($ErrorRecord) {
+    $ex = $null
+    if ($ErrorRecord -is [System.Management.Automation.ErrorRecord]) { $ex = $ErrorRecord.Exception }
+    elseif ($ErrorRecord -is [Exception]) { $ex = $ErrorRecord }
+    while ($null -ne $ex) {
+        if ($ex -is [System.Security.SecurityException] -or $ex -is [UnauthorizedAccessException]) { return $true }
+        $ex = $ex.InnerException
+    }
+    return $false
 }
 
 # German, user-facing text for an exception (no stack traces).
@@ -430,6 +481,23 @@ function Update-VxSettings($Partial) {
     Save-VxSettings
 }
 
+# Testmodus and real mode keep separate state, instance and lock files: simulated statuses,
+# "needs reboot" flags and remembered power-setting values must never show up in real mode.
+function Get-VxModeTag {
+    if ($global:VxCtx.Simulate) { return 'sim' }
+    return 'real'
+}
+
+function Get-VxStateFileName {
+    if ($global:VxCtx.Simulate) { return 'state-sim.json' }
+    return 'state.json'
+}
+
+function Get-VxInstanceFileName {
+    if ($global:VxCtx.Simulate) { return 'instance-sim.json' }
+    return 'instance.json'
+}
+
 function Import-VxState {
     $ctx = $global:VxCtx
     $st = @{
@@ -438,7 +506,8 @@ function Import-VxState {
         naReasons = @{}; ultimateGuid = $null; highGuid = $null; powersettingBefore = @{}
         bootId = $null; restorePoints = 0
     }
-    $path = Get-VxDataPath 'state.json'
+    $name = Get-VxStateFileName
+    $path = Get-VxDataPath $name
     if ([IO.File]::Exists($path)) {
         try {
             $loaded = ConvertTo-VxHashtable (Read-VxJsonFile $path)
@@ -446,7 +515,17 @@ function Import-VxState {
                 foreach ($k in @($loaded.Keys)) { $st[$k] = $loaded[$k] }
             }
         } catch {
-            Write-VxLog 'warn' ('state.json unlesbar: ' + $_.Exception.Message)
+            Write-VxLog 'warn' ($name + ' unlesbar: ' + $_.Exception.Message)
+        }
+    }
+    # The Testmodus may know the power plan copies real mode created (read-only, never written back).
+    if ($ctx.Simulate -and -not ($st.ultimateGuid -or $st.highGuid)) {
+        $real = Get-VxDataPath 'state.json'
+        if ([IO.File]::Exists($real)) {
+            try {
+                $r = ConvertTo-VxHashtable (Read-VxJsonFile $real)
+                if ($r -is [hashtable]) { foreach ($k in @('ultimateGuid', 'highGuid')) { if ($r.ContainsKey($k)) { $st[$k] = $r[$k] } } }
+            } catch { $null = $_ }
         }
     }
     foreach ($k in @('statuses', 'naReasons', 'powersettingBefore')) { if (-not ($st[$k] -is [hashtable])) { $st[$k] = @{} } }
@@ -461,9 +540,9 @@ function Save-VxState {
     try {
         $copy = @{}
         foreach ($k in @($ctx.State.Keys)) { $copy[$k] = $ctx.State[$k] }
-        Write-VxJsonFile -Path (Get-VxDataPath 'state.json') -InputObject $copy
+        Write-VxJsonFile -Path (Get-VxDataPath (Get-VxStateFileName)) -InputObject $copy
     } catch {
-        Write-VxLog 'warn' ('state.json konnte nicht gespeichert werden: ' + $_.Exception.Message)
+        Write-VxLog 'warn' ((Get-VxStateFileName) + ' konnte nicht gespeichert werden: ' + $_.Exception.Message)
     }
 }
 

@@ -59,7 +59,7 @@ velox-tweaker/
 ```
 
 Runtime data lives in `%LOCALAPPDATA%\Velox\` (or `-DataRoot`):
-`settings.json`, `claude.key` (DPAPI-encrypted), `state.json`, `backups\<id>.json`, `logs\`, `edge-profile\`, `sim-state.json`.
+`settings.json`, `claude.key` (DPAPI-encrypted), `state.json` + `instance.json` (real mode), `state-sim.json` + `instance-sim.json` + `sim-state.json` (Testmodus - the two modes never share state or the single-instance lock), `backups\<id>.json`, `logs\`, `edge-profile\`.
 
 ---
 
@@ -138,6 +138,7 @@ Tests run under pwsh 7 on Linux; the product runs on 5.1 on Windows. Code must w
 | `desc` | yes | German, ≤ 150 chars, one line in plain words: what it brings + any downside |
 | `info` | no | German, ≤ 500 chars, extra background, shown when expanded |
 | `group` | no | sub-heading inside the category |
+| `situational` | no | `true` = only for a specific problem (MPO flicker, Wi-Fi roaming ...): the advisors pick it only when the user's own text asks for it; presets may still include it |
 | `kind` | no | `toggle` (default, revertible), `action` (one-shot button, e.g. cleanup), `remove` (Appx removal; not revertible) |
 | `impact` | yes | 1 = kaum spürbar, 2 = spürbar, 3 = stark |
 | `risk` | yes | `safe` (no realistic downside), `moderate` (trade-off, e.g. a feature stops working), `risky` (security or stability trade-off — never in presets, never auto-picked) |
@@ -334,7 +335,9 @@ Objects:
 
 ```text
 app      = { name:"VELOX", version:"1.0.0" }
-mode     = { simulate, admin, windows, os:"Windows 11 Pro 23H2 (22631)", ps:"5.1.22621", userMismatch }
+mode     = { simulate, admin, windows, os:"Windows 11 Pro 23H2 (22631)", ps:"5.1.22621", userMismatch,
+             desktopUser }   // desktopUser: the signed-in desktop account when VELOX was elevated with another
+                             // account; HKCU writes and user folders then target that desktop user
 tweak    = catalog tweak as in §3 + { category, applicable: bool, naReason: string|null }
 settings = { accent:"violet"|"blue"|"cyan"|"green"|"pink"|"orange", motion:"full"|"reduced",
              confirmRisky:true, autoRestorePoint:true,
@@ -420,7 +423,7 @@ Restore is off it is enabled for the system drive; failure is logged as a warnin
 ## 9. Claude advisor (core/Claude.ps1)
 
 PowerShell has no official Anthropic SDK, so this is raw HTTPS (`System.Net.Http.HttpClient`, TLS 1.2,
-UTF-8 body bytes, 180 s timeout). Base URL `https://api.anthropic.com` (override: env
+UTF-8 body bytes, 600 s timeout - a non-streaming call at effort "high" can take minutes). Base URL `https://api.anthropic.com` (override: env
 `VELOX_ANTHROPIC_BASE_URL`, used by tests).
 
 ```

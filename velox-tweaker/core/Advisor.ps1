@@ -62,9 +62,70 @@ function Get-VxRiskRank([string]$Risk) {
     return 2
 }
 
+# The scan decides the form factor from the chassis (a desktop with a USB UPS reports a battery too).
 function Test-VxIsLaptop($VxProfile) {
     if ($null -eq $VxProfile) { return $false }
-    return ([string](Get-VxProp $VxProfile 'formFactor') -eq 'laptop' -or [bool](Get-VxProp $VxProfile 'battery' $false))
+    return ([string](Get-VxProp $VxProfile 'formFactor') -eq 'laptop')
+}
+
+# Ryzen X3D CPUs with two chiplets (7900X3D, 7950X3D, 9900X3D, 9950X3D) need "Ausbalanciert" and
+# core parking: AMD's driver parks the second chiplet so games run on the V-Cache cores.
+function Test-VxDualCcdX3d($VxProfile) {
+    $n = [string](Get-VxProp (Get-VxProp $VxProfile 'cpu') 'name' '')
+    return ($n -match '(?i)\b(7900|7950|9900|9950)X3D\b')
+}
+
+# Tweaks that fight AMD's chiplet scheduling on dual-CCD X3D CPUs: power plans, core parking, and
+# everything whose own catalog text warns about X3D.
+function Test-VxX3dHostile($Tweak) {
+    foreach ($a in @($Tweak.actions)) {
+        $type = [string](Get-VxProp $a 'type')
+        if ($type -eq 'powerplan') { return $true }
+        if ($type -eq 'powersetting' -and @('0cc5b647-c1df-4637-891a-dec35c318583', 'ea062031-0e34-4ff1-9b6d-eb1059334028') -contains ([string](Get-VxProp $a 'setting')).ToLowerInvariant()) { return $true }
+    }
+    return (([string](Get-VxProp $Tweak 'warning' '') + ' ' + [string](Get-VxProp $Tweak 'info' '')) -match 'X3D')
+}
+
+# WLAN-only tweaks (pointless on a PC without a WLAN adapter).
+function Test-VxWifiTweak($Tweak) {
+    return (([string]$Tweak.id + ' ' + [string]$Tweak.name) -match '(?i)wifi|wlan|wi-fi')
+}
+
+# Preset that matches an advisor goal; its tweak list was reviewed by hand.
+function Get-VxGoalPresetIds([string]$Goal) {
+    $presetId = $Goal
+    if ($Goal -eq 'balanced') { $presetId = 'safe' }
+    $p = @(@($global:VxCtx.Catalog.presets) | Where-Object { [string](Get-VxProp $_ 'id') -eq $presetId })[0]
+    if ($null -eq $p) { return @() }
+    return @(@(Get-VxProp $p 'ids' @()) | ForEach-Object { [string]$_ })
+}
+
+# Exe names a tweak raises the priority of (IFEO\<exe>\PerfOptions), e.g. games.*-priority.
+function Get-VxTweakGameExes($Tweak) {
+    $out = @()
+    foreach ($a in @($Tweak.actions)) {
+        if ([string](Get-VxProp $a 'type') -ne 'reg') { continue }
+        $m = [regex]::Match([string](Get-VxProp $a 'path'), '(?i)\\Image File Execution Options\\([^\\]+)\\PerfOptions$')
+        if ($m.Success) { $out += $m.Groups[1].Value.ToLowerInvariant() }
+    }
+    return $out
+}
+
+# Games found on this PC (cached per job): @{ exes = @{ <exe lower> = $true }; fivem = bool }.
+function Get-VxDetectedGames {
+    $ctx = $global:VxCtx
+    if ($ctx.Cache.ContainsKey('detectedGames')) { return $ctx.Cache.detectedGames }
+    $list = @()
+    try { if ($ctx.Windows) { $list = @(Get-VxRealGames) } else { $list = @(Get-VxSimGames) } } catch { $list = @() }
+    $list += @(@($ctx.Settings.games))
+    $r = @{ exes = @{}; fivem = $false }
+    foreach ($g in $list) {
+        $exe = Get-VxPathLeaf ([string](Get-VxProp $g 'path' ''))
+        if ($exe) { $r.exes[$exe.ToLowerInvariant()] = $true }
+        if ([string](Get-VxProp $g 'source' '') -eq 'fivem' -or $exe -match '(?i)^fivem') { $r.fivem = $true }
+    }
+    $ctx.Cache.detectedGames = $r
+    return $r
 }
 
 # Recommended set for a goal (status-agnostic). Returns list of @{ tweak; keyword }.
@@ -76,6 +137,11 @@ function Get-VxGoalCandidates([string]$Goal, $VxProfile, [string[]]$ExtraTags = 
     $ram = [double](Get-VxProp (Get-VxProp $VxProfile 'ram') 'totalGB' 0)
     $gpuVendors = @(@(Get-VxProp $VxProfile 'gpus' @()) | ForEach-Object { [string](Get-VxProp $_ 'vendor') })
     $cpuVendor = [string](Get-VxProp (Get-VxProp $VxProfile 'cpu') 'vendor')
+    $presetIds = @(Get-VxGoalPresetIds $Goal)
+    $x3d = Test-VxDualCcdX3d $VxProfile
+    $nets = @(Get-VxProp $VxProfile 'network' @())
+    $noWifi = ($nets.Count -gt 0 -and @($nets | Where-Object { [string](Get-VxProp $_ 'type') -eq 'wifi' }).Count -eq 0)
+    $games = $null
     $out = New-Object System.Collections.ArrayList
     foreach ($t in $ctx.Catalog.tweaks) {
         if ((Get-VxTweakKind $t) -ne 'toggle') { continue }
@@ -95,6 +161,24 @@ function Get-VxGoalCandidates([string]$Goal, $VxProfile, [string[]]$ExtraTags = 
         if (-not $ok -and $safeHit -and $rank -eq 0) { $ok = $true }
         if (-not $ok -and $keyword -and $rank -le 1) { $ok = $true }
         if (-not $ok) { continue }
+        # A trade-off ("moderate") is only picked without being asked for when it is part of the
+        # hand-reviewed preset for this goal or targets this PC's hardware (GPU/CPU vendor, SSD/HDD).
+        # Situational fixes ("only if you have flicker / a VRR monitor ...") need the free text.
+        $situational = [bool](Get-VxProp $t 'situational' $false)
+        if ($situational -and -not $keyword) { continue }
+        if ($rank -eq 1 -and -not $keyword) {
+            $hw = (@($tags | Where-Object { @('nvidia', 'amd', 'intel') -contains $_ }).Count -gt 0) -or ($tags -contains 'ssd' -and $sysDisk -eq 'ssd') -or ($tags -contains 'hdd' -and $sysDisk -eq 'hdd')
+            if (-not ($presetIds -contains [string]$t.id) -and -not $hw) { continue }
+        }
+        if ($x3d -and (Test-VxX3dHostile $t)) { continue }
+        if ($noWifi -and (Test-VxWifiTweak $t)) { continue }
+        # priority tweaks for one game only when that game is installed
+        $exes = @(Get-VxTweakGameExes $t)
+        if ($exes.Count -gt 0) {
+            if ($null -eq $games) { $games = Get-VxDetectedGames }
+            $found = @($exes | Where-Object { $games.exes.ContainsKey($_) }).Count -gt 0
+            if (-not $found -and -not ($games.fivem -and $tags -contains 'fivem')) { continue }
+        }
         if ($cfg.exclude -and $idText -match $cfg.exclude) { continue }
         # --- profile rules
         if ($isLaptop -and $tags -contains 'laptop-bad') { continue }
@@ -156,17 +240,18 @@ function Get-VxPlanReason($Tweak, $VxProfile, [string]$Goal) {
     if (($tags -contains 'fivem' -or $tags -contains 'gta') -and $Goal -eq 'fivem') { return ("Speziell für FiveM und GTA V: {0}" -f $desc) }
     if ($tags -contains 'battery' -and (Test-VxIsLaptop $VxProfile)) { return ("Schont den Akku deines Laptops: {0}" -f $desc) }
     if ($tags -contains 'ping' -or $tags -contains 'network') {
+        # the wording follows the TWEAK (a WLAN setting stays a WLAN setting), not just the PC
+        if (Test-VxWifiTweak $Tweak) { return ("Für einen stabileren Ping über WLAN: {0}" -f $desc) }
         if ($hasLan) { return ("Für niedrigeren Ping über deine LAN-Verbindung: {0}" -f $desc) }
-        if ($nets.Count -gt 0) { return ("Für einen stabileren Ping über WLAN: {0}" -f $desc) }
         return ("Für niedrigeren Ping: {0}" -f $desc)
     }
-    if ($tags -contains 'input' -or $tags -contains 'latency') { return ("Damit Maus und Tastatur direkter reagieren: {0}" -f $desc) }
-    if ($tags -contains 'stutter') {
-        if ($ram -gt 0) { return ("Gegen Ruckler (bei deinen {0} GB RAM sinnvoll): {1}" -f $ram, $desc) }
-        return ("Gegen Ruckler: {0}" -f $desc)
-    }
+    if ($tags -contains 'input') { return ("Damit Maus und Tastatur direkter reagieren: {0}" -f $desc) }
+    if ($tags -contains 'latency') { return ("Weniger Verzögerung: {0}" -f $desc) }
+    if ($tags -contains 'memory' -and $ram -gt 0) { return ("Passend zu deinen {0} GB RAM: {1}" -f $ram, $desc) }
+    if ($tags -contains 'stutter') { return ("Gegen Ruckler: {0}" -f $desc) }
     if ($tags -contains 'fps') {
-        $g = Get-VxShortGpuName $VxProfile ''
+        $g = $null
+        if ([string]$Tweak.category -eq 'gpu') { $g = Get-VxShortGpuName $VxProfile '' }
         if ($g) { return ("Mehr FPS aus deiner {0}: {1}" -f $g, $desc) }
         return ("Mehr FPS: {0}" -f $desc)
     }
@@ -272,7 +357,9 @@ function Get-VxFindings($VxProfile, [string]$Goal) {
     $pw = Get-VxProp $VxProfile 'power'
     if ($null -ne $pw) {
         $guid = [string](Get-VxProp $pw 'activePlan')
-        if ($guid -eq (Get-VxPlanBaseGuid 'balanced') -and -not $isLaptop) {
+        if ($guid -eq (Get-VxPlanBaseGuid 'balanced') -and -not $isLaptop -and (Test-VxDualCcdX3d $VxProfile)) {
+            [void]$f.Add((New-VxFinding 'power-plan' 'good' "Energieplan 'Ausbalanciert' passt zu deinem Ryzen X3D" 'Bei Ryzen-X3D-Prozessoren mit zwei Chiplets braucht AMD diesen Plan, damit Spiele auf den Kernen mit dem großen Cache laufen. Lass ihn so.' $null))
+        } elseif ($guid -eq (Get-VxPlanBaseGuid 'balanced') -and -not $isLaptop) {
             $ids = @(Get-VxApplicableFixIds @(Find-VxPlanTweakIds) $VxProfile)
             $fix = $null
             if ($ids.Count -gt 0) { $fix = [ordered]@{ type = 'tweaks'; ids = $ids } } else { $fix = [ordered]@{ type = 'open'; target = 'ms-settings:powersleep' } }
@@ -426,6 +513,13 @@ function Invoke-VxAdvisor([string]$Goal, [string]$Text, $VxProfile) {
     }
     $findings = @(Get-VxFindings $VxProfile $Goal)
     $planIds = @($plan | ForEach-Object { $_.id })
+    # the power plan finding offers the same plan the plan list contains
+    $planPlan = @($planIds | Where-Object { Test-VxTweakHasAction (Get-VxTweak $_) 'powerplan' })
+    if ($planPlan.Count -gt 0) {
+        foreach ($fd in $findings) {
+            if ($fd.id -eq 'power-plan' -and $null -ne $fd.fix -and [string]$fd.fix.type -eq 'tweaks') { $fd.fix = [ordered]@{ type = 'tweaks'; ids = @($planPlan[0]) } }
+        }
+    }
     $sc = Get-VxAdvisorScore $cands $findings $planIds
     $bad = @($findings | Where-Object { $_.severity -eq 'bad' -or $_.severity -eq 'warn' })
     $summary = ("Dein PC erreicht {0} von 100 Punkten für das Ziel '{1}'." -f $sc.score, $cfg.name)

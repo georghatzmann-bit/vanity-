@@ -44,11 +44,17 @@ function Get-VxClaudeKey {
     }
 }
 
+# The override exists for tests only: in real (elevated) mode it is ignored, so a value planted in
+# the user environment cannot send the API key somewhere else.
 function Get-VxClaudeBaseUrl {
-    $b = [Environment]::GetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL')
+    $b = $null
+    $ctx = $global:VxCtx
+    if ($null -eq $ctx -or $ctx.Simulate -or -not $ctx.Windows) { $b = [Environment]::GetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL') }
     if ([string]::IsNullOrWhiteSpace($b)) { $b = 'https://api.anthropic.com' }
     return $b.Trim().TrimEnd('/')
 }
+
+function Get-VxClaudeTimeoutSec { return 600 }
 
 function Get-VxClaudeSchema {
     return [ordered]@{
@@ -96,7 +102,9 @@ Rules:
 - Prefer tweaks with risk "safe". Use "moderate" only when it clearly serves the goal and the trade-off is acceptable.
 - NEVER choose a tweak with risk "risky" unless the request says allowRisky is true. Even then, only if it directly serves the goal, and say clearly in the reason what protection is lost.
 - Do not choose tweaks whose status is "applied" or "na".
-- Respect the profile: on laptops or devices with a battery never choose tweaks tagged "laptop-bad"; choose vendor-tagged tweaks (nvidia, amd, intel) only when the PC has hardware from that vendor; if Windows is on an HDD, do not disable SysMain/prefetch and do not choose "ssd" tweaks; with less than 16 GB RAM, do not disable memory compression or paging.
+- Respect the profile: on laptops (formFactor "laptop") never choose tweaks tagged "laptop-bad"; choose vendor-tagged tweaks (nvidia, amd, intel) only when the PC has hardware from that vendor; if Windows is on an HDD, do not disable SysMain/prefetch and do not choose "ssd" tweaks; with less than 16 GB RAM, do not disable memory compression or paging.
+- AMD Ryzen X3D CPUs with two chiplets (7900X3D, 7950X3D, 9900X3D, 9950X3D) need the "Balanced" power plan and core parking so games run on the V-Cache cores: on those CPUs never choose power plan or core parking tweaks, nor any tweak whose warning mentions X3D, and never call "Balanced" a problem.
+- Read each tweak's warning. Tweaks whose text says they only help with a specific problem (flicker, a VRR monitor, mesh WLAN, mixed results) are chosen only when the user's free text describes that problem. Do not choose WLAN tweaks for a PC without a WLAN adapter, and choose per-game priority tweaks only for games the user mentions.
 - Match the goal: gaming = FPS, stutter, latency; competitive = also input and network/ping; balanced = safe improvements only; privacy = telemetry, ads, AI features; laptop = battery and heat; streaming = like gaming but keep capture/Game Bar features; fivem = gaming plus FiveM/GTA V specific tweaks.
 - Use the free text: map complaints (stutter, ping, input delay, battery, privacy) to the matching tweaks.
 - Write every text (summary, finding titles and details, reasons) in simple German, addressing the user as "du". No jargon; when a technical term is unavoidable, explain it in a few words.
@@ -107,16 +115,18 @@ Rules:
 '@
 }
 
-# One line per toggle tweak: id | name | category | risk | tags | desc (sorted, stable for caching).
+# One line per toggle tweak: id | name | category | risk | tags | desc | warning (sorted, stable for caching).
 function Get-VxCatalogDigest {
     $lines = New-Object System.Collections.Generic.List[string]
-    [void]$lines.Add('VELOX catalog digest (id | name | category | risk | tags | desc):')
+    [void]$lines.Add('VELOX catalog digest (id | name | category | risk | tags | desc | warning):')
     foreach ($t in @($global:VxCtx.Catalog.tweaks | Sort-Object { [string]$_.id })) {
         if ((Get-VxTweakKind $t) -ne 'toggle') { continue }
         $tags = (@($t.tags) | ForEach-Object { [string]$_ }) -join ','
         $desc = ([string]$t.desc) -replace '[\r\n|]+', ' '
         $name = ([string]$t.name) -replace '[\r\n|]+', ' '
-        [void]$lines.Add(('{0} | {1} | {2} | {3} | {4} | {5}' -f $t.id, $name, $t.category, $t.risk, $tags, $desc))
+        $warn = ([string](Get-VxProp $t 'warning' '')) -replace '[\r\n|]+', ' '
+        if ([bool](Get-VxProp $t 'situational' $false)) { $warn = ('nur bei passendem Problem. ' + $warn).Trim() }
+        [void]$lines.Add(('{0} | {1} | {2} | {3} | {4} | {5} | {6}' -f $t.id, $name, $t.category, $t.risk, $tags, $desc, $warn))
     }
     return ($lines -join "`n")
 }
@@ -173,7 +183,8 @@ function Send-VxClaudeRequest([string]$Key, [string]$Json, [bool]$WithFallback) 
     $handler = New-Object System.Net.Http.HttpClientHandler
     if ($uri.IsLoopback) { $handler.UseProxy = $false }
     $client = New-Object System.Net.Http.HttpClient($handler)
-    $client.Timeout = [TimeSpan]::FromSeconds(180)
+    # effort "high" with up to 16000 output tokens can take several minutes on a non-streaming call
+    $client.Timeout = [TimeSpan]::FromSeconds((Get-VxClaudeTimeoutSec))
     $cts = New-Object System.Threading.CancellationTokenSource
     try {
         $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Post, $uri)
@@ -198,7 +209,7 @@ function Send-VxClaudeRequest([string]$Key, [string]$Json, [bool]$WithFallback) 
         $ex = $_.Exception
         while ($null -ne $ex.InnerException) { $ex = $ex.InnerException }
         if ($ex -is [System.Threading.Tasks.TaskCanceledException] -or $ex -is [TimeoutException]) {
-            return @{ status = 0; text = 'Claude hat nicht rechtzeitig geantwortet (Zeitüberschreitung nach 3 Minuten).' }
+            return @{ status = 0; text = ('Claude hat nicht rechtzeitig geantwortet (Zeitüberschreitung nach {0} Minuten). Versuch es noch einmal oder nutze die lokale Smart-Analyse.' -f [int]((Get-VxClaudeTimeoutSec) / 60)) }
         }
         return @{ status = 0; text = ('Keine Verbindung zu Claude (api.anthropic.com). Prüfe deine Internetverbindung. (' + $ex.Message + ')') }
     } finally {
@@ -271,6 +282,10 @@ function Select-VxClaudePlan($Items, [bool]$AllowRisky, $VxProfile) {
         if ($null -eq $t) { $dropped.Add("$id (unbekannt)"); continue }
         if ((Get-VxTweakKind $t) -ne 'toggle') { $dropped.Add("$id (keine Umschalt-Option)"); continue }
         if ([string]$t.risk -eq 'risky' -and -not $AllowRisky) { $dropped.Add("$id (riskant)"); continue }
+        $tags = @(@($t.tags) | ForEach-Object { [string]$_ })
+        if ($tags -contains 'security-off' -and -not $AllowRisky) { $dropped.Add("$id (schaltet Schutz ab)"); continue }
+        if ($tags -contains 'laptop-bad' -and (Test-VxIsLaptop $VxProfile)) { $dropped.Add("$id (schlecht für Laptops)"); continue }
+        if ((Test-VxDualCcdX3d $VxProfile) -and (Test-VxX3dHostile $t)) { $dropped.Add("$id (kostet auf Ryzen X3D mit zwei Chiplets FPS)"); continue }
         if (-not (Test-VxWhen $t $VxProfile $false).ok -or [string]$global:VxCtx.State.statuses[$id] -eq 'na') { $dropped.Add("$id (passt nicht zu diesem PC)"); continue }
         $keys = @(Get-VxTweakTargetKeys $t)
         $clash = @($keys | Where-Object { $claimed.ContainsKey($_) }).Count -gt 0
@@ -300,7 +315,7 @@ function Invoke-VxClaudeJob($Params) {
     $prof = Confirm-VxProfile
     $model = [string]$ctx.Settings.claude.model
     if (-not $model) { $model = 'claude-opus-5-5' }
-    Set-VxProgress 0.65 ("Frage Claude ({0}) - das kann bis zu einer Minute dauern ..." -f $model)
+    Set-VxProgress 0.65 ("Frage Claude ({0}) - das kann ein paar Minuten dauern ..." -f $model)
     $body = New-VxClaudeBody $model (Get-VxClaudeUserContent $goal $text $allowRisky $prof) $true
     $resp = Invoke-VxClaudeApi $key $body
     $stop = [string](Get-VxProp $resp 'stop_reason')

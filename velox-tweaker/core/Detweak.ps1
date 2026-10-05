@@ -75,6 +75,28 @@ function Get-VxDetweakScan {
             } catch { $null = $_ }
         }
     }
+    # Values VELOX itself sets (every catalog reg action, whatever its status) and the IFEO priority
+    # of games boosted in the game booster: a registryKeys hit made only of these is not foreign.
+    $explained = New-Object System.Collections.ArrayList
+    foreach ($t in $cat.tweaks) {
+        foreach ($a in @($t.actions)) {
+            if ([string](Get-VxProp $a 'type') -eq 'reg') { [void]$explained.Add(@{ rx = (ConvertTo-VxKeyRegex ([string]$a.path)); name = ([string]$a.name).ToLowerInvariant() }) }
+        }
+    }
+    foreach ($g in @($ctx.Settings.games)) {
+        $exe = Get-VxPathLeaf ([string](Get-VxProp $g 'path' ''))
+        if (-not $exe) { continue }
+        $gp = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\' + $exe + '\PerfOptions'
+        [void]$explained.Add(@{ rx = (ConvertTo-VxKeyRegex $gp); name = 'cpupriorityclass' })
+    }
+    $isExplained = {
+        param([string]$keyPath, [string]$valueName)
+        $lp = $keyPath.ToLowerInvariant()
+        $ln = $valueName.ToLowerInvariant()
+        foreach ($x in $explained) { if ($x.name -eq $ln -and $lp -match $x.rx) { return $true } }
+        return $false
+    }
+
     $addItem = {
         param($item)
         $lk = $item.key.ToLowerInvariant()
@@ -93,7 +115,13 @@ function Get-VxDetweakScan {
                 $def = Get-VxActionDefault $r
                 $kind = [string](Get-VxProp $r 'kind')
                 foreach ($t in @(Resolve-VxRegPattern $path)) {
-                    $cur = Get-VxRegValue $t $name
+                    $cur = $null
+                    try { $cur = Get-VxRegValue $t $name }
+                    catch {
+                        # a key only Windows itself may read (e.g. the display class key 'Properties')
+                        if (Test-VxAccessDenied $_) { continue }
+                        throw
+                    }
                     if (-not $cur.exists) { continue }
                     $k = $kind
                     if (-not $k) { $k = [string]$cur.kind }
@@ -111,7 +139,18 @@ function Get-VxDetweakScan {
             try {
                 $path = [string]$r.path
                 foreach ($t in @(Resolve-VxRegPattern $path)) {
-                    if (-not (Test-VxRegKey $t)) { continue }
+                    try {
+                        if (-not (Test-VxRegKey $t)) { continue }
+                        # listed only when something in it is not explained by VELOX's own tweaks or
+                        # boosts - resetting deletes the whole key, which would undo those as well
+                        if (@(Get-VxRegSubKeys $t).Count -eq 0) {
+                            $foreign = @(@(Get-VxRegValueNames $t) | Where-Object { -not (& $isExplained $t ([string]$_)) })
+                            if ($foreign.Count -eq 0) { continue }
+                        }
+                    } catch {
+                        if (Test-VxAccessDenied $_) { continue }
+                        throw
+                    }
                     $label = [string]$r.label
                     $seg = Get-VxWildSegment $path $t
                     if ($seg) { $label = $label + ' (' + $seg + ')' }
@@ -207,6 +246,11 @@ function Invoke-VxDetweakJob($Params) {
     Set-VxProgress 0.02 'Bereite Detweak vor ...'
     Invoke-VxAutoRestorePoint 'Detweak' $J $wantRp
 
+    # power plan tweaks are reverted after, and applied before, everything else (power settings
+    # belong to a plan - see Get-VxPowerOrderedIds)
+    $planKeys = @($keys | Where-Object { $_ -like 'tweak|*' -and (Test-VxTweakHasAction (Get-VxTweak $_.Substring(6)) 'powerplan') })
+    $keys = @(@($keys | Where-Object { $planKeys -notcontains $_ }) + $planKeys)
+    $thenApply = @(Get-VxPowerOrderedIds $thenApply 'apply')
     $scan = Get-VxDetweakScan -ProgressFrom 0.05 -ProgressTo 0.3
     $map = @{}
     foreach ($it in $scan.items) { $map[$it.key.ToLowerInvariant()] = $it }
@@ -290,6 +334,7 @@ function Invoke-VxDetweakJob($Params) {
         $backupId = Complete-VxJournal $J
         Set-VxProgress 0.93 'Aktualisiere Status ...'
         try { Update-VxStatuses } catch { $null = $_ }
+        try { Sync-VxBoostedGames } catch { $null = $_ }
         $needs = Get-VxNeedsOf $needsTweaks.ToArray()
         foreach ($x in $extraNeeds) { if ($needs.Contains($x)) { $needs[$x] = $true } }
         # registry resets of foreign tweaks usually need a reboot to take effect

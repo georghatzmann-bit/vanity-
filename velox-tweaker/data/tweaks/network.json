@@ -95,6 +95,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Sehr alte Router oder Firewalls kommen mit ECN nicht klar – einzelne Webseiten oder Server laden dann langsam oder gar nicht.",
       "needs": "none",
       "tags": [
@@ -138,12 +139,12 @@
       "id": "network.nic-powersave-off",
       "name": "Netzwerkkarte nicht mehr abschalten lassen",
       "desc": "Windows darf die Netzwerkkarte nicht mehr zum Stromsparen ausschalten. Verhindert Verbindungsabbrüche nach Standby und Leerlauf.",
-      "info": "Entspricht dem Haken „Computer kann das Gerät ausschalten, um Energie zu sparen“ im Geräte-Manager (Wert PnPCapabilities=24, so von Microsoft dokumentiert). Gilt für alle echten LAN- und WLAN-Karten. Am Laptop kostet das im Standby etwas Akku.",
+      "info": "Entspricht dem Haken „Computer kann das Gerät ausschalten, um Energie zu sparen“ im Geräte-Manager (Wert PnPCapabilities=24, so von Microsoft dokumentiert). Gilt für alle echten LAN- und WLAN-Karten. Am Laptop kostet das im Standby etwas Akku. Nebenwirkung: Der PC lässt sich danach nicht mehr per Netzwerk aufwecken (Wake-on-LAN).",
       "group": "Netzwerkkarte",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Wake-on-LAN (PC übers Netzwerk aufwecken) funktioniert danach nicht mehr.",
       "needs": "reboot",
       "tags": [
         "network",
@@ -242,6 +243,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Etwas mehr CPU-Last beim Hochladen großer Dateien. Bringt nur bei fehlerhaften Treibern spürbar etwas.",
       "needs": "reboot",
       "tags": [
@@ -371,6 +373,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Mit Mesh-WLAN oder mehreren Access Points bleibt der PC länger an einem schwächer werdenden Sender hängen.",
       "needs": "reboot",
       "tags": [
@@ -623,6 +626,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
+      "situational": true,
       "warning": "Bei Anschlüssen mit DS-Lite (geteilte IPv4-Adresse, häufig bei Kabel/Glasfaser) kann IPv4 langsamer sein als IPv6 – dann eher nicht nutzen.",
       "needs": "reboot",
       "tags": [

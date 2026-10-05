@@ -274,6 +274,9 @@ function Test-Tweak([string]$file, [string]$category, $t) {
     $info = Get-Prop $t 'info'
     if ($null -ne $info -and ([string]$info).Length -gt 500) { Add-Err $where 'info longer than 500 chars' }
     $kind = 'toggle'; if (Has-Prop $t 'kind') { $kind = [string](Get-Prop $t 'kind') }
+    # situational: only for a specific problem - the advisors pick it only when the user's own text asks for it
+    if ((Has-Prop $t 'situational') -and -not ((Get-Prop $t 'situational') -is [bool])) { Add-Err $where 'situational must be boolean' }
+    if ((Get-Prop $t 'situational') -eq $true -and $kind -ne 'toggle') { Add-Err $where 'situational only makes sense for toggles' }
     if ($Kinds -notcontains $kind) { Add-Err $where "kind must be toggle|action|remove" }
     $impact = Get-Prop $t 'impact'
     if (-not (Test-IsInt $impact) -or [int]$impact -lt 1 -or [int]$impact -gt 3) { Add-Err $where 'impact must be 1, 2 or 3' }

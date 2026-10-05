@@ -16,7 +16,7 @@ function Test-VxCleanPathSafe([string]$Path) {
     if ($p -match '(^|[\\/])\.\.([\\/]|$)') { return $false }
     # string handling instead of [IO.Path] so the checks behave the same in the Linux tests
     $deny = New-Object System.Collections.Generic.List[string]
-    foreach ($v in @($env:SystemRoot, $env:windir, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432, $env:ProgramData, $env:USERPROFILE, $env:PUBLIC, $env:APPDATA, $env:LOCALAPPDATA, $env:HOME)) {
+    foreach ($v in @($env:SystemRoot, $env:windir, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432, $env:ProgramData, $env:USERPROFILE, $env:PUBLIC, $env:APPDATA, $env:LOCALAPPDATA, $env:HOME, (Get-VxUserFolder 'profile'), (Get-VxUserFolder 'appData'), (Get-VxUserFolder 'localAppData'))) {
         if ($v) { $deny.Add($v.TrimEnd('\', '/')) }
     }
     $win = $env:SystemRoot
@@ -34,9 +34,109 @@ function Test-VxCleanPathSafe([string]$Path) {
     return $true
 }
 
-# Expands a clean path into top-level items: @{ root; filter; contentsOnly }.
+# Native helpers for deleting without following junctions (Windows only, compiled once per runspace).
+# DeleteUnder opens the item itself (never a link target), asks Windows for the item's real final
+# path, refuses when that is not below the cleaned root and then deletes THROUGH THAT HANDLE - so a
+# folder swapped for a junction between listing and deleting cannot redirect the delete.
+function Initialize-VxSafeFs {
+    if ('VeloxNative.SafeFs' -as [type]) { return $true }
+    if (-not (Test-VxWindows)) { return $false }
+    $src = @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace VeloxNative {
+  public static class SafeFs {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern SafeFileHandle CreateFileW(string name, uint access, uint share, IntPtr sa, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern uint GetFinalPathNameByHandleW(SafeFileHandle h, StringBuilder buf, uint len, uint flags);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetFileInformationByHandle(SafeFileHandle h, int cls, ref uint info, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetFileInformationByHandle(SafeFileHandle h, int cls, ref byte info, uint size);
+    const uint DELETE = 0x00010000, READ_ATTR = 0x80, SHARE_ALL = 7, OPEN_EXISTING = 3;
+    const uint OPEN_REPARSE = 0x00200000, BACKUP = 0x02000000;
+    static string Final(SafeFileHandle h) {
+      StringBuilder sb = new StringBuilder(1024);
+      uint n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0);
+      if (n == 0) return null;
+      if (n >= sb.Capacity) {
+        sb = new StringBuilder((int)n + 2);
+        n = GetFinalPathNameByHandleW(h, sb, (uint)sb.Capacity, 0);
+        if (n == 0) return null;
+      }
+      return sb.ToString();
+    }
+    public static string FinalPath(string path) {
+      using (SafeFileHandle h = CreateFileW(path, READ_ATTR, SHARE_ALL, IntPtr.Zero, OPEN_EXISTING, BACKUP, IntPtr.Zero)) {
+        if (h.IsInvalid) return null;
+        return Final(h);
+      }
+    }
+    static int Map(int err) {
+      if (err == 32 || err == 33 || err == 5 || err == 145 || err == 1224) return 2;
+      if (err == 206 || err == 3 || err == 111) return 3;
+      if (err == 2) return 5;
+      return 4;
+    }
+    // 0 deleted, 1 not below the root (refused), 2 in use / access denied, 3 path too long, 4 other, 5 gone
+    public static int DeleteUnder(string path, string rootFinal) {
+      using (SafeFileHandle h = CreateFileW(path, DELETE | READ_ATTR, SHARE_ALL, IntPtr.Zero, OPEN_EXISTING, OPEN_REPARSE | BACKUP, IntPtr.Zero)) {
+        if (h.IsInvalid) return Map(Marshal.GetLastWin32Error());
+        string f = Final(h);
+        if (f == null) return 4;
+        string root = rootFinal.TrimEnd('\\') + "\\";
+        if (!f.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return 1;
+        uint flags = 0x1 | 0x2 | 0x10; // DELETE | POSIX_SEMANTICS | IGNORE_READONLY_ATTRIBUTE (Win10 1809+)
+        if (SetFileInformationByHandle(h, 21, ref flags, 4)) return 0;
+        byte del = 1;
+        if (SetFileInformationByHandle(h, 4, ref del, 1)) return 0;
+        return Map(Marshal.GetLastWin32Error());
+      }
+    }
+  }
+}
+'@
+    try { Add-Type -TypeDefinition $src -Language CSharp -ErrorAction Stop; return $true } catch {
+        Write-VxLog 'warn' ('Sicheres Löschen nicht verfügbar: ' + $_.Exception.Message)
+        return $false
+    }
+}
+
+# Long-path form of a local or UNC path (\\?\C:\... / \\?\UNC\server\share\...) when .NET accepts it
+# (Windows PowerShell 5.1 otherwise fails above 260 characters); else the path unchanged.
+function Get-VxLongPath([string]$Path) {
+    if (-not (Test-VxWindows) -or -not $Path -or $Path.StartsWith('\\?\')) { return $Path }
+    $lp = $null
+    if ($Path -match '^[A-Za-z]:\\') { $lp = '\\?\' + $Path }
+    elseif ($Path.StartsWith('\\')) { $lp = '\\?\UNC\' + $Path.Substring(2) }
+    if ($null -eq $lp) { return $Path }
+    try { if ([IO.Directory]::Exists($lp) -or [IO.File]::Exists($lp)) { return $lp } } catch { $null = $_ }
+    return $Path
+}
+
+# Refuses a root when it or any folder above it is a junction / symbolic link: then the folder that
+# looks like a cache could really be C:\Program Files\... and the cleaner would empty that.
+function Test-VxCleanRootChain([string]$Root) {
+    $p = $Root
+    while ($p) {
+        try {
+            $di = New-Object IO.DirectoryInfo($p)
+            if ($di.Exists -and (($di.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $false }
+        } catch { return $false }
+        $parent = [IO.Path]::GetDirectoryName($p)
+        if (-not $parent -or $parent -eq $p) { break }
+        $p = $parent
+    }
+    return $true
+}
+
+# Expands a clean path into top-level items: @{ root; filter; expanded }. Per-user variables point
+# at the person at the desktop (Expand-VxUserPath).
 function Resolve-VxCleanPath([string]$Raw) {
-    $exp = [Environment]::ExpandEnvironmentVariables($Raw)
+    $exp = Expand-VxUserPath $Raw
     $leaf = [IO.Path]::GetFileName($exp)
     if ($leaf -match '[\*\?]') {
         $parent = [IO.Path]::GetDirectoryName($exp)
@@ -49,54 +149,96 @@ function Get-VxCleanTopItems($Resolved, [string[]]$Keep) {
     $items = @()
     $root = $Resolved.root
     if (-not (Test-VxCleanPathSafe $root)) { throw ("Pfad wird aus Sicherheitsgründen nicht bereinigt: {0}" -f $root) }
+    if (-not (Test-VxCleanRootChain $root)) { throw ("Pfad wird nicht bereinigt, weil er (oder ein Ordner darüber) eine Verknüpfung auf einen anderen Ort ist: {0}" -f $root) }
+    $lr = Get-VxLongPath $root
     if ($Resolved.filter) {
-        if (-not [IO.Directory]::Exists($root)) { return @() }
-        $di = New-Object IO.DirectoryInfo($root)
+        if (-not [IO.Directory]::Exists($lr)) { return @() }
+        $di = New-Object IO.DirectoryInfo($lr)
         $items = @($di.GetFileSystemInfos($Resolved.filter))
-    } elseif ([IO.Directory]::Exists($root)) {
-        $di = New-Object IO.DirectoryInfo($root)
+    } elseif ([IO.Directory]::Exists($lr)) {
+        $di = New-Object IO.DirectoryInfo($lr)
         $items = @($di.GetFileSystemInfos())
-    } elseif ([IO.File]::Exists($root)) {
-        $items = @(New-Object IO.FileInfo($root))
+    } elseif ([IO.File]::Exists($lr)) {
+        $items = @(New-Object IO.FileInfo($lr))
     }
     if ($Keep.Count -gt 0) { $items = @($items | Where-Object { $Keep -notcontains $_.Name }) }
     return $items
 }
 
-# Walks (and optionally deletes) files below the given items. Never follows junctions/symlinks.
-function Invoke-VxCleanWalk($Items, [bool]$Delete, [int]$MaxMs = 30000) {
+# Real final path of the cleaned root (\\?\C:\...), $null off Windows or when unknown.
+function Get-VxCleanRootFinal([string]$Root) {
+    if (-not (Initialize-VxSafeFs)) { return $null }
+    try { return [VeloxNative.SafeFs]::FinalPath((Get-VxLongPath $Root)) } catch { return $null }
+}
+
+# Deletes one file / empty folder. Returns 'ok', 'locked', 'toolong', 'refused', 'gone' or 'error'.
+function Remove-VxCleanItem($Item, [string]$RootFinal) {
+    if ($RootFinal -and ('VeloxNative.SafeFs' -as [type])) {
+        $code = [VeloxNative.SafeFs]::DeleteUnder($Item.FullName, $RootFinal)
+        switch ($code) { 0 { return 'ok' } 1 { return 'refused' } 2 { return 'locked' } 3 { return 'toolong' } 5 { return 'gone' } }
+        return 'error'
+    }
+    # fallback (non-Windows tests, or the native helper is unavailable): the folder the item sits
+    # in must still be a real folder right before the delete
+    try {
+        $parent = $null
+        if ($Item -is [IO.FileInfo]) { $parent = $Item.Directory } else { $parent = $Item.Parent }
+        if ($null -ne $parent) {
+            $parent.Refresh()
+            if (($parent.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return 'refused' }
+        }
+        if ($Item -is [IO.FileInfo] -and ($Item.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) { $Item.Attributes = [IO.FileAttributes]::Normal }
+        $Item.Delete()
+        return 'ok'
+    } catch [System.IO.PathTooLongException] { return 'toolong' }
+    catch [System.IO.FileNotFoundException] { return 'gone' }
+    catch [System.IO.DirectoryNotFoundException] { return 'gone' }
+    catch { return 'locked' }
+}
+
+# Walks (and optionally deletes) files below the given items. Never follows junctions/symlinks:
+# reparse points are skipped, every folder is re-checked right before it is listed, and deletes
+# are verified against the root's real path (Remove-VxCleanItem).
+# Counts: skipped (in use / access denied), tooLong (path too long), refused (redirected).
+function Invoke-VxCleanWalk($Items, [bool]$Delete, [int]$MaxMs = 30000, [string]$RootFinal = $null) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $res = @{ bytes = [long]0; files = 0; freed = [long]0; deleted = 0; skipped = 0 }
-    $dirs = New-Object System.Collections.Generic.List[string]
+    $res = @{ bytes = [long]0; files = 0; freed = [long]0; deleted = 0; skipped = 0; tooLong = 0; refused = 0 }
+    $dirs = New-Object System.Collections.Generic.List[object]
     $stack = New-Object System.Collections.Generic.Stack[object]
     foreach ($i in @($Items)) { $stack.Push($i) }
     while ($stack.Count -gt 0) {
         if (-not $Delete -and $sw.ElapsedMilliseconds -gt $MaxMs) { break }
         $it = $stack.Pop()
         try {
+            $it.Refresh()
             if (($it.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
             if ($it -is [IO.DirectoryInfo]) {
-                $dirs.Add($it.FullName)
+                $dirs.Add($it)
                 foreach ($c in $it.GetFileSystemInfos()) { $stack.Push($c) }
             } else {
                 $len = [long]$it.Length
                 $res.bytes += $len
                 $res.files++
                 if ($Delete) {
-                    try {
-                        if (($it.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0) { $it.Attributes = [IO.FileAttributes]::Normal }
-                        $it.Delete()
-                        $res.freed += $len
-                        $res.deleted++
-                    } catch { $res.skipped++ }
+                    switch (Remove-VxCleanItem $it $RootFinal) {
+                        'ok' { $res.freed += $len; $res.deleted++ }
+                        'gone' { $null = $_ }
+                        'toolong' { $res.tooLong++ }
+                        'refused' { $res.refused++ }
+                        default { $res.skipped++ }
+                    }
                 }
             }
-        } catch { $res.skipped++ }
+        } catch [System.IO.PathTooLongException] { $res.tooLong++ }
+        catch { $res.skipped++ }
     }
     if ($Delete) {
         # remove now-empty folders, deepest first
-        foreach ($d in @($dirs | Sort-Object { $_.Length } -Descending)) {
-            try { if ([IO.Directory]::Exists($d) -and @([IO.Directory]::GetFileSystemEntries($d)).Count -eq 0) { [IO.Directory]::Delete($d) } } catch { $null = $_ }
+        foreach ($d in @($dirs | Sort-Object { $_.FullName.Length } -Descending)) {
+            try {
+                $d.Refresh()
+                if ($d.Exists -and (($d.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) -and @($d.GetFileSystemInfos()).Count -eq 0) { $null = Remove-VxCleanItem $d $RootFinal }
+            } catch { $null = $_ }
         }
     }
     return $res
@@ -197,19 +339,31 @@ function Invoke-VxRunAction($Tweak, $J = $null) {
                 $svc = @(@(Get-VxProp $a 'stopServices' @()) | ForEach-Object { [string]$_ })
                 if ($svc.Count -gt 0) { $stopped = @(Stop-VxServicesForClean $svc) }
                 try {
-                    $skipped = 0
+                    $skipped = 0; $tooLong = 0; $refused = 0
                     foreach ($p in $paths) {
-                        $r = Resolve-VxCleanPath $p
-                        $items = @(Get-VxCleanTopItems $r $keep)
-                        $w = Invoke-VxCleanWalk $items $true
-                        $freed += $w.freed
-                        $skipped += $w.skipped
+                        try {
+                            $r = Resolve-VxCleanPath $p
+                            $items = @(Get-VxCleanTopItems $r $keep)
+                            if ($items.Count -eq 0) { continue }
+                            $rootFinal = Get-VxCleanRootFinal $r.root
+                            if ((Test-VxWindows) -and ('VeloxNative.SafeFs' -as [type]) -and -not $rootFinal) { throw ("Ordner konnte nicht sicher geprüft werden: {0}" -f $r.root) }
+                            $w = Invoke-VxCleanWalk $items $true 30000 $rootFinal
+                            $freed += $w.freed
+                            $skipped += $w.skipped; $tooLong += $w.tooLong; $refused += $w.refused
+                        } catch {
+                            if ([string]$_.Exception.Message -eq 'VX_CANCELLED') { throw }
+                            $ok = $false
+                            $msgs += (Get-VxErrorText $_)
+                        }
                     }
-                    if ($skipped -gt 0) { $msgs += ("{0} Dateien waren in Benutzung und wurden übersprungen" -f $skipped) }
+                    if ($skipped -gt 0) { $msgs += ("{0} Dateien waren in Benutzung oder geschützt und wurden übersprungen" -f $skipped) }
+                    if ($tooLong -gt 0) { $msgs += ("{0} Dateien haben einen zu langen Pfad und wurden übersprungen" -f $tooLong) }
+                    if ($refused -gt 0) { $msgs += ("{0} Dateien lagen hinter einer Ordner-Verknüpfung und wurden aus Sicherheitsgründen nicht gelöscht" -f $refused) }
                 } finally {
                     foreach ($s in $stopped) { $null = Invoke-VxNative -FilePath (Get-VxSystemTool 'sc.exe') -Arguments @('start', $s) -TimeoutSec 20 }
                 }
             } elseif ($type -eq 'ps') {
+                if ($null -ne $ctx.DesktopUser -and (Test-VxPerUserScript ([string]$a.apply))) { throw (Get-VxPerUserBlockText) }
                 if ($null -ne $J) { Add-VxJournalEntry $J ([ordered]@{ op = 'cmd'; id = [string]$Tweak.id; label = [string]$Tweak.name; restorable = $false }) }
                 if ($ctx.Simulate) { $msgs += 'Testmodus: nur protokolliert'; continue }
                 $null = Invoke-VxPsSource ([string]$a.apply)
@@ -230,6 +384,8 @@ function Invoke-VxRunAction($Tweak, $J = $null) {
 function Invoke-VxRunActionJob($Params) {
     $ids = @(@(Get-VxProp $Params 'ids' @()) | ForEach-Object { [string]$_ } | Where-Object { $_ } | Select-Object -Unique)
     $J = New-VxJournal 'clean' 'Reinigung & Reparatur'
+    Set-VxProgress 0.02 'Bereite vor ...'
+    Invoke-VxAutoRestorePoint 'Reinigung & Reparatur' $J
     $results = New-Object System.Collections.ArrayList
     $n = 0
     try {
@@ -262,7 +418,7 @@ function Get-VxStartupLocations {
     )
     $user = ''
     $common = ''
-    try { $user = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup) } catch { $null = $_ }
+    try { $user = Get-VxUserFolder 'startup' } catch { $null = $_ }
     try { $common = [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonStartup) } catch { $null = $_ }
     if ($user) { $list += @{ id = 'hkcu-folder'; type = 'folder'; path = $user; approved = 'HKCU\' + $approved + 'StartupFolder'; label = 'Autostart-Ordner (Benutzer)' } }
     if ($common) { $list += @{ id = 'common-folder'; type = 'folder'; path = $common; approved = 'HKLM\' + $approved + 'StartupFolder'; label = 'Autostart-Ordner (alle Benutzer)' } }
@@ -341,6 +497,7 @@ function Invoke-VxStartupSetJob($Params) {
     $verb = 'aktiviert'
     if (-not $enabled) { $verb = 'deaktiviert' }
     $J = New-VxJournal 'startup' ("Autostart: {0} {1}" -f $item.name, $verb)
+    Invoke-VxAutoRestorePoint ("Autostart: {0}" -f $item.name) $J
     try {
         $null = Set-VxRegJ $J $loc.approved $name 'Binary' $hex 'startup'
     } finally { $null = Complete-VxJournal $J }
@@ -402,18 +559,75 @@ function Get-VxKnownGames {
     )
 }
 
+function Get-VxIfeoPerfPath([string]$Exe) {
+    return ('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\' + $Exe + '\PerfOptions')
+}
+
+# Id of an APPLIED catalog toggle that sets this exe's IFEO CpuPriorityClass (e.g. games.gta5-priority),
+# else $null. The booster and such a tweak share one registry value.
+function Get-VxPriorityTweakFor([string]$Exe) {
+    $ctx = $global:VxCtx
+    if (-not $Exe -or $null -eq $ctx.Catalog) { return $null }
+    $path = (Get-VxIfeoPerfPath $Exe).ToLowerInvariant()
+    foreach ($t in @($ctx.Catalog.tweaks)) {
+        if ((Get-VxTweakKind $t) -ne 'toggle') { continue }
+        $hit = @(@($t.actions) | Where-Object { [string](Get-VxProp $_ 'type') -eq 'reg' -and [string](Get-VxProp $_ 'name') -ieq 'CpuPriorityClass' -and ([string](Get-VxProp $_ 'path')).ToLowerInvariant() -eq $path }).Count -gt 0
+        if (-not $hit) { continue }
+        try { $st = Get-VxTweakStatus $t } catch { $st = $null }
+        if ($null -ne $st -and $st.status -eq 'applied') { return [string]$t.id }
+    }
+    return $null
+}
+
 function Get-VxGameBoostState([string]$Path) {
     $exe = Get-VxPathLeaf ($Path)
-    $b = [ordered]@{ priority = $false; gpu = $false; fso = $false }
+    $b = [ordered]@{ priority = $false; gpu = $false; fso = $false; priorityTweak = $null }
     try {
-        $p = Get-VxRegValue ('HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\' + $exe + '\PerfOptions') 'CpuPriorityClass'
+        $p = Get-VxRegValue (Get-VxIfeoPerfPath $exe) 'CpuPriorityClass'
         $b.priority = ($p.exists -and [long]$p.value -eq 3)
+        if ($b.priority) { $b.priorityTweak = Get-VxPriorityTweakFor $exe }
         $g = Get-VxRegValue 'HKCU\Software\Microsoft\DirectX\UserGpuPreferences' $Path
         $b.gpu = ($g.exists -and [string]$g.value -match 'GpuPreference=2;?')
         $f = Get-VxRegValue 'HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers' $Path
         $b.fso = ($f.exists -and (' ' + [string]$f.value + ' ') -match '\sDISABLEDXMAXIMIZEDWINDOWEDMODE\s')
     } catch { $null = $_ }
     return $b
+}
+
+# Re-reads the boost state of every remembered game after a job that may have touched the same
+# values (reverting games.*-priority, a restore, a detweak) and says so when a boost went away.
+function Sync-VxBoostedGames {
+    $ctx = $global:VxCtx
+    if ($null -eq $ctx.Settings) { return }
+    $list = New-Object System.Collections.ArrayList
+    $changed = $false
+    foreach ($g in @($ctx.Settings.games)) {
+        $path = [string](Get-VxProp $g 'path' '')
+        if (-not $path) { continue }
+        $old = Get-VxProp $g 'boost'
+        $now = Get-VxGameBoostState $path
+        $name = [string](Get-VxProp $g 'name' (Get-VxPathStem $path))
+        foreach ($k in @('priority', 'gpu', 'fso')) {
+            if ([bool](Get-VxProp $old $k $false) -ne [bool]$now[$k]) {
+                $changed = $true
+                if (-not $now[$k]) {
+                    $what = switch ($k) { 'priority' { 'hohe CPU-Priorität' } 'gpu' { 'starke Grafikkarte' } 'fso' { 'Vollbild-Optimierung aus' } }
+                    Write-VxLog 'warn' ("Spiele-Boost {0}: '{1}' ist jetzt aus - die Einstellung wurde mit zurückgesetzt." -f $name, $what)
+                }
+            }
+        }
+        if (-not ($now.priority -or $now.gpu -or $now.fso)) { $changed = $true; continue }
+        $e = [ordered]@{}
+        foreach ($k in @('id', 'name', 'exe', 'path', 'source')) { $e[$k] = Get-VxProp $g $k }
+        $e['boost'] = $now
+        $saved = Get-VxProp $g 'saved'
+        if ($now.priority -and $null -ne $saved) { $e['saved'] = $saved }
+        [void]$list.Add($e)
+    }
+    if ($changed) {
+        $ctx.Settings.games = $list.ToArray()
+        Save-VxSettings
+    }
 }
 
 function New-VxGameEntry([string]$Name, [string]$Path, [string]$Source) {
@@ -456,9 +670,10 @@ function Get-VxRealGames {
     }
     # FiveM launcher + its GTA processes
     try {
-        $fivem = [IO.Path]::Combine([IO.Path]::Combine([string]$env:LOCALAPPDATA, 'FiveM'), 'FiveM.exe')
+        $lad = Get-VxUserFolder 'localAppData'
+        $fivem = [IO.Path]::Combine([IO.Path]::Combine($lad, 'FiveM'), 'FiveM.exe')
         & $add 'FiveM' $fivem 'fivem'
-        $sub = [IO.Path]::Combine([string]$env:LOCALAPPDATA, 'FiveM\FiveM.app\data\cache\subprocess')
+        $sub = [IO.Path]::Combine($lad, 'FiveM\FiveM.app\data\cache\subprocess')
         if ([IO.Directory]::Exists($sub)) {
             foreach ($f in @(Get-ChildItem -LiteralPath $sub -Filter '*GTAProcess.exe' -File -ErrorAction SilentlyContinue)) {
                 & $add ('FiveM Spielprozess (' + $f.BaseName + ')') $f.FullName 'fivem'
@@ -604,17 +819,40 @@ function Invoke-VxGameBoostJob($Params) {
     $gpu = [bool](Get-VxProp $Params 'gpu' $false)
     $fso = [bool](Get-VxProp $Params 'fso' $false)
     $exe = Get-VxPathLeaf ($path)
+    $prevEntry = @(@($ctx.Settings.games) | Where-Object { [string](Get-VxProp $_ 'path') -ieq $path })[0]
+    $saved = Get-VxProp $prevEntry 'saved'
     $J = New-VxJournal 'game' ('Spiele-Boost: ' + $exe)
+    Invoke-VxAutoRestorePoint ('Spiele-Boost: ' + $exe) $J
     $errors = @()
     try {
-        # 1) CPU priority "high" via Image File Execution Options (per exe name)
+        # 1) CPU priority "high" via Image File Execution Options (per exe name). The value is
+        #    shared with the games.*-priority catalog tweaks and with other tools, so the booster
+        #    remembers what was there before and only ever undoes its own change.
         try {
-            $ifeo = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\' + $exe + '\PerfOptions'
-            if ($prio) { $null = Set-VxRegJ $J $ifeo 'CpuPriorityClass' 'DWord' 3 'game' }
-            else {
-                $null = Set-VxRegJ $J $ifeo 'CpuPriorityClass' $null $null 'game'
-                if ((Test-VxRegKey $ifeo) -and @(Get-VxRegValueNames $ifeo).Count -eq 0 -and @(Get-VxRegSubKeys $ifeo).Count -eq 0) {
-                    $null = Set-VxRegKeyJ $J $ifeo $false 'game'
+            $ifeo = Get-VxIfeoPerfPath $exe
+            $cur = Get-VxRegSnapshot $ifeo 'CpuPriorityClass'
+            $isHigh = ($cur.exists -and [long]$cur.value -eq 3)
+            if ($prio) {
+                if (-not $isHigh -and $null -eq $saved) { $saved = @{ value = $cur; keyExisted = [bool](Test-VxRegKey $ifeo) } }
+                $null = Set-VxRegJ $J $ifeo 'CpuPriorityClass' 'DWord' 3 'game'
+            } elseif ($isHigh) {
+                $tw = Get-VxPriorityTweakFor $exe
+                if ($tw) {
+                    $tn = [string](Get-VxTweak $tw).name
+                    Write-VxLog 'info' ("Hohe CPU-Priorität bleibt an: sie kommt vom Tweak '{0}'. Zum Ausschalten den Tweak zurücksetzen." -f $tn)
+                } else {
+                    $bv = Get-VxProp $saved 'value'
+                    if ($null -ne $bv -and (Get-VxProp $bv 'exists') -eq $true -and @('DWord', 'QWord', 'String') -contains [string](Get-VxProp $bv 'kind')) {
+                        $null = Set-VxRegJ $J $ifeo 'CpuPriorityClass' ([string](Get-VxProp $bv 'kind')) (Get-VxProp $bv 'value') 'game'
+                    } else {
+                        $null = Set-VxRegJ $J $ifeo 'CpuPriorityClass' $null $null 'game'
+                    }
+                    # delete the key only when VELOX created it (or nobody knows) and it is empty now
+                    $keyExisted = [bool](Get-VxProp $saved 'keyExisted' $false)
+                    if (-not $keyExisted -and (Test-VxRegKey $ifeo) -and @(Get-VxRegValueNames $ifeo).Count -eq 0 -and @(Get-VxRegSubKeys $ifeo).Count -eq 0) {
+                        $null = Set-VxRegKeyJ $J $ifeo $false 'game'
+                    }
+                    $saved = $null
                 }
             }
         } catch { $errors += (Get-VxErrorText $_ 'CPU-Priorität') }
@@ -648,7 +886,9 @@ function Invoke-VxGameBoostJob($Params) {
     $list = New-Object System.Collections.ArrayList
     foreach ($g in @($ctx.Settings.games)) { if ([string](Get-VxProp $g 'path') -ine $path) { [void]$list.Add($g) } }
     if ($game.boost.priority -or $game.boost.gpu -or $game.boost.fso) {
-        [void]$list.Add([ordered]@{ id = $game.id; name = $game.name; exe = $game.exe; path = $game.path; source = $game.source; boost = $game.boost })
+        $e = [ordered]@{ id = $game.id; name = $game.name; exe = $game.exe; path = $game.path; source = $game.source; boost = $game.boost }
+        if ($game.boost.priority -and $null -ne $saved) { $e['saved'] = $saved }
+        [void]$list.Add($e)
     }
     $ctx.Settings.games = $list.ToArray()
     Save-VxSettings
@@ -715,11 +955,13 @@ function Invoke-VxExplorerRestartJob($Params) {
         Write-VxLog 'info' '[Testmodus] Explorer wird im Testmodus nicht neu gestartet.'
     } else {
         Set-VxProgress 0.3 'Starte Explorer neu ...'
-        Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        # only this session's Explorer - other signed-in users (fast user switching) keep their desktop
+        $sid = [Diagnostics.Process]::GetCurrentProcess().SessionId
+        Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid } | Stop-Process -Force -ErrorAction SilentlyContinue
         $back = $false
         for ($i = 0; $i -lt 12; $i++) {
             Start-Sleep -Milliseconds 500
-            if (@(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue).Count -gt 0) { $back = $true; break }
+            if (@(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid }).Count -gt 0) { $back = $true; break }
         }
         if (-not $back) { Start-Process -FilePath ([IO.Path]::Combine([string]$env:SystemRoot, 'explorer.exe')) }
         Write-VxLog 'ok' 'Explorer neu gestartet.'

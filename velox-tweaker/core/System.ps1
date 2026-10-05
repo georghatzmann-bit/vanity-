@@ -174,9 +174,30 @@ function Get-VxBaseKey([string]$Hive) {
     return [Microsoft.Win32.RegistryKey]::OpenBaseKey($h, [Microsoft.Win32.RegistryView]::Registry64)
 }
 
+# Hive + subkey a path really lives in. When VELOX runs elevated as another account than the
+# desktop user (Get-VxDesktopUser), HKCU means the DESKTOP user's hive: HKU\<SID> (and its
+# Software\Classes part HKU\<SID>_Classes) - not the hive of the account that typed the password.
+function Resolve-VxRealRegTarget([string]$Path) {
+    $sp = Split-VxRegPath $Path
+    $du = $global:VxCtx.DesktopUser
+    if ($sp.Hive -eq 'HKCU' -and $null -ne $du -and $du.sid) {
+        $sub = [string]$sp.Sub
+        $sid = [string]$du.sid
+        if ($sub -match '^(?i)Software\\Classes(\\(.*))?$') {
+            $rest = $Matches[2]
+            $t = $sid + '_Classes'
+            if ($rest) { $t = $t + '\' + $rest }
+            return @{ Hive = 'HKU'; Sub = $t }
+        }
+        if ($sub) { return @{ Hive = 'HKU'; Sub = ($sid + '\' + $sub) } }
+        return @{ Hive = 'HKU'; Sub = $sid }
+    }
+    return @{ Hive = $sp.Hive; Sub = $sp.Sub }
+}
+
 # Opens a key; returns $null when it does not exist (and -Create is not given).
 function Open-VxRealKey([string]$Path, [bool]$Writable = $false, [bool]$Create = $false) {
-    $sp = Split-VxRegPath $Path
+    $sp = Resolve-VxRealRegTarget $Path
     $base = Get-VxBaseKey $sp.Hive
     if ([string]::IsNullOrEmpty($sp.Sub)) { return $base }
     try {
@@ -351,6 +372,31 @@ function Get-VxSimReg {
     return $sim.reg
 }
 
+# Key of a value inside an overlay entry. Never the raw name: the key's default value has the
+# name "" and a JSON property with an empty name makes sim-state.json unreadable (ConvertFrom-Json
+# rejects it on 5.1 and 7), which used to wipe the whole Testmodus overlay on the next start.
+function Get-VxSimValueKey([string]$Name) {
+    return ('@' + ([string]$Name).ToLowerInvariant())
+}
+
+# Re-keys values written by older versions (raw lower-case name) to Get-VxSimValueKey.
+function Repair-VxSimRegValues {
+    $reg = Get-VxSimReg
+    foreach ($k in @($reg.Keys)) {
+        $e = $reg[$k]
+        if (-not ($e -is [hashtable])) { continue }
+        if (-not ($e.values -is [hashtable])) { $e.values = @{}; continue }
+        $fixed = @{}
+        foreach ($vk in @($e.values.Keys)) {
+            $v = $e.values[$vk]
+            $nm = [string](Get-VxProp $v 'name' '')
+            if (-not (Test-VxProp $v 'name')) { if ([string]$vk -like '@*') { $nm = ([string]$vk).Substring(1) } else { $nm = [string]$vk } }
+            $fixed[(Get-VxSimValueKey $nm)] = $v
+        }
+        $e.values = $fixed
+    }
+}
+
 function Get-VxSimRegEntry([string]$Path, [bool]$Create = $false) {
     $reg = Get-VxSimReg
     $k = $Path.ToLowerInvariant()
@@ -417,7 +463,7 @@ function Get-VxSimRegValue([string]$Path, [string]$Name) {
     $none = @{ exists = $false; kind = $null; value = $null }
     if (-not (Test-VxSimRegKey $Path)) { return $none }
     $e = Get-VxSimRegEntry $Path $false
-    $ln = $Name.ToLowerInvariant()
+    $ln = Get-VxSimValueKey $Name
     if ($null -ne $e) {
         if ($e.values.ContainsKey($ln)) {
             $v = $e.values[$ln]
@@ -442,13 +488,13 @@ function Set-VxSimRegValue([string]$Path, [string]$Name, [string]$Kind, $Value) 
     if ($Kind -eq 'MultiString') { $stored = @(@($Value) | ForEach-Object { [string]$_ }) }
     if ($Kind -eq 'Binary') { $stored = ([string]$Value).ToUpperInvariant() }
     if ($Kind -eq 'DWord' -or $Kind -eq 'QWord') { $stored = [decimal]$Value; if ($stored -le [decimal][long]::MaxValue) { $stored = [long]$stored } }
-    $e.values[$Name.ToLowerInvariant()] = @{ name = $Name; kind = $Kind; value = $stored; deleted = $false }
+    $e.values[(Get-VxSimValueKey $Name)] = @{ name = $Name; kind = $Kind; value = $stored; deleted = $false }
 }
 
 function Remove-VxSimRegValue([string]$Path, [string]$Name) {
     if (-not (Test-VxSimRegKey $Path)) { return }
     $e = Get-VxSimRegEntry $Path $true
-    $e.values[$Name.ToLowerInvariant()] = @{ name = $Name; kind = $null; value = $null; deleted = $true }
+    $e.values[(Get-VxSimValueKey $Name)] = @{ name = $Name; kind = $null; value = $null; deleted = $true }
 }
 
 function Get-VxSimRegSubKeys([string]$Path) {
@@ -482,7 +528,7 @@ function Get-VxSimRegValueNames([string]$Path) {
     $hidden = (($null -ne $e -and $e.cleared) -or (Test-VxSimAncestorHidden $Path))
     if (-not $hidden) {
         foreach ($n in @(Get-VxBaseRegValueNames $Path)) {
-            if ($null -ne $e -and $e.values.ContainsKey($n.ToLowerInvariant())) { continue }
+            if ($null -ne $e -and $e.values.ContainsKey((Get-VxSimValueKey $n))) { continue }
             $names.Add($n)
         }
     }
@@ -569,16 +615,23 @@ function Export-VxRegTree([string]$Path, [int]$Depth = 0) {
     return [ordered]@{ path = $Path; values = $vals.ToArray(); keys = $keys.ToArray() }
 }
 
-function Import-VxRegTree($Tree) {
+# Re-creates a key tree. With a journal $J every value that is overwritten and every subkey that is
+# created is journalled, so a restore that lands on an existing key can itself be undone.
+# Without $J (the key was just created and that creation is journalled) values are written directly.
+function Import-VxRegTree($Tree, $J = $null, [string]$TweakId = $null) {
     if ($null -eq $Tree) { return }
     $path = [string](Get-VxProp $Tree 'path')
-    New-VxRegKey $path
+    if ($null -eq $J) { New-VxRegKey $path }
+    elseif (-not (Test-VxRegKey $path)) { $null = Set-VxRegKeyJ $J $path $true $TweakId $Tree; return }
     foreach ($v in @(Get-VxProp $Tree 'values' @())) {
         $kind = [string](Get-VxProp $v 'kind')
         if (@('DWord', 'QWord', 'String', 'ExpandString', 'MultiString', 'Binary') -notcontains $kind) { continue }
-        Set-VxRegValue $path ([string](Get-VxProp $v 'name')) $kind (Get-VxProp $v 'value')
+        $val = Get-VxProp $v 'value'
+        if ($kind -eq 'MultiString') { $val = [string[]]@($val) }
+        if ($null -eq $J) { Set-VxRegValue $path ([string](Get-VxProp $v 'name')) $kind $val }
+        else { $null = Set-VxRegJ $J $path ([string](Get-VxProp $v 'name')) $kind $val $TweakId }
     }
-    foreach ($k in @(Get-VxProp $Tree 'keys' @())) { Import-VxRegTree $k }
+    foreach ($k in @(Get-VxProp $Tree 'keys' @())) { Import-VxRegTree $k $J $TweakId }
 }
 
 # ================================================================== services
@@ -788,6 +841,49 @@ function Get-VxBcdValue([string]$Name) {
     return $null
 }
 
+# BCD settings BitLocker ignores (Microsoft "BCD settings and BitLocker": not in the validation
+# profile). Changing any OTHER setting (loadoptions, debug, nointegritychecks, testsigning ...)
+# can make BitLocker ask for the 48-digit recovery key at the next boot.
+function Get-VxBitLockerSafeBcdNames {
+    # deliberately short: for anything not known to be ignored, BitLocker is suspended once - harmless
+    return @('useplatformclock', 'useplatformtick', 'disabledynamictick', 'tscsyncpolicy', 'hypervisorlaunchtype')
+}
+
+function Test-VxBcdNeedsBitLockerSuspend([string]$Name) {
+    return ((Get-VxBitLockerSafeBcdNames) -notcontains ([string]$Name).ToLowerInvariant())
+}
+
+# Before a boot setting that BitLocker validates is changed: if BitLocker protects the system
+# drive, suspend it for exactly one reboot (what Suspend-BitLocker -RebootCount 1 does) so the
+# next boot does not ask for the recovery key. Refuses the change when that is not possible.
+function Confirm-VxBitLockerForBcd([string]$Name) {
+    $ctx = $global:VxCtx
+    if ($ctx.Simulate -or -not $ctx.Windows) { return }
+    if (-not (Test-VxBcdNeedsBitLockerSuspend $Name)) { return }
+    if ($ctx.Cache.ContainsKey('bitlockerSuspended')) { return }
+    $drive = [string]$env:SystemDrive
+    if (-not $drive) { $drive = 'C:' }
+    $vol = $null
+    try {
+        $vol = @(Get-CimInstance -Namespace 'root/cimv2/Security/MicrosoftVolumeEncryption' -ClassName 'Win32_EncryptableVolume' -Filter ("DriveLetter='{0}'" -f $drive) -OperationTimeoutSec 15 -ErrorAction Stop)[0]
+    } catch { $vol = $null }
+    # no BitLocker on this PC (Home edition without device encryption, or namespace missing)
+    if ($null -eq $vol) { $ctx.Cache.bitlockerSuspended = $false; return }
+    $prot = 0
+    try { $prot = [int](Invoke-CimMethod -InputObject $vol -MethodName 'GetProtectionStatus' -ErrorAction Stop).ProtectionStatus } catch { $prot = [int]$vol.ProtectionStatus }
+    if ($prot -ne 1) { $ctx.Cache.bitlockerSuspended = $false; return }
+    $ok = $false
+    try {
+        $r = Invoke-CimMethod -InputObject $vol -MethodName 'DisableKeyProtectors' -Arguments @{ DisableCount = [uint32]1 } -ErrorAction Stop
+        $ok = ([int]$r.ReturnValue -eq 0)
+    } catch { $ok = $false }
+    if (-not $ok) {
+        throw ("BitLocker schützt dein Systemlaufwerk und konnte nicht für einen Neustart pausiert werden. Der Boot-Wert '{0}' wird deshalb nicht geändert - sonst fragt Windows beim nächsten Start nach dem 48-stelligen Wiederherstellungsschlüssel. Notiere dir zuerst den Schlüssel (Systemsteuerung > BitLocker > Wiederherstellungsschlüssel sichern)." -f $Name)
+    }
+    $ctx.Cache.bitlockerSuspended = $true
+    Write-VxLog 'warn' ("BitLocker wurde für den nächsten Neustart pausiert, weil der Boot-Wert '{0}' geändert wird. Danach schaltet er sich von selbst wieder ein." -f $Name)
+}
+
 function Set-VxBcdValue([string]$Name, [string]$Value) {
     $ctx = $global:VxCtx
     if ($ctx.Simulate) {
@@ -795,6 +891,7 @@ function Set-VxBcdValue([string]$Name, [string]$Value) {
         $ctx.Sim.bcd[$Name.ToLowerInvariant()] = $Value
         return
     }
+    Confirm-VxBitLockerForBcd $Name
     $ctx.Cache.Remove('bcd')
     $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'bcdedit.exe') -Arguments @('/set', '{current}', $Name, $Value) -TimeoutSec 30
     if ($r.ExitCode -ne 0) { throw ("bcdedit /set $Name fehlgeschlagen: " + ($r.Output + $r.Error).Trim()) }
@@ -807,6 +904,7 @@ function Remove-VxBcdValue([string]$Name) {
         $ctx.Sim.bcd[$Name.ToLowerInvariant()] = '__deleted__'
         return
     }
+    Confirm-VxBitLockerForBcd $Name
     $ctx.Cache.Remove('bcd')
     $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'bcdedit.exe') -Arguments @('/deletevalue', '{current}', $Name) -TimeoutSec 30
     # deleting a value that is not set returns an error - treat as success when it is gone
@@ -889,8 +987,9 @@ function Get-VxPlanCandidates([string]$Plan) {
     if ($Plan -eq 'ultimate' -and $null -ne $st -and $st.ultimateGuid) { $list += ([string]$st.ultimateGuid).ToLowerInvariant() }
     if ($Plan -eq 'high' -and $null -ne $st -and $st.highGuid) { $list += ([string]$st.highGuid).ToLowerInvariant() }
     if ($ctx.Windows -and $Plan -ne 'balanced') {
-        $rx = 'Ultimate Performance|Ultimative Leistung|Performances ultimes|Máximo rendimiento|Prestazioni ottimali|Ultieme prestaties'
-        if ($Plan -eq 'high') { $rx = '^(High performance|Höchstleistung|Hohe Leistung|Performances élevées|Alto rendimiento|Prestazioni elevate)$' }
+        # accented letters may arrive mis-decoded (code page mix-ups), so they match 1-2 any characters
+        $rx = 'Ultimate Performance|Ultimative Leistung|Performances ultimes|M.{1,2}ximo rendimiento|Prestazioni ottimali|Ultieme prestaties'
+        if ($Plan -eq 'high') { $rx = '^(High performance|H.{1,2}chstleistung|Hohe Leistung|Performances .{1,2}lev.{1,2}es|Alto rendimiento|Prestazioni elevate)$' }
         foreach ($p in @(Get-VxRealPlanTable)) { if ($p.name -match $rx -and $list -notcontains $p.guid) { $list += $p.guid } }
     }
     return $list
@@ -938,43 +1037,89 @@ function ConvertFrom-VxPowercfgQuery([string]$Text) {
     return @{ ac = $ac; dc = $dc }
 }
 
-function Get-VxPowerSetting([string]$Subgroup, [string]$Setting, $Default = $null) {
+# GUID of the active scheme, or '' when it cannot be read (callers then fall back to SCHEME_CURRENT).
+function Get-VxActiveSchemeGuid {
+    try { return [string](Get-VxActivePlan).guid } catch { return '' }
+}
+
+# Key of a power setting in the simulated per-scheme table.
+function Get-VxSimPwsKey([string]$Scheme, [string]$Subgroup, [string]$Setting) {
+    return ($Scheme + '|' + $Subgroup + '|' + $Setting).ToLowerInvariant()
+}
+
+# AC/DC value of a power setting in the given scheme ('' = the active one). Power settings belong
+# to a scheme: switching the plan switches every value, so callers that remember or journal a value
+# must also remember the scheme it came from.
+function Get-VxPowerSetting([string]$Subgroup, [string]$Setting, $Default = $null, [string]$Scheme = '') {
     $ctx = $global:VxCtx
-    $key = ($Subgroup + '|' + $Setting).ToLowerInvariant()
     if ($ctx.Simulate) {
         if (-not ($ctx.Sim.pws -is [hashtable])) { $ctx.Sim.pws = @{} }
+        $sch = $Scheme
+        if (-not $sch) { $sch = Get-VxActiveSchemeGuid }
+        $key = Get-VxSimPwsKey $sch $Subgroup $Setting
         if ($ctx.Sim.pws.ContainsKey($key)) { $v = $ctx.Sim.pws[$key]; return @{ ac = $v.ac; dc = $v.dc } }
         if (-not $ctx.Windows) {
             if ($null -ne $Default) { return @{ ac = (Get-VxProp $Default 'ac'); dc = (Get-VxProp $Default 'dc') } }
             return $null
         }
     }
-    $r = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/query', 'SCHEME_CURRENT', $Subgroup, $Setting) -TimeoutSec 20
+    $target = $Scheme
+    if (-not $target) { $target = 'SCHEME_CURRENT' }
+    $r = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/query', $target, $Subgroup, $Setting) -TimeoutSec 20
     if ($r.ExitCode -ne 0) { return $null }
     return (ConvertFrom-VxPowercfgQuery $r.Output)
 }
 
-function Set-VxPowerSetting([string]$Subgroup, [string]$Setting, $Ac, $Dc) {
+# Writes AC and/or DC ($null = leave that half alone) into the given scheme ('' = the active one).
+# Only the active scheme is re-activated so the change takes effect; other schemes are just written.
+function Set-VxPowerSetting([string]$Subgroup, [string]$Setting, $Ac, $Dc, [string]$Scheme = '') {
     $ctx = $global:VxCtx
-    $key = ($Subgroup + '|' + $Setting).ToLowerInvariant()
     if ($ctx.Simulate) {
         if (-not ($ctx.Sim.pws -is [hashtable])) { $ctx.Sim.pws = @{} }
-        $cur = Get-VxPowerSetting $Subgroup $Setting $null
+        $sch = $Scheme
+        if (-not $sch) { $sch = Get-VxActiveSchemeGuid }
+        $cur = Get-VxPowerSetting $Subgroup $Setting $null $sch
+        $newAc = $Ac
+        if ($null -eq $newAc -and $null -ne $cur) { $newAc = $cur.ac }
         $newDc = $Dc
         if ($null -eq $newDc -and $null -ne $cur) { $newDc = $cur.dc }
-        $ctx.Sim.pws[$key] = @{ ac = $Ac; dc = $newDc }
+        $ctx.Sim.pws[(Get-VxSimPwsKey $sch $Subgroup $Setting)] = @{ ac = $newAc; dc = $newDc }
         return
     }
     $pc = Get-VxPowercfg
+    $target = $Scheme
+    $isActive = $true
+    if ($target) {
+        $active = Get-VxActiveSchemeGuid
+        $isActive = (-not $active -or [string]::Equals($active, $target, [StringComparison]::OrdinalIgnoreCase))
+    } else { $target = 'SCHEME_CURRENT' }
     if ($null -ne $Ac) {
-        $r = Invoke-VxNative -FilePath $pc -Arguments @('/setacvalueindex', 'SCHEME_CURRENT', $Subgroup, $Setting, [string]$Ac) -TimeoutSec 20
+        $r = Invoke-VxNative -FilePath $pc -Arguments @('/setacvalueindex', $target, $Subgroup, $Setting, [string]$Ac) -TimeoutSec 20
         if ($r.ExitCode -ne 0) { throw ('powercfg (Netzbetrieb) fehlgeschlagen: ' + ($r.Output + $r.Error).Trim()) }
     }
     if ($null -ne $Dc) {
-        $r2 = Invoke-VxNative -FilePath $pc -Arguments @('/setdcvalueindex', 'SCHEME_CURRENT', $Subgroup, $Setting, [string]$Dc) -TimeoutSec 20
+        $r2 = Invoke-VxNative -FilePath $pc -Arguments @('/setdcvalueindex', $target, $Subgroup, $Setting, [string]$Dc) -TimeoutSec 20
         if ($r2.ExitCode -ne 0) { throw ('powercfg (Akkubetrieb) fehlgeschlagen: ' + ($r2.Output + $r2.Error).Trim()) }
     }
-    $null = Invoke-VxNative -FilePath $pc -Arguments @('/setactive', 'SCHEME_CURRENT') -TimeoutSec 20
+    if ($isActive) { $null = Invoke-VxNative -FilePath $pc -Arguments @('/setactive', 'SCHEME_CURRENT') -TimeoutSec 20 }
+}
+
+# Older Testmodus overlays stored power settings without a scheme: they belonged to the plan that
+# was active then, which is the simulated active plan (or Balanced).
+function Repair-VxSimPowerSettings {
+    $ctx = $global:VxCtx
+    if (-not ($ctx.Sim.pws -is [hashtable])) { $ctx.Sim.pws = @{}; return }
+    $legacy = @($ctx.Sim.pws.Keys | Where-Object { @(([string]$_).Split('|')).Count -eq 2 })
+    if ($legacy.Count -eq 0) { return }
+    $sch = ''
+    if ($ctx.Sim.power -is [hashtable] -and $ctx.Sim.power.ContainsKey('active')) { $sch = [string]$ctx.Sim.power.active }
+    if (-not $sch) { $sch = Get-VxPlanBaseGuid 'balanced' }
+    foreach ($k in $legacy) {
+        $v = $ctx.Sim.pws[$k]
+        $ctx.Sim.pws.Remove($k)
+        $nk = ($sch + '|' + $k).ToLowerInvariant()
+        if (-not $ctx.Sim.pws.ContainsKey($nk)) { $ctx.Sim.pws[$nk] = $v }
+    }
 }
 
 # ================================================================== optional features
