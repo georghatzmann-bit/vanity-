@@ -293,7 +293,7 @@ kbd {
 .page > * { min-width: 0; }
 
 /* page transition fallback (no View Transitions API) */
-.page { animation: page-in var(--t-slow) var(--ease) both; }
+.page { animation: page-in var(--t-slow) var(--ease) backwards; }
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 ::view-transition-old(page) { animation: vt-out 140ms var(--ease) both; }
 ::view-transition-new(page) { animation: vt-in 200ms var(--ease) both; }
@@ -302,7 +302,7 @@ kbd {
 ::view-transition-group(root) { animation: none; }
 
 /* staggered entrance */
-.enter { animation: enter 360ms var(--ease) both; animation-delay: calc(var(--i, 0) * 32ms); }
+.enter { animation: enter 360ms var(--ease) backwards; animation-delay: calc(var(--i, 0) * 32ms); }
 @keyframes enter { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
 
 /* ------------------------------------------------------------------ cards */
@@ -322,6 +322,10 @@ kbd {
   box-shadow: var(--edge), inset 0 0 0 1px rgba(var(--accent-rgb), .22), 0 14px 32px -16px rgba(0, 0, 0, .8), 0 0 28px -12px rgba(var(--accent-rgb), .45);
 }
 .card.clickable:active, .tile:active { transform: scale(.985); }
+.tilt:hover { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateY(-2px); }
+.tilt:active { transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(.985); }
+.burst { position: fixed; z-index: 70; width: 0; height: 0; pointer-events: none; }
+.burst i { position: absolute; left: -3px; top: -3px; width: 7px; height: 7px; border-radius: 2px; box-shadow: 0 0 8px rgba(var(--accent-rgb), .6); }
 /* pointer spotlight */
 .spot::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
@@ -1210,7 +1214,7 @@ kbd {
 .splash { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: radial-gradient(800px 500px at 50% 40%, rgba(var(--accent-rgb), .16), transparent 70%), var(--bg); transition: opacity 400ms var(--ease); }
 .splash.gone { opacity: 0; pointer-events: none; }
 .splash.gone .splash-card { transform: scale(.98); }
-.splash-card { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, calc(100vw - 48px)); text-align: center; transition: transform 400ms var(--ease); animation: enter 500ms var(--ease) both; }
+.splash-card { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, calc(100vw - 48px)); text-align: center; transition: transform 400ms var(--ease); animation: enter 500ms var(--ease) backwards; }
 .splash-logo { position: relative; width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center; color: #fff; background: var(--brand); box-shadow: 0 20px 60px -16px rgba(var(--accent-rgb), .9), inset 0 1px 0 rgba(255, 255, 255, .3); margin-bottom: 12px; }
 .splash-orbit { position: absolute; inset: -14px; border-radius: 50%; border: 1.5px solid transparent; border-top-color: rgba(var(--accent-rgb), .9); border-right-color: rgba(34, 211, 238, .5); animation: spin 1.6s linear infinite; }
 .splash-orbit.o2 { inset: -26px; border-top-color: rgba(34, 211, 238, .5); border-right-color: transparent; border-left-color: rgba(var(--accent-rgb), .4); animation-duration: 2.6s; animation-direction: reverse; }
@@ -1293,7 +1297,7 @@ kbd {
 :root[data-motion="reduced"] .banner, :root[data-motion="reduced"] .trow-details, :root[data-motion="reduced"] .splash-card { animation-name: fade !important; }
 :root[data-motion="reduced"] .toast.leaving, :root[data-motion="reduced"] .layer.closing .dialog, :root[data-motion="reduced"] .layer.closing .drawer { animation-name: fade-out !important; }
 :root[data-motion="reduced"] .btn:hover, :root[data-motion="reduced"] .card.clickable:hover, :root[data-motion="reduced"] .tile:hover, :root[data-motion="reduced"] .trow:hover,
-:root[data-motion="reduced"] .goal:hover, :root[data-motion="reduced"] .sys-card:hover, :root[data-motion="reduced"] .btn:active, :root[data-motion="reduced"] .card.clickable:active,
+:root[data-motion="reduced"] .tilt:hover, :root[data-motion="reduced"] .goal:hover, :root[data-motion="reduced"] .sys-card:hover, :root[data-motion="reduced"] .btn:active, :root[data-motion="reduced"] .card.clickable:active,
 :root[data-motion="reduced"] .nav-item:active, :root[data-motion="reduced"] .chip:active, :root[data-motion="reduced"] .swatch:hover { transform: none !important; }
 :root[data-motion="reduced"] .switch-thumb, :root[data-motion="reduced"] .nav-pill, :root[data-motion="reduced"] .seg-ind, :root[data-motion="reduced"] .pending { transition-timing-function: linear !important; }
 :root[data-motion="reduced"] .ripple, :root[data-motion="reduced"] .brand-mark::after, :root[data-motion="reduced"] .btn-brand::after, :root[data-motion="reduced"] .pbar-fill::after { display: none; }

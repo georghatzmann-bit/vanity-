@@ -115,7 +115,7 @@
       "id": "ui.logon-blur-off",
       "name": "Anmeldebildschirm ohne Unschärfe",
       "desc": "Das Hintergrundbild bei der Passworteingabe wird scharf statt verschwommen angezeigt.",
-      "group": "Design & Farben",
+      "group": "Anmeldung & Sperrbildschirm",
       "kind": "toggle",
       "impact": 1,
       "risk": "safe",
@@ -143,7 +143,7 @@
       "name": "Sperrbildschirm überspringen",
       "desc": "Nach dem Start oder Sperren geht es direkt zur Passworteingabe – ohne erst den Sperrbildschirm wegzuklicken.",
       "info": "Dein Passwort oder deine PIN bleibt natürlich weiter nötig – nur der Vorhang davor fällt weg.",
-      "group": "Design & Farben",
+      "group": "Anmeldung & Sperrbildschirm",
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
@@ -162,6 +162,35 @@
           "kind": "DWord",
           "value": 1,
           "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.numlock-on",
+      "name": "Ziffernblock (NumLock) beim Start an",
+      "desc": "Der Ziffernblock funktioniert schon bei der PIN- oder Passworteingabe, ohne dass du erst Num drücken musst.",
+      "info": "Nur für Desktop-PCs: Bei Laptops mit eingebautem Ziffernblock in den Buchstabentasten würden sonst Buchstaben zu Zahlen. Ist der Schnellstart aktiv, kann zusätzlich die BIOS-Einstellung „NumLock“ entscheiden.",
+      "group": "Anmeldung & Sperrbildschirm",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "quality-of-life",
+        "desktop"
+      ],
+      "when": {
+        "formFactor": "desktop"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKU\\.DEFAULT\\Control Panel\\Keyboard",
+          "name": "InitialKeyboardIndicators",
+          "kind": "String",
+          "value": "2",
+          "default": "2147483648"
         }
       ]
     },
@@ -451,8 +480,8 @@
       "group": "Startmenü",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Startmenü und Sprunglisten zeigen keine zuletzt geöffneten Dateien mehr – auch nicht für Office und andere Programme.",
       "needs": "explorer",
       "tags": [
         "ui",
@@ -577,8 +606,8 @@
       "group": "Explorer",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Zuletzt benutzte Dateien findest du nicht mehr über die Startseite bzw. den Schnellzugriff im Explorer.",
       "needs": "explorer",
       "tags": [
         "explorer",
@@ -1435,35 +1464,6 @@
           "kind": "String",
           "value": "100",
           "default": "400"
-        }
-      ]
-    },
-    {
-      "id": "ui.numlock-on",
-      "name": "Num-Taste beim Start einschalten",
-      "desc": "Der Ziffernblock funktioniert schon bei der PIN- oder Passworteingabe, ohne dass du erst Num drücken musst.",
-      "info": "Nur für Desktop-PCs: Bei Laptops mit eingebautem Ziffernblock in den Buchstabentasten würden sonst Buchstaben zu Zahlen. Ist der Schnellstart aktiv, kann zusätzlich die BIOS-Einstellung „NumLock“ entscheiden.",
-      "group": "Tastatur",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "reboot",
-      "tags": [
-        "quality-of-life",
-        "desktop"
-      ],
-      "when": {
-        "formFactor": "desktop"
-      },
-      "actions": [
-        {
-          "type": "reg",
-          "path": "HKU\\.DEFAULT\\Control Panel\\Keyboard",
-          "name": "InitialKeyboardIndicators",
-          "kind": "String",
-          "value": "2",
-          "default": "2147483648"
         }
       ]
     }

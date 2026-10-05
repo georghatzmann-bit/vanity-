@@ -37,11 +37,23 @@ export function initToken() {
 
 export function hasToken() { return !!token; }
 
+/** After "lost": keep probing quietly; resolves when the backend answers again. */
+export function waitForBackend(interval = 4000) {
+  return new Promise((resolve) => {
+    const probe = async () => {
+      try { await request('POST', '/api/heartbeat', undefined, { timeout: 3000, quietNetwork: true }); resolve(); }
+      catch { setTimeout(probe, interval); }
+    };
+    setTimeout(probe, interval);
+  });
+}
+
 export function on(event, fn) { listeners[event].add(fn); return () => listeners[event].delete(fn); }
 
 function networkFailed() {
   failures++;
-  if (failures >= 2 && !lostFired) {
+  // three consecutive failures (heartbeat retries quickly after a miss) = the backend is gone
+  if (failures >= 3 && !lostFired) {
     lostFired = true;
     for (const fn of listeners.lost) fn();
   }
@@ -62,7 +74,7 @@ export async function request(method, path, body, opts = {}) {
       method, headers, cache: 'no-store', credentials: 'same-origin', signal: ctrl.signal,
       body: body !== undefined ? JSON.stringify(body) : undefined
     });
-  } catch (e) {
+  } catch {
     clearTimeout(timer);
     if (!opts.quietNetwork) networkFailed();
     throw new ApiError('Keine Verbindung zu VELOX.', 0, null);
@@ -133,12 +145,16 @@ let hbTimer = null;
 export function startHeartbeat(onBusy) {
   if (hbTimer) return;
   const beat = async () => {
+    let ok = false;
     try {
       const r = await api.heartbeat();
+      ok = true;
       if (onBusy) onBusy(r && r.busy);
     } catch { /* counted in request() */ }
+    // every 5 s; after a miss retry soon so a dead backend is noticed within a few seconds
+    if (!lostFired) hbTimer = setTimeout(beat, ok ? 5000 : 1500);
   };
-  hbTimer = setInterval(beat, 5000);
+  hbTimer = setTimeout(beat, 5000);
   window.addEventListener('pagehide', () => {
     try { navigator.sendBeacon('/api/shutdown?t=' + encodeURIComponent(token)); } catch { /* ignore */ }
   });

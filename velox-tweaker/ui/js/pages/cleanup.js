@@ -9,7 +9,6 @@ export default {
     const repairs = ctx.tweaks.filter(t => t.category === 'repair' && t.kind === 'action');
     const sel = new Set(actions.filter(t => t.risk === 'safe' && ctx.applicable(t)).map(t => t.id));
     let sizes = ctx.cache.clean ? ctx.cache.clean.sizes : null;
-    let freed = null;
 
     const totalEl = h('span', { class: 'clean-total-num', text: '0 B' });
     const totalSub = h('span', { class: 'clean-total-sub' });
@@ -84,7 +83,6 @@ export default {
       const res = (job.result && job.result.results) || [];
       const bytes = res.reduce((s, r) => s + (Number(r.freedBytes) || 0), 0);
       const fails = res.filter(r => !r.ok);
-      freed = bytes;
       append(clear(freedBox), 
         h('div', { class: 'freed-icon' }, icon('checkCircle', 22)),
         h('div', {}, h('div', { class: 'freed-label', text: 'Freigegeben' }), h('div', { class: 'freed-num', 'data-testid': 'clean-freed', text: '0 B' })),

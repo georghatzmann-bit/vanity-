@@ -28,7 +28,7 @@
       "risk": "moderate",
       "warning": "Mehr Stromverbrauch und Wärme. Bei Ryzen-X3D-CPUs mit zwei Chiplets (z. B. 7950X3D, 9950X3D) kann es FPS kosten – dort „Ausbalanciert“ lassen.",
       "needs": "none",
-      "tags": ["fps", "latency", "laptop-bad"],
+      "tags": ["fps", "latency", "laptop-bad", "stutter"],
       "actions": [
         { "type": "powerplan", "plan": "high", "default": "balanced" }
       ]
@@ -122,7 +122,7 @@
     },
     {
       "id": "power.throttling-off",
-      "name": "Power Throttling aus (Hintergrund nicht drosseln)",
+      "name": "Hintergrund-Drosselung (Power Throttling) aus",
       "desc": "Windows bremst Programme im Hintergrund nicht mehr, z. B. OBS, Discord oder Downloads beim Spielen. Kostet auf Laptops Akku.",
       "info": "Die Drosselung schickt Hintergrund-Programme auf sparsame Kerne und niedrigen Takt. Mit einem Höchstleistungs-Plan am Netzteil greift sie ohnehin selten.",
       "group": "Prozessor",
@@ -190,7 +190,7 @@
     },
     {
       "id": "power.disk-sleep-off",
-      "name": "Festplatten nicht mehr abschalten",
+      "name": "Festplatten-Abschaltung aus",
       "desc": "HDDs drehen nicht mehr nach 20 Minuten ab. Kein Warten und Ruckeln, wenn ein Spiel plötzlich auf die Platte zugreift.",
       "info": "Für SSDs fast egal. Gilt am Netzteil für den aktiven Energieplan.",
       "group": "Geräte & Laufwerke",
@@ -232,7 +232,7 @@
       "risk": "moderate",
       "warning": "Geplante Aufgaben und Neustarts nach Updates wecken den PC nicht mehr – sie laufen erst, wenn du ihn wieder benutzt.",
       "needs": "none",
-      "tags": ["quality-of-life"],
+      "tags": ["quality-of-life", "battery"],
       "actions": [
         { "type": "powersetting", "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20", "setting": "bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d",
           "ac": 0, "dc": 0, "default": { "ac": 2, "dc": 0 } }
@@ -249,7 +249,7 @@
       "risk": "moderate",
       "warning": "Ruhezustand und Schnellstart fallen weg. Laptops können bei fast leerem Akku nicht mehr sicher in den Ruhezustand wechseln.",
       "needs": "none",
-      "tags": ["storage", "ssd", "boot"],
+      "tags": ["storage", "ssd", "boot", "laptop-bad"],
       "actions": [
         { "type": "ps",
           "apply": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe /hibernate off 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg /hibernate off failed with exit code ' + $LASTEXITCODE) }",

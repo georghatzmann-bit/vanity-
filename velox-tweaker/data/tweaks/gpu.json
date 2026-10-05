@@ -43,7 +43,8 @@
       "needs": "reboot",
       "tags": [
         "stutter",
-        "compat"
+        "compat",
+        "laptop-bad"
       ],
       "actions": [
         {
@@ -153,7 +154,7 @@
     },
     {
       "id": "gpu.nvidia-telemetry-off",
-      "name": "NVIDIA-Telemetrie abschalten",
+      "name": "NVIDIA-Telemetrie aus",
       "desc": "Schaltet die bekannten Telemetrie-Schalter in Treiber und NVIDIA-Systemsteuerung aus. Kein Nachteil beim Spielen.",
       "group": "NVIDIA",
       "kind": "toggle",
@@ -487,7 +488,8 @@
       "needs": "none",
       "tags": [
         "telemetry",
-        "amd"
+        "amd",
+        "privacy"
       ],
       "when": {
         "gpuVendor": "amd",

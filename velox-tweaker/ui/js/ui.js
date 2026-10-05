@@ -117,6 +117,10 @@ export function installEffects() {
       const r = el.getBoundingClientRect();
       el.style.setProperty('--mx', (last.clientX - r.left) + 'px');
       el.style.setProperty('--my', (last.clientY - r.top) + 'px');
+      if (el.classList.contains('tilt') && !reducedMotion()) {
+        el.style.setProperty('--ry', (((last.clientX - r.left) / r.width - 0.5) * 5).toFixed(2) + 'deg');
+        el.style.setProperty('--rx', (((last.clientY - r.top) / r.height - 0.5) * -5).toFixed(2) + 'deg');
+      }
     });
   }, { passive: true });
 
@@ -157,6 +161,33 @@ export function installEffects() {
   document.addEventListener('focusout', hideTip);
   document.addEventListener('pointerdown', hideTip, { passive: true });
   document.addEventListener('scroll', hideTip, { passive: true, capture: true });
+}
+
+/** Celebration: a short particle burst at (x, y). Off with reduced motion. */
+export function burst(x, y, n = 30) {
+  if (reducedMotion() || !Element.prototype.animate) return;
+  const layer = document.createElement('div');
+  layer.className = 'burst';
+  layer.setAttribute('aria-hidden', 'true');
+  layer.style.left = x + 'px';
+  layer.style.top = y + 'px';
+  document.body.appendChild(layer);
+  const colors = ['var(--accent)', 'var(--brand-2)', '#FFFFFF', 'var(--accent-hi)'];
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('i');
+    p.style.background = colors[i % colors.length];
+    if (i % 3 === 0) p.style.borderRadius = '50%';
+    layer.appendChild(p);
+    const ang = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+    const dist = 70 + Math.random() * 130;
+    const dx = Math.cos(ang) * dist; const dy = Math.sin(ang) * dist * 0.75;
+    p.animate([
+      { transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 },
+      { transform: 'translate(' + dx * 0.85 + 'px,' + (dy * 0.85 - 10) + 'px) rotate(' + (Math.random() * 360) + 'deg) scale(1)', opacity: 1, offset: 0.6 },
+      { transform: 'translate(' + dx + 'px,' + (dy + 46) + 'px) rotate(' + (Math.random() * 540) + 'deg) scale(.3)', opacity: 0 }
+    ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+  }
+  setTimeout(() => layer.remove(), 1600);
 }
 
 // ------------------------------------------------------------------ small pieces

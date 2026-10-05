@@ -180,7 +180,7 @@ export default {
       stagger(findBox);
     }
     const tile = (ic, title, desc, page, opts) => {
-      const t = h('button', { class: 'tile spot', type: 'button', 'data-testid': 'tile-' + page },
+      const t = h('button', { class: 'tile spot tilt', type: 'button', 'data-testid': 'tile-' + page },
         h('span', { class: 'tile-icon' }, icon(ic, 20)),
         h('span', { class: 'tile-text' }, h('span', { class: 'tile-title', text: title }), h('span', { class: 'tile-desc', text: desc })),
         icon('arrowRight', 16, 'tile-go'));

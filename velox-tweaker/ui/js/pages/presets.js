@@ -49,7 +49,7 @@ export default {
         const pct = total ? Math.round(plan.done.length / total * 100) : 0;
         const rec = recommendedFor(ctx, p);
         const r = RISK[p.maxRisk] || RISK.safe;
-        const card = h('button', { class: ['card preset-card clickable spot', rec && 'is-rec'], type: 'button', 'data-preset': p.id, 'aria-label': p.name + ': Vorschau öffnen' },
+        const card = h('button', { class: ['card preset-card clickable spot tilt', rec && 'is-rec'], type: 'button', 'data-preset': p.id, 'aria-label': p.name + ': Vorschau öffnen' },
           h('div', { class: 'preset-top' },
             h('div', { class: 'preset-icon' }, icon(p.icon || 'stack', 22)),
             rec ? h('span', { class: 'badge badge-accent' }, icon('star', 12), h('span', { text: 'Empfohlen für dich' })) : null),

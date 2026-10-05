@@ -1,9 +1,9 @@
 // VELOX front end entry: app state (ctx), router, sidebar, top bar, staged changes,
 // job runner with progress overlay, needs banners, command palette, splash and "ended" screens.
-import { api, initToken, hasToken, on as onApi, pollJob, startHeartbeat } from './api.js';
+import { api, initToken, hasToken, on as onApi, pollJob, startHeartbeat, waitForBackend } from './api.js';
 import { icon } from './icons.js';
 import {
-  h, clear, $, $$, toast, jobOverlay, confirmDialog, installEffects, countUp, plural, fmtNumber,
+  h, clear, $, $$, toast, jobOverlay, confirmDialog, installEffects, countUp, plural, burst,
   viewTransition, openLayer, reducedMotion
 } from './ui.js';
 
@@ -485,10 +485,19 @@ async function follow(jobId, type, opts = {}) {
   if (job.status === 'done' && job.result) applyResultLocally(type, job.result);
   if (meta.mutating || type === 'scan') await refreshState();
 
+  if (job.status === 'done' && ['apply', 'detweak', 'restore', 'run-action'].includes(type)) celebrate(type, job.result || {});
   if (job.status === 'error') toast({ type: 'error', title: meta.title + ' – fehlgeschlagen', text: job.error || 'Unbekannter Fehler' });
   else if (job.status === 'cancelled') toast({ type: 'info', title: 'Abgebrochen', text: 'Bereits erledigte Schritte bleiben gesichert.' });
   else if (!opts.quiet) resultToast(type, job.result || {});
   return job;
+}
+
+/** A short particle burst when something worked out completely. */
+function celebrate(type, r) {
+  const res = r.results || [];
+  if (res.some(x => x && x.ok === false) || r.failed) return;
+  const m = $('#main').getBoundingClientRect();
+  setTimeout(() => burst(m.left + m.width / 2, m.top + Math.min(m.height * 0.42, 320)), 380);
 }
 
 function applyResultLocally(type, r) {
@@ -596,6 +605,8 @@ function showEnded(reason) {
   requestAnimationFrame(() => el.classList.add('show'));
   $('#app').setAttribute('inert', '');
   $('#splash').hidden = true;
+  // If VELOX comes back (e.g. the PC was just busy), quietly pick up where we were.
+  if (reason === 'lost') waitForBackend().then(() => location.reload());
 }
 function showBootError(msg) {
   const el = $('#ended');

@@ -3,10 +3,10 @@
   "tweaks": [
     {
       "id": "gaming.gamemode-on",
-      "name": "Spielmodus (Game Mode) fest einschalten",
+      "name": "Spielmodus (Game Mode) fest an",
       "desc": "Windows gibt dem laufenden Spiel Vorrang und hält Updates und Treiber-Installationen zurück. Kein Nachteil.",
       "info": "Seit Windows 10 1903 ist der Spielmodus von Haus aus an und hilft vor allem auf schwächeren PCs mit viel Hintergrundlast. Alte Tweak-Pakete schalten ihn oft aus – das stammt aus 2017, als er noch Ruckler verursachte, und ist überholt. Dieser Schalter setzt ihn ausdrücklich auf an.",
-      "group": "Spielmodus",
+      "group": "Spiel-Einstellungen",
       "kind": "toggle",
       "impact": 1,
       "risk": "safe",
@@ -35,6 +35,86 @@
           "kind": "DWord",
           "value": 1,
           "default": null
+        }
+      ]
+    },
+    {
+      "id": "gaming.fso-off",
+      "name": "Vollbild-Optimierungen global aus",
+      "desc": "Ältere DirectX-9/10/11-Spiele laufen wieder in echtem Vollbild. Kann Verzögerung senken, Alt+Tab wird dafür langsamer.",
+      "info": "Vollbild-Optimierungen lassen „exklusives Vollbild“ in Wahrheit randlos laufen, damit Overlays und schnelles Alt+Tab gehen. Auf aktuellen Systemen ist das meist gleich schnell; manche älteren Spiele laufen in echtem Vollbild aber gleichmäßiger. DirectX-12- und Vulkan-Spiele betrifft das nicht, und neuere Windows-11-Versionen beachten den globalen Schalter nicht bei jedem Spiel. Einzelne Spiele stellst du gezielt unter „Spiele-spezifisch“ ein.",
+      "group": "Spiel-Einstellungen",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Alt+Tab dauert länger und das Bild flackert dabei kurz. Game Bar und manche Overlays erscheinen in diesen Spielen nicht.",
+      "needs": "logoff",
+      "tags": [
+        "fps",
+        "latency",
+        "input"
+      ],
+      "when": {
+        "minBuild": 17134
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_FSEBehaviorMode",
+          "kind": "DWord",
+          "value": 2,
+          "default": 0
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_HonorUserFSEBehaviorMode",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_FSEBehavior",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_DXGIHonorFSEWindowsCompatible",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "gaming.fth-off",
+      "name": "Fehlertoleranten Heap (FTH) aus",
+      "desc": "Windows hängt Spielen nach Abstürzen keine bremsende Speicher-Absicherung mehr an. Dafür fehlt diese Notlösung bei wackligen Programmen.",
+      "info": "Stürzt ein Programm mehrmals ab, aktiviert Windows still eine langsamere, fehlertolerante Speicherverwaltung dafür – oft dauerhaft. Bei Spielen, die mit Mods oder beim Testen öfter abstürzen, kostet das Leistung. Bereits markierte Programme bleiben markiert.",
+      "group": "Spiel-Einstellungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme mit Speicherfehlern werden nicht mehr automatisch abgesichert und stürzen eventuell öfter ab.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\FTH",
+          "name": "Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
         }
       ]
     },
@@ -87,7 +167,8 @@
       "warning": "Aufnahme und Übertragung über die Game Bar sind für alle Benutzer gesperrt, bis du das zurücknimmst.",
       "needs": "logoff",
       "tags": [
-        "fps"
+        "fps",
+        "stutter"
       ],
       "actions": [
         {
@@ -160,60 +241,6 @@
           "kind": "DWord",
           "value": 1,
           "default": null
-        }
-      ]
-    },
-    {
-      "id": "gaming.fso-off",
-      "name": "Vollbild-Optimierungen global aus",
-      "desc": "Ältere DirectX-9/10/11-Spiele laufen wieder in echtem Vollbild. Kann Verzögerung senken, Alt+Tab wird dafür langsamer.",
-      "info": "Vollbild-Optimierungen lassen „exklusives Vollbild“ in Wahrheit randlos laufen, damit Overlays und schnelles Alt+Tab gehen. Auf aktuellen Systemen ist das meist gleich schnell; manche älteren Spiele laufen in echtem Vollbild aber gleichmäßiger. DirectX-12- und Vulkan-Spiele betrifft das nicht, und neuere Windows-11-Versionen beachten den globalen Schalter nicht bei jedem Spiel. Einzelne Spiele stellst du gezielt unter „Spiele-spezifisch“ ein.",
-      "group": "Vollbild",
-      "kind": "toggle",
-      "impact": 2,
-      "risk": "moderate",
-      "warning": "Alt+Tab dauert länger und das Bild flackert dabei kurz. Game Bar und manche Overlays erscheinen in diesen Spielen nicht.",
-      "needs": "logoff",
-      "tags": [
-        "fps",
-        "latency",
-        "input"
-      ],
-      "when": {
-        "minBuild": 17134
-      },
-      "actions": [
-        {
-          "type": "reg",
-          "path": "HKCU\\System\\GameConfigStore",
-          "name": "GameDVR_FSEBehaviorMode",
-          "kind": "DWord",
-          "value": 2,
-          "default": 0
-        },
-        {
-          "type": "reg",
-          "path": "HKCU\\System\\GameConfigStore",
-          "name": "GameDVR_HonorUserFSEBehaviorMode",
-          "kind": "DWord",
-          "value": 1,
-          "default": 0
-        },
-        {
-          "type": "reg",
-          "path": "HKCU\\System\\GameConfigStore",
-          "name": "GameDVR_FSEBehavior",
-          "kind": "DWord",
-          "value": 2,
-          "default": null
-        },
-        {
-          "type": "reg",
-          "path": "HKCU\\System\\GameConfigStore",
-          "name": "GameDVR_DXGIHonorFSEWindowsCompatible",
-          "kind": "DWord",
-          "value": 1,
-          "default": 0
         }
       ]
     },
@@ -319,32 +346,6 @@
           "kind": "DWord",
           "value": 38,
           "default": 2
-        }
-      ]
-    },
-    {
-      "id": "gaming.fth-off",
-      "name": "Fehlertoleranten Heap (FTH) aus",
-      "desc": "Windows hängt Spielen nach Abstürzen keine bremsende Speicher-Absicherung mehr an. Dafür fehlt diese Notlösung bei wackligen Programmen.",
-      "info": "Stürzt ein Programm mehrmals ab, aktiviert Windows still eine langsamere, fehlertolerante Speicherverwaltung dafür – oft dauerhaft. Bei Spielen, die mit Mods oder beim Testen öfter abstürzen, kostet das Leistung. Bereits markierte Programme bleiben markiert.",
-      "group": "Stabilität",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "moderate",
-      "warning": "Programme mit Speicherfehlern werden nicht mehr automatisch abgesichert und stürzen eventuell öfter ab.",
-      "needs": "reboot",
-      "tags": [
-        "fps",
-        "stutter"
-      ],
-      "actions": [
-        {
-          "type": "reg",
-          "path": "HKLM\\SOFTWARE\\Microsoft\\FTH",
-          "name": "Enabled",
-          "kind": "DWord",
-          "value": 0,
-          "default": 1
         }
       ]
     }

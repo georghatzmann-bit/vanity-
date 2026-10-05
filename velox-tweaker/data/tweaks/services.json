@@ -5,7 +5,7 @@
       "id": "services.diagtrack-off",
       "name": "Telemetrie-Dienst (DiagTrack) aus",
       "desc": "Der Hauptdienst, der Nutzungs- und Diagnosedaten an Microsoft schickt, läuft nicht mehr. Spart etwas CPU, Datenträger und Netzwerk.",
-      "info": "Heißt in der Dienste-Liste 'Benutzererfahrungen und Telemetrie im verbundenen Modus'. Windows Update funktioniert weiter. Nur Windows-Insider-Vorabversionen brauchen den Dienst.",
+      "info": "Heißt in der Dienste-Liste „Benutzererfahrungen und Telemetrie im verbundenen Modus“. Windows Update funktioniert weiter. Nur Windows-Insider-Vorabversionen brauchen den Dienst.",
       "group": "Telemetrie & Fehlerberichte",
       "kind": "toggle",
       "impact": 2,
@@ -32,7 +32,7 @@
       "id": "services.dmwappush-off",
       "name": "WAP-Push-Dienst für Telemetrie aus",
       "desc": "Leitet Geräteverwaltungs- und Telemetrie-Nachrichten weiter. Auf privaten PCs ohne Firmenverwaltung unnötig.",
-      "info": "Heißt 'Gerätemanagement für WAP-Push-Nachrichtenrouting'. Läuft nur bei Bedarf, der Leistungsgewinn ist daher klein.",
+      "info": "Heißt „Gerätemanagement für WAP-Push-Nachrichtenrouting“. Läuft nur bei Bedarf, der Leistungsgewinn ist daher klein.",
       "group": "Telemetrie & Fehlerberichte",
       "kind": "toggle",
       "impact": 1,
@@ -79,45 +79,6 @@
           "name": "diagnosticshub.standardcollector.service",
           "start": "Disabled",
           "default": "Manual"
-        }
-      ]
-    },
-    {
-      "id": "services.wer-off",
-      "name": "Windows-Fehlerberichterstattung aus",
-      "desc": "Nach Abstürzen sammelt Windows keine Berichte mehr und schickt nichts an Microsoft. Spart nach Abstürzen Rechenzeit und Platz.",
-      "info": "Schaltet den Dienst, die Problemberichte in der Systemsteuerung und die Aufgabe ab, die gesammelte Berichte nachträglich hochlädt.",
-      "group": "Telemetrie & Fehlerberichte",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "moderate",
-      "warning": "Microsoft bekommt keine Absturzberichte mehr und kann dir keine Lösungen dafür anbieten. Die Zuverlässigkeitsüberwachung zeigt weniger Details.",
-      "needs": "none",
-      "tags": [
-        "privacy",
-        "telemetry"
-      ],
-      "when": {
-        "service": "WerSvc"
-      },
-      "actions": [
-        {
-          "type": "service",
-          "name": "WerSvc",
-          "start": "Disabled",
-          "default": "Manual"
-        },
-        {
-          "type": "service",
-          "name": "wercplsupport",
-          "start": "Disabled",
-          "default": "Manual"
-        },
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Windows Error Reporting\\QueueReporting",
-          "enabled": false,
-          "default": true
         }
       ]
     },
@@ -201,7 +162,8 @@
           "type": "service",
           "name": "PcaSvc",
           "start": "Disabled",
-          "default": "Automatic"
+          "default": "Manual",
+          "defaultWin11": "Automatic"
         },
         {
           "type": "task",
@@ -285,7 +247,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
-      "warning": "Windows behebt bekannte Probleme (z. B. mit Ton oder Netzwerk) nicht mehr von selbst. Manche Problembehandlungen in 'Hilfe anfordern' gehen nicht mehr.",
+      "warning": "Windows behebt bekannte Probleme (z. B. mit Ton oder Netzwerk) nicht mehr von selbst. Manche Problembehandlungen in „Hilfe anfordern“ gehen nicht mehr.",
       "needs": "none",
       "tags": [
         "bloat"
@@ -386,7 +348,7 @@
       "kind": "toggle",
       "impact": 1,
       "risk": "moderate",
-      "warning": "Drucken geht danach nicht mehr, auch nicht 'Als PDF drucken'. Zum Drucken einfach wieder einschalten.",
+      "warning": "Drucken geht danach nicht mehr, auch nicht „Als PDF drucken“. Zum Drucken einfach wieder einschalten.",
       "needs": "none",
       "tags": [
         "bloat"
@@ -842,8 +804,8 @@
       "group": "Netzwerk",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Smart-TVs und Konsolen finden die Mediathek des Windows Media Players nicht mehr.",
       "needs": "none",
       "tags": [
         "network",
@@ -946,8 +908,8 @@
       "group": "Netzwerk",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Per iSCSI eingebundene NAS-Laufwerke sind danach nicht mehr erreichbar.",
       "needs": "none",
       "tags": [
         "network",
@@ -992,31 +954,6 @@
       ]
     },
     {
-      "id": "services.geolocation-off",
-      "name": "Standortdienst aus",
-      "desc": "Windows und Apps können deinen Standort nicht mehr bestimmen. Mehr Privatsphäre, ein Dienst weniger.",
-      "group": "Selten genutzte Funktionen",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "moderate",
-      "warning": "Standort für Wetter, Karten und 'Mein Gerät suchen' geht nicht mehr. Die Zeitzone stellt sich nicht mehr automatisch um.",
-      "needs": "none",
-      "tags": [
-        "privacy"
-      ],
-      "when": {
-        "service": "lfsvc"
-      },
-      "actions": [
-        {
-          "type": "service",
-          "name": "lfsvc",
-          "start": "Disabled",
-          "default": "Manual"
-        }
-      ]
-    },
-    {
       "id": "services.retaildemo-off",
       "name": "Händler-Demo-Dienst aus",
       "desc": "Dienst für den Vorführmodus im Elektronikmarkt. Zu Hause völlig unnötig.",
@@ -1048,8 +985,8 @@
       "group": "Selten genutzte Funktionen",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Bist du im Windows-Insider-Programm, bekommst du keine neuen Vorabversionen mehr.",
       "needs": "none",
       "tags": [
         "bloat"
@@ -1169,12 +1106,12 @@
       "id": "services.offline-files-off",
       "name": "Offlinedateien aus",
       "desc": "Hält Netzwerkordner für die Nutzung ohne Netz bereit. Zu Hause wird das fast nie genutzt.",
-      "info": "Nur wer Netzwerkordner mit 'Immer offline verfügbar' markiert hat, verliert diese Funktion.",
+      "info": "Nur wer Netzwerkordner mit „Immer offline verfügbar“ markiert hat, verliert diese Funktion.",
       "group": "Selten genutzte Funktionen",
       "kind": "toggle",
       "impact": 1,
-      "risk": "safe",
-      "warning": null,
+      "risk": "moderate",
+      "warning": "Netzwerkordner, die du offline verfügbar gemacht hast, sind ohne Netzwerk nicht mehr erreichbar.",
       "needs": "none",
       "tags": [
         "bloat"
@@ -1194,7 +1131,7 @@
     {
       "id": "services.kiosk-off",
       "name": "Kiosk-Modus-Dienst aus",
-      "desc": "Dienst für den 'Zugewiesenen Zugriff' (PC zeigt nur eine einzige App). Auf normalen PCs ungenutzt.",
+      "desc": "Dienst für den „Zugewiesenen Zugriff“ (PC zeigt nur eine einzige App). Auf normalen PCs ungenutzt.",
       "group": "Selten genutzte Funktionen",
       "kind": "toggle",
       "impact": 1,
@@ -1249,68 +1186,6 @@
       ]
     },
     {
-      "id": "services.task-programdataupdater-off",
-      "name": "Programm-Telemetrie-Aufgabe aus (Windows 10)",
-      "desc": "Sammelt Telemetrie über installierte Programme für Microsofts Verbesserungsprogramm. Gibt es nur unter Windows 10.",
-      "group": "Geplante Aufgaben: Telemetrie",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "telemetry",
-        "privacy"
-      ],
-      "when": {
-        "os": "win10"
-      },
-      "actions": [
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Application Experience\\ProgramDataUpdater",
-          "enabled": false,
-          "default": true
-        }
-      ]
-    },
-    {
-      "id": "services.task-ceip-off",
-      "name": "Aufgaben für Nutzungsstatistik (CEIP) aus",
-      "desc": "Aufgaben, die Nutzungs- und USB-Statistiken für Microsofts Verbesserungsprogramm sammeln, laufen nicht mehr.",
-      "info": "CEIP heißt 'Programm zur Verbesserung der Benutzerfreundlichkeit'. Die Autochk-Aufgabe sammelt dafür Daten über Laufwerksprüfungen. Die Laufwerksprüfung selbst läuft weiter.",
-      "group": "Geplante Aufgaben: Telemetrie",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "telemetry",
-        "privacy"
-      ],
-      "actions": [
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator",
-          "enabled": false,
-          "default": true
-        },
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\UsbCeip",
-          "enabled": false,
-          "default": true
-        },
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Autochk\\Proxy",
-          "enabled": false,
-          "default": true
-        }
-      ]
-    },
-    {
       "id": "services.task-diskdiag-off",
       "name": "Laufwerks-Diagnosedaten nicht mehr senden",
       "desc": "Die Aufgabe, die allgemeine Infos über deine Laufwerke sammelt und an Microsoft schickt, läuft nicht mehr.",
@@ -1328,35 +1203,6 @@
         {
           "type": "task",
           "path": "\\Microsoft\\Windows\\DiskDiagnostic\\Microsoft-Windows-DiskDiagnosticDataCollector",
-          "enabled": false,
-          "default": true
-        }
-      ]
-    },
-    {
-      "id": "services.task-feedback-off",
-      "name": "Feedback-Aufgaben aus",
-      "desc": "Windows lädt keine Feedback-Umfragen und Szenarien mehr im Hintergrund herunter.",
-      "group": "Geplante Aufgaben: Telemetrie",
-      "kind": "toggle",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "telemetry",
-        "privacy"
-      ],
-      "actions": [
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient",
-          "enabled": false,
-          "default": true
-        },
-        {
-          "type": "task",
-          "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClientOnScenarioDownload",
           "enabled": false,
           "default": true
         }
@@ -1498,7 +1344,7 @@
       "id": "services.task-winsat-off",
       "name": "Leistungsbewertung (WinSAT) aus",
       "desc": "Windows misst die Leistung deines PCs nicht mehr regelmäßig im Leerlauf neu.",
-      "info": "Ehrlich: die Messung läuft selten und nur im Leerlauf, der Gewinn ist klein. Manuell kannst du sie jederzeit mit 'winsat formal' starten.",
+      "info": "Ehrlich: die Messung läuft selten und nur im Leerlauf, der Gewinn ist klein. Manuell kannst du sie jederzeit mit „winsat formal“ starten.",
       "group": "Geplante Aufgaben: Wartung & Hinweise",
       "kind": "toggle",
       "impact": 1,

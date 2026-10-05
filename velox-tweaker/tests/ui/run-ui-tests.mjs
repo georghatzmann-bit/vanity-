@@ -68,7 +68,7 @@ function stopServer(s) {
 }
 function rawRequest(s, method, p, { headers = {}, body } = {}) {
   return new Promise((resolve) => {
-    const req = http.request({ host: s.host === 'localhost' ? 'localhost' : '127.0.0.1', port: s.port, method, path: p, headers: Object.assign({ Host: s.host + ':' + s.port }, headers) }, (res) => {
+    const req = http.request({ agent: false, host: s.host === 'localhost' ? 'localhost' : '127.0.0.1', port: s.port, method, path: p, headers: Object.assign({ Host: s.host + ':' + s.port }, headers) }, (res) => {
       let data = ''; res.on('data', c => { data += c; }); res.on('end', () => { let json = null; try { json = JSON.parse(data); } catch { /* not json */ } resolve({ status: res.statusCode, headers: res.headers, json, text: data }); });
     });
     req.on('error', (e) => resolve({ status: 0, error: e.message }));
@@ -156,11 +156,14 @@ test('security: token, host, origin, OPTIONS, static traversal', async (t) => {
   const s = t.server;
   assert((await rawRequest(s, 'GET', '/api/state')).status === 401, 'no token -> 401');
   assert((await rawRequest(s, 'GET', '/api/state', { headers: { 'X-Velox-Token': 'wrong' } })).status === 401, 'wrong token -> 401');
-  // 403 from VELOX itself, or 400 from http.sys/HttpListener which already rejects foreign host names
-  const badHost = (await rawRequest(s, 'GET', '/api/state', { headers: { 'X-Velox-Token': s.token, Host: 'evil.example:' + s.port } })).status;
-  assert(badHost === 403 || badHost === 400, 'bad host rejected (' + badHost + ')');
-  assert((await rawRequest(s, 'GET', '/api/state', { headers: { 'X-Velox-Token': s.token, Origin: 'http://evil.example' } })).status === 403, 'bad origin -> 403');
-  assert((await rawRequest(s, 'OPTIONS', '/api/state', { headers: { 'X-Velox-Token': s.token } })).status === 403, 'OPTIONS -> 403');
+  // 403 from VELOX itself, or 400/404 from http.sys / HttpListener, which already refuse host names
+  // that do not match the listener prefix. Either way nothing may be served.
+  const bh = await rawRequest(s, 'GET', '/api/state', { headers: { 'X-Velox-Token': s.token, Host: 'evil.example:' + s.port } });
+  assert([400, 403, 404].includes(bh.status) && !(bh.json && bh.json.statuses), 'bad host rejected (' + bh.status + ')');
+  const bo = await rawRequest(s, 'GET', '/api/state', { headers: { 'X-Velox-Token': s.token, Origin: 'http://evil.example' } });
+  assert(bo.status === 403, 'bad origin -> 403 (got ' + bo.status + ')');
+  const op = await rawRequest(s, 'OPTIONS', '/api/state', { headers: { 'X-Velox-Token': s.token } });
+  assert(op.status === 403, 'OPTIONS -> 403 (got ' + op.status + ')');
   const ok = await api(s, 'GET', '/api/state');
   assert(ok.status === 200 && ok.json && ok.json.statuses, 'state with token');
   assert(/application\/json/.test(ok.headers['content-type']), 'json content type');
@@ -293,6 +296,32 @@ test('tweaks: risky toggle needs the confirm checkbox', async (t) => {
   await page.click('.layer .dialog [data-action="cancel"]');
   await page.waitForTimeout(300);
   assert(!(await page.$eval('#pending', p => p.classList.contains('show'))), 'cancel stages nothing');
+});
+
+test('hover feedback on every kind of control', async (t) => {
+  const page = await openApp(t, 'overview');
+  const snap = (sel) => page.$eval(sel, (el) => {
+    const pick = (e) => { const cs = getComputedStyle(e); return [cs.transform, cs.backgroundColor, cs.color, cs.boxShadow, cs.opacity, cs.backgroundImage].join('|'); };
+    return [el, ...Array.from(el.querySelectorAll('*')).slice(0, 4)].map(pick).join('#');
+  });
+  const check = async (sel) => {
+    const el = await page.$(sel);
+    assert(el, 'element exists: ' + sel);
+    await page.mouse.move(2, 2);
+    await page.waitForTimeout(260);
+    const before = await snap(sel);
+    await el.hover();
+    await page.waitForTimeout(260);
+    const after = await snap(sel);
+    assert(before !== after, 'no hover feedback on ' + sel);
+  };
+  for (const sel of ['.tile', '.stat-card', '.sys-card', '.hero .btn-primary', '.hero .btn-secondary', '#nav .nav-item:not([aria-current])', '#palette-trigger']) await check(sel);
+  await goPage(page, 'tweaks');
+  for (const sel of ['.chip[data-filter="risk:safe"]', '.rail-item[aria-pressed="false"]', '.tw-list .trow', '.tw-list .trow .trow-expand', '.tw-list .trow .switch:not([disabled])']) await check(sel);
+  await goPage(page, 'presets');
+  if (await page.$('.preset-card')) await check('.preset-card');
+  await goPage(page, 'settings');
+  for (const sel of ['.swatch:not([aria-checked="true"])', '.model:not([aria-checked="true"])']) await check(sel);
 });
 
 test('keyboard: switch with Space, Escape closes dialogs, focus ring', async (t) => {
