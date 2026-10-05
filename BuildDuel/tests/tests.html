@@ -75,17 +75,25 @@
       var out = document.getElementById('output');
       out.className = '';
       out.innerHTML = '<div class="summary fail">Tests konnten nicht geladen werden: ' +
-        String(message).replace(/</g, '&lt;') + '</div>';
+        String(message).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</div>';
+      document.title = 'FEHLER – Tests konnten nicht geladen werden';
       window.__TEST_RESULTS__ = { passed: 0, failed: 1, total: 1, done: true,
         failures: [{ group: 'Laden', test: 'Test-Dateien', message: String(message) }] };
     }
-    window.addEventListener('error', function (event) { showLoadError(event.message); });
+    window.addEventListener('error', function (event) {
+      var file = String(event.filename || '').replace(location.origin + '/', '');
+      var where = file ? ' – Datei ' + file + (event.lineno ? ', Zeile ' + event.lineno : '') : '';
+      var hint = /SyntaxError/.test(event.message)
+        ? ' (Tippfehler? Häufig: Komma statt Punkt bei Kommazahlen, z. B. 8.4 statt 8,4, oder ein fehlendes Komma am Zeilenende.)'
+        : '';
+      showLoadError(event.message + where + hint);
+    });
     setTimeout(function () {
       showLoadError('Nach 15 Sekunden immer noch kein Ergebnis. Läuft start.bat?');
     }, 15000);
   </script>
 
-  <script type="module" onerror="showLoadError('Eine Test-Datei fehlt oder konnte nicht geladen werden (Details: Taste F12, Reiter Konsole).')">
+  <script type="module" onerror="showLoadError('Eine Datei (Test- oder Spiel-Datei) fehlt. Welche, steht im schwarzen start.bat-Fenster in der Zeile „Hinweis: … Fehler 404“.')">
     import { run } from './runner.js';
     // Jede Test-Datei meldet ihre Tests beim Laden an.
     import './config.test.js';

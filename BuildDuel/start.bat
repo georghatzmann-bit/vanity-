@@ -26,6 +26,9 @@ if not exist "tools\server.js" goto :files_missing
 rem --- Python suchen. Wichtig: wirklich die Version abfragen. "python" kann
 rem --- auch nur der Platzhalter aus dem Microsoft Store sein - der kann nichts
 rem --- und meldet dann einen Fehler-Code.
+echo  Suche Python ...
+echo  Beim allerersten Start kann das 1-2 Minuten dauern. Fenster offen lassen.
+echo.
 py -3 --version >nul 2>&1
 if %errorlevel%==0 goto :run_py
 
@@ -105,7 +108,8 @@ echo  [FEHLER] Weder Python noch Node.js gefunden.
 echo.
 echo  So behebst du das - einmalig, dauert etwa 3 Minuten:
 echo    1. Oeffne https://www.python.org/downloads/
-echo    2. Klicke auf den gelben Knopf "Download Python".
+echo    2. NICHT auf den grossen gelben Knopf klicken, sondern direkt darunter
+echo       auf den Link "Or get the standalone installer for Python 3...".
 echo    3. Starte die heruntergeladene Datei.
 echo    4. WICHTIG: Unten im Fenster den Haken bei "Add python.exe to PATH" setzen.
 echo    5. Auf "Install Now" klicken und warten, bis "Setup was successful" kommt.

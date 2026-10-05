@@ -8,6 +8,7 @@ Warum nicht einfach "python -m http.server"?
   2. "Kein Zwischenspeichern": Nach einem Update siehst du sofort die neue
      Version und nicht eine alte aus dem Browser-Speicher.
   3. Ist Port 8000 belegt, nimmt der Server automatisch 8001, 8002 ...
+     (sperrt Windows den ganzen Bereich, dann 18000 ... oder einen freien).
   4. Er oeffnet den Browser erst, wenn er wirklich bereit ist.
   5. Er hoert nur auf diesem PC (127.0.0.1) - niemand im WLAN kann zugreifen,
      und die Windows-Firewall fragt nicht nach.
@@ -28,13 +29,16 @@ import argparse  # noqa: E402
 import errno  # noqa: E402
 import http.server  # noqa: E402
 import os  # noqa: E402
+import socket  # noqa: E402
 import socketserver  # noqa: E402
 import threading  # noqa: E402
 import webbrowser  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Ordner BuildDuel
 HOST = "127.0.0.1"
-PORTS_TO_TRY = 11  # 8000 bis 8010
+PORTS_TO_TRY = 11  # 8000 bis 8010, danach 18000 bis 18010, zuletzt ein beliebiger freier Port
+IN_USE_CODES = (errno.EADDRINUSE, 10048)  # 10048 = Windows: "Adresse wird bereits verwendet"
+BLOCKED_CODES = (errno.EACCES, 10013)  # 10013 = Windows: Port gesperrt (oft WSL/Docker/Hyper-V)
 
 MIME_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -105,17 +109,50 @@ class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
         super().handle_error(request, client_address)
 
 
-def open_server(first_port):
-    last_error = None
-    for port in range(first_port, first_port + PORTS_TO_TRY):
+def port_answers(port):
+    """True, wenn auf diesem PC schon ein anderes Programm auf dem Port antwortet.
+
+    Wichtig unter Windows: Dort darf unser Server 127.0.0.1:8000 belegen, obwohl
+    ein anderes Programm schon auf "allen Adressen" (0.0.0.0 oder ::) lauscht.
+    Der Browser wuerde bei "localhost" dann womoeglich das ANDERE Programm
+    erreichen. Darum vorher anklopfen - bei IPv4 und IPv6.
+    """
+    for family, address in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
         try:
-            return Server((HOST, port), Handler), port
+            with socket.socket(family, socket.SOCK_STREAM) as probe:
+                probe.settimeout(0.3)
+                if probe.connect_ex((address, port)) == 0:
+                    return True
+        except OSError:
+            pass  # z. B. IPv6 auf diesem PC ausgeschaltet
+    return False
+
+
+def error_code(exc):
+    return getattr(exc, "winerror", None) or exc.errno
+
+
+def open_server(first_port):
+    """Sucht einen freien Port. Gibt (server, port, windows_hat_gesperrt) zurueck."""
+    candidates = list(range(first_port, first_port + PORTS_TO_TRY))
+    candidates += list(range(first_port + 10000, first_port + 10000 + PORTS_TO_TRY))
+    candidates.append(0)  # 0 = das Betriebssystem waehlt einen freien Port
+    blocked = False
+    last_error = None
+    for port in candidates:
+        if port and port_answers(port):
+            continue
+        try:
+            server = Server((HOST, port), Handler)
+            return server, server.server_address[1], blocked
         except OSError as exc:
             last_error = exc
-            in_use = exc.errno in (errno.EADDRINUSE, errno.EACCES, 10048, 10013)
-            if not in_use:
+            code = error_code(exc)
+            if code in BLOCKED_CODES:
+                blocked = True
+            elif code not in IN_USE_CODES:
                 raise
-    raise last_error
+    raise last_error or OSError("kein freier Port")
 
 
 def main():
@@ -131,11 +168,10 @@ def main():
 
     os.chdir(ROOT)
     try:
-        server, port = open_server(args.port)
+        server, port, blocked = open_server(args.port)
     except OSError as exc:
-        print("FEHLER: Kein freier Port zwischen {} und {} gefunden ({}).".format(
-            args.port, args.port + PORTS_TO_TRY - 1, exc))
-        print("Schliesse andere Server-Fenster (z. B. ein zweites start.bat) und versuche es nochmal.")
+        print("FEHLER: Der Server konnte keinen Port oeffnen ({}).".format(exc))
+        print("Starte den PC neu und versuche es nochmal. Hilft das nicht: Screenshot an Claude.")
         return 4
 
     url = "http://localhost:{}/".format(port)
@@ -143,7 +179,12 @@ def main():
     print("  BuildDuel laeuft:  " + url)
     print("  Tests:             " + url + "tests/tests.html")
     print("")
-    if port != args.port:
+    if port != args.port and blocked:
+        print("  Hinweis: Windows sperrt Port {} (oft wegen WSL, Docker oder Hyper-V),".format(args.port))
+        print("  darum jetzt Port {}. Das ist in Ordnung.".format(port))
+        print("  Gespeicherte Einstellungen gelten aber pro Adresse.")
+        print("")
+    elif port != args.port:
         print("  Hinweis: Port {} war belegt, darum jetzt Port {}.".format(args.port, port))
         print("  Gespeicherte Einstellungen gelten pro Adresse - am besten das andere")
         print("  Programm auf Port {} schliessen und start.bat neu starten.".format(args.port))
@@ -153,9 +194,18 @@ def main():
     print("")
     sys.stdout.flush()
 
+    def open_browser():
+        try:
+            opened = webbrowser.open(url)
+        except Exception:  # noqa: BLE001 - jeder Fehler heisst: nicht geklappt
+            opened = False
+        if not opened:
+            print("  Browser konnte nicht geoeffnet werden. Bitte selbst oeffnen: " + url)
+            sys.stdout.flush()
+
     if not args.no_browser:
         # Kurz warten, bis serve_forever laeuft, dann Browser oeffnen.
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, open_browser).start()
 
     try:
         server.serve_forever()

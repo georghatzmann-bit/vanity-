@@ -40,6 +40,7 @@
       <div id="error-text" class="error-text"></div>
       <pre id="error-details" class="error-details"></pre>
       <div class="error-hint">Tipp: Mach einen Screenshot von dieser Meldung und schick ihn an Claude.</div>
+      <button id="error-close" class="error-close" type="button" hidden>Meldung schließen</button>
     </div>
   </div>
 
@@ -53,23 +54,36 @@
   <!-- Läuft vor dem Spiel: Fehler verständlich anzeigen + Tipps beim Laden -->
   <script>
     (function () {
-      function show(title, text, details) {
+      var body = document.body;
+
+      // closable = true: Das Spiel läuft weiter, die Meldung darf weggeklickt werden.
+      function show(title, text, details, closable) {
         // Nur die ERSTE Meldung zeigen – sie ist meistens die eigentliche Ursache.
-        if (document.body.classList.contains('has-error')) return;
-        var box = document.getElementById('error');
+        if (body.classList.contains('has-error')) return;
         document.getElementById('error-title').textContent = title;
         document.getElementById('error-text').textContent = text || '';
         document.getElementById('error-details').textContent = details || '';
-        box.hidden = false;
-        document.body.classList.add('has-error');
+        document.getElementById('error-close').hidden = !closable;
+        document.getElementById('error').hidden = false;
+        body.classList.add('has-error');
       }
+
+      document.getElementById('error-close').addEventListener('click', function () {
+        document.getElementById('error').hidden = true;
+        body.classList.remove('has-error');
+      });
 
       // Wird auch von src/main.js benutzt.
       window.showFatalError = function (title, error) {
         var text = error && error.message ? error.message : String(error || '');
         var details = error && error.stack ? error.stack : '';
-        show(title, text, details);
+        show(title, text, details, false);
       };
+
+      // Dateiname ohne "http://localhost:8000/" davor
+      function shortName(url) {
+        return String(url || '').replace(location.origin + '/', '');
+      }
 
       // Fall 1: index.html wurde direkt per Doppelklick geöffnet (file://)
       if (location.protocol === 'file:') {
@@ -78,32 +92,42 @@
           'Du hast index.html direkt geöffnet. So blockiert der Browser aus Sicherheitsgründen ' +
           'die Spiel-Dateien. Schließ diesen Tab und starte das Spiel mit einem Doppelklick auf ' +
           'start.bat im Ordner BuildDuel. Dann öffnet sich der Browser von selbst.',
-          'Adresse jetzt: ' + location.href + '\nRichtig wäre: http://localhost:8000'
+          'Adresse jetzt: ' + location.href + '\nRichtig wäre: http://localhost:8000',
+          false
         );
         return;
       }
 
       // Fall 2: unerwartete Fehler im Spiel
       window.addEventListener('error', function (event) {
+        // Fehler von fremden Skripten (z. B. Browser-Erweiterungen) ignorieren
+        if (event.message === 'Script error.') return;
+        if (event.filename && event.filename.indexOf(location.origin) !== 0) return;
+
+        var file = shortName(event.filename);
+        var where = file + (event.lineno ? ', Zeile ' + event.lineno : '');
+        var started = body.classList.contains('ready');
+
+        // Häufigster Fall beim Werte-Ändern: Tippfehler in config.js
+        if (/SyntaxError/.test(event.message)) {
+          show('Tippfehler in ' + (file || 'einer Datei') + (event.lineno ? ' (Zeile ' + event.lineno + ')' : ''),
+            'Die Datei enthält einen Schreibfehler. Häufige Ursachen: Komma statt Punkt bei ' +
+            'Kommazahlen (8.4 statt 8,4), ein fehlendes Komma am Zeilenende oder ein fehlendes ' +
+            'Anführungszeichen. Tipp: In der Datei Strg + Z (rückgängig), speichern, dann F5.',
+            event.message + (where ? '\n' + where : ''), false);
+          return;
+        }
         show('Unerwarteter Fehler', event.message,
-          (event.filename || '') + (event.lineno ? ':' + event.lineno : '') +
-          (event.error && event.error.stack ? '\n\n' + event.error.stack : ''));
+          where + (event.error && event.error.stack ? '\n\n' + event.error.stack : ''), started);
       });
       window.addEventListener('unhandledrejection', function (event) {
         var reason = event.reason || {};
-        show('Unerwarteter Fehler', reason.message || String(reason), reason.stack || '');
+        show('Unerwarteter Fehler', reason.message || String(reason), reason.stack || '',
+          body.classList.contains('ready'));
       });
 
-      // Fall 3: Spiel lädt nach 15 Sekunden immer noch nicht
-      setTimeout(function () {
-        if (document.body.classList.contains('ready') || document.body.classList.contains('has-error')) return;
-        show('Das Spiel lädt nicht',
-          'Das dauert ungewöhnlich lange. Ist das schwarze Fenster von start.bat noch offen? ' +
-          'Ein sehr alter Browser kann auch der Grund sein (bitte Chrome, Edge oder Firefox aktualisieren).',
-          '');
-      }, 15000);
-
       // Wechselnde Tipps auf dem Ladebildschirm
+      var tipBox = document.getElementById('loading-tip');
       var tips = [
         'Wer höher steht, gewinnt meistens.',
         'Eine Wand vor dir fängt Schüsse sofort ab.',
@@ -112,15 +136,25 @@
       ];
       var i = 0;
       var timer = setInterval(function () {
-        if (document.body.classList.contains('ready')) { clearInterval(timer); return; }
+        if (body.classList.contains('ready')) { clearInterval(timer); return; }
         i = (i + 1) % tips.length;
-        document.getElementById('loading-tip').textContent = tips[i];
+        tipBox.textContent = tips[i];
       }, 2500);
+
+      // Fall 3: Spiel lädt nach 15 Sekunden immer noch nicht → Hinweis auf dem
+      // Ladebildschirm (verschwindet von selbst, falls das Spiel doch noch startet)
+      setTimeout(function () {
+        if (body.classList.contains('ready') || body.classList.contains('has-error')) return;
+        clearInterval(timer);
+        tipBox.classList.add('loading-slow');
+        tipBox.textContent = 'Das dauert ungewöhnlich lange. Ist das schwarze start.bat-Fenster noch offen? ' +
+          'Ein sehr alter Browser kann auch der Grund sein – bitte Chrome, Edge oder Firefox aktualisieren.';
+      }, 15000);
     })();
   </script>
 
   <!-- Das eigentliche Spiel. onerror: eine Datei fehlt oder der Server liefert sie falsch aus. -->
   <script type="module" src="src/main.js"
-    onerror="window.showFatalError && window.showFatalError('Spiel-Dateien fehlen', new Error('src/main.js oder lib/three.module.js konnte nicht geladen werden. Ist der Ordner vollständig entpackt? Bitte mit start.bat starten.'))"></script>
+    onerror="window.showFatalError && window.showFatalError('Spiel-Dateien fehlen', { message: 'Eine Spiel-Datei konnte nicht geladen werden. Welche, steht im schwarzen start.bat-Fenster in der Zeile „Hinweis: … Fehler 404“. Meist hilft: die ZIP-Datei nochmal mit „Alle extrahieren“ entpacken und start.bat im neuen Ordner starten.' })"></script>
 </body>
 </html>

@@ -26,12 +26,18 @@ export function createReferenceObjects(scene, config) {
   body.receiveShadow = true;
   group.add(body);
 
-  // Kopf-Zone als gelber Ring knapp unter dem Scheitel
+  // Kopf-Zone als gelber Ring knapp unter dem Scheitel. Dort ist die Kapsel
+  // schon "rund" (obere Halbkugel), also etwas schmaler als 0,4 m – den echten
+  // Radius an dieser Höhe ausrechnen, sonst schneidet der Ring in die Figur.
+  const ringY = height - headZone; // 1,5 m
+  const above = Math.max(0, ringY - (height - radius)); // wie weit über dem Mittelpunkt der Halbkugel
+  const radiusAtRing = Math.sqrt(radius * radius - above * above);
   const headRing = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.97, radius * 0.97, 0.03, 24, 1, true),
+    new THREE.TorusGeometry(radiusAtRing + 0.012, 0.012, 6, 40),
     new THREE.MeshBasicMaterial({ color: 0xffd93d }),
   );
-  headRing.position.set(cell / 2, height - headZone, cell / 2);
+  headRing.rotation.x = Math.PI / 2; // flach hinlegen
+  headRing.position.set(cell / 2, ringY, cell / 2);
   group.add(headRing);
 
   // --- Umriss einer Bau-Zelle ------------------------------------------------

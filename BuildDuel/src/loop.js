@@ -7,12 +7,18 @@
 // Logik-Schritte (je 1/60 s) jetzt fällig sind.
 //
 // Beispiel bei 60 Schritten pro Sekunde:
-//   - Bildschirm mit 60 Hz  → pro Bild genau 1 Schritt
+//   - Bildschirm mit 60 Hz  → pro Bild 1 Schritt (ganz selten 0 oder 2, weil
+//                             Bildschirme nie exakt 60,000 Hz haben)
 //   - Bildschirm mit 144 Hz → meistens 0, manchmal 1 Schritt
 //   - Bildschirm mit 30 Hz  → pro Bild 2 Schritte
 //
-// "alpha" (0..1) sagt, wie weit wir schon im nächsten Schritt sind. Damit kann
-// das Bild später Bewegungen weich zwischen zwei Schritten zeichnen.
+// "alpha" (0..1) sagt, wie weit wir schon im nächsten Schritt sind. Damit
+// zeichnet das Bild ab Phase 2 Bewegungen weich zwischen zwei Schritten
+// (sonst würde es bei 0 oder 2 Schritten kurz ruckeln).
+//
+// Trick: Die Uhr startet mit einem HALBEN Schritt Vorrat. Bei 60 Hz liegt der
+// Vorrat dann immer in der Mitte zwischen zwei Schritten – kleine Messfehler
+// der Browser-Zeit (± 0,1 ms) führen so nicht zu 0-1-2-Gezappel.
 //
 // Diese Datei benutzt kein Three.js und keinen Browser – darum lässt sie sich
 // in tests/tests.html einfach prüfen.
@@ -33,7 +39,7 @@ export class FixedStepClock {
     this.step = 1 / tickRate; // Länge eines Schritts in Sekunden
     this.maxFrameTime = maxFrameTime;
     this.maxStepsPerFrame = maxStepsPerFrame;
-    this.accumulator = 0; // gesammelte, noch nicht verrechnete Zeit
+    this.accumulator = this.step / 2; // gesammelte, noch nicht verrechnete Zeit (Start: halber Schritt)
     this.totalSteps = 0; // alle Schritte seit dem Start
     this.droppedTime = 0; // Zeit, die verworfen wurde (zu langsamer Rechner / Tab im Hintergrund)
   }
@@ -79,6 +85,6 @@ export class FixedStepClock {
 
   /** Setzt die Uhr zurück (z. B. nach einer Pause oder beim Rundenstart). */
   reset() {
-    this.accumulator = 0;
+    this.accumulator = this.step / 2;
   }
 }

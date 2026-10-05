@@ -13,31 +13,24 @@ describe('Spielwerte: Grundlagen', () => {
     assert.ok(Object.isFrozen(CONFIG.controls.keyboard.buildWall), 'Tasten-Listen');
   });
 
-  it('Logik läuft mit 60 Schritten pro Sekunde', () => {
-    assert.equal(CONFIG.loop.tickRate, 60);
-    assert.ok(CONFIG.loop.maxStepsPerFrame >= 2);
-  });
-
-  it('Spielername ist der Platzhalter "BuildDuel"', () => {
-    assert.equal(CONFIG.game.name, 'BuildDuel');
+  it('Spiel-Uhr: Schritt-Grenze und Pausen-Grenze passen zusammen', () => {
+    const { tickRate, maxFrameTime, maxStepsPerFrame } = CONFIG.loop;
+    assert.ok(tickRate > 0 && maxStepsPerFrame >= 2);
+    // Sonst hätte maxFrameTime keine Wirkung (die Schritt-Grenze würde vorher greifen)
+    assert.ok(maxStepsPerFrame / tickRate >= maxFrameTime - 1e-9,
+      `${maxStepsPerFrame} Schritte = ${(maxStepsPerFrame / tickRate).toFixed(3)} s < maxFrameTime ${maxFrameTime} s`);
   });
 });
 
 describe('Spielwerte: Spieler und Welt', () => {
-  it('Sprunghöhe ist ca. 1,4 m (aus Sprung-Tempo und Schwerkraft)', () => {
-    const { jumpVelocity } = CONFIG.player;
-    const height = (jumpVelocity * jumpVelocity) / (2 * CONFIG.world.gravity);
-    assert.close(height, 1.4, 0.05, 'Sprunghöhe in m');
-  });
-
   it('Tempo: geduckt < gehen < sprinten', () => {
     const p = CONFIG.player;
     assert.ok(p.crouchSpeed < p.walkSpeed && p.walkSpeed < p.sprintSpeed);
   });
 
-  it('Leben 100, Schild höchstens 100', () => {
-    assert.equal(CONFIG.player.maxHealth, 100);
-    assert.ok(CONFIG.player.maxShield > 0 && CONFIG.player.maxShield <= 100);
+  it('Leben und Schild sind größer als 0', () => {
+    assert.ok(CONFIG.player.maxHealth > 0);
+    assert.ok(CONFIG.player.maxShield > 0);
   });
 
   it('Hitbox: Kopf-Zone ist kleiner als die Figur, geduckt kleiner als stehend', () => {
@@ -51,11 +44,14 @@ describe('Spielwerte: Spieler und Welt', () => {
     assert.ok(CONFIG.player.maxWalkableSlope > CONFIG.building.rampSlopeDeg);
   });
 
-  it('Bau-Raster: 4 m Zellen, 4 m Wandhöhe', () => {
-    assert.equal(CONFIG.world.gridCellSize, 4);
-    assert.equal(CONFIG.world.wallHeight, 4);
-    // Boden-Fläche muss aus ganzen Zellen bestehen (sonst sitzt das Raster schief)
+  it('Boden-Fläche besteht aus ganzen Bau-Zellen (sonst sitzt das Raster schief)', () => {
     assert.equal((CONFIG.world.groundSize / 2) % CONFIG.world.gridCellSize, 0, 'Boden-Hälfte / Zelle');
+  });
+
+  it('Boden ist größer als die Sichtweite (kein sichtbarer Rand)', () => {
+    for (const [name, preset] of Object.entries(CONFIG.graphics.presets)) {
+      assert.ok(CONFIG.world.groundSize / 2 > preset.viewDistance, name);
+    }
   });
 
   it('Kamera: Sniper-Sicht < Ziel-Sicht < normale Sicht', () => {
@@ -66,11 +62,6 @@ describe('Spielwerte: Spieler und Welt', () => {
 });
 
 describe('Spielwerte: Waffen', () => {
-  it('Schrotflinte macht maximal 90 Schaden (10 Kugeln x 9)', () => {
-    const s = CONFIG.weapons.shotgun;
-    assert.equal(s.pellets * s.damagePerPellet, 90);
-  });
-
   it('jede Schusswaffe hat Magazin, Nachladezeit und Schuss-Tempo', () => {
     for (const id of GUNS) {
       const w = CONFIG.weapons[id];
@@ -119,11 +110,6 @@ describe('Spielwerte: Bauen und Material', () => {
     assert.ok(t.wood < t.stone && t.stone < t.metal);
     const f = CONFIG.materials.startHealthFraction;
     assert.ok(f > 0 && f < 1);
-  });
-
-  it('Material: 10 pro Bauteil, höchstens 999', () => {
-    assert.equal(CONFIG.materials.costPerPiece, 10);
-    assert.equal(CONFIG.materials.maxPerType, 999);
   });
 
   it('kein Modus startet mit mehr Material als erlaubt', () => {
@@ -223,13 +209,6 @@ describe('Spielwerte: Tasten', () => {
     }
   });
 
-  it('Wand liegt auf Z und (für deutsche Tastaturen) auf Y', () => {
-    assert.deepEqual([...CONFIG.controls.keyboard.buildWall], ['KeyZ', 'KeyY']);
-    assert.deepEqual([...CONFIG.controls.keyboard.buildFloor], ['KeyX']);
-    assert.deepEqual([...CONFIG.controls.keyboard.buildRamp], ['KeyC']);
-    assert.deepEqual([...CONFIG.controls.keyboard.buildRoof], ['KeyV']);
-  });
-
   it('Controller: Bau-Tasten sind verschieden und gültige Knopf-Nummern', () => {
     const b = CONFIG.controls.gamepad.buildMode;
     const buttons = [b.wall, b.ramp, b.floor, b.roof];
@@ -261,12 +240,73 @@ describe('Spielwerte: Optik und Grafik', () => {
     assert.ok(CONFIG.graphics.presets[CONFIG.graphics.quality], `Stufe "${CONFIG.graphics.quality}"`);
   });
 
-  it('unbekannte Grafik-Stufe fällt auf "mittel" zurück', () => {
-    assert.equal(getQualityPreset('gibtsnicht'), CONFIG.graphics.presets.mittel);
+  it('Grafik-Stufe: Groß-/Kleinschreibung egal, Unbekanntes wird "mittel"', () => {
+    assert.equal(getQualityPreset('Hoch').name, 'hoch');
+    assert.equal(getQualityPreset(' NIEDRIG ').name, 'niedrig');
+    assert.equal(getQualityPreset('gibtsnicht').name, 'mittel');
+    assert.equal(getQualityPreset('gibtsnicht').viewDistance, CONFIG.graphics.presets.mittel.viewDistance);
+  });
+
+  it('Nebel: beginnt vor dem Ende, endet vor der Sichtweite', () => {
+    const v = CONFIG.visuals;
+    assert.ok(v.fogStartFraction >= 0 && v.fogStartFraction < v.fogEndFraction && v.fogEndFraction <= 1);
   });
 
   it('Sichtweite: niedrig < mittel < hoch', () => {
     const p = CONFIG.graphics.presets;
     assert.ok(p.niedrig.viewDistance < p.mittel.viewDistance && p.mittel.viewDistance < p.hoch.viewDistance);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Diese Tests prüfen Werte, die genau so in deinem Plan stehen. Änderst du einen
+// davon ABSICHTLICH in config.js, wird hier der passende Test rot – das ist dann
+// in Ordnung und kein Fehler im Spiel.
+// -----------------------------------------------------------------------------
+describe('Vorgaben aus deinem Plan (dürfen rot werden, wenn du sie absichtlich änderst)', () => {
+  it('Spielname ist der Platzhalter "BuildDuel"', () => {
+    assert.equal(CONFIG.game.name, 'BuildDuel');
+  });
+
+  it('Logik: 60 Schritte pro Sekunde', () => {
+    assert.equal(CONFIG.loop.tickRate, 60);
+  });
+
+  it('Sprunghöhe ca. 1,4 m (aus Sprung-Tempo und Schwerkraft)', () => {
+    const { jumpVelocity } = CONFIG.player;
+    const height = (jumpVelocity * jumpVelocity) / (2 * CONFIG.world.gravity);
+    assert.close(height, 1.4, 0.05, 'Sprunghöhe in m');
+  });
+
+  it('Leben 100, Schild höchstens 100', () => {
+    assert.equal(CONFIG.player.maxHealth, 100);
+    assert.ok(CONFIG.player.maxShield <= 100);
+  });
+
+  it('Bau-Raster: 4 m Zellen, 4 m Wandhöhe', () => {
+    assert.equal(CONFIG.world.gridCellSize, 4);
+    assert.equal(CONFIG.world.wallHeight, 4);
+  });
+
+  it('Schrotflinte macht maximal 90 Schaden (10 Kugeln x 9)', () => {
+    const s = CONFIG.weapons.shotgun;
+    assert.equal(s.pellets * s.damagePerPellet, 90);
+  });
+
+  it('Material: 10 pro Bauteil, höchstens 999', () => {
+    assert.equal(CONFIG.materials.costPerPiece, 10);
+    assert.equal(CONFIG.materials.maxPerType, 999);
+  });
+
+  it('Bau-Tasten: Z (und Y) Wand, X Boden, C Rampe, V Dach', () => {
+    assert.deepEqual([...CONFIG.controls.keyboard.buildWall], ['KeyZ', 'KeyY']);
+    assert.deepEqual([...CONFIG.controls.keyboard.buildFloor], ['KeyX']);
+    assert.deepEqual([...CONFIG.controls.keyboard.buildRamp], ['KeyC']);
+    assert.deepEqual([...CONFIG.controls.keyboard.buildRoof], ['KeyV']);
+  });
+
+  it('Battle Royale: Zonen-Zeiten und Schaden wie im Plan', () => {
+    const phases = CONFIG.modes.battleRoyale.storm.phases.map((p) => [p.wait, p.shrink, p.dps]);
+    assert.deepEqual(phases, [[60, 45, 1], [45, 40, 2], [40, 35, 5], [30, 30, 8], [20, 30, 10]]);
   });
 });

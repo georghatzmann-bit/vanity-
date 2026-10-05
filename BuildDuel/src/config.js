@@ -10,8 +10,9 @@
 //   // SCHÄTZUNG  = Das Original (1v1.LOL) hat diesen Wert nie veröffentlicht.
 //                  Wir haben einen sinnvollen Wert geschätzt. Gerne anpassen.
 //   // belegt     = Steht so in verlässlichen Quellen über das Original.
-//   ohne Markierung = eigene Entscheidung für BuildDuel (Farben, Technik,
-//                  Bots usw.), die nichts mit dem Original zu tun hat.
+//   // Vorgabe    = steht so in deinem Plan, ist aber kein Wert des Originals.
+//   ohne Markierung = Vorgabe aus deinem Plan oder eigene Entscheidung für
+//                  BuildDuel (Technik, Farben, Bots usw.).
 //
 // Einheiten: 1 Einheit = 1 Meter, Zeiten in Sekunden (s), Winkel in Grad (°),
 // Tempo in Metern pro Sekunde (m/s), außer es steht anders dabei.
@@ -37,8 +38,8 @@ export const CONFIG = deepFreeze({
   // Browser kann (requestAnimationFrame).
   loop: {
     tickRate: 60, // Logik-Schritte pro Sekunde
-    maxFrameTime: 0.25, // längere Pausen (z. B. Tab im Hintergrund) werden auf 0,25 s gekürzt
-    maxStepsPerFrame: 8, // nie mehr als 8 Logik-Schritte pro Bild, sonst ruckelt es sich fest
+    maxFrameTime: 0.2, // längere Pausen (z. B. ein Ruckler) zählen höchstens als 0,2 s
+    maxStepsPerFrame: 12, // höchstens 12 Schritte pro Bild (= 0,2 s). Unter 5 Bildern/s läuft das Spiel langsamer, statt zu springen
   },
 
   // ---------------------------------------------------------------------------
@@ -79,10 +80,10 @@ export const CONFIG = deepFreeze({
 
     // Treffer-Form ("Hitbox"): eine Kapsel
     hitbox: {
-      height: 1.8, // Gesamthöhe stehend
+      height: 1.8, // Gesamthöhe stehend // SCHÄTZUNG
       crouchHeight: 1.3, // Gesamthöhe geduckt // SCHÄTZUNG
-      radius: 0.4,
-      headZone: 0.3, // die obersten 0,3 m zählen als Kopf
+      radius: 0.4, // SCHÄTZUNG
+      headZone: 0.3, // die obersten 0,3 m zählen als Kopf // SCHÄTZUNG
     },
   },
 
@@ -137,7 +138,7 @@ export const CONFIG = deepFreeze({
       jump: ['Space'], // belegt
       crouch: ['ShiftLeft'], // belegt (Shift = ducken)
       primary: ['Mouse0'], // schießen bzw. Bauteil setzen // belegt
-      secondary: ['Mouse2'], // zielen bzw. im Edit "Felder zurücksetzen" // belegt
+      secondary: ['Mouse2'], // zielen (belegt); im Edit "Felder zurücksetzen" (Vorgabe)
       buildWall: ['KeyZ', 'KeyY'], // belegt (Z, auf QWERTZ auch Y)
       buildFloor: ['KeyX'], // Quellen widersprechen sich bei Boden/Rampe – hier festgelegt
       buildRamp: ['KeyC'], // Quellen widersprechen sich bei Boden/Rampe – hier festgelegt
@@ -175,17 +176,17 @@ export const CONFIG = deepFreeze({
     //                10=linker Stick drücken 11=rechter Stick drücken
     //                12=Steuerkreuz hoch 13=runter 14=links 15=rechts
     gamepad: {
-      jump: 0, // A / Kreuz // belegt
+      jump: 0, // A / Kreuz
       toggleBuildMode: 1, // B / Kreis
       reload: 2, // X / Quadrat
       use: 3, // Y / Dreieck
       prevWeapon: 4, // L1
       nextWeapon: 5, // R1
       aim: 6, // L2
-      fire: 7, // R2 // belegt
+      fire: 7, // R2
       scoreboard: 8,
       pause: 9,
-      crouchOrRotate: 11, // R3 // belegt
+      crouchOrRotate: 11, // R3
       edit: 13, // Steuerkreuz unten
       emote: 12, // Steuerkreuz hoch
       switchMaterial: 14, // Steuerkreuz links
@@ -207,7 +208,7 @@ export const CONFIG = deepFreeze({
 
     // Handy / Touch (optional, Phase 11). Positionen in % vom Bildschirm.
     touch: {
-      autoShoot: false, // schießt automatisch, wenn das Fadenkreuz auf einem Gegner ist // belegt (Option im Original)
+      autoShoot: false, // schießt automatisch, wenn das Fadenkreuz auf einem Gegner ist
       stickRadiusPx: 60,
       layout: {
         stick: { x: 14, y: 72 },
@@ -281,6 +282,9 @@ export const CONFIG = deepFreeze({
   // ---------------------------------------------------------------------------
   // Schadens-Abfall ("falloff"): bis "fullUntil" Meter voller Schaden, danach
   // wird es weniger, ab "minAt" Metern gilt nur noch "minFactor" (z. B. 0,2 = 20 %).
+  // Streuung ("spreadDeg", "baseDeg" …): Öffnungswinkel des ganzen Kegels in Grad.
+  // Ein Schuss weicht also höchstens um den HALBEN Wert von der Bildmitte ab
+  // (Schrotflinte 6° → höchstens 3° → auf 5 m treffen alle Kugeln eine Figur).
   weapons: {
     switchTime: 0.25, // Waffen-Wechsel dauert 0,25 s // SCHÄTZUNG
     aimMoveFactor: 0.7, // beim Zielen läuft man mit 70 % Tempo // SCHÄTZUNG
@@ -318,7 +322,7 @@ export const CONFIG = deepFreeze({
       magazine: 30, // SCHÄTZUNG
       reloadTime: 2.2, // SCHÄTZUNG
       falloff: { fullUntil: 30, minAt: 60, minFactor: 0.6 }, // SCHÄTZUNG
-      maxRange: 300,
+      maxRange: 300, // SCHÄTZUNG
       structureDamage: 25, // SCHÄTZUNG
       spread: { baseDeg: 0.6, movingMultiplier: 2, aimMultiplier: 0.4 }, // SCHÄTZUNG
       tracer: true, // Leuchtspur
@@ -336,7 +340,7 @@ export const CONFIG = deepFreeze({
       magazine: 30, // SCHÄTZUNG
       reloadTime: 2.0, // SCHÄTZUNG
       falloff: { fullUntil: 12, minAt: 30, minFactor: 0.5 }, // SCHÄTZUNG
-      maxRange: 150,
+      maxRange: 150, // SCHÄTZUNG
       structureDamage: 18, // SCHÄTZUNG
       spread: { baseDeg: 1.2, movingMultiplier: 1.6, aimMultiplier: 0.6 }, // SCHÄTZUNG
       tracer: false,
@@ -372,7 +376,7 @@ export const CONFIG = deepFreeze({
       magazine: 16, // SCHÄTZUNG
       reloadTime: 1.5, // SCHÄTZUNG
       falloff: { fullUntil: 20, minAt: 45, minFactor: 0.6 }, // SCHÄTZUNG
-      maxRange: 150,
+      maxRange: 150, // SCHÄTZUNG
       structureDamage: 20, // SCHÄTZUNG
       spread: { baseDeg: 0.9, movingMultiplier: 1.8, aimMultiplier: 0.5 }, // SCHÄTZUNG
       tracer: false,
@@ -418,6 +422,9 @@ export const CONFIG = deepFreeze({
   },
 
   // Seltenheiten (nur Farbe + kleiner Schadens-Bonus im Battle Royale)
+  // Hinweis für später: Grün sieht fast aus wie Gras – Boden-Loot bekommt darum in
+  // Phase 9 ein Leuchten. Schadenszahlen (Phase 5) bekommen einen dunklen Rand,
+  // damit Weiß/Gelb/Blau auch vor dem hellen Himmel lesbar sind.
   rarities: {
     order: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
     common: { name: 'Gewöhnlich', color: '#A0A7AE', damageMultiplier: 1.0 }, // SCHÄTZUNG
@@ -471,7 +478,7 @@ export const CONFIG = deepFreeze({
       roundsToWin: 5, // wer zuerst 5 Runden gewinnt
       roundPause: 3, // Pause zwischen Runden (s)
       startHealth: 100,
-      startShield: 100,
+      startShield: 100, // SCHÄTZUNG (100 Leben + 100 Schild)
       startMaterials: { wood: 500, stone: 500, metal: 500 }, // SCHÄTZUNG
       loadout: ['shotgun', 'ar', 'sniper', 'smg'], // SCHÄTZUNG
       infiniteReserveAmmo: true, // SCHÄTZUNG
@@ -493,7 +500,7 @@ export const CONFIG = deepFreeze({
       jumpVehicleSpeed: 30, // SCHÄTZUNG
       freefallSpeed: 30, // Fall-Tempo im freien Fall // SCHÄTZUNG
       freefallMoveSpeed: 15, // seitliches Lenken im freien Fall // SCHÄTZUNG
-      gliderDeployHeight: 30, // ab 30 m über dem Boden öffnet der Gleiter automatisch
+      gliderDeployHeight: 30, // ab 30 m über dem Boden öffnet der Gleiter automatisch // SCHÄTZUNG
       gliderFallSpeed: 6, // SCHÄTZUNG
       gliderMoveSpeed: 14, // SCHÄTZUNG
       // Sturm-Zone: 5 Phasen. wait = Warten, shrink = Schrumpfen (s), dps = Schaden pro Sekunde draußen
@@ -525,10 +532,10 @@ export const CONFIG = deepFreeze({
       roundsToWin: 5,
       roundPause: 3,
       startHealth: 100,
-      startShield: 100,
-      startMaterials: { wood: 200, stone: 200, metal: 200 },
-      loadout: ['shotgun', 'smg'],
-      infiniteReserveAmmo: true,
+      startShield: 100, // SCHÄTZUNG (100 Leben + 100 Schild)
+      startMaterials: { wood: 200, stone: 200, metal: 200 }, // Plan nennt 500 und 200 – hier gilt der Wert aus dem Modus-Abschnitt // SCHÄTZUNG
+      loadout: ['shotgun', 'smg'], // Vorgabe: nur Schrotflinte + Maschinenpistole
+      infiniteReserveAmmo: true, // SCHÄTZUNG
       boxGapCells: 0, // die zwei Boxen stehen direkt nebeneinander
     },
 
@@ -536,19 +543,19 @@ export const CONFIG = deepFreeze({
       name: 'Zone Wars',
       totalPlayers: 6, // du + 5 Bots
       mapSize: 160,
-      roundDuration: 90, // ganze Runde ca. 90 s
+      roundDuration: 90, // ganze Runde ca. 90 s // SCHÄTZUNG
       startHealth: 100,
-      startShield: 100,
-      startMaterials: { wood: 300, stone: 300, metal: 300 },
+      startShield: 100, // SCHÄTZUNG
+      startMaterials: { wood: 300, stone: 300, metal: 300 }, // Plan nennt 500 und 300 – hier gilt der Wert aus dem Modus-Abschnitt // SCHÄTZUNG
       randomLoadout: true,
       storm: {
-        initialRadius: 80,
+        initialRadius: 80, // SCHÄTZUNG
         moving: true, // Zone wandert und schrumpft
         phases: [
-          { wait: 10, shrink: 20, dps: 5, endRadius: 50 },
-          { wait: 8, shrink: 18, dps: 8, endRadius: 25 },
-          { wait: 6, shrink: 16, dps: 12, endRadius: 8 },
-          { wait: 4, shrink: 8, dps: 20, endRadius: 0 },
+          { wait: 10, shrink: 20, dps: 5, endRadius: 50 }, // SCHÄTZUNG
+          { wait: 8, shrink: 18, dps: 8, endRadius: 25 }, // SCHÄTZUNG
+          { wait: 6, shrink: 16, dps: 12, endRadius: 8 }, // SCHÄTZUNG
+          { wait: 4, shrink: 8, dps: 20, endRadius: 0 }, // SCHÄTZUNG
         ],
       },
     },
@@ -608,7 +615,8 @@ export const CONFIG = deepFreeze({
       damageShield: '#4FC3F7', // Schadenszahl: Schild
     },
     stormOpacity: 0.35,
-    fogStartFraction: 0.45, // Nebel beginnt bei 45 % der Sichtweite
+    fogStartFraction: 0.15, // leichter Nebel beginnt bei 15 % der Sichtweite …
+    fogEndFraction: 0.9, // … und verdeckt ab 90 % alles (Horizont-Farbe)
     // Sonne: Richtung, aus der das Licht kommt (wird normalisiert)
     sunDirection: { x: -0.55, y: 1.0, z: 0.35 },
     sunIntensity: 2.6,
@@ -622,10 +630,12 @@ export const CONFIG = deepFreeze({
   graphics: {
     quality: 'hoch', // 'niedrig' | 'mittel' | 'hoch'  ← bei Ruckeln auf 'mittel' stellen
     showFps: true,
+    // maxPixelRatio ist der größte Hebel für die Leistung: Bei Bildschirmen mit
+    // Windows-Skalierung 150–200 % malt der Browser sonst 2–4-mal so viele Pixel.
     presets: {
       niedrig: { shadows: false, shadowMapSize: 512, maxPixelRatio: 1, resolutionScale: 0.75, antialias: false, viewDistance: 250 },
       mittel: { shadows: true, shadowMapSize: 1024, maxPixelRatio: 1.25, resolutionScale: 1, antialias: true, viewDistance: 450 },
-      hoch: { shadows: true, shadowMapSize: 2048, maxPixelRatio: 2, resolutionScale: 1, antialias: true, viewDistance: 700 },
+      hoch: { shadows: true, shadowMapSize: 2048, maxPixelRatio: 1.5, resolutionScale: 1, antialias: true, viewDistance: 700 },
     },
   },
 
@@ -665,8 +675,13 @@ function deepFreeze(obj) {
   return Object.freeze(obj);
 }
 
-// Liefert die aktuelle Grafik-Voreinstellung (z. B. CONFIG.graphics.presets.hoch).
-// Unbekannter Name → 'mittel', damit das Spiel trotzdem startet.
+// Liefert die Grafik-Voreinstellung samt Namen, z. B. { name: 'hoch', shadows: true, … }.
+// Groß-/Kleinschreibung ist egal ('Hoch' = 'hoch'). Unbekannter Name → 'mittel'
+// (mit Hinweis in der Browser-Konsole), damit das Spiel trotzdem startet.
 export function getQualityPreset(name = CONFIG.graphics.quality) {
-  return CONFIG.graphics.presets[name] ?? CONFIG.graphics.presets.mittel;
+  const key = String(name).trim().toLowerCase();
+  const presets = CONFIG.graphics.presets;
+  if (Object.hasOwn(presets, key)) return { name: key, ...presets[key] };
+  console.warn(`Grafik-Stufe "${name}" gibt es nicht – nehme "mittel". Erlaubt: ${Object.keys(presets).join(', ')}`);
+  return { name: 'mittel', ...presets.mittel };
 }

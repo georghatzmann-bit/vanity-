@@ -18,7 +18,11 @@ export function createEnvironment(scene, config, quality) {
   // --- Nebel: weit entfernte Dinge verschwimmen in der Horizont-Farbe -------
   const horizon = new THREE.Color(colors.skyHorizon);
   scene.background = horizon.clone();
-  scene.fog = new THREE.Fog(horizon.clone(), viewDistance * visuals.fogStartFraction, viewDistance * 0.95);
+  scene.fog = new THREE.Fog(
+    horizon.clone(),
+    viewDistance * visuals.fogStartFraction,
+    viewDistance * visuals.fogEndFraction,
+  );
 
   // --- Himmel: eine große Kugel um die Kamera mit Farbverlauf ---------------
   // Unten/Horizont hellblau, nach oben kräftiger blau.
@@ -74,7 +78,7 @@ export function createEnvironment(scene, config, quality) {
   const sun = new THREE.DirectionalLight(0xfff3dd, visuals.sunIntensity);
   sun.name = 'Sonne';
   const area = visuals.shadowArea;
-  const sunDistance = 200;
+  const sunDistance = 120; // so weit steht die "Schatten-Kamera" vom Mittelpunkt entfernt
   sun.castShadow = quality.shadows;
   if (quality.shadows) {
     sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
@@ -85,25 +89,30 @@ export function createEnvironment(scene, config, quality) {
     cam.bottom = -area;
     cam.near = 1;
     cam.far = sunDistance * 2;
-    sun.shadow.bias = -0.0004;
+    // bias ist ein Bruchteil der Tiefe (far - near ≈ 240 m): -0,00005 ≈ 1 cm.
+    // Größer → helle Lichtspalte, wo Wände auf Böden stehen. normalBias
+    // verhindert die "Streifen" (Schattenakne) auf schrägen Flächen.
+    sun.shadow.bias = -0.00005;
     sun.shadow.normalBias = 0.03;
     sun.shadow.radius = 2; // weiche Kanten
   }
   scene.add(sun);
   scene.add(sun.target);
 
-  // Größe eines Schatten-Pixels in Metern (zum "Einrasten", siehe unten)
-  const texelSize = (area * 2) / (quality.shadowMapSize || 1024);
+  // Der Schatten-Bereich wandert (ab Phase 2) mit dem Spieler mit. Damit die
+  // Schattenkanten dabei nicht flimmern, rastet er auf ganze Schatten-Pixel ein.
+  // Wichtig: Das Raster liegt schräg (so wie die Sonne scheint). Darum wird der
+  // Punkt erst in die Sicht der Sonne gedreht, dort gerundet und zurückgedreht.
+  const texelSize = (area * 2) / (quality.shadowMapSize || 1024); // ein Schatten-Pixel in Metern
+  const sunRotation = new THREE.Matrix4().lookAt(sunDirection, new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
+  const sunRotationInverse = sunRotation.clone().invert();
   const snapped = new THREE.Vector3();
 
   function placeSun(focus) {
-    // Schatten-Bereich auf ganze Schatten-Pixel einrasten – sonst flimmern
-    // Schattenkanten, wenn sich der Bereich mit dem Spieler mitbewegt.
-    snapped.set(
-      Math.round(focus.x / texelSize) * texelSize,
-      0,
-      Math.round(focus.z / texelSize) * texelSize,
-    );
+    snapped.copy(focus).applyMatrix4(sunRotationInverse); // in Sonnen-Sicht
+    snapped.x = Math.round(snapped.x / texelSize) * texelSize;
+    snapped.y = Math.round(snapped.y / texelSize) * texelSize;
+    snapped.applyMatrix4(sunRotation); // zurück in die Welt
     sun.target.position.copy(snapped);
     sun.position.copy(snapped).addScaledVector(sunDirection, sunDistance);
     sun.target.updateMatrixWorld();

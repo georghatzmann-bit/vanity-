@@ -20,9 +20,14 @@ import { FpsDisplay } from './ui/fpsMeter.js';
 const quality = getQualityPreset();
 
 // Zeigt eine verständliche Fehlermeldung (Funktion steht in index.html).
+// Bei Fehlern mit eigener Erklärung (userFacing) steht unten nur der technische Grund.
 function fail(title, error) {
   console.error(title, error);
-  if (typeof window.showFatalError === 'function') {
+  if (typeof window.showFatalError !== 'function') return;
+  if (error && error.userFacing) {
+    const cause = error.cause ? String(error.cause.message || error.cause) : '';
+    window.showFatalError(title, { message: error.message, stack: cause });
+  } else {
     window.showFatalError(title, error);
   }
 }
@@ -42,6 +47,7 @@ function createRenderer(container) {
       '"Hardwarebeschleunigung verwenden" einschalten.',
     );
     err.cause = error;
+    err.userFacing = true;
     throw err;
   }
   renderer.shadowMap.enabled = quality.shadows;
@@ -87,13 +93,24 @@ function start() {
   const fps = CONFIG.graphics.showFps && fpsElement ? new FpsDisplay(fpsElement) : null;
   const focus = new THREE.Vector3(0, 0, 0); // Phase 1: Schatten rund um die Mitte
 
-  // Fenstergröße ändert sich (oder Fenster wandert auf einen anderen Bildschirm)
+  // Fenstergröße ändert sich
   window.addEventListener('resize', () => applySize(renderer, camera));
+  // Fenster wandert auf einen Bildschirm mit anderer Windows-Skalierung (z. B.
+  // Laptop 150 %, Monitor 100 %). Dann gibt es kein "resize", nur die
+  // Pixeldichte ändert sich – darauf extra hören.
+  function watchPixelRatio() {
+    const query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    query.addEventListener('change', () => {
+      applySize(renderer, camera);
+      watchPixelRatio();
+    }, { once: true });
+  }
+  watchPixelRatio();
 
   // Grafikkarte hat den Zustand verloren (selten, z. B. Treiber-Neustart)
   renderer.domElement.addEventListener('webglcontextlost', (event) => {
     event.preventDefault();
-    fail('Die Grafik wurde zurückgesetzt', new Error('Bitte die Seite neu laden (Taste F5).'));
+    fail('Die Grafik wurde zurückgesetzt', Object.assign(new Error('Bitte die Seite neu laden (Taste F5).'), { userFacing: true }));
   });
 
   // Für Tests und zum Nachschauen in der Browser-Konsole (F12)
@@ -142,7 +159,7 @@ function start() {
   document.body.classList.add('ready');
   console.info(
     `${CONFIG.game.name} ${CONFIG.game.version} gestartet – Three.js r${THREE.REVISION}, ` +
-    `Grafik "${CONFIG.graphics.quality}", Logik ${CONFIG.loop.tickRate}/s`,
+    `Grafik "${quality.name}", Logik ${CONFIG.loop.tickRate}/s`,
   );
 }
 

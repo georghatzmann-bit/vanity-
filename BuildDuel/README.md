@@ -7,16 +7,18 @@ Ein Browser-Spiel zum Schießen und Bauen aus der Schulter-Perspektive – angel
 ## Starten in 5 Schritten
 
 1. **Python installieren (nur einmal nötig).**
-   Öffne <https://www.python.org/downloads/> und klicke auf den gelben Knopf „Download Python“. Starte die heruntergeladene Datei.
+   Öffne <https://www.python.org/downloads/>. Klicke **nicht** auf den großen gelben Knopf, sondern direkt darunter auf den Link **„Or get the standalone installer for Python 3.…“**. Starte die heruntergeladene Datei.
    **Wichtig:** Unten im Fenster den Haken bei **„Add python.exe to PATH“** setzen. Dann auf „Install Now“ klicken.
    *Geklappt, wenn:* „Setup was successful“ erscheint.
+   (Hast du schon den „Python install manager“ vom gelben Knopf installiert? Das geht auch. Der allererste Start von `start.bat` dauert dann 1–2 Minuten, weil Python noch nachgeladen wird.)
 
 2. **Spiel herunterladen und entpacken.**
-   Lade die ZIP-Datei herunter: [BuildDuel als ZIP](https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/1v1-lol-rebuild-threejs-mzvao9.zip) (du musst bei GitHub angemeldet sein).
+   Lade die ZIP-Datei herunter: [BuildDuel als ZIP](https://github.com/georghatzmann-bit/vanity-/archive/refs/heads/claude/1v1-lol-rebuild-threejs-mzvao9.zip) (ohne Anmeldung).
    Rechtsklick auf die ZIP-Datei → „Alle extrahieren …“ → „Extrahieren“.
-   *Geklappt, wenn:* Du einen normalen Ordner siehst und darin den Ordner `BuildDuel`.
+   *Geklappt, wenn:* Es einen Ordner `vanity--claude-1v1-lol-rebuild-threejs-mzvao9` gibt, darin nochmal einen Ordner mit demselben Namen und darin den Ordner `BuildDuel`.
+   Die anderen Dateien daneben (z. B. `Jarvis.bat`) gehören zu einem anderen Projekt – einfach nicht beachten.
 
-3. **`start.bat` doppelklicken** (im Ordner `BuildDuel`).
+3. **`start.bat` doppelklicken** (im Ordner `BuildDuel`). Windows zeigt die Datei oft nur als **„start“** mit dem Typ „Windows-Batchdatei“ und einem Zahnrad-Symbol.
    Falls Windows „Der Computer wurde durch Windows geschützt“ zeigt: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken.
    *Geklappt, wenn:* Ein schwarzes Fenster „BuildDuel laeuft: http://localhost:8000/“ anzeigt.
 
@@ -37,13 +39,15 @@ Kein Python? `start.bat` benutzt auch Node.js, falls das installiert ist.
 - Eine **orange Figur** in Spielergröße (1,8 m). Der gelbe Ring zeigt, wo die Kopf-Zone beginnt (oberste 0,3 m = Kopfschuss).
 - Einen **blauen Kasten**: genau eine Bau-Zelle (4 × 4 × 4 m). So groß werden später Wände, Böden und Rampen.
 - Die Kamera dreht sich langsam. **Maus ziehen** = selbst drehen, **Mausrad** = näher/weiter.
-- Oben links: **FPS** (Bilder pro Sekunde, grün ab 55), die Zeit pro Bild und **„Logik 60/s“** – die Spiel-Logik rechnet immer genau 60-mal pro Sekunde, egal wie schnell dein Bildschirm ist.
+- Oben links: **FPS** (Bilder pro Sekunde, grün ab 55), die Zeit pro Bild und **„Logik 60/s“** – die Spiel-Logik rechnet immer 60-mal pro Sekunde, egal wie schnell dein Bildschirm ist (erst unter 5 Bildern pro Sekunde wird das Spiel langsamer, statt zu springen).
 
 ## Tests
 
 Während `start.bat` läuft, diese Adresse öffnen: <http://localhost:8000/tests/tests.html>
 
 *Geklappt, wenn:* oben grün „Alle … Tests bestanden“ steht. Rote Zeilen sagen genau, was nicht stimmt.
+
+Die letzte Gruppe „Vorgaben aus deinem Plan“ prüft Werte, die genau so in deinem Plan stehen (z. B. Schrotflinte max. 90 Schaden). Änderst du so einen Wert **absichtlich**, wird dort ein Test rot – das ist dann in Ordnung.
 
 ## Spielwerte ändern
 
@@ -52,6 +56,7 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 - Werte mit `// SCHÄTZUNG` hat das Original nie veröffentlicht – sie sind geschätzt und dürfen gern angepasst werden.
 - Werte mit `// belegt` stammen aus verlässlichen Quellen über das Original.
 - Nach dem Ändern: Datei speichern, im Browser **F5** drücken. Danach am besten die Tests öffnen – sie melden, wenn Werte nicht mehr zusammenpassen.
+- Kommazahlen immer mit **Punkt** schreiben (`8.4`, nicht `8,4`). Sonst meldet das Spiel „Tippfehler in src/config.js (Zeile …)“.
 
 **Ruckelt es?** In `src/config.js` die Zeile `quality: 'hoch'` auf `'mittel'` oder `'niedrig'` ändern.
 
@@ -62,7 +67,10 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 | „Bitte über start.bat starten“ | Du hast `index.html` direkt geöffnet. So blockiert der Browser die Spiel-Dateien. Tab schließen, `start.bat` doppelklicken. |
 | Schwarzes Fenster: „Weder Python noch Node.js gefunden“ | Schritt 1 machen. Klappt es danach immer noch nicht: PC neu starten und nochmal versuchen. |
 | Schwarzes Fenster: „Spiel-Dateien fehlen“ | Die ZIP-Datei wurde nicht ganz entpackt. Schritt 2 wiederholen („Alle extrahieren“). |
+| Der Browser öffnet sich nicht von selbst | Die Adresse aus dem schwarzen Fenster (z. B. `http://localhost:8000`) selbst in Chrome, Edge oder Firefox eintippen. |
 | „Port 8000 war belegt, darum jetzt Port 8001“ | Es läuft noch ein anderes `start.bat`-Fenster. Alle schließen und neu starten. |
+| „Windows sperrt Port 8000 …“ | Kein Problem, das Spiel läuft dann auf einem anderen Port (steht im Fenster). |
+| Kasten „Tippfehler in src/config.js (Zeile …)“ | In `config.js` an dieser Zeile nachsehen. Meist: Komma statt Punkt bei einer Zahl oder ein fehlendes Komma am Zeilenende. |
 | Kasten mit rotem Rand: „Dein Browser kann gerade keine 3D-Grafik …“ | Browser aktualisieren. In den Browser-Einstellungen „Hardwarebeschleunigung verwenden“ einschalten, Browser neu starten. |
 | FPS-Zahl ist orange oder rot | Grafik auf `'mittel'` stellen (siehe oben). Laptop ans Netzteil hängen. |
 | Irgendein anderer Kasten mit rotem Rand | Screenshot machen und an Claude schicken. |
