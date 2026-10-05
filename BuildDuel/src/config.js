@@ -1,0 +1,672 @@
+// =============================================================================
+// BuildDuel – ALLE Spielwerte an einem Ort
+// =============================================================================
+//
+// Hier stehen alle Zahlen des Spiels: Tempo, Schaden, Größen, Tasten, Zeiten.
+// Wenn sich etwas "falsch" anfühlt (z. B. Schrotflinte zu stark), änderst du
+// NUR diese Datei, speicherst und lädst die Seite im Browser neu (F5).
+//
+// So sind die Kommentare zu lesen:
+//   // SCHÄTZUNG  = Das Original (1v1.LOL) hat diesen Wert nie veröffentlicht.
+//                  Wir haben einen sinnvollen Wert geschätzt. Gerne anpassen.
+//   // belegt     = Steht so in verlässlichen Quellen über das Original.
+//   ohne Markierung = eigene Entscheidung für BuildDuel (Farben, Technik,
+//                  Bots usw.), die nichts mit dem Original zu tun hat.
+//
+// Einheiten: 1 Einheit = 1 Meter, Zeiten in Sekunden (s), Winkel in Grad (°),
+// Tempo in Metern pro Sekunde (m/s), außer es steht anders dabei.
+//
+// Hinweis: Die Werte werden beim Start "eingefroren" (Object.freeze). Das Spiel
+// kann sie also nicht aus Versehen verändern. Eigene Einstellungen aus dem Menü
+// (Tasten, Empfindlichkeit …) werden ab Phase 11 getrennt gespeichert und
+// überschreiben dann nur die Standardwerte von hier.
+// =============================================================================
+
+export const CONFIG = deepFreeze({
+  // ---------------------------------------------------------------------------
+  // Allgemein
+  // ---------------------------------------------------------------------------
+  game: {
+    name: 'BuildDuel', // Platzhalter-Name, keine Original-Namen benutzen
+    version: '0.1.0', // 0.1 = Phase 1
+    storageKeyPrefix: 'buildduel.', // Vorsilbe für alles, was im Browser gespeichert wird
+  },
+
+  // Spielschleife: Die Spiel-Logik rechnet immer genau 60-mal pro Sekunde,
+  // egal wie schnell der Bildschirm ist. Das Bild wird so oft gemalt, wie der
+  // Browser kann (requestAnimationFrame).
+  loop: {
+    tickRate: 60, // Logik-Schritte pro Sekunde
+    maxFrameTime: 0.25, // längere Pausen (z. B. Tab im Hintergrund) werden auf 0,25 s gekürzt
+    maxStepsPerFrame: 8, // nie mehr als 8 Logik-Schritte pro Bild, sonst ruckelt es sich fest
+  },
+
+  // ---------------------------------------------------------------------------
+  // Welt und Raster
+  // ---------------------------------------------------------------------------
+  world: {
+    gridCellSize: 4, // Bau-Raster: eine Zelle ist 4 x 4 m // SCHÄTZUNG
+    wallHeight: 4, // eine Wand ist 4 m hoch (= eine Stockwerk-Höhe) // SCHÄTZUNG
+    gravity: 25, // Schwerkraft in m/s² (Erde wäre 9,81 – Spiele sind "schneller") // SCHÄTZUNG
+    groundSize: 2000, // Kantenlänge der Boden-Fläche (größer als die Sichtweite → kein sichtbarer Rand)
+    killPlaneY: -50, // wer tiefer fällt, ist raus (Sicherheitsnetz)
+  },
+
+  // ---------------------------------------------------------------------------
+  // Spieler
+  // ---------------------------------------------------------------------------
+  player: {
+    maxHealth: 100, // belegt (mehrere Quellen: 100 Lebenspunkte)
+    maxShield: 100, // Schild nimmt Schaden zuerst // SCHÄTZUNG
+    healthRegen: 0, // kein automatisches Heilen
+
+    // Bewegung
+    walkSpeed: 6, // SCHÄTZUNG
+    crouchSpeed: 3, // SCHÄTZUNG
+    sprintSpeed: 7.5, // nur aktiv, wenn Ducken auf Strg liegt (siehe controls) // SCHÄTZUNG
+    jumpVelocity: 8.4, // Start-Tempo nach oben → Sprunghöhe ca. 1,4 m // SCHÄTZUNG
+    groundAcceleration: 60, // wie schnell man auf volles Tempo kommt // SCHÄTZUNG
+    airControl: 0.35, // Lenken in der Luft (0 = gar nicht, 1 = wie am Boden) // SCHÄTZUNG
+    maxWalkableSlope: 46, // bis zu dieser Steigung (°) kann man ohne Springen laufen – Rampen haben 45°
+    stepHeight: 0.35, // kleine Kanten (z. B. Bodenplatten) werden automatisch "hochgestiegen" // SCHÄTZUNG
+
+    // Fallschaden
+    fallDamage: {
+      safeHeight: 7, // bis 7 m Fall: kein Schaden // SCHÄTZUNG
+      damagePerMeter: 10, // je Meter darüber: 10 Schaden // SCHÄTZUNG
+      // Beim Absprung im Battle Royale (Freifall + Gleiter) gibt es keinen Fallschaden.
+    },
+
+    // Treffer-Form ("Hitbox"): eine Kapsel
+    hitbox: {
+      height: 1.8, // Gesamthöhe stehend
+      crouchHeight: 1.3, // Gesamthöhe geduckt // SCHÄTZUNG
+      radius: 0.4,
+      headZone: 0.3, // die obersten 0,3 m zählen als Kopf
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Kamera (Über-die-Schulter)
+  // ---------------------------------------------------------------------------
+  camera: {
+    distance: 3.2, // so weit hinter der Figur // SCHÄTZUNG
+    shoulderOffset: 0.6, // so weit nach rechts versetzt // SCHÄTZUNG
+    height: 1.6, // so hoch über den Füßen // SCHÄTZUNG
+    aimDistance: 1.8, // beim Zielen näher ran // SCHÄTZUNG
+    collisionPadding: 0.2, // Abstand zur Wand, wenn die Kamera sonst durch eine Wand ginge
+    fov: 70, // Sichtfeld normal (°) // SCHÄTZUNG
+    aimFov: 55, // Sichtfeld beim Zielen (°) // SCHÄTZUNG
+    sniperFov: 20, // Sichtfeld mit Zielfernrohr (°) // SCHÄTZUNG
+    fovChangeSpeed: 12, // wie schnell das Sichtfeld wechselt (höher = schneller)
+    near: 0.1, // näher als das wird nichts gezeichnet
+    minPitch: -80, // so weit kann man nach unten schauen (°)
+    maxPitch: 80, // so weit kann man nach oben schauen (°)
+  },
+
+  // Empfindlichkeit (Standardwerte – ab Phase 11 im Menü änderbar)
+  sensitivity: {
+    baseRadiansPerPixel: 0.0022, // Grund-Drehung pro Maus-Pixel
+    x: 1.0, // links/rechts
+    y: 1.0, // hoch/runter
+    aim: 0.7, // beim Zielen (Faktor)
+    sniper: 0.45, // mit Zielfernrohr (Faktor)
+    build: 1.0, // im Baumodus (Faktor)
+    edit: 1.0, // im Edit-Modus (Faktor)
+    invertY: false, // Y-Achse umkehren
+    gamepadLookSpeed: 3.2, // Controller: Drehung in Radiant pro Sekunde bei vollem Stick
+    gamepadDeadzone: 0.15, // Controller: kleine Stick-Bewegungen ignorieren
+  },
+
+  // ---------------------------------------------------------------------------
+  // Steuerung (Standard-Tasten)
+  // ---------------------------------------------------------------------------
+  // Tasten werden als "Tasten-Position" gespeichert (KeyboardEvent.code).
+  // Wichtig für deutsche Tastaturen (QWERTZ): Der Code 'KeyZ' ist die Taste
+  // UNTEN LINKS neben X (auf deutschen Tastaturen steht dort "Y"). 'KeyY' ist
+  // die Taste OBEN, auf der bei dir "Z" steht. Beide bauen eine Wand – so
+  // passt es auf jeder Tastatur (das Original erlaubte auch Z und Y).
+  // Maus: 'Mouse0' = links, 'Mouse1' = Mausrad drücken, 'Mouse2' = rechts,
+  // 'WheelUp' / 'WheelDown' = Mausrad drehen.
+  controls: {
+    keyboard: {
+      moveForward: ['KeyW'], // belegt
+      moveBack: ['KeyS'], // belegt
+      moveLeft: ['KeyA'], // belegt
+      moveRight: ['KeyD'], // belegt
+      jump: ['Space'], // belegt
+      crouch: ['ShiftLeft'], // belegt (Shift = ducken)
+      primary: ['Mouse0'], // schießen bzw. Bauteil setzen // belegt
+      secondary: ['Mouse2'], // zielen bzw. im Edit "Felder zurücksetzen" // belegt
+      buildWall: ['KeyZ', 'KeyY'], // belegt (Z, auf QWERTZ auch Y)
+      buildFloor: ['KeyX'], // Quellen widersprechen sich bei Boden/Rampe – hier festgelegt
+      buildRamp: ['KeyC'], // Quellen widersprechen sich bei Boden/Rampe – hier festgelegt
+      buildRoof: ['KeyV'], // belegt
+      pickaxe: ['KeyF'], // belegt
+      slot1: ['Digit1'], // Schrotflinte
+      slot2: ['Digit2'], // Sturmgewehr
+      slot3: ['Digit3'], // Scharfschützengewehr
+      slot4: ['Digit4'], // Maschinenpistole / Pistole
+      slot5: ['Digit5'], // Heil-Item
+      reloadOrRotate: ['KeyR'], // nachladen; im Baumodus: Bauteil drehen // belegt
+      edit: ['KeyG'], // belegt
+      use: ['KeyE'], // Türen öffnen, Gegenstände aufheben // belegt
+      emote: ['KeyB'], // belegt
+      switchMaterial: ['KeyQ', 'Mouse1'], // im Baumodus: Holz → Stein → Metall
+      nextItem: ['WheelDown'], // belegt (Mausrad)
+      prevItem: ['WheelUp'], // belegt (Mausrad)
+      scoreboard: ['Tab'],
+      pause: ['Escape'],
+    },
+    // Tasten, die absichtlich doppelt belegt sein dürfen, weil sie je nach
+    // Situation etwas anderes tun (die Tests prüfen den Rest auf Konflikte).
+    allowedSharedKeys: [],
+    // Ducken auf Strg legen? Dann ist Shift = Sprinten.
+    // ACHTUNG: Strg + W schließt im Browser den Tab! Darum ist das aus.
+    crouchOnCtrl: false,
+    crouchCtrlKey: 'ControlLeft',
+    sprintKeyWhenCrouchOnCtrl: 'ShiftLeft',
+    crouchToggle: false, // false = halten, true = einmal drücken zum Umschalten
+    editOnRelease: false, // Edit bestätigen, sobald G losgelassen wird
+    resetEditAfterConfirm: false, // Edit-Auswahl nach dem Bestätigen leeren
+
+    // Controller (Standard-Belegung nach "Standard Gamepad", Xbox-Namen)
+    // Knopf-Nummern: 0=A 1=B 2=X 3=Y 4=LB 5=RB 6=LT 7=RT 8=Back 9=Start
+    //                10=linker Stick drücken 11=rechter Stick drücken
+    //                12=Steuerkreuz hoch 13=runter 14=links 15=rechts
+    gamepad: {
+      jump: 0, // A / Kreuz // belegt
+      toggleBuildMode: 1, // B / Kreis
+      reload: 2, // X / Quadrat
+      use: 3, // Y / Dreieck
+      prevWeapon: 4, // L1
+      nextWeapon: 5, // R1
+      aim: 6, // L2
+      fire: 7, // R2 // belegt
+      scoreboard: 8,
+      pause: 9,
+      crouchOrRotate: 11, // R3 // belegt
+      edit: 13, // Steuerkreuz unten
+      emote: 12, // Steuerkreuz hoch
+      switchMaterial: 14, // Steuerkreuz links
+      // Im Baumodus haben die Schultertasten eine andere Aufgabe:
+      buildMode: {
+        wall: 7, // R2
+        ramp: 6, // L2
+        floor: 5, // R1
+        roof: 4, // L1
+      },
+      aimAssist: {
+        enabled: true, // nur für Controller, im Menü abschaltbar
+        slowdownFactor: 0.7, // Drehung um 30 % langsamer, wenn ein Gegner nah am Fadenkreuz ist
+        radiusDeg: 4, // "nah am Fadenkreuz" = innerhalb von 4°
+        maxDistance: 60, // nur Gegner bis 60 m
+        // Keine automatische Ausrichtung auf Gegner – nur "Klebe-Effekt".
+      },
+    },
+
+    // Handy / Touch (optional, Phase 11). Positionen in % vom Bildschirm.
+    touch: {
+      autoShoot: false, // schießt automatisch, wenn das Fadenkreuz auf einem Gegner ist // belegt (Option im Original)
+      stickRadiusPx: 60,
+      layout: {
+        stick: { x: 14, y: 72 },
+        fire: { x: 88, y: 62 },
+        jump: { x: 92, y: 80 },
+        crouch: { x: 80, y: 86 },
+        edit: { x: 78, y: 72 },
+        reload: { x: 82, y: 50 },
+        buildWall: { x: 6, y: 44 },
+        buildFloor: { x: 13, y: 40 },
+        buildRamp: { x: 20, y: 44 },
+        buildRoof: { x: 27, y: 48 },
+      },
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Material (zum Bauen)
+  // ---------------------------------------------------------------------------
+  materials: {
+    order: ['wood', 'stone', 'metal'], // Reihenfolge beim Wechseln mit Q
+    names: { wood: 'Holz', stone: 'Stein', metal: 'Metall' },
+    costPerPiece: 10, // SCHÄTZUNG
+    maxPerType: 999, // SCHÄTZUNG
+    // Aufbau-Zeit: neue Teile starten mit wenig Leben und "wachsen" auf 100 %.
+    // Das Teil blockiert Schüsse aber sofort.
+    startHealthFraction: 0.1, // SCHÄTZUNG
+    buildTime: { wood: 1.0, stone: 2.0, metal: 3.0 }, // Sekunden bis 100 % // SCHÄTZUNG
+    // Sammeln mit der Spitzhacke (Battle Royale)
+    harvestPerHit: { min: 5, max: 10 }, // SCHÄTZUNG
+    harvestSources: { tree: 'wood', rock: 'stone', car: 'metal', metalFence: 'metal' },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Bauen
+  // ---------------------------------------------------------------------------
+  building: {
+    pieceTypes: ['wall', 'floor', 'ramp', 'roof'],
+    pieceNames: { wall: 'Wand', floor: 'Boden', ramp: 'Rampe', roof: 'Dach' },
+    // Lebenspunkte bei 100 % Aufbau
+    maxHealth: {
+      wall: { wood: 150, stone: 300, metal: 500 }, // SCHÄTZUNG
+      floor: { wood: 140, stone: 280, metal: 460 }, // SCHÄTZUNG
+      ramp: { wood: 140, stone: 280, metal: 460 }, // SCHÄTZUNG
+      roof: { wood: 140, stone: 280, metal: 460 }, // SCHÄTZUNG
+    },
+    placeCooldown: 0.05, // Mindestabstand zwischen zwei Platzierungen (schnelles "Spammen" geht)
+    maxPlaceCells: 1, // höchstens 1 Zelle vor der eigenen Zelle
+    maxPieces: 3000, // mehr Bauteile gleichzeitig gibt es nicht (Leistung)
+    pieceThickness: 0.2, // Dicke von Wand/Boden/Dach (m) // SCHÄTZUNG
+    rampSlopeDeg: 45, // Steigung der Rampe
+    collapseDelay: 0.1, // so lange nach Zerstörung fallen lose Teile weg
+    collapseAnimTime: 0.4, // Dauer der kleinen Zerfalls-Animation
+    // Edit-Raster: Spalten x Reihen
+    editGrid: {
+      wall: { cols: 3, rows: 3 },
+      floor: { cols: 2, rows: 2 },
+      ramp: { cols: 2, rows: 2 },
+      roof: { cols: 2, rows: 2 },
+    },
+    // Tür = die mittleren unteren 2 Felder einer Wand (Feld-Nummern 0..8,
+    // oben links = 0, unten rechts = 8)
+    wallDoorCells: [4, 7],
+    previewColorOk: '#4DA6FF', // Vorschau: blau = geht
+    previewColorBlocked: '#FF4D4D', // Vorschau: rot = geht nicht
+    previewOpacity: 0.35,
+  },
+
+  // ---------------------------------------------------------------------------
+  // Waffen – alle Werte sind geschätzt (das Original hat keine Zahlen veröffentlicht)
+  // ---------------------------------------------------------------------------
+  // Schadens-Abfall ("falloff"): bis "fullUntil" Meter voller Schaden, danach
+  // wird es weniger, ab "minAt" Metern gilt nur noch "minFactor" (z. B. 0,2 = 20 %).
+  weapons: {
+    switchTime: 0.25, // Waffen-Wechsel dauert 0,25 s // SCHÄTZUNG
+    aimMoveFactor: 0.7, // beim Zielen läuft man mit 70 % Tempo // SCHÄTZUNG
+    // Treffer-Prüfung für Strahl-Waffen: erst von der Kamera-Mitte, dann prüfen,
+    // ob von der Waffe aus der Weg frei ist (kein Schießen um Ecken).
+    muzzleCheck: true,
+
+    shotgun: {
+      name: 'Pump-Schrotflinte',
+      slot: 1,
+      kind: 'hitscan', // sofortiger Strahl
+      pellets: 10, // SCHÄTZUNG
+      damagePerPellet: 9, // 10 x 9 = max. 90 // SCHÄTZUNG
+      headMultiplier: 1.5, // SCHÄTZUNG
+      fireInterval: 0.8, // 1 Schuss alle 0,8 s // SCHÄTZUNG
+      magazine: 5, // SCHÄTZUNG
+      reloadMode: 'perShell', // Schuss für Schuss nachladen
+      reloadTime: 4.5, // für ein ganz leeres Magazin // SCHÄTZUNG
+      reloadTimePerShell: 0.9, // 4,5 s / 5 Schuss // SCHÄTZUNG
+      falloff: { fullUntil: 5, minAt: 25, minFactor: 0.2 }, // SCHÄTZUNG
+      maxRange: 40, // SCHÄTZUNG
+      structureDamage: 60, // an Bauteilen, gesamt pro Schuss // SCHÄTZUNG
+      spreadDeg: 6, // fester Kegel // SCHÄTZUNG
+      crosshair: 'circle',
+    },
+
+    ar: {
+      name: 'Sturmgewehr',
+      slot: 2,
+      kind: 'hitscan',
+      damage: 30, // SCHÄTZUNG
+      headMultiplier: 1.5, // SCHÄTZUNG
+      fireRate: 5.5, // Schuss pro Sekunde // SCHÄTZUNG
+      automatic: true,
+      magazine: 30, // SCHÄTZUNG
+      reloadTime: 2.2, // SCHÄTZUNG
+      falloff: { fullUntil: 30, minAt: 60, minFactor: 0.6 }, // SCHÄTZUNG
+      maxRange: 300,
+      structureDamage: 25, // SCHÄTZUNG
+      spread: { baseDeg: 0.6, movingMultiplier: 2, aimMultiplier: 0.4 }, // SCHÄTZUNG
+      tracer: true, // Leuchtspur
+      crosshair: 'cross',
+    },
+
+    smg: {
+      name: 'Maschinenpistole',
+      slot: 4,
+      kind: 'hitscan',
+      damage: 17, // SCHÄTZUNG
+      headMultiplier: 1.5, // SCHÄTZUNG
+      fireRate: 12, // SCHÄTZUNG
+      automatic: true,
+      magazine: 30, // SCHÄTZUNG
+      reloadTime: 2.0, // SCHÄTZUNG
+      falloff: { fullUntil: 12, minAt: 30, minFactor: 0.5 }, // SCHÄTZUNG
+      maxRange: 150,
+      structureDamage: 18, // SCHÄTZUNG
+      spread: { baseDeg: 1.2, movingMultiplier: 1.6, aimMultiplier: 0.6 }, // SCHÄTZUNG
+      tracer: false,
+      crosshair: 'cross',
+    },
+
+    sniper: {
+      name: 'Scharfschützengewehr',
+      slot: 3,
+      kind: 'projectile', // echtes Geschoss mit Flugzeit
+      damage: 105, // SCHÄTZUNG
+      headMultiplier: 2.5, // SCHÄTZUNG
+      fireInterval: 1.6, // SCHÄTZUNG
+      magazine: 1, // SCHÄTZUNG
+      reloadTime: 2.5, // SCHÄTZUNG
+      projectileSpeed: 300, // m/s // SCHÄTZUNG
+      projectileGravity: 4, // "leichter Fall" in m/s² // SCHÄTZUNG
+      projectileMaxLifetime: 3, // danach verschwindet das Geschoss
+      structureDamage: 50, // SCHÄTZUNG
+      spread: { hipDeg: 4, aimedDeg: 0 }, // aus der Hüfte ungenau, mit Zielfernrohr genau // SCHÄTZUNG
+      scopeOverlay: true,
+      crosshair: 'dot',
+    },
+
+    pistol: {
+      name: 'Pistole',
+      slot: 4, // teilt sich Platz 4 mit der Maschinenpistole
+      kind: 'hitscan',
+      damage: 24, // SCHÄTZUNG
+      headMultiplier: 1.5, // SCHÄTZUNG
+      fireRate: 6, // SCHÄTZUNG
+      automatic: true, // laut Fan-Videos automatisch
+      magazine: 16, // SCHÄTZUNG
+      reloadTime: 1.5, // SCHÄTZUNG
+      falloff: { fullUntil: 20, minAt: 45, minFactor: 0.6 }, // SCHÄTZUNG
+      maxRange: 150,
+      structureDamage: 20, // SCHÄTZUNG
+      spread: { baseDeg: 0.9, movingMultiplier: 1.8, aimMultiplier: 0.5 }, // SCHÄTZUNG
+      tracer: false,
+      crosshair: 'cross',
+    },
+
+    grenadeLauncher: {
+      name: 'Granatwerfer',
+      slot: 4,
+      kind: 'projectile',
+      explosionDamage: 70, // in der Mitte der Explosion // SCHÄTZUNG
+      explosionRadius: 4, // SCHÄTZUNG
+      edgeDamageFactor: 0.3, // am Rand der Explosion nur noch 30 % // SCHÄTZUNG
+      damageThroughWalls: true, // trifft auch hinter Wänden
+      fireInterval: 1.0, // SCHÄTZUNG
+      magazine: 6, // SCHÄTZUNG
+      reloadTime: 3.0, // SCHÄTZUNG
+      projectileSpeed: 35, // Bogenflug // SCHÄTZUNG
+      projectileGravity: 20, // SCHÄTZUNG
+      fuseTime: 3, // explodiert spätestens nach 3 s // SCHÄTZUNG
+      structureDamage: 150, // SCHÄTZUNG
+      crosshair: 'cross',
+    },
+
+    pickaxe: {
+      name: 'Spitzhacke',
+      kind: 'melee',
+      playerDamage: 20, // SCHÄTZUNG
+      structureDamage: 50, // SCHÄTZUNG
+      swingInterval: 0.5, // SCHÄTZUNG
+      range: 2, // SCHÄTZUNG
+    },
+
+    // Munitions-Vorrat (Reserve) je Waffe, wenn ein Modus nicht "unendlich" hat
+    defaultReserveAmmo: {
+      shotgun: 15, // SCHÄTZUNG
+      ar: 120, // SCHÄTZUNG
+      smg: 120, // SCHÄTZUNG
+      sniper: 8, // SCHÄTZUNG
+      pistol: 64, // SCHÄTZUNG
+      grenadeLauncher: 12, // SCHÄTZUNG
+    },
+  },
+
+  // Seltenheiten (nur Farbe + kleiner Schadens-Bonus im Battle Royale)
+  rarities: {
+    order: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
+    common: { name: 'Gewöhnlich', color: '#A0A7AE', damageMultiplier: 1.0 }, // SCHÄTZUNG
+    uncommon: { name: 'Ungewöhnlich', color: '#5BC74A', damageMultiplier: 1.05 }, // SCHÄTZUNG
+    rare: { name: 'Selten', color: '#3E8BFF', damageMultiplier: 1.1 }, // SCHÄTZUNG
+    epic: { name: 'Episch', color: '#A64DFF', damageMultiplier: 1.15 }, // SCHÄTZUNG
+    legendary: { name: 'Legendär', color: '#F5A623', damageMultiplier: 1.2 }, // SCHÄTZUNG
+  },
+
+  // Heil-Items (Battle Royale) – Platz 5
+  healing: {
+    moveSpeedFactor: 0.5, // beim Benutzen langsamer laufen // SCHÄTZUNG
+    cancelOnWeaponSwitch: true,
+    bandage: { name: 'Verband', heals: 'health', amount: 15, maxTo: 75, useTime: 3, stack: 15 }, // SCHÄTZUNG
+    medkit: { name: 'Medikit', heals: 'health', amount: 100, maxTo: 100, useTime: 8, stack: 3 }, // SCHÄTZUNG
+    smallShield: { name: 'Kleiner Schildtrank', heals: 'shield', amount: 25, maxTo: 50, useTime: 2, stack: 6 }, // SCHÄTZUNG
+    bigShield: { name: 'Großer Schildtrank', heals: 'shield', amount: 50, maxTo: 100, useTime: 4, stack: 3 }, // SCHÄTZUNG
+  },
+
+  // ---------------------------------------------------------------------------
+  // Bots (Gegner-KI)
+  // ---------------------------------------------------------------------------
+  bots: {
+    defaultDifficulty: 'medium',
+    difficulties: {
+      easy: { name: 'Leicht', reactionMs: 600, aimErrorDeg: 4, buildsPerSecond: 1 },
+      medium: { name: 'Mittel', reactionMs: 350, aimErrorDeg: 2, buildsPerSecond: 2 },
+      hard: { name: 'Schwer', reactionMs: 200, aimErrorDeg: 1, buildsPerSecond: 4 },
+    },
+    // Zustände: Suchen -> Annähern -> Kämpfen -> Deckung -> Heilen -> Fliehen (vor der Zone)
+    states: ['search', 'approach', 'fight', 'cover', 'heal', 'flee'],
+    wallWhenHitChance: 0.7, // wenn getroffen: mit 70 % Chance eine Wand vor sich
+    lowHealthThreshold: 40, // darunter: Box bauen und heilen
+    hearingRange: 60, // hören Schüsse im Umkreis von 60 m
+    sightRange: 150, // sehen (ohne Wände dazwischen) bis 150 m
+    // Waffenwahl nach Abstand
+    weaponRanges: { shotgunBelow: 8, sniperAbove: 50 }, // dazwischen: Sturmgewehr
+    names: ['Bot_1', 'Bot_2', 'Bot_3', 'Bot_4', 'Bot_5', 'Bot_6', 'Bot_7', 'Bot_8', 'Bot_9',
+      'Bot_10', 'Bot_11', 'Bot_12', 'Bot_13', 'Bot_14', 'Bot_15', 'Bot_16', 'Bot_17', 'Bot_18',
+      'Bot_19', 'Bot_20', 'Bot_21', 'Bot_22', 'Bot_23'],
+  },
+
+  // ---------------------------------------------------------------------------
+  // Spielmodi
+  // ---------------------------------------------------------------------------
+  modes: {
+    duel: {
+      name: 'Duell 1v1',
+      arenaSize: 80, // 80 x 80 m
+      spawnDistance: 40, // Abstand der beiden Startpunkte
+      roundsToWin: 5, // wer zuerst 5 Runden gewinnt
+      roundPause: 3, // Pause zwischen Runden (s)
+      startHealth: 100,
+      startShield: 100,
+      startMaterials: { wood: 500, stone: 500, metal: 500 }, // SCHÄTZUNG
+      loadout: ['shotgun', 'ar', 'sniper', 'smg'], // SCHÄTZUNG
+      infiniteReserveAmmo: true, // SCHÄTZUNG
+      trophiesWin: 25,
+      trophiesLoss: -15,
+    },
+
+    battleRoyale: {
+      name: 'Battle Royale',
+      islandSize: 600, // 600 x 600 m
+      totalPlayers: 10, // du + 9 Bots; Quellen nennen 10, 16 oder 24 – CrazyGames sagt "bis zu 10"
+      minPlayers: 2,
+      maxPlayers: 24,
+      startHealth: 100,
+      startShield: 0,
+      startMaterials: { wood: 0, stone: 0, metal: 0 },
+      // Absprung
+      jumpVehicleHeight: 120, // Flughöhe des fliegenden Objekts // SCHÄTZUNG
+      jumpVehicleSpeed: 30, // SCHÄTZUNG
+      freefallSpeed: 30, // Fall-Tempo im freien Fall // SCHÄTZUNG
+      freefallMoveSpeed: 15, // seitliches Lenken im freien Fall // SCHÄTZUNG
+      gliderDeployHeight: 30, // ab 30 m über dem Boden öffnet der Gleiter automatisch
+      gliderFallSpeed: 6, // SCHÄTZUNG
+      gliderMoveSpeed: 14, // SCHÄTZUNG
+      // Sturm-Zone: 5 Phasen. wait = Warten, shrink = Schrumpfen (s), dps = Schaden pro Sekunde draußen
+      storm: {
+        initialRadius: 430, // deckt am Anfang die ganze Insel ab
+        phases: [
+          { wait: 60, shrink: 45, dps: 1, endRadius: 200 }, // SCHÄTZUNG
+          { wait: 45, shrink: 40, dps: 2, endRadius: 120 }, // SCHÄTZUNG
+          { wait: 40, shrink: 35, dps: 5, endRadius: 65 }, // SCHÄTZUNG
+          { wait: 30, shrink: 30, dps: 8, endRadius: 30 }, // SCHÄTZUNG
+          { wait: 20, shrink: 30, dps: 10, endRadius: 0 }, // SCHÄTZUNG
+        ],
+        // Die neue Zone liegt immer komplett in der alten.
+      },
+      chest: {
+        materialAmount: 30, // je Kiste von einer zufälligen Sorte // SCHÄTZUNG
+        ammoMagazines: 2, // Munition für 2 Magazine // SCHÄTZUNG
+        healItemChance: 0.5, // SCHÄTZUNG
+      },
+      rarityWeights: { common: 40, uncommon: 30, rare: 18, epic: 9, legendary: 3 }, // SCHÄTZUNG
+      trophiesByPlacement: [40, 25, 15, 10, 5], // Platz 1..5, danach 0
+      trophiesPerKill: 5,
+      trophiesEarlyOut: -10, // als Erster/Zweiter raus
+    },
+
+    boxFight: {
+      name: 'Box Fight',
+      teamSizes: [1, 2], // 1v1 oder 2v2 (mit Bot-Partner)
+      roundsToWin: 5,
+      roundPause: 3,
+      startHealth: 100,
+      startShield: 100,
+      startMaterials: { wood: 200, stone: 200, metal: 200 },
+      loadout: ['shotgun', 'smg'],
+      infiniteReserveAmmo: true,
+      boxGapCells: 0, // die zwei Boxen stehen direkt nebeneinander
+    },
+
+    zoneWars: {
+      name: 'Zone Wars',
+      totalPlayers: 6, // du + 5 Bots
+      mapSize: 160,
+      roundDuration: 90, // ganze Runde ca. 90 s
+      startHealth: 100,
+      startShield: 100,
+      startMaterials: { wood: 300, stone: 300, metal: 300 },
+      randomLoadout: true,
+      storm: {
+        initialRadius: 80,
+        moving: true, // Zone wandert und schrumpft
+        phases: [
+          { wait: 10, shrink: 20, dps: 5, endRadius: 50 },
+          { wait: 8, shrink: 18, dps: 8, endRadius: 25 },
+          { wait: 6, shrink: 16, dps: 12, endRadius: 8 },
+          { wait: 4, shrink: 8, dps: 20, endRadius: 0 },
+        ],
+      },
+    },
+
+    justBuild: {
+      name: 'Freies Bauen',
+      infiniteMaterials: true,
+      showPiecesPerSecond: true,
+    },
+
+    aimTrainer: {
+      name: 'Aim Trainer',
+      duration: 60, // Länge einer Runde (s)
+      targetLifetime: 1.5, // Zielscheiben verschwinden nach 1,5 s
+      spawnInterval: 0.7,
+      targetRadius: 0.5,
+      headRadius: 0.18,
+      minDistance: 8,
+      maxDistance: 35,
+    },
+
+    deathmatch: {
+      name: 'Deathmatch',
+      totalPlayers: 8, // du + 7 Bots
+      killsToWin: 20,
+      respawnDelay: 3,
+      spawnProtection: 2, // 2 s unverwundbar nach dem Wiederbeleben
+      startHealth: 100,
+      startShield: 50,
+      startMaterials: { wood: 300, stone: 300, metal: 300 },
+      loadout: ['shotgun', 'ar', 'sniper', 'smg'],
+      infiniteReserveAmmo: true,
+    },
+
+    // Später / optional
+    zombies: { name: 'Zombies', enabled: false },
+    zeroBuilds: { name: 'Ohne Bauen', enabled: false },
+    team4v4: { name: 'Team 4v4', enabled: false },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Optik
+  // ---------------------------------------------------------------------------
+  visuals: {
+    colors: {
+      skyTop: '#3A8DDE', // Himmel oben
+      skyHorizon: '#7EC8F2', // Himmel am Horizont
+      grass: '#5DBB4C',
+      desert: '#E3C47A',
+      water: '#3FB7D9',
+      storm: '#8E3FD8',
+      wood: '#D9A066',
+      stone: '#9C9C9C',
+      metal: '#7D8FA3',
+      damageBody: '#FFFFFF', // Schadenszahl: Körper
+      damageHead: '#FFD93D', // Schadenszahl: Kopf
+      damageShield: '#4FC3F7', // Schadenszahl: Schild
+    },
+    stormOpacity: 0.35,
+    fogStartFraction: 0.45, // Nebel beginnt bei 45 % der Sichtweite
+    // Sonne: Richtung, aus der das Licht kommt (wird normalisiert)
+    sunDirection: { x: -0.55, y: 1.0, z: 0.35 },
+    sunIntensity: 2.6,
+    hemiIntensity: 1.6, // weiches Licht von Himmel und Boden (Comic-Look: eher hell)
+    shadowArea: 70, // Schatten werden im Umkreis von 70 m berechnet
+    groundGridLines: true, // feine Linien im 4-m-Bauraster auf dem Boden
+    groundGridOpacity: 0.07,
+  },
+
+  // Grafik-Qualität (ab Phase 11 im Menü wählbar)
+  graphics: {
+    quality: 'hoch', // 'niedrig' | 'mittel' | 'hoch'  ← bei Ruckeln auf 'mittel' stellen
+    showFps: true,
+    presets: {
+      niedrig: { shadows: false, shadowMapSize: 512, maxPixelRatio: 1, resolutionScale: 0.75, antialias: false, viewDistance: 250 },
+      mittel: { shadows: true, shadowMapSize: 1024, maxPixelRatio: 1.25, resolutionScale: 1, antialias: true, viewDistance: 450 },
+      hoch: { shadows: true, shadowMapSize: 2048, maxPixelRatio: 2, resolutionScale: 1, antialias: true, viewDistance: 700 },
+    },
+  },
+
+  // Ton (Lautstärken 0..1)
+  audio: {
+    master: 0.8,
+    effects: 1.0,
+    music: 0.5,
+    refDistance: 5, // ab hier wird es leiser
+    maxDistance: 120, // weiter weg hört man nichts mehr
+    rolloff: 1.2,
+  },
+
+  // Fortschritt (Pokale, Münzen, Pass)
+  progression: {
+    passTiers: 20,
+    xpPerTier: 1000,
+    xpPerMatch: 150,
+    xpPerKill: 50,
+    xpPerWin: 300,
+    coinsPerWin: 50,
+    coinsPerMatch: 10,
+  },
+
+  // Hilfen für die Entwicklung
+  debug: {
+    showReferenceObjects: true, // Phase 1: Maßstab-Figur und eine Bau-Zelle anzeigen
+    previewOrbitSpeed: 0.12, // Phase 1: so schnell dreht sich die Vorschau-Kamera (Radiant/s)
+  },
+});
+
+// Friert ein Objekt samt allen Unter-Objekten ein (nichts kann es mehr ändern).
+function deepFreeze(obj) {
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) deepFreeze(value);
+  }
+  return Object.freeze(obj);
+}
+
+// Liefert die aktuelle Grafik-Voreinstellung (z. B. CONFIG.graphics.presets.hoch).
+// Unbekannter Name → 'mittel', damit das Spiel trotzdem startet.
+export function getQualityPreset(name = CONFIG.graphics.quality) {
+  return CONFIG.graphics.presets[name] ?? CONFIG.graphics.presets.mittel;
+}

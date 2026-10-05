@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>BuildDuel</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="src/ui/styles.css">
+  <!-- "three" zeigt auf die lokale Kopie in /lib → läuft auch ohne Internet -->
+  <script type="importmap">
+    { "imports": { "three": "./lib/three.module.js" } }
+  </script>
+</head>
+<body>
+  <!-- Hier landet das 3D-Bild -->
+  <div id="game"></div>
+
+  <!-- Anzeigen über dem 3D-Bild -->
+  <div id="ui">
+    <div id="fps" class="fps" hidden></div>
+    <div id="info" class="panel info">
+      <div class="info-title">Phase 1 · Leere Szene</div>
+      <div class="info-row"><span class="swatch swatch-figure"></span>Figur: 1,8 m groß (gelber Ring = Kopf-Zone)</div>
+      <div class="info-row"><span class="swatch swatch-cell"></span>Kasten: eine Bau-Zelle, 4 × 4 × 4 m</div>
+      <div class="info-hint">Maus ziehen = Kamera drehen · Mausrad = Zoom</div>
+    </div>
+  </div>
+
+  <!-- Ladebildschirm (verschwindet, sobald das erste Bild fertig ist) -->
+  <div id="loading" class="loading">
+    <div class="loading-title">BuildDuel</div>
+    <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+    <div id="loading-tip" class="loading-tip">Wer höher steht, gewinnt meistens.</div>
+  </div>
+
+  <!-- Fehler-Anzeige (normalerweise unsichtbar) -->
+  <div id="error" class="error-screen" hidden>
+    <div class="panel error-panel">
+      <div id="error-title" class="error-title">Fehler</div>
+      <div id="error-text" class="error-text"></div>
+      <pre id="error-details" class="error-details"></pre>
+      <div class="error-hint">Tipp: Mach einen Screenshot von dieser Meldung und schick ihn an Claude.</div>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="error-screen"><div class="panel error-panel">
+      <div class="error-title">JavaScript ist ausgeschaltet</div>
+      <div class="error-text">Bitte JavaScript im Browser einschalten.</div>
+    </div></div>
+  </noscript>
+
+  <!-- Läuft vor dem Spiel: Fehler verständlich anzeigen + Tipps beim Laden -->
+  <script>
+    (function () {
+      function show(title, text, details) {
+        // Nur die ERSTE Meldung zeigen – sie ist meistens die eigentliche Ursache.
+        if (document.body.classList.contains('has-error')) return;
+        var box = document.getElementById('error');
+        document.getElementById('error-title').textContent = title;
+        document.getElementById('error-text').textContent = text || '';
+        document.getElementById('error-details').textContent = details || '';
+        box.hidden = false;
+        document.body.classList.add('has-error');
+      }
+
+      // Wird auch von src/main.js benutzt.
+      window.showFatalError = function (title, error) {
+        var text = error && error.message ? error.message : String(error || '');
+        var details = error && error.stack ? error.stack : '';
+        show(title, text, details);
+      };
+
+      // Fall 1: index.html wurde direkt per Doppelklick geöffnet (file://)
+      if (location.protocol === 'file:') {
+        show(
+          'Bitte über start.bat starten',
+          'Du hast index.html direkt geöffnet. So blockiert der Browser aus Sicherheitsgründen ' +
+          'die Spiel-Dateien. Schließ diesen Tab und starte das Spiel mit einem Doppelklick auf ' +
+          'start.bat im Ordner BuildDuel. Dann öffnet sich der Browser von selbst.',
+          'Adresse jetzt: ' + location.href + '\nRichtig wäre: http://localhost:8000'
+        );
+        return;
+      }
+
+      // Fall 2: unerwartete Fehler im Spiel
+      window.addEventListener('error', function (event) {
+        show('Unerwarteter Fehler', event.message,
+          (event.filename || '') + (event.lineno ? ':' + event.lineno : '') +
+          (event.error && event.error.stack ? '\n\n' + event.error.stack : ''));
+      });
+      window.addEventListener('unhandledrejection', function (event) {
+        var reason = event.reason || {};
+        show('Unerwarteter Fehler', reason.message || String(reason), reason.stack || '');
+      });
+
+      // Fall 3: Spiel lädt nach 15 Sekunden immer noch nicht
+      setTimeout(function () {
+        if (document.body.classList.contains('ready') || document.body.classList.contains('has-error')) return;
+        show('Das Spiel lädt nicht',
+          'Das dauert ungewöhnlich lange. Ist das schwarze Fenster von start.bat noch offen? ' +
+          'Ein sehr alter Browser kann auch der Grund sein (bitte Chrome, Edge oder Firefox aktualisieren).',
+          '');
+      }, 15000);
+
+      // Wechselnde Tipps auf dem Ladebildschirm
+      var tips = [
+        'Wer höher steht, gewinnt meistens.',
+        'Eine Wand vor dir fängt Schüsse sofort ab.',
+        'Holz baut sich am schnellsten auf.',
+        'Alle Spielwerte stehen in src/config.js.',
+      ];
+      var i = 0;
+      var timer = setInterval(function () {
+        if (document.body.classList.contains('ready')) { clearInterval(timer); return; }
+        i = (i + 1) % tips.length;
+        document.getElementById('loading-tip').textContent = tips[i];
+      }, 2500);
+    })();
+  </script>
+
+  <!-- Das eigentliche Spiel. onerror: eine Datei fehlt oder der Server liefert sie falsch aus. -->
+  <script type="module" src="src/main.js"
+    onerror="window.showFatalError && window.showFatalError('Spiel-Dateien fehlen', new Error('src/main.js oder lib/three.module.js konnte nicht geladen werden. Ist der Ordner vollständig entpackt? Bitte mit start.bat starten.'))"></script>
+</body>
+</html>

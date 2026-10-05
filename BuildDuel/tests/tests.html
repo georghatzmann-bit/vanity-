@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BuildDuel – Tests</title>
+  <link rel="icon" href="data:,">
+  <script type="importmap">
+    { "imports": { "three": "../lib/three.module.js" } }
+  </script>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card: #171a21;
+      --text: #e8eaf0;
+      --dim: #a9afbd;
+      --good: #4cd964;
+      --bad: #ff4d4d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 48px;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    }
+    main { max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    h1 { margin: 0; font-size: 22px; }
+    .hint { color: var(--dim); font-size: 13px; margin: 0; }
+    .summary {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .summary.ok { background: rgba(76, 217, 100, 0.15); color: var(--good); }
+    .summary.fail { background: rgba(255, 77, 77, 0.15); color: var(--bad); }
+    .group { background: var(--card); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+    .group h2 { margin: 0 0 8px; font-size: 15px; }
+    .group.fail h2 { color: var(--bad); }
+    ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .test { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+    .badge {
+      flex: none;
+      min-width: 64px;
+      text-align: center;
+      padding: 0 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .test.ok .badge { background: rgba(76, 217, 100, 0.18); color: var(--good); }
+    .test.fail .badge { background: rgba(255, 77, 77, 0.18); color: var(--bad); }
+    .why { width: 100%; padding-left: 72px; color: var(--bad); font-size: 13px; }
+    .loading { color: var(--dim); }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <h1>BuildDuel – automatische Tests</h1>
+      <p class="hint">Grün = in Ordnung, Rot = da stimmt etwas nicht (die Zeile darunter sagt, was).
+        Seite neu laden (F5) führt alle Tests nochmal aus.</p>
+    </div>
+    <div id="output" class="loading">Tests laufen …</div>
+  </main>
+
+  <script>
+    // Zeigt einen Lade-Fehler an (Test-Datei fehlt, Tippfehler im Code …)
+    function showLoadError(message) {
+      if (window.__TEST_RESULTS__) return;
+      var out = document.getElementById('output');
+      out.className = '';
+      out.innerHTML = '<div class="summary fail">Tests konnten nicht geladen werden: ' +
+        String(message).replace(/</g, '&lt;') + '</div>';
+      window.__TEST_RESULTS__ = { passed: 0, failed: 1, total: 1, done: true,
+        failures: [{ group: 'Laden', test: 'Test-Dateien', message: String(message) }] };
+    }
+    window.addEventListener('error', function (event) { showLoadError(event.message); });
+    setTimeout(function () {
+      showLoadError('Nach 15 Sekunden immer noch kein Ergebnis. Läuft start.bat?');
+    }, 15000);
+  </script>
+
+  <script type="module" onerror="showLoadError('Eine Test-Datei fehlt oder konnte nicht geladen werden (Details: Taste F12, Reiter Konsole).')">
+    import { run } from './runner.js';
+    // Jede Test-Datei meldet ihre Tests beim Laden an.
+    import './config.test.js';
+    import './loop.test.js';
+    import './fpsMeter.test.js';
+    import './random.test.js';
+
+    run(document.getElementById('output'));
+  </script>
+</body>
+</html>
