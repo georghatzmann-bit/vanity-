@@ -49,7 +49,8 @@ export default {
      * (backend may also mark it source "velox"). Those are not foreign, are unchecked by default and
      * are not counted as Fremd-Tweaks.
      */
-    const isOwn = (it) => it.source === 'velox' || (it.source === 'catalog' && it.tweakId && ctx.status(it.tweakId) === 'applied');
+    // The backend decides from its journals what VELOX set itself (source "velox"); the same rule feeds state.foreignCount.
+    const isOwn = (it) => it.source === 'velox';
     const foreignOf = (items) => items.filter(it => !isOwn(it));
     function publishCount() {
       const d = ctx.cache.detweak;

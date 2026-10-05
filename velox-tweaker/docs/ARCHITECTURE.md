@@ -255,8 +255,10 @@ selected, journal everything.
   "services": [ { "name": "SysMain", "default": "Automatic", "label": "SysMain (Superfetch)", "group": "Dienste" } ],
   "tasks": [ { "path": "\\Microsoft\\Windows\\...", "default": true, "label": "…", "group": "Aufgaben" } ],
   "commands": [
-    { "id": "power-defaults", "label": "Energiepläne auf Standard", "desc": "…", "defaultOn": true,
-      "needs": "none", "script": "powercfg -restoredefaultschemes" }
+    { "id": "dns-flush", "label": "DNS-Cache leeren", "desc": "…", "defaultOn": true,
+      "needs": "none", "risk": "safe", "script": "ipconfig /flushdns" },
+    { "id": "power-defaults", "label": "Energiepläne auf Standard", "desc": "…", "defaultOn": false,
+      "needs": "none", "risk": "moderate", "script": "powercfg -restoredefaultschemes" }
   ]
 }
 ```
@@ -269,8 +271,26 @@ selected, journal everything.
 - `services[]`: only listed when current start type ≠ `default` **and** the service exists. Only services
   whose default is certain for both Win10 and Win11 (or with `defaultWin11`).
 - `tasks[]`: only listed when current state ≠ `default`.
-- `commands[]`: optional extra resets shown as checkboxes (`defaultOn`), never silently run.
+- `commands[]`: optional extra resets shown as checkboxes (`defaultOn`), never silently run. Only
+  harmless commands are `defaultOn: true` (today `dns-flush` and `trim-defaults`). Optional `risk`
+  (`safe` default | `moderate`): `moderate` marks a command that changes system-wide behaviour (power
+  plans reset, TCP globals, Defender, memory management, DEP, page file, network stack, policies …);
+  the UI shows a "Mittel" badge. `tools/Validate-Catalog.ps1` accepts only `safe|moderate`.
 - The detweak scan also includes every catalog `toggle` tweak whose status is not `default`.
+- **Source of a scan item**: `detweak` (from this list), `catalog` (a catalog tweak another tool
+  changed) or `velox` (a catalog tweak VELOX itself set). `velox` is decided from the journals in
+  `backups\` of the current mode (Testmodus journals never count for the real PC and vice versa): every
+  value of the tweak that is not at the Windows default must equal the `after` of the newest journal
+  entry for that target, and that entry must come from a catalog tweak (not a detweak reset, a
+  restore or a game boost). A value another tool set to the same number without a journal stays
+  `catalog`. `velox` items are listed (they can be reset) but are **not foreign**.
+- `current` / `default` of a catalog item are the real values ("0" → "1", "Deaktiviert" →
+  "Automatisch", "nicht gesetzt") when the tweak changes exactly one value; otherwise the status text
+  ("Angepasst" / "Teilweise angepasst" / "Von anderem Tool geändert" → "Windows-Standard").
+- **foreignCount** = scan items whose source is not `velox`. It is stored with the foreign keys in
+  `state` (`state.foreignCount`, `profile.foreignCount`) and kept in sync without a rescan: a detweak
+  job removes what it reset or applied, an `apply`/`revert` job removes the tweaks it changed
+  (journalled, `ok`). It stays `null` until the first detweak scan.
 
 ---
 
@@ -303,7 +323,7 @@ When ready the backend prints exactly one line to stdout: `VELOX_READY http://12
 
 Security (MUST):
 - Every `/api/*` request needs header `X-Velox-Token: <token>`; else 401.
-  Exception: `POST /api/shutdown?t=<token>` (sendBeacon cannot set headers).
+  Exception: `POST /api/shutdown?t=<token>&s=<session>` (sendBeacon cannot set headers).
 - `Host` header must be `127.0.0.1:<port>` or `localhost:<port>`; else 403 (DNS rebinding).
 - If an `Origin` header is present it must be `http://127.0.0.1:<port>` or `http://localhost:<port>`; else 403.
 - `OPTIONS` → 403, never send CORS headers.
@@ -319,17 +339,27 @@ with `history.replaceState`.
 |---|---|---|
 | `GET /api/bootstrap` | – | `{ app, mode, categories, tweaks, presets, settings, state, busy }` |
 | `GET /api/state` | – | `state` |
-| `POST /api/jobs` | `{ type, params }` | `{ jobId }` or 409 `{ error:"busy", jobId }` |
+| `POST /api/jobs` | `{ type, params }` | `{ jobId }` or 409 `{ error:"busy", jobId, type }` (type = the running job's type) |
 | `GET /api/jobs/<id>?since=<n>` | – | `job` |
 | `POST /api/jobs/<id>/cancel` | – | `{ ok }` |
 | `POST /api/settings` | partial settings | `{ settings }` |
 | `POST /api/claude/key` | `{ key }` | `{ hasKey: true }` |
 | `DELETE /api/claude/key` | – | `{ hasKey: false }` |
-| `GET /api/backups` | – | `{ backups: [ { id, label, kind, created, count, simulate, restorable } ] }` |
+| `GET /api/backups` | – | `{ backups: [ { id, label, kind, created, count, tweakCount, simulate, restorable } ] }` — `count` = journal entries (values), `tweakCount` = distinct catalog tweak ids in the journal |
 | `GET /api/backups/<id>` | – | full journal |
 | `POST /api/open` | `{ target }` | `{ ok }` — whitelist only: `ms-settings:*` URIs listed in Server.ps1, `backups` (opens folder) |
-| `POST /api/heartbeat` | – | `{ ok, busy }` |
-| `POST /api/shutdown` | – | `{ ok }` (exits after 4 s unless a heartbeat/bootstrap arrives) |
+| `POST /api/heartbeat?s=<session>` | – | `{ ok, busy }` |
+| `POST /api/shutdown?t=<token>&s=<session>` | – | `{ ok, closing }` (see below) |
+
+**Window sessions.** Every UI window has a random session id (`ui/js/api.js`) and sends it as `?s=`
+with every heartbeat (every 3 s) and with the shutdown beacon on `pagehide`. The backend keeps the
+last heartbeat per session. A shutdown beacon from session X ends VELOX after a 4 s grace period
+only if **no other** session sent a heartbeat within the grace period before the beacon (then the
+answer is `closing:false` and nothing is scheduled) and none arrives during it (a heartbeat of
+another window, or a bootstrap, cancels). X's own heartbeat that arrives < 1 s after its beacon was
+already in flight and does not cancel; a later one (the page came back from the back/forward cache)
+does. Without `s` the old rule applies: the beacon always schedules the exit and any heartbeat
+cancels it. A running job delays the exit until it ends; 150 s without any heartbeat also ends VELOX.
 
 Objects:
 
@@ -343,9 +373,12 @@ settings = { accent:"violet"|"blue"|"cyan"|"green"|"pink"|"orange", motion:"full
              confirmRisky:true, autoRestorePoint:true,
              claude:{ hasKey:false, model:"claude-opus-5-5" }, games:[...boosted games] }
 state    = { statuses:{ <tweakId>: "applied"|"default"|"partial"|"custom"|"na"|"unknown" },
-             profile: profile|null, lastScan: iso|null, needs:{ explorer:false, reboot:false, logoff:false } }
+             profile: profile|null, lastScan: iso|null, needs:{ explorer:false, reboot:false, logoff:false },
+             foreignCount: n|null }   // foreign tweaks (§5), also in profile.foreignCount; null before the first detweak scan
 job      = { id, type, status:"running"|"done"|"error"|"cancelled", progress:0..1, step:"German text",
              log:[ { i, t, level:"info"|"ok"|"warn"|"error", msg } ], result:object|null, error:string|null }
+             // log and error are user-visible German text: never PowerShell stack traces or error
+             // positions ("at <ScriptBlock>, …", "At line:…") - those go to logs\velox-<date>.log only
 ```
 
 Status meaning: `applied` all actions in tweak state; `default` all at Windows default; `partial`
@@ -361,8 +394,8 @@ mixed; `custom` a value is neither (set by another tool); `na` not applicable/no
 | `revert` | `{ ids, label }` | same |
 | `restorepoint` | `{ label }` | `{ ok, message }` |
 | `restore` | `{ backupId }` | `{ restored, failed, errors:[…] }` |
-| `detweak-scan` | `{}` | `{ items:[ { key, source:"detweak"|"catalog", tweakId, label, group, current, default } ], commands:[…] }` |
-| `detweak` | `{ keys, commands, thenApply:[ids], restorePoint }` | `{ reset, failed, applied, backupId, needs }` |
+| `detweak-scan` | `{}` | `{ items:[ { key, source:"detweak"\|"catalog"\|"velox", tweakId, label, group, current, default } ], commands:[ { id, label, desc, defaultOn, needs, risk:"safe"\|"moderate" } ], foreignCount }` |
+| `detweak` | `{ keys, commands, thenApply:[ids], restorePoint }` | `{ reset, resetValues, commandsRun, failed, applied, backupId, needs, errors:[…], foreignCount }` — `resetValues` = values/keys reset, `commandsRun` = commands run, `reset` = both (kept for older UIs) |
 | `advisor` | `{ goal, text }` | `advisorResult` |
 | `claude` | `{ goal, text, allowRisky }` | `advisorResult` + `{ model, usage }` |
 | `clean-scan` | `{}` | `{ items:[ { id, bytes, files } ] }` |
@@ -376,6 +409,25 @@ mixed; `custom` a value is neither (set by another tool); `na` not applicable/no
 | `reboot` | `{}` | `{ ok }` (`shutdown /r /t 10`; simulate: logged only) |
 
 `goal` ∈ `gaming`, `competitive`, `balanced`, `privacy`, `laptop`, `streaming`, `fivem`.
+
+Local advisor (core/Advisor.ps1, deterministic):
+- **Recommended set** per goal: candidates (goal tags, free-text keywords, hardware rules; `moderate`
+  only from the goal's preset, for this PC's hardware, on request or when it fixes a finding) ranked
+  by priority, free-text match, finding fix, preset membership, goal relevance, impact, risk, id;
+  conflicting tweaks removed (an applied one keeps its slot); capped per goal: balanced 25, gaming 40,
+  competitive 55, privacy 50, laptop 30, streaming 40, fivem 45. The plan = the not yet applied part,
+  so it never exceeds the cap and applying it empties it.
+- **Reasons**: German, per goal tag and category (a network tweak in a gaming plan talks about ping),
+  then the tweak's own description; the hardware is named only when it matters (vendor-specific
+  tweak, SSD/HDD tweak, memory tweak with ≤ 16 GB RAM).
+- **Score** = 50 + 50 × weighted share of the recommended set applied (weight = impact, half for side
+  benefits) − finding penalties (bad 5, warn 3, info 1, at most 12; "no-backups" costs nothing). A
+  stock Windows PC lands around 35–55, a fully applied plan around 85–95. 100 only when every
+  recommended tweak is applied and no finding other than good news is left (else at most 99).
+  `scoreAfter` = the same with the plan applied and findings fixed by a plan tweak gone. A finding
+  whose fix tweak VELOX has applied since the last scan is not shown any more.
+- Texts use German keywords, German quotes („…“) and de-DE numbers ("3,3 GB"). The "foreign tweaks"
+  finding uses `foreignCount` (never VELOX's own tweaks).
 
 ```text
 advisorResult = { engine:"local"|"claude", score:0..100, scoreAfter:0..100, summary:"German",

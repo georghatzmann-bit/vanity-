@@ -568,6 +568,18 @@ Test-Case 'realcatalog' 'echter Katalog: jeder Toggle apply -> applied, revert -
     Assert-True ($bad.Count -eq 0) ("alle Round-Trips ok, aber: " + ($bad -join ' || '))
 }
 
+Test-Case 'realcatalog' 'Detweak listet keine Katalog-Tweaks, deren Ziel schon der Windows-Standard ist' {
+    $realData = Join-Path $AppRoot 'data'
+    if (-not (Test-Path -LiteralPath (Join-Path $realData 'tweaks'))) { Add-Note 'data/tweaks fehlt - übersprungen.'; return }
+    $ctx = New-TestContext -DataDir $realData
+    if ($ctx.Catalog.errors.Count -gt 0) { Add-Note 'Echter Katalog lädt nicht sauber - übersprungen.'; return }
+    $noops = @($ctx.Catalog.tweaks | Where-Object { (Get-VxTweakKind $_) -eq 'toggle' -and (Test-TweakIsNoop $_) } | ForEach-Object { [string]$_.id })
+    $scan = Get-VxDetweakScan
+    $listed = @($scan.items | Where-Object { $_.source -ne 'detweak' } | ForEach-Object { [string]$_.tweakId })
+    $wrong = @($noops | Where-Object { $listed -contains $_ })
+    Assert-True ($wrong.Count -eq 0) ('am Windows-Standard, trotzdem als Abweichung gelistet: ' + ($wrong -join ', '))
+}
+
 # ==================================================================== detweak
 Test-Case 'detweak' 'Fremd-Tweaks finden, gezielt zurücksetzen, Journal stellt sie wieder her' {
     $ctx = New-TestContext -Seed
@@ -586,12 +598,21 @@ Test-Case 'detweak' 'Fremd-Tweaks finden, gezielt zurücksetzen, Journal stellt 
     $prio = @($scan.items | Where-Object { $_.key -match 'Win32PrioritySeparation' })[0]
     Assert-True ($prio.current -match '38' -and $prio.default -match '^2' -and $prio.source -eq 'detweak' -and $prio.label) 'current/default/label'
     Assert-True (@($scan.commands).Count -eq 2 -and $scan.commands[0].id -eq 'power-defaults') 'Befehle gelistet'
-    Assert-Equal $keys.Count ([int]$ctx.State.profile.foreignCount) 'foreignCount im Profil'
+    Assert-True ($scan.commands[0].risk -eq 'safe' -and $scan.commands[1].risk -eq 'moderate') 'Befehle mit risk'
+    $own = @($scan.items | Where-Object { $_.key -eq 'tweak|latency.timer-bcd' })[0]
+    Assert-Equal 'velox' $own.source 'von VELOX angewendeter Tweak hat source velox'
+    Assert-Equal 'catalog' (@($scan.items | Where-Object { $_.key -eq 'tweak|services.sysmain-off' })[0]).source 'fremd gesetzter Katalog-Tweak bleibt catalog'
+    Assert-Equal ($keys.Count - 1) ([int]$ctx.State.profile.foreignCount) 'foreignCount im Profil ohne eigene Tweaks'
+    Assert-Equal ($keys.Count - 1) ([int](Get-VxStateDto).foreignCount) 'foreignCount oben im State'
+    Assert-Equal ($keys.Count - 1) ([int]$scan.foreignCount) 'foreignCount im Scan-Ergebnis'
     $before = Get-SimSnapshot
     $prioBefore = (Get-VxRegValue 'HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation').value
     $res = Invoke-VxDetweakJob ([pscustomobject]@{ keys = $keys; commands = @('power-defaults'); thenApply = @('gaming.gamedvr-off'); restorePoint = $true })
     Assert-Equal 0 $res.failed ('keine Fehler: ' + ($res.errors -join '; '))
     Assert-Equal ($keys.Count + 1) $res.reset 'alles zurückgesetzt (+ Befehl)'
+    Assert-True ($res.resetValues -eq $keys.Count -and $res.commandsRun -eq 1) ('Werte und Befehle getrennt gezählt: {0}/{1}' -f $res.resetValues, $res.commandsRun)
+    Assert-Equal 0 ([int](Get-VxStateDto).foreignCount) 'foreignCount nach Detweak 0 (neu angewendeter Tweak ist eigener)'
+    Assert-Equal 0 ([int]$res.foreignCount) 'foreignCount im Detweak-Ergebnis'
     Assert-Equal 1 $res.applied 'danach angewendet'
     Assert-True ($null -ne $res.backupId -and $res.needs.reboot) 'Backup + Neustart nötig'
     Assert-Equal 2 ([int](Get-VxRegValue 'HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation').value) 'Standard 2'
@@ -607,6 +628,62 @@ Test-Case 'detweak' 'Fremd-Tweaks finden, gezielt zurücksetzen, Journal stellt 
     $after = Get-SimSnapshot
     Assert-True ($before -eq $after) ('Zustand wie vor dem Detweak: ' + (Compare-Snapshot $before $after))
     Assert-True (Test-VxRegKey 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\GTA5.exe\PerfOptions') 'IFEO-Baum zurück'
+}
+
+Test-Case 'detweak' 'Eigene Tweaks (Journal): source velox, echte Werte, foreignCount nach apply/revert synchron' {
+    $ctx = New-TestContext -Seed
+    $hp = 'HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.hags-on') }) 'apply'
+    # another tool sets a catalog tweak to exactly VELOX's value - no journal, so it is foreign
+    Set-VxRegValue 'HKCU\Software\Microsoft\GameBar' 'AutoGameModeEnabled' 'DWord' 1
+    Update-VxStatuses
+    Assert-Equal 'applied' (Get-Status 'gaming.gamemode-on') 'fremd auf VELOX-Wert gesetzt'
+    $scan = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    $byKey = @{}; foreach ($it in $scan.items) { $byKey[$it.key] = $it }
+    $hags = $byKey['tweak|gaming.hags-on']
+    Assert-True ($null -ne $hags -and $hags.source -eq 'velox') 'per VELOX angewendet = velox'
+    Assert-True ($hags.current -eq '2' -and $hags.default -eq 'nicht gesetzt') ('echte Werte statt Status-Text: {0} -> {1}' -f $hags.current, $hags.default)
+    Assert-Equal 'catalog' $byKey['tweak|gaming.gamemode-on'].source 'gleicher Wert ohne Journal = fremd'
+    $sys = $byKey['tweak|services.sysmain-off']
+    Assert-True ($sys.current -eq 'Deaktiviert' -and $sys.default -eq 'Automatisch') ('Dienst-Werte: {0} -> {1}' -f $sys.current, $sys.default)
+    $multi = @($scan.items | Where-Object { $_.source -ne 'detweak' -and @((Get-VxTweak $_.tweakId).actions).Count -gt 1 })
+    foreach ($m in $multi) { Assert-True ($m.default -eq 'Windows-Standard') "mehrere Werte -> Status-Text ($($m.key))" }
+    $foreign = @($scan.items | Where-Object { $_.source -ne 'velox' }).Count
+    Assert-Equal $foreign ([int](Get-VxStateDto).foreignCount) 'foreignCount = alles außer velox'
+    # another tool changes VELOX's value afterwards -> foreign again
+    Set-VxRegValue $hp 'HwSchMode' 'DWord' 7
+    Update-VxStatuses
+    $scan2 = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    Assert-Equal 'catalog' (@($scan2.items | Where-Object { $_.key -eq 'tweak|gaming.hags-on' })[0]).source 'nach fremder Änderung wieder fremd'
+    $n2 = [int](Get-VxStateDto).foreignCount
+    Assert-Equal ($foreign + 1) $n2 'foreignCount +1'
+    # apply/revert keep foreignCount in sync: VELOX sets it again -> own; revert -> default
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.hags-on') }) 'apply'
+    Assert-Equal ($n2 - 1) ([int](Get-VxStateDto).foreignCount) 'nach apply nicht mehr fremd'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('services.sysmain-off') }) 'revert'
+    Assert-Equal ($n2 - 2) ([int](Get-VxStateDto).foreignCount) 'nach revert nicht mehr fremd'
+    Assert-Equal ($n2 - 2) ([int]$ctx.State.profile.foreignCount) 'Profil ebenso'
+    $scan3 = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    Assert-Equal ($n2 - 2) ([int]$scan3.foreignCount) 'neuer Scan bestätigt die Buchführung'
+    # Testmodus journals never explain the real PC (and vice versa)
+    foreach ($f in @(Get-ChildItem -LiteralPath $ctx.BackupDir -Filter '*.json')) {
+        $txt = [IO.File]::ReadAllText($f.FullName) -replace '"simulate":true', '"simulate":false'
+        [IO.File]::WriteAllText($f.FullName, $txt)
+    }
+    $scan4 = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    Assert-Equal 0 @($scan4.items | Where-Object { $_.source -eq 'velox' }).Count 'Journale des anderen Modus zählen nicht'
+}
+
+Test-Case 'detweak' 'Sicherungen: tweakCount (verschiedene Tweaks) neben count (Werte)' {
+    $ctx = New-TestContext
+    $res = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.gamedvr-off', 'gaming.mmcss-games', 'gaming.hags-on'); label = 'Drei' }) 'apply'
+    $b = @(Get-VxBackupList | Where-Object { $_.id -eq $res.backupId })[0]
+    Assert-True ($null -ne $b -and $b.tweakCount -eq 3 -and $b.count -eq 6) ('tweakCount 3 / count 6: {0} / {1}' -f $b.tweakCount, $b.count)
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = 'C:\Games\X\x.exe'; priority = $true })
+    $g = @(Get-VxBackupList | Where-Object { $_.kind -eq 'game' })[0]
+    Assert-True ($null -ne $g -and $g.tweakCount -eq 0 -and $g.count -ge 1) 'Spiele-Boost hat keine Tweak-IDs'
+    $ids = @(Get-VxBackupIds -Oldest)
+    Assert-Equal $res.backupId $ids[0] 'älteste zuerst'
 }
 
 # ==================================================================== advisor
@@ -687,6 +764,73 @@ Test-Case 'advisor' 'Desktop vs. Laptop, Ziele, Hardware-Regeln, Befunde, determ
     $ctx.State.profile = Get-VxProfile
     $afterRun = Invoke-VxAdvisor 'gaming' '' $ctx.State.profile
     Assert-True ($afterRun.score -gt $before.score) ("Score steigt nach dem Anwenden ({0} -> {1})" -f $before.score, $afterRun.score)
+}
+
+Test-Case 'advisor' 'Smart-Analyse (echter Katalog): Plan-Größe je Ziel, Score-Eichung, 100 nur komplett, Texte deutsch' {
+    $realData = Join-Path $AppRoot 'data'
+    if (-not (Test-Path -LiteralPath (Join-Path $realData 'tweaks'))) { Add-Note 'echter Katalog fehlt - Advisor-Eichung übersprungen.'; return }
+    $ctx = New-TestContext -DataDir $realData
+    $desk = $ctx.State.profile
+    Update-VxStatuses
+    $caps = @{ balanced = 25; gaming = 40; competitive = 55; privacy = 50; laptop = 30; streaming = 40; fivem = 45 }
+    foreach ($goal in @($caps.Keys | Sort-Object)) {
+        $r = Invoke-VxAdvisor $goal '' $desk
+        $n = @($r.plan).Count
+        Assert-True ($n -gt 0 -and $n -le $caps[$goal]) ("Plan-Größe {0}: {1} (max {2})" -f $goal, $n, $caps[$goal])
+        Assert-True ($r.summary -match '„.+“' -and $r.summary -notmatch "'") ("deutsche Anführungszeichen ($goal): " + $r.summary)
+        foreach ($i in $r.plan) {
+            $t = Get-VxTweak $i.id
+            Assert-True ($i.reason.Length -gt [string]$t.desc.Length) "Begründung erklärt mehr als die Beschreibung ($($i.id))"
+            if ([string]$t.category -eq 'network' -and @('gaming', 'competitive', 'fivem') -contains $goal -and (@($t.tags) -contains 'ping' -or @($t.tags) -contains 'network')) {
+                Assert-True ($i.reason -match 'Ping|WLAN|Netzwerk') "Netzwerk-Tweak mit Netzwerk-Begründung ($goal, $($i.id)): $($i.reason)"
+            }
+            if (@($t.tags) -contains 'nvidia') { Assert-True ($i.reason -notmatch 'an Microsoft' -or [string]$t.desc -match 'Microsoft') "NVIDIA-Tweak nicht Microsoft zugeschrieben ($($i.id))" }
+        }
+        Assert-Equal (ConvertTo-VxJson $r) (ConvertTo-VxJson (Invoke-VxAdvisor $goal '' $desk)) "deterministisch ($goal)"
+    }
+    # stock Windows: gaming lands in 35..55, the plan promises 85..95
+    $g = Invoke-VxAdvisor 'gaming' '' $desk
+    Assert-True ($g.score -ge 35 -and $g.score -le 55) ("Serien-Windows Gaming-Score 35-55: {0}" -f $g.score)
+    Assert-True ($g.scoreAfter -ge 85 -and $g.scoreAfter -le 95) ("mit Plan 85-95: {0}" -f $g.scoreAfter)
+    $clean = ConvertTo-VxHashtable (ConvertFrom-VxJsonText (ConvertTo-VxJson $desk))
+    $clean.display.currentHz = $clean.display.maxHz; $clean.ram.configuredMHz = 3600; $clean.security.vbs = $false; $clean.security.hvci = $false
+    $clean.uptimeHours = 5; $clean.tempMB = 100
+    $cs = Invoke-VxAdvisor 'gaming' '' $clean
+    Assert-True ($cs.score -ge 35 -and $cs.score -le 55) ("sauberer Serien-PC 35-55: {0}" -f $cs.score)
+    # applying the plan reaches the promised score; hardware/BIOS findings keep it below 100
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @($g.plan | ForEach-Object { $_.id }) }) 'apply'
+    $g2 = Invoke-VxAdvisor 'gaming' '' $desk
+    Assert-Equal 0 @($g2.plan).Count 'Plan komplett angewendet'
+    Assert-True ([math]::Abs($g2.score - $g.scoreAfter) -le 1 -and $g2.score -ge 85 -and $g2.score -le 95) ("Score nach dem Plan {0} = versprochen {1}" -f $g2.score, $g.scoreAfter)
+    Assert-True (@($g2.findings | ForEach-Object { $_.id }) -notcontains 'power-plan' -and @($g2.findings | ForEach-Object { $_.id }) -notcontains 'game-dvr') 'gelöste Befunde verschwinden'
+    # 100 only with every recommended tweak applied and no open finding
+    $c2 = Invoke-VxAdvisor 'gaming' '' $clean
+    Assert-True ($c2.score -eq 100 -and @($c2.plan).Count -eq 0) ("alles angewendet, keine Befunde -> 100: {0} / {1}" -f $c2.score, ((@($c2.findings | Where-Object { $_.severity -ne 'good' }) | ForEach-Object { $_.id }) -join ','))
+    $clean.uptimeHours = 400
+    $c3 = Invoke-VxAdvisor 'gaming' '' $clean
+    Assert-True ($c3.score -le 99) ("offener Befund -> nie 100: {0}" -f $c3.score)
+    $clean.uptimeHours = 5
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @($g.plan[0].id) }) 'revert'
+    $c4 = Invoke-VxAdvisor 'gaming' '' $clean
+    Assert-True ($c4.score -le 99 -and @($c4.plan).Count -eq 1) ("ein Tweak offen -> nie 100: {0}" -f $c4.score)
+    # free text: German keywords, de-DE numbers
+    $k = Invoke-VxAdvisor 'gaming' 'Es ruckelt und der Ping ist hoch' $desk
+    Assert-True ($k.summary -match 'Ruckler' -and $k.summary -match 'Ping' -and $k.summary -notmatch 'stutter|network') ('deutsche Stichworte: ' + $k.summary)
+    $tf = @($g.findings | Where-Object { $_.id -eq 'temp-files' })[0]
+    Assert-True ($tf.title -match '^3,3 GB') ('de-DE Zahl: ' + $tf.title)
+}
+
+Test-Case 'advisor' 'Smart-Analyse: Fremd-Tweak-Befund zählt VELOX-eigene Tweaks nicht' {
+    $ctx = New-TestContext
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('latency.timer-bcd', 'gaming.hags-on') }) 'apply'
+    $null = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    Assert-Equal 0 ([int]$ctx.State.profile.foreignCount) 'nur eigene Tweaks -> 0'
+    $r = Invoke-VxAdvisor 'gaming' '' $ctx.State.profile
+    Assert-True (@($r.findings | Where-Object { $_.id -eq 'foreign' }).Count -eq 0) 'kein Fremd-Tweak-Befund'
+    Set-VxRegValue 'HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl' 'Win32PrioritySeparation' 'DWord' 38
+    $null = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    $f = @((Invoke-VxAdvisor 'gaming' '' $ctx.State.profile).findings | Where-Object { $_.id -eq 'foreign' })[0]
+    Assert-True ($null -ne $f -and $f.title -match '^1 Einstellung von') ('ein Fremd-Tweak: ' + $f.title)
 }
 
 # ==================================================================== claude
@@ -987,6 +1131,7 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         Assert-True ($w10.applicable -eq $false -and $w10.naReason) 'nicht anwendbar mit Grund'
         Assert-True ($bs.settings.claude.hasKey -eq $false -and $bs.settings.claude.model -eq 'claude-opus-5-5' -and $bs.settings.accent -eq 'violet') 'settings'
         Assert-True ($null -ne $bs.state.needs -and $null -ne $bs.state.PSObject.Properties['statuses']) 'state'
+        Assert-True ($null -ne $bs.state.PSObject.Properties['foreignCount']) 'state.foreignCount vorhanden'
         Assert-True (@($bs.presets).Count -eq 3 -and @($bs.categories).Count -ge 10) 'presets/categories'
         # ---- jobs
         $r = Invoke-Http 'POST' ($base + 'api/jobs') @{ type = 'bogus'; params = @{} } $H
@@ -997,6 +1142,7 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         Assert-Equal 200 $r1.status 'scan gestartet'
         $r2 = Invoke-Http 'POST' ($base + 'api/jobs') @{ type = 'advisor'; params = @{ goal = 'gaming' } } $H
         Assert-True ($r2.status -eq 409 -and $r2.json.error -eq 'busy' -and $r2.json.jobId -eq $r1.json.jobId) ('zweiter Job -> 409 busy (' + $r2.status + ')')
+        Assert-Equal 'scan' $r2.json.type '409 nennt den Job-Typ'
         $hb = Invoke-Http 'POST' ($base + 'api/heartbeat') $null $H
         Assert-True ($hb.json.ok -eq $true -and $hb.json.busy -eq $true) 'heartbeat meldet busy'
         $scan = Wait-Job $base $H $r1.json.jobId
@@ -1019,6 +1165,7 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         $bl = Invoke-Http 'GET' ($base + 'api/backups') $null $H
         $b = @($bl.json.backups | Where-Object { $_.id -eq $ap.result.backupId })[0]
         Assert-True ($null -ne $b -and $b.kind -eq 'apply' -and $b.label -eq 'E2E' -and $b.count -ge 2 -and $b.simulate -eq $true -and $b.restorable -eq $true) 'Backup-Liste'
+        Assert-Equal 2 ([int]$b.tweakCount) 'Backup-Liste: tweakCount'
         $bd = Invoke-Http 'GET' ($base + 'api/backups/' + $b.id) $null $H
         Assert-True ($bd.status -eq 200 -and @($bd.json.entries).Count -eq $b.count -and $bd.json.entries[0].before) 'Journal abrufbar'
         $bt = Invoke-Http 'GET' ($base + 'api/backups/..%2F..%2Fsettings') $null $H
@@ -1030,6 +1177,8 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         # ---- detweak + advisor + more job types
         $dt = Start-JobAndWait $base $H 'detweak-scan' @{}
         Assert-True (@($dt.result.items | Where-Object { $_.key -match 'Win32PrioritySeparation' }).Count -eq 1 -and @($dt.result.commands).Count -ge 1) 'detweak-scan'
+        $stDt = (Invoke-Http 'GET' ($base + 'api/state') $null $H).json
+        Assert-True ($stDt.foreignCount -eq $dt.result.foreignCount -and $stDt.profile.foreignCount -eq $dt.result.foreignCount) 'foreignCount im State und Profil'
         $ad = Start-JobAndWait $base $H 'advisor' @{ goal = 'competitive'; text = 'Maus fühlt sich verzögert an' }
         Assert-True ($ad.result.engine -eq 'local' -and @($ad.result.plan).Count -gt 0 -and @($ad.result.findings).Count -gt 0 -and $ad.result.summary) 'advisor'
         $cs = Start-JobAndWait $base $H 'clean-scan' @{}
@@ -1094,9 +1243,15 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         $out2 = $p2.StandardOutput.ReadToEndAsync()
         Assert-True ($p2.WaitForExit(30000)) 'zweite Instanz beendet sich'
         Assert-True ($out2.Result -match 'laeuft bereits' -and $out2.Result -notmatch 'VELOX_READY') 'zweite Instanz übergibt an die erste'
-        # ---- shutdown via sendBeacon-style ?t= (no header)
-        $sd = Invoke-Http 'POST' ($base + 'api/shutdown?t=' + $token)
-        Assert-True ($sd.status -eq 200 -and $sd.json.ok) 'shutdown angenommen'
+        # ---- shutdown via sendBeacon-style ?t= (no header), per window session
+        $hbA = Invoke-Http 'POST' ($base + 'api/heartbeat?s=aaaa1111') $null $H
+        Assert-True ($hbA.json.ok) 'heartbeat mit Session'
+        $sdB = Invoke-Http 'POST' ($base + 'api/shutdown?t=' + $token + '&s=bbbb2222')
+        Assert-True ($sdB.status -eq 200 -and $sdB.json.ok -and $sdB.json.closing -eq $false) 'anderes Fenster lebt -> kein Beenden'
+        Start-Sleep -Milliseconds 300
+        Assert-True (-not $proc.HasExited) 'läuft weiter'
+        $sd = Invoke-Http 'POST' ($base + 'api/shutdown?t=' + $token + '&s=aaaa1111')
+        Assert-True ($sd.status -eq 200 -and $sd.json.ok -and $sd.json.closing -eq $true) 'letztes Fenster -> shutdown angenommen'
         Assert-True ($proc.WaitForExit(20000)) 'Prozess beendet sich nach dem Shutdown'
         Assert-Equal 0 $proc.ExitCode 'Exit-Code 0'
         Assert-True (-not [IO.File]::Exists((Join-Path $dataRoot 'instance-sim.json'))) 'instance-sim.json aufgeräumt'
@@ -1126,6 +1281,77 @@ Test-Case 'server' 'Shutdown wird durch einen Heartbeat abgebrochen; Heartbeat-T
     $life.lastHeartbeat = [DateTime]::UtcNow.AddSeconds(-151)
     Test-VxLifecycle
     Assert-True ($life.stop -and $life.reason -eq 'timeout') 'Timeout nach 150 s'
+}
+
+Test-Case 'server' 'Fenster-Sessions: Beenden nur, wenn kein anderes Fenster lebt; alter Ablauf ohne s' {
+    $null = New-TestContext
+    $global:VxCtx.Life = New-VxLifecycle
+    $life = $global:VxCtx.Life
+    # window A lives, window B closes -> VELOX keeps running
+    Register-VxHeartbeat 'winA'
+    Assert-True (-not (Request-VxShutdown 'winB')) 'B schließt, A lebt -> kein Beenden'
+    Assert-True ($null -eq $life.shutdownAt) 'nichts geplant'
+    # A's last heartbeat is older than the grace period -> A closing ends VELOX
+    $life.sessions['winA'] = [DateTime]::UtcNow.AddSeconds(-10)
+    Register-VxHeartbeat 'winC'
+    $life.sessions['winC'] = [DateTime]::UtcNow.AddSeconds(-10)
+    Assert-True (Request-VxShutdown 'winA') 'kein anderes Fenster in der Gnadenfrist -> Beenden geplant'
+    # A heartbeat of A that was already in flight does not cancel ...
+    Register-VxHeartbeat 'winA'
+    Assert-True ($null -ne $life.shutdownAt) 'verspäteter Heartbeat des schließenden Fensters bricht nicht ab'
+    # ... a heartbeat of another window during the grace period does
+    Register-VxHeartbeat 'winC'
+    Assert-True ($null -eq $life.shutdownAt) 'Heartbeat eines anderen Fensters bricht ab'
+    # back from the back/forward cache: A's own later heartbeat cancels too
+    $life.sessions['winC'] = [DateTime]::UtcNow.AddSeconds(-10)
+    Assert-True (Request-VxShutdown 'winA') 'erneut geplant'
+    $life.shutdownRequested = ([DateTime]$life.shutdownRequested).AddSeconds(-2)
+    Register-VxHeartbeat 'winA'
+    Assert-True ($null -eq $life.shutdownAt) 'späterer Heartbeat von A (bfcache) bricht ab'
+    # at the end of the grace period another window that beat in time still blocks
+    $life.sessions['winC'] = [DateTime]::UtcNow.AddSeconds(-10)
+    $null = Request-VxShutdown 'winA'
+    $life.sessions['winC'] = [DateTime]::UtcNow
+    $life.shutdownAt = [DateTime]::UtcNow.AddSeconds(-1)
+    Test-VxLifecycle
+    Assert-True (-not $life.stop -and $null -eq $life.shutdownAt) 'anderes Fenster lebt bei Ablauf -> kein Beenden'
+    $life.sessions['winC'] = [DateTime]::UtcNow.AddSeconds(-10)
+    $null = Request-VxShutdown 'winA'
+    $life.shutdownAt = [DateTime]::UtcNow.AddSeconds(-1)
+    Test-VxLifecycle
+    Assert-True ($life.stop -and $life.reason -eq 'shutdown') 'sonst Beenden nach Ablauf'
+    # without session ids: old behaviour (beacon always schedules, any heartbeat cancels)
+    $global:VxCtx.Life = New-VxLifecycle
+    $life = $global:VxCtx.Life
+    Register-VxHeartbeat 'winA'
+    Assert-True (Request-VxShutdown '') 'ohne s immer geplant'
+    Register-VxHeartbeat ''
+    Assert-True ($null -eq $life.shutdownAt) 'ohne s bricht jeder Heartbeat ab'
+}
+
+Test-Case 'server' 'Jobs: keine Stacktraces im Job-Log oder Fehlertext, nur in der Logdatei' {
+    $ctx = New-TestContext
+    $orig = ${function:Invoke-VxScanJob}
+    try {
+        ${function:global:Invoke-VxScanJob} = { param($Params) Write-VxLog 'error' ("Schritt kaputt | at <ScriptBlock>, <No file>: line 3`n   at Invoke-VxFoo, C:\x\Engine.ps1: line 12"); throw ("Etwas ging schief`nAt line:1 char:1`n+ throw 'x'`n+ ~~~~~~~~~`n    + CategoryInfo          : OperationStopped: (:) [], RuntimeException") }
+        $job = [hashtable]::Synchronized(@{ id = 'abcdef12'; type = 'scan'; status = 'running'; progress = 0.0; step = 'Starte ...'
+                log = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); nextIndex = 0
+                result = $null; error = $null; cancel = $false; lockObj = (New-Object object); params = @{} })
+        $global:VxJob = $job
+        Invoke-VxJobBody
+    } finally {
+        $global:VxJob = $null
+        ${function:global:Invoke-VxScanJob} = $orig
+    }
+    Assert-Equal 'error' $job.status 'Job fehlgeschlagen'
+    Assert-Equal 'Etwas ging schief' $job.error 'Fehlertext ohne Position/Stack'
+    $all = (@($job.log | ForEach-Object { $_.msg }) -join "`n")
+    Assert-True ($all -match 'Schritt kaputt' -and $all -match 'Etwas ging schief') 'Meldungen bleiben'
+    Assert-True ($all -notmatch '<ScriptBlock>|line \d|At line|CategoryInfo|Engine\.ps1') ('kein Stacktrace im Job-Log: ' + $all)
+    $logText = (@(Get-ChildItem -LiteralPath $ctx.LogDir -Filter '*.log' | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n")
+    Assert-True ($logText -match 'Job scan fehlgeschlagen' -and $logText -match 'at ') 'Stacktrace steht in der Logdatei'
+    Assert-Equal 'Zugriff verweigert – Administratorrechte nötig' (Remove-VxStackText 'Zugriff verweigert – Administratorrechte nötig | at <ScriptBlock>, <No file>: line 9') 'angehängter Stack wird abgeschnitten'
+    Assert-Equal 'Fehler A' (Remove-VxStackText "Fehler A`nIn Zeile:4 Zeichen:5`n+ foo") 'deutsche Positionszeilen'
 }
 
 # ==================================================================== review fixes (regression tests)

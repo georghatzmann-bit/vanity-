@@ -24,12 +24,21 @@ siehst du deinen echten PC, aber VELOX verändert **nichts**.
 Falls Windows "Der Computer wurde durch Windows geschützt" zeigt: auf **Weitere Informationen**
 und dann **Trotzdem ausführen** klicken. Das kommt bei jeder heruntergeladenen `.bat`-Datei.
 
+## So sieht es aus
+
+| | |
+|---|---|
+| ![Übersicht](docs/screenshots/state-overview-analyzed.png) | ![KI-Optimierer](docs/screenshots/state-advisor-result.png) |
+| **Übersicht** – Score, Hardware, nächster Schritt | **KI-Optimierer** – persönlicher Plan mit Begründung |
+| ![Detweak](docs/screenshots/state-detweak-scan.png) | ![Tweaks](docs/screenshots/tweaks-1360x880.png) |
+| **Detweak** – Fremd-Tweaks finden und zurücksetzen | **Tweaks** – 455 Schalter mit Erklärung und Risiko |
+
 ## Was VELOX kann
 
 | Bereich | Was passiert |
 |---|---|
 | **Übersicht** | Dein PC auf einen Blick: Hardware, Score, wichtigste Hinweise. |
-| **Tweaks** | Alle Tweaks nach Kategorien, mit Suche, Filter und Erklärung zu jedem Schalter. |
+| **Tweaks** | 455 Tweaks in 16 Kategorien, mit Suche, Filter und Erklärung zu jedem Schalter. |
 | **Presets** | Fertige Pakete: Sicherer Boost, Gaming Max, Esport, Laptop, Datenschutz, Streamer, FiveM/GTA V, Aufräumen, Ultimate. |
 | **KI-Optimierer** | Analysiert deine Hardware und schlägt einen persönlichen Plan vor. Offline kostenlos, oder mit Claude als echter KI (eigener API-Key nötig). |
 | **Detweak** | Findet Tweaks von anderen Tools und setzt sie auf Windows-Standard zurück. Danach auf Wunsch direkt ein Preset oder den KI-Plan anwenden. |

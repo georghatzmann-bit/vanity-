@@ -209,9 +209,7 @@
       "desc": "Alles aus Gaming Max plus Energieplan „Ultimative Leistung“ und Feinschliff für Maus, Timer, Netzwerk und CPU. Für Shooter-Spieler, die keine Verzögerung wollen – dafür mehr Strom und Wärme. Bei Ryzen-X3D-CPUs mit zwei Chiplets (z. B. 7950X3D) lieber Gaming Max nehmen.",
       "icon": "target",
       "maxRisk": "moderate",
-      "recommendedFor": [
-        "desktop"
-      ],
+      "recommendedFor": [],
       "ids": [
         "power.ultimate-plan",
         "power.epp-performance",
@@ -569,9 +567,7 @@
       "desc": "Wie Gaming Max, aber Game Bar, Aufnahme-Overlays, Kamera, Mikrofon und Benachrichtigungen bleiben voll nutzbar. Für alle, die mit OBS & Co. streamen und Stabilität wollen.",
       "icon": "video",
       "maxRisk": "moderate",
-      "recommendedFor": [
-        "desktop"
-      ],
+      "recommendedFor": [],
       "ids": [
         "power.epp-performance",
         "power.throttling-off",
@@ -679,9 +675,7 @@
       "desc": "Alles aus Gaming Max plus hohe CPU-Priorität für FiveM und GTA V. Für Roleplay- und GTA-Online-Spieler. Ist die CPU voll ausgelastet, können Discord und andere Programme im Hintergrund kurz stocken.",
       "icon": "car",
       "maxRisk": "moderate",
-      "recommendedFor": [
-        "desktop"
-      ],
+      "recommendedFor": [],
       "ids": [
         "power.epp-performance",
         "power.throttling-off",
@@ -799,10 +793,7 @@
       "desc": "Löscht temporäre Dateien, alte Update-Downloads, Absturzberichte und Treiber-Reste. Deine eigenen Dateien und der Papierkorb bleiben unberührt.",
       "icon": "broom",
       "maxRisk": "safe",
-      "recommendedFor": [
-        "desktop",
-        "laptop"
-      ],
+      "recommendedFor": [],
       "ids": [
         "cleanup.user-temp",
         "cleanup.windows-temp",
@@ -823,9 +814,7 @@
       "desc": "Leistung, Datenschutz und Aufräumen in einem Paket – nur für Desktop-PCs. Bluetooth, Drucken, Suche, Xbox, Kamera, Mikrofon und Smartphone-Link funktionieren weiter; Copilot, Widgets, Fenster-Animationen und Game-Bar-Clips fallen weg. Bei Ryzen-X3D-CPUs mit zwei Chiplets lieber Gaming Max nehmen.",
       "icon": "rocket",
       "maxRisk": "moderate",
-      "recommendedFor": [
-        "desktop"
-      ],
+      "recommendedFor": [],
       "ids": [
         "power.ultimate-plan",
         "power.epp-performance",

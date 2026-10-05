@@ -377,7 +377,7 @@ function Invoke-VxRunAction($Tweak, $J = $null) {
     $message = ''
     if ($freed -gt 0) { $message = (Format-VxBytes $freed) + ' freigegeben' }
     elseif ($ok) { $message = 'Ausgeführt' }
-    if ($msgs.Count -gt 0) { if ($message) { $message += ' - ' }; $message += ($msgs -join '; ') }
+    if ($msgs.Count -gt 0) { if ($message) { $message += ' – ' }; $message += ($msgs -join '; ') }
     return @{ ok = $ok; freedBytes = $freed; message = $message }
 }
 
@@ -612,7 +612,7 @@ function Sync-VxBoostedGames {
                 $changed = $true
                 if (-not $now[$k]) {
                     $what = switch ($k) { 'priority' { 'hohe CPU-Priorität' } 'gpu' { 'starke Grafikkarte' } 'fso' { 'Vollbild-Optimierung aus' } }
-                    Write-VxLog 'warn' ("Spiele-Boost {0}: '{1}' ist jetzt aus - die Einstellung wurde mit zurückgesetzt." -f $name, $what)
+                    Write-VxLog 'warn' ("Spiele-Boost {0}: '{1}' ist jetzt aus – die Einstellung wurde mit zurückgesetzt." -f $name, $what)
                 }
             }
         }

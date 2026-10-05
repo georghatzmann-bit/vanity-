@@ -23,6 +23,6 @@
   ],
   "commands": [
     { "id": "power-defaults", "label": "Energiepläne auf Standard", "desc": "Stellt alle Energiepläne wieder her.", "defaultOn": true, "needs": "none", "script": "powercfg -restoredefaultschemes" },
-    { "id": "netsh-reset", "label": "Netzwerk-Stack zurücksetzen", "desc": "Setzt Winsock und TCP/IP zurück.", "defaultOn": false, "needs": "reboot", "script": "netsh winsock reset | Out-Null" }
+    { "id": "netsh-reset", "label": "Netzwerk-Stack zurücksetzen", "desc": "Setzt Winsock und TCP/IP zurück.", "defaultOn": false, "needs": "reboot", "risk": "moderate", "script": "netsh winsock reset | Out-Null" }
   ]
 }

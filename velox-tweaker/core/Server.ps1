@@ -12,7 +12,12 @@
 #
 # API notes (details the contract leaves open - the UI relies on these):
 #   - Error responses are JSON { "error": "<German message>" } with a 4xx/5xx status.
-#     409 for a busy job runner is exactly { "error": "busy", "jobId": "<running job id>" }.
+#     409 for a busy job runner is exactly { "error": "busy", "jobId": "<running job id>", "type": "<its job type>" }.
+#   - POST /api/heartbeat?s=<session> and POST /api/shutdown?t=<token>&s=<session>: every UI window has a
+#     random session id. A shutdown beacon from window X ends VELOX after 4 s only when no OTHER window
+#     sent a heartbeat within those 4 s (before or during); X's own heartbeat < 1 s after its beacon
+#     (already in flight) does not cancel. Without s the old rule applies: any heartbeat cancels.
+#     Shutdown answers { ok, closing } (closing false = another window is still open).
 #   - GET /api/bootstrap: "busy" is a boolean; extra field "activeJob" = { id, type } | null so a
 #     reloaded UI can resume polling a running job. bootstrap also counts as a heartbeat.
 #   - GET /api/jobs/<id>?since=<n>: returns log entries with i >= n. i starts at 0 and increases by 1,
@@ -200,14 +205,71 @@ function Get-VxBootstrapDto {
     }
 }
 
-function Register-VxHeartbeat {
+# Window session id from ?s= (ui/js/api.js sends it with heartbeat and shutdown beacon); '' if absent.
+function Get-VxSessionId($Request) {
+    $s = ''
+    try { $s = [string]$Request.QueryString['s'] } catch { $s = '' }
+    if ($s -match '^[A-Za-z0-9_-]{4,64}$') { return $s }
+    return ''
+}
+
+# $true when a window other than $Except sent a heartbeat at or after $Since.
+function Test-VxOtherSession([string]$Except, [DateTime]$Since) {
     $life = $global:VxCtx.Life
-    $life.lastHeartbeat = [DateTime]::UtcNow
+    if ($null -eq $life.sessions) { return $false }
+    foreach ($k in @($life.sessions.Keys)) {
+        if ($k -eq $Except) { continue }
+        if ([DateTime]$life.sessions[$k] -ge $Since) { return $true }
+    }
+    return $false
+}
+
+# Heartbeat (and bootstrap, which has no session id). Without a session id every heartbeat cancels
+# a pending shutdown (old behaviour). With one, the window that sent the shutdown beacon cannot
+# cancel it with a heartbeat that was already on its way (< 1 s after the beacon) - only a later one
+# (the page came back from the back/forward cache) or any other window does.
+function Register-VxHeartbeat([string]$Session = '') {
+    $life = $global:VxCtx.Life
+    $now = [DateTime]::UtcNow
+    $life.lastHeartbeat = $now
     $life.firstHeartbeat = $true
+    if ($Session) {
+        if ($null -eq $life.sessions) { $life.sessions = @{} }
+        if ($null -ne $life.shutdownAt -and $life.shutdownSession -eq $Session -and $null -ne $life.shutdownRequested -and ($now - [DateTime]$life.shutdownRequested).TotalSeconds -lt 1) { return }
+        $life.sessions[$Session] = $now
+        # forget windows that are long gone
+        foreach ($k in @($life.sessions.Keys)) { if (($now - [DateTime]$life.sessions[$k]).TotalSeconds -gt 600) { $life.sessions.Remove($k) } }
+    }
     if ($null -ne $life.shutdownAt) {
         $life.shutdownAt = $null
-        Write-VxLog 'info' 'Beenden abgebrochen - die Oberfläche ist wieder da.'
+        $life.shutdownSession = $null
+        $life.shutdownRequested = $null
+        Write-VxLog 'info' 'Beenden abgebrochen – die Oberfläche ist wieder da.'
     }
+}
+
+# Shutdown beacon of a closing window. With a session id VELOX only ends when no OTHER window sent a
+# heartbeat within the grace period (checked now, and again when it ends); a heartbeat of another
+# window during the grace period cancels it. Returns $true when the shutdown was scheduled.
+function Request-VxShutdown([string]$Session = '') {
+    $life = $global:VxCtx.Life
+    $now = [DateTime]::UtcNow
+    $grace = [double]$life.graceSec
+    if ($grace -le 0) { $grace = 4 }
+    if ($Session) {
+        if ($null -eq $life.sessions) { $life.sessions = @{} }
+        $life.sessions.Remove($Session)
+        if (Test-VxOtherSession $Session $now.AddSeconds(-$grace)) {
+            Write-VxLog 'info' 'Ein VELOX-Fenster wurde geschlossen – ein anderes ist noch offen, VELOX läuft weiter.'
+            return $false
+        }
+    }
+    $life.shutdownAt = $now.AddSeconds($grace)
+    $life.shutdownSession = $Session
+    $life.shutdownRequested = $now
+    $life.waitLogged = $false
+    Write-VxLog 'info' ('Oberfläche geschlossen – VELOX beendet sich in {0} Sekunden.' -f $grace)
+    return $true
 }
 
 # ------------------------------------------------------------------ static files
@@ -285,8 +347,8 @@ function Invoke-VxRequest($Context) {
             if ($m -eq 'VX_TOO_LARGE') { Send-VxError $Context 413 'Anfrage zu groß.' }
             elseif ($m -eq 'VX_BAD_JSON') { Send-VxError $Context 400 'Ungültiges JSON.' }
             else {
-                Write-VxLog 'error' ('Serverfehler: ' + $m + ' | ' + $_.ScriptStackTrace)
-                Send-VxError $Context 500 ('Interner Fehler: ' + $m)
+                Write-VxFileLog 'error' ('Serverfehler: ' + $m + ' | ' + $_.ScriptStackTrace)
+                Send-VxError $Context 500 (Remove-VxStackText ('Interner Fehler: ' + $m))
             }
         } catch { $null = $_ }
     } finally {
@@ -306,14 +368,13 @@ function Invoke-VxApi($Context, [string]$Method, [string]$Path) {
     }
     if ($Method -eq 'GET' -and $Path -eq '/api/state') { Send-VxJson $Context 200 (Get-VxStateDto); return }
     if ($Method -eq 'POST' -and $Path -eq '/api/heartbeat') {
-        Register-VxHeartbeat
+        Register-VxHeartbeat (Get-VxSessionId $req)
         Send-VxJson $Context 200 ([ordered]@{ ok = $true; busy = (Test-VxBusy) })
         return
     }
     if ($Method -eq 'POST' -and $Path -eq '/api/shutdown') {
-        $life.shutdownAt = [DateTime]::UtcNow.AddSeconds(4)
-        Write-VxLog 'info' 'Oberfläche geschlossen - VELOX beendet sich in 4 Sekunden.'
-        Send-VxJson $Context 200 ([ordered]@{ ok = $true })
+        $closing = Request-VxShutdown (Get-VxSessionId $req)
+        Send-VxJson $Context 200 ([ordered]@{ ok = $true; closing = [bool]$closing })
         return
     }
     if ($Method -eq 'POST' -and $Path -eq '/api/jobs') {
@@ -323,7 +384,7 @@ function Invoke-VxApi($Context, [string]$Method, [string]$Path) {
         if ($null -eq $params) { $params = [pscustomobject]@{} }
         if ((Get-VxJobTypes) -notcontains $type) { Send-VxError $Context 400 ("Unbekannter Job-Typ '{0}'." -f $type); return }
         $r = Start-VxJob $type $params
-        if ($r.busy) { Send-VxJson $Context 409 ([ordered]@{ error = 'busy'; jobId = $r.jobId }); return }
+        if ($r.busy) { Send-VxJson $Context 409 ([ordered]@{ error = 'busy'; jobId = $r.jobId; type = $r.type }); return }
         Send-VxJson $Context 200 ([ordered]@{ jobId = $r.jobId })
         return
     }
@@ -412,6 +473,14 @@ function Test-VxLifecycle {
     $life = $ctx.Life
     $now = [DateTime]::UtcNow
     if ($null -ne $life.shutdownAt -and $now -ge $life.shutdownAt) {
+        $grace = [double]$life.graceSec
+        if ($grace -le 0) { $grace = 4 }
+        if ($life.shutdownSession -and $null -ne $life.shutdownRequested -and (Test-VxOtherSession ([string]$life.shutdownSession) ([DateTime]$life.shutdownRequested).AddSeconds(-$grace))) {
+            # another window is still alive (its heartbeat normally cancels earlier already)
+            $life.shutdownAt = $null; $life.shutdownSession = $null; $life.shutdownRequested = $null
+            Write-VxLog 'info' 'Beenden abgebrochen – ein anderes VELOX-Fenster ist noch offen.'
+            return
+        }
         if (Test-VxBusy) {
             if (-not $life.waitLogged) { Write-VxLog 'info' 'Warte auf laufende Aufgabe, dann wird beendet.'; $life.waitLogged = $true }
         } else {
@@ -456,5 +525,6 @@ function New-VxLifecycle {
     return [hashtable]::Synchronized(@{
             lastHeartbeat = $null; firstHeartbeat = $false; shutdownAt = $null; stop = $false; reason = $null
             timeoutSec = 150; waitLogged = $false; lastActivity = [DateTime]::UtcNow
+            graceSec = 4; sessions = @{}; shutdownSession = $null; shutdownRequested = $null
         })
 }

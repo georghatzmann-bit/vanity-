@@ -432,6 +432,9 @@ if (Test-Path $detFile) {
         foreach ($f in @('id','label','desc','script','needs')) { if ([string]::IsNullOrWhiteSpace([string](Get-Prop $c $f))) { Add-Err $w "'$f' missing" } }
         if (-not ((Get-Prop $c 'defaultOn') -is [bool])) { Add-Err $w 'defaultOn must be boolean' }
         if ($Needs -notcontains [string](Get-Prop $c 'needs')) { Add-Err $w 'needs invalid' }
+        # optional: 'moderate' marks a command that changes system-wide behaviour (UI shows a badge)
+        if ((Has-Prop $c 'risk') -and @('safe', 'moderate') -notcontains [string](Get-Prop $c 'risk')) { Add-Err $w "risk must be safe|moderate" }
+        if ((Has-Prop $c 'risk') -and [string](Get-Prop $c 'risk') -eq 'moderate' -and (Get-Prop $c 'defaultOn') -eq $true) { Add-Warn $w 'moderate command is defaultOn' }
         if ($cids.ContainsKey([string]$c.id)) { Add-Err $w 'duplicate command id' } else { $cids[[string]$c.id] = 1 }
         $s = [string](Get-Prop $c 'script')
         if (-not (Test-IsAscii $s)) { Add-Err $w 'script must be ASCII' }

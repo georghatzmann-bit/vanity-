@@ -213,6 +213,10 @@ function buildWorld() {
     ],
     stats: { heartbeats: 0, shutdowns: 0, bootstraps: 0, jobs: {}, unauthorized: 0 },
     shutdownTimer: null,
+    shutdownSession: '',
+    shutdownAt: 0,
+    sessions: new Map(),
+    foreignKeys: null,
     dead: false
   };
 }
@@ -286,10 +290,28 @@ async function maybeRestorePoint(ctx) {
     await ctx.tick();
   }
 }
-/** Same shape as core/Common.ps1 Get-VxStateDto: statuses, profile, lastScan, needs (no top-level foreignCount). */
+/** Same shape as core/Common.ps1 Get-VxStateDto: statuses, profile, lastScan, needs, foreignCount (null before the first detweak scan). */
 function stateDto() {
   const s = W.state;
-  return { statuses: s.statuses, profile: s.profile || null, lastScan: s.lastScan || null, needs: s.needs };
+  return { statuses: s.statuses, profile: s.profile || null, lastScan: s.lastScan || null, needs: s.needs, foreignCount: typeof s.foreignCount === 'number' ? s.foreignCount : null };
+}
+/** Like core/Detweak.ps1 Set-VxForeignKeys: foreign keys of the last scan, count in state + profile. */
+function setForeignKeys(keys) {
+  W.foreignKeys = new Set(keys);
+  W.state.foreignCount = W.foreignKeys.size;
+  if (W.state.profile) W.state.profile.foreignCount = W.foreignKeys.size;
+}
+/** Like core/Detweak.ps1 Update-VxForeignAfterChange: what VELOX just reset/applied is not foreign. */
+function dropForeign(keys) {
+  if (!W.foreignKeys) return;
+  for (const k of keys) W.foreignKeys.delete(k);
+  setForeignKeys([...W.foreignKeys]);
+}
+/** source "velox": the tweak is applied and VELOX's newest journal for it set it (not a revert/restore). */
+function setByVelox(id) {
+  if (W.state.statuses[id] !== 'applied') return false;
+  const b = W.backups.find(x => x.entries.some(e => e.tweakId === id));
+  return !!b && b.kind !== 'revert' && b.kind !== 'restore';
 }
 
 function saveBackup(kind, label, entries) {
@@ -398,18 +420,24 @@ const JOBS = {
       const s = W.state.statuses[t.id];
       if (t.kind !== 'toggle' || !['applied', 'custom', 'partial'].includes(s)) continue;
       const cat = W.categories.find(c => c.id === t.category);
-      items.push({ key: 'tweak:' + t.id, source: 'catalog', tweakId: t.id, label: t.name, group: cat ? cat.name : t.category, current: s === 'applied' ? 'Tweak aktiv' : s === 'partial' ? 'Teilweise geändert' : 'Eigener Wert', default: 'Windows-Standard' });
+      // like core/Detweak.ps1: real values for a single registry value, else the status text
+      const acts = t.actions || [];
+      const one = acts.length === 1 && acts[0].type === 'reg' && !String(acts[0].path).includes('*') ? acts[0] : null;
+      const show = v => v === null || v === undefined ? 'nicht gesetzt' : Array.isArray(v) ? v.join(', ') : String(v);
+      const current = one && s === 'applied' ? show(one.value) : s === 'applied' ? 'Angepasst' : s === 'partial' ? 'Teilweise angepasst' : 'Von anderem Tool geändert';
+      items.push({ key: 'tweak:' + t.id, source: setByVelox(t.id) ? 'velox' : 'catalog', tweakId: t.id, label: t.name, group: cat ? cat.name : t.category, current, default: one ? show(one.default) : 'Windows-Standard' });
     }
-    ctx.log(items.length ? 'warn' : 'ok', items.length + ' Abweichungen vom Windows-Standard gefunden.');
-    W.state.foreignCount = items.length;
-    if (W.state.profile) W.state.profile.foreignCount = items.length; // like core/Detweak.ps1 Set-VxForeignCount
-    return { items, commands: (W.detweak.commands || []).map(c => ({ id: c.id, label: c.label, desc: c.desc, defaultOn: !!c.defaultOn, needs: c.needs || 'none' })) };
+    const foreign = items.filter(i => i.source !== 'velox');
+    ctx.log(foreign.length ? 'warn' : 'ok', foreign.length + ' Fremd-Tweaks gefunden, ' + (items.length - foreign.length) + ' von VELOX selbst gesetzt.');
+    setForeignKeys(foreign.map(i => i.key));
+    return { items, commands: (W.detweak.commands || []).map(c => ({ id: c.id, label: c.label, desc: c.desc, defaultOn: !!c.defaultOn, needs: c.needs || 'none', risk: c.risk || 'safe' })), foreignCount: foreign.length };
   },
   async detweak(p, ctx) {
     const keys = Array.isArray(p.keys) ? p.keys : [];
     if (p.restorePoint) { ctx.step('Wiederherstellungspunkt wird erstellt …', 0.04); ctx.log('info', 'Testmodus: Wiederherstellungspunkt nur protokolliert.'); W.restorePointDone = true; await ctx.tick(); }
     const entries = [];
-    let reset = 0, failed = 0, applied = 0;
+    let reset = 0, failed = 0, applied = 0, resetValues = 0, commandsRun = 0;
+    const done = [];
     const total = keys.length + (p.commands || []).length + (p.thenApply || []).length + 1;
     let n = 0;
     for (const key of keys) {
@@ -417,12 +445,12 @@ const JOBS = {
       ctx.step('Wird zurückgesetzt …', n / total);
       if (key.startsWith('tweak:')) {
         const id = key.slice(6); const t = W.byId.get(id);
-        if (t) { entries.push(...journalFor(t, 'revert')); W.state.statuses[id] = 'default'; reset++; ctx.log('ok', 'Standard: ' + t.name); }
+        if (t) { entries.push(...journalFor(t, 'revert')); W.state.statuses[id] = 'default'; reset++; resetValues++; done.push(key); ctx.log('ok', 'Standard: ' + t.name); }
         else { failed++; ctx.log('error', 'Unbekannt: ' + key); }
       } else if (W.foreign.has(key)) {
         const f = W.foreign.get(key);
         entries.push({ op: f.kind === 'reg' ? 'reg' : f.kind === 'bcd' ? 'bcd' : f.kind === 'svc' ? 'service' : 'regkey', name: f.entry.name, path: f.path || f.entry.path, before: f.current, after: f.entry.default === undefined ? null : f.entry.default, detweakKey: key, foreign: f });
-        W.foreign.delete(key); reset++; ctx.log('ok', 'Standard: ' + f.entry.label);
+        W.foreign.delete(key); reset++; resetValues++; done.push(key); ctx.log('ok', 'Standard: ' + f.entry.label);
       } else { failed++; ctx.log('warn', 'Schon auf Standard: ' + key); }
       await ctx.tick(0.5);
     }
@@ -432,6 +460,7 @@ const JOBS = {
       ctx.step('Befehl: ' + (cmd ? cmd.label : c), n / total);
       ctx.log('info', 'Testmodus: ' + (cmd ? cmd.script : c) + ' nur protokolliert.');
       if (cmd && cmd.needs && cmd.needs !== 'none') W.state.needs[cmd.needs] = true;
+      if (cmd) { reset++; commandsRun++; } else failed++; // like the backend: reset = values + commands
       await ctx.tick(0.6);
     }
     for (const id of p.thenApply || []) {
@@ -440,12 +469,13 @@ const JOBS = {
       if (!t || !t.applicable || t.kind !== 'toggle') continue;
       ctx.step('Wird angewendet: ' + t.name, n / total);
       entries.push(...journalFor(t, 'apply'));
-      W.state.statuses[id] = 'applied'; applied++; addNeeds(t);
+      W.state.statuses[id] = 'applied'; applied++; addNeeds(t); done.push('tweak:' + id);
       ctx.log('ok', 'Angewendet: ' + t.name);
       await ctx.tick(0.4);
     }
     const backupId = saveBackup('detweak', 'Detweak', entries);
-    return { reset, failed, applied, backupId, needs: W.state.needs };
+    dropForeign(done);
+    return { reset, resetValues, commandsRun, failed, applied, backupId, needs: W.state.needs, errors: [], foreignCount: typeof W.state.foreignCount === 'number' ? W.state.foreignCount : 0 };
   },
   async advisor(p, ctx) { return advise(p, ctx, 'local'); },
   async claude(p, ctx) {
@@ -539,6 +569,7 @@ async function applyRevert(p, ctx, mode) {
     results.push({ id: t.id, ok: true, status, error: null });
   }
   const backupId = saveBackup(mode, p.label || (mode === 'apply' ? 'Tweaks angewendet' : 'Tweaks zurückgesetzt'), entries);
+  dropForeign(results.filter(r => r.ok).map(r => 'tweak:' + r.id)); // like core/Engine.ps1 Invoke-VxApplyJob
   return { results, backupId, needs: W.state.needs };
 }
 function describe(a, mode) {
@@ -635,7 +666,7 @@ async function handle(req, res) {
   if (m('POST', /^\/api\/jobs$/)) {
     const type = body.type;
     if (!JOBS[type]) return send(res, 400, { error: 'Unbekannter Job-Typ: ' + String(type) });
-    if (W.running) return send(res, 409, { error: 'busy', jobId: W.running });
+    if (W.running) return send(res, 409, { error: 'busy', jobId: W.running, type: W.jobs.get(W.running).type });
     const job = newJob(type, body.params || {});
     return send(res, 200, { jobId: job.id });
   }
@@ -668,7 +699,7 @@ async function handle(req, res) {
   }
   if (m('DELETE', /^\/api\/claude\/key$/)) { W.settings.claude.hasKey = false; return send(res, 200, { hasKey: false }); }
   if (m('GET', /^\/api\/backups$/)) {
-    return send(res, 200, { backups: W.backups.map(b => ({ id: b.id, label: b.label, kind: b.kind, created: b.created, count: b.entries.length, simulate: b.simulate, restorable: b.kind !== 'restore' && b.entries.some(e => e.op !== 'appx') })) });
+    return send(res, 200, { backups: W.backups.map(b => ({ id: b.id, label: b.label, kind: b.kind, created: b.created, count: b.entries.length, tweakCount: new Set(b.entries.map(e => e.tweakId).filter(x => /^[a-z0-9]+(\.[a-z0-9-]+)+$/.test(String(x)))).size, simulate: b.simulate, restorable: b.kind !== 'restore' && b.entries.some(e => e.op !== 'appx') })) });
   }
   mm = p.match(/^\/api\/backups\/([A-Za-z0-9-]+)$/);
   if (mm && req.method === 'GET') {
@@ -683,16 +714,31 @@ async function handle(req, res) {
     log('open', t);
     return send(res, 200, { ok: true });
   }
-  if (m('POST', /^\/api\/heartbeat$/)) { cancelShutdown(); W.stats.heartbeats++; return send(res, 200, { ok: true, busy: !!W.running }); }
+  // window sessions like core/Server.ps1: ?s=<id> on heartbeat and shutdown beacon
+  const sess = /^[A-Za-z0-9_-]{4,64}$/.test(url.searchParams.get('s') || '') ? url.searchParams.get('s') : '';
+  if (m('POST', /^\/api\/heartbeat$/)) {
+    W.stats.heartbeats++;
+    const now = Date.now();
+    // the closing window's heartbeat that was already in flight does not cancel its own shutdown
+    const stray = sess && W.shutdownTimer && W.shutdownSession === sess && now - W.shutdownAt < 1000;
+    if (!stray) { if (sess) W.sessions.set(sess, now); cancelShutdown(); }
+    return send(res, 200, { ok: true, busy: !!W.running });
+  }
   if (m('POST', /^\/api\/shutdown$/)) {
     W.stats.shutdowns++;
+    if (sess) {
+      W.sessions.delete(sess);
+      const other = [...W.sessions.values()].some(t => Date.now() - t <= 4000);
+      if (other) { log('shutdown: another window is still open'); return send(res, 200, { ok: true, closing: false }); }
+    }
     cancelShutdown();
+    W.shutdownSession = sess; W.shutdownAt = Date.now();
     W.shutdownTimer = setTimeout(() => {
       W.shutdownTimer = null;
       if (opt.exitOnShutdown) { log('shutdown: exiting'); process.exit(0); }
       log('shutdown timer elapsed (mock keeps running; use --exit-on-shutdown to exit)');
     }, 4000);
-    return send(res, 200, { ok: true });
+    return send(res, 200, { ok: true, closing: true });
   }
   if (m('GET', /^\/__mock\/stats$/)) return send(res, 200, Object.assign({}, W.stats, { shutdownPending: !!W.shutdownTimer }));
   if (m('POST', /^\/__mock\/kill$/)) { send(res, 200, { ok: true }); setTimeout(() => { W.dead = true; }, 20); return; }

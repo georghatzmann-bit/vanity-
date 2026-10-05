@@ -823,7 +823,7 @@ test('reduced motion before boot: splash and aurora do not animate', async (t) =
   t.watch(page);
   await page.route('**/api/bootstrap', async (r) => { await sleep(1200); await r.continue(); });
   await page.goto(t.server.url);
-  const anim = await page.evaluate(() => ['.aurora .a1', '.splash-orbit', '.brand-mark'].map(s => getComputedStyle(document.querySelector(s), s === '.brand-mark' ? '::after' : null).animationName));
+  const anim = await page.evaluate(() => ['.aurora .a1', '.splash-logo .vx-logo-cap', '.splash-logo .vx-logo-v'].map(s => getComputedStyle(document.querySelector(s)).animationName));
   assert(anim.every(a => a === 'none'), 'animations before boot: ' + anim.join(', '));
   await ready(page);
 });

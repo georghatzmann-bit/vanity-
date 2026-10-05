@@ -47,7 +47,7 @@ function Get-VxJobHandles {
 # Starts a job. Returns @{ jobId } or @{ busy = $true; jobId } when another job runs.
 function Start-VxJob([string]$Type, $Params) {
     $ctx = $global:VxCtx
-    if (Test-VxBusy) { return @{ busy = $true; jobId = $ctx.CurrentJobId } }
+    if (Test-VxBusy) { return @{ busy = $true; jobId = $ctx.CurrentJobId; type = [string]$ctx.Jobs[$ctx.CurrentJobId].type } }
     if ((Get-VxJobTypes) -notcontains $Type) { throw "Unbekannter Job-Typ '$Type'" }
     # job state survives until the next job starts
     Update-VxJobs
@@ -144,9 +144,10 @@ function Invoke-VxJobBody {
             Add-VxJobLog $job 'warn' 'Vom Benutzer abgebrochen.'
             $job.status = 'cancelled'
         } else {
-            $job.error = $msg
+            # the user sees the message only; the stack trace goes to the log file in the data root
+            $job.error = Remove-VxStackText $msg
             Add-VxJobLog $job 'error' $msg
-            try { Write-VxLog 'error' ("Job {0} fehlgeschlagen: {1} | {2}" -f $job.type, $msg, $_.ScriptStackTrace) } catch { $null = $_ }
+            try { Write-VxFileLog 'error' ("Job {0} fehlgeschlagen: {1} | {2}" -f $job.type, $msg, $_.ScriptStackTrace) } catch { $null = $_ }
             $job.status = 'error'
         }
     } finally {
@@ -163,13 +164,15 @@ function Update-VxJobs {
         if (-not $h.handle.IsCompleted) { continue }
         $job = $ctx.Jobs[$id]
         try { $null = $h.ps.EndInvoke($h.handle) } catch {
-            if ($null -ne $job -and $job.status -eq 'running') { $job.error = 'Interner Fehler: ' + $_.Exception.Message }
+            Write-VxFileLog 'error' ('Job-Runspace: ' + $_.Exception.Message + ' | ' + $_.ScriptStackTrace)
+            if ($null -ne $job -and $job.status -eq 'running') { $job.error = Remove-VxStackText ('Interner Fehler: ' + $_.Exception.Message) }
         }
         if ($null -ne $job -and $job.status -eq 'running') {
             $errs = @($h.ps.Streams.Error | ForEach-Object { [string]$_ })
+            foreach ($e in @($h.ps.Streams.Error)) { Write-VxFileLog 'error' ('Job-Runspace: ' + [string]$e + ' | ' + [string]$e.ScriptStackTrace) }
             if (-not $job.error) {
                 $job.error = 'Die Hintergrundaufgabe wurde unerwartet beendet.'
-                if ($errs.Count -gt 0) { $job.error += ' ' + $errs[0] }
+                if ($errs.Count -gt 0) { $job.error += ' ' + (Remove-VxStackText $errs[0]) }
             }
             $job.status = 'error'
             $job.finished = Get-VxNowIso

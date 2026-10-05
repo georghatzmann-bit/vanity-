@@ -129,7 +129,7 @@ function Get-VxDetectedGames {
 }
 
 # Recommended set for a goal (status-agnostic). Returns list of @{ tweak; keyword }.
-function Get-VxGoalCandidates([string]$Goal, $VxProfile, [string[]]$ExtraTags = @()) {
+function Get-VxGoalCandidates([string]$Goal, $VxProfile, [string[]]$ExtraTags = @(), [string[]]$FixIds = @()) {
     $ctx = $global:VxCtx
     $cfg = Get-VxGoalConfig $Goal
     $isLaptop = (Test-VxIsLaptop $VxProfile) -or $Goal -eq 'laptop'
@@ -162,13 +162,14 @@ function Get-VxGoalCandidates([string]$Goal, $VxProfile, [string[]]$ExtraTags = 
         if (-not $ok -and $keyword -and $rank -le 1) { $ok = $true }
         if (-not $ok) { continue }
         # A trade-off ("moderate") is only picked without being asked for when it is part of the
-        # hand-reviewed preset for this goal or targets this PC's hardware (GPU/CPU vendor, SSD/HDD).
+        # hand-reviewed preset for this goal, targets this PC's hardware (GPU/CPU vendor, SSD/HDD)
+        # or fixes a finding of this PC (e.g. "Energieplan Ausbalanciert auf einem Desktop-PC").
         # Situational fixes ("only if you have flicker / a VRR monitor ...") need the free text.
         $situational = [bool](Get-VxProp $t 'situational' $false)
         if ($situational -and -not $keyword) { continue }
         if ($rank -eq 1 -and -not $keyword) {
             $hw = (@($tags | Where-Object { @('nvidia', 'amd', 'intel') -contains $_ }).Count -gt 0) -or ($tags -contains 'ssd' -and $sysDisk -eq 'ssd') -or ($tags -contains 'hdd' -and $sysDisk -eq 'hdd')
-            if (-not ($presetIds -contains [string]$t.id) -and -not $hw) { continue }
+            if (-not ($presetIds -contains [string]$t.id) -and -not $hw -and -not ($FixIds -contains [string]$t.id)) { continue }
         }
         if ($x3d -and (Test-VxX3dHostile $t)) { continue }
         if ($noWifi -and (Test-VxWifiTweak $t)) { continue }
@@ -219,46 +220,158 @@ function Get-VxShortGpuName($VxProfile, [string]$Vendor = '') {
     return (($n -replace '\(R\)|\(TM\)', '') -replace '\s+', ' ').Trim()
 }
 
-function Get-VxPlanReason($Tweak, $VxProfile, [string]$Goal) {
+# German word for a free-text keyword tag (summary: "Deine Beschreibung wurde berücksichtigt").
+function Get-VxTagWord([string]$Tag) {
+    switch ($Tag) {
+        'stutter' { return 'Ruckler' }
+        'network' { return 'Netzwerk' }
+        'ping' { return 'Ping' }
+        'input' { return 'Eingabe' }
+        'latency' { return 'Latenz' }
+        'battery' { return 'Akku' }
+        'fivem' { return 'FiveM' }
+        'gta' { return 'GTA V' }
+        'privacy' { return 'Datenschutz' }
+        'telemetry' { return 'Telemetrie' }
+        'ads' { return 'Werbung' }
+        'fps' { return 'FPS' }
+        'streaming' { return 'Streaming' }
+        'ai' { return 'KI' }
+        'boot' { return 'Systemstart' }
+        'quality-of-life' { return 'Bedienkomfort' }
+    }
+    return $Tag
+}
+
+# Which tag of a tweak explains its benefit for a goal: the first one in the goal's order.
+function Get-VxGoalTagOrder([string]$Goal) {
+    switch ($Goal) {
+        'competitive' { return @('input', 'latency', 'ping', 'network', 'fps', 'stutter', 'competitive', 'audio', 'memory', 'storage', 'boot', 'update', 'bloat', 'telemetry', 'privacy', 'ads', 'ai', 'quality-of-life', 'explorer', 'ui') }
+        'balanced' { return @('stutter', 'fps', 'boot', 'storage', 'quality-of-life', 'explorer', 'ui', 'input', 'latency', 'memory', 'ping', 'network', 'telemetry', 'privacy', 'ads', 'ai', 'bloat', 'update', 'audio') }
+        'privacy' { return @('telemetry', 'privacy', 'ai', 'ads', 'bloat', 'update', 'quality-of-life', 'explorer', 'ui', 'stutter', 'fps') }
+        'laptop' { return @('battery', 'stutter', 'fps', 'boot', 'storage', 'memory', 'bloat', 'telemetry', 'privacy', 'ads', 'ai', 'quality-of-life', 'explorer', 'ui', 'input', 'latency', 'ping', 'network') }
+        'streaming' { return @('streaming', 'stutter', 'fps', 'ping', 'network', 'input', 'latency', 'memory', 'storage', 'bloat', 'telemetry', 'privacy', 'ads', 'ai', 'quality-of-life') }
+        'fivem' { return @('fivem', 'gta', 'fps', 'stutter', 'input', 'latency', 'ping', 'network', 'memory', 'storage', 'bloat', 'telemetry', 'privacy', 'ads', 'ai', 'quality-of-life') }
+    }
+    return @('fps', 'stutter', 'input', 'latency', 'ping', 'network', 'memory', 'storage', 'boot', 'bloat', 'telemetry', 'privacy', 'ads', 'ai', 'quality-of-life', 'explorer', 'ui')
+}
+
+# Tags that describe a tweak of this category best (checked before the goal's order, but only
+# tags that also belong to the goal): a network tweak in a gaming plan is about ping, not "latency".
+function Get-VxCategoryTagOrder([string]$Category) {
+    switch ($Category) {
+        'network' { return @('ping', 'network') }
+        'gpu' { return @('fps') }
+        'privacy' { return @('telemetry', 'privacy') }
+        'debloat' { return @('ai', 'ads', 'bloat') }
+        'ui' { return @('explorer', 'ui', 'quality-of-life') }
+        'memory' { return @('memory', 'storage') }
+        'games' { return @('fivem', 'gta') }
+    }
+    return @()
+}
+
+# The benefit of a tweak in plain German, for one tag and goal (no hardware - see Get-VxHardwareNote).
+# Worded so it holds for every tweak with that tag and category (Edge, NVIDIA, Windows ...); the
+# tweak's own description follows it in the reason.
+function Get-VxTagBenefit([string]$Tag, $Tweak, $VxProfile, [string]$Goal) {
+    $cat = [string]$Tweak.category
+    $play = @('gaming', 'competitive', 'fivem', 'streaming') -contains $Goal
+    switch ($Tag) {
+        'fps' {
+            if ($cat -eq 'gpu') { return 'Holt mehr aus deiner Grafikkarte heraus' }
+            if ($cat -eq 'power') { return 'Der Prozessor bleibt auf Leistung statt auf Stromsparen – das bringt mehr FPS' }
+            return 'Mehr Leistung und FPS für deine Spiele'
+        }
+        'stutter' {
+            if ($cat -eq 'services') { return 'Ein Hintergrunddienst weniger, der mitten im Spiel Ruckler auslösen kann' }
+            if ($cat -eq 'power') { return 'Weniger kurze Hänger durch Stromspar-Zustände' }
+            if ($cat -eq 'memory') { return 'Programme und Spiele laden flüssiger nach, ohne kurze Hänger' }
+            if (-not $play) { return 'Windows läuft gleichmäßiger, ohne kurze Hänger' }
+            return 'Gleichmäßigere Bildrate mit weniger Rucklern'
+        }
+        'input' { return 'Maus und Tastatur reagieren direkter' }
+        'latency' { return 'Weniger Verzögerung zwischen deiner Eingabe und dem Bild' }
+        { $_ -eq 'network' -or $_ -eq 'ping' } {
+            if (Test-VxWifiTweak $Tweak) { return 'Stabilere WLAN-Verbindung mit weniger Ping-Spitzen' }
+            if ($play) { return 'Niedrigerer und stabilerer Ping beim Online-Spielen' }
+            return 'Stabilere und schnellere Netzwerkverbindung'
+        }
+        'competitive' { return 'Für Esport: ein direkteres, berechenbareres Spielgefühl' }
+        'memory' { return 'Windows geht sparsamer mit dem Arbeitsspeicher um' }
+        'storage' { return 'Spart Speicherplatz und unnötige Schreibzugriffe' }
+        'boot' { return 'Windows startet schneller' }
+        'battery' {
+            if (Test-VxIsLaptop $VxProfile) { return 'Verlängert die Akkulaufzeit deines Laptops' }
+            return 'Spart Strom'
+        }
+        'telemetry' { return 'Weniger Nutzungs- und Diagnosedaten verlassen deinen PC' }
+        'privacy' { return 'Mehr Privatsphäre – weniger Daten über dich werden gesammelt oder geteilt' }
+        'ads' { return 'Weniger Werbung und aufdringliche Vorschläge' }
+        'ai' { return 'KI-Funktionen, die du nicht brauchst, bleiben aus' }
+        'bloat' {
+            if ($cat -eq 'services') { return 'Ein unnötiger Hintergrunddienst weniger – spart Arbeitsspeicher und Rechenzeit' }
+            return 'Weniger Ballast in Windows'
+        }
+        'quality-of-life' { return 'Macht die tägliche Bedienung angenehmer' }
+        'explorer' { return 'Der Explorer wird übersichtlicher und reagiert schneller' }
+        'ui' { return 'Die Oberfläche wird aufgeräumter' }
+        'streaming' { return 'Mehr Reserven, damit Spiel und Stream gleichzeitig flüssig laufen' }
+        { $_ -eq 'fivem' -or $_ -eq 'gta' } { return 'Speziell für FiveM und GTA V – mehr Leistung im Spiel' }
+        'audio' { return 'Weniger Knacken und Verzögerung beim Ton' }
+        'update' { return 'Windows Update funkt dir seltener dazwischen' }
+        'compat' { return 'Vermeidet Probleme mit älteren Programmen und Spielen' }
+    }
+    return $null
+}
+
+# Hardware the tweak is made for, when it really matters: GPU/CPU vendor, SSD/HDD, little RAM.
+function Get-VxHardwareNote($Tweak, $VxProfile) {
     $tags = @($Tweak.tags | ForEach-Object { [string]$_ })
-    $desc = ([string]$Tweak.desc).Trim()
-    if ($desc.Length -gt 0) { $desc = $desc.Substring(0, 1).ToUpperInvariant() + $desc.Substring(1) }
-    $disk = Get-VxDiskLabel $VxProfile
-    $nets = @(Get-VxProp $VxProfile 'network' @())
-    $hasLan = @($nets | Where-Object { [string](Get-VxProp $_ 'type') -eq 'ethernet' }).Count -gt 0
-    $ram = [double](Get-VxProp (Get-VxProp $VxProfile 'ram') 'totalGB' 0)
     foreach ($v in @('nvidia', 'amd', 'intel')) {
         if ($tags -contains $v) {
             $g = Get-VxShortGpuName $VxProfile $v
-            if ($g) { return ("Passend zu deiner {0}: {1}" -f $g, $desc) }
-            $cpu = [string](Get-VxProp (Get-VxProp $VxProfile 'cpu') 'name')
-            if ($cpu) { return ("Passend zu deinem Prozessor ({0}): {1}" -f ($cpu -replace '\(R\)|\(TM\)', ''), $desc) }
+            $gv = @(@(Get-VxProp $VxProfile 'gpus' @()) | Where-Object { [string](Get-VxProp $_ 'vendor') -eq $v }).Count -gt 0
+            if ($g -and $gv) { return ('passend zu deiner {0}' -f $g) }
+            $cpu = Get-VxProp $VxProfile 'cpu'
+            if ([string](Get-VxProp $cpu 'vendor') -eq $v -and [string](Get-VxProp $cpu 'name')) {
+                return ('passend zu deinem Prozessor ({0})' -f ((([string](Get-VxProp $cpu 'name')) -replace '\(R\)|\(TM\)', '' -replace '\s+', ' ').Trim()))
+            }
         }
     }
-    if ($tags -contains 'ssd' -and $disk -and $disk -ne 'Festplatte (HDD)') { return ("Du hast eine {0}, deshalb lohnt sich das: {1}" -f $disk, $desc) }
-    if ($tags -contains 'hdd' -and $disk -eq 'Festplatte (HDD)') { return ("Windows liegt bei dir auf einer Festplatte (HDD), deshalb hilft das: {0}" -f $desc) }
-    if (($tags -contains 'fivem' -or $tags -contains 'gta') -and $Goal -eq 'fivem') { return ("Speziell für FiveM und GTA V: {0}" -f $desc) }
-    if ($tags -contains 'battery' -and (Test-VxIsLaptop $VxProfile)) { return ("Schont den Akku deines Laptops: {0}" -f $desc) }
-    if ($tags -contains 'ping' -or $tags -contains 'network') {
-        # the wording follows the TWEAK (a WLAN setting stays a WLAN setting), not just the PC
-        if (Test-VxWifiTweak $Tweak) { return ("Für einen stabileren Ping über WLAN: {0}" -f $desc) }
-        if ($hasLan) { return ("Für niedrigeren Ping über deine LAN-Verbindung: {0}" -f $desc) }
-        return ("Für niedrigeren Ping: {0}" -f $desc)
+    $disk = Get-VxDiskLabel $VxProfile
+    if ($tags -contains 'ssd' -and $disk -and $disk -ne 'Festplatte (HDD)') { return ('lohnt sich, weil Windows auf deiner {0} liegt' -f $disk) }
+    if ($tags -contains 'hdd' -and $disk -eq 'Festplatte (HDD)') { return 'hilft, weil Windows bei dir auf einer Festplatte (HDD) liegt' }
+    # RAM only matters when there is little of it
+    $ram = [double](Get-VxProp (Get-VxProp $VxProfile 'ram') 'totalGB' 0)
+    if ($tags -contains 'memory' -and $ram -gt 0 -and $ram -le 16) { return ('gerade bei {0} GB Arbeitsspeicher spürbar' -f (Format-VxNumber $ram ([int]([math]::Round($ram) -ne $ram)))) }
+    return $null
+}
+
+# Why a tweak is in the plan: its benefit for this goal in simple words (+ the hardware it fits,
+# only when that matters), then the tweak's own one-line description (what it does, any downside).
+function Get-VxPlanReason($Tweak, $VxProfile, [string]$Goal) {
+    $tags = @($Tweak.tags | ForEach-Object { [string]$_ })
+    $order = @(Get-VxGoalTagOrder $Goal)
+    $lead = $null
+    foreach ($x in @(Get-VxCategoryTagOrder ([string]$Tweak.category))) { if ($tags -contains $x -and $order -contains $x) { $lead = $x; break } }
+    if (-not $lead) { foreach ($x in $order) { if ($tags -contains $x) { $lead = $x; break } } }
+    $benefit = $null
+    if ($lead) { $benefit = Get-VxTagBenefit $lead $Tweak $VxProfile $Goal }
+    if (-not $benefit) { foreach ($x in $tags) { $benefit = Get-VxTagBenefit $x $Tweak $VxProfile $Goal; if ($benefit) { break } } }
+    $hw = Get-VxHardwareNote $Tweak $VxProfile
+    $desc = ([string]$Tweak.desc).Trim()
+    if ($desc.Length -gt 0) {
+        $desc = $desc.Substring(0, 1).ToUpperInvariant() + $desc.Substring(1)
+        if ($desc -notmatch '[.!?…]$') { $desc += '.' }
     }
-    if ($tags -contains 'input') { return ("Damit Maus und Tastatur direkter reagieren: {0}" -f $desc) }
-    if ($tags -contains 'latency') { return ("Weniger Verzögerung: {0}" -f $desc) }
-    if ($tags -contains 'memory' -and $ram -gt 0) { return ("Passend zu deinen {0} GB RAM: {1}" -f $ram, $desc) }
-    if ($tags -contains 'stutter') { return ("Gegen Ruckler: {0}" -f $desc) }
-    if ($tags -contains 'fps') {
-        $g = $null
-        if ([string]$Tweak.category -eq 'gpu') { $g = Get-VxShortGpuName $VxProfile '' }
-        if ($g) { return ("Mehr FPS aus deiner {0}: {1}" -f $g, $desc) }
-        return ("Mehr FPS: {0}" -f $desc)
+    if (-not $benefit) {
+        if ($hw) { return ($hw.Substring(0, 1).ToUpperInvariant() + $hw.Substring(1) + '. ' + $desc).Trim() }
+        return $desc
     }
-    if ($tags -contains 'privacy' -or $tags -contains 'telemetry') { return ("Weniger Daten an Microsoft: {0}" -f $desc) }
-    if ($tags -contains 'ads' -or $tags -contains 'ai' -or $tags -contains 'bloat') { return ("Weniger Werbung und Ballast: {0}" -f $desc) }
-    if ($tags -contains 'streaming') { return ("Gut fürs Streamen: {0}" -f $desc) }
-    return $desc
+    $head = $benefit
+    if ($hw) { $head += ' – ' + $hw }
+    return ($head + '. ' + $desc).Trim()
 }
 
 # Exclusive targets of a tweak (used to keep conflicting tweaks out of one plan).
@@ -320,7 +433,9 @@ function Get-VxApplicableFixIds([string[]]$Ids, $VxProfile) {
     return $ok
 }
 
-function Get-VxFindings($VxProfile, [string]$Goal) {
+# Findings for the profile of the last scan. Without -All, findings that a tweak VELOX applied since
+# has solved are left out (the profile itself is not re-read).
+function Get-VxFindings($VxProfile, [string]$Goal, [switch]$All) {
     $ctx = $global:VxCtx
     $f = New-Object System.Collections.ArrayList
     if ($null -eq $VxProfile) { return @() }
@@ -330,7 +445,7 @@ function Get-VxFindings($VxProfile, [string]$Goal) {
     if ($null -ne $d) {
         $cur = [int](Get-VxProp $d 'currentHz' 0); $max = [int](Get-VxProp $d 'maxHz' 0)
         if ($cur -gt 0 -and $max -gt ($cur + 5)) {
-            [void]$f.Add((New-VxFinding 'refresh-rate' 'bad' ("Bildschirm läuft nur mit {0} Hz" -f $cur) ("Dein Bildschirm schafft {0} Hz, Windows nutzt aber nur {1} Hz. Stell in den erweiterten Anzeigeeinstellungen die Bildwiederholrate auf {0} Hz - das ist der größte Gratis-Boost für flüssiges Spielen." -f $max, $cur) ([ordered]@{ type = 'open'; target = 'ms-settings:display-advanced' })))
+            [void]$f.Add((New-VxFinding 'refresh-rate' 'bad' ("Bildschirm läuft nur mit {0} Hz" -f $cur) ("Dein Bildschirm schafft {0} Hz, Windows nutzt aber nur {1} Hz. Stell in den erweiterten Anzeigeeinstellungen die Bildwiederholrate auf {0} Hz – das ist der größte Gratis-Boost für flüssiges Spielen." -f $max, $cur) ([ordered]@{ type = 'open'; target = 'ms-settings:display-advanced' })))
         } elseif ($cur -ge 100) {
             [void]$f.Add((New-VxFinding 'refresh-rate' 'good' ("Bildschirm nutzt {0} Hz" -f $cur) 'Die Bildwiederholrate steht schon auf dem Maximum.' $null))
         }
@@ -345,25 +460,25 @@ function Get-VxFindings($VxProfile, [string]$Goal) {
         if ($slow) {
             $sev = 'warn'; $extra = ''
             if ($isLaptop) { $sev = 'info'; $extra = ' Bei Laptops geht das nur, wenn das BIOS diese Option anbietet.' }
-            [void]$f.Add((New-VxFinding 'xmp' $sev ("Arbeitsspeicher läuft nur mit {0} MHz" -f $conf) ("Dein {0}-RAM läuft mit {1} MHz, typisch sind {2} MHz. Schalte im BIOS das XMP- bzw. EXPO-Profil ein - das bringt in CPU-lastigen Spielen oft spürbar mehr FPS. Das geht nur im BIOS, nicht per Software.{3}" -f $type, $conf, $typical, $extra) $null))
+            [void]$f.Add((New-VxFinding 'xmp' $sev ("Arbeitsspeicher läuft nur mit {0} MHz" -f $conf) ("Dein {0}-RAM läuft mit {1} MHz, typisch sind {2} MHz. Schalte im BIOS das XMP- bzw. EXPO-Profil ein – das bringt in CPU-lastigen Spielen oft spürbar mehr FPS. Das geht nur im BIOS, nicht per Software.{3}" -f $type, $conf, $typical, $extra) $null))
         }
     }
     # ---- VBS / HVCI
     $sec = Get-VxProp $VxProfile 'security'
     if ($null -ne $sec -and ((Get-VxProp $sec 'hvci') -eq $true -or (Get-VxProp $sec 'vbs') -eq $true)) {
-        [void]$f.Add((New-VxFinding 'vbs' 'info' 'Kernisolierung (VBS/HVCI) ist an' "Das schützt den Windows-Kern vor Angriffen, kostet in manchen Spielen aber ein paar Prozent Leistung. VELOX schaltet das nie automatisch ab. Unter 'Experte (riskant)' findest du die passenden Tweaks - nur benutzen, wenn du das Risiko verstehst." $null))
+        [void]$f.Add((New-VxFinding 'vbs' 'info' 'Kernisolierung (VBS/HVCI) ist an' 'Das schützt den Windows-Kern vor Angriffen, kostet in manchen Spielen aber ein paar Prozent Leistung. VELOX schaltet das nie automatisch ab. Unter „Experte (riskant)“ findest du die passenden Tweaks – nur benutzen, wenn du das Risiko verstehst.' $null))
     }
     # ---- power plan
     $pw = Get-VxProp $VxProfile 'power'
     if ($null -ne $pw) {
         $guid = [string](Get-VxProp $pw 'activePlan')
         if ($guid -eq (Get-VxPlanBaseGuid 'balanced') -and -not $isLaptop -and (Test-VxDualCcdX3d $VxProfile)) {
-            [void]$f.Add((New-VxFinding 'power-plan' 'good' "Energieplan 'Ausbalanciert' passt zu deinem Ryzen X3D" 'Bei Ryzen-X3D-Prozessoren mit zwei Chiplets braucht AMD diesen Plan, damit Spiele auf den Kernen mit dem großen Cache laufen. Lass ihn so.' $null))
+            [void]$f.Add((New-VxFinding 'power-plan' 'good' 'Energieplan „Ausbalanciert“ passt zu deinem Ryzen X3D' 'Bei Ryzen-X3D-Prozessoren mit zwei Chiplets braucht AMD diesen Plan, damit Spiele auf den Kernen mit dem großen Cache laufen. Lass ihn so.' $null))
         } elseif ($guid -eq (Get-VxPlanBaseGuid 'balanced') -and -not $isLaptop) {
             $ids = @(Get-VxApplicableFixIds @(Find-VxPlanTweakIds) $VxProfile)
             $fix = $null
             if ($ids.Count -gt 0) { $fix = [ordered]@{ type = 'tweaks'; ids = $ids } } else { $fix = [ordered]@{ type = 'open'; target = 'ms-settings:powersleep' } }
-            [void]$f.Add((New-VxFinding 'power-plan' 'warn' "Energieplan 'Ausbalanciert' auf einem Desktop-PC" 'Der Prozessor taktet damit oft herunter und braucht Zeit zum Hochfahren - das kostet Reaktionszeit und kann Ruckler verursachen. Ein Leistungsplan hält ihn auf Trab.' $fix))
+            [void]$f.Add((New-VxFinding 'power-plan' 'warn' 'Energieplan „Ausbalanciert“ auf einem Desktop-PC' 'Der Prozessor taktet damit oft herunter und braucht Zeit zum Hochfahren – das kostet Reaktionszeit und kann Ruckler verursachen. Ein Leistungsplan hält ihn auf Trab.' $fix))
         }
     }
     # ---- gaming flags
@@ -391,14 +506,14 @@ function Get-VxFindings($VxProfile, [string]$Goal) {
     $free = Get-VxProp $VxProfile 'systemDriveFreeGB'
     if ($null -ne $free) {
         if ([double]$free -lt 10) {
-            [void]$f.Add((New-VxFinding 'disk-space' 'bad' ("Nur noch {0} GB frei auf dem Systemlaufwerk" -f $free) 'Windows wird langsam und Updates können fehlschlagen, wenn weniger als 10 GB frei sind. Räum auf.' ([ordered]@{ type = 'page'; page = 'cleanup' })))
+            [void]$f.Add((New-VxFinding 'disk-space' 'bad' ("Nur noch {0} GB frei auf dem Systemlaufwerk" -f (Format-VxNumber ([double]$free) ([int]([math]::Round([double]$free) -ne [double]$free)))) 'Windows wird langsam und Updates können fehlschlagen, wenn weniger als 10 GB frei sind. Räum auf.' ([ordered]@{ type = 'page'; page = 'cleanup' })))
         } elseif ([double]$free -lt 25) {
-            [void]$f.Add((New-VxFinding 'disk-space' 'warn' ("Nur {0} GB frei auf dem Systemlaufwerk" -f $free) 'Etwas Platz schaffen hilft Windows und Spielen beim Nachladen.' ([ordered]@{ type = 'page'; page = 'cleanup' })))
+            [void]$f.Add((New-VxFinding 'disk-space' 'warn' ("Nur {0} GB frei auf dem Systemlaufwerk" -f (Format-VxNumber ([double]$free) ([int]([math]::Round([double]$free) -ne [double]$free)))) 'Etwas Platz schaffen hilft Windows und Spielen beim Nachladen.' ([ordered]@{ type = 'page'; page = 'cleanup' })))
         }
     }
     $temp = Get-VxProp $VxProfile 'tempMB'
     if ($null -ne $temp -and [double]$temp -gt 2000) {
-        [void]$f.Add((New-VxFinding 'temp-files' 'info' ("{0:N1} GB temporäre Dateien" -f ([double]$temp / 1024)) 'Die kannst du gefahrlos löschen.' ([ordered]@{ type = 'page'; page = 'cleanup' })))
+        [void]$f.Add((New-VxFinding 'temp-files' 'info' ("{0} GB temporäre Dateien" -f (Format-VxNumber ([double]$temp / 1024) 1)) 'Die kannst du gefahrlos löschen.' ([ordered]@{ type = 'page'; page = 'cleanup' })))
     }
     # ---- uptime
     $up = Get-VxProp $VxProfile 'uptimeHours'
@@ -408,13 +523,15 @@ function Get-VxFindings($VxProfile, [string]$Goal) {
     # ---- startup apps
     $sc = Get-VxProp $VxProfile 'startupCount'
     if ($null -ne $sc -and [int]$sc -gt 8) {
-        [void]$f.Add((New-VxFinding 'startup' 'warn' ("{0} Programme starten mit Windows" -f $sc) 'Jedes davon verlängert den Start und läuft danach im Hintergrund weiter. Schalte unter "Apps" ab, was du nicht sofort brauchst.' ([ordered]@{ type = 'page'; page = 'apps' })))
+        [void]$f.Add((New-VxFinding 'startup' 'warn' ("{0} Programme starten mit Windows" -f [int]$sc) 'Jedes davon verlängert den Start und läuft danach im Hintergrund weiter. Schalte unter „Apps“ ab, was du nicht sofort brauchst.' ([ordered]@{ type = 'page'; page = 'apps' })))
     }
     # ---- foreign tweaks
     $fc = Get-VxProp $VxProfile 'foreignCount'
     if ($null -eq $fc) { $fc = Get-VxProp $ctx.State 'foreignCount' $null }
     if ($null -ne $fc -and [int]$fc -gt 0) {
-        [void]$f.Add((New-VxFinding 'foreign' 'warn' ("{0} Einstellungen von anderen Tweak-Tools gefunden" -f $fc) 'Andere Tweaker setzen oft Werte, die heute eher schaden. Mit Detweak setzt du sie sauber auf Standard zurück.' ([ordered]@{ type = 'page'; page = 'detweak' })))
+        # foreignCount never counts what VELOX itself set (core/Detweak.ps1)
+        $what = 'Einstellungen'; if ([int]$fc -eq 1) { $what = 'Einstellung' }
+        [void]$f.Add((New-VxFinding 'foreign' 'warn' ("{0} {1} von anderen Tweak-Tools gefunden" -f [int]$fc, $what) 'Andere Tweaker setzen oft Werte, die heute eher schaden. Mit Detweak setzt du sie sauber auf Standard zurück.' ([ordered]@{ type = 'page'; page = 'detweak' })))
     }
     # ---- backups
     $hasBackups = $false
@@ -424,94 +541,165 @@ function Get-VxFindings($VxProfile, [string]$Goal) {
     }
     # ---- good news
     if ([string](Get-VxProp $VxProfile 'systemDisk') -eq 'ssd') {
-        [void]$f.Add((New-VxFinding 'ssd' 'good' ("Windows liegt auf einer {0}" -f (Get-VxDiskLabel $VxProfile)) 'Schnelle Ladezeiten - perfekt.' $null))
+        [void]$f.Add((New-VxFinding 'ssd' 'good' ("Windows liegt auf einer {0}" -f (Get-VxDiskLabel $VxProfile)) 'Schnelle Ladezeiten – perfekt.' $null))
     }
-    return @($f)
+    if ($All) { return @($f) }
+    # the profile is from the last scan: a finding one of whose fix tweaks VELOX has applied since is
+    # solved (each fix id alone fixes it: "a performance plan", "Game DVR off"); the power plan
+    # finding is solved by any performance plan tweak
+    $st = $ctx.State.statuses
+    $planIds = @()
+    foreach ($t in $ctx.Catalog.tweaks) {
+        foreach ($a in @($t.actions)) { if ([string](Get-VxProp $a 'type') -eq 'powerplan' -and [string](Get-VxProp $a 'plan') -ne 'balanced') { $planIds += [string]$t.id } }
+    }
+    $open = @($f | Where-Object {
+            $fix = Get-VxProp $_ 'fix'
+            if ([string](Get-VxProp $_ 'id') -eq 'power-plan' -and @($planIds | Where-Object { [string]$st[$_] -eq 'applied' }).Count -gt 0) { return $false }
+            if ($null -eq $fix -or [string](Get-VxProp $fix 'type') -ne 'tweaks') { return $true }
+            $ids = @(Get-VxProp $fix 'ids' @())
+            if ($ids.Count -eq 0) { return $true }
+            return (@($ids | Where-Object { [string]$st[[string]$_] -eq 'applied' }).Count -eq 0)
+        })
+    return @($open)
 }
 
-function Get-VxSeverityPenalty([string]$Severity) {
-    switch ($Severity) { 'bad' { return 8 } 'warn' { return 4 } }
+# Score points a finding costs. "no-backups" is reassurance, not a problem.
+function Get-VxFindingPenalty($Finding) {
+    if ([string](Get-VxProp $Finding 'id') -eq 'no-backups') { return 0 }
+    switch ([string](Get-VxProp $Finding 'severity')) { 'bad' { return 5 } 'warn' { return 3 } 'info' { return 1 } }
     return 0
 }
 
-# Score 0-100 = 60 % weighted share of the goal's recommended tweaks applied + 40 - finding penalties.
-function Get-VxAdvisorScore($Candidates, $Findings, [string[]]$PlanIds) {
-    $st = $global:VxCtx.State.statuses
-    $total = 0.0; $done = 0.0; $after = 0.0
-    foreach ($c in @($Candidates)) {
-        $t = $c.tweak
-        $w = [double](Get-VxProp $t 'impact' 1)
-        if ($w -lt 1) { $w = 1 }
-        $total += $w
-        $s = [string]$st[[string]$t.id]
-        if ($s -eq 'applied') { $done += $w; $after += $w }
-        elseif ($PlanIds -contains [string]$t.id) { $after += $w }
+# Plan size per goal: enough for a noticeable effect, few enough to review.
+function Get-VxGoalPlanCap([string]$Goal) {
+    switch ($Goal) {
+        'balanced' { return 25 }
+        'competitive' { return 55 }
+        'privacy' { return 50 }
+        'laptop' { return 30 }
+        'streaming' { return 40 }
+        'fivem' { return 45 }
     }
-    $share = 1.0; $shareAfter = 1.0
-    if ($total -gt 0) { $share = $done / $total; $shareAfter = $after / $total }
-    $pen = 0; $penAfter = 0
-    foreach ($f in @($Findings)) {
-        $p = Get-VxSeverityPenalty ([string]$f.severity)
-        $pen += $p
-        $fixed = $false
-        $fix = Get-VxProp $f 'fix'
-        if ($null -ne $fix -and [string](Get-VxProp $fix 'type') -eq 'tweaks') {
-            $ids = @(Get-VxProp $fix 'ids' @())
-            if ($ids.Count -gt 0) {
-                $fixed = $true
-                foreach ($i in $ids) { if (-not ($PlanIds -contains [string]$i) -and [string]$st[[string]$i] -ne 'applied') { $fixed = $false } }
-            }
-        }
-        if (-not $fixed) { $penAfter += $p }
-    }
-    if ($pen -gt 40) { $pen = 40 }
-    if ($penAfter -gt 40) { $penAfter = 40 }
-    $score = [int][math]::Round(60 * $share + 40 - $pen)
-    $scoreAfter = [int][math]::Round(60 * $shareAfter + 40 - $penAfter)
-    $score = [math]::Max(0, [math]::Min(100, $score))
-    $scoreAfter = [math]::Max($score, [math]::Min(100, $scoreAfter))
-    return @{ score = $score; scoreAfter = $scoreAfter }
+    return 40
 }
 
-# The local advisor. Returns advisorResult (contract section 7).
-function Invoke-VxAdvisor([string]$Goal, [string]$Text, $VxProfile) {
-    $valid = @('gaming', 'competitive', 'balanced', 'privacy', 'laptop', 'streaming', 'fivem')
-    if ($valid -notcontains $Goal) { $Goal = 'gaming' }
-    $cfg = Get-VxGoalConfig $Goal
-    $extra = @(Get-VxTextTags $Text)
-    $cands = @(Get-VxGoalCandidates $Goal $VxProfile $extra)
+# The recommended set for a goal on this PC: candidates ranked by priority (impact and relevance:
+# free-text match, the goal's hand-reviewed preset, goal tags), conflicting tweaks removed (an
+# applied one keeps its slot), capped per goal. Status-agnostic apart from that, so applying the
+# plan does not change the set. Returns rows { id; tweak; prio; core; keyword; applied }.
+function Get-VxRecommended([string]$Goal, $VxProfile, [string[]]$ExtraTags = @(), $Findings = @()) {
     $st = $global:VxCtx.State.statuses
-    $plan = New-Object System.Collections.ArrayList
+    $presetIds = @(Get-VxGoalPresetIds $Goal)
+    # tweaks that fix a finding of this PC ("Game DVR is on") are the most relevant ones
+    $fixIds = @{}
+    foreach ($f in @($Findings)) {
+        $fix = Get-VxProp $f 'fix'
+        if ($null -ne $fix -and [string](Get-VxProp $fix 'type') -eq 'tweaks' -and @('bad', 'warn', 'info') -contains [string](Get-VxProp $f 'severity')) {
+            foreach ($i in @(Get-VxProp $fix 'ids' @())) { $fixIds[[string]$i] = $true }
+        }
+    }
     $rows = @()
-    foreach ($c in $cands) {
+    foreach ($c in @(Get-VxGoalCandidates $Goal $VxProfile $ExtraTags @($fixIds.Keys))) {
         $t = $c.tweak
-        if ([string]$st[[string]$t.id] -eq 'applied') { continue }
         $impact = [int](Get-VxProp $t 'impact' 1)
         # goal tweaks: impact 3 -> priority 1 ... ; side benefits (privacy/debloat in a gaming goal) rank lower
         $prio = 4 - $impact
         if (-not $c.core) { $prio = 5 - $impact }
         if ($c.keyword) { $prio-- }
+        if ($fixIds.ContainsKey([string]$t.id)) { $prio = 1 }
         if ($prio -lt 1) { $prio = 1 }
         if ($prio -gt 3) { $prio = 3 }
-        $kw = 1
-        if ($c.keyword) { $kw = 0 }
-        $coreRank = 1
-        if ($c.core) { $coreRank = 0 }
-        $rows += [pscustomobject]@{ id = [string]$t.id; prio = $prio; kw = $kw; core = $coreRank; impact = $impact; risk = (Get-VxRiskRank ([string]$t.risk)); tweak = $t }
+        $kw = 1; if ($c.keyword -or $fixIds.ContainsKey([string]$t.id)) { $kw = 0 }
+        $pre = 1; if ($presetIds -contains [string]$t.id) { $pre = 0 }
+        $cr = 1; if ($c.core) { $cr = 0 }
+        $rows += [pscustomobject]@{
+            id = [string]$t.id; tweak = $t; prio = $prio; kw = $kw; preset = $pre; coreRank = $cr; impact = $impact
+            risk = (Get-VxRiskRank ([string]$t.risk)); core = [bool]$c.core; keyword = [bool]$c.keyword
+            applied = ([string]$st[[string]$t.id] -eq 'applied')
+        }
     }
-    $sorted = @($rows | Sort-Object -Property @{ Expression = 'prio' }, @{ Expression = 'kw' }, @{ Expression = 'core' }, @{ Expression = 'impact'; Descending = $true }, @{ Expression = 'risk' }, @{ Expression = 'id' })
+    $sorted = @($rows | Sort-Object -Property @{ Expression = 'prio' }, @{ Expression = 'kw' }, @{ Expression = 'preset' }, @{ Expression = 'coreRank' }, @{ Expression = 'impact'; Descending = $true }, @{ Expression = 'risk' }, @{ Expression = 'id' })
+    # two tweaks that set the same thing (e.g. two power plans) never both: one already applied wins
     $claimed = @{}
     foreach ($r in $sorted) {
-        if ($plan.Count -ge 60) { break }
-        # two tweaks that set the same thing (e.g. two power plans) must not both be in a plan
+        if (-not $r.applied) { continue }
+        foreach ($k in @(Get-VxTweakTargetKeys $r.tweak)) { if (-not $claimed.ContainsKey($k)) { $claimed[$k] = $r.id } }
+    }
+    $cap = Get-VxGoalPlanCap $Goal
+    $out = New-Object System.Collections.ArrayList
+    foreach ($r in $sorted) {
+        if ($out.Count -ge $cap) { break }
         $keys = @(Get-VxTweakTargetKeys $r.tweak)
         $clash = $false
-        foreach ($k in $keys) { if ($claimed.ContainsKey($k)) { $clash = $true } }
+        foreach ($k in $keys) { if ($claimed.ContainsKey($k) -and $claimed[$k] -ne $r.id) { $clash = $true } }
         if ($clash) { continue }
-        foreach ($k in $keys) { $claimed[$k] = $true }
+        foreach ($k in $keys) { $claimed[$k] = $r.id }
+        [void]$out.Add($r)
+    }
+    return @($out)
+}
+
+# Score 0-100 for the recommended set: 50 + 50 x weighted share applied (weight = impact, half for
+# side benefits) - finding penalties (bad 5, warn 3, info 1; at most 12). A stock Windows PC lands
+# around 35-55, a fully applied plan around 85-95 (hardware/BIOS findings remain). 100 only when
+# every recommended tweak is applied and no finding (other than good news) is left.
+# scoreAfter: the same with the plan applied and the findings its tweaks fix gone.
+function Get-VxAdvisorScore($Recommended, $Findings, [string[]]$PlanIds) {
+    $st = $global:VxCtx.State.statuses
+    $total = 0.0; $done = 0.0; $after = 0.0
+    foreach ($r in @($Recommended)) {
+        $t = Get-VxProp $r 'tweak'
+        $w = [double](Get-VxProp $t 'impact' 1)
+        if ($w -lt 1) { $w = 1 }
+        if (-not [bool](Get-VxProp $r 'core' $true)) { $w = $w / 2 }
+        $total += $w
+        if ([string]$st[[string]$t.id] -eq 'applied') { $done += $w; $after += $w }
+        elseif ($PlanIds -contains [string]$t.id) { $after += $w }
+    }
+    $share = 1.0; $shareAfter = 1.0
+    if ($total -gt 0) { $share = $done / $total; $shareAfter = $after / $total }
+    $pen = 0; $penAfter = 0; $left = 0; $leftAfter = 0
+    foreach ($f in @($Findings)) {
+        $p = Get-VxFindingPenalty $f
+        $counts = ([string](Get-VxProp $f 'severity') -ne 'good' -and [string](Get-VxProp $f 'id') -ne 'no-backups')
+        $pen += $p
+        if ($counts) { $left++ }
+        $fixed = $false
+        $fix = Get-VxProp $f 'fix'
+        if ($null -ne $fix -and [string](Get-VxProp $fix 'type') -eq 'tweaks') {
+            $ids = @(Get-VxProp $fix 'ids' @())
+            # any one of the fix tweaks solves it
+            foreach ($i in $ids) { if (($PlanIds -contains [string]$i) -or [string]$st[[string]$i] -eq 'applied') { $fixed = $true } }
+        }
+        if (-not $fixed) { $penAfter += $p; if ($counts) { $leftAfter++ } }
+    }
+    if ($pen -gt 12) { $pen = 12 }
+    if ($penAfter -gt 12) { $penAfter = 12 }
+    $score = [int][math]::Round(50 + 50 * $share - $pen)
+    $scoreAfter = [int][math]::Round(50 + 50 * $shareAfter - $penAfter)
+    # 100 is earned only by a complete plan and no open finding
+    if ($score -ge 100 -and ($done -lt $total -or $left -gt 0)) { $score = 99 }
+    if ($scoreAfter -ge 100 -and ($after -lt $total -or $leftAfter -gt 0)) { $scoreAfter = 99 }
+    $score = [math]::Max(0, [math]::Min(100, $score))
+    $scoreAfter = [math]::Max($score, [math]::Min(100, $scoreAfter))
+    return @{ score = [int]$score; scoreAfter = [int]$scoreAfter }
+}
+
+# The local advisor. Returns advisorResult (contract section 7). Deterministic.
+function Invoke-VxAdvisor([string]$Goal, [string]$Text, $VxProfile) {
+    $valid = @('gaming', 'competitive', 'balanced', 'privacy', 'laptop', 'streaming', 'fivem')
+    if ($valid -notcontains $Goal) { $Goal = 'gaming' }
+    $cfg = Get-VxGoalConfig $Goal
+    $extra = @(Get-VxTextTags $Text)
+    $findings = @(Get-VxFindings $VxProfile $Goal)
+    # the recommended set follows the scanned findings (also the ones solved since), so applying the
+    # plan does not change it
+    $rec = @(Get-VxRecommended $Goal $VxProfile $extra @(Get-VxFindings $VxProfile $Goal -All))
+    $plan = New-Object System.Collections.ArrayList
+    foreach ($r in $rec) {
+        if ($r.applied) { continue }
         [void]$plan.Add([ordered]@{ id = $r.id; reason = (Get-VxPlanReason $r.tweak $VxProfile $Goal); priority = $r.prio })
     }
-    $findings = @(Get-VxFindings $VxProfile $Goal)
     $planIds = @($plan | ForEach-Object { $_.id })
     # the power plan finding offers the same plan the plan list contains
     $planPlan = @($planIds | Where-Object { Test-VxTweakHasAction (Get-VxTweak $_) 'powerplan' })
@@ -520,13 +708,14 @@ function Invoke-VxAdvisor([string]$Goal, [string]$Text, $VxProfile) {
             if ($fd.id -eq 'power-plan' -and $null -ne $fd.fix -and [string]$fd.fix.type -eq 'tweaks') { $fd.fix = [ordered]@{ type = 'tweaks'; ids = @($planPlan[0]) } }
         }
     }
-    $sc = Get-VxAdvisorScore $cands $findings $planIds
-    $bad = @($findings | Where-Object { $_.severity -eq 'bad' -or $_.severity -eq 'warn' })
-    $summary = ("Dein PC erreicht {0} von 100 Punkten für das Ziel '{1}'." -f $sc.score, $cfg.name)
-    if ($plan.Count -gt 0) { $summary += (" Mit den {0} empfohlenen Tweaks kommst du auf etwa {1} Punkte." -f $plan.Count, $sc.scoreAfter) }
-    else { $summary += ' Alle passenden Tweaks sind schon aktiv - stark!' }
-    if ($bad.Count -gt 0) { $summary += (" Am wichtigsten: {0}." -f $bad[0].title) }
-    if ($extra.Count -gt 0) { $summary += (' Deine Beschreibung wurde berücksichtigt (' + ($extra -join ', ') + ').') }
+    $sc = Get-VxAdvisorScore $rec $findings $planIds
+    $bad = @(@($findings | Where-Object { $_.severity -eq 'bad' }) + @($findings | Where-Object { $_.severity -eq 'warn' }))
+    $summary = ('Dein PC erreicht {0} von 100 Punkten für das Ziel „{1}“.' -f $sc.score, $cfg.name)
+    if ($plan.Count -eq 1) { $summary += (' Mit dem empfohlenen Tweak kommst du auf etwa {0} Punkte.' -f $sc.scoreAfter) }
+    elseif ($plan.Count -gt 1) { $summary += (' Mit den {0} empfohlenen Tweaks kommst du auf etwa {1} Punkte.' -f $plan.Count, $sc.scoreAfter) }
+    else { $summary += ' Alle passenden Tweaks sind schon aktiv – stark!' }
+    if ($bad.Count -gt 0) { $summary += (' Am wichtigsten: {0}.' -f $bad[0].title) }
+    if ($extra.Count -gt 0) { $summary += (' Deine Beschreibung wurde berücksichtigt: ' + ((@($extra | ForEach-Object { Get-VxTagWord $_ }) | Select-Object -Unique) -join ', ') + '.') }
     return [ordered]@{
         engine = 'local'; score = $sc.score; scoreAfter = $sc.scoreAfter; summary = $summary
         findings = $findings; plan = $plan.ToArray()

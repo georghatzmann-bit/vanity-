@@ -4577,16 +4577,18 @@
       "id": "power-defaults",
       "label": "Energiepläne auf Standard",
       "desc": "Setzt alle Energiepläne auf die Windows-Werkseinstellung zurück. Eigene, importierte und vom Hersteller mitgelieferte Pläne werden dabei gelöscht.",
-      "defaultOn": true,
+      "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe -restoredefaultschemes 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg -restoredefaultschemes ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
     },
     {
       "id": "tcp-defaults",
       "label": "TCP-Globaleinstellungen auf Standard",
       "desc": "Stellt die Internet-Grundeinstellungen (Auto-Tuning, RSS, ECN, Zeitstempel, Staukontrolle usw.), die Ping-Tweaker gern verstellen, auf Windows-Standard.",
-      "defaultOn": true,
+      "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\netsh.exe'\n$sets = @(\n    @('int', 'tcp', 'set', 'global', 'autotuninglevel=normal'),\n    @('int', 'tcp', 'set', 'global', 'rss=enabled'),\n    @('int', 'tcp', 'set', 'global', 'rsc=enabled'),\n    @('int', 'tcp', 'set', 'global', 'ecncapability=default'),\n    @('int', 'tcp', 'set', 'global', 'timestamps=default'),\n    @('int', 'tcp', 'set', 'global', 'initialrto=1000'),\n    @('int', 'tcp', 'set', 'global', 'nonsackrttresiliency=disabled'),\n    @('int', 'tcp', 'set', 'global', 'maxsynretransmissions=4'),\n    @('int', 'tcp', 'set', 'global', 'fastopen=enabled'),\n    @('int', 'tcp', 'set', 'global', 'fastopenfallback=enabled'),\n    @('int', 'tcp', 'set', 'global', 'hystart=enabled'),\n    @('int', 'tcp', 'set', 'global', 'prr=enabled'),\n    @('int', 'tcp', 'set', 'global', 'pacingprofile=off'),\n    @('int', 'tcp', 'set', 'heuristics', 'disabled'),\n    @('int', 'tcp', 'set', 'supplemental', 'template=internet', 'congestionprovider=cubic'),\n    @('int', 'tcp', 'set', 'supplemental', 'template=internetcustom', 'congestionprovider=cubic'),\n    @('int', 'ip', 'set', 'global', 'taskoffload=enabled'),\n    @('int', 'ipv4', 'set', 'dynamicport', 'tcp', 'start=49152', 'num=16384'),\n    @('int', 'ipv4', 'set', 'dynamicport', 'udp', 'start=49152', 'num=16384')\n)\n$failed = @()\nforeach ($a in $sets) {\n    $null = & $exe $a 2>&1\n    if ($LASTEXITCODE -ne 0) { $failed += ($a -join ' ') }\n}\nif ($failed.Count -gt 0) { throw ('Nicht alle Werte liessen sich setzen: ' + ($failed -join '; ')) }\n"
     },
     {
@@ -4595,22 +4597,25 @@
       "desc": "Löscht zwischengespeicherte Adressen, damit alte oder verbogene Einträge sofort verschwinden. Harmlos.",
       "defaultOn": true,
       "needs": "none",
+      "risk": "safe",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('ipconfig /flushdns ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
     },
     {
       "id": "defender-defaults",
       "label": "Defender-Schutz wieder einschalten",
       "desc": "Schaltet Echtzeitschutz, Verhaltensüberwachung, Cloud-Schutz, Download- und Skript-Prüfung wieder ein, falls ein Tool sie abgeschaltet hat. Bei anderem Virenschutz ohne Wirkung.",
-      "defaultOn": true,
+      "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "if (-not (Get-Command -Name Set-MpPreference -ErrorAction SilentlyContinue)) { return }\n$st = $null\ntry { $st = Get-MpComputerStatus -ErrorAction Stop } catch { return }\nif ($null -eq $st -or -not $st.AMServiceEnabled) { return }\ntry {\n    Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false -DisableIOAVProtection $false -DisableScriptScanning $false -DisableBlockAtFirstSeen $false -MAPSReporting 2 -ErrorAction Stop\n} catch {\n    throw ('Defender-Einstellungen nicht aenderbar. Ist der Manipulationsschutz an? Dann unter Windows-Sicherheit > Viren- und Bedrohungsschutz pruefen. ' + $_.Exception.Message)\n}\n"
     },
     {
       "id": "memory-defaults",
       "label": "Speicherkomprimierung und Prefetch auf Standard",
       "desc": "Schaltet Speicherkomprimierung, Prefetch und das Vorladen häufig genutzter Apps wieder ein, falls ein Tool sie abgeschaltet hat (Disable-MMAgent).",
-      "defaultOn": true,
+      "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "if (-not (Get-Command -Name Enable-MMAgent -ErrorAction SilentlyContinue)) { return }\n$svc = Get-Service -Name 'SysMain' -ErrorAction SilentlyContinue\nif ($null -eq $svc) { return }\nif ($svc.Status -ne 'Running') {\n    if ($svc.StartType -eq 'Disabled') { throw 'Der Dienst SysMain ist deaktiviert. Bitte SysMain im Detweak mit auswaehlen und erneut ausfuehren.' }\n    Start-Service -Name 'SysMain' -ErrorAction Stop\n}\n$mm = Get-MMAgent -ErrorAction Stop\nif (-not $mm.MemoryCompression) { Enable-MMAgent -MemoryCompression -ErrorAction Stop }\nif (-not $mm.ApplicationLaunchPrefetching) { Enable-MMAgent -ApplicationLaunchPrefetching -ErrorAction Stop }\nif (-not $mm.ApplicationPreLaunch) { Enable-MMAgent -ApplicationPreLaunch -ErrorAction Stop }\n"
     },
     {
@@ -4619,14 +4624,16 @@
       "desc": "Stellt sicher, dass Windows SSDs über gelöschte Daten informiert (Standard). Ohne TRIM werden SSDs mit der Zeit langsamer.",
       "defaultOn": true,
       "needs": "none",
+      "risk": "safe",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\fsutil.exe'\n$null = & $exe behavior set DisableDeleteNotify 0 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('fsutil behavior set DisableDeleteNotify 0 ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
     },
     {
       "id": "dep-optin",
       "label": "Datenausführungsverhinderung (DEP) wieder an",
       "desc": "Schaltet DEP auf den Windows-Standard (OptIn) zurück, falls ein Tool sie ganz abgeschaltet hat (nx AlwaysOff). Sonst passiert nichts.",
-      "defaultOn": true,
+      "defaultOn": false,
       "needs": "reboot",
+      "risk": "moderate",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\bcdedit.exe'\n$out = & $exe /enum '{current}' 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('bcdedit /enum ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\nif (-not ((@($out) -join \"`n\") -match '(?im)^\\s*nx\\s+AlwaysOff\\s*$')) { return }\n$null = & $exe /set '{current}' nx OptIn 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('bcdedit /set nx OptIn ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
     },
     {
@@ -4635,6 +4642,7 @@
       "desc": "Gibt die Größe der Auslagerungsdatei wieder an Windows ab. Hilft, wenn ein Tool sie abgeschaltet oder zu klein gemacht hat (Abstürze, 'zu wenig Arbeitsspeicher').",
       "defaultOn": false,
       "needs": "reboot",
+      "risk": "moderate",
       "script": "$cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop\nif (-not $cs.AutomaticManagedPagefile) {\n    Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $true } -ErrorAction Stop\n}\n"
     },
     {
@@ -4643,6 +4651,7 @@
       "desc": "Legt die Ruhezustand-Datei wieder an (powercfg /hibernate on). Nötig für Schnellstart und Ruhezustand, belegt aber einige GB auf C:.",
       "defaultOn": false,
       "needs": "reboot",
+      "risk": "moderate",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe /hibernate on 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg /hibernate on ist fehlgeschlagen (Code ' + $LASTEXITCODE + '). Manche Geraete unterstuetzen keinen Ruhezustand.') }\n"
     },
     {
@@ -4651,6 +4660,7 @@
       "desc": "Entfernt fest eingetragene DNS-Server (z. B. von Ping-Tweakern) bei allen aktiven Netzwerkadaptern. Wer bewusst eigenen DNS nutzt, lässt das aus.",
       "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "if (-not (Get-Command -Name Set-DnsClientServerAddress -ErrorAction SilentlyContinue)) { throw 'Set-DnsClientServerAddress gibt es auf diesem Windows nicht.' }\n$failed = @()\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' })) {\n    try { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop } catch { $failed += $a.Name }\n}\nif ($failed.Count -gt 0) { throw ('DNS konnte nicht zurueckgesetzt werden fuer: ' + ($failed -join ', ')) }\n"
     },
     {
@@ -4659,6 +4669,7 @@
       "desc": "Setzt die erweiterten Einstellungen aller echten Netzwerkadapter (Energiesparen, Interrupt-Moderation, Puffer ...) auf Treiber-Standard. Die Verbindung ist kurz weg.",
       "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "if (-not (Get-Command -Name Reset-NetAdapterAdvancedProperty -ErrorAction SilentlyContinue)) { throw 'Reset-NetAdapterAdvancedProperty gibt es auf diesem Windows nicht.' }\n$failed = @()\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction Stop)) {\n    try { Reset-NetAdapterAdvancedProperty -Name $a.Name -DisplayName '*' -ErrorAction Stop } catch { $failed += $a.Name }\n}\nif ($failed.Count -gt 0) { throw ('Nicht zurueckgesetzt (Treiber unterstuetzt es nicht): ' + ($failed -join ', ')) }\n"
     },
     {
@@ -4667,6 +4678,7 @@
       "desc": "Ersetzt die Hosts-Datei durch die leere Windows-Vorlage. Die alte Datei wird vorher daneben gesichert (hosts.velox-backup-...). Danach wird der DNS-Cache geleert.",
       "defaultOn": false,
       "needs": "none",
+      "risk": "moderate",
       "script": "$dir = Join-Path $env:SystemRoot 'System32\\drivers\\etc'\n$path = Join-Path $dir 'hosts'\nif (Test-Path -LiteralPath $path) {\n    $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop\n    if ($item.IsReadOnly) { $item.IsReadOnly = $false }\n    $backup = Join-Path $dir ('hosts.velox-backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))\n    Copy-Item -LiteralPath $path -Destination $backup -Force -ErrorAction Stop\n}\n$lines = @(\n    '# Copyright (c) 1993-2009 Microsoft Corp.',\n    '#',\n    '# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.',\n    '#',\n    '# This file contains the mappings of IP addresses to host names. Each',\n    '# entry should be kept on an individual line. The IP address should',\n    '# be placed in the first column followed by the corresponding host name.',\n    '# The IP address and the host name should be separated by at least one',\n    '# space.',\n    '#',\n    '# Additionally, comments (such as these) may be inserted on individual',\n    '# lines or following the machine name denoted by a ''#'' symbol.',\n    '#',\n    '# For example:',\n    '#',\n    '#      102.54.94.97     rhino.acme.com          # source server',\n    '#       38.25.63.10     x.acme.com              # x client host',\n    '',\n    '# localhost name resolution is handled within DNS itself.',\n    ('#' + [char]9 + '127.0.0.1       localhost'),\n    ('#' + [char]9 + '::1             localhost')\n)\n[IO.File]::WriteAllText($path, (($lines -join [Environment]::NewLine) + [Environment]::NewLine), [Text.Encoding]::ASCII)\n$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\n"
     },
     {
@@ -4675,6 +4687,7 @@
       "desc": "Löscht die lokal gespeicherten Gruppenrichtlinien (Registry.pol), damit Tools, die über gpedit arbeiten, ihre Sperren nicht wieder einspielen. Der Ordner wird vorher gesichert.",
       "defaultOn": false,
       "needs": "reboot",
+      "risk": "moderate",
       "script": "$base = Join-Path $env:SystemRoot 'System32'\n$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'\nforeach ($name in @('GroupPolicy', 'GroupPolicyUsers')) {\n    $dir = Join-Path $base $name\n    if (-not (Test-Path -LiteralPath $dir)) { continue }\n    Copy-Item -LiteralPath $dir -Destination (Join-Path $base ($name + '.velox-backup-' + $stamp)) -Recurse -Force -ErrorAction Stop\n    if ($name -eq 'GroupPolicyUsers') {\n        Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop | Remove-Item -Recurse -Force -ErrorAction Stop\n    } else {\n        foreach ($sub in @('Machine', 'User')) {\n            $pol = Join-Path (Join-Path $dir $sub) 'Registry.pol'\n            if (Test-Path -LiteralPath $pol) { Remove-Item -LiteralPath $pol -Force -ErrorAction Stop }\n        }\n    }\n}\n$exe = Join-Path $base 'gpupdate.exe'\n$null = 'N', 'N' | & $exe /force /wait:120 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('gpupdate /force meldete Code ' + $LASTEXITCODE + '. Nach dem Neustart werden die Richtlinien trotzdem neu eingelesen.') }\n"
     },
     {
@@ -4683,6 +4696,7 @@
       "desc": "Setzt Winsock und TCP/IP komplett zurück (netsh winsock reset, netsh int ip reset). Hilft bei kaputtem Internet nach Tweaks. VPN-Software muss danach evtl. neu installiert werden.",
       "defaultOn": false,
       "needs": "reboot",
+      "risk": "moderate",
       "script": "$exe = Join-Path $env:SystemRoot 'System32\\netsh.exe'\n$null = & $exe winsock reset 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('netsh winsock reset ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n$null = & $exe int ip reset 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('netsh int ip reset meldete Code ' + $LASTEXITCODE + '. Einzelne geschuetzte Eintraege werden oft nicht zurueckgesetzt - das ist meist harmlos. Bitte neu starten.') }\n"
     }
   ]

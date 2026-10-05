@@ -240,13 +240,13 @@ function Invoke-VxClaudeApi([string]$Key, $Body) {
         if (-not $withFallback) { $b.Remove('fallbacks') }
         $r = Send-VxClaudeRequest $Key (ConvertTo-VxJson $b) $withFallback
         if ($r.status -eq 400 -and -not $retriedFallback -and $withFallback -and $r.text -match 'fallback') {
-            Write-VxLog 'warn' 'Claude-API kennt die Fallback-Option nicht - neuer Versuch ohne.'
+            Write-VxLog 'warn' 'Claude-API kennt die Fallback-Option nicht – neuer Versuch ohne.'
             $withFallback = $false
             $retriedFallback = $true
             continue
         }
         if (($r.status -ge 500 -or $r.status -eq 529) -and -not $retried5xx) {
-            Write-VxLog 'warn' ("Claude ist gerade überlastet (HTTP {0}) - neuer Versuch in 3 Sekunden." -f $r.status)
+            Write-VxLog 'warn' ("Claude ist gerade überlastet (HTTP {0}) – neuer Versuch in 3 Sekunden." -f $r.status)
             $retried5xx = $true
             for ($i = 0; $i -lt 6; $i++) { Test-VxCancel; Start-Sleep -Milliseconds 500 }
             continue
@@ -315,7 +315,7 @@ function Invoke-VxClaudeJob($Params) {
     $prof = Confirm-VxProfile
     $model = [string]$ctx.Settings.claude.model
     if (-not $model) { $model = 'claude-opus-5-5' }
-    Set-VxProgress 0.65 ("Frage Claude ({0}) - das kann ein paar Minuten dauern ..." -f $model)
+    Set-VxProgress 0.65 ("Frage Claude ({0}) – das kann ein paar Minuten dauern ..." -f $model)
     $body = New-VxClaudeBody $model (Get-VxClaudeUserContent $goal $text $allowRisky $prof) $true
     $resp = Invoke-VxClaudeApi $key $body
     $stop = [string](Get-VxProp $resp 'stop_reason')
@@ -338,9 +338,9 @@ function Invoke-VxClaudeJob($Params) {
         [void]$findings.Add([ordered]@{ id = ('claude-' + $i); severity = $sev; title = [string](Get-VxProp $f 'title'); detail = [string](Get-VxProp $f 'detail'); fix = $null })
     }
     # score from the local advisor's view of the resulting plan
-    $cands = @(Get-VxGoalCandidates $goal $prof @(Get-VxTextTags $text))
     $localFindings = @(Get-VxFindings $prof $goal)
-    $sc = Get-VxAdvisorScore $cands $localFindings @($sel.plan | ForEach-Object { $_.id })
+    $rec = @(Get-VxRecommended $goal $prof @(Get-VxTextTags $text) @(Get-VxFindings $prof $goal -All))
+    $sc = Get-VxAdvisorScore $rec $localFindings @($sel.plan | ForEach-Object { $_.id })
     $usage = Get-VxProp $resp 'usage'
     $u = [ordered]@{
         input_tokens = Get-VxProp $usage 'input_tokens' 0

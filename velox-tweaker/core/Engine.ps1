@@ -90,26 +90,45 @@ function Test-VxEntryRestorable($Entry) {
     return $true
 }
 
-function Get-VxBackupList {
+# Backup ids on disk (finished .json and interrupted .journal files). Newest first by id, or with
+# -Oldest in the order they were written (file time, then id - two backups of the same second can
+# have ids that do not sort by time).
+function Get-VxBackupIds([switch]$Oldest) {
     $dir = $global:VxCtx.BackupDir
-    $list = New-Object System.Collections.ArrayList
     if (-not [IO.Directory]::Exists($dir)) { return @() }
     $ids = @{}
     foreach ($f in @(Get-ChildItem -LiteralPath $dir -File -ErrorAction SilentlyContinue)) {
         $ext = $f.Extension.ToLowerInvariant()
         if ($ext -ne '.json' -and $ext -ne '.journal') { continue }
         $id = [IO.Path]::GetFileNameWithoutExtension($f.Name)
-        if (Test-VxBackupId $id) { $ids[$id] = $true }
+        if (-not (Test-VxBackupId $id)) { continue }
+        $t = $f.LastWriteTimeUtc.Ticks
+        if (-not $ids.ContainsKey($id) -or $t -gt $ids[$id]) { $ids[$id] = $t }
     }
-    foreach ($id in @($ids.Keys | Sort-Object -Descending)) {
+    if ($Oldest) {
+        return @($ids.Keys | Sort-Object -Property @{ Expression = { $ids[$_] } }, @{ Expression = { $_ } })
+    }
+    return @($ids.Keys | Sort-Object -Descending)
+}
+
+function Get-VxBackupList {
+    $list = New-Object System.Collections.ArrayList
+    foreach ($id in @(Get-VxBackupIds)) {
         try {
             $b = Read-VxBackup $id
             if ($null -eq $b) { continue }
             $entries = @(Get-VxProp $b 'entries' @())
             $restorable = (@($entries | Where-Object { Test-VxEntryRestorable $_ }).Count -gt 0)
+            # tweakCount: distinct catalog tweak ids in the journal (count stays the number of values);
+            # 'detweak', 'restore', 'game', 'startup' are not tweak ids
+            $tids = @{}
+            foreach ($e in $entries) {
+                $tid = [string](Get-VxProp $e 'tweakId' '')
+                if ($tid -match '^[a-z0-9]+(\.[a-z0-9-]+)+$') { $tids[$tid] = $true }
+            }
             [void]$list.Add([ordered]@{
                     id = $id; label = [string]$b.label; kind = [string]$b.kind; created = (ConvertTo-VxIsoText $b.created)
-                    count = $entries.Count; simulate = [bool](Get-VxProp $b 'simulate' $false); restorable = $restorable
+                    count = $entries.Count; tweakCount = $tids.Count; simulate = [bool](Get-VxProp $b 'simulate' $false); restorable = $restorable
                 })
         } catch { Write-VxLog 'warn' "Sicherung $id unlesbar: $($_.Exception.Message)" }
     }
@@ -735,6 +754,11 @@ function Invoke-VxApplyJob($Params, [string]$Mode) {
         try { Sync-VxBoostedGames } catch { $null = $_ }
         $needs = Get-VxNeedsOf $changedTweaks.ToArray()
         foreach ($k in @('explorer', 'reboot', 'logoff')) { if ($needs[$k]) { Add-VxNeeds $k } }
+        # a tweak VELOX just changed (journalled) is VELOX's own or at default now, not foreign
+        try {
+            $okIds = @($results | Where-Object { $_.ok } | ForEach-Object { [string]$_.id })
+            Update-VxForeignAfterTweaks @($changedTweaks | Where-Object { $okIds -contains [string]$_.id })
+        } catch { $null = $_ }
         Save-VxState
         Save-VxSim
     }
@@ -803,7 +827,7 @@ function Invoke-VxRestoreJob($Params) {
     if ($null -eq $b) { throw 'Diese Sicherung wurde nicht gefunden.' }
     if ([bool](Get-VxProp $b 'simulate' $false) -ne [bool]$ctx.Simulate) {
         if ($ctx.Simulate) { throw 'Diese Sicherung stammt aus dem echten Modus und kann im Testmodus nicht wiederhergestellt werden.' }
-        throw 'Diese Sicherung stammt aus dem Testmodus - dort wurde am PC nichts verändert.'
+        throw 'Diese Sicherung stammt aus dem Testmodus – dort wurde am PC nichts verändert.'
     }
     $entries = @(Get-VxProp $b 'entries' @())
     # backups live in a user-writable folder, so a journal is untrusted input: only entries that

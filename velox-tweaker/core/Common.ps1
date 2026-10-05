@@ -189,20 +189,48 @@ function Get-VxDataPath([string]$Name) {
 
 # ------------------------------------------------------------------ logging
 
-function Write-VxLog {
+# Log file only (logs\velox-<date>.log in the data root) - for details the user never sees,
+# e.g. PowerShell stack traces.
+function Write-VxFileLog {
     param([string]$Level = 'info', [string]$Message = '')
     $ctx = $global:VxCtx
+    if ($null -eq $ctx -or -not $ctx.LogDir) { return }
     $line = '{0} [{1}] {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Level.ToUpperInvariant(), $Message
-    if ($null -ne $ctx -and $ctx.LogDir) {
-        try {
-            $file = [IO.Path]::Combine($ctx.LogDir, ('velox-' + (Get-Date).ToString('yyyyMMdd') + '.log'))
-            [System.Threading.Monitor]::Enter($ctx.LogLock)
-            try { [IO.File]::AppendAllText($file, $line + "`r`n", (New-Object System.Text.UTF8Encoding($false))) }
-            finally { [System.Threading.Monitor]::Exit($ctx.LogLock) }
-        } catch { $null = $_ }
-    }
+    try {
+        $file = [IO.Path]::Combine($ctx.LogDir, ('velox-' + (Get-Date).ToString('yyyyMMdd') + '.log'))
+        [System.Threading.Monitor]::Enter($ctx.LogLock)
+        try { [IO.File]::AppendAllText($file, $line + "`r`n", (New-Object System.Text.UTF8Encoding($false))) }
+        finally { [System.Threading.Monitor]::Exit($ctx.LogLock) }
+    } catch { $null = $_ }
+}
+
+# Log file + the running job's log (user-visible, without stack traces - see Remove-VxStackText).
+function Write-VxLog {
+    param([string]$Level = 'info', [string]$Message = '')
+    Write-VxFileLog -Level $Level -Message $Message
     $job = $global:VxJob
     if ($null -ne $job) { Add-VxJobLog -Job $job -Level $Level -Message $Message }
+}
+
+# User-visible error text without PowerShell stack traces and error-position noise:
+# "| at <ScriptBlock>, <No file>: line 3", "at Invoke-VxFoo, C:\...\Engine.ps1: line 12",
+# "At line:3 char:5" / "In Zeile:3 Zeichen:5", "+ throw ...", "+ CategoryInfo ...", "~~~~".
+function Remove-VxStackText([string]$Text) {
+    if ([string]::IsNullOrEmpty($Text)) { return $Text }
+    $keep = New-Object System.Collections.Generic.List[string]
+    foreach ($line in ($Text -split "\r?\n")) {
+        if ($line -match '^\s*\|?\s*at\s.+(:\s*(line|Zeile)\s*\d+|<ScriptBlock>|<No file>)') { continue }
+        if ($line -match '^\s*(At|In|Bei)\s+(line|Zeile)\s*:\s*\d+') { continue }
+        if ($line -match '^\s*\+\s' -or $line -match '^\s*~+\s*$') { continue }
+        if ($line -match '^\s*\+?\s*(CategoryInfo|FullyQualifiedErrorId)\s*:') { continue }
+        # a stack trace appended on the same line: "Fehler | at <ScriptBlock>, <No file>: line 3"
+        $l = [regex]::Replace($line, '\s*\|\s*at\s.*$', '')
+        $l = [regex]::Replace($l, '\s+at\s+(<ScriptBlock>|[\w-]+),\s*[^,]*:\s*(line|Zeile)\s*\d+.*$', '')
+        if ($l.Trim()) { $keep.Add($l.TrimEnd()) }
+    }
+    $out = ($keep.ToArray() -join "`n").Trim()
+    if (-not $out) { return 'Interner Fehler – Details stehen in der Logdatei.' }
+    return $out
 }
 
 function Add-VxJobLog {
@@ -210,11 +238,12 @@ function Add-VxJobLog {
     if ($null -eq $Job) { return }
     $lvl = $Level
     if (@('info', 'ok', 'warn', 'error') -notcontains $lvl) { $lvl = 'info' }
+    $clean = Remove-VxStackText $Message
     [System.Threading.Monitor]::Enter($Job.lockObj)
     try {
         $i = [int]$Job.nextIndex
         $Job.nextIndex = $i + 1
-        $entry = [ordered]@{ i = $i; t = (Get-Date).ToString('HH:mm:ss'); level = $lvl; msg = $Message }
+        $entry = [ordered]@{ i = $i; t = (Get-Date).ToString('HH:mm:ss'); level = $lvl; msg = $clean }
         [void]$Job.log.Add($entry)
         # keep memory bounded on very long jobs
         if ($Job.log.Count -gt 5000) { $Job.log.RemoveAt(0) }
@@ -368,11 +397,17 @@ function New-VxRandomHex([int]$Bytes = 32) {
     return (([BitConverter]::ToString($b)).Replace('-', '').ToLowerInvariant())
 }
 
+# German number text (de-DE: decimal comma, thousands dot), independent of the runspace culture.
+function Format-VxNumber([double]$Value, [int]$Decimals = 0) {
+    $de = [Globalization.CultureInfo]::GetCultureInfo('de-DE')
+    return $Value.ToString(('N' + $Decimals), $de)
+}
+
 function Format-VxBytes([double]$Bytes) {
-    if ($Bytes -ge 1GB) { return ('{0:N1} GB' -f ($Bytes / 1GB)) }
-    if ($Bytes -ge 1MB) { return ('{0:N0} MB' -f ($Bytes / 1MB)) }
-    if ($Bytes -ge 1KB) { return ('{0:N0} KB' -f ($Bytes / 1KB)) }
-    return ('{0:N0} B' -f $Bytes)
+    if ($Bytes -ge 1GB) { return ((Format-VxNumber ($Bytes / 1GB) 1) + ' GB') }
+    if ($Bytes -ge 1MB) { return ((Format-VxNumber ($Bytes / 1MB) 0) + ' MB') }
+    if ($Bytes -ge 1KB) { return ((Format-VxNumber ($Bytes / 1KB) 0) + ' KB') }
+    return ((Format-VxNumber $Bytes 0) + ' B')
 }
 
 # $true when an error (ErrorRecord or Exception, possibly wrapped) is "access denied": a registry key
@@ -395,7 +430,7 @@ function Get-VxErrorText($ErrorRecord, [string]$Prefix = '') {
     elseif ($ErrorRecord -is [Exception]) { $msg = $ErrorRecord.Message }
     else { $msg = [string]$ErrorRecord }
     if ($msg -match 'denied|verweigert|UnauthorizedAccess|Requested registry access is not allowed') {
-        $msg = 'Zugriff verweigert - Administratorrechte nötig oder der Eintrag ist von Windows geschützt. (' + $msg + ')'
+        $msg = 'Zugriff verweigert – Administratorrechte nötig oder der Eintrag ist von Windows geschützt. (' + $msg + ')'
     }
     if ($Prefix) { return ($Prefix + ': ' + $msg) }
     return $msg
@@ -558,11 +593,16 @@ function Get-VxStateDto {
             break
         } catch { Start-Sleep -Milliseconds 20 }
     }
+    # foreignCount: foreign tweaks found by the last detweak scan (VELOX's own tweaks not counted),
+    # kept in sync by detweak / apply / revert; null until the first detweak scan
+    $fc = $null
+    if ($st.ContainsKey('foreignCount') -and $null -ne $st.foreignCount) { $fc = [int]$st.foreignCount }
     return [ordered]@{
         statuses = $statuses
         profile = $st.profile
         lastScan = $st.lastScan
         needs = [ordered]@{ explorer = [bool]$st.needs.explorer; reboot = [bool]$st.needs.reboot; logoff = [bool]$st.needs.logoff }
+        foreignCount = $fc
     }
 }
 

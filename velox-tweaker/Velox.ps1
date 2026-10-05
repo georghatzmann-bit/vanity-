@@ -285,7 +285,7 @@ try {
     if ($ctx.Simulate) { Import-VxSim -Reset ([bool]$SimReset) }
     if ($SimReset) {
         $ctx.State.statuses = @{}; $ctx.State.naReasons = @{}; $ctx.State.profile = $null; $ctx.State.lastScan = $null
-        $ctx.State.foreignCount = $null; $ctx.State.needs = @{ explorer = $false; reboot = $false; logoff = $false }
+        $ctx.State.foreignCount = $null; $ctx.State.foreignKeys = $null; $ctx.State.needs = @{ explorer = $false; reboot = $false; logoff = $false }
     }
     $bootId = Get-VxBootId
     if ($bootId -and $ctx.State.bootId -ne $bootId) {

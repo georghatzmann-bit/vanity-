@@ -409,7 +409,7 @@ function Get-VxOsText {
     $ctx = $global:VxCtx
     if (-not $ctx.Windows) {
         $p = Get-VxSimProfile $ctx.SimProfile
-        return ('{0} {1} ({2}) - simuliert' -f $p.os.caption, $p.os.displayVersion, $p.os.build)
+        return ('{0} {1} ({2}) – simuliert' -f $p.os.caption, $p.os.displayVersion, $p.os.build)
     }
     try {
         $cv = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion'

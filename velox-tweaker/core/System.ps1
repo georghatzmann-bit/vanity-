@@ -603,12 +603,13 @@ function Export-VxRegTree([string]$Path, [int]$Depth = 0) {
     if ($Depth -gt 20) { return $null }
     if (-not (Test-VxRegKey $Path)) { return $null }
     $vals = New-Object System.Collections.ArrayList
-    foreach ($n in @(Get-VxRegValueNames $Path)) {
+    # sorted: the simulated registry has no stable value order, and a stable export compares equal
+    foreach ($n in @(@(Get-VxRegValueNames $Path) | Sort-Object)) {
         $v = Get-VxRegValue $Path $n
         if ($v.exists) { [void]$vals.Add([ordered]@{ name = $n; kind = $v.kind; value = $v.value }) }
     }
     $keys = New-Object System.Collections.ArrayList
-    foreach ($sk in @(Get-VxRegSubKeys $Path)) {
+    foreach ($sk in @(@(Get-VxRegSubKeys $Path) | Sort-Object)) {
         $t = Export-VxRegTree ($Path + '\' + $sk) ($Depth + 1)
         if ($null -ne $t) { [void]$keys.Add($t) }
     }
@@ -709,11 +710,11 @@ function Set-VxServiceStart([string]$Name, [string]$Start, [bool]$StopNow = $fal
     if ($StopNow) {
         $s = Invoke-VxNative -FilePath $sc -Arguments @('stop', $Name) -TimeoutSec 20
         # 1062 = not started, 1052 = cannot be stopped - both fine
-        if ($s.ExitCode -ne 0 -and $s.ExitCode -ne 1062) { Write-VxLog 'warn' "Dienst $Name konnte nicht sofort gestoppt werden (Code $($s.ExitCode)) - wirkt nach dem Neustart." }
+        if ($s.ExitCode -ne 0 -and $s.ExitCode -ne 1062) { Write-VxLog 'warn' "Dienst $Name konnte nicht sofort gestoppt werden (Code $($s.ExitCode)) – wirkt nach dem Neustart." }
     }
     if ($StartNow) {
         $s2 = Invoke-VxNative -FilePath $sc -Arguments @('start', $Name) -TimeoutSec 20
-        if ($s2.ExitCode -ne 0 -and $s2.ExitCode -ne 1056) { Write-VxLog 'warn' "Dienst $Name konnte nicht gestartet werden (Code $($s2.ExitCode)) - startet nach dem Neustart." }
+        if ($s2.ExitCode -ne 0 -and $s2.ExitCode -ne 1056) { Write-VxLog 'warn' "Dienst $Name konnte nicht gestartet werden (Code $($s2.ExitCode)) – startet nach dem Neustart." }
     }
 }
 
@@ -878,7 +879,7 @@ function Confirm-VxBitLockerForBcd([string]$Name) {
         $ok = ([int]$r.ReturnValue -eq 0)
     } catch { $ok = $false }
     if (-not $ok) {
-        throw ("BitLocker schützt dein Systemlaufwerk und konnte nicht für einen Neustart pausiert werden. Der Boot-Wert '{0}' wird deshalb nicht geändert - sonst fragt Windows beim nächsten Start nach dem 48-stelligen Wiederherstellungsschlüssel. Notiere dir zuerst den Schlüssel (Systemsteuerung > BitLocker > Wiederherstellungsschlüssel sichern)." -f $Name)
+        throw ("BitLocker schützt dein Systemlaufwerk und konnte nicht für einen Neustart pausiert werden. Der Boot-Wert '{0}' wird deshalb nicht geändert – sonst fragt Windows beim nächsten Start nach dem 48-stelligen Wiederherstellungsschlüssel. Notiere dir zuerst den Schlüssel (Systemsteuerung > BitLocker > Wiederherstellungsschlüssel sichern)." -f $Name)
     }
     $ctx.Cache.bitlockerSuspended = $true
     Write-VxLog 'warn' ("BitLocker wurde für den nächsten Neustart pausiert, weil der Boot-Wert '{0}' geändert wird. Danach schaltet er sich von selbst wieder ein." -f $Name)
