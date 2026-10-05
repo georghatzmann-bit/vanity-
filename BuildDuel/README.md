@@ -2,7 +2,7 @@
 
 Ein Browser-Spiel zum Schießen und Bauen aus der Schulter-Perspektive – angelehnt an das Spielgefühl des alten Browser-Spiels 1v1.LOL. Alles ist selbst gemacht (eigene Formen, Farben und Töne). Es werden keine Original-Grafiken, -Sounds oder -Namen benutzt.
 
-**Stand: Phase 1 von 12** – leere Szene mit Himmel, Boden, Sonne, Schatten und FPS-Anzeige.
+**Stand: Phase 2 von 12** – eine bunte Comic-Figur läuft, springt und duckt sich auf einem Übungsplatz. Die Kamera schaut über die Schulter und geht nie durch Wände.
 
 ## Starten in 5 Schritten
 
@@ -24,7 +24,7 @@ Ein Browser-Spiel zum Schießen und Bauen aus der Schulter-Perspektive – angel
 
 4. **Spielen.**
    Der Browser öffnet sich von selbst mit <http://localhost:8000>. Das schwarze Fenster dabei **offen lassen** – es ist der kleine Server, der das Spiel ausliefert.
-   *Geklappt, wenn:* Du Himmel, grünen Boden, eine orange Figur in einem blauen Kasten und oben links die FPS-Zahl siehst.
+   *Geklappt, wenn:* Du eine bunte Figur von hinten, bunte Kisten und Rampen und in der Mitte den gelben Knopf **„Klicken zum Spielen“** siehst. Klick darauf – dann kannst du laufen (Steuerung siehe unten).
 
 5. **Beenden.**
    Browser-Tab schließen und das schwarze Fenster schließen.
@@ -33,21 +33,56 @@ Kein Python? `start.bat` benutzt auch Node.js, falls das installiert ist.
 
 **Bei jeder neuen Phase:** neue ZIP-Datei laden (Schritt 2), entpacken und `start.bat` im neuen Ordner starten. Deine Einstellungen bleiben erhalten, solange das Spiel unter <http://localhost:8000> läuft.
 
-## Was du in Phase 1 siehst
+## Steuerung (Phase 2)
 
-- Hellblauen Himmel mit Farbverlauf, grünen Boden mit feinem 4-m-Raster (das spätere Bau-Raster) und leichten Nebel in der Ferne.
-- Eine **orange Figur** in Spielergröße (1,8 m). Der gelbe Ring zeigt, wo die Kopf-Zone beginnt (oberste 0,3 m = Kopfschuss).
-- Einen **blauen Kasten**: genau eine Bau-Zelle (4 × 4 × 4 m). So groß werden später Wände, Böden und Rampen.
-- Die Kamera dreht sich langsam. **Maus ziehen** = selbst drehen, **Mausrad** = näher/weiter.
-- Oben links: **FPS** (Bilder pro Sekunde, grün ab 55), die Zeit pro Bild und **„Logik 60/s“** – die Spiel-Logik rechnet immer 60-mal pro Sekunde, egal wie schnell dein Bildschirm ist (erst unter 5 Bildern pro Sekunde wird das Spiel langsamer, statt zu springen).
+Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel festgehalten (der Mauszeiger verschwindet) und die Maus dreht die Kamera.
+
+| Was | Taste |
+|---|---|
+| Laufen | **W A S D** |
+| Umschauen | **Maus** |
+| Springen | **Leertaste** (gedrückt halten = immer wieder springen) |
+| Ducken | **Shift** gedrückt halten |
+| Zielen (Kamera fährt näher ran) | **rechte Maustaste** gedrückt halten |
+| Tanzen | **B** |
+| Pause (Maus freigeben) | **Esc** – danach wieder auf „Klicken zum Weiterspielen“ |
+
+Controller (Xbox/PlayStation) gehen auch: linker Stick laufen, rechter Stick umschauen, A/Kreuz springen, R3 ducken, L2 zielen.
+
+Die Tasten-Belegung kann man in Phase 11 im Menü ändern. Bis dahin steht sie in `src/config.js` (Abschnitt `controls`).
+
+## Der Übungsplatz
+
+Das Spiel startet auf einem Übungsplatz (80 × 80 m mit Mauer rundherum). Probier die Stationen aus:
+
+- **Drei Kisten (0,3 m / 1 m / 2 m):** Auf die kleine läufst du einfach hinauf. Auf die 1-m-Kiste kommst du nur mit Springen, auf die 2-m-Kiste gar nicht.
+- **Wand (4 m):** Stell dich mit dem Rücken dicht davor und dreh dich – die Kamera geht nie durch die Wand.
+- **Türkise Rampe (45°):** ohne Springen hoch auf die 4-m-Plattform. Von dort führen lila Rampen auf den **Turm (12 m)**.
+- **Vom Turm springen:** Ein Sturz aus 12 m macht **50 Schaden** (erst geht der Schild weg, dann das Leben). Bis 7 m Fallhöhe passiert nichts. Wirst du besiegt, stehst du nach 2 Sekunden am Startpunkt wieder auf.
+- **Grüner Tunnel (Decke 1,5 m):** nur geduckt passt du hinein. Lässt du Shift darunter los, bleibst du trotzdem geduckt, bis über dir Platz ist.
+- **Rosa Rampe:** steht so hoch, dass du darunter durchlaufen kannst.
+- **Dach:** ein kleines Pyramiden-Dach zum Drüberlaufen.
+- **Übungs-Figuren:** stehen nur herum (ab Phase 7 kämpfen Bots richtig).
+
+Oben links steht die **FPS**-Zahl (Bilder pro Sekunde, grün ab 55) und **„Logik 60/s“** – die Spiel-Logik rechnet immer 60-mal pro Sekunde, egal wie schnell dein Bildschirm ist.
+
+**Checkliste für Phase 2** (bitte ausprobieren):
+
+- [ ] Spiel startet per Doppelklick auf `start.bat` und öffnet sich im Browser
+- [ ] FPS-Anzeige zeigt 50–60 (grün)
+- [ ] WASD, Springen, Ducken, Umschauen funktionieren; die Kamera geht nicht durch Wände
+- [ ] Die Rampe hochlaufen geht ohne Springen
+- [ ] Sturz vom Turm: unten links bei der Steuerung sinkt „Schild“ von 100 auf 50 (das richtige HUD mit Balken kommt in Phase 6)
 
 ## Tests
 
 Während `start.bat` läuft, diese Adresse öffnen: <http://localhost:8000/tests/tests.html>
 
-*Geklappt, wenn:* oben grün „Alle … Tests bestanden“ steht. Rote Zeilen sagen genau, was nicht stimmt.
+*Geklappt, wenn:* oben grün „Alle … Tests bestanden“ steht. Rote Zeilen sagen genau, was nicht stimmt. Die Tests prüfen u. a. die Spielwerte, die Kollision, die Eingabe und ganze kleine Szenen („1 Sekunde laufen ≈ 6 m“, „Sturz aus 12 m = 50 Schaden“).
 
-Die letzte Gruppe „Vorgaben aus deinem Plan“ prüft Werte, die genau so in deinem Plan stehen (z. B. Schrotflinte max. 90 Schaden). Änderst du so einen Wert **absichtlich**, wird dort ein Test rot – das ist dann in Ordnung.
+Die Gruppe „Vorgaben aus deinem Plan“ prüft Werte, die genau so in deinem Plan stehen (z. B. Schrotflinte max. 90 Schaden). Änderst du so einen Wert **absichtlich**, wird dort ein Test rot – das ist dann in Ordnung.
+
+*Nur für Entwickler:* `tests/e2e/run.cjs` startet das Spiel automatisch in einem unsichtbaren Browser, steuert die Figur, macht Screenshots und prüft die Konsole (braucht Node.js und Playwright, Anleitung oben in der Datei). Für das Spielen ist das nicht nötig.
 
 ## Spielwerte ändern
 
@@ -59,6 +94,8 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 - Kommazahlen immer mit **Punkt** schreiben (`8.4`, nicht `8,4`). Sonst meldet das Spiel „Tippfehler in src/config.js (Zeile …)“.
 
 **Ruckelt es?** In `src/config.js` die Zeile `quality: 'hoch'` auf `'mittel'` oder `'niedrig'` ändern.
+
+**Maus zu schnell oder zu langsam?** In `src/config.js` unter `sensitivity` den Wert `x` (links/rechts) und `y` (hoch/runter) ändern, z. B. `0.7` = langsamer, `1.5` = schneller.
 
 ## Probleme und Lösungen
 
@@ -73,6 +110,9 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 | Kasten „Tippfehler in src/config.js (Zeile …)“ | In `config.js` an dieser Zeile nachsehen. Meist: Komma statt Punkt bei einer Zahl oder ein fehlendes Komma am Zeilenende. |
 | Kasten mit rotem Rand: „Dein Browser kann gerade keine 3D-Grafik …“ | Browser aktualisieren. In den Browser-Einstellungen „Hardwarebeschleunigung verwenden“ einschalten, Browser neu starten. |
 | FPS-Zahl ist orange oder rot | Grafik auf `'mittel'` stellen (siehe oben). Laptop ans Netzteil hängen. |
+| „Die Maus konnte nicht gesperrt werden“ | Nach **Esc** braucht der Browser etwa 1 Sekunde Pause. Kurz warten, dann nochmal klicken. |
+| Die Figur läuft nicht, obwohl ich W drücke | Erst auf „Klicken zum Spielen“ klicken. Steht „Pausiert“ da, nochmal klicken. |
+| Tab ist plötzlich zu | **Strg + W** schließt im Browser den Tab – das kann kein Spiel verhindern. Darum liegt Ducken auf Shift und nicht auf Strg. |
 | Irgendein anderer Kasten mit rotem Rand | Screenshot machen und an Claude schicken. |
 | Beim Beenden mit Strg + C fragt das Fenster „Batchvorgang abbrechen (J/N)?“ | `J` drücken. Das ist normal. |
 
@@ -85,24 +125,29 @@ BuildDuel/
   lib/                  Three.js 0.186.1 (3D-Bibliothek, liegt lokal → läuft ohne Internet)
   src/
     config.js           ALLE Spielwerte
-    main.js             Start und Spielschleife
+    main.js             Start, "Klicken zum Spielen", Pause, Spielschleife
     loop.js             feste Spiel-Uhr (60 Logik-Schritte pro Sekunde)
-    camera.js           Kamera (Phase 1: Vorschau-Kamera)
-    world/              Himmel, Licht, Boden, Maßstab-Objekte
-    ui/                 FPS-Anzeige und Aussehen (styles.css)
+    core/               Spiel (game.js), Ereignisse (events.js), Einstellungen (settings.js)
+    input.js            Tastatur, Maus (Maus-Sperre), Controller
+    playerController.js macht aus Tasten + Maus einen Befehl für die Figur
+    player.js           Figur: Laufen, Springen, Ducken, Rampen, Fallschaden
+    physics.js          Kollision: Kisten, Rampen, Dächer, Boden, Strahlen
+    camera.js           Schulter-Kamera (mit Wand-Schutz) und Vorschau-Kamera
+    modes/              Spielmodi (jetzt: Übungsplatz)
+    world/              Himmel, Licht, Karten, Figuren-Grafik
+    building/ weapons/ ai/ audio/   noch "Attrappen" – kommen in den nächsten Phasen
+    ui/                 FPS-Anzeige, Aussehen (styles.css), später das HUD
     util/random.js      Zufall mit Startwert (gleiches Muster bei jedem Start)
-  tests/                automatische Tests (tests.html)
+  tests/                automatische Tests (tests.html), Browser-Tests (e2e/)
   tools/                kleiner lokaler Server (Python oder Node.js)
 ```
-
-Weitere Ordner aus dem Plan (`building/`, `weapons/`, `ai/`, `modes/`, `audio/`) kommen in den jeweiligen Phasen dazu.
 
 ## Fahrplan
 
 | Phase | Inhalt | Stand |
 |---|---|---|
 | 1 | Projekt, start.bat, Szene mit Boden, Himmel, Licht, FPS-Anzeige | ✅ fertig |
-| 2 | Spielerfigur, Laufen, Springen, Ducken, Schulter-Kamera | offen |
+| 2 | Spielerfigur, Laufen, Springen, Ducken, Schulter-Kamera | ✅ fertig |
 | 3 | Bau-System: Raster, Vorschau, Wand/Boden/Rampe/Dach, Material | offen |
 | 4 | Editieren, Einsturz, Spitzhacke | offen |
 | 5 | Waffen | offen |

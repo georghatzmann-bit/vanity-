@@ -166,6 +166,7 @@ function start() {
     document.body.classList.toggle('playing', playing);
     if (!playing) {
       input.releaseAll();
+      input.exitPointerLock(); // Pause gibt die Maus immer frei
       ui.title.textContent = next === 'paused' ? 'Pausiert' : CONFIG.game.name;
       ui.button.textContent = next === 'paused' ? 'Klicken zum Weiterspielen' : 'Klicken zum Spielen';
     } else {
@@ -175,7 +176,7 @@ function start() {
   }
 
   function play(options = {}) {
-    forcedPlay = !!options.withoutLock;
+    forcedPlay = !!options.withoutLock && !input.locked;
     setState('playing');
   }
 
@@ -205,9 +206,10 @@ function start() {
     event.preventDefault();
     requestPlay();
   });
-  // Ohne Maus-Sperre gespielt (Tests/Touch): Esc pausiert
+  // Esc pausiert. (Mit Maus-Sperre gibt der Browser die Maus bei Esc selbst frei –
+  // dann kommt die Pause über onLockChange. Manche Browser melden die Taste trotzdem.)
   window.addEventListener('keydown', (event) => {
-    if (event.code === 'Escape' && state === 'playing' && !input.locked) setState('paused');
+    if (event.code === 'Escape' && state === 'playing') setState('paused');
   });
 
   // Hilfe unten links (vorläufig, bis es das HUD und das Einstellungs-Menü gibt)
@@ -225,10 +227,23 @@ function start() {
     rows.push(['Zielen (näher ran)', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
     ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
       rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
+      '<div class="help-status" data-status></div>' +
       '<div class="help-hint">Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.</div>';
+    ui.status = ui.help.querySelector('[data-status]');
     ui.help.hidden = false;
   }
   renderHelp();
+
+  // Leben/Schild (vorläufig – das richtige HUD kommt in Phase 6)
+  let lastStatus = '';
+  function updateStatus() {
+    const p = game?.player;
+    const text = p ? (p.alive ? `Leben ${Math.ceil(p.health)} · Schild ${Math.ceil(p.shield)}` : 'Besiegt – gleich geht\u2019s weiter') : '';
+    if (text !== lastStatus) {
+      lastStatus = text;
+      ui.status.textContent = text;
+    }
+  }
 
   // --- Fenster ------------------------------------------------------------------------
   window.addEventListener('resize', () => applySize(renderer, camera));
@@ -264,6 +279,7 @@ function start() {
     }
     environment.update(camera.position, focus);
     renderer.render(scene, camera);
+    updateStatus();
     frames++;
     fps?.update(frameSeconds, steps);
   }

@@ -117,8 +117,14 @@ html, body {
 .help-row { display: flex; justify-content: space-between; gap: 12px; }
 .help-row span { color: var(--text-dim); }
 .help-row b { font-weight: 600; text-align: right; }
+.help-status { margin-top: 6px; font-weight: 700; color: #9fe6a0; font-variant-numeric: tabular-nums; }
+.help-status:empty { display: none; }
 .help-hint { margin-top: 6px; font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 body.playing .help { opacity: 0.75; }
+/* Kleine Bildschirme (Handy): keine Tastatur-Hilfe, sie würde nur verdecken */
+@media (max-width: 600px), (max-height: 480px) {
+  .help { display: none; }
+}
 
 /* --- "Klicken zum Spielen" / "Pausiert" ------------------------------------ */
 .play-overlay {

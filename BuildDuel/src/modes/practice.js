@@ -136,7 +136,7 @@ function buildCourse(map, cfg, thickness) {
   cfg.stepHeights.forEach((height, i) => {
     const x0 = 4 + i * 6;
     map.addBox({ x: x0, y: 0, z: 0 }, { x: x0 + 4, y: height, z: 4 }, { color: COLORS.step[i % COLORS.step.length] });
-    label(`${formatMeters(height)} hoch`, x0 + 2, height + 0.9, 2);
+    label(`${formatMeters(height)} hoch`, x0 + 2, height + 0.45, 4.3); // vorn, unter der Kamera-Höhe
   });
 
   // --- Hohe Wand (Kamera-Test) -----------------------------------------------------------
@@ -149,7 +149,7 @@ function buildCourse(map, cfg, thickness) {
   // Rampe A: Boden → Plattform (steigt Richtung −Z)
   map.addSlope({ minX: -24, maxX: -20, minZ: -4, maxZ: 0, baseY: 0, rise: h1, dir: 3, thickness }, rampOptions);
   map.addBox({ x: -28, y: 0, z: -12 }, { x: -16, y: h1, z: -4 }, { color: COLORS.platform });
-  label('Rampe 45° → Plattform 4 m', -22, 1.6, 1.2);
+  label('Rampe 45° → Plattform 4 m', -27, 1.2, 0.5); // neben der Rampe, nicht im Weg
 
   // Turm: zweite Stufe (8 m) und Gipfel (12 m), jeweils mit einer Rampe hinauf
   const top = cfg.towerHeight;
@@ -158,7 +158,7 @@ function buildCourse(map, cfg, thickness) {
   map.addBox({ x: -24, y: 0, z: -20 }, { x: -20, y: mid, z: -12 }, { color: COLORS.tower });
   map.addSlope({ minX: -24, maxX: -20, minZ: -20, maxZ: -16, baseY: mid, rise: top - mid, dir: 3, thickness }, { color: COLORS.towerRamp });
   map.addBox({ x: -26, y: 0, z: -28 }, { x: -18, y: top, z: -20 }, { color: COLORS.tower });
-  label(`Turm ${formatMeters(top)} – Fallschaden testen`, -22, top + 1.2, -24);
+  label(`Turm ${formatMeters(top)} – Fallschaden testen`, -18.6, top + 2.2, -27.4); // hinten am Rand
 
   // --- Niedrige Decke: nur geduckt hindurch ------------------------------------------------
   const ceil = cfg.lowCeiling;
@@ -179,7 +179,7 @@ function buildCourse(map, cfg, thickness) {
     ) - bridge.vThickness;
     map.addBox({ x, y: 0, z: zz }, { x: x + post, y: underside, z: zz + post }, { color: COLORS.post });
   }
-  label('Unter der Rampe durch', 18, bridgeY - 0.6, -8.6);
+  label('Unter der Rampe durch', 21.6, 1.4, -9.4); // neben der Stütze
 
   // --- Kleines Dach (Pyramide) auf einem Sockel -------------------------------------------
   map.addBox({ x: 24, y: 0, z: -14 }, { x: 28, y: 0.3, z: -10 }, { color: COLORS.roofBase });

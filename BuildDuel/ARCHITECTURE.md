@@ -77,8 +77,9 @@ src/
   ai/bot.js            Bot-Gehirn → CharacterCommand
   modes/               index.js (Liste), practice.js, duel.js, battleRoyale.js, boxFight.js,
                        zoneWars.js, justBuild.js, aimTrainer.js, deathmatch.js
-  world/               environment.js, characterModel.js, mapArena.js, mapIsland.js,
-                       mapZoneWars.js, loot.js, storm.js, effects.js, referenceObjects.js
+  world/               environment.js, characterModel.js, mapBuilder.js (Karten-Baukasten),
+                       mapArena.js, mapIsland.js, mapZoneWars.js, loot.js, storm.js, effects.js,
+                       referenceObjects.js
   ui/                  hud.js, menus.js, settings.js (Einstellungs-Fenster), killfeed.js,
                        minimap.js, touch.js, fpsMeter.js, styles.css
   audio/sfx.js         erzeugte Töne (Web Audio)
@@ -94,6 +95,9 @@ const game = new Game({
   settings,       // aus core/settings.js
   headless,       // true = keine HUD/Audio/DOM-Effekte
   seed,           // Zufall
+  input,          // Input (input.js) für die Spieler-Figur oder null
+  renderer,       // nur für Textur-Schärfe (optional)
+  uiRoot,         // HTML-Ebene für das HUD (optional)
 });
 ```
 
@@ -104,13 +108,21 @@ Felder (öffentlich, andere Module dürfen lesen):
 - `building` (Bau-System), `weapons` (Waffen-System), `projectiles`, `effects`, `audio`, `hud`
 - `mode` (aktueller Modus) und `map` (aktuelle Karte), `storm` (oder null), `loot` (oder null)
 - `systems` (Array von Objekten mit `update(dt, game)` – laufen am Ende jedes Ticks)
+- `root` (THREE.Group: ALLES, was das Spiel in die Szene legt, hängt hier – `dispose()` räumt es ab)
+- `cameraRig` (ThirdPersonCamera, auch headless – rechnet den Ziel-Strahl), `playerController`, `input`
 
 Methoden:
 - `addCharacter(options) → Character` / `removeCharacter(character)`
 - `fixedUpdate(dt)` – ein Logik-Schritt (1/60 s), Reihenfolge siehe unten
 - `frameUpdate(frameSeconds, alpha)` – Bild: Figuren-Modelle (interpoliert), Kamera, Effekte, HUD
 - `simulate(seconds)` – ruft `fixedUpdate` so oft wie nötig (für Tests, ohne Bild)
+- `startMode(id, options)` – räumt den alten Modus ab und startet den neuen (`mode.start()`)
+- `endMode()` – Figuren, Karte, Bauteile, Sturm, Loot weg
 - `dispose()` – alles aufräumen (Szene leeren, Ereignisse abmelden)
+
+`fixedUpdate(dt, sample?)`: Ohne `sample` holt das Spiel selbst `input.sample(dt)` (vorher setzt es
+`input.gamepadBuildMode`, wenn der Spieler baut). Figuren ohne Gehirn (`brain: null`) bekommen
+einen leeren Befehl (stehen still). `brain.think()` darf `null` liefern (= alter Befehl).
 
 **Reihenfolge in `fixedUpdate(dt)`:**
 1. `mode.preUpdate(dt)`
@@ -121,6 +133,11 @@ Methoden:
 6. `projectiles.update(dt)`, `building.update(dt)` (Aufbau, Einsturz), `storm?.update(dt)`, `loot?.update(dt)`
 7. `mode.update(dt)`, dann alle `systems[i].update(dt, game)`
 8. `time += dt; tick++`
+
+Nach Schritt 4 wird der Ziel-Strahl des Spielers (`aimOrigin/aimDir`) mit der neuen Lage neu
+berechnet, damit Schüsse/Bauteile in Schritt 5 genau zur Kamera passen.
+`frameUpdate` blendet die eigene Figur aus, wenn die Kamera näher als
+`CONFIG.camera.hideCharacterDistance` ist, und dreht sie genau mit der Kamera.
 
 ## 6. Character (src/player.js)
 
@@ -146,6 +163,15 @@ character.invulnerableUntil // game.time, bis zu dem kein Schaden ankommt
 character.command     // CharacterCommand dieses Ticks
 character.brain       // Bot-Gehirn oder null
 character.view        // Grafik (characterModel) oder null (headless)
+// seit Welle 1 zusätzlich:
+character.radius, height        // aktuelle Maße der Treffer-Kapsel (geduckt kleiner)
+character.prevPitch, prevStepOffset, stepOffset // für weiche Grafik (Stufen gleiten nach)
+character.scopeFov    // null oder Sichtfeld (°) – Waffen setzen es beim Zielfernrohr, die Kamera nutzt es
+character.speedFactor // 1 = normal (z. B. 0,5 beim Heilen)
+character.emoteUntil  // Spielzeit, bis zu der die Figur tanzt (B)
+character.actionKind, actionTime // Arm-Schwung in der Grafik, gesetzt mit triggerAction('build'|'attack'|…)
+character.deathTime   // Spielzeit des Besiegtwerdens (Grafik kippt um)
+character.lastCombatMode, modeBeforeEdit, editOpenedTick // Hilfen für Modus-Wechsel/Edit
 ```
 
 Methoden:
@@ -156,6 +182,26 @@ Methoden:
 - `eyePosition(out)` – Augenhöhe (stehend 1,6 m, geduckt weniger).
 - `forward(out)`, `aimDirection(out)` (mit pitch).
 - `resetForRound(options)` – Leben/Schild/Munition/Material zurücksetzen.
+  `options = { health, shield, materials, infiniteMaterials, position, yaw, invulnerableFor }`.
+- `spawnAt(position, yaw, pitch)` – ohne Übergang hinsetzen (prevPosition = position).
+- `applySelection(command)` – Schritt 3: Bau-Taste → sofort `'build'` mit dem Bauteil;
+  Waffen-Taste/F → Baumodus verlassen (leerer Platz ändert `selectedSlot` nicht);
+  G → `'edit'` nur wenn `game.building.canEdit(character)` true ist (setzt `modeBeforeEdit`,
+  `editOpenedTick = game.tick`). **Bestätigen/Schließen eines Edits macht das Bau-System**
+  (es soll im Tick `editOpenedTick` das G nicht gleich als Bestätigung werten). Wird während
+  Edit eine andere Auswahl gedrückt, ruft applySelection `game.building.closeEdit(character)`.
+  `toggleBuild` (Controller), Mausrad (`nextItem/prevItem`: Bauteile bzw. Spitzhacke + belegte
+  Plätze), Q (`switchMaterial`, nur im Baumodus), B (Tanz, nur am Boden).
+  `aiming = secondary && mode === 'weapon'` (das Waffen-System darf das verfeinern).
+- `applyDamage` versteht zusätzlich `info.bypassShield` und `info.ignoreInvulnerable`
+  (Kill-Ebene). Fallschaden geht wie jeder Schaden zuerst auf den Schild.
+
+Weitere Exporte von player.js: `resetCommand(cmd, yaw, pitch)`, `getSkin(id)`,
+`moveCharacter(c, cmd, dt, world)`, `landCharacter(c, { noDamage })`, `bodyFits(...)`, `findSupport(...)`,
+`registerMoveStateHandler(state, handler)` – **Haken für Welle 3b**: Für `moveState`
+`'freefall'`/`'glide'` ruft moveCharacter `handler(character, command, dt, world)` statt der
+normalen Bewegung auf; zum Landen `landCharacter(character, { noDamage: true })`.
+In `'freefall'`/`'glide'` gibt es nie Fallschaden.
 
 ### CharacterCommand (Befehl pro Tick)
 
@@ -174,6 +220,7 @@ Methoden:
   reloadOrRotate, editPressed, editReleased, usePressed, emotePressed,
   switchMaterial, nextItem, prevItem,
   aimOrigin, aimDir    // Ziel-Strahl in der Welt (Spieler: Kamera-Mitte; Bot: Auge → Ziel)
+  secondaryReleased, edit // seit Welle 1: rechte Taste losgelassen, G gehalten (für "Edit beim Loslassen")
 }
 ```
 
@@ -192,8 +239,25 @@ world.raycast(origin, dir, maxDist, options) // → Treffer oder null
    // options: { ignore(collider) → bool, characters: Character[] | null, ignoreCharacter }
    // Treffer: { distance, point, normal, collider, character, part ('head'|'body'), terrain }
 world.surfaceHeight(x, z, maxY) // höchste begehbare Fläche ≤ maxY (Gelände, Box-Oberkanten, Schrägen)
-world.boxBlocked(min, max, ignore) // bool
+world.boxBlocked(min, max, ignore) // bool – nur Collider (nicht das Gelände)
+world.setTerrain(terrain)     // { heightAt(x, z), isFlat?, height?, maxHeight? } oder null = flach bei 0
+world.clear()
 ```
+
+Genauer (Welle 1):
+- `raycast(origin, dir, maxDist, options, out)`: `dir` muss Länge 1 haben. Ohne `out` wird ein
+  internes Ergebnis-Objekt benutzt, das beim nächsten raycast überschrieben wird (`createRayHit()`
+  liefert ein eigenes). `options.skipTerrain` lässt das Gelände weg. Startet der Strahl IN einer Box
+  oder Platte, zählt diese nicht. Strahlen laufen per 3D-DDA durch das Raumgitter (Zelle = 4 m).
+- `queryBox(min, max, out)` liefert nur eingeschaltete Collider (`enabled`), jeden nur einmal.
+  Ohne `out` ein internes Array (gültig bis zur nächsten Abfrage).
+- Schrägen-Collider haben zusätzlich `kind` ('ramp'|'pyramid'), `minX/maxX/minZ/maxZ`, `baseY`,
+  `rise`, `vThickness` (Dicke senkrecht gemessen) und für Rampen `a, b, c` (Höhe = a·x + b·z + c).
+  Hilfen: `slopeSurfaceY(c, x, z)`, `slopeRangeOverRect(...)`, `slopeIntersectsBox(...)`,
+  `boxOverlapsStrict(...)`, `createFlatTerrain(h)`.
+- Sehr große Collider (über `CONFIG.physics.bigColliderCells` Zellen) liegen in einer eigenen
+  Liste und werden immer geprüft.
+- `collider.mesh` (optional) setzt der Karten-Baukasten für die Grafik.
 
 `collider.data` (frei, aber diese Felder sind vereinbart):
 ```js
@@ -211,6 +275,10 @@ Figuren-Kollision: Figur = senkrechte Kapsel (Radius 0,4 m, Höhe 1,8 m bzw. ged
 für Wände als Box angenähert. Bewegung: erst X, dann Z, dann Y (je mit Aufschieben),
 Stufen bis `CONFIG.player.stepHeight` werden hochgestiegen, Schrägen bis
 `maxWalkableSlope` sind begehbar (Rampen 45°).
+Schrägen sind Platten: Man steht auf ihrer Oberseite (Höhe an der Figuren-Mitte), läuft
+darunter durch, wenn der Kopf unter der Unterseite bleibt, und wird sonst aufgehalten.
+Lange Bewegungen werden in Teilschritte zerlegt (`maxSubstepDistance`), damit man nie
+durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapDistance`.
 
 ## 8. Ereignisse (EventBus, Namen und Inhalte)
 
@@ -252,6 +320,8 @@ Stufen bis `CONFIG.player.stepHeight` werden hochgestiegen, Schrägen bis
 - **Ton** (`src/audio/sfx.js`): `createAudio(game)` → hört auf Ereignisse, `setVolumes(settings)`, `frameUpdate()` (Zuhörer an Kamera).
 - **HUD** (`src/ui/hud.js`): `createHud(game, root)` → `frameUpdate(dt)`, `dispose()`.
 - **Bot-Gehirn** (`src/ai/bot.js`): `createBotBrain(character, game, difficulty)` → `{ think(dt) → CharacterCommand }`.
+- Zusätzlich (Welle 1): Bau-System hat `canEdit(character)` und `closeEdit(character)` (siehe §6);
+  alle Systeme haben `dispose()` (Game.dispose ruft es auf).
 - **Sturm** (`src/world/storm.js`): `createStorm(game, spec)` → `{ update(dt), isInside(pos), center, radius, nextCenter, nextRadius, phase, state, timeLeft, damagePerSecond }`.
 - **Loot** (`src/world/loot.js`): `createLootSystem(game, spec)` → `{ update(dt), dropAll(character), spawnFloorItem(...), chests }`.
 
@@ -260,7 +330,15 @@ Methoden, die nichts tut. So läuft das Spiel in jeder Phase.
 
 ## 10. Modi (src/modes/)
 
-`src/modes/index.js` enthält die Liste: `{ id, name, description, create(game, options) }`.
+`src/modes/index.js` enthält die Liste `MODES`: `{ id, name, description, create(game, options) }`,
+dazu `getModeDef(id)` und `DEFAULT_MODE_ID` (`'practice'`, bis es ein Hauptmenü gibt).
+
+**Karten** (Welle 1): `createArenaMap(game, spec)` (world/mapArena.js) und allgemein
+`createMapBuilder(game, name)` (world/mapBuilder.js) liefern ein Karten-Objekt:
+`{ root, colliders, addBox(min, max, { color, data, kind }), addSlope(spec, { color, data, kind }),
+addLabel(text, position), addObject(obj), dispose() }` – addBox/addSlope legen Kollision UND
+Grafik an (headless nur Kollision). Die Arena hat zusätzlich `size`, `ground`, `contains(x, z, margin)`.
+Der Modus setzt `game.map = karte` und räumt sie in `dispose()` ab.
 
 Jeder Modus:
 ```js
@@ -284,6 +362,33 @@ Jeder Modus:
 - `core/progress.js`: `loadProgress()`, `saveProgress(p)`, `addMatchResult(p, result)`.
   Form: `{ trophies, coins, xp, passTier, owned: { skins: [], hats: [], pickaxes: [], emotes: [] }, equipped: { skin, hat, pickaxe, emote }, matches, wins }`.
 - Schlüssel im localStorage: `buildduel.settings.v1`, `buildduel.progress.v1`. Lesen/Schreiben immer mit try/catch.
+- Welle 1: `loadSettings(storage?)`, `saveSettings(s, storage?)`, `resetSettings(storage?)` nehmen zum
+  Testen einen Speicher-Ersatz. Gespeichertes wird über die Standardwerte gelegt; unbekannte Felder
+  und falsche Typen werden ignoriert, kaputtes JSON → Standardwerte. `graphics.resolutionScale` und
+  `graphics.viewDistance` sind `null` = Wert der Qualitäts-Stufe; `resolveGraphics(settings)` liefert
+  die wirklich geltenden Grafik-Werte.
+
+## 11a. Eingabe, Steuerung, Kamera, Figuren-Grafik (Welle 1)
+
+- **Input** (`src/input.js`): `new Input(settings, { getGamepads?, now? })`, `attach(canvas)`,
+  `requestPointerLock()`, `exitPointerLock()`, `applySettings(settings)`, `releaseAll()`,
+  `sample(dt)` → `{ held, pressed, released, lookDX, lookDY, moveAxisX, moveAxisZ, lookAxisX,
+  lookAxisY, wheel, device, dt }` (wiederverwendetes Objekt; Aktions-Namen = Tasten-Aktionen aus
+  config.js + `sprint` + `toggleBuild`). Virtuell: `setVirtual(action, down)`, `addLook(dx, dy)`,
+  `setMoveAxis(x, z)`, `setLookAxis(x, y)`. Schalter: `playing` (Spiel-Tasten blockieren),
+  `gamepadBuildMode`, `allowMouseWithoutLock`. Rückrufe: `onLockChange(locked)`, `onLockError(err)`.
+  `peekLook(out)` = noch nicht abgeholte Maus-Bewegung (Kamera zeigt sie sofort).
+- **Spieler-Steuerung** (`src/playerController.js`): `createPlayerController()` →
+  `{ buildCommand(sample, character, cameraRig, settings, game), reset() }`. Hilfen:
+  `applyMouseLook`, `modeSensitivity`, `enemyNearCrosshair`, `wrapAngle`, `clampPitch`.
+  yaw wird im Bereich −π…π gehalten (Grafik interpoliert mit `lerpAngle`).
+- **Kamera** (`src/camera.js`): `new ThirdPersonCamera(threeCamera | null)`:
+  `computeAimRay(character, world, outOrigin, outDir, yaw?, pitch?)` (deterministisch, ohne Glättung),
+  `computePose(...)`, `update(character, alpha, dt, world, input?, settings?)`, `snap()` (nach
+  Teleport/Runde), Felder `yaw`, `pitch`, `fov`, `characterDistance`.
+- **Figuren-Grafik** (`src/world/characterModel.js`): `createCharacterView(character, parent)` →
+  `{ root, rightHand, attach(name, obj), detach(name), setHidden(bool), update(alpha, dt, yawOverride?), dispose() }`.
+  Farbsets und Hut-Formen stehen in `CONFIG.skins`.
 
 ## 12. Testen
 
@@ -294,7 +399,12 @@ Jeder Modus:
 - **Browser-Tests für Entwickler** (`tests/e2e/run.cjs`, braucht Node + Playwright, nicht für
   Spieler): startet `tools/server.py`, öffnet Spiel und Tests im echten Browser, prüft
   Konsole, macht Screenshots, steuert Spielszenen über `window.buildDuel`.
-- `window.buildDuel` (Debug-Zugang im Browser): `{ game, startMode(id, options), simulate(seconds), input, CONFIG }`.
+- `window.buildDuel` (Debug-Zugang im Browser): `{ game, startMode(id, options), simulate(seconds), input, CONFIG,
+  settings, play(), pause(), manualStep(on), state, modeId, frames, ticks, renderer, scene, camera }`.
+  `play()` spielt ohne Maus-Sperre (Tests), `manualStep(true)` hält die Spielschleife an
+  (Bilder laufen weiter, Logik nur noch über `simulate`).
+- `tests/e2e/run.cjs`: neue Prüfungen als Eintrag in `GAME_CHECKS` anhängen
+  (`{ name, run: async (ctx) => … }`, ctx = `{ page, assert, log, shot }`).
 - URL-Schnellstart (für Tests/Entwicklung): `index.html?mode=duel&bots=hard&seed=1` überspringt das Menü.
 
 ## 13. Wer besitzt welche Dateien (Entwicklungs-Wellen)
@@ -305,7 +415,7 @@ Abschlussbericht genannt.
 
 | Welle | Dateien |
 |---|---|
-| 1 Fundament (Phase 2) | core/game.js, core/events.js, core/settings.js, input.js, playerController.js, player.js, physics.js, camera.js, world/characterModel.js, modes/index.js, modes/practice.js, main.js, Attrappen aller Systeme, tests/e2e/* |
+| 1 Fundament (Phase 2) | core/game.js, core/events.js, core/settings.js, input.js, playerController.js, player.js, physics.js, camera.js, world/characterModel.js, world/mapBuilder.js, modes/index.js, modes/practice.js, main.js, Attrappen aller Systeme, tests/e2e/* (mapArena.js: Boden in createArenaMap verschoben – gehört weiter Welle 3b) |
 | 2a Bauen (3+4) | building/*, Bau-Tests |
 | 2b Waffen (5) | core/damage.js, weapons/*, Zielpuppen, Schadenszahlen, Waffen-Tests |
 | 3a HUD + Ton + Effekte (6, 12) | ui/hud.js, ui/killfeed.js, ui/minimap.js, audio/sfx.js, world/effects.js |
