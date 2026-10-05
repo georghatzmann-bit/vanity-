@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" alt="VELOX" width="330"></p>
+
 # VELOX – der ultimative PC-Tweaker
 
 VELOX macht Windows 10 und 11 schneller, ruhiger und privater. Hunderte Tweaks, fertige Presets,

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" width="330" height="72" role="img" aria-label="VELOX">
+  <path d="M11 6v36M24 6v36M37 6v36" stroke="#7C5CFF" stroke-opacity=".38" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M11 13 24 35 37 13" fill="none" stroke="#7C5CFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#E8EAF0" stroke="#0F1115" stroke-opacity=".25"><rect x="5" y="9.5" width="12" height="7" rx="2.4"/><rect x="18" y="31.5" width="12" height="7" rx="2.4"/><rect x="31" y="9.5" width="12" height="7" rx="2.4"/></g>
+  <text x="58" y="33" font-family="Segoe UI, system-ui, sans-serif" font-size="24" font-weight="700" letter-spacing="5" fill="#7C5CFF">VELOX</text>
+</svg>

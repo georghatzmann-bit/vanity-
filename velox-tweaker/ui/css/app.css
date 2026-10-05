@@ -166,19 +166,19 @@ kbd {
   overflow: hidden;
 }
 .brand { display: flex; align-items: center; gap: 12px; padding: 4px 8px 16px; min-width: 0; }
-.brand-mark {
-  flex: none; width: 36px; height: 36px; border-radius: 10px;
-  display: grid; place-items: center; color: #fff;
-  background: var(--brand);
-  box-shadow: 0 6px 18px -6px rgba(var(--accent-rgb), .8), inset 0 1px 0 rgba(255, 255, 255, .25);
-  position: relative; overflow: hidden;
-}
-.brand-mark::after {
-  content: ""; position: absolute; inset: -40%;
-  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .45) 50%, transparent 60%);
-  transform: translateX(-60%); animation: shine 6s var(--ease) infinite;
-}
-@keyframes shine { 0%, 70% { transform: translateX(-60%); } 85%, 100% { transform: translateX(60%); } }
+.brand-mark { flex: none; width: 34px; height: 34px; }
+/* ---- VELOX logo: three faders whose caps form a "V" (tuning = the whole idea of the app) ---- */
+.vx-logo { display: block; width: 100%; height: 100%; overflow: visible; }
+.vx-logo-tracks { fill: none; stroke: rgba(var(--accent-rgb), .32); stroke-width: 2.6; stroke-linecap: round; }
+.vx-logo-v { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), .55)); transition: filter var(--t) var(--ease); }
+.vx-logo-cap { fill: #E8EAF0; transform-box: fill-box; transform-origin: center; }
+.brand:hover .vx-logo-v { filter: drop-shadow(0 0 9px rgba(var(--accent-rgb), .85)); }
+/* hover: a quick staggered "tuning" nudge of the three caps */
+.brand:hover .vx-logo-cap { animation: vx-nudge 520ms var(--ease) both; }
+.brand:hover .vx-logo-cap.c2 { animation-delay: 70ms; }
+.brand:hover .vx-logo-cap.c3 { animation-delay: 140ms; }
+@keyframes vx-nudge { 0% { transform: none; } 35% { transform: translateY(-3px); } 70% { transform: translateY(1.5px); } 100% { transform: none; } }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; white-space: nowrap; transition: opacity var(--t) var(--ease); }
 .brand-name { font: 700 var(--fs-2)/1.2 var(--font-display); letter-spacing: .18em; }
 .brand-sub { font-size: var(--fs-3); color: var(--faint); }
@@ -1280,9 +1280,16 @@ kbd {
 .splash.gone { opacity: 0; pointer-events: none; }
 .splash.gone .splash-card { transform: scale(.98); }
 .splash-card { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, calc(100vw - 48px)); text-align: center; transition: transform 400ms var(--ease); animation: enter 500ms var(--ease) backwards; }
-.splash-logo { position: relative; width: 84px; height: 84px; border-radius: 24px; display: grid; place-items: center; color: #fff; background: var(--brand); box-shadow: 0 20px 60px -16px rgba(var(--accent-rgb), .9), inset 0 1px 0 rgba(255, 255, 255, .3); margin-bottom: 12px; }
-.splash-orbit { position: absolute; inset: -14px; border-radius: 50%; border: 1.5px solid transparent; border-top-color: rgba(var(--accent-rgb), .9); border-right-color: rgba(34, 211, 238, .5); animation: spin 1.6s linear infinite; }
-.splash-orbit.o2 { inset: -26px; border-top-color: rgba(34, 211, 238, .5); border-right-color: transparent; border-left-color: rgba(var(--accent-rgb), .4); animation-duration: 2.6s; animation-direction: reverse; }
+.splash-logo { position: relative; width: 92px; height: 92px; margin-bottom: 16px; }
+.splash-logo::before { content: ""; position: absolute; inset: -28px; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--accent-rgb), .22), transparent); }
+/* while VELOX starts and scans: the caps ride their tracks like a mixing desk, the V draws itself */
+.splash-logo .vx-logo-cap { animation: vx-eq 1.4s var(--ease) infinite; }
+.splash-logo .vx-logo-cap.c1 { --vx-eq: 7px; }
+.splash-logo .vx-logo-cap.c2 { --vx-eq: -7px; animation-delay: -.45s; }
+.splash-logo .vx-logo-cap.c3 { --vx-eq: 7px; animation-delay: -.9s; }
+@keyframes vx-eq { 0%, 100% { transform: none; } 50% { transform: translateY(var(--vx-eq)); } }
+.splash-logo .vx-logo-v { stroke-dasharray: 60; animation: vx-draw 2.8s var(--ease) infinite; }
+@keyframes vx-draw { 0% { stroke-dashoffset: 60; } 45%, 70% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -60; } }
 .splash-name { font: 700 var(--fs-1)/1 var(--font-display); letter-spacing: .3em; }
 .splash-text { color: var(--muted); }
 .splash:not(.scanning) .splash-text, .splash:not(.scanning) .splash-progress, .splash:not(.scanning) .splash-hint, .splash:not(.scanning) #splash-pct { visibility: hidden; }
@@ -1374,7 +1381,8 @@ kbd {
 :root[data-motion="reduced"] .tilt:hover, :root[data-motion="reduced"] .goal:hover, :root[data-motion="reduced"] .sys-card:hover, :root[data-motion="reduced"] .btn:active, :root[data-motion="reduced"] .card.clickable:active,
 :root[data-motion="reduced"] .nav-item:active, :root[data-motion="reduced"] .chip:active, :root[data-motion="reduced"] .swatch:hover { transform: none !important; }
 :root[data-motion="reduced"] .switch-thumb, :root[data-motion="reduced"] .nav-pill, :root[data-motion="reduced"] .seg-ind, :root[data-motion="reduced"] .pending { transition-timing-function: linear !important; }
-:root[data-motion="reduced"] .ripple, :root[data-motion="reduced"] .brand-mark::after, :root[data-motion="reduced"] .btn-brand::after, :root[data-motion="reduced"] .pbar-fill::after { display: none; }
+:root[data-motion="reduced"] .ripple, :root[data-motion="reduced"] .btn-brand::after, :root[data-motion="reduced"] .pbar-fill::after { display: none; }
+:root[data-motion="reduced"] .vx-logo-cap, :root[data-motion="reduced"] .vx-logo-v { animation: none !important; stroke-dasharray: none; }
 :root[data-motion="reduced"] .radar-sweep { animation: none !important; opacity: .5; }
 :root[data-motion="reduced"] .spinner, :root[data-motion="reduced"] .job-orb-ring, :root[data-motion="reduced"] .splash-orbit { animation: none !important; border-color: rgba(var(--accent-rgb), .5); }
 :root[data-motion="reduced"] .skel { animation: none !important; background: rgba(255, 255, 255, .07); }
@@ -1384,7 +1392,8 @@ kbd {
 /* Windows asks for less motion: honoured from the very first frame (splash, error and end screens
    appear before the settings are loaded and data-motion is set). */
 @media (prefers-reduced-motion: reduce) {
-  .aurora span, .brand-mark::after, .splash-orbit, .hero-orb-ring, .empty-glow, .ring-glow, .chip-reboot, .skel, .spinner, .job-orb-ring, .badge-pending .dot, .switch[aria-busy="true"] .switch-thumb { animation: none !important; }
+  .vx-logo-v { stroke-dasharray: none; }
+  .aurora span, .vx-logo-cap, .vx-logo-v, .splash-orbit, .hero-orb-ring, .empty-glow, .ring-glow, .chip-reboot, .skel, .spinner, .job-orb-ring, .badge-pending .dot, .switch[aria-busy="true"] .switch-thumb { animation: none !important; }
   .splash-card, .page, .enter, .banner, .toast, .dialog, .drawer, .palette { animation-name: fade !important; animation-duration: 120ms !important; animation-delay: 0ms !important; }
   .ripple, .btn-brand::after, .pbar-fill::after, .fly-dot { display: none; }
   ::view-transition-old(page), ::view-transition-new(page), ::view-transition-group(preset-icon) { animation: none !important; }

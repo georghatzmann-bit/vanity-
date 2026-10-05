@@ -87,10 +87,11 @@ const P = {
   flask: '<path d="M9.5 3.5h5M10.5 3.5v5.2L5 18.3A1.5 1.5 0 0 0 6.3 20.5h11.4a1.5 1.5 0 0 0 1.3-2.2l-5.5-9.6V3.5"/><path d="M7.5 14.5h9"/>',
   cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.5 1.6A3.8 3.8 0 0 1 17.5 18.5H7Z"/>',
   send: '<path d="M20.5 3.5 10 14M20.5 3.5 14 20.5l-4-6.5-6.5-4 17-6.5Z"/>',
-  logo: '<path d="M4 5.5h4.2l3.8 9.2 3.8-9.2H20L13.6 19.5h-3.2L4 5.5Z" fill="currentColor" stroke="none"/>'
+  logo: '<path d="M5.5 3.5v17M12 3.5v17M18.5 3.5v17" opacity=".4"/><path d="M5.5 7 12 17l6.5-10" stroke-width="2.4"/><rect x="2.5" y="5.4" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><rect x="9" y="15.4" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><rect x="15.5" y="5.4" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/>'
 };
 
 const ALIAS = {
+  video: 'broadcast',
   overview: 'home', tweaks: 'sliders', presets: 'stack', advisor: 'brain', detweak: 'undo', games: 'gamepad', cleanup: 'broom', apps: 'package', backups: 'archive', settings: 'cog',
   shieldcheck: 'shieldCheck', 'shield-check': 'shieldCheck', gauge2: 'gauge', crown: 'trophy', competitive: 'target', esport: 'target', fivem: 'car', privacy: 'eye-off', streaming: 'broadcast',
   laptop: 'battery', clean: 'broom', safe: 'shieldCheck', ultimate: 'rocket', balanced: 'scale', trash2: 'trash', wifi2: 'wifi', bolt2: 'bolt', cpu2: 'cpu', 'alert-triangle': 'alert', warning: 'alert'
