@@ -42,12 +42,12 @@ Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel fest
 | Laufen | **W A S D** |
 | Umschauen | **Maus** |
 | Springen | **Leertaste** (gedrückt halten = immer wieder springen) |
-| Ducken | **Shift** gedrückt halten |
+| Ducken | **Shift** gedrückt halten (linke oder rechte Shift-Taste) |
 | Zielen (Kamera fährt näher ran) | **rechte Maustaste** gedrückt halten |
 | Tanzen | **B** |
 | Pause (Maus freigeben) | **Esc** – danach wieder auf „Klicken zum Weiterspielen“ |
 
-Controller (Xbox/PlayStation) gehen auch: linker Stick laufen, rechter Stick umschauen, A/Kreuz springen, R3 ducken, L2 zielen.
+Controller (Xbox/PlayStation) gehen auch: linker Stick laufen, rechter Stick umschauen, A/Kreuz springen, R3 ducken, L2 zielen, **Start/Options** = Pause und wieder weiterspielen.
 
 Die Tasten-Belegung kann man in Phase 11 im Menü ändern. Bis dahin steht sie in `src/config.js` (Abschnitt `controls`).
 
@@ -56,8 +56,8 @@ Die Tasten-Belegung kann man in Phase 11 im Menü ändern. Bis dahin steht sie i
 Das Spiel startet auf einem Übungsplatz (80 × 80 m mit Mauer rundherum). Probier die Stationen aus:
 
 - **Drei Kisten (0,3 m / 1 m / 2 m):** Auf die kleine läufst du einfach hinauf. Auf die 1-m-Kiste kommst du nur mit Springen, auf die 2-m-Kiste gar nicht.
-- **Wand (4 m):** Stell dich mit dem Rücken dicht davor und dreh dich – die Kamera geht nie durch die Wand.
-- **Türkise Rampe (45°):** ohne Springen hoch auf die 4-m-Plattform. Von dort führen lila Rampen auf den **Turm (12 m)**.
+- **Wand (4 m):** Stell dich mit dem Rücken dicht davor und dreh dich – die Kamera geht nie durch die Wand, und deine Figur steht nie vor dem Fadenkreuz.
+- **Türkise Rampe (45°):** ohne Springen hoch auf die 4-m-Plattform. Von dort führen lila Rampen auf den **Turm (12 m)**. Auch direkt aneinander gesetzte Rampen läufst du ohne Springen hinauf.
 - **Vom Turm springen:** Ein Sturz aus 12 m macht **50 Schaden** (erst geht der Schild weg, dann das Leben). Bis 7 m Fallhöhe passiert nichts. Wirst du besiegt, stehst du nach 2 Sekunden am Startpunkt wieder auf.
 - **Grüner Tunnel (Decke 1,5 m):** nur geduckt passt du hinein. Lässt du Shift darunter los, bleibst du trotzdem geduckt, bis über dir Platz ist.
 - **Rosa Rampe:** steht so hoch, dass du darunter durchlaufen kannst.
@@ -110,7 +110,7 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 | Kasten „Tippfehler in src/config.js (Zeile …)“ | In `config.js` an dieser Zeile nachsehen. Meist: Komma statt Punkt bei einer Zahl oder ein fehlendes Komma am Zeilenende. |
 | Kasten mit rotem Rand: „Dein Browser kann gerade keine 3D-Grafik …“ | Browser aktualisieren. In den Browser-Einstellungen „Hardwarebeschleunigung verwenden“ einschalten, Browser neu starten. |
 | FPS-Zahl ist orange oder rot | Grafik auf `'mittel'` stellen (siehe oben). Laptop ans Netzteil hängen. |
-| „Die Maus konnte nicht gesperrt werden“ | Nach **Esc** braucht der Browser etwa 1 Sekunde Pause. Kurz warten, dann nochmal klicken. |
+| „Die Maus konnte nicht gesperrt werden“ | Nach **Esc** braucht der Browser etwa 1 Sekunde Pause. Kurz warten, dann nochmal klicken. Klappt es mehrmals nicht: Seite mit **F5** neu laden oder Chrome/Edge benutzen. Notfalls erscheint der Knopf **„Ohne Maus-Sperre spielen“** – dann bleibt der Mauszeiger sichtbar und dreht die Kamera nur, solange er im Fenster ist. |
 | Die Figur läuft nicht, obwohl ich W drücke | Erst auf „Klicken zum Spielen“ klicken. Steht „Pausiert“ da, nochmal klicken. |
 | Tab ist plötzlich zu | **Strg + W** schließt im Browser den Tab – das kann kein Spiel verhindern. Darum liegt Ducken auf Shift und nicht auf Strg. |
 | Irgendein anderer Kasten mit rotem Rand | Screenshot machen und an Claude schicken. |

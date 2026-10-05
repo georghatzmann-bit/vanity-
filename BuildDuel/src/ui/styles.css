@@ -104,7 +104,7 @@ html, body {
   position: absolute;
   left: 16px;
   bottom: 16px;
-  width: 260px;
+  width: 270px;
   max-width: calc(100% - 32px);
   padding: 10px 14px;
   display: flex;
@@ -116,11 +116,17 @@ html, body {
 .help-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
 .help-row { display: flex; justify-content: space-between; gap: 12px; }
 .help-row span { color: var(--text-dim); }
-.help-row b { font-weight: 600; text-align: right; }
+.help-row b { font-weight: 600; text-align: right; white-space: nowrap; }
 .help-status { margin-top: 6px; font-weight: 700; color: #9fe6a0; font-variant-numeric: tabular-nums; }
 .help-status:empty { display: none; }
 .help-hint { margin-top: 6px; font-size: 12px; color: var(--text-dim); line-height: 1.4; }
-body.playing .help { opacity: 0.75; }
+body.playing .help { opacity: 0.6; }
+/* Kleinere Fenster (z. B. 800 x 600): Hilfe schmaler, damit sie die Figur nicht verdeckt */
+@media (max-width: 900px), (max-height: 640px) {
+  .help { width: 210px; padding: 8px 10px; font-size: 12px; }
+  .help-title { font-size: 13px; margin-bottom: 2px; }
+  .help-hint { display: none; }
+}
 /* Kleine Bildschirme (Handy): keine Tastatur-Hilfe, sie würde nur verdecken */
 @media (max-width: 600px), (max-height: 480px) {
   .help { display: none; }
@@ -172,6 +178,22 @@ body.playing .help { opacity: 0.75; }
 .play-info { font-size: 13px; color: var(--text-dim); line-height: 1.45; }
 .play-hint { font-size: 13px; color: var(--warn); min-height: 0; }
 .play-hint:empty { display: none; }
+/* Notlösung "Ohne Maus-Sperre spielen" (erscheint erst, wenn die Sperre öfter scheitert) */
+.play-alt {
+  min-height: 40px;
+  padding: 8px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.play-alt:hover { background: rgba(255, 255, 255, 0.08); }
+.play-alt:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.play-alt[hidden] { display: none; }
 
 /* --- Ladebildschirm --------------------------------------------------------- */
 .loading {

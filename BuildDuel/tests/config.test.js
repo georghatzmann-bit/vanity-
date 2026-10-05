@@ -73,6 +73,16 @@ describe('Spielwerte: Bewegung, Kamera, Figuren (Phase 2)', () => {
     assert.ok(c.crouchHeight < c.height);
     assert.ok(c.collisionPadding > c.near);
     assert.ok(c.hideCharacterDistance < c.aimDistance);
+    // Ecken der Bild-Nahgrenze bei 16:9 und normalem Sichtfeld müssen in den Wand-Abstand passen
+    const t = Math.tan((c.fov * Math.PI) / 360);
+    const corner = c.near * Math.sqrt(1 + t * t * (1 + (16 / 9) ** 2));
+    assert.ok(c.probeRadius >= corner, `probeRadius ${c.probeRadius} < Ecke ${corner.toFixed(3)}`);
+    // Schulter-Punkt frei: im 4-m-Raster hat die Kamera neben dem Kopf Platz
+    assert.ok(c.hideCharacterSide < c.shoulderOffset, 'sonst wäre die eigene Figur immer unsichtbar');
+    assert.ok(c.hideCharacterDistance > c.shoulderOffset, 'Kamera direkt neben dem Kopf → Figur ausblenden');
+    // Ducken unter der niedrigsten Decke: Kamera-Box passt über dem Kopf
+    assert.ok(c.crouchHeight + c.probeRadius <= CONFIG.player.hitbox.crouchHeight + 1e-9);
+    assert.ok(c.height + c.probeRadius <= CONFIG.player.hitbox.height + 1e-9);
   });
 
   it('Stufen: 0,3-m-Kiste geht, 1-m-Kiste nicht (Übungsplatz)', () => {

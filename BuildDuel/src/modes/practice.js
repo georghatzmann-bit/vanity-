@@ -179,12 +179,12 @@ function buildCourse(map, cfg, thickness) {
     ) - bridge.vThickness;
     map.addBox({ x, y: 0, z: zz }, { x: x + post, y: underside, z: zz + post }, { color: COLORS.post });
   }
-  label('Unter der Rampe durch', 21.6, 1.4, -9.4); // neben der Stütze
+  label('Unter der Rampe durch', 18, 6.4, -12); // über der Rampe (vom Start aus nicht hinter den Kisten-Schildern)
 
   // --- Kleines Dach (Pyramide) auf einem Sockel -------------------------------------------
   map.addBox({ x: 24, y: 0, z: -14 }, { x: 28, y: 0.3, z: -10 }, { color: COLORS.roofBase });
   map.addSlope({ minX: 24, maxX: 28, minZ: -14, maxZ: -10, baseY: 0.3, rise: CONFIG.building.roofHeight, dir: 'pyramid', thickness }, { color: COLORS.roof });
-  label('Dach', 26, 2.8, -12);
+  label('Dach', 25.6, 3.4, -12); // über der Spitze, vom Start aus zwischen den Kisten-Schildern
 }
 
 // 0.3 → "0,3 m", 4 → "4 m"

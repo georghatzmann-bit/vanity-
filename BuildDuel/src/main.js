@@ -80,7 +80,7 @@ function applySize(renderer, camera) {
 // Tasten-Namen für die Hilfe (deutsch)
 const KEY_NAMES = {
   Space: 'Leertaste', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Strg', ControlRight: 'Strg',
-  Mouse0: 'Linke Maustaste', Mouse1: 'Mausrad-Klick', Mouse2: 'Rechte Maustaste',
+  Mouse0: 'Linksklick', Mouse1: 'Mausrad-Klick', Mouse2: 'Rechtsklick',
   WheelUp: 'Mausrad hoch', WheelDown: 'Mausrad runter', Escape: 'Esc', Tab: 'Tab',
 };
 function keyName(code) {
@@ -115,6 +115,7 @@ function start() {
     sub: document.getElementById('play-sub'),
     button: document.getElementById('play-button'),
     hint: document.getElementById('play-hint'),
+    noLock: document.getElementById('play-nolock'),
     crosshair: document.getElementById('crosshair'),
     help: document.getElementById('help'),
   };
@@ -129,6 +130,7 @@ function start() {
     }
     game?.dispose();
     input.releaseAll();
+    input.clearEdges();
     game = new Game({
       scene,
       camera,
@@ -171,6 +173,8 @@ function start() {
       ui.button.textContent = next === 'paused' ? 'Klicken zum Weiterspielen' : 'Klicken zum Spielen';
     } else {
       ui.hint.textContent = '';
+      // Was im Pause-Bildschirm gedrückt wurde (Leertaste, C …), zählt nicht im Spiel
+      input.clearEdges();
       clock.reset();
     }
   }
@@ -190,21 +194,48 @@ function start() {
     input.requestPointerLock();
   }
 
+  let lockFailures = 0; // abgelehnte Maus-Sperren seit der letzten geklappten
+  let noLockMode = false; // gerade "ohne Maus-Sperre" gespielt
   input.onLockChange = (locked) => {
     if (locked) {
       forcedPlay = false;
+      lockFailures = 0;
+      ui.noLock.hidden = true;
+      if (noLockMode) {
+        noLockMode = false;
+        input.allowMouseWithoutLock = false;
+        input.lookWithoutLock = false;
+      }
       setState('playing');
     } else if (state === 'playing' && !forcedPlay) {
       setState('paused');
     }
   };
+  // Maus-Sperre abgelehnt: Beim ersten Mal ist es meist nur zu früh (Chrome erlaubt
+  // nach Esc erst nach ca. 1 Sekunde eine neue Sperre). Klappt es öfter nicht
+  // (Browser-Regel, eingebettete Seite …), gibt es einen Weg ohne Sperre.
   input.onLockError = () => {
-    // Chrome erlaubt nach Esc erst nach ca. 1 Sekunde eine neue Sperre
-    ui.hint.textContent = 'Die Maus konnte nicht gesperrt werden. Kurz warten und nochmal klicken.';
+    lockFailures++;
+    if (lockFailures < 2) {
+      ui.hint.textContent = 'Die Maus konnte nicht gesperrt werden. Kurz warten und nochmal klicken.';
+    } else {
+      ui.hint.textContent = 'Klappt es weiterhin nicht? Seite mit F5 neu laden. Hilft das nicht: ' +
+        'Chrome oder Edge benutzen – oder unten ohne Maus-Sperre spielen.';
+      ui.noLock.hidden = false;
+    }
   };
   ui.overlay.addEventListener('click', (event) => {
     event.preventDefault();
     requestPlay();
+  });
+  // Notlösung: ohne Maus-Sperre spielen (der Mauszeiger bleibt sichtbar)
+  ui.noLock.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation(); // nicht noch einmal die Sperre anfordern
+    noLockMode = true;
+    input.allowMouseWithoutLock = true;
+    input.lookWithoutLock = true;
+    play({ withoutLock: true });
   });
   // Esc pausiert. (Mit Maus-Sperre gibt der Browser die Maus bei Esc selbst frei –
   // dann kommt die Pause über onLockChange. Manche Browser melden die Taste trotzdem.)
@@ -215,16 +246,18 @@ function start() {
   // Hilfe unten links (vorläufig, bis es das HUD und das Einstellungs-Menü gibt)
   function renderHelp() {
     const kb = settings.controls.keyboard;
-    const keys = (action) => (kb[action] ?? []).map(keyName).join(' / ');
-    const crouchKey = settings.controls.crouchOnCtrl ? keyName(CONFIG.controls.crouchCtrlKey) : keys('crouch');
+    // Tasten-Namen ohne Doppelte (linke und rechte Shift-Taste heißen beide "Shift")
+    const names = (codes) => [...new Set(codes.map(keyName))].join(' / ');
+    const keys = (action) => names(kb[action] ?? []);
+    const crouchKey = settings.controls.crouchOnCtrl ? names(CONFIG.controls.crouchCtrlKeys) : keys('crouch');
     const rows = [
       ['Laufen', [keys('moveForward'), keys('moveLeft'), keys('moveBack'), keys('moveRight')].join(' ')],
       ['Umschauen', 'Maus'],
       ['Springen', keys('jump')],
       ['Ducken', `${crouchKey} (${settings.controls.crouchToggle ? 'umschalten' : 'halten'})`],
     ];
-    if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', keyName(CONFIG.controls.sprintKeyWhenCrouchOnCtrl)]);
-    rows.push(['Zielen (Zoom)', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
+    if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', names(CONFIG.controls.sprintKeysWhenCrouchOnCtrl)]);
+    rows.push(['Zielen', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
     ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
       rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
       '<div class="help-status" data-status></div>' +
@@ -295,7 +328,18 @@ function start() {
         const result = clock.advance(frameSeconds);
         steps = result.steps;
         alpha = result.alpha;
-        for (let i = 0; i < steps; i++) game.fixedUpdate(clock.step);
+        for (let i = 0; i < steps; i++) {
+          game.fixedUpdate(clock.step);
+          // Pause-Taste (Controller "Start", ohne Maus-Sperre auch Esc)
+          if (game.lastSample?.pressed.pause) {
+            setState('paused');
+            break;
+          }
+        }
+      } else if (state !== 'playing' && input.pollPauseButton()) {
+        // Controller "Start" im Start-/Pause-Bildschirm: weiterspielen (ohne Maus-Sperre –
+        // ein Controller-Knopf darf die Maus nicht sperren)
+        play({ withoutLock: true });
       }
       renderFrame(frameSeconds, steps, alpha);
     } catch (error) {

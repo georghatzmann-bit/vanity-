@@ -134,10 +134,13 @@ einen leeren Befehl (stehen still). `brain.think()` darf `null` liefern (= alter
 7. `mode.update(dt)`, dann alle `systems[i].update(dt, game)`
 8. `time += dt; tick++`
 
-Nach Schritt 4 wird der Ziel-Strahl des Spielers (`aimOrigin/aimDir`) mit der neuen Lage neu
-berechnet, damit Schüsse/Bauteile in Schritt 5 genau zur Kamera passen.
-`frameUpdate` blendet die eigene Figur aus, wenn die Kamera näher als
-`CONFIG.camera.hideCharacterDistance` ist, und dreht sie genau mit der Kamera.
+Nach Schritt 4 rechnet `cameraRig.fixedUpdate(player, dt, world)` den Kamera-Zustand des Ticks
+(geglättete Duck-Höhe, Schulter-Abstand), danach wird der Ziel-Strahl des Spielers
+(`aimOrigin/aimDir`) mit der neuen Lage neu berechnet – er liegt genau auf der Fadenkreuz-Linie,
+damit Schüsse/Bauteile in Schritt 5 genau zur Kamera passen.
+`frameUpdate` blendet die eigene Figur aus, wenn `cameraRig.hideCharacter` gesetzt ist (Kamera
+näher als `CONFIG.camera.hideCharacterDistance` am Kopf, oder Wand rechts: Schulter-Punkt näher
+als `hideCharacterSide`), und dreht sie genau mit der Kamera.
 
 ## 6. Character (src/player.js)
 
@@ -371,21 +374,33 @@ Jeder Modus:
 ## 11a. Eingabe, Steuerung, Kamera, Figuren-Grafik (Welle 1)
 
 - **Input** (`src/input.js`): `new Input(settings, { getGamepads?, now? })`, `attach(canvas)`,
-  `requestPointerLock()`, `exitPointerLock()`, `applySettings(settings)`, `releaseAll()`,
+  `requestPointerLock()`, `exitPointerLock()`, `applySettings(settings)`, `releaseAll()` (gehaltene
+  Controller-Knöpfe zählen danach erst nach dem Loslassen wieder), `clearEdges()` (verwirft
+  pressed/released, Maus-Bewegung, Mausrad – main.js ruft es beim (Weiter-)Spielen auf),
+  `pollPauseButton()` (nur Start-/Pause-Bildschirm: Controller-Start neu gedrückt?),
   `sample(dt)` → `{ held, pressed, released, lookDX, lookDY, moveAxisX, moveAxisZ, lookAxisX,
   lookAxisY, wheel, device, dt }` (wiederverwendetes Objekt; Aktions-Namen = Tasten-Aktionen aus
   config.js + `sprint` + `toggleBuild`). Virtuell: `setVirtual(action, down)`, `addLook(dx, dy)`,
   `setMoveAxis(x, z)`, `setLookAxis(x, y)`. Schalter: `playing` (Spiel-Tasten blockieren),
-  `gamepadBuildMode`, `allowMouseWithoutLock`. Rückrufe: `onLockChange(locked)`, `onLockError(err)`.
+  `gamepadBuildMode`, `allowMouseWithoutLock`, `lookWithoutLock` (Notlösung ohne Maus-Sperre).
+  Rückrufe: `onLockChange(locked)`, `onLockError(err)`. Die Aktion `pause` (Esc, Controller-Start)
+  pausiert in main.js.
   `peekLook(out)` = noch nicht abgeholte Maus-Bewegung (Kamera zeigt sie sofort).
 - **Spieler-Steuerung** (`src/playerController.js`): `createPlayerController()` →
   `{ buildCommand(sample, character, cameraRig, settings, game), reset() }`. Hilfen:
   `applyMouseLook`, `modeSensitivity`, `enemyNearCrosshair`, `wrapAngle`, `clampPitch`.
   yaw wird im Bereich −π…π gehalten (Grafik interpoliert mit `lerpAngle`).
-- **Kamera** (`src/camera.js`): `new ThirdPersonCamera(threeCamera | null)`:
-  `computeAimRay(character, world, outOrigin, outDir, yaw?, pitch?)` (deterministisch, ohne Glättung),
-  `computePose(...)`, `update(character, alpha, dt, world, input?, settings?)`, `snap()` (nach
-  Teleport/Runde), Felder `yaw`, `pitch`, `fov`, `characterDistance`.
+- **Kamera** (`src/camera.js`): `new ThirdPersonCamera(threeCamera | null)`. Kamera-Arm aus zwei
+  Teilen: Kopf → Schulter-Punkt (0,6 m rechts, Wand rechts → kürzer), dann vom Schulter-Punkt
+  gegen die Blickrichtung nach hinten (3,2 m, Zielen 1,8 m). Die Kamera ist eine kleine Box
+  (`CONFIG.camera.probeRadius`) – sie kommt nie so nah an Wände, dass die Bild-Nahgrenze hineinragt.
+  `fixedUpdate(character, dt, world)` (einmal pro Tick, Game ruft es für den Spieler auf),
+  `computeAimRay(character, world, outOrigin, outDir, yaw?, pitch?)` (= Fadenkreuz-Linie; benutzt
+  nur den Tick-Zustand → gleich bei jeder Bildrate), `computePose(world, fx, fy, fz, yaw, pitch,
+  distance, pivotHeight, outPos, outDir, side?, probe?)`, `shoulderSide(world, hx, hy, hz, yaw)`,
+  `isFree(world, x, y, z, m)`, `update(character, alpha, dt, world, input?, settings?)`, `snap()`
+  (nach Teleport/Runde; Sprünge > 3 m werden auch selbst erkannt), Felder `yaw`, `pitch`, `fov`,
+  `side`, `characterDistance` (Kamera ↔ Kopf), `hideCharacter`.
 - **Figuren-Grafik** (`src/world/characterModel.js`): `createCharacterView(character, parent)` →
   `{ root, rightHand, attach(name, obj), detach(name), setHidden(bool), update(alpha, dt, yawOverride?), dispose() }`.
   Farbsets und Hut-Formen stehen in `CONFIG.skins`.

@@ -58,6 +58,7 @@ export const CONFIG = deepFreeze({
     bigColliderCells: 256, // Collider über mehr Raster-Zellen landen in einer eigenen Liste
     terrainRayStep: 1.0, // Strahl gegen hügeliges Gelände: so groß sind die Such-Schritte (m)
     terrainBisectSteps: 12, // danach so oft halbieren (genauer Treffpunkt)
+    terrainRayMaxDistance: 2000, // so weit sucht ein Strahl höchstens nach dem Gelände (m) – nie endlos
   },
 
   // ---------------------------------------------------------------------------
@@ -110,8 +111,8 @@ export const CONFIG = deepFreeze({
   // Kamera (Über-die-Schulter)
   // ---------------------------------------------------------------------------
   camera: {
-    distance: 3.2, // so weit hinter der Figur // SCHÄTZUNG
-    shoulderOffset: 0.6, // so weit nach rechts versetzt // SCHÄTZUNG
+    distance: 3.2, // so weit hinter der Figur (genauer: hinter dem Schulter-Punkt) // SCHÄTZUNG
+    shoulderOffset: 0.6, // so weit nach rechts versetzt ("Schulter-Punkt" neben dem Kopf) // SCHÄTZUNG
     height: 1.6, // so hoch über den Füßen // SCHÄTZUNG
     aimDistance: 1.8, // beim Zielen näher ran // SCHÄTZUNG
     collisionPadding: 0.2, // Abstand zur Wand, wenn die Kamera sonst durch eine Wand ginge
@@ -119,11 +120,13 @@ export const CONFIG = deepFreeze({
     aimFov: 55, // Sichtfeld beim Zielen (°) // SCHÄTZUNG
     sniperFov: 20, // Sichtfeld mit Zielfernrohr (°) // SCHÄTZUNG
     fovChangeSpeed: 12, // wie schnell das Sichtfeld wechselt (höher = schneller)
-    crouchHeight: 1.15, // Kamera-Höhe über den Füßen, wenn man geduckt ist
+    crouchHeight: 1.1, // Kamera-Höhe über den Füßen, wenn man geduckt ist (+ probeRadius passt unter jede Decke, unter die man geduckt passt)
     aimZoomSpeed: 14, // wie schnell die Kamera beim Zielen näher fährt (höher = schneller)
     crouchSmoothing: 12, // wie schnell die Kamera beim Ducken mitgeht
     collisionReturnSpeed: 6, // nach einem Hindernis fährt die Kamera so schnell wieder zurück
-    hideCharacterDistance: 0.6, // ist die Kamera näher an der Figur, wird die eigene Figur ausgeblendet
+    probeRadius: 0.2, // die Kamera bleibt so weit von Wänden weg (größer als die Ecken der Bild-Nahgrenze → nie durch Wände sehen)
+    hideCharacterDistance: 0.75, // ist die Kamera näher am Kopf der Figur, wird die eigene Figur ausgeblendet
+    hideCharacterSide: 0.45, // Wand rechts: liegt der Schulter-Punkt näher am Kopf, würde die Figur das Fadenkreuz verdecken → ausblenden
     near: 0.1, // näher als das wird nichts gezeichnet
     minPitch: -80, // so weit kann man nach unten schauen (°)
     maxPitch: 80, // so weit kann man nach oben schauen (°)
@@ -161,7 +164,7 @@ export const CONFIG = deepFreeze({
       moveLeft: ['KeyA'], // belegt
       moveRight: ['KeyD'], // belegt
       jump: ['Space'], // belegt
-      crouch: ['ShiftLeft'], // belegt (Shift = ducken)
+      crouch: ['ShiftLeft', 'ShiftRight'], // belegt (Shift = ducken; linke und rechte Shift-Taste)
       primary: ['Mouse0'], // schießen bzw. Bauteil setzen // belegt
       secondary: ['Mouse2'], // zielen (belegt); im Edit "Felder zurücksetzen" (Vorgabe)
       buildWall: ['KeyZ', 'KeyY'], // belegt (Z, auf QWERTZ auch Y)
@@ -190,8 +193,8 @@ export const CONFIG = deepFreeze({
     // Ducken auf Strg legen? Dann ist Shift = Sprinten.
     // ACHTUNG: Strg + W schließt im Browser den Tab! Darum ist das aus.
     crouchOnCtrl: false,
-    crouchCtrlKey: 'ControlLeft',
-    sprintKeyWhenCrouchOnCtrl: 'ShiftLeft',
+    crouchCtrlKeys: ['ControlLeft', 'ControlRight'], // Ducken, wenn crouchOnCtrl an ist
+    sprintKeysWhenCrouchOnCtrl: ['ShiftLeft', 'ShiftRight'], // dann Sprinten
     crouchToggle: false, // false = halten, true = einmal drücken zum Umschalten
     editOnRelease: false, // Edit bestätigen, sobald G losgelassen wird
     resetEditAfterConfirm: false, // Edit-Auswahl nach dem Bestätigen leeren
@@ -646,6 +649,8 @@ export const CONFIG = deepFreeze({
   // Optik
   // ---------------------------------------------------------------------------
   visuals: {
+    labelMinScreenHeight: 22, // Schilder (Übungsplatz) sind auf dem Bildschirm mindestens so hoch (Pixel) – lesbar auch von weit weg
+    labelMaxGrow: 4, // … dafür werden sie höchstens 4-mal so groß
     colors: {
       skyTop: '#3A8DDE', // Himmel oben
       skyHorizon: '#7EC8F2', // Himmel am Horizont

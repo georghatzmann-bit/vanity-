@@ -206,9 +206,11 @@ export class Game {
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       moveCharacter(c, c.command, dt, this.world);
-      // Ziel-Strahl des Spielers nach der Bewegung neu (passt dann genau zur neuen Lage)
-      if (c.isPlayer && c.alive && sample) {
-        this.cameraRig.computeAimRay(c, this.world, c.command.aimOrigin, c.command.aimDir);
+      if (c === this.player) {
+        // Kamera-Zustand (Duck-Höhe, Schulter) einmal pro Tick – Bild und Ziel-Strahl teilen ihn
+        this.cameraRig.fixedUpdate(c, dt, this.world);
+        // Ziel-Strahl des Spielers nach der Bewegung neu (passt dann genau zur neuen Lage)
+        if (c.alive && sample) this.cameraRig.computeAimRay(c, this.world, c.command.aimOrigin, c.command.aimDir);
       }
     }
     // 5. Bauen und Waffen
@@ -261,7 +263,7 @@ export class Game {
       if (!c.view) continue;
       if (c === player && this.camera) {
         // eigene Figur: dreht sich genau mit der Kamera; zu nah → ausblenden
-        c.view.setHidden(this.cameraRig.characterDistance < CONFIG.camera.hideCharacterDistance);
+        c.view.setHidden(this.cameraRig.hideCharacter);
         c.view.update(alpha, frameSeconds, c.alive ? this.cameraRig.yaw : undefined);
       } else {
         c.view.update(alpha, frameSeconds);

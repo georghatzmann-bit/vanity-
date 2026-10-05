@@ -20,6 +20,7 @@ describe('Eingabe: Tasten-Belegung', () => {
     assert.deepEqual(b.get('KeyZ'), ['buildWall']);
     assert.deepEqual(b.get('KeyY'), ['buildWall']);
     assert.deepEqual(b.get('ShiftLeft'), ['crouch']);
+    assert.deepEqual(b.get('ShiftRight'), ['crouch'], 'auch die rechte Shift-Taste');
     assert.deepEqual(b.get('WheelDown'), ['nextItem']);
     assert.deepEqual(b.get('Mouse0'), ['primary']);
   });
@@ -28,8 +29,21 @@ describe('Eingabe: Tasten-Belegung', () => {
     const s = defaultSettings();
     s.controls.crouchOnCtrl = true;
     const b = buildBindings(s);
-    assert.deepEqual(b.get(CONFIG.controls.crouchCtrlKey), ['crouch']);
-    assert.deepEqual(b.get('ShiftLeft'), ['sprint']);
+    assert.deepEqual(b.get('ControlLeft'), ['crouch']);
+    assert.deepEqual(b.get('ControlRight'), ['crouch']);
+    assert.deepEqual(b.get('ShiftLeft'), ['sprint'], 'Shift duckt dann NICHT mehr');
+    assert.deepEqual(b.get('ShiftRight'), ['sprint']);
+  });
+
+  it('rechte Shift-Taste duckt genauso wie die linke', () => {
+    const input = makeInput();
+    input.handleKeyDown(key('ShiftRight'));
+    assert.ok(input.sample().held.crouch);
+    input.handleKeyDown(key('ShiftLeft'));
+    input.handleKeyUp(key('ShiftRight'));
+    assert.ok(input.sample().held.crouch, 'linke noch gedrückt');
+    input.handleKeyUp(key('ShiftLeft'));
+    assert.ok(!input.sample().held.crouch);
   });
 
   it('eigene Belegung aus den Einstellungen', () => {
@@ -181,6 +195,29 @@ describe('Eingabe: Drücken und Loslassen', () => {
     assert.ok(!s.held.jump && s.released.jump);
   });
 
+  it('clearEdges (weiterspielen nach der Pause): im Pause-Bildschirm Gedrücktes zählt nicht', () => {
+    const input = makeInput();
+    input.playing = false;
+    // Pause: Leertaste und C kurz gedrückt, W gedrückt und gehalten, Maus bewegt
+    input.handleKeyDown(key('Space'));
+    input.handleKeyUp(key('Space'));
+    input.handleKeyDown(key('KeyC'));
+    input.handleKeyUp(key('KeyC'));
+    input.handleKeyDown(key('KeyW'));
+    input.addLook(500, 300);
+    // weiter
+    input.playing = true;
+    input.clearEdges();
+    const s = input.sample();
+    assert.ok(!s.pressed.jump && !s.released.jump, 'kein Sprung');
+    assert.ok(!s.pressed.buildRamp, 'kein Baumodus');
+    assert.equal(s.lookDX, 0);
+    assert.equal(s.lookDY, 0);
+    assert.ok(s.held.moveForward, 'gehaltenes W läuft weiter');
+    input.handleKeyUp(key('KeyW'));
+    assert.ok(input.sample().released.moveForward);
+  });
+
   it('applySettings: neue Belegung, gedrückte Tasten werden losgelassen', () => {
     const input = makeInput();
     input.handleKeyDown(key('ShiftLeft'));
@@ -193,6 +230,41 @@ describe('Eingabe: Drücken und Loslassen', () => {
     input.handleKeyDown(key('ControlLeft'));
     const st = input.sample();
     assert.ok(st.held.sprint && st.held.crouch);
+  });
+});
+
+describe('Eingabe: Maus-Sperre', () => {
+  it('abgelehnte Sperre wird pro Klick nur einmal gemeldet (Promise + Ereignis)', async () => {
+    const input = makeInput();
+    const errors = [];
+    input.onLockError = (e) => errors.push(e);
+    input.element = {
+      requestPointerLock() {
+        return Promise.reject(Object.assign(new Error('abgelehnt'), { name: 'NotAllowedError' }));
+      },
+    };
+    input.requestPointerLock();
+    input._onLockError(); // Chrome schickt zusätzlich "pointerlockerror"
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(errors.length, 1, 'ein Klick = ein Fehlschlag');
+    input.requestPointerLock();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(errors.length, 2, 'zweiter Klick wird wieder gemeldet');
+    input.element = null;
+  });
+
+  it('ohne Sperre: Maus dreht nur mit lookWithoutLock (Notlösung) und nur im Spiel', () => {
+    const input = makeInput();
+    input.handleMouseMove({ movementX: 50, movementY: 0 });
+    assert.equal(input.sample().lookDX, 0, 'ohne Sperre: nichts');
+    input.lookWithoutLock = true;
+    input.handleMouseMove({ movementX: 50, movementY: 0 });
+    assert.equal(input.sample().lookDX, 0, 'nicht im Spiel: nichts');
+    input.playing = true;
+    input.handleMouseMove({ movementX: 50, movementY: -20 });
+    const s = input.sample();
+    assert.equal(s.lookDX, 50);
+    assert.equal(s.lookDY, -20);
   });
 });
 
@@ -266,6 +338,40 @@ describe('Eingabe: Controller', () => {
     pads[0] = pad({ [g.buildMode.ramp]: true });
     s = input.sample();
     assert.ok(s.pressed.buildRamp && s.held.primary, 'nach dem Loslassen geht es normal');
+  });
+
+  it('releaseAll mit gehaltenem R2: kein neuer Schuss, erst nach Loslassen wieder', () => {
+    const g = CONFIG.controls.gamepad;
+    const pads = [pad({ [g.fire]: true })];
+    const input = makeInput(defaultSettings(), pads);
+    assert.ok(input.sample().pressed.primary);
+    input.releaseAll(); // Fenster verliert den Fokus / Pause
+    let s = input.sample();
+    assert.ok(s.released.primary && !s.held.primary, 'losgelassen gemeldet');
+    s = input.sample();
+    assert.ok(!s.pressed.primary && !s.held.primary, 'gehaltenes R2 drückt nicht neu');
+    pads[0] = pad({});
+    input.sample();
+    pads[0] = pad({ [g.fire]: true });
+    assert.ok(input.sample().pressed.primary, 'neu gedrückt → schießt');
+  });
+
+  it('Start (Pause-Knopf): im Spiel als Aktion "pause"; im Pause-Bildschirm pollPauseButton', () => {
+    const g = CONFIG.controls.gamepad;
+    const pads = [pad({ [g.pause]: true })];
+    const input = makeInput(defaultSettings(), pads);
+    assert.ok(input.sample().pressed.pause, 'im Spiel: pause');
+    input.releaseAll(); // → Pause-Bildschirm
+    assert.ok(!input.pollPauseButton(), 'noch gehaltener Start zählt nicht neu');
+    pads[0] = pad({});
+    assert.ok(!input.pollPauseButton());
+    pads[0] = pad({ [g.pause]: true });
+    assert.ok(input.pollPauseButton(), 'neu gedrückt → weiterspielen');
+    assert.ok(!input.pollPauseButton(), 'nur einmal');
+    input.clearEdges(); // weiterspielen
+    assert.ok(!input.sample().pressed.pause, 'gehaltener Start pausiert nicht sofort wieder');
+    pads.length = 0;
+    assert.ok(!input.pollPauseButton(), 'ohne Controller: nichts');
   });
 
   it('B schaltet den Baumodus (toggleBuild), R3 duckt', () => {

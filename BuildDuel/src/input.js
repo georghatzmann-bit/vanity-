@@ -64,18 +64,19 @@ export function buildBindings(settings) {
     }
   };
   const crouchOnCtrl = !!settings?.controls?.crouchOnCtrl;
+  const sprintKeys = CONFIG.controls.sprintKeysWhenCrouchOnCtrl;
   for (const action of Object.keys(CONFIG.controls.keyboard)) {
     if (crouchOnCtrl && action === 'crouch') continue;
     const codes = keyboard[action] ?? CONFIG.controls.keyboard[action];
     for (const code of codes) {
-      // Bei "Ducken auf Strg" ist die Sprint-Taste (Shift) für Sprinten reserviert
-      if (crouchOnCtrl && code === CONFIG.controls.sprintKeyWhenCrouchOnCtrl) continue;
+      // Bei "Ducken auf Strg" sind die Shift-Tasten für Sprinten reserviert
+      if (crouchOnCtrl && sprintKeys.includes(code)) continue;
       add(code, action);
     }
   }
   if (crouchOnCtrl) {
-    add(CONFIG.controls.crouchCtrlKey, 'crouch');
-    add(CONFIG.controls.sprintKeyWhenCrouchOnCtrl, 'sprint');
+    for (const code of CONFIG.controls.crouchCtrlKeys) add(code, 'crouch');
+    for (const code of sprintKeys) add(code, 'sprint');
   }
   return bindings;
 }
@@ -95,6 +96,7 @@ export class Input {
     this.locked = false; // Maus-Sperre aktiv?
     this.playing = false; // Spiel läuft (dann werden Spiel-Tasten blockiert)
     this.allowMouseWithoutLock = false; // Tests/Touch: Maus-Tasten auch ohne Sperre
+    this.lookWithoutLock = false; // Notlösung ohne Maus-Sperre: Maus dreht trotzdem (solange der Zeiger im Fenster ist)
     this.device = 'keyboard';
     this.gamepadBuildMode = false; // Controller: Schultertasten bauen (Baumodus)
     this.gamepadConnected = false;
@@ -118,6 +120,7 @@ export class Input {
     this._lookAxisX = 0;
     this._lookAxisY = 0;
     this._lockTime = -1e9;
+    this._lockFailReported = false;
     this._gpMoveX = 0;
     this._gpMoveZ = 0;
     this._gpLookX = 0;
@@ -217,6 +220,7 @@ export class Input {
    * Browser das nicht, gibt es die normale Sperre.
    */
   requestPointerLock() {
+    this._lockFailReported = false; // neuer Versuch: ein Fehlschlag wird wieder gemeldet
     const element = this.element;
     if (!element || !element.requestPointerLock) {
       this._lockFailed(new Error('Dieser Browser kann die Maus nicht sperren'));
@@ -264,7 +268,11 @@ export class Input {
     this.onLockChange?.(locked);
   }
 
+  // Chrome meldet einen Fehlschlag doppelt (abgelehntes Promise UND "pointerlockerror") –
+  // pro Versuch nur einmal weitergeben
   _lockFailed(error) {
+    if (this._lockFailReported) return;
+    this._lockFailReported = true;
     this.onLockError?.(error);
   }
 
@@ -317,7 +325,7 @@ export class Input {
   }
 
   handleMouseMove(e) {
-    if (!this.locked) return;
+    if (!this.locked && !(this.lookWithoutLock && this.playing)) return;
     const dx = e.movementX || 0;
     const dy = e.movementY || 0;
     // Direkt nach dem Sperren melden manche Browser einen riesigen Sprung → ignorieren
@@ -395,6 +403,41 @@ export class Input {
     this._lookAxisX = 0;
     this._lookAxisY = 0;
     this._wheelAccum = 0;
+    // Gehaltene Controller-Knöpfe zählen erst nach dem Loslassen wieder (sonst würde
+    // z. B. ein gehaltenes R2 nach der Pause sofort einen neuen Schuss auslösen)
+    this._suppressHeldGamepadButtons();
+  }
+
+  /**
+   * Verwirft "gedrückt"/"losgelassen", Maus-Bewegung und Mausrad, die noch nicht
+   * abgeholt wurden – z. B. Tasten, die im Pause-Bildschirm gedrückt wurden.
+   * Gehaltene Tasten bleiben gehalten (ein gehaltenes W läuft weiter).
+   * Aufrufen, wenn das Spiel (wieder) losgeht.
+   */
+  clearEdges() {
+    for (let i = 0; i < ACTIONS.length; i++) {
+      this._down[ACTIONS[i]] = false;
+      this._up[ACTIONS[i]] = false;
+    }
+    this._lookDX = 0;
+    this._lookDY = 0;
+    this._wheel = 0;
+    this._wheelAccum = 0;
+    this._suppressHeldGamepadButtons();
+  }
+
+  /**
+   * Nur für Start-/Pause-Bildschirm (dort läuft sample() nicht): Wurde am Controller
+   * der Pause-Knopf ("Start") neu gedrückt? Ein schon gehaltener Knopf zählt nicht.
+   */
+  pollPauseButton() {
+    const pad = this._findPad();
+    const index = CONFIG.controls.gamepad.pause;
+    const buttons = pad?.buttons || [];
+    const count = Math.min(buttons.length, this._gpPrevButtons.length);
+    const wasDown = this._gpPrevButtons[index] === 1;
+    for (let i = 0; i < this._gpPrevButtons.length; i++) this._gpPrevButtons[i] = i < count && buttonDown(buttons[i]) ? 1 : 0;
+    return !wasDown && this._gpPrevButtons[index] === 1;
   }
 
   /** Noch nicht abgeholte Maus-Bewegung (für die Kamera, ohne sie zu verbrauchen). */
@@ -453,23 +496,7 @@ export class Input {
     this._gpMoveZ = 0;
     this._gpLookX = 0;
     this._gpLookY = 0;
-    let pads;
-    try {
-      pads = this.getGamepads() || [];
-    } catch {
-      pads = [];
-    }
-    let pad = null;
-    for (let i = 0; i < pads.length; i++) {
-      const p = pads[i];
-      if (!p || p.connected === false) continue;
-      if (p.mapping === 'standard') {
-        pad = p;
-        break;
-      }
-      if (!pad) pad = p;
-    }
-    this.gamepadConnected = !!pad;
+    const pad = this._findPad();
     const next = this._gpNext;
     for (const action of ACTIONS) next[action] = false;
 
@@ -518,6 +545,8 @@ export class Input {
         this._gpButton(buttons, map.crouchOrRotate, 'crouch');
       }
       if (this._gpActive) this.device = 'gamepad';
+    } else {
+      this._gpPrevButtons.fill(0);
     }
 
     // Änderungen gegenüber der letzten Abfrage als Drücken/Loslassen melden
@@ -534,6 +563,35 @@ export class Input {
   // ---------------------------------------------------------------------------
   // intern
   // ---------------------------------------------------------------------------
+
+  // Der benutzte Controller (bevorzugt mit Standard-Belegung) oder null
+  _findPad() {
+    let pads;
+    try {
+      pads = this.getGamepads() || [];
+    } catch {
+      pads = [];
+    }
+    let pad = null;
+    for (let i = 0; i < pads.length; i++) {
+      const p = pads[i];
+      if (!p || p.connected === false) continue;
+      if (p.mapping === 'standard') {
+        pad = p;
+        break;
+      }
+      if (!pad) pad = p;
+    }
+    this.gamepadConnected = !!pad;
+    return pad;
+  }
+
+  // Alle gerade gehaltenen Controller-Knöpfe sperren, bis sie losgelassen werden
+  _suppressHeldGamepadButtons() {
+    for (let i = 0; i < this._gpPrevButtons.length; i++) {
+      if (this._gpPrevButtons[i]) this._gpSuppressed[i] = 1;
+    }
+  }
 
   // Ein Controller-Knopf: gedrückt → Aktion für diese Abfrage merken. Gibt 1/0 zurück.
   _gpButton(buttons, index, action) {

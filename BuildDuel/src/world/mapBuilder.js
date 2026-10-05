@@ -4,12 +4,16 @@
 // Jede Karte (Arena, Übungsplatz, später Insel) benutzt diese Helfer:
 //   addBox(min, max, options)   – Kiste/Wand/Plattform
 //   addSlope(spec, options)     – Rampe oder Pyramiden-Dach (spec wie world.addSlope)
-//   addLabel(text, position)    – Schild mit Text (nur Grafik)
+//   addLabel(text, position)    – Schild mit Text (nur Grafik); weit weg wird es
+//                                 größer, damit man es noch lesen kann
+//   frameUpdate()               – jedes Bild (Schilder an den Abstand anpassen)
 //   dispose()                   – alles wieder entfernen (Kollision + Grafik)
 //
 // Ohne Bildschirm (game.headless) wird nur die Kollision angelegt.
 // =============================================================================
 import * as THREE from 'three';
+
+const _size = new THREE.Vector2();
 
 /**
  * @param {object} game
@@ -22,6 +26,7 @@ export function createMapBuilder(game, name = 'Karte') {
   game.root?.add(root);
   const colliders = [];
   const materials = new Map(); // Farbe → Material (gleiche Farbe = gleiches Material)
+  const labels = []; // { sprite, width, height } – Grundgröße der Schilder (m)
   let tileTexture = null;
 
   function material(color) {
@@ -83,7 +88,32 @@ export function createMapBuilder(game, name = 'Karte') {
       const sprite = createLabelSprite(text, options);
       sprite.position.set(position.x, position.y, position.z);
       root.add(sprite);
+      labels.push({ sprite, width: sprite.scale.x, height: sprite.scale.y });
       return sprite;
+    },
+
+    /**
+     * Jedes Bild: Schilder in der Ferne so weit vergrößern, dass sie auf dem
+     * Bildschirm mindestens visuals.labelMinScreenHeight Pixel hoch sind.
+     */
+    frameUpdate() {
+      if (!visual || labels.length === 0) return;
+      const camera = game.camera;
+      const renderer = game.renderer;
+      if (!camera || !renderer) return;
+      const screenHeight = renderer.getSize(_size).y;
+      if (!(screenHeight > 0)) return;
+      const visuals = game.config?.visuals ?? {};
+      const minPixels = visuals.labelMinScreenHeight ?? 22;
+      const maxGrow = visuals.labelMaxGrow ?? 4;
+      // so viel Welt-Höhe (m) ist ein Pixel in 1 m Abstand
+      const metersPerPixel = (2 * Math.tan((camera.fov * Math.PI) / 360)) / screenHeight;
+      for (let i = 0; i < labels.length; i++) {
+        const l = labels[i];
+        const distance = l.sprite.position.distanceTo(camera.position);
+        const grow = Math.min(maxGrow, Math.max(1, (minPixels * metersPerPixel * distance) / l.height));
+        l.sprite.scale.set(l.width * grow, l.height * grow, 1);
+      }
     },
 
     /** Grafik-Objekt hinzufügen (z. B. Boden). */
@@ -96,6 +126,7 @@ export function createMapBuilder(game, name = 'Karte') {
     dispose() {
       for (const c of colliders) game.world.remove(c);
       colliders.length = 0;
+      labels.length = 0;
       disposeObject(root);
       root.parent?.remove(root);
       for (const m of materials.values()) m.dispose();
