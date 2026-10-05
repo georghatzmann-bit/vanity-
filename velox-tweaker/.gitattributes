@@ -1,0 +1,5 @@
+# Batch files must keep CRLF bytes exactly as committed (cmd.exe misparses LF-only files).
+*.bat -text
+*.cmd -text
+# .ps1 files carry a UTF-8 BOM; keep their bytes untouched.
+*.ps1 -text

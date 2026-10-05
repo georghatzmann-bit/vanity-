@@ -1,0 +1,20 @@
+{
+  "categories": [
+    { "id": "gaming",   "order": 1,  "icon": "gamepad",  "name": "Gaming & FPS",          "desc": "Mehr Bilder pro Sekunde, weniger Ruckler, Spiele bekommen Vorrang." },
+    { "id": "latency",  "order": 2,  "icon": "mouse",    "name": "Input & Latenz",        "desc": "Maus, Tastatur und Timer: alles reagiert direkter." },
+    { "id": "power",    "order": 3,  "icon": "bolt",     "name": "Energie & CPU",         "desc": "Prozessor und Energieplan auf Leistung statt Stromsparen." },
+    { "id": "gpu",      "order": 4,  "icon": "gpu",      "name": "Grafikkarte",           "desc": "Einstellungen für NVIDIA, AMD und Intel Grafik." },
+    { "id": "network",  "order": 5,  "icon": "wifi",     "name": "Netzwerk & Ping",       "desc": "Niedrigerer Ping und stabilere Verbindung beim Online-Spielen." },
+    { "id": "memory",   "order": 6,  "icon": "chip",     "name": "Speicher & Laufwerke",  "desc": "Arbeitsspeicher, SSD und Festplatten effizienter nutzen." },
+    { "id": "system",   "order": 7,  "icon": "cog",      "name": "System & Start",        "desc": "Schnellerer Start, kürzere Wartezeiten, weniger Unterbrechungen." },
+    { "id": "privacy",  "order": 8,  "icon": "shield",   "name": "Datenschutz",           "desc": "Weniger Daten an Microsoft, weniger Hintergrund-Aktivität." },
+    { "id": "debloat",  "order": 9,  "icon": "sparkles", "name": "Werbung & KI-Features", "desc": "Werbung, Vorschläge, Copilot, Widgets und anderen Ballast abschalten." },
+    { "id": "services", "order": 10, "icon": "layers",   "name": "Dienste & Aufgaben",    "desc": "Unnötige Hintergrunddienste und geplante Aufgaben ruhigstellen." },
+    { "id": "ui",       "order": 11, "icon": "layout",   "name": "Oberfläche & Explorer", "desc": "Windows so einrichten, wie es sich gut bedienen lässt." },
+    { "id": "games",    "order": 12, "icon": "target",   "name": "Spiele-spezifisch",     "desc": "Feinschliff für einzelne Spiele wie FiveM und GTA V." },
+    { "id": "security", "order": 13, "icon": "alert",    "name": "Experte (riskant)",     "desc": "Mehr Leistung gegen weniger Schutz. Nur wenn du genau weißt, was du tust." },
+    { "id": "cleanup",  "order": 14, "icon": "broom",    "name": "Reinigung",             "desc": "Temporäre Dateien, Caches und Datenmüll entfernen." },
+    { "id": "repair",   "order": 15, "icon": "wrench",   "name": "Reparatur",             "desc": "Windows-Dateien prüfen und typische Probleme beheben." },
+    { "id": "apps",     "order": 16, "icon": "package",  "name": "Bloatware",             "desc": "Vorinstallierte Apps entfernen, die kaum jemand braucht." }
+  ]
+}

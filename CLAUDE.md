@@ -1,6 +1,7 @@
 # vanity-
 
-Lua scripts for the **Vanity** menu (FiveM / GTA V sandbox).
+Lua scripts for the **Vanity** menu (FiveM / GTA V sandbox) — plus one separate Windows project,
+`velox-tweaker/` (see the last section). Everything up to that section is about the Lua scripts only.
 
 ## Layout
 
@@ -107,3 +108,16 @@ Crossing it fails at compile time with `main function has more than 200 local va
 says nothing about which change caused it. `test/parity_test.lua` asserts headroom instead, so
 the failure arrives with a name attached. If it starts failing, group related locals into a table
 rather than deleting features.
+
+## velox-tweaker/ — separate Windows project (the Lua rules above do NOT apply)
+
+VELOX is a Windows 10/11 PC tweaker: PowerShell 5.1 backend + local HTTP server + HTML/CSS/JS UI in an
+Edge app window, driven by a declarative JSON tweak catalog.
+
+- **Contract:** `velox-tweaker/docs/ARCHITECTURE.md` — read it before changing anything in that folder.
+- The backend must run on **Windows PowerShell 5.1** (no PS7-only syntax, `.ps1` saved as UTF-8 *with* BOM,
+  `.bat` with CRLF). After writing files run `pwsh velox-tweaker/tools/Normalize-Files.ps1`.
+- Data checks: `pwsh velox-tweaker/tools/Validate-Catalog.ps1` (0 errors required).
+- Backend tests (simulate mode, run here on Linux with pwsh 7): `pwsh velox-tweaker/tests/Run-Tests.ps1`.
+- UI end-to-end tests (Playwright, Chromium in `/opt/pw-browsers`): `node velox-tweaker/tests/ui/run-ui-tests.mjs`.
+- Simulate mode (`Velox.ps1 -Simulate`) never touches the system; all tests use it.
