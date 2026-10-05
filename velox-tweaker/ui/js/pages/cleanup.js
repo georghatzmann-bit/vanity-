@@ -1,6 +1,6 @@
 // Reinigung: measure cleanup actions (clean-scan), pick, run, show freed space; repair tools below.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, countUp, fmtBytes, fmtNumber, emptyState, stagger, toast, badge, needsBadge, confirmDialog, riskBadge } from '../ui.js';
+import { h, clear, button, checkbox, countUp, fmtBytes, fmtNumber, emptyState, stagger, toast, badge, needsBadge, confirmDialog, riskBadge, append } from '../ui.js';
 
 export default {
   id: 'cleanup', title: 'Reinigung', icon: 'broom', desc: 'Speicher freiräumen und Windows reparieren', keywords: 'aufräumen temp cache speicher reparatur sfc dism',
@@ -30,7 +30,9 @@ export default {
       const { b, f } = total();
       countUp(totalEl, b, { format: fmtBytes, duration: 600 });
       totalSub.textContent = sizes ? (sel.size + ' von ' + actions.length + ' Bereichen · ' + fmtNumber(f) + ' Dateien') : 'Wird gemessen …';
-      runBtn.disabled = !sel.size || !sizes;
+      const unknown = sizes ? Array.from(sel).some(id => !sizes[id]) : false;
+      runBtn.disabled = !sel.size || !sizes || (b === 0 && !unknown);
+      runBtn.title = runBtn.disabled && sizes && sel.size ? 'Gerade gibt es hier nichts zu löschen.' : '';
     }
 
     function fill(animate) {
@@ -43,7 +45,7 @@ export default {
         cb.input.setAttribute('aria-label', t.name);
         const size = h('div', { class: 'clean-size' });
         if (!sizes) size.appendChild(h('div', { class: 'skel', style: { width: '64px', height: '14px' } }));
-        else if (s) { const n = h('span', { class: 'clean-bytes', text: '0 B' }); size.append(n, h('span', { class: 'clean-files', text: fmtNumber(s.files || 0) + ' Dateien' })); countUp(n, s.bytes || 0, { format: fmtBytes, from: 0, duration: 800 }); }
+        else if (s) { const n = h('span', { class: 'clean-bytes', text: '0 B' }); append(size, n, h('span', { class: 'clean-files', text: fmtNumber(s.files || 0) + ' Dateien' })); countUp(n, s.bytes || 0, { format: fmtBytes, from: 0, duration: 800 }); }
         else size.appendChild(h('span', { class: 'clean-files', text: '–' }));
         list.appendChild(h('div', { class: ['clean-row', na && 'is-na'], 'data-id': t.id },
           cb,
@@ -83,7 +85,7 @@ export default {
       const bytes = res.reduce((s, r) => s + (Number(r.freedBytes) || 0), 0);
       const fails = res.filter(r => !r.ok);
       freed = bytes;
-      clear(freedBox).append(
+      append(clear(freedBox), 
         h('div', { class: 'freed-icon' }, icon('checkCircle', 22)),
         h('div', {}, h('div', { class: 'freed-label', text: 'Freigegeben' }), h('div', { class: 'freed-num', 'data-testid': 'clean-freed', text: '0 B' })),
         fails.length ? badge(fails.length + ' übersprungen', 'warn', 'warn') : null);
@@ -99,7 +101,7 @@ export default {
     for (const t of repairs) {
       const b = button({ label: 'Ausführen', icon: 'play', size: 'sm', variant: 'secondary', disabled: !ctx.applicable(t), onClick: async () => {
         if (t.warning) { const ok = await confirmDialog({ title: t.name + '?', text: t.warning, confirmLabel: 'Ausführen' }); if (!ok) return; }
-        const job = await ctx.runJob('run-action', { ids: [t.id] }, { title: t.name, quiet: true });
+        const job = await ctx.runJob('run-action', { ids: [t.id] }, { title: t.name, quiet: true, icon: 'wrench' });
         if (job && job.status === 'done') { const r = ((job.result && job.result.results) || [])[0] || {}; toast({ type: r.ok === false ? 'warn' : 'ok', title: t.name, text: r.message || 'Fertig.' }); }
       } });
       repairGrid.appendChild(h('article', { class: 'card repair-card spot', 'data-id': t.id },
@@ -110,7 +112,7 @@ export default {
         h('div', { class: 'repair-foot' }, b)));
     }
 
-    el.append(summary,
+    append(el, summary,
       h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Was gelöscht werden kann' }), h('p', { class: 'section-desc', text: 'Nur Dateien, die Windows und Programme jederzeit neu anlegen. Gesperrte Dateien werden übersprungen.' }))),
       h('section', { class: 'card clean-card' }, list),
       h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Reparatur' }), h('p', { class: 'section-desc', text: 'Werkzeuge für typische Windows-Probleme. Jedes zeigt dir live, was passiert.' }))),

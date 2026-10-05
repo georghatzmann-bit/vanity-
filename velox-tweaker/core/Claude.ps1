@@ -262,6 +262,7 @@ function Select-VxClaudePlan($Items, [bool]$AllowRisky, $VxProfile) {
     $plan = New-Object System.Collections.ArrayList
     $dropped = New-Object System.Collections.Generic.List[string]
     $seen = @{}
+    $claimed = @{}
     foreach ($p in @($Items)) {
         $id = [string](Get-VxProp $p 'id')
         if (-not $id -or $seen.ContainsKey($id)) { continue }
@@ -271,6 +272,10 @@ function Select-VxClaudePlan($Items, [bool]$AllowRisky, $VxProfile) {
         if ((Get-VxTweakKind $t) -ne 'toggle') { $dropped.Add("$id (keine Umschalt-Option)"); continue }
         if ([string]$t.risk -eq 'risky' -and -not $AllowRisky) { $dropped.Add("$id (riskant)"); continue }
         if (-not (Test-VxWhen $t $VxProfile $false).ok -or [string]$global:VxCtx.State.statuses[$id] -eq 'na') { $dropped.Add("$id (passt nicht zu diesem PC)"); continue }
+        $keys = @(Get-VxTweakTargetKeys $t)
+        $clash = @($keys | Where-Object { $claimed.ContainsKey($_) }).Count -gt 0
+        if ($clash) { [void]$dropped.Add("$id (widerspricht einem anderen Vorschlag)"); continue }
+        foreach ($k in $keys) { $claimed[$k] = $true }
         $reason = ([string](Get-VxProp $p 'reason')).Trim()
         if ($reason.Length -gt 500) { $reason = $reason.Substring(0, 500) }
         if (-not $reason) { $reason = [string]$t.desc }

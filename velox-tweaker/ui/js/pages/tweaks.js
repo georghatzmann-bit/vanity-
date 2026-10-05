@@ -1,6 +1,6 @@
 // Tweaks: category rail, search, filter chips, staged toggles, incremental rendering for 500+ rows.
 import { icon } from '../icons.js';
-import { h, clear, button, emptyState, toast, plural, fmtNumber } from '../ui.js';
+import { h, clear, button, emptyState, toast, plural, fmtNumber, append } from '../ui.js';
 import { renderList } from '../tweakrow.js';
 
 export const OWN_PAGES = new Set(['cleanup', 'repair', 'apps']);
@@ -115,7 +115,7 @@ export default {
       const rec = recommended();
       const recBtn = button({ label: rec.length ? 'Empfohlene aktivieren (' + rec.length + ')' : 'Empfohlene sind aktiv', icon: rec.length ? 'sparkles' : 'check', variant: rec.length ? 'primary' : 'secondary', size: 'sm', disabled: !rec.length || !!query, attrs: { 'data-testid': 'recommend-btn', title: 'Merkt alle sicheren Tweaks dieser Kategorie vor, die zu deinem PC passen und noch nicht aktiv sind.' },
         onClick: async () => { const n = await ctx.stageMany(rec.map(t => t.id), true); if (n) toast({ type: 'ok', title: plural(n, 'Tweak', 'Tweaks') + ' vorgemerkt', text: 'Nur sichere Tweaks. Klick unten auf "Anwenden", um sie zu übernehmen.' }); } });
-      head.append(
+      append(head, 
         h('div', { class: 'tw-head-icon' }, icon(c.icon || 'layers', 22)),
         h('div', { class: 'tw-head-text' },
           h('h2', { class: 'tw-head-title', text: query ? 'Suche: „' + query + '“' : c.name }),
@@ -160,7 +160,7 @@ export default {
       refresh();
     }
 
-    el.append(h('div', { class: 'tw-layout' },
+    append(el, h('div', { class: 'tw-layout' },
       rail,
       h('div', { class: 'tw-main' },
         h('div', { class: 'tw-toolbar' }, searchBox, resultInfo),

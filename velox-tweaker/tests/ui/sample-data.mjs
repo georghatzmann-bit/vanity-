@@ -357,31 +357,44 @@ export const detweak = {
   ]
 };
 
+// Same shape as core/Scan.ps1 produces.
 export const profiles = {
   desktop: {
-    formFactor: 'desktop',
-    os: { name: 'Windows 11 Pro', version: '23H2', build: 22631, family: 'win11' },
-    cpu: { name: 'AMD Ryzen 7 7800X3D 8-Core Processor', vendor: 'amd', cores: 8, threads: 16, maxMhz: 4200 },
-    gpus: [{ name: 'NVIDIA GeForce RTX 4070 SUPER', vendor: 'nvidia', vramGB: 12, driver: '566.36' }],
-    ram: { totalGB: 32, speedMhz: 6000, modules: 2 },
-    ramGB: 32,
-    disks: [{ name: 'Samsung SSD 990 PRO 1TB', type: 'ssd', sizeGB: 931, freeGB: 412, system: true }, { name: 'WDC WD20EZBX', type: 'hdd', sizeGB: 1863, freeGB: 920, system: false }],
+    os: { caption: 'Windows 11 Pro', build: 22631, displayVersion: '23H2', isWin11: true, edition: 'Professional' },
+    cpu: { name: 'AMD Ryzen 7 7800X3D 8-Core Processor', vendor: 'amd', cores: 8, threads: 16, maxMHz: 4200 },
+    gpus: [{ name: 'NVIDIA GeForce RTX 4070 SUPER', vendor: 'nvidia', vramGB: 12, driver: '32.0.15.6636' }],
+    ram: { totalGB: 32, type: 'DDR5', speedMHz: 6000, configuredMHz: 6000, modules: 2 },
+    disks: [{ model: 'Samsung SSD 990 PRO 1TB', media: 'ssd', bus: 'nvme', sizeGB: 1000 }, { model: 'WDC WD20EZBX', media: 'hdd', bus: 'sata', sizeGB: 2000 }],
     systemDisk: 'ssd',
-    displays: [{ name: 'LG ULTRAGEAR', width: 2560, height: 1440, hz: 165, primary: true }],
+    systemDriveFreeGB: 412.4,
+    formFactor: 'desktop',
     battery: false,
-    powerPlan: 'balanced'
+    display: { width: 2560, height: 1440, currentHz: 144, maxHz: 165 },
+    power: { activePlan: '381b4222-f694-41f0-9685-ff5bb260df2e', name: 'Ausbalanciert' },
+    security: { vbs: true, hvci: true, defenderRealtime: true },
+    gaming: { gameMode: true, hags: false, gameDvr: true },
+    network: [{ name: 'Ethernet', type: 'ethernet', linkMbps: 1000 }],
+    startupCount: 7,
+    uptimeHours: 31.5,
+    tempMB: 1840
   },
   laptop: {
-    formFactor: 'laptop',
-    os: { name: 'Windows 10 Home', version: '22H2', build: 19045, family: 'win10' },
-    cpu: { name: 'Intel(R) Core(TM) i7-12700H', vendor: 'intel', cores: 14, threads: 20, maxMhz: 2300 },
-    gpus: [{ name: 'Intel(R) Iris(R) Xe Graphics', vendor: 'intel', vramGB: 0, driver: '31.0.101.4502' }, { name: 'NVIDIA GeForce RTX 3060 Laptop GPU', vendor: 'nvidia', vramGB: 6, driver: '552.22' }],
-    ram: { totalGB: 16, speedMhz: 4800, modules: 2 },
-    ramGB: 16,
-    disks: [{ name: 'SK hynix PC801 512GB', type: 'ssd', sizeGB: 476, freeGB: 61, system: true }],
+    os: { caption: 'Windows 10 Home', build: 19045, displayVersion: '22H2', isWin11: false, edition: 'Core' },
+    cpu: { name: '12th Gen Intel(R) Core(TM) i7-12700H', vendor: 'intel', cores: 14, threads: 20, maxMHz: 2300 },
+    gpus: [{ name: 'NVIDIA GeForce RTX 3060 Laptop GPU', vendor: 'nvidia', vramGB: 6, driver: '31.0.15.5222' }, { name: 'Intel(R) Iris(R) Xe Graphics', vendor: 'intel', vramGB: 1, driver: '31.0.101.5186' }],
+    ram: { totalGB: 16, type: 'DDR4', speedMHz: 3200, configuredMHz: 3200, modules: 2 },
+    disks: [{ model: 'SAMSUNG MZVL2512HCJQ', media: 'ssd', bus: 'nvme', sizeGB: 512 }],
     systemDisk: 'ssd',
-    displays: [{ name: 'Integriertes Display', width: 1920, height: 1080, hz: 144, primary: true }],
+    systemDriveFreeGB: 61.2,
+    formFactor: 'laptop',
     battery: true,
-    powerPlan: 'balanced'
+    display: { width: 1920, height: 1080, currentHz: 60, maxHz: 144 },
+    power: { activePlan: '381b4222-f694-41f0-9685-ff5bb260df2e', name: 'Ausbalanciert' },
+    security: { vbs: true, hvci: true, defenderRealtime: true },
+    gaming: { gameMode: true, hags: false, gameDvr: true },
+    network: [{ name: 'WLAN', type: 'wifi', linkMbps: 866 }],
+    startupCount: 11,
+    uptimeHours: 52,
+    tempMB: 900
   }
 };

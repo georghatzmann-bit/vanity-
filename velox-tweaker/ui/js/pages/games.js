@@ -1,8 +1,11 @@
 // Spiele: detected games with three boost switches each, add by file dialog or path, plus the
 // "games" category tweaks.
 import { icon } from '../icons.js';
-import { h, clear, button, toggle, avatar, badge, emptyState, stagger, toast } from '../ui.js';
+import { h, clear, button, toggle, avatar, badge, emptyState, stagger, toast, append } from '../ui.js';
 import { renderList } from '../tweakrow.js';
+
+const SOURCES = { steam: 'Steam', epic: 'Epic Games', fivem: 'FiveM', rockstar: 'Rockstar', riot: 'Riot', ubisoft: 'Ubisoft', ea: 'EA', battlenet: 'Battle.net', gog: 'GOG', xbox: 'Xbox', manual: 'Manuell', manuell: 'Manuell', running: 'Läuft gerade' };
+const sourceLabel = (s) => SOURCES[String(s || '').toLowerCase()] || String(s || '');
 
 const BOOSTS = [
   { key: 'priority', label: 'Hohe CPU-Priorität', desc: 'Vorrang vor Hintergrund-Programmen', icon: 'cpu' },
@@ -21,7 +24,7 @@ export default {
     pathInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addPath(pathInput.value); });
     const tweakList = h('div', { class: 'tw-list' });
 
-    el.append(
+    append(el, 
       h('section', { class: 'card pad-24 games-head' },
         h('div', { class: 'games-head-text' }, h('h2', { class: 'section-title', text: 'Deine Spiele' }), h('p', { class: 'section-desc', text: 'VELOX findet Spiele aus Steam, Epic, Rockstar, Riot und FiveM. Jeder Schalter wirkt sofort und nur für dieses Spiel.' })),
         h('div', { class: 'games-head-actions' }, detectBtn, pickBtn),
@@ -51,7 +54,7 @@ export default {
       const rows = BOOSTS.map(b => {
         const sw = toggle({ checked: boost[b.key], label: b.label + ' für ' + g.name, onChange: async (next) => {
           const nb = Object.assign({}, boost, { [b.key]: next });
-          const job = await ctx.runJob('game-boost', { path: g.path, priority: !!nb.priority, gpu: !!nb.gpu, fso: !!nb.fso }, { overlay: false, quiet: true });
+          const job = await ctx.runJob('game-boost', { path: g.path, name: g.name, source: g.source, priority: !!nb.priority, gpu: !!nb.gpu, fso: !!nb.fso }, { overlay: false, quiet: true });
           if (job && job.status === 'done') {
             const ng = (job.result && job.result.game) || Object.assign({}, g, { boost: nb });
             Object.assign(g, ng, { boost: Object.assign({}, nb, ng.boost || {}) });
@@ -69,7 +72,7 @@ export default {
       const card = h('article', { class: ['card game-card spot', active && 'is-boosted'], 'data-game': g.id || g.exe || g.path },
         h('div', { class: 'game-top' }, avatar(g.name),
           h('div', { class: 'game-titles' }, h('div', { class: 'game-name', text: g.name }), h('div', { class: 'game-path mono', text: g.path, title: g.path })),
-          g.source ? badge(g.source, 'neutral') : null),
+          g.source ? badge(sourceLabel(g.source), 'neutral') : null),
         h('div', { class: 'boost-list' }, rows),
         h('div', { class: 'game-foot' }, countEl));
       return card;

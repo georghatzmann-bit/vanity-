@@ -66,7 +66,7 @@
       "id": "security.hvci-off",
       "name": "Speicher-Integrität (Kernisolierung) aus",
       "desc": "Schaltet die Speicher-Integrität (HVCI) ab. Bringt in CPU-lastigen Spielen ein paar Prozent FPS, schwächt aber den Schutz des Windows-Kerns.",
-      "info": "Das ist der Schalter unter Windows-Sicherheit > Gerätesicherheit > Kernisolierung. Tests zeigen meist 2–6 % mehr FPS in CPU-lastigen Spielen, auf CPUs vor Intel 7. Gen bzw. AMD Ryzen 3000 deutlich mehr. Unter Windows 11 schaltet ‚Zurücksetzen‘ sie wieder ein. Valorant (Vanguard) und FACEIT können Speicher-Integrität verlangen.",
+      "info": "Das ist der Schalter unter Windows-Sicherheit > Gerätesicherheit > Kernisolierung. Meist 2–6 % mehr FPS in CPU-lastigen Spielen, auf CPUs vor Intel 7. Gen bzw. AMD Ryzen 3000 deutlich mehr. Unter Windows 11 schaltet ‚Zurücksetzen‘ sie wieder ein – aber ohne die Treiber-Prüfung von Windows-Sicherheit. War sie wegen eines alten Treibers aus, schalte sie lieber dort ein: Ein unpassender Treiber kann sonst ausfallen oder einen Bluescreen auslösen.",
       "group": "Virtualisierung & Kernisolierung",
       "kind": "toggle",
       "impact": 2,
@@ -93,7 +93,7 @@
       "id": "security.vbs-off",
       "name": "Virtualisierungsbasierte Sicherheit (VBS) aus",
       "desc": "Schaltet VBS ganz ab und damit alle Schutzfunktionen, die darauf aufbauen. Etwas mehr Leistung, aber deutlich weniger Schutz.",
-      "info": "VBS trennt per Hypervisor einen geschützten Speicherbereich ab. Ohne VBS laufen auch Speicher-Integrität und Credential Guard nicht. Prüfen kannst du es in ‚Systeminformationen‘ (msinfo32) unter ‚Virtualisierungsbasierte Sicherheit‘. Wurde VBS per UEFI-Sperre eingeschaltet (Firmen-PCs), wirkt der Schalter nicht.",
+      "info": "VBS trennt per Hypervisor einen geschützten Speicherbereich ab. Ohne VBS laufen auch Speicher-Integrität und Credential Guard nicht. Bei Windows Home und Pro hält meist die Speicher-Integrität VBS am Laufen – schalte sie mit aus oder nimm den Hypervisor-Schalter. Prüfen kannst du es in ‚Systeminformationen‘ (msinfo32). Mit UEFI-Sperre (Firmen-PCs) wirkt der Schalter nicht.",
       "group": "Virtualisierung & Kernisolierung",
       "kind": "toggle",
       "impact": 2,
@@ -118,13 +118,13 @@
     {
       "id": "security.hypervisor-off",
       "name": "Windows-Hypervisor beim Start nicht laden",
-      "desc": "Der Hypervisor startet nicht mehr mit Windows. Das schaltet VBS sicher mit ab, aber WSL2, Hyper-V, Sandbox und Android-Apps gehen nicht mehr.",
+      "desc": "Der Hypervisor startet nicht mehr mit Windows. Das schaltet VBS zuverlässig mit ab, aber WSL2, Hyper-V, Sandbox und Docker gehen nicht mehr.",
       "info": "Der gründlichste Weg, VBS abzuschalten. Emulatoren wie BlueStacks oder VirtualBox laufen ohne Hypervisor oft sogar schneller. Zurücksetzen löscht den Eintrag wieder. Hast du vorher Hyper-V oder WSL2 benutzt, stelle lieber über ‚Sicherungen‘ wieder her, dann kommt der alte Wert (meist ‚Auto‘) zurück.",
       "group": "Virtualisierung & Kernisolierung",
       "kind": "toggle",
       "impact": 2,
       "risk": "risky",
-      "warning": "WSL2, Hyper-V, Windows-Sandbox, Docker Desktop und Android-Apps funktionieren nicht mehr. VBS und Speicher-Integrität sind aus, Vanguard und FACEIT können das ablehnen.",
+      "warning": "WSL2, Hyper-V, Windows-Sandbox und Docker Desktop funktionieren nicht mehr. VBS und Speicher-Integrität sind aus, Vanguard und FACEIT können das ablehnen.",
       "needs": "reboot",
       "tags": [
         "fps",
@@ -227,16 +227,17 @@
     {
       "id": "security.defender-samples-off",
       "name": "Defender schickt keine Dateiproben mehr",
-      "desc": "Verdächtige Dateien werden nicht mehr automatisch zur Analyse an Microsoft hochgeladen. Mehr Privatsphäre, neue Schadsoftware fällt evtl. später auf.",
-      "info": "Entspricht ‚Automatische Übermittlung von Beispielen‘ in Windows-Sicherheit. Der Cloud-Schutz selbst (Abgleich von Datei-Kennungen) bleibt an, nur ganze Dateien werden nicht mehr hochgeladen.",
+      "desc": "Verdächtige Dateien werden nicht mehr zur Analyse an Microsoft hochgeladen. Mehr Privatsphäre, aber neue Schadsoftware wird später erkannt.",
+      "info": "Entspricht ‚Automatische Übermittlung von Beispielen‘ in Windows-Sicherheit. Der Cloud-Abgleich von Datei-Kennungen bleibt an. ‚Blockieren beim ersten Auftreten‘ braucht aber die Dateiproben und fällt damit weg.",
       "group": "Microsoft Defender",
       "kind": "toggle",
       "impact": 1,
-      "risk": "moderate",
-      "warning": "Ganz neue Schadsoftware kann ohne Cloud-Analyse der Datei später erkannt werden.",
+      "risk": "risky",
+      "warning": "Der Schutz ‚Blockieren beim ersten Auftreten‘ fällt weg. Ganz neue Schadsoftware wird dadurch erst später erkannt.",
       "needs": "none",
       "tags": [
-        "privacy"
+        "privacy",
+        "security-off"
       ],
       "actions": [
         {

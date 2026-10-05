@@ -105,8 +105,10 @@ async function boot() {
   route();
   startHeartbeat((busy) => { ctx.backendBusy = busy || null; });
 
-  const busy = data.busy;
-  const busyId = busy && (typeof busy === 'string' ? busy : busy.jobId || busy.id);
+  // Backend: busy is a boolean plus activeJob { id, type }. Older shapes (busy as id/object) are accepted too.
+  const active = data.activeJob || (data.busy && typeof data.busy === 'object' ? data.busy : null) || (typeof data.busy === 'string' ? { id: data.busy } : null);
+  const busy = active;
+  const busyId = active && (active.id || active.jobId);
   const last = Date.parse(ctx.state.lastScan || '');
   const fresh = !!(ctx.state.profile && last && (Date.now() - last) < SCAN_FRESH_MS);
   const firstRun = !busyId && !fresh && !ctx.state.profile;
@@ -136,7 +138,7 @@ function ingest(d) {
 }
 function normalizeState(s) {
   s = s || {};
-  return { statuses: s.statuses || {}, profile: s.profile || null, lastScan: s.lastScan || null, needs: Object.assign({ explorer: false, reboot: false, logoff: false }, s.needs || {}) };
+  return Object.assign({}, s, { statuses: s.statuses || {}, profile: s.profile || null, lastScan: s.lastScan || null, needs: Object.assign({ explorer: false, reboot: false, logoff: false }, s.needs || {}) });
 }
 
 async function initialScan(firstRun) {
@@ -462,7 +464,7 @@ async function follow(jobId, type, opts = {}) {
   root.classList.add('is-busy');
   const overlay = opts.overlay === false ? null : jobOverlay({
     title: opts.title || meta.title, subtitle: opts.subtitle || (ctx.mode.simulate && meta.mutating ? 'Testmodus: Änderungen werden nur simuliert.' : null),
-    cancellable: !!meta.cancel, icon: meta.icon,
+    cancellable: !!meta.cancel, icon: opts.icon || meta.icon,
     onCancel: () => api.cancelJob(jobId).catch(() => {})
   });
   let job;

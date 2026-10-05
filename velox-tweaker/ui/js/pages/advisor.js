@@ -1,7 +1,7 @@
 // KI-Optimierer: goal, free text, engine (local Smart-Analyse / Claude), radar scan driven by the
 // job log, then before -> after score rings, findings with fixes and a selectable plan.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog } from '../ui.js';
+import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append } from '../ui.js';
 import { api } from '../api.js';
 
 export const GOALS = [
@@ -44,6 +44,7 @@ export default {
     let engine = ctx.cache.engine && ctx.settings.claude && ctx.settings.claude.hasKey ? ctx.cache.engine : 'local';
     let allowRisky = false;
     let running = false;
+    let planUnsub = null;
 
     // ---------- setup card
     const goalBox = h('div', { class: 'goal-grid', role: 'radiogroup', 'aria-label': 'Ziel' });
@@ -80,7 +81,7 @@ export default {
       h('div', { class: 'ai-setup-foot' }, h('p', { class: 'fine', text: 'Die Analyse verändert nichts. Du entscheidest danach, was angewendet wird.' }), startBtn));
 
     const stage = h('div', { class: 'ai-stage' });
-    el.append(setup, stage);
+    append(el, setup, stage);
 
     function idle() {
       clear(stage);
@@ -143,6 +144,7 @@ export default {
         ctx.cache.advisor = Object.assign({ goal, at: new Date().toISOString() }, job.result);
         ctx.emit('advisor');
         showResult(ctx.cache.advisor, true);
+        requestAnimationFrame(() => stage.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }));
         toast({ type: 'ok', title: 'Analyse fertig', text: (job.result.plan || []).length + ' Vorschläge für dich.' });
       } else {
         idle();
@@ -215,7 +217,11 @@ export default {
           if (!ok) return;
         }
         const job = await ctx.runJob('apply', { ids, label: 'KI-Plan (' + (r.engine === 'claude' ? 'Claude' : 'Smart-Analyse') + ')' }, { title: 'KI-Plan wird angewendet' });
-        if (job && job.status === 'done') { for (const id of ids) { sel.delete(id); ctx.pending.delete(id); } ctx.emit('pending'); renderPlan(); }
+        if (job && job.status === 'done') {
+          for (const id of ids) { sel.delete(id); ctx.pending.delete(id); }
+          r.planApplied = planItems.every(({ t }) => ctx.isApplied(t.id) || !ctx.applicable(t));
+          ctx.emit('pending'); ctx.emit('advisor'); renderPlan();
+        }
       });
       stageBtn.addEventListener('click', async () => {
         const n = await ctx.stageMany(Array.from(sel), true, { confirmed: false });
@@ -228,13 +234,13 @@ export default {
           planItems.length ? h('div', { class: 'card-actions' }, stageBtn, applyBtn) : null),
         planItems.length ? planList : emptyState({ icon: 'checkCircle', title: 'Nichts zu tun', text: 'Alle passenden Tweaks sind schon aktiv.' }));
 
-      stage.append(head,
+      append(stage, head,
         findings.length ? h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Befunde' }), h('p', { class: 'section-desc', text: plural(findings.length, 'Punkt', 'Punkte') + ', sortiert nach Wichtigkeit.' }))) : null,
         findings.length ? fGrid : null,
         planCard);
       if (animate) { stagger(stage, ':scope > *'); stagger(fGrid); }
-      const onSt = () => renderPlan();
-      ctx.on('statuses', onSt);
+      if (planUnsub) planUnsub();
+      planUnsub = ctx.on('statuses', () => { if (planList.isConnected) renderPlan(); });
     }
 
     idle();

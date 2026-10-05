@@ -5,10 +5,10 @@
       "id": "games.fivem-priority",
       "name": "FiveM: hohe CPU-Priorität",
       "desc": "Windows gibt dem FiveM-Spielprozess Vorrang vor Hintergrundprogrammen. Hilft gegen Ruckler, wenn die CPU am Limit ist.",
-      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn FiveM startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für den Spielprozess aller gängigen Game-Builds (FiveM_bXXXX_GTAProcess.exe bis Build 3570). Neuere Builds sind erst mit einem Katalog-Update dabei.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn FiveM startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für den Spielprozess aller gängigen Game-Builds (FiveM_bXXXX_GTAProcess.exe bis Build 3889). Neuere Builds sind erst mit einem Katalog-Update dabei.",
       "group": "FiveM",
       "kind": "toggle",
-      "impact": 2,
+      "impact": 1,
       "risk": "moderate",
       "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
       "needs": "none",
@@ -126,6 +126,22 @@
         {
           "type": "reg",
           "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3570_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3751_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3889_GTAProcess.exe\\PerfOptions",
           "name": "CpuPriorityClass",
           "kind": "DWord",
           "value": 3,
@@ -350,7 +366,7 @@
       "id": "games.r6siege-priority",
       "name": "Rainbow Six Siege: hohe CPU-Priorität",
       "desc": "Windows gibt Rainbow Six Siege Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
-      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Rainbow Six Siege startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für die DirectX- und die Vulkan-Version.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Rainbow Six Siege startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für RainbowSix.exe und RainbowSix_DX12.exe (Siege X läuft nur noch mit DirectX 12).",
       "group": "Andere Spiele",
       "kind": "toggle",
       "impact": 1,
@@ -373,7 +389,7 @@
         },
         {
           "type": "reg",
-          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RainbowSix_Vulkan.exe\\PerfOptions",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RainbowSix_DX12.exe\\PerfOptions",
           "name": "CpuPriorityClass",
           "kind": "DWord",
           "value": 3,

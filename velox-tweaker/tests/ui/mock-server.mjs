@@ -117,8 +117,8 @@ function evalWhen(w) {
   if (w.gpuVendor && !profile.gpus.some(g => g.vendor === w.gpuVendor)) return 'Keine ' + vendorName[w.gpuVendor] + '-Grafikkarte gefunden';
   if (w.cpuVendor && profile.cpu.vendor !== w.cpuVendor) return 'Nur für ' + vendorName[w.cpuVendor] + '-Prozessoren';
   if (w.systemDisk && profile.systemDisk !== w.systemDisk) return w.systemDisk === 'ssd' ? 'Nur wenn Windows auf einer SSD liegt' : 'Nur wenn Windows auf einer Festplatte (HDD) liegt';
-  if (w.minRamGB && profile.ramGB < w.minRamGB) return 'Braucht mindestens ' + w.minRamGB + ' GB Arbeitsspeicher';
-  if (w.maxRamGB && profile.ramGB > w.maxRamGB) return 'Nur bei höchstens ' + w.maxRamGB + ' GB Arbeitsspeicher';
+  if (w.minRamGB && profile.ram.totalGB < w.minRamGB) return 'Braucht mindestens ' + w.minRamGB + ' GB Arbeitsspeicher';
+  if (w.maxRamGB && profile.ram.totalGB > w.maxRamGB) return 'Nur bei höchstens ' + w.maxRamGB + ' GB Arbeitsspeicher';
   if (w.package && INSTALLED_MISSING.has(w.package)) return 'App ist nicht installiert';
   return null;
 }
@@ -321,10 +321,11 @@ function advisorResult(params, engine) {
   if (st['gaming.gamedvr-off'] === 'applied') findings.push({ id: 'dvr', severity: 'good', title: 'Hintergrund-Aufnahme ist aus', detail: 'Game DVR kostet keine Leistung mehr.', fix: null });
   findings.push({ id: 'gfx-settings', severity: 'info', title: 'Grafikeinstellungen pro Spiel prüfen', detail: 'In den Windows-Grafikeinstellungen kannst du jedem Spiel die schnelle Grafikkarte fest zuweisen.', fix: { type: 'open', target: 'ms-settings:display-advancedgraphics' } });
   if (/ruckel|stutter|lag/.test(text)) findings.push({ id: 'stutter', severity: 'warn', title: 'Ruckler: wahrscheinliche Ursachen', detail: 'Hintergrund-Aufnahme, Energiesparen der CPU und Fremd-Timer-Einstellungen sind die häufigsten Gründe. Der Plan unten geht genau das an.', fix: { type: 'tweaks', ids: plan.slice(0, 3).map(p => p.id) } });
-  if (profile.disks && profile.disks.some(d => d.system && d.freeGB < 80)) findings.push({ id: 'disk', severity: 'warn', title: 'Systemlaufwerk wird voll', detail: 'Weniger als 80 GB frei. Eine Reinigung schafft Platz.', fix: { type: 'page', page: 'cleanup' } });
+  if (profile.systemDriveFreeGB < 80) findings.push({ id: 'disk', severity: 'warn', title: 'Systemlaufwerk wird voll', detail: 'Weniger als 80 GB frei. Eine Reinigung schafft Platz.', fix: { type: 'page', page: 'cleanup' } });
+  const goalName = { gaming: 'Gaming', competitive: 'Esport', balanced: 'Ausgewogen', privacy: 'Datenschutz', laptop: 'Laptop', streaming: 'Streaming', fivem: 'FiveM' }[goal];
   const summary = engine === 'claude'
-    ? 'Claude hat dein System für "' + goal + '" bewertet: ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte. Die größten Hebel sind Energieplan und Hintergrund-Aufnahmen.'
-    : 'Dein PC ist gut ausgestattet, aber noch nicht auf "' + goal + '" eingestellt. ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte.';
+    ? 'Claude hat dein System für „' + goalName + '“ bewertet: ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte. Die größten Hebel sind Energieplan und Hintergrund-Aufnahmen.'
+    : 'Dein PC ist gut ausgestattet, aber noch nicht auf „' + goalName + '“ eingestellt. ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte.';
   return { engine, goal, score, scoreAfter, summary, findings, plan };
 }
 function reasonFor(t, goal) {
@@ -393,6 +394,7 @@ const JOBS = {
       items.push({ key: 'tweak:' + t.id, source: 'catalog', tweakId: t.id, label: t.name, group: cat ? cat.name : t.category, current: s === 'applied' ? 'Tweak aktiv' : s === 'partial' ? 'Teilweise geändert' : 'Eigener Wert', default: 'Windows-Standard' });
     }
     ctx.log(items.length ? 'warn' : 'ok', items.length + ' Abweichungen vom Windows-Standard gefunden.');
+    W.state.foreignCount = items.length;
     return { items, commands: (W.detweak.commands || []).map(c => ({ id: c.id, label: c.label, desc: c.desc, defaultOn: !!c.defaultOn, needs: c.needs || 'none' })) };
   },
   async detweak(p, ctx) {
@@ -457,7 +459,7 @@ const JOBS = {
       if (!t) { results.push({ id: ids[i], ok: false, freedBytes: 0, message: 'Unbekannte Aktion' }); continue; }
       ctx.step(t.name + ' …', i / ids.length);
       if (t.category === 'repair') {
-        for (const pct of [12, 37, 64, 91, 100]) { ctx.log('info', 'Überprüfung ' + pct + ' % abgeschlossen.'); await ctx.tick(0.6); }
+        for (const pct of [12, 37, 64, 91, 100]) { ctx.step(t.name + ' … ' + pct + ' %', (i + pct / 100) / ids.length); ctx.log('info', 'Überprüfung ' + pct + ' % abgeschlossen.'); await ctx.tick(0.6); }
       } else await ctx.tick();
       const size = W.cleanSizes && W.cleanSizes[t.id];
       const freed = size ? size.bytes : (t.actions || []).some(a => a.type === 'clean') ? 42 * 1048576 : 0;
@@ -481,14 +483,14 @@ const JOBS = {
     const libs = ['Steam-Bibliotheken', 'Epic Games', 'Rockstar Launcher', 'FiveM', 'Riot Games'];
     for (let i = 0; i < libs.length; i++) { ctx.step(libs[i] + ' werden durchsucht …', (i + 1) / 6); await ctx.tick(0.5); }
     const found = [
-      { id: 'fivem', name: 'FiveM', exe: 'FiveM_GTAProcess.exe', path: 'C:\\Users\\Spieler\\AppData\\Local\\FiveM\\FiveM.app\\data\\cache\\subprocess\\FiveM_GTAProcess.exe', source: 'FiveM' },
-      { id: 'gta5', name: 'Grand Theft Auto V', exe: 'GTA5.exe', path: 'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe', source: 'Rockstar' },
-      { id: 'cs2', name: 'Counter-Strike 2', exe: 'cs2.exe', path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe', source: 'Steam' },
-      { id: 'valorant', name: 'VALORANT', exe: 'VALORANT-Win64-Shipping.exe', path: 'C:\\Riot Games\\VALORANT\\live\\ShooterGame\\Binaries\\Win64\\VALORANT-Win64-Shipping.exe', source: 'Riot' },
-      { id: 'fortnite', name: 'Fortnite', exe: 'FortniteClient-Win64-Shipping.exe', path: 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe', source: 'Epic' }
+      { id: 'fivem', name: 'FiveM', exe: 'FiveM_GTAProcess.exe', path: 'C:\\Users\\Spieler\\AppData\\Local\\FiveM\\FiveM.app\\data\\cache\\subprocess\\FiveM_GTAProcess.exe', source: 'fivem' },
+      { id: 'gta5', name: 'Grand Theft Auto V', exe: 'GTA5.exe', path: 'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe', source: 'rockstar' },
+      { id: 'cs2', name: 'Counter-Strike 2', exe: 'cs2.exe', path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe', source: 'steam' },
+      { id: 'valorant', name: 'VALORANT', exe: 'VALORANT-Win64-Shipping.exe', path: 'C:\\Riot Games\\VALORANT\\live\\ShooterGame\\Binaries\\Win64\\VALORANT-Win64-Shipping.exe', source: 'riot' },
+      { id: 'fortnite', name: 'Fortnite', exe: 'FortniteClient-Win64-Shipping.exe', path: 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe', source: 'epic' }
     ];
     const games = found.map(g => { const b = W.settings.games.find(x => x.path.toLowerCase() === g.path.toLowerCase()); return Object.assign(g, { boost: b ? b.boost : { priority: false, gpu: false, fso: false } }); });
-    for (const b of W.settings.games) if (!games.some(g => g.path.toLowerCase() === b.path.toLowerCase())) games.push(Object.assign({ source: 'Manuell' }, b));
+    for (const b of W.settings.games) if (!games.some(g => g.path.toLowerCase() === b.path.toLowerCase())) games.push(Object.assign({ source: 'manual' }, b));
     return { games };
   },
   async 'game-boost'(p, ctx) {
@@ -500,7 +502,7 @@ const JOBS = {
     if (!g) { g = { id: exe.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-exe$/, ''), name: exe.replace(/\.exe$/i, ''), exe, path: p.path, boost: {} }; W.settings.games.push(g); }
     g.boost = { priority: !!p.priority, gpu: !!p.gpu, fso: !!p.fso };
     saveBackup('game', 'Spiel-Boost: ' + g.name, [{ op: 'game', path: g.path, after: g.boost }]);
-    return { ok: true, game: Object.assign({ source: 'Manuell' }, g) };
+    return { ok: true, game: Object.assign({ source: 'manual' }, g) };
   },
   async 'pick-file'(p, ctx) { await ctx.tick(0.3); ctx.log('info', 'Testmodus: kein Dateidialog.'); return { path: null }; },
   async 'explorer-restart'(p, ctx) { ctx.step('Explorer wird neu gestartet …', 0.5); await ctx.tick(2); W.state.needs.explorer = false; ctx.log('ok', 'Explorer neu gestartet (Testmodus).'); return { ok: true }; },
@@ -614,9 +616,11 @@ async function handle(req, res) {
     cancelShutdown(); W.stats.bootstraps++;
     return send(res, 200, {
       app: { name: 'VELOX', version: '1.0.0' },
-      mode: { simulate: true, admin: opt.admin, windows: false, os: profile.os.name + ' ' + profile.os.version + ' (' + profile.os.build + ')', ps: '7.6.0 (Mock)', userMismatch: false },
+      mode: { simulate: true, admin: opt.admin, windows: false, os: profile.os.caption + ' ' + profile.os.displayVersion + ' (' + profile.os.build + ')', ps: '7.6.0 (Mock)', userMismatch: false },
       categories: W.categories, tweaks: W.tweaks, presets: W.presets, settings: W.settings, state: W.state,
-      busy: W.running ? { jobId: W.running, type: W.jobs.get(W.running).type } : null
+      // same as core/Server.ps1: busy is a boolean, activeJob tells which job to attach to
+      busy: !!W.running,
+      activeJob: W.running ? { id: W.running, type: W.jobs.get(W.running).type } : null
     });
   }
   if (m('GET', /^\/api\/state$/)) return send(res, 200, W.state);
@@ -671,7 +675,7 @@ async function handle(req, res) {
     log('open', t);
     return send(res, 200, { ok: true });
   }
-  if (m('POST', /^\/api\/heartbeat$/)) { cancelShutdown(); W.stats.heartbeats++; return send(res, 200, { ok: true, busy: W.running }); }
+  if (m('POST', /^\/api\/heartbeat$/)) { cancelShutdown(); W.stats.heartbeats++; return send(res, 200, { ok: true, busy: !!W.running }); }
   if (m('POST', /^\/api\/shutdown$/)) {
     W.stats.shutdowns++;
     cancelShutdown();

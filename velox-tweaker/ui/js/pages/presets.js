@@ -1,6 +1,6 @@
 // Presets: cards + preview drawer that lists only the changes that would really happen.
 import { icon } from '../icons.js';
-import { h, clear, button, drawer, badge, riskBadge, needsBadge, checkbox, emptyState, stagger, plural, toast, RISK } from '../ui.js';
+import { h, clear, button, drawer, badge, riskBadge, needsBadge, checkbox, emptyState, stagger, plural, toast, RISK, append } from '../ui.js';
 
 export function presetPlan(ctx, p) {
   const ts = (p.ids || []).map(id => ctx.byId.get(id)).filter(Boolean);
@@ -39,7 +39,7 @@ export default {
     function fill() {
       clear(grid);
       if (!ctx.presets.length) {
-        grid.appendChild(emptyState({ icon: 'stack', title: 'Noch keine Presets', text: 'Die Preset-Liste ist leer. Du kannst Tweaks trotzdem einzeln unter "Tweaks" vormerken.', action: button({ label: 'Zu den Tweaks', variant: 'secondary', size: 'sm', onClick: () => ctx.navigate('tweaks') }) }));
+        grid.appendChild(h('div', { class: 'card pad-24 span-all' }, emptyState({ icon: 'stack', title: 'Noch keine Presets', text: 'Die Preset-Liste ist leer. Du kannst Tweaks trotzdem einzeln unter "Tweaks" vormerken.', action: button({ label: 'Zu den Tweaks', variant: 'secondary', size: 'sm', onClick: () => ctx.navigate('tweaks') }) })));
         return;
       }
       const sorted = ctx.presets.slice().sort((a, b) => Number(recommendedFor(ctx, b)) - Number(recommendedFor(ctx, a)));
@@ -67,7 +67,7 @@ export default {
       }
       stagger(grid);
     }
-    el.append(
+    append(el, 
       h('div', { class: 'intro' },
         h('p', { class: 'intro-text', text: 'Jedes Preset ist eine geprüfte Auswahl. Riskante Tweaks sind nie dabei. Vor dem Anwenden siehst du genau, was sich ändert – und alles wird gesichert.' })),
       grid);

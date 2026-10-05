@@ -1,7 +1,7 @@
 // Tweak rows (used by Tweaks, Spiele and the preset preview) + the human-readable
 // "Was genau geändert wird" description of every action type (section 3).
 import { icon } from './icons.js';
-import { h, clear, toggle, riskBadge, impactBars, needsBadge, badge, button, confirmDialog, toast } from './ui.js';
+import { h, clear, toggle, riskBadge, impactBars, needsBadge, badge, button, confirmDialog, toast, append } from './ui.js';
 
 const START = { Automatic: 'Automatisch', AutomaticDelayed: 'Automatisch (verzögert)', Manual: 'Manuell', Disabled: 'Deaktiviert' };
 const PLAN = { ultimate: 'Ultimative Leistung', high: 'Höchstleistung', balanced: 'Ausbalanciert' };
@@ -98,7 +98,7 @@ export function tweakRow(ctx, t, opts = {}) {
   }
   const main = h('div', { class: 'trow-main' }, text, h('div', { class: 'trow-ctrl' }, control, expand));
   const details = h('div', { class: 'trow-details', hidden: true });
-  row.append(main, details);
+  append(row, main, details);
   row._control = control;
   row._meta = meta;
   row._t = t;

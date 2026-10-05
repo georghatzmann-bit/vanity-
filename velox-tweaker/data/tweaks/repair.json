@@ -122,7 +122,7 @@
       "id": "repair.dns-flush",
       "name": "DNS-Cache leeren",
       "desc": "Vergisst gespeicherte Adressen von Webseiten und Servern. Hilft, wenn eine Seite oder ein Spielserver nach einem Umzug nicht erreichbar ist.",
-      "info": "Entspricht ipconfig /flushdns und /registerdns. Völlig harmlos – der Cache füllt sich beim Surfen sofort wieder.",
+      "info": "Entspricht ipconfig /flushdns. Völlig harmlos – der Cache füllt sich beim Surfen sofort wieder.",
       "group": "Netzwerk",
       "kind": "action",
       "impact": 1,
@@ -136,7 +136,7 @@
       "actions": [
         {
           "type": "ps",
-          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('ipconfig /flushdns fehlgeschlagen (Code ' + $LASTEXITCODE + '). Laeuft der DNS-Client-Dienst?') }\n$null = & $exe /registerdns 2>&1",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('ipconfig /flushdns fehlgeschlagen (Code ' + $LASTEXITCODE + '). Laeuft der DNS-Client-Dienst?') }",
           "revert": null,
           "detect": null
         }
@@ -185,7 +185,7 @@
       "actions": [
         {
           "type": "ps",
-          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'IconCache.db'), (Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\iconcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    Start-Sleep -Seconds 3\n    $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    if ($now.Count -eq 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
+          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'IconCache.db'), (Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\iconcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    $now = @()\n    for ($i = 0; $i -lt 16 -and $now.Count -eq 0; $i++) {\n        Start-Sleep -Milliseconds 500\n        $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    }\n    if ($now.Count -eq 0 -and $shell.Count -gt 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
           "revert": null,
           "detect": null
         }

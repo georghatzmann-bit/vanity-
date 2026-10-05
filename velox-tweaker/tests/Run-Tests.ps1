@@ -19,6 +19,7 @@ $FixtureData = Join-Path (Join-Path $TestRoot 'fixtures') 'data'
 $HostExe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
 $script:Results = New-Object System.Collections.ArrayList
 $script:Notes = New-Object System.Collections.ArrayList
+$script:TempDirs = New-Object System.Collections.ArrayList
 $script:Started = [Diagnostics.Stopwatch]::StartNew()
 
 # ------------------------------------------------------------------ mini framework
@@ -58,6 +59,7 @@ function Add-Note([string]$Text) {
 function New-TempDir([string]$Name) {
     $d = Join-Path ([IO.Path]::GetTempPath()) ('velox-test-' + $Name + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     [void][IO.Directory]::CreateDirectory($d)
+    [void]$script:TempDirs.Add($d)
     return $d
 }
 
@@ -166,8 +168,7 @@ Test-Case 'compat' 'keine PS7-only Syntax oder Cmdlet-Features (AST-Scan)' {
             if ($n -is [System.Management.Automation.Language.CommandAst]) {
                 $cmd = [string]$n.GetCommandName()
                 $params = @($n.CommandElements | Where-Object { $_ -is [System.Management.Automation.Language.CommandParameterAst] } | ForEach-Object { $_.ParameterName.ToLowerInvariant() })
-                $text = $n.Extent.Text
-                switch -Regex ($cmd) {
+                                switch -Regex ($cmd) {
                     '^(ForEach-Object|%|foreach)$' { if ($params -contains 'parallel') { [void]$problems.Add(("{0}:{1} ForEach-Object -Parallel" -f $f.Name, $line)) } }
                     '^ConvertFrom-Json$' { if ($params -contains 'ashashtable' -or $params -contains 'depth') { [void]$problems.Add(("{0}:{1} ConvertFrom-Json -AsHashtable/-Depth" -f $f.Name, $line)) } }
                     '^(Test-Json|Get-Error)$' { [void]$problems.Add(("{0}:{1} {2}" -f $f.Name, $line, $cmd)) }
@@ -182,7 +183,12 @@ Test-Case 'compat' 'keine PS7-only Syntax oder Cmdlet-Features (AST-Scan)' {
                         if ($params -contains 'additionalchildpath' -or ($params.Count -eq 0 -and $positional.Count -gt 2)) { [void]$problems.Add(("{0}:{1} Join-Path mit mehreren Kindern" -f $f.Name, $line)) }
                     }
                 }
-                if ($text -match '(?i)utf8NoBOM') { [void]$problems.Add(("{0}:{1} -Encoding utf8NoBOM" -f $f.Name, $line)) }
+                $els = @($n.CommandElements)
+                for ($ei = 0; $ei -lt $els.Count - 1; $ei++) {
+                    if ($els[$ei] -is [System.Management.Automation.Language.CommandParameterAst] -and $els[$ei].ParameterName -eq 'Encoding' -and $els[$ei + 1].Extent.Text -match '(?i)utf8NoBOM') {
+                        [void]$problems.Add(("{0}:{1} -Encoding utf8NoBOM" -f $f.Name, $line))
+                    }
+                }
             }
         }
     }
@@ -213,6 +219,8 @@ Test-Case 'compat' 'PSScriptAnalyzer: PSUseCompatibleSyntax 5.1 + Commands/Types
         foreach ($d in @(Invoke-ScriptAnalyzer -Path $f.FullName -Settings $settings)) {
             $skip = $false
             foreach ($c in $allowedCommands) { if ($d.RuleName -eq 'PSUseCompatibleCommands' -and $d.Message -match [regex]::Escape("'" + $c + "'")) { $skip = $true } }
+            # WinForms is loaded explicitly with Add-Type -AssemblyName right before use (pick-file dialog)
+            if ($d.RuleName -eq 'PSUseCompatibleTypes' -and $d.Message -match "'System\.Windows\.Forms\.") { $skip = $true }
             if (-not $skip) { [void]$found.Add(("{0}:{1} {2}: {3}" -f $f.Name, $d.Line, $d.RuleName, $d.Message)) }
         }
     }
@@ -306,7 +314,7 @@ Test-Case 'engine' 'jeder Aktionstyp: apply -> applied -> revert -> default' {
     $null = New-TestContext
     $ids = @('gaming.gamedvr-off', 'gaming.gamemode-on', 'gaming.hags-on', 'gaming.mmcss-games', 'gaming.nvidia-telemetry-off',
         'latency.timer-bcd', 'latency.mouse-accel-off', 'network.nagle-off', 'network.eee-off', 'network.autotuning',
-        'power.ultimate-plan', 'power.core-parking-off', 'power.usb-suspend-off', 'services.sysmain-off', 'services.diagtrack-off',
+        'power.ultimate-plan', 'power.high-plan', 'power.core-parking-off', 'power.usb-suspend-off', 'services.sysmain-off', 'services.diagtrack-off',
         'services.fax-off', 'services.delayed-start', 'system.classic-context-menu', 'system.xps-off', 'privacy.telemetry-policy',
         'privacy.ads-id-off', 'memory.compression-off', 'games.fivem-priority', 'security.vbs-off')
     foreach ($id in $ids) {
@@ -628,6 +636,7 @@ Test-Case 'advisor' 'Desktop vs. Laptop, Ziele, Hardware-Regeln, Befunde, determ
     $g = Invoke-VxAdvisor 'gaming' '' $desk
     $ids = @($g.plan | ForEach-Object { $_.id })
     Assert-True ($ids -contains 'gaming.gamedvr-off' -and $ids -contains 'power.ultimate-plan') 'Gaming-Plan Desktop'
+    Assert-True ($ids -notcontains 'power.high-plan') 'nur ein Energieplan im Plan (keine Konflikte)'
     Assert-True ($ids -contains 'gaming.nvidia-telemetry-off') 'NVIDIA-Tweak bei NVIDIA-Karte'
     Assert-True ($ids -notcontains 'gaming.amd-ulps-off') 'kein AMD-Tweak bei NVIDIA'
     Assert-True ($ids -notcontains 'security.vbs-off') 'kein riskanter Tweak'
@@ -682,7 +691,7 @@ Test-Case 'advisor' 'Desktop vs. Laptop, Ziele, Hardware-Regeln, Befunde, determ
 
 # ==================================================================== claude
 function Start-MockAnthropic {
-    $state = [hashtable]::Synchronized(@{ queue = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); requests = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); stop = $false; port = 0; ready = $false; error = $null })
+    $state = [hashtable]::Synchronized(@{ queue = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); requests = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); stop = $false; port = 0; ready = $false; error = $null; host = '127.0.0.1' })
     $port = Get-VxFreePort
     $state.port = $port
     $rs = [runspacefactory]::CreateRunspace()
@@ -691,9 +700,14 @@ function Start-MockAnthropic {
     $ps.Runspace = $rs
     $code = {
         param($state)
-        $l = New-Object System.Net.HttpListener
-        $l.Prefixes.Add('http://127.0.0.1:' + $state.port + '/')
-        try { $l.Start() } catch { $state.error = $_.Exception.Message; return }
+        # 127.0.0.1 needs admin rights with http.sys on Windows; localhost does not
+        $l = $null
+        foreach ($h in @('127.0.0.1', 'localhost')) {
+            $l = New-Object System.Net.HttpListener
+            $l.Prefixes.Add('http://' + $h + ':' + $state.port + '/')
+            try { $l.Start(); $state.host = $h; break } catch { $state.error = $_.Exception.Message; $l.Close(); $l = $null }
+        }
+        if ($null -eq $l) { return }
         $state.ready = $true
         $pending = $null
         while (-not $state.stop) {
@@ -720,9 +734,9 @@ function Start-MockAnthropic {
     }
     $null = $ps.AddScript($code.ToString()).AddArgument($state)
     $h = $ps.BeginInvoke()
-    for ($i = 0; $i -lt 50 -and -not $state.ready -and -not $state.error; $i++) { Start-Sleep -Milliseconds 100 }
+    for ($i = 0; $i -lt 50 -and -not $state.ready; $i++) { Start-Sleep -Milliseconds 100 }
     if (-not $state.ready) { throw ('Mock-Server startet nicht: ' + $state.error) }
-    return @{ state = $state; ps = $ps; rs = $rs; handle = $h; url = ('http://127.0.0.1:' + $port) }
+    return @{ state = $state; ps = $ps; rs = $rs; handle = $h; url = ('http://' + $state.host + ':' + $port) }
 }
 
 function Stop-MockAnthropic($Mock) {
@@ -935,7 +949,10 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
             [void]$lines.Add($line)
             if ($line -match '^VELOX_READY (\S+)$') { $url = $Matches[1] }
         }
-        Assert-True ($null -ne $url) ('VELOX_READY-Zeile: ' + ($lines -join ' / ') + ' ' + $errTask.Result)
+        if ($null -eq $url) {
+            if (-not $proc.HasExited) { try { $proc.Kill() } catch { $null = $_ } }
+            throw ('keine VELOX_READY-Zeile: ' + ($lines -join ' / ') + ' ' + $errTask.Result)
+        }
         Assert-True ($url -match '^http://(127\.0\.0\.1|localhost):(\d+)/\?t=' + $token + '$') "URL-Format ($url)"
         $port = [int]$Matches[2]
         $hostName = $Matches[1]
@@ -1110,6 +1127,7 @@ Test-Case 'server' 'Shutdown wird durch einen Heartbeat abgebrochen; Heartbeat-T
 }
 
 # ------------------------------------------------------------------ summary
+foreach ($d in $script:TempDirs) { try { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction Stop } catch { $null = $_ } }
 $total = $script:Results.Count
 $failed = @($script:Results | Where-Object { -not $_.ok })
 Write-Host ''

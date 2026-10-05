@@ -27,10 +27,11 @@ export function h(tag, props, ...children) {
   append(el, children);
   return el;
 }
-export function append(el, children) {
+/** Null-safe append: skips null/false, flattens arrays, turns strings into text nodes. */
+export function append(el, ...children) {
   for (const c of children) {
     if (c === null || c === undefined || c === false || c === true) continue;
-    if (Array.isArray(c)) append(el, c);
+    if (Array.isArray(c)) append(el, ...c);
     else if (c instanceof Node) el.appendChild(c);
     else el.appendChild(document.createTextNode(String(c)));
   }
@@ -359,8 +360,8 @@ export function toast({ type = 'ok', title, text, action, duration = 4600 }) {
     h('div', { class: 'toast-icon' }, icon(TOAST_ICON[type] || 'info', 18)),
     h('div', { class: 'toast-body' },
       h('div', { class: 'toast-title' }, h('span', { class: 'toast-kind', text: TOAST_LABEL[type] || '' }), h('span', { text: title || '' })),
-      text && h('div', { class: 'toast-text', text })),
-    action && button({ label: action.label, variant: 'ghost', size: 'sm', onClick: () => { action.onClick(); close(); } }),
+      text && h('div', { class: 'toast-text', text }),
+      action && h('div', { class: 'toast-actions' }, button({ label: action.label, variant: 'secondary', size: 'sm', onClick: () => { action.onClick(); close(); } }))),
     iconButton({ icon: 'x', label: 'Schließen', size: 15, onClick: close, cls: 'toast-x' }),
     h('div', { class: 'toast-timer' }));
   toastRoot.appendChild(el);

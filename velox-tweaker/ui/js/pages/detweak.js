@@ -1,7 +1,7 @@
 // Detweak: scan for values other tweakers changed, pick what to reset, optionally apply a preset or
 // the last AI plan afterwards.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, badge, confirmDialog, emptyState, stagger, plural, countUp, toast, fmtRelative } from '../ui.js';
+import { h, clear, button, checkbox, badge, confirmDialog, emptyState, stagger, plural, countUp, toast, fmtRelative, append } from '../ui.js';
 import { fmtValue } from '../tweakrow.js';
 
 export default {
@@ -28,7 +28,7 @@ export default {
           h('div', { class: 'step3' }, h('span', { class: 'step3-n', text: '3' }), h('span', { text: 'Zurücksetzen' }))),
         h('div', { class: 'hero-actions' }, scanBtn)));
     const body = h('div', { class: 'dt-body' });
-    el.append(hero, body);
+    append(el, hero, body);
 
     if (thenApply && opts.thenApply) {
       const p = ctx.presets.find(x => x.id === opts.thenApply);

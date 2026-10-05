@@ -1,6 +1,6 @@
 // Sicherungen: journal list with expandable entries, restore, manual restore point.
 import { icon } from '../icons.js';
-import { h, clear, button, badge, confirmDialog, emptyState, stagger, fmtDate, fmtRelative, plural, toast, skeleton } from '../ui.js';
+import { h, clear, button, badge, confirmDialog, emptyState, stagger, fmtDate, fmtRelative, plural, toast, skeleton, append } from '../ui.js';
 import { api } from '../api.js';
 import { fmtValue } from '../tweakrow.js';
 
@@ -48,7 +48,7 @@ export default {
       try { await api.open('backups'); toast({ type: 'ok', title: 'Ordner geöffnet', text: 'Der Explorer zeigt dir die Sicherungsdateien.' }); }
       catch (e) { toast({ type: 'error', title: 'Konnte den Ordner nicht öffnen', text: e.message }); }
     } });
-    el.append(
+    append(el, 
       h('section', { class: 'card pad-24 bk-head' },
         h('div', { class: 'bk-head-icon' }, icon('shieldCheck', 26)),
         h('div', { class: 'bk-head-text' }, h('h2', { class: 'section-title', text: 'Dein Sicherheitsnetz' }), h('p', { class: 'section-desc', text: 'VELOX speichert vor jeder Änderung den alten Wert. Mit "Wiederherstellen" kommt genau dieser Stand zurück. Ein Windows-Wiederherstellungspunkt sichert zusätzlich das ganze System.' })),

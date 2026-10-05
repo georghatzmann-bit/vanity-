@@ -92,7 +92,7 @@
       "actions": [
         {
           "type": "ps",
-          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\thumbcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    Start-Sleep -Seconds 3\n    $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    if ($now.Count -eq 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
+          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\thumbcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    $now = @()\n    for ($i = 0; $i -lt 16 -and $now.Count -eq 0; $i++) {\n        Start-Sleep -Milliseconds 500\n        $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    }\n    if ($now.Count -eq 0 -and $shell.Count -gt 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
           "revert": null,
           "detect": null
         }
@@ -234,7 +234,7 @@
       "id": "cleanup.nvidia-shader-cache",
       "name": "NVIDIA-Shader-Cache leeren",
       "desc": "Löscht die Shader-Caches des NVIDIA-Treibers. Hilft nach Treiber-Updates gegen Ruckler, die ersten Spielstarts dauern länger.",
-      "info": "Neue Treiber (ab etwa 571) speichern in AppData\\Local\\NVIDIA, ältere in AppData\\LocalLow\\NVIDIA\\PerDriverVersion oder NV_Cache – alle drei Orte werden geleert. Die Größe des Caches stellst du in der NVIDIA-Systemsteuerung ein.",
+      "info": "Treiber ab Version 545 speichern in AppData\\LocalLow\\NVIDIA\\PerDriverVersion, ältere in AppData\\Local\\NVIDIA oder NV_Cache – alle Orte werden geleert, dazu der CUDA-Cache (ComputeCache). Die Größe des Caches stellst du in der NVIDIA-Systemsteuerung ein.",
       "group": "Shader-Caches",
       "kind": "action",
       "impact": 1,
@@ -253,11 +253,13 @@
         {
           "type": "clean",
           "paths": [
-            "%LOCALAPPDATA%\\NVIDIA\\DXCache\\*",
-            "%LOCALAPPDATA%\\NVIDIA\\GLCache\\*",
             "%USERPROFILE%\\AppData\\LocalLow\\NVIDIA\\PerDriverVersion\\DXCache\\*",
             "%USERPROFILE%\\AppData\\LocalLow\\NVIDIA\\PerDriverVersion\\GLCache\\*",
-            "%LOCALAPPDATA%\\NVIDIA Corporation\\NV_Cache\\*"
+            "%LOCALAPPDATA%\\NVIDIA\\DXCache\\*",
+            "%LOCALAPPDATA%\\NVIDIA\\GLCache\\*",
+            "%LOCALAPPDATA%\\NVIDIA Corporation\\NV_Cache\\*",
+            "%PROGRAMDATA%\\NVIDIA Corporation\\NV_Cache\\*",
+            "%APPDATA%\\NVIDIA\\ComputeCache\\*"
           ]
         }
       ]
@@ -487,7 +489,7 @@
       "id": "cleanup.recent-files",
       "name": "Liste zuletzt geöffneter Dateien leeren",
       "desc": "Leert ‚Zuletzt verwendet‘ im Explorer und im Startmenü. Die Dateien selbst bleiben unberührt.",
-      "info": "Gelöscht werden nur die Verknüpfungen in der Liste. Angeheftete Einträge in Sprunglisten der Taskleiste bleiben erhalten.",
+      "info": "Gelöscht werden nur die Verknüpfungen in der Liste und die Liste ‚Zuletzt verwendet‘ im Schnellzugriff. Angeheftete Ordner im Schnellzugriff und angeheftete Einträge in Sprunglisten der Taskleiste bleiben erhalten.",
       "group": "Papierkorb & Verlauf",
       "kind": "action",
       "impact": 1,
@@ -502,7 +504,8 @@
         {
           "type": "clean",
           "paths": [
-            "%APPDATA%\\Microsoft\\Windows\\Recent\\*.lnk"
+            "%APPDATA%\\Microsoft\\Windows\\Recent\\*.lnk",
+            "%APPDATA%\\Microsoft\\Windows\\Recent\\AutomaticDestinations\\5f7b5f1e01b83767.automaticDestinations-ms"
           ]
         }
       ]

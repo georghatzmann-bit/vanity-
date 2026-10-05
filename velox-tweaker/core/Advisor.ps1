@@ -112,7 +112,7 @@ function Get-VxGoalCandidates([string]$Goal, $VxProfile, [string[]]$ExtraTags = 
         if (-not $w.ok) { continue }
         $st = [string]$ctx.State.statuses[[string]$t.id]
         if ($st -eq 'na') { continue }
-        [void]$out.Add(@{ tweak = $t; keyword = $keyword })
+        [void]$out.Add(@{ tweak = $t; keyword = $keyword; core = ($coreHit -or $keyword) })
     }
     return @($out)
 }
@@ -174,6 +174,21 @@ function Get-VxPlanReason($Tweak, $VxProfile, [string]$Goal) {
     if ($tags -contains 'ads' -or $tags -contains 'ai' -or $tags -contains 'bloat') { return ("Weniger Werbung und Ballast: {0}" -f $desc) }
     if ($tags -contains 'streaming') { return ("Gut fürs Streamen: {0}" -f $desc) }
     return $desc
+}
+
+# Exclusive targets of a tweak (used to keep conflicting tweaks out of one plan).
+function Get-VxTweakTargetKeys($Tweak) {
+    $keys = @()
+    foreach ($a in @($Tweak.actions)) {
+        switch ([string](Get-VxProp $a 'type')) {
+            'powerplan' { $keys += 'powerplan' }
+            'service' { $keys += ('svc|' + ([string]$a.name).ToLowerInvariant()) }
+            'bcd' { $keys += ('bcd|' + ([string]$a.name).ToLowerInvariant()) }
+            'powersetting' { $keys += ('pws|' + ([string]$a.subgroup + '|' + [string]$a.setting).ToLowerInvariant()) }
+            'reg' { $keys += ('reg|' + ([string]$a.path + '|' + [string]$a.name).ToLowerInvariant()) }
+        }
+    }
+    return $keys
 }
 
 # Finds catalog toggles that set a registry value (path suffix + name) to a value.
@@ -385,16 +400,28 @@ function Invoke-VxAdvisor([string]$Goal, [string]$Text, $VxProfile) {
         $t = $c.tweak
         if ([string]$st[[string]$t.id] -eq 'applied') { continue }
         $impact = [int](Get-VxProp $t 'impact' 1)
+        # goal tweaks: impact 3 -> priority 1 ... ; side benefits (privacy/debloat in a gaming goal) rank lower
         $prio = 4 - $impact
+        if (-not $c.core) { $prio = 5 - $impact }
+        if ($c.keyword) { $prio-- }
         if ($prio -lt 1) { $prio = 1 }
         if ($prio -gt 3) { $prio = 3 }
-        if ($c.keyword -and $prio -gt 1) { $prio-- }
         $kw = 1
         if ($c.keyword) { $kw = 0 }
-        $rows += [pscustomobject]@{ id = [string]$t.id; prio = $prio; kw = $kw; impact = $impact; risk = (Get-VxRiskRank ([string]$t.risk)); tweak = $t }
+        $coreRank = 1
+        if ($c.core) { $coreRank = 0 }
+        $rows += [pscustomobject]@{ id = [string]$t.id; prio = $prio; kw = $kw; core = $coreRank; impact = $impact; risk = (Get-VxRiskRank ([string]$t.risk)); tweak = $t }
     }
-    $sorted = @($rows | Sort-Object -Property @{ Expression = 'prio' }, @{ Expression = 'kw' }, @{ Expression = 'impact'; Descending = $true }, @{ Expression = 'risk' }, @{ Expression = 'id' })
-    foreach ($r in ($sorted | Select-Object -First 60)) {
+    $sorted = @($rows | Sort-Object -Property @{ Expression = 'prio' }, @{ Expression = 'kw' }, @{ Expression = 'core' }, @{ Expression = 'impact'; Descending = $true }, @{ Expression = 'risk' }, @{ Expression = 'id' })
+    $claimed = @{}
+    foreach ($r in $sorted) {
+        if ($plan.Count -ge 60) { break }
+        # two tweaks that set the same thing (e.g. two power plans) must not both be in a plan
+        $keys = @(Get-VxTweakTargetKeys $r.tweak)
+        $clash = $false
+        foreach ($k in $keys) { if ($claimed.ContainsKey($k)) { $clash = $true } }
+        if ($clash) { continue }
+        foreach ($k in $keys) { $claimed[$k] = $true }
         [void]$plan.Add([ordered]@{ id = $r.id; reason = (Get-VxPlanReason $r.tweak $VxProfile $Goal); priority = $r.prio })
     }
     $findings = @(Get-VxFindings $VxProfile $Goal)

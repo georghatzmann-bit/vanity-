@@ -1,6 +1,6 @@
 // Übersicht: score hero, system cards, stats, top findings, quick tiles.
 import { icon } from '../icons.js';
-import { h, clear, scoreRing, button, countUp, fmtRelative, fmtNumber, emptyState, stagger, badge } from '../ui.js';
+import { h, clear, scoreRing, button, countUp, fmtRelative, fmtNumber, emptyState, stagger, badge, append } from '../ui.js';
 import { api } from '../api.js';
 import { severityBadge, applyFix } from './advisor.js';
 
@@ -25,25 +25,28 @@ export function describeProfile(p) {
   const gpu = gpus.find(g => /nvidia|amd|radeon|geforce/i.test((g.vendor || '') + ' ' + (g.name || ''))) || gpus[0] || {};
   const ramObj = p.ram && typeof p.ram === 'object' ? p.ram : {};
   const ramGB = pick(p.ramGB, ramObj.totalGB, ramObj.gb, p.memoryGB, typeof p.ram === 'number' ? p.ram : null);
-  const ramSpeed = pick(ramObj.speedMhz, ramObj.speed, p.ramSpeedMhz, p.ramSpeed);
+  const ramSpeed = pick(ramObj.speedMHz, ramObj.speedMhz, ramObj.speed, p.ramSpeedMhz, p.ramSpeed);
   const disks = Array.isArray(p.disks) ? p.disks : Array.isArray(p.drives) ? p.drives : [];
   const sys = disks.find(d => d && (d.system || d.isSystem)) || disks[0] || {};
-  const diskType = String(pick(sys.type, sys.mediaType, p.systemDisk, '') || '').toLowerCase();
+  const diskType = String(pick(p.systemDisk, sys.media, sys.type, sys.mediaType, '') || '').toLowerCase();
+  const diskName = pick(sys.model, sys.name, sys.friendlyName);
+  const freeGB = pick(p.systemDriveFreeGB, sys.freeGB);
   const os = p.os && typeof p.os === 'object' ? p.os : {};
-  const osName = pick(os.name, os.caption, typeof p.os === 'string' ? p.os : null, p.osName, p.windows && p.windows.caption) || 'Windows';
-  const osVer = pick(os.version, os.displayVersion, p.osVersion);
+  const osName = pick(os.caption, os.name, typeof p.os === 'string' ? p.os : null, p.osName, p.windows && p.windows.caption) || 'Windows';
+  const osVer = pick(os.displayVersion, os.version, p.osVersion);
   const build = pick(os.build, p.build, p.osBuild);
   const displays = Array.isArray(p.displays) ? p.displays : Array.isArray(p.monitors) ? p.monitors : p.display ? [p.display] : [];
   const disp = displays.find(d => d && d.primary) || displays[0] || {};
-  const hz = pick(disp.hz, disp.refreshRate, p.refreshRate, p.hz);
+  const hz = pick(disp.currentHz, disp.hz, disp.refreshRate, p.refreshRate, p.hz);
+  const maxHz = pick(disp.maxHz, null);
   const res = disp.width && disp.height ? disp.width + ' × ' + disp.height : pick(disp.resolution, null);
   return [
     { key: 'cpu', icon: 'cpu', label: 'Prozessor', value: cpuName, sub: [cores && cores + ' Kerne', threads && threads + ' Threads'].filter(Boolean).join(' · ') || ' ' },
     { key: 'gpu', icon: 'gpu', label: 'Grafikkarte', value: gpu.name || 'Unbekannt', sub: [gpu.vramGB ? gpu.vramGB + ' GB VRAM' : null, gpus.length > 1 ? '+' + (gpus.length - 1) + ' weitere' : null, gpu.driver ? 'Treiber ' + gpu.driver : null].filter(Boolean).join(' · ') || ' ' },
-    { key: 'ram', icon: 'ram', label: 'Arbeitsspeicher', value: ramGB ? fmtNumber(Number(ramGB)) + ' GB' : 'Unbekannt', sub: ramSpeed ? ramSpeed + ' MHz' + (ramObj.modules ? ' · ' + ramObj.modules + ' Module' : '') : ' ' },
-    { key: 'disk', icon: 'drive', label: 'Systemlaufwerk', value: diskType === 'ssd' || diskType === 'nvme' ? 'SSD' : diskType === 'hdd' ? 'Festplatte (HDD)' : (sys.name || 'Unbekannt'), sub: [sys.name && (diskType ? sys.name : null), sys.freeGB !== undefined ? fmtNumber(sys.freeGB) + ' GB frei' : null].filter(Boolean).join(' · ') || ' ' },
+    { key: 'ram', icon: 'ram', label: 'Arbeitsspeicher', value: ramGB ? fmtNumber(Number(ramGB)) + ' GB' + (ramObj.type ? ' ' + ramObj.type : '') : 'Unbekannt', sub: [ramSpeed ? ramSpeed + ' MHz' : null, ramObj.modules ? ramObj.modules + (ramObj.modules === 1 ? ' Modul' : ' Module') : null].filter(Boolean).join(' · ') || ' ' },
+    { key: 'disk', icon: 'drive', label: 'Systemlaufwerk', value: diskType === 'ssd' || diskType === 'nvme' ? (sys.bus === 'nvme' ? 'NVMe-SSD' : 'SSD') : diskType === 'hdd' ? 'Festplatte (HDD)' : (diskName || 'Unbekannt'), sub: [diskType ? diskName : null, freeGB !== undefined && freeGB !== null ? fmtNumber(Number(freeGB), 0) + ' GB frei' : null].filter(Boolean).join(' · ') || ' ' },
     { key: 'os', icon: 'windows', label: 'Windows', value: osName, sub: [osVer, build && 'Build ' + build].filter(Boolean).join(' · ') || ' ' },
-    { key: 'display', icon: 'monitor', label: 'Bildschirm', value: hz ? hz + ' Hz' : 'Unbekannt', sub: res || ' ' }
+    { key: 'display', icon: 'monitor', label: 'Bildschirm', value: hz ? hz + ' Hz' : 'Unbekannt', sub: [res, maxHz && hz && maxHz > hz ? 'kann ' + maxHz + ' Hz' : null].filter(Boolean).join(' · ') || ' ', warn: !!(maxHz && hz && maxHz > hz + 5) }
   ];
 }
 
@@ -74,14 +77,16 @@ export default {
         eyebrow.textContent = 'Noch nicht analysiert';
         headline.textContent = 'Finde heraus, was in deinem PC steckt';
         text.textContent = 'Die Smart-Analyse prüft Hardware, Energieplan, Hintergrunddienste und Fremd-Tweaks – offline und in wenigen Sekunden. Danach bekommst du einen Plan, den du mit einem Klick anwendest.';
-        metaLine.append(icon('shieldCheck', 14), h('span', { text: 'Vor jeder Änderung wird automatisch gesichert.' }));
+        append(metaLine, icon('shieldCheck', 14), h('span', { text: 'Vor jeder Änderung wird automatisch gesichert.' }));
       } else {
+        const score = r.planApplied ? r.scoreAfter : r.score;
         ring.setLabel('von 100');
-        ring.set(r.score, r.scoreAfter);
-        eyebrow.textContent = 'Leistungs-Score';
-        headline.textContent = r.score >= 80 ? 'Stark eingestellt' : r.score >= 60 ? 'Gut – aber da geht noch was' : 'Dein PC bremst sich selbst aus';
-        text.textContent = r.summary || '';
-        metaLine.append(icon('arrowRight', 14), h('span', { text: 'Mit dem Plan: ' + r.scoreAfter + ' Punkte · ' + (r.plan || []).length + ' Vorschläge · ' + (r.engine === 'claude' ? 'Claude KI' : 'Smart-Analyse') }));
+        ring.set(score, r.planApplied ? null : r.scoreAfter);
+        eyebrow.textContent = r.planApplied ? 'Leistungs-Score · Plan angewendet' : 'Leistungs-Score';
+        headline.textContent = score >= 80 ? 'Stark eingestellt' : score >= 60 ? 'Gut – aber da geht noch was' : 'Dein PC bremst sich selbst aus';
+        text.textContent = r.planApplied ? 'Dein Plan ist angewendet. Starte eine neue Analyse, um den genauen Stand zu sehen – oder schau dir die Presets an.' : (r.summary || '');
+        const engineName = r.engine === 'claude' ? 'Claude KI' : 'Smart-Analyse';
+        append(metaLine, icon(r.planApplied ? 'checkCircle' : 'arrowRight', 14), h('span', { text: r.planApplied ? 'Vorher ' + r.score + ' Punkte · ' + engineName : 'Mit dem Plan: ' + r.scoreAfter + ' Punkte · ' + (r.plan || []).length + ' Vorschläge · ' + engineName }));
         cta.querySelector('.btn-label').textContent = 'Neu analysieren';
       }
     }
@@ -104,7 +109,7 @@ export default {
       for (const c of cards) {
         sysGrid.appendChild(h('div', { class: 'card sys-card spot', 'data-sys': c.key, title: c.value },
           h('div', { class: 'sys-icon' }, icon(c.icon, 20)),
-          h('div', { class: 'sys-text' }, h('div', { class: 'sys-label', text: c.label }), h('div', { class: 'sys-value', text: c.value }), h('div', { class: 'sys-sub', text: c.sub }))));
+          h('div', { class: 'sys-text' }, h('div', { class: 'sys-label', text: c.label }), h('div', { class: 'sys-value', text: c.value }), h('div', { class: 'sys-sub' + (c.warn ? ' is-warn' : ''), text: c.sub }))));
       }
       stagger(sysGrid);
     }
@@ -136,7 +141,10 @@ export default {
       statBar.firstChild.style.transform = 'scaleX(' + (toggles.length ? on / toggles.length : 0) + ')';
       const scan = ctx.cache.detweak;
       if (scan) { countUp(statForeign, scan.items.length); statForeignSub.textContent = scan.items.length ? 'beim letzten Detweak-Scan gefunden' : 'alles auf Windows-Standard'; }
-      else {
+      else if (typeof ctx.state.foreignCount === 'number') {
+        countUp(statForeign, ctx.state.foreignCount);
+        statForeignSub.textContent = ctx.state.foreignCount ? 'beim letzten Detweak-Scan gefunden' : 'alles auf Windows-Standard';
+      } else {
         const n = Object.values(ctx.state.statuses).filter(s => s === 'custom' || s === 'partial').length;
         countUp(statForeign, n);
         statForeignSub.textContent = n ? 'von anderen Tools geänderte Werte' : 'Detweak-Scan für alle Details';
@@ -185,7 +193,7 @@ export default {
       tile('broom', 'Reinigung', 'Temp-Dateien und Caches löschen', 'cleanup'),
       tile('gamepad', 'Spiele boosten', 'Priorität und Grafikkarte pro Spiel', 'games'));
 
-    el.append(
+    append(el, 
       hero,
       h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Dein System' }), h('p', { class: 'section-desc', text: 'Erkannt beim letzten Scan. VELOX wählt passende Tweaks automatisch danach aus.' })),
         ctx.state.lastScan ? badge('Gescannt ' + fmtRelative(ctx.state.lastScan), 'neutral', 'clock') : null),

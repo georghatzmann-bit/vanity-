@@ -1,6 +1,6 @@
 // Einstellungen: accent (live), motion, safety switches, Claude key/model, about + Testmodus.
 import { icon } from '../icons.js';
-import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge } from '../ui.js';
+import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append } from '../ui.js';
 import { api } from '../api.js';
 
 const ACCENTS = [
@@ -82,7 +82,7 @@ export default {
         });
         models.appendChild(b);
       }
-      claudeBox.append(status,
+      append(claudeBox, status,
         h('div', { class: 'key-row' }, h('div', { class: 'path-input' }, icon('key', 16), input), save, del),
         h('p', { class: 'fine', text: 'Den Key bekommst du unter console.anthropic.com. Jede Analyse kostet ein paar Cent und wird über dein Anthropic-Konto abgerechnet.' }),
         h('div', { class: 'field-label mt-16', text: 'Modell' }), models,
@@ -102,7 +102,7 @@ export default {
     const section = (id, ic, title, desc, ...children) => h('section', { class: 'card pad-24 set-section', id: 'set-' + id },
       h('div', { class: 'set-head' }, h('span', { class: 'set-icon' }, icon(ic, 18)), h('div', {}, h('h2', { class: 'section-title', text: title }), h('p', { class: 'section-desc', text: desc }))), ...children);
 
-    el.append(h('div', { class: 'set-grid' },
+    append(el, h('div', { class: 'set-grid' },
       section('look', 'palette', 'Aussehen', 'So sieht VELOX für dich aus.',
         optionRow({ title: 'Akzentfarbe', desc: 'Färbt Schalter, Buttons und Hervorhebungen. Wirkt sofort.', control: swatches }),
         optionRow({ title: 'Animationen', desc: osReduced ? 'Windows wünscht weniger Bewegung – VELOX hält sich daran.' : 'Reduziert schaltet Bewegungen ab und lässt nur sanfte Überblendungen.', control: motion })),

@@ -66,7 +66,7 @@ function ConvertTo-VxHex([byte[]]$Bytes) {
 
 function ConvertFrom-VxHex([string]$Hex) {
     $h = ([string]$Hex) -replace '[\s,\-]', ''
-    if ($h.Length % 2 -ne 0) { throw "Ungueltiger Hex-Wert '$Hex'" }
+    if ($h.Length % 2 -ne 0) { throw "Ungültiger Hex-Wert '$Hex'" }
     $bytes = New-Object byte[] ($h.Length / 2)
     for ($i = 0; $i -lt $bytes.Length; $i++) {
         $bytes[$i] = [Convert]::ToByte($h.Substring($i * 2, 2), 16)
@@ -99,7 +99,7 @@ function ConvertTo-VxRegRaw($Value, [string]$Kind) {
     switch ($Kind) {
         'DWord' {
             $d = [decimal]$Value
-            if ($d -lt -2147483648 -or $d -gt 4294967295) { throw "DWORD-Wert ausserhalb des Bereichs: $Value" }
+            if ($d -lt -2147483648 -or $d -gt 4294967295) { throw "DWORD-Wert außerhalb des Bereichs: $Value" }
             if ($d -gt 2147483647) { $d = $d - [decimal]4294967296 }
             return [int]$d
         }
@@ -200,7 +200,7 @@ function Get-VxRealRegValue([string]$Path, [string]$Name) {
 
 function Set-VxRealRegValue([string]$Path, [string]$Name, [string]$Kind, $Value) {
     $k = Open-VxRealKey $Path $true $true
-    if ($null -eq $k) { throw "Registry-Schluessel konnte nicht geoeffnet werden: $Path" }
+    if ($null -eq $k) { throw "Registry-Schlüssel konnte nicht geöffnet werden: $Path" }
     try {
         $raw = ConvertTo-VxRegRaw $Value $Kind
         $k.SetValue($Name, $raw, (Get-VxRegKindEnum $Kind))
@@ -228,7 +228,7 @@ function New-VxRealRegKey([string]$Path) {
 
 function Remove-VxRealRegKey([string]$Path) {
     $parent = Get-VxRegParent $Path
-    if (-not $parent) { throw "Ein Registry-Stamm kann nicht geloescht werden: $Path" }
+    if (-not $parent) { throw "Ein Registry-Stamm kann nicht gelöscht werden: $Path" }
     $k = Open-VxRealKey $parent $true $false
     if ($null -eq $k) { return }
     try { $k.DeleteSubKeyTree((Get-VxRegLeaf $Path), $false) } finally { $k.Close() }
@@ -632,8 +632,8 @@ function Set-VxServiceStart([string]$Name, [string]$Start, [bool]$StopNow = $fal
     if ($ctx.Simulate) {
         if (-not ($ctx.Sim.svc -is [hashtable])) { $ctx.Sim.svc = @{} }
         $ctx.Sim.svc[$Name.ToLowerInvariant()] = $Start
-        if ($StopNow) { Write-VxLog 'info' "[Testmodus] Dienst $Name wuerde gestoppt" }
-        if ($StartNow) { Write-VxLog 'info' "[Testmodus] Dienst $Name wuerde gestartet" }
+        if ($StopNow) { Write-VxLog 'info' "[Testmodus] Dienst $Name würde gestoppt" }
+        if ($StartNow) { Write-VxLog 'info' "[Testmodus] Dienst $Name würde gestartet" }
         return
     }
     $sc = Get-VxSystemTool 'sc.exe'
@@ -650,7 +650,7 @@ function Set-VxServiceStart([string]$Name, [string]$Start, [bool]$StopNow = $fal
                 if ($d.exists) { Set-VxRealRegValue $path 'DelayedAutostart' 'DWord' 0 }
             }
         } catch {
-            throw ("Starttyp von Dienst '$Name' konnte nicht geaendert werden (sc.exe Code $($r.ExitCode)): " + (($r.Output + ' ' + $r.Error).Trim()))
+            throw ("Starttyp von Dienst '$Name' konnte nicht geändert werden (sc.exe Code $($r.ExitCode)): " + (($r.Output + ' ' + $r.Error).Trim()))
         }
     }
     if ($StopNow) {
@@ -729,7 +729,7 @@ function Set-VxTaskState([string]$Path, [bool]$Enabled) {
     $flag = '/DISABLE'
     if ($Enabled) { $flag = '/ENABLE' }
     $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'schtasks.exe') -Arguments @('/Change', '/TN', $Path, $flag) -TimeoutSec 30
-    if ($r.ExitCode -ne 0) { throw ("Aufgabe '$Path' konnte nicht geaendert werden: " + (($r.Error + ' ' + $r.Output).Trim())) }
+    if ($r.ExitCode -ne 0) { throw ("Aufgabe '$Path' konnte nicht geändert werden: " + (($r.Error + ' ' + $r.Output).Trim())) }
 }
 
 # ================================================================== BCD
@@ -859,17 +859,40 @@ function Get-VxActivePlan {
 function Get-VxPlanDisplayName([string]$Guid) {
     $g = $Guid.ToLowerInvariant()
     if ($g -eq (Get-VxPlanBaseGuid 'balanced')) { return 'Ausbalanciert' }
-    if ($g -eq (Get-VxPlanBaseGuid 'high')) { return 'Hoechstleistung' }
+    if ($g -eq (Get-VxPlanBaseGuid 'high')) { return 'Höchstleistung' }
     if ((Get-VxPlanCandidates 'ultimate') -contains $g) { return 'Ultimative Leistung' }
     return 'Benutzerdefiniert'
 }
 
-# All GUIDs that count as the given plan (Ultimate may exist as a duplicated copy).
+# GUID + name of every power scheme (real system, cached per scan/job).
+function Get-VxRealPlanTable {
+    $c = $global:VxCtx.Cache
+    if ($c.ContainsKey('planTable')) { return $c.planTable }
+    $list = @()
+    try {
+        $r = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/list') -TimeoutSec 20
+        foreach ($line in ($r.Output -split "`r?`n")) {
+            $m = [regex]::Match($line, '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\s*\((.*)\)')
+            if ($m.Success) { $list += @{ guid = $m.Groups[1].Value.ToLowerInvariant(); name = $m.Groups[2].Value.Trim() } }
+        }
+    } catch { $null = $_ }
+    $c.planTable = $list
+    return $list
+}
+
+# All GUIDs that count as the given plan. Ultimate (and High on Modern-Standby PCs) usually exists only
+# as a duplicated copy - the one VELOX made (state.json) or one made by another tool (matched by name).
 function Get-VxPlanCandidates([string]$Plan) {
-    $st = $global:VxCtx.State
+    $ctx = $global:VxCtx
+    $st = $ctx.State
     $list = @((Get-VxPlanBaseGuid $Plan))
     if ($Plan -eq 'ultimate' -and $null -ne $st -and $st.ultimateGuid) { $list += ([string]$st.ultimateGuid).ToLowerInvariant() }
     if ($Plan -eq 'high' -and $null -ne $st -and $st.highGuid) { $list += ([string]$st.highGuid).ToLowerInvariant() }
+    if ($ctx.Windows -and $Plan -ne 'balanced') {
+        $rx = 'Ultimate Performance|Ultimative Leistung|Performances ultimes|Máximo rendimiento|Prestazioni ottimali|Ultieme prestaties'
+        if ($Plan -eq 'high') { $rx = '^(High performance|Höchstleistung|Hohe Leistung|Performances élevées|Alto rendimiento|Prestazioni elevate)$' }
+        foreach ($p in @(Get-VxRealPlanTable)) { if ($p.name -match $rx -and $list -notcontains $p.guid) { $list += $p.guid } }
+    }
     return $list
 }
 
@@ -887,6 +910,7 @@ function Resolve-VxPlanGuid([string]$Plan) {
     $m = [regex]::Match($r.Output, '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
     if ($r.ExitCode -ne 0 -or -not $m.Success) { throw ('Energieplan konnte nicht angelegt werden: ' + ($r.Output + $r.Error).Trim()) }
     $guid = $m.Value.ToLowerInvariant()
+    $ctx.Cache.Remove('planTable')
     if ($Plan -eq 'ultimate') { $ctx.State.ultimateGuid = $guid } else { $ctx.State.highGuid = $guid }
     Save-VxState
     return $guid
@@ -900,6 +924,7 @@ function Set-VxActivePlanGuid([string]$Guid) {
         return
     }
     $ctx.Cache.Remove('activePlan')
+    $ctx.Cache.Remove('planTable')
     $r = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/setactive', $Guid) -TimeoutSec 30
     if ($r.ExitCode -ne 0) { throw ('Energieplan konnte nicht aktiviert werden: ' + ($r.Output + $r.Error).Trim()) }
 }
@@ -964,7 +989,7 @@ function Get-VxRealFeatureTable {
         }
     } catch {
         Write-VxLog 'warn' ('Windows-Features konnten nicht gelesen werden: ' + $_.Exception.Message)
-        $h = $null
+        $h = 'error'
     }
     $c.features = $h
     return $h
@@ -980,6 +1005,8 @@ function Get-VxFeatureState([string]$Name) {
         if (-not $ctx.Windows) { return $true }
     }
     $t = Get-VxRealFeatureTable
+    # unreadable (e.g. Testmodus without admin rights) -> the caller reports "unknown", not "na"
+    if ($t -is [string]) { throw 'Windows-Features können ohne Administratorrechte nicht gelesen werden.' }
     if ($null -eq $t -or -not $t.ContainsKey($k)) { return $null }
     return ($t[$k] -match '^Enable')
 }
@@ -1003,7 +1030,7 @@ function Set-VxFeatureState([string]$Name, [bool]$Enabled) {
     if ($Enabled) { $a = @('/Online', '/Enable-Feature', "/FeatureName:$Name", '/All', '/NoRestart', '/Quiet') }
     $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'dism.exe') -Arguments $a -TimeoutSec 900
     # 3010 = success, reboot required
-    if ($r.ExitCode -ne 0 -and $r.ExitCode -ne 3010) { throw ("Windows-Feature '$Name' konnte nicht geaendert werden (Code $($r.ExitCode)).") }
+    if ($r.ExitCode -ne 0 -and $r.ExitCode -ne 3010) { throw ("Windows-Feature '$Name' konnte nicht geändert werden (Code $($r.ExitCode)).") }
 }
 
 # ================================================================== Appx packages

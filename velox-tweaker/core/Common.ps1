@@ -280,7 +280,7 @@ function Invoke-VxNative {
         $errTask = $p.StandardError.ReadToEndAsync()
         if (-not $p.WaitForExit($TimeoutSec * 1000)) {
             try { $p.Kill() } catch { $null = $_ }
-            $result.Error = "Zeitueberschreitung nach $TimeoutSec s: $FilePath"
+            $result.Error = "Zeitüberschreitung nach $TimeoutSec s: $FilePath"
             return $result
         }
         $p.WaitForExit()
@@ -344,7 +344,7 @@ function Get-VxErrorText($ErrorRecord, [string]$Prefix = '') {
     elseif ($ErrorRecord -is [Exception]) { $msg = $ErrorRecord.Message }
     else { $msg = [string]$ErrorRecord }
     if ($msg -match 'denied|verweigert|UnauthorizedAccess|Requested registry access is not allowed') {
-        $msg = 'Zugriff verweigert - Administratorrechte noetig oder der Eintrag ist von Windows geschuetzt. (' + $msg + ')'
+        $msg = 'Zugriff verweigert - Administratorrechte nötig oder der Eintrag ist von Windows geschützt. (' + $msg + ')'
     }
     if ($Prefix) { return ($Prefix + ': ' + $msg) }
     return $msg
@@ -471,7 +471,14 @@ function Save-VxState {
 function Get-VxStateDto {
     $st = $global:VxCtx.State
     $statuses = [ordered]@{}
-    foreach ($k in @($st.statuses.Keys | Sort-Object)) { $statuses[$k] = $st.statuses[$k] }
+    # a running job may write statuses while the server thread enumerates them - retry on that race
+    for ($try = 0; $try -lt 5; $try++) {
+        try {
+            $statuses = [ordered]@{}
+            foreach ($k in @($st.statuses.Keys | Sort-Object)) { $statuses[$k] = $st.statuses[$k] }
+            break
+        } catch { Start-Sleep -Milliseconds 20 }
+    }
     return [ordered]@{
         statuses = $statuses
         profile = $st.profile

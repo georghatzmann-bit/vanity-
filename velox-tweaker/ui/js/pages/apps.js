@@ -1,7 +1,7 @@
 // Apps: Autostart manager (startup-list / startup-set) and Bloatware removal (kind "remove" tweaks).
 // Startup names and commands are untrusted strings from the PC: textContent only.
 import { icon } from '../icons.js';
-import { h, clear, button, toggle, checkbox, badge, segmented, emptyState, stagger, toast, plural, confirmDialog, avatar, skeleton } from '../ui.js';
+import { h, clear, button, toggle, checkbox, badge, segmented, emptyState, stagger, toast, plural, confirmDialog, avatar, skeleton, append } from '../ui.js';
 
 /** Short, friendly label for a startup location; the full path stays in the tooltip. */
 function locationBadge(loc) {
@@ -24,7 +24,7 @@ export default {
       options: [{ value: 'startup', label: 'Autostart', icon: 'power' }, { value: 'bloat', label: 'Bloatware', icon: 'trash' }],
       onChange: (v) => { tab = v; ctx.cache.appsTab = v; render(); }
     });
-    el.append(h('div', { class: 'apps-tabs' }, tabs), box);
+    append(el, h('div', { class: 'apps-tabs' }, tabs), box);
 
     function render() { clear(box); if (tab === 'startup') startup(); else bloat(); }
 
@@ -33,7 +33,7 @@ export default {
       const listEl = h('div', { class: 'list-card', 'data-testid': 'startup-list' });
       const reload = button({ label: 'Aktualisieren', icon: 'refresh', variant: 'ghost', size: 'sm', onClick: () => load(true) });
       const info = h('p', { class: 'section-desc' });
-      box.append(h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Programme beim Windows-Start' }), info), reload), h('section', { class: 'card' }, listEl));
+      append(box, h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Programme beim Windows-Start' }), info), reload), h('section', { class: 'card' }, listEl));
       function fill(animate) {
         clear(listEl);
         const items = ctx.cache.startup;
@@ -85,7 +85,7 @@ export default {
       const noneBtn = button({ label: 'Keine', size: 'sm', variant: 'ghost', onClick: () => { sel.clear(); fill(); } });
       const listEl = h('div', { class: 'list-card bloat-list', 'data-testid': 'bloat-list' });
       const removable = (t) => ctx.applicable(t) && ctx.status(t.id) !== 'applied';
-      box.append(
+      append(box, 
         h('div', { class: 'note note-warn' }, icon('alert', 15), h('span', { text: 'Entfernen ist nicht rückgängig zu machen. Brauchst du eine App doch wieder, installierst du sie einfach über den Microsoft Store neu.' })),
         h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Vorinstallierte Apps' }), h('p', { class: 'section-desc', text: 'Wähle aus, was weg soll. Systemwichtige Apps wie Store oder Sicherheit stehen hier gar nicht erst.' })), h('div', { class: 'section-actions' }, allBtn, noneBtn, removeBtn)),
         h('section', { class: 'card' }, listEl));
