@@ -1,0 +1,518 @@
+{
+  "category": "games",
+  "tweaks": [
+    {
+      "id": "games.fivem-priority",
+      "name": "FiveM: hohe CPU-Priorität",
+      "desc": "Windows gibt dem FiveM-Spielprozess Vorrang vor Hintergrundprogrammen. Hilft gegen Ruckler, wenn die CPU am Limit ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn FiveM startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für den Spielprozess aller gängigen Game-Builds (FiveM_bXXXX_GTAProcess.exe bis Build 3570). Neuere Builds sind erst mit einem Katalog-Update dabei.",
+      "group": "FiveM",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "fivem",
+        "gta"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2060_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2189_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2372_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2545_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2612_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2699_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2802_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b2944_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3095_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3258_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3323_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3407_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_b3570_GTAProcess.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.fivem-cache-clean",
+      "name": "FiveM-Cache leeren",
+      "desc": "Löscht die von Servern geladenen FiveM-Dateien. Hilft bei Endlos-Laden, Texturfehlern und Abstürzen. FiveM vorher schließen.",
+      "info": "Geleert werden data\\cache, server-cache und server-cache-priv. Die Spieldaten (game-storage und der alte Ordner cache\\game) bleiben, damit FiveM nicht mehrere GB neu laden muss. Server-Einstellungen in nui-storage bleiben ebenfalls. Der nächste Server-Beitritt dauert etwas länger, weil die Dateien neu geladen werden.",
+      "group": "FiveM",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "fivem",
+        "gta",
+        "cleanup",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\FiveM\\FiveM.app\\data\\cache\\*"
+          ],
+          "keep": [
+            "game"
+          ]
+        },
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\FiveM\\FiveM.app\\data\\server-cache\\*",
+            "%LOCALAPPDATA%\\FiveM\\FiveM.app\\data\\server-cache-priv\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "games.fivem-crashes-clean",
+      "name": "FiveM-Absturzberichte und Logs löschen",
+      "desc": "Entfernt alte Crash-Dumps und Logdateien von FiveM. Gibt oft mehrere hundert MB frei, am Spiel ändert sich nichts.",
+      "info": "Die Dateien braucht man nur, wenn man einen Absturz gerade dem FiveM-Support oder einem Server-Team schicken will – dann vorher sichern.",
+      "group": "FiveM",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "fivem",
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\FiveM\\FiveM.app\\crashes\\*",
+            "%LOCALAPPDATA%\\FiveM\\FiveM.app\\logs\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "games.gta5-priority",
+      "name": "GTA V: hohe CPU-Priorität",
+      "desc": "Windows gibt GTA V (Legacy und Enhanced) Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn GTA V startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für GTA5.exe (Legacy) und GTA5_Enhanced.exe, nicht für FiveM – dafür gibt es einen eigenen Schalter.",
+      "group": "GTA V",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "gta"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\GTA5.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\GTA5_Enhanced.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.cs2-priority",
+      "name": "Counter-Strike 2: hohe CPU-Priorität",
+      "desc": "Windows gibt Counter-Strike 2 Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Counter-Strike 2 startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Entspricht der früheren Startoption -high.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cs2.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.fortnite-priority",
+      "name": "Fortnite: hohe CPU-Priorität",
+      "desc": "Windows gibt Fortnite Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Fortnite startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FortniteClient-Win64-Shipping.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.apex-priority",
+      "name": "Apex Legends: hohe CPU-Priorität",
+      "desc": "Windows gibt Apex Legends Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Apex Legends startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für die DirectX-11- und die DirectX-12-Version.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\r5apex.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\r5apex_dx12.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.rocketleague-priority",
+      "name": "Rocket League: hohe CPU-Priorität",
+      "desc": "Windows gibt Rocket League Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Rocket League startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RocketLeague.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.r6siege-priority",
+      "name": "Rainbow Six Siege: hohe CPU-Priorität",
+      "desc": "Windows gibt Rainbow Six Siege Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Rainbow Six Siege startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Gilt für die DirectX- und die Vulkan-Version.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RainbowSix.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RainbowSix_Vulkan.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.overwatch-priority",
+      "name": "Overwatch 2: hohe CPU-Priorität",
+      "desc": "Windows gibt Overwatch 2 Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Overwatch 2 startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\Overwatch.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.pubg-priority",
+      "name": "PUBG: hohe CPU-Priorität",
+      "desc": "Windows gibt PUBG Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn PUBG startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\TslGame.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.rust-priority",
+      "name": "Rust: hohe CPU-Priorität",
+      "desc": "Windows gibt Rust Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Rust startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\RustClient.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.dota2-priority",
+      "name": "Dota 2: hohe CPU-Priorität",
+      "desc": "Windows gibt Dota 2 Vorrang vor Hintergrundprogrammen. Hilft nur, wenn die CPU voll ausgelastet ist.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Dota 2 startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme im Hintergrund wie Discord, OBS oder Musik können stocken, wenn das Spiel die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\dota2.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "games.minecraft-java-priority",
+      "name": "Minecraft Java: hohe CPU-Priorität",
+      "desc": "Windows gibt Minecraft Java (javaw.exe) Vorrang. Gilt aber für alle Java-Programme mit Fenster, nicht nur für Minecraft.",
+      "info": "Setzt per ‚Image File Execution Options‘ die Priorität ‚Hoch‘, jedes Mal wenn Minecraft Java startet (wirkt ab dem nächsten Start). VELOX kann nicht erkennen, ob das Spiel installiert ist – ohne das Spiel passiert einfach nichts. Spürbar ist es nur, wenn die CPU voll ausgelastet ist. Minecraft Java läuft als javaw.exe – das gilt auch für andere Java-Programme. Für die Bedrock-Version aus dem Store wirkt es nicht.",
+      "group": "Andere Spiele",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Gilt für alle Java-Programme mit Fenster. Hintergrundprogramme wie Discord oder OBS können stocken, wenn Java die CPU voll auslastet.",
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\javaw.exe\\PerfOptions",
+          "name": "CpuPriorityClass",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,294 @@
+{
+  "category": "power",
+  "tweaks": [
+    {
+      "id": "power.ultimate-plan",
+      "name": "Energieplan „Ultimative Leistung“ aktivieren",
+      "desc": "Der schnellste Energieplan von Windows: keine Stromspar-Pausen für CPU, Laufwerke und USB. Verbraucht mehr Strom.",
+      "info": "Wird bei Bedarf automatisch angelegt. Nur einen Energieplan wählen. Die Einzel-Einstellungen in dieser Kategorie gelten für den gerade aktiven Plan – also zuerst den Plan wählen. Auf Laptops mit „Modern Standby“ lässt Windows oft nur „Ausbalanciert“ zu. Ryzen-X3D-CPUs mit zwei Chiplets brauchen „Ausbalanciert“, damit AMD Spiele auf die richtigen Kerne legt.",
+      "group": "Energieplan",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Mehr Stromverbrauch und Wärme. Bei Ryzen-X3D-CPUs mit zwei Chiplets (z. B. 7950X3D, 9950X3D) kann es FPS kosten – dort „Ausbalanciert“ lassen.",
+      "needs": "none",
+      "tags": ["fps", "latency", "stutter", "desktop", "laptop-bad"],
+      "actions": [
+        { "type": "powerplan", "plan": "ultimate", "default": "balanced" }
+      ]
+    },
+    {
+      "id": "power.high-plan",
+      "name": "Energieplan „Höchstleistung“ aktivieren",
+      "desc": "Der klassische Leistungs-Plan: Die CPU taktet schneller hoch, weniger Stromsparen. Etwas sparsamer als „Ultimative Leistung“.",
+      "info": "Alternative zu „Ultimative Leistung“ – nur einen der beiden Pläne wählen. Zurücksetzen aktiviert wieder „Ausbalanciert“. Ryzen-X3D-CPUs mit zwei Chiplets brauchen „Ausbalanciert“, damit AMD Spiele auf die richtigen Kerne legt.",
+      "group": "Energieplan",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Mehr Stromverbrauch und Wärme. Bei Ryzen-X3D-CPUs mit zwei Chiplets (z. B. 7950X3D, 9950X3D) kann es FPS kosten – dort „Ausbalanciert“ lassen.",
+      "needs": "none",
+      "tags": ["fps", "latency", "laptop-bad"],
+      "actions": [
+        { "type": "powerplan", "plan": "high", "default": "balanced" }
+      ]
+    },
+    {
+      "id": "power.core-parking-off",
+      "name": "Kern-Parken aus (alle CPU-Kerne bleiben wach)",
+      "desc": "Windows legt keine CPU-Kerne mehr schlafen. Auf vielen PCs ist das schon Standard – hilft, wenn ein Tool oder Hersteller-Plan Kerne parkt.",
+      "info": "Gilt nur am Netzteil und für den aktiven Energieplan. Windows lässt im Plan „Ausbalanciert“ meist schon alle Kerne wach, dann steht der Schalter von Anfang an auf „aktiv“. Er stellt den Wert wieder her, wenn ein anderes Tool oder ein Hersteller-Plan das Parken eingeschaltet hat.",
+      "group": "Prozessor",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bei Ryzen-X3D-CPUs mit zwei Chiplets (z. B. 7950X3D, 9950X3D) braucht AMD das Kern-Parken für Spiele – dort kann es FPS kosten.",
+      "needs": "none",
+      "tags": ["fps", "stutter", "latency", "laptop-bad"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "54533251-82be-4824-96c1-47b60b740d00", "setting": "0cc5b647-c1df-4637-891a-dec35c318583",
+          "ac": 100, "dc": null, "default": { "ac": 100, "dc": 100 } }
+      ]
+    },
+    {
+      "id": "power.epp-performance",
+      "name": "CPU-Energieprofil auf maximale Leistung (EPP 0)",
+      "desc": "Sagt modernen CPUs, dass Leistung vor Stromsparen geht: Sie takten schneller hoch. Dafür mehr Wärme und Verbrauch.",
+      "info": "Wirkt nur bei CPUs, die ihren Takt selbst regeln (Intel ab 6. Generation mit Speed Shift, aktuelle AMD Ryzen mit CPPC). Gilt nur am Netzteil und für den aktiven Energieplan.",
+      "group": "Prozessor",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["fps", "latency", "laptop-bad"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "54533251-82be-4824-96c1-47b60b740d00", "setting": "36687f9e-e3a5-4dbf-b1dc-15eb381c6863",
+          "ac": 0, "dc": null, "default": { "ac": 33, "dc": 50 } }
+      ]
+    },
+    {
+      "id": "power.min-cpu-state-100",
+      "name": "Minimaler Prozessorzustand auf 100 %",
+      "desc": "Die CPU bleibt dauerhaft auf hohem Takt statt herunterzutakten. Mit modernen CPUs kaum spürbar, aber mehr Wärme und Strom.",
+      "info": "Moderne CPUs takten in Sekundenbruchteilen hoch, deshalb bringt das heute wenig. Gilt nur am Netzteil und für den aktiven Energieplan.",
+      "group": "Prozessor",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Mehr Wärme, Lüfterlärm und Stromverbrauch – auch wenn der PC gar nichts tut.",
+      "needs": "none",
+      "tags": ["latency", "desktop", "laptop-bad"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "54533251-82be-4824-96c1-47b60b740d00", "setting": "893dee8e-2bef-41e0-89c6-b55d0929964c",
+          "ac": 100, "dc": null, "default": { "ac": 5, "dc": 5 } }
+      ]
+    },
+    {
+      "id": "power.cpu-idle-off",
+      "name": "CPU-Ruhezustände komplett aus",
+      "desc": "Die CPU schläft nie, Aufwach-Verzögerungen fallen weg. Extrem viel Wärme und Strom, der Task-Manager zeigt dauerhaft 100 %.",
+      "info": "Nur für Latenz-Messungen interessant. In Spielen kann es sogar FPS kosten, weil der Turbo durch die Dauerhitze weniger Spielraum hat. Gilt nur am Netzteil und für den aktiven Energieplan.",
+      "group": "Prozessor",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "risky",
+      "warning": "Die CPU zieht ständig Volllast-Strom: hohe Temperaturen, laute Lüfter, mögliche Instabilität. Nur mit starker Kühlung und nur zum Testen.",
+      "needs": "none",
+      "tags": ["latency", "competitive", "desktop", "laptop-bad"],
+      "when": { "formFactor": "desktop" },
+      "actions": [
+        { "type": "powersetting", "subgroup": "54533251-82be-4824-96c1-47b60b740d00", "setting": "5d76a2ca-e8c0-402f-a133-2158492d58ad",
+          "ac": 1, "dc": null, "default": { "ac": 0, "dc": 0 } }
+      ]
+    },
+    {
+      "id": "power.turbo-off-on-battery",
+      "name": "Turbo-Boost im Akkubetrieb aus",
+      "desc": "Auf Akku läuft die CPU ohne Turbo: deutlich kühler, leiser und längere Laufzeit. Am Netzteil bleibt die volle Leistung.",
+      "info": "Setzt den Turbo-Modus im Akkubetrieb auf „Deaktiviert“. Das wirkt auch bei neueren CPUs, die ihren Takt selbst regeln – dort klappt der alte 99-%-Trick oft nicht mehr. Am Netzteil bleibt der Windows-Standard „Aggressiv“.",
+      "group": "Prozessor",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Im Akkubetrieb weniger Leistung, z. B. in Spielen oder beim Exportieren.",
+      "needs": "none",
+      "tags": ["battery", "quality-of-life"],
+      "when": { "formFactor": "laptop" },
+      "actions": [
+        { "type": "powersetting", "subgroup": "54533251-82be-4824-96c1-47b60b740d00", "setting": "be337238-0d82-4146-a960-4f3749d470c7",
+          "ac": 2, "dc": 0, "default": { "ac": 2, "dc": 2 } }
+      ]
+    },
+    {
+      "id": "power.throttling-off",
+      "name": "Power Throttling aus (Hintergrund nicht drosseln)",
+      "desc": "Windows bremst Programme im Hintergrund nicht mehr, z. B. OBS, Discord oder Downloads beim Spielen. Kostet auf Laptops Akku.",
+      "info": "Die Drosselung schickt Hintergrund-Programme auf sparsame Kerne und niedrigen Takt. Mit einem Höchstleistungs-Plan am Netzteil greift sie ohnehin selten.",
+      "group": "Prozessor",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["streaming", "stutter", "laptop-bad"],
+      "when": { "minBuild": 16299 },
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling", "name": "PowerThrottlingOff", "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "power.usb-selective-suspend-off",
+      "name": "USB-Energiesparen aus (Selective Suspend)",
+      "desc": "Maus, Headset oder Controller werden nicht mehr schlafen gelegt. Behebt Aussetzer und kurze Verbindungsabbrüche bei USB-Geräten.",
+      "info": "Gilt am Netzteil für den aktiven Energieplan. Im Akkubetrieb spart Windows weiter Strom.",
+      "group": "Geräte & Laufwerke",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["input", "latency", "audio", "stutter"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3", "setting": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226",
+          "ac": 0, "dc": null, "default": { "ac": 1, "dc": 1 } }
+      ]
+    },
+    {
+      "id": "power.usb3-lpm-off",
+      "name": "USB-3-Verbindungs-Stromsparen aus",
+      "desc": "USB-3-Anschlüsse wechseln nicht mehr in Spar-Zustände. Kann kurze Hänger bei schnellen USB-Geräten verhindern.",
+      "info": "Betrifft die Spar-Zustände U1/U2 der USB-3-Verbindung. Meist ist der Unterschied klein. Gilt am Netzteil für den aktiven Energieplan.",
+      "group": "Geräte & Laufwerke",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["input", "stutter"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3", "setting": "d4e98f31-5ffe-4ce1-be31-1b38b384c009",
+          "ac": 0, "dc": null, "default": { "ac": 2, "dc": null } }
+      ]
+    },
+    {
+      "id": "power.pcie-aspm-off",
+      "name": "PCIe-Stromsparen aus (Link State Power Management)",
+      "desc": "Grafikkarte, NVMe-SSD und Netzwerkkarte bleiben voll wach. Kann seltene Mikroruckler und Aufwach-Probleme beheben.",
+      "info": "Gilt am Netzteil für den aktiven Energieplan. Auf Desktops kostet das nur wenige Watt. Manche Mainboards regeln das im BIOS selbst, dann ändert sich nichts.",
+      "group": "Geräte & Laufwerke",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["stutter", "latency"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "501a4d13-42af-4429-9fd1-a8218c268e20", "setting": "ee12f906-d277-404b-b6da-e5fa1a576df5",
+          "ac": 0, "dc": null, "default": { "ac": 2, "dc": null } }
+      ]
+    },
+    {
+      "id": "power.disk-sleep-off",
+      "name": "Festplatten nicht mehr abschalten",
+      "desc": "HDDs drehen nicht mehr nach 20 Minuten ab. Kein Warten und Ruckeln, wenn ein Spiel plötzlich auf die Platte zugreift.",
+      "info": "Für SSDs fast egal. Gilt am Netzteil für den aktiven Energieplan.",
+      "group": "Geräte & Laufwerke",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["hdd", "stutter", "storage"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "0012ee47-9041-4b5d-9b77-535fba8b1442", "setting": "6738e2c4-e8a5-4a42-b16a-e040e769756e",
+          "ac": 0, "dc": null, "default": { "ac": 1200, "dc": 600 } }
+      ]
+    },
+    {
+      "id": "power.sleep-off-ac",
+      "name": "Kein automatischer Energiesparmodus am Netzteil",
+      "desc": "Der PC schläft nicht mehr von selbst ein, Downloads und Spiel-Updates laufen durch. Der Bildschirm geht weiter aus.",
+      "info": "Kostet Strom, wenn du den PC oft unbenutzt laufen lässt. Gilt für den aktiven Energieplan; im Akkubetrieb bleibt alles wie es ist. Zurücksetzen stellt deinen vorherigen Wert wieder her (sonst 30 Minuten).",
+      "group": "Standby & Ruhezustand",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["quality-of-life", "desktop"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20", "setting": "29f6c1db-86da-48c5-9fdb-f2b67b1f44da",
+          "ac": 0, "dc": null, "default": { "ac": 1800, "dc": null } }
+      ]
+    },
+    {
+      "id": "power.wake-timers-off",
+      "name": "Weck-Timer aus (PC wacht nachts nicht auf)",
+      "desc": "Geplante Aufgaben dürfen den PC nicht mehr aus dem Energiesparmodus wecken. Wartung läuft dann, wenn er sowieso an ist.",
+      "group": "Standby & Ruhezustand",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Geplante Aufgaben und Neustarts nach Updates wecken den PC nicht mehr – sie laufen erst, wenn du ihn wieder benutzt.",
+      "needs": "none",
+      "tags": ["quality-of-life"],
+      "actions": [
+        { "type": "powersetting", "subgroup": "238c9fa8-0aad-41ed-83f4-97be242c8f20", "setting": "bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d",
+          "ac": 0, "dc": 0, "default": { "ac": 2, "dc": 0 } }
+      ]
+    },
+    {
+      "id": "power.hibernation-off",
+      "name": "Ruhezustand aus (mehrere GB frei)",
+      "desc": "Löscht die Ruhezustandsdatei hiberfil.sys und gibt auf C: mehrere GB frei. Ruhezustand und Schnellstart gibt es danach nicht mehr.",
+      "info": "Die Datei ist meist etwa 40 % so groß wie dein Arbeitsspeicher. Der normale Energiesparmodus (Standby) bleibt. Zurücksetzen legt die Datei wieder an.",
+      "group": "Standby & Ruhezustand",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Ruhezustand und Schnellstart fallen weg. Laptops können bei fast leerem Akku nicht mehr sicher in den Ruhezustand wechseln.",
+      "needs": "none",
+      "tags": ["storage", "ssd", "boot"],
+      "actions": [
+        { "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe /hibernate off 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg /hibernate off failed with exit code ' + $LASTEXITCODE) }",
+          "revert": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe /hibernate on 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg /hibernate on failed with exit code ' + $LASTEXITCODE) }",
+          "detect": "try {\n  $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)\n  $k = $base.OpenSubKey('SYSTEM\\CurrentControlSet\\Control\\Power')\n  if ($null -eq $k) { return $null }\n  $v = $k.GetValue('HibernateEnabled', $null)\n  if ($null -eq $v) { $v = $k.GetValue('HibernateEnabledDefault', $null) }\n  $k.Close()\n  if ($null -eq $v) { return $null }\n  return ([int]$v -eq 0)\n} catch {\n  return $null\n}" }
+      ]
+    },
+    {
+      "id": "power.fast-startup-off",
+      "name": "Schnellstart aus (echtes Herunterfahren)",
+      "desc": "Herunterfahren beendet Windows komplett. Behebt Treiber- und Update-Probleme und Ärger mit Dual-Boot. Kaltstart dauert etwas länger.",
+      "info": "Mit Schnellstart ist „Herunterfahren“ eigentlich ein halber Ruhezustand: Kernel und Treiber laufen nach dem Einschalten einfach weiter, Fehler bleiben erhalten. „Neu starten“ war schon immer ein echter Neustart.",
+      "group": "Standby & Ruhezustand",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["boot", "compat", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power", "name": "HiberbootEnabled", "kind": "DWord", "value": 0, "default": 1 }
+      ]
+    },
+    {
+      "id": "power.standby-network-off-battery",
+      "name": "Kein WLAN im Standby (Akkubetrieb)",
+      "desc": "Im Standby auf Akku trennt der Laptop das Netzwerk. Spart Akku und verhindert, dass er in der Tasche warm wird.",
+      "info": "Wirkt nur auf Geräten mit „Modern Standby“ (viele neuere Laptops), auf anderen ändert sich nichts. Wird als Richtlinie gesetzt und gilt für alle Energiepläne.",
+      "group": "Standby & Ruhezustand",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Mails, Nachrichten und Updates kommen im Standby nicht mehr an. Die Einstellung ist dann in den Windows-Einstellungen gesperrt.",
+      "needs": "reboot",
+      "tags": ["battery", "quality-of-life"],
+      "when": { "formFactor": "laptop" },
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9", "name": "DCSettingIndex", "kind": "DWord", "value": 0, "default": null }
+      ]
+    }
+  ]
+}

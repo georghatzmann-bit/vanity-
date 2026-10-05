@@ -1,0 +1,20 @@
+{
+  "category": "network",
+  "tweaks": [
+    { "id": "network.nagle-off", "name": "Nagle-Algorithmus aus", "desc": "Kleine Datenpakete werden sofort gesendet. Niedrigerer Ping.",
+      "impact": 2, "risk": "safe", "needs": "reboot", "tags": ["network", "ping"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*", "name": "TcpAckFrequency", "kind": "DWord", "value": 1, "default": null },
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*", "name": "TCPNoDelay", "kind": "DWord", "value": 1, "default": null }
+      ] },
+    { "id": "network.eee-off", "name": "Energiesparendes Ethernet aus", "desc": "Die Netzwerkkarte schläft nicht mehr ein. Stabilerer Ping.",
+      "impact": 1, "risk": "safe", "needs": "reboot", "tags": ["network", "ping", "laptop-bad"],
+      "actions": [ { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}\\*", "name": "EEE", "kind": "String", "value": "0", "default": "1", "onlyExisting": true } ] },
+    { "id": "network.flowcontrol-off", "name": "Flusskontrolle aus", "desc": "Nur wenn die Netzwerkkarte das anbietet.",
+      "impact": 1, "risk": "safe", "needs": "reboot", "tags": ["network"],
+      "actions": [ { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}\\*", "name": "*FlowControl", "kind": "String", "value": "0", "default": null, "onlyExisting": true } ] },
+    { "id": "network.autotuning", "name": "TCP-Autotuning normal", "desc": "Setzt die TCP-Fenstergröße auf den Standard.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["network"],
+      "actions": [ { "type": "ps", "apply": "$null = 'apply'", "revert": "$null = 'revert'", "detect": "$false" } ] }
+  ]
+}

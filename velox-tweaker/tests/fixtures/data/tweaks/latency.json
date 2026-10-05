@@ -1,0 +1,18 @@
+{
+  "category": "latency",
+  "tweaks": [
+    { "id": "latency.timer-bcd", "name": "Präziserer System-Timer", "desc": "Weniger Timer-Schwankungen beim Spielen.",
+      "impact": 2, "risk": "moderate", "warning": "Etwas mehr Stromverbrauch.", "needs": "reboot", "tags": ["latency", "laptop-bad"],
+      "actions": [
+        { "type": "bcd", "name": "disabledynamictick", "value": "yes", "default": null },
+        { "type": "bcd", "name": "tscsyncpolicy", "value": "Enhanced", "default": null }
+      ] },
+    { "id": "latency.mouse-accel-off", "name": "Mausbeschleunigung aus", "desc": "Die Maus bewegt sich immer gleich weit. Besser zum Zielen.",
+      "impact": 3, "risk": "safe", "needs": "logoff", "tags": ["input", "latency", "competitive"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "MouseSpeed", "kind": "String", "value": "0", "default": "1" },
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "MouseThreshold1", "kind": "String", "value": "0", "default": "6" },
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "MouseThreshold2", "kind": "String", "value": "0", "default": "10" }
+      ] }
+  ]
+}

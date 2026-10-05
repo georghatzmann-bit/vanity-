@@ -1,0 +1,1414 @@
+{
+  "category": "debloat",
+  "tweaks": [
+    {
+      "id": "debloat.copilot-off",
+      "name": "Copilot in Windows abschalten",
+      "desc": "Schaltet den Copilot-Seitenbereich ab und blendet den Copilot-Knopf in der Taskleiste aus. Copilot ist danach nicht mehr erreichbar.",
+      "info": "Wirkt auf den eingebauten Copilot von Windows 10 22H2 und Windows 11 22H2/23H2. Die neue Copilot-App ist eine normale App – die entfernst du unter „Bloatware“. Microsoft führt die Richtlinie als veraltet.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ai",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsCopilot",
+          "name": "TurnOffWindowsCopilot",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowCopilotButton",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.copilot-context-menu-off",
+      "name": "„Copilot fragen“ im Rechtsklickmenü ausblenden",
+      "desc": "Entfernt den Eintrag „Copilot fragen“, den die Copilot-App ins Rechtsklickmenü des Explorers einbaut. Die App selbst bleibt.",
+      "info": "Blockiert nur die Shell-Erweiterung der Copilot-App für dein Benutzerkonto. Ist die App nicht installiert, ändert sich nichts.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ai",
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Blocked",
+          "name": "{CB3B0003-8088-4EDE-8769-8B354AB2FF8C}",
+          "kind": "String",
+          "value": "",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.recall-snapshots-off",
+      "name": "Recall: keine Bildschirm-Schnappschüsse",
+      "desc": "Windows speichert keine Bildschirmfotos mehr für Recall, vorhandene werden gelöscht. Spart Speicher und Rechenzeit, schützt deine Daten.",
+      "info": "Recall gibt es nur auf Copilot+ PCs mit Windows 11 24H2. Auf anderen PCs schadet die Einstellung nicht.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ai",
+        "privacy",
+        "storage"
+      ],
+      "when": {
+        "minBuild": 26100
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
+          "name": "DisableAIDataAnalysis",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
+          "name": "DisableAIDataAnalysis",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.recall-remove",
+      "name": "Recall komplett entfernen",
+      "desc": "Entfernt die Recall-Funktion ganz von Copilot+ PCs. Gespeicherte Schnappschüsse werden gelöscht.",
+      "info": "Beim Zurücksetzen wird nur die Richtlinie gelöscht. Recall musst du dann selbst unter „Windows-Features aktivieren oder deaktivieren“ wieder einschalten.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Recall verschwindet vom PC, alle Schnappschüsse werden gelöscht. Zurück nur über „Windows-Features“.",
+      "needs": "reboot",
+      "tags": [
+        "ai",
+        "privacy",
+        "bloat"
+      ],
+      "when": {
+        "minBuild": 26100
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
+          "name": "AllowRecallEnablement",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.click-to-do-off",
+      "name": "Click to Do abschalten",
+      "desc": "Schaltet die KI-Bildschirmanalyse „Click to Do“ (Win + Mausklick) ab. Gibt es nur auf Copilot+ PCs.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ai",
+        "privacy"
+      ],
+      "when": {
+        "minBuild": 26100
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
+          "name": "DisableClickToDo",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsAI",
+          "name": "DisableClickToDo",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ],
+      "info": "Microsoft führt diese Richtlinie noch als Vorschau. Auf PCs ohne Click to Do bewirkt sie nichts."
+    },
+    {
+      "id": "debloat.paint-ai-off",
+      "name": "KI-Funktionen in Paint ausschalten",
+      "desc": "Blendet Cocreator, Bild-Ersteller und generatives Füllen in Paint aus. Normales Malen bleibt wie gewohnt.",
+      "info": "Offizielle Richtlinien von Microsoft, ab Windows 11 22H2 mit aktuellem Paint. Paint muss neu gestartet werden.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ai",
+        "bloat"
+      ],
+      "when": {
+        "minBuild": 22621
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Paint",
+          "name": "DisableCocreator",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Paint",
+          "name": "DisableGenerativeFill",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Paint",
+          "name": "DisableImageCreator",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.notepad-ai-off",
+      "name": "KI-Funktionen im Editor ausschalten",
+      "desc": "Blendet Copilot, Umschreiben und Zusammenfassen im Windows-Editor (Notepad) aus. Der Editor wird wieder schlicht.",
+      "info": "Offizielle Editor-Richtlinie, wirkt ab Editor-Version 11.2503. Der Editor muss neu gestartet werden.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ai",
+        "bloat"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\WindowsNotepad",
+          "name": "DisableAIFeatures",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.ai-actions-off",
+      "name": "KI-Aktionen im Explorer-Rechtsklick ausblenden",
+      "desc": "Entfernt das Untermenü „KI-Aktionen“ (z. B. Bild bearbeiten, Zusammenfassen) aus dem Rechtsklickmenü im Explorer.",
+      "info": "Gibt es nur in neueren Windows-11-Versionen (24H2 und neuer). Auf älteren Versionen bewirkt die Einstellung nichts.",
+      "group": "Copilot & KI",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ai",
+        "explorer",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 26100
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
+          "name": "HideAIActionsMenu",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.widgets-off",
+      "name": "Widgets abschalten",
+      "desc": "Schaltet das Widgets-Board mit News und Wetter ab, inklusive Taskleisten-Knopf. Spart Arbeitsspeicher und Hintergrund-Downloads.",
+      "info": "Die Widgets laufen als Web-Prozesse im Hintergrund und laden ständig MSN-Inhalte nach. Offizielle Richtlinie für Windows 11.",
+      "group": "Widgets & Suche",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "bloat",
+        "ads",
+        "memory"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Dsh",
+          "name": "AllowNewsAndInterests",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.lockscreen-widgets-off",
+      "name": "Widgets auf dem Sperrbildschirm aus",
+      "desc": "Blendet Wetter, Börse und andere Widgets auf dem Sperrbildschirm aus. Der Sperrbildschirm wird ruhiger.",
+      "info": "Neue Richtlinie, die nur aktuelle Windows-11-Versionen beachten. Auf älteren Versionen bewirkt sie nichts.",
+      "group": "Widgets & Suche",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "bloat",
+        "ads",
+        "ui"
+      ],
+      "when": {
+        "minBuild": 22621
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Dsh",
+          "name": "DisableWidgetsOnLockScreen",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.news-interests-off",
+      "name": "Neuigkeiten und Interessen aus (Windows 10)",
+      "desc": "Entfernt das Wetter- und News-Feld aus der Windows-10-Taskleiste. Spart Arbeitsspeicher und Hintergrund-Downloads.",
+      "group": "Widgets & Suche",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "bloat",
+        "ads",
+        "memory"
+      ],
+      "when": {
+        "maxBuild": 19045
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Feeds",
+          "name": "EnableFeeds",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.web-search-off",
+      "name": "Bing-Websuche im Startmenü aus",
+      "desc": "Die Suche zeigt nur noch Treffer von deinem PC statt Bing-Webergebnissen. Schneller, ruhiger und es geht nichts ins Netz.",
+      "info": "Nebenwirkung: Im Suchfeld des Explorers werden keine letzten Suchbegriffe mehr vorgeschlagen.",
+      "group": "Widgets & Suche",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ads",
+        "privacy",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer",
+          "name": "DisableSearchBoxSuggestions",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "BingSearchEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.search-highlights-off",
+      "name": "Suchhighlights abschalten",
+      "desc": "Entfernt Tagesthemen, Feiertagsbilder und Trends aus der Windows-Suche. Die Suche öffnet sich schlicht und schneller.",
+      "group": "Widgets & Suche",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ads",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search",
+          "name": "EnableDynamicContentInWSB",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.cortana-off",
+      "name": "Cortana abschalten",
+      "desc": "Schaltet die Sprachassistentin Cortana ab. Microsoft hat Cortana ohnehin eingestellt.",
+      "info": "Nur sinnvoll, wenn die alte Cortana-App noch installiert ist. Die App selbst entfernst du unter „Bloatware“.",
+      "group": "Widgets & Suche",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "bloat",
+        "privacy"
+      ],
+      "when": {
+        "maxBuild": 22631
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search",
+          "name": "AllowCortana",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.auto-app-installs-off",
+      "name": "Automatische Werbe-App-Installationen aus",
+      "desc": "Verhindert, dass Windows heimlich Spiele und Werbe-Apps wie Candy Crush installiert. Bereits installierte Apps bleiben.",
+      "info": "Schon installierte Werbe-Apps entfernst du unter „Bloatware“.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SilentInstalledAppsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "PreInstalledAppsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "PreInstalledAppsEverEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "OemPreInstalledAppsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "debloat.start-suggestions-off",
+      "name": "Vorschläge und Werbung im Startmenü aus",
+      "desc": "Keine App-Empfehlungen, Tipps und neuen App-Vorschläge mehr im Startmenü.",
+      "info": "Unter Windows 10 sind das die gesponserten Kacheln, unter Windows 11 die Empfehlungen für Tipps, Verknüpfungen und neue Apps.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ads",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SystemPaneSuggestionsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338388Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_IrisRecommendations",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.tips-off",
+      "name": "Tipps und Tricks von Windows aus",
+      "desc": "Windows zeigt keine Tipps-, Trick- und Vorschlag-Benachrichtigungen mehr an. Weniger Unterbrechungen.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SoftLandingEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338389Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "debloat.welcome-experience-off",
+      "name": "Willkommensseite nach Updates aus",
+      "desc": "Nach großen Updates erscheint nicht mehr die Seite „Das ist neu“ mit Werbung für Microsoft-Dienste.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-310093Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "debloat.settings-suggestions-off",
+      "name": "Vorschläge in den Einstellungen aus",
+      "desc": "Die Einstellungen-App zeigt keine vorgeschlagenen Inhalte und Werbung für Microsoft-Dienste mehr.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338393Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-353694Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-353696Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "debloat.online-tips-off",
+      "name": "Online-Tipps in den Einstellungen aus",
+      "desc": "Die Einstellungen laden keine Tipps und Hilfe-Videos mehr aus dem Internet. Weniger Ballast, nichts geht verloren.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+          "name": "AllowOnlineTips",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.finish-setup-off",
+      "name": "„Mehr aus Windows herausholen“ aus",
+      "desc": "Kein Vollbild-Hinweis mehr, dass du dein Gerät „fertig einrichten“ sollst (Microsoft 365, OneDrive, Handy-Link).",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\UserProfileEngagement",
+          "name": "ScoobeSystemSettingEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.account-notifications-off",
+      "name": "Konto-Hinweise im Startmenü aus",
+      "desc": "Keine Hinweise mehr im Startmenü und in den Einstellungen, dein Microsoft-Konto zu sichern oder OneDrive zu nutzen.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ads",
+        "ui"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_AccountNotifications",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\SystemSettings\\AccountNotifications",
+          "name": "EnableAccountNotifications",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.cloud-content-policies",
+      "name": "Werbe-Richtlinien setzen (nur Enterprise/Education)",
+      "desc": "Offizielle Richtlinien gegen Werbe-Apps, Tipps und Konto-Werbung. Wirken nur in Windows Enterprise und Education.",
+      "info": "Microsoft schreibt selbst: Windows Home und Pro beachten diese vier Richtlinien nicht. Dort helfen die anderen Schalter in dieser Gruppe. Schaden tut die Einstellung nicht.",
+      "group": "Startmenü, Tipps & Werbung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ads",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+          "name": "DisableWindowsConsumerFeatures",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+          "name": "DisableCloudOptimizedContent",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+          "name": "DisableConsumerAccountStateContent",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+          "name": "DisableSoftLanding",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.lockscreen-tips-off",
+      "name": "Tipps und „Wissenswertes“ auf dem Sperrbildschirm aus",
+      "desc": "Keine Fakten, Tipps und Werbetexte mehr auf dem Sperrbildschirm. Dein Hintergrundbild bleibt.",
+      "group": "Sperrbildschirm",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "RotatingLockScreenOverlayEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "SubscribedContent-338387Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "debloat.spotlight-off",
+      "name": "Windows-Blickpunkt auf dem Sperrbildschirm aus",
+      "desc": "Der Sperrbildschirm lädt keine täglichen Bilder mit Werbetexten mehr von Microsoft. Spart etwas Datenvolumen.",
+      "info": "Falls weiter Blickpunkt-Bilder erscheinen: Einstellungen > Personalisierung > Sperrbildschirm > „Bild“ wählen. Eine Richtlinie dafür gibt es nur in Enterprise/Education.",
+      "group": "Sperrbildschirm",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die wechselnden Blickpunkt-Hintergrundbilder fallen weg.",
+      "needs": "logoff",
+      "tags": [
+        "ads",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager",
+          "name": "RotatingLockScreenEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "debloat.spotlight-thirdparty-off",
+      "name": "Keine Drittanbieter-Werbung im Windows-Blickpunkt",
+      "desc": "Windows-Blickpunkt schlägt keine Apps und Inhalte von anderen Firmen mehr vor. Die Blickpunkt-Bilder selbst bleiben.",
+      "info": "Offizielle Richtlinie, die laut Microsoft auch in Windows Pro wirkt. Für den Sperrbildschirm, die Einstellungen und das Info-Center.",
+      "group": "Sperrbildschirm",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ads"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\CloudContent",
+          "name": "DisableThirdPartySuggestions",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.chat-icon-off",
+      "name": "Chat-Symbol (Teams) in der Taskleiste aus",
+      "desc": "Entfernt das Chat-Symbol für privates Teams aus der Windows-11-Taskleiste und verhindert, dass es zurückkommt.",
+      "info": "Betrifft Windows 11 21H2 bis 23H2. Die Teams-App selbst entfernst du unter „Bloatware“.",
+      "group": "Chat, Meet Now & Kontakte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "bloat",
+        "ui"
+      ],
+      "when": {
+        "minBuild": 22000,
+        "maxBuild": 22631
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Chat",
+          "name": "ChatIcon",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.meet-now-off",
+      "name": "„Jetzt besprechen“ (Meet Now) aus",
+      "desc": "Entfernt das Skype-Kamerasymbol „Jetzt besprechen“ aus dem Infobereich der Windows-10-Taskleiste.",
+      "group": "Chat, Meet Now & Kontakte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "bloat",
+        "ui"
+      ],
+      "when": {
+        "maxBuild": 19045
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+          "name": "HideSCAMeetNow",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+          "name": "HideSCAMeetNow",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.people-bar-off",
+      "name": "Kontakte-Leiste (Personen) aus",
+      "desc": "Entfernt die Kontakte-Leiste aus der Windows-10-Taskleiste. Kaum jemand nutzt sie.",
+      "group": "Chat, Meet Now & Kontakte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "bloat",
+        "ui"
+      ],
+      "when": {
+        "maxBuild": 19045
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer",
+          "name": "HidePeopleBar",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.onedrive-explorer-ads-off",
+      "name": "OneDrive-Werbung im Explorer aus",
+      "desc": "Der Explorer zeigt keine Werbebanner mehr für OneDrive und Microsoft 365 an. OneDrive selbst funktioniert normal weiter.",
+      "group": "OneDrive",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ads",
+        "explorer"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowSyncProviderNotifications",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.onedrive-off",
+      "name": "OneDrive komplett abschalten",
+      "desc": "OneDrive startet und synchronisiert nicht mehr. Spart Arbeitsspeicher, Hintergrund-Uploads und Akku.",
+      "info": "Prüfe vorher, ob deine Dateien (Desktop, Dokumente, Bilder) nicht nur in OneDrive liegen. Beim Zurücksetzen startet OneDrive wieder normal.",
+      "group": "OneDrive",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Dateien, die nur in der Cloud liegen, sind am PC nicht mehr erreichbar, und nichts wird mehr gesichert.",
+      "needs": "logoff",
+      "tags": [
+        "bloat",
+        "privacy",
+        "memory",
+        "battery"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\OneDrive",
+          "name": "DisableFileSyncNGSC",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.phone-in-start-off",
+      "name": "Handy-Bereich im Startmenü aus",
+      "desc": "Entfernt den Smartphone-Link-Bereich (Akku, Nachrichten, Anrufe) neben dem Windows-11-Startmenü.",
+      "group": "Smartphone-Verknüpfung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "bloat",
+        "ui"
+      ],
+      "when": {
+        "minBuild": 22631
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Start\\Companions\\Microsoft.YourPhone_8wekyb3d8bbwe",
+          "name": "IsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.phone-link-off",
+      "name": "Smartphone-Verknüpfung abschalten",
+      "desc": "Der PC kann nicht mehr mit einem Handy verknüpft werden und verschwindet aus der Geräteliste deines Handys.",
+      "group": "Smartphone-Verknüpfung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Smartphone-Link funktioniert nicht mehr: keine SMS, Anrufe oder Fotos vom Handy am PC.",
+      "needs": "reboot",
+      "tags": [
+        "bloat",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "EnableMmx",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-copilot-off",
+      "name": "Edge: Seitenleiste und Copilot-Einstiege aus",
+      "desc": "Blendet die Edge-Seitenleiste aus. Copilot-Knöpfe verschwinden damit nur in Arbeits- oder Schulprofilen.",
+      "info": "Seit Edge 141 steuert die Seitenleisten-Richtlinie den Copilot-Knopf nicht mehr. Laut Microsoft greifen diese Richtlinien nicht in einem Profil mit privatem Microsoft-Konto – den Copilot-Knopf blendest du dort unter edge://settings aus. Edge zeigt danach „Von deiner Organisation verwaltet“ – das ist normal.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ai",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "HubsSidebarEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "NewTabPageBingChatEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "Microsoft365CopilotChatIconEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-shopping-off",
+      "name": "Edge: Shopping-Hinweise und Rewards aus",
+      "desc": "Keine Gutschein-, Preisvergleich- und Rewards-Einblendungen mehr beim Surfen und Einkaufen.",
+      "info": "Laut Microsoft greifen diese Richtlinien nicht in einem Edge-Profil, das mit einem privaten Microsoft-Konto angemeldet ist. Edge zeigt danach außerdem „Von deiner Organisation verwaltet“ – das ist normal.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "EdgeShoppingAssistantEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "ShowMicrosoftRewards",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-startup-boost-off",
+      "name": "Edge: Schnellstart im Hintergrund aus",
+      "desc": "Edge lädt sich nicht mehr beim Windows-Start vor. Spart Arbeitsspeicher, dafür öffnet sich Edge etwas langsamer.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "memory",
+        "boot"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "StartupBoostEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-background-off",
+      "name": "Edge: Weiterlaufen nach dem Schließen aus",
+      "desc": "Edge beendet sich wirklich, wenn du es schließt. Spart Arbeitsspeicher und Akku; Erweiterungen laufen dann nicht im Hintergrund.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "memory",
+        "battery"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "BackgroundModeEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-first-run-off",
+      "name": "Edge: Einrichtungs- und Standardbrowser-Werbung aus",
+      "desc": "Kein Einrichtungs-Assistent beim ersten Start und keine Aufforderung mehr, Edge und Bing als Standard zu setzen.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "HideFirstRunExperience",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "DefaultBrowserSettingsCampaignEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-recommendations-off",
+      "name": "Edge: Empfehlungen und Werbe-Tabs aus",
+      "desc": "Edge zeigt keine Produkt-Empfehlungen, Werbe-Seiten und Vorschlag-Benachrichtigungen mehr.",
+      "info": "Laut Microsoft blendet die Empfehlungs-Richtlinie in einem Profil mit privatem Microsoft-Konto nichts aus; die Werbe-Tabs und Blickpunkt-Tipps werden trotzdem gesperrt. Edge zeigt danach „Von deiner Organisation verwaltet“ – das ist normal.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "ShowRecommendationsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "PromotionalTabsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "SpotlightExperiencesAndRecommendationsEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-newtab-clean",
+      "name": "Edge: Neuer Tab ohne News und Werbe-Kacheln",
+      "desc": "Die Neuer-Tab-Seite zeigt keine MSN-News und keine gesponserten Schnellzugriffe mehr. Lädt schneller.",
+      "info": "Laut Microsoft greifen diese Richtlinien nicht in einem Edge-Profil, das mit einem privaten Microsoft-Konto angemeldet ist. Edge zeigt danach außerdem „Von deiner Organisation verwaltet“ – das ist normal.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "NewTabPageContentEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+          "name": "NewTabPageHideDefaultTopSites",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.edge-desktop-shortcut-off",
+      "name": "Edge: Desktop-Verknüpfung bei Updates entfernen",
+      "desc": "Edge-Updates legen keine Edge-Verknüpfung mehr für alle Benutzer auf den Desktop; eine vorhandene wird gelöscht. Eigene Verknüpfungen bleiben.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+          "name": "CreateDesktopShortcutDefault",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+          "name": "RemoveDesktopShortcutDefault",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ],
+      "info": "Die vom Edge-Installer angelegte Verknüpfung wird beim nächsten Edge-Update oder Neustart entfernt. Selbst erstellte Verknüpfungen in deinem Benutzerkonto bleiben unberührt."
+    },
+    {
+      "id": "debloat.store-open-with-off",
+      "name": "„Im Store suchen“ beim Öffnen von Dateien aus",
+      "desc": "Bei unbekannten Dateitypen schlägt Windows nicht mehr vor, eine App im Microsoft Store zu suchen.",
+      "group": "Sonstiges",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ads",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
+          "name": "NoUseStoreOpenWith",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.ink-suggestions-off",
+      "name": "App-Vorschläge im Windows Ink-Arbeitsbereich aus",
+      "desc": "Der Stift-Arbeitsbereich zeigt keine vorgeschlagenen Store-Apps mehr. Nur relevant bei Geräten mit Stift.",
+      "group": "Sonstiges",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ads"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsInkWorkspace",
+          "name": "AllowSuggestedAppsInWindowsInkWorkspace",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "debloat.suggested-actions-off",
+      "name": "Vorgeschlagene Aktionen beim Kopieren aus",
+      "desc": "Kopierst du Telefonnummern oder Termine, poppen keine Vorschläge (anrufen, Termin anlegen) mehr auf.",
+      "info": "Microsoft hat die Funktion mit Windows 11 24H2 entfernt, daher nur für 22H2/23H2.",
+      "group": "Sonstiges",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 22621,
+        "maxBuild": 22631
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\SmartActionPlatform\\SmartClipboard",
+          "name": "Disabled",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "category": "services",
+  "tweaks": [
+    { "id": "services.sysmain-off", "name": "SysMain (Superfetch) aus", "desc": "Auf SSDs unnötig. Weniger Festplattenaktivität.",
+      "impact": 2, "risk": "moderate", "warning": "Auf Festplatten (HDD) starten Programme langsamer.", "needs": "none", "tags": ["ssd", "stutter"],
+      "actions": [ { "type": "service", "name": "SysMain", "start": "Disabled", "default": "Automatic" } ] },
+    { "id": "services.diagtrack-off", "name": "Telemetrie-Dienst aus", "desc": "Windows sendet weniger Nutzungsdaten.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["telemetry", "privacy"],
+      "actions": [
+        { "type": "service", "name": "DiagTrack", "start": "Disabled", "default": "Automatic" },
+        { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser", "enabled": false, "default": true }
+      ] },
+    { "id": "services.fax-off", "name": "Fax-Dienst aus", "desc": "Faxen braucht heute kaum noch jemand.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["bloat"], "when": { "service": "Fax" },
+      "actions": [ { "type": "service", "name": "Fax", "start": "Disabled", "default": "Manual", "stop": false } ] },
+    { "id": "services.missing-service", "name": "Nicht vorhandener Dienst", "desc": "Testfall: der Dienst existiert nicht.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["bloat"], "when": { "service": "VxNoSuchService" },
+      "actions": [ { "type": "service", "name": "VxNoSuchService", "start": "Disabled", "default": "Manual" } ] },
+    { "id": "services.delayed-start", "name": "Druckdienst verzögert starten", "desc": "Der Druckdienst startet etwas später.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["boot"],
+      "actions": [ { "type": "service", "name": "Spooler", "start": "AutomaticDelayed", "default": "Automatic" } ] }
+  ]
+}

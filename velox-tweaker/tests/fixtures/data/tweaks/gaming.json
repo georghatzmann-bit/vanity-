@@ -1,0 +1,31 @@
+{
+  "category": "gaming",
+  "tweaks": [
+    { "id": "gaming.gamedvr-off", "name": "Hintergrund-Aufnahme (Game DVR) aus", "desc": "Windows nimmt sonst heimlich Gameplay auf. Aus = mehr FPS.",
+      "group": "Xbox Game Bar", "kind": "toggle", "impact": 3, "risk": "safe", "warning": null, "needs": "none", "tags": ["fps", "stutter"],
+      "when": { "minBuild": 17763 },
+      "actions": [
+        { "type": "reg", "path": "HKCU\\System\\GameConfigStore", "name": "GameDVR_Enabled", "kind": "DWord", "value": 0, "default": 1 },
+        { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR", "name": "AppCaptureEnabled", "kind": "DWord", "value": 0, "default": null }
+      ] },
+    { "id": "gaming.gamemode-on", "name": "Spielmodus an", "desc": "Spiele bekommen Vorrang vor Hintergrund-Aufgaben.",
+      "impact": 2, "risk": "safe", "needs": "none", "tags": ["fps"],
+      "actions": [ { "type": "reg", "path": "HKCU\\Software\\Microsoft\\GameBar", "name": "AutoGameModeEnabled", "kind": "DWord", "value": 1, "default": null } ] },
+    { "id": "gaming.hags-on", "name": "GPU-Planung (HAGS) an", "desc": "Die Grafikkarte plant ihren Speicher selbst. Weniger Latenz.",
+      "impact": 2, "risk": "safe", "needs": "reboot", "tags": ["fps", "latency"], "when": { "minBuild": 19041 },
+      "actions": [ { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", "name": "HwSchMode", "kind": "DWord", "value": 2, "default": null } ] },
+    { "id": "gaming.mmcss-games", "name": "Spiele-Priorität im Multimedia-Planer", "desc": "Spiele bekommen mehr CPU-Zeit.",
+      "impact": 2, "risk": "safe", "needs": "none", "tags": ["fps", "stutter"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "Priority", "kind": "DWord", "value": 6, "default": 2 },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "Scheduling Category", "kind": "String", "value": "High", "default": "Medium" },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "SFIO Priority", "kind": "String", "value": "High", "default": "Normal" }
+      ] },
+    { "id": "gaming.nvidia-telemetry-off", "name": "NVIDIA-Telemetrie aus", "desc": "Der NVIDIA-Treiber sendet weniger Daten.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["nvidia", "telemetry"], "when": { "gpuVendor": "nvidia" },
+      "actions": [ { "type": "reg", "path": "HKLM\\SOFTWARE\\NVIDIA Corporation\\NvControlPanel2\\Client", "name": "OptInOrOutPreference", "kind": "DWord", "value": 0, "default": 1 } ] },
+    { "id": "gaming.amd-ulps-off", "name": "AMD-Stromsparmodus ULPS aus", "desc": "Verhindert Ruckler mit AMD-Karten.",
+      "impact": 2, "risk": "moderate", "warning": "Etwas mehr Stromverbrauch im Leerlauf.", "needs": "reboot", "tags": ["amd", "stutter"], "when": { "gpuVendor": "amd" },
+      "actions": [ { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\*", "name": "EnableUlps", "kind": "DWord", "value": 0, "default": 1, "onlyExisting": true } ] }
+  ]
+}

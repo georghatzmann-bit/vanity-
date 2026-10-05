@@ -1,0 +1,506 @@
+{
+  "category": "gpu",
+  "tweaks": [
+    {
+      "id": "gpu.hags-on",
+      "name": "Hardware-GPU-Planung (HAGS) an",
+      "desc": "Die Grafikkarte plant ihren Speicher selbst. Nötig für DLSS Frame Generation, kann die Latenz leicht senken.",
+      "info": "Braucht Windows 10 2004 oder neuer und einen passenden Treiber (NVIDIA ab GTX 1000, aktuelle AMD Radeon, Intel Arc). Ohne Unterstützung passiert nichts. Bei den meisten Spielen ändert sich wenig; treten mit VR, Aufnahme-Software oder älteren Spielen Ruckler auf, einfach wieder ausschalten.",
+      "group": "Windows-Grafik",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "latency"
+      ],
+      "when": {
+        "minBuild": 19041
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+          "name": "HwSchMode",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gpu.mpo-off",
+      "name": "Multiplane Overlay (MPO) aus",
+      "desc": "Behebt Flackern, schwarze Bilder und Ruckler bei manchen Mehr-Monitor-Setups. Ohne solche Probleme lieber an lassen.",
+      "info": "MPO lässt die Grafikkarte Bildebenen selbst zusammensetzen – das spart Strom und Verzögerung bei Spielen im Fenster oder randlos. Mit manchen Treibern, besonders bei Monitoren mit unterschiedlicher Bildrate, verursacht es aber Flackern. NVIDIA hat den ersten Wert (OverlayTestMode) selbst als Abhilfe veröffentlicht. Unter Windows 11 24H2 wirkt laut vielen Nutzerberichten nur noch der zweite Wert (DisableOverlays), deshalb setzt VELOX beide.",
+      "group": "Windows-Grafik",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Randlose Spiele und Videos können etwas mehr Verzögerung und Stromverbrauch haben. Nur sinnvoll, wenn du Flackern oder Ruckler hast.",
+      "needs": "reboot",
+      "tags": [
+        "stutter",
+        "compat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\Dwm",
+          "name": "OverlayTestMode",
+          "kind": "DWord",
+          "value": 5,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+          "name": "DisableOverlays",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gpu.windowed-games-on",
+      "name": "Optimierungen für Spiele im Fenstermodus an",
+      "desc": "DirectX-10/11-Spiele im Fenster oder randlos nutzen das moderne Bildmodell: weniger Verzögerung, VRR und Auto HDR möglich.",
+      "info": "Schaltet in Einstellungen › Anzeige › Grafik die gleichnamige Option ein. Die anderen Werte derselben Einstellung (VRR, Auto HDR, bevorzugte GPU) bleiben erhalten. Macht ein einzelnes altes Spiel Probleme, schaltest du es dort pro Spiel ab. Wirkt beim nächsten Spielstart.",
+      "group": "Windows-Grafik",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "fps",
+        "latency"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$p = 'HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; $n = 'DirectXUserGlobalSettings'; $k = 'SwapEffectUpgradeEnable'; $v = '1'\nif (-not (Test-Path -LiteralPath $p)) { New-Item -Path $p -Force -ErrorAction Stop | Out-Null }\n$cur = [string](Get-ItemProperty -LiteralPath $p -ErrorAction Stop).$n\n$parts = @($cur -split ';' | Where-Object { $_.Trim() -ne '' -and ($_ -split '=')[0].Trim() -ne $k })\n$parts += ($k + '=' + $v)\nNew-ItemProperty -LiteralPath $p -Name $n -Value (($parts -join ';') + ';') -PropertyType String -Force -ErrorAction Stop | Out-Null\n",
+          "revert": "$p = 'HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; $n = 'DirectXUserGlobalSettings'; $k = 'SwapEffectUpgradeEnable'; $v = '1'\nif (Test-Path -LiteralPath $p) {\n  $cur = [string](Get-ItemProperty -LiteralPath $p -ErrorAction Stop).$n\n  if ($cur -ne '') {\n    $parts = @($cur -split ';' | Where-Object { $_.Trim() -ne '' -and ($_ -split '=')[0].Trim() -ne $k })\n    if ($parts.Count -gt 0) {\n      New-ItemProperty -LiteralPath $p -Name $n -Value (($parts -join ';') + ';') -PropertyType String -Force -ErrorAction Stop | Out-Null\n    } else {\n      Remove-ItemProperty -LiteralPath $p -Name $n -ErrorAction Stop\n    }\n  }\n}\n",
+          "detect": "$p = 'HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; $n = 'DirectXUserGlobalSettings'; $k = 'SwapEffectUpgradeEnable'; $v = '1'\n$cur = ''\nif (Test-Path -LiteralPath $p) { $cur = [string](Get-ItemProperty -LiteralPath $p -ErrorAction Stop).$n }\n$hit = @($cur -split ';' | Where-Object { $_.Trim() -eq ($k + '=' + $v) })\n$hit.Count -gt 0\n"
+        }
+      ]
+    },
+    {
+      "id": "gpu.vrr-on",
+      "name": "Variable Bildrate (VRR) auch für ältere Spiele",
+      "desc": "DirectX-11-Spiele ohne eigene VRR-Unterstützung nutzen trotzdem G-Sync/FreeSync. Nur mit VRR-Monitor sinnvoll.",
+      "info": "Entspricht dem Schalter „Variable Aktualisierungsrate“ in den Grafikeinstellungen. Er erscheint dort nur, wenn Monitor und Treiber VRR können – sonst bewirkt er nichts. Spiele mit eigener G-Sync/FreeSync-Unterstützung betrifft er nicht.",
+      "group": "Windows-Grafik",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Einzelne Spiele können damit in Menüs oder Ladebildschirmen flackern. Dann wieder ausschalten.",
+      "needs": "none",
+      "tags": [
+        "stutter",
+        "fps"
+      ],
+      "when": {
+        "minBuild": 18362
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$p = 'HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; $n = 'DirectXUserGlobalSettings'; $k = 'VRROptimizeEnable'; $v = '1'\nif (-not (Test-Path -LiteralPath $p)) { New-Item -Path $p -Force -ErrorAction Stop | Out-Null }\n$cur = [string](Get-ItemProperty -LiteralPath $p -ErrorAction Stop).$n\n$parts = @($cur -split ';' | Where-Object { $_.Trim() -ne '' -and ($_ -split '=')[0].Trim() -ne $k })\n$parts += ($k + '=' + $v)\nNew-ItemProperty -LiteralPath $p -Name $n -Value (($parts -join ';') + ';') -PropertyType String -Force -ErrorAction Stop | Out-Null\n",
+          "revert": "$p = 'HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; $n = 'DirectXUserGlobalSettings'; $k = 'VRROptimizeEnable'; $v = '1'\nif (Test-Path -LiteralPath $p) {\n  $cur = [string](Get-ItemProperty -LiteralPath $p -ErrorAction Stop).$n\n  if ($cur -ne '') {\n    $parts = @($cur -split ';' | Where-Object { $_.Trim() -ne '' -and ($_ -split '=')[0].Trim() -ne $k })\n    if ($parts.Count -gt 0) {\n      New-ItemProperty -LiteralPath $p -Name $n -Value (($parts -join ';') + ';') -PropertyType String -Force -ErrorAction Stop | Out-Null\n    } else {\n      Remove-ItemProperty -LiteralPath $p -Name $n -ErrorAction Stop\n    }\n  }\n}\n",
+          "detect": "$p = 'HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences'; $n = 'DirectXUserGlobalSettings'; $k = 'VRROptimizeEnable'; $v = '1'\n$cur = ''\nif (Test-Path -LiteralPath $p) { $cur = [string](Get-ItemProperty -LiteralPath $p -ErrorAction Stop).$n }\n$hit = @($cur -split ';' | Where-Object { $_.Trim() -eq ($k + '=' + $v) })\n$hit.Count -gt 0\n"
+        }
+      ]
+    },
+    {
+      "id": "gpu.tdr-delay",
+      "name": "Mehr Geduld bei Grafik-Hängern (TDR)",
+      "desc": "Windows wartet 10 statt 2 Sekunden, bevor es den Grafiktreiber neu startet. Weniger Abstürze bei Shader-Kompilierung.",
+      "info": "Bei schwerer Last (Shader-Kompilierung, Rendering, KI-Programme) meldet Windows sonst schnell „Anzeigetreiber reagiert nicht mehr“ und das Spiel stürzt ab. Die Erkennung bleibt aktiv, sie greift nur später. Echte Treiber- oder Übertaktungsprobleme behebt das nicht. Microsoft sieht diese Werte eigentlich für Tests vor.",
+      "group": "Windows-Grafik",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Hängt die Grafikkarte wirklich, bleibt das Bild bis zu 10 Sekunden eingefroren, bevor Windows den Treiber neu startet.",
+      "needs": "reboot",
+      "tags": [
+        "compat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+          "name": "TdrDelay",
+          "kind": "DWord",
+          "value": 10,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+          "name": "TdrDdiDelay",
+          "kind": "DWord",
+          "value": 10,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gpu.nvidia-telemetry-off",
+      "name": "NVIDIA-Telemetrie abschalten",
+      "desc": "Schaltet die bekannten Telemetrie-Schalter in Treiber und NVIDIA-Systemsteuerung aus. Kein Nachteil beim Spielen.",
+      "group": "NVIDIA",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry",
+        "nvidia"
+      ],
+      "when": {
+        "gpuVendor": "nvidia"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\NVIDIA Corporation\\NvControlPanel2\\Client",
+          "name": "OptInOrOutPreference",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\NVIDIA Corporation\\Global\\FTS",
+          "name": "EnableRID44231",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\NVIDIA Corporation\\Global\\FTS",
+          "name": "EnableRID64640",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\NVIDIA Corporation\\Global\\FTS",
+          "name": "EnableRID66610",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Global\\Startup",
+          "name": "SendTelemetryData",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ],
+      "info": "Welche Daten neuere Treiber genau senden, legt NVIDIA nicht offen. Diese Werte sind die bekannten Abschalter; bei manchen Treiberversionen werden sie nicht mehr gelesen."
+    },
+    {
+      "id": "gpu.nvidia-telemetry-tasks-off",
+      "name": "NVIDIA-Telemetrie-Aufgaben aus",
+      "desc": "Die geplanten Aufgaben für NVIDIA-Absturz- und Telemetrieberichte (NvTmRep, NvTmMon) starten nicht mehr.",
+      "info": "Die Aufgaben heißen je nach Treiber etwas anders und gibt es nicht überall. VELOX schaltet alle passenden ab, die es findet.",
+      "group": "NVIDIA",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry",
+        "nvidia"
+      ],
+      "when": {
+        "gpuVendor": "nvidia"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$names = @('NvTmRep*', 'NvTmMon*')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -ne 'Disabled') { Disable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "revert": "$names = @('NvTmRep*', 'NvTmMon*')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -eq 'Disabled') { Enable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "detect": "$names = @('NvTmRep*', 'NvTmMon*')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nif ($t.Count -eq 0) { $null } else { @($t | Where-Object { [string]$_.State -ne 'Disabled' }).Count -eq 0 }\n"
+        }
+      ]
+    },
+    {
+      "id": "gpu.nvidia-telemetry-container-off",
+      "name": "Dienst „NVIDIA Telemetry Container“ aus",
+      "desc": "Der Telemetrie-Dienst älterer NVIDIA-Treiber läuft nicht mehr im Hintergrund. Kein Nachteil beim Spielen.",
+      "info": "Gibt es nur bei älteren Treibern bzw. GeForce Experience. Neuere Treiber haben den Dienst nicht mehr – dann ist der Schalter ausgegraut.",
+      "group": "NVIDIA",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry",
+        "nvidia",
+        "bloat"
+      ],
+      "when": {
+        "gpuVendor": "nvidia",
+        "service": "NvTelemetryContainer"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "NvTelemetryContainer",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "gpu.nvidia-container-manual",
+      "name": "NVIDIA-App-Dienst nicht mehr automatisch starten",
+      "desc": "Der Hintergrunddienst von NVIDIA App/GeForce Experience startet nicht mehr mit Windows. Spart etwas Arbeitsspeicher.",
+      "info": "Der Dienst „NVIDIA LocalSystem Container“ wird für Overlay, Instant Replay, Filter und Treiber-Updates der NVIDIA App gebraucht. Wer nur den Treiber und die Systemsteuerung nutzt, braucht ihn nicht dauerhaft.",
+      "group": "NVIDIA",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Overlay, Instant Replay, Filter und automatische Treiber-Updates der NVIDIA App bzw. GeForce Experience funktionieren eventuell nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "nvidia"
+      ],
+      "when": {
+        "gpuVendor": "nvidia",
+        "service": "NvContainerLocalSystem"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "NvContainerLocalSystem",
+          "start": "Manual",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "gpu.nvidia-display-container-off",
+      "name": "NVIDIA Display Container aus",
+      "desc": "Der Hilfsdienst der NVIDIA-Systemsteuerung läuft nicht mehr. Minimal weniger Hintergrundlast, die Systemsteuerung öffnet sich dann nicht.",
+      "info": "Manche Tweak-Pakete schalten ihn wegen angeblicher Latenz-Spitzen ab – Messungen zeigen kaum Unterschied. Nur sinnvoll, wenn du die NVIDIA-Systemsteuerung so gut wie nie brauchst. Zum Einstellen kurz zurücksetzen.",
+      "group": "NVIDIA",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die NVIDIA-Systemsteuerung lässt sich nicht mehr öffnen, bis du diesen Dienst wieder einschaltest.",
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "nvidia"
+      ],
+      "when": {
+        "gpuVendor": "nvidia",
+        "service": "NVDisplay.ContainerLocalSystem"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "NVDisplay.ContainerLocalSystem",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "gpu.nvidia-context-menu-off",
+      "name": "NVIDIA-Eintrag im Desktop-Rechtsklick ausblenden",
+      "desc": "„NVIDIA Systemsteuerung“ verschwindet aus dem Rechtsklick-Menü des Desktops. Öffnen geht weiter über das Startmenü.",
+      "group": "NVIDIA",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ui",
+        "quality-of-life",
+        "nvidia"
+      ],
+      "when": {
+        "gpuVendor": "nvidia"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\NVIDIA Corporation\\Global\\NvCplApi\\Policies",
+          "name": "ContextUIPolicy",
+          "kind": "DWord",
+          "value": 0,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "id": "gpu.amd-ulps-off",
+      "name": "AMD-Tiefschlaf (ULPS) aus",
+      "desc": "Ungenutzte AMD-GPUs werden nicht mehr tief abgeschaltet. Hilft gegen Aussetzer beim Aufwachen, kostet etwas Strom im Leerlauf.",
+      "info": "ULPS (Ultra Low Power State) schaltet schlafende AMD-Grafikchips fast komplett ab. Bei mehreren Grafikkarten oder Übertaktungs-Tools führt das öfter zu Rucklern, schwarzen Bildern oder Abstürzen. Bei nur einer Karte im Desktop ist der Effekt klein. Nach Treiber-Updates neu anwenden. Zurücksetzen stellt den AMD-Standard (1) wieder her.",
+      "group": "AMD",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "stutter",
+        "amd",
+        "laptop-bad"
+      ],
+      "when": {
+        "gpuVendor": "amd"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'\n$keys = @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | Where-Object {\n  $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue\n  $p -and $null -ne $p.PSObject.Properties['EnableUlps']\n})\nforeach ($k in $keys) {\n  $v = (Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction Stop).EnableUlps\n  if ([int]$v -ne 0) { New-ItemProperty -LiteralPath $k.PSPath -Name 'EnableUlps' -Value 0 -PropertyType DWord -Force -ErrorAction Stop | Out-Null }\n}\n",
+          "revert": "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'\n$keys = @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | Where-Object {\n  $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue\n  $p -and $null -ne $p.PSObject.Properties['EnableUlps']\n})\nforeach ($k in $keys) {\n  $v = (Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction Stop).EnableUlps\n  if ([int]$v -eq 0) { New-ItemProperty -LiteralPath $k.PSPath -Name 'EnableUlps' -Value 1 -PropertyType DWord -Force -ErrorAction Stop | Out-Null }\n}\n",
+          "detect": "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}'\n$keys = @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | Where-Object {\n  $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue\n  $p -and $null -ne $p.PSObject.Properties['EnableUlps']\n})\nif ($keys.Count -eq 0) { $null } else {\n  $ok = $true\n  foreach ($k in $keys) {\n    $v = (Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction Stop).EnableUlps\n    if ([int]$v -ne 0) { $ok = $false }\n  }\n  $ok\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "gpu.amd-uep-off",
+      "name": "AMD-Nutzungsdatenprogramm (UEP) aus",
+      "desc": "Dienst und Aufgaben des „AMD User Experience Program“ laufen nicht mehr. Keine Nutzungsdaten an AMD, kein Nachteil.",
+      "group": "AMD",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry",
+        "amd",
+        "bloat"
+      ],
+      "when": {
+        "gpuVendor": "amd",
+        "service": "AUEPLauncher"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "AUEPLauncher",
+          "start": "Disabled",
+          "default": "Automatic"
+        },
+        {
+          "type": "ps",
+          "apply": "$names = @('AMDInstallLauncher', 'AMDInstallUEP', 'AMDDVRAnalytics')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -ne 'Disabled') { Disable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "revert": "$names = @('AMDInstallLauncher', 'AMDInstallUEP', 'AMDDVRAnalytics')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -eq 'Disabled') { Enable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "detect": "$names = @('AMDInstallLauncher', 'AMDInstallUEP', 'AMDDVRAnalytics')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nif ($t.Count -eq 0) { $null } else { @($t | Where-Object { [string]$_.State -ne 'Disabled' }).Count -eq 0 }\n"
+        }
+      ],
+      "info": "Das Programm ist bei der Treiber-Installation ein Opt-in. Fehlt der Dienst, war es nie installiert – dann ist der Schalter ausgegraut. Auch die ReLive-Analyse-Aufgabe (AMDDVRAnalytics) wird abgeschaltet."
+    },
+    {
+      "id": "gpu.amd-link-tasks-off",
+      "name": "AMD-Link-Update-Aufgaben aus",
+      "desc": "Die geplanten Aufgaben für AMD Link (Streaming aufs Handy) starten nicht mehr mit Windows.",
+      "info": "Nur sinnvoll, wenn du AMD Link nicht nutzt. Die Aufgaben gibt es nur bei manchen Treiberversionen.",
+      "group": "AMD",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "amd"
+      ],
+      "when": {
+        "gpuVendor": "amd"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$names = @('AMDLinkUpdate', 'ModifyLinkUpdate', 'AMD Link Driver')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -ne 'Disabled') { Disable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "revert": "$names = @('AMDLinkUpdate', 'ModifyLinkUpdate', 'AMD Link Driver')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -eq 'Disabled') { Enable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "detect": "$names = @('AMDLinkUpdate', 'ModifyLinkUpdate', 'AMD Link Driver')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nif ($t.Count -eq 0) { $null } else { @($t | Where-Object { [string]$_.State -ne 'Disabled' }).Count -eq 0 }\n"
+        }
+      ]
+    },
+    {
+      "id": "gpu.amd-startdvr-off",
+      "name": "Radeon-Hintergrunddienste nicht automatisch starten",
+      "desc": "Die Aufgabe „StartDVR“ startet Radeon-Hostdienst und Overlay nicht mehr beim Anmelden. Etwas weniger Hintergrundlast.",
+      "info": "StartDVR lädt beim Anmelden den „Radeon Settings Host Service“ und das Desktop-Overlay. Die Radeon Software selbst (StartCN) bleibt unberührt.",
+      "group": "AMD",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Radeon-Overlay, Aufnahme (ReLive) und Hotkeys stehen erst bereit, wenn du die Radeon Software öffnest.",
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "amd"
+      ],
+      "when": {
+        "gpuVendor": "amd"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$names = @('StartDVR')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -ne 'Disabled') { Disable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "revert": "$names = @('StartDVR')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nforeach ($x in $t) { if ([string]$x.State -eq 'Disabled') { Enable-ScheduledTask -TaskName $x.TaskName -TaskPath $x.TaskPath -ErrorAction Stop | Out-Null } }\n",
+          "detect": "$names = @('StartDVR')\n$t = @(Get-ScheduledTask -TaskPath '\\' -ErrorAction SilentlyContinue | Where-Object { $tn = $_.TaskName; @($names | Where-Object { $tn -like $_ }).Count -gt 0 })\nif ($t.Count -eq 0) { $null } else { @($t | Where-Object { [string]$_.State -ne 'Disabled' }).Count -eq 0 }\n"
+        }
+      ]
+    },
+    {
+      "id": "gpu.amd-crash-defender-off",
+      "name": "Dienst „AMD Crash Defender“ aus",
+      "desc": "Der Dienst ergänzt Absturzberichte nicht mehr um AMD-Treiber-Infos. Kaum Leistungsgewinn, dafür schwerere Fehlersuche.",
+      "info": "Der Dienst (amdfendrsr.exe) schreibt bei Treiber-Abstürzen zusätzliche Infos in die Absturzberichte. Die eigentliche Absturz-Erholung von Windows (TDR) bleibt aktiv.",
+      "group": "AMD",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Nach Grafik-Abstürzen gibt es keine AMD-Fehlerberichte mehr, das erschwert die Fehlersuche.",
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "amd"
+      ],
+      "when": {
+        "gpuVendor": "amd",
+        "service": "AMD Crash Defender Service"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "AMD Crash Defender Service",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    }
+  ]
+}

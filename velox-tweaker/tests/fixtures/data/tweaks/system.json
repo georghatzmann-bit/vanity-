@@ -1,0 +1,29 @@
+{
+  "category": "system",
+  "tweaks": [
+    { "id": "system.classic-context-menu", "name": "Klassisches Kontextmenü", "desc": "Rechtsklick zeigt sofort alle Optionen.",
+      "impact": 1, "risk": "safe", "needs": "explorer", "tags": ["ui", "quality-of-life"], "when": { "os": "win11" },
+      "actions": [
+        { "type": "regkey", "path": "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32", "present": true, "default": false },
+        { "type": "reg", "path": "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32", "name": "", "kind": "String", "value": "", "default": null }
+      ] },
+    { "id": "system.remove-tree", "name": "Test-Schlüssel entfernen", "desc": "Testfall: löscht einen ganzen Registry-Baum.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["ui"],
+      "actions": [ { "type": "regkey", "path": "HKCU\\Software\\VeloxFixture\\Tree", "present": false, "default": true } ] },
+    { "id": "system.value-kinds", "name": "Alle Werttypen", "desc": "Testfall: QWord, Binary, MultiString, ExpandString und großes DWORD.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["ui"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\VeloxFixture\\Values", "name": "BigDword", "kind": "DWord", "value": 4294967295, "default": 0 },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\VeloxFixture\\Values", "name": "QWordVal", "kind": "QWord", "value": 5000000000, "default": 1 },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\VeloxFixture\\Values", "name": "BinaryVal", "kind": "Binary", "value": "9E1E078012000000", "default": "9E3E078012000000" },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\VeloxFixture\\Values", "name": "MultiVal", "kind": "MultiString", "value": ["alpha", "beta"], "default": ["gamma"] },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\VeloxFixture\\Values", "name": "ExpandVal", "kind": "ExpandString", "value": "%SystemRoot%\\velox", "default": "%TEMP%\\velox" }
+      ] },
+    { "id": "system.xps-off", "name": "XPS-Dienste aus", "desc": "Kaum genutztes Druckformat abschalten.",
+      "impact": 1, "risk": "moderate", "warning": "XPS-Dokumente lassen sich nicht mehr drucken.", "needs": "reboot", "tags": ["bloat"],
+      "actions": [ { "type": "feature", "name": "Printing-XPSServices-Features", "enabled": false, "default": true } ] },
+    { "id": "system.win10-only", "name": "Nur für Windows 10", "desc": "Testfall für when.os.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["ui"], "when": { "os": "win10" },
+      "actions": [ { "type": "reg", "path": "HKCU\\Software\\VeloxFixture\\Win10", "name": "Only", "kind": "DWord", "value": 1, "default": null } ] }
+  ]
+}

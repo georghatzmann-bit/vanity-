@@ -1,0 +1,1543 @@
+{
+  "category": "services",
+  "tweaks": [
+    {
+      "id": "services.diagtrack-off",
+      "name": "Telemetrie-Dienst (DiagTrack) aus",
+      "desc": "Der Hauptdienst, der Nutzungs- und Diagnosedaten an Microsoft schickt, läuft nicht mehr. Spart etwas CPU, Datenträger und Netzwerk.",
+      "info": "Heißt in der Dienste-Liste 'Benutzererfahrungen und Telemetrie im verbundenen Modus'. Windows Update funktioniert weiter. Nur Windows-Insider-Vorabversionen brauchen den Dienst.",
+      "group": "Telemetrie & Fehlerberichte",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry"
+      ],
+      "when": {
+        "service": "DiagTrack"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "DiagTrack",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "services.dmwappush-off",
+      "name": "WAP-Push-Dienst für Telemetrie aus",
+      "desc": "Leitet Geräteverwaltungs- und Telemetrie-Nachrichten weiter. Auf privaten PCs ohne Firmenverwaltung unnötig.",
+      "info": "Heißt 'Gerätemanagement für WAP-Push-Nachrichtenrouting'. Läuft nur bei Bedarf, der Leistungsgewinn ist daher klein.",
+      "group": "Telemetrie & Fehlerberichte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Firmen- und Schul-PCs, die über Intune/MDM verwaltet werden, bekommen dann keine Verwaltungs-Nachrichten mehr.",
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry"
+      ],
+      "when": {
+        "service": "dmwappushservice"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "dmwappushservice",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.diaghub-off",
+      "name": "Diagnose-Hub-Sammeldienst aus",
+      "desc": "Sammelt Echtzeit-Diagnosedaten für Entwickler-Tools. Brauchst du nur, wenn du mit Visual Studio Programme analysierst.",
+      "info": "Läuft nur bei Bedarf. Mit dem Dienst aus funktionieren die Diagnose- und Profiler-Werkzeuge von Visual Studio nicht mehr.",
+      "group": "Telemetrie & Fehlerberichte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Profiler und Diagnose-Werkzeuge in Visual Studio funktionieren nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "bloat"
+      ],
+      "when": {
+        "service": "diagnosticshub.standardcollector.service"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "diagnosticshub.standardcollector.service",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.wer-off",
+      "name": "Windows-Fehlerberichterstattung aus",
+      "desc": "Nach Abstürzen sammelt Windows keine Berichte mehr und schickt nichts an Microsoft. Spart nach Abstürzen Rechenzeit und Platz.",
+      "info": "Schaltet den Dienst, die Problemberichte in der Systemsteuerung und die Aufgabe ab, die gesammelte Berichte nachträglich hochlädt.",
+      "group": "Telemetrie & Fehlerberichte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Microsoft bekommt keine Absturzberichte mehr und kann dir keine Lösungen dafür anbieten. Die Zuverlässigkeitsüberwachung zeigt weniger Details.",
+      "needs": "none",
+      "tags": [
+        "privacy",
+        "telemetry"
+      ],
+      "when": {
+        "service": "WerSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "WerSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "wercplsupport",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Windows Error Reporting\\QueueReporting",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.sysmain-off",
+      "name": "SysMain (Superfetch) aus",
+      "desc": "Windows lädt Programme nicht mehr vorab in den Arbeitsspeicher. Weniger Hintergrundlast, Programme starten evtl. minimal langsamer.",
+      "info": "Auf SSDs bringt das Vorladen wenig, deshalb ist auch der Gewinn klein. Darum wird der Schalter nur bei SSD und mindestens 16 GB RAM angeboten. Auf HDDs macht SysMain Programmstarts spürbar schneller.",
+      "group": "Leistung & Hintergrund",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Mit SysMain aus ist auch die Speicherkomprimierung praktisch aus. Auf einer Festplatte (HDD) oder mit wenig RAM unbedingt anlassen.",
+      "needs": "none",
+      "tags": [
+        "ssd",
+        "memory",
+        "stutter"
+      ],
+      "when": {
+        "service": "SysMain",
+        "systemDisk": "ssd",
+        "minRamGB": 16
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "SysMain",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "services.wsearch-off",
+      "name": "Windows-Suchindex (WSearch) aus",
+      "desc": "Windows durchsucht und indiziert deine Dateien nicht mehr im Hintergrund. Weniger Last auf CPU und Laufwerk, aber die Suche wird langsamer.",
+      "info": "Lohnt sich vor allem auf schwächeren PCs oder wenn der Indexer dauernd das Laufwerk beschäftigt. Wer viel sucht, lässt ihn besser an.",
+      "group": "Leistung & Hintergrund",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Suche in Startmenü, Explorer und Einstellungen wird langsam und findet keine Inhalte in Dateien mehr. Die Suche in Outlook geht nicht mehr richtig.",
+      "needs": "none",
+      "tags": [
+        "storage",
+        "stutter"
+      ],
+      "when": {
+        "service": "WSearch"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "WSearch",
+          "start": "Disabled",
+          "default": "AutomaticDelayed"
+        }
+      ]
+    },
+    {
+      "id": "services.pcasvc-off",
+      "name": "Programmkompatibilitäts-Assistent aus",
+      "desc": "Windows überwacht gestartete Programme nicht mehr auf bekannte Kompatibilitätsprobleme. Etwas weniger Arbeit bei jedem Programmstart.",
+      "info": "Schaltet auch die Aufgabe ab, die die Kompatibilitäts-Datenbank aktualisiert. Manuell gesetzte Kompatibilitätsmodi (Rechtsklick > Eigenschaften) wirken weiter.",
+      "group": "Leistung & Hintergrund",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bei alten Programmen kommt kein Hinweis mehr, dass sie mit Kompatibilitäts-Einstellungen besser laufen würden.",
+      "needs": "none",
+      "tags": [
+        "compat",
+        "bloat"
+      ],
+      "when": {
+        "service": "PcaSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "PcaSvc",
+          "start": "Disabled",
+          "default": "Automatic"
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Application Experience\\PcaPatchDbTask",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.trkwks-off",
+      "name": "Verknüpfungs-Nachverfolgung (TrkWks) aus",
+      "desc": "Windows verfolgt nicht mehr, wohin verschobene Dateien wandern. Verknüpfungen auf verschobene Dateien reparieren sich nicht mehr selbst.",
+      "info": "Der Dienst ist vor allem für Firmennetze gedacht. Zu Hause merkt man das Fehlen praktisch nie.",
+      "group": "Leistung & Hintergrund",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "TrkWks"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "TrkWks",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "services.diagnostics-off",
+      "name": "Diagnoserichtliniendienst aus",
+      "desc": "Windows sucht im Hintergrund nicht mehr selbst nach Problemen und zeichnet weniger Nutzungsdaten auf. Etwas weniger Hintergrundlast.",
+      "info": "Im Diagnoserichtliniendienst läuft auch die Ressourcen-Statistik (SRUM), aus der Windows den App-Verlauf und die Akku- und Datennutzung pro App berechnet.",
+      "group": "Leistung & Hintergrund",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Problembehandlungen und Netzwerkdiagnose gehen nicht mehr. Task-Manager-App-Verlauf, Akku-Nutzung und Datennutzung pro App fehlen.",
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "telemetry"
+      ],
+      "when": {
+        "service": "DPS"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "DPS",
+          "start": "Disabled",
+          "default": "Automatic"
+        },
+        {
+          "type": "service",
+          "name": "WdiServiceHost",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "WdiSystemHost",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.troubleshooting-off",
+      "name": "Automatische Problembehandlung aus",
+      "desc": "Windows führt empfohlene Problembehandlungen nicht mehr selbst im Hintergrund aus. Du entscheidest selbst, was repariert wird.",
+      "info": "Beide Dienste starten nur bei Bedarf, der Leistungsgewinn ist daher klein.",
+      "group": "Leistung & Hintergrund",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Windows behebt bekannte Probleme (z. B. mit Ton oder Netzwerk) nicht mehr von selbst. Manche Problembehandlungen in 'Hilfe anfordern' gehen nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "TroubleshootingSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "TroubleshootingSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "diagsvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.xbox-live-off",
+      "name": "Xbox-Live-Dienste aus",
+      "desc": "Xbox-Anmeldung, Cloud-Spielstände und Xbox-Netzwerk stehen nicht mehr bereit. Für Spieler ohne Xbox-App und Game Pass.",
+      "info": "Schaltet auch die Aufgabe ab, die Cloud-Spielstände im Hintergrund abgleicht. Die Dienste starten nur bei Bedarf, der Gewinn ist klein. Steam-, Epic- und FiveM-Spiele ohne Xbox-Konto sind nicht betroffen.",
+      "group": "Xbox",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Xbox-App, Game-Pass-Spiele, Xbox-Anmeldung in Spielen (z. B. Minecraft, Forza) und Cloud-Spielstände funktionieren nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "XblAuthManager"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "XblAuthManager",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "XblGameSave",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "XboxNetApiSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\XblGameSave\\XblGameSaveTask",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.xbox-accessory-off",
+      "name": "Xbox-Zubehör-Dienst aus",
+      "desc": "Verwaltet Xbox-Controller-Zubehör und dessen Firmware-Updates. Für PCs ohne Xbox-Controller.",
+      "group": "Xbox",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Firmware-Updates und Einstellungen für Xbox-Controller (z. B. Tastenbelegung in der Xbox-Zubehör-App) gehen nicht mehr. Nutzt du einen Xbox-Controller, lass ihn an.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "XboxGipSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "XboxGipSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.spooler-off",
+      "name": "Druckwarteschlange aus",
+      "desc": "Der Druckdienst läuft nicht mehr. Spart etwas Arbeitsspeicher und schließt Angriffsfläche im Druckdienst.",
+      "info": "Der Druckdienst hatte in der Vergangenheit schwere Sicherheitslücken (PrintNightmare). Ohne Drucker ist er überflüssig.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Drucken geht danach nicht mehr, auch nicht 'Als PDF drucken'. Zum Drucken einfach wieder einschalten.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "Spooler"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "Spooler",
+          "start": "Disabled",
+          "default": "Automatic"
+        },
+        {
+          "type": "service",
+          "name": "PrintNotify",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.fax-off",
+      "name": "Fax-Dienst aus",
+      "desc": "Faxen über ein Modem braucht heute kaum noch jemand. Der Fax-Dienst wird abgeschaltet.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "Fax"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "Fax",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.wia-off",
+      "name": "Scanner- und Kamera-Import (WIA) aus",
+      "desc": "Der Dienst für Scanner und Bildimport von Kameras läuft nicht mehr. Nur sinnvoll, wenn du keinen Scanner nutzt.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Scanner und der Foto-Import von manchen Kameras funktionieren nicht mehr. Normale Webcams laufen weiter.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "stisvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "stisvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "WiaRpc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.bluetooth-off",
+      "name": "Bluetooth-Dienste aus",
+      "desc": "Für PCs ohne Bluetooth-Geräte: die Bluetooth-Dienste laufen nicht mehr mit.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bluetooth-Mäuse, -Tastaturen, -Kopfhörer und -Controller funktionieren nicht mehr und lassen sich nicht neu koppeln.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "bthserv"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "bthserv",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "BTAGService",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.biometrics-off",
+      "name": "Biometrie-Dienst (Fingerabdruck/Gesicht) aus",
+      "desc": "Für PCs ohne Fingerabdruckleser oder Gesichtserkennung: der Biometrie-Dienst läuft nicht mehr.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Anmelden per Fingerabdruck oder Gesicht (Windows Hello) geht nicht mehr. PIN und Passwort funktionieren weiter.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "WbioSrvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "WbioSrvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.smartcard-off",
+      "name": "Smartcard-Dienste aus",
+      "desc": "Für PCs ohne Kartenleser: die Smartcard-Dienste laufen nicht mehr.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Kartenleser gehen nicht mehr, z. B. Online-Ausweis mit dem Personalausweis, Firmen-Smartcards und manche Sicherheitsschlüssel.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "SCardSvr"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "SCardSvr",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "ScDeviceEnum",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "SCPolicySvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.sensors-off",
+      "name": "Sensor-Dienste aus (Desktop-PC)",
+      "desc": "Desktop-PCs haben meist keine Lage- oder Lichtsensoren. Die Dienste dafür laufen dann nicht mehr.",
+      "info": "Nur für Desktop-PCs angeboten. Falls doch Sensoren verbaut sind, gehen automatisches Drehen des Bildschirms und Helligkeit nach Umgebungslicht nicht mehr.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "desktop",
+        "bloat"
+      ],
+      "when": {
+        "service": "SensorService",
+        "formFactor": "desktop"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "SensorService",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "SensrSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "SensorDataService",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.payments-off",
+      "name": "Bezahl- und NFC-Dienste aus",
+      "desc": "Dienste für NFC-Bezahlen und die Windows-Wallet laufen nicht mehr. Auf PCs werden sie praktisch nie genutzt.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Auf Laptops mit NFC-Chip geht NFC (z. B. Koppeln oder Bezahlen per Antippen) nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "SEMgrSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "SEMgrSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "WalletService",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.phonesvc-off",
+      "name": "Telefonie-Dienst aus",
+      "desc": "Verwaltet den Telefonstatus des Geräts. Brauchst du nur, wenn du über den PC telefonierst.",
+      "group": "Geräte & Hardware",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Anrufe über Smartphone-Link (Phone Link) funktionieren evtl. nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "PhoneSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "PhoneSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.hotspot-off",
+      "name": "Mobiler Hotspot und Internetfreigabe aus",
+      "desc": "Dein PC teilt seine Internetverbindung nicht mehr mit anderen Geräten. Die Dienste dafür laufen nicht mehr.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Mobiler Hotspot und Internetfreigabe gehen nicht mehr. Hyper-V-Standardswitch, Windows-Sandbox und WSL 2 haben evtl. kein Internet.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "icssvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "icssvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "SharedAccess",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.iphlpsvc-off",
+      "name": "IP-Hilfsdienst (IPv6-Tunnel) aus",
+      "desc": "Tunnel-Techniken für IPv6 über IPv4 (z. B. Teredo) laufen nicht mehr. Bei normalem Heim-Internet meist ohne Folgen.",
+      "info": "Ein Ping-Gewinn ist nicht messbar. Der Dienst ist einfach nur überflüssig, wenn du kein IPv6 über Tunnel brauchst.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Xbox-Party-Chat und Teredo-Spiele melden evtl. NAT-Probleme. Manche VPNs und Portweiterleitungen (netsh portproxy, z. B. für WSL) gehen nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network"
+      ],
+      "when": {
+        "service": "iphlpsvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "iphlpsvc",
+          "start": "Disabled",
+          "default": "Automatic"
+        }
+      ]
+    },
+    {
+      "id": "services.network-discovery-off",
+      "name": "Netzwerkerkennung und UPnP-Geräte aus",
+      "desc": "Dein PC sucht nicht mehr ständig nach Geräten im Netzwerk und zeigt sich dort nicht mehr. Weniger Netzwerkverkehr im Hintergrund.",
+      "info": "Betrifft SSDP-Suche, UPnP-Gerätehost, Veröffentlichung der Funktionssuche und die Netzwerkübersicht (LLTD). Freigegebene Ordner sind per \\\\Name weiter erreichbar.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Smart-TVs, Netzwerkdrucker und Medienserver werden nicht mehr gefunden, Streamen per DLNA geht nicht. Manche Programme öffnen Router-Ports nicht mehr per UPnP.",
+      "needs": "none",
+      "tags": [
+        "network"
+      ],
+      "when": {
+        "service": "SSDPSRV"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "SSDPSRV",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "upnphost",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "FDResPub",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "lltdsvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.ncdautosetup-off",
+      "name": "Auto-Einrichtung von Netzwerkgeräten aus",
+      "desc": "Windows richtet gefundene Netzwerkgeräte (z. B. Drucker, Fernseher) nicht mehr von selbst ein.",
+      "info": "Geräte kannst du weiterhin von Hand in den Einstellungen hinzufügen.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "NcdAutoSetup"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "NcdAutoSetup",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.wps-off",
+      "name": "WLAN-Einrichtung per WPS aus",
+      "desc": "Der Dienst für die WLAN-Einrichtung per WPS-Knopf am Router läuft nicht mehr. Mit WLAN-Passwort verbindest du dich ganz normal.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Verbinden per WPS-Knopf am Router und WPS-Einrichtung mancher Drucker gehen nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "wcncsvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "wcncsvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.webclient-off",
+      "name": "WebDAV-Client aus",
+      "desc": "Dienst zum Einbinden von Web-Ordnern (WebDAV) als Laufwerk. Die meisten brauchen ihn nie.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Als Laufwerk eingebundene Web-Ordner (z. B. Nextcloud oder SharePoint per WebDAV) funktionieren nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "WebClient"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "WebClient",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.wmp-sharing-off",
+      "name": "Medienfreigabe des Media Players aus",
+      "desc": "Windows Media Player teilt deine Mediathek nicht mehr im Netzwerk.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "WMPNetworkSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "WMPNetworkSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.ajrouter-off",
+      "name": "AllJoyn-Router aus",
+      "desc": "Alter Dienst für die Kommunikation mit Smart-Home-Geräten (AllJoyn), den heute kaum noch etwas nutzt.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "AJRouter"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "AJRouter",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.alg-off",
+      "name": "Gatewaydienst auf Anwendungsebene aus",
+      "desc": "Hilfsdienst für die Internetfreigabe mit alten Protokollen. Auf normalen PCs wird er nicht gebraucht.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "ALG"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "ALG",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.snmptrap-off",
+      "name": "SNMP-Trap-Dienst aus",
+      "desc": "Empfängt Verwaltungsmeldungen (SNMP) aus Firmennetzen. Zu Hause unnötig.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "SNMPTRAP"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "SNMPTRAP",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.iscsi-off",
+      "name": "iSCSI-Initiator aus",
+      "desc": "Verbindet Netzwerk-Speicher per iSCSI. Brauchst du nur, wenn du ein NAS auf diese Weise als Laufwerk eingebunden hast.",
+      "group": "Netzwerk",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "when": {
+        "service": "MSiSCSI"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "MSiSCSI",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.maps-off",
+      "name": "Offline-Karten-Dienst aus",
+      "desc": "Der Dienst für heruntergeladene Karten startet nicht mehr mit Windows. Offline-Karten der Karten-App gehen dann nicht mehr.",
+      "info": "Online-Karten im Browser sind nicht betroffen.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "MapsBroker"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "MapsBroker",
+          "start": "Disabled",
+          "default": "AutomaticDelayed"
+        }
+      ]
+    },
+    {
+      "id": "services.geolocation-off",
+      "name": "Standortdienst aus",
+      "desc": "Windows und Apps können deinen Standort nicht mehr bestimmen. Mehr Privatsphäre, ein Dienst weniger.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Standort für Wetter, Karten und 'Mein Gerät suchen' geht nicht mehr. Die Zeitzone stellt sich nicht mehr automatisch um.",
+      "needs": "none",
+      "tags": [
+        "privacy"
+      ],
+      "when": {
+        "service": "lfsvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "lfsvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.retaildemo-off",
+      "name": "Händler-Demo-Dienst aus",
+      "desc": "Dienst für den Vorführmodus im Elektronikmarkt. Zu Hause völlig unnötig.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "RetailDemo"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "RetailDemo",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.insider-off",
+      "name": "Windows-Insider-Dienst aus",
+      "desc": "Nur für Vorabversionen aus dem Windows-Insider-Programm nötig. Ohne Insider-Programm kein Nachteil.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "wisvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "wisvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.parental-off",
+      "name": "Jugendschutz (Microsoft Family) aus",
+      "desc": "Die Jugendschutz-Überwachung von Microsoft Family läuft nicht mehr im Hintergrund.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bildschirmzeit-Limits und Filter von Microsoft Family greifen auf diesem PC nicht mehr. Nicht auf PCs von Kindern verwenden.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "WpcMonSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "WpcMonSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Shell\\FamilySafetyMonitor",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Shell\\FamilySafetyRefreshTask",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.mixed-reality-off",
+      "name": "Mixed-Reality-Dienste aus",
+      "desc": "Dienste für Windows-Mixed-Reality-Brillen und räumliche Wahrnehmung laufen nicht mehr.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Windows-Mixed-Reality-Brillen (z. B. HP Reverb) gehen nicht mehr. Andere VR-Brillen wie Quest, Index oder Vive sind nicht betroffen.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "spectrum"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "spectrum",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "perceptionsimulation",
+          "start": "Disabled",
+          "default": "Manual"
+        },
+        {
+          "type": "service",
+          "name": "SharedRealitySvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.event-collector-off",
+      "name": "Ereignissammlung für Firmennetze aus",
+      "desc": "Sammelt Ereignisprotokolle von anderen PCs ein. Nur in Firmennetzen sinnvoll.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "Wecsvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "Wecsvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.offline-files-off",
+      "name": "Offlinedateien aus",
+      "desc": "Hält Netzwerkordner für die Nutzung ohne Netz bereit. Zu Hause wird das fast nie genutzt.",
+      "info": "Nur wer Netzwerkordner mit 'Immer offline verfügbar' markiert hat, verliert diese Funktion.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "CscService"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "CscService",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.kiosk-off",
+      "name": "Kiosk-Modus-Dienst aus",
+      "desc": "Dienst für den 'Zugewiesenen Zugriff' (PC zeigt nur eine einzige App). Auf normalen PCs ungenutzt.",
+      "group": "Selten genutzte Funktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "service": "AssignedAccessManagerSvc"
+      },
+      "actions": [
+        {
+          "type": "service",
+          "name": "AssignedAccessManagerSvc",
+          "start": "Disabled",
+          "default": "Manual"
+        }
+      ]
+    },
+    {
+      "id": "services.task-appraiser-off",
+      "name": "Kompatibilitäts-Telemetrie (CompatTelRunner) aus",
+      "desc": "Die Aufgaben, die regelmäßig alle Programme scannen und Daten an Microsoft schicken, laufen nicht mehr. Weniger CPU- und Laufwerk-Spitzen.",
+      "info": "Das Programm CompatTelRunner.exe sorgt sonst oft minutenlang für hohe CPU- und Laufwerk-Last. Normale Sicherheitsupdates kommen weiter. Willst du auf eine neue Windows-Version upgraden, schalte den Schalter vorher zurück.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Große Funktionsupdates (neue Windows-Version) werden evtl. erst später oder gar nicht automatisch angeboten, weil die Kompatibilitätsprüfung fehlt.",
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy",
+        "stutter",
+        "update"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser Exp",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-programdataupdater-off",
+      "name": "Programm-Telemetrie-Aufgabe aus (Windows 10)",
+      "desc": "Sammelt Telemetrie über installierte Programme für Microsofts Verbesserungsprogramm. Gibt es nur unter Windows 10.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "when": {
+        "os": "win10"
+      },
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Application Experience\\ProgramDataUpdater",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-ceip-off",
+      "name": "Aufgaben für Nutzungsstatistik (CEIP) aus",
+      "desc": "Aufgaben, die Nutzungs- und USB-Statistiken für Microsofts Verbesserungsprogramm sammeln, laufen nicht mehr.",
+      "info": "CEIP heißt 'Programm zur Verbesserung der Benutzerfreundlichkeit'. Die Autochk-Aufgabe sammelt dafür Daten über Laufwerksprüfungen. Die Laufwerksprüfung selbst läuft weiter.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\UsbCeip",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Autochk\\Proxy",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-diskdiag-off",
+      "name": "Laufwerks-Diagnosedaten nicht mehr senden",
+      "desc": "Die Aufgabe, die allgemeine Infos über deine Laufwerke sammelt und an Microsoft schickt, läuft nicht mehr.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\DiskDiagnostic\\Microsoft-Windows-DiskDiagnosticDataCollector",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-feedback-off",
+      "name": "Feedback-Aufgaben aus",
+      "desc": "Windows lädt keine Feedback-Umfragen und Szenarien mehr im Hintergrund herunter.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClientOnScenarioDownload",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-diskfootprint-off",
+      "name": "Speicherbelegungs-Diagnose aus",
+      "desc": "Die Aufgabe, die die Belegung deines Laufwerks für Diagnosedaten erfasst, läuft nicht mehr.",
+      "info": "Die Speicheroptimierung (Storage Sense) liegt im selben Ordner und wird hier nicht angefasst.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\DiskFootprint\\Diagnostics",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-feature-usage-off",
+      "name": "Funktions-Nutzungsdaten nicht mehr melden",
+      "desc": "Aufgaben, die festhalten und melden, welche Windows-Funktionen du wie oft nutzt, laufen nicht mehr.",
+      "info": "Die Aufgabe, die neue Funktionen freischaltet (ReconcileFeatures), bleibt bewusst an.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Flighting\\FeatureConfig\\UsageDataReporting",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Flighting\\FeatureConfig\\UsageDataFlushing",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-deviceinfo-off",
+      "name": "Geräte-Info-Aufgaben aus",
+      "desc": "Aufgaben, die Hardware-Infos deines PCs für Microsoft sammeln, laufen nicht mehr.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Device Information\\Device",
+          "enabled": false,
+          "default": true
+        },
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Device Information\\Device User",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-marebackup-off",
+      "name": "App-Sicherungs-Aufgabe (MareBackup) aus",
+      "desc": "Windows sammelt nicht mehr regelmäßig eine Liste deiner Programme für die Windows-Sicherung.",
+      "group": "Geplante Aufgaben: Telemetrie",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die Windows-Sicherung kann deine installierten Programme auf einem neuen PC nicht mehr vorschlagen.",
+      "needs": "none",
+      "tags": [
+        "telemetry",
+        "privacy"
+      ],
+      "when": {
+        "os": "win11",
+        "minBuild": 22631
+      },
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Application Experience\\MareBackup",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-energy-diag-off",
+      "name": "Energie-Diagnose-Aufgabe aus",
+      "desc": "Windows sucht im Leerlauf nicht mehr nach Ursachen für hohen Stromverbrauch. Kein Nachteil im Alltag.",
+      "group": "Geplante Aufgaben: Wartung & Hinweise",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Power Efficiency Diagnostics\\AnalyzeSystem",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-winsat-off",
+      "name": "Leistungsbewertung (WinSAT) aus",
+      "desc": "Windows misst die Leistung deines PCs nicht mehr regelmäßig im Leerlauf neu.",
+      "info": "Ehrlich: die Messung läuft selten und nur im Leerlauf, der Gewinn ist klein. Manuell kannst du sie jederzeit mit 'winsat formal' starten.",
+      "group": "Geplante Aufgaben: Wartung & Hinweise",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Maintenance\\WinSAT",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "services.task-startupapp-off",
+      "name": "Autostart-Prüfung aus",
+      "desc": "Windows prüft die Autostart-Programme nicht mehr im Hintergrund.",
+      "group": "Geplante Aufgaben: Wartung & Hinweise",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Windows meldet nicht mehr, wenn sich neue Programme in den Autostart eintragen.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "task",
+          "path": "\\Microsoft\\Windows\\Application Experience\\StartupAppTask",
+          "enabled": false,
+          "default": true
+        }
+      ]
+    }
+  ]
+}

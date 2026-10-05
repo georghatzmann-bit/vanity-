@@ -1,0 +1,20 @@
+{
+  "os": { "caption": "Windows 10 Home", "build": 19045, "displayVersion": "22H2", "isWin11": false, "edition": "Core" },
+  "cpu": { "name": "Intel(R) Core(TM) i5-9400F CPU @ 2.90GHz", "vendor": "intel", "cores": 6, "threads": 6, "maxMHz": 2901 },
+  "gpus": [ { "name": "AMD Radeon RX 6600", "vendor": "amd", "vramGB": 8, "driver": "31.0.24027.1012" } ],
+  "ram": { "totalGB": 8, "type": "DDR4", "speedMHz": 2666, "configuredMHz": 2666, "modules": 1 },
+  "disks": [ { "model": "WDC WD10EZEX-08WN4A0", "media": "hdd", "bus": "sata", "sizeGB": 1000 } ],
+  "systemDisk": "hdd",
+  "systemDriveFreeGB": 8.2,
+  "formFactor": "desktop",
+  "battery": false,
+  "display": { "width": 1920, "height": 1080, "currentHz": 144, "maxHz": 144 },
+  "power": { "activePlan": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", "name": "Hoechstleistung" },
+  "security": { "vbs": false, "hvci": false, "defenderRealtime": true },
+  "gaming": { "gameMode": true, "hags": false, "gameDvr": false },
+  "network": [ { "name": "WLAN", "type": "wifi", "linkMbps": 300 } ],
+  "startupCount": 11,
+  "uptimeHours": 20.5,
+  "tempMB": 900,
+  "foreignCount": null
+}

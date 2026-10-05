@@ -1,0 +1,1154 @@
+{
+  "category": "privacy",
+  "tweaks": [
+    {
+      "id": "privacy.telemetry-minimum",
+      "name": "Diagnosedaten auf Minimum",
+      "desc": "Windows schickt nur noch die nötigsten Diagnosedaten an Microsoft statt ausführlicher Nutzungsdaten.",
+      "info": "Setzt die Richtlinie auf die niedrigste Stufe. Komplett aus (Stufe 0) gibt es nur bei Enterprise/Education. Bei Home und Pro bedeutet das ehrlich gesagt: nur noch 'Erforderliche Diagnosedaten'. Windows-Insider-Vorschauversionen brauchen optionale Daten und gehen damit nicht. In den Einstellungen steht danach 'Von deiner Organisation verwaltet'.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "AllowTelemetry",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.diag-logs-limit",
+      "name": "Zusätzliche Diagnose-Logs und Speicherabbilder begrenzen",
+      "desc": "Windows sammelt keine extra Protokolle mehr und schickt nach Abstürzen nur noch kleine Speicherabbilder. Kein Nachteil im Alltag.",
+      "info": "Wirkt nur, wenn 'Optionale Diagnosedaten' an sind. Große Speicherabbilder können enthalten, was beim Absturz im Arbeitsspeicher war, also auch persönliche Inhalte.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "LimitDiagnosticLogCollection",
+          "kind": "DWord", "value": 1, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "LimitDumpCollection",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.onesettings-off",
+      "name": "Diagnose-Konfiguration aus der Cloud sperren",
+      "desc": "Windows lädt keine Einstellungen mehr vom Microsoft-Dienst OneSettings. Weniger Verbindungen im Hintergrund.",
+      "info": "Über OneSettings verteilt Microsoft aus der Ferne Einstellungen, unter anderem welche Diagnosedaten gesammelt werden. Offizielle Richtlinie. Was Windows sonst noch darüber bekommt, sagt Microsoft nicht genau.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Microsoft kann Einstellungen nicht mehr aus der Ferne anpassen. Einzelne Fehlerbehebungen, die so verteilt werden, kommen dann nicht an.",
+      "needs": "reboot",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "DisableOneSettingsDownloads",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.tailored-experiences-off",
+      "name": "Maßgeschneiderte Erfahrungen aus",
+      "desc": "Microsoft nutzt deine Diagnosedaten nicht mehr für persönliche Tipps, Werbung und Empfehlungen.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy", "telemetry", "ads"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\CloudContent", "name": "DisableTailoredExperiencesWithDiagnosticData",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.app-telemetry-off",
+      "name": "Programm-Telemetrie und Software-Inventar aus",
+      "desc": "Windows meldet nicht mehr, welche Programme du installiert hast und wie du sie nutzt. Spart etwas Hintergrundlast.",
+      "info": "Schaltet die Anwendungs-Telemetrie und den Inventar-Sammler der Programmkompatibilität ab. Der Kompatibilitäts-Assistent selbst bleibt aktiv.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "AITEnable",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "DisableInventory",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.steps-recorder-off",
+      "name": "Schrittaufzeichnung aus",
+      "desc": "Sperrt die alte Schrittaufzeichnung (psr.exe), die Klicks und Bildschirmfotos mitschneiden kann. Kaum jemand braucht sie.",
+      "info": "Ehrlich gesagt: Sie zeichnet nur auf, wenn jemand sie von Hand startet. Der Gewinn ist also klein. Microsoft entfernt sie ohnehin nach und nach aus Windows.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "DisableUAR",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.ceip-off",
+      "name": "Programm zur Verbesserung der Benutzerfreundlichkeit aus",
+      "desc": "Schaltet das alte Microsoft-Kundenprogramm (CEIP/SQM) ab, das Nutzungsstatistiken sammelt. Kein Nachteil.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\SQMClient\\Windows", "name": "CEIPEnable",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\AppV\\CEIP", "name": "CEIPEnable",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.diagtrack-autologger-off",
+      "name": "Telemetrie-Mitschnitt beim Start aus",
+      "desc": "Stoppt das Start-Protokoll (AutoLogger), das Telemetrie schon beim Hochfahren aufzeichnet. Etwas weniger Schreibzugriffe.",
+      "info": "Betrifft nur die Aufzeichnung beim Systemstart. Den Telemetrie-Dienst selbst findest du unter 'Dienste & Aufgaben'.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\WMI\\Autologger\\AutoLogger-Diagtrack-Listener", "name": "Start",
+          "kind": "DWord", "value": 0, "default": 1, "onlyExisting": true }
+      ]
+    },
+    {
+      "id": "privacy.mrt-reporting-off",
+      "name": "Berichte des Tools zum Entfernen von Schadsoftware aus",
+      "desc": "Das monatliche Microsoft-Prüftool (MRT) läuft weiter, schickt aber keine Funde mehr an Microsoft.",
+      "info": "Der Schutz bleibt gleich: MRT sucht und entfernt weiterhin Schadsoftware, nur der Bericht entfällt.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\MRT", "name": "DontReportInfectionInformation",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.kms-online-validation-off",
+      "name": "Online-Prüfung bei KMS-Aktivierung aus",
+      "desc": "Windows schickt bei Firmen-Aktivierung (KMS) keine Lizenz-Prüfdaten mehr online an Microsoft. Aktivierung bleibt gültig.",
+      "info": "Betrifft nur Geräte, die über einen KMS-Server aktiviert werden. Bei normaler Aktivierung (digitale Lizenz/Key) passiert nichts.",
+      "group": "Diagnosedaten",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\CurrentVersion\\Software Protection Platform", "name": "NoGenTicket",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.feedback-off",
+      "name": "Feedback-Fragen von Windows aus",
+      "desc": "Windows fragt nicht mehr nach deiner Meinung und zeigt keine Feedback-Benachrichtigungen. Weniger Unterbrechungen.",
+      "group": "Fehlerberichte & Feedback",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Siuf\\Rules", "name": "NumberOfSIUFInPeriod",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "DoNotShowFeedbackNotifications",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.wer-off",
+      "name": "Windows-Fehlerberichterstattung aus",
+      "desc": "Abstürze werden nicht mehr an Microsoft gemeldet. Nachteil: Windows kann dir keine Lösungen für Abstürze mehr vorschlagen.",
+      "info": "Spart nach Abstürzen etwas Rechenzeit und Upload. Für Fehlersuche bei häufigen Abstürzen lieber eingeschaltet lassen.",
+      "group": "Fehlerberichte & Feedback",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Keine Lösungsvorschläge und keine Absturzberichte mehr; Fehlersuche bei Abstürzen wird schwerer.",
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "Disabled",
+          "kind": "DWord", "value": 1, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\PCHealth\\ErrorReporting", "name": "DoReport",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.wer-no-extra-data",
+      "name": "Fehlerberichte ohne Zusatzdaten",
+      "desc": "Fehlerberichte bleiben an, schicken aber keine zusätzlichen Dateien und Speicherinhalte mehr mit.",
+      "info": "Sanfte Alternative zum kompletten Abschalten der Fehlerberichte.",
+      "group": "Fehlerberichte & Feedback",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "DontSendAdditionalData",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.advertising-id-off",
+      "name": "Werbe-ID aus",
+      "desc": "Apps bekommen keine Werbe-ID mehr, mit der sie dich für personalisierte Werbung wiedererkennen. Kein Nachteil.",
+      "info": "Setzt die offizielle Richtlinie für alle Benutzer. Der Schalter in den Einstellungen ist danach gesperrt.",
+      "group": "Werbung & Tracking",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "ads"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AdvertisingInfo", "name": "DisabledByGroupPolicy",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.language-list-off",
+      "name": "Webseiten sehen deine Sprachliste nicht",
+      "desc": "Windows gibt deine Sprachliste nicht mehr an Webseiten und Apps weiter. Manche Apps zeigen dann eher Englisch an.",
+      "info": "Moderne Browser wie Edge, Chrome und Firefox schicken ihre eigene Sprachliste und sind davon nicht betroffen. Der Gewinn ist klein.",
+      "group": "Werbung & Tracking",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\International\\User Profile", "name": "HttpAcceptLanguageOptOut",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.app-launch-tracking-off",
+      "name": "App-Starts nicht mitzählen",
+      "desc": "Windows merkt sich nicht mehr, welche Apps du wie oft startest. Die Liste 'Meistverwendet' im Start bleibt dann leer.",
+      "group": "Werbung & Tracking",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "Start_TrackProgs",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.activity-history-off",
+      "name": "Aktivitätsverlauf aus",
+      "desc": "Windows sammelt nicht mehr, welche Dateien, Apps und Seiten du geöffnet hast, und lädt nichts davon hoch.",
+      "group": "Aktivitäten & Synchronisierung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "EnableActivityFeed",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "PublishUserActivities",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "UploadUserActivities",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.cloud-clipboard-off",
+      "name": "Zwischenablage nicht in die Cloud",
+      "desc": "Kopierter Text wird nicht mehr über dein Microsoft-Konto auf andere Geräte synchronisiert. Win+V bleibt lokal nutzbar.",
+      "group": "Aktivitäten & Synchronisierung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "AllowCrossDeviceClipboard",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.clipboard-history-off",
+      "name": "Zwischenablage-Verlauf aus",
+      "desc": "Windows speichert keine Liste von allem, was du kopierst (auch Passwörter). Nachteil: Win+V zeigt keinen Verlauf mehr.",
+      "group": "Aktivitäten & Synchronisierung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Der Verlauf mit Win+V funktioniert danach nicht mehr, nur das zuletzt Kopierte bleibt.",
+      "needs": "logoff",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "AllowClipboardHistory",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.settings-sync-off",
+      "name": "Einstellungen nicht mit Microsoft-Konto synchronisieren",
+      "desc": "Design, Passwörter und Einstellungen werden nicht mehr über dein Microsoft-Konto auf andere PCs übertragen.",
+      "info": "Gilt für die Windows-Synchronisierung. Edge und OneDrive haben eigene Einstellungen dafür.",
+      "group": "Aktivitäten & Synchronisierung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Auf einem neuen PC musst du deine Windows-Einstellungen wieder von Hand einrichten.",
+      "needs": "logoff",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\SettingSync", "name": "DisableSettingSync",
+          "kind": "DWord", "value": 2, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\SettingSync", "name": "DisableSettingSyncUserOverride",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.message-sync-off",
+      "name": "SMS-Sicherung in der Cloud aus",
+      "desc": "Textnachrichten werden nicht mehr in die Microsoft-Cloud gesichert. Betrifft nur PCs mit Mobilfunk-Modul.",
+      "group": "Aktivitäten & Synchronisierung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Messaging", "name": "AllowMessageSync",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.cross-device-off",
+      "name": "Geräteübergreifende Funktionen aus",
+      "desc": "Der PC tauscht keine Daten mehr mit Handy und anderen PCs aus (Smartphone-Link, Teilen in der Nähe, 'Auf PC fortsetzen').",
+      "info": "Schaltet die 'Plattform für verbundene Geräte' ab. Wer Smartphone-Link oder Teilen in der Nähe nutzt, sollte das an lassen.",
+      "group": "Aktivitäten & Synchronisierung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Teilen in der Nähe und das Fortsetzen von Apps auf anderen Geräten gehen nicht mehr, Smartphone-Link evtl. nur eingeschränkt.",
+      "needs": "reboot",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "EnableCdp",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.location-off",
+      "name": "Standortdienst komplett aus",
+      "desc": "Weder Windows noch Apps können deinen Standort bestimmen. Nachteil: Wetter, Karten und automatische Zeitzone sind ungenau.",
+      "group": "Standort",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Automatische Zeitzone, Wetter- und Karten-Apps sowie 'Mein Gerät suchen' funktionieren nicht mehr richtig.",
+      "needs": "reboot",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors", "name": "DisableLocation",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-location-off",
+      "name": "Apps dürfen den Standort nicht abfragen",
+      "desc": "Store-Apps bekommen keinen Zugriff auf deinen Standort. Windows selbst (z. B. Zeitzone) darf ihn weiter nutzen.",
+      "info": "Sanftere Variante zum kompletten Abschalten des Standortdienstes.",
+      "group": "Standort",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Wetter-, Karten- und Lieferdienst-Apps können deinen Standort nicht mehr nutzen.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessLocation",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.find-my-device-off",
+      "name": "'Mein Gerät suchen' aus",
+      "desc": "Der PC meldet seinen Standort nicht mehr an dein Microsoft-Konto. Nachteil: Ein gestohlener Laptop lässt sich nicht orten.",
+      "group": "Standort",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bei Verlust oder Diebstahl kannst du das Gerät nicht mehr über account.microsoft.com orten.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\FindMyDevice", "name": "AllowFindMyDevice",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.search-location-off",
+      "name": "Windows-Suche ohne Standort",
+      "desc": "Die Suche in der Taskleiste schickt deinen Standort nicht mehr mit. Ergebnisse sind dann weniger auf deinen Ort bezogen.",
+      "group": "Standort",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", "name": "AllowSearchToUseLocation",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.maps-auto-update-off",
+      "name": "Offline-Karten nicht automatisch laden",
+      "desc": "Windows lädt Offline-Karten nicht mehr selbstständig im Hintergrund herunter. Spart Datenvolumen.",
+      "group": "Standort",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "network"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Maps", "name": "AutoDownloadAndUpdateMapData",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Maps", "name": "AllowUntriggeredNetworkTrafficOnSettingsPage",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.inking-typing-learning-off",
+      "name": "Lernen aus Tippen und Handschrift aus",
+      "desc": "Windows sammelt nicht mehr deine getippten Wörter und Handschrift, um ein persönliches Wörterbuch aufzubauen.",
+      "info": "Die Wortvorschläge der Bildschirmtastatur werden dadurch etwas weniger persönlich.",
+      "group": "Eingabe & Sprache",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "RestrictImplicitInkCollection",
+          "kind": "DWord", "value": 1, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "RestrictImplicitTextCollection",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.online-speech-off",
+      "name": "Online-Spracherkennung aus",
+      "desc": "Deine Sprache wird nicht mehr zur Erkennung an Microsoft-Server geschickt. Nachteil: Diktieren mit Win+H geht meist nicht mehr.",
+      "info": "Die Sprachsteuerung (Voice Access) von Windows 11 arbeitet auf dem PC und läuft weiter.",
+      "group": "Eingabe & Sprache",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Diktieren (Win+H) und Sprachbefehle, die die Cloud brauchen, funktionieren nicht mehr.",
+      "needs": "logoff",
+      "tags": ["privacy", "ai"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "AllowInputPersonalization",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.linguistic-data-off",
+      "name": "Freihand- und Eingabeerkennung verbessern aus",
+      "desc": "Windows schickt keine Proben deiner Eingaben mehr an Microsoft, um die Erkennung zu verbessern. Kein Nachteil.",
+      "group": "Eingabe & Sprache",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\TextInput", "name": "AllowLinguisticDataCollection",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.handwriting-sharing-off",
+      "name": "Handschrift-Daten nicht teilen",
+      "desc": "Proben deiner Handschrift und Fehlerberichte der Handschrifterkennung gehen nicht mehr an Microsoft.",
+      "group": "Eingabe & Sprache",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\TabletPC", "name": "PreventHandwritingDataSharing",
+          "kind": "DWord", "value": 1, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\HandwritingErrorReports", "name": "PreventHandwritingErrorReports",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.typing-insights-off",
+      "name": "Tipp-Statistiken aus",
+      "desc": "Windows zählt nicht mehr mit, wie oft Autokorrektur und Wortvorschläge dir geholfen haben. Kein Nachteil.",
+      "info": "Die Statistik bleibt auf deinem PC und wird nicht verschickt. Der Gewinn ist also klein.",
+      "group": "Eingabe & Sprache",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Input\\Settings", "name": "InsightsEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.speech-model-update-off",
+      "name": "Sprachmodelle nicht automatisch aktualisieren",
+      "desc": "Windows lädt Sprachdaten für die Spracherkennung nicht mehr selbst im Hintergrund nach. Weniger Netzwerkverkehr.",
+      "info": "Die Spracherkennung funktioniert weiter, nutzt aber den bereits installierten Stand.",
+      "group": "Eingabe & Sprache",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "network"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Speech", "name": "AllowSpeechModelUpdate",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.cloud-search-off",
+      "name": "Cloud-Inhalte nicht in der Suche",
+      "desc": "Die Windows-Suche durchsucht nicht mehr OneDrive, Outlook und andere Konto-Inhalte. Lokale Dateien findest du weiter.",
+      "group": "Suche",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Dateien und Mails aus OneDrive/Outlook tauchen nicht mehr in der Taskleisten-Suche auf.",
+      "needs": "logoff",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", "name": "AllowCloudSearch",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.search-history-off",
+      "name": "Suchverlauf auf dem Gerät aus",
+      "desc": "Die Taskleisten-Suche merkt sich deine letzten Suchen nicht mehr. Andere Nutzer des PCs sehen sie dann nicht.",
+      "group": "Suche",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\SearchSettings", "name": "IsDeviceSearchHistoryEnabled",
+          "kind": "DWord", "value": 0, "default": 1 }
+      ]
+    },
+    {
+      "id": "privacy.apps-diagnostics-off",
+      "name": "Apps dürfen keine Diagnose-Infos anderer Apps lesen",
+      "desc": "Store-Apps sehen nicht mehr, welche anderen Apps laufen und wie viel sie verbrauchen. Kein Nachteil im Alltag.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsGetDiagnosticInfo",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-account-info-off",
+      "name": "Apps dürfen deine Kontoinfos nicht lesen",
+      "desc": "Store-Apps bekommen deinen Namen, dein Bild und deine Konto-Daten nicht mehr. Einige Apps zeigen dann kein Profilbild.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessAccountInfo",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-contacts-off",
+      "name": "Apps dürfen deine Kontakte nicht lesen",
+      "desc": "Store-Apps bekommen keinen Zugriff mehr auf dein Adressbuch. Kontakte-Funktionen in Mail- oder Handy-Apps fehlen dann.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Apps wie Smartphone-Link oder ältere Mail-Apps zeigen keine Kontakte mehr an.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessContacts",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-calendar-off",
+      "name": "Apps dürfen deinen Kalender nicht lesen",
+      "desc": "Store-Apps bekommen keinen Zugriff mehr auf deine Termine. Kalender-Apps, die das nutzen, zeigen dann nichts an.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Store-Apps, die Termine aus dem Windows-Kalender anzeigen, bleiben leer.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessCalendar",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-phone-off",
+      "name": "Apps dürfen nicht telefonieren oder Anrufliste lesen",
+      "desc": "Store-Apps können keine Anrufe starten und deine Anrufliste nicht lesen. Wichtig nur, wenn du mit dem PC telefonierst.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Anrufe über Smartphone-Link funktionieren danach evtl. nicht mehr.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessPhone",
+          "kind": "DWord", "value": 2, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessCallHistory",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-email-off",
+      "name": "Apps dürfen deine E-Mails nicht lesen",
+      "desc": "Fremde Store-Apps bekommen keinen Zugriff mehr auf die E-Mails im Windows-Mailspeicher.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Apps, die Mails über Windows versenden oder anzeigen, funktionieren evtl. nicht mehr.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessEmail",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-messaging-off",
+      "name": "Apps dürfen keine SMS lesen oder senden",
+      "desc": "Store-Apps können keine Text- und MMS-Nachrichten mehr lesen oder verschicken.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "SMS über Smartphone-Link oder ein Mobilfunk-Modul funktionieren evtl. nicht mehr.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessMessaging",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-tasks-off",
+      "name": "Apps dürfen deine Aufgaben nicht lesen",
+      "desc": "Store-Apps bekommen keinen Zugriff mehr auf deine Aufgabenliste im Windows-Speicher. Kaum eine App braucht das.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessTasks",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-radios-off",
+      "name": "Apps dürfen Funk nicht steuern",
+      "desc": "Store-Apps können Bluetooth und andere Funkmodule nicht mehr selbst ein- oder ausschalten. Du schaltest weiter selbst.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessRadios",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-motion-off",
+      "name": "Apps dürfen Bewegungsdaten nicht lesen",
+      "desc": "Store-Apps bekommen keine Bewegungs- und Aktivitätsdaten aus Sensoren mehr. Betrifft vor allem Tablets.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessMotion",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-devices-off",
+      "name": "Apps dürfen nicht mit fremden Geräten reden",
+      "desc": "Store-Apps können sich nicht mehr mit ungekoppelten Geräten in der Nähe (z. B. Beacons) und bekannten Geräten austauschen.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Einzelne Store-Apps für Zubehör (Fitness-Tracker, Smart-Home) finden ihre Geräte evtl. nicht mehr.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsSyncWithDevices",
+          "kind": "DWord", "value": 2, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessTrustedDevices",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-notifications-off",
+      "name": "Apps dürfen deine Benachrichtigungen nicht lesen",
+      "desc": "Store-Apps können nicht mehr mitlesen, welche Benachrichtigungen du bekommst. Die Benachrichtigungen selbst kommen weiter.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Apps, die Benachrichtigungen weiterleiten (z. B. an eine Smartwatch), funktionieren nicht mehr.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsAccessNotifications",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.apps-voice-activation-off",
+      "name": "Apps hören nicht auf Sprachbefehle",
+      "desc": "Store-Apps dürfen nicht dauerhaft auf ein Stichwort lauschen, auch nicht auf dem Sperrbildschirm. Spart etwas Hintergrundlast.",
+      "group": "App-Berechtigungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "ai"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsActivateWithVoice",
+          "kind": "DWord", "value": 2, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy", "name": "LetAppsActivateWithVoiceAboveLock",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-diagnostic-data-off",
+      "name": "Edge: Diagnosedaten und Feedback aus",
+      "desc": "Edge schickt keine Nutzungs- und Absturzdaten mehr an Microsoft und zeigt keine Feedback-Knöpfe. Kein Nachteil.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Das ist normal bei Richtlinien. Wirkt nach Neustart von Edge, auch mit privatem Microsoft-Konto.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "DiagnosticData",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "UserFeedbackAllowed",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-personalization-off",
+      "name": "Edge: Surfverlauf nicht für Werbung nutzen",
+      "desc": "Edge schickt deinen Browserverlauf nicht mehr an Microsoft, um Werbung, Suche und News zu personalisieren.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Gilt auch mit privatem Microsoft-Konto in Edge.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "ads"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "PersonalizationReportingEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-search-suggest-off",
+      "name": "Edge: Suchvorschläge aus",
+      "desc": "Was du in die Adressleiste tippst, geht nicht mehr schon beim Tippen an die Suchmaschine. Dafür keine Vorschläge mehr.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Wirkt nicht, wenn du in Edge mit einem privaten Microsoft-Konto angemeldet bist.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "In der Adressleiste erscheinen keine Suchvorschläge mehr, während du tippst.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "SearchSuggestEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-tracking-strict",
+      "name": "Edge: Strenger Tracking-Schutz",
+      "desc": "Edge blockiert die meisten Tracker von Webseiten. Mehr Privatsphäre, aber manche Seiten funktionieren nicht ganz richtig.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Wirkt nicht, wenn du in Edge mit einem privaten Microsoft-Konto angemeldet bist.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Einzelne Seiten (Logins, eingebettete Videos, Bezahlseiten) können fehlerhaft laden.",
+      "needs": "none",
+      "tags": ["privacy", "ads"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "TrackingPrevention",
+          "kind": "DWord", "value": 3, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-do-not-track",
+      "name": "Edge: 'Nicht verfolgen' senden",
+      "desc": "Edge bittet Webseiten, dich nicht zu verfolgen. Viele Seiten ignorieren das leider, schaden tut es nicht.",
+      "info": "Webseiten müssen sich nicht daran halten, die Wirkung ist ehrlich gesagt gering. Wirkt nicht, wenn du in Edge mit einem privaten Microsoft-Konto angemeldet bist.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "ConfigureDoNotTrack",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-payment-query-off",
+      "name": "Edge: Seiten fragen gespeicherte Zahlungsarten nicht ab",
+      "desc": "Webseiten können nicht mehr prüfen, ob du in Edge Zahlungsmethoden gespeichert hast. Weniger Fingerabdruck-Tracking.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Wirkt nicht, wenn du in Edge mit einem privaten Microsoft-Konto angemeldet bist.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "PaymentMethodQueryEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-prediction-off",
+      "name": "Edge: Seiten nicht vorab laden",
+      "desc": "Edge lädt Links nicht mehr auf Verdacht vor. Weniger Verbindungen zu Seiten, die du nie öffnest, dafür minimal langsamer.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Wirkt nicht, wenn du in Edge mit einem privaten Microsoft-Konto angemeldet bist.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Seiten öffnen sich in Edge eventuell einen Tick langsamer.",
+      "needs": "none",
+      "tags": ["privacy", "network"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "NetworkPredictionOptions",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-error-pages-off",
+      "name": "Edge: Ähnliche Seiten bei Fehlern nicht nachschlagen",
+      "desc": "Bei nicht gefundenen Seiten schickt Edge die Adresse nicht mehr an Microsoft, um Alternativen vorzuschlagen.",
+      "info": "Edge zeigt danach 'Von deiner Organisation verwaltet' an. Wirkt nicht, wenn du in Edge mit einem privaten Microsoft-Konto angemeldet bist.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "AlternateErrorPagesEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.edge-editor-proofing-off",
+      "name": "Edge: Rechtschreibprüfung ohne Microsoft-Cloud",
+      "desc": "Was du in Webseiten-Felder tippst, geht nicht mehr zur Prüfung an den Microsoft Editor. Die lokale Rechtschreibprüfung bleibt.",
+      "info": "Edge prüft dann nur noch mit der eingebauten Prüfung auf deinem PC. Edge zeigt 'Von deiner Organisation verwaltet' an. Wirkt nicht mit privatem Microsoft-Konto in Edge.",
+      "group": "Microsoft Edge",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Grammatik-Vorschläge in Edge fallen weg, die Rechtschreibprüfung findet etwas weniger Fehler.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "MicrosoftEditorProofingEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.office-telemetry-off",
+      "name": "Office: Diagnosedaten aus",
+      "desc": "Word, Excel und Co. schicken keine Diagnose- und Nutzungsdaten mehr an Microsoft. Wirkt nur, wenn Office installiert ist.",
+      "info": "Setzt die offizielle Stufe 'Keine' (Neither). Ein paar technisch nötige Dienstdaten sendet Office laut Microsoft trotzdem. DisableTelemetry ist ein inoffizieller Zusatzschalter, der das Telemetrie-Modul von Office abschaltet.",
+      "group": "Office",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\Common\\ClientTelemetry", "name": "SendTelemetry",
+          "kind": "DWord", "value": 3, "default": null },
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\Common\\ClientTelemetry", "name": "DisableTelemetry",
+          "kind": "DWord", "value": 1, "default": null },
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\Common", "name": "QMEnable",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\OSM", "name": "EnableLogging",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\OSM", "name": "EnableUpload",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.office-feedback-off",
+      "name": "Office: Feedback und Umfragen aus",
+      "desc": "Office zeigt keine Umfragen und Feedback-Knöpfe mehr an. Wirkt nur, wenn Office installiert ist.",
+      "group": "Office",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\Common\\Feedback", "name": "Enabled",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\Common\\Feedback", "name": "SurveyEnabled",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.office-optional-connected-off",
+      "name": "Office: Optionale Online-Funktionen aus",
+      "desc": "Schaltet zusätzliche Cloud-Funktionen in Office ab, die eigene Datenschutzregeln haben (z. B. 3D-Karten, Bing-Bilder).",
+      "info": "Co-Autoren, OneDrive-Speicherung und Übersetzung bleiben erhalten. Nur die 'optionalen verbundenen Erfahrungen' werden abgeschaltet.",
+      "group": "Office",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Funktionen wie Online-Bilder einfügen oder 3D-Karten in Excel sind dann ausgegraut.",
+      "needs": "none",
+      "tags": ["privacy"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Policies\\Microsoft\\Office\\16.0\\Common\\Privacy", "name": "ControllerConnectedServicesEnabled",
+          "kind": "DWord", "value": 2, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.vs-telemetry-off",
+      "name": "Visual Studio: Telemetrie und Umfragen aus",
+      "desc": "Visual Studio nimmt nicht mehr am Verbesserungsprogramm teil und zeigt keine Umfragen. Nur wenn VS installiert ist.",
+      "info": "Probleme melden über 'Feedback senden' bleibt möglich. Der Umfrage-Schalter wirkt ab Visual Studio 2022 Version 17.13.",
+      "group": "Entwickler-Tools",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\VisualStudio\\SQM", "name": "OptIn",
+          "kind": "DWord", "value": 0, "default": null },
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\VisualStudio\\Feedback", "name": "SurveysDisabled",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.vscode-telemetry-off",
+      "name": "VS Code: Telemetrie aus",
+      "desc": "Visual Studio Code und seine Microsoft-Erweiterungen schicken keine Nutzungs- und Fehlerdaten mehr. Nur wenn VS Code installiert ist.",
+      "info": "Offizielle Richtlinie ab VS Code 1.99. Neue Funktionen, die Microsoft erst testweise verteilt, bekommst du dann evtl. etwas später. Manche Erweiterungen fremder Anbieter haben eigene Schalter.",
+      "group": "Entwickler-Tools",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\VSCode", "name": "TelemetryLevel",
+          "kind": "String", "value": "off", "default": null }
+      ]
+    },
+    {
+      "id": "privacy.powershell-telemetry-off",
+      "name": "PowerShell 7: Telemetrie aus",
+      "desc": "PowerShell 7 schickt beim Start keine Nutzungsdaten mehr an Microsoft. Das eingebaute PowerShell 5.1 sendet ohnehin nichts.",
+      "info": "Setzt die Umgebungsvariable POWERSHELL_TELEMETRY_OPTOUT für alle Benutzer. Neu gestartete Programme sehen sie nach dem Abmelden.",
+      "group": "Entwickler-Tools",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", "name": "POWERSHELL_TELEMETRY_OPTOUT",
+          "kind": "String", "value": "1", "default": null }
+      ]
+    },
+    {
+      "id": "privacy.dotnet-telemetry-off",
+      "name": ".NET-Werkzeuge: Telemetrie aus",
+      "desc": "Der .NET-Befehl (dotnet) schickt keine Nutzungsdaten mehr an Microsoft. Nur für Entwickler relevant.",
+      "info": "Setzt die Umgebungsvariable DOTNET_CLI_TELEMETRY_OPTOUT für alle Benutzer. Wirkt nach dem Abmelden.",
+      "group": "Entwickler-Tools",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["privacy", "telemetry"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", "name": "DOTNET_CLI_TELEMETRY_OPTOUT",
+          "kind": "String", "value": "1", "default": null }
+      ]
+    },
+    {
+      "id": "privacy.device-metadata-off",
+      "name": "Geräte-Infos nicht aus dem Internet laden",
+      "desc": "Windows lädt für angeschlossene Geräte keine Bilder und Herstellerinfos mehr aus dem Internet. Treiber kommen weiterhin.",
+      "info": "In 'Geräte und Drucker' sehen manche Geräte dann nur ein Standard-Symbol.",
+      "group": "Sonstige Verbindungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "network"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Device Metadata", "name": "PreventDeviceMetadataFromNetwork",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.font-providers-off",
+      "name": "Schriften nicht online nachladen",
+      "desc": "Windows fragt nicht mehr bei Microsoft nach fehlenden Schriftarten. Nur installierte Schriften sind verfügbar.",
+      "group": "Sonstige Verbindungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Apps, die Schriften bei Bedarf herunterladen, zeigen dann eine Ersatzschrift.",
+      "needs": "reboot",
+      "tags": ["privacy", "network"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "EnableFontProviders",
+          "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "privacy.onedrive-presignin-off",
+      "name": "OneDrive: kein Datenverkehr vor der Anmeldung",
+      "desc": "OneDrive baut keine Verbindung zu Microsoft auf, solange du nicht in OneDrive angemeldet bist.",
+      "group": "Sonstige Verbindungen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": ["privacy", "network"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\OneDrive", "name": "PreventNetworkTrafficPreUserSignIn",
+          "kind": "DWord", "value": 1, "default": null }
+      ]
+    }
+  ]
+}

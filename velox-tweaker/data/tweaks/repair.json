@@ -1,0 +1,354 @@
+{
+  "category": "repair",
+  "tweaks": [
+    {
+      "id": "repair.dism-scanhealth",
+      "name": "Windows-Abbild prüfen (DISM)",
+      "desc": "Prüft den Komponentenspeicher, aus dem Windows kaputte Dateien ersetzt. Ändert nichts, dauert 5–15 Minuten.",
+      "info": "Entspricht DISM /Online /Cleanup-Image /ScanHealth. Meldet es Fehler, führe danach ‚Windows-Abbild reparieren‘ aus und dann die Systemdatei-Prüfung (SFC).",
+      "group": "Systemdateien",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$r = Repair-WindowsImage -Online -ScanHealth -NoRestart -ErrorAction Stop\n$s = [string]$r.ImageHealthState\nif ($s -eq 'Repairable') { throw 'Der Komponentenspeicher hat Fehler. Starte jetzt: Windows-Abbild reparieren (DISM RestoreHealth).' }\nif ($s -eq 'NonRepairable') { throw 'Der Komponentenspeicher ist nicht mehr reparierbar. Hier hilft nur eine Reparatur-Installation von Windows.' }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.dism-restorehealth",
+      "name": "Windows-Abbild reparieren (DISM)",
+      "desc": "Repariert den Komponentenspeicher mit Originaldateien von Windows Update. Braucht Internet und dauert 10–30 Minuten.",
+      "info": "Entspricht DISM /Online /Cleanup-Image /RestoreHealth. Reihenfolge bei Problemen: zuerst das hier, dann ‚Systemdateien prüfen (SFC)‘ – SFC holt seine Ersatzdateien aus genau diesem Speicher.",
+      "group": "Systemdateien",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\dism.exe'\n$null = & $exe /Online /Cleanup-Image /RestoreHealth /NoRestart 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0 -and $c -ne 3010) { throw ('DISM RestoreHealth fehlgeschlagen (Code ' + $c + '). DISM braucht Internet und ein funktionierendes Windows Update, um Ersatzdateien zu laden.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.sfc",
+      "name": "Systemdateien prüfen und reparieren (SFC)",
+      "desc": "Prüft alle geschützten Windows-Dateien und ersetzt beschädigte. Dauert 10–30 Minuten, der PC bleibt benutzbar.",
+      "info": "Entspricht sfc /scannow. Findet SFC Fehler, die es nicht beheben kann, erst ‚Windows-Abbild reparieren (DISM)‘ und danach SFC noch einmal ausführen. Einige Reparaturen werden erst nach einem Neustart wirksam.",
+      "group": "Systemdateien",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\sfc.exe'\n$null = & $exe /scannow 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0) { throw ('SFC meldet Code ' + $c + ': Es wurden Fehler gefunden oder der Scan konnte nicht laufen. Details: ' + (Join-Path $env:SystemRoot 'Logs\\CBS\\CBS.log') + '. Tipp: erst Windows-Abbild reparieren (DISM), dann SFC erneut starten.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.chkdsk-scan",
+      "name": "Systemlaufwerk auf Fehler prüfen",
+      "desc": "Prüft das Dateisystem von Laufwerk C: im laufenden Betrieb und behebt kleine Fehler direkt. Kein Neustart nötig.",
+      "info": "Entspricht chkdsk C: /scan (Online-Prüfung). Findet es Fehler, die nur offline behoben werden können, sagt VELOX dir, was zu tun ist. Prüft das Dateisystem, nicht die Hardware der SSD.",
+      "group": "Systemdateien",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\chkdsk.exe'\n$null = & $exe $env:SystemDrive /scan 2>&1\n$c = $LASTEXITCODE\nif ($c -ge 3) { throw ('CHKDSK hat Fehler auf ' + $env:SystemDrive + ' gefunden, die erst beim Neustart behoben werden (Code ' + $c + '). Als Admin ausfuehren: chkdsk ' + $env:SystemDrive + ' /spotfix und neu starten.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.network-reset",
+      "name": "Netzwerk-Stack zurücksetzen",
+      "desc": "Setzt Winsock und TCP/IP auf Werkszustand zurück. Hilft bei ‚kein Internet‘ trotz Verbindung. Danach Neustart nötig.",
+      "info": "Entspricht netsh winsock reset und netsh int ip reset. Behebt kaputte Netzwerk-Einträge, die VPNs, alte Virenscanner oder Tweak-Tools hinterlassen. Netzwerk-Tweaks von VELOX danach am besten erneut anwenden.",
+      "group": "Netzwerk",
+      "kind": "action",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Feste IP-Adressen und manche Netzwerk-Tweaks gehen verloren. VPN- und Proxy-Programme müssen eventuell neu eingerichtet werden.",
+      "needs": "reboot",
+      "tags": [
+        "repair",
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\netsh.exe'\n$null = & $exe winsock reset 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('netsh winsock reset fehlgeschlagen (Code ' + $LASTEXITCODE + ')') }\n# 'int ip reset' often reports 'Access is denied' for one protected key although the reset worked - not treated as failure.\n$null = & $exe int ip reset 2>&1",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.dns-flush",
+      "name": "DNS-Cache leeren",
+      "desc": "Vergisst gespeicherte Adressen von Webseiten und Servern. Hilft, wenn eine Seite oder ein Spielserver nach einem Umzug nicht erreichbar ist.",
+      "info": "Entspricht ipconfig /flushdns und /registerdns. Völlig harmlos – der Cache füllt sich beim Surfen sofort wieder.",
+      "group": "Netzwerk",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair",
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('ipconfig /flushdns fehlgeschlagen (Code ' + $LASTEXITCODE + '). Laeuft der DNS-Client-Dienst?') }\n$null = & $exe /registerdns 2>&1",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.ip-renew",
+      "name": "IP-Adresse neu anfordern",
+      "desc": "Holt sich vom Router eine neue IP-Adresse. Hilft bei ‚Kein Internetzugriff‘. Die Verbindung ist für ein paar Sekunden weg.",
+      "info": "Entspricht ipconfig /release und /renew. Wirkt nur bei Adaptern, die ihre Adresse automatisch (DHCP) bekommen. Laufende Downloads, Calls und Online-Spiele brechen ab.",
+      "group": "Netzwerk",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die Internetverbindung ist kurz getrennt – laufende Spiele, Calls und Downloads brechen ab.",
+      "needs": "none",
+      "tags": [
+        "repair",
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /release 2>&1\n$null = & $exe /renew 2>&1\n$ok = $false\nfor ($i = 0; $i -lt 30 -and -not $ok; $i++) {\n    $up = @(Get-NetIPConfiguration -ErrorAction SilentlyContinue | Where-Object { $null -ne $_.IPv4DefaultGateway -and $null -ne $_.NetAdapter -and [string]$_.NetAdapter.Status -eq 'Up' })\n    if ($up.Count -gt 0) { $ok = $true } else { Start-Sleep -Seconds 1 }\n}\nif (-not $ok) { throw 'Nach dem Erneuern hat kein Netzwerkadapter eine Verbindung (kein Standardgateway). Kabel oder WLAN kontrollieren, notfalls den PC neu starten.' }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.icon-cache",
+      "name": "Symbol-Cache neu aufbauen",
+      "desc": "Behebt falsche, leere oder weiße Symbole im Explorer und auf dem Desktop. Der Explorer startet dafür kurz neu.",
+      "info": "Löscht IconCache.db und iconcache_*.db. Taskleiste und offene Ordnerfenster verschwinden kurz. Sollten Symbole noch falsch sein, hilft ein Neustart.",
+      "group": "Explorer & Anzeige",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair",
+        "explorer",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'IconCache.db'), (Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\iconcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    Start-Sleep -Seconds 3\n    $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    if ($now.Count -eq 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.font-cache",
+      "name": "Schriftart-Cache neu aufbauen",
+      "desc": "Behebt falsch dargestellte oder fehlende Schriften. Der Cache wird beim nächsten Neustart neu erstellt.",
+      "info": "Der Dienst ‚Windows-Schriftartencache‘ wird kurz angehalten und seine Cache-Dateien gelöscht. Bis zum Neustart können Programme minimal langsamer starten.",
+      "group": "Explorer & Anzeige",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "repair",
+        "ui"
+      ],
+      "when": {
+        "service": "FontCache"
+      },
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%WINDIR%\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache\\*",
+            "%WINDIR%\\System32\\FNTCACHE.DAT"
+          ],
+          "stopServices": [
+            "FontCache"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repair.store-reset",
+      "name": "Microsoft Store zurücksetzen",
+      "desc": "Leert den Cache des Microsoft Store. Hilft, wenn Downloads hängen oder der Store nicht lädt. Der Store öffnet sich danach.",
+      "info": "Startet das Windows-Werkzeug wsreset.exe. Installierte Apps und deine Anmeldung bleiben erhalten.",
+      "group": "Apps & Dienste",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\WSReset.exe'\nif (-not (Test-Path -LiteralPath $exe)) { throw 'WSReset.exe wurde nicht gefunden.' }\n$p = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden -ErrorAction Stop\nif (-not $p.WaitForExit(180000)) { throw 'WSReset hat nach 3 Minuten nicht geantwortet.' }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.windows-update-reset",
+      "name": "Windows Update zurücksetzen",
+      "desc": "Setzt die Update-Dienste und ihre Ordner zurück. Hilft, wenn Updates hängen oder immer wieder fehlschlagen.",
+      "info": "Hält die Update-Dienste an, ersetzt die Ordner SoftwareDistribution und catroot2 durch leere und startet die Dienste neu – das bekannte Microsoft-Verfahren. Danach neu starten und erneut nach Updates suchen.",
+      "group": "Apps & Dienste",
+      "kind": "action",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Der Update-Verlauf in den Einstellungen wird geleert und angefangene Downloads starten neu. Nicht ausführen, während ein Update installiert wird.",
+      "needs": "reboot",
+      "tags": [
+        "repair",
+        "update"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$root = $env:SystemRoot\n$wasRunning = @()\nforeach ($n in @('usosvc', 'wuauserv', 'bits', 'cryptsvc')) {\n    $s = Get-Service -Name $n -ErrorAction SilentlyContinue\n    if ($null -ne $s -and [string]$s.Status -ne 'Stopped') {\n        $wasRunning += $n\n        try { Stop-Service -Name $n -Force -ErrorAction Stop } catch { $null = $_ }\n    }\n}\n$items = @(\n    @{ Src = (Join-Path $root 'SoftwareDistribution'); New = 'SoftwareDistribution.velox-old' },\n    @{ Src = (Join-Path $root 'System32\\catroot2'); New = 'catroot2.velox-old' }\n)\n$err = $null\ntry {\n    foreach ($it in $items) {\n        $old = Join-Path (Split-Path -Parent $it.Src) $it.New\n        if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue }\n        if (Test-Path -LiteralPath $it.Src) { Rename-Item -LiteralPath $it.Src -NewName $it.New -ErrorAction Stop }\n    }\n} catch {\n    $err = $_.Exception.Message\n} finally {\n    foreach ($n in @('cryptsvc', 'bits', 'wuauserv', 'usosvc')) {\n        if ($n -eq 'cryptsvc' -or $wasRunning -contains $n) { try { Start-Service -Name $n -ErrorAction Stop } catch { $null = $_ } }\n    }\n}\nif ($null -ne $err) { throw ('Windows-Update-Reset fehlgeschlagen: ' + $err) }\nforeach ($it in $items) {\n    $old = Join-Path (Split-Path -Parent $it.Src) $it.New\n    if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue }\n}",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.search-index-rebuild",
+      "name": "Suchindex neu aufbauen",
+      "desc": "Baut den Windows-Suchindex komplett neu auf. Hilft, wenn die Suche Dateien nicht findet oder hängt.",
+      "info": "Setzt den Index wie unter ‚Indizierungsoptionen > Erweitert > Neu erstellen‘ zurück. Je nach Datenmenge dauert der Neuaufbau Minuten bis Stunden und läuft im Hintergrund.",
+      "group": "Apps & Dienste",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bis der Index neu aufgebaut ist, findet die Suche nicht alles, und der PC arbeitet im Hintergrund mehr.",
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "when": {
+        "service": "WSearch"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$svc = Get-CimInstance -ClassName Win32_Service -Filter \"Name='WSearch'\" -ErrorAction Stop\nif ($null -eq $svc) { throw 'Windows Search ist auf diesem PC nicht vorhanden.' }\nif ([string]$svc.StartMode -eq 'Disabled') { throw 'Der Dienst Windows Search ist deaktiviert. Schalte ihn zuerst wieder ein.' }\nStop-Service -Name WSearch -Force -ErrorAction Stop\n$base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)\n$k = $base.OpenSubKey('SOFTWARE\\Microsoft\\Windows Search', $true)\nif ($null -eq $k) { $base.Close(); throw 'Registry-Schluessel von Windows Search fehlt.' }\ntry { $k.SetValue('SetupCompletedSuccessfully', 0, [Microsoft.Win32.RegistryValueKind]::DWord) } finally { $k.Close(); $base.Close() }\nStart-Service -Name WSearch -ErrorAction Stop",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.time-sync",
+      "name": "Uhrzeit mit dem Internet abgleichen",
+      "desc": "Stellt die Windows-Uhr sofort nach dem Zeitserver. Hilft bei Zertifikats-Fehlern und Anmeldeproblemen durch falsche Uhrzeit.",
+      "info": "Entspricht w32tm /resync /force. Startet dafür bei Bedarf den Zeitdienst. Weicht die Uhr danach wieder ab, kann die BIOS-Batterie leer sein.",
+      "group": "Apps & Dienste",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "when": {
+        "service": "W32Time"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$s = Get-Service -Name W32Time -ErrorAction SilentlyContinue\nif ($null -eq $s) { throw 'Der Windows-Zeitdienst (W32Time) fehlt.' }\nif ([string]$s.Status -ne 'Running') { Start-Service -Name W32Time -ErrorAction Stop; Start-Sleep -Seconds 2 }\n$exe = Join-Path $env:SystemRoot 'System32\\w32tm.exe'\n$null = & $exe /resync /force 2>&1\nif ($LASTEXITCODE -ne 0) {\n    $null = & $exe /config /update 2>&1\n    Start-Sleep -Seconds 2\n    $null = & $exe /resync /force 2>&1\n    if ($LASTEXITCODE -ne 0) { throw ('Zeitabgleich fehlgeschlagen (Code ' + $LASTEXITCODE + '). Besteht eine Internetverbindung?') }\n}",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "repair.print-queue",
+      "name": "Hängende Druckaufträge löschen",
+      "desc": "Leert die Druckerwarteschlange, wenn ein Auftrag feststeckt und nichts mehr gedruckt wird.",
+      "info": "Die Druckwarteschlange (Spooler) wird kurz angehalten, die wartenden Aufträge gelöscht und der Dienst wieder gestartet.",
+      "group": "Apps & Dienste",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Alle wartenden Druckaufträge werden gelöscht und müssen neu gedruckt werden.",
+      "needs": "none",
+      "tags": [
+        "repair"
+      ],
+      "when": {
+        "service": "Spooler"
+      },
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%WINDIR%\\System32\\spool\\PRINTERS\\*"
+          ],
+          "stopServices": [
+            "Spooler"
+          ]
+        }
+      ]
+    }
+  ]
+}

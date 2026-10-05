@@ -1,0 +1,10 @@
+{
+  "presets": [
+    { "id": "safe", "name": "Sicherer Boost", "tagline": "Nur sichere Tweaks", "desc": "Für jeden PC.", "icon": "shield", "maxRisk": "safe",
+      "recommendedFor": ["desktop", "laptop"], "ids": ["gaming.gamedvr-off", "gaming.gamemode-on", "privacy.ads-id-off"] },
+    { "id": "gaming", "name": "Gaming Max", "tagline": "Maximale FPS", "desc": "Für Gaming-PCs.", "icon": "gamepad", "maxRisk": "moderate",
+      "recommendedFor": ["desktop"], "ids": ["gaming.gamedvr-off", "gaming.mmcss-games", "power.ultimate-plan", "latency.timer-bcd"] },
+    { "id": "clean", "name": "Aufräumen", "tagline": "Platz schaffen", "desc": "Löscht Datenmüll.", "icon": "broom", "maxRisk": "safe",
+      "recommendedFor": ["desktop", "laptop"], "ids": ["cleanup.temp"] }
+  ]
+}

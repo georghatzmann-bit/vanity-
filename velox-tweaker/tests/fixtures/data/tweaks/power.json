@@ -1,0 +1,17 @@
+{
+  "category": "power",
+  "tweaks": [
+    { "id": "power.ultimate-plan", "name": "Energieplan Ultimative Leistung", "desc": "Der Prozessor taktet nicht mehr herunter.",
+      "impact": 2, "risk": "safe", "needs": "none", "tags": ["fps", "latency", "laptop-bad", "desktop"],
+      "actions": [ { "type": "powerplan", "plan": "ultimate", "default": "balanced" } ] },
+    { "id": "power.core-parking-off", "name": "Core Parking aus", "desc": "Alle CPU-Kerne bleiben wach. Weniger Ruckler.",
+      "impact": 2, "risk": "safe", "needs": "none", "tags": ["fps", "stutter", "laptop-bad"],
+      "actions": [ { "type": "powersetting", "subgroup": "54533251-82be-4824-96c1-47b60b740d00", "setting": "0cc5b647-c1df-4637-891a-dec35c318583", "ac": 100, "dc": null, "default": { "ac": 10, "dc": 10 } } ] },
+    { "id": "power.usb-suspend-off", "name": "USB-Energiesparen aus", "desc": "Maus und Headset schlafen nicht mehr ein.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["input", "laptop-bad"],
+      "actions": [ { "type": "powersetting", "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3", "setting": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", "ac": 0, "dc": 0, "default": { "ac": 1, "dc": 1 } } ] },
+    { "id": "power.battery-saver-early", "name": "Akku früher schonen", "desc": "Der Energiesparmodus startet schon bei 30 Prozent.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["battery"], "when": { "formFactor": "laptop" },
+      "actions": [ { "type": "powersetting", "subgroup": "de830923-a562-41af-a086-e3a2c6bad2da", "setting": "e69653ca-cf7f-4f05-aa73-cb833fa90ad4", "ac": 30, "dc": 30, "default": { "ac": 20, "dc": 20 } } ] }
+  ]
+}

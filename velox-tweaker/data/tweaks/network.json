@@ -1,0 +1,749 @@
+{
+  "category": "network",
+  "tweaks": [
+    {
+      "id": "network.nagle-off",
+      "name": "Nagle-Tweak: TCP-Bestätigung ohne Verzögerung",
+      "desc": "TCP-Pakete werden sofort bestätigt statt gesammelt. Kann bei TCP-Spielen den Ping glätten, bei UDP-Spielen ändert es nichts.",
+      "info": "Wirksam ist vor allem TcpAckFrequency=1: Windows bestätigt jedes TCP-Paket sofort statt kurz zu warten. TCPNoDelay=1 wird mitgesetzt, weil es zum bekannten Nagle-Tweak gehört; den Nagle-Algorithmus schalten Spiele aber selbst ab. Die meisten modernen Shooter (auch FiveM/GTA Online im Spiel) nutzen UDP – dort wirkt der Tweak gar nicht. Spürbar höchstens bei älteren TCP-Spielen und MMOs. Etwas mehr kleine Pakete im Netz, sonst kein Nachteil.",
+      "group": "TCP/IP",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "ping",
+        "latency",
+        "competitive"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*",
+          "name": "TcpAckFrequency",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*",
+          "name": "TCPNoDelay",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.throttling-off",
+      "name": "Netzwerk-Bremse bei Musik/Video aus",
+      "desc": "Windows bremst das Netzwerk nicht mehr, während Audio oder Video läuft. Hilft bei schnellen Leitungen, am Ping ändert es kaum etwas.",
+      "info": "NetworkThrottlingIndex (Standard 10) begrenzt die Paketverarbeitung, solange der Multimedia-Dienst (MMCSS) aktiv ist – etwa wenn nebenbei Musik läuft. Das kann Downloads über Gigabit-Leitungen bremsen. Auf den Ping im Spiel hat es praktisch keinen messbaren Einfluss, auch wenn viele Tweak-Pakete das versprechen.",
+      "group": "TCP/IP",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+          "name": "NetworkThrottlingIndex",
+          "kind": "DWord",
+          "value": 4294967295,
+          "default": 10
+        }
+      ]
+    },
+    {
+      "id": "network.rsc-off",
+      "name": "Paket-Zusammenfassung (RSC) aus",
+      "desc": "Eingehende TCP-Pakete werden nicht mehr gebündelt, sondern einzeln sofort weitergereicht. Minimal mehr CPU-Last bei großen Downloads.",
+      "info": "RSC (Receive Segment Coalescing) fasst mehrere TCP-Pakete zu einem großen zusammen, um die CPU zu entlasten. Für Spiele ohne Bedeutung, da die meist UDP nutzen. Beliebt in Latenz-Guides, Wirkung auf modernen Systemen kaum messbar.",
+      "group": "TCP/IP",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "latency"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "Set-NetOffloadGlobalSetting -ReceiveSegmentCoalescing Disabled -ErrorAction Stop\n",
+          "revert": "Set-NetOffloadGlobalSetting -ReceiveSegmentCoalescing Enabled -ErrorAction Stop\n",
+          "detect": "[string](Get-NetOffloadGlobalSetting -ErrorAction Stop).ReceiveSegmentCoalescing -eq 'Disabled'\n"
+        }
+      ]
+    },
+    {
+      "id": "network.ecn-on",
+      "name": "Stau-Signal (ECN) einschalten",
+      "desc": "Router können Überlast melden, statt Pakete zu verwerfen. Hilft nur mit modernen Routern (z. B. mit SQM), alte Geräte können stören.",
+      "info": "ECN (Explicit Congestion Notification) ist bei Windows-Desktops standardmäßig aus. Es bringt nur etwas, wenn dein Router Warteschlangen-Management wie fq_codel/CAKE (oft „SQM“ genannt) nutzt. Ohne das ändert sich nichts. Viele Tweak-Pakete „deaktivieren“ ECN – das ist ohnehin der Standard.",
+      "group": "TCP/IP",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Sehr alte Router oder Firewalls kommen mit ECN nicht klar – einzelne Webseiten oder Server laden dann langsam oder gar nicht.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "ping"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "& netsh.exe int tcp set global ecncapability=enabled | Out-Null\nif ($LASTEXITCODE -ne 0) { throw 'netsh failed' }\n",
+          "revert": "& netsh.exe int tcp set global ecncapability=default | Out-Null\nif ($LASTEXITCODE -ne 0) { throw 'netsh failed' }\n",
+          "detect": "$s = @(Get-NetTCPSetting -ErrorAction Stop | Where-Object { @('Internet', 'InternetCustom') -contains [string]$_.SettingName })\nif ($s.Count -eq 0) { $null } else { @($s | Where-Object { [string]$_.EcnCapability -eq 'Enabled' }).Count -gt 0 }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.tcp-defaults-reset",
+      "name": "Kaputte TCP-Tweaks reparieren",
+      "desc": "Setzt Auto-Tuning, RSS, Staukontrolle und Offload auf Windows-Standard zurück. Hilft, wenn alte Tweak-Tools Downloads gebremst haben.",
+      "info": "Viele alte Tweaker schalten das TCP-Auto-Tuning ab („autotuninglevel=disabled“) – dann ist die Download-Geschwindigkeit auf wenige MB/s begrenzt. Diese Aktion stellt Auto-Tuning (normal), RSS (Verteilung auf mehrere CPU-Kerne), TCP-Zeitstempel, die erste Wartezeit (1 s), die Staukontrolle (CUBIC statt dem alten CTCP) und Task-Offload wieder auf die Werte von Windows.",
+      "group": "Reparieren",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$steps = @(\n  @('int', 'tcp', 'set', 'global', 'autotuninglevel=normal'),\n  @('int', 'tcp', 'set', 'global', 'rss=enabled'),\n  @('int', 'tcp', 'set', 'global', 'timestamps=default'),\n  @('int', 'tcp', 'set', 'global', 'initialRto=1000'),\n  @('int', 'tcp', 'set', 'supplemental', 'template=internet', 'congestionprovider=cubic'),\n  @('int', 'ip', 'set', 'global', 'taskoffload=enabled')\n)\n$ok = 0\nforeach ($a in $steps) {\n  & netsh.exe $a 2>&1 | Out-Null\n  if ($LASTEXITCODE -eq 0) { $ok++ }\n}\nif ($ok -eq 0) { throw 'netsh failed' }\n",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "network.nic-powersave-off",
+      "name": "Netzwerkkarte nicht mehr abschalten lassen",
+      "desc": "Windows darf die Netzwerkkarte nicht mehr zum Stromsparen ausschalten. Verhindert Verbindungsabbrüche nach Standby und Leerlauf.",
+      "info": "Entspricht dem Haken „Computer kann das Gerät ausschalten, um Energie zu sparen“ im Geräte-Manager (Wert PnPCapabilities=24, so von Microsoft dokumentiert). Gilt für alle echten LAN- und WLAN-Karten. Am Laptop kostet das im Standby etwas Akku.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "laptop-bad"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'\n$ids = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.InterfaceGuid })\n$keys = @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | Where-Object {\n  $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue\n  $p -and ($ids -contains [string]$p.NetCfgInstanceId)\n})\nforeach ($k in $keys) {\n  New-ItemProperty -LiteralPath $k.PSPath -Name 'PnPCapabilities' -Value 24 -PropertyType DWord -Force -ErrorAction Stop | Out-Null\n}\n",
+          "revert": "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'\n$ids = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.InterfaceGuid })\n$keys = @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | Where-Object {\n  $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue\n  $p -and ($ids -contains [string]$p.NetCfgInstanceId)\n})\nforeach ($k in $keys) {\n  $v = (Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction Stop).PnPCapabilities\n  if ($null -ne $v -and [int]$v -eq 24) { Remove-ItemProperty -LiteralPath $k.PSPath -Name 'PnPCapabilities' -ErrorAction Stop }\n}\n",
+          "detect": "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'\n$ids = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object { [string]$_.InterfaceGuid })\n$keys = @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^[0-9]{4}$' } | Where-Object {\n  $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue\n  $p -and ($ids -contains [string]$p.NetCfgInstanceId)\n})\nif ($keys.Count -eq 0) { $null } else {\n  $ok = $true\n  foreach ($k in $keys) {\n    $v = (Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction Stop).PnPCapabilities\n    if ($null -eq $v -or ([int]$v -band 24) -ne 24) { $ok = $false }\n  }\n  $ok\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "network.interrupt-moderation-off",
+      "name": "Interrupt-Moderation der Netzwerkkarte aus",
+      "desc": "Die Netzwerkkarte meldet jedes Paket sofort an die CPU statt gesammelt. Etwas weniger Verzögerung, dafür mehr CPU-Last.",
+      "info": "Ohne Moderation sinkt die Verzögerung pro Paket um Mikrosekunden bis etwa 0,1 ms – im Ping kaum sichtbar. Wird nur bei Netzwerkkarten geändert, die die Einstellung kennen. Zurück stellt den Treiber-Standard wieder her. Wirkt nach einem Neustart oder Neustart des Adapters.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Mehr CPU-Last bei viel Datenverkehr (große Downloads, Streaming). Am Laptop kostet das Akku.",
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "latency",
+        "competitive",
+        "laptop-bad"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('*InterruptModeration')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    if ([string]$p.RegistryValue -ne $target) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $target -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('*InterruptModeration')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('*InterruptModeration')\n$target = '0'\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    $hit++\n    if ([string]$p.RegistryValue -ne $target) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.eee-off",
+      "name": "Energiesparendes Ethernet (EEE/Green) aus",
+      "desc": "Schaltet Energy Efficient Ethernet, Green Ethernet und ähnliche Stromspar-Modi der LAN-Karte ab. Verhindert kurze Aufwach-Verzögerungen.",
+      "info": "EEE lässt die Leitung in Pausen einschlafen; das Aufwachen kostet jedes Mal ein paar Mikrosekunden, bei manchen Switches gibt es sogar kurze Verbindungsabbrüche. Betrifft Realtek-, Intel- und Killer-Karten, sofern sie die Einstellung haben. Der Strom-Mehrverbrauch liegt unter einem Watt.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "ping",
+        "laptop-bad"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('*EEE', 'EEE', 'AdvancedEEE', 'EEELinkAdvertisement', 'EnableGreenEthernet', 'GigaLite', 'PowerSavingMode')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    if ([string]$p.RegistryValue -ne $target) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $target -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('*EEE', 'EEE', 'AdvancedEEE', 'EEELinkAdvertisement', 'EnableGreenEthernet', 'GigaLite', 'PowerSavingMode')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('*EEE', 'EEE', 'AdvancedEEE', 'EEELinkAdvertisement', 'EnableGreenEthernet', 'GigaLite', 'PowerSavingMode')\n$target = '0'\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    $hit++\n    if ([string]$p.RegistryValue -ne $target) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.flow-control-off",
+      "name": "Flusssteuerung der LAN-Karte aus",
+      "desc": "Die Netzwerkkarte pausiert nicht mehr auf Anweisung des Switches. Kann seltene Mini-Hänger vermeiden, bei Überlast gehen eher Pakete verloren.",
+      "info": "Flow Control (Pause-Frames) ist im Heimnetz selten aktiv. Wirkung auf modernen Systemen kaum messbar; sinnvoll vor allem, wenn ein günstiger Switch dauernd Pause-Frames schickt.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bei stark ausgelastetem Heimnetz (z. B. großes Backup aufs NAS) gehen eher Pakete verloren, statt kurz zu warten.",
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "ping"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('*FlowControl')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    if ([string]$p.RegistryValue -ne $target) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $target -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('*FlowControl')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('*FlowControl')\n$target = '0'\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    $hit++\n    if ([string]$p.RegistryValue -ne $target) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.lso-off",
+      "name": "Large Send Offload (LSO) aus",
+      "desc": "Die CPU zerlegt große Sendungen selbst statt der Netzwerkkarte. Behebt bei manchen Treibern langsame Uploads, kostet etwas CPU.",
+      "info": "LSO betrifft nur große TCP-Uploads. Spielpakete sind klein und laufen über UDP – für den Ping ist die Einstellung egal. Lohnt sich, wenn Uploads oder Streams ohne Grund stocken (bekanntes Problem einiger Intel- und Realtek-Treiber).",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Etwas mehr CPU-Last beim Hochladen großer Dateien. Bringt nur bei fehlerhaften Treibern spürbar etwas.",
+      "needs": "reboot",
+      "tags": [
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('*LsoV2IPv4', '*LsoV2IPv6', '*LsoV1IPv4')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    if ([string]$p.RegistryValue -ne $target) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $target -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('*LsoV2IPv4', '*LsoV2IPv6', '*LsoV1IPv4')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('*LsoV2IPv4', '*LsoV2IPv6', '*LsoV1IPv4')\n$target = '0'\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    $hit++\n    if ([string]$p.RegistryValue -ne $target) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.wol-off",
+      "name": "Wake-on-LAN aus",
+      "desc": "Der PC wird nicht mehr durch Netzwerkpakete aus dem Standby geweckt. Verhindert, dass er nachts von selbst aufwacht.",
+      "info": "Nur abschalten, wenn du den PC nicht per App oder Fritzbox aus der Ferne aufweckst. Zurück stellt den Treiber-Standard her.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "battery",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('*WakeOnMagicPacket', '*WakeOnPattern', 'WakeOnLink', 'S5WakeOnLan', '*ModernStandbyWoLMagicPacket')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    if ([string]$p.RegistryValue -ne $target) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $target -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('*WakeOnMagicPacket', '*WakeOnPattern', 'WakeOnLink', 'S5WakeOnLan', '*ModernStandbyWoLMagicPacket')\n$target = '0'\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('*WakeOnMagicPacket', '*WakeOnPattern', 'WakeOnLink', 'S5WakeOnLan', '*ModernStandbyWoLMagicPacket')\n$target = '0'\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $valid = @($p.ValidRegistryValues)\n    if ($valid.Count -gt 0 -and $valid -notcontains $target) { continue }\n    $hit++\n    if ([string]$p.RegistryValue -ne $target) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.nic-rxbuffers-max",
+      "name": "Empfangspuffer der Netzwerkkarte maximal",
+      "desc": "Die Netzwerkkarte bekommt den größten Empfangspuffer, den ihr Treiber erlaubt. Weniger verworfene Pakete bei Lastspitzen.",
+      "info": "Kostet nur ein paar Megabyte Arbeitsspeicher. Hilft bei schnellen Leitungen und vielen gleichzeitigen Verbindungen; auf den normalen Ping hat es keinen Einfluss. Zurück stellt den Treiber-Standard her.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('*ReceiveBuffers')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $max = $p.NumericParameterMaxValue\n    if ($null -eq $max -or ([string]$max) -eq '' -or ([int64]$max) -le 0) { continue }\n    $want = [string]([int64]$max)\n    if ([string]$p.RegistryValue -ne $want) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $want -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('*ReceiveBuffers')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('*ReceiveBuffers')\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $max = $p.NumericParameterMaxValue\n    if ($null -eq $max -or ([string]$max) -eq '' -or ([int64]$max) -le 0) { continue }\n    $want = [string]([int64]$max)\n    $hit++\n    if ([string]$p.RegistryValue -ne $want) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.lltd-off",
+      "name": "Netzwerkkarten-Protokoll LLTD aus",
+      "desc": "Schaltet die Link-Layer-Topologieerkennung an den Netzwerkkarten ab. Etwas weniger Hintergrund-Verkehr, die Netzwerkübersicht fehlt dann.",
+      "info": "LLTD (Link-Layer Topology Discovery) zeichnet die alte „Netzwerkübersicht“ der Systemsteuerung. Dateifreigaben, Drucker und Internet funktionieren ohne. Wirkung auf die Leistung kaum messbar – eher Aufräumen.",
+      "group": "Netzwerkkarte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$ids = @('ms_lltdio', 'ms_rspndr')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($b in @(Get-NetAdapterBinding -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { ($ids -contains $_.ComponentID) -and $_.Enabled })) {\n    Disable-NetAdapterBinding -Name $a.Name -ComponentID $b.ComponentID -ErrorAction Stop\n  }\n}\n",
+          "revert": "$ids = @('ms_lltdio', 'ms_rspndr')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($b in @(Get-NetAdapterBinding -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { ($ids -contains $_.ComponentID) -and -not $_.Enabled })) {\n    Enable-NetAdapterBinding -Name $a.Name -ComponentID $b.ComponentID -ErrorAction Stop\n  }\n}\n",
+          "detect": "$ids = @('ms_lltdio', 'ms_rspndr')\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($b in @(Get-NetAdapterBinding -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $ids -contains $_.ComponentID })) {\n    $hit++\n    if ($b.Enabled) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.wifi-powersave-off",
+      "name": "WLAN-Stromsparen im Akkubetrieb aus",
+      "desc": "Die WLAN-Karte bleibt auch im Akkubetrieb auf voller Leistung. Weniger Ping-Spitzen unterwegs, kostet aber Akku.",
+      "info": "Am Netzteil arbeitet die WLAN-Karte schon von Haus aus mit maximaler Leistung. Dieser Schalter ändert nur den Akkubetrieb (Standard dort: „Mittlerer Energiesparmodus“). Gilt für den aktiven Energieplan.",
+      "group": "WLAN",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "ping",
+        "laptop-bad"
+      ],
+      "when": {
+        "formFactor": "laptop"
+      },
+      "actions": [
+        {
+          "type": "powersetting",
+          "subgroup": "19cafeef-e7c5-4b06-a5ba-2c8e2908cd29",
+          "setting": "12bbebe6-58d6-4636-95bb-3217ef867c1a",
+          "ac": 0,
+          "dc": 0,
+          "default": {
+            "ac": 0,
+            "dc": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "network.wifi-roaming-low",
+      "name": "WLAN-Roaming auf niedrigste Stufe",
+      "desc": "Die WLAN-Karte sucht seltener im Hintergrund nach besseren Access Points. Weniger Ping-Spitzen, im Mesh-WLAN wechselt sie träger.",
+      "info": "Die Hintergrund-Suche nach anderen Access Points verursacht bei vielen WLAN-Karten regelmäßige Ping-Spitzen. Wird nur bei Karten geändert, die diese Einstellung anbieten (Intel-WLAN). Für einen festen Gaming-Platz sinnvoll, für Laptops, die oft den Raum wechseln, eher nicht.",
+      "group": "WLAN",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Mit Mesh-WLAN oder mehreren Access Points bleibt der PC länger an einem schwächer werdenden Sender hängen.",
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "ping",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$kw = @('RoamAggressiveness')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $vals = @(@($p.ValidRegistryValues) | ForEach-Object { $_ -as [int] } | Where-Object { $null -ne $_ })\n    if ($vals.Count -eq 0) { continue }\n    $want = [string](($vals | Measure-Object -Minimum).Minimum)\n    if ([string]$p.RegistryValue -ne $want) {\n      Set-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -RegistryValue $want -NoRestart -ErrorAction Stop\n    }\n  }\n}\n",
+          "revert": "$kw = @('RoamAggressiveness')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    Reset-NetAdapterAdvancedProperty -Name $a.Name -RegistryKeyword $p.RegistryKeyword -NoRestart -ErrorAction Stop\n  }\n}\n",
+          "detect": "$kw = @('RoamAggressiveness')\n$hit = 0\n$ok = $true\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  foreach ($p in @(Get-NetAdapterAdvancedProperty -Name $a.Name -ErrorAction SilentlyContinue | Where-Object { $kw -contains $_.RegistryKeyword })) {\n    $vals = @(@($p.ValidRegistryValues) | ForEach-Object { $_ -as [int] } | Where-Object { $null -ne $_ })\n    if ($vals.Count -eq 0) { continue }\n    $want = [string](($vals | Measure-Object -Minimum).Minimum)\n    $hit++\n    if ([string]$p.RegistryValue -ne $want) { $ok = $false }\n  }\n}\nif ($hit -eq 0) { $null } else { $ok }\n"
+        }
+      ]
+    },
+    {
+      "id": "network.dns-cloudflare",
+      "name": "DNS: Cloudflare (1.1.1.1)",
+      "desc": "Nutzt den schnellen DNS-Dienst von Cloudflare statt dem des Providers. Webseiten öffnen oft etwas schneller, der Ping bleibt gleich.",
+      "info": "Stellt die DNS-Server (das „Telefonbuch“ des Internets) aller echten Netzwerkkarten fest ein. Das macht Seitenaufrufe oft etwas schneller, ändert aber nicht den Ping im Spiel. Zurück stellt wieder „automatisch (DHCP)“ ein. Es kann immer nur ein DNS-Anbieter aktiv sein.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Lokale Namen vom Router (z. B. fritz.box) und DNS-Filter wie Pi-hole oder Kinderschutz im Router greifen dann nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$v4 = @('1.1.1.1', '1.0.0.1')\n$v6 = @('2606:4700:4700::1111', '2606:4700:4700::1001')\n$done = 0\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  try {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($v4 + $v6) -ErrorAction Stop\n    $done++\n  } catch {\n    try {\n      Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $v4 -ErrorAction Stop\n      $done++\n    } catch { }\n  }\n}\nif ($done -eq 0) { throw 'No network adapter could be configured.' }\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "revert": "$v4 = @('1.1.1.1', '1.0.0.1')\n$v6 = @('2606:4700:4700::1111', '2606:4700:4700::1001')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n  if (($cur -join ',') -eq ($v4 -join ',')) {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop\n  }\n}\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "detect": "$v4 = @('1.1.1.1', '1.0.0.1')\n$v6 = @('2606:4700:4700::1111', '2606:4700:4700::1001')\n$up = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { [string]$_.Status -eq 'Up' })\nif ($up.Count -eq 0) { $null } else {\n  $ok = $true\n  foreach ($a in $up) {\n    $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n    if (($cur -join ',') -ne ($v4 -join ',')) { $ok = $false }\n  }\n  $ok\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "network.dns-google",
+      "name": "DNS: Google (8.8.8.8)",
+      "desc": "Nutzt den DNS-Dienst von Google statt dem des Providers. Zuverlässig und schnell, Google sieht dafür deine Anfragen.",
+      "info": "Stellt die DNS-Server (das „Telefonbuch“ des Internets) aller echten Netzwerkkarten fest ein. Das macht Seitenaufrufe oft etwas schneller, ändert aber nicht den Ping im Spiel. Zurück stellt wieder „automatisch (DHCP)“ ein. Es kann immer nur ein DNS-Anbieter aktiv sein.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Lokale Namen vom Router (z. B. fritz.box) und DNS-Filter wie Pi-hole oder Kinderschutz im Router greifen dann nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$v4 = @('8.8.8.8', '8.8.4.4')\n$v6 = @('2001:4860:4860::8888', '2001:4860:4860::8844')\n$done = 0\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  try {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($v4 + $v6) -ErrorAction Stop\n    $done++\n  } catch {\n    try {\n      Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $v4 -ErrorAction Stop\n      $done++\n    } catch { }\n  }\n}\nif ($done -eq 0) { throw 'No network adapter could be configured.' }\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "revert": "$v4 = @('8.8.8.8', '8.8.4.4')\n$v6 = @('2001:4860:4860::8888', '2001:4860:4860::8844')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n  if (($cur -join ',') -eq ($v4 -join ',')) {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop\n  }\n}\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "detect": "$v4 = @('8.8.8.8', '8.8.4.4')\n$v6 = @('2001:4860:4860::8888', '2001:4860:4860::8844')\n$up = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { [string]$_.Status -eq 'Up' })\nif ($up.Count -eq 0) { $null } else {\n  $ok = $true\n  foreach ($a in $up) {\n    $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n    if (($cur -join ',') -ne ($v4 -join ',')) { $ok = $false }\n  }\n  $ok\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "network.dns-quad9",
+      "name": "DNS: Quad9 (9.9.9.9, blockt Schadseiten)",
+      "desc": "Nutzt den gemeinnützigen DNS-Dienst Quad9, der bekannte Schadsoftware-Seiten blockiert. Gut für Datenschutz und Sicherheit.",
+      "info": "Stellt die DNS-Server (das „Telefonbuch“ des Internets) aller echten Netzwerkkarten fest ein. Das macht Seitenaufrufe oft etwas schneller, ändert aber nicht den Ping im Spiel. Zurück stellt wieder „automatisch (DHCP)“ ein. Es kann immer nur ein DNS-Anbieter aktiv sein.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Lokale Namen vom Router (z. B. fritz.box) und DNS-Filter wie Pi-hole oder Kinderschutz im Router greifen dann nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$v4 = @('9.9.9.9', '149.112.112.112')\n$v6 = @('2620:fe::fe', '2620:fe::9')\n$done = 0\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  try {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($v4 + $v6) -ErrorAction Stop\n    $done++\n  } catch {\n    try {\n      Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $v4 -ErrorAction Stop\n      $done++\n    } catch { }\n  }\n}\nif ($done -eq 0) { throw 'No network adapter could be configured.' }\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "revert": "$v4 = @('9.9.9.9', '149.112.112.112')\n$v6 = @('2620:fe::fe', '2620:fe::9')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n  if (($cur -join ',') -eq ($v4 -join ',')) {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop\n  }\n}\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "detect": "$v4 = @('9.9.9.9', '149.112.112.112')\n$v6 = @('2620:fe::fe', '2620:fe::9')\n$up = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { [string]$_.Status -eq 'Up' })\nif ($up.Count -eq 0) { $null } else {\n  $ok = $true\n  foreach ($a in $up) {\n    $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n    if (($cur -join ',') -ne ($v4 -join ',')) { $ok = $false }\n  }\n  $ok\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "network.dns-adguard",
+      "name": "DNS: AdGuard (blockt Werbung und Tracker)",
+      "desc": "Nutzt AdGuard DNS, das Werbe- und Tracking-Adressen für alle Programme blockiert. Manche Seiten oder Gutscheinlinks gehen dann nicht.",
+      "info": "Stellt die DNS-Server (das „Telefonbuch“ des Internets) aller echten Netzwerkkarten fest ein. Das macht Seitenaufrufe oft etwas schneller, ändert aber nicht den Ping im Spiel. Zurück stellt wieder „automatisch (DHCP)“ ein. Es kann immer nur ein DNS-Anbieter aktiv sein.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Werbe-Links, manche Shops und Spiele-Werbung (Belohnungsvideos) funktionieren nicht mehr. Lokale Router-Namen wie fritz.box gehen nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "network",
+        "privacy",
+        "ads"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$v4 = @('94.140.14.14', '94.140.15.15')\n$v6 = @('2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff')\n$done = 0\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  try {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($v4 + $v6) -ErrorAction Stop\n    $done++\n  } catch {\n    try {\n      Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $v4 -ErrorAction Stop\n      $done++\n    } catch { }\n  }\n}\nif ($done -eq 0) { throw 'No network adapter could be configured.' }\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "revert": "$v4 = @('94.140.14.14', '94.140.15.15')\n$v6 = @('2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff')\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {\n  $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n  if (($cur -join ',') -eq ($v4 -join ',')) {\n    Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop\n  }\n}\nClear-DnsClientCache -ErrorAction SilentlyContinue\n",
+          "detect": "$v4 = @('94.140.14.14', '94.140.15.15')\n$v6 = @('2a10:50c0::ad1:ff', '2a10:50c0::ad2:ff')\n$up = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { [string]$_.Status -eq 'Up' })\nif ($up.Count -eq 0) { $null } else {\n  $ok = $true\n  foreach ($a in $up) {\n    $cur = @(Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.ServerAddresses })\n    if (($cur -join ',') -ne ($v4 -join ',')) { $ok = $false }\n  }\n  $ok\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "network.doh-allow",
+      "name": "Verschlüsseltes DNS (DoH) erlauben",
+      "desc": "Windows verschlüsselt DNS-Anfragen, wenn der DNS-Server das kann (z. B. Cloudflare, Google, Quad9). Der Provider sieht weniger mit.",
+      "info": "Gruppenrichtlinie „DNS über HTTPS (DoH)-Namensauflösung konfigurieren“ auf „DoH zulassen“. Wirkt zusammen mit einem der DNS-Anbieter oben; mit dem DNS des Routers bleibt alles wie bisher. Fällt automatisch auf normales DNS zurück, wenn DoH nicht geht. Nur Windows 11.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "privacy"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient",
+          "name": "DoHPolicy",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.llmnr-off",
+      "name": "LLMNR-Namensauflösung aus",
+      "desc": "Schaltet ein altes Protokoll ab, das Namen im lokalen Netz per Rundruf sucht. Weniger Hintergrund-Verkehr und eine bekannte Angriffsfläche weniger.",
+      "info": "LLMNR wird nur gebraucht, wenn ein Gerät im Heimnetz keinen DNS-Namen hat – das moderne mDNS übernimmt das heute. In fremden WLANs lassen sich über LLMNR Passwort-Hashes abgreifen; Sicherheits-Empfehlungen raten deshalb zum Abschalten.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient",
+          "name": "EnableMulticast",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.netbios-off",
+      "name": "NetBIOS über TCP/IP aus",
+      "desc": "Schaltet das alte NetBIOS-Protokoll an allen Netzwerkverbindungen ab. Weniger Rundrufe im Netz, sehr alte Freigaben finden sich evtl. nicht mehr.",
+      "info": "Moderne Dateifreigaben (SMB 2/3) laufen direkt über TCP und brauchen NetBIOS nicht. Neu hinzugefügte Netzwerkkarten bekommen wieder den Standard – dann den Schalter einfach erneut anwenden.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Sehr alte NAS-Geräte, Drucker oder Windows-XP-Freigaben, die nur über NetBIOS-Namen erreichbar sind, findest du dann eventuell nicht mehr.",
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces\\*",
+          "name": "NetbiosOptions",
+          "kind": "DWord",
+          "value": 2,
+          "default": 0,
+          "onlyExisting": true
+        }
+      ]
+    },
+    {
+      "id": "network.smart-dns-off",
+      "name": "Paralleles DNS über alle Adapter aus",
+      "desc": "Windows fragt DNS nicht mehr gleichzeitig über alle Netzwerkadapter. Verhindert DNS-Lecks am VPN vorbei.",
+      "info": "Gruppenrichtlinie „Intelligente Namensauflösung mit mehreren Netzwerken deaktivieren“. Sinnvoll, wenn du ein VPN nutzt. Ohne VPN und mit nur einer Netzwerkverbindung ändert sich nichts.",
+      "group": "DNS & Namensauflösung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient",
+          "name": "DisableSmartNameResolution",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.teredo-off",
+      "name": "Teredo-Tunnel aus",
+      "desc": "Schaltet den IPv6-Tunnel Teredo ab, den kaum noch jemand braucht. Ein virtueller Adapter weniger im Hintergrund.",
+      "info": "Teredo verpackt IPv6 in IPv4, wenn der Anschluss kein echtes IPv6 hat. Nutzt du keine Xbox-Dienste am PC, fehlt nichts.",
+      "group": "IPv6 & Tunnel",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Xbox-Party-Chat und manche Xbox/Game-Pass-Spiele (z. B. Halo, Forza, Sea of Thieves) brauchen Teredo für Multiplayer und melden dann einen NAT-Fehler.",
+      "needs": "none",
+      "tags": [
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if ([string](Get-NetTeredoConfiguration -ErrorAction Stop).Type -ne 'Disabled') { Set-NetTeredoConfiguration -Type Disabled -ErrorAction Stop }\n",
+          "revert": "Set-NetTeredoConfiguration -Type Default -ErrorAction Stop\n",
+          "detect": "[string](Get-NetTeredoConfiguration -ErrorAction Stop).Type -eq 'Disabled'\n"
+        }
+      ]
+    },
+    {
+      "id": "network.prefer-ipv4",
+      "name": "IPv4 vor IPv6 bevorzugen",
+      "desc": "Windows nimmt IPv4, wenn ein Server beides anbietet. Nur sinnvoll, wenn dein IPv6 Probleme macht – IPv6 bleibt an.",
+      "info": "Setzt den von Microsoft dokumentierten Wert DisabledComponents=0x20 („IPv4 gegenüber IPv6 bevorzugen“). IPv6 komplett abzuschalten empfiehlt Microsoft ausdrücklich nicht – das macht dieser Schalter auch nicht.",
+      "group": "IPv6 & Tunnel",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bei Anschlüssen mit DS-Lite (geteilte IPv4-Adresse, häufig bei Kabel/Glasfaser) kann IPv4 langsamer sein als IPv6 – dann eher nicht nutzen.",
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "compat"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+          "name": "DisabledComponents",
+          "kind": "DWord",
+          "value": 32,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.do-p2p-off",
+      "name": "Update-Verteilung an andere PCs aus",
+      "desc": "Windows lädt Updates nicht mehr an andere PCs hoch und holt sie nur noch von Microsoft. Kein Upload im Hintergrund mehr.",
+      "info": "Übermittlungsoptimierung (Delivery Optimization) im Modus 0 = „nur HTTP, kein Peer-to-Peer“. Updates kommen weiter ganz normal; nur das Teilen mit anderen Geräten im Netz entfällt. Mit mehreren PCs im Haushalt werden Updates dafür einzeln geladen.",
+      "group": "Updates & Bandbreite",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "update",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+          "name": "DODownloadMode",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.do-bg-limit",
+      "name": "Update-Downloads im Hintergrund begrenzen",
+      "desc": "Hintergrund-Updates nutzen höchstens 25 % deiner Bandbreite. Weniger Lags durch Updates beim Zocken, Updates dauern etwas länger.",
+      "info": "Gruppenrichtlinie „Maximale Hintergrund-Downloadbandbreite (Prozent)“. Updates werden nicht abgeschaltet, nur gedrosselt. Windows drosselt Hintergrund-Downloads zwar schon selbst, reagiert bei langsamen Leitungen aber oft zu spät.",
+      "group": "Updates & Bandbreite",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network",
+        "update",
+        "ping"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+          "name": "DOPercentageMaxBackgroundBandwidth",
+          "kind": "DWord",
+          "value": 25,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.qos-reserve-off",
+      "name": "„Reservierte“ QoS-Bandbreite auf 0 %",
+      "desc": "Beliebter Tweak gegen die angeblich reservierten 20 % Bandbreite. Ehrlich: Windows reserviert nichts – die Wirkung ist praktisch null.",
+      "info": "Die Richtlinie „Reservierbare Bandbreite einschränken“ gilt nur für Programme, die ausdrücklich Bandbreite über QoS anfordern – das tut im Heimgebrauch praktisch keins. Ohne solche Programme steht schon immer 100 % zur Verfügung. Harmlos, aber Wirkung kaum messbar.",
+      "group": "Updates & Bandbreite",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "network"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Psched",
+          "name": "NonBestEffortLimit",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "network.smb-throttling-off",
+      "name": "Drosselung bei Netzwerkfreigaben aus",
+      "desc": "Der Windows-Dateiclient drosselt Kopien von NAS und Freigaben nicht mehr. Hilft bei schnellen Netzen und WLAN mit hoher Latenz.",
+      "info": "Wert aus Microsofts Leistungs-Leitfaden für SMB-Clients. Wirkt nur beim Kopieren über Netzwerkfreigaben (NAS, anderer PC), nicht beim Spielen oder Surfen.",
+      "group": "Dateifreigaben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "network",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+          "name": "DisableBandwidthThrottling",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    }
+  ]
+}

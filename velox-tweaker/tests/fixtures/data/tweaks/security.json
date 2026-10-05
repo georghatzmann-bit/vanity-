@@ -1,0 +1,8 @@
+{
+  "category": "security",
+  "tweaks": [
+    { "id": "security.vbs-off", "name": "Kernisolierung (VBS) aus", "desc": "Ein paar Prozent mehr FPS, aber weniger Schutz.",
+      "impact": 2, "risk": "risky", "warning": "Der Windows-Kern ist schlechter vor Schadsoftware geschützt.", "needs": "reboot", "tags": ["security-off", "fps"],
+      "actions": [ { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard", "name": "EnableVirtualizationBasedSecurity", "kind": "DWord", "value": 0, "default": null } ] }
+  ]
+}

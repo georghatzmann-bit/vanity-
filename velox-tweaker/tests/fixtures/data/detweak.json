@@ -1,0 +1,28 @@
+{
+  "registry": [
+    { "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl", "name": "Win32PrioritySeparation", "kind": "DWord", "default": 2, "label": "CPU-Zeitverteilung (Win32PrioritySeparation)", "group": "CPU & Scheduler" },
+    { "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile", "name": "SystemResponsiveness", "kind": "DWord", "default": 20, "label": "Multimedia-Reserve (SystemResponsiveness)", "group": "CPU & Scheduler" },
+    { "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile", "name": "NetworkThrottlingIndex", "kind": "DWord", "default": 10, "label": "Netzwerk-Drosselung", "group": "Netzwerk" },
+    { "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*", "name": "TcpAckFrequency", "default": null, "label": "TCP-Bestätigungen (TcpAckFrequency)", "group": "Netzwerk" },
+    { "path": "HKCU\\System\\GameConfigStore", "name": "GameDVR_FSEBehaviorMode", "default": null, "label": "Vollbild-Optimierungen global", "group": "Grafik" }
+  ],
+  "registryKeys": [
+    { "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\*\\PerfOptions", "label": "Prozess-Prioritäten per IFEO", "group": "Prozesse" }
+  ],
+  "bcd": [
+    { "name": "useplatformclock", "label": "HPET erzwungen", "group": "Boot & Timer" },
+    { "name": "disabledynamictick", "label": "Dynamic Tick aus", "group": "Boot & Timer" }
+  ],
+  "services": [
+    { "name": "SysMain", "default": "Automatic", "label": "SysMain (Superfetch)", "group": "Dienste" },
+    { "name": "DiagTrack", "default": "Automatic", "label": "Telemetrie-Dienst", "group": "Dienste" },
+    { "name": "WSearch", "default": "AutomaticDelayed", "label": "Windows-Suche", "group": "Dienste" }
+  ],
+  "tasks": [
+    { "path": "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag", "default": true, "label": "Laufwerke optimieren", "group": "Aufgaben" }
+  ],
+  "commands": [
+    { "id": "power-defaults", "label": "Energiepläne auf Standard", "desc": "Stellt alle Energiepläne wieder her.", "defaultOn": true, "needs": "none", "script": "powercfg -restoredefaultschemes" },
+    { "id": "netsh-reset", "label": "Netzwerk-Stack zurücksetzen", "desc": "Setzt Winsock und TCP/IP zurück.", "defaultOn": false, "needs": "reboot", "script": "netsh winsock reset | Out-Null" }
+  ]
+}

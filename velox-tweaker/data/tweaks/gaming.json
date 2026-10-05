@@ -1,0 +1,352 @@
+{
+  "category": "gaming",
+  "tweaks": [
+    {
+      "id": "gaming.gamemode-on",
+      "name": "Spielmodus (Game Mode) fest einschalten",
+      "desc": "Windows gibt dem laufenden Spiel Vorrang und hält Updates und Treiber-Installationen zurück. Kein Nachteil.",
+      "info": "Seit Windows 10 1903 ist der Spielmodus von Haus aus an und hilft vor allem auf schwächeren PCs mit viel Hintergrundlast. Alte Tweak-Pakete schalten ihn oft aus – das stammt aus 2017, als er noch Ruckler verursachte, und ist überholt. Dieser Schalter setzt ihn ausdrücklich auf an.",
+      "group": "Spielmodus",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "fps",
+        "stutter"
+      ],
+      "when": {
+        "minBuild": 15063
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\GameBar",
+          "name": "AutoGameModeEnabled",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\GameBar",
+          "name": "AllowAutoGameMode",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gaming.gamedvr-off",
+      "name": "Spielaufnahme (Game DVR) aus",
+      "desc": "Die Game Bar hält keine Aufnahme mehr im Hintergrund bereit. Spart etwas Leistung, Clips per Win+Alt+R gehen dann nicht mehr.",
+      "info": "Entspricht dem Schalter „Spielclips, Screenshots und Übertragungen mit der Xbox Game Bar aufnehmen“. Bringt vor allem auf schwächeren PCs und Laptops etwas. Wer mit OBS, ShadowPlay oder Radeon ReLive aufnimmt, verliert nichts.",
+      "group": "Xbox Game Bar & Aufnahme",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Clips und Screenshots über die Xbox Game Bar funktionieren danach nicht mehr.",
+      "needs": "logoff",
+      "tags": [
+        "fps",
+        "stutter"
+      ],
+      "when": {
+        "minBuild": 10240
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+          "name": "AppCaptureEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "gaming.gamedvr-policy-off",
+      "name": "Spielaufnahme per Richtlinie sperren",
+      "desc": "Sperrt Aufnahme und Übertragung der Game Bar für alle Benutzer. Gründlicher als der normale Schalter, die Funktion fehlt dann ganz.",
+      "info": "Das ist die Gruppenrichtlinie „Windows-Spielaufzeichnung und -übertragung aktivieren“. Sie verhindert, dass Updates oder die Xbox-App die Aufnahme still wieder einschalten.",
+      "group": "Xbox Game Bar & Aufnahme",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Aufnahme und Übertragung über die Game Bar sind für alle Benutzer gesperrt, bis du das zurücknimmst.",
+      "needs": "logoff",
+      "tags": [
+        "fps"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR",
+          "name": "AllowGameDVR",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gaming.gamebar-controller-off",
+      "name": "Game Bar nicht per Xbox-Taste öffnen",
+      "desc": "Die Xbox-Taste am Controller öffnet mitten im Spiel nicht mehr die Game Bar. Praktisch, wenn du sie oft aus Versehen drückst.",
+      "info": "Entspricht „Xbox Game Bar mit dieser Taste auf dem Controller öffnen“ in den Einstellungen. Win+G funktioniert weiterhin.",
+      "group": "Xbox Game Bar & Aufnahme",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "input",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 17763
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\GameBar",
+          "name": "UseNexusForGameBarEnabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gaming.gamebar-background-off",
+      "name": "Game Bar nicht im Hintergrund laufen lassen",
+      "desc": "Die Xbox-Game-Bar-App darf nicht mehr dauerhaft im Hintergrund aktiv sein. Etwas weniger Last, Widgets laden beim Öffnen kurz nach.",
+      "info": "Entspricht „Hintergrund-Apps › Xbox Game Bar › Nie“. Der globale Schalter für alle Hintergrund-Apps liegt unter System & Start.",
+      "group": "Xbox Game Bar & Aufnahme",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "fps"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications\\Microsoft.XboxGamingOverlay_8wekyb3d8bbwe",
+          "name": "Disabled",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications\\Microsoft.XboxGamingOverlay_8wekyb3d8bbwe",
+          "name": "DisabledByUser",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gaming.fso-off",
+      "name": "Vollbild-Optimierungen global aus",
+      "desc": "Ältere DirectX-9/10/11-Spiele laufen wieder in echtem Vollbild. Kann Verzögerung senken, Alt+Tab wird dafür langsamer.",
+      "info": "Vollbild-Optimierungen lassen „exklusives Vollbild“ in Wahrheit randlos laufen, damit Overlays und schnelles Alt+Tab gehen. Auf aktuellen Systemen ist das meist gleich schnell; manche älteren Spiele laufen in echtem Vollbild aber gleichmäßiger. DirectX-12- und Vulkan-Spiele betrifft das nicht, und neuere Windows-11-Versionen beachten den globalen Schalter nicht bei jedem Spiel. Einzelne Spiele stellst du gezielt unter „Spiele-spezifisch“ ein.",
+      "group": "Vollbild",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Alt+Tab dauert länger und das Bild flackert dabei kurz. Game Bar und manche Overlays erscheinen in diesen Spielen nicht.",
+      "needs": "logoff",
+      "tags": [
+        "fps",
+        "latency",
+        "input"
+      ],
+      "when": {
+        "minBuild": 17134
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_FSEBehaviorMode",
+          "kind": "DWord",
+          "value": 2,
+          "default": 0
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_HonorUserFSEBehaviorMode",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_FSEBehavior",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\System\\GameConfigStore",
+          "name": "GameDVR_DXGIHonorFSEWindowsCompatible",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "gaming.mmcss-responsiveness",
+      "name": "Mehr CPU-Zeit für Spiele und Audio (MMCSS)",
+      "desc": "Windows hält nur noch 10 statt 20 % Rechenzeit für Hintergrundaufgaben frei. Kleiner Vorteil für Programme, die den Dienst nutzen.",
+      "info": "Gilt nur für Threads, die sich beim Multimedia-Dienst (MMCSS) anmelden – vor allem Audio und manche Spiele. Laut Microsoft werden Werte unter 10 auf 20 zurückgesetzt: das beliebte „0“ aus Tweak-Paketen bewirkt also nichts. Die Netzwerk-Bremse (NetworkThrottlingIndex) findest du unter Netzwerk & Ping.",
+      "group": "CPU-Zuteilung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "audio",
+        "latency"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+          "name": "SystemResponsiveness",
+          "kind": "DWord",
+          "value": 10,
+          "default": 20
+        }
+      ]
+    },
+    {
+      "id": "gaming.mmcss-games-high",
+      "name": "Spiele-Profil im MMCSS auf hohe Priorität",
+      "desc": "Spiele, die sich beim Multimedia-Dienst anmelden, laufen mit höherer Thread-Priorität. Wirkt nur bei diesen Spielen.",
+      "info": "Stellt unter Tasks\\Games die Planungskategorie von „Medium“ auf „High“. Nur wenige Spiele melden sich bei MMCSS als „Games“ an – bei allen anderen ändert sich nichts. Die oft mitgesetzten Werte „Priority“, „GPU Priority“ und „SFIO Priority“ lässt VELOX weg: laut Microsoft werden sie in diesem Fall ignoriert oder gar nicht genutzt.",
+      "group": "CPU-Zuteilung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Kann in seltenen Fällen Ton oder Hintergrundprogramme während des Spielens ausbremsen.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "latency"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+          "name": "Scheduling Category",
+          "kind": "String",
+          "value": "High",
+          "default": "Medium"
+        }
+      ]
+    },
+    {
+      "id": "gaming.mmcss-nolazymode",
+      "name": "MMCSS-Sparmodus aus (NoLazyMode)",
+      "desc": "Der Multimedia-Dienst lässt seine Leerlauf-Erkennung weg und plant durchgehend. Beliebt in FPS-Paketen, Wirkung kaum messbar.",
+      "info": "Undokumentierter Wert, den der Treiber mmcss.sys wirklich liest: Laut Messungen der Community fallen damit die Leerlauf-Phasen des Planers weg. Einen spürbaren Vorteil hat noch niemand belegt, dafür kann der PC etwas mehr Strom brauchen. Nur für Leute, die wirklich alles ausreizen wollen – auf Laptops lieber aus lassen.",
+      "group": "CPU-Zuteilung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "latency",
+        "laptop-bad"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+          "name": "NoLazyMode",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "gaming.priority-separation",
+      "name": "CPU-Zeit: Programme im Vordergrund bevorzugen",
+      "desc": "Setzt die Prozessor-Zeitplanung auf „Programme“ (Wert 38). Repariert vor allem schräge Werte, die andere Tweaker gesetzt haben.",
+      "info": "Das ist dieselbe Einstellung wie Systemeigenschaften › Leistung › Erweitert › „Programme“: kurze, variable Zeitscheiben und dreifacher Vorrang für das aktive Fenster. Auf normalen Windows-PCs entspricht das praktisch schon dem Standard (2). Andere Werte aus Tweak-Paketen (z. B. 40 oder 42) bringen in Messungen keinen verlässlichen Vorteil.",
+      "group": "CPU-Zuteilung",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "fps",
+        "latency",
+        "input"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl",
+          "name": "Win32PrioritySeparation",
+          "kind": "DWord",
+          "value": 38,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "id": "gaming.fth-off",
+      "name": "Fehlertoleranten Heap (FTH) aus",
+      "desc": "Windows hängt Spielen nach Abstürzen keine bremsende Speicher-Absicherung mehr an. Dafür fehlt diese Notlösung bei wackligen Programmen.",
+      "info": "Stürzt ein Programm mehrmals ab, aktiviert Windows still eine langsamere, fehlertolerante Speicherverwaltung dafür – oft dauerhaft. Bei Spielen, die mit Mods oder beim Testen öfter abstürzen, kostet das Leistung. Bereits markierte Programme bleiben markiert.",
+      "group": "Stabilität",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Programme mit Speicherfehlern werden nicht mehr automatisch abgesichert und stürzen eventuell öfter ab.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\FTH",
+          "name": "Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    }
+  ]
+}

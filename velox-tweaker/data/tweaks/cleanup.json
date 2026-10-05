@@ -1,0 +1,535 @@
+{
+  "category": "cleanup",
+  "tweaks": [
+    {
+      "id": "cleanup.user-temp",
+      "name": "Eigene temporäre Dateien löschen",
+      "desc": "Leert deinen Temp-Ordner. Programme legen dort Reste ab, die oft mehrere GB groß werden. Gerade benutzte Dateien bleiben.",
+      "info": "Das ist %TEMP% (AppData\\Local\\Temp). Dateien, die gerade von einem Programm benutzt werden, sind gesperrt und werden übersprungen. Am besten direkt nach einem Neustart ausführen.",
+      "group": "Temporäre Dateien",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%TEMP%\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.windows-temp",
+      "name": "Temporäre Windows-Dateien löschen",
+      "desc": "Leert den Temp-Ordner von Windows. Dort sammeln sich Reste von Installationen und Updates.",
+      "info": "Gesperrte Dateien werden übersprungen. Läuft gerade eine Installation oder ein Update, warte lieber, bis es fertig ist.",
+      "group": "Temporäre Dateien",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%WINDIR%\\Temp\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.inetcache",
+      "name": "Alten Internet-Cache von Windows leeren",
+      "desc": "Löscht den Internet-Cache, den Windows-Komponenten und ältere Programme nutzen. Edge, Chrome und Firefox sind nicht betroffen.",
+      "info": "Der Ordner stammt vom Internet Explorer und wird von manchen Programmen und Windows-Teilen weiter benutzt. Er füllt sich danach langsam wieder.",
+      "group": "Temporäre Dateien",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Microsoft\\Windows\\INetCache\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.thumbnail-cache",
+      "name": "Vorschaubild-Cache löschen",
+      "desc": "Löscht die gespeicherten Vorschaubilder im Explorer. Hilft bei falschen Vorschauen, gibt Platz frei. Der Explorer startet dafür kurz neu.",
+      "info": "Die Dateien thumbcache_*.db sind gesperrt, solange der Explorer läuft – deshalb wird er kurz beendet und neu gestartet. Taskleiste und offene Ordnerfenster verschwinden für ein paar Sekunden. Vorschaubilder werden beim nächsten Öffnen eines Ordners neu erstellt.",
+      "group": "Temporäre Dateien",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "explorer"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\thumbcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    Start-Sleep -Seconds 3\n    $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    if ($now.Count -eq 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "cleanup.wu-download-cache",
+      "name": "Windows-Update-Downloads löschen",
+      "desc": "Löscht bereits installierte Update-Pakete aus dem Download-Ordner. Gibt oft mehrere GB frei.",
+      "info": "Die Update-Dienste werden dafür kurz angehalten. Nicht direkt nach einem Update vor dem Neustart ausführen – sonst lädt Windows die Pakete noch einmal herunter.",
+      "group": "Windows Update",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "update"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%WINDIR%\\SoftwareDistribution\\Download\\*"
+          ],
+          "stopServices": [
+            "wuauserv",
+            "bits"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.delivery-optimization",
+      "name": "Übermittlungsoptimierungs-Cache leeren",
+      "desc": "Löscht die Update-Dateien, die Windows für andere PCs zwischenspeichert. Gibt oft mehrere GB frei.",
+      "info": "Die Übermittlungsoptimierung hält Update-Teile bereit, um sie mit anderen PCs zu teilen. Gelöscht wird über den offiziellen Windows-Befehl, der Dienst selbst bleibt unverändert.",
+      "group": "Windows Update",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "update"
+      ],
+      "when": {
+        "minBuild": 17763
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if (-not (Get-Command -Name Delete-DeliveryOptimizationCache -ErrorAction SilentlyContinue)) { throw 'Delete-DeliveryOptimizationCache gibt es auf diesem Windows nicht.' }\nDelete-DeliveryOptimizationCache -Force -ErrorAction Stop",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "cleanup.component-store",
+      "name": "Alte Update-Reste aufräumen (DISM)",
+      "desc": "Entfernt veraltete Windows-Komponenten, die neuere Updates ersetzt haben. Gibt oft 1–5 GB frei, dauert aber 5–30 Minuten.",
+      "info": "Macht dasselbe wie die geplante Aufgabe ‚StartComponentCleanup‘ und die Datenträgerbereinigung bei ‚Windows Update-Bereinigung‘, nur sofort. Updates lassen sich weiterhin deinstallieren.",
+      "group": "Windows Update",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "update"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\dism.exe'\n$null = & $exe /Online /Cleanup-Image /StartComponentCleanup /NoRestart 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0 -and $c -ne 3010) { throw ('DISM-Bereinigung fehlgeschlagen (Code ' + $c + '). Steht noch ein Neustart nach einem Update an? Dann erst neu starten.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "cleanup.component-store-resetbase",
+      "name": "Update-Reste endgültig entfernen (ResetBase)",
+      "desc": "Räumt den Komponentenspeicher maximal auf. Spart noch mehr Platz, installierte Updates lassen sich danach aber nicht mehr deinstallieren.",
+      "info": "DISM /StartComponentCleanup /ResetBase. Sinnvoll, wenn das System nach den letzten Updates stabil läuft. Dauert 10–30 Minuten.",
+      "group": "Windows Update",
+      "kind": "action",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Bereits installierte Updates können danach nicht mehr deinstalliert werden. Macht ein Update Probleme, hilft dann nur noch eine Reparatur-Installation.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "update"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\dism.exe'\n$null = & $exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase /NoRestart 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0 -and $c -ne 3010) { throw ('DISM-Bereinigung fehlgeschlagen (Code ' + $c + '). Steht noch ein Neustart nach einem Update an? Dann erst neu starten.') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "cleanup.directx-shader-cache",
+      "name": "DirectX-Shader-Cache von Windows leeren",
+      "desc": "Löscht die von Windows gespeicherten Shader. Kann nach Treiber-Updates Ruckler beheben, die ersten Spielstarts ruckeln dafür kurz.",
+      "info": "Spiele bauen ihre Shader beim nächsten Start neu auf. Nur sinnvoll nach einem Grafiktreiber-Update oder wenn ein Spiel plötzlich ruckelt oder abstürzt – nicht regelmäßig.",
+      "group": "Shader-Caches",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "stutter",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\D3DSCache\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.nvidia-shader-cache",
+      "name": "NVIDIA-Shader-Cache leeren",
+      "desc": "Löscht die Shader-Caches des NVIDIA-Treibers. Hilft nach Treiber-Updates gegen Ruckler, die ersten Spielstarts dauern länger.",
+      "info": "Neue Treiber (ab etwa 571) speichern in AppData\\Local\\NVIDIA, ältere in AppData\\LocalLow\\NVIDIA\\PerDriverVersion oder NV_Cache – alle drei Orte werden geleert. Die Größe des Caches stellst du in der NVIDIA-Systemsteuerung ein.",
+      "group": "Shader-Caches",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "stutter",
+        "nvidia"
+      ],
+      "when": {
+        "gpuVendor": "nvidia"
+      },
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\NVIDIA\\DXCache\\*",
+            "%LOCALAPPDATA%\\NVIDIA\\GLCache\\*",
+            "%USERPROFILE%\\AppData\\LocalLow\\NVIDIA\\PerDriverVersion\\DXCache\\*",
+            "%USERPROFILE%\\AppData\\LocalLow\\NVIDIA\\PerDriverVersion\\GLCache\\*",
+            "%LOCALAPPDATA%\\NVIDIA Corporation\\NV_Cache\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.amd-shader-cache",
+      "name": "AMD-Shader-Cache leeren",
+      "desc": "Löscht die Shader-Caches des AMD-Treibers (DirectX, Vulkan, OpenGL). Hilft nach Treiber-Updates gegen Ruckler, erste Starts dauern länger.",
+      "info": "Dasselbe wie ‚Shader-Cache zurücksetzen‘ in der AMD-Software (Adrenalin) unter Grafik > Erweitert.",
+      "group": "Shader-Caches",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "stutter",
+        "amd"
+      ],
+      "when": {
+        "gpuVendor": "amd"
+      },
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\AMD\\DxCache\\*",
+            "%LOCALAPPDATA%\\AMD\\DxcCache\\*",
+            "%LOCALAPPDATA%\\AMD\\Dx9Cache\\*",
+            "%LOCALAPPDATA%\\AMD\\GLCache\\*",
+            "%LOCALAPPDATA%\\AMD\\VkCache\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.intel-shader-cache",
+      "name": "Intel-Shader-Cache leeren",
+      "desc": "Löscht den Shader-Cache des Intel-Grafiktreibers (Arc und integrierte Grafik). Die ersten Spielstarts dauern danach länger.",
+      "info": "Hilft vor allem nach Treiber-Updates oder wenn ein Spiel mit Intel-Grafik plötzlich ruckelt.",
+      "group": "Shader-Caches",
+      "kind": "action",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "stutter",
+        "intel"
+      ],
+      "when": {
+        "gpuVendor": "intel"
+      },
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%USERPROFILE%\\AppData\\LocalLow\\Intel\\ShaderCache\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.crash-dumps",
+      "name": "Absturz-Speicherabbilder löschen",
+      "desc": "Löscht Speicherabbilder von abgestürzten Programmen und Bluescreens. MEMORY.DMP allein kann viele GB groß sein.",
+      "info": "Die Dateien braucht man nur, um einen Absturz oder Bluescreen untersuchen zu lassen. Willst du das noch, sichere sie vorher (z. B. für BlueScreenView oder den Support).",
+      "group": "Absturzberichte & Protokolle",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\CrashDumps\\*",
+            "%WINDIR%\\Minidump\\*",
+            "%WINDIR%\\MEMORY.DMP",
+            "%WINDIR%\\LiveKernelReports\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.error-reports",
+      "name": "Fehlerberichte von Windows löschen",
+      "desc": "Löscht gesammelte und wartende Fehlerberichte der Windows-Fehlerberichterstattung.",
+      "info": "Die Berichte nutzt nur die Zuverlässigkeitsüberwachung für ihre Details. Wer Probleme mit einem Absturz untersuchen will, wartet besser damit.",
+      "group": "Absturzberichte & Protokolle",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%PROGRAMDATA%\\Microsoft\\Windows\\WER\\ReportArchive\\*",
+            "%PROGRAMDATA%\\Microsoft\\Windows\\WER\\ReportQueue\\*",
+            "%PROGRAMDATA%\\Microsoft\\Windows\\WER\\Temp\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Windows\\WER\\ReportArchive\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Windows\\WER\\ReportQueue\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.system-logs",
+      "name": "Alte Windows-Protokolle löschen",
+      "desc": "Löscht archivierte Protokolle von Komponentenspeicher, DISM und Windows Update. Aktive Protokolle bleiben.",
+      "info": "Gerade benutzte Protokolle sind gesperrt und werden übersprungen. Willst du ein Update- oder Reparatur-Problem untersuchen lassen, führe das erst danach aus.",
+      "group": "Absturzberichte & Protokolle",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%WINDIR%\\Logs\\CBS\\CbsPersist_*",
+            "%WINDIR%\\Logs\\DISM\\*",
+            "%WINDIR%\\Logs\\WindowsUpdate\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.driver-installer-leftovers",
+      "name": "Reste von Grafiktreiber-Installationen löschen",
+      "desc": "Löscht entpackte Treiber-Installer in C:\\NVIDIA und C:\\AMD und alte NVIDIA-Downloads. Oft 1–3 GB, der Treiber bleibt installiert.",
+      "info": "Die Installer entpacken sich vor jeder Treiber-Installation dorthin und räumen danach nicht auf. Für ein neues Treiber-Update lädst du den Installer ohnehin neu herunter.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "nvidia",
+        "amd"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%SystemDrive%\\NVIDIA\\*",
+            "%SystemDrive%\\AMD\\*",
+            "%PROGRAMDATA%\\NVIDIA Corporation\\Downloader\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.launcher-webcache",
+      "name": "Web-Cache von Steam und Epic leeren",
+      "desc": "Leert die eingebauten Browser-Caches von Steam und Epic Games Launcher. Hilft bei leeren oder hängenden Shop-Seiten. Launcher vorher schließen.",
+      "info": "Spiele, Spielstände und Anmeldung bleiben erhalten. Die Shop-Seiten laden beim nächsten Start einmal etwas langsamer.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Steam\\htmlcache\\*",
+            "%LOCALAPPDATA%\\EpicGamesLauncher\\Saved\\webcache*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.discord-cache",
+      "name": "Discord-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Bilder und Daten von Discord. Gibt oft hunderte MB frei. Discord vorher ganz beenden (auch im Tray).",
+      "info": "Anmeldung, Einstellungen und Nachrichten bleiben erhalten – Discord lädt Bilder und Emojis einfach neu.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%APPDATA%\\discord\\Cache\\*",
+            "%APPDATA%\\discord\\Code Cache\\*",
+            "%APPDATA%\\discord\\GPUCache\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.recent-files",
+      "name": "Liste zuletzt geöffneter Dateien leeren",
+      "desc": "Leert ‚Zuletzt verwendet‘ im Explorer und im Startmenü. Die Dateien selbst bleiben unberührt.",
+      "info": "Gelöscht werden nur die Verknüpfungen in der Liste. Angeheftete Einträge in Sprunglisten der Taskleiste bleiben erhalten.",
+      "group": "Papierkorb & Verlauf",
+      "kind": "action",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%APPDATA%\\Microsoft\\Windows\\Recent\\*.lnk"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.recycle-bin",
+      "name": "Papierkorb leeren",
+      "desc": "Leert den Papierkorb auf allen Laufwerken. Gelöschte Dateien sind danach endgültig weg.",
+      "info": "Leert den Papierkorb deines Benutzerkontos auf allen Laufwerken – genau wie ‚Papierkorb leeren‘ im Kontextmenü, nur ohne Rückfrage.",
+      "group": "Papierkorb & Verlauf",
+      "kind": "action",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Alles im Papierkorb wird endgültig gelöscht und lässt sich nicht wiederherstellen.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$sig = '[DllImport(\"shell32.dll\", CharSet = CharSet.Unicode)] public static extern int SHEmptyRecycleBin(IntPtr hwnd, string pszRootPath, uint dwFlags);'\nif (-not ('VxShell.RecycleBin' -as [type])) { Add-Type -Namespace VxShell -Name RecycleBin -MemberDefinition $sig -ErrorAction Stop }\n$hr = [VxShell.RecycleBin]::SHEmptyRecycleBin([IntPtr]::Zero, $null, 7)\nif ($hr -ne 0 -and $hr -ne -2147418113) { throw ('Papierkorb konnte nicht geleert werden (HRESULT 0x' + $hr.ToString('X8') + ')') }",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    }
+  ]
+}

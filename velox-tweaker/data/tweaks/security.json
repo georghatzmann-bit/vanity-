@@ -1,0 +1,253 @@
+{
+  "category": "security",
+  "tweaks": [
+    {
+      "id": "security.spectre-meltdown-off",
+      "name": "Spectre/Meltdown-Schutz aus",
+      "desc": "Schaltet den Software-Schutz gegen Spectre und Meltdown ab. Auf älteren CPUs spürbar schneller, öffnet aber echte Sicherheitslücken.",
+      "info": "Lohnt sich vor allem auf Intel-CPUs bis etwa zur 8. Generation und älteren AMD-CPUs – dort kostet der Schutz bei Spielen und vielen Datei-Zugriffen einige Prozent. Auf aktuellen CPUs (etwa ab 2019) steckt der Schutz größtenteils in der Hardware, der Gewinn ist dann kaum messbar. Das sind die von Microsoft dokumentierten Schalter (KB4073119).",
+      "group": "CPU-Schutz",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "risky",
+      "warning": "Programme und Webseiten können über diese Lücken Daten wie Passwörter aus dem Speicher anderer Programme auslesen.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "security-off"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+          "name": "FeatureSettingsOverride",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+          "name": "FeatureSettingsOverrideMask",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "security.cfg-off",
+      "name": "Ablaufsteuerungsschutz (CFG) systemweit aus",
+      "desc": "Schaltet den Exploit-Schutz CFG für alle Programme ab. Der Gewinn ist in den meisten Spielen kaum messbar.",
+      "info": "Entspricht Windows-Sicherheit > App- und Browsersteuerung > Exploit-Schutz > Ablaufsteuerungsschutz (CFG). Steht in vielen FPS-Paketen, Messungen zeigen aber meist nur 0–2 %.",
+      "group": "CPU-Schutz",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "risky",
+      "warning": "Programme sind leichter über Speicherfehler angreifbar. Manche Anti-Cheats (z. B. Riot Vanguard) setzen CFG voraus und melden dann Fehler.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "security-off"
+      ],
+      "when": {
+        "minBuild": 16299
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "Set-ProcessMitigation -System -Disable CFG -ErrorAction Stop",
+          "revert": "Set-ProcessMitigation -System -Enable CFG -ErrorAction Stop",
+          "detect": "$m = Get-ProcessMitigation -System -ErrorAction Stop\n[string]$m.CFG.Enable -eq 'OFF'"
+        }
+      ]
+    },
+    {
+      "id": "security.hvci-off",
+      "name": "Speicher-Integrität (Kernisolierung) aus",
+      "desc": "Schaltet die Speicher-Integrität (HVCI) ab. Bringt in CPU-lastigen Spielen ein paar Prozent FPS, schwächt aber den Schutz des Windows-Kerns.",
+      "info": "Das ist der Schalter unter Windows-Sicherheit > Gerätesicherheit > Kernisolierung. Tests zeigen meist 2–6 % mehr FPS in CPU-lastigen Spielen, auf CPUs vor Intel 7. Gen bzw. AMD Ryzen 3000 deutlich mehr. Unter Windows 11 schaltet ‚Zurücksetzen‘ sie wieder ein. Valorant (Vanguard) und FACEIT können Speicher-Integrität verlangen.",
+      "group": "Virtualisierung & Kernisolierung",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "risky",
+      "warning": "Schadsoftware und unsichere Treiber kommen leichter in den Windows-Kern. Valorant und FACEIT können Speicher-Integrität voraussetzen und starten dann nicht.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "security-off"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+          "name": "Enabled",
+          "kind": "DWord",
+          "value": 0,
+          "default": null,
+          "defaultWin11": 1
+        }
+      ]
+    },
+    {
+      "id": "security.vbs-off",
+      "name": "Virtualisierungsbasierte Sicherheit (VBS) aus",
+      "desc": "Schaltet VBS ganz ab und damit alle Schutzfunktionen, die darauf aufbauen. Etwas mehr Leistung, aber deutlich weniger Schutz.",
+      "info": "VBS trennt per Hypervisor einen geschützten Speicherbereich ab. Ohne VBS laufen auch Speicher-Integrität und Credential Guard nicht. Prüfen kannst du es in ‚Systeminformationen‘ (msinfo32) unter ‚Virtualisierungsbasierte Sicherheit‘. Wurde VBS per UEFI-Sperre eingeschaltet (Firmen-PCs), wirkt der Schalter nicht.",
+      "group": "Virtualisierung & Kernisolierung",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "risky",
+      "warning": "Speicher-Integrität, Credential Guard und weitere Schutzfunktionen fallen weg. Valorant und FACEIT können VBS voraussetzen und starten dann nicht.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "security-off"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+          "name": "EnableVirtualizationBasedSecurity",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "security.hypervisor-off",
+      "name": "Windows-Hypervisor beim Start nicht laden",
+      "desc": "Der Hypervisor startet nicht mehr mit Windows. Das schaltet VBS sicher mit ab, aber WSL2, Hyper-V, Sandbox und Android-Apps gehen nicht mehr.",
+      "info": "Der gründlichste Weg, VBS abzuschalten. Emulatoren wie BlueStacks oder VirtualBox laufen ohne Hypervisor oft sogar schneller. Zurücksetzen löscht den Eintrag wieder. Hast du vorher Hyper-V oder WSL2 benutzt, stelle lieber über ‚Sicherungen‘ wieder her, dann kommt der alte Wert (meist ‚Auto‘) zurück.",
+      "group": "Virtualisierung & Kernisolierung",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "risky",
+      "warning": "WSL2, Hyper-V, Windows-Sandbox, Docker Desktop und Android-Apps funktionieren nicht mehr. VBS und Speicher-Integrität sind aus, Vanguard und FACEIT können das ablehnen.",
+      "needs": "reboot",
+      "tags": [
+        "fps",
+        "security-off"
+      ],
+      "actions": [
+        {
+          "type": "bcd",
+          "name": "hypervisorlaunchtype",
+          "value": "Off",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "security.smartscreen-off",
+      "name": "SmartScreen für Apps und Dateien aus",
+      "desc": "Windows prüft heruntergeladene Programme nicht mehr online, bevor sie starten. Kaum schneller, aber ohne Warnung vor bekannter Schadsoftware.",
+      "info": "Betrifft die Prüfung im Explorer beim Öffnen von Downloads (‚Der Computer wurde durch Windows geschützt‘). Der Virenscanner von Defender und SmartScreen in Edge bleiben unverändert. Der einzige Gewinn: keine Online-Prüfung und keine Warnfenster bei unbekannten Programmen.",
+      "group": "Windows-Schutzfunktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "risky",
+      "warning": "Heruntergeladene Schadprogramme und gefälschte Installer starten ohne Warnung.",
+      "needs": "none",
+      "tags": [
+        "security-off",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "EnableSmartScreen",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "security.uac-no-secure-desktop",
+      "name": "UAC-Abfrage ohne abgedunkelten Bildschirm",
+      "desc": "Die Admin-Abfrage erscheint ohne Abdunkeln. Vollbild-Spiele werden dabei nicht mehr minimiert, die Abfrage ist aber weniger geschützt.",
+      "info": "Die Benutzerkontensteuerung (UAC) selbst bleibt an – du wirst weiter gefragt. Nur der abgedunkelte, geschützte Desktop fällt weg, auf dem andere Programme die Abfrage nicht sehen oder bedienen können.",
+      "group": "Windows-Schutzfunktionen",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "risky",
+      "warning": "Die UAC-Abfrage läuft nicht mehr auf dem geschützten Desktop. Schadsoftware kann sie leichter nachahmen oder beeinflussen.",
+      "needs": "none",
+      "tags": [
+        "security-off",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+          "name": "PromptOnSecureDesktop",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "security.defender-scan-gentle",
+      "name": "Virenscans bremsen den PC weniger",
+      "desc": "Defender-Scans nutzen im Schnitt höchstens 20 % CPU, geplante Scans laufen mit niedriger Priorität. Dafür dauern Scans länger.",
+      "info": "Der Echtzeitschutz bleibt voll aktiv, nur Scans werden gebremst (Standard: 50 % CPU). Die Grenze ist ein Durchschnitt, kurze Spitzen sind möglich. Gesetzt wird das über die offiziellen Defender-Gruppenrichtlinien.",
+      "group": "Microsoft Defender",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Vollständige und geplante Scans dauern deutlich länger.",
+      "needs": "none",
+      "tags": [
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Scan",
+          "name": "AvgCPULoadFactor",
+          "kind": "DWord",
+          "value": 20,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Scan",
+          "name": "LowCpuPriority",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "security.defender-samples-off",
+      "name": "Defender schickt keine Dateiproben mehr",
+      "desc": "Verdächtige Dateien werden nicht mehr automatisch zur Analyse an Microsoft hochgeladen. Mehr Privatsphäre, neue Schadsoftware fällt evtl. später auf.",
+      "info": "Entspricht ‚Automatische Übermittlung von Beispielen‘ in Windows-Sicherheit. Der Cloud-Schutz selbst (Abgleich von Datei-Kennungen) bleibt an, nur ganze Dateien werden nicht mehr hochgeladen.",
+      "group": "Microsoft Defender",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Ganz neue Schadsoftware kann ohne Cloud-Analyse der Datei später erkannt werden.",
+      "needs": "none",
+      "tags": [
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Spynet",
+          "name": "SubmitSamplesConsent",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        }
+      ]
+    }
+  ]
+}

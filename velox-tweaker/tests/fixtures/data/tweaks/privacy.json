@@ -1,0 +1,11 @@
+{
+  "category": "privacy",
+  "tweaks": [
+    { "id": "privacy.telemetry-policy", "name": "Telemetrie auf Minimum", "desc": "Windows sendet nur noch das Nötigste.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["privacy", "telemetry"],
+      "actions": [ { "type": "reg", "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "AllowTelemetry", "kind": "DWord", "value": 0, "default": null } ] },
+    { "id": "privacy.ads-id-off", "name": "Werbe-ID aus", "desc": "Apps bekommen keine Werbe-ID mehr.",
+      "impact": 1, "risk": "safe", "needs": "none", "tags": ["privacy", "ads"],
+      "actions": [ { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "name": "Enabled", "kind": "DWord", "value": 0, "default": 1 } ] }
+  ]
+}

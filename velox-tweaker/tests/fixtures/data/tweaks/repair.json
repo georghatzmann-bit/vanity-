@@ -1,0 +1,8 @@
+{
+  "category": "repair",
+  "tweaks": [
+    { "id": "repair.sfc", "name": "Systemdateien prüfen", "desc": "Prüft Windows-Dateien und repariert sie.",
+      "kind": "action", "impact": 1, "risk": "safe", "needs": "none", "tags": ["repair"],
+      "actions": [ { "type": "ps", "apply": "$null = & sfc.exe /scannow", "revert": null, "detect": null } ] }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "category": "memory",
+  "tweaks": [
+    { "id": "memory.compression-off", "name": "Speicherkomprimierung aus", "desc": "Spart CPU-Zeit, braucht aber mehr RAM.",
+      "impact": 1, "risk": "moderate", "warning": "Mit wenig RAM wird es eher langsamer.", "needs": "reboot", "tags": ["memory", "stutter"],
+      "actions": [ { "type": "ps", "apply": "Disable-MMAgent -MemoryCompression -ErrorAction Stop", "revert": "Enable-MMAgent -MemoryCompression -ErrorAction Stop", "detect": "$s = Get-MMAgent -ErrorAction Stop; -not $s.MemoryCompression" } ] }
+  ]
+}

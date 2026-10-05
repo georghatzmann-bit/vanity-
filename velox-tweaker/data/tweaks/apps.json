@@ -1,0 +1,1375 @@
+{
+  "category": "apps",
+  "tweaks": [
+    {
+      "id": "apps.bing-news",
+      "name": "Microsoft News entfernen",
+      "desc": "Die vorinstallierte Nachrichten-App mit MSN-Inhalten. Kaum genutzt, lädt Inhalte im Hintergrund.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Microsoft.BingNews"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.BingNews"
+        }
+      ]
+    },
+    {
+      "id": "apps.bing-weather",
+      "name": "Wetter-App entfernen",
+      "desc": "Die vorinstallierte Wetter-App von MSN. Das Wetter in Widgets oder auf dem Sperrbildschirm ist davon unabhängig.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.BingWeather"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.BingWeather"
+        }
+      ]
+    },
+    {
+      "id": "apps.bing-search",
+      "name": "Bing-Suche-App entfernen",
+      "desc": "Die eigenständige Bing-Such-App aus neueren Windows-11-Versionen. Die Windows-Suche funktioniert ohne sie weiter.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Microsoft.BingSearch"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.BingSearch"
+        }
+      ]
+    },
+    {
+      "id": "apps.get-help",
+      "name": "„Hilfe anfordern“ entfernen",
+      "desc": "Microsofts Support-Chat-App. Wird für die neuen Problembehandlungen von Windows 11 gebraucht.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die neuen Windows-Problembehandlungen (z. B. für Audio oder Netzwerk) starten danach nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.GetHelp"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.GetHelp"
+        }
+      ]
+    },
+    {
+      "id": "apps.tips",
+      "name": "Tipps-App entfernen",
+      "desc": "Die App mit Windows-Tipps und Einführungen. Wird kaum gebraucht.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Microsoft.Getstarted"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Getstarted"
+        }
+      ]
+    },
+    {
+      "id": "apps.office-hub",
+      "name": "Microsoft 365 (Copilot)-App entfernen",
+      "desc": "Werbe- und Start-App für Microsoft 365. Installierte Office-Programme wie Word und Excel bleiben erhalten.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads",
+        "ai"
+      ],
+      "when": {
+        "package": "Microsoft.MicrosoftOfficeHub"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.MicrosoftOfficeHub"
+        }
+      ]
+    },
+    {
+      "id": "apps.solitaire",
+      "name": "Solitaire Collection entfernen",
+      "desc": "Vorinstallierte Kartenspiele mit Werbung und Abo-Angeboten.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Microsoft.MicrosoftSolitaireCollection"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.MicrosoftSolitaireCollection"
+        }
+      ]
+    },
+    {
+      "id": "apps.sticky-notes",
+      "name": "Kurznotizen (Sticky Notes) entfernen",
+      "desc": "Die Notizzettel-App von Windows. Nur entfernen, wenn du sie nicht nutzt.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Notizen, die nicht mit deinem Microsoft-Konto synchronisiert sind, gehen verloren.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.MicrosoftStickyNotes"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.MicrosoftStickyNotes"
+        }
+      ]
+    },
+    {
+      "id": "apps.power-automate",
+      "name": "Power Automate entfernen",
+      "desc": "Microsofts Automatisierungs-Tool für Firmen-Abläufe. Für normale Nutzer überflüssig.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.PowerAutomateDesktop"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.PowerAutomateDesktop"
+        }
+      ]
+    },
+    {
+      "id": "apps.todo",
+      "name": "Microsoft To Do entfernen",
+      "desc": "Die Aufgaben-App von Microsoft. Deine Aufgaben bleiben in der Cloud gespeichert.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.Todos"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Todos"
+        }
+      ]
+    },
+    {
+      "id": "apps.alarms",
+      "name": "Uhr-App (Wecker & Timer) entfernen",
+      "desc": "Die App für Wecker, Timer, Stoppuhr und Weltzeit.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Wecker, Timer und Stoppuhr von Windows funktionieren danach nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.WindowsAlarms"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.WindowsAlarms"
+        }
+      ]
+    },
+    {
+      "id": "apps.feedback-hub",
+      "name": "Feedback-Hub entfernen",
+      "desc": "Die App, mit der du Microsoft Fehler meldest. Für normale Nutzer überflüssig.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "telemetry"
+      ],
+      "when": {
+        "package": "Microsoft.WindowsFeedbackHub"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.WindowsFeedbackHub"
+        }
+      ]
+    },
+    {
+      "id": "apps.maps",
+      "name": "Karten-App entfernen",
+      "desc": "Die Karten-App von Windows. Microsoft hat sie eingestellt; Online-Karten im Browser sind besser.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.WindowsMaps"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.WindowsMaps"
+        }
+      ]
+    },
+    {
+      "id": "apps.sound-recorder",
+      "name": "Audiorekorder entfernen",
+      "desc": "Die einfache App für Sprachaufnahmen. Nur entfernen, wenn du sie nicht nutzt.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.WindowsSoundRecorder"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.WindowsSoundRecorder"
+        }
+      ]
+    },
+    {
+      "id": "apps.phone-link",
+      "name": "Smartphone-Link entfernen",
+      "desc": "Die App, die dein Handy mit dem PC verbindet (SMS, Anrufe, Fotos).",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "SMS, Anrufe und Handy-Fotos am PC funktionieren danach nicht mehr.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.YourPhone"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.YourPhone"
+        }
+      ]
+    },
+    {
+      "id": "apps.media-player",
+      "name": "Media Player (Groove Musik) entfernen",
+      "desc": "Der Standard-Player für Musik und Videos unter Windows 11. Nur entfernen, wenn du einen anderen Player hast.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Musik- und Videodateien öffnen sich danach nicht mehr per Doppelklick. Installiere vorher z. B. VLC.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.ZuneMusic"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.ZuneMusic"
+        }
+      ]
+    },
+    {
+      "id": "apps.films-tv",
+      "name": "Filme & TV entfernen",
+      "desc": "Die alte Video-App von Microsoft, deren Film-Shop eingestellt ist. Videos öffnen danach im Media Player.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.ZuneVideo"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.ZuneVideo"
+        }
+      ]
+    },
+    {
+      "id": "apps.clipchamp",
+      "name": "Clipchamp entfernen",
+      "desc": "Der vorinstallierte Online-Videoeditor mit Abo-Werbung.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Clipchamp.Clipchamp"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Clipchamp.Clipchamp"
+        }
+      ]
+    },
+    {
+      "id": "apps.dev-home",
+      "name": "Dev Home entfernen",
+      "desc": "Ein Dashboard für Programmierer, das Microsoft eingestellt hat. Für normale Nutzer überflüssig.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.Windows.DevHome"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Windows.DevHome"
+        }
+      ]
+    },
+    {
+      "id": "apps.journal",
+      "name": "Microsoft Journal entfernen",
+      "desc": "Eine Notiz-App für Stift-Eingabe. Ohne Touchscreen und Stift nutzlos.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.MicrosoftJournal"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.MicrosoftJournal"
+        }
+      ]
+    },
+    {
+      "id": "apps.camera",
+      "name": "Kamera-App entfernen",
+      "desc": "Die App für Fotos und Videos mit der Webcam. Die Webcam funktioniert in Teams, Discord und Co. weiter.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Du kannst deine Webcam danach nicht mehr mit einer eingebauten App testen oder Fotos aufnehmen.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.WindowsCamera"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.WindowsCamera"
+        }
+      ]
+    },
+    {
+      "id": "apps.quick-assist",
+      "name": "Remotehilfe (Schnellhilfe) entfernen",
+      "desc": "Die Fernhilfe-App von Windows. Wird gern von Telefon-Betrügern missbraucht.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Jemand anderes kann dir dann nicht mehr per Schnellhilfe am PC helfen.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "MicrosoftCorporationII.QuickAssist"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "MicrosoftCorporationII.QuickAssist"
+        }
+      ]
+    },
+    {
+      "id": "apps.family",
+      "name": "Microsoft Family Safety entfernen",
+      "desc": "App für Jugendschutz und Bildschirmzeit. Nur entfernen, wenn du sie nicht für Kinder nutzt.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "MicrosoftCorporationII.MicrosoftFamily"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "MicrosoftCorporationII.MicrosoftFamily"
+        }
+      ]
+    },
+    {
+      "id": "apps.mixed-reality",
+      "name": "Mixed-Reality-Portal entfernen",
+      "desc": "Die App für Windows-Mixed-Reality-Brillen, die Microsoft eingestellt hat. Ohne passende Brille nutzlos.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.MixedReality.Portal"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.MixedReality.Portal"
+        }
+      ]
+    },
+    {
+      "id": "apps.widgets-platform",
+      "name": "Widgets-App komplett entfernen",
+      "desc": "Entfernt das Widgets-Board mit News und Wetter ganz. Spart Arbeitsspeicher, der sonst im Hintergrund belegt wird.",
+      "info": "Sanftere Alternative: „Widgets abschalten“ unter „Werbung & KI-Features“. Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Microsoft-Apps",
+      "kind": "remove",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Widgets und das Wetter in Taskleiste und Sperrbildschirm verschwinden. Ein Windows-Update kann die App zurückbringen.",
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads",
+        "memory"
+      ],
+      "when": {
+        "package": "MicrosoftWindows.Client.WebExperience",
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "MicrosoftWindows.Client.WebExperience"
+        }
+      ]
+    },
+    {
+      "id": "apps.copilot",
+      "name": "Copilot-App entfernen",
+      "desc": "Die Copilot-App von Microsoft. Nur entfernen, wenn du den KI-Chat nicht nutzt.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "KI & Copilot",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ai"
+      ],
+      "when": {
+        "package": "Microsoft.Copilot"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Copilot"
+        }
+      ]
+    },
+    {
+      "id": "apps.copilot-provider",
+      "name": "Alten Copilot-Seitenbereich entfernen",
+      "desc": "Das Paket für den alten Copilot-Seitenbereich aus Windows 11 23H2. Wird von der neuen App ersetzt.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "KI & Copilot",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ai"
+      ],
+      "when": {
+        "package": "Microsoft.Windows.Ai.Copilot.Provider"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Windows.Ai.Copilot.Provider"
+        }
+      ]
+    },
+    {
+      "id": "apps.teams-personal",
+      "name": "Teams (privat, für das Chat-Symbol) entfernen",
+      "desc": "Die alte private Teams-Version, die Windows 11 für das Chat-Symbol mitinstalliert. Startet sonst gern mit Windows.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "memory"
+      ],
+      "when": {
+        "package": "MicrosoftTeams"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "MicrosoftTeams"
+        }
+      ]
+    },
+    {
+      "id": "apps.teams-new",
+      "name": "Neues Microsoft Teams entfernen",
+      "desc": "Die neue Teams-App. Läuft gern im Hintergrund mit. Nur entfernen, wenn du Teams gar nicht brauchst.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Entfernt Teams komplett – auch für Arbeit oder Schule.",
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "memory"
+      ],
+      "when": {
+        "package": "MSTeams"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "MSTeams"
+        }
+      ]
+    },
+    {
+      "id": "apps.outlook-new",
+      "name": "Neues Outlook entfernen",
+      "desc": "Das neue Outlook, das Mail & Kalender ersetzt. Nur entfernen, wenn du ein anderes Mail-Programm nutzt.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Wenn du deine E-Mails damit liest, brauchst du danach ein anderes Mail-Programm.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.OutlookForWindows"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.OutlookForWindows"
+        }
+      ]
+    },
+    {
+      "id": "apps.mail-calendar",
+      "name": "Mail und Kalender entfernen",
+      "desc": "Die alten Apps Mail und Kalender. Microsoft hat sie Ende 2024 eingestellt, das neue Outlook ersetzt sie.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "E-Mails und Termine, die du nur in Mail/Kalender liest, siehst du dann nur noch im Browser oder einer anderen App.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "microsoft.windowscommunicationsapps"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "microsoft.windowscommunicationsapps"
+        }
+      ]
+    },
+    {
+      "id": "apps.onenote-win10",
+      "name": "OneNote für Windows 10 entfernen",
+      "desc": "Die eingestellte App-Version von OneNote. Deine Notizbücher bleiben in OneDrive gespeichert.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.Office.OneNote"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Office.OneNote"
+        }
+      ]
+    },
+    {
+      "id": "apps.skype",
+      "name": "Skype entfernen",
+      "desc": "Microsoft hat Skype im Mai 2025 abgeschaltet. Die App ist nur noch Ballast.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.SkypeApp"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.SkypeApp"
+        }
+      ]
+    },
+    {
+      "id": "apps.people",
+      "name": "Kontakte-App (Personen) entfernen",
+      "desc": "Die alte Kontakte-App von Windows 10. Wird kaum genutzt.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Kommunikation & Office",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.People"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.People"
+        }
+      ]
+    },
+    {
+      "id": "apps.xbox-app",
+      "name": "Xbox-App entfernen",
+      "desc": "Die Xbox-App für Game Pass und den PC-Store. Nur entfernen, wenn du keinen Game Pass nutzt.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Xbox",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Game-Pass- und Xbox-PC-Spiele lassen sich danach nicht mehr installieren, aktualisieren oder starten.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.GamingApp"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.GamingApp"
+        }
+      ]
+    },
+    {
+      "id": "apps.xbox-game-bar",
+      "name": "Xbox Game Bar entfernen",
+      "desc": "Das Overlay mit Win + G (FPS-Anzeige, Aufnahmen, Party-Chat).",
+      "info": "Für mehr FPS reicht meist schon „Game DVR aus“ unter „Gaming & FPS“. Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Xbox",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Win + G, Aufnahmen und FPS-Anzeige gehen nicht mehr; manche Spiele zeigen beim Start einen Hinweis zu „ms-gamingoverlay“.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.XboxGamingOverlay"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.XboxGamingOverlay"
+        }
+      ]
+    },
+    {
+      "id": "apps.xbox-speech",
+      "name": "Xbox Sprache-zu-Text entfernen",
+      "desc": "Wandelt im Xbox-Party-Chat Sprache in Text um. Nur für Bedienungshilfen gebraucht.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Xbox",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.XboxSpeechToTextOverlay"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.XboxSpeechToTextOverlay"
+        }
+      ]
+    },
+    {
+      "id": "apps.xbox-tcui",
+      "name": "Xbox-Oberfläche für Spiele (TCUI) entfernen",
+      "desc": "Zeigt in Spielen Xbox-Fenster wie Freundesliste oder Einladungen an.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Xbox",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Store- und Game-Pass-Spiele mit Xbox-Anmeldung können danach Freunde, Einladungen oder Erfolge nicht mehr anzeigen.",
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.Xbox.TCUI"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Xbox.TCUI"
+        }
+      ]
+    },
+    {
+      "id": "apps.xbox-companion",
+      "name": "Xbox Console Companion entfernen",
+      "desc": "Die alte Xbox-App von Windows 10. Wurde durch die neue Xbox-App ersetzt.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Xbox",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.XboxApp"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.XboxApp"
+        }
+      ]
+    },
+    {
+      "id": "apps.cortana",
+      "name": "Cortana-App entfernen",
+      "desc": "Die eingestellte Sprachassistentin. Microsoft hat Cortana abgeschaltet.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "privacy"
+      ],
+      "when": {
+        "package": "Microsoft.549981C3F5F10"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.549981C3F5F10"
+        }
+      ]
+    },
+    {
+      "id": "apps.bing-finance",
+      "name": "MSN Geld entfernen",
+      "desc": "Alte, eingestellte Finanz-App von Microsoft.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.BingFinance"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.BingFinance"
+        }
+      ]
+    },
+    {
+      "id": "apps.bing-sports",
+      "name": "MSN Sport entfernen",
+      "desc": "Alte, eingestellte Sport-App von Microsoft.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.BingSports"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.BingSports"
+        }
+      ]
+    },
+    {
+      "id": "apps.3d-viewer",
+      "name": "3D-Viewer entfernen",
+      "desc": "Zeigt 3D-Modelle an. Für fast alle Nutzer überflüssig.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.Microsoft3DViewer"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Microsoft3DViewer"
+        }
+      ]
+    },
+    {
+      "id": "apps.paint-3d",
+      "name": "Paint 3D entfernen",
+      "desc": "Die eingestellte 3D-Version von Paint. Das normale Paint bleibt erhalten.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.MSPaint"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.MSPaint"
+        }
+      ]
+    },
+    {
+      "id": "apps.wallet",
+      "name": "Microsoft Wallet entfernen",
+      "desc": "Alte Bezahl-App von Windows 10 ohne Funktion in Deutschland.",
+      "info": "Microsoft hat die App eingestellt. Einmal entfernt, kannst du sie nicht mehr aus dem Microsoft Store installieren.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.Wallet"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.Wallet"
+        }
+      ]
+    },
+    {
+      "id": "apps.mobile-plans",
+      "name": "Mobilfunktarife entfernen",
+      "desc": "Die App zum Kauf von Mobilfunk-Datentarifen für PCs mit SIM-Karte. Ohne eingebautes Mobilfunkmodem nutzlos.",
+      "info": "Microsoft hat die App eingestellt. Ob sie sich später noch aus dem Microsoft Store installieren lässt, ist nicht sicher.",
+      "group": "Windows-10-Altlasten",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat"
+      ],
+      "when": {
+        "package": "Microsoft.OneConnect"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Microsoft.OneConnect"
+        }
+      ]
+    },
+    {
+      "id": "apps.candy-crush-saga",
+      "name": "Candy Crush Saga entfernen",
+      "desc": "Ein von Windows mitinstalliertes Werbe-Spiel. Spielst du es selbst, lass es drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "king.com.CandyCrushSaga"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "king.com.CandyCrushSaga"
+        }
+      ]
+    },
+    {
+      "id": "apps.candy-crush-soda",
+      "name": "Candy Crush Soda Saga entfernen",
+      "desc": "Ein von Windows mitinstalliertes Werbe-Spiel. Spielst du es selbst, lass es drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "king.com.CandyCrushSodaSaga"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "king.com.CandyCrushSodaSaga"
+        }
+      ]
+    },
+    {
+      "id": "apps.spotify",
+      "name": "Spotify entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "SpotifyAB.SpotifyMusic"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "SpotifyAB.SpotifyMusic"
+        }
+      ]
+    },
+    {
+      "id": "apps.disney-plus",
+      "name": "Disney+ entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Disney.37853FC22B2CE"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Disney.37853FC22B2CE"
+        }
+      ]
+    },
+    {
+      "id": "apps.netflix",
+      "name": "Netflix entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "4DF9E0F8.Netflix"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "4DF9E0F8.Netflix"
+        }
+      ]
+    },
+    {
+      "id": "apps.prime-video",
+      "name": "Prime Video entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "AmazonVideo.PrimeVideo"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "AmazonVideo.PrimeVideo"
+        }
+      ]
+    },
+    {
+      "id": "apps.tiktok",
+      "name": "TikTok entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "BytedancePte.Ltd.TikTok"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "BytedancePte.Ltd.TikTok"
+        }
+      ]
+    },
+    {
+      "id": "apps.facebook",
+      "name": "Facebook entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Facebook.Facebook"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Facebook.Facebook"
+        }
+      ]
+    },
+    {
+      "id": "apps.instagram",
+      "name": "Instagram entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "Facebook.InstagramBeta"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "Facebook.InstagramBeta"
+        }
+      ]
+    },
+    {
+      "id": "apps.linkedin",
+      "name": "LinkedIn entfernen",
+      "desc": "Eine von Windows mitinstallierte Werbe-App. Nutzt du sie selbst, lass sie drauf.",
+      "info": "Lässt sich nicht per Knopf zurückholen, aber jederzeit kostenlos aus dem Microsoft Store neu installieren.",
+      "group": "Werbe-Apps von Drittanbietern",
+      "kind": "remove",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "bloat",
+        "ads"
+      ],
+      "when": {
+        "package": "7EE7776C.LinkedInforWindows"
+      },
+      "actions": [
+        {
+          "type": "appx",
+          "package": "7EE7776C.LinkedInforWindows"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1471 @@
+{
+  "category": "ui",
+  "tweaks": [
+    {
+      "id": "ui.dark-mode",
+      "name": "Dunkles Design für Windows und Apps",
+      "desc": "Taskleiste, Startmenü, Explorer, Einstellungen und Apps werden dunkel. Angenehmer für die Augen, besonders abends.",
+      "info": "Programme, die gerade offen sind, wechseln teils erst nach einem Neustart des Programms. Auf OLED-Laptops spart es zusätzlich etwas Akku.",
+      "group": "Design & Farben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "AppsUseLightTheme",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "SystemUsesLightTheme",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.transparency-off",
+      "name": "Transparenz-Effekte aus",
+      "desc": "Taskleiste, Startmenü und Fenster werden undurchsichtig. Etwas weniger Arbeit für schwache Grafikchips und besser lesbar.",
+      "info": "Auf aktuellen Grafikkarten ist der Leistungsunterschied kaum messbar. Auf Laptops mit integrierter Grafik spart es ein wenig Strom.",
+      "group": "Design & Farben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "battery"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "EnableTransparency",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.accent-titlebars",
+      "name": "Akzentfarbe in Titelleisten und Fensterrahmen",
+      "desc": "Das aktive Fenster bekommt eine farbige Titelleiste. So erkennst du sofort, welches Fenster gerade Eingaben bekommt.",
+      "group": "Design & Farben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\DWM",
+          "name": "ColorPrevalence",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "ui.accent-taskbar",
+      "name": "Akzentfarbe auf Start und Taskleiste",
+      "desc": "Taskleiste und Startmenü werden in deiner Akzentfarbe eingefärbt statt schwarz oder weiß.",
+      "info": "Funktioniert nur, wenn der Windows-Modus dunkel ist (siehe „Dunkles Design“). Im hellen Modus ignoriert Windows den Wert.",
+      "group": "Design & Farben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+          "name": "ColorPrevalence",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "ui.logon-blur-off",
+      "name": "Anmeldebildschirm ohne Unschärfe",
+      "desc": "Das Hintergrundbild bei der Passworteingabe wird scharf statt verschwommen angezeigt.",
+      "group": "Design & Farben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ui"
+      ],
+      "when": {
+        "minBuild": 18362
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+          "name": "DisableAcrylicBackgroundOnLogon",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.lockscreen-off",
+      "name": "Sperrbildschirm überspringen",
+      "desc": "Nach dem Start oder Sperren geht es direkt zur Passworteingabe – ohne erst den Sperrbildschirm wegzuklicken.",
+      "info": "Dein Passwort oder deine PIN bleibt natürlich weiter nötig – nur der Vorhang davor fällt weg.",
+      "group": "Design & Farben",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Uhrzeit, Spotlight-Bilder und Infos auf dem Sperrbildschirm entfallen. Unter Windows Home kann die Einstellung wirkungslos sein.",
+      "needs": "none",
+      "tags": [
+        "ui",
+        "quality-of-life",
+        "boot"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
+          "name": "NoLockScreen",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.taskbar-left",
+      "name": "Taskleisten-Symbole links ausrichten",
+      "desc": "Start-Knopf und Apps sitzen wieder links wie bei Windows 10, statt in der Mitte zu wandern.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAl",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.taskview-button-off",
+      "name": "Taskansicht-Knopf ausblenden",
+      "desc": "Entfernt den Knopf für virtuelle Desktops aus der Taskleiste. Win+Tab funktioniert weiterhin.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowTaskViewButton",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.search-icon-only",
+      "name": "Suchfeld in der Taskleiste nur als Symbol",
+      "desc": "Das breite Suchfeld wird zur kleinen Lupe – mehr Platz für deine Apps. Suchen geht weiter per Klick oder Windows-Taste.",
+      "info": "Windows zeigt standardmäßig das breite Suchfeld. Tippe nach dem Drücken der Windows-Taste einfach los, um zu suchen.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+          "name": "SearchboxTaskbarMode",
+          "kind": "DWord",
+          "value": 1,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "id": "ui.end-task",
+      "name": "„Task beenden“ im Rechtsklick auf Taskleisten-Apps",
+      "desc": "Hängende Programme beendest du per Rechtsklick in der Taskleiste – ohne Task-Manager. Praktisch bei eingefrorenen Spielen.",
+      "info": "Gibt es ab Windows 11 23H2. Das Programm wird sofort beendet, ungespeicherte Daten darin gehen verloren.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 22631
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
+          "name": "TaskbarEndTask",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.clock-seconds",
+      "name": "Sekunden in der Taskleisten-Uhr anzeigen",
+      "desc": "Die Uhr zeigt zusätzlich Sekunden. Praktisch zum Timen – kostet laut Microsoft minimal mehr Strom.",
+      "info": "Unter Windows 11 erst ab Version 22H2 mit aktuellen Updates verfügbar, auf älteren Builds passiert nichts.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "laptop-bad"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowSecondsInSystemClock",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.taskbar-never-combine",
+      "name": "Taskleisten-Fenster nie zusammenfassen",
+      "desc": "Jedes Fenster bekommt einen eigenen Taskleisten-Knopf mit Titel. Zwischen mehreren Fenstern wechselst du mit einem Klick.",
+      "info": "Gilt für die Haupt-Taskleiste und Taskleisten auf weiteren Bildschirmen. Unter Windows 11 erst ab 23H2 verfügbar, ältere Builds ignorieren es.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarGlomLevel",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "MMTaskbarGlomLevel",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.last-active-click",
+      "name": "Klick auf Taskleisten-App öffnet letztes Fenster",
+      "desc": "Bei mehreren offenen Fenstern einer App springt ein Klick direkt zum zuletzt benutzten statt erst die Vorschau zu zeigen.",
+      "info": "Weitere Klicks wechseln durch alle Fenster der App. Die Vorschau erscheint weiterhin beim Drüberfahren mit der Maus.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "LastActiveClick",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.small-taskbar-icons",
+      "name": "Kleine Taskleisten-Symbole",
+      "desc": "Die Taskleiste wird schmaler, du hast mehr Platz auf dem Bildschirm.",
+      "info": "Nur Windows 10. Windows 11 kennt diese Einstellung nicht mehr.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "when": {
+        "os": "win10"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarSmallIcons",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.tray-show-all",
+      "name": "Alle Symbole im Infobereich anzeigen",
+      "desc": "Discord, Steam, Lautstärke-Tools & Co. sind direkt neben der Uhr sichtbar statt hinter dem kleinen Pfeil versteckt.",
+      "info": "Nur Windows 10. Unter Windows 11 legst du das in den Einstellungen unter „Andere Systemleistensymbole“ pro App fest.",
+      "group": "Taskleiste",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "os": "win10"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+          "name": "EnableAutoTray",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.start-more-pins",
+      "name": "Startmenü: mehr Platz für angeheftete Apps",
+      "desc": "Das Startmenü zeigt eine Reihe mehr angeheftete Apps und dafür weniger „Empfohlen“-Einträge.",
+      "info": "Entspricht dem Layout „Mehr angeheftete Elemente“ (Windows 11 22H2 bis 24H2). Im neu gestalteten Startmenü ab Ende 2025 gibt es diese Auswahl nicht mehr, dort ändert sich nichts.",
+      "group": "Startmenü",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 22621
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_Layout",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.recent-items-off",
+      "name": "Zuletzt geöffnete Dateien in Start und Sprunglisten aus",
+      "desc": "Startmenü, Sprunglisten und Explorer zeigen nicht mehr, welche Dateien du zuletzt geöffnet hast. Aufgeräumter und privater.",
+      "info": "Die Sprunglisten (Rechtsklick auf ein Taskleisten-Programm) bleiben dann leer, angeheftete Einträge darin bleiben erhalten.",
+      "group": "Startmenü",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Start_TrackDocs",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.file-extensions",
+      "name": "Dateiendungen immer anzeigen",
+      "desc": "Du siehst „bild.png“ statt nur „bild“. Schützt vor Tricks wie „rechnung.pdf.exe“ und hilft beim Umbenennen.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "HideFileExt",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.hidden-files",
+      "name": "Versteckte Dateien und Ordner anzeigen",
+      "desc": "Ordner wie AppData werden sichtbar – wichtig für Mods, Spielstände und Konfigurationsdateien.",
+      "info": "Versteckte Elemente werden leicht ausgegraut angezeigt, damit du sie von normalen unterscheiden kannst.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "Hidden",
+          "kind": "DWord",
+          "value": 1,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "id": "ui.protected-os-files",
+      "name": "Geschützte Systemdateien anzeigen",
+      "desc": "Zeigt auch Dateien wie desktop.ini oder pagefile.sys. Nur nötig, wenn du gezielt an Systemdateien musst.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Auf dem Desktop und in Ordnern tauchen Systemdateien auf. Wer sie löscht oder verschiebt, kann Windows oder Programme beschädigen.",
+      "needs": "explorer",
+      "tags": [
+        "explorer"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ShowSuperHidden",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "ui.explorer-this-pc",
+      "name": "Explorer öffnet „Dieser PC“",
+      "desc": "Der Explorer startet mit deinen Laufwerken statt mit „Start“/Schnellzugriff. Schneller da und ohne Cloud-Dateien.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "LaunchTo",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.quick-access-recent-off",
+      "name": "Zuletzt benutzte Dateien im Schnellzugriff aus",
+      "desc": "Der Explorer listet keine kürzlich geöffneten und häufig genutzten Dateien mehr – auch keine von Office.com. Privater und schneller.",
+      "info": "Angeheftete Ordner im Schnellzugriff bleiben. Die Office.com-Liste gibt es nur unter Windows 11, unter Windows 10 hat der Wert keine Wirkung.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "privacy"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+          "name": "ShowRecent",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+          "name": "ShowFrequent",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+          "name": "ShowCloudFilesInQuickAccess",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.explorer-compact",
+      "name": "Kompakte Ansicht im Explorer",
+      "desc": "Weniger Abstand zwischen Dateien – mehr passt auf einen Blick, ähnlich wie bei Windows 10.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "UseCompactMode",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.explorer-full-path",
+      "name": "Vollständigen Pfad in der Titelleiste anzeigen",
+      "desc": "Der Explorer zeigt „C:\\Users\\Name\\Downloads“ statt nur „Downloads“. Du weißt immer, wo du gerade bist.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\CabinetState",
+          "name": "FullPath",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "ui.shortcut-suffix-off",
+      "name": "Kein „- Verknüpfung“ an neuen Verknüpfungen",
+      "desc": "Neue Verknüpfungen heißen einfach „Spiel“ statt „Spiel - Verknüpfung“. Das Pfeil-Symbol zeigt ohnehin, dass es eine Verknüpfung ist.",
+      "info": "Gilt für Verknüpfungen, die du ab jetzt erstellst. Bestehende behalten ihren Namen.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\NamingTemplates",
+          "name": "ShortcutNameTemplate",
+          "kind": "String",
+          "value": "%s.lnk",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.explorer-separate-process",
+      "name": "Ordnerfenster in eigenem Prozess starten",
+      "desc": "Stürzt ein Explorer-Fenster ab, reißt es Taskleiste und Desktop nicht mehr mit. Kostet etwas mehr Arbeitsspeicher.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "SeparateProcess",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "ui.explorer-restore-folders",
+      "name": "Offene Ordner nach der Anmeldung wiederherstellen",
+      "desc": "Explorer-Fenster, die beim Herunterfahren offen waren, öffnen sich nach dem Start wieder.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "PersistBrowsers",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.navpane-expand",
+      "name": "Navigationsbereich klappt zum offenen Ordner auf",
+      "desc": "Die Ordnerleiste links zeigt automatisch, wo du dich gerade befindest. Erleichtert die Orientierung in tiefen Ordnern.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "NavPaneExpandToCurrentFolder",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.folder-type-generic",
+      "name": "Ordner nicht mehr nach Inhalt analysieren",
+      "desc": "Der Explorer prüft große Ordner (z. B. Downloads) nicht mehr auf Bilder oder Musik. Sie öffnen deutlich schneller.",
+      "info": "Alle Ordner nutzen dann die allgemeine Ansicht. Musik- oder Bildordner zeigen keine speziellen Spalten (Interpret, Aufnahmedatum) mehr, die kannst du aber per Rechtsklick auf die Spaltenköpfe selbst einblenden.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "quality-of-life",
+        "hdd"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell",
+          "name": "FolderType",
+          "kind": "String",
+          "value": "NotSpecified",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.thumbnails-off",
+      "name": "Vorschaubilder im Explorer aus",
+      "desc": "Statt Bild- und Videovorschauen zeigt der Explorer nur Symbole. Ordner mit tausenden Fotos laden spürbar schneller, besonders auf Festplatten.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Du siehst nicht mehr auf einen Blick, was in Bildern und Videos ist.",
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "hdd"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "IconsOnly",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "ui.gallery-off",
+      "name": "„Galerie“ aus dem Explorer-Navigationsbereich entfernen",
+      "desc": "Blendet den Eintrag „Galerie“ links im Explorer aus. Deine Bilder bleiben natürlich, wo sie sind.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui"
+      ],
+      "when": {
+        "minBuild": 22621
+      },
+      "actions": [
+        {
+          "type": "regkey",
+          "path": "HKCU\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+          "present": true,
+          "default": false
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+          "name": "System.IsPinnedToNameSpaceTree",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.3d-objects-off",
+      "name": "Ordner „3D-Objekte“ unter „Dieser PC“ ausblenden",
+      "desc": "Entfernt den kaum genutzten Ordner „3D-Objekte“ aus „Dieser PC“. Der Ordner selbst und sein Inhalt bleiben auf der Festplatte.",
+      "info": "Nur Windows 10 – Windows 11 zeigt diesen Ordner ohnehin nicht mehr.",
+      "group": "Explorer",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "bloat"
+      ],
+      "when": {
+        "os": "win10"
+      },
+      "actions": [
+        {
+          "type": "regkey",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MyComputer\\NameSpace\\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}",
+          "present": false,
+          "default": true
+        },
+        {
+          "type": "regkey",
+          "path": "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MyComputer\\NameSpace\\{0DB7E03F-FC29-4DC6-9020-FF41B59E513A}",
+          "present": false,
+          "default": true
+        }
+      ]
+    },
+    {
+      "id": "ui.aero-shake-off",
+      "name": "Fenster schütteln minimiert nicht mehr alle anderen",
+      "desc": "Wenn du ein Fenster beim Ziehen hin und her bewegst, verschwinden nicht mehr versehentlich alle anderen Fenster.",
+      "info": "Nur Windows 10. Unter Windows 11 ist diese Funktion bereits ab Werk aus.",
+      "group": "Fenster & Snap",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "os": "win10"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "DisallowShaking",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.snap-assist-off",
+      "name": "Keine Vorschläge nach dem Andocken eines Fensters",
+      "desc": "Schiebst du ein Fenster an den Rand, bleibt die andere Hälfte frei – ohne Auswahl-Übersicht der übrigen Fenster.",
+      "info": "Das Andocken selbst (Fenster an den Rand ziehen, Win+Pfeiltasten) funktioniert weiterhin.",
+      "group": "Fenster & Snap",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "SnapAssist",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.snap-layouts-off",
+      "name": "Andock-Layouts am Maximieren-Knopf und oben am Rand aus",
+      "desc": "Kein Layout-Menü mehr beim Überfahren des Maximieren-Knopfs oder beim Ziehen eines Fensters an den oberen Rand.",
+      "info": "Praktisch, wenn das Menü beim schnellen Klicken stört. Win+Z und Win+Pfeiltasten funktionieren weiterhin.",
+      "group": "Fenster & Snap",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "EnableSnapAssistFlyout",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "EnableSnapBar",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.alttab-no-tabs",
+      "name": "Alt+Tab zeigt nur Fenster, keine Browser-Tabs",
+      "desc": "Edge-Tabs tauchen nicht mehr einzeln in Alt+Tab auf. Du springst schneller zurück ins Spiel oder ins richtige Fenster.",
+      "info": "Betrifft nur Microsoft Edge. Andere Browser zeigen ihre Tabs ohnehin nicht in Alt+Tab.",
+      "group": "Fenster & Snap",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "MultiTaskingAltTabFilter",
+          "kind": "DWord",
+          "value": 3,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.scrollbars-always",
+      "name": "Bildlaufleisten immer anzeigen",
+      "desc": "Bildlaufleisten in Einstellungen und Store-Apps bleiben sichtbar, statt sich zu verstecken. Leichter zu treffen.",
+      "group": "Fenster & Snap",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 17134
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Accessibility",
+          "name": "DynamicScrollbars",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.classic-context-menu",
+      "name": "Klassisches Rechtsklickmenü (ohne „Weitere Optionen“)",
+      "desc": "Der Rechtsklick zeigt sofort alle Einträge wie unter Windows 10 – ohne Umweg über „Weitere Optionen anzeigen“.",
+      "info": "Nur für dein Benutzerkonto. Zurücksetzen bringt das neue Windows-11-Menü zurück.",
+      "group": "Rechtsklickmenü",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 22000
+      },
+      "actions": [
+        {
+          "type": "regkey",
+          "path": "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}",
+          "present": true,
+          "default": false
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\\InprocServer32",
+          "name": "",
+          "kind": "String",
+          "value": "",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.ctx-give-access-off",
+      "name": "„Zugriff gewähren auf“ aus dem Rechtsklickmenü entfernen",
+      "desc": "Entfernt den Eintrag für Netzwerkfreigaben aus dem Rechtsklickmenü. Weniger Ballast, wenn du keine Ordner im Netzwerk teilst.",
+      "info": "Ordner freigeben kannst du weiterhin über Eigenschaften > Freigabe.",
+      "group": "Rechtsklickmenü",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Blocked",
+          "name": "{f81e9010-6ea4-11ce-a7ff-00aa003ca9f6}",
+          "kind": "String",
+          "value": "",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.ctx-compat-off",
+      "name": "„Behandeln von Kompatibilitätsproblemen“ entfernen",
+      "desc": "Entfernt den Kompatibilitäts-Assistenten aus dem Rechtsklickmenü von Programmen.",
+      "info": "Den Kompatibilitätsmodus stellst du weiterhin über Eigenschaften > Kompatibilität ein.",
+      "group": "Rechtsklickmenü",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Blocked",
+          "name": "{1d27f844-3a1f-4410-85ac-14651078412d}",
+          "kind": "String",
+          "value": "",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.ctx-cast-off",
+      "name": "„Auf Gerät übertragen“ aus dem Rechtsklickmenü entfernen",
+      "desc": "Entfernt den Eintrag zum Streamen von Medien an Fernseher und DLNA-Geräte.",
+      "group": "Rechtsklickmenü",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Blocked",
+          "name": "{7AD84985-87B4-4a16-BE58-8B72A5B390F7}",
+          "kind": "String",
+          "value": "",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.ctx-previous-versions-off",
+      "name": "„Vorgängerversionen wiederherstellen“ entfernen",
+      "desc": "Entfernt den Eintrag aus dem Rechtsklickmenü – und den Reiter „Vorgängerversionen“ in den Eigenschaften.",
+      "group": "Rechtsklickmenü",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Ältere Versionen von Dateien aus Wiederherstellungspunkten oder dem Dateiversionsverlauf kannst du dann nicht mehr per Explorer zurückholen.",
+      "needs": "explorer",
+      "tags": [
+        "explorer",
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Shell Extensions\\Blocked",
+          "name": "{596AB062-B4D2-4215-9F74-E9109B0A8153}",
+          "kind": "String",
+          "value": "",
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.desktop-this-pc",
+      "name": "„Dieser PC“ auf dem Desktop anzeigen",
+      "desc": "Ein Symbol für deine Laufwerke direkt auf dem Desktop – ein Doppelklick bis zu allen Festplatten.",
+      "group": "Desktop",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel",
+          "name": "{20D04FE0-3AEA-1069-A2D8-08002B30309D}",
+          "kind": "DWord",
+          "value": 0,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.desktop-recyclebin-off",
+      "name": "Papierkorb vom Desktop entfernen",
+      "desc": "Für einen ganz leeren Desktop. Den Papierkorb erreichst du weiter über den Explorer oder die Adresszeile.",
+      "info": "Tipp: Tippe „Papierkorb“ in die Explorer-Adresszeile oder hefte ihn im Schnellzugriff an.",
+      "group": "Desktop",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\HideDesktopIcons\\NewStartPanel",
+          "name": "{645FF040-5081-101B-9F08-00AA002F954E}",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.wallpaper-quality",
+      "name": "Hintergrundbild in voller Qualität",
+      "desc": "Windows komprimiert JPG-Hintergrundbilder sonst auf 85 % Qualität. Mit 100 % gibt es keine Artefakte mehr.",
+      "info": "Wirkt, sobald du das Hintergrundbild neu einstellst.",
+      "group": "Desktop",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Desktop",
+          "name": "JPEGImportQuality",
+          "kind": "DWord",
+          "value": 100,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "ui.visual-effects-performance",
+      "name": "Visuelle Effekte auf Leistung stellen",
+      "desc": "Schaltet Schatten, Ein- und Ausblenden, Fensterinhalt beim Ziehen und ähnliche Effekte ab. Schrift bleibt glatt. Hilft vor allem schwachen PCs.",
+      "info": "Entspricht „Für optimale Leistung anpassen“ in den Leistungsoptionen, nur ohne die Kantenglättung der Schrift abzuschalten. Auf aktuellen PCs ist der FPS-Gewinn in Spielen kaum messbar, die Oberfläche fühlt sich aber direkter an.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Windows sieht schlichter aus: keine Fensterschatten, Menüs erscheinen ohne Übergang, beim Verschieben siehst du nur einen Rahmen.",
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "battery"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Desktop",
+          "name": "UserPreferencesMask",
+          "kind": "Binary",
+          "value": "9012038010000000",
+          "default": "9E1E078012000000",
+          "defaultWin11": "9E3E078012000000"
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Desktop",
+          "name": "DragFullWindows",
+          "kind": "String",
+          "value": "0",
+          "default": "1"
+        }
+      ]
+    },
+    {
+      "id": "ui.window-animations-off",
+      "name": "Animationen beim Minimieren und Maximieren aus",
+      "desc": "Fenster springen sofort auf und zu, statt zu gleiten. Windows fühlt sich spürbar schneller an.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Desktop\\WindowMetrics",
+          "name": "MinAnimate",
+          "kind": "String",
+          "value": "0",
+          "default": "1"
+        }
+      ]
+    },
+    {
+      "id": "ui.taskbar-animations-off",
+      "name": "Taskleisten-Animationen aus",
+      "desc": "Symbole und Vorschauen in der Taskleiste erscheinen ohne Animation.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "TaskbarAnimations",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.listview-effects-off",
+      "name": "Durchsichtige Auswahl und Symbol-Schatten aus",
+      "desc": "Der Explorer zeichnet die Auswahl-Box ohne Transparenz und die Desktop-Symbole ohne Schatten. Minimal weniger Grafikarbeit.",
+      "info": "Wirkung auf modernen Systemen kaum messbar – eher Geschmackssache.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ListviewAlphaSelect",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        },
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+          "name": "ListviewShadow",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ]
+    },
+    {
+      "id": "ui.aero-peek-off",
+      "name": "Desktop-Vorschau (Aero Peek) aus",
+      "desc": "Fährst du über eine Fenster-Vorschau in der Taskleiste, werden die anderen Fenster nicht mehr durchsichtig. Kein versehentliches Aufblitzen.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "explorer",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\DWM",
+          "name": "EnableAeroPeek",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1
+        }
+      ],
+      "info": "Schaltet die Funktion „Aero Peek“ ganz ab, also auch die Desktop-Vorschau in der Ecke rechts unten, falls du sie eingeschaltet hast."
+    },
+    {
+      "id": "ui.menu-show-delay",
+      "name": "Untermenüs schneller öffnen",
+      "desc": "Untermenüs (z. B. „Öffnen mit“, „Neu“) klappen nach 0,1 statt 0,4 Sekunden auf. Das Arbeiten mit Menüs geht flotter.",
+      "info": "Ganz auf 0 zu stellen lohnt nicht: Dann springen Untermenüs schon beim zufälligen Drüberfahren auf.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Desktop",
+          "name": "MenuShowDelay",
+          "kind": "String",
+          "value": "100",
+          "default": "400"
+        }
+      ]
+    },
+    {
+      "id": "ui.mouse-hover-time",
+      "name": "Schnellere Reaktion beim Überfahren mit der Maus",
+      "desc": "Taskleisten-Vorschauen und Hover-Effekte erscheinen nach 0,1 statt 0,4 Sekunden. Die Oberfläche wirkt reaktionsfreudiger.",
+      "info": "Nachteil: Vorschauen tauchen auch dann auf, wenn du die Maus nur kurz über ein Element bewegst. Normale Tooltips haben eine eigene Wartezeit und ändern sich kaum.",
+      "group": "Animationen & Effekte",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": [
+        "ui",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Control Panel\\Mouse",
+          "name": "MouseHoverTime",
+          "kind": "String",
+          "value": "100",
+          "default": "400"
+        }
+      ]
+    },
+    {
+      "id": "ui.numlock-on",
+      "name": "Num-Taste beim Start einschalten",
+      "desc": "Der Ziffernblock funktioniert schon bei der PIN- oder Passworteingabe, ohne dass du erst Num drücken musst.",
+      "info": "Nur für Desktop-PCs: Bei Laptops mit eingebautem Ziffernblock in den Buchstabentasten würden sonst Buchstaben zu Zahlen. Ist der Schnellstart aktiv, kann zusätzlich die BIOS-Einstellung „NumLock“ entscheiden.",
+      "group": "Tastatur",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "quality-of-life",
+        "desktop"
+      ],
+      "when": {
+        "formFactor": "desktop"
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKU\\.DEFAULT\\Control Panel\\Keyboard",
+          "name": "InitialKeyboardIndicators",
+          "kind": "String",
+          "value": "2",
+          "default": "2147483648"
+        }
+      ]
+    }
+  ]
+}

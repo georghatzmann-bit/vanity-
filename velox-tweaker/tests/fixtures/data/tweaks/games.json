@@ -1,0 +1,8 @@
+{
+  "category": "games",
+  "tweaks": [
+    { "id": "games.fivem-priority", "name": "FiveM mit hoher Priorität", "desc": "Der FiveM-Spielprozess bekommt mehr CPU-Zeit.",
+      "impact": 2, "risk": "safe", "needs": "none", "tags": ["fivem", "gta", "fps"],
+      "actions": [ { "type": "reg", "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\FiveM_GTAProcess.exe\\PerfOptions", "name": "CpuPriorityClass", "kind": "DWord", "value": 3, "default": null } ] }
+  ]
+}

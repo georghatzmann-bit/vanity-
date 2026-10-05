@@ -1,0 +1,8 @@
+{
+  "category": "apps",
+  "tweaks": [
+    { "id": "apps.bingnews", "name": "Microsoft News entfernen", "desc": "Die News-App wird entfernt.",
+      "kind": "remove", "impact": 1, "risk": "safe", "needs": "none", "tags": ["bloat"], "when": { "package": "Microsoft.BingNews" },
+      "actions": [ { "type": "appx", "package": "Microsoft.BingNews" } ] }
+  ]
+}

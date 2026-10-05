@@ -1,0 +1,4623 @@
+{
+  "registry": [
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl",
+      "name": "Win32PrioritySeparation",
+      "kind": "DWord",
+      "default": 2,
+      "label": "CPU-Zeitverteilung Vordergrund/Hintergrund (Win32PrioritySeparation)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl",
+      "name": "IRQ8Priority",
+      "kind": "DWord",
+      "default": null,
+      "label": "Erzwungene Interrupt-Priorität (IRQ8Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl",
+      "name": "IRQ16Priority",
+      "kind": "DWord",
+      "default": null,
+      "label": "Erzwungene Interrupt-Priorität (IRQ16Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+      "name": "SystemResponsiveness",
+      "kind": "DWord",
+      "default": 20,
+      "label": "Reservierte CPU-Zeit für Hintergrund-Aufgaben (MMCSS SystemResponsiveness)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+      "name": "NetworkThrottlingIndex",
+      "kind": "DWord",
+      "default": 10,
+      "label": "Netzwerk-Drosselung bei Multimedia (MMCSS NetworkThrottlingIndex)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+      "name": "NoLazyMode",
+      "kind": "DWord",
+      "default": null,
+      "label": "MMCSS-Sondermodus (NoLazyMode)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+      "name": "LazyModeTimeout",
+      "kind": "DWord",
+      "default": null,
+      "label": "MMCSS-Sondermodus (LazyModeTimeout)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+      "name": "AlwaysOn",
+      "kind": "DWord",
+      "default": null,
+      "label": "MMCSS-Sondermodus (AlwaysOn)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "Affinity",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Spiele-Profil: CPU-Kern-Zuordnung (MMCSS Games Affinity)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "Background Only",
+      "kind": "String",
+      "default": "False",
+      "label": "Spiele-Profil: nur Hintergrund (MMCSS Games Background Only)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "Clock Rate",
+      "kind": "DWord",
+      "default": 10000,
+      "label": "Spiele-Profil: Takt-Intervall (MMCSS Games Clock Rate)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "GPU Priority",
+      "kind": "DWord",
+      "default": 8,
+      "label": "Spiele-Profil: Grafikkarten-Priorität (MMCSS Games GPU Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "Priority",
+      "kind": "DWord",
+      "default": 2,
+      "label": "Spiele-Profil: CPU-Priorität (MMCSS Games Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "Scheduling Category",
+      "kind": "String",
+      "default": "Medium",
+      "label": "Spiele-Profil: Planungs-Kategorie (MMCSS Games Scheduling Category)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "SFIO Priority",
+      "kind": "String",
+      "default": "Normal",
+      "label": "Spiele-Profil: Datenträger-Priorität (MMCSS Games SFIO Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+      "name": "Latency Sensitive",
+      "kind": "String",
+      "default": null,
+      "label": "Spiele-Profil: latenzkritisch erzwungen (MMCSS Games Latency Sensitive)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio",
+      "name": "Priority",
+      "kind": "DWord",
+      "default": 6,
+      "label": "Audio-Profil: CPU-Priorität (MMCSS Audio Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio",
+      "name": "Scheduling Category",
+      "kind": "String",
+      "default": "Medium",
+      "label": "Audio-Profil: Planungs-Kategorie (MMCSS Audio Scheduling Category)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio",
+      "name": "SFIO Priority",
+      "kind": "String",
+      "default": "Normal",
+      "label": "Audio-Profil: Datenträger-Priorität (MMCSS Audio SFIO Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio",
+      "name": "GPU Priority",
+      "kind": "DWord",
+      "default": 8,
+      "label": "Audio-Profil: Grafikkarten-Priorität (MMCSS Audio GPU Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Audio",
+      "name": "Background Only",
+      "kind": "String",
+      "default": "True",
+      "label": "Audio-Profil: nur Hintergrund (MMCSS Audio Background Only)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Pro Audio",
+      "name": "Priority",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Pro-Audio-Profil: CPU-Priorität (MMCSS Pro Audio Priority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Pro Audio",
+      "name": "Scheduling Category",
+      "kind": "String",
+      "default": "High",
+      "label": "Pro-Audio-Profil: Planungs-Kategorie (MMCSS Pro Audio Scheduling Category)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "DpcWatchdogProfileOffset",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (DpcWatchdogProfileOffset)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "DpcTimeout",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (DpcTimeout)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "DpcWatchdogPeriod",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (DpcWatchdogPeriod)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "IdealDpcRate",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (IdealDpcRate)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "MinimumDpcRate",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (MinimumDpcRate)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "MaximumDpcQueueDepth",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (MaximumDpcQueueDepth)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "AdjustDpcThreshold",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (AdjustDpcThreshold)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "ThreadDpcEnable",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: DPC-Verhalten geändert (ThreadDpcEnable)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "DisableLowQosTimerResolution",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (DisableLowQosTimerResolution)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "SerializeTimerExpiration",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (SerializeTimerExpiration)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "DistributeTimers",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (DistributeTimers)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "InterruptSteeringDisabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (InterruptSteeringDisabled)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "KiClockTimerPerCpu",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (KiClockTimerPerCpu)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "KiClockTimerHighLatency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (KiClockTimerHighLatency)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "KiClockTimerAlwaysOnPresent",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (KiClockTimerAlwaysOnPresent)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "SplitLargeCaches",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (SplitLargeCaches)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "CoalescingTimerInterval",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Timer/Interrupt-Verhalten geändert (CoalescingTimerInterval)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\I/O System",
+      "name": "PassiveIntRealTimeWorkerPriority",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: Priorität für Interrupt-Arbeiter (PassiveIntRealTimeWorkerPriority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\I/O System",
+      "name": "CountOperations",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kernel: E/A-Zählung abgeschaltet (CountOperations)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control",
+      "name": "SvcHostSplitThresholdInKB",
+      "kind": "DWord",
+      "default": 3670016,
+      "label": "Dienste-Prozesse bündeln (SvcHostSplitThresholdInKB)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "GlobalTimerResolutionRequests",
+      "kind": "DWord",
+      "default": null,
+      "label": "Systemweite Timer-Auflösung (GlobalTimerResolutionRequests)",
+      "group": "Boot & Timer"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\DXGKrnl\\Parameters",
+      "name": "ThreadPriority",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Kernel: Thread-Priorität erzwungen (DXGKrnl ThreadPriority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\USBXHCI\\Parameters",
+      "name": "ThreadPriority",
+      "kind": "DWord",
+      "default": null,
+      "label": "USB-Controller: Thread-Priorität erzwungen (USBXHCI ThreadPriority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\USBHUB3\\Parameters",
+      "name": "ThreadPriority",
+      "kind": "DWord",
+      "default": null,
+      "label": "USB-Hub: Thread-Priorität erzwungen (USBHUB3 ThreadPriority)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\FTH",
+      "name": "Enabled",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Schutz vor abstürzenden Programmen (Fault Tolerant Heap)",
+      "group": "CPU & Scheduler"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "LargeSystemCache",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Großer Datei-Cache wie auf Servern (LargeSystemCache)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "DisablePagingExecutive",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Kernel im Arbeitsspeicher festhalten (DisablePagingExecutive)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "SecondLevelDataCache",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Manuelle CPU-Cache-Größe (SecondLevelDataCache)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "ClearPageFileAtShutdown",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Auslagerungsdatei beim Herunterfahren leeren (ClearPageFileAtShutdown)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "NonPagedPoolQuota",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Speicher-Pool-Grenze (NonPagedPoolQuota)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "NonPagedPoolSize",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Speicher-Pool-Größe (NonPagedPoolSize)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "PagedPoolQuota",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Speicher-Pool-Grenze (PagedPoolQuota)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "PagedPoolSize",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Speicher-Pool-Größe (PagedPoolSize)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "SessionPoolSize",
+      "kind": "DWord",
+      "default": 4,
+      "label": "Sitzungs-Speicher (SessionPoolSize)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "SessionViewSize",
+      "kind": "DWord",
+      "default": 48,
+      "label": "Sitzungs-Ansichtsspeicher (SessionViewSize)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "SystemPages",
+      "kind": "DWord",
+      "default": 0,
+      "label": "System-Seitentabellen (SystemPages)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "IoPageLockLimit",
+      "kind": "DWord",
+      "default": null,
+      "label": "Speicherverwaltung geändert (IoPageLockLimit)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "DisablePageCombining",
+      "kind": "DWord",
+      "default": null,
+      "label": "Speicherverwaltung geändert (DisablePageCombining)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "DisablePagingCombining",
+      "kind": "DWord",
+      "default": null,
+      "label": "Speicherverwaltung geändert (DisablePagingCombining)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "PoolUsageMaximum",
+      "kind": "DWord",
+      "default": null,
+      "label": "Speicherverwaltung geändert (PoolUsageMaximum)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "MoveImages",
+      "kind": "DWord",
+      "default": null,
+      "label": "Speicher-Zufallsanordnung abgeschaltet (MoveImages / ASLR)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "FeatureSettingsOverride",
+      "kind": "DWord",
+      "default": null,
+      "label": "CPU-Sicherheitslücken-Schutz geändert (Spectre/Meltdown FeatureSettingsOverride) - Zurücksetzen stellt den Schutz wieder her",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+      "name": "FeatureSettingsOverrideMask",
+      "kind": "DWord",
+      "default": null,
+      "label": "CPU-Sicherheitslücken-Schutz geändert (Spectre/Meltdown FeatureSettingsOverrideMask) - Zurücksetzen stellt den Schutz wieder her",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+      "name": "DisableTsx",
+      "kind": "DWord",
+      "default": null,
+      "label": "CPU-Funktion TSX umgestellt (DisableTsx)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters",
+      "name": "EnablePrefetcher",
+      "kind": "DWord",
+      "default": 3,
+      "label": "Programme vorab laden (EnablePrefetcher)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+      "name": "NtfsDisable8dot3NameCreation",
+      "kind": "DWord",
+      "default": 2,
+      "label": "Kurze 8.3-Dateinamen (NtfsDisable8dot3NameCreation)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore",
+      "name": "SystemRestorePointCreationFrequency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Mindestabstand zwischen Wiederherstellungspunkten (SystemRestorePointCreationFrequency)",
+      "group": "Speicher"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "HwSchMode",
+      "kind": "DWord",
+      "default": null,
+      "label": "Hardwarebeschleunigte GPU-Planung erzwungen (HwSchMode)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "TdrDelay",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Absturzschutz geändert (TdrDelay)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "TdrDdiDelay",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Absturzschutz geändert (TdrDdiDelay)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "TdrLevel",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Absturzschutz geändert (TdrLevel)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "TdrDebugMode",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Absturzschutz geändert (TdrDebugMode)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "TdrLimitCount",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Absturzschutz geändert (TdrLimitCount)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "TdrLimitTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Absturzschutz geändert (TdrLimitTime)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "DisableOverlays",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Sonderschalter (DisableOverlays)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "DpiMapIommuContiguous",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Sonderschalter (DpiMapIommuContiguous)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+      "name": "RmGpsPsEnablePerCpuCoreDpc",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafiktreiber-Sonderschalter (RmGpsPsEnablePerCpuCoreDpc)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler",
+      "name": "EnablePreemption",
+      "kind": "DWord",
+      "default": null,
+      "label": "GPU-Planer geändert (EnablePreemption)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler",
+      "name": "VsyncIdleTimeout",
+      "kind": "DWord",
+      "default": null,
+      "label": "GPU-Planer geändert (VsyncIdleTimeout)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultD3TransitionLatencyActivelyUsed",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultD3TransitionLatencyActivelyUsed)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultD3TransitionLatencyIdleLongTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultD3TransitionLatencyIdleLongTime)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultD3TransitionLatencyIdleMonitorOff",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultD3TransitionLatencyIdleMonitorOff)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultD3TransitionLatencyIdleNoContext",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultD3TransitionLatencyIdleNoContext)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultD3TransitionLatencyIdleShortTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultD3TransitionLatencyIdleShortTime)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultD3TransitionLatencyIdleVeryLongTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultD3TransitionLatencyIdleVeryLongTime)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceIdle0",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceIdle0)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceIdle0MonitorOff",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceIdle0MonitorOff)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceMemory",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceMemory)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceNoContext",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceNoContext)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceNoContextMonitorOff",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceNoContextMonitorOff)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceOther",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceOther)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultLatencyToleranceTimerPeriod",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultLatencyToleranceTimerPeriod)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultMemoryRefreshLatencyToleranceActivelyUsed",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultMemoryRefreshLatencyToleranceActivelyUsed)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultMemoryRefreshLatencyToleranceMonitorOff",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultMemoryRefreshLatencyToleranceMonitorOff)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "DefaultMemoryRefreshLatencyToleranceNoContext",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (DefaultMemoryRefreshLatencyToleranceNoContext)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "Latency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (Latency)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "MaxIAverageGraphicsLatencyInOneBucket",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (MaxIAverageGraphicsLatencyInOneBucket)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "MiracastPerfTrackGraphicsLatency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (MiracastPerfTrackGraphicsLatency)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "MonitorLatencyTolerance",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (MonitorLatencyTolerance)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "MonitorRefreshLatencyTolerance",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (MonitorRefreshLatencyTolerance)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Power",
+      "name": "TransitionLatency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Grafik-Energiesparlatenz geändert (TransitionLatency)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\Dwm",
+      "name": "OverlayTestMode",
+      "kind": "DWord",
+      "default": null,
+      "label": "Multiplane-Overlay abgeschaltet (OverlayTestMode)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\Dwm",
+      "name": "OverlayMinFPS",
+      "kind": "DWord",
+      "default": null,
+      "label": "Overlay-Mindest-FPS (OverlayMinFPS)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\*",
+      "name": "DisableDynamicPstate",
+      "kind": "DWord",
+      "default": null,
+      "label": "NVIDIA-Grafikkarte: Taktverhalten fest eingestellt (DisableDynamicPstate)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\*",
+      "name": "PowerMizerEnable",
+      "kind": "DWord",
+      "default": null,
+      "label": "NVIDIA-Grafikkarte: Taktverhalten fest eingestellt (PowerMizerEnable)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\*",
+      "name": "PowerMizerLevel",
+      "kind": "DWord",
+      "default": null,
+      "label": "NVIDIA-Grafikkarte: Taktverhalten fest eingestellt (PowerMizerLevel)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\*",
+      "name": "PowerMizerLevelAC",
+      "kind": "DWord",
+      "default": null,
+      "label": "NVIDIA-Grafikkarte: Taktverhalten fest eingestellt (PowerMizerLevelAC)",
+      "group": "Grafik"
+    },
+    {
+      "path": "HKCU\\System\\GameConfigStore",
+      "name": "GameDVR_Enabled",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Spiele-Aufnahme im Hintergrund (GameDVR_Enabled)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\System\\GameConfigStore",
+      "name": "GameDVR_HonorUserFSEBehaviorMode",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Vollbild-Optimierungen: Benutzerwahl erzwingen (GameDVR_HonorUserFSEBehaviorMode)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\System\\GameConfigStore",
+      "name": "GameDVR_DXGIHonorFSEWindowsCompatible",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Vollbild-Optimierungen für DXGI (GameDVR_DXGIHonorFSEWindowsCompatible)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\System\\GameConfigStore",
+      "name": "GameDVR_EFSEFeatureFlags",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Erweiterter Vollbildmodus (GameDVR_EFSEFeatureFlags)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\System\\GameConfigStore",
+      "name": "GameDVR_FSEBehavior",
+      "kind": "DWord",
+      "default": null,
+      "label": "Vollbild-Optimierungen global abgeschaltet (GameDVR_FSEBehavior)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+      "name": "AppCaptureEnabled",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Game-Bar-Aufnahmen (AppCaptureEnabled)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR",
+      "name": "AllowGameDVR",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Spiele-Aufnahme verboten (AllowGameDVR)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\PolicyManager\\default\\ApplicationManagement\\AllowGameDVR",
+      "name": "value",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Spiele-Aufnahme erlaubt (PolicyManager AllowGameDVR)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\WindowsRuntime\\ActivatableClassId\\Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter",
+      "name": "ActivationType",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Game-Bar-Präsenzdienst (PresenceWriter ActivationType)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\GameBar",
+      "name": "AllowAutoGameMode",
+      "kind": "DWord",
+      "default": null,
+      "label": "Spielmodus fest eingestellt (AllowAutoGameMode)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\GameBar",
+      "name": "AutoGameModeEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Spielmodus fest eingestellt (AutoGameModeEnabled)",
+      "group": "Spiele & Game Bar"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "MouseSpeed",
+      "kind": "String",
+      "default": "1",
+      "label": "Mausbeschleunigung (MouseSpeed)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "MouseThreshold1",
+      "kind": "String",
+      "default": "6",
+      "label": "Mausbeschleunigung Schwelle 1 (MouseThreshold1)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "MouseThreshold2",
+      "kind": "String",
+      "default": "10",
+      "label": "Mausbeschleunigung Schwelle 2 (MouseThreshold2)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "MouseSensitivity",
+      "kind": "String",
+      "default": "10",
+      "label": "Zeigergeschwindigkeit (MouseSensitivity)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "SmoothMouseXCurve",
+      "kind": "Binary",
+      "default": "0000000000000000156E000000000000004001000000000029DC0300000000000000280000000000",
+      "label": "Mauskurve horizontal (SmoothMouseXCurve)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "SmoothMouseYCurve",
+      "kind": "Binary",
+      "default": "0000000000000000FD11010000000000002404000000000000FC12000000000000C0BB0100000000",
+      "label": "Mauskurve vertikal (SmoothMouseYCurve)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "MouseHoverTime",
+      "kind": "String",
+      "default": "400",
+      "label": "Verzögerung bis Tooltips erscheinen (MouseHoverTime)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "DoubleClickSpeed",
+      "kind": "String",
+      "default": "500",
+      "label": "Doppelklick-Geschwindigkeit (DoubleClickSpeed)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Mouse",
+      "name": "MouseTrails",
+      "kind": "String",
+      "default": "0",
+      "label": "Mausspur (MouseTrails)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Keyboard",
+      "name": "KeyboardDelay",
+      "kind": "String",
+      "default": "1",
+      "label": "Tasten-Wiederholverzögerung (KeyboardDelay)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Keyboard",
+      "name": "KeyboardSpeed",
+      "kind": "String",
+      "default": "31",
+      "label": "Tasten-Wiederholrate (KeyboardSpeed)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\Keyboard Response",
+      "name": "AutoRepeatDelay",
+      "kind": "String",
+      "default": "1000",
+      "label": "Anschlagverzögerung: Wiederholverzögerung (Keyboard Response AutoRepeatDelay)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\Keyboard Response",
+      "name": "AutoRepeatRate",
+      "kind": "String",
+      "default": "500",
+      "label": "Anschlagverzögerung: Wiederholrate (Keyboard Response AutoRepeatRate)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\Keyboard Response",
+      "name": "BounceTime",
+      "kind": "String",
+      "default": "0",
+      "label": "Anschlagverzögerung: Prellzeit (Keyboard Response BounceTime)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\Keyboard Response",
+      "name": "DelayBeforeAcceptance",
+      "kind": "String",
+      "default": "1000",
+      "label": "Anschlagverzögerung: Annahmeverzögerung (Keyboard Response DelayBeforeAcceptance)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\Keyboard Response",
+      "name": "Flags",
+      "kind": "String",
+      "default": "126",
+      "label": "Anschlagverzögerung: Tastenkürzel (Keyboard Response Flags)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\StickyKeys",
+      "name": "Flags",
+      "kind": "String",
+      "default": "510",
+      "label": "Einrastfunktion: Tastenkürzel (StickyKeys Flags)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\ToggleKeys",
+      "name": "Flags",
+      "kind": "String",
+      "default": "62",
+      "label": "Statusanzeige-Töne: Tastenkürzel (ToggleKeys Flags)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Accessibility\\MouseKeys",
+      "name": "Flags",
+      "kind": "String",
+      "default": "62",
+      "label": "Maustasten: Tastenkürzel (MouseKeys Flags)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\mouclass\\Parameters",
+      "name": "MouseDataQueueSize",
+      "kind": "DWord",
+      "default": 100,
+      "label": "Maus-Eingabepuffer (MouseDataQueueSize)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters",
+      "name": "KeyboardDataQueueSize",
+      "kind": "DWord",
+      "default": 100,
+      "label": "Tastatur-Eingabepuffer (KeyboardDataQueueSize)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\mouclass\\Parameters",
+      "name": "ThreadPriority",
+      "kind": "DWord",
+      "default": null,
+      "label": "Maus-Treiber: Thread-Priorität erzwungen (mouclass ThreadPriority)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters",
+      "name": "ThreadPriority",
+      "kind": "DWord",
+      "default": null,
+      "label": "Tastatur-Treiber: Thread-Priorität erzwungen (kbdclass ThreadPriority)",
+      "group": "Maus & Tastatur"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "MenuShowDelay",
+      "kind": "String",
+      "default": "400",
+      "label": "Verzögerung beim Öffnen von Menüs (MenuShowDelay)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "AutoEndTasks",
+      "kind": "String",
+      "default": null,
+      "label": "Programme beim Herunterfahren ohne Nachfrage beenden (AutoEndTasks)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "HungAppTimeout",
+      "kind": "String",
+      "default": null,
+      "label": "Wartezeit bis ein Programm als 'reagiert nicht' gilt (HungAppTimeout)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "WaitToKillAppTimeout",
+      "kind": "String",
+      "default": null,
+      "label": "Wartezeit auf Programme beim Herunterfahren (WaitToKillAppTimeout)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "LowLevelHooksTimeout",
+      "kind": "String",
+      "default": null,
+      "label": "Wartezeit auf Eingabe-Hooks (LowLevelHooksTimeout)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "ForegroundLockTimeout",
+      "kind": "DWord",
+      "default": 200000,
+      "label": "Schutz vor Fenstern, die sich in den Vordergrund drängen (ForegroundLockTimeout)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "ForegroundFlashCount",
+      "kind": "DWord",
+      "default": 7,
+      "label": "Blinken von Taskleisten-Schaltflächen (ForegroundFlashCount)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control",
+      "name": "WaitToKillServiceTimeout",
+      "kind": "String",
+      "default": "5000",
+      "label": "Wartezeit auf Dienste beim Herunterfahren (WaitToKillServiceTimeout)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize",
+      "name": "StartupDelayInMSec",
+      "kind": "DWord",
+      "default": null,
+      "label": "Autostart-Verzögerung nach der Anmeldung (StartupDelayInMSec)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize",
+      "name": "WaitForIdleState",
+      "kind": "DWord",
+      "default": null,
+      "label": "Autostart wartet auf Leerlauf (WaitForIdleState)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Serialize",
+      "name": "StartupDelayInMSec",
+      "kind": "DWord",
+      "default": null,
+      "label": "Autostart-Verzögerung für alle Benutzer (StartupDelayInMSec)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+      "name": "CrashDumpEnabled",
+      "kind": "DWord",
+      "default": 7,
+      "label": "Absturzberichte (Speicherabbild) schreiben (CrashDumpEnabled)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+      "name": "AutoReboot",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Nach Bluescreen automatisch neu starten (AutoReboot)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+      "name": "LogEvent",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Abstürze ins Ereignisprotokoll schreiben (LogEvent)",
+      "group": "Herunterfahren & Reaktionszeit"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "DragFullWindows",
+      "kind": "String",
+      "default": "1",
+      "label": "Fensterinhalt beim Ziehen anzeigen (DragFullWindows)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "FontSmoothing",
+      "kind": "String",
+      "default": "2",
+      "label": "Schriftglättung (FontSmoothing)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "WheelScrollLines",
+      "kind": "String",
+      "default": "3",
+      "label": "Zeilen pro Mausrad-Raste (WheelScrollLines)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop",
+      "name": "JPEGImportQuality",
+      "kind": "DWord",
+      "default": null,
+      "label": "Hintergrundbild-Qualität (JPEGImportQuality)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Control Panel\\Desktop\\WindowMetrics",
+      "name": "MinAnimate",
+      "kind": "String",
+      "default": "1",
+      "label": "Animation beim Minimieren/Maximieren (MinAnimate)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "TaskbarAnimations",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Taskleisten-Animationen (TaskbarAnimations)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "ListviewAlphaSelect",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Durchsichtiges Auswahlrechteck (ListviewAlphaSelect)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "ListviewShadow",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Schatten unter Desktop-Symbolen (ListviewShadow)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "IconsOnly",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Miniaturansichten statt Symbole (IconsOnly)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "ExtendedUIHoverTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Verhalten geändert (ExtendedUIHoverTime)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "DesktopLivePreviewHoverTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Verhalten geändert (DesktopLivePreviewHoverTime)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "DisableThumbnailCache",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Verhalten geändert (DisableThumbnailCache)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\DWM",
+      "name": "EnableAeroPeek",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Desktop-Vorschau (EnableAeroPeek)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\DWM",
+      "name": "AlwaysHibernateThumbnails",
+      "kind": "DWord",
+      "default": 0,
+      "label": "Taskleisten-Vorschaubilder zwischenspeichern (AlwaysHibernateThumbnails)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+      "name": "EnableTransparency",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Transparenz-Effekte (EnableTransparency)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer",
+      "name": "Max Cached Icons",
+      "kind": "String",
+      "default": null,
+      "label": "Größe des Symbol-Caches (Max Cached Icons)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoLowDiskSpaceChecks",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoLowDiskSpaceChecks)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "LinkResolveIgnoreLinkInfo",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (LinkResolveIgnoreLinkInfo)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoResolveSearch",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoResolveSearch)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoResolveTrack",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoResolveTrack)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoInternetOpenWith",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoInternetOpenWith)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoInstrumentation",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoInstrumentation)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoRecentDocsHistory",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoRecentDocsHistory)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "ClearRecentDocsOnExit",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (ClearRecentDocsOnExit)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoThumbnailCache",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (NoThumbnailCache)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "NoInstrumentation",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie für alle Benutzer (NoInstrumentation)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "HideSCAHealth",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie für alle Benutzer (HideSCAHealth)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+      "name": "SettingsPageVisibility",
+      "kind": "String",
+      "default": null,
+      "label": "Versteckte Seiten in den Einstellungen (SettingsPageVisibility)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer",
+      "name": "DisableNotificationCenter",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (DisableNotificationCenter)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Policies\\Microsoft\\Windows\\Explorer",
+      "name": "DisableSearchBoxSuggestions",
+      "kind": "DWord",
+      "default": null,
+      "label": "Explorer-Richtlinie (DisableSearchBoxSuggestions)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
+      "name": "NoUseStoreOpenWith",
+      "kind": "DWord",
+      "default": null,
+      "label": "Store bei 'Öffnen mit' ausgeblendet (NoUseStoreOpenWith)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications",
+      "name": "ToastEnabled",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Benachrichtigungen (ToastEnabled)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CurrentVersion\\PushNotifications",
+      "name": "NoCloudApplicationNotification",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Cloud-Benachrichtigungen aus (NoCloudApplicationNotification)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
+      "name": "NoLockScreen",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Sperrbildschirm aus (NoLockScreen)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+      "name": "DisableAcrylicBackgroundOnLogon",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Unschärfe am Anmeldebildschirm aus (DisableAcrylicBackgroundOnLogon)",
+      "group": "Oberfläche"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpAckFrequency",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpAckFrequency)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TCPNoDelay",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TCPNoDelay)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpDelAckTicks",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpDelAckTicks)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "DefaultTTL",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (DefaultTTL)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "Tcp1323Opts",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (Tcp1323Opts)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "SackOpts",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (SackOpts)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpMaxDupAcks",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpMaxDupAcks)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpMaxDataRetransmissions",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpMaxDataRetransmissions)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpMaxConnectRetransmissions",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpMaxConnectRetransmissions)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpTimedWaitDelay",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpTimedWaitDelay)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "MaxUserPort",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (MaxUserPort)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "MaxFreeTcbs",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (MaxFreeTcbs)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "MaxFreeTWTcbs",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (MaxFreeTWTcbs)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "MaxHashTableSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (MaxHashTableSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpNumConnections",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpNumConnections)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpWindowSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpWindowSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "GlobalMaxTcpWindowSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (GlobalMaxTcpWindowSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnablePMTUDiscovery",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnablePMTUDiscovery)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnablePMTUBHDetect",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnablePMTUBHDetect)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "KeepAliveTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (KeepAliveTime)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "KeepAliveInterval",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (KeepAliveInterval)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpCreateAndConnectTcbRateLimitDepth",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpCreateAndConnectTcbRateLimitDepth)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnableConnectionRateLimiting",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnableConnectionRateLimiting)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "DisableTaskOffload",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (DisableTaskOffload)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnableTCPA",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnableTCPA)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnableRSS",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnableRSS)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnableTCPChimney",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnableTCPChimney)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "EnableDCA",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (EnableDCA)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters",
+      "name": "TcpInitialRTT",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP/IP-Einstellung geändert (TcpInitialRTT)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*",
+      "name": "TcpAckFrequency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Netzwerkadapter: TCP-Bestätigung geändert (TcpAckFrequency)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*",
+      "name": "TCPNoDelay",
+      "kind": "DWord",
+      "default": null,
+      "label": "Netzwerkadapter: TCP-Bestätigung geändert (TCPNoDelay)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*",
+      "name": "TcpDelAckTicks",
+      "kind": "DWord",
+      "default": null,
+      "label": "Netzwerkadapter: TCP-Bestätigung geändert (TcpDelAckTicks)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\*",
+      "name": "TcpInitialRTT",
+      "kind": "DWord",
+      "default": null,
+      "label": "Netzwerkadapter: TCP-Bestätigung geändert (TcpInitialRTT)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider",
+      "name": "Class",
+      "kind": "DWord",
+      "default": 8,
+      "label": "Namensauflösung: Klasse (ServiceProvider Class)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider",
+      "name": "DnsPriority",
+      "kind": "DWord",
+      "default": 2000,
+      "label": "Namensauflösung: DNS-Reihenfolge (DnsPriority)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider",
+      "name": "HostsPriority",
+      "kind": "DWord",
+      "default": 500,
+      "label": "Namensauflösung: Hosts-Reihenfolge (HostsPriority)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider",
+      "name": "LocalPriority",
+      "kind": "DWord",
+      "default": 499,
+      "label": "Namensauflösung: Lokal-Reihenfolge (LocalPriority)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\ServiceProvider",
+      "name": "NetbtPriority",
+      "kind": "DWord",
+      "default": 2001,
+      "label": "Namensauflösung: NetBIOS-Reihenfolge (NetbtPriority)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\QoS",
+      "name": "Do not use NLA",
+      "kind": "String",
+      "default": null,
+      "label": "QoS ohne Netzwerkerkennung (Do not use NLA)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+      "name": "DisabledComponents",
+      "kind": "DWord",
+      "default": null,
+      "label": "IPv6 ganz oder teilweise abgeschaltet (DisabledComponents)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "DefaultReceiveWindow",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD DefaultReceiveWindow)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "DefaultSendWindow",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD DefaultSendWindow)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "FastSendDatagramThreshold",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD FastSendDatagramThreshold)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "FastCopyReceiveThreshold",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD FastCopyReceiveThreshold)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "DynamicSendBufferDisable",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD DynamicSendBufferDisable)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "IgnorePushBitOnReceives",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD IgnorePushBitOnReceives)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "NonBlockingSendSpecialBuffering",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD NonBlockingSendSpecialBuffering)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "DisableRawSecurity",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD DisableRawSecurity)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "IgnoreOrderlyRelease",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD IgnoreOrderlyRelease)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "BufferAlignment",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD BufferAlignment)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "DoNotHoldNicBuffers",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD DoNotHoldNicBuffers)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "SmallBufferSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD SmallBufferSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "MediumBufferSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD MediumBufferSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "LargeBufferSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD LargeBufferSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "HugeBufferSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD HugeBufferSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "SmallBufferListDepth",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD SmallBufferListDepth)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "MediumBufferListDepth",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD MediumBufferListDepth)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "LargeBufferListDepth",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD LargeBufferListDepth)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "TransmitWorker",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD TransmitWorker)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "PriorityBoost",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD PriorityBoost)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "DisableAddressSharing",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD DisableAddressSharing)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "MaxActiveTransmitFileCount",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD MaxActiveTransmitFileCount)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "MaxFastTransmit",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD MaxFastTransmit)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\AFD\\Parameters",
+      "name": "MaxFastCopyTransmit",
+      "kind": "DWord",
+      "default": null,
+      "label": "Winsock-Puffer geändert (AFD MaxFastCopyTransmit)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "IRPStackSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (IRPStackSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "SizReqBuf",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (SizReqBuf)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "MaxWorkItems",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (MaxWorkItems)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "MaxMpxCt",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (MaxMpxCt)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "MaxCmds",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (MaxCmds)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "MaxFreeConnections",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (MaxFreeConnections)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanServer\\Parameters",
+      "name": "MinFreeConnections",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Server) geändert (MinFreeConnections)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+      "name": "DisableBandwidthThrottling",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Client) geändert (DisableBandwidthThrottling)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+      "name": "DisableLargeMtu",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Client) geändert (DisableLargeMtu)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+      "name": "FileInfoCacheEntriesMax",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Client) geändert (FileInfoCacheEntriesMax)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+      "name": "DirectoryCacheEntriesMax",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Client) geändert (DirectoryCacheEntriesMax)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+      "name": "FileNotFoundCacheEntriesMax",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Client) geändert (FileNotFoundCacheEntriesMax)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters",
+      "name": "MaxCmds",
+      "kind": "DWord",
+      "default": null,
+      "label": "Datei-Freigabe (Client) geändert (MaxCmds)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Psched",
+      "name": "NonBestEffortLimit",
+      "kind": "DWord",
+      "default": null,
+      "label": "Reservierte Bandbreite / QoS-Planer (NonBestEffortLimit)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Psched",
+      "name": "TimerResolution",
+      "kind": "DWord",
+      "default": null,
+      "label": "Reservierte Bandbreite / QoS-Planer (TimerResolution)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "NegativeCacheTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (NegativeCacheTime)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "NetFailureCacheTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (NetFailureCacheTime)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "NegativeSOACacheTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (NegativeSOACacheTime)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "MaxCacheTtl",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (MaxCacheTtl)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "MaxNegativeCacheTtl",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (MaxNegativeCacheTtl)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "MaxCacheEntryTtlLimit",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (MaxCacheEntryTtlLimit)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "MaxSOACacheEntryTtlLimit",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (MaxSOACacheEntryTtlLimit)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "CacheHashTableBucketSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (CacheHashTableBucketSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Dnscache\\Parameters",
+      "name": "CacheHashTableSize",
+      "kind": "DWord",
+      "default": null,
+      "label": "DNS-Zwischenspeicher geändert (CacheHashTableSize)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\DNSClient",
+      "name": "EnableMulticast",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Namensauflösung im lokalen Netz aus (LLMNR EnableMulticast)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters\\Interfaces\\*",
+      "name": "NetbiosOptions",
+      "kind": "DWord",
+      "default": 0,
+      "label": "NetBIOS über TCP/IP (NetbiosOptions)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NetBT\\Parameters",
+      "name": "NodeType",
+      "kind": "DWord",
+      "default": null,
+      "label": "NetBIOS-Knotentyp erzwungen (NodeType)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\MSMQ\\Parameters",
+      "name": "TCPNoDelay",
+      "kind": "DWord",
+      "default": null,
+      "label": "TCP-Verzögerung für MSMQ (TCPNoDelay)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+      "name": "MaxConnectionsPerServer",
+      "kind": "DWord",
+      "default": null,
+      "label": "Max. gleichzeitige Verbindungen pro Server (HKLM MaxConnectionsPerServer)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+      "name": "MaxConnectionsPer1_0Server",
+      "kind": "DWord",
+      "default": null,
+      "label": "Max. gleichzeitige Verbindungen pro Server (HKLM MaxConnectionsPer1_0Server)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+      "name": "MaxConnectionsPerServer",
+      "kind": "DWord",
+      "default": null,
+      "label": "Max. gleichzeitige Verbindungen pro Server (HKCU MaxConnectionsPerServer)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings",
+      "name": "MaxConnectionsPer1_0Server",
+      "kind": "DWord",
+      "default": null,
+      "label": "Max. gleichzeitige Verbindungen pro Server (HKCU MaxConnectionsPer1_0Server)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NlaSvc\\Parameters\\Internet",
+      "name": "EnableActiveProbing",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Internet-Verbindung prüfen (Netzwerkstatus, EnableActiveProbing)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\NetworkConnectivityStatusIndicator",
+      "name": "NoActiveProbe",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Internet-Verbindungstest aus - Netzwerksymbol zeigt dann oft 'Kein Internet' (NoActiveProbe)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Ndu",
+      "name": "Start",
+      "kind": "DWord",
+      "default": 2,
+      "label": "Netzwerk-Datennutzung messen (Ndu-Treiber Start)",
+      "group": "Netzwerk"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling",
+      "name": "PowerThrottlingOff",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiedrosselung von Hintergrund-Apps abgeschaltet (PowerThrottlingOff)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "CsEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Modern Standby umgestellt (CsEnabled)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "PlatformAoAcOverride",
+      "kind": "DWord",
+      "default": null,
+      "label": "Modern Standby umgestellt (PlatformAoAcOverride)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "CoalescingTimerInterval",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (CoalescingTimerInterval)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "ExitLatency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (ExitLatency)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "ExitLatencyCheckEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (ExitLatencyCheckEnabled)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "Latency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (Latency)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "LatencyToleranceDefault",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (LatencyToleranceDefault)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "LatencyToleranceFSVP",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (LatencyToleranceFSVP)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "LatencyTolerancePerfOverride",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (LatencyTolerancePerfOverride)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "LatencyToleranceScreenOffIR",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (LatencyToleranceScreenOffIR)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "LatencyToleranceVSyncEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (LatencyToleranceVSyncEnabled)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power",
+      "name": "RtlCapabilityCheckLatency",
+      "kind": "DWord",
+      "default": null,
+      "label": "Energiespar-Latenz geändert (RtlCapabilityCheckLatency)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power",
+      "name": "CoalescingTimerInterval",
+      "kind": "DWord",
+      "default": null,
+      "label": "Timer-Bündelung abgeschaltet (Session Manager CoalescingTimerInterval)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power",
+      "name": "HiberbootEnabled",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Schnellstart (HiberbootEnabled)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\USB",
+      "name": "DisableSelectiveSuspend",
+      "kind": "DWord",
+      "default": null,
+      "label": "USB-Energiesparen abgeschaltet (DisableSelectiveSuspend)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\intelppm",
+      "name": "Start",
+      "kind": "DWord",
+      "default": 3,
+      "label": "Intel-CPU-Energietreiber (intelppm Start)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\amdppm",
+      "name": "Start",
+      "kind": "DWord",
+      "default": 3,
+      "label": "AMD-CPU-Energietreiber (amdppm Start)",
+      "group": "Energie"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DisableWindowsUpdateAccess",
+      "kind": "DWord",
+      "default": null,
+      "label": "Zugriff auf Windows Update gesperrt (DisableWindowsUpdateAccess) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DoNotConnectToWindowsUpdateInternetLocations",
+      "kind": "DWord",
+      "default": null,
+      "label": "Verbindung zu Windows Update blockiert (DoNotConnectToWindowsUpdateInternetLocations) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "WUServer",
+      "kind": "String",
+      "default": null,
+      "label": "Updates über fremden Update-Server (WUServer) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "WUStatusServer",
+      "kind": "String",
+      "default": null,
+      "label": "Fremder Update-Statusserver (WUStatusServer) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "UpdateServiceUrlAlternate",
+      "kind": "String",
+      "default": null,
+      "label": "Alternative Update-Quelle (UpdateServiceUrlAlternate) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "SetDisableUXWUAccess",
+      "kind": "DWord",
+      "default": null,
+      "label": "Update-Seite in den Einstellungen gesperrt (SetDisableUXWUAccess) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DisableOSUpgrade",
+      "kind": "DWord",
+      "default": null,
+      "label": "Windows-Upgrades blockiert (DisableOSUpgrade) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DisableDualScan",
+      "kind": "DWord",
+      "default": null,
+      "label": "Update-Quellen eingeschränkt (DisableDualScan) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DeferFeatureUpdates",
+      "kind": "DWord",
+      "default": null,
+      "label": "Funktionsupdates zurückgestellt (DeferFeatureUpdates) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DeferFeatureUpdatesPeriodInDays",
+      "kind": "DWord",
+      "default": null,
+      "label": "Funktionsupdates um Tage zurückgestellt (DeferFeatureUpdatesPeriodInDays) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DeferQualityUpdates",
+      "kind": "DWord",
+      "default": null,
+      "label": "Sicherheitsupdates zurückgestellt (DeferQualityUpdates) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "DeferQualityUpdatesPeriodInDays",
+      "kind": "DWord",
+      "default": null,
+      "label": "Sicherheitsupdates um Tage zurückgestellt (DeferQualityUpdatesPeriodInDays) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "TargetReleaseVersion",
+      "kind": "DWord",
+      "default": null,
+      "label": "Windows-Version festgenagelt (TargetReleaseVersion) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "TargetReleaseVersionInfo",
+      "kind": "String",
+      "default": null,
+      "label": "Windows-Version festgenagelt (TargetReleaseVersionInfo) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "ProductVersion",
+      "kind": "String",
+      "default": null,
+      "label": "Windows-Produktversion festgenagelt (ProductVersion) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+      "name": "ExcludeWUDriversInQualityUpdate",
+      "kind": "DWord",
+      "default": null,
+      "label": "Keine Treiber über Windows Update (ExcludeWUDriversInQualityUpdate)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+      "name": "NoAutoUpdate",
+      "kind": "DWord",
+      "default": null,
+      "label": "Automatische Updates abgeschaltet (NoAutoUpdate) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+      "name": "AUOptions",
+      "kind": "DWord",
+      "default": null,
+      "label": "Update-Modus erzwungen (AUOptions) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+      "name": "UseWUServer",
+      "kind": "DWord",
+      "default": null,
+      "label": "Fremden Update-Server verwenden (UseWUServer) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+      "name": "NoAutoRebootWithLoggedOnUsers",
+      "kind": "DWord",
+      "default": null,
+      "label": "Kein Neustart nach Updates (NoAutoRebootWithLoggedOnUsers)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+      "name": "ScheduledInstallDay",
+      "kind": "DWord",
+      "default": null,
+      "label": "Fester Update-Tag (ScheduledInstallDay)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU",
+      "name": "ScheduledInstallTime",
+      "kind": "DWord",
+      "default": null,
+      "label": "Feste Update-Uhrzeit (ScheduledInstallTime)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\WindowsUpdate\\UX\\Settings",
+      "name": "FlightSettingsMaxPauseDays",
+      "kind": "DWord",
+      "default": null,
+      "label": "Updates jahrelang pausierbar gemacht (FlightSettingsMaxPauseDays)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+      "name": "DODownloadMode",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Übermittlungsoptimierung fest eingestellt (DODownloadMode)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DriverSearching",
+      "name": "SearchOrderConfig",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Treiber automatisch über Windows Update (SearchOrderConfig)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DriverSearching",
+      "name": "DontSearchWindowsUpdate",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Treiber nicht über Windows Update suchen (DontSearchWindowsUpdate)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsStore",
+      "name": "AutoDownload",
+      "kind": "DWord",
+      "default": null,
+      "label": "Microsoft-Store-Richtlinie (AutoDownload)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsStore",
+      "name": "RemoveWindowsStore",
+      "kind": "DWord",
+      "default": null,
+      "label": "Microsoft-Store-Richtlinie (RemoveWindowsStore)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsStore",
+      "name": "DisableStoreApps",
+      "kind": "DWord",
+      "default": null,
+      "label": "Microsoft-Store-Richtlinie (DisableStoreApps)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsStore",
+      "name": "DisableOSUpgrade",
+      "kind": "DWord",
+      "default": null,
+      "label": "Microsoft-Store-Richtlinie (DisableOSUpgrade)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\MRT",
+      "name": "DontOfferThroughWUAU",
+      "kind": "DWord",
+      "default": null,
+      "label": "Tool zum Entfernen bösartiger Software blockiert (DontOfferThroughWUAU)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
+      "name": "DisableAntiSpyware",
+      "kind": "DWord",
+      "default": null,
+      "label": "Microsoft Defender abgeschaltet (DisableAntiSpyware) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
+      "name": "DisableAntiVirus",
+      "kind": "DWord",
+      "default": null,
+      "label": "Virenschutz abgeschaltet (DisableAntiVirus) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
+      "name": "DisableRoutinelyTakingAction",
+      "kind": "DWord",
+      "default": null,
+      "label": "Keine automatische Reaktion auf Bedrohungen (DisableRoutinelyTakingAction) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
+      "name": "ServiceKeepAlive",
+      "kind": "DWord",
+      "default": null,
+      "label": "Defender-Dienst darf beendet werden (ServiceKeepAlive) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender",
+      "name": "AllowFastServiceStartup",
+      "kind": "DWord",
+      "default": null,
+      "label": "Defender-Schnellstart abgeschaltet (AllowFastServiceStartup) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
+      "name": "DisableRealtimeMonitoring",
+      "kind": "DWord",
+      "default": null,
+      "label": "Echtzeitschutz abgeschaltet (DisableRealtimeMonitoring) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
+      "name": "DisableBehaviorMonitoring",
+      "kind": "DWord",
+      "default": null,
+      "label": "Verhaltensüberwachung abgeschaltet (DisableBehaviorMonitoring) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
+      "name": "DisableOnAccessProtection",
+      "kind": "DWord",
+      "default": null,
+      "label": "Prüfung beim Dateizugriff abgeschaltet (DisableOnAccessProtection) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
+      "name": "DisableScanOnRealtimeEnable",
+      "kind": "DWord",
+      "default": null,
+      "label": "Prozess-Scan abgeschaltet (DisableScanOnRealtimeEnable) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
+      "name": "DisableIOAVProtection",
+      "kind": "DWord",
+      "default": null,
+      "label": "Scan von Downloads abgeschaltet (DisableIOAVProtection) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Real-Time Protection",
+      "name": "DisableScriptScanning",
+      "kind": "DWord",
+      "default": null,
+      "label": "Skript-Prüfung abgeschaltet (DisableScriptScanning) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Spynet",
+      "name": "SpynetReporting",
+      "kind": "DWord",
+      "default": null,
+      "label": "Cloud-Schutz abgeschaltet (SpynetReporting) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Spynet",
+      "name": "SubmitSamplesConsent",
+      "kind": "DWord",
+      "default": null,
+      "label": "Beispielübermittlung festgelegt (SubmitSamplesConsent) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\Spynet",
+      "name": "DisableBlockAtFirstSeen",
+      "kind": "DWord",
+      "default": null,
+      "label": "Sofort-Blockierung neuer Schadsoftware abgeschaltet (DisableBlockAtFirstSeen) - Zurücksetzen schaltet den Virenschutz wieder ein",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\UX Configuration",
+      "name": "Notification_Suppress",
+      "kind": "DWord",
+      "default": null,
+      "label": "Defender-Hinweise unterdrückt (Notification_Suppress)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender Security Center\\Notifications",
+      "name": "DisableNotifications",
+      "kind": "DWord",
+      "default": null,
+      "label": "Sicherheits-Benachrichtigungen unterdrückt (DisableNotifications)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender Security Center\\Notifications",
+      "name": "DisableEnhancedNotifications",
+      "kind": "DWord",
+      "default": null,
+      "label": "Sicherheits-Benachrichtigungen unterdrückt (DisableEnhancedNotifications)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender Security Center\\Systray",
+      "name": "HideSystray",
+      "kind": "DWord",
+      "default": null,
+      "label": "Sicherheits-Symbol in der Taskleiste versteckt (HideSystray)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+      "name": "EnableLUA",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Benutzerkontensteuerung (UAC, EnableLUA) - Zurücksetzen schaltet den Schutz wieder ein",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+      "name": "ConsentPromptBehaviorAdmin",
+      "kind": "DWord",
+      "default": 5,
+      "label": "UAC-Nachfrage für Administratoren (ConsentPromptBehaviorAdmin)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+      "name": "ConsentPromptBehaviorUser",
+      "kind": "DWord",
+      "default": 3,
+      "label": "UAC-Nachfrage für Standardbenutzer (ConsentPromptBehaviorUser)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+      "name": "PromptOnSecureDesktop",
+      "kind": "DWord",
+      "default": 1,
+      "label": "UAC auf abgedunkeltem Desktop (PromptOnSecureDesktop)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\DomainProfile",
+      "name": "EnableFirewall",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Firewall für Domänennetzwerk (EnableFirewall) - Zurücksetzen schaltet die Firewall wieder ein",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsFirewall\\DomainProfile",
+      "name": "EnableFirewall",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Firewall für Domänennetzwerk fest eingestellt (EnableFirewall)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\StandardProfile",
+      "name": "EnableFirewall",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Firewall für privates Netzwerk (EnableFirewall) - Zurücksetzen schaltet die Firewall wieder ein",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsFirewall\\StandardProfile",
+      "name": "EnableFirewall",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Firewall für privates Netzwerk fest eingestellt (EnableFirewall)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\PublicProfile",
+      "name": "EnableFirewall",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Firewall für öffentliches Netzwerk (EnableFirewall) - Zurücksetzen schaltet die Firewall wieder ein",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsFirewall\\PublicProfile",
+      "name": "EnableFirewall",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Firewall für öffentliches Netzwerk fest eingestellt (EnableFirewall)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+      "name": "EnableSmartScreen",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: SmartScreen-Schutz vor gefährlichen Downloads (EnableSmartScreen)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+      "name": "ShellSmartScreenLevel",
+      "kind": "String",
+      "default": null,
+      "label": "Richtlinie: SmartScreen-Stufe (ShellSmartScreenLevel)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\SmartScreen",
+      "name": "ConfigureAppInstallControlEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: App-Installationskontrolle (ConfigureAppInstallControlEnabled)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\SmartScreen",
+      "name": "ConfigureAppInstallControl",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: App-Installationskontrolle (ConfigureAppInstallControl)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\MicrosoftEdge\\PhishingFilter",
+      "name": "EnabledV9",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: SmartScreen im alten Edge (EnabledV9)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
+      "name": "EnableVirtualizationBasedSecurity",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Kernisolierung / virtualisierungsbasierte Sicherheit (EnableVirtualizationBasedSecurity)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
+      "name": "HypervisorEnforcedCodeIntegrity",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Kernisolierung / virtualisierungsbasierte Sicherheit (HypervisorEnforcedCodeIntegrity)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows Script Host\\Settings",
+      "name": "Enabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Windows Script Host abgeschaltet (Enabled)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\SystemRestore",
+      "name": "DisableSR",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Systemwiederherstellung gesperrt (DisableSR)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\SystemRestore",
+      "name": "DisableConfig",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Systemwiederherstellung gesperrt (DisableConfig)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection",
+      "name": "AllowTelemetry",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Diagnosedaten-Stufe (AllowTelemetry)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection",
+      "name": "AllowDeviceNameInTelemetry",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Gerätename in Diagnosedaten (AllowDeviceNameInTelemetry)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy",
+      "name": "LetAppsRunInBackground",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: App-Berechtigung gesperrt - kann Kamera/Mikrofon/Benachrichtigungen kaputt machen (LetAppsRunInBackground)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy",
+      "name": "LetAppsAccessCamera",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: App-Berechtigung gesperrt - kann Kamera/Mikrofon/Benachrichtigungen kaputt machen (LetAppsAccessCamera)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppPrivacy",
+      "name": "LetAppsAccessMicrophone",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: App-Berechtigung gesperrt - kann Kamera/Mikrofon/Benachrichtigungen kaputt machen (LetAppsAccessMicrophone)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications",
+      "name": "GlobalUserDisabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Hintergrund-Apps global gesperrt (GlobalUserDisabled)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+      "name": "BackgroundAppGlobalToggle",
+      "kind": "DWord",
+      "default": 1,
+      "label": "Hintergrund-Apps global gesperrt (BackgroundAppGlobalToggle)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search",
+      "name": "AllowCortana",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Suche eingeschränkt (AllowCortana)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search",
+      "name": "DisableWebSearch",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Suche eingeschränkt (DisableWebSearch)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search",
+      "name": "ConnectedSearchUseWeb",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Suche eingeschränkt (ConnectedSearchUseWeb)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+      "name": "DisableWindowsConsumerFeatures",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Windows-Tipps und Vorschläge (DisableWindowsConsumerFeatures)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+      "name": "DisableSoftLanding",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Windows-Tipps und Vorschläge (DisableSoftLanding)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+      "name": "DisableCloudOptimizedContent",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Windows-Tipps und Vorschläge (DisableCloudOptimizedContent)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors",
+      "name": "DisableSensors",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Sensoren/Standort gesperrt (DisableSensors)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\LocationAndSensors",
+      "name": "DisableWindowsLocationProvider",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Sensoren/Standort gesperrt (DisableWindowsLocationProvider)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat",
+      "name": "DisableEngine",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Kompatibilitäts-Hilfe abgeschaltet - ältere Programme/Spiele können Probleme machen (DisableEngine)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat",
+      "name": "DisablePCA",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Kompatibilitäts-Hilfe abgeschaltet - ältere Programme/Spiele können Probleme machen (DisablePCA)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Biometrics",
+      "name": "Enabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Fingerabdruck/Windows Hello gesperrt (Biometrics Enabled)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\OneDrive",
+      "name": "DisableFileSyncNGSC",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: OneDrive gesperrt (DisableFileSyncNGSC)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Feeds",
+      "name": "EnableFeeds",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Neuigkeiten und Interessen (EnableFeeds)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\WindowsInkWorkspace",
+      "name": "AllowWindowsInkWorkspace",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Windows Ink Arbeitsbereich (AllowWindowsInkWorkspace)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\ScheduledDiagnostics",
+      "name": "EnabledExecution",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: automatische Problembehandlung aus (EnabledExecution)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\WDI\\{9c5a40da-b965-4fc3-8781-88dd50a6299d}",
+      "name": "ScenarioExecutionEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Richtlinie: Leistungsdiagnose aus (ScenarioExecutionEnabled)",
+      "group": "Datenschutz"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "StartupBoostEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (StartupBoostEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "BackgroundModeEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (BackgroundModeEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "HardwareAccelerationModeEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (HardwareAccelerationModeEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "HubsSidebarEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (HubsSidebarEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "EdgeShoppingAssistantEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (EdgeShoppingAssistantEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "EdgeCollectionsEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (EdgeCollectionsEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "ShowRecommendationsEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (ShowRecommendationsEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "HideFirstRunExperience",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (HideFirstRunExperience)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "ShowMicrosoftRewards",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (ShowMicrosoftRewards)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "MicrosoftEdgeInsiderPromotionEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (MicrosoftEdgeInsiderPromotionEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "WebWidgetAllowed",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (WebWidgetAllowed)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "TyposquattingCheckerEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (TyposquattingCheckerEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "EdgeAssetDeliveryServiceEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (EdgeAssetDeliveryServiceEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "SpotlightExperiencesAndRecommendationsEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (SpotlightExperiencesAndRecommendationsEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "DefaultBrowserSettingsCampaignEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (DefaultBrowserSettingsCampaignEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "NewTabPageContentEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (NewTabPageContentEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "PersonalizationReportingEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (PersonalizationReportingEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "DiagnosticData",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (DiagnosticData)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "UserFeedbackAllowed",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (UserFeedbackAllowed)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "ConfigureDoNotTrack",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (ConfigureDoNotTrack)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "AlternateErrorPagesEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (AlternateErrorPagesEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "SearchSuggestEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (SearchSuggestEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "TrackingPrevention",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (TrackingPrevention)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "PaymentMethodQueryEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (PaymentMethodQueryEnabled)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "NetworkPredictionOptions",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie (NetworkPredictionOptions)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "SmartScreenEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie: Schutz vor gefährlichen Seiten (SmartScreenEnabled)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge",
+      "name": "SmartScreenPuaEnabled",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Richtlinie: Schutz vor gefährlichen Seiten (SmartScreenPuaEnabled)",
+      "group": "Sicherheit"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+      "name": "UpdateDefault",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Update-Richtlinie (UpdateDefault)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+      "name": "Update{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062}",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Update-Richtlinie (Update{56EB18F8-B008-4CBD-B6D2-8C97FE7E9062})",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+      "name": "AutoUpdateCheckPeriodMinutes",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Update-Richtlinie (AutoUpdateCheckPeriodMinutes)",
+      "group": "Edge"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+      "name": "CreateDesktopShortcutDefault",
+      "kind": "DWord",
+      "default": null,
+      "label": "Edge-Update-Richtlinie (CreateDesktopShortcutDefault)",
+      "group": "Edge"
+    }
+  ],
+  "registryKeys": [
+    {
+      "path": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\*\\PerfOptions",
+      "label": "Feste CPU-/Datenträger-Priorität für ein Programm (IFEO PerfOptions)",
+      "group": "Prozesse"
+    },
+    {
+      "path": "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\*\\PerfOptions",
+      "label": "Feste CPU-/Datenträger-Priorität für ein 32-Bit-Programm (IFEO PerfOptions)",
+      "group": "Prozesse"
+    }
+  ],
+  "bcd": [
+    {
+      "name": "useplatformclock",
+      "label": "HPET als Zeitgeber erzwungen (useplatformclock)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "useplatformtick",
+      "label": "Plattform-Takt erzwungen (useplatformtick)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "disabledynamictick",
+      "label": "Dynamischer Takt abgeschaltet (disabledynamictick)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "tscsyncpolicy",
+      "label": "TSC-Synchronisierung geändert (tscsyncpolicy)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "x2apicpolicy",
+      "label": "x2APIC-Modus umgestellt (x2apicpolicy)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "uselegacyapicmode",
+      "label": "Alter APIC-Modus erzwungen (uselegacyapicmode)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "linearaddress57",
+      "label": "5-Level-Paging umgestellt (linearaddress57)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "increaseuserva",
+      "label": "Adressraum für Programme vergrößert (increaseuserva)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "firstmegabytepolicy",
+      "label": "Nutzung des ersten Megabytes umgestellt (firstmegabytepolicy)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "avoidlowmemory",
+      "label": "Unteren Arbeitsspeicher meiden (avoidlowmemory)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "nolowmem",
+      "label": "Unteren Arbeitsspeicher nicht nutzen (nolowmem)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "usephysicaldestination",
+      "label": "Interrupt-Zustellung umgestellt (usephysicaldestination)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "configaccesspolicy",
+      "label": "PCI-Konfigurationszugriff umgestellt (configaccesspolicy)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "msi",
+      "label": "MSI-Interrupts global umgestellt (msi)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "usefirmwarepcisettings",
+      "label": "PCI-Einstellungen aus dem BIOS erzwungen (usefirmwarepcisettings)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "pciexpress",
+      "label": "PCI-Express-Energiesparen umgestellt (pciexpress)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "clustermodeaddressing",
+      "label": "APIC-Cluster-Adressierung umgestellt (clustermodeaddressing)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "forcelegacyplatform",
+      "label": "Alte Plattform-Erkennung erzwungen (forcelegacyplatform)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "halbreakpoint",
+      "label": "HAL-Haltepunkt gesetzt (halbreakpoint)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "xsavedisable",
+      "label": "XSAVE-Prozessorfunktion umgestellt (xsavedisable)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "numproc",
+      "label": "Anzahl der CPU-Kerne begrenzt (numproc)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "onecpu",
+      "label": "Nur ein CPU-Kern beim Start (onecpu)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "groupsize",
+      "label": "Prozessorgruppen-Größe festgelegt (groupsize)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "maxgroup",
+      "label": "Prozessorgruppen maximiert (maxgroup)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "groupaware",
+      "label": "Prozessorgruppen-Test erzwungen (groupaware)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "perfmem",
+      "label": "Speicher für Leistungsprotokoll reserviert (perfmem)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "truncatememory",
+      "label": "Arbeitsspeicher abgeschnitten (truncatememory)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "removememory",
+      "label": "Arbeitsspeicher ausgeblendet (removememory)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "tpmbootentropy",
+      "label": "TPM-Zufallsquelle beim Start umgestellt (tpmbootentropy)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "vsmlaunchtype",
+      "label": "Virtueller sicherer Modus umgestellt (vsmlaunchtype)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "disableelamdrivers",
+      "label": "Früher Virenschutz-Start abgeschaltet (disableelamdrivers) - Zurücksetzen stellt den Schutz wieder her",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "nointegritychecks",
+      "label": "Treiber-Signaturprüfung abgeschaltet (nointegritychecks) - Zurücksetzen stellt den Schutz wieder her",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "loadoptions",
+      "label": "Zusätzliche Startoptionen (loadoptions)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "quietboot",
+      "label": "Startlogo ausgeblendet (quietboot)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "bootux",
+      "label": "Startanimation umgestellt (bootux)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "sos",
+      "label": "Treiberliste beim Start anzeigen (sos)",
+      "group": "Boot & Timer"
+    },
+    {
+      "name": "bootlog",
+      "label": "Startprotokoll schreiben (bootlog)",
+      "group": "Boot & Timer"
+    }
+  ],
+  "services": [
+    {
+      "name": "SysMain",
+      "default": "Automatic",
+      "label": "SysMain - beschleunigt Programmstarts (früher Superfetch)",
+      "group": "Dienste"
+    },
+    {
+      "name": "DiagTrack",
+      "default": "Automatic",
+      "label": "Telemetrie-Dienst (DiagTrack)",
+      "group": "Dienste"
+    },
+    {
+      "name": "dmwappushservice",
+      "default": "Manual",
+      "label": "WAP-Push-Nachrichten (dmwappushservice)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WSearch",
+      "default": "AutomaticDelayed",
+      "label": "Windows-Suche / Indizierung (WSearch)",
+      "group": "Dienste"
+    },
+    {
+      "name": "MapsBroker",
+      "default": "AutomaticDelayed",
+      "label": "Offline-Karten (MapsBroker)",
+      "group": "Dienste"
+    },
+    {
+      "name": "TrkWks",
+      "default": "Automatic",
+      "label": "Verknüpfungen reparieren (TrkWks)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WerSvc",
+      "default": "Manual",
+      "label": "Fehlerberichterstattung (WerSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "wercplsupport",
+      "default": "Manual",
+      "label": "Problemberichte in der Systemsteuerung (wercplsupport)",
+      "group": "Dienste"
+    },
+    {
+      "name": "DPS",
+      "default": "Automatic",
+      "label": "Diagnoserichtlinien - automatische Problemerkennung (DPS)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WdiServiceHost",
+      "default": "Manual",
+      "label": "Diagnose-Diensthost (WdiServiceHost)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WdiSystemHost",
+      "default": "Manual",
+      "label": "Diagnose-Systemhost (WdiSystemHost)",
+      "group": "Dienste"
+    },
+    {
+      "name": "DiagSvc",
+      "default": "Manual",
+      "label": "Diagnose-Ausführung (DiagSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "TroubleshootingSvc",
+      "default": "Manual",
+      "label": "Empfohlene Problembehandlung (TroubleshootingSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "diagnosticshub.standardcollector.service",
+      "default": "Manual",
+      "label": "Diagnose-Hub-Sammler (diagnosticshub.standardcollector.service)",
+      "group": "Dienste"
+    },
+    {
+      "name": "iphlpsvc",
+      "default": "Automatic",
+      "label": "IP-Hilfsdienst - IPv6-Übergänge (iphlpsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "Spooler",
+      "default": "Automatic",
+      "label": "Druckwarteschlange (Spooler)",
+      "group": "Dienste"
+    },
+    {
+      "name": "PrintNotify",
+      "default": "Manual",
+      "label": "Drucker-Erweiterungen und Benachrichtigungen (PrintNotify)",
+      "group": "Dienste"
+    },
+    {
+      "name": "Fax",
+      "default": "Manual",
+      "label": "Fax (Fax)",
+      "group": "Dienste"
+    },
+    {
+      "name": "XblAuthManager",
+      "default": "Manual",
+      "label": "Xbox-Live-Anmeldung (XblAuthManager)",
+      "group": "Dienste"
+    },
+    {
+      "name": "XblGameSave",
+      "default": "Manual",
+      "label": "Xbox-Spielstände in der Cloud (XblGameSave)",
+      "group": "Dienste"
+    },
+    {
+      "name": "XboxNetApiSvc",
+      "default": "Manual",
+      "label": "Xbox-Live-Netzwerk (XboxNetApiSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "XboxGipSvc",
+      "default": "Manual",
+      "label": "Xbox-Zubehör / Controller (XboxGipSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "bthserv",
+      "default": "Manual",
+      "label": "Bluetooth-Unterstützung (bthserv)",
+      "group": "Dienste"
+    },
+    {
+      "name": "BTAGService",
+      "default": "Manual",
+      "label": "Bluetooth-Audio-Gateway (BTAGService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "BthAvctpSvc",
+      "default": "Manual",
+      "label": "Bluetooth-Audio-Steuerung (BthAvctpSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "lfsvc",
+      "default": "Manual",
+      "label": "Standortdienst (lfsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WbioSrvc",
+      "default": "Manual",
+      "label": "Biometrie / Windows Hello (WbioSrvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SensorService",
+      "default": "Manual",
+      "label": "Sensordienst (SensorService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SensrSvc",
+      "default": "Manual",
+      "label": "Sensorüberwachung (SensrSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SensorDataService",
+      "default": "Manual",
+      "label": "Sensordaten (SensorDataService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "stisvc",
+      "default": "Manual",
+      "label": "Scanner und Kameras (stisvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WiaRpc",
+      "default": "Manual",
+      "label": "Ereignisse für Standbilder (WiaRpc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "PhoneSvc",
+      "default": "Manual",
+      "label": "Telefonie (PhoneSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "TapiSrv",
+      "default": "Manual",
+      "label": "Telefonie-API (TapiSrv)",
+      "group": "Dienste"
+    },
+    {
+      "name": "icssvc",
+      "default": "Manual",
+      "label": "Mobiler Hotspot (icssvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SharedAccess",
+      "default": "Manual",
+      "label": "Internetverbindungsfreigabe (SharedAccess)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SSDPSRV",
+      "default": "Manual",
+      "label": "Geräteerkennung im Netzwerk (SSDPSRV)",
+      "group": "Dienste"
+    },
+    {
+      "name": "upnphost",
+      "default": "Manual",
+      "label": "UPnP-Gerätehost (upnphost)",
+      "group": "Dienste"
+    },
+    {
+      "name": "FDResPub",
+      "default": "Manual",
+      "label": "Funktionssuche-Ressourcenveröffentlichung (FDResPub)",
+      "group": "Dienste"
+    },
+    {
+      "name": "fdPHost",
+      "default": "Manual",
+      "label": "Funktionssuche-Anbieterhost (fdPHost)",
+      "group": "Dienste"
+    },
+    {
+      "name": "lltdsvc",
+      "default": "Manual",
+      "label": "Netzwerkübersicht (lltdsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "lmhosts",
+      "default": "Manual",
+      "label": "NetBIOS-Hilfsdienst (lmhosts)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WebClient",
+      "default": "Manual",
+      "label": "WebDAV-Client (WebClient)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WMPNetworkSvc",
+      "default": "Manual",
+      "label": "Media-Player-Netzwerkfreigabe (WMPNetworkSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "AJRouter",
+      "default": "Manual",
+      "label": "AllJoyn-Router (AJRouter)",
+      "group": "Dienste"
+    },
+    {
+      "name": "ALG",
+      "default": "Manual",
+      "label": "Gatewaydienst auf Anwendungsebene (ALG)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SNMPTRAP",
+      "default": "Manual",
+      "label": "SNMP-Trap (SNMPTRAP)",
+      "group": "Dienste"
+    },
+    {
+      "name": "MSiSCSI",
+      "default": "Manual",
+      "label": "iSCSI-Initiator (MSiSCSI)",
+      "group": "Dienste"
+    },
+    {
+      "name": "QWAVE",
+      "default": "Manual",
+      "label": "Netzwerk-Qualität für Audio/Video (QWAVE)",
+      "group": "Dienste"
+    },
+    {
+      "name": "wcncsvc",
+      "default": "Manual",
+      "label": "WLAN-Einrichtung per WPS (wcncsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "RetailDemo",
+      "default": "Manual",
+      "label": "Vorführmodus für Geschäfte (RetailDemo)",
+      "group": "Dienste"
+    },
+    {
+      "name": "wisvc",
+      "default": "Manual",
+      "label": "Windows-Insider-Dienst (wisvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WpcMonSvc",
+      "default": "Manual",
+      "label": "Jugendschutz (WpcMonSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "CscService",
+      "default": "Manual",
+      "label": "Offlinedateien (CscService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "Wecsvc",
+      "default": "Manual",
+      "label": "Ereignissammlung (Wecsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WalletService",
+      "default": "Manual",
+      "label": "Wallet (WalletService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SEMgrSvc",
+      "default": "Manual",
+      "label": "Zahlungen und NFC (SEMgrSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "seclogon",
+      "default": "Manual",
+      "label": "Sekundäre Anmeldung - 'Als anderer Benutzer ausführen' (seclogon)",
+      "group": "Dienste"
+    },
+    {
+      "name": "CertPropSvc",
+      "default": "Manual",
+      "label": "Zertifikatverteilung (CertPropSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "ScDeviceEnum",
+      "default": "Manual",
+      "label": "Smartcard-Geräte (ScDeviceEnum)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SCPolicySvc",
+      "default": "Manual",
+      "label": "Smartcard-Entfernungsrichtlinie (SCPolicySvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "TermService",
+      "default": "Manual",
+      "label": "Remotedesktop (TermService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SessionEnv",
+      "default": "Manual",
+      "label": "Remotedesktop-Konfiguration (SessionEnv)",
+      "group": "Dienste"
+    },
+    {
+      "name": "UmRdpService",
+      "default": "Manual",
+      "label": "Remotedesktop-Portumleitung (UmRdpService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WinRM",
+      "default": "Manual",
+      "label": "Windows-Remoteverwaltung (WinRM)",
+      "group": "Dienste"
+    },
+    {
+      "name": "defragsvc",
+      "default": "Manual",
+      "label": "Laufwerke optimieren / TRIM (defragsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "VSS",
+      "default": "Manual",
+      "label": "Volumeschattenkopie - nötig für Wiederherstellungspunkte (VSS)",
+      "group": "Dienste"
+    },
+    {
+      "name": "swprv",
+      "default": "Manual",
+      "label": "Schattenkopie-Anbieter (swprv)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SDRSVC",
+      "default": "Manual",
+      "label": "Windows-Sicherung (SDRSVC)",
+      "group": "Dienste"
+    },
+    {
+      "name": "W32Time",
+      "default": "Manual",
+      "label": "Uhrzeit-Synchronisierung (W32Time)",
+      "group": "Dienste"
+    },
+    {
+      "name": "hidserv",
+      "default": "Manual",
+      "label": "Sondertasten an Tastatur/Fernbedienung (hidserv)",
+      "group": "Dienste"
+    },
+    {
+      "name": "InstallService",
+      "default": "Manual",
+      "label": "Microsoft-Store-Installationen (InstallService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "wlidsvc",
+      "default": "Manual",
+      "label": "Microsoft-Konto-Anmeldung (wlidsvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "TokenBroker",
+      "default": "Manual",
+      "label": "Webkonto-Manager (TokenBroker)",
+      "group": "Dienste"
+    },
+    {
+      "name": "AppReadiness",
+      "default": "Manual",
+      "label": "App-Vorbereitung (AppReadiness)",
+      "group": "Dienste"
+    },
+    {
+      "name": "AxInstSV",
+      "default": "Manual",
+      "label": "ActiveX-Installer (AxInstSV)",
+      "group": "Dienste"
+    },
+    {
+      "name": "edgeupdatem",
+      "default": "Manual",
+      "label": "Microsoft-Edge-Update (edgeupdatem)",
+      "group": "Dienste"
+    },
+    {
+      "name": "MicrosoftEdgeElevationService",
+      "default": "Manual",
+      "label": "Microsoft-Edge-Rechteerhöhung (MicrosoftEdgeElevationService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "Themes",
+      "default": "Automatic",
+      "label": "Designs (Themes)",
+      "group": "Dienste"
+    },
+    {
+      "name": "FontCache",
+      "default": "Automatic",
+      "label": "Schriftarten-Cache (FontCache)",
+      "group": "Dienste"
+    },
+    {
+      "name": "WpnService",
+      "default": "Automatic",
+      "label": "Benachrichtigungen (WpnService)",
+      "group": "Dienste"
+    },
+    {
+      "name": "DusmSvc",
+      "default": "Automatic",
+      "label": "Datennutzung (DusmSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "ShellHWDetection",
+      "default": "Automatic",
+      "label": "Automatische Wiedergabe (ShellHWDetection)",
+      "group": "Dienste"
+    },
+    {
+      "name": "SENS",
+      "default": "Automatic",
+      "label": "Systemereignis-Benachrichtigung (SENS)",
+      "group": "Dienste"
+    },
+    {
+      "name": "LanmanServer",
+      "default": "Automatic",
+      "label": "Datei- und Druckerfreigabe (LanmanServer)",
+      "group": "Dienste"
+    },
+    {
+      "name": "LanmanWorkstation",
+      "default": "Automatic",
+      "label": "Zugriff auf Netzwerkfreigaben (LanmanWorkstation)",
+      "group": "Dienste"
+    },
+    {
+      "name": "NlaSvc",
+      "default": "Automatic",
+      "label": "Netzwerkerkennung (NlaSvc)",
+      "group": "Dienste"
+    },
+    {
+      "name": "Dnscache",
+      "default": "Automatic",
+      "label": "DNS-Client (Dnscache)",
+      "group": "Dienste"
+    },
+    {
+      "name": "EventLog",
+      "default": "Automatic",
+      "label": "Ereignisprotokoll (EventLog)",
+      "group": "Dienste"
+    },
+    {
+      "name": "AudioSrv",
+      "default": "Automatic",
+      "label": "Windows-Audio (AudioSrv)",
+      "group": "Dienste"
+    },
+    {
+      "name": "AudioEndpointBuilder",
+      "default": "Automatic",
+      "label": "Audio-Endpunkte (AudioEndpointBuilder)",
+      "group": "Dienste"
+    },
+    {
+      "name": "wuauserv",
+      "default": "Manual",
+      "label": "Windows Update (wuauserv) - Zurücksetzen stellt Sicherheitsupdates wieder her",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "WaaSMedicSvc",
+      "default": "Manual",
+      "label": "Windows-Update-Reparatur (WaaSMedicSvc)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "WinDefend",
+      "default": "Automatic",
+      "label": "Microsoft-Defender-Virenschutz (WinDefend)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "WdNisSvc",
+      "default": "Manual",
+      "label": "Defender-Netzwerkprüfung (WdNisSvc)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "SecurityHealthService",
+      "default": "Manual",
+      "label": "Windows-Sicherheit (SecurityHealthService)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "wscsvc",
+      "default": "AutomaticDelayed",
+      "label": "Sicherheitscenter (wscsvc)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "mpssvc",
+      "default": "Automatic",
+      "label": "Windows-Firewall (mpssvc)",
+      "group": "Windows Update & Defender"
+    },
+    {
+      "name": "BFE",
+      "default": "Automatic",
+      "label": "Basisfiltermodul - nötig für Firewall und VPN (BFE)",
+      "group": "Windows Update & Defender"
+    }
+  ],
+  "tasks": [
+    {
+      "path": "\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser",
+      "default": true,
+      "label": "Kompatibilitäts-Prüfung (Compatibility Appraiser)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Application Experience\\ProgramDataUpdater",
+      "default": true,
+      "label": "Programm-Telemetrie (ProgramDataUpdater)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Application Experience\\StartupAppTask",
+      "default": true,
+      "label": "Autostart-Prüfung (StartupAppTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Application Experience\\PcaPatchDbTask",
+      "default": true,
+      "label": "Kompatibilitäts-Datenbank (PcaPatchDbTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Application Experience\\MareBackup",
+      "default": true,
+      "label": "Kompatibilitäts-Sicherung (MareBackup)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator",
+      "default": true,
+      "label": "Programm zur Verbesserung der Benutzerfreundlichkeit (Consolidator)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\UsbCeip",
+      "default": true,
+      "label": "USB-Nutzungsdaten (UsbCeip)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\KernelCeipTask",
+      "default": true,
+      "label": "Kernel-Nutzungsdaten (KernelCeipTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Autochk\\Proxy",
+      "default": true,
+      "label": "Autochk-Datensammlung (Proxy)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\DiskDiagnostic\\Microsoft-Windows-DiskDiagnosticDataCollector",
+      "default": true,
+      "label": "Datenträger-Diagnose (DiskDiagnosticDataCollector)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\DiskFootprint\\Diagnostics",
+      "default": true,
+      "label": "Speicherplatz-Diagnose (DiskFootprint)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient",
+      "default": true,
+      "label": "Feedback-Abfragen (DmClient)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClientOnScenarioDownload",
+      "default": true,
+      "label": "Feedback-Abfragen (DmClientOnScenarioDownload)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Windows Error Reporting\\QueueReporting",
+      "default": true,
+      "label": "Fehlerberichte senden (QueueReporting)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Defrag\\ScheduledDefrag",
+      "default": true,
+      "label": "Laufwerke optimieren / TRIM (ScheduledDefrag)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Maintenance\\WinSAT",
+      "default": true,
+      "label": "Leistungsbewertung (WinSAT)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Power Efficiency Diagnostics\\AnalyzeSystem",
+      "default": true,
+      "label": "Energieeffizienz-Analyse (AnalyzeSystem)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Shell\\FamilySafetyMonitor",
+      "default": true,
+      "label": "Jugendschutz-Überwachung (FamilySafetyMonitor)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Shell\\FamilySafetyRefreshTask",
+      "default": true,
+      "label": "Jugendschutz-Aktualisierung (FamilySafetyRefreshTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\XblGameSave\\XblGameSaveTask",
+      "default": true,
+      "label": "Xbox-Spielstände synchronisieren (XblGameSaveTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Device Information\\Device",
+      "default": true,
+      "label": "Geräte-Informationen sammeln (Device)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Flighting\\FeatureConfig\\UsageDataReporting",
+      "default": true,
+      "label": "Funktions-Nutzungsdaten (UsageDataReporting)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\CloudExperienceHost\\CreateObjectTask",
+      "default": true,
+      "label": "Cloud-Einrichtung (CreateObjectTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\NetTrace\\GatherNetworkInfo",
+      "default": true,
+      "label": "Netzwerk-Informationen sammeln (GatherNetworkInfo)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Diagnosis\\Scheduled",
+      "default": true,
+      "label": "Geplante Wartungsdiagnose (Diagnosis Scheduled)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\WDI\\ResolutionHost",
+      "default": true,
+      "label": "Diagnose-Lösungshost (ResolutionHost)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Location\\Notifications",
+      "default": true,
+      "label": "Standort-Benachrichtigungen (Location Notifications)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Location\\WindowsActionDialog",
+      "default": true,
+      "label": "Standort-Dialog (WindowsActionDialog)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Registry\\RegIdleBackup",
+      "default": true,
+      "label": "Registry-Sicherung im Leerlauf (RegIdleBackup)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\SystemRestore\\SR",
+      "default": true,
+      "label": "Automatische Wiederherstellungspunkte (SystemRestore SR)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Chkdsk\\ProactiveScan",
+      "default": true,
+      "label": "Datenträger-Prüfung im Hintergrund (ProactiveScan)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Servicing\\StartComponentCleanup",
+      "default": true,
+      "label": "Aufräumen nach Updates (StartComponentCleanup)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Time Synchronization\\SynchronizeTime",
+      "default": true,
+      "label": "Uhrzeit synchronisieren (SynchronizeTime)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\PI\\Sqm-Tasks",
+      "default": true,
+      "label": "Nutzungsdaten (Sqm-Tasks)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Speech\\SpeechModelDownloadTask",
+      "default": true,
+      "label": "Sprachmodelle laden (SpeechModelDownloadTask)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\RetailDemo\\CleanupOfflineContent",
+      "default": true,
+      "label": "Vorführmodus aufräumen (CleanupOfflineContent)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\WindowsUpdate\\Scheduled Start",
+      "default": true,
+      "label": "Windows Update planmäßig starten (Scheduled Start)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan",
+      "default": true,
+      "label": "Nach Updates suchen (Schedule Scan)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Windows Defender\\Windows Defender Scheduled Scan",
+      "default": true,
+      "label": "Geplanter Virenscan (Windows Defender Scheduled Scan)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Windows Defender\\Windows Defender Cache Maintenance",
+      "default": true,
+      "label": "Defender-Cache-Wartung (Cache Maintenance)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Windows Defender\\Windows Defender Cleanup",
+      "default": true,
+      "label": "Defender-Aufräumen (Cleanup)",
+      "group": "Aufgaben"
+    },
+    {
+      "path": "\\Microsoft\\Windows\\Windows Defender\\Windows Defender Verification",
+      "default": true,
+      "label": "Defender-Prüfung (Verification)",
+      "group": "Aufgaben"
+    }
+  ],
+  "commands": [
+    {
+      "id": "power-defaults",
+      "label": "Energiepläne auf Standard",
+      "desc": "Setzt alle Energiepläne auf die Windows-Werkseinstellung zurück. Eigene oder importierte Pläne (z. B. von Tweak-Packs) werden dabei gelöscht.",
+      "defaultOn": true,
+      "needs": "none",
+      "script": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe -restoredefaultschemes 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg -restoredefaultschemes ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
+    },
+    {
+      "id": "tcp-defaults",
+      "label": "TCP-Globaleinstellungen auf Standard",
+      "desc": "Stellt die Internet-Grundeinstellungen (Auto-Tuning, RSS, ECN, Zeitstempel, Staukontrolle usw.), die Ping-Tweaker gern verstellen, auf Windows-Standard.",
+      "defaultOn": true,
+      "needs": "none",
+      "script": "$exe = Join-Path $env:SystemRoot 'System32\\netsh.exe'\n$sets = @(\n    @('int', 'tcp', 'set', 'global', 'autotuninglevel=normal'),\n    @('int', 'tcp', 'set', 'global', 'rss=enabled'),\n    @('int', 'tcp', 'set', 'global', 'rsc=enabled'),\n    @('int', 'tcp', 'set', 'global', 'ecncapability=default'),\n    @('int', 'tcp', 'set', 'global', 'timestamps=default'),\n    @('int', 'tcp', 'set', 'global', 'initialrto=1000'),\n    @('int', 'tcp', 'set', 'global', 'nonsackrttresiliency=disabled'),\n    @('int', 'tcp', 'set', 'global', 'fastopen=enabled'),\n    @('int', 'tcp', 'set', 'global', 'fastopenfallback=enabled'),\n    @('int', 'tcp', 'set', 'global', 'hystart=enabled'),\n    @('int', 'tcp', 'set', 'global', 'prr=enabled'),\n    @('int', 'tcp', 'set', 'global', 'pacingprofile=off'),\n    @('int', 'tcp', 'set', 'heuristics', 'disabled'),\n    @('int', 'tcp', 'set', 'supplemental', 'template=internet', 'congestionprovider=cubic'),\n    @('int', 'tcp', 'set', 'supplemental', 'template=internetcustom', 'congestionprovider=cubic'),\n    @('int', 'ip', 'set', 'global', 'taskoffload=enabled'),\n    @('int', 'ipv4', 'set', 'dynamicport', 'tcp', 'start=49152', 'num=16384'),\n    @('int', 'ipv4', 'set', 'dynamicport', 'udp', 'start=49152', 'num=16384')\n)\n$failed = @()\nforeach ($a in $sets) {\n    $null = & $exe $a 2>&1\n    if ($LASTEXITCODE -ne 0) { $failed += ($a -join ' ') }\n}\nif ($failed.Count -gt 0) { throw ('Nicht alle Werte liessen sich setzen: ' + ($failed -join '; ')) }\n"
+    },
+    {
+      "id": "dns-flush",
+      "label": "DNS-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Adressen, damit alte oder verbogene Einträge sofort verschwinden. Harmlos.",
+      "defaultOn": true,
+      "needs": "none",
+      "script": "$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('ipconfig /flushdns ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
+    },
+    {
+      "id": "defender-defaults",
+      "label": "Defender-Schutz wieder einschalten",
+      "desc": "Schaltet Echtzeitschutz, Verhaltensüberwachung, Download- und Skript-Prüfung wieder ein, falls ein Tool sie per Befehl abgeschaltet hat. Bei einem anderen Virenschutz ohne Wirkung.",
+      "defaultOn": true,
+      "needs": "none",
+      "script": "if (-not (Get-Command -Name Set-MpPreference -ErrorAction SilentlyContinue)) { return }\n$st = $null\ntry { $st = Get-MpComputerStatus -ErrorAction Stop } catch { return }\nif ($null -eq $st -or -not $st.AMServiceEnabled) { return }\ntry {\n    Set-MpPreference -DisableRealtimeMonitoring $false -DisableBehaviorMonitoring $false -DisableIOAVProtection $false -DisableScriptScanning $false -DisableBlockAtFirstSeen $false -ErrorAction Stop\n} catch {\n    throw ('Defender-Einstellungen nicht aenderbar. Ist der Manipulationsschutz an? Dann unter Windows-Sicherheit > Viren- und Bedrohungsschutz pruefen. ' + $_.Exception.Message)\n}\n"
+    },
+    {
+      "id": "memory-defaults",
+      "label": "Speicherkomprimierung auf Standard",
+      "desc": "Schaltet Speicherkomprimierung und das Vorladen häufig genutzter Apps wieder ein, falls ein Tool sie abgeschaltet hat (Disable-MMAgent).",
+      "defaultOn": true,
+      "needs": "none",
+      "script": "if (-not (Get-Command -Name Enable-MMAgent -ErrorAction SilentlyContinue)) { return }\n$svc = Get-Service -Name 'SysMain' -ErrorAction SilentlyContinue\nif ($null -eq $svc) { return }\nif ($svc.Status -ne 'Running') {\n    if ($svc.StartType -eq 'Disabled') { throw 'Der Dienst SysMain ist deaktiviert. Bitte SysMain im Detweak mit auswaehlen und erneut ausfuehren.' }\n    Start-Service -Name 'SysMain' -ErrorAction Stop\n}\n$mm = Get-MMAgent -ErrorAction Stop\nif (-not $mm.MemoryCompression) { Enable-MMAgent -MemoryCompression -ErrorAction Stop }\nif (-not $mm.ApplicationPreLaunch) { Enable-MMAgent -ApplicationPreLaunch -ErrorAction Stop }\n"
+    },
+    {
+      "id": "trim-defaults",
+      "label": "TRIM für SSDs einschalten",
+      "desc": "Stellt sicher, dass Windows SSDs über gelöschte Daten informiert (Standard). Ohne TRIM werden SSDs mit der Zeit langsamer.",
+      "defaultOn": true,
+      "needs": "none",
+      "script": "$exe = Join-Path $env:SystemRoot 'System32\\fsutil.exe'\n$null = & $exe behavior set DisableDeleteNotify 0 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('fsutil behavior set DisableDeleteNotify 0 ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n"
+    },
+    {
+      "id": "pagefile-auto",
+      "label": "Auslagerungsdatei automatisch verwalten",
+      "desc": "Gibt die Größe der Auslagerungsdatei wieder an Windows ab. Hilft, wenn ein Tool sie abgeschaltet oder zu klein gemacht hat (Abstürze, 'zu wenig Arbeitsspeicher').",
+      "defaultOn": false,
+      "needs": "reboot",
+      "script": "$cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop\nif (-not $cs.AutomaticManagedPagefile) {\n    Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $true } -ErrorAction Stop\n}\n"
+    },
+    {
+      "id": "hibernate-on",
+      "label": "Ruhezustand-Datei wieder anlegen",
+      "desc": "Legt die Ruhezustand-Datei wieder an (powercfg /hibernate on). Nötig für Schnellstart und Ruhezustand, belegt aber einige GB auf C:.",
+      "defaultOn": false,
+      "needs": "reboot",
+      "script": "$exe = Join-Path $env:SystemRoot 'System32\\powercfg.exe'\n$null = & $exe /hibernate on 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('powercfg /hibernate on ist fehlgeschlagen (Code ' + $LASTEXITCODE + '). Manche Geraete unterstuetzen keinen Ruhezustand.') }\n"
+    },
+    {
+      "id": "dns-dhcp",
+      "label": "DNS-Server wieder automatisch beziehen",
+      "desc": "Entfernt fest eingetragene DNS-Server (z. B. von Ping-Tweakern) bei allen aktiven Netzwerkadaptern. Wer bewusst eigenen DNS nutzt, lässt das aus.",
+      "defaultOn": false,
+      "needs": "none",
+      "script": "if (-not (Get-Command -Name Set-DnsClientServerAddress -ErrorAction SilentlyContinue)) { throw 'Set-DnsClientServerAddress gibt es auf diesem Windows nicht.' }\n$failed = @()\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' })) {\n    try { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop } catch { $failed += $a.Name }\n}\nif ($failed.Count -gt 0) { throw ('DNS konnte nicht zurueckgesetzt werden fuer: ' + ($failed -join ', ')) }\n"
+    },
+    {
+      "id": "adapter-defaults",
+      "label": "Netzwerkadapter-Einstellungen auf Standard",
+      "desc": "Setzt die erweiterten Einstellungen aller echten Netzwerkadapter (Energiesparen, Interrupt-Moderation, Puffer ...) auf Treiber-Standard. Die Verbindung ist kurz weg.",
+      "defaultOn": false,
+      "needs": "none",
+      "script": "if (-not (Get-Command -Name Reset-NetAdapterAdvancedProperty -ErrorAction SilentlyContinue)) { throw 'Reset-NetAdapterAdvancedProperty gibt es auf diesem Windows nicht.' }\n$failed = @()\nforeach ($a in @(Get-NetAdapter -Physical -ErrorAction Stop)) {\n    try { Reset-NetAdapterAdvancedProperty -Name $a.Name -DisplayName '*' -ErrorAction Stop } catch { $failed += $a.Name }\n}\nif ($failed.Count -gt 0) { throw ('Nicht zurueckgesetzt (Treiber unterstuetzt es nicht): ' + ($failed -join ', ')) }\n"
+    },
+    {
+      "id": "hosts-default",
+      "label": "Hosts-Datei auf Standard",
+      "desc": "Ersetzt die Hosts-Datei durch die leere Windows-Vorlage. Die alte Datei wird vorher daneben gesichert (hosts.velox-backup-...). Danach wird der DNS-Cache geleert.",
+      "defaultOn": false,
+      "needs": "none",
+      "script": "$dir = Join-Path $env:SystemRoot 'System32\\drivers\\etc'\n$path = Join-Path $dir 'hosts'\nif (Test-Path -LiteralPath $path) {\n    $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop\n    if ($item.IsReadOnly) { $item.IsReadOnly = $false }\n    $backup = Join-Path $dir ('hosts.velox-backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))\n    Copy-Item -LiteralPath $path -Destination $backup -Force -ErrorAction Stop\n}\n$lines = @(\n    '# Copyright (c) 1993-2009 Microsoft Corp.',\n    '#',\n    '# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.',\n    '#',\n    '# This file contains the mappings of IP addresses to host names. Each',\n    '# entry should be kept on an individual line. The IP address should',\n    '# be placed in the first column followed by the corresponding host name.',\n    '# The IP address and the host name should be separated by at least one',\n    '# space.',\n    '#',\n    '# Additionally, comments (such as these) may be inserted on individual',\n    '# lines or following the machine name denoted by a ''#'' symbol.',\n    '#',\n    '# For example:',\n    '#',\n    '#      102.54.94.97     rhino.acme.com          # source server',\n    '#       38.25.63.10     x.acme.com              # x client host',\n    '',\n    '# localhost name resolution is handled within DNS itself.',\n    ('#' + [char]9 + '127.0.0.1       localhost'),\n    ('#' + [char]9 + '::1             localhost')\n)\n[IO.File]::WriteAllText($path, (($lines -join [Environment]::NewLine) + [Environment]::NewLine), [Text.Encoding]::ASCII)\n$exe = Join-Path $env:SystemRoot 'System32\\ipconfig.exe'\n$null = & $exe /flushdns 2>&1\n"
+    },
+    {
+      "id": "gpo-reset",
+      "label": "Lokale Gruppenrichtlinien zurücksetzen",
+      "desc": "Löscht die lokal gespeicherten Gruppenrichtlinien (Registry.pol), damit Tools, die über gpedit arbeiten, ihre Sperren nicht wieder einspielen. Der Ordner wird vorher gesichert.",
+      "defaultOn": false,
+      "needs": "reboot",
+      "script": "$base = Join-Path $env:SystemRoot 'System32'\n$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'\nforeach ($name in @('GroupPolicy', 'GroupPolicyUsers')) {\n    $dir = Join-Path $base $name\n    if (-not (Test-Path -LiteralPath $dir)) { continue }\n    Copy-Item -LiteralPath $dir -Destination (Join-Path $base ($name + '.velox-backup-' + $stamp)) -Recurse -Force -ErrorAction Stop\n    if ($name -eq 'GroupPolicyUsers') {\n        Get-ChildItem -LiteralPath $dir -Force -ErrorAction Stop | Remove-Item -Recurse -Force -ErrorAction Stop\n    } else {\n        foreach ($sub in @('Machine', 'User')) {\n            $pol = Join-Path (Join-Path $dir $sub) 'Registry.pol'\n            if (Test-Path -LiteralPath $pol) { Remove-Item -LiteralPath $pol -Force -ErrorAction Stop }\n        }\n    }\n}\n$exe = Join-Path $base 'gpupdate.exe'\n$null = & $exe /force 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('gpupdate /force meldete Code ' + $LASTEXITCODE + '. Nach dem Neustart werden die Richtlinien trotzdem neu eingelesen.') }\n"
+    },
+    {
+      "id": "network-reset",
+      "label": "Netzwerk-Stack komplett zurücksetzen",
+      "desc": "Setzt Winsock und TCP/IP komplett zurück (netsh winsock reset, netsh int ip reset). Hilft bei kaputtem Internet nach Tweaks. VPN-Software muss danach evtl. neu installiert werden.",
+      "defaultOn": false,
+      "needs": "reboot",
+      "script": "$exe = Join-Path $env:SystemRoot 'System32\\netsh.exe'\n$null = & $exe winsock reset 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('netsh winsock reset ist fehlgeschlagen (Code ' + $LASTEXITCODE + ').') }\n$null = & $exe int ip reset 2>&1\nif ($LASTEXITCODE -ne 0) { throw ('netsh int ip reset meldete Code ' + $LASTEXITCODE + '. Einzelne geschuetzte Eintraege werden oft nicht zurueckgesetzt - das ist meist harmlos. Bitte neu starten.') }\n"
+    }
+  ]
+}

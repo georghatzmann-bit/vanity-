@@ -1,0 +1,269 @@
+{
+  "category": "latency",
+  "tweaks": [
+    {
+      "id": "latency.mouse-accel-off",
+      "name": "Mausbeschleunigung aus (Zeigerpräzision)",
+      "desc": "Der Zeiger bewegt sich immer gleich weit, egal wie schnell du die Maus bewegst. Besseres Zielen, am Anfang kurz ungewohnt.",
+      "info": "Entspricht dem Haken „Zeigerbeschleunigung verbessern“ in den Mauseinstellungen. Spiele mit Raw Input ignorieren ihn, Desktop, Menüs und viele ältere Spiele aber nicht. Wirkt nach dem nächsten Abmelden.",
+      "group": "Maus",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "latency", "competitive"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "MouseSpeed", "kind": "String", "value": "0", "default": "1" },
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "MouseThreshold1", "kind": "String", "value": "0", "default": "6" },
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "MouseThreshold2", "kind": "String", "value": "0", "default": "10" }
+      ]
+    },
+    {
+      "id": "latency.mouse-curve-flat",
+      "name": "Gerade 1:1-Mauskurve (MarkC-Fix, 100 % Skalierung)",
+      "desc": "Macht die Beschleunigungskurve gerade – für Spiele, die die Zeigerpräzision selbst wieder einschalten. Exakt 1:1 nur bei 100 % Skalierung.",
+      "info": "Ist die Mausbeschleunigung aus, benutzt Windows diese Kurve gar nicht – dann bringt der Schalter nichts. Sinnvoll nur für ältere Spiele, die die Beschleunigung erzwingen. Die Zeigergeschwindigkeit dafür auf der Mitte (6 von 11) lassen.",
+      "group": "Maus",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "competitive"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "SmoothMouseXCurve", "kind": "Binary",
+          "value": "0000000000000000C0CC0C0000000000809919000000000040662600000000000033330000000000",
+          "default": "0000000000000000156E000000000000004001000000000029DC0300000000000000280000000000" },
+        { "type": "reg", "path": "HKCU\\Control Panel\\Mouse", "name": "SmoothMouseYCurve", "kind": "Binary",
+          "value": "0000000000000000000038000000000000007000000000000000A800000000000000E00000000000",
+          "default": "0000000000000000FD11010000000000002404000000000000FC12000000000000C0BB0100000000" }
+      ]
+    },
+    {
+      "id": "latency.input-queue-size",
+      "name": "Eingabe-Puffer von Maus und Tastatur verkleinern",
+      "desc": "Beliebter Latenz-Tweak: Puffer von 100 auf 50 Einträge. Ehrlich gesagt ist der Unterschied kaum messbar.",
+      "info": "Der Puffer füllt sich nur, wenn Windows Eingaben nicht schnell genug abholt – kleiner macht die Maus also nicht schneller. Zu kleine Werte (unter etwa 20), wie sie manche FPS-Pakete setzen, können bei Mäusen mit 4000–8000 Hz Bewegungen verschlucken. Deshalb nutzen wir einen vorsichtigen Wert.",
+      "group": "Maus",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Bei sehr hohen Abfrageraten (4000–8000 Hz) und kurzen Hängern können einzelne Eingaben verloren gehen.",
+      "needs": "reboot",
+      "tags": ["input", "latency"],
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\mouclass\\Parameters", "name": "MouseDataQueueSize", "kind": "DWord", "value": 50, "default": 100 },
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters", "name": "KeyboardDataQueueSize", "kind": "DWord", "value": 50, "default": 100 }
+      ]
+    },
+    {
+      "id": "latency.keyboard-repeat-fast",
+      "name": "Tastenwiederholung schneller starten",
+      "desc": "Gehaltene Tasten wiederholen sich schon nach kurzer Zeit. Wer Tasten beim Tippen lange hält, bekommt evtl. doppelte Buchstaben.",
+      "info": "Setzt die Verzögerung in den Tastatur-Einstellungen auf die kürzeste Stufe. Die Wiederholrate selbst steht bei Windows schon auf Maximum.",
+      "group": "Tastatur",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Keyboard", "name": "KeyboardDelay", "kind": "String", "value": "0", "default": "1" }
+      ]
+    },
+    {
+      "id": "latency.language-hotkey-off",
+      "name": "Alt+Shift wechselt nicht mehr die Tastatursprache",
+      "desc": "Kein versehentlicher Wechsel auf ein anderes Layout mitten im Spiel (z. B. Y und Z vertauscht). Win+Leertaste geht weiterhin.",
+      "info": "Betrifft nur PCs mit mehr als einer Eingabesprache oder einem zweiten Tastaturlayout. Die Kürzel Alt+Shift und Strg+Shift werden abgeschaltet, alles andere bleibt.",
+      "group": "Tastatur",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Keyboard Layout\\Toggle", "name": "Hotkey", "kind": "String", "value": "3", "default": "1" },
+        { "type": "reg", "path": "HKCU\\Keyboard Layout\\Toggle", "name": "Language Hotkey", "kind": "String", "value": "3", "default": "1" },
+        { "type": "reg", "path": "HKCU\\Keyboard Layout\\Toggle", "name": "Layout Hotkey", "kind": "String", "value": "3", "default": "2" }
+      ]
+    },
+    {
+      "id": "latency.printscreen-snipping-off",
+      "name": "Druck-Taste öffnet nicht mehr das Snipping Tool",
+      "desc": "Druck macht wieder einen klassischen Screenshot in die Zwischenablage, statt dich mit einem Auswahl-Fenster aus dem Spiel zu holen.",
+      "info": "Seit 2023 öffnet die Druck-Taste unter Windows 11 standardmäßig das Ausschneide-Werkzeug. Win+Shift+S funktioniert danach weiterhin.",
+      "group": "Tastatur",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "quality-of-life"],
+      "when": { "minBuild": 22621 },
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Keyboard", "name": "PrintScreenKeyForSnippingEnabled", "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "latency.stickykeys-hotkey-off",
+      "name": "Einrastfunktion-Abfrage (5× Shift) aus",
+      "desc": "Kein Popup mehr, wenn du im Spiel mehrmals schnell Shift drückst. Die Einrastfunktion selbst bleibt in den Einstellungen verfügbar.",
+      "group": "Bedienungshilfen-Kürzel",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "competitive", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Accessibility\\StickyKeys", "name": "Flags", "kind": "String", "value": "506", "default": "510" }
+      ]
+    },
+    {
+      "id": "latency.filterkeys-hotkey-off",
+      "name": "Anschlagverzögerung-Abfrage (8 Sek. Shift) aus",
+      "desc": "Kein Popup mehr, wenn du die rechte Shift-Taste lange hältst, z. B. zum Schleichen oder Sprinten. Die Funktion bleibt in den Einstellungen.",
+      "group": "Bedienungshilfen-Kürzel",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "competitive", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Accessibility\\Keyboard Response", "name": "Flags", "kind": "String", "value": "122", "default": "126" }
+      ]
+    },
+    {
+      "id": "latency.togglekeys-hotkey-off",
+      "name": "Statustöne-Abfrage (5 Sek. NumLock) aus",
+      "desc": "Kein Popup mehr, wenn NumLock länger gedrückt wird. Die Statustöne lassen sich weiter in den Einstellungen einschalten.",
+      "group": "Bedienungshilfen-Kürzel",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Accessibility\\ToggleKeys", "name": "Flags", "kind": "String", "value": "58", "default": "62" }
+      ]
+    },
+    {
+      "id": "latency.mousekeys-hotkey-off",
+      "name": "Tastaturmaus-Kürzel (Alt+Shift+NumLock) aus",
+      "desc": "Linke Alt + linke Shift + NumLock schaltet nicht mehr aus Versehen die Maussteuerung per Ziffernblock ein.",
+      "group": "Bedienungshilfen-Kürzel",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "quality-of-life"],
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Control Panel\\Accessibility\\MouseKeys", "name": "Flags", "kind": "String", "value": "58", "default": "62" }
+      ]
+    },
+    {
+      "id": "latency.narrator-hotkey-off",
+      "name": "Sprachausgabe-Kürzel (Strg+Win+Enter) aus",
+      "desc": "Die Sprachausgabe startet nicht mehr aus Versehen mitten im Spiel. In den Einstellungen lässt sie sich weiter einschalten.",
+      "group": "Bedienungshilfen-Kürzel",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "logoff",
+      "tags": ["input", "quality-of-life"],
+      "when": { "minBuild": 17763 },
+      "actions": [
+        { "type": "reg", "path": "HKCU\\Software\\Microsoft\\Narrator\\NoRoam", "name": "WinEnterLaunchEnabled", "kind": "DWord", "value": 0, "default": null }
+      ]
+    },
+    {
+      "id": "latency.hpet-not-forced",
+      "name": "HPET-Zwang aus (useplatformclock)",
+      "desc": "Windows nutzt die schnelle CPU-Uhr (TSC) statt der langsameren HPET. Ändert nur etwas, wenn ein anderes Tool HPET erzwungen hat.",
+      "info": "„useplatformclock = yes“ war ein verbreiteter Tweak, der auf heutigen PCs meist mehr Latenz und Ruckler bringt. Der Schalter setzt den Wert ausdrücklich auf „no“ – das entspricht dem Windows-Standard. HPET im BIOS bleibt unverändert.",
+      "group": "Timer & Boot",
+      "kind": "toggle",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["latency", "stutter", "boot"],
+      "actions": [
+        { "type": "bcd", "name": "useplatformclock", "value": "no", "default": null }
+      ]
+    },
+    {
+      "id": "latency.dynamic-tick-off",
+      "name": "Dynamischen Timer-Takt aus (disabledynamictick)",
+      "desc": "Der System-Takt läuft gleichmäßig weiter, statt im Leerlauf zu pausieren. Kann Timer-Schwankungen glätten, kostet etwas Strom.",
+      "info": "Windows lässt den Takt sonst im Leerlauf ausfallen, um Strom zu sparen. Vorteile zeigen sich vor allem in Latenz-Messungen, in Spielen ist es meist kaum spürbar. Auf Laptops eher weglassen.",
+      "group": "Timer & Boot",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["latency", "stutter", "laptop-bad", "boot"],
+      "actions": [
+        { "type": "bcd", "name": "disabledynamictick", "value": "yes", "default": null }
+      ]
+    },
+    {
+      "id": "latency.platform-tick-on",
+      "name": "Plattform-Timer als Taktquelle (useplatformtick)",
+      "desc": "Erzwingt die Hardware-Uhr als Taktgeber. Die Ergebnisse sind gemischt – nur behalten, wenn du wirklich einen Unterschied merkst.",
+      "info": "Auf manchen Systemen laufen Timer danach gleichmäßiger, auf anderen ändert sich nichts oder feine Timer-Auflösungen (0,5 ms) werden ungenauer. Kein Allheilmittel, eher zum Ausprobieren.",
+      "group": "Timer & Boot",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Kann je nach Mainboard die Timer-Genauigkeit auch verschlechtern. Wenn es sich schlechter anfühlt, einfach zurücksetzen.",
+      "needs": "reboot",
+      "tags": ["latency", "boot"],
+      "actions": [
+        { "type": "bcd", "name": "useplatformtick", "value": "yes", "default": null }
+      ]
+    },
+    {
+      "id": "latency.tsc-sync-enhanced",
+      "name": "TSC-Abgleich auf „Enhanced“ (tscsyncpolicy)",
+      "desc": "Legt fest, wie Windows die Uhren der CPU-Kerne abgleicht. Aktuelle Windows-Versionen machen das meist schon so – kaum messbar.",
+      "info": "Beliebter Teil vieler Latenz-Pakete. Schadet nicht, auf modernen Systemen ist die Wirkung aber praktisch nicht nachweisbar.",
+      "group": "Timer & Boot",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["latency", "boot"],
+      "actions": [
+        { "type": "bcd", "name": "tscsyncpolicy", "value": "Enhanced", "default": null }
+      ]
+    },
+    {
+      "id": "latency.global-timer-resolution",
+      "name": "Timer-Auflösung wieder systemweit (Windows 11)",
+      "desc": "Eine feine Timer-Einstellung, z. B. von einem Timer-Tool, gilt wieder für alle Programme. Kostet etwas Strom im Leerlauf.",
+      "info": "Seit Windows 10 2004 gilt eine Timer-Anfrage nur für das Programm, das sie stellt; Windows 11 ignoriert zusätzlich Anfragen minimierter Fenster. Dieser Wert holt das alte Verhalten zurück. Nützlich nur mit Timer-Tool oder wenn ein Spiel selbst keine feine Auflösung anfordert.",
+      "group": "Timer & Boot",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": ["latency", "stutter", "laptop-bad"],
+      "when": { "minBuild": 22000 },
+      "actions": [
+        { "type": "reg", "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel", "name": "GlobalTimerResolutionRequests", "kind": "DWord", "value": 1, "default": null }
+      ]
+    }
+  ]
+}

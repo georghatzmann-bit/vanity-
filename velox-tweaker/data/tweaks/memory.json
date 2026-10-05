@@ -1,0 +1,426 @@
+{
+  "category": "memory",
+  "tweaks": [
+    {
+      "id": "memory.compression-off",
+      "name": "Speicherkomprimierung aus (ab 16 GB RAM)",
+      "desc": "Windows packt selten genutzten Arbeitsspeicher nicht mehr zusammen. Spart etwas CPU, belegt dafür mehr RAM.",
+      "info": "Die Komprimierung läuft nur, wenn der RAM knapp wird; mit 16 GB und mehr passiert das beim Spielen selten. Wirkung meist kaum messbar, auf CPUs mit wenigen Kernen am ehesten spürbar. Ist der Dienst SysMain aus, lässt sich der Schalter nicht lesen oder ändern.",
+      "group": "Arbeitsspeicher",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Wird der Arbeitsspeicher knapp, lagert Windows früher auf die Festplatte aus – das ruckelt mehr als Komprimieren. Nur mit genug RAM sinnvoll.",
+      "needs": "reboot",
+      "tags": [
+        "memory",
+        "stutter"
+      ],
+      "when": {
+        "minRamGB": 16
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if ((Get-MMAgent -ErrorAction Stop).MemoryCompression) { Disable-MMAgent -MemoryCompression -ErrorAction Stop }\n",
+          "revert": "if (-not (Get-MMAgent -ErrorAction Stop).MemoryCompression) { Enable-MMAgent -MemoryCompression -ErrorAction Stop }\n",
+          "detect": "-not [bool](Get-MMAgent -ErrorAction Stop).MemoryCompression\n"
+        }
+      ]
+    },
+    {
+      "id": "memory.page-combining-off",
+      "name": "Seiten-Zusammenlegung im RAM aus",
+      "desc": "Windows sucht nicht mehr regelmäßig nach doppelten Speicherseiten. Spart etwas CPU im Hintergrund, belegt minimal mehr RAM.",
+      "info": "Page Combining läuft etwa alle 15 Minuten und spart typischerweise nur wenige hundert MB. Mit viel RAM lohnt sich das kaum. Abschalten schließt nebenbei eine theoretische Seitenkanal-Angriffsfläche.",
+      "group": "Arbeitsspeicher",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "memory"
+      ],
+      "when": {
+        "minRamGB": 16
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if ((Get-MMAgent -ErrorAction Stop).PageCombining) { Disable-MMAgent -PageCombining -ErrorAction Stop }\n",
+          "revert": "if (-not (Get-MMAgent -ErrorAction Stop).PageCombining) { Enable-MMAgent -PageCombining -ErrorAction Stop }\n",
+          "detect": "-not [bool](Get-MMAgent -ErrorAction Stop).PageCombining\n"
+        }
+      ]
+    },
+    {
+      "id": "memory.app-prelaunch-off",
+      "name": "Apps nicht mehr vorab im Hintergrund starten",
+      "desc": "Windows startet Store-Apps (z. B. Fotos, Mail) nicht mehr vorsorglich im Hintergrund. Weniger RAM-Verbrauch, diese Apps öffnen etwas langsamer.",
+      "info": "„Application Pre-Launch“ lädt Apps, die du oft nutzt, schon vorher in den Speicher. Klassische Programme und Spiele betrifft das nicht.",
+      "group": "Arbeitsspeicher",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "memory",
+        "bloat"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if ((Get-MMAgent -ErrorAction Stop).ApplicationPreLaunch) { Disable-MMAgent -ApplicationPreLaunch -ErrorAction Stop }\n",
+          "revert": "if (-not (Get-MMAgent -ErrorAction Stop).ApplicationPreLaunch) { Enable-MMAgent -ApplicationPreLaunch -ErrorAction Stop }\n",
+          "detect": "-not [bool](Get-MMAgent -ErrorAction Stop).ApplicationPreLaunch\n"
+        }
+      ]
+    },
+    {
+      "id": "memory.paging-executive-off",
+      "name": "Windows-Kern im RAM halten",
+      "desc": "Treiber und Systemkern werden nie auf die Festplatte ausgelagert. Wirkung auf modernen Systemen kaum messbar.",
+      "info": "Ein Klassiker aus Windows-XP-Zeiten. Mit genug RAM lagert Windows den Kern ohnehin fast nie aus – darum nur ab 16 GB angeboten.",
+      "group": "Arbeitsspeicher",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Belegt dauerhaft etwas mehr RAM. Mit wenig Arbeitsspeicher eher schlechter als besser.",
+      "needs": "reboot",
+      "tags": [
+        "memory",
+        "stutter"
+      ],
+      "when": {
+        "minRamGB": 16
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management",
+          "name": "DisablePagingExecutive",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "memory.svchost-grouping",
+      "name": "Dienste in weniger Prozessen bündeln",
+      "desc": "Windows-Dienste teilen sich wieder wenige svchost-Prozesse. Etwas weniger RAM und Prozesse, aber ein Absturz trifft mehrere Dienste.",
+      "info": "Ab 3,5 GB RAM gibt Windows jedem Dienst einen eigenen Prozess – das ist stabiler. Bündeln senkt die Prozesszahl im Task-Manager deutlich, spart aber meist nur 100–300 MB RAM. FPS ändern sich dadurch nicht, auch wenn das oft behauptet wird.",
+      "group": "Arbeitsspeicher",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Stürzt ein gebündelter Dienst ab, reißt er die anderen im selben Prozess mit. Fehlersuche wird schwerer.",
+      "needs": "reboot",
+      "tags": [
+        "memory"
+      ],
+      "when": {
+        "minBuild": 15063
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control",
+          "name": "SvcHostSplitThresholdInKB",
+          "kind": "DWord",
+          "value": 4294967295,
+          "default": 3670016
+        }
+      ]
+    },
+    {
+      "id": "memory.lastaccess-off",
+      "name": "Zeitstempel „Letzter Zugriff“ aus",
+      "desc": "NTFS schreibt nicht mehr bei jedem Lesen das Zugriffsdatum. Etwas weniger Schreibzugriffe, Datei-Tools sehen das Zugriffsdatum nicht mehr.",
+      "info": "Standard ist „vom System verwaltet“ – Windows entscheidet selbst und schaltet das Zugriffsdatum auf großen Systemlaufwerken oft schon ab. Auf SSDs ist die Wirkung kaum messbar, bei vielen kleinen Dateien auf HDDs am ehesten. Zurück stellt wieder „vom System verwaltet“ ein.",
+      "group": "Laufwerke & NTFS",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Speicheroptimierung „Downloads löschen, die X Tage nicht geöffnet wurden“ und manche Backup-Tools verlassen sich auf das Zugriffsdatum.",
+      "needs": "reboot",
+      "tags": [
+        "storage",
+        "ssd"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "& fsutil.exe behavior set disablelastaccess 1 | Out-Null\nif ($LASTEXITCODE -ne 0) { throw 'fsutil failed' }\n",
+          "revert": "& fsutil.exe behavior set disablelastaccess 2 | Out-Null\nif ($LASTEXITCODE -ne 0) { throw 'fsutil failed' }\n",
+          "detect": "$v = (Get-ItemProperty -LiteralPath 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem' -ErrorAction Stop).NtfsDisableLastAccessUpdate\n($null -ne $v) -and ([int64]$v -eq 1)\n"
+        }
+      ]
+    },
+    {
+      "id": "memory.8dot3-off",
+      "name": "Kurze 8.3-Dateinamen für neue Dateien aus",
+      "desc": "Windows legt für neue Dateien keine alten DOS-Kurznamen (PROGRA~1) mehr an. Schneller in Ordnern mit sehr vielen Dateien.",
+      "info": "Gilt für alle Laufwerke und nur für neue Dateien – vorhandene Kurznamen bleiben. Merklich schneller wird es erst bei Ordnern mit zehntausenden Dateien.",
+      "group": "Laufwerke & NTFS",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Sehr alte Programme und Installer, die Kurznamen wie C:\\PROGRA~1 erwarten, können bei neu angelegten Ordnern scheitern.",
+      "needs": "reboot",
+      "tags": [
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+          "name": "NtfsDisable8dot3NameCreation",
+          "kind": "DWord",
+          "value": 1,
+          "default": 2
+        }
+      ]
+    },
+    {
+      "id": "memory.ntfs-memory",
+      "name": "Mehr Arbeitsspeicher für NTFS-Cache",
+      "desc": "Das Dateisystem darf mehr RAM für seine Verwaltungsdaten nutzen. Hilft bei sehr vielen Dateien, belegt etwas mehr Speicher.",
+      "info": "Entspricht „fsutil behavior set memoryusage 2“. Nützlich bei großen Spielebibliotheken und vielen Dateizugriffen; auf die FPS im Spiel hat es keinen Einfluss. Laut Microsoft kann es bei schon vollem Arbeitsspeicher eher bremsen – darum nur ab 16 GB RAM.",
+      "group": "Laufwerke & NTFS",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "storage",
+        "memory"
+      ],
+      "when": {
+        "minRamGB": 16
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+          "name": "NtfsMemoryUsage",
+          "kind": "DWord",
+          "value": 2,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "memory.long-paths-on",
+      "name": "Lange Dateipfade (über 260 Zeichen) erlauben",
+      "desc": "Programme, die es unterstützen, dürfen Pfade länger als 260 Zeichen nutzen. Weniger „Pfad zu lang“-Fehler beim Entpacken.",
+      "info": "Hilft etwa bei Mod-Ordnern, Git und tief verschachtelten Archiven. Der Explorer selbst bleibt beim alten Limit, neuere Programme (PowerShell, 7-Zip, viele Entwickler-Tools) profitieren.",
+      "group": "Laufwerke & NTFS",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "storage",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 14393
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+          "name": "LongPathsEnabled",
+          "kind": "DWord",
+          "value": 1,
+          "default": 0
+        }
+      ]
+    },
+    {
+      "id": "memory.trim-now",
+      "name": "SSD-TRIM sicherstellen und jetzt ausführen",
+      "desc": "Schaltet TRIM für NTFS ein, falls ein Tool es abgeschaltet hat, und schickt TRIM jetzt an alle SSDs. Hält SSDs dauerhaft schnell.",
+      "info": "TRIM sagt der SSD, welche Blöcke frei sind – ohne TRIM wird sie mit der Zeit langsamer. Windows hat TRIM von Haus aus an; diese Aktion repariert nur, was andere Tweaker verstellt haben, und stößt einen TRIM-Lauf an. Festplatten (HDD) werden übersprungen.",
+      "group": "Laufwerke & NTFS",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "ssd",
+        "storage",
+        "repair"
+      ],
+      "when": {
+        "systemDisk": "ssd"
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "& fsutil.exe behavior set disabledeletenotify NTFS 0 | Out-Null\nif ($LASTEXITCODE -ne 0) { throw 'fsutil failed' }\nforeach ($v in @(Get-Volume -ErrorAction SilentlyContinue | Where-Object { [string]$_.DriveType -eq 'Fixed' -and $_.DriveLetter -and [string]$_.FileSystem -eq 'NTFS' })) {\n  try { Optimize-Volume -DriveLetter $v.DriveLetter -ReTrim -ErrorAction Stop } catch { }\n}\n",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    },
+    {
+      "id": "memory.storage-sense-on",
+      "name": "Speicheroptimierung wöchentlich laufen lassen",
+      "desc": "Windows löscht jede Woche automatisch temporäre Dateien. Hält das Laufwerk frei, der Papierkorb wird nach 30 Tagen geleert.",
+      "info": "Setzt die Gruppenrichtlinien „Speicheroptimierung zulassen“ und „Ausführungsintervall: wöchentlich“. Ohne Richtlinie läuft die Speicheroptimierung erst, wenn der Platz schon knapp ist. Der Schalter in den Einstellungen ist danach gesperrt, bis du das zurücknimmst.",
+      "group": "Speicherplatz",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Dateien, die länger als 30 Tage im Papierkorb liegen, werden automatisch endgültig gelöscht. Downloads bleiben unangetastet.",
+      "needs": "none",
+      "tags": [
+        "storage",
+        "cleanup",
+        "quality-of-life"
+      ],
+      "when": {
+        "minBuild": 18362
+      },
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\StorageSense",
+          "name": "AllowStorageSenseGlobal",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\StorageSense",
+          "name": "ConfigStorageSenseGlobalCadence",
+          "kind": "DWord",
+          "value": 7,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "memory.reserved-storage-off",
+      "name": "Reservierten Speicher für Updates freigeben",
+      "desc": "Gibt die etwa 7 GB frei, die Windows für Updates zurückhält. Mehr Platz, große Updates können bei vollem Laufwerk scheitern.",
+      "info": "Nur sinnvoll bei kleinen SSDs, wo jedes Gigabyte zählt. Geht nicht, während ein Update gerade installiert wird – dann nach dem Neustart erneut versuchen.",
+      "group": "Speicherplatz",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Ist das Laufwerk fast voll, können Funktions-Updates fehlschlagen, bis du Platz schaffst.",
+      "needs": "none",
+      "tags": [
+        "storage"
+      ],
+      "when": {
+        "minBuild": 19041
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if ([string](Get-WindowsReservedStorageState -ErrorAction Stop).ReservedStorageState -ne 'Disabled') { Set-WindowsReservedStorageState -State Disabled -ErrorAction Stop }\n",
+          "revert": "if ([string](Get-WindowsReservedStorageState -ErrorAction Stop).ReservedStorageState -ne 'Enabled') { Set-WindowsReservedStorageState -State Enabled -ErrorAction Stop }\n",
+          "detect": "[string](Get-WindowsReservedStorageState -ErrorAction Stop).ReservedStorageState -eq 'Disabled'\n"
+        }
+      ]
+    },
+    {
+      "id": "memory.thumbcache-keep",
+      "name": "Vorschaubilder nicht automatisch löschen",
+      "desc": "Die automatische Bereinigung löscht den Vorschaubild-Cache nicht mehr. Ordner mit Bildern und Videos öffnen schneller.",
+      "info": "Seit Windows 10 1709 leert die geplante Bereinigung (SilentCleanup) regelmäßig den Thumbnail-Cache, sodass Explorer alle Vorschauen neu berechnen muss. Der Cache belegt meist nur einige hundert MB. Die Datenträgerbereinigung von Hand kann ihn weiterhin löschen.",
+      "group": "Speicherplatz",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "explorer",
+        "storage",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Thumbnail Cache",
+          "name": "Autorun",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1,
+          "onlyExisting": true
+        },
+        {
+          "type": "reg",
+          "path": "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\Thumbnail Cache",
+          "name": "Autorun",
+          "kind": "DWord",
+          "value": 0,
+          "default": 1,
+          "onlyExisting": true
+        }
+      ]
+    },
+    {
+      "id": "memory.lowdisk-warning-off",
+      "name": "Warnung „Wenig Speicherplatz“ aus",
+      "desc": "Windows meldet nicht mehr ständig, dass ein Laufwerk fast voll ist. Praktisch für eine volle Spiele-Platte, du musst selbst auf den Platz achten.",
+      "info": "Gruppenrichtlinie „Überprüfung auf wenig Speicherplatz deaktivieren“ für den aktuellen Benutzer. Sinnvoll, wenn ein Laufwerk absichtlich randvoll ist (z. B. nur für Spiele). Auf dem Windows-Laufwerk solltest du trotzdem mindestens 15–20 GB frei lassen.",
+      "group": "Speicherplatz",
+      "kind": "toggle",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Auch für das Windows-Laufwerk kommt keine Warnung mehr. Läuft es voll, scheitern Updates und Programme stürzen ab.",
+      "needs": "explorer",
+      "tags": [
+        "storage",
+        "quality-of-life"
+      ],
+      "actions": [
+        {
+          "type": "reg",
+          "path": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+          "name": "NoLowDiskSpaceChecks",
+          "kind": "DWord",
+          "value": 1,
+          "default": null
+        }
+      ]
+    },
+    {
+      "id": "memory.pagefile-auto",
+      "name": "Auslagerungsdatei wieder von Windows verwalten",
+      "desc": "Stellt die Auslagerungsdatei auf „automatisch verwalten“ zurück, falls ein Tool sie fest eingestellt hat. Verhindert Abstürze bei vollem RAM.",
+      "info": "Viele Tweak-Pakete setzen die Auslagerungsdatei auf eine feste, oft zu kleine Größe oder schalten sie ab. Spiele wie GTA V oder FiveM stürzen dann mit „Nicht genügend Arbeitsspeicher“ ab, obwohl RAM frei aussieht. Die Verwaltung durch Windows ist fast immer die beste Wahl.",
+      "group": "Speicherplatz",
+      "kind": "action",
+      "impact": 2,
+      "risk": "safe",
+      "warning": null,
+      "needs": "reboot",
+      "tags": [
+        "memory",
+        "repair",
+        "stutter"
+      ],
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "$cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop\nif (-not $cs.AutomaticManagedPagefile) {\n  Set-CimInstance -InputObject $cs -Property @{ AutomaticManagedPagefile = $true } -ErrorAction Stop\n}\n",
+          "revert": null,
+          "detect": null
+        }
+      ]
+    }
+  ]
+}

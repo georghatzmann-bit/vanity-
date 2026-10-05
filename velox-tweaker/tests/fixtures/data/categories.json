@@ -1,0 +1,17 @@
+{
+  "categories": [
+    { "id": "gaming",   "order": 1,  "icon": "gamepad",  "name": "Gaming & FPS",          "desc": "Mehr FPS." },
+    { "id": "latency",  "order": 2,  "icon": "mouse",    "name": "Input & Latenz",        "desc": "Direktere Eingaben." },
+    { "id": "power",    "order": 3,  "icon": "bolt",     "name": "Energie & CPU",         "desc": "Leistung statt Stromsparen." },
+    { "id": "network",  "order": 5,  "icon": "wifi",     "name": "Netzwerk & Ping",       "desc": "Niedrigerer Ping." },
+    { "id": "memory",   "order": 6,  "icon": "chip",     "name": "Speicher & Laufwerke",  "desc": "Speicher effizienter nutzen." },
+    { "id": "system",   "order": 7,  "icon": "cog",      "name": "System & Start",        "desc": "Schnellerer Start." },
+    { "id": "privacy",  "order": 8,  "icon": "shield",   "name": "Datenschutz",           "desc": "Weniger Daten an Microsoft." },
+    { "id": "services", "order": 10, "icon": "layers",   "name": "Dienste & Aufgaben",    "desc": "Weniger Hintergrunddienste." },
+    { "id": "games",    "order": 12, "icon": "target",   "name": "Spiele-spezifisch",     "desc": "FiveM und GTA V." },
+    { "id": "security", "order": 13, "icon": "alert",    "name": "Experte (riskant)",     "desc": "Nur für Experten." },
+    { "id": "cleanup",  "order": 14, "icon": "broom",    "name": "Reinigung",             "desc": "Datenmüll entfernen." },
+    { "id": "repair",   "order": 15, "icon": "wrench",   "name": "Reparatur",             "desc": "Windows reparieren." },
+    { "id": "apps",     "order": 16, "icon": "package",  "name": "Bloatware",             "desc": "Apps entfernen." }
+  ]
+}
