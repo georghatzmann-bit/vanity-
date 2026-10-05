@@ -159,6 +159,37 @@ describe('Kollisions-Welt: Strahlen', () => {
     assert.close(hit.point.y, ch.height, 1e-6);
   });
 
+  it('Strahl beginnt IN einer Figur (Figuren ineinander): Treffer bei Abstand 0', () => {
+    const world = new CollisionWorld();
+    const enemy = fakeCharacter(0, 0, -5);
+    const shooter = fakeCharacter(0, 0, -4.6);
+    const options = { characters: [enemy, shooter], ignoreCharacter: shooter, skipTerrain: true };
+    let hit = world.raycast(v(0, 1.6, -4.7), v(0, 0, -1), 50, options);
+    assert.ok(hit && hit.character === enemy, 'Gegner getroffen');
+    assert.equal(hit.distance, 0);
+    assert.equal(hit.part, 'head', 'Start auf Kopfhöhe');
+    assert.close(hit.normal.z, 1, 1e-9, 'Normale gegen die Richtung');
+    hit = world.raycast(v(0.1, 0.9, -5.2), v(1, 0, 0), 50, options);
+    assert.ok(hit && hit.character === enemy && hit.distance === 0 && hit.part === 'body', 'Körper, andere Richtung');
+    // die eigene Figur bleibt ausgenommen, auch wenn der Strahl in ihr beginnt
+    hit = world.raycast(v(0, 1, -4.6), v(0, 0, 1), 50, options);
+    assert.equal(hit, null, 'nur die eigene Figur → kein Treffer');
+    // knapp außerhalb (über dem Kopf): normal von außen
+    assert.equal(world.raycast(v(0, 1.85, -5), v(0, 0, -1), 50, options), null);
+  });
+
+  it('hügeliges Gelände: Strahl mit maxDist = Infinity endet (kein Hängenbleiben)', () => {
+    const world = new CollisionWorld();
+    // Insel (bis 30 m hoch), außen Meer bei -2 m
+    world.setTerrain({ heightAt: (x, z) => (Math.hypot(x, z) < 200 ? 30 * Math.max(0, 1 - Math.hypot(x, z) / 200) : -2), maxHeight: 30 });
+    const t0 = performance.now();
+    const hit = world.raycast(v(400, 5, 0), v(1, 0, 0), Infinity);
+    assert.equal(hit, null, 'waagerecht über dem Meer: nichts');
+    const hill = world.raycast(v(-400, 5, 0), v(1, 0, 0), Infinity);
+    assert.ok(hill && hill.terrain, 'Richtung Insel: trifft den Hang');
+    assert.ok(performance.now() - t0 < 500, 'schnell fertig');
+  });
+
   it('Figuren: ignoreCharacter, besiegte Figuren, Wand davor', () => {
     const world = new CollisionWorld();
     const me = fakeCharacter(0, 0, 0);

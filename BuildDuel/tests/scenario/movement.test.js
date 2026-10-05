@@ -170,6 +170,62 @@ describe('Szenario: Rampen', () => {
     }
   });
 
+  it('Rampen-Kette (Rampe an Rampe, wie beim Hochbauen): ohne Springen bis oben', () => {
+    // Am Übergang ist die Vorderkante der Figur schon auf der nächsten Rampe,
+    // die Füße (Mitte) aber noch 0,4 m tiefer – das darf nicht blockieren.
+    const ramp = (game, minX, maxX, minZ, maxZ, baseY, dir) =>
+      game.world.addSlope({ minX, maxX, minZ, maxZ, baseY, rise: 4, dir, thickness: 0.2 });
+    const cases = [
+      { name: '+X gehen', fields: {}, yaw: -Math.PI / 2, start: { x: -4, y: 0, z: 0 },
+        build: (g) => { ramp(g, -2, 2, -2, 2, 0, 0); ramp(g, 2, 6, -2, 2, 4, 0); ramp(g, 6, 10, -2, 2, 8, 0); box(g, 10, 0, -2, 70, 12, 2); } },
+      { name: '+X sprinten', fields: { sprint: true }, yaw: -Math.PI / 2, start: { x: -4, y: 0, z: 0 },
+        build: (g) => { ramp(g, -2, 2, -2, 2, 0, 0); ramp(g, 2, 6, -2, 2, 4, 0); ramp(g, 6, 10, -2, 2, 8, 0); box(g, 10, 0, -2, 70, 12, 2); } },
+      { name: '−Z geduckt', fields: { crouch: true }, yaw: 0, time: 3.6, start: { x: 0.7, y: 0, z: 4 },
+        build: (g) => { ramp(g, -2, 2, -2, 2, 0, 3); ramp(g, -2, 2, -6, -2, 4, 3); box(g, -2, 0, -60, 2, 8, -6); } },
+    ];
+    for (const k of cases) {
+      const game = createTestGame();
+      k.build(game);
+      const c = addDrivenCharacter(game, { position: k.start, yaw: k.yaw });
+      const jumps = collect(game, 'jump');
+      Object.assign(c.brain.fields, { moveZ: 1 }, k.fields);
+      const time = k.time ?? 2; // geduckt ist man halb so schnell
+      game.simulate(time);
+      assert.ok(c.position.y > 6, `${k.name}: nach ${time} s auf y = ${c.position.y.toFixed(2)} (hängt an der Naht?)`);
+      game.simulate(4);
+      const top = k.yaw === 0 ? 8 : 12;
+      assert.close(c.position.y, top, 1e-9, `${k.name}: oben angekommen`);
+      assert.equal(jumps.length, 0, `${k.name}: nicht gesprungen`);
+    }
+  });
+
+  it('Grat (Rampe hoch, direkt Rampe runter) und Tal: ohne Springen hinüber', () => {
+    for (const back of [false, true]) {
+      const game = createTestGame();
+      game.world.addSlope({ minX: -2, maxX: 2, minZ: -2, maxZ: 2, baseY: 0, rise: 4, dir: 0, thickness: 0.2 });
+      game.world.addSlope({ minX: 2, maxX: 6, minZ: -2, maxZ: 2, baseY: 0, rise: 4, dir: 2, thickness: 0.2 });
+      const c = addDrivenCharacter(game, { position: { x: back ? 8 : -4, y: 0, z: 0 }, yaw: back ? Math.PI / 2 : -Math.PI / 2 });
+      const jumps = collect(game, 'jump');
+      c.brain.fields.moveZ = 1;
+      const max = maxHeightDuring(game, c, 3);
+      assert.ok(max > 3.9, `über den Grat (${back ? 'rückwärts' : 'vorwärts'}): höchster Punkt ${max.toFixed(2)} m`);
+      assert.ok(back ? c.position.x < -3 : c.position.x > 7, `auf der anderen Seite: x = ${c.position.x.toFixed(2)}`);
+      assert.equal(c.position.y, 0);
+      assert.equal(jumps.length, 0);
+    }
+    // Tal: Rampe hinunter, unten direkt wieder eine Rampe hinauf
+    const game = createTestGame();
+    box(game, -30, 0, -2, -2, 4, 2);
+    game.world.addSlope({ minX: -2, maxX: 2, minZ: -2, maxZ: 2, baseY: 0, rise: 4, dir: 2, thickness: 0.2 });
+    game.world.addSlope({ minX: 2, maxX: 6, minZ: -2, maxZ: 2, baseY: 0, rise: 4, dir: 0, thickness: 0.2 });
+    box(game, 6, 0, -2, 30, 4, 2);
+    const c = addDrivenCharacter(game, { position: { x: -6, y: 4, z: 0 }, yaw: -Math.PI / 2 });
+    c.brain.fields.moveZ = 1;
+    game.simulate(3);
+    assert.close(c.position.y, 4, 1e-9, 'durch das Tal und wieder oben');
+    assert.ok(c.position.x > 7);
+  });
+
   it('unter einer hohen Rampe durchlaufen', () => {
     const game = createTestGame();
     game.world.addSlope({ minX: -2, maxX: 2, minZ: -10, maxZ: -6, baseY: 3, rise: 4, dir: 3, thickness: 0.2 });

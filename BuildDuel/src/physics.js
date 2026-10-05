@@ -417,10 +417,12 @@ export class CollisionWorld {
     const maxHeight = terrain.maxHeight ?? Infinity;
     const step = this.config.physics?.terrainRayStep ?? 1;
     const bisect = this.config.physics?.terrainBisectSteps ?? 12;
+    // Nie endlos suchen (z. B. maxDist = Infinity und ein waagerechter Strahl über dem Meer)
+    const limit = Math.min(maxDist, this.config.physics?.terrainRayMaxDistance ?? 2000);
     let prevT = 0;
     let prevF = origin.y - terrain.heightAt(origin.x, origin.z);
     if (prevF < 0) return false; // Start unter dem Gelände
-    for (let t = Math.min(step, maxDist); ; t = Math.min(t + step, maxDist)) {
+    for (let t = Math.min(step, limit); ; t = Math.min(t + step, limit)) {
       const y = origin.y + dir.y * t;
       if (y > maxHeight && dir.y >= 0) return false; // steigt über alle Hügel
       const f = y - terrain.heightAt(origin.x + dir.x * t, origin.z + dir.z * t);
@@ -444,7 +446,7 @@ export class CollisionWorld {
       }
       prevT = t;
       prevF = f;
-      if (t >= maxDist) return false;
+      if (t >= limit) return false;
     }
   }
 
@@ -887,9 +889,16 @@ function rayConvex(planes, start, count, origin, dir, maxDist, out) {
 function rayCapsule(origin, dir, x, y, z, r, h, maxDist, out) {
   const y0 = y + r; // Mitte der unteren Halbkugel
   const y1 = y + Math.max(r, h - r); // Mitte der oberen Halbkugel
-  // schneller Vortest gegen die umgebende Box
   const ox = origin.x - x;
   const oz = origin.z - z;
+  // Start IN der Kapsel (Figuren stehen ineinander, Schuss aus nächster Nähe):
+  // sofort getroffen, an der Startstelle
+  const cy = origin.y < y0 ? y0 : origin.y > y1 ? y1 : origin.y;
+  const oyc = origin.y - cy;
+  if (ox * ox + oyc * oyc + oz * oz <= r * r) {
+    setHit(out, origin, dir, 0, -dir.x, -dir.y, -dir.z);
+    return true;
+  }
   let best = Infinity;
   let hx = 0;
   let hy = 0;

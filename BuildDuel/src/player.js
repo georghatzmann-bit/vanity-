@@ -556,11 +556,23 @@ function moveAxis(ch, world, axis, d, depth = 0) {
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.type === 'box') continue;
-    const cls = classifySlope(c, x, y, z, r, h, P.stepHeight);
-    if (cls === SLOPE_ON_TOP) {
+    if (classifySlope(c, x, y, z, r, h, P.stepHeight) === SLOPE_ON_TOP) {
       const s = slopeSurfaceY(c, x, z);
       if (s > stepTo) stepTo = s;
       if (slopeRangeOverRect(c, x - r, x + r, z - r, z + r, _range) && _range.max > slopeFront) slopeFront = _range.max;
+    }
+  }
+  // Rampe → Rampe (Rampen-Kette, Grat): Die nächste Rampe zählt ab der Vorderkante
+  // der Figur – genauso wie die Plattform am Ende einer Rampe (siehe unten).
+  const slopeBase = Math.max(y, Math.min(slopeFront, y + P.stepHeight));
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.type === 'box') continue;
+    const cls = classifySlope(c, x, y, z, r, h, P.stepHeight);
+    if (cls === SLOPE_ON_TOP) continue; // schon oben gezählt
+    if (slopeBase > y && classifySlope(c, x, slopeBase, z, r, h, P.stepHeight) === SLOPE_ON_TOP) {
+      const s = slopeSurfaceY(c, x, z);
+      if (s > stepTo) stepTo = s;
     } else if (cls === SLOPE_BLOCKED && classifySlope(c, oldX, y, oldZ, r, h, P.stepHeight) !== SLOPE_BLOCKED) {
       hardBlock = true;
     }
