@@ -1,7 +1,10 @@
 // VELOX API client (docs/ARCHITECTURE.md section 7).
 // - token: read once from ?t=, kept in sessionStorage, removed from the address bar
 // - every call sends X-Velox-Token
-// - heartbeat every 5 s, shutdown beacon on pagehide
+// - heartbeat every 3 s, shutdown beacon on pagehide - but only from the LAST open VELOX window:
+//   windows see each other over a BroadcastChannel, so closing a second window (Ctrl-click on a
+//   sidebar link opens one) never ends the backend under the first one
+// - every window has a random session id, sent with heartbeat and beacon (?s=) for the backend
 // - after repeated network failures the app is told the backend is gone
 
 const TOKEN_KEY = 'velox.token';
@@ -9,6 +12,11 @@ let token = '';
 let failures = 0;
 const listeners = { lost: new Set(), unauthorized: new Set(), ok: new Set() };
 let lostFired = false;
+const SESSION = (() => {
+  try { const a = new Uint8Array(8); crypto.getRandomValues(a); return Array.from(a, b => b.toString(16).padStart(2, '0')).join(''); }
+  catch { return String(Math.random()).slice(2, 18); }
+})();
+export function sessionId() { return SESSION; }
 
 export class ApiError extends Error {
   constructor(message, status, body) {
@@ -100,7 +108,7 @@ export const api = {
   backups: () => request('GET', '/api/backups'),
   backup: (id) => request('GET', '/api/backups/' + encodeURIComponent(id)),
   open: (target) => request('POST', '/api/open', { target }),
-  heartbeat: () => request('POST', '/api/heartbeat', undefined, { timeout: 4000 }),
+  heartbeat: () => request('POST', '/api/heartbeat?s=' + SESSION, undefined, { timeout: 4000 }),
   startJob: (type, params) => request('POST', '/api/jobs', { type, params: params || {} }),
   job: (id, since) => request('GET', '/api/jobs/' + encodeURIComponent(id) + '?since=' + (since || 0)),
   cancelJob: (id) => request('POST', '/api/jobs/' + encodeURIComponent(id) + '/cancel')
@@ -142,22 +150,53 @@ export function pollJob(jobId, onUpdate, interval = 250) {
 }
 
 let hbTimer = null;
+const HB_MS = 3000;
 export function startHeartbeat(onBusy) {
   if (hbTimer) return;
+  let beatNow = null;
   const beat = async () => {
+    clearTimeout(hbTimer);
+    hbTimer = null;
     let ok = false;
     try {
       const r = await api.heartbeat();
       ok = true;
       if (onBusy) onBusy(r && r.busy);
     } catch { /* counted in request() */ }
-    // every 5 s; after a miss retry soon so a dead backend is noticed within a few seconds
-    if (!lostFired) hbTimer = setTimeout(beat, ok ? 5000 : 1500);
+    // regular beat; after a miss retry soon so a dead backend is noticed within a few seconds
+    if (!lostFired && !hbTimer) hbTimer = setTimeout(beat, ok ? HB_MS : 1500);
   };
-  hbTimer = setTimeout(beat, 5000);
-  window.addEventListener('pagehide', () => {
-    try { navigator.sendBeacon('/api/shutdown?t=' + encodeURIComponent(token)); } catch { /* ignore */ }
+  beatNow = beat;
+  hbTimer = setTimeout(beat, HB_MS);
+
+  // Other VELOX windows of this backend: hello every beat, bye on close.
+  const peers = new Map(); // session -> last seen (ms)
+  let chan = null;
+  try {
+    chan = new BroadcastChannel('velox:' + location.port);
+    chan.onmessage = (e) => {
+      const m = e.data || {};
+      if (!m.s || m.s === SESSION) return;
+      if (m.t === 'bye') { peers.delete(m.s); beatNow(); return; } // a window closes: prove we are still here
+      peers.set(m.s, Date.now());
+      if (m.t === 'hello?') chan.postMessage({ t: 'hello', s: SESSION });
+    };
+    chan.postMessage({ t: 'hello?', s: SESSION });
+    setInterval(() => { try { chan.postMessage({ t: 'hello', s: SESSION }); } catch { /* closed */ } }, HB_MS);
+  } catch { chan = null; }
+  const othersAlive = () => { const now = Date.now(); for (const t of peers.values()) if (now - t < HB_MS * 2 + 1000) return true; return false; };
+
+  window.addEventListener('pagehide', (e) => {
+    try { if (chan) chan.postMessage({ t: 'bye', s: SESSION }); } catch { /* ignore */ }
+    // Going into the back/forward cache is not a close. Another open window keeps VELOX alive.
+    if (e.persisted || othersAlive()) return;
+    try { navigator.sendBeacon('/api/shutdown?t=' + encodeURIComponent(token) + '&s=' + SESSION); } catch { /* ignore */ }
   });
-  // Coming back from bfcache: tell the backend we are still here.
-  window.addEventListener('pageshow', (e) => { if (e.persisted) beat(); });
+  // Coming back from bfcache: one heartbeat loop only, and say hello again.
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    clearTimeout(hbTimer); hbTimer = null;
+    try { if (chan) chan.postMessage({ t: 'hello?', s: SESSION }); } catch { /* ignore */ }
+    beat();
+  });
 }

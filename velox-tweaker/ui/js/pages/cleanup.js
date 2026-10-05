@@ -1,6 +1,6 @@
 // Reinigung: measure cleanup actions (clean-scan), pick, run, show freed space; repair tools below.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, countUp, fmtBytes, fmtNumber, emptyState, stagger, toast, badge, needsBadge, confirmDialog, riskBadge, append } from '../ui.js';
+import { h, clear, button, checkbox, countUp, fmtBytes, fmtNumber, emptyState, stagger, toast, badge, needsBadge, confirmDialog, riskBadge, append, fmtRelative, fmtDate } from '../ui.js';
 
 export default {
   id: 'cleanup', title: 'Reinigung', icon: 'broom', desc: 'Speicher freiräumen und Windows reparieren', keywords: 'aufräumen temp cache speicher reparatur sfc dism',
@@ -95,18 +95,33 @@ export default {
     }
 
     // repair
+    // Repair tools: the log stays open when they finish (they can run for many minutes), and the
+    // last result stays on the card.
     const repairGrid = h('div', { class: 'repair-grid' });
+    ctx.cache.repairLast = ctx.cache.repairLast || {};
+    const lastLine = (t) => {
+      const l = ctx.cache.repairLast[t.id];
+      if (!l) return h('p', { class: 'repair-last fine', text: 'Noch nicht ausgeführt.' });
+      return h('p', { class: 'repair-last' + (l.ok ? '' : ' is-warn'), title: fmtDate(l.at) }, icon(l.ok ? 'checkCircle' : 'warn', 13), h('span', { text: 'Zuletzt ' + fmtRelative(l.at) + ': ' + l.msg }));
+    };
     for (const t of repairs) {
+      const lastBox = h('div', { class: 'repair-last-box' }, lastLine(t));
       const b = button({ label: 'Ausführen', icon: 'play', size: 'sm', variant: 'secondary', disabled: !ctx.applicable(t), onClick: async () => {
         if (t.warning) { const ok = await confirmDialog({ title: t.name + '?', text: t.warning, confirmLabel: 'Ausführen' }); if (!ok) return; }
-        const job = await ctx.runJob('run-action', { ids: [t.id] }, { title: t.name, quiet: true, icon: 'wrench' });
-        if (job && job.status === 'done') { const r = ((job.result && job.result.results) || [])[0] || {}; toast({ type: r.ok === false ? 'warn' : 'ok', title: t.name, text: r.message || 'Fertig.' }); }
+        const job = await ctx.runJob('run-action', { ids: [t.id] }, { title: t.name, quiet: true, icon: 'wrench', keepOpen: true });
+        if (job && job.status === 'done') {
+          const r = ((job.result && job.result.results) || [])[0] || {};
+          ctx.cache.repairLast[t.id] = { at: new Date().toISOString(), ok: r.ok !== false, msg: r.message || (r.ok === false ? 'Fehlgeschlagen' : 'Fertig, keine Fehler gemeldet') };
+          clear(lastBox).appendChild(lastLine(t));
+          toast({ type: r.ok === false ? 'warn' : 'ok', title: t.name, text: r.message || 'Fertig.' });
+        }
       } });
       repairGrid.appendChild(h('article', { class: 'card repair-card spot', 'data-id': t.id },
         h('div', { class: 'repair-top' }, h('span', { class: 'repair-icon' }, icon('wrench', 18)), h('div', { class: 'repair-badges' }, t.risk !== 'safe' ? riskBadge(t.risk) : null, needsBadge(t.needs))),
         h('h3', { class: 'repair-name', text: t.name }),
         h('p', { class: 'repair-desc', text: t.desc }),
         t.warning ? h('p', { class: 'clean-warn' }, icon('alert', 13), h('span', { text: t.warning })) : null,
+        lastBox,
         h('div', { class: 'repair-foot' }, b)));
     }
 

@@ -1,7 +1,7 @@
 // Spiele: detected games with three boost switches each, add by file dialog or path, plus the
 // "games" category tweaks.
 import { icon } from '../icons.js';
-import { h, clear, button, toggle, avatar, badge, emptyState, stagger, toast, append } from '../ui.js';
+import { h, clear, button, toggle, avatar, badge, emptyState, stagger, toast, append, plural } from '../ui.js';
 import { renderList } from '../tweakrow.js';
 
 const SOURCES = { steam: 'Steam', epic: 'Epic Games', fivem: 'FiveM', rockstar: 'Rockstar', riot: 'Riot', ubisoft: 'Ubisoft', ea: 'EA', battlenet: 'Battle.net', gog: 'GOG', xbox: 'Xbox', manual: 'Manuell', manuell: 'Manuell', running: 'Läuft gerade' };
@@ -54,7 +54,11 @@ export default {
       const rows = BOOSTS.map(b => {
         const sw = toggle({ checked: boost[b.key], label: b.label + ' für ' + g.name, onChange: async (next) => {
           const nb = Object.assign({}, boost, { [b.key]: next });
-          const job = await ctx.runJob('game-boost', { path: g.path, name: g.name, source: g.source, priority: !!nb.priority, gpu: !!nb.gpu, fso: !!nb.fso }, { overlay: false, quiet: true });
+          // busy state on the switch itself: the job has no overlay, so the switch shows it is saving
+          sw.setAttribute('aria-busy', 'true'); sw.disabled = true;
+          let job;
+          try { job = await ctx.runJob('game-boost', { path: g.path, name: g.name, source: g.source, priority: !!nb.priority, gpu: !!nb.gpu, fso: !!nb.fso }, { overlay: false, quiet: true }); }
+          finally { sw.removeAttribute('aria-busy'); sw.disabled = false; }
           if (job && job.status === 'done') {
             const ng = (job.result && job.result.game) || Object.assign({}, g, { boost: nb });
             Object.assign(g, ng, { boost: Object.assign({}, nb, ng.boost || {}) });
@@ -83,7 +87,7 @@ export default {
       if (job && job.status === 'done') {
         ctx.cache.games = (job.result && job.result.games) || [];
         fill(true);
-        if (manual) toast({ type: 'ok', title: ctx.cache.games.length + ' Spiele gefunden' });
+        if (manual) toast(ctx.cache.games.length ? { type: 'ok', title: plural(ctx.cache.games.length, 'Spiel', 'Spiele') + ' gefunden' } : { type: 'info', title: 'Keine Spiele gefunden', text: 'Füge dein Spiel über „Spiel hinzufügen“ oder den Pfad zur .exe hinzu.' });
       } else if (!job && ctx.busy && !manual) {
         ctx.whenIdle(() => { if (el.isConnected && !ctx.cache.games) detect(false); });
       } else if (!ctx.cache.games) { ctx.cache.games = (ctx.settings.games || []).slice(); fill(true); }

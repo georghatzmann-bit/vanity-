@@ -3,15 +3,39 @@
 import { icon } from '../icons.js';
 import { h, clear, button, toggle, checkbox, badge, segmented, emptyState, stagger, toast, plural, confirmDialog, avatar, skeleton, append } from '../ui.js';
 
-/** Short, friendly label for a startup location; the full path stays in the tooltip. */
-function locationBadge(loc) {
-  const l = String(loc || '');
-  let label = l || 'Unbekannt';
-  if (/^HKCU\\/i.test(l) || /^HKEY_CURRENT_USER/i.test(l)) label = 'Registry · Benutzer';
-  else if (/^HKLM\\/i.test(l) || /^HKEY_LOCAL_MACHINE/i.test(l)) label = 'Registry · Alle Benutzer';
-  const b = badge(label, 'neutral');
-  b.title = l;
-  return b;
+/** "Nur für dich" / "Für alle Benutzer" instead of registry paths; the raw location stays in the details. */
+function scopeLabel(it) {
+  const id = String(it.id || ''); const loc = String(it.location || '');
+  if (/^(hklm|common)/i.test(id) || /alle benutzer|^HKLM|HKEY_LOCAL_MACHINE/i.test(loc)) return 'Für alle Benutzer';
+  return 'Nur für dich';
+}
+
+/**
+ * Friendly names for well-known autostart entries. important: switching it off removes something
+ * the user notices (sound control, the security icon, touchpad gestures) - VELOX asks first.
+ */
+const KNOWN = [
+  { re: /securityhealth/i, name: 'Windows-Sicherheit', info: 'Zeigt das Schild-Symbol und Warnungen von Windows-Sicherheit (Virenschutz, Firewall) an.', important: true },
+  { re: /rtkaud|rthdvcpl|rtkngui|realtek/i, name: 'Realtek-Audio', info: 'Steuert Sound, Lautsprecher und die Erkennung von Kopfhörern.', important: true },
+  { re: /waves|maxxaudio/i, name: 'Waves-Audio', info: 'Klangverbesserung und Mikrofon-Einstellungen mancher Laptops.', important: true },
+  { re: /syntp|synaptics|etdctrl|elantech|precisiontouch/i, name: 'Touchpad-Treiber', info: 'Gesten und Einstellungen des Touchpads.', important: true },
+  { re: /iastor|rapid storage/i, name: 'Intel Rapid Storage', info: 'Überwacht Festplatten und RAID.', important: true },
+  { re: /igfx|intel.*graphics/i, name: 'Intel-Grafik', info: 'Hotkeys und Symbol der Intel-Grafik. Aus schadet meist nicht.' },
+  { re: /onedrive/i, name: 'OneDrive', info: 'Synchronisiert deine Dateien mit der Cloud. Aus = schnellerer Start; synchronisiert wird dann erst, wenn du OneDrive öffnest.' },
+  { re: /teams/i, name: 'Microsoft Teams', info: 'Chat und Videoanrufe. Startet sonst einfach, wenn du es öffnest.' },
+  { re: /msedge|edgeautolaunch/i, name: 'Microsoft Edge (Vorstart)', info: 'Lädt Edge schon beim Start vor. Aus = schnellerer Start.' },
+  { re: /discord/i, name: 'Discord', info: 'Chat für Gamer. Startet sonst, wenn du es öffnest.' },
+  { re: /steam/i, name: 'Steam', info: 'Spiele-Launcher. Startet sonst, wenn du ein Spiel öffnest.' },
+  { re: /epicgames/i, name: 'Epic Games Launcher', info: 'Spiele-Launcher. Startet sonst, wenn du ein Spiel öffnest.' },
+  { re: /spotify/i, name: 'Spotify', info: 'Musik. Startet sonst, wenn du es öffnest.' },
+  { re: /lghub|logitech/i, name: 'Logitech G HUB', info: 'Profile für Maus und Tastatur. Aus = Profile erst nach dem Öffnen aktiv.' },
+  { re: /razer|synapse/i, name: 'Razer Synapse', info: 'Profile und Beleuchtung für Razer-Geräte.' },
+  { re: /nvidia|nvbackend|nvcontainer/i, name: 'NVIDIA-Hilfsprogramm', info: 'Overlay und Updates der NVIDIA-App. Der Grafiktreiber läuft auch ohne.' },
+  { re: /radeon|amd ?software/i, name: 'AMD Software', info: 'Overlay und Updates von AMD. Der Grafiktreiber läuft auch ohne.' }
+];
+function knownOf(it) {
+  const hay = String(it.name || '') + ' ' + String(it.command || '');
+  return KNOWN.find(k => k.re.test(hay)) || null;
 }
 
 export default {
@@ -42,12 +66,20 @@ export default {
         info.textContent = plural(items.length, 'Eintrag', 'Einträge') + ', davon ' + on + ' aktiv. Weniger Autostart = schnellerer Start und weniger Hintergrundlast.';
         if (!items.length) { listEl.appendChild(emptyState({ icon: 'power', title: 'Kein Autostart', text: 'Beim Windows-Start werden keine zusätzlichen Programme geladen. Perfekt.' })); return; }
         for (const it of items) {
-          const sw = toggle({ checked: !!it.enabled, label: 'Autostart: ' + it.name, onChange: async (next) => {
+          const known = knownOf(it);
+          const friendly = known ? known.name : it.name;
+          const sw = toggle({ checked: !!it.enabled, label: 'Autostart: ' + friendly, onChange: async (next) => {
+            if (!next && known && known.important) {
+              const ok = await confirmDialog({ title: friendly + ' wirklich nicht mehr starten?', icon: 'alert', tone: 'warn', text: known.info + ' Ohne Autostart fehlt das, bis du es von Hand startest. Empfohlen: anlassen.', confirmLabel: 'Trotzdem ausschalten' });
+              if (!ok) return false;
+            }
+            sw.setAttribute('aria-busy', 'true'); sw.disabled = true;
             const job = await ctx.runJob('startup-set', { id: it.id, enabled: next }, { overlay: false, quiet: true });
+            sw.removeAttribute('aria-busy'); sw.disabled = false;
             if (job && job.status === 'done') {
               const ni = (job.result && job.result.item) || {};
               it.enabled = ni.enabled !== undefined ? !!ni.enabled : next;
-              toast({ type: 'ok', title: it.name + (it.enabled ? ' startet wieder mit Windows' : ' startet nicht mehr mit Windows'), text: 'Gilt ab dem nächsten Windows-Start.' });
+              toast({ type: 'ok', title: friendly + (it.enabled ? ' startet wieder mit Windows' : ' startet nicht mehr mit Windows'), text: 'Gilt ab dem nächsten Windows-Start. Du kannst es jederzeit wieder umschalten.' });
               row.classList.toggle('is-off', !it.enabled);
               const n = items.filter(i => i.enabled).length;
               info.textContent = plural(items.length, 'Eintrag', 'Einträge') + ', davon ' + n + ' aktiv. Weniger Autostart = schnellerer Start und weniger Hintergrundlast.';
@@ -55,11 +87,22 @@ export default {
             }
             return false;
           } });
-          const row = h('div', { class: ['su-row', !it.enabled && 'is-off'], 'data-id': it.id },
-            avatar(it.name, 36),
-            h('div', { class: 'su-text' }, h('div', { class: 'su-name', text: it.name }), h('div', { class: 'su-cmd mono', text: it.command || '', title: it.command || '' })),
-            locationBadge(it.location),
-            sw);
+          const details = h('div', { class: 'su-details', hidden: true },
+            h('dl', { class: 'pro-list' },
+              h('dt', { text: 'Eintrag' }), h('dd', { class: 'mono', text: it.name || '' }),
+              h('dt', { text: 'Befehl' }), h('dd', { class: 'mono', text: it.command || '–' }),
+              h('dt', { text: 'Ort' }), h('dd', { text: it.location || '–' })));
+          const expand = h('button', { class: 'icon-btn su-expand', type: 'button', 'aria-expanded': 'false', 'aria-label': 'Details zu ' + friendly, 'data-tip': 'Details' }, icon('chevronDown', 16));
+          expand.addEventListener('click', () => { const open = details.hidden; details.hidden = !open; expand.setAttribute('aria-expanded', String(open)); row.classList.toggle('open', open); });
+          const row = h('div', { class: ['su-row', !it.enabled && 'is-off', known && known.important && 'is-important'], 'data-id': it.id },
+            h('div', { class: 'su-main' },
+              avatar(friendly, 36),
+              h('div', { class: 'su-text' },
+                h('div', { class: 'su-name' }, h('span', { text: friendly }), known && known.important ? badge('Wichtig – besser anlassen', 'warn', 'shieldCheck') : null),
+                h('div', { class: 'su-info', text: known ? known.info : (it.command ? 'Startet automatisch mit Windows. Details zeigen den genauen Befehl.' : 'Startet automatisch mit Windows.') })),
+              badge(scopeLabel(it), 'neutral', 'user'),
+              expand, sw),
+            details);
           listEl.appendChild(row);
         }
         if (animate) stagger(listEl);
@@ -116,8 +159,17 @@ export default {
           confirmLabel: 'Endgültig entfernen'
         });
         if (!ok) return;
-        const job = await ctx.runJob('apply', { ids: Array.from(sel), label: 'Apps entfernt (' + sel.size + ')' }, { title: 'Apps werden entfernt' });
-        if (job && job.status === 'done') { sel.clear(); fill(); }
+        // quiet: the generic apply toast would promise an undo that does not exist for removed apps
+        const job = await ctx.runJob('apply', { ids: Array.from(sel), label: 'Apps entfernt (' + sel.size + ')' }, { title: 'Apps werden entfernt', quiet: true });
+        if (job && job.status === 'done') {
+          const res = (job.result && job.result.results) || [];
+          const ok = res.filter(r => r.ok).length; const fail = res.length - ok;
+          const firstErr = res.find(r => !r.ok);
+          toast(fail
+            ? { type: 'warn', title: plural(ok, 'App entfernt', 'Apps entfernt') + ', ' + fail + ' nicht', text: firstErr ? ((ctx.byId.get(firstErr.id) || {}).name || firstErr.id) + ': ' + (firstErr.error || 'Fehler') : '' }
+            : { type: 'ok', title: plural(ok, 'App entfernt', 'Apps entfernt'), text: 'Neu installieren geht jederzeit über den Microsoft Store.' });
+          sel.clear(); fill();
+        }
       }
       fill();
       stagger(listEl);

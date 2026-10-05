@@ -1,6 +1,6 @@
 // Einstellungen: accent (live), motion, safety switches, Claude key/model, about + Testmodus.
 import { icon } from '../icons.js';
-import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append } from '../ui.js';
+import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append, radioKeys } from '../ui.js';
 import { api } from '../api.js';
 
 const ACCENTS = [
@@ -21,18 +21,28 @@ export default {
     for (const [id, name] of ACCENTS) {
       const b = h('button', { class: 'swatch', type: 'button', role: 'radio', 'aria-checked': String(s().accent === id), 'aria-label': name, 'data-tip': name, 'data-accent': id }, h('span', { class: 'swatch-dot' }), icon('check', 14, 'swatch-check'));
       b.addEventListener('click', async () => {
-        for (const x of swatches.children) x.setAttribute('aria-checked', String(x === b));
+        const prev = s().accent || 'violet';
+        if (prev === id && b.getAttribute('aria-checked') === 'true') return;
+        markSwatch(id);
         document.documentElement.dataset.accent = id; // live preview before the server answers
         const ok = await ctx.saveSettings({ accent: id }, { silent: true });
         if (ok) toast({ type: 'ok', title: 'Akzentfarbe: ' + name });
+        else { markSwatch(prev); document.documentElement.dataset.accent = prev; } // show what is really saved
       });
       swatches.appendChild(b);
     }
+    function markSwatch(id) { for (const x of swatches.children) x.setAttribute('aria-checked', String(x.dataset.accent === id)); if (swatches.syncRadios) swatches.syncRadios(); }
+    radioKeys(swatches, (b) => b.click());
     const osReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const motion = segmented({
       label: 'Animationen', value: s().motion === 'reduced' ? 'reduced' : 'full',
       options: [{ value: 'full', label: 'Voll', icon: 'sparkles' }, { value: 'reduced', label: 'Reduziert', icon: 'motion' }],
-      onChange: async (v) => { const ok = await ctx.saveSettings({ motion: v }, { silent: true }); if (ok) toast({ type: 'ok', title: v === 'reduced' ? 'Animationen reduziert' : 'Alle Animationen an' }); }
+      onChange: async (v) => {
+        const prev = s().motion === 'reduced' ? 'reduced' : 'full';
+        const ok = await ctx.saveSettings({ motion: v }, { silent: true });
+        if (ok) toast({ type: 'ok', title: v === 'reduced' ? 'Animationen reduziert' : 'Alle Animationen an' });
+        else motion.select(prev);
+      }
     });
 
     // ---------- safety
@@ -49,7 +59,7 @@ export default {
       const c = s().claude || {};
       const status = h('div', { class: 'key-status ' + (c.hasKey ? 'is-ok' : 'is-off') },
         icon(c.hasKey ? 'checkCircle' : 'key', 18),
-        h('div', {}, h('strong', { text: c.hasKey ? 'API-Key hinterlegt' : 'Kein API-Key hinterlegt' }), h('span', { text: c.hasKey ? 'Verschlüsselt mit Windows (DPAPI) gespeichert. VELOX zeigt ihn nie wieder an.' : 'Ohne Key nutzt der KI-Optimierer die kostenlose Smart-Analyse.' })));
+        h('div', {}, h('strong', { text: c.hasKey ? 'API-Key hinterlegt' : 'Kein API-Key hinterlegt' }), h('span', { text: c.hasKey ? 'Sicher in Windows gespeichert – nur dein Benutzerkonto kann ihn lesen. VELOX zeigt ihn nie wieder an.' : 'Ohne Key nutzt der KI-Optimierer die kostenlose Smart-Analyse.' })));
       const input = h('input', { class: 'input', type: 'password', placeholder: c.hasKey ? 'Neuen Key eingeben, um ihn zu ersetzen' : 'sk-ant-…', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Claude API-Key', 'data-testid': 'claude-key' });
       const save = button({ label: 'Speichern', icon: 'lock', variant: 'primary', onClick: async () => {
         const key = input.value.trim();
@@ -76,12 +86,17 @@ export default {
         const b = h('button', { class: 'model ripple-host', type: 'button', role: 'radio', 'aria-checked': String((c.model || 'claude-opus-5-5') === m.id), 'data-model': m.id },
           h('span', { class: 'radio-dot' }), h('span', { class: 'model-text' }, h('span', { class: 'model-label', text: m.label }), h('span', { class: 'model-desc', text: m.desc })));
         b.addEventListener('click', async () => {
-          for (const x of models.children) x.setAttribute('aria-checked', String(x === b));
+          const prev = (s().claude && s().claude.model) || 'claude-opus-5-5';
+          if (prev === m.id && b.getAttribute('aria-checked') === 'true') return;
+          const mark = (id) => { for (const x of models.children) x.setAttribute('aria-checked', String(x.dataset.model === id)); if (models.syncRadios) models.syncRadios(); };
+          mark(m.id);
           const ok = await ctx.saveSettings({ claude: { model: m.id } }, { silent: true });
           if (ok) { ctx.settings.claude = Object.assign({}, c, ctx.settings.claude, { model: m.id }); toast({ type: 'ok', title: 'Modell: ' + m.label.split(' – ')[0] }); }
+          else mark(prev);
         });
         models.appendChild(b);
       }
+      radioKeys(models, (b) => b.click());
       append(claudeBox, status,
         h('div', { class: 'key-row' }, h('div', { class: 'path-input' }, icon('key', 16), input), save, del),
         h('p', { class: 'fine', text: 'Den Key bekommst du unter console.anthropic.com. Jede Analyse kostet ein paar Cent und wird über dein Anthropic-Konto abgerechnet.' }),
@@ -116,6 +131,6 @@ export default {
           : 'Echtbetrieb: Änderungen werden wirklich angewendet. Zum gefahrlosen Ausprobieren gibt es Start-Testmodus.bat – dort wird nichts verändert.' })))));
 
     if (opts && opts.focus === 'claude') requestAnimationFrame(() => { const t = el.querySelector('#set-claude'); if (t) { t.scrollIntoView({ block: 'start' }); t.classList.add('flash'); const i = t.querySelector('input'); if (i) i.focus({ preventScroll: true }); } });
-    ctx.on('settings', () => { for (const x of swatches.children) x.setAttribute('aria-checked', String(x.dataset.accent === s().accent)); });
+    ctx.on('settings', () => markSwatch(s().accent || 'violet'));
   }
 };

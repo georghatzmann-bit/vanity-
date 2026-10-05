@@ -6,8 +6,14 @@ import { fmtValue } from '../tweakrow.js';
 
 const KIND = {
   apply: ['Angewendet', 'bolt'], revert: ['Zurückgesetzt', 'undo'], detweak: ['Detweak', 'undo'], restore: ['Wiederherstellung', 'history'],
-  game: ['Spiel-Boost', 'gamepad'], startup: ['Autostart', 'power'], action: ['Aktion', 'play']
+  game: ['Spiel-Boost', 'gamepad'], startup: ['Autostart', 'power'], action: ['Aktion', 'play'], clean: ['Reinigung', 'broom'],
+  restorepoint: ['Wiederherstellungspunkt', 'shieldCheck'], remove: ['Apps entfernt', 'trash']
 };
+/** "66 Tweaks · 106 Werte": tweaks when the backend tells us, journal entries are single values. */
+function countText(b) {
+  const vals = plural(b.count || 0, 'Wert', 'Werte');
+  return typeof b.tweakCount === 'number' && b.tweakCount ? plural(b.tweakCount, 'Tweak', 'Tweaks') + ' · ' + vals : vals;
+}
 const START = { Automatic: 'Automatisch', AutomaticDelayed: 'Automatisch (verzögert)', Manual: 'Manuell', Disabled: 'Deaktiviert' };
 const PLANS = { '381b4222-f694-41f0-9685-ff5bb260df2e': 'Ausbalanciert', '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c': 'Höchstleistung', 'e9a42b02-d5df-448d-aa00-03f14749eb61': 'Ultimative Leistung', 'a1841308-3541-4fab-bc81-f71556f20b4a': 'Energiesparmodus' };
 
@@ -29,6 +35,8 @@ export function describeEntry(e) {
     case 'powersetting': return { what: 'Energieoption', target: (e.subgroup || '') + ' / ' + (e.setting || ''), from: e.before ? 'Netz ' + fmtValue(e.before.ac) + ', Akku ' + fmtValue(e.before.dc) : '–', to: e.after ? 'Netz ' + fmtValue(e.after.ac) + ', Akku ' + fmtValue(e.after.dc) : '–' };
     case 'feature': return { what: 'Windows-Feature', target: e.name, from: onOff(e.before), to: onOff(e.after) };
     case 'ps': return { what: 'Skript', target: e.tweakId || '', from: null, to: e.mode === 'revert' ? 'zurückgesetzt' : 'ausgeführt' };
+    case 'cmd': return { what: 'Befehl', target: e.label || e.id || '', from: null, to: 'ausgeführt (nicht automatisch umkehrbar)' };
+    case 'clean': return { what: 'Dateien gelöscht', target: e.label || e.id || e.path || '', from: null, to: 'gelöscht' };
     case 'appx': return { what: 'App entfernt', target: e.package, from: null, to: 'nicht wiederherstellbar' };
     case 'startup': return { what: 'Autostart', target: e.id || e.name || '', from: onOff(e.before), to: onOff(e.after) };
     case 'game': return { what: 'Spiel-Boost', target: e.path || '', from: null, to: e.after ? Object.entries(e.after).filter(([, v]) => v).map(([k]) => ({ priority: 'Priorität', gpu: 'Grafikkarte', fso: 'Vollbild' }[k] || k)).join(', ') || 'keine Boosts' : '' };
@@ -74,11 +82,11 @@ export default {
     }
 
     function item(b) {
-      const [kindLabel, kindIcon] = KIND[b.kind] || [b.kind || 'Änderung', 'archive'];
+      const [kindLabel, kindIcon] = (Object.prototype.hasOwnProperty.call(KIND, b.kind) && KIND[b.kind]) || ['Änderung', 'archive'];
       const details = h('div', { class: 'bk-details', hidden: true });
       const expand = h('button', { class: 'icon-btn', type: 'button', 'aria-expanded': 'false', 'aria-label': 'Details: ' + b.label, 'data-tip': 'Details' }, icon('chevronDown', 16));
       const restore = b.restorable === false ? null : button({ label: 'Wiederherstellen', icon: 'history', size: 'sm', variant: 'secondary', attrs: { 'data-testid': 'backup-restore' }, onClick: async () => {
-        const ok = await confirmDialog({ title: '„' + b.label + '“ wiederherstellen?', icon: 'history', text: plural(b.count || 0, 'Änderung wird', 'Änderungen werden') + ' auf den Stand vor dieser Sicherung zurückgesetzt. Auch das wird wieder gesichert.', confirmLabel: 'Wiederherstellen' });
+        const ok = await confirmDialog({ title: '„' + b.label + '“ wiederherstellen?', icon: 'history', text: plural(b.count || 0, 'Wert wird', 'Werte werden') + ' auf den Stand vor dieser Sicherung zurückgesetzt. Auch das wird wieder gesichert.', confirmLabel: 'Wiederherstellen' });
         if (!ok) return;
         const job = await ctx.runJob('restore', { backupId: b.id });
         if (job && job.status === 'done') load(false);
@@ -88,8 +96,8 @@ export default {
           h('div', { class: 'bk-icon kind-' + b.kind }, icon(kindIcon, 18)),
           h('div', { class: 'bk-text' },
             h('div', { class: 'bk-label', text: b.label || kindLabel }),
-            h('div', { class: 'bk-meta' }, h('span', { text: fmtDate(b.created) }), h('span', { class: 'dotsep', text: '·' }), h('span', { text: fmtRelative(b.created) }), h('span', { class: 'dotsep', text: '·' }), h('span', { text: plural(b.count || 0, 'Änderung', 'Änderungen') }))),
-          h('div', { class: 'bk-badges' }, badge(kindLabel, 'neutral'), b.simulate ? badge('Testmodus', 'neutral', 'flask') : null),
+            h('div', { class: 'bk-meta' }, h('span', { text: fmtDate(b.created) }), h('span', { class: 'dotsep', text: '·' }), h('span', { text: fmtRelative(b.created) }), h('span', { class: 'dotsep', text: '·' }), h('span', { text: countText(b) }))),
+          h('div', { class: 'bk-badges' }, badge(kindLabel, 'neutral'), b.simulate ? badge('Testmodus', 'neutral', 'flask') : null, b.restorable === false ? badge('Nicht umkehrbar', 'neutral', 'lock') : null),
           h('div', { class: 'bk-actions' }, restore, expand)),
         details);
       expand.addEventListener('click', async () => {

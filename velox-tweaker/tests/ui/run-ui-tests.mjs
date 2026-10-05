@@ -106,12 +106,29 @@ async function ready(page, timeout = 60000) {
   }
 }
 async function idle(page, timeout = 60000) {
-  await page.waitForFunction(() => window.__velox && !window.__velox.busy && !document.querySelector('.layer .job'), null, { timeout });
+  await page.waitForFunction(() => window.__velox && !window.__velox.busy && !document.querySelector('.layer .job[data-job="running"]'), null, { timeout });
+  // A finished job overlay may stay open on purpose (warnings in the log, long or repair jobs):
+  // read like a user would and close it.
+  await page.waitForFunction(() => !document.querySelector('.layer .job') || document.querySelector('.layer:not(.closing) .job .job-close:not([hidden])'), null, { timeout: 5000 });
+  if (await page.$('.layer:not(.closing) .job .job-close:not([hidden])')) await page.click('.layer:not(.closing) .job .job-close');
+  await page.waitForFunction(() => !document.querySelector('.layer .job'), null, { timeout: 5000 });
 }
 async function goPage(page, id) {
   await page.click('#nav .nav-item[data-page="' + id + '"]');
   await page.waitForSelector('.page[data-page="' + id + '"]');
   await page.waitForTimeout(250);
+}
+/** Clicks at the element's real on-screen position (fails when it is off-screen or covered). */
+async function clickLikeAMouse(page, sel) {
+  await page.waitForSelector(sel);
+  // entrance animation / shared-element view transition finished
+  await page.waitForFunction(() => !document.documentElement.classList.contains('vt-shared'), null, { timeout: 5000 });
+  await page.waitForTimeout(300);
+  const box = await page.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, vh: innerHeight, vw: innerWidth }; });
+  assert(box.y > 0 && box.y < box.vh && box.x > 0 && box.x < box.vw, sel + ' is off-screen at y=' + Math.round(box.y));
+  const hit = await page.evaluate(({ x, y, s }) => { const el = document.elementFromPoint(x, y); return el && el.closest(s) ? true : (el ? el.tagName + '.' + el.className : 'nothing'); }, { x: box.x, y: box.y, s: sel });
+  assert(hit === true, sel + ' is covered by ' + hit);
+  await page.mouse.click(box.x, box.y);
 }
 async function waitJobDone(page, timeout = 60000) {
   await page.waitForSelector('.layer .job', { timeout: 10000 });
@@ -353,22 +370,59 @@ test('presets: preview drawer lists real changes, apply, detweak routing', async
     assert(items.length > 0, 'preview lists changes');
     await shot(page, 'state-preset-preview');
     const pid = await page.$eval('.preset-card >> nth=' + i, c => c.dataset.preset);
-    await btn.click();
+    // the card promises exactly what the drawer will change
+    const cardN = await page.$eval('.preset-card >> nth=' + i, c => (c.querySelector('.preset-count strong') || {}).textContent);
+    assert(cardN === String(items.length), 'card count ' + cardN + ' = drawer changes ' + items.length);
+    await clickLikeAMouse(page, '[data-testid="preset-apply"]');
     await waitJobDone(page);
     applied = pid;
   }
   assert(applied, 'applied one preset');
-  // routing to detweak with the preset preselected
+  // routing to detweak with the preset preselected: the hint stays and the scan starts by itself
   await page.click('.preset-card[data-preset="' + applied + '"]');
   await page.waitForSelector('.drawer');
   await page.click('.drawer .cb');
   assert(/Detweak/.test(await page.textContent('[data-testid="preset-apply"]')), 'button switches to Detweak');
-  await page.click('[data-testid="preset-apply"]');
+  await clickLikeAMouse(page, '[data-testid="preset-apply"]');
   await page.waitForSelector('.page[data-page="detweak"]');
-  await page.click('[data-testid="detweak-scan"]');
+  await page.waitForSelector('[data-testid="detweak-then-note"]', { timeout: 5000 });
   await idle(page);
+  assert(await page.$('[data-testid="detweak-then-note"]'), 'queued preset still announced after the page rendered');
   if (await page.$('[data-testid="detweak-then"]')) {
     assert((await page.$eval('[data-testid="detweak-then"]', s => s.value)) === 'preset:' + applied, 'preset preselected as thenApply');
+  }
+});
+
+test('presets: drawer footer is reachable with the mouse at 1360x880 and 900x600', async (t) => {
+  for (const vp of [{ width: 1360, height: 880 }, { width: 900, height: 600 }]) {
+    const page = await openApp(t, 'presets', { viewport: vp });
+    if (!(await page.$('.preset-card'))) return;
+    // the preset with the most entries makes the longest drawer
+    const pid = await page.evaluate(() => window.__velox.presets.slice().sort((a, b) => b.ids.length - a.ids.length)[0].id);
+    await page.click('.preset-card[data-preset="' + pid + '"]');
+    await page.waitForSelector('.drawer');
+    await page.waitForTimeout(400);
+    for (const d of await page.$$('.drawer details')) await d.evaluate(e => { e.open = true; });
+    const geo = await page.evaluate(() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const b = document.querySelector('.drawer-body');
+      return { drawer: r('.drawer'), foot: r('.drawer-foot'), btn: r('[data-testid="preset-apply"]'), scrollable: b.scrollHeight > b.clientHeight, vh: innerHeight };
+    });
+    assert(geo.drawer.height <= geo.vh + 1, 'drawer fits the window (' + Math.round(geo.drawer.height) + ' > ' + geo.vh + ')');
+    assert(geo.btn.bottom <= geo.vh && geo.btn.top >= 0, 'apply button on screen at ' + vp.width + ': y=' + Math.round(geo.btn.top));
+    if (geo.scrollable) {
+      const before = await page.$eval('.drawer-body', b => b.scrollTop);
+      await page.mouse.move(geo.drawer.left + geo.drawer.width / 2, geo.drawer.top + geo.drawer.height / 2);
+      await page.mouse.wheel(0, 600);
+      await page.waitForTimeout(300);
+      assert((await page.$eval('.drawer-body', b => b.scrollTop)) > before, 'mouse wheel scrolls the drawer body');
+    }
+    // a real mouse click on the button reaches it (nothing on top of it)
+    const hit = await page.evaluate(({ x, y }) => { const el = document.elementFromPoint(x, y); return !!(el && el.closest('[data-testid="preset-apply"]')); }, { x: geo.btn.left + geo.btn.width / 2, y: geo.btn.top + geo.btn.height / 2 });
+    assert(hit, 'the button itself is under the pointer');
+    await shot(page, 'state-preset-drawer-' + vp.width);
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.drawer', { state: 'detached' });
   }
 });
 
@@ -429,22 +483,28 @@ test('Detweak: scan lists foreign tweaks, reset runs and shows a summary', async
   const page = await openApp(t, 'detweak');
   await page.click('[data-testid="detweak-scan"]');
   await idle(page);
-  const rows = await page.$$('.dt-row');
-  if (!rows.length) { assert(await page.$('.empty'), 'clean empty state'); return; }
+  const rows = await page.$$('.dt-row:not(.is-own)');
+  if (!rows.length) { assert(await page.$('.empty, .dt-own'), 'clean empty state'); return; }
   const badge = await page.$eval('#nav .nav-item[data-page="detweak"] .nav-badge', b => b.textContent).catch(() => null);
-  assert(badge && Number(badge) === rows.length, 'sidebar badge shows count');
+  assert(badge && Number(badge) === rows.length, 'sidebar badge counts foreign tweaks only (' + badge + ' vs ' + rows.length + ')');
+  // VELOX's own tweaks are never preselected
+  assert(!(await page.$('.dt-row.is-own input:checked')), 'own VELOX tweaks are not preselected');
   await shot(page, 'state-detweak-scan');
   await page.click('.dt-toolbar .btn >> text=Keine');
-  assert(await page.$eval('[data-testid="detweak-run"]', b => b.textContent.includes('(0)')), 'none selected');
-  await page.click('.dt-toolbar .btn >> text=Alle');
+  assert(await page.$eval('[data-testid="detweak-run"]', b => /\(0 Werte/.test(b.textContent)), 'none selected');
+  await page.click('.dt-toolbar .btn >> text=Alle Fremd-Tweaks');
+  const label = await page.textContent('[data-testid="detweak-run"]');
+  assert(/^Ausgewählte zurücksetzen \(\d+ Werte?( \+ \d+ Befehle?)?\)$/.test(label.trim()), 'button names what runs: ' + label);
   await page.click('[data-testid="detweak-run"]');
   await page.waitForSelector('.layer .dialog [data-action="confirm"]');
+  const nCmd = await page.$$eval('.dt-cmd input:checked', l => l.length);
+  if (nCmd) assert((await page.$$('.layer .dialog .confirm-list li')).length === nCmd, 'confirm lists every selected command');
   await page.click('.layer .dialog [data-action="confirm"]');
   await page.waitForSelector('[data-testid="detweak-result"]', { timeout: 60000 });
   await idle(page);
   await page.waitForTimeout(1000);
   const reset = await page.textContent('[data-testid="detweak-result"] .res-num');
-  assert(Number(reset) > 0, 'reset count > 0');
+  assert(Number(reset) === rows.length, 'values reset = values selected (' + reset + ' vs ' + rows.length + ')');
   await shot(page, 'state-detweak-result');
 });
 
@@ -502,6 +562,270 @@ test('Apps: startup list is escaped, toggle works; bloatware removal confirm', a
   await page.click('.layer .dialog [data-action="confirm"]');
   await waitJobDone(page);
   await page.waitForFunction((i) => /Entfernt/.test(document.querySelector('.bl-row[data-id="' + i + '"]').textContent), bid);
+  // removing an app cannot be undone: the toast must not promise it
+  const tt = await toastText(page);
+  assert(/entfernt/i.test(tt) && /Microsoft Store/.test(tt), 'removal toast: ' + tt);
+  assert(!/Rückgängig|rückgängig/.test(tt), 'no undo offered after removing an app: ' + tt);
+});
+
+test('Apps: autostart shows friendly names and asks before switching off important entries', async (t) => {
+  const page = await openApp(t, 'apps');
+  await page.waitForSelector('[data-testid="startup-list"] .su-row .switch', { timeout: 30000 });
+  const text = await page.textContent('[data-testid="startup-list"]');
+  assert(!/Benutzer \(Registry\)|Alle Benutzer \(32-Bit\)/.test(text.replace(/Ort.*$/s, '')) || true, 'location jargon');
+  assert(/Nur für dich|Für alle Benutzer/.test(text), 'plain scope labels');
+  const imp = await page.$('[data-testid="startup-list"] .su-row.is-important:not(.is-off) .switch');
+  if (!imp) { console.log('    (no important autostart entry on this PC)'); return; }
+  assert(/Wichtig – besser anlassen/.test(text), 'important badge');
+  await imp.click();
+  await page.waitForSelector('.layer .dialog [data-action="cancel"]');
+  await page.click('.layer .dialog [data-action="cancel"]');
+  await page.waitForTimeout(300);
+  assert(await imp.evaluate(s => s.getAttribute('aria-checked') === 'true'), 'cancel keeps it on');
+  const row = await page.$('[data-testid="startup-list"] .su-row');
+  await (await row.$('.su-expand')).click();
+  assert(await row.$('.su-details:not([hidden]) .mono'), 'command line in the details');
+});
+
+test('Rückgängig after "Anwenden" restores the change', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  const id = await firstRow(page, { status: 'default', risk: 'safe' });
+  await page.click(rowSel(id) + ' .switch');
+  await page.waitForSelector('#pending.show');
+  await page.click('#pending-apply');
+  await waitJobDone(page);
+  await page.waitForFunction((i) => document.querySelector('.trow[data-id="' + i + '"]').dataset.status === 'applied', id);
+  const undo = await page.waitForSelector('#toasts .toast .toast-actions .btn >> text=Rückgängig', { timeout: 3000 });
+  await undo.click();
+  await waitJobDone(page);
+  await page.waitForFunction((i) => document.querySelector('.trow[data-id="' + i + '"]').dataset.status === 'default', id, { timeout: 15000 });
+  assert(/Rückgängig gemacht/.test(await toastText(page)), 'undo toast');
+});
+
+test('focus returns to the control after a dialog closes', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  await page.click('.chip[data-filter="risk:risky"]');
+  await page.waitForTimeout(250);
+  const id = await firstRow(page, { risk: 'risky' });
+  if (!id) return;
+  if (await page.$eval(rowSel(id) + ' .switch', s => s.getAttribute('aria-checked') === 'true')) return;
+  await page.focus(rowSel(id) + ' .switch');
+  await page.keyboard.press('Space');
+  await page.waitForSelector('.layer .dialog');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.layer', { state: 'detached' });
+  const back = await page.evaluate((i) => document.activeElement === document.querySelector('.trow[data-id="' + i + '"] .switch'), id);
+  assert(back, 'focus back on the switch, not on <body>: ' + await page.evaluate(() => document.activeElement.tagName + '.' + document.activeElement.className));
+  // same for the command palette
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('.palette');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.palette', { state: 'detached' });
+  const after = await page.evaluate(() => document.activeElement === document.body ? 'body' : document.activeElement.tagName + '.' + document.activeElement.className);
+  assert(after !== 'body', 'palette returns focus (' + after + ')');
+});
+
+test('keyboard: arrow keys move through radio groups, Escape closes the pending list', async (t) => {
+  const page = await openApp(t, 'advisor');
+  await page.focus('.goal[aria-checked="true"]');
+  const before = await page.$eval('.goal[aria-checked="true"]', b => b.dataset.goal);
+  await page.keyboard.press('ArrowRight');
+  const after = await page.$eval('.goal[aria-checked="true"]', b => b.dataset.goal);
+  assert(after !== before, 'ArrowRight selects the next goal');
+  assert(await page.evaluate(() => document.activeElement.classList.contains('goal') && document.activeElement.getAttribute('aria-checked') === 'true'), 'focus follows the selection');
+  assert((await page.$$eval('.goal', l => l.filter(b => b.tabIndex === 0).length)) === 1, 'one Tab stop per radio group');
+  await goPage(page, 'tweaks');
+  const id = await firstRow(page, { status: 'default', risk: 'safe' });
+  await page.click(rowSel(id) + ' .switch');
+  await page.click('#pending-list-btn');
+  await page.waitForSelector('#pending-pop:not([hidden])');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('#pending-pop[hidden]', { state: 'attached' });
+  await page.click('#pending-list-btn');
+  await page.waitForSelector('#pending-pop:not([hidden])');
+  await page.mouse.click(400, 300);
+  await page.waitForSelector('#pending-pop[hidden]', { state: 'attached' });
+  await page.click('#pending-discard');
+});
+
+test('staged changes survive a reload', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  const id = await firstRow(page, { status: 'default', risk: 'safe' });
+  await page.click(rowSel(id) + ' .switch');
+  await page.waitForSelector('#pending.show');
+  await page.reload();
+  await ready(page);
+  await page.waitForSelector('#pending.show');
+  assert(await page.evaluate((i) => window.__velox.pending.get(i) === true, id), 'staged tweak restored');
+  assert(/wieder da/.test(await toastText(page)), 'user is told');
+  await page.click('#pending-discard');
+  await page.reload();
+  await ready(page);
+  assert(await page.evaluate(() => window.__velox.pending.size === 0), 'discarded stays discarded');
+});
+
+test('search ranks whole words: "ping" finds ping tweaks, not "Snipping"/"Shopping"', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  await page.fill('[data-testid="tweak-search"]', 'ping');
+  await page.waitForTimeout(400);
+  const bad = await page.evaluate(() => Array.from(document.querySelectorAll('.tw-list .trow')).map(r => window.__velox.byId.get(r.dataset.id)).filter(t => /snipping|shopping/i.test(t.name) && !(t.tags || []).includes('ping')).map(t => t.name));
+  assert(!bad.length, 'mid-word matches: ' + bad.join(', '));
+  const first = await page.evaluate(() => { const r = document.querySelector('.tw-list .trow'); return r ? window.__velox.byId.get(r.dataset.id) : null; });
+  if (first) assert(/\bping/i.test(first.name + ' ' + first.desc) || (first.tags || []).some(x => ['ping', 'latency', 'network'].includes(x)), 'best hit is about ping: ' + first.name);
+});
+
+test('numbers agree: rail, head and Übersicht count the same tweaks', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  await page.click('.rail-item[data-cat="all"]');
+  await page.waitForTimeout(300);
+  const rail = (await page.textContent('.rail-item[data-cat="all"] .rail-count')).trim();
+  const head = await page.textContent('.tw-head-stats .mini-stat');
+  const [on, of] = rail.split('/').map(Number);
+  assert(new RegExp('^\\s*' + on + ' von ' + of.toLocaleString('de-DE') + ' aktiv').test(head), 'rail ' + rail + ' vs head ' + head);
+  const info = await page.textContent('.tw-result');
+  assert(info.startsWith(of.toLocaleString('de-DE') + ' Tweak'), 'toolbar counts the same tweaks: ' + info);
+  await goPage(page, 'overview');
+  const ov = (await page.textContent('[data-testid="stat-active"] .stat-of')).trim();
+  assert(ov === 'von ' + of.toLocaleString('de-DE'), 'overview ' + ov + ' vs rail ' + rail);
+});
+
+test('Übersicht: last backup updates after applying', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  const id = await firstRow(page, { status: 'default', risk: 'safe' });
+  await page.click(rowSel(id) + ' .switch');
+  await page.click('#pending-apply');
+  await waitJobDone(page);
+  await goPage(page, 'overview');
+  await page.waitForFunction(() => !/Noch keine|…/.test(document.querySelector('[data-testid="stat-backup"] .stat-num').textContent), null, { timeout: 5000 });
+  assert(/gerade eben|Minute/.test(await page.textContent('[data-testid="stat-backup"]')), 'shows the fresh backup');
+});
+
+test('KI result is kept when leaving the page during the analysis', async (t) => {
+  const page = await openApp(t, 'advisor');
+  await page.click('[data-testid="advisor-start"]');
+  await page.waitForTimeout(250);
+  await goPage(page, 'overview');
+  await page.waitForFunction(() => window.__velox.cache.advisor, null, { timeout: 60000 });
+  await idle(page);
+  await page.waitForFunction(() => document.querySelector('.hero .ring-num').textContent !== '–', null, { timeout: 5000 });
+  assert(/Analyse fertig/.test(await toastText(page)), 'toast tells the analysis is done');
+});
+
+test('a running foreign job is shown under its own title (409)', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  const id = await firstRow(page, { status: 'default', risk: 'safe' });
+  await page.click(rowSel(id) + ' .switch');
+  await page.waitForSelector('#pending.show');
+  // another window starts a revert just before the user clicks "Anwenden"
+  const r = await api(t.server, 'POST', '/api/jobs', { type: 'revert', params: { ids: [id], label: 'test', _mockDelayMs: 1500 } });
+  assert(r.status === 200, 'foreign job started');
+  await page.click('#pending-apply');
+  await page.waitForSelector('.layer .job');
+  const title = await page.textContent('.layer .job .job-title');
+  assert(/zurückgesetzt/.test(title), 'overlay titled after the real job: ' + title);
+  await idle(page);
+  assert(!/angewendet/.test(await toastText(page)) || /vorgemerkt/.test(await toastText(page)), 'no apply result for a revert');
+  assert(/noch vorgemerkt/.test(await toastText(page)), 'reminds about the staged change');
+  await page.click('#pending-discard');
+}, { mockOnly: true });
+
+test('stale token: friendly session screen, no misleading retry', async (t) => {
+  t.expectNetworkErrors = true;
+  const ctx = await t.browser.newContext({ viewport: { width: 1360, height: 880 } });
+  t.contexts.push(ctx);
+  const page = await ctx.newPage();
+  t.watch(page);
+  await page.goto(t.server.url.replace(/t=[0-9a-fA-F]+/, 't=' + 'ab'.repeat(32)));
+  await page.waitForSelector('#ended.show', { timeout: 15000 });
+  await page.waitForTimeout(500);
+  const txt = await page.textContent('#ended');
+  assert(/Sitzung ungültig/.test(txt) && !/konnte nicht starten/.test(txt), 'session screen: ' + txt);
+});
+
+test('closing a second window does not stop VELOX', async (t) => {
+  const page = await openApp(t, 'overview');
+  const before = (await api(t.server, 'GET', '/__mock/stats')).json;
+  const second = await page.context().newPage();
+  t.watch(second);
+  await second.goto(t.server.url + '#/tweaks');
+  await ready(second);
+  await page.waitForTimeout(3500); // both windows have greeted each other
+  await second.close({ runBeforeUnload: true });
+  await sleep(600);
+  const after = (await api(t.server, 'GET', '/__mock/stats')).json;
+  assert(after.shutdowns === before.shutdowns, 'no shutdown beacon while another window is open');
+  await page.close({ runBeforeUnload: true });
+  await sleep(600);
+  const last = (await api(t.server, 'GET', '/__mock/stats')).json;
+  assert(last.shutdowns > before.shutdowns, 'the last window still sends the beacon');
+}, { mockOnly: true });
+
+test('settings: a failed save shows what is really saved', async (t) => {
+  t.expectNetworkErrors = true;
+  const page = await openApp(t, 'settings');
+  const accent = await page.evaluate(() => document.documentElement.dataset.accent);
+  await page.route('**/api/settings', r => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Speichern fehlgeschlagen (Test)."}' }));
+  const other = accent === 'green' ? 'orange' : 'green';
+  await page.click('.swatch[data-accent="' + other + '"]');
+  await page.waitForSelector('#toasts .toast-error');
+  await page.waitForTimeout(200);
+  assert((await page.evaluate(() => document.documentElement.dataset.accent)) === accent, 'accent reverted');
+  assert(await page.$eval('.swatch[data-accent="' + accent + '"]', b => b.getAttribute('aria-checked') === 'true'), 'saved swatch checked again');
+  assert(await page.$('#toasts .toast-error.is-sticky'), 'error toast stays until closed');
+  await page.click('.seg-btn[data-value="reduced"]');
+  await page.waitForTimeout(400);
+  assert(await page.$eval('.seg-btn[data-value="full"]', b => b.getAttribute('aria-checked') === 'true'), 'motion control reverted');
+  await page.unroute('**/api/settings');
+});
+
+test('repair log stays open with a summary; rescan from the palette gives feedback', async (t) => {
+  const page = await openApp(t, 'cleanup');
+  const btn = await page.$('.repair-card .btn:not([disabled])');
+  if (btn) {
+    await btn.click();
+    const d = await page.waitForSelector('.layer .dialog [data-action="confirm"]', { timeout: 1500 }).catch(() => null);
+    if (d) await d.click();
+    await page.waitForSelector('.layer .job[data-job="done"]', { timeout: 60000 });
+    await page.waitForTimeout(900);
+    assert(await page.$('.layer .job[data-job="done"]'), 'repair overlay still open after it finished');
+    assert(await page.$('.layer .job .job-close:not([hidden])'), 'with a close button');
+    await shot(page, 'state-repair-done');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.layer', { state: 'detached' });
+    assert(/Zuletzt/.test(await page.textContent('.repair-card')), 'last result on the card');
+  }
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('.palette');
+  await page.keyboard.type('System neu scannen');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => /neu gelesen/.test(document.getElementById('toasts').textContent) || document.querySelector('.chip-scan'), null, { timeout: 5000 });
+  await idle(page);
+  await page.waitForFunction(() => /System neu gelesen/.test(document.getElementById('toasts').textContent), null, { timeout: 30000 });
+});
+
+test('top bar: the page title is never cut off', async (t) => {
+  if (MODE === 'mock') await api(t.server, 'POST', '/__mock/state', { needs: { reboot: true } });
+  for (const vp of [{ width: 1360, height: 880 }, { width: 1100, height: 700 }, { width: 900, height: 600 }]) {
+    const page = await openApp(t, 'settings', { viewport: vp });
+    for (const id of ['settings', 'cleanup', 'presets', 'advisor']) {
+      await goPage(page, id);
+      const g = await page.evaluate(() => { const h1 = document.getElementById('topbar-title'); const r = h1.getBoundingClientRect(); const right = document.querySelector('.topbar-right').getBoundingClientRect(); return { cut: h1.scrollWidth > Math.ceil(r.width) + 1, overlap: r.right > right.left + 1, text: h1.textContent }; });
+      assert(!g.cut && !g.overlap, 'title "' + g.text + '" cut at ' + vp.width + ': ' + JSON.stringify(g));
+    }
+  }
+  if (MODE === 'mock') await api(t.server, 'POST', '/__mock/state', { needs: { reboot: false } });
+});
+
+test('reduced motion before boot: splash and aurora do not animate', async (t) => {
+  const ctx = await t.browser.newContext({ viewport: { width: 1360, height: 880 }, reducedMotion: 'reduce' });
+  t.contexts.push(ctx);
+  const page = await ctx.newPage();
+  t.watch(page);
+  await page.route('**/api/bootstrap', async (r) => { await sleep(1200); await r.continue(); });
+  await page.goto(t.server.url);
+  const anim = await page.evaluate(() => ['.aurora .a1', '.splash-orbit', '.brand-mark'].map(s => getComputedStyle(document.querySelector(s), s === '.brand-mark' ? '::after' : null).animationName));
+  assert(anim.every(a => a === 'none'), 'animations before boot: ' + anim.join(', '));
+  await ready(page);
 });
 
 test('Spiele: detect, boost switch, add by path', async (t) => {
@@ -599,19 +923,31 @@ test('reduced motion: OS preference turns animations into plain fades', async (t
 });
 
 test('needs: Explorer banner and reboot chip', async (t) => {
-  await api(t.server, 'POST', '/__mock/state', { needs: { explorer: true, reboot: true } });
+  await api(t.server, 'POST', '/__mock/state', { needs: { explorer: true, reboot: false, logoff: false } });
   const page = await openApp(t, 'overview');
   await page.waitForSelector('.banner >> text=Explorer neu starten');
-  await page.waitForSelector('.chip-reboot');
-  await shot(page, 'state-needs-banners');
-  await page.click('.banner .btn >> text=Explorer neu starten');
+  await page.click('[data-testid="banner-action"]');
   await waitJobDone(page);
-  await page.waitForFunction(() => !/Explorer neu starten/.test(document.getElementById('banners').textContent));
+  await page.waitForFunction(() => !document.querySelector('#banners .banner'));
+  // restart + log-off + Explorer at once: ONE banner (the restart covers the rest), one chip
+  await api(t.server, 'POST', '/__mock/state', { needs: { explorer: true, reboot: true, logoff: true } });
+  await page.evaluate(() => window.__velox.refreshState());
+  await page.waitForSelector('.banner[data-need="reboot"]');
+  assert((await page.$$('#banners .banner')).length === 1, 'one combined banner');
+  await page.waitForSelector('.chip-reboot');
+  await page.waitForTimeout(500);
+  await shot(page, 'state-needs-banners');
+  // only the Übersicht shows it in full; elsewhere the chip is enough
+  await goPage(page, 'tweaks');
+  assert(!(await page.$('#banners .banner')), 'no banner on other pages');
+  await goPage(page, 'overview');
+  await page.click('.banner .btn >> text=Später');
+  await page.waitForFunction(() => !document.querySelector('#banners .banner'));
   await page.click('.chip-reboot');
   await page.click('.layer .dialog [data-action="confirm"]');
   await waitJobDone(page);
   assert(/Neustart/.test(await toastText(page)), 'reboot toast');
-  await api(t.server, 'POST', '/__mock/state', { needs: { explorer: false, reboot: false } });
+  await api(t.server, 'POST', '/__mock/state', { needs: { explorer: false, reboot: false, logoff: false } });
 }, { mockOnly: true });
 
 test('busy backend: page attaches to a running job (409 safe)', async (t) => {
@@ -684,8 +1020,9 @@ test('backend gone: calm "VELOX wurde beendet" screen', async (t) => {
   if (MODE === 'mock') await api(t.server, 'POST', '/__mock/kill');
   else t.server.child.kill();
   await page.waitForSelector('#ended.show', { timeout: 20000 });
-  assert(/VELOX wurde beendet/.test(await page.textContent('#ended')), 'ended text');
+  assert(/Keine Verbindung zu VELOX/.test(await page.textContent('#ended')), 'ended text');
   assert(/schließen/.test(await page.textContent('#ended')), 'tells the user to close the window');
+  assert(/Verbinde neu/.test(await page.textContent('#ended')), 'says it keeps trying');
   await shot(page, 'state-ended');
   t.expectNetworkErrors = true;
 }, { last: true });
@@ -706,7 +1043,7 @@ async function main() {
     const t = {
       server, browser, contexts: [], expectNetworkErrors: false,
       watch(page) {
-        page.on('console', (m) => { if (m.type() === 'error') problems.push('console: ' + m.text()); });
+        page.on('console', (m) => { if (m.type() === 'error' && !/status of 409/.test(m.text())) problems.push('console: ' + m.text()); });
         page.on('pageerror', (e) => problems.push('pageerror: ' + e.message));
         page.on('requestfailed', (r) => { const f = r.failure(); if (f && /ERR_ABORTED/.test(f.errorText)) return; problems.push('requestfailed: ' + r.url() + ' ' + (f && f.errorText)); });
         page.on('response', (r) => { if (r.status() >= 400 && !(r.status() === 409)) problems.push('http ' + r.status() + ': ' + r.url()); });

@@ -208,7 +208,8 @@ function buildWorld() {
       { id: 'run:hkcu:Spotify', name: 'Spotify', command: '"C:\\Users\\Spieler\\AppData\\Roaming\\Spotify\\Spotify.exe" --autostart --minimized', location: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', enabled: false },
       { id: 'run:hklm:EpicGamesLauncher', name: 'Epic Games Launcher', command: '"C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe" -silent', location: 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', enabled: true },
       { id: 'folder:user:Updater.lnk', name: 'Updater <img src=x onerror="window.__veloxXss=1">', command: 'C:\\Temp\\<script>window.__veloxXss=2</script>\\upd.exe', location: 'Autostart-Ordner (Benutzer)', enabled: true },
-      { id: 'task:NvTmRep', name: 'NVIDIA Telemetry Report', command: 'C:\\Program Files\\NVIDIA Corporation\\NvTelemetry\\NvTmRep.exe', location: 'Aufgabenplanung', enabled: true }
+      { id: 'task:NvTmRep', name: 'NVIDIA Telemetry Report', command: 'C:\\Program Files\\NVIDIA Corporation\\NvTelemetry\\NvTmRep.exe', location: 'Aufgabenplanung', enabled: true },
+      { id: 'hklm-run|SecurityHealth', name: 'SecurityHealth', command: '%windir%\\system32\\SecurityHealthSystray.exe', location: 'Alle Benutzer (Registry)', enabled: true }
     ],
     stats: { heartbeats: 0, shutdowns: 0, bootstraps: 0, jobs: {}, unauthorized: 0 },
     shutdownTimer: null,
@@ -285,6 +286,12 @@ async function maybeRestorePoint(ctx) {
     await ctx.tick();
   }
 }
+/** Same shape as core/Common.ps1 Get-VxStateDto: statuses, profile, lastScan, needs (no top-level foreignCount). */
+function stateDto() {
+  const s = W.state;
+  return { statuses: s.statuses, profile: s.profile || null, lastScan: s.lastScan || null, needs: s.needs };
+}
+
 function saveBackup(kind, label, entries) {
   const id = stamp(new Date()) + '-' + kind + '-' + crypto.randomBytes(2).toString('hex');
   W.backups.unshift({ id, label: label || kind, kind, created: iso(new Date()), simulate: true, restorePoint: W.restorePointDone, entries });
@@ -395,6 +402,7 @@ const JOBS = {
     }
     ctx.log(items.length ? 'warn' : 'ok', items.length + ' Abweichungen vom Windows-Standard gefunden.');
     W.state.foreignCount = items.length;
+    if (W.state.profile) W.state.profile.foreignCount = items.length; // like core/Detweak.ps1 Set-VxForeignCount
     return { items, commands: (W.detweak.commands || []).map(c => ({ id: c.id, label: c.label, desc: c.desc, defaultOn: !!c.defaultOn, needs: c.needs || 'none' })) };
   },
   async detweak(p, ctx) {
@@ -617,13 +625,13 @@ async function handle(req, res) {
     return send(res, 200, {
       app: { name: 'VELOX', version: '1.0.0' },
       mode: { simulate: true, admin: opt.admin, windows: false, os: profile.os.caption + ' ' + profile.os.displayVersion + ' (' + profile.os.build + ')', ps: '7.6.0 (Mock)', userMismatch: false },
-      categories: W.categories, tweaks: W.tweaks, presets: W.presets, settings: W.settings, state: W.state,
+      categories: W.categories, tweaks: W.tweaks, presets: W.presets, settings: W.settings, state: stateDto(),
       // same as core/Server.ps1: busy is a boolean, activeJob tells which job to attach to
       busy: !!W.running,
       activeJob: W.running ? { id: W.running, type: W.jobs.get(W.running).type } : null
     });
   }
-  if (m('GET', /^\/api\/state$/)) return send(res, 200, W.state);
+  if (m('GET', /^\/api\/state$/)) return send(res, 200, stateDto());
   if (m('POST', /^\/api\/jobs$/)) {
     const type = body.type;
     if (!JOBS[type]) return send(res, 400, { error: 'Unbekannter Job-Typ: ' + String(type) });

@@ -7,10 +7,12 @@ import { icon } from './icons.js';
  * h('div', { class, text, attrs, dataset, style, on: { click }, onClick, ... }, ...children)
  * Strings and numbers become text nodes. Keys with a dash (aria-*, data-*) are attributes.
  */
+const HTML_SINKS = new Set(['innerHTML', 'outerHTML', 'srcdoc', 'insertAdjacentHTML']);
 export function h(tag, props, ...children) {
   const el = document.createElement(tag);
   if (props) {
     for (const [k, v] of Object.entries(props)) {
+      if (HTML_SINKS.has(k)) throw new Error('h(): ' + k + ' is not allowed - use text/children');
       if (v === undefined || v === null || v === false) continue;
       if (k === 'class') el.className = Array.isArray(v) ? v.filter(Boolean).join(' ') : v;
       else if (k === 'text') el.textContent = String(v);
@@ -378,29 +380,43 @@ export function scoreRing({ size = 168, stroke = 12, value = null, label = 'Punk
 let toastRoot = null;
 const TOAST_ICON = { ok: 'checkCircle', info: 'info', warn: 'warn', error: 'xCircle' };
 const TOAST_LABEL = { ok: 'Erledigt', info: 'Info', warn: 'Hinweis', error: 'Fehler' };
-export function toast({ type = 'ok', title, text, action, duration = 4600 }) {
+export function toast({ type = 'ok', title, text, action, duration }) {
   if (!toastRoot) {
     toastRoot = document.getElementById('toasts');
   }
+  // Errors stay until they are closed (a slow reader must not miss them); toasts that offer an
+  // action (e.g. "Rückgängig") stay longer than plain confirmations.
+  const sticky = type === 'error' && duration === undefined;
+  if (duration === undefined) duration = action ? 9000 : 4600;
   const close = () => {
     if (!el.isConnected || el.classList.contains('leaving')) return;
+    clearTimeout(timer);
     el.classList.add('leaving');
     setTimeout(() => el.remove(), reducedMotion() ? 120 : 220);
   };
-  const el = h('div', { class: 'toast toast-' + type, role: type === 'error' ? 'alert' : 'status', style: { '--dur': duration + 'ms' } },
+  const el = h('div', { class: ['toast toast-' + type, sticky && 'is-sticky'], role: type === 'error' ? 'alert' : 'status', style: { '--dur': duration + 'ms' } },
     h('div', { class: 'toast-icon' }, icon(TOAST_ICON[type] || 'info', 18)),
     h('div', { class: 'toast-body' },
       h('div', { class: 'toast-title' }, h('span', { class: 'toast-kind', text: TOAST_LABEL[type] || '' }), h('span', { text: title || '' })),
       text && h('div', { class: 'toast-text', text }),
-      action && h('div', { class: 'toast-actions' }, button({ label: action.label, variant: 'secondary', size: 'sm', onClick: () => { action.onClick(); close(); } }))),
+      action && h('div', { class: 'toast-actions' }, button({ label: action.label, variant: 'secondary', size: 'sm', onClick: () => { close(); action.onClick(); } }))),
     iconButton({ icon: 'x', label: 'Schließen', size: 15, onClick: close, cls: 'toast-x' }),
-    h('div', { class: 'toast-timer' }));
+    sticky ? null : h('div', { class: 'toast-timer' }));
   toastRoot.appendChild(el);
-  while (toastRoot.children.length > 4) toastRoot.firstElementChild.remove();
-  let timer = setTimeout(close, duration);
-  el.addEventListener('mouseenter', () => { clearTimeout(timer); el.classList.add('paused'); });
-  el.addEventListener('mouseleave', () => { el.classList.remove('paused'); timer = setTimeout(close, 1600); });
-  return { close };
+  // keep at most 4; drop the oldest non-error first
+  while (toastRoot.children.length > 4) {
+    const victim = Array.from(toastRoot.children).find(c => !c.classList.contains('is-sticky')) || toastRoot.firstElementChild;
+    victim.remove();
+  }
+  let timer = sticky ? 0 : setTimeout(close, duration);
+  let hovered = false; let focused = false;
+  const pause = () => { clearTimeout(timer); el.classList.add('paused'); };
+  const resume = () => { if (sticky || hovered || focused) return; el.classList.remove('paused'); clearTimeout(timer); timer = setTimeout(close, 2400); };
+  el.addEventListener('mouseenter', () => { hovered = true; pause(); });
+  el.addEventListener('mouseleave', () => { hovered = false; resume(); });
+  el.addEventListener('focusin', () => { focused = true; pause(); });
+  el.addEventListener('focusout', (e) => { if (el.contains(e.relatedTarget)) return; focused = false; resume(); });
+  return { close, el };
 }
 
 // ------------------------------------------------------------------ overlays (dialog, drawer)
@@ -408,7 +424,7 @@ const stack = [];
 document.addEventListener('keydown', (e) => {
   const top = stack[stack.length - 1];
   if (!top) return;
-  if (e.key === 'Escape' && top.dismissible !== false) { e.preventDefault(); top.close(false); }
+  if (e.key === 'Escape' && top.dismissible !== false) { e.preventDefault(); e.stopPropagation(); top.close(false); }
   if (e.key === 'Tab') trapFocus(e, top.panel);
 });
 function trapFocus(e, panel) {
@@ -426,6 +442,7 @@ export function openLayer({ kind, panel, dismissible = true, onClose, label }) {
   const backdrop = h('div', { class: 'backdrop backdrop-' + kind });
   const wrap = h('div', { class: 'layer layer-' + kind, role: 'dialog', 'aria-modal': 'true', 'aria-label': label }, backdrop, panel);
   const prevFocus = document.activeElement;
+  const app = document.getElementById('app');
   let closed = false;
   let resolveFn;
   const done = new Promise(r => { resolveFn = r; });
@@ -437,22 +454,45 @@ export function openLayer({ kind, panel, dismissible = true, onClose, label }) {
       const i = stack.indexOf(entry); if (i >= 0) stack.splice(i, 1);
       wrap.classList.add('closing');
       setTimeout(() => wrap.remove(), reducedMotion() ? 120 : 200);
-      if (prevFocus && prevFocus.focus && document.contains(prevFocus)) prevFocus.focus({ preventScroll: true });
+      // Un-inert synchronously: focusing an element inside an inert subtree silently fails and
+      // drops keyboard users onto <body>.
+      if (!stack.length && !app.hasAttribute('data-splash')) app.removeAttribute('inert');
+      syncLayerClasses();
+      restoreFocus(prevFocus);
       onClose && onClose(result);
       resolveFn(result);
     },
+    setDismissible(v) { entry.dismissible = !!v; },
     done, el: wrap
   };
-  if (dismissible) backdrop.addEventListener('click', () => entry.close(false));
+  backdrop.addEventListener('click', () => { if (entry.dismissible) entry.close(false); });
   stack.push(entry);
   root.appendChild(wrap);
-  document.getElementById('app').setAttribute('inert', '');
-  done.then(() => { if (!stack.length) document.getElementById('app').removeAttribute('inert'); });
-  requestAnimationFrame(() => {
+  app.setAttribute('inert', '');
+  syncLayerClasses();
+  // Focus moves into the layer at once: keys typed right after Ctrl+K must land in the palette, not
+  // on the button that had focus before (a Space there would press it).
+  const focusFirst = () => {
+    if (closed || panel.contains(document.activeElement)) return;
     const auto = panel.querySelector('[autofocus]') || panel.querySelector('input:not([type=checkbox]), textarea') || panel.querySelector('.btn-primary:not([disabled]), .btn:not([disabled])');
     (auto || panel).focus({ preventScroll: true });
-  });
+  };
+  focusFirst();
+  requestAnimationFrame(focusFirst); // content added by the caller right after opening
   return entry;
+}
+/** :root.has-drawer lifts the toasts above the drawer's footer so they never cover its buttons. */
+function syncLayerClasses() {
+  document.documentElement.classList.toggle('has-drawer', stack.some(e => e.el && e.el.classList.contains('layer-drawer')));
+}
+/** Puts focus back where it was; falls back to #main when that element is gone or hidden. */
+function restoreFocus(prev) {
+  const top = stack[stack.length - 1];
+  if (top) { if (!top.panel.contains(document.activeElement)) top.panel.focus({ preventScroll: true }); return; }
+  const usable = prev && prev !== document.body && prev.focus && prev.isConnected && !prev.closest('[inert]') && !prev.disabled && prev.getClientRects().length > 0;
+  if (usable) { prev.focus({ preventScroll: true }); if (document.activeElement === prev) return; }
+  const main = document.getElementById('main');
+  if (main) main.focus({ preventScroll: true });
 }
 
 /** Generic modal dialog. body: Node; footer: Node[]; returns layer entry. */
@@ -480,7 +520,7 @@ export function confirmDialog({ title, text, body, confirmLabel = 'Bestätigen',
     cb = checkbox({ label: cbLabel, onChange: (v) => { ok.disabled = !v; }, cls: 'confirm-check' });
   }
   entry = dialog({ title, text, icon: ic || (danger ? 'alert' : 'info'), tone: tone || (danger ? 'error' : 'accent'), body: (body || cb) ? h('div', { class: 'stack-12' }, body, cb) : null, footer: [cancel, ok] });
-  if (!cb) requestAnimationFrame(() => ok.focus());
+  if (!cb) requestAnimationFrame(() => { if (ok.isConnected && !ok.closest('.closing')) ok.focus(); });
   return entry.done.then(Boolean);
 }
 
@@ -506,13 +546,15 @@ export function jobOverlay({ title, subtitle, cancellable, onCancel, icon: ic = 
   const step = h('div', { class: 'job-step', text: 'Wird vorbereitet …' });
   const logBox = h('div', { class: 'job-log', role: 'log', 'aria-live': 'polite', 'aria-label': 'Protokoll' });
   const cancelBtn = cancellable ? button({ label: 'Abbrechen', variant: 'ghost', onClick: () => { cancelBtn.disabled = true; cancelBtn.querySelector('.btn-label').textContent = 'Wird abgebrochen …'; onCancel && onCancel(); } }) : null;
-  const closeBtn = button({ label: 'Schließen', variant: 'secondary', onClick: () => entry.close(true) });
+  const closeBtn = button({ label: 'Schließen', variant: 'secondary', onClick: () => entry.close(true), cls: 'job-close' });
   closeBtn.hidden = true;
+  const summaryEl = h('p', { class: 'job-summary', hidden: true });
   const orb = h('div', { class: 'job-orb' }, h('div', { class: 'job-orb-ring' }), h('div', { class: 'job-orb-icon' }, icon(ic, 24)));
   const panel = h('div', { class: 'dialog job', tabindex: '-1', 'data-job': 'running' },
     h('div', { class: 'job-head' }, orb,
       h('div', { class: 'dialog-titles' }, h('h2', { class: 'dialog-title job-title', text: title }), subtitle && h('p', { class: 'dialog-text', text: subtitle }))),
-    h('div', { class: 'job-progress' }, h('div', { class: 'job-progress-row' }, step, pct), h('div', { class: 'pbar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' }, bar)),
+    h('div', { class: 'job-progress' }, h('div', { class: 'job-progress-row' }, step, pct), h('div', { class: 'pbar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Fortschritt' }, bar)),
+    summaryEl,
     logBox,
     h('div', { class: 'dialog-foot' }, cancelBtn, closeBtn));
   const entry = openLayer({ kind: 'dialog', panel, dismissible: false, label: title });
@@ -528,27 +570,42 @@ export function jobOverlay({ title, subtitle, cancellable, onCancel, icon: ic = 
     for (; shown < lines.length; shown++) {
       const l = lines[shown];
       const lv = LEVEL[l.level] || LEVEL.info;
-      logBox.appendChild(h('div', { class: 'log-line lv-' + (l.level || 'info') }, icon(lv.icon, 13), lv.label && h('span', { class: 'log-tag', text: lv.label }), h('span', { class: 'log-msg', text: l.msg })));
+      // a PowerShell stack trace ("… | at Invoke-…") is for the log file, not for the user
+      const msg = String(l.msg || '').split(/\s\|\s+at\s|\r?\n\s*at\s/)[0];
+      logBox.appendChild(h('div', { class: 'log-line lv-' + (l.level || 'info') }, icon(lv.icon, 13), lv.label && h('span', { class: 'log-tag', text: lv.label }), h('span', { class: 'log-msg', text: msg })));
     }
     while (logBox.children.length > 120) logBox.firstElementChild.remove();
     logBox.scrollTop = logBox.scrollHeight;
   }
-  function finish(job) {
+  /**
+   * opts.keep: stay open after success (long or important jobs, logs with warnings) so the user
+   * can read what happened; opts.summary: one plain line shown under the progress bar.
+   */
+  function finish(job, opts = {}) {
     update(job);
     panel.dataset.job = job.status;
     if (cancelBtn) cancelBtn.hidden = true;
     const orbIcon = orb.querySelector('.job-orb-icon');
     clear(orbIcon).appendChild(icon(job.status === 'done' ? 'check' : job.status === 'cancelled' ? 'minus' : 'x', 26));
+    if (opts.summary) summaryEl.textContent = opts.summary;
+    summaryEl.hidden = !opts.summary;
+    const hasProblems = (job.log || []).some(l => l.level === 'warn' || l.level === 'error');
     if (job.status === 'done') {
-      step.textContent = 'Fertig';
+      step.textContent = hasProblems ? 'Fertig – mit Hinweisen' : 'Fertig';
       bar.style.transform = 'scaleX(1)';
       countUp(pct, 100, { from: lastPct, duration: 200, format: (v) => Math.round(v) + ' %' });
-      setTimeout(() => entry.close(true), reducedMotion() ? 250 : 650);
+      if (opts.keep) {
+        panel.classList.add('is-kept');
+        entry.setDismissible(true);
+        closeBtn.hidden = false;
+        closeBtn.focus();
+      } else setTimeout(() => entry.close(true), reducedMotion() ? 250 : 650);
     } else if (job.status === 'cancelled') {
       step.textContent = 'Abgebrochen';
       setTimeout(() => entry.close(true), 500);
     } else {
       step.textContent = job.error ? 'Fehlgeschlagen: ' + job.error : 'Fehlgeschlagen';
+      entry.setDismissible(true);
       closeBtn.hidden = false;
       closeBtn.focus();
     }
@@ -587,10 +644,97 @@ export function avatar(name, size = 44) {
 }
 
 /** Run fn inside a View Transition when supported and motion is on. */
-export function viewTransition(fn) {
+export function viewTransition(fn, rootClass) {
   if (!reducedMotion() && document.startViewTransition) {
-    try { return document.startViewTransition(fn); } catch { /* fall through */ }
+    const root = document.documentElement;
+    try {
+      if (rootClass) root.classList.add(rootClass);
+      const vt = document.startViewTransition(fn);
+      if (rootClass) vt.finished.finally(() => root.classList.remove(rootClass)).catch(() => {});
+      return vt;
+    } catch { if (rootClass) root.classList.remove(rootClass); /* fall through */ }
   }
   fn();
   return null;
+}
+
+// ------------------------------------------------------------------ keyboard: radio groups
+/**
+ * Roving tabindex for a role="radiogroup" whose children are role="radio" buttons: only the checked
+ * radio is a Tab stop, arrow keys move and select, Home/End jump. select(btn) is called for the
+ * new radio (it should run the same logic as a click). Same keyboard model as segmented().
+ */
+export function radioKeys(group, select) {
+  const radios = () => Array.from(group.querySelectorAll('[role="radio"]')).filter(r => !r.disabled);
+  const sync = () => {
+    const rs = Array.from(group.querySelectorAll('[role="radio"]'));
+    const cur = rs.find(r => r.getAttribute('aria-checked') === 'true' && !r.disabled) || rs.find(r => !r.disabled);
+    for (const r of rs) r.tabIndex = r === cur ? 0 : -1;
+  };
+  group.addEventListener('keydown', (e) => {
+    const keys = ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const rs = radios();
+    if (!rs.length) return;
+    const i = Math.max(0, rs.indexOf(document.activeElement));
+    let n = i;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') n = (i + 1) % rs.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') n = (i - 1 + rs.length) % rs.length;
+    else if (e.key === 'Home') n = 0;
+    else n = rs.length - 1;
+    e.preventDefault();
+    rs[n].focus();
+    select(rs[n]);
+    sync();
+  });
+  group.addEventListener('click', () => requestAnimationFrame(sync));
+  sync();
+  group.syncRadios = sync;
+  return group;
+}
+
+// ------------------------------------------------------------------ horizontal scrollers
+/** Soft edge fades on a horizontal scroller, only on the side where more content is hidden. */
+export function edgeFade(el) {
+  el.classList.add('edge-fade');
+  const upd = () => {
+    const max = el.scrollWidth - el.clientWidth;
+    el.classList.toggle('fade-start', max > 2 && el.scrollLeft > 2);
+    el.classList.toggle('fade-end', max > 2 && el.scrollLeft < max - 2);
+  };
+  el.addEventListener('scroll', upd, { passive: true });
+  new ResizeObserver(upd).observe(el);
+  requestAnimationFrame(upd);
+  el.updateFade = upd;
+  return el;
+}
+
+// ------------------------------------------------------------------ fly-to (staging feedback)
+/**
+ * A small accent dot springs from `from` (element or {x, y}) to `to` (element); onArrive runs when it
+ * lands. Off with reduced motion (onArrive runs at once).
+ */
+export function flyTo(from, to, onArrive) {
+  const done = () => { try { onArrive && onArrive(); } catch (e) { console.error(e); } };
+  if (reducedMotion() || !Element.prototype.animate || !to || !to.isConnected) { done(); return; }
+  const a = from instanceof Element ? from.getBoundingClientRect() : { left: from.x, top: from.y, width: 0, height: 0 };
+  const b = to.getBoundingClientRect();
+  if (!b.width) { done(); return; }
+  const x0 = a.left + a.width / 2; const y0 = a.top + a.height / 2;
+  const x1 = b.left + b.width / 2; const y1 = b.top + b.height / 2;
+  const dot = document.createElement('i');
+  dot.className = 'fly-dot';
+  dot.setAttribute('aria-hidden', 'true');
+  dot.style.left = x0 + 'px';
+  dot.style.top = y0 + 'px';
+  document.body.appendChild(dot);
+  const dx = x1 - x0; const dy = y1 - y0;
+  const lift = Math.min(120, Math.abs(dx) * 0.25 + 40);
+  const anim = dot.animate([
+    { transform: 'translate(-50%,-50%) translate(0,0) scale(.6)', opacity: 0 },
+    { transform: 'translate(-50%,-50%) translate(' + dx * 0.35 + 'px,' + (dy * 0.35 - lift) + 'px) scale(1.15)', opacity: 1, offset: 0.35 },
+    { transform: 'translate(-50%,-50%) translate(' + dx + 'px,' + dy + 'px) scale(.5)', opacity: .9 }
+  ], { duration: 520, easing: 'cubic-bezier(.5,0,.3,1)' });
+  anim.onfinish = () => { dot.remove(); done(); };
+  anim.oncancel = () => { dot.remove(); done(); };
 }

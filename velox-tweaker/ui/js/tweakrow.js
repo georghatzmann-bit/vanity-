@@ -1,7 +1,7 @@
 // Tweak rows (used by Tweaks, Spiele and the preset preview) + the human-readable
 // "Was genau geändert wird" description of every action type (section 3).
 import { icon } from './icons.js';
-import { h, clear, toggle, riskBadge, impactBars, needsBadge, badge, button, confirmDialog, toast, append } from './ui.js';
+import { h, clear, toggle, riskBadge, impactBars, badge, button, confirmDialog, toast, append, flyTo } from './ui.js';
 
 const START = { Automatic: 'Automatisch', AutomaticDelayed: 'Automatisch (verzögert)', Manual: 'Manuell', Disabled: 'Deaktiviert' };
 const PLAN = { ultimate: 'Ultimative Leistung', high: 'Höchstleistung', balanced: 'Ausbalanciert' };
@@ -23,7 +23,7 @@ export function fmtValue(v, kind) {
 /** One action -> { kind, title, target, from, to, code } (all plain strings). */
 export function describeAction(a) {
   switch (a.type) {
-    case 'reg': return { kind: 'Registry', icon: 'key', target: a.path + (a.name === '' ? ' (Standardwert)' : '\\' + a.name), from: fmtValue(a.default), to: fmtValue(a.value), note: a.onlyExisting ? 'nur wo der Wert schon existiert' : (a.path.includes('*') ? 'für jeden Unterschlüssel' : null), extra: a.kind };
+    case 'reg': return { kind: 'Registry-Wert', icon: 'key', target: a.path + (a.name === '' ? ' (Standardwert)' : '\\' + a.name), from: fmtValue(a.default), to: fmtValue(a.value), note: a.onlyExisting ? 'nur wo der Wert schon existiert' : (a.path.includes('*') ? 'für jeden Unterschlüssel' : null), extra: a.kind };
     case 'regkey': return { kind: 'Registry-Schlüssel', icon: 'key', target: a.path, from: a.default ? 'vorhanden' : 'nicht vorhanden', to: a.present ? 'wird angelegt' : 'wird gelöscht' };
     case 'service': return { kind: 'Dienst', icon: 'layers', target: a.name, from: START[a.default] || a.default, to: START[a.start] || a.start, note: a.start === 'Disabled' && a.stop !== false ? 'wird auch sofort beendet' : null };
     case 'task': return { kind: 'Geplante Aufgabe', icon: 'clock', target: a.path, from: a.default ? 'aktiviert' : 'deaktiviert', to: a.enabled ? 'aktiviert' : 'deaktiviert' };
@@ -49,13 +49,13 @@ export function actionList(t) {
   for (const a of t.actions || []) {
     const d = describeAction(a);
     const li = h('li', { class: 'act' },
-      h('div', { class: 'act-kind' }, icon(d.icon, 14), h('span', { text: d.kind }), d.extra && h('span', { class: 'act-extra', text: d.extra })),
+      h('div', { class: 'act-kind' }, icon(d.icon, 14), h('span', { text: d.kind })),
       d.target && h('div', { class: 'act-target mono', text: d.target }));
     if (d.from !== undefined || d.to !== undefined) {
       li.appendChild(h('div', { class: 'act-change' },
-        h('span', { class: 'val val-from', title: 'Windows-Standard' }, h('span', { class: 'val-label', text: 'Standard' }), h('span', { class: 'mono', text: d.from })),
+        h('span', { class: 'val val-from', title: 'Windows-Standard' }, h('span', { class: 'val-label', text: 'Windows' }), h('span', { class: 'mono', text: d.from })),
         icon('arrowRight', 14, 'act-arrow'),
-        h('span', { class: 'val val-to', title: 'Mit diesem Tweak' }, h('span', { class: 'val-label', text: 'Neu' }), h('span', { class: 'mono', text: d.to }))));
+        h('span', { class: 'val val-to', title: 'Mit diesem Tweak' }, h('span', { class: 'val-label', text: 'VELOX' }), h('span', { class: 'mono', text: d.to }))));
     }
     if (d.text) li.appendChild(h('div', { class: 'act-text', text: d.text }));
     if (d.note) li.appendChild(h('div', { class: 'act-text', text: d.note }));
@@ -89,7 +89,17 @@ export function tweakRow(ctx, t, opts = {}) {
   if (kind === 'toggle') {
     control = toggle({
       label: t.name,
-      onChange: async (next) => { await ctx.stage(t.id, next); updateRow(ctx, row, t); return false; }
+      onChange: async (next) => {
+        const before = ctx.pending.has(t.id);
+        const ok = await ctx.stage(t.id, next);
+        updateRow(ctx, row, t);
+        // staged (not un-staged): a dot springs from the switch into the counter of the pending bar
+        if (ok && !before && ctx.pending.has(t.id)) {
+          const target = document.getElementById('pending-count');
+          requestAnimationFrame(() => flyTo(control, target, () => { target.classList.remove('bump'); void target.offsetWidth; target.classList.add('bump'); }));
+        }
+        return false;
+      }
     });
   } else if (kind === 'action') {
     control = button({ label: 'Ausführen', icon: 'play', size: 'sm', onClick: () => runAction(ctx, t) });
@@ -125,7 +135,17 @@ function fillDetails(ctx, t, box) {
     !ctx.applicable(t) && h('div', { class: 'note note-info' }, icon('lock', 15), h('span', { text: 'Nicht verfügbar: ' + (t.naReason || 'passt nicht zu deinem PC.') })),
     h('div', { class: 'trow-sub', text: 'Was genau geändert wird' }),
     actionList(t),
-    h('div', { class: 'trow-id mono', text: t.id + ((t.tags && t.tags.length) ? '  ·  ' + t.tags.join(', ') : '') })));
+    proDetails(t)));
+}
+/** Internal id, tags and value types: only for people who want them. */
+function proDetails(t) {
+  const kinds = Array.from(new Set((t.actions || []).filter(a => a.type === 'reg' && a.kind).map(a => a.kind)));
+  return h('details', { class: 'pro' },
+    h('summary', {}, icon('chevronRight', 13), h('span', { text: 'Für Profis' })),
+    h('dl', { class: 'pro-list' },
+      h('dt', { text: 'ID' }), h('dd', { class: 'mono', text: t.id }),
+      t.tags && t.tags.length ? [h('dt', { text: 'Stichwörter' }), h('dd', { class: 'mono', text: t.tags.join(', ') })] : null,
+      kinds.length ? [h('dt', { text: 'Registry-Typ' }), h('dd', { class: 'mono', text: kinds.join(', ') })] : null));
 }
 
 export function updateRow(ctx, row, t) {
@@ -149,19 +169,20 @@ export function updateRow(ctx, row, t) {
   } else {
     c.disabled = na;
   }
+  // Risk + impact + exactly one state; restart needs are a small icon with a tooltip.
   const meta = clear(row._meta);
   meta.appendChild(riskBadge(t.risk));
   meta.appendChild(impactBars(t.impact));
-  const nb = needsBadge(t.needs);
-  if (nb) meta.appendChild(nb);
   if (pending) meta.appendChild(h('span', { class: 'badge badge-accent badge-pending' }, h('span', { class: 'dot' }), h('span', { text: ctx.pending.get(t.id) ? 'Vorgemerkt: an' : 'Vorgemerkt: aus' })));
-  if (kind === 'remove') meta.appendChild(badge(st === 'applied' ? 'Entfernt' : na ? 'Nicht vorhanden' : 'Installiert', st === 'applied' ? 'ok' : 'neutral'));
-  else if (kind === 'toggle' && STATUS_BADGE[st] && !(st === 'applied' && pending)) {
+  else if (kind === 'remove') meta.appendChild(badge(st === 'applied' ? 'Entfernt' : na ? 'Nicht vorhanden' : 'Installiert', st === 'applied' ? 'ok' : 'neutral'));
+  else if (kind === 'toggle' && STATUS_BADGE[st]) {
     const [txt, tone, ic] = STATUS_BADGE[st];
     const b = badge(txt, tone, ic);
     if (st === 'na' && t.naReason) { b.title = t.naReason; b.querySelector('span:last-child').textContent = 'Nicht verfügbar: ' + t.naReason; }
     meta.appendChild(b);
   }
+  const NEEDS = { reboot: ['restart', 'Wirkt erst nach einem Neustart'], logoff: ['user', 'Wirkt erst nach Ab- und Anmelden'], explorer: ['refresh', 'Wirkt nach einem Explorer-Neustart'] };
+  if (NEEDS[t.needs]) meta.appendChild(h('span', { class: 'needs-ic', 'data-tip': NEEDS[t.needs][1], title: NEEDS[t.needs][1] }, icon(NEEDS[t.needs][0], 13), h('span', { class: 'sr-only', text: NEEDS[t.needs][1] })));
 }
 
 async function runAction(ctx, t) {
@@ -179,7 +200,14 @@ async function runAction(ctx, t) {
 async function removeApp(ctx, t) {
   const ok = await confirmDialog({ title: t.name + ' entfernen?', text: 'Das ist nicht rückgängig zu machen. Du kannst die App später über den Microsoft Store neu installieren.', confirmLabel: 'Entfernen', danger: true });
   if (!ok) return;
-  await ctx.runJob('apply', { ids: [t.id], label: 'App entfernt: ' + t.name });
+  // quiet: the generic apply toast would offer "Rückgängig", which does not exist for removed apps
+  const job = await ctx.runJob('apply', { ids: [t.id], label: 'App entfernt: ' + t.name }, { title: 'App wird entfernt', quiet: true });
+  if (job && job.status === 'done') {
+    const r = ((job.result && job.result.results) || [])[0] || {};
+    toast(r.ok === false
+      ? { type: 'warn', title: t.name + ' nicht entfernt', text: r.error || 'Fehlgeschlagen.' }
+      : { type: 'ok', title: t.name + ' entfernt', text: 'Neu installieren geht jederzeit über den Microsoft Store.' });
+  }
 }
 
 /**

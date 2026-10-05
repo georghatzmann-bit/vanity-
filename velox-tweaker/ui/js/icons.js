@@ -101,8 +101,11 @@ const NS = 'http://www.w3.org/2000/svg';
 
 /** Returns a fresh <svg> element for a known icon name (falls back to "sparkles"). */
 export function icon(name, size = 18, cls = '') {
-  let key = P[name] ? name : ALIAS[name] || ALIAS[String(name || '').toLowerCase()] || 'sparkles';
-  if (!P[key]) key = 'sparkles';
+  // Own-property lookups only: a catalog icon such as "constructor" must not reach Object.prototype.
+  const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+  const n = String(name || '');
+  let key = own(P, n) ? n : own(ALIAS, n) ? ALIAS[n] : own(ALIAS, n.toLowerCase()) ? ALIAS[n.toLowerCase()] : 'sparkles';
+  if (!own(P, key)) key = 'sparkles';
   let tpl = cache.get(key);
   if (!tpl) {
     tpl = document.createElementNS(NS, 'svg');

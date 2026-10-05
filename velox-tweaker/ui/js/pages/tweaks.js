@@ -1,7 +1,8 @@
 // Tweaks: category rail, search, filter chips, staged toggles, incremental rendering for 500+ rows.
 import { icon } from '../icons.js';
-import { h, clear, button, emptyState, toast, plural, fmtNumber, append } from '../ui.js';
+import { h, clear, button, emptyState, toast, plural, fmtNumber, append, edgeFade } from '../ui.js';
 import { renderList } from '../tweakrow.js';
+import { tweakScore } from '../search.js';
 
 export const OWN_PAGES = new Set(['cleanup', 'repair', 'apps']);
 
@@ -10,8 +11,6 @@ const FILTERS = [
   { key: 'status', label: 'Status', options: [['on', 'Aktiv'], ['off', 'Aus'], ['foreign', 'Fremd geändert'], ['na', 'Nicht verfügbar']] },
   { key: 'impact', label: 'Wirkung', options: [['3', 'Stark'], ['2', 'Spürbar'], ['1', 'Kaum']] }
 ];
-
-const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default {
   id: 'tweaks', title: 'Tweaks', icon: 'sliders', desc: 'Jede Einstellung einzeln – vormerken, prüfen, anwenden', keywords: 'einstellungen optionen alle',
@@ -37,14 +36,15 @@ export default {
     };
     mkRailItem('all', 'Alle Tweaks', 'layers');
     for (const c of cats) mkRailItem(c.id, c.name, c.icon);
+    // Same definition everywhere: active / applicable toggles (what fits this PC).
     function railCounts() {
       for (const [id, b] of railItems) {
-        const list = ctx.toggles().filter(t => inScope(t) && (id === 'all' || t.category === id));
+        const list = ctx.countable(t => inScope(t) && (id === 'all' || t.category === id));
         const on = list.filter(t => ctx.isApplied(t.id)).length;
-        const pend = list.filter(t => ctx.pending.has(t.id)).length;
+        const pend = ctx.toggles().filter(t => inScope(t) && (id === 'all' || t.category === id) && ctx.pending.has(t.id)).length;
         const cnt = b.querySelector('.rail-count');
         cnt.textContent = on + '/' + list.length;
-        cnt.title = on + ' von ' + list.length + ' aktiv';
+        cnt.title = on + ' von ' + list.length + ' passenden Tweaks aktiv';
         b.classList.toggle('has-pending', pend > 0);
       }
     }
@@ -86,6 +86,7 @@ export default {
     const resultInfo = h('div', { class: 'tw-result', 'aria-live': 'polite' });
     const list = h('div', { class: 'tw-list', 'data-testid': 'tweak-list' });
 
+    const scoreOf = new Map();
     function matches(t) {
       if (active.risk.size && !active.risk.has(t.risk)) return false;
       if (active.impact.size && !active.impact.has(String(t.impact || 1))) return false;
@@ -94,11 +95,7 @@ export default {
         const key = !ctx.applicable(t) ? 'na' : st === 'applied' ? 'on' : (st === 'custom' || st === 'partial') ? 'foreign' : 'off';
         if (!active.status.has(key)) return false;
       }
-      if (query) {
-        const q = norm(query);
-        const hay = norm(t.name + ' ' + t.desc + ' ' + (t.group || '') + ' ' + t.id + ' ' + (t.tags || []).join(' ') + ' ' + ctx.catName(t.category));
-        if (!q.split(/\s+/).every(w => hay.includes(w))) return false;
-      }
+      if (query) { const sc = tweakScore(query, t, ctx.catName(t.category)); if (!sc) return false; scoreOf.set(t.id, sc); }
       return true;
     }
 
@@ -110,7 +107,7 @@ export default {
       clear(head);
       const c = cat === 'all' ? { name: 'Alle Tweaks', desc: 'Alles, was VELOX an deinem PC einstellen kann – nach Bereichen sortiert.', icon: 'layers' } : ctx.catById.get(cat);
       const scope = ctx.toggles().filter(t => inScope(t) && (cat === 'all' || t.category === cat));
-      const appl = scope.filter(t => ctx.applicable(t));
+      const appl = ctx.countable(t => inScope(t) && (cat === 'all' || t.category === cat));
       const on = appl.filter(t => ctx.isApplied(t.id)).length;
       const rec = recommended();
       const recBtn = button({ label: rec.length ? 'Empfohlene aktivieren (' + rec.length + ')' : 'Empfohlene sind aktiv', icon: rec.length ? 'sparkles' : 'check', variant: rec.length ? 'primary' : 'secondary', size: 'sm', disabled: !rec.length || !!query, attrs: { 'data-testid': 'recommend-btn', title: 'Merkt alle sicheren Tweaks dieser Kategorie vor, die zu deinem PC passen und noch nicht aktiv sind.' },
@@ -129,26 +126,34 @@ export default {
     function refresh() {
       if (renderer) renderer.cancel();
       ctx.cache.tweaksCat = cat;
+      scoreOf.clear();
       const all = ctx.tweaks.filter(t => inScope(t) && (query || cat === 'all' || t.category === cat));
       const filtered = all.filter(matches);
       const anyFilter = Object.values(active).some(s => s.size);
       resetChip.hidden = !anyFilter;
-      resultInfo.textContent = (query || anyFilter) ? plural(filtered.length, 'Treffer', 'Treffer') : plural(filtered.length, 'Tweak', 'Tweaks');
+      // Counted like the head and the rail: toggles that fit this PC; one-off actions separately.
+      const nToggles = filtered.filter(t => (t.kind || 'toggle') === 'toggle' && ctx.applicable(t)).length;
+      const nActions = filtered.filter(t => t.kind === 'action' && ctx.applicable(t)).length;
+      resultInfo.textContent = (query || anyFilter) ? plural(filtered.length, 'Treffer', 'Treffer')
+        : [plural(nToggles, 'Tweak', 'Tweaks'), nActions ? plural(nActions, 'Aktion', 'Aktionen') : null].filter(Boolean).join(' · ');
       fillHead();
       const order = new Map(ctx.categories.map((c, i) => [c.id, i]));
-      const grouped = query || cat === 'all';
-      const sorted = filtered.slice().sort((a, b) => grouped ? (order.get(a.category) - order.get(b.category)) || 0 : 0);
+      // search: best match first (no grouping, the category is shown on each row)
+      const sorted = query
+        ? filtered.slice().sort((a, b) => (scoreOf.get(b.id) - scoreOf.get(a.id)) || (Number(ctx.applicable(b)) - Number(ctx.applicable(a))) || ((Number(b.impact) || 1) - (Number(a.impact) || 1)))
+        : filtered.slice().sort((a, b) => cat === 'all' ? (order.get(a.category) - order.get(b.category)) || 0 : 0);
       if (!sorted.length) {
         clear(list).appendChild(emptyState({
           icon: 'search', title: 'Nichts gefunden',
-          text: query ? 'Kein Tweak passt zu „' + query + '“. Probier ein anderes Wort, z. B. „Maus“, „Ping“ oder „Werbung“.' : 'Mit diesen Filtern bleibt nichts übrig.',
+          text: query ? 'Kein Tweak passt zu „' + query + '“. Probier ein anderes Wort, z. B. „Maus“, „Ping“ oder „Werbung“.' : 'Mit diesen Filtern bleibt nichts übrig. Nimm einen Filter heraus oder setz alle zurück.',
           action: button({ label: 'Suche und Filter zurücksetzen', variant: 'secondary', size: 'sm', onClick: () => { search.value = ''; query = ''; clearBtn.hidden = true; resetChip.click(); } })
         }));
         renderer = null;
         return;
       }
       renderer = renderList(ctx, list, sorted, {
-        groupBy: grouped ? (t) => ctx.catName(t.category) : (t) => t.group || null
+        showCategory: !!query,
+        groupBy: query ? null : cat === 'all' ? (t) => ctx.catName(t.category) : (t) => t.group || null
       });
     }
 
@@ -156,7 +161,7 @@ export default {
       cat = id;
       for (const [k, b] of railItems) b.setAttribute('aria-pressed', String(k === id));
       const cur = railItems.get(id);
-      if (cur && cur.scrollIntoView && rail.scrollWidth > rail.clientWidth) cur.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+      if (cur && cur.scrollIntoView && rail.scrollWidth > rail.clientWidth) cur.scrollIntoView({ inline: 'center', block: 'nearest', behavior: document.documentElement.dataset.motion === 'reduced' ? 'auto' : 'smooth' });
       refresh();
     }
 
@@ -166,6 +171,7 @@ export default {
         h('div', { class: 'tw-toolbar' }, searchBox, resultInfo),
         chipRow, head, list)));
 
+    edgeFade(rail);
     railCounts();
     refresh();
     if (opts && opts.focusSearch) requestAnimationFrame(() => search.focus());

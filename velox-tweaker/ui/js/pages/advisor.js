@@ -1,7 +1,7 @@
 // KI-Optimierer: goal, free text, engine (local Smart-Analyse / Claude), radar scan driven by the
 // job log, then before -> after score rings, findings with fixes and a selectable plan.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append } from '../ui.js';
+import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append, radioKeys } from '../ui.js';
 import { api } from '../api.js';
 
 export const GOALS = [
@@ -54,6 +54,7 @@ export default {
       b.addEventListener('click', () => { goal = g.id; for (const x of goalBox.children) x.setAttribute('aria-checked', String(x.dataset.goal === goal)); });
       goalBox.appendChild(b);
     }
+    radioKeys(goalBox, (b) => b.click());
     const text = h('textarea', { class: 'textarea', rows: 2, maxLength: 600, placeholder: 'Beschreib dein Problem, z. B. „FiveM ruckelt in der Stadt“ (optional)', 'aria-label': 'Problem beschreiben (optional)', value: ctx.cache.advisorText || '' });
     const hasKey = !!(ctx.settings.claude && ctx.settings.claude.hasKey);
     const ENGINES = [
@@ -67,6 +68,7 @@ export default {
       b.addEventListener('click', () => { engine = e.value; for (const x of eng.children) x.setAttribute('aria-checked', String(x === b)); claudeOpts.hidden = engine !== 'claude'; });
       eng.appendChild(b);
     }
+    radioKeys(eng, (b) => b.click());
     const keyHint = hasKey ? null : h('button', { class: 'link-btn', type: 'button' }, icon('key', 14), h('span', { text: 'Claude nutzen? API-Key in Einstellungen hinterlegen' }));
     if (keyHint) keyHint.addEventListener('click', () => ctx.navigate('settings', { focus: 'claude' }));
     const claudeOpts = h('div', { class: 'claude-opts', hidden: engine !== 'claude' },
@@ -139,13 +141,20 @@ export default {
       running = false;
       startBtn.disabled = false;
       setup.classList.remove('is-running');
-      if (!el.isConnected) return;
-      if (job && job.status === 'done' && job.result) {
+      // Keep the result even when the user left the page meanwhile (a Claude call is paid for).
+      const okJob = job && job.status === 'done' && job.result;
+      if (okJob) {
         ctx.cache.advisor = Object.assign({ goal, at: new Date().toISOString() }, job.result);
         ctx.emit('advisor');
+      }
+      if (!el.isConnected) {
+        if (okJob) toast({ type: 'ok', title: 'Analyse fertig', text: plural((job.result.plan || []).length, 'Vorschlag', 'Vorschläge') + ' für dich.', action: { label: 'Ansehen', onClick: () => ctx.navigate('advisor') } });
+        return;
+      }
+      if (okJob) {
         showResult(ctx.cache.advisor, true);
         requestAnimationFrame(() => stage.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' }));
-        toast({ type: 'ok', title: 'Analyse fertig', text: (job.result.plan || []).length + ' Vorschläge für dich.' });
+        toast({ type: 'ok', title: 'Analyse fertig', text: plural((job.result.plan || []).length, 'Vorschlag', 'Vorschläge') + ' für dich.' });
       } else {
         idle();
         if (job && job.status === 'error' && engine === 'claude') stage.prepend(h('div', { class: 'note note-warn' }, icon('alert', 15), h('span', { text: 'Claude-Analyse fehlgeschlagen: ' + (job.error || '') + ' Die Smart-Analyse funktioniert immer offline.' })));
@@ -166,7 +175,7 @@ export default {
           h('div', { class: 'eyebrow', text: engineLabel + ' · Ziel: ' + ((GOALS.find(g => g.id === (r.goal || goal)) || {}).label || '') }),
           h('h2', { class: 'hero-title', text: gain > 0 ? '+' + gain + ' Punkte sind drin' : 'Schon sehr gut eingestellt' }),
           h('p', { class: 'hero-text', text: r.summary || '' }),
-          r.usage ? h('p', { class: 'fine', text: 'Verbrauch: ' + (r.usage.input_tokens || 0) + ' Eingabe- und ' + (r.usage.output_tokens || 0) + ' Ausgabe-Tokens.' }) : null));
+          r.usage ? h('p', { class: 'fine', text: 'Diese Analyse hat ein paar Cent gekostet und läuft über dein Anthropic-Konto. Die genauen Kosten siehst du in der Anthropic-Konsole.' }) : null));
 
       // findings
       const order = { bad: 0, warn: 1, info: 2, good: 3 };
@@ -185,12 +194,19 @@ export default {
       const planItems = (r.plan || []).map(p => ({ p, t: ctx.byId.get(p.id) })).filter(x => x.t);
       const sel = new Set(planItems.filter(x => ctx.applicable(x.t) && !ctx.isApplied(x.t.id)).map(x => x.t.id));
       const planList = h('div', { class: 'plan-list' });
+      const SHOW = 12;
+      let firstPlan = true;
+      let showAll = planItems.length <= SHOW + 3;
+      const moreBtn = button({ label: '', variant: 'ghost', size: 'sm', iconRight: 'chevronDown', cls: 'plan-more', onClick: () => { showAll = true; renderPlan(); } });
       const applyBtn = button({ label: '', icon: 'bolt', variant: 'primary', cls: 'btn-brand', attrs: { 'data-testid': 'plan-apply' } });
       const stageBtn = button({ label: 'Nur vormerken', icon: 'plus', variant: 'secondary' });
       const PRIO = { 1: 'Priorität hoch', 2: 'Priorität mittel', 3: 'Priorität niedrig' };
       function renderPlan() {
         clear(planList);
-        planItems.forEach(({ p, t }, i) => {
+        // most important first; long plans show the top items and fold the rest
+        const ordered = planItems.slice().sort((a, b) => (a.p.priority || 2) - (b.p.priority || 2));
+        const visible = showAll ? ordered : ordered.slice(0, SHOW);
+        visible.forEach(({ p, t }, i) => {
           const done = ctx.isApplied(t.id); const na = !ctx.applicable(t);
           const cb = checkbox({ checked: sel.has(t.id), disabled: done || na, onChange: (v) => { if (v) sel.add(t.id); else sel.delete(t.id); updateBtns(); } });
           cb.input.setAttribute('aria-label', t.name);
@@ -201,7 +217,14 @@ export default {
               done ? badge('Schon aktiv', 'ok', 'check') : na ? badge('Nicht verfügbar', 'neutral', 'lock') : badge(PRIO[p.priority] || PRIO[2], p.priority === 1 ? 'accent' : 'neutral'),
               riskBadge(t.risk))));
         });
-        if (animate) stagger(planList);
+        if (!showAll) {
+          const hidden = ordered.length - visible.length;
+          const hiddenSel = ordered.slice(SHOW).filter(x => sel.has(x.t.id)).length;
+          moreBtn.querySelector('.btn-label').textContent = 'Weitere ' + hidden + ' Vorschläge anzeigen' + (hiddenSel ? ' (' + hiddenSel + ' davon ausgewählt)' : '');
+          planList.appendChild(moreBtn);
+        }
+        if (animate && firstPlan) stagger(planList);
+        firstPlan = false;
         updateBtns();
       }
       function updateBtns() {

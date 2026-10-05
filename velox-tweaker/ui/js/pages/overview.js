@@ -1,6 +1,6 @@
 // Übersicht: score hero, system cards, stats, top findings, quick tiles.
 import { icon } from '../icons.js';
-import { h, clear, scoreRing, button, countUp, fmtRelative, fmtNumber, emptyState, stagger, badge, append } from '../ui.js';
+import { h, clear, scoreRing, button, countUp, fmtRelative, fmtDate, fmtNumber, emptyState, stagger, badge, append, plural, reducedMotion } from '../ui.js';
 import { api } from '../api.js';
 import { severityBadge, applyFix } from './advisor.js';
 
@@ -62,15 +62,40 @@ export default {
     const headline = h('h2', { class: 'hero-title' });
     const text = h('p', { class: 'hero-text' });
     const metaLine = h('div', { class: 'hero-meta' });
-    const cta = button({ label: 'Jetzt analysieren', icon: 'sparkles', variant: 'primary', cls: 'btn-brand btn-lg', onClick: () => ctx.navigate('advisor', { autostart: true }), attrs: { 'data-testid': 'cta-analyze' } });
+    const cta = button({ label: 'Jetzt analysieren', icon: 'sparkles', variant: 'primary', cls: 'btn-brand btn-lg', onClick: () => ctaRun && ctaRun(), attrs: { 'data-testid': 'cta-analyze' } });
     const second = button({ label: 'Preset wählen', icon: 'stack', variant: 'secondary', cls: 'btn-lg', onClick: () => ctx.navigate('presets') });
     const hero = h('section', { class: 'card hero spot' }, h('div', { class: 'hero-bg', 'aria-hidden': 'true' }),
       h('div', { class: 'hero-ring' }, ring),
       h('div', { class: 'hero-body' }, eyebrow, headline, text, h('div', { class: 'hero-actions' }, cta, second), metaLine));
 
+    /**
+     * The hero names the one next best step for this PC, in priority order: apply what is staged,
+     * analyse, review foreign tweaks, restart, otherwise pick a preset.
+     */
+    function nextStep() {
+      const r = ctx.cache.advisor;
+      const foreign = foreignCount();
+      const need = ctx.state.needs || {};
+      if (ctx.pending.size) return { label: plural(ctx.pending.size, 'Änderung', 'Änderungen') + ' anwenden', icon: 'bolt', run: () => ctx.applyPending() };
+      if (!r) return { label: 'Jetzt analysieren', icon: 'sparkles', run: () => ctx.navigate('advisor', { autostart: true }) };
+      if (!r.planApplied && (r.plan || []).length) return { label: 'Plan ansehen', icon: 'arrowRight', run: () => ctx.navigate('advisor') };
+      if (foreign) return { label: 'Fremd-Tweaks prüfen (' + foreign + ')', icon: 'undo', run: () => ctx.navigate('detweak') };
+      if (need.reboot) return { label: 'Neu starten …', icon: 'restart', run: () => document.querySelector('.chip-reboot') && document.querySelector('.chip-reboot').click() };
+      return { label: 'Neu analysieren', icon: 'sparkles', run: () => ctx.navigate('advisor', { autostart: true }) };
+    }
+    let ctaRun = null;
+    function fillCta() {
+      const st = nextStep();
+      ctaRun = st.run;
+      cta.querySelector('.btn-label').textContent = st.label;
+      const old = cta.querySelector('svg.icon');
+      if (old && old.dataset.icon !== st.icon) old.replaceWith(icon(st.icon, 17));
+    }
+    let lastRingKey = null;
     function fillHero() {
       const r = ctx.cache.advisor;
       clear(metaLine);
+      fillCta();
       if (!r) {
         ring.set(null);
         ring.setLabel('noch offen');
@@ -81,18 +106,40 @@ export default {
       } else {
         const score = r.planApplied ? r.scoreAfter : r.score;
         ring.setLabel('von 100');
-        ring.set(score, r.planApplied ? null : r.scoreAfter);
+        // Handoff: right after the plan was applied the ring counts up from the old score to the new one.
+        const key = r.at + '|' + !!r.planApplied;
+        if (r.planApplied && !r.handedOff) {
+          r.handedOff = true;
+          ring.set(r.score);
+          setTimeout(() => { if (ring.isConnected) ring.set(r.scoreAfter); }, reducedMotion() ? 0 : 900);
+        } else if (key !== lastRingKey) ring.set(score, r.planApplied ? null : r.scoreAfter);
+        lastRingKey = key;
         eyebrow.textContent = r.planApplied ? 'Leistungs-Score · Plan angewendet' : 'Leistungs-Score';
-        headline.textContent = score >= 80 ? 'Stark eingestellt' : score >= 60 ? 'Gut – aber da geht noch was' : 'Dein PC bremst sich selbst aus';
+        headline.textContent = score >= 80 ? 'Stark eingestellt' : score >= 60 ? 'Gut – aber da geht noch was' : 'Da steckt noch viel Leistung drin';
         text.textContent = r.planApplied ? 'Dein Plan ist angewendet. Starte eine neue Analyse, um den genauen Stand zu sehen – oder schau dir die Presets an.' : (r.summary || '');
         const engineName = r.engine === 'claude' ? 'Claude KI' : 'Smart-Analyse';
         append(metaLine, icon(r.planApplied ? 'checkCircle' : 'arrowRight', 14), h('span', { text: r.planApplied ? 'Vorher ' + r.score + ' Punkte · ' + engineName : 'Mit dem Plan: ' + r.scoreAfter + ' Punkte · ' + (r.plan || []).length + ' Vorschläge · ' + engineName }));
-        cta.querySelector('.btn-label').textContent = 'Neu analysieren';
       }
     }
+    /** Foreign tweaks: last detweak scan in this session, else the count the backend remembered. */
+    function foreignCount() {
+      if (ctx.cache.detweak) return typeof ctx.cache.detweakCount === 'number' ? ctx.cache.detweakCount : ctx.cache.detweak.items.length;
+      const p = ctx.state.profile || {};
+      const n = typeof p.foreignCount === 'number' ? p.foreignCount : ctx.state.foreignCount;
+      return typeof n === 'number' ? n : null;
+    }
+
+    const scanBadge = h('span', { class: 'scan-badge' });
+    function fillScanBadge() {
+      clear(scanBadge);
+      if (ctx.scanning) scanBadge.appendChild(badge('Scan läuft …', 'accent', 'refresh'));
+      else if (ctx.state.lastScan) { const b = badge('Gescannt ' + fmtRelative(ctx.state.lastScan), 'neutral', 'clock'); b.title = fmtDate(ctx.state.lastScan); scanBadge.appendChild(b); }
+    }
+    fillScanBadge();
 
     // ---------- system cards
     const sysGrid = h('section', { class: 'sys-grid', 'aria-label': 'System' });
+    let sysShown = false;
     function fillSys() {
       clear(sysGrid);
       const cards = describeProfile(ctx.state.profile);
@@ -111,7 +158,9 @@ export default {
           h('div', { class: 'sys-icon' }, icon(c.icon, 20)),
           h('div', { class: 'sys-text' }, h('div', { class: 'sys-label', text: c.label }), h('div', { class: 'sys-value', text: c.value }), h('div', { class: 'sys-sub' + (c.warn ? ' is-warn' : ''), text: c.sub }))));
       }
-      stagger(sysGrid);
+      // entrance once (skeleton -> content); later status refreshes must not replay it
+      if (!sysShown) stagger(sysGrid);
+      sysShown = true;
     }
 
     // ---------- stats
@@ -134,16 +183,15 @@ export default {
       mkStat('undo', 'Fremd-Tweaks', [statForeign], statForeignSub, () => ctx.navigate('detweak'), 'stat-foreign'),
       mkStat('archive', 'Letzte Sicherung', [statBackup], statBackupSub, () => ctx.navigate('backups'), 'stat-backup'));
     function fillStats() {
-      const toggles = ctx.toggles().filter(t => ctx.applicable(t));
+      const toggles = ctx.countable();
       const on = toggles.filter(t => ctx.isApplied(t.id)).length;
       countUp(statActive, on);
       statActiveOf.textContent = ' von ' + fmtNumber(toggles.length);
       statBar.firstChild.style.transform = 'scaleX(' + (toggles.length ? on / toggles.length : 0) + ')';
-      const scan = ctx.cache.detweak;
-      if (scan) { countUp(statForeign, scan.items.length); statForeignSub.textContent = scan.items.length ? 'beim letzten Detweak-Scan gefunden' : 'alles auf Windows-Standard'; }
-      else if (typeof ctx.state.foreignCount === 'number') {
-        countUp(statForeign, ctx.state.foreignCount);
-        statForeignSub.textContent = ctx.state.foreignCount ? 'beim letzten Detweak-Scan gefunden' : 'alles auf Windows-Standard';
+      const known = foreignCount();
+      if (known !== null) {
+        countUp(statForeign, known);
+        statForeignSub.textContent = known ? 'beim letzten Detweak-Scan gefunden' : 'alles auf Windows-Standard';
       } else {
         const n = Object.values(ctx.state.statuses).filter(s => s === 'custom' || s === 'partial').length;
         countUp(statForeign, n);
@@ -156,6 +204,7 @@ export default {
         const b = ctx.cache.backups[0];
         statBackup.textContent = b ? fmtRelative(b.created) : 'Noch keine';
         statBackupSub.textContent = b ? b.label : 'Wird vor jeder Änderung angelegt';
+        statBackup.title = b ? fmtDate(b.created) : '';
       } catch { statBackup.textContent = '–'; }
     }
 
@@ -196,7 +245,7 @@ export default {
     append(el, 
       hero,
       h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Dein System' }), h('p', { class: 'section-desc', text: 'Erkannt beim letzten Scan. VELOX wählt passende Tweaks automatisch danach aus.' })),
-        ctx.state.lastScan ? badge('Gescannt ' + fmtRelative(ctx.state.lastScan), 'neutral', 'clock') : null),
+        scanBadge),
       sysGrid,
       stats,
       h('div', { class: 'split' },
@@ -206,9 +255,11 @@ export default {
 
     fillHero(); fillSys(); fillStats(); fillFindings(); fillBackup();
     ctx.on('statuses', fillStats);
-    ctx.on('state', () => { fillSys(); fillStats(); });
-    ctx.on('scanning', fillSys);
+    ctx.on('state', () => { fillSys(); fillStats(); fillScanBadge(); fillCta(); });
+    ctx.on('scanning', () => { fillSys(); fillScanBadge(); });
     ctx.on('advisor', () => { fillHero(); fillFindings(); });
+    ctx.on('pending', fillCta);
+    ctx.on('detweak', () => { fillStats(); fillCta(); });
     ctx.on('backups', fillBackup);
   }
 };

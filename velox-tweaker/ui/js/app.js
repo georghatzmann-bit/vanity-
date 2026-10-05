@@ -4,8 +4,9 @@ import { api, initToken, hasToken, on as onApi, pollJob, startHeartbeat, waitFor
 import { icon } from './icons.js';
 import {
   h, clear, $, $$, toast, jobOverlay, confirmDialog, installEffects, countUp, plural, burst,
-  viewTransition, openLayer, reducedMotion
+  viewTransition, openLayer, reducedMotion, overlayOpen, spinner
 } from './ui.js';
+import { tweakScore, textScore } from './search.js';
 
 import overview from './pages/overview.js';
 import tweaks from './pages/tweaks.js';
@@ -24,26 +25,28 @@ const root = document.documentElement;
 const SCAN_FRESH_MS = 30 * 60 * 1000;
 
 // Per job type: overlay title/icon, whether it can be cancelled, whether it changes the system.
+// fail: toast title when the job fails (plain German, no "<title> – fehlgeschlagen" grammar).
 const JOB_META = {
-  scan: { title: 'System wird analysiert', icon: 'cpu', cancel: true },
-  apply: { title: 'Tweaks werden angewendet', icon: 'bolt', cancel: true, mutating: true },
-  revert: { title: 'Tweaks werden zurückgesetzt', icon: 'undo', cancel: true, mutating: true },
-  restorepoint: { title: 'Wiederherstellungspunkt wird erstellt', icon: 'shieldCheck', mutating: true },
-  restore: { title: 'Sicherung wird wiederhergestellt', icon: 'history', cancel: true, mutating: true },
-  'detweak-scan': { title: 'Suche nach Fremd-Tweaks', icon: 'search', cancel: true },
-  detweak: { title: 'Detweak läuft', icon: 'undo', cancel: true, mutating: true },
-  advisor: { title: 'Smart-Analyse', icon: 'brain', cancel: true },
-  claude: { title: 'Claude analysiert dein System', icon: 'brain', cancel: true },
-  'clean-scan': { title: 'Speicherplatz wird gemessen', icon: 'broom', cancel: true },
-  'run-action': { title: 'Wird ausgeführt', icon: 'broom', cancel: true, mutating: true },
-  'startup-list': { title: 'Autostart wird gelesen', icon: 'package' },
-  'startup-set': { title: 'Autostart wird geändert', icon: 'package', mutating: true },
-  'games-detect': { title: 'Spiele werden gesucht', icon: 'gamepad', cancel: true },
-  'game-boost': { title: 'Spiel-Boost wird gesetzt', icon: 'gamepad', mutating: true },
-  'pick-file': { title: 'Datei auswählen', icon: 'file' },
-  'explorer-restart': { title: 'Explorer wird neu gestartet', icon: 'refresh', mutating: true },
-  reboot: { title: 'Neustart wird vorbereitet', icon: 'restart', mutating: true }
+  scan: { title: 'System wird analysiert', fail: 'Systemanalyse fehlgeschlagen', icon: 'cpu', cancel: true },
+  apply: { title: 'Tweaks werden angewendet', fail: 'Anwenden fehlgeschlagen', icon: 'bolt', cancel: true, mutating: true },
+  revert: { title: 'Tweaks werden zurückgesetzt', fail: 'Zurücksetzen fehlgeschlagen', icon: 'undo', cancel: true, mutating: true },
+  restorepoint: { title: 'Wiederherstellungspunkt wird erstellt', fail: 'Wiederherstellungspunkt fehlgeschlagen', icon: 'shieldCheck', mutating: true },
+  restore: { title: 'Sicherung wird wiederhergestellt', fail: 'Wiederherstellen fehlgeschlagen', icon: 'history', cancel: true, mutating: true },
+  'detweak-scan': { title: 'Suche nach Fremd-Tweaks', fail: 'Detweak-Scan fehlgeschlagen', icon: 'search', cancel: true },
+  detweak: { title: 'Detweak läuft', fail: 'Detweak fehlgeschlagen', icon: 'undo', cancel: true, mutating: true },
+  advisor: { title: 'Smart-Analyse', fail: 'Smart-Analyse fehlgeschlagen', icon: 'brain', cancel: true },
+  claude: { title: 'Claude analysiert dein System', fail: 'Claude-Analyse fehlgeschlagen', icon: 'brain', cancel: true },
+  'clean-scan': { title: 'Speicherplatz wird gemessen', fail: 'Messen fehlgeschlagen', icon: 'broom', cancel: true },
+  'run-action': { title: 'Wird ausgeführt', fail: 'Ausführen fehlgeschlagen', icon: 'broom', cancel: true, mutating: true },
+  'startup-list': { title: 'Autostart wird gelesen', fail: 'Autostart nicht lesbar', icon: 'package' },
+  'startup-set': { title: 'Autostart wird geändert', fail: 'Autostart nicht geändert', icon: 'package', mutating: true },
+  'games-detect': { title: 'Spiele werden gesucht', fail: 'Spielesuche fehlgeschlagen', icon: 'gamepad', cancel: true },
+  'game-boost': { title: 'Spiel-Boost wird gesetzt', fail: 'Spiel-Boost nicht gesetzt', icon: 'gamepad', mutating: true },
+  'pick-file': { title: 'Datei auswählen', fail: 'Dateiauswahl fehlgeschlagen', icon: 'file' },
+  'explorer-restart': { title: 'Explorer wird neu gestartet', fail: 'Explorer-Neustart fehlgeschlagen', icon: 'refresh', mutating: true },
+  reboot: { title: 'Neustart wird vorbereitet', fail: 'Neustart nicht geplant', icon: 'restart', mutating: true }
 };
+const failTitle = (type) => (JOB_META[type] || {}).fail || 'Aufgabe fehlgeschlagen';
 
 // ------------------------------------------------------------------ context
 const bus = new Map();
@@ -58,12 +61,17 @@ const ctx = {
   on(evt, fn) { if (!bus.has(evt)) bus.set(evt, new Set()); bus.get(evt).add(fn); return () => bus.get(evt).delete(fn); },
   emit(evt, data) { for (const fn of Array.from(bus.get(evt) || [])) { try { fn(data); } catch (e) { console.error(e); } } },
   navigate, runJob, stage, stageMany, unstage, clearPending, applyPending, refreshState, reloadCatalog, saveSettings, openPalette,
+  undoBackups, detweakLine, successLine, needsSuffix, friendlyError, rescan: () => initialScan(false, true),
   status(id) { return ctx.state.statuses[id] || (ctx.byId.get(id) && ctx.byId.get(id).applicable === false ? 'na' : 'unknown'); },
   applicable(t) { if (typeof t === 'string') t = ctx.byId.get(t); return !!t && t.applicable !== false && ctx.status(t.id) !== 'na'; },
   isApplied(id) { return ctx.status(id) === 'applied'; },
   effective(id) { return ctx.pending.has(id) ? ctx.pending.get(id) : ctx.isApplied(id); },
   catName(id) { const c = ctx.catById.get(id); return c ? c.name : id; },
   toggles() { return ctx.tweaks.filter(t => (t.kind || 'toggle') === 'toggle'); },
+  /** The one definition of "how many tweaks" used on every page: toggles that fit this PC. */
+  countable(filter) { return ctx.toggles().filter(t => ctx.applicable(t) && (!filter || filter(t))); },
+  /** True when every result belongs to an app removal (cannot be undone). */
+  onlyRemovals(ids) { return ids.length > 0 && ids.every(id => (ctx.byId.get(id) || {}).kind === 'remove'); },
   /** Runs fn now, or as soon as the running job has finished. */
   whenIdle(fn) {
     if (!ctx.busy) { fn(); return; }
@@ -92,10 +100,13 @@ async function boot() {
     data = await api.bootstrap();
   } catch (e) {
     if (e.status === 0) { showEnded('lost'); return; }
+    // 401: the "Sitzung ungültig" screen is already up (unauthorized listener) - keep it.
+    if (e.status === 401 || ended) return;
     showBootError(e.message);
     return;
   }
   ingest(data);
+  restorePending();
   applyTheme();
   renderNav();
   renderChips();
@@ -136,27 +147,57 @@ function ingest(d) {
   ctx.state = normalizeState(d.state);
   for (const id of Array.from(ctx.pending.keys())) if (!ctx.byId.has(id)) ctx.pending.delete(id);
 }
+// ------------------------------------------------------------------ staged changes survive a reload
+const PENDING_KEY = 'velox.pending';
+function savePending() {
+  try {
+    if (ctx.pending.size) sessionStorage.setItem(PENDING_KEY, JSON.stringify(Array.from(ctx.pending)));
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch { /* storage blocked: staged changes live in memory only */ }
+}
+function restorePending() {
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null'); } catch { saved = null; }
+  if (!Array.isArray(saved) || !saved.length) return;
+  let n = 0;
+  for (const pair of saved) {
+    if (!Array.isArray(pair)) continue;
+    const [id, on] = pair;
+    const t = ctx.byId.get(id);
+    if (!t || (t.kind || 'toggle') !== 'toggle' || !ctx.applicable(t) || !!on === ctx.isApplied(id)) continue;
+    ctx.pending.set(id, !!on); n++;
+  }
+  if (n) {
+    ctx.emit('pending');
+    toast({ type: 'info', title: 'Deine vorgemerkten Änderungen sind wieder da', text: plural(n, 'Änderung wartet', 'Änderungen warten') + ' unten auf „Anwenden“.' });
+  } else savePending();
+}
+
 function normalizeState(s) {
   s = s || {};
   return Object.assign({}, s, { statuses: s.statuses || {}, profile: s.profile || null, lastScan: s.lastScan || null, needs: Object.assign({ explorer: false, reboot: false, logoff: false }, s.needs || {}) });
 }
 
-async function initialScan(firstRun) {
+async function initialScan(firstRun, manual) {
+  if (ctx.scanning) return;
+  if (manual && ctx.busy) { toast({ type: 'warn', title: 'Bitte kurz warten', text: 'Gerade läuft noch: ' + (JOB_META[ctx.busy.type] || {}).title + '.' }); return; }
   ctx.scanning = true;
   ctx.emit('scanning', true);
+  renderChips();
   if (firstRun) showSplash();
+  if (manual) toast({ type: 'info', title: 'System wird neu gelesen …', text: 'Hardware und Status jedes Tweaks. Oben rechts siehst du, wann es fertig ist.' });
   const job = await runJob('scan', {}, {
     overlay: false, quiet: true,
     onUpdate: (j) => updateSplash(j)
   });
   ctx.scanning = false;
   ctx.emit('scanning', false);
+  renderChips();
   hideSplash();
   if (job && job.status === 'done') {
     await reloadCatalog();
-    if (firstRun) toast({ type: 'ok', title: 'System erkannt', text: 'Alles bereit. Starte mit "Jetzt analysieren" oder einem Preset.' });
-  } else if (job && job.status === 'error') {
-    toast({ type: 'error', title: 'Systemanalyse fehlgeschlagen', text: job.error || 'Unbekannter Fehler' });
+    if (firstRun) toast({ type: 'ok', title: 'System erkannt', text: 'Alles bereit. Starte mit „Jetzt analysieren“ oder einem Preset.' });
+    else if (manual) toast({ type: 'ok', title: 'System neu gelesen', text: 'Hardware und Status aller Tweaks sind aktuell.' });
   }
 }
 
@@ -197,7 +238,18 @@ function buildShell() {
   $('#pending-discard').addEventListener('click', () => { const n = ctx.pending.size; clearPending(); toast({ type: 'info', title: plural(n, 'Änderung', 'Änderungen') + ' verworfen' }); });
   $('#pending-apply').addEventListener('click', () => applyPending());
   $('#pending-list-btn').addEventListener('click', togglePendingList);
+  // The pending list behaves like a popover: Escape and a click outside close it.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || $('#pending-pop').hidden || overlayOpen()) return;
+    e.preventDefault();
+    closePendingList(true);
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if ($('#pending-pop').hidden || e.target.closest('#pending')) return;
+    closePendingList(false);
+  }, { passive: true });
   ctx.on('pending', renderPending);
+  ctx.on('pending', savePending);
 }
 
 function renderNav() {
@@ -239,11 +291,25 @@ function renderChips() {
   if (m.simulate) box.appendChild(h('span', { class: 'mode-chip chip-sim', title: 'Testmodus: VELOX zeigt alles an, verändert aber nichts an deinem PC.' }, icon('flask', 14), h('span', { class: 'chip-long', text: 'Testmodus – nichts wird verändert' }), h('span', { class: 'chip-short', text: 'Testmodus' })));
   if (m.admin) box.appendChild(h('span', { class: 'mode-chip chip-admin', title: 'VELOX läuft mit Administratorrechten.' }, icon('shieldCheck', 14), h('span', { class: 'chip-long', text: 'Administrator' }), h('span', { class: 'chip-short', text: 'Admin' })));
   else if (m.admin === false) box.appendChild(h('span', { class: 'mode-chip chip-warn', title: 'Ohne Administratorrechte können viele Tweaks nicht gesetzt werden. Starte VELOX über Start.bat.' }, icon('alert', 14), h('span', { class: 'chip-long', text: 'Keine Adminrechte' }), h('span', { class: 'chip-short', text: 'Kein Admin' })));
-  if (ctx.state.needs && ctx.state.needs.reboot) {
-    const b = h('button', { class: 'mode-chip chip-reboot ripple-host', type: 'button', title: 'Einige Änderungen wirken erst nach einem Neustart.' }, icon('restart', 14), h('span', { text: 'Neustart nötig' }));
-    b.addEventListener('click', askReboot);
+  if (ctx.scanning) box.appendChild(h('span', { class: 'mode-chip chip-scan', role: 'status', title: 'VELOX liest Hardware und Status neu ein. Es wird nichts verändert.' }, spinner(12), h('span', { class: 'chip-long', text: 'Scan läuft …' }), h('span', { class: 'chip-short', text: 'Scan …' })));
+  const need = topNeed();
+  if (need) {
+    const b = h('button', { class: 'mode-chip chip-reboot ripple-host', type: 'button', title: need.text, 'data-need': need.key }, icon(need.icon, 14), h('span', { class: 'chip-long', text: need.chip }), h('span', { class: 'chip-short', text: need.short }));
+    b.addEventListener('click', need.run);
     box.appendChild(b);
   }
+}
+
+/**
+ * Restart / log-off / Explorer: one need at a time, by priority - a restart also covers logging off
+ * and reloading Explorer, logging off also reloads Explorer.
+ */
+function topNeed() {
+  const n = ctx.state.needs || {};
+  if (n.reboot) return { key: 'reboot', icon: 'restart', chip: 'Neustart nötig', short: 'Neustart', title: 'Neustart empfohlen', text: 'Damit alle Änderungen wirken, starte den PC einmal neu. Das geht auch später.', action: 'Neu starten …', run: askReboot };
+  if (n.logoff) return { key: 'logoff', icon: 'user', chip: 'Abmelden nötig', short: 'Abmelden', title: 'Einmal abmelden', text: 'Melde dich einmal ab und wieder an, damit alle Änderungen wirken.', action: null, run: () => toast({ type: 'info', title: 'Einmal abmelden', text: 'Startmenü > dein Name > Abmelden. Danach wieder anmelden – fertig.' }) };
+  if (n.explorer) return { key: 'explorer', icon: 'refresh', chip: 'Explorer neu laden', short: 'Explorer', title: 'Explorer neu starten', text: 'Ein paar Änderungen werden erst sichtbar, wenn Taskleiste und Explorer neu laden. Offene Explorer-Fenster schließen sich dabei.', action: 'Explorer neu starten', run: () => runJob('explorer-restart', {}, {}) };
+  return null;
 }
 
 async function askReboot() {
@@ -256,25 +322,34 @@ async function askReboot() {
   await runJob('reboot', {}, {});
 }
 
+const BANNER_KEY = 'velox.bannerDismissed';
+/** One combined banner, in full on the Übersicht only (elsewhere the top-bar chip is enough). */
 function renderBanners() {
-  const box = clear($('#banners'));
-  const n = ctx.state.needs || {};
-  if (n.explorer) {
-    const b = h('button', { class: 'btn btn-secondary btn-sm', type: 'button' }, icon('refresh', 15), h('span', { class: 'btn-label', text: 'Explorer neu starten' }));
-    b.addEventListener('click', () => runJob('explorer-restart', {}, {}));
-    box.appendChild(h('div', { class: 'banner banner-info', role: 'status' }, h('div', { class: 'banner-icon' }, icon('refresh', 18)),
-      h('div', { class: 'banner-text' }, h('strong', { text: 'Explorer neu starten' }), h('span', { text: 'Ein paar Änderungen werden erst sichtbar, wenn Taskleiste und Explorer neu laden. Offene Explorer-Fenster schließen sich dabei.' })), b));
+  const box = $('#banners');
+  const need = topNeed();
+  let dismissed = '';
+  try { dismissed = sessionStorage.getItem(BANNER_KEY) || ''; } catch { /* ignore */ }
+  const want = need && currentPageId() === 'overview' && dismissed !== need.key ? need.key : '';
+  const cur = box.firstElementChild;
+  if (cur && !cur.classList.contains('leaving') && cur.dataset.need === want) return; // unchanged: no replayed entrance
+  clear(box);
+  if (!want) return;
+  const later = h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, h('span', { class: 'btn-label', text: 'Später' }));
+  later.addEventListener('click', () => {
+    try { sessionStorage.setItem(BANNER_KEY, need.key); } catch { /* ignore */ }
+    const b = box.firstElementChild;
+    if (b) { b.classList.add('leaving'); setTimeout(renderBanners, reducedMotion() ? 120 : 200); } else renderBanners();
+    toast({ type: 'info', title: 'Erinnerung ausgeblendet', text: 'Oben rechts siehst du weiter, dass noch etwas offen ist.' });
+  });
+  let act = null;
+  if (need.action) {
+    act = h('button', { class: 'btn btn-secondary btn-sm', type: 'button', 'data-testid': 'banner-action' }, icon(need.icon, 15), h('span', { class: 'btn-label', text: need.action }));
+    act.addEventListener('click', need.run);
   }
-  if (n.logoff) {
-    box.appendChild(h('div', { class: 'banner banner-info', role: 'status' }, h('div', { class: 'banner-icon' }, icon('user', 18)),
-      h('div', { class: 'banner-text' }, h('strong', { text: 'Abmelden nötig' }), h('span', { text: 'Melde dich einmal ab und wieder an, damit alle Änderungen wirken.' }))));
-  }
-  if (n.reboot) {
-    const b = h('button', { class: 'btn btn-secondary btn-sm', type: 'button' }, icon('restart', 15), h('span', { class: 'btn-label', text: 'Neu starten …' }));
-    b.addEventListener('click', askReboot);
-    box.appendChild(h('div', { class: 'banner banner-warn', role: 'status' }, h('div', { class: 'banner-icon' }, icon('restart', 18)),
-      h('div', { class: 'banner-text' }, h('strong', { text: 'Neustart nötig' }), h('span', { text: 'Einige Änderungen wirken erst nach einem Neustart. Du kannst auch später neu starten.' })), b));
-  }
+  box.appendChild(h('div', { class: 'banner ' + (need.key === 'reboot' ? 'banner-warn' : 'banner-info'), role: 'status', 'data-need': need.key },
+    h('div', { class: 'banner-icon' }, icon(need.icon, 18)),
+    h('div', { class: 'banner-text' }, h('strong', { text: need.title }), h('span', { text: need.text })),
+    h('div', { class: 'banner-actions' }, later, act)));
 }
 
 // ------------------------------------------------------------------ router
@@ -307,6 +382,7 @@ function route(force) {
     try { inst = page.mount(el, scope, opts) || null; } catch (e) { console.error(e); el.appendChild(h('div', { class: 'card pad-24', text: 'Diese Seite konnte nicht geladen werden: ' + e.message })); }
     active = { id, inst, el, unsubs };
     ctx.page = id;
+    renderBanners();
     $('#topbar-title').textContent = page.title;
     $('#topbar-desc').textContent = page.desc || '';
     clear($('#topbar-icon')).appendChild(icon(page.icon, 20));
@@ -382,7 +458,14 @@ function renderPending() {
 function togglePendingList() {
   const pop = $('#pending-pop');
   if (pop.hidden) { fillPendingList(); pop.hidden = false; $('#pending-list-btn').setAttribute('aria-expanded', 'true'); }
-  else { pop.hidden = true; $('#pending-list-btn').setAttribute('aria-expanded', 'false'); }
+  else closePendingList(false);
+}
+function closePendingList(refocus) {
+  const pop = $('#pending-pop');
+  if (pop.hidden) return;
+  pop.hidden = true;
+  $('#pending-list-btn').setAttribute('aria-expanded', 'false');
+  if (refocus) $('#pending-list-btn').focus();
 }
 function fillPendingList() {
   const pop = clear($('#pending-pop'));
@@ -400,32 +483,47 @@ function fillPendingList() {
 async function applyPending() {
   if (!ctx.pending.size) return;
   if (ctx.busy) { toast({ type: 'warn', title: 'Bitte kurz warten', text: 'Eine andere Aufgabe läuft gerade.' }); return; }
-  $('#pending-pop').hidden = true;
+  closePendingList(false);
   const onIds = []; const offIds = [];
   for (const [id, v] of ctx.pending) (v ? onIds : offIds).push(id);
-  let okCount = 0; let failCount = 0;
+  let okCount = 0; let failCount = 0; let firstErr = null;
+  const backups = []; const needs = {};
+  const take = (job, ids) => {
+    for (const id of ids) ctx.pending.delete(id);
+    const r = job.result || {};
+    const res = r.results || [];
+    okCount += res.filter(x => x.ok).length;
+    const bad = res.filter(x => !x.ok);
+    failCount += bad.length;
+    if (!firstErr && bad.length) firstErr = bad[0];
+    if (r.backupId) backups.push(r.backupId);
+    Object.assign(needs, r.needs || {});
+  };
   if (onIds.length) {
     const job = await runJob('apply', { ids: onIds, label: 'Tweaks: ' + plural(onIds.length, 'aktiviert', 'aktiviert') }, { quiet: true });
-    if (job && job.status === 'done') { for (const id of onIds) ctx.pending.delete(id); const r = summarize(job); okCount += r.ok; failCount += r.fail; }
-    else if (job && job.status === 'error') { ctx.emit('pending'); return; }
-    else if (!job || job.status === 'cancelled') { ctx.emit('pending'); return; }
+    if (job && job.status === 'done') take(job, onIds);
+    else { ctx.emit('pending'); return; }
   }
   if (offIds.length) {
     const job = await runJob('revert', { ids: offIds, label: 'Tweaks: ' + plural(offIds.length, 'zurückgesetzt', 'zurückgesetzt') }, { quiet: true });
-    if (job && job.status === 'done') { for (const id of offIds) ctx.pending.delete(id); const r = summarize(job); okCount += r.ok; failCount += r.fail; }
+    if (job && job.status === 'done') take(job, offIds);
   }
   ctx.emit('pending');
-  if (okCount || failCount) {
-    toast({
-      type: failCount ? 'warn' : 'ok',
-      title: failCount ? okCount + ' erledigt, ' + failCount + ' fehlgeschlagen' : plural(okCount, 'Änderung', 'Änderungen') + ' angewendet',
-      text: failCount ? 'Details findest du im Protokoll und unter Sicherungen.' : 'Alles wurde gesichert. Unter "Sicherungen" kannst du es jederzeit rückgängig machen.'
-    });
-  }
+  if (!okCount && !failCount) return;
+  const undoIds = backups.slice().reverse();
+  toast({
+    type: failCount ? 'warn' : 'ok',
+    title: failCount ? okCount + ' erledigt, ' + failCount + ' fehlgeschlagen' : plural(okCount, 'Änderung', 'Änderungen') + ' angewendet',
+    text: failCount && firstErr ? tweakName(firstErr.id) + ': ' + (firstErr.error || 'Fehler') : successLine(needs),
+    action: undoIds.length && !ctx.onlyRemovals(onIds.concat(offIds)) ? { label: 'Rückgängig', onClick: () => undoBackups(undoIds) } : null
+  });
 }
-function summarize(job) {
-  const res = (job.result && job.result.results) || [];
-  return { ok: res.filter(r => r.ok).length, fail: res.filter(r => !r.ok).length };
+const tweakName = (id) => (ctx.byId.get(id) || { name: id }).name;
+/** "Gesichert · Neustart empfohlen": the second half of every success toast. */
+function successLine(needs, removed) {
+  const n = needs || {};
+  const after = n.reboot ? 'Neustart empfohlen, damit alles wirkt.' : n.logoff ? 'Einmal abmelden, damit alles wirkt.' : n.explorer ? 'Explorer neu laden, damit alles sichtbar wird.' : 'Wirkt sofort.';
+  return (removed ? 'Entfernte Apps lassen sich nur über den Microsoft Store zurückholen. ' : 'Gesichert – mit „Rückgängig“ oder unter „Sicherungen“ zurückholbar. ') + after;
 }
 
 // ------------------------------------------------------------------ jobs
@@ -447,18 +545,32 @@ async function runJob(type, params, opts = {}) {
   } catch (e) {
     ctx.busy = null; ctx.emit('busy', null);
     if (e.status === 409 && e.body && e.body.jobId) {
-      toast({ type: 'info', title: 'VELOX ist gerade beschäftigt', text: 'Ich zeige dir die laufende Aufgabe.' });
-      await follow(e.body.jobId, 'apply', {});
+      await followForeign(e.body.jobId, e.body.type);
       return null;
     }
-    if (e.status !== 0) toast({ type: 'error', title: (JOB_META[type] || {}).title || 'Aufgabe', text: e.message });
+    if (e.status !== 0) toast({ type: 'error', title: failTitle(type), text: e.message });
     return null;
   }
   return follow(jobId, type, opts);
 }
 
+/**
+ * Someone else started a job (another window, or the backend was still busy): show it under its
+ * real title, then remind the user that their own staged changes are still waiting.
+ */
+async function followForeign(jobId, knownType) {
+  let type = knownType;
+  if (!type) { try { type = (await api.job(jobId, 0)).type; } catch { type = null; } }
+  toast({ type: 'info', title: 'VELOX ist gerade beschäftigt', text: 'Ich zeige dir die laufende Aufgabe: ' + ((JOB_META[type] || {}).title || 'Aufgabe') + '.' });
+  await follow(jobId, type || 'job', {});
+  if (ctx.pending.size) {
+    toast({ type: 'info', title: 'Deine Änderungen sind noch vorgemerkt', text: plural(ctx.pending.size, 'Änderung wartet', 'Änderungen warten') + ' unten in der Leiste.', action: { label: 'Jetzt anwenden', onClick: () => applyPending() } });
+  }
+}
+
 async function follow(jobId, type, opts = {}) {
   const meta = JOB_META[type] || { title: 'Aufgabe läuft', icon: 'bolt' };
+  const t0 = Date.now();
   ctx.busy = { id: jobId, type };
   ctx.emit('busy', ctx.busy);
   root.classList.add('is-busy');
@@ -479,17 +591,56 @@ async function follow(jobId, type, opts = {}) {
   ctx.busy = null;
   ctx.emit('busy', null);
   root.classList.remove('is-busy');
-  if (overlay) overlay.finish(job);
+  if (overlay) {
+    // Stay open when there is something to read: warnings in the log, a long job the user may have
+    // walked away from, or when the caller asks for it (repair tools).
+    const problems = (job.log || []).some(l => l.level === 'warn' || l.level === 'error');
+    const long = job.startedAt && job.finishedAt ? (Date.parse(job.finishedAt) - Date.parse(job.startedAt)) > 20000 : (Date.now() - t0) > 20000;
+    overlay.finish(job, { keep: job.status === 'done' && (!!opts.keepOpen || problems || long), summary: job.status === 'done' ? (opts.summary ? opts.summary(job) : jobSummary(type, job.result || {})) : null });
+  }
   if (opts.onUpdate) opts.onUpdate(job);
 
   if (job.status === 'done' && job.result) applyResultLocally(type, job.result);
   if (meta.mutating || type === 'scan') await refreshState();
+  if (meta.mutating && job.status !== 'error') { ctx.cache.backups = null; ctx.emit('backups'); }
 
   if (job.status === 'done' && ['apply', 'detweak', 'restore', 'run-action'].includes(type)) celebrate(type, job.result || {});
-  if (job.status === 'error') toast({ type: 'error', title: meta.title + ' – fehlgeschlagen', text: job.error || 'Unbekannter Fehler' });
+  if (job.status === 'error') toast({ type: 'error', title: failTitle(type), text: friendlyError(job.error) });
   else if (job.status === 'cancelled') toast({ type: 'info', title: 'Abgebrochen', text: 'Bereits erledigte Schritte bleiben gesichert.' });
-  else if (!opts.quiet) resultToast(type, job.result || {});
+  else if (!opts.quiet) resultToast(type, job.result || {}, opts);
   return job;
+}
+/** Backend errors can carry technical tails ("| at Invoke-…"); the toast shows the plain part. */
+function friendlyError(msg) {
+  const m = String(msg || '').split(/\s\|\s|\r?\n\s*at\s/)[0].trim();
+  return m || 'Unbekannter Fehler';
+}
+/** One plain line for the job overlay once it is done. */
+function jobSummary(type, r) {
+  const res = r.results || [];
+  if (type === 'apply' || type === 'revert') {
+    const ok = res.filter(x => x.ok).length; const fail = res.length - ok;
+    const removed = res.length && ctx.onlyRemovals(res.map(x => x.id));
+    const what = removed ? plural(ok, 'App entfernt', 'Apps entfernt') : plural(ok, 'Tweak', 'Tweaks') + (type === 'apply' ? ' angewendet' : ' zurückgesetzt');
+    return what + (fail ? ' · ' + fail + ' fehlgeschlagen' : '') + needsSuffix(r.needs);
+  }
+  if (type === 'run-action') {
+    const ok = res.filter(x => x.ok !== false); const fail = res.length - ok.length;
+    const msgs = ok.map(x => x.message).filter(Boolean);
+    return (msgs.length === 1 ? msgs[0] : plural(ok.length, 'Aufgabe erledigt', 'Aufgaben erledigt')) + (fail ? ' · ' + fail + ' fehlgeschlagen' : '');
+  }
+  if (type === 'restore') return plural(r.restored || 0, 'Wert', 'Werte') + ' wiederhergestellt' + (r.failed ? ' · ' + r.failed + ' fehlgeschlagen' : '');
+  if (type === 'detweak') return detweakLine(r) + needsSuffix(r.needs);
+  return null;
+}
+function needsSuffix(n) { n = n || {}; return n.reboot ? ' · Neustart empfohlen' : n.logoff ? ' · Abmelden nötig' : n.explorer ? ' · Explorer neu laden' : ''; }
+/** Detweak result in words: values and commands are counted separately when the backend says so. */
+function detweakLine(r) {
+  const vals = typeof r.resetValues === 'number' ? r.resetValues : (typeof r.commandsRun === 'number' ? Math.max(0, (r.reset || 0) - r.commandsRun) : (r.reset || 0));
+  const parts = [plural(vals, 'Wert', 'Werte') + ' zurückgesetzt'];
+  if (typeof r.commandsRun === 'number' && r.commandsRun) parts.push(plural(r.commandsRun, 'Befehl', 'Befehle') + ' ausgeführt');
+  if (r.applied) parts.push(plural(r.applied, 'Tweak', 'Tweaks') + ' danach angewendet');
+  return parts.join(' · ');
 }
 
 /** A short particle burst when something worked out completely. */
@@ -509,31 +660,41 @@ function applyResultLocally(type, r) {
   if (r.needs && typeof r.needs === 'object') { Object.assign(ctx.state.needs, r.needs); renderBanners(); renderChips(); }
 }
 
-function resultToast(type, r) {
+function resultToast(type, r, opts = {}) {
   switch (type) {
     case 'apply': case 'revert': {
       const res = r.results || [];
       const ok = res.filter(x => x.ok).length; const fail = res.length - ok;
       const firstErr = res.find(x => !x.ok);
+      const removed = ctx.onlyRemovals(res.map(x => x.id));
+      const anyRemoved = res.some(x => (ctx.byId.get(x.id) || {}).kind === 'remove');
+      const noun = removed ? ['App entfernt', 'Apps entfernt'] : type === 'apply' ? ['Tweak angewendet', 'Tweaks angewendet'] : ['Tweak zurückgesetzt', 'Tweaks zurückgesetzt'];
       toast({
         type: fail ? 'warn' : 'ok',
-        title: fail ? ok + ' erledigt, ' + fail + ' fehlgeschlagen' : (type === 'apply' ? plural(ok, 'Tweak', 'Tweaks') + ' angewendet' : plural(ok, 'Tweak', 'Tweaks') + ' zurückgesetzt'),
-        text: fail && firstErr ? (ctx.byId.get(firstErr.id) || { name: firstErr.id }).name + ': ' + (firstErr.error || 'Fehler') : 'Gesichert – unter "Sicherungen" jederzeit rückgängig.',
-        action: r.backupId ? { label: 'Rückgängig', onClick: () => undoBackup(r.backupId) } : null
+        title: fail ? ok + ' erledigt, ' + fail + ' fehlgeschlagen' : (opts.doneTitle || plural(ok, noun[0], noun[1])),
+        text: fail && firstErr ? tweakName(firstErr.id) + ': ' + (firstErr.error || 'Fehler') : removed ? 'Nicht rückgängig zu machen. Neu installieren geht über den Microsoft Store.' + needsSuffix(r.needs).replace(' · ', ' ') : successLine(r.needs, anyRemoved),
+        action: r.backupId && !removed ? { label: 'Rückgängig', onClick: () => undoBackups([r.backupId]) } : null
       });
       break;
     }
     case 'restorepoint': toast({ type: r.ok === false ? 'warn' : 'ok', title: r.ok === false ? 'Kein Wiederherstellungspunkt' : 'Wiederherstellungspunkt erstellt', text: r.message || '' }); break;
-    case 'restore': toast({ type: r.failed ? 'warn' : 'ok', title: plural(r.restored || 0, 'Änderung', 'Änderungen') + ' wiederhergestellt', text: r.failed ? r.failed + ' konnten nicht zurückgesetzt werden.' : 'Dein PC ist auf dem Stand dieser Sicherung.' }); break;
+    case 'restore': toast({ type: r.failed ? 'warn' : 'ok', title: plural(r.restored || 0, 'Wert', 'Werte') + ' wiederhergestellt', text: r.failed ? r.failed + ' konnten nicht zurückgesetzt werden' + (r.errors && r.errors.length ? ': ' + friendlyError(r.errors[0]) : '.') : 'Dein PC ist wieder auf dem Stand vor dieser Sicherung.' + needsSuffix(r.needs).replace(' · ', ' ') }); break;
     case 'explorer-restart': toast({ type: 'ok', title: 'Explorer neu gestartet' }); break;
     case 'reboot': toast({ type: 'info', title: ctx.mode.simulate ? 'Neustart protokolliert (Testmodus)' : 'Neustart in 10 Sekunden', text: ctx.mode.simulate ? 'Im Testmodus startet der PC nicht neu.' : 'Speichere jetzt deine offenen Dateien.' }); break;
     default: break;
   }
 }
 
-async function undoBackup(backupId) {
-  const job = await runJob('restore', { backupId }, { title: 'Wird rückgängig gemacht' });
-  if (job && job.status === 'done') { ctx.cache.backups = null; ctx.emit('backups'); }
+/** Undo = restore the given backups, newest first. */
+async function undoBackups(ids) {
+  let restored = 0; let failed = 0;
+  for (let i = 0; i < ids.length; i++) {
+    const job = await runJob('restore', { backupId: ids[i] }, { title: 'Wird rückgängig gemacht', quiet: true });
+    if (!job || job.status !== 'done') return;
+    restored += (job.result && job.result.restored) || 0;
+    failed += (job.result && job.result.failed) || 0;
+  }
+  toast({ type: failed ? 'warn' : 'ok', title: 'Rückgängig gemacht', text: failed ? failed + ' Werte konnten nicht zurückgesetzt werden. Details unter „Sicherungen“.' : 'Alles ist wieder wie vorher (' + plural(restored, 'Wert', 'Werte') + ').' });
 }
 
 async function refreshState() {
@@ -568,6 +729,9 @@ async function saveSettings(partial, { silent } = {}) {
 // ------------------------------------------------------------------ splash & end states
 function showSplash() {
   const s = $('#splash');
+  // the splash covers the app: keyboard focus must not wander into the controls behind it
+  $('#app').setAttribute('inert', '');
+  $('#app').setAttribute('data-splash', '');
   s.hidden = false;
   s.classList.remove('gone');
   s.classList.add('scanning');
@@ -583,6 +747,8 @@ function updateSplash(job) {
 }
 function hideSplash() {
   const s = $('#splash');
+  const app = $('#app');
+  if (app.hasAttribute('data-splash')) { app.removeAttribute('data-splash'); if (!overlayOpen() && !ended) app.removeAttribute('inert'); }
   if (s.hidden || s.classList.contains('gone')) return;
   s.classList.add('gone');
   setTimeout(() => { s.hidden = true; }, reducedMotion() ? 150 : 450);
@@ -593,14 +759,15 @@ function showEnded(reason) {
   if (ended) return;
   ended = true;
   const el = $('#ended');
-  const title = reason === 'token' ? 'Sitzung ungültig' : 'VELOX wurde beendet';
+  const title = reason === 'token' ? 'Sitzung ungültig' : 'Keine Verbindung zu VELOX';
   const text = reason === 'token'
-    ? 'Dieses Fenster gehört zu einer alten Sitzung. Starte VELOX neu über Start.bat.'
-    : 'Du kannst dieses Fenster schließen. Zum Weitermachen VELOX einfach wieder über Start.bat starten.';
+    ? 'Dieses Fenster gehört zu einer alten VELOX-Sitzung. Du kannst es schließen – das aktuelle VELOX-Fenster öffnet sich, wenn du VELOX über Start.bat startest.'
+    : 'VELOX wurde beendet oder antwortet gerade nicht. Kommt es zurück, geht es hier von selbst weiter. Sonst kannst du dieses Fenster schließen und VELOX über Start.bat neu starten.';
   clear(el).appendChild(h('div', { class: 'ended-card' },
     h('div', { class: 'ended-icon' }, icon('power', 30)),
     h('h1', { class: 'ended-title', text: title }),
-    h('p', { class: 'ended-text', text })));
+    h('p', { class: 'ended-text', text }),
+    reason === 'lost' ? h('p', { class: 'ended-retry', role: 'status' }, spinner(14), h('span', { text: 'Verbinde neu …' })) : null));
   el.hidden = false;
   requestAnimationFrame(() => el.classList.add('show'));
   $('#app').setAttribute('inert', '');
@@ -609,16 +776,24 @@ function showEnded(reason) {
   if (reason === 'lost') waitForBackend().then(() => location.reload());
 }
 function showBootError(msg) {
+  if (ended) return; // the session/connection screen already explains it
   const el = $('#ended');
   const retry = h('button', { class: 'btn btn-primary', type: 'button' }, icon('refresh', 16), h('span', { class: 'btn-label', text: 'Erneut versuchen' }));
   retry.addEventListener('click', () => location.reload());
   clear(el).appendChild(h('div', { class: 'ended-card' },
     h('div', { class: 'ended-icon tone-error' }, icon('alert', 30)),
     h('h1', { class: 'ended-title', text: 'VELOX konnte nicht starten' }),
-    h('p', { class: 'ended-text', text: msg || 'Unbekannter Fehler.' }), retry));
+    h('p', { class: 'ended-text', text: plainBootError(msg) }), retry));
   el.hidden = false;
   el.classList.add('show');
   $('#splash').hidden = true;
+}
+
+function plainBootError(msg) {
+  const m = String(msg || '');
+  if (/autoris|token/i.test(m)) return 'Dieses Fenster gehört zu einer alten VELOX-Sitzung. Schließe es und starte VELOX über Start.bat.';
+  if (/^Anfrage fehlgeschlagen \(5/.test(m)) return 'VELOX hatte beim Start einen internen Fehler. Versuch es noch einmal; hilft das nicht, starte VELOX neu.';
+  return m || 'Unbekannter Fehler.';
 }
 
 // ------------------------------------------------------------------ command palette
@@ -640,33 +815,25 @@ function openPalette() {
     { label: 'Fremd-Tweaks suchen', hint: 'Detweak-Scan starten', icon: 'undo', run: () => navigate('detweak', { autostart: true }) },
     { label: 'Speicher aufräumen', hint: 'Reinigung öffnen', icon: 'broom', run: () => navigate('cleanup') },
     { label: 'Wiederherstellungspunkt erstellen', hint: 'Sicherheitsnetz für Windows', icon: 'shieldCheck', run: () => runJob('restorepoint', { label: 'VELOX manuell' }) },
-    { label: 'System neu scannen', hint: 'Hardware und Status neu lesen', icon: 'refresh', run: () => initialScan(false) },
+    { label: 'System neu scannen', hint: 'Hardware und Status neu lesen', icon: 'refresh', run: () => initialScan(false, true) },
     { label: 'Explorer neu starten', hint: 'Taskleiste und Explorer neu laden', icon: 'refresh', run: () => runJob('explorer-restart', {}) },
     { label: 'Vorgemerkte Änderungen anwenden', hint: 'Anwenden-Leiste ausführen', icon: 'check', run: () => applyPending(), when: () => ctx.pending.size > 0 },
     { label: 'Animationen umschalten', hint: 'Voll / Reduziert', icon: 'motion', run: () => saveSettings({ motion: ctx.settings.motion === 'reduced' ? 'full' : 'reduced' }) }
   ];
-  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  function score(q, text) {
-    const t = norm(text);
-    if (!q) return 1;
-    if (t.startsWith(q)) return 3;
-    if (t.includes(' ' + q)) return 2.5;
-    if (t.includes(q)) return 2;
-    const words = q.split(/\s+/).filter(Boolean);
-    return words.length > 1 && words.every(w => t.includes(w)) ? 1.5 : 0;
-  }
   function build() {
-    const q = norm(input.value.trim());
+    const q = input.value.trim();
     items = [];
-    const pages = PAGES.map(p => ({ kind: 'page', label: p.title, hint: p.desc || '', icon: p.icon, run: () => navigate(p.id), s: score(q, p.title + ' ' + (p.keywords || '')) })).filter(x => x.s > 0);
-    const acts = actions.filter(a => !a.when || a.when()).map(a => Object.assign({ kind: 'action', s: score(q, a.label + ' ' + a.hint) }, a)).filter(x => x.s > 0);
+    const pages = PAGES.map(p => ({ kind: 'page', label: p.title, hint: p.desc || '', icon: p.icon, run: () => navigate(p.id), s: Math.max(textScore(q, p.title) * 3, textScore(q, p.keywords || '') * 1.5, textScore(q, p.desc || '')) })).filter(x => x.s > 0);
+    const acts = actions.filter(a => !a.when || a.when()).map(a => Object.assign({ kind: 'action', s: Math.max(textScore(q, a.label) * 3, textScore(q, a.hint)) }, a)).filter(x => x.s > 0);
     let tw = [];
     if (q.length >= 2) {
-      tw = ctx.tweaks.filter(t => (t.kind || 'toggle') === 'toggle').map(t => ({ t, s: Math.max(score(q, t.name) * 1.2, score(q, t.desc) * 0.6, score(q, t.id) * 0.8, score(q, (t.tags || []).join(' ')) * 0.5) }))
-        .filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 30)
+      tw = ctx.tweaks.filter(t => (t.kind || 'toggle') === 'toggle').map(t => ({ t, s: tweakScore(q, t, ctx.catName(t.category)) + (ctx.applicable(t) ? 0.05 : 0) + (Number(t.impact) || 1) * 0.01 }))
+        .filter(x => x.s > 0.05).sort((a, b) => b.s - a.s).slice(0, 30)
         .map(({ t, s }) => ({ kind: 'tweak', t, label: t.name, hint: ctx.catName(t.category), icon: (ctx.catById.get(t.category) || {}).icon || 'sliders', s }));
     }
-    const groups = q ? [['Tweaks', tw], ['Seiten', pages], ['Aktionen', acts]] : [['Seiten', pages], ['Aktionen', acts]];
+    // with a query, the group holding the best match comes first ("Sicherungen" opens the page)
+    const top = (arr) => arr.reduce((m, x) => Math.max(m, x.s), 0);
+    const groups = q ? [['Tweaks', tw], ['Seiten', pages], ['Aktionen', acts]].sort((a, b) => top(b[1]) - top(a[1])) : [['Seiten', pages], ['Aktionen', acts]];
     clear(list);
     for (const [name, arr] of groups) {
       if (!arr.length) continue;
@@ -689,7 +856,7 @@ function openPalette() {
         list.appendChild(row);
       }
     }
-    if (!items.length) list.appendChild(h('div', { class: 'palette-empty' }, icon('search', 22), h('span', { text: 'Nichts gefunden. Versuch es mit "Maus", "Ping" oder "Copilot".' })));
+    if (!items.length) list.appendChild(h('div', { class: 'palette-empty' }, icon('search', 22), h('span', { text: 'Nichts gefunden. Versuch es mit „Maus“, „Ping“ oder „Copilot“.' })));
     select(0, true);
   }
   function select(i, scroll) {
