@@ -162,7 +162,8 @@ async function openServer(firstPort) {
       return { server, port: server.address().port, blocked };
     } catch (error) {
       lastError = error;
-      if (error.code === 'EACCES') blocked = true; // Windows sperrt den Port (oft WSL/Docker/Hyper-V)
+      // Windows sperrt den Port (oft WSL/Docker/Hyper-V) – nur melden, wenn es der Wunsch-Port ist
+      if (error.code === 'EACCES') blocked = blocked || port === firstPort;
       else if (error.code !== 'EADDRINUSE') throw error;
     }
   }

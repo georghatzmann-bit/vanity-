@@ -236,8 +236,9 @@ describe('Spielwerte: Optik und Grafik', () => {
     }
   });
 
-  it('Grafik-Stufe aus config.js gibt es wirklich', () => {
-    assert.ok(CONFIG.graphics.presets[CONFIG.graphics.quality], `Stufe "${CONFIG.graphics.quality}"`);
+  it('Grafik-Stufe aus config.js gibt es wirklich (Groß-/Kleinschreibung egal)', () => {
+    const key = String(CONFIG.graphics.quality).trim().toLowerCase();
+    assert.ok(Object.hasOwn(CONFIG.graphics.presets, key), `Stufe "${CONFIG.graphics.quality}"`);
   });
 
   it('Grafik-Stufe: Groß-/Kleinschreibung egal, Unbekanntes wird "mittel"', () => {

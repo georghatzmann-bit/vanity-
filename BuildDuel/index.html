@@ -55,11 +55,14 @@
   <script>
     (function () {
       var body = document.body;
+      var fatalShown = false;
 
       // closable = true: Das Spiel läuft weiter, die Meldung darf weggeklickt werden.
       function show(title, text, details, closable) {
         // Nur die ERSTE Meldung zeigen – sie ist meistens die eigentliche Ursache.
-        if (body.classList.contains('has-error')) return;
+        // Ausnahme: Eine schwere Meldung (Spiel steht) ersetzt eine harmlose.
+        if (body.classList.contains('has-error') && (fatalShown || closable)) return;
+        if (!closable) fatalShown = true;
         document.getElementById('error-title').textContent = title;
         document.getElementById('error-text').textContent = text || '';
         document.getElementById('error-details').textContent = details || '';
@@ -104,8 +107,8 @@
         if (event.message === 'Script error.') return;
         if (event.filename && event.filename.indexOf(location.origin) !== 0) return;
 
-        var file = shortName(event.filename);
-        var where = file + (event.lineno ? ', Zeile ' + event.lineno : '');
+        var file = shortName(event.filename) || (event.filename ? 'index.html' : '');
+        var where = file ? file + (event.lineno ? ', Zeile ' + event.lineno : '') : '';
         var started = body.classList.contains('ready');
 
         // Häufigster Fall beim Werte-Ändern: Tippfehler in config.js
@@ -117,8 +120,9 @@
             event.message + (where ? '\n' + where : ''), false);
           return;
         }
+        var stack = event.error && event.error.stack ? event.error.stack : '';
         show('Unerwarteter Fehler', event.message,
-          where + (event.error && event.error.stack ? '\n\n' + event.error.stack : ''), started);
+          where + (where && stack ? '\n\n' : '') + stack, started);
       });
       window.addEventListener('unhandledrejection', function (event) {
         var reason = event.reason || {};

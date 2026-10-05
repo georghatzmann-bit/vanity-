@@ -78,6 +78,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return MIME_TYPES[ext]
         return super().guess_type(path)
 
+    def send_head(self):
+        # Adressen mit "Null-Zeichen" (%00) kann Windows nicht oeffnen -> sauber ablehnen
+        if "\x00" in self.translate_path(self.path):
+            self.send_error(400, "Ungueltige Adresse")
+            return None
+        return super().send_head()
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store, must-revalidate")
         super().end_headers()
@@ -89,7 +96,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except (TypeError, ValueError):
             status = 0
         if status >= 400:
-            print("  Hinweis: {} -> Fehler {}".format(self.path, status))
+            # self.path fehlt, wenn die Anfrage gar nicht lesbar war (z. B. https:// getippt)
+            print("  Hinweis: {} -> Fehler {}".format(getattr(self, "path", "?"), status))
 
     def log_error(self, *args):
         pass  # wird schon in log_request gemeldet
@@ -149,7 +157,7 @@ def open_server(first_port):
             last_error = exc
             code = error_code(exc)
             if code in BLOCKED_CODES:
-                blocked = True
+                blocked = blocked or port == first_port  # nur melden, wenn der Wunsch-Port gesperrt ist
             elif code not in IN_USE_CODES:
                 raise
     raise last_error or OSError("kein freier Port")
