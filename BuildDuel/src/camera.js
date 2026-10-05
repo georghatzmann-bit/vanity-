@@ -215,7 +215,11 @@ export class ThirdPersonCamera {
     if (world) {
       const padding = this.cfg.collisionPadding;
       const hit = world.raycast(pivot, this._toCamera, length + padding, this._rayOptions, this._hit);
-      if (hit) allowed = Math.max(0, hit.distance - padding);
+      if (hit) {
+        // Abstand senkrecht zur getroffenen Fläche einhalten (auch bei schrägem Strahl)
+        const cos = Math.abs(this._toCamera.dot(hit.normal));
+        allowed = Math.max(0, hit.distance - padding / Math.max(cos, 0.25));
+      }
     }
     this._allowedLength = allowed;
     const used = Math.min(length, allowed);

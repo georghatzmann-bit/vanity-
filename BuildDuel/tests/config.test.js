@@ -61,6 +61,63 @@ describe('Spielwerte: Spieler und Welt', () => {
   });
 });
 
+describe('Spielwerte: Bewegung, Kamera, Figuren (Phase 2)', () => {
+  it('Augenhöhe liegt in der Figur (stehend und geduckt)', () => {
+    const p = CONFIG.player;
+    assert.ok(p.eyeHeight > p.crouchEyeHeight && p.eyeHeight < p.hitbox.height);
+    assert.ok(p.crouchEyeHeight < p.hitbox.crouchHeight);
+  });
+
+  it('Kamera: geduckt tiefer als stehend, Wand-Abstand größer als die Bild-Nahgrenze', () => {
+    const c = CONFIG.camera;
+    assert.ok(c.crouchHeight < c.height);
+    assert.ok(c.collisionPadding > c.near);
+    assert.ok(c.hideCharacterDistance < c.aimDistance);
+  });
+
+  it('Stufen: 0,3-m-Kiste geht, 1-m-Kiste nicht (Übungsplatz)', () => {
+    const steps = CONFIG.modes.practice.stepHeights;
+    assert.ok(CONFIG.player.stepHeight >= steps[0], 'kleinste Kiste ersteigbar');
+    assert.ok(CONFIG.player.stepHeight < steps[1], 'zweite Kiste nicht');
+  });
+
+  it('Teilschritte sind kürzer als Figur + dünnster Boden (kein Durchfallen)', () => {
+    const p = CONFIG.player;
+    assert.ok(p.maxSubstepDistance < CONFIG.building.pieceThickness + p.hitbox.radius * 2);
+    assert.ok(p.maxSubsteps >= 10);
+    // bei Höchsttempo reichen die Teilschritte
+    assert.ok(p.maxFallSpeed / CONFIG.loop.tickRate <= p.maxSubstepDistance * p.maxSubsteps);
+  });
+
+  it('Bergab "kleben" reicht für 45°-Rampen beim Sprinten', () => {
+    const p = CONFIG.player;
+    const perTick = p.sprintSpeed / CONFIG.loop.tickRate;
+    assert.ok(p.groundSnapDistance >= perTick + p.hitbox.radius * Math.tan(CONFIG.building.rampSlopeDeg * Math.PI / 180) - 1e-9);
+  });
+
+  it('Übungsplatz: Decke zwischen geduckt und stehend, Turm hoch genug für Fallschaden', () => {
+    const pr = CONFIG.modes.practice;
+    const h = CONFIG.player.hitbox;
+    assert.ok(pr.lowCeiling > h.crouchHeight && pr.lowCeiling < h.height);
+    assert.ok(pr.towerHeight > CONFIG.player.fallDamage.safeHeight);
+    assert.ok(pr.bridgeRampHeight - CONFIG.building.pieceThickness * Math.SQRT2 > h.height, 'unter der Rampe ist Platz');
+    assert.ok(pr.idleBots <= CONFIG.bots.names.length);
+  });
+
+  it('Farbsets: gültige Farben, bekannte Hut-Formen, eindeutige ids, Standard vorhanden', () => {
+    const skins = CONFIG.skins;
+    const ids = new Set();
+    for (const s of skins.list) {
+      for (const key of ['body', 'accent', 'skinTone', 'hatColor']) assert.ok(HEX_COLOR.test(s[key]), `${s.id}.${key}`);
+      assert.ok(skins.hatShapes.includes(s.hat), `${s.id}: Hut ${s.hat}`);
+      assert.ok(!ids.has(s.id), `doppelt: ${s.id}`);
+      ids.add(s.id);
+    }
+    assert.ok(skins.list.length >= 8);
+    assert.ok(ids.has(skins.defaultId));
+  });
+});
+
 describe('Spielwerte: Waffen', () => {
   it('jede Schusswaffe hat Magazin, Nachladezeit und Schuss-Tempo', () => {
     for (const id of GUNS) {
@@ -313,6 +370,17 @@ describe('Vorgaben aus deinem Plan (dürfen rot werden, wenn du sie absichtlich 
     assert.deepEqual([...CONFIG.controls.keyboard.buildFloor], ['KeyX']);
     assert.deepEqual([...CONFIG.controls.keyboard.buildRamp], ['KeyC']);
     assert.deepEqual([...CONFIG.controls.keyboard.buildRoof], ['KeyV']);
+  });
+
+  it('Fallschaden: ab 7 m, 10 pro Meter (12 m → 50)', () => {
+    const fd = CONFIG.player.fallDamage;
+    assert.equal(fd.safeHeight, 7);
+    assert.equal((12 - fd.safeHeight) * fd.damagePerMeter, 50);
+  });
+
+  it('Kamera: 3,2 m dahinter, 0,6 m rechts, 1,6 m hoch, beim Zielen 1,8 m und 55°', () => {
+    const c = CONFIG.camera;
+    assert.deepEqual([c.distance, c.shoulderOffset, c.height, c.aimDistance, c.fov, c.aimFov], [3.2, 0.6, 1.6, 1.8, 70, 55]);
   });
 
   it('Battle Royale: Zonen-Zeiten und Schaden wie im Plan', () => {

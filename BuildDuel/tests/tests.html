@@ -89,8 +89,8 @@
       showLoadError(event.message + where + hint);
     });
     setTimeout(function () {
-      showLoadError('Nach 15 Sekunden immer noch kein Ergebnis. Läuft start.bat?');
-    }, 15000);
+      showLoadError('Nach 60 Sekunden immer noch kein Ergebnis. Läuft start.bat?');
+    }, 60000);
   </script>
 
   <script type="module" onerror="showLoadError('Eine Datei (Test- oder Spiel-Datei) fehlt. Welche, steht im schwarzen start.bat-Fenster in der Zeile „Hinweis: … Fehler 404“.')">
@@ -100,6 +100,16 @@
     import './loop.test.js';
     import './fpsMeter.test.js';
     import './random.test.js';
+    import './events.test.js';
+    import './settings.test.js';
+    import './input.test.js';
+    import './physics.test.js';
+    import './player.test.js';
+    import './playerController.test.js';
+    import './camera.test.js';
+    import './characterModel.test.js';
+    import './game.test.js';
+    import './scenario/movement.test.js';
 
     run(document.getElementById('output'));
   </script>
