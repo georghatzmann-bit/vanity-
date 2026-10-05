@@ -224,7 +224,7 @@ function start() {
       ['Ducken', `${crouchKey} (${settings.controls.crouchToggle ? 'umschalten' : 'halten'})`],
     ];
     if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', keyName(CONFIG.controls.sprintKeyWhenCrouchOnCtrl)]);
-    rows.push(['Zielen (näher ran)', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
+    rows.push(['Zielen (Zoom)', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
     ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
       rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
       '<div class="help-status" data-status></div>' +

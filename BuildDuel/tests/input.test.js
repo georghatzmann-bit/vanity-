@@ -252,6 +252,22 @@ describe('Eingabe: Controller', () => {
     assert.ok(s.pressed.buildRamp && s.released.buildWall);
   });
 
+  it('Umschalten in den Baumodus mit gehaltenem L2: setzt NICHT sofort eine Rampe', () => {
+    const g = CONFIG.controls.gamepad;
+    const pads = [pad({ [g.aim]: true })];
+    const input = makeInput(defaultSettings(), pads);
+    assert.ok(input.sample().held.secondary, 'L2 = zielen');
+    input.gamepadBuildMode = true;
+    let s = input.sample();
+    assert.ok(!s.pressed.buildRamp && !s.held.primary, 'gehaltenes L2 zählt nicht');
+    assert.ok(s.released.secondary);
+    pads[0] = pad({});
+    input.sample();
+    pads[0] = pad({ [g.buildMode.ramp]: true });
+    s = input.sample();
+    assert.ok(s.pressed.buildRamp && s.held.primary, 'nach dem Loslassen geht es normal');
+  });
+
   it('B schaltet den Baumodus (toggleBuild), R3 duckt', () => {
     const g = CONFIG.controls.gamepad;
     const pads = [pad({ [g.toggleBuildMode]: true, [g.crouchOrRotate]: true })];

@@ -4,6 +4,8 @@ import { describe, it, assert } from '../runner.js';
 import { CONFIG } from '../../src/config.js';
 import { Input } from '../../src/input.js';
 import { defaultSettings } from '../../src/core/settings.js';
+import { bodyFits } from '../../src/player.js';
+import { createRng } from '../../src/util/random.js';
 import { createTestGame, addDrivenCharacter, collect, maxHeightDuring } from './helpers.js';
 
 const P = CONFIG.player;
@@ -149,6 +151,23 @@ describe('Szenario: Rampen', () => {
     assert.equal(c.position.y, 0);
     assert.ok(c.position.z > -4);
     assert.equal(lands.filter((l) => l.fallHeight > 0.6).length, 0, 'kein Fallen beim Hinunterlaufen');
+  });
+
+  it('oben an der Rampe auf die Plattform: klappt bei jedem Tempo und jeder Schritt-Lage', () => {
+    // Die Vorderkante des Körpers erreicht die Plattform, bevor die Füße oben sind –
+    // das darf nie zum Hängenbleiben führen (egal wo genau die Schritte landen).
+    for (const fields of [{}, { sprint: true }, { crouch: true }, { secondary: true }]) {
+      for (let k = 0; k < 10; k++) {
+        const game = createTestGame();
+        game.world.addSlope({ minX: -2, maxX: 2, minZ: -8, maxZ: -4, baseY: 0, rise: 4, dir: 3, thickness: 0.2 });
+        box(game, -2, 0, -40, 2, 4, -8); // Plattform genau so breit wie die Rampe (und lang)
+        const c = addDrivenCharacter(game, { position: { x: (k % 3) * 0.6 - 0.6, y: 0, z: -k * 0.013 } });
+        Object.assign(c.brain.fields, { moveZ: 1 }, fields);
+        game.simulate(4);
+        assert.close(c.position.y, 4, 1e-9, `${JSON.stringify(fields)} Versatz ${k}: y = ${c.position.y.toFixed(3)}`);
+        assert.ok(c.position.z < -8.5, `${JSON.stringify(fields)} Versatz ${k}: z = ${c.position.z.toFixed(2)}`);
+      }
+    }
   });
 
   it('unter einer hohen Rampe durchlaufen', () => {
@@ -304,5 +323,46 @@ describe('Szenario: Spieler mit echter Eingabe auf dem Übungsplatz', () => {
     game.simulate(1 / 60);
     assert.close(p.yaw, -Math.PI / 2, 1e-6);
     game.dispose();
+  });
+});
+
+describe('Szenario: Zufalls-Spaziergang über den Übungsplatz', () => {
+  it('8 Figuren, 2 x 30 s zufällig laufen/springen/ducken: nie in einer Wand, nie unter dem Boden', () => {
+    let checks = 0;
+    for (const seed of [3, 11]) {
+      const game = createTestGame({ seed });
+      game.startMode('practice');
+      const rng = createRng(seed * 77);
+      const walkers = [];
+      for (let i = 0; i < 8; i++) {
+        const c = addDrivenCharacter(game, { name: `W${i}`, position: { x: (rng() - 0.5) * 60, y: 0, z: (rng() - 0.5) * 60 }, yaw: rng() * 6.28 });
+        c.brain.fields.moveZ = 1;
+        walkers.push(c);
+      }
+      for (let t = 0; t < 30 * 60; t++) {
+        for (const c of walkers) {
+          const f = c.brain.fields;
+          if (rng() < 0.02) f.yaw = rng() * 6.28;
+          if (rng() < 0.02) f.moveX = (rng() - 0.5) * 2;
+          f.jumpPressed = rng() < 0.01;
+          f.jump = rng() < 0.05;
+          if (rng() < 0.01) f.crouch = !f.crouch;
+          f.sprint = rng() < 0.5;
+        }
+        game.fixedUpdate(1 / 60);
+        if (t < 120) continue; // Startpunkte dürfen in Kisten liegen – erst hinauslaufen lassen
+        for (const c of walkers) {
+          const p = c.position;
+          assert.ok(Number.isFinite(p.x + p.y + p.z), `${c.name}: Position ungültig`);
+          assert.ok(p.y > -0.001, `${c.name}: unter dem Boden (y = ${p.y})`);
+          assert.ok(Math.abs(p.x) < 40.01 && Math.abs(p.z) < 40.01, `${c.name}: aus der Arena`);
+          assert.ok(bodyFits(game.world, p.x, p.y, p.z, c.radius, c.height),
+            `${c.name} steckt fest bei ${p.toArray().map((v) => v.toFixed(2)).join(', ')} (Tick ${t})`);
+          checks++;
+        }
+      }
+      game.dispose();
+    }
+    assert.ok(checks > 20000);
   });
 });

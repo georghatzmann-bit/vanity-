@@ -123,6 +123,11 @@ export class Input {
     this._gpLookX = 0;
     this._gpLookY = 0;
     this._gpActive = false;
+    // Knöpfe, die beim Umschalten Baumodus ↔ Kampf schon gedrückt waren, zählen erst
+    // nach dem Loslassen wieder (sonst würde z. B. gehaltenes L2 sofort eine Rampe setzen)
+    this._gpSuppressed = new Uint8Array(32);
+    this._gpPrevButtons = new Uint8Array(32); // roh gedrückt bei der letzten Abfrage
+    this._gpLastBuildMode = false;
 
     this.state = {
       held: emptyActionMap(),
@@ -481,6 +486,14 @@ export class Input {
 
       const map = CONFIG.controls.gamepad;
       const buttons = pad.buttons || [];
+      const count = Math.min(buttons.length, this._gpPrevButtons.length);
+      if (this.gamepadBuildMode !== this._gpLastBuildMode) {
+        this._gpLastBuildMode = this.gamepadBuildMode;
+        for (let i = 0; i < count; i++) {
+          if (this._gpPrevButtons[i] && buttonDown(buttons[i])) this._gpSuppressed[i] = 1;
+        }
+      }
+      for (let i = 0; i < count; i++) this._gpPrevButtons[i] = buttonDown(buttons[i]) ? 1 : 0;
       this._gpButton(buttons, map.jump, 'jump');
       this._gpButton(buttons, map.toggleBuildMode, 'toggleBuild');
       this._gpButton(buttons, map.use, 'use');
@@ -524,10 +537,12 @@ export class Input {
 
   // Ein Controller-Knopf: gedrückt → Aktion für diese Abfrage merken. Gibt 1/0 zurück.
   _gpButton(buttons, index, action) {
-    const b = buttons[index];
-    if (!b) return 0;
-    const down = typeof b === 'object' ? (b.pressed || b.value > 0.5) : b > 0.5;
-    if (!down) return 0;
+    const down = buttonDown(buttons[index]);
+    if (!down) {
+      if (index < this._gpSuppressed.length) this._gpSuppressed[index] = 0;
+      return 0;
+    }
+    if (this._gpSuppressed[index]) return 0;
     this._gpNext[action] = true;
     this._gpActive = true;
     return 1;
@@ -563,6 +578,11 @@ function isTextField(target) {
   if (!target || typeof target !== 'object') return false;
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable === true;
+}
+
+function buttonDown(b) {
+  if (!b) return false;
+  return typeof b === 'object' ? (b.pressed || b.value > 0.5) : b > 0.5;
 }
 
 function clamp1(v) {

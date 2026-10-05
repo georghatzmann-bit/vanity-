@@ -549,6 +549,10 @@ function moveAxis(ch, world, axis, d, depth = 0) {
   let hardBlock = false;
 
   // 1. Durchgang: Schrägen und Gelände (heben die Füße evtl. schon an)
+  // slopeFront = höchste Rampen-Fläche unter dem Körper-Umriss. Oben an einer Rampe ist
+  // die Vorderkante des Körpers schon höher als die Füße (Mitte) – von dort aus zählt
+  // eine Stufe auf die anschließende Plattform.
+  let slopeFront = y;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.type === 'box') continue;
@@ -556,6 +560,7 @@ function moveAxis(ch, world, axis, d, depth = 0) {
     if (cls === SLOPE_ON_TOP) {
       const s = slopeSurfaceY(c, x, z);
       if (s > stepTo) stepTo = s;
+      if (slopeRangeOverRect(c, x - r, x + r, z - r, z + r, _range) && _range.max > slopeFront) slopeFront = _range.max;
     } else if (cls === SLOPE_BLOCKED && classifySlope(c, oldX, y, oldZ, r, h, P.stepHeight) !== SLOPE_BLOCKED) {
       hardBlock = true;
     }
@@ -572,6 +577,7 @@ function moveAxis(ch, world, axis, d, depth = 0) {
 
   // 2. Durchgang: Boxen – gemessen ab der (evtl. angehobenen) Fuß-Höhe
   const feet = stepTo;
+  const stepBase = Math.max(feet, Math.min(slopeFront, feet + P.stepHeight));
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
     if (c.type !== 'box') continue;
@@ -579,7 +585,7 @@ function moveAxis(ch, world, axis, d, depth = 0) {
     // Steckte man schon vorher drin (z. B. Bauteil im Körper), darf man hinaus.
     if (boxOverlapsStrict(c, oldX - r, y, oldZ - r, oldX + r, y + h, oldZ + r)) continue;
     const top = c.max.y;
-    if (top - feet <= P.stepHeight + 1e-4) {
+    if (top - stepBase <= P.stepHeight + 1e-4) {
       if (top > stepTo) {
         stepTo = top;
         stepFromBox = true;
@@ -605,9 +611,9 @@ function moveAxis(ch, world, axis, d, depth = 0) {
   }
 
   if (limit !== d) {
-    if (axis === 0) ch.position.x = oldX + limit;
-    else ch.position.z = oldZ + limit;
+    // nur bis an die Wand – dabei aber Rampen/Stufen auf dem Teilstück beachten
     setAxisVelocity(ch, axis, 0);
+    if (Math.abs(limit) > 1e-6 && depth < 3) moveAxis(ch, world, axis, limit, depth + 1);
     return BLOCKED;
   }
 
