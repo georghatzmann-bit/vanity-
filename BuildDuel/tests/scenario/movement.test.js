@@ -290,6 +290,22 @@ describe('Szenario: Ducken', () => {
     const max = maxHeightDuring(game, c, 1);
     assert.close(max, 2.5 - P.hitbox.height, 1e-6);
   });
+
+  it('Springen unter eine Rampe, die genau auf Kopfhöhe ist: Füße bleiben auf dem Boden (nicht hineingedrückt)', () => {
+    // Boden-Platte (0,2 m) und darüber eine Rampe in derselben Zelle; an dieser Stelle ist
+    // unter der Rampe genau 1,8 m Platz (Unterseite liegt 0,02 mm unter dem Kopf)
+    const game = createTestGame();
+    box(game, -4, 0, 0, 0, 0.2, 4);
+    game.world.addSlope({ minX: -4, maxX: 0, minZ: 0, maxZ: 4, baseY: 0, rise: 4, dir: 0, thickness: 0.2 });
+    const x = -1.3171746834687459;
+    const c = addDrivenCharacter(game, { position: { x, y: 0.2, z: 2 } });
+    c.brain.fields.jumpPressed = true;
+    for (let i = 0; i < 30; i++) {
+      game.fixedUpdate(1 / 60);
+      assert.ok(c.position.y >= 0.2, `Tick ${i}: Füße bei ${c.position.y} (im Boden)`);
+      assert.ok(bodyFits(game.world, c.position.x, c.position.y, c.position.z, c.radius, c.height), `Tick ${i}: steckt fest`);
+    }
+  });
 });
 
 describe('Szenario: Fallen', () => {

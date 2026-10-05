@@ -693,7 +693,9 @@ function moveVertical(ch, world, dy) {
     }
   }
   if (ceiling < Infinity) {
-    ch.position.y = ceiling - h;
+    // nie tiefer als vorher (die Decke darf bis 0,1 mm unter dem Kopf liegen –
+    // sonst würden die Füße in den Boden gedrückt)
+    ch.position.y = Math.max(y, ceiling - h);
     return CEILING;
   }
   ch.position.y = y + dy;
