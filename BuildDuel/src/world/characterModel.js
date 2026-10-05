@@ -60,7 +60,8 @@ function sharedGeometries() {
     hand: g(new THREE.SphereGeometry(0.09, 10, 8)),
     // Hüte
     dome: g(new THREE.SphereGeometry(0.29, 18, 10, 0, Math.PI * 2, 0, HALF_PI)),
-    brim: g(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 16, 1, false, -HALF_PI, Math.PI)),
+    // halbe Scheibe nach vorn (−Z): Winkel π/2 … 3π/2
+    brim: g(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 16, 1, false, HALF_PI, Math.PI)),
     pompom: g(new THREE.SphereGeometry(0.07, 10, 8)),
     band: g(new THREE.TorusGeometry(0.28, 0.045, 6, 20)),
     cone: g(new THREE.ConeGeometry(0.17, 0.42, 16)),
@@ -343,7 +344,9 @@ function addHat(head, shape, mHat, mAccent, mWhite, mesh) {
   switch (shape) {
     case 'cap': {
       mesh(G.dome, mHat, head, 0, 0.03, 0);
-      mesh(G.brim, mHat, head, 0, 0.06, -0.2).scale.set(1, 1, 1.3);
+      const brim = mesh(G.brim, mHat, head, 0, 0.09, -0.08);
+      brim.scale.set(1.05, 1, 1.35);
+      brim.rotation.x = 0.12; // Schirm leicht nach unten
       break;
     }
     case 'beanie': {
