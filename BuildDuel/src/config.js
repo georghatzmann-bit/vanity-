@@ -260,6 +260,7 @@ export const CONFIG = deepFreeze({
     maxPieces: 3000, // mehr Bauteile gleichzeitig gibt es nicht (Leistung)
     pieceThickness: 0.2, // Dicke von Wand/Boden/Dach (m) // SCHÄTZUNG
     rampSlopeDeg: 45, // Steigung der Rampe
+    roofHeight: 1.5, // so hoch ist die Spitze des Dachs (Pyramide) über ihrer Grundfläche // SCHÄTZUNG
     collapseDelay: 0.1, // so lange nach Zerstörung fallen lose Teile weg
     collapseAnimTime: 0.4, // Dauer der kleinen Zerfalls-Animation
     // Edit-Raster: Spalten x Reihen
