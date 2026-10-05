@@ -244,8 +244,17 @@ describe('Spielwerte: Optik und Grafik', () => {
   it('Grafik-Stufe: Groß-/Kleinschreibung egal, Unbekanntes wird "mittel"', () => {
     assert.equal(getQualityPreset('Hoch').name, 'hoch');
     assert.equal(getQualityPreset(' NIEDRIG ').name, 'niedrig');
-    assert.equal(getQualityPreset('gibtsnicht').name, 'mittel');
-    assert.equal(getQualityPreset('gibtsnicht').viewDistance, CONFIG.graphics.presets.mittel.viewDistance);
+    // Der Hinweis in der Konsole ist hier erwartet – abfangen, damit die Test-Seite sauber bleibt
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      assert.equal(getQualityPreset('gibtsnicht').name, 'mittel');
+      assert.equal(getQualityPreset('gibtsnicht').viewDistance, CONFIG.graphics.presets.mittel.viewDistance);
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.equal(warnings.length, 2, 'Hinweis in der Konsole');
   });
 
   it('Nebel: beginnt vor dem Ende, endet vor der Sichtweite', () => {

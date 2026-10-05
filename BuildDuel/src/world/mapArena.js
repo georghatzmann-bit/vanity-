@@ -1,38 +1,77 @@
 // =============================================================================
 // Arena-Karte
 // =============================================================================
-// Phase 1: nur der Boden (Gras mit feinem 4-m-Bauraster).
-// Phase 8: kommt die Duell-Arena dazu (80 x 80 m, Felsen, Bäume).
+// createArenaMap(game, spec) baut eine flache Arena:
+//   - Gras-Boden mit feinem 4-m-Bauraster (reicht bis zum Horizont)
+//   - eine niedrige Mauer rundherum (spec.size x spec.size Meter)
+// Die zurückgegebene Karte hat die Baukasten-Methoden aus mapBuilder.js
+// (addBox, addSlope, addLabel, dispose), damit Modi weitere Dinge hineinsetzen
+// können (Übungsplatz: Kisten, Rampen, Turm …).
+//
+// Phase 8 (Duell): kommen Felsen und Bäume dazu.
 // =============================================================================
 import * as THREE from 'three';
+import { CONFIG } from '../config.js';
 import { createRng } from '../util/random.js';
+import { createMapBuilder } from './mapBuilder.js';
 
 /**
- * Legt den Boden in die Szene.
- * @param {THREE.Scene} scene
- * @param {THREE.WebGLRenderer} renderer  (für die Textur-Schärfe)
- * @param {object} config  CONFIG aus config.js
- * @returns {{ ground: THREE.Mesh }}
+ * @param {object} game
+ * @param {object} [spec]  { size (m), borderHeight (m), borderThickness (m), borderColor }
+ * @returns {object} Karte (mit size, ground, addBox, addSlope, addLabel, dispose …)
  */
-export function createArena(scene, renderer, config) {
+export function createArenaMap(game, spec = {}) {
+  const config = game.config ?? CONFIG;
+  const size = spec.size ?? 80;
+  const half = size / 2;
+  const builder = createMapBuilder(game, 'Arena');
+  let ground = null;
+
+  // Gelände: flach bei 0 (Standard der Kollisions-Welt)
+  game.world.setTerrain(null);
+
+  if (!game.headless && typeof document !== 'undefined') {
+    ground = createGround(config, game.renderer);
+    builder.addObject(ground);
+  }
+
+  // Rand-Mauer (4 Seiten)
+  const h = spec.borderHeight ?? 3;
+  const t = spec.borderThickness ?? 1;
+  const color = spec.borderColor ?? '#9AA7B8';
+  builder.addBox({ x: -half - t, y: 0, z: -half - t }, { x: half + t, y: h, z: -half }, { color });
+  builder.addBox({ x: -half - t, y: 0, z: half }, { x: half + t, y: h, z: half + t }, { color });
+  builder.addBox({ x: -half - t, y: 0, z: -half }, { x: -half, y: h, z: half }, { color });
+  builder.addBox({ x: half, y: 0, z: -half }, { x: half + t, y: h, z: half }, { color });
+
+  return {
+    ...builder,
+    id: 'arena',
+    size,
+    ground,
+    /** Liegt der Punkt in der Arena (innerhalb der Mauer)? */
+    contains(x, z, margin = 0) {
+      return Math.abs(x) <= half - margin && Math.abs(z) <= half - margin;
+    },
+  };
+}
+
+/** Gras-Boden (nur Grafik). */
+function createGround(config, renderer) {
   const size = config.world.groundSize;
   const cell = config.world.gridCellSize;
-
   const texture = createGrassTexture(config);
   // Eine Textur-Kachel = genau eine Bau-Zelle (4 x 4 m)
   texture.repeat.set(size / cell, size / cell);
-  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  texture.anisotropy = renderer ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
 
   const geometry = new THREE.PlaneGeometry(size, size);
   geometry.rotateX(-Math.PI / 2); // flach hinlegen (Y zeigt nach oben)
-
   const material = new THREE.MeshLambertMaterial({ map: texture });
   const ground = new THREE.Mesh(geometry, material);
   ground.name = 'Boden';
   ground.receiveShadow = true;
-  scene.add(ground);
-
-  return { ground };
+  return ground;
 }
 
 /**

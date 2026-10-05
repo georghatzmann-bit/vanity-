@@ -1,0 +1,4 @@
+# Screenshots und Berichte der Browser-Tests (tests/e2e/run.cjs)
+tests/e2e/out/
+# Python-Zwischendateien des Servers
+tools/__pycache__/

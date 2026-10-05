@@ -2,22 +2,32 @@
 // BuildDuel – Start und Spielschleife
 // =============================================================================
 // Ablauf:
-//   1. Grafik (Renderer), Szene und Kamera anlegen
-//   2. Welt bauen (Phase 1: Himmel, Licht, Boden, Maßstab-Objekte)
-//   3. Spielschleife starten:
-//        - Logik: immer genau 60-mal pro Sekunde (feste Spiel-Uhr, loop.js)
-//        - Bild:  so oft der Browser kann (requestAnimationFrame)
+//   1. Einstellungen laden, Grafik (Renderer), Szene, Kamera, Himmel/Licht
+//   2. Spiel (Game) mit dem Start-Modus anlegen (Übungsplatz, oder ?mode=… in der Adresse)
+//   3. "Klicken zum Spielen" → Maus wird gesperrt (Pointer Lock), das Spiel läuft.
+//      Esc gibt die Maus frei → "Pausiert – Klicken zum Weiterspielen".
+//   4. Spielschleife:
+//        - Logik: immer genau 60-mal pro Sekunde (feste Spiel-Uhr, loop.js);
+//          jeder Schritt holt zuerst die Eingabe ab (input.sample) und rechnet dann
+//          game.fixedUpdate
+//        - Bild: so oft der Browser kann (requestAnimationFrame), Figuren und Kamera
+//          weich zwischen zwei Logik-Schritten (alpha)
 // =============================================================================
 import * as THREE from 'three';
-import { CONFIG, getQualityPreset } from './config.js';
+import { CONFIG } from './config.js';
 import { FixedStepClock } from './loop.js';
-import { createCamera, OrbitPreview } from './camera.js';
+import { createCamera } from './camera.js';
 import { createEnvironment } from './world/environment.js';
-import { createArena } from './world/mapArena.js';
 import { createReferenceObjects } from './world/referenceObjects.js';
 import { FpsDisplay } from './ui/fpsMeter.js';
+import { loadSettings, resolveGraphics } from './core/settings.js';
+import { Input } from './input.js';
+import { Game } from './core/game.js';
+import { DEFAULT_MODE_ID, getModeDef } from './modes/index.js';
 
-const quality = getQualityPreset();
+const settings = loadSettings();
+const quality = resolveGraphics(settings);
+const params = new URLSearchParams(location.search);
 
 // Zeigt eine verständliche Fehlermeldung (Funktion steht in index.html).
 // Bei Fehlern mit eigener Erklärung (userFacing) steht unten nur der technische Grund.
@@ -67,33 +77,160 @@ function applySize(renderer, camera) {
   camera.updateProjectionMatrix();
 }
 
-// --- 2. Welt ------------------------------------------------------------------
+// Tasten-Namen für die Hilfe (deutsch)
+const KEY_NAMES = {
+  Space: 'Leertaste', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Strg', ControlRight: 'Strg',
+  Mouse0: 'Linke Maustaste', Mouse1: 'Mausrad-Klick', Mouse2: 'Rechte Maustaste',
+  WheelUp: 'Mausrad hoch', WheelDown: 'Mausrad runter', Escape: 'Esc', Tab: 'Tab',
+};
+function keyName(code) {
+  if (KEY_NAMES[code]) return KEY_NAMES[code];
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit\d$/.test(code)) return code.slice(5);
+  return code;
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+// --- 2. Start -------------------------------------------------------------------
 function start() {
   const container = document.getElementById('game');
   const renderer = createRenderer(container);
+  const canvas = renderer.domElement;
+  canvas.tabIndex = 0;
   const scene = new THREE.Scene();
   const camera = createCamera(CONFIG, quality);
   applySize(renderer, camera);
-
   const environment = createEnvironment(scene, CONFIG, quality);
-  createArena(scene, renderer, CONFIG);
   if (CONFIG.debug.showReferenceObjects) createReferenceObjects(scene, CONFIG);
 
-  // Vorschau-Kamera startet auf der Sonnenseite (dann ist die Figur hell)
-  const half = CONFIG.world.gridCellSize / 2;
-  const sunDir = CONFIG.visuals.sunDirection;
-  const preview = new OrbitPreview(camera, renderer.domElement, {
-    target: new THREE.Vector3(half, 1.2, half),
-    yaw: Math.atan2(sunDir.x, sunDir.z) + 0.6,
-    autoRotateSpeed: CONFIG.debug.previewOrbitSpeed,
-  });
+  const input = new Input(settings);
+  input.attach(canvas);
+
+  const ui = {
+    overlay: document.getElementById('play-overlay'),
+    title: document.getElementById('play-title'),
+    sub: document.getElementById('play-sub'),
+    button: document.getElementById('play-button'),
+    hint: document.getElementById('play-hint'),
+    crosshair: document.getElementById('crosshair'),
+    help: document.getElementById('help'),
+  };
+
+  // --- Spiel anlegen ----------------------------------------------------------------
+  let game = null;
+  let currentModeId = null;
+  function startMode(id = DEFAULT_MODE_ID, options = {}) {
+    if (!getModeDef(id)) {
+      console.warn(`Spielmodus "${id}" gibt es nicht – starte "${DEFAULT_MODE_ID}".`);
+      id = DEFAULT_MODE_ID;
+    }
+    game?.dispose();
+    input.releaseAll();
+    game = new Game({
+      scene,
+      camera,
+      renderer,
+      settings,
+      headless: false,
+      seed: options.seed ?? Number(params.get('seed') ?? 1),
+      input,
+      uiRoot: document.getElementById('ui'),
+    });
+    game.startMode(id, options);
+    currentModeId = id;
+    ui.sub.textContent = getModeDef(id).name;
+    clock.reset();
+    return game;
+  }
 
   const clock = new FixedStepClock(CONFIG.loop);
   const fpsElement = document.getElementById('fps');
-  const fps = CONFIG.graphics.showFps && fpsElement ? new FpsDisplay(fpsElement) : null;
-  const focus = new THREE.Vector3(0, 0, 0); // Phase 1: Schatten rund um die Mitte
+  const fps = quality.showFps && fpsElement ? new FpsDisplay(fpsElement) : null;
+  const focus = new THREE.Vector3();
 
-  // Fenstergröße ändert sich
+  // --- Spielen / Pause ------------------------------------------------------------------
+  // state: 'start' (noch nicht geklickt) | 'playing' | 'paused'
+  let state = 'start';
+  let manualStep = false; // Tests: Logik nur über buildDuel.simulate()
+  let forcedPlay = false; // gespielt ohne Maus-Sperre (Tests, Touch)
+
+  function setState(next) {
+    state = next;
+    const playing = next === 'playing';
+    input.playing = playing;
+    ui.overlay.hidden = playing;
+    ui.crosshair.hidden = !playing;
+    document.body.classList.toggle('playing', playing);
+    if (!playing) {
+      input.releaseAll();
+      ui.title.textContent = next === 'paused' ? 'Pausiert' : CONFIG.game.name;
+      ui.button.textContent = next === 'paused' ? 'Klicken zum Weiterspielen' : 'Klicken zum Spielen';
+    } else {
+      ui.hint.textContent = '';
+      clock.reset();
+    }
+  }
+
+  function play(options = {}) {
+    forcedPlay = !!options.withoutLock;
+    setState('playing');
+  }
+
+  function requestPlay() {
+    ui.hint.textContent = '';
+    // Ohne Maus-Sperre (z. B. Tablet): einfach losspielen
+    if (!canvas.requestPointerLock) {
+      play({ withoutLock: true });
+      return;
+    }
+    input.requestPointerLock();
+  }
+
+  input.onLockChange = (locked) => {
+    if (locked) {
+      forcedPlay = false;
+      setState('playing');
+    } else if (state === 'playing' && !forcedPlay) {
+      setState('paused');
+    }
+  };
+  input.onLockError = () => {
+    // Chrome erlaubt nach Esc erst nach ca. 1 Sekunde eine neue Sperre
+    ui.hint.textContent = 'Die Maus konnte nicht gesperrt werden. Kurz warten und nochmal klicken.';
+  };
+  ui.overlay.addEventListener('click', (event) => {
+    event.preventDefault();
+    requestPlay();
+  });
+  // Ohne Maus-Sperre gespielt (Tests/Touch): Esc pausiert
+  window.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape' && state === 'playing' && !input.locked) setState('paused');
+  });
+
+  // Hilfe unten links (vorläufig, bis es das HUD und das Einstellungs-Menü gibt)
+  function renderHelp() {
+    const kb = settings.controls.keyboard;
+    const keys = (action) => (kb[action] ?? []).map(keyName).join(' / ');
+    const crouchKey = settings.controls.crouchOnCtrl ? keyName(CONFIG.controls.crouchCtrlKey) : keys('crouch');
+    const rows = [
+      ['Laufen', [keys('moveForward'), keys('moveLeft'), keys('moveBack'), keys('moveRight')].join(' ')],
+      ['Umschauen', 'Maus'],
+      ['Springen', keys('jump')],
+      ['Ducken', `${crouchKey} (${settings.controls.crouchToggle ? 'umschalten' : 'halten'})`],
+    ];
+    if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', keyName(CONFIG.controls.sprintKeyWhenCrouchOnCtrl)]);
+    rows.push(['Zielen (näher ran)', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
+    ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
+      rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
+      '<div class="help-hint">Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.</div>';
+    ui.help.hidden = false;
+  }
+  renderHelp();
+
+  // --- Fenster ------------------------------------------------------------------------
   window.addEventListener('resize', () => applySize(renderer, camera));
   // Fenster wandert auf einen Bildschirm mit anderer Windows-Skalierung (z. B.
   // Laptop 150 %, Monitor 100 %). Dann gibt es kein "resize", nur die
@@ -108,40 +245,52 @@ function start() {
   watchPixelRatio();
 
   // Grafikkarte hat den Zustand verloren (selten, z. B. Treiber-Neustart)
-  renderer.domElement.addEventListener('webglcontextlost', (event) => {
+  canvas.addEventListener('webglcontextlost', (event) => {
     event.preventDefault();
     fail('Die Grafik wurde zurückgesetzt', Object.assign(new Error('Bitte die Seite neu laden (Taste F5).'), { userFacing: true }));
   });
 
-  // Für Tests und zum Nachschauen in der Browser-Konsole (F12)
-  const game = { CONFIG, quality, renderer, scene, camera, clock, ticks: 0, frames: 0 };
-  window.buildDuel = game;
+  // --- 3. Spielschleife -------------------------------------------------------------------
+  let frames = 0;
+  let lastTime = null;
+  let frameErrorShown = false;
 
-  // --- Logik-Schritt (immer 1/60 s) ---------------------------------------------
-  // Phase 1 hat noch keine Spiel-Logik. Ab Phase 2 bewegt sich hier der Spieler.
-  function fixedUpdate(/* stepSeconds */) {
-    game.ticks++;
-  }
-
-  // --- Bild malen -----------------------------------------------------------------
-  function render(frameSeconds /* , alpha */) {
-    preview.update(frameSeconds);
+  function renderFrame(frameSeconds, steps, alpha) {
+    const dt = Math.min(frameSeconds, CONFIG.loop.maxFrameTime);
+    game.frameUpdate(dt, alpha);
+    const player = game.player;
+    if (player) {
+      focus.lerpVectors(player.prevPosition, player.position, alpha);
+    }
     environment.update(camera.position, focus);
     renderer.render(scene, camera);
-    game.frames++;
+    frames++;
+    fps?.update(frameSeconds, steps);
   }
 
-  // --- 3. Spielschleife -----------------------------------------------------------
-  let lastTime = null;
   function frame(now) {
     requestAnimationFrame(frame);
     const frameSeconds = lastTime === null ? 0 : (now - lastTime) / 1000;
     lastTime = now;
-
-    const { steps, alpha } = clock.advance(frameSeconds);
-    for (let i = 0; i < steps; i++) fixedUpdate(clock.step);
-    render(Math.min(frameSeconds, CONFIG.loop.maxFrameTime), alpha);
-    fps?.update(frameSeconds, steps);
+    try {
+      let steps = 0;
+      let alpha = 1;
+      if (state === 'playing' && !manualStep) {
+        const result = clock.advance(frameSeconds);
+        steps = result.steps;
+        alpha = result.alpha;
+        for (let i = 0; i < steps; i++) game.fixedUpdate(clock.step);
+      }
+      renderFrame(frameSeconds, steps, alpha);
+    } catch (error) {
+      // Nicht still weitermachen: Der erste Fehler kommt in die Fehler-Anzeige.
+      if (!frameErrorShown) {
+        frameErrorShown = true;
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
+    }
   }
 
   // Tab im Hintergrund: Der Browser pausiert requestAnimationFrame. Beim
@@ -153,13 +302,67 @@ function start() {
     }
   });
 
+  // Start-Modus aus der Adresse (?mode=practice) oder Übungsplatz
+  startMode(params.get('mode') ?? DEFAULT_MODE_ID, {
+    botDifficulty: params.get('bots') ?? settings.game.botDifficulty,
+    seed: Number(params.get('seed') ?? 1),
+  });
+  setState('start');
+
+  // Für Tests und zum Nachschauen in der Browser-Konsole (F12)
+  window.buildDuel = {
+    CONFIG,
+    settings,
+    input,
+    quality,
+    renderer,
+    scene,
+    camera,
+    clock,
+    get game() {
+      return game;
+    },
+    get state() {
+      return state;
+    },
+    get modeId() {
+      return currentModeId;
+    },
+    get frames() {
+      return frames;
+    },
+    get ticks() {
+      return game ? game.tick : 0;
+    },
+    /** Neues Spiel mit einem Modus starten. */
+    startMode(id, options) {
+      return startMode(id, options);
+    },
+    /** Logik direkt rechnen (ohne Bild), z. B. buildDuel.simulate(1) = 1 Sekunde. */
+    simulate(seconds) {
+      return game.simulate(seconds);
+    },
+    /** Spielen ohne Maus-Sperre (für Tests). */
+    play() {
+      play({ withoutLock: true });
+    },
+    pause() {
+      setState('paused');
+    },
+    /** true = die Spielschleife rechnet keine Logik mehr (nur noch Bilder), Tests rechnen selbst. */
+    manualStep(on = true) {
+      manualStep = !!on;
+      clock.reset();
+    },
+  };
+
   // Erstes Bild sofort malen, dann Ladebildschirm ausblenden
-  render(0, 0);
+  renderFrame(0, 0, 1);
   requestAnimationFrame(frame);
   document.body.classList.add('ready');
   console.info(
     `${CONFIG.game.name} ${CONFIG.game.version} gestartet – Three.js r${THREE.REVISION}, ` +
-    `Grafik "${quality.name}", Logik ${CONFIG.loop.tickRate}/s`,
+    `Grafik "${quality.name}", Logik ${CONFIG.loop.tickRate}/s, Modus "${currentModeId}"`,
   );
 }
 

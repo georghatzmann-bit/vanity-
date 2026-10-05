@@ -29,7 +29,7 @@ export const CONFIG = deepFreeze({
   // ---------------------------------------------------------------------------
   game: {
     name: 'BuildDuel', // Platzhalter-Name, keine Original-Namen benutzen
-    version: '0.1.0', // 0.1 = Phase 1
+    version: '0.2.0', // 0.2 = Phase 2 (Figur, Bewegung, Kamera)
     storageKeyPrefix: 'buildduel.', // Vorsilbe für alles, was im Browser gespeichert wird
   },
 
@@ -53,6 +53,13 @@ export const CONFIG = deepFreeze({
     killPlaneY: -50, // wer tiefer fällt, ist raus (Sicherheitsnetz)
   },
 
+  // Technik der Kollisions-Welt (physics.js) – nur für Leistung, ändert das Spiel nicht
+  physics: {
+    bigColliderCells: 256, // Collider über mehr Raster-Zellen landen in einer eigenen Liste
+    terrainRayStep: 1.0, // Strahl gegen hügeliges Gelände: so groß sind die Such-Schritte (m)
+    terrainBisectSteps: 12, // danach so oft halbieren (genauer Treffpunkt)
+  },
+
   // ---------------------------------------------------------------------------
   // Spieler
   // ---------------------------------------------------------------------------
@@ -70,6 +77,18 @@ export const CONFIG = deepFreeze({
     airControl: 0.35, // Lenken in der Luft (0 = gar nicht, 1 = wie am Boden) // SCHÄTZUNG
     maxWalkableSlope: 46, // bis zu dieser Steigung (°) kann man ohne Springen laufen – Rampen haben 45°
     stepHeight: 0.35, // kleine Kanten (z. B. Bodenplatten) werden automatisch "hochgestiegen" // SCHÄTZUNG
+    maxFallSpeed: 60, // schneller fällt man nicht (Luftwiderstand) // SCHÄTZUNG
+    coyoteTime: 0.1, // so lange nach dem Verlassen einer Kante darf man noch springen (fühlt sich fairer an)
+    jumpBufferTime: 0.12, // Leertaste kurz VOR der Landung gedrückt → springt sofort bei der Landung
+    groundSnapDistance: 0.55, // beim Bergab-Laufen (Rampe, kleine Stufe) bleibt man so weit am Boden "kleben" (m)
+    stepSmoothing: 14, // Figur und Kamera ziehen eine Stufe weich nach (höher = schneller)
+    eyeHeight: 1.6, // Augenhöhe stehend (über den Füßen)
+    crouchEyeHeight: 1.1, // Augenhöhe geduckt
+    footstepDistance: 2.0, // alle 2 m ein Schritt (für das Schritt-Geräusch)
+    emoteDuration: 2.0, // B: die Figur tanzt so lange
+    // Gegen "Durchfallen": Bewegungen, die länger sind, werden in Teilschritte zerlegt.
+    maxSubstepDistance: 0.25, // höchstens so weit pro Teilschritt (m)
+    maxSubsteps: 40, // höchstens so viele Teilschritte pro Tick
 
     // Fallschaden
     fallDamage: {
@@ -100,6 +119,11 @@ export const CONFIG = deepFreeze({
     aimFov: 55, // Sichtfeld beim Zielen (°) // SCHÄTZUNG
     sniperFov: 20, // Sichtfeld mit Zielfernrohr (°) // SCHÄTZUNG
     fovChangeSpeed: 12, // wie schnell das Sichtfeld wechselt (höher = schneller)
+    crouchHeight: 1.15, // Kamera-Höhe über den Füßen, wenn man geduckt ist
+    aimZoomSpeed: 14, // wie schnell die Kamera beim Zielen näher fährt (höher = schneller)
+    crouchSmoothing: 12, // wie schnell die Kamera beim Ducken mitgeht
+    collisionReturnSpeed: 6, // nach einem Hindernis fährt die Kamera so schnell wieder zurück
+    hideCharacterDistance: 0.6, // ist die Kamera näher an der Figur, wird die eigene Figur ausgeblendet
     near: 0.1, // näher als das wird nichts gezeichnet
     minPitch: -80, // so weit kann man nach unten schauen (°)
     maxPitch: 80, // so weit kann man nach oben schauen (°)
@@ -117,6 +141,7 @@ export const CONFIG = deepFreeze({
     invertY: false, // Y-Achse umkehren
     gamepadLookSpeed: 3.2, // Controller: Drehung in Radiant pro Sekunde bei vollem Stick
     gamepadDeadzone: 0.15, // Controller: kleine Stick-Bewegungen ignorieren
+    gamepadLookExponent: 1.6, // Controller: kleine Stick-Ausschläge drehen feiner (1 = gleichmäßig)
   },
 
   // ---------------------------------------------------------------------------
@@ -591,6 +616,26 @@ export const CONFIG = deepFreeze({
       infiniteReserveAmmo: true,
     },
 
+    // Übungsplatz (Phase 2): zum Ausprobieren von Laufen, Springen, Ducken, Kamera
+    practice: {
+      name: 'Übungsplatz',
+      arenaSize: 80, // 80 x 80 m
+      borderHeight: 3, // Rand-Mauer
+      startHealth: 100,
+      startShield: 100,
+      startMaterials: { wood: 999, stone: 999, metal: 999 },
+      infiniteMaterials: true, // ab Phase 3: frei bauen zum Üben
+      idleBots: 4, // stehende Übungs-Figuren (ohne KI)
+      stepHeights: [0.3, 1, 2], // Kisten zum Testen: 0,3 m geht man hoch, 1 m und 2 m nicht
+      highWall: 4, // hohe Wand (Kamera-Test)
+      platformHeight: 4, // Plattform am Ende der 45°-Rampe
+      towerHeight: 12, // hoher Turm (Fallschaden-Test: 12 m → 50 Schaden)
+      lowCeiling: 1.5, // niedrige Decke: nur geduckt passt man durch
+      bridgeRampHeight: 3, // frei stehende Rampe, unter der man durchlaufen kann (Unterkante)
+      respawnDelay: 2, // nach dem Besiegtwerden (z. B. vom Turm gefallen) so schnell wieder da
+      spawn: { x: 0, z: 22 }, // Startpunkt (schaut Richtung −Z auf die Stationen)
+    },
+
     // Später / optional
     zombies: { name: 'Zombies', enabled: false },
     zeroBuilds: { name: 'Ohne Bauen', enabled: false },
@@ -625,6 +670,23 @@ export const CONFIG = deepFreeze({
     shadowArea: 70, // Schatten werden im Umkreis von 70 m berechnet
     groundGridLines: true, // feine Linien im 4-m-Bauraster auf dem Boden
     groundGridOpacity: 0.07,
+  },
+
+  // Figuren-Aussehen ("Skins" = Farbsets + Hut-Form). Eigene Platzhalter, keine Original-Skins.
+  // body = Oberteil, accent = Hose/Rucksack, skinTone = Haut, hat = Hut-Form, hatColor = Hut-Farbe
+  skins: {
+    hatShapes: ['none', 'cap', 'beanie', 'cone', 'tophat', 'crown', 'helmet', 'headband'],
+    defaultId: 'sonne',
+    list: [
+      { id: 'sonne', name: 'Sonnenschein', body: '#FFB627', accent: '#3A6EA5', skinTone: '#F2C9A0', hat: 'cap', hatColor: '#E8483B' },
+      { id: 'ozean', name: 'Ozean', body: '#2EC4E6', accent: '#1D3557', skinTone: '#C68E6B', hat: 'beanie', hatColor: '#F1FAEE' },
+      { id: 'wald', name: 'Waldläufer', body: '#56C271', accent: '#6B4F2A', skinTone: '#E8B98F', hat: 'helmet', hatColor: '#3E7C3A' },
+      { id: 'kirsche', name: 'Kirsche', body: '#E8475F', accent: '#2B2D42', skinTone: '#F5D0B5', hat: 'headband', hatColor: '#FFFFFF' },
+      { id: 'lava', name: 'Lava', body: '#FF6B35', accent: '#3D3D3D', skinTone: '#8D5A3B', hat: 'tophat', hatColor: '#222222' },
+      { id: 'mitternacht', name: 'Mitternacht', body: '#5B5BD6', accent: '#1E1E3F', skinTone: '#D9A77E', hat: 'crown', hatColor: '#FFD23D' },
+      { id: 'bonbon', name: 'Bonbon', body: '#FF8CC6', accent: '#7B2CBF', skinTone: '#F7D6BF', hat: 'cone', hatColor: '#4CC9F0' },
+      { id: 'zitrone', name: 'Zitrone', body: '#F4E04D', accent: '#2A9D8F', skinTone: '#B07A55', hat: 'none', hatColor: '#000000' },
+    ],
   },
 
   // Grafik-Qualität (ab Phase 11 im Menü wählbar)
@@ -663,7 +725,7 @@ export const CONFIG = deepFreeze({
 
   // Hilfen für die Entwicklung
   debug: {
-    showReferenceObjects: true, // Phase 1: Maßstab-Figur und eine Bau-Zelle anzeigen
+    showReferenceObjects: false, // Phase 1: Maßstab-Figur und eine Bau-Zelle anzeigen (true = einschalten)
     previewOrbitSpeed: 0.12, // Phase 1: so schnell dreht sich die Vorschau-Kamera (Radiant/s)
   },
 });

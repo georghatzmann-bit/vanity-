@@ -18,11 +18,19 @@
   <!-- Anzeigen über dem 3D-Bild -->
   <div id="ui">
     <div id="fps" class="fps" hidden></div>
-    <div id="info" class="panel info">
-      <div class="info-title">Phase 1 · Leere Szene</div>
-      <div class="info-row"><span class="swatch swatch-figure"></span>Figur: 1,8 m groß (gelber Ring = Kopf-Zone)</div>
-      <div class="info-row"><span class="swatch swatch-cell"></span>Kasten: eine Bau-Zelle, 4 × 4 × 4 m</div>
-      <div class="info-hint">Maus ziehen = Kamera drehen · Mausrad = Zoom</div>
+    <!-- Fadenkreuz in der Bildmitte (vorläufig – das HUD kommt in Phase 6) -->
+    <div id="crosshair" class="crosshair" hidden><span></span><span></span><span></span><span></span></div>
+    <!-- Steuerung unten links (vorläufig) -->
+    <div id="help" class="panel help" hidden></div>
+    <!-- "Klicken zum Spielen" / "Pausiert" -->
+    <div id="play-overlay" class="play-overlay" hidden>
+      <div class="play-card">
+        <div id="play-title" class="play-title">BuildDuel</div>
+        <div id="play-sub" class="play-sub"></div>
+        <button id="play-button" class="play-button" type="button">Klicken zum Spielen</button>
+        <div class="play-info">Die Maus wird dabei im Spiel festgehalten. Mit <b>Esc</b> bekommst du sie zurück.</div>
+        <div id="play-hint" class="play-hint" aria-live="polite"></div>
+      </div>
     </div>
   </div>
 
