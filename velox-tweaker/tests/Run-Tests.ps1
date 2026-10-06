@@ -195,6 +195,91 @@ Test-Case 'compat' 'keine PS7-only Syntax oder Cmdlet-Features (AST-Scan)' {
     Assert-True ($problems.Count -eq 0) ("keine Funde, aber: " + ($problems -join '; '))
 }
 
+# Every C# source the backend hands to Add-Type (type definitions and -MemberDefinition snippets,
+# also those inside isolated-script text): @{ name; code; refs }. refs = the assemblies Windows
+# PowerShell 5.1 references (System.dll by default, System.Drawing when the source uses it).
+function Get-CSharpSources {
+    $list = New-Object System.Collections.ArrayList
+    $files = @(Get-ChildItem -LiteralPath (Join-Path $AppRoot 'core') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $AppRoot 'Velox.ps1'))
+    foreach ($f in $files) {
+        $tokens = $null; $errs = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errs)
+        $strs = $ast.FindAll({ param($a) $a -is [System.Management.Automation.Language.StringConstantExpressionAst] -or $a -is [System.Management.Automation.Language.ExpandableStringExpressionAst] }, $true)
+        foreach ($s in $strs) {
+            $v = [string]$s.Value
+            $where = '{0}:{1}' -f $f.Name, $s.Extent.StartLineNumber
+            if ($v -match '(?m)^\s*using System' -and $v -match '\b(class|struct)\b') {
+                $refs = @('mscorlib', 'System')
+                if ($v -match '(?m)^\s*using System\.Drawing') { $refs += 'System.Drawing' }
+                [void]$list.Add(@{ name = $where; code = $v; refs = $refs })
+            }
+            foreach ($m in [regex]::Matches($v, "Add-Type\s+-Namespace\s+(\w+)\s+-Name\s+(\w+)\s+-MemberDefinition\s+'((?:[^']|'')*)'")) {
+                # what Add-Type -MemberDefinition generates around the members
+                $code = "using System;`nusing System.Runtime.InteropServices;`nnamespace " + $m.Groups[1].Value + " {`npublic class " + $m.Groups[2].Value + " {`n" + $m.Groups[3].Value.Replace("''", "'") + "`n}`n}`n"
+                [void]$list.Add(@{ name = $where + ' (MemberDefinition)'; code = $code; refs = @('mscorlib', 'System') })
+            }
+        }
+    }
+    return $list.ToArray()
+}
+
+# Folder with the .NET Framework 4.8 reference assemblies (NuGet cache or the Windows SDK), or $null.
+function Get-Net48RefDir {
+    $cands = New-Object System.Collections.Generic.List[string]
+    $pk = [Environment]::GetEnvironmentVariable('NUGET_PACKAGES')
+    if (-not $pk) { $pk = [IO.Path]::Combine([Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile), '.nuget', 'packages') }
+    $base = [IO.Path]::Combine($pk, 'microsoft.netframework.referenceassemblies.net48')
+    if ([IO.Directory]::Exists($base)) {
+        foreach ($v in @([IO.Directory]::GetDirectories($base) | Sort-Object -Descending)) { $cands.Add([IO.Path]::Combine($v, 'build', '.NETFramework', 'v4.8')) }
+    }
+    $pf86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+    if ($pf86) { $cands.Add([IO.Path]::Combine($pf86, 'Reference Assemblies', 'Microsoft', 'Framework', '.NETFramework', 'v4.8')) }
+    foreach ($c in $cands) { if ([IO.File]::Exists([IO.Path]::Combine($c, 'mscorlib.dll'))) { return $c } }
+    return $null
+}
+
+Test-Case 'compat' 'C#-Quellen für Add-Type kompilieren wie unter Windows PowerShell 5.1 (C# 5, .NET Framework 4.8, Warnungen = Fehler)' {
+    $srcs = @(Get-CSharpSources)
+    Assert-True ($srcs.Count -ge 6) ('alle C#-Quellen gefunden: ' + $srcs.Count)
+    $dotnet = @(Get-Command 'dotnet' -CommandType Application -ErrorAction SilentlyContinue)[0]
+    if ($null -eq $dotnet) { Add-Note 'dotnet fehlt - C#-Kompilierprüfung übersprungen.'; return }
+    $csc = $null
+    try {
+        foreach ($line in @(& $dotnet.Source --list-sdks 2>$null)) {
+            $m = [regex]::Match([string]$line, '^(\S+)\s+\[(.+)\]\s*$')
+            if (-not $m.Success) { continue }
+            $c = [IO.Path]::Combine($m.Groups[2].Value, $m.Groups[1].Value, 'Roslyn', 'bincore', 'csc.dll')
+            if ([IO.File]::Exists($c)) { $csc = $c }
+        }
+    } catch { $csc = $null }
+    $refDir = Get-Net48RefDir
+    if (-not $csc -or -not $refDir) { Add-Note 'C#-Compiler oder .NET-4.8-Referenzassemblys fehlen - C#-Kompilierprüfung übersprungen.'; return }
+    $dir = New-TempDir 'csharp'
+    $fails = New-Object System.Collections.ArrayList
+    $i = 0
+    foreach ($s in $srcs) {
+        $i++
+        $file = Join-Path $dir ('src' + $i + '.cs')
+        [IO.File]::WriteAllText($file, $s.code)
+        # Windows PowerShell 5.1: CodeDom csc (C# 5), warning level 4, warnings fail Add-Type
+        $cargs = @($csc, '-nologo', '-noconfig', '-nostdlib+', '-langversion:5', '-warn:4', '-warnaserror+', '-target:library', ('-out:' + (Join-Path $dir ('src' + $i + '.dll'))))
+        foreach ($r in $s.refs) { $cargs += ('-r:' + [IO.Path]::Combine($refDir, $r + '.dll')) }
+        $cargs += $file
+        $out = @(& $dotnet.Source @cargs 2>&1 | ForEach-Object { [string]$_ })
+        if ($LASTEXITCODE -ne 0) { [void]$fails.Add(($s.name + ': ' + (($out | Where-Object { $_ -match 'error' } | Select-Object -First 3) -join ' | ').Replace($file, 'src'))) }
+    }
+    Assert-True ($fails.Count -eq 0) ('C# 5 kompiliert: ' + ($fails -join ' || '))
+}
+
+Test-Case 'compat' 'keine -EncodedCommand-Aufrufe (Virenscanner schlagen bei Base64-Befehlen aus Admin-Prozessen an)' {
+    $hits = @()
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $AppRoot 'core') -Filter '*.ps1') + @(Get-Item -LiteralPath (Join-Path $AppRoot 'Velox.ps1'))) {
+        $n = 0
+        foreach ($line in [IO.File]::ReadAllLines($f.FullName)) { $n++; if ($line -match '(?i)-(EncodedCommand|enc|ec)\s' -and $line -notmatch '^\s*#') { $hits += ('{0}:{1}' -f $f.Name, $n) } }
+    }
+    Assert-True ($hits.Count -eq 0) ('gefunden: ' + ($hits -join ', '))
+}
+
 Test-Case 'compat' 'PSScriptAnalyzer: PSUseCompatibleSyntax 5.1 + Commands/Types (Win10, PS 5.1)' {
     $mod = Get-Module -ListAvailable -Name PSScriptAnalyzer | Sort-Object Version -Descending | Select-Object -First 1
     if ($null -eq $mod) { Add-Note 'PSScriptAnalyzer ist nicht installiert - Kompatibilitätsprüfung übersprungen.'; return }
@@ -1952,7 +2037,8 @@ Test-Case 'ai' 'Claude Code: Suche auf PATH, Version und Anmeldestatus ohne Toke
     $js = [IO.Path]::Combine($shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
     [IO.File]::WriteAllText($js, '//')
     $shim = Join-Path $shimDir 'claude.cmd'
-    [IO.File]::WriteAllText($shim, "@ECHO off`r`nSET dp0=%~dp0`r`n`"%_prog%`"  `"%dp0%\node_modules\@anthropic-ai\claude-code\cli.js`" %*`r`n")
+    # the real npm cmd-shim names "%dp0%\node.exe" first (missing unless node sits next to it)
+    [IO.File]::WriteAllText($shim, "@ECHO off`r`nSET dp0=%~dp0`r`nIF EXIST `"%dp0%\node.exe`" (`r`n  SET `"_prog=%dp0%\node.exe`"`r`n) ELSE (`r`n  SET `"_prog=node`"`r`n)`r`n`"%_prog%`"  `"%dp0%\node_modules\@anthropic-ai\claude-code\cli.js`" %*`r`n")
     $l = Resolve-VxClaudeCliLaunch $shim
     Assert-True (-not $l.viaCmd -or -not (Get-Command node -ErrorAction SilentlyContinue)) ('npm-Shim über node: ' + $l.file)
     if (-not $l.viaCmd) { Assert-True (@($l.prefix).Count -eq 1 -and ([string]$l.prefix[0]).EndsWith('cli.js')) 'cli.js als erstes Argument' }
@@ -2023,6 +2109,31 @@ Test-Case 'ai' 'Claude Code: Analyse über die Fake-CLI (Aufruf, stdin, Schema, 
             $msg = Get-AiError { Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' }) }
             Assert-True ($msg -eq 'VX_CANCELLED' -and $sw.Elapsed.TotalSeconds -lt 15) ("Abbrechen beendet die CLI ($msg, {0:n1} s)" -f $sw.Elapsed.TotalSeconds)
         } finally { $global:VxJob = $null; try { $null = $rs.EndInvoke($h) } catch { $null = $_ }; $rs.Dispose() }
+    }
+}
+Test-Case 'ai' 'Claude Code: Start ohne Adminrechte - Befehlszeile bleibt unter 1024 Zeichen (Schema fällt weg)' {
+    $ctx = New-TestContext
+    Use-FakeClaude 'ok' {
+        param($log)
+        # pretend VELOX runs elevated, but start the fake CLI normally (no ShellChild off Windows)
+        function Test-VxClaudeShellLaunch { return $true }
+        function Initialize-VxShellLauncher { return $false }
+        function Get-VxShellCommandLineMax { return 200 }
+        $r = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming'; text = ''; allowRisky = $false })
+        Assert-True (@($r.plan).Count -gt 0) 'Analyse klappt ohne Schema'
+        $call = @(Read-FakeClaudeCalls $log | Where-Object { $_.argv -contains '-p' })[0]
+        Assert-True (-not (@($call.argv) -contains '--json-schema') -and (@($call.argv) -contains '--system-prompt-file')) 'kein --json-schema, Regeln weiter aus der Datei'
+    }
+    Use-FakeClaude 'ok' {
+        param($log)
+        function Test-VxClaudeShellLaunch { return $true }
+        function Initialize-VxShellLauncher { return $false }
+        $null = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming'; text = ''; allowRisky = $false })
+        $call = @(Read-FakeClaudeCalls $log | Where-Object { $_.argv -contains '-p' })[0]
+        $cli = Find-VxClaudeCli
+        $line = Get-VxClaudeCliLine $cli @($call.argv)
+        if ($line.Length -le 1000) { Assert-True (@($call.argv) -contains '--json-schema') 'kurze Befehlszeile: Schema bleibt' }
+        Assert-True ($line.Length -le 1024) ('Befehlszeile ' + $line.Length + ' Zeichen')
     }
 }
 
@@ -2325,6 +2436,15 @@ Test-Case 'restorepoint' 'Isolierter Schritt: Ergebnis, Fehlercode, Abbrechen' {
     $cancelled = $false
     try { $null = Invoke-VxIsolated -Script 'Start-Sleep -Seconds 30' -TimeoutSec 60 } catch { $cancelled = ([string]$_.Exception.Message -eq 'VX_CANCELLED') } finally { $global:VxJob = $null }
     Assert-True $cancelled 'Abbrechen beendet den Prozess'
+    # the script ran from a temp .ps1 in <dataRoot>\tmp (never -EncodedCommand) that is gone afterwards
+    $tmp = Get-VxDataPath 'tmp'
+    Assert-True ([IO.Directory]::Exists($tmp) -and @([IO.Directory]::GetFiles($tmp, 'iso-*.ps1')).Count -eq 0) 'Skriptdateien wieder gelöscht'
+    $old = Join-Path $tmp 'iso-alt000000.ps1'
+    [IO.File]::WriteAllText($old, '#')
+    [IO.File]::SetLastWriteTimeUtc($old, [DateTime]::UtcNow.AddDays(-2))
+    $z = Invoke-VxIsolated -Script '[Console]::Out.WriteLine("VXRM 7 0"); [Console]::Out.Flush(); Start-Sleep -Seconds 30' -TimeoutSec 3
+    Assert-True ($z.timedOut -and (Get-VxRestorePointRemoveCodes $z.output)['7'] -eq 0) ('Ausgabe bis zum Zeitlimit bleibt: ' + $z.output)
+    Assert-True (-not [IO.File]::Exists($old)) 'Reste älter als ein Tag werden aufgeräumt'
 }
 
 # ==================================================================== speed
@@ -2626,6 +2746,13 @@ Test-Case 'games' 'Bilder: Steam-Cache (alt + neu), GOG-.ico, Xbox-Logos; Art-Da
     Assert-Equal $null (Get-VxGameArtFile '..\..\sys' 'cover') 'Pfad statt id -> null'
     Assert-Equal $null (Get-VxGameArtFile $gta.id 'path') 'unbekannte Bildart -> null'
     Assert-Equal $null (Get-VxExeIconPng 'C:\x\y.exe') 'Exe-Icon nur unter Windows'
+    # after a restart (empty in-memory map) the images of the last detection are still served
+    $global:VxCtx.GameArt = $null
+    Assert-Equal (Join-Path $lc '271590_header.jpg') (Get-VxGameArtFile $gta.id 'cover') 'Bild nach Neustart aus art-map-sim.json'
+    Assert-True ((Get-VxGameArtFile $sc.id 'icon') -match 'Logo150\.png$') 'Xbox-Logo nach Neustart'
+    [IO.File]::WriteAllText((Get-VxGameArtMapFile), '{ kaputt')
+    $global:VxCtx.GameArt = $null
+    Assert-Equal $null (Get-VxGameArtFile $gta.id 'cover') 'kaputte Datei: kein Fehler, nur kein Bild'
 }
 
 # ------------------------------------------------------------------ summary

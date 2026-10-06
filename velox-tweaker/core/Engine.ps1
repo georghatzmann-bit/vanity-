@@ -720,16 +720,34 @@ function Get-RpList {
 }
 
 # Isolated script: adopt the oldest existing VELOX point as baseline ($Adopt) or create a new one.
-function Get-VxRestorePointCreateScript([string]$Description, [bool]$Adopt) {
+# System Restore switched off for the system drive (HRESULT 0x80070422 / code 1058) is reported as
+# result.disabled; only $Enable (the user asked for a point by hand) switches it on - an automatic
+# point never changes the computer protection settings behind the user's back.
+function Get-VxRestorePointCreateScript([string]$Description, [bool]$Adopt, [bool]$Enable = $false) {
     $d = $Description.Replace("'", "''")
     $a = '$false'
     if ($Adopt) { $a = '$true' }
+    $e = '$false'
+    if ($Enable) { $e = '$true' }
     return (Get-VxRestorePointScriptHead) + @"
 `$desc = '$d'
 `$adopt = $a
+`$enable = $e
 "@ + @'
 
-$res = [ordered]@{ ok = $false; adopted = $false; sequence = $null; created = $null; description = $desc; message = ''; throttled = $false }
+$res = [ordered]@{ ok = $false; adopted = $false; sequence = $null; created = $null; description = $desc; message = ''; throttled = $false; disabled = $false; enabled = $false }
+function Test-RpDisabled([string]$Text) { return ($Text -match '(?i)0x80070422|\b1058\b') }
+function New-RpPoint {
+    $msg = ''
+    try { Checkpoint-Computer -Description $desc -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop -WarningAction SilentlyContinue; return @{ done = $true; message = '' } } catch { $msg = [string]$_.Exception.Message }
+    try {
+        $r = Invoke-CimMethod -Namespace 'root/default' -ClassName 'SystemRestore' -MethodName 'CreateRestorePoint' -Arguments @{ Description = $desc; RestorePointType = [uint32]12; EventType = [uint32]100 } -OperationTimeoutSec 120 -ErrorAction Stop
+        if ([int]$r.ReturnValue -eq 0) { return @{ done = $true; message = '' } }
+        if (-not $msg) { $msg = 'SystemRestore-Fehlercode ' + $r.ReturnValue }
+        elseif (([int]$r.ReturnValue) -eq 1058) { $msg += ' (1058)' }
+    } catch { if (-not $msg) { $msg = [string]$_.Exception.Message } }
+    return @{ done = $false; message = $msg }
+}
 $list = @()
 try { $list = @(Get-RpList) } catch { $res.message = 'Liste nicht lesbar: ' + $_.Exception.Message }
 $own = @($list | Where-Object { [string]$_.description -like 'VELOX*' } | Sort-Object { [long]$_.sequence })
@@ -738,18 +756,19 @@ if ($adopt -and $own.Count -gt 0) {
 } else {
     $maxSeq = 0
     foreach ($r in $list) { if ([long]$r.sequence -gt $maxSeq) { $maxSeq = [long]$r.sequence } }
-    try { Enable-ComputerRestore -Drive ($env:SystemDrive + '\') -ErrorAction Stop } catch { $res.message = 'Computerschutz: ' + $_.Exception.Message }
-    $done = $false
-    try { Checkpoint-Computer -Description $desc -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop -WarningAction SilentlyContinue; $done = $true } catch { $res.message = [string]$_.Exception.Message }
+    $try = New-RpPoint
+    if (-not $try.done -and (Test-RpDisabled $try.message) -and $enable) {
+        try { Enable-ComputerRestore -Drive ($env:SystemDrive + '\') -ErrorAction Stop; $res.enabled = $true; $try = New-RpPoint }
+        catch { $try.message = 'Computerschutz: ' + $_.Exception.Message }
+    }
+    $done = [bool]$try.done
     if (-not $done) {
-        try {
-            $r = Invoke-CimMethod -Namespace 'root/default' -ClassName 'SystemRestore' -MethodName 'CreateRestorePoint' -Arguments @{ Description = $desc; RestorePointType = [uint32]12; EventType = [uint32]100 } -ErrorAction Stop
-            if ([int]$r.ReturnValue -eq 0) { $done = $true } else { $res.message = 'SystemRestore-Fehlercode ' + $r.ReturnValue }
-        } catch { if (-not $res.message) { $res.message = [string]$_.Exception.Message } }
+        $res.message = [string]$try.message
+        if (Test-RpDisabled $res.message) { $res.disabled = $true }
     }
     $new = @()
     try { $new = @(Get-RpList | Where-Object { [long]$_.sequence -gt $maxSeq -and [string]$_.description -eq $desc } | Sort-Object { [long]$_.sequence }) } catch { $null = $_ }
-    if ($new.Count -gt 0) { $res.ok = $true; $res.sequence = [long]$new[-1].sequence; $res.created = $new[-1].created; $res.message = '' }
+    if ($new.Count -gt 0) { $res.ok = $true; $res.sequence = [long]$new[-1].sequence; $res.created = $new[-1].created; $res.message = ''; $res.disabled = $false }
     elseif ($done) { $res.throttled = $true; $res.message = 'Windows hat keinen neuen Punkt angelegt (höchstens einer pro 24 Stunden).' }
 }
 [Console]::Out.WriteLine('VXRESULT ' + (ConvertTo-Json -InputObject $res -Compress -Depth 5))
@@ -765,22 +784,32 @@ try { $res.items = @(Get-RpList) } catch { $res.ok = $false; $res.message = [str
 '@
 }
 
+# Isolated script: deletes restore points one by one (SRRemoveRestorePoint, srclient.dll) and prints
+# "VXRM <sequence> <code>" after each one, so a timeout still tells which ones are gone.
 function Get-VxRestorePointRemoveScript([long[]]$Sequences) {
     $list = (@($Sequences) | ForEach-Object { [string][long]$_ }) -join ','
     return @"
 `$seqs = @($list)
 "@ + @'
 
-if ($PSVersionTable.PSVersion.Major -lt 6) { try { Remove-TypeData -TypeName System.Array -ErrorAction Stop } catch { $null = $_ } }
 Add-Type -Namespace VxSr -Name Native -MemberDefinition '[DllImport("srclient.dll")] public static extern int SRRemoveRestorePoint(int index);' -ErrorAction Stop
-$out = @()
 foreach ($s in $seqs) {
     $rc = -1
     try { $rc = [VxSr.Native]::SRRemoveRestorePoint([int]$s) } catch { $rc = -1 }
-    $out += [ordered]@{ sequence = [long]$s; code = [int]$rc }
+    [Console]::Out.WriteLine(('VXRM {0} {1}' -f [long]$s, [int]$rc))
+    [Console]::Out.Flush()
 }
-[Console]::Out.WriteLine('VXRESULT ' + (ConvertTo-Json -InputObject @($out) -Compress -Depth 5))
 '@
+}
+
+# Codes of a remove run: @{ '<sequence>' = <code> } from its "VXRM" lines.
+function Get-VxRestorePointRemoveCodes([string]$Output) {
+    $codes = @{}
+    foreach ($line in ([string]$Output -split "\r?\n")) {
+        $m = [regex]::Match($line, '^VXRM (\d+) (-?\d+)\s*$')
+        if ($m.Success) { $codes[$m.Groups[1].Value] = [int]$m.Groups[2].Value }
+    }
+    return $codes
 }
 
 # Restore points on this PC: @{ ok; items = @( @{ sequence; description; created; velox; manual } ); message }.
@@ -851,7 +880,7 @@ function New-VxRestorePoint([string]$Label, [string]$Kind = 'manual') {
     if ($desc.Length -gt 200) { $desc = $desc.Substring(0, 200) }
     $step = Get-VxRestorePointStep
     Set-VxProgress -Step $step
-    $out = @{ ok = $false; created = $false; adopted = $false; skipped = $false; timedOut = $false; message = ''; sequence = $null; createdAt = $null }
+    $out = @{ ok = $false; created = $false; adopted = $false; skipped = $false; timedOut = $false; disabled = $false; message = ''; sequence = $null; createdAt = $null }
     $r = $null
     if ($ctx.Simulate -and -not (Get-VxProp $ctx 'SimRestorePointScript')) {
         $own = @(Get-VxSimRestorePoints | Where-Object { [string]$_.description -like 'VELOX*' } | Sort-Object { [long]$_.sequence })
@@ -864,14 +893,14 @@ function New-VxRestorePoint([string]$Label, [string]$Kind = 'manual') {
         Write-VxLog 'info' ("[Testmodus] Wiederherstellungspunkt '{0}' wurde nur simuliert." -f $desc)
         Save-VxSim
     } else {
-        $script = Get-VxRestorePointCreateScript $desc $isBaseline
+        $script = Get-VxRestorePointCreateScript $desc $isBaseline ($Kind -eq 'manual')
         # tests replace the script (e.g. one that hangs) to exercise timeout and skip
         if ($ctx.Simulate) { $script = [string]$ctx.SimRestorePointScript }
         $srKey = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
         $prev = $null
-        $touchFreq = ($isBaseline -and -not $ctx.Simulate)
+        $touchFreq = (($isBaseline -or $Kind -eq 'manual') -and -not $ctx.Simulate)
         if ($touchFreq) {
-            # only for the baseline: lift Windows' "one per 24 h" limit for this one point
+            # only for the baseline and a point the user asked for: lift Windows' "one per 24 h" limit for this one point
             try { $prev = Get-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' } catch { $prev = $null }
             try { Set-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' 'DWord' 0 } catch { Write-VxLog 'warn' ('Häufigkeits-Sperre konnte nicht aufgehoben werden: ' + $_.Exception.Message) }
         }
@@ -893,6 +922,7 @@ function New-VxRestorePoint([string]$Label, [string]$Kind = 'manual') {
         }
         Write-VxFileLog 'info' ("Wiederherstellungspunkt ({0}): {1} ms, Code {2}, übersprungen {3}, Zeitlimit {4}" -f $Kind, $x.ms, $x.exitCode, $x.skipped, $x.timedOut)
     }
+    if ($null -ne $r -and [bool](Get-VxProp $r 'enabled' $false)) { Write-VxLog 'info' ('Der Computerschutz (Systemwiederherstellung) für Laufwerk ' + (Get-VxSystemDriveLabel) + ' wurde eingeschaltet.') }
     if ($null -ne $r -and [bool](Get-VxProp $r 'ok' $false)) {
         $out.ok = $true
         $out.adopted = [bool](Get-VxProp $r 'adopted' $false)
@@ -923,6 +953,10 @@ function New-VxRestorePoint([string]$Label, [string]$Kind = 'manual') {
     } elseif ($out.timedOut) {
         $out.message = ('Der Wiederherstellungspunkt hat länger als {0} s gedauert und wurde abgebrochen. Windows legt ihn eventuell im Hintergrund noch an. VELOX macht weiter und sichert alles im eigenen Journal.' -f (Get-VxRestorePointTimeoutSec))
         if ($isBaseline) { Set-VxBaselineRecord 'timeout' @{ description = $desc } }
+    } elseif ($null -ne $r -and [bool](Get-VxProp $r 'disabled' $false)) {
+        $out.disabled = $true
+        $out.message = ('Der Computerschutz (Systemwiederherstellung) ist für Laufwerk {0} ausgeschaltet – Windows kann deshalb keinen Wiederherstellungspunkt anlegen. VELOX macht trotzdem weiter und sichert alles im eigenen Journal. Einschalten kannst du ihn in der Windows-Suche unter „Wiederherstellungspunkt erstellen“ → „Konfigurieren“.' -f (Get-VxSystemDriveLabel))
+        if ($isBaseline) { Set-VxBaselineRecord 'failed' @{ description = $desc } }   # the UI knows created|adopted|skipped|timeout|failed
     } else {
         $why = ''
         if ($null -ne $r) { $why = [string](Get-VxProp $r 'message' '') }
@@ -932,6 +966,13 @@ function New-VxRestorePoint([string]$Label, [string]$Kind = 'manual') {
     }
     Write-VxLog 'warn' $out.message
     return $out
+}
+
+# "C:" - the drive Windows runs from (System Restore is about this one).
+function Get-VxSystemDriveLabel {
+    $d = [string][Environment]::GetEnvironmentVariable('SystemDrive')
+    if (-not $d) { $d = 'C:' }
+    return $d
 }
 
 function Format-VxIsoDate([string]$Iso) {
@@ -986,7 +1027,7 @@ function Invoke-VxManualRestorePointJob($Params) {
     Set-VxProgress 0.1 (Get-VxRestorePointStep)
     $x = New-VxRestorePoint $label 'manual'
     Set-VxProgress 1 'Fertig'
-    return [ordered]@{ ok = [bool]$x.ok; message = [string]$x.message; skipped = [bool]$x.skipped; timedOut = [bool]$x.timedOut; baseline = (Get-VxBaselineDto) }
+    return [ordered]@{ ok = [bool]$x.ok; message = [string]$x.message; skipped = [bool]$x.skipped; timedOut = [bool]$x.timedOut; disabled = [bool]$x.disabled; baseline = (Get-VxBaselineDto) }
 }
 
 # Which VELOX restore point stays when the others are cleaned up: the recorded baseline when it
@@ -1038,10 +1079,11 @@ function Invoke-VxRestorePointCleanJob($Params) {
         Write-VxLog 'info' ("[Testmodus] {0} Wiederherstellungspunkte nur aus der Testliste gelöscht." -f $removed)
     } else {
         Set-VxProgress 0.3 ('Lösche {0} Wiederherstellungspunkte ...' -f $drop.Count)
-        $x = Invoke-VxIsolated -Script (Get-VxRestorePointRemoveScript @($drop | ForEach-Object { [long]$_.sequence })) -TimeoutSec 180 -Skippable -Step ('Lösche {0} Wiederherstellungspunkte' -f $drop.Count)
-        $codes = Get-VxIsolatedResult $x.output
-        $byseq = @{}
-        foreach ($c in @($codes)) { if ($null -ne $c) { $byseq[[string](Get-VxProp $c 'sequence')] = [int](Get-VxProp $c 'code' -1) } }
+        # every deleted point drops a shadow copy (a few seconds each): the limit grows with the count
+        $limit = [math]::Min(900, 60 + 15 * $drop.Count)
+        $x = Invoke-VxIsolated -Script (Get-VxRestorePointRemoveScript @($drop | ForEach-Object { [long]$_.sequence })) -TimeoutSec $limit -Skippable -Step ('Lösche {0} Wiederherstellungspunkte' -f $drop.Count)
+        $byseq = Get-VxRestorePointRemoveCodes $x.output
+        if (-not $x.ok -and $x.error) { Write-VxFileLog 'warn' ('Wiederherstellungspunkte löschen: ' + $x.error) }
         foreach ($d in $drop) {
             $k = [string]$d.sequence
             if ($byseq.ContainsKey($k) -and $byseq[$k] -eq 0) { $removed++; continue }

@@ -870,20 +870,22 @@ function Resolve-VxClaudeCliLaunch([string]$Path) {
     $dir = [IO.Path]::GetDirectoryName($Path)
     try {
         $text = [IO.File]::ReadAllText($Path)
-        $m = [regex]::Match($text, '"%(?:~dp0|dp0%)\\?([^"%]+?\.(?:exe|js|cjs|mjs))"', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-        if ($m.Success) {
+        # the npm shim names "%dp0%\node.exe" (only there when node sits next to it) before the real
+        # target - every quoted %dp0% path is tried, node.exe itself is never the target
+        foreach ($m in [regex]::Matches($text, '"%(?:~dp0|dp0%)\\?([^"%]+?\.(?:exe|js|cjs|mjs))"', [Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
             $rel = $m.Groups[1].Value.Replace('\', [string][IO.Path]::DirectorySeparatorChar)
+            if ([IO.Path]::GetFileName($rel) -ieq 'node.exe') { continue }
             $target = [IO.Path]::GetFullPath([IO.Path]::Combine($dir, $rel))
-            if ([IO.File]::Exists($target)) {
-                if ($target.ToLowerInvariant().EndsWith('.exe')) { $l.file = $target; return $l }
-                $node = [IO.Path]::Combine($dir, 'node.exe')
-                if (-not [IO.File]::Exists($node)) {
-                    $nc = @(Get-Command 'node' -CommandType Application -ErrorAction SilentlyContinue)
-                    $node = $null
-                    if ($nc.Count -gt 0) { $node = [string]$nc[0].Source }
-                }
-                if ($node) { $l.file = $node; $l.prefix = @($target); return $l }
+            if (-not [IO.File]::Exists($target)) { continue }
+            if ($target.ToLowerInvariant().EndsWith('.exe')) { $l.file = $target; return $l }
+            $node = [IO.Path]::Combine($dir, 'node.exe')
+            if (-not [IO.File]::Exists($node)) {
+                $nc = @(Get-Command 'node' -CommandType Application -ErrorAction SilentlyContinue)
+                $node = $null
+                if ($nc.Count -gt 0) { $node = [string]$nc[0].Source }
             }
+            if ($node) { $l.file = $node; $l.prefix = @($target); return $l }
+            break
         }
     } catch { $null = $_ }
     $l.file = Get-VxSystemTool 'cmd.exe'
@@ -979,9 +981,18 @@ namespace VxAi
                 ShellChild c = new ShellChild();
                 c.Pid = pi.dwProcessId;
                 c.Process = pi.hProcess;
-                c.StdIn = new FileStream(new SafeFileHandle(inW, true), FileAccess.Write, 4096, false); inW = IntPtr.Zero;
-                c.StdOut = new FileStream(new SafeFileHandle(outR, true), FileAccess.Read, 4096, false); outR = IntPtr.Zero;
-                c.StdErr = new FileStream(new SafeFileHandle(errR, true), FileAccess.Read, 4096, false); errR = IntPtr.Zero;
+                try
+                {
+                    c.StdIn = new FileStream(new SafeFileHandle(inW, true), FileAccess.Write, 4096, false); inW = IntPtr.Zero;
+                    c.StdOut = new FileStream(new SafeFileHandle(outR, true), FileAccess.Read, 4096, false); outR = IntPtr.Zero;
+                    c.StdErr = new FileStream(new SafeFileHandle(errR, true), FileAccess.Read, 4096, false); errR = IntPtr.Zero;
+                }
+                catch
+                {
+                    c.Kill();
+                    c.Dispose();
+                    throw;
+                }
                 return c;
             }
             finally
@@ -1059,6 +1070,27 @@ namespace VxAi
 '@
 }
 
+# $true when Invoke-VxClaudeCli starts the CLI through VxAi.ShellChild (VELOX elevated on Windows).
+function Test-VxClaudeShellLaunch {
+    $ctx = $global:VxCtx
+    return ((Test-VxWindows) -and $null -ne $ctx -and [bool]$ctx.Admin)
+}
+
+# The argument part of the CLI command line (npm shim prefix and cmd.exe wrapping included).
+function Get-VxClaudeCliArgLine([hashtable]$Cli, [string[]]$Arguments) {
+    $argLine = (@(@($Cli.prefix) + @($Arguments)) | ForEach-Object { ConvertTo-VxArgument ([string]$_) }) -join ' '
+    if ($Cli.viaCmd) { $argLine = '/d /s /c "' + (ConvertTo-VxArgument ([string]$Cli.path)) + ' ' + $argLine + '"' }
+    return $argLine
+}
+
+# Full command line as the process gets it. CreateProcessWithTokenW (the start without admin rights)
+# accepts at most 1024 characters - the advisor drops the inline JSON schema when it would not fit.
+function Get-VxClaudeCliLine([hashtable]$Cli, [string[]]$Arguments) {
+    return ((ConvertTo-VxArgument ([string]$Cli.file)) + ' ' + (Get-VxClaudeCliArgLine $Cli $Arguments))
+}
+
+function Get-VxShellCommandLineMax { return 1000 }
+
 function Initialize-VxShellLauncher {
     if ($null -ne ('VxAi.ShellChild' -as [type])) { return $true }
     try { Add-Type -TypeDefinition (Get-VxShellLauncherSource) -Language CSharp -ErrorAction Stop; return $true }
@@ -1075,9 +1107,8 @@ function Invoke-VxClaudeCli {
         [string]$Cwd = '', [string]$Step = '', [double]$ProgFrom = -1, [double]$ProgTo = -1)
     $ctx = $global:VxCtx
     $res = @{ started = $false; exitCode = -1; output = ''; error = ''; timedOut = $false; ms = 0; message = '' }
-    $argLine = (@(@($Cli.prefix) + @($Arguments)) | ForEach-Object { ConvertTo-VxArgument ([string]$_) }) -join ' '
+    $argLine = Get-VxClaudeCliArgLine $Cli $Arguments
     $file = [string]$Cli.file
-    if ($Cli.viaCmd) { $argLine = '/d /s /c "' + (ConvertTo-VxArgument ([string]$Cli.path)) + ' ' + $argLine + '"' }
     if (-not $Cwd -or -not [IO.Directory]::Exists($Cwd)) { $Cwd = [IO.Path]::GetTempPath() }
     $envList = @(Get-VxClaudeCliEnv)
     $utf8 = New-Object System.Text.UTF8Encoding($false)
@@ -1091,11 +1122,12 @@ function Invoke-VxClaudeCli {
     $errTask = $null
     $stdinStream = $null
     $stdinOpen = $false
-    $useShell = ((Test-VxWindows) -and $null -ne $ctx -and [bool]$ctx.Admin)
+    $useShell = Test-VxClaudeShellLaunch
     try {
         if ($useShell -and (Initialize-VxShellLauncher)) {
             try {
                 $cmdLine = (ConvertTo-VxArgument $file) + ' ' + $argLine
+                if ($cmdLine.Length -gt 1024) { Write-VxFileLog 'warn' ('Claude-Code-Befehlszeile hat {0} Zeichen (Grenze 1024).' -f $cmdLine.Length) }
                 $shell = [VxAi.ShellChild]::Start($file, $cmdLine, $Cwd, [string[]]$envList)
             } catch {
                 $shell = $null
@@ -1168,11 +1200,10 @@ function Invoke-VxClaudeCli {
             return $res
         }
         if ($null -ne $p) { $p.WaitForExit() }
-        try { [void]$outTask.Wait(5000) } catch { $null = $_ }
-        try { [void]$errTask.Wait(5000) } catch { $null = $_ }
         if ($null -ne $shell) { $res.exitCode = $shell.ExitCode } else { $res.exitCode = $p.ExitCode }
-        try { $res.output = [string]$outTask.Result } catch { $null = $_ }
-        try { $res.error = ([string]$errTask.Result).Trim() } catch { $null = $_ }
+        # a child of the CLI may still hold the pipe: never block on .Result
+        try { if ($outTask.Wait(5000)) { $res.output = [string]$outTask.Result } } catch { $null = $_ }
+        try { if ($errTask.Wait(5000)) { $res.error = ([string]$errTask.Result).Trim() } } catch { $null = $_ }
     } finally {
         if ($stdinOpen) { try { $stdinStream.Dispose() } catch { $null = $_ } }
         if ($null -ne $shell) { try { $shell.Dispose() } catch { $null = $_ } }
@@ -1310,7 +1341,14 @@ function Invoke-VxClaudeCodeAdvisor([string]$Goal, [string]$Text, [bool]$AllowRi
                 $stdin = $system + "`n`n---`n`n" + $user
             } else {
                 $cliArgs += @('--tools', '', '--no-session-persistence', '--setting-sources', '', '--system-prompt-file', $sysFile)
-                if ($mode -eq 'full') { $cliArgs += @('--json-schema', $schema) }
+                if ($mode -eq 'full') {
+                    $withSchema = @($cliArgs) + @('--json-schema', $schema)
+                    if ((Test-VxClaudeShellLaunch) -and (Get-VxClaudeCliLine $cli $withSchema).Length -gt (Get-VxShellCommandLineMax)) {
+                        # too long for the start without admin rights: the answer format comes from the rules text
+                        Write-VxFileLog 'info' 'Claude Code: Befehlszeile zu lang für das Antwortschema - frage ohne festes Schema.'
+                        $mode = 'noschema'
+                    } else { $cliArgs = $withSchema }
+                }
             }
             $r = Invoke-VxClaudeCli -Cli $cli -Arguments $cliArgs -StdinText $stdin -TimeoutSec (Get-VxClaudeCodeTimeoutSec) -Cwd $dir -Step $step -ProgFrom 0.66 -ProgTo 0.92
             if (-not $r.started) {

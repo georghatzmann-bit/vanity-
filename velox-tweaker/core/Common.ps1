@@ -379,11 +379,10 @@ function Invoke-VxNative {
             return $result
         }
         $p.WaitForExit()
-        [void]$outTask.Wait(5000)
-        [void]$errTask.Wait(5000)
         $result.ExitCode = $p.ExitCode
-        $result.Output = [string]$outTask.Result
-        $result.Error = [string]$errTask.Result
+        # a grandchild that inherited the pipe can keep it open: never block on .Result
+        if ($outTask.Wait(5000)) { $result.Output = [string]$outTask.Result }
+        if ($errTask.Wait(5000)) { $result.Error = [string]$errTask.Result }
     } catch {
         $result.Error = "Programm konnte nicht gestartet werden ($FilePath): " + $_.Exception.Message
     } finally {
@@ -428,23 +427,59 @@ function Stop-VxProcessTree($Process) {
     try { [void]$Process.WaitForExit(3000) } catch { $null = $_ }
 }
 
+# Folder for the isolated scripts: <data root>\tmp (VELOX-owned, never the shared %TEMP%).
+function Get-VxIsolatedDir {
+    $d = Get-VxDataPath 'tmp'
+    if (-not [IO.Directory]::Exists($d)) { [void][IO.Directory]::CreateDirectory($d) }
+    return $d
+}
+
+# Deletes a script file of Invoke-VxIsolated; a scanner may hold it for a moment after the run.
+function Remove-VxIsolatedFile([string]$Path) {
+    for ($i = 0; $i -lt 5; $i++) {
+        try { if ([IO.File]::Exists($Path)) { [IO.File]::Delete($Path) }; return } catch { Start-Sleep -Milliseconds 100 }
+    }
+}
+
+# Removes isolated scripts older than a day (a VELOX that was killed mid-run cannot delete its own).
+function Clear-VxIsolatedDir([string]$Dir) {
+    try {
+        $limit = [DateTime]::UtcNow.AddDays(-1)
+        foreach ($f in @([IO.Directory]::GetFiles($Dir, 'iso-*.ps1'))) {
+            try { if ([IO.File]::GetLastWriteTimeUtc($f) -lt $limit) { [IO.File]::Delete($f) } } catch { $null = $_ }
+        }
+    } catch { $null = $_ }
+}
+
 # Runs PowerShell source in its own powershell.exe with a hard timeout, so a step that hangs
 # (restore point, a reset command) can never block a job. -Skippable shows "Überspringen" in the
 # job overlay while it runs (job.skippable); the button (job.skip) and "Abbrechen" (job.cancel) end
 # the process at once. The script runs with the default error preference; a terminating error
 # becomes exit code 1 with its message on stderr.
+# The source goes into a temp .ps1 in <data root>\tmp (UTF-8 with BOM, so 5.1 keeps the umlauts)
+# started with -File and deleted afterwards - never -EncodedCommand: virus scanners (Defender ASR,
+# AMSI heuristics) flag base64-encoded commands from elevated processes.
 # Returns @{ ok; exitCode; output; error; timedOut; skipped; ms }. Throws VX_CANCELLED on cancel.
 function Invoke-VxIsolated {
     param([string]$Script, [int]$TimeoutSec = 90, [switch]$Skippable, [string]$Step = '')
     $job = $global:VxJob
     $res = @{ ok = $false; exitCode = -1; output = ''; error = ''; timedOut = $false; skipped = $false; ms = 0 }
-    $wrapped = "try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding(`$false) } catch { `$null = `$_ }`n" +
-        "`$ProgressPreference = 'SilentlyContinue'`n" +
-        "try {`n& {`n" + $Script + "`n}`n} catch { [Console]::Error.WriteLine([string]`$_.Exception.Message); exit 1 }`nexit 0`n"
-    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($wrapped))
+    $wrapped = "try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding(`$false) } catch { `$null = `$_ }`r`n" +
+        "`$ProgressPreference = 'SilentlyContinue'`r`n" +
+        "try {`r`n& {`r`n" + $Script + "`r`n}`r`n} catch { [Console]::Error.WriteLine([string]`$_.Exception.Message); exit 1 }`r`nexit 0`r`n"
+    $file = $null
+    try {
+        $dir = Get-VxIsolatedDir
+        Clear-VxIsolatedDir $dir
+        $file = [IO.Path]::Combine($dir, ('iso-' + [Guid]::NewGuid().ToString('N').Substring(0, 12) + '.ps1'))
+        [IO.File]::WriteAllText($file, $wrapped, (New-Object System.Text.UTF8Encoding($true)))
+    } catch {
+        $res.error = 'PowerShell-Skript konnte nicht angelegt werden: ' + $_.Exception.Message
+        return $res
+    }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = Get-VxPowerShellExe
-    $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc
+    $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' + (ConvertTo-VxArgument $file)
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true
@@ -476,18 +511,20 @@ function Invoke-VxIsolated {
         }
         if ($cancelled -or $res.skipped -or $res.timedOut) {
             Stop-VxProcessTree $p
+            # what the script printed before it was stopped (e.g. the points deleted so far)
+            try { if ($outTask.Wait(3000)) { $res.output = [string]$outTask.Result } } catch { $null = $_ }
         } else {
             $p.WaitForExit()
-            [void]$outTask.Wait(5000)
-            [void]$errTask.Wait(5000)
             $res.exitCode = $p.ExitCode
-            $res.output = [string]$outTask.Result
-            $res.error = ([string]$errTask.Result).Trim()
+            # a process the script started may still hold the pipe: never block on .Result
+            if ($outTask.Wait(5000)) { $res.output = [string]$outTask.Result }
+            if ($errTask.Wait(5000)) { $res.error = ([string]$errTask.Result).Trim() }
             $res.ok = ($p.ExitCode -eq 0)
         }
     } finally {
         if ($Skippable -and $null -ne $job) { $job.skippable = $false; $job.skip = $false }
         if ($null -ne $p) { try { $p.Dispose() } catch { $null = $_ } }
+        if ($file) { Remove-VxIsolatedFile $file }
         $res.ms = [int]$sw.ElapsedMilliseconds
     }
     if ($cancelled) { throw 'VX_CANCELLED' }

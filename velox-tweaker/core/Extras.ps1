@@ -1621,6 +1621,7 @@ public static class VxShellArt {
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
     [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr m, ref MONITORINFO mi);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLongW(IntPtr h, int index);
 
     // The exe's own icon at up to <size> px as PNG with transparency (SIIGBF_BIGGERSIZEOK | SIIGBF_ICONONLY).
     public static bool SaveIconPng(string file, string png, int size) {
@@ -1678,9 +1679,11 @@ public static class VxShellArt {
         return src;
     }
 
-    // True when the window covers its whole monitor (exclusive or borderless fullscreen).
+    // True when the window covers its whole monitor (exclusive or borderless fullscreen). A window
+    // with a title bar is a maximized normal window (with an auto-hide taskbar it covers the screen too).
     public static bool IsFullscreenish(IntPtr hwnd) {
         RECT wr;
+        if ((GetWindowLongW(hwnd, -16) & 0x00C00000) == 0x00C00000) return false;
         if (!GetWindowRect(hwnd, out wr)) return false;
         IntPtr mon = MonitorFromWindow(hwnd, 2);
         if (mon == IntPtr.Zero) return false;
@@ -1737,10 +1740,43 @@ function Get-VxExeIconPng([string]$Exe) {
     return $null
 }
 
+# The registered art survives a restart: <data root>\cache\gameart\art-map(-sim).json, so the images
+# of the last detection show up at once instead of 404 until the next scan.
+function Get-VxGameArtMapFile {
+    $name = 'art-map.json'
+    if ($global:VxCtx.Simulate) { $name = 'art-map-sim.json' }
+    return [IO.Path]::Combine([string]$global:VxCtx.DataRoot, 'cache', 'gameart', $name)
+}
+
 function Get-VxGameArtMap {
     $ctx = $global:VxCtx
-    if (-not $ctx.ContainsKey('GameArt') -or $null -eq $ctx.GameArt) { $ctx.GameArt = [hashtable]::Synchronized(@{}) }
-    return $ctx.GameArt
+    if ($ctx.ContainsKey('GameArt') -and $null -ne $ctx.GameArt) { return $ctx.GameArt }
+    $map = [hashtable]::Synchronized(@{})
+    try {
+        $f = Get-VxGameArtMapFile
+        if ([IO.File]::Exists($f)) {
+            $j = Read-VxJsonFile $f
+            if ($null -ne $j) {
+                foreach ($p in @($j.PSObject.Properties)) {
+                    if ([string]$p.Name -notmatch '^[a-f0-9]{10}$' -or $null -eq $p.Value) { continue }
+                    $e = @{ cover = $null; icon = $null; v = [string](Get-VxProp $p.Value 'v' '') }
+                    foreach ($k in @('cover', 'icon')) { $x = Get-VxProp $p.Value $k; if ($x -is [string] -and $x) { $e[$k] = $x } }
+                    $map[[string]$p.Name] = $e
+                }
+            }
+        }
+    } catch { Write-VxFileLog 'warn' ('Spiele-Bilder: gespeicherte Liste nicht lesbar: ' + $_.Exception.Message) }
+    $ctx.GameArt = $map
+    return $map
+}
+
+function Save-VxGameArtMap {
+    try {
+        $map = Get-VxGameArtMap
+        $out = [ordered]@{}
+        foreach ($k in @($map.Keys | Sort-Object)) { $e = $map[$k]; $out[$k] = [ordered]@{ cover = $e.cover; icon = $e.icon; v = $e.v } }
+        Write-VxJsonFile (Get-VxGameArtMapFile) $out
+    } catch { Write-VxFileLog 'warn' ('Spiele-Bilder: Liste nicht gespeichert: ' + $_.Exception.Message) }
 }
 
 # Resolves the art of detected games to files on disk, registers them for GET /api/game-art and
@@ -1774,6 +1810,7 @@ function Update-VxGameArt($Sys, $Raws, [int]$BudgetSec = 12) {
             $dtos[$id] = [ordered]@{ cover = [bool]$cover; icon = [bool]$icon; shape = $shape; v = $v }
         } catch { Write-VxFileLog 'warn' ('Spiele-Bild ' + [string]$r.path + ': ' + $_.Exception.Message) }
     }
+    Save-VxGameArtMap
     return $dtos
 }
 

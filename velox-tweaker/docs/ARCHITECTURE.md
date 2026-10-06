@@ -63,7 +63,7 @@ velox-tweaker/
 ```
 
 Runtime data lives in `%LOCALAPPDATA%\Velox\` (or `-DataRoot`):
-`settings.json`, `claude.key` + `groq.key` (DPAPI-encrypted), `state.json` + `instance.json` (real mode), `state-sim.json` + `instance-sim.json` + `sim-state.json` (Testmodus - the two modes never share state or the single-instance lock), `backups\<id>.json`, `logs\`, `edge-profile\`.
+`settings.json`, `claude.key` + `groq.key` (DPAPI-encrypted), `state.json` + `instance.json` (real mode), `state-sim.json` + `instance-sim.json` + `sim-state.json` (Testmodus - the two modes never share state or the single-instance lock), `backups\<id>.json`, `logs\`, `edge-profile\`, `cache\gameart\` (game icons + `art-map.json`), `tmp\` (scripts of `Invoke-VxIsolated`, deleted after each run).
 
 ---
 
@@ -102,6 +102,22 @@ Tests run under pwsh 7 on Linux; the product runs on 5.1 on Windows. Code must w
     functions (no top-level side effects) so it can be dot-sourced into the job runspace.
 11. All public backend functions must work in **simulate mode** (§6) so they are testable on Linux.
 12. Run PSScriptAnalyzer with `PSUseCompatibleSyntax` for 5.1 (`tests/Run-Tests.ps1` does this when the module is installed).
+13. **C# for `Add-Type`** is compiled by the .NET Framework CodeDom compiler of Windows PowerShell 5.1:
+    **C# 5** only (no `$""`, `nameof`, `?.`, expression-bodied members, auto-property initializers,
+    `out var`, pattern matching, tuples, `default` literals, local functions), references are
+    `mscorlib` + `System.dll` (no `System.Core`/LINQ) plus what `-ReferencedAssemblies` adds, and
+    **every compiler warning fails `Add-Type`** (unused variables, unassigned fields …). The `compat`
+    test extracts every C# source from `core/*.ps1` (also `-MemberDefinition` snippets inside
+    isolated-script text) and compiles it exactly like that with the dotnet SDK's `csc`
+    (`-langversion:5 -warn:4 -warnaserror+`) against the .NET Framework 4.8 reference assemblies
+    (NuGet `Microsoft.NETFramework.ReferenceAssemblies.net48`); it is skipped with a note when dotnet
+    or the reference assemblies are missing.
+14. Never start `powershell.exe -EncodedCommand` (virus scanners flag base64 commands from elevated
+    processes). `Invoke-VxIsolated` writes the script to `<dataRoot>\tmp\iso-*.ps1` (UTF-8 with BOM),
+    runs it with `-File` and deletes it afterwards (leftovers older than a day are removed on the next
+    run). A `compat` test fails on any `-EncodedCommand` in `core/` or `Velox.ps1`.
+15. Never read `Task.Result` of a pipe reader after a timed-out `Wait()`: a grandchild that inherited
+    the pipe keeps it open and `.Result` would block the job for good.
 
 ---
 
@@ -500,6 +516,10 @@ Art (registered per id for `GET /api/game-art`): Steam's local library cache (ol
 Xbox `SplashScreenImage` + the largest `Square*Logo` scale; on Windows the exe's own icon fills the
 gaps (IShellItemImageFactory via one Add-Type class, fallback `Icon.ExtractAssociatedIcon`), cached as
 PNG under `<dataRoot>\cache\gameart\` (key = path + size + date) within a 12 s budget per detection.
+The id → file map is saved next to them (`art-map.json`, Testmodus `art-map-sim.json`) and read back
+lazily after a restart, so the images of the last detection are served before the next scan.
+Running games: a window counts as fullscreen only when it covers its monitor **and** has no title
+bar (a maximized normal window with an auto-hide taskbar covers the screen too).
 Off Windows — or in Testmodus with `VELOX_GAMES_FIXTURE` set — the detection reads the fake PC in
 `tests/fixtures/games/pc` (`system.json` = registry, processes, Appx; `C/`, `D/` = drives), with
 generated placeholder art (no real logos).
@@ -554,15 +574,22 @@ rare extra net, never one per job. `settings.restorePoints`:
   point). The baseline is settled once `created`, `adopted` or `skipped`; after `timeout`/`failed`
   it is tried again in a later session (once per session, at most 3 attempts).
 - Creation runs in its own `powershell.exe` (`Invoke-VxIsolated`) with a hard timeout of 90 s:
-  `Enable-ComputerRestore` for the system drive, `Checkpoint-Computer`, fallback WMI
-  `SystemRestore.CreateRestorePoint`, then the new sequence number is read back. The job shows
+  `Checkpoint-Computer`, fallback WMI `SystemRestore.CreateRestorePoint`, then the new sequence
+  number is read back. Computer protection switched off for the system drive (HRESULT
+  `0x80070422` / code 1058) → German message how to switch it on, the job goes on (baseline status
+  `failed`, tried again next session). Only a point the user asks for by hand (`restorepoint` job)
+  runs `Enable-ComputerRestore` and tries once more; automatic points never change the protection
+  settings. The job shows
   "Wiederherstellungspunkt wird erstellt – das kann bis zu 1–2 Minuten dauern" plus elapsed time,
   `job.skippable` is true and "Überspringen" ends just this step. Timeout, skip or failure → a
   warning in the log, the job goes on. `SystemRestorePointCreationFrequency` is set to 0 only for
-  the baseline and restored to its previous value (or removed) right after.
+  the baseline and a point the user asks for by hand, and restored to its previous value (or
+  removed) right after.
 - Clean-up: the Sicherungen page lists the restore points (`restorepoint-list`) and deletes the
   superfluous VELOX ones (`restorepoint-clean`, after a confirm dialog) with `SRRemoveRestorePoint`
-  from `srclient.dll` (Add-Type P/Invoke in an isolated `powershell.exe`, 180 s timeout).
+  from `srclient.dll` (Add-Type P/Invoke in an isolated `powershell.exe`; timeout 60 s + 15 s per
+  point, at most 15 min). The script prints `VXRM <sequence> <code>` after every point, so a timeout
+  or "Überspringen" still reports which ones are gone.
 
 ### Job speed
 
@@ -645,8 +672,14 @@ VELOX runs elevated, the CLI lives in user-writable folders: when VELOX has admi
 call (also `--version` / `auth status`) is started **without** them, with the token of the desktop's
 Explorer (`VxAi.ShellChild`: `CreateProcessWithTokenW` + `CreateEnvironmentBlock`, redirected pipes,
 C# 5 via `Add-Type`). That is also the desktop user's account when VELOX was elevated with another
-admin account (`mode.desktopUser`). If that start fails: same account → plain child process (logged);
-other account → German explanation that Claude Code must run from the user's own account.
+admin account (`mode.desktopUser`). If that start fails (e.g. the "Sekundäre Anmeldung" service
+seclogon is disabled): same account → plain child process (logged); other account → German
+explanation that Claude Code must run from the user's own account. `CreateProcessWithTokenW` takes at
+most 1024 characters of command line: when the full line with `--json-schema` would exceed 1000,
+the analysis runs without the inline schema (the rules text still demands the JSON object). The
+prompt itself never goes on the command line (stdin; system text via `--system-prompt-file`). An
+npm `claude.cmd` shim is resolved to `node.exe` + `cli.js` (or the bundled `.exe`), skipping the
+`"%dp0%\node.exe"` reference the shim names first.
 
 Install text (German, in the status row and errors): PowerShell as a normal user →
 `irm https://claude.ai/install.ps1 | iex` → `claude` and log in (Pro/Max) → "Erneut prüfen".
