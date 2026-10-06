@@ -29,7 +29,6 @@ namespace Velox.Host
         private bool _test;
         private bool _ready;
         private bool _quitting;
-        private float _phase;
         private string _status = "VELOX wird gestartet …";
         private readonly float _k;
 
@@ -47,7 +46,7 @@ namespace Velox.Host
             ClientSize = new Size(S(420), S(260));
             DoubleBuffered = true;
             _timeout = new StartTimer(OnTimeout);
-            _anim.Tick += (s, e) => { _phase += 0.033f; Invalidate(); };
+            _anim.Tick += (s, e) => Invalidate();
         }
 
         private int S(int v) { return (int)Math.Round(v * _k); }
@@ -166,29 +165,17 @@ namespace Velox.Host
             base.OnPaint(e);
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var glow = new GraphicsPath())
-            {
-                var c = new RectangleF(ClientSize.Width / 2f - S(90), S(10), S(180), S(180));
-                glow.AddEllipse(c);
-                using (var pgb = new PathGradientBrush(glow) { CenterColor = Color.FromArgb(46, Brand.Accent), SurroundColors = new[] { Color.FromArgb(0, Brand.Accent) } })
-                    g.FillPath(pgb, glow);
-            }
-            float lift = (float)Math.Sin(_phase * 4.5) * 2.2f;
-            Brand.DrawLogo(g, new RectangleF(ClientSize.Width / 2f - S(36), S(50), S(72), S(72)), lift);
-            using (var f = Brand.UiFont(20 * _k, FontStyle.Bold))
-                TextRenderer.DrawText(g, "V E L O X", f, new Rectangle(0, S(138), ClientSize.Width, S(30)), Brand.Text, TextFormatFlags.HorizontalCenter);
-            using (var f = Brand.UiFont(14 * _k, FontStyle.Regular))
-                TextRenderer.DrawText(g, _status, f, new Rectangle(0, S(178), ClientSize.Width, S(24)), Brand.Muted, TextFormatFlags.HorizontalCenter);
-            // indeterminate bar
-            var track = new RectangleF(S(80), S(214), ClientSize.Width - S(160), S(6));
-            using (var p = Brand.Rounded(track, S(3))) using (var br = new SolidBrush(Color.FromArgb(18, 255, 255, 255))) g.FillPath(br, p);
-            float w = track.Width * 0.38f;
-            float x = track.X + (float)((_phase * 0.55) % 1.3 - 0.3) * track.Width;
-            var seg = RectangleF.Intersect(track, new RectangleF(x, track.Y, w, track.Height));
-            if (seg.Width > 1)
-                using (var p = Brand.Rounded(seg, S(3)))
-                using (var br = new LinearGradientBrush(new RectangleF(seg.X - 1, seg.Y, seg.Width + 2, seg.Height), Brand.Accent, Brand.Cyan, 0f))
-                    g.FillPath(br, p);
+            // brand/: ink ground, the mark, bone title, ash status, the kit's hairline loader. Left-aligned on one edge.
+            int m = S(32);
+            Brand.DrawLogo(g, new RectangleF(m, S(36), S(56), S(52)), 0);
+            using (var f = Brand.UiFont(22 * _k, FontStyle.Bold))
+                TextRenderer.DrawText(g, "VELOX", f, new Point(m, S(104)), Brand.Text, TextFormatFlags.NoPadding);
+            if (_test)
+                using (var f = Brand.UiFont(12 * _k, FontStyle.Regular))
+                    TextRenderer.DrawText(g, "Testmodus", f, new Rectangle(m, S(20), ClientSize.Width - 2 * m, S(18)), Brand.Ok, TextFormatFlags.Right | TextFormatFlags.NoPadding);
+            Brand.DrawLoader(g, new RectangleF(m, S(176), ClientSize.Width - 2 * m, S(2)), _k, Environment.TickCount / 1000.0, -1);
+            using (var f = Brand.UiFont(13 * _k, FontStyle.Regular))
+                TextRenderer.DrawText(g, _status, f, new Rectangle(m, S(190), ClientSize.Width - 2 * m, S(22)), Brand.Muted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

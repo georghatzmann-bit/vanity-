@@ -4,7 +4,8 @@
 #   velox-tweaker/native/build.sh
 #
 # Steps: VELOX.exe (net472) -> payload.zip (app + VELOX.exe + WebView2 DLLs, fixed timestamps, sorted)
-#        -> VeloxSetup.exe (net472, payload + setup-ui embedded) -> verify (manifests, resources, payload, size).
+#        -> VeloxSetup.exe (net472, payload + setup-ui embedded) -> verify (manifests, resources, payload, size,
+#        brand/ copies byte-identical inside both exes).
 # Deterministic: the same sources give a byte-identical VeloxSetup.exe. Windows: native/Build.ps1.
 set -euo pipefail
 
@@ -35,6 +36,15 @@ rm -rf "$OBJ"
 mkdir -p "$OBJ"
 VERSION="$(tr -d ' \r\n' < "$APP/VERSION")"
 echo "VELOX $VERSION"
+
+step "Markenkit (brand/ -> Kopien)"
+# VELOX.exe and the setup embed byte-identical copies of brand/ (native/host/start/brand, native/setup-ui/brand);
+# buildtool verify checks them again inside the finished exes
+if command -v node >/dev/null 2>&1; then
+  node "$APP/brand/tools/check-copies.mjs" || { echo "FEHLER: Kopien von brand/ weichen ab - node tools/sync-brand.mjs ausfuehren" >&2; exit 1; }
+else
+  echo "(node fehlt - Kopien werden erst von buildtool verify geprueft)"
+fi
 
 step "VELOX.exe"
 build host "$HERE/host/VeloxHost.csproj" -o "$OBJ/host"

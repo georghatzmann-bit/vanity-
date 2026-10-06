@@ -647,12 +647,14 @@ namespace Velox.Setup
 
         // ------------------------------------------------------------ start VELOX
 
-        public static bool Launch(string dir)
+        /// <param name="quiet">the user muted the installer's intro: VELOX.exe's start screen stays silent for this run</param>
+        public static bool Launch(string dir, bool quiet = false)
         {
             string exe = Path.Combine(dir, "VELOX.exe");
             try
             {
-                using (Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false, WorkingDirectory = dir })) { }
+                // --from-setup: the installer just played the full intro, so VELOX.exe starts with the short one
+                using (Process.Start(new ProcessStartInfo(exe, quiet ? "--from-setup --quiet-start" : "--from-setup") { UseShellExecute = false, WorkingDirectory = dir })) { }
                 Log.Info("VELOX gestartet.");
                 return true;
             }

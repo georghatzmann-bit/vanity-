@@ -52,6 +52,15 @@ namespace Velox.Host
         // holding the user data folder, a security product hooking it) never completes CreateAsync /
         // EnsureCoreWebView2Async and never throws: without this the user would stare at an empty window.
         private const int WebViewStartTimeoutMs = 30000;
+        // the start sequence plays its sound without a click (WebView2 otherwise blocks audio until a gesture)
+        private const string AutoplayArgs = "--autoplay-policy=no-user-gesture-required";
+        // the browser process of a VELOX that is just closing (or of 1.1.x, started without these arguments)
+        // can still own the user data folder: a new environment with other options then fails with this
+        private const int ErrorInvalidState = unchecked((int)0x8007139F);
+        // hand-over: a broken start screen may delay the app by at most this much after VELOX_READY ...
+        private const int HandoverCapMs = 1000;
+        // ... a working one by its own announced rest of the intro + this, never more than HandoverMaxMs
+        private const int HandoverGraceMs = 250, HandoverMaxMs = 2300;
 
         private readonly Log _log = Program.Log;
         private WebView2 _web;
@@ -65,8 +74,14 @@ namespace Velox.Host
         private string _lastStatusJson;     // latest start-up phase; the start screen may load after it arrived
         private bool _splashReady;
         private bool _onInternal;
-        private bool _internalNavPending;
         private string _pendingAppUrl;      // backend ready before the web view
+        private string _goUrl;              // app URL waiting for the start screen's hand-over
+        private readonly Timer _handover = new Timer();
+        private DateTime _readyAt;
+        private string _startDir;           // extracted start screen (StartPage), served as https://start.velox.example/
+        private string _introVariant;       // full | short for the first load of the start screen
+        private int _splashLoads;
+        private bool? _soundChoice;         // M / sound button on the start screen (forwarded to the app)
         private string _appOrigin;          // http://127.0.0.1:<port>/
         private string _appOriginAlt;       // http://localhost:<port>/
         private bool _closing;
@@ -93,13 +108,14 @@ namespace Velox.Host
             UpdateMinimumSize();
 
             // WebView2 paints this colour until the first page is ready: never a white flash
-            try { Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF0F1115"); } catch (Exception) { }
+            try { Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF0C0D0F"); } catch (Exception) { }
             _web = new WebView2 { Dock = DockStyle.Fill };
             try { _web.DefaultBackgroundColor = Brand.Bg; } catch (Exception) { }
             Controls.Add(_web);
 
             _timeout = new StartTimer(OnStartTimeout);
             _webWatchdog.Tick += (s, e) => { _webWatchdog.Stop(); OnWebViewStuck(); };
+            _handover.Tick += (s, e) => { _handover.Stop(); Continue("Zeitlimit"); };
         }
 
         // ------------------------------------------------------------ window chrome
@@ -159,15 +175,43 @@ namespace Velox.Host
             base.OnLoad(e);
             StartBackend();
             _webWatchdog.Start();
+            _startDir = StartPage.Extract(_log);
+            if (_startDir == null) { UseFallback(); return; }   // no start screen: the Edge window has its own
+            _introVariant = WindowPlacement.TakeIntroVariant(Util.Version());
+            // the installer has just played the full intro with its sound: not the same strike twice in a row
+            // (the version is recorded above all the same, so the next start is short as well)
+            if (Program.FromSetup) _introVariant = "short";
             try
             {
                 string udf = Path.Combine(Path.Combine(Program.DataDir, "webview2"), IsTest ? "test" : "real");
                 Directory.CreateDirectory(udf);
-                var opts = new CoreWebView2EnvironmentOptions();
-                try { opts.Language = "de-DE"; } catch (Exception) { }
-                CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, udf, opts);
-                if (_webGaveUp) return;
-                await _web.EnsureCoreWebView2Async(env);
+                // An environment's options must match a browser process that still runs on the same user data
+                // folder (ERROR_INVALID_STATE otherwise): wait for it a few times, then start without autoplay -
+                // the intro then shows "Ton: klicken" instead of failing over to the Edge window.
+                string[] attempts = { AutoplayArgs, AutoplayArgs, AutoplayArgs, AutoplayArgs, null };
+                for (int i = 0; ; i++)
+                {
+                    try
+                    {
+                        var opts = new CoreWebView2EnvironmentOptions();
+                        try { opts.Language = "de-DE"; } catch (Exception) { }
+                        if (attempts[i] != null) opts.AdditionalBrowserArguments = attempts[i];
+                        CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, udf, opts);
+                        if (_webGaveUp) return;
+                        await _web.EnsureCoreWebView2Async(env);
+                        if (attempts[i] == null) _log.Warn("WebView2 ohne Autoplay gestartet - der Startton braucht dann einen Klick.");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_webGaveUp || _closing) return;
+                        if (!IsInvalidState(ex) || i + 1 >= attempts.Length) throw;
+                        _log.Warn("WebView2-Profil noch belegt (" + (i + 1) + "): " + ex.Message);
+                        RecreateWebControl();
+                        await Task.Delay(600);
+                        if (_webGaveUp || _closing) return;
+                    }
+                }
                 if (_webGaveUp) return;
                 _webWatchdog.Stop();
                 _core = _web.CoreWebView2;
@@ -181,6 +225,21 @@ namespace Velox.Host
                 _log.Error("WebView2-Start fehlgeschlagen: " + ex);
                 UseFallback();
             }
+        }
+
+        private static bool IsInvalidState(Exception ex)
+        {
+            for (Exception x = ex; x != null; x = x.InnerException) if (x.HResult == ErrorInvalidState) return true;
+            return false;
+        }
+
+        /// <summary>A WebView2 control whose initialisation failed is not reused: a fresh one for the next attempt.</summary>
+        private void RecreateWebControl()
+        {
+            try { Controls.Remove(_web); _web.Dispose(); } catch (Exception) { }
+            _web = new WebView2 { Dock = DockStyle.Fill };
+            try { _web.DefaultBackgroundColor = Brand.Bg; } catch (Exception) { }
+            Controls.Add(_web);
         }
 
         private void OnWebViewStuck()
@@ -217,6 +276,7 @@ namespace Velox.Host
             Try(() => s.AreHostObjectsAllowed = false);
             Try(() => s.IsWebMessageEnabled = true);
             Try(() => s.AreDefaultScriptDialogsEnabled = true);
+            _core.SetVirtualHostNameToFolderMapping(StartPage.HostName, _startDir, CoreWebView2HostResourceAccessKind.DenyCors);
             _core.NavigationStarting += OnNavigationStarting;
             _core.FrameNavigationStarting += OnFrameNavigationStarting;
             _core.NewWindowRequested += OnNewWindowRequested;
@@ -280,17 +340,56 @@ namespace Velox.Host
             GoToApp(b.Url);
         }
 
+        /// <summary>
+        /// Backend ready: the start screen plays its hand-over (intro.done()) and answers "continue"; then the app
+        /// is loaded. A start screen that does not answer costs at most HandoverCapMs (see the constants).
+        /// </summary>
         private void GoToApp(string url)
         {
+            _goUrl = url;
+            _readyAt = DateTime.UtcNow;
+            _handover.Stop();
+            if (!_splashReady || !_onInternal) { _handover.Interval = HandoverCapMs; _handover.Start(); return; }   // "ready" goes out on splash-ready
             PostToSplash("{\"type\":\"ready\"}");
-            var t = new Timer { Interval = 160 };
-            t.Tick += (s, e) =>
-            {
-                t.Stop(); t.Dispose();
-                if (_closing || _failed || _core == null) return;
-                try { _core.Navigate(url); } catch (Exception ex) { _log.Error("Navigate: " + ex.Message); }
-            };
-            t.Start();
+            _handover.Interval = HandoverCapMs;
+            _handover.Start();
+        }
+
+        /// <summary>The start screen announced how long its hand-over still takes.</summary>
+        private void OnHandoverAnnounced(object ms)
+        {
+            if (_goUrl == null || !_handover.Enabled) return;
+            double want;
+            try { want = Convert.ToDouble(ms, System.Globalization.CultureInfo.InvariantCulture); } catch (Exception) { return; }
+            if (double.IsNaN(want) || want < 0) return;
+            double spent = (DateTime.UtcNow - _readyAt).TotalMilliseconds;
+            double left = Math.Min(want + HandoverGraceMs, HandoverMaxMs) - spent;
+            _handover.Stop();
+            _handover.Interval = (int)Math.Max(1, Math.Max(left, HandoverCapMs - spent));
+            _handover.Start();
+        }
+
+        private void Continue(string why)
+        {
+            _handover.Stop();
+            string url = _goUrl;
+            _goUrl = null;
+            if (url == null || _closing || _failed || _core == null) return;
+            if (why != null) _log.Info("Übergabe an die Oberfläche: " + why + " nach " + (int)(DateTime.UtcNow - _readyAt).TotalMilliseconds + " ms");
+            try { _core.Navigate(AppUrl(url)); } catch (Exception ex) { _log.Error("Navigate: " + ex.Message); }
+        }
+
+        /// <summary>
+        /// The app URL plus from=host (the in-app splash only shows the end pose) and the start sound the user
+        /// chose on the start screen, if any - the app saves it as settings.json "startSound" (ARCHITECTURE §11).
+        /// </summary>
+        private string AppUrl(string url)
+        {
+            string sep = url.IndexOf('?') >= 0 ? "&" : "?";
+            string extra = "from=host";
+            if (_soundChoice.HasValue) extra += "&sound=" + (_soundChoice.Value ? "on" : "off");
+            int hash = url.IndexOf('#');
+            return hash >= 0 ? url.Substring(0, hash) + sep + extra + url.Substring(hash) : url + sep + extra;
         }
 
         private void OnBackendExited(Backend b, int code)
@@ -317,22 +416,30 @@ namespace Velox.Host
 
         // ------------------------------------------------------------ start screen (embedded page)
 
-        private static string SplashHtml()
-        {
-            using (Stream s = typeof(HostForm).Assembly.GetManifestResourceStream("splash.html"))
-            {
-                if (s == null) return "<!doctype html><html><body style=\"background:#0F1115;color:#E8EAF0;font-family:Segoe UI\">VELOX wird gestartet …</body></html>";
-                using (var r = new StreamReader(s, System.Text.Encoding.UTF8)) return r.ReadToEnd();
-            }
-        }
-
         private void NavigateSplash()
         {
             if (_core == null) return;
             _splashReady = false;
-            _internalNavPending = true;
             _onInternal = true;
-            try { _core.NavigateToString(SplashHtml()); }
+            if (!File.Exists(Path.Combine(_startDir, "splash.html")))
+            {
+                // an old-folder cleanup of another instance took it: write it again
+                string dir = StartPage.Extract(_log);
+                if (dir != null)
+                {
+                    Util.DeleteTree(_startDir, false);
+                    _startDir = dir;
+                    try { _core.ClearVirtualHostNameToFolderMapping(StartPage.HostName); } catch (Exception) { }
+                    try { _core.SetVirtualHostNameToFolderMapping(StartPage.HostName, _startDir, CoreWebView2HostResourceAccessKind.DenyCors); }
+                    catch (Exception ex) { _log.Error("Startbildschirm: " + ex.Message); }
+                }
+            }
+            // the first load plays the intro (full after an install / update); a later one (an error after the
+            // app was shown) is the still end pose: no second intro, no sound
+            string variant = _splashLoads++ == 0 ? (_introVariant ?? "short") : "still";
+            // muted in the installer a moment ago (--quiet-start): silent for this run, settings.json stays as it is
+            bool sound = _soundChoice ?? (!Program.QuietStart && UserSettings.StartSound(Program.DataDir, _log));
+            try { _core.Navigate(StartPage.Url(variant, sound, IsTest)); }
             catch (Exception ex) { _log.Error("Startbildschirm: " + ex.Message); }
             // mode and a pending error are sent when the page reports "splash-ready"
         }
@@ -350,6 +457,7 @@ namespace Velox.Host
             PostToSplash(Json(new Dictionary<string, object> { { "type", "mode" }, { "test", IsTest } }));
             if (_failed && _lastErrorJson != null) PostToSplash(_lastErrorJson);
             else if (!_failed && _lastStatusJson != null && _backend != null && string.IsNullOrEmpty(_backend.Origin)) PostToSplash(_lastStatusJson);
+            if (!_failed && _goUrl != null) PostToSplash("{\"type\":\"ready\"}");   // the backend was faster than the page
         }
 
         private void ShowError(string title, string message, string log)
@@ -357,6 +465,8 @@ namespace Velox.Host
             if (_closing) return;
             _failed = true;
             _timeout.Stop();
+            _handover.Stop();
+            _goUrl = null;
             _log.Warn(title + ": " + message);
             _lastErrorJson = Json(new Dictionary<string, object> {
                 { "type", "error" }, { "title", title }, { "message", message }, { "log", log ?? "" }, { "canTest", !IsTest }
@@ -385,12 +495,7 @@ namespace Velox.Host
         private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
             string uri = e.Uri ?? "";
-            if (_internalNavPending && (uri.StartsWith("data:", StringComparison.OrdinalIgnoreCase) || uri == "about:blank"))
-            {
-                _internalNavPending = false;
-                _onInternal = true;
-                return;
-            }
+            if (StartPage.IsStartUri(uri)) { _onInternal = true; _splashReady = false; return; }
             if (IsAppUri(uri)) { _onInternal = false; _splashReady = false; _appNavId = e.NavigationId; return; }
             e.Cancel = true;
             if (IsWebUri(uri) && e.IsUserInitiated) Util.OpenUnelevated(uri, _log);
@@ -400,7 +505,7 @@ namespace Velox.Host
         private void OnFrameNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
         {
             string uri = e.Uri ?? "";
-            if (IsAppUri(uri) || uri == "about:blank" || uri.StartsWith("about:srcdoc", StringComparison.OrdinalIgnoreCase)) return;
+            if (IsAppUri(uri) || StartPage.IsStartUri(uri) || uri == "about:blank" || uri.StartsWith("about:srcdoc", StringComparison.OrdinalIgnoreCase)) return;
             e.Cancel = true;
             _log.Warn("Frame-Navigation blockiert: " + Shorten(uri));
         }
@@ -469,11 +574,12 @@ namespace Velox.Host
         {
             // only the embedded start screen talks to the host, never the backend's pages
             string src = e.Source ?? "";
-            if (!_onInternal || IsWebUri(src)) return;
+            if (!_onInternal || !StartPage.IsStartUri(src)) return;
             string type = null;
+            Dictionary<string, object> d;
             try
             {
-                var d = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(e.WebMessageAsJson);
+                d = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(e.WebMessageAsJson);
                 object t;
                 if (d != null && d.TryGetValue("type", out t)) type = t as string;
             }
@@ -493,6 +599,17 @@ namespace Velox.Host
                 case "openlog":
                     string logs = Path.GetDirectoryName(_log.Path);
                     Util.OpenUnelevated(File.Exists(_log.Path) ? _log.Path : logs, _log);
+                    break;
+                case "sound":
+                    object on;
+                    if (d.TryGetValue("on", out on) && on is bool) { _soundChoice = (bool)on; _log.Info("Startton " + ((bool)on ? "an" : "aus") + " (wird an die Oberfläche weitergegeben)."); }
+                    break;
+                case "handover":
+                    object ms;
+                    if (d.TryGetValue("ms", out ms)) OnHandoverAnnounced(ms);
+                    break;
+                case "continue":
+                    Continue(null);
                     break;
             }
         }
@@ -579,6 +696,9 @@ namespace Velox.Host
             {
                 try { _timeout.Dispose(); } catch (Exception) { }
                 try { _webWatchdog.Dispose(); } catch (Exception) { }
+                try { _handover.Dispose(); } catch (Exception) { }
+                try { if (_web != null) { _web.Dispose(); _web = null; } } catch (Exception) { }
+                if (_startDir != null) { Util.DeleteTree(_startDir, false); _startDir = null; }
                 try { if (_backend != null) _backend.Dispose(); } catch (Exception) { }
             }
             base.Dispose(disposing);

@@ -189,6 +189,9 @@ function Get-VxModeDto {
         simulate = [bool]$ctx.Simulate; admin = [bool]$ctx.Admin; windows = [bool]$ctx.Windows
         os = [string]$ctx.OsText; ps = $PSVersionTable.PSVersion.ToString(); userMismatch = [bool]$ctx.UserMismatch
         desktopUser = $(if ($null -ne $ctx.DesktopUser) { [string]$ctx.DesktopUser.name } else { $null })
+        # the UI runs inside VELOX.exe's own window (-HostPid + -NoBrowser): the host already played the
+        # start sequence, the in-app splash only shows its end pose (ARCHITECTURE section 11)
+        hosted = [bool]($null -ne $ctx.Life -and $ctx.Life.hostWindow)
     }
 }
 

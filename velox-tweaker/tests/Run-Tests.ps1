@@ -6,7 +6,7 @@
 .EXAMPLE
   pwsh tests/Run-Tests.ps1
   pwsh tests/Run-Tests.ps1 -Strict          # also fail when the real data/ catalog has errors
-  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games)
+  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games, settings)
 #>
 param(
     [switch]$Strict,
@@ -2753,6 +2753,45 @@ Test-Case 'games' 'Bilder: Steam-Cache (alt + neu), GOG-.ico, Xbox-Logos; Art-Da
     [IO.File]::WriteAllText((Get-VxGameArtMapFile), '{ kaputt')
     $global:VxCtx.GameArt = $null
     Assert-Equal $null (Get-VxGameArtFile $gta.id 'cover') 'kaputte Datei: kein Fehler, nur kein Bild'
+}
+
+Test-Case 'settings' 'Start-Sound und introSeen: Standard, gespeichert, nur gültige Werte, VELOX.exe-Vertrag' {
+    $ctx = New-TestContext
+    $dto = Get-VxSettingsDto
+    Assert-Equal $true $dto.startSound 'Standard: Ton an'
+    Assert-Equal '' $dto.introSeen 'Standard: noch kein Intro gesehen'
+    Update-VxSettings ([pscustomobject]@{ startSound = $false; introSeen = '1.2.0' })
+    Assert-Equal $false (Get-VxSettingsDto).startSound 'aus gesetzt'
+    Assert-Equal '1.2.0' (Get-VxSettingsDto).introSeen 'Version gemerkt'
+    Update-VxSettings ([pscustomobject]@{ startSound = 'nein'; introSeen = '../../x' })
+    Assert-Equal $false (Get-VxSettingsDto).startSound 'kein bool -> ignoriert'
+    Assert-Equal '1.2.0' (Get-VxSettingsDto).introSeen 'keine Version -> ignoriert'
+    # the file VELOX.exe reads: top-level JSON boolean "startSound"
+    $path = Get-VxDataPath 'settings.json'
+    $raw = [IO.File]::ReadAllText($path)
+    Assert-True ($raw -match '"startSound"\s*:\s*false') ('settings.json enthält "startSound": false - ' + $raw)
+    $saved = Read-VxJsonFile $path
+    Assert-True ($saved.startSound -is [bool] -and $saved.startSound -eq $false) 'als bool gespeichert'
+    $null = Import-VxSettings
+    Assert-Equal $false (Get-VxSettingsDto).startSound 'nach Neustart noch aus'
+    Assert-Equal '1.2.0' (Get-VxSettingsDto).introSeen 'nach Neustart noch gemerkt'
+    # older settings.json without the keys, and garbage values -> defaults
+    [IO.File]::WriteAllText($path, '{"accent":"blue","startSound":"aus","introSeen":5}')
+    $null = Import-VxSettings
+    Assert-Equal $true (Get-VxSettingsDto).startSound 'kaputter Wert -> Ton an'
+    Assert-Equal '' (Get-VxSettingsDto).introSeen 'kaputter Wert -> leer'
+    Update-VxSettings ([pscustomobject]@{ startSound = $true })
+    Assert-True ([IO.File]::ReadAllText($path) -match '"startSound"\s*:\s*true') 'wieder an gespeichert'
+}
+
+Test-Case 'settings' 'bootstrap.mode.hosted nur unter VELOX.exe (-HostPid + -NoBrowser)' {
+    $ctx = New-TestContext
+    $ctx.Life = New-VxLifecycle
+    Assert-Equal $false (Get-VxModeDto).hosted 'Start.bat / Edge-Fenster'
+    $ctx.Life.hostWindow = $true
+    Assert-Equal $true (Get-VxModeDto).hosted 'im Fenster von VELOX.exe'
+    $ctx.Life = $null
+    Assert-Equal $false (Get-VxModeDto).hosted 'ohne Lebenszyklus'
 }
 
 # ------------------------------------------------------------------ summary

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const brand = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const pw = process.env.PLAYWRIGHT || 'playwright';
+const pw = process.env.PLAYWRIGHT || (fs.existsSync('/opt/node22/lib/node_modules/playwright/index.mjs') ? '/opt/node22/lib/node_modules/playwright/index.mjs' : 'playwright');   // global install fallback, like tests/ui/run-ui-tests.mjs
 const { chromium } = await import(pw.startsWith('/') ? pathToFileURL(pw).href : pw);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 // a host page with its own palette (to prove mounting the intro does not retheme it)

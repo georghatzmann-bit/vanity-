@@ -11,7 +11,10 @@
   <ItemGroup>
     <Compile Include="*.cs" />
     <Compile Include="../shared/*.cs" />
-    <EmbeddedResource Include="splash.html" LogicalName="splash.html" />
+    <!-- the start screen (StartPage.cs): served from these resources as https://start.velox.example/.
+         start/brand/ = byte-identical copies of brand/ (tools/sync-brand.mjs; buildtool verify checks them) -->
+    <EmbeddedResource Include="start/*.html;start/*.css;start/*.js" LogicalName="start/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="start/brand/*.*" LogicalName="start/brand/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Web.Extensions" />

@@ -612,6 +612,10 @@ function Get-VxDefaultSettings {
         motion = 'full'
         confirmRisky = $true
         restorePoints = 'first'
+        # start sequence (brand/intro.js): its sound may play (also read by VELOX.exe, see ARCHITECTURE §11)
+        startSound = $true
+        # VERSION whose full intro the in-app splash last played ('' = never; Start.bat / Edge window only)
+        introSeen = ''
         claude = @{ model = 'claude-opus-5-5' }
         # KI-Optimierer (core/Claude.ps1): provider '' = automatic (first ready one)
         ai = @{ provider = ''; claudeCode = @{ model = 'sonnet' }; groq = @{ model = '' } }
@@ -634,6 +638,11 @@ function Merge-VxAiSettings($Settings, $Ai) {
         $g = [string]$Ai.groq.model
         if ($g -eq '' -or $g -match '^[A-Za-z0-9][A-Za-z0-9._/:\-]{1,100}$') { $Settings.ai.groq.model = $g }
     }
+}
+
+# settings.introSeen: '' or a version like 1.2.0 (it is only ever compared with VERSION)
+function Test-VxIntroSeenValue($Value) {
+    return ($Value -is [string] -and ($Value -eq '' -or $Value -match '^\d{1,4}\.\d{1,4}\.\d{1,4}$'))
 }
 
 function Get-VxRestorePointMode {
@@ -664,6 +673,8 @@ function Import-VxSettings {
                     $s.claude.model = [string]$loaded.claude.model
                 }
                 if ($loaded.ContainsKey('ai')) { Merge-VxAiSettings $s $loaded.ai }
+                if ($loaded.ContainsKey('startSound') -and $loaded.startSound -is [bool]) { $s.startSound = $loaded.startSound }
+                if ($loaded.ContainsKey('introSeen') -and (Test-VxIntroSeenValue $loaded.introSeen)) { $s.introSeen = [string]$loaded.introSeen }
                 if ($loaded.ContainsKey('games') -and $null -ne $loaded.games) { $s.games = @($loaded.games) }
             }
         } catch {
@@ -680,6 +691,8 @@ function Save-VxSettings {
     $out = [ordered]@{
         accent = $s.accent; motion = $s.motion; confirmRisky = [bool]$s.confirmRisky
         restorePoints = (Get-VxRestorePointMode)
+        startSound = ($s.startSound -ne $false)
+        introSeen = [string]$s.introSeen
         claude = [ordered]@{ model = [string]$s.claude.model }
         ai = [ordered]@{ provider = [string]$s.ai.provider; claudeCode = [ordered]@{ model = [string]$s.ai.claudeCode.model }; groq = [ordered]@{ model = [string]$s.ai.groq.model } }
         games = @($s.games)
@@ -698,6 +711,8 @@ function Get-VxSettingsDto {
         restorePoints = (Get-VxRestorePointMode)
         # read-only, for older UIs: any automatic restore point at all
         autoRestorePoint = ((Get-VxRestorePointMode) -ne 'off')
+        startSound = ($s.startSound -ne $false)
+        introSeen = [string]$s.introSeen
         claude = [ordered]@{ hasKey = (Test-VxClaudeKey); model = [string]$s.claude.model }
         ai = [ordered]@{
             provider = [string]$s.ai.provider
@@ -717,6 +732,8 @@ function Update-VxSettings($Partial) {
     if ($p.ContainsKey('accent') -and @('violet', 'blue', 'cyan', 'green', 'pink', 'orange') -contains [string]$p.accent) { $s.accent = [string]$p.accent }
     if ($p.ContainsKey('motion') -and @('full', 'reduced') -contains [string]$p.motion) { $s.motion = [string]$p.motion }
     if ($p.ContainsKey('confirmRisky') -and $p.confirmRisky -is [bool]) { $s.confirmRisky = $p.confirmRisky }
+    if ($p.ContainsKey('startSound') -and $p.startSound -is [bool]) { $s.startSound = $p.startSound }
+    if ($p.ContainsKey('introSeen') -and (Test-VxIntroSeenValue $p.introSeen)) { $s.introSeen = [string]$p.introSeen }
     if ($p.ContainsKey('restorePoints') -and (Get-VxRestorePointModes) -contains [string]$p.restorePoints) { $s.restorePoints = [string]$p.restorePoints }
     elseif ($p.ContainsKey('autoRestorePoint') -and $p.autoRestorePoint -is [bool]) {
         # older UIs: off -> 'off', on -> keep the current mode ('first' when it was off)

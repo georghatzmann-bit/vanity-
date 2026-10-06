@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark">
+<title>VELOX</title>
+<!-- VELOX.exe start screen (served by the host from its embedded resources at https://start.velox.example/,
+     docs/ARCHITECTURE.md section 11). The start sequence is brand/intro.js, a byte-identical copy of the kit. -->
+<link rel="stylesheet" href="brand/intro.css">
+<link rel="stylesheet" href="splash.css">
+<script type="module" src="splash.js"></script>
+</head>
+<body>
+<main id="stage" class="stage"></main>
+<p id="mode" class="mode" aria-hidden="true">Testmodus</p>
+
+<!-- moved into the intro's slot under the word when they are needed -->
+<p id="hint" class="hint" hidden>Beim ersten Start kann das ein paar Sekunden dauern.</p>
+<section id="error" class="err" role="alert" aria-labelledby="err-title" hidden>
+  <h1 id="err-title" class="err-title">VELOX konnte nicht starten</h1>
+  <p id="err-text" class="err-text"></p>
+  <pre id="err-log" class="err-log" tabindex="0"></pre>
+  <div class="err-btns">
+    <button id="b-retry" class="btn primary" type="button">Erneut versuchen</button>
+    <button id="b-test" class="btn" type="button">Testmodus</button>
+    <button id="b-log" class="btn quiet" type="button">Log öffnen</button>
+  </div>
+</section>
+</body>
+</html>

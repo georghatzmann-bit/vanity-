@@ -11,19 +11,25 @@ namespace Velox.Native
 {
     internal static class Brand
     {
-        public static readonly Color Bg = Color.FromArgb(0x0F, 0x11, 0x15);
-        public static readonly Color S1 = Color.FromArgb(0x15, 0x18, 0x21);
-        public static readonly Color S2 = Color.FromArgb(0x1B, 0x1F, 0x2A);
-        public static readonly Color S3 = Color.FromArgb(0x23, 0x28, 0x38);
-        public static readonly Color Text = Color.FromArgb(0xE8, 0xEA, 0xF0);
-        public static readonly Color Muted = Color.FromArgb(0x9A, 0xA3, 0xB2);
-        public static readonly Color Faint = Color.FromArgb(0x6B, 0x73, 0x85);
-        public static readonly Color Accent = Color.FromArgb(0x7C, 0x5C, 0xFF);
-        public static readonly Color Cyan = Color.FromArgb(0x22, 0xD3, 0xEE);
-        public static readonly Color Ok = Color.FromArgb(0x34, 0xD3, 0x99);
-        public static readonly Color Err = Color.FromArgb(0xF4, 0x3F, 0x5E);
-        /// <summary>#0F1115 as COLORREF (0x00BBGGRR) for DWMWA_CAPTION_COLOR.</summary>
-        public const int CaptionBgr = 0x0015110F;
+        // brand/tokens.css ("Versatz"): ink + bone, one signal colour, no gradients, no glow
+        public static readonly Color Bg = Color.FromArgb(0x0C, 0x0D, 0x0F);       // --vx-ink
+        public static readonly Color S1 = Color.FromArgb(0x14, 0x15, 0x18);       // --vx-ink-2
+        public static readonly Color S2 = Color.FromArgb(0x1A, 0x1B, 0x1F);       // --vx-ink-3 (the icon tile)
+        public static readonly Color S3 = Color.FromArgb(0x21, 0x23, 0x28);       // --vx-ink-4
+        public static readonly Color Line = Color.FromArgb(0x2A, 0x2C, 0x31);     // --vx-line
+        public static readonly Color Line2 = Color.FromArgb(0x45, 0x48, 0x4F);    // --vx-line-2
+        public static readonly Color Text = Color.FromArgb(0xEC, 0xE9, 0xE2);     // --vx-bone
+        public static readonly Color Muted = Color.FromArgb(0x8E, 0x8B, 0x85);    // --vx-ash
+        public static readonly Color Faint = Color.FromArgb(0x80, 0x7D, 0x77);    // --vx-ash-2
+        public static readonly Color Accent = Color.FromArgb(0xFF, 0x5A, 0x1F);   // --vx-signal
+        public static readonly Color AccentHi = Color.FromArgb(0xFF, 0x70, 0x38); // --vx-signal-hi
+        public static readonly Color OnAccent = Color.FromArgb(0x0C, 0x0D, 0x0F); // --vx-on-signal (never bone on signal)
+        public static readonly Color Ok = Color.FromArgb(0x3F, 0xC9, 0x8A);       // --vx-safe
+        public static readonly Color Err = Color.FromArgb(0xF2, 0x5A, 0x80);      // --vx-risk
+        /// <summary>#0C0D0F as COLORREF (0x00BBGGRR) for DWMWA_CAPTION_COLOR.</summary>
+        public const int CaptionBgr = 0x000F0D0C;
+        /// <summary>#2A2C31 as COLORREF for DWMWA_BORDER_COLOR (the borderless setup window's hairline).</summary>
+        public const int LineBgr = 0x00312C2A;
 
         public static Font UiFont(float px, FontStyle style)
         {
@@ -47,43 +53,86 @@ namespace Velox.Native
             return p;
         }
 
-        /// <summary>The fader-V logo (ui/index.html .vx-logo, viewBox 0 0 48 48) into a square.</summary>
-        public static void DrawLogo(Graphics g, RectangleF box, float capLift)
+        // brand/mark.svg (viewBox 0 0 106.84 100): the wordmark's V, cut at 44-52, the upper half one step ahead
+        private static readonly PointF[] MarkTopL = { new PointF(22.84f, 0), new PointF(47.84f, 0), new PointF(52.56f, 44), new PointF(28.63f, 44) };
+        private static readonly PointF[] MarkTopR = { new PointF(63.18f, 44), new PointF(81.84f, 0), new PointF(106.84f, 0), new PointF(87.11f, 44) };
+        private static readonly PointF[] MarkFoot = { new PointF(46.41f, 52), new PointF(47.7f, 64), new PointF(52.79f, 52), new PointF(76.52f, 52), new PointF(55, 100), new PointF(29, 100), new PointF(22.68f, 52) };
+
+        /// <summary>
+        /// The VELOX mark (brand/mark.svg) centred in a box. <paramref name="shift"/> moves the bone upper half
+        /// sideways in mark units (0 = the canonical pose, where it already sits one step ahead).
+        /// </summary>
+        public static void DrawLogo(Graphics g, RectangleF box, float shift)
         {
             var state = g.Save();
             try
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                float s = Math.Min(box.Width, box.Height) / 48f;
-                g.TranslateTransform(box.X + (box.Width - 48 * s) / 2, box.Y + (box.Height - 48 * s) / 2);
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                float s = Math.Min(box.Width / 106.84f, box.Height / 100f);
+                g.TranslateTransform(box.X + (box.Width - 106.84f * s) / 2, box.Y + (box.Height - 100f * s) / 2);
                 g.ScaleTransform(s, s);
-                using (var track = new Pen(Color.FromArgb(97, Accent), 2.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                using (var foot = new SolidBrush(Accent)) g.FillPolygon(foot, MarkFoot);
+                g.TranslateTransform(shift, 0);
+                using (var top = new SolidBrush(Text))
                 {
-                    g.DrawLine(track, 11, 6, 11, 42);
-                    g.DrawLine(track, 24, 6, 24, 42);
-                    g.DrawLine(track, 37, 6, 37, 42);
-                }
-                using (var glow = new Pen(Color.FromArgb(60, Accent), 9f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
-                {
-                    g.DrawLines(glow, new[] { new PointF(11, 13), new PointF(24, 35), new PointF(37, 13) });
-                }
-                using (var v = new Pen(Accent, 5f) { StartCap = LineCap.Round, EndCap = LineCap.Round, LineJoin = LineJoin.Round })
-                {
-                    g.DrawLines(v, new[] { new PointF(11, 13), new PointF(24, 35), new PointF(37, 13) });
-                }
-                using (var cap = new SolidBrush(Text))
-                {
-                    foreach (var r in new[] { new RectangleF(5, 9.5f - capLift, 12, 7), new RectangleF(18, 31.5f + capLift, 12, 7), new RectangleF(31, 9.5f - capLift, 12, 7) })
-                    {
-                        using (var p = Rounded(r, 2.4f)) g.FillPath(cap, p);
-                    }
+                    g.FillPolygon(top, MarkTopL);
+                    g.FillPolygon(top, MarkTopR);
                 }
             }
             finally { g.Restore(state); }
         }
+
+        /// <summary>
+        /// The kit's loader (brand/intro.css .vx-track): a 1 px hairline with a 2 px signal segment. pct &lt; 0 =
+        /// indeterminate (the segment slides along every 1.7 s, <paramref name="seconds"/> = a running clock);
+        /// 0..100 = the finished part in bone with the signal only at its head (brand/ticks.js: orange is the
+        /// current position, never "finished"); 100 = all bone.
+        /// </summary>
+        public static void DrawLoader(Graphics g, RectangleF r, float k, double seconds, double pct)
+        {
+            var mode = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.None;
+            float thick = Math.Max(1, (float)Math.Round(2 * k)), hair = Math.Max(1, (float)Math.Round(k));
+            float y = (float)Math.Round(r.Y), x0 = (float)Math.Round(r.X), w = (float)Math.Round(r.Width);
+            using (var line = new SolidBrush(Line)) g.FillRectangle(line, x0, y + (float)Math.Floor((thick - hair) / 2), w, hair);
+            if (pct < 0)
+            {
+                double u = (seconds % 1.7) / 1.7;
+                double a = u < 0.5 ? 2 * u * u : 1 - Math.Pow(-2 * u + 2, 2) / 2;     // ease in-out across the track
+                float segW = w * 0.22f, sx = x0 + (float)((w + segW) * a) - segW;
+                float l = Math.Max(x0, sx), rgt = Math.Min(x0 + w, sx + segW);
+                if (rgt - l >= 1) using (var b = new SolidBrush(Accent)) g.FillRectangle(b, l, y, rgt - l, thick);
+            }
+            else
+            {
+                float fw = (float)Math.Round(w * Math.Max(0, Math.Min(100, pct)) / 100.0);
+                if (fw >= 1) using (var b = new SolidBrush(Text)) g.FillRectangle(b, x0, y, fw, thick);
+                if (pct < 100) using (var b = new SolidBrush(Accent)) g.FillRectangle(b, x0 + Math.Max(0, fw - thick), y - thick, thick, thick * 3);
+            }
+            g.SmoothingMode = mode;
+        }
+
+        /// <summary>The app icon: the mark on the lifted tile (brand/app-icon.svg: #1A1B1F, 1 px keyline #45484F).</summary>
+        public static void DrawAppIcon(Graphics g, RectangleF box)
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            float r = box.Width * 54.72f / 256f;
+            var tile = new RectangleF(box.X + 0.5f, box.Y + 0.5f, box.Width - 1, box.Height - 1);
+            using (var p = Rounded(tile, r))
+            using (var br = new SolidBrush(S2))
+            using (var pen = new Pen(Line2, 1f))
+            {
+                g.FillPath(br, p);
+                g.DrawPath(pen, p);
+            }
+            // app-icon.svg: the mark at translate(44.41 51.2) scale(1.536) inside the 256 tile
+            float k = box.Width / 256f;
+            DrawLogo(g, new RectangleF(box.X + 44.41f * k, box.Y + 51.2f * k, 106.84f * 1.536f * k, 100f * 1.536f * k), 0);
+        }
     }
 
-    /// <summary>Flat, rounded button: "primary" = brand gradient, otherwise a subtle glass button.</summary>
+    /// <summary>Flat button: "primary" = solid signal with ink text, otherwise a hairline button (brand/tokens.css).</summary>
     internal sealed class FlatButton : Control
     {
         private bool _hover, _down;
@@ -124,33 +173,31 @@ namespace Velox.Native
             using (var bg = new SolidBrush(Parent != null ? Parent.BackColor : Brand.Bg)) g.FillRectangle(bg, ClientRectangle);
             var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
             if (_down) r.Inflate(-1, -1);
-            float radius = 8 * UiScale;
+            float radius = 6 * UiScale;
             using (var path = Brand.Rounded(r, radius))
             {
                 if (Primary)
                 {
-                    using (var br = new LinearGradientBrush(r, Brand.Accent, Brand.Cyan, 20f))
-                    {
-                        g.FillPath(br, path);
-                    }
-                    if (_hover && Enabled) using (var hl = new SolidBrush(Color.FromArgb(28, 255, 255, 255))) g.FillPath(hl, path);
+                    using (var br = new SolidBrush(_hover && Enabled ? Brand.AccentHi : Brand.Accent)) g.FillPath(br, path);
                 }
                 else if (Danger)
                 {
-                    using (var br = new SolidBrush(Color.FromArgb(_hover ? 60 : 36, Brand.Err))) g.FillPath(br, path);
-                    using (var pen = new Pen(Color.FromArgb(_hover ? 140 : 90, Brand.Err), 1f)) g.DrawPath(pen, path);
+                    using (var br = new SolidBrush(Color.FromArgb(_hover ? 46 : 26, Brand.Err))) g.FillPath(br, path);
+                    using (var pen = new Pen(Color.FromArgb(_hover ? 200 : 140, Brand.Err), 1f)) g.DrawPath(pen, path);
                 }
                 else
                 {
-                    using (var br = new SolidBrush(Color.FromArgb(_hover ? 26 : 15, 255, 255, 255))) g.FillPath(br, path);
-                    using (var pen = new Pen(Color.FromArgb(_hover ? 41 : 26, 255, 255, 255), 1f)) g.DrawPath(pen, path);
+                    if (_hover && Enabled) using (var br = new SolidBrush(Brand.S3)) g.FillPath(br, path);
+                    using (var pen = new Pen(Brand.Line2, 1f)) g.DrawPath(pen, path);
                 }
                 if (Focused && ShowFocusCues)
                 {
-                    using (var pen = new Pen(Brand.Accent, 2f)) g.DrawPath(pen, path);
+                    var fr = r; fr.Inflate(1.5f * UiScale, 1.5f * UiScale);
+                    using (var fp = Brand.Rounded(fr, radius + 1.5f * UiScale))
+                    using (var pen = new Pen(Brand.Accent, 2f * UiScale)) g.DrawPath(pen, fp);
                 }
             }
-            Color fg = Primary ? Color.White : (Danger ? Color.FromArgb(0xFF, 0x8B, 0xA0) : Brand.Text);
+            Color fg = Primary ? Brand.OnAccent : (Danger ? Brand.Err : Brand.Text);
             if (!Enabled) fg = Color.FromArgb(120, fg);
             TextRenderer.DrawText(g, Text, Font, Rectangle.Round(r), fg, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
         }
@@ -251,17 +298,7 @@ namespace Velox.Native
             int pad = S(24);
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            var tile = new RectangleF(pad, pad, S(56), S(56));
-            using (var p = Brand.Rounded(tile, S(14)))
-            using (var br = new SolidBrush(Brand.S1))
-            using (var pen = new Pen(Color.FromArgb(18, 255, 255, 255)))
-            {
-                g.FillPath(br, p);
-                g.DrawPath(pen, p);
-            }
-            var inner = tile;
-            inner.Inflate(-S(8), -S(8));
-            Brand.DrawLogo(g, inner, 0);
+            Brand.DrawAppIcon(g, new RectangleF(pad, pad, S(56), S(56)));
         }
 
         public static int Show(IWin32Window owner, string title, string message, string detail, string[] buttons, int primary, bool danger)

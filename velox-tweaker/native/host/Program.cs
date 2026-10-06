@@ -19,6 +19,10 @@ namespace Velox.Host
         public static Log Log;
         public static string AppDir;
         public static string DataDir;
+        /// <summary>Started by VeloxSetup.exe right after its own (full) intro: the start screen plays the short one.</summary>
+        public static bool FromSetup;
+        /// <summary>The user muted the installer's intro (M / sound button): this start screen stays silent too (not saved).</summary>
+        public static bool QuietStart;
         private static Mutex _mutex;
         private static uint _activateMsg;
 
@@ -30,6 +34,8 @@ namespace Velox.Host
             Log = new Log(Path.Combine(Path.Combine(DataDir, "logs"), "host.log"));
             bool test = HasArg(args, "--test") || HasArg(args, "/test");
             bool elevatedRelaunch = HasArg(args, "--elevated");
+            FromSetup = HasArg(args, "--from-setup");
+            QuietStart = HasArg(args, "--quiet-start");
             Log.Info("VELOX.exe " + Util.Version() + " startet (" + (test ? "Testmodus" : "echter Modus") + ", Admin: " + Util.IsElevated() + ", " + (IntPtr.Size * 8) + "-Bit)");
 
             try { Application.EnableVisualStyles(); } catch (Exception) { }

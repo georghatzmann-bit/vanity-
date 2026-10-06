@@ -1,11 +1,10 @@
-// Einstellungen: accent (live), motion, safety switches, KI providers (settings-ai.js), about + Testmodus.
+// Einstellungen: start sound + replay, motion, safety switches, KI providers (settings-ai.js), about + Testmodus.
+// (The accent picker is gone: the brand has one signal colour. settings.accent stays in settings.json, unused.)
 import { icon } from '../icons.js';
 import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append, radioKeys, startHint } from '../ui.js';
 import { aiSection } from './settings-ai.js';
+import { splash } from '../splash.js';
 
-const ACCENTS = [
-  ['violet', 'Violett'], ['blue', 'Blau'], ['cyan', 'Cyan'], ['green', 'Grün'], ['pink', 'Pink'], ['orange', 'Orange']
-];
 // Windows restore points (settings.restorePoints, docs/ARCHITECTURE.md section 8)
 export const RP_MODES = [
   { id: 'first', label: 'Nur einmal, vor der allerersten Änderung', desc: 'Empfohlen. Danach sichert VELOX jeden Wert im eigenen Journal – das spart Speicherplatz.' },
@@ -21,27 +20,18 @@ export function rpMode(settings) {
 export { MODELS } from './settings-ai.js';
 
 export default {
-  id: 'settings', title: 'Einstellungen', icon: 'cog', desc: 'Aussehen, Sicherheit und KI', keywords: 'optionen farbe animation api key claude code groq ki',
+  id: 'settings', title: 'Einstellungen', icon: 'cog', desc: 'Start, Sicherheit und KI', keywords: 'optionen ton sound start animation api key claude code groq ki',
   mount(el, ctx, opts) {
     const s = () => ctx.settings;
 
-    // ---------- appearance
-    const swatches = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Akzentfarbe' });
-    for (const [id, name] of ACCENTS) {
-      const b = h('button', { class: 'swatch', type: 'button', role: 'radio', 'aria-checked': String(s().accent === id), 'aria-label': name, 'data-tip': name, 'data-accent': id }, h('span', { class: 'swatch-dot' }), icon('check', 14, 'swatch-check'));
-      b.addEventListener('click', async () => {
-        const prev = s().accent || 'violet';
-        if (prev === id && b.getAttribute('aria-checked') === 'true') return;
-        markSwatch(id);
-        document.documentElement.dataset.accent = id; // live preview before the server answers
-        const ok = await ctx.saveSettings({ accent: id }, { silent: true });
-        if (ok) toast({ type: 'ok', title: 'Akzentfarbe: ' + name });
-        else { markSwatch(prev); document.documentElement.dataset.accent = prev; } // show what is really saved
-      });
-      swatches.appendChild(b);
-    }
-    function markSwatch(id) { for (const x of swatches.children) x.setAttribute('aria-checked', String(x.dataset.accent === id)); if (swatches.syncRadios) swatches.syncRadios(); }
-    radioKeys(swatches, (b) => b.click());
+    // ---------- start + motion
+    // settings.startSound: also read by VELOX.exe for its start screen (ARCHITECTURE.md section 11)
+    const startSound = toggle({ checked: s().startSound !== false, label: 'Start-Sound', cls: 'start-sound', onChange: async (v) => {
+      const ok = await ctx.saveSettings({ startSound: v }, { silent: true });
+      if (ok) toast({ type: 'ok', title: v ? 'Start-Sound an' : 'Start-Sound aus' });
+      return ok;
+    } });
+    const replay = button({ label: 'Abspielen', icon: 'play', size: 'sm', attrs: { 'data-testid': 'intro-replay' }, onClick: () => splash.preview(s()) });
     const osReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const motion = segmented({
       label: 'Animationen', value: s().motion === 'reduced' ? 'reduced' : 'full',
@@ -82,19 +72,21 @@ export default {
     // ---------- about
     const m = ctx.mode || {};
     const about = h('dl', { class: 'about' },
-      h('dt', { text: 'Version' }), h('dd', { text: (ctx.app.name || 'VELOX') + ' ' + (ctx.app.version || '') }),
+      h('dt', { text: 'Version' }), h('dd', { class: 'about-mono', text: ctx.app.version || '–' }),
       h('dt', { text: 'Modus' }), h('dd', {}, m.simulate ? badge('Testmodus', 'neutral', 'flask') : badge('Echtbetrieb', 'accent', 'bolt')),
       h('dt', { text: 'Rechte' }), h('dd', {}, m.admin ? badge('Administrator', 'ok', 'shieldCheck') : badge('Ohne Adminrechte', 'warn', 'alert')),
       h('dt', { text: 'Windows' }), h('dd', { text: m.os || 'unbekannt' }),
-      h('dt', { text: 'PowerShell' }), h('dd', { text: m.ps || 'unbekannt' }));
+      h('dt', { text: 'PowerShell' }), h('dd', { class: 'about-mono', text: m.ps || 'unbekannt' }));
+    const aboutBrand = h('div', { class: 'about-brand' }, h('img', { src: 'brand/wordmark.svg', alt: 'VELOX', width: '136', height: '32' }));
 
     const section = (id, ic, title, desc, ...children) => h('section', { class: 'card pad-24 set-section', id: 'set-' + id },
       h('div', { class: 'set-head' }, h('span', { class: 'set-icon' }, icon(ic, 18)), h('div', {}, h('h2', { class: 'section-title', text: title }), h('p', { class: 'section-desc', text: desc }))), ...children);
 
     append(el, h('div', { class: 'set-grid' },
-      section('look', 'palette', 'Aussehen', 'So sieht VELOX für dich aus.',
-        optionRow({ title: 'Akzentfarbe', desc: 'Färbt Schalter, Buttons und Hervorhebungen. Wirkt sofort.', control: swatches }),
-        optionRow({ title: 'Animationen', desc: osReduced ? 'Windows wünscht weniger Bewegung – VELOX hält sich daran.' : 'Reduziert schaltet Bewegungen ab und lässt nur sanfte Überblendungen.', control: motion })),
+      section('look', 'sparkles', 'Start und Bewegung', 'Wie VELOX startet und sich bewegt.',
+        optionRow({ icon: 'volume', title: 'Start-Sound', desc: 'Ein kurzer Klang zur Startanimation. Taste M schaltet ihn auch beim Start um.', control: startSound }),
+        optionRow({ icon: 'play', title: 'Startanimation', desc: 'Spielt sie noch einmal ab – mit Ton, wenn Start-Sound an ist. Esc beendet sie.', control: replay }),
+        optionRow({ icon: 'motion', title: 'Animationen', desc: osReduced ? 'Windows wünscht weniger Bewegung – VELOX hält sich daran.' : 'Reduziert schaltet Bewegungen ab und lässt nur sanfte Überblendungen.', control: motion })),
       section('safety', 'shield', 'Sicherheit', 'Schutz vor ungewollten Änderungen.',
         optionRow({ title: 'Bei riskanten Tweaks nachfragen', desc: 'Zeigt eine Warnung mit Häkchen, bevor ein riskanter Tweak vorgemerkt wird.', control: risky }),
         h('div', { class: 'rp-block' },
@@ -102,7 +94,7 @@ export default {
           h('p', { class: 'fine', text: 'Ein Wiederherstellungspunkt kann mehrere GB Speicher belegen. VELOX braucht ihn nicht, um etwas rückgängig zu machen – er ist nur ein zusätzliches Netz.' }),
           rpList)),
       section('ai', 'sparkles', 'KI', 'Welche KI der KI-Optimierer nutzt. Am besten: Claude Code mit deinem Claude-Abo.', ai.el),
-      section('about', 'info', 'Über VELOX', 'Version und Umgebung.', about,
+      section('about', 'info', 'Über VELOX', 'Version und Umgebung.', aboutBrand, about,
         h('div', { class: 'note ' + (m.simulate ? 'note-warn' : 'note-info') + ' mt-16' }, icon('flask', 15), h('span', { text: m.simulate
           ? 'Testmodus ist an: VELOX zeigt dir alles und tut so, als würde es Änderungen anwenden – an deinem PC wird aber nichts verändert. Zum echten Anwenden schließ VELOX und starte ' + startHint(false) + '.'
           : 'Echtbetrieb: Änderungen werden wirklich angewendet. Zum gefahrlosen Ausprobieren gibt es ' + startHint(true) + ' – dort wird nichts verändert.' })))));
@@ -111,6 +103,6 @@ export default {
     const aiFocus = opts && { ai: 'claude-code', claude: 'claude-api', 'claude-api': 'claude-api', groq: 'groq', 'claude-code': 'claude-code' }[opts.focus];
     if (aiFocus) requestAnimationFrame(() => ai.focus(aiFocus));
     if (opts && opts.focus === 'safety') requestAnimationFrame(() => { const t = el.querySelector('#set-safety'); if (t) { t.scrollIntoView({ block: 'start' }); t.classList.add('flash'); const r = rpList.querySelector('[aria-checked="true"]'); if (r) r.focus({ preventScroll: true }); } });
-    ctx.on('settings', () => { markSwatch(s().accent || 'violet'); markRp(rpMode(s())); });
+    ctx.on('settings', () => { startSound.setChecked(s().startSound !== false); markRp(rpMode(s())); });
   }
 };

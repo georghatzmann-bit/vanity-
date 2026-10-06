@@ -52,6 +52,14 @@ Write-Host ('VELOX ' + $version)
 
 $common = @('-c', 'Release', '-nologo', '-v', 'q', '-clp:ErrorsOnly')
 
+Write-Step 'Markenkit (brand/ -> Kopien)'
+# VELOX.exe and the setup embed byte-identical copies of brand/; buildtool verify checks them again in the exes
+$nodeCmd = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($nodeCmd) {
+    & $nodeCmd.Path (Join-Path (Join-Path (Join-Path $app 'brand') 'tools') 'check-copies.mjs')
+    if ($LASTEXITCODE -ne 0) { Write-Host 'FEHLER: Kopien von brand/ weichen ab - node tools/sync-brand.mjs ausfuehren' -ForegroundColor Red; exit 1 }
+} else { Write-Host '(node fehlt - Kopien werden erst von buildtool verify geprueft)' }
+
 Write-Step 'VELOX.exe'
 $null = Invoke-Dotnet 'host' (@('build', (Join-Path (Join-Path $here 'host') 'VeloxHost.csproj'), '-o', (Join-Path $obj 'host')) + $common)
 

@@ -183,19 +183,12 @@ namespace Velox.Setup
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             int pad = (int)(24 * _k);
-            Brand.DrawLogo(g, new RectangleF(pad, pad, 48 * _k, 48 * _k), (float)Math.Sin(_phase * 4.5) * 2f);
+            Brand.DrawAppIcon(g, new RectangleF(pad, pad, 48 * _k, 48 * _k));
             using (var f = Brand.UiFont(16 * _k, FontStyle.Bold))
                 TextRenderer.DrawText(g, "Microsoft WebView2 wird installiert", f, new Point((int)(pad + 64 * _k), pad + (int)(4 * _k)), Brand.Text);
             using (var f = Brand.UiFont(14 * _k, FontStyle.Regular))
                 TextRenderer.DrawText(g, _status, f, new Point((int)(pad + 64 * _k), pad + (int)(30 * _k)), Brand.Muted);
-            var track = new RectangleF(pad, ClientSize.Height - pad - 6 * _k, ClientSize.Width - 2 * pad, 6 * _k);
-            using (var p = Brand.Rounded(track, 3 * _k)) using (var br = new SolidBrush(Color.FromArgb(18, 255, 255, 255))) g.FillPath(br, p);
-            float w = track.Width * 0.38f, x = track.X + (float)((_phase * 0.55) % 1.3 - 0.3) * track.Width;
-            var seg = RectangleF.Intersect(track, new RectangleF(x, track.Y, w, track.Height));
-            if (seg.Width > 1)
-                using (var p = Brand.Rounded(seg, 3 * _k))
-                using (var br = new LinearGradientBrush(new RectangleF(seg.X - 1, seg.Y, seg.Width + 2, seg.Height), Brand.Accent, Brand.Cyan, 0f))
-                    g.FillPath(br, p);
+            Brand.DrawLoader(g, new RectangleF(pad, ClientSize.Height - pad - 2 * _k, ClientSize.Width - 2 * pad, 2 * _k), _k, Environment.TickCount / 1000.0, -1);
         }
 
         protected override void Dispose(bool disposing) { if (disposing) _anim.Dispose(); base.Dispose(disposing); }

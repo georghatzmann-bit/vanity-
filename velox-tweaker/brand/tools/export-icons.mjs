@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url)), brand = path.resolve(here, '..');
-const pw = process.env.PLAYWRIGHT || 'playwright';
+const pw = process.env.PLAYWRIGHT || (fs.existsSync('/opt/node22/lib/node_modules/playwright/index.mjs') ? '/opt/node22/lib/node_modules/playwright/index.mjs' : 'playwright');   // global install fallback, like tests/ui/run-ui-tests.mjs
 const { chromium } = await import(pw.startsWith('/') ? pathToFileURL(pw).href : pw);
 const src = (n) => n === 16 ? 'mark-16.svg' : n <= 24 ? `src/fit/mark-${n}.svg` : `src/fit/app-icon-${n}.svg`;
 const sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];

@@ -17,6 +17,8 @@
     <EmbeddedResource Include="../setup-ui/index.html" LogicalName="ui/index.html" />
     <EmbeddedResource Include="../setup-ui/setup.css" LogicalName="ui/setup.css" />
     <EmbeddedResource Include="../setup-ui/setup.js" LogicalName="ui/setup.js" />
+    <!-- byte-identical copies of brand/ (tools/sync-brand.mjs; buildtool verify compares them with brand/) -->
+    <EmbeddedResource Include="../setup-ui/brand/*.*" LogicalName="ui/brand/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Web.Extensions" />

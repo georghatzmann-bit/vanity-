@@ -1,0 +1,61 @@
+/* VELOX.exe start screen. Palette, type and motion come from brand/tokens.css (via brand/intro.css);
+ * this file only adds what the host needs around the intro: the Testmodus label, the "first start"
+ * hint and the error panel, which goes into intro.slot under the word (the word stays). */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--vx-ink); color: var(--vx-bone); }
+body { font: 400 13px/1.45 var(--vx-font); -webkit-font-smoothing: antialiased; user-select: none; }
+.stage { position: fixed; inset: 0; }
+
+/* Testmodus: the free left corner label, same size as the version label on the right, in "Sicher" green */
+.mode {
+  position: fixed; z-index: 4; top: 20px; left: var(--m, 56px); margin: 0; display: none;
+  font: 400 12px/1 var(--vx-font); color: var(--vx-safe); pointer-events: none;
+}
+body.test .mode { display: block; }
+
+.hint { margin: 0; color: var(--vx-ash-2); font-size: 12px; }
+
+/* error: the loader steps aside, the panel hangs from the V's foot like the loader did */
+body.failed .vx-load { visibility: hidden; }
+.err {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  height: 100%; max-width: 760px; padding: 0 0 56px; user-select: text;
+}
+.err[hidden] { display: none; }
+.err-title { margin: 0; font: 600 20px/1.25 var(--vx-font-display); color: var(--vx-bone); letter-spacing: -.005em; }
+.err-text { margin: 0; color: var(--vx-ash); max-width: 64ch; }
+.err-log {
+  flex: 0 1 auto; min-height: 44px; max-height: 180px; width: 100%; overflow: auto; margin: 2px 0 0; padding: 10px 12px;
+  background: var(--vx-ink-2); border: 1px solid var(--vx-line); border-left: 2px solid var(--vx-risk); border-radius: 4px;
+  font: 400 12px/1.5 var(--vx-mono); font-variant-numeric: tabular-nums; color: var(--vx-ash);
+  white-space: pre-wrap; word-break: break-word;
+}
+.err-log:empty { display: none; }
+.err-log:focus-visible { outline: 2px solid var(--vx-signal); outline-offset: 1px; }
+.err-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; flex: none; }
+
+.btn {
+  white-space: nowrap;
+  font: 600 13px/1 var(--vx-font); height: 34px; padding: 0 16px; border-radius: 6px; cursor: pointer;
+  color: var(--vx-bone); background: transparent; border: 1px solid var(--vx-line-2);
+  transition: background-color var(--vx-t-fast) linear, color var(--vx-t-fast) linear;
+}
+.btn:hover { background: var(--vx-ink-3); }
+.btn:active { background: var(--vx-ink-4); }
+.btn:focus-visible { outline: 2px solid var(--vx-signal); outline-offset: 2px; }
+.btn.primary { color: var(--vx-on-signal); background: var(--vx-signal); border-color: var(--vx-signal); }
+.btn.primary:hover { background: var(--vx-signal-hi); border-color: var(--vx-signal-hi); }
+.btn.primary:active { background: var(--vx-signal-lo); border-color: var(--vx-signal-lo); }
+.btn.quiet { border-color: transparent; color: var(--vx-ash); }
+.btn.quiet:hover { color: var(--vx-bone); background: var(--vx-ink-2); }
+.btn[hidden] { display: none; }
+
+/* the panel arrives like the installer's content: 8 px up, expo-out */
+body.failed .err { animation: vx-arrive 460ms var(--vx-ease) both; }
+@keyframes vx-arrive { from { opacity: 0; transform: translateY(8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  body.failed .err { animation: vx-fade 200ms linear both; }
+  @keyframes vx-fade { from { opacity: 0; } }
+  .btn { transition: none; }
+}

@@ -260,6 +260,215 @@ test('bootstrap renders, first-run scan, token removed from URL', async (t) => {
   await shot(page, 'overview-first-run-1360');
 });
 
+// ------------------------------------------------------------------ brand: splash, sound setting, palette, CSP
+/** A fresh window on the app (own context: own sessionStorage / localStorage), not waited for. */
+async function openRaw(t, query = '', opts = {}) {
+  const ctx = await t.browser.newContext({ viewport: opts.viewport || { width: 1360, height: 880 }, reducedMotion: opts.reducedMotion || 'no-preference' });
+  t.contexts.push(ctx);
+  const page = await ctx.newPage();
+  t.watch(page);
+  if (opts.init) await page.addInitScript(opts.init);
+  await page.goto(t.server.url + query);
+  return page;
+}
+const splashInfo = (page) => page.evaluate(() => window.__velox && window.__velox.splash && window.__velox.splash.info);
+async function introMounted(page) {
+  await page.waitForFunction(() => window.__velox && window.__velox.splash && window.__velox.splash.info.mounted, null, { timeout: 15000 });
+  return splashInfo(page);
+}
+async function settingsNow(t) { return (await api(t.server, 'GET', '/api/bootstrap')).json.settings; }
+
+test('splash: full intro for a new version, short after that, the hand-over then the app', async (t) => {
+  await api(t.server, 'POST', '/api/settings', { introSeen: '', startSound: true });
+  const version = (await api(t.server, 'GET', '/api/bootstrap')).json.app.version;
+  const page = await openRaw(t);
+  const a = await introMounted(page);
+  assert(a.variant === 'full' && !a.hosted, 'first start of ' + version + ': full intro, ' + JSON.stringify(a));
+  assert(a.sound === true && a.muted === false, 'sound allowed by the setting: ' + JSON.stringify(a));
+  assert((await page.$eval('#splash .vx-label-r', e => e.textContent)) === 'Version ' + version, 'version label');
+  assert(await page.$eval('#app', e => e.hasAttribute('inert')), 'the app behind the splash is inert');
+  await page.waitForFunction(() => document.querySelector('#splash .vx.vx--settled'), null, { timeout: 10000 });
+  await shot(page, 'state-splash-full');
+  await ready(page);
+  assert(!(await page.$('#splash .vx')), 'intro destroyed after the hand-over');
+  assert(!(await page.$eval('#app', e => e.hasAttribute('inert'))), 'app usable after the splash');
+  assert((await settingsNow(t)).introSeen === version, 'introSeen remembered in settings.json');
+  const page2 = await openRaw(t);
+  const b = await introMounted(page2);
+  assert(b.variant === 'short', 'second start: short intro, ' + JSON.stringify(b));
+  // Esc skips to the settled pose; the app is there right after the hand-over
+  await page2.waitForFunction(() => window.__velox.splash.intro && window.__velox.splash.intro.keysActive);
+  await page2.keyboard.press('Escape');
+  await ready(page2);
+});
+
+test('splash: under VELOX.exe only the hand-over pose, no sound, no second intro', async (t) => {
+  await api(t.server, 'POST', '/api/settings', { introSeen: '', startSound: true });
+  const page = await openRaw(t, (t.server.url.includes('?') ? '&' : '?') + 'from=host&sound=off');
+  const a = await introMounted(page);
+  assert(a.hosted && a.variant === 'still', 'from=host: still pose, ' + JSON.stringify(a));
+  const pose = await page.evaluate(() => ({ cls: document.querySelector('#splash .vx').className, soundBtn: !!document.querySelector('#splash .vx-sound:not([hidden])'), skip: !!document.querySelector('#splash .vx-skip:not([hidden])') }));
+  assert(/vx--done/.test(pose.cls) && !pose.soundBtn && !pose.skip, 'canonical end pose without controls: ' + JSON.stringify(pose));
+  await ready(page);
+  assert(!/from=|sound=|[?&]t=/.test(page.url()), 'hints removed from the address bar: ' + page.url());
+  const s = await settingsNow(t);
+  assert(s.startSound === false, 'the start screen\'s mute choice (&sound=off) is saved');
+  assert(s.introSeen === '', 'no full intro played here, nothing marked as seen');
+  // a reload inside VELOX.exe (the hint is gone from the URL) still shows only the pose
+  await page.reload();
+  const r = await introMounted(page);
+  assert(r.hosted && r.variant === 'still', 'reload in VELOX.exe: still pose, ' + JSON.stringify(r));
+  await ready(page);
+  await api(t.server, 'POST', '/api/settings', { startSound: true });
+  if (MODE === 'mock') {
+    // a host that forgot from=host: bootstrap.mode.hosted is enough
+    await api(t.server, 'POST', '/__mock/mode', { hosted: true });
+    try {
+      const p2 = await openRaw(t);
+      const b = await introMounted(p2);
+      assert(b.hosted && b.variant === 'still', 'mode.hosted: still pose, ' + JSON.stringify(b));
+      await ready(p2);
+    } finally { await api(t.server, 'POST', '/__mock/mode', { hosted: false }); }
+  }
+});
+
+test('splash: first-run scan shows its progress in the intro, also under VELOX.exe', async (t) => {
+  await api(t.server, 'POST', '/__mock/reset', {});
+  try {
+    const page = await openRaw(t, (t.server.url.includes('?') ? '&' : '?') + 'from=host');
+    await page.waitForSelector('#splash .splash-scan', { timeout: 15000 });
+    await page.waitForFunction(() => /%/.test(document.querySelector('#splash .splash-scan-pct').textContent));
+    await shot(page, 'state-splash-hosted-scan');
+    await ready(page);
+    await api(t.server, 'POST', '/__mock/reset', {});
+    const p2 = await openRaw(t);
+    await introMounted(p2);
+    await p2.waitForFunction(() => document.querySelector('#splash .vx.vx--det'), null, { timeout: 15000 });
+    await ready(p2);
+  } finally { await api(t.server, 'POST', '/api/settings', { startSound: true }); }
+}, { mockOnly: true });
+
+test('splash: M in the intro writes settings.startSound; the next start respects it', async (t) => {
+  await api(t.server, 'POST', '/api/settings', { introSeen: '', startSound: true });
+  const page = await openRaw(t);
+  await introMounted(page);
+  await page.waitForFunction(() => window.__velox.splash.intro && window.__velox.splash.intro.keysActive);
+  // headless Chromium blocks autoplay like Edge does: the first M is the gesture that unlocks
+  // (and replays) the sound, it never mutes; the next M mutes
+  if (await page.evaluate(() => window.__velox.splash.intro.blocked)) {
+    assert((await page.$eval('#splash .vx-sound', b => b.textContent)).includes('Ton: klicken'), 'blocked autoplay says so');
+    await page.keyboard.press('m');
+    await page.waitForFunction(() => !window.__velox.splash.intro.blocked);
+  }
+  await page.keyboard.press('m');
+  await page.waitForFunction(() => window.__velox.splash.info.muted === true);
+  await page.waitForFunction(() => window.__velox.settings.startSound === false, null, { timeout: 5000 });
+  assert((await settingsNow(t)).startSound === false, 'M saved startSound=false');
+  await ready(page);
+  await goPage(page, 'settings');
+  assert((await page.$eval('.switch.start-sound', b => b.getAttribute('aria-checked'))) === 'false', 'settings page shows it off');
+  const p2 = await openRaw(t);
+  const b = await introMounted(p2);
+  assert(b.muted === true && b.sound === false, 'next start is muted: ' + JSON.stringify(b));
+  assert((await p2.$eval('#splash .vx-sound', e => e.textContent)).includes('Ton aus'), 'button says "Ton aus"');
+  await ready(p2);
+  // and back on through the settings page
+  await goPage(p2, 'settings');
+  await p2.click('.switch.start-sound');
+  await p2.waitForFunction(() => window.__velox.settings.startSound === true);
+  assert((await settingsNow(t)).startSound === true, 'switched back on');
+  // replay from the settings page: the full intro over the app, then back
+  await p2.click('[data-testid="intro-replay"]');
+  await p2.waitForFunction(() => window.__velox.splash.info.preview === true);
+  assert(!(await p2.$eval('#splash', e => e.hidden)), 'replay shows the splash');
+  await p2.keyboard.press('Escape');
+  await p2.waitForFunction(() => document.getElementById('splash').hidden && !window.__velox.splash.info.preview, null, { timeout: 8000 });
+  assert(!(await p2.$eval('#app', e => e.hasAttribute('inert'))), 'app usable after the replay');
+});
+
+test('brand: no violet left, signal only where the kit allows it, AA contrast of accent text and badges', async (t) => {
+  // the stylesheets themselves
+  for (const f of ['css/app.css', 'css/games.css', 'brand/tokens.css', 'brand/tokens-app.css', 'brand/intro.css', 'index.html']) {
+    const r = await rawRequest(t.server, 'GET', '/' + f);
+    assert(r.status === 200, f + ' served');
+    assert(!/7C5CFF|124,\s*92,\s*255|22D3EE|34,\s*211,\s*238/i.test(r.text), f + ' still contains the old violet/cyan');
+    assert(!/data-accent/.test(r.text), f + ' still has accent variants');
+  }
+  const page = await openApp(t, 'overview');
+  const OLD = /124,\s*92,\s*255|34,\s*211,\s*238/;
+  const scan = () => page.evaluate(() => {
+    const props = ['color', 'backgroundColor', 'borderTopColor', 'boxShadow', 'backgroundImage', 'outlineColor', 'fill', 'stroke', 'textDecorationColor'];
+    const out = [];
+    for (const el of document.querySelectorAll('body, body *')) {
+      for (const pseudo of [null, '::before', '::after']) {
+        const cs = getComputedStyle(el, pseudo);
+        for (const p of props) { const v = cs[p]; if (v && /124,\s*92,\s*255|34,\s*211,\s*238/.test(v)) out.push((el.className && el.className.baseVal === undefined ? el.className : el.tagName) + (pseudo || '') + ' ' + p + ': ' + v); }
+      }
+      if (out.length > 5) break;
+    }
+    return out;
+  });
+  for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings']) {
+    await goPage(page, id);
+    const bad = await scan();
+    assert(!bad.length, 'old accent on ' + id + ': ' + bad.join(' | '));
+  }
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('.palette');
+  assert(!(await scan()).length, 'old accent in the palette');
+  await page.keyboard.press('Escape');
+  // the signal: primary button (ink text on it), focus ring, active nav bar
+  const sig = await page.evaluate(() => {
+    const btn = document.querySelector('.btn-primary') || document.querySelector('#pending-apply');
+    const bar = getComputedStyle(document.getElementById('nav-pill'), '::before').backgroundColor;
+    return { bg: getComputedStyle(btn).backgroundColor, fg: getComputedStyle(btn).color, bar, ring: getComputedStyle(document.documentElement).getPropertyValue('--focus-outline') };
+  });
+  assert(sig.bg === 'rgb(255, 90, 31)' && sig.fg === 'rgb(12, 13, 15)', 'primary = signal with ink text: ' + JSON.stringify(sig));
+  assert(sig.bar === 'rgb(255, 90, 31)', 'active nav bar in signal: ' + sig.bar);
+  assert(/FF5A1F|var\(--vx-signal\)/i.test(sig.ring), 'focus ring in signal: ' + sig.ring);
+  // contrast (WCAG 2.x) of every badge and every accent button on the tweaks page, against what
+  // is really behind them (semi-transparent tints composited over the card)
+  await goPage(page, 'tweaks');
+  const res = await page.evaluate(() => {
+    const parse = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map(Number); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+    const over = (top, bot) => ({ r: top.r * top.a + bot.r * (1 - top.a), g: top.g * top.a + bot.g * (1 - top.a), b: top.b * top.a + bot.b * (1 - top.a), a: 1 });
+    const bgOf = (el) => { const stack = []; for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0) { stack.push(c); if (c.a >= 1) break; } } let acc = { r: 12, g: 13, b: 15, a: 1 }; for (let i = stack.length - 1; i >= 0; i--) acc = over(stack[i], acc); return acc; };
+    const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+    const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const rows = [];
+    for (const el of document.querySelectorAll('.badge, .btn-primary, .btn-brand, .chip[aria-pressed="true"]')) {
+      if (!el.getClientRects().length) continue;
+      const fg = parse(getComputedStyle(el).color); const bg = bgOf(el);
+      rows.push({ cls: el.className, text: el.textContent.trim().slice(0, 24), ratio: Math.round(ratio(fg, bg) * 100) / 100 });
+    }
+    return rows;
+  });
+  assert(res.length > 10, 'badges found: ' + res.length);
+  const low = res.filter(r => r.ratio < 4.5);
+  assert(!low.length, 'below AA 4.5:1: ' + JSON.stringify(low.slice(0, 5)));
+  const kinds = await page.evaluate(() => ['ok', 'warn', 'error'].map(k => { const b = document.querySelector('.badge-' + k); return b ? getComputedStyle(b).color : null; }));
+  assert(new Set(kinds.filter(Boolean)).size === kinds.filter(Boolean).length && !kinds.includes('rgb(255, 90, 31)'), 'Sicher/Mittel/Riskant distinct and never the signal: ' + kinds.join(' / '));
+});
+
+test('CSP: no violations anywhere (splash, every page, palette, dialogs, replay)', async (t) => {
+  const init = () => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective + ' ' + (e.blockedURI || '') + ' ' + (e.sourceFile || '') + ':' + e.lineNumber)); };
+  const page = await openRaw(t, '', { init });
+  const consoleCsp = [];
+  page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) consoleCsp.push(m.text()); });
+  await ready(page);
+  for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings']) await goPage(page, id);
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('.palette');
+  await page.keyboard.press('Escape');
+  await page.click('[data-testid="intro-replay"]');
+  await page.waitForFunction(() => window.__velox.splash.info.preview === true);
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.getElementById('splash').hidden, null, { timeout: 8000 });
+  const v = await page.evaluate(() => window.__csp);
+  assert(!v.length && !consoleCsp.length, 'CSP violations: ' + JSON.stringify(v.concat(consoleCsp).slice(0, 5)));
+});
+
 test('navigation: every page at 1360x880 and 900x600, no horizontal overflow', async (t) => {
   const ids = ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings'];
   for (const vp of [{ width: 1360, height: 880 }, { width: 900, height: 600 }]) {
@@ -413,7 +622,7 @@ test('hover feedback on every kind of control', async (t) => {
   await goPage(page, 'presets');
   if (await page.$('.preset-card')) await check('.preset-card');
   await goPage(page, 'settings');
-  for (const sel of ['.swatch:not([aria-checked="true"])', '.model:not([aria-checked="true"])']) await check(sel);
+  for (const sel of ['.switch.start-sound', '[data-testid="intro-replay"]', '.model:not([aria-checked="true"])']) await check(sel);
 });
 
 test('keyboard: switch with Space, Escape closes dialogs, focus ring', async (t) => {
@@ -961,14 +1170,12 @@ test('closing a second window does not stop VELOX', async (t) => {
 test('settings: a failed save shows what is really saved', async (t) => {
   t.expectNetworkErrors = true;
   const page = await openApp(t, 'settings');
-  const accent = await page.evaluate(() => document.documentElement.dataset.accent);
+  const sound = await page.$eval('.switch.start-sound', b => b.getAttribute('aria-checked'));
   await page.route('**/api/settings', r => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Speichern fehlgeschlagen (Test)."}' }));
-  const other = accent === 'green' ? 'orange' : 'green';
-  await page.click('.swatch[data-accent="' + other + '"]');
+  await page.click('.switch.start-sound');
   await page.waitForSelector('#toasts .toast-error');
   await page.waitForTimeout(200);
-  assert((await page.evaluate(() => document.documentElement.dataset.accent)) === accent, 'accent reverted');
-  assert(await page.$eval('.swatch[data-accent="' + accent + '"]', b => b.getAttribute('aria-checked') === 'true'), 'saved swatch checked again');
+  assert((await page.$eval('.switch.start-sound', b => b.getAttribute('aria-checked'))) === sound, 'Start-Sound switch shows what is really saved');
   assert(await page.$('#toasts .toast-error.is-sticky'), 'error toast stays until closed');
   await page.click('.seg-btn[data-value="reduced"]');
   await page.waitForTimeout(400);
@@ -1014,15 +1221,19 @@ test('top bar: the page title is never cut off', async (t) => {
   if (MODE === 'mock') await api(t.server, 'POST', '/__mock/state', { needs: { reboot: false } });
 });
 
-test('reduced motion before boot: splash and aurora do not animate', async (t) => {
+test('reduced motion before boot: the intro fades instead of striking, nothing else animates', async (t) => {
   const ctx = await t.browser.newContext({ viewport: { width: 1360, height: 880 }, reducedMotion: 'reduce' });
   t.contexts.push(ctx);
   const page = await ctx.newPage();
   t.watch(page);
   await page.route('**/api/bootstrap', async (r) => { await sleep(1200); await r.continue(); });
   await page.goto(t.server.url);
-  const anim = await page.evaluate(() => ['.aurora .a1', '.splash-logo .vx-logo-cap', '.splash-logo .vx-logo-v'].map(s => getComputedStyle(document.querySelector(s)).animationName));
-  assert(anim.every(a => a === 'none'), 'animations before boot: ' + anim.join(', '));
+  // the backend is slow: after 700 ms the splash starts a silent short intro, which under
+  // prefers-reduced-motion is the kit's reduced variant (a 0.6 s fade, no blade, no travel)
+  await page.waitForSelector('#splash .vx');
+  const st = await page.evaluate(() => ({ variant: document.querySelector('#splash .vx').className, anims: Array.from(document.querySelectorAll('#splash, #splash *')).map(e => getComputedStyle(e).animationName).filter(a => a && a !== 'none') }));
+  assert(/vx--reduced/.test(st.variant), 'reduced intro variant: ' + st.variant);
+  assert(st.anims.length === 0, 'no CSS animations in the splash: ' + st.anims.join(', '));
   await ready(page);
 });
 
@@ -1249,24 +1460,25 @@ test('Wiederherstellungspunkt: "Überspringen" beendet nur diesen Schritt', asyn
   assert(/übersprungen/i.test(await toastText(page)), 'toast says skipped: ' + await toastText(page));
 }, { mockOnly: true });
 
-test('Einstellungen: accent changes live and persists; motion setting', async (t) => {
+test('Einstellungen: Start-Sound and motion persist; one signal colour, no accent picker', async (t) => {
   const page = await openApp(t, 'settings');
-  await page.click('.swatch[data-accent="cyan"]');
-  await page.waitForFunction(() => document.documentElement.dataset.accent === 'cyan');
-  await page.waitForTimeout(400);
-  const col = await page.$eval('.btn-primary, .switch[aria-checked="true"] .switch-track', el => getComputedStyle(el).backgroundColor);
-  assert(/34, 195, 230/.test(col), 'accent applied to controls: ' + col);
-  await page.waitForTimeout(400);
-  await shot(page, 'state-settings-cyan');
+  assert(!(await page.$('.swatch')), 'no accent swatches: the brand has one signal colour');
+  const desc = await page.$eval('.switch.start-sound', b => b.closest('.opt-row').querySelector('.opt-desc').textContent);
+  assert(desc.length > 20, 'Start-Sound has one grey explanation line');
+  assert((await page.$eval('.switch.start-sound', b => b.getAttribute('aria-checked'))) === 'true', 'Start-Sound on by default');
+  await page.click('.switch.start-sound');
+  await page.waitForFunction(() => document.querySelector('.switch.start-sound').getAttribute('aria-checked') === 'false');
+  await page.waitForFunction(() => window.__velox.settings.startSound === false);
+  await shot(page, 'state-settings-start');
   await page.reload();
   await ready(page);
-  assert((await page.evaluate(() => document.documentElement.dataset.accent)) === 'cyan', 'accent persisted');
+  assert((await page.$eval('.switch.start-sound', b => b.getAttribute('aria-checked'))) === 'false', 'Start-Sound off persisted');
+  await page.click('.switch.start-sound');
+  await page.waitForFunction(() => window.__velox.settings.startSound === true);
   await page.click('.seg-btn[data-value="reduced"]');
   await page.waitForFunction(() => document.documentElement.dataset.motion === 'reduced');
   await page.click('.seg-btn[data-value="full"]');
   await page.waitForFunction(() => document.documentElement.dataset.motion === 'full');
-  await page.click('.swatch[data-accent="violet"]');
-  await page.waitForFunction(() => document.documentElement.dataset.accent === 'violet');
   await page.waitForTimeout(300);
 });
 
@@ -1312,8 +1524,7 @@ test('reduced motion: OS preference turns animations into plain fades', async (t
   assert((await page.evaluate(() => document.documentElement.dataset.motion)) === 'reduced', 'data-motion=reduced');
   const dur = await page.$eval('.page', el => parseFloat(getComputedStyle(el).animationDuration));
   assert(dur <= 0.13, 'page animation short: ' + dur);
-  const aur = await page.$eval('.aurora .a1', el => getComputedStyle(el).animationName);
-  assert(aur === 'none', 'aurora stopped');
+  assert(!(await page.$('.aurora')), 'no aurora background any more (calm ink surface)');
   await goPage(page, 'tweaks');
   const id = await firstRow(page, { status: 'default', risk: 'safe' });
   await page.click(rowSel(id) + ' .switch');

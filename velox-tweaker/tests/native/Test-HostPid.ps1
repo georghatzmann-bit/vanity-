@@ -2,6 +2,7 @@
 .SYNOPSIS
     Checks the VELOX.exe <-> Velox.ps1 contract in simulate mode (runs on Linux with pwsh 7, and on Windows):
     - "-NoBrowser -Port 0 -HostPid <pid>" prints "VELOX_READY http://127.0.0.1:<port>/?t=<token>"
+    - the app page loads with the hand-over parameters VELOX.exe appends (&from=host&sound=on|off)
     - the backend answers /api/bootstrap and POST /api/heartbeat (busy check before closing) with that token
     - the backend ends by itself a few seconds after the host process is gone
     - POST /api/shutdown?t=<token> (what VELOX.exe sends on close) is accepted
@@ -86,6 +87,11 @@ if ($url) {
         $r = Invoke-RestMethod -Uri ((Get-Origin $url) + 'api/bootstrap') -Headers @{ 'X-Velox-Token' = (Get-Token $url) } -TimeoutSec 10
         Check ($null -ne $r -and $r.PSObject.Properties.Name -contains 'busy') '/api/bootstrap answers with "busy"'
     } catch { Check $false ('/api/bootstrap: ' + $_.Exception.Message) }
+    try {
+        # what VELOX.exe navigates to after the start screen's hand-over (HostForm.AppUrl): the app page must load
+        $app = Invoke-WebRequest -UseBasicParsing -Uri ($url + '&from=host&sound=off') -TimeoutSec 10
+        Check ($app.StatusCode -eq 200 -and $app.Content -match '<html') 'app URL with &from=host&sound=off (VELOX.exe hand-over) serves the app'
+    } catch { Check $false ('app URL with &from=host: ' + $_.Exception.Message) }
     # what VELOX.exe asks before it closes (Backend.IsBusy): a cheap POST /api/heartbeat, no session id
     try {
         $raw = Invoke-WebRequest -UseBasicParsing -Method Post -Uri ((Get-Origin $url) + 'api/heartbeat') -Headers @{ 'X-Velox-Token' = (Get-Token $url) } -Body '' -TimeoutSec 10

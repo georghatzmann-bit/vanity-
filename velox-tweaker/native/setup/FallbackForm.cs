@@ -104,7 +104,7 @@ namespace Velox.Setup
         private CheckBox AddCheck(string text, int y)
         {
             var c = new CheckBox { Text = text, Checked = true, AutoSize = false, ForeColor = Brand.Text, BackColor = Brand.Bg, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
-            c.FlatAppearance.BorderColor = Brand.Accent;
+            c.FlatAppearance.BorderColor = Brand.Line2;
             c.FlatAppearance.CheckedBackColor = Brand.S2;
             c.FlatAppearance.MouseOverBackColor = Brand.S1;
             c.SetBounds(S(32), y, ClientSize.Width - S(64), S(26));
@@ -119,19 +119,9 @@ namespace Velox.Setup
             base.OnPaint(e);
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            var tile = new RectangleF(S(32), S(28), S(52), S(52));
-            using (var p = Brand.Rounded(tile, S(13))) using (var br = new SolidBrush(Brand.S1)) using (var pen = new Pen(Color.FromArgb(18, 255, 255, 255))) { g.FillPath(br, p); g.DrawPath(pen, p); }
-            var inner = tile; inner.Inflate(-S(7), -S(7));
-            Brand.DrawLogo(g, inner, 0);
+            Brand.DrawAppIcon(g, new RectangleF(S(32), S(28), S(52), S(52)));
             if (_pct >= 0)
-            {
-                var track = new RectangleF(S(32), ClientSize.Height - S(84), ClientSize.Width - S(64), S(6));
-                using (var p = Brand.Rounded(track, S(3))) using (var br = new SolidBrush(Color.FromArgb(18, 255, 255, 255))) g.FillPath(br, p);
-                var fill = new RectangleF(track.X, track.Y, Math.Max(track.Height, (float)(track.Width * _pct / 100.0)), track.Height);
-                using (var p = Brand.Rounded(fill, S(3)))
-                using (var br = new LinearGradientBrush(new RectangleF(track.X - 1, track.Y, track.Width + 2, track.Height), Brand.Accent, Brand.Cyan, 0f))
-                    g.FillPath(br, p);
-            }
+                Brand.DrawLoader(g, new RectangleF(S(32), ClientSize.Height - S(84), ClientSize.Width - S(64), S(2)), _k, 0, _pct);
         }
 
         private void Browse()

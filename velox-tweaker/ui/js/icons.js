@@ -83,11 +83,13 @@ const P = {
   keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7.5 14h9"/>',
   palette: '<path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.3-1.2-1.6-1.2-2.8 0-1 .8-1.5 1.8-1.5h2.1a4 4 0 0 0 4-4.1c0-3.8-3.8-6.9-8.5-6.9Z"/><circle cx="7.8" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7.3" r="1" fill="currentColor"/><circle cx="15" cy="7.8" r="1" fill="currentColor"/>',
   motion: '<path d="M3 12h4M3 7.5h7M3 16.5h6"/><circle cx="16" cy="12" r="4.5"/>',
+  volume: '<path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>',
   flask: '<path d="M9.5 3.5h5M10.5 3.5v5.2L5 18.3A1.5 1.5 0 0 0 6.3 20.5h11.4a1.5 1.5 0 0 0 1.3-2.2l-5.5-9.6V3.5"/><path d="M7.5 14.5h9"/>',
   cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.5 1.6A3.8 3.8 0 0 1 17.5 18.5H7Z"/>',
   send: '<path d="M20.5 3.5 10 14M20.5 3.5 14 20.5l-4-6.5-6.5-4 17-6.5Z"/>',
-  logo: '<path d="M5.5 3.5v17M12 3.5v17M18.5 3.5v17" opacity=".4"/><path d="M5.5 7 12 17l6.5-10" stroke-width="2.4"/><rect x="2.5" y="5.4" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><rect x="9" y="15.4" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><rect x="15.5" y="5.4" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/>'
+  // the brand mark (brand/mark.svg): the wordmark's V, cut once, the upper half one step ahead, the foot in signal
+  logo: '<g transform="translate(1.3 2) scale(.2)" stroke="none"><path fill="currentColor" d="M22.84 0L47.84 0L52.56 44L28.63 44ZM63.18 44L81.84 0L106.84 0L87.11 44Z"/><path fill="#FF5A1F" d="M46.41 52L47.7 64L52.79 52L76.52 52L55 100L29 100L22.68 52Z"/></g>'
 };
 
 const ALIAS = {

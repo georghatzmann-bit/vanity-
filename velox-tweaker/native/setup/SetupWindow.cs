@@ -45,12 +45,17 @@ namespace Velox.Setup
             exitCode = 1;
             string ui = Path.Combine(Program.TempDir, "ui");
             Directory.CreateDirectory(ui);
-            foreach (string f in new[] { "index.html", "setup.css", "setup.js" })
+            // index.html, setup.css, setup.js and brand/* (byte-identical copies of the brand kit)
+            foreach (string name in Payload.ResourceNames("ui/"))
             {
-                byte[] b = Payload.Resource("ui/" + f);
-                if (b == null) { Program.Log.Error("UI-Datei fehlt im Setup: " + f); return false; }
-                File.WriteAllBytes(Path.Combine(ui, f), b);
+                string rel = name.Substring(3);
+                if (rel.Length == 0 || rel.Contains("..") || rel.Contains(":") || rel.Contains("\\") || rel.StartsWith("/", StringComparison.Ordinal)) continue;
+                string path = Path.Combine(ui, rel.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllBytes(path, Payload.Resource(name));
             }
+            foreach (string f in new[] { "index.html", "setup.css", "setup.js", "brand/intro.js", "brand/ticks.js" })
+                if (!File.Exists(Path.Combine(ui, f.Replace('/', Path.DirectorySeparatorChar)))) { Program.Log.Error("UI-Datei fehlt im Setup: " + f); return false; }
             using (var form = new SetupForm(a, ui))
             {
                 Application.Run(form);
@@ -63,6 +68,8 @@ namespace Velox.Setup
     internal sealed class SetupForm : Form
     {
         private const string Host = "setup.velox.example";
+        // the intro's sound plays without a click (WebView2 otherwise blocks audio until a user gesture)
+        private const string AutoplayArgs = "--autoplay-policy=no-user-gesture-required";
         private const int DipW = 880, DipH = 560;
 
         private readonly Program.Args _args;
@@ -73,6 +80,7 @@ namespace Velox.Setup
         private bool _busy;
         private bool _allowClose;
         private string _installedDir;   // after a successful install, for "VELOX starten"
+        private bool _quietStart;       // the intro was muted here (M / sound button): passed to VELOX.exe as --quiet-start
         private readonly JavaScriptSerializer _json = new JavaScriptSerializer();
 
         public int ExitCode { get; private set; }
@@ -96,7 +104,7 @@ namespace Velox.Setup
             int w = Math.Min((int)Math.Round(DipW * k), wa.Width), h = Math.Min((int)Math.Round(DipH * k), wa.Height);
             Bounds = new Rectangle(wa.Left + (wa.Width - w) / 2, wa.Top + (wa.Height - h) / 2, w, h);
 
-            try { Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF0F1115"); } catch (Exception) { }
+            try { Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF0C0D0F"); } catch (Exception) { }
             _web = new WebView2 { Dock = DockStyle.Fill };
             try { _web.DefaultBackgroundColor = Brand.Bg; } catch (Exception) { }
             Controls.Add(_web);
@@ -120,7 +128,7 @@ namespace Velox.Setup
             Win.ApplyDarkFrame(Handle, true, -1);
             try
             {
-                int border = 0x00443128;   // #283144 as COLORREF: a faint hairline around the window (Windows 11)
+                int border = Brand.LineBgr;   // --vx-line as COLORREF: a hairline around the window (Windows 11)
                 NativeMethods.DwmSetWindowAttribute(Handle, NativeMethods.DWMWA_BORDER_COLOR, ref border, 4);
             }
             catch (Exception) { }
@@ -142,10 +150,22 @@ namespace Velox.Setup
             base.OnLoad(e);
             try
             {
+                // a fresh user data folder per run (the private temp folder), so no other browser process can
+                // hold it with other options; if the runtime still refuses the argument, start without it
+                // (the intro then runs silent and offers "Ton: klicken")
                 string udf = Path.Combine(Program.TempDir, "webview2");
+                CoreWebView2Environment env;
                 var opts = new CoreWebView2EnvironmentOptions();
                 try { opts.Language = "de-DE"; } catch (Exception) { }
-                CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, udf, opts);
+                opts.AdditionalBrowserArguments = AutoplayArgs;
+                try { env = await CoreWebView2Environment.CreateAsync(null, udf, opts); }
+                catch (Exception ex)
+                {
+                    _log.Warn("WebView2 mit Autoplay nicht gestartet (" + ex.Message + ") - ohne.");
+                    opts = new CoreWebView2EnvironmentOptions();
+                    try { opts.Language = "de-DE"; } catch (Exception) { }
+                    env = await CoreWebView2Environment.CreateAsync(null, udf + "-2", opts);
+                }
                 await _web.EnsureCoreWebView2Async(env);
                 _core = _web.CoreWebView2;
                 CoreWebView2Settings s = _core.Settings;
@@ -177,7 +197,9 @@ namespace Velox.Setup
                     if (a2.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessExited || a2.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
                         Try(() => _core.Reload());
                 };
-                _core.Navigate("https://" + Host + "/index.html");
+                // the start sound follows the app's setting (settings.json "startSound", read only; missing = on)
+                bool sound = UserSettings.StartSound(UserSettings.DataDir(), _log);
+                _core.Navigate("https://" + Host + "/index.html?sound=" + (sound ? "1" : "0"));
             }
             catch (Exception ex)
             {
@@ -241,11 +263,16 @@ namespace Velox.Setup
                 case "install": StartInstall(m); break;
                 case "uninstall": StartUninstall(m); break;
                 case "launch":
-                    if (_installedDir != null) Installer.Launch(_installedDir);
+                    if (_installedDir != null) Installer.Launch(_installedDir, _quietStart);
                     _allowClose = true;
                     Close();
                     break;
                 case "openLog": Util.OpenUnelevated(_log.Path, _log); break;
+                case "sound":
+                    // M / the sound button in the intro: only for this run (the setup never writes the app's settings)
+                    _quietStart = !Bool(m, "on", true);   // ... but a VELOX.exe started from here stays silent too
+                    _log.Info("Startton im Setup " + (_quietStart ? "aus" : "an") + ".");
+                    break;
             }
         }
 
@@ -335,7 +362,7 @@ namespace Velox.Setup
                 string error;
                 _installedDir = Installer.NormalizeDir(o.Dir, out error);
                 bool launched = false;
-                if (o.Launch && _installedDir != null) launched = Installer.Launch(_installedDir);
+                if (o.Launch && _installedDir != null) launched = Installer.Launch(_installedDir, _quietStart);
                 ExitCode = 0;
                 Post(new Dictionary<string, object> { { "type", "done" }, { "mode", "install" }, { "launched", launched } });
             });

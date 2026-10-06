@@ -7,6 +7,7 @@ import {
   viewTransition, openLayer, reducedMotion, overlayOpen, spinner, button, startHint
 } from './ui.js';
 import { tweakScore, textScore } from './search.js';
+import { splash } from './splash.js';
 
 import overview from './pages/overview.js';
 import tweaks from './pages/tweaks.js';
@@ -102,11 +103,13 @@ const ctx = {
   }
 };
 window.__velox = ctx; // handy for debugging in the Edge dev tools; holds no secrets
+ctx.splash = splash;   // tests + dev tools: splash.info (variant, hosted, sound)
 
 // ------------------------------------------------------------------ theme
 const mqReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+// One identity, one signal colour (brand/): settings.accent of older versions is kept in
+// settings.json but no longer applied.
 function applyTheme() {
-  root.dataset.accent = ctx.settings.accent || 'violet';
   root.dataset.motion = (ctx.settings.motion === 'reduced' || mqReduced.matches) ? 'reduced' : 'full';
 }
 mqReduced.addEventListener('change', applyTheme);
@@ -114,7 +117,11 @@ mqReduced.addEventListener('change', applyTheme);
 // ------------------------------------------------------------------ boot
 async function boot() {
   installEffects();
+  // the splash covers the app: keyboard focus must not wander into the controls behind it
+  $('#app').setAttribute('inert', '');
+  $('#app').setAttribute('data-splash', '');
   if (!initToken() && !hasToken()) { showEnded('token'); return; }
+  splash.early();
   onApi('lost', () => showEnded('lost'));
   onApi('unauthorized', () => showEnded('token'));
   buildShell();
@@ -129,11 +136,13 @@ async function boot() {
     return;
   }
   ingest(data);
+  splash.configure(data, (partial) => saveSettings(partial, { silent: true }));
   restorePending();
   applyTheme();
   renderNav();
   renderChips();
   renderBanners();
+  $('#brand-ver').textContent = ctx.app.version || '';
   root.classList.add('ready');
   window.addEventListener('hashchange', route);
   route();
@@ -285,7 +294,8 @@ function renderNav() {
     const b = h('a', { class: 'nav-item', href: '#/' + p.id, 'aria-current': p.id === current ? 'page' : null, 'data-page': p.id, 'data-tip': p.title },
       h('span', { class: 'nav-icon' }, icon(p.icon, 19)),
       h('span', { class: 'nav-label', text: p.title }),
-      badgeVal ? h('span', { class: 'nav-badge', text: badgeVal.text, title: badgeVal.title }) : null);
+      badgeVal ? h('span', { class: 'nav-badge', text: badgeVal.text, title: badgeVal.title }) : null,
+      h('span', { class: 'nav-num', 'aria-hidden': 'true', text: String(PAGES.indexOf(p) + 1).padStart(2, '0') }));
     return b;
   });
   const pill = $('#nav-pill') || h('span', { id: 'nav-pill', class: 'nav-pill', 'aria-hidden': 'true' });
@@ -806,30 +816,21 @@ async function saveSettings(partial, { silent } = {}) {
 
 // ------------------------------------------------------------------ splash & end states
 function showSplash() {
-  const s = $('#splash');
-  // the splash covers the app: keyboard focus must not wander into the controls behind it
-  $('#app').setAttribute('inert', '');
-  $('#app').setAttribute('data-splash', '');
-  s.hidden = false;
-  s.classList.remove('gone');
-  s.classList.add('scanning');
-  $('#splash-step').textContent = 'Hardware wird erkannt …';
+  const app = $('#app');
+  app.setAttribute('inert', '');
+  app.setAttribute('data-splash', '');
+  splash.scanStart();
 }
 function updateSplash(job) {
-  const s = $('#splash');
-  if (s.hidden) return;
-  const p = Math.round((job.progress || 0) * 100);
-  $('#splash-bar').style.transform = 'scaleX(' + Math.max(0.03, p / 100) + ')';
-  if (job.step) $('#splash-step').textContent = job.step;
-  $('#splash-pct').textContent = p + ' %';
+  splash.update(job);
 }
 function hideSplash() {
-  const s = $('#splash');
   const app = $('#app');
-  if (app.hasAttribute('data-splash')) { app.removeAttribute('data-splash'); if (!overlayOpen() && !ended) app.removeAttribute('inert'); }
-  if (s.hidden || s.classList.contains('gone')) return;
-  s.classList.add('gone');
-  setTimeout(() => { s.hidden = true; }, reducedMotion() ? 150 : 450);
+  // the intro hands over (it never cuts itself short), fades, and is destroyed; the app behind is
+  // already rendered, so it is usable the moment the splash is gone
+  return splash.finish().then(() => {
+    if (app.hasAttribute('data-splash')) { app.removeAttribute('data-splash'); if (!overlayOpen() && !ended) app.removeAttribute('inert'); }
+  });
 }
 
 let ended = false;
@@ -849,7 +850,7 @@ function showEnded(reason) {
   el.hidden = false;
   requestAnimationFrame(() => el.classList.add('show'));
   $('#app').setAttribute('inert', '');
-  $('#splash').hidden = true;
+  splash.hide();
   // If VELOX comes back (e.g. the PC was just busy), quietly pick up where we were.
   if (reason === 'lost') waitForBackend().then(() => location.reload());
 }
@@ -864,7 +865,7 @@ function showBootError(msg) {
     h('p', { class: 'ended-text', text: plainBootError(msg) }), retry));
   el.hidden = false;
   el.classList.add('show');
-  $('#splash').hidden = true;
+  splash.hide();
 }
 
 function plainBootError(msg) {
@@ -876,7 +877,7 @@ function plainBootError(msg) {
 
 // ------------------------------------------------------------------ command palette
 function openPalette() {
-  if ($('.palette')) return;
+  if ($('.palette') || !$('#splash').hidden) return;   // not under the start sequence
   const input = h('input', { class: 'palette-input', type: 'text', placeholder: 'Tweak, Seite oder Aktion suchen …', 'aria-label': 'Suchen', autocomplete: 'off', spellcheck: 'false', autofocus: true });
   const list = h('div', { class: 'palette-list', role: 'listbox', id: 'palette-list' });
   input.setAttribute('role', 'combobox');

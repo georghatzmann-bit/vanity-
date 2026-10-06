@@ -253,7 +253,9 @@ function Open-VxAppWindow([string]$Url) {
         $browser = Find-VxBrowser
         if ($browser) {
             $profileDir = Get-VxEdgeProfileDir
-            $a = @(('--app=' + $Url), ('--user-data-dir=' + (ConvertTo-VxQuotedArg $profileDir)), '--no-first-run', '--no-default-browser-check', '--window-size=1360,880')
+            # autoplay: the in-app start sequence plays its sound without a click (VELOX's own profile, so the
+            # flag only applies to this window; with a profile already open the intro offers "Ton: klicken")
+            $a = @(('--app=' + $Url), ('--user-data-dir=' + (ConvertTo-VxQuotedArg $profileDir)), '--no-first-run', '--no-default-browser-check', '--autoplay-policy=no-user-gesture-required', '--window-size=1360,880')
             Start-Process -FilePath $browser -ArgumentList ($a -join ' ') -ErrorAction Stop
             return
         }

@@ -147,6 +147,8 @@ internal static class Program
         Check(s.Informational == version, $"setup: informational version {s.Informational} = {version}");
         foreach (string r in new[] { "payload.zip", "ui/index.html", "ui/setup.css", "ui/setup.js" })
             Check(s.Resources.ContainsKey(r), "setup: embedded resource " + r);
+        CheckEmbeddedFiles("setup", s, "ui/", app, Path.Combine(app, "native", "setup-ui"), new[] { "index.html", "setup.css", "setup.js" });
+        CheckBrandCopies("setup", s, "ui/brand/", app, SetupBrand);
         Check(!s.ReferencesWebView2Files, "setup: no WebView2 DLL needed next to the exe (only assembly references)");
         Check(s.TargetFramework == TargetFramework, $"setup: built for {s.TargetFramework} (expected {TargetFramework})");
 
@@ -189,7 +191,8 @@ internal static class Program
         Check(v.HasIcon, "VELOX.exe: icon group resource");
         Check(v.HasVersion, "VELOX.exe: version resource");
         Check(v.AssemblyVersion == version + ".0", $"VELOX.exe: assembly version {v.AssemblyVersion} = {version}.0");
-        Check(v.Resources.ContainsKey("splash.html"), "VELOX.exe: embedded start screen splash.html");
+        CheckEmbeddedFiles("VELOX.exe", v, "start/", app, Path.Combine(app, "native", "host", "start"), new[] { "splash.html", "splash.css", "splash.js" });
+        CheckBrandCopies("VELOX.exe", v, "start/brand/", app, HostBrand);
         var core = InspectPe(Read(entries["Microsoft.Web.WebView2.Core.dll"]), "Microsoft.Web.WebView2.Core.dll");
         var wf = InspectPe(Read(entries["Microsoft.Web.WebView2.WinForms.dll"]), "Microsoft.Web.WebView2.WinForms.dll");
         Check(core.IlOnly && wf.IlOnly, "WebView2 managed DLLs are IL-only (loadable from memory by the setup)");
@@ -222,6 +225,44 @@ internal static class Program
         Console.WriteLine($"sha256 {sha}");
         Console.WriteLine(_fails == 0 ? "VERIFY OK" : $"VERIFY FAILED: {_fails} check(s)");
         return _fails == 0 ? 0 : 1;
+    }
+
+    // The brand kit (velox-tweaker/brand) is the single source of truth: each surface embeds byte-identical
+    // copies of exactly the runtime files it needs (the lists of tools/sync-brand.mjs) and nothing else.
+    private static readonly string[] HostBrand = { "glyphs.js", "intro.css", "intro.js", "sound.js", "tokens.css" };
+    private static readonly string[] SetupBrand = { "glyphs.js", "intro.css", "intro.js", "kit.css", "sound.js", "ticks.js", "tokens.css" };
+
+    private static void CheckBrandCopies(string label, PeInfo pe, string prefix, string app, string[] files)
+    {
+        var embedded = pe.Resources.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Select(k => k.Substring(prefix.Length)).OrderBy(k => k, StringComparer.Ordinal).ToList();
+        Check(embedded.SequenceEqual(files.OrderBy(f => f, StringComparer.Ordinal)), $"{label}: brand files embedded under {prefix} = {string.Join(", ", files)} (found {string.Join(", ", embedded)})");
+        int same = 0;
+        foreach (string f in files)
+        {
+            string src = Path.Combine(app, "brand", f);
+            if (!File.Exists(src)) { Check(false, $"{label}: brand/{f} exists"); continue; }
+            if (pe.Resources.TryGetValue(prefix + f, out byte[] b) && b.AsSpan().SequenceEqual(File.ReadAllBytes(src))) same++;
+            else Check(false, $"{label}: embedded {prefix}{f} is byte-identical to brand/{f}");
+        }
+        Check(same == files.Length, $"{label}: all {files.Length} embedded brand files byte-identical to brand/ (SHA-256 {ShortHash(files.Select(f => Path.Combine(app, "brand", f)))})");
+    }
+
+    private static void CheckEmbeddedFiles(string label, PeInfo pe, string prefix, string app, string dir, string[] files)
+    {
+        foreach (string f in files)
+        {
+            string src = Path.Combine(dir, f);
+            bool ok = File.Exists(src) && pe.Resources.TryGetValue(prefix + f, out byte[] b) && b.AsSpan().SequenceEqual(File.ReadAllBytes(src));
+            Check(ok, $"{label}: embedded {prefix}{f} = {Path.GetRelativePath(app, src).Replace('\\', '/')}");
+        }
+    }
+
+    private static string ShortHash(IEnumerable<string> paths)
+    {
+        using var sha = SHA256.Create();
+        foreach (string p in paths.Where(File.Exists)) { byte[] b = File.ReadAllBytes(p); sha.TransformBlock(b, 0, b.Length, null, 0); }
+        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+        return Convert.ToHexString(sha.Hash).ToLowerInvariant().Substring(0, 12);
     }
 
     private const string TargetFramework = ".NETFramework,Version=v4.7.2";

@@ -1,4 +1,9 @@
-<p align="center"><img src="docs/logo.svg" alt="VELOX" width="330"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/lockup.svg">
+    <img src="docs/logo.svg" alt="VELOX" width="330">
+  </picture>
+</p>
 
 # VELOX – der ultimative PC-Tweaker
 
@@ -71,6 +76,15 @@ Auch hier kann „Der Computer wurde durch Windows geschützt“ kommen: **Weite
 | **Apps** | Autostart aufräumen und vorinstallierte Bloatware entfernen. |
 | **Sicherungen** | Jede Änderung ist protokolliert und lässt sich zurückspielen. |
 
+## Der Start
+
+Beim Start schneidet eine Klinge durch den Schriftzug, die Buchstaben öffnen sich, die obere Hälfte
+wird mit einem Klack eine Stufe nach vorn geschlagen – dann ist VELOX bereit. Das volle Intro
+(1,6 Sekunden) kommt beim ersten Start einer neuen Version, sonst eine kurze Fassung. Mit **Esc**
+überspringst du es, mit **M** schaltest du den Ton um. Den Klang kannst du auch unter
+**Einstellungen → Start und Bewegung → Start-Sound** ausschalten; dort spielst du das Intro auch
+noch einmal ab. Wünscht Windows weniger Bewegung, blendet VELOX den Schriftzug nur sanft ein.
+
 ## Sicherheit
 
 - Vor der ersten Änderung legt VELOX einen **Windows-Wiederherstellungspunkt** an.
@@ -107,6 +121,9 @@ fliegen raus.
 ## Für Entwickler
 
 - Aufbau und Regeln: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Marke (Schriftzug, Symbol, Farben, Startanimation mit Ton): [`brand/README.md`](brand/README.md).
+  `brand/` ist die einzige Quelle; `node tools/sync-brand.mjs` kopiert sie nach `ui/brand/` und
+  `native/…/brand/`, `node tools/sync-brand.mjs --check` prüft die Kopien
 - Daten prüfen: `pwsh tools/Validate-Catalog.ps1`
 - Backend-Tests: `pwsh tests/Run-Tests.ps1`
 - Oberflächen-Tests: `node tests/ui/run-ui-tests.mjs`

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-accent="violet" data-motion="full">
+<html lang="de" data-motion="full">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,30 +7,22 @@
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="dark">
   <title>VELOX</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='11' fill='%23151821'/%3E%3Cpath d='M11 6v36M24 6v36M37 6v36' stroke='%237C5CFF' stroke-opacity='.38' stroke-width='2.6' stroke-linecap='round'/%3E%3Cpath d='M11 13 24 35 37 13' fill='none' stroke='%237C5CFF' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cg fill='%23E8EAF0'%3E%3Crect x='5' y='9.5' width='12' height='7' rx='2.4'/%3E%3Crect x='18' y='31.5' width='12' height='7' rx='2.4'/%3E%3Crect x='31' y='9.5' width='12' height='7' rx='2.4'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="icon" href="brand/app-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/games.css">
+  <!-- brand kit (byte-identical copies of brand/, see tools/sync-brand.mjs): the palette mapping
+       must come AFTER app.css; intro.css is linked here so the splash has no unstyled frame -->
+  <link rel="stylesheet" href="brand/tokens-app.css">
+  <link rel="stylesheet" href="brand/intro.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
-  <div class="aurora" aria-hidden="true"><span class="a1"></span><span class="a2"></span><span class="a3"></span><span class="grain"></span></div>
-
   <div id="app" class="shell">
     <aside id="sidebar" class="sidebar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg class="vx-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-            <path class="vx-logo-tracks" d="M11 6v36M24 6v36M37 6v36"/>
-            <path class="vx-logo-v" d="M11 13 24 35 37 13"/>
-            <rect class="vx-logo-cap c1" x="5" y="9.5" width="12" height="7" rx="2.4"/>
-            <rect class="vx-logo-cap c2" x="18" y="31.5" width="12" height="7" rx="2.4"/>
-            <rect class="vx-logo-cap c3" x="31" y="9.5" width="12" height="7" rx="2.4"/>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <span class="brand-name">VELOX</span>
-          <span class="brand-sub">PC Tweaker</span>
-        </div>
+        <img class="brand-word" src="brand/wordmark-small.svg" alt="VELOX" width="68" height="16">
+        <img class="brand-mark" src="brand/mark.svg" alt="" width="26" height="24">
+        <span id="brand-ver" class="brand-ver"></span>
       </div>
       <nav id="nav" class="nav" aria-label="Hauptmenü"></nav>
       <div class="sidebar-foot">
@@ -93,23 +85,9 @@
   <div id="layers" class="layers"></div>
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <div id="splash" class="splash" role="status" aria-live="polite">
-    <div class="splash-card">
-      <div class="splash-logo" aria-hidden="true">
-        <svg class="vx-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-          <path class="vx-logo-tracks" d="M11 6v36M24 6v36M37 6v36"/>
-          <path class="vx-logo-v" d="M11 13 24 35 37 13"/>
-          <rect class="vx-logo-cap c1" x="5" y="9.5" width="12" height="7" rx="2.4"/>
-          <rect class="vx-logo-cap c2" x="18" y="31.5" width="12" height="7" rx="2.4"/>
-          <rect class="vx-logo-cap c3" x="31" y="9.5" width="12" height="7" rx="2.4"/>
-        </svg>
-      </div>
-      <div class="splash-name">VELOX</div>
-      <p class="splash-text">Dein System wird analysiert</p>
-      <div class="splash-progress"><div id="splash-bar" class="splash-bar"></div></div>
-      <div class="splash-meta"><span id="splash-step">VELOX wird gestartet …</span><span id="splash-pct"></span></div>
-      <p class="splash-hint">Beim ersten Start dauert das ein paar Sekunden. Es wird nichts verändert.</p>
-    </div>
+  <!-- the start sequence (brand/intro.js, mounted by js/splash.js): plain ink until it starts -->
+  <div id="splash" class="splash">
+    <div id="splash-stage" class="splash-stage"></div>
   </div>
 
   <div id="ended" class="ended" hidden></div>

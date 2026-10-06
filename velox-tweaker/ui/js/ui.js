@@ -84,7 +84,7 @@ export function plural(n, one, many) { return fmtNumber(n) + ' ' + (n === 1 ? on
 export function installEffects() {
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || reducedMotion()) return;
-    const target = e.target.closest('.btn, .ripple-host, .nav-item, .chip, .tile, .card.clickable, .seg-btn, .icon-btn, .switch, .swatch, .rail-item, .goal, .model, .palette-item');
+    const target = e.target.closest('.btn, .ripple-host, .nav-item, .chip, .tile, .card.clickable, .seg-btn, .icon-btn, .switch, .rail-item, .goal, .model, .palette-item');
     if (!target || target.disabled || target.getAttribute('aria-disabled') === 'true') return;
     const r = target.getBoundingClientRect();
     const size = Math.max(r.width, r.height) * 2.2;
@@ -174,7 +174,8 @@ export function burst(x, y, n = 30) {
   layer.style.left = x + 'px';
   layer.style.top = y + 'px';
   document.body.appendChild(layer);
-  const colors = ['var(--accent)', 'var(--brand-2)', '#FFFFFF', 'var(--accent-hi)'];
+  // bone and ash flakes - the identity has one signal colour and it is not confetti
+  const colors = ['var(--vx-bone)', 'var(--vx-ash)', 'var(--vx-bone)', 'var(--vx-line-2)'];
   for (let i = 0; i < n; i++) {
     const p = document.createElement('i');
     p.style.background = colors[i % colors.length];
@@ -330,11 +331,9 @@ export function countUp(el, to, { from, duration = 900, format = (v) => fmtNumbe
 }
 
 // ------------------------------------------------------------------ score ring
-let ringId = 0;
 export function scoreRing({ size = 168, stroke = 12, value = null, label = 'Punkte', ghost = null, cls } = {}) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const gid = 'rg' + (++ringId);
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
@@ -343,22 +342,16 @@ export function scoreRing({ size = 168, stroke = 12, value = null, label = 'Punk
   svg.setAttribute('class', 'ring-svg');
   svg.setAttribute('aria-hidden', 'true');
   const mk = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v)); return e; };
-  const defs = mk('defs', {});
-  const grad = mk('linearGradient', { id: gid, x1: '0', y1: '0', x2: '1', y2: '1' });
-  grad.appendChild(mk('stop', { offset: '0%', 'stop-color': 'var(--accent)' }));
-  grad.appendChild(mk('stop', { offset: '100%', 'stop-color': 'var(--brand-2)' }));
-  defs.appendChild(grad);
-  svg.appendChild(defs);
   const cx = size / 2;
   svg.appendChild(mk('circle', { cx, cy: cx, r, class: 'ring-track', 'stroke-width': stroke, fill: 'none' }));
-  const ghostArc = mk('circle', { cx, cy: cx, r, class: 'ring-ghost', 'stroke-width': stroke, fill: 'none', 'stroke-dasharray': c, 'stroke-dashoffset': c, 'stroke-linecap': 'round', transform: 'rotate(-90 ' + cx + ' ' + cx + ')' });
+  const ghostArc = mk('circle', { cx, cy: cx, r, class: 'ring-ghost', 'stroke-width': stroke, fill: 'none', 'stroke-dasharray': c, 'stroke-dashoffset': c, 'stroke-linecap': 'butt', transform: 'rotate(-90 ' + cx + ' ' + cx + ')' });
   svg.appendChild(ghostArc);
-  const arc = mk('circle', { cx, cy: cx, r, class: 'ring-arc', stroke: 'url(#' + gid + ')', 'stroke-width': stroke, fill: 'none', 'stroke-dasharray': c, 'stroke-dashoffset': c, 'stroke-linecap': 'round', transform: 'rotate(-90 ' + cx + ' ' + cx + ')' });
+  const arc = mk('circle', { cx, cy: cx, r, class: 'ring-arc', 'stroke-width': stroke, fill: 'none', 'stroke-dasharray': c, 'stroke-dashoffset': c, 'stroke-linecap': 'butt', transform: 'rotate(-90 ' + cx + ' ' + cx + ')' });
   svg.appendChild(arc);
   const num = h('span', { class: 'ring-num', text: value === null ? '–' : '0' });
   const lab = h('span', { class: 'ring-label', text: label });
   const el = h('div', { class: ['ring', cls], style: { width: size + 'px', height: size + 'px' }, role: 'img', 'aria-label': label + ': ' + (value === null ? 'noch nicht analysiert' : value) },
-    h('div', { class: 'ring-glow' }), svg, h('div', { class: 'ring-center' }, num, lab));
+    svg, h('div', { class: 'ring-center' }, num, lab));
   function set(v, g) {
     if (v === null || v === undefined) { arc.setAttribute('stroke-dashoffset', String(c)); num.textContent = '–'; el.classList.add('is-empty'); return; }
     el.classList.remove('is-empty');
@@ -556,6 +549,14 @@ export function drawer({ title, subtitle, body, footer, icon: ic, label }) {
   return entry;
 }
 
+// ------------------------------------------------------------------ progress bar
+/** Sets a .pbar's fill (scaleX) and its signal head (--p on the .pbar, app.css). p = 0..1 */
+export function setBar(fill, p, min = 0.02) {
+  const v = Math.max(min, Math.min(1, Number(p) || 0));
+  fill.style.transform = 'scaleX(' + v + ')';
+  if (fill.parentElement) fill.parentElement.style.setProperty('--p', String(v));
+}
+
 // ------------------------------------------------------------------ job overlay
 const LEVEL = { info: { label: '', icon: 'chevronRight' }, ok: { label: 'OK', icon: 'check' }, warn: { label: 'Hinweis', icon: 'warn' }, error: { label: 'Fehler', icon: 'xCircle' } };
 /** Progress overlay for a running job. */
@@ -590,7 +591,7 @@ export function jobOverlay({ title, subtitle, cancellable, onCancel, icon: ic = 
   function update(job) {
     const p = Math.round((Number(job.progress) || 0) * 100);
     if (p !== lastPct) { countUp(pct, p, { from: lastPct, duration: 300, format: (v) => Math.round(v) + ' %' }); lastPct = p; }
-    bar.style.transform = 'scaleX(' + Math.max(0.02, p / 100) + ')';
+    setBar(bar, p / 100, 0.02);
     panel.querySelector('.pbar').setAttribute('aria-valuenow', String(p));
     if (job.step) step.textContent = stepText(job.step);
     const lines = job.log || [];
@@ -619,7 +620,7 @@ export function jobOverlay({ title, subtitle, cancellable, onCancel, icon: ic = 
     const hasProblems = (job.log || []).some(l => l.level === 'warn' || l.level === 'error');
     if (job.status === 'done') {
       step.textContent = hasProblems ? 'Fertig – mit Hinweisen' : 'Fertig';
-      bar.style.transform = 'scaleX(1)';
+      setBar(bar, 1);
       countUp(pct, 100, { from: lastPct, duration: 200, format: (v) => Math.round(v) + ' %' });
       if (opts.keep) {
         panel.classList.add('is-kept');
@@ -662,12 +663,10 @@ export function optionRow({ title, desc, control, icon: ic }) {
     h('div', { class: 'opt-control' }, control));
 }
 
-/** Avatar with a gradient derived from a string (for games). */
+/** Initials avatar (games, autostart entries): monochrome, the letters in mono (app.css .avatar). */
 export function avatar(name, size = 44) {
-  let hsh = 0; for (const c of String(name)) hsh = (hsh * 31 + c.charCodeAt(0)) >>> 0;
-  const h1 = hsh % 360; const h2 = (h1 + 50 + (hsh >> 8) % 60) % 360;
   const letters = String(name).replace(/[^A-Za-z0-9ÄÖÜäöü ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
-  return h('div', { class: 'avatar', style: { width: size + 'px', height: size + 'px', '--a1': 'hsl(' + h1 + ' 80% 60%)', '--a2': 'hsl(' + h2 + ' 85% 50%)' }, 'aria-hidden': 'true', text: letters });
+  return h('div', { class: 'avatar', style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true', text: letters });
 }
 
 /** Run fn inside a View Transition when supported and motion is on. */

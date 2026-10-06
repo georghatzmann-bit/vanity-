@@ -36,11 +36,6 @@ function artUrl(g, kind) {
   if (!t || !g.id) return null;
   return '/api/game-art/' + encodeURIComponent(g.id) + '?kind=' + kind + '&v=' + encodeURIComponent((g.art && g.art.v) || '') + '&t=' + encodeURIComponent(t);
 }
-function hues(name) {
-  let x = 0; for (const c of String(name)) x = (x * 31 + c.charCodeAt(0)) >>> 0;
-  const a = x % 360;
-  return { '--g1': 'hsl(' + a + ' 70% 46%)', '--g2': 'hsl(' + ((a + 50 + (x >> 8) % 60) % 360) + ' 75% 30%)' };
-}
 function initials(name) {
   return String(name).replace(/[^A-Za-z0-9ÄÖÜäöü ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 }
@@ -61,7 +56,7 @@ function img(src, cls, onLoad, onError) {
  * a failed image falls back one step.
  */
 function banner(g, coverUrl, iconUrl) {
-  const el = h('div', { class: 'gc-art', 'aria-hidden': 'true', style: hues(g.name) },
+  const el = h('div', { class: 'gc-art', 'aria-hidden': 'true' },
     h('div', { class: 'gc-fallback' }, h('span', { class: 'gc-initials', text: initials(g.name) }), h('span', { class: 'gc-title', text: g.name })));
   const done = () => { el.classList.remove('is-loading'); el.classList.add('is-loaded'); };
   const iconStage = () => {

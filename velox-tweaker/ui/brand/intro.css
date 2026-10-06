@@ -1,0 +1,93 @@
+/* VELOX start sequence - styles for brand/intro.js. Loaded by mount() if the page has not
+ * linked it. All motion is done by intro.js with transform/opacity only.
+ * Imports the --vx-* palette only: nothing here touches the host page's own variables. */
+@import url("tokens.css");
+
+.vx-host { position: relative; overflow: hidden; background: var(--vx-ink); }
+.vx {
+  position: absolute; inset: 0; overflow: hidden;
+  background: var(--vx-ink); color: var(--vx-bone);
+  font: 400 var(--vx-fs, 13px)/1.45 var(--vx-font);
+  -webkit-font-smoothing: antialiased; user-select: none; cursor: default;
+  contain: layout paint;
+}
+.vx--boot { visibility: hidden; }
+
+/* the word: two clip groups (above / below the cut), pieces move inside them */
+.vx-word { position: absolute; left: 0; top: 0; display: block; overflow: visible; will-change: transform; }
+.vx-pc { fill: var(--vx-bone); }
+.vx-pc.vx-signal { fill: var(--vx-signal); }
+
+/* the blade, and the hand-over line: 2 px, solid signal, a full-width element scaled from
+ * its left end. It sits UNDER the word, so it only shows in the cut. intro.js sets
+ * --vx-thick / --vx-hair to whole device pixels (125 % / 150 % scaling: no soft fringe). */
+.vx-blade {
+  position: absolute; left: 0; top: 0; height: var(--vx-thick, 2px); background: var(--vx-signal);
+  transform-origin: 0 50%; opacity: 0; will-change: transform, opacity;
+}
+.vx-word { z-index: 1; }
+
+/* loader: a hairline exactly as wide as the word, flush with the V's foot */
+.vx-load { position: absolute; opacity: 0; will-change: opacity; }
+.vx-load-in { will-change: transform; }
+.vx-track { position: relative; height: var(--vx-thick, 2px); overflow: hidden; }
+.vx-track::before { content: ""; position: absolute; left: 0; right: 0; top: var(--vx-hair-y, 1px); height: var(--vx-hair, 1px); background: var(--vx-line); }
+.vx-seg {
+  position: absolute; left: 0; top: 0; width: 100%; height: var(--vx-thick, 2px); background: var(--vx-signal);
+  transform-origin: 0 50%; transform: scaleX(0); opacity: 0; will-change: transform;
+}
+.vx-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-top: .9em; color: var(--vx-ash); }
+.vx-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-pct { font-family: var(--vx-mono); font-variant-numeric: tabular-nums; font-size: .86em; color: var(--vx-ash-2); }
+
+/* content the host puts under the word (the installer's welcome). It arrives when the intro
+ * settles: the word never moves, the content comes in under it. */
+.vx-slot { position: absolute; bottom: 0; z-index: 2; user-select: text; }
+.vx-slot:empty { display: none; }
+.vx--noload .vx-slot { opacity: 0; transform: translateY(8px); pointer-events: none; }
+.vx--noload.vx--settled .vx-slot {
+  opacity: 1; transform: none; pointer-events: auto;
+  transition: opacity 320ms var(--vx-ease) 40ms, transform 460ms var(--vx-ease) 40ms;
+}
+
+/* corner labels: plain small text on the word's margins - sentence case, no tracking
+ * (no spec-sheet HUD). Usually only the version, top right. */
+.vx-labels {
+  position: absolute; left: var(--vx-m, 56px); right: var(--vx-m, 56px); top: 20px;
+  display: flex; justify-content: space-between; pointer-events: none;
+  font: 400 12px/1 var(--vx-font); color: var(--vx-ash-2); font-variant-numeric: tabular-nums;
+}
+.vx-label-r { margin-left: auto; }
+.vx-labels:empty, .vx-label:empty { display: none; }
+
+/* bottom bar: sound (left, on the margin) and skip (right) */
+.vx-bar {
+  position: absolute; left: calc(var(--vx-m, 56px) - 8px); right: calc(var(--vx-m, 56px) - 8px); bottom: 12px; z-index: 3;
+  display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+}
+.vx-btn {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
+  font: 400 12px/1 var(--vx-font); color: var(--vx-ash); background: transparent;
+  border: 0; border-radius: 4px; padding: 7px 8px; cursor: pointer;
+  transition: color var(--vx-t-fast) linear, background-color var(--vx-t-fast) linear;
+}
+.vx-btn:hover { color: var(--vx-bone); background: var(--vx-ink-2); }
+.vx-btn:focus-visible { outline: 2px solid var(--vx-signal); outline-offset: 1px; }
+/* autoplay blocked: the button asks for the click instead of claiming "Ton an" */
+.vx-sound.vx-blocked { color: var(--vx-bone); }
+.vx-sound.vx-blocked .vx-key { color: var(--vx-bone); border-color: var(--vx-line-2); }
+.vx-btn[hidden] { display: none; }
+.vx-skip { margin-left: auto; }
+.vx-skip.vx-off { pointer-events: none; visibility: hidden; }
+.vx-key {
+  font: 400 10px/1 var(--vx-mono); color: var(--vx-ash-2);
+  border: 1px solid var(--vx-line); border-radius: 3px; padding: 2px 4px;
+}
+/* the installer brings its own controls: once settled, the intro's bar steps aside */
+.vx--noload.vx--settled .vx-sound { opacity: 0; pointer-events: none; transition: opacity 240ms linear; }
+.vx--done .vx-bar { opacity: 0; pointer-events: none; transition: opacity 120ms linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vx-btn { transition: none; }
+  .vx--noload .vx-slot { transform: none; }
+}

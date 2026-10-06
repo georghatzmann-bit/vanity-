@@ -1,4 +1,5 @@
-// Remembers size, position and the maximized state of the VELOX window in %LOCALAPPDATA%\Velox\window.json.
+// Remembers size, position and the maximized state of the VELOX window in %LOCALAPPDATA%\Velox\window.json,
+// and lastIntroVersion: the VERSION whose full start sequence VELOX.exe last played (host-owned, never settings.json).
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -66,15 +67,64 @@ namespace Velox.Host
             {
                 Rectangle r = f.WindowState == FormWindowState.Normal ? f.Bounds : f.RestoreBounds;
                 if (r.Width < 200 || r.Height < 150) return;
-                bool max = f.WindowState == FormWindowState.Maximized;
-                string json = string.Format(CultureInfo.InvariantCulture, "{{\"x\":{0},\"y\":{1},\"w\":{2},\"h\":{3},\"maximized\":{4}}}", r.X, r.Y, r.Width, r.Height, max ? "true" : "false");
-                Directory.CreateDirectory(Program.DataDir);
-                string tmp = FilePath + ".tmp";
-                File.WriteAllText(tmp, json, new UTF8Encoding(false));
-                if (File.Exists(FilePath)) File.Delete(FilePath);
-                File.Move(tmp, FilePath);
+                Dictionary<string, object> d = Read();
+                d["x"] = r.X; d["y"] = r.Y; d["w"] = r.Width; d["h"] = r.Height;
+                d["maximized"] = f.WindowState == FormWindowState.Maximized;
+                Write(d);
             }
             catch (Exception ex) { Program.Log.Warn("window.json nicht gespeichert: " + ex.Message); }
+        }
+
+        /// <summary>
+        /// "full" the first time this VERSION starts (first start after an install or update), "short" after that.
+        /// Records the version at once, so a start that ends in an error does not replay the full intro.
+        /// </summary>
+        public static string TakeIntroVariant(string version)
+        {
+            try
+            {
+                Dictionary<string, object> d = Read();
+                object v;
+                if (d.TryGetValue("lastIntroVersion", out v) && string.Equals(v as string, version, StringComparison.Ordinal)) return "short";
+                d["lastIntroVersion"] = version;
+                Write(d);
+                return "full";
+            }
+            catch (Exception ex)
+            {
+                Program.Log.Warn("window.json (lastIntroVersion): " + ex.Message);
+                return "short";
+            }
+        }
+
+        /// <summary>The whole file (other keys are kept on every write); empty when missing or unreadable.</summary>
+        private static Dictionary<string, object> Read()
+        {
+            try
+            {
+                if (File.Exists(FilePath))
+                {
+                    var d = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(FilePath, Encoding.UTF8));
+                    if (d != null) return d;
+                }
+            }
+            catch (Exception) { }
+            return new Dictionary<string, object>();
+        }
+
+        private static void Write(Dictionary<string, object> d)
+        {
+            Directory.CreateDirectory(Program.DataDir);
+            string tmp = FilePath + ".tmp";
+            File.WriteAllText(tmp, new JavaScriptSerializer().Serialize(d), new UTF8Encoding(false));
+            if (File.Exists(FilePath))
+            {
+                try { File.Replace(tmp, FilePath, null, true); return; }      // atomic on NTFS
+                catch (PlatformNotSupportedException) { }
+                catch (IOException) { }
+                File.Delete(FilePath);
+            }
+            File.Move(tmp, FilePath);
         }
     }
 }

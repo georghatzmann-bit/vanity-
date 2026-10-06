@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-// Renders velox.ico (16..256 px) from the VELOX logo: a dark rounded tile with the fader-V
-// (same drawing as the favicon in ui/index.html). Chromium renders each size as PNG with real
-// anti-aliasing; ImageMagick packs them into one .ico. Small sizes use slightly bolder strokes so
-// the three faders stay readable at 16 px.
+// Renders velox.ico (16..256 px) and velox-256.png from the brand kit (velox-tweaker/brand), the single
+// source of truth for the app icon. Same sources as brand/tools/export-icons.mjs:
+//   16 px       brand/mark-16.svg              (pixel master: every pixel on or off)
+//   20, 24 px   brand/src/fit/mark-20/24.svg   (pixel-fitted masters, drawn by rule in brand/src/pixelfit.mjs)
+//   32 - 256 px brand/src/fit/app-icon-<n>.svg (brand/app-icon.svg with every horizontal edge and the
+//                                                keyline snapped to whole pixels at that size)
+// Chromium renders each size 1:1 (no resampling), ImageMagick unpacks the pixels, and the frames are packed
+// into one .ico. The result is compared with brand/export/app-icon-<n>.png.
 //   node native/assets/make-icon.mjs   (needs the global Playwright + ImageMagick "convert")
 import { createRequire } from 'node:module';
 import { execFileSync, execSync } from 'node:child_process';
@@ -12,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const brand = path.resolve(here, '../../brand');
 function loadPlaywright() {
   const tries = [() => createRequire(import.meta.url)('playwright'), () => createRequire('/opt/node22/lib/node_modules/')('playwright')];
   tries.push(() => createRequire(execSync('npm root -g').toString().trim() + '/')('playwright'));
@@ -21,27 +26,8 @@ function loadPlaywright() {
 const { chromium } = loadPlaywright();
 
 const SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
-
-function svg(size) {
-  const small = size <= 24;
-  const mid = size > 24 && size <= 48;
-  const track = small ? 3.4 : mid ? 3 : 2.6;
-  const v = small ? 6.4 : mid ? 5.6 : 5;
-  const trackOpacity = small ? 0.55 : 0.42;
-  const r = size <= 32 ? 9 : 11;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="${size}" height="${size}">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1B1F2A"/><stop offset="1" stop-color="#12141B"/></linearGradient>
-    <radialGradient id="glow" cx=".5" cy=".55" r=".5"><stop offset="0" stop-color="#7C5CFF" stop-opacity=".28"/><stop offset="1" stop-color="#7C5CFF" stop-opacity="0"/></radialGradient>
-  </defs>
-  <rect width="48" height="48" rx="${r}" fill="url(#g)"/>
-  ${size >= 32 ? '<rect width="48" height="48" rx="' + r + '" fill="url(#glow)"/>' : ''}
-  ${size >= 48 ? '<rect x=".5" y=".5" width="47" height="47" rx="' + (r - 0.5) + '" fill="none" stroke="#fff" stroke-opacity=".07"/>' : ''}
-  <path d="M11 6v36M24 6v36M37 6v36" stroke="#7C5CFF" stroke-opacity="${trackOpacity}" stroke-width="${track}" stroke-linecap="round"/>
-  <path d="M11 13 24 35 37 13" fill="none" stroke="#7C5CFF" stroke-width="${v}" stroke-linecap="round" stroke-linejoin="round"/>
-  <g fill="#E8EAF0"><rect x="5" y="9.5" width="12" height="7" rx="2.4"/><rect x="18" y="31.5" width="12" height="7" rx="2.4"/><rect x="31" y="9.5" width="12" height="7" rx="2.4"/></g>
-</svg>`;
-}
+const source = (n) => (n === 16 ? 'mark-16.svg' : n <= 24 ? `src/fit/mark-${n}.svg` : `src/fit/app-icon-${n}.svg`);
+const svg = (n) => fs.readFileSync(path.join(brand, source(n)), 'utf8');
 
 // ICO with classic 32-bit DIB frames up to 48 px (every Windows API and .NET's Icon class reads
 // them) and PNG-compressed frames from 64 px up (Vista+), which keeps the file - and both exes - small.
@@ -84,10 +70,17 @@ try {
   const pngs = [];
   for (const s of SIZES) {
     await page.setViewportSize({ width: s, height: s });
-    await page.setContent(`<!doctype html><html><body style="margin:0;background:transparent">${svg(s)}</body></html>`);
+    await page.setContent(`<!doctype html><html><head><style>html,body{margin:0;background:transparent}svg{display:block}</style></head><body>${svg(s)}</body></html>`);
     const file = path.join(tmp, `icon-${s}.png`);
-    await page.locator('svg').screenshot({ path: file, omitBackground: true });
+    await page.screenshot({ path: file, omitBackground: true, clip: { x: 0, y: 0, width: s, height: s } });
     pngs.push(file);
+    // same pixels as the kit's export (decoded RGBA, so PNG encoder differences do not count)
+    const ref = path.join(brand, 'export', `app-icon-${s}.png`);
+    if (fs.existsSync(ref)) {
+      const a = execFileSync('convert', [file, '-depth', '8', 'RGBA:-'], { maxBuffer: 1 << 24 });
+      const b = execFileSync('convert', [ref, '-depth', '8', 'RGBA:-'], { maxBuffer: 1 << 24 });
+      console.log(`${String(s).padStart(3)} px  ${source(s).padEnd(26)} ${Buffer.compare(a, b) === 0 ? 'identical to brand/export' : 'DIFFERS from brand/export/app-icon-' + s + '.png'}`);
+    }
   }
   const out = path.join(here, 'velox.ico');
   fs.writeFileSync(out, packIco(SIZES.map((s, i) => ({ size: s, png: pngs[i] }))));

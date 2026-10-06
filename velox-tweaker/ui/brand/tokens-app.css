@@ -1,0 +1,56 @@
+/* VELOX app mapping - the brand palette (tokens.css) under the variable names ui/css/app.css
+ * already uses. Link it from ui/ AFTER app.css (or replace app.css's :root palette with this
+ * block). It is deliberately NOT imported by intro.css: mounting the intro must never retheme
+ * the host page. Values that were gradients, glass or glow become solid. */
+@import url("tokens.css");
+
+:root {
+  --bg: var(--vx-ink);
+  --s1: var(--vx-ink-2);
+  --s2: var(--vx-ink-3);
+  --s3: var(--vx-ink-4);
+  --s4: var(--vx-line);
+  --hair: rgba(236, 233, 226, .07);
+  --hair-2: rgba(236, 233, 226, .12);
+  --text: var(--vx-bone);
+  --muted: var(--vx-ash);
+  --faint: var(--vx-ash-2);
+
+  --ok: var(--vx-safe);   --ok-rgb: var(--vx-safe-rgb);
+  --warn: var(--vx-mid);  --warn-rgb: var(--vx-mid-rgb);
+  --err: var(--vx-risk);  --err-rgb: var(--vx-risk-rgb);
+
+  --accent: var(--vx-signal);
+  --accent-rgb: var(--vx-signal-rgb);
+  --accent-hi: var(--vx-signal-hi);
+  --accent-press: var(--vx-signal-lo);
+  --on-accent: var(--vx-on-signal);
+  --brand-2: var(--vx-signal);               /* the cyan is gone */
+  --brand: var(--vx-signal);                 /* was a gradient; now one solid colour */
+
+  --glass: var(--vx-ink-2);                  /* no glassmorphism */
+  --glass-2: var(--vx-ink-3);
+  --card: var(--vx-ink-2);
+  --edge: inset 0 0 0 1px var(--vx-line);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 18px 40px -18px rgba(0, 0, 0, .75), 0 1px 0 rgba(0, 0, 0, .4);
+  --glow: none;                              /* no accent glow on hover */
+
+  /* focus: a 2 px signal ring with a 2 px ink gap - 5.9:1 against ink-2 */
+  --focus-ring: 0 0 0 2px var(--vx-ink), 0 0 0 4px var(--vx-signal);
+  --focus-outline: 2px solid var(--vx-signal);
+  /* selection: signal at 32 % on ink (#5A2614), bone text on it 10.1:1 */
+  --selection-bg: rgba(255, 90, 31, .32);
+  --selection-fg: var(--vx-bone);
+
+  /* risk badges: text in the risk colour on a 12 % tint of it, always with the word
+   * ("Sicher" / "Mittel" / "Riskant") and an icon - colour is never the only cue.
+   * text on its own 12 % tint over ink-2: safe 7.0:1, mid 8.5:1, risk 5.0:1 */
+  --risk-safe: var(--vx-safe);  --risk-safe-bg: rgba(var(--vx-safe-rgb), .12);
+  --risk-mid: var(--vx-mid);    --risk-mid-bg: rgba(var(--vx-mid-rgb), .12);
+  --risk-high: var(--vx-risk);  --risk-high-bg: rgba(var(--vx-risk-rgb), .12);
+
+  /* nav: the active item gets a 2 px signal bar on its left edge, nothing else turns orange */
+  --nav-active-bar: var(--vx-signal);
+  --nav-active-bg: var(--vx-ink-3);
+}

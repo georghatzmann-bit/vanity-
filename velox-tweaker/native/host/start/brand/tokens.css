@@ -1,0 +1,50 @@
+/* VELOX brand tokens - "Versatz". The palette only: every name starts with --vx-, so loading
+ * this file never changes a host page's own variables (intro.css imports it).
+ * Monochrome ink + bone, one signal colour. No gradients, no glow, no glass.
+ * The mapping onto the app's variable names lives in tokens-app.css, which ui/ links itself.
+ * Contrast ratios (WCAG 2.x) are measured against --vx-ink unless noted. */
+
+/* ---------------------------------------------------------------- 1. brand palette */
+:root {
+  /* ink: the ground, ~70 % of every surface */
+  --vx-ink:      #0C0D0F;   /* background */
+  --vx-ink-2:    #141518;   /* panels, sidebar, installer window */
+  --vx-ink-3:    #1A1B1F;   /* raised: cards, inputs, the icon tile */
+  --vx-ink-4:    #212328;   /* hover on raised */
+  --vx-line:     #2A2C31;   /* hairlines, the loader track */
+  --vx-line-2:   #45484F;   /* strong hairline, icon keyline, input borders (1.8:1 vs. a #202020 taskbar) */
+
+  /* bone: text and the wordmark - a warm off-white, never pure white */
+  --vx-bone:     #ECE9E2;   /* primary text            16.0:1 */
+  --vx-ash:      #8E8B85;   /* secondary text           5.7:1 (5.1:1 on ink-3) */
+  --vx-ash-2:    #807D77;   /* tertiary text, labels    4.7:1 (4.4:1 on ink-2: labels >= 12px only) */
+
+  /* signal: the cut. Only the V's foot, the blade, the loader segment, the primary
+   * button, the active-nav bar and the focus ring. About 2 % of the pixels. */
+  --vx-signal:    #FF5A1F;  /* 6.2:1 on ink */
+  --vx-signal-hi: #FF7038;  /* hover   (ink text on it 7.1:1) */
+  --vx-signal-lo: #E04812;  /* pressed (ink text on it 4.7:1) */
+  --vx-on-signal: #0C0D0F;  /* text on signal: ink 6.2:1. Bone on signal is only 2.6:1 - never. */
+  --vx-signal-rgb: 255, 90, 31;
+
+  /* risk: kept clearly apart from the signal (CIEDE2000 distance to #FF5A1F in brackets) */
+  --vx-safe:     #3FC98A;   /* "Sicher"   9.2:1  (dE 65) */
+  --vx-mid:      #E9C440;   /* "Mittel"  11.5:1  (dE 38) - gold, pushed towards yellow so it stays apart
+                             from the signal under deuteranopia too (simulated dE2000 12.0, was 9.6).
+                             Rule: a Mittel badge never sits directly beside a primary button. */
+  --vx-risk:     #F25A80;   /* "Riskant"  6.1:1  (dE 24) - rose red, pulled away from orange */
+  --vx-safe-rgb: 63, 201, 138;
+  --vx-mid-rgb:  233, 196, 64;
+  --vx-risk-rgb: 242, 90, 128;
+
+  /* type: system fonts only (nothing to download) */
+  --vx-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --vx-font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --vx-mono: "Cascadia Mono", "Cascadia Code", Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+
+  /* motion: short, one curve for arrivals, one for the snap */
+  --vx-ease: cubic-bezier(.16, 1, .3, 1);        /* arrive (expo-out) */
+  --vx-ease-snap: cubic-bezier(.55, 0, .9, .3);  /* accelerate into a stop (the hand-over) */
+  --vx-t-fast: 120ms;
+  --vx-t: 180ms;
+}

@@ -2,7 +2,7 @@
 // ui/js/ai.js), radar scan driven by the job log, then before -> after score rings, findings with
 // fixes and a selectable plan.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append, radioKeys, spinner } from '../ui.js';
+import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append, radioKeys, spinner, setBar } from '../ui.js';
 import { api } from '../api.js';
 import { PROVIDERS, PROVIDER_BY_ID, providerStatus, statusText, statusTone, defaultProvider, loadAiStatus, engineLabel, engineShort } from '../ai.js';
 
@@ -149,7 +149,7 @@ export default {
       box.update = (job) => {
         const p = Math.round((job.progress || 0) * 100);
         pctTxt.textContent = p + ' %';
-        bar.firstChild.style.transform = 'scaleX(' + Math.max(0.03, p / 100) + ')';
+        setBar(bar.firstChild, p / 100, 0.03);
         if (job.step) stepTxt.textContent = job.step;
         const log = job.log || [];
         for (; seen < log.length; seen++) {

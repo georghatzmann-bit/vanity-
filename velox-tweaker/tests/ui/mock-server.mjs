@@ -14,6 +14,7 @@
 //   GET  /__mock/stats   counters (heartbeats, shutdown requests, job types started)
 //   POST /__mock/kill    stop answering (simulates the backend having exited)
 //   POST /__mock/reset   rebuild all state from scratch
+//   POST /__mock/mode    { hosted: bool } bootstrap.mode.hosted (VELOX.exe window, ARCHITECTURE section 11)
 //   POST /__mock/ai      { claudeCode: 'ready'|'logged-out'|'missing', failNext: '<provider>' } KI provider state
 
 import http from 'node:http';
@@ -50,6 +51,8 @@ const opt = {
   sample: !!arg('sample', false),
   claudeCode: String(arg('claude-code', 'missing'))
 };
+// the one version number, like Velox.ps1 ($ctx.Version from VERSION)
+const APP_VERSION = (() => { try { const v = fs.readFileSync(path.join(appRoot, 'VERSION'), 'utf8').trim(); return /^\d+\.\d+\.\d+$/.test(v) ? v : '1.0.0'; } catch { return '1.0.0'; } })();
 const log = (...a) => { if (!opt.quiet) console.error('[mock]', ...a); };
 
 // ---------------------------------------------------------------- catalog loading
@@ -194,7 +197,7 @@ function buildWorld() {
   log('catalog:', 'categories from', cats.from, '| tweaks', decorated.length, 'from', tw.from, '| presets from', pr.from, '| detweak from', dt.from);
   return {
     categories, tweaks: decorated, byId: new Map(decorated.map(t => [t.id, t])), presets, detweak,
-    settings: { accent: 'violet', motion: 'full', confirmRisky: true, restorePoints: 'first', autoRestorePoint: true, claude: { hasKey: false, model: 'claude-opus-5-5' },
+    settings: { accent: 'violet', motion: 'full', confirmRisky: true, restorePoints: 'first', autoRestorePoint: true, startSound: true, introSeen: '', claude: { hasKey: false, model: 'claude-opus-5-5' },
       ai: { provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } },
       games: [{ id: 'fivem', name: 'FiveM', exe: 'FiveM_GTAProcess.exe', path: 'C:\\Users\\Spieler\\AppData\\Local\\FiveM\\FiveM.app\\data\\cache\\subprocess\\FiveM_GTAProcess.exe', boost: { priority: true, gpu: true, fso: false } }] },
     state: { statuses, profile: opt.freshScan ? profile : null, lastScan: opt.freshScan ? iso(new Date()) : null, needs: { explorer: false, reboot: false, logoff: false } },
@@ -222,7 +225,7 @@ function buildWorld() {
       { id: 'task:NvTmRep', name: 'NVIDIA Telemetry Report', command: 'C:\\Program Files\\NVIDIA Corporation\\NvTelemetry\\NvTmRep.exe', location: 'Aufgabenplanung', enabled: true },
       { id: 'hklm-run|SecurityHealth', name: 'SecurityHealth', command: '%windir%\\system32\\SecurityHealthSystray.exe', location: 'Alle Benutzer (Registry)', enabled: true }
     ],
-    stats: { heartbeats: 0, shutdowns: 0, bootstraps: 0, jobs: {}, unauthorized: 0 },
+    stats: { heartbeats: 0, shutdowns: 0, bootstraps: 0, jobs: {}, unauthorized: 0, settingsPosts: [] },
     shutdownTimer: null,
     shutdownSession: '',
     shutdownAt: 0,
@@ -829,8 +832,8 @@ async function handle(req, res) {
   if (m('GET', /^\/api\/bootstrap$/)) {
     cancelShutdown(); W.stats.bootstraps++;
     return send(res, 200, {
-      app: { name: 'VELOX', version: '1.0.0' },
-      mode: { simulate: true, admin: opt.admin, windows: false, os: profile.os.caption + ' ' + profile.os.displayVersion + ' (' + profile.os.build + ')', ps: '7.6.0 (Mock)', userMismatch: false },
+      app: { name: 'VELOX', version: APP_VERSION },
+      mode: { simulate: true, admin: opt.admin, windows: false, os: profile.os.caption + ' ' + profile.os.displayVersion + ' (' + profile.os.build + ')', ps: '7.6.0 (Mock)', userMismatch: false, hosted: !!W.hosted },
       categories: W.categories, tweaks: W.tweaks, presets: W.presets, settings: W.settings, state: stateDto(),
       // same as core/Server.ps1: busy is a boolean, activeJob tells which job to attach to
       busy: !!W.running,
@@ -872,6 +875,9 @@ async function handle(req, res) {
     if (['violet', 'blue', 'cyan', 'green', 'pink', 'orange'].includes(body.accent)) s.accent = body.accent;
     if (['full', 'reduced'].includes(body.motion)) s.motion = body.motion;
     if (typeof body.confirmRisky === 'boolean') s.confirmRisky = body.confirmRisky;
+    if (typeof body.startSound === 'boolean') s.startSound = body.startSound;
+    if (typeof body.introSeen === 'string' && (body.introSeen === '' || /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(body.introSeen))) s.introSeen = body.introSeen;
+    W.stats.settingsPosts.push(Object.keys(body).sort().join(','));
     if (['first', 'presets', 'off'].includes(body.restorePoints)) s.restorePoints = body.restorePoints;
     else if (typeof body.autoRestorePoint === 'boolean') s.restorePoints = body.autoRestorePoint ? (s.restorePoints === 'off' ? 'first' : s.restorePoints) : 'off';
     s.autoRestorePoint = s.restorePoints !== 'off';
@@ -956,6 +962,7 @@ async function handle(req, res) {
     if (body.reset) { W.settings.claude.hasKey = false; W.settings.ai = { provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } }; W.claudeCode = opt.claudeCode; W.aiFailNext = null; }
     return send(res, 200, { claudeCode: W.claudeCode, settings: W.settings });
   }
+  if (m('POST', /^\/__mock\/mode$/)) { W.hosted = !!body.hosted; return send(res, 200, { hosted: W.hosted }); }
   if (m('POST', /^\/__mock\/state$/)) { if (body.needs) Object.assign(W.state.needs, body.needs); return send(res, 200, W.state); }
   return send(res, 404, { error: 'not found' });
 }
