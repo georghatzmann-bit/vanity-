@@ -536,6 +536,14 @@ function Test-VxLifecycle {
     $ctx = $global:VxCtx
     $life = $ctx.Life
     $now = [DateTime]::UtcNow
+    # The loop runs every 250 ms. A much bigger gap on the wall clock means the PC was asleep or
+    # hibernating: the page could not send heartbeats meanwhile, so the wake-up counts as one -
+    # otherwise VELOX would quit every time the PC wakes up with VELOX open.
+    if ($null -ne $life.lastTick -and ($now - [DateTime]$life.lastTick).TotalSeconds -gt 30) {
+        if ($null -ne $life.lastHeartbeat) { $life.lastHeartbeat = $now }
+        Write-VxLog 'info' ('Zeitsprung erkannt (Ruhezustand?) - ' + [int]($now - [DateTime]$life.lastTick).TotalSeconds + ' s.')
+    }
+    $life.lastTick = $now
     if ($null -ne $life.shutdownAt -and $now -ge $life.shutdownAt) {
         $grace = [double]$life.graceSec
         if ($grace -le 0) { $grace = 4 }
@@ -553,7 +561,8 @@ function Test-VxLifecycle {
             return
         }
     }
-    if ($life.firstHeartbeat -and $null -ne $life.lastHeartbeat -and ($now - $life.lastHeartbeat).TotalSeconds -gt [double]$life.timeoutSec) {
+    # under VELOX.exe the host window ends the backend (job object / host watcher), never a missing heartbeat
+    if (-not $life.hostWindow -and $life.firstHeartbeat -and $null -ne $life.lastHeartbeat -and ($now - $life.lastHeartbeat).TotalSeconds -gt [double]$life.timeoutSec) {
         if (-not (Test-VxBusy)) {
             $life.stop = $true
             $life.reason = 'timeout'
@@ -588,7 +597,7 @@ function Invoke-VxServerLoop($Listener) {
 function New-VxLifecycle {
     return [hashtable]::Synchronized(@{
             lastHeartbeat = $null; firstHeartbeat = $false; shutdownAt = $null; stop = $false; reason = $null
-            timeoutSec = 150; waitLogged = $false; lastActivity = [DateTime]::UtcNow
+            timeoutSec = 150; waitLogged = $false; lastActivity = [DateTime]::UtcNow; lastTick = $null; hostWindow = $false
             graceSec = 4; sessions = @{}; shutdownSession = $null; shutdownRequested = $null
         })
 }

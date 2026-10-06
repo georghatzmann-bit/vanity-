@@ -224,6 +224,25 @@ namespace Velox.Native
             return ver.Major + "." + ver.Minor + "." + ver.Build;
         }
 
+        /// <summary>.NET Framework 4.7.2 (the version VELOX.exe and the setup are built for).</summary>
+        public const int NetFrameworkMinRelease = 461808;
+        public const string NetFrameworkDownloadUrl = "https://dotnet.microsoft.com/download/dotnet-framework/net48";
+
+        /// <summary>The "Release" number of the installed .NET Framework 4.x; 0 when it cannot be read.</summary>
+        public static int NetFrameworkRelease()
+        {
+            try
+            {
+                using (var hk = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Default))
+                using (var k = hk.OpenSubKey(@"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full", false))
+                {
+                    object v = k == null ? null : k.GetValue("Release");
+                    return v is int ? (int)v : 0;
+                }
+            }
+            catch (Exception) { return 0; }
+        }
+
         /// <summary>Quotes one command-line argument for CommandLineToArgvW / the C runtime.</summary>
         public static string QuoteArg(string arg)
         {

@@ -48,14 +48,21 @@ namespace Velox.Host
 
     internal sealed class HostForm : Form
     {
-        private const int StartTimeoutMs = 45000;
+        // A WebView2 runtime that is installed but stuck (half-finished update, leftover msedgewebview2.exe
+        // holding the user data folder, a security product hooking it) never completes CreateAsync /
+        // EnsureCoreWebView2Async and never throws: without this the user would stare at an empty window.
+        private const int WebViewStartTimeoutMs = 30000;
 
         private readonly Log _log = Program.Log;
         private WebView2 _web;
         private CoreWebView2 _core;
         private Backend _backend;
-        private readonly Timer _timeout = new Timer();
+        private readonly StartTimer _timeout;
+        private readonly Timer _webWatchdog = new Timer { Interval = WebViewStartTimeoutMs };
+        private bool _webGaveUp;
+        private ulong _appNavId;            // NavigationId of the latest navigation to the app
         private string _lastErrorJson;      // shown again whenever the start screen (re)loads
+        private string _lastStatusJson;     // latest start-up phase; the start screen may load after it arrived
         private bool _splashReady;
         private bool _onInternal;
         private bool _internalNavPending;
@@ -91,8 +98,8 @@ namespace Velox.Host
             try { _web.DefaultBackgroundColor = Brand.Bg; } catch (Exception) { }
             Controls.Add(_web);
 
-            _timeout.Interval = StartTimeoutMs;
-            _timeout.Tick += (s, e) => { _timeout.Stop(); OnStartTimeout(); };
+            _timeout = new StartTimer(OnStartTimeout);
+            _webWatchdog.Tick += (s, e) => { _webWatchdog.Stop(); OnWebViewStuck(); };
         }
 
         // ------------------------------------------------------------ window chrome
@@ -151,6 +158,7 @@ namespace Velox.Host
         {
             base.OnLoad(e);
             StartBackend();
+            _webWatchdog.Start();
             try
             {
                 string udf = Path.Combine(Path.Combine(Program.DataDir, "webview2"), IsTest ? "test" : "real");
@@ -158,7 +166,10 @@ namespace Velox.Host
                 var opts = new CoreWebView2EnvironmentOptions();
                 try { opts.Language = "de-DE"; } catch (Exception) { }
                 CoreWebView2Environment env = await CoreWebView2Environment.CreateAsync(null, udf, opts);
+                if (_webGaveUp) return;
                 await _web.EnsureCoreWebView2Async(env);
+                if (_webGaveUp) return;
+                _webWatchdog.Stop();
                 _core = _web.CoreWebView2;
                 ConfigureCore();
                 NavigateSplash();
@@ -166,12 +177,29 @@ namespace Velox.Host
             }
             catch (Exception ex)
             {
+                if (_webGaveUp || _closing) return;   // the watchdog switched to the Edge window already / the user closed VELOX
                 _log.Error("WebView2-Start fehlgeschlagen: " + ex);
-                FallbackRequested = true;
-                _exitNow = true;
-                if (_backend != null) { _backend.Dispose(); _backend = null; }
-                Close();
+                UseFallback();
             }
+        }
+
+        private void OnWebViewStuck()
+        {
+            if (_core != null || _closing || _webGaveUp) return;
+            _webGaveUp = true;
+            _log.Error("WebView2 hat sich nach " + WebViewStartTimeoutMs / 1000 + " s nicht gemeldet - Edge-App-Fenster wird benutzt.");
+            UseFallback();
+        }
+
+        /// <summary>WebView2 cannot be used: end this window and its backend; Program starts FallbackHost.</summary>
+        private void UseFallback()
+        {
+            _webWatchdog.Stop();
+            _timeout.Stop();
+            FallbackRequested = true;
+            _exitNow = true;
+            if (_backend != null) { _backend.Dispose(); _backend = null; }
+            try { Close(); } catch (Exception) { }
         }
 
         private void ConfigureCore()
@@ -207,21 +235,32 @@ namespace Velox.Host
             if (_backend != null) { _backend.Dispose(); _backend = null; }
             _failed = false;
             _lastErrorJson = null;
+            _lastStatusJson = null;
             _navFailures = 0;
             _appOrigin = _appOriginAlt = null;
             var b = new Backend(_log);
             b.Ready += url => UI(() => OnBackendReady(b, url));
             b.AlreadyRunning += url => UI(() => OnBackendReady(b, url));
             b.Exited += code => UI(() => OnBackendExited(b, code));
+            b.Output += () => UI(() => { if (b == _backend) _timeout.Alive(); });
+            b.Status += key => UI(() => OnBackendStatus(b, key));
             _backend = b;
+            _timeout.Begin();
             string err;
             if (!b.Start(Program.AppDir, IsTest, true, out err))
             {
                 ShowError("VELOX konnte nicht starten", err ?? "PowerShell ließ sich nicht starten.", b.Tail(40));
                 return;
             }
-            _timeout.Stop();
-            _timeout.Start();
+        }
+
+        private void OnBackendStatus(Backend b, string key)
+        {
+            if (b != _backend || _closing || _failed) return;
+            string text = StartupText.Status(key, IsTest);
+            if (text == null) return;
+            _lastStatusJson = Json(new Dictionary<string, object> { { "type", "status" }, { "text", text } });
+            PostToSplash(_lastStatusJson);
         }
 
         private void UI(Action a)
@@ -259,9 +298,8 @@ namespace Velox.Host
             if (b != _backend || _closing) return;
             _timeout.Stop();
             if (!b.OwnsServer && !string.IsNullOrEmpty(b.Origin)) return; // only connected to another instance's server
-            string errs = b.Errors();
             if (string.IsNullOrEmpty(b.Origin))
-                ShowError("VELOX konnte nicht starten", string.IsNullOrEmpty(errs) ? "Der VELOX-Motor (PowerShell) hat sich sofort wieder beendet (Code " + code + ")." : errs, b.Tail(40));
+                ShowError("VELOX konnte nicht starten", StartupText.EarlyExit(b.Errors(), b.Tail(80), code, Program.AppDir), b.Tail(40));
             else
                 ShowError("VELOX wurde unerwartet beendet", "Der VELOX-Motor im Hintergrund läuft nicht mehr (Code " + code + "). Deine Änderungen sind gesichert – starte ihn einfach neu.", b.Tail(40));
         }
@@ -269,11 +307,12 @@ namespace Velox.Host
         private void OnStartTimeout()
         {
             if (_closing || _backend == null || !string.IsNullOrEmpty(_backend.Origin)) return;
-            _log.Warn("Backend nicht rechtzeitig bereit (" + StartTimeoutMs / 1000 + " s).");
+            int secs = _timeout.ElapsedSeconds;
+            _log.Warn("Backend nicht rechtzeitig bereit (" + secs + " s).");
             string tail = _backend.Tail(40);
             _backend.Dispose();
             _backend = null;
-            ShowError("VELOX startet nicht", "Der VELOX-Motor hat sich nach " + StartTimeoutMs / 1000 + " Sekunden noch nicht gemeldet. Oft hilft ein zweiter Versuch. Wenn nicht, schau ins Log.", tail);
+            ShowError("VELOX startet nicht", "Der VELOX-Motor hat sich nach " + secs + " Sekunden noch nicht gemeldet. Oft hilft ein zweiter Versuch oder ein Neustart des PCs. Wenn nicht, schau ins Log.", tail);
         }
 
         // ------------------------------------------------------------ start screen (embedded page)
@@ -310,6 +349,7 @@ namespace Velox.Host
             _splashReady = true;
             PostToSplash(Json(new Dictionary<string, object> { { "type", "mode" }, { "test", IsTest } }));
             if (_failed && _lastErrorJson != null) PostToSplash(_lastErrorJson);
+            else if (!_failed && _lastStatusJson != null && _backend != null && string.IsNullOrEmpty(_backend.Origin)) PostToSplash(_lastStatusJson);
         }
 
         private void ShowError(string title, string message, string log)
@@ -351,7 +391,7 @@ namespace Velox.Host
                 _onInternal = true;
                 return;
             }
-            if (IsAppUri(uri)) { _onInternal = false; _splashReady = false; return; }
+            if (IsAppUri(uri)) { _onInternal = false; _splashReady = false; _appNavId = e.NavigationId; return; }
             e.Cancel = true;
             if (IsWebUri(uri) && e.IsUserInitiated) Util.OpenUnelevated(uri, _log);
             else _log.Warn("Navigation blockiert: " + Shorten(uri));
@@ -375,6 +415,10 @@ namespace Velox.Host
         private void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             if (_onInternal || e.IsSuccess) { if (!_onInternal) _navFailures = 0; return; }
+            // Only a failed load of the app counts. Not: the start screen replaced by the app before it finished,
+            // a navigation this host cancelled (a file dropped onto the window, a blocked link) - both end with
+            // OperationCanceled - or any older navigation that a newer one replaced.
+            if (e.NavigationId != _appNavId || e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
             _navFailures++;
             _log.Warn("Seite nicht geladen: " + e.WebErrorStatus);
             if (_closing || _backend == null) return;
@@ -534,6 +578,7 @@ namespace Velox.Host
             if (disposing)
             {
                 try { _timeout.Dispose(); } catch (Exception) { }
+                try { _webWatchdog.Dispose(); } catch (Exception) { }
                 try { if (_backend != null) _backend.Dispose(); } catch (Exception) { }
             }
             base.Dispose(disposing);

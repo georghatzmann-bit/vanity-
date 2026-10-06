@@ -450,7 +450,7 @@ mixed; `custom` a value is neither (set by another tool); `na` not applicable/no
 | `games-detect` | `{}` | `{ games:[ game ] }` (see "Game library" below) |
 | `game-boost` | `{ path, priority, gpu, fso }` | `{ ok, game }` |
 | `pick-file` | `{}` | `{ path }` (native dialog; `null` when cancelled or in simulate mode off Windows) |
-| `explorer-restart` | `{}` | `{ ok }` |
+| `explorer-restart` | `{}` | `{ ok }` - ends this session's Explorer; Windows restarts it. Only if it is not back after 15 s, the backend starts `explorer.exe` with the desktop Explorer's token taken beforehand (`CreateProcessWithTokenW`: not elevated, outside VELOX.exe's job object), never with `Start-Process`; without a token the job fails with Task-Manager instructions. |
 | `reboot` | `{}` | `{ ok }` (`shutdown /r /t 10`; simulate: logged only) |
 
 `goal` ∈ `gaming`, `competitive`, `balanced`, `privacy`, `laptop`, `streaming`, `fivem`.
@@ -789,14 +789,17 @@ The user asked for an **ultra-modern** UI with hover and click animations on eve
 
 ## 11. Native host & installer (`native/`, `dist/`)
 
-Two small **.NET Framework 4.8 WinForms** exes (4.8 ships with every Windows 10 1903+ / 11, so nothing
-has to be installed) around the unchanged PowerShell backend. Both use **WebView2** for their UI and
+Two small **.NET Framework WinForms** exes built for **4.7.2** (every Windows 10 from 1803 on - also LTSC
+2019 / 1809, which has no 4.8 - and Windows 11 have it, so nothing has to be installed; 4.8 / 4.8.1 run them
+unchanged) around the unchanged PowerShell backend. VeloxSetup.exe checks the installed version first
+(`Release` ≥ 461808 under `HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full`; older → German
+dialog with the download link, `/S` → exit 1; unreadable → go on). Both use **WebView2** for their UI and
 are AnyCPU without Prefer32Bit (64-bit process → 64-bit `powershell.exe`, 64-bit registry view).
 
 | File | What |
 |---|---|
-| `VERSION` | the one version number (`1.1.0`). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
-| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs`, `splash.html` (embedded start screen), `app.manifest` (`asInvoker`, PerMonitorV2). |
+| `VERSION` | the one version number (`1.1.1`; bump it for every `dist/VeloxSetup.exe` that leaves the house, so an installed build can be told apart and the setup offers *Aktualisieren*). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
+| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `Startup.cs` (start timeout, start-up texts, diagnosis of a blocked PowerShell), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs`, `splash.html` (embedded start screen), `app.manifest` (`asInvoker`, PerMonitorV2). |
 | `native/setup/` | **VeloxSetup.exe** – installer + uninstaller: `Program.cs` (switches, AssemblyResolve, temp copy for uninstall), `SetupWindow.cs` (the only file with WebView2 types), `Installer.cs` (install/update/uninstall engine), `Payload.cs` (embedded zip), `WebView2Runtime.cs` (runtime download), `FallbackForm.cs` (plain native UI), `app.manifest` (`requireAdministrator`, PerMonitorV2). |
 | `native/setup-ui/` | installer UI: `index.html`, `setup.css`, `setup.js` (same design system as `ui/`, §10). Opening `index.html` in a browser shows a demo (`#update`, `#uninstall` in the URL pick the mode). |
 | `native/shared/` | `Common.cs` (Log, Util), `DarkUi.cs` (dark native dialogs, `Brand` colours), `NativeMethods.cs` (P/Invoke). |
@@ -804,13 +807,15 @@ are AnyCPU without Prefer32Bit (64-bit process → 64-bit `powershell.exe`, 64-b
 | `native/buildtool/` | net8 helper used only by the build: `pack` (payload.zip) and `verify` (checks the finished exe). |
 | `native/build.sh`, `native/Build.ps1` | build `dist/VeloxSetup.exe` (Linux/macOS resp. Windows, .NET SDK 8+). Deterministic: same sources → byte-identical exe. |
 | `dist/VeloxSetup.exe` | the download (≈ 1.1 MB, budget 3 MB). `dist/obj/` is build output and ignored. |
-| `tests/native/` | `run-setup-ui-tests.mjs` (installer UI + host start screen in Chromium, mocked bridge, screenshots), `Test-HostPid.ps1` (backend ↔ host contract). |
+| `tests/native/` | `run-setup-ui-tests.mjs` (installer UI + host start screen in Chromium, mocked bridge, screenshots), `Test-HostPid.ps1` (backend ↔ host contract, lifecycle), `wine-smoke.sh` (runs the real VeloxSetup.exe / VELOX.exe / Uninstall.exe under Wine + wine-mono with a fake `powershell.exe` from `wine/`; optional, skips without Wine). |
 
 ### Velox.ps1 under VELOX.exe
 
 VELOX.exe starts `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive
 -ExecutionPolicy Bypass -File "<dir>\Velox.ps1" -NoBrowser -Port 0 -HostPid <pid> [-Simulate]` hidden
-(`CreateNoWindow`), stdin closed, stdout/stderr read asynchronously (OEM code page), `PSModulePath` and
+(`CreateNoWindow`), stdin closed, stdout/stderr read asynchronously in the system OEM code page (`GetOEMCP()` -
+what PowerShell's hidden console starts with; not the user culture's code page, and 65001 with Windows'
+"Beta: UTF-8" option), `PSModulePath` and
 `VELOX_DATA_DIR` removed from its environment. The process goes into a **job object with
 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`**, so neither it nor anything it starts can outlive VELOX.exe.
 
@@ -819,10 +824,15 @@ VELOX.exe starts `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -N
 - start-up errors are printed as one line `VELOX_ERROR <text>` instead of waiting for Enter;
 - not elevated in real mode → `VELOX_ERROR …`, exit 2 (VELOX.exe elevates itself; the backend never opens a second UAC prompt);
 - another backend of the same mode already runs → `VELOX_RUNNING <url>` (VELOX.exe connects to it);
-- a watcher runspace checks every 2 s whether that process still exists (and is the same process: start time) and otherwise asks the server loop to end (the normal shutdown path, a running job still finishes).
+- a watcher runspace checks every 2 s whether that process still exists (and is the same process: start time) and otherwise asks the server loop to end (the normal shutdown path, a running job still finishes);
+- `VELOX_STATUS <key>` before each start-up phase (`core`, `system`, `catalog`, `server`); VELOX.exe shows a German text for it (`Startup.cs`) and counts it as a sign of life;
+- with `-NoBrowser` too (VELOX.exe's own window) the 150 s page-heartbeat timeout is off (`$ctx.Life.hostWindow`): the host ends the backend.
+
+In every mode the server loop treats a wall-clock jump of more than 30 s between two rounds as a wake-up from
+sleep/hibernation and counts it as a heartbeat - before, VELOX quit whenever the PC woke up with VELOX open.
 
 Stdout lines VELOX.exe reacts to: `VELOX_READY http://127.0.0.1:<port>/?t=<token>` (only 127.0.0.1/localhost
-with a token is accepted), `VELOX_RUNNING <url>`, `VELOX_ERROR <text>`. Everything is also written to
+with a token is accepted), `VELOX_RUNNING <url>`, `VELOX_ERROR <text>`, `VELOX_STATUS <key>`. Everything is also written to
 `%LOCALAPPDATA%\Velox\logs\host.log`. `Start.bat` / `Start-Testmodus.bat` behave exactly as before.
 
 ### VELOX.exe
@@ -835,8 +845,9 @@ with a token is accepted), `VELOX_RUNNING <url>`, `VELOX_ERROR <text>`. Everythi
 
 - **Single instance per mode:** mutex `Local\VELOX-Host-real` / `Local\VELOX-Host-sim`. A second start broadcasts the registered window message `VELOX.Host.Activate.v1` (wParam 1 = real, 2 = Testmodus; allowed through UIPI with `ChangeWindowMessageFilterEx`) and exits; if the other instance is just closing (mutex gone within 4.5 s) it starts normally instead.
 - **Window:** opens at once with the embedded start screen (`NavigateToString(splash.html)`), BackColor and `WEBVIEW2_DEFAULT_BACKGROUND_COLOR` `#0F1115` (no white flash), dark title bar (`DwmSetWindowAttribute` 20, fallback 19), Windows 11 rounded corners + caption colour, min 900×600, default 1360×880 DIP clamped to the work area, size/position/maximized in `%LOCALAPPDATA%\Velox\window.json`, title `VELOX` / `VELOX – Testmodus`.
-- **Start:** the backend must report `VELOX_READY` within **45 s**; otherwise (or if it exits) the start screen shows an error with the last 40 log lines and the buttons *Erneut versuchen* / *Testmodus* / *Log öffnen*.
-- **WebView2:** user data folder `%LOCALAPPDATA%\Velox\webview2\<real|test>`; DevTools, browser accelerator keys, default context menu, status bar, zoom, pinch zoom, swipe navigation, autofill, password saving and host objects off. Only `http://127.0.0.1:<port>/` (and `localhost:<port>`) and the embedded start screen may load in the window; every other navigation is cancelled, user-initiated http(s) links and `window.open` open in the default browser **non-elevated** via `explorer.exe "<url>"`. Render process crash → reload; browser process crash → restart VELOX.exe.
+- **Start:** the backend must report `VELOX_READY` - at the latest **60 s after its last output line** and **180 s** after the start (a slow first start after boot or install keeps going while it prints its phases); otherwise (or if it exits) the start screen shows an error with the last 40 log lines and the buttons *Erneut versuchen* / *Testmodus* / *Log öffnen*. Ended without `VELOX_ERROR`: the stderr tail is checked for PowerShell refusing the script (execution policy forced by Group Policy, the virus scanner / AMSI, Constrained Language Mode) and the user gets a plain German explanation instead of "Code 1".
+- **WebView2 watchdog:** if `CreateAsync` / `EnsureCoreWebView2Async` has not finished after **30 s** (a stuck runtime never throws), VELOX.exe gives up on WebView2 exactly as on an exception: `FallbackHost`.
+- **WebView2:** user data folder `%LOCALAPPDATA%\Velox\webview2\<real|test>`; DevTools, browser accelerator keys, default context menu, status bar, zoom, pinch zoom, swipe navigation, autofill, password saving and host objects off. Only `http://127.0.0.1:<port>/` (and `localhost:<port>`) and the embedded start screen may load in the window; every other navigation is cancelled, user-initiated http(s) links and `window.open` open in the default browser **non-elevated** via `explorer.exe "<url>"`. Render process crash → reload; browser process crash → restart VELOX.exe. A failed load of the app (only the latest app navigation, never `OperationCanceled` - the start screen replaced by the app, or a navigation the host cancelled itself) is retried up to 3 times.
 - **Close:** if `POST /api/heartbeat` says `busy`, ask first (*Trotzdem beenden* / *Weiter warten*). Then the window hides, the WebView is disposed (its heartbeats stop), `POST /api/shutdown?t=<token>`, wait up to **3 s**, then `TerminateJobObject` (the backend keeps its 4 s reload grace period, so it is normally ended by the job object; that is safe because every change is saved when it is made). Windows shutdown: request + terminate at once.
 - **WebView2 runtime missing** (`GetAvailableBrowserVersionString` throws `WebView2RuntimeNotFoundException`, or creating the environment fails): `FallbackHost` – a small dark start window runs `Velox.ps1` hidden **without** `-NoBrowser` (the backend opens its Edge app window as with `Start.bat`); VELOX.exe stays alive as the job owner and ends when the backend ends.
 
@@ -868,10 +879,10 @@ missing → `FallbackForm`, a plain native install/uninstall UI with the same en
 | Switch | Meaning |
 |---|---|
 | *(none)* | install UI; when VELOX is installed already: update UI. |
-| `/S` | silent install (no UI, VELOX is not started). With `/D=<folder>` another folder, `/nodesktop`, `/nostartmenu`. |
+| `/S` | silent install (no UI, VELOX is not started). With `/D=<folder>` another folder (NSIS style: may be unquoted with spaces when it is the last argument - it is read from the raw command line; `"/D=<folder>"` works too), `/nodesktop`, `/nostartmenu`. |
 | `/uninstall` | uninstall UI (`Uninstall.exe /uninstall` is the `UninstallString`). |
-| `/uninstall /S` | silent uninstall, keeps settings and backups; `/purge` deletes `%LOCALAPPDATA%\Velox` too. |
-| `--from-temp --dir <folder>` | internal: the uninstaller copies itself to `%TEMP%\VeloxUninstall-*` and runs from there so it can delete its own folder. That temp copy (and the loaded `WebView2Loader.dll`) cannot delete itself: it is registered for deletion at the next restart (`MoveFileEx` delay-until-reboot, like NSIS) - no `cmd /c ping & rd` helper, which antivirus heuristics flag. |
+| `/uninstall /S` | silent uninstall, keeps settings and backups; `/purge` deletes `%LOCALAPPDATA%\Velox` too. The launching `Uninstall.exe` waits for the temp copy's **result file** (`--parent <pid> --result <file>`), exits with that code, and the copy then deletes the launcher's `Uninstall.exe` and the empty folder (a running exe cannot be deleted). |
+| `--from-temp --dir <folder> [--parent <pid> --result <file>]` | internal: the uninstaller copies itself to `%TEMP%\VeloxUninstall-*` and runs from there so it can delete its own folder. That temp copy (and the loaded `WebView2Loader.dll`) cannot delete itself: it is registered for deletion at the next restart (`MoveFileEx` delay-until-reboot, like NSIS) - no `cmd /c ping & rd` helper, which antivirus heuristics flag. |
 
 Exit codes: 0 ok, 1 error, 2 closed before finishing, 5 not elevated. Log: `%TEMP%\VeloxSetup.log`.
 
@@ -920,8 +931,13 @@ blurred wordmark) and then settles into the app splash's loop, so the hand-over 
 
 `native/build.sh` (or `native/Build.ps1`): `dotnet build` VELOX.exe → `buildtool pack` (payload.zip, sorted,
 fixed timestamps) → `dotnet build` VeloxSetup.exe with the payload → copy to `dist/` → `buildtool verify`:
-manifests (`requireAdministrator` / `asInvoker`, PerMonitorV2), icon + version resources, versions =
+manifests (`requireAdministrator` / `asInvoker`, PerMonitorV2; parsed strictly as XML like Windows' SxS
+loader does - "--" in a comment once made VELOX.exe refuse to start), icon + version resources, versions =
 `VERSION`, embedded resources, payload = every app file byte-identical and nothing else, CRLF of the
-`.bat`s and BOM of `Velox.ps1` kept, WebView2Loader machine types, size ≤ 3 MB. Then
-`node tests/native/run-setup-ui-tests.mjs` and `pwsh tests/native/Test-HostPid.ps1`.
-Nothing of the Win32/COM/WebView2 side can run on Linux; every such call is wrapped and logged.
+`.bat`s and BOM of `Velox.ps1` kept, WebView2Loader machine types, size ≤ 3 MB; both exes built for
+4.7.2 = `VELOX.exe.config`'s `sku` = the setup's .NET check (`Util.NetFrameworkMinRelease`); every
+non-framework assembly VELOX.exe, the setup and the WebView2 DLLs reference is in the payload root with the
+exact name, version and public key token. Then
+`node tests/native/run-setup-ui-tests.mjs` and `pwsh tests/native/Test-HostPid.ps1`; with Wine installed
+also `tests/native/wine-smoke.sh` (≈ 4 min). WebView2, UAC and shortcuts cannot run under Wine; every
+Win32/COM/WebView2 call is wrapped and logged.

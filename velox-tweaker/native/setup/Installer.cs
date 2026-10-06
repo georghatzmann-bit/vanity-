@@ -547,8 +547,13 @@ namespace Velox.Setup
 
         // ------------------------------------------------------------ uninstall
 
-        /// <summary>Removes exactly the files VELOX installed (manifest + current payload list), then empty folders.</summary>
-        private static void RemoveInstalledFiles(string dir, ProgressFn report = null, double from = 0, double to = 0)
+        /// <summary>
+        /// Removes exactly the files VELOX installed (manifest + current payload list), then empty folders.
+        /// What is locked is deleted at the next restart (MoveFileEx), the folder too - Windows removes it then
+        /// if it is empty by that time. keepSelf: Uninstall.exe is still running (the launcher of a silent
+        /// uninstall waits for the result); RemoveLeftovers deletes it once it has exited.
+        /// </summary>
+        private static void RemoveInstalledFiles(string dir, ProgressFn report = null, double from = 0, double to = 0, bool keepSelf = false)
         {
             HashSet<string> files = ReadManifest(dir);
             long ignored;
@@ -562,6 +567,7 @@ namespace Velox.Setup
                 string p;
                 try { p = SafeCombine(dir, rel); } catch (Exception) { continue; }
                 if (report != null) report(from + (to - from) * i / n, "Dateien werden entfernt …", rel.Replace('\\', '/'));
+                if (keepSelf && string.Equals(rel, "Uninstall.exe", StringComparison.OrdinalIgnoreCase)) continue;
                 try
                 {
                     if (File.Exists(p)) { File.SetAttributes(p, FileAttributes.Normal); File.Delete(p); }
@@ -573,9 +579,44 @@ namespace Velox.Setup
                 }
             }
             RemoveEmptyDirs(dir, true);
+            if (!keepSelf) ScheduleDirRemoval(dir);
         }
 
-        public static void Uninstall(string dir, bool keepData, bool closeRunning, ProgressFn report)
+        /// <summary>
+        /// Registers the install folder for removal at the next restart when it is still there. Registered after
+        /// its files, so Windows deletes them first; a folder that is not empty by then simply stays.
+        /// </summary>
+        private static void ScheduleDirRemoval(string dir)
+        {
+            if (!Directory.Exists(dir)) return;
+            try
+            {
+                if (NativeMethods.MoveFileEx(dir, null, NativeMethods.MOVEFILE_DELAY_UNTIL_REBOOT)) Log.Info("Ordner wird beim nächsten Neustart entfernt: " + dir);
+            }
+            catch (Exception) { }
+        }
+
+        /// <summary>After a silent uninstall: the launching Uninstall.exe has exited - delete it and the empty folder.</summary>
+        public static void RemoveLeftovers(string dir)
+        {
+            string self = Path.Combine(dir, "Uninstall.exe");
+            for (int i = 0; File.Exists(self); i++)
+            {
+                try { File.SetAttributes(self, FileAttributes.Normal); File.Delete(self); Log.Info("Uninstall.exe entfernt."); break; }
+                catch (Exception ex)
+                {
+                    if (i < 10) { Thread.Sleep(300); continue; }
+                    Log.Warn("Nicht gelöscht (Uninstall.exe): " + ex.Message);
+                    try { NativeMethods.MoveFileEx(self, null, NativeMethods.MOVEFILE_DELAY_UNTIL_REBOOT); } catch (Exception) { }
+                    break;
+                }
+            }
+            RemoveEmptyDirs(dir, true);
+            if (!Directory.Exists(dir)) Log.Info("Programmordner entfernt: " + dir);
+            ScheduleDirRemoval(dir);
+        }
+
+        public static void Uninstall(string dir, bool keepData, bool closeRunning, ProgressFn report, bool launcherWaits = false)
         {
             Log.Info("Deinstallation aus " + dir + " (Daten behalten: " + keepData + ")");
             report(2, "Vorbereiten …", null);
@@ -589,7 +630,7 @@ namespace Velox.Setup
             DeleteFile(Path.Combine(CommonPrograms() ?? "", "VELOX.lnk"));
             DeleteFile(Path.Combine(CommonPrograms() ?? "", "VELOX Testmodus.lnk"));
             DeleteFile(Path.Combine(CommonDesktop() ?? "", "VELOX.lnk"));
-            if (Directory.Exists(dir)) RemoveInstalledFiles(dir, report, 15, 80);
+            if (Directory.Exists(dir)) RemoveInstalledFiles(dir, report, 15, 80, launcherWaits);
             report(85, "Eintrag bei Windows wird entfernt …", null);
             DeleteUninstallEntry();
             if (!keepData)

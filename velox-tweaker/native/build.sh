@@ -3,8 +3,8 @@
 #
 #   velox-tweaker/native/build.sh
 #
-# Steps: VELOX.exe (net48) -> payload.zip (app + VELOX.exe + WebView2 DLLs, fixed timestamps, sorted)
-#        -> VeloxSetup.exe (net48, payload + setup-ui embedded) -> verify (manifests, resources, payload, size).
+# Steps: VELOX.exe (net472) -> payload.zip (app + VELOX.exe + WebView2 DLLs, fixed timestamps, sorted)
+#        -> VeloxSetup.exe (net472, payload + setup-ui embedded) -> verify (manifests, resources, payload, size).
 # Deterministic: the same sources give a byte-identical VeloxSetup.exe. Windows: native/Build.ps1.
 set -euo pipefail
 

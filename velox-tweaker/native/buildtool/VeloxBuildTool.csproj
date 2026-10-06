@@ -7,7 +7,7 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <!-- override the net48 settings of native/Directory.Build.props -->
+    <!-- override the net472 settings of native/Directory.Build.props -->
     <ApplicationIcon></ApplicationIcon>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <InvariantGlobalization>true</InvariantGlobalization>
@@ -15,7 +15,7 @@
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Remove="Microsoft.NETFramework.ReferenceAssemblies.net48" />
+    <PackageReference Remove="Microsoft.NETFramework.ReferenceAssemblies.net472" />
     <Reference Remove="System.Windows.Forms" />
     <Reference Remove="System.Drawing" />
   </ItemGroup>

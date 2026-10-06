@@ -144,6 +144,10 @@ namespace Velox.Native
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool CloseHandle(IntPtr handle);
 
+        // the system's OEM code page (what a new console starts with)
+        [DllImport("kernel32.dll")]
+        public static extern uint GetOEMCP();
+
         // ------------------------------------------------------------ files
         public const int MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
 

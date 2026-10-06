@@ -59,7 +59,8 @@ namespace Velox.Host
 
     /// <summary>
     /// One run of Velox.ps1. Events fire on thread-pool threads; the form marshals them.
-    /// Protocol on stdout (one line each): VELOX_READY &lt;url&gt; | VELOX_RUNNING &lt;url&gt; | VELOX_ERROR &lt;text&gt;.
+    /// Protocol on stdout (one line each): VELOX_READY &lt;url&gt; | VELOX_RUNNING &lt;url&gt; | VELOX_ERROR &lt;text&gt;
+    /// | VELOX_STATUS &lt;key&gt; (start-up phase: core, system, catalog, server).
     /// </summary>
     internal sealed class Backend : IDisposable
     {
@@ -75,6 +76,8 @@ namespace Velox.Host
         public event Action<string> Ready;           // app url (own backend)
         public event Action<string> AlreadyRunning;  // app url of another running backend
         public event Action<int> Exited;             // exit code (-1 unknown)
+        public event Action<string> Status;          // start-up phase key (VELOX_STATUS)
+        public event Action Output;                  // any line on stdout/stderr: the backend is alive
 
         public string Url { get; private set; }
         public string Origin { get; private set; }   // http://127.0.0.1:<port>/
@@ -111,8 +114,7 @@ namespace Velox.Host
             args.Append(" -Port 0 -HostPid ").Append(Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture));
             if (simulate) args.Append(" -Simulate");
 
-            Encoding oem;
-            try { oem = Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage); } catch (Exception) { oem = Encoding.Default; }
+            Encoding oem = ConsoleEncoding();
             var psi = new ProcessStartInfo(ps, args.ToString())
             {
                 UseShellExecute = false,
@@ -154,9 +156,27 @@ namespace Velox.Host
             }
         }
 
+        /// <summary>
+        /// What Windows PowerShell 5.1 writes redirected output in: [Console]::OutputEncoding, i.e. the console code
+        /// page of its (hidden) console, which starts as the system's OEM code page - GetOEMCP(), not the user
+        /// culture's OEMCodePage (they differ with another display language, or 65001 with the "Beta: UTF-8" option).
+        /// </summary>
+        internal static Encoding ConsoleEncoding()
+        {
+            try
+            {
+                int cp = (int)NativeMethods.GetOEMCP();
+                if (cp > 0) return Encoding.GetEncoding(cp);
+            }
+            catch (Exception) { }
+            try { return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage); } catch (Exception) { return Encoding.Default; }
+        }
+
         private void OnLine(string line, bool isErr)
         {
             if (line == null) return;
+            var o = Output;
+            if (o != null && !_disposed && !_readySeen) { try { o(); } catch (Exception) { } }
             lock (_lock)
             {
                 _tail.Enqueue((isErr ? "! " : "") + line);
@@ -177,6 +197,11 @@ namespace Velox.Host
             else if (t.StartsWith("VELOX_ERROR ", StringComparison.Ordinal))
             {
                 lock (_lock) { _errors.Add(t.Substring(12).Trim()); }
+            }
+            else if (t.StartsWith("VELOX_STATUS ", StringComparison.Ordinal) && !_readySeen)
+            {
+                var h = Status;
+                if (h != null && !_disposed) h(t.Substring(13).Trim());
             }
         }
 

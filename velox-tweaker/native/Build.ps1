@@ -2,8 +2,8 @@
 .SYNOPSIS
     Builds dist\VeloxSetup.exe (one self-contained installer) on Windows with the .NET SDK (8 or newer).
 .DESCRIPTION
-    Same steps as native/build.sh: VELOX.exe (net48) -> payload.zip (app + VELOX.exe + WebView2 DLLs)
-    -> VeloxSetup.exe (net48, payload + setup-ui embedded) -> verify (manifests, resources, payload, size).
+    Same steps as native/build.sh: VELOX.exe (net472) -> payload.zip (app + VELOX.exe + WebView2 DLLs)
+    -> VeloxSetup.exe (net472, payload + setup-ui embedded) -> verify (manifests, resources, payload, size).
     Runs on Windows PowerShell 5.1 and PowerShell 7. Deterministic: same sources, byte-identical exe.
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File velox-tweaker\native\Build.ps1

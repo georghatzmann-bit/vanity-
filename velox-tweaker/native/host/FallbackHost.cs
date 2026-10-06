@@ -23,7 +23,7 @@ namespace Velox.Host
     internal sealed class FallbackForm : Form
     {
         private readonly Log _log = Program.Log;
-        private readonly Timer _timeout = new Timer { Interval = 45000 };
+        private readonly StartTimer _timeout;
         private readonly Timer _anim = new Timer { Interval = 33 };
         private Backend _backend;
         private bool _test;
@@ -46,7 +46,7 @@ namespace Velox.Host
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             ClientSize = new Size(S(420), S(260));
             DoubleBuffered = true;
-            _timeout.Tick += (s, e) => { _timeout.Stop(); OnTimeout(); };
+            _timeout = new StartTimer(OnTimeout);
             _anim.Tick += (s, e) => { _phase += 0.033f; Invalidate(); };
         }
 
@@ -89,10 +89,17 @@ namespace Velox.Host
             b.Ready += url => UI(() => { if (b != _backend) return; _ready = true; _timeout.Stop(); _anim.Stop(); Hide(); });
             b.AlreadyRunning += url => UI(() => { if (b != _backend) return; _quitting = true; Close(); });
             b.Exited += code => UI(() => OnExited(b, code));
+            b.Output += () => UI(() => { if (b == _backend) _timeout.Alive(); });
+            b.Status += key => UI(() =>
+            {
+                if (b != _backend || _ready) return;
+                string text = StartupText.Status(key, _test);
+                if (text != null) { _status = text; Invalidate(); }
+            });
             _backend = b;
+            _timeout.Begin();
             string err;
-            if (!b.Start(Program.AppDir, _test, false, out err)) { Fail(err, b.Tail(30)); return; }
-            _timeout.Start();
+            if (!b.Start(Program.AppDir, _test, false, out err)) { _timeout.Stop(); Fail(err, b.Tail(30)); return; }
         }
 
         /// <summary>A second start while the Edge window is open: Velox.ps1 opens the existing window again and exits.</summary>
@@ -115,8 +122,7 @@ namespace Velox.Host
             if (b != _backend || _quitting) return;
             _timeout.Stop();
             if (_ready) { _quitting = true; Close(); return; }   // the app window was closed: VELOX ends
-            string errs = b.Errors();
-            Fail(string.IsNullOrEmpty(errs) ? "Der VELOX-Motor (PowerShell) hat sich sofort wieder beendet (Code " + code + ")." : errs, b.Tail(30));
+            Fail(StartupText.EarlyExit(b.Errors(), b.Tail(80), code, Program.AppDir), b.Tail(30));
         }
 
         private void OnTimeout()
@@ -125,12 +131,13 @@ namespace Velox.Host
             string tail = _backend.Tail(30);
             _backend.Dispose();
             _backend = null;
-            Fail("Der VELOX-Motor hat sich nach 45 Sekunden noch nicht gemeldet.", tail);
+            Fail("Der VELOX-Motor hat sich nach " + _timeout.ElapsedSeconds + " Sekunden noch nicht gemeldet. Oft hilft ein zweiter Versuch oder ein Neustart des PCs.", tail);
         }
 
         private void Fail(string message, string tail)
         {
             _anim.Stop();
+            _log.Warn("VELOX konnte nicht starten: " + message);
             var buttons = _test ? new[] { "Log öffnen", "Schließen", "Erneut versuchen" } : new[] { "Log öffnen", "Testmodus", "Erneut versuchen" };
             while (true)
             {

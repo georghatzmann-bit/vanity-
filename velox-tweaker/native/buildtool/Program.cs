@@ -148,6 +148,7 @@ internal static class Program
         foreach (string r in new[] { "payload.zip", "ui/index.html", "ui/setup.css", "ui/setup.js" })
             Check(s.Resources.ContainsKey(r), "setup: embedded resource " + r);
         Check(!s.ReferencesWebView2Files, "setup: no WebView2 DLL needed next to the exe (only assembly references)");
+        Check(s.TargetFramework == TargetFramework, $"setup: built for {s.TargetFramework} (expected {TargetFramework})");
 
         if (!s.Resources.TryGetValue("payload.zip", out byte[] payload)) { Console.WriteLine($"FAILED: {_fails} check(s)"); return 1; }
         Console.WriteLine($"payload.zip: {payload.Length / 1024} KB");
@@ -192,6 +193,25 @@ internal static class Program
         var core = InspectPe(Read(entries["Microsoft.Web.WebView2.Core.dll"]), "Microsoft.Web.WebView2.Core.dll");
         var wf = InspectPe(Read(entries["Microsoft.Web.WebView2.WinForms.dll"]), "Microsoft.Web.WebView2.WinForms.dll");
         Check(core.IlOnly && wf.IlOnly, "WebView2 managed DLLs are IL-only (loadable from memory by the setup)");
+
+        // .NET Framework version: what VELOX.exe is built for = what VELOX.exe.config asks Windows for = what
+        // the setup checks before it installs. A mismatch means Windows shows its own runtime dialog instead of VELOX.
+        Check(v.TargetFramework == TargetFramework, $"VELOX.exe: built for {v.TargetFramework} (expected {TargetFramework})");
+        var cfg = new System.Xml.XmlDocument();
+        try { cfg.LoadXml(Encoding.UTF8.GetString(Read(entries["VELOX.exe.config"])).TrimStart('\uFEFF')); } catch (System.Xml.XmlException) { }
+        string sku = (cfg.SelectSingleNode("/configuration/startup/supportedRuntime/@sku") as System.Xml.XmlAttribute)?.Value ?? "";
+        Check(sku == v.TargetFramework, $"VELOX.exe.config: supportedRuntime sku \"{sku}\" = the framework VELOX.exe is built for");
+        CheckSetupRuntimeGate(app, v.TargetFramework);
+
+        // Every assembly the exes load at run time is in the payload, next to VELOX.exe, with exactly the
+        // referenced identity (name, version, public key token): what the CLR probes for VELOX.exe and what the
+        // setup's AssemblyResolve hands out from the payload. Framework assemblies come from Windows.
+        var dlls = new Dictionary<string, PeInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in entries.Values.Where(e => !e.FullName.Contains('/') && e.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+            dlls[Path.GetFileNameWithoutExtension(e.FullName)] = InspectPe(Read(e), e.FullName);
+        CheckDependencies("VELOX.exe", v, dlls);
+        CheckDependencies("setup", s, dlls);
+        foreach (var kv in dlls) CheckDependencies(kv.Key + ".dll", kv.Value, dlls);
         foreach (var arch in new[] { ("win-x64", Machine.Amd64), ("win-x86", Machine.I386), ("win-arm64", Machine.Arm64) })
         {
             using var pe = new PEReader(new MemoryStream(Read(entries[$"runtimes/{arch.Item1}/native/WebView2Loader.dll"])));
@@ -202,6 +222,38 @@ internal static class Program
         Console.WriteLine($"sha256 {sha}");
         Console.WriteLine(_fails == 0 ? "VERIFY OK" : $"VERIFY FAILED: {_fails} check(s)");
         return _fails == 0 ? 0 : 1;
+    }
+
+    private const string TargetFramework = ".NETFramework,Version=v4.7.2";
+    // "Release" values of HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full (minimum per version)
+    private static readonly Dictionary<string, int> FrameworkRelease = new Dictionary<string, int>
+    {
+        [".NETFramework,Version=v4.6.2"] = 394802, [".NETFramework,Version=v4.7"] = 460798, [".NETFramework,Version=v4.7.1"] = 461308,
+        [".NETFramework,Version=v4.7.2"] = 461808, [".NETFramework,Version=v4.8"] = 528040, [".NETFramework,Version=v4.8.1"] = 533320,
+    };
+    private static readonly HashSet<string> FrameworkKeyTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "b77a5c561934e089", "b03f5f7f11d50a3a", "31bf3856ad364e35", "cc7b13ffcd2ddd51"
+    };
+
+    /// <summary>The setup's .NET check (Util.NetFrameworkMinRelease) must match the framework VELOX.exe needs.</summary>
+    private static void CheckSetupRuntimeGate(string app, string tfm)
+    {
+        string src = Path.Combine(app, "native", "shared", "Common.cs");
+        var m = File.Exists(src) ? Regex.Match(File.ReadAllText(src), @"NetFrameworkMinRelease\s*=\s*(\d+)") : Match.Empty;
+        bool known = FrameworkRelease.TryGetValue(tfm ?? "", out int need);
+        Check(m.Success && known && int.Parse(m.Groups[1].Value) == need,
+            $"setup checks .NET Release >= {(m.Success ? m.Groups[1].Value : "?")} = what {tfm} needs ({(known ? need.ToString() : "?")})");
+    }
+
+    private static void CheckDependencies(string label, PeInfo pe, Dictionary<string, PeInfo> dlls)
+    {
+        foreach (var r in pe.References)
+        {
+            if (FrameworkKeyTokens.Contains(r.Token)) continue;
+            bool ok = dlls.TryGetValue(r.Name, out var d) && d.Name == r.Name && d.Version == r.Version && string.Equals(d.Token, r.Token, StringComparison.OrdinalIgnoreCase);
+            Check(ok, $"{label} -> {r.Name} {r.Version} ({r.Token}): in the payload next to VELOX.exe" + (d != null && !ok ? $" (found {d.Name} {d.Version} {d.Token})" : ""));
+        }
     }
 
     // Windows' side-by-side loader parses the embedded manifest (and <exe>.config) strictly before the
@@ -264,7 +316,10 @@ internal static class Program
     {
         public string Manifest = "";
         public bool HasIcon, HasVersion, IlOnly, ReferencesWebView2Files;
-        public string AssemblyVersion = "", Informational = "";
+        public string AssemblyVersion = "", Informational = "", TargetFramework = "";
+        public string Name = "", Token = "";
+        public Version Version;
+        public List<(string Name, Version Version, string Token)> References = new List<(string, Version, string)>();
         public Dictionary<string, byte[]> Resources = new Dictionary<string, byte[]>(StringComparer.Ordinal);
     }
 
@@ -285,6 +340,15 @@ internal static class Program
             var md = pe.GetMetadataReader();
             var asm = md.GetAssemblyDefinition();
             info.AssemblyVersion = asm.Version.ToString();
+            info.Name = md.GetString(asm.Name);
+            info.Version = asm.Version;
+            info.Token = TokenOf(md.GetBlobBytes(asm.PublicKey), false);
+            foreach (var rh in md.AssemblyReferences)
+            {
+                var r = md.GetAssemblyReference(rh);
+                bool full = (r.Flags & System.Reflection.AssemblyFlags.PublicKey) != 0;
+                info.References.Add((md.GetString(r.Name), r.Version, TokenOf(md.GetBlobBytes(r.PublicKeyOrToken), !full)));
+            }
             foreach (var ca in asm.GetCustomAttributes())
             {
                 var attr = md.GetCustomAttribute(ca);
@@ -297,6 +361,12 @@ internal static class Program
                     var br = md.GetBlobReader(attr.Value);
                     br.ReadUInt16();
                     info.Informational = br.ReadSerializedString();
+                }
+                if (tn == "TargetFrameworkAttribute")
+                {
+                    var br = md.GetBlobReader(attr.Value);
+                    br.ReadUInt16();
+                    info.TargetFramework = br.ReadSerializedString();
                 }
             }
             // managed resources
@@ -330,6 +400,14 @@ internal static class Program
             }
         }
         return info;
+    }
+
+    /// <summary>Public key token (hex): the blob itself when it is a token, else the last 8 bytes of SHA-1(key) reversed.</summary>
+    private static string TokenOf(byte[] blob, bool isToken)
+    {
+        if (blob == null || blob.Length == 0) return "";
+        byte[] t = isToken ? blob : SHA1.HashData(blob).Skip(12).Reverse().ToArray();
+        return Convert.ToHexString(t).ToLowerInvariant();
     }
 
     /// <summary>Walks IMAGE_RESOURCE_DIRECTORY (type -> name -> language) and yields data entries.</summary>

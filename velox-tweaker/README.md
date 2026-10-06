@@ -29,6 +29,14 @@ Ein Update installierst du genauso: neue `VeloxSetup.exe` starten, **Aktualisier
 Deine Einstellungen und Sicherungen bleiben erhalten. Entfernen: Windows-Einstellungen →
 Apps → VELOX → Deinstallieren.
 
+VELOX 1.1.0 meldet beim Start „Die Side-by-Side-Konfiguration ist ungültig“? Das war ein Fehler
+in dieser Version. Lade die neue `VeloxSetup.exe` herunter, starte sie und klick **Aktualisieren** –
+danach startet VELOX normal.
+
+Läuft auf Windows 11 und Windows 10 (ab Version 1803). Für Admins: `VeloxSetup.exe /S` installiert
+ohne Fenster (`/D=C:\Ordner\VELOX` als letztes Argument für einen anderen Ordner),
+`Uninstall.exe /uninstall /S` entfernt VELOX ohne Fenster.
+
 ### Ohne Installation
 
 1. Den Ordner `velox-tweaker` irgendwo hin entpacken (zum Beispiel auf den Desktop).
@@ -103,4 +111,5 @@ fliegen raus.
 - Backend-Tests: `pwsh tests/Run-Tests.ps1`
 - Oberflächen-Tests: `node tests/ui/run-ui-tests.mjs`
 - Setup bauen: `native/build.sh` (Linux/macOS) oder `native/Build.ps1` (Windows), braucht das .NET SDK 8
-- Setup-Tests: `node tests/native/run-setup-ui-tests.mjs` und `pwsh tests/native/Test-HostPid.ps1`
+- Setup-Tests: `node tests/native/run-setup-ui-tests.mjs` und `pwsh tests/native/Test-HostPid.ps1`;
+  mit Wine zusätzlich `tests/native/wine-smoke.sh` (Setup, VELOX.exe und Deinstallation echt ausgeführt)

@@ -5,6 +5,8 @@
     - the backend answers /api/bootstrap and POST /api/heartbeat (busy check before closing) with that token
     - the backend ends by itself a few seconds after the host process is gone
     - POST /api/shutdown?t=<token> (what VELOX.exe sends on close) is accepted
+    - "VELOX_STATUS <key>" start-up phases come before VELOX_READY (keys VELOX.exe knows)
+    - lifecycle: no heartbeat timeout under VELOX.exe's own window, and a sleeping PC does not end VELOX
 .EXAMPLE
     pwsh velox-tweaker/tests/native/Test-HostPid.ps1
 #>
@@ -45,13 +47,16 @@ function Start-FakeHost {
     return [Diagnostics.Process]::Start($psi)
 }
 
+$script:statusKeys = New-Object System.Collections.Generic.List[string]
 function Wait-Ready($Proc, [int]$TimeoutSec) {
+    $script:statusKeys.Clear()
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSec)
     $task = $Proc.StandardOutput.ReadLineAsync()
     while ([DateTime]::UtcNow -lt $deadline) {
         if ($task.Wait(250)) {
             $line = $task.Result
             if ($null -eq $line) { return $null }
+            if ($line -match '^VELOX_STATUS (\S+)') { $script:statusKeys.Add($Matches[1]) }
             if ($line -match '^VELOX_READY (\S+)') { return $Matches[1] }
             $task = $Proc.StandardOutput.ReadLineAsync()
         }
@@ -70,6 +75,10 @@ $hostProc = Start-FakeHost
 $be = Start-Backend $hostProc.Id (Join-Path $tmp 'a')
 $url = Wait-Ready $be 60
 Check ($null -ne $url) ('VELOX_READY line: ' + $url)
+# native/host/Startup.cs (StartupText.Status) maps exactly these keys to German text
+Check (($script:statusKeys -join ',') -eq 'core,system,catalog,server') ('VELOX_STATUS phases before VELOX_READY: ' + ($script:statusKeys -join ','))
+$startupCs = [IO.File]::ReadAllText((Join-Path $root 'native/host/Startup.cs'))
+Check (@($script:statusKeys | Where-Object { $startupCs -notmatch ('case "' + $_ + '"') }).Count -eq 0) 'every VELOX_STATUS key has a German text in native/host/Startup.cs'
 if ($url) {
     $u = [Uri]$url
     Check ($u.Host -eq '127.0.0.1' -and $u.Port -gt 0 -and (Get-Token $url)) 'url is http://127.0.0.1:<port>/?t=<token>'
@@ -105,6 +114,39 @@ if ($url) {
     if (-not $ended) { try { $be.Kill() } catch { $null = $_ } }
 }
 try { Stop-Process -Id $hostProc.Id -Force -ErrorAction Stop } catch { $null = $_ }
+
+Write-Host 'Lifecycle (core/Server.ps1 Test-VxLifecycle)'
+$lifeCheck = {
+    param($ServerFile)
+    . ([scriptblock]::Create([IO.File]::ReadAllText($ServerFile, [Text.Encoding]::UTF8)))
+    function Test-VxBusy { return $false }
+    function Write-VxLog { param($Level, $Text) }
+    function Test-VxOtherSession { return $false }
+    $r = @{}
+    $now = [DateTime]::UtcNow
+    # page gone for 200 s, loop ran all the time -> ends (Start.bat / Edge window)
+    $global:VxCtx = @{ Life = (New-VxLifecycle) }
+    $l = $global:VxCtx.Life; $l.firstHeartbeat = $true; $l.lastHeartbeat = $now.AddSeconds(-200); $l.lastTick = $now.AddMilliseconds(-250)
+    Test-VxLifecycle; $r.timeout = [bool]$l.stop
+    # the same, but the loop itself did not run for 200 s (PC asleep) -> keeps running
+    $global:VxCtx = @{ Life = (New-VxLifecycle) }
+    $l = $global:VxCtx.Life; $l.firstHeartbeat = $true; $l.lastHeartbeat = $now.AddSeconds(-200); $l.lastTick = $now.AddSeconds(-200)
+    Test-VxLifecycle; $r.sleep = [bool]$l.stop
+    Test-VxLifecycle; $r.sleepAfter = [bool]$l.stop
+    # VELOX.exe's own window: no heartbeat timeout at all
+    $global:VxCtx = @{ Life = (New-VxLifecycle) }
+    $l = $global:VxCtx.Life; $l.hostWindow = $true; $l.firstHeartbeat = $true; $l.lastHeartbeat = $now.AddSeconds(-600); $l.lastTick = $now.AddMilliseconds(-250)
+    Test-VxLifecycle; $r.host = [bool]$l.stop
+    return $r
+}
+$lps = [PowerShell]::Create()
+$lr = $lps.AddScript($lifeCheck).AddArgument((Join-Path $root 'core/Server.ps1')).Invoke() | Select-Object -First 1
+if ($lps.HadErrors) { foreach ($er in $lps.Streams.Error) { Write-Host ('  ' + $er) } }
+$lps.Dispose()
+Check ($lr.timeout -eq $true) 'no heartbeat for 200 s with the loop running -> backend ends (timeout kept for Start.bat)'
+Check ($lr.sleep -eq $false -and $lr.sleepAfter -eq $false) 'wall clock jumped 200 s (PC asleep) -> counted as a wake-up, backend keeps running'
+Check ($lr.host -eq $false) 'under VELOX.exe (-HostPid + -NoBrowser) no heartbeat timeout'
+
 try { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction Stop } catch { $null = $_ }
 
 if ($fails -gt 0) { Write-Host ("FAILED: {0} check(s)" -f $fails) -ForegroundColor Red; exit 1 }

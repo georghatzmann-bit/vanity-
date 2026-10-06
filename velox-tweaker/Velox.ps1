@@ -34,6 +34,12 @@ function Write-VxConsole([string]$Text) {
     [Console]::Out.Flush()
 }
 
+# Under VELOX.exe: one line per start-up phase. The host shows it on its start screen (it maps the
+# key to German text) and knows the backend is still busy, so a slow first start is not cut off.
+function Write-VxHostStatus([string]$Key) {
+    if ($HostPid -gt 0) { Write-VxConsole ('VELOX_STATUS ' + $Key) }
+}
+
 function Wait-VxEnter([string]$Text) {
     # Under VELOX.exe there is no console to press Enter in: the host shows the text instead.
     if ($HostPid -gt 0) {
@@ -170,6 +176,7 @@ if ($VxIsWindows) {
 
 # Each core file is read once; the job runspaces get exactly this text later (Get-VxCoreSources),
 # never a fresh read of files the normal user could change while VELOX runs as admin.
+Write-VxHostStatus 'core'
 $VxCoreNames = @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs', 'Server')
 $VxCoreText = @{}
 foreach ($n in $VxCoreNames) {
@@ -301,9 +308,11 @@ if (-not $VxOwnsMutex) {
 
 $VxListener = $null
 try {
+    Write-VxHostStatus 'system'
     Initialize-VxOsInfo
     $null = Import-VxSettings
     $null = Import-VxState
+    Write-VxHostStatus 'catalog'
     $null = Import-VxCatalog
     if ($ctx.Simulate) { Import-VxSim -Reset ([bool]$SimReset) }
     if ($SimReset) {
@@ -323,6 +332,10 @@ try {
     if ([string]::IsNullOrEmpty($Token)) { $Token = New-VxRandomHex 32 }
     $ctx.Token = $Token
     $ctx.Life = New-VxLifecycle
+    # VELOX.exe shows the UI in its own window and ends the backend itself (job object, -HostPid
+    # watcher): the page-heartbeat timeout is not needed there
+    if ($HostPid -gt 0 -and $NoBrowser) { $ctx.Life.hostWindow = $true }
+    Write-VxHostStatus 'server'
     $srv = Start-VxListener $Port
     $VxListener = $srv.listener
     $ctx.Port = $srv.port

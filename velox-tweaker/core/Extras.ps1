@@ -2053,6 +2053,104 @@ function Invoke-VxPickFileJob($Params) {
 
 # ================================================================== explorer / reboot
 
+# C# helper for the Explorer restart: keeps a copy of the desktop Explorer's token (the signed-in user,
+# without admin rights) before Explorer is ended, and - only if Windows does not bring the shell back by
+# itself - starts explorer.exe with it. CreateProcessWithTokenW goes through the secondary logon service,
+# so the new shell is neither elevated nor inside VELOX.exe's job object (which ends everything in it
+# when VELOX closes - Start-Process from here would take the taskbar and desktop down with VELOX).
+function Get-VxShellTokenSource {
+    return @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace VxShell
+{
+    public static class ExplorerToken
+    {
+        /// <summary>Primary token of the process that owns the desktop shell window; IntPtr.Zero if there is none.</summary>
+        public static IntPtr Capture()
+        {
+            IntPtr shell = GetShellWindow();
+            if (shell == IntPtr.Zero) return IntPtr.Zero;
+            uint pid = 0;
+            GetWindowThreadProcessId(shell, out pid);
+            if (pid == 0) return IntPtr.Zero;
+            IntPtr hProc = OpenProcess(0x1000, false, pid);
+            if (hProc == IntPtr.Zero) return IntPtr.Zero;
+            IntPtr tok = IntPtr.Zero, prim = IntPtr.Zero;
+            try
+            {
+                if (!OpenProcessToken(hProc, 0x0002 | 0x0008 | 0x0001, out tok)) return IntPtr.Zero;
+                if (!DuplicateTokenEx(tok, 0x02000000, IntPtr.Zero, 2, 1, out prim)) return IntPtr.Zero;
+                return prim;
+            }
+            finally
+            {
+                if (tok != IntPtr.Zero) CloseHandle(tok);
+                CloseHandle(hProc);
+            }
+        }
+
+        /// <summary>Starts the shell with that token; returns the process id.</summary>
+        public static int Start(IntPtr token, string exe, string cwd)
+        {
+            IntPtr env = IntPtr.Zero;
+            try
+            {
+                if (!CreateEnvironmentBlock(out env, token, false)) env = IntPtr.Zero;
+                STARTUPINFO si = new STARTUPINFO();
+                si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+                si.lpDesktop = "winsta0\\default";
+                PROCESS_INFORMATION pi;
+                StringBuilder cl = new StringBuilder("\"" + exe + "\"", exe.Length + 3);
+                if (!CreateProcessWithTokenW(token, 1, exe, cl, 0x00000400, env, cwd, ref si, out pi))
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                CloseHandle(pi.hThread);
+                CloseHandle(pi.hProcess);
+                return pi.dwProcessId;
+            }
+            finally
+            {
+                if (env != IntPtr.Zero) DestroyEnvironmentBlock(env);
+            }
+        }
+
+        public static void Release(IntPtr token) { if (token != IntPtr.Zero) CloseHandle(token); }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        internal struct STARTUPINFO
+        {
+            public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+            public int dwX; public int dwY; public int dwXSize; public int dwYSize; public int dwXCountChars; public int dwYCountChars;
+            public int dwFillAttribute; public int dwFlags; public short wShowWindow; public short cbReserved2; public IntPtr lpReserved2;
+            public IntPtr hStdInput; public IntPtr hStdOutput; public IntPtr hStdError;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct PROCESS_INFORMATION { public IntPtr hProcess; public IntPtr hThread; public int dwProcessId; public int dwThreadId; }
+
+        [DllImport("user32.dll")] static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll", SetLastError = true)] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr h, uint access, out IntPtr tok);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool DuplicateTokenEx(IntPtr tok, uint access, IntPtr attrs, int level, int type, out IntPtr newTok);
+        [DllImport("userenv.dll", SetLastError = true)] static extern bool CreateEnvironmentBlock(out IntPtr env, IntPtr tok, bool inherit);
+        [DllImport("userenv.dll", SetLastError = true)] static extern bool DestroyEnvironmentBlock(IntPtr env);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        static extern bool CreateProcessWithTokenW(IntPtr tok, int logonFlags, string app, StringBuilder cmd, int flags, IntPtr env, string cwd, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr h);
+    }
+}
+'@
+}
+
+function Initialize-VxShellToken {
+    if ($null -ne ('VxShell.ExplorerToken' -as [type])) { return $true }
+    try { Add-Type -TypeDefinition (Get-VxShellTokenSource) -Language CSharp -ErrorAction Stop; return $true }
+    catch { Write-VxLog 'warn' ('Explorer-Starthilfe nicht verfügbar: ' + $_.Exception.Message); return $false }
+}
+
 function Invoke-VxExplorerRestartJob($Params) {
     $ctx = $global:VxCtx
     if ($ctx.Simulate -and -not $ctx.Windows) {
@@ -2061,15 +2159,34 @@ function Invoke-VxExplorerRestartJob($Params) {
         Write-VxLog 'info' '[Testmodus] Explorer wird im Testmodus nicht neu gestartet.'
     } else {
         Set-VxProgress 0.3 'Starte Explorer neu ...'
-        # only this session's Explorer - other signed-in users (fast user switching) keep their desktop
-        $sid = [Diagnostics.Process]::GetCurrentProcess().SessionId
-        Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid } | Stop-Process -Force -ErrorAction SilentlyContinue
-        $back = $false
-        for ($i = 0; $i -lt 12; $i++) {
-            Start-Sleep -Milliseconds 500
-            if (@(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid }).Count -gt 0) { $back = $true; break }
+        # the desktop user's token, taken while the shell still runs (see Get-VxShellTokenSource)
+        $token = [IntPtr]::Zero
+        if (Initialize-VxShellToken) { try { $token = [VxShell.ExplorerToken]::Capture() } catch { $token = [IntPtr]::Zero } }
+        try {
+            # only this session's Explorer - other signed-in users (fast user switching) keep their desktop
+            $sid = [Diagnostics.Process]::GetCurrentProcess().SessionId
+            Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid } | Stop-Process -Force -ErrorAction SilentlyContinue
+            # Windows (Winlogon) normally restarts the shell by itself within a few seconds
+            $back = $false
+            for ($i = 0; $i -lt 30; $i++) {
+                Start-Sleep -Milliseconds 500
+                if (@(Get-Process -Name 'explorer' -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid }).Count -gt 0) { $back = $true; break }
+            }
+            if (-not $back) {
+                $explorer = [IO.Path]::Combine([string]$env:SystemRoot, 'explorer.exe')
+                $started = $false
+                if ($token -ne [IntPtr]::Zero) {
+                    try { $null = [VxShell.ExplorerToken]::Start($token, $explorer, [string]$env:SystemRoot); $started = $true }
+                    catch { Write-VxLog 'warn' ('Explorer ohne Adminrechte nicht startbar: ' + $_.Exception.Message) }
+                }
+                if (-not $started) {
+                    # never Start-Process from here: elevated, and ended together with VELOX (job object)
+                    throw 'Windows hat den Explorer nicht wieder gestartet. Drück Strg+Alt+Entf, öffne den Task-Manager, klick auf „Neuen Task ausführen“, gib explorer ein und drück Enter.'
+                }
+            }
+        } finally {
+            if ($token -ne [IntPtr]::Zero) { try { [VxShell.ExplorerToken]::Release($token) } catch { $null = $_ } }
         }
-        if (-not $back) { Start-Process -FilePath ([IO.Path]::Combine([string]$env:SystemRoot, 'explorer.exe')) }
         Write-VxLog 'ok' 'Explorer neu gestartet.'
     }
     $ctx.State.needs.explorer = $false
