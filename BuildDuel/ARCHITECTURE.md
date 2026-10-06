@@ -372,8 +372,8 @@ building.doors, building.editedPieces   // Sets; building.view = Grafik oder nul
 
 **Ziel-Objekt** (`createTarget()` aus grid.js, wird wiederverwendet):
 `{ type, kind, i, j, k, dir, slotKey, numKey, valid, reason, material, anchorX, anchorY, anchorZ }`,
-`reason` = `'limit'` (3000 erreicht) | `'occupied'` | `'material'` | `'blocked'` (Figur im Weg) |
-`'unsupported'` (kein Halt) | `null`.
+`reason` = `'limit'` (3000 erreicht) | `'outside'` (außerhalb des Bau-Bereichs, siehe unten) |
+`'occupied'` | `'material'` | `'blocked'` (Figur im Weg) | `'unsupported'` (kein Halt) | `null`.
 
 **Bauteil-Felder** (zusätzlich zu §9): `kind` (`'f'|'wx'|'wz'|'r'|'c'`), `numKey`, `editMask`
 (Bitmaske der entfernten Felder, passend zu `edit`), `isDoor` (Getter), `doorCollider`,
@@ -389,7 +389,9 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   ihre Ebene; für die Zelle davor: die Höhe, an der man sie betritt; in der Luft: Fuß-Höhe +
   `levelEpsilon`). Blick > `lookUpPitch` = eine Ebene höher, Blick über eine Kante nach unten =
   eine tiefer (Rampe dann zu einem hin). Wand: Kante der eigenen Zelle in Blickrichtung; steht davor
-  eine von einem weg steigende Rampe → an deren oberes Ende. Steht vor einem schon eine Wand, kommt
+  eine von einem weg steigende Rampe → an deren oberes Ende. Spalte entlang der Wand = die eigene, die
+  Nachbar-Spalte nur, wenn der Anker mehr als `wallColumnMargin` in ihr liegt (360° drehen = 4 eigene
+  Wände). Steht vor einem schon eine Wand, kommt
   die Rampe in die eigene Zelle (der Bauende wird auf sie gehoben). Dach: über einem.
   Rampen-Richtung = Blick + `buildRotation` (R im Baumodus, `rotationSteps`).
 - Setzen: Platz frei, Material (`costPerPiece`, außer `infiniteMaterials`), höchstens `maxPieces`,
@@ -398,7 +400,12 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   **Wände** sind nie vom Körper blockiert: eine Figur, die in der neuen Wand steht, wird waagerecht
   zu der Seite der Wand-Ebene geschoben, auf der ihre Mitte steht (Abstand `wallPushGap`); nur wenn
   dort kein Platz ist, bleibt `'blocked'`. Boden/Rampe/Dach im Körper → `'blocked'`.
-  Maus gehalten: setzt erneut, sobald sich der Ziel-Platz ändert und gültig ist.
+  Maus gehalten ("Turbo-Bauen"): setzt, sobald das Ziel gültig ist und `placeCooldown` um ist – auf
+  einem neuen Platz oder auf demselben, wenn das Teil dort zerstört wurde.
+- Bau-Bereich: höchstens Ebene `game.map.buildBounds.maxLevel` bzw. `CONFIG.building.maxLevel`;
+  seitlich nur innerhalb von `game.map.buildBounds = { minX, maxX, minZ, maxZ }` (falls die Karte
+  das hat; die Arena: innerhalb der Mauer, Wände direkt auf der Mauer-Linie gehen). Sonst `'outside'`.
+  `placePiece(…, { force: true })` (Modi) prüft das nicht.
 - Aufbau: Leben wächst von `startHealthFraction` auf 100 % in `buildTime[material]`; Schaden
   im Aufbau zählt mit. Das Teil blockiert sofort (Collider ab dem ersten Tick).
 - Halt/Einsturz: Nachbarn = berührende Formen (ganze Formen, Edits ändern den Halt nicht). Wird ein
@@ -430,7 +437,8 @@ dazu `getModeDef(id)` und `DEFAULT_MODE_ID` (`'practice'`, bis es ein Hauptmenü
 `createMapBuilder(game, name)` (world/mapBuilder.js) liefern ein Karten-Objekt:
 `{ root, colliders, addBox(min, max, { color, data, kind }), addSlope(spec, { color, data, kind }),
 addLabel(text, position), addObject(obj), dispose() }` – addBox/addSlope legen Kollision UND
-Grafik an (headless nur Kollision). Die Arena hat zusätzlich `size`, `ground`, `contains(x, z, margin)`.
+Grafik an (headless nur Kollision). Die Arena hat zusätzlich `size`, `ground`, `contains(x, z, margin)` und
+`buildBounds` (Bau-Bereich, siehe §9a; `spec.buildBounds`/`spec.maxBuildLevel` ändern ihn).
 Der Modus setzt `game.map = karte` und räumt sie in `dispose()` ab.
 
 Jeder Modus:
