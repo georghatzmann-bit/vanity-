@@ -93,7 +93,8 @@ describe('Spiel (Game)', () => {
       assert.ok(key in mode, `Modus hat ${key}`);
     }
     assert.ok(game.player, 'Spieler da');
-    assert.equal(game.characters.length, 1 + CONFIG.modes.practice.idleBots);
+    // Spieler + Übungs-Figuren + Zielpuppen (Phase 5)
+    assert.equal(game.characters.length, 1 + CONFIG.modes.practice.idleBots + CONFIG.practiceRange.dummies.list.length);
     assert.ok(game.world.colliders.length > 10, 'Stationen haben Kollision');
     assert.equal(mode.isOver, false);
     assert.equal(mode.hudInfo().topCenter, CONFIG.modes.practice.name);

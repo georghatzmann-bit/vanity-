@@ -75,6 +75,8 @@ export function createWeaponVisuals(game, system) {
     const core = new THREE.Mesh(ballGeometry, coreMat);
     const outer = new THREE.Mesh(ballGeometry, outerMat);
     core.visible = outer.visible = false;
+    core.name = 'Feuerball innen';
+    outer.name = 'Feuerball';
     root.add(outer, core);
     explosions.push({ core, outer, start: -1, radius: 4, position: new THREE.Vector3() });
   }
@@ -124,7 +126,7 @@ export function createWeaponVisuals(game, system) {
   // --- Waffe in der Hand ------------------------------------------------------------------------
   function wantedModel(c) {
     if (!c.alive) return null;
-    if (c.mode === 'pickaxe') return 'pickaxe';
+    if (c.mode === 'pickaxe') return 'pickaxe:common';
     if (c.mode !== 'weapon') return null;
     const item = c.slots[c.selectedSlot];
     if (!item || !hasWeaponModel(item.id)) return null;
@@ -161,11 +163,17 @@ export function createWeaponVisuals(game, system) {
         v.mount = mount;
       }
     }
-    // Rückstoß: kurz nach hinten zucken
     if (v.mount) {
+      // Rückstoß: kurz nach hinten zucken
       const age = now - v.kickTime;
       const kick = age >= 0 && age < 0.12 ? V.recoilKick * (1 - age / 0.12) : 0;
       v.mount.children[0].position.z = kick;
+      // Beim Blick nach oben die Waffe etwas tiefer halten – sonst ragt der Lauf
+      // (die Arme folgen dem Blick) von unten ins Fadenkreuz.
+      if (v.key !== 'pickaxe:common') {
+        const lower = V.lookUpLowering * Math.max(0, c.pitch - V.lookUpLoweringFrom);
+        v.mount.rotation.x = -Math.PI / 2 - lower;
+      }
     }
     return v;
   }
@@ -280,7 +288,7 @@ export function createWeaponVisuals(game, system) {
         const grow = 1 - (1 - k) * (1 - k) * (1 - k);
         x.outer.position.copy(x.position);
         x.core.position.copy(x.position);
-        const rOuter = x.radius * (0.25 + 0.75 * grow);
+        const rOuter = x.radius * (0.45 + 0.55 * grow);
         x.outer.scale.setScalar(rOuter);
         x.core.scale.setScalar(rOuter * 0.6);
         x.outer.material.opacity = 0.55 * (1 - k);

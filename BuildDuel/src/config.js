@@ -498,6 +498,12 @@ export const CONFIG = deepFreeze({
     tracerLifetime: 0.09, // Leuchtspur (Sturmgewehr) verblasst in so vielen Sekunden
     tracerWidth: 0.035, // Dicke der Leuchtspur (m)
     tracerColor: '#FFE7A0',
+    modelScale: 1.35, // Waffen in der Hand etwas größer als echt (Comic-Stil, besser zu erkennen)
+    // Blick steil nach oben: Waffe zeigt etwas tiefer als der Blick (sonst ragt sie ins Fadenkreuz)
+    lookUpLowering: 0.4, // so viel tiefer pro Radiant Blick nach oben
+    lookUpLoweringFrom: 0.2, // ab dieser Blick-Neigung (Radiant)
+    holdTiltDown: 0.09, // Waffe zeigt immer ein klein wenig tiefer als der Blick (Radiant)
+    holdTiltIn: 0.11, // … und ein klein wenig zur Körpermitte (Radiant)
     recoilKick: 0.06, // Waffe zuckt beim Schuss so weit nach hinten (m)
     bulletColor: '#FFF3C4', // Scharfschützen-Geschoss (Leuchtstreifen)
     bulletLength: 2.2, // Länge des Leuchtstreifens (m)
@@ -544,21 +550,22 @@ export const CONFIG = deepFreeze({
       shield: 100, // nur die Puppe mit "shield: true"
       regenDelay: 1.5, // so lange nach dem letzten Treffer wieder voll (s)
       respawnDelay: 1.5, // falls eine Puppe doch umfällt: so schnell steht sie wieder
-      // Abstand vom Schieß-Stand (m); side = seitlich versetzt (m, nach Süden +)
+      // Abstand vom Schieß-Stand (m); side = seitlich versetzt (m, nach Süden +).
+      // Die Versätze sind so gewählt, dass keine Puppe eine andere verdeckt.
       list: [
-        { distance: 5 },
+        { distance: 5, side: 3 },
         { distance: 15 },
         { distance: 15, side: -3, shield: true },
-        { distance: 30 },
-        { distance: 60 },
+        { distance: 30, side: 4 },
+        { distance: 60, side: -6 },
       ],
       skin: { body: '#E9D8B4', accent: '#C0392B', skinTone: '#E9D8B4', hat: 'helmet', hatColor: '#C0392B' },
     },
     // Sammel-Objekte für die Spitzhacke (F): Baum = Holz, Fels = Stein, Auto = Metall
     harvest: {
-      tree: { x: -10, z: 27 },
-      rock: { x: -16, z: 27 },
-      car: { x: -23, z: 27 },
+      tree: { x: -30, z: 19 },
+      rock: { x: -24, z: 19 },
+      car: { x: -17, z: 19 },
     },
   },
 

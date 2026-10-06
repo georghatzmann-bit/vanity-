@@ -230,6 +230,8 @@ const BUILDERS = {
   },
 };
 
+const HEAL_MODELS = ['bandage', 'medkit', 'smallShield', 'bigShield'];
+
 /** Gibt es ein Modell für diesen Namen? */
 export function hasWeaponModel(id) {
   return Object.hasOwn(BUILDERS, id);
@@ -260,13 +262,20 @@ export function createHandMount(id, model) {
   const mount = new THREE.Group();
   mount.name = `Halter ${id}`;
   mount.add(model);
+  // Comic-Stil: Waffen etwas größer als in echt, damit man sie gut erkennt
+  mount.scale.setScalar(CONFIG.weaponVisuals.modelScale ?? 1);
   if (id === 'pickaxe') {
     mount.rotation.set(0.35, 0, 0);
     mount.position.set(0, -0.02, 0);
   } else {
     // Modell −Z → Hand −Y (den Unterarm entlang nach vorn), Modell +Y → Hand −Z (nach oben)
     mount.rotation.set(-Math.PI / 2, 0, 0);
-    mount.position.set(0, -0.02, 0.03);
+    // etwas zur Körpermitte hin und leicht nach unten/innen gekippt: Lange Läufe zeigen sonst
+    // genau in Blickrichtung und ragen (von hinten gesehen) bis ans Fadenkreuz heran.
+    mount.position.set(-0.06, -0.02, 0.03);
+    model.rotation.set(-(CONFIG.weaponVisuals.holdTiltDown ?? 0), CONFIG.weaponVisuals.holdTiltIn ?? 0, 0);
+    // Heil-Items liegen in der Hand (nicht davor)
+    if (HEAL_MODELS.includes(id)) mount.position.set(-0.04, 0.06, 0.02);
   }
   mount.userData.muzzle = model.userData.muzzle;
   return mount;
