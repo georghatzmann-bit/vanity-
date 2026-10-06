@@ -121,3 +121,6 @@ Edge app window, driven by a declarative JSON tweak catalog.
 - Backend tests (simulate mode, run here on Linux with pwsh 7): `pwsh velox-tweaker/tests/Run-Tests.ps1`.
 - UI end-to-end tests (Playwright, Chromium in `/opt/pw-browsers`): `node velox-tweaker/tests/ui/run-ui-tests.mjs`.
 - Simulate mode (`Velox.ps1 -Simulate`) never touches the system; all tests use it.
+- **Planned, not now: license keys.** The owner may later want VELOX to need a license key. Do not build
+  it until asked, but don't design anything that would make it hard (one start-up gate in VELOX.exe /
+  the backend's bootstrap would be the natural place; keys must never be checked only in the UI).
