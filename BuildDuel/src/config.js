@@ -640,8 +640,8 @@ export const CONFIG = deepFreeze({
     stripeSpeed: 0.035, // Schlieren in der Wand wandern langsam (Bild-Breiten pro Sekunde)
     pulseSpeed: 1.3, // die Wand "atmet" leicht …
     pulseAmount: 0.12, // … um so viel (Anteil der Deckkraft)
-    outsideTint: 0.13, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
-    outsideFogMix: 0.5, // draußen im Sturm: der Nebel wird so stark lila
+    outsideTint: 0.2, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
+    outsideFogMix: 0.6, // draußen im Sturm: der Nebel wird so stark lila
   },
 
   // Loot (src/world/loot.js): Kisten, Gegenstände am Boden, Aufheben (E), Fallenlassen

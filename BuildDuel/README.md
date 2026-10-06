@@ -141,7 +141,7 @@ Die Spielmodi Duell, Battle Royale und Zone Wars kommen als Nächstes – ihre W
 | Duell-Arena | <http://localhost:8000/?mode=sandbox-arena> | 80 x 80 m Arena mit Felsen und Bäumen, Startpunkte 40 m auseinander |
 | Zone Wars | <http://localhost:8000/?mode=sandbox-zonewars> | kleine hügelige Karte, die Zone wandert und schrumpft schnell |
 
-- **Absprung:** Über der Insel mit der **Leertaste** aus dem Ballon springen. Im freien Fall mit WASD lenken – nach unten schauen + W = Sturzflug. 30 m über dem Boden öffnet sich der **Gleiter** von selbst (oder früher mit der Leertaste). Landen macht nie Schaden.
+- **Absprung:** Über der Insel mit der **Leertaste** aus dem Ballon springen. Im freien Fall mit WASD lenken – nach unten schauen + W = Sturzflug. 30 m über dem Boden öffnet sich der **Gleiter** von selbst (oder früher mit der Leertaste). Die Kamera fährt dabei etwas weiter weg, damit du siehst, wo du landest. Landen macht nie Schaden.
 - **Kisten** (goldener Würfel, leuchtet): davor stehen und **E** drücken. Heraus springen eine Waffe, Munition, Material und manchmal ein Heil-Item.
 - **Gegenstände am Boden** leuchten in ihrer Seltenheits-Farbe (grau, grün, blau, lila, gold). Waffen und Heil-Items mit **E** aufheben – sind alle 5 Plätze voll, wird mit der Waffe in der Hand **getauscht**. Munition und Material sammelst du im Vorbeilaufen ein.
 - **Sturm:** die lila Wand. Draußen wird das Bild lila und du verlierst jede Sekunde Leben (der Schild hilft nicht). Die neue Zone liegt immer ganz in der alten.
