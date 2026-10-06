@@ -40,6 +40,7 @@ describe('HUD: Text-Formate', () => {
   it('Zonen-Text aus dem Sturm', () => {
     assert.equal(stormZoneText({ radius: 100, timeLeft: 45, state: 'wait' }), 'Zone schrumpft in 0:45');
     assert.equal(stormZoneText({ radius: 100, timeLeft: 11.5, state: 'shrink' }), 'Zone schrumpft: 0:12');
+    assert.equal(stormZoneText({ radius: 0, timeLeft: 0, state: 'closed' }), 'Letzte Zone');
     assert.equal(stormZoneText({ radius: Infinity, timeLeft: 0, state: 'wait' }), null, 'Attrappe (unendlich groß)');
     assert.equal(stormZoneText(null), null);
   });
@@ -179,6 +180,9 @@ describe('Minimap', () => {
     const b = { minX: 0, maxX: 600, minZ: 0, maxZ: 600 };
     assert.equal(mapBoundsOf({ bounds: b, size: 80 }), b);
     assert.equal(mapBoundsOf({ buildBounds: { minX: -1, maxX: 1, minZ: -1, maxZ: 1 } }).maxX, 1);
+    assert.deepEqual(mapBoundsOf({ size: 100, center: { x: 10, z: -20 } }), { minX: -40, maxX: 60, minZ: -70, maxZ: 30 });
+    const play = { minX: -5, maxX: 5, minZ: -5, maxZ: 5 };
+    assert.equal(mapBoundsOf({ playBounds: play, size: 600 }), play, 'Spiel-Bereich vor der Größe');
     assert.equal(mapBoundsOf(null), null);
     assert.equal(mapBoundsOf({}), null);
   });
@@ -216,6 +220,8 @@ describe('Spielwerte: HUD, Ton, Effekte', () => {
     assert.ok(h.lowHealth > 0 && h.lowHealth < CONFIG.player.maxHealth);
     assert.ok(h.crosshair.minGap >= 0 && h.crosshair.maxGap > h.crosshair.minGap);
     assert.ok(h.minimap.range > 0 && h.infoInterval > 0 && h.promptInterval > 0);
+    assert.ok(h.stormTint >= 0 && h.stormTint <= 1, 'Sturm-Färbung 0..1');
+    for (const key of ['background', 'water', 'border']) assert.ok(/^#[0-9A-Fa-f]{6}$/.test(h.minimap[key]), `Minimap-Farbe ${key}`);
   });
 
   it('Ton: Begrenzung pro Art nie größer als die Gesamtzahl, Entfernungen sinnvoll', () => {

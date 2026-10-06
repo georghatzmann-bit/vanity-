@@ -886,13 +886,14 @@ export const CONFIG = deepFreeze({
     infoInterval: 0.1, // so oft (s) fragt das HUD den Modus nach Stand, Zone, Lebenden (hudInfo)
     promptInterval: 0.1, // so oft (s) wird der Hinweis "E – Tür öffnen" geprüft
     lowHealth: 35, // weniger Leben: roter Bildschirmrand (stärker, je weniger)
+    stormTint: 1, // außerhalb der Zone: lila Rand am Bildschirm (0 = aus, 1 = voll) – die Sturm-Wand färbt zusätzlich das Bild
     killFeed: { max: 5, lifetime: 5, fadeTime: 0.5 }, // letzte 5 Meldungen, verschwinden nach 5 s
     hitMarker: { time: 0.22, killTime: 0.5 }, // Treffer-X (rot bei Kill) so lange sichtbar (s)
     damageIndicator: { time: 1.2, count: 4 }, // roter Bogen zeigt zum Angreifer
     eliminationTime: 2.2, // "Bot_3 besiegt" unter dem Fadenkreuz (s)
     crosshair: { minGap: 5, maxGap: 70, buildGap: 4 }, // Lücke in der Mitte (Pixel), wächst mit der Streuung
     message: { duration: 2.5, infoDuration: 1.6 }, // große Nachricht / kleiner Hinweis (s), wenn das Ereignis keine Zeit nennt
-    minimap: { range: 150, redrawInterval: 1 / 30, background: '#4E9F42', border: '#2F6B2A' }, // Umkreis (m) um die eigene Figur
+    minimap: { range: 150, redrawInterval: 1 / 30, background: '#4E9F42', water: '#3FB7D9', border: '#2F6B2A' }, // Umkreis (m) um die eigene Figur
     // kurze Waffen-Namen im Kill-Feed ("Du [AR] Bot_3")
     weaponShortNames: {
       shotgun: 'Schrot', ar: 'AR', smg: 'MP', sniper: 'Sniper', pistol: 'Pistole', grenadeLauncher: 'Granate',

@@ -290,11 +290,18 @@ async function captureAll(ctx, size) {
     open: buildDuel.game.hud.helpOpen,
     rows: document.querySelectorAll('.hud-help-grid .row').length,
     text: document.querySelector('.hud-help-card').textContent,
+    // Tasten, deren Text nicht in ihr Kästchen passt (abgeschnitten), und ob die Karte ohne Scrollen passt
+    cut: [...document.querySelectorAll('.hud-help-card kbd')].filter((k) => k.scrollWidth > k.clientWidth + 1).map((k) => k.textContent),
+    overflow: (() => {
+      const card = document.querySelector('.hud-help-card');
+      return card.scrollHeight - card.clientHeight;
+    })(),
   }));
   await shot('09-hilfe');
   await page.keyboard.press('KeyH');
   const closed = await page.evaluate(() => buildDuel.game.hud.helpOpen);
   ctx.assert(help.open && help.rows >= 20 && /Wand/.test(help.text) && /Leertaste/.test(help.text), `${tag} Hilfe: offen ${help.open}, ${help.rows} Zeilen`);
+  ctx.assert(help.cut.length === 0 && help.overflow <= 1, `${tag} Hilfe vollständig lesbar: abgeschnitten [${help.cut.join(', ')}], ${help.overflow} px zu hoch`);
   ctx.assert(!closed, `${tag} H schließt die Hilfe wieder`);
 
   // 10. Zone, Minimap, Stand, große Nachricht, Hinweis (Sturm-Attrappe, Modus-Anzeige ersetzt)

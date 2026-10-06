@@ -18,17 +18,24 @@ const M = CONFIG.hud.minimap;
 const DASH = [5, 4];
 const NO_DASH = [];
 
+function isRect(b) {
+  return !!b && Number.isFinite(b.minX) && Number.isFinite(b.maxX) && Number.isFinite(b.minZ) && Number.isFinite(b.maxZ);
+}
+
 /**
  * Grenzen einer Karte { minX, maxX, minZ, maxZ } oder null.
- * Reihenfolge: map.bounds, sonst map.size (Quadrat um 0), sonst map.buildBounds.
+ * Reihenfolge: map.bounds, map.playBounds, sonst map.size (Quadrat um map.center bzw. 0),
+ * sonst map.buildBounds.
  */
 export function mapBoundsOf(map) {
   if (!map) return null;
-  const b = map.bounds;
-  if (b && Number.isFinite(b.minX) && Number.isFinite(b.maxX) && Number.isFinite(b.minZ) && Number.isFinite(b.maxZ)) return b;
+  if (isRect(map.bounds)) return map.bounds;
+  if (isRect(map.playBounds)) return map.playBounds;
   if (Number.isFinite(map.size) && map.size > 0) {
     const h = map.size / 2;
-    return { minX: -h, maxX: h, minZ: -h, maxZ: h };
+    const cx = map.center?.x ?? 0;
+    const cz = map.center?.z ?? 0;
+    return { minX: cx - h, maxX: cx + h, minZ: cz - h, maxZ: cz + h };
   }
   const bb = map.buildBounds;
   if (bb && Number.isFinite(bb.minX) && Number.isFinite(bb.maxX)) return bb;
@@ -62,6 +69,46 @@ export function worldToMinimap(x, z, cx, cz, k, r, out = { x: 0, y: 0 }) {
  */
 export function arrowAngle(yaw) {
   return -yaw;
+}
+
+// Wasser einzeichnen (Karten mit map.isWater(x, z), z. B. die Insel): grobes Raster, einmal pro Karte
+function paintWater(g, map, bounds, width, height) {
+  const cells = 160; // Auflösung des Rasters (Kästchen je Seite)
+  const small = document.createElement('canvas');
+  small.width = cells;
+  small.height = cells;
+  const sg = small.getContext('2d');
+  const image = sg.createImageData(cells, cells);
+  const water = hexToRgb(M.water);
+  const land = hexToRgb(M.background);
+  const w = bounds.maxX - bounds.minX;
+  const h = bounds.maxZ - bounds.minZ;
+  for (let j = 0; j < cells; j++) {
+    for (let i = 0; i < cells; i++) {
+      const x = bounds.minX + ((i + 0.5) / cells) * w;
+      const z = bounds.minZ + ((j + 0.5) / cells) * h;
+      let wet = false;
+      try {
+        wet = !!map.isWater(x, z);
+      } catch {
+        wet = false;
+      }
+      const c = wet ? water : land;
+      const k = (j * cells + i) * 4;
+      image.data[k] = c[0];
+      image.data[k + 1] = c[1];
+      image.data[k + 2] = c[2];
+      image.data[k + 3] = 255;
+    }
+  }
+  sg.putImageData(image, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(small, 0, 0, width, height);
+}
+
+function hexToRgb(hex) {
+  const v = parseInt(String(hex).replace('#', ''), 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 }
 
 /**
@@ -112,6 +159,7 @@ export function createMinimap(container) {
     };
     g.fillStyle = M.background;
     g.fillRect(0, 0, c.width, c.height);
+    if (typeof map.paintMinimap !== 'function' && typeof map.isWater === 'function') paintWater(g, map, bounds, c.width, c.height);
     if (typeof map.paintMinimap === 'function') {
       try {
         map.paintMinimap(g, toPx, scale);

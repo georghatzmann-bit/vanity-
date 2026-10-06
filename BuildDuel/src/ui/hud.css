@@ -52,10 +52,11 @@
 
 /* --- Bildschirm-Färbungen ---------------------------------------------------- */
 .hud-tint { position: absolute; inset: 0; opacity: 0; transition: opacity 300ms ease; }
+/* außerhalb der Zone: lila Rand (die Mitte bleibt klar – die Sturm-Wand färbt das Bild selbst) */
 .hud-storm-tint {
-  background: radial-gradient(ellipse at 50% 50%, rgba(142, 63, 216, 0.16) 35%, rgba(110, 32, 190, 0.48) 100%);
+  background: radial-gradient(ellipse at 50% 50%, rgba(142, 63, 216, 0.06) 30%, rgba(120, 36, 200, 0.5) 100%);
 }
-.hud.outside-storm .hud-storm-tint { opacity: 1; }
+.hud.outside-storm .hud-storm-tint { opacity: var(--storm-tint, 1); }
 .hud-lowhp { background: radial-gradient(ellipse at 50% 50%, transparent 52%, rgba(210, 16, 16, 0.55) 100%); }
 .hud.lowhp .hud-lowhp { opacity: var(--lowhp, 0.6); }
 .hud-lowhp-pulse {
@@ -271,6 +272,12 @@ body:not(.playing) .hud-reload,
   font-weight: 700;
 }
 .hud.has-prompt .hud-prompt { display: flex; }
+.hud-prompt[data-r="common"] { border-color: #A0A7AE; }
+.hud-prompt[data-r="uncommon"] { border-color: #5BC74A; }
+.hud-prompt[data-r="rare"] { border-color: #3E8BFF; }
+.hud-prompt[data-r="epic"] { border-color: #A64DFF; }
+.hud-prompt[data-r="legendary"] { border-color: #F5A623; }
+.hud-prompt[data-r] { border-width: 2px; }
 .hud-prompt kbd { font-size: 13px; min-width: 24px; padding: 2px 6px; }
 
 /* --- Nachrichten ------------------------------------------------------------------- */
@@ -665,7 +672,8 @@ body:not(.playing) .hud-reload,
 .hud-help-grid h3 { margin: 0 0 6px; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
 .hud-help-grid .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
 .hud-help-grid .row span { flex: 1 1 auto; min-width: 0; color: rgba(255, 255, 255, 0.82); }
-.hud-help-grid .row kbd { flex: 0 1 auto; max-width: 64%; white-space: normal; overflow-wrap: normal; text-align: right; }
+/* die Taste bricht nie um (sonst würde "Linksklick" abgeschnitten) – der Text links bricht stattdessen um */
+.hud-help-grid .row kbd { flex: 0 0 auto; white-space: nowrap; text-align: right; }
 .hud-help-hint { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, 0.75); }
 
 /* =============================================================================================
@@ -728,6 +736,10 @@ body:not(.playing) .hud-reload,
   .hud-mat .label { display: none; }
   .hud-hint { bottom: calc(var(--edge) + 60px); }
 }
+/* z. B. 800 x 600: Leben/Schild schmaler, damit sie nie über der eigenen Figur liegen */
+@media (max-width: 900px) {
+  .hud-vitals { width: 210px; }
+}
 @media (max-width: 760px), (max-height: 520px) {
   .hud { --slot: 44px; --piece: 38px; --edge: 10px; }
   .hud-vitals { width: 200px; padding: 6px 8px; gap: 4px; }
@@ -769,13 +781,24 @@ body:not(.playing) .hud-reload,
   .hud-title { font-size: 11px; padding: 2px 8px; }
   .hud-spectate { bottom: 190px; font-size: 15px; }
   .hud-toast { top: calc(50% - 100px); font-size: 13px; }
-  .hud-help-grid { grid-template-columns: 1fr; gap: 8px; }
-  .hud-help-grid .row { font-size: 12px; padding: 2px 0; }
-  .hud-help-card { padding: 12px 14px; }
+  .hud-help-grid { grid-template-columns: 1fr; }
   .hud-message { top: 32%; }
   /* FPS-Kasten schmaler (nur die Zahl), damit oben Platz für Stand und Minimap bleibt */
   #fps.fps { padding: 3px 6px; }
   #fps .fps-detail { display: none; }
+}
+/* Hilfe (H) auf kleinen Bildschirmen: eng gesetzt, damit alles ohne Scrollen passt */
+@media (max-width: 520px), (max-height: 560px) {
+  .hud-help { padding: 8px; }
+  .hud-help-card { padding: 10px 12px; border-radius: 10px; }
+  .hud-help-head { margin-bottom: 6px; }
+  .hud-help-head b { font-size: 16px; }
+  .hud-help-head span { font-size: 11px; }
+  .hud-help-grid { gap: 4px 16px; }
+  .hud-help-grid h3 { margin: 0 0 1px; font-size: 10px; }
+  .hud-help-grid .row { padding: 0; font-size: 11px; line-height: 1.2; }
+  .hud-help-grid .row kbd { padding: 0 4px; font-size: 10px; line-height: 1.25; box-shadow: none; }
+  .hud-help-hint { margin-top: 6px; padding-top: 6px; font-size: 11px; line-height: 1.3; }
 }
 /* Touch-Geräte ohne Tastatur: keine Tasten-Hinweise */
 @media (pointer: coarse) and (hover: none) {

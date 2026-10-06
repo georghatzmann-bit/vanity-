@@ -20,9 +20,10 @@
 // (letzte Werte werden gemerkt), liest pro Bild keine Größen aus dem Layout und legt pro
 // Bild keine neuen Objekte an.
 //
-// Andere Teile des Spiels können einen Hinweis zeigen (siehe ARCHITECTURE.md):
+// Andere Teile des Spiels können einen Hinweis zeigen (siehe ARCHITECTURE.md §9b):
 //   game.hud.setPrompt(text | null, source?)   z. B. Modus/Tutorial
-//   game.hud.addPromptProvider(fn) → remove()  fn(player) → Text | { text, action } | null
+//   game.interactionPrompt = { text, action, rarity } | Text | null   Logik (Loot, Kisten), auch headless
+//   game.hud.addPromptProvider(fn) → remove()  fn(player) → Text | { text, action, rarity } | null
 // Ohne Bildschirm (headless) liefert createHud eine Attrappe mit denselben Methoden.
 // =============================================================================
 import { CONFIG } from '../config.js';
@@ -156,7 +157,7 @@ export function damageAngle(dx, dz, yaw) {
 export function stormZoneText(storm) {
   if (!storm || !Number.isFinite(storm.radius) || !Number.isFinite(storm.timeLeft)) return null;
   if (storm.state === 'shrink') return `Zone schrumpft: ${formatTime(storm.timeLeft)}`;
-  if (storm.state === 'done' || storm.state === 'end') return 'Letzte Zone';
+  if (storm.state === 'closed' || storm.state === 'done') return 'Letzte Zone';
   return `Zone schrumpft in ${formatTime(storm.timeLeft)}`;
 }
 
@@ -338,6 +339,7 @@ export function createHud(game, root) {
   };
   ui.edit.textContent = T.edit;
   el.style.setProperty('--scope-color', CONFIG.weaponVisuals.scopeOverlayColor);
+  el.style.setProperty('--storm-tint', String(HC.stormTint));
   ui.hintText.textContent = T.help;
 
   // Material-Anzeige
@@ -397,7 +399,7 @@ export function createHud(game, root) {
     crossType: '', gap: -1, reloadP: -1, reloadOn: null,
     ammoKey: '', ammoMag: null, ammoRes: null, ammoState: null,
     healOn: null, healName: '', healTime: '', healF: -1,
-    lowhp: -1, prompt: null, promptKey: '',
+    lowhp: -1, prompt: null, promptKey: '', promptRarity: null,
     alive: undefined, kills: undefined, zone: undefined, extra: undefined,
     topKey: '', spectate: null, hitOpacity: -1, elimOpacity: -1,
   };
@@ -612,7 +614,10 @@ export function createHud(game, root) {
     for (const value of promptSources.values()) chosen = value;
     if (chosen) return chosen;
     if (!player || !player.alive) return null;
-    // 2. Anbieter (Loot, Kisten …) in der Reihenfolge der Anmeldung
+    // 2. vom Spiel gesetzt (Loot/Kisten, Welle 3b): game.interactionPrompt = { text, action, rarity } oder Text
+    const fromGame = game.interactionPrompt;
+    if (fromGame && (typeof fromGame === 'string' || fromGame.text)) return fromGame;
+    // 3. Anbieter in der Reihenfolge der Anmeldung
     for (const fn of promptProviders) {
       let value = null;
       try {
@@ -622,7 +627,7 @@ export function createHud(game, root) {
       }
       if (value) return value;
     }
-    // 3. Türen
+    // 4. Türen
     return doorPrompt(player);
   }
 
@@ -630,14 +635,19 @@ export function createHud(game, root) {
     const value = currentPrompt(player);
     const text = value ? (typeof value === 'string' ? value : value.text) : null;
     const key = value && typeof value === 'object' && value.action ? firstKey(value.action) : labels.use;
-    if (text === last.prompt && key === last.promptKey) return;
+    const rarity = value && typeof value === 'object' && value.rarity ? value.rarity : null;
+    if (text === last.prompt && key === last.promptKey && rarity === last.promptRarity) return;
     last.prompt = text;
     last.promptKey = key;
+    last.promptRarity = rarity;
     setFlag('has-prompt', !!text);
     if (text) {
       setText(ui.promptText, text);
       setText(ui.promptKey, key);
     }
+    // Seltenheit (Waffe am Boden): farbiger Rand
+    if (rarity) ui.prompt.dataset.r = rarity;
+    else delete ui.prompt.dataset.r;
   }
 
   // --- Bild für Bild -------------------------------------------------------------------------
@@ -1026,7 +1036,7 @@ export function createHud(game, root) {
         }
         // lila außerhalb der Zone
         const storm = game.storm;
-        setFlag('outside-storm', alive && !!storm && typeof storm.isInside === 'function' && storm.isInside(p.position) === false);
+        setFlag('outside-storm', HC.stormTint > 0 && alive && !!storm && typeof storm.isInside === 'function' && storm.isInside(p.position) === false);
       }
       if (!alive) {
         if (flags.reloading) setFlag('reloading', false);
