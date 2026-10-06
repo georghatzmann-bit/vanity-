@@ -192,7 +192,7 @@ const GAME_CHECKS = [
       const playing = await ctx.page.evaluate(() => ({
         state: buildDuel.state,
         overlay: !document.getElementById('play-overlay').hidden,
-        crosshair: !document.getElementById('crosshair').hidden,
+        crosshair: getComputedStyle(document.querySelector('.hud-cross')).display !== 'none',
       }));
       ctx.assert(playing.state === 'playing' && !playing.overlay && playing.crosshair, 'spielt, Fadenkreuz sichtbar');
     },
@@ -376,13 +376,18 @@ const GAME_CHECKS = [
         buildDuel.input.setVirtual('moveForward', true);
         return { tick: buildDuel.ticks, frames: buildDuel.frames };
       });
+      // mindestens 1,5 s UND mindestens 5 Bilder: Mit Software-Grafik auf einem ausgelasteten Rechner
+      // sind es manchmal nur 1–2 Bilder pro Sekunde, und pro Bild holt die Schleife höchstens
+      // einige Logik-Schritte nach (Schutz gegen "Spirale des Todes").
+      const started = Date.now();
       await ctx.page.waitForTimeout(1500);
+      await ctx.page.waitForFunction((target) => buildDuel.frames >= target, before.frames + 5, { timeout: 20000 });
       const after = await ctx.page.evaluate(() => {
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.manualStep(true);
         return { tick: buildDuel.ticks, frames: buildDuel.frames, z: buildDuel.game.player.position.z };
       });
-      ctx.log(`${after.frames - before.frames} Bilder, ${after.tick - before.tick} Logik-Schritte in 1,5 s`);
+      ctx.log(`${after.frames - before.frames} Bilder, ${after.tick - before.tick} Logik-Schritte in ${((Date.now() - started) / 1000).toFixed(1).replace('.', ',')} s`);
       ctx.assert(after.tick - before.tick >= 30, 'Logik-Schritte laufen');
       ctx.assert(after.frames > before.frames, 'Bilder werden gemalt');
       ctx.assert(22 - after.z > 1, `bewegt: ${(22 - after.z).toFixed(2)} m`);
@@ -432,7 +437,13 @@ const GAME_CHECKS = [
         return buildDuel.game.player.crouching;
       });
       ctx.assert(down && !up, `rechte Shift: geduckt ${down}, nach dem Loslassen ${up}`);
-      const help = await ctx.page.evaluate(() => document.getElementById('help').textContent);
+      const help = await ctx.page.evaluate(() => {
+        const hud = buildDuel.game.hud;
+        hud.setHelpOpen(true); // Steuerungs-Hilfe (H) des HUD
+        const text = document.querySelector('.hud-help-card').textContent;
+        hud.setHelpOpen(false);
+        return text;
+      });
       ctx.assert(/DuckenShift \(halten\)/.test(help), 'Hilfe zeigt "Shift" nur einmal');
     },
   },
@@ -619,19 +630,25 @@ const GAME_CHECKS = [
         window.__pad.buttons[buildDuel.CONFIG.controls.gamepad.pause] = { pressed: d, value: d ? 1 : 0 };
       }, down);
       const state = () => ctx.page.evaluate(() => buildDuel.state);
-      await ctx.page.waitForTimeout(300);
+      // Auf Bilder warten statt auf feste Zeiten: Mit Software-Grafik sind es oft nur 3–5 Bilder pro
+      // Sekunde – die Spielschleife fragt den Controller nur einmal pro Bild ab.
+      const waitFrames = async (n) => {
+        const start = await ctx.page.evaluate(() => buildDuel.frames);
+        await ctx.page.waitForFunction((target) => buildDuel.frames >= target, start + n, { timeout: 20000 });
+      };
+      await waitFrames(2);
       states.push(await state());
       await setStart(true);
-      await ctx.page.waitForTimeout(500);
+      await waitFrames(3);
       states.push(await state());
-      await ctx.page.waitForTimeout(300);
+      await waitFrames(2);
       states.push(await state()); // Start noch gehalten: bleibt pausiert
       await setStart(false);
-      await ctx.page.waitForTimeout(300);
+      await waitFrames(2);
       await setStart(true);
-      await ctx.page.waitForTimeout(500);
+      await waitFrames(3);
       states.push(await state());
-      await ctx.page.waitForTimeout(300);
+      await waitFrames(2);
       states.push(await state()); // Start noch gehalten: pausiert NICHT sofort wieder
       await setStart(false);
       await ctx.page.evaluate(() => {
@@ -645,11 +662,8 @@ const GAME_CHECKS = [
     },
   },
   {
-    name: 'Hilfe-Leiste einzeilig; bei 800 x 600 nicht über der Figur; Schilder von weitem lesbar, nah nie riesig',
+    name: 'HUD (Leben/Schild) bei 800 x 600 nicht über der Figur; Schilder von weitem lesbar, nah nie riesig',
     async run(ctx) {
-      const rows = await ctx.page.evaluate(() => [...document.querySelectorAll('#help .help-row')].map((r) => r.getBoundingClientRect().height));
-      const one = Math.min(...rows);
-      ctx.assert(rows.every((h) => h < one * 1.5), `Zeilen-Höhen: ${rows.map((h) => h.toFixed(0)).join(', ')}`);
       // Schilder vom Startpunkt aus: mindestens ~20 Pixel hoch
       const labels = await ctx.page.evaluate(async () => {
         const THREE = await import('three');
@@ -733,11 +747,11 @@ const GAME_CHECKS = [
             }
           }
         }
-        const help = document.getElementById('help').getBoundingClientRect();
+        const help = document.querySelector('.hud-vitals').getBoundingClientRect();
         return { helpRight: help.right, helpTop: help.top, figureLeft: minX, figureBottom: maxY };
       });
       ctx.assert(r.helpRight < r.figureLeft || r.helpTop > r.figureBottom,
-        `Hilfe (rechts ${r.helpRight.toFixed(0)}) und Figur (links ${r.figureLeft.toFixed(0)}) überlappen`);
+        `Leben/Schild (rechts ${r.helpRight.toFixed(0)}) und Figur (links ${r.figureLeft.toFixed(0)}) überlappen`);
       await ctx.shot('16-800x600');
       await ctx.page.setViewportSize({ width: 1280, height: 720 });
       await ctx.page.waitForTimeout(300);
@@ -814,6 +828,8 @@ const GAME_CHECKS = [
   // Welle 2a: Bauen und Editieren (über die echte Eingabe: Z/X/C/V, Klick, Q, R, G, E)
   // ---------------------------------------------------------------------------
   ...require('./buildChecks.cjs').BUILD_CHECKS,
+  // Welle 3a: HUD, Ton, Effekte – siehe hudChecks.cjs
+  ...require('./hudChecks.cjs').HUD_CHECKS,
 ];
 
 // =============================================================================

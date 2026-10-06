@@ -46,6 +46,7 @@ Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel fest
 | Zielen (Kamera fährt näher ran) | **rechte Maustaste** gedrückt halten |
 | Tanzen | **B** |
 | Pause (Maus freigeben) | **Esc** – danach wieder auf „Klicken zum Weiterspielen“ |
+| Alle Tasten auf einen Blick | **H** (nochmal **H** schließt die Hilfe) |
 
 **Bauen und Editieren (Phase 3 und 4):**
 
@@ -109,7 +110,7 @@ Auf dem Übungsplatz hast du **unendlich Material**. (In den späteren Modi kost
 - [ ] FPS-Anzeige zeigt 50–60 (grün)
 - [ ] WASD, Springen, Ducken, Umschauen funktionieren; die Kamera geht nicht durch Wände
 - [ ] Die Rampe hochlaufen geht ohne Springen
-- [ ] Sturz vom Turm: unten links bei der Steuerung sinkt „Schild“ von 100 auf 50 (das richtige HUD mit Balken kommt in Phase 6)
+- [ ] Sturz vom Turm: unten links sinkt der blaue Schild-Balken von 100 auf 50
 
 ## Waffen (Phase 5)
 
@@ -128,8 +129,36 @@ Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfe
 - **Schieß-Stand** (gelbe Matte, vom Start aus hinten rechts): Zielpuppen in 5, 15, 30 und 60 m, eine davon mit Schild. Über dem Ziel erscheint der Schaden: **weiß** = Körper, **gelb** = Kopf, **blau** = Schild. Die Puppen sind nach 1,5 s wieder heil.
 - **Baum, Fels, Auto** (vom Start aus vorn links, hinter dem Turm): mit der Spitzhacke (F) schlagen gibt 5–10 Holz, Stein oder Metall.
 - Tipp: Schrotflinte schießen und **sofort** auf das Sturmgewehr (2) wechseln – das geht schneller, als auf den nächsten Schrot-Schuss zu warten.
-- Unten links bei der Steuerung stehen Waffe und Munition („Sturmgewehr 30 / ∞“). Das richtige HUD kommt in Phase 6.
+- Unten rechts stehen Waffe und Munition („Sturmgewehr 30 / ∞“) – mehr dazu im nächsten Abschnitt.
 - Alle Waffen-Werte (Schaden, Magazin, Nachladen, Streuung) stehen in `src/config.js` unter `weapons`.
+
+## Anzeigen, Ton und Effekte (Phase 6 und 12)
+
+**Das HUD** (Anzeigen über dem Spielbild):
+
+| Wo | Was |
+|---|---|
+| Mitte | Fadenkreuz (4 Striche; Schrotflinte = Kreis; wird beim Laufen größer, beim Zielen kleiner). Treffer = kurzes **X** (gelb bei Kopfschuss, **rot** beim Besiegen). Im Edit steht **EDIT** darunter. Beim Nachladen läuft ein Ring, beim Heilen ein grüner Balken. |
+| unten links | **Schild** (blau) über **Leben** (grün), je mit Zahl. Darüber der Hinweis **H Steuerung**. |
+| unten rechts | **Waffen-Leiste**: Spitzhacke (F) und 5 Plätze (Taste klein in der Ecke, Rand in der Seltenheits-Farbe, gewählter Platz hebt sich ab), daneben **Munition „Magazin / Reserve“** (∞ = unendlich). Darüber die **Bau-Leiste** (Wand/Boden/Rampe/Dach mit den Tasten **deiner** Tastatur – auf einer deutschen Tastatur steht bei der Wand „Y“) und das **Material** (Holz/Stein/Metall, das aktive ist blau umrandet). Im Baumodus hat die Bau-Leiste einen **blauen Rahmen**. |
+| oben links | **Kill-Feed**: „Du [AR] Bot_3“ – die letzten 5 Meldungen, sie verschwinden nach 5 Sekunden. ◎ = Kopfschuss. |
+| oben Mitte | Name des Modus bzw. der Stand (Duell: „Du 3 – 2 Bot_1“). |
+| oben rechts | **Minimap** (nur mit Sturm-Zone: Norden oben, gelber Pfeil = du, weißer Kreis = Zone, gestrichelt = nächste Zone), darunter „Lebend“, „Kills“ und „Zone schrumpft in 0:45“. |
+| ganzer Bildschirm | Große Nachrichten („RUNDE 2“, „SIEG!“), Zielfernrohr beim Scharfschützengewehr, ein **roter Bogen** zeigt, aus welcher Richtung du getroffen wirst, **roter Rand** bei wenig Leben, **lila Rand** außerhalb der Zone, „E – Tür öffnen“ vor einer Tür, „Du schaust zu: …“ nach dem Besiegtwerden. |
+
+**H** öffnet eine Übersicht aller Tasten (nochmal **H** schließt sie). Sie zeigt immer die gerade gültige Belegung.
+
+**Ton:** Alle Geräusche werden im Browser erzeugt (keine Sound-Dateien): Schritte (Gras klingt anders als ein Holz-, Stein- oder Metallboden), Springen und Landen, Bauteile setzen (Holz „klock“, Stein dumpf, Metall „kling“) und zerbrechen, jede Waffe eigen, Nachladen, ein heller „Ping“ bei Treffern (Kopfschuss höher), Schild zerbricht (Glas-Klirren), Spitzhacke, Heilen, Sturm-Brummen und eine Sieg-Fanfare. Gegner hörst du aus ihrer Richtung und leiser, je weiter weg sie sind – so hörst du auch, wo jemand baut. Der Ton startet erst nach dem ersten Klick (das verlangen alle Browser). Lautstärken stehen in `src/config.js` unter `audio` (später im Menü).
+
+**Effekte:** Splitter in Holz-, Stein- oder Metallfarbe bei Treffern auf Bauteile, Trümmer und Staub beim Zerstören und Einstürzen, Funken bei Einschlägen, Rauch und Glut bei Explosionen, Späne beim Sammeln mit der Spitzhacke, blaue Scherben, wenn ein Schild bricht, Staub bei harten Landungen. Bei Grafik „niedrig“ gibt es weniger Teilchen.
+
+**Checkliste für Phase 6** (bitte ausprobieren):
+
+- [ ] Alle Anzeigen stehen an der beschriebenen Stelle und ändern sich sofort (Schild/Leben nach einem Sturz, Munition beim Schießen, Material-Wechsel mit Q)
+- [ ] Baumodus (Z/X/C/V): blauer Rahmen um die Bau-Leiste; G auf eine eigene Wand: „EDIT“ unter dem Fadenkreuz
+- [ ] Eine Zielpuppe treffen: weißes X; Kopfschuss: gelbes X
+- [ ] H zeigt die Steuerung, H schließt sie wieder
+- [ ] Ton: Schüsse, Bauen, Treffer-Ping – und nach Esc + Weiterspielen ist der Ton noch da
 
 ## Tests
 
@@ -194,8 +223,10 @@ BuildDuel/
     world/              Himmel, Licht, Karten, Figuren-Grafik
     building/           Bauen: Raster + Zielwahl (grid.js), Formen/Bilder (pieces.js, view.js),
                         Edit + Türen (edit.js), Bau-System mit Halt/Einsturz (structure.js)
-    weapons/ ai/ audio/ noch "Attrappen" – kommen in den nächsten Phasen
-    ui/                 FPS-Anzeige, Aussehen (styles.css), später das HUD
+    weapons/            Waffen, Treffer, Geschosse, Waffen-Grafik
+    ai/                 noch eine "Attrappe" – Bots kommen in Phase 7
+    audio/sfx.js        alle Töne (erzeugt, keine Dateien), Raumklang, Menü-Musik
+    ui/                 HUD (hud.js, hud.css, Kill-Feed, Minimap), FPS-Anzeige, Aussehen (styles.css)
     util/random.js      Zufall mit Startwert (gleiches Muster bei jedem Start)
   tests/                automatische Tests (tests.html), Browser-Tests (e2e/)
   tools/                kleiner lokaler Server (Python oder Node.js)
@@ -208,15 +239,15 @@ BuildDuel/
 | 1 | Projekt, start.bat, Szene mit Boden, Himmel, Licht, FPS-Anzeige | ✅ fertig |
 | 2 | Spielerfigur, Laufen, Springen, Ducken, Schulter-Kamera | ✅ fertig |
 | 3 | Bau-System: Raster, Vorschau, Wand/Boden/Rampe/Dach, Material | ✅ fertig |
-| 4 | Editieren, Einsturz, Spitzhacke | ✅ Editieren + Einsturz fertig (Spitzhacke kommt mit den Waffen) |
-| 5 | Waffen | offen |
-| 6 | HUD komplett | offen |
+| 4 | Editieren, Einsturz, Spitzhacke | ✅ fertig |
+| 5 | Waffen | ✅ fertig |
+| 6 | HUD komplett | ✅ fertig |
 | 7 | Bots | offen |
 | 8 | Duell 1v1 | offen |
 | 9 | Battle Royale | offen |
 | 10 | Box Fight, Zone Wars, Freies Bauen, Aim Trainer, Deathmatch | offen |
 | 11 | Menüs, Einstellungen, Controller und Touch | offen |
-| 12 | Sound, Partikel, Feinschliff, Leistung | offen |
+| 12 | Sound, Partikel, Feinschliff, Leistung | Sound + Partikel fertig, Feinschliff folgt |
 
 ## Technik (für Neugierige)
 

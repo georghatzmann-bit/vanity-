@@ -104,7 +104,10 @@ const WEAPON_CHECKS = [
         }
         __wp.press('slot1', 0.3);
         const dummies = buildDuel.game.characters.filter((c) => c.isDummy).map((c) => c.name);
-        return { slots, cycle4, cycle5, mode: p.mode, dummies, help: document.getElementById('help').textContent };
+        buildDuel.game.hud.setHelpOpen(true); // Steuerungs-Hilfe (H) des HUD
+        const help = document.querySelector('.hud-help-card').textContent;
+        buildDuel.game.hud.setHelpOpen(false);
+        return { slots, cycle4, cycle5, mode: p.mode, dummies, help };
       });
       ctx.assert(JSON.stringify(r.slots) === JSON.stringify(['shotgun', 'ar', 'sniper', 'smg', 'bandage']), `Plätze: ${r.slots.join(', ')}`);
       ctx.assert(JSON.stringify(r.cycle4) === JSON.stringify(['smg', 'pistol', 'grenadeLauncher', 'smg']), `4 nochmal: ${r.cycle4.join(' → ')}`);
@@ -364,7 +367,7 @@ const WEAPON_CHECKS = [
       const scoped = await ctx.page.evaluate(() => ({
         fov: buildDuel.camera.fov,
         scopeFov: buildDuel.game.player.scopeFov,
-        overlay: getComputedStyle(document.querySelector('.bd-scope')).display,
+        overlay: getComputedStyle(document.querySelector('.hud-scope')).display,
         figureVisible: buildDuel.game.player.view.root.visible,
       }));
       await ctx.shot('25-sniper-zielfernrohr');
@@ -613,7 +616,7 @@ const WEAPON_CHECKS = [
         __wp.select('bandage');
         buildDuel.input.setVirtual('primary', true);
         buildDuel.simulate(1.5);
-        const during = { factor: p.speedFactor, healing: p.healing?.itemId, status: document.querySelector('[data-status]').textContent };
+        const during = { factor: p.speedFactor, healing: p.healing?.itemId };
         buildDuel.simulate(1.6);
         buildDuel.input.setVirtual('primary', false);
         const afterUse = p.health;

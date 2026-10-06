@@ -80,58 +80,6 @@ html, body {
 .fps[data-rating="mittel"] .fps-main b { color: var(--warn); }
 .fps[data-rating="schlecht"] .fps-main b { color: var(--bad); }
 
-/* --- Fadenkreuz (vorläufig, das echte HUD kommt in Phase 6) --------------- */
-.crosshair {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
-}
-.crosshair span {
-  position: absolute;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
-  border-radius: 1px;
-}
-.crosshair span:nth-child(1) { left: -1px; top: -12px; width: 2px; height: 7px; }
-.crosshair span:nth-child(2) { left: -1px; top: 5px; width: 2px; height: 7px; }
-.crosshair span:nth-child(3) { top: -1px; left: -12px; width: 7px; height: 2px; }
-.crosshair span:nth-child(4) { top: -1px; left: 5px; width: 7px; height: 2px; }
-
-/* --- Steuerung unten links (vorläufig) ------------------------------------- */
-.help {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  width: 270px;
-  max-width: calc(100% - 32px);
-  padding: 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 13px;
-  background: rgba(15, 17, 21, 0.6);
-}
-.help-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
-.help-row { display: flex; justify-content: space-between; gap: 12px; }
-.help-row span { color: var(--text-dim); }
-.help-row b { font-weight: 600; text-align: right; white-space: nowrap; }
-.help-status { margin-top: 6px; font-weight: 700; color: #9fe6a0; font-variant-numeric: tabular-nums; }
-.help-status:empty { display: none; }
-.help-hint { margin-top: 6px; font-size: 12px; color: var(--text-dim); line-height: 1.4; }
-body.playing .help { opacity: 0.6; }
-/* Kleinere Fenster (z. B. 800 x 600): Hilfe schmaler, damit sie die Figur nicht verdeckt */
-@media (max-width: 900px), (max-height: 640px) {
-  .help { width: 210px; padding: 8px 10px; font-size: 12px; }
-  .help-title { font-size: 13px; margin-bottom: 2px; }
-  .help-hint { display: none; }
-}
-/* Kleine Bildschirme (Handy): keine Tastatur-Hilfe, sie würde nur verdecken */
-@media (max-width: 600px), (max-height: 480px) {
-  .help { display: none; }
-}
-
 /* --- "Klicken zum Spielen" / "Pausiert" ------------------------------------ */
 .play-overlay {
   position: absolute;

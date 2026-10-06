@@ -239,7 +239,14 @@ export function createEditController(system) {
 
   /** E gedrückt: Tür unter dem Fadenkreuz oder die nächste Tür dicht vor der Figur umschalten. */
   function use(character) {
-    if (!character.alive || system.doors.size === 0) return false;
+    const best = findDoor(character);
+    if (!best) return false;
+    return system.setDoorOpen(best, !best.doorOpen);
+  }
+
+  // Tür, die E jetzt öffnen/schließen würde (auch für den HUD-Hinweis "E – Tür öffnen"), oder null
+  function findDoor(character) {
+    if (!character?.alive || system.doors.size === 0) return null;
     system.aimRay(character, _origin, _dir);
     let best = null;
     let bestDist = B.useReach;
@@ -265,8 +272,7 @@ export function createEditController(system) {
         }
       }
     }
-    if (!best || !isDoorPiece(best)) return false;
-    return system.setDoorOpen(best, !best.doorOpen);
+    return best && isDoorPiece(best) ? best : null;
   }
 
   // Mitte der Tür-Öffnung
@@ -280,6 +286,7 @@ export function createEditController(system) {
 
   return {
     canEdit,
+    findDoor,
     update,
     close,
     confirm,

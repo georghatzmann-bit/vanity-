@@ -80,8 +80,8 @@ src/
   world/               environment.js, characterModel.js, mapBuilder.js (Karten-Baukasten),
                        mapArena.js, mapIsland.js, mapZoneWars.js, loot.js, storm.js, effects.js,
                        referenceObjects.js
-  ui/                  hud.js, menus.js, settings.js (Einstellungs-Fenster), killfeed.js,
-                       minimap.js, touch.js, fpsMeter.js, styles.css
+  ui/                  hud.js (+ hud.css, hudIcons.js), menus.js, settings.js (Einstellungs-Fenster),
+                       killfeed.js, minimap.js, touch.js, fpsMeter.js, styles.css
   audio/sfx.js         erzeugte Töne (Web Audio)
   util/random.js       Zufall mit Startwert
 ```
@@ -330,9 +330,9 @@ durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapD
   `{ updateCharacter(c, cmd, dt), giveLoadout(c, ids, options), createItem(id, rarity), frameUpdate(alpha) }`.
   Gegenstand im Slot: `{ id, kind: 'weapon'|'heal', rarity, ammo, reserve, count, ... }`.
 - **Geschosse** (`src/weapons/projectiles.js`): `createProjectileSystem(game)` → `{ spawn(spec), update(dt), clear() }`.
-- **Effekte** (`src/world/effects.js`): `createEffects(game)` → hört auf Ereignisse, `frameUpdate(dt)`.
-- **Ton** (`src/audio/sfx.js`): `createAudio(game)` → hört auf Ereignisse, `setVolumes(settings)`, `frameUpdate()` (Zuhörer an Kamera).
-- **HUD** (`src/ui/hud.js`): `createHud(game, root)` → `frameUpdate(dt)`, `dispose()`.
+- **Effekte** (`src/world/effects.js`): `createEffects(game)` → hört auf Ereignisse, `frameUpdate(dt)` (genauer: §9b).
+- **Ton** (`src/audio/sfx.js`): `createAudio(game)` → hört auf Ereignisse, `setVolumes(settings)`, `frameUpdate()` (Zuhörer an Kamera) (genauer: §9b).
+- **HUD** (`src/ui/hud.js`): `createHud(game, root)` → `frameUpdate(dt)`, `dispose()` (genauer: §9b).
 - **Bot-Gehirn** (`src/ai/bot.js`): `createBotBrain(character, game, difficulty)` → `{ think(dt) → CharacterCommand }`.
 - Zusätzlich (Welle 1): Bau-System hat `canEdit(character)` und `closeEdit(character)` (siehe §6);
   alle Systeme haben `dispose()` (Game.dispose ruft es auf).
@@ -367,6 +367,7 @@ building.getPiece(kind, i, j, k), building.getPieceAt(slotKey), building.pieces 
 building.setEdit(piece, mask, editDir?) // entfernte Felder als Bitmaske (0 = ganzes Teil); editDir nur Rampe
 building.setDoorOpen(piece, open)       // false, wenn jemand in der Tür steht
 building.canEdit(c), building.closeEdit(c)   // closeEdit ÜBERNIMMT die gewählten Felder (wie im Original)
+building.findDoor(c)                    // Tür, die E jetzt umschalten würde, oder null (Welle 3a: HUD-Hinweis)
 building.editSession(c)                 // { piece, selection (Bitmaske), hover (Feld) } oder null
 building.targetOf(c)                    // letztes Bau-Ziel (Vorschau) oder null
 building.aimRay(c, outOrigin, outDir)   // Ziel-Strahl (Befehl, sonst Augen + Blick)
@@ -442,6 +443,94 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   `pieceHealthCap`, ein neues Teil ist also heil). Vorschau/Edit-Kacheln nur für `game.player`;
   Vorschau mit `reason === 'occupied'` = nur dünner roter Umriss (keine Fläche über dem Teil).
 
+## 9b. HUD, Ton, Effekte (Welle 3a)
+
+Dateien: `src/ui/hud.js` (+ `hud.css`, `hudIcons.js`), `src/ui/killfeed.js`, `src/ui/minimap.js`,
+`src/audio/sfx.js`, `src/world/effects.js`. Alle drei Systeme gibt es auch ohne Bildschirm – dann als
+Attrappe mit denselben Methoden (`headless`, kein `uiRoot` bzw. kein Web Audio). Werte: `CONFIG.hud`,
+`CONFIG.audio`, `CONFIG.effects`. Browser-Prüfungen: `tests/e2e/hudChecks.cjs` (in `GAME_CHECKS`).
+
+**HUD** – `createHud(game, root)` (root = `#ui`; das HUD setzt sein Element vor `#play-overlay`):
+```js
+hud.frameUpdate(dt)                 // pro Bild (Game.frameUpdate) – schreibt nur Geändertes ins HTML
+hud.setPrompt(text | { text, action } | null, source = 'default')   // Hinweis "E – …" setzen/löschen
+hud.addPromptProvider(fn) → remove  // fn(player) → Text | { text, action, rarity } | null, ~10-mal pro s gefragt
+hud.applySettings(settings)         // nach geänderter Tasten-Belegung: Tasten-Beschriftungen neu
+hud.setHelpOpen(bool), hud.toggleHelp(), hud.helpOpen   // Steuerungs-Hilfe (Taste: controls.keyboard.help = H)
+hud.clear()                         // Treffer-X, Nachrichten, Treffer-Richtung, Kill-Feed sofort weg (neue Runde)
+hud.setPaused(bool)                 // Zeit-Anzeigen anhalten (nur Screenshots)
+hud.debugState()                    // Tests: was gerade zu sehen ist (null ohne Bildschirm)
+hud.dispose()
+```
+Das HUD liest (nur lesen, nichts ändern): `game.player` (Leben, Schild, `mode`, `slots`, `selectedSlot`,
+`buildPiece`, `materials`, `currentMaterial`, `infiniteMaterials`, `healing`, `scopeFov`, `alive`),
+`weapons.getCrosshair/getAmmo`, `building.findDoor`, `game.camera.fov`, `cameraRig.yaw`, `game.storm`
+(`center, radius, nextCenter, nextRadius, state ('wait'|'shrink'|'closed'), timeLeft, isInside(pos)`),
+`game.map` (Minimap, s. u.), `game.mode.hudInfo()` (höchstens 10-mal pro s), `game.spectateTarget` und die
+Ereignisse `hit`, `characterDamaged`, `characterKilled`, `message`. Klassen setzt es nur an seinem eigenen
+Element; Fadenkreuz/Nachlade-Ring erscheinen nur mit `body.playing` (main.js). Die vorläufige Hilfe/Statuszeile
+aus main.js gibt es nicht mehr: die Steuerung zeigt die Hilfe (H, neue Tasten-Aktion `help`), aus der echten
+Belegung erzeugt, und darunter `mode.helpHint`.
+
+**Interaktions-Hinweis ("E – Tür öffnen", "E – Aufheben: …", "E – Kiste öffnen")** – Vertrag:
+- Text OHNE Taste ("Tür öffnen", "Aufheben: Sturmgewehr"); die Taste davor schreibt das HUD aus der Belegung
+  der Aktion `action` (Standard `'use'`). Optional `rarity` → farbiger Rand.
+- Quellen, in dieser Reihenfolge: 1. `hud.setPrompt(…)` (neueste Quelle zuerst; z. B. Modus/Tutorial),
+  2. **`game.interactionPrompt`** = `{ text, action, rarity, … }` oder Text oder `null` – Logik-Systeme
+  (Loot, Kisten) setzen es jeden Tick neu, auch headless, und löschen es selbst, 3. `addPromptProvider`,
+  4. Türen (`building.findDoor(player)` → "Tür öffnen"/"Tür schließen").
+
+**`mode.hudInfo()`** (§10) – alle Felder freiwillig:
+`{ topCenter, alive, kills, zoneText, extra[], minimap, spectating, deadText }`.
+`topCenter` = Text ("Übungsplatz") ODER Stand `{ leftName, leftScore, rightName, rightScore }` (Duell
+"Du 3 – 2 Bot_1"). `alive`/`kills` = Zahl oder `null` (dann versteckt). `zoneText` ersetzt den Text aus dem
+Sturm ("Zone schrumpft in 0:45"). `extra` = weitere Zeilen unter dem Stand. `minimap: true/false` erzwingt die
+Minimap (sonst: nur, wenn `game.storm` mit endlichem Radius da ist). Ist der Spieler besiegt: "Du schaust zu:
+{Name}" mit `spectating` (Figur oder Name) bzw. `game.spectateTarget`, sonst `deadText` oder "Du wurdest besiegt".
+Große Nachrichten kommen über das Ereignis `message` (`kind` 'round'|'win'|'lose' groß in der Mitte, 'info' klein).
+
+**Minimap**: Norden (−Z) oben. Grenzen: `map.bounds` → `map.playBounds` → `map.size` (um `map.center`) →
+`map.buildBounds`. Hintergrund einmal pro Karte: Boden-Farbe, Wasser (falls `map.isWater(x, z)`), eigene Malerei
+`map.paintMinimap(ctx, toPx, pxPerMeter)` (falls vorhanden), darüber die Umrisse von `map.colliders` in der
+Farbe ihres Meshes (`map.minimapSkipColliders = true` schaltet das ab). Zone weiß, nächste Zone gestrichelt.
+
+**Tasten-Beschriftung**: `keyLabel(code, layoutMap)` – mit `navigator.keyboard.getLayoutMap()` (wenn der Browser
+es kann) steht dort der Buchstabe der echten Tastatur (QWERTZ: `KeyZ` → "Y"), sonst der Buchstabe des Codes.
+
+**Ton** – `createAudio(game)`; die Web-Audio-Maschine (`getAudioEngine()`) gibt es einmal pro Seite, sie
+überlebt neue Spiele (Menü-Musik läuft weiter). Der AudioContext entsteht erst beim ersten Klick/Tastendruck
+(Autoplay-Regel der Browser); vorher werden Töne ohne Fehler weggelassen. Ist der Tab versteckt, wird der
+AudioContext angehalten (`visibilitychange`) und danach fortgesetzt.
+```js
+audio.setVolumes(settings)          // settings.audio { master, effects, music } – nach Änderung im Menü aufrufen
+audio.frameUpdate()                 // Zuhörer = Kamera; Sturm-Brummen (draußen laut, nahe der Wand leiser)
+audio.play(name, position?, own?)   // Rezept aus SOUND_NAMES; position {x,y,z} = Raumklang
+audio.ui('click'|'hover'|'back'|'confirm')   // Menü-Töne
+audio.playMusic('menu'), audio.stopMusic()   // leise erzeugte Schleife (Gruppe "Musik")
+audio.unlock()                      // Ton sofort einschalten (Tests; normal von selbst)
+audio.debug                         // Tests: activeVoices(type?), stats(), soundNames(), playAll()
+```
+Hört auf: `shot`, `explosion`, `impact` (nur Spitzhacke), `swing`, `harvest`, `hit` (eigene Treffer: "Ping",
+Kopf höher, Kill zweistufig), `shieldBroken`, `piecePlaced` (Material), `pieceDestroyed`, `doorToggled`,
+`footstep` (Untergrund per Strahl: Gras/Holz/Stein/Metall), `jump`, `land`, `reloadStart/End`,
+`weaponSwitched`, `healStart`, `heal`, `pickup`, `chestOpened`, `message` (win/lose/round), `matchEnd`.
+Eigene Töne ohne Richtung, fremde mit `PannerNode` (HRTF, `refDistance/maxDistance/rolloff`); weiter als
+`maxDistance` wird gar nicht erst gespielt. `VoiceLimiter`: höchstens `maxVoices`, je Art `voicesPerType`;
+wichtigere (eigene > nahe > ferne) ersetzen ältere.
+
+**Effekte** – `createEffects(game)`:
+```js
+effects.frameUpdate(dt)             // Teilchen bewegen + malen (nichts wird angelegt)
+effects.spawn(kind, position, options)   // 'sparks'|'splinters'|'dust'|'explosion'|'shards' – für Modi/Tests
+effects.setPaused(bool), effects.clear(), effects.stats(), effects.dispose()
+```
+Hört auf: `hit` an Bauteilen (Splitter in Material-Farbe), `pieceDestroyed` (Trümmer + Staub, auch Einsturz),
+`impact` (Funken; Gelände: Staub), `explosion` (Trümmer, Rauch, Glut – der Feuerball bleibt bei den Waffen),
+`harvest` (Späne), `shieldBroken` (Scherben), `land` ab `effects.hardLanding` m (Staub-Ring), `footstep` beim
+Sprinten. Drei feste Vorräte (Staub/Glühen = `THREE.Points` mit eigenem Shader, Stücke = `InstancedMesh`);
+voll → das älteste Teilchen wird ersetzt. Grafik "niedrig"/"mittel" → `effects.qualityFactor`.
+`Game.endMode()` ruft `effects.clear()`.
+
 ## 10. Modi (src/modes/)
 
 `src/modes/index.js` enthält die Liste `MODES`: `{ id, name, description, create(game, options) }`,
@@ -464,7 +553,7 @@ Jeder Modus:
   start(),                 // Karte bauen, Figuren erzeugen, Ausrüstung geben
   preUpdate(dt), update(dt),
   onCharacterKilled(victim, killer),
-  hudInfo(),               // { topCenter, alive, kills, zoneText, extra[] } für das HUD
+  hudInfo(),               // { topCenter, alive, kills, zoneText, extra[], minimap?, spectating?, deadText? } für das HUD (§9b)
   isOver,                  // bool
   result,                  // { won, placement, kills, damage, accuracy, trophies, coins, xp, title, lines[] }
   dispose(),
@@ -619,8 +708,8 @@ kein Shader-Neubau), Leuchtspur bei `tracer: true`, Feuerball, Treffer-Zahlen al
 (Vorrat, `settings.game.damageNumbers`, nur eigene Treffer), Ist die eigene Figur ausgeblendet (Kamera am Kopf) oder im Zielfernrohr: kein Blitz-Bild (beim Ausblenden nur
 das kurze Licht), Leuchtspur und Sniper-Streifen beginnen `weaponVisuals.hiddenShotStartDistance` vor der Kamera;
 der Streifen eines Geschosses reicht nie hinter seinen Bild-Start zurück. Spitzhacke: Zahl = wirklich gesammelt
-(`+N`), bei vollem Material `harvestFullText`. **vorläufiges** Zielfernrohr-Bild `.bd-scope`
-(das HUD in Welle 3a darf es ersetzen; `CONFIG.weapons.sniper.scopeOverlay`)). Werte: `CONFIG.weaponVisuals`.
+(`+N`), bei vollem Material `harvestFullText`. Das Zielfernrohr-Bild malt seit Welle 3a das HUD (`.hud-scope`,
+solange `character.scopeFov` gesetzt ist; Farbe `weaponVisuals.scopeOverlayColor`). Werte: `CONFIG.weaponVisuals`.
 
 **Übungsplatz** (`src/weapons/practiceRange.js`, eingehängt in modes/practice.js): alle Waffen
 (`CONFIG.practiceRange.loadoutSlots`), Schieß-Stand mit Zielpuppen (5/15/30/60 m, eine mit Schild; viel
@@ -644,7 +733,7 @@ Browser-Prüfungen der Waffen: `tests/e2e/weaponChecks.cjs` (in `GAME_CHECKS` vo
   (`{ name, run: async (ctx) => … }`, ctx = `{ page, assert, log, shot }`).
   Welle 2a: Bau-Prüfungen stehen in `tests/e2e/buildChecks.cjs` (in GAME_CHECKS eingehängt);
   `--grep text` führt nur Prüfungen aus, deren Name passt (z. B. `--grep "Bauen|Edit"`).
-- Modi dürfen `helpHint` (Text) haben – main.js zeigt ihn unter der Steuerungs-Hilfe.
+- Modi dürfen `helpHint` (Text) haben – das HUD zeigt ihn unten in der Steuerungs-Hilfe (Taste H).
 - URL-Schnellstart (für Tests/Entwicklung): `index.html?mode=duel&bots=hard&seed=1` überspringt das Menü.
 
 ## 13. Wer besitzt welche Dateien (Entwicklungs-Wellen)
@@ -658,7 +747,7 @@ Abschlussbericht genannt.
 | 1 Fundament (Phase 2) | core/game.js, core/events.js, core/settings.js, input.js, playerController.js, player.js, physics.js, camera.js, world/characterModel.js, world/mapBuilder.js, modes/index.js, modes/practice.js, main.js, Attrappen aller Systeme, tests/e2e/* (mapArena.js: Boden in createArenaMap verschoben – gehört weiter Welle 3b) |
 | 2a Bauen (3+4) | building/*, Bau-Tests |
 | 2b Waffen (5) | core/damage.js, weapons/*, Zielpuppen, Schadenszahlen, Waffen-Tests |
-| 3a HUD + Ton + Effekte (6, 12) | ui/hud.js, ui/killfeed.js, ui/minimap.js, audio/sfx.js, world/effects.js |
+| 3a HUD + Ton + Effekte (6, 12) | ui/hud.js, ui/hud.css, ui/hudIcons.js, ui/killfeed.js, ui/minimap.js, audio/sfx.js, world/effects.js, tests/e2e/hudChecks.cjs (dazu klein: building findDoor, main.js ohne vorläufige Hilfe, weapons/visuals.js ohne vorläufiges Zielfernrohr) |
 | 3b Welt (9 Teil) | world/storm.js, world/loot.js, world/mapArena.js, world/mapIsland.js, world/mapZoneWars.js, Gleiter/Freifall in player.js |
 | 4a Bots (7) | ai/bot.js |
 | 4b Modi (8–10) | modes/* |

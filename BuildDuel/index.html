@@ -6,6 +6,7 @@
   <title>BuildDuel</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="src/ui/styles.css">
+  <link rel="stylesheet" href="src/ui/hud.css">
   <!-- "three" zeigt auf die lokale Kopie in /lib → läuft auch ohne Internet -->
   <script type="importmap">
     { "imports": { "three": "./lib/three.module.js" } }
@@ -18,10 +19,7 @@
   <!-- Anzeigen über dem 3D-Bild -->
   <div id="ui">
     <div id="fps" class="fps" hidden></div>
-    <!-- Fadenkreuz in der Bildmitte (vorläufig – das HUD kommt in Phase 6) -->
-    <div id="crosshair" class="crosshair" hidden><span></span><span></span><span></span><span></span></div>
-    <!-- Steuerung unten links (vorläufig) -->
-    <div id="help" class="panel help" hidden></div>
+    <!-- Hier setzt src/ui/hud.js das HUD ein (Fadenkreuz, Leben, Waffen, Bau-Leiste, Minimap …) -->
     <!-- "Klicken zum Spielen" / "Pausiert" -->
     <div id="play-overlay" class="play-overlay" hidden>
       <div class="play-card">

@@ -77,23 +77,6 @@ function applySize(renderer, camera) {
   camera.updateProjectionMatrix();
 }
 
-// Tasten-Namen für die Hilfe (deutsch)
-const KEY_NAMES = {
-  Space: 'Leertaste', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Strg', ControlRight: 'Strg',
-  Mouse0: 'Linksklick', Mouse1: 'Mausrad-Klick', Mouse2: 'Rechtsklick',
-  WheelUp: 'Mausrad hoch', WheelDown: 'Mausrad runter', Escape: 'Esc', Tab: 'Tab',
-};
-function keyName(code) {
-  if (KEY_NAMES[code]) return KEY_NAMES[code];
-  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
-  if (/^Digit\d$/.test(code)) return code.slice(5);
-  return code;
-}
-
-function escapeHtml(text) {
-  return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-}
-
 // --- 2. Start -------------------------------------------------------------------
 function start() {
   const container = document.getElementById('game');
@@ -116,8 +99,6 @@ function start() {
     button: document.getElementById('play-button'),
     hint: document.getElementById('play-hint'),
     noLock: document.getElementById('play-nolock'),
-    crosshair: document.getElementById('crosshair'),
-    help: document.getElementById('help'),
   };
 
   // --- Spiel anlegen ----------------------------------------------------------------
@@ -144,7 +125,6 @@ function start() {
     game.startMode(id, options);
     currentModeId = id;
     ui.sub.textContent = getModeDef(id).name;
-    if (ui.status) renderHelp(); // Hinweis-Zeile des Modus
     clock.reset();
     return game;
   }
@@ -165,7 +145,7 @@ function start() {
     const playing = next === 'playing';
     input.playing = playing;
     ui.overlay.hidden = playing;
-    ui.crosshair.hidden = !playing;
+    // Fadenkreuz & Co. zeigt das HUD nur mit body.playing (src/ui/hud.css)
     document.body.classList.toggle('playing', playing);
     if (!playing) {
       input.releaseAll();
@@ -244,73 +224,6 @@ function start() {
     if (event.code === 'Escape' && state === 'playing') setState('paused');
   });
 
-  // Hilfe unten links (vorläufig, bis es das HUD und das Einstellungs-Menü gibt)
-  function renderHelp() {
-    const kb = settings.controls.keyboard;
-    // Tasten-Namen ohne Doppelte (linke und rechte Shift-Taste heißen beide "Shift")
-    const names = (codes) => [...new Set(codes.map(keyName))].join(' / ');
-    const keys = (action) => names(kb[action] ?? []);
-    const crouchKey = settings.controls.crouchOnCtrl ? names(CONFIG.controls.crouchCtrlKeys) : keys('crouch');
-    const rows = [
-      ['Laufen', [keys('moveForward'), keys('moveLeft'), keys('moveBack'), keys('moveRight')].join(' ')],
-      ['Umschauen', 'Maus'],
-      ['Springen', keys('jump')],
-      ['Ducken', `${crouchKey} (${settings.controls.crouchToggle ? 'umschalten' : 'halten'})`],
-    ];
-    if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', names(CONFIG.controls.sprintKeysWhenCrouchOnCtrl)]);
-    // Waffen (Welle 2b) und Bauen (Welle 2a): nur die erste Taste jeder Aktion,
-    // damit jede Zeile einzeilig bleibt
-    const first = (action) => keyName((kb[action] ?? [])[0] ?? '');
-    rows.push(
-      ['Schießen / Setzen', first('primary')],
-      ['Zielen', keys('secondary')],
-      ['Waffen', ['slot1', 'slot2', 'slot3', 'slot4'].map(first).join(' ')],
-      ['Heilen', first('slot5')],
-      ['Spitzhacke', first('pickaxe')],
-      ['Nachladen / Drehen', first('reloadOrRotate')],
-      ['Bauen', [names(kb.buildWall ?? []).replace(/ \/ /g, '/'), first('buildFloor'), first('buildRamp'), first('buildRoof')].join(' ')],
-      ['Material', first('switchMaterial')],
-      ['Edit / Tür', `${first('edit')} / ${first('use')}`],
-      ['Tanzen', keys('emote')],
-      ['Pause', 'Esc'],
-    );
-    const hint = game?.mode?.helpHint ?? 'Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.';
-    ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
-      rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
-      '<div class="help-status" data-status></div>' +
-      `<div class="help-hint">${escapeHtml(hint)}</div>`;
-    ui.status = ui.help.querySelector('[data-status]');
-    ui.status.style.whiteSpace = 'pre-line'; // zweite Zeile: Waffe und Munition
-    ui.help.hidden = false;
-  }
-  renderHelp();
-
-  // Waffe und Munition (vorläufig – das richtige HUD kommt in Phase 6)
-  function weaponStatus(p) {
-    if (p.mode === 'pickaxe') return 'Spitzhacke';
-    if (p.mode !== 'weapon') return '';
-    const item = p.slots[p.selectedSlot];
-    const ammo = item ? game.weapons.getAmmo?.(p) : null;
-    if (!item || !ammo) return '';
-    if (ammo.heal) {
-      if (p.healing) return `${item.name} … ${Math.round(p.healing.progress * 100)} %`;
-      return `${item.name} ${ammo.infinite ? '\u221E' : ammo.mag}`;
-    }
-    return `${item.name} ${ammo.mag} / ${ammo.infinite ? '\u221E' : ammo.reserve}${ammo.reloading ? ' – lädt nach' : ''}`;
-  }
-
-  // Leben/Schild (vorläufig – das richtige HUD kommt in Phase 6)
-  let lastStatus = '';
-  function updateStatus() {
-    const p = game?.player;
-    const weapon = p && p.alive ? weaponStatus(p) : '';
-    const text = p ? (p.alive ? `Leben ${Math.ceil(p.health)} · Schild ${Math.ceil(p.shield)}${weapon ? `\n${weapon}` : ''}` : 'Besiegt – gleich geht\u2019s weiter') : '';
-    if (text !== lastStatus) {
-      lastStatus = text;
-      ui.status.textContent = text;
-    }
-  }
-
   // --- Fenster ------------------------------------------------------------------------
   window.addEventListener('resize', () => applySize(renderer, camera));
   // Fenster wandert auf einen Bildschirm mit anderer Windows-Skalierung (z. B.
@@ -345,7 +258,6 @@ function start() {
     }
     environment.update(camera.position, focus);
     renderer.render(scene, camera);
-    updateStatus();
     frames++;
     fps?.update(frameSeconds, steps);
   }
