@@ -7,6 +7,7 @@
 // =============================================================================
 import { CONFIG } from '../config.js';
 import { createPracticeMode } from './practice.js';
+import { createIslandSandbox, createArenaSandbox, createZoneWarsSandbox } from './sandbox.js';
 
 export const MODES = [
   {
@@ -15,6 +16,10 @@ export const MODES = [
     description: 'Laufen, Springen, Ducken und die Kamera ausprobieren.',
     create: createPracticeMode,
   },
+  // Welle 3b: Test-Modi für die Welt (nur für Entwickler, nicht im Menü: hidden)
+  { id: 'sandbox-island', name: 'Test: Insel', description: 'Insel, Sturm, Loot, Absprung (Entwickler-Test).', hidden: true, create: createIslandSandbox },
+  { id: 'sandbox-arena', name: 'Test: Duell-Arena', description: 'Arena mit Felsen und Bäumen (Entwickler-Test).', hidden: true, create: createArenaSandbox },
+  { id: 'sandbox-zonewars', name: 'Test: Zone Wars', description: 'Hügel-Karte mit wandernder Zone (Entwickler-Test).', hidden: true, create: createZoneWarsSandbox },
 ];
 
 /** Modus, mit dem das Spiel startet (bis es ein Hauptmenü gibt). */

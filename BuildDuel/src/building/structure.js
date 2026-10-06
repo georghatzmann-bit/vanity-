@@ -125,7 +125,7 @@ export function createBuildingSystem(game) {
       const list = world.queryBox(_qMin, _qMax, _list);
       for (let n = 0; n < list.length; n++) {
         const c = list[n];
-        if (c.data?.kind === 'piece') continue;
+        if (c.data?.kind === 'piece' || c.data?.kind === 'barrier') continue; // unsichtbare Karten-Grenze hält nichts (Welle 3b)
         if (shapesTouch(shape, colliderToShape(c, _other), tol)) return true;
       }
     } else if (shape.minY <= tol) {

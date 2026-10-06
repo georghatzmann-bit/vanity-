@@ -81,6 +81,8 @@ export class Game {
     this.map = null;
     this.storm = null;
     this.loot = null;
+    // Welle 3b: Hinweis für das HUD, was E gerade tut ({ text, action: 'use', kind, target } oder null) – setzt loot.js
+    this.interactionPrompt = null;
     this.systems = [];
     this.disposed = false;
 
@@ -132,6 +134,7 @@ export class Game {
     this.storm = null;
     this.loot?.dispose?.();
     this.loot = null;
+    this.interactionPrompt = null;
     if (this.map) {
       this.map.dispose?.();
       this.map = null;
@@ -280,6 +283,10 @@ export class Game {
     this.audio.frameUpdate();
     this.hud.frameUpdate(frameSeconds);
     this.map?.frameUpdate?.(frameSeconds);
+    // Welle 3b: Sturm-Wand, Kisten/Boden-Loot, weitere Systeme (z. B. Absprung-Fahrzeug) – nach den Figuren
+    this.storm?.frameUpdate?.(frameSeconds);
+    this.loot?.frameUpdate?.(frameSeconds, alpha);
+    for (let i = 0; i < this.systems.length; i++) this.systems[i].frameUpdate?.(frameSeconds, alpha);
   }
 
   // ---------------------------------------------------------------------------
