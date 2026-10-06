@@ -395,6 +395,9 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
 - Setzen: Platz frei, Material (`costPerPiece`, außer `infiniteMaterials`), höchstens `maxPieces`,
   keine Figur im Weg (nur die Füße bis `player.stepHeight` dürfen drinstecken → Figur wird
   angehoben), Halt (Gelände, Karten-Teil oder berührendes Bauteil). `placeCooldown` pro Figur.
+  **Wände** sind nie vom Körper blockiert: eine Figur, die in der neuen Wand steht, wird waagerecht
+  zu der Seite der Wand-Ebene geschoben, auf der ihre Mitte steht (Abstand `wallPushGap`); nur wenn
+  dort kein Platz ist, bleibt `'blocked'`. Boden/Rampe/Dach im Körper → `'blocked'`.
   Maus gehalten: setzt erneut, sobald sich der Ziel-Platz ändert und gültig ist.
 - Aufbau: Leben wächst von `startHealthFraction` auf 100 % in `buildTime[material]`; Schaden
   im Aufbau zählt mit. Das Teil blockiert sofort (Collider ab dem ersten Tick).

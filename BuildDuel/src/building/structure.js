@@ -159,45 +159,94 @@ export function createBuildingSystem(game) {
     return c === builder && shape.kind === 'ramp' ? Infinity : CONFIG.player.stepHeight;
   }
 
+  // Was passiert mit einer Figur, wenn das Teil gesetzt wird?
+  const BODY_FREE = 0; // steckt nicht drin
+  const BODY_LIFT = 1; // nur die Füße stecken drin → auf das Teil heben (_move.y)
+  const BODY_PUSH = 2; // Wand: zur Seite hinausschieben (_move.x/_move.z)
+  const BODY_BLOCKED = 3; // geht nicht (Platz bleibt rot)
+  const _move = { x: 0, y: 0, z: 0 };
+
   /**
-   * Steht eine Figur im Weg? Nur die Füße (bis zur Stufen-Höhe) dürfen in der Form
-   * stecken – dann wird die Figur auf das neue Teil gehoben (siehe liftLimit).
-   * @returns {boolean} true = blockiert
+   * Wand: Die Figur wird zu der Seite der Wand-Ebene geschoben, auf der ihre Mitte
+   * steht (wie im Original: eine Wand ist nie "vom eigenen Körper blockiert").
+   * Schreibt das Ziel in _move. false = dort ist kein Platz.
    */
-  function bodyBlocks(shape, builder) {
+  function wallPushTarget(shape, kind, c) {
+    const p = c.position;
+    const r = c.radius;
+    const gap = B.wallPushGap;
+    _move.x = p.x;
+    _move.y = p.y;
+    _move.z = p.z;
+    if (kind === 'wx') {
+      const plane = (shape.minZ + shape.maxZ) / 2;
+      const half = (shape.maxZ - shape.minZ) / 2;
+      _move.z = plane + (p.z >= plane ? 1 : -1) * (half + r + gap);
+    } else {
+      const plane = (shape.minX + shape.maxX) / 2;
+      const half = (shape.maxX - shape.minX) / 2;
+      _move.x = plane + (p.x >= plane ? 1 : -1) * (half + r + gap);
+    }
+    return !world || bodyFits(world, _move.x, p.y, _move.z, r, c.height);
+  }
+
+  /**
+   * Steckt Figur c im neuen Teil – und wenn ja: anheben, schieben oder blockiert?
+   * Nur die Füße (bis zur Stufen-Höhe, siehe liftLimit) dürfen im Teil stecken – dann
+   * wird die Figur auf das Teil gehoben. Steckt mehr drin, wird sie bei einer Wand zur
+   * Seite geschoben; bei Boden/Rampe/Dach ist der Platz blockiert.
+   */
+  function bodyResult(shape, kind, c, builder) {
+    const p = c.position;
+    const r = c.radius;
+    const h = c.height;
+    if (!shapeOverlapsBox(shape, p.x - r, p.y, p.z - r, p.x + r, p.y + h, p.z + r)) return BODY_FREE;
+    const lift = liftLimit(c, shape, builder);
+    let liftOk = !(lift < h && shapeOverlapsBox(shape, p.x - r, p.y + lift, p.z - r, p.x + r, p.y + h, p.z + r));
+    let top = p.y;
+    if (liftOk) {
+      top = shapeTopOverRect(shape, p.x - r, p.x + r, p.z - r, p.z + r);
+      liftOk = top - p.y <= lift + 1e-6 && (!world || bodyFits(world, p.x, top, p.z, r, h));
+    }
+    if (liftOk) {
+      _move.x = p.x;
+      _move.y = Math.max(p.y, top);
+      _move.z = p.z;
+      return BODY_LIFT;
+    }
+    if ((kind === 'wx' || kind === 'wz') && wallPushTarget(shape, kind, c)) return BODY_PUSH;
+    return BODY_BLOCKED;
+  }
+
+  /** Steht eine Figur so im Weg, dass das Teil nicht gesetzt werden kann? */
+  function bodyBlocks(shape, kind, builder) {
     const list = game?.characters;
     if (!list) return false;
     for (let n = 0; n < list.length; n++) {
       const c = list[n];
-      if (!c.alive) continue;
-      const p = c.position;
-      const r = c.radius;
-      const h = c.height;
-      if (!shapeOverlapsBox(shape, p.x - r, p.y, p.z - r, p.x + r, p.y + h, p.z + r)) continue;
-      const lift = liftLimit(c, shape, builder);
-      if (lift < h && shapeOverlapsBox(shape, p.x - r, p.y + lift, p.z - r, p.x + r, p.y + h, p.z + r)) return true;
-      const top = shapeTopOverRect(shape, p.x - r, p.x + r, p.z - r, p.z + r);
-      if (top - p.y > lift + 1e-6) return true;
-      if (world && !bodyFits(world, p.x, top, p.z, r, h)) return true;
+      if (c.alive && bodyResult(shape, kind, c, builder) === BODY_BLOCKED) return true;
     }
     return false;
   }
 
-  // Figuren, deren Füße im neuen Teil stecken, auf das Teil heben
-  function liftCharacters(shape, builder) {
+  // Figuren, die im neuen Teil stecken, auf das Teil heben bzw. aus der Wand schieben
+  function settleCharacters(shape, kind, builder) {
     const list = game?.characters;
     if (!list) return;
     for (let n = 0; n < list.length; n++) {
       const c = list[n];
       if (!c.alive) continue;
+      const result = bodyResult(shape, kind, c, builder);
       const p = c.position;
-      const r = c.radius;
-      if (!shapeOverlapsBox(shape, p.x - r, p.y, p.z - r, p.x + r, p.y + c.height, p.z + r)) continue;
-      const top = shapeTopOverRect(shape, p.x - r, p.x + r, p.z - r, p.z + r);
-      if (top > p.y && top - p.y <= liftLimit(c, shape, builder) + 1e-6) {
+      if (result === BODY_LIFT && _move.y > p.y) {
+        const top = _move.y;
         c.stepOffset = Math.max(-0.6, (c.stepOffset ?? 0) - (top - p.y)); // Grafik zieht weich nach
         p.y = top;
         if (c.airPeakY !== undefined && c.airPeakY < top) c.airPeakY = top; // kein Fallschaden durchs Anheben
+      } else if (result === BODY_PUSH) {
+        // waagerecht hinaus (die Grafik gleitet über einen Tick nach)
+        p.x = _move.x;
+        p.z = _move.z;
       }
     }
   }
@@ -214,7 +263,7 @@ export function createBuildingSystem(game) {
       if ((character.materials?.[material] ?? 0) < M.costPerPiece) return 'material';
     }
     const shape = slotShape(kind, i, j, k, dir, _shape);
-    if (!options?.skipBodyCheck && bodyBlocks(shape, character)) return 'blocked';
+    if (!options?.skipBodyCheck && bodyBlocks(shape, kind, character)) return 'blocked';
     if (!options?.skipSupport && !touchesGround(shape) && !hasSupportingNeighbor(shape, kind, i, j, k)) return 'unsupported';
     return null;
   }
@@ -326,10 +375,11 @@ export function createBuildingSystem(game) {
     pieces.set(piece.slotKey, piece);
     byNum.set(piece.numKey, piece);
     ownerCounts.set(piece.owner, (ownerCounts.get(piece.owner) ?? 0) + 1);
+    // erst die Figuren hinaus/hinauf (gleiche Rechnung wie checkPlacement, ohne das neue Teil)
+    if (!options.force) settleCharacters(piece.shape, kind, owner);
     makeColliders(piece);
     linkNeighbors(piece);
     piece.grounded = touchesGround(piece.shape);
-    if (!options.force) liftCharacters(piece.shape, owner);
     view?.add(piece);
     if (options.charge && owner?.stats) owner.stats.piecesBuilt++; // selbst gebaut (nicht vom Modus hingestellt)
     game?.events?.emit?.('piecePlaced', { piece, owner: piece.owner });

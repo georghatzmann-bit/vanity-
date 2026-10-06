@@ -315,6 +315,9 @@ export const CONFIG = deepFreeze({
     lookDownDrop: 0.5, // liegt der Anker so weit (m) unter der eigenen Ebene (Blick über eine Kante) → eine Ebene tiefer
     rotationSteps: 4, // R dreht die Rampe in 90°-Schritten (4 Richtungen)
     supportTolerance: 0.05, // so nah (m) müssen sich Teile kommen, um sich zu halten (Berührung)
+    // Eine neue Wand, in der eine Figur steht, schiebt sie zur Seite hinaus (wie im Original –
+    // eine Wand ist nie vom eigenen Körper blockiert). So viel Luft (m) bleibt danach zur Wand.
+    wallPushGap: 0.01,
 
     // --- Edit und Türen ---
     editReach: 7, // G: so weit (m) darf das Bauteil vom Fadenkreuz-Anfang weg sein // SCHÄTZUNG

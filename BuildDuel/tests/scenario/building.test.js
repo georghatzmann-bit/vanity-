@@ -168,6 +168,44 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
     game.dispose();
   });
 
+  it('Box an der Zell-Kante: die neue Wand schiebt den Bauenden hinaus (nie "blockiert" durch den eigenen Körper)', () => {
+    const T = B.pieceThickness;
+    for (const [x, z] of [[0.45, 21.8], [0.3, 23.7], [3.6, 20.2], [3.95, 23.95]]) {
+      const { game, p, f } = practice(x, z);
+      f.pitch = -0.1;
+      for (let side = 0; side < 4; side++) {
+        f.yaw = (side * Math.PI) / 2;
+        tap(game, f);
+        assert.ok(buildOnce(game, p, f, 'wall'), `Wand ${side} bei (${x}, ${z}): ${game.building.getTarget(p, 'wall').reason}`);
+      }
+      for (const k of ['wx:0:0:5', 'wx:0:0:6', 'wz:0:0:5', 'wz:1:0:5']) assert.ok(game.building.getPieceAt(k), `${k} fehlt bei (${x}, ${z})`);
+      // Figur steht jetzt ganz in der Box (kein Stück steckt in einer Wand)
+      const r = p.radius;
+      const pos = p.position;
+      assert.ok(pos.x >= T / 2 + r - 1e-6 && pos.x <= S - T / 2 - r + 1e-6, `x ${pos.x.toFixed(3)}`);
+      assert.ok(pos.z >= 5 * S + T / 2 + r - 1e-6 && pos.z <= 6 * S - T / 2 - r + 1e-6, `z ${pos.z.toFixed(3)}`);
+      f.pitch = 0.5;
+      tap(game, f);
+      assert.ok(buildOnce(game, p, f, 'roof'), 'Dach');
+      game.simulate(0.3);
+      assert.ok(Math.abs(p.position.y) < 1e-3 && p.grounded, 'steht ruhig am Boden');
+      game.dispose();
+    }
+  });
+
+  it('Wand schiebt auch andere Figuren zur Seite ihrer Mitte; Boden im Kopf bleibt "blocked"', () => {
+    const { game, p, f } = practice(2, 21);
+    const other = game.addCharacter({ name: 'Gegner', position: { x: 2.5, y: 0, z: 20.15 }, brain: null });
+    const wall = buildOnce(game, p, f, 'wall'); // wx:0:0:5 bei z = 20
+    assert.ok(wall, 'Wand gesetzt, obwohl der Gegner drin steht');
+    assert.close(other.position.z, 20 + B.pieceThickness / 2 + other.radius + B.wallPushGap, 1e-6, 'nach +Z hinaus');
+    assert.close(other.position.x, 2.5, 1e-9, 'nur quer zur Wand');
+    // Boden: Figur in der Luft, der Boden (y = 4) steckt im Kopf → rot
+    p.position.y = 3;
+    assert.equal(game.building.checkPlacement('floor', 'f', 0, 1, 5, 0, p), 'blocked');
+    game.dispose();
+  });
+
   it('Aufbau: Holz nach 1 s voll, Stein nach 2 s, Metall nach 3 s – blockt aber sofort', () => {
     const { game, p, f } = practice();
     const damaged = collect(game, 'pieceDamaged');
