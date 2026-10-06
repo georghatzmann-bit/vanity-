@@ -771,6 +771,7 @@ export const CONFIG = deepFreeze({
       hillHeight: 9, // SCHÄTZUNG
       hillScale: 46,
       rimHeight: 10, // am Rand steigen Hügel an (Grenze)
+      maxSlopeDeg: 34, // je Raster-Richtung höchstens so steil (schräg über die Ecke bis ca. 44° – noch begehbar)
       rocks: 16,
       trees: 22,
       covers: 8, // kleine Deckungs-Mauern

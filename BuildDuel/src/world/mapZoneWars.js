@@ -47,7 +47,7 @@ export function createZoneWarsMap(game, spec = {}) {
   };
   const count = Math.round((2 * extent) / cell) + 1;
   const heights = sampleHeights(-extent, -extent, cell, count, count, heightFn);
-  limitSlopes(heights, count, count, cell * Math.tan((34 * Math.PI) / 180), 6);
+  limitSlopes(heights, count, count, cell * Math.tan((cfg.maxSlopeDeg * Math.PI) / 180), 6);
   const terrain = createHeightfield({ minX: -extent, minZ: -extent, cell, countX: count, countZ: count, heights, outsideHeight: rimTop });
   game.world.setTerrain(terrain);
   const heightAt = (x, z) => terrain.heightAt(x, z);

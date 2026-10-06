@@ -466,6 +466,9 @@ describe('Spielwerte: Welt (Welle 3b – Sturm, Loot, Karten, Absprung)', () => 
     assert.equal(r, 0);
     assert.ok(z.storm.initialRadius * Math.SQRT2 >= z.mapSize / 2, 'deckt die Karte ab');
     assert.ok(CONFIG.maps.zoneWars.spawnMinDistance * 2 < z.mapSize);
+    // Hänge: auch schräg über die Raster-Ecke (Faktor Wurzel 2) noch begehbar
+    const diagonal = (Math.atan(Math.SQRT2 * Math.tan((CONFIG.maps.zoneWars.maxSlopeDeg * Math.PI) / 180)) * 180) / Math.PI;
+    assert.ok(diagonal < CONFIG.player.maxWalkableSlope, `Zone Wars: Hang schräg ${diagonal.toFixed(1)}°`);
   });
 
   it('Sturm: Schaden in Schritten, Wand sichtbar', () => {

@@ -302,6 +302,7 @@ const WORLD_CHECKS = [
   {
     name: 'Welt: Duell-Arena mit Felsen und Bäumen, unsichtbare Wand über der Mauer',
     async run(ctx) {
+      await installHelpers(ctx.page); // läuft auch allein (--grep)
       const r = await ctx.page.evaluate(() => {
         buildDuel.startMode('sandbox-arena');
         buildDuel.play();
@@ -332,6 +333,7 @@ const WORLD_CHECKS = [
   {
     name: 'Welt: Zone-Wars-Karte, Zone wandert',
     async run(ctx) {
+      await installHelpers(ctx.page); // läuft auch allein (--grep)
       const r = await ctx.page.evaluate(() => {
         buildDuel.startMode('sandbox-zonewars');
         buildDuel.play();
