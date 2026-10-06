@@ -1,6 +1,6 @@
 // Einstellungen: accent (live), motion, safety switches, KI providers (settings-ai.js), about + Testmodus.
 import { icon } from '../icons.js';
-import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append, radioKeys } from '../ui.js';
+import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append, radioKeys, startHint } from '../ui.js';
 import { aiSection } from './settings-ai.js';
 
 const ACCENTS = [
@@ -104,8 +104,8 @@ export default {
       section('ai', 'sparkles', 'KI', 'Welche KI der KI-Optimierer nutzt. Am besten: Claude Code mit deinem Claude-Abo.', ai.el),
       section('about', 'info', 'Über VELOX', 'Version und Umgebung.', about,
         h('div', { class: 'note ' + (m.simulate ? 'note-warn' : 'note-info') + ' mt-16' }, icon('flask', 15), h('span', { text: m.simulate
-          ? 'Testmodus ist an: VELOX zeigt dir alles und tut so, als würde es Änderungen anwenden – an deinem PC wird aber nichts verändert. Zum echten Anwenden starte VELOX über Start.bat statt Start-Testmodus.bat.'
-          : 'Echtbetrieb: Änderungen werden wirklich angewendet. Zum gefahrlosen Ausprobieren gibt es Start-Testmodus.bat – dort wird nichts verändert.' })))));
+          ? 'Testmodus ist an: VELOX zeigt dir alles und tut so, als würde es Änderungen anwenden – an deinem PC wird aber nichts verändert. Zum echten Anwenden schließ VELOX und starte ' + startHint(false) + '.'
+          : 'Echtbetrieb: Änderungen werden wirklich angewendet. Zum gefahrlosen Ausprobieren gibt es ' + startHint(true) + ' – dort wird nichts verändert.' })))));
 
     // focus 'ai' / 'claude' (older links) / 'groq' / 'claude-code' / 'claude-api': open that provider card
     const aiFocus = opts && { ai: 'claude-code', claude: 'claude-api', 'claude-api': 'claude-api', groq: 'groq', 'claude-code': 'claude-code' }[opts.focus];

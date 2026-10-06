@@ -49,6 +49,7 @@ export default {
   id: 'backups', title: 'Sicherungen', icon: 'archive', desc: 'Jede Änderung ist gesichert – hier machst du sie rückgängig', keywords: 'backup journal wiederherstellen rückgängig undo',
   mount(el, ctx) {
     const list = h('div', { class: 'bk-list', 'data-testid': 'backup-list' });
+    const listDesc = h('p', { class: 'section-desc' });
     const rpBtn = button({ label: 'Wiederherstellungspunkt erstellen', icon: 'shieldCheck', variant: 'primary', onClick: async () => {
       const job = await ctx.runJob('restorepoint', { label: 'Manuell' });
       if (job && job.status === 'done') { load(); rpLoad(true); }
@@ -108,10 +109,10 @@ export default {
         for (const p of items.slice(0, 30)) ul.appendChild(rpItem(p, r.keep));
         rpBody.appendChild(ul);
       }
-      const clean = button({ label: 'Überflüssige VELOX-Wiederherstellungspunkte löschen (der erste bleibt)', icon: 'trash', size: 'sm', variant: 'secondary', disabled: !extra, attrs: { 'data-testid': 'rp-clean' }, onClick: async () => {
+      const clean = button({ label: extra ? plural(extra, 'überflüssigen Punkt', 'überflüssige Punkte') + ' löschen' : 'Nichts zu löschen', icon: 'trash', size: 'sm', variant: 'secondary', disabled: !extra, attrs: { 'data-testid': 'rp-clean' }, onClick: async () => {
         const keepText = r.keep ? 'Der erste VELOX-Punkt vom ' + fmtDate(r.keep.created) + ' bleibt als Sicherheitsnetz. ' : '';
         const ok = await confirmDialog({ title: plural(extra, 'überflüssigen Wiederherstellungspunkt', 'überflüssige Wiederherstellungspunkte') + ' löschen?', icon: 'trash', danger: true,
-          text: keepText + 'Punkte, die du selbst erstellt hast, und Punkte von Windows oder anderen Programmen werden nicht angefasst. Gelöschte Punkte lassen sich nicht zurückholen – das gibt Speicherplatz frei.', confirmLabel: 'Löschen' });
+          text: keepText + 'Punkte, die du selbst erstellt hast, und Punkte von Windows oder anderen Programmen werden nicht angefasst. Das gibt Speicherplatz frei. Gelöschte Punkte lassen sich aber nicht zurückholen.', confirmLabel: 'Löschen' });
         if (!ok) return;
         const job = await ctx.runJob('restorepoint-clean', {});
         if (job && job.status === 'done') rpLoad(true);
@@ -143,12 +144,14 @@ export default {
     append(el, 
       h('section', { class: 'card pad-24 bk-head' },
         h('div', { class: 'bk-head-icon' }, icon('shieldCheck', 26)),
-        h('div', { class: 'bk-head-text' }, h('h2', { class: 'section-title', text: 'Dein Sicherheitsnetz' }), h('p', { class: 'section-desc', text: 'VELOX speichert vor jeder Änderung den alten Wert. Mit "Wiederherstellen" kommt genau dieser Stand zurück. Ein Windows-Wiederherstellungspunkt sichert zusätzlich das ganze System.' })),
+        h('div', { class: 'bk-head-text' }, h('h2', { class: 'section-title', text: 'Dein Sicherheitsnetz' }), h('p', { class: 'section-desc', text: 'VELOX speichert vor jeder Änderung den alten Wert. Mit „Wiederherstellen“ kommt genau dieser Stand zurück. Ein Windows-Wiederherstellungspunkt sichert zusätzlich das ganze System.' })),
         h('div', { class: 'bk-head-actions' }, folderBtn, rpBtn)),
-      rpCard,
-      list);
+      h('div', { class: 'section-head' }, h('div', {}, h('h2', { class: 'section-title', text: 'Deine Sicherungen' }), listDesc)),
+      list,
+      rpCard);
 
     async function load(animate = true) {
+      listDesc.textContent = 'Neueste zuerst. Ein Klick auf „Wiederherstellen“ setzt alle Werte dieser Sicherung zurück.';
       clear(list);
       for (let i = 0; i < 3; i++) list.appendChild(h('div', { class: 'card bk-item' }, h('div', { class: 'bk-main' }, h('div', { class: 'skel', style: { width: '40px', height: '40px', 'border-radius': '12px' } }), skeleton(2, 'grow'))));
       let backups;
@@ -157,6 +160,7 @@ export default {
       backups.sort((a, b) => String(b.created).localeCompare(String(a.created)));
       ctx.cache.backups = backups;
       ctx.emit('backups');
+      listDesc.textContent = plural(backups.length, 'Sicherung', 'Sicherungen') + ', neueste zuerst. „Wiederherstellen“ setzt alle Werte dieser Sicherung zurück.';
       clear(list);
       if (!backups.length) {
         list.appendChild(h('div', { class: 'card pad-24' }, emptyState({ icon: 'archive', title: 'Noch keine Sicherungen', text: 'Sobald du etwas anwendest, legt VELOX hier automatisch eine Sicherung an. Du kannst jede davon mit einem Klick zurückholen.', action: button({ label: 'Zu den Presets', icon: 'stack', size: 'sm', variant: 'secondary', onClick: () => ctx.navigate('presets') }) })));
@@ -181,7 +185,7 @@ export default {
           h('div', { class: 'bk-icon kind-' + b.kind }, icon(kindIcon, 18)),
           h('div', { class: 'bk-text' },
             h('div', { class: 'bk-label', text: b.label || kindLabel }),
-            h('div', { class: 'bk-meta' }, h('span', { text: fmtDate(b.created) }), h('span', { class: 'dotsep', text: '·' }), h('span', { text: fmtRelative(b.created) }), h('span', { class: 'dotsep', text: '·' }), h('span', { text: countText(b) }))),
+            h('div', { class: 'bk-meta' }, h('div', { class: 'meta-line' }, h('span', { text: fmtDate(b.created) }), h('span', { text: fmtRelative(b.created) }), h('span', { text: countText(b) })))),
           h('div', { class: 'bk-badges' }, badge(kindLabel, 'neutral'), b.simulate ? badge('Testmodus', 'neutral', 'flask') : null, b.restorable === false ? badge('Nicht umkehrbar', 'neutral', 'lock') : null),
           h('div', { class: 'bk-actions' }, restore, expand)),
         details);

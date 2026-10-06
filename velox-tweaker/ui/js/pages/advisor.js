@@ -27,7 +27,7 @@ export async function applyFix(ctx, fix) {
   if (!fix) return;
   if (fix.type === 'tweaks') {
     const n = await ctx.stageMany(fix.ids || [], true);
-    if (n) toast({ type: 'ok', title: plural(n, 'Tweak', 'Tweaks') + ' vorgemerkt', text: 'Klick unten auf "Anwenden", um sie zu übernehmen.', action: { label: 'Jetzt anwenden', onClick: () => ctx.applyPending() } });
+    if (n) toast({ type: 'ok', title: plural(n, 'Tweak', 'Tweaks') + ' vorgemerkt', text: 'Klick unten auf „Anwenden“, um sie zu übernehmen.', action: { label: 'Jetzt anwenden', onClick: () => ctx.applyPending() } });
     else toast({ type: 'info', title: 'Schon erledigt', text: 'Diese Tweaks sind bereits aktiv oder vorgemerkt.' });
   } else if (fix.type === 'open') {
     try { await api.open(fix.target); toast({ type: 'ok', title: 'Windows-Einstellungen geöffnet', text: 'Das Fenster erscheint gleich neben VELOX.' }); }
@@ -60,7 +60,7 @@ export default {
       goalBox.appendChild(b);
     }
     radioKeys(goalBox, (b) => b.click());
-    const text = h('textarea', { class: 'textarea', rows: 2, maxLength: 600, placeholder: 'Beschreib dein Problem, z. B. „FiveM ruckelt in der Stadt“ (optional)', 'aria-label': 'Problem beschreiben (optional)', value: ctx.cache.advisorText || '' });
+    const text = h('textarea', { class: 'textarea', rows: 3, maxLength: 600, placeholder: 'Beschreib dein Problem, z. B. „FiveM ruckelt in der Stadt“', 'aria-label': 'Problem beschreiben (optional)', value: ctx.cache.advisorText || '' });
     const eng = h('div', { class: 'prov-grid', role: 'radiogroup', 'aria-label': 'KI auswählen', 'data-testid': 'ai-providers' });
     const provHint = h('div', { class: 'prov-hint' });
     const claudeOpts = h('div', { class: 'claude-opts' },
@@ -73,7 +73,7 @@ export default {
         const b = h('button', { class: ['prov', 'ripple-host', 'is-' + st.state], type: 'button', role: 'radio', 'aria-checked': String(engine === p.id), 'data-provider': p.id, 'data-ready': String(!!st.ready) },
           h('span', { class: 'engine-icon' }, icon(p.icon, 16)),
           h('span', { class: 'prov-text' },
-            h('span', { class: 'prov-name' }, h('span', { text: p.name }), p.recommended ? h('span', { class: 'prov-rec', text: 'Empfohlen' }) : null),
+            h('span', { class: 'prov-name' }, h('span', { text: p.name }), p.recommended ? h('span', { class: 'badge badge-accent prov-rec' }, icon('star', 11), h('span', { text: 'Empfohlen' })) : null),
             h('span', { class: 'prov-state pst-' + statusTone(st) }, st.state === 'checking' ? spinner(10) : h('span', { class: 'prov-dot' }), h('span', { text: statusText(st) }))));
         b.addEventListener('click', () => {
           engine = p.id; picked = true; ctx.cache.engine = engine;
@@ -129,7 +129,7 @@ export default {
     function idle() {
       clear(stage);
       if (ctx.cache.advisor) { showResult(ctx.cache.advisor, false); return; }
-      stage.appendChild(h('section', { class: 'card pad-24' }, emptyState({ icon: 'radar', title: 'Bereit für die Analyse', text: 'Wähle oben dein Ziel und starte. Die Smart-Analyse läuft komplett offline und dauert nur ein paar Sekunden.' })));
+      stage.appendChild(h('section', { class: 'card pad-24' }, emptyState({ icon: 'radar', title: 'Bereit für die Analyse', text: 'Wähl oben dein Ziel und die KI und starte die Analyse. Hier siehst du danach deine Punkte, was auffällt und einen fertigen Plan.' })));
     }
 
     // ---------- radar
@@ -180,7 +180,7 @@ export default {
       const t0 = Date.now();
       const job = usedEngine === 'offline'
         ? await ctx.runJob('advisor', { goal, text: text.value.trim() }, { overlay: false, quiet: true, onUpdate: (j) => r.update(j) })
-        : await ctx.runJob('ai', { provider: usedEngine, goal, text: text.value.trim(), allowRisky }, { overlay: false, quiet: true, onUpdate: (j) => r.update(j) });
+        : await ctx.runJob('ai', { provider: usedEngine, goal, text: text.value.trim(), allowRisky }, { overlay: false, quiet: true, quietError: () => el.isConnected, onUpdate: (j) => r.update(j) });
       const minShow = reducedMotion() ? 0 : 1400 - (Date.now() - t0);
       if (minShow > 0) await new Promise(res => setTimeout(res, minShow));
       running = false;
@@ -207,7 +207,7 @@ export default {
           const offline = button({ label: 'Smart-Analyse starten', icon: 'cpu', size: 'sm', variant: 'secondary', onClick: () => { engine = 'offline'; picked = true; renderProviders(); syncSetup(); start(); } });
           const fix = button({ label: 'Einstellungen öffnen', icon: 'cog', size: 'sm', variant: 'ghost', onClick: () => ctx.navigate('settings', { focus: usedEngine }) });
           stage.prepend(h('div', { class: 'note note-warn ai-error', 'data-testid': 'advisor-error' }, icon('alert', 15),
-            h('div', {}, h('strong', { text: name + '-Analyse fehlgeschlagen' }), h('p', { text: job.error || '' }), h('p', { class: 'fine', text: 'Die Smart-Analyse funktioniert immer – offline und sofort.' }), h('div', { class: 'prov-note-act' }, offline, fix))));
+            h('div', {}, h('strong', { text: 'Analyse mit ' + name + ' fehlgeschlagen' }), h('p', { text: job.error || '' }), h('p', { class: 'fine', text: 'Die Smart-Analyse funktioniert immer – offline und sofort.' }), h('div', { class: 'prov-note-act' }, offline, fix))));
           // a setup problem (logged out, key gone) shows on the chips too
           if (usedEngine === 'claude-code' || /Key|angemeldet/.test(job.error || '')) loadAiStatus(ctx, { force: true }).catch(() => {});
         }
@@ -234,7 +234,7 @@ export default {
       const findings = (r.findings || []).slice().sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
       const fGrid = h('div', { class: 'finding-grid' });
       for (const f of findings) {
-        const fixLabel = !f.fix ? null : f.fix.type === 'tweaks' ? 'Beheben (' + (f.fix.ids || []).length + ')' : f.fix.type === 'open' ? 'Einstellungen öffnen' : 'Hingehen';
+        const fixLabel = !f.fix ? null : f.fix.type === 'tweaks' ? 'Beheben (' + (f.fix.ids || []).length + ')' : f.fix.type === 'open' ? 'Einstellungen öffnen' : (PAGE_ALIAS[f.fix.page] || f.fix.page) === 'detweak' ? 'Mit Detweak prüfen' : 'Öffnen';
         fGrid.appendChild(h('article', { class: 'card finding sev-' + f.severity },
           h('div', { class: 'finding-top' }, severityBadge(f.severity)),
           h('h3', { class: 'finding-title', text: f.title }),

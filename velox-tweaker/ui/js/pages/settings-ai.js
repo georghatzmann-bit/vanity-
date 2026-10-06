@@ -132,7 +132,10 @@ export function aiSection(ctx) {
     const st = providerStatus(ctx, 'claude-code');
     const body = [];
     const msg = st.state === 'checking' ? 'VELOX sucht Claude Code auf deinem PC …' : st.message || (st.state === 'unknown' ? 'Noch nicht geprüft.' : '');
-    body.push(h('p', { class: 'ai-msg', 'data-testid': 'ai-cc-message', text: msg }));
+    // the state as a status box, styled like the "API-Key hinterlegt" box of the other cards
+    const tone = st.state === 'ready' ? 'ok' : (st.state === 'checking' || st.state === 'unknown') ? 'info' : 'warn';
+    body.push(h('div', { class: 'ai-msg is-' + tone, 'data-testid': 'ai-cc-message' },
+      st.state === 'checking' ? spinner(16) : icon(tone === 'ok' ? 'checkCircle' : tone === 'warn' ? 'alert' : 'info', 18), h('span', { text: msg })));
     if (st.steps && st.steps.length && st.state !== 'ready') body.push(stepList(st.steps));
     if ((ctx.mode || {}).desktopUser) body.push(h('div', { class: 'note note-info' }, icon('user', 15), h('span', { text: 'VELOX läuft mit dem Konto eines anderen Administrators. Claude Code wird trotzdem unter deinem Windows-Konto „' + ctx.mode.desktopUser + '“ gestartet – ohne Adminrechte.' })));
     const recheck = button({ label: st.state === 'ready' ? 'Erneut prüfen' : 'Erneut prüfen', icon: 'refresh', variant: 'secondary', size: 'sm', attrs: { 'data-testid': 'ai-cc-recheck' }, disabled: st.state === 'checking', onClick: async () => {
@@ -195,7 +198,7 @@ export function aiSection(ctx) {
   }
 
   function offlineCard() {
-    return card('offline', h('p', { class: 'ai-msg', text: 'Immer verfügbar. Rechnet auch die Punkte aus – für jede KI.' }));
+    return card('offline', h('div', { class: 'ai-msg is-ok' }, icon('checkCircle', 18), h('span', { text: 'Immer verfügbar. Rechnet auch die Punkte aus – für jede KI.' })));
   }
 
   function render() {

@@ -4,7 +4,7 @@ import { api, request, initToken, hasToken, on as onApi, pollJob, startHeartbeat
 import { icon } from './icons.js';
 import {
   h, clear, $, $$, toast, jobOverlay, confirmDialog, installEffects, countUp, plural, burst,
-  viewTransition, openLayer, reducedMotion, overlayOpen, spinner, button
+  viewTransition, openLayer, reducedMotion, overlayOpen, spinner, button, startHint
 } from './ui.js';
 import { tweakScore, textScore } from './search.js';
 
@@ -77,6 +77,9 @@ const ctx = {
   cache: { advisor: null, detweak: null, clean: null, startup: null, games: null, backups: null, goal: null, detweakCount: null },
   busy: null,
   scanning: false,
+  // > 0 while the UI re-reads state or catalog after a job (busy is already null then, but the
+  // pages are about to re-render); the UI tests wait for 0 before they touch anything
+  settling: 0,
   page: null,
   on(evt, fn) { if (!bus.has(evt)) bus.set(evt, new Set()); bus.get(evt).add(fn); return () => bus.get(evt).delete(fn); },
   emit(evt, data) { for (const fn of Array.from(bus.get(evt) || [])) { try { fn(data); } catch (e) { console.error(e); } } },
@@ -224,6 +227,7 @@ async function initialScan(firstRun, manual) {
 
 /** Re-reads bootstrap (applicability may change after a scan) without touching UI state. */
 async function reloadCatalog() {
+  ctx.settling++;
   try {
     const d = await api.bootstrap();
     ingest(d);
@@ -233,7 +237,7 @@ async function reloadCatalog() {
     renderNav();
     renderChips();
     renderBanners();
-  } catch { /* keep what we have */ }
+  } catch { /* keep what we have */ } finally { ctx.settling--; }
 }
 
 // ------------------------------------------------------------------ shell
@@ -311,7 +315,7 @@ function renderChips() {
   const m = ctx.mode || {};
   if (m.simulate) box.appendChild(h('span', { class: 'mode-chip chip-sim', title: 'Testmodus: VELOX zeigt alles an, verändert aber nichts an deinem PC.' }, icon('flask', 14), h('span', { class: 'chip-long', text: 'Testmodus – nichts wird verändert' }), h('span', { class: 'chip-short', text: 'Testmodus' })));
   if (m.admin) box.appendChild(h('span', { class: 'mode-chip chip-admin', title: 'VELOX läuft mit Administratorrechten.' }, icon('shieldCheck', 14), h('span', { class: 'chip-long', text: 'Administrator' }), h('span', { class: 'chip-short', text: 'Admin' })));
-  else if (m.admin === false) box.appendChild(h('span', { class: 'mode-chip chip-warn', title: 'Ohne Administratorrechte können viele Tweaks nicht gesetzt werden. Starte VELOX über Start.bat.' }, icon('alert', 14), h('span', { class: 'chip-long', text: 'Keine Adminrechte' }), h('span', { class: 'chip-short', text: 'Kein Admin' })));
+  else if (m.admin === false) box.appendChild(h('span', { class: 'mode-chip chip-warn', title: 'Ohne Administratorrechte können viele Tweaks nicht gesetzt werden. Starte VELOX über ' + startHint(false) + '.' }, icon('alert', 14), h('span', { class: 'chip-long', text: 'Keine Adminrechte' }), h('span', { class: 'chip-short', text: 'Kein Admin' })));
   if (ctx.scanning) box.appendChild(h('span', { class: 'mode-chip chip-scan', role: 'status', title: 'VELOX liest Hardware und Status neu ein. Es wird nichts verändert.' }, spinner(12), h('span', { class: 'chip-long', text: 'Scan läuft …' }), h('span', { class: 'chip-short', text: 'Scan …' })));
   const need = topNeed();
   if (need) {
@@ -478,19 +482,20 @@ function renderPending() {
 }
 function togglePendingList() {
   const pop = $('#pending-pop');
-  if (pop.hidden) { fillPendingList(); pop.hidden = false; $('#pending-list-btn').setAttribute('aria-expanded', 'true'); }
+  if (pop.hidden) { fillPendingList(); pop.hidden = false; $('#pending-list-btn').setAttribute('aria-expanded', 'true'); document.documentElement.classList.toggle('has-pending-pop', !pop.hidden); }
   else closePendingList(false);
 }
 function closePendingList(refocus) {
   const pop = $('#pending-pop');
   if (pop.hidden) return;
   pop.hidden = true;
+  document.documentElement.classList.remove('has-pending-pop');
   $('#pending-list-btn').setAttribute('aria-expanded', 'false');
   if (refocus) $('#pending-list-btn').focus();
 }
 function fillPendingList() {
   const pop = clear($('#pending-pop'));
-  if (!ctx.pending.size) { pop.hidden = true; return; }
+  if (!ctx.pending.size) { pop.hidden = true; document.documentElement.classList.remove('has-pending-pop'); return; }
   for (const [id, on] of ctx.pending) {
     const t = ctx.byId.get(id);
     const rm = h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Entfernen: ' + (t ? t.name : id) }, icon('x', 14));
@@ -618,6 +623,7 @@ async function follow(jobId, type, opts = {}) {
   // a reset command) - the job itself goes on with the next step
   const panel = overlay ? Array.from(document.querySelectorAll('.layer .dialog.job')).pop() : null;
   let skipBtn = null;
+  let skipHint = null;
   const syncSkip = (j) => {
     if (!panel) return;
     const want = j.status === 'running' && !!j.skippable;
@@ -629,8 +635,12 @@ async function follow(jobId, type, opts = {}) {
         request('POST', '/api/jobs/' + encodeURIComponent(jobId) + '/skip').catch(() => {});
       } });
       const foot = panel.querySelector('.dialog-foot');
-      if (foot) foot.insertBefore(skipBtn, foot.firstChild);
-    } else if (!want && skipBtn) { skipBtn.remove(); skipBtn = null; }
+      if (foot) {
+        skipHint = h('p', { class: 'job-skip-hint', text: 'Dauert es zu lange? Dann lass nur diesen Schritt aus – der Rest läuft weiter.' });
+        foot.insertBefore(skipBtn, foot.firstChild);
+        foot.insertBefore(skipHint, skipBtn);
+      }
+    } else if (!want && skipBtn) { skipBtn.remove(); skipBtn = null; if (skipHint) { skipHint.remove(); skipHint = null; } }
   };
   let job;
   try {
@@ -660,7 +670,10 @@ async function follow(jobId, type, opts = {}) {
   if (meta.mutating && job.status !== 'error') { ctx.cache.backups = null; ctx.cache.restorePoints = null; ctx.emit('backups'); }
 
   if (job.status === 'done' && ['apply', 'detweak', 'restore', 'run-action'].includes(type)) celebrate(type, job.result || {});
-  if (job.status === 'error') toast({ type: 'error', title: failTitle(type), text: friendlyError(job.error) });
+  // quietError: the page shows the error itself (e.g. the KI-Optimierer with its way out) - a sticky
+  // toast saying the same would only cover the content
+  const quietError = typeof opts.quietError === 'function' ? opts.quietError() : !!opts.quietError;
+  if (job.status === 'error') { if (!quietError) toast({ type: 'error', title: failTitle(type), text: friendlyError(job.error) }); }
   else if (job.status === 'cancelled') toast({ type: 'info', title: 'Abgebrochen', text: 'Bereits erledigte Schritte bleiben gesichert.' });
   else if (!opts.quiet) resultToast(type, job.result || {}, opts);
   return job;
@@ -733,7 +746,14 @@ function resultToast(type, r, opts = {}) {
       });
       break;
     }
-    case 'restorepoint': toast({ type: r.ok === false ? 'warn' : 'ok', title: r.ok === false ? (r.skipped ? 'Wiederherstellungspunkt übersprungen' : 'Kein Wiederherstellungspunkt') : 'Wiederherstellungspunkt erstellt', text: r.message || '' }); break;
+    case 'restorepoint': {
+      const title = r.ok === false ? (r.skipped ? 'Wiederherstellungspunkt übersprungen' : 'Kein Wiederherstellungspunkt') : 'Wiederherstellungspunkt erstellt';
+      // the backend's message often repeats the title as its first sentence: say it only once
+      let text = String(r.message || '');
+      if (text.toLowerCase().startsWith(title.toLowerCase())) text = text.slice(title.length).replace(/^[\s.:–-]+/, '');
+      toast({ type: r.ok === false ? 'warn' : 'ok', title, text });
+      break;
+    }
     case 'restorepoint-clean': toast({ type: r.failed ? 'warn' : 'ok', title: r.removed ? plural(r.removed, 'alter Wiederherstellungspunkt', 'alte Wiederherstellungspunkte') + ' gelöscht' : 'Nichts zu löschen', text: r.failed ? r.failed + ' konnten nicht gelöscht werden' + (r.errors && r.errors.length ? ': ' + friendlyError(r.errors[0]) : '.') : 'Der erste VELOX-Wiederherstellungspunkt bleibt als Sicherheitsnetz erhalten.' }); break;
     case 'restore': toast({ type: r.failed ? 'warn' : 'ok', title: plural(r.restored || 0, 'Wert', 'Werte') + ' wiederhergestellt', text: r.failed ? r.failed + ' konnten nicht zurückgesetzt werden' + (r.errors && r.errors.length ? ': ' + friendlyError(r.errors[0]) : '.') : 'Dein PC ist wieder auf dem Stand vor dieser Sicherung.' + needsSuffix(r.needs).replace(' · ', ' ') }); break;
     case 'explorer-restart': toast({ type: 'ok', title: 'Explorer neu gestartet' }); break;
@@ -755,6 +775,7 @@ async function undoBackups(ids) {
 }
 
 async function refreshState() {
+  ctx.settling++;
   try {
     const s = await api.state();
     ctx.state = normalizeState(s);
@@ -766,7 +787,7 @@ async function refreshState() {
     if (changed) ctx.emit('pending');
     renderChips();
     renderBanners();
-  } catch { /* connection handling lives in api.js */ }
+  } catch { /* connection handling lives in api.js */ } finally { ctx.settling--; }
 }
 
 async function saveSettings(partial, { silent } = {}) {
@@ -818,8 +839,8 @@ function showEnded(reason) {
   const el = $('#ended');
   const title = reason === 'token' ? 'Sitzung ungültig' : 'Keine Verbindung zu VELOX';
   const text = reason === 'token'
-    ? 'Dieses Fenster gehört zu einer alten VELOX-Sitzung. Du kannst es schließen – das aktuelle VELOX-Fenster öffnet sich, wenn du VELOX über Start.bat startest.'
-    : 'VELOX wurde beendet oder antwortet gerade nicht. Kommt es zurück, geht es hier von selbst weiter. Sonst kannst du dieses Fenster schließen und VELOX über Start.bat neu starten.';
+    ? 'Dieses Fenster gehört zu einer alten VELOX-Sitzung. Du kannst es schließen – das aktuelle VELOX-Fenster öffnet sich, wenn du VELOX über ' + startHint(!!(ctx.mode || {}).simulate) + ' startest.'
+    : 'VELOX wurde beendet oder antwortet gerade nicht. Kommt es zurück, geht es hier von selbst weiter. Sonst kannst du dieses Fenster schließen und VELOX über ' + startHint(!!(ctx.mode || {}).simulate) + ' neu starten.';
   clear(el).appendChild(h('div', { class: 'ended-card' },
     h('div', { class: 'ended-icon' }, icon('power', 30)),
     h('h1', { class: 'ended-title', text: title }),
@@ -848,7 +869,7 @@ function showBootError(msg) {
 
 function plainBootError(msg) {
   const m = String(msg || '');
-  if (/autoris|token/i.test(m)) return 'Dieses Fenster gehört zu einer alten VELOX-Sitzung. Schließe es und starte VELOX über Start.bat.';
+  if (/autoris|token/i.test(m)) return 'Dieses Fenster gehört zu einer alten VELOX-Sitzung. Schließ es und starte VELOX über ' + startHint(!!(ctx.mode || {}).simulate) + '.';
   if (/^Anfrage fehlgeschlagen \(5/.test(m)) return 'VELOX hatte beim Start einen internen Fehler. Versuch es noch einmal; hilft das nicht, starte VELOX neu.';
   return m || 'Unbekannter Fehler.';
 }
@@ -929,7 +950,7 @@ function openPalette() {
       const next = !ctx.effective(it.t.id);
       layer.close(true);
       const ok = await stage(it.t.id, next);
-      if (ok) toast({ type: 'ok', title: (ctx.pending.has(it.t.id) ? 'Vorgemerkt: ' : 'Zurückgenommen: ') + it.t.name, text: ctx.pending.has(it.t.id) ? (next ? 'Wird eingeschaltet' : 'Wird ausgeschaltet') + ', sobald du unten auf "Anwenden" klickst.' : 'Die vorgemerkte Änderung wurde entfernt.' });
+      if (ok) toast({ type: 'ok', title: (ctx.pending.has(it.t.id) ? 'Vorgemerkt: ' : 'Zurückgenommen: ') + it.t.name, text: ctx.pending.has(it.t.id) ? (next ? 'Wird eingeschaltet' : 'Wird ausgeschaltet') + ', sobald du unten auf „Anwenden“ klickst.' : 'Die vorgemerkte Änderung wurde entfernt.' });
       return;
     }
     layer.close(true);

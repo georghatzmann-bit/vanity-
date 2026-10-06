@@ -144,7 +144,9 @@ async function ready(page, timeout = 60000) {
   }
 }
 async function idle(page, timeout = 60000) {
-  await page.waitForFunction(() => window.__velox && !window.__velox.busy && !document.querySelector('.layer .job[data-job="running"]'), null, { timeout });
+  // not busy AND settled: after a job the app still re-reads state / catalog (ctx.settling) and the
+  // pages re-render - a click in that window lands on a row that is about to be replaced
+  await page.waitForFunction(() => window.__velox && !window.__velox.busy && !window.__velox.settling && !document.querySelector('.layer .job[data-job="running"]'), null, { timeout });
   // A finished job overlay may stay open on purpose (warnings in the log, long or repair jobs):
   // read like a user would and close it.
   await page.waitForFunction(() => !document.querySelector('.layer .job') || document.querySelector('.layer:not(.closing) .job .job-close:not([hidden])'), null, { timeout: 5000 });
@@ -167,6 +169,11 @@ async function clickLikeAMouse(page, sel) {
   const hit = await page.evaluate(({ x, y, s }) => { const el = document.elementFromPoint(x, y); return el && el.closest(s) ? true : (el ? el.tagName + '.' + el.className : 'nothing'); }, { x: box.x, y: box.y, s: sel });
   assert(hit === true, sel + ' is covered by ' + hit);
   await page.mouse.click(box.x, box.y);
+}
+/** A number shown with countUp() (ui.js), read once its animation has ended. */
+async function settledNumber(page, sel) {
+  await page.waitForFunction((s) => { const e = document.querySelector(s); return !!e && !e._cu; }, sel, { timeout: 5000 });
+  return Number((await page.textContent(sel)).replace(/\./g, '').trim());
 }
 async function waitJobDone(page, timeout = 60000) {
   await page.waitForSelector('.layer .job', { timeout: 10000 });
@@ -316,13 +323,43 @@ test('tweaks: details, search, filters, recommended, discard', async (t) => {
   if (btn) {
     await btn.click();
     await page.waitForSelector('#pending.show');
-    const n = Number(await page.textContent('#pending-count'));
-    assert(n > 0, 'recommended staged');
+    // the counter counts up for 300 ms: read it once it has settled, never mid-animation
+    const n = await settledNumber(page, '#pending-count');
+    assert(n > 0 && n === await page.evaluate(() => window.__velox.pending.size), 'recommended staged: ' + n);
     await page.click('#pending-list-btn');
     await page.waitForSelector('#pending-pop:not([hidden]) .pending-item');
     await page.click('#pending-discard');
     await page.waitForSelector('#pending:not(.show)');
   }
+});
+
+// Root cause of the old "details, search, filters" flake: after the first-run scan the job is no
+// longer busy, but the app still re-reads state and catalog and then re-renders the tweak list - a
+// row opened in that window snapped shut (waitForSelector on the open details then timed out).
+// Deterministic version of that race: open a row, then make the app re-read the catalog (a rescan,
+// as from the palette) and check the row survives the re-render.
+test('tweaks: open details survive the catalog re-render after a scan', async (t) => {
+  const page = await openApp(t, 'tweaks');
+  const id = await firstRow(page, {});
+  await page.click(rowSel(id) + ' .trow-expand');
+  await page.waitForSelector(rowSel(id) + ' .trow-details:not([hidden])');
+  // mark the row element: after the re-render it must be a new element that is open again
+  await page.$eval(rowSel(id), r => { r.dataset.before = '1'; });
+  const reloads = await page.evaluate(() => new Promise((res) => {
+    let n = 0; const off = window.__velox.on('catalog', () => { n++; });
+    window.__velox.rescan();
+    const wait = () => (window.__velox.scanning || window.__velox.settling) ? setTimeout(wait, 50) : (off(), res(n));
+    setTimeout(wait, 50);
+  }));
+  assert(reloads > 0, 'the rescan re-read the catalog');
+  await idle(page);
+  assert(await page.$eval(rowSel(id), r => !r.dataset.before), 'the list really was re-rendered');
+  assert(await page.$eval(rowSel(id) + ' .trow-details', d => !d.hidden), 'details still open after the list re-rendered');
+  assert((await page.getAttribute(rowSel(id) + ' .trow-expand', 'aria-expanded')) === 'true', 'aria-expanded kept');
+  // closing it is remembered as well
+  await page.click(rowSel(id) + ' .trow-expand');
+  await page.evaluate(() => window.__velox.emit('catalog'));
+  assert(await page.$eval(rowSel(id) + ' .trow-details', d => d.hidden), 'a closed row stays closed');
 });
 
 test('tweaks: risky toggle needs the confirm checkbox', async (t) => {
@@ -617,7 +654,8 @@ test('KI-Optimierer: Claude Code empfohlen und vorausgewählt, Fortschritt, Fehl
     await page.click('[data-testid="advisor-start"]');
     await page.waitForSelector('[data-testid="advisor-error"]', { timeout: 30000 });
     const err = await page.textContent('[data-testid="advisor-error"]');
-    assert(/Claude Code-Analyse fehlgeschlagen/.test(err) && /Nutzungslimit/.test(err), 'clear German error: ' + err);
+    assert(/Analyse mit Claude Code fehlgeschlagen/.test(err) && /Nutzungslimit/.test(err), 'clear German error: ' + err);
+    assert(!/KI-Analyse fehlgeschlagen/.test(await toastText(page)), 'the page shows the error once, no extra sticky toast');
     await page.click('[data-testid="advisor-error"] .btn >> text=Smart-Analyse starten');
     await page.waitForSelector('[data-testid="advisor-result"]', { timeout: 60000 });
     assert(/Smart-Analyse/.test(await page.textContent('[data-testid="advisor-result"] .eyebrow')), 'offline fallback ran');
@@ -661,7 +699,7 @@ test('Detweak: scan lists foreign tweaks, reset runs and shows a summary', async
   await page.waitForSelector('[data-testid="detweak-result"]', { timeout: 60000 });
   await idle(page);
   await page.waitForTimeout(1000);
-  const reset = await page.textContent('[data-testid="detweak-result"] .res-num');
+  const reset = await settledNumber(page, '[data-testid="detweak-result"] .res-num');
   assert(Number(reset) === rows.length, 'values reset = values selected (' + reset + ' vs ' + rows.length + ')');
   await shot(page, 'state-detweak-result');
 });

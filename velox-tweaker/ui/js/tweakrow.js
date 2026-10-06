@@ -119,10 +119,14 @@ export function tweakRow(ctx, t, opts = {}) {
     details.hidden = !open;
     expand.setAttribute('aria-expanded', String(open));
     row.classList.toggle('open', open);
+    // opts.openIds (a Set owned by the page) remembers what the user opened, so a re-render (the
+    // catalog is re-read after a scan) does not snap the details shut under the pointer
+    if (opts.openIds) { if (open) opts.openIds.add(t.id); else opts.openIds.delete(t.id); }
   };
   expand.addEventListener('click', toggleDetails);
   main.addEventListener('click', (e) => { if (e.target.closest('button, a, input, label')) return; toggleDetails(); });
   updateRow(ctx, row, t);
+  if (opts.openIds && opts.openIds.has(t.id)) toggleDetails();
   return row;
 }
 

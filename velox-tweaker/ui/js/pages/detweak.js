@@ -1,7 +1,7 @@
 // Detweak: scan for values other tweakers changed, pick what to reset, optionally apply a preset or
 // the last AI plan afterwards.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, badge, confirmDialog, emptyState, stagger, plural, countUp, toast, fmtRelative, append, reducedMotion } from '../ui.js';
+import { h, clear, button, checkbox, badge, riskBadge, confirmDialog, emptyState, stagger, plural, countUp, toast, fmtRelative, append, reducedMotion } from '../ui.js';
 import { fmtValue, describeAction } from '../tweakrow.js';
 
 export default {
@@ -103,6 +103,10 @@ export default {
       clear(body);
       document.documentElement.classList.remove('has-dock');
       scanBtn.querySelector('.btn-label').textContent = ctx.cache.detweak ? 'Neu scannen' : 'Scan starten';
+      // once there is a result, the red "zurücksetzen" bar is the next step: the rescan steps back
+      const scanned = !!ctx.cache.detweak;
+      scanBtn.classList.toggle('btn-primary', !scanned); scanBtn.classList.toggle('btn-brand', !scanned);
+      scanBtn.classList.toggle('btn-secondary', scanned);
       if (lastResult) body.appendChild(resultCard(lastResult));
       const note = thenNote();
       if (note) body.appendChild(note);
@@ -161,7 +165,7 @@ export default {
       // options
       const cmds = data.commands.map(c => {
         const cb = checkbox({ checked: cmdSel.has(c.id), label: c.label, desc: c.desc, onChange: (v) => { if (v) cmdSel.add(c.id); else cmdSel.delete(c.id); syncCount(); } });
-        const badges = [c.needs === 'reboot' ? badge('Neustart', 'neutral', 'restart') : null, c.risk && c.risk !== 'safe' ? badge(c.risk === 'risky' ? 'Riskant' : 'Mittel', c.risk === 'risky' ? 'error' : 'warn', 'alert') : null].filter(Boolean);
+        const badges = [c.needs === 'reboot' ? badge('Neustart', 'neutral', 'restart') : null, c.risk && c.risk !== 'safe' ? riskBadge(c.risk) : null].filter(Boolean);
         return h('div', { class: 'dt-cmd', 'data-cmd': c.id }, cb, badges.length ? h('div', { class: 'dt-cmd-badges' }, badges) : null);
       });
       const select = h('select', { class: 'select', 'aria-label': 'Danach anwenden', 'data-testid': 'detweak-then' },
@@ -201,11 +205,12 @@ export default {
         countEl.textContent = nV + ' von ' + data.items.length + ' ausgewählt';
         const parts = [plural(nV, 'Wert', 'Werte')];
         if (nC) parts.push(plural(nC, 'Befehl', 'Befehle'));
-        goBtn.querySelector('.btn-label').textContent = 'Ausgewählte zurücksetzen (' + parts.join(' + ') + ')';
-        goBtn.disabled = !nV && !nC;
+        const none = !nV && !nC;
+        goBtn.querySelector('.btn-label').textContent = none ? 'Nichts ausgewählt' : 'Ausgewählte zurücksetzen (' + parts.join(' + ') + ')';
+        goBtn.disabled = none;
         clear(sumEl).append(
-          h('strong', { text: parts.join(' + ') + ' ausgewählt' }),
-          h('span', { class: 'fine', text: (nC ? 'Befehle: ' + data.commands.filter(c => cmdSel.has(c.id)).map(c => c.label).join(', ') + '. ' : '') + (thenApply ? 'Danach: ' + thenName() + '. ' : '') + 'Alles wird vorher gesichert.' }));
+          h('strong', { text: none ? 'Nichts ausgewählt' : parts.join(' + ') + ' ausgewählt' }),
+          h('span', { class: 'fine', text: none ? 'Setz oben einen Haken bei allem, was zurück auf Windows-Standard soll.' : (nC ? 'Befehle: ' + data.commands.filter(c => cmdSel.has(c.id)).map(c => c.label).join(', ') + '. ' : '') + (thenApply ? 'Danach: ' + thenName() + '. ' : '') + 'Alles wird vorher gesichert.' }));
       }
       function syncChecks() { for (const c of checks) c.cb.input.checked = selected.has(c.key); syncCount(); }
       syncCount();
@@ -231,6 +236,8 @@ export default {
       const remaining = data.items.filter(i => !selected.has(i.key));
       ctx.cache.detweak = Object.assign({}, data, { items: remaining });
       selected.clear();
+      // the commands just ran: offering "0 Werte + 2 Befehle" again right away would only repeat them
+      for (const c of cmdList) cmdSel.delete(c.id);
       publishCount();
       toast({ type: lastResult.failed ? 'warn' : 'ok', title: ctx.detweakLine(lastResult), text: (lastResult.failed ? lastResult.failed + ' fehlgeschlagen. ' : '') + 'Gesichert unter „Sicherungen“.' + ctx.needsSuffix(lastResult.needs).replace(' · ', ' ') });
       render(true);

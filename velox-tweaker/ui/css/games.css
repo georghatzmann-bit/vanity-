@@ -3,9 +3,9 @@
 
 /* ------------------------------------------------------------------ head: text, counter, actions */
 .games-head { grid-template-columns: minmax(0, 1fr) auto auto; }
-.games-stat { display: flex; align-items: center; gap: 12px; padding: 8px 16px 8px 12px; border-radius: var(--r-ctl); background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px var(--hair); }
+.games-stat { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-radius: var(--r-ctl); background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px var(--hair); }
 .games-stat-num {
-  min-width: 2ch; text-align: right;
+  text-align: center;
   font: 700 var(--fs-display)/1 var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -.02em;
   background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent;
 }

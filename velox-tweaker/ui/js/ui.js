@@ -319,7 +319,9 @@ export function countUp(el, to, { from, duration = 900, format = (v) => fmtNumbe
   if (reducedMotion() || start === to || duration <= 0) { el.textContent = format(to); return; }
   const t0 = performance.now();
   const step = (now) => {
-    const p = Math.min(1, (now - t0) / duration);
+    // Chrome hands rAF the frame's begin time, which can lie before t0: without the floor the
+    // first frame eases to below the start value (a pending bar briefly showing "-46").
+    const p = Math.max(0, Math.min(1, (now - t0) / duration));
     const e = 1 - Math.pow(1 - p, 3);
     el.textContent = format(start + (to - start) * e);
     if (p < 1) el._cu = requestAnimationFrame(step); else el._cu = 0;
@@ -436,6 +438,17 @@ function trapFocus(e, panel) {
   else if (!panel.contains(document.activeElement)) { first.focus(); e.preventDefault(); }
 }
 export function overlayOpen() { return stack.length > 0; }
+/**
+ * Where the user starts VELOX: the start menu entry of VeloxSetup.exe (VELOX.exe, WebView2), or
+ * Start.bat / Start-Testmodus.bat when VELOX runs from the unpacked folder or VELOX.exe fell back
+ * to an Edge window.
+ */
+export function startHint(test) {
+  const menu = test ? '„VELOX Testmodus“' : '„VELOX“';
+  if (window.chrome && window.chrome.webview) return menu + ' im Startmenü';
+  return menu + ' im Startmenü (oder ' + (test ? 'Start-Testmodus.bat' : 'Start.bat') + ')';
+}
+
 
 export function openLayer({ kind, panel, dismissible = true, onClose, label }) {
   const root = document.getElementById('layers');
@@ -481,9 +494,15 @@ export function openLayer({ kind, panel, dismissible = true, onClose, label }) {
   requestAnimationFrame(focusFirst); // content added by the caller right after opening
   return entry;
 }
-/** :root.has-drawer lifts the toasts above the drawer's footer so they never cover its buttons. */
+/**
+ * :root.has-drawer lifts the toasts above the drawer's footer so they never cover its buttons;
+ * :root.has-modal (a centred dialog, the job overlay or the palette) puts them behind the backdrop -
+ * at 900 px a toast would otherwise sit on the dialog's own buttons.
+ */
 function syncLayerClasses() {
-  document.documentElement.classList.toggle('has-drawer', stack.some(e => e.el && e.el.classList.contains('layer-drawer')));
+  const isDrawer = (e) => e.el && e.el.classList.contains('layer-drawer');
+  document.documentElement.classList.toggle('has-drawer', stack.some(isDrawer));
+  document.documentElement.classList.toggle('has-modal', stack.some(e => !isDrawer(e)));
 }
 /** Puts focus back where it was; falls back to #main when that element is gone or hidden. */
 function restoreFocus(prev) {
@@ -558,6 +577,14 @@ export function jobOverlay({ title, subtitle, cancellable, onCancel, icon: ic = 
     logBox,
     h('div', { class: 'dialog-foot' }, cancelBtn, closeBtn));
   const entry = openLayer({ kind: 'dialog', panel, dismissible: false, label: title });
+  // a step that starts with the title ("Wiederherstellungspunkt wird erstellt – das kann …") would
+  // say the headline twice: keep only what it adds
+  const stepText = (txt) => {
+    const t = String(txt);
+    if (!title || !t.toLowerCase().startsWith(String(title).toLowerCase())) return t;
+    const rest = t.slice(String(title).length).replace(/^[\s.:,–-]+/, '');
+    return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : t;
+  };
   let shown = 0;
   let lastPct = 0;
   function update(job) {
@@ -565,7 +592,7 @@ export function jobOverlay({ title, subtitle, cancellable, onCancel, icon: ic = 
     if (p !== lastPct) { countUp(pct, p, { from: lastPct, duration: 300, format: (v) => Math.round(v) + ' %' }); lastPct = p; }
     bar.style.transform = 'scaleX(' + Math.max(0.02, p / 100) + ')';
     panel.querySelector('.pbar').setAttribute('aria-valuenow', String(p));
-    if (job.step) step.textContent = job.step;
+    if (job.step) step.textContent = stepText(job.step);
     const lines = job.log || [];
     for (; shown < lines.length; shown++) {
       const l = lines[shown];

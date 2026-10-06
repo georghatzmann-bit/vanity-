@@ -8,7 +8,7 @@ export const OWN_PAGES = new Set(['cleanup', 'repair', 'apps']);
 
 const FILTERS = [
   { key: 'risk', label: 'Risiko', options: [['safe', 'Sicher'], ['moderate', 'Mittel'], ['risky', 'Riskant']] },
-  { key: 'status', label: 'Status', options: [['on', 'Aktiv'], ['off', 'Aus'], ['foreign', 'Fremd geändert'], ['na', 'Nicht verfügbar']] },
+  { key: 'status', label: 'Status', options: [['on', 'Aktiv'], ['off', 'Aus'], ['foreign', 'Fremd geändert'], ['na', 'Passt nicht']] },
   { key: 'impact', label: 'Wirkung', options: [['3', 'Stark'], ['2', 'Spürbar'], ['1', 'Kaum']] }
 ];
 
@@ -21,6 +21,7 @@ export default {
     let query = (opts && opts.query) || '';
     const active = { risk: new Set(), status: new Set(), impact: new Set() };
     let renderer = null;
+    const openIds = new Set(); // rows whose details the user opened (survive a re-render)
 
     const inScope = (t) => !OWN_PAGES.has(t.category) && ctx.catById.has(t.category);
 
@@ -61,11 +62,13 @@ export default {
     search.addEventListener('keydown', (e) => { if (e.key === 'Escape' && search.value) { e.stopPropagation(); clearBtn.click(); } });
     const searchBox = h('div', { class: 'search' }, icon('search', 17), search, clearBtn);
 
-    const chipRow = h('div', { class: 'chip-row', role: 'group', 'aria-label': 'Filter' });
+    const chipRow = h('div', { class: 'chip-row tw-chips', role: 'group', 'aria-label': 'Filter' });
     const resetChip = h('button', { class: 'chip chip-reset', type: 'button', hidden: true }, icon('x', 13), h('span', { text: 'Filter zurücksetzen' }));
     resetChip.addEventListener('click', () => { for (const s of Object.values(active)) s.clear(); for (const c of chipRow.querySelectorAll('.chip[aria-pressed]')) c.setAttribute('aria-pressed', 'false'); refresh(); });
+    // one group per filter (label + its chips): a group wraps as a whole, so no line ever starts
+    // with a lone chip or a stray divider
     for (const g of FILTERS) {
-      chipRow.appendChild(h('span', { class: 'chip-label', text: g.label }));
+      const grp = h('span', { class: 'chip-group', role: 'group', 'aria-label': g.label }, h('span', { class: 'chip-label', 'aria-hidden': 'true', text: g.label }));
       for (const [val, label] of g.options) {
         const c = h('button', { class: 'chip', type: 'button', 'aria-pressed': 'false', 'data-filter': g.key + ':' + val }, h('span', { class: 'chip-dot' }), h('span', { text: label }));
         c.addEventListener('click', () => {
@@ -74,11 +77,10 @@ export default {
           if (on) active[g.key].add(val); else active[g.key].delete(val);
           refresh();
         });
-        chipRow.appendChild(c);
+        grp.appendChild(c);
       }
-      chipRow.appendChild(h('span', { class: 'chip-sep', 'aria-hidden': 'true' }));
+      chipRow.appendChild(grp);
     }
-    chipRow.lastChild.remove();
     chipRow.appendChild(resetChip);
 
     // ---------- head + list
@@ -87,6 +89,7 @@ export default {
     const list = h('div', { class: 'tw-list', 'data-testid': 'tweak-list' });
 
     const scoreOf = new Map();
+    let lastHits = []; // what the list shows right now (the head counts search hits from it)
     function matches(t) {
       if (active.risk.size && !active.risk.has(t.risk)) return false;
       if (active.impact.size && !active.impact.has(String(t.impact || 1))) return false;
@@ -109,26 +112,35 @@ export default {
       const scope = ctx.toggles().filter(t => inScope(t) && (cat === 'all' || t.category === cat));
       const appl = ctx.countable(t => inScope(t) && (cat === 'all' || t.category === cat));
       const on = appl.filter(t => ctx.isApplied(t.id)).length;
+      const hits = lastHits;
+      const hitsOn = query ? hits.filter(t => (t.kind || 'toggle') === 'toggle' && ctx.applicable(t) && ctx.isApplied(t.id)).length : 0;
       const rec = recommended();
-      const recBtn = button({ label: rec.length ? 'Empfohlene aktivieren (' + rec.length + ')' : 'Empfohlene sind aktiv', icon: rec.length ? 'sparkles' : 'check', variant: rec.length ? 'primary' : 'secondary', size: 'sm', disabled: !rec.length || !!query, attrs: { 'data-testid': 'recommend-btn', title: 'Merkt alle sicheren Tweaks dieser Kategorie vor, die zu deinem PC passen und noch nicht aktiv sind.' },
-        onClick: async () => { const n = await ctx.stageMany(rec.map(t => t.id), true); if (n) toast({ type: 'ok', title: plural(n, 'Tweak', 'Tweaks') + ' vorgemerkt', text: 'Nur sichere Tweaks. Klick unten auf "Anwenden", um sie zu übernehmen.' }); } });
+      // nothing left to recommend: either all of them are already on, or they wait in the pending bar
+      const recStaged = !rec.length && ctx.toggles().some(t => inScope(t) && (cat === 'all' || t.category === cat) && t.risk === 'safe' && ctx.pending.get(t.id) === true);
+      const recBtn = button({ label: rec.length ? 'Empfohlene aktivieren (' + rec.length + ')' : recStaged ? 'Empfohlene sind vorgemerkt' : 'Empfohlene sind aktiv', icon: rec.length ? 'sparkles' : 'check', variant: rec.length ? 'primary' : 'secondary', size: 'sm', disabled: !rec.length || !!query, attrs: { 'data-testid': 'recommend-btn', title: 'Merkt alle sicheren Tweaks dieser Kategorie vor, die zu deinem PC passen und noch nicht aktiv sind.' },
+        onClick: async () => { const n = await ctx.stageMany(rec.map(t => t.id), true); if (n) toast({ type: 'ok', title: plural(n, 'Tweak', 'Tweaks') + ' vorgemerkt', text: 'Nur sichere Tweaks. Klick unten auf „Anwenden“, um sie zu übernehmen.' }); } });
       append(head, 
-        h('div', { class: 'tw-head-icon' }, icon(c.icon || 'layers', 22)),
+        h('div', { class: 'tw-head-icon' }, icon(query ? 'search' : (c.icon || 'layers'), 22)),
         h('div', { class: 'tw-head-text' },
           h('h2', { class: 'tw-head-title', text: query ? 'Suche: „' + query + '“' : c.name }),
-          h('p', { class: 'tw-head-desc', text: query ? 'Ergebnisse aus allen Bereichen.' : c.desc || '' }),
-          h('div', { class: 'tw-head-stats' },
+          h('p', { class: 'tw-head-desc', text: query ? (hits.length ? 'Ergebnisse aus allen Bereichen, die besten zuerst.' : 'Kein Tweak passt zu deiner Suche.') : c.desc || '' }),
+          // searching: the numbers describe the hits, not the category that happens to be selected
+          query ? h('div', { class: 'tw-head-stats' },
+            h('span', { class: 'mini-stat' }, h('strong', { text: fmtNumber(hits.length) }), ' Treffer'),
+            hitsOn ? h('span', { class: 'mini-stat muted', text: fmtNumber(hitsOn) + ' davon aktiv' }) : null)
+          : h('div', { class: 'tw-head-stats' },
             h('span', { class: 'mini-stat' }, h('strong', { text: fmtNumber(on) }), ' von ' + fmtNumber(appl.length) + ' aktiv'),
             appl.length < scope.length ? h('span', { class: 'mini-stat muted', text: (scope.length - appl.length) + ' passen nicht zu deinem PC' }) : null)),
-        h('div', { class: 'tw-head-actions' }, recBtn));
+        query ? null : h('div', { class: 'tw-head-actions' }, recBtn));
     }
 
-    function refresh() {
+    function refresh(animate = true) {
       if (renderer) renderer.cancel();
       ctx.cache.tweaksCat = cat;
       scoreOf.clear();
       const all = ctx.tweaks.filter(t => inScope(t) && (query || cat === 'all' || t.category === cat));
       const filtered = all.filter(matches);
+      lastHits = filtered;
       const anyFilter = Object.values(active).some(s => s.size);
       resetChip.hidden = !anyFilter;
       // Counted like the head and the rail: toggles that fit this PC; one-off actions separately.
@@ -152,7 +164,7 @@ export default {
         return;
       }
       renderer = renderList(ctx, list, sorted, {
-        showCategory: !!query,
+        showCategory: !!query, openIds, animate,
         groupBy: query ? null : cat === 'all' ? (t) => ctx.catName(t.category) : (t) => t.group || null
       });
     }
@@ -179,7 +191,8 @@ export default {
     const onChange = () => { if (renderer) renderer.update(); railCounts(); fillHead(); };
     ctx.on('statuses', onChange);
     ctx.on('pending', onChange);
-    ctx.on('catalog', () => { railCounts(); refresh(); });
+    // the catalog is re-read after every scan: same filters, same open rows, no entrance animation
+    ctx.on('catalog', () => { railCounts(); refresh(false); });
     return { destroy() { if (renderer) renderer.cancel(); } };
   }
 };
