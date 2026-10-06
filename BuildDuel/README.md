@@ -84,14 +84,16 @@ Oben links steht die **FPS**-Zahl (Bilder pro Sekunde, grün ab 55) und **„Log
 
 Auf dem Übungsplatz hast du **unendlich Material**. (In den späteren Modi kostet jedes Teil 10 Material; ohne Material wird der Geist rot.)
 
-- **Der Geist:** Blau = hier geht's. Rot = geht nicht (Platz belegt, kein Material, jemand steht im Weg oder das Teil hätte keinen Halt).
+- **Der Geist:** Blau = hier geht's. Rot = geht nicht (kein Material, jemand steht im Weg, das Teil hätte keinen Halt oder du bist am Rand des Platzes bzw. zu hoch). Steht dort schon ein Teil, siehst du nur einen dünnen roten Rahmen. Eine **Wand** geht immer – stehst du in ihr, schiebt sie dich zur Seite.
 - **Wohin kommt das Teil?** Die Wand an die Kante vor dir, Boden und Rampe in das Feld vor dir, das Dach über dich. Schaust du nach oben, kommt das Teil eine Etage höher. Schaust du auf den Boden, kommt es dorthin.
 - **Aufbau:** Neue Teile sind kurz durchsichtig und wachsen auf volle Stärke (Holz 1 s, Stein 2 s, Metall 3 s). Schüsse halten sie aber sofort auf.
 - **Halt:** Jedes Teil muss mit dem Boden verbunden sein. Wird das unterste Teil eines Turms zerstört, fällt alles darüber in sich zusammen.
 - **Box (Schutz):** In einer Zelle stehen bleiben, Wand setzen, viermal um 90° drehen und jeweils eine Wand setzen, dann **V** für das Dach.
 - **Ramp Rush:** **W** gedrückt halten, Maus gedrückt halten und abwechselnd **C** (Rampe) und **Z** (Wand) drücken – du läufst die Rampen hoch, die Wände schützen dich.
+- **Maus gedrückt halten:** Wird deine Wand zerschossen, setzt das Spiel sie sofort wieder hin (solange du hinschaust).
 - **90er:** Rampe + Wand setzen, die Rampe hochlaufen (etwas zur linken Seite), oben **90° nach links drehen**, Wand, **springen**, in der Luft Rampe + Wand. Wiederholen – jede Runde eine Etage höher.
 - **Edit:** Nur eigene Teile. **G** zeigt leuchtende Felder; angeklickte Felder werden rot und verschwinden nach dem zweiten **G**. Die zwei mittleren unteren Felder einer Wand ergeben eine **Tür** (mit **E** öffnen/schließen).
+- **Ecktreppe:** Bei einer Rampe **ein** Feld wegnehmen – dann wird sie zur Treppe mit Ecke: ein Stück hoch auf ein kleines Podest, um die Ecke drehen und weiter hinauf. Nimmst du **zwei Felder nebeneinander** weg, bleibt eine schmale Rampe; sie steigt in die Richtung, in der du über die zwei Felder gezogen (oder sie nacheinander angeklickt) hast: erstes Feld = unten, zweites = oben.
 
 **Checkliste für Phase 3 und 4** (bitte ausprobieren):
 
@@ -124,7 +126,7 @@ Auf dem Übungsplatz hast du **unendlich Material**. (In den späteren Modi kost
 Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfer, **5 nochmal** zum nächsten Heil-Item (Verband, Medikit, kleiner und großer Schildtrank). Munition und Heil-Items gehen dort nie aus.
 
 - **Schieß-Stand** (gelbe Matte, vom Start aus hinten rechts): Zielpuppen in 5, 15, 30 und 60 m, eine davon mit Schild. Über dem Ziel erscheint der Schaden: **weiß** = Körper, **gelb** = Kopf, **blau** = Schild. Die Puppen sind nach 1,5 s wieder heil.
-- **Baum, Fels, Auto** (vom Start aus links): mit der Spitzhacke (F) schlagen gibt 5–10 Holz, Stein oder Metall.
+- **Baum, Fels, Auto** (vom Start aus vorn links, hinter dem Turm): mit der Spitzhacke (F) schlagen gibt 5–10 Holz, Stein oder Metall.
 - Tipp: Schrotflinte schießen und **sofort** auf das Sturmgewehr (2) wechseln – das geht schneller, als auf den nächsten Schrot-Schuss zu warten.
 - Unten links bei der Steuerung stehen Waffe und Munition („Sturmgewehr 30 / ∞“). Das richtige HUD kommt in Phase 6.
 - Alle Waffen-Werte (Schaden, Magazin, Nachladen, Streuung) stehen in `src/config.js` unter `weapons`.
