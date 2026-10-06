@@ -72,7 +72,7 @@ src/
   player.js            Character (Daten) + Bewegung (laufen, springen, ducken, Rampen, Fallschaden, Gleiter)
   physics.js           CollisionWorld: Boxen, Schrägen, Gelände, Raumgitter, Strahltests
   camera.js            Schulter-Kamera (mit Wand-Kollision) + Vorschau-Kamera
-  building/            grid.js, pieces.js, structure.js, edit.js
+  building/            grid.js, pieces.js, structure.js, edit.js, view.js (Grafik, Welle 2a)
   weapons/             weapons.js, hitscan.js, projectiles.js
   ai/bot.js            Bot-Gehirn → CharacterCommand
   modes/               index.js (Liste), practice.js, duel.js, battleRoyale.js, boxFight.js,
@@ -192,7 +192,8 @@ Methoden:
   G → `'edit'` nur wenn `game.building.canEdit(character)` true ist (setzt `modeBeforeEdit`,
   `editOpenedTick = game.tick`). **Bestätigen/Schließen eines Edits macht das Bau-System**
   (es soll im Tick `editOpenedTick` das G nicht gleich als Bestätigung werten). Wird während
-  Edit eine andere Auswahl gedrückt, ruft applySelection `game.building.closeEdit(character)`.
+  Edit eine andere Auswahl gedrückt, ruft applySelection `game.building.closeEdit(character)`
+  (Welle 2a: das übernimmt die gewählten Felder – wie "bestätigen").
   `toggleBuild` (Controller), Mausrad (`nextItem/prevItem`: Bauteile bzw. Spitzhacke + belegte
   Plätze), Q (`switchMaterial`, nur im Baumodus), B (Tanz, nur am Boden).
   `aiming = secondary && mode === 'weapon'` (das Waffen-System darf das verfeinern).
@@ -261,6 +262,10 @@ Genauer (Welle 1):
 - Sehr große Collider (über `CONFIG.physics.bigColliderCells` Zellen) liegen in einer eigenen
   Liste und werden immer geprüft.
 - `collider.mesh` (optional) setzt der Karten-Baukasten für die Grafik.
+- Welle 2a: `addSlope(spec)` versteht zusätzlich `spec.clip = { minX, maxX, minZ, maxZ }` – die
+  Schräge wird auf dieses Rechteck zugeschnitten (gleiche Fläche/Höhe, kleinerer Umriss; jedes
+  konvexe Teilstück bekommt 4 Grenz-Ebenen, `minX…maxZ` = Rechteck). So entstehen editierte
+  Rampen (halbe Rampe, Eck-Rampe) und Dach-Viertel. Ohne `clip` ändert sich nichts.
 
 `collider.data` (frei, aber diese Felder sind vereinbart):
 ```js
@@ -293,7 +298,7 @@ durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapD
 | `characterKilled` | `{ victim, killer, weaponId }` |
 | `shieldBroken` | `{ character }` |
 | `piecePlaced` | `{ piece, owner }` |
-| `pieceDamaged` | `{ piece, amount, by }` |
+| `pieceDamaged` | `{ piece, amount, by }` (amount = wirklich abgezogen) |
 | `pieceDestroyed` | `{ piece, by, collapsed }` |
 | `pieceEdited` | `{ piece, owner }` |
 | `doorToggled` | `{ piece, open }` |
@@ -315,6 +320,7 @@ durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapD
 - **Bauen** (`src/building/structure.js`): `createBuildingSystem(game)` →
   `{ updateCharacter(c, cmd, dt), update(dt), placePiece(type, slotKey, owner, material, options), removePiece(piece), clearAll(), pieces (Map), countFor(owner), getPieceAt(slotKey), frameUpdate(alpha) }`.
   Bauteil-Objekt: `{ id, type, slotKey, i, j, k, dir, material, owner, health, maxHealth, buildProgress, edit (Set der entfernten Felder), doorOpen, colliders[] , applyDamage() }`.
+  Genaue Beschreibung (Welle 2a): siehe **§9a**.
 - **Waffen** (`src/weapons/weapons.js`): `createWeaponSystem(game)` →
   `{ updateCharacter(c, cmd, dt), giveLoadout(c, ids, options), createItem(id, rarity), frameUpdate(alpha) }`.
   Gegenstand im Slot: `{ id, kind: 'weapon'|'heal', rarity, ammo, reserve, count, ... }`.
@@ -330,6 +336,83 @@ durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapD
 
 Gibt es ein System (noch) nicht, liefert die Datei eine einfache Attrappe mit denselben
 Methoden, die nichts tut. So läuft das Spiel in jeder Phase.
+
+## 9a. Bau-System im Detail (Welle 2a)
+
+Dateien in `src/building/`:
+
+| Datei | Inhalt |
+|---|---|
+| `grid.js` | reine Mathematik: Zellen, Slot-Schlüssel (Text `slotKey()` und Zahl `numericSlotKey()`), `parseSlotKey`, `wallSlotForSide(i,j,k,dir)`, `slotBounds`, Formen (`slotShape`, `shapesTouch`, `shapeOverlapsBox` …), Edit-Felder (`presentRects`, `tilesToMask`, `isDoorMask` …) und die **Zielwahl** `selectTarget()` |
+| `pieces.js` | Kollisions-Teile je Edit (`pieceColliderSpecs`), Formen daraus (Bild = Kollision), Texturen (Holz/Stein/Metall + Risse), Edit-Kacheln, `pickTile()`, `pieceOrigin()`, `pieceCenter()` |
+| `view.js` | Grafik (nur mit Bildschirm): InstancedMesh-Gruppen, Einzel-Meshes, Trümmer, Tür-Blatt, Vorschau, Edit-Kacheln |
+| `edit.js` | Edit-Modus (Öffnen, Klicken/Ziehen, Zurücksetzen, Bestätigen) und Türen (E) |
+| `structure.js` | `createBuildingSystem(game)` – Setzen, Prüfen, Aufbau, Schaden, Halt/Einsturz, Ereignisse |
+
+**Schnittstelle** (alles aus §9 plus):
+```js
+building.getTarget(character, type = character.buildPiece, out?) // → Ziel (siehe unten), mit Prüfung
+building.checkPlacement(type, kind, i, j, k, dir, character, options?) // → Grund oder null
+building.placePiece(type, slotKey, owner, material, options)
+   // options: { dir (Rampe 0..3), edit (Feld-Liste), instant (gleich 100 %, kein Aufbau),
+   //            force (ohne Halt-/Figuren-Prüfung, z. B. vorgebaute Box), charge (Material abziehen) }
+   // → Bauteil oder null. Modi stellen Teile mit { instant: true } (und evtl. force) hin.
+building.removePiece(piece, { by, collapsed, silent, noCollapse })   // zerstört (mit Ereignis + Halt-Prüfung)
+building.getPiece(kind, i, j, k), building.getPieceAt(slotKey), building.pieces (Map)
+building.setEdit(piece, mask)           // entfernte Felder als Bitmaske (0 = ganzes Teil)
+building.setDoorOpen(piece, open)       // false, wenn jemand in der Tür steht
+building.canEdit(c), building.closeEdit(c)   // closeEdit ÜBERNIMMT die gewählten Felder (wie im Original)
+building.editSession(c)                 // { piece, selection (Bitmaske), hover (Feld) } oder null
+building.targetOf(c)                    // letztes Bau-Ziel (Vorschau) oder null
+building.aimRay(c, outOrigin, outDir)   // Ziel-Strahl (Befehl, sonst Augen + Blick)
+building.pieceCenter(piece, out)        // Mitte (Effekte, Töne)
+building.countFor(owner), building.clearAll(), building.dispose()
+building.doors, building.editedPieces   // Sets; building.view = Grafik oder null (headless)
+```
+
+**Ziel-Objekt** (`createTarget()` aus grid.js, wird wiederverwendet):
+`{ type, kind, i, j, k, dir, slotKey, numKey, valid, reason, material, anchorX, anchorY, anchorZ }`,
+`reason` = `'limit'` (3000 erreicht) | `'occupied'` | `'material'` | `'blocked'` (Figur im Weg) |
+`'unsupported'` (kein Halt) | `null`.
+
+**Bauteil-Felder** (zusätzlich zu §9): `kind` (`'f'|'wx'|'wz'|'r'|'c'`), `numKey`, `editMask`
+(Bitmaske der entfernten Felder, passend zu `edit`), `isDoor` (Getter), `doorCollider`,
+`buildTime`, `placedAt`, `neighbors` (Set berührender Teile), `grounded` (berührt Gelände oder
+Karten-Teile), `collapsing` (fällt gleich), `removed`, `shape` (ganze Form für Halt).
+`applyDamage(amount, info)` → `{ amount, destroyed }`; `info.attacker` landet als `by` im Ereignis.
+Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
+
+**Regeln:**
+- Zielwahl (`selectTarget`): "Blick-Anker" = Punkt auf dem Blick-Strahl (von den Augen,
+  `CONFIG.building.targetReach[typ]`), oder der Boden, auf den man schaut. Dessen Zelle (höchstens
+  `maxPlaceCells` weg) ist das Ziel für Boden/Rampe/Dach. Ebene aus den Füßen (auf einer Rampe:
+  ihre Ebene; für die Zelle davor: die Höhe, an der man sie betritt; in der Luft: Fuß-Höhe +
+  `levelEpsilon`). Blick > `lookUpPitch` = eine Ebene höher, Blick über eine Kante nach unten =
+  eine tiefer (Rampe dann zu einem hin). Wand: Kante der eigenen Zelle in Blickrichtung; steht davor
+  eine von einem weg steigende Rampe → an deren oberes Ende. Steht vor einem schon eine Wand, kommt
+  die Rampe in die eigene Zelle (der Bauende wird auf sie gehoben). Dach: über einem.
+  Rampen-Richtung = Blick + `buildRotation` (R im Baumodus, `rotationSteps`).
+- Setzen: Platz frei, Material (`costPerPiece`, außer `infiniteMaterials`), höchstens `maxPieces`,
+  keine Figur im Weg (nur die Füße bis `player.stepHeight` dürfen drinstecken → Figur wird
+  angehoben), Halt (Gelände, Karten-Teil oder berührendes Bauteil). `placeCooldown` pro Figur.
+  Maus gehalten: setzt erneut, sobald sich der Ziel-Platz ändert und gültig ist.
+- Aufbau: Leben wächst von `startHealthFraction` auf 100 % in `buildTime[material]`; Schaden
+  im Aufbau zählt mit. Das Teil blockiert sofort (Collider ab dem ersten Tick).
+- Halt/Einsturz: Nachbarn = berührende Formen (ganze Formen, Edits ändern den Halt nicht). Wird ein
+  Teil entfernt, sucht eine Breitensuche ab seinen Nachbarn ein Teil mit `grounded`; Gruppen ohne
+  Halt bekommen `collapsing` und verschwinden nach `collapseDelay` (`pieceDestroyed` mit
+  `collapsed: true`, Grafik: `collapseAnimTime`).
+- Edit-Felder: Wand 3 x 3 (Nummer = Reihe·3 + Spalte, Reihe 0 oben, Spalte 0 = kleines x bzw. z),
+  sonst 2 x 2 (Spalte entlang x, Reihe entlang z). Tür = genau `wallDoorCells` entfernt; das
+  Tür-Blatt ist ein eigener Collider (offen = ausgeschaltet). Alle Felder entfernen geht nicht.
+  Im Tick `editOpenedTick` bestätigt G nicht. `settings.controls.editOnRelease`: Loslassen von G
+  bestätigt; `resetEditAfterConfirm`: ein neuer Edit beginnt mit leerer Auswahl.
+- E (`usePressed`): Tür unter dem Fadenkreuz (bis `useReach`) oder die nächste bis
+  `doorNearDistance` – jede Figur darf Türen benutzen.
+- Bots bauen über denselben Befehl (`selectBuild` + `primaryPressed`, Ziel-Strahl in
+  `aimOrigin/aimDir`) und prüfen vorher mit `getTarget()`.
+- Grafik: fertige, unbearbeitete Teile → InstancedMesh je (Typ, Material, Risse); im Aufbau,
+  editiert, Trümmer → einzelne Meshes. Vorschau/Edit-Kacheln nur für `game.player`.
 
 ## 10. Modi (src/modes/)
 
@@ -420,6 +503,9 @@ Jeder Modus:
   (Bilder laufen weiter, Logik nur noch über `simulate`).
 - `tests/e2e/run.cjs`: neue Prüfungen als Eintrag in `GAME_CHECKS` anhängen
   (`{ name, run: async (ctx) => … }`, ctx = `{ page, assert, log, shot }`).
+  Welle 2a: Bau-Prüfungen stehen in `tests/e2e/buildChecks.cjs` (in GAME_CHECKS eingehängt);
+  `--grep text` führt nur Prüfungen aus, deren Name passt (z. B. `--grep "Bauen|Edit"`).
+- Modi dürfen `helpHint` (Text) haben – main.js zeigt ihn unter der Steuerungs-Hilfe.
 - URL-Schnellstart (für Tests/Entwicklung): `index.html?mode=duel&bots=hard&seed=1` überspringt das Menü.
 
 ## 13. Wer besitzt welche Dateien (Entwicklungs-Wellen)

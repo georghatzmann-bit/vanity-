@@ -109,10 +109,13 @@ export class CollisionWorld {
 
   /**
    * Fügt eine Schräge hinzu: Rampe oder Pyramiden-Dach.
-   * spec = { minX, maxX, minZ, maxZ, baseY, rise, dir, thickness }
+   * spec = { minX, maxX, minZ, maxZ, baseY, rise, dir, thickness, clip? }
    *   dir 0..3: Rampe steigt Richtung +X, +Z, −X, −Z (von baseY auf baseY + rise)
    *   dir 'pyramid': Dach, Spitze in der Mitte (baseY + rise), Ränder bei baseY
    *   thickness: Dicke der Platte (senkrecht zur Fläche gemessen)
+   *   clip (Welle 2a, optional): { minX, maxX, minZ, maxZ } – nur dieses Stück der
+   *     Schräge ist da (editierte Rampen/Dächer: halbe Rampe, Dach-Viertel). Form und
+   *     Höhe bleiben wie bei der ganzen Schräge, nur der Umriss wird kleiner.
    */
   addSlope(spec, data = null) {
     const collider = {
@@ -651,6 +654,7 @@ function prepareSlope(c) {
     }
     c.min.set(c.minX, c.baseY - c.vThickness, c.minZ);
     c.max.set(c.maxX, top, c.maxZ);
+    applySlopeClip(c);
     return;
   }
 
@@ -682,6 +686,46 @@ function prepareSlope(c) {
   c.parts = [[0, 6]];
   c.min.set(c.minX, c.baseY - c.vThickness, c.minZ);
   c.max.set(c.maxX, c.baseY + c.rise, c.maxZ);
+  applySlopeClip(c);
+}
+
+// Welle 2a: Schräge auf ein Rechteck zuschneiden (spec.clip). Die Fläche bleibt
+// dieselbe (gleiche Höhe an jeder Stelle), nur der Umriss wird kleiner: Jedes
+// konvexe Teilstück bekommt 4 zusätzliche Grenz-Ebenen, und minX..maxZ (für
+// Höhe, Abfragen und das Raumgitter) werden auf das Rechteck gesetzt.
+function applySlopeClip(c) {
+  const clip = c.spec.clip;
+  if (!clip) return;
+  const minX = Math.max(c.minX, Math.min(clip.minX, clip.maxX));
+  const maxX = Math.min(c.maxX, Math.max(clip.minX, clip.maxX));
+  const minZ = Math.max(c.minZ, Math.min(clip.minZ, clip.maxZ));
+  const maxZ = Math.min(c.maxZ, Math.max(clip.minZ, clip.maxZ));
+  if (!(maxX > minX && maxZ > minZ)) return; // leeres Rechteck: ungeschnitten lassen
+  const old = c.planes;
+  const parts = c.parts;
+  const planes = new Float64Array(old.length + parts.length * 4 * 4);
+  const newParts = [];
+  let p = 0;
+  for (const [start, count] of parts) {
+    const first = p / 4;
+    for (let i = 0; i < count * 4; i++) planes[p++] = old[start * 4 + i];
+    p = writePlane(planes, p, -1, 0, 0, -minX);
+    p = writePlane(planes, p, 1, 0, 0, maxX);
+    p = writePlane(planes, p, 0, 0, -1, -minZ);
+    p = writePlane(planes, p, 0, 0, 1, maxZ);
+    newParts.push([first, count + 4]);
+  }
+  c.planes = planes;
+  c.parts = newParts;
+  c.minX = minX;
+  c.maxX = maxX;
+  c.minZ = minZ;
+  c.maxZ = maxZ;
+  // Höhen-Bereich des Stücks (für das Raumgitter und schnelle Vortests)
+  const range = { min: 0, max: 0 };
+  slopeRangeOverRect(c, minX, maxX, minZ, maxZ, range);
+  c.min.set(minX, range.min - c.vThickness, minZ);
+  c.max.set(maxX, range.max, maxZ);
 }
 
 function writePlane(planes, p, nx, ny, nz, d) {

@@ -289,8 +289,8 @@ export const CONFIG = deepFreeze({
     pieceThickness: 0.2, // Dicke von Wand/Boden/Dach (m) // SCHÄTZUNG
     rampSlopeDeg: 45, // Steigung der Rampe
     roofHeight: 1.5, // so hoch ist die Spitze des Dachs (Pyramide) über ihrer Grundfläche // SCHÄTZUNG
-    collapseDelay: 0.1, // so lange nach Zerstörung fallen lose Teile weg
-    collapseAnimTime: 0.4, // Dauer der kleinen Zerfalls-Animation
+    collapseDelay: 0.1, // so lange nach Zerstörung fallen lose Teile weg (Vorgabe)
+    collapseAnimTime: 0.4, // Dauer der kleinen Zerfalls-Animation (Absacken + Verblassen)
     // Edit-Raster: Spalten x Reihen
     editGrid: {
       wall: { cols: 3, rows: 3 },
@@ -304,6 +304,37 @@ export const CONFIG = deepFreeze({
     previewColorOk: '#4DA6FF', // Vorschau: blau = geht
     previewColorBlocked: '#FF4D4D', // Vorschau: rot = geht nicht
     previewOpacity: 0.35,
+
+    // --- Zielwahl: wohin kommt das Bauteil? (Welle 2a, siehe src/building/grid.js) ---
+    // "Blick-Anker" = Punkt auf dem Blick-Strahl so weit vor den Augen (m). Seine Zelle
+    // ist das Ziel für Boden/Rampe/Dach. Trifft der Strahl vorher einen Boden, liegt
+    // der Anker dort ("die Zelle, auf die du schaust").
+    targetReach: { wall: 3.4, floor: 3.4, ramp: 3.4, roof: 1.8 }, // SCHÄTZUNG (Gefühl wie im Original)
+    levelEpsilon: 0.3, // so knapp (m) unter der nächsten Ebene zählt man schon zu ihr (Sprung bei 90ern)
+    lookUpPitch: 40, // Blick höher als 40° nach oben → Bauteil eine Ebene höher // SCHÄTZUNG
+    lookDownDrop: 0.5, // liegt der Anker so weit (m) unter der eigenen Ebene (Blick über eine Kante) → eine Ebene tiefer
+    rotationSteps: 4, // R dreht die Rampe in 90°-Schritten (4 Richtungen)
+    supportTolerance: 0.05, // so nah (m) müssen sich Teile kommen, um sich zu halten (Berührung)
+
+    // --- Edit und Türen ---
+    editReach: 7, // G: so weit (m) darf das Bauteil vom Fadenkreuz-Anfang weg sein // SCHÄTZUNG
+    editMaxDistance: 10, // entfernt man sich weiter vom editierten Teil, schließt der Edit
+    useReach: 4.5, // E: Tür, auf die man schaut, bis so weit (m) // SCHÄTZUNG
+    doorNearDistance: 2.2, // … oder die nächste Tür, wenn man so nah (m) davor steht
+    doorOpenTime: 0.2, // so lange (s) schwingt die Tür auf/zu (nur Grafik – Durchgang sofort frei)
+    doorOpenAngle: 100, // so weit (°) schwingt die Tür auf
+    hintCooldown: 1.5, // Hinweis "fremdes Bauteil" höchstens alle 1,5 s
+
+    // --- Aussehen ---
+    textureSize: 256, // Pixel der erzeugten Holz/Stein/Metall-Bilder (1 Bild = 4 x 4 m)
+    crackThreshold: 0.5, // unter 50 % Leben: Risse
+    damageDarkening: 0.45, // so viel dunkler wird ein Teil bei 0 % Leben (0 = gar nicht, 1 = schwarz)
+    constructionOpacity: { start: 0.45, end: 0.85 }, // Aufbau: leicht durchsichtig, wird fester
+    collapseSink: 1.2, // Einsturz-Animation: so weit (m) sackt ein Teil ab, während es verblasst
+    editTileColor: '#7FE3FF', // Edit-Kacheln: leuchtend hellblau
+    editTileSelectedColor: '#FF4D4D', // gewählte Felder (werden entfernt): rot
+    editTileHoverColor: '#FFFFFF', // Feld unter dem Fadenkreuz
+    editTileOpacity: 0.45,
   },
 
   // ---------------------------------------------------------------------------

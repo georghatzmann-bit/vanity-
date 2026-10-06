@@ -144,6 +144,7 @@ function start() {
     game.startMode(id, options);
     currentModeId = id;
     ui.sub.textContent = getModeDef(id).name;
+    if (ui.status) renderHelp(); // Hinweis-Zeile des Modus
     clock.reset();
     return game;
   }
@@ -257,11 +258,21 @@ function start() {
       ['Ducken', `${crouchKey} (${settings.controls.crouchToggle ? 'umschalten' : 'halten'})`],
     ];
     if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', names(CONFIG.controls.sprintKeysWhenCrouchOnCtrl)]);
-    rows.push(['Zielen', keys('secondary')], ['Tanzen', keys('emote')], ['Pause', 'Esc']);
+    rows.push(['Zielen', keys('secondary')]);
+    // Bauen (Welle 2a): nur die erste Taste jeder Aktion, damit jede Zeile einzeilig bleibt
+    const first = (action) => keyName((kb[action] ?? [])[0] ?? '');
+    rows.push(
+      ['Bauen', [names(kb.buildWall ?? []).replace(/ \/ /g, '/'), first('buildFloor'), first('buildRamp'), first('buildRoof')].join(' ')],
+      ['Setzen', first('primary')],
+      ['Material / Drehen', `${first('switchMaterial')} / ${first('reloadOrRotate')}`],
+      ['Edit / Tür', `${first('edit')} / ${first('use')}`],
+    );
+    rows.push(['Tanzen', keys('emote')], ['Pause', 'Esc']);
+    const hint = game?.mode?.helpHint ?? 'Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.';
     ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
       rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
       '<div class="help-status" data-status></div>' +
-      '<div class="help-hint">Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.</div>';
+      `<div class="help-hint">${escapeHtml(hint)}</div>`;
     ui.status = ui.help.querySelector('[data-status]');
     ui.help.hidden = false;
   }
