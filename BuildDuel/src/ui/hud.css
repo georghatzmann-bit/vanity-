@@ -118,8 +118,8 @@
   width: calc(2 * var(--r));
   height: calc(2 * var(--r));
   border-radius: 50%;
-  border: 6px solid transparent;
-  border-top-color: rgba(255, 52, 52, 0.92);
+  border: 8px solid transparent;
+  border-top-color: rgba(255, 44, 44, 0.95);
   opacity: 0;
 }
 
@@ -545,7 +545,6 @@ body:not(.playing) .hud-reload,
   padding: 4px;
   border-radius: 12px;
   border: 2px solid transparent;
-  transition: border-color 120ms ease, background-color 120ms ease;
 }
 .hud.mode-build .hud-build, .hud.mode-edit .hud-build {
   border-color: var(--accent);
@@ -666,8 +665,56 @@ body:not(.playing) .hud-reload,
 .hud-help-grid h3 { margin: 0 0 6px; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); }
 .hud-help-grid .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
 .hud-help-grid .row span { flex: 1 1 auto; min-width: 0; color: rgba(255, 255, 255, 0.82); }
-.hud-help-grid .row kbd { flex: 0 1 auto; max-width: 62%; white-space: normal; overflow-wrap: anywhere; }
+.hud-help-grid .row kbd { flex: 0 1 auto; max-width: 64%; white-space: normal; overflow-wrap: normal; text-align: right; }
 .hud-help-hint { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, 0.75); }
+
+/* =============================================================================================
+   Große Bildschirme (Full HD und mehr): alles etwas größer
+   ============================================================================================= */
+@media (min-width: 1700px) and (min-height: 900px) {
+  .hud { --slot: 72px; --piece: 60px; --edge: 28px; }
+  .hud kbd { font-size: 12px; }
+  .hud-piece kbd, .hud-slot kbd { font-size: 12px; min-width: 18px; }
+  .hud-vitals { width: 380px; padding: 10px 12px; gap: 8px; }
+  .hud-bar { height: 22px; grid-template-columns: 20px 42px 1fr; gap: 8px; }
+  .hud-bar .ico, .hud-bar .ico svg { width: 20px; height: 20px; }
+  .hud-bar .num { font-size: 20px; }
+  .hud-bar .track { height: 18px; }
+  .hud-hint { bottom: calc(var(--edge) + 80px); font-size: 14px; }
+  .hud-ammo { min-width: 120px; }
+  .hud-ammo .name { font-size: 15px; }
+  .hud-ammo .mag { font-size: 40px; }
+  .hud-ammo .res { font-size: 20px; }
+  .hud-ammo .state { font-size: 14px; }
+  .hud-slot .count { font-size: 14px; }
+  .hud-mat { font-size: 16px; padding: 4px 12px 4px 8px; }
+  .hud-mat i { width: 17px; height: 17px; }
+  .hud-loadout, .hud-mats, .hud-build, .hud-slots { gap: 8px; }
+  .hud-feed { top: 20px; max-width: 460px; }
+  #fps:not([hidden]) ~ .hud .hud-feed { top: 70px; }
+  .hud-feed-row { font-size: 16px; padding: 4px 12px; }
+  .hud-feed-row .w { font-size: 13px; }
+  .hud-side { top: 20px; }
+  .hud-map { width: 220px; height: 220px; }
+  .hud.has-map .hud-side::before { right: calc(110px - 7px); }
+  .hud-stats { font-size: 17px; padding: 8px 14px; }
+  .hud-top { top: 18px; }
+  .hud-title { font-size: 16px; padding: 5px 16px; }
+  .hud-score { font-size: 17px; padding: 5px 18px; }
+  .hud-score b { font-size: 30px; }
+  .hud-prompt { font-size: 17px; top: 116px; }
+  .hud-healbar { width: 260px; top: 64px; }
+  .hud-healbar-text { font-size: 15px; }
+  .hud-edit { font-size: 15px; top: 30px; }
+  .hud-elim { font-size: 18px; top: 70px; }
+  .hud-toast { font-size: 16px; }
+  .hud-spectate { font-size: 22px; bottom: 150px; }
+  .hud-help-card { width: min(1040px, 100%); padding: 24px 28px; }
+  .hud-help-grid .row { font-size: 15px; }
+  .hud-help-grid h3 { font-size: 13px; }
+  .hud-help-head b { font-size: 24px; }
+  .hud-help-hint { font-size: 15px; }
+}
 
 /* =============================================================================================
    Kleinere Bildschirme
@@ -702,9 +749,9 @@ body:not(.playing) .hud-reload,
 @media (max-width: 520px) {
   .hud { --slot: 40px; --piece: 34px; }
   .hud-vitals { top: var(--edge); bottom: auto; width: 150px; padding: 5px 7px; }
-  #fps:not([hidden]) ~ .hud .hud-vitals { top: 58px; }
+  #fps:not([hidden]) ~ .hud .hud-vitals { top: 40px; }
   .hud-feed { top: 74px; max-width: 58vw; }
-  #fps:not([hidden]) ~ .hud .hud-feed { top: 122px; }
+  #fps:not([hidden]) ~ .hud .hud-feed { top: 104px; }
   .hud-feed-row:nth-child(n + 4) { display: none; }
   .hud-hint { display: none; }
   .hud-loadout { right: 50%; transform: translateX(50%); align-items: center; gap: 6px; }
@@ -722,9 +769,13 @@ body:not(.playing) .hud-reload,
   .hud-title { font-size: 11px; padding: 2px 8px; }
   .hud-spectate { bottom: 190px; font-size: 15px; }
   .hud-toast { top: calc(50% - 100px); font-size: 13px; }
-  .hud-help-grid { grid-template-columns: 1fr 1fr; gap: 8px 12px; }
-  .hud-help-grid .row { font-size: 11px; }
+  .hud-help-grid { grid-template-columns: 1fr; gap: 8px; }
+  .hud-help-grid .row { font-size: 12px; padding: 2px 0; }
   .hud-help-card { padding: 12px 14px; }
+  .hud-message { top: 32%; }
+  /* FPS-Kasten schmaler (nur die Zahl), damit oben Platz für Stand und Minimap bleibt */
+  #fps.fps { padding: 3px 6px; }
+  #fps .fps-detail { display: none; }
 }
 /* Touch-Geräte ohne Tastatur: keine Tasten-Hinweise */
 @media (pointer: coarse) and (hover: none) {

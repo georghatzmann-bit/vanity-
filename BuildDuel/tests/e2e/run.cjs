@@ -192,7 +192,7 @@ const GAME_CHECKS = [
       const playing = await ctx.page.evaluate(() => ({
         state: buildDuel.state,
         overlay: !document.getElementById('play-overlay').hidden,
-        crosshair: !document.getElementById('crosshair').hidden,
+        crosshair: getComputedStyle(document.querySelector('.hud-cross')).display !== 'none',
       }));
       ctx.assert(playing.state === 'playing' && !playing.overlay && playing.crosshair, 'spielt, Fadenkreuz sichtbar');
     },
@@ -645,11 +645,8 @@ const GAME_CHECKS = [
     },
   },
   {
-    name: 'Hilfe-Leiste einzeilig; bei 800 x 600 nicht über der Figur; Schilder von weitem lesbar, nah nie riesig',
+    name: 'HUD (Leben/Schild) bei 800 x 600 nicht über der Figur; Schilder von weitem lesbar, nah nie riesig',
     async run(ctx) {
-      const rows = await ctx.page.evaluate(() => [...document.querySelectorAll('#help .help-row')].map((r) => r.getBoundingClientRect().height));
-      const one = Math.min(...rows);
-      ctx.assert(rows.every((h) => h < one * 1.5), `Zeilen-Höhen: ${rows.map((h) => h.toFixed(0)).join(', ')}`);
       // Schilder vom Startpunkt aus: mindestens ~20 Pixel hoch
       const labels = await ctx.page.evaluate(async () => {
         const THREE = await import('three');
@@ -733,11 +730,11 @@ const GAME_CHECKS = [
             }
           }
         }
-        const help = document.getElementById('help').getBoundingClientRect();
+        const help = document.querySelector('.hud-vitals').getBoundingClientRect();
         return { helpRight: help.right, helpTop: help.top, figureLeft: minX, figureBottom: maxY };
       });
       ctx.assert(r.helpRight < r.figureLeft || r.helpTop > r.figureBottom,
-        `Hilfe (rechts ${r.helpRight.toFixed(0)}) und Figur (links ${r.figureLeft.toFixed(0)}) überlappen`);
+        `Leben/Schild (rechts ${r.helpRight.toFixed(0)}) und Figur (links ${r.figureLeft.toFixed(0)}) überlappen`);
       await ctx.shot('16-800x600');
       await ctx.page.setViewportSize({ width: 1280, height: 720 });
       await ctx.page.waitForTimeout(300);
@@ -814,6 +811,8 @@ const GAME_CHECKS = [
   // Welle 2a: Bauen und Editieren (über die echte Eingabe: Z/X/C/V, Klick, Q, R, G, E)
   // ---------------------------------------------------------------------------
   ...require('./buildChecks.cjs').BUILD_CHECKS,
+  // Welle 3a: HUD, Ton, Effekte – siehe hudChecks.cjs
+  ...require('./hudChecks.cjs').HUD_CHECKS,
 ];
 
 // =============================================================================

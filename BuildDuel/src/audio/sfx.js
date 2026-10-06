@@ -1105,7 +1105,7 @@ export function createAudio(game) {
 
     /** Für Tests. */
     debug: {
-      activeVoices: () => (eng.context ? eng.limiter.count(eng.context.currentTime) : 0),
+      activeVoices: (type = null) => (eng.context ? eng.limiter.count(eng.context.currentTime, type) : 0),
       stats: () => ({ state: eng.state, ...eng.stats, byName: { ...eng.stats.byName }, maxVoices: eng.limiter.max, music: eng.musicPlaying }),
       soundNames: () => SOUND_NAMES,
       playAll: () => SOUND_NAMES.map((name) => eng.play(name, null, options(true))),

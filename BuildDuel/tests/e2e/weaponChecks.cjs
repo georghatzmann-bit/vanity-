@@ -364,7 +364,7 @@ const WEAPON_CHECKS = [
       const scoped = await ctx.page.evaluate(() => ({
         fov: buildDuel.camera.fov,
         scopeFov: buildDuel.game.player.scopeFov,
-        overlay: getComputedStyle(document.querySelector('.bd-scope')).display,
+        overlay: getComputedStyle(document.querySelector('.hud-scope')).display,
         figureVisible: buildDuel.game.player.view.root.visible,
       }));
       await ctx.shot('25-sniper-zielfernrohr');
@@ -613,7 +613,7 @@ const WEAPON_CHECKS = [
         __wp.select('bandage');
         buildDuel.input.setVirtual('primary', true);
         buildDuel.simulate(1.5);
-        const during = { factor: p.speedFactor, healing: p.healing?.itemId, status: document.querySelector('[data-status]').textContent };
+        const during = { factor: p.speedFactor, healing: p.healing?.itemId };
         buildDuel.simulate(1.6);
         buildDuel.input.setVirtual('primary', false);
         const afterUse = p.health;

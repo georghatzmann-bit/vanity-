@@ -215,6 +215,8 @@ function createHeadlessHud(game) {
       return () => {};
     },
     applySettings() {},
+    clear() {},
+    setPaused() {},
     setHelpOpen() {},
     toggleHelp() {},
     debugState() {
@@ -404,6 +406,7 @@ export function createHud(game, root) {
   let promptTimer = 0;
   let mapVisible = false;
   let helpOpen = false;
+  let paused = false; // Tests/Screenshots: Zeit-Anzeigen (Treffer-X, Nachrichten …) anhalten
   const labels = { use: 'E', help: 'H' };
 
   // Treffer-Marker
@@ -990,7 +993,7 @@ export function createHud(game, root) {
     /** Pro Bild (nach der Logik). dt = echte Bild-Zeit in Sekunden. */
     frameUpdate(dt = 0) {
       if (disposed) return;
-      dt = Math.min(0.25, Math.max(0, dt || 0));
+      dt = paused ? 0 : Math.min(0.25, Math.max(0, dt || 0));
       now += dt;
       const p = game.player;
       const alive = !!p && p.alive;
@@ -1065,6 +1068,23 @@ export function createHud(game, root) {
     /** Neue Einstellungen (Tasten-Belegung): Beschriftungen neu. */
     applySettings() {
       refreshLabels();
+    },
+
+    /** Kurze Anzeigen sofort weg (Treffer-X, Nachrichten, Treffer-Richtung, Kill-Feed) – z. B. neue Runde. */
+    clear() {
+      hit.timer = 0;
+      elim.timer = 0;
+      message.timer = 0;
+      toast.timer = 0;
+      ui.message.style.opacity = '0';
+      ui.toast.style.opacity = '0';
+      for (const a of arcs) a.timer = 0;
+      feed.clear();
+    },
+
+    /** Zeit-Anzeigen anhalten (nur für Screenshots in Tests). */
+    setPaused(on) {
+      paused = !!on;
     },
 
     get helpOpen() {
