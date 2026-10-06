@@ -172,7 +172,7 @@ describe('Waffen: Werte und Hilfen', () => {
 describe('Spielwerte: Waffen-Optik und Übungsplatz (Phase 5)', () => {
   it('Farben sind gültig', () => {
     const v = CONFIG.weaponVisuals;
-    for (const key of ['tracerColor', 'bulletColor', 'grenadeColor', 'explosionColor']) assert.ok(HEX_COLOR.test(v[key]), key);
+    for (const key of ['tracerColor', 'bulletColor', 'grenadeColor', 'explosionColor', 'explosionCoreColor']) assert.ok(HEX_COLOR.test(v[key]), key);
     assert.ok(HEX_COLOR.test(v.damageNumbers.structureColor) && HEX_COLOR.test(v.damageNumbers.harvestColor));
     for (const key of ['damageBody', 'damageHead', 'damageShield']) assert.ok(HEX_COLOR.test(CONFIG.visuals.colors[key]), key);
   });

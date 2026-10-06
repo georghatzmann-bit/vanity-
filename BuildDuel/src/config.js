@@ -497,7 +497,7 @@ export const CONFIG = deepFreeze({
     muzzleLight: { color: '#FFC56B', intensity: 6, distance: 5 }, // kurzes Licht beim Schuss
     tracerLifetime: 0.09, // Leuchtspur (Sturmgewehr) verblasst in so vielen Sekunden
     tracerWidth: 0.035, // Dicke der Leuchtspur (m)
-    tracerColor: '#FFE7A0',
+    tracerColor: '#FFD45C',
     modelScale: 1.35, // Waffen in der Hand etwas größer als echt (Comic-Stil, besser zu erkennen)
     // Blick steil nach oben: Waffe zeigt etwas tiefer als der Blick (sonst ragt sie ins Fadenkreuz)
     lookUpLowering: 0.4, // so viel tiefer pro Radiant Blick nach oben
@@ -510,7 +510,8 @@ export const CONFIG = deepFreeze({
     grenadeColor: '#3B4A3A',
     grenadeRadius: 0.09, // m
     explosionTime: 0.45, // Feuerball wächst und verblasst in so vielen Sekunden
-    explosionColor: '#FF9A3C',
+    explosionColor: '#FF7A1F', // Feuerball außen
+    explosionCoreColor: '#FFD34D', // Feuerball innen
     // Treffer-Zahlen über dem Ziel (weiß = Körper, gelb = Kopf, blau = Schild; Farben: visuals.colors)
     damageNumbers: {
       lifetime: 0.9, // so lange sichtbar (s)

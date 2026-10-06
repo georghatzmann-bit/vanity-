@@ -43,6 +43,8 @@ async function installHelpers(page) {
       // Schieß-Stand, Blick nach Westen; Puppe nach Name
       toStand() {
         const g = buildDuel.game;
+        g.weapons.setEffectsPaused(false);
+        g.weapons.clearEffects(); // saubere Bilder: alte Zahlen/Feuerbälle weg
         const r = buildDuel.CONFIG.practiceRange;
         g.player.resetForRound({ health: 100, shield: 100, position: { x: r.stand.x, y: 0, z: r.stand.z }, yaw: Math.PI / 2 });
         g.cameraRig.snap();
@@ -111,36 +113,44 @@ const WEAPON_CHECKS = [
       ctx.assert(/Schießen/.test(r.help) && /Spitzhacke/.test(r.help) && /Nachladen/.test(r.help), 'Hilfe nennt Schießen, Spitzhacke, Nachladen');
       await nextFrames(ctx.page, 3);
       await ctx.shot('20-schiess-stand');
-      // Alle Modelle nebeneinander (andere Figuren halten sie, seitlich zur Kamera)
+      // Alle Modelle aus der Nähe: je drei Figuren halten sie (schräg zur Kamera),
+      // der Spieler zielt (Kamera näher dran, engeres Sichtfeld)
+      const groups = [['shotgun', 'ar', 'smg'], ['sniper', 'pistol', 'grenadeLauncher'], ['pickaxe', 'medkit', 'bigShield']];
+      const rarity = { shotgun: 'common', ar: 'uncommon', smg: 'rare', sniper: 'epic', pistol: 'legendary', grenadeLauncher: 'rare' };
+      for (let k = 0; k < groups.length; k++) {
+        await ctx.page.evaluate(({ ids, rarity }) => {
+          const g = buildDuel.game;
+          for (const c of window.__lineup ?? []) g.removeCharacter(c);
+          g.player.resetForRound({ health: 100, shield: 100, position: { x: 0, y: 0, z: 23.5 }, yaw: 0 });
+          g.player.pitch = g.player.prevPitch = -0.1;
+          g.cameraRig.snap();
+          __wp.press('slot1', 0.3);
+          buildDuel.input.setVirtual('secondary', true);
+          window.__lineup = ids.map((id, i) => {
+            const c = g.addCharacter({ name: `Modell ${id}`, isBot: true, brain: null, team: 300 + i, position: { x: 1.5 + i * 1.15, y: 0, z: 20.8 }, yaw: Math.PI * 0.8 });
+            if (id === 'pickaxe') {
+              g.weapons.giveLoadout(c, []);
+              c.setMode('pickaxe');
+            } else {
+              g.weapons.giveLoadout(c, [id], { rarity: rarity[id] ?? 'common' });
+            }
+            return c;
+          });
+          buildDuel.simulate(0.3);
+        }, { ids: groups[k], rarity });
+        await nextFrames(ctx.page, 3); // die Grafik hängt die Modelle im nächsten Bild an
+        await ctx.page.waitForTimeout(900); // Zoom beim Zielen
+        await ctx.shot(`21-waffen-modelle-${k + 1}`);
+        const attached = await ctx.page.evaluate(() => window.__lineup.map((c) => {
+          let found = false;
+          c.view.root.traverse((o) => { if (o.name.startsWith('Waffe ')) found = true; });
+          return found;
+        }));
+        ctx.assert(attached.every(Boolean), `${groups[k].join(', ')}: jede Figur hält ihr Modell`);
+      }
       await ctx.page.evaluate(() => {
-        const g = buildDuel.game;
-        g.player.resetForRound({ health: 100, shield: 100, position: { x: 0, y: 0, z: 23.5 }, yaw: 0 });
-        g.player.pitch = g.player.prevPitch = -0.08;
-        g.cameraRig.snap();
-        const ids = ['shotgun', 'ar', 'smg', 'sniper', 'pistol', 'grenadeLauncher', 'pickaxe', 'medkit', 'bigShield'];
-        const rarity = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'rare', 'common', 'common', 'common'];
-        window.__lineup = ids.map((id, i) => {
-          const c = g.addCharacter({ name: `Modell ${id}`, isBot: true, brain: null, team: 300 + i, position: { x: 1.0 + i * 0.95, y: 0, z: 19.2 }, yaw: -Math.PI / 2 });
-          if (id === 'pickaxe') {
-            g.weapons.giveLoadout(c, []);
-            c.setMode('pickaxe');
-          } else {
-            g.weapons.giveLoadout(c, [id], { rarity: rarity[i] });
-          }
-          return c;
-        });
-        buildDuel.simulate(0.3);
-      });
-      await nextFrames(ctx.page, 3);
-      await ctx.page.waitForTimeout(300);
-      await ctx.shot('21-waffen-modelle');
-      const attached = await ctx.page.evaluate(() => window.__lineup.map((c) => {
-        let found = false;
-        c.view.root.traverse((o) => { if (o.name.startsWith('Waffe ')) found = true; });
-        return found;
-      }));
-      ctx.assert(attached.every(Boolean), `jede Figur hält ihr Modell: ${JSON.stringify(attached)}`);
-      await ctx.page.evaluate(() => {
+        buildDuel.input.setVirtual('secondary', false);
+        buildDuel.simulate(0.05);
         for (const c of window.__lineup) buildDuel.game.removeCharacter(c);
         window.__lineup = null;
       });
@@ -241,6 +251,7 @@ const WEAPON_CHECKS = [
         const THREE = await import('three');
         const g = buildDuel.game;
         // Spieler schaut quer auf eine Schuss-Linie: ein Übungs-Schütze schießt von rechts nach links
+        g.weapons.clearEffects();
         g.player.resetForRound({ health: 100, shield: 100, position: { x: 12, y: 0, z: 36.5 }, yaw: 0 });
         g.player.pitch = g.player.prevPitch = -0.05;
         g.cameraRig.snap();
@@ -277,8 +288,8 @@ const WEAPON_CHECKS = [
         let flashes = 0;
         buildDuel.game.root.traverse((o) => {
           if (!o.visible) return;
-          if (o.isSprite && o.material.blending === 2) flashes++; // AdditiveBlending
-          if (o.isMesh && o.material.blending === 2 && o.scale.z > 1 && o.scale.x < 0.1) tracers++;
+          if (o.name === 'Mündungsblitz' && o.material.opacity > 0.5) flashes++;
+          if (o.name === 'Leuchtspur' && o.material.opacity > 0.5 && o.scale.z > 5) tracers++;
         });
         return { tracers, flashes };
       });
@@ -355,7 +366,7 @@ const WEAPON_CHECKS = [
         off();
         return { explosion, damage: buildDuel.CONFIG.practiceRange.dummies.health - d.health };
       });
-      await nextFrames(ctx.page, 2);
+      await nextFrames(ctx.page, 1);
       await ctx.page.evaluate(() => buildDuel.game.weapons.setEffectsPaused(true));
       await nextFrames(ctx.page, 1);
       await ctx.shot('27-granate-explosion');
@@ -372,6 +383,7 @@ const WEAPON_CHECKS = [
         const g = buildDuel.game;
         const t = buildDuel.CONFIG.practiceRange.harvest.tree;
         const p = g.player;
+        g.weapons.clearEffects();
         p.resetForRound({ health: 100, shield: 100, position: { x: t.x, y: 0, z: t.z + 1.5 }, yaw: 0 });
         g.cameraRig.snap();
         p.materials.wood = 100;

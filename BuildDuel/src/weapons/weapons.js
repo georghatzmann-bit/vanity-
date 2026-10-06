@@ -767,6 +767,11 @@ export function createWeaponSystem(game) {
       visuals?.setPaused(paused);
     },
 
+    /** Alle Waffen-Effekte (Blitze, Spuren, Zahlen, Feuerbälle) sofort entfernen. */
+    clearEffects() {
+      visuals?.clear();
+    },
+
     get visuals() {
       return visuals;
     },

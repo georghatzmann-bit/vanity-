@@ -40,6 +40,7 @@ export function createWeaponVisuals(game, system) {
   for (let i = 0; i < FLASHES; i++) {
     const material = new THREE.SpriteMaterial({ map: flashTexture, color: '#FFE2A0', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
     const sprite = new THREE.Sprite(material);
+    sprite.name = 'Mündungsblitz';
     sprite.visible = false;
     sprite.renderOrder = 20;
     root.add(sprite);
@@ -56,8 +57,10 @@ export function createWeaponVisuals(game, system) {
   tracerGeometry.translate(0, 0, 0.5); // von z = 0 bis 1 → wird auf die Länge gestreckt
   const tracers = [];
   for (let i = 0; i < TRACERS; i++) {
-    const material = new THREE.MeshBasicMaterial({ color: V.tracerColor, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    // normale Mischung (nicht additiv): bleibt auch vor dem hellen Himmel gelb
+    const material = new THREE.MeshBasicMaterial({ color: V.tracerColor, transparent: true, opacity: 0, depthWrite: false });
     const mesh = new THREE.Mesh(tracerGeometry, material);
+    mesh.name = 'Leuchtspur';
     mesh.visible = false;
     mesh.frustumCulled = false;
     mesh.renderOrder = 19;
@@ -70,7 +73,7 @@ export function createWeaponVisuals(game, system) {
   const ballGeometry = new THREE.SphereGeometry(1, 20, 14);
   const explosions = [];
   for (let i = 0; i < EXPLOSIONS; i++) {
-    const coreMat = new THREE.MeshBasicMaterial({ color: '#FFE08A', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    const coreMat = new THREE.MeshBasicMaterial({ color: V.explosionCoreColor, transparent: true, opacity: 0, depthWrite: false });
     const outerMat = new THREE.MeshBasicMaterial({ color: V.explosionColor, transparent: true, opacity: 0, depthWrite: false });
     const core = new THREE.Mesh(ballGeometry, coreMat);
     const outer = new THREE.Mesh(ballGeometry, outerMat);
@@ -136,7 +139,7 @@ export function createWeaponVisuals(game, system) {
   function updateHeld(c) {
     let v = views.get(c);
     if (!v) {
-      v = { key: null, mount: null, models: new Map(), kickTime: -1, view: c.view };
+      v = { key: null, mount: null, models: new Map(), kickTime: -1, view: c.view, mode: null, item: undefined, alive: true };
       views.set(c, v);
     }
     if (v.view !== c.view) {
@@ -144,8 +147,14 @@ export function createWeaponVisuals(game, system) {
       v.view = c.view;
       v.key = null;
       v.mount = null;
+      v.item = undefined;
     }
-    const key = wantedModel(c);
+    // Nur neu rechnen, wenn sich Modus, Gegenstand oder Leben geändert haben (keine Texte pro Bild)
+    const item = c.mode === 'weapon' ? c.slots[c.selectedSlot] ?? null : null;
+    const key = item === v.item && c.mode === v.mode && c.alive === v.alive ? v.key : wantedModel(c);
+    v.item = item;
+    v.mode = c.mode;
+    v.alive = c.alive;
     if (key !== v.key) {
       v.key = key;
       if (!key) {
@@ -272,7 +281,7 @@ export function createWeaponVisuals(game, system) {
           tr.mesh.visible = false;
           continue;
         }
-        tr.mesh.material.opacity = 0.9 * (1 - age / V.tracerLifetime);
+        tr.mesh.material.opacity = 0.85 * (1 - age / V.tracerLifetime);
       }
 
       // Feuerbälle
@@ -291,8 +300,8 @@ export function createWeaponVisuals(game, system) {
         const rOuter = x.radius * (0.45 + 0.55 * grow);
         x.outer.scale.setScalar(rOuter);
         x.core.scale.setScalar(rOuter * 0.6);
-        x.outer.material.opacity = 0.55 * (1 - k);
-        x.core.material.opacity = 0.9 * (1 - k * k);
+        x.outer.material.opacity = 0.6 * (1 - k);
+        x.core.material.opacity = 0.85 * (1 - k * k);
         x.core.visible = x.outer.visible = true;
       }
 
@@ -303,6 +312,20 @@ export function createWeaponVisuals(game, system) {
     /** Effekte anhalten (Screenshots in Tests). */
     setPaused(on) {
       paused = !!on;
+    },
+
+    /** Alle laufenden Effekte sofort weg (neue Runde, Tests). */
+    clear() {
+      pendingCount = 0;
+      for (const f of flashes) f.sprite.visible = false;
+      lightStart = -1;
+      light.intensity = 0;
+      for (const tr of tracers) tr.mesh.visible = false;
+      for (const x of explosions) {
+        x.start = -1;
+        x.core.visible = x.outer.visible = false;
+      }
+      numbers?.clear();
     },
 
     dispose() {
@@ -448,6 +471,12 @@ function createDamageNumbers(game) {
     /** Für Tests: sichtbare Zahlen { text, kind } */
     visible() {
       return list.filter((n) => n.active).map((n) => ({ text: n.el.textContent, kind: n.kind }));
+    },
+    clear() {
+      for (const n of list) {
+        n.active = false;
+        n.el.style.display = 'none';
+      }
     },
     dispose() {
       layer.remove();

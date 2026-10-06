@@ -125,6 +125,7 @@ export class Game {
     for (const c of [...this.characters]) this.removeCharacter(c);
     this.building.clearAll();
     this.projectiles.clear();
+    this.weapons.clearEffects?.();
     this.mode?.dispose?.();
     this.mode = null;
     this.storm?.dispose?.();

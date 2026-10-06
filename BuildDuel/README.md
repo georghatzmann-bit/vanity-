@@ -74,6 +74,26 @@ Oben links steht die **FPS**-Zahl (Bilder pro Sekunde, grün ab 55) und **„Log
 - [ ] Die Rampe hochlaufen geht ohne Springen
 - [ ] Sturz vom Turm: unten links bei der Steuerung sinkt „Schild“ von 100 auf 50 (das richtige HUD mit Balken kommt in Phase 6)
 
+## Waffen (Phase 5)
+
+| Was | Taste |
+|---|---|
+| Schießen | **linke Maustaste** (Sturmgewehr, MP, Pistole: gedrückt halten) |
+| Zielen | **rechte Maustaste** – mit dem Scharfschützengewehr: Zielfernrohr |
+| Waffe wählen | **1** Schrotflinte · **2** Sturmgewehr · **3** Scharfschützengewehr · **4** Maschinenpistole |
+| Heilen | **5** (Heil-Item in die Hand), dann **linke Maustaste** |
+| Spitzhacke | **F** (Material sammeln, Bauteile abbauen) |
+| Nachladen | **R** (leeres Magazin lädt von selbst nach) |
+| Mausrad | nächste / vorige Waffe |
+
+Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfer, **5 nochmal** zum nächsten Heil-Item (Verband, Medikit, kleiner und großer Schildtrank). Munition und Heil-Items gehen dort nie aus.
+
+- **Schieß-Stand** (gelbe Matte, vom Start aus hinten rechts): Zielpuppen in 5, 15, 30 und 60 m, eine davon mit Schild. Über dem Ziel erscheint der Schaden: **weiß** = Körper, **gelb** = Kopf, **blau** = Schild. Die Puppen sind nach 1,5 s wieder heil.
+- **Baum, Fels, Auto** (vom Start aus links): mit der Spitzhacke (F) schlagen gibt 5–10 Holz, Stein oder Metall.
+- Tipp: Schrotflinte schießen und **sofort** auf das Sturmgewehr (2) wechseln – das geht schneller, als auf den nächsten Schrot-Schuss zu warten.
+- Unten links bei der Steuerung stehen Waffe und Munition („Sturmgewehr 30 / ∞“). Das richtige HUD kommt in Phase 6.
+- Alle Waffen-Werte (Schaden, Magazin, Nachladen, Streuung) stehen in `src/config.js` unter `weapons`.
+
 ## Tests
 
 Während `start.bat` läuft, diese Adresse öffnen: <http://localhost:8000/tests/tests.html>
