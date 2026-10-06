@@ -215,6 +215,10 @@ const WORLD_CHECKS = [
       });
       await ctx.page.waitForTimeout(1200);
       await ctx.shot('45-welt-stadt');
+      // auch mitten in der Stadt (viele Häuser, Stände, Loot im Blick) wenige Zeichen-Aufrufe
+      const calls = await ctx.page.evaluate(() => __wd.worldCalls());
+      ctx.log(`Zeichen-Aufrufe in der Stadt: Welt ${calls.world}, mit ${calls.characters} Figuren ${calls.all}`);
+      ctx.assert(calls.world < 150, `Stadt: ${calls.world} Zeichen-Aufrufe (Ziel < 150)`);
       const r = await ctx.page.evaluate(() => {
         const g = buildDuel.game;
         const h = g.map.houses.find((x) => x.floors > 1 && x.area === 'Sandkrug');
