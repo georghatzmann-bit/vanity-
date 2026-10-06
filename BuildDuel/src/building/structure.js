@@ -534,7 +534,9 @@ export function createBuildingSystem(game) {
   function settleAfterEdit(piece) {
     const list = game?.characters;
     if (!list || !world) return;
-    editLift = CONFIG.world.wallHeight / 2 + 0.01;
+    // Wand: nur hinausschieben (höchstens die Füße anheben), sonst bis zu einer halben Ebene anheben
+    const wall = piece.kind === 'wx' || piece.kind === 'wz';
+    editLift = wall ? CONFIG.player.stepHeight : CONFIG.world.wallHeight / 2 + 0.01;
     try {
       for (const collider of piece.colliders) {
         if (!collider.enabled) continue;

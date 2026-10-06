@@ -471,6 +471,25 @@ describe('Szenario: Edit und Türen', () => {
     game.dispose();
   });
 
+  it('nach einem Edit steckt niemand in der neuen Form: Tür zurücksetzen schiebt hinaus, Ecktreppe hebt an', () => {
+    const game = new Game({ headless: true, seed: 1 });
+    const b = game.building;
+    const wall = b.placePiece('wall', 'wx:0:0:0', null, 'wood', { instant: true, force: true, edit: [4, 7] }); // Tür bei z = 0
+    b.setDoorOpen(wall, true);
+    const inDoor = game.addCharacter({ name: 'Tür', position: { x: 2, y: 0, z: 0.1 }, brain: null });
+    b.setEdit(wall, 0); // zurücksetzen: ganze Wand
+    assert.close(inDoor.position.z, B.pieceThickness / 2 + inDoor.radius + B.wallPushGap, 1e-6, 'zur Seite seiner Mitte hinaus');
+    assert.equal(inDoor.position.y, 0, 'nicht auf die Wand gehoben');
+    // Rampe (steigt nach +X) mit einer Figur darauf → Ecktreppe: Figur steht danach auf der neuen Form
+    const ramp = b.placePiece('ramp', 'r:2:0:2', null, 'wood', { dir: 0, instant: true, force: true });
+    const onRamp = game.addCharacter({ name: 'Rampe', position: { x: 9.0, y: 1.0, z: 11 }, brain: null }); // auf Feld 2 (1 m hoch)
+    b.setEdit(ramp, 1 << 1); // Feld 1 weg → Feld 2 wird das Podest (2 m) – die Figur steckt darin
+    assert.ok(onRamp.position.y >= 2 - 1e-6, `angehoben: ${onRamp.position.y.toFixed(2)}`);
+    game.simulate(0.3);
+    assert.ok(onRamp.grounded && onRamp.position.y >= 2, 'steht auf der Treppe');
+    game.dispose();
+  });
+
   it('halbe Rampe: zwei Felder nacheinander wählen = Richtung (vom ersten zum zweiten Feld hinauf)', () => {
     const game = new Game({ headless: true, seed: 1 });
     const p = game.addCharacter({ name: 'Edit', isPlayer: false, position: { x: 2, y: 0, z: 7 }, yaw: 0, brain: null });
