@@ -304,6 +304,7 @@ export const CONFIG = deepFreeze({
     previewColorOk: '#4DA6FF', // Vorschau: blau = geht
     previewColorBlocked: '#FF4D4D', // Vorschau: rot = geht nicht
     previewOpacity: 0.35,
+    previewOccupiedEdgeOpacity: 0.5, // Platz belegt (z. B. gerade gesetzt): nur ein dünner roter Umriss, keine Fläche
 
     // --- Zielwahl: wohin kommt das Bauteil? (Welle 2a, siehe src/building/grid.js) ---
     // "Blick-Anker" = Punkt auf dem Blick-Strahl so weit vor den Augen (m). Seine Zelle

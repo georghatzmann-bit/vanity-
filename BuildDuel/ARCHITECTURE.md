@@ -414,8 +414,12 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   `doorNearDistance` – jede Figur darf Türen benutzen.
 - Bots bauen über denselben Befehl (`selectBuild` + `primaryPressed`, Ziel-Strahl in
   `aimOrigin/aimDir`) und prüfen vorher mit `getTarget()`.
-- Grafik: fertige, unbearbeitete Teile → InstancedMesh je (Typ, Material, Risse); im Aufbau,
-  editiert, Trümmer → einzelne Meshes. Vorschau/Edit-Kacheln nur für `game.player`.
+- Grafik: fertige Teile → InstancedMesh je (Form, Material, Risse); Form = Typ bzw. bei
+  editierten Teilen (Art, Rampen-Richtung, Edit-Maske) – jede Edit-Form wird einmal gebaut und
+  geteilt (gilt bis `clear()`); im Aufbau und Trümmer → einzelne Meshes. Risse/Dunkelheit nach
+  `pieceHealthFraction(piece)` (pieces.js; im Aufbau gemessen am jetzt möglichen Leben
+  `pieceHealthCap`, ein neues Teil ist also heil). Vorschau/Edit-Kacheln nur für `game.player`;
+  Vorschau mit `reason === 'occupied'` = nur dünner roter Umriss (keine Fläche über dem Teil).
 
 ## 10. Modi (src/modes/)
 

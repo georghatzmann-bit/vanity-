@@ -22,7 +22,7 @@ import {
   shapeBottomAt, shapeOverlapsBox, shapeTopOverRect, selectTarget, createTarget, typeOfKind, tilesToMask,
   maskToTiles, isDoorMask, fullTileMask,
 } from './grid.js';
-import { pieceColliderSpecs, isDoorPiece, pieceCenter } from './pieces.js';
+import { pieceColliderSpecs, isDoorPiece, pieceCenter, pieceHealthCap } from './pieces.js';
 import { createEditController } from './edit.js';
 import { createBuildingView } from './view.js';
 
@@ -289,8 +289,7 @@ export function createBuildingSystem(game) {
 
   // Lebenspunkte im Aufbau: wachsen von startHealthFraction auf 100 %
   function growthHealth(piece) {
-    const f = M.startHealthFraction;
-    return piece.maxHealth * (f + (1 - f) * piece.buildProgress);
+    return pieceHealthCap(piece);
   }
 
   /**

@@ -558,7 +558,7 @@ describe('Szenario: 3000 Bauteile (Leistung)', () => {
     game.dispose();
   });
 
-  it('mit Bildschirm (nur im Browser): fertige Teile in InstancedMeshes, Aufbau/Edit einzeln, Vorschau', () => {
+  it('mit Bildschirm (nur im Browser): fertige (auch editierte) Teile in InstancedMeshes, Aufbau einzeln, Vorschau', () => {
     if (typeof document === 'undefined' || typeof document.createElement !== 'function') return; // Node: übersprungen
     const game = new Game({ headless: false, seed: 1 });
     game.startMode('practice');
@@ -580,7 +580,38 @@ describe('Szenario: 3000 Bauteile (Leistung)', () => {
     assert.equal(stats.instanced, 201, 'nach dem Aufbau in der InstancedMesh');
     b.setEdit(wall, (1 << 4) | (1 << 7));
     game.frameUpdate(1 / 60, 1);
-    assert.equal(b.view.stats().instanced, 200, 'editiert = eigene Form');
+    stats = b.view.stats();
+    assert.equal(stats.instanced, 201, 'editiert: auch als Instanz (eigene Gruppe mit der Tür-Form)');
+    assert.equal(stats.editShapes, 1);
+    // 60 weitere Türen (wx und wz) + 20 Fenster: die Formen werden geteilt → wenige Zeichen-Aufrufe
+    const door = [4, 7];
+    for (let n = 0; n < 60; n++) {
+      b.placePiece('wall', `${n % 2 ? 'wz' : 'wx'}:${-20 + (n % 30)}:0:${-20 - Math.floor(n / 30) * 2}`, p, 'stone', { instant: true, force: true, edit: door });
+    }
+    for (let n = 0; n < 20; n++) b.placePiece('wall', `wx:${-20 + n}:0:-30`, p, 'stone', { instant: true, force: true, edit: [4] });
+    game.frameUpdate(1 / 60, 1);
+    stats = b.view.stats();
+    assert.equal(stats.instanced, 281, 'alle fertigen Teile als Instanzen');
+    assert.equal(stats.editShapes, 3, 'Tür wx, Tür wz, Fenster wx');
+    assert.ok(stats.drawCalls <= 6, `Zeichen-Aufrufe: ${stats.drawCalls}`);
+    // Neues Teil im Aufbau: unbeschädigt → keine Risse, nicht dunkel; Treffer im Aufbau zeigen sich
+    f.yaw = Math.PI;
+    tap(game, f);
+    const fresh = buildOnce(game, p, f, 'wall');
+    game.simulate(0.1);
+    game.frameUpdate(1 / 60, 1);
+    assert.ok(fresh.buildProgress > 0 && fresh.buildProgress < 0.5);
+    assert.equal(fresh.view.cracked, false, 'frisch = heil');
+    assert.equal(fresh.view.dark, 0);
+    fresh.applyDamage(fresh.health * 0.7, { attacker: null });
+    assert.equal(fresh.view.cracked, true, 'im Aufbau getroffen → Risse');
+    assert.ok(fresh.view.dark >= 2);
+    // Vorschau auf dem gerade gesetzten Teil ("belegt"): keine rote Fläche, nur der Umriss
+    game.frameUpdate(1 / 60, 1);
+    const ghost = b.view.root.getObjectByName('Vorschau wall');
+    assert.equal(b.targetOf(p).reason, 'occupied');
+    assert.ok(ghost.visible && ghost.material.visible === false, 'Fläche aus');
+    assert.ok(ghost.children[0].material.visible !== false, 'Umriss da');
     // 3000 Teile: Bild-Vorbereitung bleibt schnell
     for (let n = 200; n < B.maxPieces - 1; n++) b.placePiece('floor', `f:${-30 + (n % 60)}:0:${10 + Math.floor(n / 60)}`, p, 'wood', { instant: true, force: true });
     const t0 = performance.now();

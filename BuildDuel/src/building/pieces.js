@@ -138,6 +138,26 @@ export function pieceCenter(piece, out = new THREE.Vector3()) {
   return out;
 }
 
+/**
+ * Höchstes Leben, das ein Teil JETZT haben kann: im Aufbau wächst es von
+ * startHealthFraction auf 100 % (structure.js), danach maxHealth.
+ */
+export function pieceHealthCap(piece) {
+  if (!(piece.buildProgress < 1)) return piece.maxHealth;
+  const f = CONFIG.materials.startHealthFraction;
+  return piece.maxHealth * (f + (1 - f) * Math.max(0, piece.buildProgress));
+}
+
+/**
+ * Leben als Anteil 0..1 – im Aufbau gemessen am jetzt möglichen Höchstwert. So ist
+ * ein frisch gesetztes, unbeschädigtes Teil "heil" (keine Risse, nicht dunkel);
+ * Treffer während des Aufbaus zeigen sich trotzdem.
+ */
+export function pieceHealthFraction(piece) {
+  const cap = pieceHealthCap(piece);
+  return cap > 0 ? Math.max(0, Math.min(1, piece.health / cap)) : 0;
+}
+
 /** Drehung (um die Hochachse) für die gemeinsame Form eines Typs. */
 export function pieceRotationY(piece) {
   if (piece.kind === 'wz') return -Math.PI / 2;

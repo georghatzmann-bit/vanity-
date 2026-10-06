@@ -1,11 +1,13 @@
 // =============================================================================
 // Bauteile zeichnen (nur mit Bildschirm)
 // =============================================================================
-// - Fertige, unbearbeitete Teile: InstancedMesh je (Typ, Material, Risse ja/nein)
-//   → 3000 Teile kosten nur ein paar Zeichen-Aufrufe. Schaden macht sie dunkler
-//   (Farbe pro Teil), unter 50 % Leben zeigt das Bild Risse.
-// - Teile im Aufbau (leicht durchsichtig, werden fester) und editierte Teile
-//   (eigene Form mit Löchern) sind einzelne Meshes.
+// - Fertige Teile: InstancedMesh je (Form, Material, Risse ja/nein) → 3000 Teile
+//   kosten nur ein paar Zeichen-Aufrufe. "Form" = Typ, bei editierten Teilen Typ +
+//   entfernte Felder (jede Edit-Form wird nur EINMAL gebaut und von allen Teilen mit
+//   denselben Löchern geteilt – 100 Türen = 1 Zeichen-Aufruf). Schaden macht sie
+//   dunkler (Farbe pro Teil), unter 50 % Leben zeigt das Bild Risse (im Aufbau
+//   gemessen am jetzt möglichen Leben – ein neues Teil ist heil).
+// - Teile im Aufbau (leicht durchsichtig, werden fester) sind einzelne Meshes.
 // - Einsturz: das Teil sackt kurz ab und verblasst (danach weg).
 // - Tür: Tür-Blatt, das auf- und zuschwingt.
 // - Vorschau ("Geist", blau = geht, rot = geht nicht) und Edit-Kacheln – nur für
@@ -16,7 +18,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import {
   createSharedGeometry, createPieceGeometry, createDoorGeometry, createTileGeometries, createMaterialTexture,
-  pieceOrigin, pieceRotationY, doorRect, isDoorPiece,
+  pieceOrigin, pieceRotationY, doorRect, isDoorPiece, pieceHealthFraction,
 } from './pieces.js';
 import { CELL_SIZE as S, LEVEL_HEIGHT as H } from './grid.js';
 
@@ -35,6 +37,35 @@ export function createBuildingView(game) {
 
   const geometries = {};
   for (const type of TYPES) geometries[type] = createSharedGeometry(type);
+  // editierte Formen: einmal je (Art, Rampen-Richtung, entfernte Felder), in Welt-Ausrichtung
+  const editGeometries = new Map();
+  const _shape = { key: '', geometry: null, rotationY: 0, edited: false };
+
+  /** Form eines Teils: gemeinsame Typ-Form (gedreht) oder geteilte Edit-Form (ungedreht). */
+  function shapeOf(piece) {
+    const mask = piece.editMask | 0;
+    if (!mask) {
+      _shape.key = piece.type;
+      _shape.geometry = geometries[piece.type];
+      _shape.rotationY = pieceRotationY(piece);
+      _shape.edited = false;
+      return _shape;
+    }
+    const dir = piece.type === 'ramp' ? ((piece.dir % 4) + 4) % 4 : 0;
+    const key = `${piece.kind}|${dir}|${mask}`;
+    let geometry = editGeometries.get(key);
+    if (!geometry) {
+      // in Zelle (0, 0, 0) gebaut: Form und Bild-Koordinaten hängen nur von der Lage in der Zelle ab
+      geometry = createPieceGeometry({ type: piece.type, kind: piece.kind, i: 0, j: 0, k: 0, dir, editMask: mask });
+      geometry.userData.shared = true;
+      editGeometries.set(key, geometry);
+    }
+    _shape.key = key;
+    _shape.geometry = geometry;
+    _shape.rotationY = 0;
+    _shape.edited = true;
+    return _shape;
+  }
   const doorGeometry = createDoorGeometry();
   const handleGeometry = new THREE.BoxGeometry(0.08, 0.22, B.pieceThickness * 0.55 + 0.16);
   handleGeometry.userData.shared = true;
@@ -72,7 +103,7 @@ export function createBuildingView(game) {
   }
 
   // --- InstancedMesh-Gruppen ---------------------------------------------------------
-  const groups = new Map(); // "wall|wood|0" → { mesh, list, type, material, cracked, dirty }
+  const groups = new Map(); // "wall|wood|0" bzw. "wx|0|144|wood|0" → { mesh, list, geometry, edited, material, cracked }
   const _matrix = new THREE.Matrix4();
   const _pos = new THREE.Vector3();
   const _quat = new THREE.Quaternion();
@@ -80,20 +111,20 @@ export function createBuildingView(game) {
   const _axisY = new THREE.Vector3(0, 1, 0);
   const _color = new THREE.Color();
 
-  function groupFor(type, material, cracked) {
-    const key = `${type}|${material}|${cracked ? 1 : 0}`;
+  function groupFor(shape, material, cracked) {
+    const key = `${shape.key}|${material}|${cracked ? 1 : 0}`;
     let g = groups.get(key);
     if (!g) {
-      g = { key, type, material, cracked, mesh: null, list: [], capacity: 0 };
+      g = { key, geometry: shape.geometry, edited: shape.edited, material, cracked, mesh: null, list: [], capacity: 0 };
       groups.set(key, g);
-      growGroup(g, 32);
+      growGroup(g, shape.edited ? 8 : 32);
     }
     return g;
   }
 
   function growGroup(g, capacity) {
     capacity = Math.min(Math.max(capacity, 1), B.maxPieces);
-    const mesh = new THREE.InstancedMesh(geometries[g.type], materialFor(g.material, g.cracked, 0, OPACITY_LEVELS, true), capacity);
+    const mesh = new THREE.InstancedMesh(g.geometry, materialFor(g.material, g.cracked, 0, OPACITY_LEVELS, true), capacity);
     mesh.name = `Bauteile ${g.key}`;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -112,6 +143,7 @@ export function createBuildingView(game) {
       root.remove(g.mesh);
       g.mesh.dispose();
     }
+    mesh.visible = mesh.count > 0; // leere Gruppen kosten dann gar nichts
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     g.mesh = mesh;
     g.capacity = capacity;
@@ -119,13 +151,12 @@ export function createBuildingView(game) {
   }
 
   function shadeOf(piece) {
-    const frac = Math.max(0, Math.min(1, piece.health / piece.maxHealth));
-    return 1 - B.damageDarkening * (1 - frac);
+    return 1 - B.damageDarkening * (1 - pieceHealthFraction(piece));
   }
 
   function writeInstance(g, index, piece) {
     pieceOrigin(piece, _pos);
-    _quat.setFromAxisAngle(_axisY, pieceRotationY(piece));
+    _quat.setFromAxisAngle(_axisY, g.edited ? 0 : pieceRotationY(piece));
     _matrix.compose(_pos, _quat, _scale);
     g.mesh.setMatrixAt(index, _matrix);
     const shade = shadeOf(piece);
@@ -139,6 +170,7 @@ export function createBuildingView(game) {
     const index = g.list.length;
     g.list.push(piece);
     g.mesh.count = g.list.length;
+    g.mesh.visible = true;
     piece.view.group = g;
     piece.view.index = index;
     writeInstance(g, index, piece);
@@ -161,25 +193,19 @@ export function createBuildingView(game) {
     }
     g.list.pop();
     g.mesh.count = g.list.length;
+    g.mesh.visible = g.list.length > 0;
     g.mesh.instanceMatrix.needsUpdate = true;
     if (g.mesh.instanceColor) g.mesh.instanceColor.needsUpdate = true;
     v.group = null;
     v.index = -1;
   }
 
-  // --- einzelne Meshes (Aufbau, Edit) ------------------------------------------------
+  // --- einzelne Meshes (Aufbau) --------------------------------------------------------
   function removeSingle(piece) {
     const v = piece.view;
     if (!v.mesh) return;
     root.remove(v.mesh);
     v.mesh = null;
-  }
-
-  function disposeCustomGeometry(v) {
-    if (v.customGeometry) {
-      v.customGeometry.dispose();
-      v.customGeometry = null;
-    }
   }
 
   function ensureDoor(piece) {
@@ -212,19 +238,20 @@ export function createBuildingView(game) {
     }
   }
 
-  // Bauteil so zeigen, wie es gerade ist (InstancedMesh oder einzeln)
+  // Bauteil so zeigen, wie es gerade ist (InstancedMesh oder einzeln im Aufbau)
   function refresh(piece) {
     const v = piece.view;
     if (!v) return;
     const constructing = piece.buildProgress < 1;
-    const edited = (piece.editMask | 0) !== 0;
-    const frac = Math.max(0, Math.min(1, piece.health / piece.maxHealth));
+    const frac = pieceHealthFraction(piece);
     const cracked = frac < B.crackThreshold;
     v.cracked = cracked;
-    if (!constructing && !edited) {
+    const shape = shapeOf(piece);
+    v.geometry = shape.geometry;
+    v.rotationY = shape.rotationY;
+    if (!constructing) {
       removeSingle(piece);
-      disposeCustomGeometry(v);
-      const g = groupFor(piece.type, piece.material, cracked);
+      const g = groupFor(shape, piece.material, cracked);
       if (v.group !== g) {
         removeInstance(piece);
         addInstance(piece, g);
@@ -233,26 +260,19 @@ export function createBuildingView(game) {
       }
     } else {
       removeInstance(piece);
-      if (edited && (!v.customGeometry || v.editMask !== piece.editMask)) {
-        disposeCustomGeometry(v);
-        v.customGeometry = createPieceGeometry(piece);
-        v.editMask = piece.editMask;
-      }
-      if (!edited) disposeCustomGeometry(v);
-      const geometry = v.customGeometry ?? geometries[piece.type];
       const dark = Math.round((1 - frac) * DARK_LEVELS);
-      const opacity = constructing ? opacityLevel(piece.buildProgress) : OPACITY_LEVELS;
+      const opacity = opacityLevel(piece.buildProgress);
       const material = materialFor(piece.material, cracked, dark, opacity);
       if (!v.mesh) {
-        v.mesh = new THREE.Mesh(geometry, material);
+        v.mesh = new THREE.Mesh(shape.geometry, material);
         v.mesh.castShadow = true;
         v.mesh.receiveShadow = true;
         root.add(v.mesh);
       }
-      v.mesh.geometry = geometry;
+      v.mesh.geometry = shape.geometry;
       v.mesh.material = material;
       pieceOrigin(piece, v.mesh.position);
-      v.mesh.rotation.set(0, v.customGeometry ? 0 : pieceRotationY(piece), 0);
+      v.mesh.rotation.set(0, shape.rotationY, 0);
       v.opacity = opacity;
       v.dark = dark;
     }
@@ -270,17 +290,16 @@ export function createBuildingView(game) {
 
   function spawnDebris(piece, time) {
     const v = piece.view;
-    const geometry = v.customGeometry ?? geometries[piece.type];
+    const geometry = v.geometry ?? geometries[piece.type]; // geteilte Form (wird nicht entsorgt)
     const mesh = new THREE.Mesh(geometry, materialFor(piece.material, v.cracked, 0, OPACITY_LEVELS - 1));
     pieceOrigin(piece, mesh.position);
-    mesh.rotation.set(0, v.customGeometry ? 0 : pieceRotationY(piece), 0);
+    mesh.rotation.set(0, v.rotationY ?? pieceRotationY(piece), 0);
     root.add(mesh);
     const seed = (piece.id * 9301 + 49297) % 233280;
     debris.push({
       mesh,
       start: time,
       baseY: mesh.position.y,
-      custom: v.customGeometry, // gehört jetzt den Trümmern (wird danach entsorgt)
       material: piece.material,
       cracked: v.cracked,
       tiltX: ((seed % 100) / 100 - 0.5) * 0.5,
@@ -288,7 +307,6 @@ export function createBuildingView(game) {
       baseRotX: mesh.rotation.x,
       baseRotZ: mesh.rotation.z,
     });
-    v.customGeometry = null;
   }
 
   function updateDebris(time) {
@@ -297,7 +315,6 @@ export function createBuildingView(game) {
       const t = (time - d.start) / B.collapseAnimTime;
       if (t >= 1 || t < -1) {
         root.remove(d.mesh);
-        d.custom?.dispose();
         debris[n] = debris[debris.length - 1];
         debris.pop();
         continue;
@@ -321,7 +338,13 @@ export function createBuildingView(game) {
   previewBad.color.set(B.previewColorBlocked);
   const edgeOk = new THREE.LineBasicMaterial({ color: B.previewColorOk, transparent: true, opacity: 0.95, depthWrite: false });
   const edgeBad = new THREE.LineBasicMaterial({ color: B.previewColorBlocked, transparent: true, opacity: 0.95, depthWrite: false });
-  for (const m of [previewOk, previewBad, edgeOk, edgeBad]) m.userData.shared = true;
+  // Platz schon belegt (meist: das Teil, das man gerade gesetzt hat): keine rote Fläche
+  // über dem Teil, nur ein dünner roter Umriss – rot heißt weiter "geht nicht".
+  const previewNone = new THREE.MeshBasicMaterial({ visible: false });
+  const edgeOccupied = new THREE.LineBasicMaterial({
+    color: B.previewColorBlocked, transparent: true, opacity: B.previewOccupiedEdgeOpacity, depthWrite: false,
+  });
+  for (const m of [previewOk, previewBad, edgeOk, edgeBad, previewNone, edgeOccupied]) m.userData.shared = true;
   const ghosts = {};
   for (const type of TYPES) {
     const mesh = new THREE.Mesh(geometries[type], previewOk);
@@ -351,8 +374,9 @@ export function createBuildingView(game) {
       pieceOrigin(_ghostPiece, g.mesh.position);
       g.mesh.rotation.set(0, pieceRotationY(_ghostPiece), 0);
       g.mesh.scale.setScalar(1.004);
-      g.mesh.material = target.valid ? previewOk : previewBad;
-      g.edges.material = target.valid ? edgeOk : edgeBad;
+      const occupied = !target.valid && target.reason === 'occupied';
+      g.mesh.material = target.valid ? previewOk : occupied ? previewNone : previewBad;
+      g.edges.material = target.valid ? edgeOk : occupied ? edgeOccupied : edgeBad;
     }
   }
 
@@ -403,7 +427,7 @@ export function createBuildingView(game) {
     root,
     /** Neues Bauteil zeigen. */
     add(piece) {
-      piece.view = { group: null, index: -1, mesh: null, customGeometry: null, editMask: 0, door: null, cracked: false, opacity: OPACITY_LEVELS, dark: 0 };
+      piece.view = { group: null, index: -1, mesh: null, geometry: null, rotationY: 0, door: null, cracked: false, opacity: OPACITY_LEVELS, dark: 0 };
       refresh(piece);
     },
     /** Zustand geändert (Schaden, Edit, Aufbau fertig, Tür). */
@@ -412,8 +436,7 @@ export function createBuildingView(game) {
     damaged(piece) {
       const v = piece.view;
       if (!v) return;
-      const frac = Math.max(0, Math.min(1, piece.health / piece.maxHealth));
-      const cracked = frac < B.crackThreshold;
+      const cracked = pieceHealthFraction(piece) < B.crackThreshold;
       if (v.group && cracked === v.cracked) writeInstance(v.group, v.index, piece);
       else refresh(piece);
     },
@@ -424,7 +447,6 @@ export function createBuildingView(game) {
       if (collapsed) spawnDebris(piece, time);
       removeInstance(piece);
       removeSingle(piece);
-      disposeCustomGeometry(v);
       if (v.door) {
         root.remove(v.door.pivot);
         v.door = null;
@@ -465,19 +487,25 @@ export function createBuildingView(game) {
       root.traverse((o) => {
         if (o.isMesh && !o.isInstancedMesh && o.visible && !o.name.startsWith('Vorschau')) singles++;
       });
-      return { instanced, groups: groups.size, drawCalls, singles, debris: debris.length };
+      return { instanced, groups: groups.size, drawCalls, singles, debris: debris.length, editShapes: editGeometries.size };
     },
     /** Alles weg (Runde neu). */
     clear() {
-      for (const g of groups.values()) {
+      for (const g of [...groups.values()]) {
         g.list.length = 0;
         g.mesh.count = 0;
+        g.mesh.visible = false;
+        if (g.edited) {
+          // Edit-Formen gelten nur für eine Runde (sonst sammeln sie sich an)
+          root.remove(g.mesh);
+          g.mesh.dispose();
+          groups.delete(g.key);
+        }
       }
-      for (const d of debris) {
-        root.remove(d.mesh);
-        d.custom?.dispose();
-      }
+      for (const d of debris) root.remove(d.mesh);
       debris.length = 0;
+      for (const geometry of editGeometries.values()) geometry.dispose();
+      editGeometries.clear();
       setPreview(null);
       setEditOverlay(null);
       for (const child of [...root.children]) {
@@ -498,7 +526,7 @@ export function createBuildingView(game) {
       materials.clear();
       for (const t of textures.values()) t.dispose();
       textures.clear();
-      for (const m of [previewOk, previewBad, edgeOk, edgeBad, tileNormal, tileHover, tileSelected, tileSelectedHover]) m.dispose();
+      for (const m of [previewOk, previewBad, edgeOk, edgeBad, previewNone, edgeOccupied, tileNormal, tileHover, tileSelected, tileSelectedHover]) m.dispose();
       root.parent?.remove(root);
     },
   };
