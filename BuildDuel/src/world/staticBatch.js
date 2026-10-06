@@ -23,7 +23,7 @@ const _color = new THREE.Color();
 /**
  * @param {object} game
  * @param {object} builder  Karte aus createMapBuilder (root, colliders)
- * @param {object} [options] { name, castShadow, texture (Kachel-Bild, optional) }
+ * @param {object} [options] { name, castShadow, texture (Kachel-Bild, optional), selfLight (0..1, Eigenlicht) }
  */
 export function createStaticBatch(game, builder, options = {}) {
   const visual = !game.headless && typeof document !== 'undefined';
@@ -140,6 +140,18 @@ export function createStaticBatch(game, builder, options = {}) {
       geometry.setIndex(vertexCount > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
       geometry.computeBoundingSphere();
       const material = new THREE.MeshLambertMaterial({ vertexColors: true, map: options.texture ?? null });
+      // "Eigenlicht": ein Teil der eigenen Farbe leuchtet immer – wie weiches Streulicht. So
+      // wirken Innenräume und Schattenseiten warm und hell statt grau-bläulich (Comic-Look).
+      const selfLight = options.selfLight ?? 0.22;
+      if (selfLight > 0) {
+        material.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <emissivemap_fragment>',
+            `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${selfLight.toFixed(3)};`,
+          );
+        };
+        material.customProgramCacheKey = () => `staticBatchSelfLight${selfLight}`;
+      }
       mesh = new THREE.Mesh(geometry, material);
       mesh.name = options.name ?? 'Karten-Teile';
       mesh.castShadow = options.castShadow ?? true;

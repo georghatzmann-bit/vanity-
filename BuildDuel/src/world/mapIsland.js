@@ -37,6 +37,7 @@ const DESERT_TRIM = ['#C47F48', '#B5683A', '#D9955B', '#A86B45'];
 const DESERT_ROOF = ['#D4A373', '#C9935F', '#DDB07F'];
 const ACCENTS = ['#E85D75', '#3EC1D3', '#FFC93C', '#7A5CFA', '#2ECC71', '#FF8C42'];
 const WOOD_WALLS = ['#D19A66', '#C68B59', '#DDA878'];
+const FLOORS = ['#E8C9A0', '#E3B98C', '#EAD2AE'];
 const WOOD_TRIM = ['#8B5A3C', '#7A4E33'];
 const WOOD_ROOFS = ['#C0504D', '#B5443F', '#4E7FB8', '#5C8F4A'];
 
@@ -104,7 +105,7 @@ export function createIslandMap(game, spec = {}) {
     const r = coastNorm(x, z);
     const land = smoothstep(1.0, 1.0 - cfg.beachWidth * 2.2, r);
     const hillNoise = Math.max(0, noise.fbm(x / cfg.hillScale, z / cfg.hillScale, 4) * 0.5 + 0.5);
-    let inland = cfg.landHeight + cfg.hillHeight * Math.pow(hillNoise, 1.6) * hillMask(x, z) +
+    let inland = cfg.landHeight + cfg.hillHeight * Math.pow(hillNoise, 1.35) * hillMask(x, z) +
       cfg.rollingHeight * noise.fbm(x / 55 + 3.3, z / 55 - 7.7, 2);
     // Felsenkamm im Norden: langer Rücken
     const ridge = cfg.areas.find((a) => a.name === 'Felsenkamm');
@@ -148,8 +149,9 @@ export function createIslandMap(game, spec = {}) {
   const count = Math.round((2 * extent) / cell) + 1;
   const heights = sampleHeights(-extent, -extent, cell, count, count, heightFn);
   // Hänge begrenzen (die Stadt bleibt, wie sie ist)
-  const maxRise = cell * Math.tan((cfg.maxSlopeDeg * Math.PI) / 180);
-  limitSlopes(heights, count, count, maxRise, 8, (ix, iz) => {
+  // je Achse höchstens maxRise → jedes Dreieck ist höchstens maxSlopeDeg steil (Wurzel 2 für die Diagonale)
+  const maxRise = (cell * Math.tan((cfg.maxSlopeDeg * Math.PI) / 180)) / Math.SQRT2;
+  limitSlopes(heights, count, count, maxRise, 40, (ix, iz) => {
     const x = -extent + ix * cell;
     const z = -extent + iz * cell;
     return Math.hypot(x - town.x, z - town.z) < town.radius + 2;
@@ -209,7 +211,7 @@ export function createIslandMap(game, spec = {}) {
     const rotation = Math.abs(toCenterX) > Math.abs(toCenterZ) ? (toCenterX > 0 ? 1 : 3) : (toCenterZ > 0 ? 0 : 2);
     const house = buildHouse(batch, {
       cx: lot.x, cz: lot.z, y: town.height, width, depth, floors: twoFloors ? 2 : 1, rotation, style: 'desert',
-      colors: { wall: pick(DESERT_WALLS, rng), trim: pick(DESERT_TRIM, rng), roof: pick(DESERT_ROOF, rng), accent: pick(ACCENTS, rng) },
+      colors: { wall: pick(DESERT_WALLS, rng), trim: pick(DESERT_TRIM, rng), roof: pick(DESERT_ROOF, rng), accent: pick(ACCENTS, rng), floor: pick(FLOORS, rng) },
     });
     house.area = 'Sandkrug';
     addHouse(house);
@@ -223,7 +225,7 @@ export function createIslandMap(game, spec = {}) {
   function buildWoodHouse(h, area) {
     const house = buildHouse(batch, {
       cx: h.cx, cz: h.cz, y: h.y, width: h.width, depth: h.depth, floors: h.floors, rotation: h.rotation, style: 'wood',
-      colors: { wall: pick(WOOD_WALLS, rng), trim: pick(WOOD_TRIM, rng), roof: pick(WOOD_ROOFS, rng), stairs: '#A8774F' },
+      colors: { wall: pick(WOOD_WALLS, rng), trim: pick(WOOD_TRIM, rng), roof: pick(WOOD_ROOFS, rng), stairs: '#A8774F', floor: '#D9A066' },
     });
     house.area = area;
     return house;

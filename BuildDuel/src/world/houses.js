@@ -72,7 +72,7 @@ export function buildHouse(batch, spec) {
   const worldDir = (localDir) => (localDir - r + 4) % 4;
 
   // --- Fußboden ---------------------------------------------------------------------------
-  box(0, y0 - 0.4, 0, W, floorTop, D, colors.trim);
+  box(0, y0 - 0.4, 0, W, floorTop, D, colors.floor ?? colors.trim);
 
   // --- Wände je Stockwerk ----------------------------------------------------------------
   // Wand entlang u (bei v = vPos) bzw. entlang v (bei u = uPos) mit Öffnungen
@@ -133,8 +133,8 @@ export function buildHouse(batch, spec) {
     const bottom = top - H.slab;
     floorY.push(top);
     // Decke mit Loch über der Treppe (Treppe hinten links: u klein, v klein)
-    box(holeU, bottom, T, W - T, top, D - T, colors.trim);
-    box(T, bottom, holeV, holeU, top, D - T, colors.trim);
+    box(holeU, bottom, T, W - T, top, D - T, colors.floor ?? colors.trim);
+    box(T, bottom, holeV, holeU, top, D - T, colors.floor ?? colors.trim);
     // Treppe: Schräge von unten bis zur Decke, steigt Richtung +u
     const yStair = floorTop + (f - 1) * FH;
     const [ax, az] = toWorld(stairStart, T);

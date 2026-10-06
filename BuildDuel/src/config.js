@@ -731,7 +731,7 @@ export const CONFIG = deepFreeze({
       coastNoise: 0.11, // Küste ist so stark gezackt (Anteil)
       beachWidth: 0.07, // Strand (Anteil des Radius)
       landHeight: 2.6, // flaches Land liegt so hoch über dem Wasser (m)
-      hillHeight: 22, // Hügel bis so hoch (m)
+      hillHeight: 26, // Hügel bis so hoch (m)
       hillScale: 150, // so breit sind die Hügel (m) – größer = sanfter
       rollingHeight: 3, // kleine Wellen im Gelände überall (m)
       maxSlopeDeg: 38, // steiler werden Hänge nie (laufen geht bis 46°)
@@ -747,8 +747,8 @@ export const CONFIG = deepFreeze({
       chests: 32, // Kisten-Plätze (25–40)
       floorLoot: 120, // Boden-Loot-Plätze (80–150)
       barrierMargin: 14, // unsichtbare Wand so weit außerhalb der Insel-Fläche (m)
-      fog: { near: 170, far: 980 }, // Nebel passend zur Insel (von oben sieht man alles)
-      cameraFar: 1150, // Sichtweite der Kamera auf der Insel (m)
+      fog: { near: 240, far: 1150 }, // Nebel passend zur Insel (von oben sieht man alles)
+      cameraFar: 1300, // Sichtweite der Kamera auf der Insel (m)
       hemiGroundColor: '#BFA978', // weiches Licht von unten: warm-sandig (sonst wirken Hauswände grünlich)
       maxBuildLevel: 30,
       // Namen der Gegenden (eigene Namen, nur zur Orientierung)
@@ -800,7 +800,7 @@ export const CONFIG = deepFreeze({
     balloonRadius: 9, // m
     balloonColors: ['#FF5A5F', '#FFC93C', '#3EC1D3', '#7A5CFA', '#2ECC71', '#FF8C42'],
     deckSize: 7.5, // Plattform unter dem Ballon (m)
-    deckColor: '#B97A45',
+    deckColor: '#D39A5E',
     riderSpacing: 1.25, // so dicht stehen die Mitfahrer (m)
     gliderColors: ['#FF5A5F', '#FFFFFF', '#3EC1D3'], // Streifen des Gleiters
     gliderWidth: 2.5, // Spannweite (m)

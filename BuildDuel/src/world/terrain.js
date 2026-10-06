@@ -169,7 +169,7 @@ export function sampleHeights(minX, minZ, cell, countX, countZ, heightFn) {
  * fixed(ix, iz) → true: Punkt nicht verändern (z. B. flache Stadt).
  */
 export function limitSlopes(heights, countX, countZ, maxRise, passes = 6, fixed = null) {
-  const diag = maxRise * Math.SQRT2;
+  const diag = maxRise * 2; // diagonal: zwei Achsen-Schritte
   for (let pass = 0; pass < passes; pass++) {
     let changed = false;
     for (let iz = 0; iz < countZ; iz++) {

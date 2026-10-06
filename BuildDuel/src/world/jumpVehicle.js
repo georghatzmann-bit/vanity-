@@ -228,7 +228,7 @@ function createVehicleView(game, vehicle) {
   balloon.translate(0, balloonLift, 0);
   const balloonMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const balloonMesh = new THREE.Mesh(balloon, balloonMaterial);
-  balloonMesh.castShadow = true;
+  balloonMesh.castShadow = false; // sonst liegt die Plattform im dunklen Schatten
   group.add(balloonMesh);
 
   // Plattform + Geländer + Seile + Brenner (ein Mesh mit Ecken-Farben)

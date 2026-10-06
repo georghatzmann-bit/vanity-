@@ -814,6 +814,7 @@ const GAME_CHECKS = [
   // Welle 2a: Bauen und Editieren (über die echte Eingabe: Z/X/C/V, Klick, Q, R, G, E)
   // ---------------------------------------------------------------------------
   ...require('./buildChecks.cjs').BUILD_CHECKS,
+  ...require('./worldChecks.cjs').WORLD_CHECKS, // Welle 3b: Welt (Insel, Sturm, Loot, Absprung, Arena, Zone Wars)
 ];
 
 // =============================================================================
