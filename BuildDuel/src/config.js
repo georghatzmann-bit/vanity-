@@ -624,6 +624,195 @@ export const CONFIG = deepFreeze({
   },
 
   // ---------------------------------------------------------------------------
+  // Welt (Welle 3b, Phase 8–10): Sturm-Zone, Loot, Karten, Absprung + Gleiter
+  // ---------------------------------------------------------------------------
+  // Sturm-Zone (src/world/storm.js). Phasen, Zeiten und Schaden stehen beim Modus
+  // (modes.battleRoyale.storm, modes.zoneWars.storm) – hier nur, WIE der Sturm wirkt.
+  stormZone: {
+    damageInterval: 1, // Schaden kommt in festen Schritten: alle 1 s (Schaden pro Sekunde × 1 s)
+    // Wie im Original nimmt der Sturm direkt Leben – der Schild schützt nicht davor. // SCHÄTZUNG
+    ignoresShield: true,
+    centerTries: 32, // so oft wird ein Mittelpunkt für die neue Zone gewürfelt (an Land bevorzugt)
+    landSamples: 9, // so viele Punkte der neuen Zone müssen an Land liegen (Mitte + Ring)
+    movingShiftFraction: 0.85, // Zone Wars: die Zone wandert so weit (Anteil des erlaubten Wegs) – deutlich spürbar
+    // Aussehen: lila, halb durchsichtige Wand (Zylinder ohne Deckel), von weit weg zu sehen
+    wallHeight: 190, // so hoch ist die Wand (m), nach oben wird sie durchsichtig
+    wallSegments: 96, // Rundheit der Wand
+    stripeSpeed: 0.035, // Schlieren in der Wand wandern langsam (Bild-Breiten pro Sekunde)
+    pulseSpeed: 1.3, // die Wand "atmet" leicht …
+    pulseAmount: 0.12, // … um so viel (Anteil der Deckkraft)
+    outsideTint: 0.2, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
+    outsideFogMix: 0.6, // draußen im Sturm: der Nebel wird so stark lila
+  },
+
+  // Loot (src/world/loot.js): Kisten, Gegenstände am Boden, Aufheben (E), Fallenlassen
+  loot: {
+    pickupReach: 2.6, // E: Gegenstand bis so weit (m) von der Figur
+    chestReach: 2.8, // E: Kiste bis so weit (m)
+    lookConeDeg: 35, // was näher am Fadenkreuz liegt (innerhalb dieses Winkels), wird bevorzugt
+    autoPickupRadius: 1.3, // Munition und Material sammelt man im Vorbeilaufen ein (m)
+    chestSpawnChance: 0.8, // so viele Kisten-Plätze bekommen wirklich eine Kiste // SCHÄTZUNG
+    floorSpawnChance: 0.75, // so viele Boden-Plätze bekommen wirklich etwas // SCHÄTZUNG
+    // Was liegt am Boden? (Gewichte – größer = häufiger) // SCHÄTZUNG
+    floorKindWeights: { weapon: 45, ammo: 20, heal: 20, material: 15 },
+    // Welche Waffe? (Kisten und Boden-Loot) // SCHÄTZUNG
+    weaponWeights: { ar: 26, shotgun: 24, smg: 18, pistol: 16, sniper: 10, grenadeLauncher: 6 },
+    // Welches Heil-Item? (Anzahl = so viele Stück liegen zusammen) // SCHÄTZUNG
+    healWeights: { bandage: 38, smallShield: 32, medkit: 14, bigShield: 16 },
+    healCounts: { bandage: 5, smallShield: 3, medkit: 1, bigShield: 1 },
+    ammoMagazines: 1.5, // Munitions-Kiste am Boden: so viele Magazine (Kisten: modes.battleRoyale.chest) // SCHÄTZUNG
+    floorMaterialAmount: 30, // Material-Stapel am Boden // SCHÄTZUNG
+    maxReserveMagazines: 8, // mehr Reserve-Munition (in Magazinen) passt nicht in eine Waffe // SCHÄTZUNG
+    droppedDespawnTime: 180, // fallen gelassene Gegenstände verschwinden nach 3 Minuten (Karten-Loot nie)
+    maxFloorItems: 400, // mehr Gegenstände gleichzeitig am Boden gibt es nicht (die ältesten verschwinden)
+    scatterRadius: { min: 0.9, max: 2.4 }, // fallen gelassen / aus der Kiste: so weit um die Stelle verteilt (m)
+    // --- Aussehen ---
+    popTime: 0.5, // Gegenstände springen in so vielen Sekunden aus der Kiste
+    popHeight: 1.3, // … in so einem Bogen (m)
+    floatHeight: 0.38, // Gegenstände schweben so hoch über dem Boden (m)
+    bobHeight: 0.07, // … und wippen so weit auf und ab
+    spinSpeed: 1.1, // … und drehen sich langsam (Radiant pro Sekunde)
+    itemScale: 1.6, // Waffen-Modelle am Boden größer als in der Hand (gut zu sehen)
+    beamHeight: 3.2, // Lichtsäule in Seltenheits-Farbe (m) – gut zu sehen, auch im Gras
+    beamRadius: 0.2,
+    beamOpacity: 0.32,
+    groundGlowRadius: 0.75, // leuchtender Fleck unter dem Gegenstand (m)
+    showDistance: 120, // weiter weg werden Boden-Gegenstände nicht gezeichnet (m)
+    labelBackground: 'rgba(15, 17, 21, 0.78)',
+    chest: {
+      size: { x: 1.0, y: 0.7, z: 0.62 }, // Kiste (m)
+      color: '#F2B632', // goldener Würfel
+      trimColor: '#A8641C', // Beschläge
+      glowColor: '#FFE38A', // Leuchten um die Kiste
+      glowSize: 3.4, // Größe des Leucht-Flecks (m)
+      pulseSpeed: 3.2, // so schnell pulsiert das Leuchten
+      emissiveMin: 0.25, // Leuchtkraft der Kiste (pulsiert dazwischen)
+      emissiveMax: 0.75,
+    },
+    ammoColors: { shotgun: '#E8573F', ar: '#E8B13F', smg: '#5FB3E8', sniper: '#7C5CE0', pistol: '#9BC53D', grenadeLauncher: '#5C6B5A' },
+    ammoNames: { shotgun: 'Schrot', ar: 'Gewehr-Munition', smg: 'MP-Munition', sniper: 'Scharfschützen-Munition', pistol: 'Pistolen-Munition', grenadeLauncher: 'Granaten' },
+  },
+
+  // Karten (src/world/map*.js)
+  maps: {
+    // Sammel-Objekte (Bäume, Felsen, Autos, Metallzäune): Leben – zerstört = weg // SCHÄTZUNG
+    props: {
+      tree: { health: 300 },
+      rock: { health: 400 },
+      car: { health: 500 },
+      fence: { health: 150 },
+      colors: {
+        trunk: '#8B5A2B',
+        leaves: ['#3F9D45', '#4DB653', '#58C25C', '#3A8F3F'],
+        pine: ['#2F7D46', '#3A8C4F', '#2A6F3E'],
+        rock: '#8E949C',
+        cars: ['#D64545', '#3E7BD6', '#F2C14E', '#4CB572', '#F28C38', '#E9EEF4'],
+        fence: '#9AA3AE',
+      },
+    },
+    // Arena (Duell 1v1): 80 x 80 m, flach, ein paar Felsen und Bäume
+    arena: {
+      barrierHeight: 120, // unsichtbare Wand über der Mauer: niemand verlässt die Arena (auch nicht über Rampen)
+      duelTrees: 8,
+      duelRocks: 6,
+      propMinSpacing: 8, // so weit (m) stehen Bäume/Felsen mindestens auseinander
+      propSpawnClearance: 9, // um die Startpunkte bleibt so viel Platz (m)
+      propEdgeMargin: 6, // Abstand zur Mauer (m)
+    },
+    // Battle-Royale-Insel: 600 x 600 m (Größe: modes.battleRoyale.islandSize)
+    island: {
+      seed: 7, // Startwert der Karte (gleicher Wert = gleiche Insel)
+      terrainCell: 4, // Gelände-Raster (m) – passt zum Bau-Raster
+      terrainExtent: 372, // Gelände reicht so weit von der Mitte (m), danach Meeresboden
+      seaLevel: 0, // Wasser-Oberfläche (m)
+      shelfDepth: 1.1, // flaches Wasser um die Insel (begehbar, bis zur unsichtbaren Wand) (m)
+      seabedDepth: 9, // tiefes Meer draußen (m)
+      coastRadius: 282, // Küste (m von der Mitte, an den Seiten)
+      coastShape: 2.8, // Form der Küste: 2 = Kreis, größer = eckiger (mehr Land in den Ecken)
+      coastNoise: 0.11, // Küste ist so stark gezackt (Anteil)
+      beachWidth: 0.07, // Strand (Anteil des Radius)
+      landHeight: 2.6, // flaches Land liegt so hoch über dem Wasser (m)
+      hillHeight: 26, // Hügel bis so hoch (m)
+      hillScale: 150, // so breit sind die Hügel (m) – größer = sanfter
+      rollingHeight: 3, // kleine Wellen im Gelände überall (m)
+      maxSlopeDeg: 38, // steiler werden Hänge nie (laufen geht bis 46°)
+      river: { x: 34, width: 12, bank: 16, depth: 0.7, meander: 42, wavelength: 300 }, // Fluss (begehbar, 0,7 m tief)
+      town: { x: -118, z: -96, radius: 64, height: 3, houses: 13, twoFloorChance: 0.45 }, // Wüstenstadt
+      hamlet: { x: 150, z: 40, houses: 3 }, // Weiler am Waldrand
+      farm: { x: 120, z: 168, houses: 2, fieldSize: 80 }, // Hof mit Feldern
+      forest: { x: 150, z: -92, radius: 92, trees: 160 }, // Wald
+      scatteredTrees: 70, // einzelne Bäume überall
+      rocks: 48,
+      cars: 14,
+      fences: 12, // Metallzaun-Stücke
+      chests: 32, // Kisten-Plätze (25–40)
+      floorLoot: 120, // Boden-Loot-Plätze (80–150)
+      barrierMargin: 14, // unsichtbare Wand so weit außerhalb der Insel-Fläche (m)
+      fog: { near: 240, far: 1150 }, // Nebel passend zur Insel (von oben sieht man alles)
+      cameraFar: 1300, // Sichtweite der Kamera auf der Insel (m)
+      hemiGroundColor: '#BFA978', // weiches Licht von unten: warm-sandig (sonst wirken Hauswände grünlich)
+      hemiSkyColor: '#C4E2F5', // weiches Licht von oben: etwas blasser (Innenräume nicht so blau)
+      maxBuildLevel: 30,
+      // Namen der Gegenden (eigene Namen, nur zur Orientierung)
+      areas: [
+        { name: 'Sandkrug', x: -118, z: -96, radius: 70 },
+        { name: 'Tannenhain', x: 150, z: -92, radius: 95 },
+        { name: 'Silberbach', x: 34, z: -20, radius: 40 },
+        { name: 'Kiefernruh', x: 150, z: 40, radius: 40 },
+        { name: 'Kornfeldhof', x: 120, z: 168, radius: 70 },
+        { name: 'Sonnenhügel', x: -140, z: 135, radius: 85 },
+        { name: 'Felsenkamm', x: -10, z: -220, radius: 60 },
+        { name: 'Möwenstrand', x: -10, z: 240, radius: 50 },
+      ],
+    },
+    // Zone-Wars-Karte: klein und hügelig (Größe: modes.zoneWars.mapSize)
+    zoneWars: {
+      seed: 11,
+      terrainCell: 4,
+      hillHeight: 9, // SCHÄTZUNG
+      hillScale: 46,
+      rimHeight: 10, // am Rand steigen Hügel an (Grenze)
+      maxSlopeDeg: 34, // je Raster-Richtung höchstens so steil (schräg über die Ecke bis ca. 44° – noch begehbar)
+      rocks: 16,
+      trees: 22,
+      covers: 8, // kleine Deckungs-Mauern
+      spawnMinDistance: 30, // Startpunkte so weit auseinander (m)
+      barrierHeight: 120,
+      maxBuildLevel: 20,
+    },
+    spawn: {
+      tries: 400, // so oft wird ein Startpunkt gewürfelt
+      clearance: 0.6, // Platz um die Figur (m) – nichts darf dort stehen
+      maxSlopeDeg: 30, // nicht an steilen Hängen
+    },
+  },
+
+  // Absprung: fliegendes Objekt, freier Fall, Gleiter (src/world/jumpVehicle.js, skydive.js)
+  // Tempo, Höhe und Gleiter-Werte stehen bei modes.battleRoyale (jumpVehicle…, freefall…, glider…).
+  skydive: {
+    diveSpeed: 48, // Blick nach unten: so schnell fällt man höchstens (Sturzflug) // SCHÄTZUNG
+    diveFullPitch: 60, // ab so viel Grad nach unten zählt es als voller Sturzflug
+    freefallAcceleration: 28, // so schnell ändert sich das Tempo im freien Fall (m/s²)
+    gliderAcceleration: 18, // … und mit dem Gleiter
+    gliderDeployTime: 0.35, // Gleiter klappt in so vielen Sekunden auf (nur Grafik)
+    exitSpeedFactor: 0.4, // beim Abspringen behält man so viel vom Tempo des Fahrzeugs
+    dropMargin: 30, // abspringen erst, wenn das Fahrzeug so weit (m) über der Insel ist
+    vehicleStartOffset: 140, // das Fahrzeug startet so weit (m) vor der Insel
+    vehiclePathOffset: 0.35, // die Flug-Linie läuft höchstens so weit (Anteil der halben Insel) neben der Mitte vorbei
+    // Aussehen: bunter Heißluftballon mit großer Plattform (eigenes Design)
+    balloonRadius: 9, // m
+    balloonColors: ['#FF5A5F', '#FFC93C', '#3EC1D3', '#7A5CFA', '#2ECC71', '#FF8C42'],
+    deckSize: 7.5, // Plattform unter dem Ballon (m)
+    deckColor: '#D39A5E',
+    riderSpacing: 1.25, // so dicht stehen die Mitfahrer (m)
+    gliderColors: ['#FF5A5F', '#FFFFFF', '#3EC1D3'], // Streifen des Gleiters
+    gliderWidth: 2.5, // Spannweite (m)
+    windStreaks: 6, // Fahrtwind-Striche im freien Fall
+    cameraDistance: 5.5, // Kamera im freien Fall / mit dem Gleiter so weit hinter der Figur (man sieht, wo man landet)
+    cameraZoomSpeed: 3, // … dorthin fährt sie langsam (höher = schneller); beim Landen schnell zurück
+  },
+
+  // ---------------------------------------------------------------------------
   // Bots (Gegner-KI)
   // ---------------------------------------------------------------------------
   bots: {
@@ -818,7 +1007,7 @@ export const CONFIG = deepFreeze({
       damageHead: '#FFD93D', // Schadenszahl: Kopf
       damageShield: '#4FC3F7', // Schadenszahl: Schild
     },
-    stormOpacity: 0.35,
+    stormOpacity: 0.55,
     fogStartFraction: 0.15, // leichter Nebel beginnt bei 15 % der Sichtweite …
     fogEndFraction: 0.9, // … und verdeckt ab 90 % alles (Horizont-Farbe)
     // Sonne: Richtung, aus der das Licht kommt (wird normalisiert)

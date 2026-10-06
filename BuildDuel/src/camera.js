@@ -184,6 +184,9 @@ export class ThirdPersonCamera {
     // gemalter Zustand (geglättet)
     this.fov = this.cfg.fov;
     this.distance = this.cfg.distance; // gewünschte Länge nach hinten (Zielen: kürzer)
+    // Welle 3b: im freien Fall / mit dem Gleiter weiter weg (man sieht, wo man landet)
+    this.skydiveDistance = config.skydive?.cameraDistance ?? this.cfg.distance;
+    this.skydiveZoomSpeed = config.skydive?.cameraZoomSpeed ?? this.cfg.aimZoomSpeed;
     this.pivotHeight = this.cfg.height;
     this.allowed = this.cfg.distance; // erlaubte Länge nach hinten (Wand-Schutz, geglättet)
     this.side = this.cfg.shoulderOffset; // Abstand Kopf → Schulter-Punkt im Bild
@@ -428,13 +431,15 @@ export class ThirdPersonCamera {
 
     // Glätten (nur im Bild – verschiebt die Kamera nur entlang der Fadenkreuz-Linie):
     // Zielen-Entfernung und Sichtfeld
-    const targetDistance = character.aiming ? cfg.aimDistance : cfg.distance;
+    const skydiving = character.moveState === 'freefall' || character.moveState === 'glide';
+    const targetDistance = character.aiming ? cfg.aimDistance : skydiving ? this.skydiveDistance : cfg.distance;
     const targetFov = character.scopeFov ?? (character.aiming ? cfg.aimFov : cfg.fov);
     if (snap) {
       this.distance = targetDistance;
       this.fov = targetFov;
     } else {
-      this.distance += (targetDistance - this.distance) * smoothFactor(cfg.aimZoomSpeed, dt);
+      // nach dem Absprung langsam weg fahren, sonst (Zielen, Landen) schnell
+      this.distance += (targetDistance - this.distance) * smoothFactor(skydiving ? this.skydiveZoomSpeed : cfg.aimZoomSpeed, dt);
       this.fov += (targetFov - this.fov) * smoothFactor(cfg.fovChangeSpeed, dt);
     }
     // Duck-Höhe und Schulter-Abstand: aus den Logik-Schritten (wie der Ziel-Strahl)

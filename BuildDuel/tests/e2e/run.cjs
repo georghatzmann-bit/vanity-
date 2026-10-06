@@ -830,6 +830,7 @@ const GAME_CHECKS = [
   ...require('./buildChecks.cjs').BUILD_CHECKS,
   // Welle 3a: HUD, Ton, Effekte – siehe hudChecks.cjs
   ...require('./hudChecks.cjs').HUD_CHECKS,
+  ...require('./worldChecks.cjs').WORLD_CHECKS, // Welle 3b: Welt (Insel, Sturm, Loot, Absprung, Arena, Zone Wars)
 ];
 
 // =============================================================================

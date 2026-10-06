@@ -160,6 +160,23 @@ Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfe
 - [ ] H zeigt die Steuerung, H schließt sie wieder
 - [ ] Ton: Schüsse, Bauen, Treffer-Ping – und nach Esc + Weiterspielen ist der Ton noch da
 
+## Die Welt (Phase 8–10, Teil 1)
+
+Die Spielmodi Duell, Battle Royale und Zone Wars kommen als Nächstes – ihre Welt ist schon fertig und kann in **Test-Modi** ausprobiert werden (Adresse während `start.bat` läuft):
+
+| Test-Modus | Adresse | Was es gibt |
+|---|---|---|
+| Insel | <http://localhost:8000/?mode=sandbox-island> | 600 x 600 m Insel: Wüstenstadt „Sandkrug“ mit begehbaren Häusern (manche mit Treppe in den 2. Stock), Fluss mit Brücken, Wald, Hof mit Feldern, Hügel, Strand. Du startest auf einem bunten **Heißluftballon** |
+| Duell-Arena | <http://localhost:8000/?mode=sandbox-arena> | 80 x 80 m Arena mit Felsen und Bäumen, Startpunkte 40 m auseinander |
+| Zone Wars | <http://localhost:8000/?mode=sandbox-zonewars> | kleine hügelige Karte, die Zone wandert und schrumpft schnell |
+
+- **Absprung:** Über der Insel mit der **Leertaste** aus dem Ballon springen. Im freien Fall mit WASD lenken – nach unten schauen + W = Sturzflug. 30 m über dem Boden öffnet sich der **Gleiter** von selbst (oder früher mit der Leertaste). Die Kamera fährt dabei etwas weiter weg, damit du siehst, wo du landest. Landen macht nie Schaden.
+- **Kisten** (goldener Würfel, leuchtet): davor stehen und **E** drücken. Heraus springen eine Waffe, Munition, Material und manchmal ein Heil-Item.
+- **Gegenstände am Boden** leuchten in ihrer Seltenheits-Farbe (grau, grün, blau, lila, gold). Waffen und Heil-Items mit **E** aufheben – sind alle 5 Plätze voll, wird mit der Waffe in der Hand **getauscht**. Munition und Material sammelst du im Vorbeilaufen ein.
+- **Sturm:** die lila Wand. Draußen wird das Bild lila und du verlierst jede Sekunde Leben (der Schild hilft nicht). Die neue Zone liegt immer ganz in der alten.
+- Bäume (Holz), Felsen (Stein), Autos und Metallzäune (Metall) kann man mit der Spitzhacke abbauen – sie halten aber nicht ewig.
+- Alle Werte (Zonen, Kisten-Inhalt, Seltenheiten, Insel-Größe, Anzahl Häuser/Bäume, Ballon-Tempo …) stehen in `src/config.js` unter `stormZone`, `loot`, `maps`, `skydive` und `modes.battleRoyale`.
+
 ## Tests
 
 Während `start.bat` läuft, diese Adresse öffnen: <http://localhost:8000/tests/tests.html>
@@ -220,7 +237,7 @@ BuildDuel/
     physics.js          Kollision: Kisten, Rampen, Dächer, Boden, Strahlen
     camera.js           Schulter-Kamera (mit Wand-Schutz) und Vorschau-Kamera
     modes/              Spielmodi (jetzt: Übungsplatz)
-    world/              Himmel, Licht, Karten, Figuren-Grafik
+    world/              Himmel, Licht, Karten (Arena, Insel, Zone Wars), Sturm, Loot, Ballon + Gleiter, Figuren-Grafik
     building/           Bauen: Raster + Zielwahl (grid.js), Formen/Bilder (pieces.js, view.js),
                         Edit + Türen (edit.js), Bau-System mit Halt/Einsturz (structure.js)
     weapons/            Waffen, Treffer, Geschosse, Waffen-Grafik

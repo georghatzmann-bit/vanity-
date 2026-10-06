@@ -80,6 +80,9 @@ src/
   world/               environment.js, characterModel.js, mapBuilder.js (Karten-Baukasten),
                        mapArena.js, mapIsland.js, mapZoneWars.js, loot.js, storm.js, effects.js,
                        referenceObjects.js
+                       Welle 3b: terrain.js (Gelände/Rauschen), staticBatch.js (Häuser in einem Mesh),
+                       props.js (Bäume/Felsen/Autos/Zäune), houses.js, spawnPoints.js, lootView.js,
+                       jumpVehicle.js (Absprung-Ballon), skydive.js (Freifall/Gleiter) – siehe §11d
   ui/                  hud.js (+ hud.css, hudIcons.js), menus.js, settings.js (Einstellungs-Fenster),
                        killfeed.js, minimap.js, touch.js, fpsMeter.js, styles.css
   audio/sfx.js         erzeugte Töne (Web Audio)
@@ -107,6 +110,8 @@ Felder (öffentlich, andere Module dürfen lesen):
 - `characters` (Array von Character), `player` (Character des Menschen oder `null`)
 - `building` (Bau-System), `weapons` (Waffen-System), `projectiles`, `effects`, `audio`, `hud`
 - `mode` (aktueller Modus) und `map` (aktuelle Karte), `storm` (oder null), `loot` (oder null)
+- `interactionPrompt` (Welle 3b): was E für den Spieler gerade tun würde – `{ text, action: 'use', kind, target,
+  rarity, swap }` oder `null` (setzt loot.js jeden Tick; das HUD zeigt es an), siehe §11d
 - `systems` (Array von Objekten mit `update(dt, game)` – laufen am Ende jedes Ticks)
 - `root` (THREE.Group: ALLES, was das Spiel in die Szene legt, hängt hier – `dispose()` räumt es ab)
 - `cameraRig` (ThirdPersonCamera, auch headless – rechnet den Ziel-Strahl), `playerController`, `input`
@@ -114,7 +119,8 @@ Felder (öffentlich, andere Module dürfen lesen):
 Methoden:
 - `addCharacter(options) → Character` / `removeCharacter(character)`
 - `fixedUpdate(dt)` – ein Logik-Schritt (1/60 s), Reihenfolge siehe unten
-- `frameUpdate(frameSeconds, alpha)` – Bild: Figuren-Modelle (interpoliert), Kamera, Effekte, HUD
+- `frameUpdate(frameSeconds, alpha)` – Bild: Figuren-Modelle (interpoliert), Kamera, Effekte, HUD; danach
+  (Welle 3b) `storm.frameUpdate(dt)`, `loot.frameUpdate(dt, alpha)` und `systems[i].frameUpdate?.(dt, alpha)`
 - `simulate(seconds)` – ruft `fixedUpdate` so oft wie nötig (für Tests, ohne Bild)
 - `startMode(id, options)` – räumt den alten Modus ab und startet den neuen (`mode.start()`)
 - `endMode()` – Figuren, Karte, Bauteile, Sturm, Loot weg
@@ -154,7 +160,7 @@ character.position, prevPosition, velocity   // THREE.Vector3
 character.yaw, pitch, prevYaw
 character.health, shield, alive
 character.grounded, crouching, sprinting, aiming
-character.moveState   // 'ground' | 'air' | 'freefall' | 'glide'
+character.moveState   // 'ground' | 'air' | 'freefall' | 'glide' | 'vehicle' (Welle 3b: steht im Absprung-Ballon)
 character.mode        // 'weapon' | 'pickaxe' | 'build' | 'edit'
 character.slots       // Array(5): Gegenstand oder null (siehe weapons)
 character.selectedSlot
@@ -207,7 +213,9 @@ Weitere Exporte von player.js: `resetCommand(cmd, yaw, pitch)`, `getSkin(id)`,
 `registerMoveStateHandler(state, handler)` – **Haken für Welle 3b**: Für `moveState`
 `'freefall'`/`'glide'` ruft moveCharacter `handler(character, command, dt, world)` statt der
 normalen Bewegung auf; zum Landen `landCharacter(character, { noDamage: true })`.
-In `'freefall'`/`'glide'` gibt es nie Fallschaden.
+In `'freefall'`/`'glide'` gibt es nie Fallschaden. Welle 3b meldet in `world/skydive.js` die Zustände
+`'vehicle'`, `'freefall'` und `'glide'` an (siehe §11d); dazu die Felder `character.ridingVehicle` und
+`character.gliderTime`.
 
 ### CharacterCommand (Befehl pro Tick)
 
@@ -275,7 +283,8 @@ Genauer (Welle 1):
 `collider.data` (frei, aber diese Felder sind vereinbart):
 ```js
 {
-  kind: 'piece' | 'static' | 'tree' | 'rock' | 'car' | 'fence' | 'chest' | 'target' | 'house',
+  kind: 'piece' | 'static' | 'tree' | 'rock' | 'car' | 'fence' | 'chest' | 'target' | 'house' | 'barrier',
+  // 'barrier' (Welle 3b) = unsichtbare Karten-Grenze (blocksBullets: false, hält keine Bauteile)
   ref,            // Objekt dahinter (z. B. das Bauteil)
   harvest,        // 'wood' | 'stone' | 'metal' | undefined (Spitzhacke sammelt davon)
   owner,          // Character oder undefined
@@ -313,10 +322,14 @@ durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapD
 | `footstep` | `{ character }` |
 | `harvest` | `{ character, material, amount, point }` |
 | `heal` | `{ character, kind, amount }` |
-| `pickup` | `{ character, item }` |
+| `pickup` | `{ character, item (Boden-Gegenstand, §11d), amount }` |
 | `chestOpened` | `{ chest, character }` |
 | `explosion` | `{ position, radius, owner }` |
-| `stormPhase` | `{ phase, state: 'wait'\|'shrink', timeLeft }` |
+| `stormPhase` | `{ phase, state: 'wait'\|'shrink'\|'closed', timeLeft }` |
+| `lootDropped` | `{ character, items }` (Welle 3b: dropAll) |
+| `propDestroyed` | `{ prop, by }` (Welle 3b: Baum/Fels/Auto/Zaun zerstört) |
+| `skydive` | `{ character, state: 'freefall'\|'glide' }` (Welle 3b) |
+| `vehicleDrop` | `{ character, vehicle }` (Welle 3b: aus dem Ballon gesprungen) |
 | `message` | `{ text, kind: 'round'\|'win'\|'lose'\|'info', duration }` (große Mitte-Nachricht) |
 | `matchEnd` | `{ result }` (siehe Modi) |
 
@@ -338,6 +351,7 @@ durch dünne Böden/Wände rutscht. Am Boden "klebt" man bergab bis `groundSnapD
   alle Systeme haben `dispose()` (Game.dispose ruft es auf).
 - **Sturm** (`src/world/storm.js`): `createStorm(game, spec)` → `{ update(dt), isInside(pos), center, radius, nextCenter, nextRadius, phase, state, timeLeft, damagePerSecond }`.
 - **Loot** (`src/world/loot.js`): `createLootSystem(game, spec)` → `{ update(dt), dropAll(character), spawnFloorItem(...), chests }`.
+  Sturm und Loot genau beschrieben (Welle 3b): siehe **§11d**.
 
 Gibt es ein System (noch) nicht, liefert die Datei eine einfache Attrappe mit denselben
 Methoden, die nichts tut. So läuft das Spiel in jeder Phase.
@@ -533,8 +547,10 @@ voll → das älteste Teilchen wird ersetzt. Grafik "niedrig"/"mittel" → `effe
 
 ## 10. Modi (src/modes/)
 
-`src/modes/index.js` enthält die Liste `MODES`: `{ id, name, description, create(game, options) }`,
+`src/modes/index.js` enthält die Liste `MODES`: `{ id, name, description, create(game, options), hidden? }`,
 dazu `getModeDef(id)` und `DEFAULT_MODE_ID` (`'practice'`, bis es ein Hauptmenü gibt).
+`hidden: true` = Test-Modus für Entwickler (Welle 3b: `sandbox-island`, `sandbox-arena`, `sandbox-zonewars`
+in `modes/sandbox.js`) – das Hauptmenü zeigt diese nicht an; Start über `?mode=sandbox-island`.
 
 **Karten** (Welle 1): `createArenaMap(game, spec)` (world/mapArena.js) und allgemein
 `createMapBuilder(game, name)` (world/mapBuilder.js) liefern ein Karten-Objekt:
@@ -545,6 +561,8 @@ Grafik an (headless nur Kollision). Die Arena hat zusätzlich `size`, `ground`, 
 Schilder (`addLabel`) sind auf dem Bildschirm mindestens `visuals.labelMinScreenHeight` und höchstens
 `labelMaxScreenHeight` Pixel hoch (`map.frameUpdate()`), näher als `labelFadeFar` verblassen sie.
 Der Modus setzt `game.map = karte` und räumt sie in `dispose()` ab.
+Welle 3b: Duell-Arena (`createArenaMap(game, { props: true })`), Insel (`createIslandMap`) und
+Zone-Wars-Karte (`createZoneWarsMap`) mit gemeinsamen Karten-Feldern – siehe §11d.
 
 Jeder Modus:
 ```js
@@ -716,6 +734,100 @@ solange `character.scopeFov` gesetzt ist; Farbe `weaponVisuals.scopeOverlayColor
 Leben, nach `regenDelay` wieder voll, stehen wieder auf), Baum/Fels/Auto für die Spitzhacke.
 Browser-Prüfungen der Waffen: `tests/e2e/weaponChecks.cjs` (in `GAME_CHECKS` von run.cjs eingehängt).
 
+## 11d. Welt: Karten, Sturm, Loot, Absprung (Welle 3b)
+
+**Gemeinsame Karten-Felder** (alle Karten = `createMapBuilder` + Zusätze):
+`id`, `size`, `center {x, z}`, `buildBounds`, `contains(x, z, margin)`, `isLand(x, z)` (für die Sturm-Zone),
+`areaAt(x, z)` → Name der Gegend oder `null`, `spawnPoints(count, options)` → `[{ x, y, z, yaw }]`
+(auf freiem, begehbarem Boden, Mindestabstand, Blick zur Mitte), `props` (Sammel-Objekte), `dispose()`.
+Karten mit Gelände (Insel, Zone Wars) setzen `world.setTerrain(heightfield)` und beim Aufräumen wieder
+`null`; `playBounds` = Spielfeld innerhalb der unsichtbaren Wand (Freifall/Gleiter bleiben darin).
+- **Duell-Arena** (`mapArena.js`): `createArenaMap(game, { size, props: true, seed })` – Felsen und Bäume
+  punkt-symmetrisch (fair), Platz um die Startpunkte; `spawnPoints(2)` = die festen Duell-Punkte
+  (`CONFIG.modes.duel.spawnDistance` auseinander, Blick zueinander). Jede Arena (auch der Übungsplatz) hat
+  über der Mauer eine unsichtbare Wand bis `CONFIG.maps.arena.barrierHeight` (`addBarrierRing`).
+- **Insel** (`mapIsland.js`): `createIslandMap(game, { seed })` – gleiche Insel bei gleichem `seed`
+  (`CONFIG.maps.island.seed`). Gelände mit sanften Hügeln (jedes Dreieck höchstens `maxSlopeDeg` steil), Strand,
+  flaches Wasser bis zur unsichtbaren Wand, Fluss (0,7 m tief, begehbar, 2 Brücken), Wüstenstadt "Sandkrug"
+  (begehbare Häuser, manche mit 2 Stockwerken und Treppe), Weiler, Hof mit Feldern, Wald, Felsen, Autos,
+  Metallzäune. Zusätzlich: `terrain`, `seaLevel`, `heightAt(x, z)`, `isWater(x, z)`, `riverX(z)`, `houses`
+  (je Haus: `bounds`, `floorY[]`, `door { outside, inside }`, `stairs { bottom, top }`, `toWorld(u, v)`),
+  `chestSpots`, `floorLootSpots` (`{ x, y, z, yaw, area, indoor }`), `areas`, `generationMs`,
+  `jumpPath(rng)` → `{ start, end, dir }` (Flug-Linie des Ballons). Die Insel stellt Nebel, Kamera-Sichtweite
+  und das weiche Licht von unten passend ein (`CONFIG.maps.island.fog/cameraFar/hemiGroundColor`) und setzt sie
+  beim Aufräumen zurück.
+- **Zone Wars** (`mapZoneWars.js`): `createZoneWarsMap(game, { seed })` – 160 x 160 m, Hügel, Rand steigt an,
+  Felsen/Bäume/Deckungs-Mauern, `spawnPoints(count)` weit verteilt (`spawnMinDistance`).
+- Bausteine: `terrain.js` (`createHeightfield` – heightAt nimmt GENAU die Dreiecke des Gelände-Meshes,
+  `buildTerrainGeometry`, `createNoise`, `limitSlopes`), `staticBatch.js` (viele Kisten/Schrägen → EIN Mesh mit
+  Ecken-Farben und etwas "Eigenlicht", Kollision pro Kiste), `props.js` (`createPropSet`:
+  `addTree/addRock/addCar/addFence`, Grafik als InstancedMesh; Leben aus `CONFIG.maps.props`, `applyDamage` →
+  zerstört = Kollision weg + `propDestroyed`), `houses.js` (`buildHouse`), `spawnPoints.js`
+  (`findSpawnPoints`, `checkSpawnPoint`).
+- Leistung (gemessen in `tests/e2e/worldChecks.cjs`): Insel in ca. 0,2 s erzeugt, < 150 Zeichen-Aufrufe für
+  die ganze Welt (Gelände, Wasser, Häuser, Bäume, Loot, Sturm, Ballon) – die Figuren kommen dazu.
+
+**Sturm** (`storm.js`): `createStorm(game, spec)` mit `spec = { initialRadius, phases: [{ wait, shrink, dps,
+endRadius }], moving?, center?, autoStart? (false = Uhr steht bis start()), isGoodZone?(x, z, r), baseY? }`
+(Battle Royale: `CONFIG.modes.battleRoyale.storm`, Zone Wars: `CONFIG.modes.zoneWars.storm`). Ohne Phasen:
+unendlich groß. Felder: `center`, `radius`, `nextCenter`, `nextRadius` (schon beim Warten bekannt → Minimap),
+`phase` (0 = erste), `phaseCount`, `state` ('wait' | 'shrink' | 'closed'), `timeLeft`, `stateDuration`,
+`damagePerSecond`, `paused`. Methoden: `update(dt)`, `isInside(pos)` (nur waagerecht), `distanceToEdge(pos)`
+(positiv = drinnen), `start()`, `frameUpdate(dt)`, `dispose()`.
+Regeln: Die neue Zone liegt immer komplett in der alten (`game.rng`), an Land bevorzugt (`map.isLand`);
+`moving` = wandert fast bis an den erlaubten Rand. Schrumpfen verschiebt Mitte und Radius gleichmäßig.
+Schaden: alle `CONFIG.stormZone.damageInterval` s (`kind: 'storm'`, `weaponId: 'storm'`, **direkt aufs Leben** –
+wie im Original schützt der Schild nicht: `CONFIG.stormZone.ignoresShield`). Wer im Ballon steht
+(`moveState 'vehicle'`), nimmt keinen Schaden. Grafik: lila Wand (Zylinder ohne Deckel, `fog: false`), erst ab
+dem ersten Schrumpfen; ist der Spieler draußen: lila Färbung (Kugel um die Kamera) + lila Nebel. Das HUD (3a)
+kann zusätzlich `storm.isInside(game.player.position)` benutzen.
+
+**Loot** (`loot.js`, Grafik `lootView.js`): `createLootSystem(game, spec)`, `spec = { rarityWeights, chest:
+{ materialAmount, ammoMagazines, healItemChance }, dropOnDeath (Standard true) }`.
+- Kiste: `{ id, position, yaw, opened, openedBy, openTime, collider (kind 'chest'), area }` – `spawnChest(pos,
+  { yaw })`, `openChest(chest, character)` (Inhalt springt heraus: 1 Waffe + passende Munition + Material,
+  mit `healItemChance` ein Heil-Item; danach verschwindet die Kiste). Liste: `loot.chests`.
+- Boden-Gegenstand: `{ id, kind: 'weapon'|'heal'|'ammo'|'material', item (weapons.createItem), weaponId, material,
+  amount, rarity, name, position (Ruhe-Lage am Boden), fromMap, removed, pop }` – `spawnFloorItem(desc)`,
+  `removeItem(fi)`, Liste `loot.items`.
+- Aufheben: `pickUp(c, fi)` (Waffe → ihr Platz 1–4, sonst nächster freier; Heil-Item → stapeln, sonst Platz 5,
+  sonst frei; alles voll → **Tausch mit dem gewählten Platz**, der alte Gegenstand fällt hin; leere Hand → gleich
+  in die Hand), `collect(c, fi)` (Munition → Reserve einer passenden Waffe, höchstens `maxReserveMagazines`
+  Magazine; Material bis 999; geht im Vorbeilaufen automatisch), `slotFor(c, fi)` → `{ slot, swap, stack }`.
+- E: Jeder Tick prüft `command.usePressed` jeder Figur: `focusFor(c)` = Kiste/Gegenstand in Reichweite, am
+  nächsten am Fadenkreuz, ohne Wand dazwischen → `interact(c, target)`. Für den Spieler steht das Ergebnis in
+  `game.interactionPrompt` (siehe §5). E öffnet außerdem Türen (Bau-System) – beides kann im selben Tick passieren.
+- Bots: `findNearestLoot(pos, filter)` (`filter` = Funktion oder `{ kinds, maxDistance, rarityAtLeast }`) und
+  `interact(character, target)` (gleiche Reichweiten-Regeln).
+- `dropAll(c)`: Waffen (auch Varianten), Heil-Items, Material fallen verstreut hin (`scatterRadius`), das Inventar
+  wird mit `weapons.giveLoadout(c, [])` geleert. Bei `characterKilled` automatisch (am Ende des Ticks).
+- `populate(map)`: Kisten/Boden-Loot auf `map.chestSpots`/`map.floorLootSpots` (Wahrscheinlichkeiten aus
+  `CONFIG.loot`). Verschwinden: fallen Gelassenes nach `droppedDespawnTime`, höchstens `maxFloorItems`.
+- `loot.js` schreibt beim Aufheben/Tauschen `c.slots[i]` und leert `c.weaponState.variants[i]` (sonst ist
+  weaponState nur zum Lesen) – so bleibt das Waffen-System unverändert.
+- Grafik: pro Waffen-Art ein InstancedMesh (Teile in Seltenheits-Farbe werden weiß gebacken und per Instanz-Farbe
+  eingefärbt), Lichtsäule + Leucht-Fleck in Seltenheits-Farbe, Kisten pulsieren, Schild über dem Gegenstand im Fokus.
+
+**Absprung** (`jumpVehicle.js`, `skydive.js`):
+`createJumpVehicle(game, { path: map.jumpPath(rng), speed?, dropZone?(x, z) })` → System (in `game.systems`
+legen, bleibt bis zum Ende des Modus): `board(c)`, `drop(c)`, `dropAll()`, `canDrop()` (über der Insel),
+`scheduleBotDrops(rng)` (Bots springen verteilt ab), `seatPosition(c)`, `riders`, `position`, `velocity`,
+`finished`, `update()`, `frameUpdate(dt, alpha)`, `dispose()`. Mitfahrer haben `moveState 'vehicle'` und stehen
+auf der Plattform (Kamera wie immer); Leertaste springt ab (erst über der Insel), am Inselrand werden alle
+abgesetzt. `skydive.js`: `startFreefall(c, velocity?)`, `deployGlider(c)`, `heightAboveGround(c, world)`,
+`createSkydiveView(game)` (Gleiter-Schirm, Freifall-Haltung, Fahrtwind; der Ballon benutzt ihn).
+Freifall: Tempo `freefallSpeed`, lenken `freefallMoveSpeed`, Blick nach unten + W = Sturzflug bis
+`CONFIG.skydive.diveSpeed`; der Gleiter öffnet von selbst `gliderDeployHeight` über dem Boden (Dächer zählen) oder
+mit der Leertaste; in diesen Zuständen keine Aktionen (der Befehl wird geleert). Landung: `landCharacter(c,
+{ noDamage: true })` – `land.fallHeight` ist die ganze Fallhöhe, Schaden gibt es keinen.
+Kamera: Im `'freefall'`/`'glide'` fährt die Schulter-Kamera langsam auf `CONFIG.skydive.cameraDistance` zurück
+(man sieht, wo man landet), nach der Landung schnell wieder auf die normale Länge (kleine Änderung in `camera.js`:
+`ThirdPersonCamera.update` liest `character.moveState`; nur das Bild, der Ziel-Strahl bleibt gleich).
+
+**Test-Modi** (`modes/sandbox.js`, `hidden: true`): `sandbox-island` (Insel + Sturm + Loot + Ballon, Optionen
+`{ bots, skipVehicle, stormAutoStart, mapSeed }`), `sandbox-arena`, `sandbox-zonewars`. Browser-Prüfungen:
+`tests/e2e/worldChecks.cjs` (in `GAME_CHECKS` eingehängt, Namen beginnen mit "Welt:", `--grep Welt`).
+
 ## 12. Testen
 
 - **Einheiten-Tests** (`tests/*.test.js`, in `tests/tests.html` eingetragen): reine Logik.
@@ -748,7 +860,7 @@ Abschlussbericht genannt.
 | 2a Bauen (3+4) | building/*, Bau-Tests |
 | 2b Waffen (5) | core/damage.js, weapons/*, Zielpuppen, Schadenszahlen, Waffen-Tests |
 | 3a HUD + Ton + Effekte (6, 12) | ui/hud.js, ui/hud.css, ui/hudIcons.js, ui/killfeed.js, ui/minimap.js, audio/sfx.js, world/effects.js, tests/e2e/hudChecks.cjs (dazu klein: building findDoor, main.js ohne vorläufige Hilfe, weapons/visuals.js ohne vorläufiges Zielfernrohr) |
-| 3b Welt (9 Teil) | world/storm.js, world/loot.js, world/mapArena.js, world/mapIsland.js, world/mapZoneWars.js, Gleiter/Freifall in player.js |
+| 3b Welt (9 Teil) | world/storm.js, world/loot.js, world/lootView.js, world/mapArena.js, world/mapIsland.js, world/mapZoneWars.js, world/terrain.js, world/staticBatch.js, world/props.js, world/houses.js, world/spawnPoints.js, world/jumpVehicle.js, world/skydive.js (Gleiter/Freifall über registerMoveStateHandler), modes/sandbox.js, tests/world.test.js, tests/scenario/world.test.js, tests/e2e/worldChecks.cjs |
 | 4a Bots (7) | ai/bot.js |
 | 4b Modi (8–10) | modes/* |
 | 5 Menüs (11) | ui/menus.js, ui/settings.js, ui/touch.js, core/progress.js, main.js-Ablauf |

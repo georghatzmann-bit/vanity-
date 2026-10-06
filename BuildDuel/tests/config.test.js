@@ -414,3 +414,91 @@ describe('Vorgaben aus deinem Plan (dürfen rot werden, wenn du sie absichtlich 
     assert.deepEqual(phases, [[60, 45, 1], [45, 40, 2], [40, 35, 5], [30, 30, 8], [20, 30, 10]]);
   });
 });
+
+describe('Spielwerte: Welt (Welle 3b – Sturm, Loot, Karten, Absprung)', () => {
+  it('Loot: Gewichte positiv, nur echte Waffen/Heil-Items, Stapel passen', () => {
+    const L = CONFIG.loot;
+    for (const [id, w] of Object.entries(L.weaponWeights)) {
+      assert.ok(GUNS.includes(id) && w > 0, `Waffe ${id}`);
+      assert.ok(HEX_COLOR.test(L.ammoColors[id]) && L.ammoNames[id], `Munition ${id}`);
+    }
+    for (const [id, w] of Object.entries(L.healWeights)) {
+      assert.ok(CONFIG.healing[id] && w > 0, `Heil-Item ${id}`);
+      assert.ok(L.healCounts[id] >= 1 && L.healCounts[id] <= CONFIG.healing[id].stack, `Anzahl ${id}`);
+    }
+    for (const w of Object.values(L.floorKindWeights)) assert.ok(w >= 0);
+    for (const id of CONFIG.rarities.order) assert.ok(CONFIG.modes.battleRoyale.rarityWeights[id] > 0, `Seltenheit ${id}`);
+  });
+
+  it('Loot: Reichweiten und Grenzen sinnvoll', () => {
+    const L = CONFIG.loot;
+    assert.ok(L.autoPickupRadius > 0 && L.autoPickupRadius < L.pickupReach && L.pickupReach <= L.chestReach);
+    assert.ok(L.scatterRadius.min > 0 && L.scatterRadius.min < L.scatterRadius.max);
+    assert.ok(L.maxFloorItems > CONFIG.maps.island.floorLoot * 2, 'Platz für Karten-Loot und Fallengelassenes');
+    assert.ok(L.droppedDespawnTime > 30 && L.popTime > 0 && L.maxReserveMagazines >= 2);
+    assert.ok(L.chest.emissiveMin < L.chest.emissiveMax);
+    for (const c of [L.chest.color, L.chest.trimColor, L.chest.glowColor]) assert.ok(HEX_COLOR.test(c), c);
+  });
+
+  it('Insel: 25–40 Kisten, 80–150 Boden-Loot, 10–20 Häuser, Gelände größer als die Insel', () => {
+    const I = CONFIG.maps.island;
+    assert.ok(I.chests >= 25 && I.chests <= 40);
+    assert.ok(I.floorLoot >= 80 && I.floorLoot <= 150);
+    const houses = I.town.houses + I.hamlet.houses + I.farm.houses;
+    assert.ok(houses >= 10 && houses <= 20, `Häuser ${houses}`);
+    assert.ok(I.terrainExtent > CONFIG.modes.battleRoyale.islandSize / 2 + I.barrierMargin + 20);
+    assert.ok(CONFIG.world.gridCellSize % I.terrainCell === 0, 'Gelände-Raster passt zum Bau-Raster');
+    assert.ok(I.fog.near < I.fog.far && I.cameraFar >= I.fog.far, 'Nebel/Sichtweite');
+    assert.ok(I.maxSlopeDeg < CONFIG.player.maxWalkableSlope, 'Hänge begehbar');
+    assert.ok(I.river.depth > 0 && I.river.depth < CONFIG.player.hitbox.height / 2, 'Fluss begehbar');
+    assert.ok(I.shelfDepth < CONFIG.player.eyeHeight, 'flaches Wasser: Kopf über Wasser');
+    assert.ok(HEX_COLOR.test(I.hemiGroundColor) && HEX_COLOR.test(I.hemiSkyColor));
+    for (const a of I.areas) assert.ok(a.name && a.radius > 0, a.name);
+  });
+
+  it('Zone Wars: Zone wird kleiner, am Ende 0; Startpunkte passen auf die Karte', () => {
+    const z = CONFIG.modes.zoneWars;
+    let r = z.storm.initialRadius;
+    for (const p of z.storm.phases) {
+      assert.ok(p.endRadius < r && p.wait > 0 && p.shrink > 0);
+      r = p.endRadius;
+    }
+    assert.equal(r, 0);
+    assert.ok(z.storm.initialRadius * Math.SQRT2 >= z.mapSize / 2, 'deckt die Karte ab');
+    assert.ok(CONFIG.maps.zoneWars.spawnMinDistance * 2 < z.mapSize);
+    // Hänge: auch schräg über die Raster-Ecke (Faktor Wurzel 2) noch begehbar
+    const diagonal = (Math.atan(Math.SQRT2 * Math.tan((CONFIG.maps.zoneWars.maxSlopeDeg * Math.PI) / 180)) * 180) / Math.PI;
+    assert.ok(diagonal < CONFIG.player.maxWalkableSlope, `Zone Wars: Hang schräg ${diagonal.toFixed(1)}°`);
+  });
+
+  it('Sturm: Schaden in Schritten, Wand sichtbar', () => {
+    const s = CONFIG.stormZone;
+    assert.ok(s.damageInterval > 0 && s.damageInterval <= 1);
+    assert.ok(s.wallHeight > 50 && s.wallSegments >= 24);
+    assert.ok(s.movingShiftFraction > 0 && s.movingShiftFraction <= 1);
+    assert.ok(s.outsideTint > 0 && s.outsideTint < 0.5);
+  });
+
+  it('Absprung: Gleiter öffnet unter der Flughöhe, Sturzflug schneller, Gleiter langsamer, Platz für alle', () => {
+    const br = CONFIG.modes.battleRoyale;
+    const sd = CONFIG.skydive;
+    assert.ok(br.gliderDeployHeight < br.jumpVehicleHeight);
+    assert.ok(sd.diveSpeed > br.freefallSpeed && br.gliderFallSpeed < br.freefallSpeed);
+    const cols = Math.floor(sd.deckSize / sd.riderSpacing) - 1;
+    assert.ok(cols * cols >= br.maxPlayers, `Plätze ${cols * cols}`);
+    for (const c of [...sd.balloonColors, ...sd.gliderColors, sd.deckColor]) assert.ok(HEX_COLOR.test(c), c);
+    // Kamera im Fall weiter weg als normal, aber nicht absurd weit
+    assert.ok(sd.cameraDistance > CONFIG.camera.distance && sd.cameraDistance <= 12, `Kamera ${sd.cameraDistance} m`);
+    assert.ok(sd.cameraZoomSpeed > 0);
+  });
+
+  it('Arena: unsichtbare Wand höher als die Mauer, Platz um die Startpunkte', () => {
+    const a = CONFIG.maps.arena;
+    assert.ok(a.barrierHeight > CONFIG.modes.practice.borderHeight * 10);
+    assert.ok(a.propSpawnClearance < CONFIG.modes.duel.spawnDistance / 2);
+    assert.ok(a.duelTrees >= 2 && a.duelRocks >= 2);
+    const p = CONFIG.maps.props;
+    for (const k of ['tree', 'rock', 'car', 'fence']) assert.ok(p[k].health > 0, k);
+    for (const c of [p.colors.trunk, p.colors.rock, p.colors.fence, ...p.colors.leaves, ...p.colors.pine, ...p.colors.cars]) assert.ok(HEX_COLOR.test(c), c);
+  });
+});
