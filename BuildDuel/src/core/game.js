@@ -126,6 +126,7 @@ export class Game {
     this.building.clearAll();
     this.projectiles.clear();
     this.weapons.clearEffects?.();
+    this.effects.clear?.();
     this.mode?.dispose?.();
     this.mode = null;
     this.storm?.dispose?.();
