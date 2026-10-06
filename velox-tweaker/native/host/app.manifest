@@ -5,7 +5,9 @@
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
         <!-- VELOX.exe starts without elevation and relaunches itself through UAC for the real mode,
-             so the Testmodus (VELOX.exe --test) works without administrator rights. -->
+             so the Testmodus (command line switch "test") works without administrator rights.
+             Never write two hyphens in a row inside an XML comment: Windows then rejects the whole
+             manifest and refuses to start the exe ("Side-by-Side-Konfiguration ist ungueltig"). -->
         <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>

@@ -13,6 +13,8 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml;
 
 internal static class Program
 {
@@ -138,6 +140,7 @@ internal static class Program
         var s = InspectPe(setup, "VeloxSetup.exe");
         Check(s.Manifest.Contains("level=\"requireAdministrator\""), "setup manifest: requireAdministrator");
         Check(s.Manifest.Contains("PerMonitorV2"), "setup manifest: PerMonitorV2");
+        CheckManifestXml(s.Manifest, "setup manifest");
         Check(s.HasIcon, "setup: icon group resource");
         Check(s.HasVersion, "setup: version resource");
         Check(s.AssemblyVersion == version + ".0", $"setup: assembly version {s.AssemblyVersion} = {version}.0");
@@ -180,6 +183,8 @@ internal static class Program
         var v = InspectPe(Read(entries["VELOX.exe"]), "VELOX.exe");
         Check(v.Manifest.Contains("level=\"asInvoker\""), "VELOX.exe manifest: asInvoker");
         Check(v.Manifest.Contains("PerMonitorV2"), "VELOX.exe manifest: PerMonitorV2");
+        CheckManifestXml(v.Manifest, "VELOX.exe manifest");
+        CheckConfigXml(Encoding.UTF8.GetString(Read(entries["VELOX.exe.config"])), "VELOX.exe.config");
         Check(v.HasIcon, "VELOX.exe: icon group resource");
         Check(v.HasVersion, "VELOX.exe: version resource");
         Check(v.AssemblyVersion == version + ".0", $"VELOX.exe: assembly version {v.AssemblyVersion} = {version}.0");
@@ -197,6 +202,54 @@ internal static class Program
         Console.WriteLine($"sha256 {sha}");
         Console.WriteLine(_fails == 0 ? "VERIFY OK" : $"VERIFY FAILED: {_fails} check(s)");
         return _fails == 0 ? 0 : 1;
+    }
+
+    // Windows' side-by-side loader parses the embedded manifest (and <exe>.config) strictly before the
+    // process starts: malformed XML - for example "--" inside a comment - makes Windows refuse to start
+    // the exe with "Die Side-by-Side-Konfiguration ist ungültig" (ERROR_SXS_CANT_GEN_ACTCTX, 14001).
+    // The C# compiler embeds the file without looking at it, so check it here.
+    private static XmlDocument StrictXml(string xml, string what)
+    {
+        try
+        {
+            var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
+            var doc = new XmlDocument { XmlResolver = null };
+            using (var r = XmlReader.Create(new StringReader(xml.TrimStart('\uFEFF')), settings)) doc.Load(r);
+            Check(true, what + ": well-formed XML");
+            return doc;
+        }
+        catch (XmlException ex)
+        {
+            Check(false, what + ": well-formed XML (" + ex.Message + ")");
+            return null;
+        }
+    }
+
+    private static void CheckManifestXml(string xml, string what)
+    {
+        var doc = StrictXml(xml, what);
+        if (doc == null) return;
+        var root = doc.DocumentElement;
+        Check(root.LocalName == "assembly" && root.NamespaceURI == "urn:schemas-microsoft-com:asm.v1" && root.GetAttribute("manifestVersion") == "1.0",
+            what + ": root <assembly manifestVersion=\"1.0\"> in urn:schemas-microsoft-com:asm.v1");
+        var ns = new XmlNamespaceManager(doc.NameTable);
+        ns.AddNamespace("a1", "urn:schemas-microsoft-com:asm.v1");
+        ns.AddNamespace("a3", "urn:schemas-microsoft-com:asm.v3");
+        var id = root.SelectSingleNode("a1:assemblyIdentity", ns) as XmlElement;
+        Check(id != null && Regex.IsMatch(id.GetAttribute("version"), @"^\d{1,5}\.\d{1,5}\.\d{1,5}\.\d{1,5}$") && id.GetAttribute("name").Length > 0,
+            what + ": assemblyIdentity with name and a four-part numeric version");
+        var levels = doc.SelectNodes("//a3:requestedExecutionLevel", ns);
+        Check(levels.Count == 1 && new[] { "asInvoker", "requireAdministrator", "highestAvailable" }.Contains(((XmlElement)levels[0]).GetAttribute("level")),
+            what + ": exactly one valid requestedExecutionLevel");
+        Check(doc.SelectNodes("//comment()").Cast<XmlNode>().All(c => !c.Value.Contains("--")), what + ": no \"--\" inside comments");
+    }
+
+    private static void CheckConfigXml(string xml, string what)
+    {
+        var doc = StrictXml(xml, what);
+        if (doc == null) return;
+        Check(doc.DocumentElement.LocalName == "configuration" && doc.SelectSingleNode("/configuration/startup/supportedRuntime[@version='v4.0']") != null,
+            what + ": <configuration><startup><supportedRuntime version=\"v4.0\">");
     }
 
     private static byte[] Read(ZipArchiveEntry e)
