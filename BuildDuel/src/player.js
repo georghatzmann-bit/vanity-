@@ -406,7 +406,7 @@ export class Character {
     if (cmd.emotePressed && this.grounded) this.emoteUntil = this.time + P.emoteDuration;
 
     // Zielen (rechte Maustaste) geht nur mit der Waffe in der Hand.
-    // Das Waffen-System verfeinert das (canAim: nicht mit Heil-Item oder leerer Hand).
+    // Das Waffen-System verfeinert das (canAim: nicht mit einem Heil-Item in der Hand).
     this.aiming = !!cmd.secondary && this.mode === 'weapon' && (game?.weapons?.canAim?.(this) ?? true);
   }
 

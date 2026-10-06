@@ -402,7 +402,7 @@ function addStyles() {
 .bd-scope::before, .bd-scope::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(10, 12, 16, 0.9); }
 .bd-scope::before { width: 72vmin; height: 2px; transform: translate(-50%, -50%); }
 .bd-scope::after { width: 2px; height: 72vmin; transform: translate(-50%, -50%); }
-.bd-scope .bd-scope-dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #FF3B3B; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
+.bd-scope .bd-scope-dot { position: absolute; z-index: 1; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #FF3B3B; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
 body.bd-scoped #crosshair { display: none; }
 `;
   document.head.appendChild(style);
