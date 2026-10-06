@@ -98,14 +98,12 @@ function moveAndLand(ch, dt, world) {
   const support = findSupport(world, p.x, p.y, p.z, r, ny);
   if (support > -Infinity && ny <= support + 1e-4) {
     p.y = support;
-    ch.airPeakY = support; // kein Fallschaden
     ch.velocity.x *= 0.3;
     ch.velocity.z *= 0.3;
-    landCharacter(ch, { noDamage: true });
+    landCharacter(ch, { noDamage: true }); // 'land' meldet die ganze Fallhöhe – Schaden gibt es keinen
     return true;
   }
   p.y = ny;
-  ch.airPeakY = p.y;
   return false;
 }
 
@@ -189,7 +187,8 @@ installSkydive();
 export function createSkydiveView(game) {
   const sd = CONFIG.skydive;
   const gliderGeometry = createGliderGeometry(sd);
-  const gliderMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  // unbeleuchtet: von unten gesehen bleibt der Schirm hell und bunt
+  const gliderMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
   const gliders = new Map(); // Figur → Mesh
 
   // Fahrtwind: Striche um die Kamera (nur Spieler im freien Fall)

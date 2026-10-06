@@ -149,7 +149,7 @@ function placeDuelProps(props, half, spawns, rng) {
       const x = (rng() * 2 - 1) * (half - margin);
       const z = (rng() * 2 - 1) * (half - margin);
       if (!ok(x, z)) continue;
-      const scale = kind === 'tree' ? 0.9 + rng() * 0.35 : 0.9 + rng() * 0.6;
+      const scale = kind === 'tree' ? 0.9 + rng() * 0.35 : 1.5 + rng() * 0.8;
       const yaw = rng() * Math.PI * 2;
       const treeKind = rng() < 0.4 ? 'pine' : 'round';
       const colorIndex = Math.floor(rng() * 4);

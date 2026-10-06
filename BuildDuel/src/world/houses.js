@@ -214,6 +214,11 @@ export function buildHouse(batch, spec) {
     })() : null,
     chestSpots,
     lootSpots,
+    /** lokale Haus-Koordinaten (u = Breite, v = Tiefe, Tür bei v = depth) → Welt { x, z } */
+    toWorld(u, v) {
+      const [x, z] = toWorld(u, v);
+      return { x, z };
+    },
     height: roofY + (spec.style === 'wood' ? Math.min(W, D) * 0.32 : H.parapet) - y0,
   };
 }

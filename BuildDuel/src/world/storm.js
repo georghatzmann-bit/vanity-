@@ -294,7 +294,9 @@ function createStormView(game, storm) {
       // Färbung nur, wenn der Spieler draußen wirklich Schaden nehmen kann (nicht im Absprung-Fahrzeug)
       const player = game.player;
       const affected = !player || (player.alive && player.moveState !== 'vehicle');
-      const nowOutside = !!camera && affected && Number.isFinite(r) && !storm.isInside(camera.getWorldPosition(_a));
+      if (camera) camera.getWorldPosition(_a);
+      // draußen = der Spieler ist draußen (ohne Spieler: die Kamera)
+      const nowOutside = !!camera && affected && Number.isFinite(r) && !storm.isInside(player ? player.position : _a);
       if (camera) {
         tint.position.copy(_a);
         tint.visible = nowOutside;
@@ -315,24 +317,28 @@ function createStormView(game, storm) {
   };
 }
 
-// Schlieren-Bild: senkrechte, weiche Streifen; nach oben durchsichtiger
+// Schlieren-Bild: weiche, unregelmäßige senkrechte Schwaden; unten kräftig (heller
+// Saum am Boden), nach oben durchsichtig – so sieht man die Wand als Wand, auch von innen
 function createStormTexture() {
-  const w = 128;
+  const w = 256;
   const h = 128;
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   const image = ctx.createImageData(w, h);
+  const TAU = Math.PI * 2;
   for (let y = 0; y < h; y++) {
     const v = 1 - y / (h - 1); // 0 unten, 1 oben
-    const fade = Math.max(0, 1 - Math.pow(v, 2.2)) * (0.55 + 0.45 * Math.min(1, (1 - v) * 4));
+    const fade = Math.pow(1 - v, 1.35);
+    const seam = v < 0.035 ? 1 : 0; // heller Saum am Boden
     for (let x = 0; x < w; x++) {
       const u = x / w;
-      // nahtlose Streifen (ganze Wellen über die Breite)
-      const streak = 0.5 + 0.3 * Math.sin(u * Math.PI * 2 * 2 + v * 3.5) + 0.2 * Math.sin(u * Math.PI * 2 * 5 - v * 6);
-      const a = Math.max(0, Math.min(1, (0.72 + 0.28 * streak) * fade));
-      const light = 200 + Math.round(55 * streak);
+      // nahtlos (ganze Wellen über die Breite), leicht schräg
+      const s = 0.5 + 0.24 * Math.sin(TAU * 2 * u + v * 3) + 0.17 * Math.sin(TAU * 5 * u - v * 6 + 1.3) +
+        0.09 * Math.sin(TAU * 13 * u + v * 11 + 2.1);
+      const a = Math.max(0, Math.min(1, (0.35 + 0.65 * s) * fade + seam * 0.5));
+      const light = Math.min(255, 175 + Math.round(80 * s) + seam * 60);
       const i = (y * w + x) * 4;
       image.data[i] = light;
       image.data[i + 1] = light;

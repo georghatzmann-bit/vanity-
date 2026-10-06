@@ -32,9 +32,9 @@ import {
   createGroundDetailTexture, smoothstep,
 } from './terrain.js';
 
-const DESERT_WALLS = ['#F2D7B6', '#E8C9A0', '#F5E1C8', '#E6B88A', '#EBCDB0', '#F0C9A8', '#E9D3B0'];
-const DESERT_TRIM = ['#C98B5B', '#B9875F', '#D29A68', '#BF7F55'];
-const DESERT_ROOF = ['#D8B48A', '#CFA57A', '#E0BE96'];
+const DESERT_WALLS = ['#F6C177', '#F2A65A', '#EFD3A1', '#F7DFB0', '#E9B384', '#F4CE8E', '#FADCB5', '#F3B5A0'];
+const DESERT_TRIM = ['#C47F48', '#B5683A', '#D9955B', '#A86B45'];
+const DESERT_ROOF = ['#D4A373', '#C9935F', '#DDB07F'];
 const ACCENTS = ['#E85D75', '#3EC1D3', '#FFC93C', '#7A5CFA', '#2ECC71', '#FF8C42'];
 const WOOD_WALLS = ['#D19A66', '#C68B59', '#DDA878'];
 const WOOD_TRIM = ['#8B5A3C', '#7A4E33'];
@@ -691,10 +691,18 @@ function createWaterTexture() {
   return texture;
 }
 
-// Nebel und Sichtweite passend zur Insel (beim Aufräumen zurück)
+// Nebel, Sichtweite und Umgebungslicht passend zur Insel (beim Aufräumen zurück).
+// Das weiche Licht "von unten" ist sonst grasgrün – das färbt Hauswände und Decken in der
+// Wüstenstadt grünlich. Auf der Insel kommt es warm-sandig von unten.
 function applyFog(game, cfg) {
   const fog = game.scene?.fog;
   const camera = game.camera;
+  let hemi = null;
+  game.scene?.traverse((o) => {
+    if (!hemi && o.isHemisphereLight) hemi = o;
+  });
+  const oldGround = hemi ? hemi.groundColor.clone() : null;
+  if (hemi) hemi.groundColor.set(cfg.hemiGroundColor);
   const old = { near: fog?.near, far: fog?.far, cameraFar: camera?.far };
   if (fog) {
     fog.near = cfg.fog.near;
@@ -705,6 +713,7 @@ function applyFog(game, cfg) {
     camera.updateProjectionMatrix();
   }
   return () => {
+    if (hemi && oldGround) hemi.groundColor.copy(oldGround);
     if (fog) {
       fog.near = old.near;
       fog.far = old.far;

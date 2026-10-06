@@ -635,13 +635,13 @@ export const CONFIG = deepFreeze({
     landSamples: 9, // so viele Punkte der neuen Zone müssen an Land liegen (Mitte + Ring)
     movingShiftFraction: 0.85, // Zone Wars: die Zone wandert so weit (Anteil des erlaubten Wegs) – deutlich spürbar
     // Aussehen: lila, halb durchsichtige Wand (Zylinder ohne Deckel), von weit weg zu sehen
-    wallHeight: 320, // so hoch ist die Wand (m) – höher als das Absprung-Fahrzeug
+    wallHeight: 190, // so hoch ist die Wand (m), nach oben wird sie durchsichtig
     wallSegments: 96, // Rundheit der Wand
     stripeSpeed: 0.035, // Schlieren in der Wand wandern langsam (Bild-Breiten pro Sekunde)
     pulseSpeed: 1.3, // die Wand "atmet" leicht …
     pulseAmount: 0.12, // … um so viel (Anteil der Deckkraft)
-    outsideTint: 0.2, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
-    outsideFogMix: 0.6, // draußen im Sturm: der Nebel wird so stark lila
+    outsideTint: 0.16, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
+    outsideFogMix: 0.5, // draußen im Sturm: der Nebel wird so stark lila
   },
 
   // Loot (src/world/loot.js): Kisten, Gegenstände am Boden, Aufheben (E), Fallenlassen
@@ -671,7 +671,7 @@ export const CONFIG = deepFreeze({
     floatHeight: 0.38, // Gegenstände schweben so hoch über dem Boden (m)
     bobHeight: 0.07, // … und wippen so weit auf und ab
     spinSpeed: 1.1, // … und drehen sich langsam (Radiant pro Sekunde)
-    itemScale: 1.9, // Waffen-Modelle am Boden größer als in der Hand (gut zu sehen)
+    itemScale: 1.6, // Waffen-Modelle am Boden größer als in der Hand (gut zu sehen)
     beamHeight: 3.2, // Lichtsäule in Seltenheits-Farbe (m) – gut zu sehen, auch im Gras
     beamRadius: 0.2,
     beamOpacity: 0.32,
@@ -749,6 +749,7 @@ export const CONFIG = deepFreeze({
       barrierMargin: 14, // unsichtbare Wand so weit außerhalb der Insel-Fläche (m)
       fog: { near: 170, far: 980 }, // Nebel passend zur Insel (von oben sieht man alles)
       cameraFar: 1150, // Sichtweite der Kamera auf der Insel (m)
+      hemiGroundColor: '#BFA978', // weiches Licht von unten: warm-sandig (sonst wirken Hauswände grünlich)
       maxBuildLevel: 30,
       // Namen der Gegenden (eigene Namen, nur zur Orientierung)
       areas: [
@@ -802,7 +803,7 @@ export const CONFIG = deepFreeze({
     deckColor: '#B97A45',
     riderSpacing: 1.25, // so dicht stehen die Mitfahrer (m)
     gliderColors: ['#FF5A5F', '#FFFFFF', '#3EC1D3'], // Streifen des Gleiters
-    gliderWidth: 3.0, // Spannweite (m)
+    gliderWidth: 2.5, // Spannweite (m)
     windStreaks: 6, // Fahrtwind-Striche im freien Fall
   },
 
@@ -1001,7 +1002,7 @@ export const CONFIG = deepFreeze({
       damageHead: '#FFD93D', // Schadenszahl: Kopf
       damageShield: '#4FC3F7', // Schadenszahl: Schild
     },
-    stormOpacity: 0.35,
+    stormOpacity: 0.45,
     fogStartFraction: 0.15, // leichter Nebel beginnt bei 15 % der Sichtweite …
     fogEndFraction: 0.9, // … und verdeckt ab 90 % alles (Horizont-Farbe)
     // Sonne: Richtung, aus der das Licht kommt (wird normalisiert)

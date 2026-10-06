@@ -470,14 +470,15 @@ export function createLootSystem(game, spec = {}) {
    */
   function focusFor(c) {
     if (!c?.alive || c.moveState === 'freefall' || c.moveState === 'glide' || c.moveState === 'vehicle') return null;
+    // Blick: Ziel-Strahl des Befehls (Fadenkreuz) – wie bei den Waffen nur, wenn er an den Augen beginnt
     const cmd = c.command;
-    const useCmd = cmd && cmd.aimDir && cmd.aimDir.lengthSq() > 0.5 && cmd.aimOrigin && cmd.aimOrigin.distanceToSquared(c.position) < 9;
+    c.eyePosition(_eye);
+    const useCmd = cmd && cmd.aimDir && cmd.aimDir.lengthSq() > 0.5 && cmd.aimOrigin && cmd.aimOrigin.distanceToSquared(_eye) < 1.44;
     if (useCmd) _dir.copy(cmd.aimDir);
     else c.aimDirection(_dir);
     const aimX = _dir.x;
     const aimY = _dir.y;
     const aimZ = _dir.z;
-    c.eyePosition(_eye);
     const cone = Math.cos((L.lookConeDeg * Math.PI) / 180);
     let best = null;
     let bestScore = Infinity;

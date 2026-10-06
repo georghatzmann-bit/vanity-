@@ -122,11 +122,20 @@ export function createZoneWarsMap(game, spec = {}) {
     ground.name = 'Gelände';
     ground.receiveShadow = true;
     builder.addObject(ground);
-    // weite Wiese außen (Rand verschwindet im Nebel)
-    const outerGeo = new THREE.PlaneGeometry(4000, 4000);
-    outerGeo.rotateX(-Math.PI / 2);
+    // weite Wiese außen (Rand verschwindet im Nebel): 4 Streifen rund um das Gelände-Mesh,
+    // genau auf der Rand-Höhe (in der Mitte kein Deckel über der Karte)
+    const far = 2000;
+    const strips = [
+      [-far, -far, far, -extent], [-far, extent, far, far], [-far, -extent, -extent, extent], [extent, -extent, far, extent],
+    ];
+    const positions = [];
+    for (const [x0, z0, x1, z1] of strips) {
+      positions.push(x0, rimTop, z0, x0, rimTop, z1, x1, rimTop, z0, x0, rimTop, z1, x1, rimTop, z1, x1, rimTop, z0);
+    }
+    const outerGeo = new THREE.BufferGeometry();
+    outerGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    outerGeo.computeVertexNormals();
     const outer = new THREE.Mesh(outerGeo, new THREE.MeshLambertMaterial({ color: dark.clone().lerp(grass, 0.5) }));
-    outer.position.y = rimTop - 0.05;
     outer.receiveShadow = true;
     outer.name = 'Wiese außen';
     builder.addObject(outer);

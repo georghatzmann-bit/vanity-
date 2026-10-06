@@ -287,10 +287,10 @@ export function createGroundDetailTexture(config, renderer, seed = 4242) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, px, px);
   const rng = createRng(seed);
-  for (let i = 0; i < 160; i++) {
-    const light = rng() < 0.5;
-    ctx.fillStyle = light ? 'rgba(255, 255, 230, 0.10)' : 'rgba(0, 30, 0, 0.07)';
-    ctx.fillRect(rng() * px, rng() * px, 1 + rng() * 6, 1 + rng() * 6);
+  for (let i = 0; i < 140; i++) {
+    const light = rng() < 0.55;
+    ctx.fillStyle = light ? 'rgba(255, 255, 230, 0.10)' : 'rgba(0, 30, 0, 0.035)';
+    ctx.fillRect(rng() * px, rng() * px, 1 + rng() * 4, 1 + rng() * 4);
   }
   if (config.visuals.groundGridLines) {
     ctx.fillStyle = `rgba(0, 30, 0, ${config.visuals.groundGridOpacity})`;
