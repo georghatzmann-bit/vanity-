@@ -219,12 +219,11 @@ export class Game {
         if (c.alive && sample) this.cameraRig.computeAimRay(c, this.world, c.command.aimOrigin, c.command.aimDir);
       }
     }
-    // 5. Bauen und Waffen
-    for (let i = 0; i < list.length; i++) {
-      const c = list[i];
-      this.building.updateCharacter(c, c.command, dt);
-      this.weapons.updateCharacter(c, c.command, dt);
-    }
+    // 5. Bauen und Waffen: erst ALLE Figuren bauen, dann schießen alle. So zählt ein Bauteil,
+    // das in diesem Tick gesetzt wird, immer vor den Schüssen desselben Ticks ("blockiert
+    // Schüsse sofort") – egal, an welcher Stelle der Liste Bauender und Schütze stehen.
+    for (let i = 0; i < list.length; i++) this.building.updateCharacter(list[i], list[i].command, dt);
+    for (let i = 0; i < list.length; i++) this.weapons.updateCharacter(list[i], list[i].command, dt);
     // 6. Systeme
     this.projectiles.update(dt);
     this.building.update(dt);

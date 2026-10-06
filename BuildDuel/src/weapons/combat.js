@@ -18,7 +18,8 @@ export function createCombat(game) {
   const hitEvent = {
     attacker: null,
     target: null, // Character oder Bauteil/Objekt (collider.data.ref)
-    amount: 0, // wirklich angerichteter Schaden
+    amount: 0, // wirklich angerichteter Schaden (Bauteil mit 15 Leben, Treffer 25 → 15)
+    nominal: 0, // verlangter Schaden (Waffen-Schaden vor Schild/Rest-Leben) – Schadenszahl an Bauteilen
     shieldDamage: 0,
     healthDamage: 0,
     head: false,
@@ -48,6 +49,7 @@ export function createCombat(game) {
       hitEvent.attacker = attacker ?? null;
       hitEvent.target = target;
       hitEvent.amount = total;
+      hitEvent.nominal = amount;
       hitEvent.shieldDamage = result.shieldDamage;
       hitEvent.healthDamage = result.healthDamage;
       hitEvent.head = !!head;
@@ -71,17 +73,22 @@ export function createCombat(game) {
       if (!ref || typeof ref.applyDamage !== 'function' || !(amount > 0)) return 0;
       // Eigenes Objekt: Das Bau-System darf sich "info" merken (z. B. wer es zerstört hat)
       const result = ref.applyDamage(amount, { attacker: attacker ?? null, weaponId: weaponId ?? null, point: point ? point.clone() : null, kind });
-      const done = typeof result === 'number' ? result : amount;
-      if (!(done > 0)) return 0;
+      // Rückgabe: Zahl (wirklicher Schaden) oder { amount, destroyed } (Bauteile, §9a);
+      // sonst (nichts zurückgegeben) gilt der verlangte Schaden
+      const done = typeof result === 'number' ? result
+        : result && typeof result.amount === 'number' ? result.amount : amount;
+      if (!(done > 0)) return 0; // z. B. Bauteil schon weg → kein 'hit'
       hitEvent.attacker = attacker ?? null;
       hitEvent.target = ref;
       hitEvent.amount = done;
+      hitEvent.nominal = amount;
       hitEvent.shieldDamage = 0;
       hitEvent.healthDamage = done;
       hitEvent.head = false;
       hitEvent.shield = false;
       if (point) hitEvent.point.copy(point);
-      hitEvent.killed = typeof ref.health === 'number' ? ref.health <= 0 : false;
+      hitEvent.killed = result && typeof result.destroyed === 'boolean' ? result.destroyed
+        : typeof ref.health === 'number' ? ref.health <= 0 : false;
       hitEvent.kind = collider.data.kind === 'piece' ? 'piece' : 'object';
       hitEvent.weaponId = weaponId ?? null;
       hitEvent.collider = collider;

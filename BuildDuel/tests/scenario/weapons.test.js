@@ -419,3 +419,169 @@ describe('Szenario: Heil-Items (Platz 5)', () => {
     assert.equal(c.selectedSlot, 1, 'Sturmgewehr wieder in der Hand');
   });
 });
+
+describe('Szenario: Wechsel, Reihenfolge, Wiedereintritt (Prüfung nach Welle 2)', () => {
+  it('Wand → "1" + Klick im selben Tick (oder kurz danach): Schrotflinte schießt bei +0,25 s', () => {
+    for (const delayTicks of [0, 1, 2, 3, 6]) {
+      const { game, c, ctl } = arena(['shotgun', 'ar']);
+      c.infiniteMaterials = true;
+      const t = addTarget(game, { x: 0, y: 0, z: -6 }, { health: 1000 });
+      ctl.aimAt = bodyPoint(t);
+      ctl.build('wall');
+      game.simulate(1 / 60);
+      assert.equal(c.mode, 'build');
+      const shots = [];
+      game.events.on('shot', (e) => shots.push({ weaponId: e.weaponId, time: game.time }));
+      const t0 = game.time;
+      ctl.select(1);
+      if (delayTicks === 0) ctl.click();
+      game.simulate(1 / 60);
+      for (let n = 1; n < delayTicks; n++) game.simulate(1 / 60);
+      if (delayTicks > 0) ctl.click();
+      game.simulate(0.4);
+      assert.equal(shots.length, 1, `Klick ${delayTicks} Ticks nach "1": ${shots.length} Schüsse`);
+      assert.equal(shots[0].weaponId, 'shotgun');
+      assert.close(shots[0].time - t0, W.switchTime, 1e-6, 'sobald die Waffe bereit ist');
+      game.dispose();
+    }
+  });
+
+  it('leeres Sturmgewehr → Baumodus → zurück: lädt von selbst nach (ohne Klick)', () => {
+    const { game, c, ctl } = arena(['ar'], { loadout: { infiniteReserve: false, reserve: { ar: 90 } } });
+    const ar = c.slots[1];
+    ar.ammo = 1;
+    const reloads = collect(game, 'reloadEnd');
+    ctl.click();
+    game.simulate(0.2);
+    assert.equal(ar.ammo, 0);
+    assert.ok(game.weapons.isReloading(c), 'leer → lädt nach');
+    ctl.build('wall');
+    game.simulate(0.5);
+    assert.ok(!game.weapons.isReloading(c) && reloads[0]?.interrupted, 'Bauen bricht das Nachladen ab');
+    ctl.select(2);
+    game.simulate(W.switchTime + 0.05);
+    assert.ok(game.weapons.isReloading(c), 'zurück mit leerem Magazin → lädt von selbst');
+    game.simulate(W.ar.reloadTime);
+    assert.equal(ar.ammo, W.ar.magazine);
+    assert.equal(ar.reserve, 90 - W.ar.magazine);
+    game.dispose();
+  });
+
+  it('Ereignisse pro Schuss: erst "shot", dann "impact", dann "hit" (auch Schrotflinte, Spitzhacke)', () => {
+    for (const weapon of ['ar', 'shotgun']) {
+      const { game, ctl } = arena([weapon]);
+      const t = addTarget(game, { x: 0, y: 0, z: -4 }, { health: 1000 });
+      const order = [];
+      for (const name of ['shot', 'impact', 'hit']) game.events.on(name, () => order.push(name));
+      ctl.aimAt = bodyPoint(t);
+      shootOnce(game, ctl);
+      assert.equal(order[0], 'shot', `${weapon}: ${order.join(' ')}`);
+      assert.equal(order[order.length - 1], 'hit');
+      assert.ok(order.indexOf('hit') > order.lastIndexOf('impact'), `${weapon}: ${order.join(' ')}`);
+      game.dispose();
+    }
+    const { game, ctl } = arena(['ar']);
+    const t = addTarget(game, { x: 0, y: 0, z: -1.5 }, { health: 1000 });
+    const order = [];
+    for (const name of ['swing', 'impact', 'hit']) game.events.on(name, () => order.push(name));
+    ctl.aimAt = bodyPoint(t);
+    ctl.pickaxe();
+    game.simulate(0.3);
+    ctl.primary = true;
+    game.simulate(1 / 60);
+    ctl.primary = false;
+    assert.deepEqual(order, ['swing', 'impact', 'hit']);
+    game.dispose();
+  });
+
+  it('"hit" an Bauteilen: amount = wirklich abgezogen, nominal = Waffen-Schaden, killed = zerstört', () => {
+    const { game, c, ctl } = arena(['ar']);
+    const fresh = game.building.placePiece('wall', 'wx:0:0:-2', null, 'wood'); // im Aufbau: 15 Leben
+    const hits = [];
+    game.events.on('hit', (e) => hits.push({ amount: e.amount, nominal: e.nominal, killed: e.killed, kind: e.kind }));
+    const damaged = collect(game, 'pieceDamaged');
+    ctl.aimAt = new THREE.Vector3(2, 1.5, -8);
+    shootOnce(game, ctl, 0.3);
+    assert.ok(fresh.removed, 'frische Holzwand hält einen Treffer nicht aus');
+    assert.deepEqual(hits[0], { amount: 15, nominal: W.ar.structureDamage, killed: true, kind: 'piece' });
+    assert.equal(damaged[0].amount, 15);
+    const full = game.building.placePiece('wall', 'wx:0:0:-2', null, 'wood', { instant: true });
+    shootOnce(game, ctl, 0.3);
+    assert.deepEqual(hits[1], { amount: W.ar.structureDamage, nominal: W.ar.structureDamage, killed: false, kind: 'piece' });
+    assert.equal(full.health, CONFIG.building.maxHealth.wall.wood - W.ar.structureDamage);
+    assert.equal(c.stats.shotsFired, 2);
+    game.dispose();
+  });
+
+  it('Wand und Schuss im selben Tick: die Wand hält den Schuss auf – egal, wer zuerst in der Liste steht', () => {
+    for (const builderFirst of [false, true]) {
+      const game = createTestGame();
+      let shooter;
+      let builder;
+      const addS = () => { shooter = addShooter(game, { position: { x: 2, y: 0, z: -10 }, team: 1, name: 'S' }); };
+      const addB = () => { builder = addShooter(game, { position: { x: 2, y: 0, z: 6 }, team: 2, name: 'B', shield: 0 }); };
+      if (builderFirst) { addB(); addS(); } else { addS(); addB(); }
+      game.weapons.giveLoadout(shooter.c, ['ar'], { infiniteReserve: true });
+      builder.c.infiniteMaterials = true;
+      shooter.ctl.aimAt = bodyPoint(builder.c);
+      builder.ctl.aimAt = bodyPoint(shooter.c);
+      builder.ctl.build('wall');
+      game.simulate(0.3);
+      const hits = collect(game, 'hit');
+      builder.ctl.click();
+      shooter.ctl.click();
+      game.simulate(1 / 60);
+      assert.equal(hits.length, 1);
+      assert.equal(hits[0].kind, 'piece', `Bauender zuerst: ${builderFirst}`);
+      assert.equal(builder.c.health, 100);
+      game.dispose();
+    }
+  });
+
+  it('Empfänger von "characterKilled" darf endMode()/projectiles.clear()/removeCharacter aufrufen (Sniper, Granate)', () => {
+    for (const action of ['endMode', 'clear', 'remove']) {
+      // Sniper-Kill
+      const a = arena(['sniper']);
+      const t = addTarget(a.game, { x: 0, y: 0, z: -10 }, { health: 100 });
+      a.game.events.on('characterKilled', (e) => {
+        if (action === 'endMode') a.game.endMode();
+        else if (action === 'clear') a.game.projectiles.clear();
+        else a.game.removeCharacter(e.victim);
+      });
+      a.ctl.aimAt = headPoint(t);
+      let error = null;
+      try {
+        a.ctl.click();
+        a.game.simulate(0.5);
+      } catch (err) {
+        error = err;
+      }
+      assert.equal(error, null, `Sniper + ${action}: ${error?.message}`);
+      assert.equal(t.alive, false);
+      assert.equal(a.game.projectiles.active.length, 0);
+      a.game.dispose();
+      // Granate trifft drei Figuren; der Empfänger nimmt jede sofort aus dem Spiel
+      const g = arena(['grenadeLauncher']);
+      const victims = [0, 1, 2].map((x) => addTarget(g.game, { x, y: 0, z: -10 }, { health: 1 }));
+      g.game.events.on('characterKilled', (e) => {
+        if (action === 'endMode') g.game.endMode();
+        else if (action === 'clear') g.game.projectiles.clear();
+        else g.game.removeCharacter(e.victim);
+      });
+      g.game.projectiles.spawn({
+        type: 'grenade', owner: g.c, weaponId: 'grenadeLauncher', position: new THREE.Vector3(1, 0.5, -10),
+        velocity: new THREE.Vector3(0, 0, 0), gravity: 0, lifetime: 0.02,
+      });
+      error = null;
+      try {
+        g.game.simulate(0.2);
+      } catch (err) {
+        error = err;
+      }
+      assert.equal(error, null, `Granate + ${action}: ${error?.message}`);
+      if (action !== 'endMode') assert.deepEqual(victims.map((v) => v.alive), [false, false, false], `${action}: keine Figur übersprungen`);
+      assert.equal(g.game.projectiles.active.length, 0);
+      g.game.dispose();
+    }
+  });
+});

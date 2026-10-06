@@ -546,6 +546,10 @@ export const CONFIG = deepFreeze({
     holdTiltDown: 0.09, // Waffe zeigt immer ein klein wenig tiefer als der Blick (Radiant)
     holdTiltIn: 0.11, // … und ein klein wenig zur Körpermitte (Radiant)
     recoilKick: 0.06, // Waffe zuckt beim Schuss so weit nach hinten (m)
+    harvestFullText: 'voll', // Spitzhacke bei vollem Material (999): statt "+N" diese Anzeige
+    // Eigene Figur ausgeblendet (Kamera dicht am Kopf) oder Zielfernrohr: kein Mündungsblitz,
+    // Leuchtspur/Geschoss-Streifen beginnen erst so weit (m) vor der Kamera
+    hiddenShotStartDistance: 1.5,
     bulletColor: '#FFF3C4', // Scharfschützen-Geschoss (Leuchtstreifen)
     bulletLength: 2.2, // Länge des Leuchtstreifens (m)
     grenadeColor: '#3B4A3A',

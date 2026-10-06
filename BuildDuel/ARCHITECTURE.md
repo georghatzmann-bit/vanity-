@@ -129,7 +129,9 @@ einen leeren Befehl (stehen still). `brain.think()` darf `null` liefern (= alter
 2. Für jede lebende Figur: Befehl holen (`playerController.buildCommand(...)` bzw. `bot.think(dt)`) → `character.command`
 3. Auswahl anwenden (`character.applySelection(command)`: Waffenplatz, Bauteil, Spitzhacke, Edit)
 4. Bewegung: `moveCharacter(character, command, dt, world)` (player.js)
-5. `building.updateCharacter(character, command, dt)` und `weapons.updateCharacter(character, command, dt)`
+5. erst `building.updateCharacter(character, command, dt)` für ALLE Figuren, dann
+   `weapons.updateCharacter(character, command, dt)` für alle – ein Bauteil dieses Ticks hält die
+   Schüsse desselben Ticks immer auf, egal in welcher Reihenfolge die Figuren in der Liste stehen
 6. `projectiles.update(dt)`, `building.update(dt)` (Aufbau, Einsturz), `storm?.update(dt)`, `loot?.update(dt)`
 7. `mode.update(dt)`, dann alle `systems[i].update(dt, game)`
 8. `time += dt; tick++`
@@ -529,8 +531,10 @@ Zielpuppen (Übungsplatz) haben `isDummy = true`.
 **Waffen-System** (`src/weapons/weapons.js`), `createWeaponSystem(game)` →
 - `updateCharacter(c, cmd, dt)` – Wechsel (`CONFIG.weapons.switchTime`, jede Waffe hat ihr eigenes
   `item.readyAt` → Schrotflinte → sofort AR geht), gleiche Platz-Taste nochmal = nächste Variante im Platz,
-  Abzug (automatisch: halten; halb-automatisch: Klick; ein zu früher Klick wird `fireBufferTime` gemerkt),
-  Nachladen (R; leer + Abzug; `autoReloadWhenEmpty`; Schrotflinte Patrone für Patrone, Schießen unterbricht),
+  Abzug (automatisch: halten; halb-automatisch: Klick; ein zu früher Klick wird `fireBufferTime` gemerkt –
+  während der Wechsel-Zeit läuft der Merker nicht ab: "1 + Klick im selben Tick" schießt nach `switchTime`),
+  Nachladen (R; leer + Abzug; `autoReloadWhenEmpty`: eine leere Waffe in der Hand lädt von selbst, sobald
+  sie bereit ist – auch nach einem Ausflug in den Baumodus; Schrotflinte Patrone für Patrone, Schießen unterbricht),
   Zielen/`scopeFov` (Sniper), Streuung, Spitzhacke (Schlag alle `swingInterval`, Reichweite `range` ab
   `aimOrigin`, `data.harvest` → Material), Heil-Items (Linksklick, `useTime`, Waffenwechsel bricht ab).
   Ziel-Strahl = `cmd.aimOrigin/aimDir`; liegt `aimOrigin` weiter als 1,2 m von den Augen weg (nie gesetzt),
@@ -560,7 +564,8 @@ Schaden anwenden: `src/weapons/combat.js` (`damageCharacter`, `damageObject`, `i
 An Bauteilen (`data.kind === 'piece'`) zählt `structureDamage` (Schrotflinte: 60 verteilt auf die
 treffenden Kugeln), an anderen Objekten mit `data.ref.applyDamage` der normale Waffen-Schaden.
 `data.ref.applyDamage(amount, info)` bekommt ein eigenes `info`-Objekt `{ attacker, weaponId, point, kind }`
-und darf eine Zahl (wirklicher Schaden) zurückgeben.
+und darf eine Zahl (wirklicher Schaden) oder `{ amount, destroyed }` (Bauteile, §9a) zurückgeben; ohne
+Rückgabe gilt der verlangte Schaden. 0 → kein `hit` (z. B. Bauteil schon weg).
 
 **Geschosse** (`src/weapons/projectiles.js`): `spawn({ type: 'bullet'|'grenade', owner, weaponId, rarity,
 position, velocity, gravity, lifetime, visualFrom? })`, `update(dt)` (Strecke pro Tick per raycast →
@@ -568,13 +573,18 @@ kein Durchtunneln), `clear()`, `frameUpdate(alpha)`, `active` (Liste). Sniper-Ku
 und fliegt zum Punkt unter dem Fadenkreuz (300 m/s, leichter Fall). Granate: explodiert beim Aufprall
 oder nach `fuseTime`; Figuren im Radius nehmen Schaden durch Wände hindurch (Abstand zur Kapsel),
 Bauteile im Radius `structureDamage`; eigene Granaten verletzen nicht (`selfDamage: false`).
+**Wiedereintritt:** Empfänger der Ereignisse (`hit`, `characterKilled`, `impact`, `explosion` …) dürfen
+mitten im Schritt `projectiles.clear()`, `spawn()`, `game.removeCharacter()` oder `game.endMode()` aufrufen:
+`update()` macht danach nur mit Geschossen weiter, die noch fliegen (in diesem Schritt erzeugte fliegen erst
+im nächsten), `explode()` läuft über eine Kopie von `game.characters` (aus dem Spiel genommene Figuren
+werden übersprungen, keine wird ausgelassen).
 
 **Ereignisse** (§8) – genauer bzw. neu. Die Ereignis-Objekte werden **wiederverwendet**: Wer etwas
 länger braucht, kopiert es sofort (z. B. `e.point.clone()`).
 | Ereignis | Inhalt |
 |---|---|
 | `shot` | `{ shooter, weaponId, origin (Mündung), dir, end (Treffpunkt/Ende des Strahls), pellets, kind: 'hitscan'\|'projectile' }` |
-| `hit` | `{ attacker, target, amount, shieldDamage, healthDamage, head, shield, point, killed, kind: 'character'\|'piece'\|'object', weaponId, collider }` – eine Meldung pro Ziel und Schuss (Schrotflinte: Summe der Kugeln); kein `hit` bei 0 Schaden (unverwundbar) |
+| `hit` | `{ attacker, target, amount, nominal, shieldDamage, healthDamage, head, shield, point, killed, kind: 'character'\|'piece'\|'object', weaponId, collider }` – eine Meldung pro Ziel und Schuss (Schrotflinte: Summe der Kugeln); `amount` = wirklich angerichtet (Bauteil mit 15 Leben, Treffer 25 → 15), `nominal` = verlangter Waffen-Schaden (Schadenszahl an Bauteilen), `killed` = besiegt bzw. Bauteil zerstört; kein `hit` bei 0 Schaden (unverwundbar, schon zerstört) |
 | `impact` | `{ shooter, weaponId, point, normal, kind: 'character'\|'piece'\|'object'\|'static'\|'terrain' }` – jede Kugel (für Funken/Splitter) |
 | `reloadStart` / `reloadEnd` | `{ character, weaponId, interrupted }` |
 | `swing` | `{ character }` – Spitzhacke schlägt |
@@ -582,11 +592,18 @@ länger braucht, kopiert es sofort (z. B. `e.point.clone()`).
 | `healStart` / `healCancel` | `{ character, itemId, duration }` / `{ character, itemId }` (`heal` sendet Character.heal) |
 | `explosion` | `{ position, radius, owner, weaponId }` |
 
+Reihenfolge pro Strahl-Schuss: `shot` → `impact` (jede Kugel) → `hit` (je Ziel) → evtl. `characterKilled`
+bzw. `pieceDestroyed`. Spitzhacke: `swing` → `impact` → `hit` / `harvest`. Sniper/Granate: `shot` beim
+Abfeuern, `impact`/`hit`/`explosion` beim Einschlag (Geschoss).
+
 **Grafik** (nur mit Bildschirm): `src/weapons/models.js` (`createWeaponModel(id, rarity)`, `createHandMount`;
 geteilte Formen/Materialien mit `userData.shared`), `src/weapons/visuals.js` (Waffe an der rechten Hand per
 `view.attach('weapon', …)`, Mündungsblitz-Sprite + EIN dauerhaftes PointLight (Anzahl Lichter bleibt gleich →
 kein Shader-Neubau), Leuchtspur bei `tracer: true`, Feuerball, Treffer-Zahlen als HTML in `game.uiRoot`
-(Vorrat, `settings.game.damageNumbers`, nur eigene Treffer), **vorläufiges** Zielfernrohr-Bild `.bd-scope`
+(Vorrat, `settings.game.damageNumbers`, nur eigene Treffer), Ist die eigene Figur ausgeblendet (Kamera am Kopf) oder im Zielfernrohr: kein Blitz-Bild (beim Ausblenden nur
+das kurze Licht), Leuchtspur und Sniper-Streifen beginnen `weaponVisuals.hiddenShotStartDistance` vor der Kamera;
+der Streifen eines Geschosses reicht nie hinter seinen Bild-Start zurück. Spitzhacke: Zahl = wirklich gesammelt
+(`+N`), bei vollem Material `harvestFullText`. **vorläufiges** Zielfernrohr-Bild `.bd-scope`
 (das HUD in Welle 3a darf es ersetzen; `CONFIG.weapons.sniper.scopeOverlay`)). Werte: `CONFIG.weaponVisuals`.
 
 **Übungsplatz** (`src/weapons/practiceRange.js`, eingehängt in modes/practice.js): alle Waffen

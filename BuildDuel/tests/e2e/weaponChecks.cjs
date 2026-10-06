@@ -304,6 +304,50 @@ const WEAPON_CHECKS = [
     },
   },
   {
+    name: 'Schuss aus der Box (eigene Figur ausgeblendet): kein Blitz und keine Spur vor der Kamera',
+    async run(ctx) {
+      await installHelpers(ctx.page);
+      // Box 1×1 (Zelle −6, 0, 4), Rücken zur Wand → Kamera rückt an den Kopf, Figur ausgeblendet
+      const setup = await ctx.page.evaluate(() => {
+        const g = buildDuel.game;
+        const p = g.player;
+        g.weapons.setEffectsPaused(false);
+        g.weapons.clearEffects();
+        g.building.clearAll();
+        p.resetForRound({ health: 100, shield: 100, position: { x: -22, y: 0, z: 19.4 }, yaw: 0 });
+        g.cameraRig.snap();
+        for (const k of ['wx:-6:0:4', 'wx:-6:0:5', 'wz:-6:0:4', 'wz:-5:0:4']) g.building.placePiece('wall', k, p, 'wood', { instant: true, force: true });
+        g.building.placePiece('roof', 'c:-6:1:4', p, 'wood', { instant: true, force: true });
+        __wp.select('ar');
+        p.yaw = p.prevYaw = 0;
+        p.pitch = p.prevPitch = 0;
+        buildDuel.simulate(0.3);
+        return { ar: p.slots[p.selectedSlot]?.id };
+      });
+      await nextFrames(ctx.page, 3);
+      const hidden = await ctx.page.evaluate(() => ({ hide: buildDuel.game.cameraRig.hideCharacter, visible: buildDuel.game.player.view.root.visible }));
+      ctx.assert(setup.ar === 'ar' && hidden.hide && !hidden.visible, `Figur ausgeblendet: ${JSON.stringify({ ...setup, ...hidden })}`);
+      await ctx.page.evaluate(() => {
+        __wp.press('primary');
+        buildDuel.game.weapons.setEffectsPaused(true);
+      });
+      await nextFrames(ctx.page, 2);
+      const fx = await ctx.page.evaluate(() => {
+        const cam = buildDuel.camera.position;
+        const e = buildDuel.game.weapons.visuals.visibleEffects();
+        const dist = (o) => Math.hypot(o.x - cam.x, o.y - cam.y, o.z - cam.z);
+        return { flashes: e.flashes.map(dist), tracers: e.tracers.map(dist) };
+      });
+      await ctx.shot('24b-schuss-aus-der-box');
+      await ctx.page.evaluate(() => {
+        buildDuel.game.weapons.setEffectsPaused(false);
+        buildDuel.game.building.clearAll();
+      });
+      ctx.assert(fx.flashes.length === 0, `kein Mündungsblitz (Figur unsichtbar): ${JSON.stringify(fx.flashes)}`);
+      ctx.assert(fx.tracers.length === 1 && fx.tracers[0] > 1, `Leuchtspur beginnt weiter als 1 m vor der Kamera: ${JSON.stringify(fx.tracers)}`);
+    },
+  },
+  {
     name: 'Scharfschützengewehr: Zielfernrohr (20°), eigene Figur ausgeblendet, Kopfschuss = gelbe Zahl',
     async run(ctx) {
       await installHelpers(ctx.page);
@@ -398,6 +442,9 @@ const WEAPON_CHECKS = [
         return { harvest, wood: p.materials.wood, mode: p.mode };
       });
       await nextFrames(ctx.page, 2);
+      // Die Zahl zeigt, was WIRKLICH dazukam
+      const shown = await ctx.page.evaluate(() => buildDuel.game.weapons.visuals.visibleNumbers().filter((n) => n.kind === 'harvest').map((n) => n.text));
+      ctx.assert(r.harvest && shown.includes(`+${r.harvest.amount}`), `Zahl: ${JSON.stringify(shown)} für ${JSON.stringify(r.harvest)}`);
       await ctx.page.evaluate(() => buildDuel.game.weapons.setEffectsPaused(true));
       await nextFrames(ctx.page, 1);
       await ctx.shot('28-spitzhacke-baum');
@@ -405,6 +452,25 @@ const WEAPON_CHECKS = [
       ctx.assert(r.mode === 'pickaxe', `Spitzhacke in der Hand (${r.mode})`);
       ctx.assert(r.harvest && r.harvest.material === 'wood' && r.harvest.amount >= 5 && r.harvest.amount <= 10, `Ernte: ${JSON.stringify(r.harvest)}`);
       ctx.assert(r.wood === 100 + r.harvest.amount, `Holz: ${r.wood}`);
+      // Holz schon voll (999): keine "+N"-Zahl, sondern "voll"
+      const full = await ctx.page.evaluate(() => {
+        const g = buildDuel.game;
+        const p = g.player;
+        g.weapons.clearEffects();
+        p.materials.wood = buildDuel.CONFIG.materials.maxPerType;
+        let amount = null;
+        const off = g.events.on('harvest', (e) => { amount = e.amount; });
+        buildDuel.simulate(buildDuel.CONFIG.weapons.pickaxe.swingInterval);
+        buildDuel.input.setVirtual('primary', true);
+        buildDuel.simulate(0.05);
+        buildDuel.input.setVirtual('primary', false);
+        off();
+        return { amount, wood: p.materials.wood };
+      });
+      await nextFrames(ctx.page, 2);
+      const shownFull = await ctx.page.evaluate(() => buildDuel.game.weapons.visuals.visibleNumbers().filter((n) => n.kind === 'harvest').map((n) => n.text));
+      ctx.assert(full.amount === 0 && full.wood === 999, `bei 999: ${JSON.stringify(full)}`);
+      ctx.assert(shownFull.length === 1 && shownFull[0] === 'voll', `bei 999 angezeigt: ${JSON.stringify(shownFull)}`);
     },
   },
   {

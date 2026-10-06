@@ -129,6 +129,12 @@ describe('Spielwerte: Bewegung, Kamera, Figuren (Phase 2)', () => {
 });
 
 describe('Spielwerte: Waffen', () => {
+  it('Schuss-Bild bei ausgeblendeter Figur beginnt vor der Kamera; Spitzhacke-Text bei vollem Material', () => {
+    const v = CONFIG.weaponVisuals;
+    assert.ok(v.hiddenShotStartDistance >= 1 && v.hiddenShotStartDistance <= 3);
+    assert.ok(typeof v.harvestFullText === 'string' && v.harvestFullText.length > 0);
+  });
+
   it('jede Schusswaffe hat Magazin, Nachladezeit und Schuss-Tempo', () => {
     for (const id of GUNS) {
       const w = CONFIG.weapons[id];
@@ -193,6 +199,16 @@ describe('Spielwerte: Bauen und Material', () => {
     assert.deepEqual([g.wall.cols, g.wall.rows], [3, 3]);
     for (const p of ['floor', 'roof', 'ramp']) assert.deepEqual([g[p].cols, g[p].rows], [2, 2]);
     for (const cell of CONFIG.building.wallDoorCells) assert.ok(cell >= 0 && cell < 9);
+  });
+
+  it('Zielwahl/Grenzen: Spalten-Rand kleiner als eine halbe Zelle, Bau-Höhe ganze Ebenen, Schiebe-Luft klein', () => {
+    const b = CONFIG.building;
+    const S = CONFIG.world.gridCellSize;
+    // sonst käme die Wand nie in die Nachbar-Spalte (Anker höchstens targetReach weg)
+    assert.ok(b.wallColumnMargin > 0 && b.wallColumnMargin < S / 2 && b.wallColumnMargin < b.targetReach.wall - S / 2);
+    assert.ok(Number.isInteger(b.maxLevel) && b.maxLevel >= 3, `maxLevel ${b.maxLevel}`);
+    assert.ok(b.wallPushGap >= 0 && b.wallPushGap < 0.1);
+    assert.ok(b.previewOccupiedEdgeOpacity > 0 && b.previewOccupiedEdgeOpacity <= 1);
   });
 });
 

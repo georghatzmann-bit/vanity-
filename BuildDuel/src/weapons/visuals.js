@@ -110,13 +110,15 @@ export function createWeaponVisuals(game, system) {
     if (e.kind === 'character') {
       numbers.spawn(e.point, Math.round(e.amount), damageNumberKind(e.head, e.shield));
     } else if (V.damageNumbers.showStructureHits) {
-      numbers.spawn(e.point, Math.round(e.amount), 'structure');
+      // an Bauteilen: der Waffen-Schaden (wie im Original), auch wenn das Teil weniger Leben hatte
+      numbers.spawn(e.point, Math.round(e.nominal ?? e.amount), 'structure');
     }
   }));
   offs.push(game.events.on('harvest', (e) => {
     if (!numbers || game.settings?.game?.damageNumbers === false) return;
     if (game.player && e.character !== game.player) return;
-    numbers.spawn(e.point, `+${e.rolled}`, 'harvest');
+    // was wirklich dazukam; schon voll (999) → "voll" statt einer Zahl, die nicht stimmt
+    numbers.spawn(e.point, e.amount > 0 ? `+${e.amount}` : V.harvestFullText, 'harvest');
   }));
   offs.push(game.events.on('explosion', (e) => {
     const x = explosions[nextExplosion];
@@ -205,6 +207,11 @@ export function createWeaponVisuals(game, system) {
     f.sprite.position.copy(position);
     f.sprite.material.rotation = Math.random() * Math.PI * 2;
     f.sprite.visible = true;
+    startLight(position);
+  }
+
+  // nur das kurze Licht (z. B. eigene Figur ausgeblendet: kein Blitz-Bild, aber die Wände leuchten auf)
+  function startLight(position) {
     light.position.copy(position);
     lightStart = now;
   }
@@ -229,10 +236,19 @@ export function createWeaponVisuals(game, system) {
       const def = CONFIG.weapons[p.weaponId];
       const v = c ? views.get(c) : null;
       if (v) v.kickTime = now;
-      // Spieler mit Zielfernrohr: kein Blitz vor der Linse
-      const visible = c?.view && !(c === game.player && c.scopeFov);
-      const hasMuzzle = visible && muzzleWorld(c, tmp);
-      if (!hasMuzzle) tmp.copy(p.origin);
+      // Kein Blitz vor der Linse: nicht beim Zielfernrohr und nicht, wenn die eigene Figur
+      // ausgeblendet ist (Kamera dicht am Kopf, z. B. in einer Box mit dem Rücken zur Wand)
+      const visible = !!c?.view && c.view.root.visible && !(c === game.player && c.scopeFov);
+      if (!(visible && muzzleWorld(c, tmp))) {
+        tmp.copy(p.origin);
+        if (c?.view && !visible && !c.scopeFov) startLight(tmp);
+        if (!visible) {
+          // Leuchtspur erst ein Stück vor der Kamera beginnen lassen
+          tmp2.subVectors(p.end, p.origin);
+          const length = tmp2.length();
+          if (length > 1e-6) tmp.addScaledVector(tmp2, Math.min(V.hiddenShotStartDistance, length) / length);
+        }
+      }
       if (visible) startFlash(tmp, p.weaponId === 'shotgun' || p.weaponId === 'sniper' || p.weaponId === 'grenadeLauncher');
       if (def?.tracer) startTracer(tmp, p.end);
       p.shooter = null;
@@ -246,6 +262,18 @@ export function createWeaponVisuals(game, system) {
     /** Für Tests: gerade sichtbare Treffer-Zahlen [{ text, kind }]. */
     visibleNumbers() {
       return numbers ? numbers.visible() : [];
+    },
+
+    /** Für Tests: sichtbare Blitze { x, y, z, size } und Leuchtspuren { x, y, z, length } (Anfang). */
+    visibleEffects() {
+      const out = { flashes: [], tracers: [] };
+      for (const f of flashes) {
+        if (f.sprite.visible) out.flashes.push({ x: f.sprite.position.x, y: f.sprite.position.y, z: f.sprite.position.z, size: f.sprite.scale.x });
+      }
+      for (const tr of tracers) {
+        if (tr.mesh.visible) out.tracers.push({ x: tr.mesh.position.x, y: tr.mesh.position.y, z: tr.mesh.position.z, length: tr.mesh.scale.z });
+      }
+      return out;
     },
 
     frameUpdate(/* alpha */) {

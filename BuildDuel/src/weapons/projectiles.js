@@ -47,6 +47,9 @@ export function createProjectileSystem(game) {
   const queryMax = new THREE.Vector3();
   const queryOut = [];
   const refsDone = new Set();
+  const charsSnapshot = []; // Kopie von game.characters für explode() (Empfänger dürfen die Liste ändern)
+  let epoch = 0; // Nummer des laufenden update()
+  let updating = false;
   const explosionEvent = { position: new THREE.Vector3(), radius: 0, owner: null, weaponId: null };
   const impactEvent = { shooter: null, weaponId: null, point: new THREE.Vector3(), normal: new THREE.Vector3(), kind: 'static' };
 
@@ -82,8 +85,10 @@ export function createProjectileSystem(game) {
       lifetime: 1,
       traveled: 0,
       visualOffset: new THREE.Vector3(),
+      visualStart: new THREE.Vector3(), // hier beginnt das Bild (Mündung) – der Streifen reicht nie weiter zurück
       mesh: null,
       alive: false,
+      epoch: -1, // in welchem update() erzeugt (dort noch nicht bewegen)
     };
   }
 
@@ -103,12 +108,17 @@ export function createProjectileSystem(game) {
     return mesh;
   }
 
-  function release(index) {
-    const p = active[index];
+  // Geschoss zurück in den Vorrat. Sicher, auch wenn ein Ereignis-Empfänger die Liste
+  // inzwischen geändert hat (clear(), endMode() …): schon freigegeben → nichts tun.
+  function release(p, hint = -1) {
+    if (!p.alive) return;
     p.alive = false;
     if (p.mesh) p.mesh.visible = false;
-    active[index] = active[active.length - 1];
-    active.pop();
+    const index = hint >= 0 && active[hint] === p ? hint : active.indexOf(p);
+    if (index >= 0) {
+      active[index] = active[active.length - 1];
+      active.pop();
+    }
     pool.push(p);
   }
 
@@ -174,11 +184,17 @@ export function createProjectileSystem(game) {
     const radius = def.explosionRadius;
     const rarity = game.useRarity ? rarityMultiplier(p.rarity) : 1;
     let hitSomeone = false;
-    // Figuren im Radius (durch Wände hindurch, wenn damageThroughWalls)
-    const list = game.characters;
+    // Figuren im Radius (durch Wände hindurch, wenn damageThroughWalls). Über eine KOPIE der
+    // Liste: entfernt ein Empfänger von 'characterKilled' eine Figur, wird keine übersprungen.
+    const list = charsSnapshot;
+    list.length = 0;
+    for (let i = 0; i < game.characters.length; i++) list.push(game.characters[i]);
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       if (!c.alive) continue;
+      if (list.length !== game.characters.length || game.characters[i] !== c) {
+        if (!game.characters.includes(c)) continue; // inzwischen aus dem Spiel genommen
+      }
       if (c === owner && !W.selfDamage) continue;
       if (c !== owner && owner && !W.friendlyFire && c.team === owner.team) continue;
       const d = distanceToCharacter(c, position, tmp);
@@ -198,6 +214,7 @@ export function createProjectileSystem(game) {
       const done = combat.damageCharacter(owner, c, amount, false, tmp, p.weaponId, 'explosion');
       if (done > 0 && c !== owner) hitSomeone = true;
     }
+    list.length = 0;
     if (hitSomeone && owner) owner.stats.shotsHit++;
     // Bauteile im Radius
     queryMin.set(position.x - radius, position.y - radius, position.z - radius);
@@ -230,6 +247,50 @@ export function createProjectileSystem(game) {
     game.events.emit('explosion', explosionEvent);
   }
 
+  function updateAll(dt) {
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (i >= active.length) continue; // Liste wurde von einem Empfänger verkürzt
+      const p = active[i];
+      if (!p.alive || p.epoch === epoch) continue; // gerade erst (in diesem Schritt) erzeugt
+      p.prevPosition.copy(p.position);
+      p.age += dt;
+      // Strecke dieses Schritts (genaue Wurf-Formel)
+      step.copy(p.velocity).multiplyScalar(dt);
+      step.y -= 0.5 * p.gravity * dt * dt;
+      p.velocity.y -= p.gravity * dt;
+      const len = step.length();
+      let done = false;
+      if (len > 1e-9) {
+        dir.copy(step).multiplyScalar(1 / len);
+        fillTargets(p.owner);
+        rayOptions.ignoreCharacter = p.owner;
+        const h = game.world.raycast(p.position, dir, len, rayOptions, hit);
+        if (h) {
+          if (p.type === 'grenade') {
+            // ein kleines Stück vor der Fläche explodieren
+            p.position.copy(h.point).addScaledVector(dir, -0.05);
+            explode(p, p.position);
+          } else {
+            p.position.copy(h.point);
+            bulletHit(p, h, h.distance);
+          }
+          done = true;
+        }
+      }
+      if (!done) {
+        p.position.add(step);
+        p.traveled += len;
+        if (p.age >= p.lifetime) {
+          if (p.type === 'grenade') explode(p, p.position);
+          done = true;
+        } else if (p.position.y < CONFIG.world.killPlaneY) {
+          done = true;
+        }
+      }
+      if (done) release(p, i);
+    }
+  }
+
   const system = {
     game,
     active,
@@ -254,53 +315,27 @@ export function createProjectileSystem(game) {
       p.traveled = 0;
       if (spec.visualFrom) p.visualOffset.subVectors(spec.visualFrom, spec.position);
       else p.visualOffset.set(0, 0, 0);
+      p.visualStart.copy(spec.visualFrom ?? spec.position);
       p.alive = true;
+      p.epoch = updating ? epoch : -1;
       p.mesh = meshFor(p);
       if (p.mesh) p.mesh.visible = false; // erst im nächsten Bild an der richtigen Stelle zeigen
       active.push(p);
       return p;
     },
 
-    /** Pro Logik-Schritt: fliegen und Treffer prüfen. */
+    /**
+     * Pro Logik-Schritt: fliegen und Treffer prüfen. Treffer senden Ereignisse – deren
+     * Empfänger dürfen alles (clear(), spawn(), game.endMode() …): danach wird nur noch
+     * weitergemacht, was noch wirklich fliegt.
+     */
     update(dt) {
-      for (let i = active.length - 1; i >= 0; i--) {
-        const p = active[i];
-        p.prevPosition.copy(p.position);
-        p.age += dt;
-        // Strecke dieses Schritts (genaue Wurf-Formel)
-        step.copy(p.velocity).multiplyScalar(dt);
-        step.y -= 0.5 * p.gravity * dt * dt;
-        p.velocity.y -= p.gravity * dt;
-        const len = step.length();
-        let done = false;
-        if (len > 1e-9) {
-          dir.copy(step).multiplyScalar(1 / len);
-          fillTargets(p.owner);
-          rayOptions.ignoreCharacter = p.owner;
-          const h = game.world.raycast(p.position, dir, len, rayOptions, hit);
-          if (h) {
-            if (p.type === 'grenade') {
-              // ein kleines Stück vor der Fläche explodieren
-              p.position.copy(h.point).addScaledVector(dir, -0.05);
-              explode(p, p.position);
-            } else {
-              p.position.copy(h.point);
-              bulletHit(p, h, h.distance);
-            }
-            done = true;
-          }
-        }
-        if (!done) {
-          p.position.add(step);
-          p.traveled += len;
-          if (p.age >= p.lifetime) {
-            if (p.type === 'grenade') explode(p, p.position);
-            done = true;
-          } else if (p.position.y < CONFIG.world.killPlaneY) {
-            done = true;
-          }
-        }
-        if (done) release(i);
+      epoch++;
+      updating = true;
+      try {
+        updateAll(dt);
+      } finally {
+        updating = false;
       }
     },
 
@@ -320,7 +355,12 @@ export function createProjectileSystem(game) {
           dir.copy(p.velocity).normalize();
           // Streifen zeigt nach hinten (gegen die Flugrichtung)
           mesh.quaternion.setFromUnitVectors(Z_AXIS, step.copy(dir).negate());
-          const length = Math.max(0.2, Math.min(V.bulletLength, p.traveled + 0.3));
+          // nie hinter den Start (Mündung bzw. ein Stück vor der Kamera) zurück
+          const length = Math.min(V.bulletLength, p.traveled + 0.3, tmp.distanceTo(p.visualStart));
+          if (length < 0.05) {
+            mesh.visible = false;
+            continue;
+          }
           mesh.scale.set(0.05, 0.05, length);
         } else {
           mesh.scale.set(1, 1, 1);
@@ -331,7 +371,7 @@ export function createProjectileSystem(game) {
 
     /** Alle Geschosse entfernen (z. B. neue Runde). */
     clear() {
-      for (let i = active.length - 1; i >= 0; i--) release(i);
+      for (let i = active.length - 1; i >= 0; i--) release(active[i], i);
     },
 
     dispose() {

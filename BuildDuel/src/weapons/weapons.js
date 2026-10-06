@@ -172,6 +172,10 @@ export function createWeaponSystem(game) {
     hitCharPoint.push(new THREE.Vector3());
     hitRefPoint.push(new THREE.Vector3());
   }
+  // Einschläge eines Schusses: erst gesammelt, dann NACH 'shot' gemeldet (shot → impact* → hit*)
+  const impacts = [];
+  for (let i = 0; i < 16; i++) impacts.push({ point: new THREE.Vector3(), normal: new THREE.Vector3(), kind: 'static' });
+  let impactCount = 0;
 
   // Ereignis-Objekte werden wiederverwendet (wer etwas behalten will, kopiert es)
   const shotEvent = { shooter: null, weaponId: null, origin: new THREE.Vector3(), dir: new THREE.Vector3(), end: new THREE.Vector3(), pellets: 1, kind: 'hitscan' };
@@ -410,13 +414,39 @@ export function createWeaponSystem(game) {
     hitRefAmount[i] += amount;
   }
 
+  function impactKind(t) {
+    return t.character ? 'character' : t.collider ? (isPiece(t.collider) ? 'piece' : isDamageable(t.collider) ? 'object' : 'static') : t.terrain ? 'terrain' : 'static';
+  }
+
   function emitImpact(c, weaponId, t) {
     impactEvent.shooter = c;
     impactEvent.weaponId = weaponId;
     impactEvent.point.copy(t.point);
     impactEvent.normal.copy(t.normal);
-    impactEvent.kind = t.character ? 'character' : t.collider ? (isPiece(t.collider) ? 'piece' : isDamageable(t.collider) ? 'object' : 'static') : t.terrain ? 'terrain' : 'static';
+    impactEvent.kind = impactKind(t);
     game.events.emit('impact', impactEvent);
+  }
+
+  // Einschlag einer Kugel merken (gemeldet wird er erst nach 'shot')
+  function recordImpact(t) {
+    if (impactCount >= impacts.length) return;
+    const r = impacts[impactCount++];
+    r.point.copy(t.point);
+    r.normal.copy(t.normal);
+    r.kind = impactKind(t);
+  }
+
+  function emitRecordedImpacts(c, weaponId) {
+    for (let i = 0; i < impactCount; i++) {
+      const r = impacts[i];
+      impactEvent.shooter = c;
+      impactEvent.weaponId = weaponId;
+      impactEvent.point.copy(r.point);
+      impactEvent.normal.copy(r.normal);
+      impactEvent.kind = r.kind;
+      game.events.emit('impact', impactEvent);
+    }
+    impactCount = 0;
   }
 
   // Treffer eines Schusses anwenden (eine Zahl pro Ziel), Zähler für Genauigkeit
@@ -438,10 +468,13 @@ export function createWeaponSystem(game) {
     resetHits();
   }
 
-  function fireHitscan(c, item, def, cone) {
+  // Alle Kugeln eines Strahl-Schusses verfolgen; Treffer und Einschläge nur SAMMELN
+  // (fire() meldet erst 'shot', dann die Einschläge, dann wendet es den Schaden an)
+  function traceHitscan(c, item, def, cone) {
     const pellets = def.pellets ?? 1;
     const rarity = game.useRarity ? item.rarity : null;
     resetHits();
+    impactCount = 0;
     for (let i = 0; i < pellets; i++) {
       spreadDirection(aimDir, cone, game.rng, pelletDir);
       hitscan.trace(c, aimOrigin, pelletDir, def.maxRange ?? 300, trace);
@@ -454,9 +487,8 @@ export function createWeaponSystem(game) {
         const amount = isPiece(trace.collider) ? def.structureDamage / pellets : weaponDamage(def, { distance: trace.distance, rarity });
         addRefHit(trace.collider, amount, trace.point);
       }
-      emitImpact(c, item.id, trace);
+      recordImpact(trace);
     }
-    applyHits(c, item.id);
   }
 
   function fireProjectile(c, item, def, cone) {
@@ -471,6 +503,14 @@ export function createWeaponSystem(game) {
     else velocity.copy(pelletDir);
     velocity.multiplyScalar(def.projectileSpeed);
     const grenade = def.explosionRadius > 0;
+    // Bild: Geschoss startet an der Mündung der Waffe in der Hand. Ist die eigene Figur
+    // ausgeblendet (Kamera dicht am Kopf, Zielfernrohr), ein Stück vor den Augen –
+    // sonst zieht der Leuchtstreifen direkt an der Kamera vorbei.
+    let visualFrom = null;
+    if (visuals) {
+      if (visuals.muzzleWorld(c, visualMuzzle)) visualFrom = visualMuzzle;
+      else visualFrom = visualMuzzle.copy(velocity).normalize().multiplyScalar(CONFIG.weaponVisuals.hiddenShotStartDistance).add(tmp);
+    }
     game.projectiles?.spawn({
       type: grenade ? 'grenade' : 'bullet',
       owner: c,
@@ -480,7 +520,7 @@ export function createWeaponSystem(game) {
       velocity,
       gravity: def.projectileGravity ?? 0,
       lifetime: grenade ? def.fuseTime : def.projectileMaxLifetime,
-      visualFrom: visuals && visuals.muzzleWorld(c, visualMuzzle) ? visualMuzzle : null,
+      visualFrom,
     });
   }
 
@@ -491,8 +531,10 @@ export function createWeaponSystem(game) {
     item.readyAt = nextReady(item.readyAt, time, dt, fireIntervalOf(def));
     c.stats.shotsFired++;
     if (c.emoteUntil > 0) c.emoteUntil = 0;
-    if (def.kind === 'projectile') fireProjectile(c, item, def, cone);
-    else fireHitscan(c, item, def, cone);
+    const projectile = def.kind === 'projectile';
+    if (projectile) fireProjectile(c, item, def, cone);
+    else traceHitscan(c, item, def, cone);
+    // Reihenfolge der Ereignisse: 'shot' → 'impact' (jede Kugel) → 'hit' (je Ziel)
     hitscan.muzzlePosition(c, shotOrigin);
     shotEvent.shooter = c;
     shotEvent.weaponId = item.id;
@@ -502,19 +544,29 @@ export function createWeaponSystem(game) {
     shotEvent.pellets = def.pellets ?? 1;
     shotEvent.kind = def.kind;
     game.events.emit('shot', shotEvent);
+    if (!projectile) {
+      emitRecordedImpacts(c, item.id);
+      applyHits(c, item.id);
+    }
   }
 
   function updateGun(c, st, item, cmd, dt, time) {
     const def = W[item.id];
     if (cmd.reloadOrRotate) startReload(c, st, item);
+    const equipping = time < st.equipReadyAt - EPS;
     // Abzug: automatisch = gedrückt halten, sonst ein Klick. Ein Klick kurz vor Ende der
     // Wartezeit wird gemerkt (fireBufferTime) – auch beim Antippen automatischer Waffen.
+    // Während des Waffen-Wechsels läuft der Merker nicht ab: "1 drücken + klicken" (Wand →
+    // Schrotflinte) schießt, sobald die Waffe bereit ist.
     if (cmd.primaryPressed) st.fireBuffer = W.fireBufferTime;
-    else if (st.fireBuffer > 0) st.fireBuffer = Math.max(0, st.fireBuffer - dt);
+    else if (st.fireBuffer > 0 && !equipping) st.fireBuffer = Math.max(0, st.fireBuffer - dt);
     const trigger = st.fireBuffer > 0 || (def.automatic && !!cmd.primary);
     // Schrotflinte: Schießen unterbricht das Nachladen (wenn schon Patronen drin sind)
     if (trigger && st.reloadItem === item && def.reloadMode === 'perShell' && item.ammo > 0) endReload(c, st, true);
     if (st.reloadItem === item) progressReload(c, st, item, dt);
+    // Leer in der Hand (z. B. zurück aus dem Baumodus, das Nachladen wurde abgebrochen):
+    // lädt von selbst nach, sobald die Waffe bereit ist
+    if (W.autoReloadWhenEmpty && item.ammo <= 0 && !st.reloadItem && !equipping) startReload(c, st, item);
     if (trigger && item.ammo <= 0 && !st.reloadItem) startReload(c, st, item);
     const ready = time >= st.equipReadyAt - EPS && time >= item.readyAt - EPS;
     if (trigger && !st.reloadItem && item.ammo > 0 && ready) {
@@ -550,14 +602,16 @@ export function createWeaponSystem(game) {
     resolveAim(c, cmd);
     hitscan.trace(c, aimOrigin, aimDir, def.range, trace);
     if (!trace.hit) return;
+    // Reihenfolge wie beim Schuss: 'swing' → 'impact' → 'hit' / 'harvest'
+    emitImpact(c, PICKAXE, trace);
     if (trace.character) {
       combat.damageCharacter(c, trace.character, def.playerDamage, false, trace.point, PICKAXE, 'melee');
     } else if (trace.collider) {
-      if (isDamageable(trace.collider)) combat.damageObject(c, trace.collider, def.structureDamage, trace.point, PICKAXE, 'melee');
-      const material = trace.collider.data?.harvest;
+      const collider = trace.collider; // trace kann sich in Ereignis-Empfängern ändern
+      const material = collider.data?.harvest;
+      if (isDamageable(collider)) combat.damageObject(c, collider, def.structureDamage, trace.point, PICKAXE, 'melee');
       if (material && CONFIG.materials.order.includes(material)) harvest(c, material, trace.point);
     }
-    emitImpact(c, PICKAXE, trace);
   }
 
   // --- Wechseln --------------------------------------------------------------------------------
