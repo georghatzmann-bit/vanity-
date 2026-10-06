@@ -10,10 +10,13 @@
 //   - frei stehende Rampe, unter der man durchlaufen kann
 //   - kleines Dach (Pyramide) zum Drüberlaufen
 //   - ein paar stehende Übungs-Figuren (ohne KI)
+//   - Phase 5: alle Waffen, Schieß-Stand mit Zielpuppen, Baum/Fels/Auto für die
+//     Spitzhacke (weapons/practiceRange.js, Werte in CONFIG.practiceRange)
 // Alle Höhen stehen in config.js unter modes.practice.
 // =============================================================================
 import { CONFIG } from '../config.js';
 import { createArenaMap } from '../world/mapArena.js';
+import { createPracticeRange } from '../weapons/practiceRange.js';
 
 const COLORS = {
   step: ['#FFD166', '#FF9F43', '#EF6F6C'],
@@ -38,6 +41,7 @@ export function createPracticeMode(game, options = {}) {
   const thickness = CONFIG.building.pieceThickness;
   let map = null;
   let respawnAt = -1;
+  let range = null; // Schieß-Stand mit Zielpuppen (Phase 5, weapons/practiceRange.js)
 
   const mode = {
     id: 'practice',
@@ -50,7 +54,9 @@ export function createPracticeMode(game, options = {}) {
     // Zeile unter der Steuerungs-Hilfe (main.js)
     helpHint: cfg.infiniteMaterials
       ? 'Übungsplatz: Bauen mit unendlich Material – Z/Y Wand, X Boden, C Rampe, V Dach, Linksklick setzt. ' +
-        'G auf ein eigenes Teil = Edit (Felder klicken, G bestätigt), E öffnet Türen.'
+        'G auf ein eigenes Teil = Edit (Felder klicken, G bestätigt), E öffnet Türen. ' +
+        'Waffen: 1–4 (nochmal 4: Pistole, Granatwerfer), 5 Heilen. Zielpuppen hinten rechts, ' +
+        'Baum/Fels/Auto für die Spitzhacke links.'
       : 'Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.',
 
     start() {
@@ -96,11 +102,16 @@ export function createPracticeMode(game, options = {}) {
           shield: CONFIG.player.maxShield,
         });
       }
+
+      // Phase 5: alle Waffen + Schieß-Stand (Zielpuppen, Baum/Fels/Auto zum Sammeln)
+      range = createPracticeRange(game, map);
+      if (game.player) range.equip(game.player);
     },
 
     preUpdate(/* dt */) {},
 
-    update(/* dt */) {
+    update(dt) {
+      range?.update(dt);
       // Spieler nach kurzer Pause wieder auferstehen lassen
       const player = game.player;
       if (player && !player.alive && respawnAt >= 0 && game.time >= respawnAt) {
@@ -125,6 +136,8 @@ export function createPracticeMode(game, options = {}) {
     },
 
     dispose() {
+      range?.dispose();
+      range = null;
       map?.dispose();
       if (game.map === map) game.map = null;
       map = null;

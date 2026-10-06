@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { boxOverlapsStrict, slopeSurfaceY, slopeRangeOverRect } from './physics.js';
+import { applyShieldFirst, fallDamage } from './core/damage.js';
 
 const P = CONFIG.player;
 const HITBOX = P.hitbox;
@@ -29,6 +30,7 @@ const DEG = Math.PI / 180;
 const SKIN = 1e-4; // so viel Abstand bleibt zu einer Wand (gegen Rundungsfehler)
 const MAX_SLOPE_TAN = Math.tan(P.maxWalkableSlope * DEG);
 const NO_DAMAGE = Object.freeze({ shieldDamage: 0, healthDamage: 0, killed: false });
+const _split = { health: 0, shield: 0, shieldDamage: 0, healthDamage: 0 }; // wiederverwendet (applyShieldFirst)
 
 // -----------------------------------------------------------------------------
 // Befehl pro Tick ("CharacterCommand", siehe ARCHITECTURE.md Abschnitt 6)
@@ -230,12 +232,11 @@ export class Character {
     const time = this.time;
     if (!info.ignoreInvulnerable && time < this.invulnerableUntil) return NO_DAMAGE;
 
-    let shieldDamage = 0;
-    if (!info.bypassShield && this.shield > 0) {
-      shieldDamage = Math.min(this.shield, amount);
-      this.shield -= shieldDamage;
-    }
-    const healthDamage = Math.min(this.health, amount - shieldDamage);
+    // Schild zuerst (Rechnung in core/damage.js)
+    const split = applyShieldFirst(this.health, info.bypassShield ? 0 : this.shield, amount, _split);
+    const shieldDamage = split.shieldDamage;
+    const healthDamage = split.healthDamage;
+    this.shield -= shieldDamage;
     this.health -= healthDamage;
     const killed = this.health <= 0;
     const total = shieldDamage + healthDamage;
@@ -405,8 +406,8 @@ export class Character {
     if (cmd.emotePressed && this.grounded) this.emoteUntil = this.time + P.emoteDuration;
 
     // Zielen (rechte Maustaste) geht nur mit der Waffe in der Hand.
-    // Das Waffen-System darf das später verfeinern (z. B. nicht beim Nachladen).
-    this.aiming = !!cmd.secondary && this.mode === 'weapon';
+    // Das Waffen-System verfeinert das (canAim: nicht mit einem Heil-Item in der Hand).
+    this.aiming = !!cmd.secondary && this.mode === 'weapon' && (game?.weapons?.canAim?.(this) ?? true);
   }
 
   /** Mausrad: nächstes/voriges Bauteil (Baumodus) oder nächste/vorige Waffe. */
@@ -717,7 +718,7 @@ export function landCharacter(ch, options = {}) {
   const fd = P.fallDamage;
   const noDamage = options.noDamage || previous === 'freefall' || previous === 'glide';
   if (!noDamage && fallHeight > fd.safeHeight) {
-    ch.applyDamage((fallHeight - fd.safeHeight) * fd.damagePerMeter, { kind: 'fall', weaponId: 'fall' });
+    ch.applyDamage(fallDamage(fallHeight, fd), { kind: 'fall', weaponId: 'fall' });
   }
   ch.airPeakY = ch.position.y;
   return fallHeight;

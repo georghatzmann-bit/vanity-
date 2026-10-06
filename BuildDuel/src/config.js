@@ -479,6 +479,21 @@ export const CONFIG = deepFreeze({
       pistol: 64, // SCHÄTZUNG
       grenadeLauncher: 12, // SCHÄTZUNG
     },
+
+    // --- Feinheiten (Phase 5) ---------------------------------------------------
+    // Halb-automatische Waffen (Schrotflinte, Sniper, Granatwerfer) schießen pro
+    // Klick einmal. Ein Klick kurz vor Ende der Wartezeit wird gemerkt und zählt dann.
+    fireBufferTime: 0.2, // so lange (s) wird ein zu früher Klick gemerkt // SCHÄTZUNG
+    autoReloadWhenEmpty: true, // Magazin leer → lädt sofort von selbst nach
+    friendlyFire: false, // eigenes Team nimmt keinen Schaden (Schüsse fliegen hindurch)
+    selfDamage: false, // eigene Granaten verletzen einen selbst nicht // SCHÄTZUNG
+    // Mündung (für die Prüfung "kein Schießen um Ecken"): so weit von den Augen weg
+    muzzleOffset: { right: 0.25, forward: 0.35, down: 0.15 }, // m
+    movingSpeed: 0.5, // ab so viel m/s zählt man als "in Bewegung" (mehr Streuung); in der Luft immer
+    projectileAimRange: 1000, // Geschosse fliegen zu dem Punkt, den das Fadenkreuz trifft (höchstens so weit, m)
+    // In der Hand halten: Heil-Items liegen immer auf Platz 5
+    healSlot: 5,
+    // Spitzhacke sammelt Material: CONFIG.materials.harvestPerHit (5–10 pro Schlag)
   },
 
   // Seltenheiten (nur Farbe + kleiner Schadens-Bonus im Battle Royale)
@@ -502,6 +517,88 @@ export const CONFIG = deepFreeze({
     medkit: { name: 'Medikit', heals: 'health', amount: 100, maxTo: 100, useTime: 8, stack: 3 }, // SCHÄTZUNG
     smallShield: { name: 'Kleiner Schildtrank', heals: 'shield', amount: 25, maxTo: 50, useTime: 2, stack: 6 }, // SCHÄTZUNG
     bigShield: { name: 'Großer Schildtrank', heals: 'shield', amount: 50, maxTo: 100, useTime: 4, stack: 3 }, // SCHÄTZUNG
+  },
+
+  // ---------------------------------------------------------------------------
+  // Waffen-Optik (Phase 5): Mündungsblitz, Leuchtspur, Geschosse, Schadenszahlen
+  // ---------------------------------------------------------------------------
+  weaponVisuals: {
+    muzzleFlashTime: 0.06, // so lange leuchtet der Mündungsblitz (s)
+    muzzleFlashSize: 0.45, // Größe des Blitzes (m)
+    muzzleLight: { color: '#FFC56B', intensity: 6, distance: 5 }, // kurzes Licht beim Schuss
+    tracerLifetime: 0.09, // Leuchtspur (Sturmgewehr) verblasst in so vielen Sekunden
+    tracerWidth: 0.035, // Dicke der Leuchtspur (m)
+    tracerColor: '#FFD45C',
+    modelScale: 1.35, // Waffen in der Hand etwas größer als echt (Comic-Stil, besser zu erkennen)
+    // Blick steil nach oben: Waffe zeigt etwas tiefer als der Blick (sonst ragt sie ins Fadenkreuz)
+    lookUpLowering: 0.4, // so viel tiefer pro Radiant Blick nach oben
+    lookUpLoweringFrom: 0.2, // ab dieser Blick-Neigung (Radiant)
+    holdTiltDown: 0.09, // Waffe zeigt immer ein klein wenig tiefer als der Blick (Radiant)
+    holdTiltIn: 0.11, // … und ein klein wenig zur Körpermitte (Radiant)
+    recoilKick: 0.06, // Waffe zuckt beim Schuss so weit nach hinten (m)
+    bulletColor: '#FFF3C4', // Scharfschützen-Geschoss (Leuchtstreifen)
+    bulletLength: 2.2, // Länge des Leuchtstreifens (m)
+    grenadeColor: '#3B4A3A',
+    grenadeRadius: 0.09, // m
+    explosionTime: 0.45, // Feuerball wächst und verblasst in so vielen Sekunden
+    explosionColor: '#FF7A1F', // Feuerball außen
+    explosionCoreColor: '#FFD34D', // Feuerball innen
+    // Treffer-Zahlen über dem Ziel (weiß = Körper, gelb = Kopf, blau = Schild; Farben: visuals.colors)
+    damageNumbers: {
+      lifetime: 0.9, // so lange sichtbar (s)
+      rise: 0.9, // steigen dabei so weit nach oben (m)
+      fontPx: 26, // Schrift-Größe (Pixel)
+      headFontPx: 32, // Kopfschuss größer
+      structureFontPx: 18, // Treffer an Bauteilen: klein und grau
+      structureColor: '#D8DCE3',
+      harvestColor: '#FFE2A8', // "+7" beim Sammeln mit der Spitzhacke
+      onlyOwnHits: true, // nur Treffer des Spielers anzeigen (wie im Original)
+      showStructureHits: true,
+      pool: 32, // so viele Zahlen gleichzeitig höchstens
+    },
+    // Zielfernrohr-Bild (vorläufig, bis das HUD in Phase 6 kommt)
+    scopeOverlayColor: 'rgba(5, 8, 12, 0.94)',
+  },
+
+  // ---------------------------------------------------------------------------
+  // Übungsplatz: Waffen, Zielpuppen, Sammel-Objekte (Phase 5)
+  // ---------------------------------------------------------------------------
+  practiceRange: {
+    // Waffen-Plätze 1–5. Mehrere Namen in einem Platz = gleiche Taste nochmal drücken wechselt
+    // (4 → Maschinenpistole, nochmal 4 → Pistole, nochmal 4 → Granatwerfer).
+    loadoutSlots: [
+      ['shotgun'],
+      ['ar'],
+      ['sniper'],
+      ['smg', 'pistol', 'grenadeLauncher'],
+      ['bandage', 'medkit', 'smallShield', 'bigShield'],
+    ],
+    infiniteReserveAmmo: true, // Munition geht nie aus (nur das Magazin)
+    infiniteHeals: true, // Heil-Items gehen nie aus
+    // Schieß-Stand: hier stehen und nach Westen (−X) schauen
+    stand: { x: 35, z: 33 },
+    dummies: {
+      health: 1000, // viel Leben, damit man lange üben kann
+      shield: 100, // nur die Puppe mit "shield: true"
+      regenDelay: 1.5, // so lange nach dem letzten Treffer wieder voll (s)
+      respawnDelay: 1.5, // falls eine Puppe doch umfällt: so schnell steht sie wieder
+      // Abstand vom Schieß-Stand (m); side = seitlich versetzt (m, nach Süden +).
+      // Die Versätze sind so gewählt, dass keine Puppe eine andere verdeckt.
+      list: [
+        { distance: 5, side: 3 },
+        { distance: 15 },
+        { distance: 15, side: -3, shield: true },
+        { distance: 30, side: 4 },
+        { distance: 60, side: -6 },
+      ],
+      skin: { body: '#E9D8B4', accent: '#C0392B', skinTone: '#E9D8B4', hat: 'helmet', hatColor: '#C0392B' },
+    },
+    // Sammel-Objekte für die Spitzhacke (F): Baum = Holz, Fels = Stein, Auto = Metall
+    harvest: {
+      tree: { x: -30, z: 19 },
+      rock: { x: -24, z: 19 },
+      car: { x: -17, z: 19 },
+    },
   },
 
   // ---------------------------------------------------------------------------

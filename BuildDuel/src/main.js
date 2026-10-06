@@ -258,31 +258,53 @@ function start() {
       ['Ducken', `${crouchKey} (${settings.controls.crouchToggle ? 'umschalten' : 'halten'})`],
     ];
     if (settings.controls.crouchOnCtrl) rows.push(['Sprinten', names(CONFIG.controls.sprintKeysWhenCrouchOnCtrl)]);
-    rows.push(['Zielen', keys('secondary')]);
-    // Bauen (Welle 2a): nur die erste Taste jeder Aktion, damit jede Zeile einzeilig bleibt
+    // Waffen (Welle 2b) und Bauen (Welle 2a): nur die erste Taste jeder Aktion,
+    // damit jede Zeile einzeilig bleibt
     const first = (action) => keyName((kb[action] ?? [])[0] ?? '');
     rows.push(
+      ['Schießen / Setzen', first('primary')],
+      ['Zielen', keys('secondary')],
+      ['Waffen', ['slot1', 'slot2', 'slot3', 'slot4'].map(first).join(' ')],
+      ['Heilen', first('slot5')],
+      ['Spitzhacke', first('pickaxe')],
+      ['Nachladen / Drehen', first('reloadOrRotate')],
       ['Bauen', [names(kb.buildWall ?? []).replace(/ \/ /g, '/'), first('buildFloor'), first('buildRamp'), first('buildRoof')].join(' ')],
-      ['Setzen', first('primary')],
-      ['Material / Drehen', `${first('switchMaterial')} / ${first('reloadOrRotate')}`],
+      ['Material', first('switchMaterial')],
       ['Edit / Tür', `${first('edit')} / ${first('use')}`],
+      ['Tanzen', keys('emote')],
+      ['Pause', 'Esc'],
     );
-    rows.push(['Tanzen', keys('emote')], ['Pause', 'Esc']);
     const hint = game?.mode?.helpHint ?? 'Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.';
     ui.help.innerHTML = '<div class="help-title">Steuerung</div>' +
       rows.map(([what, key]) => `<div class="help-row"><span>${what}</span><b>${escapeHtml(key)}</b></div>`).join('') +
       '<div class="help-status" data-status></div>' +
       `<div class="help-hint">${escapeHtml(hint)}</div>`;
     ui.status = ui.help.querySelector('[data-status]');
+    ui.status.style.whiteSpace = 'pre-line'; // zweite Zeile: Waffe und Munition
     ui.help.hidden = false;
   }
   renderHelp();
+
+  // Waffe und Munition (vorläufig – das richtige HUD kommt in Phase 6)
+  function weaponStatus(p) {
+    if (p.mode === 'pickaxe') return 'Spitzhacke';
+    if (p.mode !== 'weapon') return '';
+    const item = p.slots[p.selectedSlot];
+    const ammo = item ? game.weapons.getAmmo?.(p) : null;
+    if (!item || !ammo) return '';
+    if (ammo.heal) {
+      if (p.healing) return `${item.name} … ${Math.round(p.healing.progress * 100)} %`;
+      return `${item.name} ${ammo.infinite ? '\u221E' : ammo.mag}`;
+    }
+    return `${item.name} ${ammo.mag} / ${ammo.infinite ? '\u221E' : ammo.reserve}${ammo.reloading ? ' – lädt nach' : ''}`;
+  }
 
   // Leben/Schild (vorläufig – das richtige HUD kommt in Phase 6)
   let lastStatus = '';
   function updateStatus() {
     const p = game?.player;
-    const text = p ? (p.alive ? `Leben ${Math.ceil(p.health)} · Schild ${Math.ceil(p.shield)}` : 'Besiegt – gleich geht\u2019s weiter') : '';
+    const weapon = p && p.alive ? weaponStatus(p) : '';
+    const text = p ? (p.alive ? `Leben ${Math.ceil(p.health)} · Schild ${Math.ceil(p.shield)}${weapon ? `\n${weapon}` : ''}` : 'Besiegt – gleich geht\u2019s weiter') : '';
     if (text !== lastStatus) {
       lastStatus = text;
       ui.status.textContent = text;

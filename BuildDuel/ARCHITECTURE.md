@@ -488,6 +488,97 @@ Jeder Modus:
   `{ root, rightHand, attach(name, obj), detach(name), setHidden(bool), update(alpha, dt, yawOverride?), dispose() }`.
   Farbsets und Hut-Formen stehen in `CONFIG.skins`.
 
+## 11b. Waffen, Schaden, Geschosse (Welle 2b)
+
+Ergänzt §5, §6, §8 und §9 (dort stehen nur die Grundformen).
+
+**Schadens-Rechnung** (`src/core/damage.js`, reine Funktionen):
+`falloffFactor(distance, falloff)` (voll bis `fullUntil`, linear bis `minAt` auf `minFactor`),
+`weaponDamage(def, { distance, head, rarity, pellets })` (Grundschaden × Abfall × Kopf × Seltenheit × Kugeln,
+nicht gerundet – Sniper-Kopfschuss 262,5), `rarityMultiplier(rarity)` (null → 1),
+`applyShieldFirst(health, shield, damage, out?)` → `{ health, shield, shieldDamage, healthDamage }`,
+`explosionDamage(def, distance)` (Mitte voll → Rand `edgeDamageFactor`, außerhalb 0),
+`fallDamage(height)`, `damageNumberKind(head, shieldHit)` → `'head'|'shield'|'body'`.
+`Character.applyDamage` und der Fallschaden in player.js benutzen sie.
+
+**Game** (§5) hat zusätzlich `uiRoot` (HTML-Ebene, headless `null`) und `useRarity` (Standard `false`;
+der Battle-Royale-Modus setzt es auf `true` → Seltenheits-Bonus auf den Schaden). `endMode()` ruft
+`weapons.clearEffects()`. Die eigene Figur wird mit Zielfernrohr (`scopeFov`) ausgeblendet.
+
+**Character** (§6) zusätzlich: `weaponState` (gehört dem Waffen-System, nur lesen: `reloadItem`,
+`equipReadyAt`, `healItem`, `variants` …), `healing` (`null` oder `{ itemId, name, kind, duration,
+progress 0..1, timeLeft }`), beim Heilen `speedFactor = CONFIG.healing.moveSpeedFactor`.
+`applySelection` fragt `game.weapons.canAim(character)` (mit Heil-Item kein Zielen).
+Zielpuppen (Übungsplatz) haben `isDummy = true`.
+
+**Waffen-System** (`src/weapons/weapons.js`), `createWeaponSystem(game)` →
+- `updateCharacter(c, cmd, dt)` – Wechsel (`CONFIG.weapons.switchTime`, jede Waffe hat ihr eigenes
+  `item.readyAt` → Schrotflinte → sofort AR geht), gleiche Platz-Taste nochmal = nächste Variante im Platz,
+  Abzug (automatisch: halten; halb-automatisch: Klick; ein zu früher Klick wird `fireBufferTime` gemerkt),
+  Nachladen (R; leer + Abzug; `autoReloadWhenEmpty`; Schrotflinte Patrone für Patrone, Schießen unterbricht),
+  Zielen/`scopeFov` (Sniper), Streuung, Spitzhacke (Schlag alle `swingInterval`, Reichweite `range` ab
+  `aimOrigin`, `data.harvest` → Material), Heil-Items (Linksklick, `useTime`, Waffenwechsel bricht ab).
+  Ziel-Strahl = `cmd.aimOrigin/aimDir`; liegt `aimOrigin` weiter als 1,2 m von den Augen weg (nie gesetzt),
+  gilt Augen + Blickrichtung.
+- `giveLoadout(c, ids, { rarity, infiniteReserve, reserve, infiniteHeals, healCount })` – `ids` z. B.
+  `['shotgun', 'ar', 'sniper', ['smg', 'pistol', 'grenadeLauncher'], 'bandage']`; ein Eintrag als Liste =
+  mehrere Gegenstände in EINEM Platz (Varianten). Platz aus `CONFIG.weapons[id].slot` bzw.
+  `CONFIG.weapons.healSlot`, sonst der nächste freie. Liefert `c.slots`.
+- `createItem(id, rarity, options)` → Waffe `{ id, kind: 'weapon', name, rarity, ammo, magazine, reserve,
+  infiniteReserve, readyAt }` bzw. Heil-Item `{ id, kind: 'heal', name, rarity, count, stack, infinite }`.
+- Für HUD/Bots: `canAim(c)`, `getCrosshair(c)` → `{ type: 'cross'|'circle'|'dot', spread }` (Grad, ganzer
+  Kegel, aktuell), `getAmmo(c)` → `{ mag, reserve, infinite, magazine, reloading, reloadProgress, heal }`
+  oder `null` (wiederverwendetes Objekt), `isReloading(c)`, `resetCharacter(c)` (Runde: Nachladen/Heilen
+  abbrechen, alle Magazine voll), `hitscan` (siehe unten).
+- Grafik: `frameUpdate(alpha)` (zeichnet auch die Geschosse), `setEffectsPaused(bool)` (Screenshots),
+  `clearEffects()`, `visuals` (`visibleNumbers()` für Tests, `muzzleWorld(c, out)`).
+- Exporte: `WEAPON_IDS`, `HEAL_IDS`, `fireIntervalOf(def)`, `spreadFor(def, moving, aiming)`,
+  `preferredSlot(id)`, `createItem`.
+
+**Treffer-Strahl** (`src/weapons/hitscan.js`): `trace(shooter, origin, dir, maxRange, out)` – erst der
+Kamera-Strahl, dann die **Mündungs-Prüfung** Augen → Mündung (`CONFIG.weapons.muzzleOffset`) → Treffpunkt;
+steht dort etwas, bekommt DAS den Treffer (`out.blocked`). Nie den Schützen, Team-Kollegen werden
+(ohne `friendlyFire`) durchschossen, Collider mit `data.blocksBullets === false` lassen durch.
+Kopf = `part === 'head'` aus dem raycast. Dazu `aimPoint(...)`, `muzzlePosition(c, out)`, `targetsFor(c)`
+und `spreadDirection(dir, coneDeg, rng, out)` (gleichmäßig im Kegel, höchstens der HALBE Winkel).
+Schaden anwenden: `src/weapons/combat.js` (`damageCharacter`, `damageObject`, `isDamageable`, `isPiece`).
+An Bauteilen (`data.kind === 'piece'`) zählt `structureDamage` (Schrotflinte: 60 verteilt auf die
+treffenden Kugeln), an anderen Objekten mit `data.ref.applyDamage` der normale Waffen-Schaden.
+`data.ref.applyDamage(amount, info)` bekommt ein eigenes `info`-Objekt `{ attacker, weaponId, point, kind }`
+und darf eine Zahl (wirklicher Schaden) zurückgeben.
+
+**Geschosse** (`src/weapons/projectiles.js`): `spawn({ type: 'bullet'|'grenade', owner, weaponId, rarity,
+position, velocity, gravity, lifetime, visualFrom? })`, `update(dt)` (Strecke pro Tick per raycast →
+kein Durchtunneln), `clear()`, `frameUpdate(alpha)`, `active` (Liste). Sniper-Kugel startet an den Augen
+und fliegt zum Punkt unter dem Fadenkreuz (300 m/s, leichter Fall). Granate: explodiert beim Aufprall
+oder nach `fuseTime`; Figuren im Radius nehmen Schaden durch Wände hindurch (Abstand zur Kapsel),
+Bauteile im Radius `structureDamage`; eigene Granaten verletzen nicht (`selfDamage: false`).
+
+**Ereignisse** (§8) – genauer bzw. neu. Die Ereignis-Objekte werden **wiederverwendet**: Wer etwas
+länger braucht, kopiert es sofort (z. B. `e.point.clone()`).
+| Ereignis | Inhalt |
+|---|---|
+| `shot` | `{ shooter, weaponId, origin (Mündung), dir, end (Treffpunkt/Ende des Strahls), pellets, kind: 'hitscan'\|'projectile' }` |
+| `hit` | `{ attacker, target, amount, shieldDamage, healthDamage, head, shield, point, killed, kind: 'character'\|'piece'\|'object', weaponId, collider }` – eine Meldung pro Ziel und Schuss (Schrotflinte: Summe der Kugeln); kein `hit` bei 0 Schaden (unverwundbar) |
+| `impact` | `{ shooter, weaponId, point, normal, kind: 'character'\|'piece'\|'object'\|'static'\|'terrain' }` – jede Kugel (für Funken/Splitter) |
+| `reloadStart` / `reloadEnd` | `{ character, weaponId, interrupted }` |
+| `swing` | `{ character }` – Spitzhacke schlägt |
+| `harvest` | `{ character, material, amount (wirklich dazu), rolled (gewürfelt 5–10), point }` |
+| `healStart` / `healCancel` | `{ character, itemId, duration }` / `{ character, itemId }` (`heal` sendet Character.heal) |
+| `explosion` | `{ position, radius, owner, weaponId }` |
+
+**Grafik** (nur mit Bildschirm): `src/weapons/models.js` (`createWeaponModel(id, rarity)`, `createHandMount`;
+geteilte Formen/Materialien mit `userData.shared`), `src/weapons/visuals.js` (Waffe an der rechten Hand per
+`view.attach('weapon', …)`, Mündungsblitz-Sprite + EIN dauerhaftes PointLight (Anzahl Lichter bleibt gleich →
+kein Shader-Neubau), Leuchtspur bei `tracer: true`, Feuerball, Treffer-Zahlen als HTML in `game.uiRoot`
+(Vorrat, `settings.game.damageNumbers`, nur eigene Treffer), **vorläufiges** Zielfernrohr-Bild `.bd-scope`
+(das HUD in Welle 3a darf es ersetzen; `CONFIG.weapons.sniper.scopeOverlay`)). Werte: `CONFIG.weaponVisuals`.
+
+**Übungsplatz** (`src/weapons/practiceRange.js`, eingehängt in modes/practice.js): alle Waffen
+(`CONFIG.practiceRange.loadoutSlots`), Schieß-Stand mit Zielpuppen (5/15/30/60 m, eine mit Schild; viel
+Leben, nach `regenDelay` wieder voll, stehen wieder auf), Baum/Fels/Auto für die Spitzhacke.
+Browser-Prüfungen der Waffen: `tests/e2e/weaponChecks.cjs` (in `GAME_CHECKS` von run.cjs eingehängt).
+
 ## 12. Testen
 
 - **Einheiten-Tests** (`tests/*.test.js`, in `tests/tests.html` eingetragen): reine Logik.

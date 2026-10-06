@@ -746,6 +746,8 @@ const GAME_CHECKS = [
       }
     },
   },
+  // Phase 5 (Welle 2b): Waffen, Zielpuppen, Treffer-Zahlen – siehe weaponChecks.cjs
+  ...require('./weaponChecks.cjs').WEAPON_CHECKS,
   {
     name: 'Esc-Ersatz: Pause zeigt "Pausiert – Klicken zum Weiterspielen"',
     async run(ctx) {

@@ -63,6 +63,10 @@ export class Game {
     this.camera = options.camera ?? null;
     this.renderer = options.renderer ?? null;
     this.input = options.input ?? null;
+    // HTML-Ebene über dem 3D-Bild (Schadenszahlen, HUD); headless: keine
+    this.uiRoot = this.headless ? null : options.uiRoot ?? null;
+    // Battle Royale: Seltenheit der Waffe gibt einen kleinen Schadens-Bonus (der Modus schaltet das ein)
+    this.useRarity = false;
     // Alles, was dieses Spiel in die Szene legt, hängt unter root (leicht aufzuräumen)
     this.root = new THREE.Group();
     this.root.name = 'Spiel';
@@ -89,7 +93,7 @@ export class Game {
     this.projectiles = createProjectileSystem(this);
     this.effects = createEffects(this);
     this.audio = createAudio(this);
-    this.hud = createHud(this, this.headless ? null : options.uiRoot ?? null);
+    this.hud = createHud(this, this.uiRoot);
 
     // Besiegt → dem Modus Bescheid sagen
     this._offKilled = this.events.on('characterKilled', ({ victim, killer }) => {
@@ -121,6 +125,7 @@ export class Game {
     for (const c of [...this.characters]) this.removeCharacter(c);
     this.building.clearAll();
     this.projectiles.clear();
+    this.weapons.clearEffects?.();
     this.mode?.dispose?.();
     this.mode = null;
     this.storm?.dispose?.();
@@ -263,8 +268,8 @@ export class Game {
       const c = this.characters[i];
       if (!c.view) continue;
       if (c === player && this.camera) {
-        // eigene Figur: dreht sich genau mit der Kamera; zu nah → ausblenden
-        c.view.setHidden(this.cameraRig.hideCharacter);
+        // eigene Figur: dreht sich genau mit der Kamera; zu nah oder Zielfernrohr → ausblenden
+        c.view.setHidden(this.cameraRig.hideCharacter || !!c.scopeFov);
         c.view.update(alpha, frameSeconds, c.alive ? this.cameraRig.yaw : undefined);
       } else {
         c.view.update(alpha, frameSeconds);
