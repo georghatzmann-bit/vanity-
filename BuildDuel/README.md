@@ -47,7 +47,21 @@ Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel fest
 | Tanzen | **B** |
 | Pause (Maus freigeben) | **Esc** – danach wieder auf „Klicken zum Weiterspielen“ |
 
-Controller (Xbox/PlayStation) gehen auch: linker Stick laufen, rechter Stick umschauen, A/Kreuz springen, R3 ducken, L2 zielen, **Start/Options** = Pause und wieder weiterspielen.
+**Bauen und Editieren (Phase 3 und 4):**
+
+| Was | Taste |
+|---|---|
+| Wand / Boden / Rampe / Dach | **Z** (oder **Y**) / **X** / **C** / **V** – schaltet sofort in den Baumodus, ein Geist zeigt, wo das Teil hinkommt |
+| Bauteil setzen | **Linksklick** (gedrückt halten = weiter bauen, während du die Maus bewegst) |
+| Material wechseln (Holz → Stein → Metall) | **Q** oder **Mausrad drücken** |
+| Rampe drehen | **R** (im Baumodus) |
+| Bauteile durchschalten | **Mausrad drehen** (im Baumodus) |
+| Edit (Fenster, Tür …) | **G** auf ein eigenes Teil, Felder **anklicken** (oder mit gedrückter Maus darüberziehen), **G** = fertig |
+| Edit zurücksetzen | **G**, **Rechtsklick**, **G** |
+| Tür auf/zu | **E** |
+| Baumodus verlassen | **1–5** oder **F** |
+
+Controller (Xbox/PlayStation) gehen auch: linker Stick laufen, rechter Stick umschauen, A/Kreuz springen, R3 ducken, L2 zielen, **Start/Options** = Pause und wieder weiterspielen. Bauen mit Controller: **B/Kreis** schaltet den Baumodus an, dann R2 Wand, L2 Rampe, R1 Boden, L1 Dach, R3 dreht. Edit: Steuerkreuz unten, R2 wählt Felder, L2 setzt zurück, Steuerkreuz unten bestätigt.
 
 Die Tasten-Belegung kann man in Phase 11 im Menü ändern. Bis dahin steht sie in `src/config.js` (Abschnitt `controls`).
 
@@ -65,6 +79,27 @@ Das Spiel startet auf einem Übungsplatz (80 × 80 m mit Mauer rundherum). Probi
 - **Übungs-Figuren:** stehen nur herum (ab Phase 7 kämpfen Bots richtig).
 
 Oben links steht die **FPS**-Zahl (Bilder pro Sekunde, grün ab 55) und **„Logik 60/s“** – die Spiel-Logik rechnet immer 60-mal pro Sekunde, egal wie schnell dein Bildschirm ist.
+
+## Bauen – so geht's
+
+Auf dem Übungsplatz hast du **unendlich Material**. (In den späteren Modi kostet jedes Teil 10 Material; ohne Material wird der Geist rot.)
+
+- **Der Geist:** Blau = hier geht's. Rot = geht nicht (Platz belegt, kein Material, jemand steht im Weg oder das Teil hätte keinen Halt).
+- **Wohin kommt das Teil?** Die Wand an die Kante vor dir, Boden und Rampe in das Feld vor dir, das Dach über dich. Schaust du nach oben, kommt das Teil eine Etage höher. Schaust du auf den Boden, kommt es dorthin.
+- **Aufbau:** Neue Teile sind kurz durchsichtig und wachsen auf volle Stärke (Holz 1 s, Stein 2 s, Metall 3 s). Schüsse halten sie aber sofort auf.
+- **Halt:** Jedes Teil muss mit dem Boden verbunden sein. Wird das unterste Teil eines Turms zerstört, fällt alles darüber in sich zusammen.
+- **Box (Schutz):** In einer Zelle stehen bleiben, Wand setzen, viermal um 90° drehen und jeweils eine Wand setzen, dann **V** für das Dach.
+- **Ramp Rush:** **W** gedrückt halten, Maus gedrückt halten und abwechselnd **C** (Rampe) und **Z** (Wand) drücken – du läufst die Rampen hoch, die Wände schützen dich.
+- **90er:** Rampe + Wand setzen, die Rampe hochlaufen (etwas zur linken Seite), oben **90° nach links drehen**, Wand, **springen**, in der Luft Rampe + Wand. Wiederholen – jede Runde eine Etage höher.
+- **Edit:** Nur eigene Teile. **G** zeigt leuchtende Felder; angeklickte Felder werden rot und verschwinden nach dem zweiten **G**. Die zwei mittleren unteren Felder einer Wand ergeben eine **Tür** (mit **E** öffnen/schließen).
+
+**Checkliste für Phase 3 und 4** (bitte ausprobieren):
+
+- [ ] Z/X/C/V schalten sofort in den Baumodus, der blaue Geist steht am richtigen Platz, Linksklick setzt das Teil
+- [ ] Eine gebaute Rampe hochlaufen, einen Ramp Rush und einen "90er" bauen
+- [ ] Q wechselt Holz/Stein/Metall (man sieht Bretter, Steine, Nieten), R dreht die Rampe
+- [ ] G-Edit: Fenster und Tür in eine eigene Wand machen, Tür mit E öffnen, mit G – Rechtsklick – G zurücksetzen
+- [ ] Material-Abzug und Einsturz prüfen die Tests (tests.html) – im Übungsplatz ist Material unendlich, und Zerstören geht erst mit den Waffen (Phase 5)
 
 **Checkliste für Phase 2** (bitte ausprobieren):
 
@@ -135,7 +170,9 @@ BuildDuel/
     camera.js           Schulter-Kamera (mit Wand-Schutz) und Vorschau-Kamera
     modes/              Spielmodi (jetzt: Übungsplatz)
     world/              Himmel, Licht, Karten, Figuren-Grafik
-    building/ weapons/ ai/ audio/   noch "Attrappen" – kommen in den nächsten Phasen
+    building/           Bauen: Raster + Zielwahl (grid.js), Formen/Bilder (pieces.js, view.js),
+                        Edit + Türen (edit.js), Bau-System mit Halt/Einsturz (structure.js)
+    weapons/ ai/ audio/ noch "Attrappen" – kommen in den nächsten Phasen
     ui/                 FPS-Anzeige, Aussehen (styles.css), später das HUD
     util/random.js      Zufall mit Startwert (gleiches Muster bei jedem Start)
   tests/                automatische Tests (tests.html), Browser-Tests (e2e/)
@@ -148,8 +185,8 @@ BuildDuel/
 |---|---|---|
 | 1 | Projekt, start.bat, Szene mit Boden, Himmel, Licht, FPS-Anzeige | ✅ fertig |
 | 2 | Spielerfigur, Laufen, Springen, Ducken, Schulter-Kamera | ✅ fertig |
-| 3 | Bau-System: Raster, Vorschau, Wand/Boden/Rampe/Dach, Material | offen |
-| 4 | Editieren, Einsturz, Spitzhacke | offen |
+| 3 | Bau-System: Raster, Vorschau, Wand/Boden/Rampe/Dach, Material | ✅ fertig |
+| 4 | Editieren, Einsturz, Spitzhacke | ✅ Editieren + Einsturz fertig (Spitzhacke kommt mit den Waffen) |
 | 5 | Waffen | offen |
 | 6 | HUD komplett | offen |
 | 7 | Bots | offen |

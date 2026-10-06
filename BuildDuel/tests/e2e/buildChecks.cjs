@@ -319,19 +319,17 @@ const BUILD_CHECKS = [
         const b = window.__b;
         const H = buildDuel.CONFIG.world.wallHeight;
         b.select('wall');
-        b.aimAt({ x: 0, y: H - H / 6, z: 28 + 2 });
+        b.aimAt({ x: 0, y: H / 2, z: 28 + 2 }); // Feld 4 = Mitte → Fenster
         b.press('edit');
-        b.click();
-        b.aimAt({ x: 0, y: H - H / 6 - H / 3, z: 28 + 2 }); // Feld 4 dazu (großes Fenster)
         b.click();
         b.press('edit');
         const w = b.building.getPieceAt('wz:0:0:7');
-        b.viewFrom(-4.5, 0, 35, { x: 1, y: 2.4, z: 29.5 });
+        b.viewFrom(-5.5, 0, 30.8, { x: 0, y: 2.3, z: 30 });
         return [...w.edit].sort();
       });
-      ctx.assert(JSON.stringify(win) === '[1,4]', `Fenster: ${JSON.stringify(win)}`);
+      ctx.assert(JSON.stringify(win) === '[4]', `Fenster: ${JSON.stringify(win)}`);
       await settle(ctx);
-      await ctx.shot('b09-fenster-und-tuer');
+      await ctx.shot('b09-fenster');
       const reset = await ctx.page.evaluate(() => {
         const b = window.__b;
         const H = buildDuel.CONFIG.world.wallHeight;
@@ -345,6 +343,47 @@ const BUILD_CHECKS = [
         return { mask: w.editMask, colliders: w.colliders.length };
       });
       ctx.assert(reset.mask === 0 && reset.colliders === 1, `zurückgesetzt: ${JSON.stringify(reset)}`);
+    },
+  },
+  {
+    name: 'Edit-Formen: Boden mit Loch, halbe Rampe, Eck-Rampe, Dach ohne Viertel (Bild = Kollision)',
+    async run(ctx) {
+      await setup(ctx);
+      const r = await ctx.page.evaluate(() => {
+        const b = window.__b;
+        const w = b.building;
+        b.clear();
+        const put = (type, key, edit, dir = 0, material = 'wood') => w.placePiece(type, key, b.p, material, { dir, edit, instant: true, force: true });
+        const pieces = [
+          put('floor', 'f:-3:0:5', [3]),
+          put('ramp', 'r:-2:0:5', [0, 2], 3, 'stone'), // halbe Rampe (rechte Hälfte)
+          put('ramp', 'r:-1:0:5', [1], 3), // Eck-Rampe (L-Form)
+          put('roof', 'c:0:0:5', [0], 0, 'metal'), // Dach ohne ein Viertel
+          put('wall', 'wx:1:0:6', [0, 1, 2]), // halbe Wand (obere Reihe weg)
+        ];
+        // Strahlen von oben: über entfernten Feldern frei, sonst Treffer
+        const down = { x: 0, y: -1, z: 0 };
+        const hitAt = (x, z) => {
+          const hit = b.game.world.raycast({ x, y: 20, z }, down, 30, { skipTerrain: true });
+          return hit && hit.collider?.data?.kind === 'piece' ? hit.collider.data.ref.slotKey : null;
+        };
+        const probes = {
+          floorHole: hitAt(-12 + 3, 20 + 3), floorSolid: hitAt(-12 + 1, 20 + 1),
+          halfMissing: hitAt(-8 + 1, 20 + 2), halfPresent: hitAt(-8 + 3, 20 + 2),
+          cornerMissing: hitAt(-4 + 3, 20 + 1), cornerPresent: hitAt(-4 + 1, 20 + 1),
+          roofMissing: hitAt(0 + 1, 20 + 1), roofPresent: hitAt(0 + 3, 20 + 3),
+        };
+        b.viewFrom(-4, 0, 33, { x: -4, y: 1.2, z: 22 });
+        return { ok: pieces.every(Boolean), probes };
+      });
+      const p = r.probes;
+      ctx.assert(r.ok, 'alle Teile gesetzt');
+      ctx.assert(!p.floorHole && p.floorSolid === 'f:-3:0:5', `Boden: Loch frei, Rest fest ${JSON.stringify(p)}`);
+      ctx.assert(!p.halfMissing && p.halfPresent === 'r:-2:0:5', 'halbe Rampe');
+      ctx.assert(!p.cornerMissing && p.cornerPresent === 'r:-1:0:5', 'Eck-Rampe');
+      ctx.assert(!p.roofMissing && p.roofPresent === 'c:0:0:5', 'Dach-Viertel');
+      await settle(ctx);
+      await ctx.shot('b13-edit-formen');
     },
   },
   {
@@ -417,11 +456,11 @@ const BUILD_CHECKS = [
         const b = window.__b;
         const w = b.building;
         b.clear();
-        for (let n = 0; n < 5; n++) w.placePiece('ramp', `r:6:${n}:${8 - n}`, b.p, n % 2 ? 'stone' : 'wood', { dir: 3, instant: true });
+        for (let n = 0; n < 5; n++) w.placePiece('ramp', `r:6:${n}:${6 - n}`, b.p, n % 2 ? 'stone' : 'wood', { dir: 3, instant: true });
         // Wände oben an den Rampen (hängen nur an der Rampe – kein eigener Halt am Boden)
-        for (let n = 1; n < 5; n++) w.placePiece('wall', `wx:6:${n}:${8 - n}`, b.p, 'wood', { instant: true });
-        b.viewFrom(15, 0, 33, { x: 26, y: 7, z: 26 });
-        w.getPieceAt('r:6:0:8').applyDamage(1e6);
+        for (let n = 1; n < 5; n++) w.placePiece('wall', `wx:6:${n}:${6 - n}`, b.p, n % 2 ? 'metal' : 'wood', { instant: true });
+        b.viewFrom(23, 0, 36.5, { x: 26, y: 7, z: 18 });
+        w.getPieceAt('r:6:0:6').applyDamage(1e6);
         // kurz nach dem Wegfallen, mitten in der Animation
         b.step(Math.round((buildDuel.CONFIG.building.collapseDelay + buildDuel.CONFIG.building.collapseAnimTime * 0.45) * 60));
         return { left: w.pieces.size, debris: w.view.stats().debris };

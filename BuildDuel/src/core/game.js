@@ -180,8 +180,9 @@ export class Game {
     if (this.disposed) return;
     const mode = this.mode;
     const player = this.player;
-    // Controller: Im Baumodus haben die Schultertasten eine andere Aufgabe
-    if (this.input && player) this.input.gamepadBuildMode = player.mode === 'build' || player.mode === 'edit';
+    // Controller: Im Baumodus haben die Schultertasten eine andere Aufgabe.
+    // Im Edit nicht (Welle 2a): dort wählt R2 Felder (wie Linksklick), L2 setzt zurück.
+    if (this.input && player) this.input.gamepadBuildMode = player.mode === 'build';
     if (!sample && this.input) sample = this.input.sample(dt);
     this.lastSample = sample;
 

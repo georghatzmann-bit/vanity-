@@ -306,7 +306,8 @@ export function createBuildingView(game) {
       d.mesh.position.y = d.baseY - B.collapseSink * k * k;
       d.mesh.rotation.x = d.baseRotX + d.tiltX * k;
       d.mesh.rotation.z = d.baseRotZ + d.tiltZ * k;
-      const op = Math.max(1, Math.min(OPACITY_LEVELS - 1, Math.round((1 - k) * OPACITY_LEVELS)));
+      // erst fest, am Ende schnell durchsichtig
+      const op = Math.max(1, Math.min(OPACITY_LEVELS - 1, Math.round((1 - k * k) * OPACITY_LEVELS)));
       d.mesh.material = materialFor(d.material, d.cracked, 0, op);
     }
   }
