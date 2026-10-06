@@ -640,7 +640,7 @@ export const CONFIG = deepFreeze({
     stripeSpeed: 0.035, // Schlieren in der Wand wandern langsam (Bild-Breiten pro Sekunde)
     pulseSpeed: 1.3, // die Wand "atmet" leicht …
     pulseAmount: 0.12, // … um so viel (Anteil der Deckkraft)
-    outsideTint: 0.16, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
+    outsideTint: 0.13, // draußen im Sturm: das ganze Bild wird so stark lila gefärbt (Deckkraft)
     outsideFogMix: 0.5, // draußen im Sturm: der Nebel wird so stark lila
   },
 
@@ -750,6 +750,7 @@ export const CONFIG = deepFreeze({
       fog: { near: 240, far: 1150 }, // Nebel passend zur Insel (von oben sieht man alles)
       cameraFar: 1300, // Sichtweite der Kamera auf der Insel (m)
       hemiGroundColor: '#BFA978', // weiches Licht von unten: warm-sandig (sonst wirken Hauswände grünlich)
+      hemiSkyColor: '#C4E2F5', // weiches Licht von oben: etwas blasser (Innenräume nicht so blau)
       maxBuildLevel: 30,
       // Namen der Gegenden (eigene Namen, nur zur Orientierung)
       areas: [
@@ -1002,7 +1003,7 @@ export const CONFIG = deepFreeze({
       damageHead: '#FFD93D', // Schadenszahl: Kopf
       damageShield: '#4FC3F7', // Schadenszahl: Schild
     },
-    stormOpacity: 0.45,
+    stormOpacity: 0.55,
     fogStartFraction: 0.15, // leichter Nebel beginnt bei 15 % der Sichtweite …
     fogEndFraction: 0.9, // … und verdeckt ab 90 % alles (Horizont-Farbe)
     // Sonne: Richtung, aus der das Licht kommt (wird normalisiert)

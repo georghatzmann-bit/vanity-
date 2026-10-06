@@ -704,7 +704,11 @@ function applyFog(game, cfg) {
     if (!hemi && o.isHemisphereLight) hemi = o;
   });
   const oldGround = hemi ? hemi.groundColor.clone() : null;
-  if (hemi) hemi.groundColor.set(cfg.hemiGroundColor);
+  const oldSky = hemi ? hemi.color.clone() : null;
+  if (hemi) {
+    hemi.groundColor.set(cfg.hemiGroundColor);
+    hemi.color.set(cfg.hemiSkyColor);
+  }
   const old = { near: fog?.near, far: fog?.far, cameraFar: camera?.far };
   if (fog) {
     fog.near = cfg.fog.near;
@@ -716,6 +720,7 @@ function applyFog(game, cfg) {
   }
   return () => {
     if (hemi && oldGround) hemi.groundColor.copy(oldGround);
+    if (hemi && oldSky) hemi.color.copy(oldSky);
     if (fog) {
       fog.near = old.near;
       fog.far = old.far;

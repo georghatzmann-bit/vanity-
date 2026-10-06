@@ -9,7 +9,7 @@ import { createIslandMap } from '../../src/world/mapIsland.js';
 import { createStorm } from '../../src/world/storm.js';
 import { createLootSystem } from '../../src/world/loot.js';
 import { createJumpVehicle } from '../../src/world/jumpVehicle.js';
-import { heightAboveGround } from '../../src/world/skydive.js';
+import { heightAboveGround, startFreefall } from '../../src/world/skydive.js';
 
 const BR = CONFIG.modes.battleRoyale;
 
@@ -103,6 +103,30 @@ describe('Szenario: Absprung mit Gleiter', () => {
     game.simulate(60);
     assert.equal(vehicle.riders.length, 0);
     vehicle.dispose();
+    game.dispose();
+  });
+
+  it('Sturzflug (nach unten schauen + W) ist schneller, Leertaste öffnet den Gleiter sofort, keine Schüsse im Fall', () => {
+    const game = createTestGame({ seed: 2 });
+    game.map = createArenaMap(game, { size: 80 });
+    const c = addDrivenCharacter(game, { name: 'Taucher', position: { x: 0, y: 200, z: 0 } });
+    game.weapons.giveLoadout(c, ['ar'], { infiniteReserve: true });
+    startFreefall(c);
+    const f = c.brain.fields;
+    f.pitch = -1.2;
+    f.moveZ = 1;
+    f.primary = true;
+    const shots = collect(game, 'shot');
+    game.simulate(2);
+    assert.equal(c.moveState, 'freefall');
+    assert.ok(-c.velocity.y > BR.freefallSpeed + 5, `Sturzflug ${(-c.velocity.y).toFixed(1)} m/s`);
+    assert.ok(-c.velocity.y <= CONFIG.skydive.diveSpeed + 1e-6);
+    assert.equal(shots.length, 0, 'im freien Fall wird nicht geschossen');
+    f.jumpPressed = true;
+    game.simulate(1 / 60);
+    assert.equal(c.moveState, 'glide', 'Leertaste = Gleiter');
+    game.simulate(3);
+    assert.ok(Math.abs(c.velocity.y + BR.gliderFallSpeed) < 0.5, `Gleiter sinkt mit ${(-c.velocity.y).toFixed(1)} m/s`);
     game.dispose();
   });
 

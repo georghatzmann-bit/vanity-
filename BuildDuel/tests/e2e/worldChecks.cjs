@@ -55,7 +55,7 @@ async function installHelpers(page) {
         const world = r.info.render.calls;
         for (const root of roots) root.visible = true;
         r.render(buildDuel.scene, buildDuel.camera);
-        return { world, all: r.info.render.calls };
+        return { world, all: r.info.render.calls, characters: g.characters.length };
       },
     };
   });
@@ -101,7 +101,7 @@ const WORLD_CHECKS = [
       ctx.assert(pos.canDrop && Math.abs(pos.y - 120) < 1e-6, `über der Insel auf ${pos.y} m`);
       await ctx.page.waitForTimeout(1500);
       const calls = await ctx.page.evaluate(() => __wd.worldCalls());
-      ctx.log(`Zeichen-Aufrufe vom Ballon: Welt ${calls.world}, mit ${buildDuel.game.characters.length} Figuren ${calls.all}`);
+      ctx.log(`Zeichen-Aufrufe vom Ballon: Welt ${calls.world}, mit ${calls.characters} Figuren ${calls.all}`);
       ctx.assert(calls.world < 150, `Welt: ${calls.world} Zeichen-Aufrufe (Ziel < 150)`);
       await ctx.shot('40-welt-insel-vom-ballon');
     },
@@ -126,10 +126,11 @@ const WORLD_CHECKS = [
         const p = g.player;
         let n = 0;
         while (p.moveState === 'freefall' && n++ < 6000) buildDuel.simulate(1 / 60);
-        const below = g.world.surfaceHeight(p.position.x, p.position.z, p.position.y);
+        const height = p.position.y - g.world.surfaceHeight(p.position.x, p.position.z, p.position.y);
+        const state = p.moveState;
         buildDuel.simulate(0.5);
         __wd.look(p.yaw, -0.2);
-        return { state: p.moveState, height: p.position.y + 0 - below };
+        return { state, height };
       });
       ctx.assert(r2.state === 'glide' && r2.height <= 30.01 && r2.height > 28, `Gleiter: ${r2.state} bei ${r2.height.toFixed(2)} m`);
       await ctx.page.waitForTimeout(1200);
@@ -191,8 +192,9 @@ const WORLD_CHECKS = [
     name: 'Welt: Wüstenstadt, durch die Tür ins Haus und die Treppe hinauf',
     async run(ctx) {
       await ctx.page.evaluate(() => {
+        // Marktplatz der Wüstenstadt, Blick über den Platz zu den Häusern
         const t = buildDuel.CONFIG.maps.island.town;
-        __wd.place(t.x + 4, t.height, t.z + 30, Math.atan2(4, 30), -0.05);
+        __wd.place(t.x + 5, t.height, t.z + 9, Math.atan2(5, 9) + 0.35, 0.02);
       });
       await ctx.page.waitForTimeout(1200);
       await ctx.shot('45-welt-stadt');
@@ -204,6 +206,11 @@ const WORLD_CHECKS = [
         __wd.place(o.x, h.y, o.z, Math.atan2(-(i.x - o.x), -(i.z - o.z)), 0);
         __wd.hold('moveForward', 0.45);
         buildDuel.simulate(0.2);
+        // etwas weiter hinein und zur Treppe schauen
+        const s = h.stairs.bottom;
+        const p0 = g.player.position;
+        __wd.look(Math.atan2(-(s.x - p0.x), -(s.z - p0.z)) - 0.25, 0.08);
+        buildDuel.simulate(0.05);
         const p = g.player;
         const inside = p.position.x > h.bounds.minX && p.position.x < h.bounds.maxX && p.position.z > h.bounds.minZ && p.position.z < h.bounds.maxZ;
         return { inside, y: p.position.y, floor: h.floorY[0] };
@@ -221,7 +228,14 @@ const WORLD_CHECKS = [
         return { y: g.player.position.y, top: h.floorY[1] };
       });
       ctx.assert(Math.abs(r2.y - r2.top) < 1e-3, `2. Stock: y ${r2.y.toFixed(2)} (soll ${r2.top.toFixed(2)})`);
-      await ctx.page.evaluate(() => __wd.look(buildDuel.game.player.yaw + 2.4, -0.1));
+      await ctx.page.evaluate(() => {
+        // oben in die Raum-Mitte und zum Treppen-Loch schauen
+        const g = buildDuel.game;
+        const h = g.map.houses.find((x) => x.floors > 1 && x.area === 'Sandkrug');
+        const a = h.toWorld(h.width * 0.62, h.depth * 0.72);
+        const b = h.toWorld(1.2, 1.2);
+        __wd.place(a.x, h.floorY[1], a.z, Math.atan2(-(b.x - a.x), -(b.z - a.z)), -0.15);
+      });
       await ctx.page.waitForTimeout(1000);
       await ctx.shot('47-welt-oben-im-haus');
     },
@@ -272,7 +286,7 @@ const WORLD_CHECKS = [
         buildDuel.play();
         buildDuel.manualStep(true);
         const g = buildDuel.game;
-        const [a, b] = g.characters.map((c) => c.position);
+        const [a, b] = g.characters.map((c) => c.position.clone());
         // hoch über der Mauer (wie oben auf einer Rampe) hinaus laufen: die unsichtbare Wand hält auf
         const p = g.player;
         p.spawnAt({ x: 0, y: 6, z: 38 }, Math.PI);
@@ -312,7 +326,10 @@ const WORLD_CHECKS = [
       await ctx.shot('51-welt-zone-wars');
       await ctx.page.evaluate(() => {
         buildDuel.simulate(16);
-        __wd.look(buildDuel.game.player.yaw + Math.PI, 0.05);
+        const g = buildDuel.game;
+        const p = g.player.position;
+        const c = g.storm.center;
+        __wd.look(Math.atan2(-(c.x - p.x), -(c.z - p.z)), 0.05);
       });
       await ctx.page.waitForTimeout(1200);
       await ctx.shot('52-welt-zone-wars-sturm');

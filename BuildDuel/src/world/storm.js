@@ -285,7 +285,7 @@ function createStormView(game, storm) {
       const show = started && Number.isFinite(r) && r > 0.3;
       wall.visible = show;
       if (show) {
-        wall.position.set(storm.center.x, storm.spec.baseY ?? -30, storm.center.z);
+        wall.position.set(storm.center.x, storm.spec.baseY ?? -6, storm.center.z);
         wall.scale.set(r, cfg.wallHeight, r);
         texture.offset.x = (texture.offset.x + cfg.stripeSpeed * dt) % 1;
         material.opacity = baseOpacity * (1 + cfg.pulseAmount * Math.sin(time * cfg.pulseSpeed));
@@ -337,7 +337,7 @@ function createStormTexture() {
       // nahtlos (ganze Wellen über die Breite), leicht schräg
       const s = 0.5 + 0.24 * Math.sin(TAU * 2 * u + v * 3) + 0.17 * Math.sin(TAU * 5 * u - v * 6 + 1.3) +
         0.09 * Math.sin(TAU * 13 * u + v * 11 + 2.1);
-      const a = Math.max(0, Math.min(1, (0.35 + 0.65 * s) * fade + seam * 0.5));
+      const a = Math.max(0, Math.min(1, (0.45 + 0.55 * s) * fade + seam * 0.35));
       const light = Math.min(255, 175 + Math.round(80 * s) + seam * 60);
       const i = (y * w + x) * 4;
       image.data[i] = light;

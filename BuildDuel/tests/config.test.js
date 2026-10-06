@@ -452,7 +452,7 @@ describe('Spielwerte: Welt (Welle 3b – Sturm, Loot, Karten, Absprung)', () => 
     assert.ok(I.maxSlopeDeg < CONFIG.player.maxWalkableSlope, 'Hänge begehbar');
     assert.ok(I.river.depth > 0 && I.river.depth < CONFIG.player.hitbox.height / 2, 'Fluss begehbar');
     assert.ok(I.shelfDepth < CONFIG.player.eyeHeight, 'flaches Wasser: Kopf über Wasser');
-    assert.ok(HEX_COLOR.test(I.hemiGroundColor));
+    assert.ok(HEX_COLOR.test(I.hemiGroundColor) && HEX_COLOR.test(I.hemiSkyColor));
     for (const a of I.areas) assert.ok(a.name && a.radius > 0, a.name);
   });
 

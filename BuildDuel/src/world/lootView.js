@@ -29,6 +29,13 @@ const _c = new THREE.Color();
 const _cam = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
 const _size = new THREE.Vector2();
+// Farben nur einmal aus dem Text lesen (jedes Bild werden hunderte gebraucht)
+const colorCache = new Map();
+function cachedColor(hex) {
+  let c = colorCache.get(hex);
+  if (!c) colorCache.set(hex, (c = new THREE.Color(hex)));
+  return c;
+}
 
 /**
  * @param {object} game
@@ -189,7 +196,7 @@ export function createLootView(game, loot) {
     _q.identity();
     _m.compose(_p, _q, _s);
     glows.setMatrixAt(glowCount, _m);
-    glows.setColorAt(glowCount, _c.set(color).multiplyScalar(intensity));
+    glows.setColorAt(glowCount, _c.copy(cachedColor(color)).multiplyScalar(intensity));
     glowCount++;
   }
 
@@ -261,9 +268,9 @@ export function createLootView(game, loot) {
       _s.setScalar(scale);
       _m.compose(_p, _q, _s);
       entry.mesh.setMatrixAt(entry.n, _m);
-      if (fi.kind === 'weapon') entry.mesh.setColorAt(entry.n, _c.set(rarityColor(fi.rarity)));
-      else if (fi.kind === 'ammo') entry.mesh.setColorAt(entry.n, _c.set(L.ammoColors[fi.weaponId] ?? '#CCCCCC'));
-      else entry.mesh.setColorAt(entry.n, _c.set('#FFFFFF'));
+      if (fi.kind === 'weapon') entry.mesh.setColorAt(entry.n, cachedColor(rarityColor(fi.rarity)));
+      else if (fi.kind === 'ammo') entry.mesh.setColorAt(entry.n, cachedColor(L.ammoColors[fi.weaponId] ?? '#CCCCCC'));
+      else entry.mesh.setColorAt(entry.n, cachedColor('#FFFFFF'));
       entry.n++;
       // Lichtsäule + Leucht-Fleck
       const color = fi.kind === 'weapon' ? rarityColor(fi.rarity) : fi.kind === 'heal' ? '#9FF5E0' : fi.kind === 'ammo' ? (L.ammoColors[fi.weaponId] ?? '#FFFFFF') : '#FFF3D6';
@@ -273,7 +280,7 @@ export function createLootView(game, loot) {
         _s.setScalar(fi.kind === 'weapon' ? 1 : 0.75);
         _m.compose(_p, _q, _s);
         beams.setMatrixAt(nb, _m);
-        beams.setColorAt(nb, _c.set(color));
+        beams.setColorAt(nb, cachedColor(color));
         nb++;
       }
       addGlow(rest.x, rest.y, rest.z, L.groundGlowRadius * 2 * (isModel ? 1 : 0.7), color, isModel ? 0.8 : 0.45);
