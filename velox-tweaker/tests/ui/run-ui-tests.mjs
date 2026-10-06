@@ -36,6 +36,33 @@ function loadPlaywright() {
 }
 const { chromium } = loadPlaywright();
 
+// ------------------------------------------------------------------ fake KI APIs (real mode)
+// Answers like api.groq.com/openai/v1 and api.anthropic.com with the fixture plan - never the network.
+const FAKE_AI = { url: null, server: null, requests: [] };
+function fakeAiApi() {
+  const plan = fs.readFileSync(path.join(appRoot, 'tests', 'fixtures', 'claude', 'plan-ok.json'), 'utf8').trim();
+  const models = { object: 'list', data: [{ id: 'openai/gpt-oss-120b', active: true }, { id: 'openai/gpt-oss-20b', active: true }, { id: 'llama-3.1-8b-instant', active: true }, { id: 'whisper-large-v3', active: true }] };
+  const srv = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', c => { body += c; });
+    req.on('end', () => {
+      FAKE_AI.requests.push({ method: req.method, url: req.url });
+      const out = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+      if (req.method === 'GET' && req.url.startsWith('/openai/v1/models')) return out(200, models);
+      if (req.method === 'POST' && req.url === '/openai/v1/chat/completions') {
+        let model = 'openai/gpt-oss-120b'; try { model = JSON.parse(body).model || model; } catch { /* default */ }
+        return out(200, { id: 'x', object: 'chat.completion', model, choices: [{ index: 0, message: { role: 'assistant', content: plan }, finish_reason: 'stop' }], usage: { prompt_tokens: 3000, completion_tokens: 600 } });
+      }
+      if (req.method === 'GET' && req.url.startsWith('/v1/models')) return out(200, { data: [{ id: 'claude-opus-5-5', type: 'model' }], has_more: false });
+      if (req.method === 'POST' && req.url === '/v1/messages') {
+        return out(200, { id: 'msg', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: plan }], stop_reason: 'end_turn', usage: { input_tokens: 20000, output_tokens: 900 } });
+      }
+      out(404, { error: { message: 'unknown fake route' } });
+    });
+  });
+  return new Promise((resolve) => srv.listen(0, '127.0.0.1', () => { FAKE_AI.server = srv; FAKE_AI.url = 'http://127.0.0.1:' + srv.address().port; resolve(); }));
+}
+
 // ------------------------------------------------------------------ server
 function startServer(extraArgs = []) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -43,7 +70,18 @@ function startServer(extraArgs = []) {
   let dataRoot = null;
   if (REAL) {
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'velox-ui-'));
-    child = spawn('pwsh', ['-NoProfile', '-File', path.join(appRoot, 'Velox.ps1'), '-Simulate', '-NoBrowser', '-Port', '0', '-Token', token, '-DataRoot', dataRoot], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // KI: the fake Claude Code CLI first on PATH (the real CLI must never get a prompt here) and the
+    // Groq / Anthropic APIs answered by fakeAiApi() on 127.0.0.1
+    const fakeCli = path.join(appRoot, 'tests', 'fixtures', 'claude-cli');
+    const env = Object.assign({}, process.env, {
+      PATH: fakeCli + path.delimiter + (process.env.PATH || ''),
+      VELOX_CLAUDE_CLI: path.join(fakeCli, process.platform === 'win32' ? 'claude.cmd' : 'claude'),
+      VELOX_CLAUDE_CLI_ONLY: '1',
+      VELOX_FAKE_CLAUDE_MODE: 'ok',
+      VELOX_GROQ_BASE_URL: FAKE_AI.url + '/openai/v1',
+      VELOX_ANTHROPIC_BASE_URL: FAKE_AI.url
+    });
+    child = spawn('pwsh', ['-NoProfile', '-File', path.join(appRoot, 'Velox.ps1'), '-Simulate', '-NoBrowser', '-Port', '0', '-Token', token, '-DataRoot', dataRoot], { stdio: ['ignore', 'pipe', 'pipe'], env });
   } else {
     child = spawn(process.execPath, [path.join(here, 'mock-server.mjs'), '--port', '0', '--token', token, '--speed', '35', '--quiet', ...extraArgs], { stdio: ['ignore', 'pipe', 'pipe'] });
   }
@@ -428,7 +466,8 @@ test('presets: drawer footer is reachable with the mouse at 1360x880 and 900x600
 
 test('KI-Optimierer: local analysis shows a plan, applying it works', async (t) => {
   const page = await openApp(t, 'advisor');
-  assert(await page.$eval('.model[data-engine="claude"]', b => b.disabled) || true, 'claude engine state rendered');
+  await page.waitForSelector('.prov[data-provider="claude-code"]');
+  await page.click('.prov[data-provider="offline"]');
   await page.click('.goal[data-goal="fivem"]');
   await page.fill('.ai-setup textarea', 'FiveM ruckelt in der Stadt');
   await page.click('[data-testid="advisor-start"]');
@@ -458,26 +497,145 @@ test('KI-Optimierer: local analysis shows a plan, applying it works', async (t) 
   await shot(page, 'state-overview-analyzed');
 });
 
-test('KI-Optimierer: Claude needs a key; key saved in settings enables it', async (t) => {
+async function aiReset(t) { if (MODE === 'mock') await api(t.server, 'POST', '/__mock/ai', { reset: true }); }
+async function aiMock(t, body) { if (MODE === 'mock') await api(t.server, 'POST', '/__mock/ai', body); }
+const provSel = (id) => '.prov[data-provider="' + id + '"]';
+const aiCardSel = (id) => '.ai-card[data-provider="' + id + '"]';
+
+test('KI-Optimierer: Claude API braucht einen Key; Key, Verbindungstest und Modell in den Einstellungen', async (t) => {
+  await aiReset(t);
   const page = await openApp(t, 'advisor');
-  assert(await page.$eval('.model[data-engine="claude"]', b => b.disabled), 'claude disabled without key');
-  await goPage(page, 'settings');
+  await page.waitForSelector(provSel('claude-api') + '[data-ready="false"]');
+  await page.click(provSel('claude-api'));
+  assert(await page.$eval('[data-testid="advisor-start"]', b => b.disabled), 'start disabled without key');
+  assert(/API-Key/.test(await page.textContent('.prov-hint')), 'hint says a key is needed');
+  await page.click('[data-testid="prov-setup"]');
+  await page.waitForSelector('.page[data-page="settings"] ' + aiCardSel('claude-api'));
+  await page.waitForFunction(() => document.activeElement && document.activeElement.dataset.testid === 'claude-key', null, { timeout: 5000 });
   await page.fill('[data-testid="claude-key"]', 'sk-ant-test-' + 'x'.repeat(40));
   await page.click('[data-testid="claude-save"]');
-  await page.waitForSelector('.key-status.is-ok');
+  await page.waitForSelector('.claude-box .key-status.is-ok');
   assert(await page.$eval('[data-testid="claude-key"]', i => i.value === ''), 'key field cleared');
+  await page.click('[data-testid="claude-test"]');
+  await page.waitForSelector('[data-testid="ai-test-claude-api"]', { timeout: 30000 });
+  assert(/klappt/.test(await page.textContent('[data-testid="ai-test-claude-api"]')), 'connection test result');
   await page.click('.model[data-model="claude-sonnet-5-5"]');
   await page.waitForTimeout(300);
   await goPage(page, 'advisor');
-  await page.click('.model[data-engine="claude"]');
+  await page.waitForSelector(provSel('claude-api') + '[data-ready="true"]');
+  await page.click(provSel('claude-api'));
+  assert(/Mit Claude API analysieren/.test(await page.textContent('[data-testid="advisor-start"]')), 'start button names the provider');
   await page.click('[data-testid="advisor-start"]');
   await page.waitForSelector('[data-testid="advisor-result"]', { timeout: 60000 });
-  assert(/Claude/.test(await page.textContent('[data-testid="advisor-result"]')), 'claude result labelled');
+  assert(/Claude API/.test(await page.textContent('[data-testid="advisor-result"] .eyebrow')), 'result labelled with the provider');
   await goPage(page, 'settings');
-  await page.click('.claude-box .btn-ghost');
+  await page.click('[data-testid="claude-delete"]');
   await page.click('.layer .dialog [data-action="confirm"]');
-  await page.waitForSelector('.key-status.is-off');
-}, { mockOnly: true });
+  await page.waitForSelector('.claude-box .key-status.is-off');
+  await page.click('#nav .nav-item[data-page="advisor"]');
+  await page.waitForSelector(provSel('claude-api') + '[data-ready="false"]');
+  await aiReset(t);
+});
+
+test('Einstellungen → KI: Claude Code Status mit Anleitung, Groq-Key, Modelle, 900x600 ohne Überlauf', async (t) => {
+  await aiReset(t);
+  const page = await openApp(t, 'settings');
+  await page.waitForSelector(aiCardSel('claude-code'));
+  for (const id of ['claude-code', 'claude-api', 'groq', 'offline']) assert(await page.$(aiCardSel(id)), 'card ' + id);
+  assert(/Empfohlen/.test(await page.textContent(aiCardSel('claude-code') + ' .ai-card-head')), 'Claude Code is recommended');
+  assert(/Hardware-Daten/.test(await page.textContent('.ai-privacy')) && /keine Dateien/i.test(await page.textContent('.ai-privacy')), 'privacy note');
+  if (MODE === 'mock') {
+    // not installed: exact steps with the install command and a copy button
+    await page.waitForFunction(() => /nicht installiert/.test(document.querySelector('[data-testid="ai-cc-message"]').textContent), null, { timeout: 15000 });
+    const steps = await page.textContent(aiCardSel('claude-code') + ' [data-testid="ai-steps"]');
+    assert(/irm https:\/\/claude\.ai\/install\.ps1 \| iex/.test(steps) && /nicht als Administrator/.test(steps), 'install steps: ' + steps);
+    assert(await page.$(aiCardSel('claude-code') + ' .ai-cmd-row .ai-copy'), 'copy button');
+    await shot(page, 'state-ai-claude-code-missing');
+    await aiMock(t, { claudeCode: 'logged-out' });
+    await page.click('[data-testid="ai-cc-recheck"]');
+    await page.waitForFunction(() => /nicht angemeldet/.test(document.querySelector('[data-testid="ai-cc-message"]').textContent), null, { timeout: 15000 });
+    assert(/claude auth login/.test(await page.textContent(aiCardSel('claude-code') + ' [data-testid="ai-steps"]')), 'login steps');
+    await aiMock(t, { claudeCode: 'ready' });
+    await page.click('[data-testid="ai-cc-recheck"]');
+  }
+  await page.waitForFunction(() => /angemeldet als gamer@example\.com/.test(document.querySelector('[data-testid="ai-cc-message"]').textContent), null, { timeout: 30000 });
+  assert(await page.$(aiCardSel('claude-code') + ' .ai-pill[data-state="ready"]'), 'ready pill');
+  await page.click('[data-cc-model="haiku"]');
+  await page.waitForFunction(() => window.__velox.settings.ai.claudeCode.model === 'haiku', null, { timeout: 5000 });
+  // Groq: key, free connection test, model list from the key
+  await page.fill('[data-testid="groq-key"]', 'gsk_' + 'a1B2'.repeat(12));
+  await page.click('[data-testid="groq-save"]');
+  await page.waitForSelector(aiCardSel('groq') + ' .key-status.is-ok');
+  await page.click('[data-testid="groq-test"]');
+  await page.waitForSelector('[data-testid="ai-test-groq"]', { timeout: 30000 });
+  assert(/klappt/.test(await page.textContent('[data-testid="ai-test-groq"]')), 'groq test ok');
+  await page.waitForSelector('[data-groq-model="openai/gpt-oss-20b"]');
+  assert(/GPT-OSS 120B/.test(await page.textContent(aiCardSel('groq'))), 'models from the key');
+  await page.click('[data-groq-model="openai/gpt-oss-20b"]');
+  await page.waitForFunction(() => window.__velox.settings.ai.groq.model === 'openai/gpt-oss-20b', null, { timeout: 5000 });
+  await shot(page, 'state-ai-settings');
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.waitForTimeout(300);
+  const o = await overflow(page);
+  assert(o.doc <= 0 && o.main <= 0 && !o.offenders.length, 'no overflow at 900x600: ' + JSON.stringify(o));
+  // Groq in the KI-Optimierer
+  await page.setViewportSize({ width: 1360, height: 880 });
+  await goPage(page, 'advisor');
+  await page.waitForSelector(provSel('groq') + '[data-ready="true"]');
+  await page.click(provSel('groq'));
+  await page.click('[data-testid="advisor-start"]');
+  await page.waitForSelector('[data-testid="advisor-result"]', { timeout: 60000 });
+  assert(/Groq/.test(await page.textContent('[data-testid="advisor-result"] .eyebrow')), 'groq result');
+  await goPage(page, 'settings');
+  await page.click('[data-testid="groq-delete"]');
+  await page.click('.layer .dialog [data-action="confirm"]');
+  await page.waitForSelector(aiCardSel('groq') + ' .key-status.is-off');
+  await page.click('[data-cc-model="sonnet"]');
+  await page.waitForTimeout(300);
+  await aiReset(t);
+});
+
+test('KI-Optimierer: Claude Code empfohlen und vorausgewählt, Fortschritt, Fehler mit Ausweg', async (t) => {
+  await aiReset(t);
+  await aiMock(t, { claudeCode: 'ready' });
+  const page = await openApp(t, 'advisor');
+  await page.waitForSelector(provSel('claude-code') + '[data-ready="true"][aria-checked="true"]', { timeout: 30000 });
+  assert(/Empfohlen/.test(await page.textContent(provSel('claude-code'))), 'recommended badge on the chip');
+  assert(/Bereit/.test(await page.textContent(provSel('claude-code'))) && /Bereit/.test(await page.textContent(provSel('offline'))), 'ready states');
+  assert(/angemeldet als gamer@example\.com/.test(await page.textContent('.prov-hint')), 'account shown');
+  await page.click('[data-testid="advisor-start"]');
+  await page.waitForSelector('[data-testid="advisor-radar"]');
+  assert(/Claude Code analysiert/.test(await page.textContent('[data-testid="advisor-radar"] .eyebrow')), 'radar names the provider');
+  await page.waitForSelector('[data-testid="advisor-result"]', { timeout: 90000 });
+  assert(/Claude Code/.test(await page.textContent('[data-testid="advisor-result"] .eyebrow')), 'result labelled Claude Code');
+  assert(/Claude-Abo/.test(await page.textContent('[data-testid="advisor-result"]')), 'no-extra-cost note');
+  assert((await page.$$('.plan-item')).length > 0, 'plan shown');
+  await shot(page, 'state-advisor-claude-code');
+  if (MODE === 'mock') {
+    // a failing provider offers the offline analysis at once
+    await aiMock(t, { failNext: 'claude-code' });
+    await page.click('[data-testid="advisor-start"]');
+    await page.waitForSelector('[data-testid="advisor-error"]', { timeout: 30000 });
+    const err = await page.textContent('[data-testid="advisor-error"]');
+    assert(/Claude Code-Analyse fehlgeschlagen/.test(err) && /Nutzungslimit/.test(err), 'clear German error: ' + err);
+    await page.click('[data-testid="advisor-error"] .btn >> text=Smart-Analyse starten');
+    await page.waitForSelector('[data-testid="advisor-result"]', { timeout: 60000 });
+    assert(/Smart-Analyse/.test(await page.textContent('[data-testid="advisor-result"] .eyebrow')), 'offline fallback ran');
+    // logged out: the chip says so and leads to the steps
+    await aiMock(t, { claudeCode: 'logged-out' });
+    await page.evaluate(() => { window.__velox.cache.aiStatus = null; window.__velox.cache.engine = null; });
+    await goPage(page, 'overview');
+    await goPage(page, 'advisor');
+    await page.waitForFunction(() => /Nicht angemeldet/.test(document.querySelector('.prov[data-provider="claude-code"]').textContent), null, { timeout: 15000 });
+    await page.click(provSel('claude-code'));
+    assert(await page.$eval('[data-testid="advisor-start"]', b => b.disabled), 'start disabled while logged out');
+    await page.click('[data-testid="prov-setup"]');
+    await page.waitForSelector('.page[data-page="settings"] ' + aiCardSel('claude-code'));
+    assert(/claude auth login/.test(await page.textContent(aiCardSel('claude-code'))), 'login steps in the settings');
+  }
+  await page.evaluate(() => { window.__velox.cache.engine = null; });
+  await aiReset(t);
+});
 
 test('Detweak: scan lists foreign tweaks, reset runs and shows a summary', async (t) => {
   const page = await openApp(t, 'detweak');
@@ -702,6 +860,8 @@ test('Übersicht: last backup updates after applying', async (t) => {
 
 test('KI result is kept when leaving the page during the analysis', async (t) => {
   const page = await openApp(t, 'advisor');
+  await page.waitForSelector(provSel('offline'));
+  await page.click(provSel('offline'));
   await page.click('[data-testid="advisor-start"]');
   await page.waitForTimeout(250);
   await goPage(page, 'overview');
@@ -848,6 +1008,149 @@ test('Spiele: detect, boost switch, add by path', async (t) => {
   await page.waitForFunction(() => /Keine .exe/.test(document.getElementById('toasts').textContent));
 });
 
+// ---- Spiele: library with real art (mock: tests/ui/mock-server.mjs MOCK_ART, real: the fixture PC
+//      tests/fixtures/games/pc via core/Extras.ps1) - same games and art in both modes
+const cardSel = (name) => `.game-card[data-game][aria-label="${name}"]`;
+async function gamesReady(page) {
+  await page.waitForSelector('.game-card[data-game]', { timeout: 30000, state: 'attached' });
+  await idle(page);
+}
+async function artState(page, name) {
+  return page.evaluate((sel) => {
+    const c = document.querySelector(sel);
+    if (!c) return null;
+    const a = c.querySelector('.gc-art');
+    const imgs = Array.from(a.querySelectorAll('img')).map(i => ({ cls: i.className, ok: i.complete && i.naturalWidth > 0, src: i.getAttribute('src') }));
+    const ic = c.querySelector('.gc-icon');
+    const icImg = ic.querySelector('img');
+    return { art: a.dataset.art, loaded: a.classList.contains('is-loaded'), loading: a.classList.contains('is-loading'), tall: a.classList.contains('is-tall'), imgs,
+      iconAvatar: ic.classList.contains('is-avatar'), iconOk: !!(icImg && icImg.complete && icImg.naturalWidth > 0), launcher: c.querySelector('.gc-launcher').textContent, hidden: c.hidden };
+  }, cardSel(name));
+}
+async function waitArt(page, name, art) {
+  // images are loading="lazy": bring the card into view like a user scrolling the library
+  await page.$eval(cardSel(name), c => c.scrollIntoView({ block: 'center' }));
+  await page.waitForFunction(([sel, want]) => { const a = document.querySelector(sel + ' .gc-art'); return a && a.dataset.art === want && a.classList.contains('is-loaded'); }, [cardSel(name), art], { timeout: 15000 });
+  return artState(page, name);
+}
+const visibleCards = (page) => page.$$eval('.game-card[data-game]', cs => cs.filter(c => !c.hidden).map(c => ({ name: c.getAttribute('aria-label'), src: c.dataset.source })));
+
+test('Spiele: Karten mit echten Bildern (Titelbild, Kapsel, Icon), Launcher-Abzeichen, Zähler', async (t) => {
+  const page = await openApp(t, 'games');
+  const artReqs = [];
+  page.on('request', (r) => { if (r.url().includes('/api/game-art/')) artReqs.push(r.url()); });
+  await gamesReady(page);
+  const cs = await waitArt(page, 'Counter-Strike 2', 'cover');
+  assert(cs.imgs.some(i => i.cls === 'gc-cover' && i.ok), 'CS2 cover image decoded: ' + JSON.stringify(cs.imgs));
+  assert(/[?&]t=[0-9a-f]+/.test(cs.imgs[0].src) && /kind=cover/.test(cs.imgs[0].src), 'art URL carries kind and token: ' + cs.imgs[0].src);
+  await page.waitForFunction((sel) => { const i = document.querySelector(sel + ' .gc-icon img'); return i && i.complete && i.naturalWidth > 0; }, cardSel('Counter-Strike 2'));
+  assert(/Steam/.test(cs.launcher), 'Steam badge: ' + cs.launcher);
+  const ih = await waitArt(page, 'Iron Harbor', 'cover');
+  assert(ih.tall && ih.imgs.some(i => i.cls === 'gc-poster' && i.ok), 'tall capsule shown as poster: ' + JSON.stringify(ih));
+  const lk = await waitArt(page, 'Lantern Keep', 'icon');
+  assert(lk.imgs.some(i => i.cls === 'gc-icon-big' && i.ok) && /GOG/.test(lk.launcher), 'GOG .ico as big icon: ' + JSON.stringify(lk));
+  const sc = await waitArt(page, 'Sky Courier', 'cover');
+  assert(/Xbox/.test(sc.launcher), 'Xbox badge');
+  const fn = await waitArt(page, 'Fortnite', 'none');
+  assert(fn.imgs.length === 0 && fn.iconAvatar, 'no art: gradient initials + avatar, no image: ' + JSON.stringify(fn));
+  assert(await page.$eval(cardSel('Fortnite') + ' .gc-initials', e => e.textContent === 'F'), 'initials');
+  assert(!artReqs.some(u => /fortnite|d9713f3c15/i.test(u)), 'no art request for a game without art');
+  // counter counts up to the number of cards
+  const n = (await visibleCards(page)).length;
+  assert(n >= 8, 'at least 8 games: ' + n);
+  await page.waitForFunction((want) => document.querySelector('[data-testid="games-count"] .games-stat-num').textContent.trim() === String(want), n, { timeout: 5000 });
+  // "Spiele erkennen" runs again and keeps the art
+  await page.click('[data-testid="game-detect"]');
+  await page.waitForFunction(() => /gefunden/.test(document.getElementById('toasts').textContent), null, { timeout: 30000 });
+  await waitArt(page, 'Counter-Strike 2', 'cover');
+  assert(!/Bitte kurz warten/.test(await page.textContent('#toasts')), 'a click during the automatic detection waits for it instead of a busy hint');
+  await page.$eval('.games-head', e => e.scrollIntoView({ block: 'start' }));
+  await sleep(400);
+  await shot(page, 'state-games-library');
+});
+
+test('Spiele: Launcher-Filter (Maus + Pfeiltasten) und Suche', async (t) => {
+  const page = await openApp(t, 'games');
+  await gamesReady(page);
+  const all = await visibleCards(page);
+  const steamN = all.filter(c => c.src === 'steam').length;
+  assert(steamN >= 2, 'steam games: ' + steamN);
+  const chipN = await page.$eval('[data-testid="game-filter"] [data-src="steam"] .games-chip-n', e => Number(e.textContent));
+  assert(chipN === steamN, `chip count ${chipN} = ${steamN}`);
+  await page.click('[data-testid="game-filter"] [data-src="steam"]');
+  let vis = await visibleCards(page);
+  assert(vis.length === steamN && vis.every(c => c.src === 'steam'), 'only Steam: ' + JSON.stringify(vis));
+  assert(await page.$eval('[data-testid="game-filter"] [data-src="steam"]', e => e.getAttribute('aria-checked') === 'true'), 'chip checked');
+  // keyboard: arrow keys move through the chips like a radio group
+  await page.focus('[data-testid="game-filter"] [data-src="steam"]');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForFunction(() => document.querySelector('[data-testid="game-filter"] [data-src="all"]').getAttribute('aria-checked') === 'true');
+  assert((await visibleCards(page)).length === all.length, 'ArrowLeft -> Alle');
+  // search (accent/case-insensitive, also by exe name)
+  await page.fill('[data-testid="game-search"]', 'LANTERN');
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('.game-card[data-game]')).filter(c => !c.hidden).length === 1);
+  vis = await visibleCards(page);
+  assert(vis[0].name === 'Lantern Keep', 'search hit: ' + JSON.stringify(vis));
+  await page.fill('[data-testid="game-search"]', 'cs2.exe');
+  await page.waitForFunction(() => { const v = Array.from(document.querySelectorAll('.game-card[data-game]')).filter(c => !c.hidden); return v.length === 1 && v[0].getAttribute('aria-label') === 'Counter-Strike 2'; });
+  // search + filter that match nothing: friendly empty state with a reset
+  await page.click('[data-testid="game-filter"] [data-src="gog"]');
+  await page.waitForSelector('.games-nomatch:not([hidden])');
+  assert(/Kein Spiel passt/.test(await page.textContent('.games-nomatch')), 'no-match text');
+  await page.click('.games-nomatch button');
+  await page.waitForFunction((n) => Array.from(document.querySelectorAll('.game-card[data-game]')).filter(c => !c.hidden).length === n, all.length);
+  assert(await page.$eval('[data-testid="game-search"]', e => e.value === ''), 'search cleared');
+  // Escape in the search field clears it
+  await page.fill('[data-testid="game-search"]', 'zzz-nichts');
+  await page.waitForSelector('.games-nomatch:not([hidden])');
+  await page.press('[data-testid="game-search"]', 'Escape');
+  await page.waitForSelector('.games-nomatch', { state: 'hidden' });
+  // the filter survives leaving the page
+  await page.click('[data-testid="game-filter"] [data-src="steam"]');
+  await page.evaluate(() => { location.hash = '#/overview'; });
+  await page.waitForFunction(() => !document.querySelector('[data-testid="game-grid"]'));
+  await page.evaluate(() => { location.hash = '#/games'; });
+  await gamesReady(page);
+  assert((await visibleCards(page)).every(c => c.src === 'steam'), 'filter kept after page change');
+});
+
+test('Spiele: kaputte Bilder fallen auf Icon und dann auf Initialen zurück; 900x600 ohne Überlauf', async (t) => {
+  const ctx = await t.browser.newContext({ viewport: { width: 900, height: 600 }, reducedMotion: 'reduce' });
+  t.contexts.push(ctx);
+  const page = await ctx.newPage();
+  t.watch(page);
+  t.expectNetworkErrors = true; // the 404 images below are the point of this test
+  // every cover is broken; Counter-Strike's icon too
+  await page.route('**/api/game-art/**', (r) => {
+    const u = r.request().url();
+    if (/kind=cover/.test(u)) return r.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"x"}' });
+    return r.continue();
+  });
+  await page.goto(t.server.url + '#/games');
+  await ready(page);
+  await gamesReady(page);
+  // GTA/CS2 (cover + icon): cover fails -> big icon
+  const sc = await waitArt(page, 'Sky Courier', 'icon');
+  assert(sc.imgs.some(i => i.cls === 'gc-icon-big' && i.ok) && !sc.tall, 'cover 404 -> icon: ' + JSON.stringify(sc));
+  // Iron Harbor (only a capsule): cover fails -> initials
+  const ih = await waitArt(page, 'Iron Harbor', 'none');
+  assert(!ih.tall && ih.imgs.length === 0 && ih.iconAvatar, 'cover 404 without icon -> initials: ' + JSON.stringify(ih));
+  // now break the icons as well and detect again: CS2 ends at the initials, the small icon slot at the avatar
+  await page.unroute('**/api/game-art/**');
+  await page.route('**/api/game-art/**', (r) => r.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"x"}' }));
+  await page.click('[data-testid="game-detect"]');
+  await page.waitForFunction(() => /gefunden/.test(document.getElementById('toasts').textContent), null, { timeout: 30000 });
+  const cs = await waitArt(page, 'Counter-Strike 2', 'none');
+  await page.waitForFunction((sel) => document.querySelector(sel + ' .gc-icon').classList.contains('is-avatar'), cardSel('Counter-Strike 2'));
+  assert(cs.imgs.length === 0, 'cover + icon 404 -> initials: ' + JSON.stringify(cs));
+  assert(await page.$eval(cardSel('Counter-Strike 2') + ' .gc-initials', e => e.textContent === 'C2'), 'initials C2');
+  const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert(over <= 0, 'no horizontal overflow at 900x600: ' + over);
+  const card = await page.$eval(cardSel('Counter-Strike 2'), c => { const r = c.getBoundingClientRect(); return { w: r.width, sw: c.scrollWidth, cw: c.clientWidth }; });
+  assert(card.w >= 260 && card.sw <= card.cw + 1, 'card fits: ' + JSON.stringify(card));
+  await shot(page, 'state-games-fallback-900');
+});
+
 test('Sicherungen: list, details, restore', async (t) => {
   const page = await openApp(t, 'backups');
   await page.waitForSelector('[data-testid="backup-list"] .bk-item[data-backup]', { timeout: 15000 });
@@ -865,6 +1168,48 @@ test('Sicherungen: list, details, restore', async (t) => {
   await waitJobDone(page);
   assert(/Wiederherstellungspunkt/.test(await toastText(page)), 'restore point toast');
 });
+
+test('Sicherungen: Windows-Wiederherstellungspunkte – Ausgangspunkt, Liste, Aufräumen mit Nachfrage', async (t) => {
+  const page = await openApp(t, 'backups');
+  await page.waitForSelector('[data-testid="rp-list"] .rp-item', { timeout: 30000 });
+  const own = () => page.$$eval('[data-testid="rp-list"] .rp-item:not(.is-foreign)', els => els.length);
+  const manual = () => page.$$eval('[data-testid="rp-list"] .rp-item.is-manual', els => els.length);
+  const before = await own();
+  const manualBefore = await manual();
+  assert(before >= 2, 'old VELOX points listed: ' + before);
+  assert(await page.$('[data-testid="rp-list"] .rp-item.is-foreign'), 'Windows points are listed too');
+  assert(await page.$('[data-testid="rp-list"] .rp-item.is-keep'), 'the point that stays is marked');
+  await shot(page, 'state-restore-points');
+  await page.click('[data-testid="rp-clean"]');
+  await page.waitForSelector('.layer .dialog [data-action="confirm"]');
+  assert(/bleibt/.test(await page.textContent('.layer .dialog')), 'confirm says the first one stays');
+  await page.click('.layer .dialog [data-action="confirm"]');
+  await waitJobDone(page);
+  assert(/gelöscht/.test(await toastText(page)), 'clean toast');
+  await page.waitForFunction(() => document.querySelectorAll('[data-testid="rp-list"] .rp-item:not(.is-foreign):not(.is-manual)').length === 1, null, { timeout: 15000 });
+  assert(await manual() === manualBefore, 'points the user made stay: ' + manualBefore);
+  assert(await page.$('[data-testid="rp-list"] .rp-item.is-foreign'), 'Windows points stay');
+  assert(await page.$eval('[data-testid="rp-clean"]', b => b.disabled), 'nothing left to clean');
+  assert(/Ausgangspunkt/.test(await page.textContent('[data-testid="rp-baseline"]')), 'baseline date shown: ' + await page.textContent('[data-testid="rp-baseline"]'));
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.waitForTimeout(300);
+  const ov = await overflow(page);
+  assert(ov.doc <= 0 && ov.main <= 0 && !ov.offenders.length, 'no horizontal overflow at 900: ' + JSON.stringify(ov));
+  await shot(page, 'state-restore-points-900');
+});
+
+test('Wiederherstellungspunkt: "Überspringen" beendet nur diesen Schritt', async (t) => {
+  const page = await openApp(t, 'backups');
+  await page.evaluate(() => { window.__rpJob = window.__velox.runJob('restorepoint', { label: 'Test', _mockRpWaitMs: 15000 }); });
+  await page.waitForSelector('.layer .job [data-testid="job-skip"]', { timeout: 10000 });
+  assert(/1–2 Minuten/.test(await page.textContent('.layer .job')), 'step explains the wait');
+  await shot(page, 'state-job-skip');
+  const t0 = Date.now();
+  await page.click('.layer .job [data-testid="job-skip"]');
+  await waitJobDone(page, 10000);
+  assert(Date.now() - t0 < 8000, 'skip ends the step at once');
+  assert(/übersprungen/i.test(await toastText(page)), 'toast says skipped: ' + await toastText(page));
+}, { mockOnly: true });
 
 test('Einstellungen: accent changes live and persists; motion setting', async (t) => {
   const page = await openApp(t, 'settings');
@@ -884,6 +1229,23 @@ test('Einstellungen: accent changes live and persists; motion setting', async (t
   await page.waitForFunction(() => document.documentElement.dataset.motion === 'full');
   await page.click('.swatch[data-accent="violet"]');
   await page.waitForFunction(() => document.documentElement.dataset.accent === 'violet');
+  await page.waitForTimeout(300);
+});
+
+test('Einstellungen: Wiederherstellungspunkte – drei Stufen mit Erklärung, gespeichert', async (t) => {
+  const page = await openApp(t, 'settings');
+  const radios = await page.$$('[data-testid="rp-modes"] [role="radio"]');
+  assert(radios.length === 3, 'three choices');
+  assert(await page.$eval('[data-testid="rp-modes"] [data-rp="first"]', b => b.getAttribute('aria-checked') === 'true'), "default is 'first'");
+  const descs = await page.$$eval('[data-testid="rp-modes"] .model-desc', els => els.map(e => e.textContent.trim()).filter(Boolean));
+  assert(descs.length === 3, 'one explanation line each');
+  await page.click('[data-testid="rp-modes"] [data-rp="presets"]');
+  await page.waitForTimeout(400);
+  await page.reload();
+  await ready(page);
+  assert(await page.$eval('[data-testid="rp-modes"] [data-rp="presets"]', b => b.getAttribute('aria-checked') === 'true'), 'saved');
+  await page.click('[data-testid="rp-modes"] [data-rp="first"]');
+  await page.waitForFunction(() => document.querySelector('[data-testid="rp-modes"] [data-rp="first"]').getAttribute('aria-checked') === 'true');
   await page.waitForTimeout(300);
 });
 
@@ -1031,6 +1393,7 @@ test('backend gone: calm "VELOX wurde beendet" screen', async (t) => {
 async function main() {
   console.log('VELOX UI tests (' + MODE + ')');
   if (SCREENS && !ONLY) { fs.rmSync(shotDir, { recursive: true, force: true }); fs.mkdirSync(shotDir, { recursive: true }); }
+  if (REAL) await fakeAiApi();
   const server = await startServer();
   console.log('server: ' + server.url.replace(/t=.*/, 't=…'));
   const browser = await chromium.launch({ headless: !HEADED });
@@ -1065,6 +1428,7 @@ async function main() {
   }
   await browser.close();
   stopServer(server);
+  if (FAKE_AI.server) FAKE_AI.server.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed, ' + skip + ' skipped' + (SCREENS ? ' · screenshots: ' + path.relative(process.cwd(), shotDir) : ''));
   if (fail) { console.log('failed: ' + failures.join('; ')); process.exit(1); }
 }

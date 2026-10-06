@@ -271,9 +271,26 @@ function Get-VxRealRegValueNames([string]$Path) {
 
 # ================================================================== registry: SEEDED default state (non-Windows)
 
+# The seeded state never changes at runtime, so answers are memoised per path (Testmodus speed).
+function Get-VxSeedMemo([string]$Name) {
+    $seed = $global:VxCtx.Seed
+    if (-not $seed.ContainsKey($Name)) { $seed[$Name] = [hashtable]::Synchronized(@{}) }
+    return $seed[$Name]
+}
+
 function Test-VxSeedKey([string]$Path) {
     $seed = $global:VxCtx.Seed
     if ($null -eq $seed) { return $false }
+    $lp = $Path.ToLowerInvariant()
+    $memo = Get-VxSeedMemo 'memoKey'
+    if ($memo.ContainsKey($lp)) { return $memo[$lp] }
+    $r = Test-VxSeedKeyRaw $Path
+    $memo[$lp] = $r
+    return $r
+}
+
+function Test-VxSeedKeyRaw([string]$Path) {
+    $seed = $global:VxCtx.Seed
     $lp = $Path.ToLowerInvariant()
     foreach ($rx in @($seed.noKeys)) { if ($lp -match $rx) { return $false } }
     foreach ($rk in @($seed.regkeys)) { if ($lp -match $rk.regex) { return [bool]$rk.default } }
@@ -301,15 +318,19 @@ function Get-VxSeedRegValue([string]$Path, [string]$Name) {
     }
     $lp = $Path.ToLowerInvariant()
     $ln = $Name.ToLowerInvariant()
-    foreach ($w in @($seed.wildValues)) {
-        if ($w.name -eq $ln -and $lp -match $w.keyRegex) {
-            if ($null -eq $w.default) { return $none }
-            $v = $w.default
-            if ($w.kind -eq 'MultiString') { $v = [string[]]@($v) }
-            return @{ exists = $true; kind = $w.kind; value = $v }
-        }
+    $memo = Get-VxSeedMemo 'memoWild'
+    $mk = $lp + '|' + $ln
+    $w = $null
+    if ($memo.ContainsKey($mk)) { $w = $memo[$mk] }
+    else {
+        foreach ($x in @($seed.wildValues)) { if ($x.name -eq $ln -and $lp -match $x.keyRegex) { $w = $x; break } }
+        if ($null -eq $w) { $w = 'none' }
+        $memo[$mk] = $w
     }
-    return $none
+    if ($w -is [string] -or $null -eq $w.default) { return $none }
+    $v = $w.default
+    if ($w.kind -eq 'MultiString') { $v = [string[]]@($v) }
+    return @{ exists = $true; kind = $w.kind; value = $v }
 }
 
 function Get-VxSeedRegSubKeys([string]$Path) {
@@ -680,6 +701,82 @@ function Get-VxScArgs([string]$Start) {
     throw "Unbekannter Starttyp '$Start'"
 }
 
+# Service control manager calls without a process per call (sc.exe costs 40-80 ms each). Compiled
+# once per VELOX process (Add-Type, C# 5 for the .NET Framework compiler); the worker warms it up
+# while VELOX is idle. All methods return 0 or the Win32 error code.
+function Get-VxServiceNativeSource {
+    return @'
+using System;
+using System.Runtime.InteropServices;
+namespace VxNative {
+    public static class Svc {
+        [StructLayout(LayoutKind.Sequential)] private struct SvcStatus { public uint a, b, c, d, e, f, g; }
+        [StructLayout(LayoutKind.Sequential)] private struct DelayedInfo { public int fDelayedAutostart; }
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern IntPtr OpenSCManagerW(string machine, string db, uint access);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern IntPtr OpenServiceW(IntPtr scm, string name, uint access);
+        [DllImport("advapi32.dll", SetLastError = true)] private static extern bool CloseServiceHandle(IntPtr h);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool ChangeServiceConfigW(IntPtr svc, uint type, uint start, uint error, string bin, string group, IntPtr tag, string deps, string user, string pwd, string display);
+        [DllImport("advapi32.dll", SetLastError = true)] private static extern bool ChangeServiceConfig2W(IntPtr svc, uint level, ref DelayedInfo info);
+        [DllImport("advapi32.dll", SetLastError = true)] private static extern bool ControlService(IntPtr svc, uint control, ref SvcStatus status);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool StartServiceW(IntPtr svc, uint argc, IntPtr argv);
+        private const uint NoChange = 0xFFFFFFFF;
+
+        private static int WithService(string name, uint access, Func<IntPtr, int> body) {
+            IntPtr scm = OpenSCManagerW(null, null, 0x0001);
+            if (scm == IntPtr.Zero) return Marshal.GetLastWin32Error();
+            try {
+                IntPtr s = OpenServiceW(scm, name, access);
+                if (s == IntPtr.Zero) return Marshal.GetLastWin32Error();
+                try { return body(s); } finally { CloseServiceHandle(s); }
+            } finally { CloseServiceHandle(scm); }
+        }
+
+        // start: 2 auto, 3 demand, 4 disabled; delayed: 1 on, 0 off, -1 leave as it is
+        public static int SetStart(string name, uint start, int delayed) {
+            return WithService(name, 0x0001 | 0x0002, delegate(IntPtr s) {
+                if (!ChangeServiceConfigW(s, NoChange, start, NoChange, null, null, IntPtr.Zero, null, null, null, null)) return Marshal.GetLastWin32Error();
+                if (delayed >= 0) {
+                    DelayedInfo d = new DelayedInfo();
+                    d.fDelayedAutostart = delayed;
+                    if (!ChangeServiceConfig2W(s, 3, ref d)) return Marshal.GetLastWin32Error();
+                }
+                return 0;
+            });
+        }
+
+        // sends "stop" and returns at once - never waits for the service to end
+        public static int Stop(string name) {
+            return WithService(name, 0x0020, delegate(IntPtr s) {
+                SvcStatus st = new SvcStatus();
+                return ControlService(s, 1, ref st) ? 0 : Marshal.GetLastWin32Error();
+            });
+        }
+
+        public static int Start(string name) {
+            return WithService(name, 0x0010, delegate(IntPtr s) {
+                return StartServiceW(s, 0, IntPtr.Zero) ? 0 : Marshal.GetLastWin32Error();
+            });
+        }
+    }
+}
+'@
+}
+
+# $true when [VxNative.Svc] is usable (compiles it on first use; Windows only).
+function Initialize-VxServiceNative {
+    if (-not (Test-VxWindows)) { return $false }
+    if ($null -ne ('VxNative.Svc' -as [type])) { return $true }
+    if ($global:VxServiceNativeFailed) { return $false }
+    try {
+        Add-Type -TypeDefinition (Get-VxServiceNativeSource) -Language CSharp -ErrorAction Stop
+        return $true
+    } catch {
+        $global:VxServiceNativeFailed = $true
+        Write-VxFileLog 'warn' ('Dienst-Schnittstelle nicht verfügbar, nutze sc.exe: ' + $_.Exception.Message)
+        return $false
+    }
+}
+
 # Sets the start type; optionally stops (Disabled) or starts (Automatic) the service.
 function Set-VxServiceStart([string]$Name, [string]$Start, [bool]$StopNow = $false, [bool]$StartNow = $false) {
     $ctx = $global:VxCtx
@@ -690,6 +787,49 @@ function Set-VxServiceStart([string]$Name, [string]$Start, [bool]$StopNow = $fal
         if ($StartNow) { Write-VxLog 'info' "[Testmodus] Dienst $Name würde gestartet" }
         return
     }
+    $null = Get-VxScArgs $Start
+    $native = Initialize-VxServiceNative
+    if ($native) {
+        $num = switch ($Start) { 'Automatic' { 2 } 'AutomaticDelayed' { 2 } 'Manual' { 3 } 'Disabled' { 4 } }
+        $del = -1
+        if ($Start -eq 'Automatic') { $del = 0 } elseif ($Start -eq 'AutomaticDelayed') { $del = 1 }
+        $code = -1
+        try { $code = [int][VxNative.Svc]::SetStart($Name, [uint32]$num, [int]$del) } catch { $code = -1 }
+        if ($code -eq 1060) { throw ("Dienst '$Name' gibt es auf diesem PC nicht.") }
+        if ($code -ne 0) {
+            # protected services refuse the SCM even for admins; the registry values still work after a reboot
+            try { Set-VxServiceStartRegistry $Name $Start }
+            catch { throw ("Starttyp von Dienst '$Name' konnte nicht geändert werden (Code $code): " + $_.Exception.Message) }
+        }
+        if ($StopNow) {
+            $s = -1
+            try { $s = [int][VxNative.Svc]::Stop($Name) } catch { $s = -1 }
+            # 1062 = not started; anything else (1051 dependants running, 1052 cannot stop ...) works after a reboot
+            if ($s -ne 0 -and $s -ne 1062) { Write-VxLog 'warn' "Dienst $Name konnte nicht sofort gestoppt werden (Code $s) – wirkt nach dem Neustart." }
+        }
+        if ($StartNow) {
+            $s2 = -1
+            try { $s2 = [int][VxNative.Svc]::Start($Name) } catch { $s2 = -1 }
+            if ($s2 -ne 0 -and $s2 -ne 1056) { Write-VxLog 'warn' "Dienst $Name konnte nicht gestartet werden (Code $s2) – startet nach dem Neustart." }
+        }
+        return
+    }
+    Set-VxServiceStartSc $Name $Start $StopNow $StartNow
+}
+
+function Set-VxServiceStartRegistry([string]$Name, [string]$Start) {
+    $path = 'HKLM\SYSTEM\CurrentControlSet\Services\' + $Name
+    $num = switch ($Start) { 'Automatic' { 2 } 'AutomaticDelayed' { 2 } 'Manual' { 3 } 'Disabled' { 4 } }
+    Set-VxRealRegValue $path 'Start' 'DWord' $num
+    if ($Start -eq 'AutomaticDelayed') { Set-VxRealRegValue $path 'DelayedAutostart' 'DWord' 1 }
+    elseif ($Start -eq 'Automatic') {
+        $d = Get-VxRealRegValue $path 'DelayedAutostart'
+        if ($d.exists) { Set-VxRealRegValue $path 'DelayedAutostart' 'DWord' 0 }
+    }
+}
+
+# Fallback when the native interface cannot be compiled: sc.exe, one process per call.
+function Set-VxServiceStartSc([string]$Name, [string]$Start, [bool]$StopNow, [bool]$StartNow) {
     $sc = Get-VxSystemTool 'sc.exe'
     $r = Invoke-VxNative -FilePath $sc -Arguments @('config', $Name, 'start=', (Get-VxScArgs $Start)) -TimeoutSec 30
     if ($r.ExitCode -ne 0) {
@@ -733,8 +873,41 @@ function Test-VxScheduledTasksModule {
     return $c.schedModule
 }
 
+# Task Scheduler COM object (Schedule.Service), connected once per job: GetTask + Enabled take a
+# millisecond, while Get-/Disable-ScheduledTask load a CIM module and cost 100-300 ms per call.
+# Lives in the job runspace ($global:VxTaskService, reset by Invoke-VxJobBody), never in VxCtx.
+function Get-VxTaskService {
+    if (-not (Test-VxWindows)) { return $null }
+    if ($global:VxTaskServiceFailed) { return $null }
+    if ($null -ne $global:VxTaskService) { return $global:VxTaskService }
+    try {
+        $svc = New-Object -ComObject 'Schedule.Service'
+        $svc.Connect()
+        $global:VxTaskService = $svc
+        return $svc
+    } catch {
+        $global:VxTaskServiceFailed = $true
+        Write-VxFileLog 'warn' ('Aufgabenplanung (COM) nicht verfügbar, nutze das ScheduledTasks-Modul: ' + $_.Exception.Message)
+        return $null
+    }
+}
+
+# The registered task, or $null when it (or its folder) does not exist or cannot be read.
+function Get-VxComTask($Service, [string]$Path) {
+    $sp = Split-VxTaskPath $Path
+    $folder = $sp.TaskPath.TrimEnd('\')
+    if (-not $folder) { $folder = '\' }
+    try { return $Service.GetFolder($folder).GetTask($sp.TaskName) } catch { return $null }
+}
+
 # $true (enabled) / $false (disabled) / $null (missing or unreadable)
 function Get-VxRealTaskState([string]$Path) {
+    $svc = Get-VxTaskService
+    if ($null -ne $svc) {
+        $t = Get-VxComTask $svc $Path
+        if ($null -eq $t) { return $null }
+        try { return [bool]$t.Enabled } catch { return $null }
+    }
     $sp = Split-VxTaskPath $Path
     if (Test-VxScheduledTasksModule) {
         try {
@@ -769,6 +942,14 @@ function Set-VxTaskState([string]$Path, [bool]$Enabled) {
         if (-not ($ctx.Sim.task -is [hashtable])) { $ctx.Sim.task = @{} }
         $ctx.Sim.task[$Path.ToLowerInvariant()] = $Enabled
         return
+    }
+    $svc = Get-VxTaskService
+    if ($null -ne $svc) {
+        $t = Get-VxComTask $svc $Path
+        if ($null -ne $t) {
+            try { $t.Enabled = $Enabled; return }
+            catch { Write-VxFileLog 'warn' ("Aufgabe {0} über COM nicht änderbar, versuche das Modul: {1}" -f $Path, $_.Exception.Message) }
+        }
     }
     $sp = Split-VxTaskPath $Path
     if (Test-VxScheduledTasksModule) {
@@ -893,9 +1074,10 @@ function Set-VxBcdValue([string]$Name, [string]$Value) {
         return
     }
     Confirm-VxBitLockerForBcd $Name
-    $ctx.Cache.Remove('bcd')
     $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'bcdedit.exe') -Arguments @('/set', '{current}', $Name, $Value) -TimeoutSec 30
-    if ($r.ExitCode -ne 0) { throw ("bcdedit /set $Name fehlgeschlagen: " + ($r.Output + $r.Error).Trim()) }
+    if ($r.ExitCode -ne 0) { $ctx.Cache.Remove('bcd'); throw ("bcdedit /set $Name fehlgeschlagen: " + ($r.Output + $r.Error).Trim()) }
+    # keep the job's bcdedit /enum result instead of reading all boot settings again
+    if ($ctx.Cache.bcd -is [hashtable]) { $ctx.Cache.bcd[$Name.ToLowerInvariant()] = $Value }
 }
 
 function Remove-VxBcdValue([string]$Name) {
@@ -906,7 +1088,6 @@ function Remove-VxBcdValue([string]$Name) {
         return
     }
     Confirm-VxBitLockerForBcd $Name
-    $ctx.Cache.Remove('bcd')
     $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'bcdedit.exe') -Arguments @('/deletevalue', '{current}', $Name) -TimeoutSec 30
     # deleting a value that is not set returns an error - treat as success when it is gone
     if ($r.ExitCode -ne 0) {
@@ -914,7 +1095,9 @@ function Remove-VxBcdValue([string]$Name) {
         $still = $null
         try { $still = Get-VxBcdValue $Name } catch { $still = $null }
         if ($null -ne $still) { throw ("bcdedit /deletevalue $Name fehlgeschlagen: " + ($r.Output + $r.Error).Trim()) }
+        return
     }
+    if ($ctx.Cache.bcd -is [hashtable]) { $ctx.Cache.bcd.Remove($Name.ToLowerInvariant()) }
 }
 
 # ================================================================== power plans
@@ -1065,10 +1248,101 @@ function Get-VxPowerSetting([string]$Subgroup, [string]$Setting, $Default = $nul
         }
     }
     $target = $Scheme
-    if (-not $target) { $target = 'SCHEME_CURRENT' }
+    if (-not $target) { $target = Get-VxActiveSchemeGuid }
+    if (-not $target) {
+        $r0 = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/query', 'SCHEME_CURRENT', $Subgroup, $Setting) -TimeoutSec 20
+        if ($r0.ExitCode -ne 0) { return $null }
+        return (ConvertFrom-VxPowercfgQuery $r0.Output)
+    }
+    # one "powercfg /qh <scheme>" per scheme and job instead of one process per setting
+    $dump = Get-VxPowerDump $target
+    $k = (Get-VxPowerKey $Subgroup $Setting)
+    if ($dump.ContainsKey($k)) {
+        $v = $dump[$k]
+        if ($null -eq $v) { return $null }
+        return @{ ac = $v.ac; dc = $v.dc }
+    }
+    # not in the listing (or the listing could not be parsed): ask for this one setting
     $r = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/query', $target, $Subgroup, $Setting) -TimeoutSec 20
-    if ($r.ExitCode -ne 0) { return $null }
-    return (ConvertFrom-VxPowercfgQuery $r.Output)
+    $val = $null
+    if ($r.ExitCode -eq 0) { $val = ConvertFrom-VxPowercfgQuery $r.Output }
+    $dump[$k] = $val
+    if ($null -eq $val) { return $null }
+    return @{ ac = $val.ac; dc = $val.dc }
+}
+
+function Get-VxPowerKey([string]$Subgroup, [string]$Setting) { return ($Subgroup + '|' + $Setting).ToLowerInvariant() }
+
+# All AC/DC values of one scheme from a single "powercfg /qh" (hidden settings included), keyed by
+# subgroup|setting with GUIDs and aliases (SUB_PROCESSOR|PERFBOOSTMODE). Cached per job.
+function Get-VxPowerDump([string]$Scheme) {
+    $c = $global:VxCtx.Cache
+    if (-not ($c.pwsDump -is [hashtable])) { $c.pwsDump = @{} }
+    $key = $Scheme.ToLowerInvariant()
+    if ($c.pwsDump.ContainsKey($key)) { return $c.pwsDump[$key] }
+    $t = @{}
+    $r = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/qh', $Scheme) -TimeoutSec 30
+    if ($r.ExitCode -eq 0) { try { $t = ConvertFrom-VxPowercfgDump $r.Output } catch { $t = @{} } }
+    $c.pwsDump[$key] = $t
+    return $t
+}
+
+# Parses a full powercfg listing independent of the UI language: the structure is GUID lines
+# (scheme, then indented subgroups, then further indented settings), each followed by an
+# optional alias line, and the last two 0x numbers of a setting block are AC and DC.
+function ConvertFrom-VxPowercfgDump([string]$Text) {
+    $out = @{}
+    $guidRx = '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
+    $schemeIndent = -1
+    $subIndent = -1
+    $sub = @()
+    $set = @()
+    $nums = New-Object System.Collections.Generic.List[string]
+    $expectAlias = ''
+    $flush = {
+        if ($set.Count -gt 0 -and $sub.Count -gt 0 -and $nums.Count -ge 2) {
+            $v = @{ ac = [Convert]::ToInt64($nums[$nums.Count - 2], 16); dc = [Convert]::ToInt64($nums[$nums.Count - 1], 16) }
+            foreach ($a in $sub) { foreach ($b in $set) { $out[($a + '|' + $b).ToLowerInvariant()] = $v } }
+        }
+    }
+    foreach ($line in ($Text -split "\r?\n")) {
+        if (-not $line.Trim()) { continue }
+        $indent = $line.Length - $line.TrimStart().Length
+        $g = [regex]::Match($line, $guidRx)
+        if ($g.Success) {
+            if ($schemeIndent -lt 0) { $schemeIndent = $indent; $expectAlias = ''; continue }
+            if ($subIndent -lt 0 -and $indent -gt $schemeIndent) { $subIndent = $indent }
+            if ($indent -le $subIndent) {
+                & $flush
+                $sub = @($g.Value); $set = @(); $nums.Clear(); $expectAlias = 'sub'
+            } else {
+                & $flush
+                $set = @($g.Value); $nums.Clear(); $expectAlias = 'set'
+            }
+            continue
+        }
+        if ($expectAlias) {
+            $m = [regex]::Match($line, ':\s*([A-Z][A-Z0-9_]+)\s*$')
+            if ($m.Success) {
+                if ($expectAlias -eq 'sub') { $sub = @($sub) + @($m.Groups[1].Value) } else { $set = @($set) + @($m.Groups[1].Value) }
+                $expectAlias = ''
+                continue
+            }
+            $expectAlias = ''
+        }
+        foreach ($n in [regex]::Matches($line, '0x([0-9a-fA-F]+)')) { $nums.Add($n.Groups[1].Value) }
+    }
+    & $flush
+    return $out
+}
+
+# The deferred "/setactive SCHEME_CURRENT" after power settings were written into the active
+# scheme (once per job instead of once per setting). Called by Invoke-VxJobBody.
+function Complete-VxPowerChanges {
+    $c = $global:VxCtx.Cache
+    if (-not $c.ContainsKey('pwsActivate') -or -not $c.pwsActivate) { return }
+    $c.pwsActivate = $false
+    $null = Invoke-VxNative -FilePath (Get-VxPowercfg) -Arguments @('/setactive', 'SCHEME_CURRENT') -TimeoutSec 20
 }
 
 # Writes AC and/or DC ($null = leave that half alone) into the given scheme ('' = the active one).
@@ -1094,15 +1368,32 @@ function Set-VxPowerSetting([string]$Subgroup, [string]$Setting, $Ac, $Dc, [stri
         $active = Get-VxActiveSchemeGuid
         $isActive = (-not $active -or [string]::Equals($active, $target, [StringComparison]::OrdinalIgnoreCase))
     } else { $target = 'SCHEME_CURRENT' }
+    $dumpKey = $target
+    if ($target -eq 'SCHEME_CURRENT') { $dumpKey = Get-VxActiveSchemeGuid }
+    $cached = $null
+    if ($dumpKey -and $ctx.Cache.pwsDump -is [hashtable] -and $ctx.Cache.pwsDump.ContainsKey($dumpKey.ToLowerInvariant())) {
+        $cached = $ctx.Cache.pwsDump[$dumpKey.ToLowerInvariant()]
+    }
+    $k = Get-VxPowerKey $Subgroup $Setting
     if ($null -ne $Ac) {
         $r = Invoke-VxNative -FilePath $pc -Arguments @('/setacvalueindex', $target, $Subgroup, $Setting, [string]$Ac) -TimeoutSec 20
-        if ($r.ExitCode -ne 0) { throw ('powercfg (Netzbetrieb) fehlgeschlagen: ' + ($r.Output + $r.Error).Trim()) }
+        if ($r.ExitCode -ne 0) { if ($null -ne $cached) { $cached.Remove($k) }; throw ('powercfg (Netzbetrieb) fehlgeschlagen: ' + ($r.Output + $r.Error).Trim()) }
     }
     if ($null -ne $Dc) {
         $r2 = Invoke-VxNative -FilePath $pc -Arguments @('/setdcvalueindex', $target, $Subgroup, $Setting, [string]$Dc) -TimeoutSec 20
-        if ($r2.ExitCode -ne 0) { throw ('powercfg (Akkubetrieb) fehlgeschlagen: ' + ($r2.Output + $r2.Error).Trim()) }
+        if ($r2.ExitCode -ne 0) { if ($null -ne $cached) { $cached.Remove($k) }; throw ('powercfg (Akkubetrieb) fehlgeschlagen: ' + ($r2.Output + $r2.Error).Trim()) }
     }
-    if ($isActive) { $null = Invoke-VxNative -FilePath $pc -Arguments @('/setactive', 'SCHEME_CURRENT') -TimeoutSec 20 }
+    # the listing of this job now holds the written values (exit code 0 = powercfg stored them);
+    # every alias/GUID spelling of the setting shares one value object
+    if ($null -ne $cached -and $cached.ContainsKey($k) -and $null -ne $cached[$k]) {
+        if ($null -ne $Ac) { $cached[$k].ac = [long]$Ac }
+        if ($null -ne $Dc) { $cached[$k].dc = [long]$Dc }
+    } elseif ($null -ne $cached) { $cached.Remove($k) }
+    if ($isActive) {
+        # one "/setactive" per job (Complete-VxPowerChanges) - outside a job right away
+        if ($null -ne $global:VxJob) { $ctx.Cache.pwsActivate = $true }
+        else { $null = Invoke-VxNative -FilePath $pc -Arguments @('/setactive', 'SCHEME_CURRENT') -TimeoutSec 20 }
+    }
 }
 
 # Older Testmodus overlays stored power settings without a scheme: they belonged to the plan that
@@ -1164,19 +1455,27 @@ function Set-VxFeatureState([string]$Name, [bool]$Enabled) {
         $ctx.Sim.feature[$Name.ToLowerInvariant()] = $Enabled
         return
     }
-    $ctx.Cache.Remove('features')
+    $done = $false
     try {
         if ($Enabled) { $null = Enable-WindowsOptionalFeature -Online -FeatureName $Name -All -NoRestart -WarningAction SilentlyContinue -ErrorAction Stop }
         else { $null = Disable-WindowsOptionalFeature -Online -FeatureName $Name -NoRestart -WarningAction SilentlyContinue -ErrorAction Stop }
-        return
+        $done = $true
     } catch {
         Write-VxLog 'warn' ('DISM-Modul fehlgeschlagen, versuche dism.exe: ' + $_.Exception.Message)
     }
-    $a = @('/Online', '/Disable-Feature', "/FeatureName:$Name", '/NoRestart', '/Quiet')
-    if ($Enabled) { $a = @('/Online', '/Enable-Feature', "/FeatureName:$Name", '/All', '/NoRestart', '/Quiet') }
-    $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'dism.exe') -Arguments $a -TimeoutSec 900
-    # 3010 = success, reboot required
-    if ($r.ExitCode -ne 0 -and $r.ExitCode -ne 3010) { throw ("Windows-Feature '$Name' konnte nicht geändert werden (Code $($r.ExitCode)).") }
+    if (-not $done) {
+        $a = @('/Online', '/Disable-Feature', "/FeatureName:$Name", '/NoRestart', '/Quiet')
+        if ($Enabled) { $a = @('/Online', '/Enable-Feature', "/FeatureName:$Name", '/All', '/NoRestart', '/Quiet') }
+        $r = Invoke-VxNative -FilePath (Get-VxSystemTool 'dism.exe') -Arguments $a -TimeoutSec 900
+        # 3010 = success, reboot required
+        if ($r.ExitCode -ne 0 -and $r.ExitCode -ne 3010) { $ctx.Cache.Remove('features'); throw ("Windows-Feature '$Name' konnte nicht geändert werden (Code $($r.ExitCode)).") }
+    }
+    # the feature list of this job knows the new state - no second full DISM listing
+    if ($ctx.Cache.features -is [hashtable]) {
+        $st = 'Disabled'
+        if ($Enabled) { $st = 'Enabled' }
+        $ctx.Cache.features[$Name.ToLowerInvariant()] = $st
+    }
 }
 
 # ================================================================== Appx packages
@@ -1220,7 +1519,6 @@ function Remove-VxAppxPackage([string]$Package) {
         $ctx.Sim.appx[$Package.ToLowerInvariant()] = $false
         return
     }
-    $ctx.Cache.Remove('appx')
     $errors = @()
     $pkgs = @()
     try { $pkgs = @(Get-AppxPackage -AllUsers -Name $Package -ErrorAction Stop) } catch { $pkgs = @(Get-AppxPackage -Name $Package -ErrorAction SilentlyContinue) }
@@ -1242,8 +1540,11 @@ function Remove-VxAppxPackage([string]$Package) {
     } catch { Write-VxLog 'warn' ('Bereitgestellte Pakete konnten nicht gelesen werden: ' + $_.Exception.Message) }
     if ($errors.Count -gt 0 -and $pkgs.Count -gt 0) {
         $still = @(Get-AppxPackage -AllUsers -Name $Package -ErrorAction SilentlyContinue)
-        if ($still.Count -gt 0) { throw ("App '$Package' konnte nicht entfernt werden: " + ($errors -join '; ')) }
+        if ($still.Count -gt 0) { $ctx.Cache.Remove('appx'); throw ("App '$Package' konnte nicht entfernt werden: " + ($errors -join '; ')) }
     }
+    # the app list of this job stays valid: only this package is gone (Get-AppxPackage -AllUsers
+    # takes seconds, it must not run again after every removed app)
+    if ($ctx.Cache.appx -is [hashtable]) { $ctx.Cache.appx.Remove($Package.ToLowerInvariant()) }
 }
 
 # ================================================================== OS build

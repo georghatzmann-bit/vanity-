@@ -6,7 +6,7 @@
 .EXAMPLE
   pwsh tests/Run-Tests.ps1
   pwsh tests/Run-Tests.ps1 -Strict          # also fail when the real data/ catalog has errors
-  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, server, review)
+  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games)
 #>
 param(
     [switch]$Strict,
@@ -868,6 +868,7 @@ function Start-MockAnthropic {
             if ($state.queue.Count -gt 0) { $resp = $state.queue[0]; $state.queue.RemoveAt(0) }
             $bytes = [Text.Encoding]::UTF8.GetBytes([string]$resp.body)
             $c.Response.StatusCode = [int]$resp.status
+            if ($resp.ContainsKey('headers')) { foreach ($hk in @($resp.headers.Keys)) { $c.Response.AddHeader([string]$hk, [string]$resp.headers[$hk]) } }
             $c.Response.ContentType = 'application/json'
             $c.Response.ContentLength64 = $bytes.Length
             $c.Response.OutputStream.Write($bytes, 0, $bytes.Length)
@@ -901,6 +902,10 @@ function New-MockMessage([string]$Text, [string]$StopReason = 'end_turn') {
 }
 
 $claudeFix = Join-Path (Join-Path $TestRoot 'fixtures') 'claude'
+# fake Claude Code CLI (tests/fixtures/claude-cli): the real CLI must never run a prompt in the tests
+$FakeClaudeDir = Join-Path (Join-Path $TestRoot 'fixtures') 'claude-cli'
+$FakeClaudeCli = Join-Path $FakeClaudeDir 'claude'
+if (Test-VxWindows) { $FakeClaudeCli = Join-Path $FakeClaudeDir 'claude.cmd' }
 
 Test-Case 'claude' 'Key-Speicher: verschlüsselt/kodiert, nie im Klartext, ungültige Keys abgelehnt' {
     $null = New-TestContext
@@ -1079,6 +1084,12 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.EnvironmentVariables['VELOX_DATA_DIR'] = $FixtureData
+    # KI: the fake Claude Code CLI comes first on PATH - the real one is never run by the tests
+    $psi.EnvironmentVariables['PATH'] = $FakeClaudeDir + [IO.Path]::PathSeparator + [Environment]::GetEnvironmentVariable('PATH')
+    $psi.EnvironmentVariables['VELOX_CLAUDE_CLI'] = $FakeClaudeCli
+    $psi.EnvironmentVariables['VELOX_CLAUDE_CLI_ONLY'] = '1'
+    # games: the fixture PC also on Windows (Testmodus only)
+    $psi.EnvironmentVariables['VELOX_GAMES_FIXTURE'] = (Join-Path (Join-Path (Join-Path $TestRoot 'fixtures') 'games') 'pc')
     $proc = [System.Diagnostics.Process]::Start($psi)
     $errTask = $proc.StandardError.ReadToEndAsync()
     try {
@@ -1187,6 +1198,25 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         Assert-True (@($sl.result.items).Count -ge 6) 'startup-list'
         $gd = Start-JobAndWait $base $H 'games-detect' @{}
         Assert-True (@($gd.result.games).Count -ge 3) 'games-detect'
+        # ---- game art: token as ?t= (an <img> sends no headers), only ids of detected games
+        $cs2 = @($gd.result.games | Where-Object { $_.exe -eq 'cs2.exe' })[0]
+        Assert-True ($null -ne $cs2 -and $cs2.art.cover -and $cs2.art.icon -and $cs2.art.v) 'games-detect meldet Bilder'
+        $artBase = $base + 'api/game-art/' + $cs2.id
+        $ga = Invoke-Http 'GET' ($artBase + '?kind=cover&v=' + $cs2.art.v + '&t=' + $token)
+        Assert-True ($ga.status -eq 200 -and $ga.contentType -eq 'image/jpeg' -and $ga.cache -match 'max-age' -and $ga.text.Length -gt 1000) ('Titelbild (' + $ga.status + ' ' + $ga.contentType + ')')
+        Assert-Equal 'image/jpeg' (Invoke-Http 'GET' ($artBase + '?kind=icon&t=' + $token)).contentType 'Icon'
+        Assert-Equal 200 (Invoke-Http 'GET' ($artBase + '?kind=cover') $null $H).status 'Token auch als Header'
+        Assert-Equal 401 (Invoke-Http 'GET' ($artBase + '?kind=cover')).status 'ohne Token 401'
+        Assert-Equal 401 (Invoke-Http 'GET' ($artBase + '?kind=cover&t=falsch')).status 'falsches Token 401'
+        Assert-Equal 401 (Invoke-Http 'POST' ($artBase + '?kind=cover&t=' + $token)).status 'POST mit ?t= 401'
+        Assert-Equal 400 (Invoke-Http 'GET' ($artBase + '?kind=datei&t=' + $token)).status 'unbekannte Bildart 400'
+        Assert-Equal 404 (Invoke-Http 'GET' ($base + 'api/game-art/ffffffffff?kind=cover&t=' + $token)).status 'unbekannte id 404'
+        Assert-Equal 404 (Invoke-Http 'GET' ($base + 'api/game-art/..%2F..%2Fsystem.json?kind=cover&t=' + $token)).status 'Pfad statt id 404'
+        Assert-Equal 404 (Invoke-Http 'GET' ($base + 'api/game-art/%2E%2E%5Cstate-sim.json?kind=icon&t=' + $token)).status 'Backslash-Pfad 404'
+        $gg = @($gd.result.games | Where-Object { $_.exe -eq 'LanternKeep.exe' })[0]
+        Assert-Equal 'image/x-icon' (Invoke-Http 'GET' ($base + 'api/game-art/' + $gg.id + '?kind=icon&t=' + $token)).contentType 'GOG-.ico'
+        $none = @($gd.result.games | Where-Object { -not $_.art.cover -and -not $_.art.icon })[0]
+        Assert-Equal 404 (Invoke-Http 'GET' ($base + 'api/game-art/' + $none.id + '?kind=cover&t=' + $token)).status 'Spiel ohne Bild 404'
         $rp = Start-JobAndWait $base $H 'restorepoint' @{ label = 'Test' }
         Assert-True ($rp.result.ok -eq $true -and $rp.result.message) 'restorepoint (simuliert)'
         $pf = Start-JobAndWait $base $H 'pick-file' @{}
@@ -1212,6 +1242,19 @@ Test-Case 'server' 'Velox.ps1 -Simulate -NoBrowser: Sicherheit, API, Jobs, Backu
         Assert-True (-not (Invoke-Http 'GET' ($base + 'api/bootstrap') $null $H).text.Contains('E2EKEY')) 'Key nie im bootstrap'
         $k = Invoke-Http 'DELETE' ($base + 'api/claude/key') $null $H
         Assert-True ($k.json.hasKey -eq $false) 'Key gelöscht'
+        # ---- KI providers: Groq key, ai settings, ai-status with the fake Claude Code CLI
+        $k = Invoke-Http 'POST' ($base + 'api/ai/key/groq') @{ key = 'sk-ant-falsch' } $H
+        Assert-True ($k.status -eq 400 -and $k.json.error -match 'gsk_') 'falscher Groq-Key -> 400'
+        $k = Invoke-Http 'POST' ($base + 'api/ai/key/groq') @{ key = 'gsk_E2EGROQ0123456789abcdefABCDEF' } $H
+        Assert-True ($k.json.hasKey -eq $true -and $k.json.settings.ai.groq.hasKey -eq $true -and -not $k.text.Contains('E2EGROQ')) 'Groq-Key gespeichert, nicht zurückgegeben'
+        $k = Invoke-Http 'DELETE' ($base + 'api/ai/key/groq') $null $H
+        Assert-True ($k.json.hasKey -eq $false -and $k.json.settings.ai.groq.hasKey -eq $false) 'Groq-Key gelöscht'
+        Assert-Equal 405 (Invoke-Http 'GET' ($base + 'api/ai/key/groq') $null $H).status 'GET auf Key -> 405'
+        $s = Invoke-Http 'POST' ($base + 'api/settings') @{ ai = @{ provider = 'claude-code'; claudeCode = @{ model = 'haiku' }; groq = @{ model = 'openai/gpt-oss-20b'; hasKey = $true } } } $H
+        Assert-True ($s.json.settings.ai.provider -eq 'claude-code' -and $s.json.settings.ai.claudeCode.model -eq 'haiku' -and $s.json.settings.ai.groq.model -eq 'openai/gpt-oss-20b' -and $s.json.settings.ai.groq.hasKey -eq $false) 'ai-Einstellungen'
+        $as = Start-JobAndWait $base $H 'ai-status' @{}
+        $ccRow = @($as.result.providers | Where-Object { $_.id -eq 'claude-code' })[0]
+        Assert-True ($ccRow.ready -eq $true -and $ccRow.account -eq 'gamer@example.com' -and @($as.result.providers).Count -eq 4) ('ai-status mit Fake-CLI: ' + $ccRow.message)
         $o = Invoke-Http 'POST' ($base + 'api/open') @{ target = 'ms-settings:display-advanced' } $H
         Assert-True ($o.status -eq 200 -and $o.json.ok) 'open whitelist'
         $o = Invoke-Http 'POST' ($base + 'api/open') @{ target = 'calc.exe' } $H
@@ -1643,8 +1686,14 @@ Test-Case 'review' 'Cache: jeder Job und jedes Skript liest Energieplan/BCD neu'
     $ctx = New-TestContext
     $ctx.Cache.activePlan = @{ guid = 'stale'; name = 'alt' }
     $ctx.Cache.bcd = @{ useplatformclock = 'Yes' }
+    $ctx.Cache.appx = @{ 'microsoft.bingnews' = $true }
     $null = Invoke-VxPsSource '$null = 1'
-    Assert-True (-not $ctx.Cache.ContainsKey('activePlan') -and -not $ctx.Cache.ContainsKey('bcd')) 'nach Skript geleert'
+    Assert-True ($ctx.Cache.ContainsKey('activePlan') -and $ctx.Cache.ContainsKey('bcd')) 'ein Skript ohne powercfg/bcdedit lässt den Cache stehen'
+    $null = Invoke-VxPsSource '$exe = "powercfg.exe"; $null = $exe' -ReadOnly
+    Assert-True ($ctx.Cache.ContainsKey('activePlan')) 'Erkennungs-Skripte (nur lesen) lassen den Cache stehen'
+    $null = Invoke-VxPsSource '$a = "powercfg"; $b = "bcdedit"; $null = $a + $b'
+    Assert-True (-not $ctx.Cache.ContainsKey('activePlan') -and -not $ctx.Cache.ContainsKey('bcd')) 'nach powercfg/bcdedit-Skript geleert'
+    Assert-True ($ctx.Cache.ContainsKey('appx')) 'App-Liste bleibt, das Skript fasst keine Apps an'
     $ctx.Cache.activePlan = @{ guid = 'stale'; name = 'alt' }
     $job = [hashtable]::Synchronized(@{ id = 'x'; type = 'startup-list'; status = 'running'; progress = 0.0; step = ''; log = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); nextIndex = 0; result = $null; error = $null; cancel = $false; lockObj = (New-Object object); params = @{} })
     $global:VxJob = $job
@@ -1725,16 +1774,20 @@ Test-Case 'review' 'Kleinkram: BitLocker-Liste, Codepage, Wildcard ohne Leserech
     [Environment]::SetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL', 'http://evil.example')
     try { Assert-Equal 'https://api.anthropic.com' (Get-VxClaudeBaseUrl) 'Test-Umleitung im echten Modus ignoriert' }
     finally { [Environment]::SetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL', $null); $ctx.Simulate = $true; $ctx.Windows = $false }
-    # automatic restore point also before boost / autostart / cleanup jobs
+    # boost / autostart / cleanup jobs never add a restore point - only the one baseline before the
+    # very first change (whatever job that is)
+    $ctx.Sim.rp = @{ next = 1; items = @() }
+    $ctx.State.restorePointBaseline = $null
+    $ctx.RestorePointTried = $false
     foreach ($case in @('game', 'startup', 'clean')) {
-        $ctx.RestorePointDone = $false
         switch ($case) {
             'game' { $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = 'C:\Games\X\x.exe'; priority = $true }) }
             'startup' { $it = @(Get-VxStartupItems)[0]; if ($null -eq $it) { Initialize-VxSimSeed; $it = @(Get-VxStartupItems)[0] }; $null = Invoke-VxStartupSetJob ([pscustomobject]@{ id = $it.id; enabled = $false }) }
             'clean' { $null = Invoke-VxRunActionJob ([pscustomobject]@{ ids = @('cleanup.temp') }) }
         }
-        Assert-True $ctx.RestorePointDone ("Wiederherstellungspunkt vor '{0}'" -f $case)
+        Assert-Equal 1 @($ctx.Sim.rp.items).Count ("nur der Basis-Punkt nach '{0}'" -f $case)
     }
+    Assert-Equal 'created' ([string]$ctx.State.restorePointBaseline.status) 'Basis-Punkt vor der ersten Änderung'
     # core text is read once and reused by job runspaces
     $ctx.CoreSources = @('function Get-VxMarker { 1 }')
     Assert-Equal @('function Get-VxMarker { 1 }') @(Get-VxCoreSources) 'gespeicherter Quelltext'
@@ -1743,6 +1796,836 @@ Test-Case 'review' 'Kleinkram: BitLocker-Liste, Codepage, Wildcard ohne Leserech
     $vx = [IO.File]::ReadAllText((Join-Path $AppRoot 'Velox.ps1'))
     Assert-True ($vx -notmatch 'LiteralPath \$VxRoot -Recurse') 'Unblock nicht rekursiv über den Startordner'
     Assert-True ($vx -notmatch "'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths") 'kein Browser aus HKCU'
+}
+
+# ==================================================================== restore points
+
+# A job object like Start-VxJob creates, for running Invoke-VxJobBody in-process.
+function New-TestJob([string]$Type, $Params) {
+    return [hashtable]::Synchronized(@{
+            id = (New-VxRandomHex 8); type = $Type; status = 'running'; progress = 0.0; step = ''
+            log = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList)); nextIndex = 0
+            result = $null; error = $null; cancel = $false; lockObj = (New-Object object); params = $Params
+            skippable = $false; skip = $false; durationMs = $null; startTicks = [DateTime]::UtcNow.Ticks
+        })
+}
+
+function Invoke-TestJob([string]$Type, $Params) {
+    $job = New-TestJob $Type $Params
+    $global:VxJob = $job
+    try { Invoke-VxJobBody } finally { $global:VxJob = $null }
+    return $job
+}
+
+# ==================================================================== ai (KI providers)
+# Runs the fake CLI with a clean PATH (fake first) and the given fake mode; restores everything.
+function Use-FakeClaude([string]$Mode, [scriptblock]$Body, [switch]$NoCli) {
+    $oldPath = [Environment]::GetEnvironmentVariable('PATH')
+    $oldCli = [Environment]::GetEnvironmentVariable('VELOX_CLAUDE_CLI')
+    $oldMode = [Environment]::GetEnvironmentVariable('VELOX_FAKE_CLAUDE_MODE')
+    $oldLog = [Environment]::GetEnvironmentVariable('VELOX_FAKE_CLAUDE_LOG')
+    $oldOnly = [Environment]::GetEnvironmentVariable('VELOX_CLAUDE_CLI_ONLY')
+    $log = Join-Path (New-TempDir 'fakeclaude') 'calls.jsonl'
+    try {
+        # only the override and PATH count: a real Claude Code on a developer PC is never used
+        [Environment]::SetEnvironmentVariable('VELOX_CLAUDE_CLI_ONLY', '1')
+        if ($NoCli) {
+            # an empty PATH folder: neither the fake nor a real CLI can be found
+            [Environment]::SetEnvironmentVariable('PATH', (New-TempDir 'nopath'))
+            [Environment]::SetEnvironmentVariable('VELOX_CLAUDE_CLI', $null)
+        } else {
+            [Environment]::SetEnvironmentVariable('PATH', ($FakeClaudeDir + [IO.Path]::PathSeparator + $oldPath))
+            [Environment]::SetEnvironmentVariable('VELOX_CLAUDE_CLI', $null)
+        }
+        [Environment]::SetEnvironmentVariable('VELOX_FAKE_CLAUDE_MODE', $Mode)
+        [Environment]::SetEnvironmentVariable('VELOX_FAKE_CLAUDE_LOG', $log)
+        & $Body $log
+    } finally {
+        [Environment]::SetEnvironmentVariable('PATH', $oldPath)
+        [Environment]::SetEnvironmentVariable('VELOX_CLAUDE_CLI', $oldCli)
+        [Environment]::SetEnvironmentVariable('VELOX_FAKE_CLAUDE_MODE', $oldMode)
+        [Environment]::SetEnvironmentVariable('VELOX_FAKE_CLAUDE_LOG', $oldLog)
+        [Environment]::SetEnvironmentVariable('VELOX_CLAUDE_CLI_ONLY', $oldOnly)
+    }
+}
+
+function Read-FakeClaudeCalls([string]$Log) {
+    if (-not [IO.File]::Exists($Log)) { return @() }
+    return @([IO.File]::ReadAllLines($Log, [Text.Encoding]::UTF8) | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
+}
+
+function Get-AiError([scriptblock]$Body) {
+    $msg = ''
+    try { $null = & $Body } catch { $msg = $_.Exception.Message }
+    return $msg
+}
+
+$groqKey = 'gsk_TESTGROQ0123456789abcdefABCDEFxyz'
+function New-GroqChat([string]$Content, [string]$Model = 'openai/gpt-oss-120b', [string]$Finish = 'stop') {
+    $m = [ordered]@{ id = 'chatcmpl-test'; object = 'chat.completion'; model = $Model
+        choices = @([ordered]@{ index = 0; message = [ordered]@{ role = 'assistant'; content = $Content }; finish_reason = $Finish })
+        usage = [ordered]@{ prompt_tokens = 3100; completion_tokens = 700; total_tokens = 3800 } }
+    return (ConvertTo-Json -InputObject $m -Depth 10 -Compress)
+}
+$groqModels = '{"object":"list","data":[{"id":"whisper-large-v3","active":true},{"id":"llama-3.1-8b-instant","active":true},{"id":"openai/gpt-oss-20b","active":true},{"id":"openai/gpt-oss-120b","active":true},{"id":"meta-llama/llama-prompt-guard-2-86m","active":true},{"id":"some/new-model","active":true}]}'
+
+Test-Case 'ai' 'Gleiche Regeln für alle Anbieter, kompakte Liste für Groq, ai-Einstellungen' {
+    $ctx = New-TestContext
+    foreach ($mode in @('full', 'compact')) {
+        $r = Get-VxAiRulesText $mode
+        foreach ($w in @('ONLY', 'risky', 'laptop-bad', 'X3D', 'simple German', '"du"', 'allowRisky', 'free text')) { Assert-True ($r.Contains($w)) "$mode-Regeln enthalten $w" }
+    }
+    Assert-Equal (Get-VxAiRulesText 'full') (Get-VxClaudeSystemText) 'Claude-API nutzt dieselben Regeln'
+    $prof = $ctx.State.profile
+    Set-VxRegValue 'HKCU\System\GameConfigStore' 'GameDVR_Enabled' 'DWord' 0
+    $ctx.State.statuses['gaming.gamedvr-off'] = 'applied'
+    $d = Get-VxCompactDigest 'gaming' '' $false $prof 9000
+    Assert-True ($d.Length -le 9000 -and $d.StartsWith('Candidate tweaks')) 'kompakte Liste in der Größe begrenzt'
+    Assert-True (-not ($d -match '(?m)^gaming\.gamedvr-off \|')) 'schon angewendete Tweaks fehlen'
+    Assert-True ($d -match '(?m)^gaming\.mmcss-games \|') 'passender Tweak dabei'
+    Assert-True (-not ($d -match '\| risky \|')) 'ohne allowRisky keine riskanten'
+    $small = Get-VxCompactDigest 'gaming' '' $false $prof 300
+    Assert-True ($small.Length -le 300 -or ($small -split "`n").Count -eq 2) 'kleines Budget = kurze Liste'
+    $lap = Get-VxSimProfile 'laptop'
+    $dl = Get-VxCompactDigest 'gaming' '' $false $lap 20000
+    foreach ($line in @($dl -split "`n" | Select-Object -Skip 1)) { Assert-True (-not ($line -match '\|[^|]*laptop-bad[^|]*\|')) ("Laptop ohne laptop-bad: $line") }
+    # settings.ai
+    Assert-True ((Get-VxSettingsDto).ai.provider -eq '' -and (Get-VxSettingsDto).ai.claudeCode.model -eq 'sonnet' -and (Get-VxSettingsDto).ai.groq.hasKey -eq $false) 'Standard'
+    Update-VxSettings ([pscustomobject]@{ ai = [pscustomobject]@{ provider = 'groq'; claudeCode = [pscustomobject]@{ model = 'opus' }; groq = [pscustomobject]@{ model = 'openai/gpt-oss-20b' } } })
+    Update-VxSettings ([pscustomobject]@{ ai = [pscustomobject]@{ provider = 'evil'; claudeCode = [pscustomobject]@{ model = 'gpt-9' }; groq = [pscustomobject]@{ model = 'a b; rm -rf' } } })
+    $dto = Get-VxSettingsDto
+    Assert-True ($dto.ai.provider -eq 'groq' -and $dto.ai.claudeCode.model -eq 'opus' -and $dto.ai.groq.model -eq 'openai/gpt-oss-20b') 'gültige Werte gespeichert, ungültige ignoriert'
+    $null = Import-VxSettings
+    Assert-True ((Get-VxSettingsDto).ai.claudeCode.model -eq 'opus' -and (Get-VxClaudeCodeModel) -eq 'opus' -and (Get-VxGroqModelSetting) -eq 'openai/gpt-oss-20b') 'nach Neustart noch da'
+    # JSON out of model text
+    Assert-True ((ConvertFrom-VxAiJsonText "Klar!`n``````json`n{`"plan`":[]}`n``````").PSObject.Properties['plan']) 'JSON aus Code-Block'
+    Assert-True ((ConvertFrom-VxAiJsonText 'Text {"plan":[{"id":"x"}]} Ende').plan[0].id -eq 'x') 'JSON mitten im Text'
+    Assert-True ($null -eq (ConvertFrom-VxAiJsonText 'kein json')) 'kein JSON -> null'
+}
+
+Test-Case 'ai' 'Groq-Key: verschlüsselt/kodiert, Format geprüft, nie im Settings-DTO' {
+    $null = New-TestContext
+    Assert-True ((Get-AiError { Set-VxGroqKey 'sk-ant-api03-abcdefabcdefabcdefabcdef' }) -match 'gsk_') 'Anthropic-Key als Groq-Key abgelehnt'
+    Set-VxGroqKey ('  ' + $groqKey + ' ')
+    Assert-True (Test-VxGroqKey) 'hasKey'
+    Assert-True (-not ([IO.File]::ReadAllText((Get-VxGroqKeyPath))).Contains($groqKey)) 'nicht im Klartext'
+    Assert-Equal $groqKey (Get-VxGroqKey) 'lesbar, getrimmt'
+    Assert-True ((Get-VxSettingsDto).ai.groq.hasKey -eq $true -and -not (ConvertTo-VxJson (Get-VxSettingsDto)).Contains('TESTGROQ')) 'DTO: hasKey, kein Key'
+    Assert-True (-not (Test-VxClaudeKey)) 'getrennt vom Claude-Key'
+    Remove-VxGroqKey
+    Assert-True (-not (Test-VxGroqKey)) 'gelöscht'
+}
+
+Test-Case 'ai' 'Claude Code: Suche auf PATH, Version und Anmeldestatus ohne Tokens, fehlend, abgemeldet' {
+    $null = New-TestContext
+    Use-FakeClaude 'ok' {
+        param($log)
+        $cli = Find-VxClaudeCli
+        Assert-True ($null -ne $cli -and [IO.Path]::GetFileName($cli.path) -match '^claude(\.cmd)?$') ('gefunden: ' + $cli.path)
+        Assert-True ($cli.path.StartsWith($FakeClaudeDir)) 'die Fake-CLI auf PATH gewinnt'
+        $st = Get-VxClaudeCodeStatus
+        Assert-True ($st.ready -and $st.installed -and $st.loggedIn -and $st.state -eq 'ready') 'bereit'
+        Assert-True ($st.version -eq '2.1.289' -and $st.account -eq 'gamer@example.com' -and $st.subscription -eq 'max') 'Version, Konto, Abo'
+        Assert-True ($st.message -match 'angemeldet als gamer@example\.com' -and $st.message -match 'Max') ('Text: ' + $st.message)
+        $calls = @(Read-FakeClaudeCalls $log)
+        Assert-True ($calls.Count -eq 2 -and ($calls[0].argv -join ' ') -eq '--version' -and ($calls[1].argv -join ' ') -eq 'auth status') 'nur --version und auth status, kein -p'
+        Assert-True ($calls[1].env.CLAUDE_CODE_DISABLE_CLAUDE_MDS -eq '1' -and $calls[1].env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC -eq '1') 'ohne CLAUDE.md und Telemetrie'
+    }
+    Use-FakeClaude 'logged-out' {
+        $st = Get-VxClaudeCodeStatus
+        Assert-True (-not $st.ready -and $st.installed -and $st.state -eq 'logged-out') 'abgemeldet erkannt'
+        Assert-True ((@($st.steps) -join ' ') -match 'claude auth login' -and (@($st.steps) -join ' ') -match '/login') 'Anleitung zum Anmelden'
+    }
+    Use-FakeClaude 'old' {
+        $st = Get-VxClaudeCodeStatus
+        Assert-True ($st.ready -and $st.authMethod -eq 'unknown') 'alte CLI ohne auth-Befehl: wird probiert'
+    }
+    Use-FakeClaude 'ok' {
+        $st = Get-VxClaudeCodeStatus
+        Assert-True (-not $st.installed -and $st.state -eq 'missing' -and -not $st.ready) 'nicht installiert'
+        Assert-True ((@($st.steps) -join ' ').Contains('irm https://claude.ai/install.ps1 | iex') -and $st.installCommand -eq 'irm https://claude.ai/install.ps1 | iex') 'Installationsbefehl'
+        Assert-True ((Get-AiError { Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' }) }) -match 'nicht installiert.*install\.ps1') 'Analyse ohne CLI -> Anleitung'
+    } -NoCli
+    # npm shim: "%dp0%\node_modules\...\cli.js" is run with node directly (no cmd.exe quoting)
+    $shimDir = New-TempDir 'npmshim'
+    [void][IO.Directory]::CreateDirectory((Join-Path $shimDir 'node_modules\@anthropic-ai\claude-code'.Replace('\', [IO.Path]::DirectorySeparatorChar)))
+    $js = [IO.Path]::Combine($shimDir, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
+    [IO.File]::WriteAllText($js, '//')
+    $shim = Join-Path $shimDir 'claude.cmd'
+    [IO.File]::WriteAllText($shim, "@ECHO off`r`nSET dp0=%~dp0`r`n`"%_prog%`"  `"%dp0%\node_modules\@anthropic-ai\claude-code\cli.js`" %*`r`n")
+    $l = Resolve-VxClaudeCliLaunch $shim
+    Assert-True (-not $l.viaCmd -or -not (Get-Command node -ErrorAction SilentlyContinue)) ('npm-Shim über node: ' + $l.file)
+    if (-not $l.viaCmd) { Assert-True (@($l.prefix).Count -eq 1 -and ([string]$l.prefix[0]).EndsWith('cli.js')) 'cli.js als erstes Argument' }
+}
+
+Test-Case 'ai' 'Claude Code: Analyse über die Fake-CLI (Aufruf, stdin, Schema, Filter, Fallbacks, Fehler)' {
+    $ctx = New-TestContext
+    Use-FakeClaude 'ok' {
+        param($log)
+        $r = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming'; text = 'Ruckler in GTA'; allowRisky = $false })
+        Assert-Equal @('gaming.gamedvr-off', 'gaming.mmcss-games') @($r.plan | ForEach-Object { $_.id }) 'gleicher Filter wie bei der API'
+        Assert-True ($r.engine -eq 'claude-code' -and $r.provider -eq 'claude-code' -and $r.model -eq 'claude-sonnet-5-5') ('engine/model: ' + $r.model)
+        Assert-True (@($r.findings).Count -eq 2 -and $r.findings[0].id -eq 'claude-1' -and $null -eq $r.findings[0].fix -and $r.usage.input_tokens -eq 21000) 'Befunde + usage'
+        Assert-True ($r.score -ge 0 -and $r.scoreAfter -ge $r.score) 'Score vom lokalen Advisor'
+        $call = @(Read-FakeClaudeCalls $log | Where-Object { $_.argv -contains '-p' })[0]
+        $a = @($call.argv)
+        $at = { param($f) $i = [array]::IndexOf($a, $f); if ($i -ge 0 -and $i + 1 -lt $a.Count) { return [string]$a[$i + 1] } return $null }
+        Assert-True ((& $at '--output-format') -eq 'json' -and (& $at '--model') -eq 'sonnet') 'print mode, json, Modell'
+        Assert-True ($a -contains '--tools' -and (& $at '--tools') -eq '' -and (& $at '--setting-sources') -eq '' -and $a -contains '--no-session-persistence') 'keine Tools, keine Settings, keine Sitzung'
+        Assert-True (-not ($a -contains '--bare')) 'nie --bare (das würde das Abo-Login abschalten)'
+        $schema = (& $at '--json-schema') | ConvertFrom-Json
+        Assert-True ($schema.additionalProperties -eq $false -and $null -ne $schema.properties.plan) 'JSON-Schema übergeben'
+        Assert-True ($call.systemHasDigest -and $call.systemHead -match 'optimization advisor inside VELOX') 'System-Prompt mit Regeln + Katalog aus Datei'
+        Assert-True ([string]$call.stdin -match '"goal":"gaming"' -and [string]$call.stdin -match 'Ruckler in GTA') 'Anfrage über stdin'
+        Assert-True ([IO.Path]::GetFileName([string]$call.cwd) -match '^velox-ki-' -and -not [IO.Directory]::Exists([string]$call.cwd)) 'leerer Temp-Ordner, danach gelöscht'
+        foreach ($secret in @([Environment]::UserName, [Environment]::MachineName)) {
+            if ($secret -and $secret.Length -ge 3) { Assert-True (-not ([string]$call.stdin).Contains($secret)) "kein Benutzer-/Computername ($secret)" }
+        }
+        $r = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming'; allowRisky = $true })
+        Assert-True (@($r.plan | ForEach-Object { $_.id }) -contains 'security.vbs-off') 'riskant nur mit allowRisky'
+    }
+    Use-FakeClaude 'text' {
+        $r = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' })
+        Assert-Equal 2 @($r.plan).Count 'JSON aus dem Antworttext'
+    }
+    Use-FakeClaude 'old' {
+        param($log)
+        $r = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' })
+        Assert-Equal 2 @($r.plan).Count 'alte CLI: einfacher Modus klappt'
+        $calls = @(Read-FakeClaudeCalls $log | Where-Object { $_.argv -contains '-p' })
+        Assert-True ($calls.Count -eq 2 -and -not (@($calls[1].argv) -contains '--json-schema') -and [string]$calls[1].stdin -match 'ONLY') 'zweiter Aufruf ohne neue Flags, Regeln über stdin'
+    }
+    Use-FakeClaude 'schema-fail' {
+        param($log)
+        $r = Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' })
+        Assert-True (@($r.plan).Count -eq 2 -and @(Read-FakeClaudeCalls $log | Where-Object { $_.argv -contains '-p' }).Count -eq 2) 'Schema gescheitert -> zweiter Versuch ohne Schema'
+    }
+    Use-FakeClaude 'logged-out' {
+        Assert-True ((Get-AiError { Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' }) }) -match 'nicht angemeldet.*claude auth login') 'abgemeldet -> Anleitung'
+    }
+    Use-FakeClaude 'limit' {
+        Assert-True ((Get-AiError { Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' }) }) -match 'Nutzungslimit') 'Limit erreicht'
+    }
+    Use-FakeClaude 'slow' {
+        function Get-VxClaudeCodeTimeoutSec { return 2 }
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $msg = Get-AiError { Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' }) }
+        Assert-True ($msg -match 'nicht geantwortet' -and $sw.Elapsed.TotalSeconds -lt 20) ("hartes Zeitlimit ($msg)")
+        # "Abbrechen" ends the CLI at once
+        $job = New-TestJob 'ai' $null
+        $global:VxJob = $job
+        $rs = [PowerShell]::Create()
+        $null = $rs.AddScript({ param($j) Start-Sleep -Milliseconds 1500; $j.cancel = $true }).AddArgument($job)
+        $h = $rs.BeginInvoke()
+        try {
+            function Get-VxClaudeCodeTimeoutSec { return 60 }
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $msg = Get-AiError { Invoke-VxAiJob ([pscustomobject]@{ provider = 'claude-code'; goal = 'gaming' }) }
+            Assert-True ($msg -eq 'VX_CANCELLED' -and $sw.Elapsed.TotalSeconds -lt 15) ("Abbrechen beendet die CLI ($msg, {0:n1} s)" -f $sw.Elapsed.TotalSeconds)
+        } finally { $global:VxJob = $null; try { $null = $rs.EndInvoke($h) } catch { $null = $_ }; $rs.Dispose() }
+    }
+}
+
+Test-Case 'ai' 'Groq: Mock-API (Modelle, Anfrageform, Filter, 401, 429, 413, Modell weg, Format-Fehler)' {
+    $ctx = New-TestContext
+    $mock = Start-MockAnthropic
+    $oldBase = [Environment]::GetEnvironmentVariable('VELOX_GROQ_BASE_URL')
+    [Environment]::SetEnvironmentVariable('VELOX_GROQ_BASE_URL', ($mock.url + '/openai/v1'))
+    try {
+        $q = $mock.state.queue
+        $okText = [IO.File]::ReadAllText((Join-Path $claudeFix 'plan-ok.json'), [Text.Encoding]::UTF8)
+        $P = [pscustomobject]@{ provider = 'groq'; goal = 'gaming'; text = 'Ruckler in GTA'; allowRisky = $false }
+        Assert-True ((Get-AiError { Invoke-VxAiJob $P }) -match 'Groq-API-Key' -and $mock.state.requests.Count -eq 0) 'ohne Key keine Anfrage'
+        Set-VxGroqKey $groqKey
+        # 1) automatic model: GET /models, best one (gpt-oss-120b), strict json_schema
+        [void]$q.Add(@{ status = 200; body = $groqModels })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat $okText) })
+        $r = Invoke-VxAiJob $P
+        Assert-Equal @('gaming.gamedvr-off', 'gaming.mmcss-games') @($r.plan | ForEach-Object { $_.id }) 'gleicher Filter'
+        Assert-True ($r.engine -eq 'groq' -and $r.model -eq 'openai/gpt-oss-120b' -and $r.findings[0].id -eq 'groq-1' -and $r.usage.input_tokens -eq 3100) 'engine/model/usage'
+        $req = $mock.state.requests
+        Assert-True ($req[0].path -eq '/openai/v1/models' -and $req[0].headers['authorization'] -eq ('Bearer ' + $groqKey)) 'Modell-Liste mit Bearer-Key'
+        Assert-Equal '/openai/v1/chat/completions' $req[1].path 'Chat-Endpunkt'
+        $b = $req[1].body | ConvertFrom-Json
+        Assert-True ($b.model -eq 'openai/gpt-oss-120b' -and $b.response_format.type -eq 'json_schema' -and $b.response_format.json_schema.strict -eq $true) 'strict json_schema'
+        Assert-True ($b.temperature -le 0.3 -and $b.max_completion_tokens -le 3200 -and $b.reasoning_effort -eq 'low') 'niedrige Temperatur, wenig Denk-Tokens'
+        Assert-True ($b.messages[0].role -eq 'system' -and $b.messages[0].content -match 'Candidate tweaks' -and $b.messages[0].content -match 'ONLY') 'Regeln + Kandidaten'
+        Assert-True ($b.messages[1].content -match 'Ruckler in GTA' -and -not ($b.messages[1].content -match '"applied":')) 'kompakte Anfrage'
+        $chars = ([string]$b.messages[0].content).Length + ([string]$b.messages[1].content).Length
+        Assert-True ($chars -lt 16000) ("passt ins Gratis-Limit (~{0} Zeichen)" -f $chars)
+        # 2) model picked in the settings: no model list, json_object for a model without strict schema
+        $ctx.Settings.ai.groq.model = 'llama-3.3-70b-versatile'
+        $n0 = $mock.state.requests.Count
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat $okText 'llama-3.3-70b-versatile') })
+        $r = Invoke-VxAiJob $P
+        $b = $mock.state.requests[$n0].body | ConvertFrom-Json
+        Assert-True ($mock.state.requests.Count -eq $n0 + 1 -and $b.model -eq 'llama-3.3-70b-versatile' -and $b.response_format.type -eq 'json_object' -and $null -eq $b.PSObject.Properties['reasoning_effort']) 'json_object für Llama'
+        # 3) 401
+        [void]$q.Add(@{ status = 401; body = '{"error":{"message":"Invalid API Key","type":"invalid_request_error","code":"invalid_api_key"}}' })
+        Assert-True ((Get-AiError { Invoke-VxAiJob $P }) -match 'Groq-API-Key ungültig') '401'
+        # 4) 429 with a short retry-after -> one retry
+        [void]$q.Add(@{ status = 429; headers = @{ 'retry-after' = '1' }; body = '{"error":{"message":"Rate limit reached for model on tokens per minute (TPM): Limit 8000, Used 7000, Requested 2000.","code":"rate_limit_exceeded"}}' })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat $okText 'llama-3.3-70b-versatile') })
+        $r = Invoke-VxAiJob $P
+        Assert-Equal 2 @($r.plan).Count '429 -> kurz warten, dann klappt es'
+        # 5) 429 with a long wait -> German message with the time
+        [void]$q.Add(@{ status = 429; headers = @{ 'retry-after' = '300' }; body = '{"error":{"message":"Rate limit reached for requests per day (RPD)","code":"rate_limit_exceeded"}}' })
+        Assert-True ((Get-AiError { Invoke-VxAiJob $P }) -match 'Groq-Limit.*5 Minuten') '429 lang -> Wartezeit'
+        # 6) 413 request too large -> one retry with a shorter list
+        $n0 = $mock.state.requests.Count
+        [void]$q.Add(@{ status = 413; body = '{"error":{"message":"Request too large for model on tokens per minute (TPM): Limit 8000, Requested 9100","code":"rate_limit_exceeded"}}' })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat $okText 'llama-3.3-70b-versatile') })
+        $r = Invoke-VxAiJob $P
+        $l1 = ([string](($mock.state.requests[$n0].body | ConvertFrom-Json).messages[0].content)).Length
+        $l2 = ([string](($mock.state.requests[$n0 + 1].body | ConvertFrom-Json).messages[0].content)).Length
+        Assert-True (@($r.plan).Count -eq 2 -and $l2 -lt $l1) ("413 -> kürzere Liste ($l1 -> $l2)")
+        # 7) model retired -> switch to the best available one
+        $n0 = $mock.state.requests.Count
+        [void]$q.Add(@{ status = 404; body = '{"error":{"message":"The model `llama-3.3-70b-versatile` has been decommissioned","code":"model_decommissioned"}}' })
+        [void]$q.Add(@{ status = 200; body = $groqModels })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat $okText) })
+        $r = Invoke-VxAiJob $P
+        Assert-True ($r.model -eq 'openai/gpt-oss-120b' -and ($mock.state.requests[$n0 + 2].body | ConvertFrom-Json).model -eq 'openai/gpt-oss-120b') 'stillgelegtes Modell -> bestes verfügbares'
+        $ctx.Settings.ai.groq.model = ''
+        # 8) json_validate_failed -> json_object
+        $n0 = $mock.state.requests.Count
+        [void]$q.Add(@{ status = 200; body = $groqModels })
+        [void]$q.Add(@{ status = 400; body = '{"error":{"message":"Failed to generate JSON. Please adjust your prompt.","code":"json_validate_failed"}}' })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat $okText) })
+        $r = Invoke-VxAiJob $P
+        Assert-True (@($r.plan).Count -eq 2 -and ($mock.state.requests[$n0 + 2].body | ConvertFrom-Json).response_format.type -eq 'json_object') 'Format-Fehler -> json_object'
+        # 9) garbage twice -> clear error
+        [void]$q.Add(@{ status = 200; body = $groqModels })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat 'Das ist kein JSON') })
+        [void]$q.Add(@{ status = 200; body = (New-GroqChat 'immer noch nicht') })
+        Assert-True ((Get-AiError { Invoke-VxAiJob $P }) -match 'keine gültige Antwort') 'kaputte Antwort'
+        # 10) 5xx twice
+        [void]$q.Add(@{ status = 200; body = $groqModels })
+        [void]$q.Add(@{ status = 503; body = '{}' })
+        [void]$q.Add(@{ status = 503; body = '{}' })
+        Assert-True ((Get-AiError { Invoke-VxAiJob $P }) -match 'überlastet|nicht erreichbar') '5xx'
+    } finally {
+        [Environment]::SetEnvironmentVariable('VELOX_GROQ_BASE_URL', $oldBase)
+        Stop-MockAnthropic $mock
+    }
+}
+
+Test-Case 'ai' 'ai-status: alle Anbieter, „Verbindung testen“ kostenlos (Claude: GET /v1/models, Groq: Modell-Liste)' {
+    $ctx = New-TestContext
+    $mock = Start-MockAnthropic
+    $oldA = [Environment]::GetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL')
+    $oldG = [Environment]::GetEnvironmentVariable('VELOX_GROQ_BASE_URL')
+    [Environment]::SetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL', $mock.url)
+    [Environment]::SetEnvironmentVariable('VELOX_GROQ_BASE_URL', ($mock.url + '/openai/v1'))
+    try {
+        Use-FakeClaude 'ok' {
+            $r = Invoke-VxAiStatusJob ([pscustomobject]@{})
+            Assert-Equal @('claude-code', 'claude-api', 'groq', 'offline') @($r.providers | ForEach-Object { $_.id }) 'Reihenfolge'
+            Assert-True ($r.recommended -eq 'claude-code' -and $r.providers[0].ready -and -not $r.providers[1].ready -and -not $r.providers[2].ready -and $r.providers[3].ready) 'bereit-Status'
+            Assert-Equal 0 $mock.state.requests.Count 'ohne Test keine Netzwerk-Anfrage'
+        }
+        $q = $mock.state.queue
+        Set-VxClaudeKey 'sk-ant-api03-MOCKKEY0123456789abcdefABCDEF'
+        [void]$q.Add(@{ status = 200; body = '{"data":[{"id":"claude-opus-5-5","type":"model"}],"has_more":false}' })
+        $r = Invoke-VxAiStatusJob ([pscustomobject]@{ test = 'claude-api' })
+        $api = @($r.providers | Where-Object { $_.id -eq 'claude-api' })[0]
+        Assert-True ($api.tested -and $api.ok -and $api.message -match 'klappt') 'Claude-Test ok'
+        Assert-True (@($r.providers | Where-Object { $_.id -eq 'claude-code' }).Count -eq 0) 'Claude Code wird beim API-Test nicht gestartet'
+        $last = $mock.state.requests[$mock.state.requests.Count - 1]
+        Assert-True ($last.path -match '^/v1/models' -and $last.headers['x-api-key'] -match '^sk-ant-' -and -not $last.body) 'GET /v1/models, keine Nachricht'
+        [void]$q.Add(@{ status = 401; body = '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}' })
+        $api = @((Invoke-VxAiStatusJob ([pscustomobject]@{ test = 'claude-api' })).providers | Where-Object { $_.id -eq 'claude-api' })[0]
+        Assert-True (-not $api.ok -and $api.message -match 'ungültig' -and $api.state -eq 'error') 'Claude-Test 401'
+        Set-VxGroqKey $groqKey
+        [void]$q.Add(@{ status = 200; body = $groqModels })
+        $g = @((Invoke-VxAiStatusJob ([pscustomobject]@{ test = 'groq' })).providers | Where-Object { $_.id -eq 'groq' })[0]
+        $ids = @($g.models | ForEach-Object { $_.id })
+        Assert-True ($g.ok -and $ids[0] -eq 'openai/gpt-oss-120b' -and $g.models[0].recommended -and $g.models[0].strict) ('Groq-Modelle, bestes zuerst: ' + ($ids -join ', '))
+        Assert-True (-not ($ids -contains 'whisper-large-v3') -and -not ($ids -contains 'meta-llama/llama-prompt-guard-2-86m') -and $ids -contains 'some/new-model') 'nur Chat-Modelle, neue auch'
+        Assert-True ($g.models[0].label -match 'beste Qualität') 'deutsche Beschriftung'
+        [void]$q.Add(@{ status = 401; body = '{"error":{"message":"Invalid API Key"}}' })
+        $g = @((Invoke-VxAiStatusJob ([pscustomobject]@{ test = 'groq' })).providers | Where-Object { $_.id -eq 'groq' })[0]
+        Assert-True (-not $g.ok -and $g.message -match 'ungültig') 'Groq-Test 401'
+    } finally {
+        [Environment]::SetEnvironmentVariable('VELOX_ANTHROPIC_BASE_URL', $oldA)
+        [Environment]::SetEnvironmentVariable('VELOX_GROQ_BASE_URL', $oldG)
+        Stop-MockAnthropic $mock
+    }
+}
+
+Test-Case 'ai' 'Job-Runner: ai und ai-status als Job-Typen, offline = Smart-Analyse' {
+    $null = New-TestContext
+    Assert-True ((Get-VxJobTypes) -contains 'ai' -and (Get-VxJobTypes) -contains 'ai-status' -and -not ((Get-VxMutatingJobTypes) -contains 'ai')) 'Job-Typen'
+    $j = Invoke-TestJob 'ai' ([pscustomobject]@{ provider = 'offline'; goal = 'gaming'; text = '' })
+    Assert-True ($j.status -eq 'done' -and $j.result.engine -eq 'local' -and @($j.result.plan).Count -gt 0) 'offline -> Smart-Analyse'
+    $j = Invoke-TestJob 'ai' ([pscustomobject]@{ provider = 'chatgpt'; goal = 'gaming' })
+    Assert-True ($j.status -eq 'error' -and $j.error -match 'Unbekannte KI') 'unbekannter Anbieter'
+}
+
+
+Test-Case 'restorepoint' 'Einstellung restorePoints: Standard first, Umzug von autoRestorePoint, nur gültige Werte' {
+    $ctx = New-TestContext
+    Assert-Equal 'first' (Get-VxSettingsDto).restorePoints 'Standard'
+    $path = Get-VxDataPath 'settings.json'
+    [IO.File]::WriteAllText($path, '{"accent":"blue","autoRestorePoint":false}')
+    $null = Import-VxSettings
+    Assert-Equal 'off' (Get-VxSettingsDto).restorePoints 'aus bleibt aus'
+    Assert-Equal $false (Get-VxSettingsDto).autoRestorePoint 'altes Feld für ältere Oberflächen'
+    [IO.File]::WriteAllText($path, '{"autoRestorePoint":true}')
+    $null = Import-VxSettings
+    Assert-Equal 'first' (Get-VxSettingsDto).restorePoints 'an -> nur der erste'
+    Update-VxSettings ([pscustomobject]@{ restorePoints = 'presets' })
+    Assert-Equal 'presets' (Get-VxSettingsDto).restorePoints 'presets gesetzt'
+    Update-VxSettings ([pscustomobject]@{ restorePoints = 'jeden-job' })
+    Assert-Equal 'presets' (Get-VxSettingsDto).restorePoints 'Unsinn ignoriert'
+    $saved = Read-VxJsonFile $path
+    Assert-Equal 'presets' ([string]$saved.restorePoints) 'gespeichert'
+    Assert-True ($null -eq $saved.PSObject.Properties['autoRestorePoint']) 'altes Feld wird nicht mehr gespeichert'
+    Update-VxSettings ([pscustomobject]@{ autoRestorePoint = $false })
+    Assert-Equal 'off' (Get-VxSettingsDto).restorePoints 'alte Oberfläche: aus'
+    Update-VxSettings ([pscustomobject]@{ autoRestorePoint = $true })
+    Assert-Equal 'first' (Get-VxSettingsDto).restorePoints 'alte Oberfläche: an'
+}
+
+Test-Case 'restorepoint' 'Basis-Punkt genau einmal; Einzel-Tweaks, Zurücksetzen, Restore nie; presets höchstens einmal in 24 h' {
+    $ctx = New-TestContext
+    $ctx.Sim.rp = @{ next = 100; items = @() }
+    $count = { @($ctx.Sim.rp.items).Count }
+    Assert-True ($null -eq (Get-VxStateDto).restorePointBaseline) 'vorher kein Basis-Punkt'
+    $r1 = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.gamedvr-off'); label = 'Tweaks: 1 aktiviert' }) 'apply'
+    Assert-Equal 1 (& $count) 'Basis-Punkt vor der allerersten Änderung'
+    $b = (Get-VxStateDto).restorePointBaseline
+    Assert-Equal 'created' $b.status 'Status created'
+    Assert-Equal 100 ([int]$b.sequence) 'Nummer gemerkt'
+    Assert-True ([bool](Read-VxBackup $r1.backupId).restorePoint) 'Journal weiß vom Punkt'
+    # a new session (VELOX restarted): the baseline is never repeated
+    $ctx.RestorePointTried = $false
+    $null = Import-VxState
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.mmcss-games') }) 'apply'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.mmcss-games') }) 'revert'
+    $big = @($ctx.Catalog.tweaks | Where-Object { (Get-VxTweakKind $_) -eq 'toggle' } | Select-Object -First 12 | ForEach-Object { [string]$_.id })
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $big; label = 'Preset: Groß' }) 'apply'
+    $null = Invoke-VxRestoreJob ([pscustomobject]@{ backupId = $r1.backupId })
+    Assert-Equal 1 (& $count) "Modus 'first': nie wieder einer"
+    # 'presets': one before a big preset, but not twice within 24 h, never for small jobs
+    Update-VxSettings ([pscustomobject]@{ restorePoints = 'presets' })
+    $ctx.State.restorePointLast = (Get-Date).AddDays(-2).ToString('yyyy-MM-ddTHH:mm:ss')
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @($big[0..2]); label = 'Preset: Klein' }) 'apply'
+    Assert-Equal 1 (& $count) 'Preset mit weniger als 10 Tweaks: keiner'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $big; label = 'Tweaks: 12 aktiviert' }) 'apply'
+    Assert-Equal 1 (& $count) 'viele einzelne Schalter: keiner'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $big; label = 'Preset: Groß' }) 'apply'
+    Assert-Equal 2 (& $count) 'großes Preset: einer'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $big; label = 'KI-Plan (Smart-Analyse)' }) 'apply'
+    $null = Invoke-VxDetweakJob ([pscustomobject]@{ keys = @($big | ForEach-Object { 'tweak|' + $_ }); commands = @(); thenApply = @() })
+    Assert-Equal 2 (& $count) 'höchstens einer pro 24 Stunden'
+    $ctx.State.restorePointLast = (Get-Date).AddDays(-2).ToString('yyyy-MM-ddTHH:mm:ss')
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $big; purpose = 'plan'; label = 'x' }) 'apply'
+    Assert-Equal 3 (& $count) 'KI-Plan nach 24 h: einer'
+    $ctx.State.restorePointLast = (Get-Date).AddDays(-2).ToString('yyyy-MM-ddTHH:mm:ss')
+    $null = Invoke-VxDetweakJob ([pscustomobject]@{ keys = @($big | ForEach-Object { 'tweak|' + $_ }); commands = @(); thenApply = @(); restorePoint = $false })
+    Assert-Equal 3 (& $count) 'Detweak mit restorePoint=false: keiner (nie erzwungen)'
+    Update-VxSettings ([pscustomobject]@{ restorePoints = 'off' })
+    $ctx.State.restorePointBaseline = $null
+    $ctx.RestorePointTried = $false
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = $big; label = 'Preset: Groß' }) 'apply'
+    Assert-Equal 3 (& $count) "Modus 'off': gar keiner"
+}
+
+Test-Case 'restorepoint' 'Alte VELOX-Punkte: der erste wird Basis, Aufräumen löscht den Rest, Windows-Punkte bleiben' {
+    $ctx = New-TestContext
+    # the Testmodus list: one Windows point + several VELOX points from older versions
+    $before = @(Get-VxSimRestorePoints)
+    $own = @($before | Where-Object { $_.description -like 'VELOX*' })
+    Assert-True ($own.Count -ge 3) 'Testliste enthält alte VELOX-Punkte'
+    $null = Invoke-VxApplyJob ([pscustomobject]@{ ids = @('gaming.gamedvr-off') }) 'apply'
+    $b = (Get-VxStateDto).restorePointBaseline
+    Assert-Equal 'adopted' $b.status 'ältester VELOX-Punkt wird übernommen'
+    Assert-Equal ([long]$own[0].sequence) ([long]$b.sequence) 'der älteste'
+    Assert-Equal $before.Count @(Get-VxSimRestorePoints).Count 'kein neuer Punkt'
+    $list = (Invoke-TestJob 'restorepoint-list' ([pscustomobject]@{})).result
+    Assert-Equal ($own.Count - 1) ([int]$list.extra) 'überflüssige gezählt'
+    Assert-Equal ([long]$own[0].sequence) ([long]$list.keep.sequence) 'bleibt: der erste'
+    # a point the user made on purpose is never "überflüssig"
+    $manual = (Invoke-TestJob 'restorepoint' ([pscustomobject]@{ label = 'Manuell' })).result
+    Assert-True $manual.ok 'manueller Punkt'
+    $list2 = (Invoke-TestJob 'restorepoint-list' ([pscustomobject]@{})).result
+    Assert-Equal ($own.Count - 1) ([int]$list2.extra) 'manueller Punkt zählt nicht als überflüssig'
+    Assert-Equal 1 @($list2.items | Where-Object { $_.manual }).Count 'als manuell markiert'
+    Assert-True (Test-VxManualRestorePoint 'VELOX: VELOX manuell') 'alte Beschriftung erkannt'
+    $job = Invoke-TestJob 'restorepoint-clean' ([pscustomobject]@{})
+    Assert-Equal 'done' $job.status ('Aufräumen lief: ' + $job.error)
+    Assert-Equal ($own.Count - 1) ([int]$job.result.removed) 'gelöscht'
+    $after = @(Get-VxSimRestorePoints)
+    Assert-Equal 2 @($after | Where-Object { $_.description -like 'VELOX*' }).Count 'der erste VELOX-Punkt und der manuelle bleiben'
+    Assert-Equal 1 @($after | Where-Object { $_.description -notlike 'VELOX*' }).Count 'Windows-Punkt unangetastet'
+    Assert-True ($null -ne $job.result.durationMs) 'durationMs im Ergebnis'
+    $again = (Invoke-TestJob 'restorepoint-clean' ([pscustomobject]@{})).result
+    Assert-Equal 0 ([int]$again.removed) 'zweites Mal: nichts mehr zu tun'
+}
+
+Test-Case 'restorepoint' 'Hängt nie: Zeitlimit und Überspringen beenden nur diesen Schritt, der Job läuft weiter' {
+    $ctx = New-TestContext
+    $ctx.Sim.rp = @{ next = 1; items = @() }
+    # a restore point that never finishes
+    $ctx.SimRestorePointScript = 'Start-Sleep -Seconds 60'
+    $ctx.RestorePointTimeoutSec = 2
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $job = Invoke-TestJob 'apply' ([pscustomobject]@{ ids = @('gaming.gamedvr-off'); label = 'Tweaks: 1 aktiviert' })
+    Assert-True ($sw.Elapsed.TotalSeconds -lt 15) ('Zeitlimit greift: {0:N1} s' -f $sw.Elapsed.TotalSeconds)
+    Assert-Equal 'done' $job.status ('Job fertig: ' + $job.error)
+    Assert-True ($job.result.results[0].ok) 'Tweak trotzdem angewendet'
+    Assert-True (@($job.log | Where-Object { $_.level -eq 'warn' -and $_.msg -match 'länger als 2 s' }).Count -eq 1) 'Warnung erklärt das Zeitlimit'
+    Assert-Equal 'timeout' (Get-VxStateDto).restorePointBaseline.status 'als Zeitüberschreitung vermerkt'
+    Assert-Equal $false ([bool]$job.skippable) 'Überspringen-Knopf wieder weg'
+    # same session: no second attempt (one wait per start at most)
+    $sw.Restart()
+    $null = Invoke-TestJob 'apply' ([pscustomobject]@{ ids = @('gaming.mmcss-games') })
+    Assert-True ($sw.Elapsed.TotalSeconds -lt 5) 'kein zweiter Versuch in derselben Sitzung'
+    # next session: "Überspringen" ends the step at once
+    $ctx.RestorePointTried = $false
+    $ctx.RestorePointTimeoutSec = 60
+    $job2 = New-TestJob 'apply' ([pscustomobject]@{ ids = @('gaming.hags-on') })
+    $clicker = [PowerShell]::Create()
+    $null = $clicker.AddScript('param($j) for ($i = 0; $i -lt 100 -and -not $j.skippable; $i++) { Start-Sleep -Milliseconds 100 }; Start-Sleep -Milliseconds 300; $j.skip = $true').AddArgument($job2)
+    $h = $clicker.BeginInvoke()
+    $sw.Restart()
+    $global:VxJob = $job2
+    try { Invoke-VxJobBody } finally { $global:VxJob = $null; try { $null = $clicker.EndInvoke($h) } catch { $null = $_ }; $clicker.Dispose() }
+    Assert-True ($sw.Elapsed.TotalSeconds -lt 15) ('Überspringen beendet sofort: {0:N1} s' -f $sw.Elapsed.TotalSeconds)
+    Assert-Equal 'done' $job2.status 'Job lief weiter'
+    Assert-Equal 'skipped' (Get-VxStateDto).restorePointBaseline.status 'übersprungen vermerkt'
+    Assert-True (Test-VxBaselineSettled) 'übersprungen = erledigt, kein neuer Versuch'
+    # a reset command that hangs: own process, timeout, the detweak goes on
+    $ctx.SimRestorePointScript = $null
+    $ctx.SimCommandScript = 'Start-Sleep -Seconds 60'
+    $ctx.CommandTimeoutSec = 2
+    $sw.Restart()
+    $res = Invoke-VxDetweakJob ([pscustomobject]@{ keys = @(); commands = @('power-defaults'); thenApply = @('gaming.gamedvr-off') })
+    Assert-True ($sw.Elapsed.TotalSeconds -lt 15) 'Befehl mit Zeitlimit'
+    Assert-Equal 1 ([int]$res.failed) 'als fehlgeschlagen gezählt'
+    Assert-True (@($res.errors | Where-Object { $_ -match 'länger als 2 s' }).Count -eq 1) 'mit Erklärung'
+    Assert-Equal 1 ([int]$res.applied) 'danach weiter angewendet'
+    $ctx.SimCommandScript = 'throw "kaputt"'
+    $res2 = Invoke-VxDetweakJob ([pscustomobject]@{ keys = @(); commands = @('power-defaults'); thenApply = @() })
+    Assert-True (@($res2.errors | Where-Object { $_ -match 'kaputt' }).Count -eq 1) 'Fehlertext des Befehls kommt an'
+    $ctx.SimCommandScript = $null
+}
+
+Test-Case 'restorepoint' 'Isolierter Schritt: Ergebnis, Fehlercode, Abbrechen' {
+    $null = New-TestContext
+    $x = Invoke-VxIsolated -Script '[Console]::Out.WriteLine("VXRESULT " + (ConvertTo-Json -InputObject @{ a = "ä" } -Compress)); return' -TimeoutSec 30
+    Assert-True ($x.ok) ('ok: ' + $x.error)
+    Assert-Equal 'ä' ([string](Get-VxIsolatedResult $x.output).a) 'Umlaute heil'
+    $y = Invoke-VxIsolated -Script 'throw "Fehler XY"' -TimeoutSec 30
+    Assert-True (-not $y.ok -and $y.exitCode -eq 1 -and $y.error -match 'Fehler XY') 'Fehler kommt an'
+    $job = New-TestJob 'detweak' $null
+    $job.cancel = $true
+    $global:VxJob = $job
+    $cancelled = $false
+    try { $null = Invoke-VxIsolated -Script 'Start-Sleep -Seconds 30' -TimeoutSec 60 } catch { $cancelled = ([string]$_.Exception.Message -eq 'VX_CANCELLED') } finally { $global:VxJob = $null }
+    Assert-True $cancelled 'Abbrechen beendet den Prozess'
+}
+
+# ==================================================================== speed
+
+Test-Case 'speed' 'Großes Preset im Testmodus: wenig Engine-Overhead pro Tweak, durationMs, Zeiten im Log' {
+    $realData = Join-Path $AppRoot 'data'
+    if (-not (Test-Path -LiteralPath (Join-Path $realData 'tweaks'))) { Add-Note 'data/tweaks fehlt - übersprungen.'; return }
+    $ctx = New-TestContext -DataDir $realData
+    $ctx.Sim.rp = @{ next = 1; items = @() }
+    $p = @($ctx.Catalog.presets | Sort-Object { @($_.ids).Count } -Descending)[0]
+    $ids = @($p.ids | Where-Object { (Get-VxTweakKind (Get-VxTweak $_)) -eq 'toggle' })
+    Assert-True ($ids.Count -ge 50) ('großes Preset: {0}' -f $ids.Count)
+    $job = Invoke-TestJob 'apply' ([pscustomobject]@{ ids = $ids; label = ('Preset: ' + $p.name) })
+    Assert-Equal 'done' $job.status ('lief: ' + $job.error)
+    $r = $job.result
+    $bad = @($r.results | Where-Object { -not $_.ok -and $_.status -ne 'na' })
+    Assert-Equal 0 $bad.Count ('nur nicht anwendbare Tweaks fehlen: ' + (($bad | ForEach-Object { $_.id + ' ' + $_.error }) -join '; '))
+    Assert-True ([int]$r.durationMs -gt 0 -and [int]$job.durationMs -ge [int]$r.durationMs) 'durationMs im Ergebnis und am Job'
+    $per = [double]$r.timing.perTweakMs
+    # pwsh 7 on Linux: ~10-15 ms per tweak in the Testmodus (simulated registry included);
+    # the bound leaves room for Windows PowerShell 5.1 and slow CI machines
+    Assert-True ($per -lt 80) ('{0} ms je Tweak' -f $per)
+    Assert-True ([int]$r.timing.finishMs -lt [math]::Max(1500, [int]$r.timing.tweaksMs / 2)) ('Abschluss {0} ms' -f $r.timing.finishMs)
+    Add-Note ('Preset {0}: {1} Tweaks in {2} ms ({3} ms je Tweak, Abschluss {4} ms, Wiederherstellungspunkt {5} ms)' -f $p.id, $ids.Count, $r.durationMs, $per, $r.timing.finishMs, $r.timing.restorePointMs)
+    $log = [IO.File]::ReadAllText([IO.Path]::Combine($ctx.LogDir, ('velox-' + (Get-Date).ToString('yyyyMMdd') + '.log')))
+    Assert-True ($log -match ('apply ' + [regex]::Escape($ids[0]) + ': \d+ ms')) 'Zeit pro Tweak in der Logdatei'
+    Assert-True ($log -match 'Tweaks in \d+ ms \(Vorbereitung') 'Zusammenfassung in der Logdatei'
+    Assert-True (-not [IO.File]::Exists([IO.Path]::Combine($ctx.BackupDir, $r.backupId + '.journal'))) 'Journal-Datei geschlossen und abgeschlossen'
+    $okIds = @($r.results | Where-Object { $_.ok } | ForEach-Object { $_.id })
+    $inJournal = @((Read-VxBackup $r.backupId).entries | ForEach-Object { [string]$_.tweakId } | Select-Object -Unique)
+    Assert-True (@($inJournal | Where-Object { $okIds -notcontains $_ }).Count -eq 0 -and $inJournal.Count -ge [int]($okIds.Count * 0.9)) ('Journal vollständig: {0} von {1}' -f $inJournal.Count, $okIds.Count)
+}
+
+Test-Case 'speed' 'Journal: offene Datei lesbar, Eintrag sofort auf der Platte' {
+    $ctx = New-TestContext
+    $global:VxOpenJournals = New-Object System.Collections.ArrayList
+    try {
+        $J = New-VxJournal 'apply' 'offen'
+        Add-VxJournalEntry $J ([ordered]@{ op = 'reg'; path = 'HKCU\Software\X'; name = 'a'; before = @{ exists = $false }; after = @{ exists = $true; kind = 'DWord'; value = 1 }; tweakId = 'gaming.gamedvr-off' })
+        Assert-True ($null -ne $J.stream) 'Datei bleibt offen'
+        $b = Read-VxBackup $J.id
+        Assert-Equal 1 @($b.entries).Count 'unterbrochenes Journal lesbar, während es offen ist'
+        Assert-Equal 1 $global:VxOpenJournals.Count 'als offen gemerkt'
+        $id = Complete-VxJournal $J
+        Assert-True ($null -eq $J.stream -and $global:VxOpenJournals.Count -eq 0) 'geschlossen'
+        Assert-True ([IO.File]::Exists([IO.Path]::Combine($ctx.BackupDir, $id + '.json'))) 'fertige Sicherung'
+    } finally { $global:VxOpenJournals = $null }
+}
+
+Test-Case 'speed' 'Hintergrund-Arbeiter: einmal geladen, wiederverwendet, nach Absturz neu' {
+    $ctx = New-TestContext
+    $ctx.CoreSources = $null
+    $global:VxWorker = $null
+    try {
+        $run = {
+            param([string]$Type)
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $j = Start-VxJob $Type ([pscustomobject]@{})
+            while ($ctx.Jobs[$j.jobId].status -eq 'running' -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 10 }
+            for ($i = 0; $i -lt 100 -and (Get-VxJobHandles).ContainsKey($j.jobId); $i++) { Update-VxJobs; Start-Sleep -Milliseconds 10 }
+            return @{ job = $ctx.Jobs[$j.jobId]; ms = $sw.ElapsedMilliseconds }
+        }
+        $a = & $run 'startup-list'
+        Assert-Equal 'done' $a.job.status ('erster Job: ' + $a.job.error)
+        $w1 = $global:VxWorker
+        Assert-True ($null -ne $w1) 'Arbeiter bleibt'
+        $b = & $run 'startup-list'
+        Assert-Equal 'done' $b.job.status 'zweiter Job'
+        Assert-True ([object]::ReferenceEquals($w1.rs, $global:VxWorker.rs)) 'derselbe Runspace'
+        Assert-True ($b.ms -le [math]::Max(1000, $a.ms)) ('wiederverwendet ist nicht langsamer: {0} ms / {1} ms' -f $b.ms, $a.ms)
+        # crashed / closed runspace -> the next job gets a fresh one
+        $w1.rs.Close()
+        $c = & $run 'startup-list'
+        Assert-Equal 'done' $c.job.status 'nach Absturz läuft der nächste Job'
+        Assert-True (-not [object]::ReferenceEquals($w1.rs, $global:VxWorker.rs)) 'neuer Runspace'
+        $dto = Get-VxJobDto $c.job 0
+        Assert-True ($dto.Contains('skippable') -and $dto.Contains('durationMs')) 'Job-DTO mit skippable und durationMs'
+        # startup pre-warm: a job that arrives while the worker still loads the core waits for it
+        # (same runspace, the core is loaded once) instead of loading everything a second time
+        Stop-VxAllJobs 5
+        $global:VxWorker = $null
+        $ctx.TestWarmupDelayMs = 700
+        Start-VxWorkerWarmup
+        $ww = $global:VxWorker
+        Assert-True ($null -ne $ww -and $ww.warming) 'Vorwärmen läuft'
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $d = Start-VxJob 'startup-list' ([pscustomobject]@{})
+        $wasDeferred = [bool](Get-VxJobHandles)[$d.jobId].deferred
+        Assert-True $wasDeferred 'Job wartet auf den Arbeiter, der noch lädt'
+        while ((Get-VxJobHandles).ContainsKey($d.jobId) -and $sw.Elapsed.TotalSeconds -lt 60) { Update-VxJobs; Start-Sleep -Milliseconds 20 }
+        Assert-Equal 'done' $ctx.Jobs[$d.jobId].status ('Job hinter dem Vorwärmen: ' + $ctx.Jobs[$d.jobId].error)
+        Assert-True ([object]::ReferenceEquals($ww.rs, $global:VxWorker.rs)) 'derselbe vorgewärmte Runspace'
+        Assert-True ($null -ne $ww.warmed -and -not $ww.warming) 'Vorwärmen abgeschlossen'
+        Add-Note ('Job hinter dem Vorwärmen: {0} ms (wartete: {1})' -f $sw.ElapsedMilliseconds, $wasDeferred)
+        # a queued job can be cancelled before it starts
+        $global:VxWorker = $null
+        Start-VxWorkerWarmup
+        $e = Start-VxJob 'startup-list' ([pscustomobject]@{})
+        Assert-True ([bool](Get-VxJobHandles)[$e.jobId].deferred) 'zweiter Job wartet'
+        $null = Stop-VxJob $e.jobId
+        Update-VxJobs
+        Assert-Equal 'cancelled' $ctx.Jobs[$e.jobId].status 'wartender Job abgebrochen'
+        Assert-True (-not (Test-VxBusy)) 'danach nicht mehr beschäftigt'
+    } finally { $ctx.TestWarmupDelayMs = 0; Stop-VxAllJobs 5; $global:VxWorker = $null }
+}
+
+Test-Case 'speed' 'powercfg: eine Liste pro Schema statt ein Aufruf pro Einstellung (Sprache egal)' {
+    $null = New-TestContext
+    $en = @"
+Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+  GUID Alias: SCHEME_BALANCED
+  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (Processor power management)
+    GUID Alias: SUB_PROCESSOR
+    Power Setting GUID: be337238-0d82-4146-a960-4f3749d470c7  (Processor performance boost mode)
+      GUID Alias: PERFBOOSTMODE
+      Possible Setting Index: 000
+      Possible Setting Friendly Name: Disabled
+    Current AC Power Setting Index: 0x00000002
+    Current DC Power Setting Index: 0x00000001
+
+    Power Setting GUID: 893dee8e-2bef-41e0-89c6-b55d0929964c  (Minimum processor state)
+      GUID Alias: PROCTHROTTLEMIN
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0x00000064
+      Possible Settings increment: 0x00000001
+      Possible Settings units: %
+    Current AC Power Setting Index: 0x00000064
+    Current DC Power Setting Index: 0x00000005
+  Subgroup GUID: 0012ee47-9041-4b5d-9b77-535fba8b1442  (Hard disk)
+    GUID Alias: SUB_DISK
+    Power Setting GUID: 6738e2c4-e8a5-4a42-b16a-e040e769756e  (Turn off hard disk after)
+      GUID Alias: DISKIDLE
+      Minimum Possible Setting: 0x00000000
+      Maximum Possible Setting: 0xffffffff
+    Current AC Power Setting Index: 0x000004b0
+    Current DC Power Setting Index: 0x00000258
+"@
+    $t = ConvertFrom-VxPowercfgDump $en
+    Assert-Equal 2 ([int]$t['sub_processor|perfboostmode'].ac) 'Alias|Alias'
+    Assert-Equal 1 ([int]$t['54533251-82be-4824-96c1-47b60b740d00|be337238-0d82-4146-a960-4f3749d470c7'].dc) 'GUID|GUID'
+    Assert-Equal 100 ([int]$t['sub_processor|893dee8e-2bef-41e0-89c6-b55d0929964c'].ac) 'Alias|GUID, Grenzen nicht verwechselt'
+    Assert-Equal 600 ([int]$t['sub_disk|diskidle'].dc) 'zweite Untergruppe'
+    $de = $en.Replace('Power Scheme GUID', 'GUID des Energieschemas').Replace('Subgroup GUID', 'GUID der Untergruppe').Replace('GUID Alias', 'GUID-Alias').Replace('Power Setting GUID', 'GUID der Energieeinstellung').Replace('Current AC Power Setting Index', 'Index der aktuellen Wechselstromeinstellung').Replace('Current DC Power Setting Index', 'Index der aktuellen Gleichstromeinstellung')
+    $t2 = ConvertFrom-VxPowercfgDump $de
+    Assert-Equal 5 ([int]$t2['sub_processor|procthrottlemin'].dc) 'deutsche Ausgabe'
+}
+
+Test-Case 'detweak' 'Detweak nutzt die letzte Suche, liest nur betroffene Tweaks neu und erzwingt keinen Wiederherstellungspunkt' {
+    $ctx = New-TestContext -Seed
+    $ctx.Sim.rp = @{ next = 1; items = @() }
+    $scan = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    $keys = @($scan.items | Where-Object { $_.source -eq 'detweak' } | ForEach-Object { $_.key })
+    Assert-True ($keys.Count -ge 2) 'Fremd-Tweaks gefunden'
+    $origScan = ${function:Get-VxDetweakScan}
+    $origUpd = ${function:Update-VxStatuses}
+    # the closures get their own scope - they report through this hashtable
+    $probe = @{ scans = 0; ids = $null; updates = 0 }
+    ${function:Get-VxDetweakScan} = { param([double]$ProgressFrom = 0, [double]$ProgressTo = 1) $probe.scans++; & $origScan -ProgressFrom $ProgressFrom -ProgressTo $ProgressTo }.GetNewClosure()
+    ${function:Update-VxStatuses} = { param([string[]]$Ids = $null, [double]$ProgressFrom = -1, [double]$ProgressTo = -1) $probe.updates++; $probe.ids = $Ids; & $origUpd -Ids $Ids -ProgressFrom $ProgressFrom -ProgressTo $ProgressTo }.GetNewClosure()
+    try {
+        $res = Invoke-VxDetweakJob ([pscustomobject]@{ keys = $keys; commands = @(); thenApply = @('gaming.gamedvr-off'); restorePoint = $true })
+        Assert-Equal 0 $probe.scans 'keine zweite volle Suche'
+        Assert-Equal 1 $probe.updates 'Status einmal gezielt gelesen'
+        Assert-True ($null -ne $probe.ids -and @($probe.ids).Count -lt @($ctx.Catalog.tweaks).Count) ('nur betroffene Tweaks neu gelesen: {0}' -f @($probe.ids).Count)
+        Assert-True (@($probe.ids) -contains 'gaming.gamedvr-off') 'angewendeter Tweak dabei'
+        Assert-Equal $keys.Count ([int]$res.resetValues) 'alles zurückgesetzt'
+        Assert-Equal 1 @($ctx.Sim.rp.items).Count 'nur der Basis-Punkt, kein erzwungener'
+        # something changed the system since the scan -> a new scan
+        $ctx.ChangeGen = [int]$ctx.ChangeGen + 1
+        $null = Invoke-VxDetweakJob ([pscustomobject]@{ keys = $keys; commands = @(); thenApply = @() })
+        Assert-Equal 1 $probe.scans 'nach einer Änderung wird neu gesucht'
+    } finally { ${function:Get-VxDetweakScan} = $origScan; ${function:Update-VxStatuses} = $origUpd }
+    $after = Invoke-VxDetweakScanJob ([pscustomobject]@{})
+    Assert-Equal 0 @($after.items | Where-Object { $keys -contains $_.key }).Count 'Fremd-Tweaks sind weg'
+}
+
+# ==================================================================== games (detection + art)
+# The fixture PC tests/fixtures/games/pc (system.json + folders C/ and D/) is what Get-VxGameSystem
+# reads off Windows: every launcher source runs for real against it.
+
+function Get-FixtureGames {
+    $null = New-TestContext
+    $g = Invoke-VxGamesDetectJob ([pscustomobject]@{})
+    $by = @{}
+    foreach ($x in @($g.games)) { $by[[string]$x.path] = $x }
+    return @{ list = @($g.games); byPath = $by }
+}
+function Find-FixtureGame($Games, [string]$Path) { return $Games.byPath[$Path] }
+
+Test-Case 'games' 'Erkennung: Steam (alle Bibliotheken, appmanifest, Exe-Karte + Heuristik), Epic, GOG, Ubisoft, EA' {
+    $r = Get-FixtureGames
+    $steam = @($r.list | Where-Object { $_.source -eq 'steam' })
+    Assert-Equal 4 $steam.Count ('vier Steam-Spiele aus zwei Bibliotheken: ' + (($steam | ForEach-Object { $_.name }) -join ', '))
+    $cs = Find-FixtureGame $r 'C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe'
+    Assert-True ($null -ne $cs -and $cs.appid -eq '730' -and $cs.name -eq 'Counter-Strike 2') 'CS2 über die Exe-Karte (appid 730)'
+    $gta = Find-FixtureGame $r 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V\GTA5.exe'
+    Assert-True ($null -ne $gta -and $gta.source -eq 'steam' -and $gta.appid -eq '271590') 'GTA V: GTA5.exe, nicht PlayGTAV.exe'
+    Assert-True ($null -eq (Find-FixtureGame $r 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V\PlayGTAV.exe')) 'Starter-Exe nicht als eigenes Spiel'
+    $nd = Find-FixtureGame $r 'D:\SteamLibrary\steamapps\common\Nebula Drift\NebulaDrift.exe'
+    Assert-True ($null -ne $nd -and $nd.appid -eq '999001') 'Heuristik: NebulaDrift.exe statt Crash-Handler, Launcher, vc_redist, unins000'
+    $ih = Find-FixtureGame $r 'D:\SteamLibrary\steamapps\common\Iron Harbor\IronHarbor\Binaries\Win64\IronHarbor-Win64-Shipping.exe'
+    Assert-True ($null -ne $ih) 'Heuristik: Unreal *-Shipping.exe schlägt den kleinen Starter und CrashReportClient'
+    Assert-True (-not @($r.list | Where-Object { $_.name -match 'Half Built|Steamworks|Redist' -or $_.path -match '(?i)dxsetup|unins|crash|vc_redist' }).Count) 'halb installiert, Steamworks Shared und Hilfsprogramme fehlen'
+    $fn = Find-FixtureGame $r 'C:\Program Files\Epic Games\Fortnite\FortniteGame\Binaries\Win64\FortniteClient-Win64-Shipping.exe'
+    Assert-True ($null -ne $fn -and $fn.source -eq 'epic' -and $fn.appid -eq 'Fortnite') 'Epic: Fortnite aus dem .item-Manifest'
+    $lk = Find-FixtureGame $r 'C:\GOG Games\Lantern Keep\LanternKeep.exe'
+    Assert-True ($null -ne $lk -and $lk.source -eq 'gog' -and $lk.appid -eq '1207658924' -and $lk.name -eq 'Lantern Keep') 'GOG aus der Registry'
+    Assert-True (-not @($r.list | Where-Object { $_.name -eq 'Deinstalliert' }).Count) 'GOG-Eintrag ohne Dateien fehlt'
+    $r6 = @($r.list | Where-Object { $_.source -eq 'ubisoft' })[0]
+    Assert-True ($null -ne $r6 -and $r6.exe -eq 'RainbowSix.exe' -and $r6.appid -eq '635') 'Ubisoft Connect: Installs\635\InstallDir (mit /)'
+    $bf = @($r.list | Where-Object { $_.source -eq 'ea' })
+    Assert-True ($bf.Count -eq 1 -and $bf[0].exe -eq 'BF2042.exe' -and $bf[0].name -eq 'Battlefield 2042') 'EA app: Battlefield 2042'
+}
+
+Test-Case 'games' 'Erkennung: Battle.net, Riot, Xbox/Game Pass, Rockstar, FiveM/alt:V, Minecraft, Roblox, Publisher, laufende Spiele' {
+    $r = Get-FixtureGames
+    $ow = Find-FixtureGame $r 'C:\Program Files (x86)\Overwatch\_retail_\Overwatch.exe'
+    Assert-True ($null -ne $ow -and $ow.source -eq 'battlenet') 'Battle.net: Overwatch.exe im _retail_-Ordner, nicht der Launcher'
+    $va = Find-FixtureGame $r 'C:\Riot Games\VALORANT\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe'
+    Assert-True ($null -ne $va -and $va.source -eq 'riot' -and $va.name -eq 'VALORANT') 'Riot: VALORANT aus RiotClientInstalls.json'
+    Assert-True (-not @($r.list | Where-Object { $_.name -eq 'League of Legends' }).Count) 'Riot: nicht installiertes LoL fehlt'
+    $sc = Find-FixtureGame $r 'C:\XboxGames\Sky Courier\Content\SkyCourier.exe'
+    Assert-True ($null -ne $sc -and $sc.source -eq 'xbox' -and $sc.appid -eq 'Contoso.SkyCourier' -and $sc.name -eq 'Sky Courier') 'Xbox: ExecutableList ohne gamelaunchhelper'
+    $rdr = Find-FixtureGame $r 'C:\Program Files\Rockstar Games\Red Dead Redemption 2\RDR2.exe'
+    Assert-True ($null -ne $rdr -and $rdr.source -eq 'rockstar') 'Rockstar: RDR2 aus der Registry'
+    Assert-True (-not @($r.list | Where-Object { $_.exe -eq 'Launcher.exe' }).Count) 'Rockstar Launcher ist kein Spiel'
+    $five = @($r.list | Where-Object { $_.source -eq 'fivem' } | ForEach-Object { $_.exe })
+    foreach ($x in @('FiveM.exe', 'FiveM_b3095_GTAProcess.exe', 'altv.exe')) { Assert-True ($five -contains $x) ('FiveM & Co.: ' + $x) }
+    $mc = @($r.list | Where-Object { $_.source -eq 'minecraft' } | ForEach-Object { $_.exe })
+    Assert-True ($mc -contains 'MinecraftLauncher.exe' -and $mc -contains 'Minecraft.Windows.exe') 'Minecraft: Java-Launcher und Bedrock (Appx)'
+    $rb = @($r.list | Where-Object { $_.source -eq 'roblox' })
+    Assert-True ($rb.Count -eq 1 -and $rb[0].exe -eq 'RobloxPlayerBeta.exe') 'Roblox: nur der Player, nicht Studio'
+    $ta = Find-FixtureGame $r 'D:\Games\Tank Arena\TankArena.exe'
+    Assert-True ($null -ne $ta -and $ta.source -eq 'other') 'Uninstall-Eintrag eines Spiele-Publishers (DisplayIcon mit ",0")'
+    Assert-True (-not @($r.list | Where-Object { $_.name -match 'Office Tool|^Steam$' -or $_.exe -match '^(notepad|chrome|steam)\.exe$' }).Count) 'keine Programme, kein Launcher, kein Browser'
+    $pq = Find-FixtureGame $r 'D:\Indie\PixelQuest\PixelQuest.exe'
+    Assert-True ($null -ne $pq -and $pq.source -eq 'other' -and $pq.running -eq $true -and $pq.name -eq 'Pixel Quest') 'laufendes Vollbild-Spiel (Fenstertitel als Name)'
+    $gta = Find-FixtureGame $r 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V\GTA5.exe'
+    Assert-True ($gta.source -eq 'steam' -and $gta.running -eq $true) 'läuft und schon über Steam bekannt: bleibt Steam, nur als laufend markiert'
+    # dedupe: GTA V is in Steam, the Rockstar registry and the process list - once
+    Assert-Equal 1 @($r.list | Where-Object { $_.exe -eq 'GTA5.exe' }).Count 'jede Exe genau einmal'
+    $paths = @($r.list | ForEach-Object { ([string]$_.path).ToLowerInvariant() })
+    Assert-Equal $paths.Count @($paths | Select-Object -Unique).Count 'keine doppelten Pfade'
+    $ids = @($r.list | ForEach-Object { [string]$_.id })
+    Assert-True (@($ids | Where-Object { $_ -notmatch '^[a-f0-9]{10}$' }).Count -eq 0 -and $ids.Count -eq @($ids | Select-Object -Unique).Count) 'eindeutige ids'
+    $okSrc = @('steam', 'epic', 'gog', 'ubisoft', 'ea', 'battlenet', 'riot', 'xbox', 'rockstar', 'fivem', 'minecraft', 'roblox', 'other', 'manual')
+    Assert-True (@($r.list | Where-Object { $okSrc -notcontains [string]$_.source }).Count -eq 0) 'nur bekannte Quellen'
+    foreach ($x in $r.list) { Assert-True ($null -ne $x.boost -and $null -ne $x.art -and $x.exe -and $x.name) ('Felder vollständig: ' + $x.name) }
+}
+
+Test-Case 'games' 'Erkennung: kaputte Quelle, Zeitlimit, Boost bleibt erhalten, Heuristik-Filter' {
+    $null = New-TestContext
+    $sys = Get-VxGameSystem
+    Assert-True ($null -ne $sys -and -not $sys.Real) 'Testmodus liest den Fixture-PC'
+    # one source throws: only its games are missing
+    function Find-VxEpicGames($Sys, $Found) { throw 'kaputt' }
+    $found = Find-VxGames $sys $false
+    Assert-True (@($found.list | Where-Object { $_.source -eq 'epic' }).Count -eq 0 -and @($found.list | Where-Object { $_.source -eq 'gog' }).Count -eq 1) 'eine kaputte Quelle kostet nur ihre eigenen Spiele'
+    # time is up: the walk stops instead of hanging
+    $sys.Deadline = [DateTime]::UtcNow.AddSeconds(-1)
+    Assert-Equal $null (Find-VxGameExe $sys 'D:\SteamLibrary\steamapps\common\Nebula Drift' 'Nebula Drift') 'Zeitlimit beendet die Ordnersuche'
+    $sys.Deadline = [DateTime]::MaxValue
+    Assert-Equal 'D:\SteamLibrary\steamapps\common\Nebula Drift\NebulaDrift.exe' (Find-VxGameExe $sys 'D:\SteamLibrary\steamapps\common\Nebula Drift' 'Nebula Drift') 'ohne Zeitlimit gefunden'
+    foreach ($n in @('UnityCrashHandler64.exe', 'unins000.exe', 'VC_redist.x64.exe', 'DXSETUP.exe', 'EasyAntiCheat_Setup.exe', 'BEService_x64.exe', 'CrashReportClient.exe', 'NebulaDriftLauncher.exe', 'start_protected_game.exe', 'gamelaunchhelper.exe')) {
+        Assert-True (Test-VxNonGameExe $n) ('kein Spiel: ' + $n)
+    }
+    foreach ($n in @('NebulaDrift.exe', 'GTA5.exe', 'cs2.exe', 'RainbowSix.exe', 'Overwatch.exe')) { Assert-True (-not (Test-VxNonGameExe $n)) ('Spiel: ' + $n) }
+    Assert-Equal 'C:\x\Game.exe' (ConvertTo-VxIconPath '"C:\x\Game.exe",0') 'DisplayIcon mit Anführungszeichen'
+    Assert-Equal 'C:\Program Files (x86)\Steam' (ConvertTo-VxWinPath 'c:/program files (x86)//steam/') 'Registry-Pfad normalisiert'
+    # a game boosted by hand stays in the list, with its boost
+    $ctx = $global:VxCtx
+    $null = Invoke-VxGameBoostJob ([pscustomobject]@{ path = 'E:\Spiele\Eigen\eigen.exe'; priority = $true; name = 'Eigenes Spiel' })
+    $g = Invoke-VxGamesDetectJob ([pscustomobject]@{})
+    $own = @($g.games | Where-Object { $_.path -eq 'E:\Spiele\Eigen\eigen.exe' })[0]
+    Assert-True ($null -ne $own -and $own.boost.priority -and $own.art.cover -eq $false -and $own.art.icon -eq $false) 'manuelles Spiel bleibt mit Boost, ohne Bild'
+    Assert-True ($ctx.GameScan.games.Count -eq @($g.games).Count) 'Ergebnis für den Advisor gemerkt'
+}
+
+Test-Case 'games' 'Bilder: Steam-Cache (alt + neu), GOG-.ico, Xbox-Logos; Art-Datei nur für erkannte ids' {
+    $r = Get-FixtureGames
+    $lc = Join-Path (Join-Path $TestRoot 'fixtures') (Join-Path 'games' (Join-Path 'pc' (Join-Path 'C' (Join-Path 'Program Files (x86)' (Join-Path 'Steam' (Join-Path 'appcache' 'librarycache'))))))
+    $gta = Find-FixtureGame $r 'C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V\GTA5.exe'
+    Assert-True ($gta.art.cover -and $gta.art.icon -and $gta.art.shape -eq 'wide' -and $gta.art.v -match '^[a-f0-9]{10}$') 'GTA V: alte flache Namen (271590_header.jpg, _icon.jpg)'
+    Assert-Equal (Join-Path $lc '271590_header.jpg') (Get-VxGameArtFile $gta.id 'cover') 'Header als Titelbild'
+    $cs = Find-FixtureGame $r 'C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe'
+    Assert-Equal (Join-Path (Join-Path $lc '730') 'header.jpg') (Get-VxGameArtFile $cs.id 'cover') 'CS2: neuer Ordner librarycache\730\header.jpg'
+    Assert-Equal (Join-Path (Join-Path $lc '730') '8dbc71957312bbd3baea65848b545be9eae2a355.jpg') (Get-VxGameArtFile $cs.id 'icon') 'CS2: Icon mit Hash-Namen'
+    $ih = Find-FixtureGame $r 'D:\SteamLibrary\steamapps\common\Iron Harbor\IronHarbor\Binaries\Win64\IronHarbor-Win64-Shipping.exe'
+    Assert-True ($ih.art.cover -and -not $ih.art.icon -and $ih.art.shape -eq 'tall') 'nur Hochformat-Kapsel (600x900) -> shape tall'
+    $lk = Find-FixtureGame $r 'C:\GOG Games\Lantern Keep\LanternKeep.exe'
+    Assert-True (-not $lk.art.cover -and $lk.art.icon) 'GOG: goggame-<id>.ico'
+    Assert-True ((Get-VxGameArtFile $lk.id 'icon') -match 'goggame-1207658924\.ico$') 'GOG-Icon-Datei'
+    $sc = Find-FixtureGame $r 'C:\XboxGames\Sky Courier\Content\SkyCourier.exe'
+    Assert-True ((Get-VxGameArtFile $sc.id 'cover') -match 'Splash\.png$' -and (Get-VxGameArtFile $sc.id 'icon') -match 'Logo150\.png$') 'Xbox: SplashScreenImage + Square150x150Logo'
+    $nd = Find-FixtureGame $r 'D:\SteamLibrary\steamapps\common\Nebula Drift\NebulaDrift.exe'
+    Assert-True (-not $nd.art.cover -and -not $nd.art.icon -and $nd.art.v -eq '') 'ohne Bild: cover/icon false (UI zeigt Initialen; Windows nimmt das Exe-Icon)'
+    Assert-Equal $null (Get-VxGameArtFile $nd.id 'cover') 'kein Bild -> null'
+    Assert-Equal $null (Get-VxGameArtFile 'ffffffffff' 'cover') 'unbekannte id -> null'
+    Assert-Equal $null (Get-VxGameArtFile '..\..\sys' 'cover') 'Pfad statt id -> null'
+    Assert-Equal $null (Get-VxGameArtFile $gta.id 'path') 'unbekannte Bildart -> null'
+    Assert-Equal $null (Get-VxExeIconPng 'C:\x\y.exe') 'Exe-Icon nur unter Windows'
 }
 
 # ------------------------------------------------------------------ summary

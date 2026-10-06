@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
+  <title>VELOX Setup</title>
+  <link rel="stylesheet" href="setup.css">
+  <script src="setup.js" defer></script>
+</head>
+<body data-screen="intro" class="booting">
+  <div class="win">
+    <div class="aurora" aria-hidden="true"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
+    <div class="grain" aria-hidden="true"></div>
+    <canvas id="fx" class="fx" aria-hidden="true"></canvas>
+
+    <header class="titlebar" id="titlebar">
+      <div class="tb-brand">
+        <svg class="tb-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+          <path class="tb-tracks" d="M11 6v36M24 6v36M37 6v36"/>
+          <path class="tb-v" d="M11 13 24 35 37 13"/>
+          <rect x="5" y="9.5" width="12" height="7" rx="2.4"/><rect x="18" y="31.5" width="12" height="7" rx="2.4"/><rect x="31" y="9.5" width="12" height="7" rx="2.4"/>
+        </svg>
+        <span class="tb-title" id="tb-title">VELOX Setup</span>
+        <span class="tb-ver" id="tb-ver"></span>
+      </div>
+      <div class="tb-buttons">
+        <button class="tb-btn" id="btn-min" type="button" aria-label="Minimieren" data-nodrag>
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5h8"/></svg>
+        </button>
+        <button class="tb-btn tb-close" id="btn-close" type="button" aria-label="Schließen" data-nodrag>
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m2.5 2.5 7 7M9.5 2.5l-7 7"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="stage" id="stage">
+      <!-- shared hero: the fader-V logo glides between the screens (slots) -->
+      <div class="hero" id="hero" aria-hidden="true">
+        <div class="hero-tilt" id="hero-tilt">
+          <div class="hero-rays" id="hero-rays"></div>
+          <div class="hero-glow"></div>
+          <div class="hero-flash" id="hero-flash"></div>
+          <div class="hero-shock" id="hero-shock"></div>
+          <div class="hero-shock alt" id="hero-shock2"></div>
+          <svg class="hero-logo" id="hero-svg" viewBox="-6 -6 60 60" focusable="false">
+            <defs>
+              <linearGradient id="vgrad" x1="11" y1="13" x2="37" y2="13" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#7C5CFF"/><stop offset=".55" stop-color="#8E73FF"/><stop offset="1" stop-color="#7C5CFF"/>
+              </linearGradient>
+              <linearGradient id="sweepgrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+              </linearGradient>
+              <clipPath id="capclip">
+                <rect x="5" y="9.5" width="12" height="7" rx="2.4"/><rect x="18" y="31.5" width="12" height="7" rx="2.4"/><rect x="31" y="9.5" width="12" height="7" rx="2.4"/>
+              </clipPath>
+            </defs>
+            <g class="tracks">
+              <line class="track t1" x1="11" y1="6" x2="11" y2="42"/>
+              <line class="track t2" x1="24" y1="6" x2="24" y2="42"/>
+              <line class="track t3" x1="37" y1="6" x2="37" y2="42"/>
+            </g>
+            <g class="v-g">
+              <path class="v v-glow" id="v-glow" d="M11 13 24 35 37 13" pathLength="100"/>
+              <path class="v v-main" id="v-main" d="M11 13 24 35 37 13" pathLength="100"/>
+            </g>
+            <g class="cap-g g1"><rect class="cap c1" id="cap1" x="5" y="9.5" width="12" height="7" rx="2.4"/></g>
+            <g class="cap-g g2"><rect class="cap c2" id="cap2" x="18" y="31.5" width="12" height="7" rx="2.4"/></g>
+            <g class="cap-g g3"><rect class="cap c3" id="cap3" x="31" y="9.5" width="12" height="7" rx="2.4"/></g>
+            <g clip-path="url(#capclip)"><rect class="cap-sweep" id="cap-sweep" x="-14" y="0" width="12" height="48" fill="url(#sweepgrad)"/></g>
+          </svg>
+        </div>
+      </div>
+      <div class="word" id="word" aria-hidden="true">
+        <div class="word-blur">VELOX</div>
+        <div class="word-sharp" id="word-sharp"><span>V</span><span>E</span><span>L</span><span>O</span><span>X</span></div>
+        <div class="word-shine" id="word-shine">VELOX</div>
+      </div>
+
+      <!-- intro -->
+      <section class="screen intro" data-screen="intro" aria-label="Willkommen">
+        <div class="slot slot-logo" data-slot="logo" data-size="208"></div>
+        <div class="slot slot-word" data-slot="word" data-scale="1.4"></div>
+        <button class="skip" id="skip" type="button" data-nodrag>Überspringen</button>
+      </section>
+
+      <!-- welcome (install + update) -->
+      <section class="screen welcome" data-screen="welcome" aria-labelledby="w-title">
+        <div class="col">
+          <div class="slot slot-logo" data-slot="logo" data-size="112"></div>
+          <div class="slot slot-word" data-slot="word" data-scale="1"></div>
+          <h1 class="w-title in" id="w-title" data-i="0">Mach Windows schneller, ruhiger und privater.</h1>
+          <p class="w-sub in" id="w-sub" data-i="1">In wenigen Sekunden installiert. Jede Änderung wird vorher gesichert.</p>
+          <div class="update-note in" id="update-note" data-i="1" hidden>
+            <span class="pill-from" id="u-from">1.0.0</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg>
+            <span class="pill-to" id="u-to">1.1.0</span>
+          </div>
+          <div class="cta-wrap in" data-i="2">
+            <span class="cta-halo" aria-hidden="true"></span>
+            <button class="btn btn-cta" id="btn-install" type="button" data-nodrag>
+              <span class="btn-label" id="btn-install-label">Installieren</span>
+              <svg class="btn-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6.5 18.5 12 13 17.5"/></svg>
+            </button>
+          </div>
+          <p class="running-note in" id="running-note" data-i="3" hidden>VELOX läuft gerade – es wird für das Update kurz geschlossen.</p>
+          <button class="link in" id="btn-options" type="button" data-i="3" data-nodrag>Optionen</button>
+        </div>
+        <ul class="chips in" data-i="4" aria-label="Was VELOX mitbringt">
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Hunderte Tweaks mit Erklärung</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 19 6v5.5c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>Sicherung vor jeder Änderung</li>
+          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.5h6M10 3.5v5.2L5.2 17a2 2 0 0 0 1.7 3h10.2a2 2 0 0 0 1.7-3L14 8.7V3.5"/><path d="M7.5 14h9"/></svg>Testmodus zum Ausprobieren</li>
+        </ul>
+        <p class="meta in" id="w-meta" data-i="5"></p>
+      </section>
+
+      <!-- options -->
+      <section class="screen options" data-screen="options" aria-labelledby="o-title">
+        <div class="panel">
+          <div class="panel-head in" data-i="0">
+            <div class="slot slot-logo" data-slot="logo" data-size="40"></div>
+            <div>
+              <h1 id="o-title">Optionen</h1>
+              <p class="muted">Passt so? Dann einfach installieren.</p>
+            </div>
+          </div>
+          <div class="card in" data-i="1">
+            <div class="row folder-row">
+              <div class="row-text">
+                <span class="row-label">Speicherort</span>
+                <span class="path" id="o-dir" title=""></span>
+                <span class="row-sub" id="o-space"></span>
+                <span class="row-error" id="o-dir-error" role="alert" hidden></span>
+              </div>
+              <button class="btn btn-secondary" id="btn-browse" type="button" data-nodrag>Ändern …</button>
+            </div>
+          </div>
+          <div class="card in" data-i="2">
+            <label class="row toggle-row" data-nodrag>
+              <span class="row-text"><span class="row-label">Verknüpfung auf dem Desktop</span><span class="row-sub">Ein Doppelklick, und VELOX ist da.</span></span>
+              <input type="checkbox" class="switch" id="o-desktop" checked>
+            </label>
+            <label class="row toggle-row" data-nodrag>
+              <span class="row-text"><span class="row-label">Einträge im Startmenü</span><span class="row-sub">„VELOX“ und „VELOX Testmodus“</span></span>
+              <input type="checkbox" class="switch" id="o-startmenu" checked>
+            </label>
+            <label class="row toggle-row" data-nodrag>
+              <span class="row-text"><span class="row-label">VELOX danach starten</span><span class="row-sub">Startet direkt nach der Installation.</span></span>
+              <input type="checkbox" class="switch" id="o-launch" checked>
+            </label>
+          </div>
+          <div class="actions in" data-i="3">
+            <button class="btn btn-secondary" id="btn-back" type="button" data-nodrag>Zurück</button>
+            <button class="btn btn-brand" id="btn-install2" type="button" data-nodrag><span id="btn-install2-label">Installieren</span></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- progress (install, update, uninstall) -->
+      <section class="screen progress" data-screen="progress" aria-labelledby="p-title">
+        <div class="col">
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+              <defs>
+                <linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/>
+                </linearGradient>
+              </defs>
+              <circle class="ring-track" cx="100" cy="100" r="92"/>
+              <circle class="ring-ticks" cx="100" cy="100" r="80"/>
+              <circle class="ring-arc" id="ring-arc" cx="100" cy="100" r="92" pathLength="1000"/>
+            </svg>
+            <div class="ring-glow" id="ring-glow"></div>
+            <div class="ring-spark" id="ring-spark"><span></span></div>
+            <div class="slot slot-logo" data-slot="logo" data-size="92"></div>
+          </div>
+          <div class="pct" role="progressbar" id="pbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="p-title">
+            <span id="pct-num">0</span><span class="pct-sign">%</span>
+          </div>
+          <h1 class="p-title" id="p-title">VELOX wird installiert …</h1>
+          <p class="p-step" id="p-step" aria-live="polite">Vorbereiten …</p>
+          <p class="p-file" id="p-file"></p>
+        </div>
+      </section>
+
+      <!-- done -->
+      <section class="screen done" data-screen="done" aria-labelledby="d-title">
+        <div class="col">
+          <div class="done-logo">
+            <div class="slot slot-logo" data-slot="logo" data-size="112"></div>
+            <span class="badge-ok" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path class="check" d="m6.5 12.5 3.6 3.6 7.4-7.6"/></svg>
+            </span>
+          </div>
+          <h1 class="d-title in" id="d-title" data-i="0">Fertig! VELOX ist installiert.</h1>
+          <p class="d-sub in" id="d-sub" data-i="1">Du findest VELOX auf dem Desktop und im Startmenü.</p>
+          <div class="actions center in" data-i="2">
+            <button class="btn btn-secondary" id="btn-done-close" type="button" data-nodrag>Schließen</button>
+            <button class="btn btn-brand btn-lg" id="btn-launch" type="button" data-nodrag>VELOX starten</button>
+          </div>
+          <p class="hint in" id="d-hint" data-i="3">Tipp: Probier zuerst den <b>Testmodus</b> – da wird an deinem PC nichts verändert.</p>
+        </div>
+      </section>
+
+      <!-- error -->
+      <section class="screen error" data-screen="error" aria-labelledby="e-title">
+        <div class="col">
+          <div class="err-icon in" data-i="0" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5"/><path d="M12 17.4v.1"/></svg>
+          </div>
+          <h1 class="in" id="e-title" data-i="1">Das hat leider nicht geklappt</h1>
+          <p class="e-msg in" id="e-msg" data-i="2"></p>
+          <div class="e-hint in" data-i="3">
+            <span class="e-hint-label">Was du tun kannst</span>
+            <span id="e-hint"></span>
+          </div>
+          <div class="actions center in" data-i="4">
+            <button class="btn btn-ghost" id="btn-log" type="button" data-nodrag>Log öffnen</button>
+            <button class="btn btn-secondary" id="btn-err-close" type="button" data-nodrag>Schließen</button>
+            <button class="btn btn-brand" id="btn-retry" type="button" data-nodrag>Nochmal versuchen</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- uninstall -->
+      <section class="screen uninstall" data-screen="uninstall" aria-labelledby="u-title">
+        <div class="panel narrow">
+          <div class="panel-head in" data-i="0">
+            <div class="slot slot-logo" data-slot="logo" data-size="56"></div>
+            <div>
+              <h1 id="u-title">VELOX entfernen</h1>
+              <p class="muted" id="u-sub">VELOX wird von diesem PC entfernt.</p>
+            </div>
+          </div>
+          <div class="card in" data-i="1">
+            <label class="row toggle-row" data-nodrag>
+              <span class="row-text"><span class="row-label">Einstellungen und Sicherungen behalten</span><span class="row-sub">Praktisch, falls du VELOX später wieder installierst.</span></span>
+              <input type="checkbox" class="switch" id="u-keep" checked>
+            </label>
+          </div>
+          <div class="callout in" data-i="2">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6v.1"/></svg>
+            <p><b>Angewendete Tweaks bleiben aktiv.</b> Willst du sie rückgängig machen? Dann öffne vorher VELOX und spiele sie unter <b>„Sicherungen“</b> zurück.</p>
+          </div>
+          <p class="running-note in" id="u-running" data-i="3" hidden>VELOX läuft gerade – es wird dafür geschlossen.</p>
+          <div class="actions in" data-i="3">
+            <button class="btn btn-secondary" id="btn-u-cancel" type="button" data-nodrag>Abbrechen</button>
+            <button class="btn btn-danger" id="btn-uninstall" type="button" data-nodrag>Entfernen</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- confirm dialog -->
+    <div class="layer" id="confirm" hidden>
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="c-title" aria-describedby="c-text">
+        <h2 id="c-title">VELOX läuft gerade</h2>
+        <p id="c-text">Damit es weitergehen kann, wird VELOX jetzt kurz geschlossen. Falls VELOX gerade etwas an Windows ändert, warte lieber, bis es fertig ist.</p>
+        <div class="actions">
+          <button class="btn btn-secondary" id="c-cancel" type="button" data-nodrag>Abbrechen</button>
+          <button class="btn btn-brand" id="c-ok" type="button" data-nodrag>VELOX schließen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

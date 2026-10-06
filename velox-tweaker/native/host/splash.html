@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="dark">
+<title>VELOX</title>
+<style>
+/* VELOX.exe start screen: shown the moment the window opens, while the backend starts.
+   Same look as the app's own splash (ui/index.html #splash), so the hand-over is seamless. */
+:root {
+  --bg: #0F1115; --s1: #151821; --text: #E8EAF0; --muted: #9AA3B2; --faint: #6B7385;
+  --accent: #7C5CFF; --accent-rgb: 124, 92, 255; --brand-2: #22D3EE; --err-rgb: 244, 63, 94;
+  --brand: linear-gradient(135deg, var(--accent) 0%, var(--brand-2) 100%);
+  --ease: cubic-bezier(.2, .8, .2, 1); --spring: cubic-bezier(.34, 1.56, .64, 1);
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { background: radial-gradient(800px 500px at 50% 40%, rgba(var(--accent-rgb), .16), transparent 70%), var(--bg);
+  color: var(--text); font: 400 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; user-select: none; }
+.stage { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; transition: opacity 260ms var(--ease); }
+body.leaving .stage { opacity: 0; }
+.card { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, calc(100vw - 48px)); text-align: center; }
+.card.error { animation: enter 500ms var(--ease) backwards; }
+@keyframes enter { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes enter-calm { from { opacity: 0; } }
+.logo { position: relative; width: 92px; height: 92px; margin-bottom: 16px; }
+.logo::before { content: ""; position: absolute; inset: -28px; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--accent-rgb), .22), transparent); animation: glow-in 900ms var(--ease) 150ms backwards; }
+/* ignition: a flash and a ring when the V lights up (once, ~0.75 s after the window opens) */
+.logo::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; opacity: 0; pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), .9), 0 0 24px 2px rgba(var(--accent-rgb), .55), inset 0 0 18px rgba(34, 211, 238, .4);
+  animation: shock 900ms cubic-bezier(.1, .7, .25, 1) 760ms; }
+@keyframes glow-in { from { opacity: 0; transform: scale(.5); } }
+@keyframes shock { 0% { opacity: 0; transform: scale(.4); } 12% { opacity: 1; } 100% { opacity: 0; transform: scale(2.6); } }
+svg { position: relative; display: block; width: 100%; height: 100%; overflow: visible; }
+.tracks { fill: none; stroke: rgba(var(--accent-rgb), .32); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 100; animation: track-in 520ms var(--ease) backwards; }
+.tracks.t2 { animation-delay: 70ms; } .tracks.t3 { animation-delay: 140ms; }
+@keyframes track-in { from { stroke-dashoffset: 100; opacity: 0; } 30% { opacity: 1; } to { stroke-dashoffset: 0; } }
+/* the V: drawn in once with a bright flash, then the same breathing loop as the app's own start screen */
+.v { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), .55));
+  stroke-dasharray: 100; animation: v-in 520ms cubic-bezier(.5, 0, .2, 1) 560ms backwards, draw 2.8s var(--ease) 1.6s infinite; }
+@keyframes v-in { from { stroke-dashoffset: 100; } 80% { stroke: #B8A8FF; filter: drop-shadow(0 0 14px rgba(34, 211, 238, .9)); } to { stroke-dashoffset: 0; } }
+@keyframes draw { 0% { stroke-dashoffset: 0; } 30% { stroke-dashoffset: -100; } 30.01% { stroke-dashoffset: 100; } 60%, 100% { stroke-dashoffset: 0; } }
+/* fader caps drop in with a spring, then move like an equalizer */
+.cap { fill: #E8EAF0; transform-box: fill-box; transform-origin: center; }
+.cap.c1 { --eq: 7px; animation: drop 620ms var(--spring) 200ms backwards, eq 1.4s var(--ease) 1.2s infinite; }
+.cap.c3 { --eq: 7px; animation: drop 620ms var(--spring) 290ms backwards, eq 1.4s var(--ease) 1.65s infinite; }
+.cap.c2 { --eq: -7px; animation: drop 620ms var(--spring) 380ms backwards, eq 1.4s var(--ease) 2.1s infinite; }
+@keyframes drop { from { opacity: 0; transform: translateY(-16px) scale(.9, 1.15); } 20% { opacity: 1; } 45% { transform: translateY(0) scale(1.16, .76); } 70% { transform: translateY(-2px) scale(.96, 1.05); } to { transform: none; } }
+@keyframes eq { 0%, 100% { transform: none; } 50% { transform: translateY(var(--eq)); } }
+.name { font: 700 20px/1 var(--font-display); letter-spacing: .3em; padding-left: .3em; animation: word-in 700ms var(--ease) 820ms backwards; }
+@keyframes word-in { from { opacity: 0; letter-spacing: .7em; filter: blur(8px); } }
+.card.start > .status, .card.start > .bar, body.test .card.start > .chip { animation: rise 500ms var(--ease) 1s backwards; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.chip { display: none; font-size: 12px; font-weight: 600; color: #8BE9C0; background: rgba(52, 211, 153, .1); box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .3); padding: 2px 8px; border-radius: 6px; }
+body.test .chip { display: inline-block; }
+.status { color: var(--muted); min-height: 21px; }
+.bar { position: relative; width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .07); overflow: hidden; margin-top: 4px; }
+.bar::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: inherit; background: var(--brand); box-shadow: 0 0 12px rgba(var(--accent-rgb), .6); animation: indet 1.6s var(--ease) infinite; }
+@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+.hint { font-size: 12px; color: var(--faint); opacity: 0; transition: opacity 400ms var(--ease); }
+body.slow .hint { opacity: 1; }
+
+/* error */
+.error { display: none; }
+body.failed .card.start { display: none; }
+body.failed .error { display: flex; }
+.err-icon { width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center; color: #FF7A93; background: rgba(var(--err-rgb), .1); box-shadow: inset 0 0 0 1px rgba(var(--err-rgb), .3); margin-bottom: 4px; }
+.err-title { font: 600 20px/1.3 var(--font-display); margin: 0; }
+.err-text { color: var(--muted); margin: 0; }
+.log { width: min(640px, calc(100vw - 48px)); max-height: 180px; overflow: auto; text-align: left; margin: 4px 0 0; padding: 12px; border-radius: 10px; background: var(--s1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); font: 12px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word; user-select: text; }
+.log:empty { display: none; }
+.error.card { width: min(640px, calc(100vw - 48px)); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+button { font: 600 14px/1 var(--font); height: 36px; padding: 0 16px; border: 0; border-radius: 8px; cursor: pointer; color: var(--text);
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); transition: transform 120ms var(--ease), background-color 160ms var(--ease), filter 160ms var(--ease); }
+button:hover { background: rgba(255, 255, 255, .1); transform: translateY(-1px); }
+button:active { transform: scale(.97); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--brand); color: #fff; box-shadow: 0 8px 28px -8px rgba(var(--accent-rgb), .55); }
+button.primary:hover { filter: brightness(1.08) saturate(1.1); }
+button[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .v, .cap, .card, .tracks, .name, .logo::before, .logo::after, .card.start > * { animation: none !important; stroke-dasharray: none; }
+  .card.start { animation: enter-calm 300ms linear backwards !important; }
+  .bar::after { animation: none; width: 100%; opacity: .5; }
+  button:hover, button:active { transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="stage" role="status" aria-live="polite">
+  <div class="card start">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 48 48" focusable="false">
+        <path class="tracks t1" d="M11 6v36" pathLength="100"/>
+        <path class="tracks t2" d="M24 6v36" pathLength="100"/>
+        <path class="tracks t3" d="M37 6v36" pathLength="100"/>
+        <path class="v" d="M11 13 24 35 37 13" pathLength="100"/>
+        <rect class="cap c1" x="5" y="9.5" width="12" height="7" rx="2.4"/>
+        <rect class="cap c2" x="18" y="31.5" width="12" height="7" rx="2.4"/>
+        <rect class="cap c3" x="31" y="9.5" width="12" height="7" rx="2.4"/>
+      </svg>
+    </div>
+    <div class="name">VELOX</div>
+    <span class="chip">Testmodus</span>
+    <div id="status" class="status">VELOX wird gestartet …</div>
+    <div class="bar" aria-hidden="true"></div>
+    <div class="hint">Beim ersten Start kann das ein paar Sekunden dauern.</div>
+  </div>
+  <div class="card error" role="alert">
+    <div class="err-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21.5 20h-19z"/><path d="M12 10v4.5"/><path d="M12 17.4v.1"/></svg>
+    </div>
+    <h1 id="err-title" class="err-title">VELOX konnte nicht starten</h1>
+    <p id="err-text" class="err-text"></p>
+    <pre id="err-log" class="log"></pre>
+    <div class="btns">
+      <button id="b-retry" class="primary" type="button">Erneut versuchen</button>
+      <button id="b-test" type="button">Testmodus</button>
+      <button id="b-log" type="button">Log öffnen</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var wv = window.chrome && window.chrome.webview;
+  function send(type) { try { if (wv) wv.postMessage({ type: type }); } catch (e) { /* no host */ } }
+  var slowTimer = setTimeout(function () { document.body.classList.add('slow'); }, 6000);
+  function handle(m) {
+    if (!m || typeof m !== 'object') return;
+    if (m.type === 'mode') document.body.classList.toggle('test', !!m.test);
+    else if (m.type === 'status') document.getElementById('status').textContent = String(m.text || '');
+    else if (m.type === 'ready') document.body.classList.add('leaving');
+    else if (m.type === 'starting') {
+      document.body.classList.remove('failed', 'leaving', 'slow');
+      clearTimeout(slowTimer);
+      slowTimer = setTimeout(function () { document.body.classList.add('slow'); }, 6000);
+      document.getElementById('status').textContent = String(m.text || 'VELOX wird gestartet …');
+    } else if (m.type === 'error') {
+      clearTimeout(slowTimer);
+      document.getElementById('err-title').textContent = String(m.title || 'VELOX konnte nicht starten');
+      document.getElementById('err-text').textContent = String(m.message || '');
+      document.getElementById('err-log').textContent = String(m.log || '');
+      document.getElementById('b-test').hidden = !m.canTest;
+      document.body.classList.add('failed');
+      document.body.classList.remove('leaving');
+      var b = document.getElementById('b-retry');
+      setTimeout(function () { try { b.focus(); } catch (e) { /* ignore */ } }, 50);
+      var log = document.getElementById('err-log');
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+  if (wv) wv.addEventListener('message', function (e) { handle(e.data); });
+  window.__veloxSplash = handle; // for tests
+  document.getElementById('b-retry').addEventListener('click', function () { send('retry'); });
+  document.getElementById('b-test').addEventListener('click', function () { send('test'); });
+  document.getElementById('b-log').addEventListener('click', function () { send('openlog'); });
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  send('splash-ready');
+})();
+</script>
+</body>
+</html>

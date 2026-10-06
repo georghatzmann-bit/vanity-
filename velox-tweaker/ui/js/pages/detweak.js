@@ -11,7 +11,7 @@ export default {
     let thenApply = opts.thenApply ? 'preset:' + opts.thenApply : (ctx.cache.detweakThen || '');
     const selected = new Set();
     const cmdSel = new Set();
-    let restorePoint = true;
+    const restorePoint = true; // allows the policy's extra point (settings.restorePoints), never forces one
     let lastResult = null;
 
     const scanBtn = button({ label: ctx.cache.detweak ? 'Neu scannen' : 'Scan starten', icon: 'search', variant: 'primary', cls: 'btn-brand btn-lg', onClick: () => scan(), attrs: { 'data-testid': 'detweak-scan' } });
@@ -174,7 +174,16 @@ export default {
       const updThen = () => { const n = thenIds().length; thenHint.textContent = thenApply ? plural(n, 'Tweak wird', 'Tweaks werden') + ' danach angewendet.' : 'Du kannst später jederzeit ein Preset anwenden.'; };
       select.addEventListener('change', () => { thenApply = select.value; ctx.cache.detweakThen = thenApply; updThen(); syncCount(); const n = body.querySelector('.then-card'); const nn = thenNote(); if (n && nn) n.replaceWith(nn); else if (n) n.remove(); else if (nn) toolbar.before(nn); });
       updThen();
-      const rp = checkbox({ checked: restorePoint, label: 'Vorher Wiederherstellungspunkt erstellen', desc: 'Windows-eigenes Sicherheitsnetz. Zusätzlich sichert VELOX jeden Wert.', onChange: (v) => { restorePoint = v; } });
+      // Windows restore points follow settings.restorePoints (docs/ARCHITECTURE.md §8) - Detweak
+      // never forces an extra one; the journal makes every reset undoable anyway
+      const rpMode = (ctx.settings && ctx.settings.restorePoints) || (ctx.settings && ctx.settings.autoRestorePoint === false ? 'off' : 'first');
+      const rpText = rpMode === 'presets'
+        ? 'VELOX sichert jeden Wert vorher im eigenen Journal. Ab 10 Werten legt es zusätzlich einen Windows-Wiederherstellungspunkt an – höchstens einen pro Tag.'
+        : rpMode === 'off'
+          ? 'VELOX sichert jeden Wert vorher im eigenen Journal – rückgängig unter „Sicherungen“. Windows-Wiederherstellungspunkte sind aus.'
+          : 'VELOX sichert jeden Wert vorher im eigenen Journal – rückgängig unter „Sicherungen“. Einen Windows-Wiederherstellungspunkt gibt es nur einmal, vor deiner allerersten Änderung.';
+      const rp = h('div', { class: 'stack-8', 'data-testid': 'detweak-rp' }, h('p', { class: 'fine', text: rpText }),
+        h('div', {}, button({ label: 'Wiederherstellungspunkte einstellen', icon: 'cog', size: 'sm', variant: 'ghost', onClick: () => ctx.navigate('settings', { focus: 'safety' }) })));
       body.appendChild(h('section', { class: 'card pad-24 dt-options' },
         h('div', { class: 'dt-opt-grid' },
           h('div', {}, h('div', { class: 'field-label', text: 'Zusätzliche Befehle' }), h('p', { class: 'fine dt-cmd-hint', text: 'Wirken auf das ganze System. Lies die Beschreibung, bevor du einen Haken setzt.' }), h('div', { class: 'stack-8' }, cmds.length ? cmds : h('p', { class: 'fine', text: 'Keine zusätzlichen Befehle.' }))),

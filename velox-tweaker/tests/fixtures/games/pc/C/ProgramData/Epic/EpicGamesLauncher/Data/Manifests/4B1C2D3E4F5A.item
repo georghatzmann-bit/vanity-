@@ -1,0 +1,8 @@
+{
+	"FormatVersion": 0,
+	"DisplayName": "Fortnite",
+	"InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite",
+	"LaunchExecutable": "FortniteGame/Binaries/Win64/FortniteClient-Win64-Shipping.exe",
+	"AppName": "Fortnite",
+	"bIsIncompleteInstall": false
+}

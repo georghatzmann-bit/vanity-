@@ -1,18 +1,27 @@
-// Einstellungen: accent (live), motion, safety switches, Claude key/model, about + Testmodus.
+// Einstellungen: accent (live), motion, safety switches, KI providers (settings-ai.js), about + Testmodus.
 import { icon } from '../icons.js';
 import { h, clear, button, toggle, segmented, optionRow, toast, confirmDialog, badge, append, radioKeys } from '../ui.js';
-import { api } from '../api.js';
+import { aiSection } from './settings-ai.js';
 
 const ACCENTS = [
   ['violet', 'Violett'], ['blue', 'Blau'], ['cyan', 'Cyan'], ['green', 'Grün'], ['pink', 'Pink'], ['orange', 'Orange']
 ];
-export const MODELS = [
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 – beste Qualität (Standard)', desc: 'Gründlichste Analyse. Dauert etwas länger und kostet mehr pro Anfrage.' },
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 – schneller und günstiger', desc: 'Sehr gute Vorschläge in kürzerer Zeit.' }
+// Windows restore points (settings.restorePoints, docs/ARCHITECTURE.md section 8)
+export const RP_MODES = [
+  { id: 'first', label: 'Nur einmal, vor der allerersten Änderung', desc: 'Empfohlen. Danach sichert VELOX jeden Wert im eigenen Journal – das spart Speicherplatz.' },
+  { id: 'presets', label: 'Zusätzlich vor großen Paketen', desc: 'Auch vor Presets, Detweak und KI-Plänen ab 10 Tweaks – höchstens einer pro Tag.' },
+  { id: 'off', label: 'Aus', desc: 'Kein Windows-Wiederherstellungspunkt. Rückgängig geht trotzdem unter „Sicherungen“.' }
 ];
+export function rpMode(settings) {
+  const m = settings && settings.restorePoints;
+  if (RP_MODES.some(x => x.id === m)) return m;
+  return settings && settings.autoRestorePoint === false ? 'off' : 'first';
+}
+
+export { MODELS } from './settings-ai.js';
 
 export default {
-  id: 'settings', title: 'Einstellungen', icon: 'cog', desc: 'Aussehen, Sicherheit und Claude KI', keywords: 'optionen farbe animation api key claude',
+  id: 'settings', title: 'Einstellungen', icon: 'cog', desc: 'Aussehen, Sicherheit und KI', keywords: 'optionen farbe animation api key claude code groq ki',
   mount(el, ctx, opts) {
     const s = () => ctx.settings;
 
@@ -50,60 +59,25 @@ export default {
       if (!v) { const ok = await confirmDialog({ title: 'Nachfrage abschalten?', text: 'Riskante Tweaks werden dann ohne Warnung vorgemerkt. Empfohlen ist: anlassen.', confirmLabel: 'Abschalten', danger: true }); if (!ok) return false; }
       return ctx.saveSettings({ confirmRisky: v });
     } });
-    const rp = toggle({ checked: s().autoRestorePoint !== false, label: 'Automatischer Wiederherstellungspunkt', onChange: (v) => ctx.saveSettings({ autoRestorePoint: v }) });
-
-    // ---------- claude
-    const claudeBox = h('div', { class: 'claude-box' });
-    function fillClaude() {
-      clear(claudeBox);
-      const c = s().claude || {};
-      const status = h('div', { class: 'key-status ' + (c.hasKey ? 'is-ok' : 'is-off') },
-        icon(c.hasKey ? 'checkCircle' : 'key', 18),
-        h('div', {}, h('strong', { text: c.hasKey ? 'API-Key hinterlegt' : 'Kein API-Key hinterlegt' }), h('span', { text: c.hasKey ? 'Sicher in Windows gespeichert – nur dein Benutzerkonto kann ihn lesen. VELOX zeigt ihn nie wieder an.' : 'Ohne Key nutzt der KI-Optimierer die kostenlose Smart-Analyse.' })));
-      const input = h('input', { class: 'input', type: 'password', placeholder: c.hasKey ? 'Neuen Key eingeben, um ihn zu ersetzen' : 'sk-ant-…', autocomplete: 'off', spellcheck: 'false', 'aria-label': 'Claude API-Key', 'data-testid': 'claude-key' });
-      const save = button({ label: 'Speichern', icon: 'lock', variant: 'primary', onClick: async () => {
-        const key = input.value.trim();
-        if (!key) { toast({ type: 'warn', title: 'Kein Key eingegeben' }); input.focus(); return; }
-        save.disabled = true;
-        try {
-          const r = await api.setClaudeKey(key);
-          input.value = '';
-          ctx.settings.claude = Object.assign({}, ctx.settings.claude, { hasKey: !!(r && r.hasKey) });
-          ctx.emit('settings');
-          toast({ type: 'ok', title: 'API-Key gespeichert', text: 'Claude ist jetzt im KI-Optimierer verfügbar.' });
-          fillClaude();
-        } catch (e) { toast({ type: 'error', title: 'Key nicht gespeichert', text: e.message }); save.disabled = false; }
-      }, attrs: { 'data-testid': 'claude-save' } });
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); });
-      const del = c.hasKey ? button({ label: 'Key löschen', icon: 'trash', variant: 'ghost', onClick: async () => {
-        const ok = await confirmDialog({ title: 'API-Key löschen?', text: 'Der KI-Optimierer nutzt danach wieder die Smart-Analyse.', confirmLabel: 'Löschen', danger: true });
-        if (!ok) return;
-        try { await api.deleteClaudeKey(); ctx.settings.claude = Object.assign({}, ctx.settings.claude, { hasKey: false }); ctx.emit('settings'); toast({ type: 'ok', title: 'API-Key gelöscht' }); fillClaude(); }
-        catch (e) { toast({ type: 'error', title: 'Konnte nicht löschen', text: e.message }); }
-      } }) : null;
-      const models = h('div', { class: 'model-list', role: 'radiogroup', 'aria-label': 'Modell' });
-      for (const m of MODELS) {
-        const b = h('button', { class: 'model ripple-host', type: 'button', role: 'radio', 'aria-checked': String((c.model || 'claude-opus-5-5') === m.id), 'data-model': m.id },
-          h('span', { class: 'radio-dot' }), h('span', { class: 'model-text' }, h('span', { class: 'model-label', text: m.label }), h('span', { class: 'model-desc', text: m.desc })));
-        b.addEventListener('click', async () => {
-          const prev = (s().claude && s().claude.model) || 'claude-opus-5-5';
-          if (prev === m.id && b.getAttribute('aria-checked') === 'true') return;
-          const mark = (id) => { for (const x of models.children) x.setAttribute('aria-checked', String(x.dataset.model === id)); if (models.syncRadios) models.syncRadios(); };
-          mark(m.id);
-          const ok = await ctx.saveSettings({ claude: { model: m.id } }, { silent: true });
-          if (ok) { ctx.settings.claude = Object.assign({}, c, ctx.settings.claude, { model: m.id }); toast({ type: 'ok', title: 'Modell: ' + m.label.split(' – ')[0] }); }
-          else mark(prev);
-        });
-        models.appendChild(b);
-      }
-      radioKeys(models, (b) => b.click());
-      append(claudeBox, status,
-        h('div', { class: 'key-row' }, h('div', { class: 'path-input' }, icon('key', 16), input), save, del),
-        h('p', { class: 'fine', text: 'Den Key bekommst du unter console.anthropic.com. Jede Analyse kostet ein paar Cent und wird über dein Anthropic-Konto abgerechnet.' }),
-        h('div', { class: 'field-label mt-16', text: 'Modell' }), models,
-        h('div', { class: 'note note-info mt-16' }, icon('shieldCheck', 15), h('span', { text: 'Was gesendet wird: nur Hardware-Daten (z. B. Prozessor, Grafikkarte, RAM) und welche Tweaks an oder aus sind. Keine Namen, keine Dateien, keine Passwörter.' })));
+    const rpList = h('div', { class: 'model-list rp-modes', role: 'radiogroup', 'aria-label': 'Windows-Wiederherstellungspunkte', 'data-testid': 'rp-modes' });
+    const markRp = (id) => { for (const x of rpList.children) x.setAttribute('aria-checked', String(x.dataset.rp === id)); if (rpList.syncRadios) rpList.syncRadios(); };
+    for (const m of RP_MODES) {
+      const b = h('button', { class: 'model ripple-host', type: 'button', role: 'radio', 'aria-checked': String(rpMode(s()) === m.id), 'data-rp': m.id },
+        h('span', { class: 'radio-dot' }), h('span', { class: 'model-text' }, h('span', { class: 'model-label', text: m.label }), h('span', { class: 'model-desc', text: m.desc })));
+      b.addEventListener('click', async () => {
+        const prev = rpMode(s());
+        if (prev === m.id && b.getAttribute('aria-checked') === 'true') return;
+        markRp(m.id);
+        const ok = await ctx.saveSettings({ restorePoints: m.id }, { silent: true });
+        if (ok) toast({ type: 'ok', title: m.id === 'off' ? 'Wiederherstellungspunkte aus' : 'Wiederherstellungspunkte: ' + m.label });
+        else markRp(prev); // show what is really saved
+      });
+      rpList.appendChild(b);
     }
-    fillClaude();
+    radioKeys(rpList, (b) => b.click());
+
+    // ---------- KI providers
+    const ai = aiSection(ctx);
 
     // ---------- about
     const m = ctx.mode || {};
@@ -123,14 +97,20 @@ export default {
         optionRow({ title: 'Animationen', desc: osReduced ? 'Windows wünscht weniger Bewegung – VELOX hält sich daran.' : 'Reduziert schaltet Bewegungen ab und lässt nur sanfte Überblendungen.', control: motion })),
       section('safety', 'shield', 'Sicherheit', 'Schutz vor ungewollten Änderungen.',
         optionRow({ title: 'Bei riskanten Tweaks nachfragen', desc: 'Zeigt eine Warnung mit Häkchen, bevor ein riskanter Tweak vorgemerkt wird.', control: risky }),
-        optionRow({ title: 'Automatischer Wiederherstellungspunkt', desc: 'Erstellt vor der ersten Änderung pro Sitzung einen Windows-Wiederherstellungspunkt.', control: rp })),
-      section('claude', 'sparkles', 'Claude KI', 'Optional: eine zweite Meinung von Claude für den KI-Optimierer.', claudeBox),
+        h('div', { class: 'rp-block' },
+          h('div', { class: 'field-label', text: 'Windows-Wiederherstellungspunkte' }),
+          h('p', { class: 'fine', text: 'Ein Wiederherstellungspunkt kann mehrere GB Speicher belegen. VELOX braucht ihn nicht, um etwas rückgängig zu machen – er ist nur ein zusätzliches Netz.' }),
+          rpList)),
+      section('ai', 'sparkles', 'KI', 'Welche KI der KI-Optimierer nutzt. Am besten: Claude Code mit deinem Claude-Abo.', ai.el),
       section('about', 'info', 'Über VELOX', 'Version und Umgebung.', about,
         h('div', { class: 'note ' + (m.simulate ? 'note-warn' : 'note-info') + ' mt-16' }, icon('flask', 15), h('span', { text: m.simulate
           ? 'Testmodus ist an: VELOX zeigt dir alles und tut so, als würde es Änderungen anwenden – an deinem PC wird aber nichts verändert. Zum echten Anwenden starte VELOX über Start.bat statt Start-Testmodus.bat.'
           : 'Echtbetrieb: Änderungen werden wirklich angewendet. Zum gefahrlosen Ausprobieren gibt es Start-Testmodus.bat – dort wird nichts verändert.' })))));
 
-    if (opts && opts.focus === 'claude') requestAnimationFrame(() => { const t = el.querySelector('#set-claude'); if (t) { t.scrollIntoView({ block: 'start' }); t.classList.add('flash'); const i = t.querySelector('input'); if (i) i.focus({ preventScroll: true }); } });
-    ctx.on('settings', () => markSwatch(s().accent || 'violet'));
+    // focus 'ai' / 'claude' (older links) / 'groq' / 'claude-code' / 'claude-api': open that provider card
+    const aiFocus = opts && { ai: 'claude-code', claude: 'claude-api', 'claude-api': 'claude-api', groq: 'groq', 'claude-code': 'claude-code' }[opts.focus];
+    if (aiFocus) requestAnimationFrame(() => ai.focus(aiFocus));
+    if (opts && opts.focus === 'safety') requestAnimationFrame(() => { const t = el.querySelector('#set-safety'); if (t) { t.scrollIntoView({ block: 'start' }); t.classList.add('flash'); const r = rpList.querySelector('[aria-checked="true"]'); if (r) r.focus({ preventScroll: true }); } });
+    ctx.on('settings', () => { markSwatch(s().accent || 'violet'); markRp(rpMode(s())); });
   }
 };

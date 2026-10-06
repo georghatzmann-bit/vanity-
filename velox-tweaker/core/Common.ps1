@@ -168,6 +168,10 @@ function New-VxContext {
     $ctx.Jobs = [hashtable]::Synchronized(@{})
     $ctx.CurrentJobId = $null
     $ctx.RestorePointDone = $false
+    # one baseline attempt per session at most (a broken System Restore must not cost every job a wait)
+    $ctx.RestorePointTried = $false
+    # counts finished jobs that changed the system (Detweak reuses a scan only when nothing changed since)
+    $ctx.ChangeGen = 0
     $ctx.LogLock = New-Object object
     $ctx.Build = 0
     $ctx.IsWin11 = $false
@@ -196,12 +200,36 @@ function Write-VxFileLog {
     $ctx = $global:VxCtx
     if ($null -eq $ctx -or -not $ctx.LogDir) { return }
     $line = '{0} [{1}] {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Level.ToUpperInvariant(), $Message
+    # Inside a job the lines are collected and written in one go (Flush-VxFileLog): opening the
+    # log file for every line costs a virus scan on close on many PCs.
+    $buf = $global:VxLogBuffer
+    if ($null -ne $buf) {
+        $buf.Add($line)
+        if ($buf.Count -ge 200 -or $Level -eq 'error') { Flush-VxFileLog }
+        return
+    }
+    Write-VxFileLines @($line)
+}
+
+function Write-VxFileLines([string[]]$Lines) {
+    $ctx = $global:VxCtx
+    if ($null -eq $ctx -or -not $ctx.LogDir -or @($Lines).Count -eq 0) { return }
     try {
         $file = [IO.Path]::Combine($ctx.LogDir, ('velox-' + (Get-Date).ToString('yyyyMMdd') + '.log'))
+        $text = (@($Lines) -join "`r`n") + "`r`n"
         [System.Threading.Monitor]::Enter($ctx.LogLock)
-        try { [IO.File]::AppendAllText($file, $line + "`r`n", (New-Object System.Text.UTF8Encoding($false))) }
+        try { [IO.File]::AppendAllText($file, $text, (New-Object System.Text.UTF8Encoding($false))) }
         finally { [System.Threading.Monitor]::Exit($ctx.LogLock) }
     } catch { $null = $_ }
+}
+
+# Writes the lines a job collected (see Write-VxFileLog).
+function Flush-VxFileLog {
+    $buf = $global:VxLogBuffer
+    if ($null -eq $buf -or $buf.Count -eq 0) { return }
+    $lines = $buf.ToArray()
+    $buf.Clear()
+    Write-VxFileLines $lines
 }
 
 # Log file + the running job's log (user-visible, without stack traces - see Remove-VxStackText).
@@ -378,6 +406,104 @@ function Get-VxSystemTool([string]$Name) {
     return $Name
 }
 
+# 64-bit Windows PowerShell 5.1 for isolated steps (pwsh off Windows, for the tests).
+function Get-VxPowerShellExe {
+    if (Test-VxWindows) { return (Get-VxSystemTool 'WindowsPowerShell\v1.0\powershell.exe') }
+    try {
+        $self = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+        if ([IO.Path]::GetFileNameWithoutExtension($self) -match '^(pwsh|powershell)$') { return $self }
+    } catch { $null = $_ }
+    return 'pwsh'
+}
+
+# Ends a process and (on Windows) everything it started - a killed powershell.exe must not leave
+# a powercfg or netsh behind.
+function Stop-VxProcessTree($Process) {
+    if ($null -eq $Process) { return }
+    try { if ($Process.HasExited) { return } } catch { return }
+    if (Test-VxWindows) {
+        try { $null = Invoke-VxNative -FilePath (Get-VxSystemTool 'taskkill.exe') -Arguments @('/PID', [string]$Process.Id, '/T', '/F') -TimeoutSec 10 } catch { $null = $_ }
+    }
+    try { if (-not $Process.HasExited) { $Process.Kill() } } catch { $null = $_ }
+    try { [void]$Process.WaitForExit(3000) } catch { $null = $_ }
+}
+
+# Runs PowerShell source in its own powershell.exe with a hard timeout, so a step that hangs
+# (restore point, a reset command) can never block a job. -Skippable shows "Überspringen" in the
+# job overlay while it runs (job.skippable); the button (job.skip) and "Abbrechen" (job.cancel) end
+# the process at once. The script runs with the default error preference; a terminating error
+# becomes exit code 1 with its message on stderr.
+# Returns @{ ok; exitCode; output; error; timedOut; skipped; ms }. Throws VX_CANCELLED on cancel.
+function Invoke-VxIsolated {
+    param([string]$Script, [int]$TimeoutSec = 90, [switch]$Skippable, [string]$Step = '')
+    $job = $global:VxJob
+    $res = @{ ok = $false; exitCode = -1; output = ''; error = ''; timedOut = $false; skipped = $false; ms = 0 }
+    $wrapped = "try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding(`$false) } catch { `$null = `$_ }`n" +
+        "`$ProgressPreference = 'SilentlyContinue'`n" +
+        "try {`n& {`n" + $Script + "`n}`n} catch { [Console]::Error.WriteLine([string]`$_.Exception.Message); exit 1 }`nexit 0`n"
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($wrapped))
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = Get-VxPowerShellExe
+    $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    $psi.StandardOutputEncoding = $utf8
+    $psi.StandardErrorEncoding = $utf8
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $p = $null
+    $cancelled = $false
+    if ($Skippable -and $null -ne $job) { $job.skip = $false; $job.skippable = $true }
+    try {
+        try { $p = [System.Diagnostics.Process]::Start($psi) }
+        catch { $res.error = 'PowerShell konnte nicht gestartet werden: ' + $_.Exception.Message; return $res }
+        try { $p.StandardInput.Close() } catch { $null = $_ }
+        $outTask = $p.StandardOutput.ReadToEndAsync()
+        $errTask = $p.StandardError.ReadToEndAsync()
+        $lastSec = -1
+        while (-not $p.WaitForExit(200)) {
+            if ($null -ne $job -and $job.cancel) { $cancelled = $true; break }
+            if ($Skippable -and $null -ne $job -and $job.skip) { $res.skipped = $true; break }
+            $sec = [int][math]::Floor($sw.Elapsed.TotalSeconds)
+            if ($sec -ge $TimeoutSec) { $res.timedOut = $true; break }
+            if ($Step -and $sec -ne $lastSec -and $sec -ge 3) {
+                $lastSec = $sec
+                Set-VxProgress -Step ('{0} ({1}:{2:00})' -f $Step, [int][math]::Floor($sec / 60), ($sec % 60))
+            }
+        }
+        if ($cancelled -or $res.skipped -or $res.timedOut) {
+            Stop-VxProcessTree $p
+        } else {
+            $p.WaitForExit()
+            [void]$outTask.Wait(5000)
+            [void]$errTask.Wait(5000)
+            $res.exitCode = $p.ExitCode
+            $res.output = [string]$outTask.Result
+            $res.error = ([string]$errTask.Result).Trim()
+            $res.ok = ($p.ExitCode -eq 0)
+        }
+    } finally {
+        if ($Skippable -and $null -ne $job) { $job.skippable = $false; $job.skip = $false }
+        if ($null -ne $p) { try { $p.Dispose() } catch { $null = $_ } }
+        $res.ms = [int]$sw.ElapsedMilliseconds
+    }
+    if ($cancelled) { throw 'VX_CANCELLED' }
+    return $res
+}
+
+# The JSON a script printed as "VXRESULT <json>" (Invoke-VxIsolated output), or $null.
+function Get-VxIsolatedResult([string]$Output) {
+    foreach ($line in ([string]$Output -split "\r?\n")) {
+        if ($line.StartsWith('VXRESULT ')) {
+            try { return (ConvertFrom-VxJsonText $line.Substring(9)) } catch { return $null }
+        }
+    }
+    return $null
+}
+
 # ------------------------------------------------------------------ misc helpers
 
 function Get-VxNowIso { return (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss') }
@@ -438,15 +564,47 @@ function Get-VxErrorText($ErrorRecord, [string]$Prefix = '') {
 
 # ------------------------------------------------------------------ settings / state
 
+# restorePoints: 'first' = one baseline restore point before the first change VELOX ever makes
+# on this PC, 'presets' = baseline + before big jobs (presets, Detweak, KI plan with 10+ tweaks,
+# at most one per 24 h), 'off' = none (the JSON journals still make everything undoable).
+function Get-VxRestorePointModes { return @('first', 'presets', 'off') }
+
 function Get-VxDefaultSettings {
     return @{
         accent = 'violet'
         motion = 'full'
         confirmRisky = $true
-        autoRestorePoint = $true
+        restorePoints = 'first'
         claude = @{ model = 'claude-opus-5-5' }
+        # KI-Optimierer (core/Claude.ps1): provider '' = automatic (first ready one)
+        ai = @{ provider = ''; claudeCode = @{ model = 'sonnet' }; groq = @{ model = '' } }
         games = @()
     }
+}
+
+# Merges a partial "ai" settings object (from settings.json or the UI) into $Settings.ai.
+function Merge-VxAiSettings($Settings, $Ai) {
+    if (-not ($Ai -is [hashtable])) { return }
+    if ($Ai.ContainsKey('provider')) {
+        $pv = [string]$Ai.provider
+        if ($pv -eq '' -or @('claude-code', 'claude-api', 'groq', 'offline') -contains $pv) { $Settings.ai.provider = $pv }
+    }
+    if ($Ai.ContainsKey('claudeCode') -and $Ai.claudeCode -is [hashtable] -and $Ai.claudeCode.ContainsKey('model')) {
+        $m = [string]$Ai.claudeCode.model
+        if (@('sonnet', 'opus', 'haiku') -contains $m) { $Settings.ai.claudeCode.model = $m }
+    }
+    if ($Ai.ContainsKey('groq') -and $Ai.groq -is [hashtable] -and $Ai.groq.ContainsKey('model')) {
+        $g = [string]$Ai.groq.model
+        if ($g -eq '' -or $g -match '^[A-Za-z0-9][A-Za-z0-9._/:\-]{1,100}$') { $Settings.ai.groq.model = $g }
+    }
+}
+
+function Get-VxRestorePointMode {
+    $s = $global:VxCtx.Settings
+    $m = ''
+    if ($null -ne $s) { $m = [string]$s.restorePoints }
+    if ((Get-VxRestorePointModes) -notcontains $m) { return 'first' }
+    return $m
 }
 
 function Import-VxSettings {
@@ -457,12 +615,18 @@ function Import-VxSettings {
         try {
             $loaded = ConvertTo-VxHashtable (Read-VxJsonFile $path)
             if ($loaded -is [hashtable]) {
-                foreach ($k in @('accent', 'motion', 'confirmRisky', 'autoRestorePoint')) {
+                foreach ($k in @('accent', 'motion', 'confirmRisky')) {
                     if ($loaded.ContainsKey($k)) { $s[$k] = $loaded[$k] }
+                }
+                # older versions stored the bool autoRestorePoint: on -> 'first', off -> 'off'
+                if ($loaded.ContainsKey('restorePoints') -and (Get-VxRestorePointModes) -contains [string]$loaded.restorePoints) { $s.restorePoints = [string]$loaded.restorePoints }
+                elseif ($loaded.ContainsKey('autoRestorePoint') -and $loaded.autoRestorePoint -is [bool]) {
+                    if ($loaded.autoRestorePoint) { $s.restorePoints = 'first' } else { $s.restorePoints = 'off' }
                 }
                 if ($loaded.ContainsKey('claude') -and $loaded.claude -is [hashtable] -and $loaded.claude.ContainsKey('model') -and $loaded.claude.model) {
                     $s.claude.model = [string]$loaded.claude.model
                 }
+                if ($loaded.ContainsKey('ai')) { Merge-VxAiSettings $s $loaded.ai }
                 if ($loaded.ContainsKey('games') -and $null -ne $loaded.games) { $s.games = @($loaded.games) }
             }
         } catch {
@@ -478,14 +642,15 @@ function Save-VxSettings {
     $s = $ctx.Settings
     $out = [ordered]@{
         accent = $s.accent; motion = $s.motion; confirmRisky = [bool]$s.confirmRisky
-        autoRestorePoint = [bool]$s.autoRestorePoint
+        restorePoints = (Get-VxRestorePointMode)
         claude = [ordered]@{ model = [string]$s.claude.model }
+        ai = [ordered]@{ provider = [string]$s.ai.provider; claudeCode = [ordered]@{ model = [string]$s.ai.claudeCode.model }; groq = [ordered]@{ model = [string]$s.ai.groq.model } }
         games = @($s.games)
     }
     Write-VxJsonFile -Path (Get-VxDataPath 'settings.json') -InputObject $out
 }
 
-# Settings as sent to the UI (adds claude.hasKey, never the key itself).
+# Settings as sent to the UI (adds claude.hasKey / ai.groq.hasKey, never a key itself).
 function Get-VxSettingsDto {
     $ctx = $global:VxCtx
     $s = $ctx.Settings
@@ -493,8 +658,15 @@ function Get-VxSettingsDto {
         accent = $s.accent
         motion = $s.motion
         confirmRisky = [bool]$s.confirmRisky
-        autoRestorePoint = [bool]$s.autoRestorePoint
+        restorePoints = (Get-VxRestorePointMode)
+        # read-only, for older UIs: any automatic restore point at all
+        autoRestorePoint = ((Get-VxRestorePointMode) -ne 'off')
         claude = [ordered]@{ hasKey = (Test-VxClaudeKey); model = [string]$s.claude.model }
+        ai = [ordered]@{
+            provider = [string]$s.ai.provider
+            claudeCode = [ordered]@{ model = [string]$s.ai.claudeCode.model }
+            groq = [ordered]@{ hasKey = (Test-VxGroqKey); model = [string]$s.ai.groq.model }
+        }
         games = @($s.games)
     }
 }
@@ -508,11 +680,17 @@ function Update-VxSettings($Partial) {
     if ($p.ContainsKey('accent') -and @('violet', 'blue', 'cyan', 'green', 'pink', 'orange') -contains [string]$p.accent) { $s.accent = [string]$p.accent }
     if ($p.ContainsKey('motion') -and @('full', 'reduced') -contains [string]$p.motion) { $s.motion = [string]$p.motion }
     if ($p.ContainsKey('confirmRisky') -and $p.confirmRisky -is [bool]) { $s.confirmRisky = $p.confirmRisky }
-    if ($p.ContainsKey('autoRestorePoint') -and $p.autoRestorePoint -is [bool]) { $s.autoRestorePoint = $p.autoRestorePoint }
+    if ($p.ContainsKey('restorePoints') -and (Get-VxRestorePointModes) -contains [string]$p.restorePoints) { $s.restorePoints = [string]$p.restorePoints }
+    elseif ($p.ContainsKey('autoRestorePoint') -and $p.autoRestorePoint -is [bool]) {
+        # older UIs: off -> 'off', on -> keep the current mode ('first' when it was off)
+        if (-not $p.autoRestorePoint) { $s.restorePoints = 'off' }
+        elseif ((Get-VxRestorePointMode) -eq 'off') { $s.restorePoints = 'first' }
+    }
     if ($p.ContainsKey('claude') -and $p.claude -is [hashtable] -and $p.claude.ContainsKey('model')) {
         $m = [string]$p.claude.model
         if ($m -match '^[a-z0-9][a-z0-9.\-]{2,80}$') { $s.claude.model = $m }
     }
+    if ($p.ContainsKey('ai')) { Merge-VxAiSettings $s $p.ai }
     Save-VxSettings
 }
 
@@ -540,6 +718,9 @@ function Import-VxState {
         needs = @{ explorer = $false; reboot = $false; logoff = $false }
         naReasons = @{}; ultimateGuid = $null; highGuid = $null; powersettingBefore = @{}
         bootId = $null; restorePoints = 0
+        # the one baseline restore point (Engine.ps1 Invoke-VxAutoRestorePoint) and the newest
+        # restore point VELOX made (for the 24 h rule of restorePoints = 'presets')
+        restorePointBaseline = $null; restorePointLast = $null
     }
     $name = Get-VxStateFileName
     $path = Get-VxDataPath $name
@@ -603,6 +784,24 @@ function Get-VxStateDto {
         lastScan = $st.lastScan
         needs = [ordered]@{ explorer = [bool]$st.needs.explorer; reboot = [bool]$st.needs.reboot; logoff = [bool]$st.needs.logoff }
         foreignCount = $fc
+        restorePointBaseline = (Get-VxBaselineDto)
+    }
+}
+
+# The baseline restore point as sent to the UI: { status, created, sequence, description } or null.
+# status: created | adopted (an older VELOX point became the baseline) | skipped | timeout | failed
+function Get-VxBaselineDto {
+    $st = $global:VxCtx.State
+    if ($null -eq $st -or -not $st.ContainsKey('restorePointBaseline')) { return $null }
+    $b = $st.restorePointBaseline
+    if ($null -eq $b) { return $null }
+    $seq = Get-VxProp $b 'sequence'
+    if ($null -ne $seq) { $seq = [long]$seq }
+    return [ordered]@{
+        status = [string](Get-VxProp $b 'status' '')
+        created = (ConvertTo-VxIsoText (Get-VxProp $b 'created'))
+        sequence = $seq
+        description = [string](Get-VxProp $b 'description' '')
     }
 }
 

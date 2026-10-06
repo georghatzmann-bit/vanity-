@@ -1,3 +1,7 @@
 tests/ui/screenshots/
 tests/ui/review-shots/
 node_modules/
+native/**/obj/
+native/**/bin/
+tests/native/screenshots/
+dist/obj/

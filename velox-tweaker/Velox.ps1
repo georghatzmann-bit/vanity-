@@ -13,6 +13,9 @@
 .PARAMETER DataRoot     Folder for settings, backups and logs (default %LOCALAPPDATA%\Velox).
 .PARAMETER SimProfile   Simulated hardware outside Windows: desktop or laptop.
 .PARAMETER SimReset     Start the simulation from a fresh state.
+.PARAMETER HostPid      Process id of the native host (VELOX.exe). The backend ends by itself once
+                        that process is gone, never waits for Enter, and reports start errors as
+                        "VELOX_ERROR <text>" lines (docs/ARCHITECTURE.md, "Native host & installer").
 #>
 [CmdletBinding()]
 param(
@@ -22,7 +25,8 @@ param(
     [string]$Token = '',
     [string]$DataRoot = '',
     [ValidateSet('desktop', 'laptop')][string]$SimProfile = 'desktop',
-    [switch]$SimReset
+    [switch]$SimReset,
+    [int]$HostPid = 0
 )
 
 function Write-VxConsole([string]$Text) {
@@ -31,6 +35,11 @@ function Write-VxConsole([string]$Text) {
 }
 
 function Wait-VxEnter([string]$Text) {
+    # Under VELOX.exe there is no console to press Enter in: the host shows the text instead.
+    if ($HostPid -gt 0) {
+        if ($Text) { Write-VxConsole ('VELOX_ERROR ' + ($Text -replace '[\r\n]+', ' ')) }
+        return
+    }
     Write-VxConsole $Text
     try { $null = Read-Host 'Enter druecken zum Schliessen' } catch { $null = $_ }
 }
@@ -82,6 +91,11 @@ if ($VxIsWindows -and -not $Simulate) {
         $p = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
         $isAdmin = $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     } catch { $isAdmin = $false }
+    if (-not $isAdmin -and $HostPid -gt 0) {
+        # VELOX.exe elevates itself before it starts the backend; never open a second UAC prompt here
+        Wait-VxEnter 'VELOX braucht Administratorrechte. Bitte VELOX neu starten und die Windows-Abfrage mit Ja bestaetigen - oder den Testmodus nehmen.'
+        exit 2
+    }
     if (-not $isAdmin) {
         $hostExe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
         $scriptPath = ConvertTo-VxUncPath $PSCommandPath
@@ -177,6 +191,14 @@ $VxDataDir = ''
 if ($Simulate -or -not $VxIsWindows) { $VxDataDir = [string][Environment]::GetEnvironmentVariable('VELOX_DATA_DIR') }
 $ctx = New-VxContext -AppRoot $VxRoot -DataRoot $DataRoot -Simulate ([bool]$Simulate) -SimProfile $SimProfile -DataDir $VxDataDir
 $ctx.CoreSources = @(Get-VxCoreNames | ForEach-Object { [string]$VxCoreText[$_] })
+# VERSION next to Velox.ps1 is the one version number of VELOX (installer, VELOX.exe, UI)
+try {
+    $vxVersionFile = Join-Path $VxRoot 'VERSION'
+    if ([IO.File]::Exists($vxVersionFile)) {
+        $vxVersion = ([IO.File]::ReadAllText($vxVersionFile)).Trim()
+        if ($vxVersion -match '^\d+\.\d+\.\d+$') { $ctx.Version = $vxVersion }
+    }
+} catch { $null = $_ }
 
 # ------------------------------------------------------------------ app window
 
@@ -270,6 +292,7 @@ if (-not $VxOwnsMutex) {
         if (-not $url) { Start-Sleep -Milliseconds 500 }
     }
     Write-VxConsole 'VELOX laeuft bereits - das vorhandene Fenster wird geoeffnet.'
+    if ($url -and $HostPid -gt 0) { Write-VxConsole ('VELOX_RUNNING ' + $url) }
     if ($url -and -not $NoBrowser) { Open-VxAppWindow $url }
     exit 0
 }
@@ -339,9 +362,47 @@ Write-VxLog 'info' ('VELOX gestartet auf ' + $srv.url + ' (Testmodus: ' + $ctx.S
 
 if (-not $NoBrowser) { Open-VxAppWindow $appUrl }
 
+# -HostPid: a small watcher runspace asks the server loop to end (the normal shutdown path, so a
+# running job still finishes) as soon as VELOX.exe is gone. Normally the host's job object ends the
+# backend anyway; this covers a host that could not create one.
+$VxHostWatch = $null
+if ($HostPid -gt 0) {
+    try {
+        $hostStart = $null
+        try { $hostStart = [Diagnostics.Process]::GetProcessById($HostPid).StartTime } catch { $hostStart = $null }
+        $VxHostWatch = [PowerShell]::Create()
+        $null = $VxHostWatch.AddScript({
+            param($Life, [int]$HostId, $HostStart)
+            while (-not $Life.stop) {
+                Start-Sleep -Milliseconds 2000
+                $gone = $false
+                $hp = $null
+                try {
+                    $hp = [Diagnostics.Process]::GetProcessById($HostId)
+                    if ($hp.HasExited) { $gone = $true }
+                    elseif ($null -ne $HostStart -and $hp.StartTime -ne $HostStart) { $gone = $true }   # pid reused
+                } catch { $gone = $true }
+                if ($null -ne $hp) { try { $hp.Dispose() } catch { $null = $_ } }
+                # $Life is a synchronized hashtable; ask only once (do not overwrite a shutdown in progress)
+                if ($gone -and $null -eq $Life.shutdownAt) {
+                    $Life.shutdownSession = $null
+                    $Life.shutdownRequested = [DateTime]::UtcNow
+                    $Life.shutdownAt = [DateTime]::UtcNow
+                    $Life.reason = 'host'
+                }
+            }
+        }).AddArgument($ctx.Life).AddArgument($HostPid).AddArgument($hostStart)
+        $null = $VxHostWatch.BeginInvoke()
+    } catch {
+        Write-VxLog 'warn' ('Host-Ueberwachung nicht verfuegbar: ' + $_.Exception.Message)
+        $VxHostWatch = $null
+    }
+}
+
 try {
     Invoke-VxServerLoop $VxListener
 } finally {
+    if ($null -ne $VxHostWatch) { try { $ctx.Life.stop = $true; $VxHostWatch.Stop(); $VxHostWatch.Dispose() } catch { $null = $_ } }
     Write-VxConsole '  VELOX wird beendet ...'
     try { Stop-VxAllJobs 15 } catch { $null = $_ }
     try { $VxListener.Stop(); $VxListener.Close() } catch { $null = $_ }

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Build helper (runs on the build machine, .NET 8): packs payload.zip deterministically and
+       verifies the finished VeloxSetup.exe. Not shipped. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- override the net48 settings of native/Directory.Build.props -->
+    <ApplicationIcon></ApplicationIcon>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Remove="Microsoft.NETFramework.ReferenceAssemblies.net48" />
+    <Reference Remove="System.Windows.Forms" />
+    <Reference Remove="System.Drawing" />
+  </ItemGroup>
+</Project>

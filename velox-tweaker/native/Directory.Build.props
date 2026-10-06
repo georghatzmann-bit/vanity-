@@ -1,0 +1,45 @@
+<Project>
+  <!-- Shared settings for VELOX.exe (host) and VeloxSetup.exe (setup).
+       Both are .NET Framework 4.8 WinForms apps: .NET Framework 4.8 ships with every Windows 10 (1903+)
+       and Windows 11, so neither exe needs a runtime install. AnyCPU without Prefer32Bit, so they run
+       as 64-bit processes on 64-bit Windows (64-bit PowerShell, 64-bit registry view). -->
+  <PropertyGroup>
+    <VeloxVersion Condition="'$(VeloxVersion)' == ''">$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../VERSION').Trim())</VeloxVersion>
+    <Version>$(VeloxVersion)</Version>
+    <AssemblyVersion>$(VeloxVersion).0</AssemblyVersion>
+    <FileVersion>$(VeloxVersion).0</FileVersion>
+    <InformationalVersion>$(VeloxVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Company>VELOX</Company>
+    <Product>VELOX</Product>
+    <Copyright>VELOX</Copyright>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)assets/velox.ico</ApplicationIcon>
+    <PathMap>$(MSBuildThisFileDirectory)=/velox/native/</PathMap>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningLevel>4</WarningLevel>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>false</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <!-- WinForms by plain framework references: the WindowsDesktop SDK does not exist on Linux/macOS. -->
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+</Project>

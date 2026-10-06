@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+// Fake "claude" CLI for the VELOX tests (never talks to the network). Behaviour via env:
+//   VELOX_FAKE_CLAUDE_MODE  ok (default) | logged-out | old | text | limit | slow | schema-fail
+//   VELOX_FAKE_CLAUDE_LOG   file: one JSON line per call { argv, cwd, stdin, systemFile, env }
+//   VELOX_FAKE_CLAUDE_PLAN  file with the advisor JSON (default ../claude/plan-ok.json)
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const argv = process.argv.slice(2);
+const mode = process.env.VELOX_FAKE_CLAUDE_MODE || 'ok';
+const has = (f) => argv.includes(f);
+const val = (f) => { const i = argv.indexOf(f); return i >= 0 ? argv[i + 1] : undefined; };
+
+function log(extra) {
+  const f = process.env.VELOX_FAKE_CLAUDE_LOG;
+  if (!f) return;
+  const env = {};
+  for (const k of Object.keys(process.env)) if (/^CLAUDE_CODE_|^DISABLE_AUTOUPDATER$/.test(k)) env[k] = process.env[k];
+  fs.appendFileSync(f, JSON.stringify(Object.assign({ argv, cwd: process.cwd(), env }, extra)) + '\n');
+}
+
+function readStdin() {
+  try { return fs.readFileSync(0, 'utf8'); } catch { return ''; }
+}
+
+if (has('--version') || has('-v')) { log({}); process.stdout.write('2.1.289 (Claude Code)\n'); process.exit(0); }
+
+if (argv[0] === 'auth' && argv[1] === 'status') {
+  log({});
+  if (mode === 'old') { process.stderr.write("error: unknown command 'auth'\n"); process.exit(1); }
+  const out = mode === 'logged-out'
+    ? { loggedIn: false, authMethod: 'none', apiProvider: 'firstParty' }
+    : { loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty', email: 'gamer@example.com', orgId: 'org', orgName: 'Gamer', subscriptionType: 'max' };
+  process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+  process.exit(out.loggedIn ? 0 : 1);
+}
+
+if (has('-p') || has('--print')) {
+  const stdin = readStdin();
+  const sysFile = val('--system-prompt-file');
+  let system = null;
+  if (sysFile) { try { system = fs.readFileSync(sysFile, 'utf8'); } catch { system = 'UNREADABLE'; } }
+  log({ stdin, systemFile: sysFile || null, systemHead: system ? system.slice(0, 200) : null, systemHasDigest: system ? /gaming\.gamedvr-off \| /.test(system) : false });
+  if (mode === 'old') {
+    for (const f of ['--json-schema', '--system-prompt-file', '--tools', '--setting-sources', '--no-session-persistence']) {
+      if (has(f)) { process.stderr.write("error: unknown option '" + f + "'\n"); process.exit(1); }
+    }
+  }
+  if (mode === 'slow') { setTimeout(() => process.exit(0), 60000); return; }
+  const planFile = process.env.VELOX_FAKE_CLAUDE_PLAN || path.join(__dirname, '..', 'claude', 'plan-ok.json');
+  const planText = fs.readFileSync(planFile, 'utf8').trim();
+  const base = { type: 'result', duration_ms: 1234, duration_api_ms: 1100, num_turns: 1, session_id: 'fake-session', total_cost_usd: 0.0421,
+    usage: { input_tokens: 21000, output_tokens: 900, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+    modelUsage: { 'claude-sonnet-5-5': { inputTokens: 21000, outputTokens: 900 } } };
+  if (mode === 'logged-out') {
+    process.stdout.write(JSON.stringify(Object.assign(base, { subtype: 'success', is_error: true, result: 'Not logged in · Please run /login' })) + '\n');
+    process.exit(1);
+  }
+  if (mode === 'limit') {
+    process.stdout.write(JSON.stringify(Object.assign(base, { subtype: 'success', is_error: true, result: 'Claude AI usage limit reached|1760000000' })) + '\n');
+    process.exit(1);
+  }
+  if (mode === 'schema-fail' && has('--json-schema')) {
+    process.stdout.write(JSON.stringify(Object.assign(base, { subtype: 'error_max_structured_output_retries', is_error: true, result: '' })) + '\n');
+    process.exit(1);
+  }
+  if (mode === 'text' || mode === 'old' || mode === 'schema-fail' || !has('--json-schema')) {
+    process.stdout.write(JSON.stringify(Object.assign(base, { subtype: 'success', is_error: false, result: 'Hier ist dein Plan:\n```json\n' + planText + '\n```' })) + '\n');
+    process.exit(0);
+  }
+  process.stdout.write(JSON.stringify(Object.assign(base, { subtype: 'success', is_error: false, result: '', structured_output: JSON.parse(planText) })) + '\n');
+  process.exit(0);
+}
+
+process.stderr.write('fake claude: unsupported call ' + argv.join(' ') + '\n');
+process.exit(2);

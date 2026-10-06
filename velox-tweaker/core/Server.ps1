@@ -27,7 +27,12 @@
 #     job is not running. A cancelled job ends with status "cancelled".
 #   - POST /api/settings ignores unknown/invalid fields, "games" (managed by the game-boost job) and
 #     claude.hasKey; claude.model must match ^[a-z0-9][a-z0-9.-]{2,80}$.
-#   - POST /api/claude/key with an invalid key -> 400 { error }.
+#   - POST /api/claude/key with an invalid key -> 400 { error }. POST|DELETE /api/ai/key/<claude-api|groq>
+#     { key } -> { provider, hasKey, settings } (same rules; /api/claude/key = claude-api).
+#   - settings.ai = { provider: ''|claude-code|claude-api|groq|offline, claudeCode:{ model: sonnet|opus|haiku },
+#     groq:{ hasKey, model: ''|<groq model id> } } ('' = automatic).
+#   - job "ai" { provider, goal, text, allowRisky } -> advisorResult + { provider, model, usage };
+#     job "ai-status" { test? } -> { providers:[ { id, ready, state, message, steps?, models? ... } ], recommended }.
 #   - Kind "remove" (Appx) tweaks: status "applied" = removed ("entfernt"), "default" = installed.
 #     Kind "action" tweaks have no status entry. Tweaks whose "when" fails have status "na".
 #   - advisorResult finding fixes of type "page" use the page ids "cleanup", "apps", "detweak".
@@ -41,6 +46,9 @@
 #   - If http.sys refuses the 127.0.0.1 prefix (Testmodus without admin rights) the server listens
 #     on http://localhost:<port>/ instead and the VELOX_READY URL uses localhost.
 #   - Static: GET/HEAD only; "/" serves ui/index.html; missing files -> 404.
+#   - GET /api/game-art/<gameId>?kind=cover|icon&v=<v>&t=<token>: token in the query (an <img> cannot
+#     send headers). Only images registered by games-detect for that id; unknown id/no image -> 404,
+#     bad kind -> 400. Cache-Control: private, max-age=86400 (the UI adds the art version v).
 
 function Get-VxFreePort {
     $l = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
@@ -337,6 +345,10 @@ function Invoke-VxRequest($Context) {
         if (-not $okToken -and $method -eq 'POST' -and $path -eq '/api/shutdown') {
             $okToken = Test-VxTokenEqual ([string]$req.QueryString['t']) $ctx.Token
         }
+        # game art: <img> cannot send headers, so the token comes as ?t= (GET/HEAD only)
+        if (-not $okToken -and ($method -eq 'GET' -or $method -eq 'HEAD') -and $path.StartsWith('/api/game-art/')) {
+            $okToken = Test-VxTokenEqual ([string]$req.QueryString['t']) $ctx.Token
+        }
         if (-not $okToken) { Send-VxError $Context 401 'Nicht autorisiert.'; return }
         $fetchSite = [string]$req.Headers['Sec-Fetch-Site']
         if ($fetchSite -eq 'cross-site') { Send-VxError $Context 403 'Ungültiger Ursprung.'; return }
@@ -388,6 +400,14 @@ function Invoke-VxApi($Context, [string]$Method, [string]$Path) {
         Send-VxJson $Context 200 ([ordered]@{ jobId = $r.jobId })
         return
     }
+    # "Überspringen" in the job overlay: ends the running skippable step (restore point, reset command)
+    $sk = [regex]::Match($Path, '^/api/jobs/([a-f0-9]{8,32})/skip$')
+    if ($sk.Success) {
+        if ($Method -ne 'POST') { Send-VxError $Context 405 'Methode nicht erlaubt.'; return }
+        if ($null -eq $ctx.Jobs[$sk.Groups[1].Value]) { Send-VxError $Context 404 'Job nicht gefunden.'; return }
+        Send-VxJson $Context 200 ([ordered]@{ ok = (Skip-VxJobStep $sk.Groups[1].Value) })
+        return
+    }
     $m = [regex]::Match($Path, '^/api/jobs/([a-f0-9]{8,32})(/cancel)?$')
     if ($m.Success) {
         Update-VxJobs
@@ -429,6 +449,30 @@ function Invoke-VxApi($Context, [string]$Method, [string]$Path) {
         Send-VxError $Context 405 'Methode nicht erlaubt.'
         return
     }
+    # API keys of the KI providers (core/Claude.ps1): stored DPAPI-encrypted, never sent back
+    $ak = [regex]::Match($Path, '^/api/ai/key/(claude-api|groq)$')
+    if ($ak.Success) {
+        $prov = $ak.Groups[1].Value
+        $label = 'Claude-API-Key'
+        if ($prov -eq 'groq') { $label = 'Groq-API-Key' }
+        if ($Method -eq 'POST') {
+            $body = Read-VxBody $req
+            try {
+                if ($prov -eq 'groq') { Set-VxGroqKey ([string](Get-VxProp $body 'key')) } else { Set-VxClaudeKey ([string](Get-VxProp $body 'key')) }
+            } catch { Send-VxError $Context 400 ([string]$_.Exception.Message); return }
+            Write-VxLog 'info' ($label + ' gespeichert (verschlüsselt).')
+            Send-VxJson $Context 200 ([ordered]@{ provider = $prov; hasKey = $true; settings = (Get-VxSettingsDto) })
+            return
+        }
+        if ($Method -eq 'DELETE') {
+            if ($prov -eq 'groq') { Remove-VxGroqKey } else { Remove-VxClaudeKey }
+            Write-VxLog 'info' ($label + ' gelöscht.')
+            Send-VxJson $Context 200 ([ordered]@{ provider = $prov; hasKey = $false; settings = (Get-VxSettingsDto) })
+            return
+        }
+        Send-VxError $Context 405 'Methode nicht erlaubt.'
+        return
+    }
     if ($Method -eq 'GET' -and $Path -eq '/api/backups') {
         Send-VxJson $Context 200 ([ordered]@{ backups = @(Get-VxBackupList) })
         return
@@ -461,6 +505,26 @@ function Invoke-VxApi($Context, [string]$Method, [string]$Path) {
         } catch {
             Send-VxError $Context 500 ('Konnte nicht geöffnet werden: ' + $_.Exception.Message)
         }
+        return
+    }
+    # ---- game art: GET /api/game-art/<gameId>?kind=cover|icon&v=<v>&t=<token> - only images a
+    #      games-detect registered for that id (Get-VxGameArtFile), never a path from the request
+    $ga = [regex]::Match($Path, '^/api/game-art/([^/]*)$')
+    if ($ga.Success) {
+        if ($Method -ne 'GET' -and $Method -ne 'HEAD') { Send-VxError $Context 405 'Methode nicht erlaubt.'; return }
+        $kind = [string]$req.QueryString['kind']
+        if (@('cover', 'icon') -notcontains $kind) { Send-VxError $Context 400 'Unbekannte Bildart.'; return }
+        $file = Get-VxGameArtFile $ga.Groups[1].Value $kind
+        if (-not $file -or (New-Object IO.FileInfo($file)).Length -gt 8MB) { Send-VxError $Context 404 'Kein Bild für dieses Spiel.'; return }
+        $bytes = [IO.File]::ReadAllBytes($file)
+        $res = $Context.Response
+        $res.StatusCode = 200
+        Set-VxCommonHeaders $res
+        # the URL carries a version (?v=), so the browser may keep the image
+        $res.Headers['Cache-Control'] = 'private, max-age=86400'
+        $res.ContentType = Get-VxContentType ([IO.Path]::GetExtension($file))
+        $res.ContentLength64 = $bytes.Length
+        if ($Method -eq 'GET') { $res.OutputStream.Write($bytes, 0, $bytes.Length) }
         return
     }
     Send-VxError $Context 404 'Unbekannter API-Pfad.'

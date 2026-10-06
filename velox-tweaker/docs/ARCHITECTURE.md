@@ -34,9 +34,9 @@ velox-tweaker/
     Detweak.ps1           foreign-tweak scan + reset (data/detweak.json + catalog)
     Scan.ps1              hardware/system profile
     Advisor.ps1           offline expert system ("Smart-Analyse") → findings + plan + score
-    Claude.ps1            optional Claude API advisor (raw HTTPS, see §9)
+    Claude.ps1            KI providers of the KI-Optimierer: Claude Code CLI, Claude API, Groq (see §9)
     Extras.ps1            cleanup sizes/actions, startup manager, game booster, file picker
-    Jobs.ps1              background runspace job runner (one mutating job at a time)
+    Jobs.ps1              background job runner: one reused worker runspace, one job at a time
     Server.ps1            HttpListener, routing, auth, static files
   data/
     categories.json       category list (id, name, desc, icon, order)
@@ -45,21 +45,25 @@ velox-tweaker/
     detweak.json          foreign-tweak reset list (§5)
   ui/
     index.html
-    css/app.css
-    js/app.js, js/api.js, js/ui.js (components), js/icons.js, js/pages/<page>.js
+    css/app.css, css/games.css (Spiele page)
+    js/app.js, js/api.js, js/ui.js (components), js/icons.js, js/ai.js (KI providers), js/pages/<page>.js
   tests/
     Run-Tests.ps1         backend tests (pwsh 7 on Linux AND Windows PowerShell 5.1) — simulate mode
-    fixtures/             small fixture catalog + fake profiles + fake Claude responses
+    fixtures/             small fixture catalog + fake profiles + fake Claude responses + claude-cli (fake Claude Code CLI) + games/pc (fake PC for the game detection)
     ui/run-ui-tests.mjs   Playwright end-to-end tests against `Velox.ps1 -Simulate -NoBrowser`
+    native/               installer UI tests (Chromium, mocked bridge) + Velox.ps1 -HostPid contract (§11)
   tools/
     Validate-Catalog.ps1  strict schema validation of data/ (used by tests, run it after every edit)
     Normalize-Files.ps1   UTF-8 BOM for .ps1, CRLF for .bat
   docs/ARCHITECTURE.md    this file
   README.md               German user guide
+  VERSION                 the one version number (installer, VELOX.exe, app)
+  native/                 VELOX.exe + VeloxSetup.exe (C#, WebView2) and the installer UI (§11)
+  dist/VeloxSetup.exe     the built installer (native/build.sh)
 ```
 
 Runtime data lives in `%LOCALAPPDATA%\Velox\` (or `-DataRoot`):
-`settings.json`, `claude.key` (DPAPI-encrypted), `state.json` + `instance.json` (real mode), `state-sim.json` + `instance-sim.json` + `sim-state.json` (Testmodus - the two modes never share state or the single-instance lock), `backups\<id>.json`, `logs\`, `edge-profile\`.
+`settings.json`, `claude.key` + `groq.key` (DPAPI-encrypted), `state.json` + `instance.json` (real mode), `state-sim.json` + `instance-sim.json` + `sim-state.json` (Testmodus - the two modes never share state or the single-instance lock), `backups\<id>.json`, `logs\`, `edge-profile\`.
 
 ---
 
@@ -309,7 +313,9 @@ selected, journal everything.
   tweaks" (e.g. `Win32PrioritySeparation=38`, `SystemResponsiveness=0`, `useplatformclock=yes`,
   `SysMain` disabled, an IFEO `PerfOptions` key) so the detweak page has something to show.
 - `ps` actions in simulate mode only record a flag; `clean` actions report fake sizes;
-  restore points are logged, not created.
+  restore points are never created: a fake list in the overlay (`Sim.rp`, seeded with one Windows
+  point and several old "VELOX: …" points like a PC that ran an older version) is listed, adopted,
+  extended and cleaned up instead.
 - `Scan` in simulate mode off Windows returns a fake profile (`-SimProfile desktop|laptop`), on
   Windows the real profile (reads are harmless).
 
@@ -323,7 +329,8 @@ When ready the backend prints exactly one line to stdout: `VELOX_READY http://12
 
 Security (MUST):
 - Every `/api/*` request needs header `X-Velox-Token: <token>`; else 401.
-  Exception: `POST /api/shutdown?t=<token>&s=<session>` (sendBeacon cannot set headers).
+  Exception: `POST /api/shutdown?t=<token>&s=<session>` (sendBeacon cannot set headers), and
+  `GET|HEAD /api/game-art/<gameId>?…&t=<token>` (an `<img>` cannot set headers either).
 - `Host` header must be `127.0.0.1:<port>` or `localhost:<port>`; else 403 (DNS rebinding).
 - If an `Origin` header is present it must be `http://127.0.0.1:<port>` or `http://localhost:<port>`; else 403.
 - `OPTIONS` → 403, never send CORS headers.
@@ -342,14 +349,18 @@ with `history.replaceState`.
 | `POST /api/jobs` | `{ type, params }` | `{ jobId }` or 409 `{ error:"busy", jobId, type }` (type = the running job's type) |
 | `GET /api/jobs/<id>?since=<n>` | – | `job` |
 | `POST /api/jobs/<id>/cancel` | – | `{ ok }` |
+| `POST /api/jobs/<id>/skip` | – | `{ ok }` — "Überspringen": ends only the running **skippable** step (restore point, Detweak reset command); `ok:false` when none runs. The job goes on with its next step. |
 | `POST /api/settings` | partial settings | `{ settings }` |
 | `POST /api/claude/key` | `{ key }` | `{ hasKey: true }` |
 | `DELETE /api/claude/key` | – | `{ hasKey: false }` |
+| `POST /api/ai/key/<claude-api\|groq>` | `{ key }` | `{ provider, hasKey: true, settings }` — invalid key format → 400 `{ error }` (`sk-ant-…` / `gsk_…`); `/api/claude/key` = `claude-api` |
+| `DELETE /api/ai/key/<claude-api\|groq>` | – | `{ provider, hasKey: false, settings }` |
 | `GET /api/backups` | – | `{ backups: [ { id, label, kind, created, count, tweakCount, simulate, restorable } ] }` — `count` = journal entries (values), `tweakCount` = distinct catalog tweak ids in the journal |
 | `GET /api/backups/<id>` | – | full journal |
 | `POST /api/open` | `{ target }` | `{ ok }` — whitelist only: `ms-settings:*` URIs listed in Server.ps1, `backups` (opens folder) |
 | `POST /api/heartbeat?s=<session>` | – | `{ ok, busy }` |
 | `POST /api/shutdown?t=<token>&s=<session>` | – | `{ ok, closing }` (see below) |
+| `GET /api/game-art/<gameId>?kind=cover\|icon&v=<v>&t=<token>` | – | the image bytes (`image/jpeg`, `image/png`, `image/x-icon`, …), `Cache-Control: private, max-age=86400` (the URL carries the art version `v`). Only images the last `games-detect` registered for that id — never a path from the request. Bad `kind` → 400, unknown id / no image / anything that is not a 10-hex id → 404. |
 
 **Window sessions.** Every UI window has a random session id (`ui/js/api.js`) and sends it as `?s=`
 with every heartbeat (every 3 s) and with the shutdown beacon on `pagehide`. The backend keeps the
@@ -370,13 +381,27 @@ mode     = { simulate, admin, windows, os:"Windows 11 Pro 23H2 (22631)", ps:"5.1
                              // account; HKCU writes and user folders then target that desktop user
 tweak    = catalog tweak as in §3 + { category, applicable: bool, naReason: string|null }
 settings = { accent:"violet"|"blue"|"cyan"|"green"|"pink"|"orange", motion:"full"|"reduced",
-             confirmRisky:true, autoRestorePoint:true,
-             claude:{ hasKey:false, model:"claude-opus-5-5" }, games:[...boosted games] }
+             confirmRisky:true, restorePoints:"first"|"presets"|"off",   // §8 "Restore points"
+             autoRestorePoint:true,   // read-only, derived (restorePoints != "off") for older UIs
+             claude:{ hasKey:false, model:"claude-opus-5-5" },             // provider claude-api (§9)
+             ai:{ provider:""|"claude-code"|"claude-api"|"groq"|"offline",   // "" = first ready one
+                  claudeCode:{ model:"sonnet"|"opus"|"haiku" },              // default sonnet
+                  groq:{ hasKey:false, model:"" } },                         // "" = automatic
+             games:[...boosted games] }
+             // settings.json of older versions stored the bool autoRestorePoint: true -> "first",
+             // false -> "off" (migrated on load). POST /api/settings still accepts autoRestorePoint:
+             // false -> "off", true -> "first" only when it was "off".
 state    = { statuses:{ <tweakId>: "applied"|"default"|"partial"|"custom"|"na"|"unknown" },
              profile: profile|null, lastScan: iso|null, needs:{ explorer:false, reboot:false, logoff:false },
-             foreignCount: n|null }   // foreign tweaks (§5), also in profile.foreignCount; null before the first detweak scan
+             foreignCount: n|null,    // foreign tweaks (§5), also in profile.foreignCount; null before the first detweak scan
+             restorePointBaseline: { status:"created"|"adopted"|"skipped"|"timeout"|"failed", created:iso,
+                                     sequence:n|null, description } | null }   // §8, null = none yet
 job      = { id, type, status:"running"|"done"|"error"|"cancelled", progress:0..1, step:"German text",
-             log:[ { i, t, level:"info"|"ok"|"warn"|"error", msg } ], result:object|null, error:string|null }
+             log:[ { i, t, level:"info"|"ok"|"warn"|"error", msg } ], result:object|null, error:string|null,
+             skippable:bool,     // a step that "Überspringen" may end runs right now (POST …/skip)
+             durationMs:n }      // so far while running, the job's total once finished
+             // every job result object also carries durationMs (engine time of the job body); the
+             // UI shows it in the result toast ("27 Tweaks in 2,4 s angewendet")
              // log and error are user-visible German text: never PowerShell stack traces or error
              // positions ("at <ScriptBlock>, …", "At line:…") - those go to logs\velox-<date>.log only
 ```
@@ -390,19 +415,23 @@ mixed; `custom` a value is neither (set by another tool); `na` not applicable/no
 | type | params | result |
 |---|---|---|
 | `scan` | `{}` | `{ profile, statuses }` (also updates state) |
-| `apply` | `{ ids, label }` | `{ results:[{id, ok, status, error}], backupId, needs }` |
+| `apply` | `{ ids, label, purpose? }` | `{ results:[{id, ok, status, error}], backupId, needs, durationMs, timing:{ prepMs, restorePointMs, tweaksMs, finishMs, perTweakMs } }` — `purpose` `preset`\|`plan`\|`toggles` (else derived from the label: `Preset: …` → preset, `KI-Plan…` → plan) only decides about an extra restore point (§8) |
 | `revert` | `{ ids, label }` | same |
-| `restorepoint` | `{ label }` | `{ ok, message }` |
+| `restorepoint` | `{ label }` | `{ ok, message, skipped, timedOut, baseline }` (a manual point; the first one VELOX ever makes counts as the baseline) |
+| `restorepoint-list` | `{}` | `{ ok, items:[ { sequence, description, created, velox } ], keep, extra, baseline, mode, message }` — all restore points of the PC; `velox` = description starts with "VELOX"; `keep` = the VELOX point that stays (the recorded baseline, else the oldest VELOX point); `extra` = the other VELOX points |
+| `restorepoint-clean` | `{}` | `{ removed, failed, kept, errors:[…], baseline }` — deletes every VELOX point except `keep` (`SRRemoveRestorePoint`); points of Windows and other programs are never touched; `keep` becomes the baseline |
 | `restore` | `{ backupId }` | `{ restored, failed, errors:[…] }` |
 | `detweak-scan` | `{}` | `{ items:[ { key, source:"detweak"\|"catalog"\|"velox", tweakId, label, group, current, default } ], commands:[ { id, label, desc, defaultOn, needs, risk:"safe"\|"moderate" } ], foreignCount }` |
-| `detweak` | `{ keys, commands, thenApply:[ids], restorePoint }` | `{ reset, resetValues, commandsRun, failed, applied, backupId, needs, errors:[…], foreignCount }` — `resetValues` = values/keys reset, `commandsRun` = commands run, `reset` = both (kept for older UIs) |
+| `detweak` | `{ keys, commands, thenApply:[ids], restorePoint }` | `{ reset, resetValues, commandsRun, failed, applied, skipped, backupId, needs, errors:[…], foreignCount }` — `resetValues` = values/keys reset, `commandsRun` = commands run, `reset` = both (kept for older UIs), `skipped` = commands the user skipped. `restorePoint:false` only rules out an extra point for this job; it never forces one (§8). Reuses the items of the last `detweak-scan` when no system-changing job ran since (≤ 30 min); each reset command runs in its own `powershell.exe` with a hard timeout (`timeoutSec` of the command, default 120 s) and "Überspringen"; afterwards only the touched tweaks are re-detected |
 | `advisor` | `{ goal, text }` | `advisorResult` |
-| `claude` | `{ goal, text, allowRisky }` | `advisorResult` + `{ model, usage }` |
+| `claude` | `{ goal, text, allowRisky }` | `advisorResult` + `{ model, usage }` (= `ai` with provider `claude-api`) |
+| `ai` | `{ provider, goal, text, allowRisky }` | `advisorResult` + `{ provider, model, usage }` — provider `claude-code`\|`claude-api`\|`groq`\|`offline` (§9) |
+| `ai-status` | `{ test? }` | `{ providers:[ row ], recommended:"claude-code", preferred }` — see §9 |
 | `clean-scan` | `{}` | `{ items:[ { id, bytes, files } ] }` |
 | `run-action` | `{ ids }` | `{ results:[ { id, ok, freedBytes, message } ] }` |
 | `startup-list` | `{}` | `{ items:[ { id, name, command, location, enabled } ] }` |
 | `startup-set` | `{ id, enabled }` | `{ ok, item }` |
-| `games-detect` | `{}` | `{ games:[ { id, name, exe, path, source, boost:{ priority, gpu, fso } } ] }` |
+| `games-detect` | `{}` | `{ games:[ game ] }` (see "Game library" below) |
 | `game-boost` | `{ path, priority, gpu, fso }` | `{ ok, game }` |
 | `pick-file` | `{}` | `{ path }` (native dialog; `null` when cancelled or in simulate mode off Windows) |
 | `explorer-restart` | `{}` | `{ ok }` |
@@ -430,14 +459,53 @@ Local advisor (core/Advisor.ps1, deterministic):
   finding uses `foreignCount` (never VELOX's own tweaks).
 
 ```text
-advisorResult = { engine:"local"|"claude", score:0..100, scoreAfter:0..100, summary:"German",
+advisorResult = { engine:"local"|"claude"|"claude-code"|"groq", provider?, score:0..100, scoreAfter:0..100, summary:"German",
                   findings:[ { id, severity:"good"|"info"|"warn"|"bad", title, detail,
                                fix: { type:"tweaks", ids:[…] } | { type:"open", target } | { type:"page", page } | null } ],
                   plan:[ { id, reason, priority:1..3 } ] }
 ```
 
+### Game library (`games-detect`, core/Extras.ps1)
+
+```text
+game = { id:"10 hex = short hash of the lower-case exe path", name, exe, path,
+         source:"steam"|"epic"|"gog"|"ubisoft"|"ea"|"battlenet"|"riot"|"xbox"|"rockstar"|"fivem"|
+                "minecraft"|"roblox"|"other"|"manual",
+         appid?:"Steam app id / Epic AppName / GOG gameID / Ubisoft install id / Xbox identity",
+         running?:true,                       // the exe was running during the detection
+         boost:{ priority, gpu, fso, priorityTweak },
+         art:{ cover:bool, icon:bool, shape:"wide"|"tall"|null, v:"art version" } }
+```
+
+Sources, each with its own time budget; a source that throws or runs out of time only loses its own
+games; results are deduplicated by exe path (first source wins, `running` is merged in):
+Steam (every library in `libraryfolders.vdf`, every fully installed `appmanifest_*.acf`; exe from a
+curated app-id map, else the heuristic below), Epic (`Manifests\*.item`: DisplayName,
+InstallLocation, LaunchExecutable; a launcher exe is swapped for the `*-Shipping.exe` next to it),
+GOG (`GOG.com\Games\*`), Ubisoft Connect (`Launcher\Installs\*\InstallDir`), EA app / Origin (registry +
+`EA Games\*\__Installer`), Battle.net (uninstall entries of Blizzard/Activision + known exe names),
+Riot (`RiotClientInstalls.json`, Metadata yaml, default folders), Xbox / PC Game Pass (`XboxGames`
+or the drive's `.GamingRoot`, `Content\MicrosoftGame.config` ExecutableList), Rockstar (registry),
+FiveM / RedM / alt:V / RAGE MP, Minecraft (Java launcher, Java + Bedrock Appx), Roblox (newest
+`Versions\*\RobloxPlayerBeta.exe`), uninstall entries of well-known game publishers, and running
+processes with a full-screen window or an exe inside a typical game folder (`source:"other"`).
+Exe heuristic: every `.exe` up to two folders deep (plus Unreal `Binaries\Win64`), never crash
+handlers, launchers, redistributables, uninstallers, anti-cheat services, setup/helper/report tools;
+known game exe names win, then Unreal `*-Shipping.exe`, then a name like the game, then the biggest.
+Games boosted earlier (`settings.games`) are always kept.
+
+Art (registered per id for `GET /api/game-art`): Steam's local library cache (old flat
+`<appid>_header.jpg` / `_library_600x900.jpg` / `_icon.jpg` and the per-app folders
+`librarycache\<appid>\header.jpg`, `library_600x900.jpg`, `<sha1>.jpg` icon), GOG `goggame-*.ico`,
+Xbox `SplashScreenImage` + the largest `Square*Logo` scale; on Windows the exe's own icon fills the
+gaps (IShellItemImageFactory via one Add-Type class, fallback `Icon.ExtractAssociatedIcon`), cached as
+PNG under `<dataRoot>\cache\gameart\` (key = path + size + date) within a 12 s budget per detection.
+Off Windows — or in Testmodus with `VELOX_GAMES_FIXTURE` set — the detection reads the fake PC in
+`tests/fixtures/games/pc` (`system.json` = registry, processes, Appx; `C/`, `D/` = drives), with
+generated placeholder art (no real logos).
+
 Only one mutating job runs at a time (409 otherwise). Read-only jobs (`scan`, `clean-scan`,
-`detweak-scan`, `advisor`, `claude`, `startup-list`, `games-detect`) are also serialized for simplicity.
+`detweak-scan`, `advisor`, `claude`, `ai`, `ai-status`, `startup-list`, `games-detect`) are also serialized for simplicity.
 Every job that changes something writes a journal **before** each change (§8).
 
 ---
@@ -465,14 +533,126 @@ Every job that changes something writes a journal **before** each change (§8).
 ```
 
 Restore replays entries in reverse order back to `before` (a deleted key tree is re-created from
-`tree`, a `ps` entry runs the tweak's opposite script). Before any job that changes the system,
-when `settings.autoRestorePoint` is on, a Windows restore point is created once per session
-(`Checkpoint-Computer`, temporarily setting `SystemRestorePointCreationFrequency=0`; if System
-Restore is off it is enabled for the system drive; failure is logged as a warning, never fatal).
+`tree`, a `ps` entry runs the tweak's opposite script). The journal is written through one open
+`FileStream` per job (`<id>.journal`, flushed after every entry, readable while open); on success
+it becomes `<id>.json`, an interrupted job leaves the `.journal` behind and it is still listed.
+
+### Restore points (core/Engine.ps1 `Invoke-VxAutoRestorePoint`)
+
+The JSON journals make every change undoable, so Windows restore points (several GB each) are a
+rare extra net, never one per job. `settings.restorePoints`:
+
+| mode | behaviour |
+|---|---|
+| `first` (default) | exactly **one baseline** restore point before the very first change VELOX ever makes on this PC — recorded in the real-mode state (`state.restorePointBaseline` `{ status, created, sequence, description, attempts }`) and never repeated, whatever job comes first |
+| `presets` | the baseline + one before presets, KI plans and Detweak jobs with **10+** tweaks/values, at most one per 24 h (`state.restorePointLast`) |
+| `off` | none |
+
+- Single toggles, revert, restore, cleanup, autostart and game boost never add a point beyond the
+  baseline. No job forces one (the old Detweak checkbox only opts out).
+- If VELOX points from an older version exist, the oldest one is **adopted** as baseline (no new
+  point). The baseline is settled once `created`, `adopted` or `skipped`; after `timeout`/`failed`
+  it is tried again in a later session (once per session, at most 3 attempts).
+- Creation runs in its own `powershell.exe` (`Invoke-VxIsolated`) with a hard timeout of 90 s:
+  `Enable-ComputerRestore` for the system drive, `Checkpoint-Computer`, fallback WMI
+  `SystemRestore.CreateRestorePoint`, then the new sequence number is read back. The job shows
+  "Wiederherstellungspunkt wird erstellt – das kann bis zu 1–2 Minuten dauern" plus elapsed time,
+  `job.skippable` is true and "Überspringen" ends just this step. Timeout, skip or failure → a
+  warning in the log, the job goes on. `SystemRestorePointCreationFrequency` is set to 0 only for
+  the baseline and restored to its previous value (or removed) right after.
+- Clean-up: the Sicherungen page lists the restore points (`restorepoint-list`) and deletes the
+  superfluous VELOX ones (`restorepoint-clean`, after a confirm dialog) with `SRRemoveRestorePoint`
+  from `srclient.dll` (Add-Type P/Invoke in an isolated `powershell.exe`, 180 s timeout).
+
+### Job speed
+
+- **One worker runspace** is kept alive and reused (`Jobs.ps1`): the core files are dot-sourced into
+  it once; it is pre-warmed while VELOX is idle (also right after start — a job that arrives during
+  the warm-up queues behind it instead of loading the core a second time) and replaced only after
+  it crashed. Per-job state (`$VxCtx.Cache`, log buffer, open journals, COM objects) is reset by
+  `Invoke-VxJobBody`.
+- Real-Windows fast paths: scheduled tasks through one `Schedule.Service` COM connection per job
+  (`GetTask().Enabled`), services through `ChangeServiceConfig`/`ControlService` P/Invoke
+  (`VxNative.Svc`, compiled once, `sc.exe` only as fallback; a stopped service is not waited for),
+  power settings from one `powercfg /qh <scheme>` per scheme and job (language independent parse),
+  one deferred `/setactive` per job, the BCD and Appx lists read once per job.
+- After a job only the touched tweaks are re-detected, not the whole catalog.
+- Every job result carries `durationMs`; apply/revert also `timing` (see job types). The log file
+  gets one line per tweak (`apply <id>: <n> ms`) and a summary line per job.
+- Regression test (`tests/Run-Tests.ps1`, group `speed`): the biggest preset in the Testmodus must
+  stay under 80 ms engine overhead per tweak.
 
 ---
 
-## 9. Claude advisor (core/Claude.ps1)
+## 9. KI providers (core/Claude.ps1, ui/js/ai.js)
+
+The KI-Optimierer can ask four providers. All of them get the **same rules** (`Get-VxAiRulesText`:
+only ids from the catalog data, prefer `safe`, `risky` only with `allowRisky`, situational tweaks only
+when the user's text asks, laptop / vendor / X3D / HDD / RAM rules, reasons in simple German with
+"du"), the **same output schema** and the **same validation**: `Select-VxClaudePlan` drops ids that
+are unknown, not applicable, `kind != toggle`, `risky`/`security-off` without `allowRisky`,
+`laptop-bad` on laptops, X3D-hostile on dual-CCD X3D, or clash with an earlier pick;
+`Complete-VxAiResult` normalises findings (fix `null`, at most 12) and takes `score`/`scoreAfter`
+from the local advisor's scoring of the resulting plan. Only the profile without user/computer/
+adapter names and the tweak statuses are sent (the UI says so in one line).
+
+| provider | how | needs | default model |
+|---|---|---|---|
+| `claude-code` (recommended) | the user's own Claude Code CLI, `claude -p`, subscription login | Claude Code installed + logged in (Pro/Max) | `sonnet` (alias; `opus`, `haiku`) |
+| `claude-api` | raw HTTPS to the Messages API | Anthropic API key | `claude-opus-5-5` |
+| `groq` | OpenAI-compatible chat API | free Groq API key | automatic (best available) |
+| `offline` | `Invoke-VxAdvisor` (Smart-Analyse) | nothing | – |
+
+Keys: `claude.key` / `groq.key` in the data root, `ConvertFrom-SecureString` (DPAPI, current user),
+never returned to the UI (`settings.claude.hasKey`, `settings.ai.groq.hasKey` only), never logged.
+Test-only overrides — `VELOX_ANTHROPIC_BASE_URL`, `VELOX_GROQ_BASE_URL`, `VELOX_CLAUDE_CLI`,
+`VELOX_CLAUDE_CLI_ONLY=1` (discovery = override + PATH only, so tests never find a real install) — are honoured
+only in the Testmodus or off Windows, so a planted user variable can neither redirect a key nor start
+another program in real mode.
+
+### Claude Code (`claude-code`)
+
+Discovery (desktop user's folders, see `Get-VxUserFolder`): `VELOX_CLAUDE_CLI` (tests only) →
+`%USERPROFILE%\.local\bin\claude.exe` (native installer) → `%APPDATA%\npm\claude.cmd` →
+`%LOCALAPPDATA%\Microsoft\WinGet\Links\claude.exe`, `…\WinGet\Packages\Anthropic.ClaudeCode*\claude.exe`,
+`%ProgramFiles%\WinGet\Links\claude.exe` → `PATH` (`Get-Command claude`). An npm `.cmd` shim is
+resolved to `node.exe` + `cli.js` (or the bundled `claude.exe`) so no argument passes cmd.exe; an
+unresolvable shim runs through `cmd /d /s /c` without `--json-schema`.
+
+Status without spending tokens: `claude --version` and `claude auth status` (JSON, exit 0 = logged
+in; `email`, `subscriptionType`, `authMethod`). An old CLI without `auth` counts as "probably logged in".
+
+Analysis (one process, hard timeout 180 s, "Abbrechen" kills the process tree):
+
+```
+claude -p --output-format json --model <sonnet|opus|haiku> --tools "" --no-session-persistence
+       --setting-sources "" --system-prompt-file <tmp>\velox-system.txt --json-schema <advisor schema>
+stdin:  the user content (goal, text, allowRisky, profile, statuses)
+cwd:    an empty %TEMP%\velox-ki-<random> folder (deleted afterwards)
+env:    CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 DISABLE_AUTOUPDATER=1 NO_COLOR=1
+```
+
+`velox-system.txt` = rules + the full catalog digest. Never `--bare`: it limits auth to
+`ANTHROPIC_API_KEY` and would ignore the subscription login. The answer is the result JSON:
+`structured_output` when present, else the first JSON object in `result`. Fallbacks: "unknown option"
+→ one retry with only `-p --output-format json --model` and rules + digest + request on stdin;
+`is_error` with a structured-output subtype → one retry without `--json-schema`. `is_error` texts are
+mapped to German (not logged in → "claude auth login", usage limit, credit, overloaded, unknown
+model, Git for Windows, network).
+
+VELOX runs elevated, the CLI lives in user-writable folders: when VELOX has admin rights, every CLI
+call (also `--version` / `auth status`) is started **without** them, with the token of the desktop's
+Explorer (`VxAi.ShellChild`: `CreateProcessWithTokenW` + `CreateEnvironmentBlock`, redirected pipes,
+C# 5 via `Add-Type`). That is also the desktop user's account when VELOX was elevated with another
+admin account (`mode.desktopUser`). If that start fails: same account → plain child process (logged);
+other account → German explanation that Claude Code must run from the user's own account.
+
+Install text (German, in the status row and errors): PowerShell as a normal user →
+`irm https://claude.ai/install.ps1 | iex` → `claude` and log in (Pro/Max) → "Erneut prüfen".
+Login: `claude auth login` (or `claude` and `/login`).
+
+### Claude API (`claude-api`)
 
 PowerShell has no official Anthropic SDK, so this is raw HTTPS (`System.Net.Http.HttpClient`, TLS 1.2,
 UTF-8 body bytes, 600 s timeout - a non-streaming call at effort "high" can take minutes). Base URL `https://api.anthropic.com` (override: env
@@ -489,7 +669,7 @@ content-type: application/json
   "fallbacks": "default",
   "output_config": { "effort": "high", "format": { "type": "json_schema", "schema": <advisor schema> } },
   "system": [ { "type": "text", "text": "<role + rules>" },
-              { "type": "text", "text": "<catalog digest: id | name | category | risk | tags | desc>", "cache_control": { "type": "ephemeral" } } ],
+              { "type": "text", "text": "<catalog digest: id | name | category | risk | tags | desc | warning>", "cache_control": { "type": "ephemeral" } } ],
   "messages": [ { "role": "user", "content": "<profile JSON (no user/computer names) + current statuses + goal + free text>" } ] }
 ```
 
@@ -497,10 +677,47 @@ Schema: `{ summary: string, findings: [ { severity: good|info|warn|bad, title, d
 with `additionalProperties: false` everywhere. Handling: HTTP 401 → "API-Key ungültig", 429 → "Zu viele
 Anfragen", 5xx/529 → one retry after 3 s, 400 mentioning `fallbacks` → retry once without
 `fallbacks` + beta header. Check `stop_reason` before reading content: `refusal` → German message,
-`max_tokens` → error. Parse the first `text` block as JSON; drop plan ids that are unknown, not
-applicable, `kind != toggle`, or `risky` (unless `allowRisky`). Score/scoreAfter come from the local
-advisor's scoring of the resulting plan. The key is stored DPAPI-encrypted (`ConvertFrom-SecureString`)
-in `claude.key`, never returned to the UI, never logged.
+`max_tokens` → error. Parse the first `text` block as JSON. "Verbindung testen" = `GET /v1/models`
+(free; 401 = wrong key).
+
+### Groq (`groq`)
+
+`POST https://api.groq.com/openai/v1/chat/completions` (override `VELOX_GROQ_BASE_URL`), header
+`Authorization: Bearer <key>`, 90 s timeout. The free tier allows only ~8 000 tokens per minute, so
+Groq gets the **compact** variant: the same rules (plan 5–20 tweaks) and a candidate list instead of
+the whole catalog (`Get-VxCompactDigest`: the local advisor's recommended set for the goal, then the
+other fitting candidates by impact, risky ones only with `allowRisky`; never applied/`na` ones; cut at
+~9 000 characters), statuses left out. Body: `temperature 0.2`, `max_completion_tokens 2800`,
+`response_format` `json_schema` (`strict: true`) for models that support it (`openai/gpt-oss-*`,
+`qwen/qwen3*`), else `json_object`; gpt-oss also gets `reasoning_effort: "low"`, `include_reasoning: false`.
+
+Model: `settings.ai.groq.model`, or (empty = automatic) the first available one of
+`openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`, `llama-3.3-70b-versatile`, Llama 4,
+`llama-3.1-8b-instant` from `GET /openai/v1/models` (free; also "Verbindung testen", whose list —
+chat models only, no whisper/guard/tts — feeds the model choice in the settings). Errors: 401 → key
+invalid; 429 → one retry when `retry-after` ≤ 20 s, else German message with the wait time; 413 /
+"Request too large" → one retry with a ~45 % shorter list; retired / unknown model → switch once to
+the best available one; `json_validate_failed` or unreadable JSON → one retry with `json_object`;
+5xx → one retry after 3 s; `finish_reason: length` → one retry with a shorter list.
+
+### Jobs and UI
+
+- `ai-status { test? }` → `{ providers, recommended:"claude-code", preferred }`. Rows:
+  `claude-code { ready, installed, loggedIn, state: ready|missing|logged-out|error, version, account,
+  subscription, authMethod, path, runsAs, model, message, steps[], installCommand }`,
+  `claude-api|groq { ready, hasKey, state: ready|no-key|error, model, message, tested, ok, models? }`,
+  `offline { ready:true }`. Without `test` only Claude Code is probed (no network request at all);
+  `test` = one provider's free check. Background job in the UI (never blocks what the user starts).
+- `ai { provider, goal, text, allowRisky }` → advisorResult with `engine` `claude` (API, kept for
+  older UIs) | `claude-code` | `groq`, plus `provider`, `model` (served model), `usage`. A missing key
+  fails before the first scan. `offline` = the `advisor` job.
+- Einstellungen → "KI": one card per provider (status pill, "Empfohlen" on Claude Code, install/login
+  steps with a copy button, "Erneut prüfen", key field with Speichern / Key löschen / "Verbindung
+  testen", model choice per provider), one privacy line. KI-Optimierer: provider chips (2×2) with
+  their state, preselected = last choice if ready, else the first ready of Claude Code → Claude API →
+  Groq → Smart-Analyse; a not-ready chip explains what is missing and links to its card; while the
+  model thinks the radar shows the backend's step with the elapsed time; a failed run shows the
+  German error with "Smart-Analyse starten" and "Einstellungen öffnen".
 
 ---
 
@@ -526,7 +743,7 @@ The user asked for an **ultra-modern** UI with hover and click animations on eve
   command palette trigger (Ctrl+K), mode chips (Admin / Testmodus / Neustart nötig); content max 1180 px;
   sticky bottom bar for staged changes ("3 Änderungen · Verwerfen · Anwenden"). Works down to 900×600.
 - **Pages**: Übersicht (dashboard), Tweaks (category tabs + search + risk filter), Presets,
-  KI-Optimierer (local + Claude), Detweak, Spiele (game booster), Reinigung (cleanup + repair),
+  KI-Optimierer (Claude Code / Claude API / Groq / Smart-Analyse), Detweak, Spiele (game booster), Reinigung (cleanup + repair),
   Apps (autostart + bloatware), Sicherungen (backups/journal), Einstellungen.
 - Every option has one grey line of explanation. Empty states explain what to do. Every action gives
   feedback (toast). Risk badges with text ("Sicher", "Mittel", "Riskant"). Risky tweaks need a confirm
@@ -534,3 +751,144 @@ The user asked for an **ultra-modern** UI with hover and click animations on eve
 - Toggles are **staged**: flipping a switch adds to the pending bar; "Anwenden" starts one `apply`/`revert`
   job and shows a progress overlay with live log. Status `custom`/`partial` shows a hint badge
   ("Von anderem Tool geändert").
+
+---
+
+## 11. Native host & installer (`native/`, `dist/`)
+
+Two small **.NET Framework 4.8 WinForms** exes (4.8 ships with every Windows 10 1903+ / 11, so nothing
+has to be installed) around the unchanged PowerShell backend. Both use **WebView2** for their UI and
+are AnyCPU without Prefer32Bit (64-bit process → 64-bit `powershell.exe`, 64-bit registry view).
+
+| File | What |
+|---|---|
+| `VERSION` | the one version number (`1.1.0`). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
+| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs`, `splash.html` (embedded start screen), `app.manifest` (`asInvoker`, PerMonitorV2). |
+| `native/setup/` | **VeloxSetup.exe** – installer + uninstaller: `Program.cs` (switches, AssemblyResolve, temp copy for uninstall), `SetupWindow.cs` (the only file with WebView2 types), `Installer.cs` (install/update/uninstall engine), `Payload.cs` (embedded zip), `WebView2Runtime.cs` (runtime download), `FallbackForm.cs` (plain native UI), `app.manifest` (`requireAdministrator`, PerMonitorV2). |
+| `native/setup-ui/` | installer UI: `index.html`, `setup.css`, `setup.js` (same design system as `ui/`, §10). Opening `index.html` in a browser shows a demo (`#update`, `#uninstall` in the URL pick the mode). |
+| `native/shared/` | `Common.cs` (Log, Util), `DarkUi.cs` (dark native dialogs, `Brand` colours), `NativeMethods.cs` (P/Invoke). |
+| `native/assets/` | `velox.ico` (16–256 px) + `make-icon.mjs` (renders it with Chromium + ImageMagick). |
+| `native/buildtool/` | net8 helper used only by the build: `pack` (payload.zip) and `verify` (checks the finished exe). |
+| `native/build.sh`, `native/Build.ps1` | build `dist/VeloxSetup.exe` (Linux/macOS resp. Windows, .NET SDK 8+). Deterministic: same sources → byte-identical exe. |
+| `dist/VeloxSetup.exe` | the download (≈ 1.1 MB, budget 3 MB). `dist/obj/` is build output and ignored. |
+| `tests/native/` | `run-setup-ui-tests.mjs` (installer UI + host start screen in Chromium, mocked bridge, screenshots), `Test-HostPid.ps1` (backend ↔ host contract). |
+
+### Velox.ps1 under VELOX.exe
+
+VELOX.exe starts `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive
+-ExecutionPolicy Bypass -File "<dir>\Velox.ps1" -NoBrowser -Port 0 -HostPid <pid> [-Simulate]` hidden
+(`CreateNoWindow`), stdin closed, stdout/stderr read asynchronously (OEM code page), `PSModulePath` and
+`VELOX_DATA_DIR` removed from its environment. The process goes into a **job object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`**, so neither it nor anything it starts can outlive VELOX.exe.
+
+`-HostPid <int>` (default 0 = off) changes only this:
+
+- start-up errors are printed as one line `VELOX_ERROR <text>` instead of waiting for Enter;
+- not elevated in real mode → `VELOX_ERROR …`, exit 2 (VELOX.exe elevates itself; the backend never opens a second UAC prompt);
+- another backend of the same mode already runs → `VELOX_RUNNING <url>` (VELOX.exe connects to it);
+- a watcher runspace checks every 2 s whether that process still exists (and is the same process: start time) and otherwise asks the server loop to end (the normal shutdown path, a running job still finishes).
+
+Stdout lines VELOX.exe reacts to: `VELOX_READY http://127.0.0.1:<port>/?t=<token>` (only 127.0.0.1/localhost
+with a token is accepted), `VELOX_RUNNING <url>`, `VELOX_ERROR <text>`. Everything is also written to
+`%LOCALAPPDATA%\Velox\logs\host.log`. `Start.bat` / `Start-Testmodus.bat` behave exactly as before.
+
+### VELOX.exe
+
+| Switch | Meaning |
+|---|---|
+| *(none)* | real mode. Not elevated → relaunch itself with `ShellExecute` verb `runas` and `--elevated`. UAC declined → dark dialog offering the Testmodus. |
+| `--test` | Testmodus (`Velox.ps1 -Simulate`), never elevated. |
+| `--elevated` | internal: marks the relaunch (no second attempt). |
+
+- **Single instance per mode:** mutex `Local\VELOX-Host-real` / `Local\VELOX-Host-sim`. A second start broadcasts the registered window message `VELOX.Host.Activate.v1` (wParam 1 = real, 2 = Testmodus; allowed through UIPI with `ChangeWindowMessageFilterEx`) and exits; if the other instance is just closing (mutex gone within 4.5 s) it starts normally instead.
+- **Window:** opens at once with the embedded start screen (`NavigateToString(splash.html)`), BackColor and `WEBVIEW2_DEFAULT_BACKGROUND_COLOR` `#0F1115` (no white flash), dark title bar (`DwmSetWindowAttribute` 20, fallback 19), Windows 11 rounded corners + caption colour, min 900×600, default 1360×880 DIP clamped to the work area, size/position/maximized in `%LOCALAPPDATA%\Velox\window.json`, title `VELOX` / `VELOX – Testmodus`.
+- **Start:** the backend must report `VELOX_READY` within **45 s**; otherwise (or if it exits) the start screen shows an error with the last 40 log lines and the buttons *Erneut versuchen* / *Testmodus* / *Log öffnen*.
+- **WebView2:** user data folder `%LOCALAPPDATA%\Velox\webview2\<real|test>`; DevTools, browser accelerator keys, default context menu, status bar, zoom, pinch zoom, swipe navigation, autofill, password saving and host objects off. Only `http://127.0.0.1:<port>/` (and `localhost:<port>`) and the embedded start screen may load in the window; every other navigation is cancelled, user-initiated http(s) links and `window.open` open in the default browser **non-elevated** via `explorer.exe "<url>"`. Render process crash → reload; browser process crash → restart VELOX.exe.
+- **Close:** if `POST /api/heartbeat` says `busy`, ask first (*Trotzdem beenden* / *Weiter warten*). Then the window hides, the WebView is disposed (its heartbeats stop), `POST /api/shutdown?t=<token>`, wait up to **3 s**, then `TerminateJobObject` (the backend keeps its 4 s reload grace period, so it is normally ended by the job object; that is safe because every change is saved when it is made). Windows shutdown: request + terminate at once.
+- **WebView2 runtime missing** (`GetAvailableBrowserVersionString` throws `WebView2RuntimeNotFoundException`, or creating the environment fails): `FallbackHost` – a small dark start window runs `Velox.ps1` hidden **without** `-NoBrowser` (the backend opens its Edge app window as with `Start.bat`); VELOX.exe stays alive as the job owner and ends when the backend ends.
+
+Start screen protocol (`splash.html` ⇄ VELOX.exe, JSON web messages):
+host → page `mode{test}` · `status{text}` · `starting{text}` · `ready` · `error{title,message,log,canTest}`;
+page → host `splash-ready` · `retry` · `test` · `openlog`. Messages are only accepted while the start screen (not the app) is shown.
+
+### VeloxSetup.exe
+
+One file (manifest `requireAdministrator`). Embedded resources: `payload.zip` (the app: `Velox.ps1`,
+`Start.bat`, `Start-Testmodus.bat`, `README.md`, `VERSION`, `core/`, `ui/`, `data/`, plus `VELOX.exe`,
+`VELOX.exe.config`, `Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`,
+`runtimes/win-{x64,x86,arm64}/native/WebView2Loader.dll`; never `tests/`, `tools/`, `docs/`, `native/`)
+and `ui/index.html`, `ui/setup.css`, `ui/setup.js`.
+
+Its own WebView2: the managed DLLs are loaded from `payload.zip` through `AppDomain.AssemblyResolve`
+(registered first thing in `Main`; all WebView2-typed code is in `SetupWindow.cs`, called through
+`[NoInlining]` methods so it is JIT-compiled after that); `WebView2Loader.dll` for the process
+architecture is extracted to a private temp folder and announced with
+`CoreWebView2Environment.SetLoaderDllFolderPath` before any other WebView2 call. The UI files are extracted
+to the same temp folder and mapped with `SetVirtualHostNameToFolderMapping("setup.velox.example", …, Deny)`;
+only `https://setup.velox.example/` may load. Window: borderless 880×560 DIP (scaled, clamped), drop
+shadow, rounded corners, own title bar (drag = `ReleaseCapture` + `WM_NCLBUTTONDOWN/HTCAPTION`, only while `GetAsyncKeyState` says the primary button is still down).
+
+WebView2 runtime missing → dark native dialog: download the Evergreen bootstrapper
+(`https://go.microsoft.com/fwlink/p/?LinkId=2124703`) and run it with `/silent /install`; still
+missing → `FallbackForm`, a plain native install/uninstall UI with the same engine.
+
+| Switch | Meaning |
+|---|---|
+| *(none)* | install UI; when VELOX is installed already: update UI. |
+| `/S` | silent install (no UI, VELOX is not started). With `/D=<folder>` another folder, `/nodesktop`, `/nostartmenu`. |
+| `/uninstall` | uninstall UI (`Uninstall.exe /uninstall` is the `UninstallString`). |
+| `/uninstall /S` | silent uninstall, keeps settings and backups; `/purge` deletes `%LOCALAPPDATA%\Velox` too. |
+| `--from-temp --dir <folder>` | internal: the uninstaller copies itself to `%TEMP%\VeloxUninstall-*` and runs from there so it can delete its own folder. That temp copy (and the loaded `WebView2Loader.dll`) cannot delete itself: it is registered for deletion at the next restart (`MoveFileEx` delay-until-reboot, like NSIS) - no `cmd /c ping & rd` helper, which antivirus heuristics flag. |
+
+Exit codes: 0 ok, 1 error, 2 closed before finishing, 5 not elevated. Log: `%TEMP%\VeloxSetup.log`.
+
+**Install steps** (the same for install and update): check the folder (a folder not named `VELOX` gets
+`\VELOX` appended; no network drives, not below `%windir%`, no `[ ]` in the path - Windows PowerShell 5.1 reads them as wildcards in `-File`) and free space → close a running VELOX
+(`VELOX.exe` from that folder via `CloseMainWindow`, 12 s, then kill; PowerShell processes whose command
+line contains `<dir>\Velox.ps1` via WMI) → create the folder (outside Program Files: ACL admins/SYSTEM full,
+users read, owner Administrators) → extract with progress → copy itself as `<dir>\Uninstall.exe` (its `Zone.Identifier` stream - the download's Mark of the Web - is removed, so uninstalling from the Windows settings shows no SmartScreen warning) → delete files of the old
+version that are gone (list in the hidden `<dir>\.velox-files`) → shortcuts via `WScript.Shell` (common
+Start menu `VELOX.lnk` + `VELOX Testmodus.lnk` (`--test`), common desktop `VELOX.lnk`, icon from VELOX.exe)
+→ registry → optionally start VELOX.exe (it elevates itself if needed).
+
+Registry `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\VELOX` (64-bit view): `DisplayName`
+`VELOX`, `DisplayVersion` (from `VERSION`), `Publisher` `VELOX`, `DisplayIcon` `<dir>\VELOX.exe,0`,
+`InstallLocation`, `UninstallString` `"<dir>\Uninstall.exe" /uninstall`, `QuietUninstallString`
+`"<dir>\Uninstall.exe" /uninstall /S`, `EstimatedSize` (KB, DWORD), `NoModify` 1, `NoRepair` 1,
+`InstallDate` (yyyyMMdd). An existing entry means "update".
+
+**Uninstall:** close VELOX → delete the shortcuts → delete exactly the installed files (manifest + payload
+list; locked ones on reboot) and empty folders → delete the registry entry → optionally
+`%LOCALAPPDATA%\Velox` (settings, backups, logs). Applied tweaks stay active – the UI says so and points to
+*Sicherungen* in VELOX.
+
+**Message protocol** (`setup-ui` ⇄ `SetupWindow.cs`, JSON objects via `chrome.webview.postMessage` /
+`PostWebMessageAsJson`; only messages from `https://setup.velox.example/` are accepted):
+
+| Direction | Message |
+|---|---|
+| page → setup | `ready` (page loaded) · `drag` · `minimize` · `close` (ignored while busy) · `browse{dir}` · `checkRunning` · `install{dir, desktop, startMenu, launch, closeRunning}` · `uninstall{keepData, closeRunning}` · `launch` (start VELOX and close) · `openLog` · `exit` |
+| setup → page | `init{version, mode: install\|update\|uninstall, installedVersion, dir, defaultDir, sizeMB, freeMB, running}` · `folder{dir, error, freeMB}` · `running{running}` · `progress{percent, step, file}` (≤ ~30/s) · `done{mode, launched}` · `error{message, hint}` |
+
+Screens: intro (≈ 2.5 s, any click/key skips; `prefers-reduced-motion` → short fade) → welcome (install /
+update) or uninstall → options → progress (ring + equalizer logo) → done / error. A running VELOX is
+only closed after the confirm dialog.
+
+Motion (all frame-rate independent, nothing loops while idle except the slow background drift): intro =
+energy seed → particles converge onto the fader tracks → tracks draw in → caps drop with a spring → a
+pulse runs along the V → ignition (flash, god rays, double shock ring, sparks, light streak, a small
+"camera punch") → the wordmark resolves from blur → the logo glides to Welcome. Progress = ring with a
+comet head that sheds sparks, equalizer logo, ring flash at 100 %. Done = check badge, spark burst,
+confetti from the logo and from two corner "cannons" aimed past the text. VELOX.exe's start screen
+(`native/host/splash.html`) plays the same entrance in CSS (tracks, spring caps, V ignition ring,
+blurred wordmark) and then settles into the app splash's loop, so the hand-over to `ui/` stays seamless.
+
+### Build & checks
+
+`native/build.sh` (or `native/Build.ps1`): `dotnet build` VELOX.exe → `buildtool pack` (payload.zip, sorted,
+fixed timestamps) → `dotnet build` VeloxSetup.exe with the payload → copy to `dist/` → `buildtool verify`:
+manifests (`requireAdministrator` / `asInvoker`, PerMonitorV2), icon + version resources, versions =
+`VERSION`, embedded resources, payload = every app file byte-identical and nothing else, CRLF of the
+`.bat`s and BOM of `Velox.ps1` kept, WebView2Loader machine types, size ≤ 3 MB. Then
+`node tests/native/run-setup-ui-tests.mjs` and `pwsh tests/native/Test-HostPid.ps1`.
+Nothing of the Win32/COM/WebView2 side can run on Linux; every such call is wrapped and logged.

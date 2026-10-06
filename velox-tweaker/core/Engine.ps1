@@ -17,21 +17,40 @@ function New-VxJournal([string]$Kind, [string]$Label) {
     $j = @{
         id = $id; label = $Label; kind = $Kind; created = (Get-VxNowIso); simulate = [bool]$ctx.Simulate
         restorePoint = $false; entries = (New-Object System.Collections.ArrayList)
-        file = [IO.Path]::Combine($ctx.BackupDir, $id + '.journal'); headerWritten = $false
+        file = [IO.Path]::Combine($ctx.BackupDir, $id + '.journal'); headerWritten = $false; stream = $null
     }
     return $j
+}
+
+# Writes one JSON line into the journal's line file. The file stays open for the whole job (one
+# FileStream, flushed after every entry) - opening and closing it per entry costs a virus scan
+# each time on most PCs.
+function Write-VxJournalLine($Journal, [string]$Line) {
+    if ($null -eq $Journal.stream) {
+        $Journal.stream = New-Object System.IO.FileStream($Journal.file, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
+        if ($null -ne $global:VxOpenJournals) { [void]$global:VxOpenJournals.Add($Journal) }
+    }
+    $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($Line + "`n")
+    $Journal.stream.Write($bytes, 0, $bytes.Length)
+    $Journal.stream.Flush()
+}
+
+function Close-VxJournalStream($Journal) {
+    if ($null -eq $Journal -or $null -eq $Journal.stream) { return }
+    try { $Journal.stream.Flush(); $Journal.stream.Dispose() } catch { $null = $_ }
+    $Journal.stream = $null
+    if ($null -ne $global:VxOpenJournals) { $global:VxOpenJournals.Remove($Journal) }
 }
 
 # Appends the entry to the on-disk journal (one JSON line) before the change is made.
 function Add-VxJournalEntry($Journal, $Entry) {
     if ($null -eq $Journal) { return }
-    $enc = New-Object System.Text.UTF8Encoding($false)
     if (-not $Journal.headerWritten) {
         $hdr = [ordered]@{ id = $Journal.id; label = $Journal.label; kind = $Journal.kind; created = $Journal.created; simulate = $Journal.simulate; restorePoint = $Journal.restorePoint }
-        [IO.File]::AppendAllText($Journal.file, (ConvertTo-VxJson $hdr) + "`n", $enc)
+        Write-VxJournalLine $Journal (ConvertTo-VxJson $hdr)
         $Journal.headerWritten = $true
     }
-    [IO.File]::AppendAllText($Journal.file, (ConvertTo-VxJson $Entry) + "`n", $enc)
+    Write-VxJournalLine $Journal (ConvertTo-VxJson $Entry)
     [void]$Journal.entries.Add($Entry)
 }
 
@@ -47,6 +66,7 @@ function ConvertTo-VxJournalDoc($Journal) {
 function Complete-VxJournal($Journal) {
     if ($null -eq $Journal) { return $null }
     $ctx = $global:VxCtx
+    Close-VxJournalStream $Journal
     if ($Journal.entries.Count -eq 0) {
         if ([IO.File]::Exists($Journal.file)) { [IO.File]::Delete($Journal.file) }
         return $null
@@ -68,7 +88,11 @@ function Read-VxBackup([string]$Id) {
     if ([IO.File]::Exists($json)) { return (Read-VxJsonFile $json) }
     $lines = [IO.Path]::Combine($dir, $Id + '.journal')
     if ([IO.File]::Exists($lines)) {
-        $all = @([IO.File]::ReadAllLines($lines, [Text.Encoding]::UTF8) | Where-Object { $_.Trim() })
+        # the running job may still hold the file open for writing
+        $text = ''
+        $fs = New-Object System.IO.FileStream($lines, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try { $sr = New-Object System.IO.StreamReader($fs, [Text.Encoding]::UTF8); $text = $sr.ReadToEnd() } finally { $fs.Dispose() }
+        $all = @(($text -split "\r?\n") | Where-Object { $_.Trim() })
         if ($all.Count -eq 0) { return $null }
         $hdr = ConvertFrom-VxJsonText $all[0]
         $entries = New-Object System.Collections.ArrayList
@@ -250,12 +274,26 @@ function Set-VxFeatureJ($J, [string]$Name, [bool]$Enabled, [string]$TweakId = $n
 
 # ================================================================== ps scripts
 
-# Runs catalog/detweak script source. A script can change anything (powercfg, bcdedit, features),
-# so the provider cache is dropped afterwards - later reads must see the real state again.
-function Invoke-VxPsSource([string]$Source) {
+# Runs catalog/detweak script source. A script that changes something can touch what the provider
+# cache holds (powercfg, bcdedit, features, apps), so the parts it can touch are dropped afterwards -
+# later reads must see the real state again. -ReadOnly (detect scripts) keeps the cache: dropping
+# the app or feature list after every status read made big jobs re-read them dozens of times.
+function Invoke-VxPsSource([string]$Source, [switch]$ReadOnly) {
     $sb = [scriptblock]::Create($Source)
     try { return @(& $sb) }
-    finally { try { $global:VxCtx.Cache.Clear() } catch { $null = $_ } }
+    finally { if (-not $ReadOnly) { try { Clear-VxCacheFor $Source } catch { $null = $_ } } }
+}
+
+# Drops the cached reads a script may have changed (by what it calls).
+function Clear-VxCacheFor([string]$Source) {
+    $c = $global:VxCtx.Cache
+    $drop = New-Object System.Collections.Generic.List[string]
+    if ($Source -match '(?i)powercfg|PowerSetting|Win32_PowerPlan') { foreach ($k in @('activePlan', 'planTable', 'pwsDump')) { $drop.Add($k) } }
+    if ($Source -match '(?i)bcdedit') { $drop.Add('bcd') }
+    if ($Source -match '(?i)OptionalFeature|dism') { $drop.Add('features') }
+    if ($Source -match '(?i)Appx') { $drop.Add('appx') }
+    # anything else a script could do is not cached (registry, services and tasks are read live)
+    foreach ($k in $drop) { $c.Remove($k) }
 }
 
 # German error when a per-user script would hit the wrong account (see Get-VxDesktopUser).
@@ -310,7 +348,7 @@ function Get-VxPsState($Action, $Tweak, [int]$Index) {
     if ([string]::IsNullOrWhiteSpace($src)) { return 'unknown' }
     # it would read the elevated account's data, not the desktop user's
     if ($null -ne $ctx.DesktopUser -and (Test-VxPerUserScript $src)) { return 'unknown' }
-    $out = @(Invoke-VxPsSource $src)
+    $out = @(Invoke-VxPsSource $src -ReadOnly)
     if ($out.Count -eq 0) { return 'unknown' }
     $last = $out[$out.Count - 1]
     if ($last -is [bool]) { if ($last) { return 'applied' } return 'default' }
@@ -601,71 +639,430 @@ function Invoke-VxTweakChange($Tweak, [string]$Mode, $J) {
 }
 
 # ================================================================== restore points
+# Policy (settings.restorePoints, docs/ARCHITECTURE.md section 8):
+#   first   - exactly ONE baseline restore point before the first change VELOX ever makes on this
+#             PC (recorded in state.restorePointBaseline, never again after that)
+#   presets - the baseline + one before presets / Detweak / KI-plan jobs with 10+ tweaks, at most
+#             one per 24 h
+#   off     - none
+# Single toggles, revert, restore, cleanup, autostart and game boost never add one: the JSON
+# journals already make them undoable. Creation runs in its own powershell.exe with a hard timeout
+# and an "Überspringen" button - it can never hang a job.
 
-function New-VxRestorePoint([string]$Label, [bool]$Force = $false) {
-    $ctx = $global:VxCtx
-    if ($ctx.RestorePointDone -and -not $Force) {
-        return @{ ok = $true; created = $false; message = 'In dieser Sitzung wurde schon ein Wiederherstellungspunkt erstellt.' }
-    }
-    $desc = 'VELOX: ' + $Label
-    if ($desc.Length -gt 200) { $desc = $desc.Substring(0, 200) }
-    if ($ctx.Simulate) {
-        $ctx.RestorePointDone = $true
-        Write-VxLog 'info' ("[Testmodus] Wiederherstellungspunkt '{0}' wurde nur protokolliert." -f $desc)
-        return @{ ok = $true; created = $false; message = 'Testmodus: Der Wiederherstellungspunkt wurde nur simuliert.' }
-    }
-    Set-VxProgress -Step 'Erstelle Wiederherstellungspunkt (kann bis zu einer Minute dauern) ...'
-    $srKey = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
-    $prev = $null
-    try { $prev = Get-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' } catch { $prev = $null }
-    $ok = $false
-    $msg = ''
-    try {
-        try { Set-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' 'DWord' 0 } catch { Write-VxLog 'warn' ('Häufigkeits-Sperre konnte nicht aufgehoben werden: ' + $_.Exception.Message) }
-        $drive = $env:SystemDrive
-        if (-not $drive) { $drive = 'C:' }
-        if (Get-Command -Name 'Enable-ComputerRestore' -ErrorAction SilentlyContinue) {
-            try { Enable-ComputerRestore -Drive ($drive + '\') -ErrorAction Stop } catch { Write-VxLog 'warn' ('Computerschutz konnte nicht eingeschaltet werden: ' + $_.Exception.Message) }
-        }
-        if (Get-Command -Name 'Checkpoint-Computer' -ErrorAction SilentlyContinue) {
-            try {
-                Checkpoint-Computer -Description $desc -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop -WarningAction SilentlyContinue
-                $ok = $true
-            } catch { $msg = $_.Exception.Message }
-        }
-        if (-not $ok) {
-            try {
-                $r = Invoke-CimMethod -Namespace 'root/default' -ClassName 'SystemRestore' -MethodName 'CreateRestorePoint' -Arguments @{ Description = $desc; RestorePointType = [uint32]12; EventType = [uint32]100 } -ErrorAction Stop
-                if ([int]$r.ReturnValue -eq 0) { $ok = $true } else { $msg = 'SystemRestore-Fehlercode ' + $r.ReturnValue }
-            } catch { if (-not $msg) { $msg = $_.Exception.Message } }
-        }
-    } finally {
-        try {
-            if ($null -ne $prev -and $prev.exists) { Set-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' 'DWord' $prev.value }
-            else { Remove-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' }
-        } catch { $null = $_ }
-    }
-    if ($ok) {
-        $ctx.RestorePointDone = $true
-        $ctx.State.restorePoints = [int](Get-VxProp $ctx.State 'restorePoints' 0) + 1
-        Write-VxLog 'ok' "Wiederherstellungspunkt '$desc' erstellt."
-        return @{ ok = $true; created = $true; message = 'Wiederherstellungspunkt erstellt.' }
-    }
-    Write-VxLog 'warn' ('Wiederherstellungspunkt konnte nicht erstellt werden: ' + $msg)
-    return @{ ok = $false; created = $false; message = ('Wiederherstellungspunkt konnte nicht erstellt werden. VELOX macht trotzdem weiter und sichert alles im eigenen Journal. (' + $msg + ')') }
+function Get-VxRestorePointTimeoutSec {
+    $t = [int](Get-VxProp $global:VxCtx 'RestorePointTimeoutSec' 0)
+    if ($t -le 0) { $t = 90 }
+    return $t
 }
 
-# Called before every job that changes the system. Never fatal.
-function Invoke-VxAutoRestorePoint([string]$Label, $J = $null, [bool]$Force = $false) {
+function Get-VxRestorePointStep { return 'Wiederherstellungspunkt wird erstellt – das kann bis zu 1–2 Minuten dauern' }
+
+# $true when the baseline question is answered for good: created, adopted, skipped by the user, or
+# three failed attempts (System Restore is broken or switched off by policy on this PC).
+function Test-VxBaselineSettled {
+    $b = Get-VxProp $global:VxCtx.State 'restorePointBaseline'
+    if ($null -eq $b) { return $false }
+    $st = [string](Get-VxProp $b 'status' '')
+    if (@('created', 'adopted', 'skipped') -contains $st) { return $true }
+    return ([int](Get-VxProp $b 'attempts' 0) -ge 3)
+}
+
+# ------------------------------------------------------------------ simulated restore points
+
+# Testmodus: a fake restore point list in the overlay (seeded with a few old VELOX points, like a
+# PC that ran an older VELOX version, and one from Windows itself).
+function Get-VxSimRestorePoints {
+    $sim = $global:VxCtx.Sim
+    if (-not ($sim.rp -is [hashtable])) {
+        $now = Get-Date
+        $items = New-Object System.Collections.ArrayList
+        $seed = @(
+            @(12, 'Windows Update'), @(9, 'VELOX: Preset: Sicherer Boost'), @(8, 'VELOX: Tweaks: 3 aktiviert'), @(6, 'VELOX: Detweak'),
+            @(5, 'VELOX: Tweaks: 1 aktiviert'), @(3, 'VELOX: Preset: Gaming Max'), @(2, 'VELOX: Wiederherstellung 20261003-101500-apply'))
+        $n = 40
+        foreach ($x in $seed) {
+            $n++
+            [void]$items.Add(@{ sequence = $n; description = [string]$x[1]; created = (ConvertTo-VxIsoText $now.AddDays(-[int]$x[0])); type = 12 })
+        }
+        $sim.rp = @{ next = $n + 1; items = $items.ToArray() }
+    }
+    return @($sim.rp.items)
+}
+
+function Add-VxSimRestorePoint([string]$Description) {
+    $null = Get-VxSimRestorePoints
+    $rp = $global:VxCtx.Sim.rp
+    $seq = [long]$rp.next
+    $rp.next = $seq + 1
+    $item = @{ sequence = $seq; description = $Description; created = (Get-VxNowIso); type = 12 }
+    $rp.items = @(@($rp.items) + @($item))
+    return $item
+}
+
+# ------------------------------------------------------------------ real restore points (isolated scripts)
+
+# Shared helpers of the isolated scripts: restore point list as hashtables, DMTF time -> ISO.
+function Get-VxRestorePointScriptHead {
+    return @'
+if ($PSVersionTable.PSVersion.Major -lt 6) { try { Remove-TypeData -TypeName System.Array -ErrorAction Stop } catch { $null = $_ } }
+function ConvertTo-RpIso([string]$s) {
+    try { Add-Type -AssemblyName System.Management -ErrorAction Stop; return ([Management.ManagementDateTimeConverter]::ToDateTime($s)).ToString('yyyy-MM-ddTHH:mm:ss') }
+    catch { if ($s -match '^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})') { return ('{0}-{1}-{2}T{3}:{4}:{5}' -f $Matches[1], $Matches[2], $Matches[3], $Matches[4], $Matches[5], $Matches[6]) }; return $s }
+}
+function Get-RpList {
+    $out = @()
+    foreach ($r in @(Get-CimInstance -Namespace 'root/default' -ClassName 'SystemRestore' -OperationTimeoutSec 60 -ErrorAction Stop)) {
+        $out += [ordered]@{ sequence = [long]$r.SequenceNumber; description = [string]$r.Description; created = (ConvertTo-RpIso ([string]$r.CreationTime)); type = [int]$r.RestorePointType }
+    }
+    return $out
+}
+'@
+}
+
+# Isolated script: adopt the oldest existing VELOX point as baseline ($Adopt) or create a new one.
+function Get-VxRestorePointCreateScript([string]$Description, [bool]$Adopt) {
+    $d = $Description.Replace("'", "''")
+    $a = '$false'
+    if ($Adopt) { $a = '$true' }
+    return (Get-VxRestorePointScriptHead) + @"
+`$desc = '$d'
+`$adopt = $a
+"@ + @'
+
+$res = [ordered]@{ ok = $false; adopted = $false; sequence = $null; created = $null; description = $desc; message = ''; throttled = $false }
+$list = @()
+try { $list = @(Get-RpList) } catch { $res.message = 'Liste nicht lesbar: ' + $_.Exception.Message }
+$own = @($list | Where-Object { [string]$_.description -like 'VELOX*' } | Sort-Object { [long]$_.sequence })
+if ($adopt -and $own.Count -gt 0) {
+    $res.ok = $true; $res.adopted = $true; $res.sequence = [long]$own[0].sequence; $res.created = $own[0].created; $res.description = $own[0].description
+} else {
+    $maxSeq = 0
+    foreach ($r in $list) { if ([long]$r.sequence -gt $maxSeq) { $maxSeq = [long]$r.sequence } }
+    try { Enable-ComputerRestore -Drive ($env:SystemDrive + '\') -ErrorAction Stop } catch { $res.message = 'Computerschutz: ' + $_.Exception.Message }
+    $done = $false
+    try { Checkpoint-Computer -Description $desc -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop -WarningAction SilentlyContinue; $done = $true } catch { $res.message = [string]$_.Exception.Message }
+    if (-not $done) {
+        try {
+            $r = Invoke-CimMethod -Namespace 'root/default' -ClassName 'SystemRestore' -MethodName 'CreateRestorePoint' -Arguments @{ Description = $desc; RestorePointType = [uint32]12; EventType = [uint32]100 } -ErrorAction Stop
+            if ([int]$r.ReturnValue -eq 0) { $done = $true } else { $res.message = 'SystemRestore-Fehlercode ' + $r.ReturnValue }
+        } catch { if (-not $res.message) { $res.message = [string]$_.Exception.Message } }
+    }
+    $new = @()
+    try { $new = @(Get-RpList | Where-Object { [long]$_.sequence -gt $maxSeq -and [string]$_.description -eq $desc } | Sort-Object { [long]$_.sequence }) } catch { $null = $_ }
+    if ($new.Count -gt 0) { $res.ok = $true; $res.sequence = [long]$new[-1].sequence; $res.created = $new[-1].created; $res.message = '' }
+    elseif ($done) { $res.throttled = $true; $res.message = 'Windows hat keinen neuen Punkt angelegt (höchstens einer pro 24 Stunden).' }
+}
+[Console]::Out.WriteLine('VXRESULT ' + (ConvertTo-Json -InputObject $res -Compress -Depth 5))
+'@
+}
+
+function Get-VxRestorePointListScript {
+    return (Get-VxRestorePointScriptHead) + @'
+
+$res = [ordered]@{ ok = $true; items = @(); message = '' }
+try { $res.items = @(Get-RpList) } catch { $res.ok = $false; $res.message = [string]$_.Exception.Message }
+[Console]::Out.WriteLine('VXRESULT ' + (ConvertTo-Json -InputObject $res -Compress -Depth 5))
+'@
+}
+
+function Get-VxRestorePointRemoveScript([long[]]$Sequences) {
+    $list = (@($Sequences) | ForEach-Object { [string][long]$_ }) -join ','
+    return @"
+`$seqs = @($list)
+"@ + @'
+
+if ($PSVersionTable.PSVersion.Major -lt 6) { try { Remove-TypeData -TypeName System.Array -ErrorAction Stop } catch { $null = $_ } }
+Add-Type -Namespace VxSr -Name Native -MemberDefinition '[DllImport("srclient.dll")] public static extern int SRRemoveRestorePoint(int index);' -ErrorAction Stop
+$out = @()
+foreach ($s in $seqs) {
+    $rc = -1
+    try { $rc = [VxSr.Native]::SRRemoveRestorePoint([int]$s) } catch { $rc = -1 }
+    $out += [ordered]@{ sequence = [long]$s; code = [int]$rc }
+}
+[Console]::Out.WriteLine('VXRESULT ' + (ConvertTo-Json -InputObject @($out) -Compress -Depth 5))
+'@
+}
+
+# Restore points on this PC: @{ ok; items = @( @{ sequence; description; created; velox; manual } ); message }.
+# manual = a point the user made on purpose ("Wiederherstellungspunkt erstellen") - never cleaned up.
+function Get-VxRestorePoints {
     $ctx = $global:VxCtx
-    $want = $Force -or [bool]$ctx.Settings.autoRestorePoint
-    if (-not $want) { return }
-    if ($ctx.RestorePointDone -and -not $Force) { if ($null -ne $J) { $J.restorePoint = $true }; return }
+    $items = @()
+    $ok = $true
+    $msg = ''
+    if ($ctx.Simulate) {
+        $items = @(Get-VxSimRestorePoints)
+    } else {
+        $x = Invoke-VxIsolated -Script (Get-VxRestorePointListScript) -TimeoutSec 60 -Skippable -Step 'Lese Wiederherstellungspunkte'
+        $r = Get-VxIsolatedResult $x.output
+        if ($null -eq $r) {
+            $ok = $false
+            $msg = 'Die Wiederherstellungspunkte konnten nicht gelesen werden.'
+            if ($x.timedOut) { $msg = 'Windows hat nach 60 s noch keine Liste geliefert.' }
+            elseif ($x.skipped) { $msg = 'Übersprungen.' }
+            elseif ($x.error) { $msg += ' (' + $x.error + ')' }
+        } else {
+            $ok = [bool]$r.ok
+            $msg = [string](Get-VxProp $r 'message' '')
+            $items = @(Get-VxProp $r 'items' @())
+        }
+    }
+    $out = New-Object System.Collections.ArrayList
+    foreach ($i in @($items | Sort-Object { [long](Get-VxProp $_ 'sequence' 0) })) {
+        $d = [string](Get-VxProp $i 'description' '')
+        [void]$out.Add([ordered]@{
+                sequence = [long](Get-VxProp $i 'sequence' 0); description = $d; created = (ConvertTo-VxIsoText (Get-VxProp $i 'created'))
+                velox = ($d -match '^\s*VELOX'); manual = (Test-VxManualRestorePoint $d)
+            })
+    }
+    return @{ ok = $ok; items = $out.ToArray(); message = $msg }
+}
+
+# "VELOX: Manuell" (and "VELOX: VELOX manuell" of older versions).
+function Test-VxManualRestorePoint([string]$Description) {
+    return ($Description -match '(?i)^\s*VELOX:\s*(VELOX\s+)?manuell')
+}
+
+# Points the clean-up deletes: VELOX points except the one that stays and the manual ones.
+function Get-VxExtraRestorePoints($Items, $Keep) {
+    return @(@($Items) | Where-Object { $_.velox -and -not $_.manual -and ($null -eq $Keep -or [long]$_.sequence -ne [long]$Keep.sequence) })
+}
+
+# Records the outcome of a baseline attempt in the (mode-specific) state and saves it at once.
+function Set-VxBaselineRecord([string]$Status, $Info) {
+    $st = $global:VxCtx.State
+    $prev = Get-VxProp $st 'restorePointBaseline'
+    $attempts = [int](Get-VxProp $prev 'attempts' 0) + 1
+    $st.restorePointBaseline = @{
+        status = $Status; created = (Get-VxProp $Info 'created' (Get-VxNowIso)); sequence = (Get-VxProp $Info 'sequence')
+        description = [string](Get-VxProp $Info 'description' ''); attempts = $attempts; tried = (Get-VxNowIso)
+    }
+    Save-VxState
+}
+
+# Creates (or for the baseline: adopts) a restore point. $Kind: baseline | extra | manual.
+# Returns @{ ok; created; adopted; skipped; timedOut; message }. Never throws except on cancel.
+function New-VxRestorePoint([string]$Label, [string]$Kind = 'manual') {
+    $ctx = $global:VxCtx
+    $isBaseline = ($Kind -eq 'baseline')
+    # the first restore point VELOX makes is the baseline, whatever started it
+    if (-not $isBaseline -and -not (Test-VxBaselineSettled)) { $isBaseline = $true }
+    $desc = 'VELOX: ' + $Label
+    if ($desc.Length -gt 200) { $desc = $desc.Substring(0, 200) }
+    $step = Get-VxRestorePointStep
+    Set-VxProgress -Step $step
+    $out = @{ ok = $false; created = $false; adopted = $false; skipped = $false; timedOut = $false; message = ''; sequence = $null; createdAt = $null }
+    $r = $null
+    if ($ctx.Simulate -and -not (Get-VxProp $ctx 'SimRestorePointScript')) {
+        $own = @(Get-VxSimRestorePoints | Where-Object { [string]$_.description -like 'VELOX*' } | Sort-Object { [long]$_.sequence })
+        if ($isBaseline -and $own.Count -gt 0) {
+            $r = @{ ok = $true; adopted = $true; sequence = $own[0].sequence; created = $own[0].created; description = $own[0].description }
+        } else {
+            $item = Add-VxSimRestorePoint $desc
+            $r = @{ ok = $true; adopted = $false; sequence = $item.sequence; created = $item.created; description = $desc }
+        }
+        Write-VxLog 'info' ("[Testmodus] Wiederherstellungspunkt '{0}' wurde nur simuliert." -f $desc)
+        Save-VxSim
+    } else {
+        $script = Get-VxRestorePointCreateScript $desc $isBaseline
+        # tests replace the script (e.g. one that hangs) to exercise timeout and skip
+        if ($ctx.Simulate) { $script = [string]$ctx.SimRestorePointScript }
+        $srKey = 'HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+        $prev = $null
+        $touchFreq = ($isBaseline -and -not $ctx.Simulate)
+        if ($touchFreq) {
+            # only for the baseline: lift Windows' "one per 24 h" limit for this one point
+            try { $prev = Get-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' } catch { $prev = $null }
+            try { Set-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' 'DWord' 0 } catch { Write-VxLog 'warn' ('Häufigkeits-Sperre konnte nicht aufgehoben werden: ' + $_.Exception.Message) }
+        }
+        $x = $null
+        try { $x = Invoke-VxIsolated -Script $script -TimeoutSec (Get-VxRestorePointTimeoutSec) -Skippable -Step $step }
+        finally {
+            if ($touchFreq) {
+                try {
+                    if ($null -ne $prev -and $prev.exists) { Set-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' 'DWord' $prev.value }
+                    else { Remove-VxRealRegValue $srKey 'SystemRestorePointCreationFrequency' }
+                } catch { $null = $_ }
+            }
+        }
+        $out.skipped = [bool]$x.skipped
+        $out.timedOut = [bool]$x.timedOut
+        if (-not ($x.skipped -or $x.timedOut)) {
+            $r = Get-VxIsolatedResult $x.output
+            if ($null -eq $r) { $r = @{ ok = $false; message = ([string]$x.error).Trim() } }
+        }
+        Write-VxFileLog 'info' ("Wiederherstellungspunkt ({0}): {1} ms, Code {2}, übersprungen {3}, Zeitlimit {4}" -f $Kind, $x.ms, $x.exitCode, $x.skipped, $x.timedOut)
+    }
+    if ($null -ne $r -and [bool](Get-VxProp $r 'ok' $false)) {
+        $out.ok = $true
+        $out.adopted = [bool](Get-VxProp $r 'adopted' $false)
+        $out.created = -not $out.adopted
+        $out.sequence = Get-VxProp $r 'sequence'
+        $out.createdAt = ConvertTo-VxIsoText (Get-VxProp $r 'created' (Get-VxNowIso))
+        if ($out.created) {
+            $ctx.State.restorePoints = [int](Get-VxProp $ctx.State 'restorePoints' 0) + 1
+            $ctx.State.restorePointLast = Get-VxNowIso
+        }
+        if ($isBaseline) {
+            $status = 'created'
+            if ($out.adopted) { $status = 'adopted' }
+            Set-VxBaselineRecord $status @{ created = $out.createdAt; sequence = $out.sequence; description = [string](Get-VxProp $r 'description' $desc) }
+        } else { Save-VxState }
+        if ($out.adopted) {
+            $out.message = ('Dein erster VELOX-Wiederherstellungspunkt vom {0} gilt als Ausgangspunkt – es wird kein neuer angelegt.' -f (Format-VxIsoDate $out.createdAt))
+            Write-VxLog 'ok' $out.message
+        } else {
+            $out.message = 'Wiederherstellungspunkt erstellt.'
+            Write-VxLog 'ok' ("Wiederherstellungspunkt '{0}' erstellt." -f $desc)
+        }
+        return $out
+    }
+    if ($out.skipped) {
+        $out.message = 'Wiederherstellungspunkt übersprungen. VELOX sichert trotzdem jeden Wert im eigenen Journal.'
+        if ($isBaseline) { Set-VxBaselineRecord 'skipped' @{ description = $desc } }
+    } elseif ($out.timedOut) {
+        $out.message = ('Der Wiederherstellungspunkt hat länger als {0} s gedauert und wurde abgebrochen. Windows legt ihn eventuell im Hintergrund noch an. VELOX macht weiter und sichert alles im eigenen Journal.' -f (Get-VxRestorePointTimeoutSec))
+        if ($isBaseline) { Set-VxBaselineRecord 'timeout' @{ description = $desc } }
+    } else {
+        $why = ''
+        if ($null -ne $r) { $why = [string](Get-VxProp $r 'message' '') }
+        $out.message = 'Wiederherstellungspunkt konnte nicht erstellt werden. VELOX macht trotzdem weiter und sichert alles im eigenen Journal.'
+        if ($why) { $out.message += ' (' + $why + ')' }
+        if ($isBaseline) { Set-VxBaselineRecord 'failed' @{ description = $desc } }
+    }
+    Write-VxLog 'warn' $out.message
+    return $out
+}
+
+function Format-VxIsoDate([string]$Iso) {
+    $d = [datetime]::MinValue
+    if ([datetime]::TryParse($Iso, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$d)) {
+        return $d.ToString('dd.MM.yyyy', [Globalization.CultureInfo]::InvariantCulture)
+    }
+    return $Iso
+}
+
+# Called before every job that changes the system. Never fatal, never longer than the timeout.
+# $Purpose: preset | plan | detweak (big jobs that may get an extra point in mode 'presets'),
+# anything else = small job. $Count = number of tweaks / values the job changes.
+# $Force is kept for older callers and ignored: no job forces an extra restore point any more.
+function Invoke-VxAutoRestorePoint([string]$Label, $J = $null, [bool]$Force = $false, [string]$Purpose = '', [int]$Count = 0) {
+    $ctx = $global:VxCtx
+    $mode = Get-VxRestorePointMode
+    if ($mode -eq 'off') { return }
     try {
-        $r = New-VxRestorePoint $Label $Force
-        if ($null -ne $J) { $J.restorePoint = [bool]($r.ok) }
-        if (-not $r.ok) { Write-VxLog 'warn' $r.message }
-    } catch { Write-VxLog 'warn' ('Wiederherstellungspunkt fehlgeschlagen: ' + $_.Exception.Message) }
+        if (-not (Test-VxBaselineSettled)) {
+            # one attempt per session: a broken System Restore costs at most one wait per start
+            if ($ctx.RestorePointTried) { return }
+            $ctx.RestorePointTried = $true
+            $r = New-VxRestorePoint 'Ausgangszustand vor der ersten Änderung' 'baseline'
+            $ctx.RestorePointDone = [bool]$r.ok
+            if ($null -ne $J) { $J.restorePoint = [bool]$r.ok }
+            return
+        }
+        if ($mode -ne 'presets') { return }
+        if (@('preset', 'plan', 'detweak') -notcontains $Purpose -or $Count -lt 10) { return }
+        $last = [string](Get-VxProp $ctx.State 'restorePointLast' '')
+        $base = Get-VxProp $ctx.State 'restorePointBaseline'
+        if (-not $last -and $null -ne $base) { $last = [string](Get-VxProp $base 'created' '') }
+        $d = [datetime]::MinValue
+        if ($last -and [datetime]::TryParse($last, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::None, [ref]$d) -and ((Get-Date) - $d).TotalHours -lt 24) {
+            Write-VxLog 'info' 'Der letzte Wiederherstellungspunkt ist jünger als 24 Stunden – VELOX legt keinen weiteren an.'
+            return
+        }
+        $r2 = New-VxRestorePoint $Label 'extra'
+        $ctx.RestorePointDone = [bool]$r2.ok
+        if ($null -ne $J) { $J.restorePoint = [bool]$r2.ok }
+    } catch {
+        if ([string]$_.Exception.Message -eq 'VX_CANCELLED') { throw }
+        Write-VxLog 'warn' ('Wiederherstellungspunkt fehlgeschlagen: ' + $_.Exception.Message)
+    }
+}
+
+# Job 'restorepoint': the user asked for one (palette, Sicherungen page).
+function Invoke-VxManualRestorePointJob($Params) {
+    $label = [string](Get-VxProp $Params 'label' 'Manuell')
+    if (-not $label) { $label = 'Manuell' }
+    Set-VxProgress 0.1 (Get-VxRestorePointStep)
+    $x = New-VxRestorePoint $label 'manual'
+    Set-VxProgress 1 'Fertig'
+    return [ordered]@{ ok = [bool]$x.ok; message = [string]$x.message; skipped = [bool]$x.skipped; timedOut = [bool]$x.timedOut; baseline = (Get-VxBaselineDto) }
+}
+
+# Which VELOX restore point stays when the others are cleaned up: the recorded baseline when it
+# still exists, otherwise the oldest VELOX point.
+function Get-VxRestorePointKeep($Items) {
+    $own = @(@($Items) | Where-Object { $_.velox } | Sort-Object { [long]$_.sequence })
+    if ($own.Count -eq 0) { return $null }
+    $b = Get-VxProp $global:VxCtx.State 'restorePointBaseline'
+    $seq = Get-VxProp $b 'sequence'
+    if ($null -ne $seq) {
+        $hit = @($own | Where-Object { [long]$_.sequence -eq [long]$seq })
+        if ($hit.Count -gt 0) { return $hit[0] }
+    }
+    return $own[0]
+}
+
+# Job 'restorepoint-list': { ok, items, keep, extra, baseline, mode, message }.
+function Invoke-VxRestorePointListJob($Params) {
+    Set-VxProgress 0.2 'Lese Wiederherstellungspunkte ...'
+    $l = Get-VxRestorePoints
+    $keep = Get-VxRestorePointKeep $l.items
+    $extra = @(Get-VxExtraRestorePoints $l.items $keep).Count
+    Set-VxProgress 1 'Fertig'
+    return [ordered]@{
+        ok = [bool]$l.ok; items = @($l.items); keep = $keep; extra = $extra
+        baseline = (Get-VxBaselineDto); mode = (Get-VxRestorePointMode); message = [string]$l.message
+    }
+}
+
+# Job 'restorepoint-clean': deletes every VELOX restore point except the one Get-VxRestorePointKeep
+# picks and the manual ones. Restore points of Windows and other programs are never touched.
+function Invoke-VxRestorePointCleanJob($Params) {
+    $ctx = $global:VxCtx
+    Set-VxProgress 0.1 'Lese Wiederherstellungspunkte ...'
+    $l = Get-VxRestorePoints
+    if (-not $l.ok) { throw ('Die Wiederherstellungspunkte konnten nicht gelesen werden. ' + $l.message) }
+    $keep = Get-VxRestorePointKeep $l.items
+    $drop = @(Get-VxExtraRestorePoints $l.items $keep)
+    $removed = 0
+    $failed = 0
+    $errors = New-Object System.Collections.Generic.List[string]
+    if ($drop.Count -eq 0) {
+        Write-VxLog 'info' 'Keine überflüssigen VELOX-Wiederherstellungspunkte gefunden.'
+    } elseif ($ctx.Simulate) {
+        $gone = @{}
+        foreach ($d in $drop) { $gone[[string]$d.sequence] = $true; $removed++ }
+        $ctx.Sim.rp.items = @(@($ctx.Sim.rp.items) | Where-Object { -not $gone.ContainsKey([string]$_.sequence) })
+        Save-VxSim
+        Write-VxLog 'info' ("[Testmodus] {0} Wiederherstellungspunkte nur aus der Testliste gelöscht." -f $removed)
+    } else {
+        Set-VxProgress 0.3 ('Lösche {0} Wiederherstellungspunkte ...' -f $drop.Count)
+        $x = Invoke-VxIsolated -Script (Get-VxRestorePointRemoveScript @($drop | ForEach-Object { [long]$_.sequence })) -TimeoutSec 180 -Skippable -Step ('Lösche {0} Wiederherstellungspunkte' -f $drop.Count)
+        $codes = Get-VxIsolatedResult $x.output
+        $byseq = @{}
+        foreach ($c in @($codes)) { if ($null -ne $c) { $byseq[[string](Get-VxProp $c 'sequence')] = [int](Get-VxProp $c 'code' -1) } }
+        foreach ($d in $drop) {
+            $k = [string]$d.sequence
+            if ($byseq.ContainsKey($k) -and $byseq[$k] -eq 0) { $removed++; continue }
+            $failed++
+            $why = 'nicht gelöscht'
+            if ($x.timedOut) { $why = 'Zeitlimit erreicht' } elseif ($x.skipped) { $why = 'übersprungen' } elseif ($byseq.ContainsKey($k)) { $why = 'Windows-Fehlercode ' + $byseq[$k] }
+            $errors.Add(('{0} ({1}): {2}' -f $d.description, (Format-VxIsoDate ([string]$d.created)), $why))
+        }
+    }
+    if ($null -ne $keep) {
+        # the point that stays is the baseline from now on
+        $b = Get-VxProp $ctx.State 'restorePointBaseline'
+        if ($null -eq $b -or $null -eq (Get-VxProp $b 'sequence') -or [long](Get-VxProp $b 'sequence') -ne [long]$keep.sequence) {
+            $ctx.State.restorePointBaseline = @{ status = 'adopted'; created = $keep.created; sequence = $keep.sequence; description = $keep.description; attempts = 1; tried = (Get-VxNowIso) }
+            Save-VxState
+        }
+    }
+    if ($removed -gt 0) { Write-VxLog 'ok' ("{0} überflüssige VELOX-Wiederherstellungspunkte gelöscht." -f $removed) }
+    foreach ($e in $errors) { Write-VxLog 'warn' $e }
+    Set-VxProgress 1 'Fertig'
+    return [ordered]@{ removed = $removed; failed = $failed; kept = $keep; errors = $errors.ToArray(); baseline = (Get-VxBaselineDto) }
 }
 
 # ================================================================== jobs: apply / revert
@@ -714,19 +1111,39 @@ function Update-VxPowerStatuses([string[]]$Ids, $Results = $null) {
     }
 }
 
+# What an apply job is, for the restore point policy: 'preset', 'plan' (KI-Optimierer), 'toggles'
+# or 'revert'. The UI may send params.purpose; older UIs are recognised by their label.
+function Get-VxApplyPurpose($Params, [string]$Label, [string]$Mode) {
+    if ($Mode -ne 'apply') { return 'revert' }
+    $p = [string](Get-VxProp $Params 'purpose' '')
+    if (@('preset', 'plan', 'toggles') -contains $p) { return $p }
+    if ($Label -like 'Preset:*') { return 'preset' }
+    if ($Label -like 'KI-Plan*') { return 'plan' }
+    return 'toggles'
+}
+
 function Invoke-VxApplyJob($Params, [string]$Mode) {
     $ctx = $global:VxCtx
+    $swJob = [Diagnostics.Stopwatch]::StartNew()
     $ids = @(@(Get-VxProp $Params 'ids' @()) | ForEach-Object { [string]$_ } | Where-Object { $_ } | Select-Object -Unique)
     $ids = @(Get-VxPowerOrderedIds $ids $Mode)
     $label = [string](Get-VxProp $Params 'label' '')
     if (-not $label) { if ($Mode -eq 'apply') { $label = 'Tweaks anwenden' } else { $label = 'Tweaks zurücksetzen' } }
     $results = New-Object System.Collections.ArrayList
     $changedTweaks = New-Object System.Collections.ArrayList
+    $timings = New-Object System.Collections.Generic.List[string]
     $J = New-VxJournal $Mode $label
     Set-VxProgress 0.02 'Bereite Änderungen vor ...'
-    Invoke-VxAutoRestorePoint $label $J
+    $prepMs = [int]$swJob.ElapsedMilliseconds
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    Invoke-VxAutoRestorePoint $label $J $false (Get-VxApplyPurpose $Params $label $Mode) $ids.Count
+    $rpMs = [int]$sw.ElapsedMilliseconds
+    $sw.Restart()
     $n = 0
     $total = [math]::Max(1, $ids.Count)
+    $verb = 'Wende an'
+    if ($Mode -ne 'apply') { $verb = 'Setze zurück' }
+    $tw = [Diagnostics.Stopwatch]::StartNew()
     try {
         foreach ($id in $ids) {
             Test-VxCancel
@@ -736,10 +1153,10 @@ function Invoke-VxApplyJob($Params, [string]$Mode) {
                 [void]$results.Add([ordered]@{ id = $id; ok = $false; status = $null; error = 'Unbekannter Tweak.' })
                 continue
             }
-            $verb = 'Wende an'
-            if ($Mode -ne 'apply') { $verb = 'Setze zurück' }
             Set-VxProgress (0.05 + 0.9 * ($n - 1) / $total) ("{0}: {1}" -f $verb, $t.name)
+            $tw.Restart()
             $r = Invoke-VxTweakChange $t $Mode $J
+            $timings.Add(('  {0} {1}: {2} ms, {3} Änderungen' -f $Mode, $id, $tw.ElapsedMilliseconds, $r.changed))
             if ($r.ok) {
                 if ($r.changed -gt 0) { Write-VxLog 'ok' ("{0}: {1}" -f $t.name, $(if ($Mode -eq 'apply') { 'angewendet' } else { 'zurückgesetzt' })) }
                 else { Write-VxLog 'info' ("{0}: war schon so eingestellt" -f $t.name) }
@@ -749,6 +1166,9 @@ function Invoke-VxApplyJob($Params, [string]$Mode) {
             [void]$results.Add([ordered]@{ id = $id; ok = [bool]$r.ok; status = $r.status; error = $r.error })
         }
     } finally {
+        $tweaksMs = [int]$sw.ElapsedMilliseconds
+        $sw.Restart()
+        Set-VxProgress 0.96 'Speichere Sicherung ...'
         $backupId = Complete-VxJournal $J
         try { Update-VxPowerStatuses $ids $results } catch { $null = $_ }
         try { Sync-VxBoostedGames } catch { $null = $_ }
@@ -756,14 +1176,24 @@ function Invoke-VxApplyJob($Params, [string]$Mode) {
         foreach ($k in @('explorer', 'reboot', 'logoff')) { if ($needs[$k]) { Add-VxNeeds $k } }
         # a tweak VELOX just changed (journalled) is VELOX's own or at default now, not foreign
         try {
-            $okIds = @($results | Where-Object { $_.ok } | ForEach-Object { [string]$_.id })
-            Update-VxForeignAfterTweaks @($changedTweaks | Where-Object { $okIds -contains [string]$_.id })
+            $okIds = @{}
+            foreach ($x in $results) { if ($x.ok) { $okIds[[string]$x.id] = $true } }
+            Update-VxForeignAfterTweaks @($changedTweaks | Where-Object { $okIds.ContainsKey([string]$_.id) })
         } catch { $null = $_ }
         Save-VxState
         Save-VxSim
+        $finishMs = [int]$sw.ElapsedMilliseconds
+        $all = [int]$swJob.ElapsedMilliseconds
+        $per = 0
+        if ($n -gt 0) { $per = [math]::Round($tweaksMs / $n, 1) }
+        Write-VxFileLog 'info' ("{0} '{1}': {2} Tweaks in {3} ms (Vorbereitung {4} ms, Wiederherstellungspunkt {5} ms, Tweaks {6} ms = {7} ms je Tweak, Abschluss {8} ms)" -f $Mode, $label, $n, $all, $prepMs, $rpMs, $tweaksMs, $per, $finishMs)
+        foreach ($line in $timings) { Write-VxFileLog 'info' $line }
     }
     Set-VxProgress 1 'Fertig'
-    return [ordered]@{ results = $results.ToArray(); backupId = $backupId; needs = $needs }
+    return [ordered]@{
+        results = $results.ToArray(); backupId = $backupId; needs = $needs
+        timing = [ordered]@{ prepMs = $prepMs; restorePointMs = $rpMs; tweaksMs = $tweaksMs; finishMs = $finishMs; perTweakMs = $per }
+    }
 }
 
 # ================================================================== restore
@@ -834,7 +1264,7 @@ function Invoke-VxRestoreJob($Params) {
     # VELOX itself can produce are replayed with admin rights
     $allow = Get-VxRestoreAllowList
     $J = New-VxJournal 'restore' ('Wiederherstellung: ' + [string]$b.label)
-    Invoke-VxAutoRestorePoint ('Wiederherstellung ' + $id) $J
+    Invoke-VxAutoRestorePoint ('Wiederherstellung ' + $id) $J $false 'restore'
     $restored = 0
     $failed = 0
     $errors = New-Object System.Collections.Generic.List[string]

@@ -1,4 +1,5 @@
-// Sicherungen: journal list with expandable entries, restore, manual restore point.
+// Sicherungen: journal list with expandable entries, restore, manual restore point, Windows
+// restore points (baseline info, clean-up of the extra VELOX points).
 import { icon } from '../icons.js';
 import { h, clear, button, badge, confirmDialog, emptyState, stagger, fmtDate, fmtRelative, plural, toast, skeleton, append } from '../ui.js';
 import { api } from '../api.js';
@@ -49,18 +50,102 @@ export default {
   mount(el, ctx) {
     const list = h('div', { class: 'bk-list', 'data-testid': 'backup-list' });
     const rpBtn = button({ label: 'Wiederherstellungspunkt erstellen', icon: 'shieldCheck', variant: 'primary', onClick: async () => {
-      const job = await ctx.runJob('restorepoint', { label: 'VELOX manuell' });
-      if (job && job.status === 'done') load();
+      const job = await ctx.runJob('restorepoint', { label: 'Manuell' });
+      if (job && job.status === 'done') { load(); rpLoad(true); }
     } });
     const folderBtn = button({ label: 'Ordner öffnen', icon: 'folder', variant: 'ghost', onClick: async () => {
       try { await api.open('backups'); toast({ type: 'ok', title: 'Ordner geöffnet', text: 'Der Explorer zeigt dir die Sicherungsdateien.' }); }
       catch (e) { toast({ type: 'error', title: 'Konnte den Ordner nicht öffnen', text: e.message }); }
     } });
+    // ---------- Windows restore points: the baseline and the extra VELOX points
+    const rpStatus = h('p', { class: 'section-desc rp-status', 'data-testid': 'rp-baseline' });
+    const rpBody = h('div', { class: 'rp-body' });
+    const rpCard = h('section', { class: 'card pad-24 rp-card', 'data-testid': 'rp-card' },
+      h('div', { class: 'set-head' }, h('span', { class: 'set-icon' }, icon('history', 18)),
+        h('div', {}, h('h2', { class: 'section-title', text: 'Windows-Wiederherstellungspunkte' }), rpStatus)),
+      rpBody);
+
+    function baselineText(r) {
+      const b = (ctx.state && ctx.state.restorePointBaseline) || null;
+      const mode = (ctx.settings && ctx.settings.restorePoints) || (ctx.settings && ctx.settings.autoRestorePoint === false ? 'off' : 'first');
+      if (b && (b.status === 'created' || b.status === 'adopted')) {
+        return 'Dein Ausgangspunkt: der erste VELOX-Wiederherstellungspunkt vom ' + fmtDate(b.created) + '. Damit kommst du über Windows zurück zum Stand vor VELOX.';
+      }
+      if (b && b.status === 'skipped') return 'Der erste Wiederherstellungspunkt wurde übersprungen. Mit „Wiederherstellungspunkt erstellen“ legst du jederzeit einen an.';
+      if (b && (b.status === 'timeout' || b.status === 'failed')) return 'Der erste Wiederherstellungspunkt hat nicht geklappt. VELOX versucht es beim nächsten Start noch einmal – deine Änderungen sind trotzdem im Journal gesichert.';
+      if (mode === 'off') return 'Automatische Wiederherstellungspunkte sind aus (Einstellungen). Rückgängig machen geht trotzdem über die Sicherungen unten.';
+      const keep = r && r.keep;
+      if (keep) return 'Noch kein Ausgangspunkt festgelegt – vor deiner nächsten Änderung übernimmt VELOX deinen ersten VELOX-Punkt vom ' + fmtDate(keep.created) + ' und legt keinen neuen an.';
+      return 'Noch keiner – VELOX erstellt genau einen vor deiner ersten Änderung.';
+    }
+
+    function rpItem(p, keep) {
+      const isKeep = keep && p.sequence === keep.sequence;
+      const desc = String(p.description || 'Ohne Namen').replace(/^VELOX:\s*VELOX\s+/, 'VELOX: ');
+      return h('li', { class: 'rp-item' + (isKeep ? ' is-keep' : '') + (p.velox ? '' : ' is-foreign') + (p.manual ? ' is-manual' : ''), 'data-rp-seq': String(p.sequence) },
+        icon(p.velox ? 'shieldCheck' : 'windows', 15),
+        h('span', { class: 'rp-desc', text: desc }),
+        h('span', { class: 'rp-date', text: fmtDate(p.created) }),
+        isKeep ? badge('Bleibt', 'ok') : p.manual ? badge('Von dir – bleibt', 'neutral') : p.velox ? badge('Überflüssig', 'neutral') : badge('Windows', 'neutral'));
+    }
+
+    function rpFill(r, loading) {
+      rpStatus.textContent = baselineText(r);
+      clear(rpBody);
+      if (!r && loading) { rpBody.appendChild(h('p', { class: 'fine', text: 'Liste wird gelesen …' })); return; }
+      if (!r) {
+        rpBody.appendChild(button({ label: 'Wiederherstellungspunkte anzeigen', icon: 'search', size: 'sm', variant: 'secondary', onClick: () => rpLoad(true) }));
+        return;
+      }
+      if (r.ok === false) { rpBody.appendChild(h('p', { class: 'fine', text: 'Konnte die Liste nicht lesen: ' + (r.message || 'unbekannter Fehler') })); return; }
+      const items = (r.items || []).slice().sort((a, b) => String(b.created).localeCompare(String(a.created)));
+      const own = items.filter(x => x.velox);
+      const extra = typeof r.extra === 'number' ? r.extra : Math.max(0, own.length - 1);
+      rpBody.appendChild(h('p', { class: 'fine', text: !items.length ? 'Auf diesem PC gibt es gerade keine Wiederherstellungspunkte.'
+        : plural(own.length, 'Wiederherstellungspunkt stammt', 'Wiederherstellungspunkte stammen') + ' von VELOX' + (extra === 1 ? ', davon ist einer überflüssig' : extra > 1 ? ', davon sind ' + extra + ' überflüssig' : '') + '.' }));
+      if (items.length) {
+        const ul = h('ul', { class: 'rp-list', 'data-testid': 'rp-list' });
+        for (const p of items.slice(0, 30)) ul.appendChild(rpItem(p, r.keep));
+        rpBody.appendChild(ul);
+      }
+      const clean = button({ label: 'Überflüssige VELOX-Wiederherstellungspunkte löschen (der erste bleibt)', icon: 'trash', size: 'sm', variant: 'secondary', disabled: !extra, attrs: { 'data-testid': 'rp-clean' }, onClick: async () => {
+        const keepText = r.keep ? 'Der erste VELOX-Punkt vom ' + fmtDate(r.keep.created) + ' bleibt als Sicherheitsnetz. ' : '';
+        const ok = await confirmDialog({ title: plural(extra, 'überflüssigen Wiederherstellungspunkt', 'überflüssige Wiederherstellungspunkte') + ' löschen?', icon: 'trash', danger: true,
+          text: keepText + 'Punkte, die du selbst erstellt hast, und Punkte von Windows oder anderen Programmen werden nicht angefasst. Gelöschte Punkte lassen sich nicht zurückholen – das gibt Speicherplatz frei.', confirmLabel: 'Löschen' });
+        if (!ok) return;
+        const job = await ctx.runJob('restorepoint-clean', {});
+        if (job && job.status === 'done') rpLoad(true);
+      } });
+      rpBody.appendChild(h('div', { class: 'rp-actions' }, clean));
+    }
+
+    // the list is read by a quiet background job; while another job (the boot scan, an apply) runs,
+    // it waits for that one instead of getting in its way
+    let rpWait = null;
+    async function rpLoad(force) {
+      const c = ctx.cache.restorePoints;
+      if (!force && c) { rpFill(c); return; }
+      if (rpWait) { rpWait(); rpWait = null; }
+      if (!el.isConnected && !first) return;
+      if (ctx.busy || ctx.scanning) {
+        rpFill(null, true);
+        rpWait = ctx.on('busy', (b) => { if (!b && !ctx.scanning) { rpWait(); rpWait = null; if (el.isConnected) setTimeout(() => rpLoad(force), 50); } });
+        return;
+      }
+      first = false;
+      rpFill(null, true);
+      const job = await ctx.runJob('restorepoint-list', {}, { overlay: false, quiet: true, quietBusy: true, background: true });
+      if (job && job.status === 'done' && job.result) { ctx.cache.restorePoints = job.result; rpFill(job.result); }
+      else rpFill(null);
+    }
+    let first = true;
+
     append(el, 
       h('section', { class: 'card pad-24 bk-head' },
         h('div', { class: 'bk-head-icon' }, icon('shieldCheck', 26)),
         h('div', { class: 'bk-head-text' }, h('h2', { class: 'section-title', text: 'Dein Sicherheitsnetz' }), h('p', { class: 'section-desc', text: 'VELOX speichert vor jeder Änderung den alten Wert. Mit "Wiederherstellen" kommt genau dieser Stand zurück. Ein Windows-Wiederherstellungspunkt sichert zusätzlich das ganze System.' })),
         h('div', { class: 'bk-head-actions' }, folderBtn, rpBtn)),
+      rpCard,
       list);
 
     async function load(animate = true) {
@@ -134,6 +219,8 @@ export default {
     }
 
     load();
+    rpLoad(false);
     ctx.on('backups-reload', () => load(false));
+    ctx.on('state', () => { rpStatus.textContent = baselineText(ctx.cache.restorePoints); });
   }
 };

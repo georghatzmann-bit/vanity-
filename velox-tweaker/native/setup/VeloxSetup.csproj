@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- VeloxSetup.exe: ONE self-contained installer/uninstaller. Built by native/build.sh, which first
+       builds VELOX.exe and packs the app into payload.zip (path passed as VeloxPayload). -->
+  <PropertyGroup>
+    <AssemblyName>VeloxSetup</AssemblyName>
+    <RootNamespace>Velox.Setup</RootNamespace>
+    <AssemblyTitle>VELOX Setup</AssemblyTitle>
+    <Description>VELOX Setup</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>Velox.Setup.Program</StartupObject>
+    <VeloxPayload Condition="'$(VeloxPayload)' == ''">$(MSBuildThisFileDirectory)../../dist/obj/payload.zip</VeloxPayload>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <Compile Include="../shared/*.cs" />
+    <EmbeddedResource Include="$(VeloxPayload)" LogicalName="payload.zip" />
+    <EmbeddedResource Include="../setup-ui/index.html" LogicalName="ui/index.html" />
+    <EmbeddedResource Include="../setup-ui/setup.css" LogicalName="ui/setup.css" />
+    <EmbeddedResource Include="../setup-ui/setup.js" LogicalName="ui/setup.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Management" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- compile-time only: the DLLs are taken from the embedded payload at run time -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+  <Target Name="VeloxCheckPayload" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(VeloxPayload)')" Text="payload.zip not found ($(VeloxPayload)). Build with native/build.sh or native/Build.ps1." />
+  </Target>
+</Project>

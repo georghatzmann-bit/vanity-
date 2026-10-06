@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- VELOX.exe: the installed app (window + WebView2 + backend supervisor). Built by native/build.sh. -->
+  <PropertyGroup>
+    <AssemblyName>VELOX</AssemblyName>
+    <RootNamespace>Velox.Host</RootNamespace>
+    <AssemblyTitle>VELOX</AssemblyTitle>
+    <Description>VELOX - Windows Tweaker</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>Velox.Host.Program</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="*.cs" />
+    <Compile Include="../shared/*.cs" />
+    <EmbeddedResource Include="splash.html" LogicalName="splash.html" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
+  </ItemGroup>
+</Project>

@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import { h, clear, scoreRing, button, countUp, fmtRelative, fmtDate, fmtNumber, emptyState, stagger, badge, append, plural, reducedMotion } from '../ui.js';
 import { api } from '../api.js';
 import { severityBadge, applyFix } from './advisor.js';
+import { engineShort } from '../ai.js';
 
 const pick = (...v) => v.find(x => x !== undefined && x !== null && x !== '');
 
@@ -117,7 +118,7 @@ export default {
         eyebrow.textContent = r.planApplied ? 'Leistungs-Score · Plan angewendet' : 'Leistungs-Score';
         headline.textContent = score >= 80 ? 'Stark eingestellt' : score >= 60 ? 'Gut – aber da geht noch was' : 'Da steckt noch viel Leistung drin';
         text.textContent = r.planApplied ? 'Dein Plan ist angewendet. Starte eine neue Analyse, um den genauen Stand zu sehen – oder schau dir die Presets an.' : (r.summary || '');
-        const engineName = r.engine === 'claude' ? 'Claude KI' : 'Smart-Analyse';
+        const engineName = engineShort(r);
         append(metaLine, icon(r.planApplied ? 'checkCircle' : 'arrowRight', 14), h('span', { text: r.planApplied ? 'Vorher ' + r.score + ' Punkte · ' + engineName : 'Mit dem Plan: ' + r.scoreAfter + ' Punkte · ' + (r.plan || []).length + ' Vorschläge · ' + engineName }));
       }
     }

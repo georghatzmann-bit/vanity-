@@ -1,8 +1,10 @@
-// KI-Optimierer: goal, free text, engine (local Smart-Analyse / Claude), radar scan driven by the
-// job log, then before -> after score rings, findings with fixes and a selectable plan.
+// KI-Optimierer: goal, free text, KI provider (Claude Code / Claude API / Groq / Smart-Analyse, see
+// ui/js/ai.js), radar scan driven by the job log, then before -> after score rings, findings with
+// fixes and a selectable plan.
 import { icon } from '../icons.js';
-import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append, radioKeys } from '../ui.js';
+import { h, clear, button, checkbox, scoreRing, toast, plural, riskBadge, badge, stagger, reducedMotion, emptyState, confirmDialog, append, radioKeys, spinner } from '../ui.js';
 import { api } from '../api.js';
+import { PROVIDERS, PROVIDER_BY_ID, providerStatus, statusText, statusTone, defaultProvider, loadAiStatus, engineLabel, engineShort } from '../ai.js';
 
 export const GOALS = [
   { id: 'gaming', label: 'Gaming', icon: 'gamepad', desc: 'Mehr FPS, weniger Ruckler' },
@@ -37,11 +39,14 @@ export async function applyFix(ctx, fix) {
 }
 
 export default {
-  id: 'advisor', title: 'KI-Optimierer', icon: 'brain', desc: 'Analysiert deinen PC und schlägt den besten Plan vor', keywords: 'ki ai claude analyse smart optimieren',
+  id: 'advisor', title: 'KI-Optimierer', icon: 'brain', desc: 'Analysiert deinen PC und schlägt den besten Plan vor', keywords: 'ki ai claude code groq analyse smart optimieren',
   mount(el, ctx, opts) {
     const formFactor = ctx.state.profile && ctx.state.profile.formFactor;
     let goal = ctx.cache.goal || (formFactor === 'laptop' ? 'laptop' : 'gaming');
-    let engine = ctx.cache.engine && ctx.settings.claude && ctx.settings.claude.hasKey ? ctx.cache.engine : 'local';
+    // provider: chosen by the user in this visit (picked), else the best ready one (re-evaluated
+    // when the ai-status job reports back)
+    let engine = defaultProvider(ctx);
+    let picked = !!(ctx.cache.engine && engine === ctx.cache.engine);
     let allowRisky = false;
     let running = false;
     let planUnsub = null;
@@ -56,34 +61,70 @@ export default {
     }
     radioKeys(goalBox, (b) => b.click());
     const text = h('textarea', { class: 'textarea', rows: 2, maxLength: 600, placeholder: 'Beschreib dein Problem, z. B. „FiveM ruckelt in der Stadt“ (optional)', 'aria-label': 'Problem beschreiben (optional)', value: ctx.cache.advisorText || '' });
-    const hasKey = !!(ctx.settings.claude && ctx.settings.claude.hasKey);
-    const ENGINES = [
-      { value: 'local', label: 'Smart-Analyse (offline, kostenlos)', desc: 'Läuft komplett auf deinem PC, in Sekunden.', icon: 'cpu' },
-      { value: 'claude', label: 'Claude KI (braucht API-Key)', desc: hasKey ? 'Zweite Meinung von Claude, kostet ein paar Cent.' : 'Erst einen API-Key in den Einstellungen hinterlegen.', icon: 'sparkles', disabled: !hasKey }
-    ];
-    const eng = h('div', { class: 'engine-list', role: 'radiogroup', 'aria-label': 'Analyse-Methode' });
-    for (const e of ENGINES) {
-      const b = h('button', { class: 'model', type: 'button', role: 'radio', 'aria-checked': String(engine === e.value), disabled: !!e.disabled, 'data-engine': e.value },
-        h('span', { class: 'engine-icon' }, icon(e.icon, 16)), h('span', { class: 'model-text' }, h('span', { class: 'model-label', text: e.label }), h('span', { class: 'model-desc', text: e.desc })));
-      b.addEventListener('click', () => { engine = e.value; for (const x of eng.children) x.setAttribute('aria-checked', String(x === b)); claudeOpts.hidden = engine !== 'claude'; });
-      eng.appendChild(b);
+    const eng = h('div', { class: 'prov-grid', role: 'radiogroup', 'aria-label': 'KI auswählen', 'data-testid': 'ai-providers' });
+    const provHint = h('div', { class: 'prov-hint' });
+    const claudeOpts = h('div', { class: 'claude-opts' },
+      checkbox({ label: 'Riskante Tweaks erlauben', desc: 'Sonst schlägt die KI nur sichere und mittlere Tweaks vor.', onChange: (v) => { allowRisky = v; } }),
+      h('p', { class: 'fine', text: 'An die KI gehen nur Hardware-Daten und Tweak-Status – keine Namen, keine Dateien.' }));
+    function renderProviders() {
+      clear(eng);
+      for (const p of PROVIDERS) {
+        const st = providerStatus(ctx, p.id);
+        const b = h('button', { class: ['prov', 'ripple-host', 'is-' + st.state], type: 'button', role: 'radio', 'aria-checked': String(engine === p.id), 'data-provider': p.id, 'data-ready': String(!!st.ready) },
+          h('span', { class: 'engine-icon' }, icon(p.icon, 16)),
+          h('span', { class: 'prov-text' },
+            h('span', { class: 'prov-name' }, h('span', { text: p.name }), p.recommended ? h('span', { class: 'prov-rec', text: 'Empfohlen' }) : null),
+            h('span', { class: 'prov-state pst-' + statusTone(st) }, st.state === 'checking' ? spinner(10) : h('span', { class: 'prov-dot' }), h('span', { text: statusText(st) }))));
+        b.addEventListener('click', () => {
+          engine = p.id; picked = true; ctx.cache.engine = engine;
+          for (const x of eng.children) x.setAttribute('aria-checked', String(x === b));
+          if (eng.syncRadios) eng.syncRadios();
+          syncSetup();
+          if (providerStatus(ctx, p.id).ready && (ctx.settings.ai || {}).provider !== p.id) ctx.saveSettings({ ai: { provider: p.id } }, { silent: true });
+        });
+        eng.appendChild(b);
+      }
+      if (eng.syncRadios) eng.syncRadios();
     }
     radioKeys(eng, (b) => b.click());
-    const keyHint = hasKey ? null : h('button', { class: 'link-btn', type: 'button' }, icon('key', 14), h('span', { text: 'Claude nutzen? API-Key in Einstellungen hinterlegen' }));
-    if (keyHint) keyHint.addEventListener('click', () => ctx.navigate('settings', { focus: 'claude' }));
-    const claudeOpts = h('div', { class: 'claude-opts', hidden: engine !== 'claude' },
-      checkbox({ label: 'Riskante Tweaks erlauben', desc: 'Sonst schlägt Claude nur sichere und mittlere Tweaks vor.', onChange: (v) => { allowRisky = v; } }),
-      h('p', { class: 'fine', text: 'An Claude gehen nur Hardware-Daten und Tweak-Status – keine Namen, keine Dateien.' }));
+    function syncSetup() {
+      const st = providerStatus(ctx, engine);
+      const p = PROVIDER_BY_ID.get(engine);
+      claudeOpts.hidden = engine === 'offline';
+      clear(provHint);
+      if (st.ready || st.state === 'checking') {
+        provHint.appendChild(h('p', { class: 'fine prov-desc', text: (st.ready && st.message && engine === 'claude-code' ? st.message + ' ' : '') + p.desc }));
+      } else {
+        const setupText = engine === 'claude-code'
+          ? (st.state === 'logged-out' ? 'Claude Code ist installiert, aber nicht angemeldet.' : st.state === 'missing' ? 'Claude Code ist noch nicht installiert.' : (st.message || 'Claude Code wurde noch nicht geprüft.'))
+          : st.state === 'error' ? (st.message || 'Die Verbindung klappt gerade nicht.') : 'Dafür brauchst du einen API-Key' + (engine === 'groq' ? ' – bei Groq ist er kostenlos.' : '.');
+        const go = button({ label: engine === 'claude-code' ? 'So richtest du es ein' : 'Key eintragen', icon: 'arrowRight', size: 'sm', variant: 'secondary', attrs: { 'data-testid': 'prov-setup' }, onClick: () => ctx.navigate('settings', { focus: engine }) });
+        provHint.appendChild(h('div', { class: 'note note-warn prov-note' }, icon('alert', 15), h('div', {}, h('span', { text: setupText }), h('div', { class: 'prov-note-act' }, go))));
+      }
+      startBtn.disabled = running || !st.ready;
+      const lbl = startBtn.querySelector('.btn-label');
+      if (lbl) lbl.textContent = engine === 'offline' ? 'Analyse starten' : 'Mit ' + p.name + ' analysieren';
+    }
     const startBtn = button({ label: 'Analyse starten', icon: 'sparkles', variant: 'primary', cls: 'btn-brand btn-lg', onClick: () => start(), attrs: { 'data-testid': 'advisor-start' } });
     const setup = h('section', { class: 'card ai-setup pad-24' },
       h('div', { class: 'ai-setup-grid' },
         h('div', { class: 'ai-field' }, h('div', { class: 'field-label', text: 'Worauf soll optimiert werden?' }), goalBox),
         h('div', { class: 'ai-field' }, h('div', { class: 'field-label', text: 'Was stört dich? (optional)' }), text),
-        h('div', { class: 'ai-field' }, h('div', { class: 'field-label', text: 'Methode' }), eng, keyHint, claudeOpts)),
+        h('div', { class: 'ai-field' }, h('div', { class: 'field-label', text: 'Welche KI?' }), eng, provHint, claudeOpts)),
       h('div', { class: 'ai-setup-foot' }, h('p', { class: 'fine', text: 'Die Analyse verändert nichts. Du entscheidest danach, was angewendet wird.' }), startBtn));
 
     const stage = h('div', { class: 'ai-stage' });
     append(el, setup, stage);
+    renderProviders();
+    syncSetup();
+    // Claude Code is looked up in the background (no tokens); the chips follow the answer
+    const offStatus = ctx.on('ai-status', () => {
+      if (!el.isConnected) { offStatus(); return; }
+      if (!picked && !running) engine = defaultProvider(ctx);
+      renderProviders(); syncSetup();
+    });
+    const offSettings = ctx.on('settings', () => { if (!el.isConnected) { offSettings(); return; } if (!running) { renderProviders(); syncSetup(); } });
+    loadAiStatus(ctx).catch(() => {});
 
     function idle() {
       clear(stage);
@@ -102,7 +143,7 @@ export default {
       const box = h('section', { class: 'card ai-radar pad-24', 'data-testid': 'advisor-radar' },
         h('div', { class: 'radar' }, h('div', { class: 'radar-grid' }), h('div', { class: 'radar-sweep' }), blips, h('div', { class: 'radar-core' }, icon('brain', 26))),
         h('div', { class: 'radar-side' },
-          h('div', { class: 'eyebrow', text: engine === 'claude' ? 'Claude analysiert' : 'Smart-Analyse läuft' }),
+          h('div', { class: 'eyebrow', text: engine === 'offline' ? 'Smart-Analyse läuft' : PROVIDER_BY_ID.get(engine).name + ' analysiert' }),
           stepTxt, h('div', { class: 'radar-progress' }, bar, pctTxt), steps, h('div', { class: 'radar-foot' }, cancel)));
       let seen = 0;
       box.update = (job) => {
@@ -127,20 +168,24 @@ export default {
 
     async function start() {
       if (running) return;
+      if (!providerStatus(ctx, engine).ready) { syncSetup(); return; }
       running = true;
       ctx.cache.goal = goal; ctx.cache.engine = engine; ctx.cache.advisorText = text.value.trim();
       startBtn.disabled = true;
       setup.classList.add('is-running');
+      const usedEngine = engine;
       const r = radar();
       clear(stage).appendChild(r);
       r.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' });
       const t0 = Date.now();
-      const job = await ctx.runJob(engine === 'claude' ? 'claude' : 'advisor', engine === 'claude' ? { goal, text: text.value.trim(), allowRisky } : { goal, text: text.value.trim() }, { overlay: false, quiet: true, onUpdate: (j) => r.update(j) });
+      const job = usedEngine === 'offline'
+        ? await ctx.runJob('advisor', { goal, text: text.value.trim() }, { overlay: false, quiet: true, onUpdate: (j) => r.update(j) })
+        : await ctx.runJob('ai', { provider: usedEngine, goal, text: text.value.trim(), allowRisky }, { overlay: false, quiet: true, onUpdate: (j) => r.update(j) });
       const minShow = reducedMotion() ? 0 : 1400 - (Date.now() - t0);
       if (minShow > 0) await new Promise(res => setTimeout(res, minShow));
       running = false;
-      startBtn.disabled = false;
       setup.classList.remove('is-running');
+      syncSetup();
       // Keep the result even when the user left the page meanwhile (a Claude call is paid for).
       const okJob = job && job.status === 'done' && job.result;
       if (okJob) {
@@ -157,7 +202,15 @@ export default {
         toast({ type: 'ok', title: 'Analyse fertig', text: plural((job.result.plan || []).length, 'Vorschlag', 'Vorschläge') + ' für dich.' });
       } else {
         idle();
-        if (job && job.status === 'error' && engine === 'claude') stage.prepend(h('div', { class: 'note note-warn' }, icon('alert', 15), h('span', { text: 'Claude-Analyse fehlgeschlagen: ' + (job.error || '') + ' Die Smart-Analyse funktioniert immer offline.' })));
+        if (job && job.status === 'error' && usedEngine !== 'offline') {
+          const name = PROVIDER_BY_ID.get(usedEngine).name;
+          const offline = button({ label: 'Smart-Analyse starten', icon: 'cpu', size: 'sm', variant: 'secondary', onClick: () => { engine = 'offline'; picked = true; renderProviders(); syncSetup(); start(); } });
+          const fix = button({ label: 'Einstellungen öffnen', icon: 'cog', size: 'sm', variant: 'ghost', onClick: () => ctx.navigate('settings', { focus: usedEngine }) });
+          stage.prepend(h('div', { class: 'note note-warn ai-error', 'data-testid': 'advisor-error' }, icon('alert', 15),
+            h('div', {}, h('strong', { text: name + '-Analyse fehlgeschlagen' }), h('p', { text: job.error || '' }), h('p', { class: 'fine', text: 'Die Smart-Analyse funktioniert immer – offline und sofort.' }), h('div', { class: 'prov-note-act' }, offline, fix))));
+          // a setup problem (logged out, key gone) shows on the chips too
+          if (usedEngine === 'claude-code' || /Key|angemeldet/.test(job.error || '')) loadAiStatus(ctx, { force: true }).catch(() => {});
+        }
       }
     }
 
@@ -168,14 +221,13 @@ export default {
       const after = scoreRing({ size: 132, stroke: 11, value: null, label: 'Mit Plan', cls: 'ring-after' });
       requestAnimationFrame(() => { before.set(r.score); setTimeout(() => after.set(r.scoreAfter), animate && !reducedMotion() ? 450 : 0); });
       const gain = Math.max(0, (r.scoreAfter || 0) - (r.score || 0));
-      const engineLabel = r.engine === 'claude' ? 'Claude' + (r.model ? ' · ' + modelName(r.model) : '') : 'Smart-Analyse (offline)';
       const head = h('section', { class: 'card ai-score pad-24', 'data-testid': 'advisor-result' },
         h('div', { class: 'ai-rings' }, before, h('div', { class: 'ai-arrow' }, icon('arrowRight', 22), h('span', { class: 'ai-gain', text: '+' + gain })), after),
         h('div', { class: 'ai-summary' },
-          h('div', { class: 'eyebrow', text: engineLabel + ' · Ziel: ' + ((GOALS.find(g => g.id === (r.goal || goal)) || {}).label || '') }),
+          h('div', { class: 'eyebrow', text: engineLabel(r) + ' · Ziel: ' + ((GOALS.find(g => g.id === (r.goal || goal)) || {}).label || '') }),
           h('h2', { class: 'hero-title', text: gain > 0 ? '+' + gain + ' Punkte sind drin' : 'Schon sehr gut eingestellt' }),
           h('p', { class: 'hero-text', text: r.summary || '' }),
-          r.usage ? h('p', { class: 'fine', text: 'Diese Analyse hat ein paar Cent gekostet und läuft über dein Anthropic-Konto. Die genauen Kosten siehst du in der Anthropic-Konsole.' }) : null));
+          usageNote(r)));
 
       // findings
       const order = { bad: 0, warn: 1, info: 2, good: 3 };
@@ -239,7 +291,7 @@ export default {
           const ok = await confirmDialog({ title: 'Plan enthält riskante Tweaks', text: risky.map(t => t.name + ': ' + (t.warning || '')).join(' '), danger: true, checkbox: 'Ich weiß, was ich tue', confirmLabel: 'Anwenden' });
           if (!ok) return;
         }
-        const job = await ctx.runJob('apply', { ids, label: 'KI-Plan (' + (r.engine === 'claude' ? 'Claude' : 'Smart-Analyse') + ')' }, { title: 'KI-Plan wird angewendet' });
+        const job = await ctx.runJob('apply', { ids, label: 'KI-Plan (' + engineShort(r) + ')' }, { title: 'KI-Plan wird angewendet' });
         if (job && job.status === 'done') {
           for (const id of ids) { sel.delete(id); ctx.pending.delete(id); }
           r.planApplied = planItems.every(({ t }) => ctx.isApplied(t.id) || !ctx.applicable(t));
@@ -271,4 +323,10 @@ export default {
   }
 };
 
-function modelName(m) { return m === 'claude-sonnet-5-5' ? 'Claude Sonnet 5.5' : m === 'claude-opus-5-5' ? 'Claude Opus 5.5' : m; }
+function usageNote(r) {
+  const p = r.provider || (r.engine === 'claude' ? 'claude-api' : r.engine);
+  if (p === 'claude-api' && r.usage) return h('p', { class: 'fine', text: 'Diese Analyse hat ein paar Cent gekostet und läuft über dein Anthropic-Konto. Die genauen Kosten siehst du in der Anthropic-Konsole.' });
+  if (p === 'claude-code') return h('p', { class: 'fine', text: 'Lief über dein Claude-Abo mit Claude Code – keine Extrakosten, zählt zu deinem normalen Nutzungslimit.' });
+  if (p === 'groq') return h('p', { class: 'fine', text: 'Lief über dein kostenloses Groq-Kontingent.' });
+  return null;
+}

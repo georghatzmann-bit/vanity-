@@ -1,0 +1,38 @@
+{
+  "comment": "Fake Windows PC for the game detection (core/Extras.ps1, Get-VxGameSystem). C/ and D/ are the drives; registry, running processes and Appx packages are listed here. Art images are generated placeholder art, no real game logos.",
+  "folders": {
+    "localAppData": "C:\\Users\\Gamer\\AppData\\Local",
+    "appData": "C:\\Users\\Gamer\\AppData\\Roaming",
+    "programData": "C:\\ProgramData",
+    "programFiles": "C:\\Program Files",
+    "programFilesX86": "C:\\Program Files (x86)",
+    "systemRoot": "C:\\Windows"
+  },
+  "drives": ["C:\\", "D:\\"],
+  "registry": {
+    "HKCU\\Software\\Valve\\Steam": { "SteamPath": "c:/program files (x86)/steam" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Valve\\Steam": { "InstallPath": "C:\\Program Files (x86)\\Steam" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1207658924": { "gameName": "Lantern Keep", "exe": "C:\\GOG Games\\Lantern Keep\\LanternKeep.exe", "path": "C:\\GOG Games\\Lantern Keep", "gameID": "1207658924" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1400000000": { "gameName": "Deinstalliert", "exe": "C:\\GOG Games\\Gone\\Gone.exe", "path": "C:\\GOG Games\\Gone" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\635": { "InstallDir": "C:/Program Files (x86)/Ubisoft/Ubisoft Game Launcher/games/Tom Clancy's Rainbow Six Siege/" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\EA Games\\Battlefield 2042": { "Install Dir": "C:\\Program Files\\EA Games\\Battlefield 2042\\", "DisplayName": "Battlefield 2042" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games\\Red Dead Redemption 2": { "InstallFolder": "C:\\Program Files\\Rockstar Games\\Red Dead Redemption 2" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games\\Grand Theft Auto V": { "InstallFolder": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grand Theft Auto V" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Rockstar Games\\Launcher": { "InstallFolder": "C:\\Program Files\\Rockstar Games\\Launcher" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Overwatch": { "DisplayName": "Overwatch", "Publisher": "Blizzard Entertainment", "InstallLocation": "C:\\Program Files (x86)\\Overwatch" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam": { "DisplayName": "Steam", "Publisher": "Valve Corporation", "DisplayIcon": "C:\\Program Files (x86)\\Steam\\steam.exe" },
+    "HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Steam App 730": { "DisplayName": "Counter-Strike 2", "Publisher": "Valve", "InstallLocation": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive", "DisplayIcon": "C:\\Program Files (x86)\\Steam\\steam\\games\\8dbc71957312bbd3baea65848b545be9eae2a355.ico" },
+    "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{5A1B7C3D-0000-4000-8000-00000000A11A}": { "DisplayName": "Tank Arena", "Publisher": "Wargaming Group Limited", "DisplayIcon": "\"D:\\Games\\Tank Arena\\TankArena.exe\",0", "InstallLocation": "D:\\Games\\Tank Arena" },
+    "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{9001}": { "DisplayName": "Office Tool", "Publisher": "Contoso", "DisplayIcon": "C:\\Windows\\notepad.exe" },
+    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\altV": { "DisplayName": "alt:V Multiplayer", "Publisher": "alt:V", "InstallLocation": "C:\\altV" }
+  },
+  "processes": [
+    { "name": "PixelQuest", "path": "D:\\Indie\\PixelQuest\\PixelQuest.exe", "title": "Pixel Quest", "fullscreen": true },
+    { "name": "notepad", "path": "C:\\Windows\\notepad.exe", "title": "Unbenannt - Editor", "fullscreen": true },
+    { "name": "chrome", "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", "title": "Neuer Tab", "fullscreen": true },
+    { "name": "GTA5", "path": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grand Theft Auto V\\GTA5.exe", "title": "Grand Theft Auto V", "fullscreen": true }
+  ],
+  "appx": [
+    { "Name": "Microsoft.MinecraftUWP", "InstallLocation": "C:\\Program Files\\WindowsApps\\Microsoft.MinecraftUWP_1.21.0.0_x64__8wekyb3d8bbwe" }
+  ]
+}

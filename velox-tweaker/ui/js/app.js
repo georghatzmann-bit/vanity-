@@ -1,10 +1,10 @@
 // VELOX front end entry: app state (ctx), router, sidebar, top bar, staged changes,
 // job runner with progress overlay, needs banners, command palette, splash and "ended" screens.
-import { api, initToken, hasToken, on as onApi, pollJob, startHeartbeat, waitForBackend } from './api.js';
+import { api, request, initToken, hasToken, on as onApi, pollJob, startHeartbeat, waitForBackend } from './api.js';
 import { icon } from './icons.js';
 import {
   h, clear, $, $$, toast, jobOverlay, confirmDialog, installEffects, countUp, plural, burst,
-  viewTransition, openLayer, reducedMotion, overlayOpen, spinner
+  viewTransition, openLayer, reducedMotion, overlayOpen, spinner, button
 } from './ui.js';
 import { tweakScore, textScore } from './search.js';
 
@@ -36,6 +36,8 @@ const JOB_META = {
   detweak: { title: 'Detweak läuft', fail: 'Detweak fehlgeschlagen', icon: 'undo', cancel: true, mutating: true },
   advisor: { title: 'Smart-Analyse', fail: 'Smart-Analyse fehlgeschlagen', icon: 'brain', cancel: true },
   claude: { title: 'Claude analysiert dein System', fail: 'Claude-Analyse fehlgeschlagen', icon: 'brain', cancel: true },
+  ai: { title: 'KI analysiert dein System', fail: 'KI-Analyse fehlgeschlagen', icon: 'brain', cancel: true },
+  'ai-status': { title: 'KI-Anbieter werden geprüft', fail: 'KI-Prüfung fehlgeschlagen', icon: 'sparkles', cancel: true },
   'clean-scan': { title: 'Speicherplatz wird gemessen', fail: 'Messen fehlgeschlagen', icon: 'broom', cancel: true },
   'run-action': { title: 'Wird ausgeführt', fail: 'Ausführen fehlgeschlagen', icon: 'broom', cancel: true, mutating: true },
   'startup-list': { title: 'Autostart wird gelesen', fail: 'Autostart nicht lesbar', icon: 'package' },
@@ -44,8 +46,26 @@ const JOB_META = {
   'game-boost': { title: 'Spiel-Boost wird gesetzt', fail: 'Spiel-Boost nicht gesetzt', icon: 'gamepad', mutating: true },
   'pick-file': { title: 'Datei auswählen', fail: 'Dateiauswahl fehlgeschlagen', icon: 'file' },
   'explorer-restart': { title: 'Explorer wird neu gestartet', fail: 'Explorer-Neustart fehlgeschlagen', icon: 'refresh', mutating: true },
-  reboot: { title: 'Neustart wird vorbereitet', fail: 'Neustart nicht geplant', icon: 'restart', mutating: true }
+  reboot: { title: 'Neustart wird vorbereitet', fail: 'Neustart nicht geplant', icon: 'restart', mutating: true },
+  'restorepoint-list': { title: 'Wiederherstellungspunkte werden gelesen', fail: 'Wiederherstellungspunkte nicht lesbar', icon: 'shieldCheck', cancel: true },
+  'restorepoint-clean': { title: 'Alte Wiederherstellungspunkte werden gelöscht', fail: 'Löschen fehlgeschlagen', icon: 'trash', cancel: true, mutating: true }
 };
+
+/** "0,4 s", "2,4 s", "27 s", "1:05 min" - how long a job took (result.durationMs). */
+function fmtDuration(ms) {
+  const n = Number(ms);
+  if (!isFinite(n) || n < 0) return '';
+  const s = n / 1000;
+  if (s < 10) return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Math.max(0.1, s)) + ' s';
+  if (s < 60) return Math.round(s) + ' s';
+  const m = Math.floor(s / 60); const r = Math.round(s - m * 60);
+  return m + ':' + String(r).padStart(2, '0') + ' min';
+}
+/** " in 2,4 s" for a toast or summary line, '' when the backend did not say. */
+function inDuration(r) {
+  const ms = r && typeof r.durationMs === 'number' ? r.durationMs : null;
+  return ms === null ? '' : ' in ' + fmtDuration(ms);
+}
 const failTitle = (type) => (JOB_META[type] || {}).fail || 'Aufgabe fehlgeschlagen';
 
 // ------------------------------------------------------------------ context
@@ -144,6 +164,7 @@ function ingest(d) {
   ctx.presets = d.presets || [];
   ctx.settings = d.settings || {};
   ctx.settings.claude = ctx.settings.claude || { hasKey: false, model: 'claude-opus-5-5' };
+  ctx.settings.ai = Object.assign({ provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } }, ctx.settings.ai || {});
   ctx.state = normalizeState(d.state);
   for (const id of Array.from(ctx.pending.keys())) if (!ctx.byId.has(id)) ctx.pending.delete(id);
 }
@@ -486,11 +507,12 @@ async function applyPending() {
   closePendingList(false);
   const onIds = []; const offIds = [];
   for (const [id, v] of ctx.pending) (v ? onIds : offIds).push(id);
-  let okCount = 0; let failCount = 0; let firstErr = null;
+  let okCount = 0; let failCount = 0; let firstErr = null; let totalMs = 0; let timed = false;
   const backups = []; const needs = {};
   const take = (job, ids) => {
     for (const id of ids) ctx.pending.delete(id);
     const r = job.result || {};
+    if (typeof r.durationMs === 'number') { totalMs += r.durationMs; timed = true; }
     const res = r.results || [];
     okCount += res.filter(x => x.ok).length;
     const bad = res.filter(x => !x.ok);
@@ -513,7 +535,7 @@ async function applyPending() {
   const undoIds = backups.slice().reverse();
   toast({
     type: failCount ? 'warn' : 'ok',
-    title: failCount ? okCount + ' erledigt, ' + failCount + ' fehlgeschlagen' : plural(okCount, 'Änderung', 'Änderungen') + ' angewendet',
+    title: failCount ? okCount + ' erledigt, ' + failCount + ' fehlgeschlagen' : plural(okCount, 'Änderung', 'Änderungen') + (timed ? inDuration({ durationMs: totalMs }) : '') + ' angewendet',
     text: failCount && firstErr ? tweakName(firstErr.id) + ': ' + (firstErr.error || 'Fehler') : successLine(needs),
     action: undoIds.length && !ctx.onlyRemovals(onIds.concat(offIds)) ? { label: 'Rückgängig', onClick: () => undoBackups(undoIds) } : null
   });
@@ -532,11 +554,14 @@ function successLine(needs, removed) {
  * onUpdate(job) }. Resolves with the final job, or null when it could not start.
  */
 async function runJob(type, params, opts = {}) {
+  // a quiet read-only job in the background (e.g. the restore point list of the Sicherungen page)
+  // never blocks what the user or the boot scan starts: wait for it instead of refusing
+  if (ctx.busy && ctx.busy.background && !opts.background) await waitIdle(30000);
   if (ctx.busy) {
     if (!opts.quietBusy) toast({ type: 'warn', title: 'Bitte kurz warten', text: 'Gerade läuft noch: ' + (JOB_META[ctx.busy.type] || {}).title + '.' });
     return null;
   }
-  ctx.busy = { id: null, type };
+  ctx.busy = { id: null, type, background: !!opts.background };
   ctx.emit('busy', ctx.busy);
   let jobId;
   try {
@@ -552,6 +577,16 @@ async function runJob(type, params, opts = {}) {
     return null;
   }
   return follow(jobId, type, opts);
+}
+
+/** Resolves once no job runs any more (or after ms). */
+function waitIdle(ms) {
+  if (!ctx.busy) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let off = null;
+    const timer = setTimeout(() => { if (off) off(); resolve(!ctx.busy); }, ms);
+    off = ctx.on('busy', (b) => { if (!b) { clearTimeout(timer); off(); resolve(true); } });
+  });
 }
 
 /**
@@ -571,7 +606,7 @@ async function followForeign(jobId, knownType) {
 async function follow(jobId, type, opts = {}) {
   const meta = JOB_META[type] || { title: 'Aufgabe läuft', icon: 'bolt' };
   const t0 = Date.now();
-  ctx.busy = { id: jobId, type };
+  ctx.busy = { id: jobId, type, background: !!opts.background };
   ctx.emit('busy', ctx.busy);
   root.classList.add('is-busy');
   const overlay = opts.overlay === false ? null : jobOverlay({
@@ -579,9 +614,27 @@ async function follow(jobId, type, opts = {}) {
     cancellable: !!meta.cancel, icon: opts.icon || meta.icon,
     onCancel: () => api.cancelJob(jobId).catch(() => {})
   });
+  // "Überspringen": shown while the backend runs a step that may be skipped (a restore point,
+  // a reset command) - the job itself goes on with the next step
+  const panel = overlay ? Array.from(document.querySelectorAll('.layer .dialog.job')).pop() : null;
+  let skipBtn = null;
+  const syncSkip = (j) => {
+    if (!panel) return;
+    const want = j.status === 'running' && !!j.skippable;
+    panel.classList.toggle('is-skippable', want);
+    if (want && !skipBtn) {
+      skipBtn = button({ label: 'Überspringen', icon: 'arrowRight', variant: 'secondary', attrs: { 'data-testid': 'job-skip', title: 'Diesen Schritt auslassen – der Rest läuft weiter' }, onClick: () => {
+        skipBtn.disabled = true;
+        const lbl = skipBtn.querySelector('.btn-label'); if (lbl) lbl.textContent = 'Wird übersprungen …';
+        request('POST', '/api/jobs/' + encodeURIComponent(jobId) + '/skip').catch(() => {});
+      } });
+      const foot = panel.querySelector('.dialog-foot');
+      if (foot) foot.insertBefore(skipBtn, foot.firstChild);
+    } else if (!want && skipBtn) { skipBtn.remove(); skipBtn = null; }
+  };
   let job;
   try {
-    job = await pollJob(jobId, (j) => { if (overlay) overlay.update(j); if (opts.onUpdate) opts.onUpdate(j); });
+    job = await pollJob(jobId, (j) => { if (overlay) { overlay.update(j); syncSkip(j); } if (opts.onUpdate) opts.onUpdate(j); });
   } catch (e) {
     if (overlay) overlay.close();
     ctx.busy = null; ctx.emit('busy', null); root.classList.remove('is-busy');
@@ -591,6 +644,8 @@ async function follow(jobId, type, opts = {}) {
   ctx.busy = null;
   ctx.emit('busy', null);
   root.classList.remove('is-busy');
+  if (skipBtn) { skipBtn.remove(); skipBtn = null; }
+  if (panel) panel.classList.remove('is-skippable');
   if (overlay) {
     // Stay open when there is something to read: warnings in the log, a long job the user may have
     // walked away from, or when the caller asks for it (repair tools).
@@ -602,7 +657,7 @@ async function follow(jobId, type, opts = {}) {
 
   if (job.status === 'done' && job.result) applyResultLocally(type, job.result);
   if (meta.mutating || type === 'scan') await refreshState();
-  if (meta.mutating && job.status !== 'error') { ctx.cache.backups = null; ctx.emit('backups'); }
+  if (meta.mutating && job.status !== 'error') { ctx.cache.backups = null; ctx.cache.restorePoints = null; ctx.emit('backups'); }
 
   if (job.status === 'done' && ['apply', 'detweak', 'restore', 'run-action'].includes(type)) celebrate(type, job.result || {});
   if (job.status === 'error') toast({ type: 'error', title: failTitle(type), text: friendlyError(job.error) });
@@ -621,7 +676,7 @@ function jobSummary(type, r) {
   if (type === 'apply' || type === 'revert') {
     const ok = res.filter(x => x.ok).length; const fail = res.length - ok;
     const removed = res.length && ctx.onlyRemovals(res.map(x => x.id));
-    const what = removed ? plural(ok, 'App entfernt', 'Apps entfernt') : plural(ok, 'Tweak', 'Tweaks') + (type === 'apply' ? ' angewendet' : ' zurückgesetzt');
+    const what = removed ? plural(ok, 'App', 'Apps') + inDuration(r) + ' entfernt' : plural(ok, 'Tweak', 'Tweaks') + inDuration(r) + (type === 'apply' ? ' angewendet' : ' zurückgesetzt');
     return what + (fail ? ' · ' + fail + ' fehlgeschlagen' : '') + needsSuffix(r.needs);
   }
   if (type === 'run-action') {
@@ -630,7 +685,8 @@ function jobSummary(type, r) {
     return (msgs.length === 1 ? msgs[0] : plural(ok.length, 'Aufgabe erledigt', 'Aufgaben erledigt')) + (fail ? ' · ' + fail + ' fehlgeschlagen' : '');
   }
   if (type === 'restore') return plural(r.restored || 0, 'Wert', 'Werte') + ' wiederhergestellt' + (r.failed ? ' · ' + r.failed + ' fehlgeschlagen' : '');
-  if (type === 'detweak') return detweakLine(r) + needsSuffix(r.needs);
+  if (type === 'detweak') return detweakLine(r) + (typeof r.durationMs === 'number' ? ' · ' + fmtDuration(r.durationMs) : '') + needsSuffix(r.needs);
+  if (type === 'restorepoint-clean') return plural(r.removed || 0, 'Wiederherstellungspunkt', 'Wiederherstellungspunkte') + ' gelöscht' + (r.failed ? ' · ' + r.failed + ' nicht gelöscht' : '');
   return null;
 }
 function needsSuffix(n) { n = n || {}; return n.reboot ? ' · Neustart empfohlen' : n.logoff ? ' · Abmelden nötig' : n.explorer ? ' · Explorer neu laden' : ''; }
@@ -668,16 +724,17 @@ function resultToast(type, r, opts = {}) {
       const firstErr = res.find(x => !x.ok);
       const removed = ctx.onlyRemovals(res.map(x => x.id));
       const anyRemoved = res.some(x => (ctx.byId.get(x.id) || {}).kind === 'remove');
-      const noun = removed ? ['App entfernt', 'Apps entfernt'] : type === 'apply' ? ['Tweak angewendet', 'Tweaks angewendet'] : ['Tweak zurückgesetzt', 'Tweaks zurückgesetzt'];
+      const noun = removed ? ['App', 'Apps', 'entfernt'] : type === 'apply' ? ['Tweak', 'Tweaks', 'angewendet'] : ['Tweak', 'Tweaks', 'zurückgesetzt'];
       toast({
         type: fail ? 'warn' : 'ok',
-        title: fail ? ok + ' erledigt, ' + fail + ' fehlgeschlagen' : (opts.doneTitle || plural(ok, noun[0], noun[1])),
+        title: fail ? ok + ' erledigt, ' + fail + ' fehlgeschlagen' : (opts.doneTitle || plural(ok, noun[0], noun[1]) + inDuration(r) + ' ' + noun[2]),
         text: fail && firstErr ? tweakName(firstErr.id) + ': ' + (firstErr.error || 'Fehler') : removed ? 'Nicht rückgängig zu machen. Neu installieren geht über den Microsoft Store.' + needsSuffix(r.needs).replace(' · ', ' ') : successLine(r.needs, anyRemoved),
         action: r.backupId && !removed ? { label: 'Rückgängig', onClick: () => undoBackups([r.backupId]) } : null
       });
       break;
     }
-    case 'restorepoint': toast({ type: r.ok === false ? 'warn' : 'ok', title: r.ok === false ? 'Kein Wiederherstellungspunkt' : 'Wiederherstellungspunkt erstellt', text: r.message || '' }); break;
+    case 'restorepoint': toast({ type: r.ok === false ? 'warn' : 'ok', title: r.ok === false ? (r.skipped ? 'Wiederherstellungspunkt übersprungen' : 'Kein Wiederherstellungspunkt') : 'Wiederherstellungspunkt erstellt', text: r.message || '' }); break;
+    case 'restorepoint-clean': toast({ type: r.failed ? 'warn' : 'ok', title: r.removed ? plural(r.removed, 'alter Wiederherstellungspunkt', 'alte Wiederherstellungspunkte') + ' gelöscht' : 'Nichts zu löschen', text: r.failed ? r.failed + ' konnten nicht gelöscht werden' + (r.errors && r.errors.length ? ': ' + friendlyError(r.errors[0]) : '.') : 'Der erste VELOX-Wiederherstellungspunkt bleibt als Sicherheitsnetz erhalten.' }); break;
     case 'restore': toast({ type: r.failed ? 'warn' : 'ok', title: plural(r.restored || 0, 'Wert', 'Werte') + ' wiederhergestellt', text: r.failed ? r.failed + ' konnten nicht zurückgesetzt werden' + (r.errors && r.errors.length ? ': ' + friendlyError(r.errors[0]) : '.') : 'Dein PC ist wieder auf dem Stand vor dieser Sicherung.' + needsSuffix(r.needs).replace(' · ', ' ') }); break;
     case 'explorer-restart': toast({ type: 'ok', title: 'Explorer neu gestartet' }); break;
     case 'reboot': toast({ type: 'info', title: ctx.mode.simulate ? 'Neustart protokolliert (Testmodus)' : 'Neustart in 10 Sekunden', text: ctx.mode.simulate ? 'Im Testmodus startet der PC nicht neu.' : 'Speichere jetzt deine offenen Dateien.' }); break;
@@ -814,7 +871,7 @@ function openPalette() {
     { label: 'Jetzt analysieren', hint: 'KI-Optimierer starten', icon: 'brain', run: () => navigate('advisor', { autostart: true }) },
     { label: 'Fremd-Tweaks suchen', hint: 'Detweak-Scan starten', icon: 'undo', run: () => navigate('detweak', { autostart: true }) },
     { label: 'Speicher aufräumen', hint: 'Reinigung öffnen', icon: 'broom', run: () => navigate('cleanup') },
-    { label: 'Wiederherstellungspunkt erstellen', hint: 'Sicherheitsnetz für Windows', icon: 'shieldCheck', run: () => runJob('restorepoint', { label: 'VELOX manuell' }) },
+    { label: 'Wiederherstellungspunkt erstellen', hint: 'Sicherheitsnetz für Windows', icon: 'shieldCheck', run: () => runJob('restorepoint', { label: 'Manuell' }) },
     { label: 'System neu scannen', hint: 'Hardware und Status neu lesen', icon: 'refresh', run: () => initialScan(false, true) },
     { label: 'Explorer neu starten', hint: 'Taskleiste und Explorer neu laden', icon: 'refresh', run: () => runJob('explorer-restart', {}) },
     { label: 'Vorgemerkte Änderungen anwenden', hint: 'Anwenden-Leiste ausführen', icon: 'check', run: () => applyPending(), when: () => ctx.pending.size > 0 },

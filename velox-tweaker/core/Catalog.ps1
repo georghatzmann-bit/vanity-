@@ -93,6 +93,8 @@ function Initialize-VxSeedIndex {
         values = @{}; wildValues = (New-Object System.Collections.ArrayList); keys = @{}; keyNames = @{}
         wildParents = @{}; regkeys = (New-Object System.Collections.ArrayList); noKeys = (New-Object System.Collections.Generic.List[string])
         services = @{}; tasks = @{}
+        # memoised lookups (System.ps1 Test-VxSeedKey / Get-VxSeedRegValue); the seed never changes
+        memoKey = [hashtable]::Synchronized(@{}); memoWild = [hashtable]::Synchronized(@{})
     }
     $addKey = {
         param([string]$p)

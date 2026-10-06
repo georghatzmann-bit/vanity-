@@ -1398,3 +1398,85 @@ kbd {
   .ripple, .btn-brand::after, .pbar-fill::after, .fly-dot { display: none; }
   ::view-transition-old(page), ::view-transition-new(page), ::view-transition-group(preset-icon) { animation: none !important; }
 }
+
+/* ---------- Windows restore points (settings.restorePoints, Sicherungen page) */
+.rp-block { display: grid; gap: 8px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--hair); }
+.rp-block .fine { margin: 0; max-width: 68ch; }
+.rp-card { display: grid; gap: 12px; }
+.rp-card .set-head { margin-bottom: 0; }
+.rp-status { margin: 2px 0 0; max-width: 72ch; }
+.rp-body { display: grid; gap: 10px; min-width: 0; }
+.rp-body > .fine { margin: 0; }
+.rp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.rp-item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px var(--hair); color: var(--muted); }
+.rp-item > svg { flex: none; }
+.rp-item.is-keep { background: rgba(var(--accent-rgb), .1); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .35); color: inherit; }
+.rp-item.is-foreign { opacity: .75; }
+.rp-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-date { flex: none; font-size: var(--fs-3); color: var(--faint); font-variant-numeric: tabular-nums; }
+.rp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rp-actions .btn { max-width: 100%; white-space: normal; text-align: left; }
+@media (max-width: 720px) { .rp-date { display: none; } }
+/* job overlay: a long step text never widens the dialog; a skippable step (restore point) wraps
+   so its explanation stays readable next to the "Überspringen" button */
+.dialog.job { grid-template-columns: minmax(0, 1fr); }
+.job.is-skippable .job-step { white-space: normal; }
+
+/* ------------------------------------------------------------------ KI providers (ui/js/ai.js) */
+/* KI-Optimierer: provider chips */
+.prov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.prov {
+  position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; text-align: left; min-width: 0;
+  background: rgba(255, 255, 255, .03); box-shadow: inset 0 0 0 1px var(--hair);
+  transition: background-color var(--t), box-shadow var(--t), transform var(--t-fast) var(--ease);
+}
+.prov:hover { background: rgba(255, 255, 255, .06); transform: translateY(-1px); }
+.prov:active { transform: scale(.97); }
+.prov[aria-checked="true"] { background: rgba(var(--accent-rgb), .14); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .55), 0 6px 18px -10px rgba(var(--accent-rgb), .9); }
+.prov[aria-checked="true"] .engine-icon { background: var(--accent); color: #fff; }
+.prov[data-ready="false"] .engine-icon { opacity: .6; }
+.prov-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.prov-name { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; flex-wrap: wrap; }
+.prov-rec { font-size: 10px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; color: var(--accent-hi); background: rgba(var(--accent-rgb), .16); }
+.prov-state { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-3); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prov-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.prov-state.pst-ok { color: var(--ok); }
+.prov-state.pst-ok .prov-dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(var(--ok-rgb), .15); }
+.prov-state.pst-warn .prov-dot { background: var(--warn); }
+.prov-state.pst-error .prov-dot { background: var(--err, #F43F5E); }
+.prov-hint { margin-top: 10px; }
+.prov-hint .prov-desc { margin: 0; }
+.prov-note > div { display: grid; gap: 8px; }
+.prov-note-act { display: flex; gap: 8px; flex-wrap: wrap; }
+.ai-error > div { display: grid; gap: 4px; }
+.ai-error p { margin: 0; }
+.ai-error strong { color: var(--text); }
+
+/* Einstellungen: KI cards */
+#set-ai { grid-column: 1 / -1; }
+.ai-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.ai-cards .ai-privacy { grid-column: 1 / -1; }
+.ai-card { display: grid; gap: 12px; padding: 16px; border-radius: 12px; background: rgba(255, 255, 255, .025); box-shadow: inset 0 0 0 1px var(--hair); transition: box-shadow var(--t), background-color var(--t); min-width: 0; }
+.ai-card:hover { background: rgba(255, 255, 255, .04); }
+.ai-card.is-ready { box-shadow: inset 0 0 0 1px rgba(var(--ok-rgb), .22); }
+.ai-card.flash { animation: flash 1.2s var(--ease); }
+.ai-card-head { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.ai-card-icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--accent), rgba(var(--accent-rgb), .55)); }
+.ai-card-head { align-items: center; }
+.ai-card-title { min-width: 0; flex: 1; font-size: var(--fs-2); }
+.ai-card-desc { margin: -4px 0 0; }
+.ai-cmd-row { display: flex; }
+.ai-step-rest { display: block; }
+.ai-card-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.ai-pill { white-space: nowrap; }
+.ai-msg { margin: 0; color: var(--text); }
+.ai-card .fine { margin: 0; }
+.ai-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ai-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: var(--fs-3); line-height: 1.5; }
+.ai-steps li::marker { color: var(--accent-hi); font-weight: 700; }
+.ai-cmd-row { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; vertical-align: middle; margin: 2px 0; }
+.ai-cmd { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; color: var(--text); padding: 3px 8px; border-radius: 6px; background: rgba(0, 0, 0, .35); box-shadow: inset 0 0 0 1px var(--hair); user-select: all; word-break: break-all; }
+.ai-key { display: grid; gap: 8px; }
+.ai-card .claude-box { gap: 10px; }
+@media (max-width: 1240px) { .ai-cards { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1000px) { .prov-grid { grid-template-columns: minmax(0, 1fr); } }

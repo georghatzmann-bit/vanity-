@@ -14,6 +14,7 @@
 //   GET  /__mock/stats   counters (heartbeats, shutdown requests, job types started)
 //   POST /__mock/kill    stop answering (simulates the backend having exited)
 //   POST /__mock/reset   rebuild all state from scratch
+//   POST /__mock/ai      { claudeCode: 'ready'|'logged-out'|'missing', failNext: '<provider>' } KI provider state
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -46,7 +47,8 @@ const opt = {
   exitOnShutdown: !!arg('exit-on-shutdown', false),
   quiet: !!arg('quiet', false),
   dataRoot: String(arg('data-root', appRoot)),
-  sample: !!arg('sample', false)
+  sample: !!arg('sample', false),
+  claudeCode: String(arg('claude-code', 'missing'))
 };
 const log = (...a) => { if (!opt.quiet) console.error('[mock]', ...a); };
 
@@ -192,14 +194,23 @@ function buildWorld() {
   log('catalog:', 'categories from', cats.from, '| tweaks', decorated.length, 'from', tw.from, '| presets from', pr.from, '| detweak from', dt.from);
   return {
     categories, tweaks: decorated, byId: new Map(decorated.map(t => [t.id, t])), presets, detweak,
-    settings: { accent: 'violet', motion: 'full', confirmRisky: true, autoRestorePoint: true, claude: { hasKey: false, model: 'claude-opus-5-5' },
+    settings: { accent: 'violet', motion: 'full', confirmRisky: true, restorePoints: 'first', autoRestorePoint: true, claude: { hasKey: false, model: 'claude-opus-5-5' },
+      ai: { provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } },
       games: [{ id: 'fivem', name: 'FiveM', exe: 'FiveM_GTAProcess.exe', path: 'C:\\Users\\Spieler\\AppData\\Local\\FiveM\\FiveM.app\\data\\cache\\subprocess\\FiveM_GTAProcess.exe', boost: { priority: true, gpu: true, fso: false } }] },
     state: { statuses, profile: opt.freshScan ? profile : null, lastScan: opt.freshScan ? iso(new Date()) : null, needs: { explorer: false, reboot: false, logoff: false } },
     foreign,
+    claudeCode: opt.claudeCode, aiFailNext: null,
     backups: [seedBackup],
     jobs: new Map(),
     running: null,
     restorePointDone: false,
+    // like core/Engine.ps1 Get-VxSimRestorePoints: one Windows point + old VELOX points (one per job)
+    restorePoints: [
+      [12, 'Windows Update'], [9, 'VELOX: Preset: Sicherer Boost'], [8, 'VELOX: Tweaks: 3 aktiviert'], [6, 'VELOX: Detweak'],
+      [5, 'VELOX: Tweaks: 1 aktiviert'], [3, 'VELOX: Preset: Gaming Max']
+    ].map((x, i) => ({ sequence: 41 + i, description: x[1], created: iso(new Date(Date.now() - x[0] * 86400000)) })),
+    rpNext: 47,
+    restorePointBaseline: null,
     cleanSizes: null,
     startup: [
       { id: 'run:hkcu:Discord', name: 'Discord', command: '"C:\\Users\\Spieler\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe', location: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', enabled: true },
@@ -249,10 +260,11 @@ function journalFor(t, mode) {
 
 // ---------------------------------------------------------------- jobs
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const MUTATING = new Set(['apply', 'revert', 'restorepoint', 'restore', 'detweak', 'run-action', 'startup-set', 'game-boost', 'explorer-restart', 'reboot']);
+const MUTATING = new Set(['apply', 'revert', 'restorepoint', 'restore', 'detweak', 'run-action', 'startup-set', 'game-boost', 'explorer-restart', 'reboot', 'restorepoint-clean']);
 
 function newJob(type, params) {
-  const job = { id: crypto.randomBytes(6).toString('hex'), type, status: 'running', progress: 0, step: 'Wird vorbereitet …', log: [], result: null, error: null, _cancel: false, _params: params };
+  const job = { id: crypto.randomBytes(6).toString('hex'), type, status: 'running', progress: 0, step: 'Wird vorbereitet …', log: [], result: null, error: null, _cancel: false, _params: params,
+    skippable: false, _skip: false, durationMs: null, _start: Date.now() };
   W.jobs.set(job.id, job);
   W.running = job.id;
   W.stats.jobs[type] = (W.stats.jobs[type] || 0) + 1;
@@ -262,12 +274,27 @@ function newJob(type, params) {
     async tick(mult) {
       // _mockDelayMs is a mock-only test hook (keeps a job running long enough to attach to it)
       if (params && params._mockDelayMs && !job._delayed) { job._delayed = true; await sleep(Math.min(20000, Number(params._mockDelayMs) || 0)); }
-      await sleep(opt.speed * (mult || 1)); if (job._cancel) throw Object.assign(new Error('cancelled'), { cancelled: true }); }
+      await sleep(opt.speed * (mult || 1)); if (job._cancel) throw Object.assign(new Error('cancelled'), { cancelled: true }); },
+    /** Like core/Common.ps1 Invoke-VxIsolated -Skippable: waits up to ms, ends early on "Überspringen". Returns true when skipped. */
+    async skippableWait(ms) {
+      job.skippable = true; job._skip = false;
+      try {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          await sleep(50);
+          if (job._cancel) throw Object.assign(new Error('cancelled'), { cancelled: true });
+          if (job._skip) return true;
+        }
+        return false;
+      } finally { job.skippable = false; job._skip = false; }
+    }
   };
   (async () => {
     try {
       const fn = JOBS[type];
       job.result = await fn(params || {}, ctx, job);
+      job.durationMs = Date.now() - job._start;
+      if (job.result && typeof job.result === 'object' && !Array.isArray(job.result)) job.result.durationMs = job.durationMs;
       job.progress = 1;
       job.status = 'done';
       job.step = 'Fertig';
@@ -275,6 +302,7 @@ function newJob(type, params) {
       if (e.cancelled) { job.status = 'cancelled'; job.step = 'Abgebrochen'; ctx.log('warn', 'Vom Benutzer abgebrochen.'); }
       else { job.status = 'error'; job.error = e.message || String(e); job.step = 'Fehlgeschlagen'; ctx.log('error', job.error); }
     } finally {
+      if (job.durationMs === null) job.durationMs = Date.now() - job._start;
       if (W.running === job.id) W.running = null;
     }
   })();
@@ -282,18 +310,69 @@ function newJob(type, params) {
 }
 
 function addNeeds(t) { if (t && t.needs && t.needs !== 'none' && W.state.needs[t.needs] !== undefined) W.state.needs[t.needs] = true; }
-async function maybeRestorePoint(ctx) {
-  if (W.settings.autoRestorePoint && !W.restorePointDone) {
-    ctx.step('Wiederherstellungspunkt wird erstellt …', 0.05);
-    ctx.log('info', 'Testmodus: Wiederherstellungspunkt nur protokolliert.');
-    W.restorePointDone = true;
-    await ctx.tick();
+/** settings.restorePoints like core/Common.ps1 Get-VxRestorePointMode (old bool autoRestorePoint migrated). */
+function rpMode() {
+  const m = W.settings.restorePoints;
+  return ['first', 'presets', 'off'].includes(m) ? m : (W.settings.autoRestorePoint === false ? 'off' : 'first');
+}
+const RP_STEP = 'Wiederherstellungspunkt wird erstellt – das kann bis zu 1–2 Minuten dauern';
+/** Like core/Engine.ps1 New-VxRestorePoint in Testmodus: the baseline adopts the oldest VELOX point. */
+async function makeRestorePoint(ctx, label, kind, p) {
+  ctx.step(RP_STEP);
+  const own = W.restorePoints.filter(x => x.description.startsWith('VELOX')).sort((a, b) => a.sequence - b.sequence);
+  const baseline = kind === 'baseline' || !W.restorePointBaseline || !['created', 'adopted', 'skipped'].includes(W.restorePointBaseline.status);
+  // _mockRpWaitMs: mock-only test hook - a slow restore point that can be skipped
+  const skipped = await ctx.skippableWait(Math.min(20000, Number((p && p._mockRpWaitMs) || 0) || opt.speed * 2));
+  if (skipped) {
+    ctx.log('warn', 'Wiederherstellungspunkt übersprungen. VELOX sichert trotzdem jeden Wert im eigenen Journal.');
+    if (baseline) W.restorePointBaseline = { status: 'skipped', created: iso(new Date()), sequence: null, description: 'VELOX: ' + label };
+    return { ok: false, skipped: true, message: 'Wiederherstellungspunkt übersprungen. VELOX sichert trotzdem jeden Wert im eigenen Journal.' };
   }
+  let item;
+  if (baseline && own.length) {
+    item = own[0];
+    W.restorePointBaseline = { status: 'adopted', created: item.created, sequence: item.sequence, description: item.description };
+    ctx.log('ok', 'Dein erster VELOX-Wiederherstellungspunkt gilt als Ausgangspunkt – es wird kein neuer angelegt.');
+  } else {
+    item = { sequence: W.rpNext++, description: 'VELOX: ' + label, created: iso(new Date()) };
+    W.restorePoints.push(item);
+    W.restorePointLast = item.created;
+    if (baseline) W.restorePointBaseline = { status: 'created', created: item.created, sequence: item.sequence, description: item.description };
+    ctx.log('info', 'Testmodus: Wiederherstellungspunkt "' + item.description + '" nur simuliert.');
+  }
+  W.restorePointDone = true;
+  return { ok: true, skipped: false, message: 'Wiederherstellungspunkt erstellt.' };
+}
+/** Like core/Engine.ps1 Invoke-VxAutoRestorePoint: one baseline ever; mode 'presets' adds one before
+ *  presets / KI plans / Detweak with 10+ tweaks, at most one per 24 h; everything else never. */
+async function maybeRestorePoint(ctx, p, purpose, count) {
+  const mode = rpMode();
+  if (mode === 'off') return;
+  const b = W.restorePointBaseline;
+  if (!b || !['created', 'adopted', 'skipped'].includes(b.status)) {
+    if (W.rpTried) return;
+    W.rpTried = true;
+    await makeRestorePoint(ctx, 'Ausgangszustand vor der ersten Änderung', 'baseline', p);
+    return;
+  }
+  if (mode !== 'presets' || !['preset', 'plan', 'detweak'].includes(purpose) || (count || 0) < 10) return;
+  const last = W.restorePointLast || (b && b.created);
+  if (last && Date.now() - Date.parse(last) < 86400000) { ctx.log('info', 'Der letzte Wiederherstellungspunkt ist jünger als 24 Stunden – VELOX legt keinen weiteren an.'); return; }
+  await makeRestorePoint(ctx, (p && p.label) || 'Großes Paket', 'extra', p);
+}
+function rpList() {
+  const items = W.restorePoints.slice().sort((a, b) => a.sequence - b.sequence)
+    .map(x => Object.assign({}, x, { velox: /^\s*VELOX/.test(x.description), manual: /^\s*VELOX:\s*(VELOX\s+)?manuell/i.test(x.description) }));
+  const own = items.filter(x => x.velox);
+  const b = W.restorePointBaseline;
+  const keep = (b && b.sequence != null && own.find(x => x.sequence === b.sequence)) || own[0] || null;
+  return { items, keep, extra: own.filter(x => !x.manual && (!keep || x.sequence !== keep.sequence)).length };
 }
 /** Same shape as core/Common.ps1 Get-VxStateDto: statuses, profile, lastScan, needs, foreignCount (null before the first detweak scan). */
 function stateDto() {
   const s = W.state;
-  return { statuses: s.statuses, profile: s.profile || null, lastScan: s.lastScan || null, needs: s.needs, foreignCount: typeof s.foreignCount === 'number' ? s.foreignCount : null };
+  return { statuses: s.statuses, profile: s.profile || null, lastScan: s.lastScan || null, needs: s.needs, foreignCount: typeof s.foreignCount === 'number' ? s.foreignCount : null,
+    restorePointBaseline: W.restorePointBaseline };
 }
 /** Like core/Detweak.ps1 Set-VxForeignKeys: foreign keys of the last scan, count in state + profile. */
 function setForeignKeys(keys) {
@@ -352,8 +431,8 @@ function advisorResult(params, engine) {
   if (/ruckel|stutter|lag/.test(text)) findings.push({ id: 'stutter', severity: 'warn', title: 'Ruckler: wahrscheinliche Ursachen', detail: 'Hintergrund-Aufnahme, Energiesparen der CPU und Fremd-Timer-Einstellungen sind die häufigsten Gründe. Der Plan unten geht genau das an.', fix: { type: 'tweaks', ids: plan.slice(0, 3).map(p => p.id) } });
   if (profile.systemDriveFreeGB < 80) findings.push({ id: 'disk', severity: 'warn', title: 'Systemlaufwerk wird voll', detail: 'Weniger als 80 GB frei. Eine Reinigung schafft Platz.', fix: { type: 'page', page: 'cleanup' } });
   const goalName = { gaming: 'Gaming', competitive: 'Esport', balanced: 'Ausgewogen', privacy: 'Datenschutz', laptop: 'Laptop', streaming: 'Streaming', fivem: 'FiveM' }[goal];
-  const summary = engine === 'claude'
-    ? 'Claude hat dein System für „' + goalName + '“ bewertet: ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte. Die größten Hebel sind Energieplan und Hintergrund-Aufnahmen.'
+  const summary = AI_NAMES[engine]
+    ? AI_NAMES[engine] + ' hat dein System für „' + goalName + '“ bewertet: ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte. Die größten Hebel sind Energieplan und Hintergrund-Aufnahmen.'
     : 'Dein PC ist gut ausgestattet, aber noch nicht auf „' + goalName + '“ eingestellt. ' + plan.length + ' Änderungen bringen dich von ' + score + ' auf ' + scoreAfter + ' Punkte.';
   return { engine, goal, score, scoreAfter, summary, findings, plan };
 }
@@ -377,14 +456,28 @@ const JOBS = {
   async apply(p, ctx) { return applyRevert(p, ctx, 'apply'); },
   async revert(p, ctx) { return applyRevert(p, ctx, 'revert'); },
   async restorepoint(p, ctx) {
-    ctx.step('Wiederherstellungspunkt wird erstellt …', 0.3); await ctx.tick(3);
-    ctx.log('info', 'Testmodus: Wiederherstellungspunkt "' + (p.label || 'VELOX') + '" nur protokolliert.');
-    return { ok: true, message: 'Wiederherstellungspunkt erstellt (Testmodus: nur protokolliert).' };
+    const x = await makeRestorePoint(ctx, p.label || 'Manuell', 'manual', p);
+    return { ok: x.ok, message: x.ok ? 'Wiederherstellungspunkt erstellt (Testmodus: nur simuliert).' : x.message, skipped: x.skipped, timedOut: false, baseline: W.restorePointBaseline };
+  },
+  async 'restorepoint-list'(p, ctx) {
+    ctx.step('Lese Wiederherstellungspunkte ...', 0.2); await ctx.tick(0.5);
+    return Object.assign({ ok: true, message: '', baseline: W.restorePointBaseline, mode: rpMode() }, rpList());
+  },
+  async 'restorepoint-clean'(p, ctx) {
+    ctx.step('Lese Wiederherstellungspunkte ...', 0.1); await ctx.tick(0.5);
+    const l = rpList();
+    const drop = l.items.filter(x => x.velox && !x.manual && (!l.keep || x.sequence !== l.keep.sequence));
+    ctx.step('Lösche ' + drop.length + ' Wiederherstellungspunkte ...', 0.4); await ctx.tick();
+    const gone = new Set(drop.map(x => x.sequence));
+    W.restorePoints = W.restorePoints.filter(x => !gone.has(x.sequence));
+    if (l.keep && (!W.restorePointBaseline || W.restorePointBaseline.sequence !== l.keep.sequence)) W.restorePointBaseline = { status: 'adopted', created: l.keep.created, sequence: l.keep.sequence, description: l.keep.description };
+    ctx.log(drop.length ? 'ok' : 'info', drop.length ? drop.length + ' überflüssige VELOX-Wiederherstellungspunkte gelöscht.' : 'Keine überflüssigen VELOX-Wiederherstellungspunkte gefunden.');
+    return { removed: drop.length, failed: 0, kept: l.keep, errors: [], baseline: W.restorePointBaseline };
   },
   async restore(p, ctx) {
     const b = W.backups.find(x => x.id === p.backupId);
     if (!b) throw new Error('Sicherung nicht gefunden.');
-    await maybeRestorePoint(ctx);
+    await maybeRestorePoint(ctx, p, 'restore', 0);
     const entries = b.entries.slice().reverse();
     let restored = 0;
     for (let i = 0; i < entries.length; i++) {
@@ -434,7 +527,8 @@ const JOBS = {
   },
   async detweak(p, ctx) {
     const keys = Array.isArray(p.keys) ? p.keys : [];
-    if (p.restorePoint) { ctx.step('Wiederherstellungspunkt wird erstellt …', 0.04); ctx.log('info', 'Testmodus: Wiederherstellungspunkt nur protokolliert.'); W.restorePointDone = true; await ctx.tick(); }
+    // like core/Detweak.ps1: no forced restore point any more - the policy decides
+    await maybeRestorePoint(ctx, p, keys.length + (p.thenApply || []).length >= 10 ? 'detweak' : '', keys.length + (p.thenApply || []).length);
     const entries = [];
     let reset = 0, failed = 0, applied = 0, resetValues = 0, commandsRun = 0;
     const done = [];
@@ -478,6 +572,40 @@ const JOBS = {
     return { reset, resetValues, commandsRun, failed, applied, backupId, needs: W.state.needs, errors: [], foreignCount: typeof W.state.foreignCount === 'number' ? W.state.foreignCount : 0 };
   },
   async advisor(p, ctx) { return advise(p, ctx, 'local'); },
+  async 'ai-status'(p, ctx) {
+    const rows = [];
+    if (!p.test || p.test === 'claude-code') {
+      ctx.step('Suche Claude Code …', 0.3); await ctx.tick(2);
+      rows.push(claudeCodeRow());
+    }
+    const s = W.settings;
+    const api = { id: 'claude-api', name: 'Claude API', ready: s.claude.hasKey, hasKey: s.claude.hasKey, state: s.claude.hasKey ? 'ready' : 'no-key', model: s.claude.model, message: s.claude.hasKey ? 'API-Key hinterlegt.' : 'Kein API-Key hinterlegt.', tested: false };
+    if (p.test === 'claude-api') { await ctx.tick(2); Object.assign(api, { tested: true, ok: s.claude.hasKey, message: s.claude.hasKey ? 'Verbindung klappt – der Key ist gültig. (Der Test hat nichts gekostet.)' : 'Noch kein API-Key hinterlegt.' }); }
+    rows.push(api);
+    const g = s.ai.groq;
+    const groq = { id: 'groq', name: 'Groq', ready: g.hasKey, hasKey: g.hasKey, state: g.hasKey ? 'ready' : 'no-key', model: g.model, models: null, message: g.hasKey ? 'API-Key hinterlegt.' : 'Kein API-Key hinterlegt.', tested: false };
+    if (p.test === 'groq') {
+      await ctx.tick(2);
+      const models = [{ id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B – beste Qualität', strict: true, recommended: true }, { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B – sehr schnell', strict: true, recommended: false }, { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B – am schnellsten, einfachere Antworten', strict: false, recommended: false }];
+      Object.assign(groq, g.hasKey ? { tested: true, ok: true, models, message: 'Verbindung klappt – 3 Modelle verfügbar. (Der Test hat nichts gekostet.)' } : { ok: false, message: 'Noch kein Groq-Key hinterlegt.' });
+    }
+    rows.push(groq);
+    rows.push({ id: 'offline', name: 'Smart-Analyse', ready: true, state: 'ready', message: 'Läuft immer, komplett offline.' });
+    return { providers: rows, recommended: 'claude-code', preferred: s.ai.provider };
+  },
+  async ai(p, ctx) {
+    const prov = p.provider;
+    if (prov === 'offline') return advise(p, ctx, 'local');
+    if (!['claude-code', 'claude-api', 'groq'].includes(prov)) throw new Error("Unbekannte KI '" + prov + "'.");
+    if (prov === 'claude-api' && !W.settings.claude.hasKey) throw new Error('Es ist noch kein Claude-API-Key hinterlegt. Trag ihn in den Einstellungen unter „KI“ ein.');
+    if (prov === 'groq' && !W.settings.ai.groq.hasKey) throw new Error('Es ist noch kein Groq-API-Key hinterlegt. Trag ihn in den Einstellungen unter „KI“ ein – er ist kostenlos (console.groq.com/keys).');
+    if (prov === 'claude-code' && W.claudeCode === 'missing') throw new Error('Claude Code ist auf diesem PC nicht installiert. Installier es in PowerShell (nicht als Administrator) mit: irm https://claude.ai/install.ps1 | iex – dann „claude“ starten und mit deinem Claude-Konto anmelden.');
+    if (prov === 'claude-code' && W.claudeCode === 'logged-out') throw new Error('Claude Code ist nicht angemeldet. Öffne PowerShell (nicht als Administrator), gib „claude auth login“ ein und melde dich an. Dann noch einmal versuchen.');
+    if (W.aiFailNext === prov) { W.aiFailNext = null; await ctx.tick(2); throw new Error(prov === 'groq' ? 'Dein kostenloses Groq-Limit ist gerade aufgebraucht. Versuch es in 30 Sekunden noch einmal oder nimm solange die Smart-Analyse.' : 'Dein Claude-Nutzungslimit ist gerade erreicht. Warte, bis es zurückgesetzt wird (Claude Code zeigt dir die Uhrzeit), oder nimm solange Groq oder die Smart-Analyse.'); }
+    const r = await advise(p, ctx, prov);
+    const model = prov === 'claude-api' ? W.settings.claude.model : prov === 'groq' ? (W.settings.ai.groq.model || 'openai/gpt-oss-120b') : 'claude-' + (W.settings.ai.claudeCode.model || 'sonnet') + '-5-5';
+    return Object.assign(r, { engine: prov === 'claude-api' ? 'claude' : prov, provider: prov, model, usage: { input_tokens: 18234, output_tokens: 1420 } });
+  },
   async claude(p, ctx) {
     if (!W.settings.claude.hasKey) throw new Error('Kein API-Key hinterlegt. Trage ihn unter Einstellungen ein.');
     const r = await advise(p, ctx, 'claude');
@@ -518,17 +646,25 @@ const JOBS = {
     return { ok: true, item };
   },
   async 'games-detect'(p, ctx) {
-    const libs = ['Steam-Bibliotheken', 'Epic Games', 'Rockstar Launcher', 'FiveM', 'Riot Games'];
-    for (let i = 0; i < libs.length; i++) { ctx.step(libs[i] + ' werden durchsucht …', (i + 1) / 6); await ctx.tick(0.5); }
+    const libs = ['Steam-Bibliotheken', 'Epic Games', 'GOG', 'Xbox / PC Game Pass', 'Rockstar Launcher', 'FiveM', 'Riot Games'];
+    for (let i = 0; i < libs.length; i++) { ctx.step('Suche: ' + libs[i] + ' …', (i + 1) / 8); await ctx.tick(0.4); }
     const found = [
       { id: 'fivem', name: 'FiveM', exe: 'FiveM_GTAProcess.exe', path: 'C:\\Users\\Spieler\\AppData\\Local\\FiveM\\FiveM.app\\data\\cache\\subprocess\\FiveM_GTAProcess.exe', source: 'fivem' },
-      { id: 'gta5', name: 'Grand Theft Auto V', exe: 'GTA5.exe', path: 'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe', source: 'rockstar' },
-      { id: 'cs2', name: 'Counter-Strike 2', exe: 'cs2.exe', path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe', source: 'steam' },
+      { id: 'gta5', name: 'Grand Theft Auto V', exe: 'GTA5.exe', path: 'C:\\Program Files\\Rockstar Games\\Grand Theft Auto V\\GTA5.exe', source: 'rockstar', running: true },
+      { id: 'cs2', name: 'Counter-Strike 2', exe: 'cs2.exe', path: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe', source: 'steam', appid: '730' },
       { id: 'valorant', name: 'VALORANT', exe: 'VALORANT-Win64-Shipping.exe', path: 'C:\\Riot Games\\VALORANT\\live\\ShooterGame\\Binaries\\Win64\\VALORANT-Win64-Shipping.exe', source: 'riot' },
-      { id: 'fortnite', name: 'Fortnite', exe: 'FortniteClient-Win64-Shipping.exe', path: 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe', source: 'epic' }
+      { id: 'fortnite', name: 'Fortnite', exe: 'FortniteClient-Win64-Shipping.exe', path: 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe', source: 'epic', appid: 'Fortnite' },
+      { id: 'ironharbor', name: 'Iron Harbor', exe: 'IronHarbor-Win64-Shipping.exe', path: 'D:\\SteamLibrary\\steamapps\\common\\Iron Harbor\\IronHarbor\\Binaries\\Win64\\IronHarbor-Win64-Shipping.exe', source: 'steam', appid: '999002' },
+      { id: 'skycourier', name: 'Sky Courier', exe: 'SkyCourier.exe', path: 'C:\\XboxGames\\Sky Courier\\Content\\SkyCourier.exe', source: 'xbox', appid: 'Contoso.SkyCourier' },
+      { id: 'lanternkeep', name: 'Lantern Keep', exe: 'LanternKeep.exe', path: 'C:\\GOG Games\\Lantern Keep\\LanternKeep.exe', source: 'gog', appid: '1207658924' }
     ];
-    const games = found.map(g => { const b = W.settings.games.find(x => x.path.toLowerCase() === g.path.toLowerCase()); return Object.assign(g, { boost: b ? b.boost : { priority: false, gpu: false, fso: false } }); });
+    const games = found.map(g => {
+      const b = W.settings.games.find(x => x.path.toLowerCase() === g.path.toLowerCase());
+      const a = MOCK_ART[g.id];
+      return Object.assign(g, { boost: b ? b.boost : { priority: false, gpu: false, fso: false }, art: a ? { cover: !!a.cover, icon: !!a.icon, shape: a.shape || 'wide', v: 'm1' } : { cover: false, icon: false, shape: null, v: '' } });
+    });
     for (const b of W.settings.games) if (!games.some(g => g.path.toLowerCase() === b.path.toLowerCase())) games.push(Object.assign({ source: 'manual' }, b));
+    ctx.log('ok', games.length + ' Spiele gefunden.');
     return { games };
   },
   async 'game-boost'(p, ctx) {
@@ -550,7 +686,9 @@ const JOBS = {
 async function applyRevert(p, ctx, mode) {
   const ids = Array.isArray(p.ids) ? p.ids : [];
   if (!ids.length) throw new Error('Keine Tweaks ausgewählt.');
-  await maybeRestorePoint(ctx);
+  const lbl = String(p.label || '');
+  const purpose = p.purpose === 'plan' || /^KI-Plan/.test(lbl) ? 'plan' : /^Preset/.test(lbl) ? 'preset' : '';
+  await maybeRestorePoint(ctx, p, mode === 'apply' ? purpose : 'revert', ids.length);
   const results = []; const entries = [];
   for (let i = 0; i < ids.length; i++) {
     const t = W.byId.get(ids[i]);
@@ -582,17 +720,51 @@ function describe(a, mode) {
     default: return 'Aktion ' + a.type + ' (Testmodus)';
   }
 }
+const AI_NAMES = { claude: 'Claude', 'claude-api': 'Claude', 'claude-code': 'Claude Code', groq: 'Groq' };
+function claudeCodeRow() {
+  const st = W.claudeCode;
+  const base = { id: 'claude-code', name: 'Claude Code', model: W.settings.ai.claudeCode.model, installCommand: 'irm https://claude.ai/install.ps1 | iex', runsAs: null };
+  if (st === 'ready') return Object.assign(base, { ready: true, installed: true, loggedIn: true, state: 'ready', version: '2.1.289', account: 'gamer@example.com', subscription: 'max', authMethod: 'claude.ai', message: 'Claude Code 2.1.289 gefunden – angemeldet als gamer@example.com (Max).', steps: [] });
+  if (st === 'logged-out') return Object.assign(base, { ready: false, installed: true, loggedIn: false, state: 'logged-out', version: '2.1.289', message: 'Claude Code ist installiert, aber nicht angemeldet.',
+    steps: ['Öffne PowerShell als normaler Benutzer (Startmenü → „PowerShell“, nicht als Administrator).', 'Gib ein: claude auth login – oder starte „claude“ und tippe /login.', 'Melde dich im Browser mit deinem Claude-Konto (Pro oder Max) an.', 'Zurück in VELOX auf „Erneut prüfen“ klicken.'] });
+  return Object.assign(base, { ready: false, installed: false, loggedIn: false, state: 'missing', message: 'Claude Code ist auf diesem PC nicht installiert. Mit deinem Claude-Abo (Pro oder Max) ist es die beste Wahl – ganz ohne API-Key.',
+    steps: ['Öffne PowerShell als normaler Benutzer (Startmenü → „PowerShell“, nicht als Administrator).', 'Gib ein: irm https://claude.ai/install.ps1 | iex – und drück Enter.', 'Danach „claude“ eingeben und dich im Browser mit deinem Claude-Konto (Pro oder Max) anmelden.', 'Zurück in VELOX auf „Erneut prüfen“ klicken.'] });
+}
 async function advise(p, ctx, engine) {
-  const steps = engine === 'claude'
-    ? ['Systemprofil wird anonymisiert', 'Katalog wird zusammengefasst', 'Anfrage an Claude wird gesendet', 'Claude analysiert dein System', 'Antwort wird geprüft', 'Plan wird bewertet']
+  const name = AI_NAMES[engine];
+  const steps = name
+    ? ['Systemprofil wird anonymisiert', 'Katalog wird zusammengefasst', 'Anfrage an ' + name + ' wird gesendet', name + ' denkt nach', 'Antwort wird geprüft', 'Plan wird bewertet']
     : ['Hardware-Profil wird ausgewertet', 'Energieplan wird geprüft', 'Grafik-Einstellungen werden geprüft', 'Netzwerk wird geprüft', 'Hintergrund-Dienste werden geprüft', 'Datenschutz wird geprüft', 'Fremd-Tweaks werden gesucht', 'Plan wird erstellt'];
-  for (let i = 0; i < steps.length; i++) { ctx.step(steps[i] + ' …', (i + 1) / (steps.length + 1)); ctx.log(i === 6 && W.foreign.size ? 'warn' : 'info', steps[i]); await ctx.tick(engine === 'claude' ? 1.5 : 1); }
+  for (let i = 0; i < steps.length; i++) { ctx.step(steps[i] + ' …', (i + 1) / (steps.length + 1)); ctx.log(i === 6 && W.foreign.size ? 'warn' : 'info', steps[i]); await ctx.tick(name ? 1.5 : 1); }
   const r = advisorResult(p, engine);
   ctx.log('ok', r.findings.length + ' Befunde, ' + r.plan.length + ' Vorschläge.');
   return r;
 }
 
 // ---------------------------------------------------------------- http
+// game art like core/Server.ps1 (GET /api/game-art/<id>?kind=cover|icon&v=&t=): placeholder art of
+// the fixture PC in tests/fixtures/games/pc - only for ids games-detect announced
+const ART_PC = path.join(appRoot, 'tests', 'fixtures', 'games', 'pc');
+const ART_LC = path.join(ART_PC, 'C', 'Program Files (x86)', 'Steam', 'appcache', 'librarycache');
+const MOCK_ART = {
+  gta5: { cover: path.join(ART_LC, '271590_header.jpg'), icon: path.join(ART_LC, '271590_icon.jpg') },
+  cs2: { cover: path.join(ART_LC, '730', 'header.jpg'), icon: path.join(ART_LC, '730', '8dbc71957312bbd3baea65848b545be9eae2a355.jpg') },
+  ironharbor: { cover: path.join(ART_LC, '999002', 'library_600x900.jpg'), shape: 'tall' },
+  skycourier: { cover: path.join(ART_PC, 'C', 'XboxGames', 'Sky Courier', 'Content', 'Splash.png'), icon: path.join(ART_PC, 'C', 'XboxGames', 'Sky Courier', 'Content', 'Logo150.png') },
+  lanternkeep: { icon: path.join(ART_PC, 'C', 'GOG Games', 'Lantern Keep', 'goggame-1207658924.ico') }
+};
+function serveGameArt(req, res, p, url) {
+  const kind = url.searchParams.get('kind');
+  if (kind !== 'cover' && kind !== 'icon') return send(res, 400, { error: 'Unbekannte Bildart.' });
+  const id = decodeURIComponent(p.slice('/api/game-art/'.length));
+  const file = Object.prototype.hasOwnProperty.call(MOCK_ART, id) ? MOCK_ART[id][kind] : null;
+  if (!file || !fs.existsSync(file)) return send(res, 404, { error: 'Kein Bild für dieses Spiel.' });
+  const buf = fs.readFileSync(file);
+  const type = { '.jpg': 'image/jpeg', '.png': 'image/png', '.ico': 'image/x-icon' }[path.extname(file).toLowerCase()] || 'application/octet-stream';
+  res.writeHead(200, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+  res.end(req.method === 'HEAD' ? undefined : buf);
+}
+
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 let port = 0;
 
@@ -609,7 +781,8 @@ function readBody(req) {
   });
 }
 function publicJob(job, since) {
-  return { id: job.id, type: job.type, status: job.status, progress: job.progress, step: job.step, log: job.log.filter(l => l.i >= since), result: job.result, error: job.error };
+  return { id: job.id, type: job.type, status: job.status, progress: job.progress, step: job.step, log: job.log.filter(l => l.i >= since), result: job.result, error: job.error,
+    skippable: !!job.skippable, durationMs: job.durationMs === null ? Date.now() - job._start : job.durationMs };
 }
 function cancelShutdown() { if (W.shutdownTimer) { clearTimeout(W.shutdownTimer); W.shutdownTimer = null; log('shutdown cancelled'); } }
 
@@ -642,6 +815,8 @@ async function handle(req, res) {
     return serveStatic(req, res, p);
   }
 
+  // game art: an <img> cannot send headers, the token comes as ?t= (GET/HEAD only)
+  if (p.startsWith('/api/game-art/') && (req.method === 'GET' || req.method === 'HEAD') && url.searchParams.get('t') === opt.token) return serveGameArt(req, res, p, url);
   const tokenOk = req.headers['x-velox-token'] === opt.token || (p === '/api/shutdown' && req.method === 'POST' && url.searchParams.get('t') === opt.token);
   if (!tokenOk) { W.stats.unauthorized++; return send(res, 401, { error: 'unauthorized' }); }
   if (opt.latency) await sleep(opt.latency);
@@ -676,6 +851,15 @@ async function handle(req, res) {
     if (!job) return send(res, 404, { error: 'not found' });
     return send(res, 200, publicJob(job, Number(url.searchParams.get('since')) || 0));
   }
+  // "Überspringen" like core/Server.ps1 POST /api/jobs/<id>/skip: ok only while a skippable step runs
+  mm = p.match(/^\/api\/jobs\/([a-f0-9]+)\/skip$/);
+  if (mm && req.method === 'POST') {
+    const job = W.jobs.get(mm[1]);
+    if (!job) return send(res, 404, { error: 'Job nicht gefunden.' });
+    const ok = job.status === 'running' && job.skippable;
+    if (ok) { job._skip = true; job.log.push({ i: job.log.length, t: iso(new Date()), level: 'warn', msg: 'Überspringen angefordert ...' }); }
+    return send(res, 200, { ok });
+  }
   mm = p.match(/^\/api\/jobs\/([a-f0-9]+)\/cancel$/);
   if (mm && req.method === 'POST') {
     const job = W.jobs.get(mm[1]);
@@ -688,8 +872,15 @@ async function handle(req, res) {
     if (['violet', 'blue', 'cyan', 'green', 'pink', 'orange'].includes(body.accent)) s.accent = body.accent;
     if (['full', 'reduced'].includes(body.motion)) s.motion = body.motion;
     if (typeof body.confirmRisky === 'boolean') s.confirmRisky = body.confirmRisky;
-    if (typeof body.autoRestorePoint === 'boolean') s.autoRestorePoint = body.autoRestorePoint;
+    if (['first', 'presets', 'off'].includes(body.restorePoints)) s.restorePoints = body.restorePoints;
+    else if (typeof body.autoRestorePoint === 'boolean') s.restorePoints = body.autoRestorePoint ? (s.restorePoints === 'off' ? 'first' : s.restorePoints) : 'off';
+    s.autoRestorePoint = s.restorePoints !== 'off';
     if (body.claude && ['claude-opus-5-5', 'claude-sonnet-5-5'].includes(body.claude.model)) s.claude.model = body.claude.model;
+    if (body.ai && typeof body.ai === 'object') {
+      if (['', 'claude-code', 'claude-api', 'groq', 'offline'].includes(body.ai.provider)) s.ai.provider = body.ai.provider;
+      if (body.ai.claudeCode && ['sonnet', 'opus', 'haiku'].includes(body.ai.claudeCode.model)) s.ai.claudeCode.model = body.ai.claudeCode.model;
+      if (body.ai.groq && typeof body.ai.groq.model === 'string' && (body.ai.groq.model === '' || /^[A-Za-z0-9][A-Za-z0-9._/:-]{1,100}$/.test(body.ai.groq.model))) s.ai.groq.model = body.ai.groq.model;
+    }
     return send(res, 200, { settings: s });
   }
   if (m('POST', /^\/api\/claude\/key$/)) {
@@ -698,6 +889,22 @@ async function handle(req, res) {
     return send(res, 200, { hasKey: true });
   }
   if (m('DELETE', /^\/api\/claude\/key$/)) { W.settings.claude.hasKey = false; return send(res, 200, { hasKey: false }); }
+  mm = p.match(/^\/api\/ai\/key\/(claude-api|groq)$/);
+  if (mm) {
+    const prov = mm[1];
+    if (req.method === 'POST') {
+      const key = typeof body.key === 'string' ? body.key.trim() : '';
+      if (prov === 'groq' && !/^gsk_[A-Za-z0-9]{20,200}$/.test(key)) return send(res, 400, { error: 'Das sieht nicht wie ein Groq-API-Key aus (er beginnt mit „gsk_“).' });
+      if (prov === 'claude-api' && key.length < 20) return send(res, 400, { error: 'Das sieht nicht wie ein Anthropic-API-Key aus (er beginnt mit „sk-ant-“).' });
+      if (prov === 'groq') W.settings.ai.groq.hasKey = true; else W.settings.claude.hasKey = true;
+      return send(res, 200, { provider: prov, hasKey: true, settings: W.settings });
+    }
+    if (req.method === 'DELETE') {
+      if (prov === 'groq') W.settings.ai.groq.hasKey = false; else W.settings.claude.hasKey = false;
+      return send(res, 200, { provider: prov, hasKey: false, settings: W.settings });
+    }
+    return send(res, 405, { error: 'Methode nicht erlaubt.' });
+  }
   if (m('GET', /^\/api\/backups$/)) {
     return send(res, 200, { backups: W.backups.map(b => ({ id: b.id, label: b.label, kind: b.kind, created: b.created, count: b.entries.length, tweakCount: new Set(b.entries.map(e => e.tweakId).filter(x => /^[a-z0-9]+(\.[a-z0-9-]+)+$/.test(String(x)))).size, simulate: b.simulate, restorable: b.kind !== 'restore' && b.entries.some(e => e.op !== 'appx') })) });
   }
@@ -743,6 +950,12 @@ async function handle(req, res) {
   if (m('GET', /^\/__mock\/stats$/)) return send(res, 200, Object.assign({}, W.stats, { shutdownPending: !!W.shutdownTimer }));
   if (m('POST', /^\/__mock\/kill$/)) { send(res, 200, { ok: true }); setTimeout(() => { W.dead = true; }, 20); return; }
   if (m('POST', /^\/__mock\/reset$/)) { W = buildWorld(); return send(res, 200, { ok: true }); }
+  if (m('POST', /^\/__mock\/ai$/)) {
+    if (['ready', 'logged-out', 'missing'].includes(body.claudeCode)) W.claudeCode = body.claudeCode;
+    if ('failNext' in body) W.aiFailNext = body.failNext || null;
+    if (body.reset) { W.settings.claude.hasKey = false; W.settings.ai = { provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } }; W.claudeCode = opt.claudeCode; W.aiFailNext = null; }
+    return send(res, 200, { claudeCode: W.claudeCode, settings: W.settings });
+  }
   if (m('POST', /^\/__mock\/state$/)) { if (body.needs) Object.assign(W.state.needs, body.needs); return send(res, 200, W.state); }
   return send(res, 404, { error: 'not found' });
 }

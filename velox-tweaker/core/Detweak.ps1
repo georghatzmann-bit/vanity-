@@ -582,8 +582,27 @@ function Set-VxForeignCount([int]$Count) {
     $st.foreignCount = $Count
 }
 
+# The detweak job reuses the items of the last scan when nothing changed the system since
+# (ChangeGen counts finished system-changing jobs) - the full scan is the slow part on a real PC.
+function Set-VxDetweakScanCache($Items) {
+    $ctx = $global:VxCtx
+    $map = @{}
+    foreach ($it in @($Items)) { $map[([string]$it.key).ToLowerInvariant()] = $it }
+    $ctx.DetweakScanCache = @{ at = [DateTime]::UtcNow; gen = [int]$ctx.ChangeGen; map = $map; simulate = [bool]$ctx.Simulate }
+}
+
+function Get-VxDetweakScanCache {
+    $ctx = $global:VxCtx
+    $c = Get-VxProp $ctx 'DetweakScanCache'
+    if ($null -eq $c) { return $null }
+    if ([int]$c.gen -ne [int]$ctx.ChangeGen -or [bool]$c.simulate -ne [bool]$ctx.Simulate) { return $null }
+    if (([DateTime]::UtcNow - [DateTime]$c.at).TotalMinutes -gt 30) { return $null }
+    return $c.map
+}
+
 function Invoke-VxDetweakScanJob($Params) {
     $scan = Get-VxDetweakScan -ProgressFrom 0.02 -ProgressTo 0.95
+    Set-VxDetweakScanCache $scan.items
     $items = @($scan.items | ForEach-Object { ConvertTo-VxDetweakDto $_ })
     # VELOX's own tweaks are listed (they can be reset too) but are not foreign
     $foreign = @($scan.items | Where-Object { $_.source -ne 'velox' } | ForEach-Object { [string]$_.key })
@@ -601,20 +620,37 @@ function Invoke-VxDetweakJob($Params) {
     $keys = @(@(Get-VxProp $Params 'keys' @()) | ForEach-Object { [string]$_ } | Where-Object { $_ })
     $cmdIds = @(@(Get-VxProp $Params 'commands' @()) | ForEach-Object { [string]$_ } | Where-Object { $_ })
     $thenApply = @(@(Get-VxProp $Params 'thenApply' @()) | ForEach-Object { [string]$_ } | Where-Object { $_ } | Select-Object -Unique)
-    $wantRp = [bool](Get-VxProp $Params 'restorePoint' $false)
+    # restorePoint (checkbox in older UIs): false = no extra point for this job. It never forces
+    # one any more - the policy in settings.restorePoints decides (Invoke-VxAutoRestorePoint).
+    $allowRp = [bool](Get-VxProp $Params 'restorePoint' $true)
     $label = 'Detweak: fremde Tweaks zurückgesetzt'
     $J = New-VxJournal 'detweak' $label
+    $sw = [Diagnostics.Stopwatch]::StartNew()
     Set-VxProgress 0.02 'Bereite Detweak vor ...'
-    Invoke-VxAutoRestorePoint 'Detweak' $J $wantRp
+    $purpose = ''
+    if ($allowRp) { $purpose = 'detweak' }
+    Invoke-VxAutoRestorePoint 'Detweak' $J $false $purpose ($keys.Count + $thenApply.Count)
+    $rpMs = [int]$sw.ElapsedMilliseconds
+    $sw.Restart()
 
     # power plan tweaks are reverted after, and applied before, everything else (power settings
     # belong to a plan - see Get-VxPowerOrderedIds)
     $planKeys = @($keys | Where-Object { $_ -like 'tweak|*' -and (Test-VxTweakHasAction (Get-VxTweak $_.Substring(6)) 'powerplan') })
     $keys = @(@($keys | Where-Object { $planKeys -notcontains $_ }) + $planKeys)
     $thenApply = @(Get-VxPowerOrderedIds $thenApply 'apply')
-    $scan = Get-VxDetweakScan -ProgressFrom 0.05 -ProgressTo 0.3
-    $map = @{}
-    foreach ($it in $scan.items) { $map[$it.key.ToLowerInvariant()] = $it }
+    $map = Get-VxDetweakScanCache
+    $scan = $null
+    if ($null -eq $map) {
+        Set-VxProgress 0.05 'Prüfe noch einmal, was zurückgesetzt werden muss ...'
+        $scan = Get-VxDetweakScan -ProgressFrom 0.05 -ProgressTo 0.3
+        $map = @{}
+        foreach ($it in $scan.items) { $map[$it.key.ToLowerInvariant()] = $it }
+    } else {
+        Write-VxFileLog 'info' 'Detweak: Ergebnis der letzten Suche wiederverwendet (seitdem nichts geändert).'
+    }
+    $scanMs = [int]$sw.ElapsedMilliseconds
+    $sw.Restart()
+    $skipped = 0
     $reset = 0
     $resetValues = 0
     $commandsRun = 0
@@ -673,15 +709,41 @@ function Invoke-VxDetweakJob($Params) {
             $n++
             $cmd = @(@(Get-VxProp $ctx.Catalog.detweak 'commands' @()) | Where-Object { [string]$_.id -eq $cid })[0]
             if ($null -eq $cmd) { $errors.Add("Unbekannter Befehl '$cid'"); $failed++; continue }
-            Set-VxProgress (0.3 + 0.6 * $n / $total) ('Führe aus: ' + $cmd.label)
+            $stepText = 'Führe aus: ' + $cmd.label
+            Set-VxProgress (0.3 + 0.6 * $n / $total) $stepText
             Add-VxJournalEntry $J ([ordered]@{ op = 'cmd'; id = $cid; label = [string]$cmd.label; restorable = $false })
             try {
-                if ($ctx.Simulate) { Write-VxLog 'info' ("[Testmodus] Befehl '{0}' nur protokolliert" -f $cmd.label) }
-                else { $null = Invoke-VxPsSource ([string]$cmd.script); Write-VxLog 'ok' ('Ausgeführt: ' + $cmd.label) }
+                if ($ctx.Simulate -and -not (Get-VxProp $ctx 'SimCommandScript')) { Write-VxLog 'info' ("[Testmodus] Befehl '{0}' nur protokolliert" -f $cmd.label) }
+                else {
+                    # own powershell.exe with a hard timeout and "Überspringen": a reset command that
+                    # hangs (network stack, Defender, page file ...) can never block the job
+                    $src = [string]$cmd.script
+                    if ($ctx.Simulate) { $src = [string]$ctx.SimCommandScript }
+                    $limit = [int](Get-VxProp $cmd 'timeoutSec' 120)
+                    $ov = [int](Get-VxProp $ctx 'CommandTimeoutSec' 0)
+                    if ($ov -gt 0) { $limit = $ov }
+                    $x = Invoke-VxIsolated -Script $src -TimeoutSec $limit -Skippable -Step $stepText
+                    try { Clear-VxCacheFor $src } catch { $null = $_ }
+                    Write-VxFileLog 'info' ("Detweak-Befehl {0}: {1} ms, Code {2}" -f $cid, $x.ms, $x.exitCode)
+                    if ($x.skipped) {
+                        $skipped++
+                        $errors.Add([string]$cmd.label + ': übersprungen')
+                        Write-VxLog 'warn' ([string]$cmd.label + ': übersprungen.')
+                        continue
+                    }
+                    if ($x.timedOut) { throw ('Hat länger als {0} s gedauert und wurde abgebrochen.' -f $limit) }
+                    if (-not $x.ok) {
+                        $why = ([string]$x.error).Trim()
+                        if (-not $why) { $why = 'Fehlercode ' + $x.exitCode }
+                        throw $why
+                    }
+                    Write-VxLog 'ok' ('Ausgeführt: ' + $cmd.label)
+                }
                 $extraNeeds += [string](Get-VxProp $cmd 'needs' 'none')
                 $reset++
                 $commandsRun++
             } catch {
+                if ([string]$_.Exception.Message -eq 'VX_CANCELLED') { throw }
                 $failed++
                 $m = [string]$cmd.label + ': ' + (Get-VxErrorText $_)
                 $errors.Add($m)
@@ -699,9 +761,13 @@ function Invoke-VxDetweakJob($Params) {
             else { $failed++; $errors.Add($t.name + ': ' + $r.error); Write-VxLog 'error' ($t.name + ': ' + $r.error) }
         }
     } finally {
+        $workMs = [int]$sw.ElapsedMilliseconds
+        $sw.Restart()
         $backupId = Complete-VxJournal $J
-        Set-VxProgress 0.93 'Aktualisiere Status ...'
-        try { Update-VxStatuses } catch { $null = $_ }
+        # only the tweaks this job can have changed are read again, not the whole catalog
+        $refresh = @(Get-VxDetweakTouchedTweaks @($doneKeys.ToArray()) $thenApply ($commandsRun -gt 0))
+        Set-VxProgress 0.93 ('Lese den neuen Stand von {0} Tweaks ...' -f $refresh.Count)
+        try { if ($refresh.Count -gt 0) { Update-VxStatuses -Ids $refresh } } catch { $null = $_ }
         try { Sync-VxBoostedGames } catch { $null = $_ }
         $needs = Get-VxNeedsOf $needsTweaks.ToArray()
         foreach ($x in $extraNeeds) { if ($needs.Contains($x)) { $needs[$x] = $true } }
@@ -711,17 +777,46 @@ function Invoke-VxDetweakJob($Params) {
         # foreign = the last scan's foreign tweaks minus what was just reset or applied by VELOX
         $st = $ctx.State
         if (-not $st.ContainsKey('foreignKeys') -or $null -eq $st.foreignKeys) {
-            Set-VxForeignKeys @($scan.items | Where-Object { $_.source -ne 'velox' } | ForEach-Object { [string]$_.key })
+            Set-VxForeignKeys @(@($map.Values) | Where-Object { $_.source -ne 'velox' } | ForEach-Object { [string]$_.key })
         }
         Update-VxForeignAfterChange @($doneKeys.ToArray())
         Update-VxForeignAfterTweaks $appliedTweaks.ToArray()
         Save-VxState
         Save-VxSim
+        Write-VxFileLog 'info' ("detweak: {0} Werte, {1} Befehle, {2} Tweaks (Wiederherstellungspunkt {3} ms, Suche {4} ms, Änderungen {5} ms, Abschluss {6} ms, {7} Status neu gelesen)" -f $keys.Count, $cmdIds.Count, $thenApply.Count, $rpMs, $scanMs, $workMs, [int]$sw.ElapsedMilliseconds, $refresh.Count)
     }
     Set-VxProgress 1 'Fertig'
     # reset = values + commands (kept for older UIs); resetValues / commandsRun count them apart
     return [ordered]@{
-        reset = $reset; resetValues = $resetValues; commandsRun = $commandsRun; failed = $failed; applied = $applied
+        reset = $reset; resetValues = $resetValues; commandsRun = $commandsRun; failed = $failed; applied = $applied; skipped = $skipped
         backupId = $backupId; needs = $needs; errors = $errors.ToArray(); foreignCount = [int](Get-VxProp $ctx.State 'foreignCount' 0)
     }
+}
+
+# Catalog tweaks whose status a detweak job can have changed: the reverted / applied tweaks, every
+# tweak that writes one of the reset targets, and after a reset command (power plans, network,
+# boot settings ...) every tweak with a powerplan, powersetting, bcd or ps action.
+function Get-VxDetweakTouchedTweaks([string[]]$Keys, [string[]]$ApplyIds, [bool]$CommandsRan) {
+    $cat = $global:VxCtx.Catalog
+    $ids = @{}
+    $targets = @{}
+    foreach ($k in @($Keys)) {
+        $lk = ([string]$k).ToLowerInvariant()
+        if ($lk.StartsWith('tweak|')) { $ids[$k.Substring(6)] = $true } else { $targets[$lk] = $true }
+    }
+    foreach ($id in @($ApplyIds)) { if ($id) { $ids[$id] = $true } }
+    foreach ($t in @($cat.tweaks)) {
+        if ((Get-VxTweakKind $t) -eq 'action') { continue }
+        $id = [string]$t.id
+        if ($ids.ContainsKey($id)) { continue }
+        if ($CommandsRan) {
+            foreach ($a in @($t.actions)) {
+                if (@('powerplan', 'powersetting', 'bcd', 'ps') -contains [string](Get-VxProp $a 'type')) { $ids[$id] = $true; break }
+            }
+            if ($ids.ContainsKey($id)) { continue }
+        }
+        if ($targets.Count -eq 0) { continue }
+        foreach ($tk in @(Get-VxTweakDetweakKeys $t)) { if ($targets.ContainsKey($tk)) { $ids[$id] = $true; break } }
+    }
+    return @($ids.Keys | Where-Object { $null -ne (Get-VxTweak $_) })
 }
