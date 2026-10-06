@@ -22,7 +22,7 @@ import {
   shapeBottomAt, shapeOverlapsBox, shapeTopOverRect, selectTarget, createTarget, typeOfKind, tilesToMask,
   maskToTiles, isDoorMask, fullTileMask,
 } from './grid.js';
-import { pieceColliderSpecs, isDoorPiece } from './pieces.js';
+import { pieceColliderSpecs, isDoorPiece, pieceCenter } from './pieces.js';
 import { createEditController } from './edit.js';
 import { createBuildingView } from './view.js';
 
@@ -325,7 +325,7 @@ export function createBuildingSystem(game) {
     piece.grounded = touchesGround(piece.shape);
     if (!options.force) liftCharacters(piece.shape, owner);
     view?.add(piece);
-    if (owner?.stats) owner.stats.piecesBuilt++;
+    if (options.charge && owner?.stats) owner.stats.piecesBuilt++; // selbst gebaut (nicht vom Modus hingestellt)
     game?.events?.emit?.('piecePlaced', { piece, owner: piece.owner });
     return piece;
   }
@@ -670,6 +670,8 @@ export function createBuildingSystem(game) {
     setDoorOpen,
     aimRay,
     damagePiece,
+    /** Mitte eines Bauteils (für Effekte/Töne). */
+    pieceCenter,
     /** Offener Edit einer Figur (für HUD/Tests). */
     editSession(character) {
       return edit.sessionOf(character) ?? null;

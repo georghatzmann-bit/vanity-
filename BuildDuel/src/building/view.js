@@ -36,6 +36,10 @@ export function createBuildingView(game) {
   const geometries = {};
   for (const type of TYPES) geometries[type] = createSharedGeometry(type);
   const doorGeometry = createDoorGeometry();
+  const handleGeometry = new THREE.BoxGeometry(0.08, 0.22, B.pieceThickness * 0.55 + 0.16);
+  handleGeometry.userData.shared = true;
+  const handleMaterial = new THREE.MeshLambertMaterial({ color: '#3A3F47' });
+  handleMaterial.userData.shared = true;
 
   // --- Bilder und Materialien ----------------------------------------------------
   const textures = new Map(); // "wood|0" → Textur
@@ -192,10 +196,14 @@ export function createBuildingView(game) {
         pivot.position.set(piece.i * S, piece.j * H, piece.k * S + d.u0);
         pivot.rotation.y = -Math.PI / 2;
       }
-      const mesh = new THREE.Mesh(doorGeometry, materialFor(piece.material, false));
+      // Tür-Blatt etwas dunkler als die Wand, dazu ein Griff → sieht man sofort als Tür
+      const mesh = new THREE.Mesh(doorGeometry, materialFor(piece.material, false, 2));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       pivot.add(mesh);
+      const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+      handle.position.set(d.u1 - d.u0 - 0.24, 1.05, 0);
+      pivot.add(handle);
       root.add(pivot);
       v.door = { pivot, mesh, baseYaw: pivot.rotation.y };
     } else if (!door && v.door) {
@@ -482,6 +490,8 @@ export function createBuildingView(game) {
       groups.clear();
       for (const g of Object.values(geometries)) g.dispose();
       doorGeometry.dispose();
+      handleGeometry.dispose();
+      handleMaterial.dispose();
       for (const type of TYPES) ghosts[type].edges.geometry.dispose();
       for (const m of materials.values()) m.dispose();
       materials.clear();

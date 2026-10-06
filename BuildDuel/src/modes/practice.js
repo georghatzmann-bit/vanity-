@@ -47,6 +47,11 @@ export function createPracticeMode(game, options = {}) {
     result: null,
     spawnPoint: { x: cfg.spawn.x, y: 0, z: cfg.spawn.z },
     spawnYaw: 0,
+    // Zeile unter der Steuerungs-Hilfe (main.js)
+    helpHint: cfg.infiniteMaterials
+      ? 'Übungsplatz: Bauen mit unendlich Material – Z/Y Wand, X Boden, C Rampe, V Dach, Linksklick setzt. ' +
+        'G auf ein eigenes Teil = Edit (Felder klicken, G bestätigt), E öffnet Türen.'
+      : 'Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.',
 
     start() {
       map = createArenaMap(game, { size: cfg.arenaSize, borderHeight: cfg.borderHeight });

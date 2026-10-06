@@ -549,7 +549,10 @@ export function selectTarget(character, type, aimDir, world, getPiece, out = cre
     for (let n = 0; n < 4; n++) {
       const hit = world.raycast(_origin, _dir, reach, _rayOptions);
       if (!hit) break;
-      if (hit.terrain || hit.normal.y > 0.5) {
+      // Boden = Gelände oder waagerechte Fläche. Eine Rampe zählt nur, wenn man auf sie
+      // HINUNTER schaut (nicht die Rampe vor einem, die vor den Augen ansteigt).
+      const slopeAhead = hit.collider?.type === 'slope' && hit.point.y > p.y + 0.6;
+      if (hit.terrain || (hit.normal.y > 0.5 && !slopeAhead)) {
         dist = Math.max(0, hit.distance - 0.02);
         floorHit = true;
         break;

@@ -123,6 +123,21 @@ export function pieceOrigin(piece, out = new THREE.Vector3()) {
   return out.set(i * S + S / 2, j * H, k * S + S / 2);
 }
 
+/**
+ * Mitte des ganzen Bauteils (z. B. für Splitter-Effekte und Töne).
+ * out = THREE.Vector3 oder { x, y, z }
+ */
+export function pieceCenter(piece, out = new THREE.Vector3()) {
+  const { kind, i, j, k } = piece;
+  const y = kind === 'f' ? j * H : kind === 'c' ? j * H + B.roofHeight / 2 : j * H + H / 2;
+  const x = kind === 'wz' ? i * S : i * S + S / 2;
+  const z = kind === 'wx' ? k * S : k * S + S / 2;
+  out.x = x;
+  out.y = y;
+  out.z = z;
+  return out;
+}
+
 /** Drehung (um die Hochachse) für die gemeinsame Form eines Typs. */
 export function pieceRotationY(piece) {
   if (piece.kind === 'wz') return -Math.PI / 2;

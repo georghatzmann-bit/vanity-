@@ -24,6 +24,7 @@
 //   --out ordner                   Screenshots hierhin (Standard: tests/e2e/out)
 //   --ports 9150-9159              Port-Bereich für den eigenen Server
 //   --only game|tests              nur das Spiel oder nur die Test-Seite prüfen
+//   --grep text                    nur Spiel-Prüfungen, deren Name den Text enthält (Regex, z. B. "Bau|Edit")
 //
 // Für spätere Wellen: neue Prüfungen als Eintrag in GAME_CHECKS anhängen
 // ({ name, run: async (ctx) => { … } }). ctx.page ist die Spiel-Seite,
@@ -43,7 +44,7 @@ const CHROMIUM_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader',
 
 // --- Optionen lesen -------------------------------------------------------------
 function parseArgs(argv) {
-  const options = { url: null, out: path.join(ROOT, 'tests', 'e2e', 'out'), ports: [9150, 9159], only: null };
+  const options = { url: null, out: path.join(ROOT, 'tests', 'e2e', 'out'), ports: [9150, 9159], only: null, grep: null };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const next = () => {
@@ -57,8 +58,9 @@ function parseArgs(argv) {
       if (!(a > 0 && b >= a)) throw new Error('--ports erwartet z. B. 9150-9159');
       options.ports = [a, b];
     } else if (arg === '--only') options.only = next();
+    else if (arg === '--grep') options.grep = new RegExp(next(), 'i');
     else if (arg === '--help' || arg === '-h') {
-      console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 30).join('\n'));
+      console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 31).join('\n'));
       process.exit(0);
     } else throw new Error(`Unbekannte Option: ${arg}`);
   }
@@ -769,6 +771,10 @@ const GAME_CHECKS = [
       await ctx.page.setViewportSize({ width: 1280, height: 720 });
     },
   },
+  // ---------------------------------------------------------------------------
+  // Welle 2a: Bauen und Editieren (über die echte Eingabe: Z/X/C/V, Klick, Q, R, G, E)
+  // ---------------------------------------------------------------------------
+  ...require('./buildChecks.cjs').BUILD_CHECKS,
 ];
 
 // =============================================================================
@@ -816,6 +822,7 @@ async function main() {
       } else {
         await page.waitForTimeout(1000);
         for (const check of GAME_CHECKS) {
+          if (options.grep && !options.grep.test(check.name)) continue;
           const messages = [];
           let ok = true;
           const ctx = {
