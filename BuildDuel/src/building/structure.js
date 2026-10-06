@@ -18,7 +18,7 @@
 import { CONFIG } from '../config.js';
 import { bodyFits } from '../player.js';
 import {
-  KINDS, slotKey, numericSlotKey, parseSlotKey, slotShape, createShape, colliderToShape, shapesTouch,
+  KINDS, slotKey, numericSlotKey, parseSlotKey, slotShape, slotBounds, createShape, colliderToShape, shapesTouch,
   shapeBottomAt, shapeOverlapsBox, shapeTopOverRect, selectTarget, createTarget, typeOfKind, tilesToMask,
   maskToTiles, isDoorMask, fullTileMask,
 } from './grid.js';
@@ -68,12 +68,11 @@ export function createBuildingSystem(game) {
   function stateOf(character) {
     let s = states.get(character);
     if (!s) {
-      s = { target: createTarget(), hasTarget: false, nextPlaceTime: 0, lastKey: -1, generation };
+      s = { target: createTarget(), hasTarget: false, nextPlaceTime: 0, generation };
       states.set(character, s);
     } else if (s.generation !== generation) {
       s.generation = generation;
       s.hasTarget = false;
-      s.lastKey = -1;
       s.nextPlaceTime = 0;
     }
     return s;
@@ -252,11 +251,31 @@ export function createBuildingSystem(game) {
   }
 
   /**
+   * Liegt der Platz außerhalb des Bau-Bereichs? Höhe: höchstens Ebene
+   * map.buildBounds.maxLevel (sonst CONFIG.building.maxLevel). Seitlich: nur wenn die
+   * Karte game.map.buildBounds { minX, maxX, minZ, maxZ } hat (Wände auf dem Rand gehen).
+   */
+  function outsideBounds(kind, i, j, k) {
+    const bounds = game?.map?.buildBounds ?? null;
+    const maxLevel = bounds?.maxLevel ?? B.maxLevel;
+    if (Number.isFinite(maxLevel) && j > maxLevel) return true;
+    if (!bounds) return false;
+    slotBounds(kind, i, j, k, _bounds);
+    const tol = B.pieceThickness / 2 + 1e-6;
+    return (Number.isFinite(bounds.minX) && _bounds.minX < bounds.minX - tol) ||
+      (Number.isFinite(bounds.maxX) && _bounds.maxX > bounds.maxX + tol) ||
+      (Number.isFinite(bounds.minZ) && _bounds.minZ < bounds.minZ - tol) ||
+      (Number.isFinite(bounds.maxZ) && _bounds.maxZ > bounds.maxZ + tol);
+  }
+  const _bounds = {};
+
+  /**
    * Prüft, ob ein Bauteil an diesen Platz darf.
-   * @returns {string|null} Grund ('limit'|'occupied'|'material'|'blocked'|'unsupported') oder null = geht
+   * @returns {string|null} Grund ('limit'|'outside'|'occupied'|'material'|'blocked'|'unsupported') oder null = geht
    */
   function checkPlacement(type, kind, i, j, k, dir, character, options = null) {
     if (pieces.size >= B.maxPieces) return 'limit';
+    if (outsideBounds(kind, i, j, k)) return 'outside';
     if (byNum.has(numericSlotKey(kind, i, j, k))) return 'occupied';
     if (character && !character.infiniteMaterials && !options?.skipMaterial) {
       const material = options?.material ?? character.currentMaterial;
@@ -590,7 +609,6 @@ export function createBuildingSystem(game) {
     if (edit.sessionOf(character)) edit.close(character, false);
     if (character.mode !== 'build') {
       state.hasTarget = false;
-      state.lastKey = -1;
       return;
     }
     // R im Baumodus: Rampe drehen
@@ -598,17 +616,15 @@ export function createBuildingSystem(game) {
 
     const target = getTarget(character, character.buildPiece, state.target);
     state.hasTarget = true;
-    if (!cmd.primary) {
-      state.lastKey = -1;
-      return;
-    }
+    if (!cmd.primary) return;
+    // Maus gedrückt ("Turbo-Bauen"): setzt, sobald das Ziel gültig ist und die Abklingzeit
+    // um ist – auf einem neuen Platz ODER auf demselben, wenn das Teil dort zerstört wurde
+    // (Wand, die gerade zerschossen wird, kommt sofort wieder). Gültig heißt: Platz frei.
     const time = game?.time ?? 0;
-    const wants = cmd.primaryPressed || target.numKey !== state.lastKey;
-    if (wants && target.valid && time >= state.nextPlaceTime - 1e-9) {
+    if (target.valid && time >= state.nextPlaceTime - 1e-9) {
       const piece = placePiece(target.type, target.slotKey, character, character.currentMaterial,
         { dir: target.dir, charge: true });
       if (piece) {
-        state.lastKey = target.numKey;
         state.nextPlaceTime = time + B.placeCooldown;
         character.triggerAction?.('build');
         target.valid = false;

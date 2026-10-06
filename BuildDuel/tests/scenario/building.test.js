@@ -251,6 +251,77 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
     game.dispose();
   });
 
+  it('Turbo-Bauen: Maus gehalten, die Wand wird zerstört → sie kommt am selben Platz sofort wieder', () => {
+    const { game, p, f } = practice(2, 30);
+    p.infiniteMaterials = false;
+    p.materials = { wood: 100, stone: 0, metal: 0 };
+    tap(game, f, { selectBuild: 'wall' });
+    f.primary = true;
+    tap(game, f, { primaryPressed: true });
+    const first = game.building.getPieceAt('wx:0:0:7');
+    assert.ok(first, 'Wand gesetzt');
+    for (let n = 0; n < 10; n++) tap(game, f); // Maus bleibt gedrückt, Blick bleibt
+    assert.equal(game.building.pieces.size, 1, 'kein zweites Teil, solange die Wand steht');
+    first.applyDamage(1000, { attacker: null });
+    assert.equal(game.building.getPieceAt('wx:0:0:7'), null, 'zerstört');
+    tap(game, f);
+    const again = game.building.getPieceAt('wx:0:0:7');
+    assert.ok(again && again !== first, 'gleich wieder da (ohne neuen Klick)');
+    assert.equal(p.materials.wood, 100 - 2 * M.costPerPiece, 'kostet wieder Material');
+    f.primary = false;
+    game.dispose();
+  });
+
+  it('360° drehen mit gehaltener Maus (Mitte der Zelle): genau die 4 eigenen Wände, keine in Nachbar-Zellen', () => {
+    for (const pitch of [0, -0.1, -0.35]) {
+      const { game, p, f } = practice(2, 22);
+      f.pitch = pitch;
+      tap(game, f, { selectBuild: 'wall' });
+      f.primary = true;
+      tap(game, f, { primaryPressed: true });
+      for (let n = 1; n <= 60; n++) {
+        f.yaw = (n / 60) * Math.PI * 2;
+        tap(game, f);
+      }
+      f.primary = false;
+      const keys = [...game.building.pieces.keys()].sort();
+      assert.deepEqual(keys, ['wx:0:0:5', 'wx:0:0:6', 'wz:0:0:5', 'wz:1:0:5'], `Blick ${pitch}: ${keys.join(' ')}`);
+      game.dispose();
+    }
+  });
+
+  it('Wand in der Nachbar-Spalte nur, wenn man deutlich dorthin schaut', () => {
+    const { game, p, f } = practice(3.8, 22);
+    f.yaw = 0; // Blick −Z, Figur dicht an der Grenze zur Spalte x = 4..8
+    tap(game, f, { selectBuild: 'wall' });
+    assert.equal(game.building.getTarget(p, 'wall').slotKey, 'wx:0:0:5', 'geradeaus: eigene Spalte');
+    f.yaw = -0.35; // ~20° nach rechts: Anker deutlich in der Nachbar-Spalte
+    tap(game, f);
+    assert.equal(game.building.getTarget(p, 'wall').slotKey, 'wx:1:0:5', 'schräg rechts: Nachbar-Spalte');
+    game.dispose();
+  });
+
+  it('Bau-Grenzen: nicht über die Arena-Mauer hinaus und nicht höher als maxLevel ("outside" = rot)', () => {
+    const { game, p, f } = practice(-38, 30, Math.PI / 2); // Blick nach −X, Mauer bei x = −40
+    const b = game.building;
+    assert.ok(game.map.buildBounds, 'Arena hat einen Bau-Bereich');
+    tap(game, f, { selectBuild: 'floor' });
+    let t = b.getTarget(p, 'floor');
+    assert.equal(t.slotKey, 'f:-11:0:7');
+    assert.equal(t.reason, 'outside');
+    assert.equal(buildOnce(game, p, f, 'ramp'), null, 'Rampe hinter der Mauer: nein');
+    assert.ok(buildOnce(game, p, f, 'wall'), 'Wand direkt auf der Mauer-Linie geht');
+    assert.equal(b.checkPlacement('floor', 'f', -10, 0, 7, 0, p), null, 'letzte Zelle innen geht');
+    assert.equal(b.checkPlacement('wall', 'wz', -11, 0, 7, 0, p), 'outside');
+    assert.equal(b.checkPlacement('floor', 'f', 0, B.maxLevel + 1, 0, 0, p, { skipSupport: true }), 'outside', 'zu hoch');
+    assert.equal(b.checkPlacement('floor', 'f', 0, B.maxLevel, 0, 0, p, { skipSupport: true }), null, 'oberste Ebene geht');
+    // Modus darf mit force trotzdem hinstellen; Karte ohne Bau-Bereich: nur die Höhe zählt
+    assert.ok(b.placePiece('wall', 'wz:-12:0:7', null, 'wood', { instant: true, force: true }));
+    game.map.buildBounds = null;
+    assert.equal(b.checkPlacement('floor', 'f', -11, 0, 7, 0, p), null);
+    game.dispose();
+  });
+
   it('R dreht die Rampe, Q wechselt das Material', () => {
     const { game, p, f } = practice();
     tap(game, f, { selectBuild: 'ramp' });
@@ -566,7 +637,7 @@ describe('Szenario: 3000 Bauteile (Leistung)', () => {
     p.spawnAt({ x: 2, y: 0, z: 30 }, 0, 0);
     const f = driveByCommands(p, 0, 0);
     const b = game.building;
-    for (let n = 0; n < 200; n++) b.placePiece('floor', `f:${-20 + (n % 20)}:0:${-5 + Math.floor(n / 20)}`, p, 'stone', { instant: true });
+    for (let n = 0; n < 200; n++) b.placePiece('floor', `f:${-20 + (n % 20)}:0:${-5 + Math.floor(n / 20)}`, p, 'stone', { instant: true, force: true });
     const wall = buildOnce(game, p, f, 'wall');
     game.frameUpdate(1 / 60, 1);
     let stats = b.view.stats();

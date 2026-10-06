@@ -435,7 +435,8 @@ export function presentRects(cols, rows, removedMask) {
 //      In der Luft (Sprung) zählt die Fuß-Höhe (+ levelEpsilon) → 90er.
 //      Hochschauen (über lookUpPitch) = eine Ebene höher. Schaut man über eine
 //      Kante nach unten (Anker deutlich unter der eigenen Ebene) = eine tiefer.
-//   3. Wand: an der Kante der eigenen Zelle in Blickrichtung. Steht in der Zelle
+//   3. Wand: an der Kante der eigenen Zelle in Blickrichtung (in der Nachbar-Spalte nur,
+//      wenn der Anker deutlich dort liegt – wallColumnMargin). Steht in der Zelle
 //      davor eine Rampe, die von dir weg ansteigt, kommt die Wand an ihr OBERES
 //      Ende (sonst wäre der Weg die Rampe hinauf zu). Schaust du auf den Boden
 //      in der hinteren Hälfte der Zelle davor, kommt die Wand an deren Ende.
@@ -457,7 +458,7 @@ export function createTarget() {
     numKey: -1,
     slotKey: '',
     valid: false,
-    reason: null, // 'limit' | 'occupied' | 'material' | 'blocked' | 'unsupported' | null
+    reason: null, // 'limit' | 'outside' | 'occupied' | 'material' | 'blocked' | 'unsupported' | null
     anchorX: 0,
     anchorY: 0,
     anchorZ: 0,
@@ -624,7 +625,15 @@ export function selectTarget(character, type, aimDir, world, getPiece, out = cre
     const alongX = facing === 0 || facing === 2;
     const sign = facing === 0 || facing === 1 ? 1 : -1;
     const ownLine = alongX ? (sign > 0 ? ci + 1 : ci) : (sign > 0 ? ck + 1 : ck);
-    const column = alongX ? ak : ai;
+    // Spalte (entlang der Wand): die eigene – außer der Anker liegt DEUTLICH
+    // (wallColumnMargin) in der Nachbar-Spalte. Sonst käme die Wand beim Drehen um die
+    // Diagonale schon an die Kante der Nachbar-Zelle (360° = 8 Wände statt einer Box).
+    const ownColumn = alongX ? ck : ci;
+    const along = alongX ? az : ax;
+    let column = ownColumn;
+    if (along > (ownColumn + 1) * S + B.wallColumnMargin) column = ownColumn + 1;
+    else if (along < ownColumn * S - B.wallColumnMargin) column = ownColumn - 1;
+    column = clampInt(column, ownColumn - maxCells, ownColumn + maxCells);
     const frontI = alongX ? ci + sign : column;
     const frontK = alongX ? column : ck + sign;
     let far = false;

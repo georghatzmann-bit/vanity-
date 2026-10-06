@@ -314,6 +314,12 @@ export const CONFIG = deepFreeze({
     levelEpsilon: 0.3, // so knapp (m) unter der nächsten Ebene zählt man schon zu ihr (Sprung bei 90ern)
     lookUpPitch: 40, // Blick höher als 40° nach oben → Bauteil eine Ebene höher // SCHÄTZUNG
     lookDownDrop: 0.5, // liegt der Anker so weit (m) unter der eigenen Ebene (Blick über eine Kante) → eine Ebene tiefer
+    // Wand in der Nachbar-Spalte (schräg vor einem) nur, wenn der Anker so weit (m) jenseits der
+    // eigenen Spalte liegt – sonst bleibt sie an der eigenen Zelle (360° drehen = 4 Wände) // SCHÄTZUNG
+    wallColumnMargin: 0.6,
+    // Bau-Grenze nach oben: höchste Ebene (0 = Boden, 1 Ebene = 4 m). Karten können eine eigene
+    // haben (map.buildBounds.maxLevel) und seitliche Grenzen (Arena: die Mauer) // SCHÄTZUNG
+    maxLevel: 30,
     rotationSteps: 4, // R dreht die Rampe in 90°-Schritten (4 Richtungen)
     supportTolerance: 0.05, // so nah (m) müssen sich Teile kommen, um sich zu halten (Berührung)
     // Eine neue Wand, in der eine Figur steht, schiebt sie zur Seite hinaus (wie im Original –

@@ -17,7 +17,8 @@ import { createMapBuilder } from './mapBuilder.js';
 
 /**
  * @param {object} game
- * @param {object} [spec]  { size (m), borderHeight (m), borderThickness (m), borderColor }
+ * @param {object} [spec]  { size (m), borderHeight (m), borderThickness (m), borderColor,
+ *                           buildBounds (Bau-Bereich, Standard = innerhalb der Mauer), maxBuildLevel }
  * @returns {object} Karte (mit size, ground, addBox, addSlope, addLabel, dispose …)
  */
 export function createArenaMap(game, spec = {}) {
@@ -49,6 +50,8 @@ export function createArenaMap(game, spec = {}) {
     id: 'arena',
     size,
     ground,
+    // Bauen nur innerhalb der Mauer (Wände direkt auf der Mauer-Linie gehen); Höhe: CONFIG.building.maxLevel
+    buildBounds: spec.buildBounds ?? { minX: -half, maxX: half, minZ: -half, maxZ: half, maxLevel: spec.maxBuildLevel },
     /** Liegt der Punkt in der Arena (innerhalb der Mauer)? */
     contains(x, z, margin = 0) {
       return Math.abs(x) <= half - margin && Math.abs(z) <= half - margin;
