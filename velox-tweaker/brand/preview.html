@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+<meta name="color-scheme" content="dark">
+<title>VELOX Intro – Vorschau</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="intro.css">
+<link rel="stylesheet" href="kit.css">
+<link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <header class="pv-bar" id="controls">
+    <div class="pv-group" data-group="variant">
+      <span class="pv-h">Variante</span>
+      <button type="button" data-variant="full" aria-pressed="true">Voll</button>
+      <button type="button" data-variant="short">Kurz</button>
+      <button type="button" data-variant="reduced">Reduziert</button>
+      <button type="button" data-variant="still">Still</button>
+    </div>
+    <div class="pv-group" data-group="size">
+      <span class="pv-h">Fläche</span>
+      <button type="button" data-size="880x560" aria-pressed="true">Setup 880×560</button>
+      <button type="button" data-size="1360x880">VELOX.exe 1360×880</button>
+      <button type="button" data-size="fill">Fenster</button>
+    </div>
+    <div class="pv-group" data-group="place">
+      <span class="pv-h">Satz</span>
+      <button type="button" data-place="hero" aria-pressed="true">Startbild</button>
+      <button type="button" data-place="header">Installer</button>
+    </div>
+    <div class="pv-group">
+      <span class="pv-h">Steuern</span>
+      <button type="button" id="pv-replay">Neu starten</button>
+      <button type="button" id="pv-skip">skip()</button>
+      <button type="button" id="pv-mute" aria-pressed="false">Ton aus</button>
+      <button type="button" id="pv-done">done()</button>
+    </div>
+    <div class="pv-group">
+      <span class="pv-h">Status</span>
+      <input id="pv-status" type="text" value="System wird gelesen" aria-label="Statustext">
+      <button type="button" id="pv-status-set">status()</button>
+      <button type="button" data-progress="null">progress(null)</button>
+      <button type="button" data-progress="0.25">0,25</button>
+      <button type="button" data-progress="0.6">0,6</button>
+      <button type="button" data-progress="1">1</button>
+    </div>
+    <output class="pv-log" id="pv-log" aria-live="polite"></output>
+  </header>
+  <main class="pv-main"><div id="stage" class="pv-stage"></div></main>
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

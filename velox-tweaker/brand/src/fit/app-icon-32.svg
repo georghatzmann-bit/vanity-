@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>VELOX</title>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="5.9" fill="#1A1B1F" stroke="#45484F" stroke-width="1"/>
+  <path fill="#ECE9E2" d="M9.784 6L14.784 6L15.728 15L10.942 15ZM17.853 15L21.584 6L26.584 6L22.638 15Z"/><path fill="#FF5A1F" d="M13.899 17L15.174 17L19.921 17L15.616 26L10.416 26L9.153 17Z"/>
+</svg>

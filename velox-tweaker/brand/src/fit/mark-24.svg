@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <title>VELOX</title>
+  <rect x="0.5" y="0.5" width="23" height="23" rx="4.300000000000001" fill="#1A1B1F" stroke="#45484F" stroke-width="1"/>
+  <g shape-rendering="crispEdges">
+    <rect x="4" y="4" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="18" y="4" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="4" y="5" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="18" y="5" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="5" y="6" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="17" y="6" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="5" y="7" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="17" y="7" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="6" y="8" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="16" y="8" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="6" y="9" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="16" y="9" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="7" y="10" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="15" y="10" width="3" height="1" fill="#ECE9E2"/>
+    <rect x="6" y="13" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="12" y="13" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="7" y="14" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="11" y="14" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="7" y="15" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="11" y="15" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="8" y="16" width="5" height="1" fill="#FF5A1F"/>
+    <rect x="8" y="17" width="5" height="1" fill="#FF5A1F"/>
+    <rect x="9" y="18" width="3" height="1" fill="#FF5A1F"/>
+    <rect x="9" y="19" width="3" height="1" fill="#FF5A1F"/>
+  </g>
+</svg>

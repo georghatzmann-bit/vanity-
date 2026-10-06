@@ -1,0 +1,26 @@
+/* VELOX installer kit - the pieces that sit in intro.slot under the wordmark:
+ * mono readouts (Ziel, Größe, Version) and the tick-row progress (ticks.js).
+ * Imports the --vx-* palette only. Sentence case, no tracking, no uppercase labels. */
+@import url("tokens.css");
+
+/* readouts: a two-column list, labels in ash, values in bone, all mono and tabular.
+ *   <dl class="vx-readout"><dt>Ziel</dt><dd>C:\Program Files\VELOX</dd> ...</dl> */
+.vx-readout {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 16px; margin: 0;
+  font: 400 12px/1.8 var(--vx-mono); font-variant-numeric: tabular-nums;
+}
+.vx-readout dt { color: var(--vx-ash-2); }
+.vx-readout dd { margin: 0; color: var(--vx-bone); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* tick-row progress */
+.vx-ticks { display: block; min-width: 160px; }
+.vx-ticks-meta {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin: 0 0 10px;
+  font: 400 13px/1.4 var(--vx-font); color: var(--vx-ash);
+}
+.vx-ticks-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.vx-ticks-read { display: inline-flex; gap: 14px; font: 400 12px/1 var(--vx-mono); font-variant-numeric: tabular-nums; color: var(--vx-ash-2); white-space: nowrap; }
+.vx-ticks-pct { color: var(--vx-bone); min-width: 5ch; text-align: right; }
+.vx-ticks-step:empty { display: none; }
+.vx-ticks-canvas { display: block; width: 100%; height: var(--vx-ticks-h, 9px); }   /* ticks.js resizes it to whole device pixels */
+.vx-ticks--fail .vx-ticks-status { color: var(--vx-risk); }
