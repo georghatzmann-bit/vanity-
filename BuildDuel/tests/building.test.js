@@ -8,7 +8,7 @@ import {
   presentRects, isDoorMask, tilesToMask, maskToTiles, fullTileMask, selectTarget, createTarget, rampSpec, roofSpec,
   RAMP_V_THICKNESS, ROOF_V_THICKNESS, levelIndex, cellIndex,
 } from '../src/building/grid.js';
-import { pieceColliderSpecs, pickTile, isDoorPiece } from '../src/building/pieces.js';
+import { pieceColliderSpecs, pickTile, isDoorPiece, halfRampDirection } from '../src/building/pieces.js';
 
 const S = CONFIG.world.gridCellSize;
 const H = CONFIG.world.wallHeight;
@@ -204,9 +204,75 @@ describe('Bau-Raster: Edit-Felder', () => {
     const ramp = { type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir: 3, editMask: tilesToMask([0, 2]) };
     const rs = pieceColliderSpecs(ramp);
     assert.equal(rs.length, 1, 'halbe Rampe');
-    assert.deepEqual([rs[0].spec.clip.minX, rs[0].spec.clip.maxX], [S / 2, S]);
+    assert.deepEqual([rs[0].spec.minX, rs[0].spec.maxX, rs[0].spec.minZ, rs[0].spec.maxZ], [S / 2, S, 0, S]);
+    assert.deepEqual([rs[0].spec.dir, rs[0].spec.rise], [3, H], 'gleiche Richtung, ganze Höhe');
     const roof = { type: 'roof', kind: 'c', i: 0, j: 1, k: 0, dir: 0, editMask: tilesToMask([1]) };
     assert.equal(pieceColliderSpecs(roof).length, 2, 'Dach ohne ein Viertel');
+  });
+
+  it('Rampen-Edit: 1 Feld weg = Ecktreppe (Rampe – Podest – Rampe), lückenlos eine Ebene hoch', () => {
+    // für jede Richtung und jedes entfernte Feld: Höhen über die Kollision prüfen
+    for (let dir = 0; dir < 4; dir++) {
+      for (let removed = 0; removed < 4; removed++) {
+        const ramp = { type: 'ramp', kind: 'r', i: 2, j: 1, k: -1, dir, editMask: 1 << removed };
+        const specs = pieceColliderSpecs(ramp);
+        const what = `Richtung ${dir}, Feld ${removed} weg`;
+        assert.deepEqual(specs.map((s) => s.stair), ['low', 'landing', 'high'], what);
+        const world = new CollisionWorld(CONFIG);
+        for (const s of specs) {
+          if (s.type === 'box') world.addBox(s.min, s.max);
+          else world.addSlope(s.spec);
+        }
+        const x0 = 2 * S;
+        const z0 = -1 * S;
+        const y0 = 1 * H;
+        const center = (t) => ({ x: x0 + ((t % 2) + 0.5) * (S / 2), z: z0 + (Math.floor(t / 2) + 0.5) * (S / 2) });
+        const corner = 3 - removed;
+        const top = (p) => world.surfaceHeight(p.x, p.z, y0 + H + 1);
+        // Podest im Eck-Feld auf halber Höhe, das entfernte Feld frei
+        assert.close(top(center(corner)), y0 + H / 2, 1e-6, `${what}: Podest`);
+        assert.ok(top(center(removed)) < y0 - 1, `${what}: Loch`);
+        // die beiden Ende-Felder: eins steigt von y0 zum Podest, das andere vom Podest auf y0 + H
+        const ends = [corner ^ 1, corner ^ 2].map((t) => ({ t, h: top(center(t)) }));
+        ends.sort((a, b) => a.h - b.h);
+        assert.close(ends[0].h, y0 + H / 4, 1e-6, `${what}: untere Treppe (Mitte)`);
+        assert.close(ends[1].h, y0 + (3 * H) / 4, 1e-6, `${what}: obere Treppe (Mitte)`);
+        // lückenlos: an den Kanten zum Podest genau halbe Höhe
+        for (const e of ends) {
+          const a = center(e.t);
+          const c = center(corner);
+          const edge = { x: (a.x + c.x) / 2, z: (a.z + c.z) / 2 };
+          assert.close(top({ x: edge.x + (a.x - c.x) * 0.02, z: edge.z + (a.z - c.z) * 0.02 }), y0 + H / 2, 0.06, `${what}: Kante Feld ${e.t}`);
+        }
+        // 45°: wie die ganze Rampe
+        for (const s of specs.filter((x) => x.type === 'slope')) assert.close(s.spec.rise, H / 2, 1e-9);
+        // unteres Ende = das Feld, das bei der ganzen Rampe tiefer lag
+        const full = new CollisionWorld(CONFIG);
+        full.addSlope(rampSpec(2, 1, -1, dir));
+        const fullTop = (t) => full.surfaceHeight(center(t).x, center(t).z, y0 + H + 1);
+        assert.ok(fullTop(ends[0].t) < fullTop(ends[1].t), `${what}: unten bleibt unten`);
+      }
+    }
+  });
+
+  it('Rampen-Edit: 2 Felder in einer Reihe weg = halbe Rampe; Richtung = Wahl-Reihenfolge (editDir), sonst gedreht', () => {
+    const half = (dir, removed, editDir = null) => {
+      const specs = pieceColliderSpecs({ type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir, editMask: tilesToMask(removed), editDir });
+      assert.equal(specs.length, 1);
+      return specs[0].spec;
+    };
+    // Streifen entlang der alten Richtung: bleibt (oder umgedreht, wenn so gewählt)
+    assert.equal(half(0, [0, 1]).dir, 0);
+    assert.equal(half(0, [0, 1], 2).dir, 2, 'von rechts nach links gewählt → steigt nach −X');
+    assert.equal(half(0, [0, 1], 1).dir, 0, 'Richtung quer zum Streifen zählt nicht');
+    // Streifen quer zur alten Richtung: steigt entlang des Streifens
+    const across = half(0, [1, 3]);
+    assert.deepEqual([across.minX, across.maxX, across.minZ, across.maxZ], [0, S / 2, 0, S]);
+    assert.equal(across.dir, 1, 'ohne Wahl: 90° weiter gedreht');
+    assert.equal(half(0, [1, 3], 3).dir, 3);
+    assert.equal(halfRampDirection(2, null, false), 3);
+    // Diagonale bleibt die alte Form (zwei Stücke der ganzen Rampe)
+    assert.equal(pieceColliderSpecs({ type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir: 0, editMask: tilesToMask([0, 3]) }).length, 2);
   });
 
   it('pickTile: Feld unter dem Fadenkreuz (Wand, Boden, Rampe, Dach)', () => {

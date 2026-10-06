@@ -418,6 +418,87 @@ describe('Szenario: Edit und Türen', () => {
     game.dispose();
   });
 
+  it('Ecktreppe: Rampe mit G editieren (1 Feld weg) und zu Fuß hinauf – vor, 90° drehen, weiter bis oben', () => {
+    const game = new Game({ headless: true, seed: 1 });
+    const p = game.addCharacter({ name: 'Treppe', isPlayer: false, position: { x: 1, y: 0, z: -1.6 }, yaw: Math.PI, brain: null });
+    const f = driveByCommands(p, Math.PI, 0);
+    const b = game.building;
+    const ramp = b.placePiece('ramp', 'r:0:0:0', p, 'wood', { dir: 0, instant: true, force: true }); // steigt nach +X
+    assert.ok(b.placePiece('floor', 'f:1:1:0', p, 'wood', { instant: true, force: true }), 'Boden oben dahinter');
+    // Edit: G auf die Rampe, Feld 1 (hinten links, oben an der Rampe) anklicken, G
+    tap(game, f, { selectBuild: 'ramp' });
+    lookAt(p, f, { x: 3, y: 3, z: 1 });
+    tap(game, f, { editPressed: true });
+    assert.equal(p.mode, 'edit');
+    tap(game, f);
+    assert.equal(b.editSession(p).hover, 1);
+    tap(game, f, { primaryPressed: true });
+    tap(game, f, { editPressed: true });
+    assert.equal(ramp.editMask, 1 << 1, 'Feld 1 entfernt');
+    assert.equal(ramp.colliders.length, 3, 'Ecktreppe: Rampe, Podest, Rampe');
+    // hinauf: geradeaus (+Z) die untere Treppe hoch aufs Podest …
+    f.yaw = Math.PI;
+    f.pitch = 0;
+    f.moveZ = 1;
+    tap(game, { ...f, selectSlot: 0 });
+    let maxStuck = 0;
+    let last = p.position.clone();
+    const watch = () => {
+      const moved = p.position.distanceTo(last);
+      last.copy(p.position);
+      maxStuck = moved < 1e-4 ? maxStuck + 1 : 0;
+    };
+    const ok1 = runUntil(game, () => { watch(); return p.position.z >= 3; }, 3);
+    assert.ok(ok1, `aufs Podest: ${p.position.toArray().map((v) => v.toFixed(2))}`);
+    assert.close(p.position.y, H / 2, 0.05, 'Podest auf halber Höhe');
+    // … 90° nach rechts drehen (+X) und die obere Treppe hinauf auf den Boden dahinter
+    f.yaw = -Math.PI / 2;
+    const ok2 = runUntil(game, () => { watch(); return p.position.x >= 5; }, 3);
+    f.moveZ = 0;
+    game.simulate(0.2);
+    assert.ok(ok2, `oben angekommen: ${p.position.toArray().map((v) => v.toFixed(2))}`);
+    assert.close(p.position.y, H + B.pieceThickness / 2, 0.02, 'eine Ebene hoch (auf dem Boden dahinter)');
+    assert.ok(p.grounded && maxStuck < 3, `nie hängen geblieben (${maxStuck})`);
+    // wieder hinunter (umgekehrt) – ohne Sprung
+    f.yaw = Math.PI / 2;
+    f.moveZ = 1;
+    runUntil(game, () => p.position.x <= 1, 3);
+    f.yaw = 0;
+    runUntil(game, () => p.position.z <= -1, 3);
+    f.moveZ = 0;
+    game.simulate(0.3);
+    assert.ok(p.position.z <= -1 && Math.abs(p.position.y) < 0.02 && p.health === 100, `unten: ${p.position.toArray().map((v) => v.toFixed(2))}`);
+    game.dispose();
+  });
+
+  it('halbe Rampe: zwei Felder nacheinander wählen = Richtung (vom ersten zum zweiten Feld hinauf)', () => {
+    const game = new Game({ headless: true, seed: 1 });
+    const p = game.addCharacter({ name: 'Edit', isPlayer: false, position: { x: 2, y: 0, z: 7 }, yaw: 0, brain: null });
+    const f = driveByCommands(p, 0, 0);
+    const b = game.building;
+    const ramp = b.placePiece('ramp', 'r:0:0:0', p, 'wood', { dir: 0, instant: true, force: true }); // steigt nach +X
+    // Feld-Mitten auf der ganzen Rampe (Spalte entlang x, Reihe entlang z)
+    const tile = (t) => ({ x: ((t % 2) + 0.5) * (S / 2), y: ((t % 2) + 0.5) * (S / 2), z: (Math.floor(t / 2) + 0.5) * (S / 2) });
+    tap(game, f, { selectBuild: 'ramp' });
+    lookAt(p, f, tile(3));
+    tap(game, f, { editPressed: true });
+    tap(game, f);
+    // hintere Reihe quer: erst Feld 3, dann Feld 2 → bleibende Reihe 0/1 steigt nach −X
+    tap(game, f, { primaryPressed: true });
+    lookAt(p, f, tile(2));
+    tap(game, f);
+    tap(game, f, { primaryPressed: true });
+    tap(game, f, { editPressed: true });
+    assert.equal(ramp.editMask, (1 << 2) | (1 << 3));
+    assert.equal(ramp.editDir, 2, 'von Feld 3 nach Feld 2 = −X');
+    assert.equal(ramp.colliders.length, 1);
+    const c = ramp.colliders[0];
+    assert.close(c.minZ, 0, 1e-9);
+    assert.close(c.maxZ, S / 2, 1e-9);
+    assert.ok(c.a < 0, 'steigt nach −X');
+    game.dispose();
+  });
+
   it('Fenster: einzelnes Feld entfernen, Strahl geht durch das Loch; Edit beim Loslassen', () => {
     const { game, p, f, wall } = wallInFront();
     game.settings.controls.editOnRelease = true;

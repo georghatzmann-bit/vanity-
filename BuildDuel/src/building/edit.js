@@ -13,6 +13,9 @@
 //      das Loslassen von G. Waffe/Bauteil wählen bestätigt auch und verlässt den Edit.
 //   5. Wand: genau die mittleren unteren 2 Felder entfernt = Tür. E öffnet/schließt
 //      sie (jeder darf Türen benutzen).
+//   6. Rampe: 1 Feld entfernt = Ecktreppe; 2 Felder nebeneinander entfernt = halbe
+//      Rampe – sie steigt in die Richtung, in der man die zwei Felder gewählt hat
+//      (vom ersten zum zweiten Feld, z. B. Ziehen von unten nach oben).
 // Im Tick, in dem G den Edit öffnet (character.editOpenedTick), zählt dasselbe G
 // nicht gleich als "bestätigen".
 // =============================================================================
@@ -94,6 +97,8 @@ export function createEditController(system) {
       hover: -1,
       paint: null, // true = beim Ziehen auswählen, false = abwählen
       lastPaint: -1,
+      prevAdded: -1, // die zwei zuletzt GEWÄHLTEN Felder (Rampe: Richtung der halben Rampe)
+      lastAdded: -1,
     };
     sessions.set(character, session);
     candidates.delete(character);
@@ -108,17 +113,44 @@ export function createEditController(system) {
     }
   }
 
+  // Rampe: Richtung aus der Wahl-Reihenfolge (vom vorletzten zum letzten gewählten Feld),
+  // wenn genau diese zwei nebeneinander liegenden Felder gewählt sind; sonst die alte
+  function rampEditDir(session, piece) {
+    const a = session.prevAdded;
+    const b = session.lastAdded;
+    if (a >= 0 && b >= 0 && session.selection === ((1 << a) | (1 << b))) {
+      const dx = (b % 2) - (a % 2);
+      const dz = Math.floor(b / 2) - Math.floor(a / 2);
+      if (Math.abs(dx) + Math.abs(dz) === 1) return dx === 1 ? 0 : dz === 1 ? 1 : dx === -1 ? 2 : 3;
+    }
+    return session.selection === (piece.editMask | 0) ? piece.editDir ?? null : null;
+  }
+
   /** Auswahl übernehmen (sofort). Alle Felder entfernen geht nicht. */
   function confirm(character) {
     const session = sessions.get(character);
     if (!session) return false;
     const piece = session.piece;
     const full = fullTileMask(piece.type);
-    if (!piece.removed && session.selection !== full && session.selection !== (piece.editMask | 0)) {
-      system.setEdit(piece, session.selection);
+    const editDir = piece.type === 'ramp' ? rampEditDir(session, piece) : null;
+    const changed = session.selection !== (piece.editMask | 0) || (piece.type === 'ramp' && editDir !== (piece.editDir ?? null));
+    if (!piece.removed && session.selection !== full && changed) {
+      system.setEdit(piece, session.selection, editDir);
     }
     leave(character);
     return true;
+  }
+
+  // Feld umschalten (Klick oder Ziehen); merkt sich die Reihenfolge der gewählten Felder
+  function toggleTile(session, tile, select) {
+    const bit = 1 << tile;
+    if (select) {
+      session.selection |= bit;
+      session.prevAdded = session.lastAdded;
+      session.lastAdded = tile;
+    } else {
+      session.selection &= ~bit;
+    }
   }
 
   /** Jeden Tick für eine Figur im Edit-Modus (aus building.updateCharacter). */
@@ -154,17 +186,19 @@ export function createEditController(system) {
     session.hover = pickTile(piece, _origin, _dir, B.editReach * 1.5);
 
     // Rechtsklick: alles zurücksetzen
-    if (cmd.secondaryPressed) session.selection = 0;
+    if (cmd.secondaryPressed) {
+      session.selection = 0;
+      session.prevAdded = -1;
+      session.lastAdded = -1;
+    }
 
     // Klicken / Ziehen
     if (cmd.primaryPressed && session.hover >= 0) {
-      const bit = 1 << session.hover;
-      session.paint = (session.selection & bit) === 0;
-      session.selection = session.paint ? session.selection | bit : session.selection & ~bit;
+      session.paint = (session.selection & (1 << session.hover)) === 0;
+      toggleTile(session, session.hover, session.paint);
       session.lastPaint = session.hover;
     } else if (cmd.primary && session.paint !== null && session.hover >= 0 && session.hover !== session.lastPaint) {
-      const bit = 1 << session.hover;
-      session.selection = session.paint ? session.selection | bit : session.selection & ~bit;
+      toggleTile(session, session.hover, session.paint);
       session.lastPaint = session.hover;
     }
     if (!cmd.primary) {

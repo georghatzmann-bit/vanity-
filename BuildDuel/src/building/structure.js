@@ -154,7 +154,9 @@ export function createBuildingSystem(game) {
   // Wie weit darf das Teil die Figur anheben? Normal: nur so viel wie eine Stufe
   // (Füße stecken knapp drin). Eine Rampe, die man in die EIGENE Zelle setzt, hebt
   // den Bauenden ganz auf die Rampe (wie im Original).
+  let editLift = 0; // > 0 nur während settleAfterEdit: so weit darf ein Edit Figuren anheben
   function liftLimit(c, shape, builder) {
+    if (editLift > 0) return editLift;
     return c === builder && shape.kind === 'ramp' ? Infinity : CONFIG.player.stepHeight;
   }
 
@@ -355,6 +357,7 @@ export function createBuildingSystem(game) {
       placedAt: game?.time ?? 0,
       edit: new Set(),
       editMask: 0,
+      editDir: null, // Rampe: gewählte Richtung der halben Rampe (Edit), sonst null
       doorOpen: false,
       doorChangedAt: -10,
       doorCollider: null,
@@ -385,6 +388,7 @@ export function createBuildingSystem(game) {
     if (options.edit) {
       piece.editMask = tilesToMask(options.edit) & fullTileMask(type);
       if (piece.editMask === fullTileMask(type)) piece.editMask = 0;
+      if (type === 'ramp' && piece.editMask && Number.isInteger(options.editDir)) piece.editDir = ((options.editDir % 4) + 4) % 4;
       piece.edit = new Set(maskToTiles(piece.editMask));
       if (piece.editMask) editedPieces.add(piece);
       if (isDoorPiece(piece)) doors.add(piece);
@@ -522,13 +526,37 @@ export function createBuildingSystem(game) {
   // Edit (Felder) und Türen
   // ---------------------------------------------------------------------------
 
-  /** Felder eines Teils entfernen (mask = entfernte Felder). 0 = ganzes Teil. */
-  function setEdit(piece, mask) {
+  /**
+   * Figuren, die nach einem Edit in der neuen Form stecken (z. B. auf einer Rampe, die zur
+   * Ecktreppe wird; in einer Tür, die zurückgesetzt wird): auf die Form heben (bis zu einer
+   * halben Ebene) bzw. aus der Wand schieben – nie darin stecken lassen.
+   */
+  function settleAfterEdit(piece) {
+    const list = game?.characters;
+    if (!list || !world) return;
+    editLift = CONFIG.world.wallHeight / 2 + 0.01;
+    try {
+      for (const collider of piece.colliders) {
+        if (!collider.enabled) continue;
+        colliderToShape(collider, _shape);
+        settleCharacters(_shape, piece.kind, null);
+      }
+    } finally {
+      editLift = 0;
+    }
+  }
+
+  /**
+   * Felder eines Teils entfernen (mask = entfernte Felder). 0 = ganzes Teil.
+   * editDir (nur Rampen): gewählte Richtung für eine halbe Rampe (siehe pieces.js), sonst null.
+   */
+  function setEdit(piece, mask, editDir = piece.editDir ?? null) {
     if (piece.removed) return false;
     mask &= fullTileMask(piece.type);
     if (mask === fullTileMask(piece.type)) return false;
     const wasDoor = isDoorPiece(piece);
     piece.editMask = mask;
+    piece.editDir = piece.type === 'ramp' && mask && Number.isInteger(editDir) ? ((editDir % 4) + 4) % 4 : null;
     piece.edit = new Set(maskToTiles(mask));
     if (mask) editedPieces.add(piece);
     else editedPieces.delete(piece);
@@ -541,6 +569,7 @@ export function createBuildingSystem(game) {
       piece.doorOpen = false;
     }
     makeColliders(piece);
+    settleAfterEdit(piece);
     view?.refresh(piece);
     game?.events?.emit?.('pieceEdited', { piece, owner: piece.owner });
     return true;

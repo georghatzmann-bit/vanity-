@@ -346,7 +346,7 @@ const BUILD_CHECKS = [
     },
   },
   {
-    name: 'Edit-Formen: Boden mit Loch, halbe Rampe, Eck-Rampe, Dach ohne Viertel (Bild = Kollision)',
+    name: 'Edit-Formen: Boden mit Loch, halbe Rampe, Ecktreppe, Dach ohne Viertel (Bild = Kollision)',
     async run(ctx) {
       await setup(ctx);
       const r = await ctx.page.evaluate(() => {
@@ -357,7 +357,7 @@ const BUILD_CHECKS = [
         const pieces = [
           put('floor', 'f:-3:0:5', [3]),
           put('ramp', 'r:-2:0:5', [0, 2], 3, 'stone'), // halbe Rampe (rechte Hälfte)
-          put('ramp', 'r:-1:0:5', [1], 3), // Eck-Rampe (L-Form)
+          put('ramp', 'r:-1:0:5', [1], 3), // Ecktreppe (L-Form: Rampe – Podest – Rampe)
           put('roof', 'c:0:0:5', [0], 0, 'metal'), // Dach ohne ein Viertel
           put('wall', 'wx:1:0:6', [0, 1, 2]), // halbe Wand (obere Reihe weg)
         ];
@@ -367,7 +367,13 @@ const BUILD_CHECKS = [
           const hit = b.game.world.raycast({ x, y: 20, z }, down, 30, { skipTerrain: true });
           return hit && hit.collider?.data?.kind === 'piece' ? hit.collider.data.ref.slotKey : null;
         };
+        const heightAt = (x, z) => {
+          const hit = b.game.world.raycast({ x, y: 20, z }, down, 30, { skipTerrain: true });
+          return hit ? Math.round(hit.point.y * 100) / 100 : null;
+        };
         const probes = {
+          // Ecktreppe (steigt nach −Z, Feld 1 weg): Feld 3 unten (1 m in der Mitte), Podest 2 m, Feld 0 oben (3 m)
+          stairLow: heightAt(-1, 23), stairLanding: heightAt(-3, 23), stairHigh: heightAt(-3, 21),
           floorHole: hitAt(-12 + 3, 20 + 3), floorSolid: hitAt(-12 + 1, 20 + 1),
           halfMissing: hitAt(-8 + 1, 20 + 2), halfPresent: hitAt(-8 + 3, 20 + 2),
           cornerMissing: hitAt(-4 + 3, 20 + 1), cornerPresent: hitAt(-4 + 1, 20 + 1),
@@ -380,10 +386,54 @@ const BUILD_CHECKS = [
       ctx.assert(r.ok, 'alle Teile gesetzt');
       ctx.assert(!p.floorHole && p.floorSolid === 'f:-3:0:5', `Boden: Loch frei, Rest fest ${JSON.stringify(p)}`);
       ctx.assert(!p.halfMissing && p.halfPresent === 'r:-2:0:5', 'halbe Rampe');
-      ctx.assert(!p.cornerMissing && p.cornerPresent === 'r:-1:0:5', 'Eck-Rampe');
+      ctx.assert(!p.cornerMissing && p.cornerPresent === 'r:-1:0:5', 'Ecktreppe: Loch und Treppe');
+      ctx.assert(p.stairLow === 1 && p.stairLanding === 2 && p.stairHigh === 3, `Ecktreppe: Höhen ${p.stairLow} / ${p.stairLanding} / ${p.stairHigh}`);
       ctx.assert(!p.roofMissing && p.roofPresent === 'c:0:0:5', 'Dach-Viertel');
       await settle(ctx);
       await ctx.shot('b13-edit-formen');
+    },
+  },
+  {
+    name: 'Ecktreppe: Rampe (C), G + 1 Feld + G, mit W hinauf, 90° drehen, oben ankommen',
+    async run(ctx) {
+      await setup(ctx);
+      const r = await ctx.page.evaluate(() => {
+        const b = window.__b;
+        b.clear();
+        // Rampe vor sich (Zelle 2, 0, 6: x 8..12, z 24..28), steigt nach −Z
+        b.spawn(10, 0, 30.5, 0, 0);
+        const key = b.build('ramp');
+        const ramp = b.building.getPieceAt(key);
+        b.step(200); // fertig aufgebaut
+        // G auf das Feld hinten rechts (x 10..12, z 24..26), anklicken, G
+        b.aimAt({ x: 11, y: 3, z: 25 });
+        b.press('edit');
+        b.step(2);
+        const hover = b.building.editSession(b.p)?.hover;
+        b.press('primary');
+        b.press('edit');
+        // Boden oben dahinter (Ziel der Treppe)
+        b.building.placePiece('floor', 'f:2:1:5', b.p, 'wood', { instant: true, force: true });
+        // von Osten in die untere Treppe (geht nach −X), aufs Podest, 90° nach rechts (−Z), hinauf
+        b.spawn(13.6, 0, 27, Math.PI / 2, 0);
+        b.hold('moveForward', true);
+        let landing = null;
+        for (let n = 0; n < 240 && b.p.position.x > 9; n++) b.step();
+        landing = { x: b.p.position.x, y: b.p.position.y };
+        b.face(0, 0);
+        for (let n = 0; n < 240 && b.p.position.z > 22.5; n++) b.step();
+        b.hold('moveForward', false);
+        b.step(20);
+        const end = { x: b.p.position.x, y: b.p.position.y, z: b.p.position.z, grounded: b.p.grounded };
+        b.viewFrom(16, 3, 33, { x: 10, y: 1.5, z: 26 });
+        return { key, hover, mask: ramp?.editMask, colliders: ramp?.colliders.length, landing, end };
+      });
+      ctx.assert(r.key === 'r:2:0:6' && r.hover === 1, `Rampe ${r.key}, Feld unter dem Fadenkreuz ${r.hover}`);
+      ctx.assert(r.mask === 2 && r.colliders === 3, `Ecktreppe (Maske ${r.mask}, ${r.colliders} Teile)`);
+      ctx.assert(Math.abs(r.landing.y - 2) < 0.05, `auf dem Podest: ${JSON.stringify(r.landing)}`);
+      ctx.assert(Math.abs(r.end.y - 4.1) < 0.05 && r.end.z <= 22.5 && r.end.grounded, `oben: ${JSON.stringify(r.end)}`);
+      await settle(ctx);
+      await ctx.shot('b13b-ecktreppe');
     },
   },
   {

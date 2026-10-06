@@ -359,12 +359,12 @@ Dateien in `src/building/`:
 building.getTarget(character, type = character.buildPiece, out?) // → Ziel (siehe unten), mit Prüfung
 building.checkPlacement(type, kind, i, j, k, dir, character, options?) // → Grund oder null
 building.placePiece(type, slotKey, owner, material, options)
-   // options: { dir (Rampe 0..3), edit (Feld-Liste), instant (gleich 100 %, kein Aufbau),
+   // options: { dir (Rampe 0..3), edit (Feld-Liste), editDir (Rampe: Richtung der halben Rampe), instant (gleich 100 %, kein Aufbau),
    //            force (ohne Halt-/Figuren-Prüfung, z. B. vorgebaute Box), charge (Material abziehen) }
    // → Bauteil oder null. Modi stellen Teile mit { instant: true } (und evtl. force) hin.
 building.removePiece(piece, { by, collapsed, silent, noCollapse })   // zerstört (mit Ereignis + Halt-Prüfung)
 building.getPiece(kind, i, j, k), building.getPieceAt(slotKey), building.pieces (Map)
-building.setEdit(piece, mask)           // entfernte Felder als Bitmaske (0 = ganzes Teil)
+building.setEdit(piece, mask, editDir?) // entfernte Felder als Bitmaske (0 = ganzes Teil); editDir nur Rampe
 building.setDoorOpen(piece, open)       // false, wenn jemand in der Tür steht
 building.canEdit(c), building.closeEdit(c)   // closeEdit ÜBERNIMMT die gewählten Felder (wie im Original)
 building.editSession(c)                 // { piece, selection (Bitmaske), hover (Feld) } oder null
@@ -381,7 +381,8 @@ building.doors, building.editedPieces   // Sets; building.view = Grafik oder nul
 `'occupied'` | `'material'` | `'blocked'` (Figur im Weg) | `'unsupported'` (kein Halt) | `null`.
 
 **Bauteil-Felder** (zusätzlich zu §9): `kind` (`'f'|'wx'|'wz'|'r'|'c'`), `numKey`, `editMask`
-(Bitmaske der entfernten Felder, passend zu `edit`), `isDoor` (Getter), `doorCollider`,
+(Bitmaske der entfernten Felder, passend zu `edit`), `editDir` (Rampe: gewählte Richtung der halben
+Rampe oder `null`), `isDoor` (Getter), `doorCollider`,
 `buildTime`, `placedAt`, `neighbors` (Set berührender Teile), `grounded` (berührt Gelände oder
 Karten-Teile), `collapsing` (fällt gleich), `removed`, `shape` (ganze Form für Halt).
 `applyDamage(amount, info)` → `{ amount, destroyed }`; `info.attacker` landet als `by` im Ereignis.
@@ -420,6 +421,14 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
 - Edit-Felder: Wand 3 x 3 (Nummer = Reihe·3 + Spalte, Reihe 0 oben, Spalte 0 = kleines x bzw. z),
   sonst 2 x 2 (Spalte entlang x, Reihe entlang z). Tür = genau `wallDoorCells` entfernt; das
   Tür-Blatt ist ein eigener Collider (offen = ausgeschaltet). Alle Felder entfernen geht nicht.
+  **Rampe:** 1 Feld entfernt = **Ecktreppe** (pieces.js `rampEditSpecs`): kurze 45°-Rampe vom unteren
+  Ende-Feld (das bei der ganzen Rampe tiefer lag) auf ein flaches Podest im Eck-Feld (halbe Höhe,
+  gegenüber vom entfernten Feld), 90° gedreht die zweite kurze Rampe ganz hinauf. 2 Felder
+  nebeneinander entfernt = **halbe Rampe** über den übrigen Streifen (2 m breit, 45°); Richtung =
+  `editDir` (im Edit: vom vorletzten zum letzten gewählten Feld = "hinauf"), sonst die alte
+  Richtung, wenn sie entlang des Streifens liegt, sonst 90° weiter. Sonst (1 Feld übrig, Diagonale):
+  Stücke der ganzen Rampe. Edit-Kacheln/`pickTile` liegen immer auf der ganzen Rampe. Wer nach
+  einem Edit in der neuen Form steckt, wird bis zu einer halben Ebene angehoben (Wand: hinausgeschoben).
   Im Tick `editOpenedTick` bestätigt G nicht. `settings.controls.editOnRelease`: Loslassen von G
   bestätigt; `resetEditAfterConfirm`: ein neuer Edit beginnt mit leerer Auswahl.
 - E (`usePressed`): Tür unter dem Fadenkreuz (bis `useReach`) oder die nächste bis

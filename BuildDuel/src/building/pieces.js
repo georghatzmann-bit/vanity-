@@ -4,8 +4,9 @@
 // Für jedes Bauteil (Wand, Boden, Rampe, Dach) steht hier:
 //   - pieceColliderSpecs(): aus welchen Kollisions-Teilen es besteht – je nach
 //     Edit (entfernte Felder). Wand: Boxen (zusammengefasst), Tür: zusätzlich ein
-//     Tür-Blatt (nur wenn zu). Boden: Boxen. Rampe/Dach: zugeschnittene Schrägen
-//     (halbe Rampe, Eck-Rampe, Dach-Viertel …).
+//     Tür-Blatt (nur wenn zu). Boden: Boxen. Dach: zugeschnittene Schrägen
+//     (Dach-Viertel). Rampe: eigene Formen (siehe rampEditSpecs): 1 Feld weg =
+//     Ecktreppe, 2 Felder in einer Reihe weg = halbe Rampe (Richtung frei wählbar).
 //   - Formen (BufferGeometry) GENAU aus denselben Teilen → Bild = Kollision.
 //   - Bilder (Texturen) per Canvas: Holz (Bretter), Stein (Fugen), Metall (Nieten),
 //     dazu je eine Version mit Rissen (beschädigt).
@@ -75,6 +76,7 @@ export function pieceColliderSpecs(piece) {
     out.push({ type: 'slope', spec: base });
     return out;
   }
+  if (piece.type === 'ramp' && rampEditSpecs(piece, mask, out)) return out;
   const half = S / 2;
   for (const r of presentRects(2, 2, mask)) {
     out.push({
@@ -91,6 +93,103 @@ export function pieceColliderSpecs(piece) {
     });
   }
   return out;
+}
+
+// -----------------------------------------------------------------------------
+// Rampen-Edit: Ecktreppe und halbe Rampe
+// -----------------------------------------------------------------------------
+// Felder 0..3: Spalte = t % 2 (entlang x), Reihe = floor(t / 2) (entlang z).
+// - 1 Feld entfernt (3 Felder als "L") → ECKTREPPE: vom unteren Ende-Feld eine kurze
+//   Rampe (45°) hinauf auf ein flaches Podest im Eck-Feld (halbe Höhe), dort 90° drehen
+//   und mit der zweiten kurzen Rampe ganz hinauf (eine Ebene, wie die ganze Rampe).
+//   Unteres Ende = das Ende-Feld, das bei der ganzen Rampe tiefer lag.
+// - 2 Felder nebeneinander entfernt (2 Felder in einer Reihe bleiben) → HALBE RAMPE
+//   (2 m breit, 4 m lang, 45°). Richtung: piece.editDir (Reihenfolge, in der die zwei
+//   Felder gewählt wurden: vom ersten zum zweiten = "hinauf"), sonst die alte Richtung,
+//   wenn sie entlang des Streifens liegt, sonst 90° weiter gedreht.
+// - sonst (1 Feld übrig, 2 Felder über Eck): Stücke der ganzen Rampe (alte Form).
+
+/** Spalte/Reihe eines Rampen-Felds → Richtung (0 = +X, 1 = +Z, 2 = −X, 3 = −Z) von p nach q. */
+function tileDirection(p, q) {
+  const dx = (q % 2) - (p % 2);
+  const dz = Math.floor(q / 2) - Math.floor(p / 2);
+  if (dx === 1 && dz === 0) return 0;
+  if (dx === 0 && dz === 1) return 1;
+  if (dx === -1 && dz === 0) return 2;
+  if (dx === 0 && dz === -1) return 3;
+  return -1;
+}
+
+/** Rechteck eines Rampen-Felds in der Welt. */
+function rampTileRect(i, k, t) {
+  const half = S / 2;
+  const x0 = i * S + (t % 2) * half;
+  const z0 = k * S + Math.floor(t / 2) * half;
+  return { minX: x0, maxX: x0 + half, minZ: z0, maxZ: z0 + half };
+}
+
+// Wie hoch lag Feld t bei der ganzen Rampe (Richtung d)? 0 = untere Hälfte, 1 = obere
+function rampTileRank(d, t) {
+  const col = t % 2;
+  const row = Math.floor(t / 2);
+  if (d === 0) return col;
+  if (d === 2) return 1 - col;
+  if (d === 1) return row;
+  return 1 - row;
+}
+
+/**
+ * Richtung einer editierten Rampe, deren Rest-Streifen (zwei Felder) entlang der Achse
+ * "alongX" liegt: gewählte Richtung (editDir), sonst die alte, sonst 90° gedreht.
+ */
+export function halfRampDirection(dir, editDir, alongX) {
+  const fits = (d) => d !== null && d !== undefined && d >= 0 && (d % 2 === 0) === alongX;
+  if (fits(editDir)) return editDir;
+  if (fits(dir)) return dir;
+  return (dir + 1) % 4;
+}
+
+/**
+ * Kollisions-Teile einer editierten Rampe (Ecktreppe, halbe Rampe). false = keine
+ * eigene Form (dann die alte: Stücke der ganzen Rampe).
+ */
+export function rampEditSpecs(piece, mask, out) {
+  const { i, j, k } = piece;
+  const d = ((piece.dir % 4) + 4) % 4;
+  const present = ~mask & 15;
+  const tiles = [];
+  for (let t = 0; t < 4; t++) if (present & (1 << t)) tiles.push(t);
+  if (tiles.length === 3) {
+    // Ecktreppe: Eck-Feld = gegenüber vom entfernten Feld
+    const removed = [0, 1, 2, 3].find((t) => !(present & (1 << t)));
+    const corner = 3 - removed;
+    const ends = [corner ^ 1, corner ^ 2];
+    const low = rampTileRank(d, ends[0]) <= rampTileRank(d, ends[1]) ? ends[0] : ends[1];
+    const high = low === ends[0] ? ends[1] : ends[0];
+    const baseY = j * H;
+    out.push({ type: 'slope', spec: { ...rampTileRect(i, k, low), baseY, rise: H / 2, dir: tileDirection(low, corner), thickness: T }, stair: 'low' });
+    const c = rampTileRect(i, k, corner);
+    out.push({ type: 'box', min: { x: c.minX, y: baseY + H / 2 - T, z: c.minZ }, max: { x: c.maxX, y: baseY + H / 2, z: c.maxZ }, stair: 'landing' });
+    out.push({ type: 'slope', spec: { ...rampTileRect(i, k, high), baseY: baseY + H / 2, rise: H / 2, dir: tileDirection(corner, high), thickness: T }, stair: 'high' });
+    return true;
+  }
+  if (tiles.length === 2 && tileDirection(tiles[0], tiles[1]) >= 0) {
+    // halbe Rampe über den Streifen der zwei Felder
+    const alongX = tileDirection(tiles[0], tiles[1]) === 0;
+    const dir = halfRampDirection(d, piece.editDir, alongX);
+    const a = rampTileRect(i, k, tiles[0]);
+    const b = rampTileRect(i, k, tiles[1]);
+    out.push({
+      type: 'slope',
+      spec: {
+        minX: Math.min(a.minX, b.minX), maxX: Math.max(a.maxX, b.maxX),
+        minZ: Math.min(a.minZ, b.minZ), maxZ: Math.max(a.maxZ, b.maxZ),
+        baseY: j * H, rise: H, dir, thickness: T,
+      },
+    });
+    return true;
+  }
+  return false;
 }
 
 /** Lage der Tür in der Wand (u entlang der Wand, v von unten), in Metern. */
@@ -282,7 +381,7 @@ export function buildGeometryFromSpecs(specs, origin, cell, rampDir = 0) {
   for (const s of specs) {
     if (s.type === 'box') addBox(pos, uv, s.min, s.max, origin, cell);
     else if (s.spec.dir === 'pyramid') addPyramid(pos, uv, s.spec, origin, cell);
-    else addRamp(pos, uv, s.spec, origin, cell, rampDir);
+    else addRamp(pos, uv, s.spec, origin, cell, Number.isInteger(s.spec.dir) ? s.spec.dir : rampDir); // Bretter quer zur eigenen Richtung
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -331,10 +430,12 @@ function addBox(pos, uv, min, max, o, cell) {
     [1 - ux(x1), uy(y0)], [1 - ux(x0), uy(y0)], [1 - ux(x0), uy(y1)], [1 - ux(x1), uy(y1)]);
 }
 
-// Höhe einer (Rampen-)Schräge: a·x + b·z + c
+// Höhe einer (Rampen-)Schräge: a·x + b·z + c (Steigung über die Länge der Schräge selbst –
+// Teil-Rampen der Ecktreppe sind nur 2 m lang)
 function rampPlane(spec) {
-  const slope = spec.rise / S;
   const d = spec.dir;
+  const run = d === 0 || d === 2 ? spec.maxX - spec.minX : spec.maxZ - spec.minZ;
+  const slope = spec.rise / (run > 0 ? run : S);
   const a = d === 0 ? slope : d === 2 ? -slope : 0;
   const b = d === 1 ? slope : d === 3 ? -slope : 0;
   let c = spec.baseY;
@@ -348,7 +449,7 @@ function rampPlane(spec) {
 function addRamp(pos, uv, spec, o, cell, rampDir) {
   const clip = spec.clip ?? spec;
   const { a, b, c } = rampPlane(spec);
-  const vT = RAMP_V_THICKNESS;
+  const vT = (spec.thickness ?? T) * Math.sqrt(1 + a * a + b * b); // Dicke senkrecht (wie physics.js)
   const x0 = clip.minX;
   const x1 = clip.maxX;
   const z0 = clip.minZ;
@@ -477,7 +578,8 @@ export function createSharedGeometry(type) {
   return geometry;
 }
 
-/** Form eines Bauteils im aktuellen Edit-Zustand (ohne Tür-Blatt), relativ zu pieceOrigin. */
+/** Form eines Bauteils im aktuellen Edit-Zustand (ohne Tür-Blatt), relativ zu pieceOrigin.
+ *  piece braucht type, kind, i, j, k, dir, editMask (Rampe: editDir). */
 export function createPieceGeometry(piece) {
   const specs = pieceColliderSpecs(piece).filter((s) => !s.door);
   const origin = pieceOrigin(piece);

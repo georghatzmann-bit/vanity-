@@ -52,11 +52,12 @@ export function createBuildingView(game) {
       return _shape;
     }
     const dir = piece.type === 'ramp' ? ((piece.dir % 4) + 4) % 4 : 0;
-    const key = `${piece.kind}|${dir}|${mask}`;
+    const editDir = piece.type === 'ramp' ? piece.editDir ?? -1 : -1;
+    const key = `${piece.kind}|${dir}|${mask}|${editDir}`;
     let geometry = editGeometries.get(key);
     if (!geometry) {
       // in Zelle (0, 0, 0) gebaut: Form und Bild-Koordinaten hängen nur von der Lage in der Zelle ab
-      geometry = createPieceGeometry({ type: piece.type, kind: piece.kind, i: 0, j: 0, k: 0, dir, editMask: mask });
+      geometry = createPieceGeometry({ type: piece.type, kind: piece.kind, i: 0, j: 0, k: 0, dir, editMask: mask, editDir: editDir >= 0 ? editDir : null });
       geometry.userData.shared = true;
       editGeometries.set(key, geometry);
     }
