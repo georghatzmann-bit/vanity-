@@ -159,10 +159,20 @@ const WORLD_CHECKS = [
         return { prompt: g.interactionPrompt?.text ?? null };
       });
       ctx.assert(r.prompt === 'Kiste öffnen', `Hinweis: ${r.prompt}`);
+      // Für das Bild etwas nach links drehen: die Kiste steht dann rechts neben der Figur (nicht verdeckt)
+      const yaw0 = await ctx.page.evaluate(() => {
+        const p = buildDuel.game.player;
+        const yaw = p.yaw;
+        __wd.look(yaw + 0.45, -0.3);
+        buildDuel.simulate(1 / 60);
+        return yaw;
+      });
       await ctx.page.waitForTimeout(1200);
       await ctx.shot('43-welt-kiste');
-      const r2 = await ctx.page.evaluate(() => {
+      const r2 = await ctx.page.evaluate((yaw) => {
         const g = buildDuel.game;
+        __wd.look(yaw, -0.35);
+        buildDuel.simulate(1 / 60);
         let opened = 0;
         const off = g.events.on('chestOpened', () => opened++);
         __wd.press('use', 0.8);
@@ -171,20 +181,27 @@ const WORLD_CHECKS = [
         const p = g.player;
         const dx = weapon.position.x - p.position.x;
         const dz = weapon.position.z - p.position.z;
-        __wd.look(Math.atan2(-dx, -dz), -0.45);
+        const yawItem = Math.atan2(-dx, -dz);
+        __wd.look(yawItem, -0.45);
         buildDuel.simulate(0.1);
-        return { opened, prompt: g.interactionPrompt?.text ?? null, weaponId: weapon.item.id };
-      });
+        const prompt = g.interactionPrompt?.text ?? null;
+        // Bild: etwas nach links gedreht (Gegenstand rechts neben der Figur), danach wieder hin
+        __wd.look(yawItem + 0.5, -0.35);
+        buildDuel.simulate(1 / 60);
+        return { opened, prompt, weaponId: weapon.item.id, yawItem };
+      }, yaw0);
       ctx.assert(r2.opened === 1, 'Kiste geöffnet');
       ctx.assert(/Aufheben/.test(r2.prompt ?? ''), `Hinweis: ${r2.prompt}`);
       await ctx.page.waitForTimeout(1200);
       await ctx.shot('44-welt-boden-loot');
-      const r3 = await ctx.page.evaluate((id) => {
+      const r3 = await ctx.page.evaluate((yawItem) => {
+        __wd.look(yawItem, -0.45);
+        buildDuel.simulate(1 / 60);
         __wd.press('use', 0.3);
         const p = buildDuel.game.player;
         const item = p.slots[p.selectedSlot];
         return { id: item?.id ?? null, mode: p.mode };
-      }, r2.weaponId);
+      }, r2.yawItem);
       ctx.assert(r3.id === r2.weaponId && r3.mode === 'weapon', `in der Hand: ${r3.id}`);
     },
   },

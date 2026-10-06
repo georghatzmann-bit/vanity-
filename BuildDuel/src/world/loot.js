@@ -77,6 +77,7 @@ export function createLootSystem(game, spec = {}) {
   const items = [];
   const pendingDrops = [];
   const prompt = { text: '', action: 'use', kind: null, target: null, rarity: null, swap: false };
+  let promptCount = -1; // Stückzahl beim letzten Text (Heil-Items: "×3")
   const pickupEvent = { character: null, item: null, amount: 0 };
   let view = null;
 
@@ -464,6 +465,26 @@ export function createLootSystem(game, spec = {}) {
     return !hit;
   }
 
+  // Suche des Fokus (focusFor): Zwischenstand ohne neue Objekte pro Tick
+  const lookCone = Math.cos((L.lookConeDeg * Math.PI) / 180);
+  const focus = { c: null, aimX: 0, aimY: 0, aimZ: 0, best: null, bestScore: Infinity };
+
+  function considerFocus(target, pos, lift, reach) {
+    const c = focus.c;
+    if (!reachable(c, pos, reach)) return;
+    const dx = pos.x - _eye.x;
+    const dy = pos.y + lift - _eye.y;
+    const dz = pos.z - _eye.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    const dot = (dx * focus.aimX + dy * focus.aimY + dz * focus.aimZ) / len;
+    // im Blick-Kegel: nach Winkel; sonst nach Abstand (mit Aufschlag)
+    const score = dot >= lookCone ? (1 - dot) * 10 + len * 0.05 : 10 + horizontalDistance(c.position, pos);
+    if (score >= focus.bestScore) return;
+    if (!visible(c, pos, lift)) return; // (visible überschreibt _dir – die Blick-Richtung steht in focus)
+    focus.best = target;
+    focus.bestScore = score;
+  }
+
   /**
    * Was würde E bei dieser Figur gerade tun? → Kiste oder Boden-Gegenstand (oder null).
    * Bevorzugt, was nahe am Fadenkreuz liegt; nur in Reichweite und ohne Wand dazwischen.
@@ -476,28 +497,23 @@ export function createLootSystem(game, spec = {}) {
     const useCmd = cmd && cmd.aimDir && cmd.aimDir.lengthSq() > 0.5 && cmd.aimOrigin && cmd.aimOrigin.distanceToSquared(_eye) < 1.44;
     if (useCmd) _dir.copy(cmd.aimDir);
     else c.aimDirection(_dir);
-    const aimX = _dir.x;
-    const aimY = _dir.y;
-    const aimZ = _dir.z;
-    const cone = Math.cos((L.lookConeDeg * Math.PI) / 180);
-    let best = null;
-    let bestScore = Infinity;
-    const consider = (target, pos, lift, reach) => {
-      if (!reachable(c, pos, reach)) return;
-      const dx = pos.x - _eye.x;
-      const dy = pos.y + lift - _eye.y;
-      const dz = pos.z - _eye.z;
-      const len = Math.hypot(dx, dy, dz) || 1;
-      const dot = (dx * aimX + dy * aimY + dz * aimZ) / len;
-      // im Blick-Kegel: nach Winkel; sonst nach Abstand (mit Aufschlag)
-      const score = dot >= cone ? (1 - dot) * 10 + len * 0.05 : 10 + horizontalDistance(c.position, pos);
-      if (score >= bestScore) return;
-      if (!visible(c, pos, lift)) return;
-      best = target;
-      bestScore = score;
-    };
-    for (const chest of chests) if (!chest.opened) consider(chest, chest.position, L.chest.size.y * 0.5, L.chestReach);
-    for (const fi of items) if (fi.kind === 'weapon' || fi.kind === 'heal') consider(fi, fi.position, L.floatHeight, L.pickupReach);
+    focus.c = c;
+    focus.aimX = _dir.x;
+    focus.aimY = _dir.y;
+    focus.aimZ = _dir.z;
+    focus.best = null;
+    focus.bestScore = Infinity;
+    for (let i = 0; i < chests.length; i++) {
+      const chest = chests[i];
+      if (!chest.opened) considerFocus(chest, chest.position, L.chest.size.y * 0.5, L.chestReach);
+    }
+    for (let i = 0; i < items.length; i++) {
+      const fi = items[i];
+      if (fi.kind === 'weapon' || fi.kind === 'heal') considerFocus(fi, fi.position, L.floatHeight, L.pickupReach);
+    }
+    const best = focus.best;
+    focus.c = null;
+    focus.best = null;
     return best;
   }
 
@@ -604,19 +620,24 @@ export function createLootSystem(game, spec = {}) {
       prompt.target = null;
       return;
     }
-    prompt.target = target;
-    if (chests.includes(target)) {
-      prompt.kind = 'chest';
-      prompt.text = 'Kiste öffnen';
-      prompt.rarity = null;
-      prompt.swap = false;
-    } else {
-      const slot = slotFor(p, target);
-      prompt.kind = 'item';
-      prompt.rarity = target.rarity;
-      prompt.swap = !!slot?.swap;
-      const rarityName = target.kind === 'weapon' ? ` (${CONFIG.rarities[target.rarity]?.name ?? ''})` : target.kind === 'heal' && target.item.count > 1 ? ` ×${target.item.count}` : '';
-      prompt.text = `${prompt.swap ? 'Tauschen' : 'Aufheben'}: ${target.name}${rarityName}`;
+    const isChest = chests.includes(target);
+    const swap = isChest ? false : !!slotFor(p, target)?.swap;
+    const count = isChest ? 0 : target.item?.count ?? 0;
+    // Text nur neu bauen, wenn sich etwas geändert hat (sonst jeden Tick ein neuer Text)
+    if (prompt.target !== target || prompt.swap !== swap || promptCount !== count) {
+      prompt.target = target;
+      prompt.swap = swap;
+      promptCount = count;
+      if (isChest) {
+        prompt.kind = 'chest';
+        prompt.text = 'Kiste öffnen';
+        prompt.rarity = null;
+      } else {
+        prompt.kind = 'item';
+        prompt.rarity = target.rarity;
+        const rarityName = target.kind === 'weapon' ? ` (${CONFIG.rarities[target.rarity]?.name ?? ''})` : target.kind === 'heal' && count > 1 ? ` ×${count}` : '';
+        prompt.text = `${swap ? 'Tauschen' : 'Aufheben'}: ${target.name}${rarityName}`;
+      }
     }
     game.interactionPrompt = prompt;
   }

@@ -731,6 +731,9 @@ Freifall: Tempo `freefallSpeed`, lenken `freefallMoveSpeed`, Blick nach unten + 
 `CONFIG.skydive.diveSpeed`; der Gleiter öffnet von selbst `gliderDeployHeight` über dem Boden (Dächer zählen) oder
 mit der Leertaste; in diesen Zuständen keine Aktionen (der Befehl wird geleert). Landung: `landCharacter(c,
 { noDamage: true })` – `land.fallHeight` ist die ganze Fallhöhe, Schaden gibt es keinen.
+Kamera: Im `'freefall'`/`'glide'` fährt die Schulter-Kamera langsam auf `CONFIG.skydive.cameraDistance` zurück
+(man sieht, wo man landet), nach der Landung schnell wieder auf die normale Länge (kleine Änderung in `camera.js`:
+`ThirdPersonCamera.update` liest `character.moveState`; nur das Bild, der Ziel-Strahl bleibt gleich).
 
 **Test-Modi** (`modes/sandbox.js`, `hidden: true`): `sandbox-island` (Insel + Sturm + Loot + Ballon, Optionen
 `{ bots, skipVehicle, stormAutoStart, mapSeed }`), `sandbox-arena`, `sandbox-zonewars`. Browser-Prüfungen:

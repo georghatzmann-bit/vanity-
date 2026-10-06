@@ -806,6 +806,8 @@ export const CONFIG = deepFreeze({
     gliderColors: ['#FF5A5F', '#FFFFFF', '#3EC1D3'], // Streifen des Gleiters
     gliderWidth: 2.5, // Spannweite (m)
     windStreaks: 6, // Fahrtwind-Striche im freien Fall
+    cameraDistance: 5.5, // Kamera im freien Fall / mit dem Gleiter so weit hinter der Figur (man sieht, wo man landet)
+    cameraZoomSpeed: 3, // … dorthin fährt sie langsam (höher = schneller); beim Landen schnell zurück
   },
 
   // ---------------------------------------------------------------------------

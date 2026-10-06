@@ -141,15 +141,21 @@ export function createJumpVehicle(game, spec) {
 
     update() {
       vehicle.stepOnce();
-      // geplante Absprünge der Bots
+      // geplante Absprünge der Bots (rückwärts: drop() nimmt die Figur aus der Liste)
       const time = game.time ?? 0;
-      for (const [c, at] of dropTimes) {
-        if (time >= at && riders.includes(c) && vehicle.canDrop()) vehicle.drop(c);
+      if (dropTimes.size > 0 && vehicle.canDrop()) {
+        for (let i = riders.length - 1; i >= 0; i--) {
+          const c = riders[i];
+          const at = dropTimes.get(c);
+          if (at !== undefined && time >= at) vehicle.drop(c);
+        }
       }
       // Besiegte/entfernte Mitfahrer los lassen
-      for (const c of [...riders]) {
+      for (let i = riders.length - 1; i >= 0; i--) {
+        const c = riders[i];
         if (!c.alive || !game.characters?.includes(c)) {
-          riders.splice(riders.indexOf(c), 1);
+          riders.splice(i, 1);
+          dropTimes.delete(c);
           c.ridingVehicle = null;
         }
       }

@@ -274,6 +274,48 @@ describe('Loot-Regeln', () => {
     l.dispose();
     g.dispose();
   });
+
+  it('E-Hinweis (game.interactionPrompt): Aufheben → Tauschen wenn voll, immer dasselbe Objekt, sonst null', () => {
+    const g = new Game({ headless: true, seed: 3 });
+    const l = createLootSystem(g, {});
+    g.loot = l;
+    const p = g.addCharacter({ name: 'Spieler', isPlayer: true, position: { x: 0, y: 0, z: 0 }, yaw: 0 });
+    p.pitch = -0.4;
+    const fi = l.spawnFloorItem({ kind: 'weapon', id: 'ar', rarity: 'epic', position: { x: 0, y: 0, z: -1.2 } });
+    l.update(1 / 60);
+    const prompt = g.interactionPrompt;
+    assert.ok(prompt && prompt.target === fi && prompt.action === 'use' && prompt.kind === 'item');
+    assert.equal(prompt.text, `Aufheben: ${fi.name} (${CONFIG.rarities.epic.name})`);
+    assert.equal(prompt.swap, false);
+    // alles voll → Tauschen (Text ändert sich, Objekt bleibt dasselbe)
+    g.weapons.giveLoadout(p, ['shotgun', 'smg', 'sniper', 'pistol', 'bandage']);
+    l.update(1 / 60);
+    assert.equal(g.interactionPrompt, prompt, 'kein neues Objekt pro Tick');
+    assert.ok(prompt.swap && prompt.text.startsWith('Tauschen: '), prompt.text);
+    // zu weit weg → kein Hinweis
+    p.position.set(0, 0, 8);
+    l.update(1 / 60);
+    assert.equal(g.interactionPrompt, null);
+    l.dispose();
+    g.dispose();
+  });
+
+  it('Bots: interact öffnet Kisten und hebt Gegenstände nur in Reichweite auf', () => {
+    const g = new Game({ headless: true, seed: 4 });
+    const l = createLootSystem(g, {});
+    const bot = g.addCharacter({ name: 'Bot', isBot: true, position: { x: 0, y: 0, z: 0 } });
+    const chest = l.spawnChest({ x: 6, y: 0, z: 0 });
+    assert.equal(l.interact(bot, chest), false, 'zu weit weg');
+    bot.position.set(4.2, 0, 0);
+    assert.equal(l.interact(bot, chest), true);
+    assert.ok(chest.opened);
+    const weapon = l.items.find((fi) => fi.kind === 'weapon');
+    bot.position.set(weapon.position.x, 0, weapon.position.z + 1);
+    assert.equal(l.interact(bot, weapon), true);
+    assert.ok(bot.slots.includes(weapon.item));
+    l.dispose();
+    g.dispose();
+  });
 });
 
 describe('Gelände (Höhen-Raster)', () => {

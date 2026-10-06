@@ -10,6 +10,7 @@ import { createStorm } from '../../src/world/storm.js';
 import { createLootSystem } from '../../src/world/loot.js';
 import { createJumpVehicle } from '../../src/world/jumpVehicle.js';
 import { heightAboveGround, startFreefall } from '../../src/world/skydive.js';
+import { ThirdPersonCamera } from '../../src/camera.js';
 
 const BR = CONFIG.modes.battleRoyale;
 
@@ -127,6 +128,31 @@ describe('Szenario: Absprung mit Gleiter', () => {
     assert.equal(c.moveState, 'glide', 'Leertaste = Gleiter');
     game.simulate(3);
     assert.ok(Math.abs(c.velocity.y + BR.gliderFallSpeed) < 0.5, `Gleiter sinkt mit ${(-c.velocity.y).toFixed(1)} m/s`);
+    game.dispose();
+  });
+
+  it('Kamera: im freien Fall und mit dem Gleiter weiter weg, nach der Landung wieder normal', () => {
+    const game = createTestGame({ seed: 3 });
+    game.map = createArenaMap(game, { size: 80 });
+    const c = addDrivenCharacter(game, { name: 'Flieger', position: { x: 0, y: 60, z: 0 } });
+    const rig = new ThirdPersonCamera(null);
+    const frames = (seconds) => {
+      for (let i = 0; i < Math.round(seconds * 60); i++) {
+        game.fixedUpdate(1 / 60);
+        rig.update(c, 1, 1 / 60, game.world);
+      }
+    };
+    rig.update(c, 1, 1 / 60, game.world);
+    startFreefall(c);
+    frames(0.3);
+    assert.ok(rig.distance > CONFIG.camera.distance && rig.distance < CONFIG.skydive.cameraDistance, `fährt langsam weg: ${rig.distance.toFixed(2)}`);
+    frames(2.5);
+    assert.close(rig.distance, CONFIG.skydive.cameraDistance, 0.05, 'im Fall weiter weg');
+    let guard = 0;
+    while (c.moveState !== 'ground' && guard++ < 60 * 60) frames(1 / 60);
+    assert.equal(c.moveState, 'ground');
+    frames(1);
+    assert.close(rig.distance, CONFIG.camera.distance, 0.02, 'nach der Landung wieder normal');
     game.dispose();
   });
 

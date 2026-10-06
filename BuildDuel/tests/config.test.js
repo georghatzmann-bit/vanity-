@@ -484,6 +484,9 @@ describe('Spielwerte: Welt (Welle 3b – Sturm, Loot, Karten, Absprung)', () => 
     const cols = Math.floor(sd.deckSize / sd.riderSpacing) - 1;
     assert.ok(cols * cols >= br.maxPlayers, `Plätze ${cols * cols}`);
     for (const c of [...sd.balloonColors, ...sd.gliderColors, sd.deckColor]) assert.ok(HEX_COLOR.test(c), c);
+    // Kamera im Fall weiter weg als normal, aber nicht absurd weit
+    assert.ok(sd.cameraDistance > CONFIG.camera.distance && sd.cameraDistance <= 12, `Kamera ${sd.cameraDistance} m`);
+    assert.ok(sd.cameraZoomSpeed > 0);
   });
 
   it('Arena: unsichtbare Wand höher als die Mauer, Platz um die Startpunkte', () => {
