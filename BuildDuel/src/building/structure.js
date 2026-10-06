@@ -45,7 +45,8 @@ export function createBuildingSystem(game) {
   const doors = new Set(); // Teile, die gerade Türen sind
   const editedPieces = new Set(); // Teile mit Löchern
   const collapseQueue = []; // { piece, at, by }
-  const states = new Map(); // Figur → Bau-Zustand (Ziel, Abklingzeit …)
+  const states = new WeakMap(); // Figur → Bau-Zustand (Ziel, Abklingzeit …); entfernte Figuren fallen von selbst weg
+  let generation = 1; // clearAll erhöht das → alte Zustände gelten als zurückgesetzt
   let nextId = 1;
   let visitStamp = 0;
   let safeStamp = 0;
@@ -67,8 +68,13 @@ export function createBuildingSystem(game) {
   function stateOf(character) {
     let s = states.get(character);
     if (!s) {
-      s = { target: createTarget(), hasTarget: false, nextPlaceTime: 0, lastKey: -1 };
+      s = { target: createTarget(), hasTarget: false, nextPlaceTime: 0, lastKey: -1, generation };
       states.set(character, s);
+    } else if (s.generation !== generation) {
+      s.generation = generation;
+      s.hasTarget = false;
+      s.lastKey = -1;
+      s.nextPlaceTime = 0;
     }
     return s;
   }
@@ -605,7 +611,7 @@ export function createBuildingSystem(game) {
     // Vorschau und Edit-Kacheln nur für den Spieler
     const player = game.player;
     const state = player ? states.get(player) : null;
-    const showPreview = player && player.alive && player.mode === 'build' && state?.hasTarget;
+    const showPreview = player && player.alive && player.mode === 'build' && state?.hasTarget && state.generation === generation;
     view.setPreview(showPreview ? state.target : null);
     const session = player && player.mode === 'edit' ? edit.sessionOf(player) : null;
     view.setEditOverlay(session ?? null);
@@ -631,11 +637,7 @@ export function createBuildingSystem(game) {
     doors.clear();
     editedPieces.clear();
     collapseQueue.length = 0;
-    for (const s of states.values()) {
-      s.hasTarget = false;
-      s.lastKey = -1;
-      s.nextPlaceTime = 0;
-    }
+    generation++;
     view?.clear();
   }
 
@@ -679,7 +681,7 @@ export function createBuildingSystem(game) {
     /** Letztes Bau-Ziel einer Figur (Vorschau), oder null. */
     targetOf(character) {
       const s = states.get(character);
-      return s?.hasTarget ? s.target : null;
+      return s?.hasTarget && s.generation === generation ? s.target : null;
     },
     /** Wie viele Teile warten gerade auf den Einsturz? */
     get collapsingCount() {
@@ -691,7 +693,6 @@ export function createBuildingSystem(game) {
     frameUpdate,
     dispose() {
       clearAll();
-      states.clear();
       view?.dispose();
       view = null;
     },

@@ -29,8 +29,8 @@ const B = CONFIG.building;
 export function createEditController(system) {
   const game = system.game;
   const sessions = new Map(); // Figur → { piece, openedTick, selection, hover, paint, lastPaint }
-  const candidates = new Map(); // Figur → Bauteil, das canEdit zuletzt gefunden hat
-  const hintAt = new Map(); // Figur → Spielzeit des letzten Hinweises
+  let candidates = new WeakMap(); // Figur → Bauteil, das canEdit zuletzt gefunden hat
+  const hintAt = new WeakMap(); // Figur → Spielzeit des letzten Hinweises
   const _origin = { x: 0, y: 0, z: 0 };
   const _dir = { x: 0, y: 0, z: -1 };
   const _tileHit = { distance: 0 };
@@ -198,9 +198,7 @@ export function createEditController(system) {
     for (const [character, session] of sessions) {
       if (session.piece === piece) leave(character);
     }
-    for (const [character, candidate] of candidates) {
-      if (candidate === piece) candidates.delete(character);
-    }
+    // (candidates: ein weggefallenes Teil wird beim Öffnen über piece.removed erkannt)
   }
 
   // --- Türen (E) ---------------------------------------------------------------------
@@ -261,7 +259,7 @@ export function createEditController(system) {
     clear() {
       for (const character of [...sessions.keys()]) leave(character);
       sessions.clear();
-      candidates.clear();
+      candidates = new WeakMap();
     },
   };
 }
