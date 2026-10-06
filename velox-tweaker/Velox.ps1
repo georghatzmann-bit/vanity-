@@ -177,7 +177,7 @@ if ($VxIsWindows) {
 # Each core file is read once; the job runspaces get exactly this text later (Get-VxCoreSources),
 # never a fresh read of files the normal user could change while VELOX runs as admin.
 Write-VxHostStatus 'core'
-$VxCoreNames = @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs', 'Server')
+$VxCoreNames = @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Jobs', 'Server')
 $VxCoreText = @{}
 foreach ($n in $VxCoreNames) {
     $f = Join-Path (Join-Path $VxRoot 'core') ($n + '.ps1')

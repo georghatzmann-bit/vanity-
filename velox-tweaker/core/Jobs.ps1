@@ -16,7 +16,7 @@ function Get-VxMutatingJobTypes {
 }
 
 function Get-VxCoreNames {
-    return @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs')
+    return @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Jobs')
 }
 
 function Get-VxCoreFiles {
@@ -178,6 +178,8 @@ function Start-VxJob([string]$Type, $Params) {
             lockObj = (New-Object object); params = $Params
             # skippable: a step that may be skipped is running (restore point, reset command); skip: the user asked
             skippable = $false; skip = $false; durationMs = $null; startTicks = [DateTime]::UtcNow.Ticks
+            # live: per-item state of a run-action job (Reinigung / repair tools), see ConvertTo-VxLiveDto
+            live = $null
         })
     $ctx.Jobs[$id] = $job
     $ctx.CurrentJobId = $id
@@ -487,5 +489,6 @@ function Get-VxJobDto($Job, [int]$Since = 0) {
         id = $Job.id; type = $Job.type; status = $Job.status; progress = [double]$Job.progress; step = [string]$Job.step
         log = $entries; result = $Job.result; error = $Job.error
         skippable = [bool]$Job.skippable; durationMs = $dur
+        live = (ConvertTo-VxLiveDto $Job.live)
     }
 }

@@ -70,6 +70,9 @@ function startServer(extraArgs = []) {
   let dataRoot = null;
   if (REAL) {
     dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'velox-ui-'));
+    // Reinigung: a throw-away fake PC (deletes really happen in it, never on this machine)
+    const cleanFx = path.join(dataRoot, 'cleanfx');
+    execSync('pwsh -NoProfile -File ' + JSON.stringify(path.join(appRoot, 'tests', 'fixtures', 'clean', 'New-CleanFixture.ps1')) + ' -Root ' + JSON.stringify(cleanFx), { stdio: 'ignore' });
     // KI: the fake Claude Code CLI first on PATH (the real CLI must never get a prompt here) and the
     // Groq / Anthropic APIs answered by fakeAiApi() on 127.0.0.1
     const fakeCli = path.join(appRoot, 'tests', 'fixtures', 'claude-cli');
@@ -79,7 +82,10 @@ function startServer(extraArgs = []) {
       VELOX_CLAUDE_CLI_ONLY: '1',
       VELOX_FAKE_CLAUDE_MODE: 'ok',
       VELOX_GROQ_BASE_URL: FAKE_AI.url + '/openai/v1',
-      VELOX_ANTHROPIC_BASE_URL: FAKE_AI.url
+      VELOX_ANTHROPIC_BASE_URL: FAKE_AI.url,
+      // Testmodus DISM/SFC: long enough to watch the live percent and to cancel
+      VELOX_SIM_TOOL_MS: '6000',
+      VELOX_CLEAN_FIXTURE: cleanFx
     });
     child = spawn('pwsh', ['-NoProfile', '-File', path.join(appRoot, 'Velox.ps1'), '-Simulate', '-NoBrowser', '-Port', '0', '-Token', token, '-DataRoot', dataRoot], { stdio: ['ignore', 'pipe', 'pipe'], env });
   } else {
@@ -388,7 +394,7 @@ test('splash: M in the intro writes settings.startSound; the next start respects
 
 test('brand: no violet left, signal only where the kit allows it, AA contrast of accent text and badges', async (t) => {
   // the stylesheets themselves
-  for (const f of ['css/app.css', 'css/games.css', 'brand/tokens.css', 'brand/tokens-app.css', 'brand/intro.css', 'index.html']) {
+  for (const f of ['css/app.css', 'css/games.css', 'css/cleanup.css', 'brand/tokens.css', 'brand/tokens-app.css', 'brand/intro.css', 'index.html']) {
     const r = await rawRequest(t.server, 'GET', '/' + f);
     assert(r.status === 200, f + ' served');
     assert(!/7C5CFF|124,\s*92,\s*255|22D3EE|34,\s*211,\s*238/i.test(r.text), f + ' still contains the old violet/cyan');
@@ -913,29 +919,120 @@ test('Detweak: scan lists foreign tweaks, reset runs and shows a summary', async
   await shot(page, 'state-detweak-result');
 });
 
-test('Reinigung: sizes load, cleanup runs, freed bytes shown', async (t) => {
+/** Waits until the Reinigung page has its sizes. */
+async function cleanReady(page) {
+  await page.waitForSelector('[data-testid="clean-list"] .cl-group', { timeout: 30000 });
+  await page.waitForFunction(() => !document.querySelector('[data-testid="clean-list"] .skel'), null, { timeout: 30000 });
+  await idle(page);
+}
+const checkedIds = (page) => page.$$eval('[data-testid="clean-list"] .cl-row', rows => rows.filter(r => r.querySelector('input').checked).map(r => r.dataset.id));
+
+test('Reinigung: Größen je Bereich, Presets, Live-Fortschritt pro Bereich, Ergebnis „X freigegeben in Y s“', async (t) => {
   const page = await openApp(t, 'cleanup');
-  await page.waitForFunction(() => !document.querySelector('.clean-list .skel'), null, { timeout: 30000 });
-  const btn = await page.$('[data-testid="clean-run"]');
-  if (await btn.isDisabled()) { console.log('    (nothing selectable to clean)'); return; }
-  await btn.click();
-  await page.waitForSelector('.layer .dialog');
-  const dlg = await page.$('.layer .dialog [data-action="confirm"]');
-  if (dlg) await dlg.click();
+  await cleanReady(page);
+  const groups = await page.$$eval('.cl-group .cl-group-name', els => els.map(e => e.textContent));
+  assert(groups.length >= 4 && groups.includes('Browser-Caches') && groups.includes('Temporäre Dateien'), 'grouped list: ' + groups.join(', '));
+  assert(/\d/.test(await page.textContent('[data-testid="clean-list"] .cl-row .cl-size')), 'size per item');
+  await shot(page, 'cleanup-scan');
+  // presets: Schnell < Gründlich < Alles, opt-in items only in "Alles"
+  const quick = await checkedIds(page);
+  const rowsAll = await page.$$eval('[data-testid="clean-list"] .cl-row', rows => rows.map(r => ({ id: r.dataset.id, optin: r.classList.contains('tier-optin'), deep: r.classList.contains('tier-deep') })));
+  assert(quick.length > 3 && !quick.some(id => rowsAll.find(r => r.id === id).optin || rowsAll.find(r => r.id === id).deep), 'Schnell = only quick items');
+  await page.click('[data-testid="clean-presets"] .seg-btn[data-value="deep"]');
+  const deep = await checkedIds(page);
+  assert(deep.length > quick.length && deep.some(id => rowsAll.find(r => r.id === id).deep) && !deep.some(id => rowsAll.find(r => r.id === id).optin), 'Gründlich adds deep items');
+  await page.click('[data-testid="clean-presets"] .seg-btn[data-value="all"]');
+  const all = await checkedIds(page);
+  assert(all.some(id => rowsAll.find(r => r.id === id).optin), 'Alles adds the opt-in items');
+  await shot(page, 'cleanup-preset-all');
+  await page.click('[data-testid="clean-presets"] .seg-btn[data-value="quick"]');
+  assert((await checkedIds(page)).length === quick.length, 'back to Schnell');
+  // a single box off = "Eigene Auswahl"
+  await page.click('[data-testid="clean-list"] .cl-row[data-id="cleanup.inetcache"] .cb');
+  assert(/Eigene Auswahl/.test(await page.textContent('.cl-preset-hint')), 'custom selection is named');
+  await page.click('[data-testid="clean-list"] .cl-row[data-id="cleanup.inetcache"] .cb');
+  assert(/Chrome läuft/.test(await page.textContent('[data-testid="clean-apps"]')), 'running browser: close it for full effect');
+  // run and watch rows go live
+  await page.click('[data-testid="clean-run"]');
+  const d = await page.waitForSelector('.layer .dialog [data-action="confirm"]', { timeout: 1200 }).catch(() => null);
+  if (d) await d.click();
+  const seen = new Set();
+  const t0 = Date.now();
+  while (Date.now() - t0 < 60000) {
+    const st = await page.evaluate(() => ({ run: Array.from(document.querySelectorAll('.cl-row.is-run .cl-status')).map(e => e.textContent), live: !document.querySelector('.cl-live').hidden, done: !document.querySelector('[data-testid="clean-result"]').hidden }));
+    for (const x of st.run) seen.add(x);
+    if (st.live) seen.add('live');
+    if (st.done) break;
+    if (seen.size === 2 && MODE === 'mock') await shot(page, 'cleanup-running');
+    await sleep(60);
+  }
+  assert(seen.has('live') || MODE === 'real', 'live area while cleaning');
+  if (MODE === 'mock') assert(Array.from(seen).some(x => /Datei|frei|Wird bereinigt/.test(x)), 'a row showed live progress: ' + Array.from(seen).join(' | '));
   await page.waitForSelector('[data-testid="clean-freed"]', { timeout: 60000 });
   await idle(page);
-  await page.waitForTimeout(1500);
-  assert(/(B|KB|MB|GB)$/.test((await page.textContent('[data-testid="clean-freed"]')).trim()), 'freed bytes formatted');
-  await shot(page, 'state-cleanup-freed');
-  const repair = await page.$('.repair-card .btn');
-  if (repair && !(await repair.isDisabled())) {
-    await repair.click();
-    await page.waitForSelector('.layer .dialog');
-    const d2 = await page.$('.layer .dialog [data-action="confirm"]');
-    if (d2) await d2.click();
-    if (await page.$('.layer .job')) { await page.waitForTimeout(150); await shot(page, 'state-job-overlay'); }
-    await idle(page);
+  const title = (await page.textContent('[data-testid="clean-freed"]')).trim();
+  assert(/^[\d.,]+ (B|KB|MB|GB) freigegeben in [\d,]+ (s|min)/.test(title), 'result "X freigegeben in Y s": ' + title);
+  assert(await page.$('.cl-row.is-ok, .cl-row.is-partial'), 'rows show their result');
+  assert(/freigegeben in/.test(await page.textContent('#toasts')), 'toast with the freed amount');
+  assert(await page.$('.cl-row.is-skipped[data-id="cleanup.browser-chrome"]'), 'running Chrome skipped');
+  assert(/Chrome/.test(await page.textContent('[data-testid="clean-result"]')), 'result says Chrome was skipped');
+  if (MODE === 'real') {
+    // the fake PC: caches gone, cookies / documents / the file in use still there
+    const fx = path.join(t.server.dataRoot, 'cleanfx', 'C', 'Users', 'Max');
+    assert(!fs.existsSync(path.join(fx, 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data', 'Default', 'Cache', 'Cache_Data', 'data_0')), 'Edge cache deleted');
+    assert(fs.existsSync(path.join(fx, 'AppData', 'Local', 'Microsoft', 'Edge', 'User Data', 'Default', 'Cookies')), 'Edge cookies kept');
+    assert(fs.existsSync(path.join(fx, 'Documents', 'wichtig.docx')), 'documents untouched');
+    assert(fs.existsSync(path.join(fx, 'AppData', 'Local', 'Temp', 'in-use.tmp')), 'file in use kept');
+    assert(fs.existsSync(path.join(fx, 'AppData', 'Local', 'Temp', 'fresh.tmp')), 'temp files of the last 24 hours kept');
+    assert(!fs.existsSync(path.join(fx, 'AppData', 'Local', 'Temp', 'b.log')), 'old temp file deleted');
+    assert(fs.existsSync(path.join(t.server.dataRoot, 'cleanfx', 'C', '$Recycle.Bin', 'S-1-5-21-0-0-0-1001', '$RABC.txt')), 'opt-in recycle bin untouched by Schnell');
   }
+  await shot(page, 'state-cleanup-freed');
+});
+
+test('Reinigung: „Alles“ braucht ein ausdrückliches Häkchen, sonst läuft nichts', async (t) => {
+  const page = await openApp(t, 'cleanup');
+  await cleanReady(page);
+  await page.click('[data-testid="clean-presets"] .seg-btn[data-value="all"]');
+  await page.click('[data-testid="clean-run"]');
+  await page.waitForSelector('.layer .dialog .confirm-check');
+  assert(/nicht zurückholen|endgültig/.test(await page.textContent('.layer .dialog')), 'says it cannot be undone');
+  assert(/Papierkorb/.test(await page.textContent('.layer .dialog')), 'lists the opt-in items');
+  assert(await page.$eval('.layer .dialog [data-action="confirm"]', b => b.disabled), 'confirm disabled until the box is ticked');
+  await shot(page, 'cleanup-confirm-optin');
+  await page.click('.layer .dialog [data-action="cancel"]');
+  await page.waitForSelector('.layer', { state: 'detached' });
+  assert(await page.evaluate(() => !window.__velox.busy), 'nothing started');
+  assert(await page.$eval('[data-testid="clean-result"]', e => e.hidden), 'no result');
+});
+
+test('Reparatur: Dauer-Hinweis, Live-Prozent auf der Karte, Abbrechen, Seitenwechsel verliert den Job nicht', async (t) => {
+  const page = await openApp(t, 'cleanup');
+  await cleanReady(page);
+  assert(/5–30 Minuten/.test(await page.textContent('.repair-intro')) && /benutzbar/.test(await page.textContent('.repair-intro')), 'duration note up front');
+  assert(/Dauer etwa/.test(await page.textContent('.repair-card[data-id="repair.sfc"]')), 'duration on the card');
+  // SFC: live percent on the card, then the result
+  await page.click('.repair-card[data-id="repair.sfc"] .repair-run');
+  await page.waitForSelector('.repair-card[data-id="repair.sfc"] [data-testid="repair-live"]:not([hidden])', { timeout: 10000 });
+  await page.waitForFunction(() => /\d+(,\d)? %/.test((document.querySelector('.repair-card[data-id="repair.sfc"] .repair-pct') || {}).textContent || ''), null, { timeout: 20000 });
+  await shot(page, 'repair-live');
+  assert(await page.evaluate(() => !document.querySelector('.layer .job')), 'no modal overlay: the PC and VELOX stay usable');
+  assert(await page.$eval('.repair-card[data-id="repair.dism-restorehealth"] .repair-run', b => b.disabled), 'other tools wait');
+  await page.waitForFunction(() => /Zuletzt/.test(document.querySelector('.repair-card[data-id="repair.sfc"]').textContent), null, { timeout: 60000 });
+  await idle(page);
+  assert(/Keine/.test(await page.textContent('.repair-card[data-id="repair.sfc"] .repair-last')), 'result on the card');
+  // DISM: leave the page while it runs, come back, cancel
+  await page.click('.repair-card[data-id="repair.dism-restorehealth"] .repair-run');
+  await page.waitForSelector('.repair-card[data-id="repair.dism-restorehealth"] [data-testid="repair-live"]:not([hidden])', { timeout: 10000 });
+  await goPage(page, 'overview');
+  await goPage(page, 'cleanup');
+  await page.waitForSelector('.repair-card[data-id="repair.dism-restorehealth"] [data-testid="repair-live"]:not([hidden])', { timeout: 10000 });
+  await page.waitForFunction(() => /%/.test((document.querySelector('.repair-card[data-id="repair.dism-restorehealth"] .repair-pct') || {}).textContent || ''), null, { timeout: 20000 });
+  await page.click('.repair-card[data-id="repair.dism-restorehealth"] [data-testid="repair-cancel"]');
+  await page.waitForFunction(() => /abgebrochen/i.test(document.getElementById('toasts').textContent), null, { timeout: 20000 });
+  await idle(page);
+  await page.waitForFunction(() => document.querySelector('.repair-card[data-id="repair.dism-restorehealth"] [data-testid="repair-live"]').hidden, null, { timeout: 5000 });
+  assert(/heil/.test(await page.textContent('#toasts')), 'cancel toast: Windows stays intact');
 });
 
 test('Apps: startup list is escaped, toggle works; bloatware removal confirm', async (t) => {
@@ -1183,22 +1280,18 @@ test('settings: a failed save shows what is really saved', async (t) => {
   await page.unroute('**/api/settings');
 });
 
-test('repair log stays open with a summary; rescan from the palette gives feedback', async (t) => {
+test('repair result stays on the card; rescan from the palette gives feedback', async (t) => {
   const page = await openApp(t, 'cleanup');
-  const btn = await page.$('.repair-card .btn:not([disabled])');
+  await cleanReady(page);
+  const btn = await page.$('.repair-card[data-id="repair.dns-flush"] .repair-run:not([disabled])');
   if (btn) {
     await btn.click();
     const d = await page.waitForSelector('.layer .dialog [data-action="confirm"]', { timeout: 1500 }).catch(() => null);
     if (d) await d.click();
-    await page.waitForSelector('.layer .job[data-job="done"]', { timeout: 60000 });
-    await page.waitForTimeout(900);
-    assert(await page.$('.layer .job[data-job="done"]'), 'repair overlay still open after it finished');
-    assert(await page.$('.layer .job .job-close:not([hidden])'), 'with a close button');
+    await page.waitForFunction(() => /Zuletzt/.test(document.querySelector('.repair-card[data-id="repair.dns-flush"]').textContent), null, { timeout: 60000 });
     await shot(page, 'state-repair-done');
-    await page.keyboard.press('Escape');
-    await page.waitForSelector('.layer', { state: 'detached' });
-    assert(/Zuletzt/.test(await page.textContent('.repair-card')), 'last result on the card');
   }
+  await idle(page);
   await page.keyboard.press('Control+k');
   await page.waitForSelector('.palette');
   await page.keyboard.type('System neu scannen');

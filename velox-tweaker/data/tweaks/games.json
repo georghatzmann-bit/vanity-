@@ -156,6 +156,7 @@
       "info": "Geleert werden data\\cache, server-cache und server-cache-priv. Die Spieldaten (game-storage und der alte Ordner cache\\game) bleiben, damit FiveM nicht mehrere GB neu laden muss. Server-Einstellungen in nui-storage bleiben ebenfalls. Der nächste Server-Beitritt dauert etwas länger, weil die Dateien neu geladen werden.",
       "group": "FiveM & GTA V",
       "kind": "action",
+      "tier": "deep",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -174,6 +175,9 @@
           ],
           "keep": [
             "game"
+          ],
+          "closeApps": [
+            "FiveM"
           ]
         },
         {
@@ -181,6 +185,9 @@
           "paths": [
             "%LOCALAPPDATA%\\FiveM\\FiveM.app\\data\\server-cache\\*",
             "%LOCALAPPDATA%\\FiveM\\FiveM.app\\data\\server-cache-priv\\*"
+          ],
+          "closeApps": [
+            "FiveM"
           ]
         }
       ]
@@ -192,6 +199,7 @@
       "info": "Die Dateien braucht man nur, wenn man einen Absturz gerade dem FiveM-Support oder einem Server-Team schicken will – dann vorher sichern.",
       "group": "FiveM & GTA V",
       "kind": "action",
+      "tier": "quick",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -207,6 +215,9 @@
           "paths": [
             "%LOCALAPPDATA%\\FiveM\\FiveM.app\\crashes\\*",
             "%LOCALAPPDATA%\\FiveM\\FiveM.app\\logs\\*"
+          ],
+          "closeApps": [
+            "FiveM"
           ]
         }
       ]

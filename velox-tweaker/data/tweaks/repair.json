@@ -4,10 +4,11 @@
     {
       "id": "repair.dism-scanhealth",
       "name": "Windows-Abbild prüfen (DISM)",
-      "desc": "Prüft den Komponentenspeicher, aus dem Windows kaputte Dateien ersetzt. Ändert nichts, dauert 5–15 Minuten.",
+      "desc": "Prüft den Komponentenspeicher, aus dem Windows kaputte Dateien ersetzt. Ändert nichts. Dauert 5–20 Minuten, der PC bleibt benutzbar.",
       "info": "Entspricht DISM /Online /Cleanup-Image /ScanHealth. Meldet es Fehler, führe danach „Windows-Abbild reparieren“ aus und dann die Systemdatei-Prüfung (SFC).",
       "group": "Systemdateien",
       "kind": "action",
+      "duration": "5–20 Min.",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -17,10 +18,8 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$r = Repair-WindowsImage -Online -ScanHealth -NoRestart -ErrorAction Stop\n$s = [string]$r.ImageHealthState\nif ($s -eq 'Repairable') { throw 'Der Komponentenspeicher hat Fehler. Starte jetzt: Windows-Abbild reparieren (DISM RestoreHealth).' }\nif ($s -eq 'NonRepairable') { throw 'Der Komponentenspeicher ist nicht mehr reparierbar. Hier hilft nur eine Reparatur-Installation von Windows.' }",
-          "revert": null,
-          "detect": null
+          "type": "tool",
+          "tool": "dism-scanhealth"
         }
       ]
     },
@@ -31,6 +30,7 @@
       "info": "Entspricht DISM /Online /Cleanup-Image /RestoreHealth. Reihenfolge bei Problemen: zuerst das hier, dann „Systemdateien prüfen (SFC)“ – SFC holt seine Ersatzdateien aus genau diesem Speicher.",
       "group": "Systemdateien",
       "kind": "action",
+      "duration": "10–30 Min.",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -40,10 +40,8 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\dism.exe'\n$null = & $exe /Online /Cleanup-Image /RestoreHealth /NoRestart 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0 -and $c -ne 3010) { throw ('DISM RestoreHealth fehlgeschlagen (Code ' + $c + '). DISM braucht Internet und ein funktionierendes Windows Update, um Ersatzdateien zu laden.') }",
-          "revert": null,
-          "detect": null
+          "type": "tool",
+          "tool": "dism-restorehealth"
         }
       ]
     },
@@ -54,6 +52,7 @@
       "info": "Entspricht sfc /scannow. Findet SFC Fehler, die es nicht beheben kann, erst „Windows-Abbild reparieren (DISM)“ und danach SFC noch einmal ausführen. Einige Reparaturen werden erst nach einem Neustart wirksam.",
       "group": "Systemdateien",
       "kind": "action",
+      "duration": "10–30 Min.",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -63,10 +62,8 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\sfc.exe'\n$null = & $exe /scannow 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0) { throw ('SFC meldet Code ' + $c + ': Es wurden Fehler gefunden oder der Scan konnte nicht laufen. Details: ' + (Join-Path $env:SystemRoot 'Logs\\CBS\\CBS.log') + '. Tipp: erst Windows-Abbild reparieren (DISM), dann SFC erneut starten.') }",
-          "revert": null,
-          "detect": null
+          "type": "tool",
+          "tool": "sfc-scannow"
         }
       ]
     },
@@ -77,6 +74,7 @@
       "info": "Entspricht chkdsk C: /scan (Online-Prüfung). Findet es Fehler, die nur offline behoben werden können, sagt VELOX dir, was zu tun ist. Prüft das Dateisystem, nicht die Hardware der SSD.",
       "group": "Systemdateien",
       "kind": "action",
+      "duration": "2–15 Min.",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -87,10 +85,8 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\chkdsk.exe'\n$null = & $exe $env:SystemDrive /scan 2>&1\n$c = $LASTEXITCODE\nif ($c -ge 3) { throw ('CHKDSK hat Fehler auf ' + $env:SystemDrive + ' gefunden, die erst beim Neustart behoben werden (Code ' + $c + '). Als Admin ausfuehren: chkdsk ' + $env:SystemDrive + ' /spotfix und neu starten.') }",
-          "revert": null,
-          "detect": null
+          "type": "tool",
+          "tool": "chkdsk-scan"
         }
       ]
     },
@@ -241,7 +237,8 @@
           "type": "ps",
           "apply": "$exe = Join-Path $env:SystemRoot 'System32\\WSReset.exe'\nif (-not (Test-Path -LiteralPath $exe)) { throw 'WSReset.exe wurde nicht gefunden.' }\n$p = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden -ErrorAction Stop\nif (-not $p.WaitForExit(180000)) { throw 'WSReset hat nach 3 Minuten nicht geantwortet.' }",
           "revert": null,
-          "detect": null
+          "detect": null,
+          "timeoutSec": 240
         }
       ]
     },
@@ -265,7 +262,8 @@
           "type": "ps",
           "apply": "$root = $env:SystemRoot\n$wasRunning = @()\nforeach ($n in @('usosvc', 'wuauserv', 'bits', 'cryptsvc')) {\n    $s = Get-Service -Name $n -ErrorAction SilentlyContinue\n    if ($null -ne $s -and [string]$s.Status -ne 'Stopped') {\n        $wasRunning += $n\n        try { Stop-Service -Name $n -Force -ErrorAction Stop } catch { $null = $_ }\n    }\n}\n$items = @(\n    @{ Src = (Join-Path $root 'SoftwareDistribution'); New = 'SoftwareDistribution.velox-old' },\n    @{ Src = (Join-Path $root 'System32\\catroot2'); New = 'catroot2.velox-old' }\n)\n$err = $null\ntry {\n    foreach ($it in $items) {\n        $old = Join-Path (Split-Path -Parent $it.Src) $it.New\n        if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue }\n        if (Test-Path -LiteralPath $it.Src) { Rename-Item -LiteralPath $it.Src -NewName $it.New -ErrorAction Stop }\n    }\n} catch {\n    $err = $_.Exception.Message\n} finally {\n    foreach ($n in @('cryptsvc', 'bits', 'wuauserv', 'usosvc')) {\n        if ($n -eq 'cryptsvc' -or $wasRunning -contains $n) { try { Start-Service -Name $n -ErrorAction Stop } catch { $null = $_ } }\n    }\n}\nif ($null -ne $err) { throw ('Windows-Update-Reset fehlgeschlagen: ' + $err) }\nforeach ($it in $items) {\n    $old = Join-Path (Split-Path -Parent $it.Src) $it.New\n    if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue }\n}",
           "revert": null,
-          "detect": null
+          "detect": null,
+          "timeoutSec": 900
         }
       ]
     },

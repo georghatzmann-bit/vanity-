@@ -198,7 +198,7 @@ Every revertible action knows how to **apply**, **revert to the Windows default*
 | `powersetting` | `subgroup`, `setting` (GUID or powercfg alias), `ac`, `dc` (int or null), `default` `{ "ac": n, "dc": n }` | `powercfg /setacvalueindex|/setdcvalueindex SCHEME_CURRENT …` + `/setactive SCHEME_CURRENT` | the journalled previous value if known, else `default` | current AC (and DC if given) equal |
 | `feature` | `name`, `enabled` (bool), `default` (bool) | `Enable/Disable-WindowsOptionalFeature -Online -NoRestart` | back | state equals `enabled` |
 | `appx` | `package` (exact package name, e.g. `Microsoft.BingNews`) | remove for all users + deprovision | not possible (kind `remove`) | package not installed |
-| `clean` | `paths` (array of %TOKEN% paths, §3a), `keep?` (names to keep), `stopServices?`, `closeApps?` (process names without .exe: running → the item is skipped) | delete files (skip locked), report freed bytes | — (kind `action`) | — |
+| `clean` | `paths` (array of %TOKEN% paths, §3a), `keep?` (names directly in the cleaned folder that stay), `stopServices?`, `closeApps?` (process names without .exe: running → the item is skipped), `minAgeHours?` (1..720: files/folders written or created more recently stay) | delete files (skip locked), report freed bytes | — (kind `action`) | — |
 | `tool` | `tool` (one of the fixed tool ids, §3a), `timeoutSec?`, `measure?` (paths whose size the scan shows) | run the tool as its own process with live percent | — (kind `action`) | — |
 | `ps` | `apply` (PowerShell source), `revert` (source or null), `detect` (source returning `$true`/`$false`/`$null`, or null); kind `action` only: `timeoutSec?` (default 600), `measure?` | run `apply` (kind `action`: in its own `powershell.exe`, see §3a) | run `revert` | `detect` result |
 
@@ -262,6 +262,11 @@ checks tokens, wildcards and refuses drive / Windows / profile roots.
 3. The root and every folder above it must not be a junction/symlink; the walk never follows reparse
    points and deletes through `VeloxNative.SafeFs.DeleteUnder` (refuses anything whose real path left the root).
 4. Files in use are skipped and counted (`locked`), the item stays `ok` with status `partial`.
+   `minAgeHours` (the Temp items: 24): a file or folder written - on Windows also created - after the
+   cutoff is neither counted nor deleted, a young folder with everything in it (`young`; a running
+   installer or an update waiting for the reboot may still need it). `keep` protects user data that sits
+   next to a cache: `INetCache` keeps `Content.Outlook` (opened Outlook attachments, edits may live only
+   there), `Content.MSO`, `Content.Word`; the FiveM cache keeps `game`; the recycle bin keeps `desktop.ini`.
 5. `closeApps`: if one of the processes runs in this desktop session the item is **skipped** ("Chrome läuft
    gerade. Schließe … ganz") - a browser cache is never cleaned under a running browser. Browser items only
    name cache folders (Cache, Code Cache, GPUCache, Service Worker\CacheStorage + ScriptCache, ShaderCache,
@@ -278,7 +283,8 @@ checks tokens, wildcards and refuses drive / Windows / profile roots.
 `dism-component-cleanup` (60 min), `dism-component-resetbase` (90 min), `sfc-scannow` (60 min), `chkdsk-scan`
 (45 min), `cleanmgr-windows-old` (60 min; `cleanmgr /sagerun:9417` with StateFlags9417 set only for
 "Previous Installations", "Temporary Setup Files", "Setup Log Files", "Windows Upgrade Log Files" and removed
-afterwards - never "Windows ESD installation files", needed to reset the PC). Each runs as its own process
+afterwards - never "Windows ESD installation files", needed to reset the PC). Every DISM call carries
+`/NoRestart` (without it DISM asks "Restart now? (Y/N)" - nobody could answer). Each runs as its own process
 (`Invoke-VxToolProcess`, `System.Diagnostics.Process`, no PowerShell in between): stdout is read as **bytes**
 with `ReadAsync` and only completed reads are looked at (rule 15), decoded with the OEM code page - or
 UTF-16LE when the second byte is 0 / a FF FE BOM (sfc.exe writes wide characters into a pipe) - through a

@@ -422,6 +422,9 @@ function Stop-VxProcessTree($Process) {
     try { if ($Process.HasExited) { return } } catch { return }
     if (Test-VxWindows) {
         try { $null = Invoke-VxNative -FilePath (Get-VxSystemTool 'taskkill.exe') -Arguments @('/PID', [string]$Process.Id, '/T', '/F') -TimeoutSec 10 } catch { $null = $_ }
+    } else {
+        # pwsh 7 (tests): .NET's own tree kill; Process.Kill(bool) does not exist in Windows PowerShell 5.1
+        try { $Process.Kill($true) } catch { $null = $_ }
     }
     try { if (-not $Process.HasExited) { $Process.Kill() } } catch { $null = $_ }
     try { [void]$Process.WaitForExit(3000) } catch { $null = $_ }

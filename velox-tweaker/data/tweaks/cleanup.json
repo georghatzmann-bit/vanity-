@@ -4,10 +4,11 @@
     {
       "id": "cleanup.user-temp",
       "name": "Eigene temporäre Dateien löschen",
-      "desc": "Leert deinen Temp-Ordner. Programme legen dort Reste ab, die oft mehrere GB groß werden. Gerade benutzte Dateien bleiben.",
-      "info": "Das ist %TEMP% (AppData\\Local\\Temp). Dateien, die gerade von einem Programm benutzt werden, sind gesperrt und werden übersprungen. Am besten direkt nach einem Neustart ausführen.",
+      "desc": "Leert deinen Temp-Ordner. Programme legen dort Reste ab, die oft mehrere GB groß werden. Gerade benutzte und ganz neue Dateien bleiben.",
+      "info": "Das ist %TEMP% (AppData\\Local\\Temp). Dateien, die gerade von einem Programm benutzt werden, sind gesperrt und werden übersprungen. Dateien aus den letzten 24 Stunden bleiben auch – eine laufende Installation könnte sie noch brauchen.",
       "group": "Temporäre Dateien",
       "kind": "action",
+      "tier": "quick",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -21,7 +22,8 @@
           "type": "clean",
           "paths": [
             "%TEMP%\\*"
-          ]
+          ],
+          "minAgeHours": 24
         }
       ]
     },
@@ -29,9 +31,10 @@
       "id": "cleanup.windows-temp",
       "name": "Temporäre Windows-Dateien löschen",
       "desc": "Leert den Temp-Ordner von Windows. Dort sammeln sich Reste von Installationen und Updates.",
-      "info": "Gesperrte Dateien werden übersprungen. Läuft gerade eine Installation oder ein Update, warte lieber, bis es fertig ist.",
+      "info": "Gesperrte Dateien und Dateien aus den letzten 24 Stunden bleiben – eine laufende Installation oder ein Update, das auf den Neustart wartet, braucht sie vielleicht noch.",
       "group": "Temporäre Dateien",
       "kind": "action",
+      "tier": "quick",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -45,7 +48,8 @@
           "type": "clean",
           "paths": [
             "%WINDIR%\\Temp\\*"
-          ]
+          ],
+          "minAgeHours": 24
         }
       ]
     },
@@ -53,9 +57,10 @@
       "id": "cleanup.inetcache",
       "name": "Alten Internet-Cache von Windows leeren",
       "desc": "Löscht den Internet-Cache, den Windows-Komponenten und ältere Programme nutzen. Edge, Chrome und Firefox sind nicht betroffen.",
-      "info": "Der Ordner stammt vom Internet Explorer und wird von manchen Programmen und Windows-Teilen weiter benutzt. Er füllt sich danach langsam wieder.",
+      "info": "Der Ordner stammt vom Internet Explorer und wird von manchen Programmen und Windows-Teilen weiter benutzt. Er füllt sich danach langsam wieder. Die Ordner von Outlook und Office (geöffnete Anhänge, Word-Wiederherstellung) bleiben unberührt.",
       "group": "Temporäre Dateien",
       "kind": "action",
+      "tier": "quick",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -69,6 +74,11 @@
           "type": "clean",
           "paths": [
             "%LOCALAPPDATA%\\Microsoft\\Windows\\INetCache\\*"
+          ],
+          "keep": [
+            "Content.Outlook",
+            "Content.MSO",
+            "Content.Word"
           ]
         }
       ]
@@ -76,10 +86,11 @@
     {
       "id": "cleanup.thumbnail-cache",
       "name": "Vorschaubild-Cache löschen",
-      "desc": "Löscht die gespeicherten Vorschaubilder im Explorer. Hilft bei falschen Vorschauen, gibt Platz frei. Der Explorer startet dafür kurz neu.",
-      "info": "Die Dateien thumbcache_*.db sind gesperrt, solange der Explorer läuft – deshalb wird er kurz beendet und neu gestartet. Taskleiste und offene Ordnerfenster verschwinden für ein paar Sekunden. Vorschaubilder werden beim nächsten Öffnen eines Ordners neu erstellt.",
+      "desc": "Löscht die gespeicherten Vorschaubilder im Explorer. Hilft bei falschen Vorschauen. Gesperrte Dateien verschwinden beim nächsten Neustart.",
+      "info": "Die Dateien thumbcache_*.db sind gesperrt, solange der Explorer läuft. VELOX beendet den Explorer dafür nicht: freie Dateien werden sofort gelöscht, gesperrte beim nächsten Neustart von Windows. Vorschaubilder werden beim nächsten Öffnen eines Ordners neu erstellt.",
       "group": "Temporäre Dateien",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -92,9 +103,72 @@
       "actions": [
         {
           "type": "ps",
-          "apply": "$sid = (Get-Process -Id $PID).SessionId\n$targets = @((Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer\\thumbcache_*.db'))\n$shell = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n$failed = 0\ntry {\n    foreach ($p in $shell) { try { Stop-Process -Id $p.Id -Force -ErrorAction Stop } catch { $null = $_ } }\n    foreach ($p in $shell) { try { $null = $p.WaitForExit(10000) } catch { $null = $_ } }\n    foreach ($t in $targets) {\n        foreach ($f in @(Get-ChildItem -Path $t -Force -ErrorAction SilentlyContinue)) {\n            try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop } catch { $failed++ }\n        }\n    }\n} finally {\n    $now = @()\n    for ($i = 0; $i -lt 16 -and $now.Count -eq 0; $i++) {\n        Start-Sleep -Milliseconds 500\n        $now = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $sid })\n    }\n    if ($now.Count -eq 0 -and $shell.Count -gt 0) { Start-Process -FilePath (Join-Path $env:SystemRoot 'explorer.exe') }\n}\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) waren gesperrt und konnten nicht entfernt werden. Nach einem Neustart einfach erneut starten.') }",
+          "apply": "$sig = '[DllImport(\"kernel32.dll\", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);'\nAdd-Type -Namespace VxThumb -Name Native -MemberDefinition $sig -ErrorAction Stop\n$dir = Join-Path $env:LOCALAPPDATA 'Microsoft\\Windows\\Explorer'\n$now = 0; $later = 0; $failed = 0\nforeach ($f in @(Get-ChildItem -LiteralPath $dir -Filter 'thumbcache_*.db' -Force -File -ErrorAction SilentlyContinue)) {\n    try { Remove-Item -LiteralPath $f.FullName -Force -ErrorAction Stop; $now++ }\n    catch {\n        # in use by Explorer: MOVEFILE_DELAY_UNTIL_REBOOT (4) deletes it at the next start, before Explorer runs\n        if ([VxThumb.Native]::MoveFileEx($f.FullName, $null, 4)) { $later++ } else { $failed++ }\n    }\n}\n$oe = [string][char]0x00F6; $ae = [string][char]0x00E4\nWrite-Output ([string]$now + ' Vorschaubild-Datei(en) gel' + $oe + 'scht, ' + [string]$later + ' werden beim n' + $ae + 'chsten Neustart gel' + $oe + 'scht.')\nif ($failed -gt 0) { throw ([string]$failed + ' Datei(en) konnten nicht entfernt werden.') }",
           "revert": null,
-          "detect": null
+          "detect": null,
+          "measure": [
+            "%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer\\thumbcache_*.db"
+          ],
+          "timeoutSec": 60
+        }
+      ]
+    },
+    {
+      "id": "cleanup.other-users-temp",
+      "name": "Temp-Ordner anderer Benutzerkonten leeren",
+      "desc": "Leert die Temp-Ordner aller anderen Konten auf diesem PC. Lohnt sich auf Familien-PCs. Braucht Administratorrechte.",
+      "info": "Betrifft C:\\Users\\<Name>\\AppData\\Local\\Temp jedes Kontos außer deinem eigenen (das macht schon „Eigene temporäre Dateien“). Gesperrte Dateien und Dateien aus den letzten 24 Stunden bleiben. Am besten, wenn die anderen Konten gerade abgemeldet sind.",
+      "group": "Temporäre Dateien",
+      "kind": "action",
+      "tier": "optin",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Löscht auch Dateien anderer Benutzer. Ist jemand gerade angemeldet, können dessen offene Programme Daten verlieren.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%SystemDrive%\\Users\\*\\AppData\\Local\\Temp\\*"
+          ],
+          "minAgeHours": 24
+        }
+      ]
+    },
+    {
+      "id": "cleanup.delivery-optimization",
+      "name": "Übermittlungsoptimierungs-Cache leeren",
+      "desc": "Löscht die Update-Dateien, die Windows für andere PCs zwischenspeichert. Gibt oft mehrere GB frei.",
+      "info": "Die Übermittlungsoptimierung hält Update-Teile bereit, um sie mit anderen PCs zu teilen. Gelöscht wird über den offiziellen Windows-Befehl, der Dienst selbst bleibt unverändert.",
+      "group": "Windows Update",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "update"
+      ],
+      "when": {
+        "minBuild": 17763
+      },
+      "actions": [
+        {
+          "type": "ps",
+          "apply": "if (-not (Get-Command -Name Delete-DeliveryOptimizationCache -ErrorAction SilentlyContinue)) { throw 'Delete-DeliveryOptimizationCache gibt es auf diesem Windows nicht.' }\nDelete-DeliveryOptimizationCache -Force -ErrorAction Stop",
+          "revert": null,
+          "detect": null,
+          "measure": [
+            "%WINDIR%\\ServiceProfiles\\NetworkService\\AppData\\Local\\Microsoft\\Windows\\DeliveryOptimization\\Cache\\*"
+          ],
+          "timeoutSec": 180
         }
       ]
     },
@@ -105,6 +179,7 @@
       "info": "Die Update-Dienste werden dafür kurz angehalten. Nicht direkt nach einem Update vor dem Neustart ausführen – sonst lädt Windows die Pakete noch einmal herunter.",
       "group": "Windows Update",
       "kind": "action",
+      "tier": "quick",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -128,40 +203,14 @@
       ]
     },
     {
-      "id": "cleanup.delivery-optimization",
-      "name": "Übermittlungsoptimierungs-Cache leeren",
-      "desc": "Löscht die Update-Dateien, die Windows für andere PCs zwischenspeichert. Gibt oft mehrere GB frei.",
-      "info": "Die Übermittlungsoptimierung hält Update-Teile bereit, um sie mit anderen PCs zu teilen. Gelöscht wird über den offiziellen Windows-Befehl, der Dienst selbst bleibt unverändert.",
-      "group": "Windows Update",
-      "kind": "action",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "cleanup",
-        "storage",
-        "update"
-      ],
-      "when": {
-        "minBuild": 17763
-      },
-      "actions": [
-        {
-          "type": "ps",
-          "apply": "if (-not (Get-Command -Name Delete-DeliveryOptimizationCache -ErrorAction SilentlyContinue)) { throw 'Delete-DeliveryOptimizationCache gibt es auf diesem Windows nicht.' }\nDelete-DeliveryOptimizationCache -Force -ErrorAction Stop",
-          "revert": null,
-          "detect": null
-        }
-      ]
-    },
-    {
       "id": "cleanup.component-store",
       "name": "Alte Update-Reste aufräumen (DISM)",
-      "desc": "Entfernt veraltete Windows-Komponenten, die neuere Updates ersetzt haben. Gibt oft 1–5 GB frei, dauert aber 5–30 Minuten.",
+      "desc": "Entfernt veraltete Windows-Komponenten, die neuere Updates ersetzt haben. Gibt oft 1–5 GB frei. Dauert 5–30 Minuten, der PC bleibt benutzbar.",
       "info": "Macht dasselbe wie die geplante Aufgabe „StartComponentCleanup“ und die Datenträgerbereinigung bei „Windows Update-Bereinigung“, nur sofort. Updates lassen sich weiterhin deinstallieren.",
       "group": "Windows Update",
       "kind": "action",
+      "tier": "deep",
+      "duration": "5–30 Min.",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -173,10 +222,8 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\dism.exe'\n$null = & $exe /Online /Cleanup-Image /StartComponentCleanup /NoRestart 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0 -and $c -ne 3010) { throw ('DISM-Bereinigung fehlgeschlagen (Code ' + $c + '). Steht noch ein Neustart nach einem Update an? Dann erst neu starten.') }",
-          "revert": null,
-          "detect": null
+          "type": "tool",
+          "tool": "dism-component-cleanup"
         }
       ]
     },
@@ -187,6 +234,8 @@
       "info": "DISM /StartComponentCleanup /ResetBase. Sinnvoll, wenn das System nach den letzten Updates stabil läuft. Dauert 10–30 Minuten.",
       "group": "Windows Update",
       "kind": "action",
+      "tier": "optin",
+      "duration": "10–40 Min.",
       "impact": 2,
       "risk": "moderate",
       "warning": "Bereits installierte Updates können danach nicht mehr deinstalliert werden. Macht ein Update Probleme, hilft dann nur noch eine Reparatur-Installation.",
@@ -198,10 +247,539 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$exe = Join-Path $env:SystemRoot 'System32\\dism.exe'\n$null = & $exe /Online /Cleanup-Image /StartComponentCleanup /ResetBase /NoRestart 2>&1\n$c = $LASTEXITCODE\nif ($c -ne 0 -and $c -ne 3010) { throw ('DISM-Bereinigung fehlgeschlagen (Code ' + $c + '). Steht noch ein Neustart nach einem Update an? Dann erst neu starten.') }",
-          "revert": null,
-          "detect": null
+          "type": "tool",
+          "tool": "dism-component-resetbase"
+        }
+      ]
+    },
+    {
+      "id": "cleanup.windows-old",
+      "name": "Alte Windows-Installation entfernen (Windows.old)",
+      "desc": "Löscht Windows.old und Reste von Upgrades ($Windows.~BT/~WS). Oft 10–30 GB. Danach geht kein Zurück zur alten Windows-Version mehr.",
+      "info": "Nutzt die Datenträgerbereinigung von Windows („Vorherige Windows-Installationen“, „Temporäre Windows-Installationsdateien“, Setup-Protokolle). Windows löscht Windows.old sonst selbst nach etwa 10 Tagen. Die Dateien zum Zurücksetzen des PCs bleiben.",
+      "group": "Windows Update",
+      "kind": "action",
+      "tier": "optin",
+      "duration": "5–20 Min.",
+      "impact": 3,
+      "risk": "moderate",
+      "warning": "Danach kannst du nicht mehr zur vorherigen Windows-Version zurückkehren. Nur ausführen, wenn das neue Windows stabil läuft.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "update"
+      ],
+      "actions": [
+        {
+          "type": "tool",
+          "tool": "cleanmgr-windows-old",
+          "measure": [
+            "%SystemDrive%\\Windows.old",
+            "%SystemDrive%\\$Windows.~BT",
+            "%SystemDrive%\\$Windows.~WS"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-edge",
+      "name": "Edge-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Edge. Logins, Verlauf und Passwörter bleiben. Edge vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Cache\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Code Cache\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\GPUCache\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Service Worker\\CacheStorage\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\*\\Service Worker\\ScriptCache\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\ShaderCache\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\GrShaderCache\\*",
+            "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\GraphiteDawnCache\\*"
+          ],
+          "closeApps": [
+            "msedge"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-chrome",
+      "name": "Chrome-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Chrome. Logins, Verlauf und Passwörter bleiben. Chrome vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Cache\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Code Cache\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\GPUCache\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Service Worker\\CacheStorage\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\*\\Service Worker\\ScriptCache\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\ShaderCache\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\GrShaderCache\\*",
+            "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\GraphiteDawnCache\\*"
+          ],
+          "closeApps": [
+            "chrome"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-brave",
+      "name": "Brave-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Brave. Logins, Verlauf und Passwörter bleiben. Brave vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Cache\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Code Cache\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\GPUCache\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Service Worker\\CacheStorage\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\*\\Service Worker\\ScriptCache\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\ShaderCache\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\GrShaderCache\\*",
+            "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\GraphiteDawnCache\\*"
+          ],
+          "closeApps": [
+            "brave"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-vivaldi",
+      "name": "Vivaldi-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Vivaldi. Logins, Verlauf und Passwörter bleiben. Vivaldi vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Cache\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Code Cache\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\GPUCache\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Service Worker\\CacheStorage\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\*\\Service Worker\\ScriptCache\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\ShaderCache\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\GrShaderCache\\*",
+            "%LOCALAPPDATA%\\Vivaldi\\User Data\\GraphiteDawnCache\\*"
+          ],
+          "closeApps": [
+            "vivaldi"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-opera",
+      "name": "Opera-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Opera. Logins, Verlauf und Passwörter bleiben. Opera vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Opera Software\\Opera Stable\\Cache\\*",
+            "%LOCALAPPDATA%\\Opera Software\\Opera Stable\\*\\Cache\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\Code Cache\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\GPUCache\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\Service Worker\\CacheStorage\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\ShaderCache\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\GrShaderCache\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\*\\Code Cache\\*",
+            "%APPDATA%\\Opera Software\\Opera Stable\\*\\GPUCache\\*"
+          ],
+          "closeApps": [
+            "opera"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-opera-gx",
+      "name": "Opera GX-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Opera GX. Logins, Verlauf und Passwörter bleiben. Opera GX vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Opera Software\\Opera GX Stable\\Cache\\*",
+            "%LOCALAPPDATA%\\Opera Software\\Opera GX Stable\\*\\Cache\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\Code Cache\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\GPUCache\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\Service Worker\\CacheStorage\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\ShaderCache\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\GrShaderCache\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\*\\Code Cache\\*",
+            "%APPDATA%\\Opera Software\\Opera GX Stable\\*\\GPUCache\\*"
+          ],
+          "closeApps": [
+            "opera"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.browser-firefox",
+      "name": "Firefox-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Webseiten-Dateien von Firefox. Logins, Verlauf und Passwörter bleiben. Firefox vorher schließen.",
+      "info": "Gelöscht werden nur zwischengespeicherte Seiten, Bilder und Skripte (Cache, Code Cache, GPUCache, Offline-Cache von Websites) in allen Profilen. Anmeldungen, Cookies, Verlauf, Passwörter, Tabs und Erweiterungen bleiben. Läuft der Browser, wird er übersprungen.",
+      "group": "Browser-Caches",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\cache2\\*",
+            "%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\startupCache\\*",
+            "%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\thumbnails\\*",
+            "%LOCALAPPDATA%\\Mozilla\\Firefox\\Profiles\\*\\jumpListCache\\*"
+          ],
+          "closeApps": [
+            "firefox"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.discord-cache",
+      "name": "Discord-Cache leeren",
+      "desc": "Löscht zwischengespeicherte Bilder und Daten von Discord (auch PTB und Canary). Gibt oft hunderte MB frei. Discord vorher ganz beenden.",
+      "info": "Anmeldung, Einstellungen und Nachrichten bleiben erhalten – Discord lädt Bilder und Emojis einfach neu.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%APPDATA%\\discord\\Cache\\*",
+            "%APPDATA%\\discord\\Code Cache\\*",
+            "%APPDATA%\\discord\\GPUCache\\*",
+            "%APPDATA%\\discordptb\\Cache\\*",
+            "%APPDATA%\\discordptb\\Code Cache\\*",
+            "%APPDATA%\\discordptb\\GPUCache\\*",
+            "%APPDATA%\\discordcanary\\Cache\\*",
+            "%APPDATA%\\discordcanary\\Code Cache\\*",
+            "%APPDATA%\\discordcanary\\GPUCache\\*"
+          ],
+          "closeApps": [
+            "Discord",
+            "DiscordPTB",
+            "DiscordCanary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.spotify-cache",
+      "name": "Spotify-Cache leeren",
+      "desc": "Löscht den Spotify-Zwischenspeicher. Spotify vorher schließen. Offline gespeicherte Songs musst du danach eventuell neu laden.",
+      "info": "Geleert wird der Ordner Spotify\\Data (auch der Microsoft-Store-Version). Bei manchen Spotify-Versionen liegen dort auch die Offline-Songs, deshalb nur auf ausdrücklichen Wunsch. Spotify lädt gespielte Songs einfach neu.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "optin",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Je nach Spotify-Version liegen hier auch offline gespeicherte Songs – die musst du dann neu herunterladen.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Spotify\\Data\\*",
+            "%LOCALAPPDATA%\\Packages\\SpotifyAB.SpotifyMusic_zpdnekdrzrea0\\LocalCache\\Spotify\\Data\\*"
+          ],
+          "closeApps": [
+            "Spotify"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.steam-cache",
+      "name": "Steam-Cache, Logs und Dumps löschen",
+      "desc": "Leert den Web-Cache von Steam und löscht alte Logs und Absturzberichte. Spiele, Spielstände und Login bleiben. Steam vorher schließen.",
+      "info": "Geleert werden htmlcache, appcache\\httpcache, logs und dumps im Steam-Ordner. Hilft auch bei leeren oder hängenden Shop-Seiten. Die Shop-Seiten laden beim nächsten Start einmal etwas langsamer.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\Steam\\htmlcache\\*",
+            "%STEAM%\\appcache\\httpcache\\*",
+            "%STEAM%\\logs\\*",
+            "%STEAM%\\dumps\\*"
+          ],
+          "closeApps": [
+            "steam",
+            "steamwebhelper"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.epic-cache",
+      "name": "Epic-Games-Launcher-Cache und Logs löschen",
+      "desc": "Leert den Web-Cache des Epic Games Launchers und löscht seine Logs. Spiele und Login bleiben. Launcher vorher schließen.",
+      "info": "Geleert werden Saved\\webcache* und Saved\\Logs. Hilft bei leeren oder hängenden Shop-Seiten.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\EpicGamesLauncher\\Saved\\webcache*",
+            "%LOCALAPPDATA%\\EpicGamesLauncher\\Saved\\Logs\\*"
+          ],
+          "closeApps": [
+            "EpicGamesLauncher",
+            "EpicWebHelper"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.battlenet-cache",
+      "name": "Battle.net-Cache leeren",
+      "desc": "Löscht den Cache der Battle.net-App. Hilft laut Blizzard bei Lade- und Update-Fehlern. Spiele bleiben. Battle.net vorher schließen.",
+      "info": "Geleert werden die Cache-Ordner unter ProgramData\\Blizzard Entertainment und AppData\\Local\\Battle.net. Einstellungen und Spieldaten bleiben.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%PROGRAMDATA%\\Blizzard Entertainment\\Battle.net\\Cache\\*",
+            "%LOCALAPPDATA%\\Battle.net\\Cache\\*",
+            "%LOCALAPPDATA%\\Battle.net\\BrowserCaches\\*"
+          ],
+          "closeApps": [
+            "Battle.net"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.ea-cache",
+      "name": "EA-app-Cache und Logs löschen",
+      "desc": "Löscht Cache und Logs der EA app. Hilft bei Anzeige- und Ladefehlern. Spiele und Login bleiben. EA app vorher schließen.",
+      "info": "Geleert werden EADesktop\\cache, EALaunchHelper\\cache und die Logs der EA app. Dasselbe macht „App-Wiederherstellung“ in der EA app. Der nächste Start dauert etwas länger.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "deep",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "repair"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%LOCALAPPDATA%\\EADesktop\\cache\\*",
+            "%LOCALAPPDATA%\\EALaunchHelper\\cache\\*",
+            "%LOCALAPPDATA%\\Electronic Arts\\EA Desktop\\Logs\\*"
+          ],
+          "closeApps": [
+            "EADesktop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.chat-apps-cache",
+      "name": "Cache von Teams (klassisch) und Slack leeren",
+      "desc": "Löscht zwischengespeicherte Bilder und Daten von Teams (klassisch) und Slack. Login und Nachrichten bleiben. Apps vorher schließen.",
+      "info": "Geleert werden nur Cache, Code Cache, GPUCache und der Offline-Cache. Beide Apps laden Bilder und Dateien einfach neu.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%APPDATA%\\Microsoft\\Teams\\Cache\\*",
+            "%APPDATA%\\Microsoft\\Teams\\Code Cache\\*",
+            "%APPDATA%\\Microsoft\\Teams\\GPUCache\\*",
+            "%APPDATA%\\Microsoft\\Teams\\Service Worker\\CacheStorage\\*",
+            "%APPDATA%\\Slack\\Cache\\*",
+            "%APPDATA%\\Slack\\Code Cache\\*",
+            "%APPDATA%\\Slack\\GPUCache\\*",
+            "%APPDATA%\\Slack\\Service Worker\\CacheStorage\\*"
+          ],
+          "closeApps": [
+            "Teams",
+            "slack"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.driver-installer-leftovers",
+      "name": "Reste von Grafiktreiber-Installationen löschen",
+      "desc": "Löscht entpackte Treiber-Installer in C:\\NVIDIA und C:\\AMD und alte NVIDIA-Downloads. Oft 1–3 GB, der Treiber bleibt installiert.",
+      "info": "Die Installer entpacken sich vor jeder Treiber-Installation dorthin und räumen danach nicht auf. Für ein neues Treiber-Update lädst du den Installer ohnehin neu herunter.",
+      "group": "Programme & Launcher",
+      "kind": "action",
+      "tier": "quick",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage",
+        "nvidia",
+        "amd"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%SystemDrive%\\NVIDIA\\*",
+            "%SystemDrive%\\AMD\\*",
+            "%PROGRAMDATA%\\NVIDIA Corporation\\Downloader\\*"
+          ]
         }
       ]
     },
@@ -212,6 +790,7 @@
       "info": "Spiele bauen ihre Shader beim nächsten Start neu auf. Nur sinnvoll nach einem Grafiktreiber-Update oder wenn ein Spiel plötzlich ruckelt oder abstürzt – nicht regelmäßig.",
       "group": "Shader-Caches",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "moderate",
       "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
@@ -237,6 +816,7 @@
       "info": "Treiber ab Version 545 speichern in AppData\\LocalLow\\NVIDIA\\PerDriverVersion, ältere in AppData\\Local\\NVIDIA oder NV_Cache – alle Orte werden geleert, dazu der CUDA-Cache (ComputeCache). Die Größe des Caches stellst du in der NVIDIA-Systemsteuerung ein.",
       "group": "Shader-Caches",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "moderate",
       "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
@@ -271,6 +851,7 @@
       "info": "Dasselbe wie „Shader-Cache zurücksetzen“ in der AMD-Software (Adrenalin) unter Grafik > Erweitert.",
       "group": "Shader-Caches",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "moderate",
       "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
@@ -303,6 +884,7 @@
       "info": "Hilft vor allem nach Treiber-Updates oder wenn ein Spiel mit Intel-Grafik plötzlich ruckelt.",
       "group": "Shader-Caches",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "moderate",
       "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
@@ -325,12 +907,42 @@
       ]
     },
     {
+      "id": "cleanup.steam-shader-cache",
+      "name": "Steam-Shader-Cache leeren",
+      "desc": "Löscht die vorkompilierten Shader aller Steam-Spiele. Oft mehrere GB. Die nächsten Spielstarts dauern länger. Steam vorher schließen.",
+      "info": "Steam legt in steamapps\\shadercache je Spiel vorkompilierte Shader ab und lädt oder baut sie bei Bedarf neu. Sinnvoll nach Treiber-Updates oder bei Grafikfehlern, nicht regelmäßig.",
+      "group": "Shader-Caches",
+      "kind": "action",
+      "tier": "deep",
+      "impact": 1,
+      "risk": "moderate",
+      "warning": "Die nächsten Spielstarts dauern länger und ruckeln kurz, bis die Shader neu erstellt sind.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "stutter",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%STEAM%\\steamapps\\shadercache\\*"
+          ],
+          "closeApps": [
+            "steam"
+          ]
+        }
+      ]
+    },
+    {
       "id": "cleanup.crash-dumps",
       "name": "Absturz-Speicherabbilder löschen",
-      "desc": "Löscht Speicherabbilder von abgestürzten Programmen und Bluescreens. MEMORY.DMP allein kann viele GB groß sein.",
-      "info": "Die Dateien braucht man nur, um einen Absturz oder Bluescreen untersuchen zu lassen. Willst du das noch, sichere sie vorher (z. B. für BlueScreenView oder den Support).",
+      "desc": "Löscht Speicherabbilder von abgestürzten Programmen und kleine Bluescreen-Berichte (Minidumps).",
+      "info": "Die Dateien braucht man nur, um einen Absturz untersuchen zu lassen. Willst du das noch, sichere sie vorher. Das große MEMORY.DMP hat einen eigenen Punkt.",
       "group": "Absturzberichte & Protokolle",
       "kind": "action",
+      "tier": "quick",
       "impact": 2,
       "risk": "safe",
       "warning": null,
@@ -344,9 +956,57 @@
           "type": "clean",
           "paths": [
             "%LOCALAPPDATA%\\CrashDumps\\*",
-            "%WINDIR%\\Minidump\\*",
-            "%WINDIR%\\MEMORY.DMP",
+            "%WINDIR%\\Minidump\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.live-kernel-reports",
+      "name": "Treiber-Fehlerberichte löschen (LiveKernelReports)",
+      "desc": "Löscht Berichte von Treiber-Hängern, z. B. wenn der Grafiktreiber neu startet. Oft mehrere GB groß.",
+      "info": "Windows legt sie unter Windows\\LiveKernelReports ab, wenn ein Treiber hängt, ohne dass ein Bluescreen kommt. Nur nötig, wenn du solche Hänger gerade untersuchen lässt.",
+      "group": "Absturzberichte & Protokolle",
+      "kind": "action",
+      "tier": "deep",
+      "impact": 1,
+      "risk": "safe",
+      "warning": null,
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
             "%WINDIR%\\LiveKernelReports\\*"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleanup.memory-dump",
+      "name": "Großes Bluescreen-Abbild löschen (MEMORY.DMP)",
+      "desc": "Löscht das vollständige Speicherabbild des letzten Bluescreens. Kann so groß wie dein RAM sein.",
+      "info": "MEMORY.DMP braucht man nur, wenn ein Fachmann einen Bluescreen genau untersuchen soll. Ein neuer Bluescreen legt die Datei wieder an.",
+      "group": "Absturzberichte & Protokolle",
+      "kind": "action",
+      "tier": "optin",
+      "impact": 2,
+      "risk": "moderate",
+      "warning": "Danach lässt sich der letzte Bluescreen nicht mehr genau untersuchen. Willst du ihn noch analysieren lassen, sichere die Datei vorher.",
+      "needs": "none",
+      "tags": [
+        "cleanup",
+        "storage"
+      ],
+      "actions": [
+        {
+          "type": "clean",
+          "paths": [
+            "%WINDIR%\\MEMORY.DMP"
           ]
         }
       ]
@@ -358,6 +1018,7 @@
       "info": "Die Berichte nutzt nur die Zuverlässigkeitsüberwachung für ihre Details. Wer Probleme mit einem Absturz untersuchen will, wartet besser damit.",
       "group": "Absturzberichte & Protokolle",
       "kind": "action",
+      "tier": "quick",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -383,10 +1044,11 @@
     {
       "id": "cleanup.system-logs",
       "name": "Alte Windows-Protokolle löschen",
-      "desc": "Löscht archivierte Protokolle von Komponentenspeicher, DISM und Windows Update. Aktive Protokolle bleiben.",
+      "desc": "Löscht archivierte Protokolle von Komponentenspeicher, DISM, Windows Update und Setup. Aktive Protokolle bleiben.",
       "info": "Gerade benutzte Protokolle sind gesperrt und werden übersprungen. Willst du ein Update- oder Reparatur-Problem untersuchen lassen, führe das erst danach aus.",
       "group": "Absturzberichte & Protokolle",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -401,86 +1063,9 @@
           "paths": [
             "%WINDIR%\\Logs\\CBS\\CbsPersist_*",
             "%WINDIR%\\Logs\\DISM\\*",
-            "%WINDIR%\\Logs\\WindowsUpdate\\*"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "cleanup.driver-installer-leftovers",
-      "name": "Reste von Grafiktreiber-Installationen löschen",
-      "desc": "Löscht entpackte Treiber-Installer in C:\\NVIDIA und C:\\AMD und alte NVIDIA-Downloads. Oft 1–3 GB, der Treiber bleibt installiert.",
-      "info": "Die Installer entpacken sich vor jeder Treiber-Installation dorthin und räumen danach nicht auf. Für ein neues Treiber-Update lädst du den Installer ohnehin neu herunter.",
-      "group": "Programme & Launcher",
-      "kind": "action",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "cleanup",
-        "storage",
-        "nvidia",
-        "amd"
-      ],
-      "actions": [
-        {
-          "type": "clean",
-          "paths": [
-            "%SystemDrive%\\NVIDIA\\*",
-            "%SystemDrive%\\AMD\\*",
-            "%PROGRAMDATA%\\NVIDIA Corporation\\Downloader\\*"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "cleanup.launcher-webcache",
-      "name": "Web-Cache von Steam und Epic leeren",
-      "desc": "Leert die eingebauten Browser-Caches von Steam und Epic Games Launcher. Hilft bei leeren oder hängenden Shop-Seiten. Launcher vorher schließen.",
-      "info": "Spiele, Spielstände und Anmeldung bleiben erhalten. Die Shop-Seiten laden beim nächsten Start einmal etwas langsamer.",
-      "group": "Programme & Launcher",
-      "kind": "action",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "cleanup",
-        "repair"
-      ],
-      "actions": [
-        {
-          "type": "clean",
-          "paths": [
-            "%LOCALAPPDATA%\\Steam\\htmlcache\\*",
-            "%LOCALAPPDATA%\\EpicGamesLauncher\\Saved\\webcache*"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "cleanup.discord-cache",
-      "name": "Discord-Cache leeren",
-      "desc": "Löscht zwischengespeicherte Bilder und Daten von Discord. Gibt oft hunderte MB frei. Discord vorher ganz beenden (auch im Tray).",
-      "info": "Anmeldung, Einstellungen und Nachrichten bleiben erhalten – Discord lädt Bilder und Emojis einfach neu.",
-      "group": "Programme & Launcher",
-      "kind": "action",
-      "impact": 1,
-      "risk": "safe",
-      "warning": null,
-      "needs": "none",
-      "tags": [
-        "cleanup",
-        "storage"
-      ],
-      "actions": [
-        {
-          "type": "clean",
-          "paths": [
-            "%APPDATA%\\discord\\Cache\\*",
-            "%APPDATA%\\discord\\Code Cache\\*",
-            "%APPDATA%\\discord\\GPUCache\\*"
+            "%WINDIR%\\Logs\\WindowsUpdate\\*",
+            "%WINDIR%\\Logs\\MoSetup\\*",
+            "%WINDIR%\\Logs\\NetSetup\\*"
           ]
         }
       ]
@@ -492,6 +1077,7 @@
       "info": "Gelöscht werden nur die Verknüpfungen in der Liste und die Liste „Zuletzt verwendet“ im Schnellzugriff. Angeheftete Ordner im Schnellzugriff und angeheftete Einträge in Sprunglisten der Taskleiste bleiben erhalten.",
       "group": "Papierkorb & Verlauf",
       "kind": "action",
+      "tier": "deep",
       "impact": 1,
       "risk": "safe",
       "warning": null,
@@ -513,10 +1099,11 @@
     {
       "id": "cleanup.recycle-bin",
       "name": "Papierkorb leeren",
-      "desc": "Leert den Papierkorb auf allen Laufwerken. Gelöschte Dateien sind danach endgültig weg.",
-      "info": "Leert den Papierkorb deines Benutzerkontos auf allen Laufwerken – genau wie „Papierkorb leeren“ im Kontextmenü, nur ohne Rückfrage.",
+      "desc": "Leert deinen Papierkorb auf allen Laufwerken. Gelöschte Dateien sind danach endgültig weg.",
+      "info": "Leert den Papierkorb deines Benutzerkontos auf allen festen Laufwerken – wie „Papierkorb leeren“ im Kontextmenü. Die Größe siehst du vorher in der Liste.",
       "group": "Papierkorb & Verlauf",
       "kind": "action",
+      "tier": "optin",
       "impact": 2,
       "risk": "moderate",
       "warning": "Alles im Papierkorb wird endgültig gelöscht und lässt sich nicht wiederherstellen.",
@@ -527,10 +1114,13 @@
       ],
       "actions": [
         {
-          "type": "ps",
-          "apply": "$sig = '[DllImport(\"shell32.dll\", CharSet = CharSet.Unicode)] public static extern int SHEmptyRecycleBin(IntPtr hwnd, string pszRootPath, uint dwFlags);'\nif (-not ('VxShell.RecycleBin' -as [type])) { Add-Type -Namespace VxShell -Name RecycleBin -MemberDefinition $sig -ErrorAction Stop }\n$hr = [VxShell.RecycleBin]::SHEmptyRecycleBin([IntPtr]::Zero, $null, 7)\nif ($hr -ne 0 -and $hr -ne -2147418113) { throw ('Papierkorb konnte nicht geleert werden (HRESULT 0x' + $hr.ToString('X8') + ')') }",
-          "revert": null,
-          "detect": null
+          "type": "clean",
+          "paths": [
+            "%RECYCLEBIN%\\*"
+          ],
+          "keep": [
+            "desktop.ini"
+          ]
         }
       ]
     }

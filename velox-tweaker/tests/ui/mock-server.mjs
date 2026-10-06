@@ -129,6 +129,7 @@ function evalWhen(w) {
 }
 
 function hash(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function fmtMb(b) { return b >= 1073741824 ? (b / 1073741824).toFixed(1).replace(".", ",") + " GB" : Math.round(b / 1048576) + " MB"; }
 
 let W; // world state
 function buildWorld() {
@@ -615,29 +616,65 @@ const JOBS = {
     return Object.assign(r, { model: W.settings.claude.model, usage: { input_tokens: 18234, output_tokens: 1420 } });
   },
   async 'clean-scan'(p, ctx) {
-    const ids = W.tweaks.filter(t => t.kind === 'action' && (t.actions || []).some(a => a.type === 'clean')).map(t => t.id);
-    if (!W.cleanSizes) W.cleanSizes = Object.fromEntries(ids.map(id => [id, { bytes: (hash(id) % 1900 + 20) * 1048576 + (hash(id + 'b') % 1048576), files: hash(id) % 4000 + 12 }]));
-    for (let i = 0; i < ids.length; i++) { ctx.step('Wird gemessen: ' + W.byId.get(ids[i]).name, (i + 1) / (ids.length + 1)); await ctx.tick(0.5); }
-    return { items: ids.map(id => Object.assign({ id }, W.cleanSizes[id] || { bytes: 0, files: 0 })) };
+    // like core/Clean.ps1: every action tweak with a tier, a clean action or measure paths
+    const measurable = (t) => (t.actions || []).some(a => a.type === 'clean' || (a.measure && a.measure.length));
+    const list = W.tweaks.filter(t => t.kind === 'action' && (t.tier || measurable(t)));
+    if (!W.cleanSizes) {
+      W.cleanSizes = Object.fromEntries(list.map(t => {
+        const id = t.id;
+        const found = !/brave|vivaldi|opera-gx|ea-cache|chat-apps/.test(id);
+        const running = /browser-chrome/.test(id) ? ['Chrome'] : [];
+        return [id, { bytes: found ? (hash(id) % 1900 + 20) * 1048576 + (hash(id + 'b') % 1048576) : 0, files: found ? hash(id) % 4000 + 12 : 0, found, partial: id === 'cleanup.windows-old', measurable: measurable(t), running }];
+      }));
+    }
+    for (let i = 0; i < list.length; i++) { ctx.step('Messe: ' + list[i].name, (i + 1) / (list.length + 1)); if (i % 6 === 0) await ctx.tick(0.3); }
+    const items = list.map(t => Object.assign({ id: t.id }, W.cleanSizes[t.id] || { bytes: 0, files: 0, found: true, partial: false, measurable: measurable(t), running: [] }));
+    return { items, totalBytes: items.reduce((s, x) => s + (x.measurable ? x.bytes : 0), 0) };
   },
-  async 'run-action'(p, ctx) {
+  async 'run-action'(p, ctx, job) {
+    // like core/Clean.ps1 Invoke-VxRunActionJob: job.live per item, opt-in only with confirmOptIn,
+    // apps that run are skipped, tools report live percent, every item can be skipped
     const ids = Array.isArray(p.ids) ? p.ids : [];
     const results = [];
+    const live = { id: '', index: 0, total: ids.length, progress: -1, percent: -1, elapsedSec: 0, files: 0, freed: 0, note: '', done: [] };
+    job.live = live;
+    const finish = (row) => { results.push(row); live.done.push(row); };
     for (let i = 0; i < ids.length; i++) {
       const t = W.byId.get(ids[i]);
-      if (!t) { results.push({ id: ids[i], ok: false, freedBytes: 0, message: 'Unbekannte Aktion' }); continue; }
-      ctx.step(t.name + ' …', i / ids.length);
-      if (t.category === 'repair') {
-        for (const pct of [12, 37, 64, 91, 100]) { ctx.step(t.name + ' … ' + pct + ' %', (i + pct / 100) / ids.length); ctx.log('info', 'Überprüfung ' + pct + ' % abgeschlossen.'); await ctx.tick(0.6); }
-      } else await ctx.tick();
+      if (!t) { finish({ id: ids[i], ok: false, freedBytes: 0, message: 'Unbekannte Aktion.', status: 'failed', skipped: false, running: [] }); continue; }
+      Object.assign(live, { id: t.id, index: i + 1, progress: -1, percent: -1, elapsedSec: 0, files: 0, freed: 0, note: '' });
+      ctx.step('Führe aus: ' + t.name, i / ids.length);
       const size = W.cleanSizes && W.cleanSizes[t.id];
-      const freed = size ? size.bytes : (t.actions || []).some(a => a.type === 'clean') ? 42 * 1048576 : 0;
-      if (size) W.cleanSizes[t.id] = { bytes: 0, files: 0 };
+      if (t.tier === 'optin' && !p.confirmOptIn) { finish({ id: t.id, ok: false, freedBytes: 0, status: 'skipped', skipped: true, running: [], message: 'Nicht ausgeführt: Dieser Punkt braucht deine ausdrückliche Bestätigung („Alles“ mit Häkchen).' }); continue; }
+      if (size && size.running && size.running.length) { finish({ id: t.id, ok: true, freedBytes: 0, status: 'skipped', skipped: true, running: size.running, message: 'Übersprungen: ' + size.running.join(', ') + ' läuft gerade. Schließe das Programm ganz (auch im Infobereich) und starte die Reinigung noch einmal.' }); continue; }
+      const tool = (t.actions || []).find(a => a.type === 'tool');
+      job.skippable = true; job._skip = false;
+      let skipped = false;
+      const steps = tool ? [0, 8.4, 21.7, 40.2, 62.3, 62.3, 81, 100] : [0.25, 0.5, 0.75, 1];
+      for (let k = 0; k < steps.length; k++) {
+        await ctx.tick(tool ? 20 : 2);
+        if (job._skip) { skipped = true; break; }
+        if (tool) {
+          live.percent = steps[k]; live.progress = steps[k] / 100; live.elapsedSec = k * 7;
+          live.note = k === 5 ? 'DISM wartet auf Windows (seit 10 Min. keine neue Meldung).' : '';
+          ctx.step(t.name + ' – ' + String(steps[k]).replace('.', ',') + ' % · 0:' + String(k * 7).padStart(2, '0'), (i + steps[k] / 100) / ids.length);
+        } else if (size) {
+          live.progress = steps[k]; live.files = Math.round((size.files || 0) * steps[k]); live.freed = Math.round((size.bytes || 0) * steps[k]);
+          ctx.step('Führe aus: ' + t.name, (i + steps[k]) / ids.length);
+        }
+      }
+      job.skippable = false; job._skip = false;
+      if (skipped) { ctx.log('warn', t.name + ': übersprungen'); finish({ id: t.id, ok: true, freedBytes: live.freed, status: 'skipped', skipped: true, running: [], message: 'Übersprungen.' }); continue; }
+      const freed = size && size.measurable !== false ? size.bytes : (t.actions || []).some(a => a.type === 'clean') ? 42 * 1048576 : 0;
+      const locked = size && size.files > 100 ? 3 : 0;
+      if (size) W.cleanSizes[t.id] = Object.assign({}, size, { bytes: 0, files: locked });
       addNeeds(t);
-      results.push({ id: t.id, ok: true, freedBytes: freed, message: freed ? (size ? size.files : 120) + ' Dateien gelöscht' : 'Erfolgreich ausgeführt (Testmodus)' });
-      ctx.log('ok', t.name + ': fertig');
+      const message = tool ? (t.category === 'repair' ? 'Keine Fehler gefunden' : 'Fertig, ohne Fehler') : freed ? fmtMb(freed) + ' freigegeben' + (locked ? ' – ' + locked + ' Dateien waren gerade in Benutzung und bleiben' : '') : 'Ausgeführt';
+      finish({ id: t.id, ok: true, freedBytes: freed, status: locked ? 'partial' : 'ok', skipped: false, running: [], locked, deleted: size ? size.files - locked : 0, message });
+      ctx.log(locked ? 'warn' : 'ok', t.name + ': ' + message);
     }
-    return { results };
+    live.id = '';
+    return { results, freedBytes: results.reduce((s, r) => s + (r.freedBytes || 0), 0) };
   },
   async 'startup-list'(p, ctx) { ctx.step('Autostart wird gelesen …', 0.5); await ctx.tick(); return { items: W.startup }; },
   async 'startup-set'(p, ctx) {
@@ -785,7 +822,8 @@ function readBody(req) {
 }
 function publicJob(job, since) {
   return { id: job.id, type: job.type, status: job.status, progress: job.progress, step: job.step, log: job.log.filter(l => l.i >= since), result: job.result, error: job.error,
-    skippable: !!job.skippable, durationMs: job.durationMs === null ? Date.now() - job._start : job.durationMs };
+    skippable: !!job.skippable, durationMs: job.durationMs === null ? Date.now() - job._start : job.durationMs,
+    live: job.live ? JSON.parse(JSON.stringify(job.live)) : null };
 }
 function cancelShutdown() { if (W.shutdownTimer) { clearTimeout(W.shutdownTimer); W.shutdownTimer = null; log('shutdown cancelled'); } }
 

@@ -266,7 +266,8 @@
           "type": "ps",
           "apply": "& fsutil.exe behavior set disabledeletenotify NTFS 0 | Out-Null\nif ($LASTEXITCODE -ne 0) { throw 'fsutil failed' }\nforeach ($v in @(Get-Volume -ErrorAction SilentlyContinue | Where-Object { [string]$_.DriveType -eq 'Fixed' -and $_.DriveLetter -and [string]$_.FileSystem -eq 'NTFS' })) {\n  try { Optimize-Volume -DriveLetter $v.DriveLetter -ReTrim -ErrorAction Stop } catch { }\n}\n",
           "revert": null,
-          "detect": null
+          "detect": null,
+          "timeoutSec": 1800
         }
       ]
     },

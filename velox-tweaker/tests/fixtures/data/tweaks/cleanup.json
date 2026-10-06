@@ -2,10 +2,10 @@
   "category": "cleanup",
   "tweaks": [
     { "id": "cleanup.temp", "name": "Temporäre Dateien löschen", "desc": "Löscht Reste von Installationen und Programmen.",
-      "kind": "action", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup", "storage"],
+      "kind": "action", "tier": "quick", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup", "storage"],
       "actions": [ { "type": "clean", "paths": ["%TEMP%\\*", "%SystemRoot%\\Temp\\*"], "keep": ["velox-keep.txt"] } ] },
     { "id": "cleanup.wu-cache", "name": "Update-Cache leeren", "desc": "Löscht heruntergeladene Update-Dateien.",
-      "kind": "action", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup", "update"],
+      "kind": "action", "tier": "deep", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup", "update"],
       "actions": [ { "type": "clean", "paths": ["%SystemRoot%\\SoftwareDistribution\\Download"], "stopServices": ["wuauserv", "bits"] } ] }
   ]
 }

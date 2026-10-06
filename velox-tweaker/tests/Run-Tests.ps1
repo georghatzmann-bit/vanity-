@@ -6,7 +6,7 @@
 .EXAMPLE
   pwsh tests/Run-Tests.ps1
   pwsh tests/Run-Tests.ps1 -Strict          # also fail when the real data/ catalog has errors
-  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games, settings)
+  pwsh tests/Run-Tests.ps1 -Only engine     # run one group (compat, catalog, engine, realcatalog, detweak, advisor, claude, ai, server, review, restorepoint, speed, games, settings, clean)
 #>
 param(
     [switch]$Strict,
@@ -65,7 +65,7 @@ function New-TempDir([string]$Name) {
 
 # ------------------------------------------------------------------ load the backend in-process
 
-foreach ($n in @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Jobs', 'Server')) {
+foreach ($n in @('Common', 'System', 'Catalog', 'Engine', 'Detweak', 'Scan', 'Advisor', 'Claude', 'Extras', 'Clean', 'Jobs', 'Server')) {
     . (Join-Path (Join-Path $AppRoot 'core') ($n + '.ps1'))
 }
 Initialize-VxRuntime
@@ -1738,10 +1738,14 @@ Test-Case 'review' 'Restore: nur Einträge, die VELOX selbst schreibt, werden wi
 }
 
 Test-Case 'review' 'Reinigung: Verknüpfungen (Junction/Symlink) werden nie verfolgt' {
-    $null = New-TestContext
+    $ctx = New-TestContext
     $base = New-TempDir 'clean'
+    # the cache sits in the fake PC's LOCALAPPDATA (allow-list), the link target outside of it
+    $ctx.CleanFixture = $base
     $outside = Join-Path $base 'outside'
-    $cache = Join-Path $base 'cache'
+    $local = Join-Path $base 'C/Users/Max/AppData/Local'
+    [void][IO.Directory]::CreateDirectory($local)
+    $cache = Join-Path $local 'cache'
     [void][IO.Directory]::CreateDirectory($outside)
     [void][IO.Directory]::CreateDirectory((Join-Path $cache 'sub'))
     [IO.File]::WriteAllText((Join-Path $outside 'wichtig.txt'), 'x')
@@ -1756,7 +1760,7 @@ Test-Case 'review' 'Reinigung: Verknüpfungen (Junction/Symlink) werden nie verf
     Assert-Equal 2 $w.deleted 'beide Cache-Dateien gelöscht'
     Assert-True ([IO.File]::Exists((Join-Path $outside 'wichtig.txt'))) 'Ziel der Verknüpfung unberührt'
     # the cleaned folder itself (or a folder above it) is a link -> refused
-    $linkRoot = Join-Path $base 'cache-link'
+    $linkRoot = Join-Path $local 'cache-link'
     $null = New-Item -ItemType SymbolicLink -Path $linkRoot -Target $outside
     $refused = $false
     try { $null = Get-VxCleanTopItems (Resolve-VxCleanPath $linkRoot) @() } catch { $refused = ([string]$_.Exception.Message -match 'Verknüpfung') }
@@ -1877,7 +1881,7 @@ Test-Case 'review' 'Kleinkram: BitLocker-Liste, Codepage, Wildcard ohne Leserech
     $ctx.CoreSources = @('function Get-VxMarker { 1 }')
     Assert-Equal @('function Get-VxMarker { 1 }') @(Get-VxCoreSources) 'gespeicherter Quelltext'
     $ctx.CoreSources = $null
-    Assert-Equal 10 @(Get-VxCoreSources).Count 'einmal gelesen'
+    Assert-Equal 11 @(Get-VxCoreSources).Count 'einmal gelesen'
     $vx = [IO.File]::ReadAllText((Join-Path $AppRoot 'Velox.ps1'))
     Assert-True ($vx -notmatch 'LiteralPath \$VxRoot -Recurse') 'Unblock nicht rekursiv über den Startordner'
     Assert-True ($vx -notmatch "'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths") 'kein Browser aus HKCU'
@@ -2792,6 +2796,274 @@ Test-Case 'settings' 'bootstrap.mode.hosted nur unter VELOX.exe (-HostPid + -NoB
     Assert-Equal $true (Get-VxModeDto).hosted 'im Fenster von VELOX.exe'
     $ctx.Life = $null
     Assert-Equal $false (Get-VxModeDto).hosted 'ohne Lebenszyklus'
+}
+
+# ==================================================================== clean (Reinigung + DISM/SFC)
+
+# A fresh fake PC for the Reinigung (deletes really happen in it) on the REAL catalog.
+function New-CleanContext([string[]]$Running = @('chrome')) {
+    $ctx = New-TestContext -DataDir (Join-Path $AppRoot 'data')
+    $fx = Join-Path (New-TempDir 'cleanfx') 'pc'
+    $null = & (Join-Path (Join-Path (Join-Path $TestRoot 'fixtures') 'clean') 'New-CleanFixture.ps1') -Root $fx -Running $Running
+    $ctx.CleanFixture = $fx
+    $ctx.TestToolMs = 150
+    return $ctx
+}
+function Get-FxPath([string]$Rel) { return (Join-Path $global:VxCtx.CleanFixture ($Rel.Replace('\', [IO.Path]::DirectorySeparatorChar))) }
+
+Test-Case 'clean' 'Werkzeug-Ausgabe: \r-Fortschritt, geteilte Zahlen, SFC als UTF-16 (deutsch + englisch), CHKDSK Gesamt' {
+    $null = New-TestContext
+    $r = New-VxToolReader 'dism' ([Text.Encoding]::UTF8)
+    $b = [Text.Encoding]::UTF8.GetBytes("Image Version: 10.0`r`n`r`n`r[=====   2")
+    Add-VxToolBytes $r $b $b.Length
+    Assert-True ($r.percent -lt 0) 'halbe Zahl ohne % zählt noch nicht'
+    $b = [Text.Encoding]::UTF8.GetBytes("7.4%     ]`r[=========== 62.3%    ]")
+    Add-VxToolBytes $r $b $b.Length
+    Assert-Equal 62.3 $r.percent 'letzter Balken ohne Zeilenende wird gelesen'
+    Assert-True (@($r.lines | Where-Object { $_ -match '%' }).Count -eq 0) 'Balken landen nicht in den Ergebniszeilen'
+    # sfc.exe: UTF-16LE into the pipe, split in the middle of a character
+    $s = New-VxToolReader 'sfc'
+    $u = (New-Object System.Text.UnicodeEncoding($false, $false)).GetBytes("`r`nÜberprüfung 45 % abgeschlossen.`rÜberprüfung 100 % abgeschlossen.`r`nDer Windows-Ressourcenschutz hat keine Integritätsverletzungen gefunden.`r`n")
+    Add-VxToolBytes $s ([byte[]]$u[0..2]) 3
+    Add-VxToolBytes $s ([byte[]]$u[3..($u.Length - 1)]) ($u.Length - 3)
+    Assert-Equal 100.0 $s.percent 'SFC-Prozent (deutsch)'
+    Assert-True ($s.encoding -is [System.Text.UnicodeEncoding]) 'UTF-16 erkannt'
+    $o = Get-VxToolOutcome (Get-VxToolSpec 'sfc-scannow') 0 $s
+    Assert-True ($o.ok -and $o.message -match 'Keine beschädigten') ('SFC deutsch: ' + $o.message)
+    $e = New-VxToolReader 'sfc'
+    $u = (New-Object System.Text.UnicodeEncoding($false, $false)).GetBytes("`rVerification 37% complete.`r`nWindows Resource Protection found corrupt files but was unable to fix some of them.`r`n")
+    Add-VxToolBytes $e $u $u.Length
+    Assert-Equal 37.0 $e.percent 'SFC-Prozent (englisch)'
+    $o = Get-VxToolOutcome (Get-VxToolSpec 'sfc-scannow') 0 $e
+    Assert-True (-not $o.ok -and $o.message -match 'DISM') ('SFC englisch, nicht alles repariert: ' + $o.message)
+    Assert-Equal 9.0 (Get-VxToolPercent 'chkdsk' 'Progress: 9 of 100 done; Stage: 26%; Total: 9%; ETA: 0:01:00') 'CHKDSK Total'
+    Assert-Equal 31.0 (Get-VxToolPercent 'chkdsk' 'Fortschritt: 1 von 9 erledigt; Phase: 80 %; Gesamt: 31 %') 'CHKDSK Gesamt'
+    Assert-Equal 42.5 (Get-VxToolPercent 'dism' '[====  42,5 %  ]') 'Komma als Dezimalzeichen'
+    # DISM outcomes
+    $d = New-VxToolReader 'dism'
+    Add-VxToolText $d "Error: 0x800f0806`r`n`r`nThe operation could not be completed due to pending operations.`r`n"
+    $o = Get-VxToolOutcome (Get-VxToolSpec 'dism-component-cleanup') -2146498554 $d
+    Assert-True (-not $o.ok -and $o.message -match 'Neustart' -and $o.message -match '0x800F0806') ('wartender Neustart: ' + $o.message)
+    $h = New-VxToolReader 'dism'
+    Add-VxToolText $h "The component store is repairable.`r`nThe operation completed successfully.`r`n"
+    $o = Get-VxToolOutcome (Get-VxToolSpec 'dism-scanhealth') 0 $h
+    Assert-True (-not $o.ok -and $o.message -match 'RestoreHealth|reparieren') ('ScanHealth: reparierbar: ' + $o.message)
+    $o = Get-VxToolOutcome (Get-VxToolSpec 'dism-restorehealth') 3010 (New-VxToolReader 'dism')
+    Assert-True ($o.ok -and $o.reboot) '3010 = ok + Neustart'
+}
+
+Test-Case 'clean' 'Werkzeug-Prozess: Live-Prozent, Fehlercode, Zeitlimit, Überspringen und Abbrechen beenden den ganzen Prozessbaum' {
+    $null = New-TestContext
+    $fake = Join-Path (Join-Path (Join-Path $TestRoot 'fixtures') 'clean') 'fake-tool.ps1'
+    $job = New-TestJob 'run-action' $null
+    $job.live = [hashtable]::Synchronized(@{ percent = -1.0; progress = -1.0; elapsedSec = 0; note = '' })
+    $global:VxJob = $job
+    try {
+        $slot = @{ base = 0.0; span = 1.0; step = 'DISM repariert das Windows-Abbild' }
+        $r = Invoke-VxToolProcess $HostExe @('-NoProfile', '-File', $fake, '-Mode', 'dism') 'dism' 60 $slot 600 'DISM' ([Text.Encoding]::UTF8)
+        Assert-Equal 0 $r.exitCode 'Code 0'
+        Assert-Equal 100.0 $r.reader.percent 'bis 100 % gelesen'
+        $o = Get-VxToolOutcome (Get-VxToolSpec 'dism-restorehealth') $r.exitCode $r.reader
+        Assert-True $o.ok ('ok: ' + $o.message)
+        # exit codes above 255 do not survive a Linux process: 87 here, the HRESULT mapping directly
+        $r = Invoke-VxToolProcess $HostExe @('-NoProfile', '-File', $fake, '-Mode', 'dism', '-ExitCode', '87') 'dism' 60 $slot 600 'DISM' ([Text.Encoding]::UTF8)
+        $o = Get-VxToolOutcome (Get-VxToolSpec 'dism-restorehealth') $r.exitCode $r.reader
+        Assert-True (-not $o.ok -and $o.message -match 'kennt diesen Befehl' -and $o.message -match 'Error: 0x800f081f') ('Fehler mit DISM-Zeile: ' + $o.message)
+        $o = Get-VxToolOutcome (Get-VxToolSpec 'dism-restorehealth') -2146498529 $r.reader
+        Assert-True ($o.message -match 'Ersatzdateien' -and $o.message -match '0x800F081F') ('0x800F081F: ' + $o.message)
+        $r = Invoke-VxToolProcess $HostExe @('-NoProfile', '-File', $fake, '-Mode', 'sfc') 'sfc' 60 $slot 600 'SFC'
+        Assert-Equal 100.0 $r.reader.percent 'SFC über die echte Pipe als UTF-16'
+        $o = Get-VxToolOutcome (Get-VxToolSpec 'sfc-scannow') $r.exitCode $r.reader
+        Assert-True (-not $o.ok -and $o.message -match 'nicht alle') ('SFC: ' + $o.message)
+        # timeout: the tool and the process it started are gone afterwards
+        $pidFile = Join-Path (New-TempDir 'tool') 'child.pid'
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $r = Invoke-VxToolProcess $HostExe @('-NoProfile', '-File', $fake, '-Mode', 'hang', '-PidFile', $pidFile) 'dism' 4 $slot 600 'DISM' ([Text.Encoding]::UTF8)
+        Assert-True ($r.timedOut -and $sw.Elapsed.TotalSeconds -lt 20) 'Zeitlimit greift'
+        Assert-Equal 10.0 $r.reader.percent 'Prozent bis zum Zeitlimit'
+        Assert-True ($job.step -match '10,0 %' -and $job.step -match '0:0\d') ('Schritt mit Prozent und Zeit: ' + $job.step)
+        Start-Sleep -Milliseconds 300
+        if ([IO.File]::Exists($pidFile)) {
+            $cp = [int][IO.File]::ReadAllText($pidFile)
+            $alive = $true
+            try { $x = [Diagnostics.Process]::GetProcessById($cp); $alive = -not $x.HasExited } catch { $alive = $false }
+            # Linux container without an init that reaps: a killed orphan stays as zombie ("Z")
+            $stat = "/proc/$cp/stat"
+            if ($alive -and [IO.File]::Exists($stat)) { $alive = ([IO.File]::ReadAllText($stat) -notmatch '\) Z ') }
+            Assert-True (-not $alive) 'Kindprozess mit beendet'
+        }
+        # Überspringen
+        $job.skippable = $true; $job.skip = $true
+        $r = Invoke-VxToolProcess $HostExe @('-NoProfile', '-File', $fake, '-Mode', 'hang') 'dism' 60 $slot 600 'DISM'
+        Assert-True ($r.skipped -and $r.ms -lt 15000) 'Überspringen beendet den Schritt'
+        $job.skip = $false
+        # Abbrechen
+        $job.cancel = $true
+        $c = $false
+        try { $null = Invoke-VxToolProcess $HostExe @('-NoProfile', '-File', $fake, '-Mode', 'hang') 'dism' 60 $slot 600 'DISM' } catch { $c = ([string]$_.Exception.Message -eq 'VX_CANCELLED') }
+        Assert-True $c 'Abbrechen wirft VX_CANCELLED'
+    } finally { $global:VxJob = $null }
+}
+
+Test-Case 'clean' 'Testmodus: DISM/SFC zeigen Live-Fortschritt im Job, Überspringen geht weiter' {
+    $ctx = New-TestContext -DataDir (Join-Path $AppRoot 'data')
+    $ctx.TestToolMs = 400
+    $job = New-TestJob 'run-action' ([pscustomobject]@{ ids = @('repair.dism-restorehealth', 'repair.sfc') })
+    $global:VxJob = $job
+    $seen = New-Object System.Collections.ArrayList
+    try {
+        # watch the job from a second runspace like the HTTP server does
+        $ps = [PowerShell]::Create()
+        $null = $ps.AddScript({ param($j, $out) for ($i = 0; $i -lt 200; $i++) { if ($j.status -ne 'running') { break }; [void]$out.Add([string]$j.step); Start-Sleep -Milliseconds 15 } }).AddArgument($job).AddArgument($seen)
+        $h = $ps.BeginInvoke()
+        Invoke-VxJobBody
+        $null = $ps.EndInvoke($h); $ps.Dispose()
+    } finally { $global:VxJob = $null }
+    Assert-Equal 'done' $job.status ('Job fertig: ' + $job.error)
+    $res = @($job.result.results)
+    Assert-True ($res[0].ok -and $res[0].message -match 'SFC') ('DISM: ' + $res[0].message)
+    Assert-True ($res[1].ok -and $res[1].message -match 'Keine beschädigten') ('SFC: ' + $res[1].message)
+    Assert-True (@($seen | Where-Object { $_ -match 'DISM repariert .* %' }).Count -gt 0) ('DISM-Prozent im Schritt: ' + (($seen | Select-Object -Unique) -join ' | '))
+    Assert-True (@($seen | Where-Object { $_ -match 'SFC prüft .* %' }).Count -gt 0) 'SFC-Prozent im Schritt'
+    $dto = Get-VxJobDto $job 0
+    Assert-True ($null -ne $dto.live -and @($dto.live.done).Count -eq 2) 'live.done im Job-Objekt'
+    # skip: the first tool ends, the second runs
+    $ctx.TestToolMs = 3000
+    $job = New-TestJob 'run-action' ([pscustomobject]@{ ids = @('repair.dism-scanhealth', 'repair.chkdsk-scan') })
+    $global:VxJob = $job
+    try {
+        $ps = [PowerShell]::Create()
+        $null = $ps.AddScript({ param($j) for ($i = 0; $i -lt 300; $i++) { if ($j.skippable -and [string]$j.step -match 'DISM') { $j.skip = $true; break }; Start-Sleep -Milliseconds 10 } }).AddArgument($job)
+        $h = $ps.BeginInvoke()
+        Invoke-VxJobBody
+        $null = $ps.EndInvoke($h); $ps.Dispose()
+    } finally { $global:VxJob = $null }
+    $res = @($job.result.results)
+    Assert-True ($res[0].skipped -and $res[0].status -eq 'skipped' -and $res[0].message -match 'Übersprungen') ('DISM übersprungen: ' + $res[0].message)
+    Assert-True ($res[1].ok -and -not $res[1].skipped) 'CHKDSK lief danach weiter'
+}
+
+Test-Case 'clean' 'Fake-PC: Größen pro Bereich, Allow-List, Browser nur Cache, laufende Apps, gesperrte Dateien, Opt-in' {
+    $ctx = New-CleanContext
+    $scan = Invoke-VxCleanJob ([pscustomobject]@{})
+    $by = @{}; foreach ($i in $scan.items) { $by[$i.id] = $i }
+    Assert-Equal 5500 ([long]$by['cleanup.user-temp'].bytes) 'eigener Temp: genaue Bytes'
+    Assert-Equal 3 ([int]$by['cleanup.user-temp'].files) 'eigener Temp: Dateien'
+    Assert-Equal 1600 ([long]$by['cleanup.browser-edge'].bytes) 'Edge: nur Cache-Ordner aller Profile (ohne Cookies/Verlauf)'
+    Assert-Equal 700 ([long]$by['cleanup.inetcache'].bytes) 'INetCache ohne den Outlook-Anhangsordner'
+    Assert-Equal 2200 ([long]$by['cleanup.other-users-temp'].bytes) 'andere Konten: ohne das eigene'
+    Assert-Equal 5100 ([long]$by['cleanup.recycle-bin'].bytes) 'Papierkorb ohne desktop.ini'
+    Assert-Equal 16000 ([long]$by['cleanup.memory-dump'].bytes) 'MEMORY.DMP'
+    Assert-Equal 12000 ([long]$by['cleanup.windows-old'].bytes) 'Windows.old gemessen (measure)'
+    Assert-True (-not $by['cleanup.browser-brave'].found) 'Brave nicht installiert = nicht gefunden'
+    Assert-Equal @('Chrome') @($by['cleanup.browser-chrome'].running) 'Chrome läuft'
+    Assert-True ([long]$scan.totalBytes -gt 100000) 'Summe'
+    # a catalog path outside the allow-list is never touched
+    $evil = [pscustomobject]@{ id = 'cleanup.evil'; name = 'Böse'; kind = 'action'; tier = 'quick'; actions = @([pscustomobject]@{ type = 'clean'; paths = @('%USERPROFILE%\Documents\*', '%WINDIR%\System32\drivers\*') }) }
+    $m = Measure-VxCleanTweak $evil
+    Assert-Equal 0 ([long]$m.bytes) 'außerhalb der Allow-List wird nicht einmal gemessen'
+    $r = Invoke-VxRunAction $evil $null @{}
+    Assert-True (-not $r.ok -and $r.message -match 'erlaubter Ordner') ('verweigert: ' + $r.message)
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\Documents\wichtig.docx')) -and [IO.File]::Exists((Get-FxPath 'C\Windows\System32\drivers\keep.sys'))) 'Dokumente und Treiber unberührt'
+    # run: locked file stays, Chrome skipped, opt-in refused without confirmation
+    $ids = @('cleanup.user-temp', 'cleanup.browser-edge', 'cleanup.browser-chrome', 'cleanup.recycle-bin', 'games.fivem-cache-clean')
+    $job = Invoke-TestJob 'run-action' ([pscustomobject]@{ ids = $ids; expect = [pscustomobject]@{ 'cleanup.user-temp' = 3 } })
+    Assert-Equal 'done' $job.status ('Job: ' + $job.error)
+    $res = @{}; foreach ($x in $job.result.results) { $res[$x.id] = $x }
+    Assert-True ($res['cleanup.user-temp'].ok -and $res['cleanup.user-temp'].status -eq 'partial' -and $res['cleanup.user-temp'].locked -eq 1) ('gesperrte Datei gezählt: ' + $res['cleanup.user-temp'].message)
+    Assert-Equal 5000 ([long]$res['cleanup.user-temp'].freedBytes) 'freigegeben ohne die gesperrte'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Temp\in-use.tmp'))) 'gesperrte Datei bleibt'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Temp\fresh.tmp')) -and [IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Temp\setup-new\product.msi'))) 'Dateien und Ordner der letzten 24 Stunden bleiben (minAgeHours)'
+    Assert-True (-not [IO.Directory]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Temp\setup-1234'))) 'alter, geleerter Ordner wird entfernt'
+    Assert-True ($res['cleanup.user-temp'].message -match 'jünger als 24 Std') ('neue Dateien gemeldet: ' + $res['cleanup.user-temp'].message)
+    Assert-True ($res['cleanup.browser-chrome'].skipped -and $res['cleanup.browser-chrome'].message -match 'Chrome läuft') 'laufender Browser übersprungen'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Google\Chrome\User Data\Default\Cache\Cache_Data\data_1'))) 'Chrome-Cache unberührt'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Microsoft\Edge\User Data\Default\Cookies'))) 'Cookies bleiben'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Microsoft\Edge\User Data\Default\History'))) 'Verlauf bleibt'
+    Assert-True (-not [IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Microsoft\Edge\User Data\Profile 1\Code Cache\js\index'))) 'Edge-Cache des 2. Profils gelöscht'
+    Assert-True (-not $res['cleanup.recycle-bin'].ok -and $res['cleanup.recycle-bin'].message -match 'Bestätigung') 'Opt-in ohne Bestätigung abgelehnt'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\$Recycle.Bin\S-1-5-21-0-0-0-1001\$RABC.txt'))) 'Papierkorb unberührt'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\FiveM\FiveM.app\data\cache\game\keep.rpf'))) 'FiveM: keep bleibt'
+    Assert-True (-not [IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\FiveM\FiveM.app\data\cache\priv\c.bin'))) 'FiveM-Cache gelöscht'
+    Assert-True ([long]$job.result.freedBytes -gt 0 -and $null -ne $job.result.durationMs) 'Summe + Dauer im Ergebnis'
+    $live = Get-VxJobDto $job 0
+    Assert-Equal 5 @($live.live.done).Count 'jeder Bereich live gemeldet'
+    # with the confirmation: recycle bin emptied, desktop.ini stays
+    $job = Invoke-TestJob 'run-action' ([pscustomobject]@{ ids = @('cleanup.recycle-bin', 'cleanup.memory-dump'); confirmOptIn = $true })
+    Assert-True (@($job.result.results | Where-Object { -not $_.ok }).Count -eq 0) 'mit Bestätigung ok'
+    Assert-True (-not [IO.File]::Exists((Get-FxPath 'C\$Recycle.Bin\S-1-5-21-0-0-0-1001\$RABC.txt'))) 'Papierkorb geleert'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\$Recycle.Bin\S-1-5-21-0-0-0-1001\desktop.ini'))) 'desktop.ini bleibt'
+    Assert-True (-not [IO.File]::Exists((Get-FxPath 'C\Windows\MEMORY.DMP'))) 'MEMORY.DMP gelöscht'
+    # INetCache: Outlook's folder for opened attachments (edits may live only there) stays
+    $r = Invoke-VxRunAction (Get-VxTweak 'cleanup.inetcache') $null @{}
+    Assert-True ($r.ok -and -not [IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Microsoft\Windows\INetCache\IE\x.dat'))) ('INetCache geleert: ' + $r.message)
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Max\AppData\Local\Microsoft\Windows\INetCache\Content.Outlook\AB12CD34\Angebot.docx'))) 'geöffneter Outlook-Anhang bleibt'
+    # the apply path (Invoke-VxTweakChange) never runs an opt-in item
+    $ch = Invoke-VxTweakChange (Get-VxTweak 'cleanup.other-users-temp') 'apply' $null
+    Assert-True (-not $ch.ok) 'Opt-in nie über apply'
+    Assert-True ([IO.File]::Exists((Get-FxPath 'C\Users\Lena\AppData\Local\Temp\other.tmp'))) 'Temp anderer Konten unberührt'
+}
+
+Test-Case 'clean' 'Fake-PC: Verknüpfungen in Profil-Platzhaltern werden nie verfolgt, gemeinsame Ordner zählen einmal' {
+    $ctx = New-CleanContext -Running @()
+    $outside = Join-Path (New-TempDir 'outside') 'secret'
+    [void][IO.Directory]::CreateDirectory((Join-Path $outside 'Cache'))
+    [IO.File]::WriteAllText((Join-Path (Join-Path $outside 'Cache') 'wichtig.bin'), 'x')
+    $ud = Get-FxPath 'C\Users\Max\AppData\Local\Microsoft\Edge\User Data'
+    $linkOk = $true
+    try { $null = New-Item -ItemType SymbolicLink -Path (Join-Path $ud 'Profile 9') -Target $outside -ErrorAction Stop } catch { $linkOk = $false }
+    if (-not $linkOk) { Add-Note 'Symlinks nicht erlaubt - Test übersprungen.'; return }
+    $r = Invoke-VxRunAction (Get-VxTweak 'cleanup.browser-edge') $null @{}
+    Assert-True $r.ok $r.message
+    Assert-True ([IO.File]::Exists((Join-Path (Join-Path $outside 'Cache') 'wichtig.bin'))) 'Ziel der Verknüpfung unberührt'
+    # the same root in two items is measured once
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    $a = Measure-VxCleanTweak (Get-VxTweak 'cleanup.user-temp') $seen
+    $dup = [pscustomobject]@{ id = 'cleanup.dup'; kind = 'action'; actions = @([pscustomobject]@{ type = 'clean'; paths = @('%TEMP%\*') }) }
+    $b = Measure-VxCleanTweak $dup $seen
+    Assert-True ($a.bytes -gt 0 -and $b.bytes -eq 0) 'doppelter Ordner nur einmal gezählt'
+}
+
+Test-Case 'clean' 'Allow-List und Pfadregeln: Validator kennt dieselben Werkzeuge, prüft Platzhalter und Opt-in' {
+    $null = New-TestContext
+    $vtext = [IO.File]::ReadAllText((Join-Path (Join-Path $AppRoot 'tools') 'Validate-Catalog.ps1'))
+    $m = [regex]::Match($vtext, '\$ToolIds = @\(([^)]*)\)')
+    $vt = @([regex]::Matches($m.Groups[1].Value, "'([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal (@(Get-VxToolIds) -join ',') ($vt -join ',') 'gleiche Werkzeug-Liste'
+    foreach ($t in @(Get-VxToolIds)) { Assert-True ($null -ne (Get-VxToolSpec $t)) ('Spezifikation für ' + $t) }
+    # DISM without /NoRestart asks "Restart now? (Y/N)" - nobody answers that prompt, and VELOX never restarts the PC
+    foreach ($t in @(Get-VxToolIds | Where-Object { $_ -like 'dism-*' })) { Assert-True (@((Get-VxToolSpec $t).args) -contains '/NoRestart') ('/NoRestart bei ' + $t) }
+    $dir = New-TempDir 'badcat'
+    $null = Copy-Item -Path (Join-Path $FixtureData '*') -Destination $dir -Recurse
+    $bad = '{ "category": "cleanup", "tweaks": [' +
+        '{ "id": "cleanup.a", "name": "A", "desc": "a", "kind": "action", "tier": "quick", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup"], "actions": [ { "type": "tool", "tool": "format-c" } ] },' +
+        '{ "id": "cleanup.b", "name": "B", "desc": "b", "kind": "action", "tier": "quick", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup"], "actions": [ { "type": "clean", "paths": ["%LOCALAPPDATA%\\x\\*\\y\\*\\z\\*", "%FOO%\\x\\*", "%USERPROFILE%\\*"], "closeApps": ["chrome.exe"] } ] },' +
+        '{ "id": "cleanup.c", "name": "C", "desc": "c", "kind": "action", "tier": "optin", "impact": 1, "risk": "moderate", "needs": "none", "tags": ["cleanup"], "actions": [ { "type": "clean", "paths": ["%TEMP%\\*"] } ] },' +
+        '{ "id": "cleanup.d", "name": "D", "desc": "d", "kind": "action", "impact": 1, "risk": "safe", "needs": "none", "tags": ["cleanup"], "actions": [ { "type": "ps", "apply": "$null = 1", "timeoutSec": 5 } ] }' +
+        '] }'
+    [IO.File]::WriteAllText((Join-Path (Join-Path $dir 'tweaks') 'cleanup.json'), $bad)
+    $out = @(& $HostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path (Join-Path $AppRoot 'tools') 'Validate-Catalog.ps1') -DataDir $dir 2>&1 | ForEach-Object { [string]$_ })
+    $txt = $out -join "`n"
+    foreach ($want in @("unknown tool 'format-c'", 'at most one wildcard folder', "unknown token '%FOO%'", 'profile root', 'without .exe', 'opt-in clean items need a warning', 'need a tier', 'timeoutSec')) {
+        Assert-True ($txt -match [regex]::Escape($want)) ('Validator meldet: ' + $want)
+    }
+}
+
+
+Test-Case 'clean' 'Reparatur-Skripte (ps) laufen isoliert: Zeitlimit statt Hänger, Fehlertext kommt an' {
+    $ctx = New-TestContext
+    $ctx.Simulate = $false
+    try {
+        $job = New-TestJob 'run-action' $null
+        $global:VxJob = $job
+        $t = [pscustomobject]@{ id = 'repair.hang'; name = 'Hängt'; kind = 'action'; actions = @([pscustomobject]@{ type = 'ps'; apply = 'Start-Sleep -Seconds 60'; timeoutSec = 3 }) }
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $r = Invoke-VxRunAction $t $null @{}
+        Assert-True (-not $r.ok -and $r.message -match 'nicht geantwortet' -and $sw.Elapsed.TotalSeconds -lt 30) ('Zeitlimit: ' + $r.message)
+        $t2 = [pscustomobject]@{ id = 'repair.fail'; name = 'Fehler'; kind = 'action'; actions = @([pscustomobject]@{ type = 'ps'; apply = "throw 'Dienst fehlt'" }) }
+        $r = Invoke-VxRunAction $t2 $null @{}
+        Assert-True (-not $r.ok -and $r.message -match 'Dienst fehlt') ('Fehlertext: ' + $r.message)
+    } finally { $ctx.Simulate = $true; $global:VxJob = $null }
 }
 
 # ------------------------------------------------------------------ summary

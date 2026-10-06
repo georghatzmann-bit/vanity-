@@ -72,7 +72,7 @@ Auch hier kann „Der Computer wurde durch Windows geschützt“ kommen: **Weite
 | **KI-Optimierer** | Analysiert deine Hardware und schlägt einen persönlichen Plan vor. Offline kostenlos, oder mit echter KI: Claude Code mit deinem Claude-Abo, Claude API oder Groq (gratis). |
 | **Detweak** | Findet Tweaks von anderen Tools und setzt sie auf Windows-Standard zurück. Danach auf Wunsch direkt ein Preset oder den KI-Plan anwenden. |
 | **Spiele** | Erkennt deine Spiele (FiveM, GTA V, Steam, Epic) und gibt ihnen Vorrang bei CPU und Grafikkarte. |
-| **Reinigung** | Temp-Dateien, Shader-Caches, Update-Reste und Crash-Dumps löschen. Plus Reparatur-Werkzeuge (SFC, DISM, Netzwerk). |
+| **Reinigung** | Erst messen, dann löschen: Temp-Dateien, Browser- und App-Caches (nur Cache – Logins, Cookies und Verlauf bleiben), Shader-Caches, Update-Reste, Crash-Dumps. Umfang „Schnell“, „Gründlich“ oder „Alles“ (Papierkorb, Windows.old & Co. nur mit deinem Häkchen). Laufende Programme werden übersprungen. Dazu Reparatur-Werkzeuge (DISM, SFC, CHKDSK, Netzwerk) mit Live-Prozent – DISM und SFC dauern oft 5–30 Minuten, der PC bleibt benutzbar. |
 | **Apps** | Autostart aufräumen und vorinstallierte Bloatware entfernen. |
 | **Sicherungen** | Jede Änderung ist protokolliert und lässt sich zurückspielen. |
 

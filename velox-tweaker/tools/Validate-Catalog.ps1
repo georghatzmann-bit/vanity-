@@ -66,7 +66,12 @@ $Needs = @('none','explorer','logoff','reboot')
 $RegKinds = @('DWord','QWord','String','ExpandString','MultiString','Binary')
 $StartTypes = @('Automatic','AutomaticDelayed','Manual','Disabled')
 $WhenKeys = @('os','minBuild','maxBuild','formFactor','gpuVendor','cpuVendor','systemDisk','minRamGB','maxRamGB','service','package')
-$ActionTypes = @('reg','regkey','service','task','bcd','powerplan','powersetting','feature','appx','clean','ps')
+$ActionTypes = @('reg','regkey','service','task','bcd','powerplan','powersetting','feature','appx','clean','ps','tool')
+# Long-running Windows tools a 'tool' action may name - the same list as Get-VxToolIds in core/Clean.ps1.
+$ToolIds = @('dism-scanhealth','dism-restorehealth','dism-component-cleanup','dism-component-resetbase','sfc-scannow','chkdsk-scan','cleanmgr-windows-old')
+$CleanTiers = @('quick','deep','optin')
+# %TOKENS% a clean/measure path may use (core/Clean.ps1 Get-VxCleanVars); %RECYCLEBIN% only at the start.
+$CleanTokens = @('TEMP','TMP','LOCALAPPDATA','APPDATA','USERPROFILE','LOCALLOW','SYSTEMDRIVE','WINDIR','SYSTEMROOT','PROGRAMDATA','PROGRAMFILES','PROGRAMFILES(X86)','STEAM','RECYCLEBIN')
 
 # Things that must never be disabled / removed (ARCHITECTURE.md section 3).
 $ProtectedServices = @('appxsvc','staterepository','cryptsvc','bfe','dhcp','dnscache','rpcss','audiosrv',
@@ -142,6 +147,41 @@ function Test-RegPath([string]$where, $path) {
 $RegIndex = @{}   # "path|name" (lower) -> tweak id, to find conflicting tweaks
 $SeenIds = @{}
 $AllTweaks = @{}
+
+# Clean and measure paths: %TOKENS% from the list, absolute after expansion, at most ONE wildcard
+# segment before the last one (it only ever matches real folders - every browser profile, every
+# user's Temp), never a drive / Windows root.
+function Test-CleanPath([string]$w, [string]$ps) {
+    if ([string]::IsNullOrWhiteSpace($ps)) { Add-Err $w 'empty clean path'; return }
+    if ($ps -match '^[A-Za-z]:\\?$' -or $ps -match '^(?i)%(SystemDrive|WINDIR|SystemRoot|USERPROFILE|LOCALAPPDATA|APPDATA|PROGRAMDATA|ProgramFiles|ProgramFiles\(x86\)|LOCALLOW)%\\?\*?$') { Add-Err $w "refusing to clean a drive/Windows/profile root: '$ps'" }
+    if ($ps -match '\.\.') { Add-Err $w "'..' is not allowed: '$ps'" }
+    foreach ($m in [regex]::Matches($ps, '%([^%]+)%')) {
+        if ($CleanTokens -notcontains $m.Groups[1].Value.ToUpperInvariant()) { Add-Err $w "unknown token '%$($m.Groups[1].Value)%' in '$ps'" }
+    }
+    if ($ps -match '(?i)%RECYCLEBIN%' -and $ps -notmatch '^(?i)%RECYCLEBIN%\\') { Add-Err $w "%RECYCLEBIN% only at the start: '$ps'" }
+    if ($ps -notmatch '^%[^%]+%' -and $ps -notmatch '^[A-Za-z]:\\') { Add-Err $w "path must start with a %TOKEN% or a drive: '$ps'" }
+    $segs = $ps -split '\\'
+    $mid = 0
+    for ($i = 0; $i -lt $segs.Count - 1; $i++) {
+        if ($segs[$i] -match '[\*\?]') {
+            $mid++
+            if ($i -lt 2) { Add-Err $w "a wildcard folder needs at least one fixed folder before it: '$ps'" }
+        }
+    }
+    if ($mid -gt 1) { Add-Err $w "at most one wildcard folder before the last segment: '$ps'" }
+}
+
+function Test-MeasureAndTimeout([string]$w, $a) {
+    if (Has-Prop $a 'measure') {
+        $ms = @(Get-Prop $a 'measure')
+        if ($ms.Count -eq 0) { Add-Err $w "'measure' must be a non-empty array of paths" }
+        foreach ($p in $ms) { Test-CleanPath $w ([string]$p) }
+    }
+    if (Has-Prop $a 'timeoutSec') {
+        $to = Get-Prop $a 'timeoutSec'
+        if (-not (Test-IsInt $to) -or [int]$to -lt 30 -or [int]$to -gt 14400) { Add-Err $w "'timeoutSec' must be an integer 30..14400" }
+    }
+}
 
 function Test-Action([string]$where, $a, $tweak, [string]$tkind) {
     $type = [string](Get-Prop $a 'type')
@@ -230,13 +270,24 @@ function Test-Action([string]$where, $a, $tweak, [string]$tkind) {
         'clean' {
             $paths = @(Get-Prop $a 'paths')
             if ($paths.Count -eq 0) { Add-Err $w "'paths' must be a non-empty array" }
-            foreach ($p in $paths) {
-                $ps = [string]$p
-                if ($ps -match '^[A-Za-z]:\\?$' -or $ps -match '^%SystemDrive%\\?$' -or $ps -match '^%WINDIR%\\?$' -or $ps -match '^%SystemRoot%\\?$') { Add-Err $w "refusing to clean a drive/Windows root: '$ps'" }
-                $segs = $ps -split '\\'
-                for ($i = 0; $i -lt $segs.Count - 1; $i++) { if ($segs[$i] -match '[\*\?]') { Add-Err $w "wildcard only allowed in the last segment: '$ps'" } }
-            }
+            foreach ($p in $paths) { Test-CleanPath $w ([string]$p) }
             if ($tkind -ne 'action') { Add-Err $w "clean actions require kind 'action'" }
+            if (Has-Prop $a 'closeApps') {
+                $ca = @(Get-Prop $a 'closeApps')
+                if ($ca.Count -eq 0) { Add-Err $w "'closeApps' must be a non-empty array of process names" }
+                foreach ($n in $ca) { if (-not ($n -is [string]) -or [string]$n -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,40}$' -or [string]$n -match '(?i)\.exe$') { Add-Err $w "closeApps: '$n' must be a process name without .exe" } }
+            }
+            foreach ($f in @('keep','stopServices')) { if ((Has-Prop $a $f) -and @(Get-Prop $a $f).Count -eq 0) { Add-Err $w "'$f' must be a non-empty array when present" } }
+            if (Has-Prop $a 'minAgeHours') {
+                $mh = Get-Prop $a 'minAgeHours'
+                if (-not (Test-IsInt $mh) -or [int]$mh -lt 1 -or [int]$mh -gt 720) { Add-Err $w "'minAgeHours' must be an integer 1..720" }
+            }
+        }
+        'tool' {
+            $tl = [string](Get-Prop $a 'tool')
+            if ($ToolIds -notcontains $tl) { Add-Err $w "unknown tool '$tl' (allowed: $($ToolIds -join ', '))" }
+            if ($tkind -ne 'action') { Add-Err $w "tool actions require kind 'action'" }
+            Test-MeasureAndTimeout $w $a
         }
         'ps' {
             $ap = Get-Prop $a 'apply'
@@ -255,6 +306,8 @@ function Test-Action([string]$where, $a, $tweak, [string]$tkind) {
                 }
             }
             if ($tkind -eq 'toggle' -and [string]::IsNullOrWhiteSpace([string](Get-Prop $a 'revert'))) { Add-Err $w "toggle tweaks need a 'revert' script" }
+            if ($tkind -ne 'action' -and ((Has-Prop $a 'measure') -or (Has-Prop $a 'timeoutSec'))) { Add-Err $w "'measure'/'timeoutSec' only for kind 'action'" }
+            Test-MeasureAndTimeout $w $a
             if ($tkind -eq 'toggle' -and -not (Has-Prop $a 'detect')) { Add-Warn $w "no 'detect' script - status will be 'unknown'" }
         }
     }
@@ -306,6 +359,19 @@ function Test-Tweak([string]$file, [string]$category, $t) {
         foreach ($k in @('minBuild','maxBuild','minRamGB','maxRamGB')) { if ((Has-Prop $when $k) -and -not (Test-IsInt (Get-Prop $when $k))) { Add-Err $where "when.$k must be an integer" } }
     }
 
+    # Reinigung: tier = quick (Schnell) | deep (Gründlich) | optin (only "Alles" + explicit confirmation)
+    if (Has-Prop $t 'tier') {
+        $tier = [string](Get-Prop $t 'tier')
+        if ($CleanTiers -notcontains $tier) { Add-Err $where "tier must be quick|deep|optin" }
+        if ($kind -ne 'action') { Add-Err $where "tier only for kind 'action'" }
+        if ($tier -eq 'optin' -and [string]::IsNullOrWhiteSpace([string]$warning)) { Add-Err $where "opt-in clean items need a warning (what is lost)" }
+    } elseif ($category -eq 'cleanup' -and $kind -eq 'action') { Add-Err $where "cleanup actions need a tier (quick|deep|optin)" }
+    if (Has-Prop $t 'duration') {
+        $du = Get-Prop $t 'duration'
+        if (-not ($du -is [string]) -or [string]::IsNullOrWhiteSpace($du) -or ([string]$du).Length -gt 40) { Add-Err $where "duration must be a short text (<= 40 chars), e.g. '5–30 Min.'" }
+        if ($kind -ne 'action') { Add-Err $where "duration only for kind 'action'" }
+    }
+
     $actions = @(Get-Prop $t 'actions')
     if ($actions.Count -eq 0) { Add-Err $where 'actions must be a non-empty array' }
     $i = 0
@@ -313,7 +379,8 @@ function Test-Tweak([string]$file, [string]$category, $t) {
         Test-Action "$where actions[$i]" $a $t $kind
         $type = [string](Get-Prop $a 'type')
         if ($kind -eq 'toggle' -and @('appx','clean') -contains $type) { Add-Err $where "toggle tweaks must not contain '$type' actions" }
-        if ($kind -eq 'action' -and @('clean','ps') -notcontains $type) { Add-Err $where "action tweaks may only contain clean/ps actions" }
+        if ($kind -eq 'action' -and @('clean','ps','tool') -notcontains $type) { Add-Err $where "action tweaks may only contain clean/ps/tool actions" }
+        if ($kind -ne 'action' -and $type -eq 'tool') { Add-Err $where "tool actions require kind 'action'" }
         if ($kind -eq 'remove' -and $type -ne 'appx') { Add-Err $where "remove tweaks may only contain appx actions" }
         $i++
     }

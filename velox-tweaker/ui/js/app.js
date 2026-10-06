@@ -684,7 +684,7 @@ async function follow(jobId, type, opts = {}) {
   // toast saying the same would only cover the content
   const quietError = typeof opts.quietError === 'function' ? opts.quietError() : !!opts.quietError;
   if (job.status === 'error') { if (!quietError) toast({ type: 'error', title: failTitle(type), text: friendlyError(job.error) }); }
-  else if (job.status === 'cancelled') toast({ type: 'info', title: 'Abgebrochen', text: 'Bereits erledigte Schritte bleiben gesichert.' });
+  else if (job.status === 'cancelled') { if (!opts.quietCancel) toast({ type: 'info', title: 'Abgebrochen', text: 'Bereits erledigte Schritte bleiben gesichert.' }); }
   else if (!opts.quiet) resultToast(type, job.result || {}, opts);
   return job;
 }

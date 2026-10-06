@@ -1,0 +1,108 @@
+/* VELOX - Reinigung (ui/js/pages/cleanup.js). Same system as app.css: ink + bone, one signal
+   colour (only the primary button and the head of a progress bar), 4/8/12/16/24/32 spacing,
+   numbers in --mono. */
+
+/* ------------------------------------------------------------------ hero */
+.cl-hero { position: relative; display: grid; gap: 20px; padding: 24px 32px; overflow: hidden; }
+.cl-hero-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); align-items: center; gap: 32px; }
+.cl-total { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cl-total-num { font: 600 56px/1.05 var(--mono); letter-spacing: -.04em; font-variant-numeric: tabular-nums; color: var(--text); }
+.cl-total-sub { font-size: var(--fs-3); color: var(--muted); }
+.cl-hero-side { display: grid; gap: 8px; justify-items: stretch; }
+.cl-presets { width: 100%; }
+.cl-presets .seg-btn { flex: 1; justify-content: center; }
+.cl-presets.is-disabled { opacity: .55; }
+.cl-preset-hint { font-size: var(--fs-3); color: var(--muted); min-height: 36px; }
+.cl-hero-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 16px; box-shadow: inset 0 1px 0 var(--s4); }
+.cl-foot-note { max-width: 360px; text-align: right; }
+
+/* live area while cleaning */
+.cl-live { display: grid; gap: 8px; padding: 12px 16px; border-radius: var(--r-ctl); background: var(--well); box-shadow: inset 0 0 0 1px var(--s4); animation: enter 220ms var(--ease) both; }
+.cl-live-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cl-live-text { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-live-label { font-size: var(--fs-3); color: var(--muted); }
+.cl-live-freed { font: 600 var(--fs-2) var(--mono); font-variant-numeric: tabular-nums; }
+.cl-live-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.cl-hero.is-running .cl-total-num { color: var(--muted); }
+
+/* result after a run */
+.cl-result { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-radius: var(--r-ctl); background: rgba(var(--ok-rgb), .07); box-shadow: inset 0 0 0 1px rgba(var(--ok-rgb), .25); animation: enter 280ms var(--ease) both; }
+.cl-result.is-warn { background: rgba(var(--warn-rgb), .07); box-shadow: inset 0 0 0 1px rgba(var(--warn-rgb), .28); }
+.cl-result-icon { color: var(--ok); display: grid; }
+.cl-result.is-warn .cl-result-icon { color: var(--warn); }
+.cl-result-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.cl-result-title { font: 600 var(--fs-1)/1.25 var(--mono); font-variant-numeric: tabular-nums; }
+.cl-result-notes { font-size: var(--fs-3); color: var(--muted); }
+
+/* "Chrome läuft gerade" */
+.cl-apps { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--r-card); color: var(--text-2); background: rgba(var(--warn-rgb), .06); box-shadow: inset 0 0 0 1px rgba(var(--warn-rgb), .28); }
+.cl-apps > .icon { color: var(--warn); }
+.cl-apps > span { flex: 1; min-width: 0; font-size: var(--fs-3); }
+
+/* ------------------------------------------------------------------ groups + rows */
+.cl-groups { display: grid; gap: 16px; }
+.cl-group { padding: 8px; }
+.cl-group-head { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.cl-group-name { font-size: var(--fs-2); font-weight: 600; }
+.cl-group-count { font: 500 var(--fs-3) var(--mono); color: var(--faint); }
+.cl-group-sum { font: 600 var(--fs-2) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-2); }
+.cl-group-rows { display: grid; }
+.cl-row { display: flex; align-items: flex-start; gap: 16px; padding: 12px; border-radius: var(--r-ctl); transition: background-color var(--t-fast); }
+.cl-row:hover { background: var(--tint-2); }
+.cl-group-rows > .cl-row { box-shadow: inset 0 1px 0 var(--s4); }
+.cl-row > .cb { margin-top: 2px; }
+.cl-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.cl-name { display: flex; align-items: center; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+.cl-badges { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.cl-desc { font-size: var(--fs-3); color: var(--muted); }
+.cl-warn { display: flex; align-items: flex-start; gap: 6px; font-size: var(--fs-3); color: var(--warn); }
+.cl-warn .icon { flex: none; margin-top: 2px; }
+.cl-size { flex: none; display: flex; flex-direction: column; align-items: flex-end; min-width: 104px; text-align: right; }
+.cl-bytes { font: 600 var(--fs-2) var(--mono); font-variant-numeric: tabular-nums; }
+.cl-files { font-size: var(--fs-3); color: var(--faint); }
+
+/* per-row live status */
+.cl-status { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: var(--fs-3); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.cl-status .icon { flex: none; }
+.cl-row-bar { flex: 1; max-width: 220px; height: 3px; margin-left: 8px; }
+.cl-row-bar.is-indeterminate .pbar-fill { transform: scaleX(.3) !important; animation: cl-slide 1.2s var(--ease) infinite; }
+@keyframes cl-slide { from { transform: translateX(-30%) scaleX(.3); } to { transform: translateX(110%) scaleX(.3); } }
+.cl-row.is-wait .cl-status { color: var(--faint); }
+.cl-row.is-run { background: var(--tint-1); }
+.cl-row.is-ok .cl-status .icon { color: var(--ok); }
+.cl-row.is-partial .cl-status .icon, .cl-row.is-skipped .cl-status .icon { color: var(--warn); }
+.cl-row.is-failed .cl-status { color: var(--err); }
+.cl-row.is-ok .cl-size, .cl-row.is-partial .cl-size { opacity: .45; }
+
+.cl-missing { padding: 4px 4px 0; color: var(--muted); font-size: var(--fs-3); }
+.cl-missing summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; padding: 4px 0; }
+.cl-missing summary::-webkit-details-marker { display: none; }
+.cl-missing summary .icon { transition: transform var(--t) var(--ease); }
+.cl-missing[open] summary .icon { transform: rotate(90deg); }
+.cl-missing-list { margin: 8px 0 0; padding: 0 0 0 20px; columns: 2; column-gap: 32px; color: var(--faint); }
+.cl-confirm-sub { font-size: var(--fs-3); font-weight: 600; color: var(--text-2); }
+.cl-confirm-list { margin: 0; padding: 0 0 0 18px; display: grid; gap: 6px; font-size: var(--fs-3); }
+
+/* ------------------------------------------------------------------ repair */
+.repair-intro { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: var(--r-card); background: var(--s1); box-shadow: inset 0 0 0 1px var(--s4); font-size: var(--fs-3); color: var(--text-2); margin-bottom: 16px; }
+.repair-intro .icon { flex: none; margin-top: 1px; color: var(--muted); }
+.repair-duration { display: flex; align-items: center; gap: 6px; font-size: var(--fs-3); color: var(--muted); }
+.repair-live { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-ctl); background: var(--well); box-shadow: inset 0 0 0 1px var(--s4); animation: enter 220ms var(--ease) both; }
+.repair-live-row { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-3); }
+.repair-step { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.repair-pct { font: 600 var(--fs-2) var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.repair-note { font-size: var(--fs-3); color: var(--warn); }
+.repair-live-actions { display: flex; justify-content: flex-end; }
+.repair-card.is-running { box-shadow: inset 0 0 0 1px var(--vx-line-2); }
+
+@media (max-width: 1100px) {
+  .cl-hero-main { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .cl-total-num { font-size: var(--fs-display); }
+  .cl-foot-note { text-align: left; max-width: none; }
+}
+@media (max-width: 960px) {
+  .cl-hero { padding: 20px; }
+  .cl-missing-list { columns: 1; }
+}
+:root[data-motion="reduced"] .cl-row-bar.is-indeterminate .pbar-fill { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .cl-row-bar.is-indeterminate .pbar-fill { animation: none !important; } }
