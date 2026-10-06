@@ -612,11 +612,13 @@ export const CONFIG = deepFreeze({
       ],
       skin: { body: '#E9D8B4', accent: '#C0392B', skinTone: '#E9D8B4', hat: 'helmet', hatColor: '#C0392B' },
     },
-    // Sammel-Objekte für die Spitzhacke (F): Baum = Holz, Fels = Stein, Auto = Metall
+    // Sammel-Objekte für die Spitzhacke (F): Baum = Holz, Fels = Stein, Auto = Metall.
+    // Hinten links hinter dem Turm – weit weg von der Schuss-Bahn des Schieß-Stands und
+    // mindestens 8 m auseinander (ihre Schilder überdecken sich nicht).
     harvest: {
-      tree: { x: -30, z: 19 },
-      rock: { x: -24, z: 19 },
-      car: { x: -17, z: 19 },
+      tree: { x: -35, z: -35 },
+      rock: { x: -36, z: -20 },
+      car: { x: -27, z: -36 },
     },
   },
 
@@ -797,7 +799,10 @@ export const CONFIG = deepFreeze({
   // ---------------------------------------------------------------------------
   visuals: {
     labelMinScreenHeight: 22, // Schilder (Übungsplatz) sind auf dem Bildschirm mindestens so hoch (Pixel) – lesbar auch von weit weg
-    labelMaxGrow: 4, // … dafür werden sie höchstens 4-mal so groß
+    labelMaxGrow: 8, // … dafür werden sie höchstens 8-mal so groß (Schilder am anderen Ende des Platzes)
+    labelMaxScreenHeight: 40, // … und aus der Nähe höchstens so hoch (Pixel) – sie decken nie das Bild zu
+    labelFadeNear: 1.5, // näher als 1,5 m an der Kamera: Schild unsichtbar …
+    labelFadeFar: 3.5, // … ab 3,5 m wieder ganz zu sehen (dazwischen verblasst es)
     colors: {
       skyTop: '#3A8DDE', // Himmel oben
       skyHorizon: '#7EC8F2', // Himmel am Horizont

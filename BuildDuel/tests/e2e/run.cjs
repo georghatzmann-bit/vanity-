@@ -645,7 +645,7 @@ const GAME_CHECKS = [
     },
   },
   {
-    name: 'Hilfe-Leiste einzeilig; bei 800 x 600 nicht über der Figur; Schilder von weitem lesbar',
+    name: 'Hilfe-Leiste einzeilig; bei 800 x 600 nicht über der Figur; Schilder von weitem lesbar, nah nie riesig',
     async run(ctx) {
       const rows = await ctx.page.evaluate(() => [...document.querySelectorAll('#help .help-row')].map((r) => r.getBoundingClientRect().height));
       const one = Math.min(...rows);
@@ -675,6 +675,43 @@ const GAME_CHECKS = [
       });
       ctx.assert(labels.length >= 5 && labels.every((px) => px >= 18), `Schild-Höhen (Pixel): ${labels.map((px) => px.toFixed(0)).join(', ')}`);
       await ctx.shot('15-schilder-vom-start');
+      // Aus der Nähe (Rampe zum Drunter-durch-Laufen hinauf, auf dem Schieß-Stand): kein Schild
+      // höher als labelMaxScreenHeight, ganz nahe Schilder verblasst
+      const near = await ctx.page.evaluate(async () => {
+        const THREE = await import('three');
+        const g = buildDuel.game;
+        const V = buildDuel.CONFIG.visuals;
+        const out = [];
+        for (const [x, y, z, yaw] of [[18, 3.05, -9.6, 0], [18, 5.4, -12.4, 0], [35, 0.05, 33, Math.PI / 2]]) {
+          g.player.spawnAt({ x, y, z }, yaw, 0);
+          g.cameraRig.snap();
+          buildDuel.simulate(1 / 60);
+          g.frameUpdate(1 / 60, 1);
+          const cam = buildDuel.camera;
+          cam.updateMatrixWorld(true);
+          const h = window.innerHeight;
+          const a = new THREE.Vector3();
+          const b = new THREE.Vector3();
+          g.map.root.traverse((o) => {
+            if (!o.isSprite || !o.visible) return;
+            const d = o.position.distanceTo(cam.position);
+            a.copy(o.position).add(new THREE.Vector3(0, o.scale.y / 2, 0)).project(cam);
+            b.copy(o.position).add(new THREE.Vector3(0, -o.scale.y / 2, 0)).project(cam);
+            if (a.z > 1 || b.z > 1) return; // hinter der Kamera
+            if (Math.abs(a.x) > 1 || (a.y < -1 && b.y < -1) || (a.y > 1 && b.y > 1)) return; // nicht im Bild
+            out.push({ px: Math.abs(a.y - b.y) * h / 2, d, opacity: o.material.opacity, max: V.labelMaxScreenHeight, fadeNear: V.labelFadeNear });
+          });
+        }
+        return out;
+      });
+      const tooBig = near.filter((l) => l.px > l.max + 1 || (l.d < l.fadeNear && l.opacity > 0.02));
+      ctx.assert(near.length >= 5 && tooBig.length === 0, `Schilder aus der Nähe: ${JSON.stringify(tooBig.map((l) => [l.px.toFixed(0), l.d.toFixed(1)]))}`);
+      await ctx.page.evaluate(() => {
+        const g = buildDuel.game;
+        g.player.spawnAt({ x: 0, y: 0, z: 22 }, 0, 0);
+        g.cameraRig.snap();
+        buildDuel.simulate(1 / 60);
+      });
       await ctx.page.setViewportSize({ width: 800, height: 600 });
       await ctx.page.waitForTimeout(400);
       const r = await ctx.page.evaluate(async () => {

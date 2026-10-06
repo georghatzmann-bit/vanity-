@@ -65,7 +65,7 @@ export function createPracticeRange(game, map) {
   // Auto: Unterteil + Kabine
   map.addBox({ x: H.car.x - 2, y: 0, z: H.car.z - 0.9 }, { x: H.car.x + 2, y: 1.05, z: H.car.z + 0.9 }, { color: '#D64545', data: harvestData('car') });
   map.addBox({ x: H.car.x - 1.0, y: 1.05, z: H.car.z - 0.8 }, { x: H.car.x + 1.1, y: 1.75, z: H.car.z + 0.8 }, { color: '#E9EEF4', data: harvestData('car') });
-  map.addLabel('Baum → Holz (Spitzhacke: F)', { x: H.tree.x, y: 5.3, z: H.tree.z }, { size: 0.42 });
+  map.addLabel('Baum → Holz (Spitzhacke: F)', { x: H.tree.x, y: 7, z: H.tree.z }, { size: 0.42 }); // über der Krone
   map.addLabel('Fels → Stein', { x: H.rock.x, y: 2.4, z: H.rock.z }, { size: 0.42 });
   map.addLabel('Auto → Metall', { x: H.car.x, y: 2.6, z: H.car.z }, { size: 0.42 });
   if (visual) decorate(map, rock, H);

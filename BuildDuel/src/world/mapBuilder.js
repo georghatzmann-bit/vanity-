@@ -5,7 +5,8 @@
 //   addBox(min, max, options)   – Kiste/Wand/Plattform
 //   addSlope(spec, options)     – Rampe oder Pyramiden-Dach (spec wie world.addSlope)
 //   addLabel(text, position)    – Schild mit Text (nur Grafik); weit weg wird es
-//                                 größer, damit man es noch lesen kann
+//                                 größer, damit man es noch lesen kann, ganz nah
+//                                 kleiner (nie riesig) und es verblasst
 //   frameUpdate()               – jedes Bild (Schilder an den Abstand anpassen)
 //   dispose()                   – alles wieder entfernen (Kollision + Grafik)
 //
@@ -14,6 +15,8 @@
 import * as THREE from 'three';
 
 const _size = new THREE.Vector2();
+const _forward = new THREE.Vector3();
+const _toLabel = new THREE.Vector3();
 
 /**
  * @param {object} game
@@ -94,7 +97,9 @@ export function createMapBuilder(game, name = 'Karte') {
 
     /**
      * Jedes Bild: Schilder in der Ferne so weit vergrößern, dass sie auf dem
-     * Bildschirm mindestens visuals.labelMinScreenHeight Pixel hoch sind.
+     * Bildschirm mindestens visuals.labelMinScreenHeight Pixel hoch sind – und aus der
+     * Nähe höchstens visuals.labelMaxScreenHeight (sonst deckt ein Schild, an dem man
+     * vorbeiläuft, das halbe Bild zu). Ganz nah an der Kamera verblassen sie.
      */
     frameUpdate() {
       if (!visual || labels.length === 0) return;
@@ -105,14 +110,28 @@ export function createMapBuilder(game, name = 'Karte') {
       if (!(screenHeight > 0)) return;
       const visuals = game.config?.visuals ?? {};
       const minPixels = visuals.labelMinScreenHeight ?? 22;
+      const maxPixels = visuals.labelMaxScreenHeight ?? 40;
       const maxGrow = visuals.labelMaxGrow ?? 4;
+      const fadeNear = visuals.labelFadeNear ?? 1.5;
+      const fadeFar = visuals.labelFadeFar ?? 3.5;
       // so viel Welt-Höhe (m) ist ein Pixel in 1 m Abstand
       const metersPerPixel = (2 * Math.tan((camera.fov * Math.PI) / 360)) / screenHeight;
+      camera.getWorldDirection(_forward);
       for (let i = 0; i < labels.length; i++) {
         const l = labels[i];
-        const distance = l.sprite.position.distanceTo(camera.position);
-        const grow = Math.min(maxGrow, Math.max(1, (minPixels * metersPerPixel * distance) / l.height));
+        _toLabel.subVectors(l.sprite.position, camera.position);
+        const distance = _toLabel.length();
+        // Bild-Größe hängt von der Tiefe ab (Abstand entlang der Blickrichtung), nicht vom Abstand
+        const depth = Math.max(0.05, _toLabel.dot(_forward));
+        // Faktor, mit dem das Schild genau minPixels bzw. maxPixels hoch wäre
+        const forMin = (minPixels * metersPerPixel * depth) / l.height;
+        const forMax = (maxPixels * metersPerPixel * depth) / l.height;
+        const grow = Math.min(maxGrow, forMax, Math.max(1, forMin));
         l.sprite.scale.set(l.width * grow, l.height * grow, 1);
+        // ganz nah: verblassen (und gar nicht zeichnen, wenn ganz durchsichtig)
+        const fade = fadeFar > fadeNear ? Math.max(0, Math.min(1, (distance - fadeNear) / (fadeFar - fadeNear))) : 1;
+        l.sprite.material.opacity = fade;
+        l.sprite.visible = fade > 0.02;
       }
     },
 

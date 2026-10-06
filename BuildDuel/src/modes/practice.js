@@ -56,7 +56,7 @@ export function createPracticeMode(game, options = {}) {
       ? 'Übungsplatz: Bauen mit unendlich Material – Z/Y Wand, X Boden, C Rampe, V Dach, Linksklick setzt. ' +
         'G auf ein eigenes Teil = Edit (Felder klicken, G bestätigt), E öffnet Türen. ' +
         'Waffen: 1–4 (nochmal 4: Pistole, Granatwerfer), 5 Heilen. Zielpuppen hinten rechts, ' +
-        'Baum/Fels/Auto für die Spitzhacke links.'
+        'Baum/Fels/Auto für die Spitzhacke vorn links hinter dem Turm.'
       : 'Übungsplatz: Kisten, Rampen, Turm (Fallschaden), niedrige Decke.',
 
     start() {
@@ -197,7 +197,8 @@ function buildCourse(map, cfg, thickness) {
     ) - bridge.vThickness;
     map.addBox({ x, y: 0, z: zz }, { x: x + post, y: underside, z: zz + post }, { color: COLORS.post });
   }
-  label('Unter der Rampe durch', 18, 6.4, -12); // über der Rampe (vom Start aus nicht hinter den Kisten-Schildern)
+  // neben der Rampe (nicht über dem Weg hinauf), höher als das Dach-Schild daneben
+  label('Unter der Rampe durch', 21.2, 6.6, -12);
 
   // --- Kleines Dach (Pyramide) auf einem Sockel -------------------------------------------
   map.addBox({ x: 24, y: 0, z: -14 }, { x: 28, y: 0.3, z: -10 }, { color: COLORS.roofBase });

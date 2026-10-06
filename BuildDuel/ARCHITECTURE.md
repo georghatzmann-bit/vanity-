@@ -444,6 +444,8 @@ dazu `getModeDef(id)` und `DEFAULT_MODE_ID` (`'practice'`, bis es ein Hauptmenü
 addLabel(text, position), addObject(obj), dispose() }` – addBox/addSlope legen Kollision UND
 Grafik an (headless nur Kollision). Die Arena hat zusätzlich `size`, `ground`, `contains(x, z, margin)` und
 `buildBounds` (Bau-Bereich, siehe §9a; `spec.buildBounds`/`spec.maxBuildLevel` ändern ihn).
+Schilder (`addLabel`) sind auf dem Bildschirm mindestens `visuals.labelMinScreenHeight` und höchstens
+`labelMaxScreenHeight` Pixel hoch (`map.frameUpdate()`), näher als `labelFadeFar` verblassen sie.
 Der Modus setzt `game.map = karte` und räumt sie in `dispose()` ab.
 
 Jeder Modus:
