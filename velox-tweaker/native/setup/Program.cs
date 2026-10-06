@@ -12,8 +12,11 @@
 // file instead of the copy's exit, exits, and the copy then removes the launcher's Uninstall.exe).
 //
 // The WebView2 DLLs are not files next to the exe: the managed ones are loaded from the embedded
-// payload (AssemblyResolve), WebView2Loader.dll is extracted to a private temp folder. All
-// WebView2-typed code lives in SetupWindow.cs, so it is only JIT-compiled after the resolver runs.
+// payload (AssemblyResolve), WebView2Loader.dll is extracted to a private temp folder (TempDir: only
+// Administrators + SYSTEM - right for what this elevated process loads, and ONLY for that: the WebView2
+// browser process runs without our admin rights, so its UI comes from memory and its user data folder is a
+// normal user folder, see shared/WebViewData.cs). All WebView2-typed code lives in SetupWindow.cs, so it is
+// only JIT-compiled after the resolver runs.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -395,11 +398,12 @@ namespace Velox.Setup
         {
             // In-process and without a helper "cmd /c ping & rd" - that self-deletion pattern is a classic
             // malware trait that antivirus heuristics flag. The WebView2 browser processes release the user
-            // data folder a moment after the window is gone, so retry for a few seconds; whatever is still
-            // locked - and always the running exe of the uninstaller's temp copy - Windows deletes at the
-            // next restart (MoveFileEx, the same way NSIS-style uninstallers clean up after themselves).
+            // data folder (%TEMP%\VeloxSetup-WebView2-*) a moment after the window is gone, so retry for a few
+            // seconds; whatever is still locked - and always the running exe of the uninstaller's temp copy -
+            // Windows deletes at the next restart (MoveFileEx, the same way NSIS-style uninstallers clean up).
             try
             {
+                WebViewData.DeleteSetupRuns(6000, Log);
                 if (!string.IsNullOrEmpty(TempDir)) DeleteWithRetry(TempDir, 6000);
                 if (a.FromTemp)
                 {

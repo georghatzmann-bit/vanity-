@@ -3,7 +3,9 @@
 //   pack   --app <velox-tweaker> --host <VELOX.exe build dir> --out <payload.zip>
 //          Deterministic zip (sorted entries, fixed timestamps) of everything the installed app needs.
 //   verify --setup <VeloxSetup.exe> --app <velox-tweaker> [--max-mb 3]
-//          Opens the built exe and checks manifests, resources, version, payload content, size budget.
+//          Opens the built exe and checks manifests, resources, version, payload content, size budget,
+//          that both web UIs are served from memory (shared/EmbeddedSite.cs run against the embedded files)
+//          and the WebView2 rules in the native sources (no folder mapping, no user data folder in TempDir).
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,6 +17,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
+using Velox.Native;
 
 internal static class Program
 {
@@ -193,6 +196,9 @@ internal static class Program
         Check(v.AssemblyVersion == version + ".0", $"VELOX.exe: assembly version {v.AssemblyVersion} = {version}.0");
         CheckEmbeddedFiles("VELOX.exe", v, "start/", app, Path.Combine(app, "native", "host", "start"), new[] { "splash.html", "splash.css", "splash.js" });
         CheckBrandCopies("VELOX.exe", v, "start/brand/", app, HostBrand);
+        CheckServedFromMemory("setup", s, "ui/", "setup.velox.example", "index.html", SetupBrand);
+        CheckServedFromMemory("VELOX.exe", v, "start/", "start.velox.example", "splash.html", HostBrand);
+        CheckNativeSources(app);
         var core = InspectPe(Read(entries["Microsoft.Web.WebView2.Core.dll"]), "Microsoft.Web.WebView2.Core.dll");
         var wf = InspectPe(Read(entries["Microsoft.Web.WebView2.WinForms.dll"]), "Microsoft.Web.WebView2.WinForms.dll");
         Check(core.IlOnly && wf.IlOnly, "WebView2 managed DLLs are IL-only (loadable from memory by the setup)");
@@ -225,6 +231,181 @@ internal static class Program
         Console.WriteLine($"sha256 {sha}");
         Console.WriteLine(_fails == 0 ? "VERIFY OK" : $"VERIFY FAILED: {_fails} check(s)");
         return _fails == 0 ? 0 : 1;
+    }
+
+    // ------------------------------------------------------------------ WebView2: content from memory, UDF in user folders
+    //
+    // The WebView2 browser process is untrusted-for-elevation: it does not get the host's administrator rights
+    // (de-elevated / filtered token; Administrator Protection: another account). 1.2.0 put the pages and the
+    // setup's user data folder into a private Admins-only temp folder - on a real Windows 11 PC the browser could
+    // neither read the pages (ERR_FILE_NOT_FOUND) nor create its data folder (modal runtime error). Rules:
+    //   - pages come from memory: EmbeddedSite + WebResourceRequested, never a folder mapping;
+    //   - every user data folder comes from shared/WebViewData.cs, never from TempDir / CreatePrivateTempDir.
+
+    /// <summary>Runs shared/EmbeddedSite.cs (the code both exes use) against the files embedded in the built exe.</summary>
+    private static void CheckServedFromMemory(string label, PeInfo pe, string prefix, string host, string page, string[] brand)
+    {
+        var files = pe.Resources.Where(kv => kv.Key.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(kv => new KeyValuePair<string, byte[]>(kv.Key.Substring(prefix.Length), kv.Value)).ToList();
+        var site = new EmbeddedSite(host, files);
+        string o = "https://" + host + "/";
+        int served = 0;
+        foreach (var f in files)
+        {
+            var r = site.Resolve(o + f.Key, "GET");
+            string want = EmbeddedSite.ContentType(f.Key);
+            if (r != null && r.Status == 200 && want != null && r.ContentType == want && r.Body != null && r.Body.AsSpan().SequenceEqual(f.Value)
+                && r.Headers.Contains("Content-Type: " + want) && r.Headers.Contains("X-Content-Type-Options: nosniff")) served++;
+            else Check(false, $"{label}: {o}{f.Key} is served from memory with a known Content-Type");
+        }
+        Check(files.Count > 0 && served == files.Count, $"{label}: all {files.Count} embedded files under {prefix} served from memory as {o}* (status 200, identical bytes, Content-Type, nosniff)");
+        Check(brand.All(b => site.Has("brand/" + b)), $"{label}: brand/ files reachable under {o}brand/");
+        var html = site.Resolve(o + page + "?v=1&sound=0", "GET");
+        Check(html != null && html.Status == 200 && html.ContentType == "text/html; charset=utf-8", $"{label}: {page} with a query string -> 200 text/html; charset=utf-8");
+        var js = site.Resolve(o + "brand/intro.js", "GET");
+        Check(js != null && js.ContentType == "text/javascript; charset=utf-8", $"{label}: ES modules as text/javascript");
+        string csp = html == null || html.Body == null ? "" : Encoding.UTF8.GetString(html.Body);
+        Check(Regex.IsMatch(csp, "http-equiv=\"Content-Security-Policy\"[^>]*script-src 'self'") && !csp.Contains("unsafe-inline") && !csp.Contains("unsafe-eval"),
+            $"{label}: {page} keeps its strict CSP (script-src 'self', nothing unsafe)");
+        var head = site.Resolve(o + page, "HEAD");
+        Check(head != null && head.Status == 200 && head.Body == null, $"{label}: HEAD -> 200 without body");
+        bool all404 = true;
+        foreach (string bad in new[] { "", "nope.html", "brand/..%2f" + page, "brand%5c..%5c" + page, "brand//intro.js", "..%2f" + page, "%2e%2e%2f" + page,
+                                       page + "%00", page + "%22", "%3c" + page, "brand%7c" + page, "C:/Windows/win.ini", "%2fetc/passwd", page.ToUpperInvariant(), "payload.zip", "brand/", "brand/../../" + page + "%2f.." })
+        {
+            var r = site.Resolve(o + bad, "GET");
+            if (r == null || r.Status != 404) { all404 = false; Check(false, $"{label}: {o}{bad} -> 404 (got {(r == null ? "unhandled" : r.Status.ToString())})"); }
+        }
+        Check(all404, $"{label}: unknown names, encoded traversal (..%2f, %5c), absolute paths -> 404 (no file system behind it)");
+        // plain dot segments are removed by the URL rules (RFC 3986, like the browser does before it asks):
+        // they can only ever reach a file of the site itself
+        bool inside = true;
+        foreach (string dots in new[] { "../" + page, "%2e%2e/" + page, "./" + page, "brand/../" + page, "../../../" + page })
+        {
+            var r = site.Resolve(o + dots, "GET");
+            if (r == null || !(r.Status == 404 || (r.Status == 200 && r.Body.AsSpan().SequenceEqual(html.Body)))) { inside = false; Check(false, $"{label}: {o}{dots} stays inside the site"); }
+        }
+        Check(inside, $"{label}: dot segments (../, %2e%2e/, ./) resolve inside the site or 404");
+        var post = site.Resolve(o + page, "POST");
+        Check(post != null && post.Status == 405, $"{label}: POST -> 405");
+        Check(site.Resolve("https://evil.example/" + page, "GET") == null && site.Resolve("http://" + host + "/" + page, "GET") == null
+              && site.Resolve("https://" + host + ":8443/" + page, "GET") == null, $"{label}: other origins are not answered");
+    }
+
+    private static void CheckNativeSources(string app)
+    {
+        var files = new List<(string name, string text)>();
+        foreach (string dir in new[] { "host", "setup", "shared" })
+            foreach (string f in Directory.GetFiles(Path.Combine(app, "native", dir), "*.cs", SearchOption.AllDirectories).OrderBy(x => x, StringComparer.Ordinal))
+            {
+                string rel = Path.GetRelativePath(app, f).Replace('\\', '/');
+                if (rel.Contains("/bin/") || rel.Contains("/obj/")) continue;
+                files.Add((rel, File.ReadAllText(f)));
+            }
+        var found = SourceViolations(files).Distinct().ToList();
+        foreach (string v in found) Check(false, "native sources: " + v);
+        Check(files.Count > 10 && found.Count == 0, $"native sources ({files.Count} files): no folder mapping for WebView2, every user data folder from WebViewData (never TempDir / CreatePrivateTempDir)");
+        int creates = files.Sum(f => Regex.Matches(StripComments(f.text), @"CoreWebView2Environment\.CreateAsync\s*\(").Count);
+        Check(creates >= 2, $"native sources: {creates} CoreWebView2Environment.CreateAsync calls checked (host + setup)");
+        foreach (string front in new[] { "native/host/HostForm.cs", "native/setup/SetupWindow.cs" })
+        {
+            string t = files.FirstOrDefault(f => f.name == front).text ?? "";
+            Check(t.Contains("AddWebResourceRequestedFilter(") && t.Contains("WebResourceRequested += ") && t.Contains("CreateWebResourceResponse(") && t.Contains("new MemoryStream("),
+                $"{front}: pages answered from memory (filter + WebResourceRequested + CreateWebResourceResponse(MemoryStream))");
+        }
+        // a page that does not load (Edge error page) or never reports in must not stay on screen
+        string hostSrc = files.FirstOrDefault(f => f.name == "native/host/HostForm.cs").text ?? "";
+        string setupSrc = files.FirstOrDefault(f => f.name == "native/setup/SetupWindow.cs").text ?? "";
+        Check(hostSrc.Contains("OnSplashBroken(") && hostSrc.Contains("_splashWatchdog") && hostSrc.Contains("e.NavigationId == _splashNavId"),
+            "native/host/HostForm.cs: a start screen that fails to load / never reports splash-ready is detected (no Edge error page left on screen)");
+        Check(setupSrc.Contains("PageFailed(") && setupSrc.Contains("_pageWatchdog") && setupSrc.Contains("NavigationCompleted +="),
+            "native/setup/SetupWindow.cs: a setup page that fails to load / never reports ready switches to the native window");
+
+        // the guard itself: each rule must fire on a known-bad sample, and a good sample must pass
+        string M = "SetVirtual" + "HostNameToFolderMapping";
+        var samples = new (string what, string code, bool bad)[]
+        {
+            ("folder mapping", "_core." + M + "(\"h\", dir, CoreWebView2HostResourceAccessKind.Deny);", true),
+            ("UDF in TempDir", "string udf = Path.Combine(Program.TempDir, \"webview2\");\nvar env = await CoreWebView2Environment.CreateAsync(null, udf, opts);", true),
+            ("UDF expression", "var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(Util.CreatePrivateTempDir(\"x\"), \"wv\"), opts);", true),
+            ("UDF reassigned", "string udf = WebViewData.NewSetupRun(log);\nudf = Program.TempDir;\nvar env = await CoreWebView2Environment.CreateAsync(null, udf, opts);", true),
+            ("default UDF", "await _web.EnsureCoreWebView2Async();", true),
+            ("file URL", "_core.Navigate(\"file:///C:/x/index.html\");", true),
+            ("good", "string udf = WebViewData.ForHost(dir, test, log);\nif (udf == null) return;\nvar env = await CoreWebView2Environment.CreateAsync(null, udf, opts);\nawait _web.EnsureCoreWebView2Async(env);", false),
+        };
+        bool guardOk = true;
+        foreach (var x in samples)
+        {
+            bool fired = SourceViolations(new List<(string, string)> { ("sample.cs", x.code) }).Count > 0;
+            if (fired != x.bad) { guardOk = false; Check(false, $"source guard self-test: '{x.what}' {(x.bad ? "not detected" : "flagged although fine")}"); }
+        }
+        Check(guardOk, $"source guard self-test: {samples.Length} samples (mapping, UDF in TempDir / private temp, reassigned, default UDF, file:// - and a good one)");
+    }
+
+    /// <summary>Drops // comments (a "//" at the line start or after whitespace - not the one in "https://") and /* */ blocks.</summary>
+    private static string StripComments(string code)
+    {
+        code = Regex.Replace(code, @"/\*.*?\*/", " ", RegexOptions.Singleline);
+        return Regex.Replace(code, @"(?m)(^|\s)//.*$", "$1");
+    }
+
+    internal static List<string> SourceViolations(List<(string name, string text)> files)
+    {
+        var bad = new List<string>();
+        string mapping = "SetVirtual" + "HostNameToFolderMapping";
+        foreach (var (name, raw) in files)
+        {
+            if (raw.Contains(mapping)) bad.Add($"{name}: uses {mapping} - the WebView2 browser process may not be able to read that folder; serve from memory (EmbeddedSite)");
+            string code = StripComments(raw);
+            if (Regex.IsMatch(code, @"EnsureCoreWebView2Async\s*\(\s*(\)|null\b)")) bad.Add($"{name}: EnsureCoreWebView2Async without an environment (default user data folder next to the exe)");
+            if (code.Contains("CreationProperties")) bad.Add($"{name}: CreationProperties - user data folders only through WebViewData");
+            if (Regex.IsMatch(code, "\"file:", RegexOptions.IgnoreCase)) bad.Add($"{name}: a file: URL - the browser process must not read our files from disk");
+            foreach (string line in code.Split('\n'))
+                if (Regex.IsMatch(line, @"\b(TempDir|CreatePrivateTempDir)\b") && Regex.IsMatch(line, @"webview|udf|UserData", RegexOptions.IgnoreCase))
+                    bad.Add($"{name}: user data folder derived from the private temp folder: {line.Trim()}");
+            foreach (Match m in Regex.Matches(code, @"CoreWebView2Environment\.CreateAsync\s*\("))
+            {
+                List<string> args = CallArguments(code, m.Index + m.Length);
+                if (args.Count < 2) { bad.Add($"{name}: CoreWebView2Environment.CreateAsync without an explicit user data folder"); continue; }
+                string udf = args[1].Trim();
+                if (!Regex.IsMatch(udf, @"^[A-Za-z_]\w*$")) { bad.Add($"{name}: CreateAsync user data folder must be a variable set from WebViewData, not '{udf}'"); continue; }
+                var sets = Regex.Matches(code, @"(?<![\w.=!<>])" + udf + @"\s*=(?!=)\s*([^;]+);").Select(a => a.Groups[1].Value.Trim()).ToList();
+                if (sets.Count == 0) bad.Add($"{name}: CreateAsync user data folder '{udf}' is never set from WebViewData");
+                foreach (string rhs in sets)
+                    if (!rhs.StartsWith("WebViewData.", StringComparison.Ordinal) && rhs != "null")
+                        bad.Add($"{name}: user data folder '{udf}' = {rhs} - only WebViewData may choose it");
+                if (sets.Count > 0 && sets.All(r => r == "null")) bad.Add($"{name}: user data folder '{udf}' is never set from WebViewData");
+            }
+            // .NET Framework's System.IO.Path throws on " < > | NUL - which a URL can carry; this check runs on .NET 8,
+            // where it does not throw, so the request path must never reach a Path API in the first place
+            if (name.EndsWith("/EmbeddedSite.cs", StringComparison.Ordinal) && Regex.IsMatch(code, @"\bPath\.\w+\s*\("))
+                bad.Add($"{name}: System.IO.Path on a request path (throws on .NET Framework for \" < > | NUL)");
+            if (name.EndsWith("/WebViewData.cs", StringComparison.Ordinal) && Regex.IsMatch(code, @"\b(TempDir|CreatePrivateTempDir|SetAccessRuleProtection)\b"))
+                bad.Add($"{name}: WebViewData must not use the private temp folder or protected ACLs");
+        }
+        return bad;
+    }
+
+    /// <summary>The top-level comma separated arguments of a call whose "(" ends right before <paramref name="start"/>.</summary>
+    private static List<string> CallArguments(string code, int start)
+    {
+        var args = new List<string>();
+        int depth = 0, from = start;
+        bool inStr = false;
+        for (int i = start; i < code.Length; i++)
+        {
+            char c = code[i];
+            if (inStr) { if (c == '\\') i++; else if (c == '"') inStr = false; continue; }
+            if (c == '"') { inStr = true; continue; }
+            if (c == '(' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == ']' || c == '}')
+            {
+                if (depth == 0) { string last = code.Substring(from, i - from); if (args.Count > 0 || last.Trim().Length > 0) args.Add(last); return args; }
+                depth--;
+            }
+            else if (c == ',' && depth == 0) { args.Add(code.Substring(from, i - from)); from = i + 1; }
+        }
+        return args;
     }
 
     // The brand kit (velox-tweaker/brand) is the single source of truth: each surface embeds byte-identical

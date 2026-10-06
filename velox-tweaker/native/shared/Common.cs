@@ -112,6 +112,8 @@ namespace Velox.Native
         /// Creates a fresh folder with a random name that only Administrators and SYSTEM may write to
         /// (or only the current user when not elevated). Used for DLLs and copies the elevated setup loads,
         /// so a normal-user process cannot swap them in between.
+        /// NEVER for anything the WebView2 browser process reads or writes (pages, user data folder): it runs
+        /// without our administrator rights and cannot open this folder (WebViewData, EmbeddedSite).
         /// </summary>
         public static string CreatePrivateTempDir(string prefix)
         {

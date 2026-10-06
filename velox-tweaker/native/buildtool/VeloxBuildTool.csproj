@@ -15,6 +15,10 @@
     <UseAppHost>false</UseAppHost>
   </PropertyGroup>
   <ItemGroup>
+    <!-- the in-memory web server both exes use: verify runs it against the files embedded in the built exes -->
+    <Compile Include="../shared/EmbeddedSite.cs" Link="shared/EmbeddedSite.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Remove="Microsoft.NETFramework.ReferenceAssemblies.net472" />
     <Reference Remove="System.Windows.Forms" />
     <Reference Remove="System.Drawing" />

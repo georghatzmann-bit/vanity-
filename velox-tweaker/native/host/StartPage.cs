@@ -1,11 +1,11 @@
 // The start screen's files (native/host/start/: splash.html/.css/.js + brand/ copies) are embedded in VELOX.exe
-// as resources "start/<path>". At start-up they are written to a fresh private temp folder (only the current
-// user - or Administrators and SYSTEM when elevated - may write there, so nobody can swap a file the
-// elevated window loads) and served with SetVirtualHostNameToFolderMapping as https://start.velox.example/.
+// as resources "start/<path>" and served FROM MEMORY as https://start.velox.example/ through WebView2's
+// WebResourceRequested event (EmbeddedSite; HostForm glues it to the WebView). Nothing is written to disk:
+// the WebView2 browser process does not get our administrator rights, so it could not read a private
+// Admins-only folder (1.2.0: ERR_FILE_NOT_FOUND), and a folder it could read could be swapped by anyone.
 // ES modules need a real origin: NavigateToString (an opaque data: origin) cannot load brand/intro.js.
 using System;
 using System.IO;
-using System.Reflection;
 using Velox.Native;
 
 namespace Velox.Host
@@ -15,39 +15,23 @@ namespace Velox.Host
         public const string HostName = "start.velox.example";
         public const string Origin = "https://" + HostName + "/";
         private const string Prefix = "start/";
-        private const string TempPrefix = "VeloxStart-";
+        // 1.2.0 extracted the start screen into %TEMP%\VeloxStart-<random>; leftovers of a killed run are removed
+        private const string OldTempPrefix = "VeloxStart-";
 
-        /// <summary>Writes the embedded start screen into a new private folder; null if that is impossible.</summary>
-        public static string Extract(Log log)
+        /// <summary>The embedded start screen; null if it is missing from VELOX.exe (the caller uses the Edge fallback).</summary>
+        public static EmbeddedSite Load(Log log)
         {
-            string dir = null;
             try
             {
-                CleanupStale(log);
-                dir = Util.CreatePrivateTempDir(TempPrefix);
-                Assembly asm = typeof(StartPage).Assembly;
-                int n = 0;
-                foreach (string name in asm.GetManifestResourceNames())
-                {
-                    if (!name.StartsWith(Prefix, StringComparison.Ordinal)) continue;
-                    string rel = name.Substring(Prefix.Length);
-                    if (rel.Length == 0 || rel.Contains("..") || rel.Contains(":") || rel.StartsWith("/", StringComparison.Ordinal) || rel.Contains("\\")) continue;
-                    string path = Path.Combine(dir, rel.Replace('/', Path.DirectorySeparatorChar));
-                    string sub = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(sub)) Directory.CreateDirectory(sub);
-                    using (Stream s = asm.GetManifestResourceStream(name))
-                    using (var f = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
-                        s.CopyTo(f);
-                    n++;
-                }
-                if (!File.Exists(Path.Combine(dir, "splash.html")) || !File.Exists(Path.Combine(dir, "brand", "intro.js")))
-                    throw new FileNotFoundException("Startbildschirm fehlt in VELOX.exe (" + n + " Dateien).");
-                return dir;
+                CleanupOldFolders(log);
+                var site = new EmbeddedSite(HostName, typeof(StartPage).Assembly, Prefix);
+                if (!site.Has("splash.html") || !site.Has("splash.js") || !site.Has("brand/intro.js"))
+                    throw new FileNotFoundException("Startbildschirm fehlt in VELOX.exe (" + site.Count + " Dateien).");
+                return site;
             }
             catch (Exception ex)
             {
-                if (log != null) log.Error("Startbildschirm konnte nicht entpackt werden: " + ex.Message);
-                if (dir != null) Util.DeleteTree(dir, false);
+                if (log != null) log.Error("Startbildschirm nicht verfügbar: " + ex.Message);
                 return null;
             }
         }
@@ -64,12 +48,11 @@ namespace Velox.Host
             return uri != null && uri.StartsWith(Origin, StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>Folders of earlier runs that could not be deleted (killed process, files still open).</summary>
-        private static void CleanupStale(Log log)
+        private static void CleanupOldFolders(Log log)
         {
             try
             {
-                foreach (string d in Directory.GetDirectories(Path.GetTempPath(), TempPrefix + "*"))
+                foreach (string d in Directory.GetDirectories(Path.GetTempPath(), OldTempPrefix + "*"))
                 {
                     try { if (Directory.GetLastWriteTimeUtc(d) < DateTime.UtcNow.AddHours(-12)) Util.DeleteTree(d, false); }
                     catch (Exception) { }

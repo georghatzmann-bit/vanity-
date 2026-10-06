@@ -144,6 +144,37 @@ namespace Velox.Native
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool CloseHandle(IntPtr handle);
 
+        // ------------------------------------------------------------ desktop user (owner of the shell window)
+        public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        public const uint TOKEN_QUERY = 0x0008;
+        public const int TokenUser = 1;
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetShellWindow();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        public static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        public static extern bool GetTokenInformation(IntPtr token, int infoClass, IntPtr info, int length, out int returnLength);
+
+        // the signed-in user of this session (fallback when the shell's token cannot be opened)
+        public const int WTSUserName = 5, WTSDomainName = 7;
+        public static readonly IntPtr WTS_CURRENT_SERVER_HANDLE = IntPtr.Zero;
+        public const int WTS_CURRENT_SESSION = -1;
+
+        [DllImport("wtsapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern bool WTSQuerySessionInformationW(IntPtr server, int sessionId, int infoClass, out IntPtr buffer, out int bytes);
+
+        [DllImport("wtsapi32.dll")]
+        public static extern void WTSFreeMemory(IntPtr memory);
+
         // the system's OEM code page (what a new console starts with)
         [DllImport("kernel32.dll")]
         public static extern uint GetOEMCP();

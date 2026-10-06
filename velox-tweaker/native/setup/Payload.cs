@@ -67,27 +67,5 @@ namespace Velox.Setup
             }
             return list;
         }
-
-        /// <summary>Names of the embedded resources that start with a prefix (the setup UI: "ui/"), sorted.</summary>
-        public static List<string> ResourceNames(string prefix)
-        {
-            var list = new List<string>();
-            foreach (string n in Assembly.GetExecutingAssembly().GetManifestResourceNames())
-                if (n.StartsWith(prefix, StringComparison.Ordinal)) list.Add(n);
-            list.Sort(StringComparer.Ordinal);
-            return list;
-        }
-
-        /// <summary>Bytes of a small embedded resource (the setup UI files), or null.</summary>
-        public static byte[] Resource(string name)
-        {
-            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
-            {
-                if (s == null) return null;
-                var ms = new MemoryStream();
-                s.CopyTo(ms);
-                return ms.ToArray();
-            }
-        }
     }
 }

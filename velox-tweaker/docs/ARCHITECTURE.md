@@ -35,7 +35,9 @@ velox-tweaker/
     Scan.ps1              hardware/system profile
     Advisor.ps1           offline expert system ("Smart-Analyse") → findings + plan + score
     Claude.ps1            KI providers of the KI-Optimierer: Claude Code CLI, Claude API, Groq (see §9)
-    Extras.ps1            cleanup sizes/actions, startup manager, game booster, file picker
+    Extras.ps1            startup manager, game booster, file picker
+    Clean.ps1             Reinigung: clean-scan / run-action, allow-list, junction-safe walk, long-running tools
+                          (DISM, SFC, CHKDSK, Datenträgerbereinigung) with live percent, timeout, cancel, skip (§3a)
     Jobs.ps1              background job runner: one reused worker runspace, one job at a time
     Server.ps1            HttpListener, routing, auth, static files
   data/
@@ -45,12 +47,12 @@ velox-tweaker/
     detweak.json          foreign-tweak reset list (§5)
   ui/
     index.html
-    css/app.css, css/games.css (Spiele page)
+    css/app.css, css/games.css (Spiele page), css/cleanup.css (Reinigung page)
     js/app.js, js/api.js, js/ui.js (components), js/icons.js, js/ai.js (KI providers), js/splash.js (start sequence), js/pages/<page>.js
     brand/                copies of ../brand/ (tools/sync-brand.mjs): intro, sound, tokens, wordmarks, icon
   tests/
     Run-Tests.ps1         backend tests (pwsh 7 on Linux AND Windows PowerShell 5.1) — simulate mode
-    fixtures/             small fixture catalog + fake profiles + fake Claude responses + claude-cli (fake Claude Code CLI) + games/pc (fake PC for the game detection)
+    fixtures/             small fixture catalog + fake profiles + fake Claude responses + claude-cli (fake Claude Code CLI) + games/pc (fake PC for the game detection) + clean/ (New-CleanFixture.ps1 = fake PC for the Reinigung, fake-tool.ps1 = fake DISM/SFC output)
     ui/run-ui-tests.mjs   Playwright end-to-end tests against `Velox.ps1 -Simulate -NoBrowser`
     native/               installer UI tests (Chromium, mocked bridge) + Velox.ps1 -HostPid contract (§11)
   tools/
@@ -196,8 +198,9 @@ Every revertible action knows how to **apply**, **revert to the Windows default*
 | `powersetting` | `subgroup`, `setting` (GUID or powercfg alias), `ac`, `dc` (int or null), `default` `{ "ac": n, "dc": n }` | `powercfg /setacvalueindex|/setdcvalueindex SCHEME_CURRENT …` + `/setactive SCHEME_CURRENT` | the journalled previous value if known, else `default` | current AC (and DC if given) equal |
 | `feature` | `name`, `enabled` (bool), `default` (bool) | `Enable/Disable-WindowsOptionalFeature -Online -NoRestart` | back | state equals `enabled` |
 | `appx` | `package` (exact package name, e.g. `Microsoft.BingNews`) | remove for all users + deprovision | not possible (kind `remove`) | package not installed |
-| `clean` | `paths` (array, env vars allowed, wildcard only in the last segment), `keep?` (names to keep), `stopServices?` | delete files (skip locked), report freed bytes | — (kind `action`) | — |
-| `ps` | `apply` (PowerShell source), `revert` (source or null), `detect` (source returning `$true`/`$false`/`$null`, or null) | run `apply` | run `revert` | `detect` result |
+| `clean` | `paths` (array of %TOKEN% paths, §3a), `keep?` (names to keep), `stopServices?`, `closeApps?` (process names without .exe: running → the item is skipped) | delete files (skip locked), report freed bytes | — (kind `action`) | — |
+| `tool` | `tool` (one of the fixed tool ids, §3a), `timeoutSec?`, `measure?` (paths whose size the scan shows) | run the tool as its own process with live percent | — (kind `action`) | — |
+| `ps` | `apply` (PowerShell source), `revert` (source or null), `detect` (source returning `$true`/`$false`/`$null`, or null); kind `action` only: `timeoutSec?` (default 600), `measure?` | run `apply` (kind `action`: in its own `powershell.exe`, see §3a) | run `revert` | `detect` result |
 
 Rules:
 
@@ -215,7 +218,10 @@ Rules:
 - `ps` scripts must be self-contained, idempotent, quiet (no output except `detect`'s boolean), use
   `-ErrorAction Stop`, and must be ASCII. Prefer declarative types; `ps` only when nothing else fits
   (netsh, adapter properties, `Disable-MMAgent`, `fsutil` …).
-- Kind `action` tweaks (cleanup/repair) have no revert and no status; kind `remove` (Appx) shows
+- Kind `action` tweaks (cleanup/repair) have no revert and no status. Two optional fields for them:
+  `tier` (`quick` = Schnell, `deep` = Gründlich, `optin` = only "Alles" after an explicit confirmation;
+  **required** for category `cleanup`, an `optin` item needs a `warning` saying what is lost) and
+  `duration` (short German text ≤ 40 chars, e.g. `"5–30 Min."`, shown on the card). Kind `remove` (Appx) shows
   "entfernt"/"installiert".
 
 **Never put these in the catalog** (they break Windows or remove protection without real gain):
@@ -226,6 +232,76 @@ Xbox Identity Provider / Edge WebView2, disabling `AppXSvc`, `StateRepository`, 
 `wuauserv`, `BITS`, `TrustedInstaller`, `ProfSvc`, `Schedule`, `Power`, `PlugPlay`, `LSM`,
 disabling the page file, `DisableAntiSpyware`, disabling DEP (`nx AlwaysOff`), deleting Windows.old
 automatically, editing the hosts file to block Microsoft.
+
+
+### 3a. Reinigung (core/Clean.ps1) - paths, allow-list, tools
+
+**Path tokens** (clean `paths`, `measure`): `%TEMP%`/`%TMP%`, `%LOCALAPPDATA%`, `%APPDATA%`, `%USERPROFILE%`,
+`%LOCALLOW%` (`<profile>\AppData\LocalLow`) - all of the person at the desktop (`Get-VxUserFolder`) -,
+`%SystemDrive%`, `%WINDIR%`/`%SystemRoot%`, `%PROGRAMDATA%`, `%ProgramFiles%`, `%ProgramFiles(x86)%`,
+`%STEAM%` (Steam folder from the registry; empty → the path is skipped) and `%RECYCLEBIN%` (only at the
+start: `<drive>\$Recycle.Bin\<SID of the desktop user>` on every fixed drive). The wildcard (`*`, `?`) is
+allowed in the last segment and in **at most one** folder segment before it, which needs at least one
+fixed folder in front (`%LOCALAPPDATA%\Google\Chrome\User Data\*\Cache\*` = every browser profile,
+`%SystemDrive%\Users\*\AppData\Local\Temp\*` = every account). The folder wildcard only matches real
+folders: never a junction/symlink, never the desktop user's own profile folder. `tools/Validate-Catalog.ps1`
+checks tokens, wildcards and refuses drive / Windows / profile roots.
+
+**Safety, in this order** (a root failing one is skipped with a German message, the rest goes on):
+1. `Test-VxCleanPathSafe`: never a drive root, Windows, System32/SysWOW64/WinSxS/Installer/servicing, Program
+   Files, ProgramData, Users or a profile root.
+2. **Hard allow-list** (`Get-VxCleanAllowList`, code, not catalog): the root must lie in the user's Temp /
+   LocalAppData / AppData / LocalLow, in `%WINDIR%\{Temp, Logs\CBS, Logs\DISM, Logs\WindowsUpdate, Logs\MoSetup,
+   Logs\NetSetup, Minidump, LiveKernelReports, SoftwareDistribution\Download, ServiceProfiles\...\DeliveryOptimization,
+   ServiceProfiles\LocalService\...\FontCache, System32\spool\PRINTERS}`, be `%WINDIR%\MEMORY.DMP` or
+   `System32\FNTCACHE.DAT`, in `%PROGRAMDATA%\{Microsoft\Windows\WER, NVIDIA Corporation\Downloader,
+   NVIDIA Corporation\NV_Cache, Blizzard Entertainment\Battle.net\Cache}`, `%SystemDrive%\{NVIDIA, AMD,
+   $Windows.~BT, $Windows.~WS, Windows.old}` (the last three are only measured - cleanmgr deletes them),
+   `<Steam>\{appcache\httpcache, logs, dumps, steamapps\shadercache}`, the recycle bin folders above, or any
+   `<SystemDrive>\Users\<name>\AppData\Local\Temp`. A new catalog target outside it needs a code change.
+3. The root and every folder above it must not be a junction/symlink; the walk never follows reparse
+   points and deletes through `VeloxNative.SafeFs.DeleteUnder` (refuses anything whose real path left the root).
+4. Files in use are skipped and counted (`locked`), the item stays `ok` with status `partial`.
+5. `closeApps`: if one of the processes runs in this desktop session the item is **skipped** ("Chrome läuft
+   gerade. Schließe … ganz") - a browser cache is never cleaned under a running browser. Browser items only
+   name cache folders (Cache, Code Cache, GPUCache, Service Worker\CacheStorage + ScriptCache, ShaderCache,
+   GrShaderCache, GraphiteDawnCache; Firefox cache2, startupCache, thumbnails, jumpListCache) - never
+   cookies, history, logins, sessions or profiles.
+6. `optin` items run only with `run-action` `confirmOptIn: true` (the UI asks with a required checkbox);
+   `apply` never runs them. Never in the catalog: `Windows\Installer`, `Package Cache`, Prefetch, Defender
+   folders, Documents/savegames.
+7. A root shared by two items is measured and cleaned once (catalog order).
+
+**Scan** (`clean-scan`): read-only walk, at most 15 s per item and 120 s in total (`partial:true` = "≥ X").
+
+**Tools** (`tool` action, `Get-VxToolSpec`): `dism-scanhealth` (45 min), `dism-restorehealth` (90 min),
+`dism-component-cleanup` (60 min), `dism-component-resetbase` (90 min), `sfc-scannow` (60 min), `chkdsk-scan`
+(45 min), `cleanmgr-windows-old` (60 min; `cleanmgr /sagerun:9417` with StateFlags9417 set only for
+"Previous Installations", "Temporary Setup Files", "Setup Log Files", "Windows Upgrade Log Files" and removed
+afterwards - never "Windows ESD installation files", needed to reset the PC). Each runs as its own process
+(`Invoke-VxToolProcess`, `System.Diagnostics.Process`, no PowerShell in between): stdout is read as **bytes**
+with `ReadAsync` and only completed reads are looked at (rule 15), decoded with the OEM code page - or
+UTF-16LE when the second byte is 0 / a FF FE BOM (sfc.exe writes wide characters into a pipe) - through a
+stateful decoder, split on `\r` and `\n` (DISM/SFC redraw their bar with a bare `\r`; the unfinished last
+segment is read too). Percent: DISM `[== 42.3% ]`, SFC `Überprüfung 45 % abgeschlossen.` / `Verification 45%
+complete.`, CHKDSK `Total:`/`Gesamt:`. Every 0.5 s: `job.step` = "<Schritt> – 42,3 % · 3:12", `job.progress`
+and `job.live` (percent, elapsedSec, note). No new output for 10 min → note "… wartet auf Windows" (a pending
+update / the Windows Modules Installer); before DISM/SFC a pending CBS reboot or a running TiWorker is
+logged. `job.skippable` is true the whole time: "Überspringen" / "Abbrechen" / the timeout end the **whole
+process tree** (`Stop-VxProcessTree`, taskkill /T). Outcome from exit code + text (German and English):
+DISM 0/3010 ok (3010 → needs reboot), 0x800F0806 pending reboot, 0x800F081F/0x800F0906 sources, 87, 740,
+1726; ScanHealth "repairable"/"cannot be repaired" (+ `Repair-WindowsImage -CheckHealth` when the language
+is unknown); SFC "keine Integritätsverletzungen" / "erfolgreich repariert" (→ reboot) / "nicht alle" (→ run
+DISM first) / "Systemreparatur steht aus"; CHKDSK 0–2 ok, ≥3 → `/spotfix` hint. Freed bytes: `measure`
+before/after, else the free space of the system drive before/after (DISM cleanup, cleanmgr).
+
+**ps actions of kind `action`** (repair scripts, Store reset, TRIM …) run in `Invoke-VxIsolated` (own
+`powershell.exe`, `-File`, `timeoutSec` default 600, skippable) - a hanging script can never block VELOX.
+
+**Why DISM "hung" in older versions:** DISM/SFC/CHKDSK ran as `& dism.exe … 2>&1` *inside* the job runspace:
+no timeout, no cancel (the runspace was blocked, `job.cancel` was never looked at), no output until the end
+(captured, not streamed; the bar uses bare `\r`), the step text froze on "Führe aus: …" for 10–60 minutes and
+every other job got 409 "busy". `Repair-WindowsImage -ScanHealth` loaded the DISM API into the worker itself.
 
 ---
 
@@ -329,7 +405,12 @@ selected, journal everything.
 - Off Windows, the overlay is seeded on first start (or `-SimReset`) with a handful of "foreign
   tweaks" (e.g. `Win32PrioritySeparation=38`, `SystemResponsiveness=0`, `useplatformclock=yes`,
   `SysMain` disabled, an IFEO `PerfOptions` key) so the detweak page has something to show.
-- `ps` actions in simulate mode only record a flag; `clean` actions report fake sizes;
+- `ps` actions in simulate mode only record a flag; `clean` actions report fake sizes (on Windows: the real
+  sizes, nothing deleted); `tool` actions feed fake DISM/SFC/CHKDSK output (bytes, `\r` bars, SFC as UTF-16)
+  through the real reader in ~2.4 s (`VELOX_SIM_TOOL_MS`, tests `$VxCtx.TestToolMs`). With
+  `VELOX_CLEAN_FIXTURE` (Testmodus) or `$VxCtx.CleanFixture` (tests) every token points into that fake PC
+  (`tests/fixtures/clean/New-CleanFixture.ps1`; `running.txt` = running apps, `locked.txt` = files in use)
+  and deletes really happen there;
   restore points are never created: a fake list in the overlay (`Sim.rp`, seeded with one Windows
   point and several old "VELOX: …" points like a PC that ran an older version) is listed, adopted,
   extended and cleaned up instead.
@@ -366,7 +447,7 @@ with `history.replaceState`.
 | `POST /api/jobs` | `{ type, params }` | `{ jobId }` or 409 `{ error:"busy", jobId, type }` (type = the running job's type) |
 | `GET /api/jobs/<id>?since=<n>` | – | `job` |
 | `POST /api/jobs/<id>/cancel` | – | `{ ok }` |
-| `POST /api/jobs/<id>/skip` | – | `{ ok }` — "Überspringen": ends only the running **skippable** step (restore point, Detweak reset command); `ok:false` when none runs. The job goes on with its next step. |
+| `POST /api/jobs/<id>/skip` | – | `{ ok }` — "Überspringen": ends only the running **skippable** step (restore point, Detweak reset command, the current Reinigung item or repair tool); `ok:false` when none runs. The job goes on with its next step. |
 | `POST /api/settings` | partial settings | `{ settings }` |
 | `POST /api/claude/key` | `{ key }` | `{ hasKey: true }` |
 | `DELETE /api/claude/key` | – | `{ hasKey: false }` |
@@ -422,6 +503,8 @@ state    = { statuses:{ <tweakId>: "applied"|"default"|"partial"|"custom"|"na"|"
 job      = { id, type, status:"running"|"done"|"error"|"cancelled", progress:0..1, step:"German text",
              log:[ { i, t, level:"info"|"ok"|"warn"|"error", msg } ], result:object|null, error:string|null,
              skippable:bool,     // a step that "Überspringen" may end runs right now (POST …/skip)
+             live:null|{ id, index, total, progress:-1|0..1, percent:-1|0..100, elapsedSec, files, freed, note,
+                    done:[ run-action result rows ] },   // run-action only: the item running now + the finished ones
              durationMs:n }      // so far while running, the job's total once finished
              // every job result object also carries durationMs (engine time of the job body); the
              // UI shows it in the result toast ("27 Tweaks in 2,4 s angewendet")
@@ -450,8 +533,8 @@ mixed; `custom` a value is neither (set by another tool); `na` not applicable/no
 | `claude` | `{ goal, text, allowRisky }` | `advisorResult` + `{ model, usage }` (= `ai` with provider `claude-api`) |
 | `ai` | `{ provider, goal, text, allowRisky }` | `advisorResult` + `{ provider, model, usage }` — provider `claude-code`\|`claude-api`\|`groq`\|`offline` (§9) |
 | `ai-status` | `{ test? }` | `{ providers:[ row ], recommended:"claude-code", preferred }` — see §9 |
-| `clean-scan` | `{}` | `{ items:[ { id, bytes, files } ] }` |
-| `run-action` | `{ ids }` | `{ results:[ { id, ok, freedBytes, message } ] }` |
+| `clean-scan` | `{}` | `{ items:[ { id, bytes, files, found, partial, measurable, running:[app names] } ], totalBytes }` — every kind `action` tweak with a `tier`, clean action or `measure`; `found:false` = nothing of it on this PC, `measurable:false` = size only known afterwards (DISM) |
+| `run-action` | `{ ids, confirmOptIn?, expect?:{ <id>: files } }` | `{ results:[ { id, ok, freedBytes, message, status:"ok"\|"partial"\|"skipped"\|"failed", skipped, deleted, locked, running, durationMs } ], freedBytes }` — `expect` (file counts of the last scan) only drives the progress bar; live state in `job.live` |
 | `startup-list` | `{}` | `{ items:[ { id, name, command, location, enabled } ] }` |
 | `startup-set` | `{ id, enabled }` | `{ ok, item }` |
 | `games-detect` | `{}` | `{ games:[ game ] }` (see "Game library" below) |
@@ -812,7 +895,7 @@ instead of glossy: ink and bone, one signal colour, hairlines, mono readouts.
   Testmodus / Neustart nötig); content max 1180 px; sticky bottom bar for staged changes
   ("3 Änderungen · Verwerfen · Anwenden"). Works down to 900×600.
 - **Pages**: Übersicht (dashboard), Tweaks (category tabs + search + risk filter), Presets,
-  KI-Optimierer (Claude Code / Claude API / Groq / Smart-Analyse), Detweak, Spiele (game booster), Reinigung (cleanup + repair),
+  KI-Optimierer (Claude Code / Claude API / Groq / Smart-Analyse), Detweak, Spiele (game booster), Reinigung (scan → grouped list with sizes → Schnell / Gründlich / Alles → live progress per item, repair tools with duration note and live percent on the card; both without the modal overlay, the page re-attaches to a running job),
   Apps (autostart + bloatware), Sicherungen (backups/journal), Einstellungen.
 - Every option has one grey line of explanation. Empty states explain what to do. Every action gives
   feedback (toast). Risk badges with text ("Sicher", "Mittel", "Riskant"). Risky tweaks need a confirm
@@ -837,16 +920,72 @@ are AnyCPU without Prefer32Bit (64-bit process → 64-bit `powershell.exe`, 64-b
 
 | File | What |
 |---|---|
-| `VERSION` | the one version number (`1.2.0`; bump it for every `dist/VeloxSetup.exe` that leaves the house, so an installed build can be told apart and the setup offers *Aktualisieren*). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
-| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `Startup.cs` (start timeout, start-up texts, diagnosis of a blocked PowerShell), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs` (also `lastIntroVersion`), `StartPage.cs` (serves the start screen), `start/` (the start screen: `splash.html`, `splash.css`, `splash.js` + `start/brand/` = byte-identical copies of `brand/`, all embedded as resources `start/…`), `app.manifest` (`asInvoker`, PerMonitorV2). |
+| `VERSION` | the one version number (`1.2.1`; bump it for every `dist/VeloxSetup.exe` that leaves the house, so an installed build can be told apart and the setup offers *Aktualisieren*). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
+| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `Startup.cs` (start timeout, start-up texts, diagnosis of a blocked PowerShell), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs` (also `lastIntroVersion`), `StartPage.cs` (the start screen as an in-memory site), `start/` (the start screen: `splash.html`, `splash.css`, `splash.js` + `start/brand/` = byte-identical copies of `brand/`, all embedded as resources `start/…`), `app.manifest` (`asInvoker`, PerMonitorV2). |
 | `native/setup/` | **VeloxSetup.exe** – installer + uninstaller: `Program.cs` (switches, AssemblyResolve, temp copy for uninstall), `SetupWindow.cs` (the only file with WebView2 types), `Installer.cs` (install/update/uninstall engine), `Payload.cs` (embedded zip), `WebView2Runtime.cs` (runtime download), `FallbackForm.cs` (plain native UI), `app.manifest` (`requireAdministrator`, PerMonitorV2). |
 | `native/setup-ui/` | installer UI: `index.html`, `setup.css`, `setup.js` (ES module) + `brand/` (byte-identical copies of the brand kit: `intro.js`, `sound.js`, `glyphs.js`, `ticks.js`, `intro.css`, `kit.css`, `tokens.css`). Opening `index.html` over http shows a demo (`#update`, `#uninstall` in the URL pick the mode). |
-| `native/shared/` | `Common.cs` (Log, Util), `DarkUi.cs` (dark native dialogs, `Brand` = the `brand/tokens.css` palette, the mark, the kit's hairline loader), `Settings.cs` (reads `settings.json` `startSound`, never writes it), `NativeMethods.cs` (P/Invoke). |
+| `native/shared/` | `Common.cs` (Log, Util), `EmbeddedSite.cs` (embedded resources served from memory as one `https://<host>/` origin; no WebView2 types), `WebViewData.cs` (the only place that picks WebView2 user data folders + desktop-user access), `DarkUi.cs` (dark native dialogs, `Brand` = the `brand/tokens.css` palette, the mark, the kit's hairline loader), `Settings.cs` (reads `settings.json` `startSound`, never writes it), `NativeMethods.cs` (P/Invoke). |
 | `native/assets/` | `velox.ico` (16, 20, 24, 32, 40, 48, 64, 96, 128, 256 px) + `velox-256.png`, rendered by `make-icon.mjs` (Chromium 1:1 + ImageMagick) from the brand kit: 16 px `brand/mark-16.svg`, 20/24 px the pixel-fitted `brand/src/fit/mark-20/24.svg`, 32–256 px `brand/src/fit/app-icon-<n>.svg` (`brand/app-icon.svg` snapped to whole pixels per size); every frame is checked pixel-identical to `brand/export/`. Both exes use it. |
-| `native/buildtool/` | net8 helper used only by the build: `pack` (payload.zip) and `verify` (checks the finished exe). |
+| `native/buildtool/` | net8 helper used only by the build: `pack` (payload.zip) and `verify` (checks the finished exe; compiles `shared/EmbeddedSite.cs` in and runs it against the files embedded in both exes). |
 | `native/build.sh`, `native/Build.ps1` | build `dist/VeloxSetup.exe` (Linux/macOS resp. Windows, .NET SDK 8+). Deterministic: same sources → byte-identical exe. |
 | `dist/VeloxSetup.exe` | the download (≈ 1.1 MB, budget 3 MB). `dist/obj/` is build output and ignored. |
 | `tests/native/` | `run-setup-ui-tests.mjs` (installer UI + host start screen in Chromium, mocked bridge, screenshots), `Test-HostPid.ps1` (backend ↔ host contract, lifecycle), `wine-smoke.sh` (runs the real VeloxSetup.exe / VELOX.exe / Uninstall.exe under Wine + wine-mono with a fake `powershell.exe` from `wine/`; optional, skips without Wine). |
+
+### The WebView2 browser process is untrusted-for-elevation (since 1.2.1)
+
+**Rule: content from memory, user data folders in user-accessible folders.** Both exes may run elevated, but
+the WebView2 *browser process* never gets their administrator rights: current runtimes run it de-elevated
+(filtered token - the user SID is enabled, `BUILTIN\Administrators` is deny-only; Microsoft: "WebView2
+processes cannot run elevated"), and under Windows 11 Administrator Protection it may run as the signed-in
+user while the host runs as the shadow admin; over-the-shoulder elevation makes host and desktop two
+different accounts. 1.2.0 broke on a real Windows 11 PC exactly here: the setup's user data folder and both
+UIs lived in a private temp folder that only Administrators + SYSTEM may open (`Util.CreatePrivateTempDir`) -
+the runtime showed the modal "Das Datenverzeichnis konnte nicht erstellt werden", VELOX.exe showed
+`ERR_FILE_NOT_FOUND`. So:
+
+- **Pages from memory.** `https://setup.velox.example/*` and `https://start.velox.example/*` are answered by
+  `CoreWebView2.WebResourceRequested` from the embedded resources (`shared/EmbeddedSite.cs`; glue in
+  `SetupWindow.cs` / `HostForm.cs`): `AddWebResourceRequestedFilter("https://<host>/*", All, Document)`
+  (SDK 1.0.2903.40; on a runtime without `ICoreWebView2_22` the call throws `NotImplementedException` and the
+  older two-argument overload is used), `Environment.CreateWebResourceResponse(new MemoryStream(bytes, false),
+  status, reason, headers)` set synchronously on the UI thread (no deferral). Only exact names of embedded
+  files are served (no file system behind it, so no traversal; dot segments are removed by the URL rules and
+  can only reach the site's own files); `Content-Type` by extension (`text/html; charset=utf-8`,
+  `text/javascript; charset=utf-8` for `.js` incl. ES modules, `text/css; charset=utf-8`, `image/svg+xml`,
+  `image/png`, …) + `X-Content-Type-Options: nosniff` + `Cache-Control: no-store`; unknown name or type → 404,
+  other methods than GET/HEAD → 405, other origins are not answered. The pages keep their strict CSP
+  (`<meta>`). Nothing is extracted to disk; a folder mapping (`SetVirtualHostNameToFolderMapping`) is
+  forbidden.
+- **User data folders are normal user folders** (`shared/WebViewData.cs`, the only place that picks them):
+  VELOX.exe `%LOCALAPPDATA%\Velox\webview2\<real|test>` (as in 1.1.x), VeloxSetup.exe a fresh
+  `%TEMP%\VeloxSetup-WebView2-<random>` per run with the profile's inherited ACL, deleted after the run (retries
+  for 6 s while the browser lets go, the rest at the next restart; leftovers older than 12 h at the next
+  setup start). Both: the process user's own SID must have an allow entry (not only via Administrators),
+  otherwise Modify (inherit) is added for it; if the desktop user - the owner of the shell window
+  (`GetShellWindow` → `GetWindowThreadProcessId` → `OpenProcess` → `OpenProcessToken` → `TokenUser`) - is
+  another account, it gets Modify (inherit) too. Entries are only added; protection and other entries stay.
+- **The private Admins-only temp folder stays - only for what the elevated process itself loads**
+  (`WebView2Loader.dll`, the setup's uninstall copy, the runtime bootstrapper).
+- **Failures fall back, they do not hang in a runtime dialog:** a user data folder that cannot be created, or
+  `CreateAsync` / `EnsureCoreWebView2Async` failing, is logged with HRESULT, folder and exception, and the
+  setup shows its native `FallbackForm`, VELOX.exe its Edge-window fallback. Both also give up after 30 s
+  without an answer from the runtime (a stuck runtime, or one waiting behind its own error dialog).
+  **A page that does not load never stays on screen either:** the setup page must report `ready` within 15 s
+  of its navigation and a failed load of it (an Edge error page, not `OperationCanceled`) is caught in
+  `NavigationCompleted` - both switch to `FallbackForm` (nothing has been done before `ready`). VELOX.exe treats
+  a start screen that fails to load or does not report `splash-ready` within 12 s as broken: it logs it, opens
+  the app as soon as the backend is ready (no hand-over wait), and an error the start screen would have
+  shown goes to the Edge-window fallback instead.
+- **Background:** `WEBVIEW2_DEFAULT_BACKGROUND_COLOR` is ignored for elevated hosts, so both set the
+  control's `DefaultBackgroundColor` (`#0C0D0F`; the WinForms control applies it to the controller when it is
+  created) and again after start-up. API options such as `AdditionalBrowserArguments
+  "--autoplay-policy=no-user-gesture-required"` are honoured for elevated hosts and stay.
+- **Guards:** `buildtool verify` fails if any source in `native/host|setup|shared` mentions
+  `SetVirtualHostNameToFolderMapping`, if a `CoreWebView2Environment.CreateAsync` user data folder is not a
+  variable set only from `WebViewData.*`, if a line derives a WebView2/UDF path from `TempDir` /
+  `CreatePrivateTempDir`, if `EnsureCoreWebView2Async()` runs without an environment, or a `"file:` URL
+  appears (with a self-test on known-bad samples); and it serves every embedded file of both exes through
+  `EmbeddedSite` (200 + identical bytes + type, 404/405 cases, CSP kept).
 
 ### Velox.ps1 under VELOX.exe
 
@@ -883,20 +1022,20 @@ with a token is accepted), `VELOX_RUNNING <url>`, `VELOX_ERROR <text>`, `VELOX_S
 | `--elevated` | internal: marks the relaunch (no second attempt). |
 
 - **Single instance per mode:** mutex `Local\VELOX-Host-real` / `Local\VELOX-Host-sim`. A second start broadcasts the registered window message `VELOX.Host.Activate.v1` (wParam 1 = real, 2 = Testmodus; allowed through UIPI with `ChangeWindowMessageFilterEx`) and exits; if the other instance is just closing (mutex gone within 4.5 s) it starts normally instead.
-- **Window:** opens at once with the start screen (below), BackColor and `WEBVIEW2_DEFAULT_BACKGROUND_COLOR` `#0C0D0F` (`--vx-ink`; no white flash), dark title bar (`DwmSetWindowAttribute` 20, fallback 19), Windows 11 rounded corners + caption colour, min 900×600, default 1360×880 DIP clamped to the work area, size/position/maximized in `%LOCALAPPDATA%\Velox\window.json` (every write keeps the file's other keys), title `VELOX` / `VELOX – Testmodus`.
+- **Window:** opens at once with the start screen (below), BackColor and the WebView2 control's `DefaultBackgroundColor` `#0C0D0F` (`--vx-ink`; no white flash - the env var `WEBVIEW2_DEFAULT_BACKGROUND_COLOR` alone is ignored for elevated hosts), dark title bar (`DwmSetWindowAttribute` 20, fallback 19), Windows 11 rounded corners + caption colour, min 900×600, default 1360×880 DIP clamped to the work area, size/position/maximized in `%LOCALAPPDATA%\Velox\window.json` (every write keeps the file's other keys), title `VELOX` / `VELOX – Testmodus`.
 - **Start:** the backend must report `VELOX_READY` - at the latest **60 s after its last output line** and **180 s** after the start (a slow first start after boot or install keeps going while it prints its phases); otherwise (or if it exits) the start screen shows an error with the last 40 log lines and the buttons *Erneut versuchen* / *Testmodus* / *Log öffnen*. Ended without `VELOX_ERROR`: the stderr tail is checked for PowerShell refusing the script (execution policy forced by Group Policy, the virus scanner / AMSI, Constrained Language Mode) and the user gets a plain German explanation instead of "Code 1".
 - **WebView2 watchdog:** if `CreateAsync` / `EnsureCoreWebView2Async` has not finished after **30 s** (a stuck runtime never throws), VELOX.exe gives up on WebView2 exactly as on an exception: `FallbackHost`.
-- **WebView2:** user data folder `%LOCALAPPDATA%\Velox\webview2\<real|test>`; environment options `Language de-DE` + `AdditionalBrowserArguments "--autoplay-policy=no-user-gesture-required"` (SDK 1.0.2903.40; the start sound plays without a click). A browser process that still owns the user data folder with other options (a VELOX that is just closing, or 1.1.x, which started without the argument) makes the new environment fail with `ERROR_INVALID_STATE` (0x8007139F): VELOX.exe then waits 0.6 s and tries again with a fresh WebView2 control (4 attempts), and the 5th attempt starts without the argument (the intro then runs silent and offers *Ton: klicken*) - never the Edge fallback for this. DevTools, browser accelerator keys, default context menu, status bar, zoom, pinch zoom, swipe navigation, autofill, password saving and host objects off. Only `http://127.0.0.1:<port>/` (and `localhost:<port>`) and the start screen (`https://start.velox.example/`) may load in the window; every other navigation is cancelled, user-initiated http(s) links and `window.open` open in the default browser **non-elevated** via `explorer.exe "<url>"`. Render process crash → reload; browser process crash → restart VELOX.exe. A failed load of the app (only the latest app navigation, never `OperationCanceled` - the start screen replaced by the app, or a navigation the host cancelled itself) is retried up to 3 times.
+- **WebView2:** user data folder `%LOCALAPPDATA%\Velox\webview2\<real|test>` (`WebViewData.ForHost`: browser access ensured as described above; failure → Edge fallback); environment options `Language de-DE` + `AdditionalBrowserArguments "--autoplay-policy=no-user-gesture-required"` (SDK 1.0.2903.40; the start sound plays without a click). A browser process that still owns the user data folder with other options (a VELOX that is just closing, or 1.1.x, which started without the argument) makes the new environment fail with `ERROR_INVALID_STATE` (0x8007139F): VELOX.exe then waits 0.6 s and tries again with a fresh WebView2 control (4 attempts), and the 5th attempt starts without the argument (the intro then runs silent and offers *Ton: klicken*) - never the Edge fallback for this. DevTools, browser accelerator keys, default context menu, status bar, zoom, pinch zoom, swipe navigation, autofill, password saving and host objects off. Only `http://127.0.0.1:<port>/` (and `localhost:<port>`) and the start screen (`https://start.velox.example/`) may load in the window; every other navigation is cancelled, user-initiated http(s) links and `window.open` open in the default browser **non-elevated** via `explorer.exe "<url>"`. Render process crash → reload; browser process crash → restart VELOX.exe. A failed load of the app (only the latest app navigation, never `OperationCanceled` - the start screen replaced by the app, or a navigation the host cancelled itself) is retried up to 3 times.
 - **Close:** if `POST /api/heartbeat` says `busy`, ask first (*Trotzdem beenden* / *Weiter warten*). Then the window hides, the WebView is disposed (its heartbeats stop), `POST /api/shutdown?t=<token>`, wait up to **3 s**, then `TerminateJobObject` (the backend keeps its 4 s reload grace period, so it is normally ended by the job object; that is safe because every change is saved when it is made). Windows shutdown: request + terminate at once.
 - **WebView2 runtime missing** (`GetAvailableBrowserVersionString` throws `WebView2RuntimeNotFoundException`, or creating the environment fails): `FallbackHost` – a small dark start window runs `Velox.ps1` hidden **without** `-NoBrowser` (the backend opens its Edge app window as with `Start.bat`); VELOX.exe stays alive as the job owner and ends when the backend ends.
 
 **Start screen** (`native/host/start/`, since 1.2.0): `brand/intro.js` (the kit's start sequence with
 sound) from byte-identical copies in `start/brand/`. ES modules need a real origin, so `NavigateToString`
-(an opaque `data:` origin) cannot load it: VELOX.exe embeds the folder as resources `start/…`, writes it at
-start-up into a fresh private temp folder (`Util.CreatePrivateTempDir("VeloxStart-")`: only Administrators +
-SYSTEM may write when elevated, only the user otherwise - nobody can swap a file the elevated window loads;
-deleted on exit, leftovers older than 12 h at the next start; extraction impossible → Edge fallback) and maps
-it with `SetVirtualHostNameToFolderMapping("start.velox.example", …, DenyCors)`. The page keeps the strict
+(an opaque `data:` origin) cannot load it: VELOX.exe embeds the folder as resources `start/…` and answers
+`https://start.velox.example/*` from memory (`StartPage.Load` → `EmbeddedSite`, `WebResourceRequested`; see
+"untrusted-for-elevation" above - since 1.2.1, 1.2.0 extracted it to a private temp folder the browser could
+not read; its leftovers `%TEMP%\VeloxStart-*` older than 12 h are removed). Start screen missing from the exe →
+Edge fallback. Nothing can swap a file the elevated window shows: there is no file. The page keeps the strict
 CSP (`default-src 'none'; script-src 'self'; style-src 'self'`; CSSOM only, no inline styles or scripts).
 URL: `https://start.velox.example/splash.html?v=<VERSION>&variant=full|short|still&sound=1|0&test=1|0`:
 
@@ -965,13 +1104,16 @@ Its own WebView2: the managed DLLs are loaded from `payload.zip` through `AppDom
 (registered first thing in `Main`; all WebView2-typed code is in `SetupWindow.cs`, called through
 `[NoInlining]` methods so it is JIT-compiled after that); `WebView2Loader.dll` for the process
 architecture is extracted to a private temp folder and announced with
-`CoreWebView2Environment.SetLoaderDllFolderPath` before any other WebView2 call. The UI files are extracted
-(every embedded resource `ui/…`: the three files and `ui/brand/*`) to the same temp folder and mapped with
-`SetVirtualHostNameToFolderMapping("setup.velox.example", …, Deny)`; only `https://setup.velox.example/` may
-load (`index.html?sound=0|1[&mode=uninstall]`; `sound` = `settings.json` `startSound`, read only). Environment
-options: `de-DE` + `--autoplay-policy=no-user-gesture-required` (fresh user data folder per run, so no
-option clash; if the runtime still refuses, it starts again without it). Window and WebView2 background
-`#0C0D0F`, DWM border `--vx-line`. Window: borderless 880×560 DIP (scaled, clamped), drop
+`CoreWebView2Environment.SetLoaderDllFolderPath` before any other WebView2 call. The UI (every embedded
+resource `ui/…`: the three files and `ui/brand/*`) is answered from memory as `https://setup.velox.example/*`
+(`EmbeddedSite`, `WebResourceRequested` - never extracted, see "untrusted-for-elevation" above); only
+`https://setup.velox.example/` may load (`index.html?sound=0|1[&mode=uninstall]`; `sound` = `settings.json`
+`startSound`, read only). User data folder: a fresh `%TEMP%\VeloxSetup-WebView2-<random>` per run
+(`WebViewData.NewSetupRun`; normal inherited ACL, never inside the private temp folder; deleted after the
+run). Environment options: `de-DE` + `--autoplay-policy=no-user-gesture-required` (fresh folder per run, so no
+option clash; if the runtime still refuses, it starts again without it in another fresh folder). Window
+background `#0C0D0F` and the WebView2 control's `DefaultBackgroundColor` (the env var is ignored for elevated
+hosts), DWM border `--vx-line`. Window: borderless 880×560 DIP (scaled, clamped), drop
 shadow, rounded corners, own title bar (drag = `ReleaseCapture` + `WM_NCLBUTTONDOWN/HTCAPTION`, only while `GetAsyncKeyState` says the primary button is still down).
 
 WebView2 runtime missing → dark native dialog: download the Evergreen bootstrapper
@@ -1053,7 +1195,8 @@ by editing a copy), payload = every app file byte-identical and nothing else, CR
 `.bat`s and BOM of `Velox.ps1` kept, WebView2Loader machine types, size ≤ 3 MB; both exes built for
 4.7.2 = `VELOX.exe.config`'s `sku` = the setup's .NET check (`Util.NetFrameworkMinRelease`); every
 non-framework assembly VELOX.exe, the setup and the WebView2 DLLs reference is in the payload root with the
-exact name, version and public key token. Then
+exact name, version and public key token; both embedded sites served through `EmbeddedSite` and the WebView2
+source guards (see "untrusted-for-elevation"). Then
 `node tests/native/run-setup-ui-tests.mjs` and `pwsh tests/native/Test-HostPid.ps1`; with Wine installed
 also `tests/native/wine-smoke.sh` (≈ 4 min). WebView2, UAC and shortcuts cannot run under Wine; every
 Win32/COM/WebView2 call is wrapped and logged.

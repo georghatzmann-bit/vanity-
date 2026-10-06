@@ -1,6 +1,12 @@
 // The modern installer window: a borderless WinForms window hosting WebView2 with the HTML UI from
 // native/setup-ui (embedded). ALL code that touches WebView2 types lives in this file.
 //
+// The WebView2 browser process does not get this process's administrator rights (the runtime de-elevates it;
+// under Administrator Protection it may even run as another account). So it reads nothing of ours from disk -
+// the UI is answered from memory (EmbeddedSite via WebResourceRequested) - and its user data folder is a
+// normal folder of the user (WebViewData), never inside the private Admins-only Program.TempDir, which is
+// only for what THIS process loads (WebView2Loader.dll).
+//
 // Message protocol (JSON objects, docs/ARCHITECTURE.md "Native host & installer"):
 //   page -> setup: ready | drag | minimize | close | browse | checkRunning | install{dir,desktop,startMenu,launch,closeRunning}
 //                  | uninstall{keepData,closeRunning} | launch | openLog | exit
@@ -43,20 +49,12 @@ namespace Velox.Setup
         public static bool Run(Program.Args a, out int exitCode)
         {
             exitCode = 1;
-            string ui = Path.Combine(Program.TempDir, "ui");
-            Directory.CreateDirectory(ui);
-            // index.html, setup.css, setup.js and brand/* (byte-identical copies of the brand kit)
-            foreach (string name in Payload.ResourceNames("ui/"))
-            {
-                string rel = name.Substring(3);
-                if (rel.Length == 0 || rel.Contains("..") || rel.Contains(":") || rel.Contains("\\") || rel.StartsWith("/", StringComparison.Ordinal)) continue;
-                string path = Path.Combine(ui, rel.Replace('/', Path.DirectorySeparatorChar));
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllBytes(path, Payload.Resource(name));
-            }
+            // index.html, setup.css, setup.js and brand/* (byte-identical copies of the brand kit), from memory
+            var site = new EmbeddedSite(SetupForm.Host, typeof(Program).Assembly, "ui/");
             foreach (string f in new[] { "index.html", "setup.css", "setup.js", "brand/intro.js", "brand/ticks.js" })
-                if (!File.Exists(Path.Combine(ui, f.Replace('/', Path.DirectorySeparatorChar)))) { Program.Log.Error("UI-Datei fehlt im Setup: " + f); return false; }
-            using (var form = new SetupForm(a, ui))
+                if (!site.Has(f)) { Program.Log.Error("UI-Datei fehlt im Setup: " + f); return false; }
+            WebViewData.CleanupStaleSetupRuns(Program.Log);
+            using (var form = new SetupForm(a, site))
             {
                 Application.Run(form);
                 exitCode = form.ExitCode;
@@ -67,13 +65,25 @@ namespace Velox.Setup
 
     internal sealed class SetupForm : Form
     {
-        private const string Host = "setup.velox.example";
+        internal const string Host = "setup.velox.example";
         // the intro's sound plays without a click (WebView2 otherwise blocks audio until a user gesture)
         private const string AutoplayArgs = "--autoplay-policy=no-user-gesture-required";
         private const int DipW = 880, DipH = 560;
+        // a runtime that never finishes CreateAsync / EnsureCoreWebView2Async (stuck, or waiting behind one of its
+        // own error dialogs) must not leave the user with an empty window: give up and use the native window
+        private const int WebViewStartTimeoutMs = 30000;
+        // the page must report "ready" this long after its navigation began; otherwise (not loaded - an Edge error
+        // page - or its modules failed) nothing has happened yet and the native window takes over
+        private const int PageReadyTimeoutMs = 15000;
 
         private readonly Program.Args _args;
-        private readonly string _uiDir;
+        private readonly EmbeddedSite _site;
+        private CoreWebView2Environment _env;
+        private readonly System.Windows.Forms.Timer _webWatchdog = new System.Windows.Forms.Timer { Interval = WebViewStartTimeoutMs };
+        private bool _webGaveUp;
+        private readonly System.Windows.Forms.Timer _pageWatchdog = new System.Windows.Forms.Timer { Interval = PageReadyTimeoutMs };
+        private bool _pageReady;
+        private ulong _pageNavId;
         private readonly Log _log = Program.Log;
         private readonly WebView2 _web;
         private CoreWebView2 _core;
@@ -86,10 +96,10 @@ namespace Velox.Setup
         public int ExitCode { get; private set; }
         public bool StartFailed { get; private set; }
 
-        public SetupForm(Program.Args args, string uiDir)
+        public SetupForm(Program.Args args, EmbeddedSite site)
         {
             _args = args;
-            _uiDir = uiDir;
+            _site = site;
             ExitCode = 2;   // closed without finishing
             AutoScaleMode = AutoScaleMode.None;
             FormBorderStyle = FormBorderStyle.None;
@@ -104,7 +114,8 @@ namespace Velox.Setup
             int w = Math.Min((int)Math.Round(DipW * k), wa.Width), h = Math.Min((int)Math.Round(DipH * k), wa.Height);
             Bounds = new Rectangle(wa.Left + (wa.Width - w) / 2, wa.Top + (wa.Height - h) / 2, w, h);
 
-            try { Environment.SetEnvironmentVariable("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "FF0C0D0F"); } catch (Exception) { }
+            // the env var WEBVIEW2_DEFAULT_BACKGROUND_COLOR is ignored for elevated hosts (this one always is):
+            // the control property is applied to the controller when it is created - no white flash
             _web = new WebView2 { Dock = DockStyle.Fill };
             try { _web.DefaultBackgroundColor = Brand.Bg; } catch (Exception) { }
             Controls.Add(_web);
@@ -148,12 +159,25 @@ namespace Velox.Setup
         protected override async void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
+            string udf = null;
+            _webWatchdog.Tick += (s0, a0) =>
+            {
+                _webWatchdog.Stop();
+                if (_core != null || _webGaveUp) return;
+                _webGaveUp = true;
+                _log.Error("WebView2 hat sich nach " + WebViewStartTimeoutMs / 1000 + " s nicht gemeldet (Datenordner " + (udf ?? "-") + ") - einfache Ansicht.");
+                StartFailed = true;
+                _allowClose = true;
+                Close();
+            };
+            _webWatchdog.Start();
             try
             {
-                // a fresh user data folder per run (the private temp folder), so no other browser process can
-                // hold it with other options; if the runtime still refuses the argument, start without it
-                // (the intro then runs silent and offers "Ton: klicken")
-                string udf = Path.Combine(Program.TempDir, "webview2");
+                // a fresh user data folder per run in the user's %TEMP% with the normal inherited ACL (WebViewData),
+                // so no other browser process can hold it with other options; if the runtime still refuses the
+                // argument, start without it in another fresh folder (the intro then runs silent and offers
+                // "Ton: klicken"). The autoplay flag is an API option, which the runtime honours for elevated hosts.
+                udf = WebViewData.NewSetupRun(_log);
                 CoreWebView2Environment env;
                 var opts = new CoreWebView2EnvironmentOptions();
                 try { opts.Language = "de-DE"; } catch (Exception) { }
@@ -161,13 +185,20 @@ namespace Velox.Setup
                 try { env = await CoreWebView2Environment.CreateAsync(null, udf, opts); }
                 catch (Exception ex)
                 {
-                    _log.Warn("WebView2 mit Autoplay nicht gestartet (" + ex.Message + ") - ohne.");
+                    if (_webGaveUp) return;
+                    _log.Warn("WebView2 mit Autoplay nicht gestartet (HRESULT 0x" + ex.HResult.ToString("X8") + ": " + ex.Message + ") - ohne.");
                     opts = new CoreWebView2EnvironmentOptions();
                     try { opts.Language = "de-DE"; } catch (Exception) { }
-                    env = await CoreWebView2Environment.CreateAsync(null, udf + "-2", opts);
+                    udf = WebViewData.NewSetupRun(_log);
+                    env = await CoreWebView2Environment.CreateAsync(null, udf, opts);
                 }
+                if (_webGaveUp) return;
                 await _web.EnsureCoreWebView2Async(env);
+                if (_webGaveUp) return;
+                _webWatchdog.Stop();
+                _env = env;
                 _core = _web.CoreWebView2;
+                Try(() => _web.DefaultBackgroundColor = Brand.Bg);
                 CoreWebView2Settings s = _core.Settings;
                 Try(() => s.AreDevToolsEnabled = false);
                 Try(() => s.AreBrowserAcceleratorKeysEnabled = false);
@@ -180,14 +211,25 @@ namespace Velox.Setup
                 Try(() => s.IsPasswordAutosaveEnabled = false);
                 Try(() => s.AreHostObjectsAllowed = false);
                 Try(() => s.IsWebMessageEnabled = true);
-                _core.SetVirtualHostNameToFolderMapping(Host, _uiDir, CoreWebView2HostResourceAccessKind.Deny);
+                // https://setup.velox.example/* from memory; the event fires on the UI thread and is answered
+                // synchronously (no deferral)
+                try { _core.AddWebResourceRequestedFilter(_site.Filter, CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.Document); }
+                catch (NotImplementedException) { _core.AddWebResourceRequestedFilter(_site.Filter, CoreWebView2WebResourceContext.All); }   // runtime without ICoreWebView2_22
+                _core.WebResourceRequested += OnWebResourceRequested;
                 _core.NavigationStarting += (s2, a2) =>
                 {
                     string uri = a2.Uri ?? "";
-                    if (uri.StartsWith("https://" + Host + "/", StringComparison.OrdinalIgnoreCase)) return;
+                    if (uri.StartsWith("https://" + Host + "/", StringComparison.OrdinalIgnoreCase)) { _pageNavId = a2.NavigationId; return; }
                     a2.Cancel = true;
                     if (a2.IsUserInitiated && (uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase)))
                         Util.OpenUnelevated(uri, _log);
+                };
+                _core.NavigationCompleted += (s2, a2) =>
+                {
+                    if (a2.IsSuccess || _pageReady || a2.NavigationId != _pageNavId || a2.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
+                    int http = 0;
+                    try { http = a2.HttpStatusCode; } catch (Exception) { }
+                    PageFailed(a2.WebErrorStatus + (http != 0 ? ", HTTP " + http : ""));
                 };
                 _core.NewWindowRequested += (s2, a2) => { a2.Handled = true; };
                 _core.WebMessageReceived += OnMessage;
@@ -199,11 +241,15 @@ namespace Velox.Setup
                 };
                 // the start sound follows the app's setting (settings.json "startSound", read only; missing = on)
                 bool sound = UserSettings.StartSound(UserSettings.DataDir(), _log);
+                _pageWatchdog.Tick += (s2, a2) => { _pageWatchdog.Stop(); if (!_pageReady) PageFailed("keine Meldung nach " + PageReadyTimeoutMs / 1000 + " s"); };
+                _pageWatchdog.Start();
                 _core.Navigate("https://" + Host + "/index.html?sound=" + (sound ? "1" : "0"));
             }
             catch (Exception ex)
             {
-                _log.Error("WebView2 konnte nicht starten: " + ex);
+                _webWatchdog.Stop();
+                if (_webGaveUp) return;   // the watchdog has already switched to the native window
+                _log.Error("WebView2 konnte nicht starten (HRESULT 0x" + ex.HResult.ToString("X8") + ", Datenordner " + (udf ?? "-") + "): " + ex);
                 StartFailed = true;
                 _allowClose = true;
                 Close();
@@ -211,6 +257,36 @@ namespace Velox.Setup
         }
 
         private void Try(Action a) { try { a(); } catch (Exception ex) { _log.Warn("WebView2: " + ex.Message); } }
+
+        /// <summary>
+        /// The installer page did not load (an Edge error page) or never reported "ready": nothing has been done
+        /// yet, so the native window (FallbackForm) takes over instead of leaving the user on a broken page.
+        /// </summary>
+        private void PageFailed(string why)
+        {
+            _pageWatchdog.Stop();
+            if (_pageReady || _webGaveUp || _allowClose) return;
+            _webGaveUp = true;
+            _log.Error("Setup-Oberfläche nicht geladen (" + why + ") - einfache Ansicht.");
+            StartFailed = true;
+            _allowClose = true;
+            // deferred: this may run inside a WebView2 event, and closing disposes the control
+            try { BeginInvoke((Action)Close); } catch (Exception) { Close(); }
+        }
+
+        private void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
+        {
+            try
+            {
+                if (_env == null) return;
+                EmbeddedSite.Reply r = _site.Resolve(e.Request.Uri, e.Request.Method);
+                if (r == null) return;
+                // a fresh read-only MemoryStream per response: it stays valid until the runtime has read it
+                e.Response = _env.CreateWebResourceResponse(r.Body == null ? null : new MemoryStream(r.Body, false), r.Status, r.Reason, r.Headers);
+                if (r.Status != 200 && !(e.Request.Uri ?? "").EndsWith("/favicon.ico", StringComparison.OrdinalIgnoreCase)) _log.Warn("Setup-Oberfläche: " + r.Status + " für " + (e.Request.Uri ?? ""));
+            }
+            catch (Exception ex) { _log.Warn("Setup-Oberfläche: " + ex.Message); }
+        }
 
         // ------------------------------------------------------------ messages
 
@@ -246,7 +322,12 @@ namespace Velox.Setup
             string type = Str(m, "type");
             switch (type)
             {
-                case "ready": SendInit(); break;
+                case "ready":
+                    if (_webGaveUp) return;
+                    _pageReady = true;
+                    _pageWatchdog.Stop();
+                    SendInit();
+                    break;
                 case "drag":
                     // the message arrives a few ms after the mousedown: only start the move loop while the button is still down
                     // (physical button state: the click went to the WebView2 window, whose input this thread's
@@ -429,6 +510,12 @@ namespace Velox.Setup
             }) { IsBackground = true };
             t.SetApartmentState(ApartmentState.STA);
             t.Start();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { try { _webWatchdog.Dispose(); } catch (Exception) { } try { _pageWatchdog.Dispose(); } catch (Exception) { } }
+            base.Dispose(disposing);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
