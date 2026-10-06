@@ -1,6 +1,6 @@
 // =============================================================================
 // Waffen-Grafik (nur mit Bildschirm): Waffe in der Hand, Mündungsblitz, Leuchtspur,
-// Feuerball der Granate, Treffer-Zahlen und (vorläufig) das Zielfernrohr-Bild
+// Feuerball der Granate und Treffer-Zahlen (das Zielfernrohr-Bild malt das HUD, src/ui/hud.js)
 // =============================================================================
 // Hört auf Ereignisse des Spiels:
 //   'shot'      → Mündungsblitz (+ kurzes Licht), Rückstoß der Waffe, Leuchtspur (AR)
@@ -92,8 +92,6 @@ export function createWeaponVisuals(game, system) {
 
   // --- Treffer-Zahlen (HTML über dem Bild) -------------------------------------------------
   const numbers = createDamageNumbers(game);
-  // --- Zielfernrohr-Bild (vorläufig, das HUD kommt in Phase 6) --------------------------------
-  const scope = createScopeOverlay(game);
 
   const offs = [];
   offs.push(game.events.on('shot', (e) => {
@@ -334,7 +332,6 @@ export function createWeaponVisuals(game, system) {
       }
 
       numbers?.update(paused ? 0 : dt);
-      scope?.update(game.player);
     },
 
     /** Effekte anhalten (Screenshots in Tests). */
@@ -370,7 +367,6 @@ export function createWeaponVisuals(game, system) {
         x.outer.material.dispose();
       }
       numbers?.dispose();
-      scope?.dispose();
     },
   };
   visuals.system = system;
@@ -425,13 +421,6 @@ function addStyles() {
 .bd-dmg.shield { color: ${COLORS.damageShield}; }
 .bd-dmg.structure { color: ${d.structureColor}; font-size: ${d.structureFontPx}px; font-weight: 800; }
 .bd-dmg.harvest { color: ${d.harvestColor}; font-size: ${d.structureFontPx + 2}px; font-weight: 800; }
-.bd-scope { position: absolute; inset: 0; pointer-events: none; display: none;
-  background: radial-gradient(circle at 50% 50%, transparent 0, transparent 36vmin, rgba(0,0,0,0.85) 36.4vmin, ${V.scopeOverlayColor} 38vmin); }
-.bd-scope::before, .bd-scope::after { content: ""; position: absolute; left: 50%; top: 50%; background: rgba(10, 12, 16, 0.9); }
-.bd-scope::before { width: 72vmin; height: 2px; transform: translate(-50%, -50%); }
-.bd-scope::after { width: 2px; height: 72vmin; transform: translate(-50%, -50%); }
-.bd-scope .bd-scope-dot { position: absolute; z-index: 1; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #FF3B3B; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
-body.bd-scoped #crosshair { display: none; }
 `;
   document.head.appendChild(style);
 }
@@ -508,32 +497,6 @@ function createDamageNumbers(game) {
     },
     dispose() {
       layer.remove();
-    },
-  };
-}
-
-function createScopeOverlay(game) {
-  const ui = game.uiRoot;
-  if (!ui || !CONFIG.weapons.sniper.scopeOverlay) return null;
-  addStyles();
-  const el = document.createElement('div');
-  el.className = 'bd-scope';
-  const dot = document.createElement('div');
-  dot.className = 'bd-scope-dot';
-  el.appendChild(dot);
-  ui.insertBefore(el, ui.firstChild);
-  let shown = false;
-  return {
-    update(player) {
-      const on = !!(player && player.alive && player.scopeFov);
-      if (on === shown) return;
-      shown = on;
-      el.style.display = on ? 'block' : 'none';
-      document.body.classList.toggle('bd-scoped', on);
-    },
-    dispose() {
-      el.remove();
-      document.body.classList.remove('bd-scoped');
     },
   };
 }

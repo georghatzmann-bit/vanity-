@@ -762,6 +762,10 @@ export function createBuildingSystem(game) {
     closeEdit(character) {
       edit.close(character, true);
     },
+    /** Tür, die E jetzt benutzen würde (für den HUD-Hinweis), oder null. */
+    findDoor(character) {
+      return edit.findDoor(character);
+    },
     getTarget,
     checkPlacement,
     setEdit,

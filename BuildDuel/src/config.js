@@ -191,6 +191,7 @@ export const CONFIG = deepFreeze({
       prevItem: ['WheelUp'], // belegt (Mausrad)
       scoreboard: ['Tab'],
       pause: ['Escape'],
+      help: ['KeyH'], // Steuerungs-Hilfe ein/aus (HUD)
     },
     // Tasten, die absichtlich doppelt belegt sein dürfen, weil sie je nach
     // Situation etwas anderes tun (die Tests prüfen den Rest auf Konflikte).
@@ -575,7 +576,7 @@ export const CONFIG = deepFreeze({
       showStructureHits: true,
       pool: 32, // so viele Zahlen gleichzeitig höchstens
     },
-    // Zielfernrohr-Bild (vorläufig, bis das HUD in Phase 6 kommt)
+    // Zielfernrohr-Bild (zeichnet das HUD, src/ui/hud.js): Farbe außerhalb der runden Linse
     scopeOverlayColor: 'rgba(5, 8, 12, 0.94)',
   },
 
@@ -867,6 +868,62 @@ export const CONFIG = deepFreeze({
     refDistance: 5, // ab hier wird es leiser
     maxDistance: 120, // weiter weg hört man nichts mehr
     rolloff: 1.2,
+    // --- Welle 3a: erzeugte Töne (src/audio/sfx.js) ---
+    musicLevel: 0.32, // Menü-Musik ist leise (mal Musik-Lautstärke)
+    maxVoices: 32, // höchstens so viele Töne gleichzeitig (20 Bots schießen → kein Krach, keine Ruckler)
+    // höchstens so viele gleichzeitig je Ton-Art (der Rest wird weggelassen oder ersetzt leisere)
+    voicesPerType: { shot: 10, footstep: 6, build: 6, destroy: 4, explosion: 3, reload: 3, hit: 3, ui: 3, pickaxe: 4, shield: 2, heal: 2, move: 4, fanfare: 1, door: 2 },
+    defaultVoicesPerType: 4,
+    reverbSeconds: 1.6, // Hall (Scharfschützengewehr, Explosion)
+    stormHumNear: 30, // Sturm-Brummen beginnt so viele Meter vor der Wand
+    hrtf: true, // Raumklang (links/rechts, vorne/hinten); false = einfacher Stereo-Ton (spart Rechenzeit)
+  },
+
+  // ---------------------------------------------------------------------------
+  // HUD – die Anzeigen über dem 3D-Bild (Phase 6, src/ui/hud.js)
+  // ---------------------------------------------------------------------------
+  hud: {
+    infoInterval: 0.1, // so oft (s) fragt das HUD den Modus nach Stand, Zone, Lebenden (hudInfo)
+    promptInterval: 0.1, // so oft (s) wird der Hinweis "E – Tür öffnen" geprüft
+    lowHealth: 35, // weniger Leben: roter Bildschirmrand (stärker, je weniger)
+    killFeed: { max: 5, lifetime: 5, fadeTime: 0.5 }, // letzte 5 Meldungen, verschwinden nach 5 s
+    hitMarker: { time: 0.22, killTime: 0.5 }, // Treffer-X (rot bei Kill) so lange sichtbar (s)
+    damageIndicator: { time: 1.2, count: 4 }, // roter Bogen zeigt zum Angreifer
+    eliminationTime: 2.2, // "Bot_3 besiegt" unter dem Fadenkreuz (s)
+    crosshair: { minGap: 5, maxGap: 70, buildGap: 4 }, // Lücke in der Mitte (Pixel), wächst mit der Streuung
+    message: { duration: 2.5, infoDuration: 1.6 }, // große Nachricht / kleiner Hinweis (s), wenn das Ereignis keine Zeit nennt
+    minimap: { range: 150, redrawInterval: 1 / 30, background: '#4E9F42', border: '#2F6B2A' }, // Umkreis (m) um die eigene Figur
+    // kurze Waffen-Namen im Kill-Feed ("Du [AR] Bot_3")
+    weaponShortNames: {
+      shotgun: 'Schrot', ar: 'AR', smg: 'MP', sniper: 'Sniper', pistol: 'Pistole', grenadeLauncher: 'Granate',
+      pickaxe: 'Hacke', fall: 'Sturz', storm: 'Sturm', explosion: 'Explosion',
+    },
+    texts: {
+      you: 'Du',
+      dead: 'Du wurdest besiegt',
+      spectating: 'Du schaust zu:',
+      eliminated: 'besiegt',
+      help: 'Steuerung',
+      edit: 'EDIT',
+      reloading: 'Nachladen',
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Partikel-Effekte (Phase 12, src/world/effects.js) – feste Vorräte, nichts wird neu angelegt
+  // ---------------------------------------------------------------------------
+  effects: {
+    pools: { dust: 160, glow: 160, chunks: 140 }, // so viele Teilchen gleichzeitig höchstens (Grafik "hoch")
+    qualityFactor: { niedrig: 0.35, mittel: 0.7, hoch: 1 }, // weniger Teilchen bei schwächerer Grafik
+    gravity: 18, // Splitter fallen etwas langsamer als Figuren (sieht besser aus)
+    splinters: { perHit: 4, perDestroy: 18, size: 0.12, life: 0.9 }, // Treffer/Zerstörung an Bauteilen
+    sparks: { count: 5, size: 0.09, life: 0.25, speed: 6, color: '#FFD27A' }, // Einschlag an Gelände/Objekten
+    dust: { count: 6, size: 1.1, life: 0.9, color: '#D8CDB8' }, // Staub-Wolke (Einsturz, harte Landung)
+    footDust: { size: 0.5, life: 0.5 }, // kleiner Staub beim Sprinten
+    hardLanding: 3, // ab so viel Meter Fall: Staub bei der Landung
+    explosion: { debris: 14, smoke: 10, embers: 14, debrisColor: '#4A3B2E', smokeColor: '#8A8077', emberColor: '#FFB347' },
+    harvest: { chips: 6 },
+    shieldShards: { count: 16, color: '#7FD3FF' },
   },
 
   // Fortschritt (Pokale, Münzen, Pass)
