@@ -61,6 +61,24 @@ async function installHelpers(page) {
   });
 }
 
+// Für Prüfungen, die die Insel brauchen: läuft die Insel nicht (z. B. mit --grep allein
+// gestartet), wird sie geladen; overIsland = bis über die Insel fliegen (Spieler im Ballon)
+async function ensureIsland(page, overIsland = false) {
+  await page.evaluate(() => {
+    if (buildDuel.modeId === 'sandbox-island') return;
+    buildDuel.startMode('sandbox-island', { bots: 3 });
+    buildDuel.play();
+    buildDuel.manualStep(true);
+  });
+  await installHelpers(page);
+  if (!overIsland) return;
+  await page.evaluate(() => {
+    const v = buildDuel.game.mode.vehicle;
+    let n = 0;
+    while (v && buildDuel.game.player.moveState === 'vehicle' && !v.canDrop() && n++ < 400) buildDuel.simulate(0.25);
+  });
+}
+
 const WORLD_CHECKS = [
   {
     name: 'Welt: Insel lädt schnell (< 2 s), wenige Zeichen-Aufrufe, Blick vom Absprung-Ballon',
@@ -109,6 +127,7 @@ const WORLD_CHECKS = [
   {
     name: 'Welt: Leertaste → freier Fall → Gleiter bei 30 m → Landung ohne Fallschaden',
     async run(ctx) {
+      await ensureIsland(ctx.page, true); // läuft auch allein (--grep)
       const r1 = await ctx.page.evaluate(() => {
         const g = buildDuel.game;
         const p = g.player;
@@ -148,6 +167,7 @@ const WORLD_CHECKS = [
   {
     name: 'Welt: Kiste leuchtet, E öffnet sie, E hebt die Waffe auf',
     async run(ctx) {
+      await ensureIsland(ctx.page); // läuft auch allein (--grep)
       const r = await ctx.page.evaluate(() => {
         const g = buildDuel.game;
         const chest = g.loot.chests.find((c) => !c.opened && g.map.isLand(c.position.x, c.position.z) && !g.map.houses.some((h) =>
@@ -208,6 +228,7 @@ const WORLD_CHECKS = [
   {
     name: 'Welt: Wüstenstadt, durch die Tür ins Haus und die Treppe hinauf',
     async run(ctx) {
+      await ensureIsland(ctx.page); // läuft auch allein (--grep)
       await ctx.page.evaluate(() => {
         // Marktplatz der Wüstenstadt, Blick über den Platz zu den Häusern
         const t = buildDuel.CONFIG.maps.island.town;
@@ -264,6 +285,7 @@ const WORLD_CHECKS = [
   {
     name: 'Welt: Sturm-Wand von innen und außen, draußen Schaden aufs Leben',
     async run(ctx) {
+      await ensureIsland(ctx.page); // läuft auch allein (--grep)
       const r = await ctx.page.evaluate(() => {
         const g = buildDuel.game;
         const spot = g.map.spawnPoints(1, { minDistance: 0 })[0];
