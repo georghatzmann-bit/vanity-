@@ -200,6 +200,28 @@ async function captureAll(ctx, size) {
   await shot('03-treffer');
   ctx.assert(hit === 'hit' || hit === 'head', `${tag} Treffer-X: ${hit}`);
 
+  // 3b. Nachladen: Ring um das Fadenkreuz, "Nachladen" bei der Munition
+  await page.evaluate(() => {
+    __hud.reset();
+    __hud.select('ar');
+    const d = __hud.dummy('Zielpuppe 60 m');
+    __hud.aimAt(d.position.x, d.position.y + 9, d.position.z + 8); // in den Himmel: keine Treffer-Zahl über dem Ring
+    __hud.press('primary', 0.05);
+    __hud.press('reloadOrRotate', 0.8);
+    buildDuel.game.hud.setPaused(true);
+    buildDuel.game.weapons.setEffectsPaused(true);
+  });
+  await frames(page, 3);
+  const reload = await page.evaluate(() => ({
+    s: __hud.state(),
+    ring: getComputedStyle(document.querySelector('.hud-reload')).display,
+    offset: parseFloat(getComputedStyle(document.querySelector('.hud-reload .fg')).strokeDashoffset),
+  }));
+  await shot('03b-nachladen');
+  ctx.assert(reload.s.reloading && reload.s.ammoState === 'Nachladen' && reload.ring === 'block',
+    `${tag} Nachladen: ${reload.s.reloading} "${reload.s.ammoState}", Ring ${reload.ring}`);
+  ctx.assert(reload.offset > 5 && reload.offset < 115, `${tag} Nachlade-Ring teilweise gefüllt: ${reload.offset}`);
+
   // 4. Baumodus (blauer Rahmen um die Bau-Leiste)
   await page.evaluate(() => {
     __hud.reset();
@@ -420,7 +442,7 @@ const HUD_CHECKS = [
     },
   },
   {
-    name: 'Ton: alle Geräusche ohne Fehler, Ereignisse, gleichzeitige Töne begrenzt, Menü-Musik',
+    name: 'Ton: alle Geräusche ohne Fehler, Ereignisse, gleichzeitige Töne begrenzt, Menü-Musik, Pause im anderen Tab',
     async run(ctx) {
       await installHelpers(ctx.page);
       // Klick ins Bild = "Benutzer-Geste" (Browser erlauben Ton erst danach)
@@ -495,9 +517,23 @@ const HUD_CHECKS = [
         await new Promise((res) => setTimeout(res, 400));
         const musicOn = audio.debug.stats().music;
         audio.stopMusic();
+        // anderer Tab: Ton angehalten, zurück im Tab: läuft wieder
+        const waitState = async (want) => {
+          for (let i = 0; i < 40 && audio.debug.stats().state !== want; i++) await new Promise((res) => setTimeout(res, 50));
+          return audio.debug.stats().state;
+        };
+        const setHidden = (on) => {
+          Object.defineProperty(document, 'hidden', { value: on, configurable: true });
+          document.dispatchEvent(new Event('visibilitychange'));
+          delete document.hidden; // wieder die echte Eigenschaft
+        };
+        setHidden(true);
+        const hiddenState = await waitState('suspended');
+        setHidden(false);
+        const visibleState = await waitState('running');
         const stats = audio.debug.stats();
         g.building.clearAll();
-        return { errors, before, afterAll, names: audio.debug.soundNames().length, maxActive, maxShots, shotCap: buildDuel.CONFIG.audio.voicesPerType.shot, stats, musicOn, musicOff: audio.debug.stats().music };
+        return { errors, before, afterAll, names: audio.debug.soundNames().length, maxActive, maxShots, shotCap: buildDuel.CONFIG.audio.voicesPerType.shot, stats, musicOn, musicOff: audio.debug.stats().music, hiddenState, visibleState };
       });
       ctx.log(`Ton: ${r.stats.state}, gespielt ${r.stats.played}, weggelassen ${r.stats.dropped}, höchstens gleichzeitig ${r.stats.maxActive}`);
       ctx.assert(r.stats.state === 'running', `AudioContext läuft: ${r.stats.state}`);
@@ -506,6 +542,7 @@ const HUD_CHECKS = [
       ctx.assert(r.maxActive <= r.stats.maxVoices && r.stats.maxActive <= r.stats.maxVoices, `gleichzeitig höchstens ${r.stats.maxVoices}: ${r.maxActive} / ${r.stats.maxActive}`);
       ctx.assert(r.maxShots <= r.shotCap && r.maxShots > 0, `Schüsse gleichzeitig höchstens ${r.shotCap}: ${r.maxShots}`);
       ctx.assert(r.musicOn && !r.musicOff, `Menü-Musik an/aus: ${r.musicOn} / ${r.musicOff}`);
+      ctx.assert(r.hiddenState === 'suspended' && r.visibleState === 'running', `anderer Tab: Ton ${r.hiddenState}, zurück: ${r.visibleState}`);
     },
   },
   {

@@ -499,7 +499,8 @@ es kann) steht dort der Buchstabe der echten Tastatur (QWERTZ: `KeyZ` → "Y"), 
 
 **Ton** – `createAudio(game)`; die Web-Audio-Maschine (`getAudioEngine()`) gibt es einmal pro Seite, sie
 überlebt neue Spiele (Menü-Musik läuft weiter). Der AudioContext entsteht erst beim ersten Klick/Tastendruck
-(Autoplay-Regel der Browser); vorher werden Töne ohne Fehler weggelassen.
+(Autoplay-Regel der Browser); vorher werden Töne ohne Fehler weggelassen. Ist der Tab versteckt, wird der
+AudioContext angehalten (`visibilitychange`) und danach fortgesetzt.
 ```js
 audio.setVolumes(settings)          // settings.audio { master, effects, music } – nach Änderung im Menü aufrufen
 audio.frameUpdate()                 // Zuhörer = Kamera; Sturm-Brummen (draußen laut, nahe der Wand leiser)

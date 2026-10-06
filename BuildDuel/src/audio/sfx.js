@@ -522,6 +522,17 @@ function createEngine() {
   if (typeof window !== 'undefined' && AC) {
     for (const name of GESTURES) window.addEventListener(name, onGesture, true);
   }
+  // Anderer Tab / Fenster minimiert: Ton anhalten (sonst brummt der Sturm im Hintergrund weiter)
+  if (typeof document !== 'undefined' && AC) {
+    document.addEventListener('visibilitychange', () => {
+      if (!ctx) return;
+      if (document.hidden) {
+        if (ctx.state === 'running') ctx.suspend().catch(() => {});
+      } else if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    });
+  }
 
   function unlock() {
     if (!AC) return false;
