@@ -104,6 +104,11 @@ export const CONFIG = deepFreeze({
       crouchHeight: 1.3, // Gesamthöhe geduckt // SCHÄTZUNG
       radius: 0.4, // SCHÄTZUNG
       headZone: 0.3, // die obersten 0,3 m zählen als Kopf // SCHÄTZUNG
+      // Der SICHTBARE Kopf (Kugel der Figur) zählt auch als Kopf: Seine Oberkante liegt immer genau
+      // auf der Oberkante der Kapsel (stehend 1,8 m, geduckt 1,3 m). Die Figur (characterModel.js)
+      // wird danach gebaut – Bild und Treffer passen so immer zusammen.
+      headRadius: 0.27, // Kopf-Kugel (m)
+      crouchHeadForward: 0.17, // geduckt beugt sich die Figur vor: Kopf-Mitte so weit (m) vor der Kapsel-Mitte
     },
   },
 

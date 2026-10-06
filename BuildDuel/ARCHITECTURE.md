@@ -244,6 +244,9 @@ world.queryBox(min, max, out) // alle Collider, die die Box berühren
 world.raycast(origin, dir, maxDist, options) // → Treffer oder null
    // options: { ignore(collider) → bool, characters: Character[] | null, ignoreCharacter }
    // Treffer: { distance, point, normal, collider, character, part ('head'|'body'), terrain }
+   // Figur = Kapsel ∪ Kopf-Kugel (headCenter(ch, hitbox)): 'head' = oberste headZone der Kapsel ODER
+   // die Kopf-Kugel (sichtbarer Kopf, Oberkante = Kapsel-Oberkante, geduckt crouchHeadForward vor)
+   // wird getroffen, bevor der Strahl mehr als einen Kapsel-Radius durch den Körper gelaufen ist
 world.surfaceHeight(x, z, maxY) // höchste begehbare Fläche ≤ maxY (Gelände, Box-Oberkanten, Schrägen)
 world.boxBlocked(min, max, ignore) // bool – nur Collider (nicht das Gelände)
 world.setTerrain(terrain)     // { heightAt(x, z), isFlat?, height?, maxHeight? } oder null = flach bei 0
@@ -501,7 +504,9 @@ Jeder Modus:
   `isFree(world, x, y, z, m)`, `update(character, alpha, dt, world, input?, settings?)`, `snap()`
   (nach Teleport/Runde; Sprünge > 3 m werden auch selbst erkannt), Felder `yaw`, `pitch`, `fov`,
   `side`, `characterDistance` (Kamera ↔ Kopf), `hideCharacter`.
-- **Figuren-Grafik** (`src/world/characterModel.js`): `createCharacterView(character, parent)` →
+- **Figuren-Grafik** (`src/world/characterModel.js`): Kopf-Größe und -Lage (stehend und geduckt) kommen aus
+  `CONFIG.player.hitbox` (`headRadius`, `crouchHeight`, `crouchHeadForward`) – die Grafik wird nach der
+  Treffer-Prüfung gebaut, nicht umgekehrt. `createCharacterView(character, parent)` →
   `{ root, rightHand, attach(name, obj), detach(name), setHidden(bool), update(alpha, dt, yawOverride?), dispose() }`.
   Farbsets und Hut-Formen stehen in `CONFIG.skins`.
 

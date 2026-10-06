@@ -78,6 +78,7 @@ export class CollisionWorld {
     this._queryOut = [];
     this._hit = createRayHit();
     this._tmpHit = createRayHit();
+    this._headHit = createRayHit();
     this._range = { min: 0, max: 0 };
   }
 
@@ -382,24 +383,34 @@ export class CollisionWorld {
       found = true;
     }
 
-    // --- 3. Figuren (Kapseln) ---------------------------------------------------
+    // --- 3. Figuren (Kapsel + sichtbare Kopf-Kugel) ------------------------------
+    // Kopf = die obersten headZone Meter der Kapsel ODER der Strahl trifft die Kopf-Kugel
+    // (Oberkante = Kapsel-Oberkante, geduckt etwas nach vorn – wie die Figur im Bild).
     const characters = options?.characters;
     if (characters) {
       const skip = options.ignoreCharacter ?? null;
       const hitbox = this.config.player.hitbox;
+      const headHit = this._headHit;
       for (let i = 0; i < characters.length; i++) {
         const ch = characters[i];
         if (!ch || ch === skip || ch.alive === false) continue;
         const height = ch.height ?? hitbox.height;
-        if (rayCapsule(origin, dir, ch.position.x, ch.position.y, ch.position.z,
-          ch.radius ?? hitbox.radius, height, best, tmp)) {
-          best = tmp.distance;
-          copyHit(out, tmp);
-          out.collider = null;
-          out.character = ch;
-          out.part = tmp.point.y >= ch.position.y + height - hitbox.headZone ? 'head' : 'body';
-          found = true;
-        }
+        const radius = ch.radius ?? hitbox.radius;
+        const p = ch.position;
+        const capsule = rayCapsule(origin, dir, p.x, p.y, p.z, radius, height, best, tmp);
+        headCenter(ch, hitbox, height, _headCenter);
+        const head = raySphere(origin, dir, _headCenter.x, _headCenter.y, _headCenter.z, hitbox.headRadius ?? 0, best, headHit);
+        if (!capsule && !head) continue;
+        // Kopf-Kugel kurz hinter dem Eintritt in die Kapsel getroffen (nicht erst nach dem Körper)?
+        const isHead = (head && (!capsule || headHit.distance <= tmp.distance + radius)) ||
+          (capsule && tmp.point.y >= p.y + height - hitbox.headZone);
+        const use = capsule && (!head || tmp.distance <= headHit.distance) ? tmp : headHit;
+        best = use.distance;
+        copyHit(out, use);
+        out.collider = null;
+        out.character = ch;
+        out.part = isHead ? 'head' : 'body';
+        found = true;
       }
     }
 
@@ -930,6 +941,44 @@ function rayConvex(planes, start, count, origin, dir, maxDist, out) {
 }
 
 // Strahl gegen senkrechte Kapsel (Füße bei y, Höhe h, Radius r)
+const _headCenter = { x: 0, y: 0, z: 0 };
+
+/**
+ * Mitte der Kopf-Kugel einer Figur (Welt). Oberkante = Kapsel-Oberkante; geduckt (Kapsel
+ * kleiner) rückt der Kopf um bis zu crouchHeadForward in Blickrichtung (yaw) vor.
+ */
+export function headCenter(ch, hitbox, height = ch.height ?? hitbox.height, out = {}) {
+  const r = hitbox.headRadius ?? 0;
+  const range = hitbox.height - hitbox.crouchHeight;
+  const crouch = range > 0 ? Math.max(0, Math.min(1, (hitbox.height - height) / range)) : 0;
+  const forward = (hitbox.crouchHeadForward ?? 0) * crouch;
+  const yaw = ch.yaw ?? 0;
+  out.x = ch.position.x - Math.sin(yaw) * forward;
+  out.y = ch.position.y + height - r;
+  out.z = ch.position.z - Math.cos(yaw) * forward;
+  return out;
+}
+
+// Strahl gegen eine Kugel (Start in der Kugel = Treffer bei 0)
+function raySphere(origin, dir, cx, cy, cz, r, maxDist, out) {
+  if (!(r > 0)) return false;
+  const ox = origin.x - cx;
+  const oy = origin.y - cy;
+  const oz = origin.z - cz;
+  const c = ox * ox + oy * oy + oz * oz - r * r;
+  if (c <= 0) {
+    setHit(out, origin, dir, 0, -dir.x, -dir.y, -dir.z);
+    return true;
+  }
+  const b = ox * dir.x + oy * dir.y + oz * dir.z;
+  const disc = b * b - c;
+  if (disc < 0) return false;
+  const t = -b - Math.sqrt(disc);
+  if (t < 0 || t > maxDist) return false;
+  setHit(out, origin, dir, t, (ox + dir.x * t) / r, (oy + dir.y * t) / r, (oz + dir.z * t) / r);
+  return true;
+}
+
 function rayCapsule(origin, dir, x, y, z, r, h, maxDist, out) {
   const y0 = y + r; // Mitte der unteren Halbkugel
   const y1 = y + Math.max(r, h - r); // Mitte der oberen Halbkugel

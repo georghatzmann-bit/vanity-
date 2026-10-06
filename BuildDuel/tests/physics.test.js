@@ -159,6 +159,45 @@ describe('Kollisions-Welt: Strahlen', () => {
     assert.close(hit.point.y, ch.height, 1e-6);
   });
 
+  it('sichtbarer Kopf = Kopf: ganze Kopf-Kugel (auch unter der 0,3-m-Zone), stehend und geduckt (vorgebeugt)', () => {
+    const world = new CollisionWorld();
+    const hb = CONFIG.player.hitbox;
+    const r = hb.headRadius;
+    const ch = fakeCharacter(0, 0, -10);
+    ch.yaw = 0; // schaut nach −Z (vom Schützen weg)
+    const options = { characters: [ch], skipTerrain: true };
+    // stehend: Kopf-Mitte 1,8 − r; unten am Kopf (unter 1,5 m) zählt auch
+    const cy = hb.height - r;
+    for (const f of [-0.85, -0.5, 0, 0.5, 0.9]) {
+      const hit = world.raycast(v(0, cy + f * r, 0), v(0, 0, -1), 50, options);
+      assert.ok(hit && hit.character === ch && hit.part === 'head', `stehend ${f}r: ${hit?.part}`);
+    }
+    assert.equal(world.raycast(v(0, cy - r - 0.12, 0), v(0, 0, -1), 50, options).part, 'body', 'Brust unter dem Kopf');
+    // seitlich am Kopf vorbei (0,3 m neben der Mitte, unter der 0,3-m-Zone) = Körper bzw. Schulter
+    assert.equal(world.raycast(v(0.33, cy - 0.15, 0), v(0, 0, -1), 50, options).part, 'body');
+    // geduckt: Oberkante = 1,3 m, Kopf ein Stück nach vorn (in Blickrichtung) – hier zum Schützen hin
+    ch.height = hb.crouchHeight;
+    ch.yaw = Math.PI; // schaut nach +Z (zum Schützen)
+    const ccy = hb.crouchHeight - r;
+    const cz = -10 + hb.crouchHeadForward;
+    for (const f of [-0.8, -0.5, 0, 0.5, 0.85]) {
+      const hit = world.raycast(v(0, ccy + f * r, 0), v(0, 0, -1), 50, options);
+      assert.ok(hit && hit.part === 'head', `geduckt ${f}r: ${hit?.part}`);
+    }
+    // von hinten (Kopf vom Schützen weg geneigt): obere Hälfte ist Kopf
+    ch.yaw = 0;
+    for (const f of [0, 0.5, 0.85]) {
+      assert.equal(world.raycast(v(0, ccy + f * r, 0), v(0, 0, -1), 50, options).part, 'head', `von hinten ${f}r`);
+    }
+    ch.yaw = Math.PI;
+    // von der Seite: der vorgebeugte Kopf ragt vorn etwas aus der Kapsel – trifft trotzdem
+    const front = cz + r * 0.9;
+    assert.ok(Math.abs(front + 10) > ch.radius, 'Punkt liegt außerhalb der Kapsel');
+    const side = world.raycast(v(-5, ccy, front), v(1, 0, 0), 50, options);
+    assert.ok(side && side.character === ch && side.part === 'head', 'vorgebeugter Kopf von der Seite');
+    assert.equal(world.raycast(v(0, hb.crouchHeight + 0.03, 0), v(0, 0, -1), 50, options), null, 'knapp über dem geduckten Kopf');
+  });
+
   it('Strahl beginnt IN einer Figur (Figuren ineinander): Treffer bei Abstand 0', () => {
     const world = new CollisionWorld();
     const enemy = fakeCharacter(0, 0, -5);

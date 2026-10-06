@@ -393,6 +393,85 @@ const WEAPON_CHECKS = [
     },
   },
   {
+    name: 'Kopf: sichtbare Kopf-Kugel = Kopfschuss (stehend und geduckt, von vorn und hinten, Zielfernrohr)',
+    async run(ctx) {
+      await installHelpers(ctx.page);
+      const bad = [];
+      let shots = 0;
+      for (const pose of [{ crouch: false, yaw: 0 }, { crouch: true, yaw: 0 }, { crouch: false, yaw: Math.PI }, { crouch: true, yaw: Math.PI }]) {
+        const head = await ctx.page.evaluate(async (pose) => {
+          const THREE = await import('three');
+          const g = buildDuel.game;
+          const p = g.player;
+          for (const c of [...g.characters]) if (c.name === 'Kopf-Test') g.removeCharacter(c);
+          g.weapons.clearEffects();
+          p.resetForRound({ health: 100, shield: 100, position: { x: 0, y: 0, z: 30 }, yaw: 0 });
+          g.cameraRig.snap();
+          __wp.select('sniper');
+          const t = g.addCharacter({ name: 'Kopf-Test', isBot: true, team: 77, position: { x: 0, y: 0, z: 10 }, yaw: pose.yaw, health: 100000, shield: 0, brain: null });
+          t.brain = { think() { t.command.crouch = pose.crouch; t.command.yaw = pose.yaw; t.command.pitch = 0; return t.command; } };
+          window.__kt = t;
+          buildDuel.simulate(0.6);
+          return { crouching: t.crouching };
+        }, pose);
+        await nextFrames(ctx.page, 3);
+        // Mitte der Kopf-Kugel IM BILD (nicht aus der Rechnung)
+        const sphere = await ctx.page.evaluate(async () => {
+          const THREE = await import('three');
+          const t = __kt;
+          const r = buildDuel.CONFIG.player.hitbox.headRadius;
+          let mesh = null;
+          t.view.root.updateMatrixWorld(true);
+          t.view.root.traverse((o) => { if (o.isMesh && o.geometry?.type === 'SphereGeometry' && Math.abs(o.geometry.parameters.radius - r) < 1e-6) mesh = o; });
+          const c = mesh.getWorldPosition(new THREE.Vector3());
+          return { x: c.x, y: c.y, z: c.z, r };
+        });
+        // Punkte auf der Kugel, die der Schütze sieht. Von hinten verdeckt der vorgebeugte
+        // Oberkörper (geduckt) den unteren Teil des Kopfes – dort nur die obere Hälfte.
+        const offsets = [[0, 0], [0, 0.5], [0, 0.8], [-0.7, 0], [0.7, 0]];
+        if (!(pose.crouch && pose.yaw === 0)) offsets.push([0, -0.5], [0, -0.8]);
+        for (const [fx, fy] of offsets) {
+          const res = await ctx.page.evaluate(({ sphere, fx, fy }) => {
+            const g = buildDuel.game;
+            const p = g.player;
+            const t = __kt;
+            g.weapons.resetCharacter(p); // volles Magazin, kein Nachladen
+            buildDuel.input.setVirtual('secondary', true);
+            buildDuel.simulate(0.35);
+            __wp.aimAt(sphere.x + fx * sphere.r, sphere.y + fy * sphere.r, sphere.z);
+            let out = 'Fehlschuss';
+            const off = g.events.on('hit', (e) => { if (e.target === t) out = e.head ? 'KOPF' : 'Körper'; });
+            __wp.press('primary', 0.25);
+            off();
+            buildDuel.input.setVirtual('secondary', false);
+            buildDuel.simulate(1 / 60);
+            return out;
+          }, { sphere, fx, fy });
+          shots++;
+          if (res !== 'KOPF') bad.push(`${pose.crouch ? 'geduckt' : 'stehend'} ${pose.yaw ? 'von vorn' : 'von hinten'} (${fx}, ${fy}): ${res}`);
+        }
+        if (pose.crouch && pose.yaw === Math.PI) {
+          await ctx.page.evaluate((sphere) => {
+            buildDuel.game.weapons.resetCharacter(buildDuel.game.player);
+            buildDuel.input.setVirtual('secondary', true);
+            buildDuel.simulate(0.35);
+            __wp.aimAt(sphere.x, sphere.y - sphere.r * 0.5, sphere.z);
+            buildDuel.simulate(1 / 60);
+          }, sphere);
+          await nextFrames(ctx.page, 3);
+          await ctx.shot('25b-kopf-geduckt-zielfernrohr');
+          await ctx.page.evaluate(() => { buildDuel.input.setVirtual('secondary', false); buildDuel.simulate(0.1); });
+        }
+      }
+      await ctx.page.evaluate(() => {
+        const g = buildDuel.game;
+        for (const c of [...g.characters]) if (c.name === 'Kopf-Test') g.removeCharacter(c);
+      });
+      ctx.log(`${shots} Schüsse auf die sichtbare Kopf-Kugel`);
+      ctx.assert(bad.length === 0, `kein Kopfschuss: ${bad.join('; ')}`);
+    },
+  },
+  {
     name: 'Granatwerfer: Bogen, Explosion (Feuerball), Schaden in 4 m',
     async run(ctx) {
       await installHelpers(ctx.page);

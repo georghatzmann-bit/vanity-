@@ -31,8 +31,24 @@ const SHIN = 0.38;
 const SHOULDER_Y = 0.5; // über der Hüfte
 const SHOULDER_X = 0.35;
 const UPPER_ARM = 0.3;
-const HEAD_Y = 0.72; // Kopf-Mitte über der Hüfte (= 1,57 m)
-const HEAD_R = 0.27;
+// Kopf: genau die Treffer-Kugel aus CONFIG.player.hitbox (Oberkante = Kapsel-Oberkante 1,8 m)
+const HEAD_R = P.hitbox.headRadius;
+const HEAD_Y = P.hitbox.height - HEAD_R - HIP_Y; // Kopf-Mitte über der Hüfte (= 1,53 m über den Füßen)
+// Ducken: Oberkörper neigt sich vor und die Hüfte sinkt so weit, dass die Kopf-Kugel genau dort
+// sitzt, wo die Treffer-Prüfung sie erwartet (Oberkante = geduckte Kapsel 1,3 m, crouchHeadForward vor)
+const CROUCH_LEAN = Math.asin(Math.min(0.9, P.hitbox.crouchHeadForward / HEAD_Y));
+const CROUCH_DROP = HIP_Y - (P.hitbox.crouchHeight - HEAD_R - HEAD_Y * Math.cos(CROUCH_LEAN));
+const FOOT_DROP = HIP_Y - THIGH - SHIN; // Schuh unter dem Knöchel
+const CROUCH_FOOT_FORWARD = 0.12; // geduckt steht der Fuß etwas vor der Hüfte
+// Bein-Winkel dafür (zwei Glieder: Oberschenkel, Unterschenkel – Kosinus-Satz)
+const [CROUCH_THIGH, CROUCH_KNEE] = (() => {
+  const down = HIP_Y - CROUCH_DROP - FOOT_DROP;
+  const dist = Math.min(THIGH + SHIN - 1e-3, Math.hypot(CROUCH_FOOT_FORWARD, down));
+  const toFoot = Math.atan2(CROUCH_FOOT_FORWARD, down);
+  const atHip = Math.acos((THIGH * THIGH + dist * dist - SHIN * SHIN) / (2 * THIGH * dist));
+  const atKnee = Math.acos((THIGH * THIGH + SHIN * SHIN - dist * dist) / (2 * THIGH * SHIN));
+  return [toFoot + atHip, -(Math.PI - atKnee)];
+})();
 const STRIDE = 1.7; // Meter pro Schritt-Zyklus (zwei Schritte)
 
 // Gemeinsame Formen (einmal angelegt, von allen Figuren benutzt, nie entsorgt)
@@ -260,8 +276,8 @@ export function createCharacterView(character, scene) {
       // --- Beine ------------------------------------------------------------------
       const legL = legs[0];
       const legR = legs[1];
-      const crouchThigh = 1.2 * crouch;
-      const crouchKnee = -2.0 * crouch;
+      const crouchThigh = CROUCH_THIGH * crouch;
+      const crouchKnee = CROUCH_KNEE * crouch;
       legL.thigh.rotation.set(swing + crouchThigh + air * 0.9, 0, 0);
       legR.thigh.rotation.set(-swing + crouchThigh - air * 0.25, 0, 0);
       // Knie beugen sich, wenn das Bein nach hinten schwingt
@@ -270,8 +286,8 @@ export function createCharacterView(character, scene) {
 
       // Hüfte: tiefer beim Ducken, wippt beim Laufen, "atmet" im Stehen
       const bob = Math.abs(Math.cos(anim.walkPhase)) * 0.05 * Math.min(1, move);
-      hips.position.y = HIP_Y - 0.38 * crouch + bob - 0.06 * air;
-      upper.rotation.set(-0.1 * Math.min(1, move) - 0.25 * crouch, 0, 0);
+      hips.position.y = HIP_Y - CROUCH_DROP * crouch + bob - 0.06 * air;
+      upper.rotation.set(-0.1 * Math.min(1, move) - CROUCH_LEAN * crouch, 0, 0);
       torso.scale.set(1, 1 + Math.sin(t * 2.2) * 0.015 * (1 - Math.min(1, move)), 1);
       head.rotation.set(clamp(c.pitch, -0.7, 0.7) * 0.55, 0, 0);
 
