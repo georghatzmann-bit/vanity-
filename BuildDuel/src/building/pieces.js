@@ -211,9 +211,10 @@ export function pickTile(piece, origin, dir, maxDist = Infinity, out = null) {
     if (Math.abs(denom) < 1e-6) return -1;
     t = (a * origin.x + b * origin.z + c - origin.y) / denom;
   } else {
-    // Dach: Ebene auf halber Höhe (gut genug, um das Viertel zu finden)
-    if (Math.abs(dir.y) < 1e-6) return -1;
-    t = (j * H + B.roofHeight / 2 - origin.y) / dir.y;
+    // Dach: die echten Dreiecks-Flächen der Pyramide (oben und unten) – genau das,
+    // was man sieht und was das Fadenkreuz trifft
+    t = roofHitDistance(i, j, k, origin, dir, maxDist);
+    if (t === Infinity) return -1;
   }
   if (t < 0 || t > maxDist) return -1;
   const x = origin.x + dir.x * t - i * S;
@@ -225,6 +226,43 @@ export function pickTile(piece, origin, dir, maxDist = Infinity, out = null) {
   return row * 2 + col;
 }
 const _spec = {};
+
+/**
+ * Abstand, in dem der Strahl das Dach (Pyramide in Zelle i, j, k) trifft – Oberseite
+ * oder Unterseite (= Oberseite − Dicke), je nachdem was näher ist. Infinity = gar nicht.
+ * Jede der 4 Flächen ist eine Ebene y = Grund + Höhe·(1 − s / h), s = Abstand von der
+ * Mitte in Richtung der Fläche; sie gilt dort, wo s ≥ |Abstand quer| (Grat = Diagonale).
+ */
+export function roofHitDistance(i, j, k, origin, dir, maxDist = Infinity) {
+  const h = S / 2;
+  const cx = i * S + h;
+  const cz = k * S + h;
+  const rise = B.roofHeight;
+  const g = rise / h; // Steigung der Flächen
+  let best = Infinity;
+  for (let face = 0; face < 4; face++) {
+    // Fläche 0 = +X, 1 = +Z, 2 = −X, 3 = −Z
+    const ax = face === 0 ? 1 : face === 2 ? -1 : 0;
+    const az = face === 1 ? 1 : face === 3 ? -1 : 0;
+    // y = a·x + b·z + c
+    const a = -g * ax;
+    const b = -g * az;
+    const denom = dir.y - a * dir.x - b * dir.z;
+    if (Math.abs(denom) < 1e-9) continue;
+    for (let side = 0; side < 2; side++) {
+      const c = j * H + rise + g * (ax * cx + az * cz) - (side === 0 ? 0 : ROOF_V_THICKNESS);
+      const t = (a * origin.x + b * origin.z + c - origin.y) / denom;
+      if (!(t >= 0 && t <= maxDist && t < best)) continue;
+      const x = origin.x + dir.x * t - cx;
+      const z = origin.z + dir.z * t - cz;
+      const along = ax * x + az * z;
+      const across = ax !== 0 ? Math.abs(z) : Math.abs(x);
+      if (along < -1e-6 || along > h + 1e-6 || across > along + 1e-6) continue;
+      best = t;
+    }
+  }
+  return best;
+}
 
 // =============================================================================
 // Grafik (nur mit Bildschirm)

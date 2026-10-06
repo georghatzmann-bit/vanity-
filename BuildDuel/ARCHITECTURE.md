@@ -344,7 +344,7 @@ Dateien in `src/building/`:
 | Datei | Inhalt |
 |---|---|
 | `grid.js` | reine Mathematik: Zellen, Slot-Schlüssel (Text `slotKey()` und Zahl `numericSlotKey()`), `parseSlotKey`, `wallSlotForSide(i,j,k,dir)`, `slotBounds`, Formen (`slotShape`, `shapesTouch`, `shapeOverlapsBox` …), Edit-Felder (`presentRects`, `tilesToMask`, `isDoorMask` …) und die **Zielwahl** `selectTarget()` |
-| `pieces.js` | Kollisions-Teile je Edit (`pieceColliderSpecs`), Formen daraus (Bild = Kollision), Texturen (Holz/Stein/Metall + Risse), Edit-Kacheln, `pickTile()`, `pieceOrigin()`, `pieceCenter()` |
+| `pieces.js` | Kollisions-Teile je Edit (`pieceColliderSpecs`), Formen daraus (Bild = Kollision), Texturen (Holz/Stein/Metall + Risse), Edit-Kacheln, `pickTile()` (Dach: Strahl gegen die echten Pyramiden-Flächen oben/unten, `roofHitDistance`), `pieceOrigin()`, `pieceCenter()`, `pieceHealthFraction()` |
 | `view.js` | Grafik (nur mit Bildschirm): InstancedMesh-Gruppen, Einzel-Meshes, Trümmer, Tür-Blatt, Vorschau, Edit-Kacheln |
 | `edit.js` | Edit-Modus (Öffnen, Klicken/Ziehen, Zurücksetzen, Bestätigen) und Türen (E) |
 | `structure.js` | `createBuildingSystem(game)` – Setzen, Prüfen, Aufbau, Schaden, Halt/Einsturz, Ereignisse |

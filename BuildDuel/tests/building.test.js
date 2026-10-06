@@ -6,7 +6,7 @@ import { CollisionWorld, slopeSurfaceY } from '../src/physics.js';
 import {
   slotKey, parseSlotKey, numericSlotKey, wallSlotForSide, slotBounds, slotShape, shapesTouch, dirFromYaw,
   presentRects, isDoorMask, tilesToMask, maskToTiles, fullTileMask, selectTarget, createTarget, rampSpec, roofSpec,
-  RAMP_V_THICKNESS, levelIndex, cellIndex,
+  RAMP_V_THICKNESS, ROOF_V_THICKNESS, levelIndex, cellIndex,
 } from '../src/building/grid.js';
 import { pieceColliderSpecs, pickTile, isDoorPiece } from '../src/building/pieces.js';
 
@@ -223,6 +223,54 @@ describe('Bau-Raster: Edit-Felder', () => {
     assert.equal(pickTile(ramp, { x: 3, y: 9, z: 3 }, { x: 0, y: -1, z: 0 }), 3);
     const roof = { type: 'roof', kind: 'c', i: 0, j: 1, k: 0 };
     assert.equal(pickTile(roof, { x: 1, y: 9, z: 3 }, { x: 0, y: -1, z: 0 }), 2);
+  });
+
+  it('pickTile Dach: trifft die Pyramiden-Flächen (Viertel-Mitte und 0,4 m vom Rand, von oben und von unten)', () => {
+    const i = 1;
+    const j = 1;
+    const k = -2;
+    const roof = { type: 'roof', kind: 'c', i, j, k };
+    const cx = (i + 0.5) * S;
+    const cz = (k + 0.5) * S;
+    const h = S / 2;
+    const rise = CONFIG.building.roofHeight;
+    const top = (x, z) => j * H + rise * (1 - Math.max(Math.abs(x - cx), Math.abs(z - cz)) / h);
+    const dirTo = (o, p) => {
+      const d = { x: p.x - o.x, y: p.y - o.y, z: p.z - o.z };
+      const len = Math.hypot(d.x, d.y, d.z);
+      return { x: d.x / len, y: d.y / len, z: d.z / len, len };
+    };
+    let checked = 0;
+    for (let tile = 0; tile < 4; tile++) {
+      const sx = tile % 2 ? 1 : -1; // Spalte 1 = großes x
+      const sz = tile >= 2 ? 1 : -1; // Reihe 1 = großes z
+      for (const ox of [0.4, 1, h - 0.4]) {
+        for (const oz of [0.4, 1, h - 0.4]) {
+          // Punkt im Viertel, ox/oz Meter vom äußeren Rand der Zelle
+          const x = cx + sx * (h - ox);
+          const z = cz + sz * (h - oz);
+          // von oben (schräg von außen)
+          const upPoint = { x, y: top(x, z), z };
+          const above = { x: x + sx * 2, y: upPoint.y + 4, z: z + sz * 2 };
+          const d1 = dirTo(above, upPoint);
+          const out = { distance: 0 };
+          assert.equal(pickTile(roof, above, d1, 50, out), tile, `oben ${tile} (${ox}, ${oz})`);
+          assert.close(out.distance, d1.len, 1e-6, 'Abstand bis zur Oberseite');
+          // von unten (aus der Box darunter, Augenhöhe, verschiedene Standorte)
+          const downPoint = { x, y: top(x, z) - ROOF_V_THICKNESS, z };
+          for (const eye of [{ x: cx, y: j * H - 2.4, z: cz }, { x: cx - 1.4, y: j * H - 2.6, z: cz + 1.3 }, { x: x - sx * 0.3, y: j * H - 2.4, z: z - sz * 0.2 }]) {
+            const d2 = dirTo(eye, downPoint);
+            assert.equal(pickTile(roof, eye, d2, 50, out), tile, `unten ${tile} (${ox}, ${oz}) von ${eye.x},${eye.z}`);
+            assert.close(out.distance, d2.len, 1e-6, 'Abstand bis zur Unterseite');
+            checked++;
+          }
+        }
+      }
+    }
+    assert.equal(checked, 4 * 9 * 3);
+    // daneben (über der Nachbar-Zelle) und waagerecht unter dem Dach vorbei: kein Feld
+    assert.equal(pickTile(roof, { x: cx + 3, y: 9, z: cz }, { x: 0, y: -1, z: 0 }), -1);
+    assert.equal(pickTile(roof, { x: cx - 5, y: j * H - 0.5, z: cz }, { x: 1, y: 0, z: 0 }), -1);
   });
 });
 
