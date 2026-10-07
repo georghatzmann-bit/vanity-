@@ -450,6 +450,12 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   `doorNearDistance` – jede Figur darf Türen benutzen.
 - Bots bauen über denselben Befehl (`selectBuild` + `primaryPressed`, Ziel-Strahl in
   `aimOrigin/aimDir`) und prüfen vorher mit `getTarget()`.
+- Aussehen (Look-Welle, `pieces.js drawMaterialCanvas`, 1 Bild = 4 × 4 m): Holz = helle Bretter (waagerecht → auf
+  Rampen quer wie Stufen) im dunkleren Holz-Rahmen, Stein = graue Blöcke mit Fugen und Stein-Rahmen, Metall =
+  blaugraues Wellblech mit Querstrebe, Rahmen und Nieten. Im Aufbau: durchsichtig mit bläulichem Schimmer
+  (`building.constructionTint`). Vorschau: blaues Gitter-Bild (`createGhostTexture`, Farbe vom Material:
+  `previewColorOk/Blocked`) + helle Kanten (`previewEdgeColor…`). Edit-Kacheln: durchsichtig blau mit weißem
+  Umriss (LineSegments als Kind jeder Kachel), gewählte rot und durchsichtiger.
 - Grafik: fertige Teile → InstancedMesh je (Form, Material, Risse); Form = Typ bzw. bei
   editierten Teilen (Art, Rampen-Richtung, Edit-Maske) – jede Edit-Form wird einmal gebaut und
   geteilt (gilt bis `clear()`); im Aufbau und Trümmer → einzelne Meshes. Risse/Dunkelheit nach
@@ -622,11 +628,36 @@ Jeder Modus:
   `isFree(world, x, y, z, m)`, `update(character, alpha, dt, world, input?, settings?)`, `snap()`
   (nach Teleport/Runde; Sprünge > 3 m werden auch selbst erkannt), Felder `yaw`, `pitch`, `fov`,
   `side`, `characterDistance` (Kamera ↔ Kopf), `hideCharacter`.
-- **Figuren-Grafik** (`src/world/characterModel.js`): Kopf-Größe und -Lage (stehend und geduckt) kommen aus
-  `CONFIG.player.hitbox` (`headRadius`, `crouchHeight`, `crouchHeadForward`) – die Grafik wird nach der
-  Treffer-Prüfung gebaut, nicht umgekehrt. `createCharacterView(character, parent)` →
-  `{ root, rightHand, attach(name, obj), detach(name), setHidden(bool), update(alpha, dt, yawOverride?), dispose() }`.
-  Farbsets und Hut-Formen stehen in `CONFIG.skins`.
+- **Figuren-Grafik** (`src/world/characterModel.js`, Look-Welle): menschliche Low-Poly-Figur (1,8 m, Hüfte
+  0,92 m, Schultern 1,42 m, Oberarm 0,30 m, Unterarm bis Hand-Mitte 0,29 m). `createCharacterView(character, parent)` →
+  `{ root, rightHand, head, attach(name, obj), detach(name), setHidden(bool), update(alpha, dt, yawOverride?), dispose() }`.
+  - **12 Meshes pro Figur** (Körper mit Becken, Kopf, je Arm Oberarm/Unterarm+Hand, je Bein Oberschenkel/
+    Unterschenkel/Schuh). Die Teile eines Meshes sind mit `MeshBuilder` (`src/world/meshBuilder.js`: Kisten,
+    Zylinder, Kugeln, `loft` für Oberkörper/Mäntel → EINE BufferGeometry mit `color`-Attribut) verschmolzen.
+    ALLE Figuren teilen EIN Material (`characterMaterial()`, Lambert mit Ecken-Farben). Die Formen werden je
+    Skin einmal gebaut (`characterParts(skin)`, Vorrat nach Skin-Inhalt) und nie entsorgt; `dispose()` nimmt nur
+    die Figur aus der Szene.
+  - **Kopf:** die Gruppe `view.head` (Name „Kopf“) sitzt genau in der Mitte der Treffer-Kugel aus
+    `CONFIG.player.hitbox` (stehend und geduckt, `crouchHeadForward`); der sichtbare Kopf (Ellipsoid + Haare)
+    liegt IN der Kugel, oben bündig. Treffer-Werte bleiben unverändert (Kapsel 0,4 / 1,8 m, Kopf-Kugel 0,27 m).
+  - **Halten (IK):** im Waffen-Modus (`mode === 'weapon'` mit Gegenstand oder `aiming`) rechnet die Figur beide
+    Arme aus (Zwei-Glieder-IK, `solveArm`): rechte Hand am Griff (vor der rechten Schulter, beim Zielen höher), linke
+    Hand am Vorderschaft `weapon.userData.foregrip` m vor dem Griff (0 = Pistole: Hände zusammen;
+    `userData.twoHanded === false`: linke Hand frei). Der Oberkörper dreht sich dabei (linke Schulter vor), der Kopf
+    schaut weiter geradeaus. Die rechte Hand wird so gedreht, dass −Y = Lauf-Richtung (Blick) und −Z = oben – das
+    erwartet `createHandMount` (Waffe zeigt mit dem Blick). Baumodus: halb erhoben.
+  - **Animationen:** Laufen/Rennen (Knie/Ellbogen beugen, Füße bleiben waagerecht), Springen, Ducken, Zielen,
+    Bauen (`triggerAction('build')` – structure.js ruft es beim selbst gesetzten Teil), Spitzhacke (`'pickaxe'`),
+    Tanz (`emoteUntil`), Zucken bei Treffern (Leben + Schild sinken), Umfallen (nach 2,5 s weg).
+  - **Skins** (`CONFIG.skins`): komplette Outfits, Felder `id, name, skinTone, hair, hairColor, headwear,
+    headColor, headColor2, face, top, sleeves, topColor, topColor2, pants, pantsColor, pantsColor2, shoes, shoeColor,
+    gloves, belt, back, backColor, backColor2, trim`; erlaubte Werte stehen in `skins.hairStyles/headwears/faces/
+    tops/pants/shoes/backs`. Fehlende Felder füllt `normalizeSkin()` auf; alte Farbsets (`body/accent/hat/hatColor`)
+    gehen weiter. `skins.legacyIds` bildet die alten ids (sonne, ozean …) auf neue ab (`getSkin()` in player.js).
+    Für Menü/Lobby/Spind reichen `CONFIG.skins.list` (id, name) und `createCharacterView`.
+  - **Spitzhacken** (`CONFIG.pickaxes`): `{ id, name, style: classic|axe|hammer|scythe, handle, head, accent }`,
+    `defaultId`. Die Figur trägt `character.pickaxeId` (Option `pickaxe` im Character-Konstruktor, `getPickaxe()`
+    in player.js); nur Aussehen, Werte bleiben `CONFIG.weapons.pickaxe`.
 
 ## 11b. Waffen, Schaden, Geschosse (Welle 2b)
 
@@ -720,7 +751,10 @@ bzw. `pieceDestroyed`. Spitzhacke: `swing` → `impact` → `hit` / `harvest`. S
 Abfeuern, `impact`/`hit`/`explosion` beim Einschlag (Geschoss).
 
 **Grafik** (nur mit Bildschirm): `src/weapons/models.js` (`createWeaponModel(id, rarity)`, `createHandMount`;
-geteilte Formen/Materialien mit `userData.shared`), `src/weapons/visuals.js` (Waffe an der rechten Hand per
+geteilte Formen/Materialien mit `userData.shared`; Look-Welle: realistische Low-Poly-Waffen in echter Größe,
+je Waffe 2 Meshes – Körper mit Ecken-Farben (ein Material für alle Waffen) + unbeleuchtete Zier-Streifen in der
+Seltenheits-Farbe; `userData.foregrip`/`twoHanded` für das Halten; `createWeaponModel('pickaxe', pickaxeId)` baut die
+Spitzhacke aus `CONFIG.pickaxes`; in der Hand vergrößert um `weaponVisuals.modelScale`), `src/weapons/visuals.js` (Waffe an der rechten Hand per
 `view.attach('weapon', …)`, Mündungsblitz-Sprite + EIN dauerhaftes PointLight (Anzahl Lichter bleibt gleich →
 kein Shader-Neubau), Leuchtspur bei `tracer: true`, Feuerball, Treffer-Zahlen als HTML in `game.uiRoot`
 (Vorrat, `settings.game.damageNumbers`, nur eigene Treffer), Ist die eigene Figur ausgeblendet (Kamera am Kopf) oder im Zielfernrohr: kein Blitz-Bild (beim Ausblenden nur
@@ -844,6 +878,11 @@ Kamera: Im `'freefall'`/`'glide'` fährt die Schulter-Kamera langsam auf `CONFIG
 - `tests/e2e/run.cjs`: neue Prüfungen als Eintrag in `GAME_CHECKS` anhängen
   (`{ name, run: async (ctx) => … }`, ctx = `{ page, assert, log, shot }`).
   Welle 2a: Bau-Prüfungen stehen in `tests/e2e/buildChecks.cjs` (in GAME_CHECKS eingehängt);
+  Look-Welle: `tests/e2e/lookChecks.cjs` (Namen „Look: …“) – „Studio“ (eigener Renderer über dem Spiel) mit
+  allen Skins vorn/hinten/nah, Posen, Waffen aller Seltenheiten, Spitzhacken, Halten von der Seite; im echten
+  Spiel Waffen in der Hand, Bauteile aller Materialien, Schaden, Aufbau, 90er-Turm, Vorschau blau/rot,
+  Edit-Raster. Bilder `look-*.png` anschauen gehört dazu. buildChecks/weaponChecks exportieren dafür
+  `setup/settle` bzw. `installHelpers`;
   `--grep text` führt nur Prüfungen aus, deren Name passt (z. B. `--grep "Bauen|Edit"`).
 - Modi dürfen `helpHint` (Text) haben – das HUD zeigt ihn unten in der Steuerungs-Hilfe (Taste H).
 - URL-Schnellstart (für Tests/Entwicklung): `index.html?mode=duel&bots=hard&seed=1` überspringt das Menü.
@@ -865,3 +904,4 @@ Abschlussbericht genannt.
 | 4b Modi (8–10) | modes/* |
 | 5 Menüs (11) | ui/menus.js, ui/settings.js, ui/touch.js, core/progress.js, main.js-Ablauf |
 | 6 Feinschliff (12) | alles, nach Prüfung |
+| Look (Aussehen) | world/characterModel.js, world/meshBuilder.js, weapons/models.js, building/pieces.js (Bilder), building/view.js (Aufbau/Vorschau/Edit-Look), config `skins`/`pickaxes`/Farben/Licht, tests/e2e/lookChecks.cjs (dazu klein: player.js getSkin/getPickaxe, visuals.js Spitzhacken-Schlüssel, lootView.js Ecken-Farben, structure.js Bau-Arm-Stoß, environment.js Licht-Farben aus config) |

@@ -152,6 +152,23 @@ Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfe
 
 **Effekte:** Splitter in Holz-, Stein- oder Metallfarbe bei Treffern auf Bauteile, Trümmer und Staub beim Zerstören und Einstürzen, Funken bei Einschlägen, Rauch und Glut bei Explosionen, Späne beim Sammeln mit der Spitzhacke, blaue Scherben, wenn ein Schild bricht, Staub bei harten Landungen. Bei Grafik „niedrig“ gibt es weniger Teilchen.
 
+**Aussehen (wie im Original-Stil, eigene Entwürfe):** Die Figuren sind menschlich (1,8 m, breite Schultern, Gelenke an Knie und Ellbogen, Hände, Schuhe, Gesicht) und tragen komplette Outfits. Waffen werden mit **beiden Händen** an der rechten Schulter gehalten. Bauteile: **Holz** = helle Bretter im dunklen Holz-Rahmen, **Stein** = graue Blöcke mit Fugen, **Metall** = blaugraues Wellblech mit Nieten. Im Aufbau schimmern sie bläulich und durchsichtig. Die **Vorschau** ist ein blauer Geist mit hellem Gitter (rot = geht nicht), beim **Editieren** sind die Felder blau mit weißem Rand, gewählte Felder rot.
+
+| Skin (id) | Outfit |
+|---|---|
+| Rekrut (`rekrut`, Standard) | T-Shirt, Jeans, Turnschuhe, Rucksack |
+| Kapuzen-Kid (`kapuze`) | orange Kapuzenpulli, Kappe, Jogginghose |
+| Feldwebel (`soldat`) | Helm mit Schutzbrille, Weste mit Taschen, Cargohose, Stiefel |
+| Sternenfahrerin (`sternenfahrerin`) | Raumanzug mit Helm und Visier, Sauerstoff-Tanks |
+| Schattenklinge (`ninja`) | dunkle Haube mit Stirnband, Schärpe, Schwert auf dem Rücken |
+| Eisenritter (`ritter`) | Rüstung, Helm mit Feder-Busch, Wappenrock, Umhang |
+| Sprinterin (`sprinterin`) | Trainingsanzug mit Streifen, Stirnband, Pferdeschwanz |
+| Professorin (`forscherin`) | Laborkittel, Brille, lange Haare |
+| Käpt'n Kralle (`pirat`) | roter Mantel, Dreispitz, Augenklappe, Bart |
+| Blechkumpel (`blechkumpel`) | Roboter mit leuchtendem Visier und Antenne |
+
+Spitzhacken (nur Aussehen): Standard-Hacke, Eisbrecher (Eisaxt), Blitzschlag (Hammer), Tiefsee-Haken. Alle Skins und Spitzhacken stehen in `src/config.js` unter `skins` und `pickaxes` – dort kann man Farben ändern.
+
 **Checkliste für Phase 6** (bitte ausprobieren):
 
 - [ ] Alle Anzeigen stehen an der beschriebenen Stelle und ändern sich sofort (Schild/Leben nach einem Sturz, Munition beim Schießen, Material-Wechsel mit Q)
