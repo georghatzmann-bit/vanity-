@@ -100,7 +100,10 @@ Im Spiel einmal ins Bild klicken (bzw. nach **SPIELEN** passiert das von selbst)
 | Material wechseln (Holz → Stein → Metall) | **Rechtsklick** im Baumodus oder **Mausrad drücken** |
 | Rampe drehen | **R** (im Baumodus) |
 | Bauteile durchschalten | **Mausrad drehen** (im Baumodus) |
-| Edit (Fenster, Tür …) | **G** auf ein eigenes Teil, Felder **anklicken** (oder mit gedrückter Maus darüberziehen), **G** = fertig. Mit „Edit beim Loslassen bestätigen“ ist der Edit schon fertig, wenn du die **linke Maustaste loslässt** (schnelle Doppel-Edits wie in Fortnite) |
+| Edit (wie in Fortnite) | **G** auf ein eigenes Teil (das Teil wird zum blauen Raster), Felder **anklicken** oder mit gedrückter Maus **darüberziehen**, **G** = fertig. Mit „Edit beim Loslassen bestätigen“ ist der Edit schon fertig, wenn du die **linke Maustaste loslässt**. Schnell: Maus halten, **G** tippen – das Feld unter dem Fadenkreuz ist sofort gewählt (Doppel-/Dreifach-Edits) |
+| Wand / Boden editieren | graue Felder (mit Kreuz) fallen weg: Fenster, **Tür** (die 2 mittleren unteren Felder, **E** öffnet), halbe Wand … Besondere Wände: **Dreieck** (3 Felder als L in einer Ecke), **Bogen** (untere 2 Reihen), **halber Bogen** (2×2 unten in einer Ecke) |
+| Rampe editieren | den **Weg ziehen**, der als Treppe bleibt (Reihenfolge = Richtung, hinauf vom ersten Feld): 2 Felder = **halbe Rampe**, 3 als L = **L-Treppe**, alle 4 als U = **U-Treppe**. Zurück aufs vorige Feld ziehen nimmt den Schritt zurück |
+| Dach (Pyramide) editieren | angeklickte Ecken werden **hochgezogen**: 1 Ecke = 1/4-Pyramide, 2 nebeneinander = Rampen-Pyramide, 2 über Kreuz = halbe umgekehrte, 3 = 1/4 umgekehrte |
 | Edit zurücksetzen | **G**, **Rechtsklick** – das Teil ist sofort wieder ganz (Auto-Reset) |
 | Tür auf/zu | **E** |
 | Baumodus verlassen | **1–5** oder **F** |
@@ -136,7 +139,7 @@ Auf dem Übungsplatz hast du **unendlich Material**. (In den späteren Modi kost
 - **Ramp Rush:** **W** gedrückt halten, Maus gedrückt halten und abwechselnd **C** (Rampe) und **Z** (Wand) drücken – du läufst die Rampen hoch, die Wände schützen dich.
 - **Maus gedrückt halten:** Wird deine Wand zerschossen, setzt das Spiel sie sofort wieder hin (solange du hinschaust).
 - **90er:** Rampe + Wand setzen, die Rampe hochlaufen (etwas zur linken Seite), oben **90° nach links drehen**, Wand, **springen**, in der Luft Rampe + Wand. Wiederholen – jede Runde eine Etage höher.
-- **Edit:** Nur eigene Teile. **G** zeigt leuchtende Felder; angeklickte Felder werden rot und verschwinden nach dem zweiten **G**. Die zwei mittleren unteren Felder einer Wand ergeben eine **Tür** (mit **E** öffnen/schließen).
+- **Edit:** Nur eigene Teile. **G** zeigt das Raster des Teils (blau = bleibt); angeklickte Felder werden grau mit Kreuz und verschwinden nach dem zweiten **G** (Dach: Ecke geht hoch, Rampe: der gezogene Weg bleibt als Treppe). Die zwei mittleren unteren Felder einer Wand ergeben eine **Tür** (mit **E** öffnen/schließen).
 - **Ecktreppe:** Bei einer Rampe **ein** Feld wegnehmen – dann wird sie zur Treppe mit Ecke: ein Stück hoch auf ein kleines Podest, um die Ecke drehen und weiter hinauf. Nimmst du **zwei Felder nebeneinander** weg, bleibt eine schmale Rampe; sie steigt in die Richtung, in der du über die zwei Felder gezogen (oder sie nacheinander angeklickt) hast: erstes Feld = unten, zweites = oben.
 
 **Checkliste für Phase 3 und 4** (bitte ausprobieren):
@@ -195,7 +198,7 @@ Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfe
 
 **Effekte:** Splitter in Holz-, Stein- oder Metallfarbe bei Treffern auf Bauteile, Trümmer und Staub beim Zerstören und Einstürzen, Funken bei Einschlägen, Rauch und Glut bei Explosionen, Späne beim Sammeln mit der Spitzhacke, blaue Scherben, wenn ein Schild bricht, Staub bei harten Landungen. Bei Grafik „niedrig“ gibt es weniger Teilchen.
 
-**Aussehen (wie im Original-Stil, eigene Entwürfe):** Die Figuren sind menschlich (1,8 m, breite Schultern, Gelenke an Knie und Ellbogen, Hände, Schuhe, Gesicht) und tragen komplette Outfits. Waffen werden mit **beiden Händen** an der rechten Schulter gehalten. Bauteile: **Holz** = helle Bretter im dunklen Holz-Rahmen, **Stein** = graue Blöcke mit Fugen, **Metall** = blaugraues Wellblech mit Nieten. Im Aufbau schimmern sie bläulich und durchsichtig. Die **Vorschau** ist ein blauer Geist mit hellem Gitter (rot = geht nicht), beim **Editieren** sind die Felder blau mit weißem Rand, gewählte Felder rot.
+**Aussehen (wie im Original-Stil, eigene Entwürfe):** Die Figuren sind menschlich (1,8 m, breite Schultern, Gelenke an Knie und Ellbogen, Hände, Schuhe, Gesicht) und tragen komplette Outfits. Waffen werden mit **beiden Händen** an der rechten Schulter gehalten. Bauteile: **Holz** = helle Bretter im dunklen Holz-Rahmen, **Stein** = graue Blöcke mit Fugen, **Metall** = blaugraues Wellblech mit Nieten. Im Aufbau schimmern sie bläulich und durchsichtig. Die **Vorschau** ist ein blauer Geist mit hellem Gitter (rot = geht nicht), beim **Editieren** sieht man wie in Fortnite nur das Raster: blaue Felder mit weißem Rand, gewählte Felder grau mit Kreuz.
 
 | Skin (id) | Outfit |
 |---|---|

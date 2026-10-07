@@ -355,7 +355,7 @@ const LOOK_CHECKS = [
     },
   },
   {
-    name: 'Look: Vorschau blau (Gitter) und rot, Edit-Raster (blaue Kacheln mit Umriss, gewählte rot)',
+    name: 'Look: Vorschau blau (Gitter) und rot, Edit-Raster (blaue Kacheln mit weißem Rahmen, gewählte grau mit Kreuz)',
     async run(ctx) {
       const { setup, settle } = require('./buildChecks.cjs');
       await setup(ctx);

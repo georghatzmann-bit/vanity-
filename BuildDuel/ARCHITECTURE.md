@@ -373,16 +373,18 @@ Dateien in `src/building/`:
 building.getTarget(character, type = character.buildPiece, out?) // → Ziel (siehe unten), mit Prüfung
 building.checkPlacement(type, kind, i, j, k, dir, character, options?) // → Grund oder null
 building.placePiece(type, slotKey, owner, material, options)
-   // options: { dir (Rampe 0..3), edit (Feld-Liste), editDir (Rampe: Richtung der halben Rampe), instant (gleich 100 %, kein Aufbau),
+   // options: { dir (Rampe 0..3), edit (Feld-Liste: Wand/Boden = entfernte Felder, Dach = hochgezogene Ecken,
+   //            Rampe = entfernte Felder → Weg abgeleitet), editPath (Rampe: Weg, z. B. [0, 2, 3]), instant (gleich 100 %, kein Aufbau),
    //            force (ohne Halt-/Figuren-Prüfung, z. B. vorgebaute Box), charge (Material abziehen) }
    // → Bauteil oder null. Modi stellen Teile mit { instant: true } (und evtl. force) hin.
 building.removePiece(piece, { by, collapsed, silent, noCollapse })   // zerstört (mit Ereignis + Halt-Prüfung)
 building.getPiece(kind, i, j, k), building.getPieceAt(slotKey), building.pieces (Map)
-building.setEdit(piece, mask, editDir?) // entfernte Felder als Bitmaske (0 = ganzes Teil); editDir nur Rampe
+building.setEdit(piece, mask, path?)   // Wand/Boden: entfernte Felder, Dach: hochgezogene Ecken (Bitmaske, 0 = ganzes Teil);
+                                        // Rampe: path = Weg (2–4 Felder), ohne Weg aus mask abgeleitet; false = geht nicht
 building.setDoorOpen(piece, open)       // false, wenn jemand in der Tür steht
 building.canEdit(c), building.closeEdit(c)   // closeEdit ÜBERNIMMT die gewählten Felder (wie im Original)
 building.findDoor(c)                    // Tür, die E jetzt umschalten würde, oder null (Welle 3a: HUD-Hinweis)
-building.editSession(c)                 // { piece, selection (Bitmaske), hover (Feld) } oder null
+building.editSession(c)                 // { piece, selection (Bitmaske), path (Rampe: Weg), hover (Feld) } oder null
 building.targetOf(c)                    // letztes Bau-Ziel (Vorschau) oder null
 building.aimRay(c, outOrigin, outDir)   // Ziel-Strahl (Befehl, sonst Augen + Blick)
 building.pieceCenter(piece, out)        // Mitte (Effekte, Töne)
@@ -396,8 +398,8 @@ building.doors, building.editedPieces   // Sets; building.view = Grafik oder nul
 `'occupied'` | `'material'` | `'blocked'` (Figur im Weg) | `'unsupported'` (kein Halt) | `null`.
 
 **Bauteil-Felder** (zusätzlich zu §9): `kind` (`'f'|'wx'|'wz'|'r'|'c'`), `numKey`, `editMask`
-(Bitmaske der entfernten Felder, passend zu `edit`), `editDir` (Rampe: gewählte Richtung der halben
-Rampe oder `null`), `isDoor` (Getter), `doorCollider`,
+(Wand/Boden: entfernte Felder; Dach: hochgezogene Ecken; Rampe: Felder NEBEN dem Weg – passend zu
+`edit`), `editPath` (Rampe: gezogener Weg oder `null`), `isDoor` (Getter), `doorCollider`,
 `buildTime`, `placedAt`, `neighbors` (Set berührender Teile), `grounded` (berührt Gelände oder
 Karten-Teile), `collapsing` (fällt gleich), `removed`, `shape` (ganze Form für Halt).
 `applyDamage(amount, info)` → `{ amount, destroyed }`; `info.attacker` landet als `by` im Ereignis.
@@ -434,16 +436,33 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   Halt bekommen `collapsing` und verschwinden nach `collapseDelay` (`pieceDestroyed` mit
   `collapsed: true`, Grafik: `collapseAnimTime`).
 - Edit-Felder: Wand 3 x 3 (Nummer = Reihe·3 + Spalte, Reihe 0 oben, Spalte 0 = kleines x bzw. z),
-  sonst 2 x 2 (Spalte entlang x, Reihe entlang z). Tür = genau `wallDoorCells` entfernt; das
+  sonst 2 x 2 (Spalte entlang x, Reihe entlang z). Edits wie in Fortnite (pieces.js):
+  **Wand/Boden:** gewählte Felder fallen weg (Löcher, Boxen). Tür = genau `wallDoorCells` entfernt; das
   Tür-Blatt ist ein eigener Collider (offen = ausgeschaltet). Alle Felder entfernen geht nicht.
-  **Rampe:** 1 Feld entfernt = **Ecktreppe** (pieces.js `rampEditSpecs`): kurze 45°-Rampe vom unteren
-  Ende-Feld (das bei der ganzen Rampe tiefer lag) auf ein flaches Podest im Eck-Feld (halbe Höhe,
-  gegenüber vom entfernten Feld), 90° gedreht die zweite kurze Rampe ganz hinauf. 2 Felder
-  nebeneinander entfernt = **halbe Rampe** über den übrigen Streifen (2 m breit, 45°); Richtung =
-  `editDir` (im Edit: vom vorletzten zum letzten gewählten Feld = "hinauf"), sonst die alte
-  Richtung, wenn sie entlang des Streifens liegt, sonst 90° weiter. Sonst (1 Feld übrig, Diagonale):
-  Stücke der ganzen Rampe. Edit-Kacheln/`pickTile` liegen immer auf der ganzen Rampe. Wer nach
-  einem Edit in der neuen Form steckt, wird bis zu einer halben Ebene angehoben (Wand: hinausgeschoben).
+  Besondere Wand-Formen (`wallShapeOf(mask)`, alle Drehungen): **Dreieck** = L aus 3 Feldern in einer Ecke
+  weg (z. B. 1, 2, 5) → das rechtwinklige Dreieck auf der anderen Seite der Diagonale; **Bogen** = untere
+  zwei Reihen weg → obere Reihe, dünne Beine (`wallArchLegWidth`), Viertel-Ellipsen-Ecken
+  (`wallArchCornerU/V`); **halber Bogen** = 2x2 Felder unten in einer Ecke weg → Loch mit gerundeter
+  Innen-Ecke. Bild = echte Form (Umriss als Platte), Kollision = schmale Boxen (`wallCollisionSlices`,
+  `wallCurveSlices`).
+  **Rampe:** der gezogene WEG bleibt (`editPath`, jedes Feld neben dem vorigen, Reihenfolge = Richtung;
+  `rampPathSpecs`): 2 Felder = **halbe Rampe** (halbe Breite, ganze Länge/Höhe, steigt von P0 zu P1);
+  3 (L) = **L-Treppe** (Lauf P0→P1 bis zur halben Höhe, Podest auf P1, Lauf P1→P2 ganz hinauf);
+  4 (U) = **U-Treppe** (Lauf P0→P1, Podest über P1 und P2, Lauf P2→P3). Alle Läufe so steil wie die
+  ganze Rampe. 0/1 Feld = keine Änderung, Rechtsklick = ganze Rampe in der alten Richtung. `editMask` =
+  Felder neben dem Weg (U-Treppe: 0, trotzdem editiert → `isPieceEdited`, `pieceEditKey`). Alte Angaben
+  nur mit entfernten Feldern werden in einen Weg umgerechnet (`rampPathFromMask`). Im Edit: Klick beginnt
+  einen neuen Weg (außer neben dem letzten Feld = weiter), Ziehen verlängert ihn, zurück aufs vorige Feld
+  nimmt den letzten Schritt zurück. Edit-Kacheln/`pickTile` liegen immer auf der GANZEN Rampe.
+  **Dach (Pyramide):** gewählte Ecken werden **hochgezogen** (auf Spitzen-Höhe), die Mitte bleibt oben;
+  Fläche = 4 Dreiecke (Kanten-Ecken + Mitte) – ein Slope-Collider `dir: 'pyramid'` mit `spec.raise`
+  (physics.js: Höhe, Höhen-Bereich, Strahl je Dreieck). 1 = 1/4-Pyramide, 2 nebeneinander =
+  Rampen-Pyramide, 2 diagonal = halbe umgekehrte, 3 = 1/4 umgekehrte; alle 4 geht nicht. Kacheln und
+  `pickTile` (`roofHitDistance(…, raise)`) liegen auf der echten Fläche.
+  Wer nach einem Edit in der neuen Form steckt, wird bis zu einer halben Ebene angehoben (Wand:
+  hinausgeschoben). Ist die linke Maustaste beim Öffnen (G) schon gedrückt, wird das Feld unter dem
+  Fadenkreuz sofort gewählt (schnelle Edits); ein Klick neben das Raster wartet, bis das Fadenkreuz
+  (Maus gehalten) ein Feld trifft.
   Im Tick `editOpenedTick` bestätigt G nicht. Bau-/Edit-Optionen wie in Fortnite (`settings.controls`,
   Computer-Gegner nehmen die Standardwerte aus `CONFIG.controls`): `editOnRelease` – Loslassen der
   LINKEN MAUSTASTE nach dem Wählen bestätigt ("Confirm Edit on Release"); `resetConfirms` – Rechtsklick
@@ -459,10 +478,13 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   Rampen quer wie Stufen) im dunkleren Holz-Rahmen, Stein = graue Blöcke mit Fugen und Stein-Rahmen, Metall =
   blaugraues Wellblech mit Querstrebe, Rahmen und Nieten. Im Aufbau: durchsichtig mit bläulichem Schimmer
   (`building.constructionTint`). Vorschau: blaues Gitter-Bild (`createGhostTexture`, Farbe vom Material:
-  `previewColorOk/Blocked`) + helle Kanten (`previewEdgeColor…`). Edit-Kacheln: durchsichtig blau mit weißem
-  Umriss (LineSegments als Kind jeder Kachel), gewählte rot und durchsichtiger.
+  `previewColorOk/Blocked`) + helle Kanten (`previewEdgeColor…`). Edit wie in Fortnite: das Bauteil wird
+  ausgeblendet (Instanz mit Größe 0), man sieht nur das Raster – je Feld eine Kachel (Mesh `Kachel`) mit
+  weißem Rahmen (Kind `Rahmen`) und Kreuz (Kind `Kreuz`, nur bei grauen Feldern). Blau = bleibt, grau
+  mit Kreuz = fällt weg / Dach-Ecke hoch (`editTileSelectedColor`), Rampe: Weg kräftig blau
+  (`editTilePathColor`), die anderen Felder grau.
 - Grafik: fertige Teile → InstancedMesh je (Form, Material, Risse); Form = Typ bzw. bei
-  editierten Teilen (Art, Rampen-Richtung, Edit-Maske) – jede Edit-Form wird einmal gebaut und
+  editierten Teilen (Art, Rampen-Richtung, `pieceEditKey`: Maske bzw. Rampen-Weg) – jede Edit-Form wird einmal gebaut und
   geteilt (gilt bis `clear()`); im Aufbau und Trümmer → einzelne Meshes. Risse/Dunkelheit nach
   `pieceHealthFraction(piece)` (pieces.js; im Aufbau gemessen am jetzt möglichen Leben
   `pieceHealthCap`, ein neues Teil ist also heil). Vorschau/Edit-Kacheln nur für `game.player`;
@@ -620,7 +642,11 @@ Jeder Modus:
   `pollPauseButton()` (nur Start-/Pause-Bildschirm: Controller-Start neu gedrückt?),
   `sample(dt)` → `{ held, pressed, released, lookDX, lookDY, moveAxisX, moveAxisZ, lookAxisX,
   lookAxisY, wheel, device, dt }` (wiederverwendetes Objekt; Aktions-Namen = Tasten-Aktionen aus
-  config.js + `sprint` + `toggleBuild`). Virtuell: `setVirtual(action, down)`, `addLook(dx, dy)`,
+  config.js + `sprint` + `toggleBuild`). Drückt man dieselbe Taste mehrmals zwischen zwei Logik-
+  Schritten (z. B. G – Klick – G bei wenig Bildern pro Sekunde oder einem Ruckler), merkt sich die
+  Eingabe bis zu `CONFIG.controls.queuedPresses` Drücker/Loslasser und gibt je `sample()` EINEN ab
+  (nächster Drücker im nächsten Schritt) – sonst ginge das bestätigende G eines Doppel-Edits verloren.
+  Virtuell: `setVirtual(action, down)`, `addLook(dx, dy)`,
   `setMoveAxis(x, z)`, `setLookAxis(x, y)`. Schalter: `playing` (Spiel-Tasten blockieren),
   `gamepadBuildMode`, `allowMouseWithoutLock`, `lookWithoutLock` (Notlösung ohne Maus-Sperre).
   Rückrufe: `onLockChange(locked)`, `onLockError(err)`. Die Aktion `pause` (Esc, Controller-Start)
