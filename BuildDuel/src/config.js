@@ -343,8 +343,8 @@ export const CONFIG = deepFreeze({
     wallPushGap: 0.01,
 
     // --- Edit und Türen ---
-    editReach: 7, // G: so weit (m) darf das Bauteil vom Fadenkreuz-Anfang weg sein // SCHÄTZUNG
-    editMaxDistance: 10, // entfernt man sich weiter vom editierten Teil, schließt der Edit
+    editReach: 1.75 * CELL, // G: so weit (m, ca. 9 m) darf das Bauteil vom Fadenkreuz-Anfang weg sein – wächst mit dem Raster // SCHÄTZUNG
+    editMaxDistance: 2.5 * CELL, // entfernt man sich weiter (ca. 12,8 m) vom editierten Teil, schließt der Edit
     useReach: 4.5, // E: Tür, auf die man schaut, bis so weit (m) // SCHÄTZUNG
     doorNearDistance: 2.2, // … oder die nächste Tür, wenn man so nah (m) davor steht
     doorOpenTime: 0.2, // so lange (s) schwingt die Tür auf/zu (nur Grafik – Durchgang sofort frei)

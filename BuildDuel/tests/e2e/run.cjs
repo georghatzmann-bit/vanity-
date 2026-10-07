@@ -302,9 +302,10 @@ const GAME_CHECKS = [
       const r = await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
         buildDuel.input.setVirtual('moveForward', true);
-        buildDuel.simulate(0.9);
+        // vom Turm-Mittelpunkt bis über die Kante: eine Zelle (Turm ist 2 Zellen breit) + ein Schritt
+        buildDuel.simulate((buildDuel.CONFIG.world.gridCellSize + 1) / buildDuel.CONFIG.player.walkSpeed);
         buildDuel.input.setVirtual('moveForward', false);
-        buildDuel.simulate(2);
+        buildDuel.simulate(2.5);
         const fd = buildDuel.CONFIG.player.fallDamage;
         const expected = (buildDuel.CONFIG.modes.practice.towerHeight - fd.safeHeight) * fd.damagePerMeter;
         return { health: p.health, shield: p.shield, y: p.position.y, expected };
@@ -814,7 +815,7 @@ const GAME_CHECKS = [
         await page.click('#play-nolock');
         await page.waitForTimeout(300);
         await page.evaluate(() => buildDuel.manualStep(true));
-        const before = await page.evaluate(() => ({ state: buildDuel.state, yaw: buildDuel.game.player.yaw }));
+        const before = await page.evaluate(() => ({ state: buildDuel.state, yaw: buildDuel.game.player.yaw, z: buildDuel.game.player.position.z }));
         await page.mouse.move(640, 360);
         await page.mouse.move(740, 360, { steps: 5 });
         await page.keyboard.down('KeyW');
@@ -825,7 +826,7 @@ const GAME_CHECKS = [
         await page.keyboard.up('KeyW');
         ctx.assert(before.state === 'playing', `spielt ohne Sperre: ${before.state}`);
         ctx.assert(Math.abs(after.yaw - before.yaw) > 0.05, `Maus dreht: ${before.yaw.toFixed(2)} → ${after.yaw.toFixed(2)}`);
-        ctx.assert(after.z < 21, `W läuft: z=${after.z.toFixed(2)}`);
+        ctx.assert(after.z < before.z - 1, `W läuft: z=${before.z.toFixed(2)} → ${after.z.toFixed(2)}`);
       } finally {
         await page.close();
       }
