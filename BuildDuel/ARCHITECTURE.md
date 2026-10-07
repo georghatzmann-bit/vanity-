@@ -548,7 +548,11 @@ voll → das älteste Teilchen wird ersetzt. Grafik "niedrig"/"mittel" → `effe
 ## 10. Modi (src/modes/)
 
 `src/modes/index.js` enthält die Liste `MODES`: `{ id, name, description, create(game, options), hidden? }`,
-dazu `getModeDef(id)` und `DEFAULT_MODE_ID` (`'practice'`, bis es ein Hauptmenü gibt).
+dazu `getModeDef(id)` und `DEFAULT_MODE_ID` (`'practice'` – Ersatz, wenn `?mode=` einen unbekannten Modus nennt).
+Welle 5: `lobbyModes()` liefert die Kacheln der Lobby in der Reihenfolge `CONFIG.lobby.modeOrder`
+(`{ id, name, description, available }`; was es noch nicht gibt → `available: false`, grau mit „bald“),
+`LOBBY_DEFAULT_MODE_ID` = `CONFIG.lobby.defaultMode` (`'creative'`). Modi bekommen aus dem Spind
+`options.skin` und `options.pickaxe` und geben beides an `addCharacter` weiter.
 `hidden: true` = Test-Modus für Entwickler (Welle 3b: `sandbox-island`, `sandbox-arena`, `sandbox-zonewars`
 in `modes/sandbox.js`) – das Hauptmenü zeigt diese nicht an; Start über `?mode=sandbox-island`.
 
@@ -583,8 +587,9 @@ Jeder Modus:
 
 - `core/settings.js`: `loadSettings()`, `saveSettings(s)`, `defaultSettings()`, `resetSettings()`.
   Form: `{ controls: { keyboard: { action: [codes] }, crouchOnCtrl, crouchToggle, editOnRelease, resetEditAfterConfirm, aimAssist }, sensitivity: { x, y, aim, sniper, build, edit, invertY }, graphics: { quality, resolutionScale, viewDistance, showFps }, audio: { master, effects, music }, game: { playerName, botDifficulty, damageNumbers } }`.
-- `core/progress.js`: `loadProgress()`, `saveProgress(p)`, `addMatchResult(p, result)`.
-  Form: `{ trophies, coins, xp, passTier, owned: { skins: [], hats: [], pickaxes: [], emotes: [] }, equipped: { skin, hat, pickaxe, emote }, matches, wins }`.
+- `core/progress.js`: `loadProgress()`, `saveProgress(p)`, `addMatchResult(p, result)` (Details §11e).
+  Form: `{ trophies, coins, xp, passTier, owned: { skins: [], hats: [], pickaxes: [], emotes: [] }, equipped: { skin, hat, pickaxe, emote }, matches, wins, playSeconds, piecesBuilt, lastMode }`
+  (`hat` bleibt `null` – der Hut gehört zum Skin).
 - Schlüssel im localStorage: `buildduel.settings.v1`, `buildduel.progress.v1`. Lesen/Schreiben immer mit try/catch.
 - Welle 1: `loadSettings(storage?)`, `saveSettings(s, storage?)`, `resetSettings(storage?)` nehmen zum
   Testen einen Speicher-Ersatz. Gespeichertes wird über die Standardwerte gelegt; unbekannte Felder
@@ -828,6 +833,74 @@ Kamera: Im `'freefall'`/`'glide'` fährt die Schulter-Kamera langsam auf `CONFIG
 `{ bots, skipVehicle, stormAutoStart, mapSeed }`), `sandbox-arena`, `sandbox-zonewars`. Browser-Prüfungen:
 `tests/e2e/worldChecks.cjs` (in `GAME_CHECKS` eingehängt, Namen beginnen mit "Welt:", `--grep Welt`).
 
+## 11e. Lobby, Menüs, Fortschritt, Kreativ (Welle 5)
+
+**Ablauf (main.js, Zustände in `ui/menuLogic.js`):**
+`'loading'` → `'lobby'` → (SPIELEN) `'start'` → `'playing'` ⇄ `'paused'` → `'lobby'`.
+`canTransition(from, to)` sagt, was erlaubt ist; `'start'` = Spiel geladen, wartet auf die Maus-Sperre
+(Klick). `?mode=<id>` springt vom Laden direkt nach `'start'` (Tests/Entwicklung, keine Lobby).
+SPIELEN: kurze Blende (`CONFIG.lobby.transition`), `startMode(modeId)`, dann sofort `requestPointerLock()`
+im Klick-Zeitfenster. Esc/Maus-Sperre weg → `'paused'` (Pause-Fenster: Weiter, Einstellungen,
+„Alle Bauteile löschen“ nur im Kreativ-Modus (`overlayButtons(state, modeId)`), Zurück zur Lobby).
+Zurück zur Lobby: `game.dispose()`, `game = null`, Lobby-Bühne + Menü + Menü-Musik wieder an.
+In der Lobby rechnet keine Spiel-Logik; nur `lobby.frameUpdate(dt)` + Bild.
+
+**Ladebildschirm** (index.html + menus.css): `window.setLoadingProgress(fraction, text)` – main.js meldet
+echte Schritte (Grafik, Himmel, Lobby, Vorschau-Bilder, erstes Bild); bis main.js da ist, kriecht der
+Balken bis 30 %. Wechselnde deutsche Tipps.
+
+**Module:**
+- `world/lobbyScene.js` – `createLobbyScene({ scene, camera, renderer, element })` → `{ character, view,
+  angle, visible, setSkin(id), setPickaxe(id|null), playEmote(motion, s), faceCamera(), setLayout(),
+  placeCamera(), frameUpdate(dt), prepareThumbnails([[kind, entries]]), thumbnails(kind, entries) → Map(id →
+  dataURL), setVisible(on), dispose() }`. Podest, Kulisse, eigene Uhr; benutzt nur `Character` +
+  `createCharacterView` (Figuren-Aussehen gehört der Figuren-Welle) und `cosmetics.createPickaxeMount`.
+- `world/cosmetics.js` – Spind-Aussehen ohne Änderungen an fremden Modellen: `createPickaxeMount(id)`
+  (mit `CONFIG.pickaxes.list` = eigene Formen aus models.js, sonst Standard-Hacke umgefärbt nach
+  `CONFIG.cosmetics.pickaxes`), `stylePickaxe/unstylePickaxe`, `pickaxeStyle(id)` (null bei Formen-Liste),
+  `emoteMotion(id)`, `applyEmoteMotion(root, motion, age)`, `createCosmeticsSystem(game)` (game.systems,
+  nur frameUpdate; liest `character.cosmetics = { pickaxe, emote }`).
+- `ui/menus.js` + `ui/menus.css` + `ui/menuIcons.js` (Inline-SVG) – `createMenus({ root, settings, progress,
+  lobby, audio, onPlay(modeId), openSettings, isSettingsOpen, settingsNavigate, saveProgress, saveSettings })`
+  → `{ showLobby(), hide(), back(), fade(on), toast(text), setMode(id), openPicker(), selectKind(kind),
+  refresh(), frameUpdate(), moveFocus(dir), screen, selectedMode, visible, debugState() }`.
+  Bildschirme: Lobby, Spind, Shop (gleiche Sammlung, Reiter Skins/Spitzhacken/Emotes), Modus-Auswahl,
+  Kauf-Bestätigung, Namens-Feld. Bedienung: Maus, Pfeile/Enter/Esc, Controller (Steuerkreuz/Stick, A, B)
+  über `pickNeighbor()`. Klick-Töne `audio.ui('click'|'confirm'|'back'…)`, Musik `audio.playMusic('menu')`
+  in der Lobby, `stopMusic()` beim Spielstart.
+- `ui/settings.js` + `ui/settings.css` – `createSettingsWindow({ root, settings, onApply(area), onSave, audio,
+  onClose })` → `{ element, open(tab?), close(), isOpen, tab, navigate(dir), capturing }`. Reiter Steuerung (alle Aktionen
+  aus `settingsActions()`, je 2 Felder, Taste/Maustaste/Mausrad über `eventToCode`, Konflikte rot über
+  `findKeyConflicts`, „Auf Standard“, Ducken halten/umschalten, Ducken auf Strg, Edit beim Loslassen,
+  Edit zurücksetzen), Empfindlichkeit (X, Y, Zielen, Sniper, Bauen, Edit, Y umkehren), Grafik (Qualität,
+  Auflösung 50–100 %, Sichtweite, FPS-Anzeige), Ton (Gesamt, Effekte, Musik), Spiel (Schadenszahlen,
+  Controller-Zielhilfe, Bot-Schwierigkeit). Jede Änderung: `onSave()` + `onApply(area)`; main.js wendet
+  sofort an (`input.applySettings`, `hud.applySettings`, `audio.setVolumes`, Auflösung/FPS-Anzeige);
+  Qualität und Sichtweite gelten nach dem Neuladen (Hinweis + Knopf im Fenster).
+- `ui/menuLogic.js` – reine Logik (getestet): `MENU_STATES`, `canTransition`, `overlayButtons`,
+  `ACTION_GROUPS`/`settingsActions`, `findKeyConflicts(keyboard, { crouchOnCtrl })` (Map Taste → Aktionen,
+  `CONFIG.controls.allowedSharedKeys` erlaubt), `rebind(keyboard, action, index, code|null)`,
+  `eventToCode(event)`, `pickNeighbor(rect, rects, dir)`.
+
+**Fortschritt (`core/progress.js`, reine Logik):** `PROGRESS_KEY`, `defaultProgress()`, `sanitizeProgress(obj)`,
+`loadProgress(storage?)`, `saveProgress(p, storage?)`, `resetProgress(storage?)` (try/catch, kaputt → Standard,
+unbekannte Sachen fallen weg, angezogen nur, was man besitzt). Level: `xpForLevel(n)` = `levelXpBase +
+levelXpStep·(n−1)` XP für n → n+1, `levelInfo(totalXp)` → `{ level, xpIntoLevel, xpForNext, fraction, maxed }`, `addXp(p, xp)` →
+`{ level, levelsGained, coinsGained }` (`coinsPerLevel` je Level). Katalog: `catalog(kind)` →
+`[{ id, name, kind, tier, tierName, color, price, data }]` – Skins aus `CONFIG.skins.list` (Preis nach
+Listen-Platz `cosmetics.skinTiers`, Standard-Skin gratis), Spitzhacken aus `CONFIG.pickaxes.list` falls
+vorhanden (`pickaxeForms()`, Stufe `cosmetics.pickaxeTiers`), sonst `CONFIG.cosmetics.pickaxes`, Emotes aus
+`CONFIG.cosmetics.emotes`. `canBuy` → `{ ok, reason: 'owned'|'coins'|'unknown' }`, `buyItem`, `equipItem`,
+`isOwned`, `equippedItems(p)`. Start: `startCoins` Münzen + alle Gratis-Sachen. `createPlayRewards(game, p,
+{ onChange })` (game.systems): XP pro gespielter Minute und pro 100 gebauten Bauteilen (Kreativ, Übungsplatz).
+
+**Kreativ-Modus (`modes/creative.js`, id `'creative'`):** Arena `CONFIG.modes.creative.arenaSize` (200 m),
+unendlich Material (`infiniteMaterials`), alle Waffen + Heil-Items und Zielpuppen über
+`createPracticeRange` (Munition unendlich), `mode.stats = { total, perSecond, best, cleared }`
+(Bauteile/s = eigene `piecePlaced` im Fenster `piecesPerSecondWindow`, fester Ring-Speicher),
+`mode.clearAll()` (Aktion `clearBuilds`, Taste P, oder Pause-Knopf), Neustart am Startpunkt nach
+`respawnDelay` s oder unter `fallRespawnY`. HUD über `hudInfo().extra`.
+
 ## 12. Testen
 
 - **Einheiten-Tests** (`tests/*.test.js`, in `tests/tests.html` eingetragen): reine Logik.
@@ -838,7 +911,9 @@ Kamera: Im `'freefall'`/`'glide'` fährt die Schulter-Kamera langsam auf `CONFIG
   Spieler): startet `tools/server.py`, öffnet Spiel und Tests im echten Browser, prüft
   Konsole, macht Screenshots, steuert Spielszenen über `window.buildDuel`.
 - `window.buildDuel` (Debug-Zugang im Browser): `{ game, startMode(id, options), simulate(seconds), input, CONFIG,
-  settings, play(), pause(), manualStep(on), state, modeId, frames, ticks, renderer, scene, camera }`.
+  settings, play(), pause(), manualStep(on), state, modeId, frames, ticks, renderer, scene, camera }`;
+  Welle 5 dazu: `progress, lobby, menus, settingsWindow, audio, quality, showLobby()`. `game` ist in der
+  Lobby `null`; `state` ist einer der Zustände aus §11e.
   `play()` spielt ohne Maus-Sperre (Tests), `manualStep(true)` hält die Spielschleife an
   (Bilder laufen weiter, Logik nur noch über `simulate`).
 - `tests/e2e/run.cjs`: neue Prüfungen als Eintrag in `GAME_CHECKS` anhängen
@@ -847,6 +922,7 @@ Kamera: Im `'freefall'`/`'glide'` fährt die Schulter-Kamera langsam auf `CONFIG
   `--grep text` führt nur Prüfungen aus, deren Name passt (z. B. `--grep "Bauen|Edit"`).
 - Modi dürfen `helpHint` (Text) haben – das HUD zeigt ihn unten in der Steuerungs-Hilfe (Taste H).
 - URL-Schnellstart (für Tests/Entwicklung): `index.html?mode=duel&bots=hard&seed=1` überspringt das Menü.
+  Ohne `?mode` startet die Lobby. Die Lobby-Prüfungen stehen in `tests/e2e/lobbyChecks.cjs` (`--grep Lobby`).
 
 ## 13. Wer besitzt welche Dateien (Entwicklungs-Wellen)
 
@@ -863,5 +939,5 @@ Abschlussbericht genannt.
 | 3b Welt (9 Teil) | world/storm.js, world/loot.js, world/lootView.js, world/mapArena.js, world/mapIsland.js, world/mapZoneWars.js, world/terrain.js, world/staticBatch.js, world/props.js, world/houses.js, world/spawnPoints.js, world/jumpVehicle.js, world/skydive.js (Gleiter/Freifall über registerMoveStateHandler), modes/sandbox.js, tests/world.test.js, tests/scenario/world.test.js, tests/e2e/worldChecks.cjs |
 | 4a Bots (7) | ai/bot.js |
 | 4b Modi (8–10) | modes/* |
-| 5 Menüs (11) | ui/menus.js, ui/settings.js, ui/touch.js, core/progress.js, main.js-Ablauf |
+| 5 Menüs (11) | ui/menus.js, ui/menus.css, ui/menuIcons.js, ui/menuLogic.js, ui/settings.js, ui/settings.css, ui/touch.js, core/progress.js, world/lobbyScene.js, world/cosmetics.js, modes/creative.js, main.js-Ablauf, index.html (Ladebildschirm), tests/e2e/lobbyChecks.cjs (dazu klein: modes/index.js lobbyModes, practice.js Skin/Spitzhacke, Taste clearBuilds in config) |
 | 6 Feinschliff (12) | alles, nach Prüfung |

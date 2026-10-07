@@ -2,7 +2,7 @@
 
 Ein Browser-Spiel zum Schießen und Bauen aus der Schulter-Perspektive – angelehnt an das Spielgefühl des alten Browser-Spiels 1v1.LOL. Alles ist selbst gemacht (eigene Formen, Farben und Töne). Es werden keine Original-Grafiken, -Sounds oder -Namen benutzt.
 
-**Stand: Phase 2 von 12** – eine bunte Comic-Figur läuft, springt und duckt sich auf einem Übungsplatz. Die Kamera schaut über die Schulter und geht nie durch Wände.
+**Stand:** Lobby (Hauptmenü) mit Spind, Shop und Einstellungen, **Kreativ-Modus** (frei bauen mit unendlich Material) und Übungsplatz. Bauen, Editieren, Waffen, HUD, Ton und die Welt sind fertig; Bots und die Wettkampf-Modi (Duell, Battle Royale …) folgen.
 
 ## Starten in 5 Schritten
 
@@ -24,7 +24,7 @@ Ein Browser-Spiel zum Schießen und Bauen aus der Schulter-Perspektive – angel
 
 4. **Spielen.**
    Der Browser öffnet sich von selbst mit <http://localhost:8000>. Das schwarze Fenster dabei **offen lassen** – es ist der kleine Server, der das Spiel ausliefert.
-   *Geklappt, wenn:* Du eine bunte Figur von hinten, bunte Kisten und Rampen und in der Mitte den gelben Knopf **„Klicken zum Spielen“** siehst. Klick darauf – dann kannst du laufen (Steuerung siehe unten).
+   *Geklappt, wenn:* Erst ein blauer Ladebildschirm mit gelbem Balken erscheint und danach die **Lobby**: deine Figur dreht sich in der Mitte auf einem Podest, rechts unten steht der große gelbe Knopf **„SPIELEN“** (Modus „Kreativ“ ist schon gewählt). Klick auf **SPIELEN** – dann bist du im Spiel und kannst laufen und bauen (Steuerung siehe unten).
 
 5. **Beenden.**
    Browser-Tab schließen und das schwarze Fenster schließen.
@@ -33,9 +33,50 @@ Kein Python? `start.bat` benutzt auch Node.js, falls das installiert ist.
 
 **Bei jeder neuen Phase:** neue ZIP-Datei laden (Schritt 2), entpacken und `start.bat` im neuen Ordner starten. Deine Einstellungen bleiben erhalten, solange das Spiel unter <http://localhost:8000> läuft.
 
-## Steuerung (Phase 2)
+## Lobby, Spind, Shop und Einstellungen
 
-Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel festgehalten (der Mauszeiger verschwindet) und die Maus dreht die Kamera.
+Nach dem Laden landest du in der **Lobby**:
+
+| Wo | Was |
+|---|---|
+| Mitte | deine Figur auf dem Podest – mit der Maus ziehen dreht sie |
+| oben links | dein **Name** (anklicken = umbenennen, wird gespeichert), **Level** und **XP-Balken** |
+| oben rechts | **Pokale**, **Münzen** und das **Zahnrad** (Einstellungen) |
+| links | **Shop** (Sachen mit Spiel-Münzen kaufen – kein echtes Geld) und **Spind** (Skin, Spitzhacke, Emote anziehen) |
+| rechts unten | **Modus** (anklicken = wechseln; „Kreativ“ und „Übungsplatz“ gehen, graue Modi mit „bald“ kommen später), **Solo/Duo** (Duo kommt bald) und **SPIELEN** |
+
+- **Spind:** Reiter Skins / Spitzhacken / Emotes. Anklicken zeigt die Sache auf dem Podest, **Anziehen** übernimmt sie. Gesperrte Sachen zeigen ein Schloss und den Preis.
+- **Shop:** Sache wählen → **Kaufen** → im Fenster **Kaufen** bestätigen. Du startest mit 1.500 Münzen; jedes neue Level bringt 150 Münzen. XP gibt es fürs Spielen (pro Minute) und fürs Bauen (pro 100 Bauteile).
+- **Bedienung ohne Maus:** Pfeiltasten wandern über die Knöpfe, **Enter** drückt, **Esc** geht zurück. Mit Controller: Steuerkreuz/Stick, **A** = drücken, **B** = zurück.
+- Der zuletzt gewählte Modus und alles Gekaufte bleiben gespeichert (im Browser).
+
+**Im Spiel** gibt **Esc** die Maus frei und öffnet das **Pause-Menü**: Weiter, Einstellungen, (im Kreativ-Modus) Alle Bauteile löschen, Zurück zur Lobby.
+
+**Einstellungen** (Zahnrad in der Lobby oder im Pause-Menü) – alles wird sofort gespeichert:
+
+| Reiter | Was |
+|---|---|
+| Steuerung | jede Taste neu belegen (Feld anklicken, dann Taste, Maustaste oder Mausrad drücken; Entf löscht). Doppelt belegte Tasten werden **rot**. „Auf Standard“ setzt alles zurück. Ducken halten/umschalten, Ducken auf Strg, Edit beim Loslassen bestätigen, Edit nach Bestätigen zurücksetzen |
+| Empfindlichkeit | Maus X und Y, Zielen, Zielfernrohr, Baumodus, Edit-Modus, Y-Achse umkehren |
+| Grafik | Qualität (gilt nach dem Neuladen – Knopf „Jetzt neu laden“), Auflösung 50–100 % (sofort), Sichtweite (nach dem Neuladen), FPS-Anzeige |
+| Ton | Gesamt, Effekte, Musik (sofort hörbar) |
+| Spiel | Schadenszahlen, Controller-Zielhilfe, Bot-Schwierigkeit |
+
+## Der Kreativ-Modus
+
+Der Standard-Modus der Lobby: eine große, flache Wiese (200 × 200 m) zum freien Bauen und Üben.
+
+- **Unendlich Material** – Holz, Stein und Metall gehen nie aus.
+- **Alle Waffen und Heil-Items** auf den Plätzen 1–5, Munition unendlich. **Zielpuppen** stehen an der Seite, Baum/Fels/Auto zum Abbauen mit der Spitzhacke.
+- Oben in der Mitte: **Bauteile/s** (wie viele Teile du in der letzten Sekunde gesetzt hast, mit Rekord) und **Bauteile** gesamt.
+- **P** (oder im Pause-Menü „Alle Bauteile löschen“) räumt alle Bauteile weg.
+- Fällst du aus der Welt oder wirst besiegt, stehst du nach 2 Sekunden wieder am Startpunkt.
+
+Schnellstart ohne Lobby (für Tests): <http://localhost:8000/?mode=creative> bzw. `?mode=practice`.
+
+## Steuerung
+
+Im Spiel einmal ins Bild klicken (bzw. nach **SPIELEN** passiert das von selbst). Dann wird die Maus im Spiel festgehalten (der Mauszeiger verschwindet) und die Maus dreht die Kamera.
 
 | Was | Taste |
 |---|---|
@@ -45,7 +86,8 @@ Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel fest
 | Ducken | **Shift** gedrückt halten (linke oder rechte Shift-Taste) |
 | Zielen (Kamera fährt näher ran) | **rechte Maustaste** gedrückt halten |
 | Tanzen | **B** |
-| Pause (Maus freigeben) | **Esc** – danach wieder auf „Klicken zum Weiterspielen“ |
+| Pause-Menü (Maus freigeben) | **Esc** – „Weiter“ spielt weiter |
+| Alle Bauteile löschen (Kreativ) | **P** |
 | Alle Tasten auf einen Blick | **H** (nochmal **H** schließt die Hilfe) |
 
 **Bauen und Editieren (Phase 3 und 4):**
@@ -64,11 +106,11 @@ Erst auf **„Klicken zum Spielen“** klicken. Dann wird die Maus im Spiel fest
 
 Controller (Xbox/PlayStation) gehen auch: linker Stick laufen, rechter Stick umschauen, A/Kreuz springen, R3 ducken, L2 zielen, **Start/Options** = Pause und wieder weiterspielen. Bauen mit Controller: **B/Kreis** schaltet den Baumodus an, dann R2 Wand, L2 Rampe, R1 Boden, L1 Dach, R3 dreht. Edit: Steuerkreuz unten, R2 wählt Felder, L2 setzt zurück, Steuerkreuz unten bestätigt.
 
-Die Tasten-Belegung kann man in Phase 11 im Menü ändern. Bis dahin steht sie in `src/config.js` (Abschnitt `controls`).
+Alle Tasten kannst du in den **Einstellungen → Steuerung** ändern. Die Standard-Belegung steht in `src/config.js` (Abschnitt `controls`).
 
 ## Der Übungsplatz
 
-Das Spiel startet auf einem Übungsplatz (80 × 80 m mit Mauer rundherum). Probier die Stationen aus:
+Den Übungsplatz wählst du in der Lobby unter **Modus** (oder direkt mit <http://localhost:8000/?mode=practice>): 80 × 80 m mit Mauer rundherum. Probier die Stationen aus:
 
 - **Drei Kisten (0,3 m / 1 m / 2 m):** Auf die kleine läufst du einfach hinauf. Auf die 1-m-Kiste kommst du nur mit Springen, auf die 2-m-Kiste gar nicht.
 - **Wand (4 m):** Stell dich mit dem Rücken dicht davor und dreh dich – die Kamera geht nie durch die Wand, und deine Figur steht nie vor dem Fadenkreuz.
@@ -148,7 +190,7 @@ Auf dem Übungsplatz: **4 nochmal** drücken wechselt zu Pistole und Granatwerfe
 
 **H** öffnet eine Übersicht aller Tasten (nochmal **H** schließt sie). Sie zeigt immer die gerade gültige Belegung.
 
-**Ton:** Alle Geräusche werden im Browser erzeugt (keine Sound-Dateien): Schritte (Gras klingt anders als ein Holz-, Stein- oder Metallboden), Springen und Landen, Bauteile setzen (Holz „klock“, Stein dumpf, Metall „kling“) und zerbrechen, jede Waffe eigen, Nachladen, ein heller „Ping“ bei Treffern (Kopfschuss höher), Schild zerbricht (Glas-Klirren), Spitzhacke, Heilen, Sturm-Brummen und eine Sieg-Fanfare. Gegner hörst du aus ihrer Richtung und leiser, je weiter weg sie sind – so hörst du auch, wo jemand baut. Der Ton startet erst nach dem ersten Klick (das verlangen alle Browser). Lautstärken stehen in `src/config.js` unter `audio` (später im Menü).
+**Ton:** Alle Geräusche werden im Browser erzeugt (keine Sound-Dateien): Schritte (Gras klingt anders als ein Holz-, Stein- oder Metallboden), Springen und Landen, Bauteile setzen (Holz „klock“, Stein dumpf, Metall „kling“) und zerbrechen, jede Waffe eigen, Nachladen, ein heller „Ping“ bei Treffern (Kopfschuss höher), Schild zerbricht (Glas-Klirren), Spitzhacke, Heilen, Sturm-Brummen und eine Sieg-Fanfare. Gegner hörst du aus ihrer Richtung und leiser, je weiter weg sie sind – so hörst du auch, wo jemand baut. Der Ton startet erst nach dem ersten Klick (das verlangen alle Browser). Lautstärken stellst du in den **Einstellungen → Ton** ein (Standardwerte in `src/config.js` unter `audio`). In der Lobby läuft leise Menü-Musik.
 
 **Effekte:** Splitter in Holz-, Stein- oder Metallfarbe bei Treffern auf Bauteile, Trümmer und Staub beim Zerstören und Einstürzen, Funken bei Einschlägen, Rauch und Glut bei Explosionen, Späne beim Sammeln mit der Spitzhacke, blaue Scherben, wenn ein Schild bricht, Staub bei harten Landungen. Bei Grafik „niedrig“ gibt es weniger Teilchen.
 
@@ -196,9 +238,9 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 - Nach dem Ändern: Datei speichern, im Browser **F5** drücken. Danach am besten die Tests öffnen – sie melden, wenn Werte nicht mehr zusammenpassen.
 - Kommazahlen immer mit **Punkt** schreiben (`8.4`, nicht `8,4`). Sonst meldet das Spiel „Tippfehler in src/config.js (Zeile …)“.
 
-**Ruckelt es?** In `src/config.js` die Zeile `quality: 'hoch'` auf `'mittel'` oder `'niedrig'` ändern.
+**Ruckelt es?** In den **Einstellungen → Grafik** die Qualität auf „Mittel“ oder „Niedrig“ stellen (oder die Auflösung senken).
 
-**Maus zu schnell oder zu langsam?** In `src/config.js` unter `sensitivity` den Wert `x` (links/rechts) und `y` (hoch/runter) ändern, z. B. `0.7` = langsamer, `1.5` = schneller.
+**Maus zu schnell oder zu langsam?** **Einstellungen → Empfindlichkeit**: X (links/rechts) und Y (hoch/runter), z. B. `0,7` = langsamer, `1,5` = schneller.
 
 ## Probleme und Lösungen
 
@@ -212,9 +254,10 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 | „Windows sperrt Port 8000 …“ | Kein Problem, das Spiel läuft dann auf einem anderen Port (steht im Fenster). |
 | Kasten „Tippfehler in src/config.js (Zeile …)“ | In `config.js` an dieser Zeile nachsehen. Meist: Komma statt Punkt bei einer Zahl oder ein fehlendes Komma am Zeilenende. |
 | Kasten mit rotem Rand: „Dein Browser kann gerade keine 3D-Grafik …“ | Browser aktualisieren. In den Browser-Einstellungen „Hardwarebeschleunigung verwenden“ einschalten, Browser neu starten. |
-| FPS-Zahl ist orange oder rot | Grafik auf `'mittel'` stellen (siehe oben). Laptop ans Netzteil hängen. |
+| FPS-Zahl ist orange oder rot | Einstellungen → Grafik: Qualität „Mittel“ (siehe oben). Laptop ans Netzteil hängen. |
 | „Die Maus konnte nicht gesperrt werden“ | Nach **Esc** braucht der Browser etwa 1 Sekunde Pause. Kurz warten, dann nochmal klicken. Klappt es mehrmals nicht: Seite mit **F5** neu laden oder Chrome/Edge benutzen. Notfalls erscheint der Knopf **„Ohne Maus-Sperre spielen“** – dann bleibt der Mauszeiger sichtbar und dreht die Kamera nur, solange er im Fenster ist. |
-| Die Figur läuft nicht, obwohl ich W drücke | Erst auf „Klicken zum Spielen“ klicken. Steht „Pausiert“ da, nochmal klicken. |
+| Die Figur läuft nicht, obwohl ich W drücke | In der Lobby erst **SPIELEN** drücken. Steht „Pausiert“ da, auf **Weiter** klicken. |
+| Einstellungen/Münzen sind weg | Sie stehen im Browser-Speicher von `http://localhost:8000`. Ein anderer Port (8001 …) oder „Browserdaten löschen“ fängt neu an. |
 | Tab ist plötzlich zu | **Strg + W** schließt im Browser den Tab – das kann kein Spiel verhindern. Darum liegt Ducken auf Shift und nicht auf Strg. |
 | Irgendein anderer Kasten mit rotem Rand | Screenshot machen und an Claude schicken. |
 | Beim Beenden mit Strg + C fragt das Fenster „Batchvorgang abbrechen (J/N)?“ | `J` drücken. Das ist normal. |
@@ -228,22 +271,25 @@ BuildDuel/
   lib/                  Three.js 0.186.1 (3D-Bibliothek, liegt lokal → läuft ohne Internet)
   src/
     config.js           ALLE Spielwerte
-    main.js             Start, "Klicken zum Spielen", Pause, Spielschleife
+    main.js             Start, Ladebildschirm, Lobby → Spiel → Pause → Lobby, Spielschleife
     loop.js             feste Spiel-Uhr (60 Logik-Schritte pro Sekunde)
-    core/               Spiel (game.js), Ereignisse (events.js), Einstellungen (settings.js)
+    core/               Spiel (game.js), Ereignisse (events.js), Einstellungen (settings.js),
+                        Fortschritt: Münzen, Level, Shop, Spind (progress.js)
     input.js            Tastatur, Maus (Maus-Sperre), Controller
     playerController.js macht aus Tasten + Maus einen Befehl für die Figur
     player.js           Figur: Laufen, Springen, Ducken, Rampen, Fallschaden
     physics.js          Kollision: Kisten, Rampen, Dächer, Boden, Strahlen
     camera.js           Schulter-Kamera (mit Wand-Schutz) und Vorschau-Kamera
-    modes/              Spielmodi (jetzt: Übungsplatz)
-    world/              Himmel, Licht, Karten (Arena, Insel, Zone Wars), Sturm, Loot, Ballon + Gleiter, Figuren-Grafik
+    modes/              Spielmodi (Kreativ, Übungsplatz, Test-Modi)
+    world/              Himmel, Licht, Karten (Arena, Insel, Zone Wars), Sturm, Loot, Ballon + Gleiter, Figuren-Grafik,
+                        Lobby-Bühne (lobbyScene.js), Spind-Aussehen (cosmetics.js)
     building/           Bauen: Raster + Zielwahl (grid.js), Formen/Bilder (pieces.js, view.js),
                         Edit + Türen (edit.js), Bau-System mit Halt/Einsturz (structure.js)
     weapons/            Waffen, Treffer, Geschosse, Waffen-Grafik
     ai/                 noch eine "Attrappe" – Bots kommen in Phase 7
     audio/sfx.js        alle Töne (erzeugt, keine Dateien), Raumklang, Menü-Musik
-    ui/                 HUD (hud.js, hud.css, Kill-Feed, Minimap), FPS-Anzeige, Aussehen (styles.css)
+    ui/                 HUD (hud.js, hud.css, Kill-Feed, Minimap), FPS-Anzeige, Aussehen (styles.css),
+                        Lobby/Spind/Shop (menus.js, menus.css), Einstellungen (settings.js, settings.css)
     util/random.js      Zufall mit Startwert (gleiches Muster bei jedem Start)
   tests/                automatische Tests (tests.html), Browser-Tests (e2e/)
   tools/                kleiner lokaler Server (Python oder Node.js)
@@ -263,7 +309,7 @@ BuildDuel/
 | 8 | Duell 1v1 | offen |
 | 9 | Battle Royale | offen |
 | 10 | Box Fight, Zone Wars, Freies Bauen, Aim Trainer, Deathmatch | offen |
-| 11 | Menüs, Einstellungen, Controller und Touch | offen |
+| 11 | Menüs, Einstellungen, Controller und Touch | Ladebildschirm, Lobby, Spind, Shop, Einstellungen, Pause-Menü, Kreativ-Modus fertig; Ergebnis-Bildschirm, Pass und Touch folgen |
 | 12 | Sound, Partikel, Feinschliff, Leistung | Sound + Partikel fertig, Feinschliff folgt |
 
 ## Technik (für Neugierige)
