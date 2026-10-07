@@ -22,7 +22,7 @@ import {
   shapeBottomAt, shapeOverlapsBox, shapeTopOverRect, selectTarget, createTarget, typeOfKind, tilesToMask,
   maskToTiles, isDoorMask, fullTileMask,
 } from './grid.js';
-import { pieceColliderSpecs, isDoorPiece, pieceCenter, pieceHealthCap } from './pieces.js';
+import { pieceColliderSpecs, isDoorPiece, pieceCenter, pieceHealthCap, isPieceEdited, isRampPath, rampPathFromMask, pathMask } from './pieces.js';
 import { createEditController } from './edit.js';
 import { createBuildingView } from './view.js';
 
@@ -43,7 +43,7 @@ export function createBuildingSystem(game) {
   const ownerCounts = new Map(); // Besitzer → Anzahl
   const constructing = new Set(); // Teile im Aufbau
   const doors = new Set(); // Teile, die gerade Türen sind
-  const editedPieces = new Set(); // Teile mit Löchern
+  const editedPieces = new Set(); // editierte Teile (Löcher, besondere Formen, Treppen, Dach-Ecken)
   const collapseQueue = []; // { piece, at, by }
   const states = new WeakMap(); // Figur → Bau-Zustand (Ziel, Abklingzeit …); entfernte Figuren fallen von selbst weg
   let generation = 1; // clearAll erhöht das → alte Zustände gelten als zurückgesetzt
@@ -319,8 +319,11 @@ export function createBuildingSystem(game) {
    * @param {string} key       Slot-Schlüssel (z. B. "wx:0:0:-1")
    * @param {object|null} owner  Figur oder null
    * @param {string} [material] 'wood' | 'stone' | 'metal'
-   * @param {object} [options] { dir (Rampe), edit (Feld-Liste), instant (gleich 100 %),
-   *                             force (keine Halt-/Figuren-Prüfung), charge (Material abziehen) }
+   * @param {object} [options] { dir (Rampe), edit (Feld-Liste: Wand/Boden = entfernte Felder,
+   *                             Dach = hochgezogene Ecken, Rampe = entfernte Felder → Weg wird
+   *                             daraus abgeleitet), editPath (Rampe: Weg, z. B. [0, 2, 3]),
+   *                             instant (gleich 100 %), force (keine Halt-/Figuren-Prüfung),
+   *                             charge (Material abziehen) }
    * @returns {object|null} Bauteil oder null (geht nicht)
    */
   function placePiece(type, key, owner = null, material = 'wood', options = {}) {
@@ -356,8 +359,8 @@ export function createBuildingSystem(game) {
       damageTaken: 0, // Schaden während des Aufbaus
       placedAt: game?.time ?? 0,
       edit: new Set(),
-      editMask: 0,
-      editDir: null, // Rampe: gewählte Richtung der halben Rampe (Edit), sonst null
+      editMask: 0, // Wand/Boden: entfernte Felder; Dach: hochgezogene Ecken; Rampe: Felder neben dem Weg
+      editPath: null, // Rampe: gezogener Weg (2–4 Felder, Reihenfolge = Richtung), sonst null
       doorOpen: false,
       doorChangedAt: -10,
       doorCollider: null,
@@ -385,12 +388,9 @@ export function createBuildingSystem(game) {
       piece.health = growthHealth(piece);
       constructing.add(piece);
     }
-    if (options.edit) {
-      piece.editMask = tilesToMask(options.edit) & fullTileMask(type);
-      if (piece.editMask === fullTileMask(type)) piece.editMask = 0;
-      if (type === 'ramp' && piece.editMask && Number.isInteger(options.editDir)) piece.editDir = ((options.editDir % 4) + 4) % 4;
-      piece.edit = new Set(maskToTiles(piece.editMask));
-      if (piece.editMask) editedPieces.add(piece);
+    if (options.edit || options.editPath) {
+      applyEditState(piece, tilesToMask(options.edit), options.editPath ?? null);
+      if (isPieceEdited(piece)) editedPieces.add(piece);
       if (isDoorPiece(piece)) doors.add(piece);
     }
 
@@ -549,19 +549,36 @@ export function createBuildingSystem(game) {
     }
   }
 
+  // Edit-Zustand setzen (ohne Kollision/Grafik). false = geht nicht (z. B. alle Felder weg).
+  function applyEditState(piece, mask, path) {
+    const full = fullTileMask(piece.type);
+    mask &= full;
+    if (piece.type === 'ramp') {
+      // Rampe: der Weg zählt; ohne Weg wird er aus den entfernten Feldern abgeleitet
+      if (!isRampPath(path)) path = mask ? rampPathFromMask(piece.dir, mask) : null;
+      if (mask && !path) return false; // kein gültiger Weg (z. B. nur 1 Feld)
+      piece.editPath = path ? [...path] : null;
+      piece.editMask = path ? full & ~pathMask(path) : 0;
+    } else {
+      if (mask === full) return false; // alle Felder weg (Dach: alle Ecken hoch) gibt es nicht
+      piece.editPath = null;
+      piece.editMask = mask;
+    }
+    piece.edit = new Set(maskToTiles(piece.editMask));
+    return true;
+  }
+
   /**
-   * Felder eines Teils entfernen (mask = entfernte Felder). 0 = ganzes Teil.
-   * editDir (nur Rampen): gewählte Richtung für eine halbe Rampe (siehe pieces.js), sonst null.
+   * Edit übernehmen. Wand/Boden: mask = entfernte Felder. Dach: mask = hochgezogene Ecken.
+   * Rampe: path = gezogener Weg (2–4 Felder, siehe pieces.js) – ohne Weg wird er aus
+   * mask (entfernte Felder) abgeleitet. mask 0 (und kein Weg) = ganzes Teil.
    */
-  function setEdit(piece, mask, editDir = piece.editDir ?? null) {
+  function setEdit(piece, mask, path = null) {
     if (piece.removed) return false;
-    mask &= fullTileMask(piece.type);
-    if (mask === fullTileMask(piece.type)) return false;
     const wasDoor = isDoorPiece(piece);
-    piece.editMask = mask;
-    piece.editDir = piece.type === 'ramp' && mask && Number.isInteger(editDir) ? ((editDir % 4) + 4) % 4 : null;
-    piece.edit = new Set(maskToTiles(mask));
-    if (mask) editedPieces.add(piece);
+    if (!applyEditState(piece, mask, path)) return false;
+    mask = piece.editMask;
+    if (isPieceEdited(piece)) editedPieces.add(piece);
     else editedPieces.delete(piece);
     const door = isDoorMask(piece.type, mask);
     if (door) {

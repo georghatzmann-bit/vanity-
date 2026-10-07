@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import {
   createSharedGeometry, createPieceGeometry, createDoorGeometry, createTileGeometries, createMaterialTexture, createGhostTexture,
-  pieceOrigin, pieceRotationY, doorRect, isDoorPiece, pieceHealthFraction,
+  pieceOrigin, pieceRotationY, doorRect, isDoorPiece, pieceHealthFraction, pieceEditKey,
 } from './pieces.js';
 import { CELL_SIZE as S, LEVEL_HEIGHT as H } from './grid.js';
 
@@ -43,8 +43,8 @@ export function createBuildingView(game) {
 
   /** Form eines Teils: gemeinsame Typ-Form (gedreht) oder geteilte Edit-Form (ungedreht). */
   function shapeOf(piece) {
-    const mask = piece.editMask | 0;
-    if (!mask) {
+    const editKey = pieceEditKey(piece);
+    if (!editKey) {
       _shape.key = piece.type;
       _shape.geometry = geometries[piece.type];
       _shape.rotationY = pieceRotationY(piece);
@@ -52,12 +52,14 @@ export function createBuildingView(game) {
       return _shape;
     }
     const dir = piece.type === 'ramp' ? ((piece.dir % 4) + 4) % 4 : 0;
-    const editDir = piece.type === 'ramp' ? piece.editDir ?? -1 : -1;
-    const key = `${piece.kind}|${dir}|${mask}|${editDir}`;
+    const key = `${piece.kind}|${dir}|${editKey}`;
     let geometry = editGeometries.get(key);
     if (!geometry) {
       // in Zelle (0, 0, 0) gebaut: Form und Bild-Koordinaten hängen nur von der Lage in der Zelle ab
-      geometry = createPieceGeometry({ type: piece.type, kind: piece.kind, i: 0, j: 0, k: 0, dir, editMask: mask, editDir: editDir >= 0 ? editDir : null });
+      geometry = createPieceGeometry({
+        type: piece.type, kind: piece.kind, i: 0, j: 0, k: 0, dir, editMask: piece.editMask | 0,
+        editPath: piece.editPath ? [...piece.editPath] : null,
+      });
       geometry.userData.shared = true;
       editGeometries.set(key, geometry);
     }
@@ -115,6 +117,7 @@ export function createBuildingView(game) {
   const _pos = new THREE.Vector3();
   const _quat = new THREE.Quaternion();
   const _scale = new THREE.Vector3(1, 1, 1);
+  const _zero = new THREE.Vector3(0, 0, 0);
   const _axisY = new THREE.Vector3(0, 1, 0);
   const _color = new THREE.Color();
 
@@ -164,7 +167,8 @@ export function createBuildingView(game) {
   function writeInstance(g, index, piece) {
     pieceOrigin(piece, _pos);
     _quat.setFromAxisAngle(_axisY, g.edited ? 0 : pieceRotationY(piece));
-    _matrix.compose(_pos, _quat, _scale);
+    // im Edit ausgeblendet (man sieht nur das Raster): Größe 0
+    _matrix.compose(_pos, _quat, piece.view?.hidden ? _zero : _scale);
     g.mesh.setMatrixAt(index, _matrix);
     const shade = shadeOf(piece);
     g.mesh.setColorAt(index, _color.setRGB(shade, shade, shade));
@@ -278,12 +282,22 @@ export function createBuildingView(game) {
       }
       v.mesh.geometry = shape.geometry;
       v.mesh.material = material;
+      v.mesh.visible = !v.hidden;
       pieceOrigin(piece, v.mesh.position);
       v.mesh.rotation.set(0, shape.rotationY, 0);
       v.opacity = opacity;
       v.dark = dark;
     }
     ensureDoor(piece);
+    if (v.door) v.door.pivot.visible = !v.hidden;
+  }
+
+  // Im Edit: Bauteil aus- bzw. wieder einblenden (wie in Fortnite sieht man dann nur das Raster)
+  function setHidden(piece, hidden) {
+    const v = piece.view;
+    if (!v || piece.removed || v.hidden === hidden) return;
+    v.hidden = hidden;
+    refresh(piece);
   }
 
   function opacityLevel(progress) {
@@ -390,6 +404,8 @@ export function createBuildingView(game) {
   }
 
   // --- Edit-Kacheln ------------------------------------------------------------------
+  // Wie in Fortnite: blaue Felder bleiben, graue Felder (mit Kreuz) fallen weg bzw. werden
+  // hochgezogen (Dach). Rampe: der gezogene Weg ist kräftig blau, die anderen Felder grau.
   const tileMaterial = (color, opacity) => {
     const m = new THREE.MeshBasicMaterial({
       color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide,
@@ -398,15 +414,15 @@ export function createBuildingView(game) {
     m.userData.shared = true;
     return m;
   };
+  const selOpacity = B.editTileSelectedOpacity ?? B.editTileOpacity;
   const tileNormal = tileMaterial(B.editTileColor, B.editTileOpacity);
-  const tileHover = tileMaterial(B.editTileHoverColor, Math.min(1, B.editTileOpacity + 0.2));
-  const tileSelected = tileMaterial(B.editTileSelectedColor, B.editTileSelectedOpacity ?? B.editTileOpacity);
-  const tileSelectedHover = tileMaterial('#FF8A8A', Math.min(1, (B.editTileSelectedOpacity ?? B.editTileOpacity) + 0.15));
-  // Umriss jeder Kachel (weiß, gewählt rot)
-  const tileEdge = new THREE.LineBasicMaterial({ color: B.editTileEdgeColor ?? '#FFFFFF', transparent: true, opacity: 0.9, depthWrite: false });
-  const tileEdgeSelected = new THREE.LineBasicMaterial({ color: B.editTileSelectedColor, transparent: true, opacity: 0.95, depthWrite: false });
-  tileEdge.userData.shared = true;
-  tileEdgeSelected.userData.shared = true;
+  const tileHover = tileMaterial(B.editTileHoverColor, Math.min(1, B.editTileOpacity + 0.15));
+  const tilePath = tileMaterial(B.editTilePathColor ?? B.editTileColor, Math.min(1, B.editTileOpacity + 0.15));
+  const tileSelected = tileMaterial(B.editTileSelectedColor, selOpacity);
+  const tileSelectedHover = tileMaterial('#C9D0D8', Math.min(1, selOpacity + 0.1));
+  // Rahmen jeder Kachel (weiß) und Kreuz auf grauen Feldern
+  const tileEdge = tileMaterial(B.editTileEdgeColor ?? '#FFFFFF', 0.95);
+  const tileCross = tileMaterial('#F2F4F7', 0.85);
   let overlay = null; // { piece, group, meshes[] }
 
   function setEditOverlay(session) {
@@ -414,8 +430,9 @@ export function createBuildingView(game) {
       root.remove(overlay.group);
       for (const m of overlay.meshes) {
         m.geometry.dispose();
-        m.children[0]?.geometry.dispose();
+        for (const child of m.children) child.geometry.dispose();
       }
+      setHidden(overlay.piece, false);
       overlay = null;
     }
     if (!session) return;
@@ -423,23 +440,35 @@ export function createBuildingView(game) {
       const group = new THREE.Group();
       group.name = 'Edit-Kacheln';
       pieceOrigin(session.piece, group.position);
-      const meshes = createTileGeometries(session.piece).map((geometry) => {
-        const mesh = new THREE.Mesh(geometry, tileNormal);
+      const meshes = createTileGeometries(session.piece).map((shapes) => {
+        const mesh = new THREE.Mesh(shapes.fill, tileNormal);
+        mesh.name = 'Kachel';
         mesh.renderOrder = 7;
-        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 20), tileEdge);
-        edges.renderOrder = 8;
-        mesh.add(edges);
+        const frame = new THREE.Mesh(shapes.frame, tileEdge);
+        frame.name = 'Rahmen';
+        frame.renderOrder = 8;
+        const cross = new THREE.Mesh(shapes.cross, tileCross);
+        cross.name = 'Kreuz';
+        cross.renderOrder = 8;
+        mesh.add(frame, cross);
         group.add(mesh);
         return mesh;
       });
       root.add(group);
       overlay = { piece: session.piece, group, meshes };
+      setHidden(session.piece, true);
     }
+    const ramp = session.piece.type === 'ramp';
+    const pathActive = ramp && session.selection !== 0;
     for (let t = 0; t < overlay.meshes.length; t++) {
-      const selected = (session.selection & (1 << t)) !== 0;
+      const inSel = (session.selection & (1 << t)) !== 0;
+      // grau = fällt weg / hochgezogen; Rampe: grau = nicht auf dem Weg
+      const grey = ramp ? pathActive && !inSel : inSel;
       const hover = session.hover === t;
-      overlay.meshes[t].material = selected ? (hover ? tileSelectedHover : tileSelected) : hover ? tileHover : tileNormal;
-      overlay.meshes[t].children[0].material = selected ? tileEdgeSelected : tileEdge;
+      const mesh = overlay.meshes[t];
+      mesh.material = grey ? (hover ? tileSelectedHover : tileSelected)
+        : hover ? tileHover : ramp && inSel ? tilePath : tileNormal;
+      mesh.children[1].visible = grey;
     }
   }
 
@@ -547,7 +576,7 @@ export function createBuildingView(game) {
       materials.clear();
       for (const t of textures.values()) t.dispose();
       textures.clear();
-      for (const m of [previewOk, previewBad, edgeOk, edgeBad, previewNone, edgeOccupied, tileNormal, tileHover, tileSelected, tileSelectedHover, tileEdge, tileEdgeSelected]) m.dispose();
+      for (const m of [previewOk, previewBad, edgeOk, edgeBad, previewNone, edgeOccupied, tileNormal, tileHover, tilePath, tileSelected, tileSelectedHover, tileEdge, tileCross]) m.dispose();
       ghostTexture.dispose();
       root.parent?.remove(root);
     },

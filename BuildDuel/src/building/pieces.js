@@ -2,12 +2,19 @@
 // Bauteile: Form, Kollision und Aussehen
 // =============================================================================
 // Für jedes Bauteil (Wand, Boden, Rampe, Dach) steht hier:
-//   - pieceColliderSpecs(): aus welchen Kollisions-Teilen es besteht – je nach
-//     Edit (entfernte Felder). Wand: Boxen (zusammengefasst), Tür: zusätzlich ein
-//     Tür-Blatt (nur wenn zu). Boden: Boxen. Dach: zugeschnittene Schrägen
-//     (Dach-Viertel). Rampe: eigene Formen (siehe rampEditSpecs): 1 Feld weg =
-//     Ecktreppe, 2 Felder in einer Reihe weg = halbe Rampe (Richtung frei wählbar).
-//   - Formen (BufferGeometry) GENAU aus denselben Teilen → Bild = Kollision.
+//   - pieceColliderSpecs(): aus welchen Kollisions-Teilen es besteht – je nach Edit
+//     (wie in Fortnite):
+//       Wand  – gewählte Felder fallen weg (Boxen, zusammengefasst). Tür (Felder 4+7):
+//               zusätzlich ein Tür-Blatt. Besondere Formen: Dreieck (L aus 3 Feldern in
+//               einer Ecke weg), Bogen (untere zwei Reihen weg), halber Bogen (2x2 Felder
+//               unten in einer Ecke weg) – Bild = echte Form, Kollision = schmale Boxen.
+//       Boden – gewählte Felder fallen weg (Boxen).
+//       Rampe – der gezogene WEG bleibt als Treppe (piece.editPath, Reihenfolge zählt):
+//               2 Felder = halbe Rampe, 3 Felder (L) = L-Treppe, 4 Felder (U) = U-Treppe.
+//       Dach  – gewählte Ecken werden HOCHGEZOGEN (auf Spitzen-Höhe), die Mitte bleibt
+//               oben: 4 Dreiecke (siehe physics.js, spec.raise).
+//   - Formen (BufferGeometry) aus denselben Teilen → Bild = Kollision (besondere Wände:
+//     Bild = echte Form, Kollision nähert sie an).
 //   - Bilder (Texturen) per Canvas: Holz (Bretter), Stein (Fugen), Metall (Nieten),
 //     dazu je eine Version mit Rissen (beschädigt). Jedes Bild ist ein "Atlas" mit drei
 //     Bereichen (Wand S x H, Fläche S x S, Rampe S x Schräg-Länge) – so ist nichts verzerrt,
@@ -19,6 +26,7 @@
 // =============================================================================
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { pyramidFacePlane } from '../physics.js';
 import {
   CELL_SIZE as S, LEVEL_HEIGHT as H, THICKNESS as T, RAMP_V_THICKNESS, ROOF_V_THICKNESS,
   rampSpec, roofSpec, presentRects, isDoorMask, tilesToMask,
@@ -69,7 +77,7 @@ export function rampV(f) {
 
 /**
  * Kollisions-Teile eines Bauteils im aktuellen Zustand.
- * piece = { type, kind, i, j, k, dir, editMask }
+ * piece = { type, kind, i, j, k, dir, editMask, editPath? (Rampe) }
  * Ergebnis: Liste von { type: 'box', min: {x,y,z}, max: {x,y,z}, door?: true }
  *                  und { type: 'slope', spec }
  * Bei einer Tür ist das Tür-Blatt dabei (door: true) – offen = ausgeschaltet.
@@ -79,6 +87,12 @@ export function pieceColliderSpecs(piece) {
   const mask = piece.editMask | 0;
   const { kind, i, j, k } = piece;
   if (piece.type === 'wall') {
+    const shape = wallShapeOf(mask);
+    if (shape) {
+      // Dreieck / Bogen: schmale Boxen (Annäherung an Schräge und Rundung)
+      for (const r of shape.boxes) out.push(wallBox(kind, i, j, k, r.u0, r.u1, r.v0, r.v1, T / 2));
+      return out;
+    }
     const third = S / 3;
     const rowH = H / 3;
     for (const r of presentRects(3, 3, mask)) {
@@ -108,47 +122,178 @@ export function pieceColliderSpecs(piece) {
     }
     return out;
   }
-  // Rampe und Dach: Schräge, bei Edit auf die vorhandenen Felder zugeschnitten
-  const base = piece.type === 'ramp' ? rampSpec(i, j, k, piece.dir) : roofSpec(i, j, k);
-  if (mask === 0) {
-    out.push({ type: 'slope', spec: base });
+  if (piece.type === 'ramp') {
+    const path = rampPathOf(piece);
+    if (path) rampPathSpecs(piece, path, out);
+    else out.push({ type: 'slope', spec: rampSpec(i, j, k, piece.dir) });
     return out;
   }
-  if (piece.type === 'ramp' && rampEditSpecs(piece, mask, out)) return out;
-  const half = S / 2;
-  for (const r of presentRects(2, 2, mask)) {
-    out.push({
-      type: 'slope',
-      spec: {
-        ...base,
-        clip: {
-          minX: i * S + r.col0 * half,
-          maxX: i * S + (r.col0 + r.cols) * half,
-          minZ: k * S + r.row0 * half,
-          maxZ: k * S + (r.row0 + r.rows) * half,
-        },
-      },
-    });
-  }
+  // Dach: gewählte Ecken hochgezogen (alle 4 gibt es nicht)
+  const spec = roofSpec(i, j, k);
+  const raise = mask & 15;
+  if (raise && raise !== 15) spec.raise = raise;
+  out.push({ type: 'slope', spec });
   return out;
 }
 
+/** Schlüssel der Edit-Form (für geteilte Formen in der Grafik): 0 = unbearbeitet. */
+export function pieceEditKey(piece) {
+  if (piece.type === 'ramp') {
+    const path = rampPathOf(piece);
+    return path ? `p${path.join('')}` : 0;
+  }
+  return piece.editMask | 0;
+}
+
+/** Ist das Teil editiert (Löcher, besondere Form, Treppe, hochgezogene Ecken)? */
+export function isPieceEdited(piece) {
+  return pieceEditKey(piece) !== 0;
+}
+
 // -----------------------------------------------------------------------------
-// Rampen-Edit: Ecktreppe und halbe Rampe
+// Besondere Wand-Formen (Fortnite): Dreieck, Bogen, halber Bogen
+// -----------------------------------------------------------------------------
+// Felder der Wand: Nummer = Reihe·3 + Spalte, Reihe 0 = oben. u = entlang der Wand
+// (0..S), v = Höhe (0..H). Ergebnis von wallShapeOf(mask):
+//   { name, poly: [[u, v], …] (Umriss gegen den Uhrzeigersinn), boxes: [{ u0, u1, v0, v1 }] }
+
+const _wallShapes = new Map();
+
+/** Besondere Wand-Form zu den entfernten Feldern – oder null (dann normale Löcher). */
+export function wallShapeOf(mask) {
+  mask |= 0;
+  if (_wallShapes.has(mask)) return _wallShapes.get(mask);
+  const shape = makeWallShape(mask);
+  _wallShapes.set(mask, shape);
+  return shape;
+}
+
+// Dreiecke: L aus 3 Feldern in einer Ecke weg → das Dreieck auf der anderen Seite der Diagonale
+const TRIANGLES = [
+  { tiles: [1, 2, 5], poly: [[0, 0], [1, 0], [0, 1]] }, // oben rechts weg
+  { tiles: [0, 1, 3], poly: [[0, 0], [1, 0], [1, 1]] }, // oben links weg
+  { tiles: [5, 7, 8], poly: [[0, 0], [1, 1], [0, 1]] }, // unten rechts weg (hängt oben)
+  { tiles: [3, 6, 7], poly: [[1, 0], [1, 1], [0, 1]] }, // unten links weg (hängt oben)
+];
+
+function makeWallShape(mask) {
+  for (const t of TRIANGLES) {
+    if (mask !== tilesToMask(t.tiles)) continue;
+    const poly = t.poly.map(([u, v]) => [u * S, v * H]);
+    // Kollision: senkrechte Streifen, Höhe in der Mitte jedes Streifens
+    const n = Math.max(2, B.wallCollisionSlices | 0);
+    const boxes = [];
+    for (let s = 0; s < n; s++) {
+      const u0 = (s / n) * S;
+      const u1 = ((s + 1) / n) * S;
+      const range = polyVerticalRange(poly, (u0 + u1) / 2);
+      if (range) boxes.push({ u0, u1, v0: range[0], v1: range[1] });
+    }
+    return { name: 'triangle', poly, boxes };
+  }
+  const V0 = (2 * H) / 3; // Unterkante der oberen Reihe
+  if (mask === tilesToMask([3, 4, 5, 6, 7, 8])) {
+    // Bogen: obere Reihe + dünne Beine, Rundung zwischen Bein und oberer Reihe
+    const L = B.wallArchLegWidth;
+    const poly = [[0, 0], [L, 0]];
+    arcPoints(poly, L, V0, 1);
+    arcPoints(poly, S - L, V0, -1);
+    poly.push([S - L, 0], [S, 0], [S, H], [0, H]);
+    const boxes = [
+      { u0: 0, u1: L, v0: 0, v1: V0 },
+      { u0: S - L, u1: S, v0: 0, v1: V0 },
+      { u0: 0, u1: S, v0: V0, v1: H },
+    ];
+    cornerBoxes(boxes, L, V0, 1);
+    cornerBoxes(boxes, S - L, V0, -1);
+    return { name: 'arch', poly, boxes };
+  }
+  for (const side of [1, -1]) {
+    // halber Bogen: 2x2 Felder unten rechts (side 1) bzw. unten links (−1) weg
+    const tiles = side === 1 ? [4, 5, 7, 8] : [3, 4, 6, 7];
+    if (mask !== tilesToMask(tiles)) continue;
+    const C = side === 1 ? S / 3 : (2 * S) / 3; // Innenkante der stehenden Spalte
+    let poly;
+    if (side === 1) {
+      poly = [[0, 0], [C, 0]];
+      arcPoints(poly, C, V0, 1);
+      poly.push([S, V0], [S, H], [0, H]);
+    } else {
+      poly = [[0, V0]];
+      arcPoints(poly, C, V0, -1);
+      poly.push([C, 0], [S, 0], [S, H], [0, H]);
+    }
+    const boxes = [
+      side === 1 ? { u0: 0, u1: C, v0: 0, v1: V0 } : { u0: C, u1: S, v0: 0, v1: V0 },
+      { u0: 0, u1: S, v0: V0, v1: H },
+    ];
+    cornerBoxes(boxes, C, V0, side);
+    return { name: 'halfArch', poly, boxes };
+  }
+  return null;
+}
+
+// Punkte der Viertel-Ellipse an der Ecke (Bein-Innenkante c, Unterkante V0). side 1 = Rundung
+// rechts vom Bein (linke Ecke der Öffnung), −1 = links vom Bein. Reihenfolge: entlang des
+// Umrisses gegen den Uhrzeigersinn.
+function arcPoints(poly, c, V0, side) {
+  const ru = B.wallArchCornerU;
+  const rv = B.wallArchCornerV;
+  const n = Math.max(2, B.wallCurveSegments | 0);
+  const cu = c + side * ru;
+  const cv = V0 - rv;
+  for (let s = 0; s <= n; s++) {
+    // side 1: vom Bein (unten) zur Decke; side −1: von der Decke zum Bein (unten)
+    const f = side === 1 ? s / n : 1 - s / n;
+    const angle = (f * Math.PI) / 2; // 0 = am Bein, 90° = an der Decke
+    poly.push([cu - side * ru * Math.cos(angle), cv + rv * Math.sin(angle)]);
+  }
+}
+
+// Kollision der Rundung: schmale Streifen von der Rundung bis zur Decke
+function cornerBoxes(boxes, c, V0, side) {
+  const ru = B.wallArchCornerU;
+  const rv = B.wallArchCornerV;
+  const n = Math.max(1, B.wallCurveSlices | 0);
+  for (let s = 0; s < n; s++) {
+    const a = c + side * (s / n) * ru;
+    const b = c + side * ((s + 1) / n) * ru;
+    const mid = Math.abs((a + b) / 2 - (c + side * ru)) / ru; // 0..1 Abstand zur Ellipsen-Mitte
+    const v0 = V0 - rv + rv * Math.sqrt(Math.max(0, 1 - mid * mid));
+    boxes.push({ u0: Math.min(a, b), u1: Math.max(a, b), v0, v1: V0 });
+  }
+}
+
+// Senkrechter Schnitt eines konvexen Umrisses bei u → [vMin, vMax] oder null
+function polyVerticalRange(poly, u) {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let n = 0; n < poly.length; n++) {
+    const [ua, va] = poly[n];
+    const [ub, vb] = poly[(n + 1) % poly.length];
+    if ((u < Math.min(ua, ub)) || (u > Math.max(ua, ub)) || ua === ub) continue;
+    const v = va + ((u - ua) / (ub - ua)) * (vb - va);
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  return hi > lo ? [lo, hi] : null;
+}
+
+// -----------------------------------------------------------------------------
+// Rampen-Edit wie in Fortnite: der gezogene Weg bleibt als Treppe
 // -----------------------------------------------------------------------------
 // Felder 0..3: Spalte = t % 2 (entlang x), Reihe = floor(t / 2) (entlang z).
-// - 1 Feld entfernt (3 Felder als "L") → ECKTREPPE: vom unteren Ende-Feld eine kurze
-//   Rampe (gleich steil wie die ganze) hinauf auf ein flaches Podest im Eck-Feld (halbe Höhe), dort 90° drehen
-//   und mit der zweiten kurzen Rampe ganz hinauf (eine Ebene, wie die ganze Rampe).
-//   Unteres Ende = das Ende-Feld, das bei der ganzen Rampe tiefer lag.
-// - 2 Felder nebeneinander entfernt (2 Felder in einer Reihe bleiben) → HALBE RAMPE
-//   (eine halbe Zelle breit, eine Zelle lang, gleich steil). Richtung: piece.editDir (Reihenfolge, in der die zwei
-//   Felder gewählt wurden: vom ersten zum zweiten = "hinauf"), sonst die alte Richtung,
-//   wenn sie entlang des Streifens liegt, sonst 90° weiter gedreht.
-// - sonst (1 Feld übrig, 2 Felder über Eck): Stücke der ganzen Rampe (alte Form).
+// Der Weg (piece.editPath) ist die Reihenfolge, in der die Felder gezogen wurden – jedes
+// Feld liegt neben dem vorigen. Alle Treppen sind so steil wie die ganze Rampe.
+//   2 Felder (P0, P1)     → HALBE RAMPE: halbe Breite, ganze Länge und Höhe, steigt von P0 zu P1.
+//   3 Felder (L)          → L-TREPPE: Lauf P0→P1 bis zur halben Höhe, Podest auf P1,
+//                           Lauf P1→P2 ganz hinauf.
+//   4 Felder (U)          → U-TREPPE: Lauf P0→P1 bis zur halben Höhe, Podest über P1 und P2,
+//                           Lauf P2→P3 ganz hinauf.
+// 0 oder 1 Feld ändert nichts. editMask = die Felder, die NICHT auf dem Weg liegen.
 
-/** Spalte/Reihe eines Rampen-Felds → Richtung (0 = +X, 1 = +Z, 2 = −X, 3 = −Z) von p nach q. */
-function tileDirection(p, q) {
+/** Richtung (0 = +X, 1 = +Z, 2 = −X, 3 = −Z) von Feld p zum Nachbar-Feld q, sonst −1. */
+export function tileDirection(p, q) {
   const dx = (q % 2) - (p % 2);
   const dz = Math.floor(q / 2) - Math.floor(p / 2);
   if (dx === 1 && dz === 0) return 0;
@@ -176,58 +321,91 @@ function rampTileRank(d, t) {
   return 1 - row;
 }
 
-/**
- * Richtung einer editierten Rampe, deren Rest-Streifen (zwei Felder) entlang der Achse
- * "alongX" liegt: gewählte Richtung (editDir), sonst die alte, sonst 90° gedreht.
- */
-export function halfRampDirection(dir, editDir, alongX) {
-  const fits = (d) => d !== null && d !== undefined && d >= 0 && (d % 2 === 0) === alongX;
-  if (fits(editDir)) return editDir;
-  if (fits(dir)) return dir;
-  return (dir + 1) % 4;
+/** Ist das ein gültiger Rampen-Weg (2–4 verschiedene Felder, jedes neben dem vorigen)? */
+export function isRampPath(path) {
+  if (!Array.isArray(path) || path.length < 2 || path.length > 4) return false;
+  for (let n = 0; n < path.length; n++) {
+    const t = path[n];
+    if (!Number.isInteger(t) || t < 0 || t > 3 || path.indexOf(t) !== n) return false;
+    if (n > 0 && tileDirection(path[n - 1], t) < 0) return false;
+  }
+  return true;
 }
 
 /**
- * Kollisions-Teile einer editierten Rampe (Ecktreppe, halbe Rampe). false = keine
- * eigene Form (dann die alte: Stücke der ganzen Rampe).
+ * Weg aus den entfernten Feldern (für alte Angaben wie placePiece(…, { edit: [0, 2] })):
+ * 2 Felder in einer Reihe → halbe Rampe (steigt wie die ganze, quer dazu 90° weiter gedreht),
+ * 3 Felder (L) → L-Treppe, die unten beginnt, wo die ganze Rampe unten war. Sonst null.
  */
-export function rampEditSpecs(piece, mask, out) {
-  const { i, j, k } = piece;
-  const d = ((piece.dir % 4) + 4) % 4;
-  const present = ~mask & 15;
-  const tiles = [];
-  for (let t = 0; t < 4; t++) if (present & (1 << t)) tiles.push(t);
-  if (tiles.length === 3) {
-    // Ecktreppe: Eck-Feld = gegenüber vom entfernten Feld
-    const removed = [0, 1, 2, 3].find((t) => !(present & (1 << t)));
-    const corner = 3 - removed;
-    const ends = [corner ^ 1, corner ^ 2];
-    const low = rampTileRank(d, ends[0]) <= rampTileRank(d, ends[1]) ? ends[0] : ends[1];
-    const high = low === ends[0] ? ends[1] : ends[0];
-    const baseY = j * H;
-    out.push({ type: 'slope', spec: { ...rampTileRect(i, k, low), baseY, rise: H / 2, dir: tileDirection(low, corner), thickness: T }, stair: 'low' });
-    const c = rampTileRect(i, k, corner);
-    out.push({ type: 'box', min: { x: c.minX, y: baseY + H / 2 - T, z: c.minZ }, max: { x: c.maxX, y: baseY + H / 2, z: c.maxZ }, stair: 'landing' });
-    out.push({ type: 'slope', spec: { ...rampTileRect(i, k, high), baseY: baseY + H / 2, rise: H / 2, dir: tileDirection(corner, high), thickness: T }, stair: 'high' });
-    return true;
+export function rampPathFromMask(dir, removedMask) {
+  const d = ((dir % 4) + 4) % 4;
+  const kept = [];
+  for (let t = 0; t < 4; t++) if (!(removedMask & (1 << t))) kept.push(t);
+  if (kept.length === 2) {
+    const [a, b] = kept;
+    const ab = tileDirection(a, b);
+    if (ab < 0) return null;
+    const alongX = ab % 2 === 0;
+    const want = (d % 2 === 0) === alongX ? d : (d + 1) % 4;
+    return ab === want ? [a, b] : [b, a];
   }
-  if (tiles.length === 2 && tileDirection(tiles[0], tiles[1]) >= 0) {
-    // halbe Rampe über den Streifen der zwei Felder
-    const alongX = tileDirection(tiles[0], tiles[1]) === 0;
-    const dir = halfRampDirection(d, piece.editDir, alongX);
-    const a = rampTileRect(i, k, tiles[0]);
-    const b = rampTileRect(i, k, tiles[1]);
+  if (kept.length === 3) {
+    const corner = kept.find((t) => kept.every((o) => o === t || tileDirection(t, o) >= 0));
+    if (corner === undefined) return null;
+    const ends = kept.filter((t) => t !== corner);
+    const low = rampTileRank(d, ends[0]) <= rampTileRank(d, ends[1]) ? ends[0] : ends[1];
+    return [low, corner, low === ends[0] ? ends[1] : ends[0]];
+  }
+  return null;
+}
+
+/** Weg einer Rampe (piece.editPath, sonst aus der Maske) oder null = ganze Rampe. */
+export function rampPathOf(piece) {
+  if (isRampPath(piece.editPath)) return piece.editPath;
+  const mask = piece.editMask | 0;
+  return mask ? rampPathFromMask(piece.dir, mask) : null;
+}
+
+/** Felder eines Wegs als Bitmaske. */
+export function pathMask(path) {
+  let mask = 0;
+  for (const t of path) mask |= 1 << t;
+  return mask;
+}
+
+/** Kollisions-Teile einer Rampe mit Weg (halbe Rampe, L-Treppe, U-Treppe). */
+export function rampPathSpecs(piece, path, out = []) {
+  const { i, j, k } = piece;
+  const baseY = j * H;
+  if (path.length === 2) {
+    const a = rampTileRect(i, k, path[0]);
+    const b = rampTileRect(i, k, path[1]);
     out.push({
       type: 'slope',
       spec: {
         minX: Math.min(a.minX, b.minX), maxX: Math.max(a.maxX, b.maxX),
         minZ: Math.min(a.minZ, b.minZ), maxZ: Math.max(a.maxZ, b.maxZ),
-        baseY: j * H, rise: H, dir, thickness: T,
+        baseY, rise: H, dir: tileDirection(path[0], path[1]), thickness: T,
       },
+      stair: 'half',
     });
-    return true;
+    return out;
   }
-  return false;
+  // unterer Lauf: auf dem ersten Feld bis zur halben Höhe
+  out.push({ type: 'slope', spec: { ...rampTileRect(i, k, path[0]), baseY, rise: H / 2, dir: tileDirection(path[0], path[1]), thickness: T }, stair: 'low' });
+  // Podest: L = Feld P1, U = Felder P1 und P2
+  const l0 = rampTileRect(i, k, path[1]);
+  const l1 = path.length === 4 ? rampTileRect(i, k, path[2]) : l0;
+  out.push({
+    type: 'box',
+    min: { x: Math.min(l0.minX, l1.minX), y: baseY + H / 2 - T, z: Math.min(l0.minZ, l1.minZ) },
+    max: { x: Math.max(l0.maxX, l1.maxX), y: baseY + H / 2, z: Math.max(l0.maxZ, l1.maxZ) },
+    stair: 'landing',
+  });
+  // oberer Lauf: auf dem letzten Feld ganz hinauf
+  const n = path.length;
+  out.push({ type: 'slope', spec: { ...rampTileRect(i, k, path[n - 1]), baseY: baseY + H / 2, rise: H / 2, dir: tileDirection(path[n - 2], path[n - 1]), thickness: T }, stair: 'high' });
+  return out;
 }
 
 /** Lage der Tür in der Wand (u entlang der Wand, v von unten), in Metern. */
@@ -348,9 +526,9 @@ export function pickTile(piece, origin, dir, maxDist = Infinity, out = null) {
     if (Math.abs(denom) < 1e-6) return -1;
     t = (a * origin.x + b * origin.z + c - origin.y) / denom;
   } else {
-    // Dach: die echten Dreiecks-Flächen der Pyramide (oben und unten) – genau das,
-    // was man sieht und was das Fadenkreuz trifft
-    t = roofHitDistance(i, j, k, origin, dir, maxDist);
+    // Dach: die echten Dreiecks-Flächen (oben und unten, mit hochgezogenen Ecken) – genau
+    // das, was man sieht und was das Fadenkreuz trifft
+    t = roofHitDistance(i, j, k, origin, dir, maxDist, piece.editMask | 0);
     if (t === Infinity) return -1;
   }
   if (t < 0 || t > maxDist) return -1;
@@ -367,31 +545,27 @@ const _spec = {};
 /**
  * Abstand, in dem der Strahl das Dach (Pyramide in Zelle i, j, k) trifft – Oberseite
  * oder Unterseite (= Oberseite − Dicke), je nachdem was näher ist. Infinity = gar nicht.
- * Jede der 4 Flächen ist eine Ebene y = Grund + Höhe·(1 − s / h), s = Abstand von der
- * Mitte in Richtung der Fläche; sie gilt dort, wo s ≥ |Abstand quer| (Grat = Diagonale).
+ * raise = hochgezogene Ecken (Bitmaske, wie piece.editMask beim Dach).
+ * Jede der 4 Flächen ist ein Dreieck (Mitte – Ecke – Ecke) auf einer Ebene; sie gilt dort,
+ * wo der Abstand von der Mitte in Richtung der Fläche ≥ |Abstand quer| ist (Grat = Diagonale).
  */
-export function roofHitDistance(i, j, k, origin, dir, maxDist = Infinity) {
+export function roofHitDistance(i, j, k, origin, dir, maxDist = Infinity, raise = 0) {
+  const c = coneShape(i, j, k, raise);
   const h = S / 2;
-  const cx = i * S + h;
-  const cz = k * S + h;
-  const rise = B.roofHeight;
-  const g = rise / h; // Steigung der Flächen
   let best = Infinity;
   for (let face = 0; face < 4; face++) {
-    // Fläche 0 = +X, 1 = +Z, 2 = −X, 3 = −Z
-    const ax = face === 0 ? 1 : face === 2 ? -1 : 0;
-    const az = face === 1 ? 1 : face === 3 ? -1 : 0;
-    // y = a·x + b·z + c
-    const a = -g * ax;
-    const b = -g * az;
-    const denom = dir.y - a * dir.x - b * dir.z;
+    // Fläche 0 = +X, 1 = −X, 2 = +Z, 3 = −Z (wie physics.js)
+    const ax = face === 0 ? 1 : face === 1 ? -1 : 0;
+    const az = face === 2 ? 1 : face === 3 ? -1 : 0;
+    const plane = pyramidFacePlane(c, face, _facePlane);
+    const denom = dir.y - plane.a * dir.x - plane.b * dir.z;
     if (Math.abs(denom) < 1e-9) continue;
     for (let side = 0; side < 2; side++) {
-      const c = j * H + rise + g * (ax * cx + az * cz) - (side === 0 ? 0 : ROOF_V_THICKNESS);
-      const t = (a * origin.x + b * origin.z + c - origin.y) / denom;
+      const cc = plane.c - (side === 0 ? 0 : ROOF_V_THICKNESS);
+      const t = (plane.a * origin.x + plane.b * origin.z + cc - origin.y) / denom;
       if (!(t >= 0 && t <= maxDist && t < best)) continue;
-      const x = origin.x + dir.x * t - cx;
-      const z = origin.z + dir.z * t - cz;
+      const x = origin.x + dir.x * t - c.cx;
+      const z = origin.z + dir.z * t - c.cz;
       const along = ax * x + az * z;
       const across = ax !== 0 ? Math.abs(z) : Math.abs(x);
       if (along < -1e-6 || along > h + 1e-6 || across > along + 1e-6) continue;
@@ -399,6 +573,46 @@ export function roofHitDistance(i, j, k, origin, dir, maxDist = Infinity) {
     }
   }
   return best;
+}
+const _facePlane = { a: 0, b: 0, c: 0 };
+const _cone = { baseY: 0, rise: 0, cx: 0, cz: 0, hx: 1, hz: 1, h0: 0, h1: 0, h2: 0, h3: 0 };
+
+// Dach in Zelle (i, j, k) mit hochgezogenen Ecken als Rechen-Form (wie der Collider in physics.js)
+function coneShape(i, j, k, raise, out = _cone) {
+  out.baseY = j * H;
+  out.rise = B.roofHeight;
+  out.cx = i * S + S / 2;
+  out.cz = k * S + S / 2;
+  out.hx = S / 2;
+  out.hz = S / 2;
+  const top = out.baseY + out.rise;
+  out.h0 = raise & 1 ? top : out.baseY;
+  out.h1 = raise & 2 ? top : out.baseY;
+  out.h2 = raise & 4 ? top : out.baseY;
+  out.h3 = raise & 8 ? top : out.baseY;
+  return out;
+}
+
+/** Höhe der Dach-Oberseite (Zelle i, j, k, hochgezogene Ecken raise) an der Stelle (x, z). */
+export function roofSurfaceY(i, j, k, raise, x, z) {
+  const c = coneShape(i, j, k, raise);
+  const u = Math.max(-1, Math.min(1, (x - c.cx) / c.hx));
+  const w = Math.max(-1, Math.min(1, (z - c.cz) / c.hz));
+  const top = c.baseY + c.rise;
+  let s;
+  let t;
+  let ha;
+  let hb;
+  if (Math.abs(u) >= Math.abs(w)) {
+    s = Math.abs(u);
+    t = w;
+    if (u >= 0) { ha = c.h1; hb = c.h3; } else { ha = c.h0; hb = c.h2; }
+  } else {
+    s = Math.abs(w);
+    t = u;
+    if (w >= 0) { ha = c.h2; hb = c.h3; } else { ha = c.h0; hb = c.h1; }
+  }
+  return top + s * ((ha + hb) / 2 - top) + (t * (hb - ha)) / 2;
 }
 
 // =============================================================================
@@ -538,7 +752,7 @@ function addPyramid(pos, uv, spec, o, cell) {
   const hx = (spec.maxX - spec.minX) / 2;
   const hz = (spec.maxZ - spec.minZ) / 2;
   const vT = ROOF_V_THICKNESS;
-  const height = (x, z) => spec.baseY + spec.rise * (1 - Math.min(1, Math.max(Math.abs(x - cx) / hx, Math.abs(z - cz) / hz)));
+  const height = pyramidHeightFn(spec, cx, cz, hx, hz);
   const x0 = clip.minX;
   const x1 = clip.maxX;
   const z0 = clip.minZ;
@@ -610,6 +824,95 @@ function addPyramid(pos, uv, spec, o, cell) {
   }
 }
 
+// Höhe der Pyramiden-Oberseite (mit hochgezogenen Ecken spec.raise) – wie physics.js
+function pyramidHeightFn(spec, cx, cz, hx, hz) {
+  const raise = (spec.raise | 0) & 15;
+  const top = spec.baseY + spec.rise;
+  const corner = (t) => (raise & (1 << t) ? top : spec.baseY);
+  return (x, z) => {
+    const u = Math.max(-1, Math.min(1, (x - cx) / hx));
+    const w = Math.max(-1, Math.min(1, (z - cz) / hz));
+    let s;
+    let t;
+    let ha;
+    let hb;
+    if (Math.abs(u) >= Math.abs(w)) {
+      s = Math.abs(u);
+      t = w;
+      if (u >= 0) { ha = corner(1); hb = corner(3); } else { ha = corner(0); hb = corner(2); }
+    } else {
+      s = Math.abs(w);
+      t = u;
+      if (w >= 0) { ha = corner(2); hb = corner(3); } else { ha = corner(0); hb = corner(1); }
+    }
+    return top + s * ((ha + hb) / 2 - top) + (t * (hb - ha)) / 2;
+  };
+}
+
+// --- besondere Wände (Dreieck, Bogen): Umriss als dicke Platte ----------------------
+
+/**
+ * Wand-Form aus einem Umriss (u, v in Metern, gegen den Uhrzeigersinn): Vorder- und
+ * Rückseite (Dreiecke) und die Seiten entlang des Umrisses, Dicke T.
+ */
+function addWallPolygon(pos, uv, piece, poly, o, cell) {
+  const { kind, i, j, k } = piece;
+  const d = T / 2;
+  // Punkt (u, v) auf Seite side (−1 / +1) → relativ zum Ursprung
+  const P = (u, v, side) => (kind === 'wx'
+    ? [i * S + u - o.x, j * H + v - o.y, k * S + side * d - o.z]
+    : [i * S + side * d - o.x, j * H + v - o.y, k * S + u - o.z]);
+  // Außen-Richtung der Vorderseite (side +1)
+  const n = kind === 'wx' ? [0, 0, 1] : [1, 0, 0];
+  const contour = poly.map(([u, v]) => new THREE.Vector2(u, v));
+  const tris = THREE.ShapeUtils.triangulateShape(contour, []);
+  const uvOf = (u, v, side) => [side > 0 ? u / S : 1 - u / S, sideV(v)];
+  for (const side of [1, -1]) {
+    for (const [a, b, c] of tris) {
+      const pa = P(poly[a][0], poly[a][1], side);
+      const pb = P(poly[b][0], poly[b][1], side);
+      const pc = P(poly[c][0], poly[c][1], side);
+      pushTri(pos, uv, pa, pb, pc, uvOf(...poly[a], side), uvOf(...poly[b], side), uvOf(...poly[c], side),
+        n[0] * side, n[1] * side, n[2] * side);
+    }
+  }
+  // Seiten: entlang jeder Kante des Umrisses
+  for (let m = 0; m < poly.length; m++) {
+    const [ua, va] = poly[m];
+    const [ub, vb] = poly[(m + 1) % poly.length];
+    // Außen-Normale der Kante (Umriss gegen den Uhrzeigersinn → rechts von der Laufrichtung)
+    const eu = vb - va;
+    const ev = -(ub - ua);
+    const len = Math.hypot(eu, ev) || 1;
+    const nu = eu / len;
+    const nv = ev / len;
+    const nx = kind === 'wx' ? nu : 0;
+    const nz = kind === 'wx' ? 0 : nu;
+    const a0 = P(ua, va, -1);
+    const a1 = P(ua, va, 1);
+    const b0 = P(ub, vb, -1);
+    const b1 = P(ub, vb, 1);
+    const along = Math.abs(ub - ua) >= Math.abs(vb - va);
+    const tu = (u, v, side) => [along ? u / S : (side + 1) * 0.02, sideV(v)];
+    pushTri(pos, uv, a0, b0, b1, tu(ua, va, -1), tu(ub, vb, -1), tu(ub, vb, 1), nx, nv, nz);
+    pushTri(pos, uv, a0, b1, a1, tu(ua, va, -1), tu(ub, vb, 1), tu(ua, va, 1), nx, nv, nz);
+  }
+}
+
+// Dreieck mit der Vorderseite in Richtung (nx, ny, nz) (vertauscht b/c, falls nötig)
+function pushTri(pos, uv, a, b, c, ua, ub, uc, nx, ny, nz) {
+  const cx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+  const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+  const cz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  if (cx * nx + cy * ny + cz * nz < 0) {
+    pos.push(...a, ...c, ...b);
+    uv.push(...ua, ...uc, ...ub);
+  } else {
+    pos.push(...a, ...b, ...c);
+    uv.push(...ua, ...ub, ...uc);
+  }
+}
+
 /** Gemeinsame Form eines Typs (ohne Edit), relativ zu pieceOrigin, ungedreht. */
 export function createSharedGeometry(type) {
   const fake = { type, kind: type === 'wall' ? 'wx' : type === 'floor' ? 'f' : type === 'ramp' ? 'r' : 'c', i: 0, j: 0, k: 0, dir: 0, editMask: 0, doorOpen: false };
@@ -620,10 +923,23 @@ export function createSharedGeometry(type) {
 }
 
 /** Form eines Bauteils im aktuellen Edit-Zustand (ohne Tür-Blatt), relativ zu pieceOrigin.
- *  piece braucht type, kind, i, j, k, dir, editMask (Rampe: editDir). */
+ *  piece braucht type, kind, i, j, k, dir, editMask (Rampe: editPath). */
 export function createPieceGeometry(piece) {
-  const specs = pieceColliderSpecs(piece).filter((s) => !s.door);
   const origin = pieceOrigin(piece);
+  const shape = piece.type === 'wall' ? wallShapeOf(piece.editMask | 0) : null;
+  if (shape) {
+    // Dreieck / Bogen: echte Form im Bild (die Kollision nähert sie mit Boxen an)
+    const pos = [];
+    const uv = [];
+    addWallPolygon(pos, uv, piece, shape.poly, origin, cellCorner(piece));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+  const specs = pieceColliderSpecs(piece).filter((s) => !s.door);
   return buildGeometryFromSpecs(specs, origin, cellCorner(piece), piece.dir);
 }
 
@@ -649,43 +965,43 @@ export function createDoorGeometry() {
   return geometry;
 }
 
-// --- Edit-Kacheln (leuchtende Felder) ---------------------------------------------
+// --- Edit-Kacheln (wie in Fortnite) -------------------------------------------------
 
 /**
- * Formen der Edit-Kacheln eines Bauteils (eine Form pro Feld, beide Seiten),
- * relativ zu pieceOrigin. Die Kacheln sind etwas kleiner als die Felder (Lücken
- * = Gitter-Linien) und liegen knapp vor der Oberfläche.
+ * Formen der Edit-Kacheln eines Bauteils, relativ zu pieceOrigin. Je Feld:
+ *   { fill, frame, cross } – Fläche, weißer Rahmen und Kreuz (für "fällt weg").
+ * Die Kacheln liegen auf beiden Seiten knapp vor der Oberfläche des GANZEN Bauteils
+ * (Wand, Boden, ganze Rampe) – im Edit sieht man nur dieses Raster, das Bauteil selbst
+ * ist ausgeblendet. Beim Dach liegen sie auf der echten Fläche (mit hochgezogenen Ecken),
+ * genau dort, wo pickTile() trifft.
  */
 export function createTileGeometries(piece) {
   const origin = pieceOrigin(piece);
-  const gap = 0.07;
-  const lift = 0.025;
+  const gap = B.editTileGap ?? 0.06;
+  const frame = B.editTileFrame ?? 0.07;
+  const lift = 0.03;
   const list = [];
   const { kind, i, j, k } = piece;
   if (piece.type === 'wall') {
     const third = S / 3;
     const rowH = H / 3;
+    // Punkt (u, v) der Wand auf Seite side (−1 / +1)
+    const P = (u, v, side) => (kind === 'wx'
+      ? [i * S + u - origin.x, j * H + v - origin.y, k * S + side * (T / 2 + lift) - origin.z]
+      : [i * S + side * (T / 2 + lift) - origin.x, j * H + v - origin.y, k * S + u - origin.z]);
     for (let t = 0; t < 9; t++) {
       const row = Math.floor(t / 3);
       const col = t % 3;
-      const u0 = col * third + gap;
-      const u1 = (col + 1) * third - gap;
-      const v0 = (2 - row) * rowH + gap;
-      const v1 = (3 - row) * rowH - gap;
-      const pos = [];
-      const d = T / 2 + lift;
-      for (const side of [-1, 1]) {
-        const pts = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => (kind === 'wx'
-          ? [i * S + u - origin.x, j * H + v - origin.y, k * S + side * d - origin.z]
-          : [i * S + side * d - origin.x, j * H + v - origin.y, k * S + u - origin.z]));
-        pushQuad(pos, pts);
-      }
-      list.push(tileGeometry(pos));
+      list.push(tileShapes(P, col * third + gap, (col + 1) * third - gap, (2 - row) * rowH + gap, (3 - row) * rowH - gap, frame, true));
     }
     return list;
   }
   const half = S / 2;
   const height = tileHeightFn(piece);
+  // Oberseite: knapp darüber; Unterseite: knapp unter der Platte
+  const below = piece.type === 'floor' ? T / 2 : piece.type === 'ramp' ? RAMP_V_THICKNESS : ROOF_V_THICKNESS;
+  const above = piece.type === 'floor' ? T / 2 : 0;
+  const P = (x, z, side) => [x - origin.x, height(x, z) + (side > 0 ? above + lift : -(below + lift)) - origin.y, z - origin.z];
   for (let t = 0; t < 4; t++) {
     const row = Math.floor(t / 2);
     const col = t % 2;
@@ -693,29 +1009,70 @@ export function createTileGeometries(piece) {
     const x1 = i * S + (col + 1) * half - gap;
     const z0 = k * S + row * half + gap;
     const z1 = k * S + (row + 1) * half - gap;
-    const pos = [];
-    if (piece.type === 'roof') {
-      // Dach-Viertel: zwei Dreiecke (Spitze – Ecken), leicht angehoben
-      const cx = i * S + half;
-      const cz = k * S + half;
-      const outerX = col === 0 ? x0 : x1;
-      const outerZ = row === 0 ? z0 : z1;
-      const innerX = col === 0 ? cx - gap : cx + gap;
-      const innerZ = row === 0 ? cz - gap : cz + gap;
-      const P = (x, z) => [x - origin.x, height(x, z) + lift - origin.y, z - origin.z];
-      pushQuad(pos, [P(innerX, innerZ), P(outerX, innerZ), P(outerX, outerZ), P(innerX, outerZ)]);
-    } else {
-      const P = (x, z, dy) => [x - origin.x, height(x, z) + dy - origin.y, z - origin.z];
-      const top = piece.type === 'floor' ? T / 2 + lift : lift;
-      const bottom = piece.type === 'floor' ? -(T / 2 + lift) : -(RAMP_V_THICKNESS + lift);
-      pushQuad(pos, [P(x0, z0, top), P(x1, z0, top), P(x1, z1, top), P(x0, z1, top)]);
-      pushQuad(pos, [P(x0, z0, bottom), P(x1, z0, bottom), P(x1, z1, bottom), P(x0, z1, bottom)]);
-    }
-    list.push(tileGeometry(pos));
+    // Dach: jedes Viertel hat einen Grat von der Ecke zur Mitte – die Dreiecke der Fläche
+    // werden entlang dieser Diagonale geteilt (so liegt die Kachel genau auf dem Dach)
+    list.push(tileShapes(P, x0, x1, z0, z1, frame, col === row));
   }
   return list;
 }
 
+// Fläche, Rahmen und Kreuz einer Kachel über dem Rechteck [a0, a1] x [b0, b1]
+// (Kachel-Koordinaten); P(a, b, side) liefert den Punkt auf der Oberfläche.
+// mainDiagonal: kleine Vierecke entlang a = b teilen (sonst entlang der anderen Diagonale).
+function tileShapes(P, a0, a1, b0, b1, frame, mainDiagonal) {
+  const N = 4; // Unterteilung (folgt gebogenen Flächen wie dem Dach)
+  const fill = [];
+  const border = [];
+  const cross = [];
+  for (const side of [1, -1]) {
+    for (let m = 0; m < N; m++) {
+      for (let n = 0; n < N; n++) {
+        const ua = a0 + ((a1 - a0) * m) / N;
+        const ub = a0 + ((a1 - a0) * (m + 1)) / N;
+        const va = b0 + ((b1 - b0) * n) / N;
+        const vb = b0 + ((b1 - b0) * (n + 1)) / N;
+        const p00 = P(ua, va, side);
+        const p10 = P(ub, va, side);
+        const p11 = P(ub, vb, side);
+        const p01 = P(ua, vb, side);
+        if (mainDiagonal) fill.push(...p00, ...p10, ...p11, ...p00, ...p11, ...p01);
+        else fill.push(...p10, ...p11, ...p01, ...p10, ...p01, ...p00);
+      }
+    }
+    // Rahmen: 4 Streifen am Rand (nach innen)
+    strip(border, P, side, a0, b0 + frame / 2, a1, b0 + frame / 2, frame);
+    strip(border, P, side, a0, b1 - frame / 2, a1, b1 - frame / 2, frame);
+    strip(border, P, side, a0 + frame / 2, b0 + frame, a0 + frame / 2, b1 - frame, frame);
+    strip(border, P, side, a1 - frame / 2, b0 + frame, a1 - frame / 2, b1 - frame, frame);
+    // Kreuz: beide Diagonalen
+    strip(cross, P, side, a0 + frame, b0 + frame, a1 - frame, b1 - frame, frame * 0.8);
+    strip(cross, P, side, a0 + frame, b1 - frame, a1 - frame, b0 + frame, frame * 0.8);
+  }
+  return { fill: tileGeometry(fill), frame: tileGeometry(border), cross: tileGeometry(cross) };
+}
+
+// Streifen von (a0, b0) nach (a1, b1), Breite w, in 4 Stücken (folgt der Oberfläche)
+function strip(out, P, side, a0, b0, a1, b1, w) {
+  const len = Math.hypot(a1 - a0, b1 - b0) || 1;
+  const na = (-(b1 - b0) / len) * (w / 2);
+  const nb = ((a1 - a0) / len) * (w / 2);
+  const N = 4;
+  for (let m = 0; m < N; m++) {
+    const fa = m / N;
+    const fb = (m + 1) / N;
+    const ax = a0 + (a1 - a0) * fa;
+    const ay = b0 + (b1 - b0) * fa;
+    const bx = a0 + (a1 - a0) * fb;
+    const by = b0 + (b1 - b0) * fb;
+    const p0 = P(ax - na, ay - nb, side);
+    const p1 = P(bx - na, by - nb, side);
+    const p2 = P(bx + na, by + nb, side);
+    const p3 = P(ax + na, ay + nb, side);
+    out.push(...p0, ...p1, ...p2, ...p0, ...p2, ...p3);
+  }
+}
+
+// Höhe der Kachel-Fläche: Boden eben, Rampe = GANZE Rampe (Original-Richtung), Dach = echte Fläche
 function tileHeightFn(piece) {
   const { i, j, k } = piece;
   if (piece.type === 'floor') return () => j * H;
@@ -723,13 +1080,8 @@ function tileHeightFn(piece) {
     const { a, b, c } = rampPlane(rampSpec(i, j, k, piece.dir));
     return (x, z) => a * x + b * z + c;
   }
-  const cx = i * S + S / 2;
-  const cz = k * S + S / 2;
-  return (x, z) => j * H + B.roofHeight * (1 - Math.min(1, Math.max(Math.abs(x - cx), Math.abs(z - cz)) / (S / 2)));
-}
-
-function pushQuad(pos, p) {
-  pos.push(...p[0], ...p[1], ...p[2], ...p[0], ...p[2], ...p[3]);
+  const raise = piece.editMask | 0;
+  return (x, z) => roofSurfaceY(i, j, k, raise, x, z);
 }
 
 function tileGeometry(pos) {

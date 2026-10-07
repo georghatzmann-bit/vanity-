@@ -205,6 +205,7 @@ export function createShape() {
     type: 'box', kind: null,
     minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0,
     baseY: 0, rise: 0, vThickness: 0, a: 0, b: 0, c: 0, cx: 0, cz: 0, hx: 1, hz: 1,
+    raised: 0, h0: 0, h1: 0, h2: 0, h3: 0, // Dach: hochgezogene Ecken (Edit) und Ecken-Höhen
   };
 }
 
@@ -226,6 +227,8 @@ export function slotShape(kind, i, j, k, dir, out = createShape()) {
     out.cz = (k + 0.5) * S;
     out.hx = S / 2;
     out.hz = S / 2;
+    out.raised = 0;
+    out.h0 = out.h1 = out.h2 = out.h3 = out.baseY;
     return out;
   }
   out.kind = 'ramp';
@@ -257,6 +260,7 @@ export function colliderToShape(c, out = createShape()) {
   out.minY = c.min.y; out.maxY = c.max.y;
   out.baseY = c.baseY; out.rise = c.rise; out.vThickness = c.vThickness;
   out.a = c.a; out.b = c.b; out.c = c.c; out.cx = c.cx; out.cz = c.cz; out.hx = c.hx; out.hz = c.hz;
+  out.raised = c.raised | 0; out.h0 = c.h0; out.h1 = c.h1; out.h2 = c.h2; out.h3 = c.h3;
   return out;
 }
 

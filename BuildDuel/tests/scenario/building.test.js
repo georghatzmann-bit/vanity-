@@ -425,24 +425,34 @@ describe('Szenario: Edit und Türen', () => {
     game.dispose();
   });
 
-  it('Ecktreppe: Rampe mit G editieren (1 Feld weg) und zu Fuß hinauf – vor, 90° drehen, weiter bis oben', () => {
+  it('L-Treppe: Rampe mit G editieren (Weg 0 → 2 → 3 ziehen) und zu Fuß hinauf – vor, 90° drehen, weiter bis oben', () => {
     const game = new Game({ headless: true, seed: 1 });
     const p = game.addCharacter({ name: 'Treppe', isPlayer: false, position: { x: 0.25 * S, y: 0, z: -1.6 }, yaw: Math.PI, brain: null });
     const f = driveByCommands(p, Math.PI, 0);
     const b = game.building;
     const ramp = b.placePiece('ramp', 'r:0:0:0', p, 'wood', { dir: 0, instant: true, force: true }); // steigt nach +X
     assert.ok(b.placePiece('floor', 'f:1:1:0', p, 'wood', { instant: true, force: true }), 'Boden oben dahinter');
-    // Edit: G auf die Rampe, Feld 1 (hinten links, oben an der Rampe) anklicken, G
+    // Edit: G auf die Rampe, Weg ziehen: Feld 0 → Feld 2 (Podest) → Feld 3, G
+    const tile = (t) => ({ x: ((t % 2) + 0.5) * (S / 2), y: ((t % 2) + 0.5) * (H / 2), z: (Math.floor(t / 2) + 0.5) * (S / 2) });
     tap(game, f, { selectBuild: 'ramp' });
-    lookAt(p, f, { x: 0.75 * S, y: 0.75 * H, z: 0.25 * S }); // Feld 1 auf der Rampe
+    lookAt(p, f, tile(0));
     tap(game, f, { editPressed: true });
     assert.equal(p.mode, 'edit');
     tap(game, f);
-    assert.equal(b.editSession(p).hover, 1);
+    assert.equal(b.editSession(p).hover, 0);
+    f.primary = true;
     tap(game, f, { primaryPressed: true });
+    lookAt(p, f, tile(2));
+    tap(game, f);
+    lookAt(p, f, tile(3));
+    tap(game, f);
+    f.primary = false;
+    tap(game, f, { primaryReleased: true });
+    assert.deepEqual(b.editSession(p).path, [0, 2, 3]);
     tap(game, f, { editPressed: true });
-    assert.equal(ramp.editMask, 1 << 1, 'Feld 1 entfernt');
-    assert.equal(ramp.colliders.length, 3, 'Ecktreppe: Rampe, Podest, Rampe');
+    assert.deepEqual(ramp.editPath, [0, 2, 3], 'Weg übernommen');
+    assert.equal(ramp.editMask, 1 << 1, 'Feld 1 liegt nicht auf dem Weg');
+    assert.equal(ramp.colliders.length, 3, 'L-Treppe: Rampe, Podest, Rampe');
     // hinauf: geradeaus (+Z) die untere Treppe hoch aufs Podest …
     f.yaw = Math.PI;
     f.pitch = 0;
@@ -498,7 +508,7 @@ describe('Szenario: Edit und Türen', () => {
     game.dispose();
   });
 
-  it('halbe Rampe: zwei Felder nacheinander wählen = Richtung (vom ersten zum zweiten Feld hinauf)', () => {
+  it('halbe Rampe: zwei Felder nacheinander anklicken = Weg (vom ersten zum zweiten Feld hinauf)', () => {
     const game = new Game({ headless: true, seed: 1 });
     const p = game.addCharacter({ name: 'Edit', isPlayer: false, position: { x: 0.5 * S, y: 0, z: 1.75 * S }, yaw: 0, brain: null });
     const f = driveByCommands(p, 0, 0);
@@ -507,17 +517,17 @@ describe('Szenario: Edit und Türen', () => {
     // Feld-Mitten auf der ganzen Rampe (Spalte entlang x, Reihe entlang z)
     const tile = (t) => ({ x: ((t % 2) + 0.5) * (S / 2), y: ((t % 2) + 0.5) * (H / 2), z: (Math.floor(t / 2) + 0.5) * (S / 2) });
     tap(game, f, { selectBuild: 'ramp' });
-    lookAt(p, f, tile(3));
+    lookAt(p, f, tile(1));
     tap(game, f, { editPressed: true });
     tap(game, f);
-    // hintere Reihe quer: erst Feld 3, dann Feld 2 → bleibende Reihe 0/1 steigt nach −X
+    // vordere Reihe quer: erst Feld 1, dann Feld 0 anklicken → Reihe 0/1 bleibt und steigt nach −X
     tap(game, f, { primaryPressed: true });
-    lookAt(p, f, tile(2));
+    lookAt(p, f, tile(0));
     tap(game, f);
     tap(game, f, { primaryPressed: true });
     tap(game, f, { editPressed: true });
     assert.equal(ramp.editMask, (1 << 2) | (1 << 3));
-    assert.equal(ramp.editDir, 2, 'von Feld 3 nach Feld 2 = −X');
+    assert.deepEqual(ramp.editPath, [1, 0], 'von Feld 1 nach Feld 0 = −X');
     assert.equal(ramp.colliders.length, 1);
     const c = ramp.colliders[0];
     assert.close(c.minZ, 0, 1e-9);

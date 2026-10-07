@@ -1,12 +1,20 @@
 // =============================================================================
 // Edit-Modus und Türen
 // =============================================================================
-// Ablauf (wie im Original):
+// Ablauf (wie in Fortnite):
 //   1. G auf ein EIGENES Bauteil (unter dem Fadenkreuz, bis CONFIG.building.editReach)
-//      → Edit-Modus. Auf dem Bauteil erscheinen leuchtende Felder.
+//      → Edit-Modus. Das Bauteil wird ausgeblendet, man sieht sein Raster (Kacheln).
 //      Fremde Bauteile: kein Edit, kurzer Hinweis.
-//   2. Linksklick schaltet das Feld unter dem Fadenkreuz um (rot = wird entfernt).
+//      Ist die linke Maustaste beim Öffnen schon gedrückt, wird das Feld unter dem
+//      Fadenkreuz sofort gewählt (schnelle Edits: Maus halten, G tippen, loslassen).
+//   2. Linksklick schaltet das Feld unter dem Fadenkreuz um (grau = gewählt).
 //      Maus gedrückt halten und über Felder ziehen = alle mit gleichem Zustand.
+//        Wand/Boden: gewählte Felder fallen weg (Löcher, Tür, Dreieck, Bogen …).
+//        Dach:       gewählte Ecken werden hochgezogen.
+//        Rampe:      man zieht einen WEG (jedes Feld neben dem vorigen) – er bleibt als
+//                    Treppe: 2 Felder = halbe Rampe, 3 (L) = L-Treppe, 4 (U) = U-Treppe.
+//                    Zurück auf das vorige Feld ziehen nimmt den letzten Schritt zurück.
+//                    Die Reihenfolge bestimmt die Richtung (vom ersten Feld hinauf).
 //   3. Rechtsklick = zurücksetzen. Mit "Auto-Reset" (Standard, wie in Fortnite) ist
 //      das Bauteil sofort wieder ganz und der Edit zu; sonst erst nach dem Bestätigen.
 //   4. G nochmal = bestätigen (sofort). Mit "Edit beim Loslassen bestätigen"
@@ -16,14 +24,11 @@
 //      oder verworfen wird (Standard: beides bestätigt).
 //   5. Wand: genau die mittleren unteren 2 Felder entfernt = Tür. E öffnet/schließt
 //      sie (jeder darf Türen benutzen).
-//   6. Rampe: 1 Feld entfernt = Ecktreppe; 2 Felder nebeneinander entfernt = halbe
-//      Rampe – sie steigt in die Richtung, in der man die zwei Felder gewählt hat
-//      (vom ersten zum zweiten Feld, z. B. Ziehen von unten nach oben).
 // Im Tick, in dem G den Edit öffnet (character.editOpenedTick), zählt dasselbe G
 // nicht gleich als "bestätigen".
 // =============================================================================
 import { CONFIG } from '../config.js';
-import { pickTile, isDoorPiece, doorRect, pieceOrigin } from './pieces.js';
+import { pickTile, isDoorPiece, doorRect, pieceOrigin, rampPathOf, tileDirection, pathMask } from './pieces.js';
 import { fullTileMask, CELL_SIZE as S, LEVEL_HEIGHT as H } from './grid.js';
 
 const B = CONFIG.building;
@@ -34,7 +39,7 @@ const B = CONFIG.building;
  */
 export function createEditController(system) {
   const game = system.game;
-  const sessions = new Map(); // Figur → { piece, openedTick, selection, hover, paint, lastPaint }
+  const sessions = new Map(); // Figur → Sitzung (siehe open)
   let candidates = new WeakMap(); // Figur → Bauteil, das canEdit zuletzt gefunden hat
   const hintAt = new WeakMap(); // Figur → Spielzeit des letzten Hinweises
   const _origin = { x: 0, y: 0, z: 0 };
@@ -93,15 +98,22 @@ export function createEditController(system) {
 
   function open(character, piece) {
     const resetFirst = character.isPlayer && !!game.settings?.controls?.resetEditAfterConfirm;
+    const ramp = piece.type === 'ramp';
+    const current = ramp ? rampPathOf(piece) : null;
+    const path = !resetFirst && current ? [...current] : [];
     const session = {
       piece,
       openedTick: character.editOpenedTick,
-      selection: resetFirst ? 0 : piece.editMask | 0,
+      fresh: true, // erster Tick der Sitzung (Maus schon gedrückt → Feld sofort wählen)
+      armed: false, // Maus gedrückt, wartet auf ein Feld unter dem Fadenkreuz
+      // Wand/Boden: entfernte Felder, Dach: hochgezogene Ecken, Rampe: Felder des Wegs
+      selection: ramp ? pathMask(path) : resetFirst ? 0 : piece.editMask | 0,
+      path, // nur Rampe: gezogener Weg (Feld-Nummern in Reihenfolge)
+      pathStarted: false, // Rampe: in dieser Sitzung schon gezogen (sonst beginnt ein Klick neu)
+      reset: ramp && resetFirst, // Rampe: zurückgesetzt (ohne neuen Weg → ganze Rampe)
       hover: -1,
-      paint: null, // true = beim Ziehen auswählen, false = abwählen
+      paint: null, // Wand/Boden/Dach: true = beim Ziehen auswählen, false = abwählen; Rampe: true = zieht
       lastPaint: -1,
-      prevAdded: -1, // die zwei zuletzt GEWÄHLTEN Felder (Rampe: Richtung der halben Rampe)
-      lastAdded: -1,
       painted: false, // mindestens ein Feld angeklickt (für "beim Loslassen bestätigen")
     };
     sessions.set(character, session);
@@ -117,44 +129,60 @@ export function createEditController(system) {
     }
   }
 
-  // Rampe: Richtung aus der Wahl-Reihenfolge (vom vorletzten zum letzten gewählten Feld),
-  // wenn genau diese zwei nebeneinander liegenden Felder gewählt sind; sonst die alte
-  function rampEditDir(session, piece) {
-    const a = session.prevAdded;
-    const b = session.lastAdded;
-    if (a >= 0 && b >= 0 && session.selection === ((1 << a) | (1 << b))) {
-      const dx = (b % 2) - (a % 2);
-      const dz = Math.floor(b / 2) - Math.floor(a / 2);
-      if (Math.abs(dx) + Math.abs(dz) === 1) return dx === 1 ? 0 : dz === 1 ? 1 : dx === -1 ? 2 : 3;
-    }
-    return session.selection === (piece.editMask | 0) ? piece.editDir ?? null : null;
-  }
-
   /** Auswahl übernehmen (sofort). Alle Felder entfernen geht nicht. */
   function confirm(character) {
     const session = sessions.get(character);
     if (!session) return false;
     const piece = session.piece;
-    const full = fullTileMask(piece.type);
-    const editDir = piece.type === 'ramp' ? rampEditDir(session, piece) : null;
-    const changed = session.selection !== (piece.editMask | 0) || (piece.type === 'ramp' && editDir !== (piece.editDir ?? null));
-    if (!piece.removed && session.selection !== full && changed) {
-      system.setEdit(piece, session.selection, editDir);
+    if (!piece.removed) {
+      if (piece.type === 'ramp') {
+        const old = rampPathOf(piece);
+        if (session.path.length >= 2) {
+          // neuer Weg (2–4 Felder) → halbe Rampe / L- / U-Treppe
+          if (!old || old.join() !== session.path.join()) system.setEdit(piece, 0, session.path);
+        } else if (session.reset && old) {
+          system.setEdit(piece, 0, null); // zurückgesetzt → ganze Rampe
+        }
+        // 0 oder 1 Feld: keine Änderung
+      } else if (session.selection !== fullTileMask(piece.type) && session.selection !== (piece.editMask | 0)) {
+        system.setEdit(piece, session.selection);
+      }
     }
     leave(character);
     return true;
   }
 
-  // Feld umschalten (Klick oder Ziehen); merkt sich die Reihenfolge der gewählten Felder
+  // Wand/Boden/Dach: Feld umschalten (Klick oder Ziehen)
   function toggleTile(session, tile, select) {
-    const bit = 1 << tile;
-    if (select) {
-      session.selection |= bit;
-      session.prevAdded = session.lastAdded;
-      session.lastAdded = tile;
+    if (select) session.selection |= 1 << tile;
+    else session.selection &= ~(1 << tile);
+  }
+
+  // Rampe: Klick auf ein Feld. Neuer Weg – außer das Feld setzt den Weg fort (neben dem
+  // letzten Feld) oder IST das letzte Feld (dann einfach weiterziehen).
+  function rampPress(session, tile) {
+    const path = session.path;
+    const last = path.length ? path[path.length - 1] : -1;
+    if (session.pathStarted && tile === last) return;
+    if (session.pathStarted && last >= 0 && !path.includes(tile) && tileDirection(last, tile) >= 0) {
+      path.push(tile);
     } else {
-      session.selection &= ~bit;
+      path.length = 0;
+      path.push(tile);
     }
+    session.pathStarted = true;
+    session.selection = pathMask(path);
+  }
+
+  // Rampe: mit gedrückter Maus auf ein anderes Feld gezogen
+  function rampDrag(session, tile) {
+    const path = session.path;
+    if (path.length >= 2 && tile === path[path.length - 2]) {
+      path.pop(); // zurück aufs vorige Feld: letzten Schritt zurücknehmen
+    } else if (path.length && !path.includes(tile) && tileDirection(path[path.length - 1], tile) >= 0) {
+      path.push(tile);
+    }
+    session.selection = pathMask(path);
   }
 
   /** Jeden Tick für eine Figur im Edit-Modus (aus building.updateCharacter). */
@@ -188,36 +216,48 @@ export function createEditController(system) {
     // Feld unter dem Fadenkreuz
     system.aimRay(character, _origin, _dir);
     session.hover = pickTile(piece, _origin, _dir, B.editReach * 1.5);
+    const ramp = piece.type === 'ramp';
 
     // Rechtsklick: alles zurücksetzen – mit Auto-Reset sofort übernehmen und Edit schließen
     if (cmd.secondaryPressed) {
       session.selection = 0;
-      session.prevAdded = -1;
-      session.lastAdded = -1;
+      session.path.length = 0;
+      session.pathStarted = false;
+      session.reset = true;
       if (option(character, 'resetConfirms')) {
         confirm(character);
         return;
       }
     }
 
-    // Klicken / Ziehen
-    if (cmd.primaryPressed && session.hover >= 0) {
-      session.paint = (session.selection & (1 << session.hover)) === 0;
-      toggleTile(session, session.hover, session.paint);
+    // Klicken / Ziehen. Maus beim Öffnen schon gedrückt = wie ein Klick (schnelle Edits).
+    // Ein Klick neben das Raster wartet, bis das Fadenkreuz (Maus noch gedrückt) ein Feld trifft.
+    if (cmd.primaryPressed || (session.fresh && cmd.primary)) session.armed = true;
+    if (session.armed && session.paint === null && session.hover >= 0) {
+      if (ramp) {
+        rampPress(session, session.hover);
+        session.paint = true;
+      } else {
+        session.paint = (session.selection & (1 << session.hover)) === 0;
+        toggleTile(session, session.hover, session.paint);
+      }
       session.lastPaint = session.hover;
       session.painted = true;
     } else if (cmd.primary && session.paint !== null && session.hover >= 0 && session.hover !== session.lastPaint) {
-      toggleTile(session, session.hover, session.paint);
+      if (ramp) rampDrag(session, session.hover);
+      else toggleTile(session, session.hover, session.paint);
       session.lastPaint = session.hover;
     }
     if (!cmd.primary) {
       session.paint = null;
       session.lastPaint = -1;
+      session.armed = false;
     }
+    session.fresh = false;
 
     // Bestätigen: G nochmal – oder (Einstellung) Loslassen der linken Maustaste nach dem Wählen
-    const fresh = game.tick === character.editOpenedTick;
-    if (!fresh && cmd.editPressed) {
+    const opening = game.tick === character.editOpenedTick;
+    if (!opening && cmd.editPressed) {
       confirm(character);
     } else if (session.painted && !cmd.primary && option(character, 'editOnRelease')) {
       confirm(character);

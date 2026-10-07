@@ -8,7 +8,7 @@ import {
   presentRects, isDoorMask, tilesToMask, maskToTiles, fullTileMask, selectTarget, createTarget, rampSpec, roofSpec,
   RAMP_V_THICKNESS, ROOF_V_THICKNESS, levelIndex, cellIndex,
 } from '../src/building/grid.js';
-import { pieceColliderSpecs, pickTile, isDoorPiece, halfRampDirection } from '../src/building/pieces.js';
+import { pieceColliderSpecs, pickTile, isDoorPiece, rampPathFromMask } from '../src/building/pieces.js';
 
 const S = CONFIG.world.gridCellSize;
 const H = CONFIG.world.wallHeight;
@@ -213,10 +213,12 @@ describe('Bau-Raster: Edit-Felder', () => {
     assert.deepEqual([rs[0].spec.minX, rs[0].spec.maxX, rs[0].spec.minZ, rs[0].spec.maxZ], [S / 2, S, 0, S]);
     assert.deepEqual([rs[0].spec.dir, rs[0].spec.rise], [3, H], 'gleiche Richtung, ganze Höhe');
     const roof = { type: 'roof', kind: 'c', i: 0, j: 1, k: 0, dir: 0, editMask: tilesToMask([1]) };
-    assert.equal(pieceColliderSpecs(roof).length, 2, 'Dach ohne ein Viertel');
+    const roofSpecs = pieceColliderSpecs(roof);
+    assert.equal(roofSpecs.length, 1, 'Dach: eine Fläche (Ecke 1 hochgezogen, nichts fällt weg)');
+    assert.equal(roofSpecs[0].spec.raise, 2);
   });
 
-  it('Rampen-Edit: 1 Feld weg = Ecktreppe (Rampe – Podest – Rampe), lückenlos eine Ebene hoch', () => {
+  it('Rampen-Edit aus Maske: 1 Feld weg = L-Treppe (Rampe – Podest – Rampe), lückenlos eine Ebene hoch', () => {
     // für jede Richtung und jedes entfernte Feld: Höhen über die Kollision prüfen
     for (let dir = 0; dir < 4; dir++) {
       for (let removed = 0; removed < 4; removed++) {
@@ -261,24 +263,21 @@ describe('Bau-Raster: Edit-Felder', () => {
     }
   });
 
-  it('Rampen-Edit: 2 Felder in einer Reihe weg = halbe Rampe; Richtung = Wahl-Reihenfolge (editDir), sonst gedreht', () => {
-    const half = (dir, removed, editDir = null) => {
-      const specs = pieceColliderSpecs({ type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir, editMask: tilesToMask(removed), editDir });
+  it('Rampen-Edit aus Maske: 2 Felder in einer Reihe weg = halbe Rampe (alte Richtung, quer 90° gedreht)', () => {
+    const half = (dir, removed) => {
+      const specs = pieceColliderSpecs({ type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir, editMask: tilesToMask(removed) });
       assert.equal(specs.length, 1);
       return specs[0].spec;
     };
-    // Streifen entlang der alten Richtung: bleibt (oder umgedreht, wenn so gewählt)
-    assert.equal(half(0, [0, 1]).dir, 0);
-    assert.equal(half(0, [0, 1], 2).dir, 2, 'von rechts nach links gewählt → steigt nach −X');
-    assert.equal(half(0, [0, 1], 1).dir, 0, 'Richtung quer zum Streifen zählt nicht');
-    // Streifen quer zur alten Richtung: steigt entlang des Streifens
+    assert.equal(half(0, [0, 1]).dir, 0, 'Streifen entlang der alten Richtung: bleibt');
     const across = half(0, [1, 3]);
     assert.deepEqual([across.minX, across.maxX, across.minZ, across.maxZ], [0, S / 2, 0, S]);
-    assert.equal(across.dir, 1, 'ohne Wahl: 90° weiter gedreht');
-    assert.equal(half(0, [1, 3], 3).dir, 3);
-    assert.equal(halfRampDirection(2, null, false), 3);
-    // Diagonale bleibt die alte Form (zwei Stücke der ganzen Rampe)
-    assert.equal(pieceColliderSpecs({ type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir: 0, editMask: tilesToMask([0, 3]) }).length, 2);
+    assert.equal(across.dir, 1, 'quer: 90° weiter gedreht');
+    assert.deepEqual(rampPathFromMask(2, tilesToMask([0, 2])), [3, 1], 'Spalte 1, steigt nach −Z');
+    // Diagonale / nur 1 Feld: kein gültiger Weg → ganze Rampe
+    assert.equal(rampPathFromMask(0, tilesToMask([0, 3])), null);
+    assert.equal(rampPathFromMask(0, tilesToMask([0, 1, 2])), null);
+    assert.equal(pieceColliderSpecs({ type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir: 0, editMask: tilesToMask([0, 3]) }).length, 1);
   });
 
   it('pickTile: Feld unter dem Fadenkreuz (Wand, Boden, Rampe, Dach)', () => {

@@ -113,6 +113,10 @@ export class CollisionWorld {
    * spec = { minX, maxX, minZ, maxZ, baseY, rise, dir, thickness, clip? }
    *   dir 0..3: Rampe steigt Richtung +X, +Z, −X, −Z (von baseY auf baseY + rise)
    *   dir 'pyramid': Dach, Spitze in der Mitte (baseY + rise), Ränder bei baseY
+   *   raise (nur Pyramide, optional): Bitmaske der hochgezogenen Ecken (Edit wie in
+   *     Fortnite): Bit t = Ecke t (t = Reihe·2 + Spalte, Spalte entlang x, Reihe entlang z,
+   *     0 = kleines x/z). Eine hochgezogene Ecke liegt auf Spitzen-Höhe (baseY + rise).
+   *     Die Fläche besteht immer aus 4 Dreiecken (Kanten-Ecken + Mitte).
    *   thickness: Dicke der Platte (senkrecht zur Fläche gemessen)
    *   clip (Welle 2a, optional): { minX, maxX, minZ, maxZ } – nur dieses Stück der
    *     Schräge ist da (editierte Rampen/Dächer: halbe Rampe, Dach-Viertel). Form und
@@ -132,6 +136,7 @@ export class CollisionWorld {
       minX: 0, maxX: 0, minZ: 0, maxZ: 0, baseY: 0, rise: 0,
       a: 0, b: 0, c: 0, // Rampe: Höhe = a·x + b·z + c
       cx: 0, cz: 0, hx: 1, hz: 1, // Pyramide: Mitte und halbe Kantenlängen
+      raised: 0, h0: 0, h1: 0, h2: 0, h3: 0, // Pyramide: hochgezogene Ecken (Bitmaske) und Höhen der 4 Ecken
       vThickness: 0, // Dicke senkrecht (in Y) gemessen
       planes: null, // Float64Array: je Ebene nx, ny, nz, d (Innen: n·p − d ≤ 0)
       parts: null, // Array von [Start, Anzahl] – konvexe Teilstücke
@@ -634,22 +639,25 @@ function prepareSlope(c) {
     c.hz = sizeZ / 2;
     const slope = c.rise / Math.min(c.hx, c.hz);
     c.vThickness = thickness * Math.sqrt(1 + slope * slope);
-    // 4 Dach-Flächen, jede ein konvexes Stück mit 5 Ebenen
+    const top = c.baseY + c.rise;
+    // Ecken: unten (baseY) oder hochgezogen (Spitzen-Höhe)
+    const raise = (s.raise | 0) & 15;
+    c.raised = raise;
+    c.h0 = raise & 1 ? top : c.baseY;
+    c.h1 = raise & 2 ? top : c.baseY;
+    c.h2 = raise & 4 ? top : c.baseY;
+    c.h3 = raise & 8 ? top : c.baseY;
+    // 4 Dach-Flächen (Dreiecke Mitte – Ecke – Ecke), jede ein konvexes Stück mit 5 Ebenen
     c.planes = new Float64Array(4 * 5 * 4);
     c.parts = [];
-    const top = c.baseY + c.rise;
     let p = 0;
-    // Fläche +X: Höhe = top − rise·(x − cx)/hx ; Bereich |z−cz|/hz ≤ (x−cx)/hx, x ≤ maxX
-    // Fläche −X, +Z, −Z entsprechend
-    const faces = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    for (const [fx, fz] of faces) {
+    for (let face = 0; face < 4; face++) {
       const start = p / 4;
-      // Höhe y = top − rise·(fx·(x−cx)/hx + fz·(z−cz)/hz)
-      const ax = -c.rise * fx / c.hx;
-      const bz = -c.rise * fz / c.hz;
-      const cc = top + c.rise * (fx * c.cx / c.hx + fz * c.cz / c.hz);
-      p = writePlane(c.planes, p, -ax, 1, -bz, cc); // unter der Oberseite: y − ax·x − bz·z − cc ≤ 0
-      p = writePlane(c.planes, p, ax, -1, bz, -(cc - c.vThickness)); // über der Unterseite
+      const fx = FACE_X[face];
+      const fz = FACE_Z[face];
+      pyramidFacePlane(c, face, _plane);
+      p = writePlane(c.planes, p, -_plane.a, 1, -_plane.b, _plane.c); // unter der Oberseite
+      p = writePlane(c.planes, p, _plane.a, -1, _plane.b, -(_plane.c - c.vThickness)); // über der Unterseite
       if (fx !== 0) {
         // äußere Kante: fx·x ≤ fx·Rand
         p = writePlane(c.planes, p, fx, 0, 0, fx > 0 ? c.maxX : -c.minX);
@@ -739,6 +747,38 @@ function applySlopeClip(c) {
   c.max.set(maxX, range.max, maxZ);
 }
 
+// Pyramiden-Flächen: 0 = +X, 1 = −X, 2 = +Z, 3 = −Z (Richtung von der Mitte nach außen)
+const FACE_X = [1, -1, 0, 0];
+const FACE_Z = [0, 0, 1, -1];
+const _plane = { a: 0, b: 0, c: 0 };
+
+/**
+ * Ebene einer Pyramiden-Fläche (Dreieck Mitte – Ecke – Ecke): Höhe = a·x + b·z + c.
+ * Mitte immer auf Spitzen-Höhe, die Ecken auf ihrer Höhe (h0..h3, hochgezogen oder unten).
+ * face: 0 = +X, 1 = −X, 2 = +Z, 3 = −Z. Schreibt in out { a, b, c }.
+ */
+export function pyramidFacePlane(c, face, out) {
+  const top = c.baseY + c.rise;
+  const fx = FACE_X[face];
+  const fz = FACE_Z[face];
+  // Ecken der Fläche: ha bei "quer" = −1, hb bei +1 (quer = z bei X-Flächen, x bei Z-Flächen)
+  let ha;
+  let hb;
+  if (fx > 0) { ha = c.h1; hb = c.h3; } else if (fx < 0) { ha = c.h0; hb = c.h2; } else if (fz > 0) { ha = c.h2; hb = c.h3; } else { ha = c.h0; hb = c.h1; }
+  const k = (ha + hb) / 2 - top; // Änderung von der Mitte zur Kante
+  const l = (hb - ha) / 2; // Änderung quer
+  if (fx !== 0) {
+    out.a = (fx * k) / c.hx;
+    out.b = l / c.hz;
+    out.c = top - (fx * k * c.cx) / c.hx - (l * c.cz) / c.hz;
+  } else {
+    out.a = l / c.hx;
+    out.b = (fz * k) / c.hz;
+    out.c = top - (l * c.cx) / c.hx - (fz * k * c.cz) / c.hz;
+  }
+  return out;
+}
+
 function writePlane(planes, p, nx, ny, nz, d) {
   planes[p] = nx;
   planes[p + 1] = ny;
@@ -757,8 +797,28 @@ export function slopeSurfaceY(c, x, z) {
   if (z < c.minZ) z = c.minZ;
   else if (z > c.maxZ) z = c.maxZ;
   if (c.kind === 'pyramid') {
-    const u = Math.max(Math.abs(x - c.cx) / c.hx, Math.abs(z - c.cz) / c.hz);
-    return c.baseY + c.rise * (1 - Math.min(1, u));
+    const u = (x - c.cx) / c.hx;
+    const w = (z - c.cz) / c.hz;
+    const au = Math.abs(u);
+    const aw = Math.abs(w);
+    if (!c.raised) return c.baseY + c.rise * (1 - Math.min(1, au > aw ? au : aw));
+    // hochgezogene Ecken: Dreieck Mitte – Ecke – Ecke der Fläche, in der (x, z) liegt
+    const top = c.baseY + c.rise;
+    let s;
+    let t;
+    let ha;
+    let hb;
+    if (au >= aw) {
+      s = au;
+      t = w;
+      if (u >= 0) { ha = c.h1; hb = c.h3; } else { ha = c.h0; hb = c.h2; }
+    } else {
+      s = aw;
+      t = u;
+      if (w >= 0) { ha = c.h2; hb = c.h3; } else { ha = c.h0; hb = c.h1; }
+    }
+    if (s > 1) s = 1;
+    return top + s * ((ha + hb) / 2 - top) + (t * (hb - ha)) / 2;
   }
   return c.a * x + c.b * z + c.c;
 }
@@ -773,6 +833,30 @@ export function slopeRangeOverRect(c, x0, x1, z0, z1, out) {
   const az = Math.max(z0, c.minZ);
   const bz = Math.min(z1, c.maxZ);
   if (ax > bx || az > bz) return false;
+  if (c.kind === 'pyramid' && c.raised) {
+    // stückweise eben (4 Dreiecke): Extremwerte an den Ecken des Rechtecks, in der Mitte
+    // und dort, wo die Grate (Diagonalen) den Rand des Rechtecks schneiden
+    out.min = Infinity;
+    out.max = -Infinity;
+    rangePoint(c, ax, az, out);
+    rangePoint(c, bx, az, out);
+    rangePoint(c, ax, bz, out);
+    rangePoint(c, bx, bz, out);
+    if (c.cx >= ax && c.cx <= bx && c.cz >= az && c.cz <= bz) rangePoint(c, c.cx, c.cz, out);
+    const q = c.hx / c.hz;
+    for (let sgn = -1; sgn <= 1; sgn += 2) {
+      // Diagonale x − cx = sgn·(z − cz)·hx/hz
+      let x = c.cx + sgn * (az - c.cz) * q;
+      if (x > ax && x < bx) rangePoint(c, x, az, out);
+      x = c.cx + sgn * (bz - c.cz) * q;
+      if (x > ax && x < bx) rangePoint(c, x, bz, out);
+      let z = c.cz + (sgn * (ax - c.cx)) / q;
+      if (z > az && z < bz) rangePoint(c, ax, z, out);
+      z = c.cz + (sgn * (bx - c.cx)) / q;
+      if (z > az && z < bz) rangePoint(c, bx, z, out);
+    }
+    return true;
+  }
   if (c.kind === 'pyramid') {
     // höchster Punkt: dem Mittelpunkt am nächsten; tiefster: an einer Ecke
     const px = c.cx < ax ? ax : c.cx > bx ? bx : c.cx;
@@ -791,6 +875,13 @@ export function slopeRangeOverRect(c, x0, x1, z0, z1, out) {
   out.min = Math.min(h00, h11, h01, h10);
   out.max = Math.max(h00, h11, h01, h10);
   return true;
+}
+
+// Höhe an (x, z) in den Bereich out { min, max } aufnehmen
+function rangePoint(c, x, z, out) {
+  const h = slopeSurfaceY(c, x, z);
+  if (h < out.min) out.min = h;
+  if (h > out.max) out.max = h;
 }
 
 /** Schneidet die Box die Platte der Schräge? (vorsichtige Prüfung über den Umriss) */

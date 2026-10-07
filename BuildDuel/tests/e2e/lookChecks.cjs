@@ -409,10 +409,10 @@ const LOOK_CHECKS = [
         b.game.frameUpdate(1 / 60, 1);
         const overlay = b.building.view.root.getObjectByName('Edit-Kacheln');
         const tiles = overlay ? overlay.children.length : 0;
-        const edges = overlay ? overlay.children.filter((m) => m.children[0]?.isLineSegments).length : 0;
+        const edges = overlay ? overlay.children.filter((m) => m.children[0]?.name === 'Rahmen' && m.children[1]?.name === 'Kreuz').length : 0;
         return { tiles, edges, selection: b.building.editSession(b.p)?.selection ?? 0 };
       });
-      ctx.assert(edit.tiles === 9 && edit.edges === 9, `9 Kacheln mit Umriss (${edit.tiles}/${edit.edges})`);
+      ctx.assert(edit.tiles === 9 && edit.edges === 9, `9 Kacheln mit Rahmen und Kreuz (${edit.tiles}/${edit.edges})`);
       ctx.assert(edit.selection !== 0, `Felder gewählt (${edit.selection})`);
       await settle(ctx);
       await ctx.shot('look-edit-raster');

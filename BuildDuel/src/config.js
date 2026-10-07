@@ -330,6 +330,14 @@ export const CONFIG = deepFreeze({
     // Tür = die mittleren unteren 2 Felder einer Wand (Feld-Nummern 0..8,
     // oben links = 0, unten rechts = 8)
     wallDoorCells: [4, 7],
+    // Besondere Wand-Formen wie in Fortnite (Bogen, halber Bogen, Dreieck). Die Kollision
+    // nähert Rundungen und Schrägen mit schmalen Boxen an (Bild = echte Form).
+    wallArchLegWidth: CELL / 12, // Bogen: so breit (m, 0,43 m) sind die beiden dünnen Beine // SCHÄTZUNG
+    wallArchCornerU: CELL / 5, // Bogen-Rundung (Viertel-Ellipse): so breit (m, 1,02 m) … // SCHÄTZUNG
+    wallArchCornerV: LEVEL / 5, // … und so hoch (m, 0,77 m) // SCHÄTZUNG
+    wallCurveSegments: 8, // Rundung im Bild aus so vielen geraden Stücken
+    wallCollisionSlices: 8, // Dreieck: Kollision aus so vielen senkrechten Streifen
+    wallCurveSlices: 3, // Bogen-Rundung: Kollision aus so vielen Streifen je Ecke
     previewColorOk: '#4DA6FF', // Vorschau: blau = geht
     previewColorBlocked: '#FF4D4D', // Vorschau: rot = geht nicht
     previewOpacity: 0.75, // Fläche des Geists (das Gitter-Bild macht sie zusätzlich durchsichtig)
@@ -374,12 +382,18 @@ export const CONFIG = deepFreeze({
     constructionOpacity: { start: 0.45, end: 0.85 }, // Aufbau: leicht durchsichtig, wird fester
     constructionTint: '#5FA8FF', // Aufbau: bläulicher Schimmer (verschwindet, wenn das Teil fertig ist)
     collapseSink: 1.2, // Einsturz-Animation: so weit (m) sackt ein Teil ab, während es verblasst
-    editTileColor: '#6EC1FF', // Edit-Kacheln: durchsichtig blau mit weißem Umriss
-    editTileSelectedColor: '#FF4D4D', // gewählte Felder (werden entfernt): rot
-    editTileHoverColor: '#FFFFFF', // Feld unter dem Fadenkreuz
-    editTileOpacity: 0.42,
-    editTileSelectedOpacity: 0.3, // gewählte Felder: rot und durchsichtiger (fallen weg)
+    // Edit-Kacheln wie in Fortnite: Im Edit wird das Bauteil selbst ausgeblendet, man sieht
+    // nur sein Raster – blaue Felder bleiben, graue Felder (mit Kreuz) fallen weg bzw.
+    // (Dach) werden hochgezogen, bei der Rampe ist der gezogene Weg blau.
+    editTileColor: '#4FB4FF', // Feld bleibt: durchsichtig blau mit weißem Rahmen
+    editTileSelectedColor: '#9AA3AD', // gewähltes Feld (fällt weg / Dach-Ecke hoch): grau mit Kreuz
+    editTileHoverColor: '#BFE6FF', // Feld unter dem Fadenkreuz (heller)
+    editTilePathColor: '#2E9BFF', // Rampe: Felder des gezogenen Wegs (kräftiger blau)
+    editTileOpacity: 0.5,
+    editTileSelectedOpacity: 0.62, // grau etwas fester (wie in Fortnite)
     editTileEdgeColor: '#FFFFFF',
+    editTileGap: 0.06, // Lücke (m) zwischen den Kacheln (= Gitter-Linie)
+    editTileFrame: 0.07, // Breite (m) des weißen Rahmens jeder Kachel
   },
 
   // ---------------------------------------------------------------------------
