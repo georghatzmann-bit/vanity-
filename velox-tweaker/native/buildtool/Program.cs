@@ -264,9 +264,16 @@ internal static class Program
         Check(html != null && html.Status == 200 && html.ContentType == "text/html; charset=utf-8", $"{label}: {page} with a query string -> 200 text/html; charset=utf-8");
         var js = site.Resolve(o + "brand/intro.js", "GET");
         Check(js != null && js.ContentType == "text/javascript; charset=utf-8", $"{label}: ES modules as text/javascript");
+        // the light's module worker: a worker script must come with a JavaScript MIME type or it does not start
+        var worker = site.Resolve(o + "brand/light-worker.js", "GET");
+        Check(worker != null && worker.Status == 200 && worker.ContentType == "text/javascript; charset=utf-8" && worker.Headers.Contains("X-Content-Type-Options: nosniff"),
+            $"{label}: brand/light-worker.js (module worker) -> 200 text/javascript, nosniff");
         string csp = html == null || html.Body == null ? "" : Encoding.UTF8.GetString(html.Body);
         Check(Regex.IsMatch(csp, "http-equiv=\"Content-Security-Policy\"[^>]*script-src 'self'") && !csp.Contains("unsafe-inline") && !csp.Contains("unsafe-eval"),
             $"{label}: {page} keeps its strict CSP (script-src 'self', nothing unsafe)");
+        string workerSrc = CspWorkerSource(csp, out string from);
+        Check(workerSrc != null && Regex.IsMatch(workerSrc, "(^|\\s)'self'(\\s|$)"),
+            $"{label}: {page}'s CSP lets the same-origin light worker start ({from ?? "no directive"}: {workerSrc ?? "-"})");
         var head = site.Resolve(o + page, "HEAD");
         Check(head != null && head.Status == 200 && head.Body == null, $"{label}: HEAD -> 200 without body");
         bool all404 = true;
@@ -292,6 +299,29 @@ internal static class Program
               && site.Resolve("https://" + host + ":8443/" + page, "GET") == null, $"{label}: other origins are not answered");
     }
 
+    /// <summary>
+    /// The CSP source list that governs `new Worker(...)` (CSP3 fallback: worker-src, then child-src, then
+    /// script-src, then default-src), taken from the page's Content-Security-Policy meta; null if none applies.
+    /// </summary>
+    internal static string CspWorkerSource(string html, out string directive)
+    {
+        directive = null;
+        var meta = Regex.Match(html ?? "", "<meta[^>]*http-equiv=\"Content-Security-Policy\"[^>]*content=\"([^\"]*)\"", RegexOptions.IgnoreCase);
+        if (!meta.Success) return null;
+        var dirs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string part in meta.Groups[1].Value.Split(';'))
+        {
+            string d = part.Trim();
+            if (d.Length == 0) continue;
+            int sp = d.IndexOf(' ');
+            string name = sp < 0 ? d : d.Substring(0, sp);
+            if (!dirs.ContainsKey(name)) dirs[name] = sp < 0 ? "" : d.Substring(sp + 1).Trim();   // the first one wins
+        }
+        foreach (string name in new[] { "worker-src", "child-src", "script-src", "default-src" })
+            if (dirs.TryGetValue(name, out string list)) { directive = name; return list; }
+        return null;
+    }
+
     private static void CheckNativeSources(string app)
     {
         var files = new List<(string name, string text)>();
@@ -312,6 +342,10 @@ internal static class Program
             string t = files.FirstOrDefault(f => f.name == front).text ?? "";
             Check(t.Contains("AddWebResourceRequestedFilter(") && t.Contains("WebResourceRequested += ") && t.Contains("CreateWebResourceResponse(") && t.Contains("new MemoryStream("),
                 $"{front}: pages answered from memory (filter + WebResourceRequested + CreateWebResourceResponse(MemoryStream))");
+            // the light's module worker and its imports are requested by a dedicated worker: the Document source kind
+            // covers the page "including dedicated workers and iframes" (WebView2 docs); a shared/service worker would not be
+            Check(Regex.IsMatch(t, @"AddWebResourceRequestedFilter\([^;]*CoreWebView2WebResourceRequestSourceKinds\.(Document|All)\b"),
+                $"{front}: the resource filter covers the page and its dedicated workers (source kind Document)");
         }
         // a page that does not load (Edge error page) or never reports in must not stay on screen
         string hostSrc = files.FirstOrDefault(f => f.name == "native/host/HostForm.cs").text ?? "";
@@ -340,6 +374,14 @@ internal static class Program
             if (fired != x.bad) { guardOk = false; Check(false, $"source guard self-test: '{x.what}' {(x.bad ? "not detected" : "flagged although fine")}"); }
         }
         Check(guardOk, $"source guard self-test: {samples.Length} samples (mapping, UDF in TempDir / private temp, reassigned, default UDF, file:// - and a good one)");
+        // the CSP worker check itself: CSP3's fallback order, the first directive of a name wins
+        string Meta(string c) => "<meta http-equiv=\"Content-Security-Policy\" content=\"" + c + "\">";
+        bool cspOk = CspWorkerSource(Meta("default-src 'none'; script-src 'self'"), out string d1) == "'self'" && d1 == "script-src"
+            && CspWorkerSource(Meta("default-src 'self'; worker-src 'none'"), out string d2) == "'none'" && d2 == "worker-src"
+            && CspWorkerSource(Meta("default-src 'self'; child-src blob:; script-src 'self'"), out string d3) == "blob:" && d3 == "child-src"
+            && CspWorkerSource(Meta("default-src 'self'"), out string d4) == "'self'" && d4 == "default-src"
+            && CspWorkerSource("<p>no csp</p>", out _) == null;
+        Check(cspOk, "CSP worker check self-test: worker-src > child-src > script-src > default-src");
     }
 
     /// <summary>Drops // comments (a "//" at the line start or after whitespace - not the one in "https://") and /* */ blocks.</summary>
@@ -410,8 +452,9 @@ internal static class Program
 
     // The brand kit (velox-tweaker/brand) is the single source of truth: each surface embeds byte-identical
     // copies of exactly the runtime files it needs (the lists of tools/sync-brand.mjs) and nothing else.
-    private static readonly string[] HostBrand = { "glyphs.js", "intro.css", "intro.js", "sound.js", "tokens.css" };
-    private static readonly string[] SetupBrand = { "glyphs.js", "intro.css", "intro.js", "kit.css", "sound.js", "ticks.js", "tokens.css" };
+    // light-worker.js is runtime: intro.js starts it as a module worker (new URL('./light-worker.js', import.meta.url))
+    private static readonly string[] HostBrand = { "glyphs.js", "intro.css", "intro.js", "light-worker.js", "sound.js", "tokens.css" };
+    private static readonly string[] SetupBrand = { "glyphs.js", "intro.css", "intro.js", "kit.css", "light-worker.js", "sound.js", "ticks.js", "tokens.css" };
 
     private static void CheckBrandCopies(string label, PeInfo pe, string prefix, string app, string[] files)
     {

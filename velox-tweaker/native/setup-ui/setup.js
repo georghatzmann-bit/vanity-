@@ -8,7 +8,9 @@
  *                  | folder{dir,error,freeMB} | running{running} | progress{percent,step,file}
  *                  | done{mode,launched} | error{message,hint}
  *
- * The start sequence is brand/intro.js (full variant, with sound; place "header", no loader). Every screen
+ * The start sequence is brand/intro.js (the long intro "Zündung", with sound; place "header", no loader;
+ * uninstalling plays the short one). The done screen of an install / update ends with intro.celebrate() (the
+ * re-lock of the word with its own small sound; silent when the intro was muted). Every screen
  * goes into intro.slot under the settled wordmark - one continuous surface: the word never moves, the
  * welcome arrives under it when the intro settles, and the other screens replace each other in the slot.
  * Progress is the kit's tick row (brand/ticks.js). URL: index.html?sound=0|1&mode=uninstall (both optional).
@@ -26,7 +28,7 @@ if (reduced) body.classList.add('reduced');
 const S = {
   screen: 'intro', mode: 'install', version: '', installedVersion: '', dir: '', defaultDir: '',
   sizeMB: 0, freeMB: -1, running: false, inited: false, introDone: false, task: null,
-  busy: false, launched: false, keepData: true, lastPct: 0,
+  busy: false, launched: false, keepData: true, lastPct: 0, celebrated: false,
 };
 
 function send(type, data) {
@@ -41,10 +43,10 @@ function fmtMB(mb) {
 }
 
 // ================================================================== the intro + the slot
-// uninstalling is not a launch: the short variant there; installing and updating get the full one
+// uninstalling is not a launch: the short variant there; installing and updating get the long one
 const uninstallUrl = /uninstall/.test(q.get('mode') || '') || (!bridge && /uninstall/.test(location.hash));
 const intro = VeloxIntro.mount($('stage'), {
-  variant: uninstallUrl ? 'short' : 'full',
+  variant: uninstallUrl ? 'short' : 'long',
   place: 'header',
   loader: false,
   sound: true,
@@ -238,6 +240,9 @@ function onDone(m) {
   const finish = () => {
     traceBar('d-bar', 100, word);
     show('done');
+    // the finish: the word re-locks (streak, snap, sweep) with its small sound - only for a new VELOX on the
+    // PC, not for a removal. celebrate() waits for the intro's settle and plays nothing while muted.
+    if (mode !== 'uninstall') { S.celebrated = true; intro.celebrate().catch(() => {}); }
   };
   clearTimeout(doneTimer);
   if (S.screen === 'progress' && bar && !reduced) {
@@ -352,7 +357,7 @@ function preview(m) {
   switch (m.type) {
     case 'ready': {
       const mode = /uninstall/.test(location.hash) ? 'uninstall' : (/update/.test(location.hash) ? 'update' : 'install');
-      reply({ type: 'init', version: '1.2.0', mode, installedVersion: mode === 'update' ? '1.1.1' : '', dir: 'C:\\Program Files\\VELOX', defaultDir: 'C:\\Program Files\\VELOX', sizeMB: 3, freeMB: 182000, running: false }, 30);
+      reply({ type: 'init', version: '1.3.0', mode, installedVersion: mode === 'update' ? '1.2.2' : '', dir: 'C:\\Program Files\\VELOX', defaultDir: 'C:\\Program Files\\VELOX', sizeMB: 3, freeMB: 182000, running: false }, 30);
       break;
     }
     case 'browse': reply({ type: 'folder', dir: 'D:\\Programme\\VELOX', error: '', freeMB: 512000 }, 200); break;

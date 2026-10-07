@@ -19,10 +19,12 @@ namespace Velox.Host
         public static Log Log;
         public static string AppDir;
         public static string DataDir;
-        /// <summary>Started by VeloxSetup.exe right after its own (full) intro: the start screen plays the short one.</summary>
+        /// <summary>Started by VeloxSetup.exe right after its own (long) intro: the start screen plays the short one.</summary>
         public static bool FromSetup;
         /// <summary>The user muted the installer's intro (M / sound button): this start screen stays silent too (not saved).</summary>
         public static bool QuietStart;
+        /// <summary>settings.json "introMode" (long | short | off), read once at start, read only (UserSettings).</summary>
+        public static string IntroMode = "long";
         private static Mutex _mutex;
         private static uint _activateMsg;
 
@@ -81,6 +83,8 @@ namespace Velox.Host
                     DarkDialog.Show(null, "VELOX ist unvollständig", "Im Programmordner fehlen Dateien (Velox.ps1 oder der Ordner core). Bitte VELOX mit VeloxSetup.exe neu installieren.", AppDir, new[] { "Schließen" }, 0, false);
                     return 1;
                 }
+                IntroMode = UserSettings.IntroMode(DataDir, Log);
+                Log.Info("Startanimation: " + IntroMode + " (settings.json introMode" + (FromSetup && IntroMode == "long" ? ", nach dem Setup kurz" : "") + ")");
                 string why;
                 if (!WebViewSupport.IsAvailable(AppDir, out why))
                 {

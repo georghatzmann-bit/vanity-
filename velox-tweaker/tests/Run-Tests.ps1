@@ -2788,6 +2788,42 @@ Test-Case 'settings' 'Start-Sound und introSeen: Standard, gespeichert, nur gül
     Assert-True ([IO.File]::ReadAllText($path) -match '"startSound"\s*:\s*true') 'wieder an gespeichert'
 }
 
+Test-Case 'settings' 'introMode: Standard lang, gespeichert, nur long/short/off, VELOX.exe-Vertrag' {
+    $ctx = New-TestContext
+    Assert-Equal 'long' (Get-VxSettingsDto).introMode 'Standard: lang'
+    $path = Get-VxDataPath 'settings.json'
+    foreach ($m in @('short', 'off', 'long')) {
+        Update-VxSettings ([pscustomobject]@{ introMode = $m })
+        Assert-Equal $m (Get-VxSettingsDto).introMode ('gesetzt: ' + $m)
+        Assert-True ([IO.File]::ReadAllText($path) -match ('"introMode"\s*:\s*"' + $m + '"')) ('settings.json enthält "introMode": "' + $m + '"')
+    }
+    Update-VxSettings ([pscustomobject]@{ introMode = 'short' })
+    foreach ($bad in @('full', 'LONG', 'Short', '', 'still', 1, $true, $null)) {
+        Update-VxSettings ([pscustomobject]@{ introMode = $bad })
+        Assert-Equal 'short' (Get-VxSettingsDto).introMode ('ungültig -> ignoriert: ' + [string]$bad)
+    }
+    $null = Import-VxSettings
+    Assert-Equal 'short' (Get-VxSettingsDto).introMode 'nach Neustart noch kurz'
+    # the other settings do not touch it, and it does not touch them
+    Update-VxSettings ([pscustomobject]@{ startSound = $false })
+    Assert-Equal 'short' (Get-VxSettingsDto).introMode 'startSound lässt introMode stehen'
+    Update-VxSettings ([pscustomobject]@{ introMode = 'off' })
+    Assert-Equal $false (Get-VxSettingsDto).startSound 'introMode lässt startSound stehen'
+    # older settings.json without the key, and garbage values -> 'long'
+    foreach ($raw in @('{"accent":"blue"}', '{"introMode":"turbo"}', '{"introMode":5}', '{"introMode":"OFF"}', '{"introMode":null}')) {
+        [IO.File]::WriteAllText($path, $raw)
+        $null = Import-VxSettings
+        Assert-Equal 'long' (Get-VxSettingsDto).introMode ('fehlt/kaputt -> lang: ' + $raw)
+    }
+    [IO.File]::WriteAllText($path, '{"introMode":"off"}')
+    $null = Import-VxSettings
+    Assert-Equal 'off' (Get-VxSettingsDto).introMode 'aus aus der Datei gelesen'
+    $ctx.Settings.introMode = 'kaputt'
+    Assert-Equal 'long' (Get-VxSettingsDto).introMode 'kaputter Wert im Speicher -> lang'
+    Save-VxSettings
+    Assert-True ([IO.File]::ReadAllText($path) -match '"introMode"\s*:\s*"long"') 'nie ein ungültiger Wert in settings.json'
+}
+
 Test-Case 'settings' 'bootstrap.mode.hosted nur unter VELOX.exe (-HostPid + -NoBrowser)' {
     $ctx = New-TestContext
     $ctx.Life = New-VxLifecycle

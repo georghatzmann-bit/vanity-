@@ -284,29 +284,74 @@ async function introMounted(page) {
 }
 async function settingsNow(t) { return (await api(t.server, 'GET', '/api/bootstrap')).json.settings; }
 
-test('splash: full intro for a new version, short after that, the hand-over then the app', async (t) => {
-  await api(t.server, 'POST', '/api/settings', { introSeen: '', startSound: true });
+/** The light of the running intro: which thread draws it (after boot), and the timeline that plays. */
+const introLight = (page) => page.evaluate(async () => {
+  const i = window.__velox.splash.intro;
+  await i.ready;
+  return { thread: i.lightThread, timeline: i.timeline().name, variant: i.variant };
+});
+
+test('splash: settings.introMode - long on every launch (default), short, off; the hand-over then the app', async (t) => {
+  await api(t.server, 'POST', '/api/settings', { introMode: 'long', introSeen: '', startSound: true });
   const version = (await api(t.server, 'GET', '/api/bootstrap')).json.app.version;
   const page = await openRaw(t);
   const a = await introMounted(page);
-  assert(a.variant === 'full' && !a.hosted, 'first start of ' + version + ': full intro, ' + JSON.stringify(a));
+  const t0 = Date.now();
+  assert(a.variant === 'long' && a.mode === 'long' && !a.hosted, 'introMode long: the long intro, ' + JSON.stringify(a));
   assert(a.sound === true && a.muted === false, 'sound allowed by the setting: ' + JSON.stringify(a));
+  const light = await introLight(page);
+  assert(light.thread === 'worker' && light.timeline === 'long', 'the light runs in the module worker under the app CSP: ' + JSON.stringify(light));
   assert((await page.$eval('#splash .vx-label-r', e => e.textContent)) === 'Version ' + version, 'version label');
   assert(await page.$eval('#app', e => e.hasAttribute('inert')), 'the app behind the splash is inert');
-  await page.waitForFunction(() => document.querySelector('#splash .vx.vx--settled'), null, { timeout: 10000 });
-  await shot(page, 'state-splash-full');
+  // frames of the long intro as they play (real time: the names say roughly where)
+  for (const [ms, name] of [[450, 'a-ember'], [900, 'b-blade'], [1400, 'c-streaks'], [1760, 'd-ignition'], [2350, 'e-sweep']]) {
+    const wait = ms - (Date.now() - t0);
+    if (wait > 0) await sleep(wait);
+    await shot(page, 'state-splash-long-' + name);
+  }
+  // the hand-over waits for the intro's calm (2.55 s on its clock) - it never cuts the strike or the sweep short
+  await page.waitForFunction(() => document.getElementById('splash').hidden, null, { timeout: 15000 });
+  const dt = Date.now() - t0;
+  assert(dt > 2600 && dt < 9000, 'long intro + hand-over took ' + dt + ' ms');
   await ready(page);
   assert(!(await page.$('#splash .vx')), 'intro destroyed after the hand-over');
   assert(!(await page.$eval('#app', e => e.hasAttribute('inert'))), 'app usable after the splash');
-  assert((await settingsNow(t)).introSeen === version, 'introSeen remembered in settings.json');
+  assert((await settingsNow(t)).introSeen === '', 'introSeen is no longer written (1.3: introMode decides)');
+  // every launch: the long one again (no "seen" logic any more); Esc skips to the settled pose
   const page2 = await openRaw(t);
   const b = await introMounted(page2);
-  assert(b.variant === 'short', 'second start: short intro, ' + JSON.stringify(b));
-  // Esc skips to the settled pose; the app is there right after the hand-over
+  assert(b.variant === 'long', 'second start: the long intro again, ' + JSON.stringify(b));
   await page2.waitForFunction(() => window.__velox.splash.intro && window.__velox.splash.intro.keysActive);
+  await page2.evaluate(() => window.__velox.splash.intro.ready);   // (a key during the kit's boot is not a skip yet)
+  await page2.waitForTimeout(400);
   await page2.keyboard.press('Escape');
+  await page2.waitForFunction(() => document.querySelector('#splash .vx.vx--settled'), null, { timeout: 1500 });
+  await shot(page2, 'state-splash-long-settled');
   await ready(page2);
-});
+  // Kurz: the short intro
+  await api(t.server, 'POST', '/api/settings', { introMode: 'short' });
+  const page3 = await openRaw(t);
+  const c = await introMounted(page3);
+  assert(c.variant === 'short' && c.mode === 'short' && c.sound === true, 'introMode short: the short intro, ' + JSON.stringify(c));
+  assert((await introLight(page3)).thread === 'worker', 'short intro: light in the worker too');
+  await ready(page3);
+  // Aus: the still frame - no motion, no sound, no sound button, no skip, no keys
+  await api(t.server, 'POST', '/api/settings', { introMode: 'off', startSound: true });
+  const page4 = await openRaw(t);
+  const d = await introMounted(page4);
+  assert(d.variant === 'still' && d.mode === 'off' && d.sound === false, 'introMode off: still, silent, ' + JSON.stringify(d));
+  const pose = await page4.evaluate(() => { const i = window.__velox.splash.intro; return i ? { keys: i.keysActive, audible: i.audible, soundBtn: !!document.querySelector('#splash .vx-sound:not([hidden])'), skip: !!document.querySelector('#splash .vx-skip:not([hidden])') } : null; });
+  assert(!pose || (!pose.keys && !pose.audible && !pose.soundBtn && !pose.skip), 'off: no keys, no audio, no controls: ' + JSON.stringify(pose));
+  await shot(page4, 'state-splash-off');
+  const t4 = Date.now();
+  await ready(page4);
+  assert(Date.now() - t4 < 4000, 'off: the app comes right away');
+  // an unknown value (older or broken settings) is the default: long
+  if (MODE === 'mock') {
+    await api(t.server, 'POST', '/api/settings', { introMode: 'turbo' });
+    assert((await settingsNow(t)).introMode === 'off', 'invalid value ignored by the backend');
+  }
+}, { longIntro: true });
 
 test('splash: under VELOX.exe only the hand-over pose, no sound, no second intro', async (t) => {
   await api(t.server, 'POST', '/api/settings', { introSeen: '', startSound: true });
@@ -319,7 +364,7 @@ test('splash: under VELOX.exe only the hand-over pose, no sound, no second intro
   assert(!/from=|sound=|[?&]t=/.test(page.url()), 'hints removed from the address bar: ' + page.url());
   const s = await settingsNow(t);
   assert(s.startSound === false, 'the start screen\'s mute choice (&sound=off) is saved');
-  assert(s.introSeen === '', 'no full intro played here, nothing marked as seen');
+  assert(s.introSeen === '', 'nothing marked as seen');
   // a reload inside VELOX.exe (the hint is gone from the URL) still shows only the pose
   await page.reload();
   const r = await introMounted(page);
@@ -354,11 +399,58 @@ test('splash: first-run scan shows its progress in the intro, also under VELOX.e
   } finally { await api(t.server, 'POST', '/api/settings', { startSound: true }); }
 }, { mockOnly: true });
 
+test('settings: Startanimation Lang / Kurz / Aus saves settings.introMode; Abspielen plays the long one', async (t) => {
+  await api(t.server, 'POST', '/api/settings', { introMode: 'long', startSound: true });
+  const page = await openApp(t, 'settings', { viewport: { width: 1360, height: 880 } });
+  const seg = '[data-testid="intro-mode"]';
+  const read = () => page.$eval(seg, (el) => ({ labels: Array.from(el.querySelectorAll('.seg-btn')).map(b => b.textContent.trim()), checked: (el.querySelector('.seg-btn[aria-checked="true"]') || {}).dataset.value, label: el.getAttribute('aria-label') }));
+  const r0 = await read();
+  assert(r0.labels.join('/') === 'Lang/Kurz/Aus' && r0.checked === 'long' && r0.label === 'Startanimation', 'segmented control: ' + JSON.stringify(r0));
+  // next to the Start-Sound switch and the Abspielen button, in the same card
+  const near = await page.evaluate(() => { const c = document.querySelector('#set-look'); return !!(c.querySelector('[data-testid="intro-mode"]') && c.querySelector('.switch.start-sound') && c.querySelector('[data-testid="intro-replay"]')); });
+  assert(near, 'Startanimation, Start-Sound and Abspielen together in "Start und Bewegung"');
+  const sec = await page.$('#set-look');
+  await sec.scrollIntoViewIfNeeded();
+  if (SCREENS) await sec.screenshot({ path: path.join(shotDir, 'settings-start-section-1360.png') });
+  for (const [label, value] of [['Aus', 'off'], ['Kurz', 'short'], ['Lang', 'long']]) {
+    await clickLikeAMouse(page, seg + ' .seg-btn[data-value="' + value + '"]');
+    await page.waitForFunction((v) => window.__velox.settings.introMode === v, value, { timeout: 5000 });
+    assert((await settingsNow(t)).introMode === value, label + ' saved as introMode=' + value);
+    assert((await read()).checked === value, label + ' shown as selected');
+    if (value === 'off') {
+      await page.waitForTimeout(250);
+      if (SCREENS) await sec.screenshot({ path: path.join(shotDir, 'settings-start-section-off-1360.png') });
+    }
+  }
+  // keyboard: arrows move the choice (radio group)
+  await page.focus(seg + ' .seg-btn[data-value="long"]');
+  await page.keyboard.press('ArrowRight');
+  await page.waitForFunction(() => window.__velox.settings.introMode === 'short', null, { timeout: 5000 });
+  // Abspielen plays the long one even when the setting says Aus
+  await clickLikeAMouse(page, seg + ' .seg-btn[data-value="off"]');
+  await page.waitForFunction(() => window.__velox.settings.introMode === 'off', null, { timeout: 5000 });
+  await page.click('[data-testid="intro-replay"]');
+  await page.waitForFunction(() => window.__velox.splash.info.preview === true);
+  const pv = await page.evaluate(async () => { const i = window.__velox.splash.previewIntro; await i.ready; return { variant: i.variant, timeline: i.timeline().name }; });
+  assert(pv.variant === 'long' && pv.timeline === 'long', 'Abspielen with introMode off still plays the long intro: ' + JSON.stringify(pv));
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.getElementById('splash').hidden && !window.__velox.splash.info.preview, null, { timeout: 8000 });
+  // the narrow window: the control group wraps, nothing overflows
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.waitForTimeout(300);
+  const ov = await overflow(page);
+  assert(ov.doc <= 0 && ov.main <= 0 && !ov.offenders.length, 'settings at 900x600 overflow: ' + JSON.stringify(ov));
+  await sec.scrollIntoViewIfNeeded();
+  if (SCREENS) await sec.screenshot({ path: path.join(shotDir, 'settings-start-section-900.png') });
+}, { longIntro: true });
+
 test('splash: M in the intro writes settings.startSound; the next start respects it', async (t) => {
-  await api(t.server, 'POST', '/api/settings', { introSeen: '', startSound: true });
+  await api(t.server, 'POST', '/api/settings', { introMode: 'long', startSound: true });
   const page = await openRaw(t);
   await introMounted(page);
   await page.waitForFunction(() => window.__velox.splash.intro && window.__velox.splash.intro.keysActive);
+  // after boot (the sound button shows its state once the clock runs)
+  await page.evaluate(() => window.__velox.splash.intro.ready);
   // headless Chromium blocks autoplay like Edge does: the first M is the gesture that unlocks
   // (and replays) the sound, it never mutes; the next M mutes
   if (await page.evaluate(() => window.__velox.splash.intro.blocked)) {
@@ -383,10 +475,12 @@ test('splash: M in the intro writes settings.startSound; the next start respects
   await p2.click('.switch.start-sound');
   await p2.waitForFunction(() => window.__velox.settings.startSound === true);
   assert((await settingsNow(t)).startSound === true, 'switched back on');
-  // replay from the settings page: the full intro over the app, then back
+  // replay from the settings page: the long intro over the app, then back
   await p2.click('[data-testid="intro-replay"]');
   await p2.waitForFunction(() => window.__velox.splash.info.preview === true);
   assert(!(await p2.$eval('#splash', e => e.hidden)), 'replay shows the splash');
+  const pv = await p2.evaluate(async () => { const i = window.__velox.splash.previewIntro; await i.ready; return { variant: i.variant, timeline: i.timeline().name, thread: i.lightThread }; });
+  assert(pv.variant === 'long' && pv.timeline === 'long' && pv.thread === 'worker', 'Abspielen plays the long intro, light in the worker: ' + JSON.stringify(pv));
   await p2.keyboard.press('Escape');
   await p2.waitForFunction(() => document.getElementById('splash').hidden && !window.__velox.splash.info.preview, null, { timeout: 8000 });
   assert(!(await p2.$eval('#app', e => e.hasAttribute('inert'))), 'app usable after the replay');
@@ -458,9 +552,17 @@ test('brand: no violet left, signal only where the kit allows it, AA contrast of
 
 test('CSP: no violations anywhere (splash, every page, palette, dialogs, replay)', async (t) => {
   const init = () => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective + ' ' + (e.blockedURI || '') + ' ' + (e.sourceFile || '') + ':' + e.lineNumber)); };
+  await api(t.server, 'POST', '/api/settings', { introMode: 'long' });
   const page = await openRaw(t, '', { init });
   const consoleCsp = [];
   page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) consoleCsp.push(m.text()); });
+  await introMounted(page);
+  const light = await introLight(page);
+  assert(light.thread === 'worker', 'module worker loads under script-src \'self\' (worker-src falls back to it): ' + JSON.stringify(light));
+  const workers = page.workers().map(w => w.url());
+  assert(workers.some(u => /\/brand\/light-worker\.js$/.test(u)), 'the worker is brand/light-worker.js: ' + JSON.stringify(workers));
+  const wjs = await rawRequest(t.server, 'GET', '/brand/light-worker.js');
+  assert(wjs.status === 200 && /^text\/javascript/.test(wjs.headers['content-type'] || ''), 'light-worker.js served as JavaScript: ' + wjs.status + ' ' + wjs.headers['content-type']);
   await ready(page);
   for (const id of ['overview', 'tweaks', 'presets', 'advisor', 'detweak', 'games', 'cleanup', 'apps', 'backups', 'settings']) await goPage(page, id);
   await page.keyboard.press('Control+k');
@@ -1756,6 +1858,9 @@ async function main() {
     };
     const t0 = Date.now();
     try {
+      // the long intro (~3 s, the default) only where a test asks for it: every other test opens the
+      // app with the short one, like 1.2 did after the first start
+      if (!tc.opts.longIntro) await api(server, 'POST', '/api/settings', { introMode: 'short' });
       await tc.fn(t);
       if (!t.expectNetworkErrors && problems.length) throw new AssertError('console/network problems:\n      ' + problems.slice(0, 8).join('\n      '));
       pass++;

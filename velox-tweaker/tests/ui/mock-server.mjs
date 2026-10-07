@@ -198,7 +198,7 @@ function buildWorld() {
   log('catalog:', 'categories from', cats.from, '| tweaks', decorated.length, 'from', tw.from, '| presets from', pr.from, '| detweak from', dt.from);
   return {
     categories, tweaks: decorated, byId: new Map(decorated.map(t => [t.id, t])), presets, detweak,
-    settings: { accent: 'violet', motion: 'full', confirmRisky: true, restorePoints: 'first', autoRestorePoint: true, startSound: true, introSeen: '', claude: { hasKey: false, model: 'claude-opus-5-5' },
+    settings: { accent: 'violet', motion: 'full', confirmRisky: true, restorePoints: 'first', autoRestorePoint: true, startSound: true, introMode: 'long', introSeen: '', claude: { hasKey: false, model: 'claude-opus-5-5' },
       ai: { provider: '', claudeCode: { model: 'sonnet' }, groq: { hasKey: false, model: '' } },
       games: [{ id: 'fivem', name: 'FiveM', exe: 'FiveM_GTAProcess.exe', path: 'C:\\Users\\Spieler\\AppData\\Local\\FiveM\\FiveM.app\\data\\cache\\subprocess\\FiveM_GTAProcess.exe', boost: { priority: true, gpu: true, fso: false } }] },
     state: { statuses, profile: opt.freshScan ? profile : null, lastScan: opt.freshScan ? iso(new Date()) : null, needs: { explorer: false, reboot: false, logoff: false } },
@@ -914,6 +914,7 @@ async function handle(req, res) {
     if (['full', 'reduced'].includes(body.motion)) s.motion = body.motion;
     if (typeof body.confirmRisky === 'boolean') s.confirmRisky = body.confirmRisky;
     if (typeof body.startSound === 'boolean') s.startSound = body.startSound;
+    if (['long', 'short', 'off'].includes(body.introMode)) s.introMode = body.introMode;   // like core/Common.ps1
     if (typeof body.introSeen === 'string' && (body.introSeen === '' || /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(body.introSeen))) s.introSeen = body.introSeen;
     W.stats.settingsPosts.push(Object.keys(body).sort().join(','));
     if (['first', 'presets', 'off'].includes(body.restorePoints)) s.restorePoints = body.restorePoints;

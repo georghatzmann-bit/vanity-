@@ -36,7 +36,7 @@ namespace Velox.Host
             }
         }
 
-        /// <summary>The start-screen URL for one load.</summary>
+        /// <summary>The start-screen URL for one load (variant long | short | still, see HostForm.StartVariant).</summary>
         public static string Url(string variant, bool sound, bool test)
         {
             return Origin + "splash.html?v=" + Uri.EscapeDataString(Util.Version()) + "&variant=" + variant

@@ -1,8 +1,9 @@
 // VELOX.exe start screen: brand/intro.js while the PowerShell backend starts, then the hand-over to the app.
 //
-// URL (set by HostForm.cs): splash.html?v=<VERSION>&variant=full|short|still&sound=1|0&test=1|0
-//   variant  full on the first start after an install / update, short otherwise, still when the screen
-//            comes back for an error after the app was already shown (no second intro, no sound)
+// URL (set by HostForm.cs): splash.html?v=<VERSION>&variant=long|short|still&sound=1|0&test=1|0
+//   variant  settings.json "introMode": long (the default, every launch) | short | off -> still (no animation,
+//            no sound); still also when the screen comes back for an error after the app was already shown
+//            (no second intro). 'full' (1.2.x) is read as long; anything else is long as well.
 //   sound    settings.json "startSound" (VELOX.exe reads it; 0 = mounted muted)
 // Messages (JSON, docs/ARCHITECTURE.md section 11):
 //   host -> page  mode{test} · status{text} · starting{text} · ready · error{title,message,log,canTest}
@@ -20,7 +21,7 @@ function send(type, extra) {
 }
 
 const version = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(q.get('v') || '') ? q.get('v') : '';
-const variant = ['full', 'short', 'still'].includes(q.get('variant')) ? q.get('variant') : 'short';
+const variant = ['short', 'still'].includes(q.get('variant')) ? q.get('variant') : 'long';
 const soundOn = q.get('sound') !== '0';
 document.body.classList.toggle('test', q.get('test') === '1');
 
@@ -77,10 +78,16 @@ function starting(text) {
 }
 
 // ---------------------------------------------------------------- hand-over
+// intro.done() waits for `calm` (the end of the light sweep: 2.55 s into the long intro, the settle in the
+// others; at once after a skip), then plays the 430 ms hand-over. Before the intro's clock runs (boot, the
+// sound scheduled 250 ms ahead) the whole intro is still ahead: BOOT_MS covers that lead.
+const BOOT_MS = 450;
+let atRest = false;
+intro.settled.then(() => { atRest = true; });
 function remainingMs() {
   const T = intro.timeline();
-  const elapsed = intro.startedAt == null ? 0 : performance.now() - intro.startedAt;
-  return Math.round(Math.max(0, (T.settled || 0) - elapsed) + VeloxIntro.HANDOVER.total);
+  const rest = atRest ? 0 : intro.startedAt == null ? (T.calm || 0) + BOOT_MS : Math.max(0, (T.calm || 0) - (performance.now() - intro.startedAt));
+  return Math.round(rest + VeloxIntro.HANDOVER.total);
 }
 function ready() {
   if (leaving || failed) return;

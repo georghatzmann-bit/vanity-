@@ -17,10 +17,21 @@ export function rpMode(settings) {
   return settings && settings.autoRestorePoint === false ? 'off' : 'first';
 }
 
+// The start sequence (settings.introMode, docs/ARCHITECTURE.md sections 7 and 11; VELOX.exe reads it too)
+export const INTRO_MODES = [
+  { value: 'long', label: 'Lang', title: 'Die lange Startanimation bei jedem Start' },
+  { value: 'short', label: 'Kurz', title: 'Die kurze Startanimation' },
+  { value: 'off', label: 'Aus', title: 'Keine Animation und kein Ton – nur das Logo' }
+];
+export function introMode(settings) {
+  const m = settings && settings.introMode;
+  return INTRO_MODES.some(x => x.value === m) ? m : 'long';
+}
+
 export { MODELS } from './settings-ai.js';
 
 export default {
-  id: 'settings', title: 'Einstellungen', icon: 'cog', desc: 'Start, Sicherheit und KI', keywords: 'optionen ton sound start animation api key claude code groq ki',
+  id: 'settings', title: 'Einstellungen', icon: 'cog', desc: 'Start, Sicherheit und KI', keywords: 'optionen ton sound start animation startanimation intro lang kurz aus api key claude code groq ki',
   mount(el, ctx, opts) {
     const s = () => ctx.settings;
 
@@ -31,7 +42,28 @@ export default {
       if (ok) toast({ type: 'ok', title: v ? 'Start-Sound an' : 'Start-Sound aus' });
       return ok;
     } });
-    const replay = button({ label: 'Abspielen', icon: 'play', size: 'sm', attrs: { 'data-testid': 'intro-replay' }, onClick: () => splash.preview(s()) });
+    const replay = button({ label: 'Abspielen', icon: 'play', size: 'sm', attrs: { 'data-testid': 'intro-replay', title: 'Spielt die lange Startanimation ab' }, onClick: () => splash.preview(s()) });
+    const introDesc = (m) => m === 'off'
+      ? 'Aus: beim Start nur das Logo, ohne Bewegung und ohne Ton. Abspielen zeigt die lange Fassung.'
+      : m === 'short'
+        ? 'Kurz: unter einer Sekunde. Abspielen zeigt die lange Fassung.'
+        : 'Lang: rund drei Sekunden, bei jedem Start. Esc oder ein Klick überspringt sie.';
+    const introRow = optionRow({ icon: 'play', title: 'Startanimation', desc: introDesc(introMode(s())), control: null });
+    introRow.classList.add('opt-row-stack');   // the choice + Abspielen sit under the text (the card is narrow)
+    const intro = segmented({
+      label: 'Startanimation', value: introMode(s()), cls: 'intro-mode',
+      options: INTRO_MODES,
+      onChange: async (v) => {
+        const prev = introMode(s());
+        if (v === prev) return;
+        const ok = await ctx.saveSettings({ introMode: v }, { silent: true });
+        if (ok) toast({ type: 'ok', title: v === 'off' ? 'Startanimation aus' : 'Startanimation: ' + INTRO_MODES.find(x => x.value === v).label });
+        else intro.select(prev);   // show what is really saved
+        introRow.querySelector('.opt-desc').textContent = introDesc(introMode(s()));
+      }
+    });
+    intro.dataset.testid = 'intro-mode';
+    introRow.querySelector('.opt-control').append(h('div', { class: 'intro-ctl' }, intro, replay));
     const osReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const motion = segmented({
       label: 'Animationen', value: s().motion === 'reduced' ? 'reduced' : 'full',
@@ -85,7 +117,7 @@ export default {
     append(el, h('div', { class: 'set-grid' },
       section('look', 'sparkles', 'Start und Bewegung', 'Wie VELOX startet und sich bewegt.',
         optionRow({ icon: 'volume', title: 'Start-Sound', desc: 'Ein kurzer Klang zur Startanimation. Taste M schaltet ihn auch beim Start um.', control: startSound }),
-        optionRow({ icon: 'play', title: 'Startanimation', desc: 'Spielt sie noch einmal ab – mit Ton, wenn Start-Sound an ist. Esc beendet sie.', control: replay }),
+        introRow,
         optionRow({ icon: 'motion', title: 'Animationen', desc: osReduced ? 'Windows wünscht weniger Bewegung – VELOX hält sich daran.' : 'Reduziert schaltet Bewegungen ab und lässt nur sanfte Überblendungen.', control: motion })),
       section('safety', 'shield', 'Sicherheit', 'Schutz vor ungewollten Änderungen.',
         optionRow({ title: 'Bei riskanten Tweaks nachfragen', desc: 'Zeigt eine Warnung mit Häkchen, bevor ein riskanter Tweak vorgemerkt wird.', control: risky }),
@@ -103,6 +135,9 @@ export default {
     const aiFocus = opts && { ai: 'claude-code', claude: 'claude-api', 'claude-api': 'claude-api', groq: 'groq', 'claude-code': 'claude-code' }[opts.focus];
     if (aiFocus) requestAnimationFrame(() => ai.focus(aiFocus));
     if (opts && opts.focus === 'safety') requestAnimationFrame(() => { const t = el.querySelector('#set-safety'); if (t) { t.scrollIntoView({ block: 'start' }); t.classList.add('flash'); const r = rpList.querySelector('[aria-checked="true"]'); if (r) r.focus({ preventScroll: true }); } });
-    ctx.on('settings', () => { startSound.setChecked(s().startSound !== false); markRp(rpMode(s())); });
+    ctx.on('settings', () => {
+      startSound.setChecked(s().startSound !== false); markRp(rpMode(s()));
+      intro.select(introMode(s())); introRow.querySelector('.opt-desc').textContent = introDesc(introMode(s()));
+    });
   }
 };

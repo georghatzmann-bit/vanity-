@@ -3,17 +3,22 @@
 //   Started by VELOX.exe (?from=host, or bootstrap.mode.hosted): the host has already played the
 //   intro with its sound. Here only its end pose: `still` + `handedOver` (no sound, no second
 //   intro), faded out when the first data is in.
-//   Started by Start.bat (Edge app window): the full intro on the first start of a VERSION, the
-//   short one otherwise. Sound only when settings.startSound allows it; M / the sound button
-//   write that same setting. When Edge blocks autoplay the intro says "Ton: klicken" and the first
-//   click replays it with sound (the kit does that).
+//   Started by Start.bat (Edge app window): settings.introMode decides, on every launch -
+//   'long' (default) the long intro, 'short' the short one, 'off' the still frame (no motion, no
+//   sound). Sound only when settings.startSound allows it; M / the sound button write that same
+//   setting. When Edge blocks autoplay the intro says "Ton: klicken" and the first click replays
+//   it with sound (the kit does that).
 //
-// "Seen" lives in settings.introSeen (the backend's settings.json): the app's origin carries a
-// random port, so localStorage is a new, empty store on every start. localStorage is still
-// written and read (wrapped in try/catch) as a second opinion. Contract: ARCHITECTURE.md §11.
+// settings.introSeen (1.2.x: the VERSION whose full intro last played here) is no longer read or
+// written by the splash (since 1.3.0); the backend still keeps the key. Contract: ARCHITECTURE.md §7 / §11.
 import { VeloxIntro } from '../brand/intro.js';
 
-const SEEN_KEY = 'velox.intro.seen';
+const INTRO_MODES = { long: 'long', short: 'short', off: 'still' };   // settings.introMode -> kit variant
+/** settings.introMode -> 'long' | 'short' | 'off'; anything else is 'long' (the default). */
+export function introModeOf(settings) {
+  const m = settings && settings.introMode;
+  return typeof m === 'string' && Object.prototype.hasOwnProperty.call(INTRO_MODES, m) ? m : 'long';
+}
 const HOSTED_KEY = 'velox.hosted';
 const FALLBACK_MS = 700;      // no bootstrap by then: start a silent short intro anyway
 const FADE_MS = 220;
@@ -32,14 +37,11 @@ if (params.has('from') || params.has('sound')) {
   try { history.replaceState(history.state, '', location.pathname + (q ? '?' + q : '') + location.hash); } catch { /* ignore */ }
 }
 
-function localSeen() { try { return localStorage.getItem(SEEN_KEY) || ''; } catch { return ''; } }
-function markLocalSeen(v) { try { localStorage.setItem(SEEN_KEY, v); } catch { /* ignore */ } }
-
 const el = () => document.getElementById('splash');
 const stage = () => document.getElementById('splash-stage');
 
 let intro = null;
-let info = { hosted: false, variant: null, sound: false };
+let info = { hosted: false, variant: null, sound: false, mode: null };
 let fallbackTimer = 0;
 let finishing = null;
 let disposed = false;
@@ -93,8 +95,15 @@ export const splash = {
       mount({ variant: 'still', handedOver: true, sound: false, labels });
       return;
     }
-    const seen = settings.introSeen === version || localSeen() === version;
-    const variant = !version || seen ? 'short' : 'full';
+    const chosen = introModeOf(settings);
+    const variant = INTRO_MODES[chosen];
+    info.mode = chosen;
+    if (variant === 'still') {
+      // 'Aus': the settled word at once - no motion, no sound, no sound button, no keys
+      info.sound = false;
+      mount({ variant, labels, sound: false, statusText: 'Bereit' });
+      return;
+    }
     info.sound = startSound;
     mount({
       variant, labels,
@@ -103,10 +112,6 @@ export const splash = {
       statusText: 'Bereit',
       onMuteChange: (muted) => { info.sound = !muted; if (saveFn) saveFn({ startSound: !muted }); },
     });
-    if (variant === 'full' && version) {
-      markLocalSeen(version);
-      if (settings.introSeen !== version) save({ introSeen: version });
-    }
   },
 
   /** First-run scan: show what is happening under the word. */
@@ -185,8 +190,9 @@ export const splash = {
   },
 
   /**
-   * Einstellungen → "Startanimation abspielen": the full intro once more over the app, with the
-   * sound if settings.startSound allows it (the click is the gesture, so autoplay is allowed).
+   * Einstellungen → Startanimation "Abspielen": the long intro over the app, whatever
+   * settings.introMode says, with the sound if settings.startSound allows it (the click is the
+   * gesture, so autoplay is allowed).
    * Esc / Überspringen jump to the end; then the usual hand-over and fade.
    */
   async preview(settings) {
@@ -201,7 +207,7 @@ export const splash = {
     root.dataset.preview = 'true';
     const s = settings || {};
     const p = VeloxIntro.mount(stage(), {
-      variant: 'full', place: 'hero', sound: true, muted: s.startSound === false, statusText: 'Bereit',
+      variant: 'long', place: 'hero', sound: true, muted: s.startSound === false, statusText: 'Bereit',
       reducedMotion: s.motion === 'reduced' ? true : 'auto',
       onMuteChange: (muted) => { if (saveFn) saveFn({ startSound: !muted }); },
     });

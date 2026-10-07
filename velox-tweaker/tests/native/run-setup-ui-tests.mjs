@@ -70,6 +70,15 @@ function bridgeScript(init) {
     window.__sent = [];
     window.__csp = [];
     document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));
+    // sound sources started by the page (celebrate()'s cue shows up as new oscillators / buffer sources)
+    window.__audioSources = 0;
+    try {
+      const P = (window.BaseAudioContext || window.AudioContext).prototype;
+      for (const k of ['createOscillator', 'createBufferSource']) {
+        const f = P[k];
+        P[k] = function () { window.__audioSources++; return f.apply(this, arguments); };
+      }
+    } catch (e) { /* no Web Audio */ }
     window.__emit = (data) => listeners.forEach(fn => fn({ data }));
     window.chrome = window.chrome || {};
     window.chrome.webview = {
@@ -119,10 +128,42 @@ async function waitSettled(page, timeout = 4000) {
   try { await page.waitForFunction(() => document.querySelector('.vx')?.classList.contains('vx--settled'), null, { timeout }); return true; }
   catch { return false; }
 }
-async function started(page, expr = introOf) { await page.waitForFunction(e => { const i = eval(e); return i && i.startedAt !== null; }, expr, { timeout: 5000 }); }
+// (a property path, not eval: the pages' CSP has no 'unsafe-eval')
+async function started(page, expr = introOf) { await page.waitForFunction(e => { const i = e.split('.').slice(1).reduce((o, k) => o && o[k], window); return i && i.startedAt !== null; }, expr, { timeout: 5000 }); }
 /** Let the screen's arrival animation (460 ms) finish. */
 const quiet = (page) => page.waitForTimeout(600);
 async function skipIntro(page) { await started(page); await page.keyboard.press('Escape'); await waitSettled(page, 1500); await quiet(page); }
+
+/** Records the page's calls of intro.celebrate() (start, end) and the sound sources started meanwhile. */
+const spyCelebrate = (page) => page.evaluate(() => {
+  const i = window.__veloxSetup.intro, f = i.celebrate;
+  window.__celeb = [];
+  i.celebrate = function () {
+    const rec = { at: performance.now(), audio0: window.__audioSources, end: null, audio: null };
+    window.__celeb.push(rec);
+    const p = f.apply(this, arguments);
+    p.then(() => { rec.end = performance.now(); rec.audio = window.__audioSources - rec.audio0; });
+    return p;
+  };
+});
+/** Waits for celebrate() to start; frames at the given ms after its start; then for it to resolve. */
+async function watchCelebrate(page, frames = [], name = 'celebrate') {
+  const called = await page.waitForFunction(() => window.__celeb && window.__celeb.length > 0, null, { timeout: 3000 }).then(() => true, () => false);
+  if (!called) return { called };
+  const rest = await page.evaluate(() => window.__veloxSetup.intro.lightProbe());
+  let peak = 0;
+  for (const ms of frames) {
+    await page.waitForFunction(ms => performance.now() - window.__celeb[0].at >= ms, ms, { timeout: 4000, polling: 'raf' });
+    const t = await page.evaluate(() => Math.round(performance.now() - window.__celeb[0].at));
+    peak = Math.max(peak, await page.evaluate(() => window.__veloxSetup.intro.lightProbe()));
+    if (name) await page.screenshot({ path: path.join(SHOTS, `${name}-${String(t).padStart(4, '0')}ms.png`) });
+  }
+  await page.waitForFunction(() => window.__celeb[0].end !== null, null, { timeout: 4000 }).catch(() => {});
+  await page.waitForTimeout(80);
+  const r = await page.evaluate(() => window.__celeb[0]);
+  const after = await page.evaluate(() => window.__veloxSetup.intro.lightProbe());
+  return { called, rest, peak, after, ms: r.end === null ? null : Math.round(r.end - r.at), audio: r.audio, count: await page.evaluate(() => window.__celeb.length) };
+}
 
 /** Visible elements of the active screen: inside the window, under the wordmark, no clipped text, no scrolling. */
 async function layoutProblems(page, scope = '.screen.active') {
@@ -195,32 +236,40 @@ console.log('sources');
   ok(bad.length === 0, 'no old purple / cyan / gradients / confetti / aurora in the setup and start-screen sources ' + bad.join(', '));
   const inline = files.filter(f => f.endsWith('.html')).filter(f => /<style|<script(?![^>]*\bsrc=)|\sstyle=|\son[a-z]+=/i.test(fs.readFileSync(path.join(APP, f), 'utf8')));
   ok(inline.length === 0, 'no inline <style>, inline <script>, style= or on*= attributes (strict CSP) ' + inline.join(', '));
-  for (const [dir, list] of [['native/setup-ui/brand', ['glyphs.js', 'intro.css', 'intro.js', 'kit.css', 'sound.js', 'ticks.js', 'tokens.css']], ['native/host/start/brand', ['glyphs.js', 'intro.css', 'intro.js', 'sound.js', 'tokens.css']]]) {
+  for (const [dir, list] of [['native/setup-ui/brand', ['glyphs.js', 'intro.css', 'intro.js', 'kit.css', 'light-worker.js', 'sound.js', 'ticks.js', 'tokens.css']], ['native/host/start/brand', ['glyphs.js', 'intro.css', 'intro.js', 'light-worker.js', 'sound.js', 'tokens.css']]]) {
     const same = list.filter(f => Buffer.compare(fs.readFileSync(path.join(APP, dir, f)), fs.readFileSync(path.join(APP, 'brand', f))) === 0);
     ok(same.length === list.length, `${dir}: byte-identical copies of brand/ (${same.length}/${list.length})`);
   }
 }
 
-// ================================================================== 1. installer: full intro with sound, welcome arrives under the word
+// ================================================================== 1. installer: the long intro with sound, welcome arrives under the word
 console.log('installer intro');
 {
   const { page, context, errors } = await openSetup('install');
   await started(page);
-  const info = await page.evaluate(() => { const i = window.__veloxSetup.intro; return { variant: i.variant, audible: i.audible, blocked: i.blocked, keys: i.keysActive }; });
-  ok(info.variant === 'full', 'installer plays the full intro');
+  const info = await page.evaluate(() => { const i = window.__veloxSetup.intro; return { variant: i.variant, name: i.timeline().name, settled: i.timeline().settled, audible: i.audible, blocked: i.blocked, keys: i.keysActive }; });
+  ok(info.variant === 'long' && info.name === 'long' && info.settled >= 2800 && info.settled <= 3300, `installer plays the long intro "Zündung" (variant ${info.variant}, settles at ${info.settled} ms)`);
+  ok(await page.waitForFunction(() => window.__veloxSetup.intro.lightThread === 'worker', null, { timeout: 3000 }).then(() => true, () => false),
+    `the light is drawn in the module worker (lightThread ${await page.evaluate(() => window.__veloxSetup.intro.lightThread)}; brand/light-worker.js under the page's CSP)`);
   ok(info.audible === true && info.blocked === false, `sound plays without a click (autoplay flag, like SetupWindow.cs): audible=${info.audible} blocked=${info.blocked}`);
   ok((await page.textContent('.vx-sound span')) === 'Ton an', 'sound button: "Ton an"');
   ok(info.keys, 'intro listens for M / Esc while it runs');
   // frames at the beats of the sequence; the name carries the measured intro time
-  const beats = [60, 200, 330, 470, 860, 935, 1010, 1300, 1650, 2100];
+  // the beats of "Zündung" (brand/README.md): ember, charge, the streak drawing the outlines, the blade, the
+  // push / silhouette, the held breath, the strike, the sparks, the settle, the sweep, at rest
+  const beats = [80, 260, 560, 900, 1250, 1500, 1660, 1728, 1790, 2000, 2330, 2650, 3050];
+  const lit = [];
   for (let i = 0; i < beats.length; i++) {
-    await page.waitForFunction(ms => performance.now() - window.__veloxSetup.intro.startedAt >= ms, beats[i], { timeout: 5000, polling: 'raf' });
+    await page.waitForFunction(ms => performance.now() - window.__veloxSetup.intro.startedAt >= ms, beats[i], { timeout: 6000, polling: 'raf' });
     const t = await page.evaluate(() => Math.round(performance.now() - window.__veloxSetup.intro.startedAt));
     await shot(page, `intro-${String(i + 1).padStart(2, '0')}-${String(t).padStart(4, '0')}ms`);
-    if (beats[i] === 470) ok(await page.evaluate(() => getComputedStyle(document.querySelector('.vx-slot')).opacity === '0'), 'welcome stays hidden while the intro runs');
+    if (beats[i] === 560 || beats[i] === 1790) lit.push(await page.evaluate(() => window.__veloxSetup.intro.lightProbe()));
+    if (beats[i] === 2330) ok(await page.evaluate(() => getComputedStyle(document.querySelector('.vx-slot')).opacity === '0'), 'welcome stays hidden while the intro runs (2.3 s, the sweep)');
   }
-  ok(await waitSettled(page, 1000), 'intro settles (1.6 s)');
-  ok(await page.evaluate(() => { const i = window.__veloxSetup.intro; return performance.now() - i.startedAt < 2600; }), 'settled within the full variant\'s timeline');
+  ok(lit.length === 2 && lit.every(n => n > 0), `the light is lit while the intro runs (lit light pixels at the streak / after the strike: ${lit.join(' / ')})`);
+  ok(await waitSettled(page, 1500), 'intro settles (3.0 s)');
+  const tSettle = await page.evaluate(() => Math.round(performance.now() - window.__veloxSetup.intro.startedAt));
+  ok(tSettle < 3700, `settled within the long variant's timeline (${tSettle} ms after the start)`);
   ok(!(await page.evaluate(() => window.__veloxSetup.intro.keysActive)), 'the intro releases the keyboard when it settles (M in the form changes nothing)');
   const w0 = await page.evaluate(() => JSON.stringify(document.querySelector('.vx-word').getBoundingClientRect()));
   await quiet(page);
@@ -349,6 +398,7 @@ console.log('install flow');
   ok(c61 && c61.signal > 0 && c61.bone > 0 && c61.line > 0, `tick row: done ticks bone, the current one orange, the rest hairline (${JSON.stringify(c61)})`);
   await shot(page, 'progress');
   ok((await layoutProblems(page)).length === 0, 'progress: layout fits ' + (await layoutProblems(page)).join('; '));
+  await spyCelebrate(page);
   await emit(page, { type: 'progress', percent: 94, step: 'VELOX wird bei Windows angemeldet …', file: '' });
   await emit(page, { type: 'progress', percent: 100, step: 'Fertig', file: '' });
   await emit(page, { type: 'done', mode: 'install', launched: false });
@@ -356,7 +406,14 @@ console.log('install flow');
   const cDone = await tickColours(page, '#p-bar');
   ok(cDone && cDone.signal === 0 && cDone.line === 0 && cDone.bone > 0, `at 100 % the row is all bone, no orange (${JSON.stringify(cDone)})`);
   await shot(page, 'progress-complete');
+  ok(await page.evaluate(() => window.__celeb.length === 0), 'celebrate() waits for the done screen (not while the row runs out)');
   ok(await waitScreen(page, 'done', 3000), 'done message leads to the Done screen');
+  const cel = await watchCelebrate(page, [60, 200, 330, 480, 650, 900, 1250], 'done-celebrate');
+  ok(cel.called && cel.count === 1, 'the Done screen calls intro.celebrate() once');
+  ok(cel.peak > cel.rest * 3 && cel.peak > 200, `celebrate(): the cut lights up (lit light pixels: rest ${cel.rest}, peak ${cel.peak})`);
+  ok(cel.ms !== null && cel.ms >= 1250 && cel.ms <= 1800, `celebrate() resolves after ~1.3 s (${cel.ms} ms)`);
+  ok(cel.audio > 0, `celebrate() plays its sound (${cel.audio} sound sources started)`);
+  ok(cel.after <= cel.rest * 1.5 + 50, `after celebrate() only the resting ember is left (lit: ${cel.after}, rest ${cel.rest})`);
   await quiet(page);
   await shot(page, 'done');
   ok((await page.textContent('#d-title')).includes('installiert'), 'Done: "Fertig. VELOX ist installiert."');
@@ -368,6 +425,25 @@ console.log('install flow');
   ok(!!(await lastSent(page, 'launch')), '"VELOX starten" sends "launch"');
   ok((await oldLook(page)).length === 0, 'no old look on progress / done ' + (await oldLook(page)).join(' | '));
   ok(errors.length === 0, 'no console errors (install flow): ' + errors.join(' | '));
+  await context.close();
+}
+
+// ================================================================== 3b. celebrate() respects mute
+console.log('celebrate and mute');
+for (const how of ['M during the intro', 'settings.json startSound=false (?sound=0)']) {
+  const { page, context, errors } = await openSetup('install', how.startsWith('M') ? {} : { query: '?sound=0' });
+  await started(page);
+  if (how.startsWith('M')) { await page.waitForTimeout(200); await page.keyboard.press('m'); await page.waitForTimeout(60); }
+  await page.keyboard.press('Escape'); await waitSettled(page, 1500); await quiet(page);
+  ok(await page.evaluate(() => window.__veloxSetup.intro.muted), `${how}: the intro is muted`);
+  await spyCelebrate(page);
+  await page.click('#btn-install'); await waitScreen(page, 'progress');
+  await emit(page, { type: 'done', mode: 'install', launched: true });
+  ok(await waitScreen(page, 'done', 3000), `${how}: done screen`);
+  const cel = await watchCelebrate(page, [450], null);
+  ok(cel.called && cel.peak > cel.rest, `${how}: celebrate() still shows its light (rest ${cel.rest}, peak ${cel.peak})`);
+  ok(cel.audio === 0, `${how}: celebrate() plays no sound (${cel.audio} sound sources started)`);
+  ok(errors.length === 0, `${how}: no console errors ${errors.join(' | ')}`);
   await context.close();
 }
 
@@ -443,6 +519,7 @@ console.log('update');
   await quiet(page);
   ok((await page.textContent('#d-title')).includes('neuesten Stand'), 'Done: "auf dem neuesten Stand"');
   ok((await page.textContent('#d-bar .vx-ticks-status')) === 'Aktualisiert', 'Done trace: "Aktualisiert"');
+  ok(await page.evaluate(() => window.__veloxSetup.state.celebrated), 'update done: celebrate() as well');
   ok(errors.length === 0, 'no console errors (update): ' + errors.join(' | '));
   await context.close();
 }
@@ -475,6 +552,7 @@ console.log('uninstall');
   await quiet(page);
   ok((await page.textContent('#d-title')).includes('entfernt'), 'Done: "VELOX wurde entfernt."');
   ok(await page.isHidden('#btn-launch') && await page.isHidden('#d-hint'), 'no "VELOX starten" after uninstalling');
+  ok(!(await page.evaluate(() => window.__veloxSetup.state.celebrated)), 'no celebrate() after removing VELOX');
   await shot(page, 'uninstall-done');
   await page.click('#btn-done-close');
   ok(!!(await lastSent(page, 'exit')), 'close after uninstall sends "exit"');
@@ -508,6 +586,7 @@ console.log('reduced motion');
   ok((await tickColours(page, '#p-bar')).signal > 0 && (await page.textContent('#p-bar .vx-ticks-pct')) === '50 %', 'progress jumps without easing');
   await emit(page, { type: 'done', mode: 'install', launched: false });
   ok(await waitScreen(page, 'done', 600), 'done at once (reduced)');
+  ok(await page.evaluate(() => window.__veloxSetup.state.celebrated), 'reduced motion: celebrate() (the calm ember pulse and the chime)');
   await page.waitForTimeout(300);
   await shot(page, 'reduced-done');
   ok(errors.length === 0, 'no console errors (reduced motion): ' + errors.join(' | '));
@@ -567,23 +646,38 @@ for (const cfg of [{ scale: 1, width: 880, height: 560, tag: '100' }, { scale: 1
 }
 
 // ================================================================== 9. VELOX.exe start screen (native/host/start)
+// HostForm.StartVariant: settings.json introMode long -> variant=long (every launch), short -> short, off -> still
 console.log('VELOX.exe start screen');
 {
-  const { page, context, errors } = await openSplash('v=1.2.0&variant=full&sound=1&test=0');
+  const { page, context, errors } = await openSplash('v=1.3.0&variant=long&sound=1&test=0');
   await started(page, 'window.__intro');
   ok((await sent(page)).some(m => m.type === 'splash-ready'), 'start screen announces "splash-ready"');
-  const s = await page.evaluate(() => ({ v: window.__intro.variant, a: window.__intro.audible, label: document.querySelector('.vx-label-r').textContent }));
-  ok(s.v === 'full' && s.a, `variant=full from the URL, sound plays without a click (audible=${s.a})`);
-  ok(s.label === 'Version 1.2.0', 'version label: "Version 1.2.0"');
+  const s = await page.evaluate(() => ({ v: window.__intro.variant, name: window.__intro.timeline().name, calm: window.__intro.timeline().calm, a: window.__intro.audible, label: document.querySelector('.vx-label-r').textContent }));
+  ok(s.v === 'long' && s.name === 'long' && s.a, `introMode long (variant=long): the long intro, sound plays without a click (audible=${s.a})`);
+  ok(s.calm >= 2400 && s.calm <= 2700, `the long intro may hand over from "calm" (${s.calm} ms)`);
+  {
+    // VELOX.exe's hard cap must leave room for the longest honest announcement (READY before the intro's clock runs)
+    const hf = fs.readFileSync(path.join(APP, 'native/host/HostForm.cs'), 'utf8');
+    const sj = fs.readFileSync(path.join(HOST_START, 'splash.js'), 'utf8');
+    const max = +(/HandoverMaxMs = (\d+)/.exec(hf) || [])[1], grace = +(/HandoverGraceMs = (\d+)/.exec(hf) || [])[1], boot = +(/const BOOT_MS = (\d+)/.exec(sj) || [])[1];
+    const ho = await page.evaluate(async () => (await import('./brand/intro.js')).HANDOVER.total);
+    ok(max && grace && boot && max >= s.calm + boot + ho + grace && max <= s.calm + boot + ho + grace + 400,
+      `HostForm.cs HandoverMaxMs ${max} >= calm ${s.calm} + boot ${boot} + hand-over ${ho} + grace ${grace} (and not much more)`);
+  }
+  ok(s.label === 'Version 1.3.0', 'version label: "Version 1.3.0"');
   ok(await page.isHidden('#mode'), 'no Testmodus label in the real mode');
-  const beats = [150, 300, 450, 900, 940, 1050, 1400, 1800];
+  ok(await page.waitForFunction(() => window.__intro.lightThread === 'worker', null, { timeout: 3000 }).then(() => true, () => false),
+    `the light is drawn in the module worker (lightThread ${await page.evaluate(() => window.__intro.lightThread)}) under the start screen's CSP (default-src 'none'; script-src 'self')`);
+  const beats = [80, 300, 560, 900, 1250, 1500, 1660, 1728, 1790, 2050, 2350, 2650];
   for (let i = 0; i < beats.length; i++) {
-    await page.waitForFunction(ms => performance.now() - window.__intro.startedAt >= ms, beats[i], { timeout: 5000, polling: 'raf' });
+    await page.waitForFunction(ms => performance.now() - window.__intro.startedAt >= ms, beats[i], { timeout: 6000, polling: 'raf' });
     const t = await page.evaluate(() => Math.round(performance.now() - window.__intro.startedAt));
     await shot(page, `host-intro-${String(i + 1).padStart(2, '0')}-${String(t).padStart(4, '0')}ms`);
   }
+  ok(await waitSettled(page, 1500), 'the long intro settles (3.0 s)');
   await emit(page, { type: 'status', text: 'Tweaks werden eingelesen …' });
   ok((await page.textContent('.vx-status')) === 'Tweaks werden eingelesen …', 'VELOX_STATUS text goes to intro.status()');
+  await page.waitForTimeout(300);
   await shot(page, 'host-splash');
   // M during the start screen: the host forwards it to the app (&sound=off)
   await page.keyboard.press('m');
@@ -595,43 +689,103 @@ console.log('VELOX.exe start screen');
   await emit(page, { type: 'ready' });
   await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 3000 }).catch(() => {});
   const ho = await page.evaluate(() => ({ h: window.__sent.find(m => m.type === 'handover'), c: window.__sent.find(m => m.type === 'continue') }));
-  ok(ho.h && ho.h.ms >= 400 && ho.h.ms <= 460, `"ready" is answered with handover{ms} (${ho.h && ho.h.ms} ms after the settle)`);
+  ok(ho.h && ho.h.ms >= 400 && ho.h.ms <= 460, `"ready" after the settle is answered with handover{ms} (${ho.h && ho.h.ms} ms: only the hand-over)`);
   ok(ho.c && ho.c.at - tReady >= 400 && ho.c.at - tReady < 700, `"continue" when intro.done() resolves (${ho.c ? Math.round(ho.c.at - tReady) : '-'} ms after ready)`);
   ok(!(await page.evaluate(() => window.__intro.keysActive)), 'the hand-over releases the keyboard');
   await shot(page, 'host-handover-end');
   ok((await oldLook(page)).length === 0, 'start screen: no old look ' + (await oldLook(page)).join(' | '));
-  ok((await cspViolations(page)).length === 0, 'start screen: no CSP violations ' + (await cspViolations(page)).join(' | '));
+  ok((await cspViolations(page)).length === 0, 'start screen: no CSP violations (worker included) ' + (await cspViolations(page)).join(' | '));
   ok(errors.length === 0, 'start screen: no console errors ' + errors.join(' | '));
   await context.close();
 }
 {
-  // ready arrives while the full intro still runs: done() waits for the settle, the host gets the rest announced
-  const { page, context } = await openSplash('v=1.2.0&variant=full&sound=1&test=0');
+  // ready arrives while the long intro still runs: done() waits for "calm" (the end of the sweep), the host gets the rest announced
+  const { page, context } = await openSplash('v=1.3.0&variant=long&sound=1&test=0');
   await started(page, 'window.__intro');
   await page.waitForTimeout(300);
   await emit(page, { type: 'ready' });
-  await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 4000 }).catch(() => {});
-  const r = await page.evaluate(() => ({ h: window.__sent.find(m => m.type === 'handover'), c: window.__sent.find(m => m.type === 'continue'), s: window.__intro.startedAt }));
-  ok(r.h && r.h.ms > 1500 && r.h.ms < 1800, `early ready: the page announces the rest of the intro + hand-over (${r.h && r.h.ms} ms; host cap = min(ms + 250, 2300))`);
-  ok(r.c && r.c.at - r.s >= 1600 + 400 && r.c.at - r.s < 1600 + 430 + 400, `early ready: "continue" after settle + hand-over (${r.c ? Math.round(r.c.at - r.s) : '-'} ms after the start), never a struck-through word`);
+  await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 5000 }).catch(() => {});
+  const r = await page.evaluate(() => ({ h: window.__sent.find(m => m.type === 'handover'), c: window.__sent.find(m => m.type === 'continue'), s: window.__intro.startedAt, calm: window.__intro.timeline().calm }));
+  // (startedAt can lie up to 250 ms ahead of the page clock: with sound, t = 0 is put on the cue's start)
+  const want = r.h ? Math.round(r.calm - (r.h.at - r.s) + 430) : 0;
+  ok(r.h && Math.abs(r.h.ms - want) <= 40 && r.h.ms > 2300, `early ready: the page announces the rest of the intro + hand-over (${r.h && r.h.ms} ms, ~${want}; host cap = min(ms + 250, 3800))`);
+  ok(r.h && r.h.ms + 250 <= 3800, 'early ready: the announcement stays under VELOX.exe\'s hard cap (HandoverMaxMs 3800)');
+  ok(r.c && r.c.at - r.s >= r.calm + 400 && r.c.at - r.s < r.calm + 430 + 400, `early ready: "continue" after calm + hand-over (${r.c ? Math.round(r.c.at - r.s) : '-'} ms after the start), never during the strike or the sweep`);
+  ok(r.c && r.h && (r.c.at - r.s) - 300 <= r.h.ms + 250, 'early ready: "continue" comes before the host\'s announced deadline (ms + 250)');
   await context.close();
 }
 {
-  const { page, context, errors } = await openSplash('v=1.2.0&variant=short&sound=0&test=1');
+  // ready the moment the page loads (backend already running: VELOX_RUNNING): the whole intro is still ahead
+  const { page, context } = await openSplash('v=1.3.0&variant=long&sound=1&test=0');
+  await page.waitForFunction(() => window.__sent.some(m => m.type === 'splash-ready'), null, { timeout: 3000 });
+  await emit(page, { type: 'ready' });
+  await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 6000 }).catch(() => {});
+  const r = await page.evaluate(() => ({ h: window.__sent.find(m => m.type === 'handover'), c: window.__sent.find(m => m.type === 'continue') }));
+  ok(r.h && r.h.ms + 250 <= 3800 && r.c && r.c.at - r.h.at <= r.h.ms + 250, `ready at once: announced ${r.h && r.h.ms} ms, "continue" after ${r.c && r.h ? Math.round(r.c.at - r.h.at) : '-'} ms (within ms + 250 and the 3800 ms cap)`);
+  await context.close();
+}
+{
+  // skipping while the host waits for the hand-over: the app comes at once
+  const { page, context } = await openSplash('v=1.3.0&variant=long&sound=1&test=0');
+  await started(page, 'window.__intro');
+  await page.waitForTimeout(400);
+  await emit(page, { type: 'ready' });
+  await page.waitForTimeout(200);
+  const t0 = await page.evaluate(() => performance.now());
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 3000 }).catch(() => {});
+  const c = await page.evaluate(() => window.__sent.find(m => m.type === 'continue'));
+  ok(c && c.at - t0 < 800, `Esc while the host waits: "continue" ${c ? Math.round(c.at - t0) : '-'} ms later (skip + hand-over)`);
+  await context.close();
+}
+for (const legacy of ['variant=full', '']) {
+  // 1.2.x's name and a missing value both mean the long intro (settings default)
+  const { page, context } = await openSplash(`v=1.3.0&${legacy}&sound=1&test=0`);
+  await started(page, 'window.__intro');
+  ok((await page.evaluate(() => window.__intro.timeline().name)) === 'long', `${legacy || 'no variant'}: the long intro`);
+  await context.close();
+}
+{
+  const { page, context, errors } = await openSplash('v=1.3.0&variant=short&sound=0&test=1');
   await started(page, 'window.__intro');
   const s = await page.evaluate(() => ({ v: window.__intro.variant, m: window.__intro.muted, a: window.__intro.audible, label: document.querySelector('.vx-sound span').textContent }));
-  ok(s.v === 'short', 'variant=short (every start after the first)');
+  ok(s.v === 'short', 'introMode short (variant=short): the short intro');
   ok(s.m && !s.a && s.label === 'Ton aus', 'settings.json startSound=false (?sound=0): starts muted, "Ton aus"');
+  ok(await page.waitForFunction(() => window.__intro.lightThread === 'worker', null, { timeout: 3000 }).then(() => true, () => false), 'short intro: the light in the worker too');
   ok(await page.isVisible('#mode') && (await page.textContent('#mode')) === 'Testmodus', 'Testmodus label (top left, on the word\'s margin)');
   await emit(page, { type: 'mode', test: false });
   ok(await page.isHidden('#mode'), 'mode{test:false} hides it');
   await emit(page, { type: 'mode', test: true });
+  for (const ms of [120, 360, 560]) {
+    await page.waitForFunction(ms => performance.now() - window.__intro.startedAt >= ms, ms, { timeout: 4000, polling: 'raf' });
+    await shot(page, `host-short-${String(ms).padStart(4, '0')}ms`);
+  }
   ok(await waitSettled(page, 1500), 'short intro settles (0.76 s)');
-  ok(errors.length === 0, 'short start screen: no console errors ' + errors.join(' | '));
+  await emit(page, { type: 'ready' });
+  await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 3000 }).catch(() => {});
+  const h = await page.evaluate(() => window.__sent.find(m => m.type === 'handover'));
+  ok(h && h.ms >= 400 && h.ms <= 460, `short: hand-over announced ${h && h.ms} ms`);
+  ok((await cspViolations(page)).length === 0 && errors.length === 0, 'short start screen: no CSP violations, no console errors ' + errors.join(' | '));
+  await context.close();
+}
+{
+  // introMode off: VELOX.exe passes variant=still - no animation, no sound, no keys, straight to the hand-over
+  const { page, context, errors } = await openSplash('v=1.3.0&variant=still&sound=1&test=0');
+  await started(page, 'window.__intro');
+  const s = await page.evaluate(() => ({ v: window.__intro.variant, a: window.__intro.audible, keys: window.__intro.keysActive, soundHidden: document.querySelector('.vx-sound').hidden, skipHidden: document.querySelector('.vx-skip').hidden }));
+  ok(s.v === 'still' && !s.a && !s.keys && s.soundHidden && s.skipHidden, `introMode off (variant=still): no intro, no sound (audible=${s.a}), no sound button, no skip, no keys`);
+  await page.waitForTimeout(250);
+  await shot(page, 'host-off');
+  const t0 = await page.evaluate(() => performance.now());
+  await emit(page, { type: 'ready' });
+  await page.waitForFunction(() => window.__sent.some(m => m.type === 'continue'), null, { timeout: 3000 }).catch(() => {});
+  const r = await page.evaluate(() => ({ h: window.__sent.find(m => m.type === 'handover'), c: window.__sent.find(m => m.type === 'continue') }));
+  ok(r.h && r.h.ms >= 400 && r.h.ms <= 460 && r.c && r.c.at - t0 < 700, `introMode off: ready -> continue after ${r.c ? Math.round(r.c.at - t0) : '-'} ms (only the 430 ms hand-over)`);
+  ok(errors.length === 0, 'off start screen: no console errors ' + errors.join(' | '));
   await context.close();
 }
 for (const cfg of [{ width: 1360, height: 880, scale: 1, tag: '1360' }, { width: 1360, height: 880, scale: 1.5, tag: '1360-150' }, { width: 900, height: 600, scale: 1, tag: 'min' }, { width: 900, height: 600, scale: 1.5, tag: 'min-150' }]) {
-  const { page, context, errors } = await openSplash('v=1.2.0&variant=full&sound=1&test=0', cfg);
+  const { page, context, errors } = await openSplash('v=1.3.0&variant=long&sound=1&test=0', cfg);
   await started(page, 'window.__intro');
   await page.waitForTimeout(300);
   await emit(page, { type: 'error', title: 'VELOX startet nicht', message: 'Der VELOX-Motor hat sich nach 45 Sekunden noch nicht gemeldet. Oft hilft ein zweiter Versuch oder ein Neustart des PCs. Wenn nicht, schau ins Log.', log: Array.from({ length: 40 }, (_, i) => 'Zeile ' + i + ' der Ausgabe von PowerShell').join('\n'), canTest: true });
@@ -660,7 +814,7 @@ for (const cfg of [{ width: 1360, height: 880, scale: 1, tag: '1360' }, { width:
 }
 {
   // a later load of the start screen (backend died after the app was shown): the still end pose, no sound, no keys
-  const { page, context, errors } = await openSplash('v=1.2.0&variant=still&sound=1&test=0');
+  const { page, context, errors } = await openSplash('v=1.3.0&variant=still&sound=1&test=0');
   await started(page, 'window.__intro');
   const s = await page.evaluate(() => ({ v: window.__intro.variant, keys: window.__intro.keysActive, soundHidden: document.querySelector('.vx-sound').hidden, skipHidden: document.querySelector('.vx-skip').hidden }));
   ok(s.v === 'still' && !s.keys && s.soundHidden && s.skipHidden, 'variant=still: no intro, no sound button, no skip, no key listener');
@@ -671,7 +825,7 @@ for (const cfg of [{ width: 1360, height: 880, scale: 1, tag: '1360' }, { width:
   await context.close();
 }
 {
-  const { page, context, errors } = await openSplash('v=1.2.0&variant=full&sound=1&test=0', { reduced: true });
+  const { page, context, errors } = await openSplash('v=1.3.0&variant=long&sound=1&test=0', { reduced: true });
   await started(page, 'window.__intro');
   ok((await page.evaluate(() => window.__intro.variant)) === 'reduced', 'start screen with reduced motion: the calm variant');
   ok(await waitSettled(page, 1200), 'calm start screen settles within 0.8 s');
