@@ -1180,6 +1180,8 @@ export const CONFIG = deepFreeze({
       { id: 'kreisel', name: 'Kreisel', tier: 'episch', motion: 'spin' },
       { id: 'rakete', name: 'Rakete', tier: 'legendaer', motion: 'rocket' },
     ],
+    // Falls es CONFIG.pickaxes.list gibt (eigene Spitzhacken-Formen): Stufe nach Listen-Platz
+    pickaxeTiers: ['frei', 'selten', 'episch', 'legendaer', 'episch', 'legendaer'],
     defaultPickaxe: 'standard',
     defaultEmote: 'tanz',
   },

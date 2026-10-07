@@ -13,8 +13,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { Character } from '../player.js';
 import { createCharacterView } from './characterModel.js';
-import { createWeaponModel, createHandMount } from '../weapons/models.js';
-import { stylePickaxe, applyEmoteMotion } from './cosmetics.js';
+import { createPickaxeMount, applyEmoteMotion } from './cosmetics.js';
 
 const L = CONFIG.lobby;
 const PODIUM_TOP = 0.42;
@@ -55,19 +54,18 @@ export function createLobbyScene({ scene, camera, renderer, element }) {
     }
   }
 
-  /** Spitzhacke in der Hand zeigen (style = Farben) oder weglegen (null). */
-  function setPickaxe(style) {
+  /** Spitzhacke in der Hand zeigen (id aus dem Spind) oder weglegen (null). */
+  function setPickaxe(pickaxeId) {
     if (pickaxeMount) {
       view?.detach('weapon');
       disposeTree(pickaxeMount);
       pickaxeMount = null;
     }
-    if (!style) {
+    if (!pickaxeId) {
       if (character) character.mode = 'weapon';
       return;
     }
-    pickaxeMount = createHandMount('pickaxe', createWeaponModel('pickaxe'));
-    stylePickaxe(pickaxeMount, style);
+    pickaxeMount = createPickaxeMount(pickaxeId);
     if (character) {
       character.mode = 'pickaxe';
       view.attach('weapon', pickaxeMount);
@@ -224,8 +222,7 @@ export function createLobbyScene({ scene, camera, renderer, element }) {
         cam.lookAt(0, 0.98, 0);
         cleanup = () => v.dispose();
       } else {
-        const model = createHandMount('pickaxe', createWeaponModel('pickaxe'));
-        stylePickaxe(model, entry.data);
+        const model = createPickaxeMount(entry.id);
         const holder = new THREE.Group();
         holder.add(model);
         // schräg ins Bild legen und mittig ausrichten

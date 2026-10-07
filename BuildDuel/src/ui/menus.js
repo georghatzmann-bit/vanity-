@@ -14,7 +14,7 @@ import { lobbyModes, getModeDef } from '../modes/index.js';
 import {
   catalog, isOwned, canBuy, buyItem, equipItem, equippedItems, levelInfo, EQUIP_KEY,
 } from '../core/progress.js';
-import { emoteMotion, pickaxeStyle } from '../world/cosmetics.js';
+import { emoteMotion } from '../world/cosmetics.js';
 import { pickNeighbor } from './menuLogic.js';
 import { ICONS, MODE_ICONS } from './menuIcons.js';
 
@@ -388,7 +388,7 @@ export function createMenus(o) {
       lobby.faceCamera();
     } else if (entry.kind === 'pickaxes') {
       lobby.setSkin(eq.skin.id);
-      lobby.setPickaxe(pickaxeStyle(entry.id));
+      lobby.setPickaxe(entry.id);
       lobby.faceCamera();
     } else {
       lobby.setSkin(eq.skin.id);
@@ -400,7 +400,7 @@ export function createMenus(o) {
   function previewEquipped() {
     const eq = equippedItems(progress);
     lobby.setSkin(eq.skin.id);
-    lobby.setPickaxe(state.screen && state.screen !== 'lobby' && state.collectionKind === 'pickaxes' ? pickaxeStyle(eq.pickaxe.id) : null);
+    lobby.setPickaxe(state.screen && state.screen !== 'lobby' && state.collectionKind === 'pickaxes' ? eq.pickaxe.id : null);
   }
 
   // --- Kaufen bestätigen -------------------------------------------------------------------------

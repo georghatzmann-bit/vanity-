@@ -4,7 +4,7 @@ import { CONFIG } from '../src/config.js';
 import {
   PROGRESS_KEY, defaultProgress, loadProgress, saveProgress, resetProgress, sanitizeProgress,
   levelInfo, xpForLevel, addXp, addMatchResult, catalog, findItem, canBuy, buyItem, equipItem,
-  isOwned, equippedItems, createPlayRewards,
+  isOwned, equippedItems, createPlayRewards, defaultPickaxeId,
 } from '../src/core/progress.js';
 import { Game } from '../src/core/game.js';
 
@@ -25,7 +25,7 @@ describe('Fortschritt: Speichern und Laden', () => {
     assert.equal(p.xp, 0);
     assert.ok(p.owned.skins.includes(CONFIG.skins.defaultId), 'Standard-Skin');
     assert.ok(p.owned.skins.length >= 2, 'ein paar Gratis-Skins');
-    assert.ok(p.owned.pickaxes.includes(CONFIG.cosmetics.defaultPickaxe));
+    assert.ok(p.owned.pickaxes.includes(defaultPickaxeId()));
     assert.ok(p.owned.emotes.includes(CONFIG.cosmetics.defaultEmote));
     assert.equal(p.equipped.skin, CONFIG.skins.defaultId);
     for (const key of ['trophies', 'coins', 'xp', 'passTier', 'owned', 'equipped', 'matches', 'wins']) assert.ok(key in p, key);
@@ -60,7 +60,7 @@ describe('Fortschritt: Speichern und Laden', () => {
     assert.ok(!('unbekannt' in q));
     assert.ok(!q.owned.skins.includes('gibtsnicht'));
     assert.equal(q.equipped.skin, CONFIG.skins.defaultId, 'nicht besessen → Standard');
-    assert.equal(q.equipped.pickaxe, CONFIG.cosmetics.defaultPickaxe, 'Goldhacke nicht gekauft');
+    assert.equal(q.equipped.pickaxe, defaultPickaxeId(), 'Goldhacke nicht gekauft');
     assert.deepEqual(sanitizeProgress(null), defaultProgress());
     assert.deepEqual(sanitizeProgress([1, 2]), defaultProgress());
   });

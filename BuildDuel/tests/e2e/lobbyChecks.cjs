@@ -353,22 +353,25 @@ const LOBBY_CHECKS = [
         eqSkin: buildDuel.progress.equipped.skin,
         infinite: buildDuel.game.player.infiniteMaterials,
         size: buildDuel.game.map.size,
-        cosmetics: !!buildDuel.game.player.cosmetics?.pickaxe,
+        cosmetics: !!buildDuel.game.player.cosmetics && (!!buildDuel.CONFIG.pickaxes?.list || !!buildDuel.game.player.cosmetics.pickaxe),
       }));
       ctx.assert(start.state === 'playing' && !start.menu && !start.lobby, `im Spiel, Lobby weg: ${JSON.stringify(start)}`);
       ctx.assert(start.skin === start.eqSkin, `Spind-Skin im Spiel: ${start.skin}`);
       ctx.assert(start.infinite && start.size === 200, 'Kreativ: unendlich Material, 200 m');
-      ctx.assert(start.cosmetics, 'Spitzhacken-Farben am Spieler');
+      ctx.assert(start.cosmetics, 'Spind-Aussehen (Spitzhacke, Emote) am Spieler');
       // Spitzhacke ziehen (F) → umgefärbt
       await page.keyboard.press('KeyF');
       await page.evaluate(() => { buildDuel.simulate(0.2); });
       // (Software-Grafik: ein Bild kann über eine halbe Sekunde dauern – auf die Hacke in der Hand warten)
-      await page.waitForFunction(() => buildDuel.game.player.view.rightHand.children.some((m) => /pickaxe/.test(m.name) && m.userData.pickaxeStyle), null, { timeout: 15000 }).catch(() => {});
+      // (Mit eigenen Spitzhacken-Formen – CONFIG.pickaxes.list – baut models.js die Form selbst: dann zählt player.pickaxeId)
+      await page.waitForFunction(() => buildDuel.CONFIG.pickaxes?.list || buildDuel.game.player.view.rightHand.children.some((m) => /pickaxe/.test(m.name) && m.userData.pickaxeStyle), null, { timeout: 15000 }).catch(() => {});
       const styled = await page.evaluate(() => ({
         styles: buildDuel.game.player.view.rightHand.children.map((m) => m.userData.pickaxeStyle ?? null),
+        forms: !!buildDuel.CONFIG.pickaxes?.list,
+        pickaxeId: buildDuel.game.player.pickaxeId ?? null,
         equipped: buildDuel.progress.equipped.pickaxe,
       }));
-      ctx.assert(styled.styles.includes(styled.equipped), `Spitzhacke umgefärbt: ${JSON.stringify(styled)}`);
+      ctx.assert(styled.forms ? styled.pickaxeId === styled.equipped : styled.styles.includes(styled.equipped), `Spitzhacke aus dem Spind in der Hand: ${JSON.stringify(styled)}`);
       // Bauen: 6 Wände schnell nacheinander → Bauteile/s
       await page.evaluate(() => {
         const g = buildDuel.game;

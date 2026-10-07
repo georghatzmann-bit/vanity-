@@ -55,6 +55,7 @@ export function createCreativeMode(game, options = {}) {
         isPlayer: true,
         team: 1,
         skin: options.skin ?? CONFIG.skins.defaultId,
+        pickaxe: options.pickaxe, // Spitzhacke aus dem Spind (falls Figuren Spitzhacken-Formen kennen)
         position: mode.spawnPoint,
         yaw: mode.spawnYaw,
         health: cfg.startHealth,

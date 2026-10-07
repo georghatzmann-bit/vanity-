@@ -192,8 +192,8 @@ async function start() {
       uiRoot: document.getElementById('ui'),
     });
     const equipped = equippedItems(progress);
-    game.startMode(id, { skin: equipped.skin.id, ...options });
-    // Spind: Spitzhacken-Farben und Emote-Bewegung des Spielers
+    game.startMode(id, { skin: equipped.skin.id, pickaxe: equipped.pickaxe.id, ...options });
+    // Spind: Spitzhacken-Farben (nur ohne eigene Spitzhacken-Formen, siehe cosmetics.js) und Emote-Bewegung
     if (game.player) {
       game.player.cosmetics = { pickaxe: pickaxeStyle(equipped.pickaxe.id), emote: emoteMotion(equipped.emote.id) };
     }

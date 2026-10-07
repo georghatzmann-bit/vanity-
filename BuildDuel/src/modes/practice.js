@@ -70,6 +70,7 @@ export function createPracticeMode(game, options = {}) {
         isPlayer: true,
         team: 1,
         skin: options.skin ?? CONFIG.skins.defaultId, // Welle 5: Skin aus dem Spind
+        pickaxe: options.pickaxe, // … und die Spitzhacke
         position: mode.spawnPoint,
         yaw: mode.spawnYaw,
         health: cfg.startHealth,

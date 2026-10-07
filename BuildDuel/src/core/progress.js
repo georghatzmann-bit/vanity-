@@ -44,8 +44,29 @@ export function catalog(kind) {
       return item(kind, skin.id, skin.name ?? skin.id, tier, skin);
     });
   }
-  const list = kind === 'pickaxes' ? COS.pickaxes : kind === 'emotes' ? COS.emotes : [];
+  if (kind === 'pickaxes') {
+    // Gibt es eigene Spitzhacken-Formen (CONFIG.pickaxes.list), gelten diese – sonst die Farb-Varianten
+    const forms = pickaxeForms();
+    const list = forms ?? COS.pickaxes;
+    const defaultId = defaultPickaxeId();
+    return list.map((entry, i) => {
+      const tier = entry.id === defaultId ? 'frei' : entry.tier ?? COS.pickaxeTiers?.[i] ?? COS.skinTierFallback;
+      return item(kind, entry.id, entry.name ?? entry.id, tier, entry);
+    });
+  }
+  const list = kind === 'emotes' ? COS.emotes : [];
   return list.map((entry) => item(kind, entry.id, entry.name, entry.tier, entry));
+}
+
+/** Spitzhacken-Formen aus CONFIG.pickaxes.list (andere Welle) – oder null, wenn es sie nicht gibt. */
+export function pickaxeForms() {
+  const list = CONFIG.pickaxes?.list;
+  return Array.isArray(list) && list.length > 0 ? list : null;
+}
+
+/** Standard-Spitzhacke (gratis, immer im Besitz). */
+export function defaultPickaxeId() {
+  return pickaxeForms() ? CONFIG.pickaxes.defaultId ?? pickaxeForms()[0].id : COS.defaultPickaxe;
 }
 
 function item(kind, id, name, tier, data) {
@@ -71,7 +92,7 @@ function defaultEquipped() {
   return {
     skin: CONFIG.skins.defaultId,
     hat: null, // Hut gehört zum Skin (Feld bleibt für die Form aus ARCHITECTURE.md §11)
-    pickaxe: COS.defaultPickaxe,
+    pickaxe: defaultPickaxeId(),
     emote: COS.defaultEmote,
   };
 }
@@ -260,7 +281,7 @@ export function equippedItems(progress) {
   const e = progress.equipped ?? defaultEquipped();
   return {
     skin: findItem('skins', e.skin) ?? findItem('skins', CONFIG.skins.defaultId),
-    pickaxe: findItem('pickaxes', e.pickaxe) ?? findItem('pickaxes', COS.defaultPickaxe),
+    pickaxe: findItem('pickaxes', e.pickaxe) ?? findItem('pickaxes', defaultPickaxeId()),
     emote: findItem('emotes', e.emote) ?? findItem('emotes', COS.defaultEmote),
   };
 }

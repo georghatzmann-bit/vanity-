@@ -7,12 +7,16 @@
 //     auch, wenn das Modell später anders gebaut wird.
 //   - applyEmoteMotion(): bewegt die ganze Figur (root) zusätzlich zum Grund-Tanz
 //     (hüpfen, drehen, wippen) – nach view.update().
+//   - createPickaxeMount(id): Spitzhacke für Lobby/Spind – nutzt CONFIG.pickaxes.list (Formen),
+//     falls es sie gibt, sonst die Farb-Varianten aus CONFIG.cosmetics.pickaxes
 //   - createCosmeticsSystem(game): System für game.systems; wendet beides im Spiel auf
 //     Figuren mit character.cosmetics = { pickaxe: {head, handle, band}, emote: 'hop' … } an.
 // Werte: CONFIG.cosmetics (Spitzhacken-Farben, Emotes), Dauer: CONFIG.player.emoteDuration.
 // =============================================================================
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
+import { pickaxeForms } from '../core/progress.js';
+import { createWeaponModel, createHandMount } from '../weapons/models.js';
 
 const _hsl = { h: 0, s: 0, l: 0 };
 
@@ -106,9 +110,32 @@ export function emoteMotion(emoteId) {
   return CONFIG.cosmetics.emotes.find((e) => e.id === emoteId)?.motion ?? 'dance';
 }
 
-/** Farben einer Spitzhacke aus CONFIG.cosmetics.pickaxes (unbekannt → null). */
+/**
+ * Farben einer Spitzhacke aus CONFIG.cosmetics.pickaxes (unbekannt → null).
+ * Gibt es eigene Spitzhacken-Formen (CONFIG.pickaxes.list), baut models.js sie schon
+ * richtig – dann wird nichts umgefärbt (null).
+ */
 export function pickaxeStyle(pickaxeId) {
+  if (pickaxeForms()) return null;
   return CONFIG.cosmetics.pickaxes.find((p) => p.id === pickaxeId) ?? null;
+}
+
+/**
+ * Spitzhacke für die Hand (Lobby, Spind-Bilder): mit Formen-Liste die passende Form,
+ * sonst die Standard-Hacke in den Farben der Variante.
+ * @param {string} pickaxeId
+ * @returns {THREE.Group}  Halter (an die Hand hängen)
+ */
+export function createPickaxeMount(pickaxeId) {
+  if (pickaxeForms()) {
+    // createWeaponModel('pickaxe', id): das 2. Feld ist bei der Spitzhacke ihre id (CONFIG.pickaxes)
+    const mount = createHandMount('pickaxe', createWeaponModel('pickaxe', pickaxeId));
+    mount.userData.pickaxeStyle = pickaxeId;
+    return mount;
+  }
+  const mount = createHandMount('pickaxe', createWeaponModel('pickaxe'));
+  stylePickaxe(mount, pickaxeStyle(pickaxeId) ?? CONFIG.cosmetics.pickaxes[0]);
+  return mount;
 }
 
 /**
