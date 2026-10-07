@@ -112,7 +112,14 @@ let nextCharacterId = 1;
 /** Sucht ein Farbset ("Skin") aus config.js. Unbekannt → Standard-Skin. */
 export function getSkin(id) {
   const list = CONFIG.skins.list;
-  return list.find((s) => s.id === id) ?? list.find((s) => s.id === CONFIG.skins.defaultId) ?? list[0];
+  const wanted = CONFIG.skins.legacyIds?.[id] ?? id; // alte Namen (vor dem Outfit-Umbau) gehen weiter
+  return list.find((s) => s.id === wanted) ?? list.find((s) => s.id === CONFIG.skins.defaultId) ?? list[0];
+}
+
+/** Sucht eine Spitzhacke (Aussehen) aus config.js. Unbekannt → Standard. */
+export function getPickaxe(id) {
+  const list = CONFIG.pickaxes.list;
+  return list.find((p) => p.id === id) ?? list.find((p) => p.id === CONFIG.pickaxes.defaultId) ?? list[0];
 }
 
 export class Character {
@@ -129,6 +136,7 @@ export class Character {
     this.isBot = !!options.isBot;
     this.isPlayer = !!options.isPlayer;
     this.skin = typeof options.skin === 'object' && options.skin ? { ...options.skin } : { ...getSkin(options.skin) };
+    this.pickaxeId = getPickaxe(options.pickaxe).id; // Aussehen der Spitzhacke (CONFIG.pickaxes)
 
     // Position = Mitte der Füße
     this.position = new THREE.Vector3();

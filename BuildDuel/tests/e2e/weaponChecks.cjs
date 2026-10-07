@@ -423,10 +423,9 @@ const WEAPON_CHECKS = [
           const THREE = await import('three');
           const t = __kt;
           const r = buildDuel.CONFIG.player.hitbox.headRadius;
-          let mesh = null;
           t.view.root.updateMatrixWorld(true);
-          t.view.root.traverse((o) => { if (o.isMesh && o.geometry?.type === 'SphereGeometry' && Math.abs(o.geometry.parameters.radius - r) < 1e-6) mesh = o; });
-          const c = mesh.getWorldPosition(new THREE.Vector3());
+          // Gruppe "Kopf" der Figur = Mitte der Treffer-Kugel (der sichtbare Kopf liegt darin)
+          const c = t.view.head.getWorldPosition(new THREE.Vector3());
           return { x: c.x, y: c.y, z: c.z, r };
         });
         // Punkte auf der Kugel, die der Schütze sieht. Von hinten verdeckt der vorgebeugte
@@ -635,4 +634,4 @@ const WEAPON_CHECKS = [
   },
 ];
 
-module.exports = { WEAPON_CHECKS };
+module.exports = { WEAPON_CHECKS, installHelpers }; // installHelpers: auch für lookChecks.cjs

@@ -17,7 +17,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import {
-  createSharedGeometry, createPieceGeometry, createDoorGeometry, createTileGeometries, createMaterialTexture,
+  createSharedGeometry, createPieceGeometry, createDoorGeometry, createTileGeometries, createMaterialTexture, createGhostTexture,
   pieceOrigin, pieceRotationY, doorRect, isDoorPiece, pieceHealthFraction,
 } from './pieces.js';
 import { CELL_SIZE as S, LEVEL_HEIGHT as H } from './grid.js';
@@ -85,15 +85,21 @@ export function createBuildingView(game) {
     return t;
   }
   const materials = new Map();
-  /** Material für ein Teil: cracked, dark 0..DARK_LEVELS, opacity 0..OPACITY_LEVELS (= ganz fest) */
-  function materialFor(material, cracked, dark = 0, opacity = OPACITY_LEVELS, instanced = false) {
-    const key = `${material}|${cracked ? 1 : 0}|${dark}|${opacity}|${instanced ? 1 : 0}`;
+  const tint = new THREE.Color(B.constructionTint ?? '#FFFFFF');
+  /**
+   * Material für ein Teil: cracked, dark 0..DARK_LEVELS, opacity 0..OPACITY_LEVELS (= ganz fest).
+   * constructing = im Aufbau: bläulicher Schimmer, der mit dem Aufbau verschwindet (wie im Original).
+   */
+  function materialFor(material, cracked, dark = 0, opacity = OPACITY_LEVELS, instanced = false, constructing = false) {
+    const key = `${material}|${cracked ? 1 : 0}|${dark}|${opacity}|${instanced ? 1 : 0}|${constructing ? 1 : 0}`;
     let m = materials.get(key);
     if (!m) {
       const shade = instanced ? 1 : 1 - B.damageDarkening * (dark / DARK_LEVELS);
+      const color = new THREE.Color(shade, shade, shade);
+      if (constructing) color.lerp(tint.clone().multiplyScalar(shade), 0.65 * (1 - opacity / OPACITY_LEVELS) + 0.2);
       m = new THREE.MeshLambertMaterial({
         map: texture(material, cracked),
-        color: new THREE.Color(shade, shade, shade),
+        color,
         transparent: opacity < OPACITY_LEVELS,
         opacity: opacity / OPACITY_LEVELS,
       });
@@ -263,7 +269,7 @@ export function createBuildingView(game) {
       removeInstance(piece);
       const dark = Math.round((1 - frac) * DARK_LEVELS);
       const opacity = opacityLevel(piece.buildProgress);
-      const material = materialFor(piece.material, cracked, dark, opacity);
+      const material = materialFor(piece.material, cracked, dark, opacity, false, true);
       if (!v.mesh) {
         v.mesh = new THREE.Mesh(shape.geometry, material);
         v.mesh.castShadow = true;
@@ -331,14 +337,16 @@ export function createBuildingView(game) {
   }
 
   // --- Vorschau (Geist) -------------------------------------------------------------
+  // Geist wie im Original: durchsichtig blau mit hellem Gitter (Bild) und hellen Kanten
+  const ghostTexture = createGhostTexture();
   const previewOk = new THREE.MeshBasicMaterial({
-    color: B.previewColorOk, transparent: true, opacity: B.previewOpacity, depthWrite: false,
+    color: B.previewColorOk, map: ghostTexture, transparent: true, opacity: B.previewOpacity, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
   const previewBad = previewOk.clone();
   previewBad.color.set(B.previewColorBlocked);
-  const edgeOk = new THREE.LineBasicMaterial({ color: B.previewColorOk, transparent: true, opacity: 0.95, depthWrite: false });
-  const edgeBad = new THREE.LineBasicMaterial({ color: B.previewColorBlocked, transparent: true, opacity: 0.95, depthWrite: false });
+  const edgeOk = new THREE.LineBasicMaterial({ color: B.previewEdgeColorOk ?? B.previewColorOk, transparent: true, opacity: 0.95, depthWrite: false });
+  const edgeBad = new THREE.LineBasicMaterial({ color: B.previewEdgeColorBlocked ?? B.previewColorBlocked, transparent: true, opacity: 0.95, depthWrite: false });
   // Platz schon belegt (meist: das Teil, das man gerade gesetzt hat): keine rote Fläche
   // über dem Teil, nur ein dünner roter Umriss – rot heißt weiter "geht nicht".
   const previewNone = new THREE.MeshBasicMaterial({ visible: false });
@@ -392,14 +400,22 @@ export function createBuildingView(game) {
   };
   const tileNormal = tileMaterial(B.editTileColor, B.editTileOpacity);
   const tileHover = tileMaterial(B.editTileHoverColor, Math.min(1, B.editTileOpacity + 0.2));
-  const tileSelected = tileMaterial(B.editTileSelectedColor, Math.min(1, B.editTileOpacity + 0.25));
-  const tileSelectedHover = tileMaterial('#FF8A8A', Math.min(1, B.editTileOpacity + 0.35));
+  const tileSelected = tileMaterial(B.editTileSelectedColor, B.editTileSelectedOpacity ?? B.editTileOpacity);
+  const tileSelectedHover = tileMaterial('#FF8A8A', Math.min(1, (B.editTileSelectedOpacity ?? B.editTileOpacity) + 0.15));
+  // Umriss jeder Kachel (weiß, gewählt rot)
+  const tileEdge = new THREE.LineBasicMaterial({ color: B.editTileEdgeColor ?? '#FFFFFF', transparent: true, opacity: 0.9, depthWrite: false });
+  const tileEdgeSelected = new THREE.LineBasicMaterial({ color: B.editTileSelectedColor, transparent: true, opacity: 0.95, depthWrite: false });
+  tileEdge.userData.shared = true;
+  tileEdgeSelected.userData.shared = true;
   let overlay = null; // { piece, group, meshes[] }
 
   function setEditOverlay(session) {
     if (overlay && (!session || overlay.piece !== session.piece)) {
       root.remove(overlay.group);
-      for (const m of overlay.meshes) m.geometry.dispose();
+      for (const m of overlay.meshes) {
+        m.geometry.dispose();
+        m.children[0]?.geometry.dispose();
+      }
       overlay = null;
     }
     if (!session) return;
@@ -410,6 +426,9 @@ export function createBuildingView(game) {
       const meshes = createTileGeometries(session.piece).map((geometry) => {
         const mesh = new THREE.Mesh(geometry, tileNormal);
         mesh.renderOrder = 7;
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 20), tileEdge);
+        edges.renderOrder = 8;
+        mesh.add(edges);
         group.add(mesh);
         return mesh;
       });
@@ -420,6 +439,7 @@ export function createBuildingView(game) {
       const selected = (session.selection & (1 << t)) !== 0;
       const hover = session.hover === t;
       overlay.meshes[t].material = selected ? (hover ? tileSelectedHover : tileSelected) : hover ? tileHover : tileNormal;
+      overlay.meshes[t].children[0].material = selected ? tileEdgeSelected : tileEdge;
     }
   }
 
@@ -527,7 +547,8 @@ export function createBuildingView(game) {
       materials.clear();
       for (const t of textures.values()) t.dispose();
       textures.clear();
-      for (const m of [previewOk, previewBad, edgeOk, edgeBad, previewNone, edgeOccupied, tileNormal, tileHover, tileSelected, tileSelectedHover]) m.dispose();
+      for (const m of [previewOk, previewBad, edgeOk, edgeBad, previewNone, edgeOccupied, tileNormal, tileHover, tileSelected, tileSelectedHover, tileEdge, tileEdgeSelected]) m.dispose();
+      ghostTexture.dispose();
       root.parent?.remove(root);
     },
   };

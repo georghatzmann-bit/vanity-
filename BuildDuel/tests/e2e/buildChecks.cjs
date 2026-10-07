@@ -533,4 +533,4 @@ const BUILD_CHECKS = [
   },
 ];
 
-module.exports = { BUILD_CHECKS };
+module.exports = { BUILD_CHECKS, setup, settle }; // setup/settle: auch für lookChecks.cjs

@@ -219,12 +219,17 @@ const GAME_CHECKS = [
     name: 'Umschauen (Maus): 90° nach rechts',
     async run(ctx) {
       const yaw = await ctx.page.evaluate(() => {
+        const p = buildDuel.game.player;
+        // Echte Maus-Bewegungen (z. B. vom Klick auf "Spielen") vorher abholen,
+        // dann nur die Drehung durch addLook messen (sonst zufällig rot)
+        buildDuel.simulate(1 / 60);
+        const before = p.yaw;
         const px = (Math.PI / 2) / buildDuel.CONFIG.sensitivity.baseRadiansPerPixel;
         buildDuel.input.addLook(px, 0);
         buildDuel.simulate(1 / 60);
-        return buildDuel.game.player.yaw;
+        return Math.atan2(Math.sin(p.yaw - before), Math.cos(p.yaw - before));
       });
-      ctx.assert(Math.abs(yaw + Math.PI / 2) < 1e-3, `yaw: ${yaw.toFixed(3)}`);
+      ctx.assert(Math.abs(yaw + Math.PI / 2) < 1e-3, `Drehung: ${yaw.toFixed(3)}`);
     },
   },
   {
@@ -831,6 +836,7 @@ const GAME_CHECKS = [
   // Welle 3a: HUD, Ton, Effekte – siehe hudChecks.cjs
   ...require('./hudChecks.cjs').HUD_CHECKS,
   ...require('./worldChecks.cjs').WORLD_CHECKS, // Welle 3b: Welt (Insel, Sturm, Loot, Absprung, Arena, Zone Wars)
+  ...require('./lookChecks.cjs').LOOK_CHECKS, // Aussehen: Figuren, Skins, Waffen, Bauteile (Bilder look-*.png)
 ];
 
 // =============================================================================

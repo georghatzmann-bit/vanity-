@@ -114,17 +114,42 @@ describe('Spielwerte: Bewegung, Kamera, Figuren (Phase 2)', () => {
     assert.ok(pr.idleBots <= CONFIG.bots.names.length);
   });
 
-  it('Farbsets: gültige Farben, bekannte Hut-Formen, eindeutige ids, Standard vorhanden', () => {
+  it('Skins (Outfits): eindeutige ids und Namen, alle Teile bekannt, gültige Farben, Standard vorhanden', () => {
     const skins = CONFIG.skins;
     const ids = new Set();
+    const names = new Set();
+    const enums = { hair: skins.hairStyles, headwear: skins.headwears, face: skins.faces, top: skins.tops, pants: skins.pants, shoes: skins.shoes, back: skins.backs };
     for (const s of skins.list) {
-      for (const key of ['body', 'accent', 'skinTone', 'hatColor']) assert.ok(HEX_COLOR.test(s[key]), `${s.id}.${key}`);
-      assert.ok(skins.hatShapes.includes(s.hat), `${s.id}: Hut ${s.hat}`);
+      assert.ok(/^[a-z][a-z0-9]*$/.test(s.id), `id ${s.id}`);
+      assert.ok(typeof s.name === 'string' && s.name.length >= 3, `${s.id}: Name`);
+      for (const [key, allowed] of Object.entries(enums)) assert.ok(allowed.includes(s[key]), `${s.id}.${key} = ${s[key]}`);
+      assert.ok(s.sleeves === 'short' || s.sleeves === 'long', `${s.id}.sleeves`);
+      for (const key of ['skinTone', 'topColor', 'topColor2', 'pantsColor', 'pantsColor2', 'shoeColor', 'trim']) assert.ok(HEX_COLOR.test(s[key]), `${s.id}.${key}`);
+      if (s.hair !== 'none') assert.ok(HEX_COLOR.test(s.hairColor), `${s.id}.hairColor`);
+      if (s.headwear !== 'none') for (const key of ['headColor', 'headColor2']) assert.ok(HEX_COLOR.test(s[key]), `${s.id}.${key}`);
+      if (s.back !== 'none') for (const key of ['backColor', 'backColor2']) assert.ok(HEX_COLOR.test(s[key]), `${s.id}.${key}`);
+      for (const key of ['gloves', 'belt']) assert.ok(s[key] === null || HEX_COLOR.test(s[key]), `${s.id}.${key}`);
       assert.ok(!ids.has(s.id), `doppelt: ${s.id}`);
+      assert.ok(!names.has(s.name), `Name doppelt: ${s.name}`);
       ids.add(s.id);
+      names.add(s.name);
     }
-    assert.ok(skins.list.length >= 8);
+    assert.ok(skins.list.length >= 8 && skins.list.length <= 12, `${skins.list.length} Skins`);
     assert.ok(ids.has(skins.defaultId));
+    for (const [old, now] of Object.entries(skins.legacyIds)) assert.ok(ids.has(now), `alter Skin ${old} → ${now}`);
+  });
+
+  it('Spitzhacken: eindeutige ids und Namen, bekannte Formen, gültige Farben, Standard vorhanden', () => {
+    const p = CONFIG.pickaxes;
+    const ids = new Set(p.list.map((x) => x.id));
+    assert.equal(ids.size, p.list.length, 'ids eindeutig');
+    assert.equal(new Set(p.list.map((x) => x.name)).size, p.list.length, 'Namen eindeutig');
+    assert.ok(p.list.length >= 3, 'Standard + mindestens 2 eigene');
+    assert.ok(ids.has(p.defaultId));
+    for (const x of p.list) {
+      assert.ok(p.styles.includes(x.style), `${x.id}: Form ${x.style}`);
+      for (const key of ['handle', 'head', 'accent']) assert.ok(HEX_COLOR.test(x[key]), `${x.id}.${key}`);
+    }
   });
 });
 

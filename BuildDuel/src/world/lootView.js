@@ -392,7 +392,9 @@ function buildModelGeometry(id) {
       color.copy(ca);
       if (mesh.material.emissive) color.add(mesh.material.emissive);
     }
+    const own = !isRarity && mesh.material.vertexColors ? g.attributes.color : null; // Farben aus den Ecken
     for (let k = 0; k < pos.count; k++) {
+      if (own) color.fromBufferAttribute(own, k);
       v.fromBufferAttribute(pos, k).applyMatrix4(mesh.matrixWorld);
       n.fromBufferAttribute(nor, k).applyMatrix3(normalMatrix).normalize();
       positions.push(v.x, v.y, v.z);
