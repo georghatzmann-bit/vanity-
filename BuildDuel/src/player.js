@@ -155,7 +155,7 @@ export class Character {
     this.crouching = false;
     this.sprinting = false;
     this.aiming = false;
-    this.moveState = 'ground'; // 'ground' | 'air' | 'freefall' | 'glide'
+    this.moveState = 'ground'; // 'ground' | 'air' | 'freefall' | 'glide' | 'vehicle' | 'fly' (Kreativ)
 
     // Maße der Treffer-Kapsel (geduckt kleiner)
     this.radius = HITBOX.radius;
@@ -713,7 +713,8 @@ function moveVertical(ch, world, dy) {
 
 /**
  * Landen: Fallschaden ausrechnen und "land" melden.
- * options.noDamage = true → kein Fallschaden (z. B. nach dem Gleiter)
+ * options.noDamage = true → kein Fallschaden (z. B. nach dem Gleiter); ebenso, wenn die
+ * Figur ch.noFallDamage hat (Kreativ-Modus)
  */
 export function landCharacter(ch, options = {}) {
   const fallHeight = Math.max(0, ch.airPeakY - ch.position.y);
@@ -724,7 +725,8 @@ export function landCharacter(ch, options = {}) {
   ch.lastLandTime = ch.time;
   ch.game?.events?.emit('land', { character: ch, fallHeight });
   const fd = P.fallDamage;
-  const noDamage = options.noDamage || previous === 'freefall' || previous === 'glide';
+  // ch.noFallDamage: Modus ohne Fallschaden (Kreativ)
+  const noDamage = options.noDamage || ch.noFallDamage || previous === 'freefall' || previous === 'glide';
   if (!noDamage && fallHeight > fd.safeHeight) {
     ch.applyDamage(fallDamage(fallHeight, fd), { kind: 'fall', weaponId: 'fall' });
   }

@@ -867,6 +867,7 @@ const GAME_CHECKS = [
   ...require('./worldChecks.cjs').WORLD_CHECKS, // Welle 3b: Welt (Insel, Sturm, Loot, Absprung, Arena, Zone Wars)
   ...require('./lookChecks.cjs').LOOK_CHECKS, // Aussehen: Figuren, Skins, Waffen, Bauteile (Bilder look-*.png)
   ...require('./lobbyChecks.cjs').LOBBY_CHECKS, // Welle 5: Ladebildschirm, Lobby, Spind, Shop, Einstellungen, Pause-Menü, Kreativ
+  ...require('./creativeChecks.cjs').CREATIVE_CHECKS, // Fortnite-Kreativ: Fliegen (2× Springen), im Flug bauen, kein Fallschaden
 ];
 
 // =============================================================================

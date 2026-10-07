@@ -359,6 +359,7 @@ const LOBBY_CHECKS = [
         eqSkin: buildDuel.progress.equipped.skin,
         infinite: buildDuel.game.player.infiniteMaterials,
         size: buildDuel.game.map.size,
+        expectedSize: buildDuel.CONFIG.modes.creative.arenaSize,
         cosmetics: !!buildDuel.game.player.cosmetics && (!!buildDuel.CONFIG.pickaxes?.list || !!buildDuel.game.player.cosmetics.pickaxe),
         pitch: buildDuel.game.player.pitch,
         camPitch: buildDuel.game.cameraRig?.pitch ?? null,
@@ -369,7 +370,7 @@ const LOBBY_CHECKS = [
       ctx.assert(Math.abs(start.pitch) < 0.3, `Kamera schaut nach dem Start geradeaus: ${start.pitch}`);
       ctx.assert(start.state === 'playing' && !start.menu && !start.lobby, `im Spiel, Lobby weg: ${JSON.stringify(start)}`);
       ctx.assert(start.skin === start.eqSkin, `Spind-Skin im Spiel: ${start.skin}`);
-      ctx.assert(start.infinite && start.size === 200, 'Kreativ: unendlich Material, 200 m');
+      ctx.assert(start.infinite && start.size === start.expectedSize, `Kreativ: unendlich Material, ${start.size} m`);
       ctx.assert(start.cosmetics, 'Spind-Aussehen (Spitzhacke, Emote) am Spieler');
       // Spitzhacke ziehen (F) → umgefärbt
       await page.keyboard.press('KeyF');

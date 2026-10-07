@@ -7,11 +7,13 @@
 // - Anzeige "Bauteile/s" (Bauteile in der letzten Sekunde) und "Bauteile" (gesamt)
 // - Taste P (Aktion clearBuilds) oder Knopf im Pause-Menü: alle Bauteile löschen
 // - wer stirbt oder aus der Welt fällt, ist kurz danach wieder am Startpunkt
+// - wie in Fortnite Kreativ: FLIEGEN mit 2× Springen (creativeFly.js), kein Fallschaden
 // Läuft auch ohne Bildschirm (Tests).
 // =============================================================================
 import { CONFIG } from '../config.js';
 import { createArenaMap } from '../world/mapArena.js';
 import { createPracticeRange } from '../weapons/practiceRange.js';
+import { updateFlyToggle, isFlying } from './creativeFly.js';
 
 /**
  * @param {object} game
@@ -45,7 +47,8 @@ export function createCreativeMode(game, options = {}) {
     spawnPoint: { x: cfg.spawn.x, y: 0, z: cfg.spawn.z },
     spawnYaw: 0,
     helpHint: 'Kreativ: unendlich Material – Z/Y Wand, X Boden, C Rampe, V Dach, Linksklick setzt (halten = mehrere). ' +
-      'G = Edit, P = alle Bauteile löschen. Waffen 1–5 (Munition unendlich), Zielpuppen rechts hinten.',
+      'G = Edit, P = alle Bauteile löschen. Fliegen: 2× Springen (Springen halten = hoch, Ducken = runter). ' +
+      'Waffen 1–5 (Munition unendlich), Zielpuppen rechts hinten.',
 
     start() {
       map = createArenaMap(game, { size: cfg.arenaSize, borderHeight: cfg.borderHeight });
@@ -62,6 +65,7 @@ export function createCreativeMode(game, options = {}) {
         shield: cfg.startShield,
         infiniteMaterials: cfg.infiniteMaterials,
       });
+      if (game.player) game.player.noFallDamage = !!cfg.noFallDamage;
       // Alle Waffen + Heil-Items, Zielpuppen, Sammel-Objekte
       range = createPracticeRange(game, map);
       if (game.player) range.equip(game.player);
@@ -95,6 +99,8 @@ export function createCreativeMode(game, options = {}) {
 
       const player = game.player;
       if (!player) return;
+      // Fliegen: 2× Springen schaltet an/aus (nach der Bewegung dieses Ticks)
+      updateFlyToggle(player, player.command, game.time);
       // Aus der Welt gefallen → zurück zum Start
       if (player.alive && player.position.y < cfg.fallRespawnY) respawn();
       // Besiegt (z. B. Fallschaden) → nach kurzer Pause wieder da
@@ -114,7 +120,11 @@ export function createCreativeMode(game, options = {}) {
         alive: null,
         kills: null,
         zoneText: null,
-        extra: [`Bauteile/s: ${formatRate(stats.perSecond)}  (Rekord ${formatRate(stats.best)})`, `Bauteile: ${stats.total}`],
+        extra: [
+          `Bauteile/s: ${formatRate(stats.perSecond)}  (Rekord ${formatRate(stats.best)})`,
+          `Bauteile: ${stats.total}`,
+          game.player && isFlying(game.player) ? 'Fliegen: an – Springen hoch, Ducken runter, 2× Springen aus' : 'Fliegen: 2× Springen',
+        ],
       };
     },
 
@@ -136,6 +146,7 @@ export function createCreativeMode(game, options = {}) {
       position: mode.spawnPoint,
       yaw: mode.spawnYaw,
     });
+    game.player.noFallDamage = !!cfg.noFallDamage;
     game.cameraRig?.snap();
     game.events.emit('message', { text: 'Weiter geht’s!', kind: 'info', duration: 1.5 });
   }

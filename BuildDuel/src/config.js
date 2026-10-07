@@ -1004,6 +1004,17 @@ export const CONFIG = deepFreeze({
       respawnDelay: 2, // nach dem Besiegtwerden (z. B. Fallschaden) so schnell wieder da (s)
       fallRespawnY: -20, // wer tiefer fällt (aus der Welt), wird zurückgesetzt
       piecesPerSecondWindow: 1, // "Bauteile/s" = Bauteile in der letzten Sekunde
+      noFallDamage: true, // wie in Fortnite Kreativ: Fallen tut nie weh
+      // Fliegen (src/modes/creativeFly.js): 2× schnell Springen = an/aus
+      fly: {
+        doubleTapTime: 0.3, // zwei Sprung-Drücke innerhalb so vieler Sekunden = Fliegen an/aus
+        speed: 10, // waagerecht (m/s) // SCHÄTZUNG
+        sprintSpeed: 20, // mit Sprinten (m/s) // SCHÄTZUNG
+        verticalSpeed: 8, // hoch (Springen halten) / runter (Ducken halten) (m/s) // SCHÄTZUNG
+        sprintVerticalSpeed: 14, // hoch/runter mit Sprinten (m/s) // SCHÄTZUNG
+        acceleration: 40, // so schnell (m/s²) wird man schneller/langsamer (weiches Anfahren und Bremsen)
+        maxHeight: 115, // höher geht es nicht (unter der unsichtbaren Wand der Arena, 120 m)
+      },
     },
 
     // Später / optional
