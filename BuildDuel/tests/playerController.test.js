@@ -2,7 +2,7 @@
 import { describe, it, assert } from './runner.js';
 import * as THREE from 'three';
 import { CONFIG } from '../src/config.js';
-import { createPlayerController, wrapAngle } from '../src/playerController.js';
+import { createPlayerController, wrapAngle, RADIANS_PER_COUNT_PER_PERCENT } from '../src/playerController.js';
 import { Character } from '../src/player.js';
 import { Input } from '../src/input.js';
 import { defaultSettings } from '../src/core/settings.js';
@@ -10,7 +10,8 @@ import { CollisionWorld } from '../src/physics.js';
 import { ThirdPersonCamera } from '../src/camera.js';
 
 const DEG = Math.PI / 180;
-const BASE = CONFIG.sensitivity.baseRadiansPerPixel;
+// Drehung pro Maus-Count bei der Standard-Empfindlichkeit (Fortnite: 0,5555° × X %)
+const BASE = RADIANS_PER_COUNT_PER_PERCENT * CONFIG.sensitivity.x;
 
 function setup(settings = defaultSettings()) {
   const world = new CollisionWorld();
@@ -36,7 +37,7 @@ describe('Spieler-Steuerung: Blick', () => {
     t.input.addLook(100, 0);
     t.step();
     assert.close(t.player.yaw, -100 * BASE, 1e-9);
-    t.settings.sensitivity.x = 2;
+    t.settings.sensitivity.x = 2 * CONFIG.sensitivity.x;
     t.input.addLook(100, 0);
     t.step();
     assert.close(t.player.yaw, -300 * BASE, 1e-9);
@@ -65,18 +66,37 @@ describe('Spieler-Steuerung: Blick', () => {
 
   it('Empfindlichkeit je Modus: Zielen, Zielfernrohr, Bauen, Editieren', () => {
     const cases = [
-      ['aim', (p) => { p.aiming = true; }],
-      ['sniper', (p) => { p.aiming = true; p.scopeFov = 20; }],
+      ['targeting', (p) => { p.aiming = true; }],
+      ['scope', (p) => { p.aiming = true; p.scopeFov = 20; }],
       ['build', (p) => { p.mode = 'build'; }],
       ['edit', (p) => { p.mode = 'edit'; }],
     ];
     for (const [key, prepare] of cases) {
       const t = setup();
-      t.settings.sensitivity[key] = 0.5;
+      t.settings.sensitivity[key] = 50; // 50 %
       prepare(t.player);
       const cmd = t.controller.buildCommand((t.input.addLook(100, 0), t.input.sample(1 / 60)), t.player, null, t.settings, t.game);
       assert.close(cmd.yaw, -100 * BASE * 0.5, 1e-9, key);
     }
+  });
+
+  it('Fortnite-Umrechnung: 10 % = 0,05555° pro Count; 6,4 % bei 800 DPI ≈ 32 cm pro Drehung', () => {
+    const t = setup();
+    t.settings.sensitivity.x = 10;
+    t.input.addLook(1000, 0);
+    t.step();
+    assert.close(-t.player.yaw / DEG, 1000 * 0.05555, 1e-6);
+    const counts = 360 / (CONFIG.sensitivity.degreesPerCount * 6.4 / 100);
+    assert.close((counts / 800) * 2.54, 32.1, 0.2);
+  });
+
+  it('Bauen/Edit 100 % = gleiche Drehung wie normal (Fortnite-Standard)', () => {
+    const t = setup();
+    assert.equal(t.settings.sensitivity.build, 100);
+    assert.equal(t.settings.sensitivity.edit, 100);
+    t.player.mode = 'build';
+    const cmd = t.controller.buildCommand((t.input.addLook(100, 0), t.input.sample(1 / 60)), t.player, null, t.settings, t.game);
+    assert.close(cmd.yaw, -100 * BASE, 1e-9);
   });
 
   it('yaw bleibt im Bereich −π … π', () => {

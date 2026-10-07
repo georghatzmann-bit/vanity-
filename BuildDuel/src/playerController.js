@@ -43,24 +43,28 @@ export function clampPitch(p) {
 }
 
 /**
- * Faktor für die Empfindlichkeit je nach Modus: Edit, Bauen, Zielen, Zielfernrohr.
+ * Multiplikator je nach Modus (wie in Fortnite, alle Werte in %):
+ * Edit, Bauen, Zielen (Targeting), Zielfernrohr (Scope); sonst 1.
  * @returns {number}
  */
 export function modeSensitivity(character, sensitivity) {
-  if (character.mode === 'edit') return sensitivity.edit;
-  if (character.mode === 'build') return sensitivity.build;
-  if (character.aiming) return character.scopeFov ? sensitivity.sniper : sensitivity.aim;
+  if (character.mode === 'edit') return sensitivity.edit / 100;
+  if (character.mode === 'build') return sensitivity.build / 100;
+  if (character.aiming) return (character.scopeFov ? sensitivity.scope : sensitivity.targeting) / 100;
   return 1;
 }
 
+/** Drehung (Radiant) pro Maus-Count bei 1 % Empfindlichkeit – Fortnite: 0,5555° bei 100 %. */
+export const RADIANS_PER_COUNT_PER_PERCENT = (CONFIG.sensitivity.degreesPerCount * DEG) / 100;
+
 /**
- * Drehung durch Maus-Pixel (dx, dy) – gleiche Rechnung wie im Logik-Schritt.
+ * Drehung durch Maus-Counts (dx, dy) – gleiche Rechnung wie im Logik-Schritt.
  * Die Kamera benutzt das, um noch nicht verrechnete Maus-Bewegung sofort zu zeigen.
  * Schreibt in out { yaw, pitch }.
  */
 export function applyMouseLook(character, settings, dx, dy, yaw, pitch, out) {
   const s = settings.sensitivity;
-  const factor = CONFIG.sensitivity.baseRadiansPerPixel * modeSensitivity(character, s);
+  const factor = RADIANS_PER_COUNT_PER_PERCENT * modeSensitivity(character, s);
   // Maus nach rechts → yaw wird kleiner; Maus nach unten → Blick nach unten
   out.yaw = yaw - dx * factor * s.x;
   out.pitch = clampPitch(pitch - dy * factor * s.y * (s.invertY ? -1 : 1));

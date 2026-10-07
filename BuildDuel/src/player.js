@@ -376,7 +376,8 @@ export class Character {
     const game = this.game;
     const wantsOther = cmd.selectBuild || cmd.selectSlot > 0 || cmd.selectPickaxe || cmd.toggleBuild;
     if (this.mode === 'edit' && wantsOther) {
-      game?.building?.closeEdit?.(this);
+      // "Auto Confirm Edits": Wechsel zu Bauteil/Baumodus oder zu Waffe/Spitzhacke
+      game?.building?.closeEdit?.(this, cmd.selectBuild || cmd.toggleBuild ? 'build' : 'weapon');
       if (this.mode === 'edit') this.mode = this.modeBeforeEdit === 'edit' ? 'weapon' : this.modeBeforeEdit;
     }
 
@@ -394,13 +395,19 @@ export class Character {
       this.setMode('pickaxe');
     } else if (cmd.toggleBuild) {
       if (this.mode === 'build') this.setMode(this.lastCombatMode || 'weapon');
-      else this.setMode('build');
+      else {
+        this.setMode('build');
+        // "Reset Building Choice": Baumodus startet immer mit der Wand
+        const reset = this.isPlayer ? game?.settings?.controls?.resetBuildingChoice ?? CONFIG.controls.resetBuildingChoice : false;
+        if (reset) this.buildPiece = 'wall';
+      }
     }
 
     if (cmd.nextItem) this.cycleItem(1);
     else if (cmd.prevItem) this.cycleItem(-1);
 
-    if (cmd.switchMaterial && this.mode === 'build') {
+    // Material wechseln: Taste oder (wie in Fortnite) Rechtsklick im Baumodus
+    if ((cmd.switchMaterial || cmd.secondaryPressed) && this.mode === 'build') {
       const order = CONFIG.materials.order;
       this.currentMaterial = order[(order.indexOf(this.currentMaterial) + 1) % order.length];
     }

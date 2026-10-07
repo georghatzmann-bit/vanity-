@@ -411,7 +411,8 @@ describe('Szenario: Edit und Türen', () => {
     tap(game, f, { usePressed: true });
     assert.ok(!wall.doorOpen && toggled.length === 2);
     assert.equal(hitsPiece(game, before, behind), wall);
-    // Zurücksetzen: G, Rechtsklick, G
+    // Zurücksetzen ohne Auto-Reset: G, Rechtsklick, G
+    game.settings.controls.resetConfirms = false;
     lookAt(p, f, tileCenter(4));
     tap(game, f, { editPressed: true });
     tap(game, f, { secondaryPressed: true });
@@ -525,18 +526,20 @@ describe('Szenario: Edit und Türen', () => {
     game.dispose();
   });
 
-  it('Fenster: einzelnes Feld entfernen, Strahl geht durch das Loch; Edit beim Loslassen', () => {
+  it('Fenster: einzelnes Feld entfernen, Strahl geht durch das Loch; Edit beim Loslassen (Maus)', () => {
     const { game, p, f, wall } = wallInFront();
     game.settings.controls.editOnRelease = true;
     lookAt(p, f, tileCenter(1));
-    f.edit = true;
     tap(game, f, { editPressed: true });
+    tap(game, f);
+    assert.equal(p.mode, 'edit', 'ohne Klick bleibt der Edit offen');
+    f.primary = true;
     tap(game, f, { primaryPressed: true });
     tap(game, f);
-    assert.equal(p.mode, 'edit');
-    f.edit = false;
-    tap(game, f, { editReleased: true });
-    assert.equal(p.mode, 'build', 'Loslassen bestätigt');
+    assert.equal(p.mode, 'edit', 'Maus noch gedrückt');
+    f.primary = false;
+    tap(game, f, { primaryReleased: true });
+    assert.equal(p.mode, 'build', 'Loslassen der linken Maustaste bestätigt (Confirm Edit on Release)');
     assert.deepEqual([...wall.edit], [1]);
     const c = tileCenter(1);
     assert.equal(hitsPiece(game, { x: c.x, y: c.y, z: 6 * S + 1 }, { x: c.x, y: c.y, z: 6 * S - 2 }), null, 'durch das Fenster');
@@ -548,6 +551,87 @@ describe('Szenario: Edit und Türen', () => {
     tap(game, f, { primaryPressed: true });
     tap(game, f, { editPressed: true });
     assert.equal(wall.editMask, 0, 'Loch wieder zu');
+    game.dispose();
+  });
+
+  it('Auto-Reset (Standard): G + Rechtsklick → Bauteil sofort wieder ganz, Edit zu', () => {
+    const { game, p, f, wall } = wallInFront();
+    lookAt(p, f, tileCenter(4));
+    tap(game, f, { editPressed: true });
+    tap(game, f, { primaryPressed: true });
+    tap(game, f, { editPressed: true });
+    assert.equal(wall.editMask, 1 << 4, 'Fenster in der Mitte');
+    tap(game, f, { editPressed: true });
+    tap(game, f, { secondaryPressed: true });
+    assert.equal(p.mode, 'build', 'Rechtsklick schließt den Edit');
+    assert.equal(wall.editMask, 0, 'sofort zurückgesetzt');
+    assert.equal(wall.colliders.length, 1);
+    game.dispose();
+  });
+
+  it('Doppel-Edit mit "Beim Loslassen bestätigen": zwei Wände direkt nacheinander', () => {
+    const { game, p, f, wall } = wallInFront();
+    game.settings.controls.editOnRelease = true;
+    const second = game.building.placePiece('wall', 'wx:0:0:7', p, 'wood', { instant: true }); // hinter der Figur
+    const editOne = (target, tile) => {
+      lookAt(p, f, target);
+      tap(game, f, { editPressed: true });
+      f.primary = true;
+      tap(game, f, { primaryPressed: true });
+      f.primary = false;
+      tap(game, f, { primaryReleased: true });
+      return tile;
+    };
+    editOne(tileCenter(4), 4);
+    assert.equal(wall.editMask, 1 << 4, '1. Edit fertig');
+    assert.equal(p.mode, 'build');
+    editOne({ x: 0.5 * S, y: H / 2, z: 7 * S }, 4); // umdrehen, zweite Wand
+    assert.equal(second.editMask, 1 << 4, '2. Edit gleich danach fertig');
+    assert.equal(p.mode, 'build');
+    game.dispose();
+  });
+
+  it('Auto Confirm Edits: "Aus" verwirft beim Waffenwechsel, "Beide" bestätigt', () => {
+    const { game, p, f, wall } = wallInFront();
+    game.settings.controls.autoConfirmEdits = 'off';
+    lookAt(p, f, tileCenter(4));
+    tap(game, f, { editPressed: true });
+    tap(game, f, { primaryPressed: true });
+    tap(game, f, { selectSlot: 2 });
+    assert.equal(p.mode, 'weapon');
+    assert.equal(wall.editMask, 0, 'verworfen');
+    game.settings.controls.autoConfirmEdits = 'both';
+    tap(game, f, { selectBuild: 'wall' });
+    tap(game, f, { editPressed: true });
+    tap(game, f, { primaryPressed: true });
+    tap(game, f, { selectSlot: 2 });
+    assert.equal(wall.editMask, 1 << 4, 'bestätigt');
+    game.dispose();
+  });
+
+  it('Turbo-Bauen aus: Maus halten setzt nur ein Bauteil; Q startet mit der Wand; Rechtsklick wechselt Material', () => {
+    const { game, p, f } = practice(0.5 * S, 6.5 * S);
+    game.settings.controls.turboBuilding = false;
+    tap(game, f, { selectBuild: 'floor' });
+    lookAt(p, f, { x: 0.5 * S, y: 0, z: 5 * S });
+    const before = game.building.pieces.size;
+    f.primary = true;
+    tap(game, f, { primaryPressed: true });
+    f.yaw += Math.PI / 2;
+    for (let n = 0; n < 40; n++) tap(game, f);
+    f.primary = false;
+    tap(game, f, { primaryReleased: true });
+    assert.equal(game.building.pieces.size - before, 1, 'nur ein Teil ohne Turbo');
+    // Q (Baumodus an/aus): startet wieder mit der Wand
+    tap(game, f, { toggleBuild: true });
+    assert.ok(p.mode !== 'build', 'Q verlässt den Baumodus');
+    tap(game, f, { toggleBuild: true });
+    assert.equal(p.mode, 'build');
+    assert.equal(p.buildPiece, 'wall', 'Reset Building Choice');
+    // Rechtsklick im Baumodus: nächstes Material
+    const m = p.currentMaterial;
+    tap(game, f, { secondaryPressed: true });
+    assert.ok(p.currentMaterial !== m, 'anderes Material');
     game.dispose();
   });
 

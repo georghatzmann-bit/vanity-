@@ -159,6 +159,22 @@
 .sslider { display: flex; align-items: center; gap: 10px; }
 .sslider input { width: 220px; accent-color: #ffd23f; height: 28px; cursor: pointer; }
 .sslider output { min-width: 58px; text-align: right; font-size: 15px; font-weight: 900; }
+.sslider input.snum {
+  width: 78px;
+  height: 34px;
+  padding: 0 8px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.35);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: right;
+  cursor: text;
+}
+.sslider input.snum:focus { outline: none; border-color: #ffd23f; }
+.sunit { font-size: 15px; font-weight: 900; margin-left: -4px; }
 
 .sbtn {
   height: 44px;
@@ -202,4 +218,5 @@
   .skeys { width: 100%; }
   .sslider { width: 100%; }
   .sslider input { flex: 1; width: auto; }
+  .sslider input.snum { flex: none; width: 72px; }
 }

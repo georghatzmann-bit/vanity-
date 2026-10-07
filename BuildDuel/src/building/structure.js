@@ -649,6 +649,9 @@ export function createBuildingSystem(game) {
     const target = getTarget(character, character.buildPiece, state.target);
     state.hasTarget = true;
     if (!cmd.primary) return;
+    // "Turbo Building" aus: jedes Bauteil braucht einen neuen Klick
+    const turbo = character.isPlayer ? game?.settings?.controls?.turboBuilding ?? CONFIG.controls.turboBuilding : true;
+    if (!turbo && !cmd.primaryPressed) return;
     // Maus gedrückt ("Turbo-Bauen"): setzt, sobald das Ziel gültig ist und die Abklingzeit
     // um ist – auf einem neuen Platz ODER auf demselben, wenn das Teil dort zerstört wurde
     // (Wand, die gerade zerschossen wird, kommt sofort wieder). Gültig heißt: Platz frei.
@@ -760,8 +763,9 @@ export function createBuildingSystem(game) {
     canEdit(character) {
       return edit.canEdit(character);
     },
-    closeEdit(character) {
-      edit.close(character, true);
+    /** reason: 'weapon' | 'build' (Wechsel – "Auto Confirm Edits" entscheidet) oder true/false */
+    closeEdit(character, reason = true) {
+      edit.close(character, reason);
     },
     /** Tür, die E jetzt benutzen würde (für den HUD-Hinweis), oder null. */
     findDoor(character) {

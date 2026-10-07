@@ -94,16 +94,13 @@ export function createSettingsWindow(o) {
       <output data-out="${key}">${esc(format(value))}</output></div>`;
 
   const pct = (v) => `${Math.round(v * 100)} %`;
-  const factor = (v) => `${Number(v).toFixed(2).replace('.', ',')}`;
+  const percent = (v) => `${String(Math.round(Number(v) * 100) / 100).replace('.', ',')} %`;
   const meters = (v) => `${Math.round(v)} m`;
 
   const SLIDERS = {
-    'sensitivity.x': { min: 0.1, max: 5, step: 0.05, fmt: factor },
-    'sensitivity.y': { min: 0.1, max: 5, step: 0.05, fmt: factor },
-    'sensitivity.aim': { min: 0.1, max: 2, step: 0.05, fmt: factor },
-    'sensitivity.sniper': { min: 0.1, max: 2, step: 0.05, fmt: factor },
-    'sensitivity.build': { min: 0.1, max: 2, step: 0.05, fmt: factor },
-    'sensitivity.edit': { min: 0.1, max: 2, step: 0.05, fmt: factor },
+    // Empfindlichkeit in % wie in Fortnite (Grenzen aus config.js)
+    ...Object.fromEntries(Object.entries(CONFIG.sensitivity.limits).map(([k, [min, max]]) =>
+      [`sensitivity.${k}`, { min, max, step: k === 'x' || k === 'y' ? 0.1 : 1, fmt: percent }])),
     'graphics.resolutionScale': { min: 0.5, max: 1, step: 0.05, fmt: pct },
     'graphics.viewDistance': { min: 100, max: 1500, step: 50, fmt: meters },
     'audio.master': { min: 0, max: 1, step: 0.05, fmt: pct },
@@ -136,8 +133,14 @@ export function createSettingsWindow(o) {
       <div class="sgroup"><h3>Optionen</h3>
         ${row('Ducken', segmented('controls.crouchToggle', [[false, 'Halten'], [true, 'Umschalten']], c.crouchToggle))}
         ${row('Ducken auf Strg', toggle('controls.crouchOnCtrl', c.crouchOnCtrl), 'Shift wird dann Sprinten. Achtung: Strg + W schließt den Tab!')}
-        ${row('Edit beim Loslassen bestätigen', toggle('controls.editOnRelease', c.editOnRelease))}
-        ${row('Edit nach Bestätigen zurücksetzen', toggle('controls.resetEditAfterConfirm', c.resetEditAfterConfirm))}
+      </div>
+      <div class="sgroup"><h3>Bauen &amp; Editieren (wie in Fortnite)</h3>
+        ${row('Edit beim Loslassen bestätigen', toggle('controls.editOnRelease', c.editOnRelease), 'Confirm Edit on Release: Felder wählen, linke Maustaste loslassen = fertig (schnelle Doppel-Edits)')}
+        ${row('Edits automatisch bestätigen', segmented('controls.autoConfirmEdits', [['off', 'Aus'], ['weapon', 'Waffe'], ['build', 'Bauen'], ['both', 'Beide']], c.autoConfirmEdits), 'Auto Confirm Edits: Wechsel zu Waffe/Bauteil während des Edits bestätigt ihn (Aus = verwerfen)')}
+        ${row('Zurücksetzen bestätigt sofort', toggle('controls.resetConfirms', c.resetConfirms), 'Auto-Reset: Rechtsklick im Edit = Bauteil sofort wieder ganz')}
+        ${row('Turbo-Bauen', toggle('controls.turboBuilding', c.turboBuilding), 'Turbo Building: Maustaste halten baut weiter')}
+        ${row('Baumodus startet mit Wand', toggle('controls.resetBuildingChoice', c.resetBuildingChoice), 'Reset Building Choice: Q wählt immer zuerst die Wand')}
+        ${row('Edit-Auswahl beim Öffnen leer', toggle('controls.resetEditAfterConfirm', c.resetEditAfterConfirm))}
       </div>
       <div class="sconflicts${conflicts.size ? '' : ' ok'}">${conflicts.size
         ? `${ICONS.lock}<span>Doppelt belegt – ${conflictText}</span>`
@@ -164,24 +167,36 @@ export function createSettingsWindow(o) {
     return html;
   }
 
+  // Schieberegler + Zahlenfeld zum genauen Eintippen (z. B. 6,4 %)
+  function sensRow(key, label, hint) {
+    const d = SLIDERS[`sensitivity.${key}`];
+    const v = settings.sensitivity[key];
+    return row(label, `<div class="sslider"><input type="range" data-slider="sensitivity.${key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${v}">
+      <input type="number" class="snum" data-num="sensitivity.${key}" min="${d.min}" max="${d.max}" step="${d.step}" value="${v}" aria-label="${esc(label)} in Prozent"><span class="sunit">%</span></div>`, hint);
+  }
+
+  // Mausweg für eine volle Drehung bei 800 DPI (zum Vergleichen mit Fortnite)
+  function cmPer360(percent) {
+    const counts = 360 / (CONFIG.sensitivity.degreesPerCount * percent / 100);
+    return (counts / 800) * 2.54;
+  }
+
   function renderSensitivity() {
     const s = settings.sensitivity;
-    const sl = (key, label, hint) => {
-      const d = SLIDERS[`sensitivity.${key}`];
-      return row(label, slider(`sensitivity.${key}`, d.min, d.max, d.step, s[key], d.fmt), hint);
-    };
-    return `<div class="sgroup"><h3>Maus</h3>
-      ${sl('x', 'Links / Rechts (X)')}
-      ${sl('y', 'Hoch / Runter (Y)')}
-      ${row('Y-Achse umkehren', toggle('sensitivity.invertY', s.invertY))}
+    const cm = cmPer360(s.x);
+    return `<div class="sgroup"><h3>Maus (wie in Fortnite, in %)</h3>
+      ${sensRow('x', 'Maus-Empfindlichkeit X', `Bei 800 DPI: ${cm.toFixed(1).replace('.', ',')} cm für eine volle Drehung`)}
+      ${sensRow('y', 'Maus-Empfindlichkeit Y')}
+      ${sensRow('targeting', 'Zielen (Targeting)', '% der normalen Empfindlichkeit, rechte Maustaste')}
+      ${sensRow('scope', 'Zielfernrohr (Scope)', '% der normalen Empfindlichkeit')}
+      ${row('Blick umkehren (Y)', toggle('sensitivity.invertY', s.invertY))}
     </div>
-    <div class="sgroup"><h3>Faktoren</h3>
-      ${sl('aim', 'Zielen', 'mal X/Y beim Zielen (rechte Maustaste)')}
-      ${sl('sniper', 'Zielfernrohr (Sniper)')}
-      ${sl('build', 'Baumodus')}
-      ${sl('edit', 'Edit-Modus')}
+    <div class="sgroup"><h3>Bauen &amp; Editieren</h3>
+      ${sensRow('build', 'Bau-Empfindlichkeit', 'Multiplikator – Fortnite-Standard 100 %')}
+      ${sensRow('edit', 'Edit-Empfindlichkeit', 'Multiplikator – Fortnite-Standard 100 %')}
     </div>
-    <div class="sgroup sreset"><button type="button" class="sbtn dim" data-reset="sensitivity">Auf Standard</button></div>`;
+    <div class="sgroup sreset"><button type="button" class="sbtn dim" data-reset="sensitivity">Auf Standard</button>
+      <small>Gleiche Werte wie in Fortnite eintragen = gleiches Gefühl (rohe Maus-Eingabe ist an).</small></div>`;
   }
 
   function renderGraphics() {
@@ -273,7 +288,8 @@ export function createSettingsWindow(o) {
       const d = defaultSettings();
       if (t.dataset.reset === 'controls') {
         settings.controls.keyboard = d.controls.keyboard;
-        for (const k of ['crouchOnCtrl', 'crouchToggle', 'editOnRelease', 'resetEditAfterConfirm']) settings.controls[k] = d.controls[k];
+        for (const k of ['crouchOnCtrl', 'crouchToggle', 'editOnRelease', 'autoConfirmEdits', 'resetConfirms',
+          'resetEditAfterConfirm', 'turboBuilding', 'resetBuildingChoice']) settings.controls[k] = d.controls[k];
         changed('controls');
       } else {
         Object.assign(settings.sensitivity, d.sensitivity);
@@ -287,6 +303,19 @@ export function createSettingsWindow(o) {
   });
 
   body.addEventListener('input', (e) => {
+    // Zahlenfeld (Empfindlichkeit genau eintippen)
+    const num = e.target.closest('[data-num]');
+    if (num) {
+      const key = num.dataset.num;
+      const d = SLIDERS[key];
+      const value = Number(String(num.value).replace(',', '.'));
+      if (!Number.isFinite(value) || value < d.min || value > d.max) return; // erst übernehmen, wenn gültig
+      set(key, value);
+      const range = body.querySelector(`[data-slider="${CSS.escape(key)}"]`);
+      if (range) range.value = String(value);
+      changed(key.split('.')[0]);
+      return;
+    }
     const input = e.target.closest('[data-slider]');
     if (!input) return;
     const key = input.dataset.slider;
@@ -294,12 +323,26 @@ export function createSettingsWindow(o) {
     set(key, value);
     const out = body.querySelector(`[data-out="${CSS.escape(key)}"]`);
     if (out) out.textContent = SLIDERS[key].fmt(value);
+    const numField = body.querySelector(`[data-num="${CSS.escape(key)}"]`);
+    if (numField) numField.value = String(value);
     if (key === 'graphics.viewDistance') checkReload();
     changed(key.split('.')[0]);
   });
   body.addEventListener('change', (e) => {
+    // Zahlenfeld verlassen: ungültige Eingabe → in die Grenzen bringen, Anzeige auffrischen
+    const num = e.target.closest('[data-num]');
+    if (num) {
+      const key = num.dataset.num;
+      const d = SLIDERS[key];
+      const value = Number(String(num.value).replace(',', '.'));
+      set(key, Number.isFinite(value) ? Math.min(d.max, Math.max(d.min, value)) : get(key));
+      changed(key.split('.')[0]);
+      render();
+      return;
+    }
     const input = e.target.closest('[data-slider]');
     if (!input) return;
+    if (input.dataset.slider.startsWith('sensitivity.')) render(); // cm-Hinweis auffrischen
     if (input.dataset.slider.startsWith('audio.')) sound('confirm'); // Probe-Ton in neuer Lautstärke
     if (input.dataset.slider === 'graphics.viewDistance') render();
   });

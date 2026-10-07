@@ -23,11 +23,11 @@
 import { CONFIG } from './config.js';
 
 // Alle Aktionen (Tastatur-Aktionen aus config.js + Extras)
-export const ACTIONS = Object.freeze([
+export const ACTIONS = Object.freeze([...new Set([
   ...Object.keys(CONFIG.controls.keyboard),
   'sprint', // nur belegt, wenn Ducken auf Strg liegt
-  'toggleBuild', // Controller: Baumodus an/aus
-]);
+  'toggleBuild', // Baumodus an/aus (Tastatur Q, Controller B)
+])]);
 
 // Tasten, die der Browser selbst braucht – nie blockieren
 const NEVER_BLOCK = new Set(['F5', 'F11', 'F12']);

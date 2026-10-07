@@ -444,8 +444,13 @@ Collider-Daten: `{ kind: 'piece', ref: piece, owner, blocksBullets: true }`.
   Richtung, wenn sie entlang des Streifens liegt, sonst 90° weiter. Sonst (1 Feld übrig, Diagonale):
   Stücke der ganzen Rampe. Edit-Kacheln/`pickTile` liegen immer auf der ganzen Rampe. Wer nach
   einem Edit in der neuen Form steckt, wird bis zu einer halben Ebene angehoben (Wand: hinausgeschoben).
-  Im Tick `editOpenedTick` bestätigt G nicht. `settings.controls.editOnRelease`: Loslassen von G
-  bestätigt; `resetEditAfterConfirm`: ein neuer Edit beginnt mit leerer Auswahl.
+  Im Tick `editOpenedTick` bestätigt G nicht. Bau-/Edit-Optionen wie in Fortnite (`settings.controls`,
+  Computer-Gegner nehmen die Standardwerte aus `CONFIG.controls`): `editOnRelease` – Loslassen der
+  LINKEN MAUSTASTE nach dem Wählen bestätigt ("Confirm Edit on Release"); `resetConfirms` – Rechtsklick
+  setzt zurück und bestätigt sofort (Auto-Reset); `autoConfirmEdits` ('off'|'weapon'|'build'|'both') –
+  `closeEdit(character, 'weapon'|'build')` beim Wechsel bestätigt oder verwirft; `turboBuilding` – aus:
+  jedes Bauteil braucht `primaryPressed`; `resetBuildingChoice` – `toggleBuild` (Q) startet mit der Wand;
+  `resetEditAfterConfirm`: ein neuer Edit beginnt mit leerer Auswahl. Rechtsklick im Baumodus = Material.
 - E (`usePressed`): Tür unter dem Fadenkreuz (bis `useReach`) oder die nächste bis
   `doorNearDistance` – jede Figur darf Türen benutzen.
 - Bots bauen über denselben Befehl (`selectBuild` + `primaryPressed`, Ziel-Strahl in
@@ -592,7 +597,10 @@ Jeder Modus:
 ## 11. Einstellungen und Fortschritt
 
 - `core/settings.js`: `loadSettings()`, `saveSettings(s)`, `defaultSettings()`, `resetSettings()`.
-  Form: `{ controls: { keyboard: { action: [codes] }, crouchOnCtrl, crouchToggle, editOnRelease, resetEditAfterConfirm, aimAssist }, sensitivity: { x, y, aim, sniper, build, edit, invertY }, graphics: { quality, resolutionScale, viewDistance, showFps }, audio: { master, effects, music }, game: { playerName, botDifficulty, damageNumbers } }`.
+  Form: `{ controls: { keyboard: { action: [codes] }, crouchOnCtrl, crouchToggle, editOnRelease, autoConfirmEdits, resetConfirms, resetEditAfterConfirm, turboBuilding, resetBuildingChoice, aimAssist }, sensitivity: { scale, x, y, targeting, scope, build, edit, invertY }, graphics: { quality, resolutionScale, viewDistance, showFps }, audio: { master, effects, music }, game: { playerName, botDifficulty, damageNumbers } }`.
+  Empfindlichkeit in % wie in Fortnite: Drehung pro Maus-Count = `degreesPerCount` (0,5555°) × X % / 100,
+  mal Modus-Multiplikator (Bauen/Edit/Zielen/Zielfernrohr, je % / 100). Ältere Speicherungen ohne
+  `sensitivity.scale` bekommen die Standard-Empfindlichkeit (und Q wird frei für den Baumodus).
 - `core/progress.js`: `loadProgress()`, `saveProgress(p)`, `addMatchResult(p, result)` (Details §11e).
   Form: `{ trophies, coins, xp, passTier, owned: { skins: [], hats: [], pickaxes: [], emotes: [] }, equipped: { skin, hat, pickaxe, emote }, matches, wins, playSeconds, piecesBuilt, lastMode }`
   (`hat` bleibt `null` – der Hut gehört zum Skin).

@@ -6,6 +6,7 @@ import { Input } from '../../src/input.js';
 import { defaultSettings } from '../../src/core/settings.js';
 import { bodyFits } from '../../src/player.js';
 import { createRng } from '../../src/util/random.js';
+import { RADIANS_PER_COUNT_PER_PERCENT } from '../../src/playerController.js';
 import { createTestGame, addDrivenCharacter, collect, maxHeightDuring } from './helpers.js';
 
 const P = CONFIG.player;
@@ -391,7 +392,7 @@ describe('Szenario: Spieler mit echter Eingabe auf dem Übungsplatz', () => {
     game.simulate(0.3);
     assert.close(p.position.y, CONFIG.modes.practice.platformHeight, 1e-6, 'auf der Plattform (ein Stockwerk)');
     // Blick drehen: 90° nach rechts
-    const turn = (Math.PI / 2) / CONFIG.sensitivity.baseRadiansPerPixel;
+    const turn = (Math.PI / 2) / (RADIANS_PER_COUNT_PER_PERCENT * CONFIG.sensitivity.x);
     input.addLook(turn, 0);
     game.simulate(1 / 60);
     assert.close(p.yaw, -Math.PI / 2, 1e-6);

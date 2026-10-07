@@ -15,6 +15,13 @@ import { CONFIG, getQualityPreset } from '../config.js';
 
 export const SETTINGS_KEY = `${CONFIG.game.storageKeyPrefix}settings.v1`;
 
+// Empfindlichkeit in Prozent wie in Fortnite. Ältere Speicherungen (Faktoren wie 1,0)
+// haben diese Kennung nicht – ihre Empfindlichkeit wird dann auf Standard gesetzt,
+// sonst würde aus "1,0" plötzlich "1 %".
+export const SENSITIVITY_SCALE = 'fortnite-prozent';
+const AUTO_CONFIRM = ['off', 'weapon', 'build', 'both'];
+const AUTO_CONFIG_OK = (value) => AUTO_CONFIRM.includes(value);
+
 /** Erzeugt frische Standard-Einstellungen (jedes Mal ein neues Objekt). */
 export function defaultSettings() {
   const keyboard = {};
@@ -25,14 +32,19 @@ export function defaultSettings() {
       crouchOnCtrl: CONFIG.controls.crouchOnCtrl,
       crouchToggle: CONFIG.controls.crouchToggle,
       editOnRelease: CONFIG.controls.editOnRelease,
+      autoConfirmEdits: CONFIG.controls.autoConfirmEdits,
+      resetConfirms: CONFIG.controls.resetConfirms,
       resetEditAfterConfirm: CONFIG.controls.resetEditAfterConfirm,
+      turboBuilding: CONFIG.controls.turboBuilding,
+      resetBuildingChoice: CONFIG.controls.resetBuildingChoice,
       aimAssist: CONFIG.controls.gamepad.aimAssist.enabled,
     },
     sensitivity: {
+      scale: SENSITIVITY_SCALE, // Kennung der Maßeinheit (Prozent wie in Fortnite)
       x: CONFIG.sensitivity.x,
       y: CONFIG.sensitivity.y,
-      aim: CONFIG.sensitivity.aim,
-      sniper: CONFIG.sensitivity.sniper,
+      targeting: CONFIG.sensitivity.targeting,
+      scope: CONFIG.sensitivity.scope,
       build: CONFIG.sensitivity.build,
       edit: CONFIG.sensitivity.edit,
       invertY: CONFIG.sensitivity.invertY,
@@ -98,7 +110,9 @@ export function mergeSettings(defaults, stored, path = '') {
 // Werte in sinnvolle Grenzen bringen (z. B. nach Handarbeit im Speicher).
 function sanitize(settings) {
   const s = settings.sensitivity;
-  for (const key of ['x', 'y', 'aim', 'sniper', 'build', 'edit']) s[key] = clamp(s[key], 0.05, 10);
+  for (const [key, [min, max]] of Object.entries(CONFIG.sensitivity.limits)) s[key] = clamp(s[key], min, max);
+  s.scale = SENSITIVITY_SCALE;
+  if (!AUTO_CONFIG_OK(settings.controls.autoConfirmEdits)) settings.controls.autoConfirmEdits = CONFIG.controls.autoConfirmEdits;
   const g = settings.graphics;
   if (!Object.hasOwn(CONFIG.graphics.presets, String(g.quality).trim().toLowerCase())) g.quality = CONFIG.graphics.quality;
   if (g.resolutionScale !== null) g.resolutionScale = clamp(g.resolutionScale, 0.5, 1);
@@ -145,6 +159,12 @@ export function loadSettings(storage = defaultStorage()) {
     return settings; // kaputtes JSON → Standardwerte
   }
   try {
+    // alte Empfindlichkeit (Faktoren) nicht übernehmen
+    if (isPlainObject(stored) && isPlainObject(stored.sensitivity) && stored.sensitivity.scale !== SENSITIVITY_SCALE) {
+      delete stored.sensitivity;
+      // alte Belegung: Q war "Material wechseln" – jetzt ist Q der Baumodus (wie in Fortnite)
+      if (isPlainObject(stored.controls?.keyboard)) delete stored.controls.keyboard.switchMaterial;
+    }
     return sanitize(mergeSettings(settings, stored));
   } catch {
     return defaultSettings();

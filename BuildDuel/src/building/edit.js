@@ -7,10 +7,13 @@
 //      Fremde Bauteile: kein Edit, kurzer Hinweis.
 //   2. Linksklick schaltet das Feld unter dem Fadenkreuz um (rot = wird entfernt).
 //      Maus gedrückt halten und über Felder ziehen = alle mit gleichem Zustand.
-//   3. Rechtsklick = alle Felder zurücksetzen (nichts gewählt). Bestätigen stellt
-//      dann das ganze Bauteil wieder her.
-//   4. G nochmal = bestätigen (sofort). Mit "Edit beim Loslassen" bestätigt schon
-//      das Loslassen von G. Waffe/Bauteil wählen bestätigt auch und verlässt den Edit.
+//   3. Rechtsklick = zurücksetzen. Mit "Auto-Reset" (Standard, wie in Fortnite) ist
+//      das Bauteil sofort wieder ganz und der Edit zu; sonst erst nach dem Bestätigen.
+//   4. G nochmal = bestätigen (sofort). Mit "Edit beim Loslassen bestätigen"
+//      (Fortnite: "Confirm Edit on Release") bestätigt schon das Loslassen der LINKEN
+//      MAUSTASTE nach dem Wählen – so gehen schnelle Doppel- und Dreifach-Edits.
+//      Waffe/Bauteil wählen: "Auto Confirm Edits" entscheidet, ob der Edit bestätigt
+//      oder verworfen wird (Standard: beides bestätigt).
 //   5. Wand: genau die mittleren unteren 2 Felder entfernt = Tür. E öffnet/schließt
 //      sie (jeder darf Türen benutzen).
 //   6. Rampe: 1 Feld entfernt = Ecktreppe; 2 Felder nebeneinander entfernt = halbe
@@ -99,6 +102,7 @@ export function createEditController(system) {
       lastPaint: -1,
       prevAdded: -1, // die zwei zuletzt GEWÄHLTEN Felder (Rampe: Richtung der halben Rampe)
       lastAdded: -1,
+      painted: false, // mindestens ein Feld angeklickt (für "beim Loslassen bestätigen")
     };
     sessions.set(character, session);
     candidates.delete(character);
@@ -185,11 +189,15 @@ export function createEditController(system) {
     system.aimRay(character, _origin, _dir);
     session.hover = pickTile(piece, _origin, _dir, B.editReach * 1.5);
 
-    // Rechtsklick: alles zurücksetzen
+    // Rechtsklick: alles zurücksetzen – mit Auto-Reset sofort übernehmen und Edit schließen
     if (cmd.secondaryPressed) {
       session.selection = 0;
       session.prevAdded = -1;
       session.lastAdded = -1;
+      if (option(character, 'resetConfirms')) {
+        confirm(character);
+        return;
+      }
     }
 
     // Klicken / Ziehen
@@ -197,6 +205,7 @@ export function createEditController(system) {
       session.paint = (session.selection & (1 << session.hover)) === 0;
       toggleTile(session, session.hover, session.paint);
       session.lastPaint = session.hover;
+      session.painted = true;
     } else if (cmd.primary && session.paint !== null && session.hover >= 0 && session.hover !== session.lastPaint) {
       toggleTile(session, session.hover, session.paint);
       session.lastPaint = session.hover;
@@ -206,22 +215,34 @@ export function createEditController(system) {
       session.lastPaint = -1;
     }
 
-    // Bestätigen
+    // Bestätigen: G nochmal – oder (Einstellung) Loslassen der linken Maustaste nach dem Wählen
     const fresh = game.tick === character.editOpenedTick;
-    const onRelease = character.isPlayer && !!game.settings?.controls?.editOnRelease;
-    if (onRelease) {
-      if (!fresh && (cmd.editReleased || !cmd.edit)) confirm(character);
-    } else if (!fresh && cmd.editPressed) {
+    if (!fresh && cmd.editPressed) {
+      confirm(character);
+    } else if (session.painted && !cmd.primary && option(character, 'editOnRelease')) {
       confirm(character);
     }
   }
+
+  // Bau-/Edit-Einstellung: Spieler aus den Einstellungen, Computer-Gegner mit Standardwerten
+  function option(character, key) {
+    const own = character.isPlayer ? game.settings?.controls?.[key] : undefined;
+    return own ?? CONFIG.controls[key];
+  }
   const _center = { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } };
 
-  /** Edit schließen (Waffe/Bauteil gewählt): Auswahl wird übernommen. */
+  /**
+   * Edit schließen. apply: true = übernehmen, false = verwerfen,
+   * 'weapon' / 'build' = Wechsel zu Waffe / Bauteil → "Auto Confirm Edits" entscheidet.
+   */
   function close(character, apply = true) {
     if (!sessions.has(character)) {
       candidates.delete(character);
       return;
+    }
+    if (apply === 'weapon' || apply === 'build') {
+      const auto = option(character, 'autoConfirmEdits');
+      apply = auto === 'both' || auto === apply;
     }
     if (apply) confirm(character);
     else leave(character);

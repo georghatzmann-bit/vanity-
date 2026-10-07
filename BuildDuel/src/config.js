@@ -145,14 +145,24 @@ export const CONFIG = deepFreeze({
 
   // Empfindlichkeit (Standardwerte – ab Phase 11 im Menü änderbar)
   sensitivity: {
-    baseRadiansPerPixel: 0.0022, // Grund-Drehung pro Maus-Pixel
-    x: 1.0, // links/rechts
-    y: 1.0, // hoch/runter
-    aim: 0.7, // beim Zielen (Faktor)
-    sniper: 0.45, // mit Zielfernrohr (Faktor)
-    build: 1.0, // im Baumodus (Faktor)
-    edit: 1.0, // im Edit-Modus (Faktor)
+    // Wie in Fortnite: X/Y in Prozent. Bei 100 % dreht ein Maus-Zählschritt ("Count")
+    // den Blick um 0,5555°. Beispiel: 10 % → 0,05555° pro Count; 6,4 % bei 800 DPI
+    // ≈ 32 cm Mausweg für eine volle Drehung. Mit der rohen Maus-Eingabe (Pointer Lock
+    // "unadjustedMovement") stimmt das 1:1 mit Fortnite überein.
+    degreesPerCount: 0.5555, // Grad pro Count bei 100 % // SCHÄTZUNG (Messung der Spieler-Gemeinschaft)
+    x: 10, // Maus-Empfindlichkeit links/rechts in % (Fortnite-Standard)
+    y: 10, // hoch/runter in %
+    targeting: 28, // beim Zielen (rechte Maustaste): % der normalen Empfindlichkeit
+    scope: 28, // mit Zielfernrohr: % der normalen Empfindlichkeit
+    build: 100, // Baumodus-Multiplikator in % (Fortnite-Standard 100 %)
+    edit: 100, // Edit-Modus-Multiplikator in % (Fortnite-Standard 100 %)
     invertY: false, // Y-Achse umkehren
+    // erlaubte Bereiche (Einstellungs-Fenster und Prüfung beim Laden)
+    limits: {
+      x: [0.1, 100], y: [0.1, 100],
+      targeting: [1, 200], scope: [1, 200],
+      build: [1, 1000], edit: [1, 1000],
+    },
     gamepadLookSpeed: 3.2, // Controller: Drehung in Radiant pro Sekunde bei vollem Stick
     gamepadDeadzone: 0.15, // Controller: kleine Stick-Bewegungen ignorieren
     gamepadLookExponent: 1.6, // Controller: kleine Stick-Ausschläge drehen feiner (1 = gleichmäßig)
@@ -192,7 +202,8 @@ export const CONFIG = deepFreeze({
       edit: ['KeyG'], // belegt
       use: ['KeyE'], // Türen öffnen, Gegenstände aufheben // belegt
       emote: ['KeyB'], // belegt
-      switchMaterial: ['KeyQ', 'Mouse1'], // im Baumodus: Holz → Stein → Metall
+      toggleBuild: ['KeyQ'], // Baumodus an/aus (wie in Fortnite)
+      switchMaterial: ['Mouse1'], // Material wechseln: Holz → Stein → Metall (im Baumodus auch Rechtsklick, wie in Fortnite)
       nextItem: ['WheelDown'], // belegt (Mausrad)
       prevItem: ['WheelUp'], // belegt (Mausrad)
       scoreboard: ['Tab'],
@@ -209,8 +220,13 @@ export const CONFIG = deepFreeze({
     crouchCtrlKeys: ['ControlLeft', 'ControlRight'], // Ducken, wenn crouchOnCtrl an ist
     sprintKeysWhenCrouchOnCtrl: ['ShiftLeft', 'ShiftRight'], // dann Sprinten
     crouchToggle: false, // false = halten, true = einmal drücken zum Umschalten
-    editOnRelease: false, // Edit bestätigen, sobald G losgelassen wird
-    resetEditAfterConfirm: false, // Edit-Auswahl nach dem Bestätigen leeren
+    // Bauen/Editieren wie in Fortnite (Einstellungen → Spiel → Bauen)
+    editOnRelease: false, // "Confirm Edit on Release": Loslassen der linken Maustaste bestätigt den Edit
+    autoConfirmEdits: 'both', // "Auto Confirm Edits": Wechsel zu Waffe/Bauteil bestätigt den Edit – 'off' | 'weapon' | 'build' | 'both'
+    resetConfirms: true, // Rechtsklick im Edit setzt zurück UND bestätigt sofort (Auto-Reset)
+    resetEditAfterConfirm: false, // Edit-Auswahl beim nächsten Öffnen leer statt der alten Form
+    turboBuilding: true, // "Turbo Building": Maus gedrückt halten baut weiter
+    resetBuildingChoice: true, // "Reset Building Choice": Baumodus (Q) startet immer mit der Wand
 
     // Controller (Standard-Belegung nach "Standard Gamepad", Xbox-Namen)
     // Knopf-Nummern: 0=A 1=B 2=X 3=Y 4=LB 5=RB 6=LT 7=RT 8=Back 9=Start

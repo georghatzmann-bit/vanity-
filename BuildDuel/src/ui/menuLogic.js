@@ -49,7 +49,7 @@ export const ACTION_GROUPS = Object.freeze([
     ['nextItem', 'Nächster Gegenstand'], ['prevItem', 'Voriger Gegenstand'],
   ]],
   ['Bauen', [
-    ['buildWall', 'Wand'], ['buildFloor', 'Boden'], ['buildRamp', 'Rampe'], ['buildRoof', 'Dach'],
+    ['toggleBuild', 'Baumodus an/aus'], ['buildWall', 'Wand'], ['buildFloor', 'Boden'], ['buildRamp', 'Rampe'], ['buildRoof', 'Dach'],
     ['edit', 'Bearbeiten (Edit)'], ['switchMaterial', 'Material wechseln'], ['clearBuilds', 'Alles löschen (Kreativ)'],
   ]],
   ['Sonstiges', [

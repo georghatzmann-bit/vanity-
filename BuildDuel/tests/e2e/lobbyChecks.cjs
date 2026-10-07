@@ -285,18 +285,20 @@ const LOBBY_CHECKS = [
       await page.click('.settings-tabs [data-tab="graphics"]');
       await page.$eval('[data-slider="graphics.resolutionScale"]', (el) => { el.value = '0.8'; el.dispatchEvent(new Event('input', { bubbles: true })); });
       await page.click('.settings-tabs [data-tab="sensitivity"]');
-      await page.$eval('[data-slider="sensitivity.x"]', (el) => { el.value = '1.5'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+      // genau eintippen (wie die eigene Fortnite-Sensi), Schieberegler folgt
+      await page.fill('[data-num="sensitivity.x"]', '6.4');
       await page.waitForTimeout(400);
       const r = await page.evaluate(() => ({
         master: buildDuel.settings.audio.master,
         scale: buildDuel.quality.resolutionScale,
         sx: buildDuel.settings.sensitivity.x,
+        range: document.querySelector('[data-slider="sensitivity.x"]').value,
         saved: JSON.parse(localStorage.getItem('buildduel.settings.v1') || '{}'),
       }));
       ctx.assert(r.master === 0.35 && r.saved.audio?.master === 0.35, `Lautstärke: ${r.master}`);
       ctx.assert(r.scale === 0.8, `Auflösung sofort: ${r.scale}`);
-      ctx.assert(r.sx === 1.5 && r.saved.sensitivity?.x === 1.5, `Empfindlichkeit X: ${r.sx}`);
-      await page.$eval('[data-slider="sensitivity.x"]', (el) => { el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+      ctx.assert(r.sx === 6.4 && r.saved.sensitivity?.x === 6.4 && r.range === '6.4', `Empfindlichkeit X: ${r.sx} (Regler ${r.range})`);
+      await page.fill('[data-num="sensitivity.x"]', '10');
       // Auflösung zurück auf 100 % (schärfere Bilder für die nächsten Prüfungen)
       await page.click('.settings-tabs [data-tab="graphics"]');
       await page.$eval('[data-slider="graphics.resolutionScale"]', (el) => { el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); });

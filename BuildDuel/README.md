@@ -56,8 +56,8 @@ Nach dem Laden landest du in der **Lobby**:
 
 | Reiter | Was |
 |---|---|
-| Steuerung | jede Taste neu belegen (Feld anklicken, dann Taste, Maustaste oder Mausrad drücken; Entf löscht). Doppelt belegte Tasten werden **rot**. „Auf Standard“ setzt alles zurück. Ducken halten/umschalten, Ducken auf Strg, Edit beim Loslassen bestätigen, Edit nach Bestätigen zurücksetzen |
-| Empfindlichkeit | Maus X und Y, Zielen, Zielfernrohr, Baumodus, Edit-Modus, Y-Achse umkehren |
+| Steuerung | jede Taste neu belegen (Feld anklicken, dann Taste, Maustaste oder Mausrad drücken; Entf löscht). Doppelt belegte Tasten werden **rot**. „Auf Standard“ setzt alles zurück. Ducken halten/umschalten, Ducken auf Strg. **Bauen & Editieren wie in Fortnite:** Edit beim Loslassen bestätigen, Edits automatisch bestätigen (Aus/Waffe/Bauen/Beide), Zurücksetzen bestätigt sofort, Turbo-Bauen, Baumodus startet mit Wand |
+| Empfindlichkeit | **in % wie in Fortnite** (gleiche Rechnung: 0,5555° pro Maus-Count bei 100 %, rohe Maus-Eingabe): Maus X und Y, Zielen, Zielfernrohr, Bau- und Edit-Empfindlichkeit (Standard 100 %). Jeder Wert per Regler oder genau eintippen (z. B. 6,4) |
 | Grafik | Qualität (gilt nach dem Neuladen – Knopf „Jetzt neu laden“), Auflösung 50–100 % (sofort), Sichtweite (nach dem Neuladen), FPS-Anzeige |
 | Ton | Gesamt, Effekte, Musik (sofort hörbar) |
 | Spiel | Schadenszahlen, Controller-Zielhilfe, Bot-Schwierigkeit |
@@ -96,11 +96,12 @@ Im Spiel einmal ins Bild klicken (bzw. nach **SPIELEN** passiert das von selbst)
 |---|---|
 | Wand / Boden / Rampe / Dach | **Z** (oder **Y**) / **X** / **C** / **V** – schaltet sofort in den Baumodus, ein Geist zeigt, wo das Teil hinkommt |
 | Bauteil setzen | **Linksklick** (gedrückt halten = weiter bauen, während du die Maus bewegst) |
-| Material wechseln (Holz → Stein → Metall) | **Q** oder **Mausrad drücken** |
+| Baumodus an/aus (startet mit der Wand) | **Q** |
+| Material wechseln (Holz → Stein → Metall) | **Rechtsklick** im Baumodus oder **Mausrad drücken** |
 | Rampe drehen | **R** (im Baumodus) |
 | Bauteile durchschalten | **Mausrad drehen** (im Baumodus) |
-| Edit (Fenster, Tür …) | **G** auf ein eigenes Teil, Felder **anklicken** (oder mit gedrückter Maus darüberziehen), **G** = fertig |
-| Edit zurücksetzen | **G**, **Rechtsklick**, **G** |
+| Edit (Fenster, Tür …) | **G** auf ein eigenes Teil, Felder **anklicken** (oder mit gedrückter Maus darüberziehen), **G** = fertig. Mit „Edit beim Loslassen bestätigen“ ist der Edit schon fertig, wenn du die **linke Maustaste loslässt** (schnelle Doppel-Edits wie in Fortnite) |
+| Edit zurücksetzen | **G**, **Rechtsklick** – das Teil ist sofort wieder ganz (Auto-Reset) |
 | Tür auf/zu | **E** |
 | Baumodus verlassen | **1–5** oder **F** |
 
@@ -142,8 +143,8 @@ Auf dem Übungsplatz hast du **unendlich Material**. (In den späteren Modi kost
 
 - [ ] Z/X/C/V schalten sofort in den Baumodus, der blaue Geist steht am richtigen Platz, Linksklick setzt das Teil
 - [ ] Eine gebaute Rampe hochlaufen, einen Ramp Rush und einen "90er" bauen
-- [ ] Q wechselt Holz/Stein/Metall (man sieht Bretter, Steine, Nieten), R dreht die Rampe
-- [ ] G-Edit: Fenster und Tür in eine eigene Wand machen, Tür mit E öffnen, mit G – Rechtsklick – G zurücksetzen
+- [ ] Rechtsklick im Baumodus wechselt Holz/Stein/Metall (man sieht Bretter, Steine, Nieten), Q schaltet den Baumodus an/aus, R dreht die Rampe
+- [ ] G-Edit: Fenster und Tür in eine eigene Wand machen, Tür mit E öffnen, mit G – Rechtsklick sofort zurücksetzen
 - [ ] Material-Abzug und Einsturz prüfen die Tests (tests.html) – im Übungsplatz ist Material unendlich, und Zerstören geht erst mit den Waffen (Phase 5)
 
 **Checkliste für Phase 2** (bitte ausprobieren):
@@ -213,7 +214,7 @@ Spitzhacken (nur Aussehen): Standard-Hacke, Eisbrecher (Eisaxt), Blitzschlag (Ha
 
 **Checkliste für Phase 6** (bitte ausprobieren):
 
-- [ ] Alle Anzeigen stehen an der beschriebenen Stelle und ändern sich sofort (Schild/Leben nach einem Sturz, Munition beim Schießen, Material-Wechsel mit Q)
+- [ ] Alle Anzeigen stehen an der beschriebenen Stelle und ändern sich sofort (Schild/Leben nach einem Sturz, Munition beim Schießen, Material-Wechsel mit Rechtsklick im Baumodus)
 - [ ] Baumodus (Z/X/C/V): blauer Rahmen um die Bau-Leiste; G auf eine eigene Wand: „EDIT“ unter dem Fadenkreuz
 - [ ] Eine Zielpuppe treffen: weißes X; Kopfschuss: gelbes X
 - [ ] H zeigt die Steuerung, H schließt sie wieder
@@ -257,7 +258,7 @@ Alle Zahlen (Tempo, Schaden, Größen, Tasten, Zeiten) stehen in **einer** Datei
 
 **Ruckelt es?** In den **Einstellungen → Grafik** die Qualität auf „Mittel“ oder „Niedrig“ stellen (oder die Auflösung senken).
 
-**Maus zu schnell oder zu langsam?** **Einstellungen → Empfindlichkeit**: X (links/rechts) und Y (hoch/runter), z. B. `0,7` = langsamer, `1,5` = schneller.
+**Maus zu schnell oder zu langsam?** **Einstellungen → Empfindlichkeit**: X (links/rechts) und Y (hoch/runter) in % – trag einfach **deine Werte aus Fortnite** ein (z. B. `6,4`), dann fühlt es sich gleich an. Bau- und Edit-Empfindlichkeit stehen wie in Fortnite auf 100 %.
 
 ## Probleme und Lösungen
 

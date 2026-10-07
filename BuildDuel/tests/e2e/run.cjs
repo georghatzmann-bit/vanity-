@@ -228,7 +228,8 @@ const GAME_CHECKS = [
         // dann nur die Drehung durch addLook messen (sonst zufällig rot)
         buildDuel.simulate(1 / 60);
         const before = p.yaw;
-        const px = (Math.PI / 2) / buildDuel.CONFIG.sensitivity.baseRadiansPerPixel;
+        const s = buildDuel.settings.sensitivity;
+        const px = (Math.PI / 2) / ((buildDuel.CONFIG.sensitivity.degreesPerCount * Math.PI / 180 / 100) * s.x);
         buildDuel.input.addLook(px, 0);
         buildDuel.simulate(1 / 60);
         return Math.atan2(Math.sin(p.yaw - before), Math.cos(p.yaw - before));
