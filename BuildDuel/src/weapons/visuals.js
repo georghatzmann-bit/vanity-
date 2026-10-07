@@ -129,7 +129,7 @@ export function createWeaponVisuals(game, system) {
   // --- Waffe in der Hand ------------------------------------------------------------------------
   function wantedModel(c) {
     if (!c.alive) return null;
-    if (c.mode === 'pickaxe') return 'pickaxe:common';
+    if (c.mode === 'pickaxe') return `pickaxe:${c.pickaxeId ?? CONFIG.pickaxes.defaultId}`; // Spitzhacke: Aussehen aus dem Spind
     if (c.mode !== 'weapon') return null;
     const item = c.slots[c.selectedSlot];
     if (!item || !hasWeaponModel(item.id)) return null;
@@ -179,7 +179,7 @@ export function createWeaponVisuals(game, system) {
       v.mount.children[0].position.z = kick;
       // Beim Blick nach oben die Waffe etwas tiefer halten – sonst ragt der Lauf
       // (die Arme folgen dem Blick) von unten ins Fadenkreuz.
-      if (v.key !== 'pickaxe:common') {
+      if (!v.key.startsWith('pickaxe:')) {
         const lower = V.lookUpLowering * Math.max(0, c.pitch - V.lookUpLoweringFrom);
         v.mount.rotation.x = -Math.PI / 2 - lower;
       }

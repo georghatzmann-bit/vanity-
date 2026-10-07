@@ -37,8 +37,8 @@ const THIGH = 0.43;
 const SHIN = 0.41; // Knie → Knöchel (Knöchel 8 cm über dem Boden)
 const SHOULDER_Y = 0.5; // Schultergelenk über der Hüfte (1,42 m)
 const SHOULDER_X = 0.215;
-const UPPER_ARM = 0.29;
-const FOREARM = 0.28; // Ellbogen → Hand-Mitte
+const UPPER_ARM = 0.3;
+const FOREARM = 0.29; // Ellbogen → Hand-Mitte
 // Kopf: Mitte der Treffer-Kugel (Oberkante = Kapsel-Oberkante 1,8 m)
 const HEAD_R = P.hitbox.headRadius;
 const HEAD_Y = P.hitbox.height - HEAD_R - HIP_Y; // Kugel-Mitte über der Hüfte
@@ -66,11 +66,11 @@ const STRIDE = 1.9; // Meter pro Schritt-Zyklus (zwei Schritte)
 
 // Halte-Punkte der rechten Hand (im Oberkörper, vor der Brust), gedreht um PIVOT mit dem Blick
 const PIVOT = new THREE.Vector3(0, 0.46, 0);
-const GRIP_HIP = new THREE.Vector3(0.13, 0.26, -0.13); // Waffe in Hüft-/Brusthöhe
-const GRIP_AIM = new THREE.Vector3(0.1, 0.36, -0.15); // Zielen: höher, an die Schulter
+const GRIP_HIP = new THREE.Vector3(0.18, 0.27, -0.14); // Waffe in Hüft-/Brusthöhe
+const GRIP_AIM = new THREE.Vector3(0.15, 0.37, -0.16); // Zielen: höher, an die Schulter
 const POLE_R = new THREE.Vector3(0.8, -1, 0.35).normalize(); // Ellbogen zeigt nach unten-außen
 const POLE_L = new THREE.Vector3(-0.6, -1, 0.05).normalize();
-const AIM_TWIST = -0.38; // linke Schulter dreht beim Halten nach vorn
+const AIM_TWIST = -0.45; // linke Schulter dreht beim Halten nach vorn
 
 // --- gemeinsames Material und Formen ----------------------------------------------------
 let sharedMaterial = null;

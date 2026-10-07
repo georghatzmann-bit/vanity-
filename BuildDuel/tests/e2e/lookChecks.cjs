@@ -164,6 +164,96 @@ const LOOK_CHECKS = [
       await ctx.page.evaluate(() => __studio.show(false));
     },
   },
+  {
+    name: 'Look: Waffen (alle Seltenheiten) und Spitzhacken-Varianten',
+    async run(ctx) {
+      await installStudio(ctx.page);
+      const info = await ctx.page.evaluate(() => {
+        const S = __studio;
+        const { THREE, models } = S;
+        S.clear();
+        const CONFIG = buildDuel.CONFIG;
+        const ids = ['shotgun', 'ar', 'smg', 'sniper', 'pistol', 'grenadeLauncher'];
+        const rarities = CONFIG.rarities.order;
+        let maxMeshes = 0;
+        ids.forEach((id, row) => {
+          rarities.forEach((r, col) => {
+            const m = models.createWeaponModel(id, r);
+            let n = 0;
+            m.traverse((o) => { if (o.isMesh) n++; });
+            maxMeshes = Math.max(maxMeshes, n);
+            m.scale.setScalar(1.6);
+            m.rotation.y = -Math.PI / 2; // Lauf nach rechts (+X), Seite zur Kamera
+            m.position.set((col - 2) * 2.0, 0.6 + (ids.length - 1 - row) * 0.42, 0);
+            S.object(m);
+          });
+        });
+        CONFIG.pickaxes.list.forEach((p, i) => {
+          const m = models.createWeaponModel('pickaxe', p.id);
+          m.scale.setScalar(1.6);
+          m.rotation.set(-Math.PI / 2, 0, 0); // Stiel nach unten, Kopf oben
+          m.rotation.z = 0;
+          m.position.set(6.2, 0.15 + i * 0.0, (i - 1.5) * 0.9);
+          m.rotation.y = Math.PI / 2;
+          S.object(m);
+        });
+        return { maxMeshes };
+      });
+      ctx.assert(info.maxMeshes <= 2, `je Waffe höchstens 2 Meshes (Körper + Seltenheits-Streifen): ${info.maxMeshes}`);
+      await studioShot(ctx, 'look-waffen', [0.8, 1.9, 9.6, 0.8, 1.6, 0, 32]);
+      await studioShot(ctx, 'look-spitzhacken', [9.5, 1.0, 0, 6.2, 0.7, 0, 30]);
+      await ctx.page.evaluate(() => __studio.show(false));
+    },
+  },
+  {
+    name: 'Look: Figur hält jede Waffe mit beiden Händen (Seite + Spiel-Kamera), Posen',
+    async run(ctx) {
+      await installStudio(ctx.page);
+      const ids = ['shotgun', 'ar', 'smg', 'sniper', 'pistol', 'grenadeLauncher', 'pickaxe', 'medkit'];
+      await ctx.page.evaluate((ids) => {
+        const S = __studio;
+        S.clear();
+        const skins = buildDuel.CONFIG.skins.list;
+        ids.forEach((id, i) => S.character(skins[i % skins.length].id, (i - (ids.length - 1) / 2) * 1.3, 0, -Math.PI / 2, (c) => { c.aiming = i % 2 === 1; }, id, ['common', 'uncommon', 'rare', 'epic', 'legendary'][i % 5]));
+        S.animate(0.6);
+      }, ids);
+      // Blick nach +X → Kamera auf der Seite (+Z) sieht das Profil
+      await studioShot(ctx, 'look-halten-seite', [0, 1.4, 9.2, 0, 1.15, 0, 30]);
+      // wie im Spiel: von hinten rechts über die Schulter
+      await ctx.page.evaluate(() => {
+        const S = __studio;
+        S.clear();
+        ['ar', 'shotgun', 'sniper'].forEach((id, i) => S.character('rekrut', (i - 1) * 4, 0, 0, (c) => { c.aiming = i === 2; }, id, 'epic'));
+        S.animate(0.6);
+      });
+      for (const [i, id] of ['ar', 'shotgun', 'sniper'].entries()) {
+        const x = (i - 1) * 4;
+        await studioShot(ctx, `look-halten-hinten-${id}`, [x + 0.6, 1.75, 3.0, x + 0.25, 1.35, -6, 50]);
+      }
+      // Posen: Laufen, Rennen, Springen, Ducken (zielend), Bauen, Hacke, Tanz, getroffen, umfallen
+      await ctx.page.evaluate(() => {
+        const S = __studio;
+        S.clear();
+        const poses = [
+          (c) => { c.velocity.set(6, 0, 0); },
+          (c) => { c.velocity.set(7.5, 0, 0); c.mode = 'pickaxe'; },
+          (c) => { c.grounded = false; },
+          (c) => { c.crouching = true; c.aiming = true; },
+          (c) => { c.mode = 'build'; c.slots[0] = null; },
+          (c, t) => { c.mode = 'pickaxe'; if (t !== undefined && (c.time - c.actionTime) > 0.5) c.triggerAction('pickaxe'); },
+          (c) => { c.emoteUntil = 999; },
+          (c, t) => { if (t !== undefined && Math.floor(t * 4) % 2 === 0) c.health -= 0.5; },
+          (c) => { if (c.alive) { c.alive = false; c.deathTime = c.time; } },
+        ];
+        const weapons = ['ar', null, 'shotgun', 'ar', null, 'pickaxe', null, 'smg', 'ar'];
+        const skins = buildDuel.CONFIG.skins.list;
+        poses.forEach((pose, i) => S.character(skins[(i + 3) % skins.length].id, (i - 4) * 1.25, 0, -Math.PI / 2 + 0.5, pose, weapons[i], 'rare'));
+        S.animate(0.73);
+      });
+      await studioShot(ctx, 'look-posen', [0, 1.3, 9.0, 0, 1.0, 0, 34]);
+      await ctx.page.evaluate(() => __studio.show(false));
+    },
+  },
 ];
 
 module.exports = { LOOK_CHECKS, installStudio, studioShot };

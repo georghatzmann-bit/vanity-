@@ -122,7 +122,7 @@ describe('Figuren-Grafik', () => {
       let leftElbow = null;
       view.root.traverse((o) => { if (o.name === 'Unterarm' && o.parent.parent.position.x < 0) leftElbow = o.parent; });
       assert.ok(elbowL && leftElbow);
-      left.set(0, -0.28, 0).applyMatrix4(leftElbow.matrixWorld);
+      left.set(0, -0.29, 0).applyMatrix4(leftElbow.matrixWorld);
       // Lauf-Richtung = −Y der Hand
       forward.set(0, -1, 0).transformDirection(view.rightHand.matrixWorld);
       assert.close(forward.y, Math.sin(pitch), 0.08, `Waffe zeigt mit dem Blick (Neigung ${pitch})`);
