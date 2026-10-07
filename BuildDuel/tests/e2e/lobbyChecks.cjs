@@ -110,7 +110,7 @@ const LOBBY_CHECKS = [
       }));
       ctx.assert(r.state === 'lobby' && r.game === null && r.lobbyVisible, `Lobby ohne Spiel: ${r.state}`);
       ctx.assert(!r.overlay, 'kein "Klicken zum Spielen" in der Lobby');
-      ctx.assert(r.skin === 'sonne' || !!r.skin, `Figur auf dem Podest: ${r.skin}`);
+      ctx.assert(!!r.skin, `Figur auf dem Podest: ${r.skin}`);
       ctx.assert(r.mode === 'Kreativ', `Kreativ vorgewählt: ${r.mode}`);
       ctx.assert(/Spielen/i.test(r.play), `SPIELEN-Knopf: ${r.play}`);
       ctx.assert(r.duoDisabled === 'true', 'Duo gesperrt ("bald")');
@@ -192,7 +192,10 @@ const LOBBY_CHECKS = [
       const cards = await page.evaluate(() => [...document.querySelectorAll('.item-card')].map((c) => ({ id: c.dataset.id, owned: c.classList.contains('owned'), img: !!c.querySelector('img')?.src.startsWith('data:') })));
       ctx.assert(cards.length >= 2 && cards.every((c) => c.img), `Skin-Karten mit Bildern: ${cards.length}`);
       ctx.assert(cards.some((c) => !c.owned), 'gesperrte Skins zeigen Schloss + Preis');
-      const other = cards.find((c) => c.owned && c.id !== 'sonne') ?? cards.find((c) => c.owned);
+      // ein Skin, den man besitzt, aber gerade nicht anhat (unabhängig von den Skin-Namen)
+      const worn = await page.evaluate(() => buildDuel.progress.equipped.skin);
+      const other = cards.find((c) => c.owned && c.id !== worn);
+      ctx.assert(!!other, `zweiter Gratis-Skin: ${cards.filter((c) => c.owned).map((c) => c.id).join(', ')}`);
       await page.click(`.item-card[data-id="${other.id}"]`);
       await page.click('.col-detail [data-action="equip"]');
       await page.waitForTimeout(500);
@@ -294,6 +297,9 @@ const LOBBY_CHECKS = [
       ctx.assert(r.scale === 0.8, `Auflösung sofort: ${r.scale}`);
       ctx.assert(r.sx === 1.5 && r.saved.sensitivity?.x === 1.5, `Empfindlichkeit X: ${r.sx}`);
       await page.$eval('[data-slider="sensitivity.x"]', (el) => { el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+      // Auflösung zurück auf 100 % (schärfere Bilder für die nächsten Prüfungen)
+      await page.click('.settings-tabs [data-tab="graphics"]');
+      await page.$eval('[data-slider="graphics.resolutionScale"]', (el) => { el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); });
     },
   },
   {
@@ -390,6 +396,8 @@ const LOBBY_CHECKS = [
       await page.keyboard.press('KeyP');
       await page.evaluate(() => buildDuel.simulate(0.1));
       ctx.assert(await page.evaluate(() => buildDuel.game.building.pieces.size) === 0, 'P löscht alle Bauteile');
+      await page.waitForTimeout(900); // ein paar Bilder (Meldung "Alle Bauteile gelöscht")
+      await shot(ctx, page, '65b-kreativ-alles-geloescht');
       // Pause-Menü
       await page.evaluate(() => {
         const g = buildDuel.game;
