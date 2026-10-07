@@ -15,7 +15,7 @@ export const MODES = [
   {
     id: 'creative',
     name: CONFIG.modes.creative.name,
-    description: 'Frei bauen mit unendlich Material, alle Waffen, Zielpuppen.',
+    description: 'Unendlich Material, alle Waffen.',
     create: createCreativeMode,
   },
   {

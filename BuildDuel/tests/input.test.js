@@ -173,7 +173,7 @@ describe('Eingabe: Drücken und Loslassen', () => {
       input.handleKeyDown(e);
       assert.ok(!e.defaultPrevented, code);
     }
-    const free = key('KeyP');
+    const free = key('KeyJ');
     input.handleKeyDown(free);
     assert.ok(!free.defaultPrevented, 'unbelegte Taste bleibt frei');
   });

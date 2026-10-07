@@ -20,7 +20,8 @@ async function lobby(ctx) {
   return lobbyPage;
 }
 
-const shot = (ctx, page, name) => page.screenshot({ path: ctx.outPath(`${name}.png`) });
+// animations: 'disabled' – Übergänge (Einblenden) fertig zeigen; Software-Grafik malt nur 1–5 Bilder/s
+const shot = (ctx, page, name) => page.screenshot({ path: ctx.outPath(`${name}.png`), animations: 'disabled' });
 
 // Liegt ein Element ganz im Bild? Überlappen sich zwei?
 async function layout(page, selectors) {
@@ -70,7 +71,11 @@ const LOBBY_CHECKS = [
         await page.waitForSelector('#loading-fill', { timeout: 30000 });
         await page.waitForTimeout(1500);
         const early = await page.evaluate(() => ({ width: document.getElementById('loading-fill').style.width, visible: getComputedStyle(document.getElementById('loading')).opacity === '1' }));
-        await shot(ctx, page, '50-lobby-ladebildschirm');
+        // (page.screenshot wartet auf die Schriften – das klappt erst nach dem Laden; darum direkt über CDP)
+        const cdp = await page.context().newCDPSession(page);
+        const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+        require('fs').writeFileSync(ctx.outPath('50-lobby-ladebildschirm.png'), Buffer.from(data, 'base64'));
+        await cdp.detach();
         release();
         await page.waitForFunction(() => document.body.classList.contains('ready'), null, { timeout: 60000 });
         const r = await page.evaluate(() => ({ steps: window.__steps, pct: document.getElementById('loading-pct').textContent, state: buildDuel.state }));
@@ -167,7 +172,8 @@ const LOBBY_CHECKS = [
       await shot(ctx, page, '53-lobby-modus-auswahl');
       const soon = tiles.find((t) => t.soon);
       if (soon) {
-        await page.click(`.mode-tile[data-mode="${soon.id}"]`);
+        // (aria-disabled: Playwright klickt das nicht – darum direkt im Browser klicken)
+        await page.$eval(`.mode-tile[data-mode="${soon.id}"]`, (el) => el.click());
         ctx.assert(await page.evaluate(() => buildDuel.menus.selectedMode) === 'creative', '"bald"-Modus nicht wählbar');
       }
       await page.click('.mode-tile[data-mode="practice"]');
@@ -356,7 +362,8 @@ const LOBBY_CHECKS = [
       // Spitzhacke ziehen (F) → umgefärbt
       await page.keyboard.press('KeyF');
       await page.evaluate(() => { buildDuel.simulate(0.2); });
-      await page.waitForTimeout(500);
+      // (Software-Grafik: ein Bild kann über eine halbe Sekunde dauern – auf die Hacke in der Hand warten)
+      await page.waitForFunction(() => buildDuel.game.player.view.rightHand.children.some((m) => /pickaxe/.test(m.name) && m.userData.pickaxeStyle), null, { timeout: 15000 }).catch(() => {});
       const styled = await page.evaluate(() => ({
         styles: buildDuel.game.player.view.rightHand.children.map((m) => m.userData.pickaxeStyle ?? null),
         equipped: buildDuel.progress.equipped.pickaxe,
@@ -371,6 +378,8 @@ const LOBBY_CHECKS = [
       await page.waitForTimeout(700);
       const hud = await page.evaluate(() => ({ extra: document.querySelector('.hud-extra')?.textContent ?? '', pieces: buildDuel.game.building.pieces.size, pps: buildDuel.game.mode.stats.perSecond }));
       ctx.assert(/Bauteile\/s/.test(hud.extra) && hud.pieces === 6 && hud.pps >= 5, `HUD: ${JSON.stringify(hud)}`);
+      // HUD-Text wird beim Malen erneuert – auf das nächste Bild warten
+      await page.waitForFunction(() => /Bauteile: 6/.test(document.querySelector('.hud-extra')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {});
       await page.evaluate(() => buildDuel.game.hud.setPaused?.(true));
       await shot(ctx, page, '65-kreativ-im-spiel');
       await page.evaluate(() => buildDuel.game.hud.setPaused?.(false));
