@@ -360,7 +360,13 @@ const LOBBY_CHECKS = [
         infinite: buildDuel.game.player.infiniteMaterials,
         size: buildDuel.game.map.size,
         cosmetics: !!buildDuel.game.player.cosmetics && (!!buildDuel.CONFIG.pickaxes?.list || !!buildDuel.game.player.cosmetics.pickaxe),
+        pitch: buildDuel.game.player.pitch,
+        camPitch: buildDuel.game.cameraRig?.pitch ?? null,
+        locked: buildDuel.input.locked,
+        pos: buildDuel.game.player.position.toArray().map((v) => +v.toFixed(2)),
       }));
+      ctx.log(`Start: Blick ${start.pitch.toFixed(2)} (Kamera ${start.camPitch}), Maus gesperrt: ${start.locked}, Position ${start.pos}`);
+      ctx.assert(Math.abs(start.pitch) < 0.3, `Kamera schaut nach dem Start geradeaus: ${start.pitch}`);
       ctx.assert(start.state === 'playing' && !start.menu && !start.lobby, `im Spiel, Lobby weg: ${JSON.stringify(start)}`);
       ctx.assert(start.skin === start.eqSkin, `Spind-Skin im Spiel: ${start.skin}`);
       ctx.assert(start.infinite && start.size === 200, 'Kreativ: unendlich Material, 200 m');
@@ -389,6 +395,8 @@ const LOBBY_CHECKS = [
       ctx.assert(/Bauteile\/s/.test(hud.extra) && hud.pieces === 6 && hud.pps >= 5, `HUD: ${JSON.stringify(hud)}`);
       // HUD-Text wird beim Malen erneuert – auf das nächste Bild warten
       await page.waitForFunction(() => /Bauteile: 6/.test(document.querySelector('.hud-extra')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => {});
+      const view = await page.evaluate(() => ({ pitch: buildDuel.game.player.pitch, pos: buildDuel.game.player.position.toArray().map((v) => +v.toFixed(2)), locked: buildDuel.input.locked }));
+      ctx.log(`Vor dem Bild: Blick ${view.pitch.toFixed(2)}, Position ${view.pos}, Maus gesperrt: ${view.locked}`);
       await page.evaluate(() => buildDuel.game.hud.setPaused?.(true));
       await shot(ctx, page, '65-kreativ-im-spiel');
       await page.evaluate(() => buildDuel.game.hud.setPaused?.(false));
