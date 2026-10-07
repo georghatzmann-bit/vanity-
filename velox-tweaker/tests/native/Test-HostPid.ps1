@@ -8,6 +8,7 @@
     - POST /api/shutdown?t=<token> (what VELOX.exe sends on close) is accepted
     - "VELOX_STATUS <key>" start-up phases come before VELOX_READY (keys VELOX.exe knows)
     - lifecycle: no heartbeat timeout under VELOX.exe's own window, and a sleeping PC does not end VELOX
+    - settings.json "introMode" is written as VELOX.exe reads it (a top-level string: long | short | off)
 .EXAMPLE
     pwsh velox-tweaker/tests/native/Test-HostPid.ps1
 #>
@@ -23,10 +24,11 @@ function Check([bool]$Ok, [string]$What) {
 
 $psExe = (Get-Process -Id $PID).Path
 
-function Start-Backend([int]$HostPid, [string]$DataDir) {
+function Start-Backend([int]$HostPid, [string]$DataDir, [string]$DataRoot = '') {
     $psi = New-Object Diagnostics.ProcessStartInfo
     $psi.FileName = $psExe
     $psi.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $script + '" -Simulate -NoBrowser -Port 0 -HostPid ' + $HostPid
+    if ($DataRoot) { $psi.Arguments += ' -DataRoot "' + $DataRoot + '"' }
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
@@ -119,6 +121,36 @@ if ($url) {
     Check $ended 'backend ends after the shutdown request'
     if (-not $ended) { try { $be.Kill() } catch { $null = $_ } }
 }
+try { Stop-Process -Id $hostProc.Id -Force -ErrorAction Stop } catch { $null = $_ }
+
+Write-Host 'Host-PID: settings.json "introMode" (read by VELOX.exe)'
+# its own data root: the POSTs below must never touch the real %LOCALAPPDATA%\Velox\settings.json
+$sroot = Join-Path $tmp 'root'
+$null = New-Item -ItemType Directory -Path $sroot -Force
+$settingsFile = Join-Path $sroot 'settings.json'
+$hostProc = Start-FakeHost
+$be = Start-Backend $hostProc.Id (Join-Path $tmp 'c') $sroot
+$url = Wait-Ready $be 60
+Check ($null -ne $url) 'VELOX_READY (own data root)'
+if ($url) {
+    # settings.json "introMode": the backend writes it, VELOX.exe only reads it (native/shared/Settings.cs
+    # UserSettings.IntroMode: a top-level JSON string, compared ordinally with long | short | off)
+    $settingsCs = [IO.File]::ReadAllText((Join-Path $root 'native/shared/Settings.cs'))
+    $csModes = @()
+    if ($settingsCs -match 'IntroModes = \{([^}]*)\}') { $csModes = @([regex]::Matches($Matches[1], '"([a-z]+)"') | ForEach-Object { $_.Groups[1].Value }) }
+    Check (($csModes -join ',') -eq 'long,short,off') ('Settings.cs UserSettings.IntroModes = long,short,off (core/Common.ps1 Get-VxIntroModes): ' + ($csModes -join ','))
+    foreach ($case in @(@('short', 'short'), @('off', 'off'), @('Lang', 'off'), @('long', 'long'))) {
+        try {
+            $null = Invoke-RestMethod -Method Post -Uri ((Get-Origin $url) + 'api/settings') -Headers @{ 'X-Velox-Token' = (Get-Token $url) } -ContentType 'application/json' -Body ('{"introMode":"' + $case[0] + '"}') -TimeoutSec 10
+            $txt = [IO.File]::ReadAllText($settingsFile)
+            $stored = ''
+            if ($txt -match '"introMode"\s*:\s*"([^"]*)"') { $stored = $Matches[1] }
+            Check ($stored -ceq $case[1]) ('POST /api/settings {introMode:"' + $case[0] + '"} -> settings.json "introMode":"' + $stored + '" (expected "' + $case[1] + '", a string VELOX.exe can read)')
+        } catch { Check $false ('introMode ' + $case[0] + ': ' + $_.Exception.Message) }
+    }
+    try { $null = Invoke-RestMethod -Method Post -Uri ((Get-Origin $url) + 'api/shutdown?t=' + (Get-Token $url)) -TimeoutSec 10 } catch { $null = $_ }
+}
+if (-not $be.WaitForExit(20000)) { try { $be.Kill() } catch { $null = $_ } }
 try { Stop-Process -Id $hostProc.Id -Force -ErrorAction Stop } catch { $null = $_ }
 
 Write-Host 'Lifecycle (core/Server.ps1 Test-VxLifecycle)'

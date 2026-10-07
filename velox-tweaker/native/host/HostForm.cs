@@ -59,8 +59,11 @@ namespace Velox.Host
         private const int ErrorInvalidState = unchecked((int)0x8007139F);
         // hand-over: a broken start screen may delay the app by at most this much after VELOX_READY ...
         private const int HandoverCapMs = 1000;
-        // ... a working one by its own announced rest of the intro + this, never more than HandoverMaxMs
-        private const int HandoverGraceMs = 250, HandoverMaxMs = 2300;
+        // ... a working one by its own announced rest of the intro + this, never more than HandoverMaxMs.
+        // The longest honest announcement: READY right as the long intro boots = up to 450 ms boot and audio lead
+        // (splash.js BOOT_MS) + 2550 ms to "calm" (the end of the light sweep, where intro.done() may hand over)
+        // + the 430 ms hand-over = 3430 ms (+ grace 3680); the cap bounds a page that announces nonsense.
+        private const int HandoverGraceMs = 250, HandoverMaxMs = 3800;
         // a start screen that has not reported "splash-ready" this long after its navigation began counts as
         // broken (not loaded, or its modules failed): VELOX then goes straight to the app / the Edge window
         private const int SplashReadyTimeoutMs = 12000;
@@ -86,7 +89,7 @@ namespace Velox.Host
         private DateTime _readyAt;
         private EmbeddedSite _startSite;    // the start screen, served from memory as https://start.velox.example/
         private CoreWebView2Environment _env;
-        private string _introVariant;       // full | short for the first load of the start screen
+        private string _introVariant;       // long | short | still for the first load of the start screen
         private int _splashLoads;
         private bool? _soundChoice;         // M / sound button on the start screen (forwarded to the app)
         private string _appOrigin;          // http://127.0.0.1:<port>/
@@ -191,10 +194,7 @@ namespace Velox.Host
             _webWatchdog.Start();
             _startSite = StartPage.Load(_log);
             if (_startSite == null) { UseFallback(); return; }   // no start screen: the Edge window has its own
-            _introVariant = WindowPlacement.TakeIntroVariant(Util.Version());
-            // the installer has just played the full intro with its sound: not the same strike twice in a row
-            // (the version is recorded above all the same, so the next start is short as well)
-            if (Program.FromSetup) _introVariant = "short";
+            _introVariant = StartVariant(Program.IntroMode, Program.FromSetup);
             string udf = null;
             try
             {
@@ -467,14 +467,27 @@ namespace Velox.Host
 
         // ------------------------------------------------------------ start screen (embedded page)
 
+        /// <summary>
+        /// The start screen's intro for settings.json "introMode" (read once at start, Program.IntroMode):
+        /// long = the long intro on every launch, short = the short one, off = the still pose (no animation, no
+        /// sound). Right after the installer (--from-setup), which has just played the long intro and its
+        /// finish, "long" plays the short one: not the same strike twice within a few seconds.
+        /// </summary>
+        internal static string StartVariant(string introMode, bool fromSetup)
+        {
+            if (introMode == "off") return "still";
+            if (introMode == "short") return "short";
+            return fromSetup ? "short" : "long";
+        }
+
         private void NavigateSplash()
         {
             if (_core == null) return;
             _splashReady = false;
             _onInternal = true;
-            // the first load plays the intro (full after an install / update); a later one (an error after the
+            // the first load plays the intro settings.json "introMode" asks for; a later one (an error after the
             // app was shown) is the still end pose: no second intro, no sound
-            string variant = _splashLoads++ == 0 ? (_introVariant ?? "short") : "still";
+            string variant = _splashLoads++ == 0 ? (_introVariant ?? "long") : "still";
             // muted in the installer a moment ago (--quiet-start): silent for this run, settings.json stays as it is
             bool sound = _soundChoice ?? (!Program.QuietStart && UserSettings.StartSound(Program.DataDir, _log));
             _splashWatchdog.Stop();

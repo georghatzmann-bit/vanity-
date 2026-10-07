@@ -8,7 +8,7 @@ import * as Sound from './sound.js';
 const qs = new URLSearchParams(location.search);
 const stage = document.getElementById('stage');
 const log = document.getElementById('pv-log');
-const state = { variant: qs.get('variant') || 'full', size: qs.get('size') || '880x560', place: qs.get('place') || 'hero' };
+const state = { variant: qs.get('variant') || 'long', size: qs.get('size') || '880x560', place: qs.get('place') || 'hero' };
 let intro = null;
 
 function say(s) { if (log) log.textContent = s; }
@@ -50,7 +50,7 @@ function installing(slot, capture) {
     p = Math.min(1, p + 0.06 + Math.random() * 0.05);
     const i = Math.min(STEPS.length - 1, Math.floor(p * STEPS.length));
     bar.set(p); bar.status(STEPS[i]); bar.step((i + 1) + ' / ' + STEPS.length);
-    if (p < 1) setTimeout(tick, 380); else setTimeout(() => bar.done('Fertig. VELOX ist installiert.'), 400);
+    if (p < 1) setTimeout(tick, 380); else setTimeout(() => { bar.done('Fertig. VELOX ist installiert.'); intro.celebrate(); }, 400);
   };
   setTimeout(tick, 300);
   return bar;
@@ -105,6 +105,15 @@ if (qs.get('capture') === '1') {
       return true;
     },
     timeline: () => it.timeline(),
+    // installer capture: replace the welcome with the install screen at progress p (0..1),
+    // finish it (done + celebrate at ms), as setup.js does
+    install(p) {
+      if (!window.__ticks) installing(it.slot, true);
+      const b = window.__ticks, i = Math.min(STEPS.length - 1, Math.floor(p * STEPS.length));
+      b.seek(p); b.status(STEPS[i]); b.step((i + 1) + ' / ' + STEPS.length);
+    },
+    finish() { window.__ticks.done('Fertig. VELOX ist installiert.'); },
+    celebratePlan: () => it.celebratePlan(),
     layout: () => it.layout(),
     plan: () => it.plan(),
     async wav(secs = 2, which = 'cue') {
@@ -124,6 +133,7 @@ if (qs.get('capture') === '1') {
   document.getElementById('pv-replay').addEventListener('click', () => start());
   document.getElementById('pv-skip').addEventListener('click', () => intro.skip());
   document.getElementById('pv-mute').addEventListener('click', () => intro.setMuted(!intro.muted));
+  document.getElementById('pv-celebrate').addEventListener('click', () => { say('celebrate() …'); intro.celebrate().then(() => say('celebrate() fertig')); });
   document.getElementById('pv-done').addEventListener('click', () => { say('done() …'); intro.done().then(() => say('done() erfüllt – Übergabe')); });
   document.getElementById('pv-status-set').addEventListener('click', () => intro.status(document.getElementById('pv-status').value));
   document.querySelectorAll('[data-progress]').forEach((b) => b.addEventListener('click', () => intro.progress(b.dataset.progress === 'null' ? null : Number(b.dataset.progress))));

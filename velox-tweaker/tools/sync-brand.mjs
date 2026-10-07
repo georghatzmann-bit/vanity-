@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const brand = path.join(root, 'brand');
-const CORE = ['intro.js', 'sound.js', 'glyphs.js', 'intro.css', 'tokens.css'];
+const CORE = ['intro.js', 'light-worker.js', 'sound.js', 'glyphs.js', 'intro.css', 'tokens.css'];
 const SVG = ['mark.svg', 'mark-16.svg', 'app-icon.svg', 'wordmark.svg', 'wordmark-light.svg', 'wordmark-small.svg', 'wordmark-small-light.svg', 'lockup.svg'];
 const SURFACES = {
   'ui/brand': [...CORE, 'tokens-app.css', ...SVG],          // web UI: in-app splash, sidebar, favicon

@@ -16,7 +16,9 @@
 /* the word: two clip groups (above / below the cut), pieces move inside them */
 .vx-word { position: absolute; left: 0; top: 0; display: block; overflow: visible; will-change: transform; }
 .vx-pc { fill: var(--vx-bone); }
-.vx-pc.vx-signal { fill: var(--vx-signal); }
+.vx-pc.vx-signal { fill: var(--vx-signal); }   /* intro.js tints the pieces while the light plays on them */
+/* the light on the letters (intro.js paints it with gradients; hidden while there is none) */
+.vx-ov { pointer-events: none; }
 
 /* the blade, and the hand-over line: 2 px, solid signal, a full-width element scaled from
  * its left end. It sits UNDER the word, so it only shows in the cut. intro.js sets
@@ -26,6 +28,17 @@
   transform-origin: 0 50%; opacity: 0; will-change: transform, opacity;
 }
 .vx-word { z-index: 1; }
+/* the needle: the white-hot core of the light in the cut, whole device pixels (intro.js sets
+ * its height and colour). Above the light canvas; it only shows in the cut band, where no
+ * letter is while it is lit. */
+.vx-needle {
+  position: absolute; left: 0; top: 0; z-index: 2; height: 1px; background: #FFF7EC;
+  transform-origin: 0 0; opacity: 0; pointer-events: none; will-change: transform, opacity;
+}
+
+/* the light (long intro, the short one's strike, celebrate()): one canvas over the word, the
+ * size of the stage. intro.js draws additively on it and only while there is light. */
+.vx-light { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; }
 
 /* loader: a hairline exactly as wide as the word, flush with the V's foot */
 .vx-load { position: absolute; opacity: 0; will-change: opacity; }

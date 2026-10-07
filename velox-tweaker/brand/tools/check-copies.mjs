@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 const brand = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(brand, '..');
-const RUNTIME = ['intro.js', 'sound.js', 'glyphs.js', 'ticks.js', 'intro.css', 'kit.css', 'tokens.css', 'tokens-app.css', 'mark.svg', 'mark-16.svg', 'app-icon.svg',
+const RUNTIME = ['intro.js', 'light-worker.js', 'sound.js', 'glyphs.js', 'ticks.js', 'intro.css', 'kit.css', 'tokens.css', 'tokens-app.css', 'mark.svg', 'mark-16.svg', 'app-icon.svg',
   'wordmark.svg', 'wordmark-light.svg', 'wordmark-small.svg', 'wordmark-small-light.svg', 'lockup.svg'];
 const hash = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
 const canon = Object.fromEntries(RUNTIME.map((f) => [f, hash(path.join(brand, f))]));

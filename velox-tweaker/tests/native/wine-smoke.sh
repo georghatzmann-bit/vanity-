@@ -19,7 +19,8 @@
 #                                 key, shortcuts, %TEMP%\VeloxSetup.log; a second /S = update
 #   b) VeloxSetup.exe (UI)        no crash, the "WebView2 fehlt" dialog, the native FallbackForm, an update
 #                                 through it (Enter) that starts VELOX.exe, Schließen
-#   c) VELOX.exe --test           fake powershell.exe (tests/native/wine/FakePowerShell.cs) in 5 modes:
+#   c) VELOX.exe --test           fake powershell.exe (tests/native/wine/FakePowerShell.cs) in 5 modes
+#                                 (+ settings.json introMode short / invalid / unreadable / off / missing):
 #                                 exits at once / VELOX_ERROR (umlauts, OEM code page) / VELOX_READY / bad URL /
 #                                 PowerShell refuses the script (execution policy) -> plain German explanation
 #   d) VELOX.exe                  real mode (Wine runs everything as admin: the UAC relaunch is not exercised)
@@ -139,6 +140,8 @@ export VELOX_FAKE_PS_LOG="$(winepath -w "$FAKELOG" 2>/dev/null)"   # a Windows p
 WTEMP="$(wine cmd /c echo %TEMP% 2>/dev/null | tr -d '\r')"
 SETUPLOG="$(winepath -u "$WTEMP" 2>/dev/null)/VeloxSetup.log"   # Wine 9: C:\users\<user>\Temp
 HOSTLOG="$U/AppData/Local/Velox/logs/host.log"
+SETTINGS="$U/AppData/Local/Velox/settings.json"   # the backend's file; VELOX.exe only reads startSound / introMode
+settings() { mkdir -p "$(dirname "$SETTINGS")"; if [ -n "$1" ]; then printf '%s' "$1" > "$SETTINGS"; else rm -f "$SETTINGS"; fi; }
 INST="$C/Program Files/VELOX"
 REGKEY='HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\VELOX'
 
@@ -238,6 +241,7 @@ sleep 20; shot b3-setup-fallbackform-done
 check "update from the native form completed" grep -a -q 'Installation abgeschlossen' "$SETUPLOG"
 check "setup started VELOX.exe afterwards" grep -a -q 'VELOX gestartet' "$SETUPLOG"
 check "that VELOX.exe reached Main (host.log)" grep -a -q 'VELOX.exe .* startet' "$HOSTLOG"
+check "started by the setup (--from-setup): introMode long -> the short intro right after the installer's" grep -a -q 'Startanimation: long (settings.json introMode, nach dem Setup kurz)' "$HOSTLOG"
 W="$(window 'VELOX Setup')"; [ -n "$W" ] && { xdotool windowactivate "$W" 2>/dev/null; xdotool key Return; }
 sleep 6
 check "setup closed with exit 0 after 'Schließen'" bash -c "! kill -0 $BGPID 2>/dev/null && tail -1 '$SETUPLOG' | grep -q 'Ende (Code 0)'"
@@ -256,7 +260,9 @@ host_case() {   # host_case <name> <fake mode> <args...>
   xdotool search --onlyvisible --name '.' getwindowname %@ 2>/dev/null | sed 's/^/        window: /' | head -6
 }
 step "c1) VELOX.exe --test, powershell exits at once (like Wine's own stub)"
+settings '{"startSound":true,"introMode":"short"}'
 host_case c1-host-test-exit0 exit0 --test
+check "settings.json introMode \"short\" read (UserSettings.IntroMode)" grep -a -q 'Startanimation: short (settings.json introMode)' "$HOSTLOG"
 check "VELOX.exe still running (error screen, no crash)" kill -0 "$BGPID"
 check "host.log written" test -s "$HOSTLOG"
 check "host.log: Testmodus, WebView2 missing -> fallback" grep -a -q 'WebView2 nicht verfügbar' "$HOSTLOG"
@@ -267,7 +273,9 @@ check "host.log clean" log_clean "$HOSTLOG"
 cp -f "$HOSTLOG" "$LOGS/host-c1.log"; killall_wine
 
 step "c2) VELOX.exe --test, backend reports VELOX_ERROR (umlauts in the OEM code page)"
+settings $'\xef\xbb\xbf{"introMode":"Kurz","startSound":"nein"}'   # with a BOM; values the backend would never write
 host_case c2-host-test-error error --test
+check "settings.json introMode \"Kurz\" (invalid) -> long" grep -a -q 'Startanimation: long (settings.json introMode)' "$HOSTLOG"
 check "VELOX.exe still running (error screen)" kill -0 "$BGPID"
 check "German error text decoded correctly (äöüß)" grep -a -q 'Größe übersteigt das Maß (Testtext äöüß)' "$HOSTLOG"
 check "no unhandled exception" no_clr_crash c2-host-test-error
@@ -276,8 +284,10 @@ cp -f "$HOSTLOG" "$LOGS/host-c2.log"; killall_wine
 
 step "c3) VELOX.exe --test, backend VELOX_READY (fallback: start window hides, VELOX.exe stays as job owner)"
 : > "$FAKELOG"
+settings 'nicht lesbar {'   # not JSON at all (wine-mono's JavaScriptSerializer accepts a merely cut-off object)
 host_case c3-host-test-ready ready --test
 check "VELOX.exe alive while the backend runs" kill -0 "$BGPID"
+check "unreadable settings.json -> introMode long (and a warning)" bash -c "grep -a -q 'Startanimation: long (settings.json introMode)' '$HOSTLOG' && grep -a -q 'settings.json nicht lesbar - Startanimation bleibt lang' '$HOSTLOG'"
 check "backend reported ready" grep -a -q 'VELOX_READY http://127.0.0.1:' "$HOSTLOG"
 check "start window hidden after ready" test -z "$(window 'VELOX')"
 check "fallback mode starts the backend WITHOUT -NoBrowser" bash -c "! grep -a -q -- '-NoBrowser' '$FAKELOG'"
@@ -308,7 +318,9 @@ cp -f "$HOSTLOG" "$LOGS/host-c4.log"; killall_wine
 # ================================================================== d) VELOX.exe real mode
 step "d) VELOX.exe (real mode; under Wine every process is admin, so no UAC relaunch)"
 : > "$FAKELOG"
+settings '{"introMode":"off","startSound":false}'
 host_case d1-host-real-ready ready
+check "settings.json introMode \"off\" read" grep -a -q 'Startanimation: off (settings.json introMode)' "$HOSTLOG"
 check "host.log: echter Modus, Admin: True" grep -a -q 'echter Modus, Admin: True' "$HOSTLOG"
 check "real mode starts the backend without -Simulate" bash -c "grep -a -q 'Velox.ps1' '$FAKELOG' && ! grep -a -q -- '-Simulate' '$FAKELOG'"
 check "VELOX.exe alive while the backend runs" kill -0 "$BGPID"
@@ -316,7 +328,9 @@ check "no unhandled exception" no_clr_crash d1-host-real-ready
 check "host.log clean" log_clean "$HOSTLOG"
 cp -f "$HOSTLOG" "$LOGS/host-d1.log"; killall_wine
 
+settings ''
 host_case d2-host-real-exit0 exit0
+check "no settings.json -> introMode long" grep -a -q 'Startanimation: long (settings.json introMode)' "$HOSTLOG"
 check "error screen offers the Testmodus (VELOX.exe alive)" kill -0 "$BGPID"
 check "no unhandled exception" no_clr_crash d2-host-real-exit0
 cp -f "$HOSTLOG" "$LOGS/host-d2.log"; killall_wine

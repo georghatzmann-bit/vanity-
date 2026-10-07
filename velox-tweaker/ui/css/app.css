@@ -964,6 +964,12 @@ kbd {
 .opt-title { font-weight: 500; }
 .opt-desc { font-size: var(--fs-3); color: var(--muted); }
 .opt-control { flex: none; }
+/* Startanimation: Lang / Kurz / Aus + Abspielen (settings.introMode) */
+.intro-ctl { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+/* a row whose control sits under its text, on the text's left edge (icon 18 + gap 16) */
+.opt-row-stack { flex-wrap: wrap; row-gap: 10px; }
+.opt-row-stack .opt-text { flex: 1 1 calc(100% - 34px); }
+.opt-row-stack .opt-control { flex: 1 0 100%; padding-left: 34px; }
 .claude-box { display: grid; gap: 12px; }
 .claude-box .field-label.mt-16 { margin: 4px 0 -4px; }
 .claude-box .note.mt-16 { margin-top: 4px; }

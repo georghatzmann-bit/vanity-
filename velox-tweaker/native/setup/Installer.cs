@@ -653,7 +653,8 @@ namespace Velox.Setup
             string exe = Path.Combine(dir, "VELOX.exe");
             try
             {
-                // --from-setup: the installer just played the full intro, so VELOX.exe starts with the short one
+                // --from-setup: the installer just played the long intro and its finish, so VELOX.exe starts with the short one
+                // (settings.json introMode "long"; "short" / "off" stay as they are)
                 using (Process.Start(new ProcessStartInfo(exe, quiet ? "--from-setup --quiet-start" : "--from-setup") { UseShellExecute = false, WorkingDirectory = dir })) { }
                 Log.Info("VELOX gestartet.");
                 return true;

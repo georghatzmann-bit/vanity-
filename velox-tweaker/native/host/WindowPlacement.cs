@@ -1,5 +1,6 @@
 // Remembers size, position and the maximized state of the VELOX window in %LOCALAPPDATA%\Velox\window.json,
-// and lastIntroVersion: the VERSION whose full start sequence VELOX.exe last played (host-owned, never settings.json).
+// Every write keeps the file's other keys - also "lastIntroVersion", which 1.2.x used to play its full intro only on the
+// first start of a version; since 1.3.0 settings.json "introMode" decides (UserSettings.IntroMode) and the key is left as it is.
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -73,28 +74,6 @@ namespace Velox.Host
                 Write(d);
             }
             catch (Exception ex) { Program.Log.Warn("window.json nicht gespeichert: " + ex.Message); }
-        }
-
-        /// <summary>
-        /// "full" the first time this VERSION starts (first start after an install or update), "short" after that.
-        /// Records the version at once, so a start that ends in an error does not replay the full intro.
-        /// </summary>
-        public static string TakeIntroVariant(string version)
-        {
-            try
-            {
-                Dictionary<string, object> d = Read();
-                object v;
-                if (d.TryGetValue("lastIntroVersion", out v) && string.Equals(v as string, version, StringComparison.Ordinal)) return "short";
-                d["lastIntroVersion"] = version;
-                Write(d);
-                return "full";
-            }
-            catch (Exception ex)
-            {
-                Program.Log.Warn("window.json (lastIntroVersion): " + ex.Message);
-                return "short";
-            }
         }
 
         /// <summary>The whole file (other keys are kept on every write); empty when missing or unreadable.</summary>

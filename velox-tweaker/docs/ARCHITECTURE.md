@@ -489,8 +489,13 @@ settings = { accent:"violet"|…,       // legacy (≤ 1.1): still stored and ac
              motion:"full"|"reduced",
              startSound:true,       // the start sequence may play its sound (Einstellungen, M key); VELOX.exe
                                     // reads it from settings.json too (§11 "Start sound")
-             introSeen:"",          // VERSION whose full intro the Edge window last played ("" = never);
-                                    // only "" or d.d.d is accepted
+             introMode:"long"|"short"|"off",   // since 1.3.0, default "long": which start sequence plays on
+                                    // EVERY launch - "long" the long intro (skippable), "short" the short one,
+                                    // "off" the still frame (no animation, no sound). Anything else is
+                                    // ignored on POST and read as "long"; case-sensitive. VELOX.exe reads it
+                                    // from settings.json too (§11 "Start sound")
+             introSeen:"",          // legacy (1.2.x: VERSION whose full intro the Edge window last played);
+                                    // still stored and accepted ("" or d.d.d), no longer read or written by the UI
              confirmRisky:true, restorePoints:"first"|"presets"|"off",   // §8 "Restore points"
              autoRestorePoint:true,   // read-only, derived (restorePoints != "off") for older UIs
              claude:{ hasKey:false, model:"claude-opus-5-5" },             // provider claude-api (§9)
@@ -889,13 +894,16 @@ instead of glossy: ink and bone, one signal colour, hairlines, mono readouts.
   fades (the intro then uses its reduced variant).
 - **Start sequence** (`ui/js/splash.js` + `brand/intro.js`): `#splash` is plain ink until the module runs.
   Started by VELOX.exe (`?from=host`, or `bootstrap.mode.hosted`): `still` + `handedOver` – the end pose
-  VELOX.exe left, no sound – faded out when the data is in. Started by Start.bat: the full intro on the
-  first start of a `VERSION` (`settings.introSeen`, localStorage as a second opinion), the short one
-  otherwise; sound per `settings.startSound` (M / the sound button write it); blocked autoplay → "Ton:
-  klicken" and the first click replays with sound. No bootstrap after 700 ms → a silent short intro.
+  VELOX.exe left, no sound – faded out when the data is in. Started by Start.bat: `settings.introMode`
+  on every launch – `long` (default) the long intro, `short` the short one, `off` the kit's `still`
+  frame (no motion, no sound, no keys); sound per `settings.startSound` (M / the sound button write it);
+  blocked autoplay → "Ton: klicken" and the first click replays with sound. No bootstrap after 700 ms →
+  a silent short intro (the setting is not known yet). The light runs in `brand/light-worker.js` (a
+  module worker; the CSP's `script-src 'self'` covers it, as `worker-src` falls back to it).
   The first-run scan reports through the intro's loader (`status()` / `progress()`), under VELOX.exe
   through the intro's slot. Then `done()` (hand-over, never cut short), a 220 ms fade, `destroy()`.
-  Einstellungen → "Startanimation abspielen" replays the full intro over the app.
+  Einstellungen → "Start und Bewegung": *Startanimation* = a segmented control **Lang / Kurz / Aus**
+  (`introMode`) with *Abspielen*, which replays the **long** intro over the app whatever the setting says.
 - **Layout**: sidebar (232 px, collapsible to 72 px icons; the small wordmark + version, collapsed the
   mark) with mono page indices; top bar with command palette trigger (Ctrl+K), mode chips (Admin /
   Testmodus / Neustart nötig); content max 1180 px; sticky bottom bar for staged changes
@@ -926,16 +934,16 @@ are AnyCPU without Prefer32Bit (64-bit process → 64-bit `powershell.exe`, 64-b
 
 | File | What |
 |---|---|
-| `VERSION` | the one version number (`1.2.1`; bump it for every `dist/VeloxSetup.exe` that leaves the house, so an installed build can be told apart and the setup offers *Aktualisieren*). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
-| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `Startup.cs` (start timeout, start-up texts, diagnosis of a blocked PowerShell), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs` (also `lastIntroVersion`), `StartPage.cs` (the start screen as an in-memory site), `start/` (the start screen: `splash.html`, `splash.css`, `splash.js` + `start/brand/` = byte-identical copies of `brand/`, all embedded as resources `start/…`), `app.manifest` (`asInvoker`, PerMonitorV2). |
+| `VERSION` | the one version number (`1.3.0`; bump it for every `dist/VeloxSetup.exe` that leaves the house, so an installed build can be told apart and the setup offers *Aktualisieren*). Read by `native/Directory.Build.props` (assembly/file/informational version of both exes), by `Util.Version()` (registry `DisplayVersion`, installer UI) and by `Velox.ps1` (`$ctx.Version`, shown in the app). |
+| `native/host/` | **VELOX.exe** – the installed app: `Program.cs` (elevation, single instance), `HostForm.cs` (window + WebView2 + navigation policy), `Backend.cs` (PowerShell process + job object), `Startup.cs` (start timeout, start-up texts, diagnosis of a blocked PowerShell), `FallbackHost.cs` (no WebView2 → Edge app window), `WindowPlacement.cs` (`window.json`; every write keeps 1.2.x's `lastIntroVersion` untouched), `StartPage.cs` (the start screen as an in-memory site), `start/` (the start screen: `splash.html`, `splash.css`, `splash.js` + `start/brand/` = byte-identical copies of `brand/`, all embedded as resources `start/…`), `app.manifest` (`asInvoker`, PerMonitorV2). |
 | `native/setup/` | **VeloxSetup.exe** – installer + uninstaller: `Program.cs` (switches, AssemblyResolve, temp copy for uninstall), `SetupWindow.cs` (the only file with WebView2 types), `Installer.cs` (install/update/uninstall engine), `Payload.cs` (embedded zip), `WebView2Runtime.cs` (runtime download), `FallbackForm.cs` (plain native UI), `app.manifest` (`requireAdministrator`, PerMonitorV2). |
-| `native/setup-ui/` | installer UI: `index.html`, `setup.css`, `setup.js` (ES module) + `brand/` (byte-identical copies of the brand kit: `intro.js`, `sound.js`, `glyphs.js`, `ticks.js`, `intro.css`, `kit.css`, `tokens.css`). Opening `index.html` over http shows a demo (`#update`, `#uninstall` in the URL pick the mode). |
-| `native/shared/` | `Common.cs` (Log, Util), `EmbeddedSite.cs` (embedded resources served from memory as one `https://<host>/` origin; no WebView2 types), `WebViewData.cs` (the only place that picks WebView2 user data folders + desktop-user access), `DarkUi.cs` (dark native dialogs, `Brand` = the `brand/tokens.css` palette, the mark, the kit's hairline loader), `Settings.cs` (reads `settings.json` `startSound`, never writes it), `NativeMethods.cs` (P/Invoke). |
+| `native/setup-ui/` | installer UI: `index.html`, `setup.css`, `setup.js` (ES module) + `brand/` (byte-identical copies of the brand kit: `intro.js`, `light-worker.js`, `sound.js`, `glyphs.js`, `ticks.js`, `intro.css`, `kit.css`, `tokens.css`). Opening `index.html` over http shows a demo (`#update`, `#uninstall` in the URL pick the mode). |
+| `native/shared/` | `Common.cs` (Log, Util), `EmbeddedSite.cs` (embedded resources served from memory as one `https://<host>/` origin; no WebView2 types), `WebViewData.cs` (the only place that picks WebView2 user data folders + desktop-user access), `DarkUi.cs` (dark native dialogs, `Brand` = the `brand/tokens.css` palette, the mark, the kit's hairline loader), `Settings.cs` (reads `settings.json` `startSound` and `introMode`, never writes it), `NativeMethods.cs` (P/Invoke). |
 | `native/assets/` | `velox.ico` (16, 20, 24, 32, 40, 48, 64, 96, 128, 256 px) + `velox-256.png`, rendered by `make-icon.mjs` (Chromium 1:1 + ImageMagick) from the brand kit: 16 px `brand/mark-16.svg`, 20/24 px the pixel-fitted `brand/src/fit/mark-20/24.svg`, 32–256 px `brand/src/fit/app-icon-<n>.svg` (`brand/app-icon.svg` snapped to whole pixels per size); every frame is checked pixel-identical to `brand/export/`. Both exes use it. |
 | `native/buildtool/` | net8 helper used only by the build: `pack` (payload.zip) and `verify` (checks the finished exe; compiles `shared/EmbeddedSite.cs` in and runs it against the files embedded in both exes). |
 | `native/build.sh`, `native/Build.ps1` | build `dist/VeloxSetup.exe` (Linux/macOS resp. Windows, .NET SDK 8+). Deterministic: same sources → byte-identical exe. |
 | `dist/VeloxSetup.exe` | the download (≈ 1.1 MB, budget 3 MB). `dist/obj/` is build output and ignored. |
-| `tests/native/` | `run-setup-ui-tests.mjs` (installer UI + host start screen in Chromium, mocked bridge, screenshots), `Test-HostPid.ps1` (backend ↔ host contract, lifecycle), `wine-smoke.sh` (runs the real VeloxSetup.exe / VELOX.exe / Uninstall.exe under Wine + wine-mono with a fake `powershell.exe` from `wine/`; optional, skips without Wine). |
+| `tests/native/` | `run-setup-ui-tests.mjs` (installer UI + host start screen in Chromium, mocked bridge, screenshots: the long intro's frames, `celebrate()` on the done screen with / without sound, the start screen per `introMode` long / short / off, the hand-over timing against VELOX.exe's caps, the light in its module worker under each page's CSP), `Test-HostPid.ps1` (backend ↔ host contract incl. `settings.json` `introMode` as VELOX.exe reads it, lifecycle), `wine-smoke.sh` (runs the real VeloxSetup.exe / VELOX.exe / Uninstall.exe under Wine + wine-mono with a fake `powershell.exe` from `wine/`; optional, skips without Wine). |
 
 ### The WebView2 browser process is untrusted-for-elevation (since 1.2.1)
 
@@ -957,11 +965,19 @@ the runtime showed the modal "Das Datenverzeichnis konnte nicht erstellt werden"
   status, reason, headers)` set synchronously on the UI thread (no deferral). Only exact names of embedded
   files are served (no file system behind it, so no traversal; dot segments are removed by the URL rules and
   can only reach the site's own files); `Content-Type` by extension (`text/html; charset=utf-8`,
-  `text/javascript; charset=utf-8` for `.js` incl. ES modules, `text/css; charset=utf-8`, `image/svg+xml`,
+  `text/javascript; charset=utf-8` for `.js` incl. ES modules and the light's module worker `brand/light-worker.js`
+  (a worker script without a JavaScript MIME type does not start), `text/css; charset=utf-8`, `image/svg+xml`,
   `image/png`, …) + `X-Content-Type-Options: nosniff` + `Cache-Control: no-store`; unknown name or type → 404,
   other methods than GET/HEAD → 405, other origins are not answered. The pages keep their strict CSP
   (`<meta>`). Nothing is extracted to disk; a folder mapping (`SetVirtualHostNameToFolderMapping`) is
-  forbidden.
+  forbidden. **The light's worker (since 1.3.0):** `brand/intro.js` starts `brand/light-worker.js` as a
+  same-origin module worker (OffscreenCanvas); the worker's own requests (the script and its `import` of
+  `intro.js` / `glyphs.js`) come from a dedicated worker, which the `Document` source kind covers ("main page
+  including dedicated workers and iframes"). CSP: neither page has `worker-src` or `child-src`, so CSP3 falls
+  back to `script-src 'self'`, which allows it. If the worker cannot start anyway (an old runtime that does
+  not route worker requests through `WebResourceRequested`, an OffscreenCanvas failure) or has not reported back
+  within 0.9 s of the intro's boot (a request left hanging), `intro.js` draws the light on the main thread by
+  itself before its clock starts - same picture, more main-thread work.
 - **User data folders are normal user folders** (`shared/WebViewData.cs`, the only place that picks them):
   VELOX.exe `%LOCALAPPDATA%\Velox\webview2\<real|test>` (as in 1.1.x), VeloxSetup.exe a fresh
   `%TEMP%\VeloxSetup-WebView2-<random>` per run with the profile's inherited ACL, deleted after the run (retries
@@ -1043,11 +1059,16 @@ sound) from byte-identical copies in `start/brand/`. ES modules need a real orig
 not read; its leftovers `%TEMP%\VeloxStart-*` older than 12 h are removed). Start screen missing from the exe →
 Edge fallback. Nothing can swap a file the elevated window shows: there is no file. The page keeps the strict
 CSP (`default-src 'none'; script-src 'self'; style-src 'self'`; CSSOM only, no inline styles or scripts).
-URL: `https://start.velox.example/splash.html?v=<VERSION>&variant=full|short|still&sound=1|0&test=1|0`:
+URL: `https://start.velox.example/splash.html?v=<VERSION>&variant=long|short|still&sound=1|0&test=1|0`:
 
-- `variant`: `full` on the first start of a `VERSION` (VELOX.exe keeps `lastIntroVersion` in its own
-  `window.json` and records it at once), `short` on every other start, `still` when the start screen comes
-  back for an error after the app was already shown (no second intro, no sound, no keys).
+- `variant` (since 1.3.0; `HostForm.StartVariant`): from `settings.json` `introMode`, read once at start
+  (`UserSettings.IntroMode`, logged as `Startanimation: <mode> (settings.json introMode)`): `long` → `long`
+  (the long intro "Zündung", ~3 s, on **every** launch, skippable), `short` → `short`, `off` → `still` (no
+  animation, no sound, no keys). Exception: started by the setup (`--from-setup`, which has just played the
+  long intro and `celebrate()`), `long` plays `short` - not the same strike twice within seconds. `still` also
+  when the start screen comes back for an error after the app was already shown (no second intro). The page
+  reads `full` (1.2.x) and anything unknown as `long`. 1.2.x's "full only on the first start of a `VERSION`"
+  (`lastIntroVersion`) is gone.
 - `sound`: `settings.json` `startSound` (`UserSettings.StartSound`: missing file / key / non-boolean → on,
   one retry after 50 ms while the backend replaces the file) or the user's choice from earlier in this run.
 - Layout, timings, the M key, *Überspringen* / Esc and the hand-over pose are the kit's (`brand/README.md`).
@@ -1056,12 +1077,16 @@ URL: `https://start.velox.example/splash.html?v=<VERSION>&variant=full|short|sti
   loader steps aside): title, message, the last 40 log lines (mono, rose left rule, scrolled to the end),
   *Erneut versuchen* (primary) / *Testmodus* / *Log öffnen*. After 6 s without READY a quiet hint
   ("Beim ersten Start kann das ein paar Sekunden dauern.") hangs in the slot.
-- **Hand-over:** on `VELOX_READY` the host posts `ready`; the page answers `handover{ms}` (rest of the intro
-  + the 430 ms hand-over), calls `intro.done()` and posts `continue` when it resolves; the host navigates on
-  `continue` to `<app url>&from=host[&sound=on|off]`. Hard cap: without an answer the host navigates
-  **1 s** after READY; with one at `min(ms + 250, 2300)` ms after READY - a broken animation can never hold
-  the app back by more than ~1 s, a working one never ends on a struck-through word. If READY comes before
-  the page reported `splash-ready`, `ready` is posted on `splash-ready` (the 1 s cap runs from READY).
+- **Hand-over:** on `VELOX_READY` the host posts `ready`; the page answers `handover{ms}` (the rest of the
+  intro up to `calm` - the end of the light sweep, 2.55 s into the long intro, the settle in the others, 0
+  after a skip; before the intro's clock runs the whole intro + 450 ms boot lead - plus the 430 ms
+  hand-over), calls `intro.done()` and posts `continue` when it resolves; the host navigates on `continue` to
+  `<app url>&from=host[&sound=on|off]`. A ready backend therefore waits at most for the rest of the intro
+  (≤ ~3.4 s for the long one; Esc / a click skip it and the app comes ~0.5 s later). Hard cap: without an
+  answer the host navigates **1 s** after READY; with one at `min(ms + 250, 3800)` ms after READY - a broken
+  animation can never hold the app back by more than ~1 s, a working one never ends mid-strike or
+  mid-sweep. If READY comes before the page reported `splash-ready`, `ready` is posted on `splash-ready` (the
+  1 s cap runs from READY).
 
 Start screen protocol (`splash.js` ⇄ VELOX.exe, JSON web messages; only accepted from
 `https://start.velox.example/` while the start screen - not the app - is shown):
@@ -1091,10 +1116,13 @@ for this run and forwards it to the app as `&sound=on|off`) · `handover{ms}` ·
   the hand-over end pose (`still` + `handedOver`, no sound, no second intro) and fades out when the first
   data is in. As a fallback (reload inside VELOX.exe, a host that forgot `from=host`) the app also trusts
   `bootstrap.mode.hosted` (true when the backend runs with `-HostPid` **and** `-NoBrowser`).
-- **Full or short?** VELOX.exe decides for its own start screen (first start after an install / update →
-  `full`, else `short`; keep that memory in the host, e.g. in `window.json`, never in `settings.json`).
-  The app keeps `settings.introSeen` (the `VERSION` whose full intro the Edge window last played) for the
-  Start.bat path only; VELOX.exe may read it but must not write it.
+- **Long, short or off? (since 1.3.0)** Key `introMode` – JSON string, top level, exactly `"long"`,
+  `"short"` or `"off"` (case-sensitive). Missing file / key, unreadable JSON or any other value →
+  **`"long"`** (the default); same read rules as `startSound` (one retry after ~50 ms), and VELOX.exe only
+  reads it. `long` = the long intro on **every** launch, `short` = the short one, `off` = the kit's `still`
+  frame (no animation, no sound). Set on Einstellungen (*Startanimation: Lang / Kurz / Aus*) through
+  `POST /api/settings {introMode}`. The "full only on the first start of a `VERSION`" rule of 1.2.x is gone:
+  `lastIntroVersion` (VELOX.exe's `window.json`) and `settings.introSeen` are still kept but decide nothing.
 - localStorage is no help across starts: the app's origin carries a random port, so every start is a new
   origin. That is why both values live in `settings.json`.
 
@@ -1165,11 +1193,13 @@ list; locked ones on reboot) and empty folders → delete the registry entry →
 | setup → page | `init{version, mode: install\|update\|uninstall, installedVersion, dir, defaultDir, sizeMB, freeMB, running}` · `folder{dir, error, freeMB}` · `running{running}` · `progress{percent, step, file}` (≤ ~30/s) · `done{mode, launched}` · `error{message, hint}` |
 
 Screens (one continuous surface, `brand/README.md` "How each surface embeds it"): the intro is
-`brand/intro.js` **full** with sound (`short` for `/uninstall`), `place: 'header'`, `loader: false`; Esc /
+`brand/intro.js` **long** ("Zündung", ~3 s, settles at 3.0 s; since 1.3.0, before the 1.6 s `full`) with sound
+(`short` for `/uninstall`), `place: 'header'`, `loader: false`; it does not follow `introMode` (that is the
+app's start, the installer is a one-off); Esc /
 Enter / Space / *Überspringen* or a click skip it, M / the sound button mute it (`prefers-reduced-motion` →
 the kit's 0.8 s fade). Every screen lives in `intro.slot` under the wordmark, so the word never moves:
 welcome (install / update; headline, mono readouts *Ziel* / *Größe* / *Version*, update shows
-`1.1.1 → 1.2.0`) arrives under the settled word, then options → progress → done / error, or uninstall. A
+`1.2.2 → 1.3.0`) arrives under the settled word, then options → progress → done / error, or uninstall. A
 running VELOX is only closed after the confirm dialog. Orange only on the V's foot, the one primary button
 per screen, the current tick and the focus ring; switches are monochrome (bone when on); errors use the
 kit's rose (`--vx-risk`).
@@ -1179,8 +1209,15 @@ with `--vx-ease` (460 ms; reduced motion: a 200 ms fade). Progress = the kit's t
 1-device-pixel ticks, finished ones bone, the current one the only orange, status left, `42 %` mono right,
 the current file in mono below. Done = the row runs to 100 %, turns all bone (the orange tick goes away),
 then the done screen with the finished row as a quiet trace (*Installiert* / *Aktualisiert* / *Entfernt*).
+**The finish (since 1.3.0):** when the done screen of an install or update appears, `setup.js` calls
+`intro.celebrate()` - the kit's own motion on the word above (a streak runs the cut, the upper halves draw
+back and re-lock with a hit-stop, a flash in the cut, a few sparks, a sheared sweep; ~1.3 s, then only the
+resting ember) with its small sound (whoosh, thump on the stop, chime; about −22 LUFS). It plays no sound
+when the intro was muted (M / the sound button in this run, or `?sound=0` from `startSound:false`); reduced
+motion gets the calm ember pulse. Not after an uninstall. With *VELOX nach der Installation starten* VELOX.exe
+starts meanwhile (`--from-setup` → its short intro, see above).
 Error = the row stops where it failed, its current tick rose (*Abgebrochen bei 40 %*). No confetti, rings,
-particles, aurora, gradients or glow.
+aurora, gradients or glow in the UI; the only light and sparks are the kit's intro and `celebrate()`.
 
 Native fallbacks (`DarkDialog`, the setup's `FallbackForm`, the WebView2 download window, VELOX.exe's
 `FallbackForm`) use the same palette (`Brand` in `DarkUi.cs` = `brand/tokens.css`), the mark / app-icon
@@ -1194,15 +1231,21 @@ fixed timestamps) → `dotnet build` VeloxSetup.exe with the payload → copy to
 manifests (`requireAdministrator` / `asInvoker`, PerMonitorV2; parsed strictly as XML like Windows' SxS
 loader does - "--" in a comment once made VELOX.exe refuse to start), icon + version resources, versions =
 `VERSION`, embedded resources, **the brand kit**: VELOX.exe's `start/brand/*` and the setup's `ui/brand/*`
-are exactly the runtime files that surface needs and byte-identical to `brand/` (and `start/*.html|css|js`,
+are exactly the runtime files that surface needs (since 1.3.0 including `light-worker.js`) and byte-identical
+to `brand/` (and `start/*.html|css|js`,
 `ui/index.html|setup.css|setup.js` identical to their sources; `build.sh` / `Build.ps1` also run
 `brand/tools/check-copies.mjs` before building - fix a difference with `node tools/sync-brand.mjs`, never
 by editing a copy), payload = every app file byte-identical and nothing else, CRLF of the
 `.bat`s and BOM of `Velox.ps1` kept, WebView2Loader machine types, size ≤ 3 MB; both exes built for
 4.7.2 = `VELOX.exe.config`'s `sku` = the setup's .NET check (`Util.NetFrameworkMinRelease`); every
 non-framework assembly VELOX.exe, the setup and the WebView2 DLLs reference is in the payload root with the
-exact name, version and public key token; both embedded sites served through `EmbeddedSite` and the WebView2
-source guards (see "untrusted-for-elevation"). Then
+exact name, version and public key token; both embedded sites served through `EmbeddedSite` (also
+`brand/light-worker.js` as `text/javascript`, and each page's CSP must let the same-origin worker start:
+`worker-src` → `child-src` → `script-src` → `default-src`, with a self-test) and the WebView2 source guards
+(see "untrusted-for-elevation"; also: the resource filter's source kind is `Document`, which covers dedicated
+workers). Then
 `node tests/native/run-setup-ui-tests.mjs` and `pwsh tests/native/Test-HostPid.ps1`; with Wine installed
-also `tests/native/wine-smoke.sh` (≈ 4 min). WebView2, UAC and shortcuts cannot run under Wine; every
+also `tests/native/wine-smoke.sh` (≈ 4 min; it also checks `Startanimation: <mode>` in host.log for
+`settings.json` `introMode` short / invalid / unreadable / off / missing and after the setup). WebView2, UAC
+and shortcuts cannot run under Wine; every
 Win32/COM/WebView2 call is wrapped and logged.

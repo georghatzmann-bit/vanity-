@@ -78,12 +78,12 @@ Auch hier kann „Der Computer wurde durch Windows geschützt“ kommen: **Weite
 
 ## Der Start
 
-Beim Start schneidet eine Klinge durch den Schriftzug, die Buchstaben öffnen sich, die obere Hälfte
-wird mit einem Klack eine Stufe nach vorn geschlagen – dann ist VELOX bereit. Das volle Intro
-(1,6 Sekunden) kommt beim ersten Start einer neuen Version, sonst eine kurze Fassung. Mit **Esc**
-überspringst du es, mit **M** schaltest du den Ton um. Den Klang kannst du auch unter
-**Einstellungen → Start und Bewegung → Start-Sound** ausschalten; dort spielst du das Intro auch
-noch einmal ab. Wünscht Windows weniger Bewegung, blendet VELOX den Schriftzug nur sanft ein.
+Beim Start zündet ein Funke im Schnitt des Schriftzugs, Licht zeichnet die Buchstaben, die obere
+Hälfte wird mit einem Schlag eine Stufe nach vorn geschlagen – dann ist VELOX bereit. Das lange Intro
+(rund 3 Sekunden) kommt bei jedem Start. Mit **Esc** überspringst du es, mit **M** schaltest du den
+Ton um. Unter **Einstellungen → Start und Bewegung** wählst du **Startanimation: Lang / Kurz / Aus**
+(Aus = nur das Logo, ohne Ton), schaltest den **Start-Sound** aus und spielst das Intro noch einmal
+ab. Wünscht Windows weniger Bewegung, blendet VELOX den Schriftzug nur sanft ein.
 
 ## Sicherheit
 
