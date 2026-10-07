@@ -611,7 +611,7 @@ export const CONFIG = deepFreeze({
         { distance: 30, side: 4 },
         { distance: 60, side: -6 },
       ],
-      skin: { body: '#E9D8B4', accent: '#C0392B', skinTone: '#E9D8B4', hat: 'helmet', hatColor: '#C0392B' },
+      skin: { top: 'tshirt', sleeves: 'short', topColor: '#E9D8B4', topColor2: '#C0392B', pants: 'suit', pantsColor: '#C0392B', pantsColor2: '#A02D22', skinTone: '#E9D8B4', hair: 'none', headwear: 'armyHelmet', headColor: '#C0392B', headColor2: '#E9D8B4', face: 'none', shoes: 'boot', shoeColor: '#7A2219', back: 'none', belt: '#7A2219' },
     },
     // Sammel-Objekte für die Spitzhacke (F): Baum = Holz, Fels = Stein, Auto = Metall.
     // Hinten links hinter dem Turm – weit weg von der Schuss-Bahn des Schieß-Stands und
@@ -1019,20 +1019,88 @@ export const CONFIG = deepFreeze({
     groundGridOpacity: 0.07,
   },
 
-  // Figuren-Aussehen ("Skins" = Farbsets + Hut-Form). Eigene Platzhalter, keine Original-Skins.
-  // body = Oberteil, accent = Hose/Rucksack, skinTone = Haut, hat = Hut-Form, hatColor = Hut-Farbe
+  // Figuren-Aussehen ("Skins" = komplette Outfits). Eigene Entwürfe, keine Original-Skins.
+  // Jeder Skin beschreibt die Teile der Figur (src/world/characterModel.js baut sie daraus):
+  //   skinTone = Haut, hair/hairColor = Frisur, headwear/headColor/headColor2 = Kopfbedeckung,
+  //   face = Gesicht (normal, glasses = Brille, pirate = Augenklappe + Bart, none = kein Gesicht),
+  //   top/topColor/topColor2 = Oberteil, sleeves = 'short'|'long', pants/pantsColor/pantsColor2 = Hose,
+  //   shoes/shoeColor = Schuhe, gloves = Handschuh-Farbe (null = Hände), belt = Gürtel-Farbe (null = keiner),
+  //   back/backColor/backColor2 = Rücken (Rucksack, Tank, Umhang, Schwert), trim = Zier-Farbe (Knöpfe, Säume)
   skins: {
-    hatShapes: ['none', 'cap', 'beanie', 'cone', 'tophat', 'crown', 'helmet', 'headband'],
-    defaultId: 'sonne',
+    defaultId: 'rekrut',
+    // alte Skin-Namen (vor dem Outfit-Umbau) → neuer Skin (z. B. aus gespeicherten Einstellungen)
+    legacyIds: { sonne: 'rekrut', ozean: 'kapuze', wald: 'soldat', kirsche: 'ninja', lava: 'pirat', mitternacht: 'ritter', bonbon: 'sprinterin', zitrone: 'forscherin' },
+    hairStyles: ['none', 'short', 'spiky', 'bun', 'long', 'mohawk'],
+    headwears: ['none', 'cap', 'beanie', 'armyHelmet', 'spaceHelmet', 'knightHelmet', 'tricorn', 'ninjaHood', 'robotHead', 'headband'],
+    faces: ['normal', 'glasses', 'pirate', 'none'],
+    tops: ['tshirt', 'hoodie', 'tactical', 'spacesuit', 'ninja', 'armor', 'tracksuit', 'labcoat', 'pirateCoat', 'robot'],
+    pants: ['jeans', 'cargo', 'track', 'suit', 'armor'],
+    shoes: ['sneaker', 'boot'],
+    backs: ['none', 'pack', 'tank', 'cape', 'sword'],
     list: [
-      { id: 'sonne', name: 'Sonnenschein', body: '#FFB627', accent: '#3A6EA5', skinTone: '#F2C9A0', hat: 'cap', hatColor: '#E8483B' },
-      { id: 'ozean', name: 'Ozean', body: '#2EC4E6', accent: '#1D3557', skinTone: '#C68E6B', hat: 'beanie', hatColor: '#F1FAEE' },
-      { id: 'wald', name: 'Waldläufer', body: '#56C271', accent: '#6B4F2A', skinTone: '#E8B98F', hat: 'helmet', hatColor: '#3E7C3A' },
-      { id: 'kirsche', name: 'Kirsche', body: '#E8475F', accent: '#2B2D42', skinTone: '#F5D0B5', hat: 'headband', hatColor: '#FFFFFF' },
-      { id: 'lava', name: 'Lava', body: '#FF6B35', accent: '#3D3D3D', skinTone: '#8D5A3B', hat: 'tophat', hatColor: '#222222' },
-      { id: 'mitternacht', name: 'Mitternacht', body: '#5B5BD6', accent: '#1E1E3F', skinTone: '#D9A77E', hat: 'crown', hatColor: '#FFD23D' },
-      { id: 'bonbon', name: 'Bonbon', body: '#FF8CC6', accent: '#7B2CBF', skinTone: '#F7D6BF', hat: 'cone', hatColor: '#4CC9F0' },
-      { id: 'zitrone', name: 'Zitrone', body: '#F4E04D', accent: '#2A9D8F', skinTone: '#B07A55', hat: 'none', hatColor: '#000000' },
+      {
+        id: 'rekrut', name: 'Rekrut', skinTone: '#E8B996', hair: 'short', hairColor: '#5B3A1E', headwear: 'none', face: 'normal',
+        top: 'tshirt', sleeves: 'short', topColor: '#E4DFD3', topColor2: '#3E6FB0', pants: 'jeans', pantsColor: '#3B5B8C', pantsColor2: '#2E4870',
+        shoes: 'sneaker', shoeColor: '#F2F2F2', gloves: null, belt: '#4A3526', back: 'pack', backColor: '#7A6A4F', backColor2: '#5C4F3A', trim: '#C9A86A',
+      },
+      {
+        id: 'kapuze', name: 'Kapuzen-Kid', skinTone: '#C68E6B', hair: 'short', hairColor: '#1E1A17', headwear: 'cap', headColor: '#262A33', headColor2: '#F05454', face: 'normal',
+        top: 'hoodie', sleeves: 'long', topColor: '#F28C28', topColor2: '#D06A10', pants: 'track', pantsColor: '#2B2D33', pantsColor2: '#F28C28',
+        shoes: 'sneaker', shoeColor: '#FFFFFF', gloves: null, belt: null, back: 'none', trim: '#FFFFFF',
+      },
+      {
+        id: 'soldat', name: 'Feldwebel', skinTone: '#D9A77E', hair: 'none', headwear: 'armyHelmet', headColor: '#5A6E3C', headColor2: '#3E4F2A', face: 'normal',
+        top: 'tactical', sleeves: 'long', topColor: '#748656', topColor2: '#46512F', pants: 'cargo', pantsColor: '#64734A', pantsColor2: '#4E5A3A',
+        shoes: 'boot', shoeColor: '#3A2F25', gloves: '#2E2A24', belt: '#2E2A24', back: 'pack', backColor: '#55623F', backColor2: '#3F4A30', trim: '#B9A16B',
+      },
+      {
+        id: 'sternenfahrerin', name: 'Sternenfahrerin', skinTone: '#F2D0B5', hair: 'bun', hairColor: '#B5651D', headwear: 'spaceHelmet', headColor: '#F4F6F8', headColor2: '#1E3A5F', face: 'normal',
+        top: 'spacesuit', sleeves: 'long', topColor: '#F1F3F6', topColor2: '#F27F1B', pants: 'suit', pantsColor: '#EDF0F3', pantsColor2: '#F27F1B',
+        shoes: 'boot', shoeColor: '#B9C0C8', gloves: '#C8CDD3', belt: '#8E98A3', back: 'tank', backColor: '#E1E5EA', backColor2: '#F27F1B', trim: '#3E8BFF',
+      },
+      {
+        id: 'ninja', name: 'Schattenklinge', skinTone: '#E0B08A', hair: 'none', headwear: 'ninjaHood', headColor: '#262A35', headColor2: '#C0392B', face: 'normal',
+        top: 'ninja', sleeves: 'long', topColor: '#2E3340', topColor2: '#C0392B', pants: 'suit', pantsColor: '#2E3340', pantsColor2: '#22252E',
+        shoes: 'boot', shoeColor: '#1A1C22', gloves: '#1A1C22', belt: '#C0392B', back: 'sword', backColor: '#C9D1DB', backColor2: '#C0392B', trim: '#8C96A3',
+      },
+      {
+        id: 'ritter', name: 'Eisenritter', skinTone: '#E8B996', hair: 'none', headwear: 'knightHelmet', headColor: '#B8C2CC', headColor2: '#D93A3A', face: 'normal',
+        top: 'armor', sleeves: 'long', topColor: '#B8C2CC', topColor2: '#2F5DA8', pants: 'armor', pantsColor: '#7D8894', pantsColor2: '#C3CCD5',
+        shoes: 'boot', shoeColor: '#8D98A5', gloves: '#8D98A5', belt: '#5A3E25', back: 'cape', backColor: '#2F5DA8', backColor2: '#F2C14E', trim: '#F2C14E',
+      },
+      {
+        id: 'sprinterin', name: 'Sprinterin', skinTone: '#8D5A3B', hair: 'long', hairColor: '#2A1B12', headwear: 'headband', headColor: '#FFFFFF', headColor2: '#E63946', face: 'normal',
+        top: 'tracksuit', sleeves: 'long', topColor: '#2A6FDB', topColor2: '#FFFFFF', pants: 'track', pantsColor: '#2A6FDB', pantsColor2: '#FFFFFF',
+        shoes: 'sneaker', shoeColor: '#E63946', gloves: null, belt: null, back: 'none', trim: '#FFFFFF',
+      },
+      {
+        id: 'forscherin', name: 'Professorin', skinTone: '#F2D0B5', hair: 'long', hairColor: '#6B3E26', headwear: 'none', face: 'glasses',
+        top: 'labcoat', sleeves: 'long', topColor: '#F5F5F0', topColor2: '#7B4FBF', pants: 'jeans', pantsColor: '#4A4F5A', pantsColor2: '#3C4049',
+        shoes: 'sneaker', shoeColor: '#3C4049', gloves: null, belt: null, back: 'none', trim: '#3E8BFF',
+      },
+      {
+        id: 'pirat', name: "Käpt'n Kralle", skinTone: '#C68E6B', hair: 'long', hairColor: '#2B1B10', headwear: 'tricorn', headColor: '#1F1A17', headColor2: '#E8C547', face: 'pirate',
+        top: 'pirateCoat', sleeves: 'long', topColor: '#A8262B', topColor2: '#F2E8D5', pants: 'suit', pantsColor: '#3A2C22', pantsColor2: '#2B2019',
+        shoes: 'boot', shoeColor: '#2B1F17', gloves: null, belt: '#3A2C22', back: 'none', trim: '#E8C547',
+      },
+      {
+        id: 'blechkumpel', name: 'Blechkumpel', skinTone: '#9AA7B4', hair: 'none', headwear: 'robotHead', headColor: '#A3AFBB', headColor2: '#3FF0FF', face: 'none',
+        top: 'robot', sleeves: 'long', topColor: '#8592A0', topColor2: '#F2B33D', pants: 'armor', pantsColor: '#6C7884', pantsColor2: '#A3AFBB',
+        shoes: 'boot', shoeColor: '#4E5863', gloves: '#4E5863', belt: '#4E5863', back: 'pack', backColor: '#6C7884', backColor2: '#3FF0FF', trim: '#3FF0FF',
+      },
+    ],
+  },
+
+  // Spitzhacken (nur Aussehen; im Spind wählbar). Werte (Schaden, Tempo) stehen in weapons.pickaxe.
+  // style = Form des Kopfes (classic, axe, hammer, scythe), handle/head/accent = Farben. Eigene Entwürfe.
+  pickaxes: {
+    defaultId: 'standard',
+    styles: ['classic', 'axe', 'hammer', 'scythe'],
+    list: [
+      { id: 'standard', name: 'Standard-Hacke', style: 'classic', handle: '#9A6534', head: '#B9C2CC', accent: '#2E86DE' },
+      { id: 'eisbrecher', name: 'Eisbrecher', style: 'axe', handle: '#E9EEF4', head: '#7FD3FF', accent: '#2B3A55' },
+      { id: 'blitz', name: 'Blitzschlag', style: 'hammer', handle: '#2B2F38', head: '#F5C518', accent: '#FF6B35' },
+      { id: 'tiefsee', name: 'Tiefsee-Haken', style: 'scythe', handle: '#3C2A4D', head: '#3FE0C5', accent: '#A64DFF' },
     ],
   },
 
