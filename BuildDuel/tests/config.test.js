@@ -233,6 +233,22 @@ describe('Spielwerte: Bauen und Material', () => {
     }
   });
 
+  it('Wand-Bogen: dünne Beine, Rundung passt in die Öffnung, Figur passt durch; Edit-Kacheln mit Lücke und Rahmen', () => {
+    const B = CONFIG.building;
+    const S = CONFIG.world.gridCellSize;
+    const H = CONFIG.world.wallHeight;
+    assert.ok(B.wallArchLegWidth > 0 && B.wallArchLegWidth < S / 6, 'Beine dünner als ein halbes Feld');
+    assert.ok(B.wallArchLegWidth + B.wallArchCornerU < S / 2 - 0.5, 'Rundungen lassen die Mitte frei');
+    assert.ok(B.wallArchCornerU < S / 3 && B.wallArchCornerV < H / 3, 'Rundung kleiner als ein Feld');
+    // unter dem geraden Stück der Öffnung (zwischen den Rundungen) passt eine Figur aufrecht durch
+    const hb = CONFIG.player.hitbox;
+    assert.ok((2 * H) / 3 > hb.height + 0.2, 'Öffnung hoch genug');
+    assert.ok(S - 2 * (B.wallArchLegWidth + B.wallArchCornerU) > 2 * hb.radius + 0.5, 'Öffnung breit genug');
+    for (const key of ['wallCurveSegments', 'wallCollisionSlices', 'wallCurveSlices']) assert.ok(Number.isInteger(B[key]) && B[key] >= 1, key);
+    assert.ok(B.editTileGap > 0 && B.editTileFrame > 0 && B.editTileFrame < S / 8);
+    assert.ok(B.editTileOpacity > 0 && B.editTileOpacity < 1 && B.editTileSelectedOpacity > 0 && B.editTileSelectedOpacity <= 1);
+  });
+
   it('Edit-Raster: Wand 3x3, Boden/Dach/Rampe 2x2, Tür liegt in der Wand', () => {
     const g = CONFIG.building.editGrid;
     assert.deepEqual([g.wall.cols, g.wall.rows], [3, 3]);

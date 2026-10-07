@@ -50,6 +50,15 @@ function emptyActionMap() {
   return map;
 }
 
+function emptyCountMap() {
+  const map = {};
+  for (const action of ACTIONS) map[action] = 0;
+  return map;
+}
+
+// so viele Drücker derselben Taste merkt sich die Eingabe zwischen zwei Logik-Schritten
+const QUEUED_PRESSES = Math.max(1, CONFIG.controls.queuedPresses ?? 3);
+
 /** Baut die Tasten-Belegung aus den Einstellungen: Map<code, action[]>. */
 export function buildBindings(settings) {
   const keyboard = settings?.controls?.keyboard ?? CONFIG.controls.keyboard;
@@ -104,8 +113,10 @@ export class Input {
     this.onLockError = null; // (error) => void
 
     this._count = {}; // wie viele Quellen halten die Aktion gerade?
-    this._down = emptyActionMap(); // seit dem letzten sample() gedrückt
-    this._up = emptyActionMap(); // seit dem letzten sample() losgelassen
+    // Noch nicht abgeholte Drücker/Loslasser je Aktion (Anzahl). sample() gibt je Logik-
+    // Schritt EINEN ab – so geht ein zweites G (G – Klick – G in einem Bild) nicht verloren.
+    this._down = emptyCountMap(); // seit dem letzten sample() gedrückt (Anzahl)
+    this._up = emptyCountMap(); // seit dem letzten sample() losgelassen (Anzahl)
     this._virtual = emptyActionMap();
     this._gp = emptyActionMap(); // Controller-Zustand beim letzten Abfragen
     this._gpNext = emptyActionMap();
@@ -416,8 +427,8 @@ export class Input {
    */
   clearEdges() {
     for (let i = 0; i < ACTIONS.length; i++) {
-      this._down[ACTIONS[i]] = false;
-      this._up[ACTIONS[i]] = false;
+      this._down[ACTIONS[i]] = 0;
+      this._up[ACTIONS[i]] = 0;
     }
     this._lookDX = 0;
     this._lookDY = 0;
@@ -461,10 +472,11 @@ export class Input {
     for (let i = 0; i < ACTIONS.length; i++) {
       const action = ACTIONS[i];
       s.held[action] = this._count[action] > 0;
-      s.pressed[action] = this._down[action];
-      s.released[action] = this._up[action];
-      this._down[action] = false;
-      this._up[action] = false;
+      s.pressed[action] = this._down[action] > 0;
+      s.released[action] = this._up[action] > 0;
+      // je Schritt einer – weitere Drücker kommen im nächsten Schritt
+      if (this._down[action] > 0) this._down[action]--;
+      if (this._up[action] > 0) this._up[action]--;
     }
     s.lookDX = this._lookDX;
     s.lookDY = this._lookDY;
@@ -608,12 +620,12 @@ export class Input {
 
   _press(action) {
     if (this._count[action] === undefined) return;
-    if (this._count[action]++ === 0) this._down[action] = true;
+    if (this._count[action]++ === 0) this._down[action] = Math.min(this._down[action] + 1, QUEUED_PRESSES);
   }
 
   _release(action) {
     if (!this._count[action]) return;
-    if (--this._count[action] === 0) this._up[action] = true;
+    if (--this._count[action] === 0) this._up[action] = Math.min(this._up[action] + 1, QUEUED_PRESSES);
   }
 
   // Mausrad-"Taste": einmal kurz drücken und loslassen
@@ -621,8 +633,8 @@ export class Input {
     const actions = this.bindings.get(code);
     if (!actions) return;
     for (let i = 0; i < actions.length; i++) {
-      this._down[actions[i]] = true;
-      this._up[actions[i]] = true;
+      this._down[actions[i]] = Math.min(this._down[actions[i]] + 1, QUEUED_PRESSES);
+      this._up[actions[i]] = Math.min(this._up[actions[i]] + 1, QUEUED_PRESSES);
     }
   }
 

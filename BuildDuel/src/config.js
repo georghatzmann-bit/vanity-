@@ -226,6 +226,10 @@ export const CONFIG = deepFreeze({
     resetConfirms: true, // Rechtsklick im Edit setzt zurück UND bestätigt sofort (Auto-Reset)
     resetEditAfterConfirm: false, // Edit-Auswahl beim nächsten Öffnen leer statt der alten Form
     turboBuilding: true, // "Turbo Building": Maus gedrückt halten baut weiter
+    // Mehrmals dieselbe Taste zwischen zwei Logik-Schritten (z. B. G – Klick – G bei wenig
+    // Bildern pro Sekunde) geht nicht verloren: bis zu so viele Drücker werden gemerkt und
+    // nacheinander (je Logik-Schritt einer) abgegeben. Wichtig für schnelle Doppel-Edits.
+    queuedPresses: 3,
     resetBuildingChoice: true, // "Reset Building Choice": Baumodus (Q) startet immer mit der Wand
 
     // Controller (Standard-Belegung nach "Standard Gamepad", Xbox-Namen)

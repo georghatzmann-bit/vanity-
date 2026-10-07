@@ -84,6 +84,33 @@ describe('Eingabe: Drücken und Loslassen', () => {
     assert.ok(s.pressed.jump && s.released.jump && !s.held.jump);
   });
 
+  it('zweimal dieselbe Taste zwischen zwei Ticks (G – Klick – G in einem Bild): zwei Ticks nacheinander gedrückt', () => {
+    const input = makeInput();
+    input.handleKeyDown(key('KeyG'));
+    input.handleKeyUp(key('KeyG'));
+    input.handleKeyDown(key('KeyG'));
+    input.handleKeyUp(key('KeyG'));
+    let s = input.sample();
+    assert.ok(s.pressed.edit && s.released.edit && !s.held.edit, '1. Drücker');
+    s = input.sample();
+    assert.ok(s.pressed.edit && s.released.edit, '2. Drücker im nächsten Tick (geht nicht verloren)');
+    s = input.sample();
+    assert.ok(!s.pressed.edit && !s.released.edit, 'danach nichts mehr');
+    // höchstens CONFIG.controls.queuedPresses werden gemerkt
+    for (let n = 0; n < 10; n++) {
+      input.handleKeyDown(key('Space'));
+      input.handleKeyUp(key('Space'));
+    }
+    let count = 0;
+    for (let n = 0; n < 12; n++) if (input.sample().pressed.jump) count++;
+    assert.equal(count, CONFIG.controls.queuedPresses);
+    // clearEdges verwirft alles, was noch wartet
+    input.handleKeyDown(key('KeyG'));
+    input.handleKeyUp(key('KeyG'));
+    input.clearEdges();
+    assert.ok(!input.sample().pressed.edit);
+  });
+
   it('zwei Tasten für dieselbe Aktion: erst wenn beide los sind, ist sie los', () => {
     const input = makeInput();
     input.handleKeyDown(key('KeyZ'));

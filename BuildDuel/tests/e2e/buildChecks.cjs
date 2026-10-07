@@ -56,6 +56,20 @@ function installHelpers() {
       }
       h.step();
     },
+    /** Wie aimAt, aber OHNE Logik-Schritt (für Prüfungen mit laufender Spielschleife) */
+    look(point) {
+      const p = h.p;
+      const cam = bd.CONFIG.camera;
+      for (let n = 0; n < 6; n++) {
+        const sx = p.position.x + Math.cos(p.yaw) * cam.shoulderOffset;
+        const sy = p.position.y + (p.crouching ? cam.crouchHeight : cam.height);
+        const sz = p.position.z - Math.sin(p.yaw) * cam.shoulderOffset;
+        const dx = point.x - sx;
+        const dy = point.y - sy;
+        const dz = point.z - sz;
+        h.face(Math.atan2(-dx, -dz), Math.atan2(dy, Math.hypot(dx, dz)));
+      }
+    },
     select(type) { h.press(KEY[type]); },
     click() { h.press('primary'); },
     /** Bauteil wählen und setzen; liefert den Slot-Schlüssel oder null */
@@ -350,60 +364,67 @@ const BUILD_CHECKS = [
     },
   },
   {
-    name: 'Edit-Formen: Boden mit Loch, halbe Rampe, Ecktreppe, Dach ohne Viertel (Bild = Kollision)',
+    name: 'Edit-Formen wie in Fortnite: Boden-Loch, halbe Rampe, L-/U-Treppe, Dach-Ecken hoch, Dreieck, Bogen (Bild = Kollision)',
     async run(ctx) {
       await setup(ctx);
       const r = await ctx.page.evaluate(() => {
         const b = window.__b;
         const w = b.building;
         b.clear();
-        const put = (type, key, edit, dir = 0, material = 'wood') => w.placePiece(type, key, b.p, material, { dir, edit, instant: true, force: true });
+        const put = (type, key, edit, dir = 0, material = 'wood', editPath = null) => w.placePiece(type, key, b.p, material, { dir, edit, editPath, instant: true, force: true });
         const pieces = [
           put('floor', 'f:-3:0:5', [3]),
-          put('ramp', 'r:-2:0:5', [0, 2], 3, 'stone'), // halbe Rampe (rechte Hälfte)
-          put('ramp', 'r:-1:0:5', [1], 3), // Ecktreppe (L-Form: Rampe – Podest – Rampe)
-          put('roof', 'c:0:0:5', [0], 0, 'metal'), // Dach ohne ein Viertel
-          put('wall', 'wx:1:0:6', [0, 1, 2]), // halbe Wand (obere Reihe weg)
+          put('ramp', 'r:-2:0:5', null, 3, 'stone', [3, 1]), // halbe Rampe (rechte Hälfte, steigt nach −Z)
+          put('ramp', 'r:-1:0:5', null, 3, 'wood', [3, 2, 0]), // L-Treppe: Lauf – Podest – Lauf
+          put('ramp', 'r:0:0:5', null, 3, 'wood', [3, 2, 0, 1]), // U-Treppe: Lauf – Podest (2 Felder) – Lauf
+          put('roof', 'c:1:0:5', [0], 0, 'metal'), // 1/4-Pyramide (Ecke 0 hoch)
+          put('roof', 'c:2:0:5', [0, 1]), // Rampen-Pyramide
+          put('wall', 'wx:-3:0:7', [1, 2, 5]), // Dreieck
+          put('wall', 'wx:-2:0:7', [3, 4, 5, 6, 7, 8], 0, 'stone'), // Bogen
         ];
-        // Strahlen von oben: über entfernten Feldern frei, sonst Treffer
         const down = { x: 0, y: -1, z: 0 };
-        const hitAt = (x, z) => {
-          const hit = b.game.world.raycast({ x, y: 20, z }, down, 30, { skipTerrain: true });
-          return hit && hit.collider?.data?.kind === 'piece' ? hit.collider.data.ref.slotKey : null;
-        };
         const heightAt = (x, z) => {
           const hit = b.game.world.raycast({ x, y: 20, z }, down, 30, { skipTerrain: true });
-          return hit ? Math.round(hit.point.y * 100) / 100 : null;
+          return hit && hit.collider?.data?.kind === 'piece' ? Math.round(hit.point.y * 100) / 100 : null;
         };
-        // Stelle in der Zelle (i, 5): Anteile fx, fz der Zelle
+        const wallHit = (x, y) => {
+          const hit = b.game.world.raycast({ x, y, z: 7 * b.S + 2 }, { x: 0, y: 0, z: -1 }, 4, { skipTerrain: true });
+          return hit?.collider?.data?.ref?.slotKey ?? null;
+        };
         const S = b.S;
+        const H = b.H;
         const at = (i, fx, fz) => [(i + fx) * S, (5 + fz) * S];
         const probes = {
-          // Ecktreppe (steigt nach −Z, Feld 1 weg): Feld 3 unten (1/4 hoch in der Mitte), Podest 1/2, Feld 0 oben (3/4)
-          stairLow: heightAt(...at(-1, 0.75, 0.75)), stairLanding: heightAt(...at(-1, 0.25, 0.75)), stairHigh: heightAt(...at(-1, 0.25, 0.25)),
-          floorHole: hitAt(...at(-3, 0.75, 0.75)), floorSolid: hitAt(...at(-3, 0.25, 0.25)),
-          halfMissing: hitAt(...at(-2, 0.25, 0.5)), halfPresent: hitAt(...at(-2, 0.75, 0.5)),
-          cornerMissing: hitAt(...at(-1, 0.75, 0.25)), cornerPresent: hitAt(...at(-1, 0.25, 0.25)),
-          roofMissing: hitAt(...at(0, 0.25, 0.25)), roofPresent: hitAt(...at(0, 0.75, 0.75)),
+          floorHole: heightAt(...at(-3, 0.75, 0.75)), floorSolid: heightAt(...at(-3, 0.25, 0.25)),
+          halfMissing: heightAt(...at(-2, 0.25, 0.5)), halfPresent: heightAt(...at(-2, 0.75, 0.5)),
+          lLow: heightAt(...at(-1, 0.75, 0.75)), lLanding: heightAt(...at(-1, 0.25, 0.75)), lHigh: heightAt(...at(-1, 0.25, 0.25)), lHole: heightAt(...at(-1, 0.75, 0.25)),
+          uLow: heightAt(...at(0, 0.75, 0.75)), uLanding: heightAt(...at(0, 0.25, 0.5)), uHigh: heightAt(...at(0, 0.75, 0.25)),
+          quarterCorner: heightAt(...at(1, 0.02, 0.02)), quarterOther: heightAt(...at(1, 0.98, 0.98)),
+          rampPyrBack: heightAt(...at(2, 0.5, 0.02)), rampPyrFront: heightAt(...at(2, 0.5, 0.98)),
+          triKept: wallHit(-3 * S + 0.2 * S, 0.3 * H), triGone: wallHit(-3 * S + 0.8 * S, 0.8 * H),
+          archOpen: wallHit(-2 * S + 0.5 * S, 0.4 * H), archTop: wallHit(-2 * S + 0.5 * S, 0.85 * H),
         };
-        b.viewFrom(-S, 0, 8.25 * S, { x: -S, y: 1.2, z: 5.5 * S });
-        return { ok: pieces.every(Boolean), probes, H: b.H };
+        b.viewFrom(-0.5 * S, 2.2, 8.6 * S, { x: -0.5 * S, y: 0.6, z: 5.8 * S });
+        return { ok: pieces.every(Boolean), probes, H, R: buildDuel.CONFIG.building.roofHeight, T: buildDuel.CONFIG.building.pieceThickness };
       });
       const p = r.probes;
+      const near = (v, t, tol = 0.02) => v !== null && Math.abs(v - t) < tol;
       ctx.assert(r.ok, 'alle Teile gesetzt');
-      ctx.assert(!p.floorHole && p.floorSolid === 'f:-3:0:5', `Boden: Loch frei, Rest fest ${JSON.stringify(p)}`);
-      ctx.assert(!p.halfMissing && p.halfPresent === 'r:-2:0:5', 'halbe Rampe');
-      ctx.assert(!p.cornerMissing && p.cornerPresent === 'r:-1:0:5', 'Ecktreppe: Loch und Treppe');
-      const near = (v, t) => v !== null && Math.abs(v - t) < 0.011;
-      ctx.assert(near(p.stairLow, r.H / 4) && near(p.stairLanding, r.H / 2) && near(p.stairHigh, (3 * r.H) / 4),
-        `Ecktreppe: Höhen ${p.stairLow} / ${p.stairLanding} / ${p.stairHigh}`);
-      ctx.assert(!p.roofMissing && p.roofPresent === 'c:0:0:5', 'Dach-Viertel');
+      ctx.assert(p.floorHole === null && near(p.floorSolid, r.T / 2), `Boden: Loch frei, Rest fest ${JSON.stringify(p)}`);
+      ctx.assert(p.halfMissing === null && near(p.halfPresent, r.H / 2), 'halbe Rampe');
+      ctx.assert(near(p.lLow, r.H / 4) && near(p.lLanding, r.H / 2) && near(p.lHigh, (3 * r.H) / 4) && p.lHole === null,
+        `L-Treppe: ${p.lLow} / ${p.lLanding} / ${p.lHigh} / Loch ${p.lHole}`);
+      ctx.assert(near(p.uLow, r.H / 4) && near(p.uLanding, r.H / 2) && near(p.uHigh, (3 * r.H) / 4), `U-Treppe: ${p.uLow} / ${p.uLanding} / ${p.uHigh}`);
+      ctx.assert(near(p.quarterCorner, r.R, 0.05) && near(p.quarterOther, 0, 0.1), `1/4-Pyramide: ${p.quarterCorner} / ${p.quarterOther}`);
+      ctx.assert(near(p.rampPyrBack, r.R, 0.05) && near(p.rampPyrFront, 0, 0.1), `Rampen-Pyramide: ${p.rampPyrBack} / ${p.rampPyrFront}`);
+      ctx.assert(p.triKept === 'wx:-3:0:7' && p.triGone === null, `Dreieck: ${p.triKept} / ${p.triGone}`);
+      ctx.assert(p.archOpen === null && p.archTop === 'wx:-2:0:7', `Bogen: ${p.archOpen} / ${p.archTop}`);
       await settle(ctx);
       await ctx.shot('b13-edit-formen');
     },
   },
   {
-    name: 'Ecktreppe: Rampe (C), G + 1 Feld + G, mit W hinauf, 90° drehen, oben ankommen',
+    name: 'L-Treppe: Rampe (C), G + Weg ziehen (Maus halten), G, mit W hinauf, 90° drehen, oben ankommen',
     async run(ctx) {
       await setup(ctx);
       const r = await ctx.page.evaluate(() => {
@@ -416,35 +437,144 @@ const BUILD_CHECKS = [
         const key = b.build('ramp');
         const ramp = b.building.getPieceAt(key);
         b.step(200); // fertig aufgebaut
-        // G auf das Feld hinten rechts (x 2,5·S..3·S, z 6·S..6,5·S), anklicken, G
-        b.aimAt({ x: 2.75 * S, y: 0.75 * H, z: 6.25 * S });
+        // Feld-Mitten auf der ganzen Rampe (steigt nach −Z: Reihe 1 unten, Reihe 0 oben)
+        const tile = (t) => ({ x: (2 + ((t % 2) + 0.5) / 2) * S, y: (1 - (Math.floor(t / 2) + 0.5) / 2) * H, z: (6 + (Math.floor(t / 2) + 0.5) / 2) * S });
+        // G auf Feld 3 (vorne rechts), Maus halten, über Feld 2 (Podest) nach Feld 0 ziehen, loslassen, G
+        b.aimAt(tile(3));
         b.press('edit');
-        b.step(2);
         const hover = b.building.editSession(b.p)?.hover;
-        b.press('primary');
+        b.hold('primary', true);
+        b.step();
+        b.aimAt(tile(2));
+        b.aimAt(tile(0));
+        const path = [...(b.building.editSession(b.p)?.path ?? [])];
+        b.hold('primary', false);
+        b.step();
         b.press('edit');
         // Boden oben dahinter (Ziel der Treppe)
         b.building.placePiece('floor', 'f:2:1:5', b.p, 'wood', { instant: true, force: true });
-        // von Osten in die untere Treppe (geht nach −X), aufs Podest, 90° nach rechts (−Z), hinauf
+        // von Osten in den unteren Lauf (geht nach −X), aufs Podest, 90° nach rechts (−Z), hinauf
         b.spawn(3.4 * S, 0, 6.75 * S, Math.PI / 2, 0);
         b.hold('moveForward', true);
-        let landing = null;
         for (let n = 0; n < 240 && b.p.position.x > 2.25 * S; n++) b.step();
-        landing = { x: b.p.position.x, y: b.p.position.y };
+        const landing = { x: b.p.position.x, y: b.p.position.y };
         b.face(0, 0);
         for (let n = 0; n < 240 && b.p.position.z > 5.625 * S; n++) b.step();
         b.hold('moveForward', false);
         b.step(20);
         const end = { x: b.p.position.x, y: b.p.position.y, z: b.p.position.z, grounded: b.p.grounded };
         b.viewFrom(4 * S, 3, 8.25 * S, { x: 2.5 * S, y: 1.5, z: 6.5 * S });
-        return { key, hover, mask: ramp?.editMask, colliders: ramp?.colliders.length, landing, end, S, H, T: buildDuel.CONFIG.building.pieceThickness };
+        return { key, hover, path, editPath: ramp?.editPath, colliders: ramp?.colliders.length, landing, end, S, H, T: buildDuel.CONFIG.building.pieceThickness };
       });
-      ctx.assert(r.key === 'r:2:0:6' && r.hover === 1, `Rampe ${r.key}, Feld unter dem Fadenkreuz ${r.hover}`);
-      ctx.assert(r.mask === 2 && r.colliders === 3, `Ecktreppe (Maske ${r.mask}, ${r.colliders} Teile)`);
+      ctx.assert(r.key === 'r:2:0:6' && r.hover === 3, `Rampe ${r.key}, Feld unter dem Fadenkreuz ${r.hover}`);
+      ctx.assert(JSON.stringify(r.editPath) === '[3,2,0]' && r.colliders === 3, `L-Treppe (Weg ${JSON.stringify(r.path)} → ${JSON.stringify(r.editPath)}, ${r.colliders} Teile)`);
       ctx.assert(Math.abs(r.landing.y - r.H / 2) < 0.05, `auf dem Podest: ${JSON.stringify(r.landing)}`);
       ctx.assert(Math.abs(r.end.y - (r.H + r.T / 2)) < 0.05 && r.end.z <= 5.625 * r.S && r.end.grounded, `oben: ${JSON.stringify(r.end)}`);
       await settle(ctx);
-      await ctx.shot('b13b-ecktreppe');
+      await ctx.shot('b13b-l-treppe');
+    },
+  },
+  {
+    name: 'Doppel-/Dreifach-Edit mit ECHTER Maus und Tastatur (Spielschleife läuft): Wand, Boden, Rampe – G/Klick/G und Beim-Loslassen',
+    async run(ctx) {
+      await setup(ctx);
+      const page = ctx.page;
+      // auf echte Logik-Schritte warten (Software-Grafik: oft nur 3–10 Bilder pro Sekunde)
+      const ticks = async (n) => {
+        const start = await page.evaluate(() => buildDuel.ticks);
+        await page.waitForFunction((t) => buildDuel.ticks >= t, start + n, { timeout: 20000 });
+      };
+      const mode = (m) => page.waitForFunction((want) => buildDuel.game.player.mode === want, m, { timeout: 8000 }).then(() => true, () => false);
+      const look = (target) => page.evaluate((t) => {
+        const b = window.__b;
+        b.look({ x: t[0] * b.S, y: t[1] * b.H, z: t[2] * b.S });
+      }, target);
+      // Ziel-Punkte (Vielfache von S bzw. H): Wand wx:0:0:6 vor der Figur, Boden f:0:0:6 unter ihr,
+      // Rampe r:0:0:7 hinter ihr (steigt nach +Z, von der Figur weg)
+      const wallTile = (t) => [(t % 3 + 0.5) / 3, 1 - (Math.floor(t / 3) + 0.5) / 3, 6];
+      const floorTile = (t) => [((t % 2) + 0.5) / 2, 0.026, 6 + (Math.floor(t / 2) + 0.5) / 2];
+      const rampTile = (t) => [((t % 2) + 0.5) / 2, (Math.floor(t / 2) + 0.5) / 2, 7 + (Math.floor(t / 2) + 0.5) / 2];
+      const results = [];
+      for (const release of [false, true]) {
+        const plan = release
+          ? { wall: [1], floor: [1], ramp: [1, 3, 2] } // Fenster oben, Boden-Ecke, L-Treppe
+          : { wall: [4], floor: [0], ramp: [0, 2] }; // Fenster Mitte, Boden-Ecke, halbe Rampe
+        // Bühne aufbauen (noch mit Test-Schritten)
+        await page.evaluate((rel) => {
+          const b = window.__b;
+          const S = b.S;
+          b.clear();
+          b.spawn(0.5 * S, 0, 6.62 * S, 0, 0);
+          const own = { instant: true, force: true };
+          b.building.placePiece('wall', 'wx:0:0:6', b.p, 'wood', own);
+          b.building.placePiece('floor', 'f:0:0:6', b.p, 'wood', own);
+          b.building.placePiece('ramp', 'r:0:0:7', b.p, 'wood', { ...own, dir: 1 });
+          b.step(20);
+          b.press('slot1'); // Waffe in der Hand (wie nach einem Kampf)
+          buildDuel.settings.controls.editOnRelease = rel;
+          // "Ohne Maus-Sperre spielen": Maus-Tasten zählen trotzdem, echte Spielschleife
+          buildDuel.input.allowMouseWithoutLock = true;
+          buildDuel.input.lookWithoutLock = true;
+          buildDuel.manualStep(false);
+        }, release);
+        await ticks(3);
+        const log = [];
+        // Wie ein schneller Spieler: innerhalb eines Edits nur kurze Pausen (50–120 ms), KEIN
+        // Warten auf Bilder – bei Software-Grafik landen G, Klick und G oft im selben Bild.
+        // Nur beim Ziehen über die Rampe und vor dem Umdrehen zum nächsten Teil wartet die
+        // Prüfung auf Logik-Schritte (eine echte Maus fährt über die Felder dazwischen und
+        // braucht zum Drehen länger als ein Bild; der Blick wird hier direkt gesetzt).
+        const edit = async (name, tiles, target) => {
+          await look(target(tiles[0]));
+          await page.waitForTimeout(50);
+          await page.keyboard.press('KeyG');
+          await page.waitForTimeout(60);
+          await page.mouse.down();
+          for (const t of tiles.slice(1)) {
+            await ticks(2);
+            await look(target(t));
+          }
+          if (tiles.length > 1) await ticks(2);
+          await page.waitForTimeout(90);
+          await page.mouse.up();
+          await page.waitForTimeout(70);
+          if (!release) await page.keyboard.press('KeyG');
+          await ticks(3); // die Spielschleife hat alles abgeholt
+          const closed = await mode('weapon');
+          log.push(`${name}: zu ${closed}`);
+          await page.waitForTimeout(120);
+        };
+        await edit('Wand', plan.wall, wallTile);
+        await page.evaluate(() => window.__b.face(0, -1.1));
+        await edit('Boden', plan.floor, floorTile);
+        await page.evaluate(() => window.__b.face(Math.PI, -0.6)); // umdrehen zur Rampe
+        await edit('Rampe', plan.ramp, rampTile);
+        const state = await page.evaluate(() => {
+          buildDuel.manualStep(true);
+          buildDuel.input.allowMouseWithoutLock = false;
+          buildDuel.input.lookWithoutLock = false;
+          buildDuel.input.releaseAll();
+          const w = window.__b.building;
+          return {
+            wall: w.getPieceAt('wx:0:0:6')?.editMask,
+            floor: w.getPieceAt('f:0:0:6')?.editMask,
+            ramp: w.getPieceAt('r:0:0:7')?.editPath ?? null,
+            mode: buildDuel.game.player.mode,
+          };
+        });
+        const want = { wall: 1 << plan.wall[0], floor: 1 << plan.floor[0], ramp: plan.ramp };
+        const ok = state.wall === want.wall && state.floor === want.floor && JSON.stringify(state.ramp) === JSON.stringify(want.ramp);
+        results.push({ release, ok, state, want, log });
+        if (release) {
+          await page.evaluate(() => window.__b.viewFrom(1.4 * window.__b.S, 0, 8.6 * window.__b.S, { x: 0.5 * window.__b.S, y: 1, z: 6.5 * window.__b.S }));
+          await settle(ctx);
+          await ctx.shot('b13c-doppel-edit');
+        }
+      }
+      await page.evaluate(() => { buildDuel.settings.controls.editOnRelease = false; });
+      for (const r of results) {
+        ctx.assert(r.ok, `${r.release ? 'Beim Loslassen bestätigen' : 'G, Klick, G'}: ${JSON.stringify(r.state)} (erwartet ${JSON.stringify(r.want)}) – ${r.log.join('; ')}`);
+      }
     },
   },
   {
