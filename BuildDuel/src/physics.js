@@ -9,7 +9,7 @@
 //
 // Damit Abfragen auch bei 3000 Bauteilen schnell bleiben, liegen alle Collider
 // zusätzlich in einem "Raumgitter" (spatial hash): Die Welt ist in Würfel mit
-// 4 m Kantenlänge geteilt. Eine Abfrage schaut nur in die Würfel in der Nähe.
+// der Kantenlänge einer Bau-Zelle (5,12 m) geteilt. Eine Abfrage schaut nur in die Würfel in der Nähe.
 // Strahlen (raycast) wandern Würfel für Würfel durch das Gitter ("3D-DDA") und
 // hören auf, sobald der nächste Treffer sicher gefunden ist.
 //
@@ -29,7 +29,7 @@ import { CONFIG } from './config.js';
 const EPS = 1e-6;
 const OVERLAP_EPS = 1e-5; // "berühren" zählt nicht als "stecken in"
 
-// Raster-Schlüssel: Zellen-Nummern von -2048 bis 2047 je Achse (= ±8 km bei 4 m)
+// Raster-Schlüssel: Zellen-Nummern von -2048 bis 2047 je Achse (= ±10 km bei 5,12 m)
 const GRID_OFFSET = 2048;
 const GRID_SIZE = 4096;
 

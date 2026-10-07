@@ -17,6 +17,9 @@ function installHelpers() {
     get game() { return bd.game; },
     get p() { return bd.game.player; },
     get building() { return bd.game.building; },
+    // Bau-Raster aus config.js: Lagen in den Prüfungen sind Vielfache davon (passt zu jedem Raster)
+    get S() { return bd.CONFIG.world.gridCellSize; },
+    get H() { return bd.CONFIG.world.wallHeight; },
     step(n = 1) { bd.simulate(n / 60); },
     /** Aktion kurz drücken (1 Tick gedrückt, dann loslassen) */
     press(action, ticks = 1) {
@@ -105,7 +108,7 @@ const BUILD_CHECKS = [
       const r = await ctx.page.evaluate(() => {
         const b = window.__b;
         b.clear();
-        b.spawn(2, 0, 30, 0, -0.15);
+        b.spawn(0.5 * b.S, 0, 7.5 * b.S, 0, -0.15);
         b.select('wall');
         b.game.frameUpdate(1 / 60, 1);
         const ghost = b.building.view.root.getObjectByName('Vorschau wall');
@@ -146,7 +149,7 @@ const BUILD_CHECKS = [
       const r = await ctx.page.evaluate(() => {
         const b = window.__b;
         b.clear();
-        b.spawn(-6, 0, 26, 0, 0);
+        b.spawn(-1.5 * b.S, 0, 6.5 * b.S, 0, 0);
         const keys = [];
         for (let side = 0; side < 4; side++) {
           b.face((side * Math.PI) / 2, 0);
@@ -159,7 +162,7 @@ const BUILD_CHECKS = [
         return { keys, count: b.building.pieces.size, y: b.p.position.y };
       });
       ctx.assert(r.count === 6 && !r.keys.includes(null), `Box: ${r.keys.join(', ')}`);
-      await ctx.page.evaluate(() => window.__b.viewFrom(-12, 0, 33, { x: -6, y: 2.2, z: 26 }));
+      await ctx.page.evaluate(() => { const b = window.__b; b.viewFrom(-3 * b.S, 0, 8.25 * b.S, { x: -1.5 * b.S, y: 2.2, z: 6.5 * b.S }); });
       await settle(ctx);
       await ctx.shot('b03-box');
     },
@@ -171,7 +174,7 @@ const BUILD_CHECKS = [
       const r = await ctx.page.evaluate(() => {
         const b = window.__b;
         b.clear();
-        b.spawn(26, 0, 36, 0, 0);
+        b.spawn(6.5 * b.S, 0, 9 * b.S, 0, 0);
         b.hold('moveForward', true);
         b.hold('primary', true);
         let maxY = 0;
@@ -185,16 +188,16 @@ const BUILD_CHECKS = [
         b.hold('primary', false);
         b.step(70);
         const pieces = [...b.building.pieces.values()];
-        return { maxY, ramps: pieces.filter((x) => x.type === 'ramp').length, walls: pieces.filter((x) => x.type === 'wall').length };
+        return { maxY, H: b.H, ramps: pieces.filter((x) => x.type === 'ramp').length, walls: pieces.filter((x) => x.type === 'wall').length };
       });
-      ctx.assert(r.maxY >= 12, `höchster Punkt ${r.maxY.toFixed(1)} m (${r.ramps} Rampen, ${r.walls} Wände)`);
-      await ctx.page.evaluate(() => window.__b.viewFrom(13, 0, 37, { x: 26, y: 7, z: 23 }));
+      ctx.assert(r.maxY >= 3 * r.H, `höchster Punkt ${r.maxY.toFixed(1)} m (${r.ramps} Rampen, ${r.walls} Wände)`);
+      await ctx.page.evaluate(() => { const b = window.__b; b.viewFrom(3.25 * b.S, 0, 9.25 * b.S, { x: 6.5 * b.S, y: 1.75 * b.H, z: 5.75 * b.S }); });
       await settle(ctx);
       await ctx.shot('b04-rampen-turm');
     },
   },
   {
-    name: '90er: Wand, Rampe, 90° drehen, springen, wiederholen → über 12 m',
+    name: '90er: Wand, Rampe, 90° drehen, springen, wiederholen → jede Runde fast eine Ebene, über 3 Ebenen',
     async run(ctx) {
       await setup(ctx);
       const r = await ctx.page.evaluate(() => {
@@ -202,7 +205,7 @@ const BUILD_CHECKS = [
         const S = buildDuel.CONFIG.world.gridCellSize;
         const H = buildDuel.CONFIG.world.wallHeight;
         b.clear();
-        b.spawn(-26, 0, 34, 0, 0);
+        b.spawn(-6.5 * S, 0, 8.5 * S, 0, 0);
         const p = b.p;
         b.build('ramp');
         b.build('wall');
@@ -225,7 +228,7 @@ const BUILD_CHECKS = [
           };
           const startY = p.position.y;
           const ok = until(() => {
-            const high = p.position.y > startY + 2;
+            const high = p.position.y > startY + H / 2;
             b.hold('moveForward', edge(f) > 1.0 || !high);
             b.hold('moveLeft', edge(l) > 0.95);
             return p.grounded && high && edge(f) < 1.05 && edge(l) < 1.0 && Math.hypot(p.velocity.x, p.velocity.z) < 0.5;
@@ -252,11 +255,11 @@ const BUILD_CHECKS = [
           b.hold('moveForward', false);
         }
         b.step(80);
-        return { heights, health: p.health, shield: p.shield };
+        return { heights, health: p.health, shield: p.shield, H };
       });
-      const ok = r.heights.every((h, i) => i === 0 || h > r.heights[i - 1] + 3) && Math.max(...r.heights) >= 12;
+      const ok = r.heights.every((h, i) => i === 0 || h > r.heights[i - 1] + 0.75 * r.H) && Math.max(...r.heights) >= 3 * r.H;
       ctx.assert(ok, `Höhen: ${r.heights.map((h) => h.toFixed(1)).join(' → ')} (Leben ${r.health}, Schild ${r.shield})`);
-      await ctx.page.evaluate(() => window.__b.viewFrom(-11, 0, 25, { x: -28, y: 7, z: 32 }));
+      await ctx.page.evaluate(() => { const b = window.__b; b.viewFrom(-2.75 * b.S, 0, 6.25 * b.S, { x: -7 * b.S, y: 1.75 * b.H, z: 8 * b.S }); });
       await settle(ctx);
       await ctx.shot('b05-90er');
     },
@@ -269,13 +272,14 @@ const BUILD_CHECKS = [
         const b = window.__b;
         const H = buildDuel.CONFIG.world.wallHeight;
         b.clear();
-        b.spawn(2, 0, 30, 0, 0); // Wand bei z = 28 (wx:0:0:7)
+        const S = b.S;
+        b.spawn(0.5 * S, 0, 7.5 * S, 0, 0); // Wand bei z = 7·S (wx:0:0:7)
         const key = b.build('wall');
         b.face(Math.PI / 2, 0);
         const key2 = b.build('wall'); // wz:0:0:7 bei x = 0
         b.step(70);
         const wall = b.building.getPieceAt(key);
-        const tile = (t) => ({ x: (t % 3 + 0.5) * (4 / 3), y: H - (Math.floor(t / 3) + 0.5) * (H / 3), z: 28 });
+        const tile = (t) => ({ x: (t % 3 + 0.5) * (S / 3), y: H - (Math.floor(t / 3) + 0.5) * (H / 3), z: 7 * S });
         b.aimAt(tile(4));
         b.press('edit');
         const opened = b.p.mode;
@@ -301,7 +305,7 @@ const BUILD_CHECKS = [
       await ctx.page.evaluate(() => {
         const b = window.__b;
         b.press('pickaxe');
-        b.aimAt({ x: 2, y: 1.3, z: 28 });
+        b.aimAt({ x: 0.5 * b.S, y: 1.3, z: 7 * b.S });
       });
       await settle(ctx);
       await ctx.shot('b07-tuer-zu');
@@ -319,12 +323,12 @@ const BUILD_CHECKS = [
         const b = window.__b;
         const H = buildDuel.CONFIG.world.wallHeight;
         b.select('wall');
-        b.aimAt({ x: 0, y: H / 2, z: 28 + 2 }); // Feld 4 = Mitte → Fenster
+        b.aimAt({ x: 0, y: H / 2, z: 7.5 * b.S }); // Feld 4 = Mitte → Fenster
         b.press('edit');
         b.click();
         b.press('edit');
         const w = b.building.getPieceAt('wz:0:0:7');
-        b.viewFrom(-5.5, 0, 30.8, { x: 0, y: 2.3, z: 30 });
+        b.viewFrom(-1.375 * b.S, 0, 7.7 * b.S, { x: 0, y: 2.3, z: 7.5 * b.S });
         return [...w.edit].sort();
       });
       ctx.assert(JSON.stringify(win) === '[4]', `Fenster: ${JSON.stringify(win)}`);
@@ -333,9 +337,9 @@ const BUILD_CHECKS = [
       const reset = await ctx.page.evaluate(() => {
         const b = window.__b;
         const H = buildDuel.CONFIG.world.wallHeight;
-        b.spawn(2, 0, 30, Math.PI / 2, 0);
+        b.spawn(0.5 * b.S, 0, 7.5 * b.S, Math.PI / 2, 0);
         b.select('wall');
-        b.aimAt({ x: 0, y: H / 2, z: 30 });
+        b.aimAt({ x: 0, y: H / 2, z: 7.5 * b.S });
         b.press('edit');
         b.press('secondary');
         b.press('edit');
@@ -371,23 +375,28 @@ const BUILD_CHECKS = [
           const hit = b.game.world.raycast({ x, y: 20, z }, down, 30, { skipTerrain: true });
           return hit ? Math.round(hit.point.y * 100) / 100 : null;
         };
+        // Stelle in der Zelle (i, 5): Anteile fx, fz der Zelle
+        const S = b.S;
+        const at = (i, fx, fz) => [(i + fx) * S, (5 + fz) * S];
         const probes = {
-          // Ecktreppe (steigt nach −Z, Feld 1 weg): Feld 3 unten (1 m in der Mitte), Podest 2 m, Feld 0 oben (3 m)
-          stairLow: heightAt(-1, 23), stairLanding: heightAt(-3, 23), stairHigh: heightAt(-3, 21),
-          floorHole: hitAt(-12 + 3, 20 + 3), floorSolid: hitAt(-12 + 1, 20 + 1),
-          halfMissing: hitAt(-8 + 1, 20 + 2), halfPresent: hitAt(-8 + 3, 20 + 2),
-          cornerMissing: hitAt(-4 + 3, 20 + 1), cornerPresent: hitAt(-4 + 1, 20 + 1),
-          roofMissing: hitAt(0 + 1, 20 + 1), roofPresent: hitAt(0 + 3, 20 + 3),
+          // Ecktreppe (steigt nach −Z, Feld 1 weg): Feld 3 unten (1/4 hoch in der Mitte), Podest 1/2, Feld 0 oben (3/4)
+          stairLow: heightAt(...at(-1, 0.75, 0.75)), stairLanding: heightAt(...at(-1, 0.25, 0.75)), stairHigh: heightAt(...at(-1, 0.25, 0.25)),
+          floorHole: hitAt(...at(-3, 0.75, 0.75)), floorSolid: hitAt(...at(-3, 0.25, 0.25)),
+          halfMissing: hitAt(...at(-2, 0.25, 0.5)), halfPresent: hitAt(...at(-2, 0.75, 0.5)),
+          cornerMissing: hitAt(...at(-1, 0.75, 0.25)), cornerPresent: hitAt(...at(-1, 0.25, 0.25)),
+          roofMissing: hitAt(...at(0, 0.25, 0.25)), roofPresent: hitAt(...at(0, 0.75, 0.75)),
         };
-        b.viewFrom(-4, 0, 33, { x: -4, y: 1.2, z: 22 });
-        return { ok: pieces.every(Boolean), probes };
+        b.viewFrom(-S, 0, 8.25 * S, { x: -S, y: 1.2, z: 5.5 * S });
+        return { ok: pieces.every(Boolean), probes, H: b.H };
       });
       const p = r.probes;
       ctx.assert(r.ok, 'alle Teile gesetzt');
       ctx.assert(!p.floorHole && p.floorSolid === 'f:-3:0:5', `Boden: Loch frei, Rest fest ${JSON.stringify(p)}`);
       ctx.assert(!p.halfMissing && p.halfPresent === 'r:-2:0:5', 'halbe Rampe');
       ctx.assert(!p.cornerMissing && p.cornerPresent === 'r:-1:0:5', 'Ecktreppe: Loch und Treppe');
-      ctx.assert(p.stairLow === 1 && p.stairLanding === 2 && p.stairHigh === 3, `Ecktreppe: Höhen ${p.stairLow} / ${p.stairLanding} / ${p.stairHigh}`);
+      const near = (v, t) => v !== null && Math.abs(v - t) < 0.011;
+      ctx.assert(near(p.stairLow, r.H / 4) && near(p.stairLanding, r.H / 2) && near(p.stairHigh, (3 * r.H) / 4),
+        `Ecktreppe: Höhen ${p.stairLow} / ${p.stairLanding} / ${p.stairHigh}`);
       ctx.assert(!p.roofMissing && p.roofPresent === 'c:0:0:5', 'Dach-Viertel');
       await settle(ctx);
       await ctx.shot('b13-edit-formen');
@@ -400,13 +409,15 @@ const BUILD_CHECKS = [
       const r = await ctx.page.evaluate(() => {
         const b = window.__b;
         b.clear();
-        // Rampe vor sich (Zelle 2, 0, 6: x 8..12, z 24..28), steigt nach −Z
-        b.spawn(10, 0, 30.5, 0, 0);
+        const S = b.S;
+        const H = b.H;
+        // Rampe vor sich (Zelle 2, 0, 6: x 2·S..3·S, z 6·S..7·S), steigt nach −Z
+        b.spawn(2.5 * S, 0, 7.625 * S, 0, 0);
         const key = b.build('ramp');
         const ramp = b.building.getPieceAt(key);
         b.step(200); // fertig aufgebaut
-        // G auf das Feld hinten rechts (x 10..12, z 24..26), anklicken, G
-        b.aimAt({ x: 11, y: 3, z: 25 });
+        // G auf das Feld hinten rechts (x 2,5·S..3·S, z 6·S..6,5·S), anklicken, G
+        b.aimAt({ x: 2.75 * S, y: 0.75 * H, z: 6.25 * S });
         b.press('edit');
         b.step(2);
         const hover = b.building.editSession(b.p)?.hover;
@@ -415,23 +426,23 @@ const BUILD_CHECKS = [
         // Boden oben dahinter (Ziel der Treppe)
         b.building.placePiece('floor', 'f:2:1:5', b.p, 'wood', { instant: true, force: true });
         // von Osten in die untere Treppe (geht nach −X), aufs Podest, 90° nach rechts (−Z), hinauf
-        b.spawn(13.6, 0, 27, Math.PI / 2, 0);
+        b.spawn(3.4 * S, 0, 6.75 * S, Math.PI / 2, 0);
         b.hold('moveForward', true);
         let landing = null;
-        for (let n = 0; n < 240 && b.p.position.x > 9; n++) b.step();
+        for (let n = 0; n < 240 && b.p.position.x > 2.25 * S; n++) b.step();
         landing = { x: b.p.position.x, y: b.p.position.y };
         b.face(0, 0);
-        for (let n = 0; n < 240 && b.p.position.z > 22.5; n++) b.step();
+        for (let n = 0; n < 240 && b.p.position.z > 5.625 * S; n++) b.step();
         b.hold('moveForward', false);
         b.step(20);
         const end = { x: b.p.position.x, y: b.p.position.y, z: b.p.position.z, grounded: b.p.grounded };
-        b.viewFrom(16, 3, 33, { x: 10, y: 1.5, z: 26 });
-        return { key, hover, mask: ramp?.editMask, colliders: ramp?.colliders.length, landing, end };
+        b.viewFrom(4 * S, 3, 8.25 * S, { x: 2.5 * S, y: 1.5, z: 6.5 * S });
+        return { key, hover, mask: ramp?.editMask, colliders: ramp?.colliders.length, landing, end, S, H, T: buildDuel.CONFIG.building.pieceThickness };
       });
       ctx.assert(r.key === 'r:2:0:6' && r.hover === 1, `Rampe ${r.key}, Feld unter dem Fadenkreuz ${r.hover}`);
       ctx.assert(r.mask === 2 && r.colliders === 3, `Ecktreppe (Maske ${r.mask}, ${r.colliders} Teile)`);
-      ctx.assert(Math.abs(r.landing.y - 2) < 0.05, `auf dem Podest: ${JSON.stringify(r.landing)}`);
-      ctx.assert(Math.abs(r.end.y - 4.1) < 0.05 && r.end.z <= 22.5 && r.end.grounded, `oben: ${JSON.stringify(r.end)}`);
+      ctx.assert(Math.abs(r.landing.y - r.H / 2) < 0.05, `auf dem Podest: ${JSON.stringify(r.landing)}`);
+      ctx.assert(Math.abs(r.end.y - (r.H + r.T / 2)) < 0.05 && r.end.z <= 5.625 * r.S && r.end.grounded, `oben: ${JSON.stringify(r.end)}`);
       await settle(ctx);
       await ctx.shot('b13b-ecktreppe');
     },
@@ -443,11 +454,12 @@ const BUILD_CHECKS = [
       const r = await ctx.page.evaluate(() => {
         const b = window.__b;
         b.clear();
-        b.spawn(14, 0, 26, 0, 0);
+        const S = b.S;
+        b.spawn(3.5 * S, 0, 6.5 * S, 0, 0);
         const made = [];
         b.select('wall');
         for (let n = 0; n < 3; n++) {
-          b.spawn(14 + n * 4, 0, 26, 0, 0);
+          b.spawn((3.5 + n) * S, 0, 6.5 * S, 0, 0);
           b.select('wall');
           while (b.p.currentMaterial !== ['wood', 'stone', 'metal'][n]) b.press('switchMaterial');
           made.push(b.build('wall'));
@@ -465,9 +477,9 @@ const BUILD_CHECKS = [
         // fremde Wand: gehört einer Übungs-Figur
         const other = b.game.characters.find((c) => c !== b.p);
         b.building.placePiece('wall', 'wx:2:0:8', other, 'stone', { instant: true });
-        b.spawn(10, 0, 34, 0, 0);
+        b.spawn(2.5 * S, 0, 8.5 * S, 0, 0);
         b.select('wall');
-        b.aimAt({ x: 10, y: 2, z: 32 });
+        b.aimAt({ x: 2.5 * S, y: b.H / 2, z: 8 * S });
         b.press('edit');
         return {
           materials: pieces.map((x) => x && x.material),
@@ -479,7 +491,7 @@ const BUILD_CHECKS = [
         `Materialien: ${r.materials.join(', ')}`);
       ctx.assert(r.dirs.every((d) => d === 0), `R dreht die Rampe: ${r.dirs.join(', ')}`);
       ctx.assert(r.foreignMode === 'build', `fremde Wand: kein Edit (${r.foreignMode})`);
-      await ctx.page.evaluate(() => window.__b.viewFrom(19, 0, 31.5, { x: 19, y: 1.6, z: 23 }));
+      await ctx.page.evaluate(() => { const b = window.__b; b.viewFrom(4.75 * b.S, 0, 7.875 * b.S, { x: 4.75 * b.S, y: 1.6, z: 5.75 * b.S }); });
       await settle(ctx);
       await ctx.shot('b10-materialien');
     },
@@ -498,7 +510,7 @@ const BUILD_CHECKS = [
         a.applyDamage(a.maxHealth * 0.7);
         c.applyDamage(c.maxHealth * 0.55);
         d.applyDamage(d.maxHealth * 0.3);
-        b.viewFrom(22, 0, 35, { x: 22, y: 1.8, z: 28 });
+        b.viewFrom(5.5 * b.S, 0, 8.75 * b.S, { x: 5.5 * b.S, y: 1.8, z: 7 * b.S });
       });
       await settle(ctx);
       await ctx.shot('b11-risse');
@@ -509,7 +521,7 @@ const BUILD_CHECKS = [
         for (let n = 0; n < 5; n++) w.placePiece('ramp', `r:6:${n}:${6 - n}`, b.p, n % 2 ? 'stone' : 'wood', { dir: 3, instant: true });
         // Wände oben an den Rampen (hängen nur an der Rampe – kein eigener Halt am Boden)
         for (let n = 1; n < 5; n++) w.placePiece('wall', `wx:6:${n}:${6 - n}`, b.p, n % 2 ? 'metal' : 'wood', { instant: true });
-        b.viewFrom(23, 0, 36.5, { x: 26, y: 7, z: 18 });
+        b.viewFrom(5.75 * b.S, 0, 9.125 * b.S, { x: 6.5 * b.S, y: 1.75 * b.H, z: 4.5 * b.S });
         w.getPieceAt('r:6:0:6').applyDamage(1e6);
         // kurz nach dem Wegfallen, mitten in der Animation
         b.step(Math.round((buildDuel.CONFIG.building.collapseDelay + buildDuel.CONFIG.building.collapseAnimTime * 0.45) * 60));
@@ -527,7 +539,8 @@ const BUILD_CHECKS = [
       ctx.assert(after === 0, `Trümmer verschwunden: ${after}`);
       await ctx.page.evaluate(() => {
         window.__b.clear();
-        window.__b.spawn(0, 0, 22, 0, 0);
+        const sp = buildDuel.game.mode.spawnPoint;
+        window.__b.spawn(sp.x, 0, sp.z, 0, 0);
       });
     },
   },

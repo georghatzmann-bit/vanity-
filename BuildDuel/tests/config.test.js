@@ -40,12 +40,22 @@ describe('Spielwerte: Spieler und Welt', () => {
     assert.ok(h.radius * 2 < h.height);
   });
 
-  it('Rampen (45°) sind begehbar', () => {
+  it('Rampen sind begehbar und steigen genau eine Ebene auf einer Zelle', () => {
     assert.ok(CONFIG.player.maxWalkableSlope > CONFIG.building.rampSlopeDeg);
+    const slope = Math.atan(CONFIG.world.wallHeight / CONFIG.world.gridCellSize) * 180 / Math.PI;
+    assert.close(CONFIG.building.rampSlopeDeg, slope, 0.01, 'Steigung = atan(Wandhöhe / Zelle)');
   });
 
-  it('Boden-Fläche besteht aus ganzen Bau-Zellen (sonst sitzt das Raster schief)', () => {
-    assert.equal((CONFIG.world.groundSize / 2) % CONFIG.world.gridCellSize, 0, 'Boden-Hälfte / Zelle');
+  it('Boden-Fläche und Arenen bestehen aus ganzen Bau-Zellen (sonst sitzt das Raster schief)', () => {
+    const cells = (meters) => meters / CONFIG.world.gridCellSize;
+    const whole = (n) => Math.abs(n - Math.round(n)) < 1e-9;
+    assert.ok(whole(cells(CONFIG.world.groundSize / 2)), `Boden-Hälfte: ${cells(CONFIG.world.groundSize / 2)} Zellen`);
+    // Arena-Hälfte ganze Zellen: Wände passen genau auf die Mauer-Linie (Bau-Grenze)
+    for (const name of ['duel', 'practice', 'creative']) {
+      const half = cells(CONFIG.modes[name].arenaSize / 2);
+      assert.ok(whole(half), `${name}: Arena-Hälfte ${half} Zellen`);
+    }
+    assert.ok(whole(cells(CONFIG.modes.zoneWars.mapSize / 2)), 'Zone Wars');
   });
 
   it('Boden ist größer als die Sichtweite (kein sichtbarer Rand)', () => {
@@ -99,7 +109,7 @@ describe('Spielwerte: Bewegung, Kamera, Figuren (Phase 2)', () => {
     assert.ok(p.maxFallSpeed / CONFIG.loop.tickRate <= p.maxSubstepDistance * p.maxSubsteps);
   });
 
-  it('Bergab "kleben" reicht für 45°-Rampen beim Sprinten', () => {
+  it('Bergab "kleben" reicht für Rampen beim Sprinten', () => {
     const p = CONFIG.player;
     const perTick = p.sprintSpeed / CONFIG.loop.tickRate;
     assert.ok(p.groundSnapDistance >= perTick + p.hitbox.radius * Math.tan(CONFIG.building.rampSlopeDeg * Math.PI / 180) - 1e-9);
@@ -110,7 +120,11 @@ describe('Spielwerte: Bewegung, Kamera, Figuren (Phase 2)', () => {
     const h = CONFIG.player.hitbox;
     assert.ok(pr.lowCeiling > h.crouchHeight && pr.lowCeiling < h.height);
     assert.ok(pr.towerHeight > CONFIG.player.fallDamage.safeHeight);
-    assert.ok(pr.bridgeRampHeight - CONFIG.building.pieceThickness * Math.SQRT2 > h.height, 'unter der Rampe ist Platz');
+    const slope = CONFIG.building.rampSlopeDeg * Math.PI / 180;
+    assert.ok(pr.bridgeRampHeight - CONFIG.building.pieceThickness / Math.cos(slope) > h.height, 'unter der Rampe ist Platz');
+    // Plattform und Turm sind ganze Stockwerke (liegen auf dem Bau-Raster)
+    const H = CONFIG.world.wallHeight;
+    for (const v of [pr.platformHeight, pr.towerHeight]) assert.close(v / H, Math.round(v / H), 1e-9, `${v} m = ganze Stockwerke`);
     assert.ok(pr.idleBots <= CONFIG.bots.names.length);
   });
 
@@ -401,9 +415,10 @@ describe('Vorgaben aus deinem Plan (dürfen rot werden, wenn du sie absichtlich 
     assert.ok(CONFIG.player.maxShield <= 100);
   });
 
-  it('Bau-Raster: 4 m Zellen, 4 m Wandhöhe', () => {
-    assert.equal(CONFIG.world.gridCellSize, 4);
-    assert.equal(CONFIG.world.wallHeight, 4);
+  it('Bau-Raster wie in Fortnite: Zelle 5,12 m (512 Einheiten), Wandhöhe 3,84 m (384), Rampe ca. 37°', () => {
+    assert.equal(CONFIG.world.gridCellSize, 5.12);
+    assert.equal(CONFIG.world.wallHeight, 3.84);
+    assert.close(CONFIG.building.rampSlopeDeg, 36.87, 0.01);
   });
 
   it('Schrotflinte macht maximal 90 Schaden (10 Kugeln x 9)', () => {
@@ -472,7 +487,8 @@ describe('Spielwerte: Welt (Welle 3b – Sturm, Loot, Karten, Absprung)', () => 
     const houses = I.town.houses + I.hamlet.houses + I.farm.houses;
     assert.ok(houses >= 10 && houses <= 20, `Häuser ${houses}`);
     assert.ok(I.terrainExtent > CONFIG.modes.battleRoyale.islandSize / 2 + I.barrierMargin + 20);
-    assert.ok(CONFIG.world.gridCellSize % I.terrainCell === 0, 'Gelände-Raster passt zum Bau-Raster');
+    const perCell = CONFIG.world.gridCellSize / I.terrainCell;
+    assert.ok(Math.abs(perCell - Math.round(perCell)) < 1e-9 && perCell >= 1, 'Gelände-Raster passt zum Bau-Raster');
     assert.ok(I.fog.near < I.fog.far && I.cameraFar >= I.fog.far, 'Nebel/Sichtweite');
     assert.ok(I.maxSlopeDeg < CONFIG.player.maxWalkableSlope, 'Hänge begehbar');
     assert.ok(I.river.depth > 0 && I.river.depth < CONFIG.player.hitbox.height / 2, 'Fluss begehbar');

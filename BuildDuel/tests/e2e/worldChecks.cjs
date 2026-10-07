@@ -333,7 +333,8 @@ const WORLD_CHECKS = [
         const [a, b] = g.characters.map((c) => c.position.clone());
         // hoch über der Mauer (wie oben auf einer Rampe) hinaus laufen: die unsichtbare Wand hält auf
         const p = g.player;
-        p.spawnAt({ x: 0, y: 6, z: 38 }, Math.PI);
+        const half = buildDuel.CONFIG.modes.duel.arenaSize / 2;
+        p.spawnAt({ x: 0, y: 6, z: half - 2 }, Math.PI);
         p.yaw = p.prevYaw = Math.PI; // nach +Z (hinaus)
         buildDuel.input.setVirtual('moveForward', true);
         buildDuel.simulate(1);
@@ -343,11 +344,11 @@ const WORLD_CHECKS = [
         p.yaw = p.prevYaw = 0;
         g.cameraRig.snap();
         buildDuel.simulate(0.2);
-        return { distance: Math.hypot(a.x - b.x, a.z - b.z), props: g.map.props.list.length, z };
+        return { distance: Math.hypot(a.x - b.x, a.z - b.z), props: g.map.props.list.length, z, half, spawnDistance: buildDuel.CONFIG.modes.duel.spawnDistance };
       });
-      ctx.assert(Math.abs(r.distance - 40) < 1e-6, `Startpunkte ${r.distance} m auseinander`);
+      ctx.assert(Math.abs(r.distance - r.spawnDistance) < 1e-6, `Startpunkte ${r.distance} m auseinander`);
       ctx.assert(r.props >= 8, `${r.props} Felsen/Bäume`);
-      ctx.assert(r.z <= 40 - 0.4 + 1e-3, `an der Mauer-Linie aufgehalten (z ${r.z.toFixed(2)})`);
+      ctx.assert(r.z <= r.half - 0.4 + 1e-3, `an der Mauer-Linie aufgehalten (z ${r.z.toFixed(2)})`);
       await ctx.page.waitForTimeout(1200);
       await ctx.shot('50-welt-duell-arena');
     },

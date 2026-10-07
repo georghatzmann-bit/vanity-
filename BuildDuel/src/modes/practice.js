@@ -1,11 +1,11 @@
 // =============================================================================
 // Übungsplatz (Phase 2 – Start-Modus, bis es Menüs gibt)
 // =============================================================================
-// Eine 80 x 80 m Arena mit Stationen zum Ausprobieren:
+// Eine Arena (20 x 20 Bau-Zellen) mit Stationen zum Ausprobieren:
 //   - Kisten 0,3 m / 1 m / 2 m: die kleine steigt man einfach hoch, die anderen nicht
-//   - hohe Wand (4 m): Kamera stößt an und geht nicht hindurch
-//   - 45°-Rampe auf eine 4-m-Plattform – hochlaufen ohne Springen
-//   - Turm (12 m, über Rampen erreichbar): herunterfallen = 50 Fallschaden
+//   - hohe Wand (eine Wandhöhe): Kamera stößt an und geht nicht hindurch
+//   - Rampe (wie eine gebaute) auf eine Plattform ein Stockwerk hoch – hochlaufen ohne Springen
+//   - Turm (3 Stockwerke, über Rampen erreichbar): herunterfallen = Fallschaden
 //   - niedrige Decke (1,5 m): nur geduckt passt man hindurch
 //   - frei stehende Rampe, unter der man durchlaufen kann
 //   - kleines Dach (Pyramide) zum Drüberlaufen
@@ -80,11 +80,12 @@ export function createPracticeMode(game, options = {}) {
       });
 
       // Stehende Übungs-Figuren (ohne KI)
+      const S = CONFIG.world.gridCellSize;
       const spots = [
-        { x: 3, y: 0, z: 13 },
-        { x: -7, y: 0, z: 9 },
-        { x: -19, y: cfg.platformHeight, z: -6 },
-        { x: 29, y: 0, z: 6 },
+        { x: 0.75 * S, y: 0, z: 3.25 * S },
+        { x: -1.75 * S, y: 0, z: 2.25 * S },
+        { x: -4.75 * S, y: cfg.platformHeight, z: -1.5 * S },
+        { x: 7.25 * S, y: 0, z: 1.5 * S },
       ];
       const skins = CONFIG.skins.list.filter((s) => s.id !== CONFIG.skins.defaultId);
       for (let i = 0; i < Math.min(cfg.idleBots, spots.length); i++) {
@@ -147,67 +148,80 @@ export function createPracticeMode(game, options = {}) {
   return mode;
 }
 
-/** Baut die Stationen des Übungsplatzes. */
+/**
+ * Baut die Stationen des Übungsplatzes. Alle Lagen sind in Bau-Zellen angegeben
+ * (S = CONFIG.world.gridCellSize, H = wallHeight) – so liegen Rampen, Plattform und
+ * Turm genau auf dem Bau-Raster, egal wie groß eine Zelle ist.
+ */
 function buildCourse(map, cfg, thickness) {
+  const S = CONFIG.world.gridCellSize;
+  const H = CONFIG.world.wallHeight;
   const label = (text, x, y, z) => map.addLabel(text, { x, y, z });
 
-  // --- Stufen: 0,3 m / 1 m / 2 m --------------------------------------------------
+  // --- Stufen: 0,3 m / 1 m / 2 m (je eine Zelle groß) -----------------------------------
   cfg.stepHeights.forEach((height, i) => {
-    const x0 = 4 + i * 6;
-    map.addBox({ x: x0, y: 0, z: 0 }, { x: x0 + 4, y: height, z: 4 }, { color: COLORS.step[i % COLORS.step.length] });
-    label(`${formatMeters(height)} hoch`, x0 + 2, height + 0.45, 4.3); // vorn, unter der Kamera-Höhe
+    const x0 = (1 + i * 1.5) * S;
+    map.addBox({ x: x0, y: 0, z: 0 }, { x: x0 + S, y: height, z: S }, { color: COLORS.step[i % COLORS.step.length] });
+    label(`${formatMeters(height)} hoch`, x0 + S / 2, height + 0.45, S + 0.3); // vorn, unter der Kamera-Höhe
   });
 
   // --- Hohe Wand (Kamera-Test) -----------------------------------------------------------
-  map.addBox({ x: 24, y: 0, z: 1.85 }, { x: 34, y: cfg.highWall, z: 2.15 }, { color: COLORS.wall });
-  label(`Wand ${formatMeters(cfg.highWall)}`, 29, cfg.highWall + 0.9, 2);
+  map.addBox({ x: 6 * S, y: 0, z: S / 2 - 0.15 }, { x: 8.5 * S, y: cfg.highWall, z: S / 2 + 0.15 }, { color: COLORS.wall });
+  label(`Wand ${formatMeters(cfg.highWall)}`, 7.25 * S, cfg.highWall + 0.9, S / 2);
 
-  // --- Rampe 45° auf die Plattform, weiter über Rampen auf den Turm ----------------------
+  // --- Rampe auf die Plattform, weiter über Rampen auf den Turm (je 1 Zelle, 1 Ebene) -------
   const h1 = cfg.platformHeight;
   const rampOptions = { color: COLORS.ramp };
+  const slopeDeg = Math.round(CONFIG.building.rampSlopeDeg);
   // Rampe A: Boden → Plattform (steigt Richtung −Z)
-  map.addSlope({ minX: -24, maxX: -20, minZ: -4, maxZ: 0, baseY: 0, rise: h1, dir: 3, thickness }, rampOptions);
-  map.addBox({ x: -28, y: 0, z: -12 }, { x: -16, y: h1, z: -4 }, { color: COLORS.platform });
-  label('Rampe 45° → Plattform 4 m', -27, 1.2, 0.5); // neben der Rampe, nicht im Weg
+  map.addSlope({ minX: -6 * S, maxX: -5 * S, minZ: -S, maxZ: 0, baseY: 0, rise: h1, dir: 3, thickness }, rampOptions);
+  map.addBox({ x: -7 * S, y: 0, z: -3 * S }, { x: -4 * S, y: h1, z: -S }, { color: COLORS.platform });
+  label(`Rampe ${slopeDeg}° → Plattform ${formatMeters(h1)}`, -6.75 * S, 1.2, 0.5); // neben der Rampe, nicht im Weg
 
-  // Turm: zweite Stufe (8 m) und Gipfel (12 m), jeweils mit einer Rampe hinauf
+  // Turm: zweite Stufe und Gipfel, jeweils mit einer Rampe hinauf
   const top = cfg.towerHeight;
   const mid = (h1 + top) / 2;
-  map.addSlope({ minX: -24, maxX: -20, minZ: -12, maxZ: -8, baseY: h1, rise: mid - h1, dir: 3, thickness }, { color: COLORS.towerRamp });
-  map.addBox({ x: -24, y: 0, z: -20 }, { x: -20, y: mid, z: -12 }, { color: COLORS.tower });
-  map.addSlope({ minX: -24, maxX: -20, minZ: -20, maxZ: -16, baseY: mid, rise: top - mid, dir: 3, thickness }, { color: COLORS.towerRamp });
-  map.addBox({ x: -26, y: 0, z: -28 }, { x: -18, y: top, z: -20 }, { color: COLORS.tower });
-  label(`Turm ${formatMeters(top)} – Fallschaden testen`, -18.6, top + 2.2, -27.4); // hinten am Rand
+  map.addSlope({ minX: -6 * S, maxX: -5 * S, minZ: -3 * S, maxZ: -2 * S, baseY: h1, rise: mid - h1, dir: 3, thickness }, { color: COLORS.towerRamp });
+  map.addBox({ x: -6 * S, y: 0, z: -5 * S }, { x: -5 * S, y: mid, z: -3 * S }, { color: COLORS.tower });
+  map.addSlope({ minX: -6 * S, maxX: -5 * S, minZ: -5 * S, maxZ: -4 * S, baseY: mid, rise: top - mid, dir: 3, thickness }, { color: COLORS.towerRamp });
+  map.addBox({ x: -6.5 * S, y: 0, z: -7 * S }, { x: -4.5 * S, y: top, z: -5 * S }, { color: COLORS.tower });
+  label(`Turm ${formatMeters(top)} – Fallschaden testen`, -4.65 * S, top + 2.2, -6.85 * S); // hinten am Rand
 
   // --- Niedrige Decke: nur geduckt hindurch ------------------------------------------------
   const ceil = cfg.lowCeiling;
-  map.addBox({ x: 5.6, y: 0, z: -14 }, { x: 6, y: ceil + thickness, z: -6 }, { color: COLORS.tunnel });
-  map.addBox({ x: 10, y: 0, z: -14 }, { x: 10.4, y: ceil + thickness, z: -6 }, { color: COLORS.tunnel });
-  map.addBox({ x: 5.6, y: ceil, z: -14 }, { x: 10.4, y: ceil + thickness, z: -6 }, { color: COLORS.tunnel });
-  label(`Decke ${formatMeters(ceil)} – ducken!`, 8, ceil + 0.9, -6);
+  const wall = 0.4;
+  map.addBox({ x: 1.5 * S - wall, y: 0, z: -3.5 * S }, { x: 1.5 * S, y: ceil + thickness, z: -1.5 * S }, { color: COLORS.tunnel });
+  map.addBox({ x: 2.5 * S, y: 0, z: -3.5 * S }, { x: 2.5 * S + wall, y: ceil + thickness, z: -1.5 * S }, { color: COLORS.tunnel });
+  map.addBox({ x: 1.5 * S - wall, y: ceil, z: -3.5 * S }, { x: 2.5 * S + wall, y: ceil + thickness, z: -1.5 * S }, { color: COLORS.tunnel });
+  label(`Decke ${formatMeters(ceil)} – ducken!`, 2 * S, ceil + 0.9, -1.5 * S);
 
   // --- Rampe zum Drunter-durch-Laufen ----------------------------------------------------
   const bridgeY = cfg.bridgeRampHeight;
-  const bridge = map.addSlope({ minX: 16, maxX: 20, minZ: -14, maxZ: -10, baseY: bridgeY, rise: 4, dir: 3, thickness }, { color: COLORS.bridge });
+  const bx0 = 4 * S;
+  const bx1 = 5 * S;
+  const bz0 = -3.5 * S;
+  const bz1 = -2.5 * S;
+  const bridge = map.addSlope({ minX: bx0, maxX: bx1, minZ: bz0, maxZ: bz1, baseY: bridgeY, rise: H, dir: 3, thickness }, { color: COLORS.bridge });
   // dünne Stützen an den Ecken (bis unter die Platte)
   const post = 0.3;
-  for (const [x, z] of [[16, -10], [20 - post, -10], [16, -14], [20 - post, -14]]) {
-    const zz = z === -10 ? z - post : z;
+  for (const [x, z] of [[bx0, bz1], [bx1 - post, bz1], [bx0, bz0], [bx1 - post, bz0]]) {
+    const zz = z === bz1 ? z - post : z;
     const underside = Math.min(
       bridge.a * x + bridge.b * zz + bridge.c, bridge.a * x + bridge.b * (zz + post) + bridge.c,
     ) - bridge.vThickness;
     map.addBox({ x, y: 0, z: zz }, { x: x + post, y: underside, z: zz + post }, { color: COLORS.post });
   }
   // neben der Rampe (nicht über dem Weg hinauf), höher als das Dach-Schild daneben
-  label('Unter der Rampe durch', 21.2, 6.6, -12);
+  label('Unter der Rampe durch', bx1 + 1.2, bridgeY + H - 0.4, (bz0 + bz1) / 2);
 
   // --- Kleines Dach (Pyramide) auf einem Sockel -------------------------------------------
-  map.addBox({ x: 24, y: 0, z: -14 }, { x: 28, y: 0.3, z: -10 }, { color: COLORS.roofBase });
-  map.addSlope({ minX: 24, maxX: 28, minZ: -14, maxZ: -10, baseY: 0.3, rise: CONFIG.building.roofHeight, dir: 'pyramid', thickness }, { color: COLORS.roof });
-  label('Dach', 25.6, 3.4, -12); // über der Spitze, vom Start aus zwischen den Kisten-Schildern
+  const roofBase = 0.3;
+  map.addBox({ x: 6 * S, y: 0, z: -3.5 * S }, { x: 7 * S, y: roofBase, z: -2.5 * S }, { color: COLORS.roofBase });
+  map.addSlope({ minX: 6 * S, maxX: 7 * S, minZ: -3.5 * S, maxZ: -2.5 * S, baseY: roofBase, rise: CONFIG.building.roofHeight, dir: 'pyramid', thickness }, { color: COLORS.roof });
+  label('Dach', 6.4 * S, roofBase + CONFIG.building.roofHeight + 1.6, -3 * S); // über der Spitze, vom Start aus zwischen den Kisten-Schildern
 }
 
-// 0.3 → "0,3 m", 4 → "4 m"
+// 0.3 → "0,3 m", 3.84 → "3,84 m", 11.52 → "11,52 m"
 function formatMeters(value) {
-  return `${String(value).replace('.', ',')} m`;
+  return `${String(Math.round(value * 100) / 100).replace('.', ',')} m`;
 }

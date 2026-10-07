@@ -23,6 +23,12 @@
 // überschreiben dann nur die Standardwerte von hier.
 // =============================================================================
 
+// Bau-Raster wie in Fortnite (Unreal-Einheiten: 100 Einheiten = 1 m). Viele Werte unten
+// (Arena-Größen, Reichweiten beim Bauen, Übungsplatz …) werden daraus berechnet – wer das
+// Raster ändert, ändert nur diese zwei Zahlen.
+const CELL = 5.12; // eine Bau-Zelle: 512 x 512 Einheiten = 5,12 x 5,12 m
+const LEVEL = 3.84; // ein Stockwerk (Wandhöhe): 384 Einheiten = 3,84 m
+
 export const CONFIG = deepFreeze({
   // ---------------------------------------------------------------------------
   // Allgemein
@@ -46,10 +52,10 @@ export const CONFIG = deepFreeze({
   // Welt und Raster
   // ---------------------------------------------------------------------------
   world: {
-    gridCellSize: 4, // Bau-Raster: eine Zelle ist 4 x 4 m // SCHÄTZUNG
-    wallHeight: 4, // eine Wand ist 4 m hoch (= eine Stockwerk-Höhe) // SCHÄTZUNG
+    gridCellSize: CELL, // Bau-Raster wie in Fortnite: eine Zelle ist 5,12 x 5,12 m (oben bei CELL)
+    wallHeight: LEVEL, // Stockwerk-Höhe wie in Fortnite: 3,84 m (oben bei LEVEL)
     gravity: 25, // Schwerkraft in m/s² (Erde wäre 9,81 – Spiele sind "schneller") // SCHÄTZUNG
-    groundSize: 2000, // Kantenlänge der Boden-Fläche (größer als die Sichtweite → kein sichtbarer Rand)
+    groundSize: 2048, // Kantenlänge der Boden-Fläche (größer als die Sichtweite → kein sichtbarer Rand; je Hälfte 200 ganze Zellen)
     killPlaneY: -50, // wer tiefer fällt, ist raus (Sicherheitsnetz)
   },
 
@@ -76,7 +82,7 @@ export const CONFIG = deepFreeze({
     jumpVelocity: 8.4, // Start-Tempo nach oben → Sprunghöhe ca. 1,4 m // SCHÄTZUNG
     groundAcceleration: 60, // wie schnell man auf volles Tempo kommt // SCHÄTZUNG
     airControl: 0.35, // Lenken in der Luft (0 = gar nicht, 1 = wie am Boden) // SCHÄTZUNG
-    maxWalkableSlope: 46, // bis zu dieser Steigung (°) kann man ohne Springen laufen – Rampen haben 45°
+    maxWalkableSlope: 46, // bis zu dieser Steigung (°) kann man ohne Springen laufen – Rampen haben ca. 37°
     stepHeight: 0.35, // kleine Kanten (z. B. Bodenplatten) werden automatisch "hochgestiegen" // SCHÄTZUNG
     maxFallSpeed: 60, // schneller fällt man nicht (Luftwiderstand) // SCHÄTZUNG
     coyoteTime: 0.1, // so lange nach dem Verlassen einer Kante darf man noch springen (fühlt sich fairer an)
@@ -294,8 +300,8 @@ export const CONFIG = deepFreeze({
     maxPlaceCells: 1, // höchstens 1 Zelle vor der eigenen Zelle
     maxPieces: 3000, // mehr Bauteile gleichzeitig gibt es nicht (Leistung)
     pieceThickness: 0.2, // Dicke von Wand/Boden/Dach (m) // SCHÄTZUNG
-    rampSlopeDeg: 45, // Steigung der Rampe
-    roofHeight: 1.5, // so hoch ist die Spitze des Dachs (Pyramide) über ihrer Grundfläche // SCHÄTZUNG
+    rampSlopeDeg: 36.87, // Steigung der Rampe: 3,84 m hoch auf 5,12 m (wie in Fortnite, = atan(LEVEL / CELL))
+    roofHeight: LEVEL / 2, // Spitze des Dachs (Pyramide) 1,92 m über der Grundfläche – gleiche Steigung wie die Rampe // SCHÄTZUNG
     collapseDelay: 0.1, // so lange nach Zerstörung fallen lose Teile weg (Vorgabe)
     collapseAnimTime: 0.4, // Dauer der kleinen Zerfalls-Animation (Absacken + Verblassen)
     // Edit-Raster: Spalten x Reihen
@@ -319,14 +325,15 @@ export const CONFIG = deepFreeze({
     // "Blick-Anker" = Punkt auf dem Blick-Strahl so weit vor den Augen (m). Seine Zelle
     // ist das Ziel für Boden/Rampe/Dach. Trifft der Strahl vorher einen Boden, liegt
     // der Anker dort ("die Zelle, auf die du schaust").
-    targetReach: { wall: 3.4, floor: 3.4, ramp: 3.4, roof: 1.8 }, // SCHÄTZUNG (Gefühl wie im Original)
+    // Angaben als Anteil der Zelle: 0,85 Zellen = 4,35 m, 0,45 Zellen = 2,3 m
+    targetReach: { wall: 0.85 * CELL, floor: 0.85 * CELL, ramp: 0.85 * CELL, roof: 0.45 * CELL }, // SCHÄTZUNG (Gefühl wie im Original)
     levelEpsilon: 0.3, // so knapp (m) unter der nächsten Ebene zählt man schon zu ihr (Sprung bei 90ern)
     lookUpPitch: 40, // Blick höher als 40° nach oben → Bauteil eine Ebene höher // SCHÄTZUNG
     lookDownDrop: 0.5, // liegt der Anker so weit (m) unter der eigenen Ebene (Blick über eine Kante) → eine Ebene tiefer
     // Wand in der Nachbar-Spalte (schräg vor einem) nur, wenn der Anker so weit (m) jenseits der
     // eigenen Spalte liegt – sonst bleibt sie an der eigenen Zelle (360° drehen = 4 Wände) // SCHÄTZUNG
-    wallColumnMargin: 0.6,
-    // Bau-Grenze nach oben: höchste Ebene (0 = Boden, 1 Ebene = 4 m). Karten können eine eigene
+    wallColumnMargin: 0.15 * CELL, // 0,77 m
+    // Bau-Grenze nach oben: höchste Ebene (0 = Boden, 1 Ebene = 3,84 m). Karten können eine eigene
     // haben (map.buildBounds.maxLevel) und seitliche Grenzen (Arena: die Mauer) // SCHÄTZUNG
     maxLevel: 30,
     rotationSteps: 4, // R dreht die Rampe in 90°-Schritten (4 Richtungen)
@@ -345,7 +352,7 @@ export const CONFIG = deepFreeze({
     hintCooldown: 1.5, // Hinweis "fremdes Bauteil" höchstens alle 1,5 s
 
     // --- Aussehen ---
-    textureSize: 512, // Pixel der erzeugten Holz/Stein/Metall-Bilder (1 Bild = 4 x 4 m)
+    textureSize: 512, // Breite (Pixel) der erzeugten Holz/Stein/Metall-Bilder (Breite = eine Zelle, 5,12 m)
     crackThreshold: 0.5, // unter 50 % Leben: Risse
     damageDarkening: 0.45, // so viel dunkler wird ein Teil bei 0 % Leben (0 = gar nicht, 1 = schwarz)
     constructionOpacity: { start: 0.45, end: 0.85 }, // Aufbau: leicht durchsichtig, wird fester
@@ -623,9 +630,9 @@ export const CONFIG = deepFreeze({
     // Hinten links hinter dem Turm – weit weg von der Schuss-Bahn des Schieß-Stands und
     // mindestens 8 m auseinander (ihre Schilder überdecken sich nicht).
     harvest: {
-      tree: { x: -35, z: -35 },
-      rock: { x: -36, z: -20 },
-      car: { x: -27, z: -36 },
+      tree: { x: -44, z: -44 },
+      rock: { x: -46, z: -24 },
+      car: { x: -34, z: -46 },
     },
   },
 
@@ -728,7 +735,7 @@ export const CONFIG = deepFreeze({
     // Battle-Royale-Insel: 600 x 600 m (Größe: modes.battleRoyale.islandSize)
     island: {
       seed: 7, // Startwert der Karte (gleicher Wert = gleiche Insel)
-      terrainCell: 4, // Gelände-Raster (m) – passt zum Bau-Raster
+      terrainCell: CELL, // Gelände-Raster (m) – passt zum Bau-Raster
       terrainExtent: 372, // Gelände reicht so weit von der Mitte (m), danach Meeresboden
       seaLevel: 0, // Wasser-Oberfläche (m)
       shelfDepth: 1.1, // flaches Wasser um die Insel (begehbar, bis zur unsichtbaren Wand) (m)
@@ -774,7 +781,7 @@ export const CONFIG = deepFreeze({
     // Zone-Wars-Karte: klein und hügelig (Größe: modes.zoneWars.mapSize)
     zoneWars: {
       seed: 11,
-      terrainCell: 4,
+      terrainCell: CELL,
       hillHeight: 9, // SCHÄTZUNG
       hillScale: 46,
       rimHeight: 10, // am Rand steigen Hügel an (Grenze)
@@ -847,7 +854,7 @@ export const CONFIG = deepFreeze({
   modes: {
     duel: {
       name: 'Duell 1v1',
-      arenaSize: 80, // 80 x 80 m
+      arenaSize: 16 * CELL, // 16 x 16 Zellen = 81,92 x 81,92 m (ganze Zellen: Wände passen genau auf die Mauer)
       spawnDistance: 40, // Abstand der beiden Startpunkte
       roundsToWin: 5, // wer zuerst 5 Runden gewinnt
       roundPause: 3, // Pause zwischen Runden (s)
@@ -916,7 +923,7 @@ export const CONFIG = deepFreeze({
     zoneWars: {
       name: 'Zone Wars',
       totalPlayers: 6, // du + 5 Bots
-      mapSize: 160,
+      mapSize: 32 * CELL, // 32 x 32 Zellen = 163,84 m
       roundDuration: 90, // ganze Runde ca. 90 s // SCHÄTZUNG
       startHealth: 100,
       startShield: 100, // SCHÄTZUNG
@@ -967,7 +974,7 @@ export const CONFIG = deepFreeze({
     // Übungsplatz (Phase 2): zum Ausprobieren von Laufen, Springen, Ducken, Kamera
     practice: {
       name: 'Übungsplatz',
-      arenaSize: 80, // 80 x 80 m
+      arenaSize: 20 * CELL, // 20 x 20 Zellen = 102,4 x 102,4 m (die Stationen liegen auf dem Bau-Raster)
       borderHeight: 3, // Rand-Mauer
       startHealth: 100,
       startShield: 100,
@@ -975,20 +982,20 @@ export const CONFIG = deepFreeze({
       infiniteMaterials: true, // ab Phase 3: frei bauen zum Üben
       idleBots: 4, // stehende Übungs-Figuren (ohne KI)
       stepHeights: [0.3, 1, 2], // Kisten zum Testen: 0,3 m geht man hoch, 1 m und 2 m nicht
-      highWall: 4, // hohe Wand (Kamera-Test)
-      platformHeight: 4, // Plattform am Ende der 45°-Rampe
-      towerHeight: 12, // hoher Turm (Fallschaden-Test: 12 m → 50 Schaden)
+      highWall: LEVEL, // hohe Wand (Kamera-Test), so hoch wie eine Bau-Wand
+      platformHeight: LEVEL, // Plattform am Ende der Rampe (ein Stockwerk, 3,84 m)
+      towerHeight: 3 * LEVEL, // hoher Turm, 3 Stockwerke = 11,52 m (Fallschaden-Test: 4,52 m über 7 m → 45 Schaden)
       lowCeiling: 1.5, // niedrige Decke: nur geduckt passt man durch
       bridgeRampHeight: 3, // frei stehende Rampe, unter der man durchlaufen kann (Unterkante)
       respawnDelay: 2, // nach dem Besiegtwerden (z. B. vom Turm gefallen) so schnell wieder da
-      spawn: { x: 0, z: 22 }, // Startpunkt (schaut Richtung −Z auf die Stationen)
+      spawn: { x: 0, z: 5.5 * CELL }, // Startpunkt in der Mitte einer Zelle (schaut Richtung −Z auf die Stationen)
     },
 
     // Kreativ (Lobby-Standard, wie "JustBuild" im Original): große flache Wiese, unendlich Material,
     // alle Waffen und Heil-Items, Zielpuppen an der Seite, Zähler "Bauteile/s", Taste P = alles löschen
     creative: {
       name: 'Kreativ',
-      arenaSize: 200, // 200 x 200 m – Platz für riesige Bauten
+      arenaSize: 40 * CELL, // 40 x 40 Zellen = 204,8 x 204,8 m – Platz für riesige Bauten
       borderHeight: 1.2, // niedrige Rand-Mauer (die unsichtbare Wand darüber hält einen trotzdem drin)
       startHealth: 100,
       startShield: 100,
@@ -1039,7 +1046,7 @@ export const CONFIG = deepFreeze({
     hemiSkyColor: '#D6ECFF', // Licht von oben: fast weiß-blau
     hemiGroundColor: '#B9AE8C', // Licht von unten: warm (sonst färbt das Gras Gesichter und Wände grün)
     shadowArea: 70, // Schatten werden im Umkreis von 70 m berechnet
-    groundGridLines: true, // feine Linien im 4-m-Bauraster auf dem Boden
+    groundGridLines: true, // feine Linien im Bau-Raster (5,12 m) auf dem Boden
     groundGridOpacity: 0.07,
   },
 

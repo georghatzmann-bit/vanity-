@@ -1,8 +1,8 @@
 // =============================================================================
 // Bau-Raster (reine Mathematik, ohne Grafik)
 // =============================================================================
-// Die Welt ist für das Bauen in Zellen geteilt: 4 x 4 m groß, 4 m hoch
-// (CONFIG.world.gridCellSize / wallHeight). Zelle (i, j, k) umfasst
+// Die Welt ist für das Bauen in Zellen geteilt – wie in Fortnite 5,12 x 5,12 m groß und
+// 3,84 m hoch (CONFIG.world.gridCellSize / wallHeight). Zelle (i, j, k) umfasst
 //   x ∈ [i·S, (i+1)·S], y ∈ [j·H, (j+1)·H], z ∈ [k·S, (k+1)·S].
 //
 // Jedes Bauteil hat einen festen "Platz" (Slot) mit einem Schlüssel

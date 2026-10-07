@@ -334,17 +334,21 @@ const LOOK_CHECKS = [
       ctx.assert(r.placed === 18, `18 Teile gesetzt (${r.placed})`);
       ctx.assert(r.constructing === 3 && r.tinted, `im Aufbau bläulich (${r.constructing}, ${r.tinted})`);
       ctx.assert(r.stats.drawCalls <= 24, `fertige Teile in wenigen Zeichen-Aufrufen (${r.stats.drawCalls})`);
+      // Kamera-Lagen: x/z in Bau-Zellen (× S), y in Metern
       const views = [
-        ['look-bau-uebersicht', 20, 9, 47, { x: 20, y: 0, z: 30 }],
-        ['look-bau-holzwand', 10, 0, 21.5, { x: 10, y: 2.2, z: 20 }],
-        ['look-bau-steinwand', 10, 0, 29.5, { x: 10, y: 2.2, z: 28 }],
-        ['look-bau-metallwand', 10, 0, 37.5, { x: 10, y: 2.2, z: 36 }],
-        ['look-bau-boden-rampe-dach', 14, 4.5, 31, { x: 20, y: 1, z: 22 }],
-        ['look-bau-schaden-aufbau', 28, 0, 21, { x: 26, y: 1.6, z: 30 }],
-        ['look-bau-90er-turm', 46, 0, 16, { x: 38, y: 11, z: 30 }],
+        ['look-bau-uebersicht', 5, 9, 11.75, { x: 5, y: 0, z: 7.5 }],
+        ['look-bau-holzwand', 2.5, 0, 5.375, { x: 2.5, y: 2.2, z: 5 }],
+        ['look-bau-steinwand', 2.5, 0, 7.375, { x: 2.5, y: 2.2, z: 7 }],
+        ['look-bau-metallwand', 2.5, 0, 9.375, { x: 2.5, y: 2.2, z: 9 }],
+        ['look-bau-boden-rampe-dach', 3.5, 4.5, 7.75, { x: 5, y: 1, z: 5.5 }],
+        ['look-bau-schaden-aufbau', 7, 0, 5.25, { x: 6.5, y: 1.6, z: 7.5 }],
+        ['look-bau-90er-turm', 11.5, 0, 4, { x: 9.5, y: 11, z: 7.5 }],
       ];
       for (const [name, x, y, z, target] of views) {
-        await ctx.page.evaluate((a) => window.__b.viewFrom(a.x, a.y, a.z, a.target), { x, y, z, target });
+        await ctx.page.evaluate((a) => {
+          const b = window.__b;
+          b.viewFrom(a.x * b.S, a.y, a.z * b.S, { x: a.target.x * b.S, y: a.target.y, z: a.target.z * b.S });
+        }, { x, y, z, target });
         await settle(ctx);
         await ctx.shot(name);
       }
@@ -358,7 +362,7 @@ const LOOK_CHECKS = [
       const blue = await ctx.page.evaluate(() => {
         const b = window.__b;
         b.clear();
-        b.spawn(18, 0, 30, 0, 0);
+        b.spawn(4.5 * b.S, 0, 7.5 * b.S, 0, 0);
         b.select('wall');
         b.step(2);
         b.game.frameUpdate(1 / 60, 1);
@@ -391,14 +395,16 @@ const LOOK_CHECKS = [
         const b = window.__b;
         b.p.infiniteMaterials = true;
         b.clear();
-        b.spawn(18, 0, 30.6, 0, 0);
-        b.build('wall');
-        b.aimAt({ x: 18, y: 0.66, z: 28 });
+        const S = b.S;
+        const H = b.H;
+        b.spawn(4.5 * S, 0, 7.65 * S, 0, 0);
+        b.build('wall'); // wx:4:0:7 bei z = 7·S
+        b.aimAt({ x: 4.5 * S, y: 0.165 * H, z: 7 * S }); // Feld 7 (unten Mitte)
         b.press('edit');
         b.click();
-        b.aimAt({ x: 18, y: 2.0, z: 28 });
+        b.aimAt({ x: 4.5 * S, y: H / 2, z: 7 * S }); // Feld 4 (Mitte)
         b.click();
-        b.aimAt({ x: 19.4, y: 3.3, z: 28 });
+        b.aimAt({ x: 4.85 * S, y: 0.825 * H, z: 7 * S }); // Feld 2 (oben rechts) – nur Zeiger
         b.step(2);
         b.game.frameUpdate(1 / 60, 1);
         const overlay = b.building.view.root.getObjectByName('Edit-Kacheln');

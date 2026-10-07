@@ -9,7 +9,9 @@
 //     Ecktreppe, 2 Felder in einer Reihe weg = halbe Rampe (Richtung frei wählbar).
 //   - Formen (BufferGeometry) GENAU aus denselben Teilen → Bild = Kollision.
 //   - Bilder (Texturen) per Canvas: Holz (Bretter), Stein (Fugen), Metall (Nieten),
-//     dazu je eine Version mit Rissen (beschädigt).
+//     dazu je eine Version mit Rissen (beschädigt). Jedes Bild ist ein "Atlas" mit drei
+//     Bereichen (Wand S x H, Fläche S x S, Rampe S x Schräg-Länge) – so ist nichts verzerrt,
+//     obwohl die Wand (5,12 x 3,84 m) nicht quadratisch ist.
 //   - Edit-Felder: Kacheln zum Anzeigen und pickTile() (welches Feld liegt unter
 //     dem Fadenkreuz?).
 // Die Rechnungen (Kollision, Feld-Wahl) laufen auch ohne Bildschirm. Nur die
@@ -24,6 +26,42 @@ import {
 
 const B = CONFIG.building;
 const DOOR_MASK = tilesToMask(B.wallDoorCells);
+
+// -----------------------------------------------------------------------------
+// Bild-Atlas: Lage der drei Bereiche im Bild (von oben nach unten, in Metern gerechnet)
+// -----------------------------------------------------------------------------
+//   Wand   – S breit, H hoch (senkrechte Flächen: Wände, Seiten)
+//   Fläche – S x S (waagerechte Flächen: Boden, Dach von oben)
+//   Rampe  – S breit, so hoch wie die schräge Länge der Rampe (Bretter quer = Stufen)
+// Dazwischen ein schmaler Rand (gegen "Durchbluten" der Nachbar-Bereiche).
+const RAMP_LENGTH = Math.hypot(S, H);
+const ATLAS_PAD = S * 0.04;
+const ATLAS_TOTAL = H + S + RAMP_LENGTH + 2 * ATLAS_PAD;
+/** Bereiche des Atlas: top = Anfang (Anteil der Bild-Höhe von oben), size = Höhe (Anteil), meters = Höhe in m */
+export const ATLAS = Object.freeze({
+  total: ATLAS_TOTAL,
+  side: Object.freeze({ top: 0, size: H / ATLAS_TOTAL, meters: H }),
+  flat: Object.freeze({ top: (H + ATLAS_PAD) / ATLAS_TOTAL, size: S / ATLAS_TOTAL, meters: S }),
+  ramp: Object.freeze({ top: (H + S + 2 * ATLAS_PAD) / ATLAS_TOTAL, size: RAMP_LENGTH / ATLAS_TOTAL, meters: RAMP_LENGTH }),
+});
+const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+// Bild-Koordinate v (0 = unten im Bild, 1 = oben – wie three.js) für eine Stelle im Bereich;
+// local 0 = Unterkante des Bereichs, 1 = Oberkante
+function atlasV(region, local) {
+  return 1 - region.top - region.size + clamp01(local) * region.size;
+}
+/** senkrechte Fläche: Höhe y über der Zellen-Unterkante (m) → v */
+export function sideV(y) {
+  return atlasV(ATLAS.side, y / H);
+}
+/** waagerechte Fläche: Anteil 0..1 der Zelle → v */
+export function flatV(f) {
+  return atlasV(ATLAS.flat, f);
+}
+/** Rampen-Fläche: Anteil 0..1 entlang des Anstiegs → v */
+export function rampV(f) {
+  return atlasV(ATLAS.ramp, f);
+}
 
 // -----------------------------------------------------------------------------
 // Kollisions-Teile je Edit
@@ -100,11 +138,11 @@ export function pieceColliderSpecs(piece) {
 // -----------------------------------------------------------------------------
 // Felder 0..3: Spalte = t % 2 (entlang x), Reihe = floor(t / 2) (entlang z).
 // - 1 Feld entfernt (3 Felder als "L") → ECKTREPPE: vom unteren Ende-Feld eine kurze
-//   Rampe (45°) hinauf auf ein flaches Podest im Eck-Feld (halbe Höhe), dort 90° drehen
+//   Rampe (gleich steil wie die ganze) hinauf auf ein flaches Podest im Eck-Feld (halbe Höhe), dort 90° drehen
 //   und mit der zweiten kurzen Rampe ganz hinauf (eine Ebene, wie die ganze Rampe).
 //   Unteres Ende = das Ende-Feld, das bei der ganzen Rampe tiefer lag.
 // - 2 Felder nebeneinander entfernt (2 Felder in einer Reihe bleiben) → HALBE RAMPE
-//   (2 m breit, 4 m lang, 45°). Richtung: piece.editDir (Reihenfolge, in der die zwei
+//   (eine halbe Zelle breit, eine Zelle lang, gleich steil). Richtung: piece.editDir (Reihenfolge, in der die zwei
 //   Felder gewählt wurden: vom ersten zum zweiten = "hinauf"), sonst die alte Richtung,
 //   wenn sie entlang des Streifens liegt, sonst 90° weiter gedreht.
 // - sonst (1 Feld übrig, 2 Felder über Eck): Stücke der ganzen Rampe (alte Form).
@@ -406,10 +444,12 @@ function addBox(pos, uv, min, max, o, cell) {
   const y1 = max.y - o.y;
   const z0 = min.z - o.z;
   const z1 = max.z - o.z;
-  // UV: Meter ab der Zellen-Ecke / Zellgröße
+  // UV: Meter ab der Zellen-Ecke / Zellgröße; senkrechte Flächen im Wand-Bereich des
+  // Atlas (Höhe / H), waagerechte im Flächen-Bereich
   const ux = (x) => (x + o.x - cell.x) / S;
-  const uy = (y) => (y + o.y - cell.y) / S;
+  const uy = (y) => sideV(y + o.y - cell.y);
   const uz = (z) => (z + o.z - cell.z) / S;
+  const fz = (z) => flatV(uz(z));
   // +X
   quad(pos, uv, [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1],
     [1 - uz(z1), uy(y0)], [1 - uz(z0), uy(y0)], [1 - uz(z0), uy(y1)], [1 - uz(z1), uy(y1)]);
@@ -418,10 +458,10 @@ function addBox(pos, uv, min, max, o, cell) {
     [uz(z0), uy(y0)], [uz(z1), uy(y0)], [uz(z1), uy(y1)], [uz(z0), uy(y1)]);
   // +Y
   quad(pos, uv, [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0],
-    [ux(x0), 1 - uz(z1)], [ux(x1), 1 - uz(z1)], [ux(x1), 1 - uz(z0)], [ux(x0), 1 - uz(z0)]);
+    [ux(x0), flatV(1 - uz(z1))], [ux(x1), flatV(1 - uz(z1))], [ux(x1), flatV(1 - uz(z0))], [ux(x0), flatV(1 - uz(z0))]);
   // −Y
   quad(pos, uv, [x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1],
-    [ux(x0), uz(z0)], [ux(x1), uz(z0)], [ux(x1), uz(z1)], [ux(x0), uz(z1)]);
+    [ux(x0), fz(z0)], [ux(x1), fz(z0)], [ux(x1), fz(z1)], [ux(x0), fz(z1)]);
   // +Z
   quad(pos, uv, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1],
     [ux(x0), uy(y0)], [ux(x1), uy(y0)], [ux(x1), uy(y1)], [ux(x0), uy(y1)]);
@@ -457,13 +497,14 @@ function addRamp(pos, uv, spec, o, cell, rampDir) {
   const h = (x, z) => a * x + b * z + c;
   // Bretter quer zur Rampe: u = quer, v = entlang des Anstiegs (ab der unteren Kante)
   const d = ((rampDir % 4) + 4) % 4;
+  // v liegt im Rampen-Bereich des Atlas (so hoch wie die schräge Länge → nicht gestreckt)
   const tex = (x, z) => {
     const lx = x - cell.x;
     const lz = z - cell.z;
-    if (d === 0) return [lz / S, lx / S];
-    if (d === 2) return [1 - lz / S, 1 - lx / S];
-    if (d === 1) return [1 - lx / S, lz / S];
-    return [lx / S, 1 - lz / S];
+    if (d === 0) return [lz / S, rampV(lx / S)];
+    if (d === 2) return [1 - lz / S, rampV(1 - lx / S)];
+    if (d === 1) return [1 - lx / S, rampV(lz / S)];
+    return [lx / S, rampV(1 - lz / S)];
   };
   const P = (x, y, z) => [x - o.x, y - o.y, z - o.z];
   const corners = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
@@ -485,7 +526,7 @@ function addRamp(pos, uv, spec, o, cell, rampDir) {
 function sideQuad(pos, uv, top, bot, m, n, cell, o) {
   const along = (p) => (Math.abs(top[n][0] - top[m][0]) > Math.abs(top[n][2] - top[m][2])
     ? (p[0] + o.x - cell.x) / S : (p[2] + o.z - cell.z) / S);
-  const v = (p) => (p[1] + o.y - cell.y) / S;
+  const v = (p) => sideV(p[1] + o.y - cell.y);
   quad(pos, uv, bot[n], bot[m], top[m], top[n],
     [along(bot[n]), v(bot[n])], [along(bot[m]), v(bot[m])], [along(top[m]), v(top[m])], [along(top[n]), v(top[n])]);
 }
@@ -523,7 +564,7 @@ function addPyramid(pos, uv, spec, o, cell) {
   const apexInside = cx >= x0 - 1e-9 && cx <= x1 + 1e-9 && cz >= z0 - 1e-9 && cz <= z1 + 1e-9;
   const apex = [cx, cz];
   const P = (x, y, z) => [x - o.x, y - o.y, z - o.z];
-  const U = (x, z) => [(x - cell.x) / S, 1 - (z - cell.z) / S];
+  const U = (x, z) => [(x - cell.x) / S, flatV(1 - (z - cell.z) / S)];
   const n = ring.length;
   for (let m = 0; m < n; m++) {
     const p = ring[m];
@@ -563,7 +604,7 @@ function addPyramid(pos, uv, spec, o, cell) {
     const qbm = P(q[0], height(q[0], q[1]) - vT, q[1]);
     const alongX = Math.abs(q[0] - p[0]) > Math.abs(q[1] - p[1]);
     const ua = (pt2) => (alongX ? (pt2[0] + o.x - cell.x) / S : (pt2[2] + o.z - cell.z) / S);
-    const va = (pt2) => (pt2[1] + o.y - cell.y) / S;
+    const va = (pt2) => sideV(pt2[1] + o.y - cell.y);
     // Außen-Richtung: Ring läuft (von oben, −Z oben) gegen den Uhrzeigersinn
     quad(pos, uv, pbm, qbm, qt, pt, [ua(pbm), va(pbm)], [ua(qbm), va(qbm)], [ua(qt), va(qt)], [ua(pt), va(pt)]);
   }
@@ -700,8 +741,21 @@ function tileGeometry(pos) {
 
 // --- Bilder (Texturen) -------------------------------------------------------------
 
+// Pixel-Zeilen der drei Atlas-Bereiche für ein Bild der Breite px (Breite = eine Zelle)
+function atlasRows(px) {
+  const height = Math.round(px * ATLAS.total / S);
+  const rows = (region) => {
+    const y0 = Math.round(region.top * height);
+    return { y0, h: Math.round((region.top + region.size) * height) - y0, meters: region.meters };
+  };
+  return { height, regions: [rows(ATLAS.side), rows(ATLAS.flat), rows(ATLAS.ramp)] };
+}
+
 /**
- * Malt die Textur eines Materials auf eine Leinwand (1 Bild = 4 x 4 m = eine Wand/ein Boden).
+ * Malt die Textur eines Materials auf eine Leinwand. Das Bild ist eine Zelle breit und
+ * enthält drei Bereiche (ATLAS): Wand (S x H), Fläche (S x S) und Rampe (S x Schräg-Länge).
+ * Jeder Bereich hat seinen eigenen Rahmen – so sieht eine Wand wie eine Wand aus (nicht
+ * gestaucht) und ein Boden wie ein Boden.
  * Aussehen wie im Original-Stil: HOLZ = helle warme Bretter in einem dunkleren Holz-Rahmen,
  * STEIN = graue Blöcke mit Fugen und Stein-Rahmen, METALL = blaugraues Wellblech mit Rahmen und Nieten.
  * Die Bretter/Reihen laufen waagerecht – auf Rampen also quer (wie Stufen).
@@ -709,72 +763,87 @@ function tileGeometry(pos) {
  */
 export function drawMaterialCanvas(material, cracked = false) {
   const px = B.textureSize;
+  const atlas = atlasRows(px);
   const canvas = document.createElement('canvas');
   canvas.width = px;
-  canvas.height = px;
+  canvas.height = atlas.height;
   const ctx = canvas.getContext('2d');
-  const rng = seededRandom(material === 'wood' ? 11 : material === 'stone' ? 23 : 37);
   const color = CONFIG.visuals.colors[material] ?? '#CCCCCC';
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, px, px);
-  if (material === 'wood') drawWood(ctx, px, rng);
-  else if (material === 'stone') drawStone(ctx, px, rng);
-  else drawMetal(ctx, px, rng);
-  if (cracked) drawCracks(ctx, px, seededRandom(71));
+  // Rand zwischen den Bereichen in Rahmen-Farbe (blutet beim Verkleinern nicht hell durch)
+  ctx.fillStyle = FRAME_COLORS[material] ?? color;
+  ctx.fillRect(0, 0, px, atlas.height);
+  atlas.regions.forEach((r, index) => {
+    const rng = seededRandom((material === 'wood' ? 11 : material === 'stone' ? 23 : 37) + index * 101);
+    ctx.save();
+    ctx.translate(0, r.y0);
+    ctx.beginPath();
+    ctx.rect(0, 0, px, r.h);
+    ctx.clip();
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, px, r.h);
+    if (material === 'wood') drawWood(ctx, px, r.h, rng);
+    else if (material === 'stone') drawStone(ctx, px, r.h, rng);
+    else drawMetal(ctx, px, r.h, rng);
+    if (cracked) drawCracks(ctx, px, r.h, seededRandom(71 + index));
+    ctx.restore();
+  });
   return canvas;
 }
 
-// Rahmen um das ganze Bild: Breite w, Farbe, mit heller Kante innen oben/links und Schatten
-function drawFrame(ctx, px, w, color, light, dark) {
+const FRAME_COLORS = { wood: '#9C6431', stone: '#85888D', metal: '#6A7F98' };
+
+// Rahmen um einen Bereich (w x h): Breite f, Farbe, mit heller Kante innen oben/links und Schatten
+function drawFrame(ctx, w, h, f, color, light, dark) {
   ctx.fillStyle = color;
-  ctx.fillRect(0, 0, px, w);
-  ctx.fillRect(0, px - w, px, w);
-  ctx.fillRect(0, 0, w, px);
-  ctx.fillRect(px - w, 0, w, px);
-  const e = Math.max(2, Math.round(w * 0.14));
+  ctx.fillRect(0, 0, w, f);
+  ctx.fillRect(0, h - f, w, f);
+  ctx.fillRect(0, 0, f, h);
+  ctx.fillRect(w - f, 0, f, h);
+  const e = Math.max(2, Math.round(f * 0.14));
   // Kanten: außen hell (Licht), innen dunkel (Schatten auf die Füllung)
   ctx.fillStyle = light;
-  ctx.fillRect(0, 0, px, e);
-  ctx.fillRect(0, 0, e, px);
-  ctx.fillRect(px - w, w, e, px - 2 * w);
-  ctx.fillRect(w, px - w, px - 2 * w, e);
+  ctx.fillRect(0, 0, w, e);
+  ctx.fillRect(0, 0, e, h);
+  ctx.fillRect(w - f, f, e, h - 2 * f);
+  ctx.fillRect(f, h - f, w - 2 * f, e);
   ctx.fillStyle = dark;
-  ctx.fillRect(0, px - e, px, e);
-  ctx.fillRect(px - e, 0, e, px);
-  ctx.fillRect(w - e, w, e, px - 2 * w);
-  ctx.fillRect(w, w - e, px - 2 * w, e);
+  ctx.fillRect(0, h - e, w, e);
+  ctx.fillRect(w - e, 0, e, h);
+  ctx.fillRect(f - e, f, e, h - 2 * f);
+  ctx.fillRect(f, f - e, w - 2 * f, e);
 }
 
-function drawWood(ctx, px, rng) {
-  const frame = Math.round(px * 0.06);
-  const planks = 8;
-  const ph = (px - 2 * frame) / planks;
-  const seam = Math.max(2, Math.round(px / 170));
+// Holz: Bretter etwa 1/8 Zelle hoch (auf jedem Bereich gleich breit → nicht verzerrt)
+function drawWood(ctx, w, h, rng) {
+  const frame = Math.round(w * 0.06);
+  const planks = Math.max(3, Math.round(8 * h / w));
+  const ph = (h - 2 * frame) / planks;
+  const seam = Math.max(2, Math.round(w / 170));
   for (let p = 0; p < planks; p++) {
     const y = frame + p * ph;
     // jedes Brett etwas heller/dunkler (warm)
     const tone = (rng() - 0.5) * 0.22;
     ctx.fillStyle = tone > 0 ? `rgba(255, 236, 200, ${tone})` : `rgba(110, 55, 15, ${-tone})`;
-    ctx.fillRect(frame, y, px - 2 * frame, ph);
+    ctx.fillRect(frame, y, w - 2 * frame, ph);
     // Licht oben am Brett, Schatten unten (wirkt plastisch)
     ctx.fillStyle = 'rgba(255, 240, 210, 0.22)';
-    ctx.fillRect(frame, y + seam, px - 2 * frame, Math.max(2, ph * 0.08));
+    ctx.fillRect(frame, y + seam, w - 2 * frame, Math.max(2, ph * 0.08));
     ctx.fillStyle = 'rgba(90, 45, 10, 0.18)';
-    ctx.fillRect(frame, y + ph - Math.max(2, ph * 0.12), px - 2 * frame, Math.max(2, ph * 0.12));
+    ctx.fillRect(frame, y + ph - Math.max(2, ph * 0.12), w - 2 * frame, Math.max(2, ph * 0.12));
     // Maserung
     ctx.strokeStyle = 'rgba(130, 75, 30, 0.22)';
-    ctx.lineWidth = Math.max(1, px / 400);
+    ctx.lineWidth = Math.max(1, w / 400);
     for (let g = 0; g < 3; g++) {
       const gy = y + ph * (0.25 + rng() * 0.5);
       const phase = rng() * 6;
       ctx.beginPath();
       ctx.moveTo(frame, gy);
-      for (let x = frame; x <= px - frame; x += px / 32) ctx.lineTo(x, gy + Math.sin(x * 0.03 + phase) * ph * 0.06);
+      for (let x = frame; x <= w - frame; x += w / 32) ctx.lineTo(x, gy + Math.sin(x * 0.03 + phase) * ph * 0.06);
       ctx.stroke();
     }
     // Ast-Loch ab und zu
     if (rng() < 0.4) {
-      const kx = frame + rng() * (px - 2 * frame);
+      const kx = frame + rng() * (w - 2 * frame);
       ctx.fillStyle = 'rgba(110, 60, 20, 0.35)';
       ctx.beginPath();
       ctx.ellipse(kx, y + ph / 2, ph * 0.18, ph * 0.12, 0, 0, Math.PI * 2);
@@ -782,125 +851,133 @@ function drawWood(ctx, px, rng) {
     }
     // Fuge zwischen den Brettern
     ctx.fillStyle = 'rgba(70, 35, 10, 0.75)';
-    ctx.fillRect(frame, y, px - 2 * frame, seam);
+    ctx.fillRect(frame, y, w - 2 * frame, seam);
     // Stoß-Fuge (versetzt) + Nägel
-    const joint = frame + ((p % 2) * 0.5 + 0.25 + (rng() - 0.5) * 0.08) * (px - 2 * frame);
+    const joint = frame + ((p % 2) * 0.5 + 0.25 + (rng() - 0.5) * 0.08) * (w - 2 * frame);
     ctx.fillRect(joint, y, seam, ph);
     ctx.fillStyle = 'rgba(55, 45, 40, 0.7)';
-    for (const nx of [joint - px / 45, joint + px / 45, frame + px / 40, px - frame - px / 40]) {
+    for (const nx of [joint - w / 45, joint + w / 45, frame + w / 40, w - frame - w / 40]) {
       ctx.beginPath();
-      ctx.arc(nx, y + ph / 2, px / 200, 0, Math.PI * 2);
+      ctx.arc(nx, y + ph / 2, w / 200, 0, Math.PI * 2);
       ctx.fill();
     }
   }
   // dunklerer Holz-Rahmen (Balken) mit Maserung
-  drawFrame(ctx, px, frame, '#9C6431', 'rgba(255, 220, 170, 0.45)', 'rgba(60, 28, 5, 0.55)');
+  drawFrame(ctx, w, h, frame, FRAME_COLORS.wood, 'rgba(255, 220, 170, 0.45)', 'rgba(60, 28, 5, 0.55)');
   ctx.strokeStyle = 'rgba(80, 40, 10, 0.35)';
-  ctx.lineWidth = Math.max(1, px / 300);
+  ctx.lineWidth = Math.max(1, w / 300);
   for (const t of [0.35, 0.65]) {
     ctx.beginPath();
     ctx.moveTo(frame * 1.2, frame * t);
-    ctx.lineTo(px - frame * 1.2, frame * t);
-    ctx.moveTo(frame * 1.2, px - frame * t);
-    ctx.lineTo(px - frame * 1.2, px - frame * t);
+    ctx.lineTo(w - frame * 1.2, frame * t);
+    ctx.moveTo(frame * 1.2, h - frame * t);
+    ctx.lineTo(w - frame * 1.2, h - frame * t);
     ctx.moveTo(frame * t, frame * 1.2);
-    ctx.lineTo(frame * t, px - frame * 1.2);
-    ctx.moveTo(px - frame * t, frame * 1.2);
-    ctx.lineTo(px - frame * t, px - frame * 1.2);
+    ctx.lineTo(frame * t, h - frame * 1.2);
+    ctx.moveTo(w - frame * t, frame * 1.2);
+    ctx.lineTo(w - frame * t, h - frame * 1.2);
     ctx.stroke();
   }
   // Ecken: Schrauben
   ctx.fillStyle = 'rgba(60, 50, 45, 0.85)';
-  for (const [x, y] of [[frame / 2, frame / 2], [px - frame / 2, frame / 2], [frame / 2, px - frame / 2], [px - frame / 2, px - frame / 2]]) {
+  for (const [x, y] of [[frame / 2, frame / 2], [w - frame / 2, frame / 2], [frame / 2, h - frame / 2], [w - frame / 2, h - frame / 2]]) {
     ctx.beginPath();
     ctx.arc(x, y, frame * 0.18, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function drawStone(ctx, px, rng) {
-  const frame = Math.round(px * 0.055);
-  const inner = px - 2 * frame;
-  const rows = 5;
-  const rh = inner / rows;
-  const mortar = Math.max(3, Math.round(px / 100));
+// Stein: Reihen etwa 1/5 Zelle hoch, 3 Blöcke je Reihe (versetzt)
+function drawStone(ctx, w, h, rng) {
+  const frame = Math.round(w * 0.055);
+  const innerW = w - 2 * frame;
+  const innerH = h - 2 * frame;
+  const rows = Math.max(2, Math.round(5 * h / w));
+  const rh = innerH / rows;
+  const mortar = Math.max(3, Math.round(w / 100));
   // Fugen-Farbe als Grund
   ctx.fillStyle = '#6E7176';
-  ctx.fillRect(frame, frame, inner, inner);
+  ctx.fillRect(frame, frame, innerW, innerH);
   for (let r = 0; r < rows; r++) {
     const y = frame + r * rh;
     const blocks = 3;
-    const bw = inner / blocks;
+    const bw = innerW / blocks;
     const offset = (r % 2) * 0.5;
     for (let b = -1; b <= blocks; b++) {
       let x0 = frame + (b + offset) * bw;
       let x1 = x0 + bw;
       x0 = Math.max(frame, x0) + mortar / 2;
-      x1 = Math.min(px - frame, x1) - mortar / 2;
+      x1 = Math.min(w - frame, x1) - mortar / 2;
       if (x1 - x0 < 4) continue;
       const y0 = y + mortar / 2;
-      const h = rh - mortar;
+      const bh = rh - mortar;
       const tone = (rng() - 0.5) * 0.24;
       ctx.fillStyle = CONFIG.visuals.colors.stone;
-      ctx.fillRect(x0, y0, x1 - x0, h);
+      ctx.fillRect(x0, y0, x1 - x0, bh);
       ctx.fillStyle = tone > 0 ? `rgba(255, 255, 255, ${tone})` : `rgba(0, 0, 0, ${-tone})`;
-      ctx.fillRect(x0, y0, x1 - x0, h);
+      ctx.fillRect(x0, y0, x1 - x0, bh);
       // Sprenkel
-      for (let s = 0; s < 28; s++) {
+      for (let n = 0; n < 28; n++) {
         ctx.fillStyle = rng() < 0.5 ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
-        const sz = px / 260 + rng() * px / 130;
-        ctx.fillRect(x0 + rng() * (x1 - x0 - sz), y0 + rng() * (h - sz), sz, sz);
+        const sz = w / 260 + rng() * w / 130;
+        ctx.fillRect(x0 + rng() * (x1 - x0 - sz), y0 + rng() * (bh - sz), sz, sz);
       }
       // Kante: oben/links hell, unten/rechts dunkel (behauener Block)
-      const e = Math.max(2, Math.round(px / 120));
+      const e = Math.max(2, Math.round(w / 120));
       ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
       ctx.fillRect(x0, y0, x1 - x0, e);
-      ctx.fillRect(x0, y0, e, h);
+      ctx.fillRect(x0, y0, e, bh);
       ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-      ctx.fillRect(x0, y0 + h - e, x1 - x0, e);
-      ctx.fillRect(x1 - e, y0, e, h);
+      ctx.fillRect(x0, y0 + bh - e, x1 - x0, e);
+      ctx.fillRect(x1 - e, y0, e, bh);
     }
   }
-  drawFrame(ctx, px, frame, '#85888D', 'rgba(255, 255, 255, 0.35)', 'rgba(0, 0, 0, 0.4)');
-  // Rahmen aus einzelnen Steinen: Fugen quer im Rahmen
+  drawFrame(ctx, w, h, frame, FRAME_COLORS.stone, 'rgba(255, 255, 255, 0.35)', 'rgba(0, 0, 0, 0.4)');
+  // Rahmen aus einzelnen Steinen: Fugen quer im Rahmen (gleicher Abstand waagerecht und senkrecht)
   ctx.fillStyle = 'rgba(40, 42, 46, 0.45)';
+  const step = w / 6;
   for (let t = 1; t < 6; t++) {
-    const s = (t / 6) * px;
-    ctx.fillRect(s, 0, mortar * 0.7, frame);
-    ctx.fillRect(s, px - frame, mortar * 0.7, frame);
-    ctx.fillRect(0, s, frame, mortar * 0.7);
-    ctx.fillRect(px - frame, s, frame, mortar * 0.7);
+    ctx.fillRect(t * step, 0, mortar * 0.7, frame);
+    ctx.fillRect(t * step, h - frame, mortar * 0.7, frame);
+  }
+  const vSteps = Math.max(2, Math.round(h / step));
+  for (let t = 1; t < vSteps; t++) {
+    const yy = (t / vSteps) * h;
+    ctx.fillRect(0, yy, frame, mortar * 0.7);
+    ctx.fillRect(w - frame, yy, frame, mortar * 0.7);
   }
 }
 
-function drawMetal(ctx, px, rng) {
-  const frame = Math.round(px * 0.06);
-  const inner = px - 2 * frame;
-  // Wellblech: senkrechte Rillen mit Licht und Schatten
-  const period = px / 16;
-  for (let x = frame; x < px - frame; x++) {
-    const s = Math.sin(((x - frame) / period) * Math.PI * 2);
-    const a = s * 0.12;
+// Metall: senkrechte Rillen (Wellblech), Querstrebe in der Mitte, Nieten im Rahmen
+function drawMetal(ctx, w, h, rng) {
+  const frame = Math.round(w * 0.06);
+  const innerW = w - 2 * frame;
+  const innerH = h - 2 * frame;
+  const period = w / 16;
+  for (let x = frame; x < w - frame; x++) {
+    const sv = Math.sin(((x - frame) / period) * Math.PI * 2);
+    const a = sv * 0.12;
     ctx.fillStyle = a > 0 ? `rgba(235, 245, 255, ${a})` : `rgba(10, 20, 40, ${-a})`;
-    ctx.fillRect(x, frame, 1, inner);
+    ctx.fillRect(x, frame, 1, innerH);
   }
   // leichte Kratzer/Flecken
-  for (let n = 0; n < 40; n++) {
+  const scratches = Math.round(40 * h / w);
+  for (let n = 0; n < scratches; n++) {
     ctx.fillStyle = `rgba(255, 255, 255, ${0.03 + rng() * 0.05})`;
-    ctx.fillRect(frame + rng() * inner, frame + rng() * inner, px / 60 + rng() * px / 25, Math.max(1, px / 400));
+    ctx.fillRect(frame + rng() * innerW, frame + rng() * innerH, w / 60 + rng() * w / 25, Math.max(1, w / 400));
   }
   // Querstrebe in der Mitte
   const bar = Math.round(frame * 0.7);
   ctx.fillStyle = '#7086A0';
-  ctx.fillRect(frame, px / 2 - bar / 2, inner, bar);
+  ctx.fillRect(frame, h / 2 - bar / 2, innerW, bar);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.fillRect(frame, px / 2 - bar / 2, inner, Math.max(2, bar * 0.15));
+  ctx.fillRect(frame, h / 2 - bar / 2, innerW, Math.max(2, bar * 0.15));
   ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-  ctx.fillRect(frame, px / 2 + bar / 2 - Math.max(2, bar * 0.15), inner, Math.max(2, bar * 0.15));
-  drawFrame(ctx, px, frame, '#6A7F98', 'rgba(225, 238, 255, 0.5)', 'rgba(5, 12, 25, 0.45)');
-  // Nieten im Rahmen und auf der Strebe
+  ctx.fillRect(frame, h / 2 + bar / 2 - Math.max(2, bar * 0.15), innerW, Math.max(2, bar * 0.15));
+  drawFrame(ctx, w, h, frame, FRAME_COLORS.metal, 'rgba(225, 238, 255, 0.5)', 'rgba(5, 12, 25, 0.45)');
+  // Nieten im Rahmen und auf der Strebe (gleicher Abstand waagerecht und senkrecht)
   const rivet = (x, y) => {
-    const r = px / 110;
+    const r = w / 110;
     ctx.fillStyle = 'rgba(15, 22, 35, 0.6)';
     ctx.beginPath();
     ctx.arc(x + r * 0.3, y + r * 0.3, r, 0, Math.PI * 2);
@@ -916,28 +993,33 @@ function drawMetal(ctx, px, rng) {
   };
   const steps = 8;
   for (let t = 0; t <= steps; t++) {
-    const s = frame / 2 + (t / steps) * (px - frame);
-    rivet(s, frame / 2);
-    rivet(s, px - frame / 2);
-    rivet(frame / 2, s);
-    rivet(px - frame / 2, s);
-    if (t > 0 && t < steps) rivet(s, px / 2);
+    const sx = frame / 2 + (t / steps) * (w - frame);
+    rivet(sx, frame / 2);
+    rivet(sx, h - frame / 2);
+    if (t > 0 && t < steps) rivet(sx, h / 2);
+  }
+  const vSteps = Math.max(2, Math.round(steps * (h - frame) / (w - frame)));
+  for (let t = 0; t <= vSteps; t++) {
+    const sy = frame / 2 + (t / vSteps) * (h - frame);
+    rivet(frame / 2, sy);
+    rivet(w - frame / 2, sy);
   }
 }
 
-function drawCracks(ctx, px, rng) {
+function drawCracks(ctx, w, h, rng) {
   ctx.lineCap = 'round';
-  for (let c = 0; c < 5; c++) {
-    let x = px * (0.2 + rng() * 0.6);
-    let y = px * (0.2 + rng() * 0.6);
+  const count = Math.max(3, Math.round(5 * h / w));
+  for (let c = 0; c < count; c++) {
+    let x = w * (0.2 + rng() * 0.6);
+    let y = h * (0.2 + rng() * 0.6);
     let angle = rng() * Math.PI * 2;
     const steps = 6 + Math.floor(rng() * 5);
-    for (let s = 0; s < steps; s++) {
-      const len = px * (0.03 + rng() * 0.05);
+    for (let n = 0; n < steps; n++) {
+      const len = w * (0.03 + rng() * 0.05);
       const nx = x + Math.cos(angle) * len;
       const ny = y + Math.sin(angle) * len;
       ctx.strokeStyle = 'rgba(25, 18, 12, 0.85)';
-      ctx.lineWidth = Math.max(1.5, (px / 110) * (1 - s / steps) + 1);
+      ctx.lineWidth = Math.max(1.5, (w / 110) * (1 - n / steps) + 1);
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(nx, ny);
@@ -967,40 +1049,46 @@ function drawCracks(ctx, px, rng) {
 }
 
 /**
- * Bild für die Bau-Vorschau ("Geist"): weiß, durchsichtig, mit hellem Gitter (1 m) und Rand.
+ * Bild für die Bau-Vorschau ("Geist"): weiß, durchsichtig, mit hellem Gitter und Rand –
+ * derselbe Atlas wie die Material-Bilder. Gitter = Viertel einer Zelle (1,28 m) in jede
+ * Richtung, also quadratisch auf Wand (4 x 3), Boden (4 x 4) und Rampe (4 x 5).
  * Die Farbe (blau = geht, rot = geht nicht) kommt vom Material.
  */
 export function createGhostTexture() {
   const px = 256;
+  const atlas = atlasRows(px);
   const canvas = document.createElement('canvas');
   canvas.width = px;
-  canvas.height = px;
+  canvas.height = atlas.height;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
-  ctx.fillRect(0, 0, px, px);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
   const line = 3;
-  for (let t = 1; t < 4; t++) {
-    const s = (t / 4) * px;
-    ctx.fillRect(s - line / 2, 0, line, px);
-    ctx.fillRect(0, s - line / 2, px, line);
-  }
   const border = 8;
-  ctx.fillRect(0, 0, px, border);
-  ctx.fillRect(0, px - border, px, border);
-  ctx.fillRect(0, 0, border, px);
-  ctx.fillRect(px - border, 0, border, px);
+  for (const r of atlas.regions) {
+    ctx.save();
+    ctx.translate(0, r.y0);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+    ctx.fillRect(0, 0, px, r.h);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    for (let t = 1; t < 4; t++) ctx.fillRect((t / 4) * px - line / 2, 0, line, r.h);
+    const rows = Math.max(1, Math.round(r.meters / (S / 4)));
+    for (let t = 1; t < rows; t++) ctx.fillRect(0, (t / rows) * r.h - line / 2, px, line);
+    ctx.fillRect(0, 0, px, border);
+    ctx.fillRect(0, r.h - border, px, border);
+    ctx.fillRect(0, 0, border, r.h);
+    ctx.fillRect(px - border, 0, border, r.h);
+    ctx.restore();
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
-/** Textur (CanvasTexture) für ein Material. */
+/** Textur (CanvasTexture) für ein Material (Atlas: waagerecht wiederholt, senkrecht nicht). */
 export function createMaterialTexture(material, cracked, renderer = null) {
   const texture = new THREE.CanvasTexture(drawMaterialCanvas(material, cracked));
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.anisotropy = renderer ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
   return texture;
 }

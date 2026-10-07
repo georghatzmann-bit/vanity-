@@ -207,12 +207,12 @@ const GAME_CHECKS = [
       const d = await ctx.page.evaluate(() => {
         const g = buildDuel.game;
         const p = g.player;
-        p.spawnAt({ x: 0, y: 0, z: 22 }, 0);
+        p.spawnAt(buildDuel.game.mode.spawnPoint, 0);
         buildDuel.input.setVirtual('moveForward', true);
         buildDuel.simulate(1);
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.simulate(0.2);
-        return 22 - p.position.z;
+        return buildDuel.game.mode.spawnPoint.z - p.position.z;
       });
       ctx.assert(d > 5.4 && d < 6.4, `gelaufen: ${d.toFixed(2)} m`);
       await ctx.page.waitForTimeout(500);
@@ -271,28 +271,31 @@ const GAME_CHECKS = [
     },
   },
   {
-    name: 'Rampe 45° hoch auf die 4-m-Plattform (ohne Springen)',
+    name: 'Rampe hoch auf die Plattform (ein Stockwerk, ohne Springen)',
     async run(ctx) {
-      const y = await ctx.page.evaluate(() => {
+      const r = await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: -22, y: 0, z: 4 }, 0);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        p.spawnAt({ x: -5.5 * S, y: 0, z: S }, 0);
         buildDuel.input.setVirtual('moveForward', true);
-        buildDuel.simulate(1.6);
+        buildDuel.simulate(2);
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.simulate(0.3);
-        return p.position.y;
+        return { y: p.position.y, target: buildDuel.CONFIG.modes.practice.platformHeight };
       });
-      ctx.assert(Math.abs(y - 4) < 1e-3, `Höhe: ${y.toFixed(3)} m`);
+      ctx.assert(Math.abs(r.y - r.target) < 1e-3, `Höhe: ${r.y.toFixed(3)} m (Plattform ${r.target} m)`);
       await ctx.page.waitForTimeout(500);
       await ctx.shot('03-plattform');
     },
   },
   {
-    name: 'Turm 12 m: Sturz macht 50 Schaden (zuerst Schild)',
+    name: 'Turm (3 Stockwerke): Sturz macht Fallschaden (zuerst Schild)',
     async run(ctx) {
       await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.resetForRound({ health: 100, shield: 100, position: { x: -22, y: 12, z: -24 }, yaw: Math.PI / 2 });
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        const top = buildDuel.CONFIG.modes.practice.towerHeight;
+        p.resetForRound({ health: 100, shield: 100, position: { x: -5.5 * S, y: top, z: -6 * S }, yaw: Math.PI / 2 });
       });
       await ctx.page.waitForTimeout(500);
       await ctx.shot('04-turm-oben');
@@ -302,9 +305,12 @@ const GAME_CHECKS = [
         buildDuel.simulate(0.9);
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.simulate(2);
-        return { health: p.health, shield: p.shield, y: p.position.y };
+        const fd = buildDuel.CONFIG.player.fallDamage;
+        const expected = (buildDuel.CONFIG.modes.practice.towerHeight - fd.safeHeight) * fd.damagePerMeter;
+        return { health: p.health, shield: p.shield, y: p.position.y, expected };
       });
-      ctx.assert(r.y === 0 && r.health === 100 && Math.abs(r.shield - 50) < 1e-6, `Leben ${r.health}, Schild ${r.shield}`);
+      ctx.assert(r.y === 0 && r.health === 100 && Math.abs(r.shield - (100 - r.expected)) < 1e-6,
+        `Leben ${r.health}, Schild ${r.shield} (erwartet ${(100 - r.expected).toFixed(1)})`);
     },
   },
   {
@@ -312,7 +318,9 @@ const GAME_CHECKS = [
     async run(ctx) {
       const r = await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: 8, y: 0, z: -3 }, 0);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        const entry = -1.5 * S; // Eingang der niedrigen Decke
+        p.spawnAt({ x: 2 * S, y: 0, z: entry + 3 }, 0);
         buildDuel.input.setVirtual('moveForward', true);
         buildDuel.simulate(1);
         const standingZ = p.position.z;
@@ -321,24 +329,26 @@ const GAME_CHECKS = [
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.input.setVirtual('crouch', false);
         buildDuel.simulate(0.3);
-        return { standingZ, z: p.position.z, crouching: p.crouching };
+        return { standingZ, z: p.position.z, crouching: p.crouching, entry };
       });
-      ctx.assert(r.standingZ > -6 + 0.3, `stehend aufgehalten bei z=${r.standingZ.toFixed(2)}`);
-      ctx.assert(r.z < -7 && r.crouching, `geduckt drin (z=${r.z.toFixed(2)}), Aufstehen geht nicht`);
+      ctx.assert(r.standingZ > r.entry + 0.3, `stehend aufgehalten bei z=${r.standingZ.toFixed(2)}`);
+      ctx.assert(r.z < r.entry - 1 && r.crouching, `geduckt drin (z=${r.z.toFixed(2)}), Aufstehen geht nicht`);
       await ctx.page.waitForTimeout(500);
       await ctx.shot('05-decke');
     },
   },
   {
-    name: 'Kamera an der 4-m-Wand: geht nicht hindurch',
+    name: 'Kamera an der hohen Wand: geht nicht hindurch',
     async run(ctx) {
-      await ctx.page.evaluate(() => {
+      const wallFace = await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: 29, y: 0, z: 2.8 }, Math.PI); // Rücken zur Wand
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        p.spawnAt({ x: 7.25 * S, y: 0, z: S / 2 + 0.15 + 0.65 }, Math.PI); // Rücken zur Wand
+        return S / 2 + 0.15;
       });
       await ctx.page.waitForTimeout(800);
       const camZ = await ctx.page.evaluate(() => buildDuel.camera.position.z);
-      ctx.assert(camZ > 2.15 + 0.1, `Kamera bei z=${camZ.toFixed(2)} (Wand endet bei 2,15)`);
+      ctx.assert(camZ > wallFace + 0.1, `Kamera bei z=${camZ.toFixed(2)} (Wand endet bei ${wallFace.toFixed(2)})`);
       await ctx.shot('06-wand');
     },
   },
@@ -347,7 +357,7 @@ const GAME_CHECKS = [
     async run(ctx) {
       await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: 0, y: 0, z: 22 }, 0);
+        p.spawnAt(buildDuel.game.mode.spawnPoint, 0);
         buildDuel.input.setVirtual('secondary', true);
         buildDuel.simulate(1 / 60);
       });
@@ -366,7 +376,8 @@ const GAME_CHECKS = [
     async run(ctx) {
       await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: 1.2, y: 0, z: 17 }, 0.25);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        p.spawnAt({ x: 0.3 * S, y: 0, z: 4.25 * S }, 0.25);
         buildDuel.input.setVirtual('emote', true);
         buildDuel.simulate(1 / 60);
         buildDuel.input.setVirtual('emote', false);
@@ -380,7 +391,7 @@ const GAME_CHECKS = [
     async run(ctx) {
       const before = await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: 0, y: 0, z: 22 }, 0);
+        p.spawnAt(buildDuel.game.mode.spawnPoint, 0);
         buildDuel.manualStep(false);
         buildDuel.input.setVirtual('moveForward', true);
         return { tick: buildDuel.ticks, frames: buildDuel.frames };
@@ -394,12 +405,12 @@ const GAME_CHECKS = [
       const after = await ctx.page.evaluate(() => {
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.manualStep(true);
-        return { tick: buildDuel.ticks, frames: buildDuel.frames, z: buildDuel.game.player.position.z };
+        return { tick: buildDuel.ticks, frames: buildDuel.frames, z: buildDuel.game.player.position.z, startZ: buildDuel.game.mode.spawnPoint.z };
       });
       ctx.log(`${after.frames - before.frames} Bilder, ${after.tick - before.tick} Logik-Schritte in ${((Date.now() - started) / 1000).toFixed(1).replace('.', ',')} s`);
       ctx.assert(after.tick - before.tick >= 30, 'Logik-Schritte laufen');
       ctx.assert(after.frames > before.frames, 'Bilder werden gemalt');
-      ctx.assert(22 - after.z > 1, `bewegt: ${(22 - after.z).toFixed(2)} m`);
+      ctx.assert(after.startZ - after.z > 1, `bewegt: ${(after.startZ - after.z).toFixed(2)} m`);
     },
   },
   {
@@ -409,11 +420,13 @@ const GAME_CHECKS = [
         const g = buildDuel.game;
         const p = g.player;
         const T = buildDuel.CONFIG.building.pieceThickness;
-        // zwei 45°-Rampen hintereinander (steigen nach +X), oben eine Plattform in 8 m Höhe
-        g.map.addSlope({ minX: -36, maxX: -32, minZ: 8, maxZ: 12, baseY: 0, rise: 4, dir: 0, thickness: T }, { color: '#4FC3C7' });
-        g.map.addSlope({ minX: -32, maxX: -28, minZ: 8, maxZ: 12, baseY: 4, rise: 4, dir: 0, thickness: T }, { color: '#B39DDB' });
-        g.map.addBox({ x: -28, y: 0, z: 8 }, { x: -24, y: 8, z: 12 }, { color: '#C9D3E0' });
-        p.spawnAt({ x: -38.5, y: 0, z: 10 }, -Math.PI / 2);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        const H = buildDuel.CONFIG.world.wallHeight;
+        // zwei Rampen hintereinander (steigen nach +X, je eine Zelle), oben eine Plattform zwei Ebenen hoch
+        g.map.addSlope({ minX: -9 * S, maxX: -8 * S, minZ: 2 * S, maxZ: 3 * S, baseY: 0, rise: H, dir: 0, thickness: T }, { color: '#4FC3C7' });
+        g.map.addSlope({ minX: -8 * S, maxX: -7 * S, minZ: 2 * S, maxZ: 3 * S, baseY: H, rise: H, dir: 0, thickness: T }, { color: '#B39DDB' });
+        g.map.addBox({ x: -7 * S, y: 0, z: 2 * S }, { x: -6 * S, y: 2 * H, z: 3 * S }, { color: '#C9D3E0' });
+        p.spawnAt({ x: -9 * S - 2.5, y: 0, z: 2.5 * S }, -Math.PI / 2);
         let jumps = 0;
         const off = g.events.on('jump', () => jumps++);
         buildDuel.input.setVirtual('moveForward', true);
@@ -423,10 +436,10 @@ const GAME_CHECKS = [
         buildDuel.input.setVirtual('moveForward', false);
         buildDuel.simulate(0.2);
         off();
-        return { y2, y: p.position.y, x: p.position.x, jumps };
+        return { y2, y: p.position.y, x: p.position.x, jumps, H };
       });
-      ctx.assert(r.y2 > 6, `nach 2 s auf ${r.y2.toFixed(2)} m (nicht an der Naht hängen geblieben)`);
-      ctx.assert(Math.abs(r.y - 8) < 1e-6 && r.jumps === 0, `oben auf 8 m ohne Springen: y=${r.y.toFixed(2)}, Sprünge ${r.jumps}`);
+      ctx.assert(r.y2 > 1.5 * r.H, `nach 2 s auf ${r.y2.toFixed(2)} m (nicht an der Naht hängen geblieben)`);
+      ctx.assert(Math.abs(r.y - 2 * r.H) < 1e-6 && r.jumps === 0, `oben auf ${2 * r.H} m ohne Springen: y=${r.y.toFixed(2)}, Sprünge ${r.jumps}`);
       await ctx.page.waitForTimeout(500);
       await ctx.shot('11-rampen-kette');
     },
@@ -434,7 +447,7 @@ const GAME_CHECKS = [
   {
     name: 'Ducken mit der RECHTEN Shift-Taste (echte Tasten)',
     async run(ctx) {
-      await ctx.page.evaluate(() => buildDuel.game.player.spawnAt({ x: 0, y: 0, z: 22 }, 0));
+      await ctx.page.evaluate(() => buildDuel.game.player.spawnAt(buildDuel.game.mode.spawnPoint, 0));
       await ctx.page.keyboard.down('ShiftRight');
       const down = await ctx.page.evaluate(() => {
         buildDuel.simulate(0.1);
@@ -493,11 +506,13 @@ const GAME_CHECKS = [
           g.frameUpdate(1 / 60, 1);
           return clipping();
         }
-        // feste Lagen aus den Befunden (Arena-Ecke, Plattform beim Zielen, Brücken-Stütze, parallel an der 4-m-Wand)
+        // feste Lagen aus den Befunden (Arena-Ecke, Plattform beim Zielen, Brücken-Stütze, parallel an der hohen Wand)
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        const half = buildDuel.CONFIG.modes.practice.arenaSize / 2;
         const fixed = [
-          [-39.58, 39.6, 3.068, 0, false, false], [-29, -4, 1.178, -0.6, true, false],
-          [15.75, -10.75, 2.88, 0, false, false], [23.5, 2.2, Math.atan2(3.2, 0.6), 0, false, false],
-          [39.5, -39.5, -0.8, 0.4, false, true],
+          [-half + 0.42, half - 0.4, 3.068, 0, false, false], [-7 * S - 1, -S, 1.178, -0.6, true, false],
+          [4 * S - 0.25, -2.5 * S - 0.75, 2.88, 0, false, false], [6 * S - 0.5, S / 2 + 0.2, Math.atan2(3.2, 0.6), 0, false, false],
+          [half - 0.5, -half + 0.5, -0.8, 0.4, false, true],
         ];
         let bad = 0;
         let n = 0;
@@ -517,7 +532,7 @@ const GAME_CHECKS = [
             const gap = 0.41 + rnd() * 1.2;
             const x = side === 0 ? c.min.x - gap : side === 1 ? c.max.x + gap : c.min.x + (c.max.x - c.min.x) * t;
             const z = side === 2 ? c.min.z - gap : side === 3 ? c.max.z + gap : c.min.z + (c.max.z - c.min.z) * t;
-            if (Math.abs(x) > 39.5 || Math.abs(z) > 39.5) continue;
+            if (Math.abs(x) > half - 0.5 || Math.abs(z) > half - 0.5) continue;
             const yaw = rnd() * Math.PI * 2;
             const pitch = (rnd() * 2 - 1) * 1.3;
             n++;
@@ -536,7 +551,8 @@ const GAME_CHECKS = [
         p.crouching = false;
         p.height = buildDuel.CONFIG.player.hitbox.height;
         p.aiming = false;
-        p.spawnAt({ x: -39.58, y: 0, z: 39.6 }, 3.068, 0);
+        const half = buildDuel.CONFIG.modes.practice.arenaSize / 2;
+        p.spawnAt({ x: -half + 0.42, y: 0, z: half - 0.4 }, 3.068, 0);
         buildDuel.game.cameraRig.snap();
         buildDuel.simulate(1 / 60);
       });
@@ -544,7 +560,8 @@ const GAME_CHECKS = [
       await ctx.shot('12-kamera-ecke');
       await ctx.page.evaluate(() => {
         const p = buildDuel.game.player;
-        p.spawnAt({ x: -29, y: 0, z: -4 }, 1.178, -0.6);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        p.spawnAt({ x: -7 * S - 1, y: 0, z: -S }, 1.178, -0.6);
         buildDuel.input.setVirtual('secondary', true);
         buildDuel.simulate(1 / 60);
         buildDuel.game.cameraRig.snap();
@@ -588,14 +605,17 @@ const GAME_CHECKS = [
           g.frameUpdate(1 / 60, 1);
           return covered();
         }
-        for (let gap = 0.15; gap <= 2.6; gap += 0.2) out.push([`Rücken ${gap.toFixed(2)} m`, pose(29, 2.15 + 0.4 + gap, Math.PI, 0)]);
-        for (const pitch of [0.75, 1.05, 1.35]) out.push([`Blick hoch ${pitch}`, pose(0, 22, 0, pitch)]);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        const face = S / 2 + 0.15; // Vorderseite der hohen Wand
+        for (let gap = 0.15; gap <= 2.6; gap += 0.2) out.push([`Rücken ${gap.toFixed(2)} m`, pose(7.25 * S, face + 0.4 + gap, Math.PI, 0)]);
+        for (const pitch of [0.75, 1.05, 1.35]) out.push([`Blick hoch ${pitch}`, pose(0, g.mode.spawnPoint.z, 0, pitch)]);
         return out;
       });
       const bad = r.filter(([, hits]) => hits > 0);
       ctx.assert(bad.length === 0, `Fadenkreuz verdeckt: ${JSON.stringify(bad)}`);
       await ctx.page.evaluate(() => {
-        buildDuel.game.player.spawnAt({ x: 29, y: 0, z: 2.15 + 0.4 + 0.75 }, Math.PI, 0);
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        buildDuel.game.player.spawnAt({ x: 7.25 * S, y: 0, z: S / 2 + 0.15 + 0.4 + 0.75 }, Math.PI, 0);
         buildDuel.game.cameraRig.snap();
         buildDuel.simulate(1 / 60);
       });
@@ -607,7 +627,7 @@ const GAME_CHECKS = [
     name: 'Pause: im Pause-Bildschirm gedrückte Tasten zählen nach dem Weiterspielen nicht',
     async run(ctx) {
       await ctx.page.evaluate(() => {
-        buildDuel.game.player.spawnAt({ x: 0, y: 0, z: 22 }, 0);
+        buildDuel.game.player.spawnAt(buildDuel.game.mode.spawnPoint, 0);
         buildDuel.simulate(0.1);
         buildDuel.pause();
       });
@@ -677,7 +697,7 @@ const GAME_CHECKS = [
       const labels = await ctx.page.evaluate(async () => {
         const THREE = await import('three');
         const g = buildDuel.game;
-        g.player.spawnAt({ x: 0, y: 0, z: 22 }, 0, 0);
+        g.player.spawnAt(buildDuel.game.mode.spawnPoint, 0, 0);
         g.cameraRig.snap();
         buildDuel.simulate(1 / 60);
         g.frameUpdate(1 / 60, 1);
@@ -705,7 +725,12 @@ const GAME_CHECKS = [
         const g = buildDuel.game;
         const V = buildDuel.CONFIG.visuals;
         const out = [];
-        for (const [x, y, z, yaw] of [[18, 3.05, -9.6, 0], [18, 5.4, -12.4, 0], [35, 0.05, 33, Math.PI / 2]]) {
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        const H = buildDuel.CONFIG.world.wallHeight;
+        const bridgeY = buildDuel.CONFIG.modes.practice.bridgeRampHeight;
+        const stand = buildDuel.CONFIG.practiceRange.stand;
+        // Rampe zum Drunter-durch-Laufen (unteres Ende, dann fast oben) und der Schieß-Stand
+        for (const [x, y, z, yaw] of [[4.5 * S, bridgeY + 0.05, -2.5 * S + 0.4, 0], [4.5 * S, bridgeY + 0.6 * H, -3.1 * S, 0], [stand.x, 0.05, stand.z, Math.PI / 2]]) {
           g.player.spawnAt({ x, y, z }, yaw, 0);
           g.cameraRig.snap();
           buildDuel.simulate(1 / 60);
@@ -731,7 +756,7 @@ const GAME_CHECKS = [
       ctx.assert(near.length >= 5 && tooBig.length === 0, `Schilder aus der Nähe: ${JSON.stringify(tooBig.map((l) => [l.px.toFixed(0), l.d.toFixed(1)]))}`);
       await ctx.page.evaluate(() => {
         const g = buildDuel.game;
-        g.player.spawnAt({ x: 0, y: 0, z: 22 }, 0, 0);
+        g.player.spawnAt(buildDuel.game.mode.spawnPoint, 0, 0);
         g.cameraRig.snap();
         buildDuel.simulate(1 / 60);
       });

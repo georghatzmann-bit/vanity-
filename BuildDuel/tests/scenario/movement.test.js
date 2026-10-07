@@ -383,12 +383,13 @@ describe('Szenario: Spieler mit echter Eingabe auf dem Übungsplatz', () => {
     const game = createTestGame({ input, settings });
     game.startMode('practice');
     const p = game.player;
-    p.spawnAt({ x: -22, y: 0, z: 4 }, 0); // vor Rampe A, Blick nach −Z
+    const S = CONFIG.world.gridCellSize;
+    p.spawnAt({ x: -5.5 * S, y: 0, z: S }, 0); // vor Rampe A, Blick nach −Z
     input.setVirtual('moveForward', true);
-    game.simulate(1.6);
+    game.simulate(2); // eine Zelle bis zur Rampe, die Rampe hinauf, ein Stück auf die Plattform
     input.setVirtual('moveForward', false);
     game.simulate(0.3);
-    assert.close(p.position.y, CONFIG.modes.practice.platformHeight, 1e-6, 'auf der 4-m-Plattform');
+    assert.close(p.position.y, CONFIG.modes.practice.platformHeight, 1e-6, 'auf der Plattform (ein Stockwerk)');
     // Blick drehen: 90° nach rechts
     const turn = (Math.PI / 2) / CONFIG.sensitivity.baseRadiansPerPixel;
     input.addLook(turn, 0);
@@ -427,7 +428,8 @@ describe('Szenario: Zufalls-Spaziergang über den Übungsplatz', () => {
           const p = c.position;
           assert.ok(Number.isFinite(p.x + p.y + p.z), `${c.name}: Position ungültig`);
           assert.ok(p.y > -0.001, `${c.name}: unter dem Boden (y = ${p.y})`);
-          assert.ok(Math.abs(p.x) < 40.01 && Math.abs(p.z) < 40.01, `${c.name}: aus der Arena`);
+          const half = CONFIG.modes.practice.arenaSize / 2;
+          assert.ok(Math.abs(p.x) < half + 0.01 && Math.abs(p.z) < half + 0.01, `${c.name}: aus der Arena`);
           assert.ok(bodyFits(game.world, p.x, p.y, p.z, c.radius, c.height),
             `${c.name} steckt fest bei ${p.toArray().map((v) => v.toFixed(2)).join(', ')} (Tick ${t})`);
           checks++;

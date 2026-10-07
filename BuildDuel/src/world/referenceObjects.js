@@ -3,7 +3,7 @@
 // =============================================================================
 // - eine Figur in Spielergröße (Kapsel, 1,8 m hoch, Radius 0,4 m)
 //   mit hellerer "Kopf-Zone" (oberste 0,3 m = Kopfschuss)
-// - der Umriss einer Bau-Zelle (4 x 4 x 4 m)
+// - der Umriss einer Bau-Zelle (5,12 x 5,12 m, 3,84 m hoch)
 // =============================================================================
 import * as THREE from 'three';
 

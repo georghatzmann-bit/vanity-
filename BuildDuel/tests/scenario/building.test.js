@@ -12,8 +12,10 @@ const M = CONFIG.materials;
 const S = CONFIG.world.gridCellSize;
 const H = CONFIG.world.wallHeight;
 
-// Übungsplatz, Spieler bei (x, 0, z) mit Befehls-Gehirn
-function practice(x = 2, z = 30, yaw = 0, options = {}) {
+// Übungsplatz, Spieler bei (x, 0, z) mit Befehls-Gehirn. Lagen in den Tests stehen als
+// Vielfache der Zelle S bzw. der Wandhöhe H (aus config.js) – so passen sie zu jedem Raster.
+// Standard: Mitte der Zelle (0, 7).
+function practice(x = 0.5 * S, z = 7.5 * S, yaw = 0, options = {}) {
   const game = createTestGame(options);
   game.startMode('practice');
   const p = game.player;
@@ -68,11 +70,12 @@ describe('Szenario: Bauen – Material, Plätze, Halt', () => {
 
   it('Boden nicht durch eine Figur hindurch; Boden unter den Füßen hebt an', () => {
     const { game, p, f } = practice();
-    // Übungs-Figur steht auf einer 2,6-m-Kiste – ein Boden auf 4 m ginge durch ihren Körper.
-    // Halt hätte er (Wand darunter).
-    game.map.addBox({ x: 8, y: 0, z: 29 }, { x: 12, y: 2.6, z: 32 }, { color: '#999999' });
+    // Übungs-Figur steht auf einer Kiste (1,24 m unter der nächsten Ebene) – ein Boden auf Ebene 1
+    // ginge durch ihren Körper. Halt hätte er (Wand darunter).
+    const boxTop = H - 1.24;
+    game.map.addBox({ x: 2 * S, y: 0, z: 7.25 * S }, { x: 3 * S, y: boxTop, z: 8 * S }, { color: '#999999' });
     assert.ok(game.building.placePiece('wall', 'wx:2:0:7', null, 'wood', { instant: true }));
-    const dummy = game.addCharacter({ name: 'Puppe', isBot: true, brain: null, position: { x: 10, y: 2.6, z: 30.5 } });
+    const dummy = game.addCharacter({ name: 'Puppe', isBot: true, brain: null, position: { x: 2.5 * S, y: boxTop, z: 7.625 * S } });
     assert.equal(game.building.checkPlacement('floor', 'f', 2, 1, 7, 0, null), 'blocked');
     assert.equal(game.building.placePiece('floor', 'f:2:1:7', p, 'wood', { charge: true }), null);
     dummy.alive = false; // ohne Figur geht es
@@ -105,7 +108,7 @@ describe('Szenario: Bauen – Material, Plätze, Halt', () => {
   });
 
   it('Turm aus Rampen stürzt ein, wenn die unterste Rampe zerstört wird', () => {
-    const { game, p } = practice(30, 30);
+    const { game, p } = practice(7.5 * S, 7.5 * S);
     const ramps = [];
     for (let n = 0; n < 6; n++) {
       const r = game.building.placePiece('ramp', `r:6:${n}:${8 - n}`, p, 'wood', { dir: 3 });
@@ -118,7 +121,7 @@ describe('Szenario: Bauen – Material, Plätze, Halt', () => {
     assert.equal(destroyed.length, 1);
     assert.equal(destroyed[0].collapsed, false);
     assert.ok(ramps[1].collapsing && !ramps[1].removed, 'fällt gleich');
-    assert.ok(hitsPiece(game, { x: 26, y: 30, z: 26 }, { x: 26, y: 0, z: 26 }), 'blockt noch kurz');
+    assert.ok(hitsPiece(game, { x: 6.5 * S, y: 30, z: 6.5 * S }, { x: 6.5 * S, y: 0, z: 6.5 * S }), 'blockt noch kurz');
     game.simulate(B.collapseDelay + 2 / 60);
     assert.equal(game.building.pieces.size, 0, 'alle weg');
     assert.equal(destroyed.length, 6);
@@ -128,7 +131,7 @@ describe('Szenario: Bauen – Material, Plätze, Halt', () => {
   });
 
   it('Halt über Nachbarn: Boden auf Wänden fällt, wenn die letzte Wand weg ist', () => {
-    const { game, p } = practice(30, 30);
+    const { game, p } = practice(7.5 * S, 7.5 * S);
     const b = game.building;
     const w1 = b.placePiece('wall', 'wx:5:0:5', p);
     const w2 = b.placePiece('wall', 'wx:5:0:6', p);
@@ -148,7 +151,7 @@ describe('Szenario: Bauen – Material, Plätze, Halt', () => {
 
 describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
   it('Box (4 Wände + Dach + Boden) schützt: Strahlen von außen treffen die Wände', () => {
-    const { game, p, f } = practice(2, 30);
+    const { game, p, f } = practice();
     for (let side = 0; side < 4; side++) {
       f.yaw = (side * Math.PI) / 2;
       tap(game, f);
@@ -160,9 +163,9 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
     for (const k of ['wx:0:0:7', 'wx:0:0:8', 'wz:0:0:7', 'wz:1:0:7', 'c:0:1:7', 'f:0:0:7']) {
       assert.ok(game.building.getPieceAt(k), `${k} fehlt`);
     }
-    const head = { x: 2, y: 1.7, z: 30 };
-    for (const from of [{ x: 2, y: 1.7, z: 22 }, { x: 2, y: 1.7, z: 38 }, { x: -6, y: 1.7, z: 30 }, { x: 10, y: 1.7, z: 30 },
-      { x: 9, y: 2.5, z: 23 }, { x: 2, y: 20, z: 30 }]) {
+    const head = { x: 0.5 * S, y: 1.7, z: 7.5 * S };
+    for (const from of [{ x: 0.5 * S, y: 1.7, z: 5.5 * S }, { x: 0.5 * S, y: 1.7, z: 9.5 * S }, { x: -1.5 * S, y: 1.7, z: 7.5 * S },
+      { x: 2.5 * S, y: 1.7, z: 7.5 * S }, { x: 2.25 * S, y: 2.5, z: 5.75 * S }, { x: 0.5 * S, y: 20, z: 7.5 * S }]) {
       assert.ok(hitsPiece(game, from, head), `von ${JSON.stringify(from)}`);
     }
     game.dispose();
@@ -170,7 +173,8 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
 
   it('Box an der Zell-Kante: die neue Wand schiebt den Bauenden hinaus (nie "blockiert" durch den eigenen Körper)', () => {
     const T = B.pieceThickness;
-    for (const [x, z] of [[0.45, 21.8], [0.3, 23.7], [3.6, 20.2], [3.95, 23.95]]) {
+    // dicht an den Kanten der Zelle (0, 5) – Abstände zur Kante in Metern
+    for (const [x, z] of [[0.45, 5 * S + 1.8], [0.3, 6 * S - 0.3], [S - 0.4, 5 * S + 0.2], [S - 0.05, 6 * S - 0.05]]) {
       const { game, p, f } = practice(x, z);
       f.pitch = -0.1;
       for (let side = 0; side < 4; side++) {
@@ -194,14 +198,14 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
   });
 
   it('Wand schiebt auch andere Figuren zur Seite ihrer Mitte; Boden im Kopf bleibt "blocked"', () => {
-    const { game, p, f } = practice(2, 21);
-    const other = game.addCharacter({ name: 'Gegner', position: { x: 2.5, y: 0, z: 20.15 }, brain: null });
-    const wall = buildOnce(game, p, f, 'wall'); // wx:0:0:5 bei z = 20
+    const { game, p, f } = practice(0.5 * S, 5 * S + 1);
+    const other = game.addCharacter({ name: 'Gegner', position: { x: 0.5 * S + 0.5, y: 0, z: 5 * S + 0.15 }, brain: null });
+    const wall = buildOnce(game, p, f, 'wall'); // wx:0:0:5 bei z = 5·S
     assert.ok(wall, 'Wand gesetzt, obwohl der Gegner drin steht');
-    assert.close(other.position.z, 20 + B.pieceThickness / 2 + other.radius + B.wallPushGap, 1e-6, 'nach +Z hinaus');
-    assert.close(other.position.x, 2.5, 1e-9, 'nur quer zur Wand');
-    // Boden: Figur in der Luft, der Boden (y = 4) steckt im Kopf → rot
-    p.position.y = 3;
+    assert.close(other.position.z, 5 * S + B.pieceThickness / 2 + other.radius + B.wallPushGap, 1e-6, 'nach +Z hinaus');
+    assert.close(other.position.x, 0.5 * S + 0.5, 1e-9, 'nur quer zur Wand');
+    // Boden: Figur in der Luft, der Boden (y = H) steckt im Kopf → rot
+    p.position.y = H - 1;
     assert.equal(game.building.checkPlacement('floor', 'f', 0, 1, 5, 0, p), 'blocked');
     game.dispose();
   });
@@ -211,7 +215,7 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
     const damaged = collect(game, 'pieceDamaged');
     const wall = buildOnce(game, p, f, 'wall');
     assert.close(wall.health, B.maxHealth.wall.wood * M.startHealthFraction, 5, 'startet mit 10 %');
-    assert.ok(hitsPiece(game, { x: 2, y: 1.6, z: 31 }, { x: 2, y: 1.6, z: 20 }) === wall, 'blockt sofort');
+    assert.ok(hitsPiece(game, { x: 0.5 * S, y: 1.6, z: 7.5 * S + 1 }, { x: 0.5 * S, y: 1.6, z: 5 * S }) === wall, 'blockt sofort');
     game.simulate(0.5);
     assert.ok(wall.health > 60 && wall.health < 150);
     wall.applyDamage(20, { attacker: null });
@@ -235,7 +239,7 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
   });
 
   it('Maus gedrückt halten: setzt weiter, sobald sich der Platz ändert (nicht schneller als 0,05 s)', () => {
-    const { game, p, f } = practice(2, 30);
+    const { game, p, f } = practice();
     tap(game, f, { selectBuild: 'wall' });
     f.primary = true;
     tap(game, f, { primaryPressed: true });
@@ -252,7 +256,7 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
   });
 
   it('Turbo-Bauen: Maus gehalten, die Wand wird zerstört → sie kommt am selben Platz sofort wieder', () => {
-    const { game, p, f } = practice(2, 30);
+    const { game, p, f } = practice();
     p.infiniteMaterials = false;
     p.materials = { wood: 100, stone: 0, metal: 0 };
     tap(game, f, { selectBuild: 'wall' });
@@ -274,7 +278,7 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
 
   it('360° drehen mit gehaltener Maus (Mitte der Zelle): genau die 4 eigenen Wände, keine in Nachbar-Zellen', () => {
     for (const pitch of [0, -0.1, -0.35]) {
-      const { game, p, f } = practice(2, 22);
+      const { game, p, f } = practice(0.5 * S, 5.5 * S);
       f.pitch = pitch;
       tap(game, f, { selectBuild: 'wall' });
       f.primary = true;
@@ -291,8 +295,8 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
   });
 
   it('Wand in der Nachbar-Spalte nur, wenn man deutlich dorthin schaut', () => {
-    const { game, p, f } = practice(3.8, 22);
-    f.yaw = 0; // Blick −Z, Figur dicht an der Grenze zur Spalte x = 4..8
+    const { game, p, f } = practice(S - 0.2, 5.5 * S);
+    f.yaw = 0; // Blick −Z, Figur dicht an der Grenze zur Spalte x = S..2·S
     tap(game, f, { selectBuild: 'wall' });
     assert.equal(game.building.getTarget(p, 'wall').slotKey, 'wx:0:0:5', 'geradeaus: eigene Spalte');
     f.yaw = -0.35; // ~20° nach rechts: Anker deutlich in der Nachbar-Spalte
@@ -302,23 +306,25 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
   });
 
   it('Bau-Grenzen: nicht über die Arena-Mauer hinaus und nicht höher als maxLevel ("outside" = rot)', () => {
-    const { game, p, f } = practice(-38, 30, Math.PI / 2); // Blick nach −X, Mauer bei x = −40
+    const half = CONFIG.modes.practice.arenaSize / 2;
+    const { game, p, f } = practice(-half + 0.5 * S, 7.5 * S, Math.PI / 2); // Blick nach −X, Mauer bei x = −half
     const b = game.building;
     assert.ok(game.map.buildBounds, 'Arena hat einen Bau-Bereich');
     tap(game, f, { selectBuild: 'floor' });
+    const edge = Math.round(-half / S); // erste Zelle innen
     let t = b.getTarget(p, 'floor');
-    assert.equal(t.slotKey, 'f:-11:0:7');
+    assert.equal(t.slotKey, `f:${edge - 1}:0:7`);
     assert.equal(t.reason, 'outside');
     assert.equal(buildOnce(game, p, f, 'ramp'), null, 'Rampe hinter der Mauer: nein');
     assert.ok(buildOnce(game, p, f, 'wall'), 'Wand direkt auf der Mauer-Linie geht');
-    assert.equal(b.checkPlacement('floor', 'f', -10, 0, 7, 0, p), null, 'letzte Zelle innen geht');
-    assert.equal(b.checkPlacement('wall', 'wz', -11, 0, 7, 0, p), 'outside');
+    assert.equal(b.checkPlacement('floor', 'f', edge, 0, 7, 0, p), null, 'letzte Zelle innen geht');
+    assert.equal(b.checkPlacement('wall', 'wz', edge - 1, 0, 7, 0, p), 'outside');
     assert.equal(b.checkPlacement('floor', 'f', 0, B.maxLevel + 1, 0, 0, p, { skipSupport: true }), 'outside', 'zu hoch');
     assert.equal(b.checkPlacement('floor', 'f', 0, B.maxLevel, 0, 0, p, { skipSupport: true }), null, 'oberste Ebene geht');
     // Modus darf mit force trotzdem hinstellen; Karte ohne Bau-Bereich: nur die Höhe zählt
-    assert.ok(b.placePiece('wall', 'wz:-12:0:7', null, 'wood', { instant: true, force: true }));
+    assert.ok(b.placePiece('wall', `wz:${edge - 2}:0:7`, null, 'wood', { instant: true, force: true }));
     game.map.buildBounds = null;
-    assert.equal(b.checkPlacement('floor', 'f', -11, 0, 7, 0, p), null);
+    assert.equal(b.checkPlacement('floor', 'f', edge - 1, 0, 7, 0, p), null);
     game.dispose();
   });
 
@@ -342,8 +348,8 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
     assert.ok(buildOnce(game, p, f, 'ramp'));
     game.simulate(1);
     f.moveZ = 1;
-    runUntil(game, () => p.position.y > 3.5, 2);
-    assert.ok(p.position.y > 3.5, `oben: ${p.position.y.toFixed(2)}`);
+    runUntil(game, () => p.position.y > 0.9 * H, 2);
+    assert.ok(p.position.y > 0.9 * H, `oben: ${p.position.y.toFixed(2)}`);
     f.moveZ = 0;
     game.building.clearAll();
     assert.equal(game.building.pieces.size, 0);
@@ -354,13 +360,13 @@ describe('Szenario: Bauen – Box, Aufbau, Spam, Material wechseln', () => {
 
 describe('Szenario: Edit und Türen', () => {
   function wallInFront() {
-    const ctx = practice(2, 26);
-    const wall = buildOnce(ctx.game, ctx.p, ctx.f, 'wall'); // wx:0:0:6 bei z = 24
+    const ctx = practice(0.5 * S, 6.5 * S);
+    const wall = buildOnce(ctx.game, ctx.p, ctx.f, 'wall'); // wx:0:0:6 bei z = 6·S
     ctx.game.simulate(1);
     return { ...ctx, wall };
   }
-  // Mitte eines Wand-Feldes (wx bei z = 24)
-  const tileCenter = (t) => ({ x: (t % 3 + 0.5) * (S / 3), y: H - (Math.floor(t / 3) + 0.5) * (H / 3), z: 24 });
+  // Mitte eines Wand-Feldes (wx bei z = 6·S)
+  const tileCenter = (t) => ({ x: (t % 3 + 0.5) * (S / 3), y: H - (Math.floor(t / 3) + 0.5) * (H / 3), z: 6 * S });
 
   it('Wand → Tür (Klicken + Ziehen), E öffnet/schließt, Zurücksetzen stellt sie wieder her', () => {
     const { game, p, f, wall } = wallInFront();
@@ -388,8 +394,8 @@ describe('Szenario: Edit und Türen', () => {
     assert.equal(edited.length, 1);
     assert.equal(wall.colliders.length, 4, '3 Wand-Stücke + Tür-Blatt');
     // Tür zu: Strahl durch die Tür trifft das Tür-Blatt
-    const before = { x: 2, y: 1.2, z: 25 };
-    const behind = { x: 2, y: 1.2, z: 22 };
+    const before = { x: 0.5 * S, y: 1.2, z: 6 * S + 1 };
+    const behind = { x: 0.5 * S, y: 1.2, z: 6 * S - 2 };
     assert.equal(hitsPiece(game, before, behind), wall);
     tap(game, f, { usePressed: true });
     assert.ok(wall.doorOpen && toggled.length === 1 && toggled[0].open);
@@ -397,10 +403,10 @@ describe('Szenario: Edit und Türen', () => {
     // durch die offene Tür laufen und zurück
     f.yaw = 0; f.pitch = 0;
     f.moveZ = 1;
-    runUntil(game, () => p.position.z < 22.5, 2);
-    assert.ok(p.position.z < 22.5, `durch die Tür: z = ${p.position.z.toFixed(2)}`);
+    runUntil(game, () => p.position.z < 6 * S - 1.5, 2);
+    assert.ok(p.position.z < 6 * S - 1.5, `durch die Tür: z = ${p.position.z.toFixed(2)}`);
     f.moveZ = -1;
-    runUntil(game, () => p.position.z > 25.5, 2);
+    runUntil(game, () => p.position.z > 6 * S + 1.5, 2);
     f.moveZ = 0;
     tap(game, f, { usePressed: true });
     assert.ok(!wall.doorOpen && toggled.length === 2);
@@ -420,14 +426,14 @@ describe('Szenario: Edit und Türen', () => {
 
   it('Ecktreppe: Rampe mit G editieren (1 Feld weg) und zu Fuß hinauf – vor, 90° drehen, weiter bis oben', () => {
     const game = new Game({ headless: true, seed: 1 });
-    const p = game.addCharacter({ name: 'Treppe', isPlayer: false, position: { x: 1, y: 0, z: -1.6 }, yaw: Math.PI, brain: null });
+    const p = game.addCharacter({ name: 'Treppe', isPlayer: false, position: { x: 0.25 * S, y: 0, z: -1.6 }, yaw: Math.PI, brain: null });
     const f = driveByCommands(p, Math.PI, 0);
     const b = game.building;
     const ramp = b.placePiece('ramp', 'r:0:0:0', p, 'wood', { dir: 0, instant: true, force: true }); // steigt nach +X
     assert.ok(b.placePiece('floor', 'f:1:1:0', p, 'wood', { instant: true, force: true }), 'Boden oben dahinter');
     // Edit: G auf die Rampe, Feld 1 (hinten links, oben an der Rampe) anklicken, G
     tap(game, f, { selectBuild: 'ramp' });
-    lookAt(p, f, { x: 3, y: 3, z: 1 });
+    lookAt(p, f, { x: 0.75 * S, y: 0.75 * H, z: 0.25 * S }); // Feld 1 auf der Rampe
     tap(game, f, { editPressed: true });
     assert.equal(p.mode, 'edit');
     tap(game, f);
@@ -448,12 +454,12 @@ describe('Szenario: Edit und Türen', () => {
       last.copy(p.position);
       maxStuck = moved < 1e-4 ? maxStuck + 1 : 0;
     };
-    const ok1 = runUntil(game, () => { watch(); return p.position.z >= 3; }, 3);
+    const ok1 = runUntil(game, () => { watch(); return p.position.z >= 0.75 * S; }, 3);
     assert.ok(ok1, `aufs Podest: ${p.position.toArray().map((v) => v.toFixed(2))}`);
     assert.close(p.position.y, H / 2, 0.05, 'Podest auf halber Höhe');
     // … 90° nach rechts drehen (+X) und die obere Treppe hinauf auf den Boden dahinter
     f.yaw = -Math.PI / 2;
-    const ok2 = runUntil(game, () => { watch(); return p.position.x >= 5; }, 3);
+    const ok2 = runUntil(game, () => { watch(); return p.position.x >= 1.25 * S; }, 3);
     f.moveZ = 0;
     game.simulate(0.2);
     assert.ok(ok2, `oben angekommen: ${p.position.toArray().map((v) => v.toFixed(2))}`);
@@ -462,7 +468,7 @@ describe('Szenario: Edit und Türen', () => {
     // wieder hinunter (umgekehrt) – ohne Sprung
     f.yaw = Math.PI / 2;
     f.moveZ = 1;
-    runUntil(game, () => p.position.x <= 1, 3);
+    runUntil(game, () => p.position.x <= 0.25 * S, 3);
     f.yaw = 0;
     runUntil(game, () => p.position.z <= -1, 3);
     f.moveZ = 0;
@@ -476,28 +482,29 @@ describe('Szenario: Edit und Türen', () => {
     const b = game.building;
     const wall = b.placePiece('wall', 'wx:0:0:0', null, 'wood', { instant: true, force: true, edit: [4, 7] }); // Tür bei z = 0
     b.setDoorOpen(wall, true);
-    const inDoor = game.addCharacter({ name: 'Tür', position: { x: 2, y: 0, z: 0.1 }, brain: null });
+    const inDoor = game.addCharacter({ name: 'Tür', position: { x: 0.5 * S, y: 0, z: 0.1 }, brain: null });
     b.setEdit(wall, 0); // zurücksetzen: ganze Wand
     assert.close(inDoor.position.z, B.pieceThickness / 2 + inDoor.radius + B.wallPushGap, 1e-6, 'zur Seite seiner Mitte hinaus');
     assert.equal(inDoor.position.y, 0, 'nicht auf die Wand gehoben');
     // Rampe (steigt nach +X) mit einer Figur darauf → Ecktreppe: Figur steht danach auf der neuen Form
     const ramp = b.placePiece('ramp', 'r:2:0:2', null, 'wood', { dir: 0, instant: true, force: true });
-    const onRamp = game.addCharacter({ name: 'Rampe', position: { x: 9.0, y: 1.0, z: 11 }, brain: null }); // auf Feld 2 (1 m hoch)
-    b.setEdit(ramp, 1 << 1); // Feld 1 weg → Feld 2 wird das Podest (2 m) – die Figur steckt darin
-    assert.ok(onRamp.position.y >= 2 - 1e-6, `angehoben: ${onRamp.position.y.toFixed(2)}`);
+    // auf Feld 2 (Spalte 0, Reihe 1), ein Viertel hinauf
+    const onRamp = game.addCharacter({ name: 'Rampe', position: { x: 2.25 * S, y: 0.25 * H, z: 2.75 * S }, brain: null });
+    b.setEdit(ramp, 1 << 1); // Feld 1 weg → Feld 2 wird das Podest (halbe Höhe) – die Figur steckt darin
+    assert.ok(onRamp.position.y >= H / 2 - 1e-6, `angehoben: ${onRamp.position.y.toFixed(2)}`);
     game.simulate(0.3);
-    assert.ok(onRamp.grounded && onRamp.position.y >= 2, 'steht auf der Treppe');
+    assert.ok(onRamp.grounded && onRamp.position.y >= H / 2 - 1e-6, 'steht auf der Treppe');
     game.dispose();
   });
 
   it('halbe Rampe: zwei Felder nacheinander wählen = Richtung (vom ersten zum zweiten Feld hinauf)', () => {
     const game = new Game({ headless: true, seed: 1 });
-    const p = game.addCharacter({ name: 'Edit', isPlayer: false, position: { x: 2, y: 0, z: 7 }, yaw: 0, brain: null });
+    const p = game.addCharacter({ name: 'Edit', isPlayer: false, position: { x: 0.5 * S, y: 0, z: 1.75 * S }, yaw: 0, brain: null });
     const f = driveByCommands(p, 0, 0);
     const b = game.building;
     const ramp = b.placePiece('ramp', 'r:0:0:0', p, 'wood', { dir: 0, instant: true, force: true }); // steigt nach +X
     // Feld-Mitten auf der ganzen Rampe (Spalte entlang x, Reihe entlang z)
-    const tile = (t) => ({ x: ((t % 2) + 0.5) * (S / 2), y: ((t % 2) + 0.5) * (S / 2), z: (Math.floor(t / 2) + 0.5) * (S / 2) });
+    const tile = (t) => ({ x: ((t % 2) + 0.5) * (S / 2), y: ((t % 2) + 0.5) * (H / 2), z: (Math.floor(t / 2) + 0.5) * (S / 2) });
     tap(game, f, { selectBuild: 'ramp' });
     lookAt(p, f, tile(3));
     tap(game, f, { editPressed: true });
@@ -532,8 +539,8 @@ describe('Szenario: Edit und Türen', () => {
     assert.equal(p.mode, 'build', 'Loslassen bestätigt');
     assert.deepEqual([...wall.edit], [1]);
     const c = tileCenter(1);
-    assert.equal(hitsPiece(game, { x: c.x, y: c.y, z: 25 }, { x: c.x, y: c.y, z: 22 }), null, 'durch das Fenster');
-    assert.equal(hitsPiece(game, { x: 0.5, y: c.y, z: 25 }, { x: 0.5, y: c.y, z: 22 }), wall, 'daneben Wand');
+    assert.equal(hitsPiece(game, { x: c.x, y: c.y, z: 6 * S + 1 }, { x: c.x, y: c.y, z: 6 * S - 2 }), null, 'durch das Fenster');
+    assert.equal(hitsPiece(game, { x: 0.5, y: c.y, z: 6 * S + 1 }, { x: 0.5, y: c.y, z: 6 * S - 2 }), wall, 'daneben Wand');
     // offenes Loch wieder anklicken (Edit-Ziel findet auch Löcher)
     game.settings.controls.editOnRelease = false;
     tap(game, f, { editPressed: true });
@@ -545,12 +552,12 @@ describe('Szenario: Edit und Türen', () => {
   });
 
   it('fremde Wand: kein Edit, kurzer Hinweis; Waffe wählen verlässt den Edit', () => {
-    const { game, p, f } = practice(2, 26);
+    const { game, p, f } = practice(0.5 * S, 6.5 * S);
     const other = game.characters.find((c) => c !== p);
     const foreign = game.building.placePiece('wall', 'wx:0:0:6', other, 'wood', { instant: true });
     const messages = collect(game, 'message');
     tap(game, f, { selectBuild: 'wall' });
-    lookAt(p, f, { x: 2, y: 2, z: 24 });
+    lookAt(p, f, { x: 0.5 * S, y: H / 2, z: 6 * S });
     tap(game, f, { editPressed: true });
     assert.equal(p.mode, 'build');
     assert.equal(game.building.canEdit(p), false);
@@ -559,7 +566,7 @@ describe('Szenario: Edit und Türen', () => {
     f.yaw = Math.PI / 2; f.pitch = 0;
     tap(game, f);
     assert.ok(buildOnce(game, p, f, 'wall'));
-    lookAt(p, f, { x: 0, y: 2, z: 26 });
+    lookAt(p, f, { x: 0, y: H / 2, z: 6.5 * S });
     tap(game, f, { editPressed: true });
     assert.equal(p.mode, 'edit');
     tap(game, f, { selectPickaxe: true });
@@ -606,7 +613,7 @@ function nineties(game, p, f, cycles) {
     const reached = runUntil(game, () => {
       const front = edge(fx, fz);
       const left = edge(lx, lz);
-      const high = p.position.y > startY + 2;
+      const high = p.position.y > startY + H / 2;
       f.moveZ = front > 1.0 || !high ? 1 : 0;
       f.moveX = left > 0.95 ? -1 : 0;
       return p.grounded && high && front < 1.05 && left < 1.0 && Math.hypot(p.velocity.x, p.velocity.z) < 0.5;
@@ -639,14 +646,14 @@ function nineties(game, p, f, cycles) {
 }
 
 describe('Szenario: Techniken (nur mit Befehlen)', () => {
-  it('90er: jede Runde höher, über 12 m, ohne Fallschaden', () => {
-    const { game, p, f } = practice(2, 34);
+  it('90er: jede Runde höher (fast eine Ebene), mindestens 3 Ebenen, ohne Fallschaden', () => {
+    const { game, p, f } = practice(0.5 * S, 8.5 * S);
     const heights = nineties(game, p, f, 5);
     assert.ok(heights.length >= 4, `Runden: ${heights.length}`);
     for (let n = 1; n < heights.length; n++) {
-      assert.ok(heights[n] > heights[n - 1] + 3, `Runde ${n}: ${heights.map((h) => h.toFixed(1)).join(' → ')}`);
+      assert.ok(heights[n] > heights[n - 1] + 0.75 * H, `Runde ${n}: ${heights.map((h) => h.toFixed(1)).join(' → ')}`);
     }
-    assert.ok(Math.max(...heights) >= 12, `höchster Punkt ${Math.max(...heights).toFixed(1)} m`);
+    assert.ok(Math.max(...heights) >= 3 * H, `höchster Punkt ${Math.max(...heights).toFixed(1)} m`);
     assert.equal(p.health, CONFIG.modes.practice.startHealth);
     assert.equal(p.shield, CONFIG.modes.practice.startShield);
     // Spirale: Rampen in 4 verschiedenen Richtungen
@@ -656,7 +663,7 @@ describe('Szenario: Techniken (nur mit Befehlen)', () => {
   });
 
   it('Ramp Rush: vorwärts laufen, Rampe + Wand davor – mindestens 3 Ebenen hoch', () => {
-    const { game, p, f } = practice(2, 34);
+    const { game, p, f } = practice(0.5 * S, 8.5 * S);
     f.moveZ = 1;
     f.primary = true; // Maus gedrückt halten, Bauteile abwechselnd wählen
     let maxY = 0;
@@ -734,7 +741,7 @@ describe('Szenario: 3000 Bauteile (Leistung)', () => {
     const game = new Game({ headless: false, seed: 1 });
     game.startMode('practice');
     const p = game.player;
-    p.spawnAt({ x: 2, y: 0, z: 30 }, 0, 0);
+    p.spawnAt({ x: 0.5 * S, y: 0, z: 7.5 * S }, 0, 0);
     const f = driveByCommands(p, 0, 0);
     const b = game.building;
     for (let n = 0; n < 200; n++) b.placePiece('floor', `f:${-20 + (n % 20)}:0:${-5 + Math.floor(n / 20)}`, p, 'stone', { instant: true, force: true });

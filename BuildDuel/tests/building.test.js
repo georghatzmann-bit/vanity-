@@ -101,16 +101,16 @@ describe('Bau-Raster: Plätze (Slots)', () => {
 
   it('Maße der Plätze: Boden, Wand, Rampe, Dach', () => {
     const f = slotBounds('f', 1, 2, -1);
-    assert.deepEqual([f.minX, f.maxX, f.minZ, f.maxZ], [4, 8, -4, 0]);
+    assert.deepEqual([f.minX, f.maxX, f.minZ, f.maxZ], [S, 2 * S, -S, 0]);
     assert.close(f.minY, 2 * H - T / 2, 1e-9);
     assert.close(f.maxY, 2 * H + T / 2, 1e-9);
     const wx = slotBounds('wx', 0, 1, 2);
-    assert.deepEqual([wx.minX, wx.maxX, wx.minY, wx.maxY], [0, 4, 4, 8]);
+    assert.deepEqual([wx.minX, wx.maxX, wx.minY, wx.maxY], [0, S, H, 2 * H]);
     assert.close(wx.maxZ - wx.minZ, T, 1e-9);
     assert.close((wx.maxZ + wx.minZ) / 2, 2 * S, 1e-9);
     const wz = slotBounds('wz', 3, 0, 1);
     assert.close((wz.minX + wz.maxX) / 2, 3 * S, 1e-9);
-    assert.deepEqual([wz.minZ, wz.maxZ], [4, 8]);
+    assert.deepEqual([wz.minZ, wz.maxZ], [S, 2 * S]);
     const r = slotBounds('r', 0, 1, 0);
     assert.close(r.maxY, 2 * H, 1e-9);
     assert.close(r.minY, H - RAMP_V_THICKNESS, 1e-9);
@@ -123,13 +123,18 @@ describe('Bau-Raster: Plätze (Slots)', () => {
     for (let dir = 0; dir < 4; dir++) {
       const shape = slotShape('r', 1, 0, -2, dir);
       const collider = world.addSlope(rampSpec(1, 0, -2, dir));
-      for (const [x, z] of [[4.2, -7.5], [5, -6], [7.9, -4.1], [6, -5]]) {
+      // Punkte in der Zelle (1, -2) als Anteile der Zelle
+      for (const [fx, fz] of [[0.05, 0.125], [0.25, 0.5], [0.975, 0.975], [0.5, 0.75]]) {
+        const x = (1 + fx) * S;
+        const z = (-2 + fz) * S;
         assert.close(slopeSurfaceY(shape, x, z), slopeSurfaceY(collider, x, z), 1e-9, `dir ${dir} bei ${x},${z}`);
       }
       // unten an der Start-Seite, oben an der Gegenseite
       const d = [[1, 0], [0, 1], [-1, 0], [0, -1]][dir];
-      const low = slopeSurfaceY(shape, 6 - d[0] * 2, -6 - d[1] * 2);
-      const high = slopeSurfaceY(shape, 6 + d[0] * 2, -6 + d[1] * 2);
+      const mx = 1.5 * S;
+      const mz = -1.5 * S;
+      const low = slopeSurfaceY(shape, mx - d[0] * S / 2, mz - d[1] * S / 2);
+      const high = slopeSurfaceY(shape, mx + d[0] * S / 2, mz + d[1] * S / 2);
       assert.close(low, 0, 1e-9);
       assert.close(high, H, 1e-9);
     }
@@ -137,9 +142,10 @@ describe('Bau-Raster: Plätze (Slots)', () => {
 
   it('Ebene und Zelle aus Koordinaten', () => {
     assert.equal(cellIndex(-0.1), -1);
-    assert.equal(cellIndex(3.99), 0);
-    assert.equal(levelIndex(3.8, 0.3), 1);
-    assert.equal(levelIndex(3.6, 0.3), 0);
+    assert.equal(cellIndex(S - 0.01), 0);
+    assert.equal(cellIndex(S + 0.01), 1);
+    assert.equal(levelIndex(H - 0.2, 0.3), 1);
+    assert.equal(levelIndex(H - 0.4, 0.3), 0);
     assert.equal(dirFromYaw(0), 3, 'yaw 0 = Blick nach −Z');
     assert.equal(dirFromYaw(Math.PI / 2), 2, 'links drehen = −X');
     assert.equal(dirFromYaw(-Math.PI / 2), 0);
@@ -277,18 +283,19 @@ describe('Bau-Raster: Edit-Felder', () => {
 
   it('pickTile: Feld unter dem Fadenkreuz (Wand, Boden, Rampe, Dach)', () => {
     const wall = { type: 'wall', kind: 'wx', i: 0, j: 0, k: 0 };
-    // von z = +3 auf die Wand bei z = 0 schauen
-    assert.equal(pickTile(wall, { x: 0.5, y: 3.5, z: 3 }, { x: 0, y: 0, z: -1 }), 0, 'oben links');
-    assert.equal(pickTile(wall, { x: 2, y: 2, z: 3 }, { x: 0, y: 0, z: -1 }), 4, 'Mitte');
-    assert.equal(pickTile(wall, { x: 2, y: 0.4, z: 3 }, { x: 0, y: 0, z: -1 }), 7, 'unten Mitte');
-    assert.equal(pickTile(wall, { x: 3.5, y: 0.4, z: -3 }, { x: 0, y: 0, z: 1 }), 8, 'von hinten');
-    assert.equal(pickTile(wall, { x: 5, y: 2, z: 3 }, { x: 0, y: 0, z: -1 }), -1, 'daneben');
+    // von z = +3 auf die Wand bei z = 0 schauen (Lagen als Anteile von Zelle/Wandhöhe)
+    assert.equal(pickTile(wall, { x: S / 8, y: (7 * H) / 8, z: 3 }, { x: 0, y: 0, z: -1 }), 0, 'oben links');
+    assert.equal(pickTile(wall, { x: S / 2, y: H / 2, z: 3 }, { x: 0, y: 0, z: -1 }), 4, 'Mitte');
+    assert.equal(pickTile(wall, { x: S / 2, y: H / 10, z: 3 }, { x: 0, y: 0, z: -1 }), 7, 'unten Mitte');
+    assert.equal(pickTile(wall, { x: (7 * S) / 8, y: H / 10, z: -3 }, { x: 0, y: 0, z: 1 }), 8, 'von hinten');
+    assert.equal(pickTile(wall, { x: 1.25 * S, y: H / 2, z: 3 }, { x: 0, y: 0, z: -1 }), -1, 'daneben');
+    const above = 2 * H + 1; // über allem
     const floor = { type: 'floor', kind: 'f', i: 0, j: 1, k: 0 };
-    assert.equal(pickTile(floor, { x: 3, y: 6, z: 1 }, { x: 0, y: -1, z: 0 }), 1);
+    assert.equal(pickTile(floor, { x: 0.75 * S, y: above, z: 0.25 * S }, { x: 0, y: -1, z: 0 }), 1);
     const ramp = { type: 'ramp', kind: 'r', i: 0, j: 0, k: 0, dir: 0 };
-    assert.equal(pickTile(ramp, { x: 3, y: 9, z: 3 }, { x: 0, y: -1, z: 0 }), 3);
+    assert.equal(pickTile(ramp, { x: 0.75 * S, y: above, z: 0.75 * S }, { x: 0, y: -1, z: 0 }), 3);
     const roof = { type: 'roof', kind: 'c', i: 0, j: 1, k: 0 };
-    assert.equal(pickTile(roof, { x: 1, y: 9, z: 3 }, { x: 0, y: -1, z: 0 }), 2);
+    assert.equal(pickTile(roof, { x: 0.25 * S, y: above, z: 0.75 * S }, { x: 0, y: -1, z: 0 }), 2);
   });
 
   it('pickTile Dach: trifft die Pyramiden-Flächen (Viertel-Mitte und 0,4 m vom Rand, von oben und von unten)', () => {
@@ -344,33 +351,33 @@ describe('Physik: zugeschnittene Schrägen (Edit)', () => {
   it('halbe Rampe: gleiche Höhe, kleiner Umriss, Strahl daneben trifft nicht', () => {
     const world = new CollisionWorld(CONFIG);
     const full = rampSpec(0, 0, 0, 0);
-    const half = world.addSlope({ ...full, clip: { minX: 0, maxX: 4, minZ: 2, maxZ: 4 } });
-    assert.deepEqual([half.minZ, half.maxZ], [2, 4]);
-    assert.close(slopeSurfaceY(half, 3, 3), 3, 1e-9);
+    const half = world.addSlope({ ...full, clip: { minX: 0, maxX: S, minZ: S / 2, maxZ: S } });
+    assert.deepEqual([half.minZ, half.maxZ], [S / 2, S]);
+    assert.close(slopeSurfaceY(half, 0.75 * S, 0.75 * S), 0.75 * H, 1e-9);
     const down = { x: 0, y: -1, z: 0 };
-    assert.ok(world.raycast({ x: 3, y: 10, z: 3 }, down, 20, { skipTerrain: true }), 'auf dem Stück');
-    assert.equal(world.raycast({ x: 3, y: 10, z: 1 }, down, 20, { skipTerrain: true }), null, 'im Loch');
-    assert.close(world.surfaceHeight(3, 1, 10), 0, 1e-9, 'im Loch: nur der Boden');
+    assert.ok(world.raycast({ x: 0.75 * S, y: 10, z: 0.75 * S }, down, 20, { skipTerrain: true }), 'auf dem Stück');
+    assert.equal(world.raycast({ x: 0.75 * S, y: 10, z: 0.25 * S }, down, 20, { skipTerrain: true }), null, 'im Loch');
+    assert.close(world.surfaceHeight(0.75 * S, 0.25 * S, 10), 0, 1e-9, 'im Loch: nur der Boden');
   });
 
   it('Dach-Viertel: Spitze in der Ecke, Höhe wie beim ganzen Dach', () => {
     const world = new CollisionWorld(CONFIG);
     const spec = roofSpec(0, 1, 0);
-    const quarter = world.addSlope({ ...spec, clip: { minX: 2, maxX: 4, minZ: 0, maxZ: 2 } });
+    const quarter = world.addSlope({ ...spec, clip: { minX: S / 2, maxX: S, minZ: 0, maxZ: S / 2 } });
     const whole = new CollisionWorld(CONFIG).addSlope(spec);
-    for (const [x, z] of [[2.1, 1.9], [3, 1], [3.9, 0.1], [2.5, 0.5]]) {
-      assert.close(slopeSurfaceY(quarter, x, z), slopeSurfaceY(whole, x, z), 1e-9);
+    for (const [fx, fz] of [[0.525, 0.475], [0.75, 0.25], [0.975, 0.025], [0.625, 0.125]]) {
+      assert.close(slopeSurfaceY(quarter, fx * S, fz * S), slopeSurfaceY(whole, fx * S, fz * S), 1e-9);
     }
-    const hit = world.raycast({ x: 3, y: 10, z: 1 }, { x: 0, y: -1, z: 0 }, 20, { skipTerrain: true });
-    assert.ok(hit && Math.abs(hit.point.y - slopeSurfaceY(whole, 3, 1)) < 1e-6);
-    assert.equal(world.raycast({ x: 1, y: 10, z: 1 }, { x: 0, y: -1, z: 0 }, 20, { skipTerrain: true }), null);
+    const hit = world.raycast({ x: 0.75 * S, y: 10, z: 0.25 * S }, { x: 0, y: -1, z: 0 }, 20, { skipTerrain: true });
+    assert.ok(hit && Math.abs(hit.point.y - slopeSurfaceY(whole, 0.75 * S, 0.25 * S)) < 1e-6);
+    assert.equal(world.raycast({ x: 0.25 * S, y: 10, z: 0.25 * S }, { x: 0, y: -1, z: 0 }, 20, { skipTerrain: true }), null);
   });
 });
 
 describe('Bau-Raster: Zielwahl', () => {
-  // Figur in der Mitte der Zelle (0, 0, 5): x 0..4, z 20..24
-  const cx = 2;
-  const cz = 22;
+  // Figur in der Mitte der Zelle (0, 0, 5): x 0..S, z 5·S..6·S
+  const cx = 0.5 * S;
+  const cz = 5.5 * S;
 
   it('Wand: an der Kante der eigenen Zelle in Blickrichtung (alle 4 Richtungen)', () => {
     const expect = { 0: 'wx:0:0:5', [Math.PI / 2]: 'wz:0:0:5', [Math.PI]: 'wx:0:0:6', [-Math.PI / 2]: 'wz:1:0:5' };
@@ -378,7 +385,7 @@ describe('Bau-Raster: Zielwahl', () => {
       assert.equal(key(target(figure(cx, 0, cz, Number(yaw)), 'wall')), k, `yaw ${yaw}`);
     }
     // auch knapp vor der Kante und leicht nach unten schauend: dieselbe Wand
-    assert.equal(key(target(figure(cx, 0, 20.9, 0, -15 * DEG), 'wall')), 'wx:0:0:5');
+    assert.equal(key(target(figure(cx, 0, 5 * S + 0.9, 0, -15 * DEG), 'wall')), 'wx:0:0:5');
     // nach oben schauen = eine Ebene höher
     assert.equal(key(target(figure(cx, 0, cz, 0, 55 * DEG), 'wall')), 'wx:0:1:5');
   });
@@ -407,7 +414,7 @@ describe('Bau-Raster: Zielwahl', () => {
     for (let yaw = 0; yaw < Math.PI * 2; yaw += 0.3) {
       for (const pitch of [-0.6, 0, 0.4, 1.2]) {
         for (const type of ['wall', 'floor', 'ramp', 'roof']) {
-          const t = target(figure(3.9, 0, 23.9, yaw, pitch), type);
+          const t = target(figure(S - 0.1, 0, 6 * S - 0.1, yaw, pitch), type);
           assert.ok(Math.abs(t.i - 0) <= 2 && Math.abs(t.k - 5) <= 2 && Math.abs(t.j) <= 2, `${type} ${key(t)}`);
           if (type !== 'wall') assert.ok(Math.abs(t.i) <= 1 && Math.abs(t.k - 5) <= 1, `${type} ${key(t)}`);
         }
@@ -434,30 +441,30 @@ describe('Bau-Raster: Zielwahl', () => {
 
   it('auf einer Rampe: nächste Rampe eine Ebene höher (Ramp Rush), Wand auf Höhe der Rampe', () => {
     const world = new CollisionWorld(CONFIG);
-    world.addSlope(rampSpec(0, 0, 5, 3)); // steigt nach −Z: z = 24 unten, z = 20 oben (4 m)
-    const c = figure(cx, 1.5, 22.5); // auf der Rampe (Höhe 1,5 m bei z = 22,5)
+    world.addSlope(rampSpec(0, 0, 5, 3)); // steigt nach −Z: z = 6·S unten, z = 5·S oben (eine Ebene)
+    const c = figure(cx, 0.375 * H, 5.625 * S); // auf der Rampe (3/8 hinauf)
     assert.equal(key(target(c, 'ramp', world)), 'r:0:1:4');
     assert.equal(key(target(c, 'wall', world)), 'wx:0:0:5', 'Wand am oberen Ende der eigenen Rampe');
-    const top = figure(cx, 3.5, 20.5);
+    const top = figure(cx, 0.875 * H, 5.125 * S); // fast oben
     assert.equal(key(target(top, 'ramp', world)), 'r:0:1:4');
   });
 
   it('im Sprung (90er): knapp unter der nächsten Ebene zählt schon die nächste', () => {
-    const air = figure(cx, 3.75, cz, Math.PI / 2, 0, { grounded: false });
+    const air = figure(cx, H - CONFIG.building.levelEpsilon + 0.05, cz, Math.PI / 2, 0, { grounded: false });
     assert.equal(key(target(air, 'ramp')), 'r:-1:1:5');
-    const low = figure(cx, 3.5, cz, Math.PI / 2, 0, { grounded: false });
+    const low = figure(cx, H - CONFIG.building.levelEpsilon - 0.2, cz, Math.PI / 2, 0, { grounded: false });
     assert.equal(target(low, 'ramp').j, 0);
   });
 
   it('über eine Kante nach unten schauen: Wand und Treppe eine Ebene tiefer', () => {
     const world = new CollisionWorld(CONFIG);
-    world.addBox({ x: 0, y: 0, z: 20 }, { x: 4, y: 4, z: 24 }); // Plattform 4 m hoch (Karte)
-    const c = figure(cx, 4, 20.6, 0, -55 * DEG);
+    world.addBox({ x: 0, y: 0, z: 5 * S }, { x: S, y: H, z: 6 * S }); // Plattform eine Ebene hoch (Karte)
+    const c = figure(cx, H, 5 * S + 0.6, 0, -55 * DEG);
     assert.equal(key(target(c, 'wall', world)), 'wx:0:0:5');
     const r = target(c, 'ramp', world);
     assert.equal(key(r), 'r:0:0:4');
     assert.equal(r.dir, 1, 'steigt zur Figur hin');
     // auf der Plattform nach unten auf die eigene Fläche schauen: keine Änderung
-    assert.equal(key(target(figure(cx, 4, cz, 0, -55 * DEG), 'wall', world)), 'wx:0:1:5');
+    assert.equal(key(target(figure(cx, H, cz, 0, -55 * DEG), 'wall', world)), 'wx:0:1:5');
   });
 });

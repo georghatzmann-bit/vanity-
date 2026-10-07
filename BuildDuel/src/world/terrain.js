@@ -1,7 +1,7 @@
 // =============================================================================
 // Gelände: Höhen-Raster ("Heightfield") + Rauschen für sanfte Hügel
 // =============================================================================
-// Ein Gelände ist ein Raster aus Höhen-Punkten (z. B. alle 4 m). Zwischen den
+// Ein Gelände ist ein Raster aus Höhen-Punkten (z. B. alle 5,12 m = eine Bau-Zelle). Zwischen den
 // Punkten liegen Dreiecke – GENAU wie im gemalten Gelände-Mesh. Darum steht die
 // Figur immer exakt auf der Fläche, die man sieht (heightAt = Bild).
 //
@@ -276,7 +276,7 @@ export function buildTerrainGeometry(field, colorFn, options = {}) {
 
 /**
  * Helle Boden-Kachel (wird mit der Punkt-Farbe eingefärbt): feine Flecken und
- * eine zarte Linie im 4-m-Bauraster (wie in der Arena).
+ * eine zarte Linie im Bau-Raster (wie in der Arena).
  */
 export function createGroundDetailTexture(config, renderer, seed = 4242) {
   const px = 128;

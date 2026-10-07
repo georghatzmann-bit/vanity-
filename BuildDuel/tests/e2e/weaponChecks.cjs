@@ -310,14 +310,15 @@ const WEAPON_CHECKS = [
     name: 'Schuss aus der Box (eigene Figur ausgeblendet): kein Blitz und keine Spur vor der Kamera',
     async run(ctx) {
       await installHelpers(ctx.page);
-      // Box 1×1 (Zelle −6, 0, 4), Rücken zur Wand → Kamera rückt an den Kopf, Figur ausgeblendet
+      // Box 1×1 (Zelle −6, 0, 4), Rücken zur Südwand → Kamera rückt an den Kopf, Figur ausgeblendet
       const setup = await ctx.page.evaluate(() => {
         const g = buildDuel.game;
         const p = g.player;
         g.weapons.setEffectsPaused(false);
         g.weapons.clearEffects();
         g.building.clearAll();
-        p.resetForRound({ health: 100, shield: 100, position: { x: -22, y: 0, z: 19.4 }, yaw: 0 });
+        const S = buildDuel.CONFIG.world.gridCellSize;
+        p.resetForRound({ health: 100, shield: 100, position: { x: -5.5 * S, y: 0, z: 5 * S - 0.6 }, yaw: 0 });
         g.cameraRig.snap();
         for (const k of ['wx:-6:0:4', 'wx:-6:0:5', 'wz:-6:0:4', 'wz:-5:0:4']) g.building.placePiece('wall', k, p, 'wood', { instant: true, force: true });
         g.building.placePiece('roof', 'c:-6:1:4', p, 'wood', { instant: true, force: true });

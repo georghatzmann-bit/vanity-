@@ -2,7 +2,7 @@
 // Arena-Karte (Übungsplatz und Duell 1v1)
 // =============================================================================
 // createArenaMap(game, spec) baut eine flache Arena:
-//   - Gras-Boden mit feinem 4-m-Bauraster (reicht bis zum Horizont)
+//   - Gras-Boden mit feinem Bau-Raster (5,12 m) (reicht bis zum Horizont)
 //   - eine niedrige Mauer rundherum (spec.size x spec.size Meter)
 //   - darüber eine UNSICHTBARE hohe Wand (CONFIG.maps.arena.barrierHeight): Niemand
 //     verlässt die Arena – auch nicht, indem er über eine Rampe über die Mauer läuft.
@@ -170,7 +170,7 @@ function createGround(config, renderer) {
   const size = config.world.groundSize;
   const cell = config.world.gridCellSize;
   const texture = createGrassTexture(config);
-  // Eine Textur-Kachel = genau eine Bau-Zelle (4 x 4 m)
+  // Eine Textur-Kachel = genau eine Bau-Zelle (5,12 x 5,12 m)
   texture.repeat.set(size / cell, size / cell);
   texture.anisotropy = renderer ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
 
@@ -208,7 +208,7 @@ export function createGrassTexture(config) {
     ctx.fillRect(rng() * px, rng() * px, w, h);
   }
 
-  // Feine Rasterlinie am oberen und linken Rand jeder Kachel → ergibt das 4-m-Raster
+  // Feine Rasterlinie am oberen und linken Rand jeder Kachel → ergibt das Bau-Raster
   if (config.visuals.groundGridLines) {
     ctx.fillStyle = `rgba(0, 40, 0, ${config.visuals.groundGridOpacity})`;
     ctx.fillRect(0, 0, px, 2);
