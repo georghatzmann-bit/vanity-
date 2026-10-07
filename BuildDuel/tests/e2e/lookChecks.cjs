@@ -191,17 +191,15 @@ const LOOK_CHECKS = [
         CONFIG.pickaxes.list.forEach((p, i) => {
           const m = models.createWeaponModel('pickaxe', p.id);
           m.scale.setScalar(1.6);
-          m.rotation.set(-Math.PI / 2, 0, 0); // Stiel nach unten, Kopf oben
-          m.rotation.z = 0;
-          m.position.set(6.2, 0.15 + i * 0.0, (i - 1.5) * 0.9);
-          m.rotation.y = Math.PI / 2;
+          m.rotation.set(Math.PI / 2, 0, 0); // Stiel senkrecht, Kopf oben, Spitzen zur Seite
+          m.position.set(6.2, 0.2, (i - 1.5) * 1.1);
           S.object(m);
         });
         return { maxMeshes };
       });
       ctx.assert(info.maxMeshes <= 2, `je Waffe höchstens 2 Meshes (Körper + Seltenheits-Streifen): ${info.maxMeshes}`);
       await studioShot(ctx, 'look-waffen', [0.8, 1.9, 9.6, 0.8, 1.6, 0, 32]);
-      await studioShot(ctx, 'look-spitzhacken', [9.5, 1.0, 0, 6.2, 0.7, 0, 30]);
+      await studioShot(ctx, 'look-spitzhacken', [10.5, 1.0, 0, 6.2, 0.75, 0, 30]);
       await ctx.page.evaluate(() => __studio.show(false));
     },
   },
@@ -252,6 +250,50 @@ const LOOK_CHECKS = [
       });
       await studioShot(ctx, 'look-posen', [0, 1.3, 9.0, 0, 1.0, 0, 34]);
       await ctx.page.evaluate(() => __studio.show(false));
+    },
+  },
+  {
+    name: 'Look: Waffen in der Hand im echten Spiel (Schulter-Kamera, auch zielend) und Spitzhacken-Varianten',
+    async run(ctx) {
+      const { installHelpers } = require('./weaponChecks.cjs');
+      await ctx.page.evaluate(() => {
+        buildDuel.play();
+        buildDuel.manualStep(true);
+      });
+      await installHelpers(ctx.page);
+      for (const [id, aim] of [['shotgun', false], ['ar', false], ['ar', true], ['smg', false], ['sniper', false], ['pistol', false], ['grenadeLauncher', false]]) {
+        const ok = await ctx.page.evaluate(({ id, aim }) => {
+          __wp.toStand();
+          const p = buildDuel.game.player;
+          p.yaw = p.prevYaw = Math.PI / 2 + 0.25; // etwas schräg: Waffe vor dem Himmel/der Wiese
+          p.pitch = p.prevPitch = 0.05;
+          const selected = __wp.select(id);
+          buildDuel.input.setVirtual('secondary', aim && id !== 'sniper');
+          buildDuel.simulate(0.4);
+          return selected;
+        }, { id, aim });
+        ctx.assert(ok, `${id} in der Hand`);
+        await ctx.page.waitForTimeout(600);
+        await ctx.shot(`look-spiel-${id}${aim ? '-zielen' : ''}`);
+      }
+      // Spitzhacken-Varianten in der Hand
+      for (const pick of await ctx.page.evaluate(() => buildDuel.CONFIG.pickaxes.list.map((x) => x.id))) {
+        await ctx.page.evaluate((pick) => {
+          buildDuel.input.setVirtual('secondary', false);
+          __wp.toStand();
+          const p = buildDuel.game.player;
+          p.pickaxeId = pick;
+          p.yaw = p.prevYaw = Math.PI / 2 + 0.6;
+          __wp.press('pickaxe', 0.4);
+        }, pick);
+        await ctx.page.waitForTimeout(600);
+        await ctx.shot(`look-spiel-hacke-${pick}`);
+      }
+      await ctx.page.evaluate(() => {
+        const p = buildDuel.game.player;
+        p.pickaxeId = buildDuel.CONFIG.pickaxes.defaultId;
+        __wp.toStand();
+      });
     },
   },
   {

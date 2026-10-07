@@ -22,10 +22,10 @@ import { CONFIG } from '../config.js';
 import { MeshBuilder } from '../world/meshBuilder.js';
 
 // Farben (echtes Waffen-Aussehen)
-const METAL = '#3A3E46';
-const DARK = '#24272D';
-const BLACK = '#17191D';
-const POLY = '#4A4E55'; // Kunststoff
+const METAL = '#4A505A';
+const DARK = '#31353C';
+const BLACK = '#202328';
+const POLY = '#5B6068'; // Kunststoff
 const STEEL = '#8C949E';
 const WOOD = '#9A6234';
 const WOOD_DARK = '#6E4323';

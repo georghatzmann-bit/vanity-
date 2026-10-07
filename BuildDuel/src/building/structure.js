@@ -404,6 +404,7 @@ export function createBuildingSystem(game) {
     piece.grounded = touchesGround(piece.shape);
     view?.add(piece);
     if (options.charge && owner?.stats) owner.stats.piecesBuilt++; // selbst gebaut (nicht vom Modus hingestellt)
+    if (options.charge) owner?.triggerAction?.('build'); // Figur: kurzer Arm-Stoß (nur Grafik)
     game?.events?.emit?.('piecePlaced', { piece, owner: piece.owner });
     return piece;
   }

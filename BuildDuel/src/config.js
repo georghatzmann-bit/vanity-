@@ -550,7 +550,7 @@ export const CONFIG = deepFreeze({
     tracerLifetime: 0.09, // Leuchtspur (Sturmgewehr) verblasst in so vielen Sekunden
     tracerWidth: 0.035, // Dicke der Leuchtspur (m)
     tracerColor: '#FFD45C',
-    modelScale: 1.15, // Waffen in der Hand etwas größer als echt (Comic-Stil, besser zu erkennen)
+    modelScale: 1.3, // Waffen in der Hand etwas größer als echt (Comic-Stil, besser zu erkennen)
     // Blick steil nach oben: Waffe zeigt etwas tiefer als der Blick (sonst ragt sie ins Fadenkreuz)
     lookUpLowering: 0.4, // so viel tiefer pro Radiant Blick nach oben
     lookUpLoweringFrom: 0.2, // ab dieser Blick-Neigung (Radiant)

@@ -66,11 +66,11 @@ const STRIDE = 1.9; // Meter pro Schritt-Zyklus (zwei Schritte)
 
 // Halte-Punkte der rechten Hand (im Oberkörper, vor der Brust), gedreht um PIVOT mit dem Blick
 const PIVOT = new THREE.Vector3(0, 0.46, 0);
-const GRIP_HIP = new THREE.Vector3(0.18, 0.27, -0.14); // Waffe in Hüft-/Brusthöhe
-const GRIP_AIM = new THREE.Vector3(0.15, 0.37, -0.16); // Zielen: höher, an die Schulter
+const GRIP_HIP = new THREE.Vector3(0.3, 0.32, -0.06); // Waffe in Hüft-/Brusthöhe
+const GRIP_AIM = new THREE.Vector3(0.25, 0.41, -0.08); // Zielen: höher, an die Schulter
 const POLE_R = new THREE.Vector3(0.8, -1, 0.35).normalize(); // Ellbogen zeigt nach unten-außen
 const POLE_L = new THREE.Vector3(-0.6, -1, 0.05).normalize();
-const AIM_TWIST = -0.45; // linke Schulter dreht beim Halten nach vorn
+const AIM_TWIST = -0.6; // linke Schulter dreht beim Halten nach vorn
 
 // --- gemeinsames Material und Formen ----------------------------------------------------
 let sharedMaterial = null;

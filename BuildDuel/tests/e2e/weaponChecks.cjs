@@ -634,4 +634,4 @@ const WEAPON_CHECKS = [
   },
 ];
 
-module.exports = { WEAPON_CHECKS };
+module.exports = { WEAPON_CHECKS, installHelpers }; // installHelpers: auch für lookChecks.cjs
