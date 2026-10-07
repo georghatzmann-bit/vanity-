@@ -34,7 +34,7 @@ const COLORS = {
 
 /**
  * @param {object} game
- * @param {object} [options]  { seed }
+ * @param {object} [options]  { seed, skin }
  */
 export function createPracticeMode(game, options = {}) {
   const cfg = CONFIG.modes.practice;
@@ -69,7 +69,7 @@ export function createPracticeMode(game, options = {}) {
         name: game.settings?.game?.playerName ?? 'Spieler',
         isPlayer: true,
         team: 1,
-        skin: CONFIG.skins.defaultId,
+        skin: options.skin ?? CONFIG.skins.defaultId, // Welle 5: Skin aus dem Spind
         position: mode.spawnPoint,
         yaw: mode.spawnYaw,
         health: cfg.startHealth,

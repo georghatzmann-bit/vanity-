@@ -192,6 +192,7 @@ export const CONFIG = deepFreeze({
       scoreboard: ['Tab'],
       pause: ['Escape'],
       help: ['KeyH'], // Steuerungs-Hilfe ein/aus (HUD)
+      clearBuilds: ['KeyP'], // Kreativ-Modus: alle Bauteile löschen
     },
     // Tasten, die absichtlich doppelt belegt sein dürfen, weil sie je nach
     // Situation etwas anderes tun (die Tests prüfen den Rest auf Konflikte).
@@ -978,6 +979,21 @@ export const CONFIG = deepFreeze({
       spawn: { x: 0, z: 22 }, // Startpunkt (schaut Richtung −Z auf die Stationen)
     },
 
+    // Kreativ (Lobby-Standard, wie "JustBuild" im Original): große flache Wiese, unendlich Material,
+    // alle Waffen und Heil-Items, Zielpuppen an der Seite, Zähler "Bauteile/s", Taste P = alles löschen
+    creative: {
+      name: 'Kreativ',
+      arenaSize: 200, // 200 x 200 m – Platz für riesige Bauten
+      borderHeight: 1.2, // niedrige Rand-Mauer (die unsichtbare Wand darüber hält einen trotzdem drin)
+      startHealth: 100,
+      startShield: 100,
+      infiniteMaterials: true,
+      spawn: { x: 0, z: 12 }, // Startpunkt (schaut nach Norden, −Z)
+      respawnDelay: 2, // nach dem Besiegtwerden (z. B. Fallschaden) so schnell wieder da (s)
+      fallRespawnY: -20, // wer tiefer fällt (aus der Welt), wird zurückgesetzt
+      piecesPerSecondWindow: 1, // "Bauteile/s" = Bauteile in der letzten Sekunde
+    },
+
     // Später / optional
     zombies: { name: 'Zombies', enabled: false },
     zeroBuilds: { name: 'Ohne Bauen', enabled: false },
@@ -1116,7 +1132,7 @@ export const CONFIG = deepFreeze({
     shieldShards: { count: 16, color: '#7FD3FF' },
   },
 
-  // Fortschritt (Pokale, Münzen, Pass)
+  // Fortschritt (Pokale, Münzen, Pass) – src/core/progress.js
   progression: {
     passTiers: 20,
     xpPerTier: 1000,
@@ -1125,6 +1141,59 @@ export const CONFIG = deepFreeze({
     xpPerWin: 300,
     coinsPerWin: 50,
     coinsPerMatch: 10,
+    // Welle 5 (Lobby): Level aus Erfahrung (XP). Level n → n+1 braucht levelXpBase + levelXpStep · (n − 1) XP
+    levelXpBase: 300,
+    levelXpStep: 100,
+    maxLevel: 100,
+    coinsPerLevel: 150, // Münzen für jedes neue Level
+    startCoins: 1500, // Start-Guthaben (Spiel-Münzen, kein echtes Geld)
+    xpPerMinute: 60, // Kreativ/Übungsplatz: XP pro gespielter Minute
+    xpPer100Pieces: 50, // … und pro 100 gebauten Bauteilen
+  },
+
+  // Spind und Shop (Welle 5): nur Spiel-Münzen, kein echtes Geld. Preise sind Platzhalter.
+  // Skins kommen aus CONFIG.skins.list – ihr Preis hängt an der Stelle in der Liste (skinTiers),
+  // damit neue/geänderte Skins ohne weitere Einträge funktionieren. Hut = Teil des Skins.
+  cosmetics: {
+    tiers: {
+      frei: { name: 'Gratis', price: 0, color: '#8FA3BF' },
+      selten: { name: 'Selten', price: 500, color: '#3D8BFF' },
+      episch: { name: 'Episch', price: 1200, color: '#A34DF0' },
+      legendaer: { name: 'Legendär', price: 2000, color: '#F5A623' },
+    },
+    skinTiers: ['frei', 'frei', 'selten', 'selten', 'episch', 'episch', 'legendaer', 'legendaer'], // nach Listen-Platz
+    skinTierFallback: 'selten', // für weitere Skins hinten in der Liste
+    // Spitzhacken: Farben für Kopf (Metall), Stiel (Holz) und Griff-Band
+    pickaxes: [
+      { id: 'standard', name: 'Standard-Hacke', tier: 'frei', head: '#C9D1DB', handle: '#9C6B3C', band: '#2E86DE' },
+      { id: 'zucker', name: 'Zuckerstange', tier: 'selten', head: '#FF8CC6', handle: '#FFFFFF', band: '#E8475F' },
+      { id: 'wald', name: 'Waldaxt', tier: 'selten', head: '#56C271', handle: '#6B4F2A', band: '#F4E04D' },
+      { id: 'eis', name: 'Eiszapfen', tier: 'episch', head: '#9BE7FF', handle: '#E8F7FF', band: '#2E86DE' },
+      { id: 'lava', name: 'Lavahacke', tier: 'episch', head: '#FF6B35', handle: '#2B2D42', band: '#FFD23D' },
+      { id: 'gold', name: 'Goldhacke', tier: 'legendaer', head: '#FFD23D', handle: '#5B3A1E', band: '#E8483B' },
+    ],
+    // Emotes (Taste B): Grund-Tanz der Figur + Bewegung der ganzen Figur (motion)
+    emotes: [
+      { id: 'tanz', name: 'Freudentanz', tier: 'frei', motion: 'dance' },
+      { id: 'wippen', name: 'Wippen', tier: 'selten', motion: 'sway' },
+      { id: 'huepfer', name: 'Hüpfer', tier: 'selten', motion: 'hop' },
+      { id: 'kreisel', name: 'Kreisel', tier: 'episch', motion: 'spin' },
+      { id: 'rakete', name: 'Rakete', tier: 'legendaer', motion: 'rocket' },
+    ],
+    defaultPickaxe: 'standard',
+    defaultEmote: 'tanz',
+  },
+
+  // Lobby / Hauptmenü (Welle 5, src/ui/menus.js, src/world/lobbyScene.js)
+  lobby: {
+    turntableSpeed: 0.35, // so schnell dreht sich die Figur auf dem Podest (Radiant/s)
+    dragSpeed: 0.01, // Maus ziehen dreht die Figur (Radiant pro Pixel)
+    idleReturn: 3, // nach so vielen Sekunden ohne Ziehen dreht sie sich wieder von selbst
+    emotePreview: 3, // Emote-Vorschau im Spind dauert so lange (s)
+    transition: 0.35, // Übergang Lobby → Spiel (s)
+    // Reihenfolge der Modus-Kacheln. Was es (noch) nicht gibt, steht grau mit "bald" da.
+    modeOrder: ['creative', 'practice', 'duel', 'boxFight', 'zoneWars', 'battleRoyale', 'deathmatch', 'aimTrainer'],
+    defaultMode: 'creative',
   },
 
   // Hilfen für die Entwicklung
