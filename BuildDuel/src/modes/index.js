@@ -7,9 +7,17 @@
 // =============================================================================
 import { CONFIG } from '../config.js';
 import { createPracticeMode } from './practice.js';
+import { createCreativeMode } from './creative.js';
 import { createIslandSandbox, createArenaSandbox, createZoneWarsSandbox } from './sandbox.js';
 
 export const MODES = [
+  // Welle 5: Kreativ – der Standard-Modus in der Lobby
+  {
+    id: 'creative',
+    name: CONFIG.modes.creative.name,
+    description: 'Unendlich Material, alle Waffen.',
+    create: createCreativeMode,
+  },
   {
     id: 'practice',
     name: CONFIG.modes.practice.name,
@@ -22,8 +30,24 @@ export const MODES = [
   { id: 'sandbox-zonewars', name: 'Test: Zone Wars', description: 'Hügel-Karte mit wandernder Zone (Entwickler-Test).', hidden: true, create: createZoneWarsSandbox },
 ];
 
-/** Modus, mit dem das Spiel startet (bis es ein Hauptmenü gibt). */
+/** Modus, wenn ?mode=… unbekannt ist (Schnellstart ohne Lobby). */
 export const DEFAULT_MODE_ID = 'practice';
+
+/** Vorauswahl in der Lobby (Welle 5). */
+export const LOBBY_DEFAULT_MODE_ID = CONFIG.lobby.defaultMode;
+
+/**
+ * Kacheln für die Lobby in fester Reihenfolge (CONFIG.lobby.modeOrder): Modi, die es gibt,
+ * sind wählbar; die anderen stehen grau mit "bald" da. Test-Modi (hidden) erscheinen nie.
+ * @returns {{ id, name, description, available }[]}
+ */
+export function lobbyModes() {
+  return CONFIG.lobby.modeOrder.map((id) => {
+    const def = getModeDef(id);
+    if (def && !def.hidden) return { id, name: def.name, description: def.description, available: true };
+    return { id, name: CONFIG.modes[id]?.name ?? id, description: 'Kommt bald.', available: false };
+  });
+}
 
 /** Sucht einen Modus nach id. Unbekannt → null. */
 export function getModeDef(id) {

@@ -7,6 +7,8 @@
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="src/ui/styles.css">
   <link rel="stylesheet" href="src/ui/hud.css">
+  <link rel="stylesheet" href="src/ui/menus.css">
+  <link rel="stylesheet" href="src/ui/settings.css">
   <!-- "three" zeigt auf die lokale Kopie in /lib → läuft auch ohne Internet -->
   <script type="importmap">
     { "imports": { "three": "./lib/three.module.js" } }
@@ -29,15 +31,27 @@
         <div class="play-info">Die Maus wird dabei im Spiel festgehalten. Mit <b>Esc</b> bekommst du sie zurück.</div>
         <div id="play-hint" class="play-hint" aria-live="polite"></div>
         <button id="play-nolock" class="play-alt" type="button" hidden>Ohne Maus-Sperre spielen</button>
+        <!-- Pause-Menü (Welle 5): Einstellungen, Alles löschen (Kreativ), Zurück zur Lobby -->
+        <div id="pause-actions" class="pause-actions" hidden>
+          <button id="pause-settings" class="pause-btn" type="button">Einstellungen</button>
+          <button id="pause-clear" class="pause-btn dim" type="button" hidden>Alle Bauteile löschen</button>
+          <button id="pause-lobby" class="pause-btn danger" type="button">Zurück zur Lobby</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Ladebildschirm (verschwindet, sobald das erste Bild fertig ist) -->
   <div id="loading" class="loading">
-    <div class="loading-title">BuildDuel</div>
-    <div class="loading-bar"><div class="loading-bar-fill"></div></div>
-    <div id="loading-tip" class="loading-tip">Wer höher steht, gewinnt meistens.</div>
+    <div class="loading-logo">
+      <div class="loading-title">BuildDuel</div>
+      <div class="loading-sub">Bauen · Editieren · Gewinnen</div>
+    </div>
+    <div class="loading-progress">
+      <div class="loading-bar"><div id="loading-fill" class="loading-bar-fill"></div></div>
+      <div class="loading-step"><span id="loading-step">Spiel-Dateien laden …</span><b id="loading-pct">0 %</b></div>
+    </div>
+    <div class="loading-tipbox"><b>Tipp</b><span id="loading-tip" class="loading-tip">Wer höher steht, gewinnt meistens.</span></div>
   </div>
 
   <!-- Fehler-Anzeige (normalerweise unsichtbar) -->
@@ -137,12 +151,36 @@
           body.classList.contains('ready'));
       });
 
+      // Ladebalken: zeigt echte Lade-Schritte (main.js ruft setLoadingProgress auf).
+      // Bis die Spiel-Dateien da sind, kriecht er langsam bis 30 %.
+      var fill = document.getElementById('loading-fill');
+      var stepText = document.getElementById('loading-step');
+      var pctText = document.getElementById('loading-pct');
+      var shown = 0;
+      function paint(fraction) {
+        shown = Math.max(shown, Math.min(1, fraction));
+        fill.style.width = Math.round(shown * 100) + '%';
+        pctText.textContent = Math.round(shown * 100) + ' %';
+      }
+      window.setLoadingProgress = function (fraction, text) {
+        paint(fraction);
+        if (text) stepText.textContent = text;
+      };
+      var creep = setInterval(function () {
+        if (shown >= 0.3 || body.classList.contains('ready')) { clearInterval(creep); return; }
+        paint(shown + (0.3 - shown) * 0.12);
+      }, 120);
+
       // Wechselnde Tipps auf dem Ladebildschirm
       var tipBox = document.getElementById('loading-tip');
       var tips = [
         'Wer höher steht, gewinnt meistens.',
         'Eine Wand vor dir fängt Schüsse sofort ab.',
-        'Holz baut sich am schnellsten auf.',
+        'Holz baut sich am schnellsten auf – Metall hält am meisten aus.',
+        'Im Kreativ-Modus hast du unendlich Material. Taste P löscht alles.',
+        'Rampe + Wand gleichzeitig: so baust du schnell nach oben.',
+        'Im Spind (Lobby, links) wählst du Skin, Spitzhacke und Emote.',
+        'Alle Tasten kannst du in den Einstellungen (Zahnrad) ändern.',
         'Alle Spielwerte stehen in src/config.js.',
       ];
       var i = 0;
@@ -150,7 +188,7 @@
         if (body.classList.contains('ready')) { clearInterval(timer); return; }
         i = (i + 1) % tips.length;
         tipBox.textContent = tips[i];
-      }, 2500);
+      }, 2600);
 
       // Fall 3: Spiel lädt nach 15 Sekunden immer noch nicht → Hinweis auf dem
       // Ladebildschirm (verschwindet von selbst, falls das Spiel doch noch startet)

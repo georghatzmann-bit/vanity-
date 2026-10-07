@@ -159,6 +159,10 @@ function watchPage(page, label, problems) {
 // =============================================================================
 // Prüfungen im Spiel (spätere Wellen hängen hier ihre an)
 // =============================================================================
+// Welle 5: Ohne ?mode zeigt das Spiel die Lobby. Die Spiel-Prüfungen starten darum direkt den
+// Übungsplatz (Schnellstart); die Lobby-Prüfungen öffnen ihre eigene Seite ohne ?mode.
+const START_QUERY = '?mode=practice&seed=1';
+
 const GAME_CHECKS = [
   {
     name: 'Start: Ladebildschirm weg, "Klicken zum Spielen" sichtbar',
@@ -805,7 +809,7 @@ const GAME_CHECKS = [
   // Phase 5 (Welle 2b): Waffen, Zielpuppen, Treffer-Zahlen – siehe weaponChecks.cjs
   ...require('./weaponChecks.cjs').WEAPON_CHECKS,
   {
-    name: 'Esc-Ersatz: Pause zeigt "Pausiert – Klicken zum Weiterspielen"',
+    name: 'Esc-Ersatz: Pause zeigt "Pausiert – Weiter"',
     async run(ctx) {
       await ctx.page.keyboard.press('Escape');
       await ctx.page.waitForTimeout(300);
@@ -814,7 +818,7 @@ const GAME_CHECKS = [
         title: document.getElementById('play-title').textContent,
         button: document.getElementById('play-button').textContent,
       }));
-      ctx.assert(r.state === 'paused' && r.title === 'Pausiert' && /Weiterspielen/.test(r.button), `Pause: ${JSON.stringify(r)}`);
+      ctx.assert(r.state === 'paused' && r.title === 'Pausiert' && /Weiter/.test(r.button), `Pause: ${JSON.stringify(r)}`);
       await ctx.shot('09-pause');
     },
   },
@@ -837,6 +841,7 @@ const GAME_CHECKS = [
   ...require('./hudChecks.cjs').HUD_CHECKS,
   ...require('./worldChecks.cjs').WORLD_CHECKS, // Welle 3b: Welt (Insel, Sturm, Loot, Absprung, Arena, Zone Wars)
   ...require('./lookChecks.cjs').LOOK_CHECKS, // Aussehen: Figuren, Skins, Waffen, Bauteile (Bilder look-*.png)
+  ...require('./lobbyChecks.cjs').LOBBY_CHECKS, // Welle 5: Ladebildschirm, Lobby, Spind, Shop, Einstellungen, Pause-Menü, Kreativ
 ];
 
 // =============================================================================
@@ -870,7 +875,7 @@ async function main() {
     if (options.only !== 'tests') {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
       watchPage(page, 'Spiel', problems);
-      await page.goto(baseUrl + '?seed=1', { waitUntil: 'load' });
+      await page.goto(baseUrl + START_QUERY, { waitUntil: 'load' });
       await page.waitForFunction(
         () => document.body.classList.contains('ready') || document.body.classList.contains('has-error'),
         null, { timeout: 60000 },
@@ -892,11 +897,12 @@ async function main() {
             baseUrl,
             outPath: (name) => path.join(options.out, name),
             // Zweite Seite (z. B. mit verändertem Browser-Verhalten); bitte selbst schließen
-            openPage: async (initScript) => {
-              const extra = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+            // query: Adresse dahinter (Standard: Übungsplatz-Schnellstart; '' = Lobby), viewport: Größe
+            openPage: async (initScript, query = START_QUERY, viewport = { width: 1280, height: 720 }) => {
+              const extra = await browser.newPage({ viewport });
               watchPage(extra, 'Spiel 2', problems);
               if (initScript) await extra.addInitScript(initScript);
-              await extra.goto(baseUrl + '?seed=1', { waitUntil: 'load' });
+              await extra.goto(baseUrl + query, { waitUntil: 'load' });
               await extra.waitForFunction(() => document.body.classList.contains('ready'), null, { timeout: 60000 });
               return extra;
             },
