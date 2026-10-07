@@ -63,9 +63,10 @@ export function createEnvironment(scene, config, quality) {
   scene.add(sky);
 
   // --- Weiches Umgebungslicht (Himmel von oben, Gras von unten) -------------
+  // Farben aus config (visuals.hemiSkyColor/hemiGroundColor); sonst Himmel-Horizont und Gras
   const hemi = new THREE.HemisphereLight(
-    new THREE.Color(colors.skyHorizon),
-    new THREE.Color(colors.grass).multiplyScalar(0.8),
+    new THREE.Color(visuals.hemiSkyColor ?? colors.skyHorizon),
+    visuals.hemiGroundColor ? new THREE.Color(visuals.hemiGroundColor) : new THREE.Color(colors.grass).multiplyScalar(0.8),
     visuals.hemiIntensity,
   );
   hemi.name = 'Umgebungslicht';
@@ -75,7 +76,7 @@ export function createEnvironment(scene, config, quality) {
   const sunDirection = new THREE.Vector3(
     visuals.sunDirection.x, visuals.sunDirection.y, visuals.sunDirection.z,
   ).normalize();
-  const sun = new THREE.DirectionalLight(0xfff3dd, visuals.sunIntensity);
+  const sun = new THREE.DirectionalLight(visuals.sunColor ?? 0xfff3dd, visuals.sunIntensity);
   sun.name = 'Sonne';
   const area = visuals.shadowArea;
   const sunDistance = 120; // so weit steht die "Schatten-Kamera" vom Mittelpunkt entfernt

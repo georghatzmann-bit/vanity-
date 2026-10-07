@@ -254,6 +254,126 @@ const LOOK_CHECKS = [
       await ctx.page.evaluate(() => __studio.show(false));
     },
   },
+  {
+    name: 'Look: Bauteile Holz/Stein/Metall (Wand, Boden, Rampe, Dach), beschädigt, im Aufbau, 90er-Turm',
+    async run(ctx) {
+      const { setup, settle } = require('./buildChecks.cjs');
+      await setup(ctx);
+      const r = await ctx.page.evaluate(() => {
+        const b = window.__b;
+        b.clear();
+        const B = b.building;
+        const opts = { instant: true, force: true };
+        const made = [];
+        ['wood', 'stone', 'metal'].forEach((m, row) => {
+          const k = 5 + row * 2;
+          made.push(B.placePiece('wall', `wx:2:0:${k}`, null, m, opts));
+          made.push(B.placePiece('floor', `f:3:0:${k}`, null, m, opts));
+          made.push(B.placePiece('ramp', `r:4:0:${k}`, null, m, { ...opts, dir: 1 }));
+          made.push(B.placePiece('roof', `c:5:0:${k}`, null, m, opts));
+          const hurt = B.placePiece('wall', `wx:6:0:${k}`, null, m, opts);
+          hurt.applyDamage(hurt.health * 0.72, {});
+          made.push(hurt);
+          made.push(B.placePiece('wall', `wx:7:0:${k}`, null, m, { force: true })); // im Aufbau
+        });
+        // 90er-Turm: Rampe im Kasten, jede Ebene 90° gedreht
+        for (let j = 0; j < 6; j++) {
+          B.placePiece('ramp', `r:9:${j}:7`, null, 'wood', { ...opts, dir: j % 4 });
+          B.placePiece('wall', `wx:9:${j}:7`, null, 'wood', opts);
+          B.placePiece('wall', `wx:9:${j}:8`, null, 'wood', opts);
+          B.placePiece('wall', `wz:9:${j}:7`, null, 'wood', opts);
+          B.placePiece('wall', `wz:10:${j}:7`, null, 'wood', opts);
+        }
+        b.step(2);
+        const constructing = made.filter((x) => x && x.buildProgress < 1);
+        const tinted = constructing.every((x) => x.view?.mesh && x.view.mesh.material.color.b > x.view.mesh.material.color.r);
+        return { placed: made.filter(Boolean).length, constructing: constructing.length, tinted, stats: B.view.stats() };
+      });
+      ctx.assert(r.placed === 18, `18 Teile gesetzt (${r.placed})`);
+      ctx.assert(r.constructing === 3 && r.tinted, `im Aufbau bläulich (${r.constructing}, ${r.tinted})`);
+      ctx.assert(r.stats.drawCalls <= 24, `fertige Teile in wenigen Zeichen-Aufrufen (${r.stats.drawCalls})`);
+      const views = [
+        ['look-bau-uebersicht', 20, 9, 47, { x: 20, y: 0, z: 30 }],
+        ['look-bau-holzwand', 10, 0, 21.5, { x: 10, y: 2.2, z: 20 }],
+        ['look-bau-steinwand', 10, 0, 29.5, { x: 10, y: 2.2, z: 28 }],
+        ['look-bau-metallwand', 10, 0, 37.5, { x: 10, y: 2.2, z: 36 }],
+        ['look-bau-boden-rampe-dach', 14, 4.5, 31, { x: 20, y: 1, z: 22 }],
+        ['look-bau-schaden-aufbau', 28, 0, 21, { x: 26, y: 1.6, z: 30 }],
+        ['look-bau-90er-turm', 46, 0, 16, { x: 38, y: 11, z: 30 }],
+      ];
+      for (const [name, x, y, z, target] of views) {
+        await ctx.page.evaluate((a) => window.__b.viewFrom(a.x, a.y, a.z, a.target), { x, y, z, target });
+        await settle(ctx);
+        await ctx.shot(name);
+      }
+    },
+  },
+  {
+    name: 'Look: Vorschau blau (Gitter) und rot, Edit-Raster (blaue Kacheln mit Umriss, gewählte rot)',
+    async run(ctx) {
+      const { setup, settle } = require('./buildChecks.cjs');
+      await setup(ctx);
+      const blue = await ctx.page.evaluate(() => {
+        const b = window.__b;
+        b.clear();
+        b.spawn(18, 0, 30, 0, 0);
+        b.select('wall');
+        b.step(2);
+        b.game.frameUpdate(1 / 60, 1);
+        const ghost = b.building.view.root.getObjectByName('Vorschau wall');
+        return { visible: ghost.visible, map: !!ghost.material.map, color: ghost.material.color.getHexString() };
+      });
+      ctx.assert(blue.visible && blue.map && blue.color === '4da6ff', `Vorschau blau mit Gitter: ${JSON.stringify(blue)}`);
+      await settle(ctx);
+      await ctx.shot('look-vorschau-blau');
+      await ctx.page.evaluate(() => {
+        window.__b.select('ramp');
+        window.__b.step(2);
+        window.__b.game.frameUpdate(1 / 60, 1);
+      });
+      await settle(ctx);
+      await ctx.shot('look-vorschau-rampe');
+      const red = await ctx.page.evaluate(() => {
+        const b = window.__b;
+        b.p.infiniteMaterials = false;
+        for (const m of Object.keys(b.p.materials)) b.p.materials[m] = 0;
+        b.select('wall');
+        b.step(2);
+        b.game.frameUpdate(1 / 60, 1);
+        return b.building.view.root.getObjectByName('Vorschau wall').material.color.getHexString();
+      });
+      ctx.assert(red === 'ff4d4d', `ohne Material rot (${red})`);
+      await settle(ctx);
+      await ctx.shot('look-vorschau-rot');
+      const edit = await ctx.page.evaluate(() => {
+        const b = window.__b;
+        b.p.infiniteMaterials = true;
+        b.clear();
+        b.spawn(18, 0, 30.6, 0, 0);
+        b.build('wall');
+        b.aimAt({ x: 18, y: 0.66, z: 28 });
+        b.press('edit');
+        b.click();
+        b.aimAt({ x: 18, y: 2.0, z: 28 });
+        b.click();
+        b.aimAt({ x: 19.4, y: 3.3, z: 28 });
+        b.step(2);
+        b.game.frameUpdate(1 / 60, 1);
+        const overlay = b.building.view.root.getObjectByName('Edit-Kacheln');
+        const tiles = overlay ? overlay.children.length : 0;
+        const edges = overlay ? overlay.children.filter((m) => m.children[0]?.isLineSegments).length : 0;
+        return { tiles, edges, selection: b.building.editSession(b.p)?.selection ?? 0 };
+      });
+      ctx.assert(edit.tiles === 9 && edit.edges === 9, `9 Kacheln mit Umriss (${edit.tiles}/${edit.edges})`);
+      ctx.assert(edit.selection !== 0, `Felder gewählt (${edit.selection})`);
+      await settle(ctx);
+      await ctx.shot('look-edit-raster');
+      await ctx.page.evaluate(() => {
+        window.__b.press('edit');
+        window.__b.clear();
+      });
+    },
+  },
 ];
 
 module.exports = { LOOK_CHECKS, installStudio, studioShot };

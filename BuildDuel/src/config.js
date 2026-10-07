@@ -309,7 +309,9 @@ export const CONFIG = deepFreeze({
     wallDoorCells: [4, 7],
     previewColorOk: '#4DA6FF', // Vorschau: blau = geht
     previewColorBlocked: '#FF4D4D', // Vorschau: rot = geht nicht
-    previewOpacity: 0.35,
+    previewOpacity: 0.75, // Fläche des Geists (das Gitter-Bild macht sie zusätzlich durchsichtig)
+    previewEdgeColorOk: '#BFE6FF', // helle Kanten des blauen Geists
+    previewEdgeColorBlocked: '#FFB3B3',
     previewOccupiedEdgeOpacity: 0.5, // Platz belegt (z. B. gerade gesetzt): nur ein dünner roter Umriss, keine Fläche
 
     // --- Zielwahl: wohin kommt das Bauteil? (Welle 2a, siehe src/building/grid.js) ---
@@ -342,15 +344,18 @@ export const CONFIG = deepFreeze({
     hintCooldown: 1.5, // Hinweis "fremdes Bauteil" höchstens alle 1,5 s
 
     // --- Aussehen ---
-    textureSize: 256, // Pixel der erzeugten Holz/Stein/Metall-Bilder (1 Bild = 4 x 4 m)
+    textureSize: 512, // Pixel der erzeugten Holz/Stein/Metall-Bilder (1 Bild = 4 x 4 m)
     crackThreshold: 0.5, // unter 50 % Leben: Risse
     damageDarkening: 0.45, // so viel dunkler wird ein Teil bei 0 % Leben (0 = gar nicht, 1 = schwarz)
     constructionOpacity: { start: 0.45, end: 0.85 }, // Aufbau: leicht durchsichtig, wird fester
+    constructionTint: '#5FA8FF', // Aufbau: bläulicher Schimmer (verschwindet, wenn das Teil fertig ist)
     collapseSink: 1.2, // Einsturz-Animation: so weit (m) sackt ein Teil ab, während es verblasst
-    editTileColor: '#7FE3FF', // Edit-Kacheln: leuchtend hellblau
+    editTileColor: '#6EC1FF', // Edit-Kacheln: durchsichtig blau mit weißem Umriss
     editTileSelectedColor: '#FF4D4D', // gewählte Felder (werden entfernt): rot
     editTileHoverColor: '#FFFFFF', // Feld unter dem Fadenkreuz
-    editTileOpacity: 0.45,
+    editTileOpacity: 0.42,
+    editTileSelectedOpacity: 0.3, // gewählte Felder: rot und durchsichtiger (fallen weg)
+    editTileEdgeColor: '#FFFFFF',
   },
 
   // ---------------------------------------------------------------------------
@@ -994,15 +999,15 @@ export const CONFIG = deepFreeze({
     labelFadeNear: 1.5, // näher als 1,5 m an der Kamera: Schild unsichtbar …
     labelFadeFar: 3.5, // … ab 3,5 m wieder ganz zu sehen (dazwischen verblasst es)
     colors: {
-      skyTop: '#3A8DDE', // Himmel oben
-      skyHorizon: '#7EC8F2', // Himmel am Horizont
-      grass: '#5DBB4C',
+      skyTop: '#2F86E8', // Himmel oben (kräftiges Blau)
+      skyHorizon: '#86CEF5', // Himmel am Horizont
+      grass: '#5CC24A', // sattes Gras
       desert: '#E3C47A',
       water: '#3FB7D9',
       storm: '#8E3FD8',
-      wood: '#D9A066',
-      stone: '#9C9C9C',
-      metal: '#7D8FA3',
+      wood: '#E2AA6C',
+      stone: '#A9ABAE',
+      metal: '#8396AC',
       damageBody: '#FFFFFF', // Schadenszahl: Körper
       damageHead: '#FFD93D', // Schadenszahl: Kopf
       damageShield: '#4FC3F7', // Schadenszahl: Schild
@@ -1011,9 +1016,12 @@ export const CONFIG = deepFreeze({
     fogStartFraction: 0.15, // leichter Nebel beginnt bei 15 % der Sichtweite …
     fogEndFraction: 0.9, // … und verdeckt ab 90 % alles (Horizont-Farbe)
     // Sonne: Richtung, aus der das Licht kommt (wird normalisiert)
-    sunDirection: { x: -0.55, y: 1.0, z: 0.35 },
-    sunIntensity: 2.6,
-    hemiIntensity: 1.6, // weiches Licht von Himmel und Boden (Comic-Look: eher hell)
+    sunDirection: { x: -0.55, y: 1.0, z: 0.5 },
+    sunIntensity: 2.9, // kräftige Sonne (heller Comic-Look wie im Original)
+    sunColor: '#FFF4E0',
+    hemiIntensity: 1.55, // weiches Licht von Himmel und Boden (Comic-Look: eher hell)
+    hemiSkyColor: '#D6ECFF', // Licht von oben: fast weiß-blau
+    hemiGroundColor: '#B9AE8C', // Licht von unten: warm (sonst färbt das Gras Gesichter und Wände grün)
     shadowArea: 70, // Schatten werden im Umkreis von 70 m berechnet
     groundGridLines: true, // feine Linien im 4-m-Bauraster auf dem Boden
     groundGridOpacity: 0.07,
