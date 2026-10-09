@@ -285,7 +285,10 @@ class AssistantQuickTest(unittest.TestCase):
     def test_weather_and_sums(self):
         from jarvis.weather import Weather
 
-        with mock.patch.object(Weather, "forecast", return_value=dict(WEATHER, place="Wien")):
+        # Die Vorhersage ab heute: "morgen" sucht Jarvis mit dem echten Datum
+        days = [(dt.date.today() + dt.timedelta(days=i)).isoformat() for i in range(5)]
+        weather = dict(WEATHER, place="Wien", daily=dict(WEATHER["daily"], time=days))
+        with mock.patch.object(Weather, "forecast", return_value=weather):
             answer, _, steps, brain = self.run_quick("Wie wird das Wetter morgen?")
         self.assertTrue(answer.startswith("Morgen in Wien"), answer)
         self.assertEqual(brain.asked, [])

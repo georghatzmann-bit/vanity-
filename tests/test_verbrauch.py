@@ -130,7 +130,7 @@ class UsageTest(Base):
         seen = []
         verbrauch.listeners.append(seen.append)
         self.addCleanup(verbrauch.listeners.remove, seen.append)
-        verbrauch.note(REAL, now=NOW)
+        verbrauch.note(real(time.time()))  # mit der echten Uhr: das Fenster fragt usage_state() ohne feste Zeit
         self.assertEqual(seen[-1]["woche"], 34)
 
         from jarvis.gui.app import Api, GuiBridge

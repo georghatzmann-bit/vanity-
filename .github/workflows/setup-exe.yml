@@ -574,3 +574,28 @@ jobs:
             sleep $((20 * i))
           done
           exit 1
+
+      # Fester Link, der immer die neueste JarvisSetup.exe lädt (Download-Knopf in Jarvis, README, Anleitung):
+      # .../releases/download/jarvis-neueste/JarvisSetup.exe. "releases/latest" taugt nicht, seit im Repo auch
+      # andere Programme veröffentlicht werden (Konto-Retter): dann zeigt "latest" dorthin und Jarvis gibt 404.
+      - name: Fester Download-Link
+        if: steps.stand.outputs.ueberholt != 'ja'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIXED: jarvis-neueste
+          BUILD: ${{ needs.setup-exe.outputs.version }} (Build ${{ github.run_number }})
+        run: |
+          notes="Immer die neueste JarvisSetup.exe, gerade: Jarvis $BUILD. Jeder neue Bau ersetzt die Datei hier.
+          Herunterladen und doppelklicken. Windows fragt beim ersten Start vielleicht nach: \"Weitere Informationen\" und dann \"Trotzdem ausführen\"."
+          for i in 1 2 3; do
+            if gh release view "$FIXED" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$FIXED" out/JarvisSetup.exe --clobber --repo "$GITHUB_REPOSITORY" \
+                && gh release edit "$FIXED" --repo "$GITHUB_REPOSITORY" --notes "$notes" --latest=false && exit 0
+            else
+              gh release create "$FIXED" out/JarvisSetup.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                --title "Jarvis (immer die neueste Version)" --notes "$notes" --latest=false && exit 0
+            fi
+            echo "Versuch $i ging nicht"
+            sleep $((20 * i))
+          done
+          exit 1

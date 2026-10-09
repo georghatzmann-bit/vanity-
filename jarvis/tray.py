@@ -9,9 +9,10 @@ log = logging.getLogger(__name__)
 
 ACCENT = (76, 157, 255, 255)
 MUTED = (240, 85, 90, 255)
-# Die neueste JarvisSetup.exe. Das Projekt ist privat: der Browser lädt sie, weil Georg dort bei
-# GitHub angemeldet ist. Danach einfach doppelklicken, die Einstellungen bleiben.
-DOWNLOAD_URL = "https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe"
+# Die neueste JarvisSetup.exe. Fester Link (Release "jarvis-neueste", jeder Bau ersetzt die Datei): "latest" zeigt
+# auf das, was im Repo zuletzt veröffentlicht wurde, und das ist nicht immer Jarvis. Ist das Projekt privat, lädt der
+# Browser sie, weil Georg dort bei GitHub angemeldet ist. Danach einfach doppelklicken, die Einstellungen bleiben.
+DOWNLOAD_URL = "https://github.com/georghatzmann-bit/vanity-/releases/download/jarvis-neueste/JarvisSetup.exe"
 
 
 def open_download() -> None:

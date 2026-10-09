@@ -8,7 +8,7 @@ Du brauchst: Windows 10 (ab Version 1809) oder Windows 11, Internet und etwa 3 G
 
 ![Der Installer bei der Arbeit](docs/bilder/installer.jpg)
 
-1. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/latest/download/JarvisSetup.exe
+1. Diese Datei laden: https://github.com/georghatzmann-bit/vanity-/releases/download/jarvis-neueste/JarvisSetup.exe
    Zeigt GitHub „Page not found“: erst oben rechts bei GitHub anmelden (das Projekt ist privat), dann den Link noch einmal öffnen.
 2. Doppelklick auf `JarvisSetup.exe`. Fragt Windows nach („Der Computer wurde durch Windows geschützt“): **Weitere Informationen** > **Trotzdem ausführen**. Das kommt, weil der Installer nicht mit einem gekauften Zertifikat signiert ist.
 3. Im dunklen Jarvis-Fenster auf **Installieren** klicken. Die zwei Schalter darunter kannst du so lassen: **Mit Windows starten** ist an, **Symbol auf dem Desktop** ist aus (anschalten, wenn du eins willst).
