@@ -1,0 +1,4 @@
+{
+  "description": "Lernen: merkt sich Korrekturen, Vorlieben und Lob und gibt Claude die bestätigten Regeln mit",
+  "modules": ["./register.js"]
+}

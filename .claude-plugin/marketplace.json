@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "jarvis-plugins",
+  "description": "Georgs Plugins für Claude: Gedächtnis über Sitzungen, Lernen aus Korrekturen, Assistent mit Spezialisten, Körper-Tagebuch, Geld-Check und Videos ansehen. Dazu geprüfte fremde Plugins aus den Videos als Option.",
+  "owner": {
+    "name": "Georg"
+  },
+  "plugins": [
+    {
+      "name": "gedaechtnis",
+      "source": "./claude-plugins/gedaechtnis",
+      "description": "Claude merkt sich Sitzung für Sitzung, woran ihr gearbeitet habt, und was du ihm sagst (\"Merk dir ...\"). Ohne Zusatzprogramme, alles auf dem PC.",
+      "category": "productivity",
+      "tags": ["gedächtnis", "memory", "sitzungen"]
+    },
+    {
+      "name": "lernen",
+      "source": "./claude-plugins/lernen",
+      "description": "Beobachtet Korrekturen und Vorlieben, schlägt daraus Regeln und bessere Skills vor (wie Task Observer). Nichts ändert sich ohne dein Ja.",
+      "category": "productivity",
+      "tags": ["lernen", "skills", "stil"]
+    },
+    {
+      "name": "assistent",
+      "source": "./claude-plugins/assistent",
+      "description": "Spezialisten für Posteingang, Kalender, Shop, Werbung, Recherche und Texte, dazu Tagesbriefing, FAQ-Datei und Dashboard aus einem Bild.",
+      "category": "productivity",
+      "tags": ["briefing", "subagents", "konnektoren"]
+    },
+    {
+      "name": "koerper",
+      "source": "./claude-plugins/koerper",
+      "description": "Körper-Tagebuch: Essensfoto rein, Nährwerte raus. Trainingssätze mit Fortschritt, Schlaf, HRV und Ruhepuls, alles als Dashboard.",
+      "category": "productivity",
+      "tags": ["ernährung", "training", "gesundheit"]
+    },
+    {
+      "name": "geld",
+      "source": "./claude-plugins/geld",
+      "description": "Geld-Check für Shop und Werbung mit konkreten Vorschlägen, Produkttexte und ehrliche Ideen. Umgesetzt wird nur nach deinem Ja.",
+      "category": "productivity",
+      "tags": ["shop", "werbung", "umsatz"]
+    },
+    {
+      "name": "video",
+      "source": "./claude-plugins/video",
+      "description": "Claude sieht Videos wirklich an: TikTok, YouTube, Instagram oder eine Datei. Übersichtsbilder mit Zeitstempel und Transkript, sparsam mit Tokens, alles auf dem PC.",
+      "category": "productivity",
+      "tags": ["video", "tiktok", "youtube"]
+    },
+    {
+      "name": "ecc",
+      "displayName": "Everything Claude Code (optional)",
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/everything-claude-code",
+        "sha": "ef648e01899ba3e8dc6371642deaaf64b4477775"
+      },
+      "description": "Fremdes Plugin aus dem Video (MIT, Affaan Mustafa): 293 Skills und 68 Agents fürs Programmieren. Die Hooks brauchen Node.js, und die vielen Skills kosten Kontext. Auf den geprüften Stand vom 3.10.2026 festgelegt.",
+      "category": "development",
+      "tags": ["fremd", "programmieren"],
+      "defaultEnabled": false
+    },
+    {
+      "name": "task-observer",
+      "displayName": "Task Observer (optional)",
+      "source": {
+        "source": "github",
+        "repo": "rebelytics/one-skill-to-rule-them-all",
+        "sha": "da860265ae968bdc6bb13b96c2c75fcb61176b72"
+      },
+      "description": "Fremdes Plugin aus dem Video (CC BY 4.0, Eoghan Henn): das Original zu \"lernen\", ein großer Skill mit Wochen-Auswertung. Seine Befehle sind für Bash geschrieben. Auf den geprüften Stand vom 3.10.2026 festgelegt.",
+      "category": "productivity",
+      "tags": ["fremd", "skills"],
+      "defaultEnabled": false
+    },
+    {
+      "name": "mem-thedotmack",
+      "displayName": "Claude Mem (optional)",
+      "source": {
+        "source": "git-subdir",
+        "url": "thedotmack/claude-mem",
+        "path": "plugin",
+        "sha": "a1951f2ad247330b2b5d58a1e0c7efeef4a03be5"
+      },
+      "description": "Fremdes Plugin aus dem Video (Apache-2.0, Alex Newman): Gedächtnis mit eigenem Hintergrunddienst. Braucht Node.js 20, Bun und Git Bash und fasst Sitzungen mit Claude zusammen (kostet Kontingent). Auf den geprüften Stand vom 3.10.2026 festgelegt.",
+      "category": "productivity",
+      "tags": ["fremd", "gedächtnis"],
+      "defaultEnabled": false
+    }
+  ]
+}

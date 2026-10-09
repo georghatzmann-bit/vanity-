@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "lernen",
+  "displayName": "Lernen",
+  "version": "1.0.0",
+  "description": "Beobachtet, wo du Claude korrigierst oder lobst, und macht daraus mit deinem Ja feste Regeln und bessere Skills (wie Task Observer, aber ohne Zusatzprogramme).",
+  "author": { "name": "Georg" },
+  "license": "MIT",
+  "keywords": ["lernen", "skills", "stil", "vorlieben"]
+}

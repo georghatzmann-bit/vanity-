@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Jarvis einrichten</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body class="setup" data-step="welcome" data-link="wait">
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="shell">
+    <!-- Links: die Schritte -->
+    <aside class="rail glass" aria-label="Schritte">
+      <div class="rail-brand">
+        <canvas class="brand-orb" aria-hidden="true"></canvas>
+        <div>
+          <div class="rail-name">Jarvis</div>
+          <div class="rail-sub">Einrichtung</div>
+        </div>
+      </div>
+      <ol class="steps" id="steps"></ol>
+      <div class="rail-foot">
+        <span>Alles lässt sich später über die Einstellungen ändern.</span>
+        <span id="railVersion"></span>
+      </div>
+    </aside>
+
+    <!-- Rechts: der aktuelle Schritt -->
+    <main class="page" id="card">
+      <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
+      <header class="page-head">
+        <div class="step-count" id="stepCount">Schritt 1 von 7</div>
+        <h1 id="title">Willkommen bei Jarvis</h1>
+        <p class="lead" id="lead">In ein paar kurzen Schritten ist Jarvis startklar. Du klickst nur.</p>
+      </header>
+
+      <div class="page-body" id="cardBody">
+
+        <!-- 1 Willkommen -->
+        <section class="step" data-step="welcome">
+          <div class="welcome">
+            <div class="welcome-orb"><canvas id="bigReactor" aria-hidden="true"></canvas></div>
+            <ul class="plan">
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></span><span><b>Mikrofon</b><small>Damit Jarvis dich hört</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span><span><b>Stimme</b><small>Wie Jarvis klingen soll</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span><b>Name und Ort</b><small>Damit Jarvis dich kennt, und für das Wetter</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2.4 4.8.8.8 1.1 1.7 1.1 2.7V18h5v-1.5c0-1 .3-1.9 1.1-2.7C16.8 12.6 18 11.2 18 9a6 6 0 0 0-6-6zM10 21h4"/></svg></span><span><b>Gehirn</b><small>Dein Claude-Abo (Pro oder Max): denkt mit, beantwortet Fragen, erledigt Aufgaben</small></span></li>
+              <li><span class="plan-ico"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></span><span><b>Extras</b><small>Stumm-Taste, Autostart, Alexa</small></span></li>
+            </ul>
+          </div>
+          <p class="note" id="bootLine">Dauert etwa zwei Minuten. Jeder Schritt wird sofort gespeichert.</p>
+        </section>
+
+        <!-- 2 Mikrofon -->
+        <section class="step" data-step="mic" hidden>
+          <div class="mic-layout">
+            <div class="mic-list-wrap">
+              <div class="section-head">
+                <h2>Mikrofone</h2>
+                <button type="button" class="link-btn" id="micReload">Liste neu laden</button>
+              </div>
+              <div class="choices" id="micList" role="radiogroup" aria-label="Mikrofon auswählen"></div>
+            </div>
+            <div class="mic-live" id="micLive">
+              <div class="section-head"><h2>Test</h2></div>
+              <div class="meter-block">
+                <div class="meter-top"><span>Lautstärke</span><span class="meter-num" id="levelNum">–</span></div>
+                <div class="vu" id="vu" aria-hidden="true"></div>
+              </div>
+              <div class="meter-block">
+                <div class="meter-top"><span>„Hey Jarvis“ erkannt</span><span class="meter-num" id="wakeNum">–</span></div>
+                <div class="wake-track" aria-hidden="true">
+                  <span class="wake-fill" id="wakeFill"></span>
+                  <span class="wake-best" id="wakeBest"></span>
+                  <span class="wake-mark" id="wakeMark" title="Ab hier reagiert Jarvis"></span>
+                </div>
+              </div>
+              <div class="status-box" id="micStatus" data-tone="idle" aria-live="polite">
+                <span class="status-dot"></span><span id="micStatusText">Wähl links ein Mikrofon.</span>
+              </div>
+              <label class="setting">
+                <span class="setting-text">
+                  <b>Empfindlicher</b>
+                  <small>Wenn „Hey Jarvis“ nur knapp erkannt wird</small>
+                </span>
+                <input type="checkbox" class="sr-input" id="sensitive"><span class="switch" aria-hidden="true"></span>
+              </label>
+              <label class="setting">
+                <span class="setting-text">
+                  <b>Gespräch ohne Weckwort</b>
+                  <small>Nach jeder Antwort hört Jarvis 8 Sekunden weiter zu. Einfach weiterreden, „Danke“ beendet.</small>
+                </span>
+                <input type="checkbox" class="sr-input" id="conversation"><span class="switch" aria-hidden="true"></span>
+              </label>
+              <label class="setting">
+                <span class="setting-text">
+                  <b>Auch „Jarvis“ allein</b>
+                  <small>„Jarvis“, „Hallo Jarvis“, „Okay Jarvis“: Halbe Treffer prüft Jarvis kurz mit der Spracherkennung</small>
+                </span>
+                <input type="checkbox" class="sr-input" id="nameWake"><span class="switch" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <div class="key-card" id="groqCard">
+            <div class="key-head">
+              <span class="key-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></span>
+              <span class="key-text">
+                <b>Besser und schneller verstehen <span class="badge accent">gratis</span></b>
+                <small>Mit einem kostenlosen Groq-Schlüssel erkennt Jarvis Sprache in Bestqualität, meist in unter einer halben Sekunde. So geht's: Groq öffnen, mit Google anmelden, „Create API Key“ klicken, Schlüssel hier einfügen.</small>
+              </span>
+              <span class="key-state" id="groqState"></span>
+            </div>
+            <form class="key-form" id="groqForm" autocomplete="off">
+              <input class="input mono" id="groqKey" type="password" placeholder="gsk_…" spellcheck="false" aria-label="Groq-Schlüssel">
+              <button type="submit" class="btn primary" id="groqCheck">Prüfen</button>
+              <button type="button" class="btn ghost" data-open="https://console.groq.com/keys">Groq öffnen</button>
+            </form>
+            <p class="form-msg" id="groqMsg" aria-live="polite"></p>
+          </div>
+          <div class="key-card" id="picoCard">
+            <div class="key-head">
+              <span class="key-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4M3.5 3.5a12 12 0 0 0 0 17M20.5 3.5a12 12 0 0 1 0 17"/></svg></span>
+              <span class="key-text">
+                <b>Nur „Jarvis“ sagen, ohne Hey <span class="badge accent">gratis</span></b>
+                <small>Mit einem kostenlosen Picovoice-Schlüssel reicht auch „Jarvis“ allein. So geht's: Picovoice öffnen, Konto anlegen, den „AccessKey“ kopieren und hier einfügen. Danach oben im Test „Jarvis“ sagen.</small>
+              </span>
+              <span class="key-state" id="picoState"></span>
+            </div>
+            <form class="key-form" id="picoForm" autocomplete="off">
+              <input class="input mono" id="picoKey" type="password" placeholder="AccessKey" spellcheck="false" aria-label="Picovoice-Schlüssel">
+              <button type="submit" class="btn primary" id="picoCheck">Prüfen</button>
+              <button type="button" class="btn ghost" data-open="https://console.picovoice.ai/">Picovoice öffnen</button>
+            </form>
+            <p class="form-msg" id="picoMsg" aria-live="polite"></p>
+          </div>
+          <p class="note">„Hey Jarvis“ englisch aussprechen, etwa „Hej Dschahrwis“. Mit Picovoice-Schlüssel reicht „Jarvis“. Oder Strg + Alt + J drücken.</p>
+        </section>
+
+        <!-- 3 Stimme -->
+        <section class="step" data-step="voice" hidden>
+          <div class="segmented" id="voiceKind" role="radiogroup" aria-label="Art der Stimme">
+            <button type="button" role="radio" data-kind="local"><b>Lokal (empfohlen)</b><small>Auf diesem PC. Natürlich, schnell, kostenlos und ohne Internet.</small></button>
+            <button type="button" role="radio" data-kind="premium"><b>Premium</b><small>ElevenLabs. Klingt wie ein echter Mensch, braucht Internet. Abo ab etwa 6 $ im Monat.</small></button>
+          </div>
+
+          <div class="voice-panel" id="premiumPanel" hidden>
+            <div class="key-card" id="elevenCard">
+              <div class="key-head">
+                <span class="key-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><path d="M15 7a4 4 0 1 1-3.9 4.9L4 19v-3l2-2v-2h2l1.1-1.1A4 4 0 0 1 15 7z"/><circle cx="16" cy="10" r="1"/></svg></span>
+                <span class="key-text">
+                  <b>ElevenLabs-Schlüssel</b>
+                  <small>Konto auf elevenlabs.io anlegen, gratis reicht zum Ausprobieren. Dann „Schlüssel-Seite öffnen“, „Create API Key“ klicken, Schlüssel hier einfügen.</small>
+                </span>
+                <span class="key-state" id="elevenState"></span>
+              </div>
+              <form class="key-form" id="elevenForm" autocomplete="off">
+                <input class="input mono" id="elevenKey" type="password" placeholder="sk_…" spellcheck="false" aria-label="ElevenLabs-Schlüssel">
+                <button type="submit" class="btn primary" id="elevenCheck">Prüfen</button>
+                <button type="button" class="btn ghost" data-open="https://elevenlabs.io/app/settings/api-keys">Schlüssel-Seite öffnen</button>
+              </form>
+              <p class="form-msg" id="elevenMsg" aria-live="polite"></p>
+            </div>
+            <div class="plan-line" id="elevenPlan" hidden></div>
+            <div class="design-hint" id="designHint" hidden>
+              <span class="row-text">
+                <b>Eigene Jarvis-Stimme, kostenlos</b>
+                <small>Auf elevenlabs.io unter Voices > My Voices > Add a new voice > Voice Design die Beschreibung und den Probetext einfügen, Generate klicken und die beste Stimme speichern. Danach hier oben Prüfen klicken, dann steht sie unten zur Wahl. Die Beschreibung passt zu „Wie Jarvis redet“ (Schritt Name und Ort): Butler wie im Film oder wie im Video.</small>
+              </span>
+              <div class="design-actions">
+                <button type="button" class="btn small ghost" id="designPrompt">Beschreibung kopieren</button>
+                <button type="button" class="btn small ghost" id="designText">Probetext kopieren</button>
+                <button type="button" class="btn small" data-open="https://elevenlabs.io/voice-design">Voice Design öffnen</button>
+              </div>
+            </div>
+            <div class="voice-grid" id="elevenGrid" role="radiogroup" aria-label="ElevenLabs-Stimme"></div>
+            <div class="library" id="libraryBox" hidden>
+              <div class="section-head spaced">
+                <h2>Deutsche Stimmen aus der Bibliothek</h2>
+                <div class="chips" id="libraryGender">
+                  <button type="button" class="chip" data-gender="male" aria-pressed="true">Männlich</button>
+                  <button type="button" class="chip" data-gender="female" aria-pressed="false">Weiblich</button>
+                </div>
+              </div>
+              <div class="plan-line" id="libraryNote" hidden>Anhören geht immer. Nutzen kann Jarvis diese Stimmen erst mit dem Starter-Abo, so will es ElevenLabs.</div>
+              <div class="voice-grid" id="libraryGrid"></div>
+            </div>
+          </div>
+
+          <div class="voice-panel" id="localPanel">
+            <div class="key-card" id="localCard">
+              <div class="key-head">
+                <span class="key-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2.5v3.5M15 2.5v3.5M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg></span>
+                <span class="key-text">
+                  <b>Jarvis-Stimme auf diesem PC</b>
+                  <small>Deutsche Stimme und Spracherkennung laufen ganz auf deinem PC: kein Abo, kein Internet nötig, nichts verlässt den PC.</small>
+                </span>
+                <span class="key-state" id="localState"></span>
+              </div>
+              <div class="key-form">
+                <button type="button" class="btn primary" id="localInstall">Lokal einrichten</button>
+              </div>
+              <p class="form-msg" id="localMsg" aria-live="polite"></p>
+            </div>
+            <div class="voice-grid" id="localGrid" role="radiogroup" aria-label="Lokale Stimme"></div>
+            <label class="setting switch-row" id="localAllRow" hidden>
+              <span class="setting-text">
+                <b>Spracherkennung auf dem PC</b>
+                <small>An (Standard): Außer den Fragen an Claude geht nichts ins Internet. Aus: Groq in der Cloud, braucht einen Schlüssel.</small>
+              </span>
+              <input type="checkbox" class="sr-input" id="localAll"><span class="switch" aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <p class="note" id="voiceNote">Jarvis spricht nie mit einer Windows- oder Microsoft-Stimme. Ist das ElevenLabs-Guthaben leer oder das Internet weg, übernimmt die lokale Stimme.</p>
+        </section>
+
+        <!-- 4 Name und Wohnort -->
+        <section class="step" data-step="place" hidden>
+          <form class="place-form name-form" id="nameForm" autocomplete="off">
+            <input id="nameInput" class="input" type="text" maxlength="30" placeholder="Dein Vorname, z. B. Georg" aria-label="Dein Vorname" spellcheck="false">
+            <button type="submit" class="btn" id="nameSave">Speichern</button>
+          </form>
+          <p class="note name-note">Damit Jarvis weiß, mit wem er spricht.</p>
+          <div class="segmented two talk-style" id="talkStyle" role="radiogroup" aria-label="Wie Jarvis redet">
+            <button type="button" role="radio" data-style="butler"><b>Butler wie im Film</b><small>Sagt „Sir“, ruhig und förmlich, mit trockenem Humor.</small></button>
+            <button type="button" role="radio" data-style="locker"><b>Locker wie im Video</b><small>Sagt „Chef“, warm und alltäglich, denkt mit und schlägt Dinge vor.</small></button>
+          </div>
+          <form class="place-form" id="placeForm" autocomplete="off">
+            <input id="placeInput" class="input" type="text" maxlength="80" placeholder="z. B. Wien oder Graz, Österreich" aria-label="Wohnort" spellcheck="false">
+            <button type="submit" class="btn" id="placeCheck">Prüfen</button>
+          </form>
+          <p class="form-msg" id="placeMsg" aria-live="polite"></p>
+          <div class="weather-card empty" id="weatherCard">
+            <div class="weather-temp" id="weatherTemp"></div>
+            <div class="weather-info">
+              <div class="weather-place" id="weatherPlace"></div>
+              <div class="weather-text" id="weatherText"></div>
+            </div>
+          </div>
+          <p class="note">Jarvis braucht den Ort für „Wie wird das Wetter?“ und zeigt das Wetter im Fenster. Leer lassen geht auch.</p>
+        </section>
+
+        <!-- 5 Claude -->
+        <section class="step" data-step="claude" hidden>
+          <div class="claude-card" id="claudeCard" data-state="idle">
+            <span class="claude-icon" id="claudeIcon" aria-hidden="true"></span>
+            <div class="claude-text">
+              <div class="claude-title" id="claudeTitle">Noch nicht geprüft</div>
+              <div class="claude-msg" id="claudeMsg">Jarvis fragt Claude einmal, ob alles funktioniert.</div>
+              <div class="claude-note" id="claudeNote" hidden></div>
+              <div class="claude-meta" id="claudeMeta"></div>
+              <div class="claude-actions">
+                <button type="button" class="btn primary" id="claudeInstall" hidden>Claude Code installieren</button>
+                <button type="button" class="btn primary" id="claudeLogin" hidden>Bei Claude anmelden</button>
+                <button type="button" class="btn" id="claudeRetry">Nochmal prüfen</button>
+              </div>
+            </div>
+          </div>
+          <div class="howto" id="claudeHowto" hidden></div>
+          <details class="details" id="claudeDetails" hidden>
+            <summary>Claudes genaue Meldung</summary>
+            <pre id="claudeDetail"></pre>
+            <button type="button" class="btn small" id="claudeCopy">Kopieren</button>
+          </details>
+
+          <div class="section-head spaced"><h2>Modellwahl</h2></div>
+          <div class="segmented" id="speed" role="radiogroup" aria-label="Modellwahl">
+            <button type="button" role="radio" data-speed="auto"><b>Automatisch</b><small>Empfohlen. Kurze Fragen schnell, Knifflige mit Opus und viel Nachdenken.</small></button>
+            <button type="button" role="radio" data-speed="schnell"><b>Immer schnell</b><small>Sonnet, wenig Nachdenken. Am schnellsten, schont das Kontingent.</small></button>
+            <button type="button" role="radio" data-speed="gruendlich"><b>Immer gründlich</b><small>Opus, viel Nachdenken. Am klügsten, braucht länger.</small></button>
+          </div>
+          <p class="note">Dafür reicht dein Claude-Abo (Pro oder Max). Fehlt ein Modell im Abo, nimmt Jarvis von selbst das nächstkleinere. Im Verlauf steht bei jeder Antwort, womit er gedacht hat.</p>
+        </section>
+
+        <!-- 6 Extras -->
+        <section class="step" data-step="extras" hidden>
+          <div class="settings">
+            <div class="setting stacked">
+              <span class="setting-text">
+                <b>Stumm-Taste</b>
+                <small>Schaltet das Mikrofon überall in Windows aus und wieder an.</small>
+              </span>
+              <div class="keys" id="hotkeys" role="radiogroup" aria-label="Stumm-Taste"></div>
+            </div>
+
+            <label class="setting">
+              <span class="setting-text">
+                <b>Mit Windows starten</b>
+                <small>Jarvis ist nach dem Anmelden sofort da.</small>
+              </span>
+              <input type="checkbox" class="sr-input" id="autostart"><span class="switch" aria-hidden="true"></span>
+            </label>
+
+            <label class="setting">
+              <span class="setting-text">
+                <b>Volle Freigabe</b>
+                <small>Jarvis fährt herunter, startet neu, deinstalliert und räumt in den Papierkorb, ohne nachzufragen. Endgültiges Löschen und Käufe fragt er immer.</small>
+              </span>
+              <input type="checkbox" class="sr-input" id="fullPermission"><span class="switch" aria-hidden="true"></span>
+            </label>
+
+            <details class="setting alexa" id="alexa">
+              <summary>
+                <span class="setting-text">
+                  <b>Alexa über Home Assistant</b>
+                  <small>Freiwillig. Jarvis spricht über deine Echos und schaltet Geräte.</small>
+                </span>
+                <span class="chev" aria-hidden="true"></span>
+              </summary>
+              <div class="alexa-body">
+                <label class="field">
+                  <span class="field-label">Adresse</span>
+                  <input id="haUrl" class="input" type="text" placeholder="http://homeassistant.local:8123" spellcheck="false">
+                </label>
+                <label class="field">
+                  <span class="field-label">Token</span>
+                  <input id="haToken" class="input" type="password" placeholder="Langlebiges Zugriffstoken" spellcheck="false">
+                </label>
+                <div class="alexa-actions">
+                  <button type="button" class="btn" id="haCheck">Verbindung testen</button>
+                  <button type="button" class="btn primary" id="haSave" hidden>Alexa speichern</button>
+                </div>
+                <p class="form-msg" id="haMsg" aria-live="polite"></p>
+                <div class="echos" id="echos"></div>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <!-- 7 Fertig -->
+        <section class="step" data-step="done" hidden>
+          <div class="summary" id="summary"></div>
+          <p class="note">Sag „Hey Jarvis“, warte auf den Ton und sprich deinen Befehl. Oder klick auf die Kugel im Jarvis-Fenster. Tippen geht auch.</p>
+          <p class="note">Als Nächstes: Im Jarvis-Fenster oben rechts unter „Verbinden“ koppelst du dein Handy per QR-Code, richtest Alexa ein („Alexa, sag Jarvis, …“) und siehst, welche Konnektoren (Gmail, Kalender, Spotify …) Jarvis über dein Claude-Konto nutzt.</p>
+        </section>
+      </div>
+
+      <footer class="page-foot">
+        <button type="button" class="btn ghost" id="backBtn" hidden>Zurück</button>
+        <span class="foot-hint" id="footHint"></span>
+        <button type="button" class="btn primary" id="nextBtn">Los geht's</button>
+      </footer>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+
+  <script src="orb.js"></script>
+  <script src="setup.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+{
+  "description": "Gedächtnis über Sitzungen: merkt sich Anfragen und Ergebnisse und gibt sie Claude zu Beginn mit",
+  "modules": ["./register.js"]
+}

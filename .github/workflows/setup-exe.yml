@@ -1,0 +1,601 @@
+# Baut JarvisSetup.exe auf Windows, installiert sie dort einmal still zur Probe
+# und stellt sie als Release bereit (Seite "Releases" > neueste Version).
+# JarvisSetup.exe = die Oberfläche (installer/setup, WPF) mit dem Inno-Kern (installer/jarvis.iss) darin.
+name: JarvisSetup.exe bauen
+
+# Sparsam mit den Actions-Minuten (Georgs Konto: 2.000 im Monat, Windows zählt doppelt, ein Build dauert
+# etwa 15 Minuten): Nur Änderungen am Programm bauen, nicht an Anleitung und README (die kommen mit dem
+# nächsten Build mit). Kommen mehrere Änderungen kurz nacheinander, wartet nur die neueste: Läuft gerade ein
+# Build, wird ein noch wartender älterer übersprungen. Ein laufender Build wird nie abgebrochen (er
+# veröffentlicht am Ende das Release).
+on:
+  push:
+    branches: [main, claude/project-thread-0revfw]
+    paths:
+      - "jarvis/**"
+      - "jarvis_home/**"
+      - "claude-plugins/**"
+      - ".claude-plugin/**"
+      - "werkzeuge/**"
+      - "installer/**"
+      - "requirements*.txt"
+      - "Jarvis.bat"
+      - "Jarvis.pyw"
+      - "config.example.toml"
+      - ".github/workflows/setup-exe.yml"
+  workflow_dispatch:
+    inputs:
+      nur_bilder:
+        description: "Nur bauen und die Installer-Bilder machen (ohne Proben)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: setup-exe-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  setup-exe:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (python -c "import jarvis; print(jarvis.__version__)").Trim()
+          "JARVIS_VERSION=$v" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "version=$v" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+      - name: Symbol
+        run: |
+          python -m pip install --quiet pillow
+          python -c "from jarvis.tray import save_app_icon; save_app_icon('installer/jarvis.ico')"
+
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Inno-Kern bauen (JarvisKern.exe)
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\jarvis.iss'
+
+      - name: JarvisSetup.exe bauen (Oberfläche mit eingebettetem Kern)
+        shell: pwsh
+        run: |
+          dotnet build installer\setup\JarvisSetup.csproj -c Release -p:Version=$env:JARVIS_VERSION -p:KernPflicht=true -o installer\Output\oberflaeche
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Copy-Item installer\Output\oberflaeche\JarvisSetup.exe installer\Output\JarvisSetup.exe -Force
+          $kern = (Get-Item installer\Output\JarvisKern.exe).Length
+          $setup = (Get-Item installer\Output\JarvisSetup.exe).Length
+          Write-Host "JarvisKern.exe: $kern Bytes, JarvisSetup.exe: $setup Bytes"
+          if ($setup -le $kern) { Write-Host "Der Kern ist nicht eingebettet"; exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JarvisSetup
+          path: installer/Output/JarvisSetup.exe
+
+      - name: Installer-Bilder (Vorschau, installiert nichts)
+        shell: pwsh
+        run: |
+          $ziel = Join-Path $env:GITHUB_WORKSPACE "installer-bilder"
+          $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/vorschau", "/bilder=$ziel" -PassThru
+          if (-not $p.WaitForExit(180000)) { Stop-Process -Id $p.Id -Force; Write-Host "Die Vorschau hängt"; exit 1 }
+          Write-Host "Vorschau beendet mit $($p.ExitCode)"
+          Get-ChildItem $ziel -ErrorAction SilentlyContinue | Format-Table Name, Length -AutoSize
+          Get-Content "$ziel\fehler.txt" -ErrorAction SilentlyContinue
+          Get-Content "$env:TEMP\JarvisSetup-fehler.txt" -ErrorAction SilentlyContinue
+          foreach ($n in "start", "fortschritt", "fertig", "fehler") {
+            if (-not (Test-Path "$ziel\$n.png")) { Write-Host "$n.png fehlt"; exit 1 }
+          }
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-bilder
+          path: installer-bilder/
+          if-no-files-found: ignore
+
+      - name: Probe-Installation (still)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          # Wie die Oberfläche: Fortschritt in eine Datei, alle sechs Schritte müssen ankommen.
+          $env:JARVIS_FORTSCHRITT = "$pwd\fortschritt.txt"
+          $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=setup.log" -PassThru -Wait
+          Write-Host "Installer beendet mit $($p.ExitCode)"
+          Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          if ($p.ExitCode -ne 0) { Get-Content setup.log -Tail 60; exit 1 }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe")) { Write-Host "venv fehlt"; exit 1 }
+          Write-Host "--- Fortschritt (für die Oberfläche)"
+          Get-Content fortschritt.txt | Where-Object { $_ -notmatch "^JARVIS-ANTEIL" } | Select-Object -First 60
+          foreach ($n in 1..6) {
+            if (-not (Select-String -Path fortschritt.txt -Pattern "^JARVIS-SCHRITT $n/6 " -Quiet)) { Write-Host "Schritt $n fehlt im Fortschritt"; exit 1 }
+          }
+          if (-not (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FERTIG" -Quiet)) { Write-Host "JARVIS-FERTIG fehlt"; exit 1 }
+          if (Select-String -Path fortschritt.txt -Pattern "^JARVIS-FEHLER" -Quiet) { Write-Host "Fehler im Fortschritt"; exit 1 }
+          # Jarvis' Stimme und Spracherkennung richtet der Installer gleich mit ein (komplett lokal)
+          & "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe" -c "import pocket_tts, onnx_asr; print('Lokale Stimme und Erkennung installiert')"
+          if ($LASTEXITCODE -ne 0) { Write-Host "Die lokale Stimme fehlt nach der Installation"; exit 1 }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Jarvis\daten\stimmen\lokal-george.wav")) { Write-Host "Hörproben der lokalen Stimme fehlen"; exit 1 }
+          $cfg = Get-Content "$env:LOCALAPPDATA\Programs\Jarvis\config.toml" -Raw -Encoding UTF8
+          if ($cfg -notmatch '(?m)^engine = "lokal"') { Write-Host "config.toml steht nicht auf lokal"; exit 1 }
+
+      - name: Probe Umlaute und Leerzeichen im Benutzerordner
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          # Wie ein Windows-Konto "Jörg Müller": Jarvis-Ordner, Python-Umgebung, Modelle und
+          # Claude Code liegen dann unter einem Pfad mit Umlauten und Leerzeichen.
+          $basis = "C:\Temp\Jörg Müller"
+          $app = "$basis\Programme\Jarvis"
+          New-Item -ItemType Directory -Force "$basis\AppData\Local", $app | Out-Null
+          Copy-Item jarvis, jarvis_home, werkzeuge -Destination $app -Recurse -Force
+          Copy-Item Jarvis.pyw, requirements.txt, requirements-extras.txt, config.example.toml -Destination $app -Force
+          $env:USERPROFILE = $basis
+          $env:LOCALAPPDATA = "$basis\AppData\Local"
+          $env:JARVIS_FORTSCHRITT = "$basis\fortschritt.txt"
+          # Hier der Ersatzweg ohne lokale Stimme (Whisper), die lokale prüft die Installation davor.
+          $env:JARVIS_OHNE_LOKALE_STIMME = "1"
+          & powershell -NoProfile -ExecutionPolicy Bypass -File "$app\werkzeuge\installieren.ps1" -Auto -OhneVerknuepfung
+          $code = $LASTEXITCODE
+          Write-Host "installieren.ps1 beendet mit $code"
+          Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -Last 30
+          if ($code -ne 0) { exit 1 }
+          Get-Content "$basis\fortschritt.txt" -Encoding UTF8 | Where-Object { $_ -match "^JARVIS-(SCHRITT|OK|WARNUNG|FEHLER|FERTIG)" }
+          if (-not (Select-String -Path "$basis\fortschritt.txt" -Pattern "^JARVIS-FERTIG" -Quiet)) { exit 1 }
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          & $py -c "import sys; print('Python-Umgebung:', sys.prefix)"
+          & $py -c "from faster_whisper import WhisperModel; WhisperModel('small', device='cpu', compute_type='int8', local_files_only=True); print('Spracherkennung laedt aus dem Ordner mit Umlauten')"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -c "from openwakeword.model import Model; Model(wakeword_models=['hey_jarvis'], inference_framework='onnx'); print('Hey Jarvis laedt')"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Remove-Item -Recurse -Force $basis -ErrorAction SilentlyContinue
+
+      - name: Probe-Start
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, pystray, psutil, pocket_tts, onnx_asr; print('Kern-Pakete und lokale Stimme OK')"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -c "import importlib.util as u; bad = [m for m in ('edge_tts', 'pyttsx3') if u.find_spec(m)]; print('Keine Windows-/Microsoft-Stimme' if not bad else 'noch da: ' + ', '.join(bad))"
+          & $py -c "import piper; print('Reservestimme OK')"
+          Push-Location $app
+          # Die Messwerte für die Hinweise (hängende Fenster, Prozesse, Akku, Internet, Neustart, Autostart)
+          # auf einem echten Windows: darf nicht abstürzen
+          & $py -c "import json, time; from jarvis.hinweise import SystemProbe; p = SystemProbe(); p.measure(idle=1.0); time.sleep(2); l = p.measure(idle=1.0); print('Hinweise-Messung:', json.dumps({'haengt': l.hung, 'cpu': (l.busy or [])[:3], 'ram': l.ram, 'ram_top': l.ram_top, 'akku': l.battery, 'online': l.online, 'neustart': l.reboot, 'autostart': sorted(l.autostart or {})[:8], 'vorne': l.foreground}, default=str))"
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
+          & $py -m jarvis --selbsttest --schnell
+          Write-Host "Selbsttest beendet mit $LASTEXITCODE (ohne Mikrofon und Claude sind Fehler dort normal)"
+          Get-Content logs\selbsttest.txt -ErrorAction SilentlyContinue
+          Pop-Location
+          exit 0
+
+      - name: Probe Claude-Plugins (Marktplatz aus dem Jarvis-Ordner, wie bei Georg)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $claude = @("$env:USERPROFILE\.local\bin\claude.exe", (Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source)) |
+            Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not (Test-Path "$app\.claude-plugin\marketplace.json")) { Write-Host "Der Installer hat den Plugin-Marktplatz nicht mitgebracht"; exit 1 }
+          if (-not (Test-Path "$app\claude-plugins\koerper\skills\ernaehrung\naehrwerte.md")) { Write-Host "Die Nährwert-Tabelle fehlt"; exit 1 }
+          if (Test-Path "$app\claude-plugins\gedaechtnis\tests") { Write-Host "Die Plugin-Tests gehören nicht in die Installation"; exit 1 }
+          if (-not $claude) { Write-Host "Claude Code fehlt, Probe übersprungen"; exit 0 }
+          Write-Host "Claude Code: $claude"
+          # Ein eigener Claude-Ordner, damit die Probe nichts vom Runner benutzt
+          $env:CLAUDE_CONFIG_DIR = "$env:RUNNER_TEMP\claude-probe"
+          # Graphify: uv holt Jarvis bei Georg mit winget. Hat der Runner kein winget, kommt uv hier aus pip.
+          if (-not (Get-Command uv -ErrorAction SilentlyContinue) -and -not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            & $py -m pip install --quiet --disable-pip-version-check uv
+            $env:PATH = "$env:LOCALAPPDATA\Jarvis\venv\Scripts;$env:PATH"
+          }
+          & $claude plugin validate $app
+          if ($LASTEXITCODE -ne 0) { Write-Host "Der Marktplatz ist ungültig"; exit 1 }
+          Push-Location $app
+          & $py -m jarvis.claude_plugins einrichten
+          $ok = $LASTEXITCODE
+          & $py -m jarvis.claude_plugins status
+          Pop-Location
+          & $claude plugin list
+          if ($ok -ne 0) { Write-Host "Die Plugins ließen sich nicht einrichten"; exit 1 }
+          # Das Video-Plugin braucht Jarvis' python.exe (nicht pythonw.exe) und den Jarvis-Ordner
+          $settings = Get-Content "$env:CLAUDE_CONFIG_DIR\settings.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+          $video = $settings.pluginConfigs.'video@jarvis-plugins'.options
+          Write-Host "Video-Plugin: python=$($video.python) jarvis=$($video.jarvis)"
+          if (-not $video -or -not (Test-Path $video.python) -or $video.python -match "pythonw" -or -not (Test-Path "$($video.jarvis)\jarvis\video.py")) {
+            Write-Host "Das Video-Plugin hat Python oder den Jarvis-Ordner nicht"; exit 1
+          }
+          # Graphify (Skill von "graphify install") nur als Warnung: winget und PyPI auf dem Runner sind nicht Georgs PC
+          if (Test-Path "$env:CLAUDE_CONFIG_DIR\skills\graphify\SKILL.md") {
+            Write-Host "Graphify: Skill da"
+            Get-Content "$env:CLAUDE_CONFIG_DIR\CLAUDE.md" -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -First 4
+          } else {
+            Write-Host "::warning::Graphify wurde auf dem Runner nicht eingerichtet (siehe Ausgabe von einrichten)"
+          }
+
+      - name: Probe unsichtbarer Arbeitsplatz (Werkstatt-Tests poppen nicht auf)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          Push-Location "$env:LOCALAPPDATA\Programs\Jarvis"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_versteckt.py"
+          $ok = $LASTEXITCODE
+          Pop-Location
+          exit $ok
+
+      - name: Probe Windows-Einbindung (Hintergrund, Anzeige, zweiter Start)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $run = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name Jarvis -ErrorAction SilentlyContinue).Jarvis
+          Write-Host "Autostart: $run"
+          if (-not $run -or $run -notmatch "--hintergrund") { Write-Host "Autostart-Eintrag fehlt"; exit 1 }
+          $lnk = Join-Path ([Environment]::GetFolderPath("Programs")) "Jarvis.lnk"
+          if (-not (Test-Path $lnk)) { Write-Host "Startmenue-Verknuepfung fehlt"; exit 1 }
+          $l = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+          Write-Host "Verknuepfung: $($l.TargetPath) $($l.Arguments) in $($l.WorkingDirectory)"
+          Push-Location $app
+          $env:PROBE_OUT = "$env:GITHUB_WORKSPACE\probe-bilder"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe.py"
+          $probe = $LASTEXITCODE
+          # Wie der Autostart: unsichtbar starten. Danach ein zweiter Start (Doppelklick
+          # aufs Symbol): der muss sich sofort beenden und das Fenster des ersten zeigen.
+          New-Item -ItemType Directory -Force daten | Out-Null
+          Set-Content daten\einrichtung-fertig.txt "probe"
+          $first = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -PassThru
+          Start-Sleep -Seconds 30
+          if ($first.HasExited) { Write-Host "Jarvis hat sich beendet (Code $($first.ExitCode))"; Get-Content logs\jarvis.log -Tail 60; exit 1 }
+          Write-Host "Jarvis laeuft unsichtbar (PID $($first.Id))"
+          $second = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"" -PassThru
+          if (-not $second.WaitForExit(20000)) { Write-Host "Zweiter Start haengt"; Stop-Process -Id $second.Id -Force; $probe = 1 }
+          else { Write-Host "Zweiter Start beendet mit $($second.ExitCode)" }
+          Start-Sleep -Seconds 6
+          & $py -c "from PIL import ImageGrab; ImageGrab.grab().save(r'$env:GITHUB_WORKSPACE\probe-bilder\fenster-nach-zweitem-start.png')"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_fenster.py" $first.Id
+          if ($LASTEXITCODE -ne 0) { $probe = 1 }
+          if ($first.HasExited) { Write-Host "Jarvis ist beim zweiten Start abgestuerzt"; $probe = 1 }
+          # Der venv-Starter und das eigentliche Python (sein Kind) beenden
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Write-Host "--- jarvis.log"
+          Get-Content logs\jarvis.log -Tail 40 -ErrorAction SilentlyContinue
+          Pop-Location
+          exit $probe
+
+      - name: Probe im echten Fenster (Zentrale, Energie-Kugel, Skriptfehler)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        # Skriptfehler, kaputte Zentrale oder stehende Kugel halten das Release auf. Was am Netz haengt (Trailer,
+        # Tagesschau) und das Briefing (Takt der Stimme) melden sich nur als Hinweis, ebenso eine Probe, die gar
+        # nicht ans Fenster kam. Das Ergebnis steht als Annotation oben im Lauf.
+        timeout-minutes: 6
+        run: |
+          # Jarvis sichtbar starten, WebView2 mit DevTools-Port (JARVIS_DEVTOOLS_PORT, gui/app.py). Die Probe
+          # liest die Oberflaeche wie bei Georg (echtes Python dahinter): Skriptfehler, Zentrale, Kugel mit WebGL.
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $env:JARVIS_DEVTOOLS_PORT = "9229"
+          $env:PROBE_OUT = "$env:GITHUB_WORKSPACE\probe-bilder"
+          $env:PROBE_LOG = "$app\logs\jarvis.log"
+          $env:PYTHONIOENCODING = "utf-8"
+          $probe = 1
+          try {
+            $jarvis = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"" -WorkingDirectory $app -PassThru
+            & $py "$env:GITHUB_WORKSPACE\installer\probe_oberflaeche.py" 9229
+            $probe = $LASTEXITCODE
+            if ($jarvis.HasExited) { Write-Host "Jarvis hat sich beendet (Code $($jarvis.ExitCode))" }
+          } finally {
+            # Aufraeumen, auch wenn die Probe abbricht: der naechste Schritt startet Jarvis selbst
+            Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Write-Host "--- jarvis.log"
+            Get-Content "$app\logs\jarvis.log" -Tail 30 -ErrorAction SilentlyContinue
+          }
+          exit $probe
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-bilder
+          path: probe-bilder/
+          if-no-files-found: ignore
+
+      - name: Probe-Update (über ein laufendes Jarvis, wie bei Georg)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $old = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -WorkingDirectory $app -PassThru
+          Start-Sleep -Seconds 20
+          if ($old.HasExited) { Write-Host "Jarvis lief nicht (Code $($old.ExitCode))"; exit 1 }
+          Write-Host "Jarvis laeuft (PID $($old.Id)), jetzt die neue Version drueber installieren"
+          $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=update.log" -PassThru -Wait
+          Write-Host "Installer beendet mit $($p.ExitCode)"
+          $log = "$env:LOCALAPPDATA\Jarvis\installation.log"
+          Get-Content $log -ErrorAction SilentlyContinue | Select-Object -Last 25
+          if ($p.ExitCode -ne 0) { Get-Content update.log -Tail 60; exit 1 }
+          if (-not (Select-String -Path $log -Pattern "^== Fertig" -Quiet)) { Write-Host "Die Bestandteile wurden nicht fertig installiert"; exit 1 }
+          $left = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' }
+          if ($left) {
+            Write-Host "Das alte Jarvis laeuft noch: $($left.ProcessId -join ', ')"
+            $left | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            exit 1
+          }
+          Write-Host "Update ueber ein laufendes Jarvis: OK"
+
+      - name: Probe Oberfläche (Update über das Fenster, Jarvis läuft dabei)
+        if: ${{ !inputs.nur_bilder }}
+        shell: powershell
+        timeout-minutes: 15
+        run: |
+          # Wie Georg: Jarvis laeuft unsichtbar, JarvisSetup.exe doppelklicken, "Aktualisieren" klicken.
+          # Bedient wird das Fenster ueber UI Automation. Am Ende muss Jarvis wieder laufen.
+          Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+          $AE = [System.Windows.Automation.AutomationElement]
+          $alle = [System.Windows.Automation.TreeScope]::Descendants
+          function Find-Fenster {
+            $AE::RootElement.FindFirst([System.Windows.Automation.TreeScope]::Children,
+              (New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, "Jarvis Setup")))
+          }
+          function Find-Id($wurzel, $id) {
+            $wurzel.FindFirst($alle, (New-Object System.Windows.Automation.PropertyCondition($AE::AutomationIdProperty, $id)))
+          }
+          function Test-Sichtbar($wurzel, $id) {
+            $el = Find-Id $wurzel $id
+            return ($el -ne $null -and -not $el.Current.IsOffscreen)
+          }
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          $bilder = "$env:GITHUB_WORKSPACE\installer-bilder-echt"
+          New-Item -ItemType Directory -Force $bilder | Out-Null
+          function Save-Bild($fenster, $name) {
+            try {
+              $r = $fenster.Current.BoundingRectangle
+              & $py -c "import sys; from PIL import ImageGrab; b = [int(float(x)) for x in sys.argv[1:5]]; ImageGrab.grab(bbox=(b[0], b[1], b[0] + b[2], b[1] + b[3]), include_layered_windows=True).save(sys.argv[5])" $r.X $r.Y $r.Width $r.Height "$bilder\$name"
+            } catch { Write-Host "Bild $name ging nicht: $_" }
+          }
+
+          $alt = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -WorkingDirectory $app -PassThru
+          Start-Sleep -Seconds 15
+          if ($alt.HasExited) { Write-Host "Jarvis lief nicht"; exit 1 }
+          $setup = Start-Process installer\Output\JarvisSetup.exe -PassThru
+          $fenster = $null
+          for ($i = 0; $i -lt 30 -and -not $fenster; $i++) { Start-Sleep -Seconds 1; $fenster = Find-Fenster }
+          if (-not $fenster) { Write-Host "Das Setup-Fenster erscheint nicht"; exit 1 }
+          Start-Sleep -Seconds 3
+          $hinweis = Test-Sichtbar $fenster "LaeuftHinweisText"
+          Write-Host "Hinweis 'Jarvis laeuft gerade' sichtbar: $hinweis"
+          Save-Bild $fenster "1-start.png"
+          $knopf = Find-Id $fenster "KnopfInstallieren"
+          Write-Host "Knopf: $($knopf.Current.Name)"
+          $knopf.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+
+          $ergebnis = ""
+          $ende = (Get-Date).AddMinutes(12)
+          $n = 2
+          while ((Get-Date) -lt $ende) {
+            Start-Sleep -Seconds 4
+            if ($setup.HasExited) { $ergebnis = "beendet"; break }
+            try {
+              if (Test-Sichtbar $fenster "FertigTitel") { $ergebnis = "fertig"; break }
+              if (Test-Sichtbar $fenster "FehlerMeldung") { $ergebnis = "fehler"; break }
+              $prozent = Find-Id $fenster "ProzentText"
+              Write-Host "Fortschritt: $($prozent.Current.Name)"
+              if ($n -le 9) { Save-Bild $fenster "$n-fortschritt.png"; $n++ }
+            } catch { Write-Host "UI Automation: $_" }
+          }
+          Write-Host "Ergebnis: $ergebnis"
+          Start-Sleep -Seconds 3
+          Save-Bild $fenster "9-ende.png"
+          if ($ergebnis -eq "fehler") { Write-Host "Meldung: $((Find-Id $fenster 'FehlerMeldung').Current.Name)" }
+          Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -Encoding UTF8 -ErrorAction SilentlyContinue | Select-Object -Last 15
+          $ok = $ergebnis -eq "fertig" -and $hinweis
+          # Jarvis muss vom Setup wieder gestartet worden sein (unsichtbar wie vorher)
+          Start-Sleep -Seconds 8
+          $neu = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' })
+          Write-Host "Jarvis-Prozesse danach: $($neu.Count)"
+          $neu | ForEach-Object { Write-Host "  $($_.ProcessId): $($_.CommandLine)" }
+          if (-not ($neu | Where-Object { $_.CommandLine -like '*--hintergrund*' -and $_.ProcessId -ne $alt.Id })) { Write-Host "Jarvis wurde nicht neu gestartet"; $ok = $false }
+          if ($ergebnis -eq "fertig") {
+            $zu = Find-Id $fenster "KnopfFertigSchliessen"
+            $zu.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            if (-not $setup.WaitForExit(15000)) { Write-Host "Das Setup schliesst nicht"; $ok = $false }
+            else { Write-Host "Setup beendet mit $($setup.ExitCode)"; if ($setup.ExitCode -ne 0) { $ok = $false } }
+          }
+          if (-not $setup.HasExited) { Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          if (-not $ok) { exit 1 }
+          Write-Host "Update ueber das Fenster: OK"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-bilder-echt
+          path: installer-bilder-echt/
+          if-no-files-found: ignore
+
+      - name: Probe lokale Stimme (vom Installer eingerichtet, Knopf "Lokal einrichten" als Reparatur)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        timeout-minutes: 30
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          $pyw = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\pythonw.exe"
+          $app = "$env:LOCALAPPDATA\Programs\Jarvis"
+          Push-Location $app
+          & $py -c "from jarvis.localvoice import install; ok, last = install(print); print('pip fertig:', ok); raise SystemExit(0 if ok else 1)"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -m jarvis.localvoice vorbereiten "$app\daten\stimmen"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $py -m jarvis.localvoice selbsttest
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Nach dem Einrichten müssen alle anderen Teile weiter laden (pocket-tts bringt numpy 2 und torch mit)
+          & $py -c "import webview, sounddevice, numpy, faster_whisper, openwakeword, pystray, psutil, piper, torch, onnx_asr; print('Alle Pakete OK, numpy', numpy.__version__, 'torch', torch.__version__)"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # Jarvis mit der lokalen Stimme starten: Sie muss im laufenden Jarvis laden
+          & $py -c "from jarvis.config import save_setting; save_setting('tts', 'engine', 'lokal'); save_setting('stt', 'engine', 'lokal')"
+          New-Item -ItemType Directory -Force daten | Out-Null
+          Set-Content daten\einrichtung-fertig.txt "probe"
+          $run = Start-Process $pyw -ArgumentList "`"$app\Jarvis.pyw`"", "--hintergrund" -WorkingDirectory $app -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 3
+            if ($run.HasExited) { break }
+            if (Select-String -Path logs\jarvis.log -Pattern "Lokale Stimme \w+ \(.+\) bereit" -Quiet -ErrorAction SilentlyContinue) { $ok = $true; break }
+          }
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Jarvis.pyw*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Get-Content logs\jarvis.log -Tail 30 -ErrorAction SilentlyContinue
+          Pop-Location
+          if (-not $ok) { Write-Host "Die lokale Stimme hat im laufenden Jarvis nicht geladen"; exit 1 }
+          Write-Host "Lokale Stimme im laufenden Jarvis: OK"
+
+      - name: Probe Video ansehen (yt-dlp, Bilder, Ton mit Parakeet, Umlaute im Dateinamen)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: |
+          $py = "$env:LOCALAPPDATA\Jarvis\venv\Scripts\python.exe"
+          Push-Location "$env:LOCALAPPDATA\Programs\Jarvis"
+          & $py "$env:GITHUB_WORKSPACE\installer\probe_video.py"
+          $ok = $LASTEXITCODE
+          Pop-Location
+          exit $ok
+
+      - name: Probe Fehlerweg (ohne Internet muss eine klare Meldung kommen)
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          # Ein Proxy, den es nicht gibt: Für Windows PowerShell ist das Internet dann weg.
+          $ie = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+          $vorher = Get-ItemProperty $ie
+          $env:JARVIS_FORTSCHRITT = "$pwd\fehlerweg.txt"
+          try {
+            Set-ItemProperty $ie -Name ProxyEnable -Value 1 -Type DWord
+            Set-ItemProperty $ie -Name ProxyServer -Value "127.0.0.1:9"
+            $p = Start-Process installer\Output\JarvisSetup.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/LOG=fehlerweg.log" -PassThru -Wait
+          } finally {
+            if ($null -ne $vorher.ProxyEnable) { Set-ItemProperty $ie -Name ProxyEnable -Value $vorher.ProxyEnable -Type DWord } else { Remove-ItemProperty $ie -Name ProxyEnable -ErrorAction SilentlyContinue }
+            if ($null -ne $vorher.ProxyServer) { Set-ItemProperty $ie -Name ProxyServer -Value $vorher.ProxyServer } else { Remove-ItemProperty $ie -Name ProxyServer -ErrorAction SilentlyContinue }
+          }
+          Write-Host "Installer beendet mit $($p.ExitCode) (erwartet: 110 = 100 + Code 10, kein Internet)"
+          Get-Content fehlerweg.txt -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch "^JARVIS-ANTEIL" }
+          if ($p.ExitCode -ne 110) { Get-Content "$env:LOCALAPPDATA\Jarvis\installation.log" -Tail 30; exit 1 }
+          if (-not (Select-String -Path fehlerweg.txt -Pattern "^JARVIS-FEHLER 1 10 Keine Verbindung zum Internet" -Quiet)) { Write-Host "Die Meldung fehlt"; exit 1 }
+          if (-not (Select-String -Path fehlerweg.txt -Pattern "^JARVIS-TIPP " -Quiet)) { Write-Host "Der Tipp fehlt"; exit 1 }
+          Write-Host "Fehlerweg: OK"
+
+      - name: Probe-Deinstallation
+        if: ${{ !inputs.nur_bilder }}
+        shell: pwsh
+        run: |
+          $uninst = "$env:LOCALAPPDATA\Programs\Jarvis\unins000.exe"
+          $p = Start-Process $uninst -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -PassThru -Wait
+          Write-Host "Deinstallation beendet mit $($p.ExitCode)"
+          Start-Sleep -Seconds 3
+          $run = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name Jarvis -ErrorAction SilentlyContinue).Jarvis
+          if ($run) { Write-Host "Autostart-Eintrag ist noch da"; exit 1 }
+          if (Test-Path "$env:LOCALAPPDATA\Programs\Jarvis\jarvis") { Write-Host "Programmordner ist noch da"; exit 1 }
+          Write-Host "Sauber deinstalliert"
+
+  # Eigener kleiner Job fürs Veröffentlichen, mit eigenem frischen Schlüssel (GITHUB_TOKEN). Im Windows-Job
+  # scheiterte das Release mit "Resource not accessible by integration", wenn der Build vorher lange in der
+  # Warteschlange stand (Builds 188, 192 und 194, je 5 bis 8 Minuten; die anderen warteten unter 2 Minuten).
+  release:
+    needs: setup-exe
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: JarvisSetup
+          path: out
+
+      - name: Noch der neueste Stand? (sonst veröffentlicht der neuere Bau)
+        id: stand
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Kam während des Baus ein neuerer Stand mit geänderter Bau-Anleitung (.github/workflows) dazu, lehnt
+          # GitHub das Release-Tag für diesen älteren Stand ab ("Resource not accessible by integration"): so bei
+          # Bau 188, 192, 194 und 195, jedes Mal nach d680199, b79f98d, 697459e und 8027832; ging dazwischen nur
+          # ein Stand ohne Workflow-Änderung ein (184, 187, 191), klappte es. Der neuere Stand baut dann ohnehin
+          # selbst (die Workflow-Datei steht in den Pfaden) und wird veröffentlicht.
+          changed=$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$GITHUB_REF_NAME" \
+            --jq '[.files[]?.filename | select(startswith(".github/workflows/"))] | length' 2>/dev/null || echo 0)
+          if [ "${changed:-0}" -gt 0 ] 2>/dev/null; then
+            echo "::notice::Inzwischen gibt es einen neueren Stand mit geänderter Bau-Anleitung, der wird veröffentlicht. Dieser Bau ist geprüft, aber ohne Release."
+            echo "ueberholt=ja" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release
+        if: steps.stand.outputs.ueberholt != 'ja'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: jarvis-${{ needs.setup-exe.outputs.version }}-build${{ github.run_number }}
+          TITLE: Jarvis ${{ needs.setup-exe.outputs.version }} (Build ${{ github.run_number }})
+        run: |
+          notes='JarvisSetup.exe herunterladen und doppelklicken. Der Installer lädt alles Nötige selbst herunter.
+          Windows fragt beim ersten Start vielleicht nach: "Weitere Informationen" und dann "Trotzdem ausführen".'
+          for i in 1 2 3; do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$TAG" out/JarvisSetup.exe --clobber --repo "$GITHUB_REPOSITORY" && exit 0
+            else
+              gh release create "$TAG" out/JarvisSetup.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                --title "$TITLE" --notes "$notes" --latest && exit 0
+            fi
+            echo "Versuch $i ging nicht"
+            sleep $((20 * i))
+          done
+          exit 1
+
+      # Fester Link, der immer die neueste JarvisSetup.exe lädt (Download-Knopf in Jarvis, README, Anleitung):
+      # .../releases/download/jarvis-neueste/JarvisSetup.exe. "releases/latest" taugt nicht, seit im Repo auch
+      # andere Programme veröffentlicht werden (Konto-Retter): dann zeigt "latest" dorthin und Jarvis gibt 404.
+      - name: Fester Download-Link
+        if: steps.stand.outputs.ueberholt != 'ja'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FIXED: jarvis-neueste
+          BUILD: ${{ needs.setup-exe.outputs.version }} (Build ${{ github.run_number }})
+        run: |
+          notes="Immer die neueste JarvisSetup.exe, gerade: Jarvis $BUILD. Jeder neue Bau ersetzt die Datei hier.
+          Herunterladen und doppelklicken. Windows fragt beim ersten Start vielleicht nach: \"Weitere Informationen\" und dann \"Trotzdem ausführen\"."
+          for i in 1 2 3; do
+            if gh release view "$FIXED" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$FIXED" out/JarvisSetup.exe --clobber --repo "$GITHUB_REPOSITORY" \
+                && gh release edit "$FIXED" --repo "$GITHUB_REPOSITORY" --notes "$notes" --latest=false && exit 0
+            else
+              gh release create "$FIXED" out/JarvisSetup.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                --title "Jarvis (immer die neueste Version)" --notes "$notes" --latest=false && exit 0
+            fi
+            echo "Versuch $i ging nicht"
+            sleep $((20 * i))
+          done
+          exit 1

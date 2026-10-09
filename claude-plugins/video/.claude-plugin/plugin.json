@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "video",
+  "displayName": "Video",
+  "version": "1.0.0",
+  "description": "Claude sieht Videos wirklich an, statt nur das Transkript zu lesen: TikTok, YouTube, Instagram oder eine Datei. Lädt mit yt-dlp, holt Übersichtsbilder mit Zeitstempel heraus und schreibt den Ton mit, alles auf dem PC und ohne Abo. Nutzt Jarvis' Python.",
+  "author": { "name": "Georg" },
+  "license": "MIT",
+  "keywords": ["video", "tiktok", "youtube", "transkript", "bilder"],
+  "userConfig": {
+    "python": {
+      "type": "file",
+      "title": "Python von Jarvis",
+      "description": "Jarvis' eigenes Python (python.exe in seiner Umgebung). Jarvis trägt es beim Einrichten selbst ein.",
+      "default": "~/AppData/Local/Jarvis/venv/Scripts/python.exe"
+    },
+    "jarvis": {
+      "type": "directory",
+      "title": "Jarvis-Ordner",
+      "description": "Der Ordner, in dem Jarvis installiert ist (darin liegt jarvis/video.py). Jarvis trägt ihn beim Einrichten selbst ein.",
+      "default": "~/AppData/Local/Programs/Jarvis"
+    }
+  }
+}
