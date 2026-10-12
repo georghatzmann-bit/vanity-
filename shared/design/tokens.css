@@ -1,0 +1,271 @@
+/*
+ * NOVA Design-System
+ * ------------------
+ * Alle Farben, Abstände, Radien, Schatten und Bewegungszeiten als Variablen.
+ * Themes setzen nur Variablen um - Komponenten benutzen ausschließlich diese Tokens.
+ *
+ * Theme wählen:  <html data-theme="nova | polar | neon | midnight">
+ * Eigene Akzentfarbe: --nv-accent / --nv-accent-2 / --nv-accent-3 per JS überschreiben.
+ */
+
+:root,
+[data-theme="nova"] {
+  color-scheme: dark;
+  /* Flächen */
+  --nv-bg: #0a0a11;
+  --nv-bg-elev: #12121b;
+  --nv-surface: rgb(255 255 255 / 0.045);
+  --nv-surface-2: rgb(255 255 255 / 0.075);
+  --nv-surface-3: rgb(255 255 255 / 0.11);
+  --nv-surface-solid: #16161f;
+  --nv-border: rgb(255 255 255 / 0.08);
+  --nv-border-strong: rgb(255 255 255 / 0.16);
+  --nv-overlay: rgb(6 6 10 / 0.72);
+
+  /* Text */
+  --nv-fg: #eeecf4;
+  --nv-fg-soft: #c9c6d6;
+  --nv-muted: #8f8ca0;
+  --nv-faint: #5d5a6d;
+
+  /* Signatur "Nova-Glut": Koralle -> Magenta -> Violett */
+  --nv-accent: #ff4f8b;
+  --nv-accent-2: #ff8a4c;
+  --nv-accent-3: #8b5cf6;
+  --nv-accent-fg: #ffffff;
+
+  /* Status (bleiben in allen Themes gleich bedeutend) */
+  --nv-success: #34d399;
+  --nv-warning: #fbbf24;
+  --nv-danger: #f87171;
+  --nv-info: #60a5fa;
+
+  /* Hintergrund-Stimmung */
+  --nv-glow-a: rgb(255 79 139 / 0.20);
+  --nv-glow-b: rgb(139 92 246 / 0.18);
+  --nv-glow-c: rgb(255 138 76 / 0.12);
+  --nv-star: 255 255 255;
+  --nv-backdrop-dim: 0.62;
+  --nv-glass-blur: 22px;
+  --nv-glass-sat: 1.5;
+  --nv-noise-opacity: 0.035;
+  --nv-shadow-color: 0 0 0;
+  --nv-shadow-strength: 0.55;
+  --nv-glow-strength: 1;
+}
+
+/* Ganz Weiß */
+[data-theme="polar"] {
+  color-scheme: light;
+  --nv-bg: #f4f4f8;
+  --nv-bg-elev: #ffffff;
+  --nv-surface: rgb(255 255 255 / 0.62);
+  --nv-surface-2: rgb(255 255 255 / 0.82);
+  --nv-surface-3: rgb(255 255 255 / 0.95);
+  --nv-surface-solid: #ffffff;
+  --nv-border: rgb(20 18 40 / 0.08);
+  --nv-border-strong: rgb(20 18 40 / 0.16);
+  --nv-overlay: rgb(240 240 246 / 0.72);
+
+  --nv-fg: #15141c;
+  --nv-fg-soft: #33313f;
+  --nv-muted: #6b6879;
+  --nv-faint: #a3a0b1;
+
+  --nv-accent: #e8336f;
+  --nv-accent-2: #f47a35;
+  --nv-accent-3: #7c4dff;
+  --nv-accent-fg: #ffffff;
+
+  --nv-success: #059669;
+  --nv-warning: #d97706;
+  --nv-danger: #dc2626;
+  --nv-info: #2563eb;
+
+  --nv-glow-a: rgb(232 51 111 / 0.12);
+  --nv-glow-b: rgb(124 77 255 / 0.10);
+  --nv-glow-c: rgb(244 122 53 / 0.10);
+  --nv-star: 90 80 140;
+  --nv-backdrop-dim: 0.18;
+  --nv-glass-blur: 26px;
+  --nv-glass-sat: 1.8;
+  --nv-noise-opacity: 0.025;
+  --nv-shadow-color: 40 30 80;
+  --nv-shadow-strength: 0.16;
+  --nv-glow-strength: 0.55;
+}
+
+/* Neon */
+[data-theme="neon"] {
+  color-scheme: dark;
+  --nv-bg: #040509;
+  --nv-bg-elev: #0a0c14;
+  --nv-surface: rgb(0 245 212 / 0.035);
+  --nv-surface-2: rgb(0 245 212 / 0.065);
+  --nv-surface-3: rgb(0 245 212 / 0.1);
+  --nv-surface-solid: #0b0e16;
+  --nv-border: rgb(0 245 212 / 0.14);
+  --nv-border-strong: rgb(0 245 212 / 0.32);
+  --nv-overlay: rgb(2 3 6 / 0.78);
+
+  --nv-fg: #eafff9;
+  --nv-fg-soft: #bfeee3;
+  --nv-muted: #6fa79b;
+  --nv-faint: #3f6159;
+
+  --nv-accent: #00f5d4;
+  --nv-accent-2: #f72585;
+  --nv-accent-3: #7b2ff7;
+  --nv-accent-fg: #021412;
+
+  --nv-success: #39ff88;
+  --nv-warning: #ffd60a;
+  --nv-danger: #ff3864;
+  --nv-info: #4cc9f0;
+
+  --nv-glow-a: rgb(0 245 212 / 0.16);
+  --nv-glow-b: rgb(247 37 133 / 0.16);
+  --nv-glow-c: rgb(123 47 247 / 0.14);
+  --nv-star: 0 245 212;
+  --nv-backdrop-dim: 0.7;
+  --nv-glass-blur: 18px;
+  --nv-glass-sat: 1.6;
+  --nv-noise-opacity: 0.04;
+  --nv-shadow-color: 0 0 0;
+  --nv-shadow-strength: 0.7;
+  --nv-glow-strength: 1.6;
+}
+
+/* Mitternachtsblau */
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --nv-bg: #060b1c;
+  --nv-bg-elev: #0c1430;
+  --nv-surface: rgb(140 170 255 / 0.05);
+  --nv-surface-2: rgb(140 170 255 / 0.085);
+  --nv-surface-3: rgb(140 170 255 / 0.12);
+  --nv-surface-solid: #0f1834;
+  --nv-border: rgb(140 170 255 / 0.1);
+  --nv-border-strong: rgb(140 170 255 / 0.2);
+  --nv-overlay: rgb(4 8 20 / 0.75);
+
+  --nv-fg: #e8eeff;
+  --nv-fg-soft: #c3cdee;
+  --nv-muted: #8391bd;
+  --nv-faint: #4f5b82;
+
+  --nv-accent: #5b8cff;
+  --nv-accent-2: #7dd3fc;
+  --nv-accent-3: #a78bfa;
+  --nv-accent-fg: #ffffff;
+
+  --nv-success: #34d399;
+  --nv-warning: #fbbf24;
+  --nv-danger: #fb7185;
+  --nv-info: #7dd3fc;
+
+  --nv-glow-a: rgb(91 140 255 / 0.2);
+  --nv-glow-b: rgb(167 139 250 / 0.14);
+  --nv-glow-c: rgb(125 211 252 / 0.1);
+  --nv-star: 200 215 255;
+  --nv-backdrop-dim: 0.6;
+  --nv-glass-blur: 22px;
+  --nv-glass-sat: 1.4;
+  --nv-noise-opacity: 0.03;
+  --nv-shadow-color: 0 4 20;
+  --nv-shadow-strength: 0.6;
+  --nv-glow-strength: 1;
+}
+
+/* Theme-unabhängige Tokens */
+:root {
+  /* Verlauf der Akzentfarben */
+  --nv-gradient: linear-gradient(120deg, var(--nv-accent-2) 0%, var(--nv-accent) 48%, var(--nv-accent-3) 100%);
+  --nv-gradient-soft: linear-gradient(
+    120deg,
+    color-mix(in oklab, var(--nv-accent-2) 22%, transparent),
+    color-mix(in oklab, var(--nv-accent) 22%, transparent),
+    color-mix(in oklab, var(--nv-accent-3) 22%, transparent)
+  );
+
+  /* Radien */
+  --nv-radius-xs: 6px;
+  --nv-radius-sm: 8px;
+  --nv-radius-md: 12px;
+  --nv-radius-lg: 16px;
+  --nv-radius-xl: 22px;
+  --nv-radius-2xl: 28px;
+
+  /* Schatten */
+  --nv-shadow-sm: 0 1px 2px rgb(var(--nv-shadow-color) / calc(var(--nv-shadow-strength) * 0.5));
+  --nv-shadow-md: 0 8px 24px -8px rgb(var(--nv-shadow-color) / var(--nv-shadow-strength));
+  --nv-shadow-lg: 0 24px 60px -18px rgb(var(--nv-shadow-color) / calc(var(--nv-shadow-strength) * 1.2));
+  --nv-shadow-glow: 0 0 0 1px color-mix(in oklab, var(--nv-accent) 45%, transparent),
+    0 10px 40px -10px color-mix(in oklab, var(--nv-accent) calc(55% * var(--nv-glow-strength)), transparent);
+
+  /* Bewegung (Dauern in ms, Kurven) */
+  --nv-dur-fast: 140ms;
+  --nv-dur-base: 200ms;
+  --nv-dur-slow: 380ms;
+  --nv-dur-cinematic: 900ms;
+  --nv-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --nv-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --nv-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Ebenen */
+  --nv-z-bg: 0;
+  --nv-z-content: 10;
+  --nv-z-dock: 40;
+  --nv-z-titlebar: 50;
+  --nv-z-modal: 80;
+  --nv-z-toast: 90;
+  --nv-z-intro: 100;
+
+  /* Schrift */
+  --nv-font-sans: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --nv-font-display: "Sora Variable", "Sora", "Inter Variable", "Segoe UI Variable Display", system-ui, sans-serif;
+  --nv-font-mono: "Cascadia Code", "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Tailwind v4: Tokens als Utilities verfügbar machen (bg-surface, text-muted, ...) */
+@theme inline {
+  --color-bg: var(--nv-bg);
+  --color-bg-elev: var(--nv-bg-elev);
+  --color-surface: var(--nv-surface);
+  --color-surface-2: var(--nv-surface-2);
+  --color-surface-3: var(--nv-surface-3);
+  --color-surface-solid: var(--nv-surface-solid);
+  --color-line: var(--nv-border);
+  --color-line-strong: var(--nv-border-strong);
+  --color-fg: var(--nv-fg);
+  --color-fg-soft: var(--nv-fg-soft);
+  --color-muted: var(--nv-muted);
+  --color-faint: var(--nv-faint);
+  --color-accent: var(--nv-accent);
+  --color-accent-2: var(--nv-accent-2);
+  --color-accent-3: var(--nv-accent-3);
+  --color-accent-fg: var(--nv-accent-fg);
+  --color-success: var(--nv-success);
+  --color-warning: var(--nv-warning);
+  --color-danger: var(--nv-danger);
+  --color-info: var(--nv-info);
+
+  --radius-xs: var(--nv-radius-xs);
+  --radius-sm: var(--nv-radius-sm);
+  --radius-md: var(--nv-radius-md);
+  --radius-lg: var(--nv-radius-lg);
+  --radius-xl: var(--nv-radius-xl);
+  --radius-2xl: var(--nv-radius-2xl);
+
+  --shadow-sm: var(--nv-shadow-sm);
+  --shadow-md: var(--nv-shadow-md);
+  --shadow-lg: var(--nv-shadow-lg);
+  --shadow-glow: var(--nv-shadow-glow);
+
+  --font-sans: var(--nv-font-sans);
+  --font-display: var(--nv-font-display);
+  --font-mono: var(--nv-font-mono);
+
+  --ease-nova: var(--nv-ease-out);
+  --ease-spring: var(--nv-ease-spring);
+}

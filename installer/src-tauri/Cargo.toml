@@ -1,0 +1,61 @@
+[package]
+name = "nova-setup"
+version = "1.0.0"
+description = "Nova Launcher Setup"
+authors = ["Nova"]
+edition = "2021"
+rust-version = "1.83"
+
+[lib]
+name = "nova_setup_lib"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[features]
+# `tauri build` setzt dieses Feature automatisch. Wer die Setup-Exe ohne Tauri-CLI baut
+# (z. B. `cargo xwin build --release --features custom-protocol`), braucht es, damit die
+# eingebettete Oberflaeche statt des Dev-Servers geladen wird.
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+tauri = { version = "2", default-features = false, features = ["wry", "compression", "common-controls-v6", "dynamic-acl", "x11"] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "stream", "system-proxy"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "fs", "io-util", "sync"] }
+tokio-util = { version = "0.7", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+dirs = "7"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

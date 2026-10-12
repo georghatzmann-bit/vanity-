@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-ssr/
+target/
+release/
+*.log
+.DS_Store
+.vite/
+coverage/
+test-results/
+playwright-report/
+/screenshots-tmp/
+*.local
+app/src-tauri/gen/
+installer/src-tauri/gen/

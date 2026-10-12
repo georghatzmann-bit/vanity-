@@ -1,0 +1,26 @@
+{
+  "name": "nova-launcher-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "NOVA - Premium Game & App Launcher fuer Windows, mit eigenem animierten Setup-Installer.",
+  "workspaces": [
+    "shared",
+    "app",
+    "installer"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w app",
+    "dev:installer": "npm run dev -w installer",
+    "tauri:dev": "npm run tauri -w app -- dev",
+    "tauri:dev:installer": "npm run tauri -w installer -- dev",
+    "typecheck": "npm run typecheck -w app && npm run typecheck -w installer",
+    "test": "npm run test -w app && npm run test -w installer",
+    "test:rust": "node scripts/test-rust.mjs",
+    "icons": "node scripts/gen-icons.mjs",
+    "build:all": "node scripts/build-all.mjs",
+    "doctor": "node scripts/doctor.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

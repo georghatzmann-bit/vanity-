@@ -1,0 +1,109 @@
+@import "tailwindcss";
+@import "../../../shared/design/tokens.css";
+@import "../../../shared/design/base.css";
+
+@source "../../../shared";
+
+@custom-variant dark (&:where([data-theme="nova"], [data-theme="neon"], [data-theme="midnight"]) *);
+
+/* App-spezifisch */
+.app-shell {
+  position: relative;
+  z-index: var(--nv-z-content);
+}
+
+.card-shadow {
+  box-shadow: 0 18px 40px -22px rgb(var(--nv-shadow-color) / calc(var(--nv-shadow-strength) * 1.3));
+}
+
+.mask-fade-b {
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.mask-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@layer components {
+.input {
+  height: 40px;
+  width: 100%;
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-surface-2);
+  border: 1px solid var(--nv-border);
+  padding: 0 12px;
+  color: var(--nv-fg);
+  font-size: 14px;
+  transition: border-color var(--nv-dur-base) var(--nv-ease-out), box-shadow var(--nv-dur-base) var(--nv-ease-out),
+    background-color var(--nv-dur-base);
+}
+.input::placeholder {
+  color: var(--nv-faint);
+}
+.input:hover {
+  border-color: var(--nv-border-strong);
+}
+.input:focus {
+  outline: none;
+  border-color: color-mix(in oklab, var(--nv-accent) 70%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--nv-accent) 18%, transparent);
+  background: var(--nv-surface-3);
+}
+textarea.input {
+  height: auto;
+  padding: 10px 12px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* Bereichsregler */
+input[type="range"].range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+      to right,
+      var(--nv-accent) 0%,
+      var(--nv-accent) var(--fill, 50%),
+      var(--nv-surface-3) var(--fill, 50%)
+    );
+  cursor: pointer;
+}
+input[type="range"].range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--nv-accent) 35%, transparent), 0 2px 6px rgb(0 0 0 / 0.4);
+  transition: transform 150ms var(--nv-ease-spring);
+}
+input[type="range"].range:active::-webkit-slider-thumb {
+  transform: scale(1.18);
+}
+
+}
+
+/* Big Picture: großer Fokusring für Controller */
+.bp-focus {
+  outline: 3px solid var(--nv-accent);
+  outline-offset: 4px;
+}
+
+@keyframes nv-aurora {
+  0% {
+    transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(4%, 3%, 0) rotate(8deg) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1);
+  }
+}

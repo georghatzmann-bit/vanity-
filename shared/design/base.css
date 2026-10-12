@@ -1,0 +1,313 @@
+/*
+ * NOVA Basis-Stile: Grundlayout, Glas, Leuchtkanten, Scrollbars, Fokus, Keyframes.
+ * Wird von App und Installer nach tokens.css importiert.
+ */
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  html {
+    background: var(--nv-bg);
+    color: var(--nv-fg);
+    font-family: var(--nv-font-sans);
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Desktop-App: keine Textauswahl beim Ziehen, kein Gummiband-Scroll */
+    user-select: none;
+    overscroll-behavior: none;
+  }
+
+  body {
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.5;
+    transition: background-color var(--nv-dur-slow) var(--nv-ease-out), color var(--nv-dur-slow) var(--nv-ease-out);
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--nv-accent) 40%, transparent);
+    color: var(--nv-fg);
+  }
+
+  img {
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  /* Fokus nur bei Tastatur sichtbar - aber dann deutlich */
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--nv-accent);
+    outline-offset: 2px;
+    border-radius: var(--nv-radius-sm);
+  }
+
+  /* Schlanke Scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--nv-fg) 14%, transparent);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--nv-fg) 26%, transparent);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--nv-font-display);
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+}
+
+@layer components {
+  /* Glas-Fläche: Blur + Sättigung + feine Innenkante */
+  .glass {
+    background: var(--nv-surface);
+    backdrop-filter: blur(var(--nv-glass-blur)) saturate(var(--nv-glass-sat));
+    -webkit-backdrop-filter: blur(var(--nv-glass-blur)) saturate(var(--nv-glass-sat));
+    border: 1px solid var(--nv-border);
+    box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 6%, transparent), var(--nv-shadow-md);
+  }
+  .glass-strong {
+    background: color-mix(in oklab, var(--nv-bg-elev) 78%, transparent);
+    backdrop-filter: blur(calc(var(--nv-glass-blur) * 1.4)) saturate(var(--nv-glass-sat));
+    -webkit-backdrop-filter: blur(calc(var(--nv-glass-blur) * 1.4)) saturate(var(--nv-glass-sat));
+    border: 1px solid var(--nv-border);
+    box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 7%, transparent), var(--nv-shadow-lg);
+  }
+
+  /* Leuchtkante: Verlaufsrand, der per --glow-opacity eingeblendet wird */
+  .glow-edge {
+    position: relative;
+    isolation: isolate;
+  }
+  .glow-edge::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--nv-gradient);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: var(--glow-opacity, 0);
+    transition: opacity var(--nv-dur-base) var(--nv-ease-out);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .text-gradient {
+    background: var(--nv-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .bg-gradient-accent {
+    background: var(--nv-gradient);
+  }
+
+  /* Feines Filmkorn gegen Farbstreifen in Verläufen */
+  .noise::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--nv-noise-opacity);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    mix-blend-mode: overlay;
+  }
+
+  /* Schimmernde Skelett-Platzhalter */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--nv-surface-2);
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklab, var(--nv-fg) 9%, transparent) 50%,
+      transparent 80%
+    );
+    animation: nv-shimmer 1.4s var(--nv-ease-in-out) infinite;
+  }
+
+  .drag-region {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Ripple-Kreis (wird per JS eingefügt) */
+  .nv-ripple {
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+    transform: scale(0);
+    opacity: 0.45;
+    background: radial-gradient(circle, currentColor 0%, transparent 70%);
+    animation: nv-ripple 650ms var(--nv-ease-out) forwards;
+  }
+}
+
+@keyframes nv-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes nv-ripple {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes nv-pulse-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes nv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes nv-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes nv-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  40% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes nv-gradient-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+/* Barrierefreiheit: Animationen verringern / aus */
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+/* Theme-Wechsel per View Transition: Kreis breitet sich vom Klickpunkt aus */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+/* Fenster-Animation vor Minimieren/Schließen */
+#root {
+  transition: opacity 180ms var(--nv-ease-in-out), transform 180ms var(--nv-ease-in-out), filter 180ms var(--nv-ease-in-out);
+  transform-origin: 50% 60%;
+}
+html.nv-window-leave #root {
+  opacity: 0;
+  transform: scale(0.965);
+  filter: blur(4px);
+}
