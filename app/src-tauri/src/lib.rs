@@ -110,13 +110,6 @@ fn setup(app: &mut tauri::App, started_minimized: bool) -> Result<(), Box<dyn st
     Ok(())
 }
 
-/// Admin-Helfer: `Pulsar.exe --elevated <aufgaben.json> --result <ergebnis.json>`.
-/// Gibt `Some(exit_code)` zurück, wenn die Exe in diesem Modus gestartet wurde.
-pub fn elevated_entry() -> Option<i32> {
-    let args: Vec<String> = std::env::args().collect();
-    args.iter().any(|a| a == "--elevated").then(|| opt::elevated_main(&args))
-}
-
 /// Startet die App.
 pub fn run() {
     let started_minimized = std::env::args().any(|a| a == "--minimized");
@@ -209,9 +202,6 @@ pub fn run() {
             opt::opt_power_plans,
             opt::opt_power_set,
             opt::opt_flush_dns,
-            opt::opt_trim_memory,
-            opt::opt_processes,
-            opt::opt_kill,
             opt::boost_start,
             opt::boost_stop,
             opt::boost_state,

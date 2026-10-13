@@ -362,27 +362,13 @@ export interface SpeedResult {
 // Optimieren & Boost
 // ---------------------------------------------------------------------------------------------
 
-/**
- * Feste IDs der Optimierungen (Texte kommen aus den Übersetzungen):
- * powerPlan, gameMode, gameDvr, mouseAccel, networkThrottling, systemResponsiveness, nagle, powerThrottling, hags
- */
-export type TweakId =
-  | "powerPlan"
-  | "gameMode"
-  | "gameDvr"
-  | "mouseAccel"
-  | "networkThrottling"
-  | "systemResponsiveness"
-  | "nagle"
-  | "powerThrottling"
-  | "hags";
+/** Feste IDs der Optimierungen (Texte kommen aus den Übersetzungen). Alle ohne Adminrechte. */
+export type TweakId = "powerPlan" | "gameMode" | "gameDvr" | "mouseAccel";
 
 export interface Tweak {
   id: TweakId;
-  category: "power" | "windows" | "network" | "gpu";
+  category: "power" | "windows" | "input";
   impact: "high" | "medium" | "low";
-  admin: boolean;
-  reboot: boolean;
   /** on = optimiert, off = Windows-Standard */
   state: "on" | "off" | "unknown" | "unsupported";
   detail: string | null;
@@ -392,9 +378,6 @@ export interface Tweak {
 export interface ApplyReport {
   applied: string[];
   failed: { id: string; error: string }[];
-  needsReboot: boolean;
-  /** Admin-Abfrage abgelehnt */
-  cancelled: boolean;
 }
 
 export interface PowerPlan {
@@ -403,33 +386,14 @@ export interface PowerPlan {
   active: boolean;
 }
 
-export interface TrimReport {
-  freedMb: number;
-  processes: number;
-}
-
-export interface ProcInfo {
-  pid: number;
-  name: string;
-  exe: string | null;
-  memMb: number;
-  cpu: number;
-  kind: "app" | "background" | "system";
-  closable: boolean;
-}
-
 export interface BoostProfile {
   powerPlan: boolean;
   gamePriority: "normal" | "above" | "high";
-  /** Exe-Namen, z. B. "chrome.exe" */
-  closeApps: string[];
-  reopenApps: boolean;
-  trimMemory: boolean;
   flushDns: boolean;
 }
 
 export interface BoostAction {
-  id: "powerPlan" | "priority" | "closeApps" | "trimMemory" | "flushDns";
+  id: "powerPlan" | "priority" | "flushDns";
   ok: boolean;
   detail: string;
 }
@@ -440,7 +404,6 @@ export interface BoostState {
   since: number | null;
   gameId: string | null;
   actions: BoostAction[];
-  closed: { name: string; exe: string | null }[];
 }
 
 // ---------------------------------------------------------------------------------------------

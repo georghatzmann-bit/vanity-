@@ -2,24 +2,21 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Eine Optimierung mit aktuellem Zustand.
+/// Eine Optimierung mit aktuellem Zustand. Alle Optimierungen kommen ohne Adminrechte aus.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tweak {
+    /// "powerPlan" | "gameMode" | "gameDvr" | "mouseAccel"
     pub id: String,
-    /// "power" | "windows" | "network" | "gpu"
+    /// "power" | "windows" | "input"
     pub category: String,
     /// "high" | "medium" | "low" – ehrliche Einschätzung der Wirkung
     pub impact: String,
-    /// Braucht Adminrechte (Windows fragt einmal nach)
-    pub admin: bool,
-    /// Wirkt erst nach einem Neustart
-    pub reboot: bool,
     /// "on" | "off" | "unknown" | "unsupported"
     pub state: String,
-    /// Optionaler Hinweis, z. B. aktueller Wert
+    /// Optionaler Hinweis, z. B. Name des aktiven Energieplans
     pub detail: Option<String>,
-    /// Pulsar hat den Originalwert gesichert und kann zurückstellen
+    /// Pulsar hat den Originalwert gesichert und kann exakt zurückstellen
     pub can_revert: bool,
 }
 
@@ -35,9 +32,6 @@ pub struct TweakError {
 pub struct ApplyReport {
     pub applied: Vec<String>,
     pub failed: Vec<TweakError>,
-    pub needs_reboot: bool,
-    /// Die Admin-Abfrage wurde abgelehnt
-    pub cancelled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -48,27 +42,6 @@ pub struct PowerPlan {
     pub active: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TrimReport {
-    pub freed_mb: f64,
-    pub processes: u32,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProcInfo {
-    pub pid: u32,
-    pub name: String,
-    pub exe: Option<String>,
-    pub mem_mb: f64,
-    pub cpu: f32,
-    /// "app" (hat ein Fenster) | "background" | "system"
-    pub kind: String,
-    /// Darf Pulsar das Programm schließen (keine Systemprozesse)?
-    pub closable: bool,
-}
-
 /// Was beim Boost passieren soll.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -77,11 +50,7 @@ pub struct BoostProfile {
     pub power_plan: bool,
     /// "normal" | "above" | "high"
     pub game_priority: String,
-    /// Programme (Exe-Namen, z. B. "chrome.exe"), die während des Spiels geschlossen werden
-    pub close_apps: Vec<String>,
-    /// Geschlossene Programme nach dem Spiel wieder öffnen
-    pub reopen_apps: bool,
-    pub trim_memory: bool,
+    /// DNS-Zwischenspeicher vor dem Spiel leeren
     pub flush_dns: bool,
 }
 
@@ -90,9 +59,6 @@ impl Default for BoostProfile {
         Self {
             power_plan: true,
             game_priority: "high".into(),
-            close_apps: Vec::new(),
-            reopen_apps: true,
-            trim_memory: false,
             flush_dns: true,
         }
     }
@@ -101,17 +67,10 @@ impl Default for BoostProfile {
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BoostAction {
-    /// "powerPlan" | "priority" | "closeApps" | "trimMemory" | "flushDns"
+    /// "powerPlan" | "priority" | "flushDns"
     pub id: String,
     pub ok: bool,
     pub detail: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ClosedApp {
-    pub name: String,
-    pub exe: Option<String>,
 }
 
 /// Zustand des Boosts (auch als Event `boost://state`).
@@ -122,5 +81,4 @@ pub struct BoostState {
     pub since: Option<i64>,
     pub game_id: Option<String>,
     pub actions: Vec<BoostAction>,
-    pub closed: Vec<ClosedApp>,
 }

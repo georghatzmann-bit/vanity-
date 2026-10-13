@@ -1,7 +1,6 @@
-//! Optimieren: Tweaks (mit Sicherung und „Rückgängig“), Energiepläne, Boost-Modus, Prozesse,
-//! und der Admin-Helfer (`Pulsar.exe --elevated …`), der alle Admin-Schritte mit EINER Abfrage erledigt.
+//! Optimieren: Windows-Einstellungen für Spiele (mit Sicherung und „Rückgängig“), Energiepläne
+//! und der Boost-Modus. Alles läuft ohne Adminrechte.
 
-pub mod elevate;
 pub mod types;
 
 use tauri::{AppHandle, State};
@@ -16,13 +15,6 @@ pub struct OptState {}
 
 fn todo<T>() -> CmdResult<T> {
     Err("Diese Funktion ist noch nicht fertig.".into())
-}
-
-/// Einstieg für `Pulsar.exe --elevated <aufgaben.json> --result <ergebnis.json>` (läuft mit Adminrechten).
-/// Gibt den Exit-Code zurück.
-pub fn elevated_main(args: &[String]) -> i32 {
-    let _ = args;
-    2
 }
 
 #[tauri::command]
@@ -56,23 +48,6 @@ pub async fn opt_power_set(guid: String) -> CmdResult<()> {
 
 #[tauri::command]
 pub async fn opt_flush_dns() -> CmdResult<()> {
-    todo()
-}
-
-#[tauri::command]
-pub async fn opt_trim_memory() -> CmdResult<TrimReport> {
-    todo()
-}
-
-#[tauri::command]
-pub async fn opt_processes(state: State<'_, Shared>) -> CmdResult<Vec<ProcInfo>> {
-    let _ = state;
-    todo()
-}
-
-#[tauri::command]
-pub async fn opt_kill(names: Vec<String>) -> CmdResult<Vec<String>> {
-    let _ = names;
     todo()
 }
 

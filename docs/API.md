@@ -8,7 +8,7 @@ Fehler: Befehle liefern `Err(String)` mit einem **deutschen, verständlichen Sat
 
 - **Ehrlich:** Pulsar misst und optimiert lokal. Keine erfundenen „Ping-Verbesserungen“. Jede Optimierung hat eine ehrliche Wirkungsstufe.
 - **Nie abstürzen:** Kein `unwrap()` auf Laufzeitdaten. Netzwerk-Zeitlimits immer setzen.
-- **Ohne Admin starten:** Pulsar läuft als normaler Benutzer. Admin-Schritte laufen gebündelt über den Admin-Helfer (eine UAC-Abfrage).
+- **Ohne Adminrechte:** Pulsar läuft als normaler Benutzer und ändert nur Einstellungen, die dafür keine Adminrechte brauchen.
 - **Rückgängig:** Jede Änderung an Windows wird vorher gesichert (kv `opt.snapshots`) und kann exakt zurückgestellt werden.
 - **Plattform:** Ziel ist Windows 10/11. Unter Linux/macOS (Entwicklung, CI-Tests) gibt es Ersatzwege oder klare Fehlermeldungen („Nur unter Windows verfügbar.“).
 
@@ -50,8 +50,7 @@ Events: `game://started` `GameStartedEvent`, `game://stopped` `GameStoppedEvent`
 | `net_traceroute(host, maxHops=30)` → `TraceResult` | ICMP mit steigender TTL (3 Versuche je Station, 1 s Zeitlimit). Sendet je Station Event **`net://trace`** `TraceHop`. `zone`: private Adressen = `lan`, die ersten öffentlichen Stationen bis zum Netz des Anbieters = `isp`, danach `internet`, Ziel = `target`. Rückwärts-DNS nur, wenn schnell (≤ 300 ms). |
 | `net_dns_benchmark(rounds=5)` → `DnsResult[]` | Vergleicht Cloudflare (1.1.1.1/1.0.0.1), Google (8.8.8.8/8.8.4.4), Quad9 (9.9.9.9/149.112.112.112), OpenDNS (208.67.222.222/208.67.220.220), AdGuard (94.140.14.14/94.140.15.15), Control D (76.76.2.0/76.76.10.0), DNS.WATCH (84.200.69.80/84.200.70.40), und den aktuell eingestellten DNS. Eigene DNS-Anfragen per UDP:53 (Typ A); „bekannt“ = `google.com`, „neu“ = zufällige Subdomain eines großen Dienstes. Median über `rounds`. Fortschritt per **`net://dns`**. Sortiert nach `uncachedMs`. |
 | `net_dns_current()` → `DnsConfig?` | DNS der Hauptverbindung |
-| `net_dns_apply(primary, secondary?)` | Setzt DNS der Hauptverbindung über den Admin-Helfer; sichert vorher den alten Zustand |
-| `net_dns_restore()` | Stellt den gesicherten Zustand wieder her (DHCP oder alte Adressen) |
+| `net_dns_apply(primary, secondary?)`, `net_dns_restore()` | Pulsar ändert den DNS nicht selbst: beide liefern einen Hinweis-Fehler. Die Oberfläche zeigt eine Anleitung und öffnet die Windows-Netzwerkeinstellungen. |
 | `net_adapters()` → `AdapterInfo[]` | Netzwerkadapter (nur aktive, ohne Loopback/virtuelle, wenn erkennbar) |
 | `net_wifi()` → `WifiInfo?` | WLAN-Verbindung (Signal, Band, Kanal, Standard, Datenrate) oder `null` |
 | `net_speedtest()` → `SpeedResult` | Cloudflare-Speedtest (`speed.cloudflare.com/__down`, `__up`): Ruhe-Latenz (10 Messungen), Download ~8 s mit 4 parallelen Strömen, Upload ~6 s, gleichzeitig Latenz unter Last → Bufferbloat. Note: Anstieg < 5 ms = A+, < 30 = A, < 60 = B, < 200 = C, < 400 = D, sonst F. Fortschritt per **`net://speed`**. Nur ein Test gleichzeitig. |
@@ -59,35 +58,22 @@ Events: `game://started` `GameStartedEvent`, `game://stopped` `GameStoppedEvent`
 
 ## Optimieren (`src/opt/`)
 
-Feste Optimierungen (`TweakId`), Texte in den Übersetzungen:
+Feste Optimierungen (`TweakId`), Texte in den Übersetzungen. Alle ohne Adminrechte:
 
-| id | Was | Admin | Wirkung |
-|---|---|---|---|
-| `powerPlan` | Energieplan „Höchstleistung“ (bzw. „Ultimative Leistung“, falls vorhanden) | nein | mittel |
-| `gameMode` | Windows-Spielmodus an (`HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled=1`) | nein | klein |
-| `gameDvr` | Game-Bar-Hintergrundaufnahme aus (`HKCU\System\GameConfigStore\GameDVR_Enabled=0`, `HKCU\…\GameDVR\AppCaptureEnabled=0`) | nein | mittel |
-| `mouseAccel` | Mausbeschleunigung aus („Zeigerpräzision verbessern“) – sofort wirksam | nein | mittel (Zielen) |
-| `networkThrottling` | Netzwerkdrosselung für Multimedia aus (`NetworkThrottlingIndex=0xFFFFFFFF`) | ja | klein |
-| `systemResponsiveness` | Mehr CPU-Zeit für Spiele (`SystemResponsiveness=10`) | ja | klein |
-| `nagle` | Nagle-Algorithmus aus auf der Hauptverbindung (`TcpAckFrequency=1`, `TCPNoDelay=1`) | ja | klein |
-| `powerThrottling` | Energiedrosselung von Hintergrundprozessen aus | ja | klein |
-| `hags` | Hardwarebeschleunigte GPU-Planung (`HwSchMode=2`), Neustart nötig | ja | mittel |
+| id | Was | Wirkung |
+|---|---|---|
+| `powerPlan` | Energieplan „Höchstleistung“ (bzw. „Ultimative Leistung“, falls vorhanden) per `powercfg` | mittel |
+| `gameMode` | Windows-Spielmodus an (`HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled=1`) | klein |
+| `gameDvr` | Game-Bar-Hintergrundaufnahme aus (`HKCU\System\GameConfigStore\GameDVR_Enabled=0`, `HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR\AppCaptureEnabled=0`) | mittel |
+| `mouseAccel` | Mausbeschleunigung aus („Zeigerpräzision verbessern“), sofort wirksam | mittel (Zielen) |
 
 | Befehl | Verhalten |
 |---|---|
-| `opt_tweaks()` → `Tweak[]` | Liest den aktuellen Zustand aller Optimierungen |
-| `opt_apply(ids, enable)` → `ApplyReport` | Schaltet ein (`enable=true`) oder zurück auf Windows-Standard bzw. gesicherten Originalwert. Sichert vor dem ersten Ändern den Originalwert. Admin-Optimierungen werden in **einem** Admin-Helfer-Aufruf erledigt; abgelehnte UAC → `cancelled=true`. |
+| `opt_tweaks()` → `Tweak[]` | Liest den aktuellen Zustand |
+| `opt_apply(ids, enable)` → `ApplyReport` | Einschalten bzw. zurück auf den gesicherten Originalwert (sonst Windows-Standard). Sichert vor der ersten Änderung den Originalwert in kv `opt.snapshots`. |
 | `opt_revert_all()` | Stellt alle gesicherten Originalwerte wieder her |
 | `opt_power_plans()`, `opt_power_set(guid)` | Energiepläne |
 | `opt_flush_dns()` | DNS-Zwischenspeicher leeren |
-| `opt_trim_memory()` → `TrimReport` | Arbeitsspeicher von Hintergrundprozessen des Benutzers verkleinern (ehrlich: kleiner Effekt) |
-| `opt_processes()` → `ProcInfo[]` | Prozesse des Benutzers (nach Speicher sortiert), Systemprozesse `closable=false` |
-| `opt_kill(names)` → geschlossene Namen | Nur `closable` Programme |
-| `boost_start(profile, gameId?, pid?)` → `BoostState` | Führt das Profil aus (Energieplan, Spiel-Priorität für `pid` bzw. Prozesse des Spiels, Apps schließen, RAM, DNS-Cache) und merkt sich alles für `boost_stop`. Sendet **`boost://state`**. |
-| `boost_stop()` → `BoostState` | Stellt alles zurück (alter Energieplan, geschlossene Apps wieder öffnen, falls gewünscht) |
+| `boost_start(profile, gameId?, pid?)` → `BoostState` | Energieplan „Höchstleistung“, Priorität des Spiels (`pid` bzw. Prozesse des laufenden Spiels), DNS-Zwischenspeicher leeren. Merkt sich alles für `boost_stop`. Sendet **`boost://state`**. |
+| `boost_stop()` → `BoostState` | Stellt den vorherigen Energieplan wieder her |
 | `boost_state()` | Aktueller Zustand |
-
-### Admin-Helfer
-
-`Pulsar.exe --elevated <aufgaben.json> --result <ergebnis.json>` wird mit `ShellExecuteExW` und dem Verb `runas` gestartet (eine UAC-Abfrage) und beendet sich danach.
-Er führt **nur** eine feste Liste erlaubter Aufgaben aus (bestimmte Registry-Werte, DNS einer Verbindung setzen/zurücksetzen) und prüft jeden Pfad gegen eine Erlaubt-Liste. Ergebnis: JSON mit Erfolg/Fehler je Aufgabe. Läuft Pulsar bereits als Admin, werden die Aufgaben direkt ausgeführt.
