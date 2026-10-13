@@ -28,7 +28,7 @@ die Selbsttest-Berichte (`selftest.json`, `app-selftest.json`) und Screenshots l
 |---|---|
 | `npm run typecheck` (App + Installer) | 0 Fehler |
 | `npm test` | 20 Tests bestanden |
-| `cargo test` App (Linux) | Datenbank, Scanner, Bilder, Optimierer (38 Tests), Netzwerk-Logik – bestanden |
+| `cargo test` App (Linux) | 143 Tests bestanden (Datenbank, Scanner, Bilder, Optimierer 38, Netzwerk 41 – darunter DNS-Pakete gegen einen lokalen UDP-Server und TCP-Ping gegen lokale Ports) |
 | `cargo test` Installer (Linux) | bestanden |
 | `cargo xwin check --target x86_64-pc-windows-msvc` | Windows-Code (ICMP, IP Helper, WLAN, Registry, powercfg) kompiliert ohne Fehler |
 | Browser-Rundgang App (Playwright, Demo-Backend) | Alle Seiten (Cockpit, Spiele, Spiel, Netzwerk ×5, Optimieren, Berichte, Einstellungen, Palette, Boost, 4 Themes, Overlay) ohne Konsolenfehler; 33 Screenshots |
