@@ -1,0 +1,145 @@
+# Baut und testet NOVA auf einem echten Windows-Rechner von GitHub.
+# - Bei jedem Push: Typprüfung, Tests, beide Exe-Dateien bauen, App-Starttest, Installer-Selbsttest
+# - Manuell ("Run workflow") mit Haken bei "release": erstellt zusätzlich ein GitHub-Release
+#   mit NovaLauncher.exe, NovaLauncher-Setup.exe und latest.json (daraus lädt der Installer).
+name: Windows Build & Test
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "GitHub-Release erstellen (Tag v<Version aus nova.config.json>)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            app/src-tauri -> target
+            installer/src-tauri -> target
+
+      - name: Abhängigkeiten
+        run: npm ci
+
+      - name: Typprüfung
+        run: npm run typecheck
+
+      - name: Oberflächen-Tests
+        run: npm test
+
+      - name: Rust-Tests (Windows)
+        run: npm run test:rust
+
+      - name: Beide Exe-Dateien bauen
+        run: npm run build:all
+
+      - name: Version auslesen
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content nova.config.json -Raw | ConvertFrom-Json).version
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: App-Starttest + Screenshot
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Shot($path) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save($path)
+            $g.Dispose(); $bmp.Dispose()
+          }
+          New-Item -ItemType Directory -Force -Path test-output | Out-Null
+          $p = Start-Process -FilePath "release\NovaLauncher.exe" -PassThru
+          Start-Sleep -Seconds 12
+          Shot "test-output\app-start.png"
+          if ($p.HasExited) { throw "Die App hat sich sofort beendet (Exit-Code $($p.ExitCode))." }
+          Start-Sleep -Seconds 6
+          Shot "test-output\app-home.png"
+          Stop-Process -Id $p.Id -Force
+          Write-Host "App läuft stabil."
+
+      - name: Installer-Starttest + Screenshot
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $p = Start-Process -FilePath "release\NovaLauncher-Setup.exe" -PassThru
+          Start-Sleep -Seconds 9
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("test-output\setup-welcome.png")
+          if ($p.HasExited) { throw "Der Installer hat sich sofort beendet (Exit-Code $($p.ExitCode))." }
+          Stop-Process -Id $p.Id -Force
+
+      - name: Installer-Selbsttest (Download, SHA-256, Installation, Verknüpfungen, Apps & Features, Deinstallation)
+        shell: pwsh
+        run: |
+          $serve = Join-Path $env:RUNNER_TEMP "nova-serve"
+          New-Item -ItemType Directory -Force -Path $serve | Out-Null
+          Copy-Item release\NovaLauncher.exe $serve
+          $m = Get-Content release\latest.json -Raw | ConvertFrom-Json
+          $m.app.url = "http://127.0.0.1:8765/NovaLauncher.exe"
+          $m | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $serve "latest.json") -Encoding utf8
+          $server = Start-Process python -ArgumentList "-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", $serve -PassThru -WindowStyle Hidden
+          Start-Sleep -Seconds 3
+          $report = Join-Path $env:RUNNER_TEMP "selftest.json"
+          $dir = Join-Path $env:RUNNER_TEMP "nova-selftest"
+          $p = Start-Process -FilePath "release\NovaLauncher-Setup.exe" -ArgumentList "--selftest", "--dir", "`"$dir`"", "--manifest", "http://127.0.0.1:8765/latest.json", "--report", "`"$report`"" -Wait -PassThru
+          Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          if (Test-Path $report) { Get-Content $report; Copy-Item $report test-output\selftest.json }
+          if ($p.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen (Exit-Code $($p.ExitCode))." }
+          Write-Host "Selbsttest bestanden."
+
+      - name: Ergebnisse hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-windows-${{ steps.version.outputs.version }}
+          path: |
+            release/
+            test-output/
+          if-no-files-found: warn
+
+      - name: GitHub-Release erstellen
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Bei einem Release/Tag dessen Namen verwenden, sonst v<Version aus nova.config.json>
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', steps.version.outputs.version) }}
+          name: NOVA ${{ steps.version.outputs.version }}
+          make_latest: true
+          files: |
+            release/NovaLauncher.exe
+            release/NovaLauncher-Setup.exe
+            release/latest.json
+            release/SHA256SUMS.txt

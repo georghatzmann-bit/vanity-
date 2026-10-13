@@ -61,6 +61,7 @@ export function genCoverSpec(name: string): GenCoverSpec {
 /** Initialen für Monogramme: "Baldur's Gate 3" -> "BG3" */
 export function initials(name: string, max = 3): string {
   const words = name
+    .replace(/['’`´]/g, "")
     .replace(/[^\p{L}\p{N} ]/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
