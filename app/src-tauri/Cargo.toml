@@ -1,0 +1,81 @@
+[package]
+name = "nova-launcher"
+version = "1.0.0"
+description = "Nova Launcher - Premium Game & App Launcher"
+authors = ["Nova"]
+edition = "2021"
+publish = false
+default-run = "NovaLauncher"
+
+[lib]
+name = "nova_launcher_lib"
+crate-type = ["rlib"]
+
+# Direkt als NovaLauncher.exe bauen (der Installer erwartet diesen Namen)
+[[bin]]
+name = "NovaLauncher"
+path = "src/main.rs"
+
+[features]
+# Oberfläche in die Exe einbetten (statt Dev-Server). `tauri dev` schaltet das automatisch ab,
+# daher funktioniert auch ein direktes `cargo xwin build --release`.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-process = "2"
+tauri-plugin-window-state = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.37", features = ["bundled", "backup"] }
+sysinfo = { version = "0.37", default-features = false, features = ["system"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots", "json", "stream"] }
+tokio = { version = "1", features = ["rt", "time", "sync", "fs", "io-util"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+sha2 = "0.10"
+hex = "0.4"
+zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+walkdir = "2"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "bmp", "gif", "ico"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dirs = "6"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Ole",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_System_Performance",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
