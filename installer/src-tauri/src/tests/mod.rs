@@ -15,7 +15,9 @@ use crate::install::{self, InstallPlan};
 use crate::manifest::{fetch_manifest, resolve_manifest_source, Location, ManifestOrigin};
 use crate::selftest::{run_selftest, SelftestConfig};
 use crate::types::{InstallOptions, InstallRecord, Manifest, ManifestFile, Progress, SetupMode, UninstallProgress};
-use crate::uninstall::{run_revert, run_uninstall, wait_or_kill, RevertResult, UninstallOutcome, UninstallPlan, Waitable, REVERT_ARGS};
+use crate::uninstall::{
+    data_kept_warning, knows_revert_all, run_revert, run_uninstall, wait_or_kill, RevertResult, UninstallOutcome, UninstallPlan, Waitable, REVERT_ARGS,
+};
 use server::{closed_url, TestServer};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -149,6 +151,49 @@ fn cli_parsing() {
     assert!(cli.selftest);
     assert_eq!(cli.dir, Some(PathBuf::from("/tmp/x")));
     assert_eq!(cli.report, Some(PathBuf::from("/tmp/r.json")));
+
+    let cli = CliArgs::parse(["--uninstall", "--target", "C:\\P", "--user-data", "C:\\Users\\anna\\AppData\\Roaming"]);
+    assert_eq!(cli.user_data, Some(PathBuf::from("C:\\Users\\anna\\AppData\\Roaming")));
+}
+
+#[test]
+fn uninstall_detects_other_account() {
+    // Ohne Angabe (direkt gestartet) und mit dem eigenen Ordner: dasselbe Konto
+    assert!(!crate::uninstall::started_by_other_user(&CliArgs::default()));
+    if let Some(own) = dirs::config_dir() {
+        let cli = CliArgs { user_data: Some(own), ..Default::default() };
+        assert!(!crate::uninstall::started_by_other_user(&cli));
+    }
+    let cli = CliArgs { user_data: Some(PathBuf::from("/nirgends/anderes-konto")), ..Default::default() };
+    assert!(crate::uninstall::started_by_other_user(&cli));
+}
+
+#[test]
+fn uninstall_as_other_account_keeps_data_and_skips_revert() {
+    // Mit Marke und App, aber unter einem anderen Konto: `--revert-all` würde dessen (leeren)
+    // Datenordner lesen und „nichts zu tun“ melden – also nicht starten und die Daten behalten.
+    let tmp = TempDir::new("uninstall-other-user");
+    let dir = tmp.join("Pulsar");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(APP), b"x").unwrap();
+    std::fs::write(dir.join(INSTALL_INFO_NAME), record_json(true)).unwrap();
+    let data_dir = tmp.join("roaming/com.pulsar.booster");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let plan = UninstallPlan {
+        dir: dir.clone(),
+        keep_data: false,
+        data_dirs: vec![data_dir.clone()],
+        integrate: false,
+        self_exe: None,
+        app_exe_name: APP.into(),
+        revert_timeout: Duration::from_secs(5),
+        other_user: true,
+    };
+    let outcome = run_uninstall(&plan, &|_| {}).unwrap();
+    assert_eq!(outcome.revert, RevertResult::OtherUser);
+    assert!(!outcome.revert.is_ok());
+    assert!(outcome.data_kept && outcome.warnings.contains(&data_kept_warning()), "{outcome:?}");
+    assert!(data_dir.exists() && !dir.exists());
 }
 
 #[test]
@@ -224,6 +269,34 @@ fn serialization_is_camel_case() {
     }
     let done = serde_json::to_value(crate::types::InstallDone { dir: "d".into(), exe_path: "e".into(), version: "1".into(), verified: true }).unwrap();
     assert_eq!(done["exePath"], "e");
+    let un = serde_json::to_value(crate::types::UninstallDonePayload { revert_ok: false, data_kept: true }).unwrap();
+    assert_eq!(un, serde_json::json!({ "revertOk": false, "dataKept": true }));
+}
+
+#[test]
+fn install_record_revert_all_marker() {
+    // Ältere install.json (ohne Marke) bleibt lesbar – die Marke ist dann `false`.
+    let old = r#"{"version":"1.0.0","installedAt":"2026-01-01T00:00:00Z","options":{"dir":"C:\\x"},"verified":true,"scope":"user"}"#;
+    let rec: InstallRecord = serde_json::from_str(old).unwrap();
+    assert!(!rec.revert_all);
+    let new = serde_json::to_value(InstallRecord { revert_all: true, ..rec }).unwrap();
+    assert_eq!(new["revertAll"], true);
+
+    // `knows_revert_all`: nur mit lesbarer install.json und Marke.
+    let tmp = TempDir::new("marker");
+    assert!(!knows_revert_all(tmp.path()), "keine install.json");
+    std::fs::write(tmp.join(INSTALL_INFO_NAME), b"kaputt").unwrap();
+    assert!(!knows_revert_all(tmp.path()), "unlesbar");
+    std::fs::write(tmp.join(INSTALL_INFO_NAME), old).unwrap();
+    assert!(!knows_revert_all(tmp.path()), "ohne Marke");
+    std::fs::write(tmp.join(INSTALL_INFO_NAME), record_json(true)).unwrap();
+    assert!(knows_revert_all(tmp.path()));
+}
+
+/// Inhalt einer install.json – mit oder ohne Marke `"revertAll": true`.
+fn record_json(revert_all: bool) -> String {
+    let marker = if revert_all { r#","revertAll":true"# } else { "" };
+    format!(r#"{{"version":"1.0.0","installedAt":"2026-01-01T00:00:00Z","options":{{"dir":"x"}}{marker}}}"#)
 }
 
 // ------------------------------------------------------------------ Manifest
@@ -611,8 +684,10 @@ async fn install_and_uninstall_files() {
     assert_eq!(record.version, "1.2.3");
     assert_eq!(PathBuf::from(&record.options.dir), dir);
     assert!(record.options.desktop_shortcut && record.options.start_menu && !record.options.autostart);
+    assert!(record.revert_all, "das Setup schreibt die Marke für --revert-all");
     let raw: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join(INSTALL_INFO_NAME)).unwrap()).unwrap();
     assert!(raw.get("installedAt").is_some() && raw.get("options").is_some());
+    assert_eq!(raw["revertAll"], true);
 
     let ev = events.lock().unwrap().clone();
     let phases: Vec<&str> = ev.iter().map(|e| e.phase).collect();
@@ -632,7 +707,8 @@ async fn install_and_uninstall_files() {
     let done2 = install::run_install(&client(), &plan, &progress, &CancellationToken::new()).await.unwrap();
     assert_eq!(done2, done);
 
-    // Deinstallation: Benutzerdaten löschen.
+    // Deinstallation mit „Daten löschen“. Die Test-"App" lässt sich nicht starten → das Zurückstellen ist
+    // nicht vollständig → die Benutzerdaten (mit den Sicherungen) bleiben trotzdem erhalten.
     let roaming = tmp.join("roaming/com.pulsar.booster");
     let local = tmp.join("local/com.pulsar.booster");
     let unrelated = tmp.join("local/other-app");
@@ -648,20 +724,33 @@ async fn install_and_uninstall_files() {
         self_exe: None,
         app_exe_name: APP.into(),
         revert_timeout: Duration::from_secs(5),
+        other_user: false,
     };
     let steps = Arc::new(Mutex::new(Vec::<UninstallProgress>::new()));
     let sink = steps.clone();
     let outcome = run_uninstall(&uplan, &move |p| sink.lock().unwrap().push(p)).unwrap();
     assert!(outcome.dir_removed && !outcome.self_delete_pending, "{outcome:?}");
     assert!(!dir.exists());
-    assert!(!roaming.exists() && !local.exists());
-    assert!(unrelated.exists(), "only folders named com.pulsar.booster are removed");
+    assert!(matches!(outcome.revert, RevertResult::Failed(_)), "{:?}", outcome.revert);
+    assert!(outcome.data_kept && outcome.warnings.contains(&data_kept_warning()), "{outcome:?}");
+    assert!(roaming.exists() && local.exists(), "Sicherungen bleiben erhalten");
     let names: Vec<&str> = steps.lock().unwrap().iter().map(|p| p.step).collect();
     assert_eq!(names.first(), Some(&"stop"));
     assert_eq!(names.last(), Some(&"done"));
     for s in ["shortcuts", "registry", "files", "data"] {
         assert!(names.contains(&s), "{s} missing: {names:?}");
     }
+
+    // Ältere Installation (install.json ohne Marke): `--revert-all` wird nicht gestartet, die Daten
+    // werden wie gewählt gelöscht.
+    install::run_install(&client(), &plan, &progress, &CancellationToken::new()).await.unwrap();
+    std::fs::write(dir.join(INSTALL_INFO_NAME), record_json(false)).unwrap();
+    let outcome = run_uninstall(&uplan, &|_| {}).unwrap();
+    assert_eq!(outcome.revert, RevertResult::OldVersion);
+    assert!(!outcome.data_kept && !outcome.warnings.contains(&data_kept_warning()), "{outcome:?}");
+    assert!(outcome.dir_removed && !dir.exists());
+    assert!(!roaming.exists() && !local.exists());
+    assert!(unrelated.exists(), "only folders named com.pulsar.booster are removed");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -671,9 +760,10 @@ async fn uninstall_keeps_foreign_files_and_data() {
     let tmp = TempDir::new("uninstall-keep");
     let dir = tmp.join("Pulsar");
     std::fs::create_dir_all(dir.join(DOWNLOAD_DIR_NAME)).unwrap();
-    for f in [APP, UNINSTALLER_NAME, INSTALL_INFO_NAME] {
+    for f in [APP, UNINSTALLER_NAME] {
         std::fs::write(dir.join(f), b"x").unwrap();
     }
+    std::fs::write(dir.join(INSTALL_INFO_NAME), record_json(true)).unwrap();
     std::fs::write(dir.join("my-notes.txt"), b"keep me").unwrap();
     let data_dir = tmp.join("roaming/com.pulsar.booster");
     std::fs::create_dir_all(&data_dir).unwrap();
@@ -685,6 +775,7 @@ async fn uninstall_keeps_foreign_files_and_data() {
         self_exe: None,
         app_exe_name: APP.into(),
         revert_timeout: Duration::from_secs(5),
+        other_user: false,
     };
     let outcome = run_uninstall(&plan, &|_| {}).unwrap();
     assert!(!outcome.dir_removed);
@@ -696,6 +787,40 @@ async fn uninstall_keeps_foreign_files_and_data() {
     // Die Test-"App" ist kein Programm: Zurückstellen schlägt fehl, die Deinstallation läuft trotzdem durch.
     assert!(matches!(outcome.revert, RevertResult::Failed(_)), "{:?}", outcome.revert);
     assert!(outcome.warnings.iter().any(|w| w.starts_with("Einstellungen zurückstellen")), "{:?}", outcome.warnings);
+    assert!(outcome.data_kept && outcome.warnings.contains(&data_kept_warning()));
+}
+
+#[test]
+fn uninstall_keeps_data_when_app_is_missing() {
+    // install.json trägt die Marke, aber Pulsar.exe fehlt (z. B. vom Virenscanner entfernt): Zurückstellen ist
+    // nicht möglich → die Sicherungen in den Benutzerdaten bleiben trotz „Daten löschen“ erhalten.
+    let tmp = TempDir::new("uninstall-missing");
+    let dir = tmp.join("Pulsar");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(INSTALL_INFO_NAME), record_json(true)).unwrap();
+    let data_dir = tmp.join("roaming/com.pulsar.booster");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let plan = UninstallPlan {
+        dir: dir.clone(),
+        keep_data: false,
+        data_dirs: vec![data_dir.clone()],
+        integrate: false,
+        self_exe: None,
+        app_exe_name: APP.into(),
+        revert_timeout: Duration::from_secs(5),
+        other_user: false,
+    };
+    let outcome = run_uninstall(&plan, &|_| {}).unwrap();
+    assert_eq!(outcome.revert, RevertResult::Missing);
+    assert!(outcome.data_kept && outcome.warnings.contains(&data_kept_warning()), "{outcome:?}");
+    assert!(data_dir.exists() && !dir.exists());
+
+    // Ganz ohne App und install.json gibt es nichts zurückzustellen: Daten werden wie gewählt gelöscht.
+    std::fs::create_dir_all(&dir).unwrap();
+    let outcome = run_uninstall(&plan, &|_| {}).unwrap();
+    assert_eq!(outcome.revert, RevertResult::NoApp);
+    assert!(!outcome.data_kept && outcome.warnings.is_empty(), "{outcome:?}");
+    assert!(!data_dir.exists());
 }
 
 // ------------------------------------------------------------------ Deinstallieren: Windows-Einstellungen zurückstellen
@@ -756,12 +881,13 @@ fn revert_result_and_args() {
     assert_eq!(REVERT_ARGS, ["--revert-all"]);
     assert_eq!(crate::uninstall::REVERT_TIMEOUT, Duration::from_secs(120));
     assert_eq!(UninstallPlan::new(PathBuf::from("x"), true).revert_timeout, Duration::from_secs(120));
-    assert!(RevertResult::NoApp.is_ok() && RevertResult::Exited(Some(0)).is_ok());
-    for bad in [RevertResult::Exited(Some(1)), RevertResult::Exited(None), RevertResult::TimedOut, RevertResult::Failed("x".into())] {
+    assert!(RevertResult::NoApp.is_ok() && RevertResult::OldVersion.is_ok() && RevertResult::Exited(Some(0)).is_ok());
+    for bad in [RevertResult::Missing, RevertResult::Exited(Some(1)), RevertResult::Exited(None), RevertResult::TimedOut, RevertResult::OtherUser, RevertResult::Failed("x".into())] {
         assert!(!bad.is_ok(), "{bad:?}");
         assert!(!bad.describe().is_empty());
     }
     assert!(RevertResult::Exited(Some(1)).describe().contains("übrig"));
+    assert_eq!(RevertResult::OldVersion.describe(), "ältere Version – nichts zurückzustellen");
     // Ohne App-Datei wird nichts gestartet.
     let tmp = TempDir::new("revert-none");
     assert_eq!(run_revert(&tmp.join(APP), Duration::from_secs(1)), RevertResult::NoApp);
@@ -781,7 +907,7 @@ fn fake_install(tmp: &TempDir, body: &str) -> (PathBuf, UninstallPlan) {
     let dir = tmp.join("Pulsar");
     std::fs::create_dir_all(&dir).unwrap();
     write_fake_app(&dir.join(APP), body);
-    std::fs::write(dir.join(INSTALL_INFO_NAME), b"{}").unwrap();
+    std::fs::write(dir.join(INSTALL_INFO_NAME), record_json(true)).unwrap();
     let data = tmp.join("roaming/com.pulsar.booster");
     std::fs::create_dir_all(&data).unwrap();
     let plan = UninstallPlan {
@@ -792,11 +918,13 @@ fn fake_install(tmp: &TempDir, body: &str) -> (PathBuf, UninstallPlan) {
         self_exe: None,
         app_exe_name: APP.into(),
         revert_timeout: Duration::from_secs(20),
+        other_user: false,
     };
     (dir, plan)
 }
 
-/// Mit einer echten (Skript-)App: `--revert-all` läuft vor dem Löschen, Fehler und Hänger brechen nichts ab.
+/// Mit einer echten (Skript-)App: `--revert-all` läuft vor dem Löschen, Fehler und Hänger brechen nichts ab –
+/// dann bleiben aber die Benutzerdaten erhalten. Ohne Marke in install.json wird die App gar nicht gestartet.
 /// Alles in einem Test und unter `system_lock`, damit kein anderer Test gleichzeitig Prozesse startet
 /// (sonst kann Linux das gerade geschriebene Skript kurz als „Text file busy“ sperren).
 #[cfg(unix)]
@@ -825,16 +953,23 @@ fn uninstall_runs_revert_all_first() {
     let names: Vec<&str> = steps.lock().unwrap().iter().map(|p| p.step).collect();
     assert_eq!(names, ["stop", "shortcuts", "registry", "files", "files", "data", "done"]);
 
-    // 2. Etwas blieb übrig (Exit-Code 1): nur ein Hinweis, die Deinstallation läuft weiter.
+    assert!(!outcome.data_kept);
+
+    // 2. Etwas blieb übrig (Exit-Code 1): Die Deinstallation läuft weiter, aber die Benutzerdaten mit den
+    //    Sicherungen bleiben trotz „Daten löschen“ erhalten – mit ehrlichem Hinweis.
     let tmp = TempDir::new("revert-left");
+    let data = tmp.join("roaming/com.pulsar.booster");
     let (dir, plan) = fake_install(&tmp, "exit 1");
     let outcome = run_uninstall(&plan, &|_| {}).unwrap();
     assert_eq!(outcome.revert, RevertResult::Exited(Some(1)));
     assert!(outcome.warnings.iter().any(|w| w.contains("übrig")), "{:?}", outcome.warnings);
+    assert!(outcome.warnings.contains(&data_kept_warning()), "{:?}", outcome.warnings);
     assert!(outcome.dir_removed && !dir.exists());
+    assert!(outcome.data_kept && data.exists(), "Datenordner muss noch da sein");
 
-    // 3. Hängt: nach dem Zeitlimit beenden und trotzdem alles löschen.
+    // 3. Hängt: nach dem Zeitlimit beenden, die App-Dateien trotzdem löschen, die Benutzerdaten behalten.
     let tmp = TempDir::new("revert-hang");
+    let data = tmp.join("roaming/com.pulsar.booster");
     let (dir, mut plan) = fake_install(&tmp, "exec sleep 30");
     plan.revert_timeout = Duration::from_millis(300);
     let start = std::time::Instant::now();
@@ -842,7 +977,27 @@ fn uninstall_runs_revert_all_first() {
     assert_eq!(outcome.revert, RevertResult::TimedOut);
     assert!(start.elapsed() < Duration::from_secs(10), "took {:?}", start.elapsed());
     assert!(outcome.warnings.iter().any(|w| w.starts_with("Einstellungen zurückstellen")), "{:?}", outcome.warnings);
+    assert!(outcome.warnings.contains(&data_kept_warning()), "{:?}", outcome.warnings);
     assert!(outcome.dir_removed && !dir.exists());
+    assert!(outcome.data_kept && data.exists(), "Datenordner muss noch da sein");
+
+    // 4. Ältere Version (install.json ohne Marke bzw. unlesbar): die App wird nicht gestartet, nichts hängt,
+    //    die Daten werden wie gewählt gelöscht.
+    for info in [record_json(false), "kaputt".to_string()] {
+        let tmp = TempDir::new("revert-old");
+        let log = tmp.join("started.txt");
+        let data = tmp.join("roaming/com.pulsar.booster");
+        let (dir, plan) = fake_install(&tmp, &format!("echo gestartet > '{}'\nexec sleep 30", log.display()));
+        std::fs::write(dir.join(INSTALL_INFO_NAME), &info).unwrap();
+        let start = std::time::Instant::now();
+        let outcome = run_uninstall(&plan, &|_| {}).unwrap();
+        assert_eq!(outcome.revert, RevertResult::OldVersion, "{info}");
+        assert!(!log.exists(), "--revert-all darf nicht gestartet werden");
+        assert!(start.elapsed() < Duration::from_secs(10), "took {:?}", start.elapsed());
+        assert!(outcome.warnings.is_empty(), "{:?}", outcome.warnings);
+        assert!(outcome.dir_removed && !dir.exists());
+        assert!(!outcome.data_kept && !data.exists());
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -899,6 +1054,10 @@ async fn selftest_end_to_end() {
     let names: Vec<&str> = report.steps.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, ["manifest", "download", "verify", "install", "files", "shortcuts", "registry", "uninstall", "removed"]);
     assert!(report.steps[0].detail.contains("4.5.6"));
+    // Die Marke steht in install.json, also hat der Deinstaller `--revert-all` wirklich gestartet. Die Test-"App"
+    // ist kein Programm → Startfehler, das bleibt im Selbsttest nur ein Hinweis.
+    let un = &report.steps[7];
+    assert!(un.ok && un.detail.contains("--revert-all: fehlgeschlagen"), "{un:?}");
     assert_eq!(srv.requests_for("/rel/Pulsar.exe").len(), 2, "resumed once");
     assert!(!cfg.dir.join(APP).exists());
 
@@ -938,6 +1097,26 @@ async fn selftest_reports_failures() {
     assert!(!verify.ok && verify.detail.contains("checksum"), "{verify:?}");
     assert!(report.steps.iter().any(|s| s.name == "cleanup" && s.ok));
     assert!(!cfg.dir.exists() || std::fs::read_dir(&cfg.dir).unwrap().next().is_none());
+}
+
+#[test]
+fn selftest_revert_step_rules() {
+    use crate::selftest::revert_step_ok;
+    // Grün: Exit-Code 0, oder die Test-Attrappe ließ sich nicht starten (nur Hinweis).
+    assert!(revert_step_ok(&RevertResult::Exited(Some(0))));
+    assert!(revert_step_ok(&RevertResult::Failed("kein Programm".into())));
+    // Rot: anderer oder fehlender Exit-Code, Zeitüberschreitung, gar nicht aufgerufen.
+    for bad in [
+        RevertResult::Exited(Some(1)),
+        RevertResult::Exited(Some(3)),
+        RevertResult::Exited(None),
+        RevertResult::TimedOut,
+        RevertResult::OldVersion,
+        RevertResult::NoApp,
+        RevertResult::Missing,
+    ] {
+        assert!(!revert_step_ok(&bad), "{bad:?}");
+    }
 }
 
 #[test]

@@ -131,6 +131,8 @@ pub fn build_dns_config(
         servers: main.dns.clone(),
         ipv6_servers,
         dhcp,
+        // Füllt der Aufrufer (braucht die ganze Sicherung, nicht nur „gibt es eine?“)
+        other_backups: Vec::new(),
     })
 }
 
@@ -380,17 +382,11 @@ mod win {
         read_name_server("Tcpip", adapter_id).map(|v| !v.trim().is_empty())
     }
 
-    /// Die fest eingetragenen DNS-Server eines Adapters je Familie (für die Sicherung).
-    /// `(v4_dhcp, v4_servers, v6_dhcp, v6_servers)`.
-    pub fn static_servers(adapter_id: &str) -> (bool, Vec<String>, bool, Vec<String>) {
-        let read = |base| {
-            let v = read_name_server(base, adapter_id).unwrap_or_default();
-            let servers: Vec<String> = super::dns::parse_name_server(&v).iter().map(|ip| ip.to_string()).collect();
-            (servers.is_empty(), servers)
-        };
-        let (v4_dhcp, v4) = read("Tcpip");
-        let (v6_dhcp, v6) = read("Tcpip6");
-        (v4_dhcp, v4, v6_dhcp, v6)
+    /// Die fest eingetragenen DNS-Server eines Adapters je Familie (für Sicherung und
+    /// Nachkontrolle), doppelte Einträge entfernt. Leer = automatisch (DHCP).
+    pub fn static_servers(adapter_id: &str) -> super::dns::StaticDns {
+        let read = |base| super::dns::static_list(&read_name_server(base, adapter_id).unwrap_or_default());
+        super::dns::StaticDns { v4: read("Tcpip"), v6: read("Tcpip6") }
     }
 
     /// Gibt es den Netzwerk-Schlüssel dieses Adapters noch? (Für das Zurückstellen des DNS.)

@@ -1,6 +1,7 @@
 //! Optimieren: Windows-Einstellungen für Spiele (mit Sicherung und „Rückgängig“), Energiepläne
-//! und der Boost-Modus. Alles läuft ohne Adminrechte: nur HKCU, `powercfg`, die Priorität der
-//! eigenen Spielprozesse und `ipconfig /flushdns`.
+//! und der Boost-Modus. Normal ohne Adminrechte (HKCU, `powercfg`, die Priorität der eigenen
+//! Spielprozesse, `ipconfig /flushdns`); nur `nagle` und `netThrottle` (HKLM) laufen über den
+//! Admin-Helfer (`crate::elevate`, mit Windows-Abfrage).
 //!
 //! Befehle und Events stehen in `docs/API.md`. Unter Linux/macOS (Entwicklung, Tests) melden die
 //! Befehle „Nur unter Windows verfügbar.“; die Logik selbst ist dort über Schnittstellen testbar.
@@ -128,6 +129,8 @@ pub async fn opt_apply(state: State<'_, Shared>, ids: Vec<String>, enable: bool)
     blocking(move || {
         #[cfg(windows)]
         {
+            // Laden → Admin-Helfer → Nachkontrolle → Speichern ohne zweiten Ablauf dazwischen
+            let _change = crate::elevate::change_lock();
             let mut store = tweaks::SnapshotStore::load(&core)?;
             Ok(tweaks::apply_many(&ids, enable, &env(), &mut store))
         }
@@ -146,6 +149,7 @@ pub async fn opt_revert_all(state: State<'_, Shared>) -> CmdResult<ApplyReport> 
     blocking(move || {
         #[cfg(windows)]
         {
+            let _change = crate::elevate::change_lock();
             let mut store = tweaks::SnapshotStore::load(&core)?;
             Ok(tweaks::revert_all(&env(), &mut store))
         }

@@ -189,8 +189,11 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
         // 7) Optimieren: Tweaks lesen, Energiepläne, Boost an/aus (muss den alten Zustand zurückstellen)
         match crate::opt::opt_tweaks(app.state::<Shared>()).await {
             Ok(list) => {
+                // Alle Optimierungen in der Reihenfolge des Katalogs (auch `nagle` und `netThrottle`).
                 // „unknown“ ist bei fehlenden Registry-Werten (frisches Windows) erlaubt; der Energieplan muss lesbar sein
-                let ok = list.len() == 4 && (!cfg!(windows) || list.iter().any(|t| t.id == "powerPlan" && (t.state == "on" || t.state == "off")));
+                let ids: Vec<&str> = list.iter().map(|t| t.id.as_str()).collect();
+                let ok = ids == crate::opt::tweaks::IDS
+                    && (!cfg!(windows) || list.iter().any(|t| t.id == "powerPlan" && (t.state == "on" || t.state == "off")));
                 r.step("tweaks-lesen", ok, format!("{:?}", list.iter().map(|t| format!("{}={}", t.id, t.state)).collect::<Vec<_>>()));
             }
             Err(e) => r.step("tweaks-lesen", false, e),

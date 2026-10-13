@@ -122,6 +122,20 @@ pub fn parse_name_server(value: &str) -> Vec<IpAddr> {
         .collect()
 }
 
+/// Fest eingetragene Server aus einem `NameServer`-Wert als Text: übliche Schreibweise, doppelte
+/// Einträge entfernt (Reihenfolge bleibt). So lässt sich eine Sicherung immer gültig zurückstellen.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn static_list(value: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for ip in parse_name_server(value) {
+        let text = ip.to_string();
+        if !out.contains(&text) {
+            out.push(text);
+        }
+    }
+    out
+}
+
 /// Ist das ein echter IPv6-Resolver (kein veralteter Platzhalter)?
 pub fn is_real_ipv6_dns(ip: &std::net::Ipv6Addr) -> bool {
     !IPV6_PLACEHOLDERS.iter().any(|p| p.parse::<std::net::Ipv6Addr>().ok() == Some(*ip))
@@ -364,13 +378,16 @@ pub struct Candidate {
 }
 
 /// Kandidaten zusammenstellen: die festen Dienste plus der aktuelle Resolver (falls er nicht
-/// ohnehin einer der festen ist – dann wird dieser als „aktuell“ markiert).
+/// ohnehin einer der festen ist – dann wird dieser als „aktuell“ markiert). „Aktuell“ richtet sich
+/// wie `DnsConfig.provider` nur nach dem ersten Server – den fragt Windows zuerst.
 pub fn candidates(current: &[IpAddr]) -> Vec<Candidate> {
+    let first = current.first().copied();
     let mut out: Vec<Candidate> = PROVIDERS
         .iter()
         .filter_map(|p| {
             let primary: IpAddr = p.v4.0.parse().ok()?;
-            let current = current.iter().any(|c| c == &primary || p.v4.1.and_then(|s| s.parse::<IpAddr>().ok()).is_some_and(|s| s == *c));
+            let secondary = p.v4.1.and_then(|s| s.parse::<IpAddr>().ok());
+            let current = first.is_some_and(|f| f == primary || secondary == Some(f));
             Some(Candidate { id: p.id.into(), name: p.name.into(), primary, secondary: p.v4.1.map(str::to_string), current })
         })
         .collect();
@@ -481,6 +498,14 @@ pub struct DnsBackup {
 }
 
 pub type DnsBackups = BTreeMap<String, DnsBackup>;
+
+/// Die fest eingetragenen DNS-Server eines Adapters je Familie (aus `NameServer` von Tcpip bzw.
+/// Tcpip6, siehe [`static_list`]). Leer = nichts eingetragen (automatisch/DHCP).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StaticDns {
+    pub v4: Vec<String>,
+    pub v6: Vec<String>,
+}
 
 /// Sicherungen aus dem gespeicherten JSON lesen; beschädigte Einträge werden übersprungen.
 pub fn parse_backups(v: &Value) -> DnsBackups {
@@ -601,6 +626,20 @@ mod tests {
         assert!(c2.iter().find(|x| x.id == "cloudflare").unwrap().current);
 
         assert!(candidates(&[]).iter().all(|x| !x.current));
+
+        // Nur der erste Server zählt: Router zuerst, Google als Ersatz → der Router wird gemessen
+        let c3 = candidates(&[IpAddr::from([192, 168, 178, 1]), IpAddr::from([8, 8, 8, 8])]);
+        let cur: Vec<&Candidate> = c3.iter().filter(|x| x.current).collect();
+        assert_eq!(cur.len(), 1);
+        assert_eq!(cur[0].id, "current");
+        assert_eq!(cur[0].secondary.as_deref(), Some("8.8.8.8"));
+        assert!(!c3.iter().find(|x| x.id == "google").unwrap().current);
+        // Zwei bekannte Dienste → nur der erste ist „aktuell“
+        let c4 = candidates(&[IpAddr::from([1, 1, 1, 1]), IpAddr::from([8, 8, 8, 8])]);
+        let cur: Vec<&str> = c4.iter().filter(|x| x.current).map(|x| x.id.as_str()).collect();
+        assert_eq!(cur, vec!["cloudflare"]);
+        assert_eq!(c4.len(), PROVIDERS.len());
+
         assert_eq!(clamp_rounds(None), 3);
         assert_eq!(clamp_rounds(Some(0)), 1);
         assert_eq!(clamp_rounds(Some(50)), 10);
@@ -662,6 +701,16 @@ mod tests {
             assert!(!is_real_ipv6_dns(&p.parse().unwrap()), "{p}");
         }
         assert!(is_real_ipv6_dns(&"2606:4700:4700::1111".parse().unwrap()));
+    }
+
+    #[test]
+    fn static_list_removes_duplicates_and_keeps_order() {
+        assert_eq!(static_list("1.1.1.1,8.8.8.8,1.1.1.1"), vec!["1.1.1.1", "8.8.8.8"]);
+        assert_eq!(static_list("9.9.9.9 9.9.9.9 , 149.112.112.112"), vec!["9.9.9.9", "149.112.112.112"]);
+        // Übliche Schreibweise: zwei Schreibweisen derselben IPv6-Adresse sind ein Eintrag
+        assert_eq!(static_list("2606:4700:4700:0:0:0:0:1111,2606:4700:4700::1111"), vec!["2606:4700:4700::1111"]);
+        assert!(static_list("").is_empty());
+        assert!(static_list("kaputt").is_empty());
     }
 
     #[test]

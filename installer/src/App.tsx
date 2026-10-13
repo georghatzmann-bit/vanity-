@@ -3,7 +3,7 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import {
   Activity, AlertTriangle, ArrowLeft, ArrowRight, Download, FolderOpen, HardDrive, Lightbulb, Monitor, Power, Radar, RefreshCw, Rocket, ShieldCheck, Sparkles, Trash2, Volume2, VolumeX, LayoutList, Zap,
 } from "lucide-react";
-import { api, on, pickFolder, type DiskInfo, type ErrorCode, type InstallDone, type InstallError, type InstallOptions, type Manifest, type Phase, type Progress, type SetupInfo, type UninstallProgress } from "./api";
+import { api, on, pickFolder, type DiskInfo, type ErrorCode, type InstallDone, type InstallError, type InstallOptions, type Manifest, type Phase, type Progress, type SetupInfo, type UninstallDone, type UninstallProgress } from "./api";
 import { formatBytes, formatEta, getLang, setLang, useT, type Lang } from "./i18n";
 import { Backdrop } from "./components/Backdrop";
 import { OptionCard } from "./components/OptionCard";
@@ -57,6 +57,7 @@ export function App() {
   const [done, setDone] = useState<InstallDone | null>(null);
   const [keepData, setKeepData] = useState(true);
   const [unProgress, setUnProgress] = useState<UninstallProgress | null>(null);
+  const [unDone, setUnDone] = useState<UninstallDone | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [busy, setBusy] = useState(false);
   const lastProgressSound = useRef(0);
@@ -153,7 +154,8 @@ export function App() {
         sound.play("tick");
         stars.current?.burst(150, 230, { count: 30, speed: 5, life: 1.4 });
       }),
-      on<Record<string, never>>("uninstall://done", () => {
+      on<UninstallDone>("uninstall://done", (d) => {
+        setUnDone(d);
         window.setTimeout(() => {
           go("un-done");
           sound.play("farewell");
@@ -737,6 +739,16 @@ export function App() {
                       </motion.div>
                       <h1 className="mt-6 font-display text-4xl font-bold text-fg">{t("uninstall.doneTitle")}</h1>
                       <p className="mt-3 text-[15px] text-fg-soft">{t("uninstall.doneText")}</p>
+                      {unDone && !unDone.revertOk && (
+                        <div role="alert" className="mt-6 flex max-w-[560px] items-start gap-3 rounded-xl bg-warning/10 p-4 text-left text-[13px] leading-relaxed text-fg ring-1 ring-warning/30">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                          <div>
+                            <p className="font-semibold">{t("uninstall.revertFailed")}</p>
+                            <p className="mt-1 text-fg-soft">{t(keepData ? "uninstall.revertFailedKept" : "uninstall.revertFailedForced")}</p>
+                            <p className="mt-1 text-fg-soft">{t("uninstall.revertFailedHow")}</p>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-10">
                         <Button variant="secondary" size="lg" onClick={() => void api.quit()}>
                           {t("common.close")}

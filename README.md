@@ -5,10 +5,12 @@ bereit zum Spielen (Boost) und bringt die Werkzeuge mit, um Lags wirklich zu ver
 Routen-Analyse, DNS-Vergleich, Speedtest mit Bufferbloat-Note, WLAN-Check. Dazu ein In-Game-Overlay,
 Berichte zu jeder Runde und ein eigener, animierter Setup-Installer.
 
-Alles **ohne Konto und ohne Abo**. Pulsar läuft **ohne Adminrechte** – nur wenn du den DNS wechselst oder die
-zwei Netzwerk-Optimierungen einschaltest, fragt Windows einmal nach. Jede Änderung wird vorher gesichert und
-lässt sich exakt zurückstellen (beim Deinstallieren automatisch). Und ehrlich: Pulsar hat kein eigenes Servernetz
-und verspricht keinen „Ping-Zauber“. Es misst, optimiert, was sich lokal optimieren lässt, und erklärt den Rest.
+Alles **ohne Konto und ohne Abo**. Pulsar läuft als **normaler Benutzer** – Adminrechte braucht es nur, wenn du den
+DNS wechselst oder die zwei Netzwerk-Optimierungen einschaltest; dann fragt Windows einmal nach (wer das nutzt,
+installiert Pulsar besser nach „Programme“, siehe [docs/INSTALLER.md](docs/INSTALLER.md)). Jede Änderung wird vorher
+gesichert und lässt sich exakt zurückstellen (beim Deinstallieren automatisch; klappt das nicht ganz, bleiben die
+Sicherungen erhalten). Und ehrlich: Pulsar hat kein eigenes Servernetz und verspricht keinen „Ping-Zauber“. Es misst,
+optimiert, was sich lokal optimieren lässt, und erklärt den Rest.
 
 ## Funktionen auf einen Blick
 
@@ -49,11 +51,11 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | Befehl | Was |
 |---|---|
 | `npm run dev` | App-Oberfläche im Browser mit Demo-Daten (http://localhost:1420) |
-| `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=uninstall`) |
+| `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=uninstall`, `?mode=uninstall&revertfail` = Zurückstellen unvollständig) |
 | `npm run tauri:dev` | echte App mit Rust-Backend |
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
 | `Pulsar.exe --selftest <bericht.json>` | Eingebauter Selbsttest (Scan, Cover, Ping, Regionen, Spielserver, DNS, Adapter, Tweaks, Boost, Starten, Spielzeit), Exit-Code 0 = alles ok – so prüft die Windows-CI |
-| `Pulsar.exe --revert-all` | Stellt ohne Fenster alles zurück, was Pulsar an Windows geändert hat (gesicherter DNS und alle Optimierungen) – höchstens eine Windows-Abfrage. Exit-Code 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben. Der Deinstaller ruft das automatisch auf. |
+| `Pulsar.exe --revert-all` | Stellt ohne Fenster alles zurück, was Pulsar an Windows geändert hat (gesicherter DNS und alle Optimierungen) – höchstens eine Windows-Abfrage. Exit-Code 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben. Der Deinstaller ruft das automatisch auf (nur bei Installationen mit der Marke `"revertAll": true` in `install.json`); klappt es nicht ganz, löscht er die Pulsar-Daten nicht. |
 | `node scripts/feature-shots.mjs` | Screenshots aller Funktionen (Demo-Daten) für `docs/FUNKTIONEN.md`; vorher `npm run dev` und `npm run dev:installer` starten |
 | `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App per WebDriver (Linux mit `xvfb-run`) |
 | `node scripts/e2e-installer-linux.mjs <setup> <nutzlast> <ordner>` | Ende-zu-Ende-Test des echten Installers inkl. Abbruch + Fortsetzen |

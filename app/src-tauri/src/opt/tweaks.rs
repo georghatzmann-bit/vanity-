@@ -40,6 +40,8 @@ pub const THROTTLE_ON: u32 = 0xFFFF_FFFF;
 pub const THROTTLE_DEFAULT: u32 = 10;
 /// Name des gesicherten Adapters bei `nagle` (GUID als Text).
 const SNAP_ADAPTER: &str = "adapter";
+/// `nagle` einschalten, solange eine Sicherung für eine andere Verbindung besteht.
+pub const NAGLE_OTHER_ADAPTER: &str = "„Nagle“ ist noch an einer anderen Verbindung eingestellt – bitte erst zurückstellen.";
 
 /// Ist das eine Optimierung mit Windows-Abfrage?
 pub fn is_admin_id(id: &str) -> bool {
@@ -492,6 +494,14 @@ pub fn revert_all(env: &Env, store: &mut SnapshotStore) -> ApplyReport {
 
 /// Admin-Optimierungen eines Aufrufs gesammelt ausführen und das Ergebnis in `report` eintragen.
 fn run_admin(ids: &[String], enable: bool, env: &Env, store: &mut SnapshotStore, report: &mut ApplyReport) {
+    // Läuft noch ein Helfer (Zeitüberschreitung), nichts vorbereiten: Sonst könnte eine Sicherung
+    // als „schon zurückgestellt“ verschwinden, kurz bevor der Helfer doch noch ändert.
+    if !ids.is_empty() && env.elevator.busy() {
+        for id in ids {
+            report.failed.push(TweakError { id: id.clone(), error: elevate::MSG_BUSY.into() });
+        }
+        return;
+    }
     let batch = prepare_admin(ids, enable, env, store);
     let ops = batch.reg_ops();
     let outcome = if ops.is_empty() {
@@ -571,6 +581,9 @@ impl AdminBatch {
                 }
                 Err(vmsg) => {
                     let error = run_err.map(ElevateError::to_string).unwrap_or(vmsg);
+                    // Die Sicherung bleibt (Windows kann schon teilweise geändert sein): sagen, dass
+                    // Zurückstellen geht – die Oberfläche zeigt dann nie „Nicht geändert“
+                    let error = if store.get(&s.id).is_some() { format!("{error} {}", crate::net::dnsctl::RESTORE_HINT) } else { error };
                     failed.push(TweakError { id: s.id, error });
                 }
             }
@@ -627,6 +640,11 @@ fn prepare_nagle(enable: bool, env: &Env, store: &mut SnapshotStore) -> Prep {
         }
     } else {
         match nagle_saved_adapter(store) {
+            // Den gesicherten Adapter gibt es nicht mehr → nichts mehr zurückzustellen
+            Some(Ok(g)) if !env.hklm.key_exists(&interface_key(&g)) => {
+                let _ = store.remove(NAGLE);
+                return Prep::Done;
+            }
             Some(Ok(g)) => g,
             Some(Err(e)) => return Prep::Fail(e),
             None => match env.main_adapter.as_deref() {
@@ -663,6 +681,15 @@ fn prepare_nagle(enable: bool, env: &Env, store: &mut SnapshotStore) -> Prep {
             let _ = store.remove(NAGLE);
         }
         return Prep::Done;
+    }
+    // Gibt es schon eine Sicherung für einen anderen Adapter, wird hier nichts geändert – sonst
+    // blieben die Werte an diesem Adapter ohne Sicherung (eine Sicherung je Optimierung).
+    if enable {
+        match nagle_saved_adapter(store) {
+            Some(Ok(saved)) if !saved.eq_ignore_ascii_case(&guid) => return Prep::Fail(NAGLE_OTHER_ADAPTER.into()),
+            Some(Err(e)) => return Prep::Fail(e),
+            _ => {}
+        }
     }
     let mut new_snapshot = false;
     if enable && store.get(NAGLE).is_none() {
@@ -1269,6 +1296,31 @@ mod tests {
     }
 
     #[test]
+    fn busy_helper_keeps_snapshots_and_makes_no_prompt() {
+        let reg = admin_reg();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let e = env_admin(&reg, &power, &el, Some(GUID));
+        let mut store = SnapshotStore::in_memory();
+        // Nach einer Zeitüberschreitung: Sicherung da, Windows zeigt (noch) den alten Wert
+        let mut values = BTreeMap::new();
+        values.insert(elevate::VAL_THROTTLE.to_string(), None);
+        store.insert(NET_THROTTLE, values).unwrap();
+        el.busy.set(true);
+
+        let report = revert_all(&e, &mut store);
+        assert_eq!(el.calls.get(), 0, "kein zweiter Helfer");
+        assert_eq!(report.failed.len(), 1);
+        assert_eq!(report.failed[0].error, elevate::MSG_BUSY);
+        assert!(store.get(NET_THROTTLE).is_some(), "nicht als „schon zurückgestellt“ entfernt");
+
+        el.busy.set(false);
+        let report = revert_all(&e, &mut store);
+        assert_eq!(report.applied, vec![NET_THROTTLE.to_string()]);
+        assert!(store.get(NET_THROTTLE).is_none());
+    }
+
+    #[test]
     fn verify_failure_is_reported_and_snapshot_kept() {
         let reg = admin_reg();
         let power = default_power();
@@ -1283,6 +1335,8 @@ mod tests {
         assert!(report.applied.is_empty());
         assert_eq!(report.failed.len(), 1);
         assert!(report.failed[0].error.contains("nicht übernommen"), "{:?}", report.failed);
+        assert!(report.failed[0].error.ends_with(crate::net::dnsctl::RESTORE_HINT), "Sicherung bleibt → Hinweis");
+        assert!(store.get(NET_THROTTLE).is_some());
     }
 
     #[test]
@@ -1298,6 +1352,63 @@ mod tests {
         assert!(report.failed[0].error.contains("Hauptverbindung"));
         // Zustand ohne Hauptverbindung: unbekannt
         assert_eq!(state_of(&read_all(&e, &store), NAGLE), ("unknown".into(), false));
+    }
+
+    const GUID_B: &str = "{5d36e972-e325-11ce-bfc1-08002be10318}";
+
+    #[test]
+    fn nagle_refuses_other_adapter_while_backup_exists() {
+        let reg = admin_reg();
+        reg.add_key(&interface_key(GUID_B));
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let mut store = SnapshotStore::in_memory();
+
+        // An A einschalten
+        let report = apply_many(&ids(&[NAGLE]), true, &env_admin(&reg, &power, &el, Some(GUID)), &mut store);
+        assert_eq!(report.applied, vec![NAGLE.to_string()], "{:?}", report.failed);
+        assert_eq!(el.calls.get(), 1);
+
+        // Hauptverbindung ist jetzt B → Einschalten wird abgelehnt, B bleibt unverändert
+        let e_b = env_admin(&reg, &power, &el, Some(GUID_B));
+        let report = apply_many(&ids(&[NAGLE]), true, &e_b, &mut store);
+        assert_eq!(report.failed.len(), 1);
+        assert_eq!(report.failed[0].error, NAGLE_OTHER_ADAPTER);
+        assert_eq!(el.calls.get(), 1, "keine Abfrage");
+        assert!(!reg.has(&interface_key(GUID_B), elevate::VAL_TCP_ACK));
+        assert_eq!(store.get(NAGLE).unwrap().values[SNAP_ADAPTER], Some(RegVal::Str(GUID.into())));
+
+        // Zurückstellen am gesicherten Adapter A, obwohl B die Hauptverbindung ist
+        let report = revert_all(&e_b, &mut store);
+        assert_eq!(report.applied, vec![NAGLE.to_string()], "{:?}", report.failed);
+        assert!(!reg.has(&interface_key(GUID), elevate::VAL_TCP_ACK) && !reg.has(&interface_key(GUID), elevate::VAL_NO_DELAY));
+        assert!(store.get(NAGLE).is_none());
+
+        // Danach geht es an B
+        let report = apply_many(&ids(&[NAGLE]), true, &e_b, &mut store);
+        assert_eq!(report.applied, vec![NAGLE.to_string()], "{:?}", report.failed);
+        assert_eq!(reg.dword(&interface_key(GUID_B), elevate::VAL_TCP_ACK), Some(1));
+    }
+
+    #[test]
+    fn nagle_backup_for_removed_adapter_is_dropped_without_prompt() {
+        let reg = admin_reg();
+        reg.set(&interface_key(GUID_B), elevate::VAL_TCP_ACK, &RegVal::Dword(1)).unwrap();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let mut store = SnapshotStore::in_memory();
+        // An B einschalten (Original: TcpAckFrequency=1, TCPNoDelay fehlte)
+        let report = apply_many(&ids(&[NAGLE]), true, &env_admin(&reg, &power, &el, Some(GUID_B)), &mut store);
+        assert_eq!(report.applied, vec![NAGLE.to_string()], "{:?}", report.failed);
+        assert_eq!(store.get(NAGLE).unwrap().values[elevate::VAL_TCP_ACK], Some(RegVal::Dword(1)));
+
+        // Adapter B wird ausgebaut, Hauptverbindung ist A
+        reg.remove_key(&interface_key(GUID_B));
+        let report = apply_many(&ids(&[NAGLE]), false, &env_admin(&reg, &power, &el, Some(GUID)), &mut store);
+        assert_eq!(el.calls.get(), 1, "nichts mehr zurückzustellen → keine Abfrage");
+        assert_eq!(report.applied, vec![NAGLE.to_string()], "{:?}", report.failed);
+        assert!(store.get(NAGLE).is_none(), "Sicherung still verworfen");
+        assert!(!reg.has(&interface_key(GUID), elevate::VAL_TCP_ACK), "A bleibt unberührt");
     }
 
     #[test]

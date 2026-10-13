@@ -361,8 +361,11 @@ const DECLINED = "Du hast die Windows-Abfrage abgelehnt – es wurde nichts geä
 /** Demo-Zustand des DNS: eingestellter Dienst (null = automatisch vom Router) und ob Pulsar eine Sicherung hat */
 const dnsState: { provider: string | null; backup: boolean } = { provider: null, backup: false };
 
-/** Schalter für Tests in der Demo (im Browser setzen): __pulsarDeclineUac = „Nein“ auf die Windows-Abfrage, __pulsarDnsReadOnly = DNS nicht änderbar */
-const demoFlag = (name: "__pulsarDeclineUac" | "__pulsarDnsReadOnly") => typeof window !== "undefined" && (window as unknown as Record<string, unknown>)[name] === true;
+/**
+ * Schalter für Tests in der Demo (im Browser setzen): __pulsarDeclineUac = „Nein“ auf die Windows-Abfrage,
+ * __pulsarDnsReadOnly = DNS nicht änderbar, __pulsarDnsNoAnswer = Live-Prüfung des gewählten Dienstes scheitert
+ */
+const demoFlag = (name: "__pulsarDeclineUac" | "__pulsarDnsReadOnly" | "__pulsarDnsNoAnswer") => typeof window !== "undefined" && (window as unknown as Record<string, unknown>)[name] === true;
 const uacDeclined = () => demoFlag("__pulsarDeclineUac");
 
 function dnsConfig(): DnsConfig {
@@ -376,6 +379,7 @@ function dnsConfig(): DnsConfig {
     provider: p?.id ?? null,
     changedByPulsar: dnsState.backup,
     canChange: !demoFlag("__pulsarDnsReadOnly"),
+    otherBackups: [],
   };
 }
 
@@ -385,7 +389,7 @@ function dnsSet(provider: string) {
   if (!p) throw new Error(`Unbekannter DNS-Dienst: „${provider}“.`);
   // Mullvad antwortet meist nur verschlüsselt – die Live-Prüfung schlägt dann fehl
   if (demoFlag("__pulsarDnsReadOnly")) throw new Error("Dafür braucht es Windows 10 Version 2004 oder neuer.");
-  if (p.id === "mullvad") throw new Error(`${p.name} antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.`);
+  if (p.id === "mullvad" || demoFlag("__pulsarDnsNoAnswer")) throw new Error(`${p.name} antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.`);
   if (uacDeclined()) throw new Error(DECLINED);
   dnsState.backup = true;
   dnsState.provider = p.id;
@@ -462,7 +466,6 @@ const TWEAK_META: Record<string, [Tweak["category"], Tweak["impact"], boolean, b
 const isAdminTweak = (id: string) => TWEAK_META[id]?.[2] === true;
 function tweakDetail(id: string): string | null {
   if (id === "powerPlan") return tweakState[id] === "on" ? "Höchstleistung" : "Ausbalanciert";
-  if (id === "nagle") return adapters[0].name;
   return null;
 }
 function tweaks(): Tweak[] {
@@ -648,17 +651,21 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       const ids = ((a.tweaks as string[] | undefined) ?? []).filter((id) => id in tweakState);
       const before = dnsState.provider;
       let dnsError: string | null = null;
+      // Windows fragt nur, wenn der Admin-Helfer wirklich gebraucht wird (DNS nach bestandener Prüfung oder Admin-Optimierungen)
+      let dnsNeedsHelper = false;
       if (provider) {
         try {
           dnsSet(provider);
+          dnsNeedsHelper = true;
         } catch (e) {
           // Wie das Backend: bei abgelehnter Windows-Abfrage steht nur `declined`, kein DNS-Fehler
           const msg = e instanceof Error ? e.message : String(e);
           dnsError = msg === DECLINED ? null : msg;
+          dnsNeedsHelper = msg === DECLINED;
         }
       }
       const rep = applyTweaks(ids, true);
-      const declined = uacDeclined() && (!!provider || ids.some(isAdminTweak));
+      const declined = uacDeclined() && (dnsNeedsHelper || ids.some(isAdminTweak));
       return r({
         dns: dnsConfig(),
         dnsChanged: dnsState.provider !== before,

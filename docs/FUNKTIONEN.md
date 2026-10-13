@@ -94,9 +94,11 @@ Das Fazit sagt dir in einem Satz, wo der größte Sprung passiert – und was du
 ![DNS-Ergebnis](screenshots/funktionen/17-netzwerk-dns-ergebnis.jpg)
 ![DNS eingestellt](screenshots/funktionen/17b-netzwerk-dns-eingestellt.jpg)
 Vergleicht Cloudflare, Google, Quad9, OpenDNS, AdGuard, DNS0.eu, Mullvad und deinen aktuellen DNS – jeweils für neue und bekannte Adressen. Vor dem ersten Vergleich zeigt die Seite, welche Dienste geprüft werden. Sie zeigt auch, was gerade eingestellt ist (z. B. „automatisch vom Router“).
-- **Empfehlung:** Ist ein Dienst deutlich schneller als deiner (mindestens 15 % und 3 ms), schlägt Pulsar ihn vor – **Schnellsten einstellen** stellt ihn für deine Hauptverbindung ein. Sonst steht dort „Dein DNS ist schon schnell“. Jeden anderen Dienst kannst du mit **Einstellen** in seiner Zeile wählen.
+- **Empfehlung:** Ist einer der Dienste, die Pulsar auch automatisch wählt (Cloudflare, Google, Quad9, OpenDNS), deutlich schneller als deiner (mindestens 15 % und 3 ms), schlägt Pulsar ihn vor – der Knopf mit seinem Namen (z. B. **Cloudflare einstellen**) stellt ihn für deine Hauptverbindung ein. Sonst steht dort „Dein DNS ist schon schnell“. War ein anderer Dienst (AdGuard, DNS0.eu, Mullvad) noch schneller, steht dort ein Hinweis – den kannst du, wie jeden anderen Dienst, mit **Einstellen** in seiner Zeile wählen. Nach einer Änderung heißt es „Dein jetziger DNS wurde noch nicht gemessen“ – vergleiche dann erneut.
 - **Sicher:** Pulsar prüft vorher, ob der Dienst gerade antwortet, und sichert deine alte Einstellung. Für den Wechsel fragt Windows einmal nach (Adminrechte); sagst du **Nein**, ändert sich nichts. Danach steht beim Dienst „Von Pulsar eingestellt“.
-- **Zurückstellen** holt die alte Einstellung jederzeit exakt zurück – beim Deinstallieren automatisch.
+- Sind bei der Verbindung mehr als 3 DNS-Server fest eingetragen (je IPv4 bzw. IPv6), ändert Pulsar den DNS dort nicht und sagt das – mehr ließe sich nicht sicher zurückstellen.
+- **Zurückstellen** holt die alte Einstellung jederzeit exakt zurück – beim Deinstallieren automatisch. Hat Pulsar den DNS an einer anderen Verbindung geändert (z. B. am Kabel, jetzt bist du im WLAN), steht das hier ebenfalls, und **Zurückstellen** stellt auch diese zurück.
+- Klappt ein Wechsel nur teilweise oder antwortet Windows zu spät, sagt Pulsar „Nicht bestätigt“ statt „Nicht geändert“ – dann bitte prüfen oder zurückstellen.
 - Kann Pulsar den DNS auf einem PC nicht selbst einstellen (dafür braucht es Windows 10 Version 2004 oder neuer), zeigt die Seite die **Schritt-für-Schritt-Anleitung** fürs Eintragen von Hand mit Knopf, der die Netzwerkeinstellungen öffnet.
 
 Ehrlich dazu: Ein schnellerer DNS beschleunigt nur das Nachschlagen von Adressen – Spielstarts, Shop und Matchmaking werden etwas flotter. Am Ping im Spiel ändert er nichts.
@@ -128,7 +130,11 @@ Sechs Einstellungen mit ehrlicher Wirkung – jede mit Schalter, Wirkung (hoch/m
 Die ersten vier gehen ohne Adminrechte. Die zwei Netzwerk-Einstellungen tragen die Hinweise **Windows fragt nach**
 (dafür braucht Pulsar kurz Adminrechte – mehrere davon zusammen mit einer einzigen Abfrage) und **Neustart nötig**
 (sie wirken erst nach einem Neustart von Windows).
-Pulsar sichert vor jeder Änderung den Originalwert und stellt ihn exakt wieder her (**Alles zurückstellen** oben rechts).
+Pulsar sichert vor jeder Änderung den Originalwert und stellt ihn exakt wieder her.
+**Alles zurückstellen** oben auf der Seite holt alles auf einmal zurück: den DNS, die zwei Netzwerk-Einstellungen und
+alle Schalter mit Sicherung – mit höchstens einer Windows-Abfrage. Sagst du dort **Nein**, ändert sich gar nichts.
+**TCP-Pakete sofort senden** gilt immer nur für eine Verbindung: Ist es noch an einer anderen eingestellt (z. B. am
+Kabel, jetzt bist du im WLAN), bittet Pulsar, es erst zurückzustellen.
 Rechts: Energieplan wählen, DNS-Zwischenspeicher leeren und das **Boost-Profil** (Energieplan, Priorität, DNS – was der BOOST-Knopf macht).
 
 ### Netzwerk automatisch optimieren
@@ -142,8 +148,9 @@ Die Karte oben auf der Seite erledigt DNS und Netzwerk in einem Rutsch:
 3. **Jetzt einstellen** ändert alles Eingeschaltete mit **einer** Windows-Abfrage. Lehnst du ab, ändert sich nichts.
 4. Das Ergebnis zeigt jeden Punkt einzeln (**Erledigt** oder **Nicht geändert** mit Grund) und den Hinweis **Neustart nötig** für die Netzwerk-Einstellungen. Der neue DNS gilt sofort, der DNS-Zwischenspeicher wird geleert.
 
-Danach zeigt die Karte, was Pulsar eingestellt hat, und **Alles zurückstellen** holt DNS und die zwei Netzwerk-Einstellungen
-exakt zurück – wieder mit einer Windows-Abfrage. Beim Deinstallieren passiert das automatisch.
+Danach zeigt die Karte, was Pulsar eingestellt hat – direkt im Ergebnis und auch später. **Netzwerk zurückstellen**
+holt DNS und die zwei Netzwerk-Einstellungen exakt zurück – wieder mit einer Windows-Abfrage. Beim Deinstallieren
+passiert das automatisch.
 Ehrlich dazu: Ein schnellerer DNS beschleunigt das Laden und Verbinden (Spielstart, Shop, Matchmaking), den Ping im Spiel ändert er nicht.
 Die zwei Netzwerk-Einstellungen bringen meist nur wenig und wirken erst nach einem Neustart.
 
@@ -219,6 +226,8 @@ Pulsar läuft neben der Uhr weiter: Boost an/aus, Speedtest, zuletzt gespielte S
 
 - **Intro** mit Druckwellen, Sternenstaub und „Signal wird aufgebaut … Signal steht.“ (mit Ton, abschaltbar).
 - **Willkommen** → **Speicherort** (freier Platz, Adminrechte nur wenn nötig) → **Optionen** (Desktop, Startmenü, Autostart, danach starten) → **Installation**.
+- **Speicherort:** Vorgeschlagen ist dein Benutzerordner (ohne Adminrechte). Wer DNS oder die zwei Netzwerk-Einstellungen von Pulsar ändern lässt, wählt mit **Ändern** besser `C:\Program Files` – dort können andere Programme unter deinem Konto die Pulsar-Dateien nicht verändern. Das Setup fragt dafür einmal nach Adminrechten.
 - Download mit Fortschrittsring, Tempo, Restzeit und wechselnden Tipps; SHA-256-Prüfung; Verknüpfungen; Eintrag in „Apps & Features“.
 - Bricht das Internet ab: **Erneut versuchen** setzt den Download an der Stelle fort.
 - Ist Pulsar schon installiert: **Aktualisieren/Reparieren** oder **Deinstallieren** (mit „Meine Daten behalten“). Vor dem Löschen stellt der Deinstaller alle Windows-Einstellungen zurück, die Pulsar geändert hat (DNS und Optimierungen) – braucht das Adminrechte, fragt Windows einmal nach.
+- Klappt das Zurückstellen nicht ganz (z. B. Windows-Abfrage abgelehnt), wird Pulsar trotzdem entfernt, aber deine Pulsar-Daten mit den Sicherungen bleiben **immer** erhalten – auch ohne „Meine Daten behalten“. Die Fertig-Seite sagt das in einem gelben Hinweis und erklärt, wie du es nachholst (neu installieren → **Optimieren** → **Alles zurückstellen**).

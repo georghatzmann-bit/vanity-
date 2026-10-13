@@ -27,6 +27,9 @@ pub struct CliArgs {
     pub report: Option<PathBuf>,
     /// `--quiet` / `--silent` (mit `--uninstall`: ohne Oberfläche, für `QuietUninstallString`)
     pub quiet: bool,
+    /// `--user-data <dir>`: Benutzerdaten-Ordner (`%APPDATA%`) des Kontos, das die Deinstallation
+    /// gestartet hat – damit die Kopie mit Adminrechten merkt, wenn sie unter einem anderen Konto läuft.
+    pub user_data: Option<PathBuf>,
 }
 
 /// Entfernt umschließende Anführungszeichen und Leerraum (z. B. `"C:\x\"` aus Verknüpfungen).
@@ -54,7 +57,7 @@ impl CliArgs {
                 Some((k, v)) if k.starts_with("--") => (k.to_ascii_lowercase(), Some(v.to_string())),
                 _ => (raw.to_ascii_lowercase(), None),
             };
-            let takes_value = matches!(key.as_str(), "--manifest" | "--target" | "--preset" | "--dir" | "--report");
+            let takes_value = matches!(key.as_str(), "--manifest" | "--target" | "--preset" | "--dir" | "--report" | "--user-data");
             let mut value = inline;
             if takes_value && value.is_none() {
                 if let Some(next) = list.get(i + 1) {
@@ -71,6 +74,7 @@ impl CliArgs {
                 "--preset" => out.preset = value.and_then(|v| decode_preset(&v).ok()),
                 "--dir" => out.dir = value.map(PathBuf::from),
                 "--report" => out.report = value.map(PathBuf::from),
+                "--user-data" => out.user_data = value.map(PathBuf::from),
                 "--update" => out.update = true,
                 "--uninstall" => out.uninstall = true,
                 "--elevated" => out.elevated = true,

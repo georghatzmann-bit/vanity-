@@ -145,6 +145,17 @@ pub struct UninstallProgress {
     pub percent: f64,
 }
 
+/// Payload von `uninstall://done`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UninstallDonePayload {
+    /// `false` = `Pulsar.exe --revert-all` konnte nicht alles zurückstellen (Exit-Code ≠ 0, Zeitüberschreitung,
+    /// Startfehler, oder `install.json` trägt die Marke, aber `Pulsar.exe` fehlt).
+    pub revert_ok: bool,
+    /// `true` = die Pulsar-Daten wurden nicht gelöscht (gewählt oder wegen `revert_ok == false`).
+    pub data_kept: bool,
+}
+
 /// Payload von `uninstall://error`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,4 +175,9 @@ pub struct InstallRecord {
     /// `user` oder `machine` (Eintrag in HKCU bzw. HKLM)
     #[serde(default)]
     pub scope: String,
+    /// Marke `"revertAll": true`: Diese Installation kennt `Pulsar.exe --revert-all`. Das Setup schreibt sie
+    /// seit es den Admin-Helfer gibt. Fehlt sie (ältere Version), ruft der Deinstaller `--revert-all` nicht auf –
+    /// eine alte `Pulsar.exe` würde sonst mit Fenster starten.
+    #[serde(default)]
+    pub revert_all: bool,
 }

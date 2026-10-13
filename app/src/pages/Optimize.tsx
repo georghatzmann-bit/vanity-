@@ -3,10 +3,10 @@ import { motion } from "motion/react";
 import { BatteryCharging, Check, Eraser, Gauge, Info, Loader2, MousePointer2, RotateCcw, Send, Video, Zap } from "lucide-react";
 import { api, errorText } from "@/lib/api";
 import { useT } from "@/lib/i18n";
-import { isDeclined } from "@/lib/netauto";
+import { AUTO_TWEAKS, backendText, isDeclined, restoreDeclined } from "@/lib/netauto";
 import type { PowerPlan, Tweak } from "@/lib/types";
 import { useBoost } from "@/store/boost";
-import { pulsarChanges, useNetAuto } from "@/store/netauto";
+import { restoreProblems, useNetAuto, useWindowsLocked, withWindowsLock } from "@/store/netauto";
 import { useSettings } from "@/store/settings";
 import { toast, useUI } from "@/store/ui";
 import { NetAutoCard } from "@/components/NetAutoCard";
@@ -33,7 +33,7 @@ const GROUPS: Tweak["category"][] = ["windows", "power", "input", "network"];
 
 function ImpactPill({ impact }: { impact: Tweak["impact"] }) {
   const t = useT();
-  const cls = impact === "high" ? "bg-success/15 text-success" : impact === "medium" ? "bg-accent/15 text-accent" : "bg-surface-3 text-muted";
+  const cls = impact === "high" ? "bg-success/15 text-success-fg" : impact === "medium" ? "bg-accent/15 text-accent-text" : "bg-surface-3 text-muted";
   return <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", cls)}>{t(`optimize.impact.${impact}`)}</span>;
 }
 
@@ -49,6 +49,9 @@ export function Optimize({ section }: { section?: string }) {
   const update = useSettings((s) => s.update);
   const boost = useBoost((s) => s.state);
   const autoVersion = useNetAuto((s) => s.version);
+  // Gemeinsame Sperre: Solange irgendwo eine Änderung an Windows läuft, bleibt hier alles gesperrt, was Windows ändert
+  const windowsBusy = useNetAuto((s) => s.windowsBusy);
+  const windowsLocked = useWindowsLocked();
 
   const load = async () => {
     const [tw, pl] = await Promise.all([api.tweaks().catch(() => [] as Tweak[]), api.powerPlans().catch(() => [] as PowerPlan[])]);
@@ -67,48 +70,79 @@ export function Optimize({ section }: { section?: string }) {
     void useNetAuto.getState().start();
   }, [section]);
 
-  const apply = async (ids: string[], enable: boolean) => {
-    setBusy(ids.join(","));
-    try {
-      const rep = await api.tweaksApply(ids, enable);
-      const declined = rep.failed.filter((f) => isDeclined(f.error));
-      const other = rep.failed.filter((f) => !isDeclined(f.error));
-      if (other.length) toast({ kind: "warning", title: t("toast.error"), text: other.map((f) => f.error).join(" · ") });
-      else if (declined.length) toast({ kind: "info", title: t("optimize.declined"), text: t("optimize.declinedText") });
-      else if (enable) toast({ kind: "success", title: t("optimize.applied", { n: rep.applied.length }) });
-      if (!rep.failed.length) sound.play(enable ? "toggleOn" : "toggleOff");
-      await load();
-      void useNetAuto.getState().refresh();
-    } catch (e) {
-      toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  /** Wirklich alles zurück: DNS und Netzwerk-Optimierungen (eine Windows-Abfrage), danach den Rest */
-  const revertAll = async () => {
-    setReverting(true);
-    try {
-      const changes = pulsarChanges(await api.dnsCurrent().catch(() => null), tweaks);
-      if (changes.dns || changes.tweaks.length) {
-        const rep = await api.autoRestore();
-        if (rep.declined) {
-          toast({ kind: "info", title: t("optimize.declined"), text: t("optimize.declinedText") });
-          return;
-        }
+  const apply = (ids: string[], enable: boolean) =>
+    withWindowsLock(async () => {
+      setBusy(ids.join(","));
+      try {
+        const rep = await api.tweaksApply(ids, enable);
+        const declined = rep.failed.filter((f) => isDeclined(f.error));
+        const other = rep.failed.filter((f) => !isDeclined(f.error));
+        if (other.length) toast({ kind: "warning", title: t("toast.error"), text: other.map((f) => backendText(f.error, t)).join(" · ") });
+        else if (declined.length) toast({ kind: "info", title: t("optimize.declined"), text: t("optimize.declinedText") });
+        else if (enable) toast({ kind: "success", title: t("optimize.applied", { n: rep.applied.length }) });
+        if (!rep.failed.length) sound.play(enable ? "toggleOn" : "toggleOff");
+      } catch (e) {
+        toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
+      } finally {
+        setBusy(null);
+        await load();
+        // nagle/netThrottle gehören auch zur Automatik-Karte: Plan oder Ergebnis dort sind jetzt veraltet
+        if (ids.some((id) => (AUTO_TWEAKS as readonly string[]).includes(id))) await useNetAuto.getState().externalChange();
       }
-      const rep = await api.tweaksRevertAll();
-      if (rep.failed.length) toast({ kind: "warning", title: t("toast.error"), text: rep.failed.map((f) => f.error).join(" · ") });
-      else toast({ kind: "info", title: t("optimize.reverted") });
-    } catch (e) {
-      toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
-    } finally {
-      setReverting(false);
+    });
+
+  /**
+   * Alles zurück, mit höchstens einer Windows-Abfrage: erst DNS, nagle und netThrottle (net_auto_restore),
+   * danach nur die Optimierungen ohne Adminrechte, die eine Sicherung haben (opt_apply mit enable = false).
+   */
+  const revertAll = () =>
+    withWindowsLock(async () => {
+      setReverting(true);
+      try {
+        const problems: string[] = [];
+        let done = false;
+        let restart = false;
+        // Immer aufrufen: Das Backend kennt auch Sicherungen anderer Verbindungen und fragt Windows nur,
+        // wenn es wirklich etwas zurückzustellen gibt (sonst keine Abfrage)
+        try {
+          const rep = await api.autoRestore();
+          if (restoreDeclined(rep)) {
+            // Abgelehnt: dann auch sonst nichts anfassen – „Nein“ heißt „nichts ändern“
+            toast({ kind: "info", title: t("optimize.auto.restoreDeclined"), text: t("optimize.auto.restoreDeclinedText") });
+            return;
+          }
+          problems.push(...restoreProblems(rep));
+          done = rep.dnsChanged || rep.applied.length > 0;
+          restart = rep.restart;
+        } catch (e) {
+          // Ehrlich melden, aber die Optimierungen ohne Adminrechte trotzdem zurückstellen
+          problems.push(backendText(errorText(e), t));
+        }
+        // Nur Einträge mit Sicherung: „aus“ ohne Sicherung würde Windows-Standards setzen statt der alten Werte
+        const ids = (await api.tweaks()).filter((tw) => tw.canRevert && !tw.admin).map((tw) => tw.id);
+        if (ids.length) {
+          const rep = await api.tweaksApply(ids, false);
+          problems.push(...rep.failed.map((f) => backendText(f.error, t)));
+          done = done || rep.applied.length > 0;
+        }
+        if (problems.length) toast({ kind: "warning", title: t("optimize.revertPartial"), text: [...new Set(problems)].join(" · ") });
+        else if (!done) toast({ kind: "info", title: t("optimize.auto.nothingToRestore") });
+        else toast({ kind: "success", title: t("optimize.reverted"), text: restart ? t("optimize.revertedRestart") : undefined });
+      } catch (e) {
+        toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
+      } finally {
+        setReverting(false);
+        await load();
+        // Die Automatik-Karte darf danach kein altes Ergebnis mehr zeigen
+        await useNetAuto.getState().externalChange();
+      }
+    });
+
+  const setPower = (guid: string) =>
+    withWindowsLock(async () => {
+      await api.powerSet(guid).catch((e) => toast({ kind: "error", title: errorText(e) }));
       await load();
-      void useNetAuto.getState().refresh();
-    }
-  };
+    });
 
   const activePlan = plans.find((p) => p.active);
   // „Alle empfohlenen“ nimmt nur Optimierungen ohne Windows-Abfrage
@@ -122,10 +156,10 @@ export function Optimize({ section }: { section?: string }) {
           <p className="mt-1 text-sm text-muted">{t("optimize.subtitle")}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" icon={<RotateCcw className="h-4 w-4" />} loading={reverting} onClick={() => void revertAll()}>
+          <Button variant="ghost" icon={<RotateCcw className="h-4 w-4" />} loading={reverting} disabled={windowsLocked && !reverting} onClick={() => void revertAll()}>
             {t("optimize.revertAll")}
           </Button>
-          <Button variant="secondary" icon={<Check className="h-4 w-4" />} disabled={!recommended.length || !!busy} onClick={() => void apply(recommended, true)}>
+          <Button variant="secondary" icon={<Check className="h-4 w-4" />} disabled={!recommended.length || !!busy || windowsBusy} onClick={() => void apply(recommended, true)}>
             {t("optimize.applyAll")}
           </Button>
         </div>
@@ -168,7 +202,7 @@ export function Optimize({ section }: { section?: string }) {
                           {tw.canRevert ? ` · ${t("optimize.canRevert")}` : ""}
                         </div>
                       </div>
-                      {working ? <Loader2 className="h-5 w-5 animate-spin text-accent" aria-label={t("common.loading")} /> : <Toggle checked={on} disabled={unsupported || !!busy} label={t(`optimize.items.${tw.id}.name`)} onChange={(v) => void apply([tw.id], v)} />}
+                      {working ? <Loader2 className="h-5 w-5 animate-spin text-accent" aria-label={t("common.loading")} /> : <Toggle checked={on} disabled={unsupported || !!busy || windowsBusy} label={t(`optimize.items.${tw.id}.name`)} onChange={(v) => void apply([tw.id], v)} />}
                     </motion.div>
                   );
                 })}
@@ -186,14 +220,11 @@ export function Optimize({ section }: { section?: string }) {
         <motion.div variants={staggerItem} className="flex flex-col gap-5">
           <Section title={t("optimize.power")} icon={<BatteryCharging className="h-4 w-4" />}>
             <Field label={t("optimize.power")} description={activePlan ? t("optimize.powerActive", { name: activePlan.name }) : undefined} stacked>
-              <Select value={activePlan?.guid ?? ""} onChange={async (guid) => {
-                await api.powerSet(guid).catch((e) => toast({ kind: "error", title: errorText(e) }));
-                await load();
-              }} options={plans.map((p) => ({ value: p.guid, label: p.name }))} className="w-full" />
+              <Select value={activePlan?.guid ?? ""} disabled={windowsBusy} onChange={(guid) => void setPower(guid)} options={plans.map((p) => ({ value: p.guid, label: p.name }))} className="w-full" />
             </Field>
             <Field label={t("optimize.flushDns")} description={t("optimize.flushDnsDesc")}>
-              <Button size="sm" variant="secondary" icon={<Eraser className="h-3.5 w-3.5" />} onClick={() => void api.flushDns().then(() => toast({ kind: "success", title: t("optimize.flushed") })).catch((e) => toast({ kind: "error", title: errorText(e) }))}>
-                {t("optimize.flushDns")}
+              <Button size="sm" variant="secondary" icon={<Eraser className="h-3.5 w-3.5" />} disabled={windowsBusy} onClick={() => void api.flushDns().then(() => toast({ kind: "success", title: t("optimize.flushed") })).catch((e) => toast({ kind: "error", title: errorText(e) }))}>
+                {t("optimize.flushNow")}
               </Button>
             </Field>
           </Section>

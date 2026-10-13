@@ -12,10 +12,15 @@ export interface SelectOption<T extends string> {
 }
 
 /** Aufklappliste im Pulsar-Stil */
-export function Select<T extends string>({ value, options, onChange, className, placeholder, align = "left" }: { value: T; options: SelectOption<T>[]; onChange: (v: T) => void; className?: string; placeholder?: string; align?: "left" | "right" }) {
+export function Select<T extends string>({ value, options, onChange, className, placeholder, align = "left", disabled = false }: { value: T; options: SelectOption<T>[]; onChange: (v: T) => void; className?: string; placeholder?: string; align?: "left" | "right"; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = options.find((o) => o.value === value);
+
+  // Gesperrt: eine offene Liste schließen
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -35,12 +40,13 @@ export function Select<T extends string>({ value, options, onChange, className, 
     <div ref={ref} className={cn("relative", className)}>
       <button
         type="button"
-        onMouseEnter={() => sound.play("hover")}
+        disabled={disabled}
+        onMouseEnter={() => !disabled && sound.play("hover")}
         onClick={() => {
           sound.play(open ? "close" : "open");
           setOpen(!open);
         }}
-        className="flex h-10 w-full items-center gap-2 rounded-md border border-line bg-surface-2 px-3 text-left text-sm text-fg transition hover:border-line-strong"
+        className="flex h-10 w-full items-center gap-2 rounded-md border border-line bg-surface-2 px-3 text-left text-sm text-fg transition hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line"
       >
         {current?.icon}
         <span className="min-w-0 flex-1 truncate">{current?.label ?? <span className="text-faint">{placeholder}</span>}</span>

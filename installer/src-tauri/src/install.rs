@@ -240,6 +240,8 @@ pub fn finish_install(plan: &InstallPlan, spec: &DownloadSpec, verified: bool, p
         options: plan.options.clone(),
         verified,
         scope: if plan.elevated { "machine".into() } else { "user".into() },
+        // Diese App-Version kennt `--revert-all` – der Deinstaller darf es aufrufen.
+        revert_all: true,
     };
     let info_path = plan.dir.join(INSTALL_INFO_NAME);
     std::fs::write(&info_path, serde_json::to_vec_pretty(&record).unwrap_or_default())

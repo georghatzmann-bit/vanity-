@@ -318,6 +318,8 @@ export interface DnsConfig {
   changedByPulsar: boolean;
   /** Pulsar kann den DNS hier selbst ändern (sonst Anleitung zum Selbsteinstellen) */
   canChange: boolean;
+  /** Namen der anderen Verbindungen, an denen Pulsar den DNS geändert hat (Sicherung besteht → „Zurückstellen“) */
+  otherBackups: string[];
 }
 
 /** Ergebnis von net_auto_optimize und net_auto_restore */

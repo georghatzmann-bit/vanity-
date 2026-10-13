@@ -46,8 +46,23 @@ pub async fn kv_get(state: State<'_, Shared>, key: String) -> CmdResult<Value> {
     blocking(move || core.db.with(|db| db.kv_get(&key))).await
 }
 
+/// Schlüssel, die nur Pulsar selbst schreibt: die Sicherungen von Windows-Änderungen (und die Marke,
+/// dass sie nach einer beschädigten Datenbank unsicher sind). Sie gehen beim Zurückstellen an den
+/// Admin-Helfer und beschreiben den aktuellen Zustand von Windows.
+pub const MANAGED_KV_KEYS: [&str; 3] =
+    [crate::net::dns::KV_DNS_BACKUP, crate::opt::tweaks::KV_SNAPSHOTS, crate::backup::KV_RECOVERY_UNKNOWN];
+
+/// Darf die Oberfläche diesen Schlüssel schreiben?
+fn kv_writable(key: &str) -> CmdResult<()> {
+    if MANAGED_KV_KEYS.contains(&key.trim()) {
+        return Err("Dieser Eintrag wird von Pulsar selbst verwaltet.".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn kv_set(state: State<'_, Shared>, key: String, value: Option<Value>) -> CmdResult<()> {
+    kv_writable(&key)?;
     let core = state.inner().clone();
     let value = value.unwrap_or(Value::Null);
     blocking(move || core.db.with(|db| db.kv_set(&key, &value))).await
@@ -88,3 +103,16 @@ pub async fn session_delete(state: State<'_, Shared>, id: f64) -> CmdResult<()> 
     blocking(move || core.db.with(|db| db.session_delete(id as i64))).await
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_keys_are_not_writable_from_the_ui() {
+        assert!(kv_writable("settings").is_ok());
+        for key in ["net.dnsBackup", "opt.snapshots", " opt.snapshots "] {
+            assert_eq!(kv_writable(key), Err("Dieser Eintrag wird von Pulsar selbst verwaltet.".to_string()), "{key}");
+        }
+    }
+}

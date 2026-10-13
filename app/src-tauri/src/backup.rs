@@ -178,8 +178,53 @@ fn is_corrupt(path: &Path) -> bool {
     }
 }
 
+/// Marke in kv: Nach dem Wiederherstellen einer beschädigten Datenbank ließen sich die Sicherungen
+/// von Windows-Änderungen nicht lesen – Pulsar weiß nicht sicher, ob alles zurückgestellt werden
+/// kann. `--revert-all` endet dann mit 1, damit der Deinstaller die Daten (samt beschädigter Datei)
+/// behält. Wert: `{ "at": ms, "file": Pfad der beiseitegelegten Datei }`.
+pub const KV_RECOVERY_UNKNOWN: &str = "opt.recoveryUnknown";
+
+/// Die von Pulsar verwalteten Schlüssel nur lesend aus einer (beschädigten) Datei holen.
+/// `None` = nicht sicher lesbar.
+fn read_managed_raw(path: &Path) -> Option<Vec<(&'static str, serde_json::Value)>> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    let mut out = Vec::new();
+    for key in crate::library::MANAGED_KV_KEYS {
+        let text: Option<String> = conn
+            .query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0))
+            .map(Some)
+            .or_else(|e| if matches!(e, rusqlite::Error::QueryReturnedNoRows) { Ok(None) } else { Err(e) })
+            .ok()?;
+        let value = match text {
+            Some(t) => serde_json::from_str(&t).ok()?,
+            None => serde_json::Value::Null,
+        };
+        out.push((key, value));
+    }
+    Some(out)
+}
+
+/// Nach dem Wiederherstellen: Die Sicherungen von Windows-Änderungen auf den Stand der beschädigten
+/// Datei bringen (auch „keine“) – ein Backup von gestern kennt neuere Änderungen nicht oder enthält
+/// längst erledigte. Ließ sich der Stand nicht lesen, bleibt der Stand des Backups (meist richtig)
+/// und die Marke [`KV_RECOVERY_UNKNOWN`] wird gesetzt.
+fn carry_over_managed(db: &Db, managed: &Option<Vec<(&'static str, serde_json::Value)>>, aside: &Path) {
+    let written = match managed {
+        Some(values) => values.iter().try_for_each(|(key, value)| db.kv_set(key, value)),
+        None => Err("Die Sicherungen der beschädigten Datenbank ließen sich nicht lesen.".into()),
+    };
+    if let Err(e) = written {
+        eprintln!("{e}");
+        let mark = serde_json::json!({ "at": now_ms(), "file": display_path(aside) });
+        if let Err(e) = db.kv_set(KV_RECOVERY_UNKNOWN, &mark) {
+            eprintln!("Die Marke für unsichere Sicherungen konnte nicht gesetzt werden: {e}");
+        }
+    }
+}
+
 /// Profil-Datenbank öffnen; ist sie beschädigt, wird sie beiseitegelegt und das neueste
-/// gültige Backup verwendet (sonst eine leere Datenbank).
+/// gültige Backup verwendet (sonst eine leere Datenbank). Die Sicherungen von Windows-Änderungen
+/// kommen dabei aus der beschädigten Datei (siehe [`carry_over_managed`]).
 pub fn open_with_recovery(paths: &crate::state::Paths, profile: &str) -> CmdResult<Db> {
     let path = paths.db_path(profile);
     let err = match Db::open(&path) {
@@ -189,6 +234,8 @@ pub fn open_with_recovery(paths: &crate::state::Paths, profile: &str) -> CmdResu
     if !path.is_file() || !is_corrupt(&path) {
         return Err(err);
     }
+    // Vor dem Beiseitelegen: den aktuellen Stand der Sicherungen retten (falls lesbar)
+    let managed = read_managed_raw(&path);
     let aside = path.with_extension(format!("db.broken-{}", timestamp_name()));
     fs::rename(&path, &aside).map_err(|e| io_err(&e, &path))?;
     remove_wal_files(&path);
@@ -197,14 +244,24 @@ pub fn open_with_recovery(paths: &crate::state::Paths, profile: &str) -> CmdResu
         let src = PathBuf::from(&b.path);
         if check_backup_db(&src).is_ok() && copy_over(&src, &path).is_ok() {
             if let Ok(db) = Db::open(&path) {
+                carry_over_managed(&db, &managed, &aside);
                 return Ok(db);
             }
         }
     }
-    Db::open(&path)
+    let db = Db::open(&path)?;
+    carry_over_managed(&db, &managed, &aside);
+    Ok(db)
+}
+
+/// Die aktuellen Werte der von Pulsar verwalteten Schlüssel (Sicherungen von Windows-Änderungen).
+fn managed_values(db: &Db) -> CmdResult<Vec<(&'static str, serde_json::Value)>> {
+    crate::library::MANAGED_KV_KEYS.iter().map(|k| Ok((*k, db.kv_get(k)?))).collect()
 }
 
 /// Datenbank aus einem Backup wiederherstellen (Verbindung wird sicher geschlossen und neu geöffnet).
+/// Die Sicherungen von Windows-Änderungen (`net.dnsBackup`, `opt.snapshots`) bleiben dabei, wie sie
+/// gerade sind.
 pub fn restore_db(core: &Core, file: &str) -> CmdResult<()> {
     if !is_db_backup_name(file) {
         return Err("Ungültiger Backup-Name.".into());
@@ -217,18 +274,23 @@ pub fn restore_db(core: &Core, file: &str) -> CmdResult<()> {
     }
     check_backup_db(&src)?;
 
+    // Keine Windows-Änderung darf gleichzeitig laufen: sie liest und schreibt die Sicherungen
+    let _change = crate::elevate::change_lock();
     core.tracker.finalize_all(core, false, true);
     let result = (|| -> CmdResult<()> {
         let mut guard = core.db.lock();
-        let db_path = guard
-            .as_ref()
-            .map(|d| d.path().to_path_buf())
-            .unwrap_or_else(|| core.paths.db_path(&profile));
-        // Sicherheitskopie des aktuellen Stands
-        let safety = match guard.as_ref() {
-            Some(db) => Some(backup_db(db, &dir)?),
-            None => None,
+        // Ohne geöffnete Datenbank sind die aktuellen Sicherungen von Windows-Änderungen unbekannt
+        // (und es gäbe keine Sicherheitskopie) – dann lieber nichts überschreiben.
+        let Some(current) = guard.as_ref() else {
+            return Err("Die aktuelle Datenbank ist nicht geöffnet – Wiederherstellen ist gerade nicht möglich.".into());
         };
+        let db_path = current.path().to_path_buf();
+        // Die Sicherungen von Windows-Änderungen beschreiben den aktuellen Zustand von Windows,
+        // keine Nutzerdaten: Sie bleiben, wie sie jetzt sind (auch „keine“), damit Zurückstellen
+        // weiter stimmt und keine veraltete Sicherung zurückkommt.
+        let kept = managed_values(current)?;
+        // Sicherheitskopie des aktuellen Stands
+        let safety = backup_db(current, &dir)?;
         if let Some(db) = guard.take() {
             db.checkpoint();
             drop(db);
@@ -237,15 +299,19 @@ pub fn restore_db(core: &Core, file: &str) -> CmdResult<()> {
             *guard = Db::open(&db_path).ok();
             return Err(e);
         }
-        match Db::open(&db_path) {
+        let reopened = Db::open(&db_path).and_then(|db| {
+            for (key, value) in &kept {
+                db.kv_set(key, value)?;
+            }
+            Ok(db)
+        });
+        match reopened {
             Ok(db) => {
                 *guard = Some(db);
                 Ok(())
             }
             Err(e) => {
-                if let Some(s) = safety {
-                    let _ = copy_over(Path::new(&s.path), &db_path);
-                }
+                let _ = copy_over(Path::new(&safety.path), &db_path);
                 *guard = Db::open(&db_path).ok();
                 Err(format!("Das Backup konnte nicht geöffnet werden: {e}"))
             }
@@ -302,6 +368,98 @@ mod tests {
             .filter_map(|e| e.ok())
             .any(|e| e.file_name().to_string_lossy().contains(".broken-"));
         assert!(broken, "kaputte Datei wird aufgehoben");
+    }
+
+    #[test]
+    fn recovery_marks_unreadable_windows_backups() {
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = crate::state::test_paths(tmp.path());
+        {
+            let db = Db::open(&paths.db_path("p1")).unwrap();
+            db.kv_set("opt.snapshots", &json!({ "gameMode": { "values": {}, "savedAt": 1 } })).unwrap();
+            backup_db(&db, &paths.backups_dir("p1")).unwrap();
+        }
+        // Völlig unlesbar: Stand des Backups bleibt (meist richtig), dazu die Marke
+        fs::write(paths.db_path("p1"), vec![0x42u8; 8192]).unwrap();
+        let db = open_with_recovery(&paths, "p1").unwrap();
+        assert!(!db.kv_get("opt.snapshots").unwrap().is_null());
+        assert!(!db.kv_get(KV_RECOVERY_UNKNOWN).unwrap().is_null());
+    }
+
+    #[test]
+    fn recovery_takes_windows_backups_from_the_broken_file_when_readable() {
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let paths = crate::state::test_paths(tmp.path());
+        let path = paths.db_path("p1");
+        {
+            // Backup von gestern: alte DNS-Sicherung, keine Optimierungs-Sicherung
+            let db = Db::open(&path).unwrap();
+            db.kv_set("net.dnsBackup", &json!({ "{alt}": { "adapter": "Alt" } })).unwrap();
+            backup_db(&db, &paths.backups_dir("p1")).unwrap();
+            // Heute: DNS zurückgestellt, neue Optimierungs-Sicherung
+            db.kv_set("net.dnsBackup", &serde_json::Value::Null).unwrap();
+            db.kv_set("opt.snapshots", &json!({ "gameMode": { "values": {}, "savedAt": 2 } })).unwrap();
+            db.checkpoint();
+        }
+        let managed = read_managed_raw(&path).unwrap();
+        let db = Db::open(&paths.db_path("p2")).unwrap();
+        db.kv_set("net.dnsBackup", &json!({ "{alt}": { "adapter": "Alt" } })).unwrap();
+        carry_over_managed(&db, &Some(managed), &path);
+        assert!(db.kv_get("net.dnsBackup").unwrap().is_null(), "erledigte Sicherung kommt nicht zurück");
+        assert_eq!(db.kv_get("opt.snapshots").unwrap()["gameMode"]["savedAt"], json!(2), "neue Sicherung bleibt");
+        assert!(db.kv_get(KV_RECOVERY_UNKNOWN).unwrap().is_null(), "Stand bekannt → keine Marke");
+    }
+
+    #[test]
+    fn restore_needs_an_open_database() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = crate::state::test_core(tmp.path());
+        let dir = core.paths.backups_dir(&core.active_profile_id());
+        let file = core.db.with(|db| backup_db(db, &dir)).unwrap().file;
+        core.db.replace(None);
+        assert!(restore_db(&core, &file).unwrap_err().contains("nicht geöffnet"));
+    }
+
+    #[test]
+    fn restore_keeps_current_windows_backups() {
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let core = crate::state::test_core(tmp.path());
+        let dir = core.paths.backups_dir(&core.active_profile_id());
+        // Stand im Backup: alte DNS-Sicherung, keine Optimierungs-Sicherung, ein Spiel
+        let file = core
+            .db
+            .with(|db| {
+                db.put("games", "g1", &json!({ "id": "g1" }))?;
+                db.kv_set("net.dnsBackup", &json!({ "{alt}": { "adapter": "Alt" } }))?;
+                db.kv_set("settings", &json!({ "theme": "alt" }))?;
+                backup_db(db, &dir)
+            })
+            .unwrap()
+            .file;
+        // Heute: neue Optimierungs-Sicherung, DNS-Sicherung ist weg, andere Einstellungen
+        let snaps = json!({ "gameMode": { "values": { "AutoGameModeEnabled": null }, "savedAt": 2 } });
+        core.db
+            .with(|db| {
+                db.delete("games", "g1")?;
+                db.kv_set("net.dnsBackup", &serde_json::Value::Null)?;
+                db.kv_set("opt.snapshots", &snaps)?;
+                db.kv_set("settings", &json!({ "theme": "neu" }))
+            })
+            .unwrap();
+
+        restore_db(&core, &file).unwrap();
+        core.db
+            .with(|db| {
+                assert_eq!(db.list("games")?.len(), 1, "Nutzerdaten aus dem Backup");
+                assert_eq!(db.kv_get("settings")?, json!({ "theme": "alt" }));
+                assert_eq!(db.kv_get("net.dnsBackup")?, serde_json::Value::Null, "veraltete Sicherung kommt nicht zurück");
+                assert_eq!(db.kv_get("opt.snapshots")?, snaps, "aktuelle Sicherung bleibt");
+                Ok(())
+            })
+            .unwrap();
     }
 
     #[test]

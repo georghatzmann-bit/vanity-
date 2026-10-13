@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { AUTO_PROVIDERS, dnsScore, isDeclined, isManualProvider, pickBestDns, providerName, shortDnsName } from "./netauto";
-import type { DnsResult } from "./types";
+import { AUTO_PROVIDERS, BACKEND_TEXTS, backendText, dnsScore, isDeclined, isManualProvider, mayBeChanged, pickBestDns, providerName, restoreDeclined, restoreProblems, shortDnsName } from "./netauto";
+import { de } from "../locales/de";
+import { en } from "../locales/en";
+import type { AutoReport, DnsConfig, DnsResult } from "./types";
 
 /** Messergebnis bauen: uncached = „neu“, cached = „bekannt“ */
 const r = (id: string, uncachedMs: number | null, cachedMs: number | null, extra: Partial<DnsResult> = {}): DnsResult => ({
@@ -47,21 +49,52 @@ describe("Besten DNS wählen", () => {
     expect(p.gainMs).toBeCloseTo(21.8);
   });
 
-  it("ohne aktuellen DNS: Wechsel zum besten Kandidaten", () => {
+  it("jetziger DNS nicht gemessen (kein Eintrag current): kein Wechselvorschlag", () => {
     const p = pickBestDns([r("cloudflare", 11, 5), r("google", 16, 7)]);
     expect(p.current).toBeNull();
     expect(p.best?.id).toBe("cloudflare");
-    expect(p.change).toBe(true);
+    expect(p.change).toBe(false);
     expect(p.gainMs).toBeNull();
-    expect(p.reason).toBe("faster");
+    expect(p.currentScore).toBeNull();
+    expect(p.reason).toBe("notMeasured");
   });
 
-  it("aktueller DNS ohne Messwerte: Wechsel zum besten Kandidaten", () => {
+  it("nicht gemessen nach einem Wechsel: alte Router-Zeile ohne current zählt nicht", () => {
+    // Vergleich lief mit Cloudflare, danach wurde zurückgestellt → keine Zeile ist mehr „current“
+    const p = pickBestDns([r("cloudflare", 11, 5), r("google", 16, 7), r("current", 43, 3, { current: false })]);
+    expect(p.reason).toBe("notMeasured");
+    expect(p.change).toBe(false);
+  });
+
+  it("nicht gemessen und kein Kandidat zuverlässig: keine Daten", () => {
+    const p = pickBestDns([r("cloudflare", 11, 5, { failed: 2 }), r("adguard", 9, 4)]);
+    expect(p.reason).toBe("noData");
+    expect(p.change).toBe(false);
+  });
+
+  it("aktueller DNS ohne Messwerte: hat nicht geantwortet → Wechsel zum besten Kandidaten", () => {
     const p = pickBestDns([r("cloudflare", 11, 5), r("current", null, null, { failed: 15 })]);
     expect(p.current?.id).toBe("current");
     expect(p.currentScore).toBeNull();
     expect(p.change).toBe(true);
     expect(p.gainMs).toBeNull();
+    expect(p.reason).toBe("faster");
+  });
+
+  it("aktueller DNS mit Fehlern: nicht zuverlässig → Wechsel, auch wenn die Mediane gut aussehen", () => {
+    const p = pickBestDns([r("cloudflare", 11, 5), r("current", 12, 3, { failed: 2 })]);
+    expect(p.current?.id).toBe("current");
+    expect(p.currentScore).toBeNull();
+    expect(p.change).toBe(true);
+    expect(p.gainMs).toBeNull();
+    expect(p.reason).toBe("faster");
+  });
+
+  it("aktueller bekannter Dienst mit Fehlern: der beste zuverlässige Dienst wird vorgeschlagen", () => {
+    const p = pickBestDns([r("cloudflare", 5, 2, { failed: 1, current: true }), r("google", 12, 6)]);
+    expect(p.best?.id).toBe("google");
+    expect(p.change).toBe(true);
+    expect(p.reason).toBe("faster");
   });
 
   it("ist der aktuelle DNS schon der beste bekannte Dienst, bleibt alles", () => {
@@ -152,5 +185,71 @@ describe("Hilfen", () => {
     expect(isDeclined("Du hast die Windows-Abfrage abgelehnt – es wurde nichts geändert.")).toBe(true);
     expect(isDeclined("Windows hat die DNS-Änderung nicht übernommen.")).toBe(false);
     expect(isDeclined(null)).toBe(false);
+  });
+});
+
+describe("Zurückstellen ehrlich auswerten", () => {
+  const DECLINED = "Du hast die Windows-Abfrage abgelehnt – es wurde nichts geändert.";
+  const LEFT = "DNS noch nicht wie vorher";
+  const dns = (changedByPulsar: boolean, otherBackups: string[] = []): DnsConfig => ({ adapterId: "{A}", adapter: "Ethernet", servers: ["192.168.178.1"], ipv6Servers: [], dhcp: true, provider: null, changedByPulsar, canChange: true, otherBackups });
+  const rep = (x: Partial<AutoReport>): AutoReport => ({ dns: dns(false), dnsChanged: true, dnsError: null, applied: ["nagle"], failed: [], declined: false, restart: true, ...x });
+
+  it("alles gut: keine Probleme, nicht abgelehnt", () => {
+    expect(restoreProblems(rep({}), LEFT)).toEqual([]);
+    expect(restoreDeclined(rep({}))).toBe(false);
+  });
+  it("abgelehnt: keine Probleme melden, aber als abgelehnt erkennen", () => {
+    const r = rep({ declined: true, dnsChanged: false, applied: [], failed: [{ id: "nagle", error: DECLINED }] });
+    expect(restoreProblems(r, LEFT)).toEqual([]);
+    expect(restoreDeclined(r)).toBe(true);
+  });
+  it("DNS-Sicherung noch da: Windows hat den alten DNS nicht übernommen", () => {
+    expect(restoreProblems(rep({ dns: dns(true), dnsChanged: false }), LEFT)).toEqual([LEFT]);
+    // auch an einer anderen Verbindung
+    expect(restoreProblems(rep({ dns: dns(false, ["WLAN"]), dnsChanged: false }), LEFT)).toEqual([LEFT]);
+  });
+  it("DNS-Fehler und fehlgeschlagene Optimierung werden gemeldet", () => {
+    const r = rep({ dnsError: "Windows hat die DNS-Änderung nicht übernommen.", failed: [{ id: "netThrottle", error: "Nachkontrolle fehlgeschlagen" }] });
+    expect(restoreProblems(r, LEFT)).toEqual(["Windows hat die DNS-Änderung nicht übernommen.", "Nachkontrolle fehlgeschlagen"]);
+    expect(restoreDeclined(r)).toBe(false);
+  });
+  it("nur Ablehnungen in failed ohne DNS-Fehler zählen als abgelehnt", () => {
+    expect(restoreDeclined(rep({ failed: [{ id: "nagle", error: DECLINED }] }))).toBe(true);
+    expect(restoreDeclined(rep({ failed: [{ id: "nagle", error: DECLINED }], dnsError: "kaputt" }))).toBe(false);
+  });
+});
+
+describe("Meldungen des Backends", () => {
+  /** Übersetzen wie lib/i18n, aber mit fester Sprache */
+  const tr = (dict: Record<string, unknown>) => (key: string, vars?: Record<string, string | number>) => {
+    let cur: unknown = dict;
+    for (const part of key.split(".")) cur = (cur as Record<string, unknown>)?.[part];
+    const raw = typeof cur === "string" ? cur : key;
+    return vars ? raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`)) : raw;
+  };
+  const deT = tr(de as unknown as Record<string, unknown>);
+  const enT = tr(en as unknown as Record<string, unknown>);
+
+  it("erkennt, dass Windows trotz Fehler schon geändert sein kann", () => {
+    expect(mayBeChanged("Windows hat nicht alle Änderungen übernommen. Zurückstellen ist weiter möglich.")).toBe(true);
+    expect(mayBeChanged("Der Admin-Helfer hat nicht rechtzeitig geantwortet. Zurückstellen ist weiter möglich.")).toBe(true);
+    expect(mayBeChanged("Windows hat nicht alle Änderungen übernommen.")).toBe(false);
+    expect(mayBeChanged(null)).toBe(false);
+  });
+  it("lässt deutsche Meldungen unverändert (die Texte in de.ts entsprechen dem Backend)", () => {
+    for (const [sentence, key] of BACKEND_TEXTS) expect(deT(key)).toBe(sentence);
+    const msg = "Der Admin-Helfer hat nicht rechtzeitig geantwortet. Zurückstellen ist weiter möglich.";
+    expect(backendText(msg, deT)).toBe(msg);
+    expect(backendText("DNS0.eu antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.", deT)).toBe("DNS0.eu antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.");
+  });
+  it("übersetzt bekannte Sätze, auch zusammengesetzte und mit Platzhalter", () => {
+    expect(backendText("Der Admin-Helfer hat nicht rechtzeitig geantwortet. Zurückstellen ist weiter möglich.", enT)).toBe("The admin helper did not answer in time. Restoring is still possible.");
+    expect(backendText("Mullvad antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.", enT)).toBe("Mullvad is not answering right now – so Pulsar does not switch to it.");
+    expect(backendText("Pulsar hat den DNS schon an 16 Verbindungen geändert – bitte erst zurückstellen.", enT)).toBe("Pulsar has already changed the DNS on 16 connections – please restore first.");
+    expect(backendText("Pulsar kann den DNS auf diesem System nicht einstellen. Dafür braucht es Windows 10 Version 2004 oder neuer.", enT)).toBe(
+      "Pulsar cannot set the DNS on this system. This needs Windows 10 version 2004 or newer.",
+    );
+    // Unbekanntes bleibt, wie es ist
+    expect(backendText("Adapter fehlt: X Windows hat die DNS-Änderung nicht übernommen.", enT)).toBe("Adapter fehlt: X Windows did not accept the DNS change.");
   });
 });

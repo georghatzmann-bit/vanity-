@@ -112,3 +112,12 @@ pub fn build_http_client() -> reqwest::Client {
 pub fn test_paths(root: &Path) -> Paths {
     Paths::new(root.join("data"), root.join("local"))
 }
+
+/// Hilfsfunktion für Tests: Zustand mit geöffneter Datenbank in einem temporären Ordner.
+#[cfg(test)]
+pub fn test_core(root: &Path) -> Shared {
+    let core: Shared = Arc::new(Core::new(test_paths(root), false));
+    let db = crate::db::Db::open(&core.paths.db_path(DEFAULT_PROFILE)).expect("Test-Datenbank");
+    core.db.replace(Some(db));
+    core
+}

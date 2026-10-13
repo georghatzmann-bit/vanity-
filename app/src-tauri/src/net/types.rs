@@ -148,6 +148,8 @@ pub struct DnsConfig {
     pub changed_by_pulsar: bool,
     /// Pulsar kann den DNS hier ändern (Windows 10 2004+, Adapter-GUID bekannt)
     pub can_change: bool,
+    /// Namen der **anderen** Verbindungen, an denen Pulsar den DNS geändert hat (Sicherung besteht)
+    pub other_backups: Vec<String>,
 }
 
 /// Ergebnis von `net_auto_optimize` und `net_auto_restore`.

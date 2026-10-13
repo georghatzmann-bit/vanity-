@@ -7,7 +7,7 @@ use crate::install::{self, InstallPlan};
 use crate::manifest::{self, Location, ManifestOrigin, ManifestSource};
 use crate::platform::{self, ElevateError};
 use crate::types::{
-    DiskInfo, InstallDone, InstallError, InstallOptions, InstalledInfo, Manifest, Progress, SetupInfo, SetupMode, UninstallErrorPayload,
+    DiskInfo, InstallDone, InstallError, InstallOptions, InstalledInfo, Manifest, Progress, SetupInfo, SetupMode, UninstallDonePayload, UninstallErrorPayload,
 };
 use crate::uninstall::{self, UninstallPlan};
 use crate::util::{display_path, lang, log, tr};
@@ -293,9 +293,11 @@ pub async fn start_uninstall(app: AppHandle, state: State<'_, AppState>, keep_da
         state.uninstall_running.store(false, Ordering::SeqCst);
         return Err(tr("Keine Installation gefunden.", "No installation found."));
     };
+    let other_user = uninstall::started_by_other_user(&state.cli);
     let handle = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let plan = UninstallPlan::new(dir.clone(), keep_data);
+        let mut plan = UninstallPlan::new(dir.clone(), keep_data);
+        plan.other_user = other_user;
         let emitter = handle.clone();
         let result = uninstall::run_uninstall(&plan, &move |p| {
             let _ = emitter.emit(EVT_UNINSTALL_PROGRESS, p);
@@ -311,7 +313,8 @@ pub async fn start_uninstall(app: AppHandle, state: State<'_, AppState>, keep_da
                     *lock(&state.uninstall_dir) = Some(dir);
                 }
                 state.uninstall_done.store(true, Ordering::SeqCst);
-                let _ = handle.emit(EVT_UNINSTALL_DONE, serde_json::json!({}));
+                let done = UninstallDonePayload { revert_ok: outcome.revert.is_ok(), data_kept: outcome.data_kept };
+                let _ = handle.emit(EVT_UNINSTALL_DONE, done);
             }
             Err(message) => {
                 log(format!("Deinstallation fehlgeschlagen: {message}"));

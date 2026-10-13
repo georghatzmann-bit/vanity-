@@ -35,7 +35,7 @@ Relative `app.url` werden relativ zur Manifest-Adresse aufgelöst.
 |---|---|
 | ohne Argumente | `install` – oder `maintenance`, wenn Pulsar schon installiert ist |
 | `--update` | `update` – lädt die neueste App-Version in den vorhandenen Ordner und startet sie danach |
-| `--uninstall` | `uninstall` – kopiert sich zuerst nach `%TEMP%` und startet sich von dort neu (`--uninstall --target <dir>`), damit der Ordner gelöscht werden kann |
+| `--uninstall` | `uninstall` – kopiert sich zuerst nach `%TEMP%` und startet sich von dort neu (`--uninstall --target <dir> --user-data <%APPDATA% des startenden Kontos>`, mit Adminrechten, wenn der Ordner sonst nicht beschreibbar ist), damit der Ordner gelöscht werden kann. Zeigt `--user-data` auf einen anderen Ordner als den eigenen `%APPDATA%`, läuft die Kopie unter einem **anderen** Konto (bei der Windows-Abfrage wurde ein Admin-Konto eingegeben): Dann wird `Pulsar.exe --revert-all` nicht gestartet (siehe unten) |
 | `--elevated --preset <base64-json>` | nach UAC-Neustart mit Adminrechten: Optionen übernehmen und direkt installieren |
 | `--selftest --dir <dir> [--manifest <url>] [--report <datei>]` | ohne Oberfläche: komplette Installation + Deinstallation, schreibt JSON-Bericht, Exit-Code 0 = alles ok |
 
@@ -83,7 +83,7 @@ interface InstallOptions { dir: string; desktopShortcut: boolean; startMenu: boo
 | `install://done` | `{ dir, exePath, version, verified }` |
 | `uninstall://progress` | `{ step, percent }` – `step`: `stop \| shortcuts \| registry \| files \| data \| done` |
 | `uninstall://error` | `{ message }` |
-| `uninstall://done` | `{}` |
+| `uninstall://done` | `{ revertOk, dataKept }` – `revertOk: false` = `Pulsar.exe --revert-all` konnte nicht alles zurückstellen (die Oberfläche zeigt dann einen Hinweis, wie man es nachholt); `dataKept: true` = die Pulsar-Daten wurden nicht gelöscht (gewählt oder wegen `revertOk: false`) |
 
 ## Was die Installation auf dem PC anlegt
 
@@ -91,7 +91,7 @@ interface InstallOptions { dir: string; desktopShortcut: boolean; startMenu: boo
 |---|---|
 | App | `<dir>\Pulsar.exe` |
 | Deinstaller | `<dir>\Uninstall Pulsar.exe` (Kopie der Setup-Exe) |
-| Info | `<dir>\install.json` |
+| Info | `<dir>\install.json` – Version, Datum, Optionen, `scope` (`user`/`machine`) und die Marke `"revertAll": true` (diese Installation kennt `Pulsar.exe --revert-all`) |
 | Startmenü | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Pulsar.lnk` |
 | Desktop | `<Desktop>\Pulsar.lnk` |
 | Autostart | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` → `Pulsar = "<exe>" --minimized` |
@@ -101,6 +101,28 @@ interface InstallOptions { dir: string; desktopShortcut: boolean; startMenu: boo
 Ohne Adminrechte wird nach `%LOCALAPPDATA%\Programs\Pulsar` installiert. Adminrechte werden nur
 angefordert, wenn der gewählte Ordner nicht beschreibbar ist (z. B. `C:\Program Files`).
 
+### Pro Benutzer oder nach „Programme“? (ehrliche Restgefahr)
+
+Pulsar selbst läuft immer als normaler Benutzer. Nur für den DNS und die zwei Netzwerk-Einstellungen startet es sich
+kurz als Admin-Helfer (`Pulsar.exe --elevated …`, Vertrag: `docs/API.md`, „Admin-Helfer“) – Windows fragt dann nach.
+
+- **Installation pro Benutzer** (Standard, `%LOCALAPPDATA%\Programs\Pulsar`): In diesen Ordner darf jedes Programm
+  schreiben, das unter deinem Konto läuft. Ein schädliches Programm könnte dort `Pulsar.exe` austauschen oder eine
+  DLL danebenlegen. Stimmst du danach der nächsten Windows-Abfrage von Pulsar zu, liefe dieser fremde Code mit
+  Adminrechten. Pulsar beschränkt die DLL-Suche des Helfers zwar auf System32, das schützt aber nur später nachgeladene
+  DLLs – nicht vor einer ausgetauschten Exe. Microsoft sieht die Windows-Abfrage (UAC) ausdrücklich nicht als
+  Sicherheitsgrenze an.
+- **Installation nach „Programme“**: Im Setup bei **Speicherort** auf **Ändern** klicken und `C:\Program Files`
+  wählen (das Setup hängt `\Pulsar` an) oder `C:\Program Files\Pulsar` eintippen. Das Setup meldet „Für diesen
+  Ordner braucht das Setup Administratorrechte“, startet sich nach einer Windows-Abfrage mit Adminrechten neu und
+  trägt Pulsar in `HKLM` ein. Dort können normale Programme die Pulsar-Dateien nicht verändern.
+- **Empfehlung:** Wer DNS oder die zwei Netzwerk-Einstellungen von Pulsar ändern lässt, installiert besser nach
+  „Programme“. Wer diese Funktionen nicht nutzt, sieht nie eine Windows-Abfrage von Pulsar – dann reicht die
+  Installation pro Benutzer.
+- Die Benutzerdaten (mit den Sicherungen) liegen in beiden Fällen in `%APPDATA%\com.pulsar.booster` – also dort,
+  wo Programme unter deinem Konto schreiben dürfen. Der Helfer ändert trotzdem nie mehr als DNS-Adressen und genau
+  drei erlaubte Registry-Werte: Er prüft jeden Auftrag selbst, bevor er etwas ändert.
+
 ## Ablauf der Deinstallation
 
 `run_uninstall` (`installer/src-tauri/src/uninstall.rs`) – gleich für die Oberfläche, `--uninstall --quiet` und den Selbsttest.
@@ -108,17 +130,40 @@ Die Schritt-Namen in `uninstall://progress` bleiben `stop | shortcuts | registry
 
 | Schritt | Was passiert |
 |---|---|
-| `stop` | 1. Laufende `Pulsar.exe` beenden (hart – ein laufender Boost kann sich dabei nicht mehr selbst zurücknehmen).<br>2. **Windows-Einstellungen zurückstellen:** Liegt `<dir>\Pulsar.exe` noch da, startet der Deinstaller `Pulsar.exe --revert-all` verborgen (Windows: `CREATE_NO_WINDOW`, Arbeitsordner `%TEMP%`). Die App stellt den gesicherten DNS und alle Sicherungen aus **Optimieren** wieder her – mit höchstens einer Windows-Abfrage, keiner, wenn schon Adminrechte bestehen oder nichts zu tun ist (Vertrag: `docs/API.md`, „Deinstallieren: `Pulsar.exe --revert-all`“). Der Deinstaller wartet höchstens **120 s** und beendet den Prozess sonst. Danach werden übrig gebliebene `Pulsar.exe`-Prozesse noch einmal beendet, damit die Datei gelöscht werden kann. |
+| `stop` | 1. Laufende `Pulsar.exe` beenden (hart – ein laufender Boost kann sich dabei nicht mehr selbst zurücknehmen).<br>2. **Windows-Einstellungen zurückstellen:** Trägt `<dir>\install.json` die Marke `"revertAll": true` und liegt `<dir>\Pulsar.exe` noch da, startet der Deinstaller `Pulsar.exe --revert-all` verborgen (Windows: `CREATE_NO_WINDOW`, Arbeitsordner `%TEMP%`). Ohne Marke (oder ohne lesbare `install.json`) ist es eine ältere Version, die `--revert-all` nicht kennt und sonst mit Fenster starten würde: Dann wird nichts gestartet, im Protokoll steht „ältere Version – nichts zurückzustellen“. Die App stellt den gesicherten DNS und alle Sicherungen aus **Optimieren** wieder her – mit höchstens einer Windows-Abfrage, keiner, wenn schon Adminrechte bestehen oder nichts zu tun ist (Vertrag: `docs/API.md`, „Deinstallieren: `Pulsar.exe --revert-all`“). Der Deinstaller wartet höchstens **120 s** und beendet den Prozess sonst. Danach werden übrig gebliebene `Pulsar.exe`-Prozesse noch einmal beendet, damit die Datei gelöscht werden kann. |
 | `shortcuts` | Startmenü- und Desktop-Verknüpfung, Autostart entfernen |
 | `registry` | „Apps & Features“-Eintrag und `HKCU\Software\Pulsar\Booster` entfernen |
 | `files` | `Pulsar.exe`, `install.json`, Deinstaller, Download-Reste löschen; den Ordner nur, wenn er danach leer ist |
-| `data` | Nur ohne „Meine Daten behalten“: `%APPDATA%\com.pulsar.booster` und `%LOCALAPPDATA%\com.pulsar.booster` |
+| `data` | Nur ohne „Meine Daten behalten“ **und** nur, wenn das Zurückstellen vollständig war: `%APPDATA%\com.pulsar.booster` und `%LOCALAPPDATA%\com.pulsar.booster` |
 
 Zum Zurückstellen:
+- `--revert-all` rufen nur Installationen mit der Marke `"revertAll": true` in `install.json` auf. Das Setup schreibt
+  sie bei jeder Installation und jedem Update. Ältere Installationen bekommen sie also mit dem nächsten Update.
 - Das Ergebnis (Exit-Code 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben, Zeitüberschreitung,
-  Startfehler) und die Fehlerausgabe der App landen im Setup-Protokoll `%TEMP%\pulsar-setup.log`. Alles außer
-  Exit-Code 0 (oder „keine App-Datei“) kommt zusätzlich als Hinweis dazu; der Selbsttest zeigt das Ergebnis im Schritt `uninstall`.
+  Startfehler, „ältere Version“, „Pulsar.exe fehlt“, „anderes Konto“) und die Fehlerausgabe der App landen im Setup-Protokoll
+  `%TEMP%\pulsar-setup.log`.
+- **Anderes Konto:** Läuft die Deinstallation mit Adminrechten eines anderen Kontos als dem, das sie gestartet hat
+  (`--user-data`, siehe oben), würde `--revert-all` dessen Datenordner lesen, dort keine Datenbank finden und
+  fälschlich „nichts zu tun“ melden – DNS und HKLM-Werte gelten aber für den ganzen PC. Deshalb wird es dann nicht
+  gestartet; das gilt als „nicht alles zurückgestellt“.
+- **Nicht alles zurückgestellt** (Exit-Code ≠ 0, ohne Exit-Code beendet, Zeitüberschreitung, Startfehler, anderes Konto,
+  oder die Marke ist da, aber `Pulsar.exe` fehlt): Die Deinstallation läuft weiter, aber die Pulsar-Daten werden **nicht**
+  gelöscht – auch nicht, wenn „Meine Daten behalten“ abgewählt war. Dort liegen die Sicherungen (kv `opt.snapshots`,
+  `net.dnsBackup`), mit denen eine neue Installation alles exakt zurückstellen kann. Der Deinstaller sagt das ehrlich:
+  als Hinweis im Protokoll („Einige Windows-Einstellungen konnten nicht sicher zurückgestellt werden – deine
+  Pulsar-Daten bleiben erhalten, damit eine neue Installation sie zurückstellen kann.“, Deutsch oder Englisch je nach
+  Systemsprache), bei `--uninstall --quiet` zusätzlich auf der Fehlerausgabe, und in der Oberfläche als Warnung auf der
+  Fertig-Seite (`uninstall://done` mit `revertOk: false`) samt Anleitung: Pulsar neu installieren und auf der Seite
+  **Optimieren** oben auf **Alles zurückstellen** klicken – oder gleich wieder deinstallieren und der Windows-Abfrage zustimmen.
 - Ein Fehler bricht die Deinstallation **nie** ab. Lehnt man die Windows-Abfrage ab, bleiben DNS und die zwei
-  Netzwerk-Einstellungen so, wie Pulsar sie eingestellt hat; der Rest wird trotzdem entfernt.
-- Es passiert vor dem Löschen der Benutzerdaten, denn dort liegen die Sicherungen (kv `opt.snapshots`, `net.dnsBackup`).
+  Netzwerk-Einstellungen so, wie Pulsar sie eingestellt hat; Verknüpfungen, Registry-Einträge und App-Dateien werden
+  trotzdem entfernt, die Pulsar-Daten bleiben (siehe oben).
+- Es passiert vor dem Löschen der Benutzerdaten, denn dort liegen die Sicherungen.
 - Auch `--uninstall --quiet` stellt zurück; ohne Adminrechte kann dabei die Windows-Abfrage erscheinen.
+  `--quiet` behält die Benutzerdaten ohnehin immer.
+- Der Selbsttest (`--selftest`) prüft, dass `install.json` die Marke trägt, und meldet den Schritt `uninstall` rot,
+  wenn `--revert-all` mit einem anderen Exit-Code als 0, ohne Exit-Code oder nach Zeitüberschreitung endet – oder gar
+  nicht aufgerufen wurde. Ein Startfehler bleibt dort nur ein Hinweis (in den Unit-Tests ist die „App“ eine Attrappe).
+- Grenze: Arbeitest du mit einem Standardkonto und gibst beim Deinstallieren das Kennwort eines **anderen**
+  Admin-Kontos ein, läuft der Deinstaller unter diesem Admin-Konto. Er sieht dann die Pulsar-Daten deines Kontos nicht:
+  Er stellt nichts zurück und löscht diese Daten auch nicht. Stelle in diesem Fall vorher in Pulsar alles zurück.

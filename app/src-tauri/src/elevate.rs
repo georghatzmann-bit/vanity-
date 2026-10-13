@@ -15,14 +15,14 @@
 
 use std::ffi::OsString;
 use std::net::IpAddr;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::LockExt;
 
-/// Höchstens so viele DNS-Änderungen je Auftrag.
-pub const MAX_DNS_OPS: usize = 4;
+/// Höchstens so viele DNS-Änderungen je Auftrag (je gesichertem Adapter eine).
+pub const MAX_DNS_OPS: usize = 16;
 /// Höchstens so viele Registrierungs-Änderungen je Auftrag.
 pub const MAX_REG_OPS: usize = 8;
 /// Höchstens so viele Adressen je Adressfamilie.
@@ -55,6 +55,10 @@ pub const MSG_DECLINED: &str = "Du hast die Windows-Abfrage abgelehnt – es wur
 pub const MSG_NEEDS_2004: &str = "Dafür braucht es Windows 10 Version 2004 oder neuer.";
 /// Meldung bei Exit-Code 10.
 pub const MSG_PARTLY: &str = "Windows hat nicht alle Änderungen übernommen.";
+/// Meldung, wenn der Helfer nicht rechtzeitig fertig wurde (er kann danach noch ändern).
+pub const MSG_TIMED_OUT: &str = "Der Admin-Helfer hat nicht rechtzeitig geantwortet.";
+/// Meldung, solange ein Helfer nach einer Zeitüberschreitung noch läuft.
+pub const MSG_BUSY: &str = "Der Admin-Helfer läuft noch – bitte gleich noch einmal versuchen.";
 /// Einheitliche Meldung außerhalb von Windows.
 #[cfg_attr(windows, allow(dead_code))]
 pub const NOT_WINDOWS: &str = "Nur unter Windows verfügbar.";
@@ -241,12 +245,17 @@ pub enum ElevateError {
     Failed(String),
     /// Auf diesem System nicht möglich (Text für die Oberfläche)
     Unsupported(String),
+    /// Der Helfer wurde nicht rechtzeitig fertig. Er kann danach noch etwas geändert haben –
+    /// Sicherungen bleiben deshalb immer stehen, und solange er läuft, startet kein neuer Ablauf
+    /// ([`Elevator::busy`]). Anzeige wie ein Fehler.
+    TimedOut,
 }
 
 impl std::fmt::Display for ElevateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ElevateError::Declined => f.write_str(MSG_DECLINED),
+            ElevateError::TimedOut => f.write_str(MSG_TIMED_OUT),
             ElevateError::Failed(m) | ElevateError::Unsupported(m) => f.write_str(m),
         }
     }
@@ -279,6 +288,12 @@ pub fn exit_code(result: &Result<(), ElevateError>) -> i32 {
 /// Schnittstelle zum Admin-Helfer – für Tests austauschbar.
 pub trait Elevator {
     fn run(&self, task: &ElevatedTask) -> Result<(), ElevateError>;
+
+    /// Läuft ein Helfer nach einer Zeitüberschreitung noch? Dann darf kein Ablauf Sicherungen
+    /// lesen und als „schon zurückgestellt“ entfernen – der Helfer könnte gleich noch ändern.
+    fn busy(&self) -> bool {
+        false
+    }
 }
 
 /// Der echte Admin-Helfer (Windows-Abfrage bzw. direkt, wenn Pulsar schon Adminrechte hat).
@@ -288,10 +303,48 @@ impl Elevator for RealElevator {
     fn run(&self, task: &ElevatedTask) -> Result<(), ElevateError> {
         run(task)
     }
+
+    fn busy(&self) -> bool {
+        helper_running()
+    }
+}
+
+/// Am Anfang jedes Ablaufs mit Sicherungen (unter [`change_lock`]): Läuft noch ein Helfer,
+/// passiert nichts und es kommt [`MSG_BUSY`].
+pub fn ensure_idle(el: &dyn Elevator) -> Result<(), String> {
+    if el.busy() {
+        Err(MSG_BUSY.into())
+    } else {
+        Ok(())
+    }
+}
+
+/// Läuft ein Helfer nach einer Zeitüberschreitung noch (nur Windows, sonst immer `false`)?
+pub fn helper_running() -> bool {
+    #[cfg(windows)]
+    {
+        win::pending_running()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 /// Es läuft immer nur ein Helfer gleichzeitig.
 static RUN_LOCK: Mutex<()> = Mutex::new(());
+
+/// Sperre für den ganzen Ablauf „Sicherungen laden → Admin-Helfer → Nachkontrolle → speichern“
+/// (`opt_apply`, `opt_revert_all`, alle DNS-Abläufe, Datenbank wiederherstellen). So kann kein
+/// zweiter Ablauf mit einem veralteten Stand von `opt.snapshots`/`net.dnsBackup` weiterarbeiten.
+/// Reihenfolge immer: erst diese Sperre, dann [`RUN_LOCK`]. Nie während einer asynchronen
+/// Live-Prüfung halten.
+static CHANGE_LOCK: Mutex<()> = Mutex::new(());
+
+/// [`CHANGE_LOCK`] nehmen (wird beim Verlassen des Ablaufs automatisch freigegeben).
+pub fn change_lock() -> MutexGuard<'static, ()> {
+    CHANGE_LOCK.lock_safe()
+}
 
 /// Auftrag ausführen (blockierend). Ein leerer Auftrag ändert nichts und fragt nicht nach.
 pub fn run(task: &ElevatedTask) -> Result<(), ElevateError> {
@@ -300,6 +353,10 @@ pub fn run(task: &ElevatedTask) -> Result<(), ElevateError> {
         return Ok(());
     }
     let _guard = RUN_LOCK.lock_safe();
+    // Nie einen zweiten Helfer neben einem noch laufenden starten
+    if helper_running() {
+        return Err(ElevateError::Failed(MSG_BUSY.into()));
+    }
     #[cfg(windows)]
     {
         if crate::appinfo::is_elevated() {
@@ -354,9 +411,26 @@ pub fn parse_cli(args: &[OsString]) -> Option<Cli<'_>> {
 /// Ganz am Anfang von `run()` aufrufen: `Some(code)` = Sonder-Aufruf erledigt, Prozess beenden.
 pub fn cli_main() -> Option<i32> {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
-    match parse_cli(&args)? {
+    let cli = parse_cli(&args)?;
+    // Später nachgeladene DLLs nur noch aus System32 holen – nicht aus dem Programmordner, in den
+    // bei einer Installation pro Benutzer auch andere Programme schreiben dürfen.
+    restrict_dll_search();
+    match cli {
         Cli::Elevated(hex) => Some(helper_main(hex)),
         Cli::RevertAll => Some(crate::uninstall::main()),
+    }
+}
+
+/// DLL-Suche des Prozesses auf System32 beschränken (Härtung für Helfer und `--revert-all`).
+/// Schützt nur DLLs, die ab jetzt geladen werden; ein Fehler wird nur gemeldet.
+fn restrict_dll_search() {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::LibraryLoader::{SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_SYSTEM32};
+        // SAFETY: Einfacher Aufruf ohne Zeiger; ändert nur die Suchreihenfolge dieses Prozesses.
+        if let Err(e) = unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32) } {
+            eprintln!("DLL-Suche konnte nicht eingeschränkt werden: {}", e.message());
+        }
     }
 }
 
@@ -399,7 +473,7 @@ mod win {
     use std::sync::OnceLock;
 
     use windows::core::{s, w, GUID, PCWSTR, PWSTR};
-    use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
     use windows::Win32::NetworkManagement::IpHelper::{
         DNS_INTERFACE_SETTINGS, DNS_INTERFACE_SETTINGS_VERSION1, DNS_SETTING_IPV6, DNS_SETTING_NAMESERVER,
     };
@@ -429,6 +503,25 @@ mod win {
 
     fn wide(s: &std::ffi::OsStr) -> Vec<u16> {
         s.encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    /// Prozess-Handle eines Helfers, der nach einer Zeitüberschreitung noch lief (als Zahl, weil
+    /// `HANDLE` nicht zwischen Threads geteilt werden darf). Bleibt offen, bis der Helfer fertig ist.
+    static PENDING: Mutex<Option<usize>> = Mutex::new(None);
+
+    /// Läuft der Helfer nach der Zeitüberschreitung noch? Ist er fertig, wird das Handle geschlossen.
+    pub fn pending_running() -> bool {
+        let mut pending = PENDING.lock_safe();
+        let Some(raw) = *pending else { return false };
+        let process = HANDLE(raw as *mut core::ffi::c_void);
+        // SAFETY: Das Handle bleibt offen, bis es hier nach dem Ende des Helfers geschlossen wird.
+        let still_running = unsafe { WaitForSingleObject(process, 0) } == WAIT_TIMEOUT;
+        if !still_running {
+            // SAFETY: siehe oben; danach wird das Handle nicht mehr benutzt.
+            let _ = unsafe { CloseHandle(process) };
+            *pending = None;
+        }
+        still_running
     }
 
     /// Auftrag mit Adminrechten in einem zweiten Pulsar-Prozess ausführen (Windows-Abfrage).
@@ -462,16 +555,23 @@ mod win {
         if process.is_invalid() {
             return Err(ElevateError::Failed("Der Admin-Helfer konnte nicht gestartet werden.".into()));
         }
-        // SAFETY: `process` ist ein gültiges Prozess-Handle und wird in jedem Fall geschlossen.
-        let (waited, code) = unsafe {
-            let waited = WaitForSingleObject(process, HELPER_TIMEOUT_MS);
+        // SAFETY: `process` ist ein gültiges Prozess-Handle.
+        let waited = unsafe { WaitForSingleObject(process, HELPER_TIMEOUT_MS) };
+        if waited != WAIT_OBJECT_0 {
+            // Der Helfer läuft vielleicht noch und kann noch ändern: Handle behalten, damit kein
+            // Ablauf startet, bevor er fertig ist (siehe `pending_running`)
+            *PENDING.lock_safe() = Some(process.0 as usize);
+            return Err(ElevateError::TimedOut);
+        }
+        // SAFETY: `process` ist gültig; der Helfer ist beendet, das Handle wird danach geschlossen.
+        let (got, code) = unsafe {
             let mut code = 0u32;
             let got = GetExitCodeProcess(process, &mut code).is_ok();
             let _ = CloseHandle(process);
-            (waited == WAIT_OBJECT_0 && got, code)
+            (got, code)
         };
-        if !waited {
-            return Err(ElevateError::Failed("Der Admin-Helfer hat nicht rechtzeitig geantwortet.".into()));
+        if !got {
+            return Err(ElevateError::Failed("Der Admin-Helfer hat kein Ergebnis geliefert.".into()));
         }
         from_exit_code(code)
     }
@@ -576,6 +676,12 @@ pub struct MemElevator<'a> {
     pub fail: std::cell::Cell<bool>,
     /// Erfolg melden, aber nichts ändern (Windows übernimmt es nicht)
     pub ignore: std::cell::Cell<bool>,
+    /// Alles ausführen, aber trotzdem einen Fehler melden (Teilerfolg wie Exit 10)
+    pub partial: std::cell::Cell<bool>,
+    /// Zeitüberschreitung melden, nichts ändern (der echte Helfer könnte danach noch ändern)
+    pub time_out: std::cell::Cell<bool>,
+    /// Ein Helfer läuft nach einer Zeitüberschreitung noch
+    pub busy: std::cell::Cell<bool>,
 }
 
 #[cfg(test)]
@@ -588,6 +694,9 @@ impl<'a> MemElevator<'a> {
             decline: Default::default(),
             fail: Default::default(),
             ignore: Default::default(),
+            partial: Default::default(),
+            time_out: Default::default(),
+            busy: Default::default(),
         }
     }
 }
@@ -599,16 +708,25 @@ impl Elevator for MemElevator<'_> {
         self.calls.set(self.calls.get() + 1);
         self.tasks.borrow_mut().push(task.clone());
         validate(task).map_err(ElevateError::Failed)?;
+        if self.busy.get() {
+            return Err(ElevateError::Failed(MSG_BUSY.into()));
+        }
         if self.decline.get() {
             return Err(ElevateError::Declined);
         }
         if self.fail.get() {
             return Err(ElevateError::Failed(MSG_PARTLY.into()));
         }
+        if self.time_out.get() {
+            return Err(ElevateError::TimedOut);
+        }
         if self.ignore.get() {
             return Ok(());
         }
         let mut errors = Vec::new();
+        if self.partial.get() {
+            errors.push(MSG_PARTLY.to_string());
+        }
         for op in &task.dns {
             for (list, base) in [(&op.v4, KEY_INTERFACES), (&op.v6, KEY_INTERFACES6)] {
                 let Some(list) = list else { continue };
@@ -635,6 +753,10 @@ impl Elevator for MemElevator<'_> {
         } else {
             Err(ElevateError::Failed(errors.join(" ")))
         }
+    }
+
+    fn busy(&self) -> bool {
+        self.busy.get()
     }
 }
 
@@ -729,11 +851,12 @@ mod tests {
         for op in cases {
             assert!(validate(&task_dns(op.clone())).is_err(), "{op:?}");
         }
-        let five = ElevatedTask {
-            dns: (1..=5).map(|i| dns(&format!("{{00000000-0000-0000-0000-00000000000{i}}}"), None, None)).collect(),
+        let many = |n: usize| ElevatedTask {
+            dns: (1..=n).map(|i| dns(&format!("{{00000000-0000-0000-0000-{i:012}}}"), None, None)).collect(),
             reg: vec![],
         };
-        assert!(validate(&five).is_err(), "höchstens 4 DNS-Änderungen");
+        assert!(validate(&many(MAX_DNS_OPS)).is_ok(), "16 DNS-Änderungen sind erlaubt");
+        assert!(validate(&many(MAX_DNS_OPS + 1)).is_err(), "höchstens 16 DNS-Änderungen");
         let twice = ElevatedTask { dns: vec![dns(GUID, None, None), dns(&GUID.to_lowercase(), None, None)], reg: vec![] };
         assert!(validate(&twice).is_err(), "Adapter doppelt");
     }
@@ -802,6 +925,26 @@ mod tests {
 
         let big = ElevatedTask { dns: vec![], reg: (0..400).map(|_| reg(&iface(GUID), VAL_TCP_ACK, Some(1))).collect() };
         assert!(encode(&big).is_err(), "Argument über 16 KiB");
+
+        // Der größte erlaubte Auftrag (16 volle DNS-Änderungen + 8 Registrierungswerte) passt
+        let v4 = ["255.255.255.255", "255.255.255.254", "255.255.255.253"];
+        let v6 = [
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:fff1",
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:fff2",
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:fff3",
+        ];
+        let full = ElevatedTask {
+            dns: (1..=MAX_DNS_OPS)
+                .map(|i| dns(&format!("{{ffffffff-ffff-ffff-ffff-{i:012}}}"), Some(&v4), Some(&v6)))
+                .collect(),
+            reg: (1..=MAX_REG_OPS)
+                .map(|i| reg(&iface(&format!("{{ffffffff-ffff-ffff-ffff-{i:012}}}")), VAL_TCP_ACK, Some(u32::MAX)))
+                .collect(),
+        };
+        assert_eq!(validate(&full), Ok(()));
+        let hex_text = encode(&full).expect("größter Auftrag passt in 16 KiB");
+        assert!(hex_text.len() < MAX_HEX_LEN, "{}", hex_text.len());
+        assert_eq!(decode(&hex_text).unwrap(), full);
     }
 
     #[test]
@@ -815,6 +958,8 @@ mod tests {
         assert_eq!(exit_code(&Ok(())), 0);
         assert_eq!(exit_code(&Err(ElevateError::Failed("x".into()))), 10);
         assert_eq!(exit_code(&Err(ElevateError::Unsupported("x".into()))), 30);
+        assert_eq!(exit_code(&Err(ElevateError::TimedOut)), 10);
+        assert_eq!(ElevateError::TimedOut.to_string(), MSG_TIMED_OUT);
     }
 
     #[test]

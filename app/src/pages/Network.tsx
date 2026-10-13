@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Activity, AlertTriangle, Cable, Check, ExternalLink, Gauge, Globe, Info, Loader2, Play, RotateCcw, Route, Router, ShieldCheck, Star, Wifi, X, Zap } from "lucide-react";
 import { api, errorText, imgSrc, listen } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { gradeColor, pingColor, pingGrade, signalLabel } from "@/lib/grade";
 import { t, useT } from "@/lib/i18n";
-import { DNS_PROVIDERS, dnsScore, isDeclined, pickBestDns, providerName } from "@/lib/netauto";
+import { DNS_PROVIDERS, backendText, dnsScore, isDeclined, isManualProvider, mayBeChanged, pickBestDns, providerName, type DnsPick } from "@/lib/netauto";
 import type { Area, DnsConfig, DnsProgress, DnsResult, Region, SpeedProgress, SpeedResult, TraceHop, TraceResult } from "@/lib/types";
 import { useLibrary } from "@/store/library";
 import { useNet } from "@/store/net";
-import { dnsChangePossible, dnsLabel, useNetAuto } from "@/store/netauto";
+import { dnsChangePossible, dnsLabel, useNetAuto, withWindowsLock } from "@/store/netauto";
 import { useSettings } from "@/store/settings";
 import { toast, useUI, type NetworkTab } from "@/store/ui";
 import { GradeRing } from "@/components/net/GradeRing";
@@ -303,7 +303,7 @@ function RoutePanel() {
             <div className="absolute top-5 right-[12%] left-[12%] border-t-2 border-dashed border-line-strong" />
             {(["lan", "isp", "internet", "target"] as const).map((z, i) => (
               <motion.div key={z} className="relative flex flex-1 flex-col items-center text-center" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
-                <span className={cn("grid h-10 w-10 place-items-center rounded-full ring-4 ring-[var(--nv-bg-elev)]", z === "lan" ? "bg-success/20 text-success" : z === "isp" ? "bg-accent/20 text-accent" : z === "target" ? "bg-gradient-accent text-accent-fg" : "bg-surface-3 text-muted")}>
+                <span className={cn("grid h-10 w-10 place-items-center rounded-full ring-4 ring-[var(--nv-bg-elev)]", z === "lan" ? "bg-success/20 text-success-fg" : z === "isp" ? "bg-accent/20 text-accent-text" : z === "target" ? "bg-gradient-accent text-accent-fg" : "bg-surface-3 text-muted")}>
                   {z === "lan" ? <Wifi className="h-4 w-4" /> : z === "isp" ? <Cable className="h-4 w-4" /> : z === "internet" ? <Globe className="h-4 w-4" /> : <Route className="h-4 w-4" />}
                 </span>
                 <span className="mt-2 text-[12px] font-semibold text-fg">{t(`network.route.zones.${z}`)}</span>
@@ -323,7 +323,7 @@ function RoutePanel() {
             return (
               <motion.div key={h.hop} className={cn("glass flex items-center gap-3 rounded-lg px-3 py-2", highlight && "shadow-[inset_0_0_0_1px_var(--nv-warning)]")} initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={spring.gentle}>
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-surface-2 text-[11px] font-bold text-muted tabular">{h.hop}</span>
-                <span className={cn("w-24 shrink-0 rounded-full px-2 py-0.5 text-center text-[10px] font-semibold uppercase", h.zone === "lan" ? "bg-success/15 text-success" : h.zone === "isp" ? "bg-accent/15 text-accent" : h.zone === "target" ? "bg-accent-3/20 text-fg" : "bg-surface-3 text-muted")}>{t(`network.route.zones.${h.zone}`)}</span>
+                <span className={cn("w-24 shrink-0 rounded-full px-2 py-0.5 text-center text-[10px] font-semibold uppercase", h.zone === "lan" ? "bg-success/15 text-success-fg" : h.zone === "isp" ? "bg-accent/15 text-accent-text" : h.zone === "target" ? "bg-accent-3/20 text-fg" : "bg-surface-3 text-muted")}>{t(`network.route.zones.${h.zone}`)}</span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] text-fg tabular">{h.address ?? "*"}</div>
                   {h.hostname && <div className="truncate text-[11px] text-muted">{h.hostname}</div>}
@@ -356,6 +356,54 @@ function RoutePanel() {
 function dnsNote(id: string): string | null {
   const note = DNS_PROVIDERS.find((p) => p.id === id)?.note;
   return note ? t(`network.dns.notes.${note}`) : null;
+}
+
+/**
+ * Band nach dem DNS-Vergleich: Vorschlag, „schon schnell“, „keine Daten“ oder „nicht gemessen“.
+ * Ehrlich: kein Wechselvorschlag ohne Messung des jetzigen DNS, bewusst gewählte Dienste nur mit Hinweis.
+ */
+function DnsAdvice({ pick, recommend, manualCurrent, fasterManual, canChange, button }: { pick: DnsPick; recommend: DnsResult | null; manualCurrent: string | null; fasterManual: DnsResult | null; canChange: boolean; button: ReactNode }) {
+  const t = useT();
+  const strong = !!recommend && !manualCurrent;
+  let tone: "accent" | "warn" | "ok" | "info";
+  let title: string;
+  let text: ReactNode;
+  if (pick.reason === "notMeasured") {
+    tone = "info";
+    title = t("network.dns.notMeasured");
+    text = t("network.dns.notMeasuredText");
+  } else if (recommend) {
+    tone = strong ? "accent" : "info";
+    title = t("network.dns.recommend", { name: recommend.name });
+    const gain = pick.bestScore !== null && pick.currentScore !== null ? t("network.dns.recommendText", { ms: Math.round(pick.bestScore), old: Math.round(pick.currentScore) }) : t("network.dns.recommendTextNoOld");
+    text = manualCurrent ? `${t("network.dns.manualHint", { name: manualCurrent })} ${gain}` : `${gain} ${t("network.dns.uacShort")}`;
+  } else if (pick.reason === "noData") {
+    tone = "warn";
+    title = t("network.dns.noData");
+    text = t("network.dns.noDataText");
+  } else if (!canChange && pick.change && pick.best) {
+    tone = "info";
+    title = t("network.dns.recommend", { name: pick.best.name });
+    text = t("network.dns.recommendManual");
+  } else {
+    tone = "ok";
+    title = t("network.dns.alreadyFast");
+    text = fasterManual ? `${t("network.dns.alreadyFastText")} ${t("network.dns.fasterManual", { name: fasterManual.name })}` : t("network.dns.alreadyFastText");
+  }
+  const icon = { accent: <Zap className="h-5 w-5" />, warn: <AlertTriangle className="h-5 w-5" />, ok: <Check className="h-5 w-5" />, info: <Info className="h-5 w-5" /> }[tone];
+  const iconCls = { accent: "bg-gradient-accent text-accent-fg", warn: "bg-warning/15 text-warning-fg", ok: "bg-success/15 text-success-fg", info: "bg-surface-3 text-accent-text" }[tone];
+  return (
+    <motion.div key={`${pick.reason}-${recommend?.id ?? ""}`} className={cn("mt-4 flex flex-wrap items-center gap-4 rounded-xl p-4", strong ? "ring-1 ring-accent/30" : "glass")} style={strong ? { background: "var(--nv-gradient-soft)" } : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }} role="status" aria-live="polite">
+      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full", iconCls)} aria-hidden>
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold text-fg">{title}</div>
+        <div className="text-[12px] text-muted">{text}</div>
+      </div>
+      {button}
+    </motion.div>
+  );
 }
 
 function DnsPanel() {
@@ -392,44 +440,63 @@ function DnsPanel() {
     }
   };
 
-  /** Nach einer Änderung die Markierung „Aktuell“ im Vergleich anpassen (ohne neu zu messen) */
+  /**
+   * Nach einer Änderung die Markierung „Aktuell“ im Vergleich anpassen (ohne neu zu messen).
+   * Steht der neue DNS nicht im Vergleich (z. B. der Router, wenn beim Messen Cloudflare eingestellt war),
+   * ist keine Zeile mehr „Aktuell“ – dann zeigt das Band „nicht gemessen“ statt eines falschen Vorschlags.
+   */
   const markCurrent = (cfg: DnsConfig | null) => setResults((rs) => rs.map((r) => ({ ...r, current: cfg?.provider ? r.id === cfg.provider : r.id === "current" })));
 
-  const changed = (cfg: DnsConfig | null) => {
-    setCurrent(cfg);
-    markCurrent(cfg);
-    void useNetAuto.getState().refresh();
+  /** Nach jedem Versuch den echten Zustand zeigen – auch nach einem Fehler kann Windows etwas übernommen haben */
+  const changed = async (cfg: DnsConfig | null | undefined) => {
+    const fresh = cfg !== undefined ? cfg : await api.dnsCurrent().catch(() => undefined);
+    if (fresh !== undefined) {
+      setCurrent(fresh);
+      markCurrent(fresh);
+    }
+    // Die Automatik-Karte darf danach kein altes Ergebnis mehr zeigen
+    await useNetAuto.getState().externalChange();
   };
 
-  const setProvider = async (id: string) => {
-    setWorking(id);
-    try {
-      const cfg = await api.dnsApply(id);
-      changed(cfg);
-      toast({ kind: "success", title: t("network.dns.setDone", { name: providerName(id) }), text: t("network.dns.setDoneText", { servers: cfg.servers.join(", ") }) });
-    } catch (e) {
-      const msg = errorText(e);
-      if (isDeclined(msg)) toast({ kind: "info", title: t("network.dns.declined"), text: msg });
-      else toast({ kind: "error", title: t("network.dns.setFailed"), text: msg });
-    } finally {
-      setWorking(null);
-    }
-  };
+  const setProvider = (id: string) =>
+    withWindowsLock(async () => {
+      setWorking(id);
+      let cfg: DnsConfig | undefined;
+      try {
+        cfg = await api.dnsApply(id);
+        toast({ kind: "success", title: t("network.dns.setDone", { name: providerName(id) }), text: t("network.dns.setDoneText", { servers: cfg.servers.join(", ") }) });
+      } catch (e) {
+        const msg = errorText(e);
+        if (isDeclined(msg)) toast({ kind: "info", title: t("network.dns.declined"), text: t("optimize.declinedText") });
+        // Sicherung bleibt (Teilerfolg, Zeitüberschreitung): Windows kann schon geändert sein – nie „nicht geändert“
+        else if (mayBeChanged(msg)) toast({ kind: "warning", title: t("network.dns.setUnsure"), text: backendText(msg, t) });
+        else toast({ kind: "error", title: t("network.dns.setFailed"), text: backendText(msg, t) });
+      } finally {
+        await changed(cfg);
+        setWorking(null);
+      }
+    });
 
-  const restore = async () => {
-    setWorking("restore");
-    try {
-      const cfg = (await api.dnsRestore()) ?? (await api.dnsCurrent().catch(() => null));
-      changed(cfg);
-      toast({ kind: "success", title: t("network.dns.restored"), text: cfg ? t("network.dns.restoredText", { servers: cfg.dhcp ? t("network.dns.dhcp") : cfg.servers.join(", ") || "–" }) : undefined });
-    } catch (e) {
-      const msg = errorText(e);
-      if (isDeclined(msg)) toast({ kind: "info", title: t("network.dns.declined"), text: msg });
-      else toast({ kind: "error", title: t("network.dns.restoreFailed"), text: msg });
-    } finally {
-      setWorking(null);
-    }
-  };
+  const restore = () =>
+    withWindowsLock(async () => {
+      setWorking("restore");
+      // Nur wenn die Hauptverbindung selbst geändert war, passt „Wieder wie vorher: …“ zu ihren Servern
+      const mainChanged = !!current?.changedByPulsar;
+      let cfg: DnsConfig | null | undefined;
+      try {
+        cfg = (await api.dnsRestore()) ?? (await api.dnsCurrent().catch(() => null));
+        // Steht danach noch eine Sicherung da, hat Windows den alten DNS (noch) nicht übernommen
+        if (cfg?.changedByPulsar || (cfg?.otherBackups ?? []).length > 0) toast({ kind: "warning", title: t("network.dns.restoreIncomplete"), text: t("optimize.auto.restoreDnsLeft") });
+        else toast({ kind: "success", title: t("network.dns.restored"), text: cfg && mainChanged ? t("network.dns.restoredText", { servers: cfg.dhcp ? t("network.dns.dhcp") : cfg.servers.join(", ") || "–" }) : undefined });
+      } catch (e) {
+        const msg = errorText(e);
+        if (isDeclined(msg)) toast({ kind: "info", title: t("network.dns.declined"), text: t("optimize.declinedText") });
+        else toast({ kind: "error", title: t("network.dns.restoreFailed"), text: backendText(msg, t) });
+      } finally {
+        await changed(cfg);
+        setWorking(null);
+      }
+    });
 
   const pick = useMemo(() => pickBestDns(results), [results]);
   // Schnellster Eintrag nach Punktzahl (auch Dienste, die man nur von Hand wählt)
@@ -447,19 +514,25 @@ function DnsPanel() {
   }, [results]);
   const canChange = !!current?.canChange;
   const recommend = canChange && dnsChangePossible(pick, current) ? pick.best : null;
+  // Bewusst gewählter Dienst (AdGuard, DNS0.eu, Mullvad): Vorschlag nur als Hinweis, nicht hervorgehoben
+  const manualCurrent = isManualProvider(current?.provider) ? providerName(current?.provider) : null;
+  // Schnellster insgesamt ist ein Dienst, den Pulsar nie automatisch wählt → ehrlich darauf hinweisen
+  const fasterManual = canChange && fastest && pick.best && fastest !== pick.best && !fastest.current && isManualProvider(fastest.id) ? fastest : null;
   const howToTarget = pick.best ?? results.find((r) => r.uncachedMs !== null && !r.current) ?? null;
   const max = Math.max(1, ...results.map((r) => r.uncachedMs ?? 0));
   const canSet = (r: DnsResult) => canChange && r.id !== "current" && !r.current && r.id !== current?.provider && DNS_PROVIDERS.some((p) => p.id === r.id);
   // Läuft gerade „Netzwerk automatisch optimieren“, wartet diese Seite (sonst mischen sich zwei Vergleiche)
   const autoBusy = useNetAuto((st) => st.phase === "measuring" || st.phase === "applying");
-  const locked = running || !!working || autoBusy;
+  // Gemeinsame Sperre: Läuft irgendwo eine Änderung an Windows (auch auf der Optimieren-Seite), ist hier alles gesperrt
+  const windowsBusy = useNetAuto((st) => st.windowsBusy);
+  const locked = running || !!working || autoBusy || windowsBusy;
 
   return (
     <div className="mx-auto grid max-w-[1240px] grid-cols-1 gap-5 xl:grid-cols-[1.6fr_1fr]">
       <div className="min-w-0">
         <p className="text-[13px] text-muted">{t("network.dns.intro")}</p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant={results.length ? "secondary" : "primary"} loading={running} disabled={!!working || autoBusy} icon={<Activity className="h-4 w-4" />} onClick={() => void run()}>
+          <Button variant={results.length ? "secondary" : "primary"} loading={running} disabled={!!working || autoBusy || windowsBusy} icon={<Activity className="h-4 w-4" />} onClick={() => void run()}>
             {running && progress ? t("network.dns.running", { done: progress.done, total: progress.total }) : results.length ? t("network.dns.runAgain") : t("network.dns.run")}
           </Button>
           {running && progress && <ProgressBar value={progress.done / Math.max(1, progress.total)} className="w-40" />}
@@ -488,36 +561,20 @@ function DnsPanel() {
 
         {/* Empfehlung nach dem Vergleich */}
         {results.length > 0 && !running && (
-          <motion.div key={recommend?.id ?? pick.reason} className={cn("mt-4 flex flex-wrap items-center gap-4 rounded-xl p-4", recommend ? "ring-1 ring-accent/30" : "glass")} style={recommend ? { background: "var(--nv-gradient-soft)" } : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
-            <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full", recommend ? "bg-gradient-accent text-accent-fg" : pick.reason === "noData" ? "bg-warning/15 text-warning" : pick.change ? "bg-surface-3 text-accent" : "bg-success/15 text-success")} aria-hidden>
-              {recommend ? <Zap className="h-5 w-5" /> : pick.reason === "noData" ? <AlertTriangle className="h-5 w-5" /> : pick.change ? <Info className="h-5 w-5" /> : <Check className="h-5 w-5" />}
-            </span>
-            <div className="min-w-0 flex-1">
-              {recommend ? (
-                <>
-                  <div className="text-sm font-semibold text-fg">{t("network.dns.recommend", { name: recommend.name })}</div>
-                  <div className="text-[12px] text-muted">
-                    {pick.bestScore !== null && pick.currentScore !== null ? t("network.dns.recommendText", { ms: Math.round(pick.bestScore), old: Math.round(pick.currentScore) }) : t("network.dns.recommendTextNoOld")} {t("network.dns.uacShort")}
-                  </div>
-                </>
-              ) : pick.reason === "noData" ? (
-                <>
-                  <div className="text-sm font-semibold text-fg">{t("network.dns.noData")}</div>
-                  <div className="text-[12px] text-muted">{t("network.dns.noDataText")}</div>
-                </>
-              ) : (
-                <>
-                  <div className="text-sm font-semibold text-fg">{pick.change && pick.best ? t("network.dns.recommend", { name: pick.best.name }) : t("network.dns.alreadyFast")}</div>
-                  <div className="text-[12px] text-muted">{pick.change && pick.best ? t("network.dns.recommendManual") : t("network.dns.alreadyFastText")}</div>
-                </>
-              )}
-            </div>
-            {recommend && (
-              <Button variant="primary" icon={<Zap className="h-4 w-4" />} loading={working === recommend.id} disabled={locked && working !== recommend.id} onClick={() => void setProvider(recommend.id)}>
-                {t("network.dns.setFastest")}
-              </Button>
-            )}
-          </motion.div>
+          <DnsAdvice
+            pick={pick}
+            recommend={recommend}
+            manualCurrent={manualCurrent}
+            fasterManual={fasterManual}
+            canChange={canChange}
+            button={
+              recommend && (
+                <Button variant={manualCurrent ? "secondary" : "primary"} icon={<Zap className="h-4 w-4" />} loading={working === recommend.id} disabled={locked && working !== recommend.id} onClick={() => void setProvider(recommend.id)}>
+                  {t("network.dns.setNamed", { name: recommend.name })}
+                </Button>
+              )
+            }
+          />
         )}
 
         <div className="mt-3 flex flex-col gap-1.5">
@@ -528,10 +585,10 @@ function DnsPanel() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-medium text-fg">
                     <span className="truncate">{r.name}</span>
-                    {r === fastest && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">{t("network.dns.fastest")}</span>}
-                    {r === recommend && r !== fastest && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">{t("network.dns.recommended")}</span>}
+                    {r === fastest && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success-fg">{t("network.dns.fastest")}</span>}
+                    {r === recommend && r !== fastest && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent-text">{t("network.dns.recommended")}</span>}
                     {r.current && <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-semibold text-fg-soft">{t("network.dns.current")}</span>}
-                    {r.failed > 0 && <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold text-warning">{t("network.dns.failedCount", { n: r.failed })}</span>}
+                    {r.failed > 0 && <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold text-warning-fg">{t("network.dns.failedCount", { n: r.failed })}</span>}
                   </div>
                   <div className="text-[11px] text-muted tabular">
                     {r.primary}
@@ -576,8 +633,9 @@ function DnsPanel() {
         <div className="glass rounded-xl p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{t("network.dns.currentConfig")}</div>
-            {current?.changedByPulsar && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
+            {/* Pulsar stellt nur bekannte Dienste ein – nur dann stimmt „Von Pulsar eingestellt“ */}
+            {current?.changedByPulsar && !!current.provider && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent-text">
                 <ShieldCheck className="h-3 w-3" aria-hidden /> {t("network.dns.byPulsar")}
               </span>
             )}
@@ -611,9 +669,12 @@ function DnsPanel() {
                   </div>
                 )}
               </dl>
-              {current.changedByPulsar && (
+              {(current.changedByPulsar || (current.otherBackups ?? []).length > 0) && (
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                  <p className="min-w-0 flex-1 text-[12px] leading-snug text-muted">{t("network.dns.restoreHint")}</p>
+                  <p className="min-w-0 flex-1 text-[12px] leading-snug text-muted">
+                    {current.changedByPulsar ? t("network.dns.restoreHint") : t("network.dns.otherBackups", { names: (current.otherBackups ?? []).join(", ") })}
+                    {current.changedByPulsar && (current.otherBackups ?? []).length > 0 && <> {t("network.dns.otherBackups", { names: current.otherBackups.join(", ") })}</>}
+                  </p>
                   <Button size="sm" variant="secondary" icon={<RotateCcw className="h-3.5 w-3.5" />} loading={working === "restore"} disabled={locked && working !== "restore"} onClick={() => void restore()}>
                     {t("network.dns.restore")}
                   </Button>

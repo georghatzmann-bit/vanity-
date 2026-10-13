@@ -66,6 +66,11 @@ export interface UninstallProgress {
   step: "stop" | "shortcuts" | "registry" | "files" | "data" | "done";
   percent: number;
 }
+/** `revertOk: false` = Windows-Einstellungen nicht vollständig zurückgestellt; dann ist `dataKept` immer `true`. */
+export interface UninstallDone {
+  revertOk: boolean;
+  dataKept: boolean;
+}
 
 type Handler = (p: unknown) => void;
 const mockListeners = new Map<string, Set<Handler>>();
@@ -127,7 +132,10 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
     case "start_uninstall": {
       const steps: UninstallProgress["step"][] = ["stop", "shortcuts", "registry", "files", "data", "done"];
       steps.forEach((s, i) => setTimeout(() => mockEmit("uninstall://progress", { step: s, percent: ((i + 1) / steps.length) * 100 }), 500 + i * 650));
-      setTimeout(() => mockEmit("uninstall://done", {}), 500 + steps.length * 650);
+      // Demo: `?revertfail` zeigt den Fall, dass nicht alles zurückgestellt werden konnte.
+      const revertOk = !params.has("revertfail");
+      const done: UninstallDone = { revertOk, dataKept: !revertOk || Boolean(args.keepData) };
+      setTimeout(() => mockEmit("uninstall://done", done), 500 + steps.length * 650);
       return r(undefined);
     }
     case "app_running":

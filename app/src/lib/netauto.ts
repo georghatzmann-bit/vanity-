@@ -2,7 +2,7 @@
  * „Netzwerk automatisch optimieren“: Wahl des besten DNS-Dienstes (Vertrag: docs/API.md,
  * Abschnitt „Netzwerk automatisch optimieren“). Reine Funktionen ohne Seiteneffekte – gut testbar.
  */
-import type { DnsResult, TweakId } from "./types";
+import type { AutoReport, DnsResult, TweakId } from "./types";
 
 /** Bekannte DNS-Dienste (wie dns::PROVIDERS im Backend). `auto` = darf automatisch gewählt werden. */
 export const DNS_PROVIDERS: { id: string; name: string; auto: boolean; note?: "malware" | "ads" | "encrypted" }[] = [
@@ -49,8 +49,11 @@ export interface DnsPick {
   gainMs: number | null;
   bestScore: number | null;
   currentScore: number | null;
-  /** faster = Wechsel lohnt sich · alreadyFast = DNS bleibt · noData = kein Kandidat hat zuverlässig geantwortet */
-  reason: "faster" | "alreadyFast" | "noData";
+  /**
+   * faster = Wechsel lohnt sich · alreadyFast = DNS bleibt · noData = kein Kandidat hat zuverlässig geantwortet ·
+   * notMeasured = der jetzige DNS steht nicht im Vergleich (z. B. nach einer Änderung) – erst erneut vergleichen
+   */
+  reason: "faster" | "alreadyFast" | "noData" | "notMeasured";
 }
 
 /** Kleine Toleranz gegen Rundungsfehler bei Kommazahlen (Grenzwerte zählen als erreicht) */
@@ -62,11 +65,14 @@ const EPS = 1e-9;
  * - Verglichen wird mit dem Eintrag current: true.
  * - Gewechselt wird nur bei mindestens 15 % **und** mindestens 3 ms Vorsprung.
  * - Ist der aktuelle DNS selbst der beste Kandidat, bleibt alles, wie es ist.
- * - Hat der aktuelle DNS keine Messwerte (oder ist unbekannt), lohnt sich der Wechsel zum besten Kandidaten.
+ * - Fehlt der Eintrag current: true, wurde der jetzige DNS nicht gemessen: kein Wechselvorschlag (reason "notMeasured").
+ * - Hat der aktuelle DNS keine Messwerte oder Fehler (failed > 0), hat er nicht zuverlässig geantwortet:
+ *   Dann lohnt sich der Wechsel zum besten Kandidaten (currentScore und gainMs sind dann null).
  */
 export function pickBestDns(results: DnsResult[]): DnsPick {
   const current = results.find((r) => r.current) ?? null;
-  const currentScore = current ? dnsScore(current) : null;
+  // Mit Fehlern zählt der aktuelle DNS wie die Kandidaten als „nicht zuverlässig“ – kein Vergleichswert
+  const currentScore = current && current.failed === 0 ? dnsScore(current) : null;
 
   let best: DnsResult | null = null;
   let bestScore: number | null = null;
@@ -82,7 +88,9 @@ export function pickBestDns(results: DnsResult[]): DnsPick {
   }
 
   if (!best || bestScore === null) return { best: null, current, change: false, gainMs: null, bestScore: null, currentScore, reason: "noData" };
-  if (current && (best === current || best.id === current.id)) return { best, current, change: false, gainMs: 0, bestScore, currentScore, reason: "alreadyFast" };
+  // Ohne Messung des jetzigen DNS lässt sich nichts ehrlich vergleichen
+  if (!current) return { best, current: null, change: false, gainMs: null, bestScore, currentScore: null, reason: "notMeasured" };
+  if (best === current || best.id === current.id) return { best, current, change: false, gainMs: 0, bestScore, currentScore, reason: "alreadyFast" };
   if (currentScore === null) return { best, current, change: true, gainMs: null, bestScore, currentScore: null, reason: "faster" };
 
   const gain = currentScore - bestScore;
@@ -101,3 +109,74 @@ export const DECLINED_TEXT = "Windows-Abfrage abgelehnt";
 
 /** Hat der Nutzer die Windows-Abfrage abgelehnt? (aus einer Fehlermeldung des Backends) */
 export const isDeclined = (error: string | null | undefined): boolean => !!error && error.includes(DECLINED_TEXT);
+
+/**
+ * Damit endet eine Fehlermeldung des Backends, wenn danach eine Sicherung besteht (Teilerfolg, Zeitüberschreitung,
+ * Nachkontrolle ohne Bestätigung). Windows kann dann schon (teilweise) geändert sein – nie „Nicht geändert“ zeigen.
+ */
+export const RESTORE_HINT_TEXT = "Zurückstellen ist weiter möglich";
+
+/** Kann Windows trotz Fehler schon (teilweise) geändert sein? (aus einer Fehlermeldung des Backends, vor dem Übersetzen) */
+export const mayBeChanged = (error: string | null | undefined): boolean => !!error && error.includes(RESTORE_HINT_TEXT);
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+/**
+ * Feste Sätze des Backends (deutsch, wie in elevate.rs, net/dnsctl.rs und opt/tweaks.rs) → Übersetzungsschlüssel.
+ * Reihenfolge: längere Sätze vor Sätzen, die in ihnen enthalten sind.
+ */
+export const BACKEND_TEXTS: readonly (readonly [string, string])[] = [
+  ["Du hast die Windows-Abfrage abgelehnt – es wurde nichts geändert.", "backend.declined"],
+  ["Windows hat nicht alle Änderungen übernommen.", "backend.partly"],
+  ["Der Admin-Helfer hat nicht rechtzeitig geantwortet.", "backend.timedOut"],
+  ["Der Admin-Helfer läuft noch – bitte gleich noch einmal versuchen.", "backend.busy"],
+  ["Der Admin-Helfer hat den Auftrag als ungültig abgelehnt.", "backend.invalid"],
+  ["Der Admin-Helfer hat kein Ergebnis geliefert.", "backend.noResult"],
+  ["Pulsar kann den DNS auf diesem System nicht einstellen. Dafür braucht es Windows 10 Version 2004 oder neuer.", "backend.cannotChange"],
+  ["Dafür braucht es Windows 10 Version 2004 oder neuer.", "backend.needs2004"],
+  ["Windows hat die DNS-Änderung nicht übernommen.", "backend.dnsNotTaken"],
+  ["Windows hat die Änderung nicht übernommen.", "backend.notTaken"],
+  ["Pulsar hat den DNS nicht geändert – es gibt nichts zurückzustellen.", "backend.nothingToRestore"],
+  ["Bei dieser Verbindung sind mehr als 3 DNS-Server fest eingetragen – Pulsar ändert den DNS hier nicht, damit er sich sicher zurückstellen lässt.", "backend.tooManyServers"],
+  ["Zurückstellen ist weiter möglich.", "backend.restoreHint"],
+  ["Es sind noch weitere Verbindungen übrig – bitte noch einmal zurückstellen.", "backend.moreLeft"],
+  ["„Nagle“ ist noch an einer anderen Verbindung eingestellt – bitte erst zurückstellen.", "backend.nagleOther"],
+  ["Keine Hauptverbindung gefunden, an der „Nagle“ eingestellt werden kann.", "backend.nagleNoAdapter"],
+  ["Keine aktive Netzwerkverbindung gefunden.", "backend.noConnection"],
+  ["Nur unter Windows verfügbar.", "backend.notWindows"],
+];
+
+/** Sätze des Backends mit einem Platzhalter ({value}) */
+const BACKEND_PATTERNS: readonly (readonly [RegExp, string])[] = [
+  [/^(.+?) antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein\.$/, "backend.noAnswer"],
+  [/Pulsar hat den DNS schon an (\d+) Verbindungen geändert – bitte erst zurückstellen\./, "backend.tooManyAdapters"],
+  [/Der Admin-Helfer wurde unerwartet beendet \(Code (\d+)\)\./, "backend.unexpectedExit"],
+];
+
+/**
+ * Meldung des Backends in der Sprache der Oberfläche: Bekannte Sätze werden übersetzt, unbekannte bleiben, wie sie
+ * sind (das Backend meldet immer auf Deutsch). Auf Deutsch ändert sich nichts.
+ */
+export function backendText(msg: string, tr: Translate): string {
+  let out = msg;
+  for (const [re, key] of BACKEND_PATTERNS) out = out.replace(re, (_m, value: string) => tr(key, { value }));
+  for (const [de, key] of BACKEND_TEXTS) out = out.split(de).join(tr(key));
+  return out;
+}
+
+/**
+ * Was ist nach net_auto_restore übrig geblieben? Gründe als Sätze (ohne die Ablehnung der Windows-Abfrage).
+ * Steht danach noch eine DNS-Sicherung da, hat Windows den alten DNS nicht übernommen – dafür steht `dnsLeftText`.
+ */
+export function restoreProblems(rep: AutoReport, dnsLeftText: string): string[] {
+  if (rep.declined) return [];
+  const dnsLeft = !rep.dnsError && (!!rep.dns?.changedByPulsar || (rep.dns?.otherBackups ?? []).length > 0);
+  return [
+    ...(rep.dnsError && !isDeclined(rep.dnsError) ? [rep.dnsError] : []),
+    ...(dnsLeft ? [dnsLeftText] : []),
+    ...rep.failed.filter((f) => !isDeclined(f.error)).map((f) => f.error),
+  ];
+}
+
+/** Wurde die Windows-Abfrage beim Zurückstellen abgelehnt (und sonst nichts falsch gelaufen)? */
+export const restoreDeclined = (rep: AutoReport): boolean => rep.declined || (rep.failed.length > 0 && rep.failed.every((f) => isDeclined(f.error)) && !rep.dnsError);

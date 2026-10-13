@@ -2,9 +2,9 @@ import { useEffect, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { AlertTriangle, Check, CircleSlash, ExternalLink, Gauge, Globe, Info, Loader2, RotateCcw, RotateCw, Send, ShieldCheck, Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import { AUTO_TWEAKS, isDeclined, isManualProvider, providerName, shortDnsName } from "@/lib/netauto";
+import { AUTO_TWEAKS, backendText, isDeclined, isManualProvider, mayBeChanged, providerName, shortDnsName } from "@/lib/netauto";
 import type { TweakId } from "@/lib/types";
-import { dnsChangePossible, dnsLabel, pulsarChanges, useNetAuto, type NetAutoChoice } from "@/store/netauto";
+import { canSwitchOn, dnsChangePossible, dnsLabel, pulsarChanges, useNetAuto, type NetAutoChoice } from "@/store/netauto";
 import { useUI } from "@/store/ui";
 import { TweakBadges } from "@/components/ui/TweakBadges";
 import { Button } from "@shared/ui/Button";
@@ -19,9 +19,9 @@ const TWEAK_ICONS: Record<string, ReactNode> = {
 
 type Status = "ok" | "warn" | "skip" | "keep";
 
-/** Status mit Symbol und Wort – nie nur Farbe */
+/** Status mit Symbol und Wort – nie nur Farbe (Textfarben mit genug Kontrast, auch im hellen Theme) */
 function StatusPill({ status, children }: { status: Status; children: ReactNode }) {
-  const cls = { ok: "bg-success/15 text-success", warn: "bg-warning/15 text-warning", skip: "bg-surface-3 text-muted", keep: "bg-surface-3 text-fg-soft" }[status];
+  const cls = { ok: "bg-success/15 text-success-fg", warn: "bg-warning/15 text-warning-fg", skip: "bg-surface-3 text-muted", keep: "bg-surface-3 text-fg-soft" }[status];
   const icon = status === "warn" ? <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> : status === "skip" ? <CircleSlash className="h-3.5 w-3.5" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />;
   return (
     <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap", cls)}>
@@ -76,8 +76,18 @@ export function NetAutoCard() {
 
   const changes = pulsarChanges(s.dns, s.tweaks);
   const hasChanges = changes.dns || changes.tweaks.length > 0;
+  // Pulsar stellt nur bekannte Dienste ein: Sicherung da, aber kein bekannter Dienst aktiv → nicht übernommen
+  const dnsSet = !!s.dns?.changedByPulsar && !!s.dns.provider;
+  // Sicherungen an anderen Verbindungen (z. B. am Kabel, während jetzt WLAN die Hauptverbindung ist)
+  const otherDns = s.dns?.otherBackups ?? [];
+  // „Von Pulsar eingestellt“ nur, wenn auch wirklich etwas eingestellt ist (nicht bloß eine Sicherung übrig)
+  const anySet = dnsSet || changes.tweaks.some((tw) => tw.state === "on");
+  // Läuft gerade irgendeine Änderung an Windows (auch außerhalb der Karte), ist alles gesperrt, was Windows ändert
+  const locked = s.windowsBusy;
   const tweakOf = (id: TweakId) => s.tweaks.find((tw) => tw.id === id);
-  const offTweaks = AUTO_TWEAKS.filter((id) => tweakOf(id)?.state === "off");
+  const offTweaks = AUTO_TWEAKS.filter((id) => canSwitchOn(tweakOf(id)));
+  // „Aus“, aber mit Sicherung (z. B. „Nagle“ noch an einer anderen Verbindung): erst zurückstellen, kein Schalter
+  const pendingTweaks = AUTO_TWEAKS.filter((id) => tweakOf(id)?.state === "off" && !!tweakOf(id)?.canRevert);
   const onTweaks = AUTO_TWEAKS.filter((id) => tweakOf(id)?.state === "on");
   const naTweaks = AUTO_TWEAKS.filter((id) => {
     const st = tweakOf(id)?.state;
@@ -90,6 +100,8 @@ export function NetAutoCard() {
   const allGood = nothingToDo && s.pick?.reason === "alreadyFast" && !!s.dns?.canChange && onTweaks.length === AUTO_TWEAKS.length;
   const busy = s.phase === "applying";
   const tweakName = (id: string) => t(`optimize.items.${id}.name`);
+  // Windows zeigt nicht den Wert von Pulsar – bei „Nagle“ vielleicht, weil es an einer anderen Verbindung eingestellt ist
+  const notTakenDesc = (id: string) => t(id === "nagle" ? "optimize.auto.notTakenDescNagle" : "optimize.auto.notTakenDesc");
 
   // ---- DNS-Zeile im Plan --------------------------------------------------------------------
   const dnsPlan = (() => {
@@ -100,13 +112,15 @@ export function NetAutoCard() {
         change: false,
         desc: t("optimize.auto.dnsCannot"),
         extra: (
-          <button type="button" className="inline-flex items-center gap-1 font-medium text-accent hover:underline" onClick={() => useUI.getState().navigate({ page: "network", section: "dns" })}>
+          <button type="button" className="inline-flex items-center gap-1 font-medium text-accent-text hover:underline" onClick={() => useUI.getState().navigate({ page: "network", section: "dns" })}>
             {t("optimize.auto.dnsHowTo")} <ExternalLink className="h-3 w-3" aria-hidden />
           </button>
         ),
       };
     }
     if (!pick || pick.reason === "noData") return { change: false, desc: t("optimize.auto.dnsNoData"), extra: null };
+    // Ohne Messung des jetzigen DNS kein Vergleich – und auch kein „schon schnell“
+    if (pick.reason === "notMeasured") return { change: false, desc: t("optimize.auto.dnsNotMeasured"), extra: null };
     if (canDns && pick.best) {
       const from = pick.current ? shortDnsName(pick.current) : dnsLabel(dns);
       const desc =
@@ -121,21 +135,35 @@ export function NetAutoCard() {
   })();
 
   // ---- Ergebniszeilen -----------------------------------------------------------------------
-  const resultRows: { key: string; status: Status; label: string; title: string; desc: string; icon: ReactNode }[] = [];
+  const resultRows: { key: string; status: Status; label: string; title: string; desc: string; icon: ReactNode; unsure?: boolean }[] = [];
+  // Fehlschlag: „Nicht geändert“ nur, wenn nachweislich nichts geändert ist. Bleibt eine Sicherung (Teilerfolg,
+  // Zeitüberschreitung), meldet das Backend „Zurückstellen ist weiter möglich“ → „Nicht bestätigt“.
+  const failRow = (key: string, title: string, error: string, icon: ReactNode) => {
+    const unsure = mayBeChanged(error);
+    resultRows.push({ key, status: "warn", label: t(unsure ? "optimize.auto.rowUnsure" : "optimize.auto.rowFailed"), title, desc: backendText(error, t), icon, unsure });
+  };
   if (s.report && s.requested) {
     const rep = s.report;
     if (s.requested.provider) {
       const name = providerName(s.requested.provider);
-      if (rep.declined && (!rep.dnsChanged || isDeclined(rep.dnsError))) resultRows.push({ key: "dns", status: "skip", label: t("optimize.auto.rowDeclined"), title: t("optimize.auto.dnsTitle"), desc: t("optimize.auto.rowDeclinedDesc"), icon: <Globe className="h-[18px] w-[18px]" /> });
-      else if (rep.dnsError) resultRows.push({ key: "dns", status: "warn", label: t("optimize.auto.rowFailed"), title: t("optimize.auto.dnsTitle"), desc: rep.dnsError, icon: <Globe className="h-[18px] w-[18px]" /> });
-      else resultRows.push({ key: "dns", status: "ok", label: t("optimize.auto.rowDone"), title: t("optimize.auto.dnsDone", { name }), desc: t("optimize.auto.dnsDoneDesc", { servers: rep.dns?.servers.join(", ") || "–" }), icon: <Globe className="h-[18px] w-[18px]" /> });
+      const icon = <Globe className="h-[18px] w-[18px]" />;
+      const title = t("optimize.auto.dnsTitle");
+      // Der echte Grund (z. B. gescheiterte Live-Prüfung) geht vor „Abgelehnt“ – mit „Ja“ hätte es auch nicht geklappt
+      if (rep.dnsError && !isDeclined(rep.dnsError) && !rep.dnsChanged) failRow("dns", title, rep.dnsError, icon);
+      else if (!rep.dnsChanged && (rep.declined || isDeclined(rep.dnsError))) resultRows.push({ key: "dns", status: "skip", label: t("optimize.auto.rowDeclined"), title, desc: t("optimize.auto.rowDeclinedDesc"), icon });
+      else if (rep.dnsError) failRow("dns", title, rep.dnsError, icon);
+      else if (rep.dnsChanged) resultRows.push({ key: "dns", status: "ok", label: t("optimize.auto.rowDone"), title: t("optimize.auto.dnsDone", { name }), desc: t("optimize.auto.dnsDoneDesc", { servers: rep.dns?.servers.join(", ") || "–" }), icon });
+      else resultRows.push({ key: "dns", status: "warn", label: t("optimize.auto.rowUnsure"), title, desc: t("optimize.auto.rowUnknown"), icon, unsure: true });
     }
     for (const id of s.requested.tweaks) {
       const failed = rep.failed.find((f) => f.id === id);
       const icon = TWEAK_ICONS[id];
-      if (rep.applied.includes(id)) resultRows.push({ key: id, status: "ok", label: t("optimize.auto.rowDone"), title: tweakName(id), desc: t("optimize.auto.tweakDone"), icon });
+      // „Erledigt“ nur, wenn Windows den neuen Wert danach auch wirklich zeigt
+      if (rep.applied.includes(id) && tweakOf(id)?.state === "on") resultRows.push({ key: id, status: "ok", label: t("optimize.auto.rowDone"), title: tweakName(id), desc: t("optimize.auto.tweakDone"), icon });
+      else if (rep.applied.includes(id)) resultRows.push({ key: id, status: "warn", label: t("optimize.auto.notTaken"), title: tweakName(id), desc: notTakenDesc(id), icon, unsure: true });
       else if (rep.declined || isDeclined(failed?.error)) resultRows.push({ key: id, status: "skip", label: t("optimize.auto.rowDeclined"), title: tweakName(id), desc: t("optimize.auto.rowDeclinedDesc"), icon });
-      else resultRows.push({ key: id, status: "warn", label: t("optimize.auto.rowFailed"), title: tweakName(id), desc: failed?.error ?? t("optimize.auto.rowUnknown"), icon });
+      else if (failed) failRow(id, tweakName(id), failed.error, icon);
+      else resultRows.push({ key: id, status: "warn", label: t("optimize.auto.rowUnsure"), title: tweakName(id), desc: t("optimize.auto.rowUnknown"), icon, unsure: true });
     }
   }
   const okCount = resultRows.filter((r) => r.status === "ok").length;
@@ -143,10 +171,10 @@ export function NetAutoCard() {
   const resultHead = declined
     ? { icon: <CircleSlash className="h-5 w-5" />, cls: "bg-surface-3 text-muted", text: t("optimize.auto.resultDeclined") }
     : okCount === resultRows.length
-      ? { icon: <Check className="h-5 w-5" />, cls: "bg-success/15 text-success", text: t("optimize.auto.resultDone") }
+      ? { icon: <Check className="h-5 w-5" />, cls: "bg-success/15 text-success-fg", text: t("optimize.auto.resultDone") }
       : okCount > 0
-        ? { icon: <AlertTriangle className="h-5 w-5" />, cls: "bg-warning/15 text-warning", text: t("optimize.auto.resultPartial") }
-        : { icon: <AlertTriangle className="h-5 w-5" />, cls: "bg-warning/15 text-warning", text: t("optimize.auto.resultFailed") };
+        ? { icon: <AlertTriangle className="h-5 w-5" />, cls: "bg-warning/15 text-warning-fg", text: t("optimize.auto.resultPartial") }
+        : { icon: <AlertTriangle className="h-5 w-5" />, cls: "bg-warning/15 text-warning-fg", text: t(resultRows.some((r) => r.unsure) ? "optimize.auto.resultUnsure" : "optimize.auto.resultFailed") };
 
   return (
     <section aria-labelledby="netauto-title" className="glass relative overflow-hidden rounded-2xl">
@@ -166,9 +194,7 @@ export function NetAutoCard() {
             </h2>
             <p className="mt-1 max-w-[760px] text-[13px] leading-relaxed text-muted">{t("optimize.auto.desc")}</p>
           </div>
-          {s.phase === "idle" && hasChanges && (
-            <StatusPill status="ok">{t("optimize.auto.byPulsar")}</StatusPill>
-          )}
+          {s.phase === "idle" && anySet && <StatusPill status="ok">{t("optimize.auto.byPulsar")}</StatusPill>}
         </div>
 
         <AnimatePresence mode="wait" initial={false}>
@@ -193,7 +219,7 @@ export function NetAutoCard() {
                 ))}
               </ul>
               <div className="flex flex-col items-start gap-2 xl:items-end">
-                <Button variant="primary" size="lg" icon={<Sparkles className="h-4 w-4" />} onClick={() => void s.start()}>
+                <Button variant="primary" size="lg" icon={<Sparkles className="h-4 w-4" />} disabled={locked} onClick={() => void s.start()}>
                   {t("optimize.auto.start")}
                 </Button>
                 <span className="text-[12px] text-muted">{t("optimize.auto.startHint")}</span>
@@ -205,25 +231,38 @@ export function NetAutoCard() {
           {s.phase === "idle" && hasChanges && (
             <motion.div key="changed" {...fade} className="mt-5">
               <div className="divide-y divide-line rounded-xl border border-line bg-surface">
-                {changes.dns && s.dns && (
+                {s.dns?.changedByPulsar && (
                   <Row
                     icon={<Globe className="h-[18px] w-[18px]" />}
                     title={t("optimize.auto.changedDns", { name: dnsLabel(s.dns) })}
-                    desc={[...s.dns.servers, ...(s.dns.ipv6Servers ?? [])].join(", ") || "–"}
-                    control={<StatusPill status="ok">{t("optimize.auto.active")}</StatusPill>}
+                    desc={dnsSet ? [...s.dns.servers, ...(s.dns.ipv6Servers ?? [])].join(", ") || "–" : t("optimize.auto.dnsNotTakenDesc")}
+                    control={dnsSet ? <StatusPill status="ok">{t("optimize.auto.set")}</StatusPill> : <StatusPill status="warn">{t("optimize.auto.notTaken")}</StatusPill>}
                   />
                 )}
-                {changes.tweaks.map((tw) => (
-                  <Row key={tw.id} icon={TWEAK_ICONS[tw.id]} title={tweakName(tw.id)} desc={t(`optimize.items.${tw.id}.desc`)} badges={<TweakBadges restart={tw.restart} />} control={<StatusPill status="ok">{t("optimize.auto.active")}</StatusPill>} />
-                ))}
+                {otherDns.length > 0 && (
+                  <Row
+                    icon={<Globe className="h-[18px] w-[18px]" />}
+                    title={t("optimize.auto.changedDnsOther", { names: otherDns.join(", ") })}
+                    desc={t("optimize.auto.changedDnsOtherDesc")}
+                    control={<StatusPill status="keep">{t("optimize.auto.backedUp")}</StatusPill>}
+                  />
+                )}
+                {changes.tweaks.map((tw) =>
+                  // Sicherung da, aber Windows zeigt den alten Wert → ehrlich „Nicht übernommen“
+                  tw.state === "on" ? (
+                    <Row key={tw.id} icon={TWEAK_ICONS[tw.id]} title={tweakName(tw.id)} desc={t(`optimize.items.${tw.id}.desc`)} badges={<TweakBadges restart={tw.restart} />} control={<StatusPill status="ok">{t("optimize.auto.set")}</StatusPill>} />
+                  ) : (
+                    <Row key={tw.id} icon={TWEAK_ICONS[tw.id]} title={tweakName(tw.id)} desc={notTakenDesc(tw.id)} control={<StatusPill status="warn">{t("optimize.auto.notTaken")}</StatusPill>} />
+                  ),
+                )}
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <p className="max-w-[620px] text-[12px] leading-relaxed text-muted">{t("optimize.auto.changedText")}</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />} loading={s.restoring} onClick={() => void s.restore()}>
+                  <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />} loading={s.restoring} disabled={locked && !s.restoring} onClick={() => void s.restore()}>
                     {t("optimize.auto.restore")}
                   </Button>
-                  <Button variant="primary" icon={<Sparkles className="h-4 w-4" />} disabled={s.restoring} onClick={() => void s.start()}>
+                  <Button variant="primary" icon={<Sparkles className="h-4 w-4" />} disabled={locked} onClick={() => void s.start()}>
                     {t("optimize.auto.recheck")}
                   </Button>
                 </div>
@@ -261,7 +300,7 @@ export function NetAutoCard() {
                   extra={dnsPlan.extra}
                   badges={dnsPlan.change ? <TweakBadges admin /> : undefined}
                   dim={dnsPlan.change && !s.choice.dns}
-                  control={dnsPlan.change ? <Toggle checked={s.choice.dns} disabled={busy} label={t("optimize.auto.dnsChange")} onChange={(v) => s.setChoice("dns", v)} /> : <StatusPill status="keep">{t("optimize.auto.keep")}</StatusPill>}
+                  control={dnsPlan.change ? <Toggle checked={s.choice.dns} disabled={busy || locked} label={t("optimize.auto.dnsChange")} onChange={(v) => s.setChoice("dns", v)} /> : <StatusPill status="keep">{t("optimize.auto.keep")}</StatusPill>}
                 />
                 {offTweaks.map((id) => {
                   const tw = tweakOf(id);
@@ -274,16 +313,19 @@ export function NetAutoCard() {
                       desc={t(`optimize.items.${id}.desc`)}
                       badges={<TweakBadges admin={tw?.admin} restart={tw?.restart} />}
                       dim={!on}
-                      control={<Toggle checked={on} disabled={busy} label={tweakName(id)} onChange={(v) => s.setChoice(id as keyof NetAutoChoice, v)} />}
+                      control={<Toggle checked={on} disabled={busy || locked} label={tweakName(id)} onChange={(v) => s.setChoice(id as keyof NetAutoChoice, v)} />}
                     />
                   );
                 })}
+                {pendingTweaks.map((id) => (
+                  <Row key={id} icon={TWEAK_ICONS[id]} title={tweakName(id)} desc={notTakenDesc(id)} control={<StatusPill status="keep">{t("optimize.auto.keep")}</StatusPill>} />
+                ))}
               </div>
               {(onTweaks.length > 0 || naTweaks.length > 0) && (
                 <div className="mt-2 flex flex-col gap-0.5 px-1 text-[12px] text-muted">
                   {onTweaks.length > 0 && (
                     <span className="flex items-center gap-1.5">
-                      <Check className="h-3.5 w-3.5 text-success" aria-hidden /> {t("optimize.auto.alreadyOn", { list: onTweaks.map(tweakName).join(", ") })}
+                      <Check className="h-3.5 w-3.5 text-success-fg" aria-hidden /> {t("optimize.auto.alreadyOn", { list: onTweaks.map(tweakName).join(", ") })}
                     </span>
                   )}
                   {naTweaks.length > 0 && <span>{t("optimize.auto.notAvailable", { list: naTweaks.map(tweakName).join(", ") })}</span>}
@@ -293,7 +335,7 @@ export function NetAutoCard() {
               {nothingToDo ? (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
                   <div className="flex items-center gap-3">
-                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", allGood ? "bg-success/15 text-success" : "bg-surface-3 text-muted")}>
+                    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", allGood ? "bg-success/15 text-success-fg" : "bg-surface-3 text-muted")}>
                       {allGood ? <Check className="h-5 w-5" aria-hidden /> : <Info className="h-5 w-5" aria-hidden />}
                     </span>
                     <div>
@@ -321,7 +363,7 @@ export function NetAutoCard() {
                     <Button variant="ghost" disabled={busy} onClick={() => s.reset()}>
                       {t("common.cancel")}
                     </Button>
-                    <Button variant="primary" size="lg" icon={<Check className="h-4 w-4" />} loading={busy} disabled={!selected} onClick={() => void s.apply()}>
+                    <Button variant="primary" size="lg" icon={<Check className="h-4 w-4" />} loading={busy} disabled={!selected || locked} onClick={() => void s.apply()}>
                       {busy ? t("optimize.auto.applying") : selected ? t("optimize.auto.apply") : t("optimize.auto.noneSelected")}
                     </Button>
                   </div>
@@ -364,12 +406,12 @@ export function NetAutoCard() {
                   {t("optimize.auto.close")}
                 </Button>
                 {hasChanges && (
-                  <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />} loading={s.restoring} onClick={() => void s.restore()}>
-                    {t("optimize.auto.restoreAll")}
+                  <Button variant="secondary" icon={<RotateCcw className="h-4 w-4" />} loading={s.restoring} disabled={locked && !s.restoring} onClick={() => void s.restore()}>
+                    {t("optimize.auto.restore")}
                   </Button>
                 )}
                 {declined && (
-                  <Button variant="primary" icon={<ShieldCheck className="h-4 w-4" />} disabled={s.restoring} onClick={() => void s.apply()}>
+                  <Button variant="primary" icon={<ShieldCheck className="h-4 w-4" />} disabled={locked} onClick={() => void s.apply()}>
                     {t("optimize.auto.retry")}
                   </Button>
                 )}
@@ -384,14 +426,14 @@ export function NetAutoCard() {
                 <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-fg">{s.errorStep === "apply" ? t("optimize.auto.errorApply") : t("optimize.auto.errorMeasure")}</div>
-                  <div className="mt-0.5 text-[12px] leading-relaxed text-fg-soft">{s.error}</div>
+                  <div className="mt-0.5 text-[12px] leading-relaxed text-fg-soft">{s.error ? backendText(s.error, t) : null}</div>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
                 <Button variant="ghost" onClick={() => s.reset()}>
                   {t("optimize.auto.close")}
                 </Button>
-                <Button variant="primary" icon={<RotateCw className="h-4 w-4" />} onClick={() => void s.start()}>
+                <Button variant="primary" icon={<RotateCw className="h-4 w-4" />} disabled={locked} onClick={() => void s.start()}>
                   {t("optimize.auto.retry")}
                 </Button>
               </div>

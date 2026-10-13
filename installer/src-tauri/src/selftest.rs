@@ -8,7 +8,7 @@ use crate::install::{self, InstallPlan};
 use crate::manifest::{self, Location};
 use crate::platform;
 use crate::types::{InstallOptions, Progress};
-use crate::uninstall::{self, UninstallPlan};
+use crate::uninstall::{self, RevertResult, UninstallPlan};
 use crate::util::{display_path, eprint_line, same_path};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -176,7 +176,8 @@ pub async fn run_selftest(cfg: &SelftestConfig) -> SelftestReport {
         expected.push(&uninstaller);
     }
     let absent = missing(&expected, true);
-    let record_ok = install::read_install_record(&plan.dir).is_some_and(|r| r.version == manifest.version);
+    // Mit der Marke `"revertAll": true` – sonst würde der Deinstaller `--revert-all` gar nicht aufrufen.
+    let record_ok = install::read_install_record(&plan.dir).is_some_and(|r| r.version == manifest.version && r.revert_all);
     let hash_ok = match &manifest.app.sha256 {
         Some(h) => download::sha256_file(&exe).map(|a| a.eq_ignore_ascii_case(h)).unwrap_or(false),
         None => true,
@@ -187,7 +188,7 @@ pub async fn run_selftest(cfg: &SelftestConfig) -> SelftestReport {
         if absent.is_empty() && record_ok && hash_ok {
             format!("{} files present, install.json ok", expected.len())
         } else {
-            format!("missing: {absent:?}, install.json ok: {record_ok}, exe hash ok: {hash_ok}")
+            format!("missing: {absent:?}, install.json ok (version + revertAll): {record_ok}, exe hash ok: {hash_ok}")
         },
     );
 
@@ -223,8 +224,13 @@ pub async fn run_selftest(cfg: &SelftestConfig) -> SelftestReport {
     uplan.integrate = true;
     match uninstall::run_uninstall(&uplan, &|_| {}) {
         Ok(o) => {
-            let detail = if o.warnings.is_empty() { format!("ok, --revert-all: {}", o.revert.describe()) } else { o.warnings.join("; ") };
-            rec.push("uninstall", true, detail)
+            let ok = revert_step_ok(&o.revert);
+            let detail = if o.warnings.is_empty() {
+                format!("ok, --revert-all: {}", o.revert.describe())
+            } else {
+                format!("--revert-all: {} – {}", o.revert.describe(), o.warnings.join("; "))
+            };
+            rec.push("uninstall", ok, detail)
         }
         Err(e) => rec.push("uninstall", false, e),
     };
@@ -246,6 +252,14 @@ pub async fn run_selftest(cfg: &SelftestConfig) -> SelftestReport {
     rec.push("removed", ok, if ok { "all files and entries removed".to_string() } else { format!("left over: {leftovers:?}") });
 
     finish(rec)
+}
+
+/// Hat `--revert-all` beim Deinstallieren im Selbsttest funktioniert? Die frische Installation hat keine
+/// Sicherungen, also muss Exit-Code 0 herauskommen. Rot bei anderem Exit-Code, fehlendem Exit-Code oder
+/// Zeitüberschreitung – und wenn es gar nicht aufgerufen wurde (Marke fehlt, App fehlt). Ein Startfehler
+/// bleibt nur ein Hinweis: In den Unit-Tests ist die „App“ eine Attrappe, die sich nicht starten lässt.
+pub fn revert_step_ok(r: &RevertResult) -> bool {
+    matches!(r, RevertResult::Exited(Some(0)) | RevertResult::Failed(_))
 }
 
 /// Nach einem Fehler möglichst sauber aufräumen.

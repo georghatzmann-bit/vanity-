@@ -1,5 +1,8 @@
 //! Deinstallation: App beenden und Windows-Einstellungen zurückstellen → Verknüpfungen → Registry →
 //! Dateien → (optional) Benutzerdaten.
+//!
+//! Konnte `Pulsar.exe --revert-all` nicht alles zurückstellen, bleiben die Benutzerdaten immer erhalten –
+//! dort liegen die Sicherungen (DNS, Optimierungen), mit denen eine neue Installation zurückstellen kann.
 
 use crate::args::CliArgs;
 use crate::config::{config, APP_DATA_ID, DOWNLOAD_DIR_NAME, INSTALL_INFO_NAME, TEMP_UNINSTALL_PREFIX, UNINSTALLER_NAME};
@@ -33,6 +36,10 @@ pub struct UninstallPlan {
     pub app_exe_name: String,
     /// Höchstens so lange auf `Pulsar.exe --revert-all` warten.
     pub revert_timeout: Duration,
+    /// Die Deinstallation läuft mit Adminrechten eines **anderen** Kontos (siehe
+    /// [`started_by_other_user`]): `--revert-all` würde dessen Datenordner lesen und fälschlich
+    /// „nichts zu tun“ melden – es wird deshalb nicht gestartet und gilt als nicht zurückgestellt.
+    pub other_user: bool,
 }
 
 impl UninstallPlan {
@@ -45,6 +52,7 @@ impl UninstallPlan {
             self_exe: std::env::current_exe().ok(),
             app_exe_name: config().app_exe_name.clone(),
             revert_timeout: REVERT_TIMEOUT,
+            other_user: false,
         }
     }
 }
@@ -56,20 +64,31 @@ pub struct UninstallOutcome {
     pub dir_removed: bool,
     /// Was beim Zurückstellen der Windows-Einstellungen passiert ist.
     pub revert: RevertResult,
+    /// Die Benutzerdaten wurden nicht gelöscht – gewählt („Meine Daten behalten“) oder weil das
+    /// Zurückstellen nicht vollständig war.
+    pub data_kept: bool,
     pub warnings: Vec<String>,
 }
 
 /// Ergebnis von `Pulsar.exe --revert-all`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum RevertResult {
-    /// Keine App-Datei im Ordner – nichts aufzurufen.
+    /// Keine App-Datei im Ordner und keine Marke in `install.json` – nichts aufzurufen.
     #[default]
     NoApp,
+    /// `install.json` fehlt, ist unlesbar oder trägt nicht die Marke `"revertAll": true`: eine ältere
+    /// Version, die `--revert-all` nicht kennt (sie würde mit Fenster starten) – nicht aufgerufen.
+    OldVersion,
+    /// `install.json` trägt die Marke, aber `Pulsar.exe` fehlt – zurückstellen ist nicht möglich.
+    Missing,
     /// Beendet mit diesem Exit-Code (`None` = ohne Code, z. B. von außen beendet).
     /// 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben.
     Exited(Option<i32>),
     /// Zeitlimit überschritten – der Prozess wurde beendet.
     TimedOut,
+    /// Nicht gestartet: Die Deinstallation läuft unter einem anderen Konto als dem, das Pulsar benutzt
+    /// hat – dessen Sicherungen sind von hier aus nicht sicher zurückzustellen.
+    OtherUser,
     /// Konnte nicht gestartet werden oder das Warten ging schief.
     Failed(String),
 }
@@ -77,18 +96,21 @@ pub enum RevertResult {
 impl RevertResult {
     /// Alles zurückgestellt (oder nichts zu tun)?
     pub fn is_ok(&self) -> bool {
-        matches!(self, RevertResult::NoApp | RevertResult::Exited(Some(0)))
+        matches!(self, RevertResult::NoApp | RevertResult::OldVersion | RevertResult::Exited(Some(0)))
     }
 
     /// Kurzer Text fürs Protokoll.
     pub fn describe(&self) -> String {
         match self {
             RevertResult::NoApp => "keine App-Datei gefunden – nichts zurückzustellen".into(),
+            RevertResult::OldVersion => "ältere Version – nichts zurückzustellen".into(),
+            RevertResult::Missing => "Pulsar.exe fehlt – zurückstellen nicht möglich".into(),
             RevertResult::Exited(Some(0)) => "alles zurückgestellt (oder nichts zu tun)".into(),
             RevertResult::Exited(Some(1)) => "etwas ist übrig geblieben (Exit-Code 1)".into(),
             RevertResult::Exited(Some(code)) => format!("beendet mit Exit-Code {code}"),
             RevertResult::Exited(None) => "ohne Exit-Code beendet".into(),
             RevertResult::TimedOut => "Zeitlimit überschritten – Prozess beendet".into(),
+            RevertResult::OtherUser => "Deinstallation läuft unter einem anderen Windows-Konto – nicht zurückgestellt".into(),
             RevertResult::Failed(e) => format!("fehlgeschlagen: {e}"),
         }
     }
@@ -177,6 +199,39 @@ pub fn run_revert(exe: &Path, timeout: Duration) -> RevertResult {
     result
 }
 
+/// Kennt die Installation in `dir` schon `Pulsar.exe --revert-all`? Nur mit der Marke `"revertAll": true`
+/// in `install.json` (schreibt das Setup beim Installieren). Ohne lesbare `install.json`: nein.
+pub fn knows_revert_all(dir: &Path) -> bool {
+    crate::install::read_install_record(dir).is_some_and(|r| r.revert_all)
+}
+
+/// Wurde die Deinstallation von einem anderen Konto gestartet, als dem, unter dem sie jetzt läuft?
+/// Passiert, wenn ein Standardkonto bei der Windows-Abfrage die Daten eines Admin-Kontos eingibt:
+/// Die Kopie mit Adminrechten (und `Pulsar.exe --revert-all`) läuft dann als dieser andere Benutzer.
+pub fn started_by_other_user(cli: &CliArgs) -> bool {
+    cli.user_data.as_ref().is_some_and(|starter| !dirs::config_dir().is_some_and(|own| same_path(&own, starter)))
+}
+
+/// Was der Deinstaller zum Zurückstellen tut: `--revert-all` nur bei Installationen mit Marke aufrufen
+/// (und nie im Datenordner eines anderen Kontos).
+fn revert_for(dir: &Path, app_exe: &Path, timeout: Duration, other_user: bool) -> RevertResult {
+    match (knows_revert_all(dir), app_exe.is_file()) {
+        (true, true) if other_user => RevertResult::OtherUser,
+        (true, true) => run_revert(app_exe, timeout),
+        (true, false) => RevertResult::Missing,
+        (false, true) => RevertResult::OldVersion,
+        (false, false) => RevertResult::NoApp,
+    }
+}
+
+/// Hinweis, wenn die Benutzerdaten wegen eines unvollständigen Zurückstellens erhalten bleiben.
+pub fn data_kept_warning() -> String {
+    tr(
+        "Einige Windows-Einstellungen konnten nicht sicher zurückgestellt werden – deine Pulsar-Daten bleiben erhalten, damit eine neue Installation sie zurückstellen kann.",
+        "Some Windows settings could not be safely restored – your Pulsar data is kept so a new installation can restore them.",
+    )
+}
+
 /// WebView2-Daten der Setup-App selbst – nach einer Deinstallation mit entfernen.
 pub fn setup_data_dirs() -> Vec<PathBuf> {
     dirs::data_local_dir().map(|d| d.join(crate::config::SETUP_DATA_ID)).into_iter().collect()
@@ -204,18 +259,22 @@ pub fn run_uninstall(plan: &UninstallPlan, progress: &dyn Fn(UninstallProgress))
     platform::kill_processes(&plan.app_exe_name)?;
 
     // Von Pulsar geänderte Windows-Einstellungen (DNS, Optimierungen) zurückstellen, solange die App
-    // noch da ist. Braucht das Adminrechte, fragt Windows dabei höchstens einmal nach.
+    // noch da ist. Braucht das Adminrechte, fragt Windows dabei höchstens einmal nach. Ältere Versionen
+    // (ohne Marke in install.json) kennen `--revert-all` nicht – dort wird es gar nicht erst gestartet.
     let app_exe = plan.dir.join(&plan.app_exe_name);
-    outcome.revert = run_revert(&app_exe, plan.revert_timeout);
+    outcome.revert = revert_for(&plan.dir, &app_exe, plan.revert_timeout, plan.other_user);
     log(format!("Windows-Einstellungen zurückstellen: {}", outcome.revert.describe()));
-    if outcome.revert != RevertResult::NoApp {
+    if matches!(outcome.revert, RevertResult::Exited(_) | RevertResult::TimedOut | RevertResult::Failed(_)) {
         // Falls nach einem Abbruch noch ein Pulsar-Prozess (z. B. der Admin-Helfer) die Datei sperrt.
         if let Err(e) = platform::kill_processes(&plan.app_exe_name) {
             log(format!("Nach dem Zurückstellen: {e}"));
         }
     }
+    // Nicht alles zurückgestellt → die Sicherungen in den Benutzerdaten auf keinen Fall löschen.
+    outcome.data_kept = plan.keep_data || !outcome.revert.is_ok();
     if !outcome.revert.is_ok() {
         outcome.warnings.push(format!("Einstellungen zurückstellen: {}", outcome.revert.describe()));
+        outcome.warnings.push(data_kept_warning());
     }
 
     // Gehören Verknüpfungen/Registry zu genau diesem Ordner? (Schützt eine andere Installation.)
@@ -276,7 +335,10 @@ pub fn run_uninstall(plan: &UninstallPlan, progress: &dyn Fn(UninstallProgress))
 
     // ---- Benutzerdaten
     step("data", 85.0);
-    if !plan.keep_data {
+    if outcome.data_kept && !plan.keep_data {
+        log("Benutzerdaten bleiben erhalten, obwohl „Daten löschen“ gewählt war: Das Zurückstellen war nicht vollständig.");
+    }
+    if !outcome.data_kept {
         for d in &plan.data_dirs {
             // Sicherheitsnetz: nur Ordner mit genau dem App-Bezeichner.
             if d.file_name().and_then(|n| n.to_str()) != Some(APP_DATA_ID) {
@@ -331,6 +393,12 @@ pub fn relocate_if_needed(cli: &CliArgs) -> Option<i32> {
     if cli.quiet {
         args.push("--quiet".into());
     }
+    // Wer die Deinstallation startet: Gibt man bei der Windows-Abfrage ein anderes Konto ein, merkt
+    // die Kopie das daran und ruft `--revert-all` nicht im falschen Datenordner auf.
+    if let Some(own) = dirs::config_dir() {
+        args.push("--user-data".into());
+        args.push(display_path(&own));
+    }
     let need_admin = !platform::is_elevated() && !crate::disk::probe_writable(&exe_dir);
     let started = if need_admin {
         platform::shell_execute_elevated(&temp, &args)
@@ -362,9 +430,13 @@ pub fn run_quiet(cli: &CliArgs) -> i32 {
             1
         }
         Some(dir) => {
-            let plan = UninstallPlan::new(dir.clone(), true);
+            let mut plan = UninstallPlan::new(dir.clone(), true);
+            plan.other_user = started_by_other_user(cli);
             match run_uninstall(&plan, &|p| crate::util::eprint_line(format!("{:>5.1}% {}", p.percent, p.step))) {
                 Ok(outcome) => {
+                    for w in &outcome.warnings {
+                        crate::util::eprint_line(w);
+                    }
                     // Ohne Oberfläche läuft kein WebView – dessen Datenordner kann sofort weg.
                     for d in setup_data_dirs() {
                         let _ = std::fs::remove_dir_all(d);

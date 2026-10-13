@@ -86,7 +86,7 @@ await go({ page: "network", section: "dns" });
 await shot("16-netzwerk-dns", 1200);
 await click(/DNS-Dienste vergleichen/);
 await shot("17-netzwerk-dns-ergebnis", 6000);
-await click(/Schnellsten einstellen/);
+await click(/Cloudflare einstellen/);
 await shot("17b-netzwerk-dns-eingestellt", 1800);
 // Für die Optimieren-Aufnahmen wieder zurück auf den DNS vom Router
 await click(/^Zurückstellen$/);

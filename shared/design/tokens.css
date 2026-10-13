@@ -40,6 +40,10 @@
   --nv-warning: #fbbf24;
   --nv-danger: #fb7185;
   --nv-info: #60a5fa;
+  /* Text auf hellem Status- bzw. Akzent-Untergrund (Pillen, Chips) – dunkle Themes nehmen die Farbe selbst */
+  --nv-success-fg: var(--nv-success);
+  --nv-warning-fg: var(--nv-warning);
+  --nv-accent-text: var(--nv-accent);
 
   /* Hintergrund-Stimmung */
   --nv-glow-a: rgb(34 211 238 / 0.18);
@@ -164,6 +168,10 @@
   --nv-warning: #d97706;
   --nv-danger: #e11d48;
   --nv-info: #2563eb;
+  /* Im hellen Theme dunkler, damit kleine Schrift auf hellem Untergrund mindestens 4,5:1 Kontrast hat */
+  --nv-success-fg: #065f46;
+  --nv-warning-fg: #92400e;
+  --nv-accent-text: color-mix(in oklab, var(--nv-accent) 58%, black);
 
   --nv-glow-a: rgb(8 145 178 / 0.12);
   --nv-glow-b: rgb(124 58 237 / 0.09);
@@ -247,7 +255,10 @@
   --color-accent-3: var(--nv-accent-3);
   --color-accent-fg: var(--nv-accent-fg);
   --color-success: var(--nv-success);
+  --color-success-fg: var(--nv-success-fg);
   --color-warning: var(--nv-warning);
+  --color-warning-fg: var(--nv-warning-fg);
+  --color-accent-text: var(--nv-accent-text);
   --color-danger: var(--nv-danger);
   --color-info: var(--nv-info);
 
