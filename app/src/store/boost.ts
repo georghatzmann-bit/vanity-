@@ -67,8 +67,13 @@ export const useBoost = create<BoostStore>((set, get) => ({
     gameHooks.onStarted = (game, startedAt) => {
       const net = useNet.getState();
       // Messziel: echte Spielserver (schnellster Standort), sonst die Region des Spiels
-      if (game.serverGame) void net.useGameServerTarget(game.serverGame).then((ok) => !ok && game.region && net.useRegionTarget(game.region));
-      else if (game.region) void net.useRegionTarget(game.region);
+      if (game.serverGame) {
+        void net.useGameServerTarget(game.serverGame).then((ok) => {
+          if (!ok && game.region) void net.useRegionTarget(game.region);
+        });
+      } else if (game.region) {
+        void net.useRegionTarget(game.region);
+      }
       recording = { gameId: game.id, start: startedAt, samples: [], targetLabel: net.targetLabel, boosted: get().state.active };
     };
     gameHooks.onStopped = (game, session) => {
