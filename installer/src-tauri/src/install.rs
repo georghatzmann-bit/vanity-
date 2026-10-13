@@ -18,7 +18,7 @@ pub struct InstallPlan {
     pub dir: PathBuf,
     /// Wirksame Optionen (`dir` = normalisierter Ordner).
     pub options: InstallOptions,
-    /// Quelle für `Uninstall Nova.exe` (normalerweise die laufende Setup-Exe).
+    /// Quelle für `Uninstall Pulsar.exe` (normalerweise die laufende Setup-Exe).
     pub uninstaller_source: Option<PathBuf>,
     /// Mit Adminrechten → Eintrag in HKLM.
     pub elevated: bool,
@@ -60,7 +60,7 @@ impl InstallPlan {
     }
 }
 
-/// Standard-Installationsordner: `%LOCALAPPDATA%\Programs\Nova Launcher`.
+/// Standard-Installationsordner: `%LOCALAPPDATA%\Programs\Pulsar`.
 pub fn default_install_dir() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(std::env::temp_dir)
@@ -193,8 +193,8 @@ fn running_error() -> InstallError {
         "install",
         "running",
         tr(
-            "Nova Launcher läuft gerade. Bitte die App schließen, damit sie ersetzt werden kann.",
-            "Nova Launcher is currently running. Please close the app so it can be replaced.",
+            "Pulsar läuft gerade. Bitte die App schließen, damit sie ersetzt werden kann.",
+            "Pulsar is currently running. Please close the app so it can be replaced.",
         ),
         true,
     )

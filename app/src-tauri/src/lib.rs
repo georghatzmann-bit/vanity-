@@ -1,8 +1,9 @@
-//! Nova Launcher – Rust-Backend (Tauri v2).
+//! Pulsar – Game Booster, Rust-Backend (Tauri v2).
 //!
 //! Einstiegspunkt: [`run`]. Alle Befehle sind in `invoke_handler` registriert und folgen dem
 //! Vertrag in `docs/API.md`.
 
+mod appinfo;
 mod backup;
 mod config;
 mod db;
@@ -13,16 +14,15 @@ mod launch;
 mod library;
 mod models;
 mod native;
-mod profiles;
+mod net;
+mod opt;
 mod scan;
-mod screenshots;
 mod selftest;
 mod state;
 mod system;
 mod tracker;
 mod update;
 mod util;
-mod weather;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -31,10 +31,10 @@ use tauri::{Manager, RunEvent};
 use tauri_plugin_window_state::StateFlags;
 
 use crate::error::LockExt;
-use crate::state::{Core, Paths, Shared};
+use crate::state::{Core, Paths, Shared, DEFAULT_PROFILE};
 
-const IDENTIFIER: &str = "com.nova.launcher";
-const DEFAULT_OVERLAY_SHORTCUT: &str = "Alt+Shift+N";
+const IDENTIFIER: &str = "com.pulsar.booster";
+const DEFAULT_OVERLAY_SHORTCUT: &str = "Alt+Shift+P";
 
 fn fallback_dir(base: Option<PathBuf>) -> PathBuf {
     base.unwrap_or_else(std::env::temp_dir).join(IDENTIFIER)
@@ -48,7 +48,7 @@ fn fatal(msg: &str) {
         use windows::core::PCWSTR;
         use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
         let text: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
-        let title: Vec<u16> = "Nova Launcher".encode_utf16().chain(std::iter::once(0)).collect();
+        let title: Vec<u16> = "Pulsar".encode_utf16().chain(std::iter::once(0)).collect();
         unsafe {
             MessageBoxW(None, PCWSTR(text.as_ptr()), PCWSTR(title.as_ptr()), MB_OK | MB_ICONERROR);
         }
@@ -73,10 +73,7 @@ fn setup(app: &mut tauri::App, started_minimized: bool) -> Result<(), Box<dyn st
     }
 
     let core: Shared = Arc::new(Core::new(paths, started_minimized));
-    let profiles = profiles::load_or_init(&core.paths);
-    let active = profiles.active_id.clone();
-    *core.profiles.lock_safe() = profiles;
-    match backup::open_with_recovery(&core.paths, &active) {
+    match backup::open_with_recovery(&core.paths, DEFAULT_PROFILE) {
         Ok(db) => {
             core.db.replace(Some(db));
         }
@@ -113,6 +110,13 @@ fn setup(app: &mut tauri::App, started_minimized: bool) -> Result<(), Box<dyn st
     Ok(())
 }
 
+/// Admin-Helfer: `Pulsar.exe --elevated <aufgaben.json> --result <ergebnis.json>`.
+/// Gibt `Some(exit_code)` zurück, wenn die Exe in diesem Modus gestartet wurde.
+pub fn elevated_entry() -> Option<i32> {
+    let args: Vec<String> = std::env::args().collect();
+    args.iter().any(|a| a == "--elevated").then(|| opt::elevated_main(&args))
+}
+
 /// Startet die App.
 pub fn run() {
     let started_minimized = std::env::args().any(|a| a == "--minimized");
@@ -135,8 +139,8 @@ pub fn run() {
         .plugin(
             tauri_plugin_autostart::Builder::new()
                 .args(["--minimized"])
-                // gleicher Registry-Name wie beim Installer (HKCU\…\Run\NovaLauncher)
-                .app_name("NovaLauncher")
+                // gleicher Registry-Name wie beim Installer (HKCU\…\Run\Pulsar)
+                .app_name("Pulsar")
                 .build(),
         )
         .plugin(
@@ -147,20 +151,14 @@ pub fn run() {
         .setup(move |app| setup(app, started_minimized))
         .on_window_event(native::on_window_event)
         .invoke_handler(tauri::generate_handler![
-            // App & Profile
-            profiles::app_info,
-            profiles::profiles_list,
-            profiles::profile_create,
-            profiles::profile_update,
-            profiles::profile_delete,
-            profiles::profile_switch,
+            // App
+            appinfo::app_info,
             native::quit_app,
-            // Datenbank
+            // Datenbank (Spiele, Berichte, Einstellungen)
             library::db_list,
             library::db_put,
             library::db_put_many,
             library::db_delete,
-            library::games_merge,
             library::kv_get,
             library::kv_set,
             // Spielzeit
@@ -168,8 +166,7 @@ pub fn run() {
             library::sessions_range,
             library::sessions_for_game,
             library::session_delete,
-            library::playtime_add,
-            // Bibliothek scannen
+            // Spiele finden
             scan::scan_library,
             scan::inspect_paths,
             scan::paths_exist,
@@ -178,33 +175,47 @@ pub fn run() {
             launch::launch_game,
             launch::stop_game,
             launch::running_games,
-            launch::launch_tool,
             launch::open_path,
             launch::reveal_path,
             launch::open_url,
             // Bilder
             images::images_fetch,
-            images::sgdb_search,
-            images::sgdb_images,
-            images::image_download,
             images::image_set_custom,
-            images::image_palette,
             images::exe_icon,
             images::cache_size,
             images::cache_clear,
-            // System & Widgets
+            // System
             system::system_stats,
-            weather::weather,
-            weather::geocode,
-            // Screenshots, Spielstände, Backups
-            screenshots::screenshots_list,
-            screenshots::thumbnail,
-            backup::save_backup_create,
-            backup::save_backup_list,
-            backup::save_backup_restore,
-            backup::save_backup_delete,
-            backup::library_export,
-            backup::library_import,
+            // Netzwerk
+            net::net_ping_once,
+            net::net_monitor_start,
+            net::net_monitor_stop,
+            net::net_regions,
+            net::net_regions_ping,
+            net::net_game_servers,
+            net::net_traceroute,
+            net::net_dns_benchmark,
+            net::net_dns_current,
+            net::net_dns_apply,
+            net::net_dns_restore,
+            net::net_adapters,
+            net::net_wifi,
+            net::net_speedtest,
+            net::net_speedtest_cancel,
+            // Optimieren & Boost
+            opt::opt_tweaks,
+            opt::opt_apply,
+            opt::opt_revert_all,
+            opt::opt_power_plans,
+            opt::opt_power_set,
+            opt::opt_flush_dns,
+            opt::opt_trim_memory,
+            opt::opt_processes,
+            opt::opt_kill,
+            opt::boost_start,
+            opt::boost_stop,
+            opt::boost_state,
+            // Sicherungen
             backup::backups_list,
             backup::backup_now,
             backup::backup_restore,
@@ -225,6 +236,6 @@ pub fn run() {
                 }
             }
         }),
-        Err(e) => fatal(&format!("Nova Launcher konnte nicht gestartet werden:\n{e}")),
+        Err(e) => fatal(&format!("Pulsar konnte nicht gestartet werden:\n{e}")),
     }
 }

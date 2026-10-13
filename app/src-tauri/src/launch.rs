@@ -153,7 +153,7 @@ fn shell_execute(verb: &str, file: &str, params: &str, dir: Option<&Path>) -> Cm
 // Starten
 // =============================================================================================
 
-/// Programm ohne Konsolenfenster und unabhängig von Nova starten.
+/// Programm ohne Konsolenfenster und unabhängig von Pulsar starten.
 fn spawn_detached(exe: &Path, args: &str, work: Option<&Path>) -> CmdResult<()> {
     let mut cmd = Command::new(exe);
     if let Some(w) = work {
@@ -346,28 +346,6 @@ pub async fn set_tracked_games(state: State<'_, Shared>, games: Vec<crate::model
     blocking(move || {
         core.tracker.set_games(&core, games);
         Ok(())
-    })
-    .await
-}
-
-#[tauri::command]
-pub async fn launch_tool(path: String, args: Option<String>) -> CmdResult<()> {
-    blocking(move || {
-        let p = existing_file(&path)?;
-        if p.is_dir() {
-            return tauri_plugin_opener::open_path(&p, None::<&str>)
-                .map_err(|e| format!("Der Ordner konnte nicht geöffnet werden ({e})."));
-        }
-        let args = args.unwrap_or_default();
-        let is_exe = p
-            .extension()
-            .map(|e| e.eq_ignore_ascii_case("exe"))
-            .unwrap_or(false);
-        if is_exe {
-            spawn_detached(&p, &args, p.parent())
-        } else {
-            shell_open(&p, &args, p.parent())
-        }
     })
     .await
 }

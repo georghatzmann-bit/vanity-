@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Nova Launcher",
-  "mainBinaryName": "NovaLauncher",
+  "productName": "Pulsar",
+  "mainBinaryName": "Pulsar",
   "version": "1.0.0",
-  "identifier": "com.nova.launcher",
+  "identifier": "com.pulsar.booster",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Nova Launcher",
+        "title": "Pulsar",
         "url": "index.html",
         "width": 1360,
         "height": 860,
@@ -33,7 +33,7 @@
       },
       {
         "label": "overlay",
-        "title": "Nova Overlay",
+        "title": "Pulsar Overlay",
         "url": "overlay.html",
         "width": 380,
         "height": 560,
@@ -69,8 +69,8 @@
     "targets": [
       "nsis"
     ],
-    "publisher": "Nova",
-    "copyright": "Nova Launcher",
+    "publisher": "Pulsar",
+    "copyright": "Pulsar",
     "category": "Game",
     "shortDescription": "Premium Game & App Launcher",
     "icon": [

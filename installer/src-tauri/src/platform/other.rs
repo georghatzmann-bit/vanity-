@@ -110,7 +110,7 @@ pub fn launch_unelevated(exe: &Path, workdir: &Path, _elevated: bool) -> Result<
         .current_dir(workdir)
         .spawn()
         .map(|_| ())
-        .map_err(|e| format!("{}: {e}", tr("Nova Launcher konnte nicht gestartet werden", "Could not start Nova Launcher")))
+        .map_err(|e| format!("{}: {e}", tr("Pulsar konnte nicht gestartet werden", "Could not start Pulsar")))
 }
 
 pub fn spawn_detached(exe: &Path, args: &[String]) -> Result<(), String> {

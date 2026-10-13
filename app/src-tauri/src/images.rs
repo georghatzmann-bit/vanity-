@@ -86,7 +86,7 @@ fn hue_distance(a: f32, b: f32) -> f32 {
     d.min(360.0 - d)
 }
 
-/// Standardpalette (Nova-Farben), wenn das Bild kaum Farbe enthält.
+/// Standardpalette (Pulsar-Farben), wenn das Bild kaum Farbe enthält.
 pub fn default_palette() -> GamePalette {
     GamePalette {
         primary: "#ff4f8b".into(),
@@ -786,7 +786,7 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         let names: Vec<&str> = missing.iter().map(|k| kind_label(*k)).collect();
         if api_key.is_none() {
             messages.push(format!(
-                "Nicht gefunden: {}. Mit einem SteamGridDB-Schlüssel (Einstellungen) findet Nova mehr Bilder.",
+                "Nicht gefunden: {}. Mit einem SteamGridDB-Schlüssel (Einstellungen) findet Pulsar mehr Bilder.",
                 names.join(", ")
             ));
         } else {
@@ -813,58 +813,6 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         source: source.into(),
         messages,
         steam_app_id: found_by_name,
-    })
-}
-
-#[tauri::command]
-pub async fn sgdb_search(state: State<'_, Shared>, query: String, api_key: String) -> CmdResult<Vec<SgdbGame>> {
-    let q = query.trim();
-    if q.is_empty() {
-        return Ok(Vec::new());
-    }
-    sgdb_search_raw(&state.http, &api_key, q).await
-}
-
-#[tauri::command]
-pub async fn sgdb_images(
-    state: State<'_, Shared>,
-    sgdb_id: f64,
-    kind: ImageKind,
-    api_key: String,
-) -> CmdResult<Vec<SgdbImage>> {
-    if !sgdb_id.is_finite() || sgdb_id <= 0.0 {
-        return Err("Ungültige SteamGridDB-ID.".into());
-    }
-    sgdb_list(&state.http, &api_key, sgdb_id as u64, kind).await
-}
-
-#[tauri::command]
-pub async fn image_download(
-    state: State<'_, Shared>,
-    url: String,
-    game_id: String,
-    kind: ImageKind,
-) -> CmdResult<SavedImage> {
-    check_game_id(&game_id)?;
-    let url = url.trim().to_string();
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("Ungültige Bild-Adresse.".into());
-    }
-    let bytes = match download(&state.http, &url).await {
-        Ok(b) => b,
-        Err(DlError::NotFound) => return Err("Unter dieser Adresse wurde kein Bild gefunden.".into()),
-        Err(DlError::Other(e)) => return Err(e),
-    };
-    let dir = state.paths.game_images_dir(&game_id);
-    let path = store_async(dir, kind, url, bytes).await?;
-    let palette = if kind == ImageKind::Cover {
-        palette_async(path.clone()).await
-    } else {
-        None
-    };
-    Ok(SavedImage {
-        path: display_path(&path),
-        palette,
     })
 }
 
@@ -900,12 +848,6 @@ pub async fn image_set_custom(
         })
     })
     .await
-}
-
-#[tauri::command]
-pub async fn image_palette(path: String) -> CmdResult<GamePalette> {
-    let p = clean_path(&path);
-    blocking(move || palette_for_file(&p)).await
 }
 
 #[tauri::command]

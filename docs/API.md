@@ -1,140 +1,93 @@
-# NOVA – Vertrag zwischen Oberfläche und Backend
+# PULSAR – Backend-Vertrag (Tauri-Befehle und Events)
 
-Typen: siehe `app/src/lib/types.ts` (Quelle der Wahrheit). Rust-Structs spiegeln diese Typen mit
-`#[serde(rename_all = "camelCase")]`; optionale Felder sind `Option<T>` mit `#[serde(skip_serializing_if = "Option::is_none", default)]`.
-Alle Befehle geben `Result<T, String>` zurück. Fehlertexte sind kurz, verständlich und **deutsch**
-(die Oberfläche zeigt sie direkt an). Kein Befehl darf paniken – Fehler immer als `Err(String)`.
+Typen: `app/src/lib/types.ts` (TypeScript) ⇄ `app/src-tauri/src/**/types.rs` / `models.rs` (Rust, `serde(rename_all = "camelCase")`).
+Aufrufe aus der Oberfläche: `app/src/lib/api.ts`. Im Browser antwortet `app/src/lib/mock.ts` mit Demo-Daten.
+Fehler: Befehle liefern `Err(String)` mit einem **deutschen, verständlichen Satz** (wird direkt angezeigt).
 
-Tauri-Befehle werden aus JS mit camelCase-Argumentnamen aufgerufen
-(Rust `fn foo(game_id: String)` ⇄ JS `invoke("foo", { gameId })`).
+## Grundsätze
 
-## Datenablage
+- **Ehrlich:** Pulsar misst und optimiert lokal. Keine erfundenen „Ping-Verbesserungen“. Jede Optimierung hat eine ehrliche Wirkungsstufe.
+- **Nie abstürzen:** Kein `unwrap()` auf Laufzeitdaten. Netzwerk-Zeitlimits immer setzen.
+- **Ohne Admin starten:** Pulsar läuft als normaler Benutzer. Admin-Schritte laufen gebündelt über den Admin-Helfer (eine UAC-Abfrage).
+- **Rückgängig:** Jede Änderung an Windows wird vorher gesichert (kv `opt.snapshots`) und kann exakt zurückgestellt werden.
+- **Plattform:** Ziel ist Windows 10/11. Unter Linux/macOS (Entwicklung, CI-Tests) gibt es Ersatzwege oder klare Fehlermeldungen („Nur unter Windows verfügbar.“).
 
-| Was | Ort |
+## App, Daten, Spiele (aus NOVA übernommen)
+
+| Befehl | Zweck |
 |---|---|
-| Profile-Liste | `<app_data_dir>/profiles.json` → `{ profiles: Profile[], activeId }` |
-| Datenbank pro Profil | `<app_data_dir>/profiles/<id>/nova.db` (SQLite, WAL) |
-| Automatische DB-Backups | `<app_data_dir>/profiles/<id>/backups/nova-YYYYMMDD-HHMMSS.db` (max. 10) |
-| Spielstand-Backups | `<app_data_dir>/profiles/<id>/savegames/<gameId>/<YYYYMMDD-HHMMSS>.zip` |
-| Bild-Cache | `<app_local_data_dir>/cache/images/<gameId>/<kind>-<hash8>.<ext>` |
-| Vorschaubilder | `<app_local_data_dir>/cache/thumbs/<hash>.jpg` |
+| `app_info()` → `AppInfo` | Version, Ordner, Plattform, `isAdmin` |
+| `quit_app()` | Sitzungen speichern, beenden |
+| `db_list(table)`, `db_put(table,id,value)`, `db_put_many(table,items)`, `db_delete(table,id)` | Tabellen `games`, `reports` (JSON-Objekte mit `id`) |
+| `kv_get(key)`, `kv_set(key,value)` | Schlüssel/Wert, z. B. `settings` |
+| `playtime_stats()`, `sessions_range(from,to)`, `sessions_for_game(gameId,limit)`, `session_delete(id)` | Spielzeit (der Tracker zeichnet automatisch auf) |
+| `scan_library(options)` → `ScanResult` | Steam/Epic/GOG/Startmenü/Ordner durchsuchen |
+| `inspect_paths(paths)`, `paths_exist(paths)` | Drag & Drop, Aufräumen |
+| `set_tracked_games(games)` | Welche Spiele erkannt werden sollen |
+| `launch_game(gameId, launch)`, `stop_game(gameId)`, `running_games()` | Starten, Beenden, laufende Spiele |
+| `open_path`, `reveal_path`, `open_url` | Explorer/Browser öffnen |
+| `images_fetch(request)` → `ImageFetchResult` | Cover/Hintergrund/Logo/Icon (Steam ohne Schlüssel, per Name, .exe-Icon, SteamGridDB) |
+| `image_set_custom(gameId, kind, sourcePath)`, `exe_icon`, `cache_size`, `cache_clear` | Bilder |
+| `system_stats()` → `SystemStats` | CPU/RAM/GPU-Last |
+| `backups_list()`, `backup_now()`, `backup_restore(file)` | Datenbank-Sicherungen |
+| `apply_native_settings(settings)` | Schließen→Tray, Overlay-Kürzel, Sprache |
+| `overlay_toggle()` → `bool` | Ping-Overlay ein/aus |
+| `tray_set_recent(items)` | Zuletzt gespielt im Tray |
+| `update_check()`, `update_install(setupUrl, sha256)` | Updates |
 
-`app_data_dir` = `%APPDATA%\com.nova.launcher`, `app_local_data_dir` = `%LOCALAPPDATA%\com.nova.launcher`.
+Events: `game://started` `GameStartedEvent`, `game://stopped` `GameStoppedEvent`, `tray://action` `{action}`, `update://progress`.
 
-### SQLite-Schema (PRAGMA user_version = 1)
+## Netzwerk (`src/net/`)
 
-```sql
-CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE games (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE collections (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE wishlist (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE sessions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id TEXT NOT NULL,
-  start INTEGER NOT NULL,
-  end INTEGER NOT NULL,
-  seconds INTEGER NOT NULL
-);
-CREATE INDEX idx_sessions_game ON sessions(game_id);
-CREATE INDEX idx_sessions_start ON sessions(start);
-```
+| Befehl | Verhalten |
+|---|---|
+| `net_ping_once(target, count=4)` → `PingStats` | `count` Messungen (Abstand 200 ms), Zeitlimit je Messung 1 s |
+| `net_monitor_start(targets, intervalMs=1000)` | Startet/ersetzt den Live-Monitor (ein Hintergrund-Task). Jeder Takt misst alle Ziele **parallel** und sendet Event **`net://ping`** `MonitorUpdate` (neue Samples + Statistik der letzten 60 Messungen je Ziel). Intervall 250–5000 ms. |
+| `net_monitor_stop()` | Stoppt den Monitor |
+| `net_regions()` → `Region[]` | Fester Katalog von Rechenzentren weltweit (AWS-Regionen per TCP:443 auf `dynamodb.<region>.amazonaws.com`), mindestens: Frankfurt, Paris, London, Stockholm, Mailand, Irland, Spanien, Zürich, US-Ost, US-Ost 2, US-West, Kanada, São Paulo, Singapur, Tokio, Seoul, Mumbai, Sydney, Bahrain, Kapstadt. IDs stabil (z. B. `aws-eu-central-1`). |
+| `net_regions_ping(ids?, count=4)` → `RegionPing[]` | Mehrere Regionen gleichzeitig (max. 8 parallel) |
+| `net_game_servers(game)` → `Region[]` | Echte Spielserver: `cs2`/`dota2`/`deadlock` = Valve-Relays aus `https://api.steampowered.com/ISteamApps/GetSDRConfig/v1/?appid=…` (pro POP eine Adresse, ICMP), Ergebnis 6 h im Speicher; `lol` = Riot-Ping-Adressen (EUW, EUNE, NA, …), sonst leere Liste |
+| `net_traceroute(host, maxHops=30)` → `TraceResult` | ICMP mit steigender TTL (3 Versuche je Station, 1 s Zeitlimit). Sendet je Station Event **`net://trace`** `TraceHop`. `zone`: private Adressen = `lan`, die ersten öffentlichen Stationen bis zum Netz des Anbieters = `isp`, danach `internet`, Ziel = `target`. Rückwärts-DNS nur, wenn schnell (≤ 300 ms). |
+| `net_dns_benchmark(rounds=5)` → `DnsResult[]` | Vergleicht Cloudflare (1.1.1.1/1.0.0.1), Google (8.8.8.8/8.8.4.4), Quad9 (9.9.9.9/149.112.112.112), OpenDNS (208.67.222.222/208.67.220.220), AdGuard (94.140.14.14/94.140.15.15), Control D (76.76.2.0/76.76.10.0), DNS.WATCH (84.200.69.80/84.200.70.40), und den aktuell eingestellten DNS. Eigene DNS-Anfragen per UDP:53 (Typ A); „bekannt“ = `google.com`, „neu“ = zufällige Subdomain eines großen Dienstes. Median über `rounds`. Fortschritt per **`net://dns`**. Sortiert nach `uncachedMs`. |
+| `net_dns_current()` → `DnsConfig?` | DNS der Hauptverbindung |
+| `net_dns_apply(primary, secondary?)` | Setzt DNS der Hauptverbindung über den Admin-Helfer; sichert vorher den alten Zustand |
+| `net_dns_restore()` | Stellt den gesicherten Zustand wieder her (DHCP oder alte Adressen) |
+| `net_adapters()` → `AdapterInfo[]` | Netzwerkadapter (nur aktive, ohne Loopback/virtuelle, wenn erkennbar) |
+| `net_wifi()` → `WifiInfo?` | WLAN-Verbindung (Signal, Band, Kanal, Standard, Datenrate) oder `null` |
+| `net_speedtest()` → `SpeedResult` | Cloudflare-Speedtest (`speed.cloudflare.com/__down`, `__up`): Ruhe-Latenz (10 Messungen), Download ~8 s mit 4 parallelen Strömen, Upload ~6 s, gleichzeitig Latenz unter Last → Bufferbloat. Note: Anstieg < 5 ms = A+, < 30 = A, < 60 = B, < 200 = C, < 400 = D, sonst F. Fortschritt per **`net://speed`**. Nur ein Test gleichzeitig. |
+| `net_speedtest_cancel()` | Bricht einen laufenden Test ab |
 
-`data` enthält das JSON-Objekt unverändert (Backend validiert nur, dass es ein Objekt mit `id` ist).
+## Optimieren (`src/opt/`)
 
-## Befehle
+Feste Optimierungen (`TweakId`), Texte in den Übersetzungen:
 
-### App & Profile
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `app_info` | – | `AppInfo` |
-| `profiles_list` | – | `ProfilesState` |
-| `profile_create` | `name, color, avatar?` | `Profile` |
-| `profile_update` | `profile: Profile` | `()` |
-| `profile_delete` | `id` (nicht das aktive, nicht das letzte) | `()` |
-| `profile_switch` | `id` | `()` – schließt DB, öffnet DB des Profils |
-| `quit_app` | – | beendet die App sauber (Sitzungen speichern) |
+| id | Was | Admin | Wirkung |
+|---|---|---|---|
+| `powerPlan` | Energieplan „Höchstleistung“ (bzw. „Ultimative Leistung“, falls vorhanden) | nein | mittel |
+| `gameMode` | Windows-Spielmodus an (`HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled=1`) | nein | klein |
+| `gameDvr` | Game-Bar-Hintergrundaufnahme aus (`HKCU\System\GameConfigStore\GameDVR_Enabled=0`, `HKCU\…\GameDVR\AppCaptureEnabled=0`) | nein | mittel |
+| `mouseAccel` | Mausbeschleunigung aus („Zeigerpräzision verbessern“) – sofort wirksam | nein | mittel (Zielen) |
+| `networkThrottling` | Netzwerkdrosselung für Multimedia aus (`NetworkThrottlingIndex=0xFFFFFFFF`) | ja | klein |
+| `systemResponsiveness` | Mehr CPU-Zeit für Spiele (`SystemResponsiveness=10`) | ja | klein |
+| `nagle` | Nagle-Algorithmus aus auf der Hauptverbindung (`TcpAckFrequency=1`, `TCPNoDelay=1`) | ja | klein |
+| `powerThrottling` | Energiedrosselung von Hintergrundprozessen aus | ja | klein |
+| `hags` | Hardwarebeschleunigte GPU-Planung (`HwSchMode=2`), Neustart nötig | ja | mittel |
 
-### Datenbank
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `db_list` | `table: "games" \| "collections" \| "wishlist"` | `Value[]` |
-| `db_put` | `table, id, value` | `()` |
-| `db_put_many` | `table, items: { id, value }[]` | `()` (eine Transaktion) |
-| `db_delete` | `table, id` | `()` (bei `games` auch dessen Sitzungen) |
-| `kv_get` | `key` | `Value \| null` |
-| `kv_set` | `key, value` | `()` |
+| Befehl | Verhalten |
+|---|---|
+| `opt_tweaks()` → `Tweak[]` | Liest den aktuellen Zustand aller Optimierungen |
+| `opt_apply(ids, enable)` → `ApplyReport` | Schaltet ein (`enable=true`) oder zurück auf Windows-Standard bzw. gesicherten Originalwert. Sichert vor dem ersten Ändern den Originalwert. Admin-Optimierungen werden in **einem** Admin-Helfer-Aufruf erledigt; abgelehnte UAC → `cancelled=true`. |
+| `opt_revert_all()` | Stellt alle gesicherten Originalwerte wieder her |
+| `opt_power_plans()`, `opt_power_set(guid)` | Energiepläne |
+| `opt_flush_dns()` | DNS-Zwischenspeicher leeren |
+| `opt_trim_memory()` → `TrimReport` | Arbeitsspeicher von Hintergrundprozessen des Benutzers verkleinern (ehrlich: kleiner Effekt) |
+| `opt_processes()` → `ProcInfo[]` | Prozesse des Benutzers (nach Speicher sortiert), Systemprozesse `closable=false` |
+| `opt_kill(names)` → geschlossene Namen | Nur `closable` Programme |
+| `boost_start(profile, gameId?, pid?)` → `BoostState` | Führt das Profil aus (Energieplan, Spiel-Priorität für `pid` bzw. Prozesse des Spiels, Apps schließen, RAM, DNS-Cache) und merkt sich alles für `boost_stop`. Sendet **`boost://state`**. |
+| `boost_stop()` → `BoostState` | Stellt alles zurück (alter Energieplan, geschlossene Apps wieder öffnen, falls gewünscht) |
+| `boost_state()` | Aktueller Zustand |
 
-### Spielzeit
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `playtime_stats` | – | `PlayStats[]` (eine Zeile pro Spiel mit Sitzungen) |
-| `sessions_range` | `from, to` (ms) | `Session[]` (Sitzungen, die im Bereich beginnen) |
-| `sessions_for_game` | `gameId, limit` | `Session[]` neueste zuerst |
-| `session_delete` | `id` | `()` |
-| `playtime_add` | `gameId, seconds, at` | `Session` (manuell nachgetragene Zeit) |
+### Admin-Helfer
 
-### Bibliothek scannen
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `scan_library` | `options: ScanOptions` | `ScanResult` |
-| `inspect_paths` | `paths: string[]` (Drag & Drop) | `ScannedEntry[]` |
-| `paths_exist` | `paths: string[]` | `bool[]` |
-
-### Starten & Spielzeit-Erkennung
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `set_tracked_games` | `games: TrackInfo[]` | `()` – Liste der zu überwachenden Spiele |
-| `launch_game` | `gameId, launch: LaunchConfig` | `()` |
-| `stop_game` | `gameId` | `u32` Anzahl beendeter Prozesse |
-| `running_games` | – | `RunningGame[]` |
-| `launch_tool` | `path, args?` | `()` |
-| `open_path` | `path` | `()` Ordner/Datei im Explorer öffnen |
-| `reveal_path` | `path` | `()` Datei im Explorer markieren |
-| `open_url` | `url` | `()` |
-
-Events: `game://started` (`GameStartedEvent`), `game://stopped` (`GameStoppedEvent`), `tray://launch` (`{ gameId }`),
-`tray://action` (`{ action: "bigpicture" \| "overlay" \| "dice" }`), `app://second-instance` (`{}`).
-
-### Bilder
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `images_fetch` | `request: ImageFetchRequest` | `ImageFetchResult` |
-| `sgdb_search` | `query, apiKey` | `SgdbGame[]` |
-| `sgdb_images` | `sgdbId, kind, apiKey` | `SgdbImage[]` |
-| `image_download` | `url, gameId, kind` | `{ path, palette? }` |
-| `image_set_custom` | `gameId, kind, sourcePath` | `{ path, palette? }` |
-| `image_palette` | `path` | `GamePalette` |
-| `exe_icon` | `exePath, gameId` | `string \| null` (PNG-Pfad, nur Windows) |
-| `cache_size` | – | `u64` Bytes |
-| `cache_clear` | – | `u64` freigegebene Bytes |
-
-### System & Widgets
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `system_stats` | – | `SystemStats` |
-| `weather` | `lat, lon, place` | `WeatherNow` (Open-Meteo, kein Key) |
-| `geocode` | `query, lang` | `GeoPlace[]` |
-
-### Screenshots, Spielstände, Backups
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `screenshots_list` | `gameId, name, steamAppId?, folder?` | `Screenshot[]` neueste zuerst (max. 500) |
-| `thumbnail` | `path, size` | `string` Pfad zum JPG-Vorschaubild |
-| `save_backup_create` | `gameId, folder` | `SaveBackup` |
-| `save_backup_list` | `gameId` | `SaveBackup[]` |
-| `save_backup_restore` | `gameId, backupId, folder` | `()` (sichert vorher den aktuellen Stand) |
-| `save_backup_delete` | `gameId, backupId` | `()` |
-| `library_export` | `path` | `()` JSON-Datei mit allem |
-| `library_import` | `path, mode: "merge" \| "replace"` | `ImportReport` |
-| `backups_list` | – | `LibraryBackup[]` |
-| `backup_now` | – | `LibraryBackup` |
-| `backup_restore` | `file` | `()` |
-
-### Native Integration
-| Befehl | Argumente | Rückgabe |
-|---|---|---|
-| `apply_native_settings` | `settings: NativeSettings` | `()` Tray-Verhalten, Overlay-Kürzel |
-| `overlay_toggle` | – | `bool` sichtbar? |
-| `tray_set_recent` | `items: TrayRecent[]` | `()` |
-| `update_check` | – | `UpdateInfo` |
-| `update_install` | `setupUrl, sha256?` | `()` lädt Setup, startet `--update`, beendet App |
+`Pulsar.exe --elevated <aufgaben.json> --result <ergebnis.json>` wird mit `ShellExecuteExW` und dem Verb `runas` gestartet (eine UAC-Abfrage) und beendet sich danach.
+Er führt **nur** eine feste Liste erlaubter Aufgaben aus (bestimmte Registry-Werte, DNS einer Verbindung setzen/zurücksetzen) und prüft jeden Pfad gegen eine Erlaubt-Liste. Ergebnis: JSON mit Erfolg/Fehler je Aufgabe. Läuft Pulsar bereits als Admin, werden die Aufgaben direkt ausgeführt.

@@ -175,10 +175,10 @@ pub fn display_path(p: &Path) -> String {
 }
 
 fn log_path() -> PathBuf {
-    std::env::temp_dir().join("nova-setup.log")
+    std::env::temp_dir().join("pulsar-setup.log")
 }
 
-/// Schreibt eine Zeile ins Setup-Protokoll (`%TEMP%\nova-setup.log`). Fehler werden ignoriert.
+/// Schreibt eine Zeile ins Setup-Protokoll (`%TEMP%\pulsar-setup.log`). Fehler werden ignoriert.
 pub fn log(msg: impl AsRef<str>) {
     let path = log_path();
     if let Ok(meta) = std::fs::metadata(&path) {

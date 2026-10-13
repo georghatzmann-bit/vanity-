@@ -275,7 +275,7 @@ pub async fn close_app() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn launch_app(state: State<'_, AppState>) -> Result<(), String> {
-    let dir = state.app_dir().ok_or_else(|| tr("Nova Launcher ist nicht installiert.", "Nova Launcher is not installed."))?;
+    let dir = state.app_dir().ok_or_else(|| tr("Pulsar ist nicht installiert.", "Pulsar is not installed."))?;
     let exe = dir.join(&config().app_exe_name);
     if !exe.is_file() {
         return Err(format!("{}: {}", tr("Datei nicht gefunden", "File not found"), exe.display()));

@@ -1,13 +1,13 @@
 [package]
-name = "nova-setup"
+name = "pulsar-setup"
 version = "1.0.0"
-description = "Nova Launcher Setup"
-authors = ["Nova"]
+description = "Pulsar Setup"
+authors = ["Pulsar"]
 edition = "2021"
 rust-version = "1.83"
 
 [lib]
-name = "nova_setup_lib"
+name = "pulsar_setup_lib"
 path = "src/lib.rs"
 
 [build-dependencies]

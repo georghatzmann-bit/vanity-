@@ -1,180 +1,181 @@
 /*
- * NOVA Design-System
- * ------------------
+ * PULSAR Design-System
+ * --------------------
  * Alle Farben, Abstände, Radien, Schatten und Bewegungszeiten als Variablen.
  * Themes setzen nur Variablen um - Komponenten benutzen ausschließlich diese Tokens.
  *
- * Theme wählen:  <html data-theme="nova | polar | neon | midnight">
+ * Theme wählen:  <html data-theme="pulsar | ember | toxic | frost">
  * Eigene Akzentfarbe: --nv-accent / --nv-accent-2 / --nv-accent-3 per JS überschreiben.
+ * (Der Präfix "nv" stammt aus dem Vorgänger und bleibt, damit alle Komponenten stabil bleiben.)
  */
 
 :root,
-[data-theme="nova"] {
+[data-theme="pulsar"] {
   color-scheme: dark;
-  /* Flächen */
-  --nv-bg: #0a0a11;
-  --nv-bg-elev: #12121b;
-  --nv-surface: rgb(255 255 255 / 0.045);
-  --nv-surface-2: rgb(255 255 255 / 0.075);
-  --nv-surface-3: rgb(255 255 255 / 0.11);
-  --nv-surface-solid: #16161f;
-  --nv-border: rgb(255 255 255 / 0.08);
-  --nv-border-strong: rgb(255 255 255 / 0.16);
-  --nv-overlay: rgb(6 6 10 / 0.72);
+  /* Flächen: tiefes Nachtblau */
+  --nv-bg: #04070f;
+  --nv-bg-elev: #0a1020;
+  --nv-surface: rgb(160 200 255 / 0.045);
+  --nv-surface-2: rgb(160 200 255 / 0.075);
+  --nv-surface-3: rgb(160 200 255 / 0.11);
+  --nv-surface-solid: #0c1324;
+  --nv-border: rgb(160 200 255 / 0.09);
+  --nv-border-strong: rgb(160 200 255 / 0.18);
+  --nv-overlay: rgb(2 5 12 / 0.74);
 
   /* Text */
-  --nv-fg: #eeecf4;
-  --nv-fg-soft: #c9c6d6;
-  --nv-muted: #8f8ca0;
-  --nv-faint: #5d5a6d;
+  --nv-fg: #e9f1ff;
+  --nv-fg-soft: #c2d0ea;
+  --nv-muted: #8091b3;
+  --nv-faint: #4b5878;
 
-  /* Signatur "Nova-Glut": Koralle -> Magenta -> Violett */
-  --nv-accent: #ff4f8b;
-  --nv-accent-2: #ff8a4c;
-  --nv-accent-3: #8b5cf6;
-  --nv-accent-fg: #ffffff;
+  /* Signatur "Pulsar-Strahl": Eisblau -> Cyan -> Violett */
+  --nv-accent: #22d3ee;
+  --nv-accent-2: #60a5fa;
+  --nv-accent-3: #a78bfa;
+  --nv-accent-fg: #021018;
 
   /* Status (bleiben in allen Themes gleich bedeutend) */
   --nv-success: #34d399;
   --nv-warning: #fbbf24;
-  --nv-danger: #f87171;
+  --nv-danger: #fb7185;
   --nv-info: #60a5fa;
 
   /* Hintergrund-Stimmung */
-  --nv-glow-a: rgb(255 79 139 / 0.20);
-  --nv-glow-b: rgb(139 92 246 / 0.18);
-  --nv-glow-c: rgb(255 138 76 / 0.12);
-  --nv-star: 255 255 255;
+  --nv-glow-a: rgb(34 211 238 / 0.18);
+  --nv-glow-b: rgb(167 139 250 / 0.16);
+  --nv-glow-c: rgb(96 165 250 / 0.12);
+  --nv-star: 200 230 255;
+  --nv-backdrop-dim: 0.62;
+  --nv-glass-blur: 22px;
+  --nv-glass-sat: 1.5;
+  --nv-noise-opacity: 0.03;
+  --nv-shadow-color: 0 2 10;
+  --nv-shadow-strength: 0.6;
+  --nv-glow-strength: 1.15;
+}
+
+/* Glut: warmes Orange-Rot für Zocker-Nächte */
+[data-theme="ember"] {
+  color-scheme: dark;
+  --nv-bg: #0b0605;
+  --nv-bg-elev: #160c09;
+  --nv-surface: rgb(255 180 140 / 0.045);
+  --nv-surface-2: rgb(255 180 140 / 0.075);
+  --nv-surface-3: rgb(255 180 140 / 0.11);
+  --nv-surface-solid: #1a0f0b;
+  --nv-border: rgb(255 180 140 / 0.09);
+  --nv-border-strong: rgb(255 180 140 / 0.18);
+  --nv-overlay: rgb(10 5 3 / 0.74);
+
+  --nv-fg: #fff1ea;
+  --nv-fg-soft: #ecd2c6;
+  --nv-muted: #b08d80;
+  --nv-faint: #6e5249;
+
+  --nv-accent: #ff6b35;
+  --nv-accent-2: #ffb347;
+  --nv-accent-3: #ff3d6e;
+  --nv-accent-fg: #1a0700;
+
+  --nv-success: #4ade80;
+  --nv-warning: #facc15;
+  --nv-danger: #f43f5e;
+  --nv-info: #fb923c;
+
+  --nv-glow-a: rgb(255 107 53 / 0.2);
+  --nv-glow-b: rgb(255 61 110 / 0.14);
+  --nv-glow-c: rgb(255 179 71 / 0.12);
+  --nv-star: 255 210 180;
   --nv-backdrop-dim: 0.62;
   --nv-glass-blur: 22px;
   --nv-glass-sat: 1.5;
   --nv-noise-opacity: 0.035;
   --nv-shadow-color: 0 0 0;
-  --nv-shadow-strength: 0.55;
-  --nv-glow-strength: 1;
+  --nv-shadow-strength: 0.6;
+  --nv-glow-strength: 1.1;
 }
 
-/* Ganz Weiß */
-[data-theme="polar"] {
-  color-scheme: light;
-  --nv-bg: #f4f4f8;
-  --nv-bg-elev: #ffffff;
-  --nv-surface: rgb(255 255 255 / 0.62);
-  --nv-surface-2: rgb(255 255 255 / 0.82);
-  --nv-surface-3: rgb(255 255 255 / 0.95);
-  --nv-surface-solid: #ffffff;
-  --nv-border: rgb(20 18 40 / 0.08);
-  --nv-border-strong: rgb(20 18 40 / 0.16);
-  --nv-overlay: rgb(240 240 246 / 0.72);
-
-  --nv-fg: #15141c;
-  --nv-fg-soft: #33313f;
-  --nv-muted: #6b6879;
-  --nv-faint: #a3a0b1;
-
-  --nv-accent: #e8336f;
-  --nv-accent-2: #f47a35;
-  --nv-accent-3: #7c4dff;
-  --nv-accent-fg: #ffffff;
-
-  --nv-success: #059669;
-  --nv-warning: #d97706;
-  --nv-danger: #dc2626;
-  --nv-info: #2563eb;
-
-  --nv-glow-a: rgb(232 51 111 / 0.12);
-  --nv-glow-b: rgb(124 77 255 / 0.10);
-  --nv-glow-c: rgb(244 122 53 / 0.10);
-  --nv-star: 90 80 140;
-  --nv-backdrop-dim: 0.18;
-  --nv-glass-blur: 26px;
-  --nv-glass-sat: 1.8;
-  --nv-noise-opacity: 0.025;
-  --nv-shadow-color: 40 30 80;
-  --nv-shadow-strength: 0.16;
-  --nv-glow-strength: 0.55;
-}
-
-/* Neon */
-[data-theme="neon"] {
+/* Toxic: Neon-Grün */
+[data-theme="toxic"] {
   color-scheme: dark;
-  --nv-bg: #040509;
-  --nv-bg-elev: #0a0c14;
-  --nv-surface: rgb(0 245 212 / 0.035);
-  --nv-surface-2: rgb(0 245 212 / 0.065);
-  --nv-surface-3: rgb(0 245 212 / 0.1);
-  --nv-surface-solid: #0b0e16;
-  --nv-border: rgb(0 245 212 / 0.14);
-  --nv-border-strong: rgb(0 245 212 / 0.32);
-  --nv-overlay: rgb(2 3 6 / 0.78);
+  --nv-bg: #030805;
+  --nv-bg-elev: #07120b;
+  --nv-surface: rgb(120 255 170 / 0.04);
+  --nv-surface-2: rgb(120 255 170 / 0.07);
+  --nv-surface-3: rgb(120 255 170 / 0.105);
+  --nv-surface-solid: #08140d;
+  --nv-border: rgb(120 255 170 / 0.11);
+  --nv-border-strong: rgb(120 255 170 / 0.24);
+  --nv-overlay: rgb(2 6 3 / 0.78);
 
-  --nv-fg: #eafff9;
-  --nv-fg-soft: #bfeee3;
-  --nv-muted: #6fa79b;
-  --nv-faint: #3f6159;
+  --nv-fg: #eafff1;
+  --nv-fg-soft: #bfeccf;
+  --nv-muted: #6fa585;
+  --nv-faint: #3c5f4a;
 
-  --nv-accent: #00f5d4;
-  --nv-accent-2: #f72585;
-  --nv-accent-3: #7b2ff7;
-  --nv-accent-fg: #021412;
+  --nv-accent: #39ff88;
+  --nv-accent-2: #b4ff39;
+  --nv-accent-3: #00e5ff;
+  --nv-accent-fg: #011208;
 
   --nv-success: #39ff88;
   --nv-warning: #ffd60a;
   --nv-danger: #ff3864;
-  --nv-info: #4cc9f0;
+  --nv-info: #00e5ff;
 
-  --nv-glow-a: rgb(0 245 212 / 0.16);
-  --nv-glow-b: rgb(247 37 133 / 0.16);
-  --nv-glow-c: rgb(123 47 247 / 0.14);
-  --nv-star: 0 245 212;
+  --nv-glow-a: rgb(57 255 136 / 0.15);
+  --nv-glow-b: rgb(0 229 255 / 0.12);
+  --nv-glow-c: rgb(180 255 57 / 0.1);
+  --nv-star: 160 255 200;
   --nv-backdrop-dim: 0.7;
   --nv-glass-blur: 18px;
   --nv-glass-sat: 1.6;
   --nv-noise-opacity: 0.04;
   --nv-shadow-color: 0 0 0;
   --nv-shadow-strength: 0.7;
-  --nv-glow-strength: 1.6;
+  --nv-glow-strength: 1.5;
 }
 
-/* Mitternachtsblau */
-[data-theme="midnight"] {
-  color-scheme: dark;
-  --nv-bg: #060b1c;
-  --nv-bg-elev: #0c1430;
-  --nv-surface: rgb(140 170 255 / 0.05);
-  --nv-surface-2: rgb(140 170 255 / 0.085);
-  --nv-surface-3: rgb(140 170 255 / 0.12);
-  --nv-surface-solid: #0f1834;
-  --nv-border: rgb(140 170 255 / 0.1);
-  --nv-border-strong: rgb(140 170 255 / 0.2);
-  --nv-overlay: rgb(4 8 20 / 0.75);
+/* Frost: hell */
+[data-theme="frost"] {
+  color-scheme: light;
+  --nv-bg: #eef3fa;
+  --nv-bg-elev: #ffffff;
+  --nv-surface: rgb(255 255 255 / 0.62);
+  --nv-surface-2: rgb(255 255 255 / 0.82);
+  --nv-surface-3: rgb(255 255 255 / 0.95);
+  --nv-surface-solid: #ffffff;
+  --nv-border: rgb(15 30 60 / 0.09);
+  --nv-border-strong: rgb(15 30 60 / 0.17);
+  --nv-overlay: rgb(235 241 250 / 0.74);
 
-  --nv-fg: #e8eeff;
-  --nv-fg-soft: #c3cdee;
-  --nv-muted: #8391bd;
-  --nv-faint: #4f5b82;
+  --nv-fg: #0d1526;
+  --nv-fg-soft: #2b3a55;
+  --nv-muted: #5f6f8c;
+  --nv-faint: #9eabc2;
 
-  --nv-accent: #5b8cff;
-  --nv-accent-2: #7dd3fc;
-  --nv-accent-3: #a78bfa;
+  --nv-accent: #0891b2;
+  --nv-accent-2: #2563eb;
+  --nv-accent-3: #7c3aed;
   --nv-accent-fg: #ffffff;
 
-  --nv-success: #34d399;
-  --nv-warning: #fbbf24;
-  --nv-danger: #fb7185;
-  --nv-info: #7dd3fc;
+  --nv-success: #059669;
+  --nv-warning: #d97706;
+  --nv-danger: #e11d48;
+  --nv-info: #2563eb;
 
-  --nv-glow-a: rgb(91 140 255 / 0.2);
-  --nv-glow-b: rgb(167 139 250 / 0.14);
-  --nv-glow-c: rgb(125 211 252 / 0.1);
-  --nv-star: 200 215 255;
-  --nv-backdrop-dim: 0.6;
-  --nv-glass-blur: 22px;
-  --nv-glass-sat: 1.4;
-  --nv-noise-opacity: 0.03;
-  --nv-shadow-color: 0 4 20;
-  --nv-shadow-strength: 0.6;
-  --nv-glow-strength: 1;
+  --nv-glow-a: rgb(8 145 178 / 0.12);
+  --nv-glow-b: rgb(124 58 237 / 0.09);
+  --nv-glow-c: rgb(37 99 235 / 0.09);
+  --nv-star: 60 90 150;
+  --nv-backdrop-dim: 0.16;
+  --nv-glass-blur: 26px;
+  --nv-glass-sat: 1.8;
+  --nv-noise-opacity: 0.02;
+  --nv-shadow-color: 20 40 80;
+  --nv-shadow-strength: 0.15;
+  --nv-glow-strength: 0.55;
 }
 
 /* Theme-unabhängige Tokens */

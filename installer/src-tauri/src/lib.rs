@@ -1,6 +1,6 @@
-//! Nova Setup – Backend der Installer-App (`NovaLauncher-Setup.exe`).
+//! Pulsar Setup – Backend der Installer-App (`Pulsar-Setup.exe`).
 //!
-//! Lädt `NovaLauncher.exe` laut Manifest herunter (fortsetzbar), prüft SHA-256, installiert pro
+//! Lädt `Pulsar.exe` laut Manifest herunter (fortsetzbar), prüft SHA-256, installiert pro
 //! Benutzer (Adminrechte nur bei Bedarf), legt Verknüpfungen und den "Apps & Features"-Eintrag an,
 //! aktualisiert und deinstalliert. Vertrag mit der Oberfläche: `docs/INSTALLER.md`.
 
@@ -79,7 +79,7 @@ pub fn run() {
         Err(e) => {
             util::log(format!("Tauri-Start fehlgeschlagen: {e}"));
             platform::show_error_box(
-                "Nova Setup",
+                "Pulsar Setup",
                 &format!("{}\n\n{e}", util::tr("Das Setup konnte nicht gestartet werden.", "The setup could not be started.")),
             );
             std::process::exit(1);

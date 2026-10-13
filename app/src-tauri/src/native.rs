@@ -40,7 +40,7 @@ struct Labels {
 fn labels(lang: &str) -> Labels {
     if lang.eq_ignore_ascii_case("en") {
         Labels {
-            open: "Open Nova",
+            open: "Open Pulsar",
             recent: "Recently played",
             empty: "Nothing played yet",
             bigpicture: "Big Picture",
@@ -50,7 +50,7 @@ fn labels(lang: &str) -> Labels {
         }
     } else {
         Labels {
-            open: "Nova öffnen",
+            open: "Pulsar öffnen",
             recent: "Zuletzt gespielt",
             empty: "Noch nichts gespielt",
             bigpicture: "Big Picture",
@@ -243,7 +243,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let menu = build_menu(app, &lang, &recent)?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
-        .tooltip("Nova Launcher")
+        .tooltip("Pulsar")
         .show_menu_on_left_click(false)
         .on_menu_event(on_menu_event)
         .on_tray_icon_event(|tray, event| match event {
@@ -378,7 +378,7 @@ pub async fn quit_app(app: AppHandle, state: State<'_, Shared>) -> CmdResult<()>
     Ok(())
 }
 
-/// Wird vom Single-Instance-Plugin aufgerufen, wenn Nova ein zweites Mal gestartet wird.
+/// Wird vom Single-Instance-Plugin aufgerufen, wenn Pulsar ein zweites Mal gestartet wird.
 pub fn on_second_instance(app: &AppHandle) {
     show_main(app);
     let _ = app.emit("app://second-instance", Empty {});
@@ -392,7 +392,7 @@ mod tests {
     fn labels_and_shortening() {
         assert_eq!(labels("en").quit, "Quit");
         assert_eq!(labels("de").recent, "Zuletzt gespielt");
-        assert_eq!(labels("fr").open, "Nova öffnen");
+        assert_eq!(labels("fr").open, "Pulsar öffnen");
         assert_eq!(short("Kurz", 10), "Kurz");
         assert_eq!(short("Ein sehr langer Spielname", 10).chars().count(), 10);
     }

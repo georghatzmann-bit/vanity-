@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 pub struct UninstallPlan {
     pub dir: PathBuf,
     pub keep_data: bool,
-    /// Benutzerdaten-Ordner der App (`%APPDATA%\com.nova.launcher`, `%LOCALAPPDATA%\com.nova.launcher`).
+    /// Benutzerdaten-Ordner der App (`%APPDATA%\com.pulsar.booster`, `%LOCALAPPDATA%\com.pulsar.booster`).
     pub data_dirs: Vec<PathBuf>,
     /// Verknüpfungen und Registry entfernen (unter Linux ohnehin wirkungslos).
     pub integrate: bool,
@@ -145,7 +145,7 @@ pub fn run_uninstall(plan: &UninstallPlan, progress: &dyn Fn(UninstallProgress))
     Ok(outcome)
 }
 
-/// Läuft diese Exe als temporäre Deinstaller-Kopie (`%TEMP%\nova-uninstall-*.exe`)?
+/// Läuft diese Exe als temporäre Deinstaller-Kopie (`%TEMP%\pulsar-uninstall-*.exe`)?
 pub fn is_temp_copy(exe: &Path) -> bool {
     let name_ok = exe
         .file_name()

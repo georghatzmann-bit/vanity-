@@ -183,29 +183,8 @@ pub struct Session {
 }
 
 // ---------------------------------------------------------------------------------------------
-// App & Profile
+// App
 // ---------------------------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Profile {
-    pub id: String,
-    pub name: String,
-    pub color: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avatar: Option<String>,
-    #[serde(default)]
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct ProfilesState {
-    #[serde(default)]
-    pub profiles: Vec<Profile>,
-    #[serde(default)]
-    pub active_id: String,
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -213,9 +192,10 @@ pub struct AppInfo {
     pub version: String,
     pub data_dir: String,
     pub cache_dir: String,
-    pub profile_id: String,
     pub platform: String,
     pub started_minimized: bool,
+    /// Läuft Pulsar mit Adminrechten?
+    pub is_admin: bool,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -323,31 +303,6 @@ pub struct SystemStats {
     pub uptime_seconds: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct WeatherNow {
-    pub temperature: f64,
-    pub apparent: f64,
-    pub code: i64,
-    pub is_day: bool,
-    pub wind: f64,
-    pub high: f64,
-    pub low: f64,
-    pub place: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct GeoPlace {
-    pub name: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub country: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub admin: Option<String>,
-    pub lat: f64,
-    pub lon: f64,
-}
-
 // ---------------------------------------------------------------------------------------------
 // Bilder
 // ---------------------------------------------------------------------------------------------
@@ -423,39 +378,11 @@ pub struct SgdbImage {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Screenshot {
-    pub path: String,
-    pub taken_at: i64,
-    /// "steam" | "gamebar" | "nvidia" | "folder"
-    pub source: String,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveBackup {
-    pub id: String,
-    pub game_id: String,
-    pub path: String,
-    pub created_at: i64,
-    pub size: u64,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub struct LibraryBackup {
     pub file: String,
     pub path: String,
     pub created_at: i64,
     pub size: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Default, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct ImportReport {
-    pub games: u32,
-    pub collections: u32,
-    pub wishlist: u32,
-    pub sessions: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]

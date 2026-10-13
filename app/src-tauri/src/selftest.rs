@@ -1,6 +1,6 @@
 //! Eingebauter Selbsttest für automatische Prüfungen (z. B. auf dem Windows-Rechner von GitHub):
 //!
-//! `NovaLauncher.exe --selftest <bericht.json>`
+//! `Pulsar.exe --selftest <bericht.json>`
 //!
 //! Startet die App normal, ruft dann die echten Backend-Befehle auf (Scan, Bilder, Icons,
 //! Starten, Spielzeit-Erkennung, Beenden) und schreibt einen JSON-Bericht. Exit-Code 0 = alles ok.

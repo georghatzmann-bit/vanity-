@@ -17,7 +17,7 @@ use crate::util::now_ms;
 
 /// Normales Prüfintervall.
 const POLL_INTERVAL: Duration = Duration::from_secs(3);
-/// Schnelleres Intervall direkt nach einem Start aus Nova heraus.
+/// Schnelleres Intervall direkt nach einem Start aus Pulsar heraus.
 const FAST_POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// So lange nach `launch_game` wird schneller geprüft.
 const FAST_POLL_WINDOW: Duration = Duration::from_secs(90);
@@ -331,7 +331,7 @@ impl RunningEntry {
 #[derive(Default)]
 struct TrackerState {
     matchers: Vec<Matcher>,
-    /// Spiele, die aus Nova gestartet wurden, aber nicht in der überwachten Liste stehen
+    /// Spiele, die aus Pulsar gestartet wurden, aber nicht in der überwachten Liste stehen
     adhoc: HashMap<String, Matcher>,
     running: HashMap<String, RunningEntry>,
     launched: HashMap<String, Instant>,
@@ -443,7 +443,7 @@ impl Tracker {
         self.emit(events);
     }
 
-    /// Nach einem Start aus Nova: schneller prüfen, damit die Sitzung sofort beginnt.
+    /// Nach einem Start aus Pulsar: schneller prüfen, damit die Sitzung sofort beginnt.
     pub fn mark_launched(&self, game_id: &str, launch: &LaunchConfig) {
         let mut st = self.state.lock_safe();
         st.launched.insert(game_id.to_string(), Instant::now());

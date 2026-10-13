@@ -34,7 +34,7 @@ pub struct SelftestConfig {
     pub dir: PathBuf,
     pub manifest: String,
     pub report: PathBuf,
-    /// Quelle für `Uninstall Nova.exe` (Standard: die laufende Exe).
+    /// Quelle für `Uninstall Pulsar.exe` (Standard: die laufende Exe).
     pub uninstaller_source: Option<PathBuf>,
     pub retry: RetryPolicy,
     pub echo: bool,

@@ -187,8 +187,8 @@ pub fn kill_processes(exe_name: &str) -> Result<usize, String> {
     }
     if is_process_running(exe_name) {
         return Err(tr(
-            "Nova Launcher läuft noch und konnte nicht beendet werden. Bitte die App schließen.",
-            "Nova Launcher is still running and could not be closed. Please close the app.",
+            "Pulsar läuft noch und konnte nicht beendet werden. Bitte die App schließen.",
+            "Pulsar is still running and could not be closed. Please close the app.",
         ));
     }
     Ok(killed)
@@ -340,7 +340,7 @@ pub fn delete_install_state() -> Result<(), String> {
         Err(e) if is_not_found(&e) => {}
         Err(e) => return Err(e.to_string()),
     }
-    // `Software\Nova` nur löschen, wenn leer.
+    // `Software\Pulsar` nur löschen, wenn leer.
     let _ = hkcu.delete_subkey(STATE_PARENT_KEY);
     Ok(())
 }
@@ -392,7 +392,7 @@ pub fn launch_unelevated(exe: &Path, workdir: &Path, elevated: bool) -> Result<(
         }
         cmd.spawn()
     };
-    result.map(|_| ()).map_err(|e| format!("{}: {e}", tr("Nova Launcher konnte nicht gestartet werden", "Could not start Nova Launcher")))
+    result.map(|_| ()).map_err(|e| format!("{}: {e}", tr("Pulsar konnte nicht gestartet werden", "Could not start Pulsar")))
 }
 
 /// Startet ein Programm losgelöst (ohne Konsole).
@@ -512,10 +512,10 @@ pub fn ensure_webview2() -> bool {
         return true;
     }
     log("WebView2-Runtime fehlt");
-    let caption = "Nova Setup";
+    let caption = "Pulsar Setup";
     let question = tr(
-        "Für Nova Setup wird die Microsoft Edge WebView2 Runtime benötigt. Sie ist auf diesem PC nicht installiert.\n\nJetzt von Microsoft herunterladen und installieren?",
-        "Nova Setup requires the Microsoft Edge WebView2 Runtime, which is not installed on this PC.\n\nDownload and install it from Microsoft now?",
+        "Für Pulsar Setup wird die Microsoft Edge WebView2 Runtime benötigt. Sie ist auf diesem PC nicht installiert.\n\nJetzt von Microsoft herunterladen und installieren?",
+        "Pulsar Setup requires the Microsoft Edge WebView2 Runtime, which is not installed on this PC.\n\nDownload and install it from Microsoft now?",
     );
     if message_box(&question, caption, MB_YESNO | MB_ICONQUESTION) != IDYES.0 {
         return false;

@@ -5,16 +5,16 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::db::DbHandle;
-use crate::models::{NativeSettings, ProfilesState, TrayRecent};
+use crate::models::{NativeSettings, TrayRecent};
 use crate::system::SystemMonitor;
 use crate::tracker::Tracker;
 
 /// Alle Ablageorte der App.
 #[derive(Debug, Clone)]
 pub struct Paths {
-    /// `%APPDATA%\com.nova.launcher`
+    /// `%APPDATA%\com.pulsar.booster`
     pub data_dir: PathBuf,
-    /// `%LOCALAPPDATA%\com.nova.launcher\cache`
+    /// `%LOCALAPPDATA%\com.pulsar.booster\cache`
     pub cache_dir: PathBuf,
 }
 
@@ -26,22 +26,16 @@ impl Paths {
         }
     }
 
-    pub fn profiles_file(&self) -> PathBuf {
-        self.data_dir.join("profiles.json")
-    }
     pub fn profile_dir(&self, id: &str) -> PathBuf {
         self.data_dir
             .join("profiles")
             .join(crate::util::safe_segment(id))
     }
     pub fn db_path(&self, id: &str) -> PathBuf {
-        self.profile_dir(id).join("nova.db")
+        self.profile_dir(id).join("pulsar.db")
     }
     pub fn backups_dir(&self, id: &str) -> PathBuf {
         self.profile_dir(id).join("backups")
-    }
-    pub fn savegames_dir(&self, id: &str) -> PathBuf {
-        self.profile_dir(id).join("savegames")
     }
     pub fn images_dir(&self) -> PathBuf {
         self.cache_dir.join("images")
@@ -69,33 +63,37 @@ pub struct NativeState {
 pub struct Core {
     pub paths: Paths,
     pub db: DbHandle,
-    pub profiles: Mutex<ProfilesState>,
     pub tracker: Tracker,
     pub sys: Mutex<SystemMonitor>,
     pub native: Mutex<NativeState>,
     pub http: reqwest::Client,
+    pub net: crate::net::NetState,
+    pub opt: crate::opt::OptState,
     pub started_minimized: bool,
 }
 
 pub type Shared = Arc<Core>;
+
+pub const DEFAULT_PROFILE: &str = "default";
 
 impl Core {
     pub fn new(paths: Paths, started_minimized: bool) -> Self {
         Self {
             paths,
             db: DbHandle::new(),
-            profiles: Mutex::new(ProfilesState::default()),
             tracker: Tracker::new(),
             sys: Mutex::new(SystemMonitor::new()),
             native: Mutex::new(NativeState::default()),
             http: build_http_client(),
+            net: crate::net::NetState::default(),
+            opt: crate::opt::OptState::default(),
             started_minimized,
         }
     }
 
+    /// Pulsar hat (anders als NOVA) nur ein Profil; der feste Name hält die Ablage einfach.
     pub fn active_profile_id(&self) -> String {
-        use crate::error::LockExt;
-        self.profiles.lock_safe().active_id.clone()
+        DEFAULT_PROFILE.into()
     }
 }
 
@@ -104,7 +102,7 @@ pub fn build_http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .connect_timeout(Duration::from_secs(10))
-        .user_agent(concat!("NovaLauncher/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Pulsar/", env!("CARGO_PKG_VERSION")))
         .build()
         .unwrap_or_else(|_| reqwest::Client::new())
 }

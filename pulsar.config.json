@@ -1,0 +1,12 @@
+{
+  "$comment": "Zentrale Einstellungen fuer App und Installer. Nach einer Aenderung neu bauen (npm run build:all).",
+  "appName": "Pulsar",
+  "publisher": "Pulsar",
+  "version": "1.0.0",
+  "appExeName": "Pulsar.exe",
+  "setupExeName": "Pulsar-Setup.exe",
+  "manifestUrl": "https://github.com/georghatzmann-bit/vanity-/releases/download/pulsar-latest/latest.json",
+  "downloadBaseUrl": "https://github.com/georghatzmann-bit/vanity-/releases/download/pulsar-latest/",
+  "websiteUrl": "https://github.com/georghatzmann-bit/vanity-",
+  "releaseTag": "pulsar-latest"
+}

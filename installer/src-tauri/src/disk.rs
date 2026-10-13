@@ -11,7 +11,7 @@ pub fn normalize_windows_path(raw: &str) -> Result<String, String> {
     if s.is_empty() {
         return Err(tr("Bitte einen Installationsordner wählen.", "Please choose an installation folder."));
     }
-    let relative = || tr("Bitte einen vollständigen Pfad angeben (z. B. C:\\Spiele\\Nova).", "Please enter a full path (e.g. C:\\Games\\Nova).");
+    let relative = || tr("Bitte einen vollständigen Pfad angeben (z. B. C:\\Spiele\\Pulsar).", "Please enter a full path (e.g. C:\\Games\\Pulsar).");
     let (prefix, rest) = if let Some(unc) = s.strip_prefix("\\\\") {
         // \\server\share\...
         let mut parts = unc.splitn(3, '\\');
@@ -143,7 +143,7 @@ pub fn nearest_existing_ancestor(p: &Path) -> Option<PathBuf> {
 
 /// Testet Schreibrechte durch Anlegen und Löschen einer Testdatei.
 pub fn probe_writable(dir: &Path) -> bool {
-    let probe = dir.join(format!(".nova-write-test-{}.tmp", crate::util::random_suffix()));
+    let probe = dir.join(format!(".pulsar-write-test-{}.tmp", crate::util::random_suffix()));
     match std::fs::OpenOptions::new().write(true).create_new(true).open(&probe) {
         Ok(f) => {
             drop(f);

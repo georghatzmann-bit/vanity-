@@ -36,7 +36,7 @@ pub enum ElevateError {
     Unsupported,
 }
 
-/// Pfad der Startmenü-Verknüpfung (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Nova Launcher.lnk`).
+/// Pfad der Startmenü-Verknüpfung (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Pulsar.lnk`).
 pub fn start_menu_shortcut() -> Option<std::path::PathBuf> {
     start_menu_dir().map(|d| d.join(crate::config::shortcut_file_name()))
 }

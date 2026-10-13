@@ -151,7 +151,7 @@ pub async fn update_install(
         return Err(format!("Download des Updates: {}", http_status_err(resp.status().as_u16())));
     }
     let total = resp.content_length().unwrap_or(0);
-    let path = std::env::temp_dir().join("NovaLauncher-Setup.exe");
+    let path = std::env::temp_dir().join("Pulsar-Setup.exe");
     let mut file = std::fs::File::create(&path).map_err(|e| io_err(&e, &path))?;
     let mut hasher = Sha256::new();
     let mut done: u64 = 0;
@@ -228,14 +228,14 @@ mod tests {
     #[test]
     fn manifest_to_update_info() {
         let m: Manifest = serde_json::from_str(
-            r#"{"version":"1.1.0","notes":"Neu","app":{"url":"https://x/NovaLauncher.exe","sha256":"AA","size":1},
-                "setup":{"url":"NovaLauncher-Setup.exe","sha256":"ABCDEF","size":2}}"#,
+            r#"{"version":"1.1.0","notes":"Neu","app":{"url":"https://x/Pulsar.exe","sha256":"AA","size":1},
+                "setup":{"url":"Pulsar-Setup.exe","sha256":"ABCDEF","size":2}}"#,
         )
         .unwrap();
         let info = build_info(m, "https://example.com/releases/latest/download/latest.json", "1.0.0");
         assert!(info.available);
         assert_eq!(info.latest.as_deref(), Some("1.1.0"));
-        assert_eq!(info.setup_url.as_deref(), Some("https://example.com/releases/latest/download/NovaLauncher-Setup.exe"));
+        assert_eq!(info.setup_url.as_deref(), Some("https://example.com/releases/latest/download/Pulsar-Setup.exe"));
         assert_eq!(info.setup_sha256.as_deref(), Some("abcdef"));
 
         let same: Manifest = serde_json::from_str(r#"{"version":"1.0.0"}"#).unwrap();

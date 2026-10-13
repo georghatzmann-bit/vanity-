@@ -207,15 +207,6 @@ pub fn scan(entries: &mut Vec<ScannedEntry>, messages: &mut Vec<String>) {
     });
 }
 
-/// Steam-Ordner für Screenshots (`userdata`).
-pub fn userdata_dirs() -> Vec<PathBuf> {
-    steam_roots()
-        .into_iter()
-        .map(|r| r.join("userdata"))
-        .filter(|p| p.is_dir())
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

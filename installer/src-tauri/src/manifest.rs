@@ -70,7 +70,7 @@ impl Location {
                 if rp.is_absolute() {
                     return Ok(Location::File(rp.to_path_buf()));
                 }
-                // Auch URL-artige Trenner (`sub/NovaLauncher.exe`) zulassen.
+                // Auch URL-artige Trenner (`sub/Pulsar.exe`) zulassen.
                 let parent = path.parent().map(Path::to_path_buf).unwrap_or_default();
                 let mut out = parent;
                 for part in r.split(['/', '\\']) {
@@ -119,7 +119,7 @@ struct OverrideFile {
     manifest_url: Option<String>,
 }
 
-/// Reihenfolge: `--manifest` → `NOVA_MANIFEST_URL` → `nova-setup.json` neben der Exe → eingebettet.
+/// Reihenfolge: `--manifest` → `PULSAR_MANIFEST_URL` → `pulsar-setup.json` neben der Exe → eingebettet.
 pub fn resolve_manifest_source(cli: Option<&str>, env: Option<&str>, exe_dir: Option<&Path>, embedded: &str) -> ManifestSource {
     if let Some(v) = cli.map(str::trim).filter(|v| !v.is_empty()) {
         return ManifestSource { location: absolutize(v, None), origin: ManifestOrigin::CommandLine };
@@ -180,7 +180,7 @@ pub fn build_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(20))
         .read_timeout(Duration::from_secs(30))
-        .user_agent(format!("NovaSetup/{}", crate::config::setup_version()))
+        .user_agent(format!("PulsarSetup/{}", crate::config::setup_version()))
         .redirect(reqwest::redirect::Policy::limited(10))
         .build()
         .map_err(|e| format!("{}: {e}", tr("HTTP-Client konnte nicht erstellt werden", "Could not create HTTP client")))

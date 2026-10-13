@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-const APP: &str = "NovaLauncher.exe";
+const APP: &str = "Pulsar.exe";
 const SIZE: usize = 3 * 1024 * 1024 + 12_345;
 
 // ------------------------------------------------------------------ Helfer
@@ -28,7 +28,7 @@ struct TempDir(PathBuf);
 
 impl TempDir {
     fn new(tag: &str) -> Self {
-        let p = std::env::temp_dir().join(format!("nova-setup-test-{tag}-{}", crate::util::random_suffix()));
+        let p = std::env::temp_dir().join(format!("pulsar-setup-test-{tag}-{}", crate::util::random_suffix()));
         std::fs::create_dir_all(&p).unwrap();
         TempDir(p)
     }
@@ -104,7 +104,7 @@ fn manifest_json(version: &str, url: &str, sha256: Option<&str>, size: Option<u6
     if let Some(s) = size {
         app["size"] = serde_json::json!(s);
     }
-    serde_json::json!({ "name": "Nova Launcher", "version": version, "notes": "Neu", "pubDate": "2026-10-12T12:00:00Z", "app": app })
+    serde_json::json!({ "name": "Pulsar", "version": version, "notes": "Neu", "pubDate": "2026-10-12T12:00:00Z", "app": app })
         .to_string()
 }
 
@@ -117,8 +117,8 @@ fn client() -> reqwest::Client {
 #[test]
 fn embedded_config_parses() {
     let cfg = config();
-    assert_eq!(cfg.app_exe_name, "NovaLauncher.exe");
-    assert_eq!(cfg.app_name, "Nova Launcher");
+    assert_eq!(cfg.app_exe_name, "Pulsar.exe");
+    assert_eq!(cfg.app_name, "Pulsar");
     assert!(!cfg.manifest_url.is_empty());
     assert!(parse_config("{ broken").is_none());
 }
@@ -128,15 +128,15 @@ fn cli_parsing() {
     let cli = CliArgs::parse([
         "--uninstall",
         "--target",
-        "\"C:\\Program Files\\Nova Launcher\"",
+        "\"C:\\Program Files\\Pulsar\"",
         "--manifest=https://example.com/latest.json",
         "--quiet",
     ]);
     assert!(cli.uninstall && cli.quiet && !cli.update && !cli.selftest);
-    assert_eq!(cli.target, Some(PathBuf::from("C:\\Program Files\\Nova Launcher")));
+    assert_eq!(cli.target, Some(PathBuf::from("C:\\Program Files\\Pulsar")));
     assert_eq!(cli.manifest.as_deref(), Some("https://example.com/latest.json"));
 
-    let opts = InstallOptions { dir: "D:\\Spiele\\Nova".into(), desktop_shortcut: true, start_menu: false, autostart: true, launch_after: true };
+    let opts = InstallOptions { dir: "D:\\Spiele\\Pulsar".into(), desktop_shortcut: true, start_menu: false, autostart: true, launch_after: true };
     let cli = CliArgs::parse(["--elevated".to_string(), "--preset".to_string(), encode_preset(&opts), "--update".to_string()]);
     assert!(cli.elevated && cli.update);
     assert_eq!(cli.preset, Some(opts));
@@ -150,7 +150,7 @@ fn cli_parsing() {
 #[test]
 fn preset_roundtrip() {
     let opts = InstallOptions {
-        dir: "C:\\Program Files\\Nova Launcher – ä".into(),
+        dir: "C:\\Program Files\\Pulsar – ä".into(),
         desktop_shortcut: true,
         start_menu: true,
         autostart: false,
@@ -185,7 +185,7 @@ fn setup_mode_logic() {
 fn helpers() {
     use crate::util::{quote_windows_arg, rfc3339_utc};
     assert_eq!(quote_windows_arg("plain"), "plain");
-    assert_eq!(quote_windows_arg("C:\\Program Files\\Nova\\"), "\"C:\\Program Files\\Nova\\\\\"");
+    assert_eq!(quote_windows_arg("C:\\Program Files\\Pulsar\\"), "\"C:\\Program Files\\Pulsar\\\\\"");
     assert_eq!(quote_windows_arg("a\"b"), "\"a\\\"b\"");
     assert_eq!(quote_windows_arg(""), "\"\"");
     assert_eq!(rfc3339_utc(0), "1970-01-01T00:00:00Z");
@@ -199,7 +199,7 @@ fn serialization_is_camel_case() {
     let info = crate::types::SetupInfo {
         mode: SetupMode::Maintenance,
         setup_version: "1.0.0".into(),
-        app_name: "Nova Launcher".into(),
+        app_name: "Pulsar".into(),
         default_dir: "C:\\x".into(),
         installed: None,
         elevated: false,
@@ -234,7 +234,7 @@ fn manifest_source_resolution_order() {
     assert_eq!((s.origin, s.location.as_str()), (ManifestOrigin::Environment, "https://env.example/l.json"));
     let s = resolve_manifest_source(None, None, Some(tmp.path()), embedded);
     assert_eq!((s.origin, s.location.as_str()), (ManifestOrigin::Embedded, embedded));
-    std::fs::write(tmp.join("nova-setup.json"), "\u{feff}{ \"manifestUrl\": \"feed/latest.json\" }").unwrap();
+    std::fs::write(tmp.join("pulsar-setup.json"), "\u{feff}{ \"manifestUrl\": \"feed/latest.json\" }").unwrap();
     let s = resolve_manifest_source(Some("  "), Some(""), Some(tmp.path()), embedded);
     assert_eq!(s.origin, ManifestOrigin::OverrideFile);
     assert_eq!(PathBuf::from(&s.location), tmp.join("feed").join("latest.json"));
@@ -246,16 +246,16 @@ fn manifest_source_resolution_order() {
 #[test]
 fn location_resolution() {
     let base = Location::parse("https://github.com/o/r/releases/latest/download/latest.json", None).unwrap();
-    assert_eq!(base.join(APP).unwrap().to_url_string(), "https://github.com/o/r/releases/latest/download/NovaLauncher.exe");
+    assert_eq!(base.join(APP).unwrap().to_url_string(), "https://github.com/o/r/releases/latest/download/Pulsar.exe");
     assert_eq!(base.join("../v2/x.exe").unwrap().to_url_string(), "https://github.com/o/r/releases/latest/v2/x.exe");
     assert_eq!(base.join("https://cdn.example/a.exe").unwrap().to_url_string(), "https://cdn.example/a.exe");
     // Dateipfade sind plattformabhängig (Windows braucht einen Laufwerksbuchstaben).
     #[cfg(windows)]
-    let (path, url, url_upper, joined) = ("C:\\srv\\feed\\latest.json", "file:///C:/srv/feed/latest.json", "FILE:///C:/srv/feed/latest.json", "C:\\srv\\feed\\bin\\NovaLauncher.exe");
+    let (path, url, url_upper, joined) = ("C:\\srv\\feed\\latest.json", "file:///C:/srv/feed/latest.json", "FILE:///C:/srv/feed/latest.json", "C:\\srv\\feed\\bin\\Pulsar.exe");
     #[cfg(not(windows))]
-    let (path, url, url_upper, joined) = ("/srv/feed/latest.json", "file:///srv/feed/latest.json", "FILE:///srv/feed/latest.json", "/srv/feed/bin/NovaLauncher.exe");
+    let (path, url, url_upper, joined) = ("/srv/feed/latest.json", "file:///srv/feed/latest.json", "FILE:///srv/feed/latest.json", "/srv/feed/bin/Pulsar.exe");
     let file = Location::parse(path, None).unwrap();
-    assert_eq!(file.join("bin/NovaLauncher.exe").unwrap(), Location::File(PathBuf::from(joined)));
+    assert_eq!(file.join("bin/Pulsar.exe").unwrap(), Location::File(PathBuf::from(joined)));
     assert_eq!(Location::parse(url, None).unwrap(), file);
     assert_eq!(Location::parse(url_upper, None).unwrap(), file);
     assert!(Location::parse("", None).is_err());
@@ -275,7 +275,7 @@ async fn manifest_over_http_with_relative_url_and_errors() {
     let loc = Location::parse(&srv.url("/feed/latest.json"), None).unwrap();
     let m = fetch_manifest(&c, &loc).await.unwrap();
     assert_eq!(m.version, "2.0.0");
-    assert_eq!(m.app.url, srv.url("/feed/NovaLauncher.exe"));
+    assert_eq!(m.app.url, srv.url("/feed/Pulsar.exe"));
     assert_eq!(m.app.sha256.as_deref(), Some(sha(&data).as_str()));
     assert_eq!(m.app.size, Some(1000));
     assert_eq!(m.notes.as_deref(), Some("Neu"));
@@ -327,9 +327,9 @@ async fn manifest_from_local_path_and_file_url() {
 async fn download_full_and_verify() {
     let srv = TestServer::start();
     let data = test_data(SIZE, 3);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     let tmp = TempDir::new("full");
-    let s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     let (progress, events) = recorder();
     let cancel = CancellationToken::new();
     let stats = download::download(&client(), &s, &progress, &cancel, &fast_retry()).await.unwrap();
@@ -352,23 +352,23 @@ async fn download_full_and_verify() {
     let dl: Vec<_> = ev.iter().filter(|e| e.phase == "download").collect();
     assert!(dl.iter().all(|e| e.total == data.len() as u64 && e.percent <= download::DOWNLOAD_END));
     assert_eq!(dl.last().unwrap().downloaded, data.len() as u64);
-    assert_eq!(srv.requests_for("/NovaLauncher.exe")[0].range, None);
+    assert_eq!(srv.requests_for("/Pulsar.exe")[0].range, None);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn download_resumes_after_disconnect() {
     let srv = TestServer::start();
     let data = test_data(SIZE, 4);
-    srv.add_file("/files/NovaLauncher.exe", data.clone());
-    srv.add_redirect("/latest/NovaLauncher.exe", "/files/NovaLauncher.exe");
-    srv.drop_once_after("/files/NovaLauncher.exe", 1_000_000);
+    srv.add_file("/files/Pulsar.exe", data.clone());
+    srv.add_redirect("/latest/Pulsar.exe", "/files/Pulsar.exe");
+    srv.drop_once_after("/files/Pulsar.exe", 1_000_000);
     let tmp = TempDir::new("resume");
-    let s = spec(&srv.url("/latest/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let s = spec(&srv.url("/latest/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     let (progress, _) = recorder();
     let cancel = CancellationToken::new();
     let stats = download::download(&client(), &s, &progress, &cancel, &fast_retry()).await.unwrap();
     assert_eq!(stats.requests, 2, "one retry after the forced disconnect");
-    let reqs = srv.requests_for("/files/NovaLauncher.exe");
+    let reqs = srv.requests_for("/files/Pulsar.exe");
     assert_eq!(reqs.len(), 2);
     assert_eq!(reqs[0].range, None);
     let offset = stats.resumed_from.expect("second request resumed");
@@ -376,7 +376,7 @@ async fn download_resumes_after_disconnect() {
     assert_eq!(reqs[1].range.as_deref(), Some(format!("bytes={offset}-").as_str()));
     assert_eq!(reqs[1].status, 206);
     // Die Weiterleitung wurde für beide Versuche befolgt (Range-Header blieb erhalten).
-    assert_eq!(srv.requests_for("/latest/NovaLauncher.exe").len(), 2);
+    assert_eq!(srv.requests_for("/latest/Pulsar.exe").len(), 2);
     assert!(download::verify(&s, &progress, &cancel).await.unwrap());
     assert_eq!(download::sha256_file(&s.part_path()).unwrap(), sha(&data));
 }
@@ -385,10 +385,10 @@ async fn download_resumes_after_disconnect() {
 async fn network_error_keeps_part_and_next_call_resumes() {
     let srv = TestServer::start();
     let data = test_data(SIZE, 5);
-    srv.add_file("/NovaLauncher.exe", data.clone());
-    srv.drop_once_after("/NovaLauncher.exe", 700_000);
+    srv.add_file("/Pulsar.exe", data.clone());
+    srv.drop_once_after("/Pulsar.exe", 700_000);
     let tmp = TempDir::new("keep-part");
-    let s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     let (progress, _) = recorder();
     let cancel = CancellationToken::new();
     let err = download::download(&client(), &s, &progress, &cancel, &RetryPolicy::none()).await.unwrap_err();
@@ -401,7 +401,7 @@ async fn network_error_keeps_part_and_next_call_resumes() {
     let stats = download::download(&client(), &s, &progress, &cancel, &RetryPolicy::none()).await.unwrap();
     assert_eq!(stats.resumed_from, Some(kept));
     assert_eq!(stats.bytes_transferred, data.len() as u64 - kept);
-    assert_eq!(srv.requests_for("/NovaLauncher.exe")[1].range.as_deref(), Some(format!("bytes={kept}-").as_str()));
+    assert_eq!(srv.requests_for("/Pulsar.exe")[1].range.as_deref(), Some(format!("bytes={kept}-").as_str()));
     assert!(download::verify(&s, &progress, &cancel).await.unwrap());
 }
 
@@ -409,9 +409,9 @@ async fn network_error_keeps_part_and_next_call_resumes() {
 async fn checksum_mismatch_removes_part() {
     let srv = TestServer::start();
     let data = test_data(500_000, 6);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     let tmp = TempDir::new("checksum");
-    let mut s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let mut s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     s.sha256 = Some(sha(b"something else"));
     let (progress, _) = recorder();
     let cancel = CancellationToken::new();
@@ -427,16 +427,16 @@ async fn checksum_mismatch_removes_part() {
 async fn server_ignoring_range_restarts_from_zero() {
     let srv = TestServer::start();
     let data = test_data(SIZE, 7);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     srv.set_ignore_range(true);
     let tmp = TempDir::new("ignore-range");
-    let s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     write_meta_for(&s);
     std::fs::write(s.part_path(), vec![0xAAu8; 512_000]).unwrap(); // passende Meta, aber Inhalt egal
     let (progress, _) = recorder();
     let cancel = CancellationToken::new();
     let stats = download::download(&client(), &s, &progress, &cancel, &fast_retry()).await.unwrap();
-    let reqs = srv.requests_for("/NovaLauncher.exe");
+    let reqs = srv.requests_for("/Pulsar.exe");
     assert_eq!(reqs.len(), 1);
     assert_eq!(reqs[0].range.as_deref(), Some("bytes=512000-"));
     assert_eq!(reqs[0].status, 200);
@@ -449,15 +449,15 @@ async fn server_ignoring_range_restarts_from_zero() {
 async fn range_not_satisfiable_means_complete() {
     let srv = TestServer::start();
     let data = test_data(300_000, 8);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     let tmp = TempDir::new("416");
-    let s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), false, true); // Größe unbekannt
+    let s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), false, true); // Größe unbekannt
     write_meta_for(&s);
     std::fs::write(s.part_path(), &data).unwrap();
     let (progress, _) = recorder();
     let cancel = CancellationToken::new();
     let stats = download::download(&client(), &s, &progress, &cancel, &fast_retry()).await.unwrap();
-    let reqs = srv.requests_for("/NovaLauncher.exe");
+    let reqs = srv.requests_for("/Pulsar.exe");
     assert_eq!(reqs.len(), 1);
     assert_eq!(reqs[0].status, 416);
     assert_eq!(stats.bytes_transferred, 0);
@@ -468,9 +468,9 @@ async fn range_not_satisfiable_means_complete() {
 async fn complete_part_skips_network_and_stale_part_is_discarded() {
     let srv = TestServer::start();
     let data = test_data(400_000, 9);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     let tmp = TempDir::new("complete");
-    let s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     write_meta_for(&s);
     std::fs::write(s.part_path(), &data).unwrap();
     let (progress, _) = recorder();
@@ -485,7 +485,7 @@ async fn complete_part_skips_network_and_stale_part_is_discarded() {
     std::fs::write(s.part_path(), vec![1u8; 100_000]).unwrap();
     let stats = download::download(&client(), &s, &progress, &cancel, &fast_retry()).await.unwrap();
     assert_eq!(stats.requests, 1);
-    assert_eq!(srv.requests_for("/NovaLauncher.exe")[0].range, None);
+    assert_eq!(srv.requests_for("/Pulsar.exe")[0].range, None);
     assert!(download::verify(&s, &progress, &cancel).await.unwrap());
 }
 
@@ -493,10 +493,10 @@ async fn complete_part_skips_network_and_stale_part_is_discarded() {
 async fn cancel_keeps_part() {
     let srv = TestServer::start();
     let data = test_data(SIZE, 10);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     srv.set_throttle(Some(Duration::from_millis(25)));
     let tmp = TempDir::new("cancel");
-    let s = spec(&srv.url("/NovaLauncher.exe"), &data, &tmp.join("dl"), true, true);
+    let s = spec(&srv.url("/Pulsar.exe"), &data, &tmp.join("dl"), true, true);
     let (progress, events) = recorder();
     let cancel = CancellationToken::new();
     let c2 = cancel.clone();
@@ -533,10 +533,10 @@ fn disk_space_on_temp_dir() {
     assert_eq!(info.required, 1000);
     assert!(info.message.is_none());
 
-    let sub = tmp.join("a/b/../c/Nova Launcher");
+    let sub = tmp.join("a/b/../c/Pulsar");
     let info = disk_info(&sub.to_string_lossy(), 1000, false);
     assert!(info.valid && !info.exists && info.writable, "{info:?}");
-    assert_eq!(PathBuf::from(&info.path), tmp.join("a/c/Nova Launcher"));
+    assert_eq!(PathBuf::from(&info.path), tmp.join("a/c/Pulsar"));
     assert!(info.free > 0);
 
     for bad in ["", "   ", "relative/path"] {
@@ -556,13 +556,13 @@ fn disk_space_on_temp_dir() {
 #[test]
 fn windows_path_validation() {
     let ok = |s: &str| normalize_windows_path(s).unwrap();
-    assert_eq!(ok("C:/Games/Nova"), "C:\\Games\\Nova");
-    assert_eq!(ok("  \"c:\\Program Files\\Nova Launcher\\\"  "), "C:\\Program Files\\Nova Launcher");
+    assert_eq!(ok("C:/Games/Pulsar"), "C:\\Games\\Pulsar");
+    assert_eq!(ok("  \"c:\\Program Files\\Pulsar\\\"  "), "C:\\Program Files\\Pulsar");
     assert_eq!(ok("D:\\a\\..\\b\\.\\c\\\\d"), "D:\\b\\c\\d");
-    assert_eq!(ok("\\\\server\\share\\Nova"), "\\\\server\\share\\Nova");
+    assert_eq!(ok("\\\\server\\share\\Pulsar"), "\\\\server\\share\\Pulsar");
     assert_eq!(ok("C:\\Spiele\\COM10"), "C:\\Spiele\\COM10");
     assert_eq!(ok("C:\\"), "C:\\");
-    for bad in ["", "Games\\Nova", "C:", "C:Games", "\\Games", "C:\\Ga<mes", "C:\\a|b", "C:\\CON\\x", "C:\\x\\com1.txt", "C:\\folder.", "C:\\trail \\x", "\\\\server"] {
+    for bad in ["", "Games\\Pulsar", "C:", "C:Games", "\\Games", "C:\\Ga<mes", "C:\\a|b", "C:\\CON\\x", "C:\\x\\com1.txt", "C:\\folder.", "C:\\trail \\x", "\\\\server"] {
         assert!(normalize_windows_path(bad).is_err(), "{bad:?} should be invalid");
     }
     assert!(normalize_windows_path(&format!("C:\\{}", "a".repeat(250))).is_err());
@@ -584,13 +584,13 @@ async fn install_and_uninstall_files() {
     let _guard = system_lock();
     let srv = TestServer::start();
     let data = test_data(SIZE, 11);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     let tmp = TempDir::new("install");
-    let setup = tmp.join("NovaLauncher-Setup.exe");
+    let setup = tmp.join("Pulsar-Setup.exe");
     std::fs::write(&setup, b"setup-binary").unwrap();
-    let dir = tmp.join("Programs/Nova Launcher");
+    let dir = tmp.join("Programs/Pulsar");
     let options = InstallOptions { dir: String::new(), desktop_shortcut: true, start_menu: true, autostart: false, launch_after: true };
-    let mut plan = InstallPlan::new(test_manifest(srv.url("/NovaLauncher.exe"), &data, true), dir.clone(), options);
+    let mut plan = InstallPlan::new(test_manifest(srv.url("/Pulsar.exe"), &data, true), dir.clone(), options);
     plan.uninstaller_source = Some(setup.clone());
     plan.retry = fast_retry();
     let (progress, events) = recorder();
@@ -629,8 +629,8 @@ async fn install_and_uninstall_files() {
     assert_eq!(done2, done);
 
     // Deinstallation: Benutzerdaten löschen.
-    let roaming = tmp.join("roaming/com.nova.launcher");
-    let local = tmp.join("local/com.nova.launcher");
+    let roaming = tmp.join("roaming/com.pulsar.booster");
+    let local = tmp.join("local/com.pulsar.booster");
     let unrelated = tmp.join("local/other-app");
     for d in [&roaming, &local, &unrelated] {
         std::fs::create_dir_all(d).unwrap();
@@ -650,7 +650,7 @@ async fn install_and_uninstall_files() {
     assert!(outcome.dir_removed && !outcome.self_delete_pending, "{outcome:?}");
     assert!(!dir.exists());
     assert!(!roaming.exists() && !local.exists());
-    assert!(unrelated.exists(), "only folders named com.nova.launcher are removed");
+    assert!(unrelated.exists(), "only folders named com.pulsar.booster are removed");
     let names: Vec<&str> = steps.lock().unwrap().iter().map(|p| p.step).collect();
     assert_eq!(names.first(), Some(&"stop"));
     assert_eq!(names.last(), Some(&"done"));
@@ -662,13 +662,13 @@ async fn install_and_uninstall_files() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn uninstall_keeps_foreign_files_and_data() {
     let tmp = TempDir::new("uninstall-keep");
-    let dir = tmp.join("Nova");
+    let dir = tmp.join("Pulsar");
     std::fs::create_dir_all(dir.join(DOWNLOAD_DIR_NAME)).unwrap();
     for f in [APP, UNINSTALLER_NAME, INSTALL_INFO_NAME] {
         std::fs::write(dir.join(f), b"x").unwrap();
     }
     std::fs::write(dir.join("my-notes.txt"), b"keep me").unwrap();
-    let data_dir = tmp.join("roaming/com.nova.launcher");
+    let data_dir = tmp.join("roaming/com.pulsar.booster");
     std::fs::create_dir_all(&data_dir).unwrap();
     let plan = UninstallPlan {
         dir: dir.clone(),
@@ -722,9 +722,9 @@ async fn selftest_end_to_end() {
     let _guard = system_lock();
     let srv = TestServer::start();
     let data = test_data(SIZE, 13);
-    srv.add_file("/rel/NovaLauncher.exe", data.clone());
+    srv.add_file("/rel/Pulsar.exe", data.clone());
     srv.add_file("/rel/latest.json", manifest_json("4.5.6", APP, Some(&sha(&data)), Some(data.len() as u64)));
-    srv.drop_once_after("/rel/NovaLauncher.exe", 800_000);
+    srv.drop_once_after("/rel/Pulsar.exe", 800_000);
     let tmp = TempDir::new("selftest");
     let setup = tmp.join("setup.exe");
     std::fs::write(&setup, b"setup").unwrap();
@@ -741,7 +741,7 @@ async fn selftest_end_to_end() {
     let names: Vec<&str> = report.steps.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(names, ["manifest", "download", "verify", "install", "files", "shortcuts", "registry", "uninstall", "removed"]);
     assert!(report.steps[0].detail.contains("4.5.6"));
-    assert_eq!(srv.requests_for("/rel/NovaLauncher.exe").len(), 2, "resumed once");
+    assert_eq!(srv.requests_for("/rel/Pulsar.exe").len(), 2, "resumed once");
     assert!(!cfg.dir.join(APP).exists());
 
     crate::selftest::write_report(&report, &cfg.report).unwrap();
@@ -771,7 +771,7 @@ async fn selftest_reports_failures() {
     // Prüfsumme falsch → verify schlägt fehl, danach wird aufgeräumt.
     let srv = TestServer::start();
     let data = test_data(100_000, 14);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     srv.add_file("/latest.json", manifest_json("1.0.0", APP, Some(&sha(b"other")), None));
     let cfg = SelftestConfig { manifest: srv.url("/latest.json"), ..cfg };
     let report = run_selftest(&cfg).await;
@@ -788,7 +788,7 @@ fn selftest_cli_entry_point() {
     // Kompletter `--selftest`-Ablauf wie von der Kommandozeile (eigene Laufzeit, Standard-Berichtspfad).
     let srv = TestServer::start();
     let data = test_data(600_000, 15);
-    srv.add_file("/NovaLauncher.exe", data.clone());
+    srv.add_file("/Pulsar.exe", data.clone());
     srv.add_file("/latest.json", manifest_json("7.0.0", APP, Some(&sha(&data)), Some(data.len() as u64)));
     let tmp = TempDir::new("selftest-cli");
     let dir = tmp.join("target dir");

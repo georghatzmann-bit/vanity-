@@ -5,24 +5,19 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 use crate::error::{db_err, io_err, CmdResult, LockExt};
-use crate::models::{ImportReport, PlayStats, Session};
+use crate::models::{PlayStats, Session};
 use crate::util::now_ms;
 
 /// Aktuelle Schema-Version (`PRAGMA user_version`).
 pub const SCHEMA_VERSION: i64 = 1;
 
-/// Kennung und Version des Export-Formats.
-pub const EXPORT_FORMAT: &str = "nova-library";
-pub const EXPORT_VERSION: i64 = 1;
-
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS collections (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS wishlist (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   game_id TEXT NOT NULL,
@@ -38,8 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_start ON sessions(start);
 pub fn table_name(t: &str) -> CmdResult<&'static str> {
     match t.trim() {
         "games" => Ok("games"),
-        "collections" => Ok("collections"),
-        "wishlist" => Ok("wishlist"),
+        "reports" => Ok("reports"),
         other => Err(format!("Unbekannte Tabelle: „{other}“")),
     }
 }
@@ -110,7 +104,7 @@ impl Db {
             .map_err(db_err)?;
         if version > SCHEMA_VERSION {
             return Err(
-                "Die Datenbank stammt aus einer neueren Nova-Version. Bitte aktualisiere Nova.".into(),
+                "Die Datenbank stammt aus einer neueren Pulsar-Version. Bitte aktualisiere Pulsar.".into(),
             );
         }
         if version < 1 {
@@ -205,21 +199,6 @@ impl Db {
                 .map_err(db_err)?;
         }
         tx.commit().map_err(db_err)
-    }
-
-    /// Doppelte zusammenführen: Sitzungen der entfernten Einträge wandern zum behaltenen Eintrag,
-    /// danach werden die Doppelten gelöscht. Gibt die Zahl der übertragenen Sitzungen zurück.
-    pub fn merge_games(&mut self, keep: &str, remove: &[String]) -> CmdResult<usize> {
-        let tx = self.conn.transaction().map_err(db_err)?;
-        let mut moved = 0;
-        for id in remove.iter().filter(|id| id.as_str() != keep) {
-            moved += tx
-                .execute("UPDATE sessions SET game_id = ?1 WHERE game_id = ?2", params![keep, id])
-                .map_err(db_err)?;
-            tx.execute("DELETE FROM games WHERE id = ?1", params![id]).map_err(db_err)?;
-        }
-        tx.commit().map_err(db_err)?;
-        Ok(moved)
     }
 
     // -----------------------------------------------------------------------------------------
@@ -340,15 +319,6 @@ impl Db {
         rows.collect::<Result<Vec<_>, _>>().map_err(db_err)
     }
 
-    pub fn sessions_all(&self) -> CmdResult<Vec<Session>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, game_id, start, end, seconds FROM sessions ORDER BY start ASC, id ASC")
-            .map_err(db_err)?;
-        let rows = stmt.query_map([], row_to_session).map_err(db_err)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(db_err)
-    }
-
     /// Eine Zeile pro Spiel mit Sitzungen.
     pub fn playtime_stats(&self) -> CmdResult<Vec<PlayStats>> {
         let mut stmt = self
@@ -378,164 +348,6 @@ impl Db {
     // -----------------------------------------------------------------------------------------
     // Export / Import
     // -----------------------------------------------------------------------------------------
-
-    /// Alles als ein JSON-Dokument (Format `nova-library`, Version 1).
-    pub fn export_library(&self) -> CmdResult<Value> {
-        let mut kv = Map::new();
-        {
-            let mut stmt = self
-                .conn
-                .prepare("SELECT key, value FROM kv ORDER BY key")
-                .map_err(db_err)?;
-            let rows = stmt
-                .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
-                .map_err(db_err)?;
-            for row in rows {
-                let (k, v) = row.map_err(db_err)?;
-                kv.insert(k, serde_json::from_str(&v).unwrap_or(Value::String(v)));
-            }
-        }
-        let sessions = serde_json::to_value(self.sessions_all()?).unwrap_or(Value::Array(vec![]));
-        Ok(serde_json::json!({
-            "format": EXPORT_FORMAT,
-            "version": EXPORT_VERSION,
-            "exportedAt": now_ms(),
-            "games": self.list("games")?,
-            "collections": self.list("collections")?,
-            "wishlist": self.list("wishlist")?,
-            "sessions": sessions,
-            "kv": Value::Object(kv),
-        }))
-    }
-
-    /// Importiert ein Export-Dokument. `replace = true` ersetzt alles, sonst wird zusammengeführt.
-    pub fn import_library(&mut self, data: &Value, replace: bool) -> CmdResult<ImportReport> {
-        let obj = data
-            .as_object()
-            .ok_or_else(|| "Keine gültige Nova-Bibliotheksdatei.".to_string())?;
-        if obj.get("format").and_then(|f| f.as_str()) != Some(EXPORT_FORMAT) {
-            return Err("Keine gültige Nova-Bibliotheksdatei.".into());
-        }
-        let version = obj.get("version").and_then(|v| v.as_i64()).unwrap_or(0);
-        if version > EXPORT_VERSION {
-            return Err("Diese Datei stammt aus einer neueren Nova-Version.".into());
-        }
-        if version < 1 {
-            return Err("Keine gültige Nova-Bibliotheksdatei (Version fehlt).".into());
-        }
-
-        fn items(obj: &Map<String, Value>, key: &str) -> Vec<(String, String)> {
-            obj.get(key)
-                .and_then(|v| v.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| {
-                            let id = v.get("id")?.as_str()?.trim().to_string();
-                            validate_item(&id, v).ok().map(|json| (id, json))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default()
-        }
-        let games = items(obj, "games");
-        let collections = items(obj, "collections");
-        let wishlist = items(obj, "wishlist");
-        let sessions: Vec<(String, i64, i64, i64)> = obj
-            .get("sessions")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|s| {
-                        let gid = s
-                            .get("gameId")
-                            .or_else(|| s.get("game_id"))?
-                            .as_str()?
-                            .to_string();
-                        let start = s.get("start")?.as_f64()? as i64;
-                        let end = s.get("end").and_then(|e| e.as_f64()).map(|e| e as i64).unwrap_or(start);
-                        let seconds = s.get("seconds")?.as_f64()? as i64;
-                        if gid.is_empty() || seconds <= 0 {
-                            return None;
-                        }
-                        Some((gid, start, end.max(start), seconds))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let kv: Vec<(String, String)> = obj
-            .get("kv")
-            .and_then(|v| v.as_object())
-            .map(|m| {
-                m.iter()
-                    .filter(|(k, v)| !k.trim().is_empty() && !v.is_null())
-                    .filter_map(|(k, v)| serde_json::to_string(v).ok().map(|j| (k.clone(), j)))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let now = now_ms();
-        let mut report = ImportReport::default();
-        let tx = self.conn.transaction().map_err(db_err)?;
-        if replace {
-            tx.execute_batch(
-                "DELETE FROM games; DELETE FROM collections; DELETE FROM wishlist;
-                 DELETE FROM sessions; DELETE FROM kv;",
-            )
-            .map_err(db_err)?;
-        }
-        for (table, list, counter) in [
-            ("games", &games, &mut report.games),
-            ("collections", &collections, &mut report.collections),
-            ("wishlist", &wishlist, &mut report.wishlist),
-        ] {
-            let mut stmt = tx
-                .prepare(&format!(
-                    "INSERT INTO {table}(id, data, updated_at) VALUES(?1, ?2, ?3)
-                     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
-                ))
-                .map_err(db_err)?;
-            for (id, json) in list.iter() {
-                stmt.execute(params![id, json, now]).map_err(db_err)?;
-                *counter += 1;
-            }
-        }
-        {
-            let mut exists = tx
-                .prepare("SELECT 1 FROM sessions WHERE game_id = ?1 AND start = ?2 LIMIT 1")
-                .map_err(db_err)?;
-            let mut insert = tx
-                .prepare("INSERT INTO sessions(game_id, start, end, seconds) VALUES(?1, ?2, ?3, ?4)")
-                .map_err(db_err)?;
-            for (gid, start, end, seconds) in &sessions {
-                let dup = exists
-                    .query_row(params![gid, start], |_| Ok(()))
-                    .optional()
-                    .map_err(db_err)?
-                    .is_some();
-                if dup {
-                    continue;
-                }
-                insert
-                    .execute(params![gid, start, end, seconds])
-                    .map_err(db_err)?;
-                report.sessions += 1;
-            }
-        }
-        {
-            // Beim Zusammenführen vorhandene Einstellungen nicht überschreiben
-            let sql = if replace {
-                "INSERT INTO kv(key, value) VALUES(?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-            } else {
-                "INSERT OR IGNORE INTO kv(key, value) VALUES(?1, ?2)"
-            };
-            let mut stmt = tx.prepare(sql).map_err(db_err)?;
-            for (k, v) in &kv {
-                stmt.execute(params![k, v]).map_err(db_err)?;
-            }
-        }
-        tx.commit().map_err(db_err)?;
-        Ok(report)
-    }
 
     // -----------------------------------------------------------------------------------------
     // Backups
@@ -578,7 +390,7 @@ impl DbHandle {
         let mut guard = self.inner.lock_safe();
         match guard.as_mut() {
             Some(db) => f(db),
-            None => Err("Die Datenbank ist nicht geöffnet. Bitte Nova neu starten.".into()),
+            None => Err("Die Datenbank ist nicht geöffnet. Bitte Pulsar neu starten.".into()),
         }
     }
 
@@ -646,24 +458,6 @@ mod tests {
     }
 
     #[test]
-    fn merge_moves_sessions() {
-        let (_d, mut db) = temp_db();
-        for id in ["keep", "dup1", "dup2"] {
-            db.put("games", id, &json!({"id": id, "name": "Portal 2"})).unwrap();
-        }
-        db.session_insert("keep", 1_000, 61_000, 60).unwrap();
-        db.session_insert("dup1", 100_000, 220_000, 120).unwrap();
-        db.session_insert("dup2", 300_000, 330_000, 30).unwrap();
-        let moved = db.merge_games("keep", &["dup1".into(), "dup2".into(), "keep".into()]).unwrap();
-        assert_eq!(moved, 2);
-        let games = db.list("games").unwrap();
-        assert_eq!(games.len(), 1);
-        assert_eq!(games[0]["id"], "keep");
-        let total: i64 = db.sessions_for_game("keep", 10).unwrap().iter().map(|s| s.seconds).sum();
-        assert_eq!(total, 210, "Spielzeit der Doppelten bleibt erhalten");
-    }
-
-    #[test]
     fn sessions_and_stats() {
         let (_d, db) = temp_db();
         db.session_insert("a", 1_000, 61_000, 60).unwrap();
@@ -706,45 +500,7 @@ mod tests {
             db.session_insert("a", 5, 20_000, 20).unwrap();
         }
         let db = Db::open(&path).unwrap();
-        assert_eq!(db.sessions_all().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn export_import_roundtrip() {
-        let (_d, db) = temp_db();
-        db.put("games", "g1", &json!({"id":"g1","name":"Alpha"})).unwrap();
-        db.put("collections", "c1", &json!({"id":"c1","name":"Favs"})).unwrap();
-        db.put("wishlist", "w1", &json!({"id":"w1","name":"Wunsch"})).unwrap();
-        db.session_insert("g1", 1_000, 11_000, 10).unwrap();
-        db.session_insert("g1", 20_000, 80_000, 60).unwrap();
-        db.kv_set("settings", &json!({"theme":"neon"})).unwrap();
-        let export = db.export_library().unwrap();
-        assert_eq!(export["format"], "nova-library");
-        assert_eq!(export["sessions"].as_array().unwrap().len(), 2);
-        assert_eq!(export["sessions"][0]["gameId"], "g1");
-
-        // Ersetzen in eine leere Datenbank
-        let (_d2, mut other) = temp_db();
-        other.put("games", "old", &json!({"id":"old"})).unwrap();
-        let rep = other.import_library(&export, true).unwrap();
-        assert_eq!(rep, ImportReport { games: 1, collections: 1, wishlist: 1, sessions: 2 });
-        assert_eq!(other.list("games").unwrap().len(), 1, "replace entfernt alte Spiele");
-        assert_eq!(other.kv_get("settings").unwrap()["theme"], "neon");
-        assert_eq!(other.export_library().unwrap()["games"], export["games"]);
-
-        // Zusammenführen: doppelte Sitzungen werden übersprungen, Einstellungen bleiben
-        other.kv_set("settings", &json!({"theme":"polar"})).unwrap();
-        other.put("games", "g2", &json!({"id":"g2"})).unwrap();
-        let rep2 = other.import_library(&export, false).unwrap();
-        assert_eq!(rep2.sessions, 0);
-        assert_eq!(rep2.games, 1);
-        assert_eq!(other.list("games").unwrap().len(), 2);
-        assert_eq!(other.kv_get("settings").unwrap()["theme"], "polar");
-        assert_eq!(other.sessions_all().unwrap().len(), 2);
-
-        // Ungültige Dateien
-        assert!(other.import_library(&json!({"format":"anders"}), false).is_err());
-        assert!(other.import_library(&json!({"format":"nova-library","version":99}), false).is_err());
+        assert_eq!(db.sessions_range(0, i64::MAX).unwrap().len(), 1);
     }
 
     #[test]
