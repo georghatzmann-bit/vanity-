@@ -51,6 +51,27 @@ Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache
 | Boost aus | Energieplan vorher = nachher (8c5e7fda-…) – Rückstellung funktioniert |
 | Starten / erkannt / beenden / Spielzeit | PING.EXE gestartet, nach 0,5 s erkannt, beendet, 13 s in 1 Sitzung gespeichert |
 
+### DNS-Automatik und Netzwerk-Optimierungen auf Windows (CI-Lauf 38478061410, 13.10.2026, Commit `1a375a5`)
+
+Lauf: <https://github.com/georghatzmann-bit/vanity-/actions/runs/38478061410> – alle Schritte grün, auch die Rust-Tests
+auf Windows (seit das Manifest in die Test-Programme eingebettet wird). Werte aus `app-selftest.json` im Artefakt:
+
+| Prüfung | Ergebnis |
+|---|---|
+| Admin-Helfer per Kommandozeile | ungültiger Auftrag → Exit-Code 20 (abgelehnt), gültiger Auftrag → Exit-Code 0 |
+| DNS-Vergleich | 6 von 8 Diensten haben geantwortet |
+| Aktueller DNS vorher | „Ethernet 3“, automatisch vom Router (DHCP), Server 168.63.129.16 (Azure) |
+| DNS einstellen (`net_dns_apply("cloudflare")`) | 1.1.1.1 + 1.0.0.1 eingetragen, als Cloudflare erkannt, Sicherung angelegt, Namensauflösung danach ok |
+| DNS zurückstellen (`net_dns_restore`) | wieder automatisch (DHCP), 168.63.129.16, keine Sicherung mehr übrig |
+| Netzwerk-Optimierungen | „Nagle aus“ und „Netzwerk-Drosselung aus“ angewendet, danach per `Pulsar.exe --revert-all` zurückgestellt: beide wieder „aus“ wie vorher, keine Sicherung übrig |
+| TCP-Ping (1.1.1.1:443) | Ø 10 ms, Schwankung 1,2 ms, 0 % Verlust |
+
+Ehrlich dazu: Der GitHub-Rechner läuft schon mit Adminrechten. Die **Windows-Abfrage (UAC) selbst** und das
+**Ablehnen** der Abfrage wurden deshalb dort nicht durchgespielt – der Helfer lief direkt im eigenen Prozess.
+Der Knopf „Netzwerk automatisch optimieren“ (`net_auto_optimize`/`net_auto_restore`) wird im Selbsttest nicht als
+Ganzes aufgerufen; geprüft sind seine Bausteine (DNS einstellen/zurückstellen, Admin-Optimierungen, `--revert-all`)
+und die Auswahl des besten DNS per `vitest` (`netauto.test.ts`).
+
 ## 2. Lokal geprüft (Linux-Entwicklungsumgebung)
 
 | Was | Ergebnis |
