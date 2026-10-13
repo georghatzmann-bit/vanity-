@@ -22,6 +22,30 @@ Workflow `.github/workflows/windows.yml` auf `windows-latest`:
 Ergebnis des letzten Laufs: siehe `https://github.com/georghatzmann-bit/vanity-/actions` (Eintrag „Windows Build & Test“) –
 die Selbsttest-Berichte (`selftest.json`, `app-selftest.json`) und Screenshots liegen im Artefakt `pulsar-windows-<version>`.
 
+### Was der App-Selbsttest auf dem GitHub-Windows-Rechner wirklich gemessen hat (13.10.2026)
+
+| Prüfung | Ergebnis |
+|---|---|
+| Steam-Scan | Portal 2 gefunden (nachgebaute Steam-Installation) |
+| Startmenü/Epic/GOG-Scan | 46 Einträge (7-Zip, Firefox, …) |
+| Steam-Bilder | Cover, Hintergrund, Logo, Icon geladen; Bilder per Name: Hades II → Steam-ID 1145350 |
+| Exe-Icon, Icon aus Ordner | ok |
+| PC-Auslastung | CPU 40 %, RAM 16 GB, GPU-Wert vorhanden |
+| Regionen | 29 Regionen, alle 7 Erdteile |
+| TCP-Ping (1.1.1.1:443) | Ø 19 ms, Schwankung 0,7 ms, 0 % Verlust |
+| ICMP-Ping | 100 % Verlust – die Azure-Firewall des Runners blockt ICMP; der Aufruf bleibt sauber (kein Absturz) |
+| Regionen-Ping | 3/3 Regionen geantwortet |
+| Echte Spielserver (CS2) | 44 Valve-Standorte live von der Steam-API geladen |
+| DNS-Vergleich | 5/7 Dienste geantwortet (UDP 53 teilweise geblockt) |
+| Adapter | im ersten Lauf 0 (Hyper-V-Adapter wurde als „virtuell“ aussortiert) → behoben: in VMs zählt der virtuelle Adapter mit Gateway |
+| WLAN | kein WLAN (erwartet) |
+| Route | 8 Stationen, Ziel nicht erreicht (ICMP-TTL-Antworten geblockt) – Aufruf sauber |
+| Tweaks lesen | powerPlan=on, gameMode=unknown, gameDvr=unknown (Werte auf frischem Windows nicht vorhanden), mouseAccel=off |
+| Energiepläne | Balanced, High performance (aktiv), Power saver |
+| Boost an | Energieplan ok, Priorität „kein Spiel“ (ehrlich gemeldet), DNS geleert |
+| Boost aus | Energieplan vorher = nachher (8c5e7fda-…) – Rückstellung funktioniert |
+| Starten / erkannt / beenden / Spielzeit | PING.EXE gestartet, nach 0,5 s erkannt, beendet, 13 s in 1 Sitzung gespeichert |
+
 ## 2. Lokal geprüft (Linux-Entwicklungsumgebung)
 
 | Was | Ergebnis |
