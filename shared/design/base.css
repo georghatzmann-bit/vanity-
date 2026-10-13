@@ -102,6 +102,13 @@
 }
 
 @layer components {
+  /* Spiel-Logos über Hintergrundbildern: feiner heller Schein + weicher Schatten,
+     damit auch dunkle Logos (z. B. Counter-Strike 2) auf dunklem Bild lesbar bleiben */
+  .nv-logo {
+    filter: drop-shadow(0 0 1.5px rgb(255 255 255 / 0.55)) drop-shadow(0 0 14px rgb(255 255 255 / 0.16))
+      drop-shadow(0 6px 26px rgb(0 0 0 / 0.55));
+  }
+
   /* Glas-Fläche: Blur + Sättigung + feine Innenkante */
   .glass {
     background: var(--nv-surface);

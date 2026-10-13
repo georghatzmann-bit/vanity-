@@ -1,4 +1,5 @@
-//! Bilder: Steam-CDN und SteamGridDB herunterladen, im Cache ablegen, Farbpalette berechnen.
+//! Bilder: Steam (ohne Schlüssel) und SteamGridDB herunterladen, Icons aus der `.exe`,
+//! im Cache ablegen, Farbpalette berechnen.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -19,6 +20,14 @@ const STEAM_HOSTS: [&str; 2] = [
     "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/",
     "https://cdn.cloudflare.steamstatic.com/steam/apps/",
 ];
+/// Aktuelle Bildpfade (mit Hash) und das Icon eines Steam-Spiels – öffentlich, ohne Schlüssel
+const STEAM_ITEMS_API: &str = "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/";
+/// Steam-Shop-Suche per Name – öffentlich, ohne Schlüssel
+const STEAM_SEARCH_API: &str = "https://store.steampowered.com/api/storesearch/";
+/// Zweite Steam-Suche (findet auch Spiele, die der Shop ausblendet) – öffentlich, ohne Schlüssel
+const STEAM_COMMUNITY_SEARCH: &str = "https://steamcommunity.com/actions/SearchApps/";
+const STEAM_ASSET_HOST: &str = "https://shared.steamstatic.com/store_item_assets/";
+const STEAM_ICON_HOST: &str = "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/";
 const SGDB_API: &str = "https://www.steamgriddb.com/api/v2";
 const MAX_IMAGE_BYTES: usize = 40 * 1024 * 1024;
 const SGDB_INVALID_KEY: &str = "SteamGridDB-Schlüssel ungültig";
@@ -283,6 +292,180 @@ fn steam_urls(app_id: &str, kind: ImageKind) -> Vec<String> {
     out
 }
 
+/// Bildadressen eines Steam-Spiels laut Steam-Shop (aktuelle Dateien, auch bei neuen Spielen).
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SteamAssets {
+    pub cover: Vec<String>,
+    pub hero: Vec<String>,
+    /// Breites Shop-Bild (460×215) – Grundlage für Ersatz-Cover und -Hintergrund
+    pub header: Vec<String>,
+    pub icon: Option<String>,
+}
+
+pub fn parse_steam_assets(app_id: &str, v: &Value) -> Option<SteamAssets> {
+    let item = v["response"]["store_items"]
+        .as_array()?
+        .iter()
+        .find(|i| i["appid"].as_u64().map(|a| a.to_string()).as_deref() == Some(app_id))?;
+    let a = &item["assets"];
+    let format = a["asset_url_format"].as_str().unwrap_or_default();
+    let url = |key: &str| -> Option<String> {
+        let file = a[key].as_str().filter(|f| !f.is_empty())?;
+        let path = if format.contains("${FILENAME}") {
+            format.replace("${FILENAME}", file)
+        } else {
+            format!("steam/apps/{app_id}/{file}")
+        };
+        Some(format!("{STEAM_ASSET_HOST}{path}"))
+    };
+    let list = |keys: &[&str]| keys.iter().filter_map(|k| url(k)).collect::<Vec<_>>();
+    let icon = a["community_icon"]
+        .as_str()
+        .filter(|h| !h.is_empty() && h.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(|h| format!("{STEAM_ICON_HOST}{app_id}/{h}.jpg"));
+    Some(SteamAssets {
+        cover: list(&["library_capsule", "library_capsule_2x"]),
+        hero: list(&["library_hero", "library_hero_2x"]),
+        header: list(&["header_2x", "header"]),
+        icon,
+    })
+}
+
+async fn steam_assets(http: &reqwest::Client, app_id: &str) -> Option<SteamAssets> {
+    let input = serde_json::json!({
+        "ids": [{ "appid": app_id.parse::<u64>().ok()? }],
+        "context": { "language": "english", "country_code": "US" },
+        "data_request": { "include_assets": true }
+    });
+    let url = reqwest::Url::parse_with_params(STEAM_ITEMS_API, &[("input_json", input.to_string())]).ok()?;
+    let resp = http.get(url).send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let v: Value = resp.json().await.ok()?;
+    parse_steam_assets(app_id, &v)
+}
+
+const ROMAN: [(&str, &str); 9] = [
+    ("ii", "2"), ("iii", "3"), ("iv", "4"), ("v", "5"), ("vi", "6"), ("vii", "7"), ("viii", "8"), ("ix", "9"), ("x", "10"),
+];
+const EDITION_SUFFIXES: [&str; 16] = [
+    "game of the year edition", "goty edition", "goty", "definitive edition", "complete edition",
+    "deluxe edition", "enhanced edition", "ultimate edition", "standard edition", "gold edition",
+    "directors cut", "the final cut", "final cut", "remastered", "anniversary edition", "edition",
+];
+
+/// Spielnamen vergleichbar machen: klein, ohne ™®©, Satzzeichen und römische Zahlen als Ziffern.
+pub fn normalize_title(s: &str) -> String {
+    let lower = s
+        .to_lowercase()
+        .replace(['™', '®', '©'], "")
+        .replace('&', " and ")
+        .replace(['\'', '’', '`'], "");
+    let cleaned: String = lower.chars().map(|c| if c.is_alphanumeric() { c } else { ' ' }).collect();
+    cleaned
+        .split_whitespace()
+        .map(|w| ROMAN.iter().find(|(r, _)| *r == w).map(|(_, d)| *d).unwrap_or(w))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn strip_edition(normalized: &str) -> String {
+    let mut s = normalized.trim().to_string();
+    for suffix in EDITION_SUFFIXES {
+        if let Some(rest) = s.strip_suffix(suffix) {
+            s = rest.trim().to_string();
+        }
+    }
+    s
+}
+
+/// Aus den Treffern der Steam-Suche den passenden wählen – nur bei (fast) gleichem Namen,
+/// damit nie ein falsches Spiel seine Bilder hergibt.
+pub fn pick_steam_match(name: &str, v: &Value) -> Option<String> {
+    let wanted = normalize_title(name);
+    if wanted.is_empty() {
+        return None;
+    }
+    let wanted_base = strip_edition(&wanted);
+    // Shop-Suche: {"items": [{"id": 730, "name": …}]}, Community-Suche: [{"appid": "730", "name": …}]
+    let list = v["items"].as_array().or_else(|| v.as_array())?;
+    let items: Vec<(String, String)> = list
+        .iter()
+        .filter(|i| i["type"].as_str().map_or(true, |t| t == "app"))
+        .filter_map(|i| {
+            let id = i["id"].as_u64().map(|n| n.to_string()).or_else(|| i["appid"].as_str().map(str::to_string))
+                .or_else(|| i["appid"].as_u64().map(|n| n.to_string()))?;
+            id.chars().all(|c| c.is_ascii_digit()).then_some(())?;
+            Some((id, normalize_title(i["name"].as_str()?)))
+        })
+        .collect();
+    items
+        .iter()
+        .find(|(_, n)| *n == wanted)
+        .or_else(|| items.iter().find(|(_, n)| !wanted_base.is_empty() && strip_edition(n) == wanted_base))
+        .map(|(id, _)| id.clone())
+}
+
+async fn steam_find_app_id(http: &reqwest::Client, name: &str) -> Option<String> {
+    let term = name.trim();
+    if term.is_empty() {
+        return None;
+    }
+    let get_json = |url: reqwest::Url| async move {
+        let resp = http.get(url).send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        resp.json::<Value>().await.ok()
+    };
+    let shop = reqwest::Url::parse_with_params(STEAM_SEARCH_API, &[("term", term), ("l", "english"), ("cc", "US")]).ok()?;
+    if let Some(id) = get_json(shop).await.and_then(|v| pick_steam_match(name, &v)) {
+        return Some(id);
+    }
+    let mut community = reqwest::Url::parse(STEAM_COMMUNITY_SEARCH).ok()?;
+    community.path_segments_mut().ok()?.pop_if_empty().push(term);
+    get_json(community).await.and_then(|v| pick_steam_match(name, &v))
+}
+
+/// Ersatzbild aus einem breiten Shop-Bild: unscharfer, abgedunkelter Hintergrund, scharfes Bild in der Mitte.
+pub fn compose_fallback(src: &DynamicImage, w: u32, h: u32) -> DynamicImage {
+    use image::imageops::FilterType;
+    let mut bg = src
+        .resize_to_fill((w / 6).max(8), (h / 6).max(8), FilterType::Triangle)
+        .blur(3.0)
+        .resize_exact(w, h, FilterType::Triangle)
+        .brighten(-45);
+    let fg = src.resize(w * 94 / 100, h * 88 / 100, FilterType::Lanczos3);
+    let x = (w.saturating_sub(fg.width()) / 2) as i64;
+    let y = (h.saturating_sub(fg.height()) / 2) as i64;
+    image::imageops::overlay(&mut bg, &fg, x, y);
+    bg
+}
+
+fn compose_jpeg(bytes: &[u8], w: u32, h: u32) -> Option<Vec<u8>> {
+    let src = image::load_from_memory(bytes).ok()?;
+    let out = compose_fallback(&src, w, h).to_rgb8();
+    let mut jpg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpg, 88)
+        .encode_image(&out)
+        .ok()?;
+    Some(jpg)
+}
+
+/// Icon aus der Programmdatei oder – falls nur der Ordner bekannt ist – aus der Haupt-.exe darin.
+fn local_exe_icon(dir: &Path, name: &str, exe_path: Option<&str>, install_dir: Option<&str>) -> Option<String> {
+    if let Some(exe) = exe_path.map(clean_path).filter(|p| p.is_file()) {
+        if let Ok(Some(icon)) = crate::icons::exe_icon_cached(&exe, dir) {
+            return Some(icon);
+        }
+    }
+    let folder = install_dir.map(clean_path).filter(|p| p.is_dir())?;
+    let candidates = crate::scan::folder::collect_exes(&folder, 3);
+    let best = crate::scan::folder::pick_best_exe(name, &candidates)?;
+    crate::icons::exe_icon_cached(&candidates[best].path, dir).ok().flatten()
+}
+
 fn sgdb_url(segments: &[&str], query: &[(&str, &str)]) -> CmdResult<reqwest::Url> {
     let mut url = reqwest::Url::parse(SGDB_API).map_err(|e| e.to_string())?;
     url.path_segments_mut()
@@ -454,13 +637,14 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         }
     }
     if kinds.is_empty() {
-        kinds = vec![ImageKind::Cover, ImageKind::Hero, ImageKind::Logo];
+        kinds = vec![ImageKind::Cover, ImageKind::Hero, ImageKind::Logo, ImageKind::Icon];
     }
 
     let mut images = GameImages::default();
     let mut messages = Vec::new();
     let mut from_steam = false;
     let mut from_sgdb = false;
+    let mut from_exe = false;
     let mut missing: Vec<ImageKind> = Vec::new();
     for k in &kinds {
         match (!force).then(|| find_cached(&dir, *k)).flatten() {
@@ -469,15 +653,50 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         }
     }
 
-    // 1) Steam-CDN (ohne Schlüssel)
-    let steam_id = request
+    // 1) Icon direkt aus der Programmdatei (scharf, 256 px, nur Windows)
+    if missing.contains(&ImageKind::Icon) {
+        let (d, name, exe, folder) = (dir.clone(), request.name.clone(), request.exe_path.clone(), request.install_dir.clone());
+        let icon = tokio::task::spawn_blocking(move || {
+            let _ = fs::create_dir_all(&d);
+            local_exe_icon(&d, &name, exe.as_deref(), folder.as_deref())
+        })
+        .await
+        .ok()
+        .flatten();
+        if let Some(icon) = icon {
+            images.icon = Some(icon);
+            missing.retain(|k| *k != ImageKind::Icon);
+            from_exe = true;
+        }
+    }
+
+    // 2) Steam (ohne Schlüssel): bekannte Steam-ID oder Suche per Name
+    let mut steam_id = request
         .steam_app_id
-        .as_deref()
+        .clone()
         .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()));
+    let mut found_by_name: Option<String> = None;
+    if steam_id.is_none() && request.lookup_by_name.unwrap_or(false) && !missing.is_empty() {
+        found_by_name = steam_find_app_id(&http, &request.name).await;
+        steam_id = found_by_name.clone();
+    }
     let mut network_error: Option<String> = None;
-    if let Some(app_id) = steam_id {
+    let mut header_urls: Vec<String> = Vec::new();
+    if let Some(app_id) = steam_id.as_deref() {
+        let assets = if missing.is_empty() { None } else { steam_assets(&http, app_id).await };
+        if let Some(a) = &assets {
+            header_urls = a.header.clone();
+        }
         for kind in missing.clone() {
-            for url in steam_urls(app_id, kind) {
+            // Aktuelle Dateien laut Shop zuerst, danach die festen Adressen (ältere Spiele)
+            let mut urls: Vec<String> = match (&assets, kind) {
+                (Some(a), ImageKind::Cover) => a.cover.clone(),
+                (Some(a), ImageKind::Hero) => a.hero.clone(),
+                (Some(a), ImageKind::Icon) => a.icon.iter().cloned().collect(),
+                _ => Vec::new(),
+            };
+            urls.extend(steam_urls(app_id, kind));
+            for url in urls {
                 match download(&http, &url).await {
                     Ok(bytes) => {
                         let p = store_async(dir.clone(), kind, url.clone(), bytes).await?;
@@ -496,11 +715,11 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         }
     }
 
-    // 2) SteamGridDB (mit Schlüssel)
+    // 3) SteamGridDB (mit Schlüssel)
     let api_key = request.api_key.as_deref().map(str::trim).filter(|k| !k.is_empty());
     if !missing.is_empty() {
         if let Some(key) = api_key {
-            match sgdb_resolve(&http, key, steam_id, &request.name).await {
+            match sgdb_resolve(&http, key, steam_id.as_deref(), &request.name).await {
                 Ok(Some(gid)) => {
                     for kind in missing.clone() {
                         let list = match sgdb_list(&http, key, gid, kind).await {
@@ -537,14 +756,31 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         }
     }
 
+    // 4) Kein Cover/Hintergrund, aber ein Shop-Bild: Ersatz daraus zusammensetzen
+    if missing.contains(&ImageKind::Cover) || missing.contains(&ImageKind::Hero) {
+        for url in &header_urls {
+            let Ok(bytes) = download(&http, url).await else { continue };
+            for (kind, w, h) in [(ImageKind::Cover, 600, 900), (ImageKind::Hero, 1920, 620)] {
+                if !missing.contains(&kind) {
+                    continue;
+                }
+                let b = bytes.clone();
+                let composed = tokio::task::spawn_blocking(move || compose_jpeg(&b, w, h)).await.ok().flatten();
+                if let Some(jpg) = composed {
+                    let p = store_async(dir.clone(), kind, format!("{url}#{w}x{h}"), jpg).await?;
+                    images.set(kind, display_path(&p));
+                    missing.retain(|k| *k != kind);
+                    from_steam = true;
+                }
+            }
+            break;
+        }
+    }
+
     if let Some(e) = network_error {
         if !messages.contains(&e) {
             messages.push(e);
         }
-    }
-    // Ohne Schlüssel kommt das Symbol aus der .exe (exe_icon) – kein Hinweis nötig
-    if api_key.is_none() {
-        missing.retain(|k| *k != ImageKind::Icon);
     }
     if !missing.is_empty() {
         let names: Vec<&str> = missing.iter().map(|k| kind_label(*k)).collect();
@@ -566,6 +802,8 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         "steam"
     } else if from_sgdb {
         "steamgriddb"
+    } else if from_exe {
+        "exe"
     } else {
         "none"
     };
@@ -574,6 +812,7 @@ pub async fn images_fetch(state: State<'_, Shared>, request: ImageFetchRequest) 
         palette,
         source: source.into(),
         messages,
+        steam_app_id: found_by_name,
     })
 }
 
@@ -781,6 +1020,69 @@ mod tests {
         let imgs = parse_sgdb_images(&serde_json::json!({"data": [{"url": "https://x/a.png", "width": 600, "height": 900}]}));
         assert_eq!(imgs[0].thumb, "https://x/a.png");
         assert_eq!(imgs[0].height, 900);
+    }
+
+    #[test]
+    fn title_normalizing() {
+        assert_eq!(normalize_title("Baldur's Gate 3"), "baldurs gate 3");
+        assert_eq!(normalize_title("Hades II"), "hades 2");
+        assert_eq!(normalize_title("The Witcher® 3: Wild Hunt"), "the witcher 3 wild hunt");
+        assert_eq!(normalize_title("Ori and the Will of the Wisps"), normalize_title("Ori & the Will of the Wisps"));
+        assert_eq!(strip_edition(&normalize_title("Fallout 4: Game of the Year Edition")), "fallout 4");
+    }
+
+    #[test]
+    fn steam_search_picks_only_matching_names() {
+        let v = serde_json::json!({"total": 3, "items": [
+            {"type": "app", "name": "Counter-Strike 2 Soundtrack", "id": 2678630},
+            {"type": "app", "name": "Counter-Strike 2", "id": 730},
+            {"type": "app", "name": "Counter-Strike: Source", "id": 240}
+        ]});
+        assert_eq!(pick_steam_match("Counter-Strike 2", &v).as_deref(), Some("730"));
+        assert_eq!(pick_steam_match("counter strike 2", &v).as_deref(), Some("730"));
+        // Kein ähnlicher, aber falscher Treffer
+        assert_eq!(pick_steam_match("Counter-Strike", &v), None);
+        let goty = serde_json::json!({"items": [{"type": "app", "name": "The Witcher 3: Wild Hunt", "id": 292030}]});
+        assert_eq!(pick_steam_match("The Witcher 3: Wild Hunt - Game of the Year Edition", &goty).as_deref(), Some("292030"));
+        assert_eq!(pick_steam_match("", &goty), None);
+        // Antwort der Community-Suche
+        let community = serde_json::json!([{"appid": "632470", "name": "Disco Elysium - The Final Cut"}]);
+        assert_eq!(pick_steam_match("Disco Elysium", &community).as_deref(), Some("632470"));
+        assert_eq!(pick_steam_match("Witcher", &serde_json::json!({})), None);
+    }
+
+    #[test]
+    fn steam_assets_parsing() {
+        let v = serde_json::json!({"response": {"store_items": [{
+            "appid": 1145350,
+            "assets": {
+                "asset_url_format": "steam/apps/1145350/${FILENAME}?t=1",
+                "header": "91ac/header.jpg",
+                "library_capsule": "2ba1/library_capsule.jpg",
+                "library_hero": "2d2e/library_hero.jpg",
+                "community_icon": "621d9f1cfa204c0bae07a981f41007d2cf03a56c"
+            }
+        }]}});
+        let a = parse_steam_assets("1145350", &v).unwrap();
+        assert_eq!(a.cover, vec!["https://shared.steamstatic.com/store_item_assets/steam/apps/1145350/2ba1/library_capsule.jpg?t=1"]);
+        assert_eq!(a.hero.len(), 1);
+        assert_eq!(a.header.len(), 1);
+        assert_eq!(
+            a.icon.as_deref(),
+            Some("https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/1145350/621d9f1cfa204c0bae07a981f41007d2cf03a56c.jpg")
+        );
+        assert!(parse_steam_assets("730", &v).is_none(), "andere ID");
+    }
+
+    #[test]
+    fn fallback_cover_has_target_size() {
+        let wide = DynamicImage::ImageRgb8(image::RgbImage::from_fn(460, 215, |x, _| image::Rgb([(x % 255) as u8, 80, 160])));
+        let cover = compose_fallback(&wide, 600, 900);
+        assert_eq!((cover.width(), cover.height()), (600, 900));
+        let mut png = Vec::new();
+        wide.write_to(&mut std::io::Cursor::new(&mut png), ImageFormat::Png).unwrap();
+        let jpg = compose_jpeg(&png, 1920, 620).unwrap();
+        assert_eq!(detect_ext(&jpg), Some("jpg"));
     }
 
     #[test]

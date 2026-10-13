@@ -130,15 +130,21 @@ Alle installierten NOVAs melden sich dann mit „Update verfügbar“.
 
 ---
 
-## 7. Cover-Bilder (SteamGridDB)
+## 7. Cover, Hintergründe, Logos und Icons
 
-- Für **Steam-Spiele** lädt NOVA die Bilder automatisch, ganz ohne Schlüssel.
-- Für **Epic-, GOG- und andere Spiele** brauchst du einen kostenlosen Schlüssel:
-  1. Auf `https://www.steamgriddb.com` mit Steam anmelden.
-  2. Profil → **Preferences** → **API** → Schlüssel kopieren.
-  3. In NOVA: **Einstellungen → Bibliothek → SteamGridDB-API-Schlüssel** einfügen.
-  4. **Aufräumen → Alle Cover laden** klicken.
-- Spiele ohne Bild bekommen ein automatisch erzeugtes Kunst-Cover. Eigene Bilder gehen über **Spiel → Einstellungen → Bilder**.
+Du musst nichts tun – NOVA holt die Bilder selbst, ganz ohne Anmeldung oder Schlüssel:
+- **Steam-Spiele:** Cover, großes Hintergrundbild, Logo und Icon direkt von Steam.
+- **Epic-, GOG- und andere Spiele:** NOVA sucht das Spiel per Name bei Steam und nimmt dessen Bilder (klappt bei den meisten bekannten Spielen).
+- **Icons:** kommen aus der Programmdatei des Spiels (scharf, 256 Pixel). Programme wie OBS oder Discord bekommen so ihr echtes Symbol.
+- Fehlt einem Spiel ein Bild, versucht NOVA es beim Start von selbst wieder (höchstens alle 3 Tage).
+
+Nur für Spiele, die es bei Steam nicht gibt (z. B. Alan Wake 2, Minecraft), hilft ein kostenloser **SteamGridDB-Schlüssel**:
+1. Auf `https://www.steamgriddb.com` mit Steam anmelden.
+2. Profil → **Preferences** → **API** → Schlüssel kopieren.
+3. In NOVA: **Einstellungen → Bibliothek → SteamGridDB-API-Schlüssel** einfügen.
+4. **Aufräumen → Alle Cover laden** klicken.
+
+Spiele ganz ohne Bild bekommen ein automatisch gemaltes Cover (mit Icon, wenn eins da ist). Eigene Bilder gehen über **Spiel → Einstellungen → Bilder**.
 
 ---
 

@@ -65,6 +65,7 @@ export function normalizeGame(raw: Partial<Game> & { id: string }): Game {
     processNames: Array.isArray(raw.processNames) ? raw.processNames : undefined,
     images: raw.images ?? {},
     palette: raw.palette,
+    imagesCheckedAt: typeof raw.imagesCheckedAt === "number" ? raw.imagesCheckedAt : undefined,
     favorite: !!raw.favorite,
     hidden: !!raw.hidden,
     status: raw.status ?? "none",

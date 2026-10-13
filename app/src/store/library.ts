@@ -180,6 +180,11 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       });
       syncTracking(games);
       syncTray(games, stats);
+      // Fehlende Cover/Icons im Hintergrund nachladen – höchstens alle 3 Tage pro Eintrag
+      const stale = games.filter(
+        (g) => !g.hidden && ((g.kind === "game" && !g.images.cover) || !g.images.icon) && (!g.imagesCheckedAt || Date.now() - g.imagesCheckedAt > 3 * 86_400_000),
+      );
+      if (stale.length) window.setTimeout(() => void get().fetchImages(stale, { quiet: true }), 2500);
       // Erfolge leise nachziehen (ohne Pop-up-Flut beim ersten Start)
       const done = evaluate({ games, stats, sessions: sessions ?? [], collections: collections ?? [], wishlist: wishlist ?? [], counters: get().counters });
       const known = new Set(get().unlocked.map((u) => u.id));
@@ -360,25 +365,33 @@ export const useLibrary = create<LibraryState>((set, get) => ({
       while (queue.length) {
         const g = queue.shift()!;
         try {
+          const isGame = g.kind === "game";
           const steamAppId = g.source === "steam" ? g.sourceId : g.launch.target.match(/steam:\/\/rungameid\/(\d+)/)?.[1];
           const needed = opts.force ? kinds : kinds.filter((k) => !g.images[k]);
+          // Programme bekommen ihr Icon aus der .exe; Bilder nur mit SteamGridDB-Schlüssel
+          const wanted = isGame ? needed : needed.filter((k) => k === "icon" || !!key);
           let images = { ...g.images };
           let palette = g.palette;
-          if (needed.length && (steamAppId || key)) {
-            const res = await api.imagesFetch({ gameId: g.id, name: g.name, steamAppId, kinds: needed, apiKey: key || undefined, force: opts.force });
+          if (wanted.length) {
+            const exePath = g.exePath ?? (g.launch.type === "exe" ? g.launch.target : undefined);
+            const res = await api.imagesFetch({
+              gameId: g.id,
+              name: g.name,
+              steamAppId,
+              kinds: wanted,
+              apiKey: key || undefined,
+              force: opts.force,
+              exePath,
+              installDir: g.installDir,
+              lookupByName: isGame && !steamAppId,
+            });
             images = { ...images, ...Object.fromEntries(Object.entries(res.images).filter(([, v]) => !!v)) };
             if (res.palette) palette = res.palette;
             if (!opts.quiet && res.messages.length && res.source === "none") toast({ kind: "warning", title: g.name, text: res.messages[0] });
           }
-          // Programme: echtes Icon aus der .exe
-          if (!images.icon && g.exePath && (g.kind === "app" || !images.cover)) {
-            const icon = await api.exeIcon(g.exePath, g.id).catch(() => null);
-            if (icon) images.icon = icon;
-          }
-          if (JSON.stringify(images) !== JSON.stringify(g.images) || palette !== g.palette) {
-            loaded++;
-            get().updateGame(g.id, { images, palette });
-          }
+          const changed = JSON.stringify(images) !== JSON.stringify(g.images) || palette !== g.palette;
+          if (changed) loaded++;
+          get().updateGame(g.id, { images, palette, imagesCheckedAt: Date.now() });
         } catch (e) {
           if (!opts.quiet) toast({ kind: "error", title: g.name, text: errorText(e) });
         } finally {

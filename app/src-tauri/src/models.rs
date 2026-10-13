@@ -366,6 +366,15 @@ pub struct ImageFetchRequest {
     pub api_key: Option<String>,
     #[serde(default)]
     pub force: Option<bool>,
+    /// Programmdatei – für das echte Icon
+    #[serde(default)]
+    pub exe_path: Option<String>,
+    /// Installationsordner – dort wird die Haupt-.exe für das Icon gesucht
+    #[serde(default)]
+    pub install_dir: Option<String>,
+    /// Ohne Steam-ID per Name im Steam-Shop suchen (nur für Spiele sinnvoll)
+    #[serde(default)]
+    pub lookup_by_name: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -374,9 +383,12 @@ pub struct ImageFetchResult {
     pub images: GameImages,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub palette: Option<GamePalette>,
-    /// "steam" | "steamgriddb" | "none"
+    /// "steam" | "steamgriddb" | "exe" | "none"
     pub source: String,
     pub messages: Vec<String>,
+    /// Steam-ID, die per Namenssuche gefunden wurde
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steam_app_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

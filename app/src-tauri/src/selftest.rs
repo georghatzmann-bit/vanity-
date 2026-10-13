@@ -80,14 +80,25 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
             Err(e) => r.step("startmenue-epic-gog-scan", false, e),
         }
 
-        // 3) Steam-Cover von Steams Server (ohne API-Schlüssel)
-        let req = from(json!({ "gameId": "selftest-portal2", "name": "Portal 2", "steamAppId": "620", "kinds": ["cover", "hero", "logo"] }));
+        // 3) Steam-Bilder von Steams Server (ohne API-Schlüssel): Cover, Hintergrund, Logo, Icon
+        let is_file = |p: &Option<String>| p.as_ref().is_some_and(|p| std::path::Path::new(p).is_file());
+        let req = from(json!({ "gameId": "selftest-portal2", "name": "Portal 2", "steamAppId": "620", "kinds": ["cover", "hero", "logo", "icon"] }));
         match crate::images::images_fetch(app.state::<Shared>(), req).await {
             Ok(res) => {
-                let cover_ok = res.images.cover.as_ref().is_some_and(|p| std::path::Path::new(p).is_file());
-                r.step("steam-cover", cover_ok, format!("Quelle {:?}, Bilder {:?}", res.source, res.images));
+                let ok = is_file(&res.images.cover) && is_file(&res.images.hero) && is_file(&res.images.logo) && is_file(&res.images.icon);
+                r.step("steam-bilder", ok, format!("Quelle {:?}, Bilder {:?}", res.source, res.images));
             }
-            Err(e) => r.step("steam-cover", false, e),
+            Err(e) => r.step("steam-bilder", false, e),
+        }
+
+        // 3b) Spiel ohne Steam-ID (z. B. von Epic/GOG): Bilder per Namenssuche
+        let req = from(json!({ "gameId": "selftest-byname", "name": "Hades II", "lookupByName": true, "kinds": ["cover", "hero", "icon"] }));
+        match crate::images::images_fetch(app.state::<Shared>(), req).await {
+            Ok(res) => {
+                let ok = res.steam_app_id.as_deref() == Some("1145350") && is_file(&res.images.cover) && is_file(&res.images.icon);
+                r.step("bilder-per-name", ok, format!("Steam-ID {:?}, Bilder {:?}", res.steam_app_id, res.images));
+            }
+            Err(e) => r.step("bilder-per-name", false, e),
         }
 
         // 4) Programm-Icon aus einer .exe (nur Windows)
@@ -97,6 +108,13 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
                 Ok(Some(p)) => r.step("exe-icon", std::path::Path::new(&p).is_file(), p),
                 Ok(None) => r.step("exe-icon", false, "kein Icon"),
                 Err(e) => r.step("exe-icon", false, e),
+            }
+            // Nur der Installationsordner ist bekannt (wie bei Steam-Spielen): Haupt-.exe finden
+            let folder = format!("{root}\\System32\\WindowsPowerShell\\v1.0");
+            let req = from(json!({ "gameId": "selftest-folder-icon", "name": "Windows PowerShell", "installDir": folder, "kinds": ["icon"] }));
+            match crate::images::images_fetch(app.state::<Shared>(), req).await {
+                Ok(res) => r.step("icon-aus-ordner", is_file(&res.images.icon), format!("{:?}", res.images.icon)),
+                Err(e) => r.step("icon-aus-ordner", false, e),
             }
         }
 

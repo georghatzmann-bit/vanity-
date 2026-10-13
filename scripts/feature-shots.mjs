@@ -33,13 +33,13 @@ await page.goto(appUrl, { waitUntil: "networkidle" });
 await shot("01-intro", 1500);
 await page.waitForTimeout(4200);
 await nova(`window.__nova.useSettings.getState().update({ theme: "nova", language: "de" })`);
-await shot("02-startseite");
+await shot("02-startseite", 2500);
 await scrollMain(700);
 await shot("03-startseite-widgets");
 await scrollMain(0);
 
 await go({ page: "library" });
-await shot("04-bibliothek");
+await shot("04-bibliothek", 3500);
 await page.mouse.move(470, 470);
 await shot("05-bibliothek-3d-hover", 700);
 await page.mouse.move(1300, 120);

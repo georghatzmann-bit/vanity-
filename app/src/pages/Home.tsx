@@ -48,7 +48,7 @@ function Hero({ game }: { game: Game }) {
           {t("home.continue")}
         </div>
         {logo ? (
-          <img src={imgSrc(logo)} alt={game.name} className="mb-4 max-h-24 max-w-[380px] object-contain object-left drop-shadow-[0_6px_24px_rgb(0_0_0/0.6)]" draggable={false} />
+          <img src={imgSrc(logo)} alt={game.name} className="mb-4 max-h-24 max-w-[380px] object-contain object-left nv-logo" draggable={false} />
         ) : (
           <h1 className="mb-3 max-w-xl font-display text-4xl leading-tight font-bold text-white [text-shadow:0_4px_24px_rgb(0_0_0/0.5)]">{game.name}</h1>
         )}

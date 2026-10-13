@@ -202,7 +202,7 @@ export function BigPicture() {
         <AnimatePresence mode="wait">
           {game && (
             <motion.div key={game.id} initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ type: "spring", stiffness: 220, damping: 26 }}>
-              {game.images.logo ? <img src={imgSrc(game.images.logo)} alt={game.name} className="max-h-36 max-w-[560px] object-contain object-left drop-shadow-[0_8px_30px_rgb(0_0_0/0.6)]" /> : <h1 className="max-w-3xl font-display text-6xl leading-tight font-bold text-white [text-shadow:0_6px_30px_rgb(0_0_0/0.5)]">{game.name}</h1>}
+              {game.images.logo ? <img src={imgSrc(game.images.logo)} alt={game.name} className="max-h-36 max-w-[560px] object-contain object-left nv-logo" /> : <h1 className="max-w-3xl font-display text-6xl leading-tight font-bold text-white [text-shadow:0_6px_30px_rgb(0_0_0/0.5)]">{game.name}</h1>}
               <div className="mt-5 flex items-center gap-6 text-lg text-white/80">
                 <span>{st ? formatDuration(st.totalSeconds) : t("library.neverPlayed")}</span>
                 {st?.lastPlayedAt && <span>{formatRelative(st.lastPlayedAt)}</span>}

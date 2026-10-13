@@ -64,6 +64,8 @@ export interface Game {
   processNames?: string[];
   images: GameImages;
   palette?: GamePalette;
+  /** Wann zuletzt automatisch nach Bildern gesucht wurde (verhindert ständiges Nachfragen) */
+  imagesCheckedAt?: number;
   favorite: boolean;
   hidden: boolean;
   status: PlayStatus;
@@ -226,13 +228,21 @@ export interface ImageFetchRequest {
   kinds: ImageKind[];
   apiKey?: string;
   force?: boolean;
+  /** Programmdatei – für das echte Icon */
+  exePath?: string;
+  /** Installationsordner – dort sucht NOVA die Haupt-.exe für das Icon */
+  installDir?: string;
+  /** Ohne Steam-ID im Steam-Shop per Name suchen (nur Spiele) */
+  lookupByName?: boolean;
 }
 
 export interface ImageFetchResult {
   images: GameImages;
   palette?: GamePalette;
-  source: "steam" | "steamgriddb" | "none";
+  source: "steam" | "steamgriddb" | "exe" | "none";
   messages: string[];
+  /** Per Namenssuche gefundene Steam-ID */
+  steamAppId?: string;
 }
 
 export interface SgdbGame {

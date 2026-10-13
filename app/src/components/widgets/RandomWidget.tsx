@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Dices, Play } from "lucide-react";
 import { useT } from "@/lib/i18n";
@@ -13,9 +13,21 @@ export function RandomWidget() {
   const t = useT();
   const games = useLibrary((s) => s.games);
   const stats = useLibrary((s) => s.stats);
-  const [seed, setSeed] = useState(0);
   const [spin, setSpin] = useState(0);
-  const pick = useMemo(() => pickGame(games, stats, {}, seed), [games, stats, seed]);
+  // Der Vorschlag bleibt stehen, bis neu gewürfelt wird – auch wenn sich Daten im Hintergrund ändern
+  const [picked, setPicked] = useState<{ id: string; reason: string } | null>(null);
+  const rolls = useRef(0);
+  const roll = () => {
+    rolls.current++;
+    const p = pickGame(useLibrary.getState().games, useLibrary.getState().stats, {}, Date.now() + rolls.current);
+    setPicked(p ? { id: p.game.id, reason: p.reason } : null);
+  };
+  useEffect(() => {
+    if (!picked || !games.some((g) => g.id === picked.id && !g.hidden)) roll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [games, stats]);
+  const game = picked ? games.find((g) => g.id === picked.id) : undefined;
+  const pick = game && picked ? { game, reason: picked.reason } : null;
 
   return (
     <Widget
@@ -29,7 +41,7 @@ export function RandomWidget() {
           onClick={() => {
             sound.play("dice");
             setSpin((s) => s + 1);
-            setSeed((s) => s + 1);
+            roll();
           }}
           className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg"
           aria-label={t("widgets.reroll")}

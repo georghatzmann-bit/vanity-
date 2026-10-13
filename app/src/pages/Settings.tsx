@@ -345,9 +345,14 @@ function DataSection() {
           icon={<Trash2 className="h-4 w-4" />}
           onClick={async () => {
             try {
+              if (!(await confirmDialog({ title: t("settings.clearCache"), text: t("settings.clearCacheConfirm"), confirmLabel: t("settings.clearCache") }))) return;
               const freed = await api.cacheClear();
-              toast({ kind: "success", title: t("settings.cacheCleared", { size: formatBytes(freed) }) });
+              toast({ kind: "success", title: t("settings.cacheCleared", { size: formatBytes(freed) }), text: t("settings.cacheReloading") });
               load();
+              // Bilder neu laden – die Dateien sind ja weg
+              const lib = useLibrary.getState();
+              for (const g of lib.games) lib.updateGame(g.id, { images: {}, palette: undefined, imagesCheckedAt: undefined });
+              void lib.fetchImages(useLibrary.getState().games.filter((g) => !g.hidden), { quiet: true });
             } catch (e) {
               toast({ kind: "error", title: errorText(e) });
             }

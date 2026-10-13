@@ -2,7 +2,8 @@
  * Demo-Backend für den Browser (Vorschau, Screenshots, Tests).
  * Bildet die Rust-Befehle mit Beispieldaten nach. In der echten App wird es nie geladen.
  */
-import type { Collection, Game, LaunchConfig, PlayStats, Session, WishItem, ScannedEntry, Profile, Screenshot } from "./types";
+import type { Collection, Game, GameImages, ImageKind, LaunchConfig, PlayStats, Session, WishItem, ScannedEntry, Profile, Screenshot } from "./types";
+import { DEMO_ART } from "./demo-art";
 
 type Handler = (p: unknown) => void;
 const listeners = new Map<string, Set<Handler>>();
@@ -75,13 +76,19 @@ const demo: Array<[string, "game" | "app", Game["source"], string?, string?, str
   ["Ori and the Will of the Wisps", "game", "steam", "1057090", "Plattformer", ["Story", "Durchgespielt"]],
   ["It Takes Two", "game", "steam", "1426210", "Koop", ["Mit Freunden", "Durchgespielt"]],
   ["Satisfactory", "game", "epic", "satisfactory", "Simulation", ["Knobeln", "Mit Freunden"]],
-  ["Discord", "app", "startmenu", undefined, undefined, []],
-  ["Spotify", "app", "startmenu", undefined, undefined, []],
   ["OBS Studio", "app", "startmenu", undefined, undefined, []],
-  ["Visual Studio Code", "app", "startmenu", undefined, undefined, []],
+  ["Wallpaper Engine", "app", "startmenu", undefined, undefined, []],
   ["Blender", "app", "startmenu", undefined, undefined, []],
-  ["Steam", "app", "startmenu", undefined, undefined, []],
+  ["Krita", "app", "startmenu", undefined, undefined, []],
+  ["Aseprite", "app", "startmenu", undefined, undefined, []],
 ];
+
+/** Echte Bilder für die Vorschau – Programme zeigen (wie in der echten App) ihr Icon */
+function demoImages(name: string, kind: "game" | "app", kinds: ImageKind[] = ["cover", "hero", "logo", "icon"]): GameImages {
+  const art = DEMO_ART[name] ?? {};
+  const allowed = kind === "app" ? kinds.filter((k) => k === "icon") : kinds;
+  return Object.fromEntries(allowed.filter((k) => art[k]).map((k) => [k, art[k]]));
+}
 
 function makeGames(): Game[] {
   return demo.map(([name, kind, source, sourceId, genre, tags], i) => {
@@ -100,7 +107,8 @@ function makeGames(): Game[] {
       launch,
       installDir: `C:\\Games\\${name}`,
       exePath: launch.type === "exe" ? launch.target : undefined,
-      images: {},
+      images: demoImages(name, kind),
+      imagesCheckedAt: now,
       favorite: [0, 2, 3, 5, 10, 24].includes(i),
       hidden: false,
       status: kind === "app" ? "none" : tags?.includes("Durchgespielt") ? "done" : status,
@@ -153,7 +161,7 @@ interface MockDb {
   activeProfile: string;
 }
 
-const STORE_KEY = "nova-mock-db-v1";
+const STORE_KEY = "nova-mock-db-v2";
 
 function freshDb(): MockDb {
   const games = makeGames();
@@ -385,8 +393,13 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
     case "reveal_path":
     case "open_url":
       return r(undefined);
-    case "images_fetch":
-      return r({ images: {}, source: "none", messages: ["Demo-Modus: keine Bilder geladen."] });
+    case "images_fetch": {
+      const req = a.request as { name: string; kinds: ImageKind[] };
+      const images = demoImages(req.name, "game", req.kinds);
+      return Object.keys(images).length
+        ? r({ images, source: "steam", messages: [] })
+        : r({ images: {}, source: "none", messages: ["Demo-Modus: für dieses Spiel gibt es keine Beispielbilder."] });
+    }
     case "sgdb_search":
       return r([]);
     case "sgdb_images":

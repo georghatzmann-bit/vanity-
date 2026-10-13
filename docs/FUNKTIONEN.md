@@ -58,7 +58,12 @@ Spielen bzw. Beenden · Anzeigen · Favorit · Im Dock · Status · Zu Sammlung 
 
 **Lebendiger Hintergrund:** Der Hintergrund färbt sich passend zum Spiel, über dem deine Maus gerade ist. Dazu leichter Sternenhimmel, der der Maus folgt.
 
-**Ersatz-Cover:** Hat ein Spiel kein Bild, malt NOVA ein farbiges Cover mit den Anfangsbuchstaben.
+**Echte Bilder für jedes Spiel – ohne Anmeldung:** Cover, großes Hintergrundbild, Logo und Icon lädt NOVA selbst.
+- **Steam-Spiele** bekommen alles direkt von Steam.
+- **Epic-, GOG- und eigene Spiele** sucht NOVA per Name bei Steam und nimmt dessen Bilder.
+- **Icons** kommen aus der Programmdatei – scharf, auch für Programme wie OBS, Blender oder Discord. Sie erscheinen im Dock, im Overlay und bei Programmen anstelle eines Covers.
+- Fehlt etwas, versucht NOVA es beim Start von selbst noch einmal (höchstens alle 3 Tage).
+- Gibt es ein Spiel bei Steam gar nicht (z. B. Alan Wake 2), malt NOVA ein farbiges Ersatz-Cover – oder du holst dir mit einem kostenlosen SteamGridDB-Schlüssel noch mehr Bilder.
 
 **Spielzeit messen – ganz automatisch:**
 - NOVA schaut alle paar Sekunden, welche Spiele laufen. Das klappt auch, wenn du das Spiel direkt über Steam startest, solange NOVA offen ist oder unten neben der Uhr sitzt.
@@ -297,7 +302,7 @@ Links eine Abschnittsliste, die beim Scrollen mitläuft. Jedes Profil hat eigene
 ![Bibliothek](screenshots/funktionen/22-einstellungen-bibliothek.jpg)
 
 **Bibliothek**
-- **SteamGridDB-Schlüssel** – kostenlos, für schöne Cover bei Nicht-Steam-Spielen. Der Knopf „Schlüssel holen“ öffnet die Seite. (Steam-Spiele bekommen ihre Bilder auch ohne Schlüssel.)
+- **SteamGridDB-Schlüssel** – kostenlos und freiwillig. Nur nötig für Spiele, die es bei Steam nicht gibt, oder wenn du aus vielen Bildern auswählen willst. Der Knopf „Schlüssel holen“ öffnet die Seite.
 - **Beim Start nach neuen Spielen suchen**.
 - **Suchquellen** – Steam, Epic, GOG, Startmenü und eigene Ordner.
 
@@ -329,7 +334,7 @@ Links eine Abschnittsliste, die beim Scrollen mitläuft. Jedes Profil hat eigene
 - **Bibliothek exportieren** – alles in eine Datei (z. B. zum Umziehen auf einen neuen PC).
 - **Bibliothek importieren** – „Zusammenführen“ (zur bestehenden dazu) oder „Ersetzen“. Vorher macht NOVA automatisch eine Sicherung.
 - **Automatische Backups** – Liste der letzten Sicherungen, „Wiederherstellen“ oder „Jetzt sichern“.
-- **Bild-Zwischenspeicher** – zeigt, wie viel Platz die Cover belegen. „Leeren“ gibt ihn frei.
+- **Bild-Zwischenspeicher** – zeigt, wie viel Platz die Bilder belegen. „Leeren“ gibt ihn frei, danach lädt NOVA alle Bilder automatisch neu.
 
 ![Über NOVA](screenshots/funktionen/28-einstellungen-tastenkuerzel.jpg)
 

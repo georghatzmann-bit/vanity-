@@ -621,7 +621,7 @@ export function GameDetail({ id }: { id: string }) {
               {game.status !== "none" && <span className="rounded-full bg-gradient-accent px-2.5 py-1 text-[11px] font-semibold text-white">{t(`status.${game.status}`)}</span>}
             </div>
             {game.images.logo ? (
-              <img src={imgSrc(game.images.logo)} alt={game.name} className="mb-5 max-h-28 max-w-[460px] object-contain object-left drop-shadow-[0_6px_30px_rgb(0_0_0/0.6)]" />
+              <img src={imgSrc(game.images.logo)} alt={game.name} className="mb-5 max-h-28 max-w-[460px] object-contain object-left nv-logo" />
             ) : (
               <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-5 font-display text-5xl leading-[1.05] font-bold text-fg [text-shadow:0_4px_30px_rgb(0_0_0/0.35)]">
                 {game.name}
