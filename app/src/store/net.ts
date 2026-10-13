@@ -35,6 +35,8 @@ interface NetState {
   setTarget: (target: PingTarget, label: string) => Promise<void>;
   /** Messziel aus den Einstellungen (bzw. dem Spiel) wählen */
   useRegionTarget: (regionId?: string) => Promise<void>;
+  /** Echte Spielserver (cs2, dota2, deadlock, lol) messen und den schnellsten als Messziel setzen */
+  useGameServerTarget: (game: string) => Promise<boolean>;
   startMonitor: () => Promise<void>;
   stopMonitor: () => Promise<void>;
   refreshConnection: () => Promise<void>;
@@ -131,6 +133,30 @@ export const useNet = create<NetState>((set, get) => ({
     const region = get().regions.find((r) => r.id === id) ?? get().regions[0];
     if (!region) return;
     await get().setTarget(region.target, region.name);
+  },
+
+  useGameServerTarget: async (game) => {
+    try {
+      const servers = await api.gameServers(game);
+      if (!servers.length) return false;
+      // Alle Standorte kurz anpingen (höchstens 8 gleichzeitig), den schnellsten nehmen
+      const results: { region: Region; avg: number }[] = [];
+      for (let i = 0; i < servers.length; i += 8) {
+        const chunk = servers.slice(i, i + 8);
+        const stats = await Promise.all(chunk.map((r) => api.pingOnce(r.target, 2).catch(() => null)));
+        chunk.forEach((region, k) => {
+          const s = stats[k];
+          if (s && s.avg !== null && s.loss < 1) results.push({ region, avg: s.avg });
+        });
+      }
+      if (!results.length) return false;
+      results.sort((a, b) => a.avg - b.avg);
+      const best = results[0].region;
+      await get().setTarget(best.target, `${best.name} (${best.provider})`);
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   startMonitor: async () => {
