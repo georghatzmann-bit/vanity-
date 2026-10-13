@@ -3,12 +3,13 @@ import { emptyFilter, type LibraryFilter } from "@/lib/search";
 import type { Game } from "@/lib/types";
 import { sound } from "@shared/sound/engine";
 
-export type Page = "home" | "library" | "game" | "collections" | "stats" | "achievements" | "wishlist" | "cleanup" | "settings";
+export type Page = "cockpit" | "games" | "game" | "network" | "optimize" | "reports" | "settings";
+export type NetworkTab = "regions" | "route" | "dns" | "speed" | "connection";
 
 export interface Route {
   page: Page;
   id?: string;
-  /** Unterbereich, z. B. Einstellungs-Abschnitt */
+  /** Unterbereich: Netzwerk-Reiter, Einstellungs-Abschnitt, Spiel-Reiter */
   section?: string;
 }
 
@@ -46,20 +47,17 @@ interface UIState {
 
   paletteOpen: boolean;
   setPalette: (open: boolean) => void;
-  diceOpen: boolean;
-  setDice: (open: boolean) => void;
   scanOpen: boolean;
   setScan: (open: boolean) => void;
   manualOpen: boolean;
   setManual: (open: boolean) => void;
-  bigPicture: boolean;
-  setBigPicture: (on: boolean) => void;
   introDone: boolean;
   setIntroDone: () => void;
   /** Logo ist von der Startanimation in die Titelleiste geflogen */
   logoDocked: boolean;
   setLogoDocked: (v: boolean) => void;
 
+  /** Start-Ritual (Boost & Spielen) */
   ritual: Game | null;
   setRitual: (g: Game | null) => void;
 
@@ -74,10 +72,6 @@ interface UIState {
   toast: (t: Omit<Toast, "id">) => number;
   dismiss: (id: number) => void;
 
-  achievementQueue: string[];
-  pushAchievements: (ids: string[]) => void;
-  shiftAchievement: () => void;
-
   confirmState: ConfirmState | null;
   confirm: (o: ConfirmOptions) => Promise<boolean>;
   closeConfirm: (ok: boolean) => void;
@@ -86,7 +80,7 @@ interface UIState {
 let toastId = 1;
 
 export const useUI = create<UIState>((set, get) => ({
-  route: { page: "home" },
+  route: { page: "cockpit" },
   history: [],
   navigate: (r) => {
     const cur = get().route;
@@ -108,14 +102,10 @@ export const useUI = create<UIState>((set, get) => ({
 
   paletteOpen: false,
   setPalette: (open) => set({ paletteOpen: open }),
-  diceOpen: false,
-  setDice: (open) => set({ diceOpen: open }),
   scanOpen: false,
   setScan: (open) => set({ scanOpen: open }),
   manualOpen: false,
   setManual: (open) => set({ manualOpen: open }),
-  bigPicture: false,
-  setBigPicture: (on) => set({ bigPicture: on }),
   introDone: false,
   setIntroDone: () => set({ introDone: true }),
   logoDocked: false,
@@ -141,10 +131,6 @@ export const useUI = create<UIState>((set, get) => ({
     return id;
   },
   dismiss: (id) => set({ toasts: get().toasts.filter((x) => x.id !== id) }),
-
-  achievementQueue: [],
-  pushAchievements: (ids) => set({ achievementQueue: [...get().achievementQueue, ...ids] }),
-  shiftAchievement: () => set({ achievementQueue: get().achievementQueue.slice(1) }),
 
   confirmState: null,
   confirm: (o) =>

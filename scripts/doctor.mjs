@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * npm run doctor  –  prüft, ob alles zum Bauen von NOVA installiert ist,
+ * npm run doctor  –  prüft, ob alles zum Bauen von PULSAR installiert ist,
  * und sagt in einfachen Worten, was fehlt.
  */
 import { spawnSync } from "node:child_process";
@@ -22,7 +22,7 @@ const out = (cmd, args) => {
   return r.status === 0 ? (r.stdout || r.stderr).trim() : null;
 };
 
-console.log("\n✦ NOVA – Werkzeug-Check\n");
+console.log("\n◉ PULSAR – Werkzeug-Check\n");
 
 const node = process.versions.node.split(".").map(Number);
 if (node[0] >= 20) ok(`Node.js ${process.versions.node}`);

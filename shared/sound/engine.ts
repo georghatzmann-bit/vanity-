@@ -1,5 +1,5 @@
 /**
- * NOVA Klangwelt "Glas & Sterne"
+ * Pulsar Klangwelt "Glas & Sterne"
  * ------------------------------
  * Alle Töne werden live per Web Audio erzeugt - keine Sound-Dateien, keine fremden Rechte.
  * Grundlage ist eine pentatonische Tonleiter (F-Dur-Pentatonik). Dadurch klingen auch
@@ -455,7 +455,7 @@ export class SoundEngine {
         break;
       }
       case "startup": {
-        // "Nova": tiefer Atemzug, Akkord öffnet sich, Glocken funkeln auf
+        // Startklang: tiefer Atemzug, Akkord öffnet sich, Glocken funkeln auf
         this.sub(t, 70, 36, 0.28 * g, 2.2);
         this.noise(t, { dur: 1.6, from: 200, to: 4200, gain: 0.05 * g, q: 0.5, attack: 1.1, wet: 0.6 });
         this.pad([midiToHz(41), midiToHz(53), midiToHz(57), midiToHz(60), midiToHz(64), midiToHz(67)], t + 0.05, {

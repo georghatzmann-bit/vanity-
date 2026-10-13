@@ -82,15 +82,15 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
       return r({
         mode: (params.get("mode") as SetupMode) ?? "install",
         setupVersion: "1.0.0",
-        appName: "Nova Launcher",
-        defaultDir: "C:\\Users\\Georg\\AppData\\Local\\Programs\\Nova Launcher",
-        installed: params.get("mode") === "maintenance" || params.get("mode") === "update" ? { dir: "C:\\Users\\Georg\\AppData\\Local\\Programs\\Nova Launcher", version: "0.9.0" } : undefined,
+        appName: "Pulsar",
+        defaultDir: "C:\\Users\\Georg\\AppData\\Local\\Programs\\Pulsar",
+        installed: params.get("mode") === "maintenance" || params.get("mode") === "update" ? { dir: "C:\\Users\\Georg\\AppData\\Local\\Programs\\Pulsar", version: "0.9.0" } : undefined,
         elevated: false,
         systemLang: "de",
         manifestUrl: "https://github.com/…/latest.json",
       });
     case "fetch_manifest":
-      return r({ version: "1.0.0", notes: "Erste Version", app: { url: "https://example/NovaLauncher.exe", sha256: "ab12…", size: 11_800_000 } });
+      return r({ version: "1.0.0", notes: "Erste Version", app: { url: "https://example/Pulsar.exe", sha256: "ab12…", size: 11_800_000 } });
     case "disk_space": {
       const p = String(args.path ?? "");
       return r({ path: p, free: 182_400_000_000, total: 512_000_000_000, required: 13_000_000, exists: true, writable: !/program files/i.test(p), needsAdmin: /program files/i.test(p), valid: /^[a-z]:\\/i.test(p), message: /^[a-z]:\\/i.test(p) ? undefined : "Bitte einen vollständigen Pfad angeben." });
@@ -113,7 +113,7 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
         else {
           const steps: Phase[] = ["verify", "install", "shortcuts", "register"];
           steps.forEach((ph, i) => setTimeout(() => run === mockRun && mockEmit("install://progress", { phase: ph, downloaded: total, total, speed: 0, eta: 0, percent: 86 + i * 4 }), 400 + i * 450));
-          setTimeout(() => run === mockRun && mockEmit("install://done", { dir: (args.options as InstallOptions).dir, exePath: "…\\NovaLauncher.exe", version: "1.0.0", verified: true }), 400 + steps.length * 450);
+          setTimeout(() => run === mockRun && mockEmit("install://done", { dir: (args.options as InstallOptions).dir, exePath: "…\\Pulsar.exe", version: "1.0.0", verified: true }), 400 + steps.length * 450);
         }
       };
       setTimeout(() => mockEmit("install://progress", { phase: "connect", downloaded: 0, total, speed: 0, eta: 0, percent: 0 }), 50);
@@ -160,7 +160,7 @@ export async function on<T>(event: string, handler: (p: T) => void): Promise<() 
 }
 
 export async function pickFolder(defaultPath?: string): Promise<string | null> {
-  if (!isTauri()) return window.prompt("Ordner", defaultPath ?? "C:\\Spiele\\Nova") || null;
+  if (!isTauri()) return window.prompt("Ordner", defaultPath ?? "C:\\Spiele\\Pulsar") || null;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const r = await open({ directory: true, multiple: false, defaultPath });
   return typeof r === "string" ? r : null;

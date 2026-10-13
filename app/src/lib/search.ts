@@ -1,4 +1,6 @@
-import type { Game, GameKind, PlayStats, PlayStatus, SortKey } from "./types";
+import type { Game, GameKind, PlayStats } from "./types";
+
+export type SortKey = "lastPlayed" | "name" | "playtime" | "added";
 
 /** Für Vergleiche: Kleinbuchstaben, ohne Akzente, ohne Sonderzeichen */
 export function normalizeName(s: string): string {
@@ -45,37 +47,19 @@ export interface LibraryFilter {
   query: string;
   kind: GameKind | "all";
   favoritesOnly: boolean;
-  status: PlayStatus | "all";
   source: Game["source"] | "all";
-  tag: string | null;
-  collectionId: string | null;
   showHidden: boolean;
 }
 
-export const emptyFilter = (): LibraryFilter => ({
-  query: "",
-  kind: "all",
-  favoritesOnly: false,
-  status: "all",
-  source: "all",
-  tag: null,
-  collectionId: null,
-  showHidden: false,
-});
+export const emptyFilter = (): LibraryFilter => ({ query: "", kind: "all", favoritesOnly: false, source: "all", showHidden: false });
 
 export function filterGames(games: Game[], f: LibraryFilter): Game[] {
   return games.filter((g) => {
     if (!f.showHidden && g.hidden) return false;
     if (f.kind !== "all" && g.kind !== f.kind) return false;
     if (f.favoritesOnly && !g.favorite) return false;
-    if (f.status !== "all" && g.status !== f.status) return false;
     if (f.source !== "all" && g.source !== f.source) return false;
-    if (f.tag && !g.tags.includes(f.tag)) return false;
-    if (f.collectionId && !g.collectionIds.includes(f.collectionId)) return false;
-    if (f.query) {
-      const s = Math.max(fuzzyScore(f.query, g.name), g.genre ? fuzzyScore(f.query, g.genre) * 0.5 : 0, ...g.tags.map((tg) => fuzzyScore(f.query, tg) * 0.5));
-      if (s <= 0) return false;
-    }
+    if (f.query && fuzzyScore(f.query, g.name) <= 0) return false;
     return true;
   });
 }
@@ -100,9 +84,6 @@ export function sortGames(games: Game[], key: SortKey, desc: boolean, stats: Map
       case "lastPlayed":
         v = (stats.get(a.id)?.lastPlayedAt ?? 0) - (stats.get(b.id)?.lastPlayedAt ?? 0);
         break;
-      case "rating":
-        v = a.rating - b.rating;
-        break;
       case "added":
         v = a.addedAt - b.addedAt;
         break;
@@ -110,10 +91,4 @@ export function sortGames(games: Game[], key: SortKey, desc: boolean, stats: Map
     return v !== 0 ? v * dir : byName(a, b);
   });
   return list;
-}
-
-export function allTags(games: Game[]): string[] {
-  const set = new Map<string, number>();
-  for (const g of games) for (const t of g.tags) set.set(t, (set.get(t) ?? 0) + 1);
-  return [...set.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
 }

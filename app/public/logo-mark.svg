@@ -1,32 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="nvStar" x1="0.15" y1="0.1" x2="0.85" y2="0.95">
-      <stop offset="0" stop-color="#FFB27A"/>
-      <stop offset="0.28" stop-color="#FF8A4C"/>
-      <stop offset="0.58" stop-color="#FF4F8B"/>
-      <stop offset="1" stop-color="#8B5CF6"/>
+    <linearGradient id="psBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1730"/>
+      <stop offset="1" stop-color="#04070f"/>
     </linearGradient>
-    <linearGradient id="nvOrbit" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#8B5CF6"/>
-      <stop offset="0.5" stop-color="#FF4F8B"/>
-      <stop offset="1" stop-color="#FF8A4C"/>
+    <linearGradient id="psRing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60A5FA"/>
+      <stop offset="0.5" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#A78BFA"/>
     </linearGradient>
-    <radialGradient id="nvCore" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="1"/>
-      <stop offset="0.35" stop-color="#FFE3D0" stop-opacity="0.85"/>
-      <stop offset="1" stop-color="#FF4F8B" stop-opacity="0"/>
+    <linearGradient id="psBeam" x1="0.5" y1="1" x2="0.5" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#22D3EE" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#A78BFA" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="psCore" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.45" stop-color="#D9FAFF" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
     </radialGradient>
-    <clipPath id="nvFront"><rect x="0" y="256" width="512" height="256"/></clipPath>
-    <clipPath id="nvBack"><rect x="0" y="0" width="512" height="256"/></clipPath>
+    <radialGradient id="psGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <g transform="rotate(-24 256 256)">
-    <ellipse cx="256" cy="256" rx="214" ry="70" fill="none" stroke="url(#nvOrbit)" stroke-width="13" opacity="0.45" clip-path="url(#nvBack)"/>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#psBg)"/>
+  <circle cx="256" cy="256" r="220" fill="url(#psGlow)"/>
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#22D3EE" stroke-width="3" opacity="0.18"/>
+  <circle cx="256" cy="256" r="152" fill="none" stroke="url(#psRing)" stroke-width="14" stroke-linecap="round" opacity="0.95" transform="rotate(-90 256 256)"/>
+  <g transform="rotate(35 256 256)">
+    <path d="M256 256 L 236 92 Q 256 10 276 92 Z" fill="url(#psBeam)"/>
+    <path d="M256 256 L 236 92 Q 256 10 276 92 Z" fill="url(#psBeam)" transform="rotate(180 256 256)"/>
   </g>
-  <path d="M256 92 C 268 206, 306 244, 420 256 C 306 268, 268 306, 256 420 C 244 306, 206 268, 92 256 C 206 244, 244 206, 256 92 Z" fill="url(#nvStar)"/>
-  <path d="M256 150 C 262 224, 288 250, 362 256 C 288 262, 262 288, 256 362 C 250 288, 224 262, 150 256 C 224 250, 250 224, 256 150 Z" fill="#FFFFFF" opacity="0.18"/>
-  <circle cx="256" cy="256" r="58" fill="url(#nvCore)"/>
-  <g transform="rotate(-24 256 256)">
-    <ellipse cx="256" cy="256" rx="214" ry="70" fill="none" stroke="url(#nvOrbit)" stroke-width="13" clip-path="url(#nvFront)"/>
-    <circle cx="420" cy="301" r="17" fill="#FFD9C2"/>
-  </g>
+  <circle cx="256" cy="256" r="64" fill="url(#psCore)"/>
+  <circle cx="256" cy="256" r="22" fill="#FFFFFF"/>
 </svg>

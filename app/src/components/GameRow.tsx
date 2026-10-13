@@ -7,7 +7,6 @@ import { gameMenuItems } from "@/hooks/gameMenu";
 import { useLibrary } from "@/store/library";
 import { useUI } from "@/store/ui";
 import { useContextMenu } from "./ui/ContextMenu";
-import { StarRating } from "./ui/StarRating";
 import { GameCover } from "./GameCover";
 import { sound } from "@shared/sound/engine";
 import { cn } from "@shared/lib/cn";
@@ -41,12 +40,10 @@ export const GameRow = memo(function GameRow({ game, stats, running }: { game: G
         </div>
         <div className="truncate text-[12px] text-muted">
           {game.kind === "app" ? t("common.app") : t(`source.${game.source}`)}
-          {game.genre ? ` · ${game.genre}` : ""}
         </div>
       </div>
       <div className="hidden flex-1 text-[13px] text-fg-soft tabular md:block">{stats?.totalSeconds ? formatDuration(stats.totalSeconds, { short: true }) : "–"}</div>
       <div className="hidden flex-1 text-[13px] text-muted lg:block">{formatRelative(stats?.lastPlayedAt)}</div>
-      <div className="hidden w-28 lg:block">{game.kind === "game" && <StarRating value={game.rating} readOnly size={14} />}</div>
       <button
         type="button"
         onClick={(e) => {

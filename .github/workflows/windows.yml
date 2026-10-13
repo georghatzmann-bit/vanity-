@@ -1,15 +1,15 @@
-# Baut und testet NOVA auf einem echten Windows-Rechner von GitHub.
-# - Bei jedem Push: Typprüfung, Tests, beide Exe-Dateien bauen, App-Starttest, Installer-Selbsttest
-# - Ist alles grün, landen NovaLauncher.exe, NovaLauncher-Setup.exe und latest.json im festen
-#   Release "nova-latest" (daraus lädt der Installer). Es wird nie als "Latest" markiert, damit
-#   andere Projekte in diesem Repository (Jarvis, Konto-Retter) nicht verdrängt werden.
-# - Ein Tag "nova-v1.2.3" erzeugt zusätzlich ein eigenes Versions-Release.
+# Baut und testet PULSAR auf einem echten Windows-Rechner von GitHub.
+# - Bei jedem Push: Typprüfung, Tests, beide Exe-Dateien bauen, App-Starttest, Installer-Selbsttest, App-Selbsttest
+# - Ist alles grün, landen Pulsar.exe, Pulsar-Setup.exe und latest.json im festen
+#   Release "pulsar-latest" (daraus lädt der Installer). Es wird nie als "Latest" markiert, damit
+#   andere Projekte in diesem Repository nicht verdrängt werden.
+# - Ein Tag "pulsar-v1.2.3" erzeugt zusätzlich ein eigenes Versions-Release.
 name: Windows Build & Test
 
 on:
   push:
     branches: ["main", "claude/**"]
-    tags: ["nova-v*"]
+    tags: ["pulsar-v*"]
   workflow_dispatch:
 
 permissions:
@@ -58,7 +58,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $v = (Get-Content nova.config.json -Raw | ConvertFrom-Json).version
+          $v = (Get-Content pulsar.config.json -Raw | ConvertFrom-Json).version
           "version=$v" >> $env:GITHUB_OUTPUT
 
       - name: App-Starttest + Screenshot
@@ -74,12 +74,12 @@ jobs:
             $g.Dispose(); $bmp.Dispose()
           }
           New-Item -ItemType Directory -Force -Path test-output | Out-Null
-          $p = Start-Process -FilePath "release\NovaLauncher.exe" -PassThru
+          $p = Start-Process -FilePath "release\Pulsar.exe" -PassThru
           Start-Sleep -Seconds 12
           Shot "test-output\app-start.png"
           if ($p.HasExited) { throw "Die App hat sich sofort beendet (Exit-Code $($p.ExitCode))." }
           Start-Sleep -Seconds 6
-          Shot "test-output\app-home.png"
+          Shot "test-output\app-cockpit.png"
           Stop-Process -Id $p.Id -Force
           Write-Host "App läuft stabil."
 
@@ -87,7 +87,7 @@ jobs:
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-          $p = Start-Process -FilePath "release\NovaLauncher-Setup.exe" -PassThru
+          $p = Start-Process -FilePath "release\Pulsar-Setup.exe" -PassThru
           Start-Sleep -Seconds 9
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
           $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
@@ -99,11 +99,11 @@ jobs:
       - name: Installer-Selbsttest (Download, SHA-256, Installation, Verknüpfungen, Apps & Features, Deinstallation)
         shell: pwsh
         run: |
-          $serve = Join-Path $env:RUNNER_TEMP "nova-serve"
+          $serve = Join-Path $env:RUNNER_TEMP "pulsar-serve"
           New-Item -ItemType Directory -Force -Path $serve | Out-Null
-          Copy-Item release\NovaLauncher.exe $serve
+          Copy-Item release\Pulsar.exe $serve
           $m = Get-Content release\latest.json -Raw | ConvertFrom-Json
-          $m.app.url = "http://127.0.0.1:8765/NovaLauncher.exe"
+          $m.app.url = "http://127.0.0.1:8765/Pulsar.exe"
           $m | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $serve "latest.json") -Encoding utf8
           $server = Start-Process python -ArgumentList "-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", $serve -PassThru -WindowStyle Hidden
           # Warten, bis der Test-Server wirklich antwortet (Python startet auf Windows unterschiedlich schnell)
@@ -113,14 +113,14 @@ jobs:
           }
           if (-not $ready) { throw "Der lokale Test-Server ist nicht gestartet." }
           $report = Join-Path $env:RUNNER_TEMP "selftest.json"
-          $dir = Join-Path $env:RUNNER_TEMP "nova-selftest"
-          $p = Start-Process -FilePath "release\NovaLauncher-Setup.exe" -ArgumentList "--selftest", "--dir", "`"$dir`"", "--manifest", "http://127.0.0.1:8765/latest.json", "--report", "`"$report`"" -Wait -PassThru
+          $dir = Join-Path $env:RUNNER_TEMP "pulsar-selftest"
+          $p = Start-Process -FilePath "release\Pulsar-Setup.exe" -ArgumentList "--selftest", "--dir", "`"$dir`"", "--manifest", "http://127.0.0.1:8765/latest.json", "--report", "`"$report`"" -Wait -PassThru
           Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
           if (Test-Path $report) { Get-Content $report; Copy-Item $report test-output\selftest.json }
           if ($p.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen (Exit-Code $($p.ExitCode))." }
           Write-Host "Selbsttest bestanden."
 
-      - name: App-Selbsttest (Steam-Scan, Steam-Cover, Programm-Icon, Starten, Spielzeit, Beenden)
+      - name: App-Selbsttest (Steam-Scan, Cover, Ping, Regionen, DNS, Adapter, Tweaks, Boost, Spielstart, Spielzeit)
         shell: pwsh
         run: |
           # Nachgebaute Steam-Installation, damit der Steam-Scan etwas finden kann
@@ -131,11 +131,11 @@ jobs:
           Set-Content -Encoding utf8 "$steam\steamapps\appmanifest_620.acf" "`"AppState`"`n{`n`t`"appid`"`t`t`"620`"`n`t`"name`"`t`t`"Portal 2`"`n`t`"installdir`"`t`t`"Portal 2`"`n}`n"
           New-Item -Path "HKCU:\Software\Valve\Steam" -Force | Out-Null
           Set-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name SteamPath -Value ($steam -replace '\\', '/')
-          $env:NOVA_SELFTEST_EXPECT_STEAM = "Portal 2"
+          $env:PULSAR_SELFTEST_EXPECT_STEAM = "Portal 2"
           $report = Join-Path $PWD "test-output\app-selftest.json"
-          $p = Start-Process -FilePath "release\NovaLauncher.exe" -ArgumentList "--selftest", "`"$report`"" -PassThru
+          $p = Start-Process -FilePath "release\Pulsar.exe" -ArgumentList "--selftest", "`"$report`"" -PassThru
           $null = $p.Handle
-          if (-not $p.WaitForExit(240000)) { Stop-Process -Id $p.Id -Force; throw "Der App-Selbsttest hängt." }
+          if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "Der App-Selbsttest hängt." }
           if (Test-Path $report) { Get-Content $report } else { Write-Host "Kein Bericht geschrieben." }
           if ($p.ExitCode -ne 0) { throw "App-Selbsttest fehlgeschlagen (Exit-Code $($p.ExitCode))." }
           Write-Host "App-Selbsttest bestanden."
@@ -144,39 +144,39 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nova-windows-${{ steps.version.outputs.version }}
+          name: pulsar-windows-${{ steps.version.outputs.version }}
           path: |
             release/
             test-output/
           if-no-files-found: warn
 
-      - name: Release "nova-latest" aktualisieren (Download-Quelle des Installers)
+      - name: Release "pulsar-latest" aktualisieren (Download-Quelle des Installers)
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: nova-latest
-          name: NOVA (neueste Version)
+          tag_name: pulsar-latest
+          name: PULSAR (neueste Version)
           body: |
             Automatisch gebaut und auf Windows getestet. Version ${{ steps.version.outputs.version }}, Commit ${{ github.sha }}.
-            Zum Installieren: NovaLauncher-Setup.exe herunterladen und starten.
+            Zum Installieren: Pulsar-Setup.exe herunterladen und starten.
           make_latest: false
           prerelease: false
           overwrite_files: true
           files: |
-            release/NovaLauncher.exe
-            release/NovaLauncher-Setup.exe
+            release/Pulsar.exe
+            release/Pulsar-Setup.exe
             release/latest.json
             release/SHA256SUMS.txt
 
       - name: Versions-Release erstellen
-        if: startsWith(github.ref, 'refs/tags/nova-v')
+        if: startsWith(github.ref, 'refs/tags/pulsar-v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: NOVA ${{ steps.version.outputs.version }}
+          name: PULSAR ${{ steps.version.outputs.version }}
           make_latest: false
           files: |
-            release/NovaLauncher.exe
-            release/NovaLauncher-Setup.exe
+            release/Pulsar.exe
+            release/Pulsar-Setup.exe
             release/latest.json
             release/SHA256SUMS.txt

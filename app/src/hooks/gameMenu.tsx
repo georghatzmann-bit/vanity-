@@ -1,8 +1,8 @@
-import { Eye, EyeOff, FolderOpen, Heart, ImageDown, Info, ListPlus, PanelBottom, Play, Square, Tag, Trash2 } from "lucide-react";
+import { Eye, EyeOff, FolderOpen, Heart, ImageDown, Info, Play, Square, Trash2, Zap } from "lucide-react";
 import type { MenuItem } from "@/components/ui/ContextMenu";
 import { api, errorText } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import type { Game, PlayStatus } from "@/lib/types";
+import type { Game } from "@/lib/types";
 import { useLibrary } from "@/store/library";
 import { confirmDialog, toast, useUI } from "@/store/ui";
 
@@ -10,29 +10,19 @@ import { confirmDialog, toast, useUI } from "@/store/ui";
 export function gameMenuItems(game: Game): MenuItem[] {
   const lib = useLibrary.getState();
   const running = lib.running.has(game.id);
-  const statuses: PlayStatus[] = ["none", "want", "playing", "paused", "done"];
   const items: MenuItem[] = [
     running
       ? { label: t("common.stop"), icon: <Square className="h-4 w-4" />, onClick: () => void lib.stop(game.id) }
-      : { label: game.kind === "app" ? t("common.start") : t("common.play"), icon: <Play className="h-4 w-4" />, onClick: () => void lib.launch(game) },
+      : { label: game.kind === "app" ? t("common.start") : t("games.boostAndPlay"), icon: <Zap className="h-4 w-4" />, onClick: () => void lib.launch(game, { boost: game.kind === "game" }) },
+  ];
+  if (!running && game.kind === "game") items.push({ label: t("common.play"), icon: <Play className="h-4 w-4" />, onClick: () => void lib.launch(game, { boost: false }) });
+  items.push(
     { label: t("common.show"), icon: <Info className="h-4 w-4" />, onClick: () => useUI.getState().navigate({ page: "game", id: game.id }) },
     { separator: true, label: "" },
     { label: game.favorite ? t("game.unfavorite") : t("game.favorite"), icon: <Heart className="h-4 w-4" />, checked: game.favorite, onClick: () => lib.updateGame(game.id, { favorite: !game.favorite }) },
-    { label: t("game.inDock"), icon: <PanelBottom className="h-4 w-4" />, checked: !!game.inDock, onClick: () => lib.updateGame(game.id, { inDock: !game.inDock }) },
-  ];
+  );
   if (game.kind === "game") {
-    items.push({
-      label: t("game.status"),
-      icon: <Tag className="h-4 w-4" />,
-      submenu: statuses.map((s) => ({ label: t(`status.${s}`), checked: game.status === s, onClick: () => useLibrary.getState().updateGame(game.id, { status: s }) })),
-    });
-  }
-  if (lib.collections.length) {
-    items.push({
-      label: t("collections.addTo"),
-      icon: <ListPlus className="h-4 w-4" />,
-      submenu: lib.collections.map((c) => ({ label: c.name, checked: game.collectionIds.includes(c.id), onClick: () => useLibrary.getState().toggleInCollection(game.id, c.id) })),
-    });
+    items.push({ label: t("games.autoBoost"), icon: <Zap className="h-4 w-4" />, checked: game.autoBoost ?? undefined, onClick: () => lib.updateGame(game.id, { autoBoost: !(game.autoBoost ?? true) }) });
   }
   items.push({ separator: true, label: "" });
   if (game.installDir || game.exePath) {
@@ -61,7 +51,7 @@ export function gameMenuItems(game: Game): MenuItem[] {
         if (!ok) return;
         await useLibrary.getState().removeGame(game.id);
         toast({ kind: "info", title: t("game.removed", { name: game.name }) });
-        if (useUI.getState().route.id === game.id) useUI.getState().navigate({ page: "library" });
+        if (useUI.getState().route.id === game.id) useUI.getState().navigate({ page: "games" });
       },
     },
   );

@@ -3,9 +3,9 @@
  * Ende-zu-Ende-Test der ECHTEN App (Rust-Backend + Oberfläche) unter Linux UND Windows.
  * Startet die App über tauri-driver (WebDriver), bedient sie per Skript und macht Screenshots.
  *
- * Linux:   xvfb-run -a node scripts/e2e-app.mjs app/src-tauri/target/release/NovaLauncher <ausgabe>
+ * Linux:   xvfb-run -a node scripts/e2e-app.mjs app/src-tauri/target/release/Pulsar <ausgabe>
  *          (braucht tauri-driver + WebKitWebDriver)
- * Windows: node scripts/e2e-app.mjs release\NovaLauncher.exe <ausgabe> [pfad\msedgedriver.exe]
+ * Windows: node scripts/e2e-app.mjs release\Pulsar.exe <ausgabe> [pfad\msedgedriver.exe]
  *          (braucht tauri-driver + passenden Microsoft Edge WebDriver)
  *
  * Geprüft wird: Start + Intro, Datenbank, Steam-Scan (mit nachgebauter Steam-Bibliothek),
@@ -20,7 +20,7 @@ import { join, resolve } from "node:path";
 const [, , appArg, outArg = "e2e-shots", nativeDriver] = process.argv;
 const isWin = process.platform === "win32";
 if (!appArg || !existsSync(appArg)) {
-  console.error("Bitte den Pfad zur Linux-App angeben, z. B. app/src-tauri/target/release/NovaLauncher");
+  console.error("Bitte den Pfad zur Linux-App angeben, z. B. app/src-tauri/target/release/Pulsar");
   process.exit(2);
 }
 const app = resolve(appArg);
@@ -28,7 +28,7 @@ const out = resolve(outArg);
 mkdirSync(out, { recursive: true });
 
 // Eigenes, leeres Zuhause (Linux) bzw. eigener Testordner (Windows): echte Nutzerdaten bleiben unberührt
-const home = mkdtempSync(join(tmpdir(), "nova-e2e-"));
+const home = mkdtempSync(join(tmpdir(), "pulsar-e2e-"));
 const steam = isWin ? join(home, "Steam") : join(home, ".local", "share", "Steam");
 mkdirSync(join(steam, "steamapps", "common", "Portal 2"), { recursive: true });
 const vdfPath = steam.replace(/\\/g, "\\\\");
@@ -36,7 +36,7 @@ writeFileSync(join(steam, "steamapps", "libraryfolders.vdf"), `"libraryfolders"\
 writeFileSync(join(steam, "steamapps", "appmanifest_620.acf"), `"AppState"\n{\n\t"appid"\t\t"620"\n\t"name"\t\t"Portal 2"\n\t"installdir"\t\t"Portal 2"\n}\n`);
 writeFileSync(join(steam, "steamapps", "appmanifest_228980.acf"), `"AppState"\n{\n\t"appid"\t\t"228980"\n\t"name"\t\t"Steamworks Common Redistributables"\n\t"installdir"\t\t"Steamworks Shared"\n}\n`);
 if (isWin) {
-  // NOVA findet Steam über die Registry
+  // Pulsar findet Steam über die Registry
   spawnSync("reg", ["add", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath", "/t", "REG_SZ", "/d", steam.replace(/\\/g, "/"), "/f"], { stdio: "ignore" });
 }
 
@@ -79,7 +79,7 @@ try {
 
   await sleep(1200);
   await shot("01-intro");
-  const introVisible = await js(`return !!document.querySelector('canvas') && document.body.innerText.includes('NOVA')`);
+  const introVisible = await js(`return !!document.querySelector('canvas') && document.body.innerText.includes('PULSAR')`);
   check("Startanimation sichtbar", introVisible);
   await sleep(5000);
   await shot("02-start");

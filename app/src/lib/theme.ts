@@ -1,14 +1,14 @@
 import type { MotionLevel, ThemeId } from "./types";
 import { prefersReducedMotion } from "@shared/lib/env";
 
-export const THEMES: ThemeId[] = ["nova", "polar", "neon", "midnight"];
+export const THEMES: ThemeId[] = ["pulsar", "ember", "toxic", "frost"];
 
 /** Vorschaufarben der Themes (für die Auswahlkarten) */
 export const THEME_PREVIEW: Record<ThemeId, { bg: string; fg: string; a: string; b: string; c: string }> = {
-  nova: { bg: "#0a0a11", fg: "#eeecf4", a: "#ff8a4c", b: "#ff4f8b", c: "#8b5cf6" },
-  polar: { bg: "#f4f4f8", fg: "#15141c", a: "#f47a35", b: "#e8336f", c: "#7c4dff" },
-  neon: { bg: "#040509", fg: "#eafff9", a: "#f72585", b: "#00f5d4", c: "#7b2ff7" },
-  midnight: { bg: "#060b1c", fg: "#e8eeff", a: "#7dd3fc", b: "#5b8cff", c: "#a78bfa" },
+  pulsar: { bg: "#04070f", fg: "#e9f1ff", a: "#60a5fa", b: "#22d3ee", c: "#a78bfa" },
+  ember: { bg: "#0b0605", fg: "#fff1ea", a: "#ffb347", b: "#ff6b35", c: "#ff3d6e" },
+  toxic: { bg: "#030805", fg: "#eafff1", a: "#b4ff39", b: "#39ff88", c: "#00e5ff" },
+  frost: { bg: "#eef3fa", fg: "#0d1526", a: "#2563eb", b: "#0891b2", c: "#7c3aed" },
 };
 
 function hexToHsl(hex: string): [number, number, number] | null {

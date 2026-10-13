@@ -20,21 +20,16 @@ let saveTimer: number | undefined;
 /** Wirkt Einstellungen sofort auf Oberfläche, Sound und Sprache aus */
 function applyLocal(s: Settings) {
   applyAppearance(s.theme, s.accent, s.motion);
-  sound.setVolume(s.soundVolume);
-  sound.setMuted(s.soundMuted);
+  sound.setVolume(s.volume);
+  sound.setMuted(!s.sound);
   sound.setHoverEnabled(s.hoverSounds);
   setLanguage(s.language);
 }
 
-const NATIVE_KEYS: (keyof Settings)[] = ["closeToTray", "overlayShortcut", "minimizeOnLaunch", "language"];
+const NATIVE_KEYS: (keyof Settings)[] = ["closeToTray", "overlayShortcut", "language"];
 
 async function applyNative(s: Settings) {
-  try {
-    await api.applyNativeSettings({ closeToTray: s.closeToTray, overlayShortcut: s.overlayShortcut, minimizeOnLaunch: s.minimizeOnLaunch, language: s.language });
-  } catch (e) {
-    console.warn("Native Einstellungen:", e);
-    throw e;
-  }
+  await api.applyNativeSettings({ closeToTray: s.closeToTray, overlayShortcut: s.overlayShortcut, minimizeOnLaunch: false, language: s.language });
 }
 
 async function applyAutostart(enabled: boolean) {

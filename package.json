@@ -1,8 +1,8 @@
 {
-  "name": "nova-launcher-monorepo",
+  "name": "pulsar-monorepo",
   "private": true,
   "version": "1.0.0",
-  "description": "NOVA - Premium Game & App Launcher fuer Windows, mit eigenem animierten Setup-Installer.",
+  "description": "PULSAR - Game Booster fuer Windows: Live-Ping mit Note, Boost per Klick, Netzwerk-Werkzeuge, eigener animierter Setup-Installer.",
   "workspaces": [
     "shared",
     "app",

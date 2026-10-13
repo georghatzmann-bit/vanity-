@@ -91,7 +91,7 @@ impl Core {
         }
     }
 
-    /// Pulsar hat (anders als NOVA) nur ein Profil; der feste Name hält die Ablage einfach.
+    /// Pulsar hat nur ein Profil; der feste Name hält die Ablage einfach.
     pub fn active_profile_id(&self) -> String {
         DEFAULT_PROFILE.into()
     }

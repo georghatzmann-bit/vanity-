@@ -1,20 +1,23 @@
 import { memo, useEffect } from "react";
 import { AnimatePresence, motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { imgSrc } from "@/lib/api";
+import { gradeColor } from "@/lib/grade";
 import { genCoverSpec } from "@/lib/gencover";
 import { useLibrary } from "@/store/library";
+import { useNet } from "@/store/net";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
 import { Starfield } from "@shared/ui/Starfield";
 
 /**
- * Lebendiger Hintergrund: großes, unscharfes Cover des gewählten Spiels, Farbglühen aus dem Cover,
- * Sternenhimmel und leichter Parallax-Effekt zur Maus.
+ * Lebendiger Hintergrund: Farbglühen in der Farbe der aktuellen Verbindungsnote,
+ * unscharfes Cover des gewählten Spiels, Sternenhimmel und leichter Parallax-Effekt zur Maus.
  */
 export const Background = memo(function Background() {
   const focusId = useUI((s) => s.focusGameId);
   const game = useLibrary((s) => (focusId ? s.games.find((g) => g.id === focusId) : undefined));
-  const { dynamicBackground, parallax, particles, motion: motionLevel, theme } = useSettings((s) => s.settings);
+  const { motion: motionLevel, theme } = useSettings((s) => s.settings);
+  const grade = useNet((s) => s.grade);
 
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
@@ -25,7 +28,7 @@ export const Background = memo(function Background() {
   const glowX = useTransform(sx, (v) => v * 36);
   const glowY = useTransform(sy, (v) => v * 24);
 
-  const parallaxOn = parallax && motionLevel === "full";
+  const parallaxOn = motionLevel === "full";
 
   useEffect(() => {
     if (!parallaxOn) {
@@ -41,12 +44,13 @@ export const Background = memo(function Background() {
     return () => window.removeEventListener("pointermove", onMove);
   }, [parallaxOn, mx, my]);
 
-  const showGame = dynamicBackground && !!game;
-  const image = showGame ? game.images.hero ?? game.images.cover : undefined;
-  const palette = showGame ? game.palette ?? genCoverSpec(game.name).palette : undefined;
-  const light = theme === "polar";
+  const image = game ? game.images.hero ?? game.images.cover : undefined;
+  const palette = game ? game.palette ?? genCoverSpec(game.name).palette : undefined;
+  const light = theme === "frost";
 
-  const glowA = palette ? `color-mix(in oklab, ${palette.primary} ${light ? 22 : 34}%, transparent)` : "var(--nv-glow-a)";
+  // Ohne Spiel färbt die Verbindungsnote das Glühen leicht mit (grün = gut, rot = schlecht)
+  const gradeTint = grade ? gradeColor(grade) : null;
+  const glowA = palette ? `color-mix(in oklab, ${palette.primary} ${light ? 22 : 34}%, transparent)` : gradeTint ? `color-mix(in oklab, ${gradeTint} ${light ? 14 : 20}%, transparent)` : "var(--nv-glow-a)";
   const glowB = palette ? `color-mix(in oklab, ${palette.secondary} ${light ? 18 : 28}%, transparent)` : "var(--nv-glow-b)";
   const glowC = palette ? `color-mix(in oklab, ${palette.primary} 14%, transparent)` : "var(--nv-glow-c)";
 
@@ -68,10 +72,13 @@ export const Background = memo(function Background() {
         <div className="absolute top-[30%] left-[35%] h-[50%] w-[40%] rounded-full blur-[110px] transition-[background] duration-1000" style={{ background: `radial-gradient(circle, ${glowC}, transparent 70%)`, animation: "nv-aurora 34s ease-in-out infinite" }} />
       </motion.div>
 
+      {/* Feines Raster – wirkt wie ein Radar-Schirm */}
+      <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "linear-gradient(var(--nv-fg) 1px, transparent 1px), linear-gradient(90deg, var(--nv-fg) 1px, transparent 1px)", backgroundSize: "48px 48px", maskImage: "radial-gradient(70% 60% at 50% 40%, black 30%, transparent 100%)" }} />
+
       {/* Lesbarkeit: dunkler (bzw. heller) Schleier */}
       <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, color-mix(in oklab, var(--nv-bg) calc(var(--nv-backdrop-dim) * 70%), transparent) 0%, color-mix(in oklab, var(--nv-bg) calc(var(--nv-backdrop-dim) * 100%), transparent) 75%)` }} />
 
-      {particles && motionLevel !== "off" && <Starfield className="absolute inset-0 opacity-80" density={light ? 0.5 : 1.1} parallax={parallaxOn} drift={motionLevel === "full" ? 1 : 0} />}
+      {motionLevel !== "off" && <Starfield className="absolute inset-0 opacity-80" density={light ? 0.5 : 1.1} parallax={parallaxOn} drift={motionLevel === "full" ? 1 : 0} />}
 
       {/* Vignette + Filmkorn */}
       <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 40%, transparent 55%, color-mix(in oklab, var(--nv-bg) 70%, transparent) 100%)" }} />

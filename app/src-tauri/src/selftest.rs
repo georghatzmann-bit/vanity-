@@ -2,8 +2,9 @@
 //!
 //! `Pulsar.exe --selftest <bericht.json>`
 //!
-//! Startet die App normal, ruft dann die echten Backend-Befehle auf (Scan, Bilder, Icons,
-//! Starten, Spielzeit-Erkennung, Beenden) und schreibt einen JSON-Bericht. Exit-Code 0 = alles ok.
+//! Startet die App normal, ruft dann die echten Backend-Befehle auf (Scan, Bilder, Icons, Ping,
+//! Regionen, DNS, Adapter, Tweaks, Boost, Starten, Spielzeit-Erkennung, Beenden) und schreibt einen
+//! JSON-Bericht. Exit-Code 0 = alles ok.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -21,7 +22,7 @@ pub fn report_path() -> Option<PathBuf> {
         args.get(i + 1)
             .filter(|a| !a.starts_with("--"))
             .map(PathBuf::from)
-            .unwrap_or_else(|| std::env::temp_dir().join("nova-selftest.json")),
+            .unwrap_or_else(|| std::env::temp_dir().join("pulsar-selftest.json")),
     )
 }
 
@@ -64,7 +65,7 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
         match crate::scan::scan_library(from(json!({ "steam": true, "epic": false, "gog": false, "startMenu": false, "folders": [] }))).await {
             Ok(res) => {
                 let names: Vec<String> = res.entries.iter().map(|e| e.name.clone()).collect();
-                let expect = std::env::var("NOVA_SELFTEST_EXPECT_STEAM").ok();
+                let expect = std::env::var("PULSAR_SELFTEST_EXPECT_STEAM").ok();
                 let ok = expect.as_ref().map_or(true, |n| names.iter().any(|x| x == n));
                 r.step("steam-scan", ok, format!("{} gefunden: {:?} {:?}", names.len(), names, res.messages));
             }
@@ -124,7 +125,99 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
             Err(e) => r.step("pc-auslastung", false, e),
         }
 
-        // 6) Starten + Spielzeit-Erkennung + Beenden
+        // 6) Netzwerk: Regionen, Ping, DNS, Adapter, WLAN
+        let regions = match crate::net::net_regions().await {
+            Ok(list) => {
+                let areas: std::collections::BTreeSet<String> = list.iter().map(|r| format!("{:?}", r.area)).collect();
+                r.step("regionen-liste", list.len() >= 15 && areas.len() >= 5, format!("{} Regionen, Gebiete {:?}", list.len(), areas));
+                list
+            }
+            Err(e) => {
+                r.step("regionen-liste", false, e);
+                Vec::new()
+            }
+        };
+        let tcp_target = from(json!({ "id": "selftest-tcp", "label": "Cloudflare", "host": "1.1.1.1", "port": 443, "method": "tcp" }));
+        match crate::net::net_ping_once(tcp_target, Some(4)).await {
+            Ok(s) => r.step("ping-tcp", s.avg.is_some_and(|v| v > 0.0 && v < 2000.0), format!("Ø {:?} ms, Jitter {:?}, Verlust {:.0} %", s.avg.map(|v| v.round()), s.jitter.map(|v| (v * 10.0).round() / 10.0), s.loss * 100.0)),
+            Err(e) => r.step("ping-tcp", false, e),
+        }
+        let icmp_target = from(json!({ "id": "selftest-icmp", "label": "Cloudflare", "host": "1.1.1.1", "method": "icmp" }));
+        match crate::net::net_ping_once(icmp_target, Some(4)).await {
+            // ICMP darf in einer Firewall geblockt sein – dann zählt nur, dass der Aufruf sauber antwortet
+            Ok(s) => r.step("ping-icmp", true, format!("Ø {:?} ms, Verlust {:.0} %", s.avg.map(|v| v.round()), s.loss * 100.0)),
+            Err(e) => r.step("ping-icmp", false, e),
+        }
+        if !regions.is_empty() {
+            let ids: Vec<String> = regions.iter().take(3).map(|x| x.id.clone()).collect();
+            match crate::net::net_regions_ping(Some(ids.clone()), Some(3)).await {
+                Ok(list) => {
+                    let measured = list.iter().filter(|x| x.stats.avg.is_some()).count();
+                    r.step("regionen-ping", list.len() == ids.len() && measured >= 1, format!("{measured}/{} Regionen geantwortet", list.len()));
+                }
+                Err(e) => r.step("regionen-ping", false, e),
+            }
+        }
+        match crate::net::net_game_servers(app.state::<Shared>(), "cs2".into()).await {
+            Ok(list) => r.step("spielserver-cs2", !list.is_empty(), format!("{} Valve-Standorte, z. B. {:?}", list.len(), list.iter().take(3).map(|x| x.name.clone()).collect::<Vec<_>>())),
+            Err(e) => r.step("spielserver-cs2", false, e),
+        }
+        match crate::net::net_dns_benchmark(app.clone(), Some(1)).await {
+            Ok(list) => {
+                let answered = list.iter().filter(|d| d.cached_ms.is_some() || d.uncached_ms.is_some()).count();
+                r.step("dns-vergleich", answered >= 2, format!("{answered}/{} Dienste geantwortet", list.len()));
+            }
+            Err(e) => r.step("dns-vergleich", false, e),
+        }
+        match crate::net::net_dns_current(app.state::<Shared>()).await {
+            Ok(cfg) => r.step("dns-aktuell", true, format!("{cfg:?}")),
+            Err(e) => r.step("dns-aktuell", false, e),
+        }
+        match crate::net::net_adapters().await {
+            Ok(list) => r.step("adapter", !cfg!(windows) || !list.is_empty(), format!("{} Adapter: {:?}", list.len(), list.iter().map(|a| format!("{} ({}, {})", a.name, a.kind, if a.up { "aktiv" } else { "aus" })).collect::<Vec<_>>())),
+            Err(e) => r.step("adapter", false, e),
+        }
+        match crate::net::net_wifi().await {
+            Ok(w) => r.step("wlan", true, w.map_or("kein WLAN".to_string(), |w| format!("{} {} %", w.ssid, w.signal))),
+            Err(e) => r.step("wlan", false, e),
+        }
+        match crate::net::net_traceroute(app.clone(), "1.1.1.1".into(), Some(12)).await {
+            Ok(t) => r.step("route", !t.hops.is_empty(), format!("{} Stationen, Ziel erreicht: {}", t.hops.len(), t.reached)),
+            Err(e) => r.step("route", !cfg!(windows), e),
+        }
+
+        // 7) Optimieren: Tweaks lesen, Energiepläne, Boost an/aus (muss den alten Zustand zurückstellen)
+        match crate::opt::opt_tweaks(app.state::<Shared>()).await {
+            Ok(list) => {
+                let ok = list.len() == 4 && (!cfg!(windows) || list.iter().all(|t| t.state != "unknown"));
+                r.step("tweaks-lesen", ok, format!("{:?}", list.iter().map(|t| format!("{}={}", t.id, t.state)).collect::<Vec<_>>()));
+            }
+            Err(e) => r.step("tweaks-lesen", false, e),
+        }
+        if cfg!(windows) {
+            match crate::opt::opt_power_plans().await {
+                Ok(plans) => r.step("energieplaene", plans.iter().any(|p| p.active), format!("{:?}", plans.iter().map(|p| format!("{}{}", p.name, if p.active { " *" } else { "" })).collect::<Vec<_>>())),
+                Err(e) => r.step("energieplaene", false, e),
+            }
+            let before = crate::opt::opt_power_plans().await.ok().and_then(|p| p.into_iter().find(|p| p.active).map(|p| p.guid));
+            let profile = from(json!({ "powerPlan": true, "gamePriority": "high", "flushDns": true }));
+            match crate::opt::boost_start(app.clone(), app.state::<Shared>(), profile, None, None).await {
+                Ok(st) => {
+                    r.step("boost-start", st.active && !st.actions.is_empty(), format!("{:?}", st.actions.iter().map(|a| format!("{}:{}", a.id, a.ok)).collect::<Vec<_>>()));
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    match crate::opt::boost_stop(app.clone(), app.state::<Shared>()).await {
+                        Ok(st) => {
+                            let after = crate::opt::opt_power_plans().await.ok().and_then(|p| p.into_iter().find(|p| p.active).map(|p| p.guid));
+                            r.step("boost-stop", !st.active && before == after, format!("Energieplan vorher {before:?}, nachher {after:?}"));
+                        }
+                        Err(e) => r.step("boost-stop", false, e),
+                    }
+                }
+                Err(e) => r.step("boost-start", false, e),
+            }
+        }
+
+        // 8) Starten + Spielzeit-Erkennung + Beenden
         let (exe, args) = test_program();
         let game_id = "selftest-game".to_string();
         let tracked = from(json!([{ "gameId": game_id, "name": "Selbsttest", "exePath": exe }]));

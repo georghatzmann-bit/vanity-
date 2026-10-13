@@ -1,5 +1,5 @@
 /**
- * NOVA Bewegungs-System: "Schwerkraft".
+ * Pulsar Bewegungs-System: "Schwerkraft".
  * Elemente fliegen leicht federnd herein und kommen ruhig zum Stillstand.
  * Alle Animationen der App und des Installers benutzen diese Presets.
  */

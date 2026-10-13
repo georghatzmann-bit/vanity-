@@ -11,7 +11,7 @@ export interface SelectOption<T extends string> {
   icon?: ReactNode;
 }
 
-/** Aufklappliste im NOVA-Stil */
+/** Aufklappliste im Pulsar-Stil */
 export function Select<T extends string>({ value, options, onChange, className, placeholder, align = "left" }: { value: T; options: SelectOption<T>[]; onChange: (v: T) => void; className?: string; placeholder?: string; align?: "left" | "right" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

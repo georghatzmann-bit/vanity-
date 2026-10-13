@@ -1,69 +1,54 @@
-# NOVA – Testbericht (ehrlich)
+# PULSAR – Testbericht
 
-Stand: 13.10.2026, Version 1.0.0. Gebaut und getestet wurde in einer Linux-Umgebung und auf einem
-Windows-Rechner von GitHub (windows-latest). Ein echter Spiele-PC mit Steam/Epic/GOG stand **nicht** zur Verfügung.
+Ehrliche Übersicht: Was wurde wie geprüft, was läuft automatisch auf einem echten Windows-Rechner (GitHub-CI),
+und was konnte bisher nicht geprüft werden.
 
-## Automatische Tests
+## 1. Automatisch bei jedem Push (GitHub Actions, Windows)
 
-| Bereich | Wie | Ergebnis |
-|---|---|---|
-| Oberflächen-Logik (Suche, Doppelte, Statistik, Würfel, Erfolge, Übersetzungen, kaputte Daten) | 18 Vitest-Tests (`npm test`) | ✅ grün (Linux + Windows) |
-| App-Backend (VDF/ACF, Steam/Epic-Manifeste, Ordner-Scan, Prozess-Erkennung, DB, Sitzungen, Zusammenführen, Statistik, Export/Import, Spielstand-Zip inkl. Zip-Slip-Schutz, Backups, Farbpalette, Bildquellen und Namensabgleich, Versionen) | 78 Rust-Tests (`npm run test:rust`) | ✅ grün (Linux + Windows) |
-| Installer-Backend (Manifest, Download, Fortsetzen nach Abbruch, 200/206/416, Prüfsumme, Abbrechen, Speicherplatz, Installation/Deinstallation, Selbsttest) | 27 Rust-Tests | ✅ grün (Linux + Windows); unter Windows zuerst zwei Testfehler gefunden und behoben (parallele Registry-Tests, Linux-Pfad im Test) |
-| Typprüfung beider Oberflächen | `npm run typecheck` | ✅ |
+Workflow `.github/workflows/windows.yml` auf `windows-latest`:
 
-## Ende-zu-Ende mit der echten App (Rust + Oberfläche)
+| Schritt | Was wird geprüft |
+|---|---|
+| Typprüfung | `tsc` für App und Installer – 0 Fehler |
+| Oberflächen-Tests | `vitest`: Verbindungsnote, Ping-Statistik (Jitter, Verlust, Spitzen, Verdichtung), Bufferbloat-Note, Suche, Doppelte, Einstellungen-Reparatur, Spielserver-Erkennung, Übersetzungen (Schlüssel + Platzhalter DE/EN) |
+| Rust-Tests | `cargo test` für App und Installer auf Windows: Datenbank, Scanner, Bilder, Netzwerk-Logik (Statistik, DNS-Pakete, SDR-JSON, Regionen, Routen-Zonen), Optimierer (powercfg-Parsing, Registry-Sicherungen, Tweaks an/aus/rückgängig, Boost start/stop), Installer (Manifest, Pfade, Prüfsummen) |
+| Bauen | `npm run build:all` → `Pulsar.exe`, `Pulsar-Setup.exe`, `latest.json`, `SHA256SUMS.txt` |
+| App-Starttest | Startet `Pulsar.exe`, wartet 18 s, zwei Screenshots, prüft, dass sie nicht abstürzt |
+| Installer-Starttest | Startet `Pulsar-Setup.exe`, Screenshot nach 9 s |
+| Installer-Selbsttest | `--selftest`: lädt die App von einem lokalen Testserver, prüft SHA-256, installiert, legt Verknüpfungen und den Eintrag in „Apps & Features“ an, deinstalliert wieder |
+| App-Selbsttest | `Pulsar.exe --selftest`: Steam-Scan (nachgebaute Steam-Installation), Startmenü/Epic/GOG-Scan, Steam-Bilder (Cover, Hintergrund, Logo, Icon), Bilder per Name, Exe-Icon, Icon aus Ordner, PC-Auslastung, **Regionenliste, TCP-Ping, ICMP-Ping, Regionen-Ping, CS2-Spielserver (Valve-API), DNS-Vergleich, aktueller DNS, Adapter, WLAN, Route, Tweaks lesen, Energiepläne, Boost an → Boost aus (alter Energieplan muss zurück sein)**, Programm starten, „läuft gerade“ erkennen, beenden, Spielzeit gespeichert |
+| Release | Nur wenn alles grün ist: Dateien ins Release `pulsar-latest` |
 
-Unter Linux steuert `scripts/e2e-app.mjs` die echte App per WebDriver (klickt wie ein Mensch).
-Auf dem Windows-Rechner von GitHub konnte sich der Edge-WebDriver nicht mit WebView2 verbinden
-(„DevToolsActivePort file doesn't exist“). Deshalb hat die App einen **eingebauten Selbsttest**:
-`NovaLauncher.exe --selftest bericht.json` ruft dieselben Befehle auf, die auch die Oberfläche benutzt,
-und meldet das Ergebnis. Der Windows-Lauf schlägt fehl, wenn auch nur ein Schritt nicht klappt.
+Ergebnis des letzten Laufs: siehe `https://github.com/georghatzmann-bit/vanity-/actions` (Eintrag „Windows Build & Test“) –
+die Selbsttest-Berichte (`selftest.json`, `app-selftest.json`) und Screenshots liegen im Artefakt `pulsar-windows-<version>`.
 
-| Prüfung | Linux (WebDriver) | Windows (CI, Selbsttest) |
-|---|---|---|
-| App startet, Startanimation, Hauptfenster lädt | ✅ | ✅ (Screenshots im CI-Artefakt) |
-| Steam-Bibliothek gefunden (nachgebaute Steam-Installation, unter Windows über die echte Registry `HKCU\Software\Valve\Steam`) | ✅ | ✅ „Portal 2“ gefunden |
-| Startmenü-, Epic- und GOG-Scan | ✅ (leer) | ✅ 46 Programme aus dem Startmenü (z. B. 7-Zip, Firefox) |
-| Echtes Steam-Cover, Hintergrund, Logo **und Icon** von Steams Server | ✅ | ✅ |
-| Spiel ohne Steam-ID (wie bei Epic/GOG): Bilder per Namenssuche („Hades II“ → richtiges Spiel) | ✅ | ✅ |
-| Echtes Programm-Icon aus einer .exe (explorer.exe) | – (nur Windows) | ✅ |
-| Icon, wenn nur der Installationsordner bekannt ist (Haupt-.exe wird gesucht) | – (nur Windows) | ✅ |
-| PC-Auslastung (CPU, RAM, GPU) | ✅ | ✅ CPU, 16 GB RAM, GPU-Last |
-| Spiel starten, „Läuft gerade“ erkannt | ✅ | ✅ nach 0,5 s |
-| Beenden-Knopf beendet den Prozess | ✅ | ✅ |
-| Spielzeit gemessen und in der Datenbank gespeichert | ✅ (17 s) | ✅ (13 s, 1 Sitzung) |
-| Einstellungen/Theme bleiben nach Neustart, Export/Import, Backup | ✅ | – (nur Linux geprüft) |
+## 2. Lokal geprüft (Linux-Entwicklungsumgebung)
 
-`scripts/e2e-installer-linux.mjs` steuert den echten Installer: Intro → Willkommen → Ordner → Optionen →
-Download (mit absichtlichem Verbindungsabbruch bei 45 %) → Fortsetzen per Range-Anfrage → Prüfsumme →
-Installation → Fertig. **11/11 ✅** (Linux).
+| Was | Ergebnis |
+|---|---|
+| `npm run typecheck` (App + Installer) | 0 Fehler |
+| `npm test` | 20 Tests bestanden |
+| `cargo test` App (Linux) | Datenbank, Scanner, Bilder, Optimierer (38 Tests), Netzwerk-Logik – bestanden |
+| `cargo test` Installer (Linux) | bestanden |
+| `cargo xwin check --target x86_64-pc-windows-msvc` | Windows-Code (ICMP, IP Helper, WLAN, Registry, powercfg) kompiliert ohne Fehler |
+| Browser-Rundgang App (Playwright, Demo-Backend) | Alle Seiten (Cockpit, Spiele, Spiel, Netzwerk ×5, Optimieren, Berichte, Einstellungen, Palette, Boost, 4 Themes, Overlay) ohne Konsolenfehler; 33 Screenshots |
+| Browser-Rundgang Installer (Playwright, Demo-Backend) | Intro, Willkommen, Ordner, Optionen, Download, Fertig, Fehler + Fortsetzen, Wartung, Deinstallation ohne Konsolenfehler; 13 Screenshots |
 
-Auf Windows (CI) zusätzlich: Installer startet, **Installer-Selbsttest** ✅
-(Download von lokalem Server, SHA-256, Installation, Startmenü- und Desktop-Verknüpfung,
-Eintrag in „Apps & Features“, Deinstallation, alles wieder entfernt).
-Außerdem hat der Installer-Selbsttest einmal gegen das **echte GitHub-Release `nova-latest`** geladen
-und installiert – ✅.
+Dabei gefunden und behoben: eine Endlosschleife durch Store-Selektoren, die bei jedem Rendern neue Listen erzeugten
+(Spiel-Seite, Seitenleiste), und ein verschachtelter Button im Cockpit.
 
-## Oberfläche im Browser (Demo-Daten)
+## 3. Nicht geprüft (ehrlich)
 
-`scripts/ui-tour.mjs` und `scripts/installer-tour.mjs` klicken alle Seiten durch und machen Screenshots
-(alle vier Themes geprüft). Keine Fehler in der Konsole. Gefundene und behobene Fehler u. a.:
-unsichtbare Intro-Ebene blockierte alle Klicks, verdecktes Suchfeld, „0“ im Banner, falsche Initialen bei Apostroph.
+- **Echte Windows-Laufzeit außerhalb der CI:** Ob `IcmpSendEcho` in deiner Firewall durchkommt, wie `powercfg` auf
+  deinem Windows antwortet (Sprache/Codepage), ob dein Anti-Cheat die Priorität zulässt – das zeigt sich erst auf
+  deinem PC. Alle diese Stellen melden Fehler als Text statt abzustürzen.
+- **WLAN:** Der GitHub-Rechner hat kein WLAN. Der WLAN-Code wird dort nur „sauber antworten“ geprüft, nicht mit echten Werten.
+- **Overlay über Vollbild-Spielen:** Funktioniert nur im Fenster-/randlosen Modus (technische Grenze ohne Grafik-Hook).
+- **Speedtest-Zahlen:** hängen vom Cloudflare-Server und deiner Leitung ab; die Bufferbloat-Note ist eine Einschätzung, keine Labormessung.
+- **Windows-Benachrichtigungen und Autostart** wurden nur per Code geprüft, nicht per Klick.
 
-## Nicht getestet (ehrlich)
+## 4. Grenzen, die Pulsar offen nennt
 
-- **Echte Spielesammlung**: Steam lief mit nachgebauten Daten, Epic und GOG auf einem Rechner ohne diese Launcher.
-  Mit einer echten, großen Sammlung (und echten Epic-/GOG-Installationen) wurde NOVA nie ausprobiert.
-- **Klicken in der Windows-Oberfläche**: Auf Windows sind die Abläufe über den Selbsttest geprüft, und die Screenshots
-  zeigen die richtig gezeichnete App. Ein automatisches Durchklicken aller Seiten gab es nur unter Linux und im Browser.
-- **SteamGridDB** mit echtem API-Schlüssel (der Code ist da, die Antworten werden in Tests geparst).
-- **Namenssuche bei vielen echten Spielen:** geprüft mit „Hades II“ und in Tests mit Beispielantworten. Spiele, die es bei Steam
-  nicht gibt (z. B. Alan Wake 2, Minecraft) oder die Steam nicht mehr anzeigt (z. B. Rocket League), bekommen ohne SteamGridDB-Schlüssel kein Bild.
-- **Tastenkürzel fürs Overlay** über einem laufenden Vollbildspiel, **Controller** im Big-Picture-Modus,
-  **Tray-Menü**, **Autostart** und **Windows-Benachrichtigungen** – brauchen einen echten Desktop mit Mensch davor.
-- **UAC** (Installation nach „C:\Program Files“ mit Adminrechten) – der CI-Rechner läuft bereits als Admin.
-- **Update über den Installer** (`--update`) – erst prüfbar, wenn eine zweite Version veröffentlicht ist.
-- **Sounds hören**: Die Töne werden erzeugt (Code läuft fehlerfrei), angehört hat sie niemand.
-- **SmartScreen**: Die Exe-Dateien sind nicht kostenpflichtig signiert. Windows warnt beim ersten Start
-  („Weitere Informationen“ → „Trotzdem ausführen“).
+- Kein eigenes Servernetz → kein „Ping-Umleiten“.
+- Kein FPS-Zähler (kein Grafik-Hook, kein Anti-Cheat-Risiko).
+- Keine Adminrechte → keine TCP-Stack-Tweaks, keine Dienste. Dafür: nichts, was dein System „kaputtoptimiert“.

@@ -40,6 +40,9 @@ import type {
 } from "./types";
 
 type Args = Record<string, unknown>;
+
+/** Fehler als lesbaren Text (Backend liefert deutsche Sätze als String) */
+export const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 type Unlisten = () => void;
 
 let mockModule: Promise<typeof import("./mock")> | null = null;

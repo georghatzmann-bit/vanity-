@@ -33,10 +33,10 @@ const server = createServer((req, res) => {
   requests.push({ url: req.url, range: req.headers.range ?? null });
   if (req.url === "/latest.json") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ version: "1.0.0", notes: "E2E", app: { url: "NovaLauncher.exe", sha256: sha, size: payload.length } }));
+    res.end(JSON.stringify({ version: "1.0.0", notes: "E2E", app: { url: "Pulsar.exe", sha256: sha, size: payload.length } }));
     return;
   }
-  if (req.url !== "/NovaLauncher.exe") {
+  if (req.url !== "/Pulsar.exe") {
     res.writeHead(404).end();
     return;
   }
@@ -67,10 +67,10 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(8799, "127.0.0.1", r));
 
-const home = mkdtempSync(join(tmpdir(), "nova-setup-e2e-"));
-const installDir = join(home, "Programme", "Nova Launcher");
+const home = mkdtempSync(join(tmpdir(), "pulsar-setup-e2e-"));
+const installDir = join(home, "Programme", "Pulsar");
 const driver = spawn("tauri-driver", ["--port", "4447", "--native-port", "4448"], {
-  env: { ...process.env, HOME: home, XDG_DATA_HOME: join(home, ".local", "share"), NOVA_MANIFEST_URL: "http://127.0.0.1:8799/latest.json", LANG: "de_DE.UTF-8" },
+  env: { ...process.env, HOME: home, XDG_DATA_HOME: join(home, ".local", "share"), PULSAR_MANIFEST_URL: "http://127.0.0.1:8799/latest.json", LANG: "de_DE.UTF-8" },
   stdio: "ignore",
 });
 await sleep(1500);
@@ -96,7 +96,7 @@ try {
 
   await sleep(1200);
   await shot("01-intro");
-  check("Intro mit Logo", (await text()).includes("NOVA"));
+  check("Intro mit Logo", (await text()).includes("PULSAR"));
   await sleep(3200);
   await shot("02-willkommen");
   const welcome = await text();
@@ -137,12 +137,12 @@ try {
   await sleep(1500);
   await shot("07-fertig");
   check("Installation abgeschlossen", state === "done");
-  const ranged = requests.filter((r) => r.url === "/NovaLauncher.exe" && r.range);
-  check("Download nach Abbruch fortgesetzt (Range-Anfrage)", dropped && ranged.length >= 1, `${requests.filter((r) => r.url === "/NovaLauncher.exe").length} Anfragen, ${ranged.length} mit Range`);
-  const installed = join(installDir, "NovaLauncher.exe");
+  const ranged = requests.filter((r) => r.url === "/Pulsar.exe" && r.range);
+  check("Download nach Abbruch fortgesetzt (Range-Anfrage)", dropped && ranged.length >= 1, `${requests.filter((r) => r.url === "/Pulsar.exe").length} Anfragen, ${ranged.length} mit Range`);
+  const installed = join(installDir, "Pulsar.exe");
   const ok = existsSync(installed) && createHash("sha256").update(readFileSync(installed)).digest("hex") === sha;
   check("App-Datei installiert und Prüfsumme stimmt", ok, installed);
-  check("Deinstaller und install.json angelegt", existsSync(join(installDir, "Uninstall Nova.exe")) && existsSync(join(installDir, "install.json")));
+  check("Deinstaller und install.json angelegt", existsSync(join(installDir, "Uninstall Pulsar.exe")) && existsSync(join(installDir, "install.json")));
 } catch (e) {
   check("Ablauf ohne Ausnahme", false, String(e).slice(0, 400));
 } finally {

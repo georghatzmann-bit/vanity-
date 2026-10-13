@@ -1,30 +1,30 @@
-# NOVA Setup – Vertrag zwischen Installer-Oberfläche und Installer-Backend
+# Pulsar Setup – Vertrag zwischen Installer-Oberfläche und Installer-Backend
 
 Der Installer ist eine eigene kleine Tauri-App (`installer/`). Er ist eine einzelne Datei
-`NovaLauncher-Setup.exe`, lädt die eigentliche App (`NovaLauncher.exe`) aus dem Internet,
+`Pulsar-Setup.exe`, lädt die eigentliche App (`Pulsar.exe`) aus dem Internet,
 prüft sie per SHA-256, installiert sie und kann sie wieder deinstallieren oder aktualisieren.
 
 ## Konfiguration
 
-Die zentrale Datei `nova.config.json` (Projektwurzel) wird beim Bauen in die Setup-Exe eingebettet.
+Die zentrale Datei `pulsar.config.json` (Projektwurzel) wird beim Bauen in die Setup-Exe eingebettet.
 Wichtig ist `manifestUrl`: Dort liegt `latest.json` (wird von `npm run build:all` erzeugt):
 
 ```json
 {
-  "name": "Nova Launcher",
+  "name": "Pulsar",
   "version": "1.0.0",
   "notes": "Was ist neu …",
-  "pubDate": "2026-10-12T12:00:00Z",
-  "app":   { "url": "https://…/NovaLauncher.exe",       "sha256": "…", "size": 12345678 },
-  "setup": { "url": "https://…/NovaLauncher-Setup.exe", "sha256": "…", "size": 7654321 }
+  "pubDate": "2026-10-13T12:00:00Z",
+  "app":   { "url": "https://…/Pulsar.exe",       "sha256": "…", "size": 12345678 },
+  "setup": { "url": "https://…/Pulsar-Setup.exe", "sha256": "…", "size": 7654321 }
 }
 ```
 
 Reihenfolge, wer die Manifest-Adresse bestimmt (erste gewinnt):
 1. Kommandozeile `--manifest <url-oder-dateipfad>`
-2. Umgebungsvariable `NOVA_MANIFEST_URL`
-3. Datei `nova-setup.json` neben der Setup-Exe (`{ "manifestUrl": "…" }`)
-4. Eingebettete `nova.config.json`
+2. Umgebungsvariable `PULSAR_MANIFEST_URL`
+3. Datei `pulsar-setup.json` neben der Setup-Exe (`{ "manifestUrl": "…" }`)
+4. Eingebettete `pulsar.config.json`
 
 `manifestUrl` darf auch ein lokaler Pfad oder `file://`-Link sein (für Tests).
 Relative `app.url` werden relativ zur Manifest-Adresse aufgelöst.
@@ -33,7 +33,7 @@ Relative `app.url` werden relativ zur Manifest-Adresse aufgelöst.
 
 | Aufruf | Modus |
 |---|---|
-| ohne Argumente | `install` – oder `maintenance`, wenn NOVA schon installiert ist |
+| ohne Argumente | `install` – oder `maintenance`, wenn Pulsar schon installiert ist |
 | `--update` | `update` – lädt die neueste App-Version in den vorhandenen Ordner und startet sie danach |
 | `--uninstall` | `uninstall` – kopiert sich zuerst nach `%TEMP%` und startet sich von dort neu (`--uninstall --target <dir>`), damit der Ordner gelöscht werden kann |
 | `--elevated --preset <base64-json>` | nach UAC-Neustart mit Adminrechten: Optionen übernehmen und direkt installieren |
@@ -50,7 +50,7 @@ Relative `app.url` werden relativ zur Manifest-Adresse aufgelöst.
 | `cancel_install` | – | `()` |
 | `relaunch_elevated` | `options: InstallOptions` | `()` startet sich mit UAC neu und beendet sich; `Err`, wenn abgelehnt |
 | `app_running` | – | `bool` |
-| `close_app` | – | `()` beendet laufende `NovaLauncher.exe` |
+| `close_app` | – | `()` beendet laufende `Pulsar.exe` |
 | `launch_app` | – | `()` startet die installierte App (nie mit Adminrechten) |
 | `start_uninstall` | `keepData: bool` | `()` sofort; Fortschritt über Events |
 | `open_url` | `url` | `()` |
@@ -62,7 +62,7 @@ interface SetupInfo {
   mode: SetupMode;
   setupVersion: string;
   appName: string;
-  defaultDir: string;              // %LOCALAPPDATA%\Programs\Nova Launcher
+  defaultDir: string;              // %LOCALAPPDATA%\Programs\Pulsar
   installed?: { dir: string; version: string };
   elevated: boolean;
   systemLang: "de" | "en";
@@ -89,14 +89,17 @@ interface InstallOptions { dir: string; desktopShortcut: boolean; startMenu: boo
 
 | Was | Wo |
 |---|---|
-| App | `<dir>\NovaLauncher.exe` |
-| Deinstaller | `<dir>\Uninstall Nova.exe` (Kopie der Setup-Exe) |
+| App | `<dir>\Pulsar.exe` |
+| Deinstaller | `<dir>\Uninstall Pulsar.exe` (Kopie der Setup-Exe) |
 | Info | `<dir>\install.json` |
-| Startmenü | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Nova Launcher.lnk` |
-| Desktop | `<Desktop>\Nova Launcher.lnk` |
-| Autostart | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` → `NovaLauncher = "<exe>" --minimized` |
-| Apps & Features | `HKCU\…\Uninstall\NovaLauncher` (bzw. `HKLM`, wenn mit Adminrechten installiert) |
-| Installationsort merken | `HKCU\Software\Nova\Launcher` → `InstallDir`, `Version` |
+| Startmenü | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Pulsar.lnk` |
+| Desktop | `<Desktop>\Pulsar.lnk` |
+| Autostart | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` → `Pulsar = "<exe>" --minimized` |
+| Apps & Features | `HKCU\…\Uninstall\Pulsar` (bzw. `HKLM`, wenn mit Adminrechten installiert) |
+| Installationsort merken | `HKCU\Software\Pulsar\Booster` → `InstallDir`, `Version` |
 
-Ohne Adminrechte wird nach `%LOCALAPPDATA%\Programs\Nova Launcher` installiert. Adminrechte werden nur
+Ohne Adminrechte wird nach `%LOCALAPPDATA%\Programs\Pulsar` installiert. Adminrechte werden nur
 angefordert, wenn der gewählte Ordner nicht beschreibbar ist (z. B. `C:\Program Files`).
+
+Beim Deinstallieren wird die laufende App zuerst beendet – Pulsar stellt dabei einen aktiven Boost
+(Energieplan, Prozess-Prioritäten) selbst zurück.

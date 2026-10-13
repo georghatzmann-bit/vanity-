@@ -7,7 +7,7 @@ import { GameCover } from "./GameCover";
 import { Starfield, type StarfieldHandle } from "@shared/ui/Starfield";
 import { sound } from "@shared/sound/engine";
 
-/** Start-Ritual: Cover zoomt ins Zentrum, Lichtring breitet sich aus, Partikel - dann blendet NOVA aus */
+/** Start-Ritual: Cover zoomt ins Zentrum, Lichtring breitet sich aus, Partikel - dann blendet Pulsar aus */
 export function LaunchRitual() {
   const t = useT();
   const game = useUI((s) => s.ritual);

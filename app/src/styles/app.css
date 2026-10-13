@@ -4,7 +4,7 @@
 
 @source "../../../shared";
 
-@custom-variant dark (&:where([data-theme="nova"], [data-theme="neon"], [data-theme="midnight"]) *);
+@custom-variant dark (&:where([data-theme="pulsar"], [data-theme="ember"], [data-theme="toxic"]) *);
 
 /* App-spezifisch */
 .app-shell {

@@ -1,5 +1,6 @@
 // Screenshots aller Funktionen im Browser (Demo-Daten) für docs/FUNKTIONEN.md.
 // Aufruf: node scripts/feature-shots.mjs [app-url] [installer-url] [ausgabe-ordner]
+// Vorher starten: npm run dev (Port 1420) und npm run dev:installer (Port 1421)
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -24,127 +25,113 @@ const shotter = (page) => async (name, wait = 1300) => {
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: "de-DE" });
 watch(page);
 const shot = shotter(page);
-const nova = (js) => page.evaluate(js);
-const go = (route) => nova(`window.__nova.useUI.getState().navigate(${JSON.stringify(route)})`);
-const setTheme = (theme, extra = "") => nova(`window.__nova.useSettings.getState().update({ theme: "${theme}"${extra} })`);
-const scrollMain = (y) => nova(`document.querySelectorAll('*').forEach(e => { if (e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY.match(/auto|scroll/)) e.scrollTop = ${y}; })`);
+const ev = (js) => page.evaluate(js);
+const go = (route) => ev(`window.__pulsar.useUI.getState().navigate(${JSON.stringify(route)})`);
+const settings = (patch) => ev(`window.__pulsar.useSettings.getState().update(${JSON.stringify(patch)})`);
+const scrollMain = (y) => ev(`document.querySelectorAll('main *').forEach(e => { if (e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY.match(/auto|scroll/)) e.scrollTop = ${y}; }); document.querySelectorAll('main > div').forEach(d => d.scrollTop = ${y});`);
+const click = (text) => page.getByRole("button", { name: text }).first().click();
 
 await page.goto(appUrl, { waitUntil: "networkidle" });
 await shot("01-intro", 1500);
 await page.waitForTimeout(4200);
-await nova(`window.__nova.useSettings.getState().update({ theme: "nova", language: "de" })`);
-await shot("02-startseite", 2500);
-await scrollMain(700);
-await shot("03-startseite-widgets");
-await scrollMain(0);
-
-await go({ page: "library" });
-await shot("04-bibliothek", 3500);
-await page.mouse.move(470, 470);
-await shot("05-bibliothek-3d-hover", 700);
+await settings({ theme: "pulsar", language: "de" });
+await shot("02-cockpit", 2500);
+await page.mouse.move(1268, 265);
+await shot("03-cockpit-boost-hover", 600);
 await page.mouse.move(1300, 120);
-await nova(`window.__nova.useUI.getState().setFilter({ favoritesOnly: true })`);
-await shot("06-bibliothek-filter-favoriten");
-await nova(`window.__nova.useUI.getState().resetFilter()`);
-await nova(`window.__nova.useSettings.getState().update({ libraryView: "list" })`);
-await shot("07-bibliothek-liste");
-await nova(`window.__nova.useSettings.getState().update({ libraryView: "grid" })`);
+await ev(`window.__pulsar.useBoost.getState().toggle()`);
+await shot("04-cockpit-boost-aktiv", 1800);
+await ev(`window.__pulsar.useBoost.getState().toggle()`);
+await page.waitForTimeout(600);
 
-const firstId = await nova(`window.__nova.useLibrary.getState().games.find(g => g.kind === "game").id`);
-await go({ page: "game", id: firstId });
-await shot("08-spiel-uebersicht", 1800);
-await scrollMain(600);
-await shot("09-spiel-sitzungen");
+await go({ page: "games" });
+await shot("05-spiele", 2500);
+await page.mouse.move(600, 440);
+await shot("06-spiele-hover", 700);
+await page.mouse.move(1300, 120);
+await page.getByRole("button", { name: /Favoriten/ }).first().click();
+await shot("07-spiele-favoriten", 900);
+await page.getByRole("button", { name: /Favoriten/ }).first().click();
+await page.getByPlaceholder(/durchsuchen/i).fill("counter");
+await shot("08-spiele-suche", 900);
+await page.getByPlaceholder(/durchsuchen/i).fill("");
+
+const cs2 = await ev(`window.__pulsar.useLibrary.getState().games.find(g => /counter/i.test(g.name))?.id || window.__pulsar.useLibrary.getState().games[0].id`);
+await go({ page: "game", id: cs2 });
+await shot("09-spiel-uebersicht", 1800);
+await scrollMain(520);
+await shot("10-spiel-messziel", 900);
 await scrollMain(0);
-for (const [tab, name] of [["screens", "10-spiel-screenshots"], ["links", "11-spiel-ordner-spielstaende"], ["settings", "12-spiel-einstellungen"]]) {
-  await nova(`document.dispatchEvent(new CustomEvent("nova:tab", { detail: "${tab}" }))`);
-  if (tab === "screens") {
-    await page.waitForTimeout(2500);
-    await scrollMain(420);
-  }
-  await shot(name);
-  await scrollMain(0);
-}
+await go({ page: "game", id: cs2, section: "reports" });
+await shot("11-spiel-berichte", 1200);
+await go({ page: "game", id: cs2, section: "settings" });
+await shot("12-spiel-einstellungen", 1200);
 
-await go({ page: "collections" });
-await shot("13-sammlungen");
-await go({ page: "stats" });
-await shot("14-statistik", 1800);
-await scrollMain(800);
-await shot("15-statistik-kalender-uhr");
-await scrollMain(1700);
-await shot("16-statistik-backlog");
-await go({ page: "achievements" });
-await shot("17-erfolge");
-await go({ page: "wishlist" });
-await shot("18-wunschliste");
-await go({ page: "cleanup" });
-await shot("19-aufraeumen");
+await go({ page: "network", section: "regions" });
+await shot("13-netzwerk-regionen", 1500);
+await click(/Alle messen/);
+await shot("14-netzwerk-regionen-gemessen", 4500);
+await go({ page: "network", section: "route" });
+await click(/Route analysieren/);
+await shot("15-netzwerk-route", 5500);
+await go({ page: "network", section: "dns" });
+await shot("16-netzwerk-dns", 1200);
+await click(/DNS-Dienste vergleichen/);
+await shot("17-netzwerk-dns-ergebnis", 6000);
+await go({ page: "network", section: "speed" });
+await click(/Speedtest starten/);
+await shot("18-netzwerk-speedtest-laeuft", 3500);
+await shot("19-netzwerk-speedtest-ergebnis", 9000);
+await go({ page: "network", section: "connection" });
+await shot("20-netzwerk-verbindung", 1500);
+
+await go({ page: "optimize" });
+await shot("21-optimieren", 1500);
+await click(/Alle empfohlenen anwenden/);
+await shot("22-optimieren-angewendet", 1500);
+
+await go({ page: "reports" });
+await shot("23-berichte", 1800);
 
 await go({ page: "settings" });
-await shot("20-einstellungen-aussehen");
-for (const [id, name] of [["sound", "21-einstellungen-sound"], ["library", "22-einstellungen-bibliothek"], ["behavior", "23-einstellungen-verhalten"], ["wellbeing", "24-einstellungen-pausen"], ["widgets", "25-einstellungen-widgets"], ["profiles", "26-einstellungen-profile"], ["data", "27-einstellungen-daten"], ["about", "28-einstellungen-tastenkuerzel"]]) {
-  await nova(`document.getElementById("settings-${id}")?.scrollIntoView({ block: "start" })`);
-  await shot(name, 900);
+await shot("24-einstellungen-aussehen", 1500);
+await go({ page: "settings", section: "monitor" });
+await shot("25-einstellungen-messung", 1200);
+await go({ page: "settings", section: "overlay" });
+await shot("26-einstellungen-overlay", 1200);
+await go({ page: "settings", section: "about" });
+await shot("27-einstellungen-ueber", 1200);
+
+await go({ page: "cockpit" });
+await page.waitForTimeout(600);
+await ev(`window.__pulsar.useUI.getState().setPalette(true)`);
+await page.keyboard.type("speed");
+await shot("28-befehlspalette", 800);
+await page.keyboard.press("Escape");
+await ev(`window.__pulsar.useUI.getState().setScan(true)`);
+await shot("29-spiele-suchen", 800);
+await page.keyboard.press("Escape");
+await ev(`window.__pulsar.useUI.getState().setManual(true)`);
+await shot("30-manuell-hinzufuegen", 800);
+await page.keyboard.press("Escape");
+await ev(`window.__pulsar.useLibrary.getState().launch(window.__pulsar.useLibrary.getState().games.find(g => g.id === "${cs2}"), { boost: true })`);
+await shot("31-boost-und-spielen", 900);
+await page.waitForTimeout(2500);
+
+for (const theme of ["ember", "toxic", "frost"]) {
+  await settings({ theme });
+  await shot(`32-theme-${theme}`, 1000);
 }
-
-await go({ page: "home" });
-await page.waitForTimeout(800);
-await nova(`window.__nova.useUI.getState().setPalette(true)`);
-await page.keyboard.type("port");
-await shot("29-befehlspalette");
-await page.keyboard.press("Escape");
-await nova(`window.__nova.useUI.getState().setDice(true)`);
-await shot("30-wuerfel");
-// Der Würfel schwebt (Animation) – deshalb per Skript klicken, sonst wartet Playwright auf Stillstand
-await nova(`[...document.querySelectorAll("button")].find((b) => b.textContent.includes("Würfeln"))?.click()`);
-await shot("31-wuerfel-ergebnis", 5500);
-await page.keyboard.press("Escape");
-await nova(`window.__nova.useUI.getState().setScan(true)`);
-await shot("32-bibliothek-fuellen");
-await page.keyboard.press("Escape");
-await nova(`window.__nova.useUI.getState().setManual(true)`);
-await shot("33-manuell-hinzufuegen");
-await page.keyboard.press("Escape");
-await nova(`window.__nova.useUI.getState().setDragging(true)`);
-await shot("34-drag-and-drop", 900);
-await nova(`window.__nova.useUI.getState().setDragging(false)`);
-await nova(`window.__nova.useUI.getState().setBigPicture(true)`);
-await shot("35-big-picture", 1600);
-await page.keyboard.press("ArrowRight");
-await page.keyboard.press("ArrowRight");
-await shot("36-big-picture-auswahl", 900);
-await page.keyboard.press("Escape");
-
-await go({ page: "game", id: firstId });
+await settings({ theme: "pulsar" });
 await page.waitForTimeout(900);
-await nova(`window.__nova.useLibrary.getState().launch(window.__nova.useLibrary.getState().games.find(g => g.id === "${firstId}"))`);
-await shot("37-start-ritual", 800);
-await shot("38-laeuft-gerade", 3200);
-await nova(`window.__nova.useUI.getState().pushAchievements(["curator"])`);
-await shot("39-erfolg-freigeschaltet", 1200);
 
-await go({ page: "home" });
-await setTheme("polar");
-await shot("40-theme-ganz-weiss", 1600);
-await setTheme("neon");
-await go({ page: "library" });
-await shot("41-theme-neon", 1600);
-await setTheme("midnight");
-await go({ page: "stats" });
-await shot("42-theme-mitternachtsblau", 1800);
-await setTheme("nova", `, accent: "#22c55e"`);
-await go({ page: "home" });
-await shot("43-eigene-akzentfarbe", 1600);
-await nova(`window.__nova.useSettings.getState().update({ theme: "nova", accent: "" })`);
-await page.close();
-
-// ---------- Overlay (Mini-Fenster über dem Spiel) ----------
-const ov = await browser.newPage({ viewport: { width: 380, height: 560 }, locale: "de-DE" });
+// Overlay (eigenes kleines Fenster)
+const ov = await browser.newPage({ viewport: { width: 340, height: 150 }, locale: "de-DE" });
 watch(ov);
-await ov.goto(appUrl + "overlay.html", { waitUntil: "networkidle" });
-await shotter(ov)("44-overlay", 1500);
+await ov.goto(appUrl.replace(/\/$/, "") + "/overlay.html", { waitUntil: "networkidle" });
+await shotter(ov)("33-overlay", 2500);
 await ov.close();
+await page.close();
 
 // ---------- Installer ----------
 const run = async (query, steps) => {
@@ -155,27 +142,35 @@ const run = async (query, steps) => {
   await steps(p, shotter(p));
   await p.close();
 };
-const click = (p, text) => p.getByRole("button", { name: text }).first().click();
 await run("", async (p, s) => {
-  await p.waitForTimeout(4000);
-  await click(p, /Los geht/);
-  await s("45-setup-ordner", 1200);
-  await click(p, /^Weiter/);
-  await s("46-setup-optionen");
+  await s("40-setup-intro", 1400);
+  await s("41-setup-willkommen", 3000);
+  await p.getByRole("button", { name: /Los geht/ }).click();
+  await s("42-setup-ordner", 1200);
+  await p.getByRole("button", { name: /^Weiter/ }).click();
+  await s("43-setup-optionen");
+  await p.getByRole("button", { name: /Installieren/ }).click();
+  await s("44-setup-download", 2200);
+  await s("45-setup-fertig", 5500);
 });
-await run("", async (p, s) => {
-  await p.waitForTimeout(4000);
-  await click(p, /Los geht/);
-  await p.waitForTimeout(1000);
-  await click(p, /^Weiter/);
-  await p.waitForTimeout(1000);
-  await click(p, /Installieren/);
-  await p.waitForSelector("text=NOVA ist bereit", { timeout: 30000 });
-  await s("48-setup-fertig-countdown", 1800);
+await run("?fail=1", async (p, s) => {
+  await p.waitForTimeout(3600);
+  await p.getByRole("button", { name: /Los geht/ }).click();
+  await p.waitForTimeout(700);
+  await p.getByRole("button", { name: /^Weiter/ }).click();
+  await p.waitForTimeout(700);
+  await p.getByRole("button", { name: /Installieren/ }).click();
+  await s("46-setup-fehler", 3200);
 });
 await run("?mode=maintenance", async (p, s) => {
-  await s("47-setup-wartung", 4200);
+  await s("47-setup-wartung", 3800);
+  await p.getByRole("button", { name: /Deinstallieren/ }).first().click();
+  await s("48-setup-deinstallieren", 900);
 });
 
 await browser.close();
-console.log(errors.length ? "\nFEHLER:\n" + [...new Set(errors)].join("\n") : "\nKeine Fehler in der Konsole.");
+if (errors.length) {
+  console.error("\nFehler in der Konsole:\n" + [...new Set(errors)].join("\n"));
+  process.exit(1);
+}
+console.log("\nKeine Fehler in der Konsole.");

@@ -1,22 +1,53 @@
-# Kreativ-Plan: NOVA
+# PULSAR – Kreativ-Plan
 
-**Name & Idee:** NOVA – ein Stern, der plötzlich hell aufleuchtet. Logo: vierzackiger Stern in einer Umlaufbahn.
-**Farbwelt:** warmes Glühen (Koralle → Magenta → Violett) auf tiefem Schwarz – bewusst anders als die vielen blauen Launcher.
-**Bewegung „Schwerkraft“:** Elemente fliegen federnd herein und rasten weich ein; Sternenhimmel mit Maus-Parallax.
-**Klangwelt „Glas & Sterne“:** kristalline Glockentöne in einer pentatonischen Tonleiter, live per Web Audio erzeugt (keine Dateien, keine fremden Rechte).
+Pulsar ersetzt NOVA (den Spiele-Launcher) im selben Projekt. Die Idee: ein **Game Booster** wie GearUP Booster –
+nur ehrlich, ohne Konto, ohne Abo, ohne Adminrechte, und mit mehr Werkzeugen.
 
-## Übernommen
-Fast alle Punkte aus Teil 1–5 des Auftrags.
+## Der Name
 
-## Geändert – und warum
-1. **Installer ebenfalls mit Tauri** statt NSIS/Inno: nur so sieht er wirklich eigen aus (gleiches Design, gleiche Sounds). Er bleibt eine einzelne Exe (~5 MB).
-2. **Eigene, animierte Diagramme** statt Chart-Bibliothek: leichter, schneller, passend zum Look.
-3. **`latest.json`** mit Version, Link und Prüfsumme wird automatisch erzeugt – nichts muss von Hand gepflegt werden; Installer und Update-Check nutzen dieselbe Datei.
-4. **Eine Datenbank pro Profil** – Spielzeiten vermischen sich nie.
-5. **Overlay**: über Spielen im Fenster-/randlosen Modus. Exklusives Vollbild bräuchte Code-Injektion ins Spiel (Anti-Cheat-Risiko) – bewusst weggelassen.
-6. **Windows-Build in der Cloud** (GitHub Actions) zusätzlich zum Cross-Compile, damit auf echtem Windows gebaut und getestet wird.
+Ein Pulsar ist ein Stern, der in exakt gleichen Abständen pulst – wie ein perfekter, stabiler Ping.
+Daraus kommt alles: das Logo (leuchtender Kern, zwei Strahlen, Ring, Druckwellen), die Startanimation
+(der Pulsar baut sich auf, Druckwellen laufen nach außen), der Boost (ein „Puls“ durch den PC) und die
+Verbindungsnote (wie gleichmäßig pulst deine Leitung?).
 
-## Zusätzlich erfunden
-Generierte Kunst-Cover · Steam-Bilder ohne API-Key · Start-Ritual beim Spielstart · Spielzeit-Kalender (Heatmap) ·
-„Wann spielst du?“-Uhr · Backlog-Rechner · Lupen-Dock · Theme-Wechsel als Lichtkreis · echte Programm-Icons ·
-schlaue Sammlungen · Spielzeit nachtragen · Sitzungsliste · Tray-Menü mit zuletzt gespielten Spielen.
+## Die drei Versprechen
+
+1. **Ehrlich.** Keine erfundenen Zahlen, kein „Ping -40 %“. Wenn Pulsar etwas nicht messen kann, sagt es das.
+   Pulsar hat kein eigenes Servernetz und behauptet das auch nicht.
+2. **Rückgängig.** Jede Änderung an Windows wird vorher gesichert und lässt sich mit einem Klick exakt zurückstellen.
+   Ein Boost endet immer so, wie er begonnen hat – auch wenn Pulsar geschlossen wird.
+3. **Ohne Adminrechte.** Alles läuft im Benutzerkonto: Energiepläne (`powercfg`), HKCU-Einstellungen,
+   Prioritäten der eigenen Spielprozesse, `ipconfig /flushdns`, ICMP über die Windows-API.
+
+## Die Seiten
+
+| Seite | Idee |
+|---|---|
+| **Cockpit** | Ein Blick, alles klar: Note, Live-Kurve, großer BOOST-Knopf, Auslastung, letzte Runde |
+| **Spiele** | Spiele als Startpunkt für „Boost & Spielen“, pro Spiel ein Messziel – bei CS2/Dota/Deadlock/LoL die echten Server |
+| **Netzwerk** | Fünf Werkzeuge, die sonst fünf Programme wären: Regionen, Route, DNS, Speedtest (mit Bufferbloat), Verbindung |
+| **Optimieren** | Vier Schalter, die wirklich etwas bringen – mit Wirkungseinschätzung und Rückgängig |
+| **Berichte** | Jede Runde eine Auswertung mit Note – so sieht man, ob der Boost etwas bringt |
+| **Overlay** | Ping, Schwankung, Verlust und Auslastung über dem Spiel |
+
+## Design
+
+- **Farben:** Nachtblau (#04070f) mit Eisblau/Blau/Violett (Theme „Pulsar“). Dazu „Glut“ (warm), „Toxic“ (Neongrün) und „Frost“ (hell).
+- **Noten statt Zahlen:** Grün (A+/A) = gut, Blau (B) = okay, Orange (C) = spürbar, Rot (D/F) = Problem. Immer mit Text.
+- **Bewegung mit Sinn:** Druckwellen beim Boost und im Intro, Lichtkreis beim Theme-Wechsel, Start-Ritual beim Spielstart. Alles abschaltbar.
+- **Sound:** live erzeugte Töne (Web Audio), keine Dateien. Startklang, Klick, Erfolg, Fehler, Boost.
+- **Raster im Hintergrund:** wie ein Radar-Schirm, das Glühen färbt sich leicht nach der aktuellen Note.
+
+## Der Installer
+
+Noch eine Stufe über dem NOVA-Setup: Intro mit Druckwellen und „Signal wird aufgebaut … Signal steht.“,
+Fortschritt als flüssig gefüllte Kugel, wechselnde Tipps während des Downloads, Druckwellen hinter dem Haken
+am Ende. Technisch wie gehabt: eine Exe, Download mit Fortsetzen, SHA-256, Verknüpfungen, Apps & Features,
+Update- und Deinstallationsmodus, Selbsttest für die CI.
+
+## Was bewusst nicht drin ist
+
+- Kein „Ping-Routing“ über eigene Server (gibt es ohne eigene Infrastruktur nicht).
+- Kein FPS-Zähler (bräuchte einen Grafik-Hook mit Anti-Cheat-Risiko).
+- Keine Konten-, Key- oder Mod-Verwaltung.
+- Kein Admin-Helfer. Was Adminrechte bräuchte (TCP-Stack-Tweaks, Dienste), macht Pulsar nicht.

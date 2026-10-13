@@ -1,22 +1,20 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { motion } from "motion/react";
-import { ExternalLink, Gamepad2, Play, X } from "lucide-react";
+import { X } from "lucide-react";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/sora";
 import "../styles/app.css";
-import { api, imgSrc, initImgSrc } from "@/lib/api";
-import { mergeSettings, normalizeGame } from "@/lib/defaults";
-import { formatClock, formatDuration, formatTime } from "@/lib/format";
+import { api, listen } from "@/lib/api";
+import { mergeSettings } from "@/lib/defaults";
+import { formatTime } from "@/lib/format";
+import { gradeColor, pingColor, pingGrade } from "@/lib/grade";
 import { setLanguage, useT } from "@/lib/i18n";
-import { todaySeconds } from "@/lib/stats";
 import { applyAppearance } from "@/lib/theme";
-import type { Game, RunningGame, Session, Settings } from "@/lib/types";
-import { GameCover } from "@/components/GameCover";
-import { GenIcon } from "@/components/GenCover";
+import type { Corner, MonitorUpdate, OverlayItem, PingStats, Settings, SystemStats } from "@/lib/types";
 import { useNow } from "@/hooks/useNow";
-import { NovaLogo } from "@shared/ui/NovaLogo";
-import { sound } from "@shared/sound/engine";
+import { PulsarLogo } from "@shared/ui/PulsarLogo";
+import { cn } from "@shared/lib/cn";
 import { isTauri } from "@shared/lib/env";
 
 async function hide() {
@@ -25,44 +23,62 @@ async function hide() {
   await getCurrentWindow().hide();
 }
 
-async function showMain() {
+/** Fenster in die gewünschte Bildschirmecke schieben */
+async function placeInCorner(corner: Corner) {
   if (!isTauri()) return;
-  const { Window } = await import("@tauri-apps/api/window");
-  const main = await Window.getByLabel("main");
-  await main?.show();
-  await main?.unminimize();
-  await main?.setFocus();
-  await hide();
+  try {
+    const { getCurrentWindow, currentMonitor, PhysicalPosition } = await import("@tauri-apps/api/window");
+    const win = getCurrentWindow();
+    const mon = await currentMonitor();
+    if (!mon) return;
+    const size = await win.outerSize();
+    const pad = Math.round(16 * mon.scaleFactor);
+    const x = corner.endsWith("l") ? mon.position.x + pad : mon.position.x + mon.size.width - size.width - pad;
+    const y = corner.startsWith("t") ? mon.position.y + pad : mon.position.y + mon.size.height - size.height - pad - Math.round(48 * mon.scaleFactor);
+    await win.setPosition(new PhysicalPosition(x, y));
+  } catch {
+    /* Position ist Komfort, kein Muss */
+  }
 }
 
-/** Mini-Overlay: Uhr, laufende Sitzung, heutige Spielzeit, Schnellstart */
+function Bar({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
+      <motion.div className="h-full rounded-full" style={{ background: color }} animate={{ width: `${Math.max(0, Math.min(100, value))}%` }} transition={{ duration: 0.4 }} />
+    </div>
+  );
+}
+
+/** In-Game-Overlay: Ping groß, Rest klein – immer im Vordergrund, durchsichtig */
 function Overlay() {
   const t = useT();
   const now = useNow(1000);
-  const [games, setGames] = useState<Game[]>([]);
-  const [running, setRunning] = useState<RunningGame[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [settings, setSettings] = useState<Settings>(() => mergeSettings(null));
+  const [stats, setStats] = useState<PingStats | null>(null);
+  const [lastAt, setLastAt] = useState(0);
+  const [sys, setSys] = useState<SystemStats | null>(null);
 
+  // Einstellungen (Theme, Werte, Ecke, Deckkraft) regelmäßig nachladen
   useEffect(() => {
     let alive = true;
+    let lastCorner: Corner | null = null;
     const load = async () => {
       try {
-        const [g, r, s, settings] = await Promise.all([api.games(), api.runningGames(), api.sessionsRange(Date.now() - 86400000 * 2, Date.now() + 86400000), api.kvGet<Partial<Settings>>("settings")]);
+        const st = mergeSettings(await api.kvGet<Partial<Settings>>("settings"));
         if (!alive) return;
-        const st = mergeSettings(settings);
         applyAppearance(st.theme, st.accent, st.motion);
         setLanguage(st.language);
-        sound.setVolume(st.soundVolume);
-        sound.setMuted(st.soundMuted);
-        setGames(g.map(normalizeGame));
-        setRunning(r);
-        setSessions(s);
+        setSettings(st);
+        if (st.overlayCorner !== lastCorner) {
+          lastCorner = st.overlayCorner;
+          void placeInCorner(st.overlayCorner);
+        }
       } catch {
-        /* Overlay bleibt einfach leer */
+        /* Standardwerte bleiben */
       }
     };
     void load();
-    const id = window.setInterval(load, 3000);
+    const id = window.setInterval(load, 5000);
     const onFocus = () => void load();
     window.addEventListener("focus", onFocus);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && void hide();
@@ -75,92 +91,133 @@ function Overlay() {
     };
   }, []);
 
-  const current = running[0];
-  const game = current ? games.find((g) => g.id === current.gameId) : undefined;
-  const live = running.reduce((a, r) => a + (now - r.startedAt) / 1000, 0);
-  const today = todaySeconds(sessions, now) + live;
-  const quick = games.filter((g) => (g.favorite || g.inDock) && !g.hidden).slice(0, 8);
+  // Live-Ping vom Hauptfenster-Monitor (Ereignis geht an alle Fenster)
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    void listen<MonitorUpdate>("net://ping", (u) => {
+      const s = u.stats[0];
+      if (s) {
+        setStats(s);
+        setLastAt(Date.now());
+      }
+    }).then((u) => (off = u));
+    return () => off?.();
+  }, []);
+
+  // PC-Auslastung alle 2 Sekunden
+  useEffect(() => {
+    const wants = settings.overlayItems.some((i) => i === "cpu" || i === "gpu" || i === "ram");
+    if (!wants) return;
+    let alive = true;
+    const tick = () => void api.systemStats().then((s) => alive && setSys(s)).catch(() => undefined);
+    tick();
+    const id = window.setInterval(tick, 2000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [settings.overlayItems]);
+
+  const stale = Date.now() - lastAt > 5000;
+  const live = stats && !stale ? stats : null;
+  const grade = live ? pingGrade(live.avg, live.jitter, live.loss) : null;
+  const color = grade ? gradeColor(grade) : "var(--nv-muted)";
+  const items = settings.overlayItems;
+  const has = (i: OverlayItem) => items.includes(i);
+  const ram = sys ? (sys.ramUsed / Math.max(1, sys.ramTotal)) * 100 : null;
 
   return (
-    <motion.div className="glass-strong m-3 flex h-[calc(100%-24px)] flex-col overflow-hidden rounded-2xl" initial={{ opacity: 0, x: 30, scale: 0.96 }} animate={{ opacity: 1, x: 0, scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 26 }}>
-      <div data-tauri-drag-region className="flex items-center justify-between px-4 pt-3">
+    <motion.div
+      data-tauri-drag-region
+      className="glass-strong group m-2 flex h-[calc(100%-16px)] flex-col justify-between overflow-hidden rounded-2xl px-4 py-3"
+      style={{ opacity: settings.overlayOpacity }}
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={{ opacity: settings.overlayOpacity, scale: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 26 }}
+    >
+      <div data-tauri-drag-region className="flex items-center justify-between">
         <div data-tauri-drag-region className="flex items-center gap-2">
-          <NovaLogo size={20} />
-          <span data-tauri-drag-region className="font-display text-[12px] font-bold tracking-[0.2em] text-fg">
-            NOVA
+          <PulsarLogo size={16} mode="static" />
+          <span data-tauri-drag-region className="font-display text-[10px] font-bold tracking-[0.22em] text-fg">
+            {t("overlay.title")}
           </span>
+          {grade && (
+            <span className="rounded-full px-1.5 py-px font-display text-[10px] font-bold" style={{ color, background: `color-mix(in oklab, ${color} 16%, transparent)` }}>
+              {grade}
+            </span>
+          )}
         </div>
-        <button type="button" onClick={() => void hide()} className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-fg" aria-label="Schließen">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-      <div className="px-4 pt-3">
-        <div className="font-display text-[44px] leading-none font-bold text-fg tabular">{formatTime(now)}</div>
+        <div className="flex items-center gap-2">
+          {has("clock") && <span className="text-[11px] text-muted tabular">{formatTime(now)}</span>}
+          <button type="button" onClick={() => void hide()} className="grid h-5 w-5 place-items-center rounded text-faint opacity-0 transition group-hover:opacity-100 hover:bg-white/10 hover:text-fg" aria-label={t("overlay.close")}>
+            <X className="h-3 w-3" />
+          </button>
+        </div>
       </div>
 
-      <div className="mx-4 mt-4 overflow-hidden rounded-xl bg-surface">
-        {game && current ? (
-          <div className="relative flex items-center gap-3 p-3">
-            <div className="h-16 w-11 shrink-0 overflow-hidden rounded-md">
-              <GameCover game={game} />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold tracking-[0.16em] text-accent uppercase">{t("overlay.session")}</div>
-              <div className="truncate text-sm font-semibold text-fg">{game.name}</div>
-              <div className="font-display text-2xl font-bold text-fg tabular">{formatClock((now - current.startedAt) / 1000)}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 p-4 text-[13px] text-muted">
-            <Gamepad2 className="h-4 w-4" /> {t("overlay.noGame")}
+      <div data-tauri-drag-region className="flex items-end gap-4">
+        {has("ping") && (
+          <div data-tauri-drag-region className="flex items-baseline gap-1">
+            <span className="font-display text-[40px] leading-none font-bold tabular" style={{ color: pingColor(live?.last ?? null) }}>
+              {live?.last === null || live?.last === undefined ? "–" : Math.round(live.last)}
+            </span>
+            <span className="text-[11px] text-muted">ms</span>
           </div>
         )}
+        <div data-tauri-drag-region className="flex flex-1 gap-3 pb-1 text-[11px]">
+          {has("jitter") && (
+            <div>
+              <div className="text-[9px] font-semibold tracking-[0.12em] text-faint uppercase">{t("cockpit.jitter")}</div>
+              <div className="font-display text-[13px] font-bold text-fg tabular">{live?.jitter === null || live?.jitter === undefined ? "–" : `±${live.jitter.toFixed(1)}`}</div>
+            </div>
+          )}
+          {has("loss") && (
+            <div>
+              <div className="text-[9px] font-semibold tracking-[0.12em] text-faint uppercase">{t("cockpit.loss")}</div>
+              <div className={cn("font-display text-[13px] font-bold tabular", live && live.loss > 0.01 ? "text-danger" : "text-fg")}>{live ? `${(live.loss * 100).toFixed(0)} %` : "–"}</div>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="mx-4 mt-3 flex items-center justify-between rounded-xl bg-surface px-4 py-3">
-        <span className="text-[12px] text-muted">{t("overlay.today")}</span>
-        <span className="font-display text-lg font-bold text-fg tabular">{formatDuration(today, { short: true })}</span>
-      </div>
-
-      {quick.length > 0 && (
-        <div className="mt-4 px-4">
-          <div className="mb-2 text-[10px] font-semibold tracking-[0.16em] text-muted uppercase">{t("overlay.quick")}</div>
-          <div className="grid grid-cols-4 gap-2">
-            {quick.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                title={g.name}
-                onClick={async () => {
-                  sound.play("launch", { gain: 0.5 });
-                  await api.launchGame(g.id, g.launch).catch(() => undefined);
-                  await hide();
-                }}
-                className="group relative aspect-square overflow-hidden rounded-xl ring-1 ring-line transition hover:scale-105 hover:ring-accent"
-              >
-                {g.images.icon ? <div className="grid h-full w-full place-items-center bg-surface-solid p-2"><img src={imgSrc(g.images.icon)} alt="" className="h-full w-full object-contain" /></div> : g.images.cover ? <img src={imgSrc(g.images.cover)} alt="" className="h-full w-full object-cover" /> : <GenIcon name={g.name} />}
-                <span className="absolute inset-0 grid place-items-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-                  <Play className="h-4 w-4 text-white" fill="currentColor" />
-                </span>
-              </button>
-            ))}
-          </div>
+      {(has("cpu") || has("gpu") || has("ram")) && (
+        <div data-tauri-drag-region className="grid grid-cols-3 gap-3">
+          {has("cpu") && (
+            <div>
+              <div className="flex justify-between text-[9px] font-semibold tracking-[0.12em] text-faint uppercase">
+                <span>{t("cockpit.cpu")}</span>
+                <span className="text-fg tabular">{sys ? `${Math.round(sys.cpu)} %` : "–"}</span>
+              </div>
+              <Bar value={sys?.cpu ?? 0} color="var(--nv-accent)" />
+            </div>
+          )}
+          {has("gpu") && (
+            <div>
+              <div className="flex justify-between text-[9px] font-semibold tracking-[0.12em] text-faint uppercase">
+                <span>{t("cockpit.gpu")}</span>
+                <span className="text-fg tabular">{sys?.gpu === null || sys?.gpu === undefined ? "–" : `${Math.round(sys.gpu)} %`}</span>
+              </div>
+              <Bar value={sys?.gpu ?? 0} color="var(--nv-accent-2)" />
+            </div>
+          )}
+          {has("ram") && (
+            <div>
+              <div className="flex justify-between text-[9px] font-semibold tracking-[0.12em] text-faint uppercase">
+                <span>{t("cockpit.ram")}</span>
+                <span className="text-fg tabular">{ram === null ? "–" : `${Math.round(ram)} %`}</span>
+              </div>
+              <Bar value={ram ?? 0} color="var(--nv-accent-3)" />
+            </div>
+          )}
         </div>
       )}
-
-      <div className="mt-auto p-4">
-        <button type="button" onClick={() => void showMain()} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-gradient-accent text-[13px] font-semibold text-white">
-          <ExternalLink className="h-4 w-4" /> {t("overlay.open")}
-        </button>
-      </div>
+      {!live && has("ping") && <div className="text-[10px] text-faint">{t("overlay.noData")}</div>}
     </motion.div>
   );
 }
 
-void initImgSrc().then(() => {
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <Overlay />
-    </StrictMode>,
-  );
-});
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <Overlay />
+  </StrictMode>,
+);

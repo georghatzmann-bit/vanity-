@@ -1,46 +1,57 @@
 import { detectLanguage } from "./i18n";
-import type { Game, Settings } from "./types";
+import type { BoostProfile, Game, Settings } from "./types";
+
+export const defaultBoostProfile = (): BoostProfile => ({ powerPlan: true, gamePriority: "high", flushDns: true });
 
 export const defaultSettings = (): Settings => ({
-  theme: "nova",
+  theme: "pulsar",
   accent: "",
-  dynamicBackground: true,
   motion: "full",
-  parallax: true,
-  particles: true,
-  soundVolume: 0.6,
-  soundMuted: false,
-  hoverSounds: true,
   language: detectLanguage(),
-  steamGridDbKey: "",
-  scan: { steam: true, epic: true, gog: true, startMenu: true, folders: [] },
-  scanOnStart: true,
-  minimizeOnLaunch: true,
+  introAnimation: true,
+  sound: true,
+  volume: 0.6,
+  hoverSounds: true,
+
   closeToTray: true,
   autostart: false,
-  startMinimized: true,
-  breakReminder: true,
-  breakReminderMinutes: 120,
+
+  monitorRegion: "aws-eu-central-1",
+  pingIntervalMs: 1000,
+  pingAlertMs: 120,
   notifications: true,
-  dailyGoalMode: "limit",
-  dailyGoalMinutes: 180,
-  weatherPlace: null,
-  overlayShortcut: "Alt+Shift+N",
-  showDock: true,
-  librarySort: "lastPlayed",
-  librarySortDesc: true,
-  libraryView: "grid",
-  cardSize: 188,
-  checkUpdates: true,
-  introAnimation: true,
-  launchRitual: true,
+  favoriteRegions: ["aws-eu-central-1", "aws-eu-west-3", "aws-eu-west-2", "aws-us-east-1"],
+
+  autoBoost: true,
+  boostProfile: defaultBoostProfile(),
+
+  overlayEnabled: true,
+  overlayShortcut: "Alt+Shift+P",
+  overlayCorner: "tr",
+  overlayOpacity: 0.85,
+  overlayItems: ["ping", "jitter", "loss", "cpu", "gpu"],
+
+  scanOnStartup: true,
+  steamGridDbKey: "",
 });
 
 /** Fehlende Felder ergänzen (z. B. nach einem Update mit neuen Einstellungen) */
 export function mergeSettings(stored: Partial<Settings> | null | undefined): Settings {
   const d = defaultSettings();
   if (!stored || typeof stored !== "object") return d;
-  return { ...d, ...stored, scan: { ...d.scan, ...(stored.scan ?? {}) } };
+  const s = { ...d, ...stored, boostProfile: { ...d.boostProfile, ...(stored.boostProfile ?? {}) } };
+  if (!["pulsar", "ember", "toxic", "frost"].includes(s.theme)) s.theme = "pulsar";
+  const items: Settings["overlayItems"] = ["ping", "jitter", "loss", "cpu", "gpu", "ram", "clock"];
+  s.overlayItems = Array.isArray(s.overlayItems) ? s.overlayItems.filter((i) => items.includes(i)) : d.overlayItems;
+  if (!Array.isArray(s.favoriteRegions)) s.favoriteRegions = d.favoriteRegions;
+  if (!["full", "reduced", "off"].includes(s.motion)) s.motion = "full";
+  if (!["tl", "tr", "bl", "br"].includes(s.overlayCorner)) s.overlayCorner = d.overlayCorner;
+  if (!["normal", "above", "high"].includes(s.boostProfile.gamePriority)) s.boostProfile.gamePriority = d.boostProfile.gamePriority;
+  s.volume = Math.min(1, Math.max(0, Number(s.volume) || 0));
+  s.pingIntervalMs = Math.min(5000, Math.max(250, Number(s.pingIntervalMs) || 1000));
+  s.pingAlertMs = Math.min(1000, Math.max(20, Number(s.pingAlertMs) || d.pingAlertMs));
+  s.overlayOpacity = Math.min(1, Math.max(0.3, Number(s.overlayOpacity) || 0.85));
+  return s;
 }
 
 let counter = 0;
@@ -50,7 +61,7 @@ export function uid(prefix = "id"): string {
   return `${prefix}-${Date.now().toString(36)}-${rnd}${counter.toString(36)}`;
 }
 
-/** Fehlende Felder eines gespeicherten Spiels ergänzen - alte oder kaputte Daten dürfen nie abstürzen */
+/** Fehlende Felder eines gespeicherten Spiels ergänzen – alte oder kaputte Daten dürfen nie abstürzen */
 export function normalizeGame(raw: Partial<Game> & { id: string }): Game {
   const now = Date.now();
   return {
@@ -68,15 +79,23 @@ export function normalizeGame(raw: Partial<Game> & { id: string }): Game {
     imagesCheckedAt: typeof raw.imagesCheckedAt === "number" ? raw.imagesCheckedAt : undefined,
     favorite: !!raw.favorite,
     hidden: !!raw.hidden,
-    status: raw.status ?? "none",
-    rating: typeof raw.rating === "number" ? Math.min(5, Math.max(0, raw.rating)) : 0,
-    notes: raw.notes ?? "",
-    genre: raw.genre,
-    tags: Array.isArray(raw.tags) ? raw.tags : [],
-    collectionIds: Array.isArray(raw.collectionIds) ? raw.collectionIds : [],
-    links: { tools: [], ...(raw.links ?? {}) },
-    inDock: raw.inDock,
     addedAt: raw.addedAt ?? now,
     updatedAt: raw.updatedAt ?? now,
+    region: typeof raw.region === "string" ? raw.region : undefined,
+    serverGame: typeof raw.serverGame === "string" ? raw.serverGame : undefined,
+    boost: raw.boost && typeof raw.boost === "object" ? raw.boost : undefined,
+    autoBoost: typeof raw.autoBoost === "boolean" ? raw.autoBoost : undefined,
   };
+}
+
+/** Steam-AppID → Schlüssel für echte Spieleserver (siehe net_game_servers) */
+const SERVER_GAMES: Record<string, string> = { "730": "cs2", "570": "dota2", "1422450": "deadlock" };
+export function guessServerGame(game: Pick<Game, "name" | "sourceId" | "source">): string | undefined {
+  if (game.source === "steam" && game.sourceId && SERVER_GAMES[game.sourceId]) return SERVER_GAMES[game.sourceId];
+  const n = game.name.toLowerCase();
+  if (n.includes("counter-strike")) return "cs2";
+  if (n.includes("dota")) return "dota2";
+  if (n.includes("deadlock")) return "deadlock";
+  if (n.includes("league of legends")) return "lol";
+  return undefined;
 }

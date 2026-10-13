@@ -12,7 +12,7 @@ Fehler: Befehle liefern `Err(String)` mit einem **deutschen, verständlichen Sat
 - **Rückgängig:** Jede Änderung an Windows wird vorher gesichert (kv `opt.snapshots`) und kann exakt zurückgestellt werden.
 - **Plattform:** Ziel ist Windows 10/11. Unter Linux/macOS (Entwicklung, CI-Tests) gibt es Ersatzwege oder klare Fehlermeldungen („Nur unter Windows verfügbar.“).
 
-## App, Daten, Spiele (aus NOVA übernommen)
+## App, Daten, Spiele (Basis)
 
 | Befehl | Zweck |
 |---|---|

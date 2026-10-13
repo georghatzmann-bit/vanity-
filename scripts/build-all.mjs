@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Baut NOVA komplett:  npm run build:all
+ * Baut PULSAR komplett:  npm run build:all
  *
- *  1. Übernimmt die Versionsnummer aus nova.config.json in alle Projektdateien
- *  2. Baut die App      -> release/NovaLauncher.exe
- *  3. Baut den Installer -> release/NovaLauncher-Setup.exe
+ *  1. Übernimmt die Versionsnummer aus pulsar.config.json in alle Projektdateien
+ *  2. Baut die App      -> release/Pulsar.exe
+ *  3. Baut den Installer -> release/Pulsar-Setup.exe
  *  4. Schreibt release/latest.json (Version, Download-Links, SHA-256-Prüfsummen)
  *
  * Unter Windows wird direkt gebaut. Unter Linux/macOS wird für Windows
@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
 const isWin = process.platform === "win32";
-const config = JSON.parse(readFileSync(join(root, "nova.config.json"), "utf8"));
+const config = JSON.parse(readFileSync(join(root, "pulsar.config.json"), "utf8"));
 const version = String(config.version);
 const releaseDir = join(root, "release");
 
@@ -49,7 +49,7 @@ function sha256(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 
-/** Versionsnummer überall eintragen (eine Quelle: nova.config.json) */
+/** Versionsnummer überall eintragen (eine Quelle: pulsar.config.json) */
 function syncVersion() {
   step(`Version ${version} in alle Projektdateien übernehmen`);
   const jsonFiles = ["package.json", "app/package.json", "installer/package.json", "app/src-tauri/tauri.conf.json", "installer/src-tauri/tauri.conf.json"];
@@ -109,7 +109,7 @@ function fileEntry(file, name) {
 
 // ---------------------------------------------------------------------------
 const started = Date.now();
-console.log(c.bold(`\n✦ NOVA Build ${version}  ${c.dim(isWin ? "(Windows)" : `(${process.platform} → Windows-Cross-Compile)`)}`));
+console.log(c.bold(`\n◉ PULSAR Build ${version}  ${c.dim(isWin ? "(Windows)" : `(${process.platform} → Windows-Cross-Compile)`)}`));
 if (!args.has("--skip-version-sync")) syncVersion();
 checkTools();
 mkdirSync(releaseDir, { recursive: true });
@@ -118,11 +118,11 @@ const appOut = join(releaseDir, config.appExeName);
 const setupOut = join(releaseDir, config.setupExeName);
 
 if (!args.has("--setup-only")) {
-  step("App bauen (Nova Launcher)");
+  step("App bauen (Pulsar)");
   copyFileSync(buildTauri("app", config.appExeName), appOut);
 }
 if (!args.has("--app-only")) {
-  step("Installer bauen (Nova Setup)");
+  step("Installer bauen (Pulsar Setup)");
   copyFileSync(buildTauri("installer", config.setupExeName), setupOut);
 }
 
@@ -130,12 +130,12 @@ step("latest.json schreiben");
 const manifest = {
   name: config.appName,
   version,
-  notes: process.env.NOVA_RELEASE_NOTES ?? `NOVA ${version}`,
+  notes: process.env.PULSAR_RELEASE_NOTES ?? `Pulsar ${version}`,
   pubDate: new Date().toISOString(),
 };
 if (existsSync(appOut)) manifest.app = fileEntry(appOut, config.appExeName);
 if (existsSync(setupOut)) manifest.setup = fileEntry(setupOut, config.setupExeName);
-if (!manifest.app) fail("release/NovaLauncher.exe fehlt – ohne App kann keine latest.json erzeugt werden.", "Ohne --setup-only bauen.");
+if (!manifest.app) fail("release/Pulsar.exe fehlt – ohne App kann keine latest.json erzeugt werden.", "Ohne --setup-only bauen.");
 writeFileSync(join(releaseDir, "latest.json"), JSON.stringify(manifest, null, 2) + "\n");
 writeFileSync(
   join(releaseDir, "SHA256SUMS.txt"),
@@ -150,4 +150,4 @@ console.log(`\n${c.green("✔ Fertig")} in ${Math.round((Date.now() - started) /
 console.log(`  App:        ${appOut}  ${c.dim(mb(appOut))}`);
 console.log(`  Setup:      ${setupOut}  ${c.dim(mb(setupOut))}`);
 console.log(`  Manifest:   ${join(releaseDir, "latest.json")}`);
-console.log(`\n  ${c.dim(`Hochladen: alle drei Dateien in das GitHub-Release \"${config.releaseTag ?? "nova-latest"}\" (siehe docs/ANLEITUNG.md).`)}\n`);
+console.log(`\n  ${c.dim(`Hochladen: alle drei Dateien in das GitHub-Release \"${config.releaseTag ?? "pulsar-latest"}\" (siehe docs/ANLEITUNG.md).`)}\n`);

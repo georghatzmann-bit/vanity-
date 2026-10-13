@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useT } from "@/lib/i18n";
-import { NovaLogo } from "@shared/ui/NovaLogo";
+import { PulsarLogo } from "@shared/ui/PulsarLogo";
 import { Starfield, type StarfieldHandle } from "@shared/ui/Starfield";
 import { sound } from "@shared/sound/engine";
 
 /**
- * Startanimation: Sternenhimmel, das Logo zeichnet sich mit Glühen auf, Partikel explodieren,
+ * Startanimation: Sternenhimmel, der Pulsar baut sich auf, Druckwellen und Partikel im Takt,
  * dann gleitet das Logo in die Titelleiste (gemeinsame layoutId) und die App blendet ein.
  */
 export function Intro({ onDone, onLeave, ready }: { onDone: () => void; onLeave: () => void; ready: boolean }) {
@@ -17,14 +17,15 @@ export function Intro({ onDone, onLeave, ready }: { onDone: () => void; onLeave:
 
   useEffect(() => {
     sound.play("startup");
-    const burst = window.setTimeout(() => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      stars.current?.burst(w / 2, h / 2 - 20, { count: 160, speed: 9, life: 2 });
-    }, 650);
-    const min = window.setTimeout(() => setMinTimePassed(true), 2100);
+    const timers = [650, 1300].map((ms, i) =>
+      window.setTimeout(() => {
+        sound.play("tick", { gain: 0.5 });
+        stars.current?.burst(window.innerWidth / 2, window.innerHeight / 2 - 20, { count: i === 0 ? 170 : 90, speed: 9, life: 2 });
+      }, ms),
+    );
+    const min = window.setTimeout(() => setMinTimePassed(true), 2300);
     return () => {
-      window.clearTimeout(burst);
+      timers.forEach((x) => window.clearTimeout(x));
       window.clearTimeout(min);
     };
   }, []);
@@ -36,7 +37,6 @@ export function Intro({ onDone, onLeave, ready }: { onDone: () => void; onLeave:
     }
   }, [minTimePassed, ready, phase, onLeave]);
 
-  // Eigener Effekt für das Ausblenden - sonst würde der Timer beim Phasenwechsel gelöscht
   useEffect(() => {
     if (phase !== "leaving") return;
     const id = window.setTimeout(onDone, 750);
@@ -47,11 +47,15 @@ export function Intro({ onDone, onLeave, ready }: { onDone: () => void; onLeave:
     <motion.div className="fixed inset-0 grid place-items-center overflow-hidden" style={{ zIndex: "var(--nv-z-intro)", background: "var(--nv-bg)", pointerEvents: phase === "leaving" ? "none" : "auto" }} animate={{ opacity: phase === "leaving" ? 0 : 1 }} transition={{ duration: 0.6, delay: 0.1 }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(60% 50% at 50% 45%, var(--nv-glow-a), transparent 70%)" }} />
       <Starfield ref={stars} className="absolute inset-0" density={1.4} drift={0.4} parallax={false} />
+      {/* Druckwellen */}
+      {[0, 1, 2].map((i) => (
+        <motion.div key={i} className="absolute left-1/2 top-1/2 rounded-full border border-accent" style={{ width: 180, height: 180, x: "-50%", y: "-60%" }} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: [0.4, 5], opacity: [0, 0.55, 0] }} transition={{ duration: 2.4, delay: 0.6 + i * 0.65, ease: [0.22, 1, 0.36, 1] }} />
+      ))}
       <div className="relative flex flex-col items-center">
         <motion.div className="absolute top-1/2 left-1/2 h-72 w-72 -translate-x-1/2 -translate-y-[60%] rounded-full blur-3xl" style={{ background: "radial-gradient(circle, color-mix(in oklab, var(--nv-accent) 45%, transparent), transparent 70%)" }} initial={{ scale: 0, opacity: 0 }} animate={{ scale: [0, 1.4, 1], opacity: [0, 1, 0.7] }} transition={{ duration: 1.6, delay: 0.3 }} />
         {phase === "logo" ? (
-          <motion.div layoutId="nova-logo" transition={{ type: "spring", stiffness: 120, damping: 20 }}>
-            <NovaLogo size={150} mode="intro" />
+          <motion.div layoutId="pulsar-logo" transition={{ type: "spring", stiffness: 120, damping: 20 }}>
+            <PulsarLogo size={150} mode="intro" />
           </motion.div>
         ) : (
           <div style={{ width: 150, height: 150 }} />
@@ -60,7 +64,7 @@ export function Intro({ onDone, onLeave, ready }: { onDone: () => void; onLeave:
           {phase === "logo" && (
             <motion.div className="mt-8 flex flex-col items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, y: -8 }}>
               <motion.div className="font-display text-[44px] font-bold tracking-[0.42em] text-fg" initial={{ opacity: 0, letterSpacing: "0.9em", filter: "blur(12px)" }} animate={{ opacity: 1, letterSpacing: "0.42em", filter: "blur(0px)" }} transition={{ duration: 1.4, delay: 0.9, ease: [0.22, 1, 0.36, 1] }}>
-                NOVA
+                PULSAR
               </motion.div>
               <motion.div className="mt-3 text-sm tracking-[0.3em] text-muted uppercase" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.5, duration: 0.6 }}>
                 {t("app.tagline")}

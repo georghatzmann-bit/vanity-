@@ -1,7 +1,12 @@
-# ✦ NOVA – Premium Game & App Launcher für Windows
+# ◉ PULSAR – Game Booster für Windows
 
-NOVA bündelt alle Spiele und Programme in einer edlen, animierten Oberfläche – mit Spielzeit-Messung,
-Statistiken, Erfolgen, Big-Picture-Modus und einem eigenen, animierten Setup-Installer.
+Pulsar misst deine Verbindung live und gibt ihr eine Note (A+ bis F), macht deinen PC mit **einem Klick**
+bereit zum Spielen (Boost) und bringt die Werkzeuge mit, um Lags wirklich zu verstehen: Regionen-Ping,
+Routen-Analyse, DNS-Vergleich, Speedtest mit Bufferbloat-Note, WLAN-Check. Dazu ein In-Game-Overlay,
+Berichte zu jeder Runde und ein eigener, animierter Setup-Installer.
+
+Alles **ohne Konto, ohne Adminrechte, ohne Abo** – und ehrlich: Pulsar hat kein eigenes Servernetz und
+verspricht keinen „Ping-Zauber“. Es misst, optimiert, was sich lokal optimieren lässt, und erklärt den Rest.
 
 **Anleitung in einfachen Worten:** [docs/ANLEITUNG.md](docs/ANLEITUNG.md)
 
@@ -19,8 +24,8 @@ Ergebnis in `release/`:
 
 | Datei | Inhalt |
 |---|---|
-| `release/NovaLauncher.exe` | die App |
-| `release/NovaLauncher-Setup.exe` | der animierte Installer (lädt die App aus dem Internet) |
+| `release/Pulsar.exe` | die App |
+| `release/Pulsar-Setup.exe` | der animierte Installer (lädt die App aus dem Internet) |
 | `release/latest.json` | Version, Download-Links und SHA-256-Prüfsummen für den Installer |
 
 Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x86_64-pc-windows-msvc`, `cargo install cargo-xwin`).
@@ -33,9 +38,9 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=uninstall`) |
 | `npm run tauri:dev` | echte App mit Rust-Backend |
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
-| `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App per WebDriver (Linux mit `xvfb-run`) |
-| `NovaLauncher.exe --selftest <bericht.json>` | Eingebauter Selbsttest der App (Scan, Cover, Icon, Starten, Spielzeit, Beenden), Exit-Code 0 = alles ok – so prüft die Windows-CI |
+| `Pulsar.exe --selftest <bericht.json>` | Eingebauter Selbsttest (Scan, Cover, Ping, Regionen, Spielserver, DNS, Adapter, Tweaks, Boost, Starten, Spielzeit), Exit-Code 0 = alles ok – so prüft die Windows-CI |
 | `node scripts/feature-shots.mjs` | Screenshots aller Funktionen (Demo-Daten) für `docs/FUNKTIONEN.md`; vorher `npm run dev` und `npm run dev:installer` starten |
+| `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App per WebDriver (Linux mit `xvfb-run`) |
 | `node scripts/e2e-installer-linux.mjs <setup> <nutzlast> <ordner>` | Ende-zu-Ende-Test des echten Installers inkl. Abbruch + Fortsetzen |
 
 Was getestet wurde und was nicht: [docs/TESTBERICHT.md](docs/TESTBERICHT.md)
@@ -43,15 +48,16 @@ Was getestet wurde und was nicht: [docs/TESTBERICHT.md](docs/TESTBERICHT.md)
 ## Aufbau
 
 ```
-nova.config.json        zentrale Einstellungen (Version, Download-Adresse)
-shared/                 gemeinsames Design-System, Sound-Engine, UI-Bausteine
-app/                    Nova Launcher (React + Tauri/Rust)
-  src/                  Oberfläche: Seiten, Komponenten, Stores, Logik
-  src-tauri/            Backend: SQLite, Scanner, Start/Spielzeit, Bilder, Tray, Overlay …
-installer/              Nova Setup (React + Tauri/Rust): Download, SHA-256, Verknüpfungen, Deinstaller
-scripts/                build-all, doctor, Oberflächen-Rundgänge (Screenshots)
-docs/                   Anleitung, API-Verträge, Kreativ-Plan
-.github/workflows/      Windows-Build mit Tests und automatischem Release
+pulsar.config.json      zentrale Einstellungen (Version, Download-Adresse)
+shared/                 gemeinsames Design-System, Sound-Engine, UI-Bausteine, Pulsar-Logo
+app/                    Pulsar (React + Tauri/Rust)
+  src/                  Oberfläche: Cockpit, Spiele, Netzwerk, Optimieren, Berichte, Einstellungen, Overlay
+  src-tauri/            Backend: Ping/Monitor, Regionen, Route, DNS, Speedtest, Adapter/WLAN, Tweaks, Boost,
+                        SQLite, Scanner, Start/Spielzeit, Bilder, Tray …
+installer/              Pulsar Setup (React + Tauri/Rust): Download, SHA-256, Verknüpfungen, Deinstaller
+scripts/                build-all, doctor, Screenshot-Rundgänge, Ende-zu-Ende-Tests
+docs/                   Anleitung, Funktionen, API-Verträge, Testbericht, Kreativ-Plan
+.github/workflows/      Windows-Build mit Tests und automatischem Release "pulsar-latest"
 ```
 
-Technik: Tauri 2 · React 19 · TypeScript · Vite · Tailwind 4 · Motion · SQLite (rusqlite) · Web Audio.
+Technik: Tauri 2 · React 19 · TypeScript · Vite · Tailwind 4 · Motion · SQLite (rusqlite) · Web Audio · Windows-APIs (ICMP, IP Helper, WLAN, powercfg).

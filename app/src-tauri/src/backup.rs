@@ -44,7 +44,7 @@ fn unique_path(dir: &Path, stem: &str, ext: &str) -> PathBuf {
 fn db_backup_info(path: &Path) -> Option<LibraryBackup> {
     let meta = fs::metadata(path).ok()?;
     let file = path.file_name()?.to_string_lossy().to_string();
-    let stamp = file.strip_prefix("nova-").unwrap_or(&file);
+    let stamp = file.strip_prefix("pulsar-").unwrap_or(&file);
     Some(LibraryBackup {
         created_at: parse_timestamp_name(stamp).unwrap_or_else(|| mtime_ms(&meta)),
         file,
@@ -54,7 +54,7 @@ fn db_backup_info(path: &Path) -> Option<LibraryBackup> {
 }
 
 fn is_db_backup_name(name: &str) -> bool {
-    is_plain_name(name) && name.starts_with("nova-") && name.ends_with(".db")
+    is_plain_name(name) && name.starts_with("pulsar-") && name.ends_with(".db")
 }
 
 /// Datenbank-Backups eines Ordners, neueste zuerst.
@@ -80,7 +80,7 @@ fn prune_db_backups(dir: &Path, keep: usize) {
 /// Sofort ein Backup der Datenbank anlegen (ältere über 10 werden gelöscht).
 pub fn backup_db(db: &Db, dir: &Path) -> CmdResult<LibraryBackup> {
     fs::create_dir_all(dir).map_err(|e| io_err(&e, dir))?;
-    let path = unique_path(dir, &format!("nova-{}", timestamp_name()), "db");
+    let path = unique_path(dir, &format!("pulsar-{}", timestamp_name()), "db");
     db.backup_into(&path)?;
     prune_db_backups(dir, KEEP_DB_BACKUPS);
     db_backup_info(&path).ok_or_else(|| "Das Backup konnte nicht angelegt werden.".into())
@@ -99,7 +99,7 @@ pub fn auto_backup_if_due(core: &Core) -> CmdResult<Option<LibraryBackup>> {
 /// Automatisches Backup im Hintergrund (beim Start und nach einem Profilwechsel).
 pub fn auto_backup_in_background(core: Arc<Core>) {
     let _ = std::thread::Builder::new()
-        .name("nova-backup".into())
+        .name("pulsar-backup".into())
         .spawn(move || {
             // Start nicht verzögern
             std::thread::sleep(std::time::Duration::from_secs(5));
@@ -112,7 +112,7 @@ pub fn auto_backup_in_background(core: Arc<Core>) {
 /// Läuft PULSAR länger am Stück (z. B. im Infobereich), stündlich prüfen, ob das tägliche Backup fällig ist.
 pub fn auto_backup_daily(core: Arc<Core>) {
     let _ = std::thread::Builder::new()
-        .name("nova-backup-daily".into())
+        .name("pulsar-backup-daily".into())
         .spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_secs(60 * 60));
             if let Err(e) = auto_backup_if_due(&core) {
@@ -325,11 +325,11 @@ mod tests {
     #[test]
     fn db_backups_keep_ten() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = Db::open(&tmp.path().join("nova.db")).unwrap();
+        let db = Db::open(&tmp.path().join("pulsar.db")).unwrap();
         let dir = tmp.path().join("backups");
         fs::create_dir_all(&dir).unwrap();
         for i in 0..12 {
-            fs::write(dir.join(format!("nova-2020010{}-0000{:02}.db", i % 9 + 1, i)), b"x").unwrap();
+            fs::write(dir.join(format!("pulsar-2020010{}-0000{:02}.db", i % 9 + 1, i)), b"x").unwrap();
         }
         let b = backup_db(&db, &dir).unwrap();
         let list = list_db_backups(&dir);

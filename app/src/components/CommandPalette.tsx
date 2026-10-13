@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import {
-  BarChart3, CornerDownLeft, Dices, FolderHeart, FolderSearch, Gift, Home, LayoutGrid, Palette, Play, Plus, RefreshCw, Search, Settings, Sparkles, Square, Trophy, Tv,
-  Volume2, Wand2, Zap,
-} from "lucide-react";
+import { Activity, CornerDownLeft, FileBarChart2, FolderSearch, Gauge, Globe, LayoutGrid, Palette, Play, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Square, Volume2, Wand2, Zap, Eraser } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { useLanguage, useT } from "@/lib/i18n";
 import { fuzzyScore } from "@/lib/search";
 import { THEMES, transitionTheme } from "@/lib/theme";
 import type { Game } from "@/lib/types";
+import { useBoost } from "@/store/boost";
 import { useLibrary } from "@/store/library";
 import { useSettings } from "@/store/settings";
 import { toast, useUI, type Page } from "@/store/ui";
@@ -41,6 +39,7 @@ export function CommandPalette() {
   const games = useLibrary((s) => s.games);
   const stats = useLibrary((s) => s.stats);
   const running = useLibrary((s) => s.running);
+  const boostActive = useBoost((s) => s.state.active);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +49,6 @@ export function CommandPalette() {
     if (open) {
       setQ("");
       setSel(0);
-      useLibrary.getState().bump("paletteUses");
       window.setTimeout(() => inputRef.current?.focus(), 30);
     }
   }, [open]);
@@ -61,25 +59,25 @@ export function CommandPalette() {
   };
 
   const items = useMemo<Item[]>(() => {
-    const nav = (page: Page) => () => useUI.getState().navigate({ page });
+    const nav = (page: Page, section?: string) => () => useUI.getState().navigate({ page, section });
     const pages: Omit<Item, "score">[] = [
-      { id: "p-home", group: "pages", label: t("nav.home"), icon: <Home className="h-4 w-4" />, run: nav("home") },
-      { id: "p-lib", group: "pages", label: t("nav.library"), icon: <LayoutGrid className="h-4 w-4" />, run: nav("library") },
-      { id: "p-col", group: "pages", label: t("nav.collections"), icon: <FolderHeart className="h-4 w-4" />, run: nav("collections") },
-      { id: "p-stats", group: "pages", label: t("nav.stats"), icon: <BarChart3 className="h-4 w-4" />, run: nav("stats") },
-      { id: "p-ach", group: "pages", label: t("nav.achievements"), icon: <Trophy className="h-4 w-4" />, run: nav("achievements") },
-      { id: "p-wish", group: "pages", label: t("nav.wishlist"), icon: <Gift className="h-4 w-4" />, run: nav("wishlist") },
-      { id: "p-clean", group: "pages", label: t("nav.cleanup"), icon: <Sparkles className="h-4 w-4" />, run: nav("cleanup") },
+      { id: "p-cockpit", group: "pages", label: t("nav.cockpit"), icon: <Gauge className="h-4 w-4" />, run: nav("cockpit") },
+      { id: "p-games", group: "pages", label: t("nav.games"), icon: <LayoutGrid className="h-4 w-4" />, run: nav("games") },
+      { id: "p-net", group: "pages", label: t("nav.network"), icon: <Activity className="h-4 w-4" />, run: nav("network") },
+      { id: "p-opt", group: "pages", label: t("nav.optimize"), icon: <SlidersHorizontal className="h-4 w-4" />, run: nav("optimize") },
+      { id: "p-rep", group: "pages", label: t("nav.reports"), icon: <FileBarChart2 className="h-4 w-4" />, run: nav("reports") },
       { id: "p-set", group: "pages", label: t("nav.settings"), icon: <Settings className="h-4 w-4" />, run: nav("settings") },
     ];
     const s = useSettings.getState();
     const actions: Omit<Item, "score">[] = [
-      { id: "a-dice", group: "actions", label: t("palette.dice"), icon: <Dices className="h-4 w-4" />, run: () => useUI.getState().setDice(true) },
+      { id: "a-boost", group: "actions", label: boostActive ? t("palette.boostStop") : t("palette.boost"), icon: <Zap className="h-4 w-4" />, run: () => void useBoost.getState().toggle() },
+      { id: "a-speed", group: "actions", label: t("palette.speedtest"), icon: <Gauge className="h-4 w-4" />, run: nav("network", "speed") },
+      { id: "a-regions", group: "actions", label: t("palette.regions"), icon: <Globe className="h-4 w-4" />, run: nav("network", "regions") },
       { id: "a-scan", group: "actions", label: t("palette.scan"), icon: <FolderSearch className="h-4 w-4" />, run: () => useUI.getState().setScan(true) },
       { id: "a-add", group: "actions", label: t("palette.addManual"), icon: <Plus className="h-4 w-4" />, run: () => useUI.getState().setManual(true) },
-      { id: "a-bp", group: "actions", label: t("palette.bigPicture"), icon: <Tv className="h-4 w-4" />, run: () => useUI.getState().setBigPicture(true) },
       { id: "a-ov", group: "actions", label: t("palette.overlay"), icon: <Wand2 className="h-4 w-4" />, run: () => void api.overlayToggle().catch(() => undefined) },
-      { id: "a-sound", group: "actions", label: t("palette.toggleSound"), icon: <Volume2 className="h-4 w-4" />, run: () => s.update({ soundMuted: !s.settings.soundMuted }) },
+      { id: "a-flush", group: "actions", label: t("palette.flushDns"), icon: <Eraser className="h-4 w-4" />, run: () => void api.flushDns().then(() => toast({ kind: "success", title: t("optimize.flushed") })).catch((e) => toast({ kind: "error", title: String(e) })) },
+      { id: "a-sound", group: "actions", label: t("palette.toggleSound"), icon: <Volume2 className="h-4 w-4" />, run: () => s.update({ sound: !s.settings.sound }) },
       { id: "a-motion", group: "actions", label: t("palette.toggleMotion"), icon: <Zap className="h-4 w-4" />, run: () => s.update({ motion: s.settings.motion === "full" ? "off" : "full" }) },
       {
         id: "a-upd",
@@ -110,8 +108,7 @@ export function CommandPalette() {
         icon: running.has(g.id) ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />,
         game: g,
         run: (shift) => {
-          if (shift) useUI.getState().navigate({ page: "game", id: g.id });
-          else if (running.has(g.id)) useUI.getState().navigate({ page: "game", id: g.id });
+          if (shift || running.has(g.id)) useUI.getState().navigate({ page: "game", id: g.id });
           else void useLibrary.getState().launch(g);
         },
       }));
@@ -120,7 +117,7 @@ export function CommandPalette() {
       const recent = gameItems
         .filter((g) => stats.get(g.id))
         .sort((a, b) => (stats.get(b.id)?.lastPlayedAt ?? 0) - (stats.get(a.id)?.lastPlayedAt ?? 0))
-        .slice(0, 6);
+        .slice(0, 5);
       return [...recent, ...actions.slice(0, 5), ...pages].map((x) => ({ ...x, score: 1 }));
     }
     return all
@@ -129,7 +126,7 @@ export function CommandPalette() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 40);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, games, stats, running, lang, t]);
+  }, [q, games, stats, running, lang, t, boostActive]);
 
   useEffect(() => setSel(0), [q]);
   useEffect(() => {
@@ -166,7 +163,6 @@ export function CommandPalette() {
     { key: "actions", label: t("palette.actions") },
     { key: "pages", label: t("palette.pages") },
   ];
-  let idx = -1;
 
   return createPortal(
     <AnimatePresence>
@@ -188,8 +184,7 @@ export function CommandPalette() {
                   <div key={g.key} className="mb-1">
                     <div className="px-3 pt-2 pb-1.5 text-[11px] font-semibold tracking-[0.14em] text-faint uppercase">{g.label}</div>
                     {list.map((it) => {
-                      idx = items.indexOf(it);
-                      const myIdx = idx;
+                      const myIdx = items.indexOf(it);
                       const active = myIdx === sel;
                       return (
                         <button key={it.id} type="button" data-idx={myIdx} onMouseMove={() => sel !== myIdx && setSel(myIdx)} onClick={(e) => run(it, e.shiftKey)} className={cn("relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors", active ? "text-fg" : "text-fg-soft")}>
@@ -217,7 +212,7 @@ export function CommandPalette() {
                 );
               })}
             </div>
-            <div className="border-t border-line px-5 py-2.5 text-[11px] text-faint">{t("palette.hint")} · Shift+Enter Details</div>
+            <div className="border-t border-line px-5 py-2.5 text-[11px] text-faint">{t("palette.hint")} · Shift+Enter {t("common.details")}</div>
           </motion.div>
         </motion.div>
       )}

@@ -7,7 +7,6 @@ import { pickFolder } from "@/lib/dialog";
 import { useT } from "@/lib/i18n";
 import type { ScannedEntry, ScanOptions } from "@/lib/types";
 import { useLibrary } from "@/store/library";
-import { useSettings } from "@/store/settings";
 import { toast, useUI } from "@/store/ui";
 import { Modal } from "./ui/Modal";
 import { Button } from "@shared/ui/Button";
@@ -17,6 +16,28 @@ import { cn } from "@shared/lib/cn";
 import { sound } from "@shared/sound/engine";
 
 type Step = "sources" | "scanning" | "results" | "done";
+
+const SCAN_KEY = "pulsar-scan-options";
+const defaultScan = (): ScanOptions => ({ steam: true, epic: true, gog: true, startMenu: true, folders: [] });
+
+/** Zuletzt gewählte Quellen (nur lokal gemerkt) */
+function loadScanOptions(): ScanOptions {
+  try {
+    const raw = localStorage.getItem(SCAN_KEY);
+    if (!raw) return defaultScan();
+    const p = JSON.parse(raw) as Partial<ScanOptions>;
+    return { ...defaultScan(), ...p, folders: Array.isArray(p.folders) ? p.folders.filter((f) => typeof f === "string") : [] };
+  } catch {
+    return defaultScan();
+  }
+}
+function saveScanOptions(o: ScanOptions) {
+  try {
+    localStorage.setItem(SCAN_KEY, JSON.stringify(o));
+  } catch {
+    /* kein Speicher – egal */
+  }
+}
 
 /** Radar-Animation während der Suche */
 function RadarAnim() {
@@ -44,8 +65,7 @@ export function ScanWizard() {
   const t = useT();
   const open = useUI((s) => s.scanOpen);
   const setOpen = useUI((s) => s.setScan);
-  const settings = useSettings((s) => s.settings);
-  const [opts, setOpts] = useState<ScanOptions>(settings.scan);
+  const [opts, setOpts] = useState<ScanOptions>(loadScanOptions);
   const [step, setStep] = useState<Step>("sources");
   const [found, setFound] = useState<{ entry: ScannedEntry; duplicate: boolean }[]>([]);
   const [messages, setMessages] = useState<string[]>([]);
@@ -54,7 +74,7 @@ export function ScanWizard() {
 
   useEffect(() => {
     if (open) {
-      setOpts(useSettings.getState().settings.scan);
+      setOpts(loadScanOptions());
       setStep("sources");
       setFound([]);
       setMessages([]);
@@ -63,7 +83,7 @@ export function ScanWizard() {
 
   const start = async () => {
     setStep("scanning");
-    useSettings.getState().update({ scan: opts });
+    saveScanOptions(opts);
     sound.play("whoosh");
     try {
       const [res] = await Promise.all([api.scanLibrary(opts), new Promise((r) => setTimeout(r, 1200))]);
@@ -142,7 +162,7 @@ export function ScanWizard() {
             </Button>
           </>
         ) : step === "done" ? (
-          <Button variant="primary" onClick={() => (setOpen(false), useUI.getState().navigate({ page: "library" }))}>
+          <Button variant="primary" onClick={() => (setOpen(false), useUI.getState().navigate({ page: "games" }))}>
             {t("common.done")}
           </Button>
         ) : undefined

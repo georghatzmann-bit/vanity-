@@ -2,40 +2,16 @@
  * Demo-Backend für den Browser (Vorschau, Screenshots, Tests).
  * Bildet die Rust-Befehle mit Beispieldaten nach. In der echten App wird es nie geladen.
  */
-import type { Collection, Game, GameImages, ImageKind, LaunchConfig, PlayStats, Session, WishItem, ScannedEntry, Profile, Screenshot } from "./types";
+import type {
+  AdapterInfo, ApplyReport, BoostProfile, BoostState, DnsConfig, DnsResult, Game, GameImages, ImageKind, LaunchConfig, MonitorUpdate, PingSample, PingStats,
+  PingTarget, PlayStats, PowerPlan, Region, RegionPing, ScannedEntry, Session, SessionReport, SpeedProgress, SpeedResult, TraceHop, TraceResult, Tweak, WifiInfo,
+} from "./types";
 import { DEMO_ART } from "./demo-art";
+import { bufferbloatGrade, compressTimeline, countSpikes, pingGrade, summarize } from "./grade";
 
 type Handler = (p: unknown) => void;
 const listeners = new Map<string, Set<Handler>>();
 const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach((h) => h(payload));
-
-/** Erzeugte Beispiel-Screenshots (Landschaften als SVG), damit die Galerie in der Vorschau nicht leer ist */
-function demoScreenshots(gameId: string): Screenshot[] {
-  const palettes = [
-    ["#1b1036", "#f97362", "#ffd29d"],
-    ["#06142e", "#2f80ed", "#a8e6ff"],
-    ["#140a1f", "#d946ef", "#fbcfe8"],
-    ["#0b1d13", "#22c55e", "#d9f99d"],
-    ["#1f0f08", "#f59e0b", "#fde68a"],
-    ["#0d0d1a", "#8b5cf6", "#c4b5fd"],
-  ];
-  let seed = [...gameId].reduce((n, c) => n + c.charCodeAt(0), 0);
-  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-  return palettes.map(([sky, mid, sun], i) => {
-    const hills = [0.62, 0.72, 0.84]
-      .map((h, k) => {
-        const pts = Array.from({ length: 9 }, (_, j) => `${j * 200},${Math.round(900 * (h + (rnd() - 0.5) * 0.12))}`).join(" ");
-        return `<polygon points="0,900 ${pts} 1600,900" fill="${mid}" opacity="${0.35 + k * 0.3}"/>`;
-      })
-      .join("");
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky}"/><stop offset="1" stop-color="${mid}"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="${300 + Math.round(rnd() * 1000)}" cy="${220 + Math.round(rnd() * 160)}" r="110" fill="${sun}" opacity="0.9"/>${hills}</svg>`;
-    return {
-      path: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
-      takenAt: Date.now() - (i * 3 + 1) * 86_400_000 - Math.round(rnd() * 40_000_000),
-      source: i % 3 === 0 ? "gamebar" : "steam",
-    };
-  });
-}
 
 export function mockListen(event: string, handler: Handler): () => void {
   if (!listeners.has(event)) listeners.set(event, new Set());
@@ -50,40 +26,39 @@ const rand = () => {
   seed = (seed * 16807) % 2147483647;
   return (seed - 1) / 2147483646;
 };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const demo: Array<[string, "game" | "app", Game["source"], string?, string?, string[]?]> = [
-  ["Elden Ring", "game", "steam", "1245620", "Action-RPG", ["Souls-like", "Open World"]],
-  ["Cyberpunk 2077", "game", "gog", "1423049311", "RPG", ["Open World", "Story"]],
-  ["Hades II", "game", "steam", "1145350", "Roguelike", ["Action", "Kurz & knackig"]],
-  ["Stardew Valley", "game", "steam", "413150", "Simulation", ["Entspannt", "Mit Freunden"]],
-  ["Forza Horizon 5", "game", "steam", "1551360", "Rennspiel", ["Rennspiele", "Mit Freunden"]],
-  ["Baldur's Gate 3", "game", "steam", "1086940", "RPG", ["Story", "Mit Freunden"]],
-  ["Hollow Knight: Silksong", "game", "steam", "1030300", "Metroidvania", ["Action"]],
-  ["Alan Wake 2", "game", "epic", "alan-wake-2", "Horror", ["Story"]],
-  ["Rocket League", "game", "epic", "sugar", "Sport", ["Mit Freunden", "Kurz & knackig"]],
-  ["The Witcher 3: Wild Hunt", "game", "gog", "1207664643", "RPG", ["Story", "Open World", "Durchgespielt"]],
-  ["Portal 2", "game", "steam", "620", "Puzzle", ["Knobeln", "Durchgespielt"]],
-  ["Celeste", "game", "steam", "504230", "Plattformer", ["Kurz & knackig"]],
-  ["Disco Elysium", "game", "gog", "1771589310", "RPG", ["Story"]],
-  ["Counter-Strike 2", "game", "steam", "730", "Shooter", ["Mit Freunden", "Action"]],
-  ["Minecraft", "game", "startmenu", undefined, "Sandbox", ["Mit Freunden", "Entspannt"]],
-  ["Red Dead Redemption 2", "game", "steam", "1174180", "Action-Adventure", ["Open World", "Story"]],
-  ["Outer Wilds", "game", "steam", "753640", "Abenteuer", ["Knobeln", "Story"]],
-  ["Factorio", "game", "steam", "427520", "Strategie", ["Knobeln"]],
-  ["Sea of Thieves", "game", "steam", "1172620", "Abenteuer", ["Mit Freunden"]],
-  ["Balatro", "game", "steam", "2379780", "Kartenspiel", ["Kurz & knackig", "Entspannt"]],
-  ["Death Stranding", "game", "epic", "death-stranding", "Action", ["Story"]],
-  ["Ori and the Will of the Wisps", "game", "steam", "1057090", "Plattformer", ["Story", "Durchgespielt"]],
-  ["It Takes Two", "game", "steam", "1426210", "Koop", ["Mit Freunden", "Durchgespielt"]],
-  ["Satisfactory", "game", "epic", "satisfactory", "Simulation", ["Knobeln", "Mit Freunden"]],
-  ["OBS Studio", "app", "startmenu", undefined, undefined, []],
-  ["Wallpaper Engine", "app", "startmenu", undefined, undefined, []],
-  ["Blender", "app", "startmenu", undefined, undefined, []],
-  ["Krita", "app", "startmenu", undefined, undefined, []],
-  ["Aseprite", "app", "startmenu", undefined, undefined, []],
+// ---------------------------------------------------------------------------------------------
+// Spiele
+// ---------------------------------------------------------------------------------------------
+
+const demo: Array<[string, "game" | "app", Game["source"], string?, string?]> = [
+  ["Counter-Strike 2", "game", "steam", "730", "cs2"],
+  ["Elden Ring", "game", "steam", "1245620"],
+  ["Hades II", "game", "steam", "1145350"],
+  ["Rocket League", "game", "epic", "sugar"],
+  ["Dota 2", "game", "steam", "570", "dota2"],
+  ["Stardew Valley", "game", "steam", "413150"],
+  ["Forza Horizon 5", "game", "steam", "1551360"],
+  ["Baldur's Gate 3", "game", "steam", "1086940"],
+  ["Hollow Knight: Silksong", "game", "steam", "1030300"],
+  ["Alan Wake 2", "game", "epic", "alan-wake-2"],
+  ["Cyberpunk 2077", "game", "gog", "1423049311"],
+  ["Sea of Thieves", "game", "steam", "1172620"],
+  ["Balatro", "game", "steam", "2379780"],
+  ["It Takes Two", "game", "steam", "1426210"],
+  ["Satisfactory", "game", "epic", "satisfactory"],
+  ["Portal 2", "game", "steam", "620"],
+  ["Red Dead Redemption 2", "game", "steam", "1174180"],
+  ["Lethal Company", "game", "steam", "1966720"],
+  ["Death Stranding", "game", "epic", "death-stranding"],
+  ["Factorio", "game", "steam", "427520"],
+  ["OBS Studio", "app", "startmenu"],
+  ["Blender", "app", "startmenu"],
+  ["Wallpaper Engine", "app", "startmenu"],
+  ["Krita", "app", "startmenu"],
 ];
 
-/** Echte Bilder für die Vorschau – Programme zeigen (wie in der echten App) ihr Icon */
 function demoImages(name: string, kind: "game" | "app", kinds: ImageKind[] = ["cover", "hero", "logo", "icon"]): GameImages {
   const art = DEMO_ART[name] ?? {};
   const allowed = kind === "app" ? kinds.filter((k) => k === "icon") : kinds;
@@ -91,13 +66,9 @@ function demoImages(name: string, kind: "game" | "app", kinds: ImageKind[] = ["c
 }
 
 function makeGames(): Game[] {
-  return demo.map(([name, kind, source, sourceId, genre, tags], i) => {
+  return demo.map(([name, kind, source, sourceId, serverGame], i) => {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    const launch: LaunchConfig =
-      source === "steam" && sourceId
-        ? { type: "url", target: `steam://rungameid/${sourceId}` }
-        : { type: "exe", target: `C:\\Games\\${name}\\${slug}.exe` };
-    const status = (["playing", "want", "done", "none", "paused"] as const)[i % 5];
+    const launch: LaunchConfig = source === "steam" && sourceId ? { type: "url", target: `steam://rungameid/${sourceId}` } : { type: "exe", target: `C:\\Games\\${name}\\${slug}.exe` };
     return {
       id: `demo-${slug}`,
       name,
@@ -109,18 +80,12 @@ function makeGames(): Game[] {
       exePath: launch.type === "exe" ? launch.target : undefined,
       images: demoImages(name, kind),
       imagesCheckedAt: now,
-      favorite: [0, 2, 3, 5, 10, 24].includes(i),
+      favorite: [0, 1, 3, 4].includes(i),
       hidden: false,
-      status: kind === "app" ? "none" : tags?.includes("Durchgespielt") ? "done" : status,
-      rating: kind === "app" ? 0 : [5, 4.5, 5, 4, 4.5, 5, 0, 4, 3.5, 5, 5, 4.5, 4, 3, 4, 5, 4.5, 4, 3.5, 4.5, 3, 4, 5, 4][i] ?? 0,
-      notes: i === 0 ? "Malenia endlich geschafft! Als Nächstes: Schattenreich." : "",
-      genre,
-      tags: tags ?? [],
-      collectionIds: i < 6 ? ["demo-col-fav"] : tags?.includes("Mit Freunden") ? ["demo-col-friends"] : [],
-      links: { tools: [] },
-      inDock: kind === "app" || [0, 3].includes(i),
       addedAt: now - (40 - i) * DAY * 2.2,
       updatedAt: now - i * DAY,
+      serverGame,
+      region: i === 1 ? "aws-eu-west-3" : undefined,
     } satisfies Game;
   });
 }
@@ -131,7 +96,7 @@ function makeSessions(games: Game[]): Session[] {
   const playable = games.filter((g) => g.kind === "game");
   const weights = playable.map((_, i) => 1 / (1 + i * 0.35));
   const total = weights.reduce((a, b) => a + b, 0);
-  for (let d = 200; d >= 0; d--) {
+  for (let d = 120; d >= 0; d--) {
     const dayStart = new Date(now - d * DAY);
     dayStart.setHours(0, 0, 0, 0);
     const weekend = [0, 6].includes(dayStart.getDay());
@@ -151,40 +116,63 @@ function makeSessions(games: Game[]): Session[] {
   return out;
 }
 
-interface MockDb {
-  games: Game[];
-  collections: Collection[];
-  wishlist: WishItem[];
-  sessions: Session[];
-  kv: Record<string, unknown>;
-  profiles: Profile[];
-  activeProfile: string;
+/** Ping-Verlauf einer Beispielsitzung */
+function makeTimeline(start: number, seconds: number, base: number, noisy: boolean): PingSample[] {
+  const n = Math.min(seconds, 1800);
+  const out: PingSample[] = [];
+  for (let i = 0; i < n; i++) {
+    let rtt: number | null = base + (rand() - 0.5) * (noisy ? 14 : 4) + Math.sin(i / 40) * (noisy ? 6 : 2);
+    if (noisy && rand() < 0.03) rtt = base * 2 + rand() * 80;
+    if (noisy && rand() < 0.012) rtt = null;
+    out.push({ targetId: "monitor", t: start + i * 1000, rtt: rtt === null ? null : Math.round(rtt * 10) / 10 });
+  }
+  return out;
 }
 
-const STORE_KEY = "nova-mock-db-v2";
+function makeReports(games: Game[], sessions: Session[]): SessionReport[] {
+  const targets = ["Frankfurt (AWS)", "Paris (AWS)", "Frankfurt (Valve)", "Stockholm (Valve)"];
+  return sessions
+    .filter((s) => s.seconds > 600)
+    .slice(-28)
+    .map((s, i) => {
+      const game = games.find((g) => g.id === s.gameId)!;
+      const base = 14 + rand() * 30;
+      const noisy = rand() < 0.35;
+      const samples = makeTimeline(s.start, s.seconds, base, noisy);
+      const st = summarize("monitor", samples);
+      return {
+        id: `rep-${i}`,
+        gameId: game.id,
+        gameName: game.name,
+        start: s.start,
+        end: s.end,
+        targetLabel: targets[i % targets.length],
+        avgPing: st.avg,
+        minPing: st.min,
+        maxPing: st.max,
+        jitter: st.jitter,
+        loss: st.loss,
+        spikes: countSpikes(samples.map((x) => x.rtt)),
+        timeline: compressTimeline(samples.map((x) => [x.t, x.rtt] as [number, number | null])),
+        boosted: i % 3 !== 1,
+        grade: pingGrade(st.avg, st.jitter, st.loss) ?? "F",
+      };
+    });
+}
+
+interface MockDb {
+  games: Game[];
+  reports: SessionReport[];
+  sessions: Session[];
+  kv: Record<string, unknown>;
+}
+
+const STORE_KEY = "pulsar-mock-db-v1";
 
 function freshDb(): MockDb {
   const games = makeGames();
-  return {
-    games,
-    collections: [
-      { id: "demo-col-fav", name: "Allzeit-Lieblinge", icon: "Heart", color: "#ff4f8b", createdAt: now - 30 * DAY, order: 0 },
-      { id: "demo-col-friends", name: "Mit Freunden", icon: "Users", color: "#8b5cf6", createdAt: now - 20 * DAY, order: 1 },
-      { id: "demo-col-race", name: "Rennspiele", icon: "Flag", color: "#ff8a4c", createdAt: now - 10 * DAY, order: 2 },
-    ],
-    wishlist: [
-      { id: "w1", name: "Grand Theft Auto VI", price: "79,99 €", targetPrice: "49,99 €", store: "Steam", priority: 1, addedAt: now - 9 * DAY },
-      { id: "w2", name: "Clair Obscur: Expedition 33", price: "49,99 €", targetPrice: "34,99 €", store: "Steam", priority: 2, addedAt: now - 3 * DAY },
-      { id: "w3", name: "Hollow Knight: Silksong DLC", price: "14,99 €", priority: 3, addedAt: now - DAY, note: "Mit Lisa zusammen?" },
-    ],
-    sessions: makeSessions(games),
-    kv: {},
-    profiles: [
-      { id: "default", name: "Georg", color: "#ff4f8b", avatar: "G", createdAt: now - 100 * DAY },
-      { id: "p2", name: "Gast", color: "#8b5cf6", avatar: "🎮", createdAt: now - 10 * DAY },
-    ],
-    activeProfile: "default",
-  };
+  const sessions = makeSessions(games);
+  return { games, sessions, reports: makeReports(games, sessions), kv: {} };
 }
 
 function loadDb(): MockDb {
@@ -206,19 +194,18 @@ const persist = () => {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(db));
     } catch {
-      /* Speicher voll - egal in der Demo */
+      /* Speicher voll – egal in der Demo */
     }
   }, 300);
 };
 
 const running = new Map<string, { startedAt: number }>();
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function stats(): PlayStats[] {
   const map = new Map<string, PlayStats>();
   const sorted = [...db.sessions].sort((a, b) => a.start - b.start);
   for (const s of sorted) {
-    const st = map.get(s.gameId) ?? { gameId: s.gameId, totalSeconds: 0, sessions: 0 };
+    const st = map.get(s.gameId) ?? { gameId: s.gameId, totalSeconds: 0, sessions: 0, lastPlayedAt: null, lastSessionSeconds: null, firstPlayedAt: null };
     st.totalSeconds += s.seconds;
     st.sessions += 1;
     st.lastPlayedAt = s.end;
@@ -231,49 +218,204 @@ function stats(): PlayStats[] {
 
 function table(name: string): { id: string }[] {
   if (name === "games") return db.games;
-  if (name === "collections") return db.collections;
-  if (name === "wishlist") return db.wishlist;
+  if (name === "reports") return db.reports;
   throw new Error(`Unbekannte Tabelle: ${name}`);
 }
 
 const fakeScan: ScannedEntry[] = [
   { name: "Cities: Skylines II", kind: "game", source: "steam", sourceId: "949230", launch: { type: "url", target: "steam://rungameid/949230" } },
-  { name: "Lethal Company", kind: "game", source: "steam", sourceId: "1966720", launch: { type: "url", target: "steam://rungameid/1966720" } },
+  { name: "Apex Legends", kind: "game", source: "steam", sourceId: "1172470", launch: { type: "url", target: "steam://rungameid/1172470" } },
   { name: "Fortnite", kind: "game", source: "epic", sourceId: "Fortnite", launch: { type: "url", target: "com.epicgames.launcher://apps/Fortnite?action=launch" } },
   { name: "Elden Ring", kind: "game", source: "steam", sourceId: "1245620", launch: { type: "url", target: "steam://rungameid/1245620" } },
-  { name: "GIMP", kind: "app", source: "startmenu", launch: { type: "shell", target: "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\GIMP.lnk" } },
-  { name: "Notepad++", kind: "app", source: "startmenu", launch: { type: "shell", target: "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Notepad++.lnk" } },
+  { name: "Discord", kind: "app", source: "startmenu", launch: { type: "shell", target: "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Discord.lnk" } },
 ];
 
+// ---------------------------------------------------------------------------------------------
+// Netzwerk
+// ---------------------------------------------------------------------------------------------
+
+const tcp = (host: string): PingTarget => ({ id: host, label: host, host, port: 443, method: "tcp" });
+const REGIONS: (Region & { base: number })[] = [
+  { id: "aws-eu-central-1", name: "Frankfurt", country: "DE", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-central-1.amazonaws.com"), base: 9 },
+  { id: "aws-eu-west-3", name: "Paris", country: "FR", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-west-3.amazonaws.com"), base: 16 },
+  { id: "aws-eu-west-2", name: "London", country: "GB", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-west-2.amazonaws.com"), base: 19 },
+  { id: "aws-eu-north-1", name: "Stockholm", country: "SE", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-north-1.amazonaws.com"), base: 27 },
+  { id: "aws-eu-south-1", name: "Mailand", country: "IT", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-south-1.amazonaws.com"), base: 21 },
+  { id: "aws-eu-west-1", name: "Irland", country: "IE", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-west-1.amazonaws.com"), base: 28 },
+  { id: "aws-eu-south-2", name: "Spanien", country: "ES", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-south-2.amazonaws.com"), base: 31 },
+  { id: "aws-eu-central-2", name: "Zürich", country: "CH", area: "eu", provider: "AWS", target: tcp("dynamodb.eu-central-2.amazonaws.com"), base: 13 },
+  { id: "aws-us-east-1", name: "US-Ost (Virginia)", country: "US", area: "na", provider: "AWS", target: tcp("dynamodb.us-east-1.amazonaws.com"), base: 92 },
+  { id: "aws-us-east-2", name: "US-Ost (Ohio)", country: "US", area: "na", provider: "AWS", target: tcp("dynamodb.us-east-2.amazonaws.com"), base: 104 },
+  { id: "aws-us-west-2", name: "US-West (Oregon)", country: "US", area: "na", provider: "AWS", target: tcp("dynamodb.us-west-2.amazonaws.com"), base: 152 },
+  { id: "aws-ca-central-1", name: "Kanada", country: "CA", area: "na", provider: "AWS", target: tcp("dynamodb.ca-central-1.amazonaws.com"), base: 101 },
+  { id: "aws-sa-east-1", name: "São Paulo", country: "BR", area: "sa", provider: "AWS", target: tcp("dynamodb.sa-east-1.amazonaws.com"), base: 206 },
+  { id: "aws-ap-southeast-1", name: "Singapur", country: "SG", area: "asia", provider: "AWS", target: tcp("dynamodb.ap-southeast-1.amazonaws.com"), base: 168 },
+  { id: "aws-ap-northeast-1", name: "Tokio", country: "JP", area: "asia", provider: "AWS", target: tcp("dynamodb.ap-northeast-1.amazonaws.com"), base: 232 },
+  { id: "aws-ap-northeast-2", name: "Seoul", country: "KR", area: "asia", provider: "AWS", target: tcp("dynamodb.ap-northeast-2.amazonaws.com"), base: 244 },
+  { id: "aws-ap-south-1", name: "Mumbai", country: "IN", area: "asia", provider: "AWS", target: tcp("dynamodb.ap-south-1.amazonaws.com"), base: 128 },
+  { id: "aws-ap-southeast-2", name: "Sydney", country: "AU", area: "oce", provider: "AWS", target: tcp("dynamodb.ap-southeast-2.amazonaws.com"), base: 278 },
+  { id: "aws-me-south-1", name: "Bahrain", country: "BH", area: "me", provider: "AWS", target: tcp("dynamodb.me-south-1.amazonaws.com"), base: 96 },
+  { id: "aws-af-south-1", name: "Kapstadt", country: "ZA", area: "af", provider: "AWS", target: tcp("dynamodb.af-south-1.amazonaws.com"), base: 172 },
+];
+const GAME_SERVERS: Record<string, (Region & { base: number })[]> = {
+  cs2: [
+    { id: "valve-fra", name: "Frankfurt", country: "DE", area: "eu", provider: "Valve", target: { id: "valve-fra", label: "Frankfurt", host: "155.133.248.34", method: "icmp" }, base: 8 },
+    { id: "valve-ams", name: "Amsterdam", country: "NL", area: "eu", provider: "Valve", target: { id: "valve-ams", label: "Amsterdam", host: "155.133.248.36", method: "icmp" }, base: 15 },
+    { id: "valve-sto", name: "Stockholm", country: "SE", area: "eu", provider: "Valve", target: { id: "valve-sto", label: "Stockholm", host: "155.133.252.5", method: "icmp" }, base: 29 },
+    { id: "valve-vie", name: "Wien", country: "AT", area: "eu", provider: "Valve", target: { id: "valve-vie", label: "Wien", host: "185.25.182.10", method: "icmp" }, base: 17 },
+    { id: "valve-lhr", name: "London", country: "GB", area: "eu", provider: "Valve", target: { id: "valve-lhr", label: "London", host: "155.133.248.50", method: "icmp" }, base: 20 },
+    { id: "valve-iad", name: "Virginia", country: "US", area: "na", provider: "Valve", target: { id: "valve-iad", label: "Virginia", host: "162.254.192.72", method: "icmp" }, base: 94 },
+  ],
+  lol: [
+    { id: "riot-euw", name: "EUW", country: "DE", area: "eu", provider: "Riot", target: { id: "riot-euw", label: "EUW", host: "104.160.141.3", method: "icmp" }, base: 12 },
+    { id: "riot-eune", name: "EUNE", country: "DE", area: "eu", provider: "Riot", target: { id: "riot-eune", label: "EUNE", host: "104.160.142.3", method: "icmp" }, base: 18 },
+    { id: "riot-na", name: "NA", country: "US", area: "na", provider: "Riot", target: { id: "riot-na", label: "NA", host: "104.160.131.3", method: "icmp" }, base: 118 },
+  ],
+};
+GAME_SERVERS.dota2 = GAME_SERVERS.cs2;
+GAME_SERVERS.deadlock = GAME_SERVERS.cs2;
+
+function baseFor(target: PingTarget): number {
+  const r = [...REGIONS, ...Object.values(GAME_SERVERS).flat()].find((x) => x.target.id === target.id || x.target.host === target.host);
+  return r?.base ?? 24;
+}
+
+/** Simulierte Messung mit leichtem Rauschen, gelegentlichen Spitzen und Verlust */
+function sample(targetId: string, base: number): PingSample {
+  let rtt: number | null = base + (rand() - 0.5) * 5 + Math.sin(Date.now() / 9000) * 2.5;
+  if (rand() < 0.02) rtt = base * 2.4 + rand() * 60;
+  if (rand() < 0.006) rtt = null;
+  return { targetId, t: Date.now(), rtt: rtt === null ? null : Math.max(1, Math.round(rtt * 10) / 10) };
+}
+
+function pingOnce(target: PingTarget, count: number): PingStats {
+  const base = baseFor(target);
+  return summarize(target.id, Array.from({ length: count }, () => sample(target.id, base)));
+}
+
+let monitor: { timer: number; targets: PingTarget[]; history: Map<string, PingSample[]> } | null = null;
+function stopMonitor() {
+  if (monitor) window.clearInterval(monitor.timer);
+  monitor = null;
+}
+function startMonitor(targets: PingTarget[], interval: number) {
+  stopMonitor();
+  const history = new Map<string, PingSample[]>();
+  const tick = () => {
+    const samples = targets.map((tg) => sample(tg.id, baseFor(tg)));
+    const statsOut: PingStats[] = [];
+    for (const s of samples) {
+      const h = [...(history.get(s.targetId) ?? []), s].slice(-60);
+      history.set(s.targetId, h);
+      statsOut.push(summarize(s.targetId, h));
+    }
+    emit("net://ping", { samples, stats: statsOut } satisfies MonitorUpdate);
+  };
+  monitor = { timer: window.setInterval(tick, Math.max(250, interval)), targets, history };
+  tick();
+}
+
+async function traceroute(host: string): Promise<TraceResult> {
+  const hops: TraceHop[] = [
+    { hop: 1, address: "192.168.178.1", hostname: "fritz.box", rtts: [0.6, 0.5, 0.7], zone: "lan" },
+    { hop: 2, address: "100.64.12.1", hostname: null, rtts: [6.2, 5.9, 6.4], zone: "isp" },
+    { hop: 3, address: "62.155.240.129", hostname: "f-ed10-i.F.DE.NET.DTAG.DE", rtts: [7.1, 7.4, 7.0], zone: "isp" },
+    { hop: 4, address: "80.157.204.182", hostname: null, rtts: [8.3, 8.1, 8.9], zone: "internet" },
+    { hop: 5, address: null, hostname: null, rtts: [null, null, null], zone: "internet" },
+    { hop: 6, address: "52.93.35.126", hostname: null, rtts: [9.8, 10.4, 9.6], zone: "internet" },
+    { hop: 7, address: "3.123.1.77", hostname: "dynamodb.eu-central-1.amazonaws.com", rtts: [10.1, 9.9, 10.6], zone: "target" },
+  ];
+  for (const h of hops) {
+    await sleep(380);
+    emit("net://trace", h);
+  }
+  return { target: host, address: "3.123.1.77", hops, reached: true };
+}
+
+async function dnsBenchmark(rounds: number): Promise<DnsResult[]> {
+  const providers: [string, string, string, string | null, number, number][] = [
+    ["cloudflare", "Cloudflare", "1.1.1.1", "1.0.0.1", 8, 19],
+    ["google", "Google", "8.8.8.8", "8.8.4.4", 10, 24],
+    ["quad9", "Quad9", "9.9.9.9", "149.112.112.112", 12, 31],
+    ["opendns", "OpenDNS", "208.67.222.222", "208.67.220.220", 16, 38],
+    ["adguard", "AdGuard", "94.140.14.14", "94.140.15.15", 14, 33],
+    ["controld", "Control D", "76.76.2.0", "76.76.10.0", 11, 27],
+    ["dnswatch", "DNS.WATCH", "84.200.69.80", "84.200.70.40", 15, 36],
+    ["current", "Router (192.168.178.1)", "192.168.178.1", null, 4, 44],
+  ];
+  const out: DnsResult[] = [];
+  for (let i = 0; i < providers.length; i++) {
+    await sleep(260);
+    const [id, name, primary, secondary, c, u] = providers[i];
+    out.push({ id, name, primary, secondary, cachedMs: c + rand() * 3, uncachedMs: u + rand() * 8, failed: id === "dnswatch" ? 1 : 0, current: id === "current" });
+    emit("net://dns", { done: i + 1, total: providers.length });
+    void rounds;
+  }
+  return out.sort((a, b) => (a.uncachedMs ?? 999) - (b.uncachedMs ?? 999));
+}
+
+let speedCancel = false;
+async function speedtest(): Promise<SpeedResult> {
+  speedCancel = false;
+  const prog = (p: SpeedProgress) => emit("net://speed", p);
+  for (let i = 0; i < 10; i++) {
+    await sleep(90);
+    if (speedCancel) throw new Error("Der Speedtest wurde abgebrochen.");
+    prog({ phase: "latency", progress: (i + 1) / 10, mbps: null, latencyMs: 9 + rand() * 2 });
+  }
+  const down = 412 + rand() * 60;
+  for (let i = 0; i < 30; i++) {
+    await sleep(140);
+    if (speedCancel) throw new Error("Der Speedtest wurde abgebrochen.");
+    prog({ phase: "download", progress: (i + 1) / 30, mbps: down * Math.min(1, (i + 3) / 12) * (0.9 + rand() * 0.15), latencyMs: 12 + i * 0.8 + rand() * 4 });
+  }
+  const up = 41 + rand() * 8;
+  for (let i = 0; i < 22; i++) {
+    await sleep(140);
+    if (speedCancel) throw new Error("Der Speedtest wurde abgebrochen.");
+    prog({ phase: "upload", progress: (i + 1) / 22, mbps: up * Math.min(1, (i + 3) / 8) * (0.9 + rand() * 0.15), latencyMs: 14 + i * 1.6 + rand() * 6 });
+  }
+  const idle = 9.6;
+  const loadedDown = 31.5;
+  const loadedUp = 44.2;
+  const bloat = Math.max(loadedDown, loadedUp) - idle;
+  const res: SpeedResult = { downloadMbps: down, uploadMbps: up, idleLatencyMs: idle, idleJitterMs: 1.1, loadedLatencyDownMs: loadedDown, loadedLatencyUpMs: loadedUp, bufferbloatMs: bloat, grade: bufferbloatGrade(bloat), server: "FRA", at: Date.now() };
+  prog({ phase: "done", progress: 1, mbps: null, latencyMs: null });
+  return res;
+}
+
+const adapters: AdapterInfo[] = [
+  { id: "{3F2504E0-4F89-11D3-9A0C-0305E82C3301}", name: "Ethernet", description: "Intel(R) Ethernet Controller I225-V", kind: "ethernet", up: true, speedMbps: 2500, ipv4: ["192.168.178.42"], gateway: "192.168.178.1", dns: ["192.168.178.1"], primary: true },
+  { id: "{8B5C7A10-2C3D-4E5F-9A0B-1C2D3E4F5A6B}", name: "WLAN", description: "Intel(R) Wi-Fi 6E AX211 160MHz", kind: "wifi", up: true, speedMbps: 1201, ipv4: ["192.168.178.57"], gateway: "192.168.178.1", dns: ["192.168.178.1"], primary: false },
+];
+const wifi: WifiInfo = { ssid: "FRITZ!Box 7590 XK", signal: 86, rssi: -51, band: "5", channel: 44, phy: "Wi-Fi 6 (802.11ax)", rxMbps: 1201, txMbps: 1201 };
+
+// ---------------------------------------------------------------------------------------------
+// Optimieren & Boost
+// ---------------------------------------------------------------------------------------------
+
+const tweakState: Record<string, "on" | "off"> = { powerPlan: "off", gameMode: "on", gameDvr: "off", mouseAccel: "off" };
+const snapshots = new Set<string>();
+function tweaks(): Tweak[] {
+  const meta: Record<string, [Tweak["category"], Tweak["impact"]]> = { powerPlan: ["power", "medium"], gameMode: ["windows", "low"], gameDvr: ["windows", "medium"], mouseAccel: ["input", "medium"] };
+  return Object.entries(meta).map(([id, [category, impact]]) => ({ id: id as Tweak["id"], category, impact, state: tweakState[id], detail: id === "powerPlan" ? (tweakState[id] === "on" ? "Höchstleistung" : "Ausbalanciert") : null, canRevert: snapshots.has(id) }));
+}
+let plans: PowerPlan[] = [
+  { guid: "381b4222-f694-41f0-9685-ff5bb260df2e", name: "Ausbalanciert", active: true },
+  { guid: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", name: "Höchstleistung", active: false },
+  { guid: "a1841308-3541-4fab-bc81-f71556f20b4a", name: "Energiesparmodus", active: false },
+];
+let boost: BoostState = { active: false, since: null, gameId: null, actions: [] };
+
+// ---------------------------------------------------------------------------------------------
+
 export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Promise<T> {
-  await sleep(cmd === "scan_library" ? 1400 : 25);
+  await sleep(cmd === "scan_library" ? 1400 : cmd === "net_regions_ping" ? 900 : 25);
   const r = (v: unknown) => v as T;
   switch (cmd) {
     case "app_info":
-      return r({ version: "1.0.0", dataDir: "C:\\Users\\Demo\\AppData\\Roaming\\com.nova.launcher", cacheDir: "", profileId: db.activeProfile, platform: "browser", startedMinimized: false });
+      return r({ version: "1.0.0", dataDir: "C:\\Users\\Demo\\AppData\\Roaming\\com.pulsar.booster", cacheDir: "", platform: "windows", startedMinimized: false, isAdmin: false });
     case "quit_app":
-      return r(undefined);
-    case "profiles_list":
-      return r({ profiles: db.profiles, activeId: db.activeProfile });
-    case "profile_create": {
-      const p: Profile = { id: `p${Date.now()}`, name: String(a.name), color: String(a.color), avatar: a.avatar as string | undefined, createdAt: Date.now() };
-      db.profiles.push(p);
-      persist();
-      return r(p);
-    }
-    case "profile_update": {
-      const p = a.profile as Profile;
-      db.profiles = db.profiles.map((x) => (x.id === p.id ? p : x));
-      persist();
-      return r(undefined);
-    }
-    case "profile_delete":
-      db.profiles = db.profiles.filter((x) => x.id !== a.id);
-      persist();
-      return r(undefined);
-    case "profile_switch":
-      db.activeProfile = String(a.id);
-      persist();
       return r(undefined);
     case "db_list":
       return r(structuredClone(table(String(a.table))));
@@ -300,24 +442,9 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       if (name === "games") {
         db.games = db.games.filter((x) => x.id !== a.id);
         db.sessions = db.sessions.filter((s) => s.gameId !== a.id);
-      } else if (name === "collections") db.collections = db.collections.filter((x) => x.id !== a.id);
-      else if (name === "wishlist") db.wishlist = db.wishlist.filter((x) => x.id !== a.id);
+      } else if (name === "reports") db.reports = db.reports.filter((x) => x.id !== a.id);
       persist();
       return r(undefined);
-    }
-    case "games_merge": {
-      const keep = String(a.keepId);
-      const remove = new Set((a.removeIds as string[]).filter((id) => id !== keep));
-      let moved = 0;
-      db.sessions.forEach((s) => {
-        if (remove.has(s.gameId)) {
-          s.gameId = keep;
-          moved++;
-        }
-      });
-      db.games = db.games.filter((x) => !remove.has(x.id));
-      persist();
-      return r(moved);
     }
     case "kv_get":
       return r(db.kv[String(a.key)] ?? null);
@@ -328,87 +455,64 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
     case "playtime_stats":
       return r(stats());
     case "sessions_range":
-      return r(db.sessions.filter((s) => s.start >= Number(a.from) && s.start < Number(a.to)));
+      return r(db.sessions.filter((s) => s.end >= Number(a.from) && s.start <= Number(a.to)));
     case "sessions_for_game":
-      return r(
-        db.sessions
-          .filter((s) => s.gameId === a.gameId)
-          .sort((x, y) => y.start - x.start)
-          .slice(0, Number(a.limit ?? 50)),
-      );
+      return r(db.sessions.filter((s) => s.gameId === a.gameId).sort((x, y) => y.start - x.start).slice(0, Number(a.limit ?? 50)));
     case "session_delete":
-      db.sessions = db.sessions.filter((s) => s.id !== a.id);
+      db.sessions = db.sessions.filter((s) => s.id !== Number(a.id));
       persist();
       return r(undefined);
-    case "playtime_add": {
-      const at = Number(a.at);
-      const s: Session = { id: Date.now(), gameId: String(a.gameId), start: at, end: at + Number(a.seconds) * 1000, seconds: Number(a.seconds) };
-      db.sessions.push(s);
-      persist();
-      return r(s);
+    case "scan_library": {
+      const o = a.options as { steam: boolean; epic: boolean; gog: boolean; startMenu: boolean };
+      return r({ entries: fakeScan.filter((e) => (e.source === "steam" && o.steam) || (e.source === "epic" && o.epic) || (e.source === "gog" && o.gog) || (e.source === "startmenu" && o.startMenu)), messages: o.gog ? ["GOG Galaxy wurde nicht gefunden."] : [] });
     }
-    case "scan_library":
-      return r({ entries: fakeScan, messages: ["Demo-Modus: Es werden Beispiel-Funde angezeigt."] });
     case "inspect_paths":
       return r(
-        (a.paths as string[]).map((p) => ({
-          name: p.split(/[\\/]/).pop()?.replace(/\.(exe|lnk|url)$/i, "") ?? p,
-          kind: "app",
-          source: "manual",
-          launch: { type: "exe", target: p },
-          exePath: p,
-        })),
+        (a.paths as string[]).map((p) => {
+          const name = p.split(/[\\/]/).pop()?.replace(/\.(exe|lnk|url)$/i, "") ?? "Neu";
+          return { name, kind: "game", source: "manual", launch: { type: "exe", target: p }, exePath: p } satisfies ScannedEntry;
+        }),
       );
     case "paths_exist":
-      return r((a.paths as string[]).map((p) => !p.includes("Satisfactory")));
+      return r((a.paths as string[]).map((p) => !/satisfactory/i.test(p)));
     case "set_tracked_games":
       return r(undefined);
     case "launch_game": {
       const id = String(a.gameId);
-      setTimeout(() => {
-        const startedAt = Date.now();
-        running.set(id, { startedAt });
-        emit("game://started", { gameId: id, startedAt });
-      }, 1200);
+      window.setTimeout(() => {
+        running.set(id, { startedAt: Date.now() });
+        emit("game://started", { gameId: id, startedAt: Date.now() });
+      }, 2600);
       return r(undefined);
     }
     case "stop_game": {
       const id = String(a.gameId);
       const run = running.get(id);
+      running.delete(id);
       if (run) {
-        running.delete(id);
         const end = Date.now();
         const seconds = Math.max(1, Math.round((end - run.startedAt) / 1000));
-        const s: Session = { id: Date.now(), gameId: id, start: run.startedAt, end, seconds };
-        db.sessions.push(s);
+        const session: Session = { id: Date.now(), gameId: id, start: run.startedAt, end, seconds };
+        db.sessions.push(session);
         persist();
-        setTimeout(() => emit("game://stopped", { gameId: id, session: s }), 300);
+        emit("game://stopped", { gameId: id, session });
       }
       return r(run ? 1 : 0);
     }
     case "running_games":
       return r([...running.entries()].map(([gameId, v]) => ({ gameId, startedAt: v.startedAt, pids: [4242] })));
-    case "launch_tool":
     case "open_path":
     case "reveal_path":
     case "open_url":
+      console.info("Demo:", cmd, a);
       return r(undefined);
     case "images_fetch": {
       const req = a.request as { name: string; kinds: ImageKind[] };
       const images = demoImages(req.name, "game", req.kinds);
-      return Object.keys(images).length
-        ? r({ images, source: "steam", messages: [] })
-        : r({ images: {}, source: "none", messages: ["Demo-Modus: für dieses Spiel gibt es keine Beispielbilder."] });
+      return Object.keys(images).length ? r({ images, source: "steam", messages: [] }) : r({ images: {}, source: "none", messages: ["Demo-Modus: für dieses Spiel gibt es keine Beispielbilder."] });
     }
-    case "sgdb_search":
-      return r([]);
-    case "sgdb_images":
-      return r([]);
-    case "image_download":
     case "image_set_custom":
       return r({ path: "" });
-    case "image_palette":
-      return r({ primary: "#ff4f8b", secondary: "#8b5cf6", dark: "#140a14" });
     case "exe_icon":
       return r(null);
     case "cache_size":
@@ -417,61 +521,119 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       return r(48_300_000);
     case "system_stats": {
       const t = Date.now() / 1000;
-      return r({
-        cpu: 18 + 14 * Math.sin(t / 3) + rand() * 6,
-        ramUsed: 11.2e9 + Math.sin(t / 7) * 0.6e9,
-        ramTotal: 32e9,
-        gpu: 32 + 20 * Math.sin(t / 4) + rand() * 5,
-        cpuName: "AMD Ryzen 7 7800X3D",
-        gpuName: "NVIDIA GeForce RTX 4070",
-        uptimeSeconds: 3 * 3600 + 1200,
-      });
+      return r({ cpu: 18 + 14 * Math.sin(t / 3) + rand() * 6, ramUsed: 11.2e9 + Math.sin(t / 7) * 0.6e9, ramTotal: 32e9, gpu: 32 + 20 * Math.sin(t / 4) + rand() * 5, cpuName: "AMD Ryzen 7 7800X3D", gpuName: "NVIDIA GeForce RTX 4070", uptimeSeconds: 12345 });
     }
-    case "weather":
-      return r({ temperature: 14.2, apparent: 12.8, code: 2, isDay: true, wind: 11, high: 17, low: 8, place: String(a.place || "Wien") });
-    case "geocode":
-      return r([
-        { name: "Wien", country: "Österreich", admin: "Wien", lat: 48.2085, lon: 16.3721 },
-        { name: "Berlin", country: "Deutschland", admin: "Berlin", lat: 52.52, lon: 13.405 },
-      ]);
-    case "screenshots_list":
-      return r(demoScreenshots(String(a.gameId ?? "")));
-    case "thumbnail":
-      return r(String(a.path));
-    case "save_backup_create":
-      return r({ id: `${Date.now()}.zip`, gameId: a.gameId, path: "", createdAt: Date.now(), size: 4_200_000 });
-    case "save_backup_list":
-      return r([]);
-    case "save_backup_restore":
-    case "save_backup_delete":
-    case "library_export":
-    case "backup_restore":
+
+    // Netzwerk
+    case "net_ping_once":
+      return r(pingOnce(a.target as PingTarget, Number(a.count ?? 4)));
+    case "net_monitor_start":
+      startMonitor(a.targets as PingTarget[], Number(a.intervalMs ?? 1000));
       return r(undefined);
-    case "library_import":
-      return r({ games: 0, collections: 0, wishlist: 0, sessions: 0 });
+    case "net_monitor_stop":
+      stopMonitor();
+      return r(undefined);
+    case "net_regions":
+      return r(REGIONS.map(({ base: _b, ...x }) => x));
+    case "net_regions_ping": {
+      const ids = (a.ids as string[] | undefined) ?? REGIONS.map((x) => x.id);
+      return r(REGIONS.filter((x) => ids.includes(x.id)).map((x) => ({ id: x.id, stats: pingOnce(x.target, Number(a.count ?? 4)) }) satisfies RegionPing));
+    }
+    case "net_game_servers":
+      return r((GAME_SERVERS[String(a.game)] ?? []).map(({ base: _b, ...x }) => x));
+    case "net_traceroute":
+      return r(await traceroute(String(a.host)));
+    case "net_dns_benchmark":
+      return r(await dnsBenchmark(Number(a.rounds ?? 5)));
+    case "net_dns_current":
+      return r({ adapterId: adapters[0].id, adapter: adapters[0].name, servers: adapters[0].dns, dhcp: true, changedByPulsar: false } satisfies DnsConfig);
+    case "net_dns_apply":
+    case "net_dns_restore":
+      throw new Error("Pulsar ändert den DNS nicht selbst. Die Anleitung zeigt dir, wie es in den Windows-Einstellungen geht.");
+    case "net_adapters":
+      return r(adapters);
+    case "net_wifi":
+      return r(wifi);
+    case "net_speedtest":
+      return r(await speedtest());
+    case "net_speedtest_cancel":
+      speedCancel = true;
+      return r(undefined);
+
+    // Optimieren & Boost
+    case "opt_tweaks":
+      return r(tweaks());
+    case "opt_apply": {
+      const ids = a.ids as string[];
+      for (const id of ids) {
+        if (!(id in tweakState)) continue;
+        if (a.enable) snapshots.add(id);
+        else snapshots.delete(id);
+        tweakState[id] = a.enable ? "on" : "off";
+      }
+      return r({ applied: ids.filter((i) => i in tweakState), failed: [] } satisfies ApplyReport);
+    }
+    case "opt_revert_all":
+      for (const id of snapshots) tweakState[id] = "off";
+      snapshots.clear();
+      return r({ applied: [], failed: [] } satisfies ApplyReport);
+    case "opt_power_plans":
+      return r(plans);
+    case "opt_power_set":
+      plans = plans.map((p) => ({ ...p, active: p.guid === a.guid }));
+      tweakState.powerPlan = plans.find((p) => p.active)?.name === "Höchstleistung" ? "on" : "off";
+      return r(undefined);
+    case "opt_flush_dns":
+      return r(undefined);
+    case "boost_start": {
+      const profile = a.profile as BoostProfile;
+      await sleep(700);
+      boost = {
+        active: true,
+        since: Date.now(),
+        gameId: (a.gameId as string | null) ?? null,
+        actions: [
+          { id: "powerPlan", ok: profile.powerPlan, detail: profile.powerPlan ? "Höchstleistung aktiv (vorher: Ausbalanciert)" : "Übersprungen" },
+          { id: "priority", ok: true, detail: a.gameId ? `Priorität „${profile.gamePriority}“ gesetzt` : "Kein Spiel läuft – wird beim Start gesetzt" },
+          { id: "flushDns", ok: profile.flushDns, detail: profile.flushDns ? "DNS-Zwischenspeicher geleert" : "Übersprungen" },
+        ],
+      };
+      if (profile.powerPlan) {
+        plans = plans.map((p) => ({ ...p, active: p.name === "Höchstleistung" }));
+        tweakState.powerPlan = "on";
+      }
+      emit("boost://state", boost);
+      return r(boost);
+    }
+    case "boost_stop":
+      await sleep(400);
+      boost = { active: false, since: null, gameId: null, actions: [] };
+      plans = plans.map((p) => ({ ...p, active: p.name === "Ausbalanciert" }));
+      tweakState.powerPlan = "off";
+      emit("boost://state", boost);
+      return r(boost);
+    case "boost_state":
+      return r(boost);
+
+    // Sicherungen & Sonstiges
     case "backups_list":
       return r([
-        { file: "nova-20261011-090000.db", path: "", createdAt: now - DAY, size: 1_240_000 },
-        { file: "nova-20261010-090000.db", path: "", createdAt: now - 2 * DAY, size: 1_190_000 },
+        { file: "pulsar-20261012-063321.db", path: "", createdAt: now - DAY, size: 1_200_000 },
+        { file: "pulsar-20261011-063302.db", path: "", createdAt: now - 2 * DAY, size: 1_150_000 },
       ]);
     case "backup_now":
-      return r({ file: "nova-now.db", path: "", createdAt: Date.now(), size: 1_250_000 });
+      return r({ file: "pulsar-neu.db", path: "", createdAt: Date.now(), size: 1_210_000 });
+    case "backup_restore":
     case "apply_native_settings":
     case "tray_set_recent":
-      return r(undefined);
-    case "overlay_toggle":
-      return r(false);
-    case "update_check":
-      return r({ available: false, current: "1.0.0", latest: "1.0.0" });
     case "update_install":
       return r(undefined);
+    case "overlay_toggle":
+      window.open("/overlay.html", "pulsar-overlay", "width=320,height=140");
+      return r(true);
+    case "update_check":
+      return r({ available: false, current: "1.0.0", latest: "1.0.0", notes: null, setupUrl: null, setupSha256: null });
     default:
-      throw new Error(`Demo: Befehl „${cmd}“ ist nicht verfügbar.`);
+      throw new Error(`Demo: unbekannter Befehl „${cmd}“`);
   }
-}
-
-/** Für Tests: Demo-Daten zurücksetzen */
-export function resetMock() {
-  Object.assign(db, freshDb());
-  persist();
 }

@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "motion/react";
 import { api, initImgSrc } from "@/lib/api";
+import { useBoost } from "@/store/boost";
 import { useLibrary } from "@/store/library";
+import { useNet } from "@/store/net";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
-import { useBreakReminder, useDragDrop, useHotkeys, useStartupTasks } from "@/hooks/useAppEffects";
-import { AchievementPopup } from "@/components/AchievementPopup";
+import { useDragDrop, useHotkeys, useLiveStats, useStartupTasks } from "@/hooks/useAppEffects";
 import { Background } from "@/components/Background";
-import { BigPicture } from "@/components/BigPicture";
 import { CommandPalette } from "@/components/CommandPalette";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { DiceModal } from "@/components/DiceModal";
-import { Dock } from "@/components/Dock";
 import { DropZone } from "@/components/DropZone";
 import { Intro } from "@/components/Intro";
 import { LaunchRitual } from "@/components/LaunchRitual";
@@ -21,47 +19,41 @@ import { Sidebar } from "@/components/Sidebar";
 import { TitleBar } from "@/components/TitleBar";
 import { Toasts } from "@/components/Toasts";
 import { ContextMenuHost } from "@/components/ui/ContextMenu";
-import { Achievements } from "@/pages/Achievements";
-import { Cleanup } from "@/pages/Cleanup";
-import { Collections } from "@/pages/Collections";
+import { Cockpit } from "@/pages/Cockpit";
 import { GameDetail } from "@/pages/GameDetail";
-import { Home } from "@/pages/Home";
-import { Library } from "@/pages/Library";
+import { Games } from "@/pages/Games";
+import { Network } from "@/pages/Network";
+import { Optimize } from "@/pages/Optimize";
+import { Reports } from "@/pages/Reports";
 import { SettingsPage } from "@/pages/Settings";
-import { Stats } from "@/pages/Stats";
-import { Wishlist } from "@/pages/Wishlist";
 import { pageVariants } from "@shared/design/motion";
 import { sound } from "@shared/sound/engine";
 import { isTauri } from "@shared/lib/env";
 
 // Für automatische Oberflächen-Tests (nur im Entwicklungsmodus)
 if (import.meta.env.DEV) {
-  (window as unknown as Record<string, unknown>).__nova = { useUI, useLibrary, useSettings };
+  (window as unknown as Record<string, unknown>).__pulsar = { useUI, useLibrary, useSettings, useNet, useBoost };
 }
 
 function CurrentPage() {
   const route = useUI((s) => s.route);
   switch (route.page) {
-    case "home":
-      return <Home />;
-    case "library":
-      return <Library />;
+    case "cockpit":
+      return <Cockpit />;
+    case "games":
+      return <Games />;
     case "game":
-      return <GameDetail id={route.id ?? ""} />;
-    case "collections":
-      return <Collections id={route.id} />;
-    case "stats":
-      return <Stats />;
-    case "achievements":
-      return <Achievements />;
-    case "wishlist":
-      return <Wishlist />;
-    case "cleanup":
-      return <Cleanup />;
+      return <GameDetail id={route.id ?? ""} section={route.section} />;
+    case "network":
+      return <Network section={route.section} />;
+    case "optimize":
+      return <Optimize />;
+    case "reports":
+      return <Reports />;
     case "settings":
       return <SettingsPage section={route.section} />;
     default:
-      return <Home />;
+      return <Cockpit />;
   }
 }
 
@@ -72,7 +64,6 @@ export function App() {
   const settingsLoaded = useSettings((s) => s.loaded);
   const introEnabled = useSettings((s) => s.settings.introAnimation);
   const route = useUI((s) => s.route);
-  const bigPicture = useUI((s) => s.bigPicture);
 
   useEffect(() => {
     void (async () => {
@@ -88,6 +79,9 @@ export function App() {
       }
       await useSettings.getState().load();
       await useLibrary.getState().load();
+      // Netzwerk und Boost dürfen scheitern – die App bleibt bedienbar
+      await useNet.getState().init().catch((e) => console.warn("Netzwerk-Start:", e));
+      await useBoost.getState().init().catch((e) => console.warn("Boost-Start:", e));
       setReady(true);
       if (isTauri() && !info?.startedMinimized) {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -115,7 +109,7 @@ export function App() {
 
   useHotkeys();
   useDragDrop();
-  useBreakReminder();
+  useLiveStats(ready);
   useStartupTasks(ready);
 
   const onIntroLeave = useCallback(() => useUI.getState().setLogoDocked(true), []);
@@ -143,16 +137,12 @@ export function App() {
             </main>
           </div>
         </div>
-        {ready && <Dock />}
         <CommandPalette />
-        <DiceModal />
         <ScanWizard />
         <ManualAdd />
         <DropZone />
         <ConfirmDialog />
-        <AnimatePresence>{bigPicture && <BigPicture />}</AnimatePresence>
         <LaunchRitual />
-        <AchievementPopup />
         <Toasts />
         <ContextMenuHost />
         {showIntro && settingsLoaded && introEnabled && <Intro ready={ready} onLeave={onIntroLeave} onDone={onIntroDone} />}

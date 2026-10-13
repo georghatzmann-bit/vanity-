@@ -10,7 +10,7 @@ use crate::error::{CmdResult, LockExt};
 use crate::models::{NativeSettings, TrayRecent};
 use crate::state::{Core, Shared};
 
-pub const TRAY_ID: &str = "nova-tray";
+pub const TRAY_ID: &str = "pulsar-tray";
 pub const OVERLAY_MARGIN: f64 = 24.0;
 
 #[derive(Debug, Clone, Serialize)]
@@ -141,6 +141,7 @@ pub fn finalize(core: &Core) {
         first
     };
     if first {
+        crate::opt::shutdown(core);
         core.tracker.shutdown(core);
         drop(core.db.replace(None));
     }

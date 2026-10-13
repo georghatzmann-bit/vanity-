@@ -384,7 +384,7 @@ impl Tracker {
     pub fn start(core: Arc<Core>, app: AppHandle) {
         let _ = core.tracker.app.set(app);
         let spawn = std::thread::Builder::new()
-            .name("nova-tracker".into())
+            .name("pulsar-tracker".into())
             .spawn(move || thread_main(core));
         if let Err(e) = spawn {
             eprintln!("Spielzeit-Erkennung konnte nicht gestartet werden: {e}");

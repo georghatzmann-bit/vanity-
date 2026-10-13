@@ -35,7 +35,7 @@ export function formatClock(seconds: number): string {
 }
 
 /** "vor 3 Std.", "Gestern", ... */
-export function formatRelative(ts?: number): string {
+export function formatRelative(ts?: number | null): string {
   if (!ts) return t("common.never");
   const diff = Date.now() - ts;
   const min = Math.floor(diff / 60000);

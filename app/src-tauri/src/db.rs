@@ -416,7 +416,7 @@ mod tests {
 
     fn temp_db() -> (tempfile::TempDir, Db) {
         let dir = tempfile::tempdir().unwrap();
-        let db = Db::open(&dir.path().join("p").join("nova.db")).unwrap();
+        let db = Db::open(&dir.path().join("p").join("pulsar.db")).unwrap();
         (dir, db)
     }
 
@@ -450,8 +450,8 @@ mod tests {
         assert_eq!(db.list("games").unwrap().len(), 1);
         assert!(db.sessions_for_game("g1", 10).unwrap().is_empty(), "Sitzungen mitgelöscht");
 
-        db.kv_set("settings", &json!({"theme": "nova"})).unwrap();
-        assert_eq!(db.kv_get("settings").unwrap()["theme"], "nova");
+        db.kv_set("settings", &json!({"theme": "pulsar"})).unwrap();
+        assert_eq!(db.kv_get("settings").unwrap()["theme"], "pulsar");
         assert_eq!(db.kv_get("fehlt").unwrap(), Value::Null);
         db.kv_set("settings", &Value::Null).unwrap();
         assert_eq!(db.kv_get("settings").unwrap(), Value::Null);
@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn empty_sessions_removed_on_open() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nova.db");
+        let path = dir.path().join("pulsar.db");
         {
             let db = Db::open(&path).unwrap();
             db.session_insert("a", 1, 1, 0).unwrap();
@@ -507,7 +507,7 @@ mod tests {
     fn vacuum_backup() {
         let (dir, db) = temp_db();
         db.put("games", "g1", &json!({"id":"g1"})).unwrap();
-        let dest = dir.path().join("backups").join("nova-20240101-000000.db");
+        let dest = dir.path().join("backups").join("pulsar-20240101-000000.db");
         db.backup_into(&dest).unwrap();
         assert!(dest.exists());
         assert!(db.backup_into(&dest).is_err(), "vorhandene Datei nicht überschreiben");

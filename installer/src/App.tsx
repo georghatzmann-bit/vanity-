@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Download, FolderOpen, Gamepad2, HardDrive, Library, Monitor, Power, RefreshCw, Rocket, ShieldCheck, Sparkles, Trash2, Tv, Volume2, VolumeX, LayoutList,
+  Activity, AlertTriangle, ArrowLeft, ArrowRight, Download, FolderOpen, HardDrive, Lightbulb, Monitor, Power, Radar, RefreshCw, Rocket, ShieldCheck, Sparkles, Trash2, Volume2, VolumeX, LayoutList, Zap,
 } from "lucide-react";
 import { api, on, pickFolder, type DiskInfo, type ErrorCode, type InstallDone, type InstallError, type InstallOptions, type Manifest, type Phase, type Progress, type SetupInfo, type UninstallProgress } from "./api";
 import { formatBytes, formatEta, getLang, setLang, useT, type Lang } from "./i18n";
@@ -12,7 +12,7 @@ import { WaveRing } from "./components/WaveRing";
 import { AnimatedCheck } from "@shared/ui/AnimatedCheck";
 import { Button } from "@shared/ui/Button";
 import { Checkbox } from "@shared/ui/Checkbox";
-import { NovaLogo } from "@shared/ui/NovaLogo";
+import { PulsarLogo } from "@shared/ui/PulsarLogo";
 import { WindowControls } from "@shared/ui/WindowControls";
 import type { StarfieldHandle } from "@shared/ui/Starfield";
 import { cn } from "@shared/lib/cn";
@@ -25,7 +25,7 @@ const PHASES: Exclude<Phase, "done">[] = ["connect", "download", "verify", "inst
 
 function readMuted() {
   try {
-    return localStorage.getItem("nova-setup-muted") === "1";
+    return localStorage.getItem("pulsar-setup-muted") === "1";
   } catch {
     return false;
   }
@@ -70,7 +70,7 @@ export function App() {
   useEffect(() => {
     sound.setMuted(muted);
     try {
-      localStorage.setItem("nova-setup-muted", muted ? "1" : "0");
+      localStorage.setItem("pulsar-setup-muted", muted ? "1" : "0");
     } catch {
       /* egal */
     }
@@ -79,7 +79,7 @@ export function App() {
   // Start: Infos laden, Intro abspielen
   useEffect(() => {
     sound.play("startup");
-    const burst = window.setTimeout(() => stars.current?.burst(490, 270, { count: 170, speed: 9, life: 2 }), 650);
+    const bursts = [650, 1250, 1850].map((ms, i) => window.setTimeout(() => { sound.play("tick", { gain: 0.45 }); stars.current?.burst(490, 250, { count: i === 0 ? 170 : 80, speed: 9, life: 2 }); }, ms));
     let introDone = false;
     let loaded: SetupInfo | null = null;
     const next = (si: SetupInfo) => {
@@ -95,7 +95,7 @@ export function App() {
     const timer = window.setTimeout(() => {
       introDone = true;
       if (loaded) next(loaded);
-    }, 2600);
+    }, 3300);
     void api
       .setupInfo()
       .then((si) => {
@@ -107,7 +107,7 @@ export function App() {
         if (introDone) next(si);
       })
       .catch(() => {
-        loaded = { mode: "install", setupVersion: "1.0.0", appName: "Nova Launcher", defaultDir: "", elevated: false, systemLang: "de", manifestUrl: "" };
+        loaded = { mode: "install", setupVersion: "1.0.0", appName: "Pulsar", defaultDir: "", elevated: false, systemLang: "de", manifestUrl: "" };
         if (introDone) next(loaded);
       });
     void api
@@ -116,7 +116,7 @@ export function App() {
       .catch((e) => setManifestError(e instanceof Error ? e.message : String(e)));
     return () => {
       window.clearTimeout(timer);
-      window.clearTimeout(burst);
+      bursts.forEach((b) => window.clearTimeout(b));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -223,7 +223,7 @@ export function App() {
     await api.quit();
   };
 
-  // Option "NOVA danach starten": nach kurzem Countdown automatisch starten (abbrechbar)
+  // Option "Pulsar danach starten": nach kurzem Countdown automatisch starten (abbrechbar)
   const [countdown, setCountdown] = useState<number | null>(null);
   useEffect(() => {
     if (step === "done" && info?.mode !== "update" && opts.launchAfter) setCountdown(5);
@@ -240,7 +240,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [countdown]);
 
-  // Nach einem Update startet NOVA automatisch neu
+  // Nach einem Update startet Pulsar automatisch neu
   useEffect(() => {
     if (step === "done" && info?.mode === "update") {
       const id = window.setTimeout(() => void finish(true), 2600);
@@ -248,6 +248,14 @@ export function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, info]);
+
+  // Während des Downloads: kleine Tipps im Wechsel
+  const [tip, setTip] = useState(0);
+  useEffect(() => {
+    if (step !== "install") return;
+    const id = window.setInterval(() => setTip((x) => (x + 1) % 5), 4500);
+    return () => window.clearInterval(id);
+  }, [step]);
 
   const onClose = () => {
     if (step === "install" && busy) setConfirmClose(true);
@@ -270,7 +278,7 @@ export function App() {
         {/* Titelleiste */}
         <div data-tauri-drag-region className="absolute inset-x-0 top-0 z-30 flex h-11 items-center justify-between pl-5">
           <div data-tauri-drag-region className="text-[12px] font-medium tracking-[0.18em] text-faint uppercase">
-            {step !== "intro" && "Nova Setup"}
+            {step !== "intro" && "Pulsar Setup"}
           </div>
           <div className="flex h-full items-center">
             <button type="button" onClick={() => setMuted(!muted)} className="no-drag grid h-full w-11 place-items-center text-muted transition hover:text-fg" aria-label={muted ? t("common.unmute") : t("common.mute")} title={muted ? t("common.unmute") : t("common.mute")}>
@@ -280,19 +288,31 @@ export function App() {
           </div>
         </div>
 
-        {/* Intro */}
+        {/* Intro: Der Pulsar baut sich auf, Druckwellen laufen nach außen, das Signal steht */}
         <AnimatePresence>
           {step === "intro" && (
-            <motion.div key="intro" className="absolute inset-0 z-20 grid place-items-center" exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
-              <div className="flex flex-col items-center">
+            <motion.div key="intro" className="absolute inset-0 z-20 grid place-items-center" exit={{ opacity: 0, scale: 1.03, filter: "blur(6px)" }} transition={{ duration: 0.55 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <motion.div key={i} className="absolute top-1/2 left-1/2 rounded-full border border-accent" style={{ width: 160, height: 160, x: "-50%", y: "-66%" }} initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: [0.3, 6.5], opacity: [0, 0.5, 0] }} transition={{ duration: 2.6, delay: 0.55 + i * 0.6, ease: [0.22, 1, 0.36, 1] }} />
+              ))}
+              <div className="relative flex flex-col items-center">
+                <motion.div className="absolute top-0 left-1/2 h-64 w-64 -translate-x-1/2 -translate-y-[30%] rounded-full blur-3xl" style={{ background: "radial-gradient(circle, color-mix(in oklab, var(--nv-accent) 45%, transparent), transparent 70%)" }} initial={{ scale: 0, opacity: 0 }} animate={{ scale: [0, 1.5, 1], opacity: [0, 1, 0.7] }} transition={{ duration: 1.6, delay: 0.3 }} />
                 <motion.div layoutId="setup-logo" transition={{ type: "spring", stiffness: 110, damping: 18 }}>
-                  <NovaLogo size={140} mode="intro" />
+                  <PulsarLogo size={140} mode="intro" />
                 </motion.div>
                 <motion.div className="mt-8 font-display text-[40px] font-bold tracking-[0.42em] text-fg" initial={{ opacity: 0, letterSpacing: "0.9em", filter: "blur(10px)" }} animate={{ opacity: 1, letterSpacing: "0.42em", filter: "blur(0px)" }} transition={{ duration: 1.3, delay: 0.8, ease: [0.22, 1, 0.36, 1] }}>
-                  NOVA
+                  PULSAR
                 </motion.div>
                 <motion.div className="mt-2 text-[12px] tracking-[0.35em] text-muted uppercase" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }}>
                   {t("tagline")}
+                </motion.div>
+                <motion.div className="mt-8 flex items-center gap-3 text-[11px] tracking-[0.25em] text-muted uppercase" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.7 }}>
+                  <span className="flex items-end gap-[3px]">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <motion.span key={i} className="w-[5px] rounded-sm bg-accent" style={{ height: 5 + i * 3 }} initial={{ opacity: 0.18 }} animate={{ opacity: [0.18, 1] }} transition={{ delay: 1.9 + i * 0.2, duration: 0.25 }} />
+                    ))}
+                  </span>
+                  <SignalText />
                 </motion.div>
               </div>
             </motion.div>
@@ -305,10 +325,10 @@ export function App() {
             <motion.aside className="flex w-[300px] shrink-0 flex-col px-9 pt-16 pb-7" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ ...spring.smooth, delay: 0.1 }}>
               <div className="flex items-center gap-3">
                 <motion.div layoutId="setup-logo" transition={{ type: "spring", stiffness: 110, damping: 18 }}>
-                  <NovaLogo size={isUninstall && step === "un-run" ? 44 : 52} mode="idle" />
+                  <PulsarLogo size={isUninstall && step === "un-run" ? 44 : 52} mode="idle" />
                 </motion.div>
                 <div>
-                  <div className="font-display text-xl font-bold tracking-[0.22em] text-fg">NOVA</div>
+                  <div className="font-display text-xl font-bold tracking-[0.22em] text-fg">PULSAR</div>
                   <div className="text-[11px] tracking-wider text-muted">{t("tagline")}</div>
                 </div>
               </div>
@@ -341,20 +361,20 @@ export function App() {
                   <Page k="welcome" dir={dir}>
                     <div className="flex flex-1 flex-col px-10 pt-14">
                       <motion.h1 className="font-display text-[34px] leading-tight font-bold text-fg" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                        {t("welcome.title").replace("NOVA", "")}
-                        <span className="text-gradient">NOVA</span>
+                        {t("welcome.title").replace("PULSAR", "")}
+                        <span className="text-gradient">PULSAR</span>
                       </motion.h1>
                       <motion.p className="mt-3 max-w-[520px] text-[15px] leading-relaxed text-fg-soft" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                         {t("welcome.text")}
                       </motion.p>
                       <div className="mt-8 grid grid-cols-3 gap-3">
                         {[
-                          { i: <Library className="h-5 w-5" />, a: t("welcome.f1"), b: t("welcome.f1d") },
-                          { i: <BarChart3 className="h-5 w-5" />, a: t("welcome.f2"), b: t("welcome.f2d") },
-                          { i: <Tv className="h-5 w-5" />, a: t("welcome.f3"), b: t("welcome.f3d") },
+                          { i: <Activity className="h-5 w-5" />, a: t("welcome.f1"), b: t("welcome.f1d") },
+                          { i: <Zap className="h-5 w-5" />, a: t("welcome.f2"), b: t("welcome.f2d") },
+                          { i: <Radar className="h-5 w-5" />, a: t("welcome.f3"), b: t("welcome.f3d") },
                         ].map((f, i) => (
                           <motion.div key={i} className="glow-edge rounded-xl border border-line bg-surface p-4 [--glow-opacity:0] hover:[--glow-opacity:1]" initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ ...spring.gravity, delay: 0.3 + i * 0.08 }} whileHover={{ y: -4 }} onMouseEnter={() => sound.play("hover")}>
-                            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-accent text-white shadow-glow">{f.i}</span>
+                            <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-accent text-accent-fg shadow-glow">{f.i}</span>
                             <div className="mt-3 text-[13px] font-semibold text-fg">{f.a}</div>
                             <div className="text-[12px] text-muted">{f.b}</div>
                           </motion.div>
@@ -391,7 +411,7 @@ export function App() {
                       <p className="mt-3 text-[14px] text-fg-soft">{t("maintenance.text", { v: info.installed.version, dir: info.installed.dir })}</p>
                       <div className="mt-8 flex flex-col gap-3">
                         <motion.button type="button" whileHover={{ y: -3 }} whileTap={{ scale: 0.98 }} onMouseEnter={() => sound.play("hover")} onClick={() => void startInstall({ ...opts, dir: info.installed!.dir })} className="glow-edge flex items-center gap-4 rounded-xl border border-line bg-surface p-5 text-left [--glow-opacity:0] hover:[--glow-opacity:1]">
-                          <span className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-accent text-white shadow-glow">
+                          <span className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-accent text-accent-fg shadow-glow">
                             <RefreshCw className="h-5 w-5" />
                           </span>
                           <span>
@@ -428,7 +448,7 @@ export function App() {
                           className="h-11"
                           onClick={async () => {
                             const p = await pickFolder(opts.dir);
-                            if (p) setOpts({ ...opts, dir: /nova/i.test(p) ? p : `${p.replace(/[\\/]+$/, "")}\\Nova Launcher` });
+                            if (p) setOpts({ ...opts, dir: /pulsar/i.test(p) ? p : `${p.replace(/[\\/]+$/, "")}\\Pulsar` });
                           }}
                         >
                           {t("folder.browse")}
@@ -585,6 +605,16 @@ export function App() {
                             </motion.ol>
                           )}
                         </AnimatePresence>
+                        {!error && (
+                          <div className="mt-6 flex items-start gap-2.5 rounded-xl bg-surface px-4 py-3 text-[12px] leading-snug text-muted">
+                            <Lightbulb className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+                            <AnimatePresence mode="wait">
+                              <motion.span key={tip} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.25 }}>
+                                {t(`install.tips.t${tip + 1}`)}
+                              </motion.span>
+                            </AnimatePresence>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center justify-end border-t border-line px-10 py-5">
@@ -599,7 +629,10 @@ export function App() {
 
                 {step === "done" && (
                   <Page k="done" dir={dir}>
-                    <div className="flex flex-1 flex-col items-center justify-center px-10 text-center">
+                    <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-10 text-center">
+                      {[0, 1, 2].map((i) => (
+                        <motion.div key={i} className="pointer-events-none absolute top-1/2 left-1/2 rounded-full border border-success" style={{ width: 140, height: 140, x: "-50%", y: "-85%" }} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: [0.4, 6], opacity: [0, 0.45, 0] }} transition={{ duration: 2.4, delay: 0.5 + i * 0.5, ease: [0.22, 1, 0.36, 1] }} />
+                      ))}
                       <AnimatedCheck size={110} />
                       <motion.h1 className="mt-7 font-display text-4xl font-bold text-fg" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
                         {t("done.title")}
@@ -665,7 +698,7 @@ export function App() {
                   <Page k="un-run" dir={dir}>
                     <div className="flex flex-1 items-center gap-12 px-12">
                       <motion.div className="relative grid h-48 w-48 place-items-center" animate={{ scale: 1 - (unProgress?.percent ?? 0) / 160, opacity: 1 - (unProgress?.percent ?? 0) / 130, rotate: (unProgress?.percent ?? 0) * 1.8 }} transition={{ type: "spring", stiffness: 60, damping: 16 }}>
-                        <NovaLogo size={170} glow mode="static" />
+                        <PulsarLogo size={170} glow mode="static" />
                         <motion.div className="absolute inset-0 rounded-full border border-dashed border-accent/40" animate={{ rotate: -360 }} transition={{ duration: 6, repeat: Infinity, ease: "linear" }} />
                       </motion.div>
                       <div className="flex-1">
@@ -700,7 +733,7 @@ export function App() {
                   <Page k="un-done" dir={dir}>
                     <div className="flex flex-1 flex-col items-center justify-center px-10 text-center">
                       <motion.div initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={spring.gravity}>
-                        <Gamepad2 className="h-14 w-14 text-accent" strokeWidth={1.5} />
+                        <Activity className="h-14 w-14 text-accent" strokeWidth={1.5} />
                       </motion.div>
                       <h1 className="mt-6 font-display text-4xl font-bold text-fg">{t("uninstall.doneTitle")}</h1>
                       <p className="mt-3 text-[15px] text-fg-soft">{t("uninstall.doneText")}</p>
@@ -745,6 +778,17 @@ export function App() {
       </div>
     </LayoutGroup>
   );
+}
+
+/** "Signal wird aufgebaut …" → "Signal steht." (ohne Neurender des ganzen Intros) */
+function SignalText() {
+  const t = useT();
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setReady(true), 2900);
+    return () => window.clearTimeout(id);
+  }, []);
+  return <span className={ready ? "text-fg" : undefined}>{ready ? t("intro.ready") : t("intro.connecting")}</span>;
 }
 
 function defaultOpts(si: SetupInfo): InstallOptions {
