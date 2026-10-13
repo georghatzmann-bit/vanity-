@@ -106,7 +106,12 @@ jobs:
           $m.app.url = "http://127.0.0.1:8765/NovaLauncher.exe"
           $m | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $serve "latest.json") -Encoding utf8
           $server = Start-Process python -ArgumentList "-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", $serve -PassThru -WindowStyle Hidden
-          Start-Sleep -Seconds 3
+          # Warten, bis der Test-Server wirklich antwortet (Python startet auf Windows unterschiedlich schnell)
+          $ready = $false
+          for ($i = 0; $i -lt 60 -and -not $ready; $i++) {
+            try { Invoke-WebRequest "http://127.0.0.1:8765/latest.json" -UseBasicParsing -TimeoutSec 2 | Out-Null; $ready = $true } catch { Start-Sleep -Milliseconds 500 }
+          }
+          if (-not $ready) { throw "Der lokale Test-Server ist nicht gestartet." }
           $report = Join-Path $env:RUNNER_TEMP "selftest.json"
           $dir = Join-Path $env:RUNNER_TEMP "nova-selftest"
           $p = Start-Process -FilePath "release\NovaLauncher-Setup.exe" -ArgumentList "--selftest", "--dir", "`"$dir`"", "--manifest", "http://127.0.0.1:8765/latest.json", "--report", "`"$report`"" -Wait -PassThru
