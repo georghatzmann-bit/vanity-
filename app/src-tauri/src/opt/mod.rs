@@ -1,6 +1,7 @@
 //! Optimieren: Tweaks (mit Sicherung und „Rückgängig“), Energiepläne, Boost-Modus, Prozesse,
 //! und der Admin-Helfer (`Pulsar.exe --elevated …`), der alle Admin-Schritte mit EINER Abfrage erledigt.
 
+pub mod elevate;
 pub mod types;
 
 use tauri::{AppHandle, State};
