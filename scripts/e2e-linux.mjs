@@ -137,9 +137,11 @@ try {
     await js(`[...document.querySelectorAll('nav button')].find(b => b.textContent.includes(arguments[0]))?.click()`, [label]);
     await sleep(1800);
     await shot(`0${5 + i}-${label.toLowerCase()}`);
+    if (label === "Bibliothek") {
+      const inLibrary = await js(`return document.body.innerText.includes('E2E Testspiel')`);
+      check("Testspiel erscheint in der Bibliothek", inLibrary);
+    }
   }
-  const detailOk = await js(`return document.body.innerText.includes('E2E Testspiel')`);
-  check("Testspiel erscheint in der Oberfläche", detailOk);
 } catch (e) {
   check("Ablauf ohne Ausnahme", false, String(e).slice(0, 500));
 } finally {

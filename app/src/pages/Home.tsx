@@ -56,7 +56,7 @@ function Hero({ game }: { game: Game }) {
           <span className="flex items-center gap-1.5">
             <Clock3 className="h-3.5 w-3.5" /> {formatDuration(liveSeconds(stats, run, now))}
           </span>
-          {stats?.lastSessionSeconds && (
+          {!!stats?.lastSessionSeconds && (
             <span className="flex items-center gap-1.5">
               <Timer className="h-3.5 w-3.5" /> {t("game.lastSession")}: {formatDuration(stats.lastSessionSeconds)}
             </span>
@@ -138,8 +138,11 @@ export function Home() {
     if (heroGame) useUI.getState().setFocusGame(heroGame.id);
   }, [heroGame]);
 
-  const week = weekSeconds(sessions);
-  const today = todaySeconds(sessions);
+  // inklusive laufender Sitzungen, damit die Zahlen live mitzählen
+  const now = useNow(30000);
+  const live = [...running.values()].reduce((a, r) => a + Math.max(0, (now - r.startedAt) / 1000), 0);
+  const week = weekSeconds(sessions, now) + live;
+  const today = todaySeconds(sessions, now) + live;
 
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-8 px-8 pt-4 pb-28">

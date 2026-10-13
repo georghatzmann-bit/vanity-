@@ -249,10 +249,15 @@ fn location_resolution() {
     assert_eq!(base.join(APP).unwrap().to_url_string(), "https://github.com/o/r/releases/latest/download/NovaLauncher.exe");
     assert_eq!(base.join("../v2/x.exe").unwrap().to_url_string(), "https://github.com/o/r/releases/latest/v2/x.exe");
     assert_eq!(base.join("https://cdn.example/a.exe").unwrap().to_url_string(), "https://cdn.example/a.exe");
-    let file = Location::parse("/srv/feed/latest.json", None).unwrap();
-    assert_eq!(file.join("bin/NovaLauncher.exe").unwrap(), Location::File(PathBuf::from("/srv/feed/bin/NovaLauncher.exe")));
-    assert_eq!(Location::parse("file:///srv/feed/latest.json", None).unwrap(), file);
-    assert_eq!(Location::parse("FILE:///srv/feed/latest.json", None).unwrap(), file);
+    // Dateipfade sind plattformabhängig (Windows braucht einen Laufwerksbuchstaben).
+    #[cfg(windows)]
+    let (path, url, url_upper, joined) = ("C:\\srv\\feed\\latest.json", "file:///C:/srv/feed/latest.json", "FILE:///C:/srv/feed/latest.json", "C:\\srv\\feed\\bin\\NovaLauncher.exe");
+    #[cfg(not(windows))]
+    let (path, url, url_upper, joined) = ("/srv/feed/latest.json", "file:///srv/feed/latest.json", "FILE:///srv/feed/latest.json", "/srv/feed/bin/NovaLauncher.exe");
+    let file = Location::parse(path, None).unwrap();
+    assert_eq!(file.join("bin/NovaLauncher.exe").unwrap(), Location::File(PathBuf::from(joined)));
+    assert_eq!(Location::parse(url, None).unwrap(), file);
+    assert_eq!(Location::parse(url_upper, None).unwrap(), file);
     assert!(Location::parse("", None).is_err());
     assert!(base.join("  ").is_err());
 }
@@ -576,6 +581,7 @@ fn test_manifest(url: String, data: &[u8], with_sha: bool) -> Manifest {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn install_and_uninstall_files() {
+    let _guard = system_lock();
     let srv = TestServer::start();
     let data = test_data(SIZE, 11);
     srv.add_file("/NovaLauncher.exe", data.clone());
@@ -683,6 +689,7 @@ async fn uninstall_keeps_foreign_files_and_data() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn install_reports_disk_and_permission_problems() {
+    let _guard = system_lock();
     let tmp = TempDir::new("install-errors");
     std::fs::write(tmp.join("blocker"), b"file").unwrap();
     let data = test_data(1000, 12);
@@ -701,10 +708,18 @@ async fn install_reports_disk_and_permission_problems() {
     assert_eq!((err.phase, err.code, err.retryable), ("download", "disk", true));
 }
 
+/// Tests, die unter Windows echte Verknüpfungen und Registry-Einträge anlegen, dürfen nicht
+/// gleichzeitig laufen – sonst überschreiben sie sich gegenseitig den Installationsort.
+fn system_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 // ------------------------------------------------------------------ Selbsttest
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn selftest_end_to_end() {
+    let _guard = system_lock();
     let srv = TestServer::start();
     let data = test_data(SIZE, 13);
     srv.add_file("/rel/NovaLauncher.exe", data.clone());
@@ -738,6 +753,7 @@ async fn selftest_end_to_end() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn selftest_reports_failures() {
+    let _guard = system_lock();
     let tmp = TempDir::new("selftest-fail");
     let cfg = SelftestConfig {
         dir: tmp.join("install"),
@@ -768,6 +784,7 @@ async fn selftest_reports_failures() {
 
 #[test]
 fn selftest_cli_entry_point() {
+    let _guard = system_lock();
     // Kompletter `--selftest`-Ablauf wie von der Kommandozeile (eigene Laufzeit, Standard-Berichtspfad).
     let srv = TestServer::start();
     let data = test_data(600_000, 15);
