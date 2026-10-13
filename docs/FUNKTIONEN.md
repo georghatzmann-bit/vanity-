@@ -21,12 +21,20 @@ Titelleiste. Abschaltbar unter **Einstellungen → Aussehen → Startanimation**
 
 ### Übersicht
 ![Cockpit](screenshots/funktionen/02-cockpit.jpg)
+- **„Weiterspielen“-Banner** (oben, wie bei NOVA): Hintergrundbild und Logo deines zuletzt gespielten Spiels, Spielzeit, wann zuletzt gespielt, Note der letzten Runde mit Ø-Ping und Spitzen. Knöpfe: **Boost & Spielen**, **Spielen**, **Details**. Oben rechts steht, wohin Pulsar während des Spiels misst. Läuft ein Spiel, zeigt das Banner die laufende Zeit und **Beenden**. Spiele ohne breites Bild bekommen ein schwebendes Cover.
+- Das Spielbild färbt den Hintergrund der App leicht ein.
 - **Verbindungsnote** (links): A+ bis F aus Ping, Schwankung (Jitter) und Paketverlust. Mit einem Satz, was sie bedeutet.
 - **Live-Ping** (Mitte): Messung jede Sekunde zum eingestellten Messziel (Rechenzentrum oder echter Spielserver). Kurve für 60 s, 5 min oder 15 min; Ø, Min, Max, Schwankung, Verlust. Die rote gestrichelte Linie ist deine Warnschwelle.
 - **BOOST** (rechts): der große Knopf.
-- Zweite Reihe: **letzte Runde** bzw. **laufendes Spiel** mit „Boost & Spielen“, **PC-Auslastung** (CPU, RAM, GPU) und **Schnellzugriff** auf die Netzwerk-Werkzeuge.
-- Unten: Kennzahlen der letzten Runde.
 - Oben rechts: Kabel oder WLAN und die Verbindungsgeschwindigkeit.
+- In der Seitenleiste: **Zuletzt gespielt** mit Spiel-Icons – Klick öffnet das Spiel, der Play-Knopf startet es mit Boost.
+
+### Kürzlich gespielt, PC-Auslastung, letzte Runde, Favoriten
+![Kürzlich gespielt](screenshots/funktionen/02b-cockpit-kuerzlich-gespielt.jpg)
+- **Kürzlich gespielt**: Cover-Reihe mit Pfeilen zum Blättern (Überfahren: 3D-Neigung, Lichtreflex, Play-Knopf).
+- **PC-Auslastung** (CPU, RAM, GPU) und **Schnellzugriff** auf Regionen, Route, DNS, Speedtest.
+- **Letzte Runde**: Bericht mit Ping-Verlauf und Note.
+- **Favoriten**: zweite Cover-Reihe mit deinen Lieblingsspielen.
 
 ### BOOST
 ![Boost](screenshots/funktionen/03-cockpit-boost-hover.jpg)
@@ -74,17 +82,17 @@ Das Boost-Profil (was genau passiert) stellst du unter **Optimieren** ein.
 ![Regionen gemessen](screenshots/funktionen/14-netzwerk-regionen-gemessen.jpg)
 Ping zu rund 25 Rechenzentren weltweit (AWS), nach Erdteil sortiert, mit Note, Schwankung und Verlust.
 **Favoriten messen** oder **Alle messen**; die beste Region wird hervorgehoben. **Als Messziel** macht sie zum Ziel des Live-Pings im Cockpit.
-Rechts: **Echte Spielserver** – Valve (CS2, Dota 2, Deadlock) und Riot (LoL) veröffentlichen die Adressen ihrer Server; Pulsar misst sie direkt.
+Rechts: **Echte Spielserver** – Valve (CS2, Dota 2, Deadlock) und Riot (LoL) veröffentlichen die Adressen ihrer Server; Pulsar misst sie direkt. Die Auswahl zeigt das Icon des Spiels, wenn es in deiner Liste ist.
 
 ### Route
 ![Route](screenshots/funktionen/15-netzwerk-route.jpg)
-Station für Station zum Ziel. Jede Station ist eingeordnet: **Dein Netz** (Router/WLAN), **Dein Anbieter**, **Internet**, **Ziel**.
+Station für Station zum Ziel. Jede Station ist eingeordnet: **Dein Netz** (Router/WLAN), **Dein Anbieter**, **Internet**, **Ziel** – vor der ersten Analyse erklärt eine kleine Grafik die vier Zonen. Schnellziele: aktuelles Messziel, Cloudflare, Google, Steam.
 Das Fazit sagt dir in einem Satz, wo der größte Sprung passiert – und was du daran ändern kannst.
 
 ### DNS
 ![DNS](screenshots/funktionen/16-netzwerk-dns.jpg)
 ![DNS-Ergebnis](screenshots/funktionen/17-netzwerk-dns-ergebnis.jpg)
-Vergleicht Cloudflare, Google, Quad9, OpenDNS, AdGuard, DNS.WATCH, Control D und deinen aktuellen Router-DNS – jeweils für neue und bekannte Adressen.
+Vergleicht Cloudflare, Google, Quad9, OpenDNS, AdGuard, DNS0.eu, Mullvad und deinen aktuellen Router-DNS – jeweils für neue und bekannte Adressen. Vor dem ersten Vergleich zeigt die Seite, welche Dienste geprüft werden.
 Der schnellste wird markiert. Rechts die **Schritt-für-Schritt-Anleitung** fürs Eintragen in Windows mit Knopf, der die Netzwerkeinstellungen öffnet.
 Pulsar ändert den DNS **nicht selbst** – du behältst die Kontrolle. Ehrlich dazu: Ein schneller DNS macht Spielstarts und Matchmaking flotter, am Ping im Spiel ändert er nichts.
 
@@ -92,7 +100,7 @@ Pulsar ändert den DNS **nicht selbst** – du behältst die Kontrolle. Ehrlich 
 ![Speedtest läuft](screenshots/funktionen/18-netzwerk-speedtest-laeuft.jpg)
 ![Speedtest-Ergebnis](screenshots/funktionen/19-netzwerk-speedtest-ergebnis.jpg)
 Download und Upload (über Cloudflare) – und das Wichtigste fürs Spielen: **Wie stark steigt dein Ping, wenn die Leitung ausgelastet ist?**
-Das ist Bufferbloat, der häufigste Grund für Lags, „obwohl das Internet schnell ist“. Note A+ bis F mit Erklärung.
+Das ist Bufferbloat, der häufigste Grund für Lags, „obwohl das Internet schnell ist“. Note A+ bis F mit Erklärung; vor dem ersten Test zeigt die Seite die Notenskala (A+ unter 5 ms Anstieg … F ab 400 ms).
 
 ### Verbindung
 ![Verbindung](screenshots/funktionen/20-netzwerk-verbindung.jpg)
