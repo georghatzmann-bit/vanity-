@@ -31,7 +31,8 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=uninstall`) |
 | `npm run tauri:dev` | echte App mit Rust-Backend |
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
-| `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App (Linux mit `xvfb-run`, Windows mit Edge-WebDriver) |
+| `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App per WebDriver (Linux mit `xvfb-run`) |
+| `NovaLauncher.exe --selftest <bericht.json>` | Eingebauter Selbsttest der App (Scan, Cover, Icon, Starten, Spielzeit, Beenden), Exit-Code 0 = alles ok – so prüft die Windows-CI |
 | `node scripts/e2e-installer-linux.mjs <setup> <nutzlast> <ordner>` | Ende-zu-Ende-Test des echten Installers inkl. Abbruch + Fortsetzen |
 
 Was getestet wurde und was nicht: [docs/TESTBERICHT.md](docs/TESTBERICHT.md)

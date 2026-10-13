@@ -8,30 +8,40 @@ Windows-Rechner von GitHub (windows-latest). Ein echter Spiele-PC mit Steam/Epic
 | Bereich | Wie | Ergebnis |
 |---|---|---|
 | Oberflächen-Logik (Suche, Doppelte, Statistik, Würfel, Erfolge, Übersetzungen, kaputte Daten) | 18 Vitest-Tests (`npm test`) | ✅ grün (Linux + Windows) |
-| App-Backend (VDF/ACF, Steam/Epic-Manifeste, Ordner-Scan, Prozess-Erkennung, DB, Sitzungen, Statistik, Export/Import, Spielstand-Zip inkl. Zip-Slip-Schutz, Backups, Farbpalette, Versionen) | 73 Rust-Tests (`npm run test:rust`) | ✅ grün unter Linux; Windows siehe CI |
-| Installer-Backend (Manifest, Download, Fortsetzen nach Abbruch, 200/206/416, Prüfsumme, Abbrechen, Speicherplatz, Installation/Deinstallation, Selbsttest) | 27 Rust-Tests | ✅ grün unter Linux; unter Windows zwei Testfehler gefunden und behoben (parallele Registry-Tests, Linux-Pfad im Test) |
+| App-Backend (VDF/ACF, Steam/Epic-Manifeste, Ordner-Scan, Prozess-Erkennung, DB, Sitzungen, Statistik, Export/Import, Spielstand-Zip inkl. Zip-Slip-Schutz, Backups, Farbpalette, Versionen) | 73 Rust-Tests (`npm run test:rust`) | ✅ grün (Linux + Windows) |
+| Installer-Backend (Manifest, Download, Fortsetzen nach Abbruch, 200/206/416, Prüfsumme, Abbrechen, Speicherplatz, Installation/Deinstallation, Selbsttest) | 27 Rust-Tests | ✅ grün (Linux + Windows); unter Windows zuerst zwei Testfehler gefunden und behoben (parallele Registry-Tests, Linux-Pfad im Test) |
 | Typprüfung beider Oberflächen | `npm run typecheck` | ✅ |
 
 ## Ende-zu-Ende mit der echten App (Rust + Oberfläche)
 
-`scripts/e2e-app.mjs` steuert die echte App per WebDriver:
+Unter Linux steuert `scripts/e2e-app.mjs` die echte App per WebDriver (klickt wie ein Mensch).
+Auf dem Windows-Rechner von GitHub konnte sich der Edge-WebDriver nicht mit WebView2 verbinden
+(„DevToolsActivePort file doesn't exist“). Deshalb hat die App einen **eingebauten Selbsttest**:
+`NovaLauncher.exe --selftest bericht.json` ruft dieselben Befehle auf, die auch die Oberfläche benutzt,
+und meldet das Ergebnis. Der Windows-Lauf schlägt fehl, wenn auch nur ein Schritt nicht klappt.
 
-| Prüfung | Linux | Windows (CI) |
+| Prüfung | Linux (WebDriver) | Windows (CI, Selbsttest) |
 |---|---|---|
-| App startet, Startanimation sichtbar, Hauptfenster lädt | ✅ | siehe CI |
-| Steam-Bibliothek wird gefunden (nachgebaute Steam-Installation), Redistributables gefiltert | ✅ | siehe CI |
-| Echtes Steam-Cover von Steams Server geladen und angezeigt | ✅ (Portal 2) | siehe CI |
-| Spiel starten, „Läuft gerade“ erkannt, Beenden-Knopf beendet den Prozess | ✅ | siehe CI |
-| Spielzeit gemessen und in der Datenbank gespeichert | ✅ (17 s) | siehe CI |
-| Einstellungen/Theme bleiben nach Neustart, Export/Import, Backup, PC-Auslastung | ✅ | siehe CI |
+| App startet, Startanimation, Hauptfenster lädt | ✅ | ✅ (Screenshots im CI-Artefakt) |
+| Steam-Bibliothek gefunden (nachgebaute Steam-Installation, unter Windows über die echte Registry `HKCU\Software\Valve\Steam`) | ✅ | ✅ „Portal 2“ gefunden |
+| Startmenü-, Epic- und GOG-Scan | ✅ (leer) | ✅ 46 Programme aus dem Startmenü (z. B. 7-Zip, Firefox) |
+| Echtes Steam-Cover, Hero-Bild und Logo von Steams Server | ✅ | ✅ |
+| Echtes Programm-Icon aus einer .exe (explorer.exe) | – (nur Windows) | ✅ |
+| PC-Auslastung (CPU, RAM, GPU) | ✅ | ✅ CPU, 16 GB RAM, GPU-Last |
+| Spiel starten, „Läuft gerade“ erkannt | ✅ | ✅ nach 0,5 s |
+| Beenden-Knopf beendet den Prozess | ✅ | ✅ |
+| Spielzeit gemessen und in der Datenbank gespeichert | ✅ (17 s) | ✅ (13 s, 1 Sitzung) |
+| Einstellungen/Theme bleiben nach Neustart, Export/Import, Backup | ✅ | – (nur Linux geprüft) |
 
 `scripts/e2e-installer-linux.mjs` steuert den echten Installer: Intro → Willkommen → Ordner → Optionen →
 Download (mit absichtlichem Verbindungsabbruch bei 45 %) → Fortsetzen per Range-Anfrage → Prüfsumme →
 Installation → Fertig. **11/11 ✅** (Linux).
 
-Auf Windows (CI) zusätzlich: App startet und läuft stabil, Installer startet, **Installer-Selbsttest**
+Auf Windows (CI) zusätzlich: Installer startet, **Installer-Selbsttest** ✅
 (Download von lokalem Server, SHA-256, Installation, Startmenü- und Desktop-Verknüpfung,
 Eintrag in „Apps & Features“, Deinstallation, alles wieder entfernt).
+Außerdem hat der Installer-Selbsttest einmal gegen das **echte GitHub-Release `nova-latest`** geladen
+und installiert – ✅.
 
 ## Oberfläche im Browser (Demo-Daten)
 
@@ -41,8 +51,10 @@ unsichtbare Intro-Ebene blockierte alle Klicks, verdecktes Suchfeld, „0“ im 
 
 ## Nicht getestet (ehrlich)
 
-- **Echte Spiele-Launcher**: Epic-, GOG- und Startmenü-Scan sowie Steam über die echte Registry laufen nur mit
-  nachgebauten Daten bzw. auf einem leeren CI-Rechner – nie mit einer echten Spielesammlung.
+- **Echte Spielesammlung**: Steam lief mit nachgebauten Daten, Epic und GOG auf einem Rechner ohne diese Launcher.
+  Mit einer echten, großen Sammlung (und echten Epic-/GOG-Installationen) wurde NOVA nie ausprobiert.
+- **Klicken in der Windows-Oberfläche**: Auf Windows sind die Abläufe über den Selbsttest geprüft, und die Screenshots
+  zeigen die richtig gezeichnete App. Ein automatisches Durchklicken aller Seiten gab es nur unter Linux und im Browser.
 - **SteamGridDB** mit echtem API-Schlüssel (der Code ist da, die Antworten werden in Tests geparst).
 - **Tastenkürzel fürs Overlay** über einem laufenden Vollbildspiel, **Controller** im Big-Picture-Modus,
   **Tray-Menü**, **Autostart** und **Windows-Benachrichtigungen** – brauchen einen echten Desktop mit Mensch davor.
