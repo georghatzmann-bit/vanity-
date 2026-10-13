@@ -3,6 +3,13 @@
 Hier steht, wie du NOVA startest, wie du die Dateien hochlädst und wie du die Download-Adresse einstellst.
 Du brauchst dafür keine Programmierkenntnisse.
 
+## Der schnellste Weg
+
+1. Lade den Installer herunter:
+   `https://github.com/georghatzmann-bit/vanity-/releases/download/nova-latest/NovaLauncher-Setup.exe`
+2. Doppelklick auf die Datei. Bei der blauen Windows-Warnung: **Weitere Informationen** → **Trotzdem ausführen**.
+3. Durch den Installer klicken. **Geklappt**, wenn „NOVA ist bereit!“ erscheint.
+
 ---
 
 ## 1. Was ist was?
