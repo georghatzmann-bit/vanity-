@@ -308,10 +308,24 @@ fn snapshot(sys: &mut System, own_pid: u32) -> Vec<ProcInfo> {
 struct RunningEntry {
     started_at: i64,
     last_seen: i64,
+    /// Zeitpunkt der ersten Prüfung, bei der das Spiel fehlte
+    first_miss_at: i64,
     last_flush: i64,
     session_id: Option<i64>,
     pids: Vec<u32>,
     misses: u32,
+}
+
+impl RunningEntry {
+    /// Geschätztes Ende: läuft es noch → jetzt; sonst Mitte zwischen „zuletzt gesehen“ und
+    /// „erstmals vermisst“ (Fehler höchstens ein halbes Prüfintervall).
+    fn estimated_end(&self, now: i64) -> i64 {
+        if self.misses == 0 {
+            now
+        } else {
+            self.last_seen + (self.first_miss_at - self.last_seen).max(0) / 2
+        }
+    }
 }
 
 #[derive(Default)]
@@ -337,10 +351,14 @@ impl TrackerState {
         list
     }
 
+    /// Schneller prüfen: kurz nach einem Start oder wenn ein laufendes Spiel gerade fehlt
+    /// (damit das Ende schnell erkannt wird).
     fn fast_poll(&self) -> bool {
-        self.launched
-            .iter()
-            .any(|(id, t)| t.elapsed() < FAST_POLL_WINDOW && !self.running.contains_key(id))
+        self.running.values().any(|r| r.misses > 0)
+            || self
+                .launched
+                .iter()
+                .any(|(id, t)| t.elapsed() < FAST_POLL_WINDOW && !self.running.contains_key(id))
     }
 }
 
@@ -416,7 +434,7 @@ impl Tracker {
             let now = now_ms();
             for id in removed {
                 if let Some(entry) = st.running.remove(&id) {
-                    let end = if entry.misses == 0 { now } else { entry.last_seen };
+                    let end = entry.estimated_end(now);
                     events.push(TrackerEvent::Stopped(finalize(core, &id, &entry, end)));
                 }
             }
@@ -459,7 +477,8 @@ impl Tracker {
     }
 
     /// Beendet alle Prozesse eines Spiels. Liefert die Anzahl beendeter Prozesse.
-    pub fn stop_game(&self, game_id: &str) -> CmdResult<u32> {
+    /// Sind die Prozesse weg, wird die Sitzung sofort abgeschlossen (`game://stopped`).
+    pub fn stop_game(&self, core: &Core, game_id: &str) -> CmdResult<u32> {
         let (matcher, cached) = {
             let st = self.state.lock_safe();
             let m = st
@@ -494,6 +513,33 @@ impl Tracker {
                 }
             }
         }
+        if killed > 0 {
+            // Kurz warten, bis die Prozesse wirklich beendet sind, dann sofort abschließen
+            let list: Vec<Pid> = pids.iter().map(|p| Pid::from_u32(*p)).collect();
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let gone = loop {
+                sys.refresh_processes(ProcessesToUpdate::Some(&list), true);
+                if !list.iter().any(|p| sys.process(*p).is_some()) {
+                    break true;
+                }
+                if Instant::now() >= deadline {
+                    break false;
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            };
+            if gone {
+                let mut events = Vec::new();
+                {
+                    let mut st = self.state.lock_safe();
+                    if let Some(entry) = st.running.remove(game_id) {
+                        st.adhoc.remove(game_id);
+                        st.launched.remove(game_id);
+                        events.push(TrackerEvent::Stopped(finalize(core, game_id, &entry, now_ms())));
+                    }
+                }
+                self.emit(events);
+            }
+        }
         {
             let mut st = self.state.lock_safe();
             self.wake(&mut st);
@@ -516,7 +562,7 @@ impl Tracker {
             let now = now_ms();
             let entries: Vec<(String, RunningEntry)> = st.running.drain().collect();
             for (id, entry) in entries {
-                let end = if entry.misses == 0 { now } else { entry.last_seen };
+                let end = entry.estimated_end(now);
                 events.push(TrackerEvent::Stopped(finalize(core, &id, &entry, end)));
             }
             if clear_games {
@@ -606,6 +652,7 @@ impl Tracker {
                     RunningEntry {
                         started_at: now,
                         last_seen: now,
+                        first_miss_at: now,
                         last_flush: now,
                         session_id,
                         pids: pids.clone(),
@@ -628,6 +675,9 @@ impl Tracker {
         for id in missing {
             let stop = match st.running.get_mut(&id) {
                 Some(r) => {
+                    if r.misses == 0 {
+                        r.first_miss_at = now;
+                    }
                     r.misses += 1;
                     r.pids.clear();
                     r.misses >= MISSES_TO_STOP
@@ -637,7 +687,7 @@ impl Tracker {
             if stop {
                 if let Some(entry) = st.running.remove(&id) {
                     st.adhoc.remove(&id);
-                    events.push(TrackerEvent::Stopped(finalize(core, &id, &entry, entry.last_seen)));
+                    events.push(TrackerEvent::Stopped(finalize(core, &id, &entry, entry.estimated_end(now))));
                 }
             }
         }
@@ -805,6 +855,23 @@ mod tests {
         let m = Matcher::from_info(&info(Some(r"C:\Games\X\x64\game.exe"), None, &[]), &ctx());
         assert!(m.matches(None, "game.exe"));
         assert!(!m.matches(Some("c:/other/game.exe"), "game.exe"), "lesbarer Pfad muss passen");
+    }
+
+    #[test]
+    fn end_estimate_is_midpoint() {
+        let mut e = RunningEntry {
+            started_at: 0,
+            last_seen: 30_000,
+            first_miss_at: 30_000,
+            last_flush: 0,
+            session_id: None,
+            pids: vec![],
+            misses: 0,
+        };
+        assert_eq!(e.estimated_end(40_000), 40_000, "läuft noch");
+        e.misses = 2;
+        e.first_miss_at = 33_000;
+        assert_eq!(e.estimated_end(40_000), 31_500);
     }
 
     #[test]

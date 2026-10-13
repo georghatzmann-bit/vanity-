@@ -332,7 +332,7 @@ pub async fn launch_game(
 #[tauri::command]
 pub async fn stop_game(state: State<'_, Shared>, game_id: String) -> CmdResult<u32> {
     let core = state.inner().clone();
-    blocking(move || core.tracker.stop_game(&game_id)).await
+    blocking(move || core.tracker.stop_game(&core, &game_id)).await
 }
 
 #[tauri::command]
