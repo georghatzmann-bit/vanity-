@@ -65,7 +65,7 @@ function Hero({ game }: { game: Game }) {
         </div>
         <div className="flex gap-3">
           {run ? (
-            <Button variant="danger" size="lg" icon={<Square className="h-4 w-4" fill="currentColor" />} onClick={() => void useLibrary.getState().stop(game.id)} className="bg-danger text-white">
+            <Button variant="danger-solid" size="lg" icon={<Square className="h-4 w-4" fill="currentColor" />} onClick={() => void useLibrary.getState().stop(game.id)}>
               {t("common.stop")}
             </Button>
           ) : (
@@ -73,7 +73,7 @@ function Hero({ game }: { game: Game }) {
               {t("common.play")}
             </Button>
           )}
-          <Button variant="glass" size="lg" icon={<Info className="h-4 w-4" />} onClick={() => useUI.getState().navigate({ page: "game", id: game.id })} className="text-white">
+          <Button variant="ghost" size="lg" icon={<Info className="h-4 w-4" />} onClick={() => useUI.getState().navigate({ page: "game", id: game.id })} className="border border-white/20 bg-white/10 text-white backdrop-blur-md hover:bg-white/20 hover:text-white">
             Details
           </Button>
         </div>

@@ -629,7 +629,7 @@ export function GameDetail({ id }: { id: string }) {
             )}
             <div className="flex flex-wrap items-center gap-3">
               {run ? (
-                <Button size="lg" variant="danger" icon={<Square className="h-4 w-4" fill="currentColor" />} className="bg-danger text-white" onClick={async () => (await confirmDialog({ title: t("common.stop"), text: t("game.stopConfirm", { name: game.name }), danger: true, confirmLabel: t("common.stop") })) && void useLibrary.getState().stop(game.id)}>
+                <Button size="lg" variant="danger-solid" icon={<Square className="h-4 w-4" fill="currentColor" />} onClick={async () => (await confirmDialog({ title: t("common.stop"), text: t("game.stopConfirm", { name: game.name }), danger: true, confirmLabel: t("common.stop") })) && void useLibrary.getState().stop(game.id)}>
                   {t("common.stop")} · {formatDuration((now - run.startedAt) / 1000, { showSeconds: true })}
                 </Button>
               ) : (

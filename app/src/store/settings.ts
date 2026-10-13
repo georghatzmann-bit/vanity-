@@ -6,6 +6,7 @@ import { applyAppearance } from "@/lib/theme";
 import type { Settings } from "@/lib/types";
 import { sound } from "@shared/sound/engine";
 import { isTauri } from "@shared/lib/env";
+import { toast } from "./ui";
 
 interface SettingsState {
   settings: Settings;
@@ -71,7 +72,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
     if (NATIVE_KEYS.some((k) => k in patch)) {
       void applyNative(next).catch((e) => {
         // z. B. ungültiges Tastenkürzel: Meldung zeigen, alten Wert behalten
-        void import("./ui").then(({ toast }) => toast({ kind: "error", title: String(e instanceof Error ? e.message : e) }));
+        toast({ kind: "error", title: String(e instanceof Error ? e.message : e) });
       });
     }
     if ("autostart" in patch) void applyAutostart(next.autostart);

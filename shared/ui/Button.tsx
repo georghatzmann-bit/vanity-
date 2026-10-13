@@ -6,7 +6,7 @@ import { spring } from "../design/motion";
 import { sound } from "../sound/engine";
 import { spawnRipple } from "./ripple";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "glass";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-solid" | "glass";
 export type ButtonSize = "sm" | "md" | "lg" | "icon" | "icon-sm";
 
 export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onAnimationStart" | "onDrag" | "onDragStart" | "onDragEnd"> {
@@ -26,6 +26,7 @@ const variantClass: Record<ButtonVariant, string> = {
   glass: "glass text-fg hover:bg-surface-2",
   ghost: "bg-transparent text-fg-soft hover:bg-surface-2 hover:text-fg",
   danger: "bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25",
+  "danger-solid": "bg-danger text-white shadow-[0_8px_28px_-10px_var(--nv-danger)] hover:brightness-110",
 };
 
 const sizeClass: Record<ButtonSize, string> = {

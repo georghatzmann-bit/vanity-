@@ -176,7 +176,7 @@ export function CommandPalette() {
           <motion.div className="glass-strong relative flex h-fit max-h-[70vh] w-full max-w-[640px] flex-col overflow-hidden rounded-2xl" initial={{ opacity: 0, y: -16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: 0.98 }} transition={spring.snappy}>
             <div className="flex items-center gap-3 border-b border-line px-5">
               <Search className="h-5 w-5 text-accent" />
-              <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} placeholder={t("palette.placeholder")} className="h-14 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-faint" spellCheck={false} />
+              <input ref={inputRef} autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} placeholder={t("palette.placeholder")} className="h-14 flex-1 bg-transparent text-[16px] text-fg outline-none placeholder:text-faint" spellCheck={false} />
               <Kbd>Esc</Kbd>
             </div>
             <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-2">

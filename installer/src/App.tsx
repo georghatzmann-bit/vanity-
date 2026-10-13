@@ -616,10 +616,9 @@ export function App() {
                         {t("uninstall.cancel")}
                       </Button>
                       <Button
-                        variant="danger"
+                        variant="danger-solid"
                         size="lg"
                         icon={<Trash2 className="h-4 w-4" />}
-                        className="bg-danger text-white hover:bg-danger/90"
                         onClick={() => {
                           go("un-run");
                           void api.startUninstall(keepData);
