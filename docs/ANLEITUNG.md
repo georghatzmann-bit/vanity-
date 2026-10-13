@@ -29,27 +29,31 @@ Alle drei Dateien entstehen zusammen im Ordner `release/`.
 
 ## 3. Die Dateien hochladen (GitHub-Release)
 
-Der Installer lädt die App von GitHub. Dafür müssen die Dateien einmal in ein „Release“ (eine Veröffentlichung) auf GitHub.
+Der Installer lädt die App aus dem GitHub-Release **`nova-latest`** in deinem Projekt `vanity-`.
+Warum ein eigenes Release mit festem Namen? In `vanity-` liegen auch Jarvis und der Konto-Retter.
+Das „neueste Release“ von GitHub zeigt deshalb manchmal auf ein anderes Projekt. `nova-latest` gehört nur NOVA.
 
-### Weg A – GitHub baut und lädt alles selbst hoch (empfohlen)
+### Weg A – automatisch (eingerichtet)
 
-1. Öffne im Browser: `https://github.com/georghatzmann-bit/vanity-/releases/new`
-2. Klicke auf **Choose a tag**, tippe `v1.0.0` und klicke auf **Create new tag: v1.0.0**.
-3. Bei **Target** wähle den Zweig mit NOVA (`claude/nova-launcher-windows-app-3amt0f`, später `main`).
-4. Titel: `NOVA 1.0.0`. Dateien musst du **keine** anhängen.
-5. Klicke auf **Publish release**.
-6. GitHub startet jetzt von selbst einen Windows-Rechner, baut NOVA, testet es und hängt die Dateien an.
-   Den Fortschritt siehst du unter `https://github.com/georghatzmann-bit/vanity-/actions`.
-7. Warte etwa 15–25 Minuten. **Geklappt**, wenn im Release die Dateien `NovaLauncher.exe`, `NovaLauncher-Setup.exe` und `latest.json` stehen.
+Du musst nichts tun. Bei jeder Änderung, die ich (oder du) zu GitHub schicke, passiert Folgendes:
+
+1. GitHub startet einen Windows-Rechner, baut NOVA und testet es: Startet die App? Startet der Installer? Klappen Download, Prüfsumme, Installation und Deinstallation?
+2. Nur wenn **alles grün** ist, ersetzt GitHub die Dateien im Release `nova-latest`.
+3. Nachsehen: `https://github.com/georghatzmann-bit/vanity-/releases/tag/nova-latest`
+   **Geklappt**, wenn dort `NovaLauncher.exe`, `NovaLauncher-Setup.exe` und `latest.json` stehen.
+
+Den Fortschritt siehst du unter `https://github.com/georghatzmann-bit/vanity-/actions` (Eintrag „Windows Build & Test“, dauert etwa 15–25 Minuten).
 
 ### Weg B – von Hand hochladen
 
 1. Öffne `https://github.com/georghatzmann-bit/vanity-/releases/new`
-2. Bei **Choose a tag** tippe `v1.0.0` und klicke auf **Create new tag**.
-3. Titel: `NOVA 1.0.0`.
+2. Klicke auf **Choose a tag**, tippe `nova-latest` und klicke auf **Create new tag**.
+   Gibt es das Release schon, öffne stattdessen `…/releases/tag/nova-latest` und klicke auf das Stift-Symbol (**Edit**).
+3. Titel: `NOVA (neueste Version)`.
 4. Ziehe diese drei Dateien aus dem Ordner `release/` in das Feld **Attach binaries**:
-   `NovaLauncher.exe`, `NovaLauncher-Setup.exe`, `latest.json`
-5. Klicke auf **Publish release**. **Geklappt**, wenn die drei Dateien in der Liste unter dem Release stehen.
+   `NovaLauncher.exe`, `NovaLauncher-Setup.exe`, `latest.json` (alte Dateien vorher mit dem Mülleimer-Symbol löschen).
+5. Den Haken **Set as the latest release** **nicht** setzen (sonst verdrängst du Jarvis/Konto-Retter).
+6. Klicke auf **Publish release** bzw. **Update release**. **Geklappt**, wenn die drei Dateien in der Liste stehen.
 
 > Wichtig: Die drei Dateien müssen **aus demselben Bau** stammen. Sonst passt der Fingerabdruck in `latest.json` nicht zur App und der Installer meldet „Die Datei ist beschädigt angekommen“.
 
@@ -60,14 +64,14 @@ Der Installer lädt die App von GitHub. Dafür müssen die Dateien einmal in ein
 Die Adresse steht in **einer** Datei im Projekt: `nova.config.json`.
 
 ```json
-"manifestUrl": "https://github.com/georghatzmann-bit/vanity-/releases/latest/download/latest.json",
-"downloadBaseUrl": "https://github.com/georghatzmann-bit/vanity-/releases/latest/download/"
+"manifestUrl": "https://github.com/georghatzmann-bit/vanity-/releases/download/nova-latest/latest.json",
+"downloadBaseUrl": "https://github.com/georghatzmann-bit/vanity-/releases/download/nova-latest/"
 ```
 
-- Solange du die Dateien wie oben bei **diesem** GitHub-Projekt hochlädst, musst du **nichts ändern**. `latest` zeigt immer automatisch auf das neueste Release.
-- Willst du einen anderen Ort (z. B. ein anderes GitHub-Projekt oder deine eigene Webseite)? Dann beide Zeilen auf die neue Adresse ändern und neu bauen (Abschnitt 6).
+- Solange die Dateien im Release `nova-latest` von `vanity-` liegen, musst du **nichts ändern**.
+- Willst du einen anderen Ort (z. B. ein eigenes GitHub-Projekt nur für NOVA oder deine Webseite)? Dann beide Zeilen auf die neue Adresse ändern und neu bauen (Abschnitt 6).
   Beispiel eigene Webseite: `https://meine-seite.de/nova/latest.json` und `https://meine-seite.de/nova/`.
-- Das GitHub-Projekt muss **öffentlich** sein, sonst kann der Installer nichts herunterladen.
+- Das GitHub-Projekt muss **öffentlich** sein, sonst kann der Installer nichts herunterladen. (`vanity-` ist öffentlich.)
 
 **Ohne neu zu bauen:** Lege neben die `NovaLauncher-Setup.exe` eine Datei `nova-setup.json` mit diesem Inhalt:
 
@@ -114,7 +118,7 @@ Du brauchst dafür einmalig: **Node.js** (nodejs.org), **Rust** (rustup.rs) und 
    - `release\NovaLauncher-Setup.exe`
    - `release\latest.json`
 
-Neue Version veröffentlichen: In `nova.config.json` die `"version"` erhöhen (z. B. auf `1.0.1`), neu bauen und wie in Abschnitt 3 hochladen.
+Neue Version veröffentlichen: In `nova.config.json` die `"version"` erhöhen (z. B. auf `1.0.1`) und die Änderung zu GitHub schicken (Weg A macht den Rest) – oder neu bauen und wie in Abschnitt 3, Weg B hochladen.
 Alle installierten NOVAs melden sich dann mit „Update verfügbar“.
 
 ---

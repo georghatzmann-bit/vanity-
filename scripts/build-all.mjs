@@ -150,4 +150,4 @@ console.log(`\n${c.green("✔ Fertig")} in ${Math.round((Date.now() - started) /
 console.log(`  App:        ${appOut}  ${c.dim(mb(appOut))}`);
 console.log(`  Setup:      ${setupOut}  ${c.dim(mb(setupOut))}`);
 console.log(`  Manifest:   ${join(releaseDir, "latest.json")}`);
-console.log(`\n  ${c.dim("Hochladen: alle drei Dateien in ein GitHub-Release (siehe docs/ANLEITUNG.md).")}\n`);
+console.log(`\n  ${c.dim(`Hochladen: alle drei Dateien in das GitHub-Release \"${config.releaseTag ?? "nova-latest"}\" (siehe docs/ANLEITUNG.md).`)}\n`);

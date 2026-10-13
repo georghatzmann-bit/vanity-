@@ -5,7 +5,8 @@
   "version": "1.0.0",
   "appExeName": "NovaLauncher.exe",
   "setupExeName": "NovaLauncher-Setup.exe",
-  "manifestUrl": "https://github.com/georghatzmann-bit/vanity-/releases/latest/download/latest.json",
-  "downloadBaseUrl": "https://github.com/georghatzmann-bit/vanity-/releases/latest/download/",
-  "websiteUrl": "https://github.com/georghatzmann-bit/vanity-"
+  "manifestUrl": "https://github.com/georghatzmann-bit/vanity-/releases/download/nova-latest/latest.json",
+  "downloadBaseUrl": "https://github.com/georghatzmann-bit/vanity-/releases/download/nova-latest/",
+  "websiteUrl": "https://github.com/georghatzmann-bit/vanity-",
+  "releaseTag": "nova-latest"
 }

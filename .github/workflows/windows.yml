@@ -1,21 +1,16 @@
 # Baut und testet NOVA auf einem echten Windows-Rechner von GitHub.
 # - Bei jedem Push: Typprüfung, Tests, beide Exe-Dateien bauen, App-Starttest, Installer-Selbsttest
-# - Manuell ("Run workflow") mit Haken bei "release": erstellt zusätzlich ein GitHub-Release
-#   mit NovaLauncher.exe, NovaLauncher-Setup.exe und latest.json (daraus lädt der Installer).
+# - Ist alles grün, landen NovaLauncher.exe, NovaLauncher-Setup.exe und latest.json im festen
+#   Release "nova-latest" (daraus lädt der Installer). Es wird nie als "Latest" markiert, damit
+#   andere Projekte in diesem Repository (Jarvis, Konto-Retter) nicht verdrängt werden.
+# - Ein Tag "nova-v1.2.3" erzeugt zusätzlich ein eigenes Versions-Release.
 name: Windows Build & Test
 
 on:
   push:
     branches: ["main", "claude/**"]
-    tags: ["v*"]
-  release:
-    types: [published]
+    tags: ["nova-v*"]
   workflow_dispatch:
-    inputs:
-      release:
-        description: "GitHub-Release erstellen (Tag v<Version aus nova.config.json>)"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -130,14 +125,31 @@ jobs:
             test-output/
           if-no-files-found: warn
 
-      - name: GitHub-Release erstellen
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+      - name: Release "nova-latest" aktualisieren (Download-Quelle des Installers)
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          # Bei einem Release/Tag dessen Namen verwenden, sonst v<Version aus nova.config.json>
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', steps.version.outputs.version) }}
+          tag_name: nova-latest
+          name: NOVA (neueste Version)
+          body: |
+            Automatisch gebaut und auf Windows getestet. Version ${{ steps.version.outputs.version }}, Commit ${{ github.sha }}.
+            Zum Installieren: NovaLauncher-Setup.exe herunterladen und starten.
+          make_latest: false
+          prerelease: false
+          overwrite_files: true
+          files: |
+            release/NovaLauncher.exe
+            release/NovaLauncher-Setup.exe
+            release/latest.json
+            release/SHA256SUMS.txt
+
+      - name: Versions-Release erstellen
+        if: startsWith(github.ref, 'refs/tags/nova-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
           name: NOVA ${{ steps.version.outputs.version }}
-          make_latest: true
+          make_latest: false
           files: |
             release/NovaLauncher.exe
             release/NovaLauncher-Setup.exe
