@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "motion/react";
-import { initImgSrc } from "@/lib/api";
+import { api, initImgSrc } from "@/lib/api";
 import { useLibrary } from "@/store/library";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
@@ -76,16 +76,24 @@ export function App() {
 
   useEffect(() => {
     void (async () => {
-      sound.warmup();
       await initImgSrc();
+      // Autostart mit Windows (unsichtbar im Infobereich): keine Startanimation, kein Startklang
+      const info = await api.appInfo().catch(() => null);
+      if (info?.startedMinimized) {
+        setShowIntro(false);
+        useUI.getState().setLogoDocked(true);
+        useUI.getState().setIntroDone();
+      } else {
+        sound.warmup();
+      }
       await useSettings.getState().load();
       await useLibrary.getState().load();
       setReady(true);
-      if (isTauri()) {
-        // Fenster ist schon sichtbar (dunkler Hintergrund) - hier nur Fokus sicherstellen
+      if (isTauri() && !info?.startedMinimized) {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        const info = await import("@/lib/api").then((m) => m.api.appInfo()).catch(() => null);
-        if (!info?.startedMinimized) await getCurrentWindow().setFocus().catch(() => undefined);
+        await getCurrentWindow()
+          .setFocus()
+          .catch(() => undefined);
       }
     })();
   }, []);
