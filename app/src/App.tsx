@@ -91,9 +91,15 @@ export function App() {
       setReady(true);
       if (isTauri() && !info?.startedMinimized) {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");
-        await getCurrentWindow()
-          .setFocus()
-          .catch(() => undefined);
+        const win = getCurrentWindow();
+        // Kleiner Bildschirm (z. B. 1366×768)? Dann passt das Fenster nicht - also maximieren.
+        try {
+          const [size, factor] = await Promise.all([win.outerSize(), win.scaleFactor()]);
+          if (size.width / factor > window.screen.availWidth || size.height / factor > window.screen.availHeight) await win.maximize();
+        } catch {
+          /* egal */
+        }
+        await win.setFocus().catch(() => undefined);
       }
     })();
   }, []);
