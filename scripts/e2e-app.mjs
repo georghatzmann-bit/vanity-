@@ -1,23 +1,24 @@
 #!/usr/bin/env node
 /**
- * Ende-zu-Ende-Test der ECHTEN App (Rust-Backend + Oberfläche) unter Linux.
+ * Ende-zu-Ende-Test der ECHTEN App (Rust-Backend + Oberfläche) unter Linux UND Windows.
  * Startet die App über tauri-driver (WebDriver), bedient sie per Skript und macht Screenshots.
  *
- * Voraussetzungen: Linux-Build der App (npx tauri build --no-bundle in app/), tauri-driver,
- * WebKitWebDriver und ein X-Server (z. B. xvfb-run).
- *
- * Aufruf: xvfb-run -a node scripts/e2e-linux.mjs <app-binary> <ausgabe-ordner>
+ * Linux:   xvfb-run -a node scripts/e2e-app.mjs app/src-tauri/target/release/NovaLauncher <ausgabe>
+ *          (braucht tauri-driver + WebKitWebDriver)
+ * Windows: node scripts/e2e-app.mjs release\NovaLauncher.exe <ausgabe> [pfad\msedgedriver.exe]
+ *          (braucht tauri-driver + passenden Microsoft Edge WebDriver)
  *
  * Geprüft wird: Start + Intro, Datenbank, Steam-Scan (mit nachgebauter Steam-Bibliothek),
  * Hinzufügen, Starten eines Programms, Spielzeit-Erkennung, Sitzung gespeichert, Beenden,
  * Statistik, Export/Import, Seitenwechsel, Themes.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const [, , appArg, outArg = "e2e-shots"] = process.argv;
+const [, , appArg, outArg = "e2e-shots", nativeDriver] = process.argv;
+const isWin = process.platform === "win32";
 if (!appArg || !existsSync(appArg)) {
   console.error("Bitte den Pfad zur Linux-App angeben, z. B. app/src-tauri/target/release/NovaLauncher");
   process.exit(2);
@@ -26,13 +27,18 @@ const app = resolve(appArg);
 const out = resolve(outArg);
 mkdirSync(out, { recursive: true });
 
-// Eigenes, leeres Zuhause: echte Nutzerdaten bleiben unberührt
+// Eigenes, leeres Zuhause (Linux) bzw. eigener Testordner (Windows): echte Nutzerdaten bleiben unberührt
 const home = mkdtempSync(join(tmpdir(), "nova-e2e-"));
-const steam = join(home, ".local", "share", "Steam");
+const steam = isWin ? join(home, "Steam") : join(home, ".local", "share", "Steam");
 mkdirSync(join(steam, "steamapps", "common", "Portal 2"), { recursive: true });
-writeFileSync(join(steam, "steamapps", "libraryfolders.vdf"), `"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"${steam}"\n\t\t"apps"\n\t\t{\n\t\t\t"620"\t\t"0"\n\t\t}\n\t}\n}\n`);
+const vdfPath = steam.replace(/\\/g, "\\\\");
+writeFileSync(join(steam, "steamapps", "libraryfolders.vdf"), `"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"${vdfPath}"\n\t\t"apps"\n\t\t{\n\t\t\t"620"\t\t"0"\n\t\t}\n\t}\n}\n`);
 writeFileSync(join(steam, "steamapps", "appmanifest_620.acf"), `"AppState"\n{\n\t"appid"\t\t"620"\n\t"name"\t\t"Portal 2"\n\t"installdir"\t\t"Portal 2"\n}\n`);
 writeFileSync(join(steam, "steamapps", "appmanifest_228980.acf"), `"AppState"\n{\n\t"appid"\t\t"228980"\n\t"name"\t\t"Steamworks Common Redistributables"\n\t"installdir"\t\t"Steamworks Shared"\n}\n`);
+if (isWin) {
+  // NOVA findet Steam über die Registry
+  spawnSync("reg", ["add", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath", "/t", "REG_SZ", "/d", steam.replace(/\\/g, "/"), "/f"], { stdio: "ignore" });
+}
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -40,7 +46,9 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "✅" : "❌"} ${name}${detail ? ` – ${detail}` : ""}`);
 };
 
-const driver = spawn("tauri-driver", ["--port", "4444"], { env: { ...process.env, HOME: home, XDG_DATA_HOME: join(home, ".local", "share"), XDG_CONFIG_HOME: join(home, ".config") }, stdio: ["ignore", "pipe", "pipe"] });
+const driverArgs = ["--port", "4444"];
+if (nativeDriver) driverArgs.push("--native-driver", nativeDriver);
+const driver = spawn("tauri-driver", driverArgs, { env: { ...process.env, HOME: home, XDG_DATA_HOME: join(home, ".local", "share"), XDG_CONFIG_HOME: join(home, ".config") }, stdio: ["ignore", "pipe", "pipe"] });
 driver.stderr.on("data", () => undefined);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 await sleep(1500);
@@ -79,6 +87,10 @@ try {
   check("Hauptfenster mit Navigation geladen", shell);
 
   const info = await invoke("app_info");
+  if (isWin) {
+    const shotsPortal = await invoke("images_fetch", { request: { gameId: "e2e-portal", name: "Portal 2", steamAppId: "620", kinds: ["cover", "hero", "logo"] } });
+    check("Steam-Cover werden geladen (Windows)", shotsPortal.ok && !!shotsPortal.v.images.cover, shotsPortal.ok ? JSON.stringify(shotsPortal.v.images).slice(0, 160) : shotsPortal.e);
+  }
   check("Backend antwortet (app_info)", info.ok, info.ok ? `Version ${info.v.version}, Plattform ${info.v.platform}` : info.e);
 
   const scan = await invoke("scan_library", { options: { steam: true, epic: false, gog: false, startMenu: false, folders: [] } });
@@ -86,9 +98,10 @@ try {
   check("Steam-Scan findet Portal 2", names.includes("Portal 2"), scan.ok ? JSON.stringify(names) : scan.e);
   check("Steam-Scan filtert Redistributables", !names.some((n) => /Redistributable/i.test(n)));
 
-  // Testspiel: ein Programm, das 20 Sekunden läuft
-  const sleepBin = existsSync("/usr/bin/sleep") ? "/usr/bin/sleep" : "/bin/sleep";
-  const game = { id: "e2e-game", name: "E2E Testspiel", kind: "game", source: "manual", launch: { type: "exe", target: sleepBin, args: "25" }, exePath: sleepBin, images: {}, favorite: true, hidden: false, status: "playing", rating: 4, notes: "", tags: ["Test"], collectionIds: [], links: { tools: [] }, addedAt: Date.now(), updatedAt: Date.now() };
+  // Testspiel: ein Programm, das etwa 25 Sekunden läuft
+  const sleepBin = isWin ? "C:\\Windows\\System32\\PING.EXE" : existsSync("/usr/bin/sleep") ? "/usr/bin/sleep" : "/bin/sleep";
+  const sleepArgs = isWin ? "-n 30 127.0.0.1" : "25";
+  const game = { id: "e2e-game", name: "E2E Testspiel", kind: "game", source: "manual", launch: { type: "exe", target: sleepBin, args: sleepArgs }, exePath: sleepBin, images: {}, favorite: true, hidden: false, status: "playing", rating: 4, notes: "", tags: ["Test"], collectionIds: [], links: { tools: [] }, addedAt: Date.now(), updatedAt: Date.now() };
   const put = await invoke("db_put", { table: "games", id: game.id, value: game });
   check("Spiel in Datenbank speichern", put.ok, put.ok ? "" : put.e);
   const list = await invoke("db_list", { table: "games" });
@@ -124,7 +137,13 @@ try {
   const imp = await invoke("library_import", { path: join(home, "export.json"), mode: "merge" });
   check("Bibliothek importieren", imp.ok, imp.ok ? JSON.stringify(imp.v) : imp.e);
   const sys = await invoke("system_stats");
-  check("PC-Auslastung lesen", sys.ok && sys.v.ramTotal > 0, sys.ok ? `CPU ${Math.round(sys.v.cpu)} %, RAM ${(sys.v.ramTotal / 1e9).toFixed(1)} GB` : sys.e);
+  check("PC-Auslastung lesen", sys.ok && sys.v.ramTotal > 0, sys.ok ? `CPU ${Math.round(sys.v.cpu)} %, RAM ${(sys.v.ramTotal / 1e9).toFixed(1)} GB, GPU ${sys.v.gpu === null ? "n. v." : Math.round(sys.v.gpu) + " %"} ${sys.v.gpuName ?? ""}` : sys.e);
+  if (isWin) {
+    const icon = await invoke("exe_icon", { exePath: "C:\\Windows\\explorer.exe", gameId: "e2e-icon" });
+    check("Programm-Icon aus .exe lesen (Windows)", icon.ok && !!icon.v, icon.ok ? String(icon.v) : icon.e);
+    const sm = await invoke("scan_library", { options: { steam: false, epic: true, gog: true, startMenu: true, folders: [] } });
+    check("Startmenü/Epic/GOG-Scan läuft ohne Fehler (Windows)", sm.ok, sm.ok ? `${sm.v.entries.length} Einträge, z. B. ${sm.v.entries.slice(0, 4).map((e) => e.name).join(", ")}` : sm.e);
+  }
   const backup = await invoke("backup_now");
   check("Backup erstellen", backup.ok, backup.ok ? backup.v.file : backup.e);
 

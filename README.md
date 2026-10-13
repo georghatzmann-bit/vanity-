@@ -31,6 +31,10 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=uninstall`) |
 | `npm run tauri:dev` | echte App mit Rust-Backend |
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
+| `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App (Linux mit `xvfb-run`, Windows mit Edge-WebDriver) |
+| `node scripts/e2e-installer-linux.mjs <setup> <nutzlast> <ordner>` | Ende-zu-Ende-Test des echten Installers inkl. Abbruch + Fortsetzen |
+
+Was getestet wurde und was nicht: [docs/TESTBERICHT.md](docs/TESTBERICHT.md)
 
 ## Aufbau
 
