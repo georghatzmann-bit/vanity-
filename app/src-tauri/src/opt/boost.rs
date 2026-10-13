@@ -352,7 +352,9 @@ mod tests {
         let profile = BoostProfile { power_plan: true, game_priority: "normal".into(), flush_dns: true };
         let out = start(&profile, Ok(vec![]), &power);
         assert_eq!(out.actions.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(), vec!["powerPlan", "flushDns"]);
-        assert!(out.actions.iter().all(|a| !a.ok));
+        assert!(!out.actions[0].ok, "powercfg-Fehler muss als nicht ok gemeldet werden");
+        // Das DNS-Leeren läuft echt: unter Windows klappt es, sonst meldet es „Nur unter Windows“
+        assert_eq!(out.actions[1].ok, flush_dns().is_ok());
         assert!(out.changes.prev_plan.is_none());
         #[cfg(not(windows))]
         assert_eq!(out.actions[1].detail, super::super::tweaks::NOT_WINDOWS);
