@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "../../shared/design/tokens.css";
+@import "../../shared/design/base.css";
+
+@source "../../shared";
+
+@layer components {
+  .input {
+    height: 44px;
+    width: 100%;
+    border-radius: var(--nv-radius-md);
+    background: var(--nv-surface-2);
+    border: 1px solid var(--nv-border);
+    padding: 0 14px;
+    color: var(--nv-fg);
+    font-size: 14px;
+    transition: border-color var(--nv-dur-base) var(--nv-ease-out), box-shadow var(--nv-dur-base) var(--nv-ease-out);
+  }
+  .input:focus {
+    outline: none;
+    border-color: color-mix(in oklab, var(--nv-accent) 70%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--nv-accent) 18%, transparent);
+  }
+}
+
+@keyframes nv-aurora {
+  0% { transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(4%, 3%, 0) rotate(8deg) scale(1.08); }
+  100% { transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1); }
+}
