@@ -22,7 +22,7 @@ Workflow `.github/workflows/windows.yml` auf `windows-latest`:
 Ergebnis des letzten Laufs: siehe `https://github.com/georghatzmann-bit/vanity-/actions` (Eintrag „Windows Build & Test“) –
 die Selbsttest-Berichte (`selftest.json`, `app-selftest.json`) und Screenshots liegen im Artefakt `pulsar-windows-<version>`.
 
-Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache):
+Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache, noch keine Spiele installiert – darum das „Spiele finden“-Banner):
 
 ![Pulsar auf Windows](screenshots/windows-app-cockpit.png)
 ![Pulsar Setup auf Windows](screenshots/windows-setup-willkommen.png)
@@ -56,7 +56,7 @@ Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache
 | Was | Ergebnis |
 |---|---|
 | `npm run typecheck` (App + Installer) | 0 Fehler |
-| `npm test` | 20 Tests bestanden |
+| `npm test` | 21 Tests bestanden (inkl. Prüfung, dass jeder benutzte Text existiert) |
 | `cargo test` App (Linux) | 143 Tests bestanden (Datenbank, Scanner, Bilder, Optimierer 38, Netzwerk 41 – darunter DNS-Pakete gegen einen lokalen UDP-Server und TCP-Ping gegen lokale Ports) |
 | `cargo test` Installer (Linux) | bestanden |
 | `cargo xwin check --target x86_64-pc-windows-msvc` | Windows-Code (ICMP, IP Helper, WLAN, Registry, powercfg) kompiliert ohne Fehler |
