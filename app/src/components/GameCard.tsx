@@ -144,7 +144,7 @@ export const GameCard = memo(function GameCard({ game, stats, running, launching
             <div className="min-w-0 text-white">
               <div className="truncate text-[13px] font-semibold">{game.name}</div>
               <div className="mt-0.5 truncate text-[11px] text-white/70">
-                {stats?.totalSeconds ? `${formatDuration(stats.totalSeconds, { short: true })} · ${formatRelative(stats.lastPlayedAt)}` : t("library.neverPlayed")}
+                {stats?.totalSeconds ? `${formatDuration(stats.totalSeconds, { short: true })} · ${formatRelative(stats.lastPlayedAt)}` : t("games.neverPlayed")}
               </div>
             </div>
             <motion.button

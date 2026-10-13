@@ -35,14 +35,14 @@ export const spring = {
 
 /** Seitenwechsel: Fade + Slide (bewusst ohne Unschärfe-Filter – der kostet auf großen Seiten zu viel Leistung) */
 export const pageVariants: Variants = {
-  initial: { opacity: 0, y: 18, scale: 0.995 },
+  initial: { opacity: 0, y: 12, scale: 0.997 },
   enter: {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { ...spring.smooth, opacity: { duration: duration.slow, ease: ease.out } },
+    transition: { ...spring.smooth, opacity: { duration: 0.24, ease: ease.out } },
   },
-  exit: { opacity: 0, y: -10, transition: { duration: duration.base, ease: ease.inOut } },
+  exit: { opacity: 0, y: -6, transition: { duration: duration.fast, ease: ease.inOut } },
 };
 
 /** Container, dessen Kinder gestaffelt erscheinen */

@@ -67,7 +67,7 @@ export function Optimize() {
 
   return (
     <motion.div className="mx-auto max-w-[1200px] px-8 pt-3 pb-24" variants={staggerContainer(0.05)} initial="initial" animate="enter">
-      <motion.div variants={staggerItem} className="flex items-end justify-between">
+      <motion.div variants={staggerItem} className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold text-fg">{t("optimize.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("optimize.subtitle")}</p>
@@ -86,7 +86,7 @@ export function Optimize() {
         </div>
       </motion.div>
 
-      <div className="mt-6 grid grid-cols-[1.4fr_1fr] gap-5">
+      <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
         <motion.div variants={staggerItem} className="flex flex-col gap-3">
           <div className="px-1 text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{t("optimize.tweaks")}</div>
           {tweaks.map((tw, i) => {

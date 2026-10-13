@@ -16,8 +16,8 @@ export function DropZone() {
             <motion.div animate={{ y: [0, -10, 0] }} transition={{ duration: 1.4, repeat: Infinity }} className="grid h-20 w-20 place-items-center rounded-2xl bg-gradient-accent text-white shadow-glow">
               <Download className="h-9 w-9" />
             </motion.div>
-            <div className="mt-6 font-display text-2xl font-bold text-fg">{t("library.dropTitle")}</div>
-            <div className="mt-1 text-sm text-muted">{t("library.dropText")}</div>
+            <div className="mt-6 font-display text-2xl font-bold text-fg">{t("drop.title")}</div>
+            <div className="mt-1 text-sm text-muted">{t("drop.text")}</div>
           </motion.div>
         </motion.div>
       )}

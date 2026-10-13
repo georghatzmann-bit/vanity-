@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Activity, ChevronsLeft, ChevronsRight, FileBarChart2, Gauge, LayoutGrid, Settings, SlidersHorizontal, Zap } from "lucide-react";
+import { Activity, ChevronsLeft, ChevronsRight, FileBarChart2, Gauge, LayoutGrid, Play, Settings, SlidersHorizontal, Zap } from "lucide-react";
+import { imgSrc } from "@/lib/api";
 import { gradeColor } from "@/lib/grade";
-import { useT } from "@/lib/i18n";
+import { useLanguage, useT } from "@/lib/i18n";
 import { useBoost } from "@/store/boost";
 import { useLibrary } from "@/store/library";
 import { useNet } from "@/store/net";
 import { useUI, type Page } from "@/store/ui";
+import { GenIcon } from "./GenCover";
 import { Tooltip } from "./ui/Tooltip";
 import { cn } from "@shared/lib/cn";
 import { spring } from "@shared/design/motion";
@@ -31,10 +33,18 @@ function readCollapsed(): boolean {
 /** Seitenleiste mit gleitender Markierung, Live-Ping und Boost-Knopf */
 export function Sidebar() {
   const t = useT();
+  const lang = useLanguage();
   const route = useUI((s) => s.route);
   const navigate = useUI((s) => s.navigate);
   const games = useLibrary((s) => s.games);
   const count = useMemo(() => games.filter((g) => !g.hidden).length, [games]);
+  const playStats = useLibrary((s) => s.stats);
+  const running = useLibrary((s) => s.running);
+  // Zuletzt gespielt (wie die Sammlungen in NOVA): die drei letzten Spiele mit Icon
+  const recent = useMemo(
+    () => games.filter((g) => !g.hidden && g.kind === "game" && playStats.get(g.id)?.lastPlayedAt).sort((a, b) => (playStats.get(b.id)?.lastPlayedAt ?? 0) - (playStats.get(a.id)?.lastPlayedAt ?? 0)).slice(0, 3),
+    [games, playStats],
+  );
   const reports = useBoost((s) => s.reports.length);
   const boostActive = useBoost((s) => s.state.active);
   const toggleBoost = useBoost((s) => s.toggle);
@@ -104,6 +114,42 @@ export function Sidebar() {
         )}
       </button>
 
+      {recent.length > 0 && (
+        <div className="mt-5 flex flex-col gap-0.5">
+          {!collapsed && <div className="mb-1.5 px-3 text-[10px] font-semibold tracking-[0.16em] text-faint uppercase">{t("games.recent")}</div>}
+          {recent.map((g) => {
+            const isRunning = running.has(g.id);
+            const icon = g.images.icon ? (
+              <img src={imgSrc(g.images.icon)} alt="" className="h-full w-full object-cover" draggable={false} />
+            ) : g.images.cover ? (
+              <img src={imgSrc(g.images.cover)} alt="" className="h-full w-full object-cover object-top" draggable={false} />
+            ) : (
+              <GenIcon name={g.name} />
+            );
+            const row = (
+              <div key={g.id} className={cn("group relative flex h-10 items-center gap-3 rounded-lg px-2 transition hover:bg-surface-2", collapsed && "justify-center px-0")}>
+                <button type="button" onMouseEnter={() => sound.play("hover")} onClick={() => navigate({ page: "game", id: g.id })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  <span className={cn("relative h-7 w-7 shrink-0 overflow-hidden rounded-md ring-1 ring-white/10", isRunning && "ring-2 ring-success")}>{icon}</span>
+                  {!collapsed && <span className="truncate text-[13px] text-fg-soft group-hover:text-fg">{g.name}</span>}
+                </button>
+                {!collapsed && (
+                  <button type="button" onClick={() => void useLibrary.getState().launch(g, { boost: true })} className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-accent text-accent-fg opacity-0 shadow-glow transition group-hover:opacity-100" aria-label={t("games.boostAndPlay")} title={t("games.boostAndPlay")}>
+                    <Play className="ml-0.5 h-3 w-3" fill="currentColor" />
+                  </button>
+                )}
+              </div>
+            );
+            return collapsed ? (
+              <Tooltip key={g.id} label={g.name} side="right">
+                {row}
+              </Tooltip>
+            ) : (
+              row
+            );
+          })}
+        </div>
+      )}
+
       <div className="mt-auto flex flex-col gap-1">
         <motion.button
           type="button"
@@ -119,7 +165,7 @@ export function Sidebar() {
           {!collapsed && (
             <span className="min-w-0">
               <span className="block truncate">{boostActive ? t("cockpit.boostActive") : t("cockpit.boost")}</span>
-              <span className={cn("block text-[11px] font-normal", boostActive ? "text-accent-fg/80" : "text-muted")}>Strg + B</span>
+              <span className={cn("block text-[11px] font-normal", boostActive ? "text-accent-fg/80" : "text-muted")}>{lang === "de" ? "Strg" : "Ctrl"} + B</span>
             </span>
           )}
         </motion.button>

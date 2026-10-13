@@ -90,10 +90,12 @@ input[type="range"].range:active::-webkit-slider-thumb {
 
 }
 
-/* Big Picture: großer Fokusring für Controller */
-.bp-focus {
-  outline: 3px solid var(--nv-accent);
-  outline-offset: 4px;
+/* Waagerechte Reihen (Cover-Regale) ohne sichtbaren Scrollbalken */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes nv-aurora {

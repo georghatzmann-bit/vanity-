@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Activity, Cable, ExternalLink, Gauge, Globe, Loader2, Play, Route, Star, Wifi, X } from "lucide-react";
-import { api, errorText, listen } from "@/lib/api";
+import { api, errorText, imgSrc, listen } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { gradeColor, pingColor, pingGrade, signalLabel } from "@/lib/grade";
 import { useT } from "@/lib/i18n";
 import type { Area, DnsConfig, DnsProgress, DnsResult, Region, SpeedProgress, SpeedResult, TraceHop, TraceResult } from "@/lib/types";
+import { useLibrary } from "@/store/library";
 import { useNet } from "@/store/net";
 import { useSettings } from "@/store/settings";
 import { toast, useUI, type NetworkTab } from "@/store/ui";
@@ -49,7 +50,7 @@ function RegionRow({ region, onTarget }: { region: Region; onTarget?: () => void
             </div>
           </>
         ) : (
-          <span className="text-[11px] text-faint">{t("network.regions.unmeasured")}</span>
+          <span className="text-[11px] whitespace-nowrap text-faint">{t("network.regions.unmeasured")}</span>
         )}
       </div>
       <span className="grid h-8 w-8 place-items-center rounded-full text-[12px] font-bold" style={{ color: gradeColor(grade), boxShadow: `inset 0 0 0 2px ${gradeColor(grade)}` }}>
@@ -124,9 +125,9 @@ function RegionsPanel() {
   };
 
   return (
-    <div className="grid grid-cols-[1.5fr_1fr] gap-5">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.5fr_1fr]">
       <div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-xl text-[13px] text-muted">{t("network.regions.intro")}</p>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" loading={measuringRegions} onClick={() => void pingRegions(settings.favoriteRegions)}>
@@ -174,7 +175,8 @@ function RegionsPanel() {
           <p className="mt-1 text-[12px] text-muted">{t("network.regions.gameServersIntro")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(["cs2", "dota2", "deadlock", "lol"] as const).map((g) => (
-              <button key={g} type="button" onClick={() => void loadServers(g)} className={cn("rounded-full border px-3 py-1.5 text-[12px] font-medium transition", serverGame === g && servers.length ? "border-transparent bg-accent/15 text-fg" : "border-line text-muted hover:text-fg")}>
+              <button key={g} type="button" onClick={() => void loadServers(g)} className={cn("flex items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-[12px] font-medium transition", serverGame === g ? "border-transparent bg-accent/15 text-fg shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--nv-accent)_45%,transparent)]" : "border-line text-muted hover:text-fg")}>
+                <ServerGameIcon game={g} />
                 {t(`network.regions.games.${g}`)}
               </button>
             ))}
@@ -186,8 +188,8 @@ function RegionsPanel() {
               </div>
             )}
             {!loadingServers && servers.length === 0 && (
-              <Button variant="secondary" size="sm" onClick={() => void loadServers(serverGame)}>
-                {t("common.measuring").replace(" …", "")}
+              <Button variant="secondary" size="sm" icon={<Globe className="h-3.5 w-3.5" />} onClick={() => void loadServers(serverGame)}>
+                {t("network.regions.measureServers", { game: t(`network.regions.games.${serverGame}`) })}
               </Button>
             )}
             {servers.map((r) => {
@@ -275,6 +277,41 @@ function RoutePanel() {
           {running ? t("network.route.running") : t("network.route.start")}
         </Button>
       </div>
+      {/* Schnellziele */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+        <span className="text-faint">{t("network.route.quick")}</span>
+        {[
+          [targetLabel, t("network.route.quickTarget")],
+          ["1.1.1.1", "Cloudflare"],
+          ["8.8.8.8", "Google"],
+          ["steamcommunity.com", "Steam"],
+        ]
+          .filter(([h]) => h)
+          .map(([h, label]) => (
+            <button key={h} type="button" disabled={running} onClick={() => setHost(h)} className={cn("rounded-full border px-3 py-1 transition disabled:opacity-40", host === h ? "border-transparent bg-accent/15 text-fg" : "border-line text-muted hover:text-fg")}>
+              {label}
+            </button>
+          ))}
+      </div>
+
+      {/* Noch keine Analyse: kleine Grafik, was die Zonen bedeuten */}
+      {!hops.length && !running && (
+        <div className="glass mt-5 rounded-xl px-6 py-6">
+          <div className="relative flex items-start justify-between gap-2">
+            <div className="absolute top-5 right-[12%] left-[12%] border-t-2 border-dashed border-line-strong" />
+            {(["lan", "isp", "internet", "target"] as const).map((z, i) => (
+              <motion.div key={z} className="relative flex flex-1 flex-col items-center text-center" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
+                <span className={cn("grid h-10 w-10 place-items-center rounded-full ring-4 ring-[var(--nv-bg-elev)]", z === "lan" ? "bg-success/20 text-success" : z === "isp" ? "bg-accent/20 text-accent" : z === "target" ? "bg-gradient-accent text-accent-fg" : "bg-surface-3 text-muted")}>
+                  {z === "lan" ? <Wifi className="h-4 w-4" /> : z === "isp" ? <Cable className="h-4 w-4" /> : z === "internet" ? <Globe className="h-4 w-4" /> : <Route className="h-4 w-4" />}
+                </span>
+                <span className="mt-2 text-[12px] font-semibold text-fg">{t(`network.route.zones.${z}`)}</span>
+                <span className="mt-0.5 max-w-[170px] text-[11px] leading-snug text-muted">{t(`network.route.zoneHint.${z}`)}</span>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-5 flex flex-col gap-1.5">
         <AnimatePresence>
           {hops.map((h) => {
@@ -343,7 +380,7 @@ function DnsPanel() {
   const max = Math.max(1, ...results.map((r) => r.uncachedMs ?? 0));
 
   return (
-    <div className="mx-auto grid max-w-[1100px] grid-cols-[1.4fr_1fr] gap-5">
+    <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
       <div>
         <p className="text-[13px] text-muted">{t("network.dns.intro")}</p>
         <div className="mt-4 flex items-center gap-3">
@@ -352,6 +389,27 @@ function DnsPanel() {
           </Button>
           {running && progress && <ProgressBar value={progress.done / progress.total} className="w-40" />}
         </div>
+        {!results.length && !running && (
+          <div className="glass mt-4 rounded-xl p-5">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-accent">
+                <Activity className="h-5 w-5" />
+              </span>
+              <div>
+                <div className="text-sm font-semibold text-fg">{t("network.dns.notYet")}</div>
+                <div className="text-[12px] text-muted">{t("network.dns.notYetText")}</div>
+              </div>
+            </div>
+            <div className="mt-4 text-[10px] font-semibold tracking-[0.14em] text-faint uppercase">{t("network.dns.providers")}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {["Cloudflare", "Google", "Quad9", "OpenDNS", "AdGuard", "DNS0.eu", "Mullvad", t("network.dns.yourRouter")].map((n) => (
+                <span key={n} className="rounded-full border border-line bg-surface px-3 py-1 text-[12px] text-fg-soft">
+                  {n}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mt-4 flex flex-col gap-1.5">
           {results.map((r, i) => (
             <motion.div key={r.id} className={cn("glass grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 rounded-lg px-3 py-2.5", r === fastest && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--nv-success)_60%,transparent)]")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
@@ -406,6 +464,17 @@ function DnsPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Kleines Spiel-Icon für die Spielserver-Auswahl (aus der Bibliothek, sonst Kürzel) */
+function ServerGameIcon({ game }: { game: string }) {
+  const match = useLibrary((s) => s.games.find((g) => g.serverGame === game && (g.images.icon || g.images.cover)));
+  const src = match?.images.icon ?? match?.images.cover;
+  return (
+    <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-3 text-[9px] font-bold text-muted uppercase">
+      {src ? <img src={imgSrc(src)} alt="" className="h-full w-full object-cover" draggable={false} /> : game.slice(0, 2)}
+    </span>
   );
 }
 
@@ -503,7 +572,28 @@ function SpeedPanel() {
               </div>
             </>
           ) : (
-            <div className="glass flex h-full items-center justify-center rounded-xl p-6 text-center text-sm text-muted">{t("network.speed.intro")}</div>
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <StatTile label={t("network.speed.download")} value="–" unit="Mbit/s" icon={<Gauge className="h-3.5 w-3.5" />} />
+                <StatTile label={t("network.speed.upload")} value="–" unit="Mbit/s" />
+                <StatTile label={t("network.speed.idle")} value="–" unit="ms" />
+              </div>
+              <div className="glass flex items-center gap-5 rounded-xl p-5">
+                <GradeRing grade={null} size={120} label={t("network.speed.bufferbloat")} />
+                <div className="flex-1">
+                  <div className="font-display text-lg font-bold text-fg">{t("network.speed.notYet")}</div>
+                  <div className="mt-0.5 text-[12px] text-muted">{t("network.speed.notYetText")}</div>
+                  <div className="mt-2 text-[12px] text-fg-soft">{t("network.speed.bufferbloatHint")}</div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {(["A+", "A", "B", "C", "D", "F"] as const).map((g, i) => (
+                      <span key={g} className="rounded-md px-2 py-0.5 text-[11px] font-semibold tabular" style={{ color: gradeColor(g), background: `color-mix(in oklab, ${gradeColor(g)} 15%, transparent)` }}>
+                        {g} {["< 5", "< 30", "< 60", "< 200", "< 400", "≥ 400"][i]} ms
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -526,7 +616,7 @@ function ConnectionPanel() {
     if (!tips.length) tips.push(t("network.connection.tipGood"));
   }
   return (
-    <div className="mx-auto grid max-w-[1100px] grid-cols-[1fr_1fr] gap-5">
+    <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 xl:grid-cols-2">
       <div>
         <p className="text-[13px] text-muted">{t("network.connection.intro")}</p>
         <div className="mt-4 px-1 text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{t("network.connection.adapters")}</div>
@@ -545,16 +635,16 @@ function ConnectionPanel() {
                   <div className="truncate text-[11px] text-muted">{a.description}</div>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 {[
                   [t("network.connection.speed"), a.speedMbps ? (a.speedMbps >= 1000 ? `${a.speedMbps / 1000} Gbit/s` : `${a.speedMbps} Mbit/s`) : "–"],
                   [t("network.connection.ip"), a.ipv4.join(", ") || "–"],
                   [t("network.connection.gateway"), a.gateway ?? "–"],
                   [t("network.connection.dns"), a.dns.join(", ") || "–"],
                 ].map(([l, v]) => (
-                  <div key={l} className="flex justify-between gap-3">
-                    <span className="text-muted">{l}</span>
-                    <span className="truncate text-fg tabular">{v}</span>
+                  <div key={l} className="min-w-0 rounded-lg bg-surface px-3 py-2" title={v}>
+                    <div className="truncate text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">{l}</div>
+                    <div className="truncate text-[13px] font-medium text-fg tabular">{v}</div>
                   </div>
                 ))}
               </div>
@@ -576,16 +666,16 @@ function ConnectionPanel() {
               <div className="min-w-0 flex-1">
                 <div className="truncate font-display text-lg font-bold text-fg">{wifi.ssid}</div>
                 <div className="text-[12px] text-muted">{t(`cockpit.signal.${signalLabel(wifi.signal)}`)}{wifi.rssi !== null ? ` · ${wifi.rssi} dBm` : ""}</div>
-                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
+                <div className="mt-3 grid grid-cols-2 gap-2">
                   {[
                     [t("network.connection.band"), wifi.band ? `${wifi.band} GHz` : "–"],
                     [t("network.connection.channel"), wifi.channel ?? "–"],
                     [t("network.connection.standard"), wifi.phy],
                     [t("network.connection.rate"), wifi.rxMbps ? `${Math.round(wifi.rxMbps)} Mbit/s` : "–"],
                   ].map(([l, v]) => (
-                    <div key={String(l)} className="flex justify-between gap-3">
-                      <span className="text-muted">{l}</span>
-                      <span className="text-fg tabular">{v}</span>
+                    <div key={String(l)} className="min-w-0 rounded-lg bg-surface px-3 py-2">
+                      <div className="truncate text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">{l}</div>
+                      <div className="truncate text-[13px] font-medium text-fg tabular">{v}</div>
                     </div>
                   ))}
                 </div>

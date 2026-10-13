@@ -88,7 +88,7 @@ export function ManualAdd() {
               <input autoFocus value={target} onChange={(e) => setTarget(e.target.value)} className="input pl-9 font-mono text-[12px]" placeholder="C:\Games\…\game.exe" spellCheck={false} />
             </div>
             <Button icon={<FileSearch className="h-4 w-4" />} onClick={() => void browse()}>
-              {t("manual.pick")}
+              {t("manual.chooseFile")}
             </Button>
           </div>
           <div className="mt-1.5 text-[12px] text-faint">{t("manual.targetHint")}</div>

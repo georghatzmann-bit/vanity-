@@ -5,8 +5,8 @@ import { cn } from "@shared/lib/cn";
 /** Kennzahl-Kachel: Beschriftung oben, großer Wert, optional Einheit und Farbe */
 export function StatTile({ label, value, unit, icon, color, sub, className, size = "md" }: { label: ReactNode; value: ReactNode; unit?: string; icon?: ReactNode; color?: string; sub?: ReactNode; className?: string; size?: "sm" | "md" | "lg" }) {
   return (
-    <motion.div className={cn("glass flex flex-col rounded-xl", size === "sm" ? "px-3.5 py-3" : "px-4 py-3.5", className)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 220, damping: 24 }}>
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
+    <motion.div className={cn("glass flex min-w-0 flex-col rounded-xl", size === "sm" ? "px-3.5 py-3" : "px-4 py-3.5", className)} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 220, damping: 24 }}>
+      <div className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
         {icon && <span className="text-accent">{icon}</span>}
         {label}
       </div>
@@ -14,7 +14,7 @@ export function StatTile({ label, value, unit, icon, color, sub, className, size
         {value}
         {unit && <span className="text-[12px] font-medium text-muted">{unit}</span>}
       </div>
-      {sub && <div className="mt-0.5 text-[12px] text-muted">{sub}</div>}
+      {sub && <div className="mt-0.5 truncate text-[12px] text-muted">{sub}</div>}
     </motion.div>
   );
 }

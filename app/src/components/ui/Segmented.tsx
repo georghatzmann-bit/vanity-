@@ -29,7 +29,7 @@ export function Segmented<T extends string>({ value, options, onChange, classNam
               }
             }}
             className={cn(
-              "relative flex items-center gap-1.5 rounded-sm font-medium transition-colors duration-200",
+              "relative flex items-center gap-1.5 rounded-sm font-medium whitespace-nowrap transition-colors duration-200",
               size === "sm" ? "h-7 px-2.5 text-[12px]" : "h-8 px-3 text-[13px]",
               active ? "text-fg" : "text-muted hover:text-fg-soft",
             )}

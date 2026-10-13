@@ -1,3 +1,6 @@
+import { globSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { emptyFilter, filterGames, fuzzyScore, normalizeName, sortGames } from "./search";
 import { findDuplicateGroups, markDuplicates } from "./dedupe";
@@ -180,5 +183,22 @@ describe("Übersetzungen", () => {
       const ph = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort();
       expect(ph(v), k).toEqual(ph(dm.get(k) ?? ""));
     }
+  });
+  it("jeder im Code benutzte Text existiert (sonst sieht man z. B. „scan.foundTitle“ statt Text)", () => {
+    const src = join(dirname(fileURLToPath(import.meta.url)), "..");
+    const has = (k: string) => {
+      let cur: unknown = de;
+      for (const p of k.split(".")) {
+        if (cur && typeof cur === "object" && p in (cur as object)) cur = (cur as Record<string, unknown>)[p];
+        else return false;
+      }
+      return typeof cur === "string";
+    };
+    const missing: string[] = [];
+    for (const f of globSync("**/*.{ts,tsx}", { cwd: src })) {
+      if (f.includes("locales") || f.endsWith(".test.ts")) continue;
+      for (const m of readFileSync(join(src, f), "utf8").matchAll(/\bt\(\s*"([a-zA-Z0-9_.]+)"/g)) if (!has(m[1])) missing.push(`${m[1]} (${f})`);
+    }
+    expect(missing).toEqual([]);
   });
 });

@@ -22,6 +22,11 @@ Workflow `.github/workflows/windows.yml` auf `windows-latest`:
 Ergebnis des letzten Laufs: siehe `https://github.com/georghatzmann-bit/vanity-/actions` (Eintrag „Windows Build & Test“) –
 die Selbsttest-Berichte (`selftest.json`, `app-selftest.json`) und Screenshots liegen im Artefakt `pulsar-windows-<version>`.
 
+Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache):
+
+![Pulsar auf Windows](screenshots/windows-app-cockpit.png)
+![Pulsar Setup auf Windows](screenshots/windows-setup-willkommen.png)
+
 ### Was der App-Selbsttest auf dem GitHub-Windows-Rechner wirklich gemessen hat (13.10.2026)
 
 | Prüfung | Ergebnis |

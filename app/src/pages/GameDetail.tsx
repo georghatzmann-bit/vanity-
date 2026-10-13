@@ -29,12 +29,12 @@ import { spring } from "@shared/design/motion";
 
 type Tab = "overview" | "reports" | "settings";
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({ label, value, sub, className }: { label: string; value: string; sub?: string; className?: string }) {
   return (
-    <div className="glass rounded-xl px-4 py-3">
-      <div className="text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{label}</div>
-      <div className="mt-1 font-display text-xl font-bold text-fg tabular">{value}</div>
-      {sub && <div className="text-[11px] text-muted">{sub}</div>}
+    <div className={cn("glass min-w-0 rounded-xl px-4 py-3", className)}>
+      <div className="truncate text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{label}</div>
+      <div className="mt-1 truncate font-display text-xl font-bold text-fg tabular">{value}</div>
+      {sub && <div className="truncate text-[11px] text-muted">{sub}</div>}
     </div>
   );
 }
@@ -64,7 +64,7 @@ function Overview({ game }: { game: Game }) {
   const serverOptions = [{ value: "", label: t("game.serverGameNone") }, ...(["cs2", "dota2", "deadlock", "lol"] as const).map((g) => ({ value: g, label: t(`network.regions.games.${g}`) }))];
   const last = reports[0];
   return (
-    <div className="grid grid-cols-[1.2fr_1fr] gap-5">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.2fr_1fr]">
       <div className="flex flex-col gap-5">
         <Section title={t("game.stats30")}>
           <div className="py-4">
@@ -106,7 +106,7 @@ function Reports({ game }: { game: Game }) {
   const reports = useMemo(() => allReports.filter((r) => r.gameId === game.id), [allReports, game.id]);
   if (!reports.length) return <EmptyState icon={<Zap className="h-7 w-7" />} title={t("reports.empty")} text={t("game.noReports")} />;
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       {reports.map((r) => (
         <ReportCard key={r.id} report={r} />
       ))}
@@ -152,7 +152,7 @@ function SettingsTab({ game }: { game: Game }) {
   const launch = game.launch;
   const setLaunch = (patch: Partial<Game["launch"]>) => update(game.id, { launch: { ...launch, ...patch } });
   return (
-    <div className="grid grid-cols-[1fr_320px] gap-5">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
       <Section title={t("game.tabs.settings")}>
         <Field label={t("game.name")}>
           <input value={game.name} onChange={(e) => update(game.id, { name: e.target.value })} className="input w-72" />
@@ -304,12 +304,13 @@ export function GameDetail({ id, section }: { id: string; section?: string }) {
       </div>
 
       <div className="mx-auto max-w-[1400px] px-8">
-        <div className="grid grid-cols-5 gap-3">
-          <Stat label={t("game.totalPlaytime")} value={stats ? formatDuration(stats.totalSeconds, { short: true }) : "0m"} />
-          <Stat label={t("game.lastSession")} value={stats?.lastSessionSeconds ? formatDuration(stats.lastSessionSeconds, { short: true }) : "–"} />
-          <Stat label={t("game.sessions")} value={String(stats?.sessions ?? 0)} />
-          <Stat label={t("game.lastPlayed")} value={formatRelative(stats?.lastPlayedAt ?? undefined)} sub={stats?.firstPlayedAt ? t("game.firstPlayed", { date: formatDate(stats.firstPlayedAt) }) : t("game.added", { date: formatDate(game.addedAt) })} />
-          <Stat label={t("reports.avgPing")} value={lastReport?.avgPing ? `${Math.round(lastReport.avgPing)} ms` : "–"} sub={lastReport ? lastReport.targetLabel : undefined} />
+        {/* 5 Kacheln: auf schmalen Fenstern 3 + 2 nebeneinander, ohne Lücke */}
+        <div className="grid grid-cols-6 gap-3 xl:grid-cols-5">
+          <Stat className="col-span-2 xl:col-span-1" label={t("game.totalPlaytime")} value={stats ? formatDuration(stats.totalSeconds, { short: true }) : "0m"} />
+          <Stat className="col-span-2 xl:col-span-1" label={t("game.lastSession")} value={stats?.lastSessionSeconds ? formatDuration(stats.lastSessionSeconds, { short: true }) : "–"} />
+          <Stat className="col-span-2 xl:col-span-1" label={t("game.sessions")} value={String(stats?.sessions ?? 0)} />
+          <Stat className="col-span-3 xl:col-span-1" label={t("game.lastPlayed")} value={formatRelative(stats?.lastPlayedAt ?? undefined)} sub={stats?.firstPlayedAt ? t("game.firstPlayed", { date: formatDate(stats.firstPlayedAt) }) : t("game.added", { date: formatDate(game.addedAt) })} />
+          <Stat className="col-span-3 xl:col-span-1" label={t("reports.avgPing")} value={lastReport?.avgPing ? `${Math.round(lastReport.avgPing)} ms` : "–"} sub={lastReport ? lastReport.targetLabel : undefined} />
         </div>
         <Tabs value={tab} onChange={setTab} className="mt-6 mb-5" tabs={(["overview", "reports", "settings"] as Tab[]).map((v) => ({ value: v, label: t(`game.tabs.${v}`) }))} />
         <AnimatePresence mode="wait">

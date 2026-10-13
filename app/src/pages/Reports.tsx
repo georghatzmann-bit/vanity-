@@ -32,7 +32,7 @@ export function Reports() {
 
   return (
     <motion.div className="mx-auto max-w-[1400px] px-8 pt-3 pb-24" variants={staggerContainer(0.04)} initial="initial" animate="enter">
-      <motion.div variants={staggerItem} className="flex items-end justify-between">
+      <motion.div variants={staggerItem} className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold text-fg">{t("reports.title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("reports.subtitle")}</p>
@@ -41,14 +41,14 @@ export function Reports() {
           {t("reports.deleteAll")}
         </Button>
       </motion.div>
-      <motion.div variants={staggerItem} className="mt-5 grid grid-cols-[1fr_1fr_1fr_2fr] gap-4">
+      <motion.div variants={staggerItem} className="mt-5 grid grid-cols-3 gap-4 xl:grid-cols-[1fr_1fr_1fr_2fr]">
         <StatTile label={t("reports.totalSessions", { n: reports.length })} value={reports.length} sub={t("reports.overview")} />
         <StatTile label={t("reports.best")} value={summary.best ? `${Math.round(summary.best.avgPing ?? 0)} ms` : "–"} color={summary.best ? gradeColor(summary.best.grade) : undefined} sub={summary.best?.gameName} />
         <StatTile label={t("reports.worst")} value={summary.worst ? `${Math.round(summary.worst.avgPing ?? 0)} ms` : "–"} color={summary.worst ? gradeColor(summary.worst.grade) : undefined} sub={summary.worst?.gameName} />
-        <div className="glass rounded-xl px-4 py-3">
-          <div className="flex items-center justify-between text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
+        <div className="glass col-span-3 rounded-xl px-4 py-3 xl:col-span-1">
+          <div className="flex items-center justify-between gap-3 text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
             {t("reports.trend")}
-            <span className="font-display text-base font-bold tabular" style={{ color: pingColor(summary.avg) }}>
+            <span className="shrink-0 font-display text-base font-bold tracking-normal whitespace-nowrap normal-case tabular" style={{ color: pingColor(summary.avg) }}>
               Ø {summary.avg === null ? "–" : Math.round(summary.avg)} ms
             </span>
           </div>
@@ -57,7 +57,7 @@ export function Reports() {
           </div>
         </div>
       </motion.div>
-      <motion.div variants={staggerItem} className="mt-6 grid grid-cols-2 gap-4 2xl:grid-cols-3">
+      <motion.div variants={staggerItem} className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
         {reports.map((r) => (
           <ReportCard key={r.id} report={r} onDelete={() => undefined} />
         ))}

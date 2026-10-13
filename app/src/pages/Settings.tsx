@@ -320,7 +320,7 @@ export function SettingsPage({ section }: { section?: string }) {
 
   return (
     <div className="flex h-full min-h-0">
-      <nav className="sticky top-0 hidden w-56 shrink-0 flex-col gap-1 self-start px-6 pt-3 lg:flex">
+      <nav className="sticky top-0 hidden w-56 shrink-0 flex-col gap-1 self-start px-6 pt-3 xl:flex">
         <div className="mb-3 font-display text-2xl font-bold text-fg">{t("settings.title")}</div>
         {SECTIONS.map((sec) => {
           const Icon = sec.icon;
@@ -347,9 +347,24 @@ export function SettingsPage({ section }: { section?: string }) {
 
       <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto px-8 pt-3 pb-24">
         <div className="mx-auto flex max-w-[860px] flex-col gap-6">
+          {/* Schmale Fenster: Titel + Sprungleiste statt linker Liste */}
+          <div className="xl:hidden">
+            <div className="font-display text-3xl font-bold text-fg">{t("settings.title")}</div>
+            <div className="no-scrollbar -mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+              {SECTIONS.map((sec) => {
+                const Icon = sec.icon;
+                return (
+                  <button key={sec.id} type="button" onClick={() => (sound.play("click"), setActive(sec.id), document.getElementById(`settings-${sec.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }))} className={cn("flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px] font-medium whitespace-nowrap transition", active === sec.id ? "border-transparent bg-accent/15 text-fg" : "border-line text-muted hover:text-fg")}>
+                    <Icon className="h-3.5 w-3.5" />
+                    {t(sec.key)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <Section id="settings-appearance" title={t("settings.appearance")} icon={<Palette className="h-4 w-4" />}>
             <Field label={t("settings.theme")} stacked>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 {THEMES.map((id) => (
                   <ThemeCard key={id} id={id} active={s.theme === id} onPick={(e) => s.theme !== id && (sound.play("switch"), transitionTheme(() => update({ theme: id }), { x: e.clientX, y: e.clientY }))} />
                 ))}

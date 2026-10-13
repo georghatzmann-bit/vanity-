@@ -113,7 +113,16 @@ function makeSessions(games: Game[]): Session[] {
       out.push({ id: id++, gameId: playable[gi].id, start, end: start + seconds * 1000, seconds });
     }
   }
-  return out;
+  // Zuletzt gespielt: eine Runde Counter-Strike 2 vor gut zwei Stunden (der typische Fall für einen Booster)
+  const cs2 = playable.find((g) => g.serverGame === "cs2");
+  if (cs2) {
+    const start = now - (2 * 60 + 15) * 60000;
+    const seconds = 47 * 60;
+    const kept = out.filter((x) => x.end < start);
+    kept.push({ id: id++, gameId: cs2.id, start, end: start + seconds * 1000, seconds });
+    return kept.sort((a, b) => a.start - b.start);
+  }
+  return out.sort((a, b) => a.start - b.start);
 }
 
 /** Ping-Verlauf einer Beispielsitzung */
@@ -167,7 +176,7 @@ interface MockDb {
   kv: Record<string, unknown>;
 }
 
-const STORE_KEY = "pulsar-mock-db-v1";
+const STORE_KEY = "pulsar-mock-db-v2";
 
 function freshDb(): MockDb {
   const games = makeGames();
@@ -339,15 +348,15 @@ async function dnsBenchmark(rounds: number): Promise<DnsResult[]> {
     ["quad9", "Quad9", "9.9.9.9", "149.112.112.112", 12, 31],
     ["opendns", "OpenDNS", "208.67.222.222", "208.67.220.220", 16, 38],
     ["adguard", "AdGuard", "94.140.14.14", "94.140.15.15", 14, 33],
-    ["controld", "Control D", "76.76.2.0", "76.76.10.0", 11, 27],
-    ["dnswatch", "DNS.WATCH", "84.200.69.80", "84.200.70.40", 15, 36],
+    ["dns0", "DNS0.eu", "193.110.81.0", "185.253.5.0", 11, 27],
+    ["mullvad", "Mullvad", "194.242.2.2", null, 15, 36],
     ["current", "Router (192.168.178.1)", "192.168.178.1", null, 4, 44],
   ];
   const out: DnsResult[] = [];
   for (let i = 0; i < providers.length; i++) {
     await sleep(260);
     const [id, name, primary, secondary, c, u] = providers[i];
-    out.push({ id, name, primary, secondary, cachedMs: c + rand() * 3, uncachedMs: u + rand() * 8, failed: id === "dnswatch" ? 1 : 0, current: id === "current" });
+    out.push({ id, name, primary, secondary, cachedMs: c + rand() * 3, uncachedMs: u + rand() * 8, failed: id === "mullvad" ? 1 : 0, current: id === "current" });
     emit("net://dns", { done: i + 1, total: providers.length });
     void rounds;
   }
