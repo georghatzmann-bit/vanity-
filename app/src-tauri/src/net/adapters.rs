@@ -60,10 +60,13 @@ pub fn speed_mbps(bps: u64) -> Option<u64> {
 /// Aus den Rohdaten die Liste für die Oberfläche bauen: nur aktive, echte Adapter; die
 /// Hauptverbindung (Standard-Gateway mit kleinster Metrik) zuerst.
 pub fn build_infos(raw: &[RawAdapter]) -> Vec<AdapterInfo> {
-    let usable: Vec<&RawAdapter> = raw
-        .iter()
-        .filter(|a| a.up && a.if_type != IF_TYPE_LOOPBACK && a.if_type != IF_TYPE_TUNNEL && !is_virtual(&a.description))
-        .collect();
+    let active = |a: &&RawAdapter| a.up && a.if_type != IF_TYPE_LOOPBACK && a.if_type != IF_TYPE_TUNNEL;
+    let mut usable: Vec<&RawAdapter> = raw.iter().filter(active).filter(|a| !is_virtual(&a.description)).collect();
+    // In einer VM (Hyper-V, Azure, VMware) ist der „virtuelle“ Adapter die echte Verbindung:
+    // gibt es keinen physischen Adapter mit Gateway, zählen virtuelle Adapter mit Gateway dazu.
+    if !usable.iter().any(|a| a.gateway.is_some()) {
+        usable.extend(raw.iter().filter(active).filter(|a| is_virtual(&a.description) && a.gateway.is_some()));
+    }
     let primary_id = usable
         .iter()
         .filter(|a| a.gateway.is_some())
@@ -516,6 +519,20 @@ mod tests {
         assert_eq!(infos[0].gateway.as_deref(), Some("192.168.1.1"));
         assert_eq!(infos[0].dns, vec!["192.168.1.1"]);
         assert!(build_infos(&[]).is_empty());
+    }
+
+    #[test]
+    fn build_infos_keeps_virtual_adapter_when_it_is_the_only_connection() {
+        // Wie auf einer VM (z. B. GitHub-Runner): nur ein Hyper-V-Adapter mit Gateway
+        let adapters = vec![
+            RawAdapter { description: "Microsoft Hyper-V Network Adapter".into(), ..raw("vm", 6, true, Some("10.1.0.1"), 10) },
+            raw("lo", 24, true, None, 75),
+        ];
+        let infos = build_infos(&adapters);
+        assert_eq!(infos.len(), 1);
+        assert_eq!(infos[0].id, "vm");
+        assert!(infos[0].primary);
+        assert!(build_dns_config(&adapters, |_| None).is_some());
     }
 
     #[test]
