@@ -131,7 +131,15 @@ export function Cleanup() {
                 <div key={gi} className="mb-3 rounded-lg border border-line p-1">
                   {grp.map((g) => (
                     <GameLine key={g.id} game={g}>
-                      <Button size="sm" variant="secondary" onClick={() => void remove(grp.filter((x) => x.id !== g.id).map((x) => x.id))}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        title={t("cleanup.keepThisHint")}
+                        onClick={async () => {
+                          await useLibrary.getState().mergeGames(g.id, grp.filter((x) => x.id !== g.id).map((x) => x.id));
+                          toast({ kind: "success", title: t("cleanup.merged"), text: t("cleanup.mergedText") });
+                        }}
+                      >
                         {t("cleanup.keepThis")}
                       </Button>
                     </GameLine>

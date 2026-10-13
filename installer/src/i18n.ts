@@ -88,6 +88,8 @@ const de = {
     launch: "NOVA jetzt starten",
     close: "Schließen",
     unverified: "Hinweis: Für diese Version war keine Prüfsumme hinterlegt.",
+    autoLaunch: "NOVA startet in {n} Sekunden …",
+    dontLaunch: "Nicht starten",
   },
   uninstall: {
     title: "NOVA deinstallieren?",
@@ -194,6 +196,8 @@ const en: Dict = {
     launch: "Launch NOVA now",
     close: "Close",
     unverified: "Note: no checksum was provided for this version.",
+    autoLaunch: "NOVA starts in {n} seconds …",
+    dontLaunch: "Don't launch",
   },
   uninstall: {
     title: "Uninstall NOVA?",

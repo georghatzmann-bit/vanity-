@@ -34,7 +34,7 @@ function Badge({ def, unlockedAt, progress }: { def: AchievementDef; unlockedAt?
         <div className="flex items-center gap-2">
           <span className="truncate font-semibold text-fg">{t(`achievements.${def.id}.name`)}</span>
           <span className="rounded-full px-1.5 py-px text-[9px] font-bold tracking-wider uppercase" style={{ background: `color-mix(in oklab, ${c1} 22%, transparent)`, color: c1 }}>
-            {def.tier}
+            {t(`tiers.${def.tier}`)}
           </span>
         </div>
         <div className="mt-0.5 text-[12px] leading-snug text-muted">{t(`achievements.${def.id}.desc`)}</div>

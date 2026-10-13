@@ -107,7 +107,9 @@ export function WeatherWidget() {
         <div className="flex flex-1 items-center justify-between gap-2">
           <div>
             <div className="font-display text-[44px] leading-none font-bold text-fg tabular">{Math.round(data.temperature)}°</div>
-            <div className="mt-2 text-sm font-medium text-fg-soft">{DESC[kind][lang]}</div>
+            <div className="mt-2 text-sm font-medium text-fg-soft">
+              {DESC[kind][lang]} · {t("widgets.feelsLike", { t: `${Math.round(data.apparent)}°` })}
+            </div>
             <div className="text-[12px] text-muted">
               {data.place} · ↑{Math.round(data.high)}° ↓{Math.round(data.low)}°
             </div>

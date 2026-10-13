@@ -86,6 +86,7 @@ fn setup(app: &mut tauri::App, started_minimized: bool) -> Result<(), Box<dyn st
 
     tracker::Tracker::start(core.clone(), handle.clone());
     backup::auto_backup_in_background(core.clone());
+    backup::auto_backup_daily(core.clone());
 
     if let Err(e) = native::setup_tray(&handle) {
         eprintln!("Tray-Symbol konnte nicht angelegt werden: {e}");
@@ -159,6 +160,7 @@ pub fn run() {
             library::db_put,
             library::db_put_many,
             library::db_delete,
+            library::games_merge,
             library::kv_get,
             library::kv_set,
             // Spielzeit

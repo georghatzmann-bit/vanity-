@@ -46,6 +46,8 @@ interface LibraryState {
   updateGame: (id: string, patch: Partial<Game>) => void;
   removeGame: (id: string) => Promise<void>;
   removeGames: (ids: string[]) => Promise<void>;
+  /** Doppelte zusammenführen: Spielzeit, Sammlungen, Tags usw. gehen auf den behaltenen Eintrag über */
+  mergeGames: (keepId: string, removeIds: string[]) => Promise<void>;
 
   launch: (game: Game) => Promise<void>;
   stop: (gameId: string) => Promise<void>;
@@ -265,6 +267,34 @@ export const useLibrary = create<LibraryState>((set, get) => ({
         toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
       }
     }
+  },
+
+  mergeGames: async (keepId, removeIds) => {
+    const keep = get().games.find((g) => g.id === keepId);
+    const others = get().games.filter((g) => removeIds.includes(g.id) && g.id !== keepId);
+    if (!keep || others.length === 0) return;
+    const all = [keep, ...others];
+    get().updateGame(keepId, {
+      favorite: all.some((g) => g.favorite),
+      inDock: all.some((g) => g.inDock) || undefined,
+      rating: Math.max(...all.map((g) => g.rating)),
+      status: keep.status !== "none" ? keep.status : (others.find((g) => g.status !== "none")?.status ?? "none"),
+      notes: [...new Set(all.map((g) => g.notes.trim()).filter(Boolean))].join("\n\n"),
+      tags: [...new Set(all.flatMap((g) => g.tags))],
+      collectionIds: [...new Set(all.flatMap((g) => g.collectionIds))],
+      addedAt: Math.min(...all.map((g) => g.addedAt)),
+    });
+    try {
+      await api.gamesMerge(keepId, others.map((g) => g.id));
+    } catch (e) {
+      toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
+      return;
+    }
+    const gone = new Set(others.map((g) => g.id));
+    const games = get().games.filter((g) => !gone.has(g.id));
+    set({ games });
+    syncTracking(games);
+    await get().refreshStats();
   },
 
   launch: async (game) => {

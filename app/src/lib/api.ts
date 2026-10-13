@@ -101,6 +101,7 @@ export const api = {
   dbPut: (table: DbTable, id: string, value: unknown) => call<void>("db_put", { table, id, value }),
   dbPutMany: (table: DbTable, items: { id: string; value: unknown }[]) => call<void>("db_put_many", { table, items }),
   dbDelete: (table: DbTable, id: string) => call<void>("db_delete", { table, id }),
+  gamesMerge: (keepId: string, removeIds: string[]) => call<number>("games_merge", { keepId, removeIds }),
   kvGet: <T>(key: string) => call<T | null>("kv_get", { key }),
   kvSet: (key: string, value: unknown) => call<void>("kv_set", { key, value }),
 

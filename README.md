@@ -5,6 +5,8 @@ Statistiken, Erfolgen, Big-Picture-Modus und einem eigenen, animierten Setup-Ins
 
 **Anleitung in einfachen Worten:** [docs/ANLEITUNG.md](docs/ANLEITUNG.md)
 
+**Alle Funktionen mit Bildern:** [docs/FUNKTIONEN.md](docs/FUNKTIONEN.md)
+
 ## Schnellstart
 
 ```cmd
@@ -33,6 +35,7 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
 | `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App per WebDriver (Linux mit `xvfb-run`) |
 | `NovaLauncher.exe --selftest <bericht.json>` | Eingebauter Selbsttest der App (Scan, Cover, Icon, Starten, Spielzeit, Beenden), Exit-Code 0 = alles ok – so prüft die Windows-CI |
+| `node scripts/feature-shots.mjs` | Screenshots aller Funktionen (Demo-Daten) für `docs/FUNKTIONEN.md`; vorher `npm run dev` und `npm run dev:installer` starten |
 | `node scripts/e2e-installer-linux.mjs <setup> <nutzlast> <ordner>` | Ende-zu-Ende-Test des echten Installers inkl. Abbruch + Fortsetzen |
 
 Was getestet wurde und was nicht: [docs/TESTBERICHT.md](docs/TESTBERICHT.md)

@@ -56,6 +56,12 @@ pub async fn db_delete(state: State<'_, Shared>, table: String, id: String) -> C
 }
 
 #[tauri::command]
+pub async fn games_merge(state: State<'_, Shared>, keep_id: String, remove_ids: Vec<String>) -> CmdResult<usize> {
+    let core = state.inner().clone();
+    blocking(move || core.db.with(|db| db.merge_games(&keep_id, &remove_ids))).await
+}
+
+#[tauri::command]
 pub async fn kv_get(state: State<'_, Shared>, key: String) -> CmdResult<Value> {
     let core = state.inner().clone();
     blocking(move || core.db.with(|db| db.kv_get(&key))).await

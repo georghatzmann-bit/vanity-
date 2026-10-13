@@ -362,6 +362,7 @@ function DataSection() {
 
 function About() {
   const t = useT();
+  const lang = useLanguage();
   const { info, checking, error, check } = useUpdate();
   const s = useSettings((x) => x.settings);
   const update = useSettings((x) => x.update);
@@ -426,13 +427,15 @@ function About() {
             ["Ctrl+B", t("shortcuts.bigPicture")],
             ["Ctrl+,", t("shortcuts.settings")],
             ["Ctrl+1…7", t("shortcuts.pages")],
+            ["Alt+←", t("shortcuts.back")],
+            ["/", t("shortcuts.quickPalette")],
             [s.overlayShortcut, t("settings.overlay")],
           ].map(([k, label]) => (
             <div key={label} className="flex items-center justify-between gap-3">
               <span className="text-fg-soft">{label}</span>
               <span className="flex gap-1">
-                {k.split("+").map((x) => (
-                  <Kbd key={x}>{x}</Kbd>
+                {(k === "/" ? ["/"] : k.split("+")).map((x) => (
+                  <Kbd key={x}>{x === "Ctrl" && lang === "de" ? "Strg" : x}</Kbd>
                 ))}
               </span>
             </div>
@@ -588,7 +591,7 @@ export function SettingsPage({ section }: { section?: string }) {
               <div className="flex flex-wrap gap-2">
                 {sounds.map((n) => (
                   <Button key={n} size="sm" variant="secondary" silent onClick={() => sound.play(n)} icon={<Sparkles className="h-3.5 w-3.5" />}>
-                    {n}
+                    {t(`soundNames.${n}`)}
                   </Button>
                 ))}
               </div>

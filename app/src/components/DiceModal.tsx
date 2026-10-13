@@ -11,7 +11,7 @@ import { Modal } from "./ui/Modal";
 import { Button } from "@shared/ui/Button";
 import { Starfield, type StarfieldHandle } from "@shared/ui/Starfield";
 import { cn } from "@shared/lib/cn";
-import { spring } from "@shared/design/motion";
+import { duration as dur, ease, spring } from "@shared/design/motion";
 import { sound } from "@shared/sound/engine";
 
 const PIPS: Record<number, [number, number][]> = {
@@ -67,6 +67,8 @@ export function DiceModal() {
   const [result, setResult] = useState<Pick | null>(null);
   const controls = useAnimationControls();
   const stars = useRef<StarfieldHandle>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const rolls = useRef(0);
 
   const roll = async () => {
@@ -90,7 +92,12 @@ export function DiceModal() {
     setRolling(false);
     if (pick) {
       sound.play("success");
-      stars.current?.burst(300, 140, { count: 110, speed: 8, life: 1.6 });
+      // Funkenregen genau über der Ergebnis-Fläche
+      const wrap = wrapRef.current?.getBoundingClientRect();
+      const stage = stageRef.current?.getBoundingClientRect();
+      const x = wrap && stage ? stage.left - wrap.left + stage.width / 2 : 300;
+      const y = wrap && stage ? stage.top - wrap.top + stage.height / 2 : 140;
+      stars.current?.burst(x, y, { count: 110, speed: 8, life: 1.6 });
       useLibrary.getState().bump("diceRolls");
     }
   };
@@ -113,7 +120,7 @@ export function DiceModal() {
 
   return (
     <Modal open={open} onClose={() => setOpen(false)} title={t("dice.title")} subtitle={t("dice.subtitle")} width={640}>
-      <div className="relative">
+      <div ref={wrapRef} className="relative">
         <Starfield ref={stars} className="pointer-events-none absolute inset-0 z-10" density={0} drift={0} parallax={false} still />
         {!hasGames ? (
           <div className="py-10 text-center text-sm text-muted">{t("dice.empty")}</div>
@@ -136,17 +143,17 @@ export function DiceModal() {
               ))}
             </div>
 
-            <div className="mt-6 flex min-h-[230px] items-center justify-center gap-8 rounded-xl bg-surface py-6">
+            <div ref={stageRef} className="mt-6 flex min-h-[230px] items-center justify-center gap-8 rounded-xl bg-surface py-6">
               <AnimatePresence mode="wait">
                 {!result ? (
-                  <motion.div key="dice" className="flex flex-col items-center gap-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6, rotate: 30 }} transition={spring.gentle}>
+                  <motion.div key="dice" className="flex flex-col items-center gap-6" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6, rotate: 30, transition: { duration: dur.base, ease: ease.inOut } }} transition={spring.gentle}>
                     <Dice controls={controls} />
                     <Button variant="primary" size="lg" silent onClick={() => void roll()} loading={rolling} className="min-w-44">
                       {rolling ? t("dice.rolling") : t("dice.roll")}
                     </Button>
                   </motion.div>
                 ) : (
-                  <motion.div key={result.game.id} className="flex items-center gap-6 px-6" initial={{ opacity: 0, y: 30, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20 }} transition={spring.bouncy}>
+                  <motion.div key={result.game.id} className="flex items-center gap-6 px-6" initial={{ opacity: 0, y: 30, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, transition: { duration: dur.fast } }} transition={{ ...spring.bouncy, opacity: { duration: dur.base } }}>
                     <motion.div className="h-[195px] w-[130px] shrink-0 overflow-hidden rounded-xl shadow-glow" initial={{ rotateY: 180 }} animate={{ rotateY: 0 }} transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}>
                       <GameCover game={result.game} />
                     </motion.div>

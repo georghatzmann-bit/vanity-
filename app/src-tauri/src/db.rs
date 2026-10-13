@@ -207,6 +207,21 @@ impl Db {
         tx.commit().map_err(db_err)
     }
 
+    /// Doppelte zusammenführen: Sitzungen der entfernten Einträge wandern zum behaltenen Eintrag,
+    /// danach werden die Doppelten gelöscht. Gibt die Zahl der übertragenen Sitzungen zurück.
+    pub fn merge_games(&mut self, keep: &str, remove: &[String]) -> CmdResult<usize> {
+        let tx = self.conn.transaction().map_err(db_err)?;
+        let mut moved = 0;
+        for id in remove.iter().filter(|id| id.as_str() != keep) {
+            moved += tx
+                .execute("UPDATE sessions SET game_id = ?1 WHERE game_id = ?2", params![keep, id])
+                .map_err(db_err)?;
+            tx.execute("DELETE FROM games WHERE id = ?1", params![id]).map_err(db_err)?;
+        }
+        tx.commit().map_err(db_err)?;
+        Ok(moved)
+    }
+
     // -----------------------------------------------------------------------------------------
     // Schlüssel/Wert
     // -----------------------------------------------------------------------------------------
@@ -628,6 +643,24 @@ mod tests {
         assert_eq!(db.kv_get("fehlt").unwrap(), Value::Null);
         db.kv_set("settings", &Value::Null).unwrap();
         assert_eq!(db.kv_get("settings").unwrap(), Value::Null);
+    }
+
+    #[test]
+    fn merge_moves_sessions() {
+        let (_d, mut db) = temp_db();
+        for id in ["keep", "dup1", "dup2"] {
+            db.put("games", id, &json!({"id": id, "name": "Portal 2"})).unwrap();
+        }
+        db.session_insert("keep", 1_000, 61_000, 60).unwrap();
+        db.session_insert("dup1", 100_000, 220_000, 120).unwrap();
+        db.session_insert("dup2", 300_000, 330_000, 30).unwrap();
+        let moved = db.merge_games("keep", &["dup1".into(), "dup2".into(), "keep".into()]).unwrap();
+        assert_eq!(moved, 2);
+        let games = db.list("games").unwrap();
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0]["id"], "keep");
+        let total: i64 = db.sessions_for_game("keep", 10).unwrap().iter().map(|s| s.seconds).sum();
+        assert_eq!(total, 210, "Spielzeit der Doppelten bleibt erhalten");
     }
 
     #[test]

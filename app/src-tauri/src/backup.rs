@@ -365,6 +365,18 @@ pub fn auto_backup_in_background(core: Arc<Core>) {
         });
 }
 
+/// Läuft NOVA länger am Stück (z. B. im Infobereich), stündlich prüfen, ob das tägliche Backup fällig ist.
+pub fn auto_backup_daily(core: Arc<Core>) {
+    let _ = std::thread::Builder::new()
+        .name("nova-backup-daily".into())
+        .spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(60 * 60));
+            if let Err(e) = auto_backup_if_due(&core) {
+                eprintln!("Automatisches Backup fehlgeschlagen: {e}");
+            }
+        });
+}
+
 /// Prüft, ob eine Datei eine lesbare Nova-Datenbank ist.
 fn check_backup_db(path: &Path) -> CmdResult<()> {
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)

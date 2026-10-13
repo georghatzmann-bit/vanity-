@@ -211,7 +211,10 @@ export function App() {
     void startInstall(opts);
   };
 
+  const finishing = useRef(false);
   const finish = async (launch: boolean) => {
+    if (finishing.current) return;
+    finishing.current = true;
     if (launch) {
       sound.play("launch", { gain: 0.6 });
       await api.launchApp().catch(() => undefined);
@@ -219,6 +222,23 @@ export function App() {
     }
     await api.quit();
   };
+
+  // Option "NOVA danach starten": nach kurzem Countdown automatisch starten (abbrechbar)
+  const [countdown, setCountdown] = useState<number | null>(null);
+  useEffect(() => {
+    if (step === "done" && info?.mode !== "update" && opts.launchAfter) setCountdown(5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      void finish(true);
+      return;
+    }
+    const id = window.setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
 
   // Nach einem Update startet NOVA automatisch neu
   useEffect(() => {
@@ -588,14 +608,25 @@ export function App() {
                         {info?.mode === "update" ? t("done.updated") : t("done.text")}
                       </motion.p>
                       {done && !done.verified && <p className="mt-2 text-[12px] text-warning">{t("done.unverified")}</p>}
+                      {countdown !== null && countdown > 0 && (
+                        <motion.p className="mt-2 text-[13px] text-muted tabular" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>
+                          {t("done.autoLaunch", { n: countdown })}
+                        </motion.p>
+                      )}
                       {info?.mode !== "update" && (
                         <motion.div className="mt-10 flex gap-3" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }}>
                           <Button variant="primary" size="lg" icon={<Sparkles className="h-5 w-5" />} silent onClick={() => void finish(true)} autoFocus>
                             {t("done.launch")}
                           </Button>
-                          <Button variant="secondary" size="lg" onClick={() => void finish(false)}>
-                            {t("done.close")}
-                          </Button>
+                          {countdown !== null ? (
+                            <Button variant="secondary" size="lg" onClick={() => setCountdown(null)}>
+                              {t("done.dontLaunch")}
+                            </Button>
+                          ) : (
+                            <Button variant="secondary" size="lg" onClick={() => void finish(false)}>
+                              {t("done.close")}
+                            </Button>
+                          )}
                         </motion.div>
                       )}
                     </div>

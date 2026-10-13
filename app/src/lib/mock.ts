@@ -2,11 +2,39 @@
  * Demo-Backend für den Browser (Vorschau, Screenshots, Tests).
  * Bildet die Rust-Befehle mit Beispieldaten nach. In der echten App wird es nie geladen.
  */
-import type { Collection, Game, LaunchConfig, PlayStats, Session, WishItem, ScannedEntry, Profile } from "./types";
+import type { Collection, Game, LaunchConfig, PlayStats, Session, WishItem, ScannedEntry, Profile, Screenshot } from "./types";
 
 type Handler = (p: unknown) => void;
 const listeners = new Map<string, Set<Handler>>();
 const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach((h) => h(payload));
+
+/** Erzeugte Beispiel-Screenshots (Landschaften als SVG), damit die Galerie in der Vorschau nicht leer ist */
+function demoScreenshots(gameId: string): Screenshot[] {
+  const palettes = [
+    ["#1b1036", "#f97362", "#ffd29d"],
+    ["#06142e", "#2f80ed", "#a8e6ff"],
+    ["#140a1f", "#d946ef", "#fbcfe8"],
+    ["#0b1d13", "#22c55e", "#d9f99d"],
+    ["#1f0f08", "#f59e0b", "#fde68a"],
+    ["#0d0d1a", "#8b5cf6", "#c4b5fd"],
+  ];
+  let seed = [...gameId].reduce((n, c) => n + c.charCodeAt(0), 0);
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  return palettes.map(([sky, mid, sun], i) => {
+    const hills = [0.62, 0.72, 0.84]
+      .map((h, k) => {
+        const pts = Array.from({ length: 9 }, (_, j) => `${j * 200},${Math.round(900 * (h + (rnd() - 0.5) * 0.12))}`).join(" ");
+        return `<polygon points="0,900 ${pts} 1600,900" fill="${mid}" opacity="${0.35 + k * 0.3}"/>`;
+      })
+      .join("");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky}"/><stop offset="1" stop-color="${mid}"/></linearGradient></defs><rect width="1600" height="900" fill="url(#g)"/><circle cx="${300 + Math.round(rnd() * 1000)}" cy="${220 + Math.round(rnd() * 160)}" r="110" fill="${sun}" opacity="0.9"/>${hills}</svg>`;
+    return {
+      path: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+      takenAt: Date.now() - (i * 3 + 1) * 86_400_000 - Math.round(rnd() * 40_000_000),
+      source: i % 3 === 0 ? "gamebar" : "steam",
+    };
+  });
+}
 
 export function mockListen(event: string, handler: Handler): () => void {
   if (!listeners.has(event)) listeners.set(event, new Set());
@@ -269,6 +297,20 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       persist();
       return r(undefined);
     }
+    case "games_merge": {
+      const keep = String(a.keepId);
+      const remove = new Set((a.removeIds as string[]).filter((id) => id !== keep));
+      let moved = 0;
+      db.sessions.forEach((s) => {
+        if (remove.has(s.gameId)) {
+          s.gameId = keep;
+          moved++;
+        }
+      });
+      db.games = db.games.filter((x) => !remove.has(x.id));
+      persist();
+      return r(moved);
+    }
     case "kv_get":
       return r(db.kv[String(a.key)] ?? null);
     case "kv_set":
@@ -380,7 +422,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
         { name: "Berlin", country: "Deutschland", admin: "Berlin", lat: 52.52, lon: 13.405 },
       ]);
     case "screenshots_list":
-      return r([]);
+      return r(demoScreenshots(String(a.gameId ?? "")));
     case "thumbnail":
       return r(String(a.path));
     case "save_backup_create":
