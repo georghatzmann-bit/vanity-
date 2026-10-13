@@ -16,6 +16,7 @@ mod native;
 mod profiles;
 mod scan;
 mod screenshots;
+mod selftest;
 mod state;
 mod system;
 mod tracker;
@@ -93,6 +94,11 @@ fn setup(app: &mut tauri::App, started_minimized: bool) -> Result<(), Box<dyn st
         eprintln!("{e}");
     } else {
         core.native.lock_safe().settings.overlay_shortcut = DEFAULT_OVERLAY_SHORTCUT.into();
+    }
+
+    // Eingebauter Selbsttest für automatische Prüfungen (CI)
+    if let Some(report) = selftest::report_path() {
+        selftest::spawn(handle.clone(), report);
     }
 
     if let Some(main) = app.get_webview_window("main") {

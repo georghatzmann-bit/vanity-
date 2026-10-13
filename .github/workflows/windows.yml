@@ -120,38 +120,25 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen (Exit-Code $($p.ExitCode))." }
           Write-Host "Selbsttest bestanden."
 
-      - name: tauri-driver installieren (für den Ende-zu-Ende-Test)
-        continue-on-error: true
-        run: cargo install tauri-driver --locked
-
-      - name: Passenden Edge-WebDriver holen
-        id: edgedriver
-        continue-on-error: true
+      - name: App-Selbsttest (Steam-Scan, Steam-Cover, Programm-Icon, Starten, Spielzeit, Beenden)
         shell: pwsh
         run: |
-          $id = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-          $ver = $null
-          foreach ($k in @("HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$id", "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$id", "HKCU:\Software\Microsoft\EdgeUpdate\Clients\$id")) {
-            try { $ver = (Get-ItemProperty $k -ErrorAction Stop).pv; if ($ver) { break } } catch {}
-          }
-          Write-Host "WebView2-Version: $ver"
-          $dir = Join-Path $env:RUNNER_TEMP "edgedriver"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          $exe = $null
-          try {
-            Invoke-WebRequest "https://msedgedriver.microsoft.com/$ver/edgedriver_win64.zip" -OutFile "$dir\d.zip"
-            Expand-Archive "$dir\d.zip" -DestinationPath $dir -Force
-            $exe = Join-Path $dir "msedgedriver.exe"
-          } catch {
-            Write-Host "Passender Treiber nicht ladbar ($_), nehme den vorinstallierten."
-            $exe = Join-Path $env:EdgeWebDriver "msedgedriver.exe"
-          }
-          Write-Host "Treiber: $exe"
-          "path=$exe" >> $env:GITHUB_OUTPUT
-
-      - name: Ende-zu-Ende-Test der echten App (Steam-Scan, Cover, Start, Spielzeit, Icons, Export)
-        continue-on-error: true
-        run: node scripts/e2e-app.mjs release\NovaLauncher.exe test-output\e2e "${{ steps.edgedriver.outputs.path }}"
+          # Nachgebaute Steam-Installation, damit der Steam-Scan etwas finden kann
+          $steam = Join-Path $env:RUNNER_TEMP "FakeSteam"
+          New-Item -ItemType Directory -Force -Path "$steam\steamapps\common\Portal 2" | Out-Null
+          $vdfPath = $steam -replace '\\', '\\'
+          Set-Content -Encoding utf8 "$steam\steamapps\libraryfolders.vdf" "`"libraryfolders`"`n{`n`t`"0`"`n`t{`n`t`t`"path`"`t`t`"$vdfPath`"`n`t}`n}`n"
+          Set-Content -Encoding utf8 "$steam\steamapps\appmanifest_620.acf" "`"AppState`"`n{`n`t`"appid`"`t`t`"620`"`n`t`"name`"`t`t`"Portal 2`"`n`t`"installdir`"`t`t`"Portal 2`"`n}`n"
+          New-Item -Path "HKCU:\Software\Valve\Steam" -Force | Out-Null
+          Set-ItemProperty -Path "HKCU:\Software\Valve\Steam" -Name SteamPath -Value ($steam -replace '\\', '/')
+          $env:NOVA_SELFTEST_EXPECT_STEAM = "Portal 2"
+          $report = Join-Path $PWD "test-output\app-selftest.json"
+          $p = Start-Process -FilePath "release\NovaLauncher.exe" -ArgumentList "--selftest", "`"$report`"" -PassThru
+          $null = $p.Handle
+          if (-not $p.WaitForExit(240000)) { Stop-Process -Id $p.Id -Force; throw "Der App-Selbsttest hängt." }
+          if (Test-Path $report) { Get-Content $report } else { Write-Host "Kein Bericht geschrieben." }
+          if ($p.ExitCode -ne 0) { throw "App-Selbsttest fehlgeschlagen (Exit-Code $($p.ExitCode))." }
+          Write-Host "App-Selbsttest bestanden."
 
       - name: Ergebnisse hochladen
         if: always()
