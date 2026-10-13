@@ -4,6 +4,7 @@ import { api, initImgSrc } from "@/lib/api";
 import { useBoost } from "@/store/boost";
 import { useLibrary } from "@/store/library";
 import { useNet } from "@/store/net";
+import { useNetAuto } from "@/store/netauto";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
 import { useDragDrop, useHotkeys, useLiveStats, useStartupTasks } from "@/hooks/useAppEffects";
@@ -32,7 +33,7 @@ import { isTauri } from "@shared/lib/env";
 
 // Für automatische Oberflächen-Tests (nur im Entwicklungsmodus)
 if (import.meta.env.DEV) {
-  (window as unknown as Record<string, unknown>).__pulsar = { useUI, useLibrary, useSettings, useNet, useBoost };
+  (window as unknown as Record<string, unknown>).__pulsar = { useUI, useLibrary, useSettings, useNet, useBoost, useNetAuto };
 }
 
 function CurrentPage() {
@@ -47,7 +48,7 @@ function CurrentPage() {
     case "network":
       return <Network section={route.section} />;
     case "optimize":
-      return <Optimize />;
+      return <Optimize section={route.section} />;
     case "reports":
       return <Reports />;
     case "settings":

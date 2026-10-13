@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { BatteryCharging, Check, Eraser, Info, Loader2, MousePointer2, RotateCcw, Video, Zap } from "lucide-react";
+import { BatteryCharging, Check, Eraser, Gauge, Info, Loader2, MousePointer2, RotateCcw, Send, Video, Zap } from "lucide-react";
 import { api, errorText } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { isDeclined } from "@/lib/netauto";
 import type { PowerPlan, Tweak } from "@/lib/types";
 import { useBoost } from "@/store/boost";
+import { pulsarChanges, useNetAuto } from "@/store/netauto";
 import { useSettings } from "@/store/settings";
-import { toast } from "@/store/ui";
+import { toast, useUI } from "@/store/ui";
+import { NetAutoCard } from "@/components/NetAutoCard";
 import { Field, Section } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
+import { TweakBadges } from "@/components/ui/TweakBadges";
 import { Button } from "@shared/ui/Button";
 import { Toggle } from "@shared/ui/Toggle";
 import { cn } from "@shared/lib/cn";
@@ -20,7 +24,12 @@ const ICONS: Record<string, React.ReactNode> = {
   gameMode: <Zap className="h-5 w-5" />,
   gameDvr: <Video className="h-5 w-5" />,
   mouseAccel: <MousePointer2 className="h-5 w-5" />,
+  nagle: <Send className="h-5 w-5" />,
+  netThrottle: <Gauge className="h-5 w-5" />,
 };
+
+/** Reihenfolge der Gruppen in der Liste */
+const GROUPS: Tweak["category"][] = ["windows", "power", "input", "network"];
 
 function ImpactPill({ impact }: { impact: Tweak["impact"] }) {
   const t = useT();
@@ -28,33 +37,48 @@ function ImpactPill({ impact }: { impact: Tweak["impact"] }) {
   return <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", cls)}>{t(`optimize.impact.${impact}`)}</span>;
 }
 
-/** Optimieren: Windows-Einstellungen mit Rückgängig, Energieplan, Boost-Profil */
-export function Optimize() {
+/** Optimieren: Netzwerk-Automatik, Windows-Einstellungen mit Rückgängig, Energieplan, Boost-Profil */
+export function Optimize({ section }: { section?: string }) {
   const t = useT();
   const [tweaks, setTweaks] = useState<Tweak[]>([]);
   const [plans, setPlans] = useState<PowerPlan[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [reverting, setReverting] = useState(false);
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
   const boost = useBoost((s) => s.state);
+  const autoVersion = useNetAuto((s) => s.version);
 
   const load = async () => {
     const [tw, pl] = await Promise.all([api.tweaks().catch(() => [] as Tweak[]), api.powerPlans().catch(() => [] as PowerPlan[])]);
     setTweaks(tw);
     setPlans(pl);
+    setLoaded(true);
   };
   useEffect(() => {
     void load();
-  }, []);
+  }, [autoVersion]);
+
+  // Befehlspalette: „Netzwerk automatisch optimieren“ öffnet diese Seite mit section "auto"
+  useEffect(() => {
+    if (section !== "auto") return;
+    useUI.setState({ route: { page: "optimize" } });
+    void useNetAuto.getState().start();
+  }, [section]);
 
   const apply = async (ids: string[], enable: boolean) => {
     setBusy(ids.join(","));
     try {
       const rep = await api.tweaksApply(ids, enable);
-      if (rep.failed.length) toast({ kind: "warning", title: t("toast.error"), text: rep.failed.map((f) => f.error).join(" · ") });
+      const declined = rep.failed.filter((f) => isDeclined(f.error));
+      const other = rep.failed.filter((f) => !isDeclined(f.error));
+      if (other.length) toast({ kind: "warning", title: t("toast.error"), text: other.map((f) => f.error).join(" · ") });
+      else if (declined.length) toast({ kind: "info", title: t("optimize.declined"), text: t("optimize.declinedText") });
       else if (enable) toast({ kind: "success", title: t("optimize.applied", { n: rep.applied.length }) });
-      sound.play(enable ? "toggleOn" : "toggleOff");
+      if (!rep.failed.length) sound.play(enable ? "toggleOn" : "toggleOff");
       await load();
+      void useNetAuto.getState().refresh();
     } catch (e) {
       toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
     } finally {
@@ -62,8 +86,33 @@ export function Optimize() {
     }
   };
 
+  /** Wirklich alles zurück: DNS und Netzwerk-Optimierungen (eine Windows-Abfrage), danach den Rest */
+  const revertAll = async () => {
+    setReverting(true);
+    try {
+      const changes = pulsarChanges(await api.dnsCurrent().catch(() => null), tweaks);
+      if (changes.dns || changes.tweaks.length) {
+        const rep = await api.autoRestore();
+        if (rep.declined) {
+          toast({ kind: "info", title: t("optimize.declined"), text: t("optimize.declinedText") });
+          return;
+        }
+      }
+      const rep = await api.tweaksRevertAll();
+      if (rep.failed.length) toast({ kind: "warning", title: t("toast.error"), text: rep.failed.map((f) => f.error).join(" · ") });
+      else toast({ kind: "info", title: t("optimize.reverted") });
+    } catch (e) {
+      toast({ kind: "error", title: t("toast.error"), text: errorText(e) });
+    } finally {
+      setReverting(false);
+      await load();
+      void useNetAuto.getState().refresh();
+    }
+  };
+
   const activePlan = plans.find((p) => p.active);
-  const recommended = tweaks.filter((x) => x.state === "off").map((x) => x.id);
+  // „Alle empfohlenen“ nimmt nur Optimierungen ohne Windows-Abfrage
+  const recommended = tweaks.filter((x) => x.state === "off" && !x.admin).map((x) => x.id);
 
   return (
     <motion.div className="mx-auto max-w-[1200px] px-8 pt-3 pb-24" variants={staggerContainer(0.05)} initial="initial" animate="enter">
@@ -73,46 +122,65 @@ export function Optimize() {
           <p className="mt-1 text-sm text-muted">{t("optimize.subtitle")}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" icon={<RotateCcw className="h-4 w-4" />} onClick={async () => {
-            await api.tweaksRevertAll().catch((e) => toast({ kind: "error", title: errorText(e) }));
-            toast({ kind: "info", title: t("optimize.reverted") });
-            await load();
-          }}>
+          <Button variant="ghost" icon={<RotateCcw className="h-4 w-4" />} loading={reverting} onClick={() => void revertAll()}>
             {t("optimize.revertAll")}
           </Button>
-          <Button variant="primary" icon={<Check className="h-4 w-4" />} disabled={!recommended.length} onClick={() => void apply(recommended, true)}>
+          <Button variant="secondary" icon={<Check className="h-4 w-4" />} disabled={!recommended.length || !!busy} onClick={() => void apply(recommended, true)}>
             {t("optimize.applyAll")}
           </Button>
         </div>
       </motion.div>
 
+      <motion.div variants={staggerItem} className="mt-6">
+        <NetAutoCard />
+      </motion.div>
+
       <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
-        <motion.div variants={staggerItem} className="flex flex-col gap-3">
-          <div className="px-1 text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{t("optimize.tweaks")}</div>
-          {tweaks.map((tw, i) => {
-            const on = tw.state === "on";
-            const unsupported = tw.state === "unsupported";
+        <motion.div variants={staggerItem} className="flex flex-col gap-5">
+          {GROUPS.map((cat) => {
+            const list = tweaks.filter((tw) => tw.category === cat);
+            if (!list.length) return null;
             return (
-              <motion.div key={tw.id} className={cn("glass flex items-center gap-4 rounded-xl p-4 transition", on && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--nv-accent)_45%,transparent)]")} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
-                <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl", on ? "bg-gradient-accent text-accent-fg shadow-glow" : "bg-surface-2 text-muted")}>{ICONS[tw.id]}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-fg">{t(`optimize.items.${tw.id}.name`)}</span>
-                    <ImpactPill impact={tw.impact} />
-                    <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] text-muted">{t(`optimize.categories.${tw.category}`)}</span>
-                  </div>
-                  <div className="mt-0.5 text-[12px] leading-snug text-muted">{t(`optimize.items.${tw.id}.desc`)}</div>
-                  <div className="mt-1 text-[11px] text-faint">
-                    {t(`optimize.state.${tw.state}`)}
-                    {tw.detail ? ` · ${tw.detail}` : ""}
-                    {tw.canRevert ? ` · ${t("optimize.canRevert")}` : ""}
-                  </div>
+              <section key={cat} aria-labelledby={`opt-group-${cat}`} className="flex flex-col gap-2.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-1">
+                  <h2 id={`opt-group-${cat}`} className="font-sans text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
+                    {t(`optimize.categories.${cat}`)}
+                  </h2>
+                  {cat === "network" && <span className="text-[11px] text-muted">{t("optimize.networkHint")}</span>}
                 </div>
-                {busy?.includes(tw.id) ? <Loader2 className="h-5 w-5 animate-spin text-accent" /> : <Toggle checked={on} disabled={unsupported} onChange={(v) => void apply([tw.id], v)} />}
-              </motion.div>
+                {list.map((tw, i) => {
+                  const on = tw.state === "on";
+                  const unsupported = tw.state === "unsupported" || tw.state === "unknown";
+                  const working = busy?.split(",").includes(tw.id);
+                  return (
+                    <motion.div key={tw.id} className={cn("glass flex items-center gap-4 rounded-xl p-4 transition-shadow duration-200", on && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--nv-accent)_45%,transparent)]")} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                      <span className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-colors duration-200", on ? "bg-gradient-accent text-accent-fg shadow-glow" : "bg-surface-2 text-muted")}>{ICONS[tw.id]}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-sm font-semibold text-fg">{t(`optimize.items.${tw.id}.name`)}</span>
+                          <ImpactPill impact={tw.impact} />
+                          <TweakBadges admin={tw.admin} restart={tw.restart} />
+                        </div>
+                        <div className="mt-0.5 text-[12px] leading-snug text-muted">{t(`optimize.items.${tw.id}.desc`)}</div>
+                        <div className="mt-1 text-[11px] text-muted">
+                          {working && tw.admin ? t("optimize.waitingUac") : t(`optimize.state.${tw.state}`)}
+                          {tw.detail ? ` · ${tw.detail}` : ""}
+                          {tw.canRevert ? ` · ${t("optimize.canRevert")}` : ""}
+                        </div>
+                      </div>
+                      {working ? <Loader2 className="h-5 w-5 animate-spin text-accent" aria-label={t("common.loading")} /> : <Toggle checked={on} disabled={unsupported || !!busy} label={t(`optimize.items.${tw.id}.name`)} onChange={(v) => void apply([tw.id], v)} />}
+                    </motion.div>
+                  );
+                })}
+              </section>
             );
           })}
-          {!tweaks.length && <div className="glass rounded-xl p-6 text-center text-sm text-muted">{t("common.loading")}</div>}
+          {!loaded && <div className="glass rounded-xl p-6 text-center text-sm text-muted">{t("common.loading")}</div>}
+          {loaded && !tweaks.length && (
+            <div className="glass flex items-center gap-3 rounded-xl p-5 text-sm text-muted">
+              <Info className="h-5 w-5 shrink-0 text-accent" /> {t("optimize.noTweaks")}
+            </div>
+          )}
         </motion.div>
 
         <motion.div variants={staggerItem} className="flex flex-col gap-5">
@@ -133,13 +201,13 @@ export function Optimize() {
           <Section title={t("optimize.boostProfile")} icon={<Zap className="h-4 w-4" />}>
             <div className="pt-3 pb-1 text-[12px] text-muted">{t("optimize.boostProfileDesc")}</div>
             <Field label={t("optimize.boostPower")} description={t("optimize.boostPowerDesc")}>
-              <Toggle checked={settings.boostProfile.powerPlan} onChange={(v) => update({ boostProfile: { ...settings.boostProfile, powerPlan: v } })} />
+              <Toggle checked={settings.boostProfile.powerPlan} label={t("optimize.boostPower")} onChange={(v) => update({ boostProfile: { ...settings.boostProfile, powerPlan: v } })} />
             </Field>
             <Field label={t("optimize.boostPriority")} description={t("optimize.boostPriorityDesc")}>
               <Select value={settings.boostProfile.gamePriority} onChange={(v) => update({ boostProfile: { ...settings.boostProfile, gamePriority: v } })} options={(["normal", "above", "high"] as const).map((p) => ({ value: p, label: t(`optimize.priorities.${p}`) }))} className="w-40" align="right" />
             </Field>
             <Field label={t("optimize.boostFlush")} description={t("optimize.boostFlushDesc")}>
-              <Toggle checked={settings.boostProfile.flushDns} onChange={(v) => update({ boostProfile: { ...settings.boostProfile, flushDns: v } })} />
+              <Toggle checked={settings.boostProfile.flushDns} label={t("optimize.boostFlush")} onChange={(v) => update({ boostProfile: { ...settings.boostProfile, flushDns: v } })} />
             </Field>
             {boost.active && (
               <div className="py-3">

@@ -101,5 +101,24 @@ interface InstallOptions { dir: string; desktopShortcut: boolean; startMenu: boo
 Ohne Adminrechte wird nach `%LOCALAPPDATA%\Programs\Pulsar` installiert. Adminrechte werden nur
 angefordert, wenn der gewählte Ordner nicht beschreibbar ist (z. B. `C:\Program Files`).
 
-Beim Deinstallieren wird die laufende App zuerst beendet – Pulsar stellt dabei einen aktiven Boost
-(Energieplan, Prozess-Prioritäten) selbst zurück.
+## Ablauf der Deinstallation
+
+`run_uninstall` (`installer/src-tauri/src/uninstall.rs`) – gleich für die Oberfläche, `--uninstall --quiet` und den Selbsttest.
+Die Schritt-Namen in `uninstall://progress` bleiben `stop | shortcuts | registry | files | data | done`.
+
+| Schritt | Was passiert |
+|---|---|
+| `stop` | 1. Laufende `Pulsar.exe` beenden (hart – ein laufender Boost kann sich dabei nicht mehr selbst zurücknehmen).<br>2. **Windows-Einstellungen zurückstellen:** Liegt `<dir>\Pulsar.exe` noch da, startet der Deinstaller `Pulsar.exe --revert-all` verborgen (Windows: `CREATE_NO_WINDOW`, Arbeitsordner `%TEMP%`). Die App stellt den gesicherten DNS und alle Sicherungen aus **Optimieren** wieder her – mit höchstens einer Windows-Abfrage, keiner, wenn schon Adminrechte bestehen oder nichts zu tun ist (Vertrag: `docs/API.md`, „Deinstallieren: `Pulsar.exe --revert-all`“). Der Deinstaller wartet höchstens **120 s** und beendet den Prozess sonst. Danach werden übrig gebliebene `Pulsar.exe`-Prozesse noch einmal beendet, damit die Datei gelöscht werden kann. |
+| `shortcuts` | Startmenü- und Desktop-Verknüpfung, Autostart entfernen |
+| `registry` | „Apps & Features“-Eintrag und `HKCU\Software\Pulsar\Booster` entfernen |
+| `files` | `Pulsar.exe`, `install.json`, Deinstaller, Download-Reste löschen; den Ordner nur, wenn er danach leer ist |
+| `data` | Nur ohne „Meine Daten behalten“: `%APPDATA%\com.pulsar.booster` und `%LOCALAPPDATA%\com.pulsar.booster` |
+
+Zum Zurückstellen:
+- Das Ergebnis (Exit-Code 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben, Zeitüberschreitung,
+  Startfehler) und die Fehlerausgabe der App landen im Setup-Protokoll `%TEMP%\pulsar-setup.log`. Alles außer
+  Exit-Code 0 (oder „keine App-Datei“) kommt zusätzlich als Hinweis dazu; der Selbsttest zeigt das Ergebnis im Schritt `uninstall`.
+- Ein Fehler bricht die Deinstallation **nie** ab. Lehnt man die Windows-Abfrage ab, bleiben DNS und die zwei
+  Netzwerk-Einstellungen so, wie Pulsar sie eingestellt hat; der Rest wird trotzdem entfernt.
+- Es passiert vor dem Löschen der Benutzerdaten, denn dort liegen die Sicherungen (kv `opt.snapshots`, `net.dnsBackup`).
+- Auch `--uninstall --quiet` stellt zurück; ohne Adminrechte kann dabei die Windows-Abfrage erscheinen.

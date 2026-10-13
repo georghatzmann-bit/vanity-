@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Activity, CornerDownLeft, FileBarChart2, FolderSearch, Gauge, Globe, LayoutGrid, Palette, Play, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Square, Volume2, Wand2, Zap, Eraser } from "lucide-react";
+import { Activity, CornerDownLeft, FileBarChart2, FolderSearch, Gauge, Globe, LayoutGrid, Palette, Play, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Sparkles, Square, Volume2, Wand2, Zap, Eraser } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { useLanguage, useT } from "@/lib/i18n";
@@ -71,6 +71,7 @@ export function CommandPalette() {
     const s = useSettings.getState();
     const actions: Omit<Item, "score">[] = [
       { id: "a-boost", group: "actions", label: boostActive ? t("palette.boostStop") : t("palette.boost"), icon: <Zap className="h-4 w-4" />, run: () => void useBoost.getState().toggle() },
+      { id: "a-netauto", group: "actions", label: t("palette.netAuto"), sub: t("palette.netAutoSub"), icon: <Sparkles className="h-4 w-4" />, run: nav("optimize", "auto") },
       { id: "a-speed", group: "actions", label: t("palette.speedtest"), icon: <Gauge className="h-4 w-4" />, run: nav("network", "speed") },
       { id: "a-regions", group: "actions", label: t("palette.regions"), icon: <Globe className="h-4 w-4" />, run: nav("network", "regions") },
       { id: "a-scan", group: "actions", label: t("palette.scan"), icon: <FolderSearch className="h-4 w-4" />, run: () => useUI.getState().setScan(true) },

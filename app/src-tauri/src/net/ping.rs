@@ -361,7 +361,7 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().unwrap();
         let rtt = tcp_probe(addr, Duration::from_secs(2)).await;
-        assert!(rtt.is_some_and(|v| v >= 0.0 && v < 1000.0), "{rtt:?}");
+        assert!(rtt.is_some_and(|v| (0.0..1000.0).contains(&v)), "{rtt:?}");
         drop(listener);
         // Geschlossener Port → Verbindung abgelehnt → Verlust
         assert_eq!(tcp_probe(addr, Duration::from_secs(2)).await, None);

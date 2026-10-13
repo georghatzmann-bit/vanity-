@@ -54,15 +54,43 @@ den Ping zu dem Server, den du für das Spiel eingestellt hast. Danach gibt es e
 | **Spiele** | Deine Spiele (automatisch gefunden oder per Hand). Pro Spiel: Messziel, echte Spielserver, Auto-Boost |
 | **Netzwerk → Regionen** | Ping zu Rechenzentren weltweit. Die beste Region als Messziel fürs Cockpit setzen |
 | **Netzwerk → Route** | Station für Station: Wo auf dem Weg zum Server hängt es? Pulsar sagt dir: Heimnetz, Anbieter oder Internet |
-| **Netzwerk → DNS** | Vergleicht DNS-Dienste (Cloudflare, Google, Quad9 …). Zeigt dir Schritt für Schritt, wie du den schnellsten in Windows einträgst |
+| **Netzwerk → DNS** | Vergleicht DNS-Dienste (Cloudflare, Google, Quad9 …) und stellt auf Knopfdruck den schnellsten ein (**Schnellsten einstellen**, Windows fragt einmal nach). **Zurückstellen** holt deine alte Einstellung jederzeit zurück |
 | **Netzwerk → Speedtest** | Download, Upload und die **Bufferbloat-Note**: Wie stark steigt dein Ping, wenn die Leitung ausgelastet ist? |
 | **Netzwerk → Verbindung** | Kabel oder WLAN? Signalstärke, Band, Kanal, Adapter, Gateway, DNS |
-| **Optimieren** | Vier Windows-Einstellungen mit Schalter – jede mit **Rückgängig**. Energieplan, Boost-Profil |
+| **Optimieren** | **Netzwerk automatisch optimieren** (siehe unten), sechs Windows-Einstellungen mit Schalter – jede mit **Rückgängig**. Energieplan, Boost-Profil |
 | **Berichte** | Jede Spielrunde: Ping-Verlauf, Spitzen, Verlust, Note |
 | **Einstellungen** | Aussehen (4 Themes), Sound, Messung, Boost, Overlay, Verhalten, Spiele, Daten, Über |
 
 **Overlay:** `Alt + Shift + P` blendet ein kleines Fenster mit Ping, Schwankung, Verlust und Auslastung über dem
 Spiel ein (funktioniert im Fenster- und randlosen Modus, nicht im exklusiven Vollbild).
+
+### Netzwerk automatisch optimieren
+
+Pulsar sucht den schnellsten DNS-Dienst und prüft zwei Netzwerk-Einstellungen von Windows. Du siehst vorher genau,
+was sich ändert, und alles lässt sich exakt zurückstellen.
+
+1. Links auf **Optimieren** klicken.
+2. In der Karte **Netzwerk automatisch optimieren** auf **Jetzt prüfen** klicken. Pulsar vergleicht etwa
+   15 Sekunden lang die DNS-Dienste. Dabei ändert es noch nichts.
+3. Den Plan prüfen („Das schlägt Pulsar vor“). Jeder Punkt hat einen Schalter – nur eingeschaltete Punkte werden geändert:
+   - **DNS-Dienst wechseln** – nur, wenn ein Dienst deutlich schneller ist als deiner (mindestens 15 % und 3 ms).
+     Sonst steht dort „Dein DNS ist schon schnell – bleibt“.
+   - **TCP-Pakete sofort senden** – hilft nur Spielen, die TCP nutzen. Die meisten Shooter nutzen UDP.
+   - **Netzwerk-Drosselung aus** – bringt meist nur wenig.
+4. Auf **Jetzt einstellen** klicken.
+5. Windows fragt, ob die App Änderungen an deinem Gerät vornehmen darf → **Ja**.
+   Weil Pulsar nicht digital signiert ist, nennt Windows den Herausgeber „unbekannt“ – das ist bei Pulsar normal.
+   Klickst du **Nein**, ändert sich nichts.
+
+**Geklappt**, wenn „Fertig – alles eingestellt“ erscheint und jeder Punkt „Erledigt“ zeigt. Der neue DNS gilt sofort:
+Unter **Netzwerk → DNS** steht bei ihm „Von Pulsar eingestellt“. Die zwei Netzwerk-Einstellungen wirken erst
+**nach einem Neustart** von Windows.
+
+**Zurückstellen:** In derselben Karte auf **Alles zurückstellen** klicken und die Windows-Abfrage mit **Ja** bestätigen.
+Dann sind DNS und die zwei Netzwerk-Einstellungen wieder genau wie vorher (die Netzwerk-Einstellungen nach dem nächsten Neustart).
+
+**Ehrlich:** Ein schnellerer DNS beschleunigt nur das Nachschlagen von Adressen – Spielstart, Shop, Matchmaking und
+Webseiten laden etwas flotter. Den Ping **im** Spiel ändert er nicht. Die zwei Netzwerk-Einstellungen bringen meist nur wenig.
 
 ---
 
@@ -133,7 +161,11 @@ Der Installer nimmt dann diese Adresse.
 5. **Geklappt**, wenn „Pulsar ist bereit!“ erscheint. Mit **Pulsar jetzt starten** öffnest du die App.
 
 Deinstallieren: Windows-Einstellungen → **Apps** → **Installierte Apps** → „Pulsar“ → **Deinstallieren**.
-Dort kannst du wählen, ob deine Berichte und Einstellungen erhalten bleiben. Ein laufender Boost wird vorher zurückgenommen.
+Dort kannst du wählen, ob deine Berichte und Einstellungen erhalten bleiben. Vorher stellt der Deinstaller alle
+Windows-Einstellungen zurück, die Pulsar geändert hat (DNS und alles unter **Optimieren**). Hat Pulsar dabei etwas
+mit Adminrechten geändert, fragt Windows einmal nach – bestätige mit **Ja**. Einen laufenden Boost beendest du vorher
+selbst (`Strg + B`): Beim Deinstallieren wird Pulsar sofort geschlossen und kann den alten Energieplan dann nicht mehr
+selbst zurückstellen.
 
 Updates: Pulsar prüft beim Start, ob es eine neue Version gibt. Dann steht unter **Einstellungen → Über Pulsar** ein Knopf **Jetzt aktualisieren**. Ein Klick lädt den neuen Installer und aktualisiert alles.
 
@@ -165,9 +197,36 @@ Alle installierten Pulsars melden sich dann mit „Update verfügbar“.
 
 ## 8. Häufige Fragen
 
-**Braucht Pulsar Adminrechte?** Nein. Alles, was Pulsar ändert, liegt in deinem Benutzerkonto (Energieplan, Spielmodus, Game-Bar-Aufnahme, Mausbeschleunigung, Priorität der Spielprozesse).
+**Braucht Pulsar Adminrechte?** Nein, Pulsar läuft immer als normaler Benutzer. Energieplan, Spielmodus,
+Game-Bar-Aufnahme, Mausbeschleunigung und die Priorität der Spielprozesse ändert es ohne Adminrechte.
+Nur drei Dinge brauchen Adminrechte: den **DNS wechseln** und die zwei Netzwerk-Einstellungen
+**TCP-Pakete sofort senden** und **Netzwerk-Drosselung aus**. Dafür fragt Windows einmal nach. Pulsar startet sich
+dann ganz kurz als Helfer, der nur genau diese Änderungen machen darf, und beendet sich sofort wieder.
+Sagst du **Nein**, ändert sich nichts.
 
-**Ändert Pulsar meinen DNS?** Nein. Pulsar vergleicht die Dienste und zeigt dir eine Schritt-für-Schritt-Anleitung für die Windows-Einstellungen (mit Knopf, der sie direkt öffnet). So bleibst du Herr über dein System.
+**Ändert Pulsar meinen DNS?** Nur, wenn du es willst: mit **Schnellsten einstellen** bzw. **Einstellen** unter
+**Netzwerk → DNS** oder mit **Netzwerk automatisch optimieren**. Vorher sichert Pulsar deine alte Einstellung
+(zum Beispiel „automatisch vom Router“), dann fragt Windows einmal nach. **Zurückstellen** holt die alte Einstellung
+jederzeit exakt zurück – beim Deinstallieren passiert das automatisch. Pulsar ändert nur die Hauptverbindung.
+Was ein schnellerer DNS bringt: Adressen werden schneller gefunden – Spielstart, Shop, Matchmaking und Webseiten laden
+etwas flotter. Was er **nicht** bringt: Den Ping im Spiel ändert er nicht, der hängt vom Weg zum Spielserver ab.
+Die Automatik wechselt deshalb nur, wenn ein Dienst deutlich schneller ist (mindestens 15 % und 3 ms), und wählt nur
+Cloudflare, Google, Quad9 oder OpenDNS. AdGuard, DNS0.eu und Mullvad kannst du von Hand einstellen.
+
+**Wie stelle ich alles zurück?**
+
+| Was | So geht's |
+|---|---|
+| Nur den DNS | **Netzwerk → DNS** → **Zurückstellen** (Windows fragt einmal nach) |
+| DNS und die zwei Netzwerk-Einstellungen | **Optimieren** → Karte **Netzwerk automatisch optimieren** → **Alles zurückstellen** (eine Windows-Abfrage) |
+| Alle Schalter unter Optimieren | **Optimieren** → **Alles zurückstellen** oben rechts (den DNS stellst du wie oben zurück) |
+| Wirklich alles | Passiert beim **Deinstallieren** automatisch: DNS und alle Optimierungen, mit höchstens einer Windows-Abfrage |
+
+Die zwei Netzwerk-Einstellungen sind erst nach einem Neustart von Windows wieder wie vorher.
+Lehnst du die Windows-Abfrage beim Deinstallieren ab, bleiben DNS und die zwei Netzwerk-Einstellungen so, wie Pulsar
+sie eingestellt hat. Am sichersten stellst du sie deshalb vorher in Pulsar zurück. Den DNS kannst du auch selbst
+zurückstellen: Windows-Einstellungen → **Netzwerk und Internet** → deine Verbindung → **DNS-Serverzuweisung** →
+**Bearbeiten** → **Automatisch (DHCP)** (wenn er vorher automatisch vom Router kam, so ist es fast immer).
 
 **Warum sagt der Ping im Spiel etwas anderes?** Das Spiel misst zu dem Server, auf dem du gerade spielst. Pulsar misst zu dem Messziel, das du eingestellt hast. Für CS2, Dota 2, Deadlock und League of Legends kannst du unter **Spiel → Einstellungen** die echten Server des Spiels wählen – dann passen die Werte zusammen.
 

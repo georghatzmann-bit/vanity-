@@ -2,13 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Eine Optimierung mit aktuellem Zustand. Alle Optimierungen kommen ohne Adminrechte aus.
+/// Eine Optimierung mit aktuellem Zustand. Die meisten kommen ohne Adminrechte aus; `admin`
+/// markiert die wenigen, für die Windows einmal nachfragt.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tweak {
-    /// "powerPlan" | "gameMode" | "gameDvr" | "mouseAccel"
+    /// "powerPlan" | "gameMode" | "gameDvr" | "mouseAccel" | "nagle" | "netThrottle"
     pub id: String,
-    /// "power" | "windows" | "input"
+    /// "power" | "windows" | "input" | "network"
     pub category: String,
     /// "high" | "medium" | "low" – ehrliche Einschätzung der Wirkung
     pub impact: String,
@@ -18,6 +19,10 @@ pub struct Tweak {
     pub detail: Option<String>,
     /// Pulsar hat den Originalwert gesichert und kann exakt zurückstellen
     pub can_revert: bool,
+    /// Windows fragt beim Ändern einmal nach (UAC)
+    pub admin: bool,
+    /// Wirkt erst nach einem Neustart
+    pub restart: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

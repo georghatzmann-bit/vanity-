@@ -7,6 +7,7 @@ mod appinfo;
 mod backup;
 mod config;
 mod db;
+mod elevate;
 mod error;
 mod icons;
 mod images;
@@ -21,6 +22,7 @@ mod selftest;
 mod state;
 mod system;
 mod tracker;
+mod uninstall;
 mod update;
 mod util;
 
@@ -33,7 +35,7 @@ use tauri_plugin_window_state::StateFlags;
 use crate::error::LockExt;
 use crate::state::{Core, Paths, Shared, DEFAULT_PROFILE};
 
-const IDENTIFIER: &str = "com.pulsar.booster";
+pub(crate) const IDENTIFIER: &str = "com.pulsar.booster";
 const DEFAULT_OVERLAY_SHORTCUT: &str = "Alt+Shift+P";
 
 fn fallback_dir(base: Option<PathBuf>) -> PathBuf {
@@ -112,6 +114,12 @@ fn setup(app: &mut tauri::App, started_minimized: bool) -> Result<(), Box<dyn st
 
 /// Startet die App.
 pub fn run() {
+    // Sonder-Aufrufe ganz am Anfang erkennen (vor Tauri, Fenster und Einzelinstanz-Sperre):
+    // `--elevated <hex>` (Admin-Helfer) und `--revert-all` (Deinstallieren). Es öffnet sich kein Fenster.
+    if let Some(code) = elevate::cli_main() {
+        std::process::exit(code);
+    }
+
     let started_minimized = std::env::args().any(|a| a == "--minimized");
 
     let builder = tauri::Builder::default()
@@ -191,6 +199,8 @@ pub fn run() {
             net::net_dns_current,
             net::net_dns_apply,
             net::net_dns_restore,
+            net::net_auto_optimize,
+            net::net_auto_restore,
             net::net_adapters,
             net::net_wifi,
             net::net_speedtest,

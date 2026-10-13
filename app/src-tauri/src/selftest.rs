@@ -66,7 +66,7 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
             Ok(res) => {
                 let names: Vec<String> = res.entries.iter().map(|e| e.name.clone()).collect();
                 let expect = std::env::var("PULSAR_SELFTEST_EXPECT_STEAM").ok();
-                let ok = expect.as_ref().map_or(true, |n| names.iter().any(|x| x == n));
+                let ok = expect.as_ref().is_none_or(|n| names.iter().any(|x| x == n));
                 r.step("steam-scan", ok, format!("{} gefunden: {:?} {:?}", names.len(), names, res.messages));
             }
             Err(e) => r.step("steam-scan", false, e),
@@ -218,6 +218,15 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
             }
         }
 
+        // 7b) Admin-Helfer, DNS einstellen/zurückstellen, Netzwerk-Tweaks.
+        // Nur mit Adminrechten (der GitHub-Windows-Rechner läuft als Administrator); sonst nur ein
+        // Hinweis, dass übersprungen wurde.
+        if !crate::appinfo::is_elevated() {
+            r.step("admin-tests", true, "übersprungen (keine Adminrechte)");
+        } else {
+            admin_steps(&app, &mut r).await;
+        }
+
         // 8) Starten + Spielzeit-Erkennung + Beenden
         let (exe, args) = test_program();
         let game_id = "selftest-game".to_string();
@@ -270,4 +279,177 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
         println!("SELFTEST {} – {}", if r.ok { "OK" } else { "FAILED" }, report_file.display());
         app.exit(if r.ok { 0 } else { 1 });
     });
+}
+
+/// Die eigene Exe als Kindprozess starten und (bis zum Zeitlimit) auf das Ende warten.
+/// `Ok(Some(code))` = beendet, `Ok(None)` = Zeitlimit (Prozess wurde beendet).
+async fn run_self_exe(args: &[&str], timeout: Duration) -> Result<Option<i32>, String> {
+    use std::process::{Command, Stdio};
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mut cmd = Command::new(exe);
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    let start = Instant::now();
+    loop {
+        match child.try_wait().map_err(|e| e.to_string())? {
+            Some(status) => return Ok(status.code()),
+            None if start.elapsed() > timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(None);
+            }
+            None => tokio::time::sleep(Duration::from_millis(200)).await,
+        }
+    }
+}
+
+/// Aktuellen `NetworkThrottlingIndex` lesen (ohne Adminrechte); `None`, wenn er fehlt.
+#[cfg(windows)]
+fn read_current_throttle() -> Option<u32> {
+    use crate::opt::registry::{HklmRead, RegistryRead};
+    HklmRead
+        .read(crate::elevate::KEY_SYSTEM_PROFILE, crate::elevate::VAL_THROTTLE)
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_u32())
+}
+#[cfg(not(windows))]
+fn read_current_throttle() -> Option<u32> {
+    None
+}
+
+/// Zustand einer Optimierung aus `opt_tweaks` holen (`(state, canRevert)`).
+fn tweak_state(list: &[crate::opt::types::Tweak], id: &str) -> Option<(String, bool)> {
+    list.iter().find(|t| t.id == id).map(|t| (t.state.clone(), t.can_revert))
+}
+
+/// Admin-Schritte: Admin-Helfer über die Exe, DNS einstellen/zurückstellen, Netzwerk-Tweaks.
+async fn admin_steps(app: &AppHandle, r: &mut Report) {
+    use crate::elevate::{self, ElevatedTask, RegOp};
+
+    // a) Admin-Helfer-CLI: ungültiger Auftrag → Exit 20, gültiger harmloser Auftrag → Exit 0
+    {
+        let invalid = elevate::encode(&ElevatedTask {
+            dns: Vec::new(),
+            reg: vec![RegOp { key: r"SOFTWARE\Pulsar\NichtErlaubt".into(), name: "x".into(), value: Some(1) }],
+        })
+        .unwrap_or_default();
+        let mut ok = true;
+        let mut detail = String::new();
+        match run_self_exe(&["--elevated", &invalid], Duration::from_secs(30)).await {
+            Ok(Some(code)) => {
+                ok &= code == elevate::EXIT_INVALID;
+                detail.push_str(&format!("ungültig→{code}; "));
+            }
+            Ok(None) => {
+                ok = false;
+                detail.push_str("ungültig→Zeitüberschreitung; ");
+            }
+            Err(e) => {
+                ok = false;
+                detail.push_str(&format!("ungültig→Fehler ({e}); "));
+            }
+        }
+        match read_current_throttle() {
+            Some(v) => {
+                let hex = elevate::encode(&ElevatedTask {
+                    dns: Vec::new(),
+                    reg: vec![RegOp { key: elevate::KEY_SYSTEM_PROFILE.into(), name: elevate::VAL_THROTTLE.into(), value: Some(v) }],
+                })
+                .unwrap_or_default();
+                match run_self_exe(&["--elevated", &hex], Duration::from_secs(30)).await {
+                    Ok(Some(code)) => {
+                        ok &= code == elevate::EXIT_OK;
+                        detail.push_str(&format!("gültig→{code}"));
+                    }
+                    Ok(None) => {
+                        ok = false;
+                        detail.push_str("gültig→Zeitüberschreitung");
+                    }
+                    Err(e) => {
+                        ok = false;
+                        detail.push_str(&format!("gültig→Fehler ({e})"));
+                    }
+                }
+            }
+            None => detail.push_str("gültig übersprungen (kein Wert)"),
+        }
+        r.step("admin-helfer-cli", ok, detail);
+    }
+
+    // b) DNS auf Cloudflare einstellen (Live-Prüfung + Nachkontrolle im Befehl)
+    let before = crate::net::net_dns_current(app.state::<Shared>()).await.ok().flatten();
+    match crate::net::net_dns_apply(app.state::<Shared>(), "cloudflare".into()).await {
+        Ok(cfg) => {
+            let set_ok = cfg.servers.first().map(String::as_str) == Some("1.1.1.1")
+                && cfg.provider.as_deref() == Some("cloudflare")
+                && cfg.changed_by_pulsar;
+            let resolved = tokio::time::timeout(Duration::from_secs(5), tokio::net::lookup_host("api.github.com:443"))
+                .await
+                .ok()
+                .and_then(|res| res.ok())
+                .map(|mut addrs| addrs.next().is_some())
+                .unwrap_or(false);
+            r.step("dns-einstellen", set_ok && resolved, format!("servers {:?}, provider {:?}, Auflösung {resolved}", cfg.servers, cfg.provider));
+        }
+        Err(e) => r.step("dns-einstellen", false, e),
+    }
+
+    // c) DNS zurückstellen – IMMER versuchen, auch wenn b) scheitert
+    match crate::net::net_dns_restore(app.state::<Shared>()).await {
+        Ok(cfg) => {
+            let ok = match (&before, &cfg) {
+                (Some(b), Some(c)) => !c.changed_by_pulsar && c.dhcp == b.dhcp && (b.dhcp || c.servers == b.servers),
+                (_, Some(c)) => !c.changed_by_pulsar,
+                _ => true,
+            };
+            r.step("dns-zurueckstellen", ok, format!("{cfg:?}"));
+        }
+        // Keine Sicherung (z. B. b) ist vor dem Einstellen gescheitert) → es gibt nichts zurückzustellen
+        Err(e) if e.contains("nichts zurückzustellen") => r.step("dns-zurueckstellen", true, e),
+        Err(e) => r.step("dns-zurueckstellen", false, e),
+    }
+
+    // d) Netzwerk-Tweaks einschalten und per „--revert-all“ wieder zurückstellen
+    {
+        let before = crate::opt::opt_tweaks(app.state::<Shared>()).await.unwrap_or_default();
+        let nagle_before = tweak_state(&before, "nagle");
+        let throttle_before = tweak_state(&before, "netThrottle");
+        match crate::opt::opt_apply(app.state::<Shared>(), vec!["nagle".into(), "netThrottle".into()], true).await {
+            Ok(report) => {
+                let after = crate::opt::opt_tweaks(app.state::<Shared>()).await.unwrap_or_default();
+                let both_on = tweak_state(&after, "nagle").map(|(s, _)| s) == Some("on".into())
+                    && tweak_state(&after, "netThrottle").map(|(s, _)| s) == Some("on".into());
+                match run_self_exe(&["--revert-all"], Duration::from_secs(60)).await {
+                    Ok(Some(0)) => {
+                        let back = crate::opt::opt_tweaks(app.state::<Shared>()).await.unwrap_or_default();
+                        let nagle_back = tweak_state(&back, "nagle");
+                        let throttle_back = tweak_state(&back, "netThrottle");
+                        // Wie vorher und nichts mehr zurückzustellen (Sicherung entfernt)
+                        let same = |back: &Option<(String, bool)>, before: &Option<(String, bool)>| match (back, before) {
+                            (Some((bs, can_revert)), Some((fs, _))) => !can_revert && bs == fs,
+                            (None, None) => true,
+                            _ => false,
+                        };
+                        let restored = same(&nagle_back, &nagle_before) && same(&throttle_back, &throttle_before);
+                        r.step(
+                            "netzwerk-tweaks",
+                            both_on && restored,
+                            format!("angewendet {:?}, danach {nagle_back:?}/{throttle_back:?}", report.applied),
+                        );
+                    }
+                    Ok(Some(code)) => r.step("netzwerk-tweaks", false, format!("--revert-all Exit {code}")),
+                    Ok(None) => r.step("netzwerk-tweaks", false, "--revert-all Zeitüberschreitung"),
+                    Err(e) => r.step("netzwerk-tweaks", false, e),
+                }
+            }
+            Err(e) => r.step("netzwerk-tweaks", false, e),
+        }
+    }
 }

@@ -92,9 +92,14 @@ Das Fazit sagt dir in einem Satz, wo der größte Sprung passiert – und was du
 ### DNS
 ![DNS](screenshots/funktionen/16-netzwerk-dns.jpg)
 ![DNS-Ergebnis](screenshots/funktionen/17-netzwerk-dns-ergebnis.jpg)
-Vergleicht Cloudflare, Google, Quad9, OpenDNS, AdGuard, DNS0.eu, Mullvad und deinen aktuellen Router-DNS – jeweils für neue und bekannte Adressen. Vor dem ersten Vergleich zeigt die Seite, welche Dienste geprüft werden.
-Der schnellste wird markiert. Rechts die **Schritt-für-Schritt-Anleitung** fürs Eintragen in Windows mit Knopf, der die Netzwerkeinstellungen öffnet.
-Pulsar ändert den DNS **nicht selbst** – du behältst die Kontrolle. Ehrlich dazu: Ein schneller DNS macht Spielstarts und Matchmaking flotter, am Ping im Spiel ändert er nichts.
+![DNS eingestellt](screenshots/funktionen/17b-netzwerk-dns-eingestellt.jpg)
+Vergleicht Cloudflare, Google, Quad9, OpenDNS, AdGuard, DNS0.eu, Mullvad und deinen aktuellen DNS – jeweils für neue und bekannte Adressen. Vor dem ersten Vergleich zeigt die Seite, welche Dienste geprüft werden. Sie zeigt auch, was gerade eingestellt ist (z. B. „automatisch vom Router“).
+- **Empfehlung:** Ist ein Dienst deutlich schneller als deiner (mindestens 15 % und 3 ms), schlägt Pulsar ihn vor – **Schnellsten einstellen** stellt ihn für deine Hauptverbindung ein. Sonst steht dort „Dein DNS ist schon schnell“. Jeden anderen Dienst kannst du mit **Einstellen** in seiner Zeile wählen.
+- **Sicher:** Pulsar prüft vorher, ob der Dienst gerade antwortet, und sichert deine alte Einstellung. Für den Wechsel fragt Windows einmal nach (Adminrechte); sagst du **Nein**, ändert sich nichts. Danach steht beim Dienst „Von Pulsar eingestellt“.
+- **Zurückstellen** holt die alte Einstellung jederzeit exakt zurück – beim Deinstallieren automatisch.
+- Kann Pulsar den DNS auf einem PC nicht selbst einstellen (dafür braucht es Windows 10 Version 2004 oder neuer), zeigt die Seite die **Schritt-für-Schritt-Anleitung** fürs Eintragen von Hand mit Knopf, der die Netzwerkeinstellungen öffnet.
+
+Ehrlich dazu: Ein schnellerer DNS beschleunigt nur das Nachschlagen von Adressen – Spielstarts, Shop und Matchmaking werden etwas flotter. Am Ping im Spiel ändert er nichts.
 
 ### Speedtest mit Bufferbloat-Note
 ![Speedtest läuft](screenshots/funktionen/18-netzwerk-speedtest-laeuft.jpg)
@@ -112,14 +117,35 @@ Bei WLAN: Signalstärke als Ring, Band (2,4/5/6 GHz), Kanal, Standard, Datenrate
 ## Optimieren
 ![Optimieren](screenshots/funktionen/21-optimieren.jpg)
 ![Angewendet](screenshots/funktionen/22-optimieren-angewendet.jpg)
-Vier Einstellungen, die wirklich etwas bringen – jede mit Schalter, Wirkung (hoch/mittel/klein) und **Rückgängig**:
+Sechs Einstellungen mit ehrlicher Wirkung – jede mit Schalter, Wirkung (hoch/mittel/klein) und **Rückgängig**:
 - **Energieplan „Höchstleistung“**
 - **Windows-Spielmodus**
 - **Game-Bar-Aufnahme aus**
 - **Mausbeschleunigung aus**
+- **TCP-Pakete sofort senden** („Nagle aus“) – hilft nur Spielen, die TCP nutzen; die meisten Shooter nutzen UDP
+- **Netzwerk-Drosselung aus** – Windows bremst das Netzwerk nicht mehr, während Musik oder Videos laufen; bringt meist nur wenig
 
-Pulsar sichert vor jeder Änderung den Originalwert und stellt ihn exakt wieder her (**Alles zurückstellen**).
-Alles ohne Adminrechte. Rechts: Energieplan wählen, DNS-Zwischenspeicher leeren und das **Boost-Profil** (Energieplan, Priorität, DNS – was der BOOST-Knopf macht).
+Die ersten vier gehen ohne Adminrechte. Die zwei Netzwerk-Einstellungen tragen die Hinweise **Windows fragt nach**
+(dafür braucht Pulsar kurz Adminrechte – mehrere davon zusammen mit einer einzigen Abfrage) und **Neustart nötig**
+(sie wirken erst nach einem Neustart von Windows).
+Pulsar sichert vor jeder Änderung den Originalwert und stellt ihn exakt wieder her (**Alles zurückstellen** oben rechts).
+Rechts: Energieplan wählen, DNS-Zwischenspeicher leeren und das **Boost-Profil** (Energieplan, Priorität, DNS – was der BOOST-Knopf macht).
+
+### Netzwerk automatisch optimieren
+![Netzwerk automatisch optimieren](screenshots/funktionen/21b-optimieren-netzwerk-auto.jpg)
+![Netzwerk optimiert](screenshots/funktionen/21c-optimieren-netzwerk-fertig.jpg)
+Die Karte oben auf der Seite erledigt DNS und Netzwerk in einem Rutsch:
+1. **Jetzt prüfen** vergleicht die DNS-Dienste (etwa 15 Sekunden) und prüft die zwei Netzwerk-Einstellungen. Dabei ändert Pulsar noch nichts.
+2. Der Plan **„Das schlägt Pulsar vor“** zeigt jeden Punkt mit Schalter – nur eingeschaltete Punkte werden geändert:
+   - **DNS-Dienst wechseln**, z. B. „Router → Cloudflare“ mit den gemessenen Zeiten (neu gegen alt) – nur, wenn ein Dienst deutlich schneller ist (mindestens 15 % und 3 ms), sonst „Dein DNS ist schon schnell – bleibt“. Die Automatik wählt nur Cloudflare, Google, Quad9 oder OpenDNS. Hast du selbst einen anderen bekannten Dienst gewählt (z. B. AdGuard), ist der Wechsel ausgeschaltet.
+   - **TCP-Pakete sofort senden** und **Netzwerk-Drosselung aus**, falls sie noch nicht eingestellt sind.
+3. **Jetzt einstellen** ändert alles Eingeschaltete mit **einer** Windows-Abfrage. Lehnst du ab, ändert sich nichts.
+4. Das Ergebnis zeigt jeden Punkt einzeln (**Erledigt** oder **Nicht geändert** mit Grund) und den Hinweis **Neustart nötig** für die Netzwerk-Einstellungen. Der neue DNS gilt sofort, der DNS-Zwischenspeicher wird geleert.
+
+Danach zeigt die Karte, was Pulsar eingestellt hat, und **Alles zurückstellen** holt DNS und die zwei Netzwerk-Einstellungen
+exakt zurück – wieder mit einer Windows-Abfrage. Beim Deinstallieren passiert das automatisch.
+Ehrlich dazu: Ein schnellerer DNS beschleunigt das Laden und Verbinden (Spielstart, Shop, Matchmaking), den Ping im Spiel ändert er nicht.
+Die zwei Netzwerk-Einstellungen bringen meist nur wenig und wirken erst nach einem Neustart.
 
 ---
 
@@ -151,7 +177,7 @@ Oben: beste und schlechteste Runde und der Trend der letzten Runden.
 
 ### Befehlspalette
 ![Befehlspalette](screenshots/funktionen/28-befehlspalette.jpg)
-`Strg + K` oder `/`: Spiele starten, Seiten öffnen, Boost, Speedtest, Route, Theme wechseln – alles per Tastatur.
+`Strg + K` oder `/`: Spiele starten, Seiten öffnen, Boost, Speedtest, Route, Netzwerk automatisch optimieren, Theme wechseln – alles per Tastatur.
 
 ### Spiele automatisch finden
 ![Suchen](screenshots/funktionen/29-spiele-suchen.jpg)
@@ -195,4 +221,4 @@ Pulsar läuft neben der Uhr weiter: Boost an/aus, Speedtest, zuletzt gespielte S
 - **Willkommen** → **Speicherort** (freier Platz, Adminrechte nur wenn nötig) → **Optionen** (Desktop, Startmenü, Autostart, danach starten) → **Installation**.
 - Download mit Fortschrittsring, Tempo, Restzeit und wechselnden Tipps; SHA-256-Prüfung; Verknüpfungen; Eintrag in „Apps & Features“.
 - Bricht das Internet ab: **Erneut versuchen** setzt den Download an der Stelle fort.
-- Ist Pulsar schon installiert: **Aktualisieren/Reparieren** oder **Deinstallieren** (mit „Meine Daten behalten“). Ein laufender Boost wird vorher zurückgenommen.
+- Ist Pulsar schon installiert: **Aktualisieren/Reparieren** oder **Deinstallieren** (mit „Meine Daten behalten“). Vor dem Löschen stellt der Deinstaller alle Windows-Einstellungen zurück, die Pulsar geändert hat (DNS und Optimierungen) – braucht das Adminrechte, fragt Windows einmal nach.

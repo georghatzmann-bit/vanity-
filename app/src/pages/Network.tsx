@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Activity, Cable, ExternalLink, Gauge, Globe, Loader2, Play, Route, Star, Wifi, X } from "lucide-react";
+import { Activity, AlertTriangle, Cable, Check, ExternalLink, Gauge, Globe, Info, Loader2, Play, RotateCcw, Route, Router, ShieldCheck, Star, Wifi, X, Zap } from "lucide-react";
 import { api, errorText, imgSrc, listen } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { gradeColor, pingColor, pingGrade, signalLabel } from "@/lib/grade";
-import { useT } from "@/lib/i18n";
+import { t, useT } from "@/lib/i18n";
+import { DNS_PROVIDERS, dnsScore, isDeclined, pickBestDns, providerName } from "@/lib/netauto";
 import type { Area, DnsConfig, DnsProgress, DnsResult, Region, SpeedProgress, SpeedResult, TraceHop, TraceResult } from "@/lib/types";
 import { useLibrary } from "@/store/library";
 import { useNet } from "@/store/net";
+import { dnsChangePossible, dnsLabel, useNetAuto } from "@/store/netauto";
 import { useSettings } from "@/store/settings";
 import { toast, useUI, type NetworkTab } from "@/store/ui";
 import { GradeRing } from "@/components/net/GradeRing";
@@ -350,15 +352,28 @@ function RoutePanel() {
 }
 
 // ---------------------------------------------------------------------------------------------
+/** Hinweis zu einem DNS-Dienst (z. B. „blockiert Werbung“) */
+function dnsNote(id: string): string | null {
+  const note = DNS_PROVIDERS.find((p) => p.id === id)?.note;
+  return note ? t(`network.dns.notes.${note}`) : null;
+}
+
 function DnsPanel() {
   const t = useT();
   const [results, setResults] = useState<DnsResult[]>([]);
   const [progress, setProgress] = useState<DnsProgress | null>(null);
   const [running, setRunning] = useState(false);
   const [current, setCurrent] = useState<DnsConfig | null>(null);
+  const [loadingCurrent, setLoadingCurrent] = useState(true);
+  /** Gerade laufende Änderung: Dienst-ID oder "restore" */
+  const [working, setWorking] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.dnsCurrent().then(setCurrent).catch(() => setCurrent(null));
+    void api
+      .dnsCurrent()
+      .then(setCurrent)
+      .catch(() => setCurrent(null))
+      .finally(() => setLoadingCurrent(false));
   }, []);
 
   const run = async () => {
@@ -376,18 +391,78 @@ function DnsPanel() {
       setProgress(null);
     }
   };
-  const fastest = results.find((r) => r.uncachedMs !== null && !r.current);
+
+  /** Nach einer Änderung die Markierung „Aktuell“ im Vergleich anpassen (ohne neu zu messen) */
+  const markCurrent = (cfg: DnsConfig | null) => setResults((rs) => rs.map((r) => ({ ...r, current: cfg?.provider ? r.id === cfg.provider : r.id === "current" })));
+
+  const changed = (cfg: DnsConfig | null) => {
+    setCurrent(cfg);
+    markCurrent(cfg);
+    void useNetAuto.getState().refresh();
+  };
+
+  const setProvider = async (id: string) => {
+    setWorking(id);
+    try {
+      const cfg = await api.dnsApply(id);
+      changed(cfg);
+      toast({ kind: "success", title: t("network.dns.setDone", { name: providerName(id) }), text: t("network.dns.setDoneText", { servers: cfg.servers.join(", ") }) });
+    } catch (e) {
+      const msg = errorText(e);
+      if (isDeclined(msg)) toast({ kind: "info", title: t("network.dns.declined"), text: msg });
+      else toast({ kind: "error", title: t("network.dns.setFailed"), text: msg });
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const restore = async () => {
+    setWorking("restore");
+    try {
+      const cfg = (await api.dnsRestore()) ?? (await api.dnsCurrent().catch(() => null));
+      changed(cfg);
+      toast({ kind: "success", title: t("network.dns.restored"), text: cfg ? t("network.dns.restoredText", { servers: cfg.dhcp ? t("network.dns.dhcp") : cfg.servers.join(", ") || "–" }) : undefined });
+    } catch (e) {
+      const msg = errorText(e);
+      if (isDeclined(msg)) toast({ kind: "info", title: t("network.dns.declined"), text: msg });
+      else toast({ kind: "error", title: t("network.dns.restoreFailed"), text: msg });
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const pick = useMemo(() => pickBestDns(results), [results]);
+  // Schnellster Eintrag nach Punktzahl (auch Dienste, die man nur von Hand wählt)
+  const fastest = useMemo(() => {
+    let best: DnsResult | null = null;
+    let bestScore = Infinity;
+    for (const r of results) {
+      const sc = r.failed === 0 ? dnsScore(r) : null;
+      if (sc !== null && sc < bestScore) {
+        best = r;
+        bestScore = sc;
+      }
+    }
+    return best;
+  }, [results]);
+  const canChange = !!current?.canChange;
+  const recommend = canChange && dnsChangePossible(pick, current) ? pick.best : null;
+  const howToTarget = pick.best ?? results.find((r) => r.uncachedMs !== null && !r.current) ?? null;
   const max = Math.max(1, ...results.map((r) => r.uncachedMs ?? 0));
+  const canSet = (r: DnsResult) => canChange && r.id !== "current" && !r.current && r.id !== current?.provider && DNS_PROVIDERS.some((p) => p.id === r.id);
+  // Läuft gerade „Netzwerk automatisch optimieren“, wartet diese Seite (sonst mischen sich zwei Vergleiche)
+  const autoBusy = useNetAuto((st) => st.phase === "measuring" || st.phase === "applying");
+  const locked = running || !!working || autoBusy;
 
   return (
-    <div className="mx-auto grid max-w-[1100px] grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
-      <div>
+    <div className="mx-auto grid max-w-[1240px] grid-cols-1 gap-5 xl:grid-cols-[1.6fr_1fr]">
+      <div className="min-w-0">
         <p className="text-[13px] text-muted">{t("network.dns.intro")}</p>
-        <div className="mt-4 flex items-center gap-3">
-          <Button variant="primary" loading={running} icon={<Activity className="h-4 w-4" />} onClick={() => void run()}>
-            {running && progress ? t("network.dns.running", { done: progress.done, total: progress.total }) : t("network.dns.run")}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button variant={results.length ? "secondary" : "primary"} loading={running} disabled={!!working || autoBusy} icon={<Activity className="h-4 w-4" />} onClick={() => void run()}>
+            {running && progress ? t("network.dns.running", { done: progress.done, total: progress.total }) : results.length ? t("network.dns.runAgain") : t("network.dns.run")}
           </Button>
-          {running && progress && <ProgressBar value={progress.done / progress.total} className="w-40" />}
+          {running && progress && <ProgressBar value={progress.done / Math.max(1, progress.total)} className="w-40" />}
         </div>
         {!results.length && !running && (
           <div className="glass mt-4 rounded-xl p-5">
@@ -400,9 +475,9 @@ function DnsPanel() {
                 <div className="text-[12px] text-muted">{t("network.dns.notYetText")}</div>
               </div>
             </div>
-            <div className="mt-4 text-[10px] font-semibold tracking-[0.14em] text-faint uppercase">{t("network.dns.providers")}</div>
+            <div className="mt-4 text-[10px] font-semibold tracking-[0.14em] text-muted uppercase">{t("network.dns.providers")}</div>
             <div className="mt-2 flex flex-wrap gap-2">
-              {["Cloudflare", "Google", "Quad9", "OpenDNS", "AdGuard", "DNS0.eu", "Mullvad", t("network.dns.yourRouter")].map((n) => (
+              {[...DNS_PROVIDERS.map((p) => p.name), t("network.dns.yourRouter")].map((n) => (
                 <span key={n} className="rounded-full border border-line bg-surface px-3 py-1 text-[12px] text-fg-soft">
                   {n}
                 </span>
@@ -410,57 +485,165 @@ function DnsPanel() {
             </div>
           </div>
         )}
-        <div className="mt-4 flex flex-col gap-1.5">
-          {results.map((r, i) => (
-            <motion.div key={r.id} className={cn("glass grid grid-cols-[1fr_auto_auto_auto] items-center gap-4 rounded-lg px-3 py-2.5", r === fastest && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--nv-success)_60%,transparent)]")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[13px] font-medium text-fg">
-                  {r.name}
-                  {r === fastest && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">{t("network.dns.fastest")}</span>}
-                  {r.current && <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-semibold text-muted">{t("network.dns.current")}</span>}
+
+        {/* Empfehlung nach dem Vergleich */}
+        {results.length > 0 && !running && (
+          <motion.div key={recommend?.id ?? pick.reason} className={cn("mt-4 flex flex-wrap items-center gap-4 rounded-xl p-4", recommend ? "ring-1 ring-accent/30" : "glass")} style={recommend ? { background: "var(--nv-gradient-soft)" } : undefined} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+            <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-full", recommend ? "bg-gradient-accent text-accent-fg" : pick.reason === "noData" ? "bg-warning/15 text-warning" : pick.change ? "bg-surface-3 text-accent" : "bg-success/15 text-success")} aria-hidden>
+              {recommend ? <Zap className="h-5 w-5" /> : pick.reason === "noData" ? <AlertTriangle className="h-5 w-5" /> : pick.change ? <Info className="h-5 w-5" /> : <Check className="h-5 w-5" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              {recommend ? (
+                <>
+                  <div className="text-sm font-semibold text-fg">{t("network.dns.recommend", { name: recommend.name })}</div>
+                  <div className="text-[12px] text-muted">
+                    {pick.bestScore !== null && pick.currentScore !== null ? t("network.dns.recommendText", { ms: Math.round(pick.bestScore), old: Math.round(pick.currentScore) }) : t("network.dns.recommendTextNoOld")} {t("network.dns.uacShort")}
+                  </div>
+                </>
+              ) : pick.reason === "noData" ? (
+                <>
+                  <div className="text-sm font-semibold text-fg">{t("network.dns.noData")}</div>
+                  <div className="text-[12px] text-muted">{t("network.dns.noDataText")}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-semibold text-fg">{pick.change && pick.best ? t("network.dns.recommend", { name: pick.best.name }) : t("network.dns.alreadyFast")}</div>
+                  <div className="text-[12px] text-muted">{pick.change && pick.best ? t("network.dns.recommendManual") : t("network.dns.alreadyFastText")}</div>
+                </>
+              )}
+            </div>
+            {recommend && (
+              <Button variant="primary" icon={<Zap className="h-4 w-4" />} loading={working === recommend.id} disabled={locked && working !== recommend.id} onClick={() => void setProvider(recommend.id)}>
+                {t("network.dns.setFastest")}
+              </Button>
+            )}
+          </motion.div>
+        )}
+
+        <div className="mt-3 flex flex-col gap-1.5">
+          {results.map((r, i) => {
+            const note = dnsNote(r.id);
+            return (
+              <motion.div key={r.id} className={cn("glass grid items-center gap-3 rounded-lg px-3 py-2.5", canChange ? "grid-cols-[minmax(0,1fr)_auto_auto_auto_auto]" : "grid-cols-[minmax(0,1fr)_auto_auto_auto]", r === fastest && "shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--nv-success)_60%,transparent)]")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-medium text-fg">
+                    <span className="truncate">{r.name}</span>
+                    {r === fastest && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">{t("network.dns.fastest")}</span>}
+                    {r === recommend && r !== fastest && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">{t("network.dns.recommended")}</span>}
+                    {r.current && <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-semibold text-fg-soft">{t("network.dns.current")}</span>}
+                    {r.failed > 0 && <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold text-warning">{t("network.dns.failedCount", { n: r.failed })}</span>}
+                  </div>
+                  <div className="text-[11px] text-muted tabular">
+                    {r.primary}
+                    {r.secondary ? ` · ${r.secondary}` : ""}
+                    {note ? <span className="text-fg-soft"> · {note}</span> : null}
+                  </div>
                 </div>
-                <div className="text-[11px] text-muted tabular">
-                  {r.primary}
-                  {r.secondary ? ` · ${r.secondary}` : ""}
+                <div className="w-24 2xl:w-36">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                    <motion.div className="h-full rounded-full bg-gradient-accent" initial={{ width: 0 }} animate={{ width: `${((r.uncachedMs ?? max) / max) * 100}%` }} />
+                  </div>
                 </div>
-              </div>
-              <div className="w-40">
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <motion.div className="h-full rounded-full bg-gradient-accent" initial={{ width: 0 }} animate={{ width: `${((r.uncachedMs ?? max) / max) * 100}%` }} />
+                <div className="w-16 text-right">
+                  <div className="text-[10px] text-muted uppercase">{t("network.dns.uncached")}</div>
+                  <div className="text-[13px] font-semibold text-fg tabular">{r.uncachedMs === null ? "✕" : `${r.uncachedMs.toFixed(0)} ms`}</div>
                 </div>
-              </div>
-              <div className="w-20 text-right">
-                <div className="text-[10px] text-faint uppercase">{t("network.dns.uncached")}</div>
-                <div className="text-[13px] font-semibold text-fg tabular">{r.uncachedMs === null ? "✕" : `${r.uncachedMs.toFixed(0)} ms`}</div>
-              </div>
-              <div className="w-16 text-right">
-                <div className="text-[10px] text-faint uppercase">{t("network.dns.cached")}</div>
-                <div className="text-[13px] text-muted tabular">{r.cachedMs === null ? "✕" : `${r.cachedMs.toFixed(0)} ms`}</div>
-              </div>
-            </motion.div>
-          ))}
+                <div className="w-16 text-right">
+                  <div className="text-[10px] text-muted uppercase">{t("network.dns.cached")}</div>
+                  <div className="text-[13px] text-fg-soft tabular">{r.cachedMs === null ? "✕" : `${r.cachedMs.toFixed(0)} ms`}</div>
+                </div>
+                {canChange && (
+                  <div className="flex w-[104px] justify-end">
+                    {canSet(r) ? (
+                      <Button size="sm" variant="secondary" loading={working === r.id} disabled={locked && working !== r.id} onClick={() => void setProvider(r.id)} aria-label={t("network.dns.setAria", { name: r.name })}>
+                        {t("network.dns.set")}
+                      </Button>
+                    ) : r.current ? (
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-muted">
+                        <Check className="h-3.5 w-3.5" aria-hidden /> {t("network.dns.inUse")}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
-      <div className="flex flex-col gap-4">
+
+      <div className="flex min-w-0 flex-col gap-4">
+        {/* Aktuelle Einstellung */}
         <div className="glass rounded-xl p-4">
-          <div className="text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{t("network.dns.currentConfig")}</div>
-          {current ? (
-            <div className="mt-2 text-[13px] text-fg">
-              <div className="font-medium">{current.adapter}</div>
-              <div className="text-muted tabular">{current.dhcp ? `${t("network.dns.dhcp")} · ` : ""}{current.servers.join(", ") || "–"}</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">{t("network.dns.currentConfig")}</div>
+            {current?.changedByPulsar && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
+                <ShieldCheck className="h-3 w-3" aria-hidden /> {t("network.dns.byPulsar")}
+              </span>
+            )}
+          </div>
+          {loadingCurrent ? (
+            <div className="mt-3 space-y-2">
+              <div className="skeleton h-6 w-40 rounded-md" />
+              <div className="skeleton h-12 w-full rounded-lg" />
             </div>
+          ) : current ? (
+            <>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-2 text-accent">{current.provider ? <Globe className="h-5 w-5" /> : <Router className="h-5 w-5" />}</span>
+                <div className="min-w-0">
+                  <div className="truncate font-display text-lg font-bold text-fg">{dnsLabel(current)}</div>
+                  <div className="truncate text-[12px] text-muted">
+                    {current.adapter}
+                    {current.dhcp ? ` · ${t("network.dns.dhcp")}` : ""}
+                  </div>
+                </div>
+              </div>
+              <dl className="mt-3 grid grid-cols-1 gap-2">
+                <div className="min-w-0 rounded-lg bg-surface px-3 py-2">
+                  <dt className="text-[10px] font-semibold tracking-[0.1em] text-muted uppercase">{t("network.dns.ipv4")}</dt>
+                  <dd className="text-[13px] font-medium break-all text-fg tabular">{current.servers.join(", ") || "–"}</dd>
+                </div>
+                {(current.ipv6Servers ?? []).length > 0 && (
+                  <div className="min-w-0 rounded-lg bg-surface px-3 py-2">
+                    <dt className="text-[10px] font-semibold tracking-[0.1em] text-muted uppercase">{t("network.dns.ipv6")}</dt>
+                    <dd className="text-[13px] font-medium break-all text-fg tabular">{current.ipv6Servers.join(", ")}</dd>
+                  </div>
+                )}
+              </dl>
+              {current.changedByPulsar && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <p className="min-w-0 flex-1 text-[12px] leading-snug text-muted">{t("network.dns.restoreHint")}</p>
+                  <Button size="sm" variant="secondary" icon={<RotateCcw className="h-3.5 w-3.5" />} loading={working === "restore"} disabled={locked && working !== "restore"} onClick={() => void restore()}>
+                    {t("network.dns.restore")}
+                  </Button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="mt-2 text-[12px] text-muted">{t("network.dns.noAdapter")}</div>
           )}
         </div>
-        {fastest && (
-          <motion.div className="glass rounded-xl p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="text-sm font-semibold text-fg">{t("network.dns.howTo")}</div>
-            <pre className="mt-2 font-sans text-[12px] leading-relaxed whitespace-pre-wrap text-muted">{t("network.dns.howToSteps", { primary: fastest.primary, secondary: fastest.secondary ?? fastest.primary })}</pre>
-            <Button variant="secondary" size="sm" className="mt-3" icon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => void api.openUrl("ms-settings:network-status").catch(() => undefined)}>
-              {t("network.dns.openSettings")}
-            </Button>
-          </motion.div>
+
+        {canChange ? (
+          <div className="glass rounded-xl p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+              <ShieldCheck className="h-4 w-4 text-accent" aria-hidden /> {t("network.dns.safeTitle")}
+            </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-muted">{t("network.dns.safeText")}</p>
+          </div>
+        ) : (
+          results.length > 0 &&
+          howToTarget && (
+            <motion.div className="glass rounded-xl p-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="text-sm font-semibold text-fg">{t("network.dns.howTo")}</div>
+              {current && <p className="mt-1 text-[12px] text-muted">{t("network.dns.cannotChange")}</p>}
+              <pre className="mt-2 font-sans text-[12px] leading-relaxed whitespace-pre-wrap text-muted">{t("network.dns.howToSteps", { primary: howToTarget.primary, secondary: howToTarget.secondary ?? howToTarget.primary })}</pre>
+              <Button variant="secondary" size="sm" className="mt-3" icon={<ExternalLink className="h-3.5 w-3.5" />} onClick={() => void api.openUrl("ms-settings:network-status").catch(() => undefined)}>
+                {t("network.dns.openSettings")}
+              </Button>
+            </motion.div>
+          )
         )}
       </div>
     </div>

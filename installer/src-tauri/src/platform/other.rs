@@ -4,7 +4,7 @@
 use super::{ElevateError, UninstallEntry};
 use crate::util::tr;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub fn system_lang_is_german() -> bool {
     ["LC_ALL", "LC_MESSAGES", "LANG"]
@@ -111,6 +111,17 @@ pub fn launch_unelevated(exe: &Path, workdir: &Path, _elevated: bool) -> Result<
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("{}: {e}", tr("Pulsar konnte nicht gestartet werden", "Could not start Pulsar")))
+}
+
+/// Startet ein Programm ohne Ein-/Ausgabe, um auf sein Ende zu warten (Fehlerausgabe fürs Protokoll).
+pub fn spawn_hidden(exe: &Path, args: &[&str]) -> std::io::Result<std::process::Child> {
+    Command::new(exe)
+        .args(args)
+        .current_dir(std::env::temp_dir())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
 }
 
 pub fn spawn_detached(exe: &Path, args: &[String]) -> Result<(), String> {

@@ -284,12 +284,6 @@ pub async fn backup_restore(state: State<'_, Shared>, file: String) -> CmdResult
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-
-    fn write(p: &Path, content: &str) {
-        fs::create_dir_all(p.parent().unwrap()).unwrap();
-        fs::write(p, content).unwrap();
-    }
 
     #[test]
     fn corrupt_db_is_recovered_from_backup() {

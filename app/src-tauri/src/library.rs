@@ -88,8 +88,3 @@ pub async fn session_delete(state: State<'_, Shared>, id: f64) -> CmdResult<()> 
     blocking(move || core.db.with(|db| db.session_delete(id as i64))).await
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-}

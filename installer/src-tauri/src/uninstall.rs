@@ -1,11 +1,24 @@
-//! Deinstallation: App beenden → Verknüpfungen → Registry → Dateien → (optional) Benutzerdaten.
+//! Deinstallation: App beenden und Windows-Einstellungen zurückstellen → Verknüpfungen → Registry →
+//! Dateien → (optional) Benutzerdaten.
 
 use crate::args::CliArgs;
 use crate::config::{config, APP_DATA_ID, DOWNLOAD_DIR_NAME, INSTALL_INFO_NAME, TEMP_UNINSTALL_PREFIX, UNINSTALLER_NAME};
 use crate::platform::{self, ElevateError};
 use crate::types::UninstallProgress;
 use crate::util::{display_path, log, same_path, tr};
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+/// Damit stellt die App alle Windows-Einstellungen zurück, die sie geändert hat (DNS, Optimierungen).
+/// Vertrag: `docs/API.md`, Abschnitt „Deinstallieren: `Pulsar.exe --revert-all`“.
+pub const REVERT_ARGS: [&str; 1] = ["--revert-all"];
+/// So lange darf `Pulsar.exe --revert-all` höchstens laufen (inkl. Windows-Abfrage), danach wird es beendet.
+pub const REVERT_TIMEOUT: Duration = Duration::from_secs(120);
+/// So oft wird nachgesehen, ob der Prozess fertig ist.
+const REVERT_POLL: Duration = Duration::from_millis(100);
+/// Höchstens so viel von der Fehlerausgabe landet im Protokoll.
+const REVERT_LOG_LIMIT: usize = 4096;
 
 #[derive(Debug, Clone)]
 pub struct UninstallPlan {
@@ -18,6 +31,8 @@ pub struct UninstallPlan {
     /// Die laufende Exe – sie kann sich nicht selbst löschen.
     pub self_exe: Option<PathBuf>,
     pub app_exe_name: String,
+    /// Höchstens so lange auf `Pulsar.exe --revert-all` warten.
+    pub revert_timeout: Duration,
 }
 
 impl UninstallPlan {
@@ -29,6 +44,7 @@ impl UninstallPlan {
             integrate: true,
             self_exe: std::env::current_exe().ok(),
             app_exe_name: config().app_exe_name.clone(),
+            revert_timeout: REVERT_TIMEOUT,
         }
     }
 }
@@ -38,7 +54,127 @@ pub struct UninstallOutcome {
     /// Die laufende Exe liegt im Installationsordner und muss nach dem Beenden gelöscht werden.
     pub self_delete_pending: bool,
     pub dir_removed: bool,
+    /// Was beim Zurückstellen der Windows-Einstellungen passiert ist.
+    pub revert: RevertResult,
     pub warnings: Vec<String>,
+}
+
+/// Ergebnis von `Pulsar.exe --revert-all`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum RevertResult {
+    /// Keine App-Datei im Ordner – nichts aufzurufen.
+    #[default]
+    NoApp,
+    /// Beendet mit diesem Exit-Code (`None` = ohne Code, z. B. von außen beendet).
+    /// 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben.
+    Exited(Option<i32>),
+    /// Zeitlimit überschritten – der Prozess wurde beendet.
+    TimedOut,
+    /// Konnte nicht gestartet werden oder das Warten ging schief.
+    Failed(String),
+}
+
+impl RevertResult {
+    /// Alles zurückgestellt (oder nichts zu tun)?
+    pub fn is_ok(&self) -> bool {
+        matches!(self, RevertResult::NoApp | RevertResult::Exited(Some(0)))
+    }
+
+    /// Kurzer Text fürs Protokoll.
+    pub fn describe(&self) -> String {
+        match self {
+            RevertResult::NoApp => "keine App-Datei gefunden – nichts zurückzustellen".into(),
+            RevertResult::Exited(Some(0)) => "alles zurückgestellt (oder nichts zu tun)".into(),
+            RevertResult::Exited(Some(1)) => "etwas ist übrig geblieben (Exit-Code 1)".into(),
+            RevertResult::Exited(Some(code)) => format!("beendet mit Exit-Code {code}"),
+            RevertResult::Exited(None) => "ohne Exit-Code beendet".into(),
+            RevertResult::TimedOut => "Zeitlimit überschritten – Prozess beendet".into(),
+            RevertResult::Failed(e) => format!("fehlgeschlagen: {e}"),
+        }
+    }
+}
+
+/// Ein Prozess, auf dessen Ende gewartet wird (in Tests eine Attrappe).
+pub trait Waitable {
+    /// `Ok(Some(code))` = beendet, `Ok(None)` = läuft noch.
+    fn try_wait_code(&mut self) -> std::io::Result<Option<Option<i32>>>;
+    /// Hart beenden und aufräumen.
+    fn kill_now(&mut self);
+}
+
+impl Waitable for std::process::Child {
+    fn try_wait_code(&mut self) -> std::io::Result<Option<Option<i32>>> {
+        self.try_wait().map(|s| s.map(|status| status.code()))
+    }
+
+    fn kill_now(&mut self) {
+        let _ = self.kill();
+        let _ = self.wait();
+    }
+}
+
+/// Wartet höchstens `timeout` auf das Ende (Abfrage alle `poll`) und beendet den Prozess sonst.
+pub fn wait_or_kill(p: &mut impl Waitable, timeout: Duration, poll: Duration) -> RevertResult {
+    let start = Instant::now();
+    loop {
+        match p.try_wait_code() {
+            Ok(Some(code)) => return RevertResult::Exited(code),
+            Ok(None) => {}
+            Err(e) => {
+                p.kill_now();
+                return RevertResult::Failed(e.to_string());
+            }
+        }
+        let elapsed = start.elapsed();
+        if elapsed >= timeout {
+            p.kill_now();
+            return RevertResult::TimedOut;
+        }
+        std::thread::sleep(poll.min(timeout - elapsed));
+    }
+}
+
+/// Liest die Fehlerausgabe im Hintergrund (sonst könnte der Prozess beim Schreiben hängen bleiben)
+/// und behält davon höchstens `REVERT_LOG_LIMIT` Bytes.
+fn collect_stderr(child: &mut std::process::Child) -> Option<std::sync::mpsc::Receiver<String>> {
+    let mut pipe = child.stderr.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut kept = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            match pipe.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let room = REVERT_LOG_LIMIT.saturating_sub(kept.len());
+                    kept.extend_from_slice(&chunk[..n.min(room)]);
+                }
+            }
+        }
+        let _ = tx.send(String::from_utf8_lossy(&kept).trim().to_string());
+    });
+    Some(rx)
+}
+
+/// Startet `<exe> --revert-all` verborgen und wartet höchstens `timeout`. Fehler werden nur gemeldet,
+/// sie brechen die Deinstallation nie ab.
+pub fn run_revert(exe: &Path, timeout: Duration) -> RevertResult {
+    if !exe.is_file() {
+        return RevertResult::NoApp;
+    }
+    let mut child = match platform::spawn_hidden(exe, &REVERT_ARGS) {
+        Ok(c) => c,
+        Err(e) => return RevertResult::Failed(e.to_string()),
+    };
+    let stderr = collect_stderr(&mut child);
+    let result = wait_or_kill(&mut child, timeout, REVERT_POLL);
+    // Nicht ewig auf die Ausgabe warten (falls noch jemand die Leitung offen hält).
+    if let Some(text) = stderr.and_then(|rx| rx.recv_timeout(Duration::from_secs(2)).ok()) {
+        if !text.is_empty() {
+            log(format!("Ausgabe von {}: {text}", REVERT_ARGS.join(" ")));
+        }
+    }
+    result
 }
 
 /// WebView2-Daten der Setup-App selbst – nach einer Deinstallation mit entfernen.
@@ -66,6 +202,21 @@ pub fn run_uninstall(plan: &UninstallPlan, progress: &dyn Fn(UninstallProgress))
     // ---- App beenden
     step("stop", 5.0);
     platform::kill_processes(&plan.app_exe_name)?;
+
+    // Von Pulsar geänderte Windows-Einstellungen (DNS, Optimierungen) zurückstellen, solange die App
+    // noch da ist. Braucht das Adminrechte, fragt Windows dabei höchstens einmal nach.
+    let app_exe = plan.dir.join(&plan.app_exe_name);
+    outcome.revert = run_revert(&app_exe, plan.revert_timeout);
+    log(format!("Windows-Einstellungen zurückstellen: {}", outcome.revert.describe()));
+    if outcome.revert != RevertResult::NoApp {
+        // Falls nach einem Abbruch noch ein Pulsar-Prozess (z. B. der Admin-Helfer) die Datei sperrt.
+        if let Err(e) = platform::kill_processes(&plan.app_exe_name) {
+            log(format!("Nach dem Zurückstellen: {e}"));
+        }
+    }
+    if !outcome.revert.is_ok() {
+        outcome.warnings.push(format!("Einstellungen zurückstellen: {}", outcome.revert.describe()));
+    }
 
     // Gehören Verknüpfungen/Registry zu genau diesem Ordner? (Schützt eine andere Installation.)
     let owns_integration = match platform::read_install_state() {

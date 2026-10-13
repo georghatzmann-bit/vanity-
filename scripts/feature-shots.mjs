@@ -30,6 +30,9 @@ const go = (route) => ev(`window.__pulsar.useUI.getState().navigate(${JSON.strin
 const settings = (patch) => ev(`window.__pulsar.useSettings.getState().update(${JSON.stringify(patch)})`);
 const scrollMain = (y) => ev(`document.querySelectorAll('main *').forEach(e => { if (e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY.match(/auto|scroll/)) e.scrollTop = ${y}; }); document.querySelectorAll('main > div').forEach(d => d.scrollTop = ${y});`);
 const click = (text) => page.getByRole("button", { name: text }).first().click();
+// Knöpfe in der Karte „Netzwerk automatisch optimieren“ (eindeutig, z. B. „Schließen“ gibt es auch in der Titelleiste)
+const card = (text) => page.locator('section[aria-labelledby="netauto-title"]').getByRole("button", { name: text }).first().click();
+const dismissToasts = () => ev(`window.__pulsar.useUI.getState().toasts.forEach(t => window.__pulsar.useUI.getState().dismiss(t.id))`);
 
 await page.goto(appUrl, { waitUntil: "networkidle" });
 await shot("01-intro", 1500);
@@ -83,6 +86,12 @@ await go({ page: "network", section: "dns" });
 await shot("16-netzwerk-dns", 1200);
 await click(/DNS-Dienste vergleichen/);
 await shot("17-netzwerk-dns-ergebnis", 6000);
+await click(/Schnellsten einstellen/);
+await shot("17b-netzwerk-dns-eingestellt", 1800);
+// Für die Optimieren-Aufnahmen wieder zurück auf den DNS vom Router
+await click(/^Zurückstellen$/);
+await page.waitForTimeout(1500);
+await dismissToasts();
 await go({ page: "network", section: "speed" });
 await click(/Speedtest starten/);
 await shot("18-netzwerk-speedtest-laeuft", 3500);
@@ -92,6 +101,12 @@ await shot("20-netzwerk-verbindung", 1500);
 
 await go({ page: "optimize" });
 await shot("21-optimieren", 1500);
+await card(/Jetzt prüfen/);
+await shot("21b-optimieren-netzwerk-auto", 4500);
+await card(/Jetzt einstellen/);
+await shot("21c-optimieren-netzwerk-fertig", 1800);
+await card(/Schließen/);
+await page.waitForTimeout(600);
 await click(/Alle empfohlenen anwenden/);
 await shot("22-optimieren-angewendet", 1500);
 

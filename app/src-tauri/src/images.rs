@@ -392,7 +392,7 @@ pub fn pick_steam_match(name: &str, v: &Value) -> Option<String> {
     let list = v["items"].as_array().or_else(|| v.as_array())?;
     let items: Vec<(String, String)> = list
         .iter()
-        .filter(|i| i["type"].as_str().map_or(true, |t| t == "app"))
+        .filter(|i| i["type"].as_str().is_none_or(|t| t == "app"))
         .filter_map(|i| {
             let id = i["id"].as_u64().map(|n| n.to_string()).or_else(|| i["appid"].as_str().map(str::to_string))
                 .or_else(|| i["appid"].as_u64().map(|n| n.to_string()))?;

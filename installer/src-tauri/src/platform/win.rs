@@ -7,7 +7,7 @@ use std::ffi::{c_void, OsStr, OsString};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use windows::core::{Interface, GUID, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, HANDLE};
 use windows::Win32::Globalization::GetUserDefaultUILanguage;
@@ -393,6 +393,19 @@ pub fn launch_unelevated(exe: &Path, workdir: &Path, elevated: bool) -> Result<(
         cmd.spawn()
     };
     result.map(|_| ()).map_err(|e| format!("{}: {e}", tr("Pulsar konnte nicht gestartet werden", "Could not start Pulsar")))
+}
+
+/// Startet ein Programm verborgen (kein Konsolenfenster), um auf sein Ende zu warten.
+/// Die Fehlerausgabe kommt über eine Leitung zurück (fürs Protokoll).
+pub fn spawn_hidden(exe: &Path, args: &[&str]) -> std::io::Result<std::process::Child> {
+    Command::new(exe)
+        .args(args)
+        .current_dir(std::env::temp_dir())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
 }
 
 /// Startet ein Programm losgelöst (ohne Konsole).

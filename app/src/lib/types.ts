@@ -301,12 +301,38 @@ export interface DnsProgress {
   total: number;
 }
 
+/** DNS der Hauptverbindung (net_dns_current, net_dns_apply, net_dns_restore) */
 export interface DnsConfig {
+  /** GUID der Hauptverbindung, z. B. "{3F25…}" */
   adapterId: string;
   adapter: string;
+  /** IPv4-DNS-Server, die Windows gerade benutzt */
   servers: string[];
+  /** IPv6-DNS-Server, die Windows gerade benutzt (ohne veraltete Platzhalter) */
+  ipv6Servers: string[];
+  /** IPv4-DNS kommt automatisch vom Router */
   dhcp: boolean;
+  /** ID des bekannten Dienstes (z. B. "cloudflare"), sonst null */
+  provider: string | null;
+  /** Pulsar hat den DNS geändert → „Zurückstellen“ möglich */
   changedByPulsar: boolean;
+  /** Pulsar kann den DNS hier selbst ändern (sonst Anleitung zum Selbsteinstellen) */
+  canChange: boolean;
+}
+
+/** Ergebnis von net_auto_optimize und net_auto_restore */
+export interface AutoReport {
+  /** DNS danach (null außerhalb von Windows) */
+  dns: DnsConfig | null;
+  dnsChanged: boolean;
+  /** Warum der DNS nicht geändert wurde (z. B. Dienst antwortet nicht) */
+  dnsError: string | null;
+  applied: string[];
+  failed: { id: string; error: string }[];
+  /** Windows-Abfrage abgelehnt – nichts mit Adminrechten geändert */
+  declined: boolean;
+  /** Mindestens eine Änderung wirkt erst nach einem Neustart */
+  restart: boolean;
 }
 
 export interface AdapterInfo {
@@ -362,17 +388,21 @@ export interface SpeedResult {
 // Optimieren & Boost
 // ---------------------------------------------------------------------------------------------
 
-/** Feste IDs der Optimierungen (Texte kommen aus den Übersetzungen). Alle ohne Adminrechte. */
-export type TweakId = "powerPlan" | "gameMode" | "gameDvr" | "mouseAccel";
+/** Feste IDs der Optimierungen (Texte kommen aus den Übersetzungen). Nur nagle und netThrottle brauchen Adminrechte. */
+export type TweakId = "powerPlan" | "gameMode" | "gameDvr" | "mouseAccel" | "nagle" | "netThrottle";
 
 export interface Tweak {
   id: TweakId;
-  category: "power" | "windows" | "input";
+  category: "power" | "windows" | "input" | "network";
   impact: "high" | "medium" | "low";
   /** on = optimiert, off = Windows-Standard */
   state: "on" | "off" | "unknown" | "unsupported";
   detail: string | null;
   canRevert: boolean;
+  /** Windows fragt nach Erlaubnis (Adminrechte) */
+  admin: boolean;
+  /** Wirkt erst nach einem Neustart */
+  restart: boolean;
 }
 
 export interface ApplyReport {

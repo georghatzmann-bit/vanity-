@@ -8,6 +8,7 @@ import type {
   AdapterInfo,
   AppInfo,
   ApplyReport,
+  AutoReport,
   BoostProfile,
   BoostState,
   DnsConfig,
@@ -151,8 +152,14 @@ export const api = {
   traceroute: (host: string, maxHops = 30) => call<TraceResult>("net_traceroute", { host, maxHops }),
   dnsBenchmark: (rounds = 5) => call<DnsResult[]>("net_dns_benchmark", { rounds }),
   dnsCurrent: () => call<DnsConfig | null>("net_dns_current"),
-  dnsApply: (primary: string, secondary?: string | null) => call<void>("net_dns_apply", { primary, secondary }),
-  dnsRestore: () => call<void>("net_dns_restore"),
+  /** DNS-Dienst (ID wie in net_dns_benchmark) einstellen – Windows fragt nach */
+  dnsApply: (provider: string) => call<DnsConfig>("net_dns_apply", { provider }),
+  /** Gesicherten DNS wiederherstellen – Windows fragt nach */
+  dnsRestore: () => call<DnsConfig | null>("net_dns_restore"),
+  /** DNS (null = bleibt) und Optimierungen mit einer Windows-Abfrage einstellen */
+  autoOptimize: (provider: string | null, tweaks: string[]) => call<AutoReport>("net_auto_optimize", { provider, tweaks }),
+  /** DNS, nagle und netThrottle mit einer Windows-Abfrage zurückstellen */
+  autoRestore: () => call<AutoReport>("net_auto_restore"),
   adapters: () => call<AdapterInfo[]>("net_adapters"),
   wifi: () => call<WifiInfo | null>("net_wifi"),
   speedtest: () => call<SpeedResult>("net_speedtest"),

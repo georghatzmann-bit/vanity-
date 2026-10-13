@@ -68,14 +68,23 @@ impl OptState {
 #[cfg(windows)]
 static REG: registry::Hkcu = registry::Hkcu;
 #[cfg(windows)]
-static POWER: power::PowerCfgCli = power::PowerCfgCli;
-
+static HKLM: registry::HklmRead = registry::HklmRead;
 #[cfg(windows)]
-fn env() -> tweaks::Env<'static> {
+static POWER: power::PowerCfgCli = power::PowerCfgCli;
+#[cfg(windows)]
+static ELEVATOR: crate::elevate::RealElevator = crate::elevate::RealElevator;
+
+/// Zugriff auf das echte System (GUID der Hauptverbindung einmal für `nagle` nachschlagen).
+#[cfg(windows)]
+pub fn env() -> tweaks::Env<'static> {
+    let main_adapter = crate::net::adapters::primary_adapter_guid(&crate::net::adapters::read_raw().unwrap_or_default());
     tweaks::Env {
         reg: &REG,
+        hklm: &HKLM,
         power: &POWER,
+        elevator: &ELEVATOR,
         apply_mouse: tweaks::apply_mouse_now,
+        main_adapter,
     }
 }
 

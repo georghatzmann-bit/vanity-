@@ -222,7 +222,10 @@ pub async fn run_selftest(cfg: &SelftestConfig) -> SelftestReport {
     let mut uplan = UninstallPlan::new(plan.dir.clone(), true);
     uplan.integrate = true;
     match uninstall::run_uninstall(&uplan, &|_| {}) {
-        Ok(o) => rec.push("uninstall", true, if o.warnings.is_empty() { "ok".to_string() } else { o.warnings.join("; ") }),
+        Ok(o) => {
+            let detail = if o.warnings.is_empty() { format!("ok, --revert-all: {}", o.revert.describe()) } else { o.warnings.join("; ") };
+            rec.push("uninstall", true, detail)
+        }
         Err(e) => rec.push("uninstall", false, e),
     };
 

@@ -131,16 +131,39 @@ pub struct DnsProgress {
     pub total: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DnsConfig {
     pub adapter_id: String,
     pub adapter: String,
+    /// IPv4-DNS-Server, die Windows gerade benutzt
     pub servers: Vec<String>,
-    /// DNS kommt automatisch vom Router (DHCP)
+    /// IPv6-DNS-Server, die Windows gerade benutzt (ohne die veralteten Platzhalter)
+    pub ipv6_servers: Vec<String>,
+    /// IPv4-DNS kommt automatisch vom Router (DHCP)
     pub dhcp: bool,
+    /// ID des bekannten Dienstes, wenn `servers[0]` dessen Adresse ist, sonst `null`
+    pub provider: Option<String>,
     /// Pulsar hat den DNS geändert und kann ihn zurückstellen
     pub changed_by_pulsar: bool,
+    /// Pulsar kann den DNS hier ändern (Windows 10 2004+, Adapter-GUID bekannt)
+    pub can_change: bool,
+}
+
+/// Ergebnis von `net_auto_optimize` und `net_auto_restore`.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoReport {
+    /// Zustand danach (null außerhalb von Windows)
+    pub dns: Option<DnsConfig>,
+    pub dns_changed: bool,
+    pub dns_error: Option<String>,
+    pub applied: Vec<String>,
+    pub failed: Vec<crate::opt::types::TweakError>,
+    /// Windows-Abfrage abgelehnt (dann wurde nichts mit Adminrechten geändert)
+    pub declined: bool,
+    /// Mindestens eine angewendete Änderung wirkt erst nach einem Neustart
+    pub restart: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

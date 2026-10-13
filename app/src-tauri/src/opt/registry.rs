@@ -1,5 +1,7 @@
-//! Zugriff auf die Benutzer-Registrierung (`HKEY_CURRENT_USER`) hinter einer kleinen Schnittstelle,
-//! damit die Optimierungs-Logik ohne Windows getestet werden kann. Pulsar schreibt nie nach HKLM.
+//! Zugriff auf die Registrierung hinter kleinen Schnittstellen, damit die Optimierungs-Logik ohne
+//! Windows getestet werden kann: `HKEY_CURRENT_USER` lesen und schreiben ([`Registry`]),
+//! `HKEY_LOCAL_MACHINE` nur lesen ([`RegistryRead`], geht ohne Adminrechte). Geschrieben wird
+//! unter HKLM ausschließlich über den Admin-Helfer (`crate::elevate`).
 #![cfg_attr(not(windows), allow(dead_code))]
 
 use serde::{Deserialize, Serialize};
@@ -42,6 +44,14 @@ pub trait Registry {
     fn delete(&self, key: &str, name: &str) -> CmdResult<()>;
 }
 
+/// Nur lesen (für `HKLM`; Lesen braucht dort keine Adminrechte).
+pub trait RegistryRead {
+    /// Liest `name` unter `key`. `Ok(None)`, wenn Schlüssel oder Wert fehlen.
+    fn read(&self, key: &str, name: &str) -> CmdResult<Option<RegVal>>;
+    /// Gibt es den Schlüssel `key`?
+    fn key_exists(&self, key: &str) -> bool;
+}
+
 /// Setzt einen Wert oder löscht ihn (`None`) – zum Zurückstellen aus einer Sicherung.
 pub fn restore(reg: &dyn Registry, key: &str, name: &str, value: Option<&RegVal>) -> CmdResult<()> {
     match value {
@@ -59,44 +69,67 @@ pub fn restore(reg: &dyn Registry, key: &str, name: &str, value: Option<&RegVal>
 pub struct Hkcu;
 
 #[cfg(windows)]
-fn reg_err(what: &str, key: &str, name: &str, e: &std::io::Error) -> String {
+fn reg_err_in(root: &str, what: &str, key: &str, name: &str, e: &std::io::Error) -> String {
     match e.kind() {
         std::io::ErrorKind::PermissionDenied => {
-            format!("Zugriff auf die Registrierung verweigert: HKCU\\{key}\\{name}")
+            format!("Zugriff auf die Registrierung verweigert: {root}\\{key}\\{name}")
         }
-        _ => format!("Der Registrierungswert HKCU\\{key}\\{name} konnte nicht {what} werden: {e}"),
+        _ => format!("Der Registrierungswert {root}\\{key}\\{name} konnte nicht {what} werden: {e}"),
+    }
+}
+
+#[cfg(windows)]
+fn reg_err(what: &str, key: &str, name: &str, e: &std::io::Error) -> String {
+    reg_err_in("HKCU", what, key, name, e)
+}
+
+/// Einen Wert lesen (DWORD oder Text). `Ok(None)`, wenn Schlüssel oder Wert fehlen.
+#[cfg(windows)]
+fn read_value(root: &winreg::RegKey, root_name: &str, key: &str, name: &str) -> CmdResult<Option<RegVal>> {
+    use std::io::ErrorKind;
+    use winreg::enums::{KEY_READ, KEY_WOW64_64KEY, REG_DWORD, REG_EXPAND_SZ, REG_SZ};
+    use winreg::types::FromRegValue;
+
+    let sub = match root.open_subkey_with_flags(key, KEY_READ | KEY_WOW64_64KEY) {
+        Ok(k) => k,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(reg_err_in(root_name, "gelesen", key, name, &e)),
+    };
+    let raw = match sub.get_raw_value(name) {
+        Ok(r) => r,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(reg_err_in(root_name, "gelesen", key, name, &e)),
+    };
+    let parsed = match raw.vtype {
+        REG_DWORD => u32::from_reg_value(&raw).map(RegVal::Dword),
+        REG_SZ | REG_EXPAND_SZ => String::from_reg_value(&raw).map(RegVal::Str),
+        _ => return Err(format!("Unerwarteter Werttyp in der Registrierung: {root_name}\\{key}\\{name}")),
+    };
+    parsed.map(Some).map_err(|e| reg_err_in(root_name, "gelesen", key, name, &e))
+}
+
+/// `HKEY_LOCAL_MACHINE`, nur lesend.
+#[cfg(windows)]
+pub struct HklmRead;
+
+#[cfg(windows)]
+impl RegistryRead for HklmRead {
+    fn read(&self, key: &str, name: &str) -> CmdResult<Option<RegVal>> {
+        read_value(&winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE), "HKLM", key, name)
+    }
+
+    fn key_exists(&self, key: &str) -> bool {
+        use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_WOW64_64KEY};
+        winreg::RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey_with_flags(key, KEY_QUERY_VALUE | KEY_WOW64_64KEY)
+            .is_ok()
     }
 }
 
 #[cfg(windows)]
 impl Registry for Hkcu {
     fn get(&self, key: &str, name: &str) -> CmdResult<Option<RegVal>> {
-        use std::io::ErrorKind;
-        use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, REG_DWORD, REG_EXPAND_SZ, REG_SZ};
-        use winreg::types::FromRegValue;
-        use winreg::RegKey;
-
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let sub = match hkcu.open_subkey_with_flags(key, KEY_READ) {
-            Ok(k) => k,
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(reg_err("gelesen", key, name, &e)),
-        };
-        let raw = match sub.get_raw_value(name) {
-            Ok(r) => r,
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(reg_err("gelesen", key, name, &e)),
-        };
-        let parsed = match raw.vtype {
-            REG_DWORD => u32::from_reg_value(&raw).map(RegVal::Dword),
-            REG_SZ | REG_EXPAND_SZ => String::from_reg_value(&raw).map(RegVal::Str),
-            _ => {
-                return Err(format!(
-                    "Unerwarteter Werttyp in der Registrierung: HKCU\\{key}\\{name}"
-                ))
-            }
-        };
-        parsed.map(Some).map_err(|e| reg_err("gelesen", key, name, &e))
+        read_value(&winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER), "HKCU", key, name)
     }
 
     fn set(&self, key: &str, name: &str, value: &RegVal) -> CmdResult<()> {
@@ -142,6 +175,8 @@ impl Registry for Hkcu {
 #[derive(Default)]
 pub struct MemRegistry {
     values: std::cell::RefCell<std::collections::BTreeMap<(String, String), RegVal>>,
+    /// Schlüssel, die es gibt (auch ohne Werte)
+    keys: std::cell::RefCell<std::collections::BTreeSet<String>>,
     /// Alle Zugriffe schlagen fehl (simuliert eine gesperrte Registrierung)
     pub fail: std::cell::Cell<bool>,
 }
@@ -156,8 +191,21 @@ impl MemRegistry {
         let reg = Self::default();
         for (k, n, v) in values {
             reg.values.borrow_mut().insert(Self::id(k, n), v.clone());
+            reg.add_key(k);
         }
         reg
+    }
+
+    /// Schlüssel anlegen (ohne Werte).
+    pub fn add_key(&self, key: &str) {
+        self.keys.borrow_mut().insert(key.to_lowercase());
+    }
+
+    /// Schlüssel samt Werten entfernen (z. B. Netzwerkadapter ausgebaut).
+    pub fn remove_key(&self, key: &str) {
+        let k = key.to_lowercase();
+        self.keys.borrow_mut().remove(&k);
+        self.values.borrow_mut().retain(|(vk, _), _| *vk != k);
     }
 
     pub fn dword(&self, key: &str, name: &str) -> Option<u32> {
@@ -190,6 +238,7 @@ impl Registry for MemRegistry {
             return Err("Registrierung gesperrt (Test)".into());
         }
         self.values.borrow_mut().insert(Self::id(key, name), value.clone());
+        self.add_key(key);
         Ok(())
     }
 
@@ -199,6 +248,17 @@ impl Registry for MemRegistry {
         }
         self.values.borrow_mut().remove(&Self::id(key, name));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl RegistryRead for MemRegistry {
+    fn read(&self, key: &str, name: &str) -> CmdResult<Option<RegVal>> {
+        self.get(key, name)
+    }
+
+    fn key_exists(&self, key: &str) -> bool {
+        self.keys.borrow().contains(&key.to_lowercase())
     }
 }
 

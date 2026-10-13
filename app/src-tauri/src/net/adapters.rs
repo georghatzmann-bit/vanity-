@@ -3,8 +3,9 @@
 //! Funktionen und werden auch unter Linux getestet.
 #![cfg_attr(not(windows), allow(dead_code))]
 
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+use super::dns;
 use super::types::{AdapterInfo, DnsConfig, WifiInfo};
 
 /// Rohdaten eines Adapters, wie Windows sie liefert (vor Filterung und Zuordnung).
@@ -19,6 +20,8 @@ pub struct RawAdapter {
     pub ipv4: Vec<Ipv4Addr>,
     pub gateway: Option<IpAddr>,
     pub dns: Vec<IpAddr>,
+    /// IPv6-DNS-Server (ohne die veralteten Platzhalter `fec0:0:0:ffff::1/2/3`)
+    pub dns6: Vec<Ipv6Addr>,
     /// Sendegeschwindigkeit in Bit/s (0 oder u64::MAX = unbekannt)
     pub link_speed_bps: u64,
     pub ipv4_metric: u32,
@@ -91,21 +94,43 @@ pub fn build_infos(raw: &[RawAdapter]) -> Vec<AdapterInfo> {
     out
 }
 
-/// DNS-Einstellung der Hauptverbindung aus den Rohdaten. `static_dns`: ob für diesen Adapter
-/// feste DNS-Server eingetragen sind (None = unbekannt → DHCP-Flag des Adapters).
-pub fn build_dns_config(raw: &[RawAdapter], static_dns: impl Fn(&str) -> Option<bool>) -> Option<DnsConfig> {
+/// Die GUID (`{…}`) der Hauptverbindung, falls sie als solche erkennbar ist – für `nagle`.
+pub fn primary_adapter_guid(raw: &[RawAdapter]) -> Option<String> {
     let infos = build_infos(raw);
     let main = infos.iter().find(|a| a.primary).or_else(|| infos.first())?;
+    crate::elevate::is_braced_guid(&main.id).then(|| main.id.clone())
+}
+
+/// DNS-Einstellung der Hauptverbindung aus den Rohdaten.
+/// - `static_dns`: ob für diesen Adapter feste IPv4-DNS-Server eingetragen sind
+///   (None = unbekannt → DHCP-Flag des Adapters).
+/// - `dns_api_ok`: ob Pulsar den DNS hier überhaupt setzen kann (`SetInterfaceDnsSettings`).
+/// - `backed_up`: ob für diesen Adapter eine Sicherung in kv `net.dnsBackup` existiert.
+pub fn build_dns_config(
+    raw: &[RawAdapter],
+    static_dns: impl Fn(&str) -> Option<bool>,
+    dns_api_ok: bool,
+    backed_up: impl Fn(&str) -> bool,
+) -> Option<DnsConfig> {
+    let infos = build_infos(raw);
+    let main = infos.iter().find(|a| a.primary).or_else(|| infos.first())?;
+    let raw_main = raw.iter().find(|r| r.id == main.id);
     let dhcp = match static_dns(&main.id) {
         Some(is_static) => !is_static,
-        None => raw.iter().find(|r| r.id == main.id).map(|r| r.dhcp).unwrap_or(true),
+        None => raw_main.map(|r| r.dhcp).unwrap_or(true),
     };
+    let ipv6_servers: Vec<String> = raw_main
+        .map(|r| r.dns6.iter().filter(|ip| dns::is_real_ipv6_dns(ip)).map(|ip| ip.to_string()).collect())
+        .unwrap_or_default();
     Some(DnsConfig {
+        provider: dns::provider_for(&main.dns),
+        can_change: dns_api_ok && crate::elevate::is_braced_guid(&main.id),
+        changed_by_pulsar: backed_up(&main.id),
         adapter_id: main.id.clone(),
         adapter: main.name.clone(),
         servers: main.dns.clone(),
+        ipv6_servers,
         dhcp,
-        changed_by_pulsar: false,
     })
 }
 
@@ -207,7 +232,7 @@ pub fn build_wifi(raw: RawWifi) -> WifiInfo {
 // ---------------------------------------------------------------------------------------------
 
 #[cfg(windows)]
-pub use win::{dns_config, list, primary_dns_servers, wifi};
+pub use win::{interface_exists, is_static_dns, list, primary_dns_servers, read_raw, static_servers, wifi};
 
 #[cfg(windows)]
 mod win {
@@ -315,11 +340,18 @@ mod win {
                 }
                 let mut d = a.FirstDnsServerAddress;
                 while !d.is_null() {
-                    if let Some(ip) = socket_ip(&(*d).Address) {
-                        // Nur IPv4-Resolver: die eigenen UDP-Anfragen laufen über IPv4
-                        if ip.is_ipv4() && !raw.dns.contains(&ip) {
-                            raw.dns.push(ip);
+                    match socket_ip(&(*d).Address) {
+                        // IPv4-Resolver (die eigenen UDP-Anfragen laufen über IPv4)
+                        Some(IpAddr::V4(v4)) => {
+                            if !raw.dns.contains(&v4.into()) {
+                                raw.dns.push(IpAddr::V4(v4));
+                            }
                         }
+                        // IPv6-Resolver ohne die veralteten Platzhalter
+                        Some(IpAddr::V6(v6)) if super::dns::is_real_ipv6_dns(&v6) && !raw.dns6.contains(&v6) => {
+                            raw.dns6.push(v6);
+                        }
+                        _ => {}
                     }
                     d = (*d).Next;
                 }
@@ -330,27 +362,47 @@ mod win {
         Ok(out)
     }
 
-    /// Feste DNS-Server in der Registry eingetragen? (Lesen von HKLM braucht keine Adminrechte.)
-    fn static_dns(adapter_id: &str) -> Option<bool> {
-        use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ};
+    /// Den fest eingetragenen `NameServer` eines Adapters lesen (Tcpip für IPv4, Tcpip6 für IPv6).
+    /// Lesen von HKLM braucht keine Adminrechte. `None` = Schlüssel/Wert fehlt.
+    fn read_name_server(base: &str, adapter_id: &str) -> Option<String> {
+        use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY};
         use winreg::RegKey;
-        if adapter_id.is_empty() {
+        if !crate::elevate::is_braced_guid(adapter_id) {
             return None;
         }
-        let path = format!(r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{adapter_id}");
-        let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(path, KEY_READ).ok()?;
-        let value: String = key.get_value("NameServer").unwrap_or_default();
-        Some(!value.trim().is_empty())
+        let path = format!(r"SYSTEM\CurrentControlSet\Services\{base}\Parameters\Interfaces\{adapter_id}");
+        let key = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY).ok()?;
+        key.get_value("NameServer").ok()
+    }
+
+    /// Feste IPv4-DNS-Server eingetragen? (None = Adapter/Schlüssel unbekannt.)
+    pub fn is_static_dns(adapter_id: &str) -> Option<bool> {
+        read_name_server("Tcpip", adapter_id).map(|v| !v.trim().is_empty())
+    }
+
+    /// Die fest eingetragenen DNS-Server eines Adapters je Familie (für die Sicherung).
+    /// `(v4_dhcp, v4_servers, v6_dhcp, v6_servers)`.
+    pub fn static_servers(adapter_id: &str) -> (bool, Vec<String>, bool, Vec<String>) {
+        let read = |base| {
+            let v = read_name_server(base, adapter_id).unwrap_or_default();
+            let servers: Vec<String> = super::dns::parse_name_server(&v).iter().map(|ip| ip.to_string()).collect();
+            (servers.is_empty(), servers)
+        };
+        let (v4_dhcp, v4) = read("Tcpip");
+        let (v6_dhcp, v6) = read("Tcpip6");
+        (v4_dhcp, v4, v6_dhcp, v6)
+    }
+
+    /// Gibt es den Netzwerk-Schlüssel dieses Adapters noch? (Für das Zurückstellen des DNS.)
+    pub fn interface_exists(adapter_id: &str) -> bool {
+        use crate::opt::registry::{HklmRead, RegistryRead};
+        crate::elevate::is_braced_guid(adapter_id)
+            && HklmRead.key_exists(&format!("{}\\{}", crate::elevate::KEY_INTERFACES, adapter_id))
     }
 
     /// Adapterliste für die Oberfläche.
     pub fn list() -> Result<Vec<AdapterInfo>, String> {
         Ok(build_infos(&read_raw()?))
-    }
-
-    /// DNS der Hauptverbindung.
-    pub fn dns_config() -> Result<Option<DnsConfig>, String> {
-        Ok(build_dns_config(&read_raw()?, static_dns))
     }
 
     /// DNS-Server der Hauptverbindung (leer, wenn nichts bekannt).
@@ -478,6 +530,7 @@ mod tests {
             ipv4: vec![Ipv4Addr::new(192, 168, 1, 10)],
             gateway: gateway.map(|g| g.parse().unwrap()),
             dns: vec![IpAddr::from([192, 168, 1, 1])],
+            dns6: vec![],
             link_speed_bps: 1_000_000_000,
             ipv4_metric: metric,
             dhcp: true,
@@ -532,21 +585,48 @@ mod tests {
         assert_eq!(infos.len(), 1);
         assert_eq!(infos[0].id, "vm");
         assert!(infos[0].primary);
-        assert!(build_dns_config(&adapters, |_| None).is_some());
+        assert!(build_dns_config(&adapters, |_| None, false, |_| false).is_some());
     }
 
     #[test]
     fn dns_config_uses_primary_and_registry_hint() {
         let adapters = vec![raw("wifi", 71, true, Some("192.168.1.1"), 35), raw("eth", 6, true, Some("192.168.1.1"), 25)];
-        let cfg = build_dns_config(&adapters, |_| Some(true)).unwrap();
+        let cfg = build_dns_config(&adapters, |_| Some(true), false, |_| false).unwrap();
         assert_eq!(cfg.adapter_id, "eth");
         assert_eq!(cfg.adapter, "ETH");
         assert!(!cfg.dhcp, "feste Server eingetragen → kein DHCP");
         assert!(!cfg.changed_by_pulsar);
         assert_eq!(cfg.servers, vec!["192.168.1.1"]);
-        let cfg2 = build_dns_config(&adapters, |_| None).unwrap();
+        assert!(!cfg.can_change, "id ist keine Adapter-GUID");
+        let cfg2 = build_dns_config(&adapters, |_| None, false, |_| false).unwrap();
         assert!(cfg2.dhcp, "ohne Registry-Hinweis zählt das DHCP-Flag");
-        assert!(build_dns_config(&[], |_| None).is_none());
+        assert!(build_dns_config(&[], |_| None, false, |_| false).is_none());
+    }
+
+    #[test]
+    fn dns_config_fills_provider_ipv6_and_change_flags() {
+        const GUID: &str = "{4d36e972-e325-11ce-bfc1-08002be10318}";
+        let mut a = RawAdapter {
+            dns: vec![IpAddr::from([1, 1, 1, 1])],
+            dns6: vec![
+                "2606:4700:4700::1111".parse().unwrap(),
+                "fec0:0:0:ffff::1".parse().unwrap(), // Platzhalter: raus
+            ],
+            ..raw(GUID, 6, true, Some("192.168.1.1"), 10)
+        };
+        a.name = "Ethernet".into();
+        let adapters = vec![a];
+        let cfg = build_dns_config(&adapters, |_| Some(true), true, |id| id == GUID).unwrap();
+        assert_eq!(cfg.provider.as_deref(), Some("cloudflare"));
+        assert_eq!(cfg.ipv6_servers, vec!["2606:4700:4700::1111"], "Platzhalter gefiltert");
+        assert!(cfg.can_change, "GUID gültig + API vorhanden");
+        assert!(cfg.changed_by_pulsar, "Sicherung vorhanden");
+        assert_eq!(primary_adapter_guid(&adapters).as_deref(), Some(GUID));
+
+        // Ohne API kein canChange
+        let cfg2 = build_dns_config(&adapters, |_| Some(true), false, |_| false).unwrap();
+        assert!(!cfg2.can_change);
+        assert_eq!(primary_adapter_guid(&[raw("eth", 6, true, Some("192.168.1.1"), 1)]), None);
     }
 
     #[test]

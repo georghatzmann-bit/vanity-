@@ -710,7 +710,7 @@ export function App() {
                             const state = i < cur || cur === 5 ? "done" : i === cur ? "active" : "todo";
                             return (
                               <li key={s} className="flex items-center gap-3">
-                                <span className={cn("grid h-6 w-6 place-items-center rounded-full border-2", state === "done" ? "border-transparent bg-success" : state === "active" ? "border-accent" : "border-line-strong")}>
+                                <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full border-2", state === "done" ? "border-transparent bg-success" : state === "active" ? "border-accent" : "border-line-strong")}>
                                   {state === "done" && (
                                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none">
                                       <motion.path d="M5 12.5 L10 17 L19 7.5" stroke="#06140d" strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} />

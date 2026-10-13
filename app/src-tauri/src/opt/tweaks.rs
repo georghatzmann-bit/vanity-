@@ -12,8 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::power::{self, PowerCfg};
-use super::registry::{self, RegVal, Registry};
+use super::registry::{self, RegVal, Registry, RegistryRead};
 use super::types::{ApplyReport, PowerPlan, Tweak, TweakError};
+use crate::elevate::{self, ElevateError, ElevatedTask, Elevator, RegOp};
 use crate::error::CmdResult;
 use crate::state::Shared;
 use crate::util::now_ms;
@@ -27,21 +28,40 @@ pub const POWER_PLAN: &str = "powerPlan";
 pub const GAME_MODE: &str = "gameMode";
 pub const GAME_DVR: &str = "gameDvr";
 pub const MOUSE_ACCEL: &str = "mouseAccel";
+pub const NAGLE: &str = "nagle";
+pub const NET_THROTTLE: &str = "netThrottle";
 /// Alle Optimierungen in Anzeigereihenfolge.
-pub const IDS: [&str; 4] = [POWER_PLAN, GAME_MODE, GAME_DVR, MOUSE_ACCEL];
+pub const IDS: [&str; 6] = [POWER_PLAN, GAME_MODE, GAME_DVR, MOUSE_ACCEL, NAGLE, NET_THROTTLE];
+/// Die Optimierungen, für die Windows nachfragt (über den Admin-Helfer).
+pub const ADMIN_IDS: [&str; 2] = [NAGLE, NET_THROTTLE];
+
+/// `NetworkThrottlingIndex`: „an“ (Drosselung aus) und Windows-Standard.
+pub const THROTTLE_ON: u32 = 0xFFFF_FFFF;
+pub const THROTTLE_DEFAULT: u32 = 10;
+/// Name des gesicherten Adapters bei `nagle` (GUID als Text).
+const SNAP_ADAPTER: &str = "adapter";
+
+/// Ist das eine Optimierung mit Windows-Abfrage?
+pub fn is_admin_id(id: &str) -> bool {
+    ADMIN_IDS.contains(&id)
+}
 
 struct Def {
     id: &'static str,
     category: &'static str,
     impact: &'static str,
+    admin: bool,
+    restart: bool,
 }
 
-/// Katalog (Kategorie und ehrliche Wirkungsstufe laut `docs/API.md`).
-const DEFS: [Def; 4] = [
-    Def { id: POWER_PLAN, category: "power", impact: "medium" },
-    Def { id: GAME_MODE, category: "windows", impact: "low" },
-    Def { id: GAME_DVR, category: "windows", impact: "medium" },
-    Def { id: MOUSE_ACCEL, category: "input", impact: "medium" },
+/// Katalog (Kategorie, ehrliche Wirkungsstufe, Adminrechte, Neustart laut `docs/API.md`).
+const DEFS: [Def; 6] = [
+    Def { id: POWER_PLAN, category: "power", impact: "medium", admin: false, restart: false },
+    Def { id: GAME_MODE, category: "windows", impact: "low", admin: false, restart: false },
+    Def { id: GAME_DVR, category: "windows", impact: "medium", admin: false, restart: false },
+    Def { id: MOUSE_ACCEL, category: "input", impact: "medium", admin: false, restart: false },
+    Def { id: NAGLE, category: "network", impact: "low", admin: true, restart: true },
+    Def { id: NET_THROTTLE, category: "network", impact: "low", admin: true, restart: true },
 ];
 
 // Orte in der Registrierung (alle unter HKCU)
@@ -111,10 +131,17 @@ fn slots(id: &str) -> Option<&'static [Slot]> {
 
 /// Zugriff auf das System – für Tests austauschbar.
 pub struct Env<'a> {
+    /// Benutzer-Registrierung (HKCU), lesen und schreiben.
     pub reg: &'a dyn Registry,
+    /// System-Registrierung (HKLM), nur lesen (geht ohne Adminrechte).
+    pub hklm: &'a dyn RegistryRead,
     pub power: &'a dyn PowerCfg,
+    /// Admin-Helfer für die wenigen Änderungen unter HKLM (`nagle`, `netThrottle`).
+    pub elevator: &'a dyn Elevator,
     /// Mausparameter sofort anwenden: `[Schwelle 1, Schwelle 2, Beschleunigung]` (wie `SPI_SETMOUSE`).
     pub apply_mouse: fn([i32; 3]) -> CmdResult<()>,
+    /// GUID (`{…}`) der Hauptverbindung – für `nagle` (None = keine erkannt).
+    pub main_adapter: Option<String>,
 }
 
 /// Mausparameter sofort anwenden (`SystemParametersInfoW(SPI_SETMOUSE)`), damit die Änderung ohne
@@ -327,7 +354,32 @@ fn tweak(def: &Def, state: &str, detail: Option<String>, can_revert: bool) -> Tw
         state: state.into(),
         detail,
         can_revert,
+        admin: def.admin,
+        restart: def.restart,
     }
+}
+
+/// Schlüssel der Netzwerk-Einstellungen eines Adapters (für `nagle`).
+fn interface_key(guid: &str) -> String {
+    format!("{}\\{}", elevate::KEY_INTERFACES, guid)
+}
+
+/// Zustand von `nagle` an der Hauptverbindung (ohne Hauptverbindung „unbekannt“).
+fn nagle_state(env: &Env) -> CmdResult<(St, Option<String>)> {
+    let Some(guid) = env.main_adapter.as_deref() else {
+        return Ok((St::Unknown, None));
+    };
+    let key = interface_key(guid);
+    let ack = env.hklm.read(&key, elevate::VAL_TCP_ACK)?.and_then(|v| v.as_u32());
+    let nd = env.hklm.read(&key, elevate::VAL_NO_DELAY)?.and_then(|v| v.as_u32());
+    let st = if ack == Some(1) && nd == Some(1) { St::On } else { St::Off };
+    Ok((st, None))
+}
+
+/// Zustand von `netThrottle` (Drosselung aus = „an“).
+fn throttle_state(env: &Env) -> CmdResult<St> {
+    let v = env.hklm.read(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE)?.and_then(|v| v.as_u32());
+    Ok(if v == Some(THROTTLE_ON) { St::On } else { St::Off })
 }
 
 /// Aktuellen Zustand aller Optimierungen lesen (`powercfg` wird nur einmal aufgerufen).
@@ -335,14 +387,21 @@ pub fn read_all(env: &Env, store: &SnapshotStore) -> Vec<Tweak> {
     let plans = env.power.list();
     DEFS.iter()
         .map(|d| {
-            let (state, detail) = if d.id == POWER_PLAN {
-                power_state(&plans)
-            } else {
-                match slots(d.id).map(|s| read_slots(env.reg, s)) {
+            let (state, detail) = match d.id {
+                POWER_PLAN => power_state(&plans),
+                NAGLE => match nagle_state(env) {
+                    Ok(x) => x,
+                    Err(e) => (St::Unknown, Some(e)),
+                },
+                NET_THROTTLE => match throttle_state(env) {
+                    Ok(st) => (st, None),
+                    Err(e) => (St::Unknown, Some(e)),
+                },
+                _ => match slots(d.id).map(|s| read_slots(env.reg, s)) {
                     Some(Ok(values)) => (reg_state(d.id, &values), None),
                     Some(Err(e)) => (St::Unknown, Some(e)),
                     None => (St::Unknown, None),
-                }
+                },
             };
             tweak(d, state.as_str(), detail, store.get(d.id).is_some())
         })
@@ -393,33 +452,266 @@ pub fn apply_one(id: &str, enable: bool, env: &Env, store: &mut SnapshotStore) -
     }
 }
 
-/// Mehrere Optimierungen; doppelte IDs werden nur einmal bearbeitet.
+/// Mehrere Optimierungen; doppelte IDs werden nur einmal bearbeitet. Die Admin-Optimierungen eines
+/// Aufrufs laufen gesammelt über **eine** Windows-Abfrage.
 pub fn apply_many(ids: &[String], enable: bool, env: &Env, store: &mut SnapshotStore) -> ApplyReport {
+    let (admin, normal): (Vec<String>, Vec<String>) = unique_ids(ids).into_iter().partition(|id| is_admin_id(id));
     let mut report = ApplyReport::default();
-    for id in unique_ids(ids) {
+    for id in normal {
         match apply_one(&id, enable, env, store) {
             Ok(()) => report.applied.push(id),
             Err(error) => report.failed.push(TweakError { id, error }),
         }
     }
+    run_admin(&admin, enable, env, store, &mut report);
     report
 }
 
-/// Alle gesicherten Originalwerte wiederherstellen.
+/// Alle gesicherten Originalwerte wiederherstellen (Admin-Optimierungen gesammelt mit einer Abfrage).
 pub fn revert_all(env: &Env, store: &mut SnapshotStore) -> ApplyReport {
     let mut report = ApplyReport::default();
+    let mut admin = Vec::new();
     for id in store.ids() {
         if !IDS.contains(&id.as_str()) {
             // Rest einer älteren Version – still entfernen
             let _ = store.remove(&id);
             continue;
         }
-        match apply_one(&id, false, env, store) {
-            Ok(()) => report.applied.push(id),
-            Err(error) => report.failed.push(TweakError { id, error }),
+        if is_admin_id(&id) {
+            admin.push(id);
+        } else {
+            match apply_one(&id, false, env, store) {
+                Ok(()) => report.applied.push(id),
+                Err(error) => report.failed.push(TweakError { id, error }),
+            }
         }
     }
+    run_admin(&admin, false, env, store, &mut report);
     report
+}
+
+/// Admin-Optimierungen eines Aufrufs gesammelt ausführen und das Ergebnis in `report` eintragen.
+fn run_admin(ids: &[String], enable: bool, env: &Env, store: &mut SnapshotStore, report: &mut ApplyReport) {
+    let batch = prepare_admin(ids, enable, env, store);
+    let ops = batch.reg_ops();
+    let outcome = if ops.is_empty() {
+        Ok(())
+    } else {
+        env.elevator.run(&ElevatedTask { dns: Vec::new(), reg: ops })
+    };
+    let (applied, failed) = batch.settle(&outcome, env, store);
+    report.applied.extend(applied);
+    report.failed.extend(failed);
+}
+
+// =============================================================================================
+// Admin-Optimierungen (nagle, netThrottle) – über den Admin-Helfer
+// =============================================================================================
+
+/// Eine vorbereitete Admin-Optimierung.
+pub struct AdminStep {
+    id: String,
+    enable: bool,
+    /// Zielwerte am richtigen Schlüssel – zugleich die Nachkontrolle.
+    ops: Vec<RegOp>,
+    /// In diesem Aufruf neu angelegte Sicherung (bei Ablehnung wieder entfernen).
+    new_snapshot: bool,
+}
+
+/// Mehrere Admin-Optimierungen vorbereiten: Zielwerte bestimmen, Sicherungen anlegen.
+#[derive(Default)]
+pub struct AdminBatch {
+    steps: Vec<AdminStep>,
+    /// Schon im Zielzustand – nichts zu tun.
+    done: Vec<String>,
+    /// Fehler vor dem Helfer (z. B. keine Hauptverbindung).
+    failed: Vec<TweakError>,
+}
+
+enum Prep {
+    /// Schon im Zielzustand (nichts ändern).
+    Done,
+    /// Vor dem Helfer gescheitert.
+    Fail(String),
+    /// Über den Helfer ändern.
+    Step(Vec<RegOp>, bool),
+}
+
+impl AdminBatch {
+    /// Alle Registrierungs-Änderungen des Stapels (für den Admin-Helfer).
+    pub fn reg_ops(&self) -> Vec<RegOp> {
+        self.steps.iter().flat_map(|s| s.ops.clone()).collect()
+    }
+
+    /// Nach dem Admin-Helfer: Nachkontrolle, Sicherungen aufräumen, Ergebnis je ID.
+    pub fn settle(self, outcome: &Result<(), ElevateError>, env: &Env, store: &mut SnapshotStore) -> (Vec<String>, Vec<TweakError>) {
+        let mut applied = self.done;
+        let mut failed = self.failed;
+        if self.steps.is_empty() {
+            return (applied, failed);
+        }
+        if let Err(ElevateError::Declined) = outcome {
+            for s in &self.steps {
+                if s.new_snapshot {
+                    let _ = store.remove(&s.id);
+                }
+                failed.push(TweakError { id: s.id.clone(), error: elevate::MSG_DECLINED.into() });
+            }
+            return (applied, failed);
+        }
+        let run_err = outcome.as_ref().err();
+        for s in self.steps {
+            match verify_ops(&s.ops, env) {
+                Ok(()) => {
+                    // Erfolgreich zurückgestellt → Sicherung weg
+                    if !s.enable {
+                        let _ = store.remove(&s.id);
+                    }
+                    applied.push(s.id);
+                }
+                Err(vmsg) => {
+                    let error = run_err.map(ElevateError::to_string).unwrap_or(vmsg);
+                    failed.push(TweakError { id: s.id, error });
+                }
+            }
+        }
+        (applied, failed)
+    }
+}
+
+/// Admin-Optimierungen vorbereiten. Bereits im Zielzustand → nichts tun, nichts sichern.
+pub fn prepare_admin(ids: &[String], enable: bool, env: &Env, store: &mut SnapshotStore) -> AdminBatch {
+    let mut batch = AdminBatch::default();
+    for id in ids {
+        let prep = match id.as_str() {
+            NAGLE => prepare_nagle(enable, env, store),
+            NET_THROTTLE => prepare_throttle(enable, env, store),
+            _ => Prep::Fail(format!("Unbekannte Optimierung: „{id}“")),
+        };
+        match prep {
+            Prep::Done => batch.done.push(id.clone()),
+            Prep::Fail(error) => batch.failed.push(TweakError { id: id.clone(), error }),
+            Prep::Step(ops, new_snapshot) => batch.steps.push(AdminStep { id: id.clone(), enable, ops, new_snapshot }),
+        }
+    }
+    batch
+}
+
+/// Nachkontrolle: Jeder Zielwert steht jetzt wirklich so in der Registrierung.
+fn verify_ops(ops: &[RegOp], env: &Env) -> Result<(), String> {
+    for op in ops {
+        let got = env.hklm.read(&op.key, &op.name)?.and_then(|v| v.as_u32());
+        if got != op.value {
+            return Err("Windows hat die Änderung nicht übernommen.".into());
+        }
+    }
+    Ok(())
+}
+
+/// Die gesicherte Adapter-GUID von `nagle`, falls gültig.
+fn nagle_saved_adapter(store: &SnapshotStore) -> Option<Result<String, String>> {
+    let snap = store.get(NAGLE)?;
+    let adapter = snap.values.get(SNAP_ADAPTER).and_then(|v| v.as_ref()).and_then(RegVal::as_str);
+    match adapter {
+        Some(g) if elevate::is_braced_guid(g) => Some(Ok(g.to_string())),
+        _ => Some(Err("Die gesicherte Verbindung für „Nagle“ ist ungültig.".into())),
+    }
+}
+
+fn prepare_nagle(enable: bool, env: &Env, store: &mut SnapshotStore) -> Prep {
+    // Adapter: beim Einschalten die Hauptverbindung, beim Zurückstellen der gesicherte Adapter.
+    let guid = if enable {
+        match env.main_adapter.as_deref() {
+            Some(g) if elevate::is_braced_guid(g) => g.to_string(),
+            _ => return Prep::Fail("Keine Hauptverbindung gefunden, an der „Nagle“ eingestellt werden kann.".into()),
+        }
+    } else {
+        match nagle_saved_adapter(store) {
+            Some(Ok(g)) => g,
+            Some(Err(e)) => return Prep::Fail(e),
+            None => match env.main_adapter.as_deref() {
+                Some(g) if elevate::is_braced_guid(g) => g.to_string(),
+                _ => return Prep::Fail("Keine gesicherte Verbindung für „Nagle“ gefunden.".into()),
+            },
+        }
+    };
+    let key = interface_key(&guid);
+    let ack = match env.hklm.read(&key, elevate::VAL_TCP_ACK) {
+        Ok(v) => v.and_then(|v| v.as_u32()),
+        Err(e) => return Prep::Fail(e),
+    };
+    let nd = match env.hklm.read(&key, elevate::VAL_NO_DELAY) {
+        Ok(v) => v.and_then(|v| v.as_u32()),
+        Err(e) => return Prep::Fail(e),
+    };
+    // Zielwerte
+    let targets: Vec<(&str, Option<u32>)> = if enable {
+        vec![(elevate::VAL_TCP_ACK, Some(1)), (elevate::VAL_NO_DELAY, Some(1))]
+    } else {
+        match store.get(NAGLE) {
+            Some(snap) => vec![
+                (elevate::VAL_TCP_ACK, snap.values.get(elevate::VAL_TCP_ACK).and_then(|v| v.as_ref()).and_then(RegVal::as_u32)),
+                (elevate::VAL_NO_DELAY, snap.values.get(elevate::VAL_NO_DELAY).and_then(|v| v.as_ref()).and_then(RegVal::as_u32)),
+            ],
+            // Ohne Sicherung: Windows-Standard = beide Werte fehlen
+            None => vec![(elevate::VAL_TCP_ACK, None), (elevate::VAL_NO_DELAY, None)],
+        }
+    };
+    // Schon im Zielzustand?
+    if [ack, nd] == [targets[0].1, targets[1].1] {
+        if !enable {
+            let _ = store.remove(NAGLE);
+        }
+        return Prep::Done;
+    }
+    let mut new_snapshot = false;
+    if enable && store.get(NAGLE).is_none() {
+        let mut values = BTreeMap::new();
+        values.insert(SNAP_ADAPTER.to_string(), Some(RegVal::Str(guid.clone())));
+        values.insert(elevate::VAL_TCP_ACK.to_string(), ack.map(RegVal::Dword));
+        values.insert(elevate::VAL_NO_DELAY.to_string(), nd.map(RegVal::Dword));
+        if let Err(e) = store.insert(NAGLE, values) {
+            return Prep::Fail(e);
+        }
+        new_snapshot = true;
+    }
+    let ops = targets
+        .into_iter()
+        .map(|(name, value)| RegOp { key: key.clone(), name: name.to_string(), value })
+        .collect();
+    Prep::Step(ops, new_snapshot)
+}
+
+fn prepare_throttle(enable: bool, env: &Env, store: &mut SnapshotStore) -> Prep {
+    let current = match env.hklm.read(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE) {
+        Ok(v) => v.and_then(|v| v.as_u32()),
+        Err(e) => return Prep::Fail(e),
+    };
+    let target: Option<u32> = if enable {
+        Some(THROTTLE_ON)
+    } else {
+        match store.get(NET_THROTTLE) {
+            Some(snap) => snap.values.get(elevate::VAL_THROTTLE).and_then(|v| v.as_ref()).and_then(RegVal::as_u32),
+            None => Some(THROTTLE_DEFAULT),
+        }
+    };
+    if current == target {
+        if !enable {
+            let _ = store.remove(NET_THROTTLE);
+        }
+        return Prep::Done;
+    }
+    let mut new_snapshot = false;
+    if enable && store.get(NET_THROTTLE).is_none() {
+        let mut values = BTreeMap::new();
+        values.insert(elevate::VAL_THROTTLE.to_string(), current.map(RegVal::Dword));
+        if let Err(e) = store.insert(NET_THROTTLE, values) {
+            return Prep::Fail(e);
+        }
+        new_snapshot = true;
+    }
+    let ops = vec![RegOp { key: elevate::KEY_SYSTEM_PROFILE.to_string(), name: elevate::VAL_THROTTLE.to_string(), value: target }];
+    Prep::Step(ops, new_snapshot)
 }
 
 fn enable_reg(id: &str, slots: &[Slot], env: &Env, store: &mut SnapshotStore) -> CmdResult<()> {
@@ -533,8 +825,24 @@ mod tests {
         MOUSE_CALLS.with(|m| std::mem::take(&mut *m.borrow_mut()))
     }
 
+    use crate::elevate::MemElevator;
+
+    /// Für Nicht-Admin-Tests: kein Admin-Helfer erwartet (ruft er an, ist das ein Testfehler).
+    struct NoopElevator;
+    impl Elevator for NoopElevator {
+        fn run(&self, _task: &ElevatedTask) -> Result<(), ElevateError> {
+            panic!("Admin-Helfer wurde unerwartet aufgerufen");
+        }
+    }
+    static NOOP: NoopElevator = NoopElevator;
+
     fn env<'a>(reg: &'a MemRegistry, power: &'a MemPowerCfg) -> Env<'a> {
-        Env { reg, power, apply_mouse: record_mouse }
+        Env { reg, hklm: reg, power, elevator: &NOOP, apply_mouse: record_mouse, main_adapter: None }
+    }
+
+    /// Für Admin-Tests: eine (gemeinsame) Registrierung, ein Test-Helfer, Hauptverbindung.
+    fn env_admin<'a>(reg: &'a MemRegistry, power: &'a MemPowerCfg, el: &'a MemElevator<'a>, main: Option<&str>) -> Env<'a> {
+        Env { reg, hklm: reg, power, elevator: el, apply_mouse: record_mouse, main_adapter: main.map(String::from) }
     }
 
     fn default_power() -> MemPowerCfg {
@@ -550,12 +858,23 @@ mod tests {
     fn catalog_matches_contract() {
         let list = unsupported_list();
         assert_eq!(list.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), IDS);
+        assert_eq!(list.len(), 6);
         for t in &list {
-            assert!(["power", "windows", "input"].contains(&t.category.as_str()), "{}", t.category);
+            assert!(["power", "windows", "input", "network"].contains(&t.category.as_str()), "{}", t.category);
             assert!(["high", "medium", "low"].contains(&t.impact.as_str()), "{}", t.impact);
             assert_eq!(t.state, "unsupported");
             assert!(!t.can_revert);
             assert!(t.detail.is_none());
+        }
+        // nagle/netThrottle: Netzwerk, Admin, Neustart
+        for id in ADMIN_IDS {
+            let t = list.iter().find(|t| t.id == id).unwrap();
+            assert_eq!(t.category, "network");
+            assert!(t.admin && t.restart, "{id}");
+        }
+        for id in [POWER_PLAN, GAME_MODE, GAME_DVR, MOUSE_ACCEL] {
+            let t = list.iter().find(|t| t.id == id).unwrap();
+            assert!(!t.admin && !t.restart, "{id}");
         }
         let report = unsupported_report(&["gameMode".into(), " gameMode ".into(), "gameDvr".into(), "".into()]);
         assert!(report.applied.is_empty());
@@ -823,7 +1142,8 @@ mod tests {
         let power = default_power();
         let mut store = SnapshotStore::in_memory();
         let e = env(&reg, &power);
-        let ids: Vec<String> = IDS.iter().map(|s| s.to_string()).collect();
+        // Nur die Nicht-Admin-Optimierungen (Admin-Optimierungen haben eigene Tests)
+        let ids: Vec<String> = [POWER_PLAN, GAME_MODE, GAME_DVR, MOUSE_ACCEL].iter().map(|s| s.to_string()).collect();
         let report = apply_many(&ids, true, &e, &mut store);
         assert_eq!(report.applied.len(), 4, "{:?}", report.failed);
         assert_eq!(store.ids().len(), 4);
@@ -844,5 +1164,163 @@ mod tests {
             assert!(!t.can_revert);
             assert_ne!(t.state, "on", "{}", t.id);
         }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Admin-Optimierungen (nagle, netThrottle)
+    // ---------------------------------------------------------------------------------------
+
+    const GUID: &str = "{4d36e972-e325-11ce-bfc1-08002be10318}";
+
+    /// Registrierung mit den Schlüsseln, die der (Test-)Helfer öffnen kann.
+    fn admin_reg() -> MemRegistry {
+        let reg = MemRegistry::default();
+        reg.add_key(&interface_key(GUID));
+        reg.add_key(elevate::KEY_SYSTEM_PROFILE);
+        reg
+    }
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn admin_tweaks_apply_and_revert_with_one_prompt() {
+        let reg = admin_reg();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let e = env_admin(&reg, &power, &el, Some(GUID));
+        let mut store = SnapshotStore::in_memory();
+        let key = interface_key(GUID);
+
+        let list = read_all(&e, &store);
+        assert_eq!(state_of(&list, NAGLE), ("off".into(), false));
+        assert_eq!(state_of(&list, NET_THROTTLE), ("off".into(), false));
+
+        // Beide einschalten → genau eine Windows-Abfrage
+        let report = apply_many(&ids(&[NAGLE, NET_THROTTLE]), true, &e, &mut store);
+        assert_eq!(el.calls.get(), 1, "eine Abfrage für beide");
+        assert_eq!(report.applied.len(), 2, "{:?}", report.failed);
+        assert!(report.failed.is_empty());
+        assert_eq!(reg.dword(&key, elevate::VAL_TCP_ACK), Some(1));
+        assert_eq!(reg.dword(&key, elevate::VAL_NO_DELAY), Some(1));
+        assert_eq!(reg.dword(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE), Some(THROTTLE_ON));
+        let list = read_all(&e, &store);
+        assert_eq!(state_of(&list, NAGLE), ("on".into(), true));
+        assert_eq!(state_of(&list, NET_THROTTLE), ("on".into(), true));
+        // Sicherung von nagle: Adapter + Originalwerte (hier: fehlten → null)
+        let snap = store.get(NAGLE).unwrap();
+        assert_eq!(snap.values[SNAP_ADAPTER], Some(RegVal::Str(GUID.into())));
+        assert_eq!(snap.values[elevate::VAL_TCP_ACK], None);
+
+        // Schon „on“ → keine Abfrage, nichts gesichert
+        el.calls.set(0);
+        let report = apply_many(&ids(&[NAGLE, NET_THROTTLE]), true, &e, &mut store);
+        assert_eq!(el.calls.get(), 0, "schon on → keine Abfrage");
+        assert_eq!(report.applied.len(), 2);
+
+        // Zurückstellen → eine Abfrage, exakte Rückstellung, Sicherungen weg
+        el.calls.set(0);
+        let report = apply_many(&ids(&[NAGLE, NET_THROTTLE]), false, &e, &mut store);
+        assert_eq!(el.calls.get(), 1);
+        assert_eq!(report.applied.len(), 2, "{:?}", report.failed);
+        assert!(!reg.has(&key, elevate::VAL_TCP_ACK), "Original fehlte → wieder weg");
+        assert!(!reg.has(&key, elevate::VAL_NO_DELAY));
+        assert!(!reg.has(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE), "Original fehlte → wieder weg");
+        assert!(store.get(NAGLE).is_none() && store.get(NET_THROTTLE).is_none());
+    }
+
+    #[test]
+    fn admin_disable_without_snapshot_uses_defaults() {
+        let reg = admin_reg();
+        reg.set(&interface_key(GUID), elevate::VAL_TCP_ACK, &RegVal::Dword(1)).unwrap();
+        reg.set(&interface_key(GUID), elevate::VAL_NO_DELAY, &RegVal::Dword(1)).unwrap();
+        reg.set(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE, &RegVal::Dword(THROTTLE_ON)).unwrap();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let e = env_admin(&reg, &power, &el, Some(GUID));
+        let mut store = SnapshotStore::in_memory();
+
+        let report = apply_many(&ids(&[NAGLE, NET_THROTTLE]), false, &e, &mut store);
+        assert_eq!(el.calls.get(), 1);
+        assert_eq!(report.applied.len(), 2, "{:?}", report.failed);
+        // nagle ohne Sicherung: Werte löschen; netThrottle ohne Sicherung: 10
+        assert!(!reg.has(&interface_key(GUID), elevate::VAL_TCP_ACK));
+        assert_eq!(reg.dword(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE), Some(THROTTLE_DEFAULT));
+    }
+
+    #[test]
+    fn decline_removes_new_snapshot_and_changes_nothing() {
+        let reg = admin_reg();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        el.decline.set(true);
+        let e = env_admin(&reg, &power, &el, Some(GUID));
+        let mut store = SnapshotStore::in_memory();
+
+        let report = apply_many(&ids(&[NAGLE, NET_THROTTLE]), true, &e, &mut store);
+        assert_eq!(el.calls.get(), 1);
+        assert!(report.applied.is_empty());
+        assert_eq!(report.failed.len(), 2);
+        assert!(report.failed.iter().all(|f| f.error == elevate::MSG_DECLINED), "{:?}", report.failed);
+        assert!(store.get(NAGLE).is_none() && store.get(NET_THROTTLE).is_none(), "neue Sicherungen entfernt");
+        assert!(!reg.has(&interface_key(GUID), elevate::VAL_TCP_ACK), "nichts geändert");
+        assert!(!reg.has(elevate::KEY_SYSTEM_PROFILE, elevate::VAL_THROTTLE));
+    }
+
+    #[test]
+    fn verify_failure_is_reported_and_snapshot_kept() {
+        let reg = admin_reg();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        // Meldet Erfolg, ändert aber nichts → Nachkontrolle muss das merken
+        el.ignore.set(true);
+        let e = env_admin(&reg, &power, &el, Some(GUID));
+        let mut store = SnapshotStore::in_memory();
+
+        let report = apply_many(&ids(&[NET_THROTTLE]), true, &e, &mut store);
+        assert_eq!(el.calls.get(), 1);
+        assert!(report.applied.is_empty());
+        assert_eq!(report.failed.len(), 1);
+        assert!(report.failed[0].error.contains("nicht übernommen"), "{:?}", report.failed);
+    }
+
+    #[test]
+    fn nagle_without_main_adapter_fails_without_prompt() {
+        let reg = admin_reg();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let e = env_admin(&reg, &power, &el, None);
+        let mut store = SnapshotStore::in_memory();
+        let report = apply_many(&ids(&[NAGLE]), true, &e, &mut store);
+        assert_eq!(el.calls.get(), 0, "ohne Hauptverbindung keine Abfrage");
+        assert_eq!(report.failed.len(), 1);
+        assert!(report.failed[0].error.contains("Hauptverbindung"));
+        // Zustand ohne Hauptverbindung: unbekannt
+        assert_eq!(state_of(&read_all(&e, &store), NAGLE), ("unknown".into(), false));
+    }
+
+    #[test]
+    fn revert_all_mixes_ids_with_one_prompt() {
+        let reg = admin_reg();
+        let power = default_power();
+        let el = MemElevator::new(&reg);
+        let e = env_admin(&reg, &power, &el, Some(GUID));
+        let mut store = SnapshotStore::in_memory();
+        mouse_calls();
+
+        // gameMode (ohne Admin) + nagle + netThrottle (Admin) einschalten
+        let report = apply_many(&ids(&[GAME_MODE, NAGLE, NET_THROTTLE]), true, &e, &mut store);
+        assert_eq!(el.calls.get(), 1, "eine Abfrage für beide Admin-Optimierungen");
+        assert_eq!(report.applied.len(), 3, "{:?}", report.failed);
+        assert_eq!(store.ids().len(), 3);
+
+        el.calls.set(0);
+        let report = revert_all(&e, &mut store);
+        assert_eq!(el.calls.get(), 1, "Admin gesammelt mit einer Abfrage");
+        assert_eq!(report.applied.len(), 3, "{:?}", report.failed);
+        assert!(store.ids().is_empty());
+        assert!(!reg.has(KEY_GAMEBAR, "AutoGameModeEnabled"));
+        assert!(!reg.has(&interface_key(GUID), elevate::VAL_TCP_ACK));
     }
 }

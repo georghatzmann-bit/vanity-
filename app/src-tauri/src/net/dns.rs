@@ -1,27 +1,38 @@
 //! DNS: eigene UDP-Anfragen (ohne zusätzliche Bibliothek) für den Vergleich öffentlicher
-//! DNS-Dienste, Rückwärts-Auflösung für die Routen-Analyse und das Lesen des aktuellen Resolvers.
+//! DNS-Dienste, Rückwärts-Auflösung für die Routen-Analyse, das Lesen des aktuellen Resolvers und
+//! die Sicherung (kv `net.dnsBackup`) für „DNS automatisch einstellen“.
 //!
-//! Pulsar ändert den DNS nicht selbst – `net_dns_apply`/`net_dns_restore` liefern nur den Hinweis.
+//! Das eigentliche Setzen des DNS läuft über den Admin-Helfer (`crate::elevate`), damit die
+//! einmalige Windows-Abfrage reicht. Alle Prüfungen (Live-Test, Nachkontrolle) laufen ohne
+//! Adminrechte.
 
+use std::collections::BTreeMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
 use futures_util::future::join_all;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::ping;
 use super::types::{DnsProgress, DnsResult};
 
 /// Zeitlimit je DNS-Anfrage.
 pub const QUERY_TIMEOUT: Duration = Duration::from_millis(1000);
+/// Zeitlimit der Live-Prüfung vor dem Einstellen eines DNS-Dienstes.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub const LIVE_TIMEOUT: Duration = Duration::from_millis(1500);
 /// Zeitbudget für eine Rückwärts-Auflösung (Routen-Analyse, nur Windows).
 #[cfg_attr(not(windows), allow(dead_code))]
 pub const REVERSE_BUDGET: Duration = Duration::from_millis(300);
 pub const DEFAULT_ROUNDS: u32 = 3;
 pub const MAX_ROUNDS: u32 = 10;
-/// Hinweis, den `net_dns_apply`/`net_dns_restore` liefern.
-pub const NOT_CHANGED_BY_PULSAR: &str =
-    "Pulsar ändert den DNS nicht selbst. Die Anleitung zeigt dir, wie es in den Windows-Einstellungen geht.";
+/// Schlüssel der DNS-Sicherung im Schlüssel/Wert-Speicher.
+pub const KV_DNS_BACKUP: &str = "net.dnsBackup";
+/// Meldung außerhalb von Windows.
+#[cfg_attr(windows, allow(dead_code))]
+pub const NOT_WINDOWS: &str = "Nur unter Windows verfügbar.";
 
 pub const QTYPE_A: u16 = 1;
 pub const QTYPE_PTR: u16 = 12;
@@ -30,20 +41,90 @@ const QCLASS_IN: u16 = 1;
 /// Domains, die im Vergleich nachgeschlagen werden (Spiele-Dienste, die jeder Spieler braucht).
 pub const DOMAINS: [&str; 5] = ["steampowered.com", "epicgames.com", "riotgames.com", "cloudflare.com", "discord.com"];
 
-/// Öffentliche DNS-Dienste: (id, Name, primär, sekundär)
-pub const PROVIDERS: [(&str, &str, &str, Option<&str>); 7] = [
-    ("cloudflare", "Cloudflare", "1.1.1.1", Some("1.0.0.1")),
-    ("google", "Google", "8.8.8.8", Some("8.8.4.4")),
-    ("quad9", "Quad9", "9.9.9.9", Some("149.112.112.112")),
-    ("opendns", "OpenDNS", "208.67.222.222", Some("208.67.220.220")),
-    ("adguard", "AdGuard", "94.140.14.14", Some("94.140.15.15")),
-    ("dns0", "DNS0.eu", "193.110.81.0", Some("185.253.5.0")),
-    ("mullvad", "Mullvad", "194.242.2.2", None),
+/// Ein öffentlicher DNS-Dienst.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub struct Provider {
+    pub id: &'static str,
+    pub name: &'static str,
+    /// IPv4 primär und sekundär
+    pub v4: (&'static str, Option<&'static str>),
+    /// IPv6-Adressen
+    pub v6: &'static [&'static str],
+    /// Darf „Automatisch optimieren“ diesen Dienst wählen? (Die Auswahl trifft die Oberfläche.)
+    #[allow(dead_code)]
+    pub auto: bool,
+}
+
+/// Feste DNS-Dienste laut Vertragstabelle.
+pub const PROVIDERS: [Provider; 7] = [
+    Provider { id: "cloudflare", name: "Cloudflare", v4: ("1.1.1.1", Some("1.0.0.1")), v6: &["2606:4700:4700::1111", "2606:4700:4700::1001"], auto: true },
+    Provider { id: "google", name: "Google", v4: ("8.8.8.8", Some("8.8.4.4")), v6: &["2001:4860:4860::8888", "2001:4860:4860::8844"], auto: true },
+    Provider { id: "quad9", name: "Quad9", v4: ("9.9.9.9", Some("149.112.112.112")), v6: &["2620:fe::fe", "2620:fe::9"], auto: true },
+    Provider { id: "opendns", name: "OpenDNS", v4: ("208.67.222.222", Some("208.67.220.220")), v6: &["2620:119:35::35", "2620:119:53::53"], auto: true },
+    Provider { id: "adguard", name: "AdGuard", v4: ("94.140.14.14", Some("94.140.15.15")), v6: &["2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"], auto: false },
+    Provider { id: "dns0", name: "DNS0.eu", v4: ("193.110.81.0", Some("185.253.5.0")), v6: &["2a0f:fc80::", "2a0f:fc81::"], auto: false },
+    Provider { id: "mullvad", name: "Mullvad", v4: ("194.242.2.2", None), v6: &["2a07:e340::2"], auto: false },
 ];
+
+/// Einen Dienst anhand der ID finden.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn provider(id: &str) -> Option<&'static Provider> {
+    PROVIDERS.iter().find(|p| p.id == id)
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+impl Provider {
+    /// IPv4-Adressen (primär, dann sekundär) als Text.
+    pub fn v4_servers(&self) -> Vec<String> {
+        let mut out = vec![self.v4.0.to_string()];
+        if let Some(s) = self.v4.1 {
+            out.push(s.to_string());
+        }
+        out
+    }
+
+    /// IPv6-Adressen als Text.
+    pub fn v6_servers(&self) -> Vec<String> {
+        self.v6.iter().map(|s| s.to_string()).collect()
+    }
+}
+
+/// ID des bekannten Dienstes, dessen primäre oder sekundäre IPv4-Adresse `servers[0]` ist.
+pub fn provider_for(servers: &[String]) -> Option<String> {
+    let first: IpAddr = servers.first()?.parse().ok()?;
+    PROVIDERS.iter().find_map(|p| {
+        let matches = p.v4.0.parse::<IpAddr>().ok() == Some(first)
+            || p.v4.1.and_then(|s| s.parse::<IpAddr>().ok()) == Some(first);
+        matches.then(|| p.id.to_string())
+    })
+}
 
 /// `rounds` auf 1–10 begrenzen.
 pub fn clamp_rounds(rounds: Option<u32>) -> u32 {
     rounds.unwrap_or(DEFAULT_ROUNDS).clamp(1, MAX_ROUNDS)
+}
+
+// ---------------------------------------------------------------------------------------------
+// DNS-Server-Text lesen
+// ---------------------------------------------------------------------------------------------
+
+/// Veraltete IPv6-Platzhalter, die Windows einträgt (kein echter Resolver).
+pub const IPV6_PLACEHOLDERS: [&str; 3] = ["fec0:0:0:ffff::1", "fec0:0:0:ffff::2", "fec0:0:0:ffff::3"];
+
+/// Adressliste aus einem `NameServer`-Wert lesen (durch Komma und/oder Leerzeichen getrennt).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn parse_name_server(value: &str) -> Vec<IpAddr> {
+    value
+        .split([',', ' ', '\t'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse::<IpAddr>().ok())
+        .collect()
+}
+
+/// Ist das ein echter IPv6-Resolver (kein veralteter Platzhalter)?
+pub fn is_real_ipv6_dns(ip: &std::net::Ipv6Addr) -> bool {
+    !IPV6_PLACEHOLDERS.iter().any(|p| p.parse::<std::net::Ipv6Addr>().ok() == Some(*ip))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -287,10 +368,10 @@ pub struct Candidate {
 pub fn candidates(current: &[IpAddr]) -> Vec<Candidate> {
     let mut out: Vec<Candidate> = PROVIDERS
         .iter()
-        .filter_map(|(id, name, primary, secondary)| {
-            let primary: IpAddr = primary.parse().ok()?;
-            let current = current.iter().any(|c| c == &primary || secondary.and_then(|s| s.parse::<IpAddr>().ok()).is_some_and(|s| s == *c));
-            Some(Candidate { id: (*id).into(), name: (*name).into(), primary, secondary: secondary.map(str::to_string), current })
+        .filter_map(|p| {
+            let primary: IpAddr = p.v4.0.parse().ok()?;
+            let current = current.iter().any(|c| c == &primary || p.v4.1.and_then(|s| s.parse::<IpAddr>().ok()).is_some_and(|s| s == *c));
+            Some(Candidate { id: p.id.into(), name: p.name.into(), primary, secondary: p.v4.1.map(str::to_string), current })
         })
         .collect();
     if let Some(first) = current.first().copied() {
@@ -375,6 +456,63 @@ pub async fn benchmark(rounds: u32, current: &[IpAddr], on_progress: impl Fn(Dns
     .await;
     sort_results(&mut results);
     results
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sicherung (kv `net.dnsBackup`)
+// ---------------------------------------------------------------------------------------------
+
+/// Die gesicherten DNS-Server einer Adressfamilie. `dhcp` = es war nichts fest eingetragen.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyBackup {
+    pub dhcp: bool,
+    pub servers: Vec<String>,
+}
+
+/// Der gesicherte DNS-Zustand eines Adapters (Original vor der ersten Änderung durch Pulsar).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DnsBackup {
+    pub adapter: String,
+    pub v4: FamilyBackup,
+    pub v6: FamilyBackup,
+    pub saved_at: i64,
+}
+
+pub type DnsBackups = BTreeMap<String, DnsBackup>;
+
+/// Sicherungen aus dem gespeicherten JSON lesen; beschädigte Einträge werden übersprungen.
+pub fn parse_backups(v: &Value) -> DnsBackups {
+    let mut out = DnsBackups::new();
+    if let Some(obj) = v.as_object() {
+        for (id, entry) in obj {
+            if let Ok(b) = serde_json::from_value::<DnsBackup>(entry.clone()) {
+                out.insert(id.clone(), b);
+            }
+        }
+    }
+    out
+}
+
+/// Sicherungen als JSON; leer → `null`, damit der Schlüssel aus der Datenbank verschwindet.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn backups_to_value(map: &DnsBackups) -> Value {
+    if map.is_empty() {
+        return Value::Null;
+    }
+    serde_json::to_value(map).unwrap_or(Value::Null)
+}
+
+/// Sicherung anlegen, falls für diesen Adapter noch keine existiert (das Original zählt).
+/// Liefert `true`, wenn in diesem Aufruf eine neue angelegt wurde.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn insert_if_absent(map: &mut DnsBackups, adapter_id: &str, backup: DnsBackup) -> bool {
+    if map.contains_key(adapter_id) {
+        return false;
+    }
+    map.insert(adapter_id.to_string(), backup);
+    true
 }
 
 #[cfg(test)]
@@ -490,6 +628,69 @@ mod tests {
         assert_eq!(v.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), vec!["a", "b", "c"]);
     }
 
+    #[test]
+    fn providers_match_contract_and_detect_by_ip() {
+        assert_eq!(PROVIDERS.len(), 7);
+        let cf = provider("cloudflare").unwrap();
+        assert_eq!(cf.v4_servers(), vec!["1.1.1.1", "1.0.0.1"]);
+        assert_eq!(cf.v6_servers(), vec!["2606:4700:4700::1111", "2606:4700:4700::1001"]);
+        assert!(cf.auto);
+        assert_eq!(provider("mullvad").unwrap().v4_servers(), vec!["194.242.2.2"]);
+        assert!(!provider("adguard").unwrap().auto && !provider("dns0").unwrap().auto && !provider("mullvad").unwrap().auto);
+        assert!(provider("gibtsnicht").is_none());
+        // Nur cloudflare, google, quad9, opendns dürfen automatisch gewählt werden
+        let autos: Vec<&str> = PROVIDERS.iter().filter(|p| p.auto).map(|p| p.id).collect();
+        assert_eq!(autos, vec!["cloudflare", "google", "quad9", "opendns"]);
+
+        // Erkennung über primäre oder sekundäre Adresse
+        assert_eq!(provider_for(&["1.1.1.1".into()]).as_deref(), Some("cloudflare"));
+        assert_eq!(provider_for(&["149.112.112.112".into(), "x".into()]).as_deref(), Some("quad9"));
+        assert_eq!(provider_for(&["192.168.0.1".into()]), None);
+        assert_eq!(provider_for(&[]), None);
+    }
+
+    #[test]
+    fn parse_name_server_splits_and_filters_ipv6_placeholders() {
+        assert_eq!(parse_name_server("1.1.1.1,1.0.0.1"), vec![IpAddr::from([1, 1, 1, 1]), IpAddr::from([1, 0, 0, 1])]);
+        assert_eq!(parse_name_server("8.8.8.8 8.8.4.4"), vec![IpAddr::from([8, 8, 8, 8]), IpAddr::from([8, 8, 4, 4])]);
+        assert_eq!(parse_name_server("  9.9.9.9 , , 149.112.112.112 ").len(), 2);
+        assert!(parse_name_server("").is_empty());
+        assert!(parse_name_server("kaputt, ").is_empty());
+        let v6: Vec<IpAddr> = parse_name_server("2606:4700:4700::1111");
+        assert_eq!(v6, vec!["2606:4700:4700::1111".parse::<IpAddr>().unwrap()]);
+        for p in IPV6_PLACEHOLDERS {
+            assert!(!is_real_ipv6_dns(&p.parse().unwrap()), "{p}");
+        }
+        assert!(is_real_ipv6_dns(&"2606:4700:4700::1111".parse().unwrap()));
+    }
+
+    #[test]
+    fn dns_backup_json_roundtrip_and_insert_if_absent() {
+        let mut map = DnsBackups::new();
+        let b = DnsBackup {
+            adapter: "Ethernet".into(),
+            v4: FamilyBackup { dhcp: true, servers: vec![] },
+            v6: FamilyBackup { dhcp: false, servers: vec!["2606:4700:4700::1111".into()] },
+            saved_at: 1_700_000_000_000,
+        };
+        assert!(insert_if_absent(&mut map, "{GUID}", b.clone()));
+        // Vorhandene Sicherung wird nie überschrieben
+        let other = DnsBackup { adapter: "Anders".into(), ..b.clone() };
+        assert!(!insert_if_absent(&mut map, "{GUID}", other));
+        assert_eq!(map["{GUID}"].adapter, "Ethernet");
+
+        let v = backups_to_value(&map);
+        assert_eq!(v["{GUID}"]["v4"]["dhcp"], serde_json::json!(true));
+        assert_eq!(v["{GUID}"]["v6"]["servers"][0], serde_json::json!("2606:4700:4700::1111"));
+        assert_eq!(parse_backups(&v), map);
+
+        // Beschädigte Einträge überspringen
+        let broken = serde_json::json!({ "{A}": { "adapter": "x" }, "{B}": b });
+        assert_eq!(parse_backups(&broken).keys().collect::<Vec<_>>(), vec!["{B}"]);
+        assert_eq!(backups_to_value(&DnsBackups::new()), Value::Null, "leer → Schlüssel löschen");
+        assert!(parse_backups(&Value::Null).is_empty());
+    }
+
     #[tokio::test]
     async fn query_roundtrip_against_local_fake_server() {
         let server = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -507,7 +708,7 @@ mod tests {
         });
         let (resp, ms) = query(addr, "steampowered.com", QTYPE_A, Duration::from_secs(2)).await.expect("Antwort");
         assert_eq!(resp.answers, vec![DnsRecord::A(Ipv4Addr::new(10, 0, 0, 1))]);
-        assert!(ms >= 0.0 && ms < 2000.0);
+        assert!((0.0..2000.0).contains(&ms));
     }
 
     #[tokio::test]

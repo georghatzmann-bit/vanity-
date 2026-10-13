@@ -3,7 +3,7 @@
  * Bildet die Rust-Befehle mit Beispieldaten nach. In der echten App wird es nie geladen.
  */
 import type {
-  AdapterInfo, ApplyReport, BoostProfile, BoostState, DnsConfig, DnsResult, Game, GameImages, ImageKind, LaunchConfig, MonitorUpdate, PingSample, PingStats,
+  AdapterInfo, ApplyReport, AutoReport, BoostProfile, BoostState, DnsConfig, DnsResult, Game, GameImages, ImageKind, LaunchConfig, MonitorUpdate, PingSample, PingStats,
   PingTarget, PlayStats, PowerPlan, Region, RegionPing, ScannedEntry, Session, SessionReport, SpeedProgress, SpeedResult, TraceHop, TraceResult, Tweak, WifiInfo,
 } from "./types";
 import { DEMO_ART } from "./demo-art";
@@ -27,6 +27,8 @@ const rand = () => {
   return (seed - 1) / 2147483646;
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** So lange „wartet“ die Demo auf die Windows-Abfrage (UAC) */
+const UAC_MS = 800;
 
 // ---------------------------------------------------------------------------------------------
 // Spiele
@@ -341,26 +343,69 @@ async function traceroute(host: string): Promise<TraceResult> {
   return { target: host, address: "3.123.1.77", hops, reached: true };
 }
 
+// DNS-Dienste wie dns::PROVIDERS im Backend: id, Name, IPv4, IPv6, bekannt (ms), neu (ms)
+const DNS_PROVIDERS: { id: string; name: string; v4: string[]; v6: string[]; cached: number; uncached: number }[] = [
+  { id: "cloudflare", name: "Cloudflare", v4: ["1.1.1.1", "1.0.0.1"], v6: ["2606:4700:4700::1111", "2606:4700:4700::1001"], cached: 5, uncached: 11 },
+  { id: "google", name: "Google", v4: ["8.8.8.8", "8.8.4.4"], v6: ["2001:4860:4860::8888", "2001:4860:4860::8844"], cached: 7, uncached: 16 },
+  { id: "quad9", name: "Quad9", v4: ["9.9.9.9", "149.112.112.112"], v6: ["2620:fe::fe", "2620:fe::9"], cached: 9, uncached: 22 },
+  { id: "opendns", name: "OpenDNS", v4: ["208.67.222.222", "208.67.220.220"], v6: ["2620:119:35::35", "2620:119:53::53"], cached: 12, uncached: 29 },
+  { id: "adguard", name: "AdGuard", v4: ["94.140.14.14", "94.140.15.15"], v6: ["2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff"], cached: 10, uncached: 24 },
+  { id: "dns0", name: "DNS0.eu", v4: ["193.110.81.0", "185.253.5.0"], v6: ["2a0f:fc80::", "2a0f:fc81::"], cached: 8, uncached: 19 },
+  { id: "mullvad", name: "Mullvad", v4: ["194.242.2.2"], v6: ["2a07:e340::2"], cached: 12, uncached: 27 },
+];
+// Der Router verteilt den DNS automatisch – schnell bei Bekanntem, langsam bei Neuem (typisch für Heimrouter)
+const ROUTER_V4 = "192.168.178.1";
+const ROUTER_V6 = "fd00::3ea6:2fff:fe1d:42b1";
+const DECLINED = "Du hast die Windows-Abfrage abgelehnt – es wurde nichts geändert.";
+
+/** Demo-Zustand des DNS: eingestellter Dienst (null = automatisch vom Router) und ob Pulsar eine Sicherung hat */
+const dnsState: { provider: string | null; backup: boolean } = { provider: null, backup: false };
+
+/** Schalter für Tests in der Demo (im Browser setzen): __pulsarDeclineUac = „Nein“ auf die Windows-Abfrage, __pulsarDnsReadOnly = DNS nicht änderbar */
+const demoFlag = (name: "__pulsarDeclineUac" | "__pulsarDnsReadOnly") => typeof window !== "undefined" && (window as unknown as Record<string, unknown>)[name] === true;
+const uacDeclined = () => demoFlag("__pulsarDeclineUac");
+
+function dnsConfig(): DnsConfig {
+  const p = DNS_PROVIDERS.find((x) => x.id === dnsState.provider);
+  return {
+    adapterId: adapters[0].id,
+    adapter: adapters[0].name,
+    servers: p ? p.v4 : [ROUTER_V4],
+    ipv6Servers: p ? p.v6 : [ROUTER_V6],
+    dhcp: !p,
+    provider: p?.id ?? null,
+    changedByPulsar: dnsState.backup,
+    canChange: !demoFlag("__pulsarDnsReadOnly"),
+  };
+}
+
+/** Wie net_dns_apply: Live-Prüfung, Sicherung, eintragen. Wirft bei Fehlern (deutscher Satz). */
+function dnsSet(provider: string) {
+  const p = DNS_PROVIDERS.find((x) => x.id === provider);
+  if (!p) throw new Error(`Unbekannter DNS-Dienst: „${provider}“.`);
+  // Mullvad antwortet meist nur verschlüsselt – die Live-Prüfung schlägt dann fehl
+  if (demoFlag("__pulsarDnsReadOnly")) throw new Error("Dafür braucht es Windows 10 Version 2004 oder neuer.");
+  if (p.id === "mullvad") throw new Error(`${p.name} antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.`);
+  if (uacDeclined()) throw new Error(DECLINED);
+  dnsState.backup = true;
+  dnsState.provider = p.id;
+}
+
 async function dnsBenchmark(rounds: number): Promise<DnsResult[]> {
-  const providers: [string, string, string, string | null, number, number][] = [
-    ["cloudflare", "Cloudflare", "1.1.1.1", "1.0.0.1", 8, 19],
-    ["google", "Google", "8.8.8.8", "8.8.4.4", 10, 24],
-    ["quad9", "Quad9", "9.9.9.9", "149.112.112.112", 12, 31],
-    ["opendns", "OpenDNS", "208.67.222.222", "208.67.220.220", 16, 38],
-    ["adguard", "AdGuard", "94.140.14.14", "94.140.15.15", 14, 33],
-    ["dns0", "DNS0.eu", "193.110.81.0", "185.253.5.0", 11, 27],
-    ["mullvad", "Mullvad", "194.242.2.2", null, 15, 36],
-    ["current", "Router (192.168.178.1)", "192.168.178.1", null, 4, 44],
-  ];
+  const current = dnsState.provider;
+  const rows: (Omit<DnsResult, "cachedMs" | "uncachedMs" | "failed"> & { cached: number; uncached: number })[] = DNS_PROVIDERS.map((p) => ({ id: p.id, name: p.name, primary: p.v4[0], secondary: p.v4[1] ?? null, cached: p.cached, uncached: p.uncached, current: p.id === current }));
+  // Kein bekannter Dienst eingestellt → der Router ist ein eigener Eintrag „current“
+  if (!current) rows.push({ id: "current", name: `Router (${ROUTER_V4})`, primary: ROUTER_V4, secondary: null, cached: 3, uncached: 43, current: true });
   const out: DnsResult[] = [];
-  for (let i = 0; i < providers.length; i++) {
+  for (let i = 0; i < rows.length; i++) {
     await sleep(260);
-    const [id, name, primary, secondary, c, u] = providers[i];
-    out.push({ id, name, primary, secondary, cachedMs: c + rand() * 3, uncachedMs: u + rand() * 8, failed: id === "mullvad" ? 1 : 0, current: id === "current" });
-    emit("net://dns", { done: i + 1, total: providers.length });
+    const { cached, uncached, ...row } = rows[i];
+    const failed = row.id === "mullvad" ? 1 : 0;
+    out.push({ ...row, cachedMs: cached + rand() * 1.5, uncachedMs: uncached + rand() * 3, failed });
+    emit("net://dns", { done: i + 1, total: rows.length });
     void rounds;
   }
-  return out.sort((a, b) => (a.uncachedMs ?? 999) - (b.uncachedMs ?? 999));
+  return out.sort((a, b) => (a.uncachedMs ?? 999) - (b.uncachedMs ?? 999) || (a.cachedMs ?? 999) - (b.cachedMs ?? 999));
 }
 
 let speedCancel = false;
@@ -403,11 +448,41 @@ const wifi: WifiInfo = { ssid: "FRITZ!Box 7590 XK", signal: 86, rssi: -51, band:
 // Optimieren & Boost
 // ---------------------------------------------------------------------------------------------
 
-const tweakState: Record<string, "on" | "off"> = { powerPlan: "off", gameMode: "on", gameDvr: "off", mouseAccel: "off" };
+const tweakState: Record<string, "on" | "off"> = { powerPlan: "off", gameMode: "on", gameDvr: "off", mouseAccel: "off", nagle: "off", netThrottle: "off" };
 const snapshots = new Set<string>();
+// Kategorie, Wirkung, Windows fragt nach (admin), wirkt erst nach Neustart – wie die Tabelle in docs/API.md
+const TWEAK_META: Record<string, [Tweak["category"], Tweak["impact"], boolean, boolean]> = {
+  powerPlan: ["power", "medium", false, false],
+  gameMode: ["windows", "low", false, false],
+  gameDvr: ["windows", "medium", false, false],
+  mouseAccel: ["input", "medium", false, false],
+  nagle: ["network", "low", true, true],
+  netThrottle: ["network", "low", true, true],
+};
+const isAdminTweak = (id: string) => TWEAK_META[id]?.[2] === true;
+function tweakDetail(id: string): string | null {
+  if (id === "powerPlan") return tweakState[id] === "on" ? "Höchstleistung" : "Ausbalanciert";
+  if (id === "nagle") return adapters[0].name;
+  return null;
+}
 function tweaks(): Tweak[] {
-  const meta: Record<string, [Tweak["category"], Tweak["impact"]]> = { powerPlan: ["power", "medium"], gameMode: ["windows", "low"], gameDvr: ["windows", "medium"], mouseAccel: ["input", "medium"] };
-  return Object.entries(meta).map(([id, [category, impact]]) => ({ id: id as Tweak["id"], category, impact, state: tweakState[id], detail: id === "powerPlan" ? (tweakState[id] === "on" ? "Höchstleistung" : "Ausbalanciert") : null, canRevert: snapshots.has(id) }));
+  return Object.entries(TWEAK_META).map(([id, [category, impact, admin, restart]]) => ({ id: id as Tweak["id"], category, impact, state: tweakState[id], detail: tweakDetail(id), canRevert: snapshots.has(id), admin, restart }));
+}
+
+/** Optimierungen ein- oder zurückstellen wie opt_apply (Admin-IDs gesammelt mit einer Windows-Abfrage) */
+function applyTweaks(ids: string[], enable: boolean): ApplyReport {
+  const known = ids.filter((id) => id in tweakState);
+  const declined = uacDeclined() && known.some(isAdminTweak);
+  const failed = declined ? known.filter(isAdminTweak).map((id) => ({ id, error: DECLINED })) : [];
+  const applied: string[] = [];
+  for (const id of known) {
+    if (declined && isAdminTweak(id)) continue;
+    if (enable) snapshots.add(id);
+    else snapshots.delete(id);
+    tweakState[id] = enable ? "on" : "off";
+    applied.push(id);
+  }
+  return { applied, failed };
 }
 let plans: PowerPlan[] = [
   { guid: "381b4222-f694-41f0-9685-ff5bb260df2e", name: "Ausbalanciert", active: true },
@@ -555,12 +630,61 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
     case "net_dns_benchmark":
       return r(await dnsBenchmark(Number(a.rounds ?? 5)));
     case "net_dns_current":
-      return r({ adapterId: adapters[0].id, adapter: adapters[0].name, servers: adapters[0].dns, dhcp: true, changedByPulsar: false } satisfies DnsConfig);
+      return r(dnsConfig());
     case "net_dns_apply":
+      await sleep(UAC_MS);
+      dnsSet(String(a.provider));
+      return r(dnsConfig());
     case "net_dns_restore":
-      throw new Error("Pulsar ändert den DNS nicht selbst. Die Anleitung zeigt dir, wie es in den Windows-Einstellungen geht.");
+      await sleep(UAC_MS);
+      if (!dnsState.backup) throw new Error("Pulsar hat den DNS nicht geändert – es gibt nichts zurückzustellen.");
+      if (uacDeclined()) throw new Error(DECLINED);
+      dnsState.provider = null;
+      dnsState.backup = false;
+      return r(dnsConfig());
+    case "net_auto_optimize": {
+      await sleep(UAC_MS);
+      const provider = (a.provider as string | null | undefined) ?? null;
+      const ids = ((a.tweaks as string[] | undefined) ?? []).filter((id) => id in tweakState);
+      const before = dnsState.provider;
+      let dnsError: string | null = null;
+      if (provider) {
+        try {
+          dnsSet(provider);
+        } catch (e) {
+          // Wie das Backend: bei abgelehnter Windows-Abfrage steht nur `declined`, kein DNS-Fehler
+          const msg = e instanceof Error ? e.message : String(e);
+          dnsError = msg === DECLINED ? null : msg;
+        }
+      }
+      const rep = applyTweaks(ids, true);
+      const declined = uacDeclined() && (!!provider || ids.some(isAdminTweak));
+      return r({
+        dns: dnsConfig(),
+        dnsChanged: dnsState.provider !== before,
+        dnsError,
+        applied: rep.applied,
+        failed: rep.failed,
+        declined,
+        restart: rep.applied.some((id) => TWEAK_META[id]?.[3]),
+      } satisfies AutoReport);
+    }
+    case "net_auto_restore": {
+      const netIds = ["nagle", "netThrottle"].filter((id) => snapshots.has(id));
+      const todo = dnsState.backup || netIds.length > 0;
+      if (todo) await sleep(UAC_MS);
+      if (todo && uacDeclined()) {
+        return r({ dns: dnsConfig(), dnsChanged: false, dnsError: null, applied: [], failed: netIds.map((id) => ({ id, error: DECLINED })), declined: true, restart: false } satisfies AutoReport);
+      }
+      const dnsChanged = dnsState.backup;
+      dnsState.provider = null;
+      dnsState.backup = false;
+      const rep = applyTweaks(netIds, false);
+      return r({ dns: dnsConfig(), dnsChanged, dnsError: null, applied: rep.applied, failed: rep.failed, declined: false, restart: rep.applied.length > 0 } satisfies AutoReport);
+    }
     case "net_adapters":
-      return r(adapters);
+      // Die Hauptverbindung zeigt den gerade eingestellten DNS
+      return r(adapters.map((x) => (x.primary ? { ...x, dns: dnsConfig().servers } : x)));
     case "net_wifi":
       return r(wifi);
     case "net_speedtest":
@@ -574,18 +698,15 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       return r(tweaks());
     case "opt_apply": {
       const ids = a.ids as string[];
-      for (const id of ids) {
-        if (!(id in tweakState)) continue;
-        if (a.enable) snapshots.add(id);
-        else snapshots.delete(id);
-        tweakState[id] = a.enable ? "on" : "off";
-      }
-      return r({ applied: ids.filter((i) => i in tweakState), failed: [] } satisfies ApplyReport);
+      if (ids.some(isAdminTweak)) await sleep(UAC_MS);
+      return r(applyTweaks(ids, Boolean(a.enable)) satisfies ApplyReport);
     }
-    case "opt_revert_all":
-      for (const id of snapshots) tweakState[id] = "off";
-      snapshots.clear();
-      return r({ applied: [], failed: [] } satisfies ApplyReport);
+    case "opt_revert_all": {
+      const ids = [...snapshots];
+      if (ids.some(isAdminTweak)) await sleep(UAC_MS);
+      const rep = applyTweaks(ids, false);
+      return r({ applied: [], failed: rep.failed } satisfies ApplyReport);
+    }
     case "opt_power_plans":
       return r(plans);
     case "opt_power_set":

@@ -1,5 +1,9 @@
 //! Tests des Setup-Kerns (laufen unter Linux ohne Tauri-Laufzeit).
 
+// `system_lock` hält eine normale Sperre über `await` hinweg – mit Absicht: Jeder Test hat seine eigene
+// Laufzeit, die Sperre sorgt nur dafür, dass bestimmte Tests nacheinander statt gleichzeitig laufen.
+#![allow(clippy::await_holding_lock)]
+
 mod server;
 
 use crate::args::{decode_preset, encode_preset, CliArgs};
@@ -11,7 +15,7 @@ use crate::install::{self, InstallPlan};
 use crate::manifest::{fetch_manifest, resolve_manifest_source, Location, ManifestOrigin};
 use crate::selftest::{run_selftest, SelftestConfig};
 use crate::types::{InstallOptions, InstallRecord, Manifest, ManifestFile, Progress, SetupMode, UninstallProgress};
-use crate::uninstall::{run_uninstall, UninstallPlan};
+use crate::uninstall::{run_revert, run_uninstall, wait_or_kill, RevertResult, UninstallOutcome, UninstallPlan, Waitable, REVERT_ARGS};
 use server::{closed_url, TestServer};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -643,6 +647,7 @@ async fn install_and_uninstall_files() {
         integrate: true,
         self_exe: None,
         app_exe_name: APP.into(),
+        revert_timeout: Duration::from_secs(5),
     };
     let steps = Arc::new(Mutex::new(Vec::<UninstallProgress>::new()));
     let sink = steps.clone();
@@ -661,6 +666,8 @@ async fn install_and_uninstall_files() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn uninstall_keeps_foreign_files_and_data() {
+    // Startet (vergeblich) die Test-"App" – nicht gleichzeitig mit den Skript-Tests (siehe unten).
+    let _guard = system_lock();
     let tmp = TempDir::new("uninstall-keep");
     let dir = tmp.join("Pulsar");
     std::fs::create_dir_all(dir.join(DOWNLOAD_DIR_NAME)).unwrap();
@@ -677,6 +684,7 @@ async fn uninstall_keeps_foreign_files_and_data() {
         integrate: false,
         self_exe: None,
         app_exe_name: APP.into(),
+        revert_timeout: Duration::from_secs(5),
     };
     let outcome = run_uninstall(&plan, &|_| {}).unwrap();
     assert!(!outcome.dir_removed);
@@ -685,6 +693,156 @@ async fn uninstall_keeps_foreign_files_and_data() {
     }
     assert!(dir.join("my-notes.txt").exists());
     assert!(data_dir.exists());
+    // Die Test-"App" ist kein Programm: Zurückstellen schlägt fehl, die Deinstallation läuft trotzdem durch.
+    assert!(matches!(outcome.revert, RevertResult::Failed(_)), "{:?}", outcome.revert);
+    assert!(outcome.warnings.iter().any(|w| w.starts_with("Einstellungen zurückstellen")), "{:?}", outcome.warnings);
+}
+
+// ------------------------------------------------------------------ Deinstallieren: Windows-Einstellungen zurückstellen
+
+/// Attrappe für `wait_or_kill`: endet nach `exit_after` Abfragen (oder nie) bzw. meldet einen Fehler.
+struct FakeProcess {
+    polls: usize,
+    exit_after: Option<usize>,
+    code: Option<i32>,
+    fail: bool,
+    killed: bool,
+}
+
+impl FakeProcess {
+    fn new(exit_after: Option<usize>, code: Option<i32>) -> Self {
+        FakeProcess { polls: 0, exit_after, code, fail: false, killed: false }
+    }
+}
+
+impl Waitable for FakeProcess {
+    fn try_wait_code(&mut self) -> std::io::Result<Option<Option<i32>>> {
+        if self.fail {
+            return Err(std::io::Error::other("kaputt"));
+        }
+        self.polls += 1;
+        Ok(self.exit_after.filter(|n| self.polls > *n).map(|_| self.code))
+    }
+    fn kill_now(&mut self) {
+        self.killed = true;
+    }
+}
+
+#[test]
+fn revert_wait_logic() {
+    let poll = Duration::from_millis(2);
+    // Endet rechtzeitig: Exit-Code durchreichen, nicht beenden.
+    let mut p = FakeProcess::new(Some(3), Some(0));
+    assert_eq!(wait_or_kill(&mut p, Duration::from_secs(5), poll), RevertResult::Exited(Some(0)));
+    assert_eq!(p.polls, 4);
+    assert!(!p.killed);
+    let mut p = FakeProcess::new(Some(0), Some(1));
+    assert_eq!(wait_or_kill(&mut p, Duration::from_secs(5), poll), RevertResult::Exited(Some(1)));
+    // Endet nie: nach dem Zeitlimit beenden.
+    let mut p = FakeProcess::new(None, None);
+    let start = std::time::Instant::now();
+    assert_eq!(wait_or_kill(&mut p, Duration::from_millis(60), poll), RevertResult::TimedOut);
+    assert!(p.killed && p.polls >= 2);
+    assert!(start.elapsed() >= Duration::from_millis(60) && start.elapsed() < Duration::from_secs(5));
+    // Fehler beim Abfragen: beenden und melden.
+    let mut p = FakeProcess::new(None, None);
+    p.fail = true;
+    assert!(matches!(wait_or_kill(&mut p, Duration::from_secs(5), poll), RevertResult::Failed(e) if e.contains("kaputt")));
+    assert!(p.killed);
+}
+
+#[test]
+fn revert_result_and_args() {
+    assert_eq!(REVERT_ARGS, ["--revert-all"]);
+    assert_eq!(crate::uninstall::REVERT_TIMEOUT, Duration::from_secs(120));
+    assert_eq!(UninstallPlan::new(PathBuf::from("x"), true).revert_timeout, Duration::from_secs(120));
+    assert!(RevertResult::NoApp.is_ok() && RevertResult::Exited(Some(0)).is_ok());
+    for bad in [RevertResult::Exited(Some(1)), RevertResult::Exited(None), RevertResult::TimedOut, RevertResult::Failed("x".into())] {
+        assert!(!bad.is_ok(), "{bad:?}");
+        assert!(!bad.describe().is_empty());
+    }
+    assert!(RevertResult::Exited(Some(1)).describe().contains("übrig"));
+    // Ohne App-Datei wird nichts gestartet.
+    let tmp = TempDir::new("revert-none");
+    assert_eq!(run_revert(&tmp.join(APP), Duration::from_secs(1)), RevertResult::NoApp);
+    assert_eq!(UninstallOutcome::default().revert, RevertResult::NoApp);
+}
+
+/// Legt eine ausführbare Test-"App" (Shell-Skript) an.
+#[cfg(unix)]
+fn write_fake_app(path: &Path, body: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[cfg(unix)]
+fn fake_install(tmp: &TempDir, body: &str) -> (PathBuf, UninstallPlan) {
+    let dir = tmp.join("Pulsar");
+    std::fs::create_dir_all(&dir).unwrap();
+    write_fake_app(&dir.join(APP), body);
+    std::fs::write(dir.join(INSTALL_INFO_NAME), b"{}").unwrap();
+    let data = tmp.join("roaming/com.pulsar.booster");
+    std::fs::create_dir_all(&data).unwrap();
+    let plan = UninstallPlan {
+        dir: dir.clone(),
+        keep_data: false,
+        data_dirs: vec![data],
+        integrate: false,
+        self_exe: None,
+        app_exe_name: APP.into(),
+        revert_timeout: Duration::from_secs(20),
+    };
+    (dir, plan)
+}
+
+/// Mit einer echten (Skript-)App: `--revert-all` läuft vor dem Löschen, Fehler und Hänger brechen nichts ab.
+/// Alles in einem Test und unter `system_lock`, damit kein anderer Test gleichzeitig Prozesse startet
+/// (sonst kann Linux das gerade geschriebene Skript kurz als „Text file busy“ sperren).
+#[cfg(unix)]
+#[test]
+fn uninstall_runs_revert_all_first() {
+    let _guard = system_lock();
+
+    // 1. Erfolgreich: richtige Argumente, App und Benutzerdaten sind zu dem Zeitpunkt noch da.
+    let tmp = TempDir::new("revert-ok");
+    let log = tmp.join("revert.txt");
+    let data = tmp.join("roaming/com.pulsar.booster");
+    let body = format!(
+        "printf '%s\\n' \"$@\" > '{log}'\n[ -d '{data}' ] && echo daten-da >> '{log}'\n[ -f \"$0\" ] && echo app-da >> '{log}'\necho 'alles zurückgestellt' >&2\nexit 0",
+        log = log.display(),
+        data = data.display()
+    );
+    let (dir, plan) = fake_install(&tmp, &body);
+    let steps = Arc::new(Mutex::new(Vec::<UninstallProgress>::new()));
+    let sink = steps.clone();
+    let outcome = run_uninstall(&plan, &move |p| sink.lock().unwrap().push(p)).unwrap();
+    assert_eq!(outcome.revert, RevertResult::Exited(Some(0)));
+    assert_eq!(std::fs::read_to_string(&log).unwrap(), "--revert-all\ndaten-da\napp-da\n");
+    assert!(outcome.warnings.is_empty(), "{:?}", outcome.warnings);
+    assert!(outcome.dir_removed && !dir.exists() && !data.exists());
+    // Kein neuer Fortschritts-Schritt: die Oberfläche kennt nur die vorhandenen Namen.
+    let names: Vec<&str> = steps.lock().unwrap().iter().map(|p| p.step).collect();
+    assert_eq!(names, ["stop", "shortcuts", "registry", "files", "files", "data", "done"]);
+
+    // 2. Etwas blieb übrig (Exit-Code 1): nur ein Hinweis, die Deinstallation läuft weiter.
+    let tmp = TempDir::new("revert-left");
+    let (dir, plan) = fake_install(&tmp, "exit 1");
+    let outcome = run_uninstall(&plan, &|_| {}).unwrap();
+    assert_eq!(outcome.revert, RevertResult::Exited(Some(1)));
+    assert!(outcome.warnings.iter().any(|w| w.contains("übrig")), "{:?}", outcome.warnings);
+    assert!(outcome.dir_removed && !dir.exists());
+
+    // 3. Hängt: nach dem Zeitlimit beenden und trotzdem alles löschen.
+    let tmp = TempDir::new("revert-hang");
+    let (dir, mut plan) = fake_install(&tmp, "exec sleep 30");
+    plan.revert_timeout = Duration::from_millis(300);
+    let start = std::time::Instant::now();
+    let outcome = run_uninstall(&plan, &|_| {}).unwrap();
+    assert_eq!(outcome.revert, RevertResult::TimedOut);
+    assert!(start.elapsed() < Duration::from_secs(10), "took {:?}", start.elapsed());
+    assert!(outcome.warnings.iter().any(|w| w.starts_with("Einstellungen zurückstellen")), "{:?}", outcome.warnings);
+    assert!(outcome.dir_removed && !dir.exists());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
