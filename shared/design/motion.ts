@@ -33,16 +33,16 @@ export const spring = {
   bouncy: { type: "spring", stiffness: 380, damping: 16, mass: 0.8 } satisfies Transition,
 };
 
-/** Seitenwechsel: Fade + Slide */
+/** Seitenwechsel: Fade + Slide (bewusst ohne Unschärfe-Filter – der kostet auf großen Seiten zu viel Leistung) */
 export const pageVariants: Variants = {
-  initial: { opacity: 0, y: 18, filter: "blur(6px)" },
+  initial: { opacity: 0, y: 18, scale: 0.995 },
   enter: {
     opacity: 1,
     y: 0,
-    filter: "blur(0px)",
+    scale: 1,
     transition: { ...spring.smooth, opacity: { duration: duration.slow, ease: ease.out } },
   },
-  exit: { opacity: 0, y: -10, filter: "blur(4px)", transition: { duration: duration.base, ease: ease.inOut } },
+  exit: { opacity: 0, y: -10, transition: { duration: duration.base, ease: ease.inOut } },
 };
 
 /** Container, dessen Kinder gestaffelt erscheinen */
