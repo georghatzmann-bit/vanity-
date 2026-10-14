@@ -1,10 +1,10 @@
-/** Raum-Scan: Räume anlegen/umbenennen/löschen, „Hier messen“, Rangliste je Band mit „Bester Platz“. */
+/** Raum-Scan: Räume anlegen/umbenennen/löschen, „Hier messen“, Platz je Band in jeder Zeile mit „Bester Platz“. */
 import { useState, type FormEvent } from "react";
 import { Check, Crown, House, Pencil, Plus, Ruler, Trash2, X } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { getLanguage, useT } from "@/lib/i18n";
 import { bandNumber } from "@/lib/wifichan";
-import { MAX_ROOMS, mixedBands, NAME_MAX, rankRooms, rateRssi, roomBand, roomRssi } from "@/lib/rooms";
+import { MAX_ROOMS, mixedBands, NAME_MAX, rankRooms, rateRssi, roomBand, roomRssi, type RankedRoom } from "@/lib/rooms";
 import type { Room, RoomRating } from "@/lib/types";
 import { confirmDialog, toast } from "@/store/ui";
 import { useWifiScan } from "@/store/wifiscan";
@@ -45,7 +45,7 @@ function NameForm({ initial, onSave, onCancel }: { initial: string; onSave: (nam
   );
 }
 
-function RoomRow({ room, best, canMeasure }: { room: Room; best: boolean; canMeasure: boolean }) {
+function RoomRow({ room, best, ranked, canMeasure }: { room: Room; best: boolean; ranked: RankedRoom | null; canMeasure: boolean }) {
   const t = useT();
   const { measuring, measureProgress, measure, renameRoom, deleteRoom } = useWifiScan();
   const [editing, setEditing] = useState(false);
@@ -73,22 +73,37 @@ function RoomRow({ room, best, canMeasure }: { room: Room; best: boolean; canMea
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="truncate text-[13px] font-semibold text-fg">{room.name}</span>
-                {best && (
+                {best ? (
                   <span className="flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">
                     <Crown className="h-3 w-3" /> {t("wifiScan.rooms.best")}
                   </span>
-                )}
+                ) : ranked ? (
+                  <span className="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-[10px] font-semibold text-muted tabular">{t("wifiScan.rooms.rank", { n: ranked.rank })}</span>
+                ) : null}
               </div>
               <div className="mt-0.5 text-[11px] text-muted tabular">
                 {rssi === null ? (
                   t("wifiScan.rooms.notMeasured")
                 ) : (
-                  <>
+                  // Meta-Werte einzeln ohne Umbruch (Zahl und Einheit bleiben zusammen)
+                  <span className="flex flex-wrap gap-x-1.5">
                     <span style={{ color: rating ? RATING_COLOR[rating] : undefined }} className="font-semibold">
                       {t(`wifiScan.rooms.rating.${rating}`)}
                     </span>
-                    {` · ${Math.round(rssi)} dBm · ${bandText(roomBand(room))} · ${t("wifiScan.rooms.samples", { n: room.samples.length })}`}
-                  </>
+                    <span className="whitespace-nowrap">· {Math.round(rssi)} dBm</span>
+                    <span className="whitespace-nowrap">· {bandText(roomBand(room))}</span>
+                    {ranked && ranked.linkMbps !== null && (
+                      <span className="whitespace-nowrap">
+                        {"· "}
+                        {/* WLAN-Verbindungsrate, nicht das Internet-Tempo */}
+                        <span title={t("wifiScan.rooms.rateTitle")} className="cursor-help underline decoration-dotted underline-offset-2">
+                          {t("wifiScan.rooms.rate", { n: Math.round(ranked.linkMbps) })}
+                        </span>
+                      </span>
+                    )}
+                    {ranked && ranked.gatewayMs !== null && <span className="whitespace-nowrap">· {t("wifiScan.rooms.router", { n: formatNumber(ranked.gatewayMs, 1) })}</span>}
+                    <span className="whitespace-nowrap">· {t("wifiScan.rooms.samples", { n: room.samples.length })}</span>
+                  </span>
                 )}
               </div>
             </div>
@@ -105,7 +120,7 @@ function RoomRow({ room, best, canMeasure }: { room: Room; best: boolean; canMea
   );
 }
 
-export function RoomScan() {
+export function RoomScan({ noService = false }: { noService?: boolean }) {
   const t = useT();
   const { rooms, wifiState, measureError, addRoom } = useWifiScan();
   const [adding, setAdding] = useState(false);
@@ -114,6 +129,8 @@ export function RoomScan() {
   const ranking = rankRooms(list);
   // „Bester Platz“ je Band – erst, wenn es dort etwas zu vergleichen gibt
   const bestIds = new Set(ranking.filter((g) => g.rooms.length > 1).map((g) => g.rooms[0].room.id));
+  // Platz je Band (bei mehreren Bändern getrennt gezählt)
+  const rankOf = new Map(ranking.flatMap((g) => g.rooms.map((r) => [r.room.id, r] as const)));
   const full = list.length >= MAX_ROOMS;
 
   const add = async (name: string) => {
@@ -121,6 +138,15 @@ export function RoomScan() {
     if (ok) setAdding(false);
     else toast({ kind: "warning", title: t("wifiScan.rooms.maxRooms") });
   };
+
+  // Ohne WLAN am PC: eine Zeile statt Liste und Knöpfen (gespeicherte Räume bleiben gespeichert)
+  if (noService) {
+    return (
+      <div className="glass flex items-center gap-2 rounded-xl px-5 py-3.5 text-[13px] text-muted" data-testid="roomscan-noservice">
+        <House className="h-4 w-4 shrink-0 text-faint" /> {t("wifiScan.rooms.noService")}
+      </div>
+    );
+  }
 
   return (
     <div className="glass rounded-xl p-5">
@@ -149,38 +175,13 @@ export function RoomScan() {
             <NameForm initial="" onSave={(n) => void add(n)} onCancel={() => setAdding(false)} />
           </div>
         )}
-        {list.length === 0 && !adding && <div className="rounded-lg bg-surface px-3 py-6 text-center text-[13px] text-muted">{t("wifiScan.rooms.empty")}</div>}
+        {list.length === 0 && !adding && <div className="rounded-lg bg-surface px-3 py-6 text-center text-[13px] text-muted">{t("wifiScan.rooms.empty", { button: t("wifiScan.rooms.measure") })}</div>}
         {list.map((r) => (
-          <RoomRow key={r.id} room={r} best={bestIds.has(r.id)} canMeasure={connected} />
+          <RoomRow key={r.id} room={r} best={bestIds.has(r.id)} ranked={rankOf.get(r.id) ?? null} canMeasure={connected} />
         ))}
       </div>
 
-      {ranking.some((g) => g.rooms.length > 0) && (
-        <div className="mt-4 border-t border-line pt-3">
-          <div className="text-[10px] font-semibold tracking-[0.1em] text-faint uppercase">{t("wifiScan.rooms.ranking")}</div>
-          <div className="mt-2 grid gap-4 xl:grid-cols-2">
-            {ranking.map((g) => (
-              <div key={String(g.band)}>
-                <div className="text-[11px] font-semibold text-fg-soft">{bandText(g.band)}</div>
-                <ol className="mt-1 space-y-1">
-                  {g.rooms.map((r) => (
-                    <li key={r.room.id} className="grid grid-cols-[52px_minmax(0,1fr)_64px_84px] items-center gap-2 text-[12px] tabular lg:grid-cols-[52px_minmax(0,1fr)_64px_84px_88px]">
-                      <span className="text-faint">{t("wifiScan.rooms.rank", { n: r.rank })}</span>
-                      <span className="truncate text-fg">{r.room.name}</span>
-                      <span className="text-right" style={{ color: RATING_COLOR[r.rating] }}>
-                        {Math.round(r.rssi)} dBm
-                      </span>
-                      <span className="text-right text-muted">{r.linkMbps !== null ? t("wifiScan.rooms.rate", { n: Math.round(r.linkMbps) }) : "–"}</span>
-                      <span className="hidden text-right text-muted lg:block">{r.gatewayMs !== null ? t("wifiScan.rooms.router", { n: formatNumber(r.gatewayMs, 1) }) : ""}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-          {mixedBands(list) && <p className="mt-2 text-[12px] text-warning">{t("wifiScan.rooms.mixedBands")}</p>}
-        </div>
-      )}
+      {mixedBands(list) && <p className="mt-2 text-[12px] text-warning">{t("wifiScan.rooms.mixedBands")}</p>}
 
       <p className="mt-4 text-[12px] leading-relaxed text-muted">
         {t("wifiScan.rooms.deviceHint")} {t("wifiScan.rooms.routerHint")}

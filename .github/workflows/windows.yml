@@ -120,7 +120,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Selbsttest fehlgeschlagen (Exit-Code $($p.ExitCode))." }
           Write-Host "Selbsttest bestanden."
 
-      - name: App-Selbsttest (Steam-Scan, Cover, Ping, Regionen, DNS, Adapter, Tweaks, Boost, Spielstart, Spielzeit, Admin-Helfer, DNS einstellen/zurückstellen, --revert-all)
+      - name: App-Selbsttest (Steam-Scan, Cover, Ping, Regionen, DNS, Adapter, Tweaks, Boost, Spielstart, Spielzeit, Admin-Helfer, DNS einstellen/zurückstellen, --revert-all, Adapter-Zähler, Teilroute, Lag-Momentaufnahme, WLAN-Netze, Getaktet, Messverlauf, Datei-Export)
         shell: pwsh
         run: |
           # Nachgebaute Steam-Installation, damit der Steam-Scan etwas finden kann

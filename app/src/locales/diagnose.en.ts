@@ -1,8 +1,8 @@
 import type { Dict } from "./de";
 
-/** English texts of the „diagnose“ namespace (Why is it lagging?) – plugged into `en.ts`. */
+/** English texts of the „diagnose“ namespace (Why the lag?) – plugged into `en.ts`. */
 export const diagnoseEn: Dict["diagnose"] = {
-  title: "Why is it lagging?",
+  title: "Why the lag?",
   intro: "A guided check of about one minute: connection, router, server, route, traffic and – if you like – a speed test. Afterwards you get an assessment with concrete steps. Pulsar changes nothing in Windows or on your router.",
   start: "Start check",
   again: "Check again",
@@ -11,7 +11,7 @@ export const diagnoseEn: Dict["diagnose"] = {
   alreadyRunning: "A check is already running.",
   cancelled: "Check cancelled – nothing was saved.",
   withSpeedtest: "with speed test",
-  speedtestUsage: "uses up to ≈ {mb} MB depending on your line",
+  speedtestUsage: "uses up to {mb} MB depending on your line",
   metered: "Metered connection – the speed test uses data volume",
   progress: "Check running · {pct} %",
   duration: "takes about 1 minute",
@@ -20,13 +20,15 @@ export const diagnoseEn: Dict["diagnose"] = {
   emptyTitle: "No check yet",
   emptyText: "Ideally start the check while it is lagging. Other devices at home simply keep running – Pulsar can't see them, but it notices when the line is full.",
   stepsTitle: "Check steps",
+  stepsDone: "Check steps · {done} of {n} done",
+  allGoodSub: "Lag that only happens now and then can slip past a single check.",
   verdict: "Assessment",
   whatToDo: "What you can do",
   more: "Further findings and notes",
   measured: "Measured",
   honest:
     "To be honest: the diagnosis is a rule-based assessment from a check of about one minute – lag that only happens at certain times can slip through (that's what the Lag detective and the ISP log are for). Pulsar can't see other devices at home. Lag can also come from the game server itself (server load, tick rate) – Pulsar can't measure that.",
-  severity: { high: "clear", medium: "noticeable", info: "note", ok: "fine" },
+  severity: { high: "clear", medium: "noticeable", info: "note", ok: "nothing found" },
   status: {
     pending: "waiting",
     running: "running …",
@@ -39,10 +41,10 @@ export const diagnoseEn: Dict["diagnose"] = {
   step: {
     connection: { name: "Connection", desc: "Primary connection, Wi-Fi and metered connection" },
     router: { name: "Router", desc: "20 pings to your router and the first hops" },
-    server: { name: "Server", desc: "50 measurements to the ping target and your favourite regions" },
+    server: { name: "Server", desc: "Ping to the target and your favourite regions (up to 60 measurements)" },
     route: { name: "Route", desc: "Where on the way the delay comes from" },
     local: { name: "Traffic", desc: "PC load and traffic before the speed test" },
-    speed: { name: "Speed test", desc: "Download, upload and ping under load (bufferbloat)" },
+    speed: { name: "Speed test", desc: "Download, upload and ping while the line is busy" },
   },
   detail: {
     wifi: "Wi-Fi {band} GHz · {rssi} dBm",
@@ -58,10 +60,11 @@ export const diagnoseEn: Dict["diagnose"] = {
     server: "{target}: avg {ms} ms · jitter {jitter} ms · {lost} of {n} lost",
     serverLive: "from the live monitor",
     route: "{n} hops",
+    routeJump: "{n} hops · rises from hop {hop} (+{ms} ms)",
     routeLive: "Hop {n} …",
     local: "CPU {cpu} % · traffic {mbps} Mbit/s",
     localNoTraffic: "CPU {cpu} % · traffic not measurable",
-    speed: "↓ {down} · ↑ {up} Mbit/s · under load +{bloat} ms",
+    speed: "↓ {down} · ↑ {up} Mbit/s · busy line +{bloat} ms",
     speedLive: "{phase} {mbps}",
     phase: { latency: "Ping …", download: "Download", upload: "Upload", done: "done" },
   },
@@ -74,17 +77,18 @@ export const diagnoseEn: Dict["diagnose"] = {
     noLink: "No network connection found.",
     offline: "Nothing gets through behind your router.",
     localTraffic: "There is traffic on this PC right now ({mbps} Mbit/s).",
-    bufferbloat: "Under load your ping rises by {ms} ms (bufferbloat).",
+    bufferbloat: "When your line is busy (downloads, streams), your ping rises by {ms} ms.",
     wifiWeak: "Your Wi-Fi signal is weak ({rssi} dBm).",
     wifiBand24: "Your router also transmits on {band} GHz here ({rssi} dBm) – there's usually more room there.",
     wifiChannel: "Your Wi-Fi channel {current} is heavily used.",
     routerSlow: "Even the link to your router is slow/unstable (avg {ms} ms, {lost} of {n} lost).",
     homeRouterJump: "The delay comes from your home network behind the first router (second router or mesh).",
+    routeUnclear: "The delay starts at hop {hop} (+{ms} ms) – this can be a second router at your place or your provider's network (e.g. mobile).",
     serverLoss: "Packets get lost on the way to the server ({lost} of {n} packets) – your home network is quiet.",
     ispPath: "The delay probably comes from your connection or your provider's network (+{ms} ms) – also possible: the line is busy because of other devices at home.",
     internetPath: "The delay comes from beyond your provider (measured to {target}, not the game's connection).",
     serverFar: "{region} answers faster ({ms} ms instead of {cur} ms).",
-    jitterHigh: "Your ping fluctuates a lot ({ms} ms), your home network is quiet.",
+    jitterHigh: "Ping to the server fluctuates a lot ({ms} ms) while your router answers steadily.",
     slowLine: "{pct} % of the maximum speed you entered ({mbps} Mbit/s).",
     cpuHigh: "Your PC is under heavy load ({pct} %) – that can feel like lag (stutter), but it isn't a network problem.",
     vpnActive: "A VPN is active. Route and server values apply to the VPN path.",
@@ -92,12 +96,16 @@ export const diagnoseEn: Dict["diagnose"] = {
     routerNoAnswer: "Your router doesn't answer pings – can't be rated.",
     wifiBand24Maybe: "If your router offers 5 GHz, try connecting to it.",
     incomplete: "Check incomplete – {list} couldn't be measured, so there's no reliable statement.",
-    allGood: "No clear cause found.",
+    allGood: "Nothing unusual showed up in this minute.",
   },
   variant: {
     wifiWeak: { signal: "Your Wi-Fi signal is weak ({signal} %)." },
     serverLoss: { noRouter: "Packets get lost on the way to the server ({lost} of {n} packets). Whether your home network is quiet couldn't be checked (router can't be rated)." },
-    jitterHigh: { noRouter: "Your ping fluctuates a lot ({ms} ms). Whether your home network is quiet couldn't be checked (router can't be rated)." },
+    jitterHigh: {
+      noticeable: "Ping to the server fluctuates noticeably ({ms} ms) while your router answers steadily.",
+      noRouter: "Ping to the server fluctuates a lot ({ms} ms). Whether your router answers steadily couldn't be checked (router can't be rated).",
+      noticeableNoRouter: "Ping to the server fluctuates noticeably ({ms} ms). Whether your router answers steadily couldn't be checked (router can't be rated).",
+    },
     slowLine: {
       wifi: "{pct} % of the maximum speed you entered ({mbps} Mbit/s) – measured over Wi-Fi, Wi-Fi is often the bottleneck.",
       busy: "{pct} % of the maximum speed you entered ({mbps} Mbit/s) – other traffic was running during the test.",
@@ -115,7 +123,7 @@ export const diagnoseEn: Dict["diagnose"] = {
     bufferbloat: {
       1: "Check whether other devices are downloading, streaming or uploading backups",
       2: "Pause downloads and streams while gaming",
-      3: "Turn on “SQM”, “Smart Queue” or QoS prioritisation in your router, if available",
+      3: "Turn on the router feature that favours games when the line is full (often called “Smart Queue”, “SQM” or “QoS/prioritisation”), if available",
       4: "Set upload limits in backup and cloud programs",
     },
     wifiWeak: { 1: "Move closer to the router or keep a clear line of sight", 2: "Place the router higher and in the open", 3: "Use a LAN cable, powerline or mesh", 4: "Find the best spot with the room scan" },
@@ -129,6 +137,10 @@ export const diagnoseEn: Dict["diagnose"] = {
       4: "Check devices with heavy load on your home network",
     },
     homeRouterJump: { 1: "Check the link between the routers or mesh nodes (cable instead of radio)", 2: "Bypass the second router for a test" },
+    routeUnclear: {
+      1: "Do you have a second router, repeater or mesh? Then check the link to it (cable instead of radio)",
+      2: "Check again at another time of day (calendar)",
+    },
     serverLoss: {
       1: "Check whether other devices are downloading, streaming or uploading backups – pause them and check again",
       2: "Repeat at another time of day (calendar)",
@@ -173,13 +185,14 @@ export const diagnoseEn: Dict["diagnose"] = {
     allGood: {
       1: "Keep the Lag detective running while gaming",
       2: "Keep an ISP log",
-      3: "Look at the game's network graph",
+      3: "Turn on the in-game network stats to see lag as numbers.",
     },
   },
   note: {
     icmpThrottle: "Some servers throttle ping replies.",
     notGuaranteed: "Ping and packet loss are usually not guaranteed by contract.",
     gamePath: "Pulsar measures to the chosen ping target – the game may take a different path.",
+    termBufferbloat: "Technical term: bufferbloat",
   },
   link: {
     wifiTab: "Open Wi-Fi tab",

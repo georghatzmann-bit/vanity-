@@ -47,6 +47,10 @@ pub struct ScopeRequest {
     pub link_start: Option<PrimaryLinkLite>,
     /// Router-Grundwert vorhanden (Router antwortet sonst)
     pub gateway_base: Option<f64>,
+    /// IPv4 des Hauptziels (dieselbe wie `SnapshotRequest.dst`, `0.0.0.0` → `None`): Die
+    /// Hauptverbindung wird für dieses Ziel ermittelt wie beim Hook – sonst wirkt ein
+    /// Split-Tunnel-VPN wie ein Verbindungswechsel.
+    pub dst: Option<Ipv4Addr>,
 }
 
 /// Messwerte der Umfangsprüfung (Eingabe der reinen Entscheidung).
@@ -165,14 +169,15 @@ async fn answers(ip: Ipv4Addr, timeout_ms: u64) -> bool {
     a.is_some() || b.is_some()
 }
 
-/// Hauptverbindung frisch ermitteln (blockierend in `spawn_blocking`, höchstens
-/// [`LINK_TIMEOUT_MS`]) und – wenn gerade niemand anderes erneuert – in `NetState.link` ablegen.
+/// Hauptverbindung für `dst` frisch ermitteln (dieselbe Ziel-IPv4 wie der Hook; blockierend in
+/// `spawn_blocking`, höchstens [`LINK_TIMEOUT_MS`]) und – wenn gerade niemand anderes erneuert – in
+/// `NetState.link` ablegen.
 /// `None` = Zeitlimit bzw. Fehler (die Hauptverbindung selbst kann fehlen: `Some(None)`).
 #[cfg_attr(not(windows), allow(dead_code))]
-async fn fresh_link(core: &Shared) -> Option<Option<PrimaryLinkLite>> {
+async fn fresh_link(core: &Shared, dst: Option<Ipv4Addr>) -> Option<Option<PrimaryLinkLite>> {
     use std::sync::atomic::Ordering;
     let now = crate::util::now_ms();
-    let job = tauri::async_runtime::spawn_blocking(move || super::link::refresh(None, now));
+    let job = tauri::async_runtime::spawn_blocking(move || super::link::refresh(dst, now));
     let found = match tokio::time::timeout(Duration::from_millis(LINK_TIMEOUT_MS), job).await {
         Ok(Ok(found)) => found,
         _ => return None,
@@ -191,7 +196,7 @@ async fn fresh_link(core: &Shared) -> Option<Option<PrimaryLinkLite>> {
 #[cfg(windows)]
 async fn gather(core: &Shared, req: &ScopeRequest) -> ScopeInput {
     let mut input = ScopeInput { link_start: req.link_start.clone(), gateway_base: req.gateway_base, ..Default::default() };
-    let Some(link_now) = fresh_link(core).await else {
+    let Some(link_now) = fresh_link(core, req.dst).await else {
         input.incomplete = true;
         return input;
     };

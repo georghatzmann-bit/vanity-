@@ -336,6 +336,12 @@ pub fn restore_db(core: &Core, file: &str) -> CmdResult<()> {
             }
         }
     })();
+    // Einstellungen des wiederhergestellten Stands sofort übernehmen (`history.record`,
+    // `lag.snapshots`, `ispLog.slowMs` wirken nicht erst beim nächsten Flush). Sperr-Reihenfolge:
+    // Datenbank ist hier schon wieder frei. Ohne lesbare Einstellungen lädt sie der nächste Flush.
+    if let Ok(settings) = core.db.with(|db| db.kv_get(crate::library::KV_SETTINGS)) {
+        core.net.recorder.lock_safe().apply_settings(&settings);
+    }
     core.tracker.resume();
     result
 }
@@ -520,6 +526,52 @@ mod tests {
         assert_eq!(core.net.recorder.lock_safe().epoch(), epoch + 1);
         // Die Wiederherstellung hält das Schreiben nicht dauerhaft an
         assert!(core.net.flush.write_lock.try_lock().is_ok());
+    }
+
+    #[test]
+    fn restore_applies_restored_settings_and_drops_drafts() {
+        use crate::net::types::SpeedResult;
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let core = crate::state::test_core(tmp.path());
+        let dir = core.paths.backups_dir(&core.active_profile_id());
+        // Stand im Backup: Verlauf aus
+        let file = core
+            .db
+            .with(|db| {
+                db.kv_set("settings", &json!({ "history": { "record": false } }))?;
+                backup_db(db, &dir)
+            })
+            .unwrap()
+            .file;
+        // Heute: Verlauf an, ein Ereignis ist vorgemerkt
+        let on = json!({ "history": { "record": true } });
+        core.db.with(|db| db.kv_set("settings", &on)).unwrap();
+        {
+            let mut rec = core.net.recorder.lock_safe();
+            rec.apply_settings(&on);
+            let speed = SpeedResult {
+                download_mbps: 100.0,
+                upload_mbps: 20.0,
+                idle_latency_ms: 12.0,
+                idle_jitter_ms: 1.0,
+                loaded_latency_down_ms: None,
+                loaded_latency_up_ms: None,
+                bufferbloat_ms: 10.0,
+                grade: "A".into(),
+                server: "FRA".into(),
+                at: 1_000,
+            };
+            rec.push_speedtest(1_000, &speed, None, None);
+            assert_eq!(rec.pending_drafts_len(), 1);
+            assert!(rec.reference_mbps(1_000).0.is_some());
+        }
+
+        restore_db(&core, &file).unwrap();
+        let rec = core.net.recorder.lock_safe();
+        assert!(!rec.settings().record, "Schalter aus dem Backup gilt sofort");
+        assert_eq!(rec.pending_drafts_len(), 0, "alte Ereignisse werden nicht in die neue Datenbank geschrieben");
+        assert_eq!(rec.reference_mbps(1_000), (None, None), "Bezug aus der alten Datenbank ist vergessen");
     }
 
     #[test]

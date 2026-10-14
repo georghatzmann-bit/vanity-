@@ -291,24 +291,14 @@ pub struct IfCounters {
     pub tx_mbps: Option<f64>,
 }
 
-/// `net_if_counters`: Zähler der Hauptverbindung (synchron und kurz, kein Netz). `None` ohne
-/// Hauptverbindung, bei Fehler und außerhalb von Windows. Ist noch keine Hauptverbindung bekannt
-/// (Monitor lief nie), wird sie einmal ermittelt (lokale Aufrufe, wenige ms).
+/// `net_if_counters`: Zähler der Hauptverbindung (synchron und kurz, kein Netz). Liest nur die
+/// gemerkte Hauptverbindung (`NetState.link`; ermittelt sie bei Bedarf vorher der Befehl über
+/// `lag::ensure_link`). `None` ohne Hauptverbindung, bei Fehler und außerhalb von Windows.
 pub fn counters(net: &NetState, now: i64) -> Option<IfCounters> {
     if !cfg!(windows) {
         return None;
     }
-    let cached = net.link.lock_safe().clone();
-    let link = match cached {
-        Some(l) if l.luid != 0 => l,
-        _ => {
-            let fresh = super::link::refresh(None, now);
-            let luid = fresh.as_ref().map(|l| l.luid);
-            *net.link.lock_safe() = fresh.clone();
-            net.load.lock_safe().set_luid(luid);
-            fresh.filter(|l| l.luid != 0)?
-        }
-    };
+    let link = net.link.lock_safe().clone().filter(|l| l.luid != 0)?;
     let read = read_if(link.luid)?;
     let (rx_mbps, tx_mbps) = net.load.lock_safe().rates(now);
     Some(IfCounters { adapter_id: link.adapter_id, adapter: link.adapter, rx_bytes: read.rx, tx_bytes: read.tx, at: now, rx_mbps, tx_mbps })

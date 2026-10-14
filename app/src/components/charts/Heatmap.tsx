@@ -13,6 +13,8 @@ export interface HeatCell {
   label: string;
   /** Hervorheben (z. B. ruhigster Block) */
   highlight?: boolean;
+  /** kleines Etikett über dem Fach (z. B. „ruhigste Zeit“ am ersten Fach des Blocks) */
+  mark?: string;
 }
 
 /** Schraffur für „wenig Daten“ (auch in der Legende benutzt) */
@@ -58,7 +60,7 @@ export function Heatmap({ cells, rowLabels, colLabels, tooltip, label, className
                     "relative h-[22px] min-w-[18px] rounded-[4px] outline-none transition-[transform,box-shadow] duration-150 focus-visible:ring-2 focus-visible:ring-accent",
                     cell.state === "empty" && "border border-dashed border-line",
                     active && "z-10 scale-[1.18] shadow-lg",
-                    cell.highlight && "ring-2 ring-fg/70",
+                    cell.highlight && "z-[5] ring-2 ring-accent",
                   )}
                   style={
                     cell.state === "full" && cell.color
@@ -68,6 +70,9 @@ export function Heatmap({ cells, rowLabels, colLabels, tooltip, label, className
                         : undefined
                   }
                 >
+                  {cell.mark && (
+                    <span className="pointer-events-none absolute bottom-[calc(100%+3px)] left-0 z-[6] rounded bg-accent px-1 text-[9.5px] leading-[14px] font-semibold whitespace-nowrap text-bg">{cell.mark}</span>
+                  )}
                   <AnimatePresence>
                     {active && (
                       <motion.div

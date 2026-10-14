@@ -5,6 +5,7 @@ import { getLanguage, useT } from "@/lib/i18n";
 import type { ChannelAdvice, WifiBand, WifiNetwork } from "@/lib/types";
 import { bandNumber, channelBars, PSC_6, type OwnNetwork } from "@/lib/wifichan";
 import { Segmented } from "@/components/ui/Segmented";
+import { usageKey } from "./ChannelAdviceCard";
 import { cn } from "@shared/lib/cn";
 
 const ALL_BANDS: WifiBand[] = ["2.4", "5", "6"];
@@ -20,7 +21,10 @@ export function ChannelBars({ networks, own, advice }: { networks: WifiNetwork[]
   const adv = advice.find((a) => a.band === band) ?? null;
   const bars = useMemo(() => (band ? channelBars(networks, band, own, adv) : []), [networks, band, own, adv]);
   if (!band) return null;
-  const max = Math.max(2, ...bars.map((b) => b.load));
+  const peak = Math.max(0, ...bars.map((b) => b.load));
+  const max = Math.max(2, peak);
+  // Wenig los: niedrigere Fläche statt viel Leerraum über winzigen Balken
+  const quiet = peak < 1;
 
   return (
     <div>
@@ -29,12 +33,13 @@ export function ChannelBars({ networks, own, advice }: { networks: WifiNetwork[]
         {bands.length > 1 && <Segmented size="sm" value={band} onChange={(b) => setPicked(b)} options={bands.map((b) => ({ value: b, label: t("wifiScan.band", { band: bandNumber(b, getLanguage()) }) }))} />}
       </div>
       {!own && <div className="mt-2 text-[11px] text-faint">{t("wifiScan.ifRouter")}</div>}
-      <div className="mt-4 flex h-[150px] items-end gap-[3px]" role="img" aria-label={t("wifiScan.occupancy")}>
+      {quiet && <div className="mt-2 text-[12px] text-fg-soft">{t("wifiScan.quietBand")}</div>}
+      <div className={cn("mt-4 flex items-end gap-[3px]", quiet ? "h-[110px]" : "h-[150px]")} role="img" aria-label={t("wifiScan.occupancy")}>
         {bars.map((b) => (
           <div
             key={b.channel}
             className="flex h-full min-w-0 flex-1 flex-col items-center justify-end"
-            title={t("wifiScan.barTitle", { ch: b.channel, load: formatNumber(b.load, 2), n: b.count })}
+            title={t("wifiScan.barTitle", { ch: b.channel, usage: t(`wifiScan.usage.${usageKey(b.load)}`), load: formatNumber(b.load, 2), n: b.count })}
           >
             {b.own && <span className="mb-1 h-1.5 w-1.5 rounded-full bg-accent" />}
             <div

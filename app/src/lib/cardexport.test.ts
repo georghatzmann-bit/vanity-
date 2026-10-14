@@ -90,18 +90,24 @@ describe("cardModel", () => {
     expect(m.stats[3].value).toBe("6");
     expect(m.stats[0].value).toMatch(/^23 ms$/);
     expect(m.target).toBe("Frankfurt (AWS) → CS2 Frankfurt (Valve)");
-    expect(m.footer).toBe("Gemessen von Pulsar zu Frankfurt (AWS) → CS2 Frankfurt (Valve) · Ursachen sind Einschätzungen");
+    expect(m.footer).toBe("Ping von Pulsar zu Frankfurt (AWS) → CS2 Frankfurt (Valve) – nicht die Spielverbindung · Ursachen sind Einschätzungen");
+    // „47 min“ statt „47m“
+    expect(m.duration).not.toMatch(/\d+m$/);
+    expect(m.limitText).toMatch(/^Ausreißer-Grenze \d+ ms$/);
+    expect(m.outageText).toBe("Aussetzer");
     expect(m.palette?.primary).toBe("#f59e0b");
     expect(m.start).toBe(T0);
     expect(m.end).toBe(T0 + 2_820_000);
   });
   it("Ursachen mit causeSummary: Gesamtzahl und „unklar“, „n von m untersucht“", () => {
     const m = cardModel(report(), timeline(), deT);
-    expect(m.causeText).toBe("4 Ausreißer untersucht – vermutlich: 2× Heimnetz/Router, 1× Anschluss/Anbieter; 1× unklar");
+    expect(m.causeText).toBe("4 Ausreißer untersucht – vermutlich: 2× Heimnetz/Router, 1× Anschluss/Anbieter, 1× unklar");
     expect(m.examinedText).toBe("4 von 6 Ausreißern untersucht");
     const en1 = cardModel(report(), timeline(), enT);
-    expect(en1.causeText).toBe("4 spikes examined – likely: 2× Home network/router, 1× Line/provider; 1× unclear");
-    expect(en1.footer).toBe("Measured by Pulsar to Frankfurt (AWS) → CS2 Frankfurt (Valve) · causes are estimates");
+    expect(en1.causeText).toBe("4 spikes examined – likely: 2× home network/router, 1× line/provider, 1× unclear");
+    expect(en1.footer).toBe("Ping measured by Pulsar to Frankfurt (AWS) → CS2 Frankfurt (Valve) – not the game connection · causes are estimates");
+    // alle untersucht → keine doppelte Zeile rechts
+    expect(cardModel(report({ spikes: 4 }), timeline(), deT).examinedText).toBe("");
     // ohne Ereignisse: „keine untersucht“
     expect(cardModel(report({ lagCauses: undefined }), null, deT).causeText).toBe("Keine Ausreißer untersucht");
   });

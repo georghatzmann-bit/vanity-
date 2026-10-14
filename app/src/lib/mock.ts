@@ -180,7 +180,13 @@ function makeReports(games: Game[], sessions: Session[]): SessionReport[] {
         const n = typeof (e.detail as { count?: unknown } | null)?.count === "number" ? Number((e.detail as { count: number }).count) : 1;
         lagCauses[e.cause] = (lagCauses[e.cause] ?? 0) + n;
       }
-      return { ...draft, loss, spikes: countSpikes(rtts), lagCauses, grade: pingGrade(st.avg, st.jitter, loss) ?? "F" };
+      // Min/Max und Ausreißer aus derselben Zeitleiste (Kopf „Min/Max“ passt zur Kurve, Ausreißer-Zahl zu
+      // den markierten Ausreißern) – Screenshots und Store-Bilder kommen aus der Demo
+      const ok = rtts.filter((v): v is number => v !== null);
+      const spikes = tl.events.filter((e) => e.kind === "spike").reduce((a, e) => a + (typeof (e.detail as { count?: unknown } | null)?.count === "number" ? Number((e.detail as { count: number }).count) : 1), 0);
+      const minPing = ok.length ? ok.reduce((a, v) => Math.min(a, v), Infinity) : draft.minPing;
+      const maxPing = ok.length ? ok.reduce((a, v) => Math.max(a, v), -Infinity) : draft.maxPing;
+      return { ...draft, minPing, maxPing, loss, spikes, lagCauses, grade: pingGrade(st.avg, st.jitter, loss) ?? "F" };
     });
 }
 

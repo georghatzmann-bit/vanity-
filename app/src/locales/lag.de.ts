@@ -46,7 +46,7 @@ export const lagDe = {
   zone: {
     lan: "Heimnetz",
     isp: "Anbieter",
-    ispCgnat: "Anbieter (CGNAT)",
+    ispCgnat: "Gemeinsame Adresse beim Anbieter (CGNAT)",
     internet: "Internet",
     target: "Ziel",
   },
@@ -93,6 +93,8 @@ export const lagDe = {
     connection: "Verbindung",
     reasons: "Warum diese Einschätzung",
     took: "Momentaufnahme in {ms} ms",
+    toWifi: "WLAN-Tab öffnen",
+    toDiagnose: "„Warum laggt es?“ öffnen",
     unknownValue: "unbekannt",
     showDetails: "Details zeigen",
     hideDetails: "Details ausblenden",

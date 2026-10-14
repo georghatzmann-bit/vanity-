@@ -33,6 +33,7 @@ export function VerdictCard({ result, fromLast }: { result: DiagnoseLast; fromLa
         <div className="min-w-0 flex-1">
           <SeverityChip severity={verdict.severity} />
           <p className="mt-1.5 font-display text-[19px] leading-snug font-semibold text-fg">{findingText(verdict, t, fmt)}</p>
+          {verdict.id === "allGood" && <p className="mt-1 text-[13px] text-muted">{t("diagnose.allGoodSub")}</p>}
           <FindingNotes finding={verdict} />
         </div>
       </div>

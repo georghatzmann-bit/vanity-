@@ -758,7 +758,7 @@ impl Drop for Busy<'_> {
 
 /// Hauptverbindung sicherstellen (Monitor lief evtl. nie): fehlt sie oder ist sie älter als 30 s,
 /// wird sie neu ermittelt (höchstens 500 ms, nie zwei gleichzeitig).
-async fn ensure_link(core: &Shared, dst: Option<Ipv4Addr>, now: i64) {
+pub(crate) async fn ensure_link(core: &Shared, dst: Option<Ipv4Addr>, now: i64) {
     let fresh = core.net.link.lock_safe().as_ref().is_some_and(|l| now >= l.at && now - l.at < link::REFRESH_EVERY_MS);
     if fresh || core.net.link_refreshing.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
         return;
@@ -835,6 +835,9 @@ pub struct LagState {
     recent: Mutex<VecDeque<LagEvent>>,
     /// Läuft gerade eine Momentaufnahme? (nie zwei gleichzeitig)
     pub running: AtomicBool,
+    /// Ist die laufende Messung eine Ruhe-Messung? (dann bekommt ein echter Ausreißer sofort
+    /// `net://lag` mit `unknown`, statt still zu verfallen)
+    pub idle_running: AtomicBool,
     /// Grundwerte je TTL, Router und Signal (aus den Ruhe-Messungen)
     pub bases: Mutex<Baselines>,
 }

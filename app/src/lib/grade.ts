@@ -25,9 +25,11 @@ export function pingGrade(avg: number | null, jitter: number | null, loss: numbe
 /** Farbe (CSS-Variable) zu einer Note */
 export function gradeColor(grade: Grade | null): string {
   switch (grade) {
+    // A+ und A unterscheidbar (frischeres bzw. gedeckteres Grün)
     case "A+":
+      return "#1fd18b";
     case "A":
-      return "var(--nv-success)";
+      return "#2fae7a";
     case "B":
       return "var(--nv-accent)";
     case "C":

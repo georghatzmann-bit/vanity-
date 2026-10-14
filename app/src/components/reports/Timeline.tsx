@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Cpu } from "lucide-react";
 import { formatTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
-import { CAUSE_ICONS, CAUSE_TONE, causeLine, fmtMbps, fmtMs, reasonText, visibleReasons, zoneText } from "@/lib/lag";
+import { CAUSE_ICONS, CAUSE_TONE, capitalizeFirst, causeLine, fmtMbps, fmtMs, reasonText, visibleReasons, zoneText } from "@/lib/lag";
 
 const ms = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? "–" : `${fmtMs(v)} ms`);
 import {
@@ -95,8 +95,8 @@ function SpikeTip({ ev, t }: { ev: NetEvent; t: Translate }) {
   return (
     <div className="mt-2 border-t border-line pt-2">
       <div className="flex items-center gap-1.5 font-semibold" style={{ color: CAUSE_TONE[cause] }}>
-        <Icon className="h-3.5 w-3.5" /> {causeLine(cause, targetKindOf(ev.targetKey), t)}
-        <span className="ml-auto rounded bg-surface-2 px-1.5 text-[10px] font-semibold tracking-wide text-muted uppercase">{t("lag.estimate")}</span>
+        <Icon className="h-3.5 w-3.5" /> {capitalizeFirst(causeLine(cause, targetKindOf(ev.targetKey), t))}
+        {cause !== "unknown" && <span className="ml-auto rounded bg-surface-2 px-1.5 text-[10px] font-semibold tracking-wide text-muted uppercase">{t("lag.estimate")}</span>}
       </div>
       {eventCount(ev) > 1 && <div className="mt-0.5 text-muted">{t("timeline.tip.count", { n: eventCount(ev) })}</div>}
       {snap ? (
@@ -258,20 +258,8 @@ export function Timeline({ timeline, fallback = [], start, end, className }: { t
   return (
     <div className={cn("glass rounded-xl p-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* oben nur die Ausreißer-Grenze – die Last-Legende steht in der Zeile „Last“ */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
-          {!data.pingOnly && (
-            <>
-              <span className="flex items-center gap-1.5">
-                <i className="h-2 w-3 rounded-sm bg-[var(--nv-accent-2)] opacity-60" /> {t("timeline.legend.cpu")}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <i className="h-0.5 w-3 bg-[var(--nv-success)]" /> {t("timeline.legend.rx")}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <i className="h-0.5 w-3 bg-[var(--nv-warning)]" /> {t("timeline.legend.tx")}
-              </span>
-            </>
-          )}
           {data.limit !== null && (
             <span className="flex items-center gap-1.5">
               <i className="h-0 w-3 border-t border-dashed border-[var(--nv-warning)]" /> {t("timeline.legend.limit", { ms: Math.round(data.limit) })}
@@ -279,15 +267,35 @@ export function Timeline({ timeline, fallback = [], start, end, className }: { t
           )}
           <span className="hidden text-faint xl:inline">{t("timeline.scrollHint")}</span>
         </div>
-        <Segmented size="sm" value={zoom} onChange={changeZoom} options={ZOOMS.map((z) => ({ value: z, label: t(`timeline.zoom.${z}`) }))} />
+        <div className="flex flex-wrap items-center gap-3">
+          {zoom !== "all" && (
+            <span className="text-[11px] text-muted tabular" data-testid="timeline-range">
+              {t("timeline.zoomRange", { from: formatElapsed(from - data.start), to: formatElapsed(Math.min(to, data.end) - data.start), total: formatElapsed(duration) })}
+            </span>
+          )}
+          <Segmented size="sm" value={zoom} onChange={changeZoom} options={ZOOMS.map((z) => ({ value: z, label: t(`timeline.zoom.${z}`) }))} />
+        </div>
       </div>
 
       <div className="mt-3 flex">
         {/* Spur-Namen */}
         <div className="relative shrink-0" style={{ width: LABEL_W, height }}>
           {tracks.map((tr) => (
-            <div key={tr.key} className="absolute right-3 left-0 flex items-center text-[11px] font-semibold tracking-[0.08em] text-muted uppercase" style={{ top: tr.top, height: tr.height }}>
-              {trackNames[tr.key]}
+            <div key={tr.key} className="absolute right-3 left-0 flex flex-col justify-center" style={{ top: tr.top, height: tr.height }}>
+              <span className="text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">{trackNames[tr.key]}</span>
+              {tr.key === "load" && (
+                <span className="mt-0.5 flex flex-col gap-px text-[10px] leading-[12px] text-muted">
+                  <span className="flex items-center gap-1">
+                    <i className="h-2 w-2.5 rounded-sm bg-[var(--nv-accent-2)] opacity-60" /> {t("timeline.legend.cpu")}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <i className="h-0.5 w-2.5 bg-[var(--nv-success)]" /> {t("timeline.legend.rx")}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <i className="h-0.5 w-2.5 bg-[var(--nv-warning)]" /> {t("timeline.legend.tx")}
+                  </span>
+                </span>
+              )}
             </div>
           ))}
         </div>

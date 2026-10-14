@@ -24,8 +24,8 @@ export interface SonarParams {
   drop: boolean;
   /** Puls betonen (Ausreißer) */
   accent: boolean;
-  /** Tonstufe 0 (dunkel) – 5 (hell), null ohne Tonhöhe */
+  /** Tonstufe 0 (dunkel) – 5 (hell) = Resonanz auf einer Harmonischen von 173,7 Hz, null ohne Tonhöhe */
   step: number | null;
-  /** Pegel 0–1 (`sonar.volume × settings.volume`, 0 bei stumm) */
+  /** Pegel 0–1 für `PulseVoice.setLevel`: `sonar.volume`, 0 bei `settings.sound = false` (die globale Lautstärke wirkt über den Master der Engine) */
   gain: number;
 }

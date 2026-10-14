@@ -23,6 +23,8 @@ describe("Dateinamen beim Export", () => {
     const to = new Date(2026, 8, 30, 23, 59).getTime();
     expect(ispLogFileName(from, to, "html")).toBe("pulsar-anbieter-protokoll-2026-09-01_bis_2026-09-30.html");
     expect(ispLogFileName(from, to, "csv")).toBe("pulsar-anbieter-protokoll-2026-09-01_bis_2026-09-30.csv");
+    expect(ispLogFileName(from, to, "html", "en")).toBe("pulsar-isp-log-2026-09-01_to_2026-09-30.html");
+    expect(ispLogFileName(from, to, "csv", "en")).toBe("pulsar-isp-log-2026-09-01_to_2026-09-30.csv");
   });
   it("Filter passen zu den erlaubten Endungen des Backends", () => {
     const allowed = ["png", "html", "csv", "md", "txt"];

@@ -124,12 +124,20 @@ fn start_snapshot(app: &AppHandle, core: &Shared, req: SnapshotRequest) {
         return;
     }
     if !try_take(&core.net.lag.running) {
+        // Läuft eine Ausreißer-Messung, gehört dieser Ausreißer dazu (der Detektor zählt ihn mit).
+        // Läuft nur eine Ruhe-Messung, käme sonst nie ein `net://lag`: sofort „unklar“ melden.
+        if let Some(check) = busy_check(&req, core.net.lag.idle_running.load(Ordering::SeqCst)) {
+            deliver(app, core, lag_event(&req, check, session_id));
+        }
         return;
     }
+    // Vor dem Start setzen (nur der Halter von `running` setzt es zurück)
+    core.net.lag.idle_running.store(req.idle, Ordering::SeqCst);
     let app = app.clone();
     let core = core.clone();
     tauri::async_runtime::spawn(async move {
         let _busy = FlagGuard(&core.net.lag.running);
+        let _idle = FlagGuard(&core.net.lag.idle_running);
         let plan = SnapshotPlan {
             dst: Some(req.dst),
             target: Some(req.target.clone()),
@@ -153,6 +161,19 @@ fn start_snapshot(app: &AppHandle, core: &Shared, req: SnapshotRequest) {
         });
         deliver(&app, &core, lag_event(&req, check, session_id));
     });
+}
+
+/// Momentaufnahme belegt: Was ist mit einem neuen Auftrag? Ein echter Ausreißer während einer
+/// Ruhe-Messung wird sofort ohne Messung gemeldet (`unknown`, ohne Gründe); sonst nichts (Ruhe-
+/// Messung entfällt, Ausreißer zählt zur laufenden Ausreißer-Messung).
+fn busy_check(req: &SnapshotRequest, idle_running: bool) -> Option<LagCheck> {
+    (!req.idle && idle_running).then(|| LagCheck {
+        at: req.at,
+        cause: LagCause::Unknown,
+        cpu_high: false,
+        reasons: Vec::new(),
+        snapshot: LagSnapshot::off(req.at),
+    })
 }
 
 /// Umfangsprüfung eines Aussetzers starten (`spawn`, Ergebnis an den Recorder; Zeitlimit →
@@ -205,5 +226,29 @@ mod tests {
         let v = serde_json::to_value(&ev).unwrap();
         assert_eq!(v["targetId"], "valve-cs2-fra");
         assert_eq!(v["cause"], "unknown");
+    }
+
+    #[test]
+    fn spike_during_idle_measurement_is_reported_as_unknown() {
+        let mut req = SnapshotRequest {
+            dst: Ipv4Addr::new(1, 2, 3, 4),
+            target: PingTarget { id: "valve-cs2-fra".into(), label: "CS2 Frankfurt".into(), host: "x".into(), port: None, method: PingMethod::Icmp },
+            rtt: 182.0,
+            baseline: 20.0,
+            limit: 60.0,
+            at: 9_000,
+            idle: false,
+        };
+        let state = lag::LagState::default();
+        assert!(try_take(&state.running), "Ruhe-Messung läuft");
+        state.idle_running.store(true, Ordering::SeqCst);
+        let check = busy_check(&req, state.idle_running.load(Ordering::SeqCst)).expect("Ausreißer wird gemeldet");
+        assert_eq!((check.at, check.cause, check.cpu_high), (9_000, LagCause::Unknown, false));
+        assert!(check.reasons.is_empty() && check.snapshot.hops.is_empty() && check.snapshot.took_ms == 0);
+        // Laufende Ausreißer-Messung: zusammenfassen, keine zweite Meldung
+        assert!(busy_check(&req, false).is_none());
+        // Eine weitere Ruhe-Messung entfällt still
+        req.idle = true;
+        assert!(busy_check(&req, true).is_none());
     }
 }

@@ -935,7 +935,7 @@ export class SoundEngine {
   noiseBed(): NoiseBed;                                 // eine gemeinsame Instanz
   sweep(o: SweepOptions): void;
   chord(o?: ChordOptions): ChordHandle;                 // Standard = Abschluss-Akkord (E.8)
-  alertTone(level: number, o?: { at?: number }): void;  // „Einzelton“: 694,81 Hz + 1389,61 Hz (−12 dB), Anstieg 15 ms, τ 120 ms; Pegel = level × −20 dBFS
+  alertTone(level: number, o?: { at?: number; whileHidden?: boolean }): void;  // „Einzelton“: 694,81 Hz + 1389,61 Hz (−12 dB), Anstieg 15 ms, τ 120 ms; Pegel = level × −20 dBFS; whileHidden = auch bei document.hidden (Warnton im Spiel)
   score(events: ScoreEvent[], t0Model: number): ScoreHandle;
 }
 export const sound: SoundEngine;
@@ -996,7 +996,7 @@ export interface PulseVoice {
 | Pegel 0–1, Rampe ≥ 20 ms; Betonen | `setLevel(l, { rampS: 0.03 })`, `accentNext(1.5)` |
 | Tonhöhe/Stufe (optional) | `setStep(0…5)` = Harmonische von f★ |
 | start/stop ≤ 150 ms, Knoten freigeben | `start({ fadeS: 0.1 })`, `stop({ fadeS: 0.1 })`, `dispose()` |
-| Einzelton für den Warnton | `sound.alertTone(level)` |
+| Einzelton für den Warnton | `sound.alertTone(level, { whileHidden: true })` (auch wenn Pulsar im Hintergrund liegt) |
 | globale Lautstärke, Stummschaltung, gemeinsamer Kontext, Autoplay | über den Master; vor dem Unlock ist `active = false` |
 
 Zur Stufe: Die Klangwelt ist nicht mehr pentatonisch. Die Formulierung in `docs/API.md` wird beim Einbau auf „Stufen = Harmonische von 173,7 Hz“ angepasst; das stimmt Teil 2 ab.

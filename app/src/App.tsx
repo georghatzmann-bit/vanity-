@@ -87,6 +87,8 @@ export function App() {
       // Netzwerk und Boost dürfen scheitern – die App bleibt bedienbar
       await useNet.getState().init().catch((e) => console.warn("Netzwerk-Start:", e));
       await useBoost.getState().init().catch((e) => console.warn("Boost-Start:", e));
+      // „Hör dein Netz“: Warnton-Hörer (nur Hauptfenster; der Live-Ton startet erst per Klick)
+      void useSonar.getState().init();
       setReady(true);
       if (isTauri() && !info?.startedMinimized) {
         const { getCurrentWindow } = await import("@tauri-apps/api/window");

@@ -29,7 +29,7 @@ export function LocationLock({ onRetry, busy }: { onRetry: () => void; busy?: bo
             <li>{t("wifiScan.locked.step1")}</li>
             <li>{t("wifiScan.locked.step2")}</li>
             <li>{t("wifiScan.locked.step3")}</li>
-            <li>{t("wifiScan.locked.step4")}</li>
+            <li>{t("wifiScan.locked.step4", { button: t("wifiScan.locked.retry") })}</li>
           </ol>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="primary" icon={<Settings2 className="h-4 w-4" />} onClick={() => void open()}>

@@ -230,3 +230,19 @@ describe("Demo-Zeitleiste", () => {
     expect(JSON.stringify(a.events)).not.toMatch(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/);
   });
 });
+
+describe("Demo: Bericht passt zur Zeitleiste", () => {
+  it("report.maxPing = höchster Punkt (±1 ms), report.spikes = Ausreißer der Zeitleiste", async () => {
+    const { mockInvoke } = await import("./mock");
+    const reports = await mockInvoke<SessionReport[]>("db_list", { table: "reports" });
+    const withSession = reports.filter((r) => r.sessionId !== null && r.sessionId !== undefined).slice(-5);
+    expect(withSession.length).toBeGreaterThan(0);
+    for (const r of withSession) {
+      const tl = await mockInvoke<SessionTimeline>("net_session_timeline", { sessionId: r.sessionId });
+      const ok = tl.points.map((p) => p[1]).filter((v): v is number => v !== null);
+      const max = ok.reduce((a, v) => Math.max(a, v), -Infinity);
+      expect(Math.abs(max - (r.maxPing ?? 0))).toBeLessThanOrEqual(1);
+      expect(r.spikes).toBe(tl.events.filter((e) => e.kind === "spike").length);
+    }
+  });
+});

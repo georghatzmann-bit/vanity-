@@ -19,6 +19,7 @@
 //! Direkt folgende Treffer (nächste Kalenderminute) verlängern `loss`/`slow`.
 
 use std::collections::VecDeque;
+use std::net::Ipv4Addr;
 
 use serde_json::json;
 
@@ -67,6 +68,8 @@ pub struct EventTick<'a> {
     pub slow_ms: f64,
     /// Router-Grundwert des Lag-Detektivs (für die Umfangsprüfung)
     pub gateway_base: Option<f64>,
+    /// Vom Monitor aufgelöste IPv4 des Hauptziels (dieselbe wie `SnapshotRequest.dst`)
+    pub dst: Option<Ipv4Addr>,
 }
 
 /// Messziel, Netz und Sitzung, mit denen ein Ereignis angelegt wird.
@@ -280,7 +283,12 @@ impl EventDetector {
         let mut request = None;
         if run.count >= OUTAGE_MIN_LOSSES && !run.requested {
             run.requested = true;
-            request = Some(ScopeRequest { outage_t: run.first_t, link_start: run.link_start.clone(), gateway_base: tick.gateway_base });
+            request = Some(ScopeRequest {
+                outage_t: run.first_t,
+                link_start: run.link_start.clone(),
+                gateway_base: tick.gateway_base,
+                dst: tick.dst.filter(|ip| !ip.is_unspecified()),
+            });
         }
         let interval = i64::try_from(tick.interval_ms).unwrap_or(i64::MAX / 4);
         let silent_ms = (run.last_t - run.first_t).saturating_add(interval);
@@ -596,6 +604,7 @@ mod tests {
                 quiet: self.quiet,
                 slow_ms: self.slow_ms,
                 gateway_base: Some(1.0),
+                dst: Some(Ipv4Addr::new(3, 123, 1, 77)),
             };
             if let Some(req) = self.det.push(&tick) {
                 self.requests.push(req);
@@ -641,6 +650,7 @@ mod tests {
         let t = r.series(t, 3, |_| None);
         assert_eq!(r.requests.len(), 1, "Umfangsprüfung beim dritten Verlust");
         assert_eq!(r.requests[0].outage_t, start);
+        assert_eq!(r.requests[0].dst, Some(Ipv4Addr::new(3, 123, 1, 77)), "Hauptverbindung für dasselbe Ziel wie der Hook");
         let o = r.of(EventKind::Outage);
         assert_eq!(o.len(), 1);
         assert!(!o[0].closed);

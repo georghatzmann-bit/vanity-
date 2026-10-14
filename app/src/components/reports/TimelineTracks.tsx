@@ -64,6 +64,8 @@ export interface Palette {
   danger: string;
   info: string;
   font: string;
+  /** deckende Fläche (Hintergrund der Skalen-Beschriftung) */
+  surfaceSolid: string;
   cause: Record<LagCause, string>;
 }
 
@@ -84,8 +86,35 @@ function readPalette(): Palette {
     danger: v("--nv-danger", "#fb7185"),
     info: v("--nv-info", "#60a5fa"),
     font: v("--nv-font-sans", "system-ui, sans-serif"),
+    surfaceSolid: v("--nv-surface-solid", "#0c1324"),
   };
-  return { ...p, cause: { wifi: p.warning, router: p.warning, isp: p.danger, internet: p.info, localTraffic: p.accent2, unknown: p.muted } };
+  // eigene Farbe je Ursache (`--nv-cause-*`, styles/app.css) – WLAN und Router unterscheidbar
+  const cause: Record<LagCause, string> = {
+    wifi: v("--nv-cause-wifi", "#f5b942"),
+    router: v("--nv-cause-router", "#f08a4b"),
+    isp: v("--nv-cause-isp", "#f0607a"),
+    internet: v("--nv-cause-internet", "#5b8def"),
+    localTraffic: v("--nv-cause-local", "#a77bf3"),
+    unknown: v("--nv-cause-unknown", "#8b93a7"),
+  };
+  return { ...p, cause };
+}
+
+/**
+ * Skalen-Beschriftung links (x = 8) auf einem Kasten (deckende Fläche, 80 %, 3 px Innenabstand) – so
+ * überdeckt die Kurve die Zahl nicht und sie wird am Rand nicht abgeschnitten.
+ */
+function scaleLabel(ctx: CanvasRenderingContext2D, pal: Palette, text: string, baseline: number) {
+  ctx.save();
+  ctx.textAlign = "left";
+  const w = ctx.measureText(text).width;
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = pal.surfaceSolid;
+  ctx.fillRect(8 - 3, baseline - 9 - 3, w + 6, 11 + 6);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = pal.faint;
+  ctx.fillText(text, 8, baseline);
+  ctx.restore();
 }
 
 /** Design-Farben, neu gelesen bei Themenwechsel (`data-theme`/`class`/`style` am `<html>`) */
@@ -276,13 +305,14 @@ export function drawTimeline({ ctx, data: d, pal, width, from, to, hoverT, label
     ctx.strokeStyle = pal.border;
     ctx.fillStyle = pal.faint;
     ctx.textAlign = "left";
+    const scaleYs: [number, number][] = [];
     for (const f of [0.5, 1]) {
       const yy = Math.round(y(d.pingMax * f)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(0, yy);
       ctx.lineTo(width, yy);
       ctx.stroke();
-      ctx.fillText(`${Math.round(d.pingMax * f)} ms`, 4, yy + 11);
+      scaleYs.push([yy, Math.round(d.pingMax * f)]);
     }
     let line: [number, number | null][] = [];
     if (cols.bucket) {
@@ -327,6 +357,8 @@ export function drawTimeline({ ctx, data: d, pal, width, from, to, hoverT, label
       ctx.lineTo(x1, y1);
       ctx.stroke();
     }
+    // Skala erst nach der Kurve (mit Kasten), damit die Kurve die Zahl nicht überdeckt
+    for (const [yy, v] of scaleYs) scaleLabel(ctx, pal, `${v} ms`, yy + 11);
     // Ausreißer-Grenze
     if (d.limit !== null && d.limit < d.pingMax) {
       const ly = Math.round(y(d.limit)) + 0.5;
@@ -375,9 +407,7 @@ export function drawTimeline({ ctx, data: d, pal, width, from, to, hoverT, label
     ctx.lineWidth = 1.3;
     polyline(ctx, pts);
     ctx.stroke();
-    ctx.fillStyle = pal.faint;
-    ctx.textAlign = "left";
-    ctx.fillText(`${Math.round(d.jitterMax)} ms`, 4, jt.top + 11);
+    scaleLabel(ctx, pal, `${Math.round(d.jitterMax)} ms`, jt.top + 11);
   }
 
   // Verlust: rote Striche je verlorenem Punkt
@@ -454,9 +484,7 @@ export function drawTimeline({ ctx, data: d, pal, width, from, to, hoverT, label
     ctx.strokeStyle = pal.warning;
     polyline(ctx, series((p) => p[4], (c) => (c.txN ? c.txSum / c.txN : null), yt));
     ctx.stroke();
-    ctx.fillStyle = pal.faint;
-    ctx.textAlign = "left";
-    ctx.fillText(`100 % · ${Math.round(d.trafficMax)} Mbit/s`, 4, ld.top + 11);
+    scaleLabel(ctx, pal, `100 % · ${Math.round(d.trafficMax)} Mbit/s`, ld.top + 11);
   }
 
   // Zielwechsel als senkrechte Linie

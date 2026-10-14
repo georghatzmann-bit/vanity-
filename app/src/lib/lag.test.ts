@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { de } from "../locales/de";
 import { en } from "../locales/en";
 import { isLiveSpike } from "./grade";
-import { causeLabel, causeLine, causeNote, countsFromEvents, countsFromSummary, latestRecent, upsertLagEvent, visibleReasons, zoneText } from "./lag";
+import { capitalizeFirst, causeLabel, causeLine, causeNote, countsFromEvents, countsFromSummary, fmtMbps, fmtMs, latestRecent, upsertLagEvent, visibleReasons, zoneText, zoneTitle } from "./lag";
+import { getLanguage, setLanguage } from "./i18n";
 import { causeSummary } from "./lagtext";
 import { lagMock } from "./mock/lag";
 import { mockListen, runPingTick } from "./mock/core";
@@ -49,7 +50,8 @@ describe("Texte des Lag-Detektivs (dynamische Schlüssel)", () => {
   it("Ursachen immer als Einschätzung („vermutlich“), nie als Versprechen", () => {
     expect(causeLine("wifi", "region", deT)).toBe("vermutlich WLAN");
     expect(causeLine("unknown", "region", deT)).toBe("Ursache unklar");
-    expect(causeLine("isp", null, enT)).toBe("likely Line/provider");
+    expect(causeLine("isp", null, enT)).toBe("likely line/provider");
+    expect(capitalizeFirst(causeLine("isp", null, enT))).toBe("Likely line/provider");
     const all = JSON.stringify([de.lag, en.lag]).toLowerCase();
     for (const bad of ["weniger ping", "less ping", "garantiert", "guaranteed", "beweis", "proof"]) expect(all).not.toContain(bad);
   });
@@ -63,13 +65,16 @@ describe("Texte des Lag-Detektivs (dynamische Schlüssel)", () => {
 
   it("causeSummary: Gesamtzahl und „unklar“ aus Live-Ereignissen", () => {
     const list = [ev(1, "wifi", 3), ev(2, "isp"), ev(3, "unknown")];
-    expect(causeSummary(countsFromEvents(list), deT)).toBe("5 Ausreißer untersucht – vermutlich: 3× WLAN, 1× Anschluss/Anbieter; 1× unklar");
+    expect(causeSummary(countsFromEvents(list), deT)).toBe("5 Ausreißer untersucht – vermutlich: 3× WLAN, 1× Anschluss/Anbieter, 1× unklar");
     expect(causeSummary(countsFromEvents([]), enT)).toBe("No spikes examined");
   });
 
   it("Zone als Text, stumme Station = „keine Antwort“", () => {
-    expect(zoneText({ zone: "isp", cgnat: true, rtt: 5, address: "100.64.1.1" }, deT)).toBe("Anbieter (CGNAT)");
+    expect(zoneText({ zone: "isp", cgnat: true, rtt: 5, address: "100.64.1.1" }, deT)).toBe("Anbieter");
     expect(zoneText({ zone: null, cgnat: false, rtt: null, address: null }, deT)).toBe("keine Antwort");
+    // CGNAT-Hinweis und Adresse nur im Tooltip
+    expect(zoneTitle({ zone: "isp", cgnat: true, address: "100.64.1.1" }, deT)).toBe("Gemeinsame Adresse beim Anbieter (CGNAT) · 100.64.1.1");
+    expect(zoneTitle({ zone: "lan", cgnat: false, address: null }, deT)).toBeUndefined();
     expect(zoneText({ zone: "lan", cgnat: false, rtt: 1, address: "192.168.178.1" }, enT)).toBe("Home network");
   });
 });
@@ -141,5 +146,27 @@ describe("Demo: genau alle 30 Takte ein Ausreißer, 1 s später net://lag", () =
     expect(recent.every((e, i) => i === 0 || recent[i - 1].at >= e.at)).toBe(true);
     const snap = lagMock.net_lag_snapshot({}) as { cause: string };
     expect(snap.cause).toBe("internet");
+  });
+});
+
+describe("Zahlen im Format der Sprache (fmtMs, fmtMbps)", () => {
+  const before = getLanguage();
+  afterEach(() => {
+    setLanguage(before);
+    vi.unstubAllGlobals();
+  });
+  it("de: Komma, „,0“ entfällt; en: Punkt", () => {
+    // setLanguage setzt `document.documentElement.lang` – in Node gibt es kein document
+    if (typeof document === "undefined") vi.stubGlobal("document", { documentElement: {} });
+    setLanguage("de");
+    expect(fmtMs(1.94)).toBe("1,9");
+    expect(fmtMs(2)).toBe("2");
+    expect(fmtMs(42.4)).toBe("42");
+    expect(fmtMbps(2.84)).toBe("2,8");
+    expect(fmtMbps(462.8)).toBe("463");
+    expect(fmtMs(null)).toBe("–");
+    setLanguage("en");
+    expect(fmtMs(1.94)).toBe("1.9");
+    expect(fmtMbps(2.84)).toBe("2.8");
   });
 });

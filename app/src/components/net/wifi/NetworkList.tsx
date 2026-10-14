@@ -1,4 +1,5 @@
 /** WLAN-Scanner: Liste der Netze in der Nähe (nur Anzeige – fremde Namen/Adressen werden nie gespeichert). */
+import { useMemo } from "react";
 import { Lock, LockOpen } from "lucide-react";
 import { getLanguage, useT } from "@/lib/i18n";
 import type { WifiNetwork } from "@/lib/types";
@@ -30,11 +31,16 @@ export function SignalBars({ rssi, className }: { rssi: number; className?: stri
 /** „Wi-Fi 6 (802.11ax)“ → „Wi-Fi 6“ */
 const shortPhy = (phy: string) => phy.replace(/\s*\(.*\)\s*$/, "");
 
-const GRID = "grid grid-cols-[minmax(0,1fr)_92px_56px_56px] gap-x-3 lg:grid-cols-[minmax(0,1fr)_92px_56px_56px_56px_76px_64px]";
+const GRID = "grid grid-cols-[minmax(0,1fr)_92px_56px_72px] gap-x-3 lg:grid-cols-[minmax(0,1fr)_92px_56px_72px_56px_76px_84px]";
 
 export function NetworkList({ networks, own }: { networks: WifiNetwork[]; own: OwnNetwork | null }) {
   const t = useT();
-  const age = (s: number | null) => (s === null ? "–" : s < 120 ? t("wifiScan.ageSec", { n: s }) : t("wifiScan.ageMin", { n: Math.round(s / 60) }));
+  const age = (s: number | null) => (s === null ? "–" : s < 2 ? t("wifiScan.justNow") : s < 120 ? t("wifiScan.ageSec", { n: s }) : t("wifiScan.ageMin", { n: Math.round(s / 60) }));
+  // verbundenes Netz zuerst, dann eigene Netze, dann nach Signal
+  const sorted = useMemo(() => {
+    const rank = (n: WifiNetwork) => (n.connected ? 0 : ownership(n, own) !== "foreign" ? 1 : 2);
+    return [...networks].sort((a, b) => rank(a) - rank(b) || b.rssi - a.rssi);
+  }, [networks, own]);
   if (!networks.length) return <div className="px-4 py-8 text-center text-[13px] text-muted">{t("wifiScan.noNetworks")}</div>;
   return (
     <div className="text-[13px]" role="table" aria-label={t("wifiScan.networks")}>
@@ -48,7 +54,7 @@ export function NetworkList({ networks, own }: { networks: WifiNetwork[]; own: O
         <span role="columnheader" className="hidden lg:block">{t("wifiScan.col.age")}</span>
       </div>
       <div className="max-h-[360px] overflow-y-auto">
-        {networks.map((n) => {
+        {sorted.map((n) => {
           const o = ownership(n, own);
           return (
             <div key={n.bssid} role="row" className={cn(GRID, "items-center border-b border-line/60 px-4 py-2 last:border-b-0", o !== "foreign" && "bg-accent/[0.06]")}>
@@ -57,6 +63,11 @@ export function NetworkList({ networks, own }: { networks: WifiNetwork[]; own: O
                 <span className={cn("truncate", n.ssid ? "font-medium text-fg" : "text-muted italic")} title={n.ssid || t("wifiScan.hidden")}>
                   {n.ssid || t("wifiScan.hidden")}
                 </span>
+                {!n.secured && (
+                  <span className="shrink-0 rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold text-warning" title={t("wifiScan.open")}>
+                    {t("wifiScan.openPill")}
+                  </span>
+                )}
                 {n.connected ? (
                   <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">{t("wifiScan.connected")}</span>
                 ) : o === "own" ? (

@@ -395,7 +395,11 @@ pub async fn net_speedtest_cancel(state: State<'_, Shared>) -> CmdResult<()> {
 
 #[tauri::command]
 pub async fn net_if_counters(state: State<'_, Shared>) -> CmdResult<Option<ifstats::IfCounters>> {
-    Ok(ifstats::counters(&state.net, crate::util::now_ms()))
+    let core = state.inner().clone();
+    let now = crate::util::now_ms();
+    // Hauptverbindung bei Bedarf ermitteln: blockierend nur in `spawn_blocking`, nie zwei gleichzeitig
+    lag::ensure_link(&core, None, now).await;
+    Ok(ifstats::counters(&core.net, now))
 }
 
 #[tauri::command]

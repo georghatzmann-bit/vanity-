@@ -50,16 +50,21 @@ den Ping zu dem Server, den du für das Spiel eingestellt hast. Danach gibt es e
 
 | Seite | Was du dort machst |
 |---|---|
-| **Cockpit** | Note, Live-Ping, Boost, PC-Auslastung, letzte Runde, Schnellzugriff |
+| **Cockpit** | Note, Live-Ping, Boost, PC-Auslastung, letzte Runde, Schnellzugriff. Bei einem Ausreißer zeigt der **Lag-Detektiv** neben dem Ping die vermutete Ursache. Der Kopfhörer-Knopf **Hör dein Netz** macht den Ping hörbar |
 | **Spiele** | Deine Spiele (automatisch gefunden oder per Hand). Pro Spiel: Messziel, echte Spielserver, Auto-Boost |
 | **Netzwerk → Regionen** | Ping zu Rechenzentren weltweit. Die beste Region als Messziel fürs Cockpit setzen |
 | **Netzwerk → Route** | Station für Station: Wo auf dem Weg zum Server hängt es? Pulsar sagt dir: Heimnetz, Anbieter oder Internet |
 | **Netzwerk → DNS** | Vergleicht DNS-Dienste (Cloudflare, Google, Quad9 …) und stellt auf Knopfdruck den schnellsten ein (Knopf mit dem Namen des Dienstes, z. B. **Cloudflare einstellen** – Windows fragt einmal nach). **Zurückstellen** holt deine alte Einstellung jederzeit zurück |
 | **Netzwerk → Speedtest** | Download, Upload und die **Bufferbloat-Note**: Wie stark steigt dein Ping, wenn die Leitung ausgelastet ist? |
-| **Netzwerk → Verbindung** | Kabel oder WLAN? Signalstärke, Band, Kanal, Adapter, Gateway, DNS |
+| **Netzwerk → Verbindung** | Kabel oder WLAN? Signalstärke, Band, Kanal, Adapter, Gateway, DNS. Darunter die Karte **Lag-Detektiv** mit den letzten Ausreißern und warum Pulsar welche Ursache vermutet |
+| **Netzwerk → WLAN** | WLAN-Netze in der Nähe, wie voll die Kanäle sind und welcher Kanal für deinen Router besser wäre. Dazu der **Raum-Scan**: in mehreren Räumen messen und den besten Platz finden |
+| **Netzwerk → Warum laggt es?** | Eine geführte Prüfung von etwa einer Minute. Danach sagt Pulsar in einem Satz, was es vermutet, und was du tun kannst (Anleitung unten) |
 | **Optimieren** | **Netzwerk automatisch optimieren** (siehe unten), sechs Windows-Einstellungen mit Schalter – jede mit **Rückgängig**. Energieplan, Boost-Profil. **Alles zurückstellen** oben auf der Seite stellt den DNS und alle Optimierungen zurück |
-| **Berichte** | Jede Spielrunde: Ping-Verlauf, Spitzen, Verlust, Note |
-| **Einstellungen** | Aussehen (4 Themes), Sound, Messung, Boost, Overlay, Verhalten, Spiele, Daten, Über |
+| **Berichte → Runden** | Jede Spielrunde: Ping-Verlauf, Spitzen, Verlust, Note. Klick auf eine Runde öffnet die **Match-Zeitleiste**; dort speichert **Als Bild speichern** die Runde als Bild (PNG) zum Teilen |
+| **Berichte → Kalender** | Wann war deine Verbindung bisher am ruhigsten? Wochentag × Uhrzeit, gefärbt nach Note – ein Rückblick, keine Vorhersage |
+| **Berichte → Anbieter-Protokoll** | Aussetzer, Paketverlust, langsame Zeiten und Speedtests mit Uhrzeit. Als HTML (zum Drucken) oder CSV speichern |
+| **Berichte → Ausreißer** | Wie oft welche Ursache in den letzten 30 Tagen vermutet wurde |
+| **Einstellungen** | Aussehen (4 Themes), Sound (mit **Hör dein Netz**), Messung (mit Momentaufnahmen und deinen Vertragswerten), Boost, Overlay, Verhalten, Spiele, Daten (mit **Messverlauf löschen**), Über |
 
 **Overlay:** `Alt + Shift + P` blendet ein kleines Fenster mit Ping, Schwankung, Verlust und Auslastung über dem
 Spiel ein (funktioniert im Fenster- und randlosen Modus, nicht im exklusiven Vollbild).
@@ -93,6 +98,30 @@ Dann sind DNS und die zwei Netzwerk-Einstellungen wieder genau wie vorher (die N
 
 **Ehrlich:** Ein schnellerer DNS beschleunigt nur das Nachschlagen von Adressen – Spielstart, Shop, Matchmaking und
 Webseiten laden etwas flotter. Den Ping **im** Spiel ändert er nicht. Die zwei Netzwerk-Einstellungen bringen meist nur wenig.
+
+### „Warum laggt es?“ – Schritt für Schritt
+
+Am besten prüfst du dann, wenn es gerade laggt. Spiel vorher schließen oder pausieren.
+
+1. Links auf **Netzwerk** klicken, dann oben auf den Reiter **Warum laggt es?**
+   (oder im Cockpit beim Schnellzugriff auf **Warum laggt es?**, oder `Strg + K` und „laggt“ tippen).
+2. Schalter **mit Speedtest**: Lass ihn an, wenn du kein knappes Datenvolumen hast. Daneben steht, wie viel er höchstens
+   verbraucht. Bei einer getakteten Verbindung (z. B. Handy-Hotspot) ist er zuerst aus.
+3. Auf **Prüfung starten** klicken. Pulsar prüft jetzt nacheinander: Verbindung, Router, Server, Route, Datenverkehr und
+   – wenn eingeschaltet – den Speedtest. Das dauert etwa eine Minute. Mit **Abbrechen** hörst du jederzeit auf.
+4. **Geklappt**, wenn oben die Karte **Einschätzung** erscheint. Dort steht in einem Satz, was Pulsar vermutet
+   (zum Beispiel „Wenn deine Leitung voll ist, steigt dein Ping um 78 ms“).
+5. Unter **Was du tun kannst** stehen nummerierte Schritte. Arbeite sie der Reihe nach ab. Knöpfe wie **WLAN-Tab öffnen**
+   bringen dich direkt zur passenden Seite.
+6. Darunter stehen **weitere Befunde** (zum Beispiel „Dein WLAN-Kanal ist stark belegt“). Mit **Erneut prüfen**
+   siehst du, ob es besser geworden ist.
+
+Steht dort „In dieser Minute war nichts Auffälliges messbar“, war während der Prüfung alles normal. Kommt der Lag nur manchmal, schau später in die
+Karte **Lag-Detektiv** (Netzwerk → Verbindung) oder ins **Anbieter-Protokoll** (Berichte).
+
+**Ehrlich:** Das Ergebnis ist eine Einschätzung nach festen Regeln, keine Gewissheit. Andere Geräte im Haushalt sieht
+Pulsar nicht. Lag kann auch vom Spielserver selbst kommen – das kann Pulsar nicht messen. Pulsar ändert bei der Prüfung
+nichts an Windows oder am Router, und es verspricht keinen niedrigeren Ping.
 
 ---
 
@@ -181,6 +210,12 @@ gelben Hinweis. So holst du es nach: Pulsar neu installieren und auf der Seite *
 
 Updates: Pulsar prüft beim Start, ob es eine neue Version gibt. Dann steht unter **Einstellungen → Über Pulsar** ein Knopf **Jetzt aktualisieren**. Ein Klick lädt den neuen Installer und aktualisiert alles.
 
+> **Wichtig beim Update auf die Version mit Messverlauf:** Pulsar baut beim ersten Start die Datenbank um (für Kalender,
+> Zeitleiste, Ausreißer und Anbieter-Protokoll). Vorher legt es eine Kopie an: `pulsar-vor-v2-<Datum>.db` im Ordner
+> `backups` (siehe „Wo liegen meine Daten?“). Danach startet eine **ältere** Pulsar-Version mit dieser Datenbank nicht
+> mehr – sie meldet, dass die Daten aus einer neueren Version stammen. Willst du wirklich zurück zur alten Version,
+> geht das nur mit dieser Kopie.
+
 ---
 
 ## 7. Selbst neu bauen (nur wenn du etwas änderst)
@@ -267,13 +302,59 @@ dann ist der Benutzerordner in Ordnung.
 
 **Mein Anti-Cheat mag die Priorität nicht.** Manche Spiele (z. B. mit Vanguard oder EAC) lassen sich nicht in der Priorität ändern. Pulsar meldet das ehrlich im Boost-Zustand („Zugriff verweigert“) – alles andere vom Boost wirkt trotzdem.
 
+**Wie sicher ist die Ursache, die Pulsar nennt?** Es ist eine **Einschätzung**, keine Gewissheit. Bei einem Ausreißer
+schaut Pulsar etwa eine Sekunde lang nach: Wie schnell antworten dein Router und die ersten Stationen? Wie stark ist das
+WLAN? Wie viel lädt dein PC gerade? Daraus folgt nach festen Regeln eine Vermutung. Dabei gibt es Grenzen: War der
+Ausreißer schon vorbei, heißt es „unklar“. Pulsar sieht andere Geräte im Haushalt nicht – lädt dort jemand etwas,
+sieht das aus wie „Anschluss/Anbieter“. Über WLAN lassen sich WLAN und Router nicht trennen. Mit VPN bleibt die Ursache
+„unklar“. Und viele Router antworten auf solche Anfragen nur langsam oder gar nicht. Deshalb steht überall „vermutlich“
+und „Einschätzung“. Ein Bild bekommst du erst über viele Ausreißer (**Berichte → Ausreißer**).
+
+**Warum braucht der WLAN-Scanner die Ortung?** Seit Windows 11 Version 24H2 gibt Windows die Liste der WLAN-Netze nur an
+Programme heraus, die den **Standort** benutzen dürfen – aus WLAN-Netzen ließe sich nämlich ungefähr ablesen, wo du
+bist. Pulsar ermittelt **keinen** Standort und sendet nichts; es braucht nur die Netzliste. So schaltest du es frei:
+Im Tab **WLAN** auf **Windows-Einstellungen öffnen** klicken → **Standortdienste** an → **Desktop-Apps den Zugriff
+auf Ihren Standort erlauben** an. Beim ersten Mal fragt Windows vielleicht einmal nach. **Ist der Schalter grau**, regelt
+das deine Organisation (z. B. ein Firmen- oder Schul-PC) – dann kannst du es selbst nicht ändern. Ohne Freigabe zeigt
+Pulsar keine WLAN-Netze; alles andere funktioniert weiter.
+
+**Kann ich damit meinem Anbieter etwas nachweisen?** Nein – das **Anbieter-Protokoll ist ein Indiz, kein Nachweis**.
+Es zeigt, was Pulsar gemessen hat, solange es lief, und vor allem die Antwortzeit zu Spiel- und Rechenzentrums-Servern.
+Für Ansprüche wie Minderung oder Sonderkündigung gilt in Deutschland bei **Festnetz-Anschlüssen** die
+**Breitbandmessung der Bundesnetzagentur** (breitbandmessung.de, Desktop-App): PC per LAN-Kabel am Router, VPN aus,
+andere Geräte möglichst aus, 30 Messungen an 3 verschiedenen Tagen innerhalb von 14 Tagen. Die genauen, aktuellen Regeln
+stehen auf der Seite. Für Mobilfunk gibt es ein eigenes Verfahren. Das Pulsar-Protokoll hilft dir trotzdem: Melde die
+Störung beim Anbieter, notiere die Ticketnummer und nimm das Protokoll (**Bericht speichern (HTML)**) als Gesprächsgrundlage
+mit. Ein Protokoll, das per WLAN entstanden ist, sagt wenig über den Anschluss. Pulsar gibt keine Rechtsberatung –
+Rat gibt es z. B. bei der Verbraucherzentrale.
+
+**Was speichert Pulsar und wie lösche ich es?** Alles bleibt auf deinem PC, nichts wird verschickt. Für Kalender,
+Zeitleiste, Ausreißer und Anbieter-Protokoll speichert Pulsar einen **Messverlauf**: Ping-Statistik je Stunde (400 Tage),
+Ereignisse wie Aussetzer, Ausreißer und Speedtests (bis 365 Tage) und die Messwerte der letzten 50 Runden (90 Tage).
+Das sind typisch 2–6 MB. Dazu kommen deine Räume aus dem Raum-Scan und das Ergebnis der letzten Prüfung „Warum laggt es?“.
+Namen und Adressen fremder WLAN-Netze speichert Pulsar nie; in Bildkarte, HTML- und CSV-Bericht stehen keine Adressen
+und keine WLAN-Namen.
+So löschst du es:
+- **Einstellungen → Daten & Sicherung → Messverlauf löschen** (mit Rückfrage). Deine Berichte bleiben.
+- Ganz abschalten: dort **Messverlauf dauerhaft speichern** ausschalten. Die Live-Anzeige läuft weiter.
+- Räume: im Tab **WLAN** beim Raum auf den Mülleimer klicken.
+
+Wichtig: Die automatischen Sicherungen (Backups) sind Kopien der ganzen Datenbank. Sie enthalten den Verlauf noch, bis
+sie ersetzt werden – spätestens nach 10 weiteren Sicherungen (eine pro Tag).
+
+**Warum ist der Speedtest bei Handy-Hotspot aus?** Windows kennt viele Handy-Hotspots als **getaktete Verbindung**
+(Datenvolumen begrenzt). Pulsar fragt Windows danach. Ist die Verbindung getaktet, ist der Speedtest in
+**Warum laggt es?** zuerst ausgeschaltet – er kann je nach Leitung einige hundert MB verbrauchen (die Zahl steht am
+Schalter). Du kannst ihn trotzdem einschalten. Weiß Windows nicht, dass es ein Hotspot ist, kann Pulsar das auch nicht
+erkennen – schalte den Speedtest dann selbst aus.
+
 **Wo liegen meine Daten?**
 
 | Was | Ordner |
 |---|---|
 | Spiele, Berichte, Einstellungen | `%APPDATA%\com.pulsar.booster` |
 | Bilder-Zwischenspeicher | `%LOCALAPPDATA%\com.pulsar.booster` |
-| Automatische Backups (täglich, die letzten 10) | `%APPDATA%\com.pulsar.booster\profiles\default\backups` |
+| Automatische Backups (täglich, die letzten 10) und die Kopie `pulsar-vor-v2-*.db` vom Update | `%APPDATA%\com.pulsar.booster\profiles\default\backups` |
 
 ---
 

@@ -4,6 +4,7 @@
  * Ursachen sind immer eine Einschätzung – Texte nur mit „vermutlich“ bzw. „Einschätzung“.
  */
 import { ArrowDownUp, Building, CircleQuestionMark, Globe, Router, Wifi, type LucideIcon } from "lucide-react";
+import { formatNumber } from "./format";
 import { LAG_CAUSES, type EventSummaryRow, type LagCause, type LagEvent, type QuickHop, type Reason, type TargetKind } from "./types";
 
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
@@ -22,14 +23,14 @@ export const CAUSE_ICONS: Record<LagCause, LucideIcon> = {
   unknown: CircleQuestionMark,
 };
 
-/** Farbe je Ursache (Design-Token) – „unklar“ bewusst neutral */
+/** Farbe je Ursache (eigene Tokens `--nv-cause-*` in styles/app.css, hell/dunkel) – „unklar“ bewusst neutral */
 export const CAUSE_TONE: Record<LagCause, string> = {
-  wifi: "var(--nv-warning)",
-  router: "var(--nv-warning)",
-  isp: "var(--nv-danger)",
-  internet: "var(--nv-info)",
-  localTraffic: "var(--nv-accent-2)",
-  unknown: "var(--nv-muted)",
+  wifi: "var(--nv-cause-wifi)",
+  router: "var(--nv-cause-router)",
+  isp: "var(--nv-cause-isp)",
+  internet: "var(--nv-cause-internet)",
+  localTraffic: "var(--nv-cause-local)",
+  unknown: "var(--nv-cause-unknown)",
 };
 
 /** Anzeigename der Ursache; „Internet“ bekommt bei Spielserver-Zielen den Zusatz „– Spielserver-Netz“ */
@@ -85,21 +86,29 @@ export function countsFromSummary(rows: EventSummaryRow[]): Partial<Record<LagCa
   return out;
 }
 
-/** Zone einer Station als Text („keine Antwort“ bei stummer Station) */
+/** Zone einer Station als Text („keine Antwort“ bei stummer Station); CGNAT steht nur im Tooltip (`zoneTitle`) */
 export function zoneText(hop: Pick<QuickHop, "zone" | "cgnat" | "rtt" | "address">, t: Translate): string {
   if (!hop.zone) return t("lag.card.hopNoAnswer");
-  if (hop.zone === "isp" && hop.cgnat) return t("lag.zone.ispCgnat");
   return t(`lag.zone.${hop.zone}`);
 }
 
-/** Millisekunden kurz (ganze ms, unter 10 ms eine Nachkommastelle) */
-export function fmtMs(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return "–";
-  return v < 10 ? v.toFixed(1).replace(/\.0$/, "") : String(Math.round(v));
+/** Tooltip einer Station: CGNAT-Hinweis und Adresse (undefined = nichts zu zeigen) */
+export function zoneTitle(hop: Pick<QuickHop, "zone" | "cgnat" | "address">, t: Translate): string | undefined {
+  const parts = [hop.zone === "isp" && hop.cgnat ? t("lag.zone.ispCgnat") : null, hop.address].filter((x): x is string => !!x);
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
-/** Mbit/s kurz */
+/** Ersten Buchstaben groß – für Ursachen, die allein (als Überschrift) stehen */
+export const capitalizeFirst = (s: string) => (s ? s.charAt(0).toLocaleUpperCase() + s.slice(1) : s);
+
+/** Millisekunden kurz im Format der Sprache (ganze ms, unter 10 ms eine Nachkommastelle; „,0“ entfällt) */
+export function fmtMs(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "–";
+  return v < 10 ? formatNumber(v, 1) : formatNumber(Math.round(v));
+}
+
+/** Mbit/s kurz im Format der Sprache */
 export function fmtMbps(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "–";
-  return v < 10 ? v.toFixed(1) : String(Math.round(v));
+  return formatNumber(v, v < 10 ? 1 : 0);
 }

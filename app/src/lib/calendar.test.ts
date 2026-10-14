@@ -307,7 +307,7 @@ describe("Texte", () => {
     const m = calendarModel(scenario(), BERLIN);
     const d = adviceTexts(m, tDe, "de");
     expect(d.title).toBe("Bisher am ruhigsten: Mo 16–18 Uhr (Ø 15 ms, an 3 Montagen gemessen)");
-    expect(d.sub).toBe("bisher am ruhigsten gemessen – keine Vorhersage");
+    expect(d.sub).toBe("Rückblick, keine Vorhersage");
     expect(d.worst).toBe("Eher meiden: Di 20–22 Uhr (Ø 50 ms, an 3 Dienstagen gemessen)");
     const e = adviceTexts(m, tEn, "en");
     expect(e.title).toBe("Calmest so far: Mon 16:00–18:00 (avg 15 ms, measured on 3 Mondays)");
@@ -316,13 +316,15 @@ describe("Texte", () => {
 
   it("zu wenig Daten / kein deutlicher Unterschied / Datenbasis", () => {
     const few = calendarModel(scenario({ withSunday: false, covered: 1_900_000 }), BERLIN);
-    expect(adviceTexts(few, tDe, "de").title).toBe("Zu wenig Daten für eine Empfehlung – bisher 19,0 Stunden Messzeit an 6 Tagen.");
-    expect(adviceTexts(few, tEn, "en").title).toBe("Not enough data for a recommendation – so far 19.0 hours of measuring on 6 days.");
+    expect(adviceTexts(few, tDe, "de").title).toBe("Zu wenig Daten für eine Empfehlung – bisher 19 Stunden Messzeit an 6 Tagen.");
+    expect(adviceTexts(few, tEn, "en").title).toBe("Not enough data for a recommendation – so far 19 hours of measuring on 6 days.");
     const same = calendarModel(scenario({ mon16: 21, tue20: { avg: 34 }, others: 28 }), BERLIN);
     expect(adviceTexts(same, tDe, "de").title).toBe("Kein deutlicher Unterschied – zu jeder gemessenen Zeit ähnlich.");
-    expect(basisText({ coveredMs: 0, hours: 12.3, days: 4 }, tDe, "de")).toBe("12,3 Stunden Messzeit an 4 Tagen");
+    expect(basisText({ coveredMs: 0, hours: 12.3, days: 4 }, tDe, "de")).toBe("12 Stunden Messzeit an 4 Tagen");
     expect(basisText({ coveredMs: 0, hours: 1, days: 1 }, tDe, "de")).toBe("1,0 Stunden Messzeit an 1 Tag");
     expect(basisText({ coveredMs: 0, hours: 1, days: 1 }, tEn, "en")).toBe("1.0 hours of measuring on 1 day");
+    // ab 10 h ohne Nachkommastelle
+    expect(basisText({ coveredMs: 0, hours: 533, days: 30 }, tDe, "de")).toBe("533 Stunden Messzeit an 30 Tagen");
   });
 
   it("Basis erfüllt, aber kein Block aus 2 empfehlbaren Stunden → eigener ehrlicher Satz", () => {

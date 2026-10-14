@@ -1,14 +1,13 @@
 /**
  * Berichte › Ausreißer (`section: "lag"`): Ursachen aller untersuchten Ausreißer der letzten 30 Tage
- * aus `net_events_summary` (Summe von `countSum` je `cause`), mit `causeSummary` und je Ursache einem
+ * aus `net_events_summary` (Summe von `countSum` je `cause`), mit der Gesamtzahl und je Ursache einem
  * Balken. Alles als Einschätzung gekennzeichnet; die Seite funktioniert auch ohne Berichte.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Info, RefreshCw, Siren } from "lucide-react";
 import { api, errorText } from "@/lib/api";
 import { useT } from "@/lib/i18n";
-import { CAUSE_ICONS, CAUSE_TONE, causeLabel, causeNote, countsFromSummary } from "@/lib/lag";
-import { causeSummary } from "@/lib/lagtext";
+import { CAUSE_ICONS, CAUSE_TONE, capitalizeFirst, causeLabel, causeNote, countsFromSummary } from "@/lib/lag";
 import { backendText } from "@/lib/netauto";
 import { LAG_CAUSES, type LagCause } from "@/lib/types";
 import { Button } from "@shared/ui/Button";
@@ -37,15 +36,16 @@ export function LagSection() {
     };
   }, [nonce, t]);
 
+  // Summe aller untersuchten Ausreißer
+  const total = load.state === "ok" ? LAG_CAUSES.reduce((a, c) => a + (load.counts[c] ?? 0), 0) : 0;
   const bars = useMemo(() => {
     if (load.state !== "ok") return [];
-    const total = LAG_CAUSES.reduce((a, c) => a + (load.counts[c] ?? 0), 0);
     return LAG_CAUSES.map((c, i) => ({ cause: c, n: load.counts[c] ?? 0, i }))
       .filter((x) => x.n > 0)
       // „unklar“ immer zuletzt, sonst nach Anzahl
       .sort((a, b) => Number(a.cause === "unknown") - Number(b.cause === "unknown") || b.n - a.n || a.i - b.i)
       .map((x) => ({ ...x, share: total > 0 ? x.n / total : 0 }));
-  }, [load]);
+  }, [load, total]);
 
   return (
     <section className="glass rounded-xl p-5" data-testid="lag-section">
@@ -69,7 +69,8 @@ export function LagSection() {
       {load.state === "ok" && bars.length === 0 && <div className="mt-5 rounded-lg bg-surface px-4 py-5 text-[13px] text-muted">{t("lag.section.empty")}</div>}
       {load.state === "ok" && bars.length > 0 && (
         <>
-          <div className="mt-5 text-[15px] font-semibold text-fg tabular">{causeSummary(load.counts, t)}</div>
+          {/* nur die Summe – die Ursachen stehen darunter als Balken */}
+          <div className="mt-5 text-[13px] font-medium text-fg-soft tabular">{total === 1 ? t("lag.summary.headOne") : t("lag.summary.head", { n: total })}</div>
           <div className="mt-4 flex flex-col gap-3">
             {bars.map((b) => {
               const Icon = CAUSE_ICONS[b.cause];
@@ -81,7 +82,7 @@ export function LagSection() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="truncate text-[13px] font-medium text-fg">{b.cause === "unknown" ? t("lag.unclearCause") : t("lag.likely", { cause: causeLabel(b.cause, null, t) })}</span>
+                      <span className="truncate text-[13px] font-medium text-fg">{b.cause === "unknown" ? t("lag.unclearCause") : capitalizeFirst(t("lag.likely", { cause: causeLabel(b.cause, null, t) }))}</span>
                       <span className="shrink-0 text-[13px] font-semibold text-fg tabular">
                         {t("lag.section.share", { n: b.n })} <span className="font-normal text-muted">· {Math.round(b.share * 100)} %</span>
                       </span>

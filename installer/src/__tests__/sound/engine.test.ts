@@ -492,6 +492,28 @@ describe("Bausteine der Fassade", () => {
     expect(s.ctx.count()).toBe(b);
   });
 
+  it("alertTone bei verborgenem Fenster nur mit whileHidden, stumm bleibt stumm", () => {
+    const s = setup();
+    s.doc.setHidden(true);
+    const mark = s.ctx.count();
+    s.eng.alertTone(1);
+    expect(s.ctx.count()).toBe(mark);
+    s.eng.alertTone(1, { whileHidden: true });
+    const oscs = s.ctx.created.slice(mark).filter((n): n is FakeOscillator => n.kind === "oscillator");
+    expect(oscs.length).toBe(2);
+    s.eng.setMuted(true);
+    const b = s.ctx.count();
+    s.eng.alertTone(1, { whileHidden: true });
+    expect(s.ctx.count()).toBe(b);
+    // die Puls-Stimme plant verborgen weiterhin nichts
+    s.eng.setMuted(false);
+    const v = s.eng.createVoice({ periodS: 0.25 });
+    const c = s.ctx.count();
+    v.start();
+    s.time.advance(1);
+    expect(clicksOf(s.ctx, c).length).toBe(0);
+  });
+
   it("sweep: fallende Kurve, RangeError bei fHi ≤ fLo", () => {
     const s = setup();
     const mark = s.ctx.count();

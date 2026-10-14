@@ -235,6 +235,7 @@ function HeatmapCard({ model, lang }: { model: CalendarModel; lang: Lang }) {
       state,
       label: t("calendar.cellLabel", { when: whenText(c.weekday, c.hour, t, 1), state: stateText }),
       highlight: best !== null && c.weekday === best.weekday && (c.hour === best.hour || c.hour === best.hour + 1),
+      mark: best !== null && c.weekday === best.weekday && c.hour === best.hour ? t("calendar.bestMark") : undefined,
     };
   });
   return (

@@ -544,10 +544,14 @@ export class SoundEngine {
     }
   }
 
-  /** „Einzelton“ für den Warnton: 694,81 Hz + 1389,61 Hz (−12 dB), Anstieg 15 ms, τ 120 ms; Spitze = level × −20 dBFS. */
-  alertTone(level: number, o: { at?: number } = {}): void {
+  /**
+   * „Einzelton“ für den Warnton: 694,81 Hz + 1389,61 Hz (−12 dB), Anstieg 15 ms, τ 120 ms; Spitze = level × −20 dBFS.
+   * `whileHidden`: auch bei verborgenem Fenster (document.hidden) spielen – für den Warnton im Spiel, wenn Pulsar
+   * im Hintergrund liegt. Stummschaltung, Lautstärke 0 und ein ungesunder Kontext verhindern den Ton weiterhin.
+   */
+  alertTone(level: number, o: { at?: number; whileHidden?: boolean } = {}): void {
     try {
-      if (!this.prepared()) return;
+      if (!this.prepared(o.whileHidden === true)) return;
       const g = this.g as Graph;
       const peak = clamp(Number.isFinite(level) ? level : 0, 0, 1) * dbToGain(-20);
       if (peak <= 0) return;
@@ -665,9 +669,11 @@ export class SoundEngine {
     return this.voices.size;
   }
 
-  private prepared(): boolean {
+  private prepared(allowHidden = false): boolean {
     if (this._muted || this._volume <= 0) return false;
-    return this.ensure() !== null && this.audibleGraph() !== null;
+    if (this.ensure() === null) return false;
+    if (allowHidden) return this.g !== null && this.clock.healthy;
+    return this.audibleGraph() !== null;
   }
 
   /** Modellzeit für „jetzt“ bzw. at – so bleiben Abstände innerhalb eines Rezepts exakt. */

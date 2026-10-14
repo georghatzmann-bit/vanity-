@@ -25,6 +25,7 @@ export const timelineEn: Dict["timeline"] = {
     examined: "{n} of {m} spikes examined",
     estimate: "Causes are estimates, not certainties.",
   },
+  zoomRange: "Showing {from}–{to} of {total}",
   zoom: {
     label: "Zoom",
     all: "Whole match",
@@ -94,7 +95,9 @@ export const timelineEn: Dict["timeline"] = {
     loss: "Loss",
     spikes: "Spikes",
     customTarget: "custom target",
-    footer: "Measured by Pulsar to {target} · causes are estimates",
+    footer: "Ping measured by Pulsar to {target} – not the game connection · causes are estimates",
+    limitLabel: "Spike limit {ms} ms",
+    outage: "Outage",
   },
   sessions: {
     title: "Sessions",

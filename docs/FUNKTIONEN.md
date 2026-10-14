@@ -35,6 +35,25 @@ Titelleiste. Abschaltbar unter **Einstellungen → Aussehen → Startanimation**
 - **PC-Auslastung** (CPU, RAM, GPU) und **Schnellzugriff** auf Regionen, Route, DNS, Speedtest.
 - **Letzte Runde**: Bericht mit Ping-Verlauf und Note.
 - **Favoriten**: zweite Cover-Reihe mit deinen Lieblingsspielen.
+- **Schnellzugriff „Warum laggt es?“** öffnet die geführte Prüfung (siehe Netzwerk).
+
+### Lag-Detektiv und „Hör dein Netz“ in der Live-Ping-Karte
+![Lag-Detektiv im Cockpit](screenshots/funktionen/02c-cockpit-lag-detektiv.jpg)
+- **Lag-Detektiv:** Springt der Ping plötzlich hoch (ein **Ausreißer**), macht Pulsar sofort eine **Momentaufnahme**
+  von etwa einer Sekunde: das Messziel noch einmal, die ersten drei Stationen der Route, dein Router, das WLAN-Signal,
+  der Datenverkehr auf diesem PC und die CPU-Last. Daraus schätzt Pulsar die Ursache. Im Cockpit steht dann eine
+  Minute lang z. B. „182 ms · Vermutlich Heimnetz/Router“ mit dem Zusatz **Einschätzung**. Klick darauf öffnet die
+  Einzelheiten unter **Netzwerk → Verbindung**. Ist der PC stark ausgelastet, steht dort zusätzlich „PC ausgelastet“.
+- **Hör dein Netz** (Kopfhörer-Knopf neben dem Ausreißer): macht den Live-Ping hörbar – ein leiser Pulsar-Puls je
+  Messung. Gleichmäßig = stabil, stolpernd = Schwankung, Lücken = Verlust, ein betonter Puls = Ausreißer. Die Tonhöhe
+  folgt auf Wunsch dem Ping (hell = niedrig, dunkel = hoch – keine Melodie). Startet nur per Klick, stoppt, wenn du
+  Pulsar in den Infobereich schickst oder der Monitor pausiert. Die vier Balken im Knopf zeigen den letzten Puls.
+
+Ehrlich dazu: Die Ursache ist eine **Einschätzung** aus einer Momentaufnahme, keine Gewissheit – war der Ausreißer
+schon vorbei, heißt sie „unklar“. Pulsar sieht andere Geräte im Haushalt nicht; lädt dort jemand, sieht das aus wie
+„Anschluss/Anbieter“. Mit VPN bleibt die Ursache „unklar“. Für die Momentaufnahme sendet Pulsar ein paar kleine
+Pakete (abschaltbar unter **Einstellungen → Messung**). Der Ton übersetzt nur die Messung in Klang – er verbessert
+nichts, und das Stolpern ist nicht das echte Timing einzelner Pakete.
 
 ### BOOST
 ![Boost](screenshots/funktionen/03-cockpit-boost-hover.jpg)
@@ -114,6 +133,69 @@ Das ist Bufferbloat, der häufigste Grund für Lags, „obwohl das Internet schn
 Alle Netzwerkadapter mit Geschwindigkeit, IP, Router und DNS; die Hauptverbindung ist markiert.
 Bei WLAN: Signalstärke als Ring, Band (2,4/5/6 GHz), Kanal, Standard, Datenrate – plus Tipps (z. B. „Für Online-Spiele ist ein Kabel die beste Wahl“).
 
+### Lag-Detektiv (Karte unter Verbindung)
+![Lag-Detektiv](screenshots/funktionen/20a-netzwerk-lag-detektiv.jpg)
+Die letzten 20 Ausreißer seit dem Start von Pulsar, das neueste aufgeklappt. Oben die Zählung, z. B. „8 Ausreißer
+untersucht – vermutlich: 3× Anschluss/Anbieter, 2× Heimnetz/Router, …, 1× unklar“. Jedes Ereignis zeigt:
+- das Ziel bei der Momentaufnahme (Ping, Verluste, Ausreißer-Grenze), den Router mit seinem üblichen Wert, die Verbindungsart,
+- den Datenverkehr auf diesem PC (mit dem üblichen Wert und der Leitung als Bezug) und die CPU-Last,
+- die ersten drei Stationen der Route mit Zone (Heimnetz, Anbieter, Internet) und üblichem Wert – stumme Stationen heißen „keine Antwort“,
+- **Warum diese Einschätzung** in ganzen Sätzen und einen Verweis zum nächsten Schritt („WLAN-Tab öffnen“ bzw. „„Warum laggt es?“ öffnen“).
+
+Mögliche Ursachen: **WLAN**, **Heimnetz/Router**, **Anschluss/Anbieter** (immer mit „auch möglich: Leitung durch
+andere Geräte im Haushalt ausgelastet“), **Internet (hinter dem Anbieter)**, **Datenverkehr auf diesem PC** und **unklar**.
+Die üblichen Werte lernt Pulsar in ruhigen Momenten (etwa einmal pro Minute ein paar kleine Pakete).
+
+Ehrlich dazu: Über WLAN lassen sich WLAN und Router nicht sauber trennen – beides heißt dann „WLAN“. Viele Router und
+Anbieter beantworten die Anfragen an einzelne Stationen nur nachrangig oder gar nicht. Den Datenverkehr sieht Pulsar
+nur als Summe des Adapters, nicht welches Programm ihn verursacht. Pulsar behebt keine Ursache selbst.
+
+### WLAN-Scanner
+![WLAN-Scanner](screenshots/funktionen/20b-netzwerk-wlan-scanner.jpg)
+Neuer Tab **WLAN**:
+- **Kanalbelegung** je Band (2,4 / 5 / 6 GHz) als Balken – „Höhe = wie voll der Kanal durch Nachbarnetze ist“. Dein Netz ist markiert, der empfohlene Kanal umrandet.
+- **Empfehlung für deinen Router:** aktueller Kanal und Belegung → empfohlener Kanal, z. B. „Kanal 6 · stark belegt → Kanal 11 · kaum belegt“, mit dem Satz, ob sich ein Wechsel lohnt. Passt der Kanal schon, steht dort nur „passt“.
+- **Netze in der Nähe:** Name, Signal, Kanal, Band, Breite, WLAN-Standard und Alter des Eintrags; dein verbundenes Netz zuerst. Gast- und Hotspot-Netze deines eigenen Routers zählen nicht als fremde Last (erkannt an der Geräteadresse – eine Schätzung).
+- Seit Windows 11 24H2 gibt Windows WLAN-Daten nur mit **Standortzugriff** frei. Fehlt er, erklärt die Seite das und hat einen Knopf **Windows-Einstellungen öffnen**.
+
+Ehrlich dazu: Pulsar stellt **keinen Kanal um** – das machst du im Router selbst (meist unter WLAN → Funkkanal).
+Viele Router wählen den Kanal automatisch; eine feste Einstellung lohnt nur, wenn die Automatik schlecht wählt.
+Die Liste ist eine Momentaufnahme an diesem Ort. Störungen außerhalb des WLANs (Mikrowelle, Bluetooth, Funk-Kameras)
+sieht der Scan nicht. Weil ein aktiver Scan auf manchen Treibern kurz den Ping erhöht, scannt Pulsar nie, während ein
+Spiel läuft. Den Standortzugriff braucht nur Windows – Pulsar ermittelt keinen Standort und sendet nichts.
+
+### Raum-Scan
+![Raum-Scan](screenshots/funktionen/20c-netzwerk-raum-scan.jpg)
+Im selben Tab: Räume anlegen (bis zu 20), mit dem Laptop hingehen und **Hier messen** klicken. Pulsar misst Signal,
+Band, die WLAN-Verbindungsrate und – wenn das WLAN die Hauptverbindung ist – den Ping zum Router, und zeigt eine
+Rangliste mit **Bester Platz**, „Platz 2“, „Platz 3“ und einer Bewertung (sehr gut … schwach).
+
+Ehrlich dazu: Die Werte gelten für **dieses Gerät** – Konsole und Handy haben andere Antennen. Die WLAN-Verbindungsrate
+ist das Tempo zwischen PC und Router, nicht dein Internet-Tempo. Gespeichert wird nur dein eigenes Netz, keine Namen
+fremder Netze.
+
+### „Warum laggt es?“
+![„Warum laggt es?“ läuft](screenshots/funktionen/20d-netzwerk-warum-laggt-es-laeuft.jpg)
+![„Warum laggt es?“ – Einschätzung](screenshots/funktionen/20e-netzwerk-warum-laggt-es-diagnose.jpg)
+Neuer Tab **Warum laggt es?**: eine geführte Prüfung von etwa einer Minute in sechs Schritten – **Verbindung**
+(Kabel/WLAN, getaktete Verbindung), **Router** (20 Pings an den Router und die ersten Stationen), **Server** (Messziel
+und Lieblingsregionen), **Route**, **Datenverkehr** (Auslastung des PCs) und auf Wunsch ein **Speedtest** (der Schalter
+zeigt, wie viel Datenvolumen er höchstens verbraucht). Danach oben die **Einschätzung** in einem Satz, z. B. „Wenn
+deine Leitung voll ist (Downloads, Streams), steigt dein Ping um 78 ms“, mit nummerierten Schritten, was du tun
+kannst. Darunter weitere Befunde (z. B. „Dein Router funkt hier auch auf 5 GHz“, „Dein WLAN-Kanal 6 ist stark belegt“)
+mit Verweisen wie **WLAN-Tab öffnen**. Die Prüfschritte klappen nach dem Ende ein; die letzte Prüfung bleibt gespeichert.
+Einstieg auch im Cockpit (Schnellzugriff) und in der Befehlspalette. Bei einer **getakteten Verbindung** (z. B. Handy-Hotspot,
+wenn Windows ihn so kennt) ist der Speedtest zuerst aus.
+
+Unterschied zum Lag-Detektiv: „Datenverkehr auf diesem PC“ bewertet die Diagnose in Ruhe vor dem Speedtest mit einer
+festen Grenze von 5 Mbit/s; der Lag-Detektiv dagegen schaut während des Spiels, ob der Verkehr deutlich über deinem
+üblichen Wert bzw. nahe an deiner Leitung lag.
+
+Ehrlich dazu: Die Diagnose ist eine regelbasierte Einschätzung aus einer Prüfung von etwa einer Minute – Lag, der nur zu
+bestimmten Zeiten auftritt, kann sie verpassen (dafür gibt es Lag-Detektiv und Anbieter-Protokoll). Pulsar sieht andere
+Geräte im Haushalt nicht. Lag kann auch vom Spielserver selbst kommen (Serverlast, Tickrate) – das kann Pulsar nicht
+messen. Pulsar ändert bei der Prüfung nichts an Windows oder am Router.
+
 ---
 
 ## Optimieren
@@ -159,23 +241,92 @@ Die zwei Netzwerk-Einstellungen bringen meist nur wenig und wirken erst nach ein
 ## Berichte
 ![Berichte](screenshots/funktionen/23-berichte.jpg)
 Jede Spielrunde bekommt einen Bericht: Note, Ping-Verlauf, Ø/Max, Spitzen, Verlust, Messziel, ob geboostet.
-Oben: beste und schlechteste Runde und der Trend der letzten Runden.
+Oben: beste und schlechteste Runde und der Trend der letzten Runden. Die Seite hat jetzt vier Bereiche:
+**Runden**, **Kalender**, **Anbieter-Protokoll** und **Ausreißer**.
+
+### Ausreißer und ihre Ursachen
+![Ausreißer](screenshots/funktionen/23b-berichte-ausreisser-ursachen.jpg)
+Alle Ausreißer der letzten 30 Tage, die der Lag-Detektiv untersucht hat, nach Ursache gezählt – als Balken mit Anzahl
+und Anteil, z. B. „40 Ausreißer untersucht“. „Unklar“ wird immer mitgezählt.
+
+Ehrlich dazu: Jede Ursache ist eine Einschätzung aus einer Momentaufnahme. Andere Geräte im Haushalt sieht Pulsar nicht –
+eine ausgelastete Leitung sieht aus wie „Anschluss/Anbieter“.
+
+### Match-Zeitleiste
+![Match-Zeitleiste](screenshots/funktionen/23c-berichte-zeitleiste.jpg)
+Klick auf eine Runde öffnet ihre Zeitleiste: Kopf mit Note, Ø-Ping, Min/Max, Schwankung, Verlust und Ausreißern, dazu
+die **Momentaufnahmen (je 10 s zusammengefasst)** mit den Ursachen. Darunter Spuren für **Ping**, **Schwankung**,
+**Verlust**, **Ausreißer** (mit Ursachen-Symbol) und **Last** (CPU, empfangener und gesendeter Datenverkehr). Ansicht „Ganze Runde“, „5 min“
+oder „1 min“; mit Umschalt + Mausrad scrollst du waagerecht. Wechselt das Messziel während der Runde, steht das in der Spur.
+
+Ehrlich dazu: Die Zeitleiste zeigt, was Pulsar während der Runde zu **seinem Messziel** gemessen hat – nicht die
+Verbindung, die das Spiel selbst benutzt. Rohdaten gibt es nur für die 50 neuesten Runden (höchstens 90 Tage) und nur,
+solange der Monitor lief; ältere Berichte zeigen die verdichtete Kurve.
+
+### Bildkarte
+![Bildkarte](screenshots/funktionen/23d-berichte-bildkarte.jpg)
+**Als Bild speichern** in der Zeitleiste zeigt erst eine Vorschau und speichert die Runde dann als PNG
+(2400 × 1260 Pixel) – zum Teilen mit Freunden oder im Discord. Auf der Karte: Spiel, Datum, Dauer, Note, Ø-Ping,
+Schwankung, Verlust, Ausreißer, die Ping-Kurve und die Ursachen-Zählung.
+
+Ehrlich dazu: Die Karte enthält keine Adressen, keine WLAN-Namen und keine Bilder – nur Name und Werte dieser Runde. Unten
+steht klein, dass es Pulsars Ping zum Messziel ist und die Ursachen Einschätzungen sind.
+
+### Pulsar-Kalender
+![Kalender](screenshots/funktionen/23e-berichte-kalender.jpg)
+Wann war deine Verbindung bisher am ruhigsten? Jedes Fach ist ein Wochentag zu einer Stunde, gefärbt nach der Note aus
+Ø-Ping, Schwankung, Verlust und Ausreißern. Filter: Ziel, Netz („Netz 1“, „Netz 2“ …), Verbindungsart und Zeitraum
+(30/90/365 Tage). Gibt es genug Daten (mindestens 20 Stunden Messzeit an 7 Tagen) und einen deutlichen Unterschied,
+nennt Pulsar die ruhigste Zeit, z. B. „Bisher am ruhigsten: Di 17–19 Uhr“, und eine Zeit, die du eher meiden solltest.
+Sonst steht dort ehrlich „Zu wenig Daten“ oder „Kein deutlicher Unterschied“.
+
+Ehrlich dazu: Der Kalender ist ein **Rückblick, keine Vorhersage**. Gemessen wurde nur, wenn Pulsar lief – Stunden, in
+denen du nie spielst, bleiben leer. Kabel, WLAN, VPN und verschiedene Netze werden getrennt, weil sie sich nicht vergleichen lassen.
+
+### Anbieter-Protokoll
+![Anbieter-Protokoll](screenshots/funktionen/23f-berichte-anbieter-protokoll.jpg)
+Aussetzer, Paketverlust, langsame Minuten und Speedtests mit Uhrzeit – für ein Netz und einen Zeitraum von 7, 30
+oder 90 Tagen. Oben die Datenbasis (Messzeit, Zeitzone, Messziele, WLAN-Anteil), Kennzahlen („Aussetzer Internet“,
+„Andere Aussetzer“, „Zeiten mit Paketverlust“, „Langsame Minuten“, „Speedtests“), Messstunden je Tag und die Liste aller
+Ereignisse. **Bericht speichern (HTML)** (zum Drucken) oder **Als CSV speichern**. Nur Aussetzer, bei denen auch zwei
+unabhängige Internet-Adressen nicht antworteten, heißen „Aussetzer der Internetverbindung“; Aussetzer am PC (Standby,
+Kabel gezogen, WLAN-Wechsel, VPN) und nur des Messziels stehen getrennt. Während Pulsars eigenem Speedtest bzw. WLAN-Scan
+wird nichts protokolliert („Pause (eigene Messung)“). Hast du deine Vertragswerte eingetragen, steht bei Speedtests
+zusätzlich der Anteil davon – als Zahl, ohne Bewertung.
+
+Ehrlich dazu: Das Protokoll ist ein **Indiz, kein Nachweis**, und Pulsar bewertet nichts juristisch. Für Ansprüche
+gegenüber dem Anbieter zählt in Deutschland bei Festnetz-Anschlüssen die **Breitbandmessung der Bundesnetzagentur** –
+der gelbe Kasten erklärt das und öffnet breitbandmessung.de. Ein Protokoll per WLAN ist ein schwaches Indiz für den Anschluss.
 
 ---
 
 ## Einstellungen
 ![Aussehen](screenshots/funktionen/24-einstellungen-aussehen.jpg)
+![Hör dein Netz](screenshots/funktionen/24b-einstellungen-hoer-dein-netz.jpg)
 ![Messung](screenshots/funktionen/25-einstellungen-messung.jpg)
+![Momentaufnahmen und Vertragswerte](screenshots/funktionen/25b-einstellungen-messverlauf-vertrag.jpg)
 ![Overlay](screenshots/funktionen/26-einstellungen-overlay.jpg)
 ![Über Pulsar](screenshots/funktionen/27-einstellungen-ueber.jpg)
 - **Aussehen:** 4 Themes (Pulsar, Glut, Toxic, Frost) mit Lichtkreis-Übergang, eigene Akzentfarbe, Animationen (voll/verringert/aus), Startanimation, Sprache.
 - **Sound:** alle Klänge werden live erzeugt (keine Dateien); Lautstärke, Hover-Töne, Probehören.
-- **Messung:** Messziel im Cockpit, Messabstand, Warnschwelle, Windows-Benachrichtigungen.
+  Unterabschnitt **Hör dein Netz**: Lautstärke, „Tonhöhe folgt dem Ping“, **Warnton im Spiel** (Standard aus – ein sehr
+  leiser Einzelton bei einem Ausreißer, nur während ein Spiel läuft, höchstens alle 10 s), Warnton-Lautstärke und
+  **Probehören** („Stabil“, „Schwankung“, „Verlust“, „Warnton“ – je 4 Sekunden Beispielwerte, keine echte Messung).
+- **Messung:** Messziel im Cockpit, Messabstand, Warnschwelle, Windows-Benachrichtigungen,
+  **Momentaufnahmen bei Ausreißern** (Lag-Detektiv; aus = Ausreißer werden nur gemeldet, keine zusätzlichen Pakete) und
+  **Für das Anbieter-Protokoll (optional)**: „Langsam ab … ms“ und deine Vertragswerte (Download/Upload „Maximum laut
+  Vertrag“, optional „normalerweise verfügbar“ und „minimal“ aus dem Produktinformationsblatt).
 - **Boost:** automatisch boosten, sobald ein Spiel startet.
 - **Overlay:** an/aus, Tastenkürzel (aufnehmen), Ecke, Deckkraft, angezeigte Werte.
 - **Verhalten:** Schließen minimiert in den Infobereich, mit Windows starten.
 - **Spiele:** beim Start nach neuen Spielen suchen, SteamGridDB-Schlüssel (freiwillig).
 - **Daten & Sicherung:** automatische Backups (täglich, die letzten 10) wiederherstellen, jetzt sichern, Bild-Zwischenspeicher leeren.
+  **Messverlauf dauerhaft speichern** (Ping-Statistik je Stunde für 400 Tage, Ereignisse bis 365 Tage, Rohdaten der
+  letzten 50 Runden für 90 Tage – nur lokal, nichts verlässt den PC) und **Messverlauf löschen** (mit Rückfrage; die
+  Berichte bleiben, ältere Sicherungen enthalten den Verlauf noch, bis sie ersetzt werden).
+
+Ehrlich dazu: Der Messverlauf ist nur so vollständig wie die Zeit, in der Pulsar lief und gemessen hat – Lücken bleiben
+Lücken. Er braucht typisch 2–6 MB, im ungünstigsten Fall etwa 15 MB; die Sicherungen sind Kopien der ganzen Datei.
 - **Über Pulsar:** Version, Update prüfen und **Jetzt aktualisieren**, Datenordner, Tastenkürzel.
 
 ---
@@ -185,6 +336,7 @@ Oben: beste und schlechteste Runde und der Trend der letzten Runden.
 ### Befehlspalette
 ![Befehlspalette](screenshots/funktionen/28-befehlspalette.jpg)
 `Strg + K` oder `/`: Spiele starten, Seiten öffnen, Boost, Speedtest, Route, Netzwerk automatisch optimieren, Theme wechseln – alles per Tastatur.
+Neu: **Warum laggt es?**, **WLAN-Scanner**, **Anbieter-Protokoll** und **Kalender** springen direkt zur passenden Seite.
 
 ### Spiele automatisch finden
 ![Suchen](screenshots/funktionen/29-spiele-suchen.jpg)

@@ -6,6 +6,24 @@
 
 @custom-variant dark (&:where([data-theme="pulsar"], [data-theme="ember"], [data-theme="toxic"]) *);
 
+/* Farbe je Lag-Ursache (Balken, Zeitleiste, Karten) – WLAN und Router unterscheidbar */
+:root {
+  --nv-cause-wifi: #f5b942;
+  --nv-cause-router: #f08a4b;
+  --nv-cause-isp: #f0607a;
+  --nv-cause-internet: #5b8def;
+  --nv-cause-local: #a77bf3;
+  --nv-cause-unknown: #8b93a7;
+}
+[data-theme="frost"] {
+  --nv-cause-wifi: #b7800f;
+  --nv-cause-router: #c8601f;
+  --nv-cause-isp: #d23b5a;
+  --nv-cause-internet: #3a6fd8;
+  --nv-cause-local: #7c4fd6;
+  --nv-cause-unknown: #6b7489;
+}
+
 /* App-spezifisch */
 .app-shell {
   position: relative;

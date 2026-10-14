@@ -22,6 +22,7 @@ export const FINDING_IDS = [
   "wifiChannel",
   "routerSlow",
   "homeRouterJump",
+  "routeUnclear",
   "serverLoss",
   "ispPath",
   "internetPath",
@@ -42,7 +43,8 @@ export type FindingId = (typeof FINDING_IDS)[number];
 export type Severity = "high" | "medium" | "info" | "ok";
 
 /** Ergebnis von `routeJump(hops, gateway)` */
-export type RouteJump = "home" | "isp" | "internet" | "target" | "none" | "notMeasurable";
+/** `unclear` = privater Hop hinter TTL 1, der nicht das Gateway ist (zweiter Router oder Netz des Anbieters, z. B. Mobilfunk) */
+export type RouteJump = "home" | "unclear" | "isp" | "internet" | "target" | "none" | "notMeasurable";
 
 export interface Finding {
   id: FindingId;

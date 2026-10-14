@@ -357,6 +357,7 @@ impl Recorder {
                     quiet: ctx.quiet,
                     slow_ms: self.settings.slow_ms,
                     gateway_base: self.gateway_base,
+                    dst,
                 });
                 if let Some(session_id) = session {
                     let key = chunk::ChunkKey { session_id, target_key: target.id.clone(), target_label: target.label.clone(), method };
@@ -556,16 +557,23 @@ impl Recorder {
         self.gateway_base
     }
 
-    /// Vor einer Wiederherstellung: gepufferte Sitzungsdaten und gemerkte rowids verwerfen, Epoche
-    /// erhöhen.
+    /// Vor einer Wiederherstellung: Blöcke, Ausreißer, Ereignisse (auch in offenen Stapeln) und
+    /// gemerkte rowids verwerfen, Epoche erhöhen – sie hängen an Sitzungs-IDs bzw. Zeilen der alten
+    /// Datenbank. Stunden-Summen bleiben (echte Messwerte ohne Sitzungsbezug). Einstellungen, Bezug,
+    /// Median und letzte Sitzung gelten als unbekannt: Sie stammen aus der alten Datenbank (die
+    /// Einstellungen lädt `restore_db` danach sofort neu, sonst der nächste Flush).
     pub fn discard_session_data(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
+        self.clear_buffers(ClearScope::Events);
         self.chunk.clear();
         self.pending.chunks.clear();
         for b in &mut self.outbox {
             b.chunks.clear();
         }
-        self.rowids.clear();
+        self.settings_loaded = false;
+        self.reference = None;
+        self.median = None;
+        self.last_session = None;
     }
 
     /// Kurz-Sitzung (< 10 s) gelöscht: deren Blöcke verwerfen.
@@ -684,6 +692,12 @@ impl Recorder {
     #[cfg(test)]
     fn outbox_len(&self) -> usize {
         self.outbox.len()
+    }
+
+    /// Anzahl vorgemerkter Ereignisse (für Tests außerhalb des Recorders).
+    #[cfg(test)]
+    pub(crate) fn pending_drafts_len(&self) -> usize {
+        self.pending.drafts.len() + self.outbox.iter().map(|b| b.drafts.len()).sum::<usize>()
     }
 }
 
@@ -1199,6 +1213,8 @@ mod tests {
             assert!(r.pending.chunks.is_empty(), "Blöcke verworfen");
             assert_eq!(r.pending.hourly.len(), 1, "Stunden-Summen bleiben");
             assert!(r.rowids.is_empty(), "rowids vergessen");
+            assert!(r.pending.drafts.is_empty() && r.outbox.iter().all(|b| b.drafts.is_empty()), "Ereignisse verworfen");
+            assert!(!r.settings_loaded && r.reference.is_none() && r.median.is_none() && r.last_session.is_none());
         }
         // Ein Schreibfehler über eine Wiederherstellung hinweg: Blöcke der alten Epoche nie schreiben
         env.rec().pending.chunks.push(chunk_for(sid, 2_000));

@@ -38,20 +38,29 @@ export function TimelineHeader({ header: h, game, onSaveImage, sessionOnly }: { 
       {game?.palette && (
         <div className="pointer-events-none absolute inset-0 opacity-[0.16]" style={{ background: `radial-gradient(120% 140% at 0% 0%, ${game.palette.primary}, transparent 55%)` }} />
       )}
-      <div className="relative flex flex-wrap items-start gap-5">
+      {/* Note oben rechts (unter 1100 px kleiner); der Inhalt lässt rechts Platz dafür */}
+      <div className="absolute top-5 right-5 z-[1]">
+        <span className="hidden min-[1100px]:block">
+          <GradeRing grade={h.grade} size={84} label={t("timeline.card.grade")} />
+        </span>
+        <span className="block min-[1100px]:hidden">
+          <GradeRing grade={h.grade} size={72} label={t("timeline.card.grade")} />
+        </span>
+      </div>
+      <div className="relative flex items-start gap-5 pr-[88px] min-[1100px]:pr-[100px]">
         {game && (
           <button type="button" onClick={() => useUI.getState().navigate({ page: "game", id: game.id })} className="hidden h-[104px] w-[74px] shrink-0 overflow-hidden rounded-lg shadow-md sm:block" title={game.name}>
             <GameCover game={game} />
           </button>
         )}
-        <div className="min-w-[280px] flex-1">
+        <div className="min-w-0 flex-1">
           <div className="text-[11px] font-semibold tracking-[0.14em] text-accent uppercase">{t("timeline.title")}</div>
           <h1 className="mt-1 truncate font-display text-3xl font-bold text-fg">{h.gameName}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
             <span>{formatDateTime(h.start)}</span>
             <span>·</span>
             <span>
-              {t("timeline.header.duration")} {formatDuration(h.durationS, { short: true })}
+              {t("timeline.header.duration")} {formatDuration(h.durationS)}
             </span>
             {h.targets.length > 0 && (
               <>
@@ -67,12 +76,9 @@ export function TimelineHeader({ header: h, game, onSaveImage, sessionOnly }: { 
               <Info className="h-3.5 w-3.5 shrink-0" /> {t("timeline.sessionOnly")}
             </div>
           )}
-        </div>
-        <div className="ml-auto flex shrink-0 items-center gap-4">
-          <Button variant="secondary" icon={<ImageDown className="h-4 w-4" />} onClick={onSaveImage}>
+          <Button variant="secondary" size="sm" className="mt-3" icon={<ImageDown className="h-4 w-4" />} onClick={onSaveImage}>
             {t("timeline.saveImage")}
           </Button>
-          <GradeRing grade={h.grade} size={84} label={t("timeline.card.grade")} />
         </div>
       </div>
 

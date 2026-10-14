@@ -274,7 +274,27 @@ describe("Server", () => {
     expect(find(base({ server: stats(21, 12, 0, 50) }), "jitterHigh")?.severity).toBe("medium");
     expect(has(base({ server: stats(21, 12, 0, 49) }), "jitterHigh")).toBe(false);
     expect(has(base({ server: stats(21, 12, 0, 50), router: stats(1, 5, 0, 20) }), "jitterHigh")).toBe(false);
-    expect(find(base({ server: stats(21, 12, 0, 50), router: stats(null, null, 20, 20) }), "jitterHigh")?.values.variant).toBe("noRouter");
+    expect(find(base({ server: stats(21, 12, 0, 50), router: stats(null, null, 20, 20) }), "jitterHigh")?.values.variant).toBe("noticeableNoRouter");
+    expect(find(base({ server: stats(21, 30, 0, 50), router: stats(null, null, 20, 20) }), "jitterHigh")?.values.variant).toBe("noRouter");
+  });
+  it("jitterHigh: 12,8 ms „spürbar“ (mittel, ohne „Anbieter melden“), 30 ms „stark“ (hoch, mit)", () => {
+    const tr = (key: string, vars?: Record<string, string | number>) => {
+      const raw = lookup(de, key) ?? key;
+      return vars ? raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`)) : raw;
+    };
+    const f = (n: number) => String(n).replace(".", ",");
+    const mild = find(base({ server: stats(21, 12.8, 0, 50) }), "jitterHigh");
+    expect(mild?.severity).toBe("medium");
+    expect(mild && findingText(mild, tr, f)).toBe("Der Ping zum Server schwankt spürbar (12,8 ms), dein Router antwortet dabei gleichmäßig.");
+    expect(mild && fixTexts(mild, tr, f)).toHaveLength(2);
+    expect(mild && fixTexts(mild, tr, f).join(" ")).not.toContain("Anbieter melden");
+    // zusammen mit Paketverlust erscheint der Schritt auch unter 25 ms
+    const withLoss = find(base({ server: stats(21, 12.8, 3, 50) }), "jitterHigh");
+    expect(withLoss && fixTexts(withLoss, tr, f).join(" ")).toContain("Störung beim Anbieter melden");
+    const strong = find(base({ server: stats(21, 30, 0, 50) }), "jitterHigh");
+    expect(strong?.severity).toBe("high");
+    expect(strong && findingText(strong, tr, f)).toBe("Der Ping zum Server schwankt stark (30 ms), dein Router antwortet dabei gleichmäßig.");
+    expect(strong && fixTexts(strong, tr, f)).toHaveLength(3);
   });
   it("ICMP-Ziel → Zusatz „Manche Server drosseln Ping-Antworten“", () => {
     const f = find(base({ server: stats(21, 12, 0, 50), target: { id: "valve-fra", label: "Valve FRA", method: "icmp" } }), "jitterHigh");
@@ -299,12 +319,54 @@ describe("Server", () => {
 });
 
 describe("routeJump", () => {
+  /** auffälliges Ziel (Schwankung 20 ms) – erst dann gibt es Route-Befunde */
+  const shaky = stats(45, 20, 0, 50);
+  const traced = (hops: TraceHop[], over: Partial<DiagnoseInput> = {}) => base({ server: shaky, trace: { target: "x", address: null, hops, reached: true }, ...over });
+
   it("bleibt erhöht → Anbieter (+ Schwere ab 60 ms)", () => {
-    const hops = [hop(1, GW, 1, "lan"), hop(2, "62.155.240.129", 40), hop(3, "62.155.240.130", 42), hop(4, "80.157.204.182", 43), hop(5, "3.123.1.77", 44, "target")];
-    expect(routeJump(hops, GW)).toEqual({ jump: "isp", hop: 2, jumpMs: 39 });
-    expect(find(base({ trace: { target: "x", address: null, hops, reached: true } }), "ispPath")?.severity).toBe("medium");
-    const big = hops.map((h) => (h.hop > 1 ? { ...h, rtts: h.rtts.map((v) => (v === null ? null : v + 30)) } : h));
-    expect(find(base({ trace: { target: "x", address: null, hops: big, reached: true } }), "ispPath")?.severity).toBe("high");
+    const hops = [hop(1, GW, 1, "lan"), hop(2, "62.155.240.129", 6), hop(3, "62.155.240.130", 40), hop(4, "80.157.204.182", 42), hop(5, "3.123.1.77", 44, "target")];
+    expect(routeJump(hops, GW)).toEqual({ jump: "isp", hop: 3, jumpMs: 39 });
+    expect(find(traced(hops), "ispPath")?.severity).toBe("medium");
+    const big = hops.map((h) => (h.hop > 2 ? { ...h, rtts: h.rtts.map((v) => (v === null ? null : v + 30)) } : h));
+    expect(find(traced(big), "ispPath")?.severity).toBe("high");
+  });
+  it("Route-Befunde nur bei auffälligem Ziel; sonst nur in der Detailzeile", () => {
+    const hops = [hop(1, GW, 1, "lan"), hop(2, "62.155.240.129", 6), hop(3, "62.155.240.130", 40), hop(4, "80.157.204.182", 42), hop(5, "3.123.1.77", 44, "target")];
+    expect(routeJump(hops, GW).jump).toBe("isp");
+    expect(has(base({ trace: { target: "x", address: null, hops, reached: true } }), "ispPath")).toBe(false);
+    // Verlust ≥ 3 %, Ø über 100 ms bzw. bessere Region (serverFar) machen das Ziel auffällig
+    expect(has(base({ server: stats(44, 1, 2, 50), trace: { target: "x", address: null, hops, reached: true } }), "ispPath")).toBe(true);
+    expect(has(base({ server: stats(101, 1, 0, 50), trace: { target: "x", address: null, hops, reached: true } }), "ispPath")).toBe(true);
+    const far = { server: stats(90, 1, 0, 50), regions: [{ id: "fra", name: "Frankfurt", stats: stats(40, 1, 0, 4) }] };
+    expect(has(base({ ...far, trace: { target: "x", address: null, hops, reached: true } }), "ispPath")).toBe(true);
+  });
+  it("DSL gesund 1/9/10/12/38/40/42, Server Ø 42 → allGood", () => {
+    const addr = ["62.155.240.129", "62.155.240.130", "80.157.204.182", "52.93.35.126", "52.93.35.127"];
+    const hops = [hop(1, GW, 1, "lan"), ...[9, 10, 12, 38, 40].map((ms, i) => hop(i + 2, addr[i], ms)), hop(7, "3.123.1.77", 42, "target")];
+    // Anstieg 12 → 38 = 26 ms gegenüber der vorherigen Station → kein Sprung
+    expect(routeJump(hops, GW).jump).toBe("none");
+    expect(diagnose(base({ server: stats(42, 1.5, 0, 50), trace: { target: "x", address: null, hops, reached: true } }), 1).verdict).toBe("allGood");
+  });
+  it("LTE 1/35(10.x)/37/40/45 → kein homeRouterJump", () => {
+    const hops = [hop(1, GW, 1, "lan"), hop(2, "10.74.0.1", 35, "isp"), hop(3, "62.155.240.129", 37), hop(4, "62.155.240.130", 40), hop(5, "3.123.1.77", 45, "target")];
+    expect(routeJump(hops, GW).jump).toBe("none");
+    expect(has(traced(hops), "homeRouterJump")).toBe(false);
+    expect(has(base({ server: stats(45, 2, 0, 50), trace: { target: "x", address: null, hops, reached: true } }), "homeRouterJump")).toBe(false);
+  });
+  it("Starlink 1/32(100.64.x)/35/40 → kein ispPath", () => {
+    const hops = [hop(1, GW, 1, "lan"), hop(2, "100.64.0.1", 32, "isp"), hop(3, "149.19.108.1", 35), hop(4, "3.123.1.77", 40, "target")];
+    expect(routeJump(hops, GW).jump).toBe("none");
+    expect(has(traced(hops), "ispPath")).toBe(false);
+  });
+  it("Server-Schwankung 20 ms + Sprung 1/2/3/70/72/75 an Station 4 → ispPath bleibt", () => {
+    const hops = [hop(1, GW, 1, "lan"), hop(2, "62.155.240.129", 2), hop(3, "62.155.240.130", 3), hop(4, "80.157.204.182", 70), hop(5, "52.93.35.126", 72), hop(6, "3.123.1.77", 75, "target")];
+    expect(routeJump(hops, GW)).toEqual({ jump: "isp", hop: 4, jumpMs: 69 });
+    expect(find(traced(hops), "ispPath")?.severity).toBe("high");
+  });
+  it("Zugangsstrecke: Sprung erst ab 60 ms", () => {
+    const at = (ms: number) => [hop(1, GW, 1, "lan"), hop(2, "62.155.240.129", ms), hop(3, "62.155.240.130", ms + 1), hop(4, "3.123.1.77", ms + 2, "target")];
+    expect(routeJump(at(59), GW).jump).toBe("none");
+    expect(routeJump(at(61), GW)).toEqual({ jump: "isp", hop: 2, jumpMs: 60 });
   });
   it("nur ein Ausreißer-Hop → none", () => {
     const hops = [hop(1, GW, 1, "lan"), hop(2, "62.155.240.129", 6), hop(3, "62.155.240.130", 80), hop(4, "80.157.204.182", 9), hop(5, "52.93.35.126", 10), hop(6, "3.123.1.77", 11, "target")];
@@ -318,20 +380,29 @@ describe("routeJump", () => {
     const pub = ["62.155.240.129", "62.155.240.130", "62.155.240.131"];
     const hops = [hop(1, GW, 1, "lan"), ...pub.map((a, i) => hop(i + 2, a, 6 + i)), hop(5, "80.157.204.182", 45), hop(6, "52.93.35.126", 46), hop(7, "3.123.1.77", 47, "target")];
     expect(routeJump(hops, GW).jump).toBe("internet");
-    expect(find(base({ trace: { target: "x", address: null, hops, reached: true } }), "internetPath")?.values.target).toBe("Frankfurt");
+    expect(find(traced(hops), "internetPath")?.values.target).toBe("Frankfurt");
   });
   it("nicht messbar ohne Antworten außer im Heimnetz", () => {
     expect(routeJump([hop(1, GW, 1, "lan"), hop(2, null, null), hop(3, null, null)], GW).jump).toBe("notMeasurable");
     expect(routeJump([], GW).jump).toBe("notMeasurable");
   });
   it("CGNAT bei TTL 2 = Anbieter (Zonenregel der Teilroute, nicht die alte Zone)", () => {
-    const hops = [hop(1, GW, 1, "lan"), hop(2, "100.64.12.1", 40, "lan"), hop(3, "62.155.240.129", 41, "lan"), hop(4, "3.123.1.77", 42, "target")];
+    const hops = [hop(1, GW, 1, "lan"), hop(2, "100.64.12.1", 70, "lan"), hop(3, "62.155.240.129", 71, "lan"), hop(4, "3.123.1.77", 72, "target")];
     expect(routeJump(hops, GW).jump).toBe("isp");
   });
-  it("Sprung hinter doppeltem NAT = Heimnetz", () => {
-    const hops = [hop(1, "192.168.0.1", 1, "lan"), hop(2, "192.168.178.1", 40, "isp"), hop(3, "62.155.240.129", 42), hop(4, "3.123.1.77", 43, "target")];
-    expect(routeJump(hops, "192.168.0.1").jump).toBe("home");
-    expect(find(base({ adapters: [{ ...ethernet, gateway: "192.168.0.1" }], trace: { target: "x", address: null, hops, reached: true } }), "homeRouterJump")?.severity).toBe("medium");
+  it("Sprung bei privater Station hinter TTL 1 (nicht das Gateway) → unklar, nur Hinweis", () => {
+    const hops = [hop(1, "192.168.0.1", 1, "lan"), hop(2, "192.168.178.1", 70, "isp"), hop(3, "62.155.240.129", 72), hop(4, "3.123.1.77", 73, "target")];
+    expect(routeJump(hops, "192.168.0.1")).toEqual({ jump: "unclear", hop: 2, jumpMs: 69 });
+    const f = find(traced(hops, { adapters: [{ ...ethernet, gateway: "192.168.0.1" }] }), "routeUnclear");
+    expect(f?.severity).toBe("info");
+    expect(f?.values).toMatchObject({ hop: 2, ms: 69 });
+    expect(has(traced(hops, { adapters: [{ ...ethernet, gateway: "192.168.0.1" }] }), "homeRouterJump")).toBe(false);
+    expect(has(traced(hops, { adapters: [{ ...ethernet, gateway: "192.168.0.1" }] }), "ispPath")).toBe(false);
+  });
+  it("Sprung am Gateway hinter einem Repeater → Heimnetz", () => {
+    const hops = [hop(1, "192.168.178.2", 1, "lan"), hop(2, GW, 40, "lan"), hop(3, "62.155.240.129", 42), hop(4, "3.123.1.77", 43, "target")];
+    expect(routeJump(hops, GW).jump).toBe("home");
+    expect(find(traced(hops), "homeRouterJump")?.severity).toBe("medium");
   });
 });
 
@@ -476,8 +547,8 @@ describe("Texte de/en", () => {
     });
 
     it(`${lang}: Varianten, Hinweise, Verweise, Schritte, Zustände`, () => {
-      for (const v of ["wifiWeak.signal", "serverLoss.noRouter", "jitterHigh.noRouter", "slowLine.wifi", "slowLine.busy", "slowLine.noContract"]) expect(lookup(dict, `diagnose.variant.${v}`), v).toBeTruthy();
-      for (const n of ["icmpThrottle", "notGuaranteed", "gamePath"]) expect(lookup(dict, `diagnose.note.${n}`)).toBeTruthy();
+      for (const v of ["wifiWeak.signal", "serverLoss.noRouter", "jitterHigh.noRouter", "jitterHigh.noticeable", "jitterHigh.noticeableNoRouter", "slowLine.wifi", "slowLine.busy", "slowLine.noContract"]) expect(lookup(dict, `diagnose.variant.${v}`), v).toBeTruthy();
+      for (const n of ["icmpThrottle", "notGuaranteed", "gamePath", "termBufferbloat"]) expect(lookup(dict, `diagnose.note.${n}`)).toBeTruthy();
       for (const l of Object.values(LINKS).flat()) expect(lookup(dict, `diagnose.link.${l.label}`), l.label).toBeTruthy();
       for (const s of DIAGNOSE_STEPS) {
         expect(lookup(dict, `diagnose.step.${s}.name`)).toBeTruthy();
@@ -504,6 +575,9 @@ describe("Texte de/en", () => {
         { id: "serverFar", severity: "medium", values: { region: "Paris", ms: 20, cur: 90 } },
         { id: "jitterHigh", severity: "medium", values: { ms: 13, icmp: 0 } },
         { id: "jitterHigh", severity: "medium", values: { ms: 13, icmp: 0, variant: "noRouter" } },
+        { id: "jitterHigh", severity: "medium", values: { ms: 13, icmp: 0, variant: "noticeable" } },
+        { id: "jitterHigh", severity: "medium", values: { ms: 13, icmp: 0, report: 1, variant: "noticeableNoRouter" } },
+        { id: "routeUnclear", severity: "info", values: { ms: 69, hop: 2 } },
         { id: "slowLine", severity: "medium", values: { pct: 40, mbps: 200, contract: 500 } },
         { id: "slowLine", severity: "info", values: { pct: 40, mbps: 200, contract: 500, variant: "wifi" } },
         { id: "slowLine", severity: "info", values: { pct: 40, mbps: 200, contract: 500, variant: "busy" } },

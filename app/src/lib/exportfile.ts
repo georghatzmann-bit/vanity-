@@ -51,8 +51,9 @@ export const localDateTime = (ms: number) => {
 /** `pulsar-match-<spiel>-<JJJJ-MM-TT-HHMM>.png` */
 export const matchCardFileName = (gameName: string, start: number) => `pulsar-match-${slug(gameName)}-${localDateTime(start)}.png`;
 
-/** `pulsar-anbieter-protokoll-<von>_bis_<bis>.html|csv` */
-export const ispLogFileName = (from: number, to: number, ext: "html" | "csv") => `pulsar-anbieter-protokoll-${localDate(from)}_bis_${localDate(to)}.${ext}`;
+/** de `pulsar-anbieter-protokoll-<von>_bis_<bis>.html|csv`, en `pulsar-isp-log-<from>_to_<to>.html|csv` */
+export const ispLogFileName = (from: number, to: number, ext: "html" | "csv", lang: "de" | "en" = "de") =>
+  lang === "en" ? `pulsar-isp-log-${localDate(from)}_to_${localDate(to)}.${ext}` : `pulsar-anbieter-protokoll-${localDate(from)}_bis_${localDate(to)}.${ext}`;
 
 /** Text als UTF-8; CSV mit BOM (damit Excel Umlaute richtig liest) */
 export function textBytes(text: string, bom = false): Uint8Array {

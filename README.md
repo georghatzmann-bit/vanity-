@@ -23,6 +23,20 @@ optimiert, was sich lokal optimieren lässt, und erklärt den Rest.
   einzigen Windows-Abfrage. Die zwei Einstellungen bringen meist nur wenig und wirken erst nach einem Neustart.
 - **Optimieren** – Windows-Einstellungen mit Schalter, jede mit Rückgängig
 - **Spiele, Berichte, Overlay** – Bibliothek mit Covern, Bericht zu jeder Runde, Ping-Overlay im Spiel
+- **Lag-Detektiv** – macht bei jedem Ping-Ausreißer eine Momentaufnahme (Router, erste Stationen, WLAN, Datenverkehr, CPU)
+  und nennt die **vermutete** Ursache: WLAN, Heimnetz/Router, Anschluss/Anbieter, Internet, Datenverkehr auf dem PC oder „unklar“
+- **Match-Zeitleiste** – jede Runde als Zeitleiste (Ping, Schwankung, Verlust, Ausreißer mit Ursache, Last), als Bildkarte (PNG) speicherbar
+- **Pulsar-Kalender** – Wochentag × Uhrzeit aus deinen bisherigen Messungen; nennt die bisher ruhigste Zeit (Rückblick, keine Vorhersage)
+- **Hör dein Netz** – der Live-Ping als leiser Pulsar-Ton (gleichmäßig = stabil, stolpernd = Schwankung, Lücken = Verlust),
+  optional ein sehr leiser Warnton bei Ausreißern im Spiel
+- **WLAN-Scanner und Raum-Scan** – Netze in der Nähe, Kanalbelegung und Kanal-Empfehlung für deinen Router (umstellen
+  musst du ihn selbst), Signal je Raum mit „Bester Platz“
+- **„Warum laggt es?“** – geführte Prüfung von etwa einer Minute mit klarer Einschätzung und konkreten Schritten
+- **Anbieter-Protokoll** – Aussetzer, Paketverlust, langsame Zeiten und Speedtests mit Uhrzeit, als HTML/CSV.
+  Ehrlich: ein Indiz, kein Nachweis – dafür gibt es die Breitbandmessung der Bundesnetzagentur
+
+Ehrlich zu allen sieben: Ursachen sind Einschätzungen, kein Ton und keine Prüfung senkt deinen Ping, und der
+Messverlauf bleibt nur lokal auf deinem PC (löschbar unter Einstellungen → Daten & Sicherung).
 
 **Anleitung in einfachen Worten:** [docs/ANLEITUNG.md](docs/ANLEITUNG.md)
 
@@ -55,7 +69,7 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | `node scripts/installer-tour.mjs <url> <ordner>` | Rundgang durch den Installer mit Screenshots aller Szenen (Demo-Backend); vorher `npm run dev:installer` starten |
 | `npm run tauri:dev` | echte App mit Rust-Backend |
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
-| `Pulsar.exe --selftest <bericht.json>` | Eingebauter Selbsttest (Scan, Cover, Ping, Regionen, Spielserver, DNS, Adapter, Tweaks, Boost, Starten, Spielzeit), Exit-Code 0 = alles ok – so prüft die Windows-CI |
+| `Pulsar.exe --selftest <bericht.json>` | Eingebauter Selbsttest (Scan, Cover, Ping, Regionen, Spielserver, DNS, Adapter, Tweaks, Boost, Starten, Spielzeit, Adapter-Zähler, Teilroute, Lag-Momentaufnahme, WLAN-Netze, getaktete Verbindung, Messverlauf speichern in einer temporären Datenbank, Datei-Export), Exit-Code 0 = alles ok – so prüft die Windows-CI |
 | `Pulsar.exe --revert-all` | Stellt ohne Fenster alles zurück, was Pulsar an Windows geändert hat (gesicherter DNS und alle Optimierungen) – höchstens eine Windows-Abfrage. Exit-Code 0 = alles zurückgestellt oder nichts zu tun, 1 = etwas ist übrig geblieben. Der Deinstaller ruft das automatisch auf (nur bei Installationen mit der Marke `"revertAll": true` in `install.json`); klappt es nicht ganz, löscht er die Pulsar-Daten nicht. |
 | `node scripts/feature-shots.mjs` | Screenshots aller Funktionen (Demo-Daten) für `docs/FUNKTIONEN.md`; vorher `npm run dev` und `npm run dev:installer` starten |
 | `node scripts/e2e-app.mjs <app> <ordner>` | Ende-zu-Ende-Test der echten App per WebDriver (Linux mit `xvfb-run`) |
@@ -75,7 +89,8 @@ shared/                 gemeinsames Design-System, Sound-Engine, UI-Bausteine, P
 app/                    Pulsar (React + Tauri/Rust)
   src/                  Oberfläche: Cockpit, Spiele, Netzwerk, Optimieren, Berichte, Einstellungen, Overlay
   src-tauri/            Backend: Ping/Monitor, Regionen, Route, DNS (vergleichen + einstellen), Speedtest,
-                        Adapter/WLAN, Tweaks, Boost, Admin-Helfer, SQLite, Scanner, Start/Spielzeit, Bilder, Tray …
+                        Adapter/WLAN, WLAN-Scan, Lag-Detektiv, Messverlauf (net/recorder), Datei-Export,
+                        Tweaks, Boost, Admin-Helfer, SQLite, Scanner, Start/Spielzeit, Bilder, Tray …
 installer/              Pulsar Setup (React + Tauri/Rust): Download, SHA-256, Verknüpfungen, Deinstaller
 scripts/                build-all, doctor, Screenshot-Rundgänge, Ende-zu-Ende-Tests
 docs/                   Anleitung, Funktionen, API-Verträge, Testbericht, Kreativ-Plan

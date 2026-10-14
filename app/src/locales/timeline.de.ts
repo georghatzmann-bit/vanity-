@@ -24,6 +24,7 @@ export const timelineDe = {
     examined: "{n} von {m} Ausreißern untersucht",
     estimate: "Ursachen sind Einschätzungen, keine Gewissheit.",
   },
+  zoomRange: "Ausschnitt {from}–{to} von {total}",
   zoom: {
     label: "Zoom",
     all: "Ganze Runde",
@@ -97,7 +98,9 @@ export const timelineDe = {
     loss: "Verlust",
     spikes: "Ausreißer",
     customTarget: "eigenes Ziel",
-    footer: "Gemessen von Pulsar zu {target} · Ursachen sind Einschätzungen",
+    footer: "Ping von Pulsar zu {target} – nicht die Spielverbindung · Ursachen sind Einschätzungen",
+    limitLabel: "Ausreißer-Grenze {ms} ms",
+    outage: "Aussetzer",
   },
   /** Sitzungsliste im Spiel (Berichte) */
   sessions: {

@@ -1,7 +1,7 @@
 /**
  * Ursachen-Zählung als Satz – überall gleich (Lag-Detektiv-Karte, Bericht-Detail, Berichte › Ausreißer,
  * PNG-Bildkarte, Anbieter-Protokoll). Immer mit Gesamtzahl und „unklar“, nie ohne „vermutlich“:
- * „5 Ausreißer untersucht – vermutlich: 3× WLAN, 1× Anschluss/Anbieter; 1× unklar“.
+ * „5 Ausreißer untersucht – vermutlich: 3× WLAN, 1× Anschluss/Anbieter, 1× unklar“.
  */
 import { LAG_CAUSES, type LagCause } from "./types";
 
@@ -22,5 +22,5 @@ export function causeSummary(counts: Partial<Record<LagCause, number>>, t: Trans
   const unclearText = t("lag.summary.unclear", { n: unclear });
   if (!known.length) return `${head} – ${unclearText}`;
   const list = known.map((x) => t("lag.summary.item", { n: x.n, cause: t(`lag.cause.${x.c}`) })).join(", ");
-  return `${head} – ${t("lag.summary.likely", { list })}; ${unclearText}`;
+  return `${head} – ${t("lag.summary.likely", { list })}, ${unclearText}`;
 }

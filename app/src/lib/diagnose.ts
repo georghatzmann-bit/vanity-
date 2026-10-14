@@ -156,8 +156,14 @@ export function trafficMbps(counters: DiagnoseInput["counters"]): { rx: number; 
 // Routen-Auswertung
 // ---------------------------------------------------------------------------------------------
 
-/** Sprung ab dieser Höhe über der ersten Station (ms) */
+/** Sprung ab dieser Höhe über der ersten Station und über der vorherigen antwortenden Station (ms) */
 export const JUMP_MS = 30;
+/**
+ * Sprung an der Zugangsstrecke (erste Station hinter dem eigenen Router) zählt erst ab dieser Höhe (ms):
+ * DSL mit Interleaving, LTE/5G und Starlink haben dort normal 30–60 ms – das ist die Bauart der
+ * Leitung, keine Störung.
+ */
+export const ACCESS_JUMP_MS = 60;
 /** Folgestationen dürfen höchstens so viel darunter liegen (ms) */
 export const JUMP_STAYS_MS = 10;
 /** So viele antwortende Stationen (inklusive Ziel) müssen nach dem Sprung folgen */
@@ -173,32 +179,47 @@ export interface RouteJumpResult {
 
 /**
  * Wo steigt die Antwortzeit dauerhaft? Zonen nach der Zonenregel der Teilroute (`reZone`, CGNAT und
- * doppeltes NAT) – nicht die `zone` aus `net_traceroute`. Gesucht ist die erste Station k mit
- * `min(rtts) − base ≥ 30 ms`, nach der mindestens 2 antwortende Stationen folgen, die alle höchstens
- * 10 ms darunter liegen („bleibt erhöht“). Ein einzelner langsamer Hop (Router drosseln
- * Ping-Antworten) zählt deshalb nicht.
+ * doppeltes NAT) – nicht die `zone` aus `net_traceroute`. Gesucht ist die erste Station k, deren
+ * `min(rtts)` sowohl über der ersten antwortenden Station (`base`) als auch über der vorherigen
+ * antwortenden Station um mindestens 30 ms liegt, nach der mindestens 2 antwortende Stationen folgen,
+ * die alle höchstens 10 ms darunter liegen („bleibt erhöht“). Ein einzelner langsamer Hop (Router
+ * drosseln Ping-Antworten) zählt deshalb nicht, ein gleichmäßiger Anstieg über viele Stationen
+ * (Entfernung) auch nicht.
+ *
+ * - Liegt der Sprung an der Zugangsstrecke (erste Station hinter dem eigenen Router), zählt er erst
+ *   ab 60 ms: Interleaving, LTE und Starlink haben dort normal 30–60 ms.
+ * - Liegt er an einer privaten Station hinter TTL 1, die nicht das Gateway ist (Zone `lan` nur, weil
+ *   noch keine öffentliche Station kam), ist offen, ob das ein zweiter Router zu Hause oder das Netz
+ *   des Anbieters ist (Mobilfunk vergibt oft 10.x) → `unclear`.
  */
 export function routeJump(hops: TraceHop[], gateway: string | null): RouteJumpResult {
   const zoned = reZone(
     [...hops].sort((a, b) => a.hop - b.hop),
     gateway,
   );
+  const gw = gateway?.trim() ?? null;
   const answering = zoned
-    .map((h) => {
+    .map((h, i) => {
       const ok = h.rtts.filter((v): v is number => v !== null && Number.isFinite(v));
-      return { hop: h.hop, zone: h.zone, min: ok.length && h.zone !== null ? Math.min(...ok) : null };
+      // sicher zu Hause: das Gateway oder eine private Adresse an der ersten Station
+      const home = h.zone === "lan" && (i === 0 || (gw !== null && h.address?.trim() === gw));
+      return { hop: h.hop, zone: h.zone, home, min: ok.length && h.zone !== null ? Math.min(...ok) : null };
     })
-    .filter((h): h is { hop: number; zone: NonNullable<typeof h.zone>; min: number } => h.min !== null && h.zone !== null);
+    .filter((h): h is { hop: number; zone: NonNullable<typeof h.zone>; home: boolean; min: number } => h.min !== null && h.zone !== null);
   if (!answering.some((h) => h.zone !== "lan")) return { jump: "notMeasurable", hop: null, jumpMs: null };
   const base = answering[0].min;
+  // erste Station hinter dem eigenen Router (Zugangsstrecke)
+  const access = answering.findIndex((h) => !h.home);
   for (let k = 1; k < answering.length; k++) {
     const st = answering[k];
     const rise = st.min - base;
-    if (rise < JUMP_MS) continue;
+    const step = st.min - answering[k - 1].min;
+    const limit = k === access ? ACCESS_JUMP_MS : JUMP_MS;
+    if (rise < limit || step < limit) continue;
     const after = answering.slice(k + 1);
     if (after.length < JUMP_FOLLOWERS) continue;
     if (!after.every((h) => h.min >= st.min - JUMP_STAYS_MS)) continue;
-    const jump: RouteJump = st.zone === "lan" ? "home" : st.zone;
+    const jump: RouteJump = st.zone === "lan" ? (st.home ? "home" : "unclear") : st.zone;
     return { jump, hop: st.hop, jumpMs: Math.round(rise * 10) / 10 };
   }
   return { jump: "none", hop: null, jumpMs: null };
@@ -210,6 +231,9 @@ export function routeJump(hops: TraceHop[], gateway: string | null): RouteJumpRe
 
 const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, info: 2, ok: 3 };
 const ORDER = new Map<FindingId, number>(FINDING_IDS.map((id, i) => [id, i]));
+
+/** Ab dieser Schwankung zum Server heißt sie „stark“ (darunter „spürbar“) */
+export const JITTER_STRONG_MS = 25;
 
 /** Höchstens so viele Befunde (verdict eingeschlossen) */
 export const MAX_FINDINGS = 4;
@@ -329,30 +353,40 @@ export function findingsOf(input: DiagnoseInput): Finding[] {
   }
   const routerQuiet = !routerAnswers; // Router nicht bewertbar → Textvariante „noRouter“
 
+  // Server-Werte für die Route-Regel und die Server-Befunde
+  const serverAvg = server?.avg ?? null;
+  const betterRegion =
+    serverAvg !== null && serverAvg > 80
+      ? (input.regions ?? []).filter((r) => r.stats.avg !== null && answers(r.stats) && (r.stats.avg as number) <= serverAvg - 30).sort((a, b) => (a.stats.avg ?? 0) - (b.stats.avg ?? 0))[0]
+      : undefined;
+  // Route-Befunde nur, wenn das Ziel überhaupt auffällig ist – sonst ist ein Anstieg auf der Route
+  // normale Zugangs- bzw. Entfernungslatenz (er steht dann nur in der Detailzeile von Schritt „Route“)
+  const serverBad = !!server && (server.loss >= 0.03 || (server.jitter ?? 0) >= 12 || !!betterRegion || (serverAvg ?? 0) > 100);
+
   // Route
-  if (input.trace) {
+  if (input.trace && serverBad) {
     const gateway = primary?.gateway ?? null;
     const rj = routeJump(input.trace.hops, gateway);
-    if (rj.jump === "home") add("homeRouterJump", "medium", { ms: Math.round(rj.jumpMs ?? 0), hop: rj.hop ?? 0 });
-    if (rj.jump === "isp") add("ispPath", (rj.jumpMs ?? 0) >= 60 ? "high" : "medium", { ms: Math.round(rj.jumpMs ?? 0), hop: rj.hop ?? 0 });
-    if (rj.jump === "internet" || rj.jump === "target") add("internetPath", "medium", { ms: Math.round(rj.jumpMs ?? 0), hop: rj.hop ?? 0, target: input.target?.label ?? input.trace.target });
+    const at = { ms: Math.round(rj.jumpMs ?? 0), hop: rj.hop ?? 0 };
+    if (rj.jump === "home") add("homeRouterJump", "medium", at);
+    if (rj.jump === "unclear") add("routeUnclear", "info", at);
+    if (rj.jump === "isp") add("ispPath", (rj.jumpMs ?? 0) >= 60 ? "high" : "medium", at);
+    if (rj.jump === "internet" || rj.jump === "target") add("internetPath", "medium", { ...at, target: input.target?.label ?? input.trace.target });
   }
 
   // Server (nicht bei offline – dann sagt der Verlust nichts zusätzlich)
   if (server && !offline) {
     const lost = lostOf(server);
-    if (lost >= 2 && server.loss >= 0.03 && (routerQuiet || (router !== null && router.loss === 0))) {
+    const lossFinding = lost >= 2 && server.loss >= 0.03 && (routerQuiet || (router !== null && router.loss === 0));
+    if (lossFinding) {
       add("serverLoss", server.loss >= 0.05 ? "high" : "medium", { lost, n: server.samples, icmp, ...(routerQuiet ? { variant: "noRouter" } : {}) });
     }
-    const avg = server.avg;
-    if (avg !== null && avg > 80) {
-      const better = (input.regions ?? [])
-        .filter((r) => r.stats.avg !== null && answers(r.stats) && (r.stats.avg as number) <= avg - 30)
-        .sort((a, b) => (a.stats.avg ?? 0) - (b.stats.avg ?? 0))[0];
-      if (better) add("serverFar", "medium", { region: better.name, ms: Math.round(better.stats.avg ?? 0), cur: Math.round(avg) });
-    }
+    if (betterRegion && serverAvg !== null) add("serverFar", "medium", { region: betterRegion.name, ms: Math.round(betterRegion.stats.avg ?? 0), cur: Math.round(serverAvg) });
     if (server.jitter !== null && server.jitter >= 12 && server.samples >= SERVER_MIN_SAMPLES && (routerQuiet || (router?.jitter ?? 99) < 5)) {
-      add("jitterHigh", "medium", { ms: r1(server.jitter), icmp, ...(routerQuiet ? { variant: "noRouter" } : {}) });
+      // unter 25 ms „spürbar“ (mittel), ab 25 ms „stark“ (hoch); „Anbieter melden“ erst ab 25 ms oder mit Paketverlust
+      const strong = server.jitter >= JITTER_STRONG_MS;
+      const variant = strong ? (routerQuiet ? "noRouter" : null) : routerQuiet ? "noticeableNoRouter" : "noticeable";
+      add("jitterHigh", strong ? "high" : "medium", { ms: r1(server.jitter), icmp, report: strong || lossFinding ? 1 : 0, ...(variant ? { variant } : {}) });
     }
   }
 
@@ -449,6 +483,7 @@ export const FIX_COUNT: Record<FindingId, number> = {
   wifiChannel: 2,
   routerSlow: 4,
   homeRouterJump: 2,
+  routeUnclear: 2,
   serverLoss: 4,
   ispPath: 3,
   internetPath: 3,
@@ -524,8 +559,10 @@ export function fixTexts(f: Pick<Finding, "id" | "values">, t: Translate, fmt: (
   return Array.from({ length: FIX_COUNT[f.id] }, (_, i) => {
     const n = i + 1;
     if (f.id === "routerSlow" && n === 2 && f.values.via === "wifi") return t("diagnose.fix.routerSlow.2wifi", vars);
+    // „Störung beim Anbieter melden“ nur bei starker Schwankung oder zusammen mit Paketverlust
+    if (f.id === "jitterHigh" && n === 3 && f.values.report !== 1) return null;
     return t(`diagnose.fix.${f.id}.${n}`, vars);
-  });
+  }).filter((x): x is string => x !== null);
 }
 
 /** Zusatzsätze unter einem Befund (Texte `diagnose.note.*`) */
@@ -534,5 +571,6 @@ export function findingNotes(f: Pick<Finding, "id" | "values">): string[] {
   if ((f.id === "serverLoss" || f.id === "jitterHigh") && f.values.icmp === 1) notes.push("icmpThrottle");
   if (f.id === "ispPath" || f.id === "jitterHigh" || f.id === "serverLoss") notes.push("notGuaranteed");
   if (f.id === "internetPath") notes.push("gamePath");
+  if (f.id === "bufferbloat") notes.push("termBufferbloat");
   return notes;
 }

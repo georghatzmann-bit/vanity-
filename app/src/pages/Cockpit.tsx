@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Activity, Cable, Clock, Cpu, Gauge, Globe, Heart, MemoryStick, Pause, Play, Route, Stethoscope, Wifi, WifiOff, Zap } from "lucide-react";
-import { formatClock } from "@/lib/format";
+import { formatClock, formatNumber } from "@/lib/format";
 import { pingColor, signalLabel } from "@/lib/grade";
 import { useT } from "@/lib/i18n";
 import { useNow } from "@/hooks/useNow";
@@ -34,7 +34,7 @@ function greeting(t: (k: string) => string) {
   return t("cockpit.hello.evening");
 }
 
-const fmt = (v: number | null, digits = 0) => (v === null ? "–" : v.toFixed(digits));
+const fmt = (v: number | null, digits = 0) => (v === null ? "–" : formatNumber(v, digits));
 
 function LoadRing({ label, value, icon }: { label: string; value: number | null; icon: React.ReactNode }) {
   const v = value ?? 0;
@@ -163,7 +163,7 @@ export function Cockpit() {
               [t("cockpit.min"), `${fmt(stats?.min ?? null)} ms`],
               [t("cockpit.max"), `${fmt(stats?.max ?? null)} ms`],
               [t("cockpit.jitter"), `${fmt(stats?.jitter ?? null, 1)} ms`],
-              [t("cockpit.loss"), `${((stats?.loss ?? 0) * 100).toFixed(1)} %`],
+              [t("cockpit.loss"), `${formatNumber((stats?.loss ?? 0) * 100, 1)} %`],
             ].map(([l, v]) => (
               <div key={l} className="min-w-0 rounded-lg bg-surface px-3 py-2">
                 <div className="truncate text-[10px] font-semibold tracking-[0.12em] text-faint uppercase">{l}</div>

@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { Trash2, Zap } from "lucide-react";
-import { formatDateTime, formatDuration } from "@/lib/format";
+import { formatDateTime, formatDuration, formatNumber } from "@/lib/format";
 import { gradeColor, pingColor } from "@/lib/grade";
 import { useT } from "@/lib/i18n";
 import type { SessionReport } from "@/lib/types";
@@ -73,7 +73,7 @@ export function ReportCard({ report, compact = false, onDelete }: { report: Sess
           [t("reports.avgPing"), report.avgPing === null ? "–" : `${Math.round(report.avgPing)} ms`, pingColor(report.avgPing)],
           [t("cockpit.max"), report.maxPing === null ? "–" : `${Math.round(report.maxPing)} ms`, undefined],
           [t("reports.spikes"), String(report.spikes), report.spikes > 10 ? "var(--nv-warning)" : undefined],
-          [t("reports.loss"), `${(report.loss * 100).toFixed(1)} %`, report.loss > 0.01 ? "var(--nv-danger)" : undefined],
+          [t("reports.loss"), `${formatNumber(report.loss * 100, 1)} %`, report.loss > 0.01 ? "var(--nv-danger)" : undefined],
         ].map(([l, v, c]) => (
           <div key={l} className="rounded-md bg-surface px-2 py-1.5">
             <div className="text-[9px] font-semibold tracking-[0.12em] text-faint uppercase">{l}</div>

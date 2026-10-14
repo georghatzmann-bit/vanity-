@@ -36,6 +36,11 @@ import type {
 
 /** Stand des Hinweises zur Breitbandmessung (bei Änderungen der Regeln anpassen) */
 export const BNETZA_STAND = "2026-10";
+/** „Oktober 2026“ bzw. „October 2026“ aus `BNETZA_STAND` */
+export function bnetzaStandText(lang: Language): string {
+  const [y, m] = BNETZA_STAND.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(numberLocale(lang), { month: "long", year: "numeric", timeZone: "UTC" });
+}
 /** Der einzige Link im Bericht */
 export const BNETZA_URL = "https://breitbandmessung.de";
 /** Höchstens so viele Zeilen hat die Ereignisliste im HTML (die CSV enthält alle) */
@@ -339,7 +344,7 @@ const spikeTotal = (c: Partial<Record<SpikeGroup, number>>) => SPIKE_GROUPS.redu
 export function spikeText(c: Partial<Record<SpikeGroup, number>>, tr: Translate): string {
   const n = spikeTotal(c);
   if (!n) return tr("ispLog.spikesNone");
-  return tr("ispLog.spikes", { n, home: c.home ?? 0, isp: c.isp ?? 0, internet: c.internet ?? 0, unknown: c.unknown ?? 0 });
+  return tr(n === 1 ? "ispLog.spikesOne" : "ispLog.spikes", { n, home: c.home ?? 0, isp: c.isp ?? 0, internet: c.internet ?? 0, unknown: c.unknown ?? 0 });
 }
 
 /** „3 von 60 Paketen (5 %)“ */
@@ -642,6 +647,8 @@ td.day{white-space:nowrap}
 .muted{color:#5b6070}
 .small{font-size:11.5px}
 .internet{color:#b3261e;font-weight:600}
+td.num{white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.total td{font-weight:600;border-top:2px solid #d9dce3}
 tr.vpn td{background:#f4f1ff}
 a{color:#1a56c4}
 @page{size:A4;margin:14mm}
@@ -650,7 +657,8 @@ a{color:#1a56c4}
 
 function renderHtml(c: RenderCtx): string {
   const { tr, lang, tz, header: h, totals, contract } = c;
-  const e = escapeHtml;
+  // Zahl und Einheit nicht trennen („88&nbsp;%“, „500&nbsp;Mbit/s“)
+  const e = (s: string) => escapeHtml(s).replace(/(\d) (%|ms|Mbit\/s|min|s|h)(?![\w/])/g, "$1&nbsp;$2");
   const none = tr("ispLog.report.none");
   const num = (v: number | null, digits = 0) => (v === null || !Number.isFinite(v) ? none : fmtNum(v, digits, lang));
   const metaRow = (k: string, v: string) => `<tr><th>${e(k)}</th><td>${v}</td></tr>`;
@@ -658,7 +666,9 @@ function renderHtml(c: RenderCtx): string {
   const targets = h.targets.length ? h.targets.map((t) => `${e(t.label)} (${e(t.methodText)})`).join("<br>") : none;
   const contractParts: string[] = [];
   if (contract.contractDownMbps !== null || contract.contractUpMbps !== null) {
-    contractParts.push(`${e(tr("ispLog.report.contractMax"))}: ${e(tr("ispLog.report.contractValue", { down: num(contract.contractDownMbps), up: num(contract.contractUpMbps) }))}`);
+    // leeres Feld: „Upload: nicht eingetragen“ statt „Upload – Mbit/s“
+    const part = (label: string, v: number | null) => (v === null ? tr("ispLog.report.notEntered", { label }) : `${label} ${num(v)} Mbit/s`);
+    contractParts.push(`${e(tr("ispLog.report.contractMax"))}: ${e([part(tr("ispLog.settings.down"), contract.contractDownMbps), part(tr("ispLog.settings.up"), contract.contractUpMbps)].join(" · "))}`);
   }
   if (contract.contractDownNormalMbps !== null) contractParts.push(`${e(tr("ispLog.report.contractNormal"))}: ${e(num(contract.contractDownNormalMbps))} Mbit/s`);
   if (contract.contractDownMinMbps !== null) contractParts.push(`${e(tr("ispLog.report.contractMin"))}: ${e(num(contract.contractDownMinMbps))} Mbit/s`);
@@ -674,7 +684,7 @@ function renderHtml(c: RenderCtx): string {
     metaRow(tr("ispLog.report.note"), notes.map(e).join("<br>")),
   ].join("");
 
-  const bnetza = `<section class="note"><h2>${e(tr("ispLog.bnetza.title"))}</h2><p>${e(tr("ispLog.bnetza.text", { stand: BNETZA_STAND }))}</p>${
+  const bnetza = `<section class="note"><h2>${e(tr("ispLog.bnetza.title"))}</h2><p>${e(`${tr("ispLog.bnetza.text")} ${tr("ispLog.bnetza.more", { stand: bnetzaStandText(lang) })}`)}</p>${
     totals.internetOutages > 0 ? `<p><b>${e(tr("ispLog.bnetza.ticket"))}</b></p>` : ""
   }<p><a href="${BNETZA_URL}">${BNETZA_URL}</a></p></section>`;
 
@@ -683,21 +693,28 @@ function renderHtml(c: RenderCtx): string {
     kpi(tr("ispLog.kpi.internet"), String(totals.internetOutages), tr("ispLog.kpi.internetSub", { duration: durationText(totals.internetOutageS, tr) })),
     kpi(tr("ispLog.kpi.other"), String(totals.otherOutages), tr("ispLog.kpi.otherSub")),
     kpi(tr("ispLog.kpi.loss"), String(totals.lossWindows), tr("ispLog.kpi.lossSub")),
-    kpi(tr("ispLog.kpi.slow"), String(totals.slowMinutes), tr("ispLog.kpi.slowSub")),
+    kpi(tr("ispLog.kpi.slow"), String(totals.slowMinutes), tr("ispLog.kpi.slowSub", { ms: fmtNum(contract.slowMs, 0, lang) })),
     kpi(tr("ispLog.kpi.speedtests"), String(totals.speedtests), totals.downMedian === null ? tr("ispLog.kpi.speedtestsNone") : tr("ispLog.kpi.speedtestsSub", { down: fmtNum(totals.downMedian, 1, lang) })),
   ].join("")}</div><p>${e(spikeText(totals.spikesByCause, tr))}</p>`;
 
-  const dayRows = c.days
+  // Nur Tage mit Ereignissen (Nullzeilen bringen nichts), darunter eine Zeile „Gesamt“. Ausreißer je
+  // Tag nur als Zahl – die Ursachen stehen in der Zusammenfassung.
+  const otherOf = (d: IspLogDay) => d.homeNetworkOutages + d.targetOnlyOutages + d.pcOutages + d.unknownOutages;
+  const eventDays = c.days.filter((d) => d.internetOutages + otherOf(d) + d.lossWindows + d.slowMinutes + spikeTotal(d.spikesByCause) + d.speedtests > 0);
+  const dayRows = eventDays
     .map((d) => {
       const internet = d.internetOutages ? `<span class="internet">${d.internetOutages}</span> · ${e(durationText(d.internetOutageS, tr))}` : "0";
       const loss = d.lossWindows ? `${d.lossWindows}${d.lossWorst ? `<br><span class="small muted">max. ${e(lossText(d.lossWorst, tr, lang))}</span>` : ""}` : "0";
       const slow = d.slowMinutes ? `${d.slowMinutes}${d.slowByTarget.map((s) => `<br><span class="small muted">${e(tr("ispLog.days.perTarget", { label: s.label, n: s.minutes }))}</span>`).join("")}` : "0";
       const speed = d.speed ? e(speedLineText(d.speed, contract, tr, lang)) : "0";
-      return `<tr><td class="day">${e(dayText(d.date, tr, lang))}</td><td>${internet}</td><td class="small">${e(otherOutagesText(d, tr))}</td><td>${loss}</td><td>${slow}</td><td class="small">${spikeTotal(d.spikesByCause) ? e(spikeText(d.spikesByCause, tr)) : "0"}</td><td>${d.measuredHours}</td><td class="small">${speed}</td></tr>`;
+      const other = otherOf(d) ? `${otherOf(d)}<br><span class="small muted">${e(otherOutagesText(d, tr))}</span>` : "0";
+      return `<tr><td class="day">${e(dayText(d.date, tr, lang))}</td><td class="num">${internet}</td><td class="num">${other}</td><td class="num">${loss}</td><td class="num">${slow}</td><td class="num">${spikeTotal(d.spikesByCause)}</td><td class="num">${d.measuredHours}</td><td class="small">${speed}</td></tr>`;
     })
     .join("");
-  const dayTable = c.days.length
-    ? `<table><thead><tr>${["date", "internet", "other", "loss", "slow", "spikes", "hours", "speed"].map((k) => `<th>${e(tr(`ispLog.days.${k}`))}</th>`).join("")}</tr></thead><tbody>${dayRows}</tbody></table><p class="small muted">${e(tr("ispLog.distanceNote"))}</p>`
+  const sum = (f: (d: IspLogDay) => number) => c.days.reduce((a, d) => a + f(d), 0);
+  const totalRow = `<tr class="total"><td class="day">${e(tr("ispLog.report.total"))}</td><td class="num">${totals.internetOutages ? `<span class="internet">${totals.internetOutages}</span> · ${e(durationText(totals.internetOutageS, tr))}` : "0"}</td><td class="num">${totals.otherOutages}</td><td class="num">${totals.lossWindows}</td><td class="num">${totals.slowMinutes}</td><td class="num">${spikeTotal(totals.spikesByCause)}</td><td class="num">${sum((d) => d.measuredHours)}</td><td class="num">${totals.speedtests}</td></tr>`;
+  const dayTable = eventDays.length
+    ? `<table><thead><tr>${["date", "internet", "other", "loss", "slow", "spikes", "hours", "speed"].map((k) => `<th>${e(tr(`ispLog.days.${k}`))}</th>`).join("")}</tr></thead><tbody>${dayRows}${totalRow}</tbody></table><p class="small muted">${e(tr("ispLog.distanceNote"))}</p>`
     : `<p>${e(tr("ispLog.list.none"))}</p>`;
 
   const shown = c.rows.slice(0, HTML_MAX_ROWS);
@@ -745,7 +762,7 @@ ${listTable}
 }
 
 // ---------------------------------------------------------------------------------------------
-// CSV (UTF-8, Trennzeichen „;“, Zahlen mit Punkt; die Datei-Ausgabe setzt das BOM davor)
+// CSV (UTF-8, Trennzeichen „;“, Dezimalzeichen je Sprache – de Komma, en Punkt; die Datei-Ausgabe setzt das BOM davor)
 // ---------------------------------------------------------------------------------------------
 
 /** Feld maskieren: mit `;`, `"` oder Zeilenumbruch in Anführungszeichen (`"` verdoppelt) */
@@ -755,10 +772,15 @@ export function csvField(value: string): string {
 
 /** Textfeld: zusätzlich kein Formelbeginn (=, +, -, @) für Tabellenprogramme */
 const csvText = (value: string) => csvField(/^[=+\-@]/.test(value) ? `'${value}` : value);
-const csvNum = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? "" : String(Math.round(v * 10) / 10));
+/** Zahl (eine Nachkommastelle) – bei de mit Dezimalkomma, damit deutsches Excel sie als Zahl liest */
+const csvNum = (v: number | null | undefined, lang: Language) => {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "";
+  const text = String(Math.round(v * 10) / 10);
+  return lang === "de" ? text.replace(".", ",") : text;
+};
 
 function renderCsv(c: RenderCtx): string {
-  const { tr, tz } = c;
+  const { tr, tz, lang } = c;
   const lines = [tr("ispLog.csv.header")];
   const line = (r: IspLogRow, art: string, value: number | null, unit: string, extra: { scope?: string; target?: string; lost?: number | null; n?: number | null } = {}) =>
     [
@@ -770,10 +792,10 @@ function renderCsv(c: RenderCtx): string {
       csvText(extra.target ?? r.targetLabel ?? ""),
       csvText(methodText(r.method, r.targetKey, tr)),
       csvText(r.kind === "quiet" ? "" : connText(r.connection, tr)),
-      csvNum(value),
+      csvNum(value, lang),
       csvText(unit),
-      csvNum(extra.lost),
-      csvNum(extra.n),
+      csvNum(extra.lost, lang),
+      csvNum(extra.n, lang),
       "",
       r.sessionId === null ? "" : String(r.sessionId),
     ].join(";");

@@ -12,7 +12,7 @@ import { CSV_FILTER, exportText, HTML_FILTER, ispLogFileName } from "@/lib/expor
 import { useLanguage, useT } from "@/lib/i18n";
 import {
   basisText,
-  BNETZA_STAND,
+  bnetzaStandText,
   BNETZA_URL,
   buildIspLog,
   DEFAULT_ISP_RANGE,
@@ -162,7 +162,7 @@ export function IspLogSection() {
             <Notes report={report} lang={lang} />
           </motion.div>
           <motion.div variants={staggerItem}>
-            <Kpis report={report} lang={lang} />
+            <Kpis report={report} lang={lang} slowMs={contract.slowMs} />
           </motion.div>
           <motion.div variants={staggerItem}>
             <DayBars report={report} lang={lang} timeZone={timeZone} />
@@ -173,7 +173,7 @@ export function IspLogSection() {
         </>
       )}
       <motion.div variants={staggerItem}>
-        <BnetzaBox showTicket={!!report && report.totals.internetOutages > 0} />
+        <BnetzaBox showTicket={!!report && report.totals.internetOutages > 0} lang={lang} />
       </motion.div>
       <motion.div variants={staggerItem} className="flex items-start gap-2 text-[12px] leading-relaxed text-muted">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -195,7 +195,7 @@ function Filters({ base, netId, range, lang, loading, onNet, onRange, report }: 
   const hours = (ms: number) => fmtNum(Math.round(ms / 360_000) / 10, 1, lang);
   const save = (kind: "html" | "csv") => {
     if (!report) return;
-    void exportText(ispLogFileName(base.from, base.to, kind), kind === "html" ? HTML_FILTER : CSV_FILTER, kind === "html" ? report.html : report.csv);
+    void exportText(ispLogFileName(base.from, base.to, kind, lang), kind === "html" ? HTML_FILTER : CSV_FILTER, kind === "html" ? report.html : report.csv);
   };
   return (
     <div className="glass flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl px-4 py-3">
@@ -244,9 +244,11 @@ function Notes({ report, lang }: { report: IspLogResult; lang: Language }) {
     <div className="glass space-y-1.5 rounded-xl px-5 py-3 text-[13px] text-fg-soft">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium text-fg">{basisText(h, tr, lang)}</span>
-        <span className="text-muted">{zoneText(h.timeZone, h.utcOffset)}</span>
-        {h.targets.length > 0 && <span className="text-muted">· {h.targets.map((x) => `${x.label} (${x.methodText})`).join(", ")}</span>}
+        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11.5px] text-muted">{t("ispLog.timeZoneChip", { zone: zoneText(h.timeZone, h.utcOffset) })}</span>
+        {/* Messart (TCP:443/ICMP) nur im Tooltip */}
+        {h.targets.length > 0 && <span className="text-muted" title={h.targets.map((x) => `${x.label} (${x.methodText})`).join("\n")}>· {h.targets.map((x) => x.label).join(", ")}</span>}
       </div>
+      <div className="text-[12px] text-muted">{spikeText(report.totals.spikesByCause, tr)}</div>
       {warnings.map((w) => (
         <div key={w} className="flex items-start gap-2 text-warning">
           <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -261,7 +263,7 @@ function Notes({ report, lang }: { report: IspLogResult; lang: Language }) {
 // Kennzahlen
 // ---------------------------------------------------------------------------------------------
 
-function Kpis({ report, lang }: { report: IspLogResult; lang: Language }) {
+function Kpis({ report, lang, slowMs }: { report: IspLogResult; lang: Language; slowMs: number }) {
   const t = useT();
   const tot = report.totals;
   const tr = translator(lang);
@@ -269,14 +271,14 @@ function Kpis({ report, lang }: { report: IspLogResult; lang: Language }) {
     { key: "internet", icon: <Globe className="h-4 w-4" />, label: t("ispLog.kpi.internet"), value: tot.internetOutages, sub: t("ispLog.kpi.internetSub", { duration: durationText(tot.internetOutageS, tr) }), tone: tot.internetOutages > 0 ? "danger" : undefined },
     { key: "other", icon: <Unplug className="h-4 w-4" />, label: t("ispLog.kpi.other"), value: tot.otherOutages, sub: t("ispLog.kpi.otherSub") },
     { key: "loss", icon: <WifiOff className="h-4 w-4" />, label: t("ispLog.kpi.loss"), value: tot.lossWindows, sub: t("ispLog.kpi.lossSub") },
-    { key: "slow", icon: <Hourglass className="h-4 w-4" />, label: t("ispLog.kpi.slow"), value: tot.slowMinutes, sub: t("ispLog.kpi.slowSub") },
+    { key: "slow", icon: <Hourglass className="h-4 w-4" />, label: t("ispLog.kpi.slow"), value: tot.slowMinutes, sub: t("ispLog.kpi.slowSub", { ms: fmtNum(slowMs, 0, lang) }) },
     { key: "speed", icon: <Gauge className="h-4 w-4" />, label: t("ispLog.kpi.speedtests"), value: tot.speedtests, sub: tot.downMedian === null ? t("ispLog.kpi.speedtestsNone") : t("ispLog.kpi.speedtestsSub", { down: fmtNum(tot.downMedian, 1, lang) }) },
   ];
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {cards.map((c) => (
-          <div key={c.key} className="glass rounded-xl px-4 py-3" data-testid={`isp-kpi-${c.key}`}>
+          <div key={c.key} className="glass flex min-h-[112px] flex-col rounded-xl px-4 py-3" data-testid={`isp-kpi-${c.key}`}>
             <div className="flex min-h-[2rem] items-start gap-2 text-[12px] leading-tight text-muted">
               <span className={cn("mt-px text-accent", c.tone === "danger" && "text-danger")}>{c.icon}</span>
               <span className="line-clamp-2" title={c.label}>
@@ -290,7 +292,6 @@ function Kpis({ report, lang }: { report: IspLogResult; lang: Language }) {
           </div>
         ))}
       </div>
-      <p className="px-1 text-[12.5px] text-fg-soft">{spikeText(tot.spikesByCause, tr)}</p>
     </div>
   );
 }
@@ -352,9 +353,9 @@ function EventList({ rows, lang, timeZone }: { rows: IspLogRow[]; lang: Language
       {!rows.length ? (
         <p className="mt-2 text-[13px] text-muted">{t("ispLog.list.none")}</p>
       ) : (
-        <div className="mt-2 max-h-[22rem] overflow-auto">
+        <div className="mt-2 overflow-x-auto">
           <table className="w-full text-left text-[12.5px]" data-testid="isp-event-list">
-            <thead className="sticky top-0 z-[1] bg-[var(--nv-bg-elev)] text-[11px] tracking-wide text-muted uppercase">
+            <thead className="bg-surface-2 text-[11px] tracking-wide text-muted uppercase">
               <tr>
                 <th className="px-2 py-1.5 font-semibold">{t("ispLog.list.time")}</th>
                 <th className="px-2 py-1.5 font-semibold">{t("ispLog.list.kind")}</th>
@@ -398,15 +399,23 @@ function EventList({ rows, lang, timeZone }: { rows: IspLogRow[]; lang: Language
 // Hinweis-Kasten Breitbandmessung (immer sichtbar)
 // ---------------------------------------------------------------------------------------------
 
-function BnetzaBox({ showTicket }: { showTicket: boolean }) {
+function BnetzaBox({ showTicket, lang }: { showTicket: boolean; lang: Language }) {
   const t = useT();
+  const [more, setMore] = useState(false);
   return (
     <section className="rounded-xl border border-warning/50 bg-warning/10 px-5 py-4" data-testid="isp-bnetza">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
         <Info className="h-4 w-4 text-warning" />
         {t("ispLog.bnetza.title")}
       </h3>
-      <p className="mt-2 max-w-5xl text-[13px] leading-relaxed text-fg-soft">{t("ispLog.bnetza.text", { stand: BNETZA_STAND })}</p>
+      {/* zwei Sätze sichtbar, der Rest hinter „Mehr dazu“ */}
+      <p className="mt-2 max-w-5xl text-[13px] leading-relaxed text-fg-soft">
+        {t("ispLog.bnetza.text")}{" "}
+        {more && <span>{t("ispLog.bnetza.more", { stand: bnetzaStandText(lang) })} </span>}
+        <button type="button" className="font-medium text-accent hover:underline" aria-expanded={more} onClick={() => setMore((m) => !m)}>
+          {more ? t("ispLog.less") : t("ispLog.more")}
+        </button>
+      </p>
       {showTicket && <p className="mt-2 text-[13px] font-medium text-fg">{t("ispLog.bnetza.ticket")}</p>}
       <div className="mt-3">
         <Button size="sm" icon={<ExternalLink className="h-4 w-4" />} onClick={() => void api.openUrl(BNETZA_URL).catch(() => undefined)}>

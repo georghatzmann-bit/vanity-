@@ -116,7 +116,7 @@ export function WifiPanel() {
         </>
       )}
 
-      <RoomScan />
+      <RoomScan noService={noService} />
 
       <p className="text-[11px] leading-relaxed text-faint">{t("wifiScan.honest")}</p>
     </div>

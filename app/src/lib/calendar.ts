@@ -348,9 +348,11 @@ export function formatNum(v: number, digits: number, lang: CalendarLang): string
   return v.toLocaleString(lang === "de" ? "de-DE" : "en-US", { minimumFractionDigits: 0, maximumFractionDigits: digits });
 }
 
-/** Stunden Messzeit mit genau einer Nachkommastelle („20,0“) */
-export const formatHours = (hours: number, lang: CalendarLang) =>
-  hours.toLocaleString(lang === "de" ? "de-DE" : "en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+/** Stunden Messzeit: unter 10 h eine Nachkommastelle („2,5“, „1,0“), ab 10 h ganze Stunden („533“) */
+export const formatHours = (hours: number, lang: CalendarLang) => {
+  const digits = hours < 10 ? 1 : 0;
+  return hours.toLocaleString(lang === "de" ? "de-DE" : "en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+};
 
 /** „Di 20–22 Uhr“ für einen Block bzw. (`span = 1`) „Di 20–21 Uhr“ für ein Fach */
 export function whenText(weekday: number, hour: number, tr: Translate, span = 2): string {

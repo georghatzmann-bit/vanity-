@@ -1,5 +1,5 @@
 /** „Warum laggt es?“: Befund-Bausteine (Schwere-Abzeichen, Schritte, Verweise) und die Liste weiterer Befunde. */
-import { AlertOctagon, AlertTriangle, ArrowUpRight, CheckCircle2, Info } from "lucide-react";
+import { AlertOctagon, AlertTriangle, ArrowUpRight, Info } from "lucide-react";
 import { api, errorText } from "@/lib/api";
 import { LINKS, findingNotes, findingText, fixTexts, type DiagnoseLink } from "@/lib/diagnose";
 import { formatNumber } from "@/lib/format";
@@ -15,11 +15,12 @@ export const SEVERITY_TONE: Record<Severity, { text: string; bg: string; ring: s
   high: { text: "text-danger", bg: "bg-danger/15", ring: "var(--nv-danger)" },
   medium: { text: "text-warning", bg: "bg-warning/15", ring: "var(--nv-warning)" },
   info: { text: "text-accent", bg: "bg-accent/15", ring: "var(--nv-accent)" },
-  ok: { text: "text-success", bg: "bg-success/15", ring: "var(--nv-success)" },
+  // „kein Befund“ ist neutral – wer gerade laggt, soll daraus nicht „alles gut“ lesen
+  ok: { text: "text-muted", bg: "bg-surface-3", ring: "var(--nv-border-strong)" },
 };
 
 export function SeverityIcon({ severity, className }: { severity: Severity; className?: string }) {
-  const Icon = severity === "high" ? AlertOctagon : severity === "medium" ? AlertTriangle : severity === "info" ? Info : CheckCircle2;
+  const Icon = severity === "high" ? AlertOctagon : severity === "medium" ? AlertTriangle : Info;
   return <Icon className={cn(SEVERITY_TONE[severity].text, className)} aria-hidden />;
 }
 

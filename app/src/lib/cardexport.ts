@@ -50,7 +50,12 @@ export interface CardModel {
   start: number;
   end: number;
   causeText: string;
+  /** leer, wenn alle Ausreißer untersucht wurden */
   examinedText: string;
+  /** Beschriftung der gestrichelten Grenzlinie */
+  limitText: string;
+  /** Legende der roten Aussetzer-Striche */
+  outageText: string;
   footer: string;
   palette: GamePalette | null;
 }
@@ -108,7 +113,8 @@ export function cardModel(report: SessionReport, timeline: SessionTimeline | nul
     kicker: tr("timeline.card.kicker"),
     title: h.gameName,
     when: formatDateTime(h.start),
-    duration: formatDuration(h.durationS, { short: true }),
+    // „47 min“ statt „47m“ (könnte Meter heißen)
+    duration: formatDuration(h.durationS),
     grade: h.grade,
     gradeLabel: tr("timeline.card.grade"),
     stats: [
@@ -124,7 +130,10 @@ export function cardModel(report: SessionReport, timeline: SessionTimeline | nul
     start: h.start,
     end: h.end,
     causeText: causeSummary(h.causes, tr),
-    examinedText: tr("timeline.header.examined", { n: h.examined, m: h.spikes }),
+    // nur, wenn nicht alle untersucht wurden – sonst sagt die Ursachen-Zeile dasselbe
+    examinedText: h.examined < h.spikes ? tr("timeline.header.examined", { n: h.examined, m: h.spikes }) : "",
+    limitText: limit !== null ? tr("timeline.card.limitLabel", { ms: formatNumber(limit, 0) }) : "",
+    outageText: tr("timeline.card.outage"),
     footer: tr("timeline.card.footer", { target }),
     palette: game?.palette ?? null,
   };
@@ -351,7 +360,8 @@ function drawCard(ctx: CanvasRenderingContext2D, m: CardModel, c: Colors) {
   // Kennzahlen
   const sx = bx;
   const sy = 246;
-  const sw = 222;
+  // 4 Kacheln über die volle Breite (bis unter den Notenring)
+  const sw = (W - 60 - bx - 3 * 16) / 4;
   const sh = 84;
   m.stats.forEach((s, i) => {
     const x = sx + i * (sw + 16);
@@ -400,6 +410,16 @@ function drawCard(ctx: CanvasRenderingContext2D, m: CardModel, c: Colors) {
     ctx.lineTo(cx1, Y(m.limit));
     ctx.stroke();
     ctx.restore();
+    // Beschriftung am rechten Ende der Linie
+    if (m.limitText) {
+      ctx.save();
+      ctx.fillStyle = "#e8b04a";
+      ctx.font = `600 10px ${c.fontSans}`;
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(m.limitText, cx1, Y(m.limit) - 3);
+      ctx.restore();
+    }
   }
   // Fläche und Linie (Lücken bei Verlust)
   const segments: [number, number][][] = [];
@@ -442,9 +462,21 @@ function drawCard(ctx: CanvasRenderingContext2D, m: CardModel, c: Colors) {
     ctx.stroke();
   }
   ctx.restore();
-  // Verlust als rote Striche am unteren Rand
+  // Verlust als rote Striche am unteren Rand, mit kleiner Legende „Aussetzer“ oben links
   ctx.fillStyle = c.danger;
-  for (const [t, v] of m.curve) if (v === null) ctx.fillRect(X(t) - 1, cy1 + 4, 2, 8);
+  let outages = false;
+  for (const [t, v] of m.curve) {
+    if (v !== null) continue;
+    outages = true;
+    ctx.fillRect(X(t) - 1, cy1 + 4, 2, 8);
+  }
+  if (outages) {
+    ctx.fillRect(cx0, cy0 - 16, 2, 8);
+    ctx.fillStyle = c.muted;
+    ctx.font = `500 11px ${c.fontSans}`;
+    ctx.textAlign = "left";
+    ctx.fillText(m.outageText, cx0 + 7, cy0 - 8);
+  }
   // Ausreißer als leuchtende Punkte
   ctx.save();
   ctx.shadowColor = c.danger;
@@ -470,11 +502,13 @@ function drawCard(ctx: CanvasRenderingContext2D, m: CardModel, c: Colors) {
   ctx.textAlign = "left";
   ctx.fillStyle = c.fgSoft;
   ctx.font = `600 15px ${c.fontSans}`;
-  ctx.fillText(fit(ctx, m.causeText, cx1 - cx0 - 280), cx0, 554);
-  ctx.textAlign = "right";
-  ctx.fillStyle = c.muted;
-  ctx.font = `500 13px ${c.fontSans}`;
-  ctx.fillText(fit(ctx, m.examinedText, 270), cx1, 554);
+  ctx.fillText(fit(ctx, m.causeText, cx1 - cx0 - (m.examinedText ? 280 : 0)), cx0, 554);
+  if (m.examinedText) {
+    ctx.textAlign = "right";
+    ctx.fillStyle = c.muted;
+    ctx.font = `500 13px ${c.fontSans}`;
+    ctx.fillText(fit(ctx, m.examinedText, 270), cx1, 554);
+  }
   ctx.textAlign = "left";
   ctx.fillStyle = c.faint;
   ctx.font = `500 12.5px ${c.fontSans}`;

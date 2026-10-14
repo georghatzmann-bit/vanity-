@@ -59,6 +59,7 @@ export function MatchCardPreview({ open, onClose, report, timeline, game }: { op
       open={open}
       onClose={onClose}
       width={880}
+      className="max-h-[calc(100vh-32px)]!"
       title={t("timeline.card.title")}
       subtitle={t("timeline.card.subtitle")}
       footer={
@@ -77,14 +78,15 @@ export function MatchCardPreview({ open, onClose, report, timeline, game }: { op
         </div>
       }
     >
-      <div className="p-5">
-        <div className="relative aspect-[1200/630] w-full overflow-hidden rounded-xl border border-line bg-surface">
-          {url ? (
-            <img src={url} alt={t("timeline.card.title")} className="h-full w-full object-contain" data-match-card />
-          ) : (
-            <div className="grid h-full place-items-center text-sm text-muted">{failed ? t("timeline.card.failed") : t("timeline.card.rendering")}</div>
-          )}
-        </div>
+      {/* Vorschau passt in kleine Fenster (960×600): Höhe begrenzt, Seitenverhältnis 2400/1260 bleibt */}
+      <div className="pt-1">
+        {url ? (
+          <img src={url} alt={t("timeline.card.title")} className="mx-auto block h-auto max-h-[calc(100vh-260px)] w-auto max-w-full rounded-xl border border-line" data-match-card />
+        ) : (
+          <div className="mx-auto grid aspect-[2400/1260] max-h-[calc(100vh-260px)] max-w-full place-items-center rounded-xl border border-line bg-surface text-sm text-muted">
+            {failed ? t("timeline.card.failed") : t("timeline.card.rendering")}
+          </div>
+        )}
       </div>
     </Modal>
   );

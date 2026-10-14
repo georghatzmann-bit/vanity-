@@ -17,6 +17,8 @@ const watch = (page) => {
 };
 const shotter = (page) => async (name, wait = 1300) => {
   await page.waitForTimeout(wait);
+  // Die Demo-Ausreißer des Lag-Detektivs (alle 30 Takte) lösen „Hoher Ping“ aus – diese Meldung nicht mit aufnehmen
+  await page.evaluate(`window.__pulsar?.useUI.getState().toasts.filter(t => /Hoher Ping|High ping/i.test(t.title)).forEach(t => window.__pulsar.useUI.getState().dismiss(t.id))`).catch(() => {});
   await page.screenshot({ path: `${out}/${name}.jpg`, type: "jpeg", quality: 86 });
   console.log("📸", name);
 };
@@ -33,6 +35,20 @@ const click = (text) => page.getByRole("button", { name: text }).first().click()
 // Knöpfe in der Karte „Netzwerk automatisch optimieren“ (eindeutig, z. B. „Schließen“ gibt es auch in der Titelleiste)
 const card = (text) => page.locator('section[aria-labelledby="netauto-title"]').getByRole("button", { name: text }).first().click();
 const dismissToasts = () => ev(`window.__pulsar.useUI.getState().toasts.forEach(t => window.__pulsar.useUI.getState().dismiss(t.id))`);
+/** Element in den sichtbaren Bereich scrollen (`offset` px Luft darüber, damit die Titelleiste nichts verdeckt) */
+const scrollTo = (locator, block = "start", offset = 0) =>
+  locator.first().evaluate(
+    (e, [b, off]) => {
+      e.scrollIntoView({ block: b });
+      let p = e.parentElement;
+      while (p && !(p.scrollHeight > p.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(p).overflowY))) p = p.parentElement;
+      if (p) p.scrollTop -= off;
+    },
+    [block, offset],
+  );
+const intoView = (sel, block = "start", offset = 0) => scrollTo(page.locator(sel), block, offset);
+/** Demo-Schalter (siehe `demoFlag` in app/src/lib/mock/core.ts) */
+const flag = (name, on) => ev(`window.${name} = ${on ? "true" : "false"}`);
 
 await page.goto(appUrl, { waitUntil: "networkidle" });
 await shot("01-intro", 1500);
@@ -51,6 +67,10 @@ await ev(`window.__pulsar.useBoost.getState().toggle()`);
 await shot("04-cockpit-boost-aktiv", 1800);
 await ev(`window.__pulsar.useBoost.getState().toggle()`);
 await page.waitForTimeout(600);
+// Lag-Detektiv: der Demo-Monitor erzeugt alle 30 Takte einen Ausreißer, 1 s später erscheint die Einschätzung
+await page.locator('[data-testid="lag-badge"]').waitFor({ timeout: 45000 });
+await dismissToasts();
+await shot("02c-cockpit-lag-detektiv", 900);
 
 await go({ page: "games" });
 await shot("05-spiele", 2500);
@@ -98,6 +118,32 @@ await shot("18-netzwerk-speedtest-laeuft", 3500);
 await shot("19-netzwerk-speedtest-ergebnis", 9000);
 await go({ page: "network", section: "connection" });
 await shot("20-netzwerk-verbindung", 1500);
+await intoView('[data-testid="lag-card"]', "start", 24);
+await shot("20a-netzwerk-lag-detektiv", 900);
+// WLAN als Hauptverbindung (2,4 GHz, Kanal 6) und Speedtest mit Latenz unter Last – nur für die WLAN-/Diagnose-Szenen
+await flag("__pulsarWifiPrimary", true);
+await go({ page: "network", section: "wifi" });
+await scrollMain(0);
+await page.getByText(/Empfehlung für deinen Router/).first().waitFor({ timeout: 10000 });
+await shot("20b-netzwerk-wlan-scanner", 1500);
+await scrollTo(page.getByText("Raum-Scan", { exact: true }).locator("xpath=ancestor::div[contains(@class,'glass')][1]"), "end");
+await shot("20c-netzwerk-raum-scan", 900);
+await flag("__pulsarDiagnoseDemo", true);
+await go({ page: "network", section: "diagnose" });
+await scrollMain(0);
+await page.waitForTimeout(800);
+await page.locator('[data-testid="diagnose-start"]').click();
+await page.locator('[data-step="speed"][data-status="running"]').waitFor({ timeout: 20000 });
+await page.waitForTimeout(1500);
+await intoView('[data-step="speed"]', "center");
+await shot("20d-netzwerk-warum-laggt-es-laeuft", 300);
+await page.locator('[data-testid="diagnose-verdict"]').waitFor({ timeout: 30000 });
+await page.waitForTimeout(800);
+await intoView('[data-testid="diagnose-verdict"]', "start", 24);
+await shot("20e-netzwerk-warum-laggt-es-diagnose", 1500);
+await flag("__pulsarDiagnoseDemo", false);
+await flag("__pulsarWifiPrimary", false);
+await dismissToasts();
 
 await go({ page: "optimize" });
 await shot("21-optimieren", 1500);
@@ -112,11 +158,39 @@ await shot("22-optimieren-angewendet", 1500);
 
 await go({ page: "reports" });
 await shot("23-berichte", 1800);
+await go({ page: "reports", section: "lag" });
+await shot("23b-berichte-ausreisser-ursachen", 1800);
+// Match-Zeitleiste des ersten Demo-Berichts (Klick auf die erste Karte unter „Runden“)
+await go({ page: "reports" });
+await page.locator('main [role="link"]').first().waitFor({ timeout: 8000 });
+await page.locator('main [role="link"]').first().click();
+await page.getByRole("button", { name: /Als Bild speichern/ }).first().waitFor({ timeout: 8000 });
+await shot("23c-berichte-zeitleiste", 1800);
+await click(/Als Bild speichern/);
+await page.locator("img[data-match-card]").waitFor({ timeout: 15000 });
+await shot("23d-berichte-bildkarte", 1000);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(500);
+await go({ page: "reports", section: "calendar" });
+await page.locator('[data-testid="calendar-advice"]').waitFor({ timeout: 8000 });
+await shot("23e-berichte-kalender", 1500);
+await go({ page: "reports", section: "isp" });
+await page.getByRole("button", { name: /^30 Tage$/ }).first().click();
+await page.locator('[data-testid^="isp-kpi-"]').first().waitFor({ timeout: 8000 });
+await page.waitForTimeout(1200);
+await intoView('[data-testid="isp-bnetza"]', "end");
+await shot("23f-berichte-anbieter-protokoll", 900);
 
 await go({ page: "settings" });
 await shot("24-einstellungen-aussehen", 1500);
+await go({ page: "settings", section: "sound" });
+await page.waitForTimeout(1200);
+await intoView('[data-testid="sonar-settings"]', "start", 40);
+await shot("24b-einstellungen-hoer-dein-netz", 900);
 await go({ page: "settings", section: "monitor" });
 await shot("25-einstellungen-messung", 1200);
+await scrollTo(page.getByText("Momentaufnahmen bei Ausreißern", { exact: true }), "start", 190);
+await shot("25b-einstellungen-messverlauf-vertrag", 900);
 await go({ page: "settings", section: "overlay" });
 await shot("26-einstellungen-overlay", 1200);
 await go({ page: "settings", section: "about" });

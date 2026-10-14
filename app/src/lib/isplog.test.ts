@@ -5,6 +5,7 @@ import { textBytes } from "./exportfile";
 import {
   BNETZA_STAND,
   BNETZA_URL,
+  bnetzaStandText,
   buildIspLog,
   csvField,
   defaultNetId,
@@ -14,6 +15,7 @@ import {
   netChoices,
   offsetLabel,
   spikeGroup,
+  spikeText,
   translator,
 } from "./isplog";
 import { DEMO_NET_ID, demoHourlyRows } from "./mock/calendar";
@@ -71,7 +73,9 @@ function hourRow(hourStart: number, p: Partial<HourlyRow> = {}): HourlyRow {
 const outage = (t: number, scope: NetEvent["scope"], s = 10, p: Partial<NetEvent> = {}) => ev({ kind: "outage", t, endT: t + s * 1000, value: s, scope, detail: { checks: { link: true, gw: true, ext: false } }, ...p });
 
 function build(over: Partial<IspLogInput> = {}) {
-  return buildIspLog({ events: [], truncated: false, summary: [], hourly: [], from: FROM, to: TO, netId: "net-a", contract: defaultIspLog(), lang: "de", timeZone: TZ, now: TO, ...over });
+  const r = buildIspLog({ events: [], truncated: false, summary: [], hourly: [], from: FROM, to: TO, netId: "net-a", contract: defaultIspLog(), lang: "de", timeZone: TZ, now: TO, ...over });
+  // Zahl und Einheit sind im HTML mit &nbsp; verbunden – für Textvergleiche als Leerzeichen lesen (eigener Test unten)
+  return { ...r, html: r.html.replace(/&nbsp;/g, " ") };
 }
 
 describe("Ortszeit und Zeitzone", () => {
@@ -207,7 +211,12 @@ describe("Bewertung (nur gezählt, nichts juristisch)", () => {
     const contract = { ...defaultIspLog(), contractDownMbps: 500, contractUpMbps: 50, contractDownNormalMbps: 400 };
     const withC = build({ events: [st], contract });
     expect(withC.rows[0].text).toBe("↓ 450 · ↑ 45 Mbit/s · Cloudflare FRA · 90 % der eingetragenen Maximal-Geschwindigkeit");
-    expect(withC.html).toContain("Maximal-Geschwindigkeit laut Vertrag (Produktinformationsblatt): Download 500 · Upload 50 Mbit/s");
+    expect(withC.html).toContain("Maximal-Geschwindigkeit laut Vertrag (Produktinformationsblatt): Download 500 Mbit/s · Upload 50 Mbit/s");
+    // leeres Feld: „Upload: nicht eingetragen“ statt „Upload – Mbit/s“
+    const downOnly = build({ events: [st], contract: { ...defaultIspLog(), contractDownMbps: 500 } });
+    expect(downOnly.html).toContain("Download 500 Mbit/s · Upload: nicht eingetragen");
+    expect(downOnly.html).not.toContain("Upload – Mbit/s");
+    expect(build({ events: [st], contract: { ...defaultIspLog(), contractDownMbps: 500 }, lang: "en" }).html).toContain("Upload: not entered");
     expect(withC.html).toContain("normalerweise verfügbar: 400 Mbit/s");
     expect(withC.html).not.toContain("minimal:");
     expect(withC.days[0].speed).toEqual({ n: 1, downMin: 450, downMedian: 450, upMin: 45, upMedian: 45 });
@@ -226,7 +235,7 @@ describe("Export", () => {
     ev({ kind: "quiet", t: t + 3 * HOUR - 14_000, endT: t + 3 * HOUR, targetKey: null, targetLabel: null, method: null, connection: null, detail: { reason: "speedtest" } }),
   ];
 
-  it("CSV: Spalten, Maskierung, BOM über die Datei-Ausgabe, Zahlen mit Punkt", () => {
+  it("CSV: Spalten, Maskierung, BOM über die Datei-Ausgabe, Dezimalkomma bei de, Punkt bei en", () => {
     const r = build({ events: tricky });
     const lines = r.csv.split("\r\n");
     expect(lines[0]).toBe("zeit_lokal;zeit_utc;ende_lokal;art;umfang;ziel;messart;verbindung;wert;einheit;verloren;messungen;ursache;sitzung");
@@ -237,13 +246,13 @@ describe("Export", () => {
     expect(csvField("a;b")).toBe('"a;b"');
     expect(csvField("a\nb")).toBe('"a\nb"');
     expect(csvField("ok")).toBe("ok");
-    expect(r.csv).toContain(';"Server ""A""; Nord";TCP:443;Kabel;12.3;s;;;;42');
+    expect(r.csv).toContain(';"Server ""A""; Nord";TCP:443;Kabel;12,3;s;;;;42');
     // Formelbeginn wird entschärft
     expect(r.csv).toContain(";\"'=SUMME(1;2)\";");
-    // Verlust mit Paketen, WLAN, Dezimalpunkt auch auf Deutsch
-    expect(r.csv).toContain(";Verlust;;Frankfurt (AWS);TCP:443;WLAN;6.7;%;4;60;;");
-    expect(r.csv).toContain(";Speedtest Download;;Cloudflare FRA;;Kabel;452.1;Mbit/s;");
-    expect(r.csv).toContain(";Speedtest Upload;;Cloudflare FRA;;Kabel;44.3;Mbit/s;");
+    // Verlust mit Paketen, WLAN; Dezimalkomma auf Deutsch (deutsches Excel), Trennzeichen bleibt „;“
+    expect(r.csv).toContain(";Verlust;;Frankfurt (AWS);TCP:443;WLAN;6,7;%;4;60;;");
+    expect(r.csv).toContain(";Speedtest Download;;Cloudflare FRA;;Kabel;452,1;Mbit/s;");
+    expect(r.csv).toContain(";Speedtest Upload;;Cloudflare FRA;;Kabel;44,3;Mbit/s;");
     // 1 Kopf + 5 Ereignisse (+1 für den Upload) + leere letzte Zeile
     expect(lines.length).toBe(1 + 6 + 1);
     // BOM: nicht im Text selbst (sonst doppelt), aber in der gespeicherten Datei
@@ -253,13 +262,23 @@ describe("Export", () => {
     const enCsv = build({ events: tricky, lang: "en" }).csv;
     expect(enCsv.split("\r\n")[0]).toBe("time_local;time_utc;end_local;kind;scope;target;method;connection;value;unit;lost;samples;cause;session");
     expect(enCsv).toContain(";Outage;Internet connection;");
+    expect(enCsv).toContain(";452.1;Mbit/s;");
+    expect(enCsv).toContain(";6.7;%;4;60;;");
+  });
+
+  it("CSV: Speedtest 462,8 → de ';462,8;Mbit/s;', en '462.8'", () => {
+    const st = ev({ kind: "speedtest", t: t + HOUR, value: 462.8, targetKey: null, targetLabel: null, method: null, detail: { downloadMbps: 462.8, uploadMbps: null, server: "FRA" } as never });
+    expect(build({ events: [st] }).csv).toContain(";462,8;Mbit/s;");
+    const enCsv = build({ events: [st], lang: "en" }).csv;
+    expect(enCsv).toContain(";462.8;Mbit/s;");
+    expect(enCsv).not.toContain("462,8");
   });
 
   it("HTML: Hinweis-Kasten wörtlich (de/en), druckbar, ohne Skripte und externe Quellen", () => {
     for (const lang of ["de", "en"] as const) {
       const dict = lang === "de" ? de : en;
       const r = build({ events: tricky, lang });
-      const box = escapeHtml(dict.ispLog.bnetza.text.replace("{stand}", BNETZA_STAND));
+      const box = escapeHtml(`${dict.ispLog.bnetza.text} ${dict.ispLog.bnetza.more.replace("{stand}", bnetzaStandText(lang))}`);
       expect(r.html).toContain(box);
       expect(r.html).toContain(escapeHtml(dict.ispLog.bnetza.title));
       expect(r.html).toContain(`lang="${lang}"`);
@@ -274,13 +293,34 @@ describe("Export", () => {
     const deHtml = build({ events: tricky }).html;
     expect(deHtml).toContain("Festnetz-Anschlüsse");
     expect(deHtml).toContain("mit mindestens einem Tag Abstand zwischen den Messtagen");
-    expect(deHtml).toContain(`Stand: ${BNETZA_STAND}`);
+    expect(deHtml).toContain("Stand: Oktober 2026");
+    expect(BNETZA_STAND).toBe("2026-10");
     expect(deHtml).toContain("Pulsar sieht andere Geräte im Haushalt nicht");
     const enHtml = build({ events: tricky, lang: "en" }).html;
     expect(enHtml).toContain("In Germany");
     expect(enHtml).toContain("fixed-line connections");
     expect(enHtml).toContain("at least one day between the measurement days");
-    expect(enHtml).toContain(`as of ${BNETZA_STAND}`);
+    expect(enHtml).toContain("as of October 2026");
+  });
+
+  it("HTML: Tagestabelle nur mit Ereignis-Tagen plus „Gesamt“, Ausreißer je Tag nur als Zahl, &nbsp; zwischen Zahl und Einheit", () => {
+    const raw = buildIspLog({ events: tricky, truncated: false, summary: [], hourly: [], from: FROM, to: TO, netId: "net-a", contract: defaultIspLog(), lang: "de", timeZone: TZ, now: TO });
+    const rows = raw.html.match(/<td class="day">/g)?.length ?? 0;
+    // ein Tag mit Ereignissen + Gesamt (statt aller Tage des Zeitraums)
+    expect(rows).toBe(2);
+    expect(raw.html).toContain('<tr class="total"><td class="day">Gesamt</td>');
+    expect(raw.html).toContain("6,7&nbsp;%");
+    expect(raw.html).toContain("12&nbsp;s");
+    expect(raw.html).not.toMatch(/\d %/);
+    const en1 = buildIspLog({ events: tricky, truncated: false, summary: [], hourly: [], from: FROM, to: TO, netId: "net-a", contract: defaultIspLog(), lang: "en", timeZone: TZ, now: TO });
+    expect(en1.html).toContain('<td class="day">Total</td>');
+  });
+
+  it("Ausreißer: Einzahl für n = 1", () => {
+    const tr = translator("en");
+    expect(spikeText({ isp: 1 }, tr)).toBe("1 spike – likely home network/Wi-Fi/PC: 0 · line/provider: 1 · internet: 0 · unclear: 0");
+    expect(spikeText({ isp: 1, unknown: 1 }, tr)).toContain("2 spikes – of which likely");
+    expect(spikeText({ home: 1 }, translator("de"))).toBe("1 Ausreißer – vermutlich Heimnetz/WLAN/PC: 1 · Anschluss/Anbieter: 0 · Internet: 0 · unklar: 0");
   });
 
   it("die Wörter „Beweis“/„proof“ kommen nicht vor", () => {

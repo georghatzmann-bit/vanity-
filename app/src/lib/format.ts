@@ -46,9 +46,11 @@ export function formatRelative(ts?: number | null): string {
   const d = Math.floor(h / 24);
   if (d === 1) return t("common.yesterday");
   if (d < 7) return t("time.daysAgo", { n: d });
-  if (d < 30) return t("time.weeksAgo", { n: Math.floor(d / 7) });
-  if (d < 365) return t("time.monthsAgo", { n: Math.floor(d / 30) });
-  return t("time.yearsAgo", { n: Math.floor(d / 365) });
+  // Einzahl für 1 („vor 1 Woche“, nicht „vor 1 Wochen“)
+  const unit = (n: number, one: string, many: string) => (n === 1 ? t(one) : t(many, { n }));
+  if (d < 30) return unit(Math.floor(d / 7), "time.weekAgo", "time.weeksAgo");
+  if (d < 365) return unit(Math.floor(d / 30), "time.monthAgo", "time.monthsAgo");
+  return unit(Math.floor(d / 365), "time.yearAgo", "time.yearsAgo");
 }
 
 export function formatDate(ts: number, opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" }): string {

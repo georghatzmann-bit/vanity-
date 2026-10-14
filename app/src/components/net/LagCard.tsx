@@ -5,14 +5,15 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Cpu, Info, Siren } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Cpu, Info, Siren } from "lucide-react";
 import { formatTime } from "@/lib/format";
 import { useT } from "@/lib/i18n";
-import { CAUSE_ICONS, CAUSE_TONE, causeLine, causeNote, countsFromEvents, fmtMbps, fmtMs, reasonText, visibleReasons, zoneText } from "@/lib/lag";
+import { CAUSE_ICONS, CAUSE_TONE, capitalizeFirst, causeLine, causeNote, countsFromEvents, fmtMbps, fmtMs, reasonText, visibleReasons, zoneText, zoneTitle } from "@/lib/lag";
 import { causeSummary } from "@/lib/lagtext";
 import type { LagEvent, LagSnapshot } from "@/lib/types";
 import { useLag } from "@/store/lag";
 import { useSettings } from "@/store/settings";
+import { useUI } from "@/store/ui";
 import { cn } from "@shared/lib/cn";
 
 type Translate = ReturnType<typeof useT>;
@@ -56,6 +57,13 @@ function EventDetails({ ev }: { ev: LagEvent }) {
   const note = causeNote(ev.cause, t);
   const baseText = (v: number | null) => (v === null ? t("lag.card.noBase") : t("lag.card.base", { ms: fmtMs(v) }));
   const off = s.tookMs === 0 && ev.reasons.includes("snapshotsOff");
+  // Weiter je Ursache: WLAN → WLAN-Tab, Router/Anbieter/unklar → „Warum laggt es?“
+  const link =
+    ev.cause === "wifi"
+      ? { section: "wifi", label: "lag.card.toWifi" }
+      : ev.cause === "router" || ev.cause === "isp" || ev.cause === "unknown"
+        ? { section: "diagnose", label: "lag.card.toDiagnose" }
+        : null;
   return (
     <div className="space-y-3 px-4 pt-1 pb-4">
       {!off && (
@@ -91,10 +99,7 @@ function EventDetails({ ev }: { ev: LagEvent }) {
                 .join(" · ") || " "}
             </Sub>
           </Detail>
-          <Detail label={t("lag.card.cpu")}>
-            {s.cpu === null ? t("lag.card.unknownValue") : `${Math.round(s.cpu)} %`}
-            <Sub>{t("lag.card.took", { ms: s.tookMs })}</Sub>
-          </Detail>
+          <Detail label={t("lag.card.cpu")}>{s.cpu === null ? t("lag.card.unknownValue") : `${Math.round(s.cpu)} %`}</Detail>
         </div>
       )}
       {!off && (
@@ -105,13 +110,10 @@ function EventDetails({ ev }: { ev: LagEvent }) {
           ) : (
             <div className="mt-1.5 grid gap-1.5 lg:grid-cols-3">
               {s.hops.map((h) => (
-                <div key={h.ttl} className="flex min-w-0 items-center gap-2.5 rounded-lg bg-surface px-3 py-2">
+                <div key={h.ttl} className="flex min-w-0 items-center gap-2.5 rounded-lg bg-surface px-3 py-2" title={zoneTitle(h, t)}>
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-surface-3 text-[11px] font-bold text-muted tabular">{h.ttl}</span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[12px] font-medium text-fg">{zoneText(h, t)}</div>
-                    <div className="truncate text-[11px] text-muted tabular" title={h.address ?? undefined}>
-                      {h.address ?? "–"}
-                    </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <div className="text-[13px] font-semibold text-fg tabular">{h.rtt === null ? "–" : `${fmtMs(h.rtt)} ms`}</div>
@@ -147,6 +149,20 @@ function EventDetails({ ev }: { ev: LagEvent }) {
           )}
         </ul>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1">
+        {link ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-accent hover:underline"
+            onClick={() => useUI.getState().navigate({ page: "network", section: link.section })}
+          >
+            {t(link.label)} <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <span />
+        )}
+        {!off && <span className="ml-auto text-[11px] text-faint tabular">{t("lag.card.took", { ms: s.tookMs })}</span>}
+      </div>
     </div>
   );
 }
@@ -162,8 +178,8 @@ function EventRow({ ev, open, onToggle }: { ev: LagEvent; open: boolean; onToggl
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm font-semibold text-fg">{causeLine(ev.cause, ev.targetKind, t)}</span>
-            <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-px text-[9px] font-semibold tracking-[0.08em] text-muted uppercase">{t("lag.estimate")}</span>
+            <span className="truncate text-sm font-semibold text-fg">{capitalizeFirst(causeLine(ev.cause, ev.targetKind, t))}</span>
+            {ev.cause !== "unknown" && <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-px text-[9px] font-semibold tracking-[0.08em] text-muted uppercase">{t("lag.estimate")}</span>}
             {ev.count > 1 && <span className="shrink-0 rounded-full bg-accent/15 px-2 py-px text-[10px] font-semibold text-accent tabular">{t("lag.card.count", { n: ev.count })}</span>}
           </div>
           <div className="truncate text-[12px] text-muted tabular">
