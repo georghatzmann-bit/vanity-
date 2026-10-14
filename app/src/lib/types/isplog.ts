@@ -2,8 +2,8 @@
  * Anbieter-Protokoll (Bericht als HTML/CSV). Vertrag: docs/API.md, „Anbieter-Protokoll“.
  * Das Protokoll ist ein Indiz, kein Nachweis.
  */
-import type { Language } from "../types";
-import type { EventSummaryRow, HourlyRow, NetEvent } from "./history";
+import type { Language, PingMethod } from "../types";
+import type { ConnectionKind, EventKind, EventSummaryRow, HourlyRow, NetEvent, OutageScope } from "./history";
 
 /** Einstellungen `ispLog` */
 export interface IspLogSettings {
@@ -22,10 +22,13 @@ export type IspLogRange = 7 | 30 | 90;
 
 /** Eingabe von `buildIspLog` */
 export interface IspLogInput {
+  /** Ereignisse (ohne `spike`); andere Netze werden herausgefiltert */
   events: NetEvent[];
   /** `net_events_list` war gekappt */
   truncated: boolean;
+  /** Zählungen je Stunde (auch anderer Netze – für den Hinweis „andere Netze“) */
   summary: EventSummaryRow[];
+  /** Stunden-Summen (auch anderer Netze – für den Hinweis „andere Netze“) */
   hourly: HourlyRow[];
   from: number;
   to: number;
@@ -33,6 +36,20 @@ export interface IspLogInput {
   contract: IspLogSettings;
   lang: Language;
   timeZone: string;
+  /** Erstellt am (Standard: jetzt) */
+  now?: number;
+}
+
+/** Ausreißer nach vermuteter Ursache: Heimnetz/WLAN/PC, Anschluss/Anbieter, Internet, unklar */
+export type SpikeGroup = "home" | "isp" | "internet" | "unknown";
+
+/** Speedtests eines Tages */
+export interface IspLogSpeed {
+  n: number;
+  downMin: number;
+  downMedian: number;
+  upMin: number;
+  upMedian: number;
 }
 
 /** Tageswerte (Ortszeit) */
@@ -47,12 +64,46 @@ export interface IspLogDay {
   pcOutages: number;
   unknownOutages: number;
   lossWindows: number;
+  /** Verlust-Fenster mit dem höchsten Anteil des Tages */
+  lossWorst: { lost: number; n: number; pct: number } | null;
   slowMinutes: number;
+  /** langsame Minuten je Ziel */
+  slowByTarget: { key: string; label: string; minutes: number }[];
   /** Ausreißer nach Ursache (Σ count) */
-  spikesByCause: Partial<Record<"home" | "isp" | "internet" | "unknown", number>>;
-  /** Messstunden (coveredMs ≥ 30 min) */
+  spikesByCause: Partial<Record<SpikeGroup, number>>;
+  /** Messstunden (Stundengruppe mit coveredMs ≥ 30 min) */
   measuredHours: number;
+  coveredMs: number;
   speedtests: number;
+  speed: IspLogSpeed | null;
+}
+
+/** Eine Zeile der Ereignisliste (ohne Ausreißer) */
+export interface IspLogRow {
+  id: number;
+  t: number;
+  endT: number | null;
+  kind: Exclude<EventKind, "spike">;
+  scope: OutageScope | null;
+  targetKey: string | null;
+  /** schon als „eigenes Ziel“ ersetzt, wenn der Name wie eine Adresse aussieht */
+  targetLabel: string | null;
+  method: PingMethod | null;
+  connection: ConnectionKind | null;
+  value: number | null;
+  sessionId: number | null;
+  /** lesbarer Wert („3 von 60 Paketen (5 %)“, „4 s ohne Antwort“ …) */
+  text: string;
+}
+
+/** Messziel im Kopf */
+export interface IspLogTarget {
+  key: string;
+  label: string;
+  method: PingMethod;
+  /** „ICMP“, „TCP:443“ (Rechenzentren) bzw. „TCP“ */
+  methodText: string;
+  coveredMs: number;
 }
 
 /** Ergebnis von `buildIspLog` */
@@ -61,17 +112,30 @@ export interface IspLogResult {
     from: number;
     to: number;
     timeZone: string;
-    /** z. B. „UTC+2“ */
+    /** z. B. „UTC+2“ (wechselt die Sommerzeit im Zeitraum: „UTC+2 / UTC+1“) */
     utcOffset: string;
-    targets: { key: string; label: string; method: "icmp" | "tcp" }[];
+    targets: IspLogTarget[];
     hours: number;
     days: number;
     /** Anteil der Messzeit per WLAN bzw. mit VPN (0–1) */
     wifiShare: number;
     vpnShare: number;
     otherNets: number;
+    truncated: boolean;
+  };
+  totals: {
+    internetOutages: number;
+    internetOutageS: number;
+    otherOutages: number;
+    lossWindows: number;
+    slowMinutes: number;
+    speedtests: number;
+    /** Median-Download aller Speedtests */
+    downMedian: number | null;
+    spikesByCause: Partial<Record<SpikeGroup, number>>;
   };
   days: IspLogDay[];
+  rows: IspLogRow[];
   html: string;
   csv: string;
 }
