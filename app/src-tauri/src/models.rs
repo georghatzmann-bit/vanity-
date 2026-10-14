@@ -258,6 +258,8 @@ pub struct RunningGame {
     pub game_id: String,
     pub started_at: i64,
     pub pids: Vec<u32>,
+    /// Laufende Spielsitzung (`sessions.id`), sobald sie angelegt ist – nur für die Oberfläche
+    pub session_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -8,11 +8,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures_util::future::join_all;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
-use super::ping;
 use super::types::{MonitorUpdate, PingSample, PingStats, PingTarget};
 use super::EVENT_PING;
+use super::{hook, ping};
+use crate::error::LockExt;
+use crate::state::Shared;
 
 /// Länge des gleitenden Fensters je Ziel.
 pub const WINDOW: usize = 60;
@@ -92,6 +94,7 @@ pub fn start(app: AppHandle, targets: Vec<PingTarget>, interval: Duration) -> Mo
 /// Die Schleife des Monitors. Namen werden einmal aufgelöst und bei Fehlern in jedem Takt erneut
 /// versucht; ein nicht auflösbares Ziel zählt als Verlust.
 async fn run(app: AppHandle, targets: Vec<PingTarget>, interval: Duration, stop: Arc<AtomicBool>) {
+    let interval_ms = u64::try_from(interval.as_millis()).unwrap_or(u64::from(DEFAULT_INTERVAL_MS));
     let mut window = RollingWindow::new(&targets);
     let mut ips: Vec<Option<IpAddr>> = vec![None; targets.len()];
 
@@ -130,6 +133,17 @@ async fn run(app: AppHandle, targets: Vec<PingTarget>, interval: Duration, stop:
                 PingSample { target_id: t.id.clone(), t: now, rtt }
             })
             .collect();
+
+        // Netzwerk-Verlauf (einziger Hook, `docs/API.md` „Aufzeichnung“): Last messen, Recorder
+        // füttern, Aufträge (Schreiben, Momentaufnahme …) im Hintergrund starten. Hier nie
+        // `tracker` oder `db` sperren; `ingest` ist rein.
+        if let Some(core) = app.try_state::<Shared>() {
+            let ctx = core.net.ingest_ctx(now);
+            let load = core.net.load.lock_safe().sample(now);
+            let actions = core.net.recorder.lock_safe().ingest(now, interval_ms, &targets, &ips, &samples, &load, ctx);
+            hook::run_actions(&app, core.inner().clone(), actions);
+        }
+
         let update = MonitorUpdate { samples, stats: window.stats() };
         let _ = app.emit(EVENT_PING, &update);
 

@@ -1,4 +1,8 @@
 import { detectLanguage } from "./i18n";
+import { defaultHistory, mergeHistory } from "./settings/history";
+import { defaultIspLog, mergeIspLog } from "./settings/isplog";
+import { defaultLag, mergeLag } from "./settings/lag";
+import { defaultSonar, mergeSonar } from "./settings/sonar";
 import type { BoostProfile, Game, Settings } from "./types";
 
 export const defaultBoostProfile = (): BoostProfile => ({ powerPlan: true, gamePriority: "high", flushDns: true });
@@ -33,6 +37,11 @@ export const defaultSettings = (): Settings => ({
 
   scanOnStartup: true,
   steamGridDbKey: "",
+
+  lag: defaultLag(),
+  sonar: defaultSonar(),
+  ispLog: defaultIspLog(),
+  history: defaultHistory(),
 });
 
 /** Fehlende Felder ergänzen (z. B. nach einem Update mit neuen Einstellungen) */
@@ -51,6 +60,11 @@ export function mergeSettings(stored: Partial<Settings> | null | undefined): Set
   s.pingIntervalMs = Math.min(5000, Math.max(250, Number(s.pingIntervalMs) || 1000));
   s.pingAlertMs = Math.min(1000, Math.max(20, Number(s.pingAlertMs) || d.pingAlertMs));
   s.overlayOpacity = Math.min(1, Math.max(0.3, Number(s.overlayOpacity) || 0.85));
+  // Netzwerk-Funktionen (Teil 2): je Namensraum eigene Ergänzung/Kappung (lib/settings/*)
+  s.lag = mergeLag(stored.lag);
+  s.sonar = mergeSonar(stored.sonar);
+  s.ispLog = mergeIspLog(stored.ispLog);
+  s.history = mergeHistory(stored.history);
   return s;
 }
 

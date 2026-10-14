@@ -27,6 +27,10 @@ pub struct RawAdapter {
     pub ipv4_metric: u32,
     /// IP-Adresse kommt per DHCP
     pub dhcp: bool,
+    /// `NET_LUID` der Schnittstelle (`IP_ADAPTER_ADDRESSES_LH.Luid.Value`, 0 = unbekannt)
+    pub luid: u64,
+    /// Schnittstellen-Index (`IfIndex`, sonst `Ipv6IfIndex`; 0 = unbekannt)
+    pub if_index: u32,
 }
 
 const IF_TYPE_ETHERNET: u32 = 6;
@@ -321,6 +325,8 @@ mod win {
                     link_speed_bps: a.TransmitLinkSpeed,
                     ipv4_metric: a.Ipv4Metric,
                     dhcp: a.Anonymous2.Flags & IP_ADAPTER_DHCP_ENABLED != 0,
+                    luid: a.Luid.Value,
+                    if_index: if a.Anonymous1.Anonymous.IfIndex != 0 { a.Anonymous1.Anonymous.IfIndex } else { a.Ipv6IfIndex },
                     ..Default::default()
                 };
                 let mut u = a.FirstUnicastAddress;
@@ -530,6 +536,7 @@ mod tests {
             link_speed_bps: 1_000_000_000,
             ipv4_metric: metric,
             dhcp: true,
+            ..Default::default()
         }
     }
 

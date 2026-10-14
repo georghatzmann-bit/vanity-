@@ -9,6 +9,7 @@ mod config;
 mod db;
 mod elevate;
 mod error;
+mod export;
 mod icons;
 mod images;
 mod launch;
@@ -205,6 +206,20 @@ pub fn run() {
             net::net_wifi,
             net::net_speedtest,
             net::net_speedtest_cancel,
+            // Netzwerk-Verlauf und die 7 Netzwerk-Funktionen (Teil 2)
+            net::net_if_counters,
+            net::net_lag_snapshot,
+            net::net_lag_recent,
+            net::net_session_timeline,
+            net::net_history_hourly,
+            net::net_events_list,
+            net::net_events_summary,
+            net::net_history_clear,
+            net::net_wifi_scan,
+            net::net_wifi_state,
+            net::net_metered,
+            // Datei-Export (Roh-IPC)
+            export::export_file,
             // Optimieren & Boost
             opt::opt_tweaks,
             opt::opt_apply,

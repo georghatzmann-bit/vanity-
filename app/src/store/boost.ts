@@ -3,7 +3,8 @@ import { api, listen } from "@/lib/api";
 import { uid } from "@/lib/defaults";
 import { compressTimeline, countSpikes, pingGrade, summarize } from "@/lib/grade";
 import { t } from "@/lib/i18n";
-import type { BoostState, Game, PingSample, Session, SessionReport } from "@/lib/types";
+import { appendFresh } from "@/lib/recording";
+import type { BoostState, Game, LagCause, PingSample, Session, SessionReport, SpikeDetail } from "@/lib/types";
 import { gameHooks, useLibrary } from "./library";
 import { useNet } from "./net";
 import { useSettings } from "./settings";
@@ -23,8 +24,8 @@ interface BoostStore {
   deleteAllReports: () => Promise<void>;
 }
 
-/** Laufende Aufzeichnung einer Spielsitzung (Ping-Verlauf) */
-let recording: { gameId: string; start: number; samples: PingSample[]; targetLabel: string; boosted: boolean } | null = null;
+/** Laufende Aufzeichnung einer Spielsitzung (Ping-Verlauf); `lastT` = Zeit des zuletzt übernommenen Werts */
+let recording: { gameId: string; start: number; lastT: number; samples: PingSample[]; targetLabel: string; boosted: boolean } | null = null;
 let unlisten: (() => void) | null = null;
 
 function buildReport(game: Game, session: Session, rec: NonNullable<typeof recording>): SessionReport {
@@ -46,7 +47,27 @@ function buildReport(game: Game, session: Session, rec: NonNullable<typeof recor
     timeline: compressTimeline(rec.samples.map((s) => [s.t, s.rtt] as [number, number | null])),
     boosted: rec.boosted,
     grade: pingGrade(stats.avg, stats.jitter, stats.loss) ?? "F",
+    sessionId: session.id,
   };
+}
+
+/**
+ * Ursachen der Ausreißer einer Sitzung aus dem Anbieter-Protokoll (`spike`-Ereignisse, Σ `detail.count`).
+ * Schlägt das Lesen fehl, fehlt das Feld (undefined).
+ */
+async function lagCausesFor(session: Session): Promise<SessionReport["lagCauses"]> {
+  try {
+    const page = await api.eventsList(session.start, session.end + 5000, ["spike"]);
+    const out: Partial<Record<LagCause, number>> = {};
+    for (const e of page.events) {
+      if (e.sessionId !== session.id || !e.cause) continue;
+      const n = (e.detail as SpikeDetail | null)?.count;
+      out[e.cause] = (out[e.cause] ?? 0) + (typeof n === "number" && n > 0 ? n : 1);
+    }
+    return out;
+  } catch {
+    return undefined;
+  }
 }
 
 export const useBoost = create<BoostStore>((set, get) => ({
@@ -74,7 +95,7 @@ export const useBoost = create<BoostStore>((set, get) => ({
       } else if (game.region) {
         void net.useRegionTarget(game.region);
       }
-      recording = { gameId: game.id, start: startedAt, samples: [], targetLabel: net.targetLabel, boosted: get().state.active };
+      recording = { gameId: game.id, start: startedAt, lastT: Number.NEGATIVE_INFINITY, samples: [], targetLabel: net.targetLabel, boosted: get().state.active };
     };
     gameHooks.onStopped = (game, session) => {
       const rec = recording;
@@ -86,14 +107,22 @@ export const useBoost = create<BoostStore>((set, get) => ({
       set({ reports: [report, ...get().reports].slice(0, 500) });
       void api.dbPut("reports", report.id, report).catch(() => undefined);
       toast({ kind: "success", title: t("toast.reportSaved"), text: t("toast.reportText", { name: game.name, ping: Math.round(report.avgPing ?? 0), grade: report.grade }) });
+      // Ursachen der Ausreißer nachtragen (Lag-Detektiv; fehlt das Protokoll, bleibt der Bericht ohne Feld)
+      void lagCausesFor(session).then((lagCauses) => {
+        if (!lagCauses) return;
+        const withCauses = { ...report, lagCauses };
+        set({ reports: get().reports.map((r) => (r.id === report.id ? withCauses : r)) });
+        void api.dbPut("reports", report.id, withCauses).catch(() => undefined);
+      });
       // Zurück zum normalen Messziel
       void useNet.getState().useRegionTarget();
     };
-    // Messwerte während der Sitzung einsammeln
+    // Messwerte während der Sitzung einsammeln – über die Zeit, nicht über die Pufferlänge (lib/recording.ts)
     useNet.subscribe((s, prev) => {
       if (!recording || s.samples === prev.samples) return;
-      const fresh = s.samples.slice(prev.samples.length > s.samples.length ? 0 : prev.samples.length);
-      recording.samples.push(...fresh.filter((x) => x.t >= recording!.start - 2000));
+      const { fresh, lastT } = appendFresh(s.samples, recording.lastT, recording.start);
+      recording.samples.push(...fresh);
+      recording.lastT = lastT;
       recording.targetLabel = s.targetLabel;
     });
   },

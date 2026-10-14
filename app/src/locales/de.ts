@@ -1,3 +1,13 @@
+// Namensräume der 7 Netzwerk-Funktionen (Teil 2) – je eigene Datei, damit parallel gearbeitet werden kann
+import { lagDe } from "./lag.de";
+import { timelineDe } from "./timeline.de";
+import { calendarDe } from "./calendar.de";
+import { sonarDe } from "./sonar.de";
+import { wifiScanDe } from "./wifiScan.de";
+import { diagnoseDe } from "./diagnose.de";
+import { ispLogDe } from "./ispLog.de";
+import { historyDe } from "./history.de";
+
 /** Deutsche Texte – Vorlage für alle Sprachen (die Typprüfung verlangt dieselben Schlüssel in en.ts). */
 export const de = {
   app: { name: "PULSAR", tagline: "Dein Game Booster", loading: "Pulsar startet …" },
@@ -48,6 +58,9 @@ export const de = {
     unknown: "Unbekannt",
     favorite: "Favorit",
     add: "Hinzufügen",
+    soon: "Kommt gleich – diese Funktion wird gerade eingebaut.",
+    saved: "Gespeichert",
+    showInFolder: "Im Ordner zeigen",
   },
   time: {
     h: "Std.",
@@ -121,6 +134,7 @@ export const de = {
     measuringTo: "Messziel: {target}",
     heroEmpty: "Deine Spiele, einen Klick entfernt",
     heroEmptyText: "Lass Pulsar deine Steam-, Epic- und GOG-Spiele finden – mit Cover, Logo und Hintergrundbild. Dann startest du sie hier mit Boost.",
+    quickDiagnose: "Warum laggt es?",
   },
   games: {
     title: "Spiele",
@@ -198,7 +212,7 @@ export const de = {
   network: {
     title: "Netzwerk",
     subtitle: "Messen, verstehen, verbessern – alles ohne Anmeldung.",
-    tabs: { regions: "Regionen", route: "Route", dns: "DNS", speed: "Speedtest", connection: "Verbindung" },
+    tabs: { regions: "Regionen", route: "Route", dns: "DNS", speed: "Speedtest", connection: "Verbindung", wifi: "WLAN", diagnose: "Warum laggt es?" },
     regions: {
       intro: "Pulsar misst den Ping zu Rechenzentren auf der ganzen Welt. Die beste Region eignet sich als Messziel fürs Cockpit.",
       measureAll: "Alle messen",
@@ -500,6 +514,7 @@ export const de = {
     worst: "Schlechteste Runde",
     trend: "Ø Ping der letzten Runden",
     perGame: "Nach Spiel",
+    section: { rounds: "Runden", calendar: "Kalender", isp: "Anbieter-Protokoll", lag: "Ausreißer" },
   },
   settings: {
     title: "Einstellungen",
@@ -612,6 +627,11 @@ export const de = {
     flushDns: "DNS-Zwischenspeicher leeren",
     netAuto: "Netzwerk automatisch optimieren",
     netAutoSub: "DNS-Dienst und Netzwerk-Einstellungen prüfen",
+    diagnose: "Warum laggt es?",
+    diagnoseSub: "Geführte Prüfung von WLAN, Router, Server und Leitung",
+    wifiScan: "WLAN-Scanner",
+    ispLog: "Anbieter-Protokoll",
+    calendar: "Kalender",
   },
   scan: {
     title: "Spiele finden",
@@ -701,7 +721,23 @@ export const de = {
     noConnection: "Keine aktive Netzwerkverbindung gefunden.",
     noAnswer: "{value} antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein.",
     notWindows: "Nur unter Windows verfügbar.",
+    noSamples: "Für diese Sitzung gibt es keine Messwerte.",
+    badRange: "Ungültiger Zeitraum.",
+    badScope: "Unbekannter Bereich.",
+    wifiLocked: "WLAN-Daten gesperrt: Windows gibt sie nur mit Standortzugriff frei. Bitte unter Einstellungen › Datenschutz und Sicherheit › Standort die Standortdienste und „Desktop-Apps den Zugriff auf Ihren Standort erlauben“ einschalten.",
+    fileType: "Dateityp nicht erlaubt.",
+    fileTooBig: "Datei ist zu groß.",
+    badPath: "Ungültiger Speicherort.",
+    saveFailed: "Datei konnte nicht gespeichert werden: {value}",
   },
+  lag: lagDe,
+  timeline: timelineDe,
+  calendar: calendarDe,
+  sonar: sonarDe,
+  wifiScan: wifiScanDe,
+  diagnose: diagnoseDe,
+  ispLog: ispLogDe,
+  history: historyDe,
 } as const;
 
 type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };

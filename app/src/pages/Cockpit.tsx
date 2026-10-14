@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Activity, Cable, Clock, Cpu, Gauge, Globe, Heart, MemoryStick, Pause, Play, Route, Wifi, WifiOff, Zap } from "lucide-react";
+import { Activity, Cable, Clock, Cpu, Gauge, Globe, Heart, MemoryStick, Pause, Play, Route, Stethoscope, Wifi, WifiOff, Zap } from "lucide-react";
 import { formatClock } from "@/lib/format";
 import { pingColor, signalLabel } from "@/lib/grade";
 import { useT } from "@/lib/i18n";
@@ -15,6 +15,8 @@ import { GameShelf } from "@/components/GameShelf";
 import { HeroBanner } from "@/components/HeroBanner";
 import { ReportCard } from "@/components/ReportCard";
 import { GradeRing } from "@/components/net/GradeRing";
+import { LagBadge } from "@/components/net/LagBadge";
+import { SonarButton } from "@/components/net/SonarButton";
 import { PingChart } from "@/components/net/PingChart";
 import { Ring } from "@/components/ui/Ring";
 import { Segmented } from "@/components/ui/Segmented";
@@ -147,6 +149,11 @@ export function Cockpit() {
               {stats?.last === null || stats?.last === undefined ? "–" : Math.round(stats.last)}
             </span>
             <span className="text-sm text-muted">ms · {targetLabel}</span>
+            {/* Steckplätze: Lag-Detektiv (F1) und „Hör dein Netz“ (F4) */}
+            <span className="flex min-w-0 flex-1 items-center justify-end gap-2 self-center">
+              <LagBadge />
+              <SonarButton />
+            </span>
           </div>
           <PingChart points={points} height={150} alertMs={settings.pingAlertMs} windowMs={Number(win) * 1000} className="mt-2" />
           <div className="mt-3 grid grid-cols-3 gap-2 text-[12px] lg:grid-cols-5">
@@ -214,8 +221,9 @@ export function Cockpit() {
               { icon: <Route className="h-4 w-4" />, label: t("network.tabs.route"), section: "route" },
               { icon: <Activity className="h-4 w-4" />, label: t("network.tabs.dns"), section: "dns" },
               { icon: <Gauge className="h-4 w-4" />, label: t("network.tabs.speed"), section: "speed" },
+              { icon: <Stethoscope className="h-4 w-4" />, label: t("cockpit.quickDiagnose"), section: "diagnose", wide: true },
             ].map((q) => (
-              <motion.button key={q.section} type="button" whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => navigate({ page: "network", section: q.section })} className="flex min-w-0 items-center gap-2.5 rounded-xl bg-surface px-3 py-3 text-left text-[13px] font-medium text-fg-soft transition hover:bg-surface-2 hover:text-fg">
+              <motion.button key={q.section} type="button" whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => navigate({ page: "network", section: q.section })} className={cn("flex min-w-0 items-center gap-2.5 rounded-xl bg-surface px-3 py-3 text-left text-[13px] font-medium text-fg-soft transition hover:bg-surface-2 hover:text-fg", "wide" in q && "col-span-2")}>
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-2 text-accent">{q.icon}</span>
                 <span className="truncate">{q.label}</span>
               </motion.button>

@@ -144,6 +144,17 @@ export const BACKEND_TEXTS: readonly (readonly [string, string])[] = [
   ["Keine Hauptverbindung gefunden, an der „Nagle“ eingestellt werden kann.", "backend.nagleNoAdapter"],
   ["Keine aktive Netzwerkverbindung gefunden.", "backend.noConnection"],
   ["Nur unter Windows verfügbar.", "backend.notWindows"],
+  // Netzwerk-Verlauf und die 7 Netzwerk-Funktionen (Teil 2, docs/API.md „Gemeinsam für die 7 Funktionen“)
+  ["Für diese Sitzung gibt es keine Messwerte.", "backend.noSamples"],
+  ["Ungültiger Zeitraum.", "backend.badRange"],
+  ["Unbekannter Bereich.", "backend.badScope"],
+  [
+    "WLAN-Daten gesperrt: Windows gibt sie nur mit Standortzugriff frei. Bitte unter Einstellungen › Datenschutz und Sicherheit › Standort die Standortdienste und „Desktop-Apps den Zugriff auf Ihren Standort erlauben“ einschalten.",
+    "backend.wifiLocked",
+  ],
+  ["Dateityp nicht erlaubt.", "backend.fileType"],
+  ["Datei ist zu groß.", "backend.fileTooBig"],
+  ["Ungültiger Speicherort.", "backend.badPath"],
 ];
 
 /** Sätze des Backends mit einem Platzhalter ({value}) */
@@ -151,6 +162,7 @@ const BACKEND_PATTERNS: readonly (readonly [RegExp, string])[] = [
   [/^(.+?) antwortet gerade nicht – Pulsar stellt ihn deshalb nicht ein\.$/, "backend.noAnswer"],
   [/Pulsar hat den DNS schon an (\d+) Verbindungen geändert – bitte erst zurückstellen\./, "backend.tooManyAdapters"],
   [/Der Admin-Helfer wurde unerwartet beendet \(Code (\d+)\)\./, "backend.unexpectedExit"],
+  [/^Datei konnte nicht gespeichert werden: ([\s\S]+)$/, "backend.saveFailed"],
 ];
 
 /**

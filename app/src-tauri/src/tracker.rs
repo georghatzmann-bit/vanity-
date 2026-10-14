@@ -470,6 +470,7 @@ impl Tracker {
                 game_id: id.clone(),
                 started_at: r.started_at,
                 pids: r.pids.clone(),
+                session_id: r.session_id,
             })
             .collect();
         list.sort_by_key(|r| r.started_at);

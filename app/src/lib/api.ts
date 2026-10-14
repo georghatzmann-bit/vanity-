@@ -4,6 +4,13 @@
  * Vertrag: ./types.ts und docs/API.md
  */
 import { isTauri } from "@shared/lib/env";
+import { calendarApi } from "./api/calendar";
+import { diagnoseApi } from "./api/diagnose";
+import { exportApi } from "./api/export";
+import { isplogApi } from "./api/isplog";
+import { lagApi } from "./api/lag";
+import { timelineApi } from "./api/timeline";
+import { wifiApi } from "./api/wifi";
 import type {
   AdapterInfo,
   AppInfo,
@@ -49,22 +56,32 @@ type Unlisten = () => void;
 let mockModule: Promise<typeof import("./mock")> | null = null;
 const loadMock = () => (mockModule ??= import("./mock"));
 
-async function call<T>(cmd: string, args?: Args): Promise<T> {
+/** Zusätzliche Angaben für einen Aufruf (z. B. Header bei Roh-IPC) */
+export interface CallOptions {
+  headers?: Record<string, string>;
+}
+
+/**
+ * Einen Backend-Befehl aufrufen. `args` als Objekt (JSON) oder als Bytes (Roh-IPC, z. B. `export_file`).
+ * Im Browser bekommt das Demo-Backend Bytes als `{ bytes, headers }`.
+ */
+export async function call<T>(cmd: string, args?: Args | Uint8Array, options?: CallOptions): Promise<T> {
   if (isTauri()) {
     const { invoke } = await import("@tauri-apps/api/core");
     try {
-      return await invoke<T>(cmd, args);
+      return await invoke<T>(cmd, args, options?.headers ? { headers: options.headers } : undefined);
     } catch (e) {
       throw new Error(typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
     }
   }
   const mock = await loadMock();
-  return mock.mockInvoke<T>(cmd, args ?? {});
+  const mockArgs: Args = args instanceof Uint8Array ? { bytes: args, headers: options?.headers ?? {} } : (args ?? {});
+  return mock.mockInvoke<T>(cmd, mockArgs);
 }
 
 /**
  * Auf Backend-Events hören. Events:
- * "net://ping" MonitorUpdate · "net://trace" TraceHop · "net://dns" DnsProgress · "net://speed" SpeedProgress
+ * "net://ping" MonitorUpdate · "net://trace" TraceHop · "net://dns" DnsProgress · "net://speed" SpeedProgress · "net://lag" LagEvent
  * "boost://state" BoostState · "game://started" GameStartedEvent · "game://stopped" GameStoppedEvent
  * "tray://action" { action } · "update://progress" ProgressEvent
  */
@@ -99,7 +116,7 @@ export async function initImgSrc(): Promise<void> {
 
 export type DbTable = "games" | "reports";
 
-export const api = {
+const baseApi = {
   // App
   appInfo: () => call<AppInfo>("app_info"),
   quit: () => call<void>("quit_app"),
@@ -187,4 +204,16 @@ export const api = {
   traySetRecent: (items: TrayRecent[]) => call<void>("tray_set_recent", { items }),
   updateCheck: () => call<UpdateInfo>("update_check"),
   updateInstall: (setupUrl: string, sha256?: string | null) => call<void>("update_install", { setupUrl, sha256 }),
+};
+
+/** Alle Befehle: Basis plus die Teile der 7 Netzwerk-Funktionen (`lib/api/<funktion>.ts`) */
+export const api = {
+  ...baseApi,
+  ...exportApi,
+  ...lagApi,
+  ...timelineApi,
+  ...calendarApi,
+  ...wifiApi,
+  ...diagnoseApi,
+  ...isplogApi,
 };

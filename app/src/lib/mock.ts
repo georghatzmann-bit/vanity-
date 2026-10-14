@@ -8,25 +8,25 @@ import type {
 } from "./types";
 import { DEMO_ART } from "./demo-art";
 import { bufferbloatGrade, compressTimeline, countSpikes, pingGrade, summarize } from "./grade";
+import { demoFlag, emit, mockKvDefault, rand, registerMockKvDefault, runPingTick, runSpeedtestHooks, sleep, type MockHandlers } from "./mock/core";
+import { calendarMock } from "./mock/calendar";
+import { diagnoseMock } from "./mock/diagnose";
+import { exportMock } from "./mock/export";
+import { isplogMock } from "./mock/isplog";
+import { lagMock } from "./mock/lag";
+import { timelineMock } from "./mock/timeline";
+import { wifiMock } from "./mock/wifi";
 
-type Handler = (p: unknown) => void;
-const listeners = new Map<string, Set<Handler>>();
-const emit = (event: string, payload: unknown) => listeners.get(event)?.forEach((h) => h(payload));
+export { mockListen } from "./mock/core";
 
-export function mockListen(event: string, handler: Handler): () => void {
-  if (!listeners.has(event)) listeners.set(event, new Set());
-  listeners.get(event)!.add(handler);
-  return () => listeners.get(event)?.delete(handler);
-}
+/** Befehle der 7 Netzwerk-Funktionen (Teil 2) – je Funktion eine eigene Datei unter ./mock */
+const FEATURE_MOCKS: MockHandlers[] = [exportMock, lagMock, timelineMock, calendarMock, wifiMock, diagnoseMock, isplogMock];
+
+// Demo-Einstellungen: eingetragene Maximal-Geschwindigkeit (passt zum Demo-Speedtest 412–472 Mbit/s)
+registerMockKvDefault("settings", { ispLog: { contractDownMbps: 500 } });
 
 const DAY = 86400000;
 const now = Date.now();
-let seed = 1337;
-const rand = () => {
-  seed = (seed * 16807) % 2147483647;
-  return (seed - 1) / 2147483646;
-};
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** So lange „wartet“ die Demo auf die Windows-Abfrage (UAC) */
 const UAC_MS = 800;
 
@@ -167,6 +167,7 @@ function makeReports(games: Game[], sessions: Session[]): SessionReport[] {
         timeline: compressTimeline(samples.map((x) => [x.t, x.rtt] as [number, number | null])),
         boosted: i % 3 !== 1,
         grade: pingGrade(st.avg, st.jitter, st.loss) ?? "F",
+        sessionId: s.id,
       };
     });
 }
@@ -178,7 +179,7 @@ interface MockDb {
   kv: Record<string, unknown>;
 }
 
-const STORE_KEY = "pulsar-mock-db-v2";
+const STORE_KEY = "pulsar-mock-db-v3";
 
 function freshDb(): MockDb {
   const games = makeGames();
@@ -210,7 +211,7 @@ const persist = () => {
   }, 300);
 };
 
-const running = new Map<string, { startedAt: number }>();
+const running = new Map<string, { startedAt: number; sessionId: number }>();
 
 function stats(): PlayStats[] {
   const map = new Map<string, PlayStats>();
@@ -312,8 +313,11 @@ function stopMonitor() {
 function startMonitor(targets: PingTarget[], interval: number) {
   stopMonitor();
   const history = new Map<string, PingSample[]>();
+  let count = 0;
   const tick = () => {
-    const samples = targets.map((tg) => sample(tg.id, baseFor(tg)));
+    // Hauptziel (targets[0]) durch die Hooks der Funktions-Mocks (z. B. Demo-Ausreißer des Lag-Detektivs)
+    const samples = targets.map((tg, i) => (i === 0 ? runPingTick(sample(tg.id, baseFor(tg)), count, tg) : sample(tg.id, baseFor(tg))));
+    count++;
     const statsOut: PingStats[] = [];
     for (const s of samples) {
       const h = [...(history.get(s.targetId) ?? []), s].slice(-60);
@@ -361,18 +365,15 @@ const DECLINED = "Du hast die Windows-Abfrage abgelehnt – es wurde nichts geä
 /** Demo-Zustand des DNS: eingestellter Dienst (null = automatisch vom Router) und ob Pulsar eine Sicherung hat */
 const dnsState: { provider: string | null; backup: boolean } = { provider: null, backup: false };
 
-/**
- * Schalter für Tests in der Demo (im Browser setzen): __pulsarDeclineUac = „Nein“ auf die Windows-Abfrage,
- * __pulsarDnsReadOnly = DNS nicht änderbar, __pulsarDnsNoAnswer = Live-Prüfung des gewählten Dienstes scheitert
- */
-const demoFlag = (name: "__pulsarDeclineUac" | "__pulsarDnsReadOnly" | "__pulsarDnsNoAnswer") => typeof window !== "undefined" && (window as unknown as Record<string, unknown>)[name] === true;
+/** Schalter für Tests in der Demo: siehe `demoFlag` in ./mock/core.ts */
 const uacDeclined = () => demoFlag("__pulsarDeclineUac");
 
 function dnsConfig(): DnsConfig {
   const p = DNS_PROVIDERS.find((x) => x.id === dnsState.provider);
+  const main = demoFlag("__pulsarWifiPrimary") ? adapters[1] : adapters[0];
   return {
-    adapterId: adapters[0].id,
-    adapter: adapters[0].name,
+    adapterId: main.id,
+    adapter: main.name,
     servers: p ? p.v4 : [ROUTER_V4],
     ipv6Servers: p ? p.v6 : [ROUTER_V6],
     dhcp: !p,
@@ -434,11 +435,13 @@ async function speedtest(): Promise<SpeedResult> {
     prog({ phase: "upload", progress: (i + 1) / 22, mbps: up * Math.min(1, (i + 3) / 8) * (0.9 + rand() * 0.15), latencyMs: 14 + i * 1.6 + rand() * 6 });
   }
   const idle = 9.6;
-  const loadedDown = 31.5;
-  const loadedUp = 44.2;
+  // Demo-Schalter „Warum laggt es?“: Latenz unter Last +78 ms (Bufferbloat)
+  const loadedDown = demoFlag("__pulsarDiagnoseDemo") ? idle + 78 : 31.5;
+  const loadedUp = demoFlag("__pulsarDiagnoseDemo") ? idle + 61.4 : 44.2;
   const bloat = Math.max(loadedDown, loadedUp) - idle;
   const res: SpeedResult = { downloadMbps: down, uploadMbps: up, idleLatencyMs: idle, idleJitterMs: 1.1, loadedLatencyDownMs: loadedDown, loadedLatencyUpMs: loadedUp, bufferbloatMs: bloat, grade: bufferbloatGrade(bloat), server: "FRA", at: Date.now() };
   prog({ phase: "done", progress: 1, mbps: null, latencyMs: null });
+  runSpeedtestHooks(res);
   return res;
 }
 
@@ -447,6 +450,21 @@ const adapters: AdapterInfo[] = [
   { id: "{8B5C7A10-2C3D-4E5F-9A0B-1C2D3E4F5A6B}", name: "WLAN", description: "Intel(R) Wi-Fi 6E AX211 160MHz", kind: "wifi", up: true, speedMbps: 1201, ipv4: ["192.168.178.57"], gateway: "192.168.178.1", dns: ["192.168.178.1"], primary: false },
 ];
 const wifi: WifiInfo = { ssid: "FRITZ!Box 7590 XK", signal: 86, rssi: -51, band: "5", channel: 44, phy: "Wi-Fi 6 (802.11ax)", rxMbps: 1201, txMbps: 1201 };
+/** Demo-Schalter `__pulsarWifiPrimary`: verbunden mit dem 2,4-GHz-Zugangspunkt desselben Routers */
+const wifi24: WifiInfo = { ssid: "FRITZ!Box 7590 XK", signal: 80, rssi: -60, band: "2.4", channel: 6, phy: "Wi-Fi 6 (802.11ax)", rxMbps: 287, txMbps: 287 };
+
+/** Adapterliste der Demo: Kabel (Standard) oder WLAN als Hauptverbindung (`__pulsarWifiPrimary`, Kabel abgezogen) */
+function demoAdapters(): AdapterInfo[] {
+  const dns = dnsConfig().servers;
+  if (demoFlag("__pulsarWifiPrimary")) return adapters.filter((x) => x.kind === "wifi").map((x) => ({ ...x, primary: true, speedMbps: 287, dns }));
+  return adapters.map((x) => (x.primary ? { ...x, dns } : x));
+}
+
+/** WLAN-Verbindung der Demo (`net_wifi`: gesperrt oder ohne WLAN-Dienst → null) */
+function demoWifi(): WifiInfo | null {
+  if (demoFlag("__pulsarWifiLocked") || demoFlag("__pulsarNoWifi")) return null;
+  return demoFlag("__pulsarWifiPrimary") ? wifi24 : wifi;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Optimieren & Boost
@@ -534,7 +552,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       return r(undefined);
     }
     case "kv_get":
-      return r(db.kv[String(a.key)] ?? null);
+      return r(db.kv[String(a.key)] ?? mockKvDefault(String(a.key)));
     case "kv_set":
       db.kv[String(a.key)] = a.value;
       persist();
@@ -567,7 +585,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
     case "launch_game": {
       const id = String(a.gameId);
       window.setTimeout(() => {
-        running.set(id, { startedAt: Date.now() });
+        running.set(id, { startedAt: Date.now(), sessionId: Date.now() });
         emit("game://started", { gameId: id, startedAt: Date.now() });
       }, 2600);
       return r(undefined);
@@ -579,7 +597,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       if (run) {
         const end = Date.now();
         const seconds = Math.max(1, Math.round((end - run.startedAt) / 1000));
-        const session: Session = { id: Date.now(), gameId: id, start: run.startedAt, end, seconds };
+        const session: Session = { id: run.sessionId, gameId: id, start: run.startedAt, end, seconds };
         db.sessions.push(session);
         persist();
         emit("game://stopped", { gameId: id, session });
@@ -587,7 +605,7 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
       return r(run ? 1 : 0);
     }
     case "running_games":
-      return r([...running.entries()].map(([gameId, v]) => ({ gameId, startedAt: v.startedAt, pids: [4242] })));
+      return r([...running.entries()].map(([gameId, v]) => ({ gameId, startedAt: v.startedAt, pids: [4242], sessionId: v.sessionId })));
     case "open_path":
     case "reveal_path":
     case "open_url":
@@ -691,9 +709,9 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
     }
     case "net_adapters":
       // Die Hauptverbindung zeigt den gerade eingestellten DNS
-      return r(adapters.map((x) => (x.primary ? { ...x, dns: dnsConfig().servers } : x)));
+      return r(demoAdapters());
     case "net_wifi":
-      return r(wifi);
+      return r(demoWifi());
     case "net_speedtest":
       return r(await speedtest());
     case "net_speedtest_cancel":
@@ -771,6 +789,8 @@ export async function mockInvoke<T>(cmd: string, a: Record<string, unknown>): Pr
     case "update_check":
       return r({ available: false, current: "1.0.0", latest: "1.0.0", notes: null, setupUrl: null, setupSha256: null });
     default:
+      // Befehle der 7 Netzwerk-Funktionen (Teil 2)
+      for (const m of FEATURE_MOCKS) if (cmd in m) return r(await m[cmd](a));
       throw new Error(`Demo: unbekannter Befehl „${cmd}“`);
   }
 }

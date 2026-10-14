@@ -253,3 +253,21 @@ describe("Meldungen des Backends", () => {
     expect(backendText("Adapter fehlt: X Windows hat die DNS-Änderung nicht übernommen.", enT)).toBe("Adapter fehlt: X Windows did not accept the DNS change.");
   });
 });
+
+describe("Fehlersätze der 7 Netzwerk-Funktionen", () => {
+  const look = (dict: unknown) => (key: string, vars?: Record<string, string | number>) => {
+    let cur: unknown = dict;
+    for (const p of key.split(".")) cur = (cur as Record<string, unknown>)?.[p];
+    return String(cur).replace(/\{(\w+)\}/g, (_, k: string) => String(vars?.[k] ?? ""));
+  };
+  it("feste Sätze und das Muster „Datei konnte nicht gespeichert werden“ werden übersetzt", () => {
+    const enT = look(en);
+    expect(backendText("Für diese Sitzung gibt es keine Messwerte.", enT)).toBe("There are no measurements for this session.");
+    expect(backendText("Dateityp nicht erlaubt.", enT)).toBe("File type not allowed.");
+    expect(backendText("Ungültiger Zeitraum.", enT)).toBe("Invalid time range.");
+    expect(backendText("Datei konnte nicht gespeichert werden: Zugriff verweigert: C:\\x.png. Bitte prüfe die Berechtigungen.", enT)).toBe(
+      "The file could not be saved: Zugriff verweigert: C:\\x.png. Bitte prüfe die Berechtigungen.",
+    );
+    expect(backendText("Datei konnte nicht gespeichert werden: X", look(de))).toBe("Datei konnte nicht gespeichert werden: X");
+  });
+});

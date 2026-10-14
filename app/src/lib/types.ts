@@ -1,7 +1,21 @@
 /**
  * PULSAR – gemeinsamer Datenvertrag zwischen Oberfläche und Rust-Backend.
  * Alle Felder camelCase (Rust: #[serde(rename_all = "camelCase")]). Beschreibung der Befehle: docs/API.md
+ * Die Typen der 7 Netzwerk-Funktionen (Teil 2) stehen je Funktion in ./types/*.ts und werden hier wieder exportiert.
  */
+import type { LagCause, LagSettings } from "./types/lag";
+import type { SonarSettings } from "./types/sonar";
+import type { IspLogSettings } from "./types/isplog";
+import type { HistorySettings } from "./types/history";
+
+export * from "./types/lag";
+export * from "./types/timeline";
+export * from "./types/calendar";
+export * from "./types/sonar";
+export * from "./types/wifi";
+export * from "./types/diagnose";
+export * from "./types/isplog";
+export * from "./types/history";
 
 // ---------------------------------------------------------------------------------------------
 // Spiele
@@ -116,6 +130,8 @@ export interface RunningGame {
   gameId: string;
   startedAt: number;
   pids: number[];
+  /** Laufende Spielsitzung (`sessions.id`), sobald angelegt */
+  sessionId: number | null;
 }
 
 /** Event "game://started" */
@@ -462,6 +478,10 @@ export interface SessionReport {
   timeline: [number, number | null][];
   boosted: boolean;
   grade: Grade;
+  /** Spielsitzung (`GameStoppedEvent.session.id`) – ältere Berichte haben kein Feld */
+  sessionId?: number;
+  /** Ursachen der Ausreißer dieser Sitzung (Σ `detail.count` je Ursache) – fehlt, wenn unbekannt */
+  lagCauses?: Partial<Record<LagCause, number>>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -509,4 +529,10 @@ export interface Settings {
 
   scanOnStartup: boolean;
   steamGridDbKey: string;
+
+  // Netzwerk-Funktionen (Teil 2) – `mergeSettings` ergänzt/kappt je Namensraum (lib/settings/*)
+  lag?: LagSettings;
+  sonar?: SonarSettings;
+  ispLog?: IspLogSettings;
+  history?: HistorySettings;
 }
