@@ -51,6 +51,14 @@ Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache
 | Boost aus | Energieplan vorher = nachher (8c5e7fda-…) – Rückstellung funktioniert |
 | Starten / erkannt / beenden / Spielzeit | PING.EXE gestartet, nach 0,5 s erkannt, beendet, 13 s in 1 Sitzung gespeichert |
 
+### Neues Setup „Radioteleskop“ auf Windows (CI-Lauf 38565471990, 14.10.2026, Commit `de91e53`)
+
+Lauf: <https://github.com/georghatzmann-bit/vanity-/actions/runs/38565471990> – alle Schritte grün, Release `pulsar-latest`
+aktualisiert. Installer-Selbsttest 9/9 (Manifest, Download, SHA-256, Installation, Dateien, Verknüpfungen, „Apps & Features“,
+Deinstallation mit `--revert-all`, alles entfernt), App-Selbsttest 29/29. Der Screenshot oben zeigt das neue Setup nach 9 s
+auf Windows Server 2025 (englische Systemsprache). Dort sind die Windows-Animationen ausgeschaltet – das Setup zeigt deshalb
+richtig das **Standbild** („Still image“) statt des drehenden Sterns: „Bewegung reduzieren“ wird beachtet.
+
 ### DNS-Automatik und Netzwerk-Optimierungen auf Windows (CI-Lauf 38478061410, 13.10.2026, Commit `1a375a5`)
 
 Lauf: <https://github.com/georghatzmann-bit/vanity-/actions/runs/38478061410> – alle Schritte grün, auch die Rust-Tests
