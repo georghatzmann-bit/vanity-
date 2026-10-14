@@ -1255,16 +1255,17 @@ mod tests {
             assert_eq!(r.pending.hourly.len(), 1, "bei „events“ bleiben die Stunden-Summen");
         }
         assert_eq!(env.count("SELECT COUNT(*) FROM net_events"), 0);
-        assert_eq!(env.count("SELECT COUNT(*) FROM ping_hourly"), 1);
+        // Nur die Testzeile (Kabel) zählen – die Takte selbst schreiben seit F3 eigene Stunden-Summen
+        assert_eq!(env.count("SELECT COUNT(*) FROM ping_hourly WHERE connection = 'ethernet'"), 1);
         // Die Ruhezeit läuft weiter → beim nächsten Schreiben neu angelegt (nicht ins Leere aktualisiert)
         tick(&mut env.rec(), 3_000, 1_000, &t, Some(20.0), quiet_ctx(QuietReason::Speedtest));
         env.flush(3_500).unwrap();
         assert_eq!(env.count("SELECT COUNT(*) FROM net_events"), 1);
-        assert_eq!(env.count("SELECT n FROM ping_hourly"), 20);
+        assert_eq!(env.count("SELECT n FROM ping_hourly WHERE connection = 'ethernet'"), 20);
         // „all“ leert alles
         env.rec().pending.hourly.push(hourly_row(0));
         let n = history_clear_with(&env.rec, &env.gate, &env.db, ClearScope::All).unwrap();
-        assert_eq!(n, 2);
+        assert_eq!(n, 3, "1 Ereignis + Stunden-Summen der Testzeile und der Takte");
         assert!(env.rec().pending.hourly.is_empty());
         env.flush(4_000).unwrap();
         assert_eq!(env.count("SELECT COUNT(*) FROM ping_hourly"), 0);
