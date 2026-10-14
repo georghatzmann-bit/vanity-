@@ -127,7 +127,8 @@ export function Cockpit() {
         </motion.div>
 
         <motion.div variants={staggerItem} className="glass order-first col-span-2 flex min-w-0 flex-col rounded-2xl p-5 xl:order-none xl:col-span-1">
-          <div className="flex items-center justify-between gap-3">
+          {/* flex-wrap: Bei 1280 px (drei Spalten ab xl) ist die Karte schmal – Zeitraum und Pause rutschen dann in eine zweite Zeile statt über den Kartenrand. */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className={cn("relative flex h-2.5 w-2.5", !monitorOn && "opacity-40")}>
                 {monitorOn && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />}
@@ -156,7 +157,7 @@ export function Cockpit() {
             </span>
           </div>
           <PingChart points={points} height={150} alertMs={settings.pingAlertMs} windowMs={Number(win) * 1000} className="mt-2" />
-          <div className="mt-3 grid grid-cols-3 gap-2 text-[12px] lg:grid-cols-5">
+          <div className="mt-3 grid grid-cols-3 gap-2 text-[12px] lg:grid-cols-5 xl:grid-cols-3 min-[1400px]:grid-cols-5">
             {[
               [t("cockpit.avg"), `${fmt(stats?.avg ?? null)} ms`],
               [t("cockpit.min"), `${fmt(stats?.min ?? null)} ms`],

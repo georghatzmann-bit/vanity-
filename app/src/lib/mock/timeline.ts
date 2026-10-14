@@ -68,7 +68,7 @@ interface DemoSpike {
 const SNAP_BASE: NonNullable<SpikeDetail["snap"]> = { conn: "ethernet", vpn: false, hops: [], gw: 1.2, gwB: 1.1, tgt: null, rssi: null, sig: null, rx: 3.2, tx: 0.6, cpu: 34 };
 
 const DEMO_SPIKES: DemoSpike[] = [
-  { at: 0.23, cause: "router", reasons: ["gatewaySlow"], count: 2, snap: { ...SNAP_BASE, gw: 38.4, hops: [[1, 37.9, "lan"], [2, 44.8, "isp"], [3, 46.1, "isp"]], tgt: 171 } },
+  { at: 0.23, cause: "router", reasons: ["gatewaySlow"], count: 1, snap: { ...SNAP_BASE, gw: 38.4, hops: [[1, 37.9, "lan"], [2, 44.8, "isp"], [3, 46.1, "isp"]], tgt: 171 } },
   { at: 0.52, cause: "isp", reasons: ["ispHopSlow", "lineBusyPossible"], count: 1, snap: { ...SNAP_BASE, hops: [[1, 1.3, "lan"], [2, 58.2, "isp"], [3, 61.5, "isp"]], tgt: 158 } },
   { at: 0.79, cause: "unknown", reasons: ["spikeGone"], count: 1, snap: { ...SNAP_BASE, hops: [[1, 1.2, "lan"], [2, 6.4, "isp"], [3, 7.3, "isp"]], tgt: 24 } },
 ];

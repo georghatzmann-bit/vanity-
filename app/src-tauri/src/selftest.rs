@@ -594,3 +594,14 @@ async fn admin_steps(app: &AppHandle, r: &mut Report) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// Der Selbsttest-Schritt `messwerte-speichern` läuft ohne Netz und ohne Windows –
+    /// er muss also schon hier sauber durchlaufen (Stunden-Summen und Aussetzer).
+    #[test]
+    fn history_roundtrip_is_clean() {
+        let (ok, detail) = super::history_roundtrip();
+        assert!(ok, "{detail}");
+    }
+}

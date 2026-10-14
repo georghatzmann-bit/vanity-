@@ -13,7 +13,7 @@
 import { zoned } from "../isplog";
 import { defaultTimeZone, localParts } from "../localtime";
 import type { ConnectionKind, EventKind, EventSummaryRow, LagCause, NetEvent, OutageScope, SpeedResult } from "../types";
-import { DEMO_MAIN, DEMO_NET_ID, demoShape } from "./calendar";
+import { clearDemoHourly, DEMO_MAIN, DEMO_NET_ID, demoShape } from "./calendar";
 import { onSpeedtest, type MockHandlers } from "./core";
 
 const SEED = 1337;
@@ -250,9 +250,11 @@ export const isplogMock: MockHandlers = {
   net_history_clear: (a) => {
     const scope = str(a.scope);
     if (scope !== "events" && scope !== "all") throw new Error("Unbekannter Bereich.");
-    const n = demoIspEvents().length;
+    let n = demoIspEvents().length;
     write(CLEARED_KEY, String(Date.now()));
     write(LOGGED_KEY, null);
+    // „all“ leert auch die Stunden-Summen des Kalender-Demos (wie `net_history_clear` im Backend)
+    if (scope === "all") n += clearDemoHourly();
     return n;
   },
 };

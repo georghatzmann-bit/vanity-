@@ -157,7 +157,7 @@ function Filters({ rows, filter, range, lang, loading, onFilter, onRange }: { ro
   return (
     <div className="glass flex flex-wrap items-end gap-x-4 gap-y-3 rounded-xl px-4 py-3">
       {targets.length > 0 && (
-        <Labeled label={t("calendar.filter.target")} className="w-[17rem] max-w-full">
+        <Labeled label={t("calendar.filter.target")} className="w-[21.5rem] max-w-full">
           <Select value={filter.targetKey ?? ""} onChange={pickTarget} options={targets.map((o) => ({ value: o.key, label: t("calendar.targetOption", { label: o.label, kind: t(`calendar.kind.${o.kind}`), hours: hours(o.coveredMs) }) }))} />
         </Labeled>
       )}

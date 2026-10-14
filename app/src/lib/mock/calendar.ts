@@ -72,7 +72,7 @@ export function demoShape(weekday: number, hour: number): DemoHourShape | null {
 /** Werktags 12–16 Uhr nur in jeder dritten Woche gemessen (zeigt „wenig Daten“) */
 const sparse = (weekday: number, hour: number) => weekday < 5 && hour >= 12 && hour <= 16;
 
-function row(target: typeof DEMO_MAIN | typeof DEMO_SECOND, hourStart: number, coveredMs: number, s: DemoHourShape): HourlyRow {
+function row(target: typeof DEMO_MAIN | typeof DEMO_SECOND, hourStart: number, coveredMs: number, s: DemoHourShape, connection: HourlyRow["connection"] = "ethernet"): HourlyRow {
   const n = Math.round(coveredMs / 1000);
   const lost = Math.round(n * s.loss);
   const answers = n - lost;
@@ -81,7 +81,7 @@ function row(target: typeof DEMO_MAIN | typeof DEMO_SECOND, hourStart: number, c
     hourStart,
     targetKey: target.key,
     netId: DEMO_NET_ID,
-    connection: "ethernet",
+    connection,
     kind: target.kind,
     label: target.label,
     method: target.method,
@@ -119,7 +119,10 @@ export function demoHourlyRows(from: number, to: number, opts: { now?: number; t
     if (shape && (!sparse(p.weekday, p.hour) || Math.floor(day / 7) % 3 === 0)) {
       // 42–60 min echte Messzeit; kurz nach Mitternacht nur 18 min (keine Messstunde)
       const share = p.hour === 0 ? 0.3 : 0.7 + 0.3 * hash(day, p.hour, 2);
-      out.push(row(DEMO_MAIN, hs, Math.round(HOUR_MS * share), shape));
+      // Etwa jede zwölfte Stunde per WLAN (gleicher Router, also gleiches Netz) – ergibt im
+      // Anbieter-Protokoll den Demo-WLAN-Anteil von rund 8 %; der Kalender („alle außer VPN“) bleibt gleich.
+      const conn = (day * 5 + p.hour) % WIFI_EVERY === 0 ? "wifi" : "ethernet";
+      out.push(row(DEMO_MAIN, hs, Math.round(HOUR_MS * share), shape, conn));
     }
     // Zweites Ziel: nur an den letzten 3 Tagen abends
     if (ago <= 2 && p.hour >= 19 && p.hour <= 22) {
@@ -127,6 +130,31 @@ export function demoHourlyRows(from: number, to: number, opts: { now?: number; t
     }
   }
   return out;
+}
+
+/** Jede so vielte Demo-Stunde des Hauptziels per WLAN (feste Regel über Tag und Stunde, ≈ 8 %) */
+const WIFI_EVERY = 12;
+/** „Messverlauf löschen“ (Bereich `all`) im Demo: Stunden davor gelten als gelöscht */
+const HOURLY_CLEARED_KEY = "pulsar.demo.history.hourlyClearedAt";
+
+/** Demo: Stunden-Summen bis jetzt als gelöscht merken (`net_history_clear("all")`) */
+export function clearDemoHourly(now = Date.now()): number {
+  const n = demoHourlyRows(0, now).filter((r) => r.hourStart >= hourlyClearedAt()).length;
+  try {
+    localStorage.setItem(HOURLY_CLEARED_KEY, String(now));
+  } catch {
+    /* Demo ohne localStorage: nichts zu merken */
+  }
+  return n;
+}
+
+function hourlyClearedAt(): number {
+  try {
+    const v = Number(localStorage.getItem(HOURLY_CLEARED_KEY));
+    return Number.isFinite(v) ? v : 0;
+  } catch {
+    return 0;
+  }
 }
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -139,6 +167,7 @@ export const calendarMock: MockHandlers = {
     if (from === null || to === null || from > to || to - from > MAX_RANGE_MS) throw new Error("Ungültiger Zeitraum.");
     const targetKey = str(a.targetKey);
     const netId = str(a.netId);
-    return demoHourlyRows(from, to).filter((r) => (targetKey === null || r.targetKey === targetKey) && (netId === null || r.netId === netId));
+    const cleared = hourlyClearedAt();
+    return demoHourlyRows(from, to).filter((r) => r.hourStart >= cleared && (targetKey === null || r.targetKey === targetKey) && (netId === null || r.netId === netId));
   },
 };

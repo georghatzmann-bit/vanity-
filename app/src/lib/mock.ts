@@ -3,7 +3,7 @@
  * Bildet die Rust-Befehle mit Beispieldaten nach. In der echten App wird es nie geladen.
  */
 import type {
-  AdapterInfo, ApplyReport, AutoReport, BoostProfile, BoostState, DnsConfig, DnsResult, Game, GameImages, ImageKind, LaunchConfig, MonitorUpdate, PingSample, PingStats,
+  AdapterInfo, ApplyReport, LagCause, AutoReport, BoostProfile, BoostState, DnsConfig, DnsResult, Game, GameImages, ImageKind, LaunchConfig, MonitorUpdate, PingSample, PingStats,
   PingTarget, PlayStats, PowerPlan, Region, RegionPing, ScannedEntry, Session, SessionReport, SpeedProgress, SpeedResult, TraceHop, TraceResult, Tweak, WifiInfo,
 } from "./types";
 import { DEMO_ART } from "./demo-art";
@@ -14,7 +14,7 @@ import { diagnoseMock } from "./mock/diagnose";
 import { exportMock } from "./mock/export";
 import { isplogMock } from "./mock/isplog";
 import { lagMock } from "./mock/lag";
-import { timelineMock } from "./mock/timeline";
+import { demoSessionTimeline, timelineMock } from "./mock/timeline";
 import { wifiMock } from "./mock/wifi";
 
 export { mockListen } from "./mock/core";
@@ -151,7 +151,7 @@ function makeReports(games: Game[], sessions: Session[]): SessionReport[] {
       const noisy = rand() < 0.35;
       const samples = makeTimeline(s.start, s.seconds, base, noisy);
       const st = summarize("monitor", samples);
-      return {
+      const draft: SessionReport = {
         id: `rep-${i}`,
         gameId: game.id,
         gameName: game.name,
@@ -169,6 +169,18 @@ function makeReports(games: Game[], sessions: Session[]): SessionReport[] {
         grade: pingGrade(st.avg, st.jitter, st.loss) ?? "F",
         sessionId: s.id,
       };
+      // Kopf und Zeitleiste passend machen: Ausreißer, Verlust und Ursachen aus derselben Demo-Zeitleiste
+      // (sonst zeigte der Kopf „0 Ausreißer“, während die Zeitleiste die Demo-Ausreißer markiert)
+      const tl = demoSessionTimeline(s, draft);
+      const rtts = tl.points.map((p) => p[1]);
+      const loss = rtts.length ? rtts.filter((v) => v === null).length / rtts.length : st.loss;
+      const lagCauses: Partial<Record<LagCause, number>> = {};
+      for (const e of tl.events) {
+        if (e.kind !== "spike" || !e.cause) continue;
+        const n = typeof (e.detail as { count?: unknown } | null)?.count === "number" ? Number((e.detail as { count: number }).count) : 1;
+        lagCauses[e.cause] = (lagCauses[e.cause] ?? 0) + n;
+      }
+      return { ...draft, loss, spikes: countSpikes(rtts), lagCauses, grade: pingGrade(st.avg, st.jitter, loss) ?? "F" };
     });
 }
 
@@ -179,7 +191,7 @@ interface MockDb {
   kv: Record<string, unknown>;
 }
 
-const STORE_KEY = "pulsar-mock-db-v3";
+const STORE_KEY = "pulsar-mock-db-v4";
 
 function freshDb(): MockDb {
   const games = makeGames();

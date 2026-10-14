@@ -381,4 +381,16 @@ describe("Demo-Daten", () => {
     // nur abgeschlossene Stunden
     expect(rows.every((r) => r.hourStart + H <= now)).toBe(true);
   });
+
+  it("rund 8 % der Messzeit per WLAN im selben Netz (Demo des Anbieter-Protokolls)", () => {
+    for (let i = 0; i < 6; i++) {
+      const now = Date.UTC(2026, 2, 1, 10, 0) + i * 41 * DAY;
+      const rows = demoHourlyRows(now - 30 * DAY, now, { now, timeZone: BERLIN }).filter((r) => r.targetKey === DEMO_MAIN.key);
+      const total = rows.reduce((a, r) => a + r.coveredMs, 0);
+      const wifi = rows.filter((r) => r.connection === "wifi").reduce((a, r) => a + r.coveredMs, 0);
+      expect(rows.every((r) => r.netId === DEMO_NET_ID && (r.connection === "wifi" || r.connection === "ethernet"))).toBe(true);
+      expect(wifi / total).toBeGreaterThan(0.06);
+      expect(wifi / total).toBeLessThan(0.11);
+    }
+  });
 });
