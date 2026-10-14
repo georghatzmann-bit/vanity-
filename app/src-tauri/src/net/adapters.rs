@@ -7,6 +7,9 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use super::dns;
 use super::types::{AdapterInfo, DnsConfig, WifiInfo};
+#[cfg(windows)]
+use super::wifiscan::wlan_error_kind;
+use super::wifiscan::WifiStateKind;
 
 /// Rohdaten eines Adapters, wie Windows sie liefert (vor Filterung und Zuordnung).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -233,12 +236,48 @@ pub fn build_wifi(raw: RawWifi) -> WifiInfo {
     }
 }
 
+/// WLAN-Zustand (Windows 11 24H2: ohne Standortzugriff `Locked`).
+#[derive(Debug, Clone)]
+pub enum WifiState {
+    Connected(WifiInfo),
+    NotConnected,
+    /// `WlanOpenHandle` scheitert (z. B. `ERROR_SERVICE_NOT_ACTIVE` 1062) oder keine WLAN-Schnittstelle
+    NoService,
+    /// `ERROR_ACCESS_DENIED` (5) bei `WlanQueryInterface`
+    Locked,
+}
+
+impl WifiState {
+    pub fn kind(&self) -> WifiStateKind {
+        match self {
+            WifiState::Connected(_) => WifiStateKind::Connected,
+            WifiState::NotConnected => WifiStateKind::NotConnected,
+            WifiState::NoService => WifiStateKind::NoService,
+            WifiState::Locked => WifiStateKind::Locked,
+        }
+    }
+
+    /// Verbindung, falls verbunden (sonst `None` – auch bei `Locked`, wie bisher `net_wifi`).
+    pub fn into_info(self) -> Option<WifiInfo> {
+        match self {
+            WifiState::Connected(w) => Some(w),
+            _ => None,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Windows
 // ---------------------------------------------------------------------------------------------
 
 #[cfg(windows)]
-pub use win::{interface_exists, is_static_dns, list, primary_dns_servers, read_raw, static_servers, wifi};
+pub use win::{interface_exists, is_static_dns, list, primary_dns_servers, read_raw, static_servers, wifi, wifi_state};
+
+/// WLAN-Zustand außerhalb von Windows: kein WLAN-Dienst.
+#[cfg(not(windows))]
+pub fn wifi_state() -> WifiState {
+    WifiState::NoService
+}
 
 #[cfg(windows)]
 mod win {
@@ -251,11 +290,14 @@ mod win {
         IP_ADAPTER_ADDRESSES_LH, IP_ADAPTER_DHCP_ENABLED,
     };
     use windows::Win32::NetworkManagement::Ndis::IfOperStatusUp;
+    use std::ptr::addr_of;
+
+    use windows::core::GUID;
     use windows::Win32::NetworkManagement::WiFi::{
         dot11_BSS_type_infrastructure, wlan_interface_state_connected, wlan_intf_opcode_channel_number,
         wlan_intf_opcode_current_connection, WlanCloseHandle, WlanEnumInterfaces, WlanFreeMemory,
-        WlanGetNetworkBssList, WlanOpenHandle, WlanQueryInterface, WLAN_BSS_LIST, WLAN_CONNECTION_ATTRIBUTES,
-        WLAN_INTERFACE_INFO_LIST,
+        WlanGetNetworkBssList, WlanOpenHandle, WlanQueryInterface, WLAN_BSS_ENTRY, WLAN_BSS_LIST,
+        WLAN_CONNECTION_ATTRIBUTES, WLAN_INTERFACE_INFO, WLAN_INTERFACE_INFO_LIST,
     };
     use windows::Win32::Networking::WinSock::{AF_INET, AF_INET6, AF_UNSPEC, SOCKADDR_IN, SOCKET_ADDRESS};
 
@@ -419,102 +461,166 @@ mod win {
             .unwrap_or_default()
     }
 
-    /// Aktuelle WLAN-Verbindung (None = kein verbundenes WLAN).
+    /// Aktuelle WLAN-Verbindung (None = kein verbundenes WLAN, gesperrt oder kein WLAN-Dienst).
+    /// Rückwärtskompatibel zu `net_wifi`; Einzelheiten liefert `wifi_state`.
     pub fn wifi() -> Result<Option<WifiInfo>, String> {
-        // SAFETY: Aufrufe nach wlanapi-Dokumentation; jeder von Windows gelieferte Speicher wird mit
-        // WlanFreeMemory freigegeben, das Handle am Ende geschlossen.
-        unsafe {
-            let mut negotiated = 0u32;
-            let mut handle = HANDLE::default();
-            if WlanOpenHandle(2, None, &mut negotiated, &mut handle) != 0 {
-                // Kein WLAN-Dienst (z. B. Desktop ohne WLAN-Karte)
-                return Ok(None);
+        Ok(wifi_state().into_info())
+    }
+
+    /// Schließt das Handle beim Verlassen.
+    struct Handle(HANDLE);
+    impl Drop for Handle {
+        fn drop(&mut self) {
+            // SAFETY: Handle stammt aus WlanOpenHandle und wird genau einmal geschlossen.
+            unsafe {
+                let _ = WlanCloseHandle(self.0, None);
             }
-            let result = wifi_with_handle(handle);
-            let _ = WlanCloseHandle(handle, None);
-            Ok(result)
         }
     }
 
-    unsafe fn wifi_with_handle(handle: HANDLE) -> Option<WifiInfo> {
-        let mut list: *mut WLAN_INTERFACE_INFO_LIST = std::ptr::null_mut();
-        if WlanEnumInterfaces(handle, None, &mut list) != 0 || list.is_null() {
-            return None;
-        }
-        let count = (*list).dwNumberOfItems as usize;
-        let first = (*list).InterfaceInfo.as_ptr();
-        let mut found = None;
-        for i in 0..count {
-            let info = &*first.add(i);
-            if info.isState != wlan_interface_state_connected {
-                continue;
-            }
-            let guid = info.InterfaceGuid;
-
-            let mut size = 0u32;
-            let mut data: *mut c_void = std::ptr::null_mut();
-            if WlanQueryInterface(handle, &guid, wlan_intf_opcode_current_connection, None, &mut size, &mut data, None) != 0 || data.is_null() {
-                continue;
-            }
-            let attrs = std::ptr::read_unaligned(data as *const WLAN_CONNECTION_ATTRIBUTES);
-            WlanFreeMemory(data);
-            let assoc = attrs.wlanAssociationAttributes;
-            let ssid_len = (assoc.dot11Ssid.uSSIDLength as usize).min(assoc.dot11Ssid.ucSSID.len());
-            let ssid = String::from_utf8_lossy(&assoc.dot11Ssid.ucSSID[..ssid_len]).into_owned();
-
-            let mut ch_size = 0u32;
-            let mut ch_data: *mut c_void = std::ptr::null_mut();
-            let channel = if WlanQueryInterface(handle, &guid, wlan_intf_opcode_channel_number, None, &mut ch_size, &mut ch_data, None) == 0 && !ch_data.is_null() {
-                let v = if ch_size >= 4 { Some(std::ptr::read_unaligned(ch_data as *const u32)) } else { None };
-                WlanFreeMemory(ch_data);
-                v.filter(|c| *c > 0)
-            } else {
-                None
+    /// WLAN-Zustand: verbunden, nicht verbunden, kein WLAN-Dienst oder gesperrt (24H2-Standortsperre).
+    pub fn wifi_state() -> WifiState {
+        let mut negotiated = 0u32;
+        let mut raw = HANDLE::default();
+        // SAFETY: Aufrufe nach wlanapi-Dokumentation; jeder von Windows gelieferte Speicher wird mit
+        // WlanFreeMemory freigegeben, das Handle über `Handle` geschlossen.
+        let ret = unsafe { WlanOpenHandle(2, None, &mut negotiated, &mut raw) };
+        if ret != 0 {
+            // Kein WLAN-Dienst (z. B. Desktop ohne WLAN-Karte)
+            return match wlan_error_kind(ret) {
+                WifiStateKind::Locked => WifiState::Locked,
+                _ => WifiState::NoService,
             };
+        }
+        let handle = Handle(raw);
+        unsafe { state_with_handle(handle.0) }
+    }
 
-            // Genaue Frequenz und gemessener RSSI aus der BSS-Liste (nur der verbundene Zugangspunkt)
-            let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
-            let (khz, rssi) = if WlanGetNetworkBssList(
+    unsafe fn state_with_handle(handle: HANDLE) -> WifiState {
+        let mut list: *mut WLAN_INTERFACE_INFO_LIST = std::ptr::null_mut();
+        let ret = unsafe { WlanEnumInterfaces(handle, None, &mut list) };
+        if ret != 0 || list.is_null() {
+            return match wlan_error_kind(ret) {
+                WifiStateKind::Locked => WifiState::Locked,
+                _ => WifiState::NoService,
+            };
+        }
+        // SAFETY: Liste kommt von Windows; Felder einzeln gelesen.
+        let ifaces: Vec<(GUID, bool)> = unsafe {
+            let count = addr_of!((*list).dwNumberOfItems).read_unaligned() as usize;
+            let first = addr_of!((*list).InterfaceInfo) as *const WLAN_INTERFACE_INFO;
+            let v = (0..count.min(64))
+                .map(|i| {
+                    let p = first.add(i);
+                    (addr_of!((*p).InterfaceGuid).read_unaligned(), addr_of!((*p).isState).read_unaligned() == wlan_interface_state_connected)
+                })
+                .collect();
+            WlanFreeMemory(list as *const c_void);
+            v
+        };
+        if ifaces.is_empty() {
+            // Dienst läuft, aber keine WLAN-Schnittstelle
+            return WifiState::NoService;
+        }
+        let mut locked = false;
+        for (guid, connected) in &ifaces {
+            if !*connected {
+                continue;
+            }
+            match unsafe { connection(handle, guid) } {
+                Ok(state) => return state,
+                Err(code) if wlan_error_kind(code) == WifiStateKind::Locked => locked = true,
+                Err(_) => {}
+            }
+        }
+        if locked {
+            WifiState::Locked
+        } else {
+            WifiState::NotConnected
+        }
+    }
+
+    /// Verbindung einer verbundenen Schnittstelle lesen (Fehlercode bei `WlanQueryInterface`).
+    unsafe fn connection(handle: HANDLE, guid: &GUID) -> Result<WifiState, u32> {
+        let mut size = 0u32;
+        let mut data: *mut c_void = std::ptr::null_mut();
+        let ret = unsafe { WlanQueryInterface(handle, guid, wlan_intf_opcode_current_connection, None, &mut size, &mut data, None) };
+        if ret != 0 || data.is_null() {
+            return Err(if ret != 0 { ret } else { 1 });
+        }
+        if (size as usize) < std::mem::size_of::<WLAN_CONNECTION_ATTRIBUTES>() {
+            unsafe { WlanFreeMemory(data) };
+            return Err(1);
+        }
+        // SAFETY: Puffer groß genug; die Struktur enthält nur Ganzzahlen/Byte-Felder (kein `bool`).
+        let attrs = unsafe { std::ptr::read_unaligned(data as *const WLAN_CONNECTION_ATTRIBUTES) };
+        unsafe { WlanFreeMemory(data) };
+        let assoc = attrs.wlanAssociationAttributes;
+        let ssid_len = (assoc.dot11Ssid.uSSIDLength as usize).min(assoc.dot11Ssid.ucSSID.len());
+        let ssid = String::from_utf8_lossy(&assoc.dot11Ssid.ucSSID[..ssid_len]).into_owned();
+
+        let mut ch_size = 0u32;
+        let mut ch_data: *mut c_void = std::ptr::null_mut();
+        let channel = if unsafe { WlanQueryInterface(handle, guid, wlan_intf_opcode_channel_number, None, &mut ch_size, &mut ch_data, None) } == 0
+            && !ch_data.is_null()
+        {
+            let v = if ch_size >= 4 { Some(unsafe { std::ptr::read_unaligned(ch_data as *const u32) }) } else { None };
+            unsafe { WlanFreeMemory(ch_data) };
+            v.filter(|c| *c > 0)
+        } else {
+            None
+        };
+
+        // Genaue Frequenz und gemessener RSSI aus der BSS-Liste (nur der verbundene Zugangspunkt).
+        // Felder einzeln lesen: `bInRegDomain` ist ein Rust-`bool` – nie die ganze Struktur kopieren.
+        let mut bss: *mut WLAN_BSS_LIST = std::ptr::null_mut();
+        let (khz, rssi) = if unsafe {
+            WlanGetNetworkBssList(
                 handle,
-                &guid,
+                guid,
                 Some(&assoc.dot11Ssid),
                 dot11_BSS_type_infrastructure,
                 attrs.wlanSecurityAttributes.bSecurityEnabled.as_bool(),
                 None,
                 &mut bss,
-            ) == 0
-                && !bss.is_null()
-            {
-                let n = (*bss).dwNumberOfItems as usize;
-                let entries = (*bss).wlanBssEntries.as_ptr();
-                let mut hit = (None, None);
-                for j in 0..n {
-                    let e = std::ptr::read_unaligned(entries.add(j));
-                    if e.dot11Bssid == assoc.dot11Bssid {
-                        hit = (Some(e.ulChCenterFrequency).filter(|f| *f > 0), Some(e.lRssi).filter(|r| *r < 0));
+            )
+        } == 0
+            && !bss.is_null()
+        {
+            let mut hit = (None, None);
+            // SAFETY: Liste kommt von Windows; nur Einträge innerhalb von dwTotalSize.
+            unsafe {
+                let start = bss as *const u8;
+                let total = addr_of!((*bss).dwTotalSize).read_unaligned() as usize;
+                let n = addr_of!((*bss).dwNumberOfItems).read_unaligned() as usize;
+                let entries = addr_of!((*bss).wlanBssEntries) as *const WLAN_BSS_ENTRY;
+                let fits = total.saturating_sub(entries as usize - start as usize) / std::mem::size_of::<WLAN_BSS_ENTRY>();
+                for j in 0..n.min(fits) {
+                    let p = entries.add(j);
+                    if addr_of!((*p).dot11Bssid).read_unaligned() == assoc.dot11Bssid {
+                        let f = addr_of!((*p).ulChCenterFrequency).read_unaligned();
+                        let r = addr_of!((*p).lRssi).read_unaligned();
+                        hit = (Some(f).filter(|f| *f > 0), Some(r).filter(|r| *r < 0));
                         break;
                     }
                 }
                 WlanFreeMemory(bss as *const c_void);
-                hit
-            } else {
-                (None, None)
-            };
+            }
+            hit
+        } else {
+            (None, None)
+        };
 
-            found = Some(build_wifi(RawWifi {
-                ssid,
-                quality: assoc.wlanSignalQuality,
-                rssi,
-                channel,
-                center_khz: khz,
-                phy: assoc.dot11PhyType.0,
-                rx_kbps: assoc.ulRxRate,
-                tx_kbps: assoc.ulTxRate,
-            }));
-            break;
-        }
-        WlanFreeMemory(list as *const c_void);
-        found
+        Ok(WifiState::Connected(build_wifi(RawWifi {
+            ssid,
+            quality: assoc.wlanSignalQuality,
+            rssi,
+            channel,
+            center_khz: khz,
+            phy: assoc.dot11PhyType.0,
+            rx_kbps: assoc.ulRxRate,
+            tx_kbps: assoc.ulTxRate,
+        })))
     }
 }
 
@@ -630,6 +736,25 @@ mod tests {
         let cfg2 = build_dns_config(&adapters, |_| Some(true), false, |_| false).unwrap();
         assert!(!cfg2.can_change);
         assert_eq!(primary_adapter_guid(&[raw("eth", 6, true, Some("192.168.1.1"), 1)]), None);
+    }
+
+    #[test]
+    fn wifi_state_kinds_and_compat() {
+        let w = build_wifi(RawWifi { ssid: "Netz".into(), quality: 80, channel: Some(6), phy: 10, ..Default::default() });
+        let c = WifiState::Connected(w.clone());
+        assert_eq!(c.kind(), WifiStateKind::Connected);
+        assert_eq!(c.into_info().map(|x| (x.ssid, x.channel)), Some((w.ssid, w.channel)));
+        // Gesperrt, nicht verbunden, kein Dienst → für `net_wifi` wie bisher `null`
+        for (s, k) in [
+            (WifiState::Locked, WifiStateKind::Locked),
+            (WifiState::NotConnected, WifiStateKind::NotConnected),
+            (WifiState::NoService, WifiStateKind::NoService),
+        ] {
+            assert_eq!(s.kind(), k);
+            assert!(s.into_info().is_none());
+        }
+        #[cfg(not(windows))]
+        assert_eq!(wifi_state().kind(), WifiStateKind::NoService);
     }
 
     #[test]
