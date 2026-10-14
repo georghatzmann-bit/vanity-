@@ -162,28 +162,40 @@ const run = async (query, steps) => {
   await steps(p, shotter(p));
   await p.close();
 };
+// Auf Zustände warten statt auf feste Zeiten (Spec I.9)
+const waitBtn = (p, name, ms = 8000) => p.getByRole("button", { name }).first().waitFor({ timeout: ms });
+/** Intro überspringen: nach 400 ms Escape, dann auf „Los geht's“ warten */
+const skip = async (p) => {
+  await p.waitForTimeout(400);
+  await p.keyboard.press("Escape");
+  await waitBtn(p, /Los geht/, 4000);
+};
 await run("", async (p, s) => {
-  await s("40-setup-intro", 1400);
-  await s("41-setup-willkommen", 3000);
+  await s("40-setup-intro", 2400);
+  await waitBtn(p, /Los geht/);
+  await s("41-setup-willkommen", 300);
   await p.getByRole("button", { name: /Los geht/ }).click();
   await s("42-setup-ordner", 1200);
   await p.getByRole("button", { name: /^Weiter/ }).click();
   await s("43-setup-optionen");
   await p.getByRole("button", { name: /Installieren/ }).click();
   await s("44-setup-download", 2200);
-  await s("45-setup-fertig", 5500);
+  await p.getByRole("heading", { name: /Signal steht/ }).waitFor({ timeout: 30000 });
+  await s("45-setup-fertig", 1300);
 });
 await run("?fail=1", async (p, s) => {
-  await p.waitForTimeout(3600);
+  await skip(p);
   await p.getByRole("button", { name: /Los geht/ }).click();
   await p.waitForTimeout(700);
   await p.getByRole("button", { name: /^Weiter/ }).click();
   await p.waitForTimeout(700);
   await p.getByRole("button", { name: /Installieren/ }).click();
-  await s("46-setup-fehler", 3200);
+  await waitBtn(p, /Erneut versuchen/, 15000);
+  await s("46-setup-fehler", 400);
 });
 await run("?mode=maintenance", async (p, s) => {
-  await s("47-setup-wartung", 3800);
+  await waitBtn(p, /Aktualisieren oder reparieren/);
+  await s("47-setup-wartung", 300);
   await p.getByRole("button", { name: /Deinstallieren/ }).first().click();
   await s("48-setup-deinstallieren", 900);
 });

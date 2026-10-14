@@ -1,5 +1,6 @@
 /** Gemeinsame Typen des Radioteleskops (Schirm, Intro, Observatorium). */
 import type { ErrorCode } from "../api";
+import type { SpinModel } from "@shared/sound/spin";
 import type { RefId } from "./catalog";
 
 export type { RefId } from "./catalog";
@@ -14,7 +15,7 @@ export type ObsMode = "idle" | "installing" | "error" | "halted" | "relock" | "s
 export type HeardAs = "clicks" | "rattle" | "buzz" | "tone";
 
 /**
- * Was der Schirm vom Drehmodell braucht. `SpinModel` aus `shared/sound/spin.ts` erfüllt das.
+ * Was eine reine Zeichenfunktion vom Drehmodell braucht. `SpinModel` aus `shared/sound/spin.ts` erfüllt das.
  * Zeit = Modellzeit in Sekunden (`sound.clock.now()`).
  */
 export interface SpinView {
@@ -23,7 +24,8 @@ export interface SpinView {
 }
 
 export interface ObsState {
-  model: SpinView;
+  /** gemeinsame Takt-Quelle für Bild und Ton (F.2) */
+  model: SpinModel;
   mode: ObsMode;
   /** Modellzeit (s), seit der `mode` gilt */
   modeSince: number;

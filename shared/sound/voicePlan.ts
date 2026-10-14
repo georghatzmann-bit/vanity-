@@ -88,6 +88,7 @@ export function setDropout(s: PlanState, p: number, now: number, rampS = 0): voi
 
 /** Neue Periode – wirkt ab dem nächsten noch nicht geplanten Puls. */
 export function setPeriod(s: PlanState, periodS: number): void {
+  if (!Number.isFinite(periodS)) return;
   const p = clampPeriod(periodS);
   // nextNominal enthält bereits die alte Periode → auf die neue umrechnen (erst nach dem ersten Puls)
   if (s.index > 0) s.nextNominal += p - s.periodS;
@@ -99,8 +100,21 @@ export const skipNext = (s: PlanState): void => {
 };
 
 export const accentNext = (s: PlanState, factor = 1.5): void => {
-  s.accent = Math.max(0, factor);
+  s.accent = Math.max(0, Number.isFinite(factor) ? factor : 1.5);
 };
+
+export function setJitter(s: PlanState, j: number): void {
+  s.jitter = clamp(Number.isFinite(j) ? j : 0, 0, 1);
+}
+
+export function setLevel(s: PlanState, level: number): void {
+  s.level = clamp(Number.isFinite(level) ? level : 1, 0, 1);
+}
+
+/** Setzt den Takt neu an: nächster Nennzeitpunkt = t (z. B. bei start()). */
+export function restartAt(s: PlanState, t: number): void {
+  s.nextNominal = t;
+}
 
 /**
  * Entscheidet für einen Puls zur Zeit t über Aussetzer und Betonung
@@ -130,7 +144,9 @@ export function skipTo(s: PlanState, now: number): void {
 }
 
 /**
- * Plant alle Pulse, deren frühestmöglicher Ist-Zeitpunkt (Nenn − 0,35·P) vor `horizon` liegt.
+ * Plant alle Pulse, deren frühestmöglicher Ist-Zeitpunkt (Nenn − j·0,35·P) vor `horizon` liegt.
+ * (Bei j = 0 also erst, wenn der Nennzeitpunkt selbst im Horizont liegt – so bleiben
+ * setPeriod/skipNext auch bei 10-s-Perioden reaktionsschnell.)
  * Ist-Zeit = Nenn + j·0,35·P·tri(rng), nie früher als now + 5 ms.
  */
 export function planPulses(s: PlanState, now: number, horizon: number): PlannedPulse[] {
@@ -138,7 +154,7 @@ export function planPulses(s: PlanState, now: number, horizon: number): PlannedP
   // mehr als 50 ms verpasst → nicht nachholen
   if (s.nextNominal < now - MAX_LATE_S) skipTo(s, now);
   let guard = 0;
-  while (s.nextNominal - JITTER_SPAN * s.periodS < horizon && guard++ < 4096) {
+  while (s.nextNominal - s.jitter * JITTER_SPAN * s.periodS < horizon && guard++ < 4096) {
     const nominal = s.nextNominal;
     const off = s.jitter > 0 ? s.jitter * JITTER_SPAN * s.periodS * triangular(s.rng) : 0;
     const t = Math.max(now + MIN_LEAD_S, nominal + off);

@@ -77,6 +77,10 @@ const mockListeners = new Map<string, Set<Handler>>();
 const mockEmit = (e: string, p: unknown) => mockListeners.get(e)?.forEach((h) => h(p));
 let mockRun = 0;
 let mockFailOnce = new URLSearchParams(location.search).has("fail");
+const MOCK_TOTAL = 11_800_000;
+/** Demo: zuletzt geladene Bytes und Stand für das Fortsetzen */
+let mockBytes = 0;
+let mockResumeBytes = 0;
 
 async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
   const params = new URLSearchParams(location.search);
@@ -91,7 +95,7 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
         defaultDir: "C:\\Users\\Georg\\AppData\\Local\\Programs\\Pulsar",
         installed: params.get("mode") === "maintenance" || params.get("mode") === "update" ? { dir: "C:\\Users\\Georg\\AppData\\Local\\Programs\\Pulsar", version: "0.9.0" } : undefined,
         elevated: false,
-        systemLang: "de",
+        systemLang: params.get("lang") === "en" ? "en" : "de",
         manifestUrl: "https://github.com/…/latest.json",
       });
     case "fetch_manifest":
@@ -102,31 +106,42 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
     }
     case "start_install": {
       const run = ++mockRun;
-      const total = 11_800_000;
-      let done = 0;
+      const total = MOCK_TOTAL;
+      // Demo: `?slow` = Download viermal langsamer (Tick 360 statt 90 ms)
+      const tickMs = params.has("slow") ? 360 : 90;
+      // Nach Netzwerkfehler oder Abbruch geht es bei den bisherigen Bytes weiter (wie das echte Backend)
+      let done = Math.min(mockResumeBytes, total);
       const tick = () => {
         if (run !== mockRun) return;
         if (mockFailOnce && done > total * 0.45) {
           mockFailOnce = false;
+          mockResumeBytes = done;
           mockEmit("install://error", { phase: "download", code: "network", message: "Verbindung unterbrochen (Demo)", retryable: true });
           return;
         }
-        done = Math.min(total, done + 260_000 + Math.random() * 120_000);
+        const step = 260_000 + Math.random() * 120_000;
+        done = Math.min(total, done + step);
+        mockBytes = done;
+        const speed = (step / tickMs) * 1000 * (0.94 + Math.random() * 0.12);
         const percent = (done / total) * 85;
-        mockEmit("install://progress", { phase: "download", downloaded: done, total, speed: 4_300_000 + Math.random() * 600_000, eta: (total - done) / 4_500_000, percent });
-        if (done < total) setTimeout(tick, 90);
+        mockEmit("install://progress", { phase: "download", downloaded: done, total, speed, eta: (total - done) / speed, percent });
+        if (done < total) setTimeout(tick, tickMs);
         else {
+          mockResumeBytes = 0;
           const steps: Phase[] = ["verify", "install", "shortcuts", "register"];
           steps.forEach((ph, i) => setTimeout(() => run === mockRun && mockEmit("install://progress", { phase: ph, downloaded: total, total, speed: 0, eta: 0, percent: 86 + i * 4 }), 400 + i * 450));
           setTimeout(() => run === mockRun && mockEmit("install://done", { dir: (args.options as InstallOptions).dir, exePath: "…\\Pulsar.exe", version: "1.0.0", verified: true }), 400 + steps.length * 450);
         }
       };
-      setTimeout(() => mockEmit("install://progress", { phase: "connect", downloaded: 0, total, speed: 0, eta: 0, percent: 0 }), 50);
+      setTimeout(() => run === mockRun && mockEmit("install://progress", { phase: "connect", downloaded: 0, total, speed: 0, eta: 0, percent: 0 }), 50);
+      // Fortsetzen: erstes Download-Event meldet die schon vorhandenen Bytes
+      if (done > 0) setTimeout(() => run === mockRun && mockEmit("install://progress", { phase: "download", downloaded: done, total, speed: 0, eta: 0, percent: (done / total) * 85 }), 400);
       setTimeout(tick, 600);
       return r(undefined);
     }
     case "cancel_install":
       mockRun++;
+      mockResumeBytes = mockBytes;
       setTimeout(() => mockEmit("install://error", { phase: "download", code: "cancelled", message: "", retryable: true }), 100);
       return r(undefined);
     case "start_uninstall": {

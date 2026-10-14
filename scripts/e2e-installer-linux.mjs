@@ -97,7 +97,15 @@ try {
   await sleep(1200);
   await shot("01-intro");
   check("Intro mit Logo", (await text()).includes("PULSAR"));
-  await sleep(3200);
+  // Intro überspringen (D.7) und bis zu 10 s auf „Los geht's“ warten
+  await js("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+  let ready = false;
+  for (let i = 0; i < 50 && !ready; i++) {
+    ready = await js(`return [...document.querySelectorAll('button')].some(b=>b.textContent.includes('Los geht'))`);
+    if (!ready) await sleep(200);
+  }
+  check("Intro übersprungen, Willkommen erscheint", ready);
+  await sleep(400);
   await shot("02-willkommen");
   const welcome = await text();
   check("Willkommen-Seite mit Version aus dem Manifest", welcome.includes("1.0.0") || welcome.includes("Version"), welcome.slice(0, 80).replace(/\n/g, " "));
@@ -110,12 +118,12 @@ try {
   );
   await sleep(1200);
   await shot("03-ordner");
-  check("Speicherplatz wird angezeigt", /Frei|Free/.test(await text()));
+  check("Speicherplatz wird angezeigt", /Frei|Free/i.test(await text()));
   check("Weiter zu den Optionen", await click("Weiter"));
   await sleep(1000);
   await shot("04-optionen");
-  // "Nach Installation starten" aus, damit der Test nichts startet
-  await js(`const c=[...document.querySelectorAll('[role=button]')].find(x=>x.textContent.includes('danach starten')||x.textContent.includes('afterwards')); c && c.click();`);
+  // „Pulsar danach starten“ aus, damit der Test nichts startet (Optionszeile ist role="switch")
+  await js(`const c=[...document.querySelectorAll('[role=switch]')].find(x=>x.textContent.includes('danach starten')||x.textContent.includes('afterwards')); c && c.getAttribute('aria-checked')==='true' && c.click();`);
   check("Installation starten", await click("Installieren"));
   await sleep(1500);
   await shot("05-download");
@@ -129,7 +137,7 @@ try {
       check("Verbindungsabbruch wird angezeigt (mit „Erneut versuchen“)", true);
       await click("Erneut versuchen");
     }
-    if (/bereit|ready/i.test(t)) {
+    if (/Signal steht|Signal locked/.test(t)) {
       state = "done";
       break;
     }

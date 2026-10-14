@@ -41,17 +41,11 @@ function readMuted() {
   }
 }
 
-/** Dispersions-Sweep (E.7): vorwärts 3200 → 400 Hz, zurück 1800 → 300 Hz. Ältere Engine: „whoosh“. */
-type SweepFn = (o: { fHi: number; fLo: number; durS: number; gainDb: number }) => void;
+/** Dispersions-Sweep (E.7): vorwärts 3200 → 400 Hz, zurück 1800 → 300 Hz. */
 function playSweep(back: boolean) {
-  const sweep = (sound as unknown as { sweep?: SweepFn }).sweep;
-  if (typeof sweep !== "function") {
-    sound.play("whoosh", { gain: 0.6 });
-    return;
-  }
   try {
-    if (back) sweep.call(sound, { fHi: 1800, fLo: 300, durS: 0.16, gainDb: -27 });
-    else sweep.call(sound, { fHi: 3200, fLo: 400, durS: 0.22, gainDb: -24 });
+    if (back) sound.sweep({ fHi: 1800, fLo: 300, durS: 0.16, gainDb: -27 });
+    else sound.sweep({ fHi: 3200, fLo: 400, durS: 0.22, gainDb: -24 });
   } catch {
     /* Klang ist nie Pflicht */
   }

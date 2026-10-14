@@ -1,501 +1,1045 @@
 /**
- * Pulsar Klangwelt "Glas & Sterne"
- * ------------------------------
- * Alle Töne werden live per Web Audio erzeugt - keine Sound-Dateien, keine fremden Rechte.
- * Grundlage ist eine pentatonische Tonleiter (F-Dur-Pentatonik). Dadurch klingen auch
- * schnell hintereinander gespielte Töne nie schief.
- *
- * Bausteine:
- *  - FM-Glocke (Träger + Modulator mit abklingendem Index) -> kristallin
- *  - Weiches Pad (verstimmte Sägezähne durch sich öffnenden Tiefpass)
- *  - Gefiltertes Rauschen für "Whoosh"-Effekte
- *  - Künstlicher Hall (selbst erzeugte Impulsantwort)
+ * Pulsar-Sonifikation – Fassade der Klang-Engine (E.10).
+ * Alles live per Web Audio, keine Dateien, kein AudioWorklet. Ein Grundton F_STAR = 173,7016 Hz,
+ * Tonhöhen nur als dessen Harmonische, keine Melodien. Der Kontext entsteht lazy in ensure().
+ * Jede Methode ist abgesichert: Ohne Kontext gibt es stumme Objekte mit identischer API.
  */
+import { EngineClock, defaultNow } from "./clock";
+import {
+  Q_BUTTER,
+  clamp,
+  dbToGain,
+  dispersionCurve,
+  filteredNoiseRms,
+  harmonic,
+  rfiPeak,
+  type BufferName,
+  type Rng,
+  type Timbre,
+} from "./dsp";
+import { bedRms, buildGraph, disconnectAll, makeFilter, makeGain, sendToReverb, snapToSample, stopSafe, type Graph } from "./graph";
+import { RECIPES, CHORD_ATTACKS_S, CHORD_HOLD_S, CHORD_LEVELS_DB, CHORD_PARTIALS, CHORD_TAU_S, renderRecipe, type RecipeTarget, type SoundName } from "./recipes";
+import { spinUpTrack } from "./spin";
+import { ScheduledPulseVoice, SilentPulseVoice, rampParam, type PulseVoice, type PulseVoiceOptions, type VoiceHost } from "./voice";
 
-export type SoundName =
-  | "startup"
-  | "click"
-  | "hover"
-  | "switch"
-  | "success"
-  | "error"
-  | "launch"
-  | "achievement"
-  | "toggleOn"
-  | "toggleOff"
-  | "open"
-  | "close"
-  | "tick"
-  | "notify"
-  | "whoosh"
-  | "progress"
-  | "jingle"
-  | "farewell"
-  | "dice";
+export type { SoundName } from "./recipes";
+export type { AudioClock } from "./clock";
+export type { Timbre } from "./dsp";
+export type { PulseVoice, PulseVoiceOptions, PulseEvent } from "./voice";
+export { F_STAR } from "./dsp";
 
 export interface PlayOptions {
   /** 0..1, z. B. Fortschritt für "progress" */
   value?: number;
   /** Lautstärke-Faktor nur für diesen Aufruf */
   gain?: number;
+  /** Modellzeit in s (sound.clock.now()); fehlt = sofort */
+  at?: number;
 }
 
-// F-Dur-Pentatonik über mehrere Oktaven (Hz)
-const midiToHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
-const PENTA_STEPS = [0, 2, 4, 7, 9]; // F G A C D
-const pentatonic = (degree: number, baseMidi = 77 /* F5 */) => {
-  const oct = Math.floor(degree / PENTA_STEPS.length);
-  const step = PENTA_STEPS[((degree % PENTA_STEPS.length) + PENTA_STEPS.length) % PENTA_STEPS.length];
-  return midiToHz(baseMidi + oct * 12 + step);
-};
+export interface SweepOptions {
+  fHi: number;
+  fLo: number;
+  durS: number;
+  gainDb: number;
+  noiseShare?: number;
+  reverb?: boolean;
+  at?: number;
+}
 
-type Ctx = AudioContext;
+export interface ChordOptions {
+  partials?: number[];
+  levelsDb?: number[];
+  attacksS?: number[];
+  holdS?: number;
+  releaseTauS?: number;
+  gainDb?: number;
+  reverb?: boolean;
+  at?: number;
+}
+
+export interface ChordHandle {
+  release(o?: { tauS?: number; at?: number }): void;
+}
+
+export interface NoiseBed {
+  set(o: { levelDb: number; centerHz?: number; q?: number; glideS?: number; at?: number }): void;
+  /** Kurve für die Bandpass-Mitte */
+  follow(centerHz: Float32Array, o: { at: number; durS: number }): void;
+  stop(o?: { fadeS?: number }): void;
+}
+
+export interface ScoreEvent {
+  /** s relativ zu t0 */
+  at: number;
+  run: (atModel: number) => void;
+}
+
+export interface ScoreHandle {
+  /** stoppt alle in run() erzeugten Quellen */
+  cancel(o?: { fadeS?: number }): void;
+}
+
+/** Abhängigkeiten (für Tests austauschbar). */
+export interface EngineDeps {
+  createContext?: () => AudioContext | null;
+  now?: () => number;
+  timers?: {
+    setInterval: (fn: () => void, ms: number) => unknown;
+    clearInterval: (h: unknown) => void;
+    setTimeout: (fn: () => void, ms: number) => unknown;
+  };
+  doc?: { readonly hidden: boolean; addEventListener(type: string, fn: () => void): void } | null;
+  win?: { addEventListener(type: string, fn: () => void, o?: AddEventListenerOptions): void } | null;
+  random?: Rng;
+}
+
+/** Scheduler-Takt und Lookahead (E.4) */
+export const TICK_MS = 25;
+export const LOOKAHEAD_S = 0.12;
+export const MAX_VOICES = 4;
+/** Hall-Sends */
+const SEND_DB = -18;
+const CHORD_SEND_DB = -12;
+
+interface Tracked {
+  stop(fadeS: number): void;
+}
+
+function defaultCreateContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const AC: typeof AudioContext | undefined =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  return AC ? new AC({ latencyHint: "interactive" }) : null;
+}
+
+const defaultTimers = (): NonNullable<EngineDeps["timers"]> => ({
+  setInterval: (fn, ms) => setInterval(fn, ms),
+  clearInterval: (h) => clearInterval(h as ReturnType<typeof setInterval>),
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+});
+
+class Score {
+  private idx = 0;
+  readonly tracked: Tracked[] = [];
+  private readonly events: ScoreEvent[];
+
+  constructor(
+    events: ScoreEvent[],
+    private readonly t0: number,
+  ) {
+    this.events = events.filter((e) => e && Number.isFinite(e.at) && typeof e.run === "function").sort((a, b) => a.at - b.at);
+  }
+
+  get done(): boolean {
+    return this.idx >= this.events.length;
+  }
+
+  /** Führt fällige Ereignisse aus; deutlich verpasste (verborgenes Fenster) werden ohne Nachhol-Burst übersprungen. */
+  runDue(horizon: number, now: number, capture: (list: Tracked[] | null) => void): void {
+    while (this.idx < this.events.length) {
+      const e = this.events[this.idx];
+      const t = this.t0 + e.at;
+      if (t > horizon) break;
+      this.idx++;
+      if (t < now - 0.25) continue;
+      capture(this.tracked);
+      try {
+        e.run(t);
+      } catch {
+        /* Partitur darf nicht abbrechen */
+      } finally {
+        capture(null);
+      }
+    }
+  }
+
+  cancel(fadeS: number): void {
+    this.idx = this.events.length;
+    for (const t of this.tracked.splice(0)) {
+      try {
+        t.stop(fadeS);
+      } catch {
+        /* ignorieren */
+      }
+    }
+  }
+}
+
+class NoiseBedImpl implements NoiseBed {
+  private want: { levelDb: number; centerHz: number; q: number } | null = null;
+  private hidden = false;
+  private n: { g: Graph; src: AudioBufferSourceNode; bp: BiquadFilterNode; lp: BiquadFilterNode; bpG: GainNode; lpG: GainNode; level: GainNode } | null = null;
+  private gen = 0;
+
+  constructor(private readonly eng: SoundEngine) {}
+
+  get running(): boolean {
+    return this.n !== null;
+  }
+
+  set(o: { levelDb: number; centerHz?: number; q?: number; glideS?: number; at?: number }): void {
+    try {
+      const levelDb = typeof o.levelDb === "number" ? o.levelDb : -60;
+      const centerHz = clamp(o.centerHz ?? this.want?.centerHz ?? harmonic(6), 20, 16000);
+      const q = clamp(o.q ?? this.want?.q ?? 0.7, 0.05, 40);
+      this.want = { levelDb, centerHz, q };
+      const g = this.eng.audibleGraph();
+      if (!g) return;
+      const fresh = !this.n || this.n.g !== g;
+      const n = this.ensure(g);
+      this.gen++;
+      const ct = this.eng.ctAt(o.at);
+      const glide = Math.max(0.005, o.glideS ?? (fresh ? 0.3 : 0.05));
+      rampExp(n.bp.frequency, centerHz, ct, glide);
+      rampParam(n.bp.Q, q, ct, glide);
+      rampParam(n.level.gain, this.target(g), ct, glide);
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  follow(centerHz: Float32Array, o: { at: number; durS: number }): void {
+    try {
+      if (!centerHz || centerHz.length < 2 || !(o.durS > 0)) return;
+      if (this.want) this.want.centerHz = centerHz[centerHz.length - 1];
+      const n = this.n;
+      if (!n) return;
+      const ct = this.eng.ctAt(o.at);
+      n.bp.frequency.cancelScheduledValues(ct);
+      n.bp.frequency.setValueCurveAtTime(centerHz, ct, o.durS);
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  stop(o: { fadeS?: number } = {}): void {
+    this.want = null;
+    this.release(Math.max(0.005, o.fadeS ?? 0.3));
+  }
+
+  /** Stumm/unhörbar: Knoten weg, Wunschzustand bleibt. */
+  suspend(): void {
+    this.release(0.03);
+  }
+
+  /** Wieder hörbar: Wunschzustand neu aufbauen. */
+  resume(): void {
+    if (this.want && !this.n) this.set({ ...this.want, glideS: 0.3 });
+  }
+
+  setHidden(h: boolean): void {
+    this.hidden = h;
+    const n = this.n;
+    if (n) rampParam(n.level.gain, h ? 0 : this.target(n.g), n.g.ctx.currentTime, h ? 0.3 : 0.1);
+  }
+
+  private target(g: Graph): number {
+    if (!this.want || this.hidden) return 0;
+    return dbToGain(this.want.levelDb) / bedRms(g.sr, this.want.centerHz, this.want.q);
+  }
+
+  private ensure(g: Graph): NonNullable<NoiseBedImpl["n"]> {
+    if (this.n && this.n.g === g) return this.n;
+    this.teardown();
+    const ctx = g.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = g.noise;
+    src.loop = true;
+    const bp = makeFilter(ctx, { type: "bandpass", f: this.want?.centerHz ?? 1000, q: this.want?.q ?? 0.7 });
+    const lp = makeFilter(ctx, { type: "lowpass", f: 900, q: Q_BUTTER });
+    const bpG = makeGain(ctx, 0.7);
+    const lpG = makeGain(ctx, 0.3);
+    const level = makeGain(ctx, 0);
+    src.connect(bp);
+    bp.connect(bpG);
+    bpG.connect(level);
+    src.connect(lp);
+    lp.connect(lpG);
+    lpG.connect(level);
+    level.connect(g.bedBus);
+    src.start(ctx.currentTime, this.eng.random() * 3.5);
+    this.n = { g, src, bp, lp, bpG, lpG, level };
+    return this.n;
+  }
+
+  private release(fadeS: number): void {
+    const n = this.n;
+    if (!n) return;
+    const ct = n.g.ctx.currentTime;
+    rampParam(n.level.gain, 0, ct, fadeS);
+    const my = ++this.gen;
+    this.eng.later((fadeS + 0.05) * 1000, () => {
+      if (this.gen === my && this.n === n) this.teardown();
+    });
+  }
+
+  private teardown(): void {
+    const n = this.n;
+    if (!n) return;
+    this.n = null;
+    stopSafe(n.src);
+    disconnectAll([n.src, n.bp, n.lp, n.bpG, n.lpG, n.level]);
+  }
+}
+
+function rampExp(p: AudioParam, target: number, at: number, dur: number): void {
+  try {
+    p.cancelScheduledValues(at);
+    p.setValueAtTime(Math.max(1, p.value), at);
+    p.exponentialRampToValueAtTime(Math.max(1, target), at + dur);
+  } catch {
+    /* ignorieren */
+  }
+}
+
+const SILENT_CHORD: ChordHandle = { release: () => undefined };
+const SILENT_SCORE: ScoreHandle = { cancel: () => undefined };
 
 export class SoundEngine {
-  private ctx: Ctx | null = null;
-  private master: GainNode | null = null;
-  private dry: GainNode | null = null;
-  private wet: GainNode | null = null;
-  private noiseBuffer: AudioBuffer | null = null;
-  private lastPlayed = new Map<SoundName, number>();
+  readonly clock: EngineClock;
+  private ctx: AudioContext | null = null;
+  private g: Graph | null = null;
+  private lastFail = -Infinity;
   private _volume = 0.6;
   private _muted = false;
   private _hoverEnabled = true;
+  private readonly lastPlayed = new Map<SoundName, number>();
+  private readonly voices = new Set<ScheduledPulseVoice>();
+  private readonly scores = new Set<Score>();
+  private timer: unknown = null;
+  private tickQueued = false;
+  private watchdog: unknown = null;
   private unlockBound = false;
+  private visBound = false;
+  private hidden = false;
+  private capture: Tracked[] | null = null;
+  private readonly availCbs = new Set<(a: boolean) => void>();
+  private lastAvailable = false;
+  private bed: NoiseBedImpl | null = null;
+  private readonly deps: EngineDeps;
+  private readonly timers: NonNullable<EngineDeps["timers"]>;
+  readonly random: Rng;
+  private readonly host: VoiceHost;
+  private readonly target: RecipeTarget;
 
-  get volume() {
+  constructor(deps: EngineDeps = {}) {
+    this.deps = deps;
+    this.clock = new EngineClock(deps.now ?? defaultNow);
+    this.timers = deps.timers ?? defaultTimers();
+    this.random = deps.random ?? Math.random;
+    this.host = {
+      clock: this.clock,
+      audibleGraph: () => this.audibleGraph(),
+      wake: () => this.wake(),
+      release: (v) => {
+        this.voices.delete(v);
+      },
+      later: (ms, fn) => this.later(ms, fn),
+    };
+    this.target = this.makeTarget();
+  }
+
+  // ------------------------------------------------------------ bestehende API
+
+  get volume(): number {
     return this._volume;
   }
-  get muted() {
+  get muted(): boolean {
     return this._muted;
   }
-  get hoverEnabled() {
+  get hoverEnabled(): boolean {
     return this._hoverEnabled;
   }
 
-  setVolume(v: number) {
-    this._volume = Math.min(1, Math.max(0, v));
-    this.applyMaster();
-  }
-  setMuted(m: boolean) {
-    this._muted = m;
-    this.applyMaster();
-  }
-  setHoverEnabled(h: boolean) {
-    this._hoverEnabled = h;
-  }
-
-  private applyMaster() {
-    if (!this.ctx || !this.master) return;
-    const target = this._muted ? 0 : this._volume * this._volume * 0.9; // wahrnehmungsgerechte Kurve
-    this.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.03);
-  }
-
-  /** Erstellt den AudioContext bei Bedarf. Gibt null zurück, wenn Audio nicht verfügbar ist. */
-  private ensure(): Ctx | null {
-    if (this.ctx) {
-      if (this.ctx.state === "suspended") void this.ctx.resume().catch(() => undefined);
-      return this.ctx;
-    }
+  setVolume(v: number): void {
     try {
-      const AC: typeof AudioContext | undefined =
-        typeof window !== "undefined"
-          ? window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-          : undefined;
-      if (!AC) return null;
-      const ctx = new AC({ latencyHint: "interactive" });
-      this.ctx = ctx;
-
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -16;
-      comp.knee.value = 12;
-      comp.ratio.value = 3.5;
-      comp.attack.value = 0.004;
-      comp.release.value = 0.2;
-
-      const master = ctx.createGain();
-      master.gain.value = 0;
-      master.connect(comp).connect(ctx.destination);
-      this.master = master;
-
-      const dry = ctx.createGain();
-      dry.gain.value = 1;
-      dry.connect(master);
-      this.dry = dry;
-
-      const reverb = ctx.createConvolver();
-      reverb.buffer = this.makeImpulse(ctx, 2.6, 2.8);
-      const wet = ctx.createGain();
-      wet.gain.value = 0.32;
-      const hp = ctx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 220;
-      wet.connect(hp).connect(reverb).connect(master);
-      this.wet = wet;
-
-      this.noiseBuffer = this.makeNoise(ctx, 2);
+      const before = this.audibleGraph() !== null;
+      this._volume = clamp(Number.isFinite(v) ? v : 0, 0, 1);
       this.applyMaster();
-      this.bindUnlock();
-      if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
-      return ctx;
+      this.audibilityChanged(before);
     } catch {
-      this.ctx = null;
+      /* ignorieren */
+    }
+  }
+
+  setMuted(m: boolean): void {
+    try {
+      const before = this.audibleGraph() !== null;
+      this._muted = !!m;
+      this.applyMaster();
+      this.audibilityChanged(before);
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  setHoverEnabled(h: boolean): void {
+    this._hoverEnabled = !!h;
+  }
+
+  /** Bereitet Audio vor (Kontext, Graph, Puffer, Normierung), ohne einen Ton zu spielen. */
+  warmup(): void {
+    try {
+      this.ensure();
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  play(name: SoundName, opts: PlayOptions = {}): void {
+    try {
+      if (this._muted || this._volume <= 0) return;
+      if (!(name in RECIPES)) return;
+      if (name === "hover" && !this._hoverEnabled) return;
+      const ctx = this.ensure();
+      if (!ctx || !this.audibleGraph()) return;
+      const r = RECIPES[name] as { lockMs?: number };
+      if (r.lockMs) {
+        const now = this.clock.now();
+        const last = this.lastPlayed.get(name);
+        if (last !== undefined && (now - last) * 1000 < r.lockMs) return;
+        this.lastPlayed.set(name, now);
+      }
+      const t0 = this.startTime(opts.at);
+      renderRecipe(this.target, name, t0, opts, this.random);
+    } catch {
+      /* Audio blockiert nie */
+    }
+  }
+
+  // ------------------------------------------------------------ neue API
+
+  get available(): boolean {
+    return this.ctx !== null && this.clock.healthy;
+  }
+
+  onAvailabilityChange(cb: (available: boolean) => void): () => void {
+    this.availCbs.add(cb);
+    return () => {
+      this.availCbs.delete(cb);
+    };
+  }
+
+  /** Einzelpuls (vorgerendert). */
+  pulse(o: { timbre?: Timbre; gainDb?: number; at?: number; pan?: number; reverb?: boolean } = {}): void {
+    try {
+      if (!this.prepared()) return;
+      const timbre: Timbre = o.timbre === "glass" || o.timbre === "soft" ? o.timbre : "radio";
+      this.target.buffer(`pulse-${timbre}`, this.startTime(o.at), dbToGain(o.gainDb ?? -14), o.reverb ?? false);
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  /** Höchstens 4 Stimmen; danach stumme Stimme + console.warn. */
+  createVoice(o: PulseVoiceOptions = {}): PulseVoice {
+    try {
+      if (this.voices.size >= MAX_VOICES) {
+        console.warn(`[sound] höchstens ${MAX_VOICES} PulseVoices – stumme Stimme zurückgegeben`);
+        return new SilentPulseVoice(o);
+      }
+      this.ensure();
+      const v = new ScheduledPulseVoice(this.host, o);
+      this.voices.add(v);
+      return v;
+    } catch {
+      return new SilentPulseVoice(o);
+    }
+  }
+
+  /** Eine gemeinsame Instanz. */
+  noiseBed(): NoiseBed {
+    if (!this.bed) this.bed = new NoiseBedImpl(this);
+    try {
+      this.ensure();
+    } catch {
+      /* ignorieren */
+    }
+    return this.bed;
+  }
+
+  /** Dispersions-Sweep (E.7). Wirft RangeError, wenn fHi ≤ fLo. */
+  sweep(o: SweepOptions): void {
+    if (!o || !(o.fHi > o.fLo) || !(o.fLo > 0)) throw new RangeError(`Sweep muss fallen: fHi ${o?.fHi} ≤ fLo ${o?.fLo}`);
+    try {
+      if (!this.prepared()) return;
+      this.target.sweep({ at: this.startTime(o.at), fHi: o.fHi, fLo: o.fLo, durS: o.durS, gain: dbToGain(o.gainDb), noiseShare: o.noiseShare, reverb: o.reverb ?? true });
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  /** Standard = Abschluss-Akkord (E.8): Obertöne des Endtons, gleichzeitig. */
+  chord(o: ChordOptions = {}): ChordHandle {
+    try {
+      if (!this.prepared()) return SILENT_CHORD;
+      const g = this.g as Graph;
+      const partials = o.partials ?? [...CHORD_PARTIALS];
+      const levels = o.levelsDb ?? [...CHORD_LEVELS_DB];
+      const attacks = o.attacksS ?? [...CHORD_ATTACKS_S];
+      const hold = o.holdS ?? CHORD_HOLD_S;
+      const tau = o.releaseTauS ?? CHORD_TAU_S;
+      const at = this.startTime(o.at);
+      const parts = partials.map((n, i) =>
+        this.partialNodes(g, {
+          f: harmonic(n),
+          at,
+          gain: dbToGain((levels[i] ?? -50) + (o.gainDb ?? 0)),
+          attackS: attacks[i] ?? 0.6,
+          holdS: hold,
+          tauS: tau,
+          reverb: o.reverb ?? true,
+        }),
+      );
+      const handle: ChordHandle = {
+        release: (r = {}) => {
+          try {
+            const ct = this.ctAt(r.at);
+            const tauS = Math.max(0.005, r.tauS ?? tau);
+            for (const p of parts) {
+              if (!p) continue;
+              p.gain.gain.cancelScheduledValues(ct);
+              p.gain.gain.setTargetAtTime(0, ct, tauS);
+              stopSafe(p.osc, ct + 7 * tauS);
+            }
+          } catch {
+            /* ignorieren */
+          }
+        },
+      };
+      return handle;
+    } catch {
+      return SILENT_CHORD;
+    }
+  }
+
+  /** „Einzelton“ für den Warnton: 694,81 Hz + 1389,61 Hz (−12 dB), Anstieg 15 ms, τ 120 ms; Spitze = level × −20 dBFS. */
+  alertTone(level: number, o: { at?: number } = {}): void {
+    try {
+      if (!this.prepared()) return;
+      const g = this.g as Graph;
+      const peak = clamp(Number.isFinite(level) ? level : 0, 0, 1) * dbToGain(-20);
+      if (peak <= 0) return;
+      const ctx = g.ctx;
+      const ct = this.ctAt(this.startTime(o.at));
+      const env = makeGain(ctx, 0);
+      const k = peak / (1 + dbToGain(-12));
+      const oscs = [
+        { f: harmonic(4), g: 1 },
+        { f: harmonic(8), g: dbToGain(-12) },
+      ].map(({ f, g: lv }) => {
+        const osc = ctx.createOscillator();
+        osc.frequency.value = f;
+        const pg = makeGain(ctx, lv);
+        osc.connect(pg);
+        pg.connect(env);
+        return { osc, pg };
+      });
+      env.connect(g.uiBus);
+      env.gain.setValueAtTime(0, ct);
+      env.gain.linearRampToValueAtTime(k, ct + 0.015);
+      env.gain.setTargetAtTime(0, ct + 0.015, 0.12);
+      const end = ct + 0.015 + 0.12 * 8;
+      for (const x of oscs) {
+        x.osc.start(ct);
+        x.osc.stop(end);
+      }
+      oscs[0].osc.onended = () => disconnectAll([...oscs.flatMap((x) => [x.osc, x.pg]), env]);
+      this.track({
+        stop: (f) => {
+          const now = ctx.currentTime;
+          rampParam(env.gain, 0, now, f);
+          for (const x of oscs) stopSafe(x.osc, now + f + 0.01);
+        },
+      });
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  /** Partitur in Modellzeit (Intro): Ereignisse laufen über den Scheduler (Lookahead 0,12 s). */
+  score(events: ScoreEvent[], t0Model: number): ScoreHandle {
+    try {
+      const s = new Score(Array.isArray(events) ? events : [], Number.isFinite(t0Model) ? t0Model : this.clock.now());
+      this.scores.add(s);
+      this.wake();
+      return {
+        cancel: (o = {}) => {
+          s.cancel(Math.max(0.005, o.fadeS ?? 0.04));
+          this.scores.delete(s);
+        },
+      };
+    } catch {
+      return SILENT_SCORE;
+    }
+  }
+
+  // ------------------------------------------------------------ intern (auch für Stimmen/Rauschbett)
+
+  /** Graph, wenn hörbare Knoten erzeugt werden dürfen. */
+  audibleGraph(): Graph | null {
+    if (!this.g || !this.clock.healthy || this._muted || this._volume <= 0 || this.hidden) return null;
+    return this.g;
+  }
+
+  /** Kontextzeit für Modellzeit at (fehlt = sofort), nie in der Vergangenheit. */
+  ctAt(at?: number): number {
+    const ctx = this.ctx;
+    if (!ctx) return 0;
+    const now = ctx.currentTime;
+    if (at === undefined || !Number.isFinite(at)) return now;
+    const c = this.clock.ctxTimeFor(at);
+    return c === null ? now : Math.max(now, c);
+  }
+
+  later(ms: number, fn: () => void): void {
+    try {
+      this.timers.setTimeout(() => {
+        try {
+          fn();
+        } catch {
+          /* ignorieren */
+        }
+      }, Math.max(0, ms));
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  /** Klanglabor: AnalyserNode an der Summe vor dem Master (Spitze/RMS in dBFS). */
+  createAnalyser(fftSize = 8192): AnalyserNode | null {
+    try {
+      if (!this.ensure() || !this.g) return null;
+      const an = this.g.ctx.createAnalyser();
+      an.fftSize = fftSize;
+      this.g.sum.connect(an);
+      return an;
+    } catch {
       return null;
     }
   }
 
-  /** Browser blockieren Audio bis zur ersten Interaktion - dann sofort freischalten. */
-  private bindUnlock() {
-    if (this.unlockBound || typeof window === "undefined") return;
+  /** Testhilfe: ein Scheduler-Takt sofort. */
+  tickNow(): void {
+    this.tick();
+  }
+
+  /** Testhilfe: Zahl registrierter (nicht freigegebener) Stimmen. */
+  get voiceCount(): number {
+    return this.voices.size;
+  }
+
+  private prepared(): boolean {
+    if (this._muted || this._volume <= 0) return false;
+    return this.ensure() !== null && this.audibleGraph() !== null;
+  }
+
+  /** Modellzeit für „jetzt“ bzw. at – so bleiben Abstände innerhalb eines Rezepts exakt. */
+  private startTime(at?: number): number {
+    if (at !== undefined && Number.isFinite(at)) return at;
+    const ctx = this.ctx;
+    const m = ctx ? this.clock.modelTimeFor(ctx.currentTime) : null;
+    return m ?? this.clock.now();
+  }
+
+  private track(t: Tracked): void {
+    this.capture?.push(t);
+  }
+
+  private ensure(): AudioContext | null {
+    if (this.ctx) {
+      if (this.ctx.state === "suspended") void this.ctx.resume?.().catch(() => undefined);
+      return this.ctx;
+    }
+    const now = this.clock.now();
+    if (now - this.lastFail < 2) return null;
+    let ctx: AudioContext | null = null;
+    try {
+      ctx = this.deps.createContext ? this.deps.createContext() : defaultCreateContext();
+      if (!ctx) {
+        this.lastFail = now;
+        return null;
+      }
+      this.g = buildGraph(ctx);
+      this.ctx = ctx;
+      this.clock.attach(ctx);
+      this.applyMaster();
+      this.bindUnlock();
+      this.bindVisibility();
+      this.startWatchdog();
+      try {
+        ctx.addEventListener?.("statechange", () => this.later(250, () => this.checkHealth()));
+      } catch {
+        /* ignorieren */
+      }
+      if (ctx.state === "suspended") void ctx.resume?.().catch(() => undefined);
+      this.notifyAvailability();
+      return ctx;
+    } catch {
+      this.ctx = null;
+      this.g = null;
+      this.lastFail = now;
+      try {
+        void ctx?.close?.();
+      } catch {
+        /* ignorieren */
+      }
+      return null;
+    }
+  }
+
+  private applyMaster(): void {
+    if (!this.ctx || !this.g) return;
+    const target = this._muted ? 0 : this._volume * this._volume;
+    try {
+      this.g.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.03);
+    } catch {
+      /* ignorieren */
+    }
+  }
+
+  /** Nach Stumm-/Lautstärke-/Gesundheits-Wechsel: Rauschbett und Stimmen nachziehen. */
+  private audibilityChanged(before: boolean): void {
+    const now = this.audibleGraph() !== null;
+    if (before === now) return;
+    if (now) {
+      this.bed?.resume();
+      if ([...this.voices].some((v) => v.isRunning)) this.wake();
+    } else {
+      this.bed?.suspend();
+      this.tick(); // Stimmen geben ihre Knoten frei
+    }
+  }
+
+  private bindUnlock(): void {
+    const win = this.deps.win !== undefined ? this.deps.win : typeof window !== "undefined" ? window : null;
+    if (this.unlockBound || !win) return;
     this.unlockBound = true;
     const unlock = () => {
-      if (this.ctx && this.ctx.state === "suspended") void this.ctx.resume().catch(() => undefined);
-    };
-    window.addEventListener("pointerdown", unlock, { capture: true });
-    window.addEventListener("keydown", unlock, { capture: true });
-  }
-
-  /** Bereitet Audio vor (z. B. beim Start), ohne einen Ton zu spielen. */
-  warmup() {
-    this.ensure();
-  }
-
-  private makeImpulse(ctx: Ctx, seconds: number, decay: number): AudioBuffer {
-    const rate = ctx.sampleRate;
-    const len = Math.floor(rate * seconds);
-    const buf = ctx.createBuffer(2, len, rate);
-    for (let ch = 0; ch < 2; ch++) {
-      const data = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) {
-        const t = i / len;
-        // frühe Reflexionen + diffuser, abklingender Schweif
-        const early = i < rate * 0.03 && Math.random() < 0.004 ? (Math.random() * 2 - 1) * 0.8 : 0;
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay) * 0.5 + early;
+      const c = this.ctx;
+      if (c && c.state === "suspended") {
+        void c.resume?.().then(() => this.later(250, () => this.checkHealth())).catch(() => undefined);
       }
-    }
-    return buf;
-  }
-
-  private makeNoise(ctx: Ctx, seconds: number): AudioBuffer {
-    const len = Math.floor(ctx.sampleRate * seconds);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    let b0 = 0;
-    let b1 = 0;
-    let b2 = 0;
-    for (let i = 0; i < len; i++) {
-      // leicht "rosa" gefärbtes Rauschen - weicher als weißes
-      const w = Math.random() * 2 - 1;
-      b0 = 0.99765 * b0 + w * 0.099046;
-      b1 = 0.963 * b1 + w * 0.2965164;
-      b2 = 0.57 * b2 + w * 1.0526913;
-      d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.18;
-    }
-    return buf;
-  }
-
-  /** Verteilt ein Signal auf trocken + Hall */
-  private out(node: AudioNode, wetAmount = 0.35, pan = 0): void {
-    if (!this.ctx || !this.dry || !this.wet) return;
-    let src: AudioNode = node;
-    if (pan !== 0 && typeof this.ctx.createStereoPanner === "function") {
-      const p = this.ctx.createStereoPanner();
-      p.pan.value = pan;
-      node.connect(p);
-      src = p;
-    }
-    src.connect(this.dry);
-    if (wetAmount > 0) {
-      const send = this.ctx.createGain();
-      send.gain.value = wetAmount;
-      src.connect(send).connect(this.wet);
+    };
+    try {
+      win.addEventListener("pointerdown", unlock, { capture: true });
+      win.addEventListener("keydown", unlock, { capture: true });
+    } catch {
+      /* ignorieren */
     }
   }
 
-  /** Kristalline FM-Glocke */
-  private bell(freq: number, at: number, opts: { gain?: number; decay?: number; ratio?: number; index?: number; wet?: number; pan?: number } = {}) {
-    const ctx = this.ctx!;
-    const { gain = 0.2, decay = 1.2, ratio = 3.5, index = 2.2, wet = 0.4, pan = 0 } = opts;
-    const car = ctx.createOscillator();
-    const mod = ctx.createOscillator();
-    const modGain = ctx.createGain();
-    const env = ctx.createGain();
-    car.type = "sine";
-    mod.type = "sine";
-    car.frequency.setValueAtTime(freq, at);
-    mod.frequency.setValueAtTime(freq * ratio, at);
-    modGain.gain.setValueAtTime(freq * index, at);
-    modGain.gain.exponentialRampToValueAtTime(Math.max(1, freq * 0.02), at + decay * 0.6);
-    env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(gain, at + 0.004);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + decay);
-    mod.connect(modGain).connect(car.frequency);
-    car.connect(env);
-    this.out(env, wet, pan);
-    car.start(at);
-    mod.start(at);
-    car.stop(at + decay + 0.05);
-    mod.stop(at + decay + 0.05);
-  }
-
-  /** Einfacher Ton mit Hüllkurve (optional Tonhöhen-Gleiten) */
-  private tone(
-    freq: number,
-    at: number,
-    opts: { type?: OscillatorType; gain?: number; attack?: number; decay?: number; to?: number; wet?: number; lp?: number; pan?: number } = {},
-  ) {
-    const ctx = this.ctx!;
-    const { type = "sine", gain = 0.2, attack = 0.003, decay = 0.2, to, wet = 0.2, lp, pan = 0 } = opts;
-    const osc = ctx.createOscillator();
-    const env = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, at);
-    if (to) osc.frequency.exponentialRampToValueAtTime(to, at + decay);
-    env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(gain, at + attack);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
-    let last: AudioNode = osc;
-    if (lp) {
-      const f = ctx.createBiquadFilter();
-      f.type = "lowpass";
-      f.frequency.value = lp;
-      osc.connect(f);
-      last = f;
+  private bindVisibility(): void {
+    const doc = this.deps.doc !== undefined ? this.deps.doc : typeof document !== "undefined" ? document : null;
+    if (this.visBound || !doc) return;
+    this.visBound = true;
+    this.hidden = !!doc.hidden;
+    try {
+      doc.addEventListener("visibilitychange", () => {
+        const before = this.audibleGraph() !== null;
+        const h = !!doc.hidden;
+        this.hidden = h;
+        for (const v of this.voices) v.setHidden(h);
+        this.bed?.setHidden(h);
+        if (!h) {
+          this.audibilityChanged(before);
+          if (this.voices.size || this.scores.size) this.wake();
+        }
+      });
+    } catch {
+      /* ignorieren */
     }
-    last.connect(env);
-    this.out(env, wet, pan);
-    osc.start(at);
-    osc.stop(at + attack + decay + 0.05);
   }
 
-  /** Gefiltertes Rauschen mit Frequenzfahrt ("Whoosh") */
-  private noise(
-    at: number,
-    opts: { dur?: number; from?: number; to?: number; gain?: number; q?: number; type?: BiquadFilterType; attack?: number; wet?: number },
-  ) {
-    const ctx = this.ctx!;
-    const { dur = 0.3, from = 400, to = 2400, gain = 0.1, q = 1.2, type = "bandpass", attack, wet = 0.3 } = opts;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    src.loop = true;
-    const f = ctx.createBiquadFilter();
-    f.type = type;
-    f.Q.value = q;
-    f.frequency.setValueAtTime(from, at);
-    f.frequency.exponentialRampToValueAtTime(to, at + dur);
-    const env = ctx.createGain();
-    const a = attack ?? dur * 0.45;
-    env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(gain, at + a);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    src.connect(f).connect(env);
-    this.out(env, wet);
-    src.start(at, Math.random());
-    src.stop(at + dur + 0.05);
-  }
-
-  /** Warmes Pad aus verstimmten Oszillatoren mit sich öffnendem Filter */
-  private pad(freqs: number[], at: number, opts: { dur?: number; gain?: number; attack?: number; cutoffFrom?: number; cutoffTo?: number } = {}) {
-    const ctx = this.ctx!;
-    const { dur = 3, gain = 0.06, attack = 0.9, cutoffFrom = 280, cutoffTo = 2600 } = opts;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.Q.value = 0.7;
-    filter.frequency.setValueAtTime(cutoffFrom, at);
-    filter.frequency.exponentialRampToValueAtTime(cutoffTo, at + attack * 1.4);
-    filter.frequency.exponentialRampToValueAtTime(cutoffFrom * 1.5, at + dur);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, at);
-    env.gain.exponentialRampToValueAtTime(gain, at + attack);
-    env.gain.setValueAtTime(gain, at + dur * 0.55);
-    env.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    filter.connect(env);
-    this.out(env, 0.55);
-    freqs.forEach((f, i) => {
-      for (const det of [-7, 7]) {
-        const o = ctx.createOscillator();
-        o.type = i === 0 ? "triangle" : "sawtooth";
-        o.frequency.value = f;
-        o.detune.value = det;
-        const g = ctx.createGain();
-        g.gain.value = 1 / (freqs.length * 2);
-        o.connect(g).connect(filter);
-        o.start(at);
-        o.stop(at + dur + 0.1);
+  private startWatchdog(): void {
+    if (this.watchdog) return;
+    this.watchdog = true;
+    this.later(250, () => {
+      this.checkHealth();
+      try {
+        this.watchdog = this.timers.setInterval(() => this.checkHealth(), 1000);
+      } catch {
+        /* ignorieren */
       }
     });
   }
 
-  /** Tiefer, weicher Schlag (Sub) */
-  private sub(at: number, from = 90, to = 38, gain = 0.32, dur = 1.1) {
-    this.tone(from, at, { type: "sine", gain, attack: 0.01, decay: dur, to, wet: 0.05 });
+  private checkHealth(): void {
+    const before = this.audibleGraph() !== null;
+    this.clock.check();
+    this.audibilityChanged(before);
+    this.notifyAvailability();
   }
 
-  private throttled(name: SoundName, ms: number): boolean {
-    const now = performance.now();
-    const last = this.lastPlayed.get(name) ?? 0;
-    if (now - last < ms) return true;
-    this.lastPlayed.set(name, now);
-    return false;
+  private notifyAvailability(): void {
+    const a = this.available;
+    if (a === this.lastAvailable) return;
+    this.lastAvailable = a;
+    for (const cb of [...this.availCbs]) {
+      try {
+        cb(a);
+      } catch {
+        /* ignorieren */
+      }
+    }
   }
 
-  play(name: SoundName, opts: PlayOptions = {}): void {
-    if (this._muted || this._volume <= 0) return;
-    if (name === "hover" && !this._hoverEnabled) return;
-    const ctx = this.ensure();
-    if (!ctx || ctx.state === "closed") return;
+  /**
+   * Scheduler anwerfen. Der erste Takt läuft bewusst asynchron (setTimeout 0): So plant eine
+   * Stimme, die React-StrictMode sofort wieder aufräumt, nie einen Puls (keine Doppel-Pulse).
+   */
+  private wake(): void {
+    if (this.timer === null) {
+      try {
+        this.timer = this.timers.setInterval(() => this.tick(), TICK_MS);
+      } catch {
+        this.timer = null;
+      }
+    }
+    if (!this.tickQueued) {
+      this.tickQueued = true;
+      this.later(0, () => {
+        this.tickQueued = false;
+        this.tick();
+      });
+    }
+  }
+
+  /** Lookahead-Scheduler (E.4). */
+  private tick(): void {
     try {
-      this.render(name, ctx.currentTime + 0.005, opts);
+      const now = this.clock.now();
+      if (this.ctx) this.clock.update();
+      const horizon = now + LOOKAHEAD_S;
+      const g = this.audibleGraph();
+      for (const v of [...this.voices]) {
+        if (this.hidden) v.tick(now, horizon, null, true);
+        else v.tick(now, horizon, g);
+      }
+      if (!this.hidden) {
+        for (const s of [...this.scores]) {
+          s.runDue(horizon, now, (list) => {
+            this.capture = list;
+          });
+          if (s.done) this.scores.delete(s);
+        }
+      }
+      const busy = this.scores.size > 0 || [...this.voices].some((v) => v.isRunning);
+      // verborgen: Scheduler pausiert (bindVisibility weckt ihn wieder)
+      if ((!busy || this.hidden) && this.timer !== null) {
+        this.timers.clearInterval(this.timer);
+        this.timer = null;
+      }
     } catch {
-      /* Audio darf nie die App stören */
+      /* Scheduler darf nie werfen */
     }
   }
 
-  private render(name: SoundName, t: number, opts: PlayOptions) {
-    const g = opts.gain ?? 1;
-    switch (name) {
-      case "hover": {
-        if (this.throttled("hover", 45)) return;
-        const deg = 5 + Math.floor(Math.random() * 5);
-        this.tone(pentatonic(deg), t, { gain: 0.022 * g, decay: 0.06, wet: 0.25 });
-        break;
-      }
-      case "click": {
-        if (this.throttled("click", 30)) return;
-        this.tone(1250, t, { gain: 0.16 * g, decay: 0.05, to: 620, wet: 0.12 });
-        this.noise(t, { dur: 0.025, from: 5000, to: 3000, gain: 0.05 * g, type: "highpass", attack: 0.002, wet: 0 });
-        break;
-      }
-      case "tick": {
-        if (this.throttled("tick", 18)) return;
-        this.tone(2100 + Math.random() * 200, t, { gain: 0.06 * g, decay: 0.025, wet: 0.08 });
-        break;
-      }
-      case "switch": {
-        if (this.throttled("switch", 60)) return;
-        this.noise(t, { dur: 0.22, from: 600, to: 3200, gain: 0.05 * g, q: 0.9, wet: 0.35 });
-        this.bell(pentatonic(7), t + 0.03, { gain: 0.05 * g, decay: 0.5, index: 1.4, wet: 0.5, pan: -0.2 });
-        this.bell(pentatonic(9), t + 0.09, { gain: 0.04 * g, decay: 0.6, index: 1.4, wet: 0.5, pan: 0.2 });
-        break;
-      }
-      case "open": {
-        this.noise(t, { dur: 0.28, from: 500, to: 4200, gain: 0.05 * g, q: 0.8 });
-        this.bell(pentatonic(10), t + 0.06, { gain: 0.05 * g, decay: 0.7, index: 1.2 });
-        break;
-      }
-      case "close": {
-        this.noise(t, { dur: 0.22, from: 3600, to: 500, gain: 0.04 * g, q: 0.8 });
-        break;
-      }
-      case "toggleOn": {
-        this.bell(pentatonic(6), t, { gain: 0.08 * g, decay: 0.35, index: 1.6 });
-        this.bell(pentatonic(8), t + 0.06, { gain: 0.08 * g, decay: 0.5, index: 1.6 });
-        break;
-      }
-      case "toggleOff": {
-        this.bell(pentatonic(8), t, { gain: 0.06 * g, decay: 0.3, index: 1.3 });
-        this.bell(pentatonic(5), t + 0.06, { gain: 0.06 * g, decay: 0.4, index: 1.3 });
-        break;
-      }
-      case "success": {
-        [5, 7, 8, 10].forEach((d, i) => this.bell(pentatonic(d), t + i * 0.075, { gain: 0.09 * g, decay: 1.1, pan: -0.3 + i * 0.2 }));
-        break;
-      }
-      case "error": {
-        this.tone(311, t, { type: "triangle", gain: 0.14 * g, decay: 0.16, lp: 1400, wet: 0.2 });
-        this.tone(233, t + 0.13, { type: "triangle", gain: 0.14 * g, decay: 0.28, lp: 1200, wet: 0.25 });
-        break;
-      }
-      case "notify": {
-        this.bell(pentatonic(7), t, { gain: 0.08 * g, decay: 0.9 });
-        this.bell(pentatonic(11), t + 0.12, { gain: 0.07 * g, decay: 1.2 });
-        break;
-      }
-      case "whoosh": {
-        this.noise(t, { dur: 0.5, from: 300, to: 5000, gain: 0.07 * g, q: 0.7 });
-        break;
-      }
-      case "dice": {
-        // schnelle, langsamer werdende Klicks wie ein rollender Würfel
-        let at = t;
-        let gap = 0.035;
-        for (let i = 0; i < 16; i++) {
-          this.tone(1700 + Math.random() * 900, at, { gain: 0.05 * g, decay: 0.02, wet: 0.1 });
-          at += gap;
-          gap *= 1.16;
+  // ------------------------------------------------------------ Bausteine
+
+  private partialNodes(
+    g: Graph,
+    o: { f: number; at: number; gain: number; attackS: number; holdS: number; tauS: number; reverb: boolean },
+  ): { osc: OscillatorNode; gain: GainNode } | null {
+    const ctx = g.ctx;
+    const ct = this.ctAt(o.at);
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = o.f;
+    const gain = makeGain(ctx, 0);
+    osc.connect(gain);
+    gain.connect(g.chordBus);
+    const send = o.reverb ? sendToReverb(g, gain, CHORD_SEND_DB) : null;
+    gain.gain.setValueAtTime(0, ct);
+    gain.gain.setTargetAtTime(o.gain, ct, Math.max(0.001, o.attackS / 3));
+    gain.gain.setTargetAtTime(0, ct + Math.max(0, o.holdS), Math.max(0.005, o.tauS));
+    osc.start(ct);
+    osc.stop(ct + Math.max(0, o.holdS) + 7 * Math.max(0.005, o.tauS));
+    osc.onended = () => disconnectAll([osc, gain, send]);
+    this.track({
+      stop: (f) => {
+        const now = ctx.currentTime;
+        rampParam(gain.gain, 0, now, f);
+        stopSafe(osc, now + f + 0.01);
+      },
+    });
+    return { osc, gain };
+  }
+
+  private makeTarget(): RecipeTarget {
+    return {
+      buffer: (name: BufferName, at: number, gain: number, reverb: boolean) => {
+        const g = this.audibleGraph();
+        if (!g || !(gain > 0)) return;
+        const ctx = g.ctx;
+        const src = ctx.createBufferSource();
+        src.buffer = g.buffers[name];
+        const gn = makeGain(ctx, gain);
+        src.connect(gn);
+        gn.connect(g.uiBus);
+        const send = reverb ? sendToReverb(g, gn, SEND_DB) : null;
+        src.start(snapToSample(this.ctAt(at), g.sr));
+        src.onended = () => disconnectAll([src, gn, send]);
+        this.track({
+          stop: (f) => {
+            rampParam(gn.gain, 0, ctx.currentTime, f);
+            stopSafe(src, ctx.currentTime + f + 0.01);
+          },
+        });
+      },
+      partial: (o) => {
+        const g = this.audibleGraph();
+        if (g && o.gain > 0) this.partialNodes(g, o);
+      },
+      sweep: (o) => {
+        const g = this.audibleGraph();
+        if (!g || !(o.gain > 0)) return;
+        const ctx = g.ctx;
+        const D = Math.max(0.02, o.durS);
+        const curve = dispersionCurve(o.fHi, o.fLo, D, 64);
+        const ct = this.ctAt(o.at);
+        const share = clamp(o.noiseShare ?? 1 / 3, 0, 1);
+        // Hüllkurve: Anstieg 2 ms, Pegel ∝ √(f/f_hi), Ausklang in den letzten 25 ms
+        const env = new Float32Array(64);
+        for (let i = 0; i < 64; i++) {
+          const t = (i / 63) * D;
+          env[i] = o.gain * Math.min(1, t / 0.002) * Math.sqrt(curve[i] / o.fHi) * clamp((D - t) / 0.025, 0, 1);
         }
-        break;
-      }
-      case "progress": {
-        // Tonhöhe steigt mit dem Fortschritt
-        if (this.throttled("progress", 90)) return;
-        const v = Math.min(1, Math.max(0, opts.value ?? 0));
-        const deg = Math.round(v * 9);
-        this.bell(pentatonic(deg, 72), t, { gain: 0.035 * g, decay: 0.45, index: 1.1, wet: 0.5 });
-        break;
-      }
-      case "launch": {
-        this.sub(t, 120, 40, 0.3 * g, 1.4);
-        this.noise(t, { dur: 1.1, from: 180, to: 7000, gain: 0.09 * g, q: 0.6, attack: 0.85, wet: 0.5 });
-        this.pad([midiToHz(53), midiToHz(60), midiToHz(65), midiToHz(69), midiToHz(72)], t + 0.15, {
-          dur: 2.4,
-          gain: 0.05 * g,
-          attack: 0.7,
+        const envG = makeGain(ctx, 0);
+        envG.connect(g.uiBus);
+        const send = o.reverb ? sendToReverb(g, envG, SEND_DB) : null;
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueCurveAtTime(curve, ct, D);
+        // Sinus und Rauschen (Standard: Rauschen −6 dB relativ); der lautere Anteil hat Gewicht 1
+        const wMax = Math.max(1 - share, share);
+        const oscG = makeGain(ctx, (1 - share) / wMax);
+        osc.connect(oscG);
+        oscG.connect(envG);
+        const nodes: (AudioNode | null)[] = [osc, oscG, envG, send];
+        let src: AudioBufferSourceNode | null = null;
+        if (share > 0) {
+          src = ctx.createBufferSource();
+          src.buffer = g.noise;
+          src.loop = true;
+          const bp = makeFilter(ctx, { type: "bandpass", f: o.fHi, q: 18 });
+          bp.frequency.setValueCurveAtTime(curve, ct, D);
+          const norm = 0.35 / filteredNoiseRms([{ spec: { type: "bandpass", f: 1000, q: 18 }, share: 1 }], g.sr);
+          const nG = makeGain(ctx, (share / wMax) * norm);
+          src.connect(bp);
+          bp.connect(nG);
+          nG.connect(envG);
+          src.start(ct, this.random() * 3.5);
+          src.stop(ct + D + 0.01);
+          nodes.push(src, bp, nG);
+        }
+        envG.gain.setValueCurveAtTime(env, ct, D);
+        osc.start(ct);
+        osc.stop(ct + D + 0.01);
+        osc.onended = () => disconnectAll(nodes);
+        this.track({
+          stop: (f) => {
+            const now = ctx.currentTime;
+            try {
+              envG.gain.cancelScheduledValues(now);
+              envG.gain.setValueAtTime(0, now + f);
+            } catch {
+              /* ignorieren */
+            }
+            stopSafe(osc, now + f + 0.01);
+            stopSafe(src, now + f + 0.01);
+          },
         });
-        [0, 2, 4, 5, 7].forEach((d, i) => this.bell(pentatonic(d + 3), t + 0.75 + i * 0.06, { gain: 0.06 * g, decay: 1.4, pan: -0.4 + i * 0.2 }));
-        break;
-      }
-      case "achievement": {
-        [0, 2, 4, 5, 7, 9, 10, 12].forEach((d, i) =>
-          this.bell(pentatonic(d + 2), t + i * 0.045, { gain: 0.06 * g, decay: 0.8, index: 1.8, pan: Math.sin(i) * 0.5 }),
-        );
-        this.bell(pentatonic(12), t + 0.45, { gain: 0.08 * g, decay: 2.2, index: 2.5, wet: 0.6 });
-        this.bell(pentatonic(14), t + 0.45, { gain: 0.06 * g, decay: 2.2, index: 2.5, wet: 0.6 });
-        this.noise(t + 0.4, { dur: 1.4, from: 6000, to: 9000, gain: 0.025 * g, type: "highpass", attack: 0.1, wet: 0.7 });
-        break;
-      }
-      case "startup": {
-        // Startklang: tiefer Atemzug, Akkord öffnet sich, Glocken funkeln auf
-        this.sub(t, 70, 36, 0.28 * g, 2.2);
-        this.noise(t, { dur: 1.6, from: 200, to: 4200, gain: 0.05 * g, q: 0.5, attack: 1.1, wet: 0.6 });
-        this.pad([midiToHz(41), midiToHz(53), midiToHz(57), midiToHz(60), midiToHz(64), midiToHz(67)], t + 0.05, {
-          dur: 3.6,
-          gain: 0.055 * g,
-          attack: 1.2,
-          cutoffFrom: 220,
-          cutoffTo: 3200,
+      },
+      noise: (o) => {
+        const g = this.audibleGraph();
+        if (!g || !(o.rms > 0)) return;
+        const ctx = g.ctx;
+        const ct = this.ctAt(o.at);
+        const src = ctx.createBufferSource();
+        src.buffer = g.noise;
+        src.loop = true;
+        const bp = makeFilter(ctx, { type: "bandpass", f: o.centerHz, q: o.q });
+        const glide = Math.max(0.005, o.glideS ?? 0);
+        if (o.centerToHz) {
+          bp.frequency.setValueAtTime(o.centerHz, ct);
+          bp.frequency.exponentialRampToValueAtTime(o.centerToHz, ct + glide);
+        }
+        if (o.qTo !== undefined) {
+          bp.Q.setValueAtTime(o.q, ct);
+          bp.Q.linearRampToValueAtTime(o.qTo, ct + glide);
+        }
+        const r0 = filteredNoiseRms([{ spec: { type: "bandpass", f: o.centerHz, q: o.q }, share: 1 }], g.sr);
+        const r1 = filteredNoiseRms([{ spec: { type: "bandpass", f: o.centerToHz ?? o.centerHz, q: o.qTo ?? o.q }, share: 1 }], g.sr);
+        const level = o.rms / Math.sqrt(r0 * r1);
+        const env = makeGain(ctx, 0);
+        src.connect(bp);
+        bp.connect(env);
+        env.connect(g.uiBus);
+        const a = Math.max(0.002, o.attackS);
+        const holdEnd = ct + a + Math.max(0, o.durS);
+        const end = holdEnd + Math.max(0.005, o.releaseS);
+        env.gain.setValueAtTime(0, ct);
+        env.gain.linearRampToValueAtTime(level, ct + a);
+        env.gain.setValueAtTime(level, holdEnd);
+        env.gain.linearRampToValueAtTime(0, end);
+        src.start(ct, this.random() * 3.5);
+        src.stop(end + 0.01);
+        src.onended = () => disconnectAll([src, bp, env]);
+        this.track({
+          stop: (f) => {
+            rampParam(env.gain, 0, ctx.currentTime, f);
+            stopSafe(src, ctx.currentTime + f + 0.01);
+          },
         });
-        [0, 2, 3, 5, 7, 10].forEach((d, i) =>
-          this.bell(pentatonic(d), t + 0.9 + i * 0.11, { gain: 0.055 * g, decay: 1.8, index: 1.6, wet: 0.6, pan: -0.5 + i * 0.2 }),
-        );
-        this.bell(pentatonic(12), t + 1.65, { gain: 0.05 * g, decay: 2.6, index: 2.2, wet: 0.7 });
-        break;
-      }
-      case "jingle": {
-        // Erfolgs-Melodie des Installers
-        const melody: Array<[number, number]> = [
-          [0, 0],
-          [2, 0.12],
-          [4, 0.24],
-          [7, 0.36],
-          [5, 0.6],
-          [7, 0.72],
-          [10, 0.84],
-        ];
-        melody.forEach(([d, dt], i) => this.bell(pentatonic(d), t + dt, { gain: 0.08 * g, decay: 1.4, pan: -0.3 + (i % 3) * 0.3 }));
-        this.pad([midiToHz(53), midiToHz(60), midiToHz(65), midiToHz(69)], t + 0.8, { dur: 2.8, gain: 0.05 * g, attack: 0.4 });
-        this.bell(pentatonic(12), t + 1.05, { gain: 0.07 * g, decay: 2.8, index: 2.4, wet: 0.7 });
-        this.noise(t + 1.0, { dur: 1.6, from: 5000, to: 9000, gain: 0.02 * g, type: "highpass", attack: 0.2, wet: 0.7 });
-        break;
-      }
-      case "farewell": {
-        [10, 7, 5, 2, 0].forEach((d, i) => this.bell(pentatonic(d), t + i * 0.16, { gain: 0.06 * g, decay: 1.6, index: 1.3, wet: 0.6 }));
-        this.pad([midiToHz(50), midiToHz(57), midiToHz(62)], t + 0.3, { dur: 2.6, gain: 0.04 * g, attack: 0.6, cutoffTo: 1600 });
-        break;
-      }
-    }
+      },
+      rfi: (o) => {
+        const g = this.audibleGraph();
+        if (!g || !(o.peak > 0)) return;
+        const ctx = g.ctx;
+        const ct = this.ctAt(o.at);
+        const osc = ctx.createOscillator();
+        osc.type = "sawtooth";
+        osc.frequency.value = 50;
+        const bp = makeFilter(ctx, { type: "bandpass", f: 300, q: 1.2 });
+        const lp = makeFilter(ctx, { type: "lowpass", f: 900, q: Q_BUTTER });
+        const env = makeGain(ctx, 0);
+        osc.connect(bp);
+        bp.connect(lp);
+        lp.connect(env);
+        env.connect(g.uiBus);
+        const k = o.peak / rfiPeak(g.sr);
+        let last = 0;
+        env.gain.setValueAtTime(0, ct);
+        for (const [b0, b1] of o.bursts) {
+          env.gain.setValueAtTime(0, ct + b0);
+          env.gain.linearRampToValueAtTime(k, ct + b0 + o.attackS);
+          env.gain.setValueAtTime(k, ct + b1);
+          env.gain.linearRampToValueAtTime(0, ct + b1 + o.releaseS);
+          last = Math.max(last, b1 + o.releaseS);
+        }
+        osc.start(ct);
+        osc.stop(ct + last + 0.01);
+        osc.onended = () => disconnectAll([osc, bp, lp, env]);
+        this.track({
+          stop: (f) => {
+            rampParam(env.gain, 0, ctx.currentTime, f);
+            stopSafe(osc, ctx.currentTime + f + 0.01);
+          },
+        });
+      },
+      spin: (o) => {
+        if (!this.audibleGraph()) return;
+        const track = spinUpTrack({ t0: o.at, p0: o.p0, p1: o.p1, durS: o.durS, shape: o.shape, holdS: o.toneS });
+        // temporäre Stimme, zählt nicht zu den 4 Stimmen
+        const v = new ScheduledPulseVoice({ ...this.host, release: () => undefined }, { gainDb: o.gainDb, timbre: o.timbre });
+        v.renderOnce(track, o.at, o.at + o.durS + o.toneS, 0.04);
+        this.track({ stop: (f) => v.stop({ fadeS: f }) });
+      },
+    };
   }
 }
 
-/** Gemeinsame Instanz für die ganze Oberfläche */
+/** Gemeinsame Instanz für App und Installer. */
 export const sound = new SoundEngine();

@@ -38,11 +38,24 @@ function solveSeg(a: SpinKnot, b: SpinKnot, n: number): number {
   return den > 0 ? (2 * d) / den : 0;
 }
 
+/** Index des Segments [k_i, k_i+1], das t enthält (−1 vor dem ersten Knoten). */
+function findSeg(knots: readonly SpinKnot[], t: number): number {
+  if (knots.length === 0 || t < knots[0].t) return -1;
+  let lo = 0;
+  let hi = knots.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (knots[mid].t <= t) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
 /** Pulse (ganzzahlige Phase) innerhalb [t0, t1) einer Knotenfolge. */
 export function pulsesInKnots(knots: readonly SpinKnot[], t0: number, t1: number): SpinPulse[] {
   const out: SpinPulse[] = [];
   if (knots.length < 2 || t1 <= t0) return out;
-  for (let i = 0; i < knots.length - 1; i++) {
+  for (let i = Math.max(0, findSeg(knots, t0)); i < knots.length - 1; i++) {
     const a = knots[i];
     const b = knots[i + 1];
     if (b.t <= t0) continue;
@@ -50,11 +63,12 @@ export function pulsesInKnots(knots: readonly SpinKnot[], t0: number, t1: number
     const lo = Math.max(t0, a.t);
     const hi = Math.min(t1, b.t);
     if (hi <= lo) continue;
-    const pLo = segPhase(a, b, lo);
-    const pHi = segPhase(a, b, hi);
+    // An Knoten exakt die gespeicherte Phase verwenden – so gehört jede ganze Zahl genau
+    // einem Segment (keine verlorenen oder doppelten Pulse auf Knotengrenzen).
+    const pLo = lo === a.t ? a.phi : segPhase(a, b, lo);
+    const pHi = hi === b.t ? b.phi : segPhase(a, b, hi);
     for (let n = Math.ceil(pLo); n < pHi; n++) {
-      const t = a.t + solveSeg(a, b, n);
-      if (t < lo || t >= hi) continue;
+      const t = Math.min(Math.max(a.t + solveSeg(a, b, n), lo), Math.max(lo, hi - 1e-12));
       const u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
       out.push({ t, index: n, f: a.f + (b.f - a.f) * u });
     }
@@ -75,13 +89,58 @@ export function knotsFromFrequency(fn: (t: number) => number, t0: number, t1: nu
   return knots;
 }
 
+/** Was eine Stimme von einer Drehquelle braucht (SpinModel oder feste Knotenspur). */
+export interface SpinSource {
+  advance(until: number): SpinKnot[];
+  freqAt(t: number): number;
+  phaseAt(t: number): number;
+  pulsesBetween(t0: number, t1: number): SpinPulse[];
+  knotsSince(t: number): SpinKnot[];
+}
+
+/** Feste, vorab berechnete Knotenspur (Einzelklänge „launch“, „achievement“). Nach dem letzten Knoten konstant. */
+export class KnotTrack implements SpinSource {
+  constructor(readonly knots: readonly SpinKnot[]) {
+    if (knots.length === 0) throw new RangeError("KnotTrack braucht Knoten");
+  }
+  get start(): number {
+    return this.knots[0].t;
+  }
+  get end(): number {
+    return this.knots[this.knots.length - 1].t;
+  }
+  advance(): SpinKnot[] {
+    return [];
+  }
+  freqAt(t: number): number {
+    const k = this.knots;
+    const i = findSeg(k, t);
+    if (i < 0) return k[0].f;
+    const a = k[i];
+    const b = k[i + 1];
+    return b ? a.f + ((b.f - a.f) * (t - a.t)) / (b.t - a.t) : a.f;
+  }
+  phaseAt(t: number): number {
+    const k = this.knots;
+    const i = findSeg(k, t);
+    if (i < 0) return k[0].phi + k[0].f * (t - k[0].t);
+    const a = k[i];
+    const b = k[i + 1];
+    return b ? segPhase(a, b, t) : a.phi + a.f * (t - a.t);
+  }
+  pulsesBetween(t0: number, t1: number): SpinPulse[] {
+    return pulsesInKnots(this.knots, t0, t1);
+  }
+  knotsSince(t: number): SpinKnot[] {
+    return this.knots.filter((k) => k.t > t);
+  }
+}
+
 const LN2 = Math.LN2;
-/** Längere Lücken werden ohne Speichern der Zwischenknoten überbrückt. */
-const FAST_FORWARD_S = 2;
-/** Schutz gegen unbegrenztes Wachstum, wenn niemand prune() aufruft. */
+/** Schutz gegen unbegrenztes Wachstum, wenn niemand prune() aufruft (≈ 2 min bei 20 ms). */
 const MAX_KNOTS = 6000;
 
-export class SpinModel {
+export class SpinModel implements SpinSource {
   readonly dt: number;
   private knots: SpinKnot[];
   private lnTarget: number;
@@ -129,12 +188,6 @@ export class SpinModel {
   advance(until: number): SpinKnot[] {
     const created: SpinKnot[] = [];
     let last = this.lastKnot;
-    if (until - last.t > FAST_FORWARD_S) {
-      // Lange Lücke (z. B. verborgenes Fenster): ohne Zwischenknoten überspringen.
-      while (until - last.t > FAST_FORWARD_S / 2) last = this.step(last);
-      this.knots = [last];
-      created.push(last);
-    }
     while (last.t < until) {
       last = this.step(last);
       this.knots.push(last);
@@ -146,16 +199,7 @@ export class SpinModel {
 
   /** Index des Segments [k_i, k_i+1], das t enthält (oder -1 vor dem ersten Knoten). */
   private segIndex(t: number): number {
-    const k = this.knots;
-    if (t < k[0].t) return -1;
-    let lo = 0;
-    let hi = k.length - 1;
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (k[mid].t <= t) lo = mid;
-      else hi = mid;
-    }
-    return lo;
+    return findSeg(this.knots, t);
   }
 
   private ensure(t: number) {
@@ -202,4 +246,18 @@ export class SpinModel {
     const i = this.segIndex(before);
     if (i > 0) this.knots.splice(0, i);
   }
+}
+
+/**
+ * Hochdrehen als feste Spur: P(u) = P₀·(P₁/P₀)^(u^shape), u = 0…1 über durS,
+ * danach holdS konstant bei P₁. Der erste Puls liegt genau bei t0 (Phase 0).
+ */
+export function spinUpTrack(o: { t0: number; p0: number; p1: number; durS: number; shape?: number; holdS?: number; dt?: number }): KnotTrack {
+  const shape = o.shape ?? 1.6;
+  const end = o.t0 + o.durS;
+  const fn = (t: number): number => {
+    const u = Math.min(1, Math.max(0, (t - o.t0) / o.durS));
+    return 1 / (o.p0 * Math.pow(o.p1 / o.p0, Math.pow(u, shape)));
+  };
+  return new KnotTrack(knotsFromFrequency(fn, o.t0, end + (o.holdS ?? 0), o.dt ?? 0.005, 0));
 }

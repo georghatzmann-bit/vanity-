@@ -51,7 +51,8 @@ Unter Linux wird automatisch für Windows cross-kompiliert (`rustup target add x
 | Befehl | Was |
 |---|---|
 | `npm run dev` | App-Oberfläche im Browser mit Demo-Daten (http://localhost:1420) |
-| `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=uninstall`, `?mode=uninstall&revertfail` = Zurückstellen unvollständig) |
+| `npm run dev:installer` | Installer-Oberfläche im Browser (http://localhost:1421, `?fail=1`, `?mode=update`, `?mode=maintenance`, `?mode=uninstall`, `?mode=uninstall&revertfail` = Zurückstellen unvollständig, `?slow` = langsamer Download, `?lang=en`, `?quality=0\|1\|2`, `?motion=reduced`) |
+| `node scripts/installer-tour.mjs <url> <ordner>` | Rundgang durch den Installer mit Screenshots aller Szenen (Demo-Backend); vorher `npm run dev:installer` starten |
 | `npm run tauri:dev` | echte App mit Rust-Backend |
 | `npm run typecheck` / `npm test` / `npm run test:rust` | Prüfungen und Tests |
 | `Pulsar.exe --selftest <bericht.json>` | Eingebauter Selbsttest (Scan, Cover, Ping, Regionen, Spielserver, DNS, Adapter, Tweaks, Boost, Starten, Spielzeit), Exit-Code 0 = alles ok – so prüft die Windows-CI |

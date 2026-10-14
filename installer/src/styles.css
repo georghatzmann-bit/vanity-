@@ -1,30 +1,230 @@
 @import "tailwindcss";
 @import "../../shared/design/tokens.css";
 @import "../../shared/design/base.css";
+@import "./obs/obs.css";
 
 @source "../../shared";
 
+/*
+ * Bedienelemente ohne Glas (Spec B.7): Radius 2 px, kein Ripple, kein Glühen, kein Skalieren.
+ * Farbübergänge 120 ms cubic-bezier(.2,0,0,1).
+ */
 @layer components {
-  .input {
+  /* ---------- Knöpfe ---------- */
+  .obs-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+    font-family: var(--obs-sans);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    background: transparent;
+    color: var(--obs-fg);
+    transition:
+      background-color 120ms var(--obs-ease),
+      border-color 120ms var(--obs-ease),
+      color 120ms var(--obs-ease);
+  }
+  .obs-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.5;
+    flex-shrink: 0;
+  }
+  .obs-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .obs-btn:disabled {
+    opacity: 0.38;
+    cursor: default;
+  }
+  .obs-btn-sm {
+    height: 32px;
+    padding: 0 12px;
+  }
+  .obs-btn-lg {
     height: 44px;
-    width: 100%;
-    border-radius: var(--nv-radius-md);
-    background: var(--nv-surface-2);
-    border: 1px solid var(--nv-border);
-    padding: 0 14px;
-    color: var(--nv-fg);
     font-size: 14px;
-    transition: border-color var(--nv-dur-base) var(--nv-ease-out), box-shadow var(--nv-dur-base) var(--nv-ease-out);
   }
-  .input:focus {
-    outline: none;
-    border-color: color-mix(in oklab, var(--nv-accent) 70%, transparent);
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--nv-accent) 18%, transparent);
+  .obs-btn-primary {
+    background: var(--obs-fg);
+    color: var(--obs-bg);
   }
-}
+  .obs-btn-primary:hover:not(:disabled) {
+    background: #ffffff;
+  }
+  .obs-btn-secondary {
+    border-color: var(--obs-control);
+  }
+  .obs-btn-secondary:hover:not(:disabled) {
+    border-color: var(--obs-fg-2);
+    background: var(--obs-raise);
+  }
+  .obs-btn-ghost {
+    color: var(--obs-fg-2);
+    padding: 0 8px;
+  }
+  .obs-btn-ghost.obs-btn-sm {
+    padding: 0 8px;
+  }
+  .obs-btn-ghost:hover:not(:disabled) {
+    color: var(--obs-fg);
+  }
+  .obs-btn-ghost:hover:not(:disabled) .obs-btn-text {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .obs-btn-danger {
+    border-color: var(--obs-error);
+    color: var(--obs-error);
+  }
+  .obs-btn-danger:hover:not(:disabled) {
+    background: rgb(255 90 100 / 0.08);
+  }
+  .obs-btn-danger-solid {
+    background: var(--obs-error);
+    color: #0a0b0d;
+  }
+  .obs-btn-danger-solid:hover:not(:disabled) {
+    background: #ff7078;
+  }
 
-@keyframes nv-aurora {
-  0% { transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1); }
-  50% { transform: translate3d(4%, 3%, 0) rotate(8deg) scale(1.08); }
-  100% { transform: translate3d(-4%, -2%, 0) rotate(0deg) scale(1); }
+  /* ---------- Schalter 36 × 18 ---------- */
+  .obs-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 18px;
+    flex-shrink: 0;
+    border: 1px solid var(--obs-control);
+    border-radius: 2px;
+    transition:
+      background-color 120ms var(--obs-ease),
+      border-color 120ms var(--obs-ease);
+  }
+  .obs-switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 1px;
+    background: var(--obs-fg-3);
+    transition:
+      transform 120ms var(--obs-ease),
+      background-color 120ms var(--obs-ease);
+  }
+  .obs-switch[data-on="true"] {
+    background: var(--obs-signal-dim);
+    border-color: var(--obs-signal);
+  }
+  .obs-switch[data-on="true"]::after {
+    transform: translateX(18px);
+    background: var(--obs-signal);
+  }
+  [data-reduced="true"] .obs-switch,
+  [data-reduced="true"] .obs-switch::after {
+    transition: none;
+  }
+
+  /* ---------- Optionszeile (role="switch") ---------- */
+  .obs-option {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 472px;
+    height: 64px;
+    padding: 0 0 0 0;
+    border-bottom: 1px solid var(--obs-rule);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 120ms var(--obs-ease);
+  }
+  .obs-option:hover {
+    background: var(--obs-raise);
+  }
+
+  /* ---------- Zeilenknopf (Wartung) ---------- */
+  .obs-rowbtn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 472px;
+    height: 72px;
+    border-bottom: 1px solid var(--obs-rule);
+    text-align: left;
+    transition: background-color 120ms var(--obs-ease);
+  }
+  .obs-rowbtn::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: transparent;
+    transition: background-color 120ms var(--obs-ease);
+  }
+  .obs-rowbtn:hover {
+    background: var(--obs-raise);
+  }
+  .obs-rowbtn:hover::before {
+    background: var(--obs-fg-2);
+  }
+  .obs-rowbtn[data-tone="error"]:hover::before {
+    background: var(--obs-error);
+  }
+
+  /* ---------- Kontrollkästchen 16 × 16 ---------- */
+  .obs-check {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    border: 1px solid var(--obs-control);
+    border-radius: 2px;
+    transition:
+      background-color 120ms var(--obs-ease),
+      border-color 120ms var(--obs-ease);
+  }
+  .obs-check[data-on="true"] {
+    background: var(--obs-signal);
+    border-color: var(--obs-signal);
+  }
+
+  /* ---------- Eingabefeld (Pfad) ---------- */
+  .obs-input {
+    display: block;
+    width: 472px;
+    height: 40px;
+    padding: 0 12px;
+    background: var(--obs-panel);
+    border: 1px solid var(--obs-control);
+    border-radius: 2px;
+    color: var(--obs-fg);
+    font-family: var(--obs-mono);
+    font-size: 13px;
+    line-height: 16px;
+    font-feature-settings: normal;
+    transition: border-color 120ms var(--obs-ease);
+  }
+  .obs-input:focus,
+  .obs-input:focus-visible {
+    outline: none;
+    border-color: var(--obs-signal);
+    box-shadow: inset 0 0 0 1px var(--obs-signal);
+  }
 }

@@ -85,6 +85,27 @@ interface InstallOptions { dir: string; desktopShortcut: boolean; startMenu: boo
 | `uninstall://error` | `{ message }` |
 | `uninstall://done` | `{ revertOk, dataKept }` – `revertOk: false` = `Pulsar.exe --revert-all` konnte nicht alles zurückstellen (die Oberfläche zeigt dann einen Hinweis, wie man es nachholt); `dataKept: true` = die Pulsar-Daten wurden nicht gelöscht (gewählt oder wegen `revertOk: false`) |
 
+## Oberfläche
+
+Die Oberfläche („Radioteleskop“) ist reine Darstellung über dem unveränderten Vertrag oben: gleiche Befehle,
+gleiche Events und Payloads. Ablauf und Event-Logik stecken in `installer/src/flow/useSetupFlow.ts`,
+Bild und Ton in `installer/src/hooks/useObservatory.ts`.
+
+- **Prozent → Periode ist Inszenierung.** Der Schirm übersetzt `percent` in eine Drehperiode des Sterns
+  (1,337 s bis 5,757 ms, mit Rastplateaus an den Katalog-Pulsaren) und zeigt das als **INSZENIERT**. Gemessen
+  (**GEMESSEN**) sind nur die Werte aus den Events: Prozent, Bytes, Rate, Restzeit, Phasendauern.
+- **Ton aus:** Schalter in der Titelleiste oder Taste **M** (nicht im Eingabefeld); gespeichert unter
+  `pulsar-setup-muted`. Stumm erzeugt keine Audio-Knoten; Bild und Modell laufen weiter.
+- **Reduzierte Bewegung:** folgt der Systemeinstellung (live); Stern als Standbild, Stroboskop, Wandlung und
+  Zerfall als Endbilder, Seitenwechsel nur über Deckkraft. Der Ton bleibt.
+- **Qualitätsstufen:** L2/L1/L0 (Bildrate, Pixeldichte, Detail). Automatisch nur nach unten, wenn Bilder zu
+  langsam werden; jeder Wechsel wird protokolliert und steht in `<html data-quality>`.
+- **Testparameter im Browser** (`npm run dev:installer`, Demo-Backend): `?slow` (Download viermal langsamer),
+  `?lang=en`, `?quality=0|1|2` (Stufe fest), `?motion=reduced`, `?fail=1`, `?mode=update|maintenance|uninstall`,
+  `?revertfail`; im Dev-Server zusätzlich `?lab` (Klanglabor).
+- **Rundgang:** `node scripts/installer-tour.mjs http://localhost:1421/ <ordner>` macht Screenshots aller Szenen,
+  wartet auf Zustände und endet mit Exit-Code 1 bei Konsolenfehlern.
+
 ## Was die Installation auf dem PC anlegt
 
 | Was | Wo |

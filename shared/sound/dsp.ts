@@ -310,14 +310,20 @@ function onePole(x: Float32Array, fc: number, sr: number, high: boolean): Float3
   return y;
 }
 
-/** Stereo-Impulsantwort „Kuppel“: 12 ms Vorverzögerung, e^(−t/0,16 s), HP 250 Hz, LP 5 kHz. */
+/**
+ * Stereo-Impulsantwort „Kuppel“: 12 ms Vorverzögerung, e^(−t/0,16 s), HP 250 Hz, LP 5 kHz.
+ * Auf Energie 1 je Kanal normiert (Σ h² = 1): Ein Send von −18 dB ergibt so ≈ −18 dB Hall-Pegel.
+ */
 export function makeReverbIR(sr: number, rng: Rng, seconds = 0.8): [Float32Array, Float32Array] {
   const len = Math.round(seconds * sr);
   const pre = Math.round(0.012 * sr);
   const ch = (): Float32Array => {
     const x = new Float32Array(len);
     for (let i = pre; i < len; i++) x[i] = gaussian(rng) * Math.exp(-(i - pre) / sr / 0.16);
-    return onePole(onePole(x, 250, sr, true), 5000, sr, false);
+    const y = onePole(onePole(x, 250, sr, true), 5000, sr, false);
+    const e = Math.sqrt(y.reduce((s, v) => s + v * v, 0));
+    if (e > 0) for (let i = 0; i < y.length; i++) y[i] /= e;
+    return y;
   };
   return [ch(), ch()];
 }
@@ -333,3 +339,206 @@ export function sawtooth(f: number, sr: number, len: number): Float32Array {
   }
   return y;
 }
+
+// ---------------------------------------------------------------------------
+// Klangfarben und Einzelklang-Puffer (E.5)
+// ---------------------------------------------------------------------------
+
+export type Timbre = "radio" | "glass" | "soft";
+
+export type BranchRole = "body" | "core" | "gloss" | "transient";
+
+export interface TimbreBranch extends ResonatorBranch {
+  role: BranchRole;
+}
+
+export interface TimbreSpec {
+  branches: TimbreBranch[];
+  /** „smoother“ = Glätter LP c(f) (nur radio), sonst fester Tiefpass */
+  post: FilterSpec | "smoother";
+}
+
+/** Butterworth-Q für Tief- und Hochpass (Q in dB). */
+export const Q_BUTTER = -3.01;
+
+export const TIMBRES: Record<Timbre, TimbreSpec> = {
+  radio: {
+    branches: [
+      { role: "body", type: "bandpass", f: harmonic(2), q: 2.8, gainDb: -6 },
+      { role: "core", type: "bandpass", f: harmonic(6), q: 7, gainDb: 0 },
+      { role: "gloss", type: "bandpass", f: harmonic(12), q: 9, gainDb: -10 },
+      { role: "transient", type: "lowpass", f: 5000, q: Q_BUTTER, gainDb: -16 },
+    ],
+    post: "smoother",
+  },
+  glass: {
+    branches: [
+      { role: "core", type: "bandpass", f: harmonic(12), q: 9, gainDb: 0 },
+      { role: "gloss", type: "bandpass", f: harmonic(16), q: 12, gainDb: -4 },
+    ],
+    post: { type: "lowpass", f: 9000, q: Q_BUTTER },
+  },
+  soft: {
+    branches: [
+      { role: "core", type: "bandpass", f: harmonic(2), q: 2.5, gainDb: 0 },
+      { role: "body", type: "bandpass", f: harmonic(4), q: 4, gainDb: -8 },
+    ],
+    post: { type: "lowpass", f: 1200, q: Q_BUTTER },
+  },
+};
+
+/** Resonanz-Stufen (setStep): Kern-BP auf F_STAR·n, Q 7 – Harmonische, keine Tonleiter. */
+export const STEP_HARMONICS = [2, 3, 4, 6, 8, 12] as const;
+export const STEP_Q = 7;
+
+/** Resonator-Spezifikation einer Klangfarbe, optional mit Stufe und Kern-Q (progress). */
+export function timbreSpec(timbre: Timbre, o: { step?: number | null; coreQ?: number; smootherHz?: number } = {}): ResonatorSpec {
+  const t = TIMBRES[timbre];
+  const branches = t.branches.map((b) => {
+    if (b.role !== "core") return { ...b };
+    const step = o.step;
+    if (step !== null && step !== undefined) {
+      const i = clamp(Math.round(step), 0, STEP_HARMONICS.length - 1);
+      return { ...b, f: harmonic(STEP_HARMONICS[i]), q: STEP_Q };
+    }
+    return { ...b, q: o.coreQ ?? b.q };
+  });
+  const post: FilterSpec[] =
+    t.post === "smoother" ? [{ type: "lowpass", f: o.smootherHz ?? smootherCutoff(1), q: Q_BUTTER }] : [{ ...t.post }];
+  return { branches, post };
+}
+
+export type BufferName =
+  | "hover"
+  | "tick"
+  | "click"
+  | "pulse-radio"
+  | "pulse-glass"
+  | "pulse-soft"
+  | "progress-q3"
+  | "progress-q6"
+  | "progress-q9"
+  | "progress-q12";
+
+export type ExcitationName = "A" | "0.30" | "0.15" | "0.05";
+
+export interface BufferSpec {
+  exc: ExcitationName;
+  spec: ResonatorSpec;
+}
+
+const bp = (f: number, q: number, gainDb = 0): ResonatorBranch => ({ type: "bandpass", f, q, gainDb });
+
+/** Vorgerenderte Einzelklänge (E.5) – Resonatoren nur auf Harmonischen von F_STAR. */
+export const BUFFER_SPECS: Record<BufferName, BufferSpec> = {
+  hover: { exc: "A", spec: { branches: [bp(harmonic(16), 12)], post: [] } },
+  tick: { exc: "A", spec: { branches: [bp(harmonic(18), 16)], post: [] } },
+  click: { exc: "0.30", spec: { branches: [bp(harmonic(6), 6), bp(harmonic(2), 2.5, -4)], post: [] } },
+  "pulse-radio": { exc: "0.30", spec: timbreSpec("radio") },
+  "pulse-glass": { exc: "0.30", spec: timbreSpec("glass") },
+  "pulse-soft": { exc: "0.30", spec: timbreSpec("soft") },
+  "progress-q3": { exc: "0.30", spec: timbreSpec("radio", { coreQ: 3 }) },
+  "progress-q6": { exc: "0.30", spec: timbreSpec("radio", { coreQ: 6 }) },
+  "progress-q9": { exc: "0.30", spec: timbreSpec("radio", { coreQ: 9 }) },
+  "progress-q12": { exc: "0.30", spec: timbreSpec("radio", { coreQ: 12 }) },
+};
+
+/** Fester Seed der Anregungen – Puffer und Normierung sind dadurch reproduzierbar. */
+export const EXCITATION_SEED = 1919;
+
+/** Die vier Anregungen (excA = nur Impuls) für eine Abtastrate. */
+export function makeExcitations(sr: number, seed = EXCITATION_SEED): Record<ExcitationName, Float32Array> {
+  const rng = mulberry32(seed);
+  const a = new Float32Array(Math.max(1, Math.round(0.004 * sr)));
+  a[0] = 1;
+  return { A: a, "0.30": makeExcitation(sr, 0.3, rng), "0.15": makeExcitation(sr, 0.15, rng), "0.05": makeExcitation(sr, 0.05, rng) };
+}
+
+/** Anregung passend zur Pulsfrequenz (nächstliegende Variante zu noise(f)). */
+export const excitationFor = (f: number): ExcitationName => (["0.30", "0.15", "0.05"] as const)[nearestNoiseVariant(noiseShare(f))];
+
+/** Normierung einer Stimme: norm = 1/Spitze der Antwort auf exc0.30 (E.5). */
+export function voiceNorm(exc030: Float32Array, timbre: Timbre, sr: number, step: number | null = null): number {
+  const p = responsePeak(exc030, timbreSpec(timbre, { step, smootherHz: smootherCutoff(1) }), sr);
+  return p > 0 ? 1 / p : 1;
+}
+
+/** Index des progress-Puffers für value 0..1 (Kern-Q 3/6/9/12, nächster Wert). */
+export function progressBuffer(value: number): BufferName {
+  const q = 3 + 9 * clamp(Number.isFinite(value) ? value : 0, 0, 1);
+  const qs = [3, 6, 9, 12] as const;
+  let best: (typeof qs)[number] = 3;
+  for (const c of qs) if (Math.abs(c - q) < Math.abs(best - q)) best = c;
+  return `progress-q${best}`;
+}
+
+// ---------------------------------------------------------------------------
+// Simulation Klickzug ↔ Tonschicht (Prüfung der Formel g_t)
+// ---------------------------------------------------------------------------
+
+/** Klickzug: Anregung exc mit Amplitude amp alle 1/f s (auf ganze Samples gerundet). */
+export function renderClickTrain(f: number, sr: number, len: number, exc: Float32Array, amp = 1): Float32Array {
+  const y = new Float32Array(len);
+  const period = sr / f;
+  for (let k = 0; ; k++) {
+    const n0 = Math.round(k * period);
+    if (n0 >= len) break;
+    for (let i = 0; i < exc.length && n0 + i < len; i++) y[n0 + i] += amp * exc[i];
+  }
+  return y;
+}
+
+/** Harmonischen-Summe wie die PeriodicWave (real[n] = 1, ohne Normierung) mit Gain g. */
+export function renderHarmonicTone(f: number, sr: number, len: number, g: number, nMax = 256): Float32Array {
+  const y = new Float32Array(len);
+  const top = Math.min(nMax, Math.floor((sr / 2 - 1) / f));
+  for (let n = 1; n <= top; n++) {
+    const w = (2 * Math.PI * n * f) / sr;
+    for (let i = 0; i < len; i++) y[i] += g * Math.cos(w * i);
+  }
+  return y;
+}
+
+// ---------------------------------------------------------------------------
+// Pegel-Kalibrierung für Rauschen und RFI (rein, zwischengespeichert)
+// ---------------------------------------------------------------------------
+
+const calCache = new Map<string, number>();
+let calNoise: { sr: number; data: Float32Array } | null = null;
+
+function calibrationNoise(sr: number): Float32Array {
+  if (!calNoise || calNoise.sr !== sr) calNoise = { sr, data: pinkNoise(16384, mulberry32(7)) };
+  return calNoise.data;
+}
+
+/** RMS von rosa Rauschen (RMS 0,25) hinter einer Filterkette (Zweige parallel, Anteile linear). */
+export function filteredNoiseRms(branches: { spec: FilterSpec; share: number }[], sr: number): number {
+  const key = `n|${sr}|${branches.map((b) => `${b.spec.type}${b.spec.f.toFixed(1)}/${b.spec.q.toFixed(2)}*${b.share}`).join(",")}`;
+  const hit = calCache.get(key);
+  if (hit !== undefined) return hit;
+  const x = calibrationNoise(sr);
+  const sum = new Float32Array(x.length);
+  for (const b of branches) {
+    const y = filterSignal(x, biquadCoeffs(b.spec.type, b.spec.f, b.spec.q, sr));
+    for (let i = 0; i < y.length; i++) sum[i] += b.share * y[i];
+  }
+  const r = Math.max(1e-6, rmsOf(sum, 2048));
+  calCache.set(key, r);
+  return r;
+}
+
+/** Spitze eines 50-Hz-Sägezahns hinter BP 300 Q 1,2 und LP 900 (für den RFI-Fehlerklang). */
+export function rfiPeak(sr: number): number {
+  const key = `rfi|${sr}`;
+  const hit = calCache.get(key);
+  if (hit !== undefined) return hit;
+  let y = sawtooth(50, sr, Math.round(0.2 * sr));
+  y = filterSignal(y, biquadCoeffs("bandpass", 300, 1.2, sr));
+  y = filterSignal(y, biquadCoeffs("lowpass", 900, Q_BUTTER, sr));
+  const p = Math.max(1e-6, peakOf(y.subarray(Math.round(0.05 * sr))));
+  calCache.set(key, p);
+  return p;
+}
+
+/** Spitzen-Faktor (Crest) für Rauschen: Spitze ≈ RMS + 12 dB. */
+export const NOISE_CREST_DB = 12;
