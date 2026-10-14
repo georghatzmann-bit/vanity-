@@ -17,12 +17,12 @@ import {
   foldMean,
   makeRows,
   noiseRow,
+  foldRowPoint,
   plotX,
   probeGain,
-  rayTarget,
-  ringTarget,
   rowBaseY,
   sumPoint,
+  sumToRingPolar,
   type Row,
 } from "../obs/ridgeline";
 import { mulberry32 } from "../obs/rng";
@@ -48,8 +48,10 @@ export interface IntroCanvasProps {
 const W = 980;
 const H = 560;
 const TOP = 40;
-/** Panel-Innenfläche für das Bildrauschen */
-const GRAIN_RECT = { x: 211, y: 89, w: 558, h: 322 };
+/** Bildrauschen nur im Plotbereich (x 250–730, y 118–386) */
+const GRAIN_RECT = { x: 250, y: 118, w: 480, h: 268 };
+/** Deckkraft des Bildrauschens (höchstens 5 %) */
+const GRAIN_ALPHA = 0.05;
 const TILE = 128;
 const TILES = 4;
 const NOISE_SIGMA_ROWS = 0.1;
@@ -216,8 +218,9 @@ function rowPath(ctx: CanvasRenderingContext2D, k: number, value: (j: number) =>
     else ctx.lineTo(x, y);
   }
   if (close) {
-    ctx.lineTo(plotX(SAMPLES - 1), base + 1);
-    ctx.lineTo(plotX(0), base + 1);
+    // Deckfüllung bis base + ROW_H: verdeckt dahinterliegende Zeilen auch unterhalb der Grundlinie
+    ctx.lineTo(plotX(SAMPLES - 1), base + ROW_H);
+    ctx.lineTo(plotX(0), base + ROW_H);
     ctx.closePath();
   }
 }
@@ -230,15 +233,19 @@ function drawFrame(ctx: CanvasRenderingContext2D, C: Cache, pal: Palette, rows: 
   if (d.alpha <= 0.001) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, -TOP * dpr);
   ctx.lineJoin = "round";
-  ctx.lineCap = "round";
+  ctx.lineCap = "butt";
 
   const reduced = s.variant === "reduced" || s.variant === "reducedShort";
   /** Überblendung Canvas → SVG-Zeichen */
   const handOver = reduced ? 1 : 1 - s.markAlpha;
   const writtenAlpha = (reduced ? s.panelAlpha : 1) * handOver * d.alpha;
   const noiseAlpha = s.panelAlpha * d.alpha;
+  /** Deckfüllung: deckend in obs-bg; nur die Sichtbarkeit des ganzen Panels (Ein-/Ausblenden) wirkt – Deckkraft der Zeilen nur über die Strichfarbe */
+  const coverAlpha = Math.min(1, s.panelAlpha * d.alpha);
+  const bgFill = css(pal.bg);
+  const stroke = (c: RGB, a: number) => `rgb(${c[0]} ${c[1]} ${c[2]} / ${Math.min(1, Math.max(0, a)).toFixed(3)})`;
 
-  // 1) Bildrauschen im Panel (4 Kacheln, 6 %)
+  // 1) Bildrauschen im Plotbereich (4 Kacheln, 5 %)
   const grain = s.grainAlpha * s.panelAlpha * d.alpha;
   if (grain > 0.001 && C.patterns.length) {
     const pat = C.patterns[d.flicker % C.patterns.length];
@@ -250,7 +257,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, C: Cache, pal: Palette, rows: 
       const ox = (d.flicker * 37) % TILE;
       const oy = (d.flicker * 71) % TILE;
       ctx.translate(GRAIN_RECT.x - ox, GRAIN_RECT.y - oy);
-      ctx.globalAlpha = 0.06 * grain;
+      ctx.globalAlpha = GRAIN_ALPHA * grain;
       ctx.fillStyle = pat;
       ctx.fillRect(0, 0, GRAIN_RECT.w + TILE, GRAIN_RECT.h + TILE);
       ctx.restore();
@@ -276,15 +283,18 @@ function drawFrame(ctx: CanvasRenderingContext2D, C: Cache, pal: Palette, rows: 
     if (written || active) {
       // geschriebene Zeile (bzw. geschriebener Teil) mit Verdeckung
       const val = (j: number) => (written || j <= head ? row.y[j] : n[j] + (k === 1 ? probe * row.signal[j] : 0));
-      ctx.globalAlpha = written ? writtenAlpha : d.alpha;
+      const rowA = written ? writtenAlpha : d.alpha;
+      ctx.globalAlpha = coverAlpha;
       rowPath(ctx, k, val, true);
-      ctx.fillStyle = css(pal.bg);
+      ctx.fillStyle = bgFill;
       ctx.fill();
+      ctx.globalAlpha = 1;
       rowPath(ctx, k, val, false);
       const isCur = k === current;
-      ctx.strokeStyle = css(isCur ? pal.signal : pal.fg2);
+      ctx.strokeStyle = stroke(isCur ? pal.signal : pal.fg2, rowA);
       ctx.lineWidth = isCur ? 1.25 : 1;
       ctx.stroke();
+      ctx.globalAlpha = d.alpha;
       if (active && head >= 0) {
         // Schreibkopf, 1 px gelb
         const x = Math.round(plotX(head)) + 0.5;
@@ -303,13 +313,13 @@ function drawFrame(ctx: CanvasRenderingContext2D, C: Cache, pal: Palette, rows: 
     if (noiseAlpha <= 0.001) continue;
     const c = k === 1 ? probe : 0;
     const val = (j: number) => n[j] + c * row.signal[j];
-    ctx.globalAlpha = noiseAlpha;
+    ctx.globalAlpha = coverAlpha;
     rowPath(ctx, k, val, true);
-    ctx.fillStyle = css(pal.bg);
+    ctx.fillStyle = bgFill;
     ctx.fill();
-    ctx.globalAlpha = noiseAlpha * (0.35 + 0.65 * c);
+    ctx.globalAlpha = 1;
     rowPath(ctx, k, val, false);
-    ctx.strokeStyle = css(c > 0.05 ? pal.fg2 : pal.fg3);
+    ctx.strokeStyle = stroke(c > 0.05 ? pal.fg2 : pal.fg3, noiseAlpha * (0.35 + 0.65 * c));
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -324,11 +334,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, C: Cache, pal: Palette, rows: 
       const [sx, sy] = sumPoint(j, sum[j]);
       let x = sx;
       let y = sy;
-      if (e > 0) {
-        const [tx, ty] = ringTarget(j);
-        x = sx + e * (tx - sx);
-        y = sy + e * (ty - sy);
-      }
+      if (e > 0) [x, y] = sumToRingPolar(j, e, [sx, sy]);
       if (j === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
@@ -345,14 +351,10 @@ function drawFrame(ctx: CanvasRenderingContext2D, C: Cache, pal: Palette, rows: 
       const e = s.rowFold[i - 1];
       if (!(e > 0) || i > s.rowsDone) continue;
       const row = rows[i - 1];
-      const base = rowBaseY(i);
       ctx.beginPath();
       for (let j = 0; j < SAMPLES; j++) {
-        const sx = plotX(j);
-        const sy = base - ROW_H * row.y[j];
-        const [tx, ty] = rayTarget(i, j);
-        const x = sx + e * (tx - sx);
-        const y = sy + e * (ty - sy);
+        // zweistufig: glätten, dann als starres Segment zum Haarstrahl (keine punktweise Interpolation)
+        const [x, y] = foldRowPoint(i, j, row.y[j], e);
         if (j === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }

@@ -77,6 +77,7 @@ const mockListeners = new Map<string, Set<Handler>>();
 const mockEmit = (e: string, p: unknown) => mockListeners.get(e)?.forEach((h) => h(p));
 let mockRun = 0;
 let mockFailOnce = new URLSearchParams(location.search).has("fail");
+let mockUnfailOnce = new URLSearchParams(location.search).has("unfail");
 const MOCK_TOTAL = 11_800_000;
 /** Demo: zuletzt geladene Bytes und Stand für das Fortsetzen */
 let mockBytes = 0;
@@ -109,14 +110,17 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
       const total = MOCK_TOTAL;
       // Demo: `?slow` = Download viermal langsamer (Tick 360 statt 90 ms)
       const tickMs = params.has("slow") ? 360 : 90;
-      // Nach Netzwerkfehler oder Abbruch geht es bei den bisherigen Bytes weiter (wie das echte Backend)
-      let done = Math.min(mockResumeBytes, total);
+      // Nach Netzwerkfehler oder Abbruch geht es bei den bisherigen Bytes weiter (wie das echte Backend).
+      // Demo `&norange`: Server ohne Range – der Download beginnt nach dem Fortsetzen neu bei 0.
+      let done = params.has("norange") ? 0 : Math.min(mockResumeBytes, total);
       const tick = () => {
         if (run !== mockRun) return;
         if (mockFailOnce && done > total * 0.45) {
           mockFailOnce = false;
           mockResumeBytes = done;
-          mockEmit("install://error", { phase: "download", code: "network", message: "Verbindung unterbrochen (Demo)", retryable: true });
+          // Demo `&fatal`: nicht wiederholbarer Fehler (z. B. Prüfsumme)
+          if (params.has("fatal")) mockEmit("install://error", { phase: "verify", code: "checksum", message: "SHA-256 stimmt nicht (Demo)", retryable: false });
+          else mockEmit("install://error", { phase: "download", code: "network", message: "Verbindung unterbrochen (Demo)", retryable: true });
           return;
         }
         const step = 260_000 + Math.random() * 120_000;
@@ -145,6 +149,11 @@ async function mock<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
       setTimeout(() => mockEmit("install://error", { phase: "download", code: "cancelled", message: "", retryable: true }), 100);
       return r(undefined);
     case "start_uninstall": {
+      // Demo: `?unfail` = erste Deinstallation wird sofort abgelehnt (z. B. fehlende Rechte)
+      if (mockUnfailOnce) {
+        mockUnfailOnce = false;
+        throw new Error("Zugriff verweigert (Demo)");
+      }
       const steps: UninstallProgress["step"][] = ["stop", "shortcuts", "registry", "files", "data", "done"];
       steps.forEach((s, i) => setTimeout(() => mockEmit("uninstall://progress", { step: s, percent: ((i + 1) / steps.length) * 100 }), 500 + i * 650));
       // Demo: `?revertfail` zeigt den Fall, dass nicht alles zurückgestellt werden konnte.

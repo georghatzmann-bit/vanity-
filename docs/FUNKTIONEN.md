@@ -214,20 +214,40 @@ Pulsar läuft neben der Uhr weiter: Boost an/aus, Speedtest, zuletzt gespielte S
 
 ## Der Installer
 
-![Intro](screenshots/funktionen/40-setup-intro.jpg)
+Das Setup ist wie ein **Radioteleskop** gebaut: links ein Schirm mit dem Neutronenstern, rechts das Bedienfeld,
+unten die Himmelskoordinaten des Referenz-Pulsars. Eine Akzentfarbe, Haarlinien, Skalen, Messwerte in Monospace –
+kein Glas, keine Farbverläufe, kein Konfetti.
+
+![Intro – gestapeltes Pulsprofil](screenshots/funktionen/40-setup-intro.jpg)
+![Intro – Signal erfasst](screenshots/funktionen/40b-setup-signal-erfasst.jpg)
 ![Willkommen](screenshots/funktionen/41-setup-willkommen.jpg)
 ![Ordner](screenshots/funktionen/42-setup-ordner.jpg)
 ![Optionen](screenshots/funktionen/43-setup-optionen.jpg)
-![Download](screenshots/funktionen/44-setup-download.jpg)
+![Download – Vela-Bereich](screenshots/funktionen/44-setup-download.jpg)
+![Download – Ton-Bereich](screenshots/funktionen/44b-setup-ton.jpg)
 ![Fertig](screenshots/funktionen/45-setup-fertig.jpg)
 ![Fehler](screenshots/funktionen/46-setup-fehler.jpg)
 ![Wartung](screenshots/funktionen/47-setup-wartung.jpg)
 ![Deinstallieren](screenshots/funktionen/48-setup-deinstallieren.jpg)
+![Signal verloren](screenshots/funktionen/48b-setup-signal-verloren.jpg)
 
-- **Intro** mit Druckwellen, Sternenstaub und „Signal wird aufgebaut … Signal steht.“ (mit Ton, abschaltbar).
+- **Intro:** Rauschen, ein Frequenzregler sucht und rastet auf **PSR B1919+21** ein (der erste Pulsar, 1967 entdeckt von
+  Jocelyn Bell Burnell und Antony Hewish, Periode 1,3373 s). Zwei Pulse kommen in Echtzeit, der Rest des gestapelten
+  Pulsprofils im beschrifteten Zeitraffer; dann falten sich die Linien zum Pulsar-Zeichen: „Signal erfasst.“
+  Mit Klick oder Taste überspringbar. Das Profil ist **simuliert** und so beschriftet.
+- **Installation:** Der Fortschritt treibt die Drehung des Sterns an – vom Takt von B1919+21 über Vela (89 ms) und
+  den Krebsnebel-Pulsar (33,7 ms) bis zum Millisekunden-Pulsar J0437−4715 (5,76 ms). Man hört, wie aus einzelnen
+  Klicks ein Knattern, ein Schnarren und am Ende ein Ton wird. Die Drehung ist **Inszenierung** (so beschriftet);
+  Bytes, Rate und Restzeit rechts sind **gemessen**.
+- **Fertig:** Ein Stroboskop friert den Stern ein, die Strahlen werden zum Zeichen, der Ton löst sich in seine
+  Obertöne auf: „Signal steht.“ **Deinstallieren** läuft rückwärts – der Stern wird langsamer, der Ton zerfällt in
+  Klicks und Rauschen: „Signal verloren.“
+- **Klang:** „Pulsar-Sonifikation“ – nur Web Audio, keine Dateien, keine Melodien (Puls-Klicks, Rauschen, fallende
+  Dispersions-Sweeps, ein Akkord aus den Obertönen des Endtons). Leise Grundlautstärke, Knopf **Ton** oben bzw.
+  Taste **M**. Die Einstellung „Bewegung reduzieren“ von Windows wird beachtet (Standbilder, Ton bleibt).
 - **Willkommen** → **Speicherort** (freier Platz, Adminrechte nur wenn nötig) → **Optionen** (Desktop, Startmenü, Autostart, danach starten) → **Installation**.
 - **Speicherort:** Vorgeschlagen ist dein Benutzerordner (ohne Adminrechte). Wer DNS oder die zwei Netzwerk-Einstellungen von Pulsar ändern lässt, wählt mit **Ändern** besser `C:\Program Files` – dort können andere Programme unter deinem Konto die Pulsar-Dateien nicht verändern. Das Setup fragt dafür einmal nach Adminrechten.
-- Download mit Fortschrittsring, Tempo, Restzeit und wechselnden Tipps; SHA-256-Prüfung; Verknüpfungen; Eintrag in „Apps & Features“.
+- Download mit gemessenem Fortschritt, Tempo, Restzeit, Dauer jeder Phase und wechselnden Notizen; SHA-256-Prüfung; Verknüpfungen; Eintrag in „Apps & Features“.
 - Bricht das Internet ab: **Erneut versuchen** setzt den Download an der Stelle fort.
 - Ist Pulsar schon installiert: **Aktualisieren/Reparieren** oder **Deinstallieren** (mit „Meine Daten behalten“). Vor dem Löschen stellt der Deinstaller alle Windows-Einstellungen zurück, die Pulsar geändert hat (DNS und Optimierungen) – braucht das Adminrechte, fragt Windows einmal nach.
 - Klappt das Zurückstellen nicht ganz (z. B. Windows-Abfrage abgelehnt), wird Pulsar trotzdem entfernt, aber deine Pulsar-Daten mit den Sicherungen bleiben **immer** erhalten – auch ohne „Meine Daten behalten“. Die Fertig-Seite sagt das in einem gelben Hinweis und erklärt, wie du es nachholst (neu installieren → **Optimieren** → **Alles zurückstellen**).

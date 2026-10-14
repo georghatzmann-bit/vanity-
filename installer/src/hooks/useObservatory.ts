@@ -50,12 +50,18 @@ export const UNINSTALL_TIMING = {
 export const ERROR_TIMING = { dropoutRampS: 0.3, voiceStopMs: 400, bedDb: -38, bedHoldMs: 100, bedFadeS: 2.5 } as const;
 export const HALT_TIMING = { voiceStopMs: 2400, voiceFadeS: 0.6 } as const;
 export const RELOCK_MS = 300;
+/** Tag „Rastet ein …“ steht mindestens so lange (bzw. bis zum ersten echten Fortschritt danach) */
+export const RELOCK_TAG_MS = 800;
+/** Sicherheitsnetz: spätestens dann wieder „installing“ */
+export const RELOCK_TAG_MAX_MS = 2500;
+/** Vorlauf für geplante Pulse (Latenz-Offset): der erste Puls liegt nie in der Vergangenheit */
+export const PULSE_LEAD_S = 0.08;
 /** E.6 Gewöhnung */
 export const HABITUATION = { afterMs: 20000, level: 0.4, downS: 3, upS: 0.5 } as const;
 
 /** Regelgesetze (F.2 Tabelle) */
 export const CONTROL = {
-  install: { tauS: 0.6, maxOctPerS: 2 },
+  install: { tauS: 0.35, maxOctPerS: 5 },
   done: { tauS: 0.15, maxOctPerS: 3 },
   halt: { tauS: 0.5, maxOctPerS: 5 },
   idle: { tauS: 0.6, maxOctPerS: 3 },
@@ -111,6 +117,11 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
   const voiceRef = useRef<PulseVoice | null>(null);
   const chordRef = useRef<ChordHandle | null>(null);
   const bedOn = useRef(false);
+  /** Ziel-Frequenz des Antriebs (Referenz folgt dem Ziel, nicht dem nachlaufenden Modell) */
+  const targetF = useRef<number>(REFERENCES.b1919.freqHz);
+  /** letzter Antrieb x der Installation (Fehler friert dessen Periode ein, Fortsetzen rastet daran ein) */
+  const lastX = useRef(0);
+  const relock = useRef<{ minDone: boolean; progressed: boolean; atX: number }>({ minDone: false, progressed: false, atX: 0 });
   const timers = useRef(new Set<number>());
   const habit = useRef<{ timer: number | undefined; lowered: boolean; phase: string }>({ timer: undefined, lowered: false, phase: "" });
 
@@ -121,7 +132,7 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
     const patch = (p: Patch, newMode = false) =>
       setState((s) => {
         const next = { ...s, ...p, model: modelRef.current };
-        if (newMode) next.modeSince = now();
+        if (newMode && p.modeSince === undefined) next.modeSince = now();
         stateRef.current = next;
         return next;
       });
@@ -141,7 +152,10 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
 
     // --- Modell
     const freqNow = () => modelRef.current.freqAt(now());
-    const target = (f: number, c: { tauS: number; maxOctPerS: number }) => modelRef.current.setTarget({ f, ...c });
+    const target = (f: number, c: { tauS: number; maxOctPerS: number }) => {
+      targetF.current = f;
+      modelRef.current.setTarget({ f, ...c });
+    };
     const replaceModel = (f: number, phi0 = LOGO_PHASE) => {
       const m = new SpinModel({ t0: now(), f0: f, phi0 });
       modelRef.current = m;
@@ -231,26 +245,41 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
       setMode("installed", { heard: null, showMark: true, reference: "j0437" });
     };
 
+    const endRelock = () => {
+      if (stateRef.current.mode !== "relock") return;
+      setMode("installing", { heard: heardAs(freqNow()) });
+    };
+
     const onInstallStart = (retry: boolean) => {
       clearTimers();
       releaseChord();
+      if (!retry) lastX.current = 0;
       const s = stateRef.current;
       const fB = REFERENCES.b1919.freqHz;
       if (!retry && (s.showMark || Math.abs(ln(freqNow() / fB)) > 0.05)) replaceModel(fB);
       if (!retry) target(fB, CONTROL.install);
+      // Fortsetzen: sofort auf den letzten Stand hochdrehen (läuft während „Rastet ein …“, kein Stillstand auf B1919)
+      else target(1 / periodForProgress(lastX.current), CONTROL.install);
       habitStop();
       if (retry) {
-        // Fortsetzen: kurz „Rastet ein …“, Rauschbett sucht 1800 → 1042 Hz, dann Puls und Stimme
+        // Fortsetzen: „Rastet ein …“, Rauschbett sucht 1800 → 1042 Hz, nach 300 ms Puls und Stimme.
+        // Der Tag steht mindestens 800 ms bzw. bis zum ersten echten Fortschritt (x ≥ letzter Stand).
         setMode("relock", { heard: null, showMark: false });
+        relock.current = { minDone: false, progressed: false, atX: lastX.current };
         bedSet(-40, 0.02, 1800, 4);
         bed().follow(relockCurve(), { at: now() + 0.02, durS: 0.3 });
         later(() => {
           sound.pulse({ timbre: "radio", gainDb: -16 });
           bedStop(0.1);
           startVoice(0.1);
-          setMode("installing", { heard: heardAs(freqNow()) });
+          patch({ heard: heardAs(freqNow()) });
           habitPhase(flowRef.current.progress?.phase ?? "resume");
         }, RELOCK_MS);
+        later(() => {
+          relock.current.minDone = true;
+          if (relock.current.progressed) endRelock();
+        }, RELOCK_TAG_MS);
+        later(endRelock, RELOCK_TAG_MAX_MS);
         return;
       }
       setMode("installing", { heard: heardAs(freqNow()), showMark: false });
@@ -264,6 +293,11 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
       if (mode !== "installing" && mode !== "relock") return;
       const x = driveFor("install", { progress: p, unProgress: null });
       target(1 / periodForProgress(x), CONTROL.install);
+      if (mode === "relock" && p.phase !== "connect" && x >= relock.current.atX - 1e-9) {
+        relock.current.progressed = true;
+        if (relock.current.minDone) endRelock();
+      }
+      if (p.phase !== "connect") lastX.current = x;
       if (mode === "installing") {
         const db = installNoiseDb(x);
         if (db === null) bedStop(0.6);
@@ -275,8 +309,15 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
     const onError = (code: ErrorCode) => {
       clearTimers();
       habitStop();
-      // Stern dreht mit der eingefrorenen Periode weiter
-      target(freqNow(), CONTROL.install);
+      // Stern dreht mit der Ist-Frequenz weiter (eingefroren, ohne Sprung auf die Zielfrequenz)
+      const st = stateRef.current.mode;
+      if (st === "installing" || st === "relock") {
+        const m = modelRef.current;
+        const t = now();
+        const fx = m.freqAt(t);
+        replaceModel(fx, m.phaseAt(t));
+        target(fx, CONTROL.install);
+      } else target(freqNow(), CONTROL.install);
       setMode("error", { errorCode: code, heard: null });
       sound.play("error");
       const v = voiceRef.current;
@@ -341,7 +382,8 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
       target(F_STAR, CONTROL.install);
       startVoice(0.15);
       const heard = heardAs(F_STAR);
-      if (reducedRef.current) {
+      // Kein Zeichen sichtbar (z. B. „Erneut versuchen“ nach einem Fehler): ohne Wandlung Zeichen → Stern
+      if (reducedRef.current || !stateRef.current.showMark) {
         setMode("uninstalling", { heard, showMark: false, reference: "j0437" });
         return;
       }
@@ -361,7 +403,8 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
     const onUnDone = (d: UninstallDone) => {
       clearTimers();
       habitStop();
-      const td = now();
+      // Pulse mit Vorlauf, damit der erste nicht in der Vergangenheit liegt (Abstände bleiben exakt)
+      const td = now() + PULSE_LEAD_S;
       target(DECAY_FREQ, CONTROL.decay);
       stopVoice(0.05);
       const [p1, p2, p3] = UNINSTALL_TIMING.pulsesMs;
@@ -382,10 +425,11 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
         setMode("lost", { heard: null, showMark: false });
         return;
       }
-      setMode("decay", { heard: null, showMark: false });
+      // Bild-Zeitachse = Ton-Zeitachse (t_d); „Signal verloren“ erst nach dem Zerfall
+      setMode("decay", { heard: null, showMark: false, modeSince: td });
       later(() => {
         if (stateRef.current.mode === "decay") setMode("lost");
-      }, UNINSTALL_TIMING.decayToMs);
+      }, UNINSTALL_TIMING.decayToMs + PULSE_LEAD_S * 1000);
     };
 
     const onStep = (step: string) => {
@@ -437,7 +481,9 @@ export function useObservatory(flow: SetupFlow, reduced: boolean): ObsState {
       m.prune(t - 3);
       if (s.showMark || s.mode === "strobe") return;
       const f = m.freqAt(t);
-      const reference: RefId = nearestReference(1 / f);
+      // Referenz aus dem Ziel des Antriebs (nicht aus dem nachlaufenden Modell)
+      const fRef = s.mode === "installing" || s.mode === "relock" || s.mode === "error" || s.mode === "release" || s.mode === "uninstalling" ? targetF.current : f;
+      const reference: RefId = nearestReference(1 / fRef);
       const heard = s.heard === "chord" ? "chord" : voiceModes(s.mode) && (s.mode !== "halted" || s.heard !== null) ? heardAs(f) : s.heard;
       if (reference !== s.reference || heard !== s.heard) patch({ reference, heard });
     }, 100);

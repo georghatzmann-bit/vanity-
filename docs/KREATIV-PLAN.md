@@ -40,6 +40,8 @@ Verbindungsnote (wie gleichmäßig pulst deine Leitung?).
 
 ## Der Installer
 
+Vollständige Spezifikation (Design-Workflow mit 4 Entwürfen und Jury): [INSTALLER-DESIGN.md](INSTALLER-DESIGN.md).
+
 **Das Setup ist ein Radioteleskop.** Statt Glas, Glühen und Fortschrittskugel: Graphitfläche, 1-px-Haarlinien,
 Inter für Text, IBM Plex Mono für Messwerte und Beschriftungen, und genau **eine** Signalfarbe (Gelb wie Kanal 1
 am Oszilloskop) für Strahlen, Nadeln und Marken. Knöpfe sind knochenweiß, nie gelb.

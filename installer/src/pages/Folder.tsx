@@ -1,4 +1,5 @@
 /** Speicherort (C.4) */
+import { useRef } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { RAIL } from "../flow/useSetupFlow";
 import { useT } from "../i18n";
@@ -12,8 +13,15 @@ import type { PageViewProps } from "./Welcome";
 
 export function Folder({ flow }: PageViewProps) {
   const t = useT();
-  const { opts, setOpts, disk, info, requiredOk } = flow;
-  const bad = disk && (!disk.valid || disk.free < disk.required);
+  const { opts, setOpts, disk, info, requiredOk, checking } = flow;
+  const bad = !checking && disk !== null && (!disk.valid || disk.free < disk.required);
+  // Hinweis bleibt im DOM (aria-live polite): Beim Tippen wird er nicht entfernt und neu eingefügt
+  // (sonst sagte jede Tipp-Pause ihn erneut assertiv an). Während der Prüfung bleibt der letzte Text stehen.
+  const current: { tone: "error" | "warn"; text: string } | null =
+    !checking && disk && (bad || disk.needsAdmin) ? (bad ? { tone: "error", text: !disk.valid ? (disk.message ?? t("folder.invalid")) : t("folder.lowSpace") } : { tone: "warn", text: t("folder.needsAdmin") }) : null;
+  const shownRef = useRef(current);
+  if (!checking) shownRef.current = current;
+  const shown = shownRef.current;
   return (
     <Page testId="page-folder">
       <Block y={56}>
@@ -26,7 +34,7 @@ export function Folder({ flow }: PageViewProps) {
         <p className="obs-body">{t("folder.text")}</p>
       </Block>
       <Block y={224}>
-        <PathField label={t("folder.label")} value={opts.dir} onChange={(v) => setOpts({ ...opts, dir: v })} invalid={Boolean(bad)} describedBy={disk && (bad || disk.needsAdmin) ? "folder-notice" : undefined} />
+        <PathField label={t("folder.label")} value={opts.dir} onChange={(v) => setOpts({ ...opts, dir: v })} invalid={bad} describedBy={shown ? "folder-notice" : undefined} />
       </Block>
       <Block y={292} className="flex justify-end gap-2">
         {info && opts.dir !== info.defaultDir && (
@@ -41,21 +49,15 @@ export function Folder({ flow }: PageViewProps) {
       <Block y={352}>
         <DiskScale disk={disk} />
       </Block>
-      {disk && (bad || disk.needsAdmin) && (
-        <Block y={448}>
-          <div id="folder-notice">
-            {bad ? (
-              <Notice tone="error" role="alert" compact>
-                {!disk.valid ? (disk.message ?? t("folder.invalid")) : t("folder.lowSpace")}
-              </Notice>
-            ) : (
-              <Notice tone="warn" role="status" compact>
-                {t("folder.needsAdmin")}
-              </Notice>
-            )}
-          </div>
-        </Block>
-      )}
+      <Block y={448}>
+        <div id="folder-notice" aria-live="polite" aria-atomic="true" data-testid="folder-notice">
+          {shown && (
+            <Notice tone={shown.tone} compact>
+              {shown.text}
+            </Notice>
+          )}
+        </div>
+      </Block>
       <Footer
         left={
           <ObsButton variant="ghost" className="-ml-2" icon={<ArrowLeft aria-hidden />} onClick={() => flow.go("welcome", -1)}>

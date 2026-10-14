@@ -84,6 +84,11 @@
 :root[data-skin="obs"].nv-window-leave #root {
   filter: none;
 } /* Fenster-Abschied ohne Unschärfe */
+/* Das X öffnet nur die Rückfrage bzw. den Warte-Hinweis (Installation/Deinstallation läuft): kein Ausblenden */
+:root[data-skin="obs"][data-close-guarded].nv-window-leave #root {
+  opacity: 1;
+  transform: none;
+}
 :root[data-skin="obs"] ::selection {
   background: rgb(242 213 60 / 0.3);
 }
@@ -201,7 +206,7 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 1px 5px;
-    border: 1px solid var(--obs-rule-strong);
+    border: var(--hair, 1px) solid var(--obs-rule-strong);
     border-radius: 2px;
     color: var(--obs-fg-3);
     white-space: nowrap;

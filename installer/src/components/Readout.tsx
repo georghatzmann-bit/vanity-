@@ -31,10 +31,28 @@ export const bytes = (b: number) => nb(formatBytes(b));
 /** formatEta mit NBSP */
 export const eta = (s: number) => nb(formatEta(s));
 
+/**
+ * Große Mono-Ziffern (≥ 24 px): Das Dezimaltrennzeichen füllt sonst eine ganze Mono-Zelle und reißt
+ * ein Loch („47 ,1“ liest sich wie zwei Zahlen). Trennzeichen in einen Span mit −0,15em links und rechts.
+ */
+export function TightDecimal({ text }: { text: string }) {
+  const m = /^(.*\d)([.,])(\d.*)$/.exec(text);
+  if (!m) return <>{text}</>;
+  return (
+    <>
+      {m[1]}
+      <span className="obs-decimal" style={{ marginInline: "-0.15em" }}>
+        {m[2]}
+      </span>
+      {m[3]}
+    </>
+  );
+}
+
 export function Readout({ label, value, unit, unitGap = true, size, tone = "fg", layout = "stack", valueRef, testId, dataValue, className }: ReadoutProps) {
   const v = (
     <span className={cn("obs-value", `obs-value-${size}`, TONE[tone])} data-testid={testId} data-value={dataValue}>
-      <span ref={valueRef}>{value}</span>
+      <span ref={valueRef}>{size === "xl" ? <TightDecimal text={value} /> : value}</span>
       {unit && (
         <span className="obs-unit">
           {unitGap ? NBSP : ""}

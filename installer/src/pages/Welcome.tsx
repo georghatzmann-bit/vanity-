@@ -17,7 +17,7 @@ export interface PageViewProps {
 
 export function Welcome({ flow }: PageViewProps) {
   const t = useT();
-  const { manifest, manifestError, info } = flow;
+  const { manifest, manifestError } = flow;
   const size = manifest?.app.size;
   const features = [
     { a: t("welcome.f1"), b: t("welcome.f1d") },
@@ -30,9 +30,7 @@ export function Welcome({ flow }: PageViewProps) {
         <StepScale steps={RAIL.map((s) => t(`steps.${s}`))} current={0} />
       </Block>
       <Block y={120}>
-        <div className="obs-label">
-          PULSAR {manifest?.version ?? info?.setupVersion ?? DASH} · {t("welcome.eyebrow")}
-        </div>
+        <div className="obs-label">{t("welcome.eyebrow")}</div>
       </Block>
       <Block y={136}>
         <Title>{t("welcome.title")}</Title>
@@ -64,13 +62,11 @@ export function Welcome({ flow }: PageViewProps) {
           <div className="obs-label" data-testid="manifest-line">
             {manifest ? (
               <>
-                {t("welcome.version", { v: manifest.version })} · {size ? t("welcome.size", { size: bytes(size) }) : `${t("welcome.size", { size: DASH })}`}
+                {size ? t("welcome.size", { size: bytes(size) }) : t("welcome.size", { size: DASH })}
                 {manifest.app.sha256 ? ` · ${t("welcome.sha")}` : ""}
               </>
             ) : (
-              <>
-                {t("welcome.version", { v: DASH })} · {t("welcome.size", { size: DASH })}
-              </>
+              <>{t("welcome.size", { size: DASH })}</>
             )}
           </div>
         )}

@@ -55,7 +55,7 @@ const de = {
     error: "Fehler",
   },
   welcome: {
-    title: "Willkommen bei PULSAR",
+    title: "Willkommen bei Pulsar",
     text: "Pulsar misst deine Verbindung live, macht deinen PC mit einem Klick bereit zum Spielen und zeigt dir ehrlich, wo es hakt – ohne Konto. Adminrechte braucht Pulsar nur, wenn du den DNS oder zwei Netzwerk-Einstellungen änderst; dann fragt Windows nach.",
     f1: "Live-Ping mit Note",
     f1d: "A+ bis F – zu echten Spielservern",
@@ -73,7 +73,8 @@ const de = {
   },
   maintenance: {
     title: "Pulsar ist schon installiert",
-    text: "Version {v} liegt in {dir}. Was möchtest du tun?",
+    text: "Version {v} ist installiert. Was möchtest du tun?",
+    folder: "Ordner",
     update: "Aktualisieren oder reparieren",
     updateDesc: "Lädt die neueste Version. Deine Berichte und Einstellungen bleiben erhalten.",
     uninstall: "Deinstallieren",
@@ -82,7 +83,7 @@ const de = {
   },
   folder: {
     title: "Wohin soll Pulsar?",
-    text: "Der vorgeschlagene Ordner braucht keine Administratorrechte.",
+    text: "Pulsar schlägt einen Ordner ohne Administratorrechte vor.",
     browse: "Ändern",
     reset: "Vorschlag",
     required: "Benötigt",
@@ -109,6 +110,7 @@ const de = {
   },
   install: {
     title: "Pulsar wird installiert",
+    failedTitle: "Installation unterbrochen",
     updateTitle: "Update auf Version {v}",
     phases: {
       connect: "Verbinden",
@@ -134,10 +136,12 @@ const de = {
     failed: "Abbruch",
     ok: "OK",
     resumedAt: "Fortgesetzt bei {size}",
+    restarted: "Server unterstützt kein Fortsetzen – Download beginnt neu",
     cancelTitle: "Installation abbrechen?",
     cancelKeep: "Weiter installieren",
     cancelConfirmBtn: "Installation abbrechen",
     cancelledText: "Bereits geladene Daten bleiben für einen späteren Versuch erhalten.",
+    cancelled: "Installation angehalten",
     phaseStatus: "Phase {n}/{total} · {phase}",
     tips: {
       t1: "Pulsar vergibt eine Note von A+ bis F – wie in der Schule, nur für deinen Ping.",
@@ -155,9 +159,9 @@ const de = {
     manifest: "Download-Infos nicht gefunden",
     running: "Pulsar läuft noch",
     cancelled: "Installation abgebrochen",
-    unknown: "Etwas ist schiefgelaufen",
+    unknown: "Unbekannter Fehler",
     retry: "Erneut versuchen",
-    resumeHint: "Keine Sorge: Der Download wird an der Stelle fortgesetzt, an der er unterbrochen wurde.",
+    resumeHint: "Der Download wird, wenn der Server es erlaubt, an der Stelle fortgesetzt, an der er unterbrochen wurde.",
     closeApp: "Pulsar schließen und weiter",
     back: "Zurück",
   },
@@ -172,6 +176,12 @@ const de = {
     verified: "Prüfsumme SHA-256 geprüft",
     autoLaunchShort: "Autostart in {n} s",
     restartIn: "Neustart in {n} s",
+    log: "Protokoll",
+    logTotal: "Gesamtdauer",
+    logBytes: "Übertragen",
+    logBytesResumed: "Übertragen (fortgesetzt)",
+    starting: "Startet …",
+    logRate: "Mittlere Rate",
   },
   uninstall: {
     title: "Pulsar deinstallieren?",
@@ -181,17 +191,32 @@ const de = {
     confirm: "Deinstallieren",
     cancel: "Abbrechen",
     running: "Pulsar wird entfernt …",
+    failedTitle: "Entfernen unterbrochen",
     eyebrow: "Deinstallation",
     kept: "Behalten",
     stepsLabel: "Schritte",
     stepStatus: "Schritt {n}/{total} · {step}",
+    busyClose: "Deinstallation läuft – bitte warten.",
+    failedStatus: "Abbruch",
+    retry: "Erneut versuchen",
+    log: "Protokoll",
+    logRemoved: "Entfernt",
+    logRemovedValue: "{n}/{total} Schritte",
+    logData: "Daten",
+    logDataKept: "Behalten",
+    logDataDeleted: "Gelöscht",
+    logSettings: "Einstellungen",
+    logSettingsYes: "Zurückgestellt",
+    logSettingsPartial: "Teilweise zurückgestellt",
     steps: { stop: "Pulsar beenden, Einstellungen zurückstellen", shortcuts: "Verknüpfungen entfernen", registry: "Windows-Einträge entfernen", files: "Dateien löschen", data: "Daten aufräumen" },
     doneTitle: "Signal verloren.",
     doneText: "Pulsar wurde entfernt. Du bist jederzeit wieder willkommen.",
-    revertFailed: "Einige Windows-Einstellungen (DNS oder Netzwerk) konnten nicht sicher zurückgestellt werden – zum Beispiel, weil die Windows-Abfrage abgelehnt wurde.",
+    revertFailed: "Nicht alles zurückgestellt",
+    revertFailedText: "Einige Windows-Einstellungen (DNS, Netzwerk) wurden nicht zurückgestellt, etwa weil die Windows-Abfrage abgelehnt wurde.",
     revertFailedKept: "Deine Pulsar-Daten mit den Sicherungen bleiben erhalten.",
-    revertFailedForced: "Deshalb wurden deine Pulsar-Daten nicht gelöscht – dort liegen die Sicherungen, mit denen sich alles exakt zurückstellen lässt.",
-    revertFailedHow: "So stellst du zurück: Pulsar neu installieren und auf der Seite Optimieren oben auf „Alles zurückstellen“ klicken – oder gleich wieder deinstallieren und der Windows-Abfrage zustimmen.",
+    revertFailedForced: "Deine Pulsar-Daten bleiben deshalb erhalten – dort liegen die Sicherungen.",
+    revertFailedHow: "Pulsar neu installieren und auf der Seite Optimieren oben „Alles zurückstellen“ klicken",
+    revertFailedHow2: "oder erneut deinstallieren und der Windows-Abfrage zustimmen",
   },
   common: { next: "Weiter", back: "Zurück", close: "Schließen", mute: "Ton aus", unmute: "Ton an", sound: "Ton", language: "Sprache" },
   a11y: {
@@ -262,7 +287,7 @@ const en: Dict = {
     error: "Error",
   },
   welcome: {
-    title: "Welcome to PULSAR",
+    title: "Welcome to Pulsar",
     text: "Pulsar measures your connection live, gets your PC ready to play with one click and tells you honestly where the lag comes from – no account. Pulsar only needs admin rights when you change the DNS or two network settings; Windows asks first.",
     f1: "Live ping with a grade",
     f1d: "A+ to F – against real game servers",
@@ -280,7 +305,8 @@ const en: Dict = {
   },
   maintenance: {
     title: "Pulsar is already installed",
-    text: "Version {v} is in {dir}. What would you like to do?",
+    text: "Version {v} is installed. What would you like to do?",
+    folder: "Folder",
     update: "Update or repair",
     updateDesc: "Downloads the latest version. Your reports and settings are kept.",
     uninstall: "Uninstall",
@@ -289,7 +315,7 @@ const en: Dict = {
   },
   folder: {
     title: "Where should Pulsar live?",
-    text: "The suggested folder does not need administrator rights.",
+    text: "Pulsar suggests a folder that needs no administrator rights.",
     browse: "Change",
     reset: "Suggestion",
     required: "Required",
@@ -316,6 +342,7 @@ const en: Dict = {
   },
   install: {
     title: "Installing Pulsar",
+    failedTitle: "Installation interrupted",
     updateTitle: "Updating to version {v}",
     phases: {
       connect: "Connecting",
@@ -341,10 +368,12 @@ const en: Dict = {
     failed: "Failed",
     ok: "OK",
     resumedAt: "Resumed at {size}",
+    restarted: "Server does not support resuming – download starts over",
     cancelTitle: "Cancel installation?",
     cancelKeep: "Keep installing",
     cancelConfirmBtn: "Cancel installation",
     cancelledText: "Downloaded data is kept for a later attempt.",
+    cancelled: "Installation paused",
     phaseStatus: "Phase {n}/{total} · {phase}",
     tips: {
       t1: "Pulsar grades your connection from A+ to F – like school, but for your ping.",
@@ -362,9 +391,9 @@ const en: Dict = {
     manifest: "Download information not found",
     running: "Pulsar is still running",
     cancelled: "Installation cancelled",
-    unknown: "Something went wrong",
+    unknown: "Unknown error",
     retry: "Try again",
-    resumeHint: "Don't worry: the download continues where it stopped.",
+    resumeHint: "If the server allows it, the download continues where it stopped.",
     closeApp: "Close Pulsar and continue",
     back: "Back",
   },
@@ -379,6 +408,12 @@ const en: Dict = {
     verified: "SHA-256 checksum verified",
     autoLaunchShort: "Auto-start in {n} s",
     restartIn: "Restart in {n} s",
+    log: "Log",
+    logTotal: "Total time",
+    logBytes: "Transferred",
+    logBytesResumed: "Transferred (resumed)",
+    starting: "Starting …",
+    logRate: "Average rate",
   },
   uninstall: {
     title: "Uninstall Pulsar?",
@@ -388,17 +423,32 @@ const en: Dict = {
     confirm: "Uninstall",
     cancel: "Cancel",
     running: "Removing Pulsar …",
+    failedTitle: "Removal interrupted",
     eyebrow: "Uninstall",
     kept: "Kept",
     stepsLabel: "Steps",
     stepStatus: "Step {n}/{total} · {step}",
+    busyClose: "Uninstalling – please wait.",
+    failedStatus: "Stopped",
+    retry: "Try again",
+    log: "Log",
+    logRemoved: "Removed",
+    logRemovedValue: "{n}/{total} steps",
+    logData: "Data",
+    logDataKept: "Kept",
+    logDataDeleted: "Deleted",
+    logSettings: "Settings",
+    logSettingsYes: "Restored",
+    logSettingsPartial: "Partly restored",
     steps: { stop: "Closing Pulsar, restoring settings", shortcuts: "Removing shortcuts", registry: "Removing Windows entries", files: "Deleting files", data: "Cleaning up data" },
     doneTitle: "Signal lost.",
     doneText: "Pulsar has been removed. You are always welcome back.",
-    revertFailed: "Some Windows settings (DNS or network) could not be safely restored – for example because the Windows prompt was declined.",
+    revertFailed: "Not everything was restored",
+    revertFailedText: "Some Windows settings (DNS, network) were not restored, for example because the Windows prompt was declined.",
     revertFailedKept: "Your Pulsar data with the backups is kept.",
-    revertFailedForced: "That is why your Pulsar data was not deleted – it holds the backups needed to restore everything exactly.",
-    revertFailedHow: "To restore: reinstall Pulsar and click “Revert everything” at the top of the Optimize page – or uninstall it again right away and accept the Windows prompt.",
+    revertFailedForced: "Your Pulsar data is kept for that reason – it holds the backups.",
+    revertFailedHow: "Reinstall Pulsar and click “Revert everything” at the top of the Optimize page",
+    revertFailedHow2: "or uninstall again and accept the Windows prompt",
   },
   common: { next: "Next", back: "Back", close: "Close", mute: "Mute", unmute: "Unmute", sound: "Sound", language: "Language" },
   a11y: {
@@ -443,17 +493,28 @@ export function useT() {
   return t;
 }
 
+/**
+ * Bytes mit Einheit (Basis 1024). Die Einheit wechselt schon ab 1000 der kleineren Einheit – so gibt es
+ * kein „1.023 KB“ mit Tausenderpunkt; ohne Gruppierung.
+ */
 export function formatBytes(b: number): string {
-  if (!b || b < 0) return "0 B";
+  if (!b || b < 0 || !Number.isFinite(b)) return "0 B";
   const u = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.min(u.length - 1, Math.floor(Math.log(b) / Math.log(1024)));
-  return `${(b / Math.pow(1024, i)).toLocaleString(lang === "de" ? "de-DE" : "en-US", { maximumFractionDigits: i >= 2 ? 1 : 0 })} ${u[i]}`;
+  let i = 0;
+  let v = b;
+  while (v >= 1000 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toLocaleString(lang === "de" ? "de-DE" : "en-US", { maximumFractionDigits: i >= 2 ? 1 : 0, useGrouping: false })} ${u[i]}`;
 }
 
+/** Restzeit wie die übrigen Messwerte: „8 s“, „1 min 5 s“ (einmal gerundet, kein „1 min 60 s“) */
 export function formatEta(s: number): string {
   if (!Number.isFinite(s) || s <= 0) return "";
-  if (s < 60) return lang === "de" ? `${Math.ceil(s)} Sek.` : `${Math.ceil(s)} s`;
-  const m = Math.floor(s / 60);
-  const sec = Math.round(s % 60);
-  return lang === "de" ? `${m} Min. ${sec} Sek.` : `${m} min ${sec} s`;
+  const r = Math.max(1, Math.round(s));
+  if (r < 60) return `${r} s`;
+  const m = Math.floor(r / 60);
+  const sec = r % 60;
+  return `${m} min ${sec} s`;
 }

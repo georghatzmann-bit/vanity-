@@ -2,15 +2,21 @@
  * Bausteine des Bedienfelds (C.0/B.8): Seite in Fensterkoordinaten, Blöcke ab x 468 (472 breit)
  * an festen y-Lagen, Fußleiste mit Haarlinie bei y 536 und Knöpfen y 548–588.
  * Seitenwechsel: Blöcke gestaffelt im Abstand von 24 ms von oben nach unten, je Deckkraft 0→1 und
- * y 6→0 in 180 ms; Ausblenden 120 ms. Reduzierte Bewegung: nur Deckkraft 120 ms, ohne Staffelung.
+ * y 6→0 in 180 ms; Ausblenden 80 ms, überlappend mit dem Einblenden der neuen Seite (kein leeres
+ * Bedienfeld, der Fokus springt sofort auf die neue H1). Reduzierte Bewegung: nur Deckkraft 120 ms,
+ * ohne Staffelung. `HoldEnter`: Die erste Seite wartet, bis das Intro ausgeblendet ist.
  */
 import { createContext, useContext, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { motion, type Variants } from "motion/react";
+import { motion, useIsPresent, type Variants } from "motion/react";
 import { cn } from "@shared/lib/cn";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 
 const EASE = [0.2, 0, 0, 1] as const;
 const Reduced = createContext(false);
+/** true = Seite noch nicht auftreten lassen (Intro liegt noch darüber) */
+export const HoldEnter = createContext(false);
+/** Ausblenden der alten Seite (s) */
+export const PAGE_EXIT_S = 0.08;
 
 export interface PageProps {
   /** Verzögerung der Staffelung (s), z. B. 0,45 auf „Fertig“ (G.1) */
@@ -21,14 +27,17 @@ export interface PageProps {
 
 export function Page({ delay = 0, children, testId }: PageProps) {
   const reduced = useReducedMotion();
+  const hold = useContext(HoldEnter);
+  // Ausgehende Seite (Exit-Animation 80 ms): nicht mehr bedienbar, kein Fokus, kein Doppelklick
+  const present = useIsPresent();
   const variants: Variants = {
     hidden: { opacity: 1 },
     show: { opacity: 1, transition: reduced ? { delayChildren: delay } : { staggerChildren: 0.024, delayChildren: delay } },
-    exit: { opacity: 0, transition: { duration: 0.12, ease: EASE } },
+    exit: { opacity: 0, transition: { duration: PAGE_EXIT_S, ease: EASE } },
   };
   return (
     <Reduced.Provider value={reduced}>
-      <motion.div className="pointer-events-none absolute inset-0" data-testid={testId} variants={variants} initial="hidden" animate="show" exit="exit">
+      <motion.div className="pointer-events-none absolute inset-0" data-testid={testId} data-leaving={present ? undefined : "1"} inert={!present} variants={variants} initial="hidden" animate={hold ? "hidden" : "show"} exit="exit">
         {children}
       </motion.div>
     </Reduced.Provider>
@@ -80,15 +89,17 @@ export function Rule({ y, x = 468, w = 472 }: { y: number; x?: number; w?: numbe
  */
 export function Title({ children, small, autoFocus = true, id }: { children: ReactNode; small?: boolean; autoFocus?: boolean; id?: string }) {
   const ref = useRef<HTMLHeadingElement>(null);
+  // Unter dem Intro vorab gemountet: Fokus erst, wenn die Seite auftritt
+  const hold = useContext(HoldEnter);
   useEffect(() => {
-    if (!autoFocus) return;
+    if (!autoFocus || hold) return;
     const el = ref.current;
     if (!el) return;
     // nicht in einen offenen Dialog o. Ä. hineinfunken
     const active = document.activeElement;
     if (active && active !== document.body && active.closest("[role=alertdialog],[role=dialog]")) return;
     el.focus({ preventScroll: true });
-  }, [autoFocus]);
+  }, [autoFocus, hold]);
   return (
     <h1 ref={ref} id={id} tabIndex={-1} className={small ? "obs-h1-sm" : "obs-h1"}>
       {children}
@@ -96,9 +107,10 @@ export function Title({ children, small, autoFocus = true, id }: { children: Rea
   );
 }
 
-/** Fußleiste: Haarlinie bei y 536 über die ganze Bedienfeld-Breite, Knöpfe y 548–588 */
+/** Fußleiste: Haarlinie bei y 536 über die ganze Bedienfeld-Breite, Knöpfe y 548–588. Ohne Inhalt keine Leiste. */
 export function Footer({ left, right }: { left?: ReactNode; right?: ReactNode }) {
   const reduced = useContext(Reduced);
+  if (!left && !right) return null;
   return (
     <>
       <div aria-hidden className="absolute top-[536px] left-[421px] h-px w-[559px] bg-obs-rule" />

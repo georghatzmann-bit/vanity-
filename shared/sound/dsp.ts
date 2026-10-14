@@ -328,8 +328,33 @@ export function makeReverbIR(sr: number, rng: Rng, seconds = 0.8): [Float32Array
   return [ch(), ch()];
 }
 
-/** Bandbegrenzter Sägezahn (additiv, für die RFI-Kalibrierung). */
+/**
+ * Bandbegrenzter Sägezahn per PolyBLEP (für die RFI-Kalibrierung): O(len) statt O(len · N).
+ * Phase wie der Web-Audio-Sägezahn und wie `sawtoothAdditive`: bei i = 0 Wert 0, steigend.
+ */
 export function sawtooth(f: number, sr: number, len: number): Float32Array {
+  const y = new Float32Array(len);
+  const dt = f / sr;
+  const blep = (t: number) => {
+    if (t < dt) {
+      const u = t / dt;
+      return u + u - u * u - 1;
+    }
+    if (t > 1 - dt) {
+      const u = (t - 1) / dt;
+      return u * u + u + u + 1;
+    }
+    return 0;
+  };
+  for (let i = 0; i < len; i++) {
+    const ph = (0.5 + i * dt) % 1;
+    y[i] = 2 * ph - 1 - blep(ph);
+  }
+  return y;
+}
+
+/** Additiver Sägezahn (Referenz für Tests; sr/2/f Harmonische – teuer, nicht zur Laufzeit) */
+export function sawtoothAdditive(f: number, sr: number, len: number): Float32Array {
   const y = new Float32Array(len);
   const nMax = Math.floor(sr / 2 / f);
   for (let k = 1; k <= nMax; k++) {

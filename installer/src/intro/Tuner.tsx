@@ -19,7 +19,9 @@ export interface TunerProps {
 
 const X0 = 200;
 const X1 = 780;
-const BASE_Y = 484.5;
+/** Tuner-Gruppe 16 px tiefer als ursprünglich (Platz für Achsentitel und Objektzeile) */
+const DY = 16;
+const BASE_Y = 484.5 + DY;
 const MAJORS: ReadonlyArray<readonly [number, string, string]> = [
   [0.25, "0,25", "0.25"],
   [0.5, "0,5", "0.5"],
@@ -31,11 +33,17 @@ const MAJORS: ReadonlyArray<readonly [number, string, string]> = [
 const P_LOCK = "1.3373";
 const F_LOCK_TXT = "0.7478";
 
-/** Ablesung „f 0,412 Hz · P 2,427 s“ bzw. eingerastet „f 0,7478 Hz · P 1,3373 s“ */
-export function tunerReading(hz: number, locked: boolean, lang: "de" | "en"): string {
+/** Werte der Ablesung: { f: „0,412 Hz“, p: „2,427 s“ } bzw. eingerastet { f: „0,7478 Hz“, p: „1,3373 s“ } */
+export function tunerValues(hz: number, locked: boolean, lang: "de" | "en"): { f: string; p: string } {
   const dec = (s: string) => (lang === "de" ? s.replace(".", ",") : s);
-  if (locked) return `f ${dec(F_LOCK_TXT)}${NBSP}Hz · P ${dec(P_LOCK)}${NBSP}s`;
-  return `f ${fixed(hz, 3, lang)}${NBSP}Hz · P ${fixed(1 / hz, 3, lang)}${NBSP}s`;
+  if (locked) return { f: `${dec(F_LOCK_TXT)}${NBSP}Hz`, p: `${dec(P_LOCK)}${NBSP}s` };
+  return { f: `${fixed(hz, 3, lang)}${NBSP}Hz`, p: `${fixed(1 / hz, 3, lang)}${NBSP}s` };
+}
+
+/** Ablesung als Text „F 0,412 Hz · P 2,427 s“ (F/P sind Beschriftungen, im Bild Mono 10 fg-3) */
+export function tunerReading(hz: number, locked: boolean, lang: "de" | "en"): string {
+  const v = tunerValues(hz, locked, lang);
+  return `F ${v.f} · P ${v.p}`;
 }
 
 const SIGNAL = "var(--obs-signal)";
@@ -47,6 +55,8 @@ export function Tuner({ handleRef }: TunerProps) {
   const needleRef = useRef<SVGGElement>(null);
   const wordRef = useRef<HTMLSpanElement>(null);
   const valueRef = useRef<HTMLSpanElement>(null);
+  const fRef = useRef<HTMLSpanElement>(null);
+  const pRef = useRef<HTMLSpanElement>(null);
   const last = useRef({ hz: 0.4, locked: false, textAt: -1, x: -1, lockedShown: null as boolean | null });
 
   const applyText = (hz: number, locked: boolean) => {
@@ -55,7 +65,9 @@ export function Tuner({ handleRef }: TunerProps) {
     if (!w || !v) return;
     w.textContent = locked ? t("intro.locked") : t("intro.search");
     w.style.color = locked ? SIGNAL : "var(--obs-fg-3)";
-    v.textContent = tunerReading(hz, locked, getLang());
+    const r = tunerValues(hz, locked, getLang());
+    if (fRef.current) fRef.current.textContent = r.f;
+    if (pRef.current) pRef.current.textContent = r.p;
     v.style.color = locked ? SIGNAL : SEARCH;
   };
 
@@ -95,12 +107,20 @@ export function Tuner({ handleRef }: TunerProps) {
 
   return (
     <div className="pointer-events-none absolute top-0 left-0 h-[560px] w-[980px]" data-testid="intro-tuner">
-      {/* Kopfzeile y 452 */}
-      <span className="obs-label absolute left-[200px] top-[405px]">{t("intro.folding")}</span>
-      <span className="absolute right-[200px] top-[402px] flex items-baseline gap-2 whitespace-nowrap" data-testid="intro-reading">
-        <span ref={wordRef} className="obs-label" />
-        <span ref={valueRef} className="obs-value obs-value-md normal-case" />
-      </span>
+      {/* Kopfzeile: Faltfrequenz links, Ablesung rechts – eine gemeinsame Grundlinie */}
+      <div className="absolute left-[200px] flex w-[580px] items-baseline justify-between whitespace-nowrap" style={{ top: 402 + DY }}>
+        <span className="obs-label">{t("intro.folding")}</span>
+        <span className="flex items-baseline gap-2" data-testid="intro-reading">
+          <span ref={wordRef} className="obs-label" />
+          <span ref={valueRef} className="flex items-baseline gap-[6px] normal-case">
+            <span className="obs-label text-obs-fg-3">F</span>
+            <span ref={fRef} className="obs-value obs-value-md" style={{ color: "inherit" }} />
+            <span className="obs-label text-obs-fg-3">·</span>
+            <span className="obs-label text-obs-fg-3">P</span>
+            <span ref={pRef} className="obs-value obs-value-md" style={{ color: "inherit" }} />
+          </span>
+        </span>
+      </div>
       <svg aria-hidden width={980} height={560} viewBox="0 40 980 560" className="absolute top-0 left-0">
         <g style={{ shapeRendering: "crispEdges" }}>
           <line x1={X0} y1={BASE_Y} x2={X1} y2={BASE_Y} stroke="var(--obs-rule-strong)" strokeWidth={1} />
@@ -115,18 +135,18 @@ export function Tuner({ handleRef }: TunerProps) {
         </g>
         <g style={{ fontFamily: "var(--obs-mono)", fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", fill: "var(--obs-fg-3)" }}>
           {MAJORS.map(([f, de, en]) => (
-            <text key={f} x={tunerX(f)} y={490} dominantBaseline="hanging" textAnchor="middle">
+            <text key={f} x={tunerX(f)} y={490 + DY} dominantBaseline="hanging" textAnchor="middle">
               {lang === "de" ? de : en}
             </text>
           ))}
-          <text x={X1 + 10} y={490} dominantBaseline="hanging">
+          <text x={X1 + 10} y={490 + DY} dominantBaseline="hanging">
             Hz
           </text>
         </g>
         {/* Nadel: Dreieck 7 × 5 bei y 466, 1-px-Linie zur Grundlinie */}
         <g ref={needleRef} style={{ color: SEARCH }} transform={`translate(${(tunerX(0.4) - X0).toFixed(2)} 0)`}>
-          <path d={`M${X0 - 3.5} 466 L${X0 + 3.5} 466 L${X0} 471 Z`} fill="currentColor" />
-          <line x1={X0} y1={471} x2={X0} y2={BASE_Y} stroke="currentColor" strokeWidth={1} />
+          <path d={`M${X0 - 3.5} ${466 + DY} L${X0 + 3.5} ${466 + DY} L${X0} ${471 + DY} Z`} fill="currentColor" />
+          <line x1={X0} y1={471 + DY} x2={X0} y2={BASE_Y} stroke="currentColor" strokeWidth={1} />
         </g>
       </svg>
     </div>

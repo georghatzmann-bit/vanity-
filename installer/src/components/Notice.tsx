@@ -1,9 +1,11 @@
 /**
- * Hinweis (B.7): links 2 px Balken in Ton-Farbe, Fläche Ton-Farbe 6 %, Symbol 16 px, Wort
- * HINWEIS/FEHLER (Mono 10), Titel 13/600, Text 13/20 `fg-2`. Kein Ring, kein Radius.
+ * Hinweis (B.7) als Messprotokoll-Eintrag statt Alert-Kasten: keine Fläche, kein Seitenbalken,
+ * nur eine 1-px-Haarlinie oben in Tonfarbe. Zeile 1: kleines Dreieck 12 px (warn/error) und das
+ * Wort HINWEIS/FEHLER (Mono 10); darunter Titel 13/600 und Text 13/20 `fg-2`.
+ * Aktionen gehören in die Fußleiste der Seite (primär rechts, Zurück links), nicht in den Hinweis.
  */
 import type { ReactNode } from "react";
-import { AlertTriangle, Info, OctagonX } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@shared/lib/cn";
 import { useT } from "../i18n";
 
@@ -12,7 +14,6 @@ export interface NoticeProps {
   title?: ReactNode;
   role?: "alert" | "status";
   children?: ReactNode;
-  actions?: ReactNode;
   /** Wort und Text in einer Zeile (wenig Platz, ohne Titel) */
   compact?: boolean;
   className?: string;
@@ -20,37 +21,34 @@ export interface NoticeProps {
 }
 
 const TONE = {
-  warn: { color: "var(--obs-warn)", bg: "rgb(255 143 63 / 0.06)", Icon: AlertTriangle, word: "obs.hint" },
-  error: { color: "var(--obs-error)", bg: "rgb(255 90 100 / 0.06)", Icon: OctagonX, word: "obs.error" },
-  neutral: { color: "var(--obs-fg-2)", bg: "rgb(230 232 235 / 0.04)", Icon: Info, word: "obs.hint" },
+  warn: { color: "var(--obs-warn)", icon: true, word: "obs.hint" },
+  error: { color: "var(--obs-error)", icon: true, word: "obs.error" },
+  neutral: { color: "var(--obs-fg-3)", icon: false, word: "obs.hint" },
 } as const;
 
-export function Notice({ tone, title, role, children, actions, compact, className, testId }: NoticeProps) {
+export function Notice({ tone, title, role, children, compact, className, testId }: NoticeProps) {
   const t = useT();
   const s = TONE[tone];
   const word = (
-    <span className="obs-label" style={{ color: s.color }}>
+    <span className="obs-label inline-flex items-center gap-1.5 align-middle" style={{ color: s.color }}>
+      {s.icon && <AlertTriangle aria-hidden className="h-3 w-3 shrink-0" strokeWidth={1.5} />}
       {t(s.word)}
     </span>
   );
   return (
-    <div role={role} data-testid={testId} className={cn("flex w-[472px] gap-3 py-3 pr-4 pl-[14px]", className)} style={{ background: s.bg, borderLeft: `2px solid ${s.color}` }}>
-      <s.Icon aria-hidden className="mt-px h-4 w-4 shrink-0" strokeWidth={1.5} style={{ color: s.color }} />
-      <div className="min-w-0 flex-1">
-        {compact ? (
-          <p className="m-0 text-[13px] leading-5 text-obs-fg-2">
-            {word}
-            <span className="ml-2">{children}</span>
-          </p>
-        ) : (
-          <>
-            <div className="leading-4">{word}</div>
-            {title && <div className="mt-1 text-[13px] leading-5 font-semibold text-obs-fg">{title}</div>}
-            {children && <div className="mt-0.5 text-[13px] leading-5 text-obs-fg-2">{children}</div>}
-          </>
-        )}
-        {actions && <div className="mt-3 flex items-center gap-2">{actions}</div>}
-      </div>
+    <div role={role} data-testid={testId} data-tone={tone} className={cn("w-[472px] pt-2", className)} style={{ borderTop: `1px solid ${s.color}` }}>
+      {compact ? (
+        <p className="m-0 text-[13px] leading-5 text-obs-fg-2">
+          {word}
+          <span className="ml-2">{children}</span>
+        </p>
+      ) : (
+        <>
+          <div className="leading-4">{word}</div>
+          {title && <div className="mt-1.5 text-[13px] leading-5 font-semibold text-obs-fg">{title}</div>}
+          {children && <div className="mt-0.5 text-[13px] leading-5 text-obs-fg-2">{children}</div>}
+        </>
+      )}
     </div>
   );
 }

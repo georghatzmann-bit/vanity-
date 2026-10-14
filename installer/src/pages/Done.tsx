@@ -1,18 +1,21 @@
 /**
- * Fertig (C.7, G.1): „Signal steht.“, Prüfsumme (gemessen), Autostart-Countdown in Segmenten.
- * Die Staffelung beginnt 450 ms später (nach dem Stroboskop im Schirm); der Countdown-Block
- * blendet bei t ≈ 1600 ms nach `install://done` ein.
+ * Fertig (C.7, G.1): „Signal steht.“, Prüfsumme (gemessen), Autostart als Instrument (Linearskala
+ * 5 → 0 s) und ein Protokoll aus gemessenen Werten (Gesamtdauer, übertragen, mittlere Rate).
+ * Die Staffelung beginnt 150 ms später (nach dem Stroboskop im Schirm).
  */
-import { Sparkles } from "lucide-react";
-import { COUNTDOWN_S, RAIL, UPDATE_RESTART_MS } from "../flow/useSetupFlow";
+import { useEffect, useState } from "react";
+import { ArrowRight } from "lucide-react";
+import { COUNTDOWN_S, installLog, RAIL, UPDATE_RESTART_MS } from "../flow/useSetupFlow";
 import { useT, type Lang } from "../i18n";
-import { fixed, NBSP } from "../obs/format";
+import { fixed, formatDuration, NBSP } from "../obs/format";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { Countdown } from "../components/Countdown";
+import { LogList } from "../components/LogList";
 import { Notice } from "../components/Notice";
 import { ObsButton } from "../components/ObsButton";
+import { bytes } from "../components/Readout";
 import { StepScale } from "../components/StepScale";
-import { Block, Footer, Page, Title } from "./Page";
+import { Block, DASH, Footer, Page, Title } from "./Page";
 import { UpdateLabel } from "./Install";
 import type { PageViewProps } from "./Welcome";
 
@@ -33,16 +36,33 @@ function CountLabel({ tpl, n }: { tpl: string; n: string }) {
   );
 }
 
-/** Ab Seitenbeginn: Countdown-Block bei ≈ 1600 ms nach `install://done` (Seite kommt bei 650 ms) */
-const COUNTDOWN_IN_S = 0.95;
+/** Restzeit des Update-Neustarts, live in 0,1 s (ab dem Erscheinen der Seite = Start des Timers) */
+function useUpdateRemaining(active: boolean): number {
+  const [rem, setRem] = useState(UPDATE_RESTART_MS / 1000);
+  useEffect(() => {
+    if (!active) return;
+    const t0 = performance.now();
+    const id = window.setInterval(() => setRem(Math.max(0, (UPDATE_RESTART_MS - (performance.now() - t0)) / 1000)), 100);
+    return () => window.clearInterval(id);
+  }, [active]);
+  return rem;
+}
+
+/** Countdown-Block erscheint nach der Staffelung (Seite kommt 650 ms nach `install://done`) */
+const COUNTDOWN_IN_S = 0.6;
+const UPDATE_TOTAL_S = UPDATE_RESTART_MS / 1000;
 
 export function Done({ flow }: PageViewProps) {
   const t = useT();
   const reduced = useReducedMotion();
-  const { info, done, manifest, countdown, isUpdate, lang } = flow;
+  const { info, done, manifest, countdown, isUpdate, lang, phaseDurations, progress, transferred, finishing } = flow;
   const version = done?.version ?? manifest?.version ?? "";
+  const updateRem = useUpdateRemaining(isUpdate);
+  // übertragen = in dieser Sitzung wirklich geladene Bytes (nach dem Fortsetzen nicht die ganze Datei)
+  const log = installLog(phaseDurations, transferred, progress?.total);
+  const l = lang as Lang;
   return (
-    <Page delay={0.45} testId="page-done">
+    <Page delay={0.15} testId="page-done">
       <Block y={56}>
         {isUpdate ? (
           <StepScale steps={[t("steps.install"), t("steps.done")]} current={1} label={<UpdateLabel from={info?.installed?.version} to={version} />} />
@@ -57,7 +77,7 @@ export function Done({ flow }: PageViewProps) {
         <p className="obs-body">{isUpdate ? t("done.updated") : t("done.installed", { v: version })}</p>
       </Block>
       {done && (
-        <Block y={240}>
+        <Block y={232}>
           {done.verified ? (
             <div className="flex items-center gap-2" data-testid="done-verified">
               <span className="obs-label text-obs-fg-2">{t("done.verified")}</span>
@@ -71,34 +91,63 @@ export function Done({ flow }: PageViewProps) {
         </Block>
       )}
       {isUpdate ? (
-        <Block y={320} selfDelay={COUNTDOWN_IN_S}>
-          <Countdown label={<CountLabel tpl={t("done.restartIn", { n: "\u0000" })} n={fixed(UPDATE_RESTART_MS / 1000, 1, lang as Lang)} />} seconds={null} total={1} mode="bar" durationMs={UPDATE_RESTART_MS} reduced={reduced} />
+        <Block y={284} selfDelay={COUNTDOWN_IN_S}>
+          <Countdown
+            label={<CountLabel tpl={t("done.restartIn", { n: "\u0000" })} n={fixed(updateRem, 1, l)} />}
+            totalS={UPDATE_TOTAL_S}
+            remainingS={UPDATE_TOTAL_S}
+            toS={0}
+            glideS={UPDATE_TOTAL_S}
+            lang={l}
+            reduced={reduced}
+            testValue={updateRem}
+          />
         </Block>
       ) : (
         countdown !== null &&
         countdown > 0 && (
-          <Block y={320} selfDelay={COUNTDOWN_IN_S}>
-            <Countdown label={<CountLabel tpl={t("done.autoLaunchShort", { n: "\u0000" })} n={String(countdown)} />} seconds={countdown} total={COUNTDOWN_S} mode="segments" reduced={reduced} />
+          <Block y={284} selfDelay={COUNTDOWN_IN_S}>
+            <Countdown
+              label={<CountLabel tpl={t("done.autoLaunchShort", { n: "\u0000" })} n={String(countdown)} />}
+              totalS={COUNTDOWN_S}
+              remainingS={countdown}
+              toS={countdown - 1}
+              glideS={1}
+              lang={l}
+              reduced={reduced}
+            />
           </Block>
         )
       )}
+      <Block y={384} selfDelay={COUNTDOWN_IN_S}>
+        <LogList
+          title={t("done.log")}
+          tag={t("obs.measured")}
+          testId="done-log"
+          rows={[
+            { label: t("done.logTotal"), value: log.totalMs !== null ? formatDuration(log.totalMs, l) : DASH },
+            { label: t(log.resumed ? "done.logBytesResumed" : "done.logBytes"), value: log.bytes !== null ? bytes(log.bytes) : DASH },
+            { label: t("done.logRate"), value: log.rate !== null ? `${bytes(log.rate)}/s` : DASH },
+          ]}
+        />
+      </Block>
       <Footer
         left={
           !isUpdate &&
           (countdown !== null ? (
-            <ObsButton variant="secondary" onClick={flow.stopCountdown}>
+            <ObsButton variant="secondary" disabled={Boolean(finishing)} onClick={flow.stopCountdown}>
               {t("done.dontLaunch")}
             </ObsButton>
           ) : (
-            <ObsButton variant="secondary" onClick={() => void flow.finish(false)}>
+            <ObsButton variant="secondary" disabled={Boolean(finishing)} onClick={() => void flow.finish(false)}>
               {t("done.close")}
             </ObsButton>
           ))
         }
         right={
           !isUpdate && (
-            <ObsButton variant="primary" icon={<Sparkles aria-hidden />} autoFocus onClick={() => void flow.finish(true)}>
-              {t("done.launch")}
+            <ObsButton variant="primary" iconRight={finishing ? undefined : <ArrowRight aria-hidden />} autoFocus disabled={Boolean(finishing)} onClick={() => void flow.finish(true)}>
+              {finishing === "launch" ? t("done.starting") : t("done.launch")}
             </ObsButton>
           )
         }
@@ -106,4 +155,3 @@ export function Done({ flow }: PageViewProps) {
     </Page>
   );
 }
-

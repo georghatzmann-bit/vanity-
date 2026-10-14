@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { F_STAR } from "@shared/sound/dsp";
 import { sceneFor, driveFromFreq } from "../../components/StarCanvas";
-import { driveLabelKey, heardLine, cameraParts } from "../../components/Schirm";
+import { driveLabelKey, heardLine, cameraParts, exposureStep, EXPOSURE_FULL } from "../../components/Schirm";
 import { needleX } from "../../components/LogScale";
 import { decayBeamAlpha, relockCurve, voiceModes, UNINSTALL_TIMING, DONE_TIMING } from "../../hooks/useObservatory";
 import { judgeWindow, p95, qualityConfig, reportFrame, getQuality, _resetQualityForTests, WINDOW_FRAMES } from "../../hooks/useQuality";
@@ -15,24 +15,54 @@ describe("sceneFor – Belichtungskamera (F.3)", () => {
     expect(s.sharp).toBe(3.2);
     expect(s.disc).toBe("flash");
     expect(s.camera).toBe("exposure");
-    expect(s.expAlpha).toBeCloseTo(0.16, 2);
+    // im Leerlauf (n = 1/60) noch kein Bogen der Ringzone (kein Fleck am Strahlende)
+    expect(s.zone).toBe(0);
+    expect(s.axis).toBe(true);
   });
-  it("ab 2,5 Hz Sanduhr (2 Umdrehungen), ruhige Scheibe statt Blitz", () => {
+  it("Ringzone: Bogen wächst stetig mit n, ab n = 1 geschlossen", () => {
+    const a = sceneFor("installing", 0, 10.3, 2, false, 0.5);
+    expect(a.to - a.from).toBeCloseTo(0.5, 9);
+    expect(a.zone).toBeGreaterThan(0);
+    const b = sceneFor("installing", 0, 10.3, 11.19, false, 2);
+    expect(b.to - b.from).toBeCloseTo(1, 9);
+    const c = sceneFor("installing", 0, 10.3, 11.19, false, 0.999);
+    expect(Math.abs(b.zone - c.zone)).toBeLessThan(1e-6);
+  });
+  it("Fortsetzen: Zone und Ränder blenden über 300 ms ein", () => {
+    expect(sceneFor("relock", 0, 1, 11.19, false, 2).zone).toBe(0);
+    const half = sceneFor("relock", 150, 1, 11.19, false, 2);
+    const full = sceneFor("relock", 300, 1, 11.19, false, 2);
+    expect(half.zone).toBeCloseTo(full.zone / 2, 6);
+    expect(full.rims).toBeCloseTo(1, 6);
+  });
+  it("ab 2,5 Hz Sanduhr (2 Umdrehungen), keine Lichtscheibe, Strobo-Strahl", () => {
     const s = sceneFor("installing", 0, 10.3, 11.19, false);
     expect(s.width).toBe(2);
     expect(s.sharp).toBeNull();
-    expect(s.disc).toBe("steady");
+    expect(s.disc).toBe("none");
+    expect(s.strobeBeam).toBe(true);
     expect(s.blur).toBeCloseTo(0.2, 6);
   });
-  it("Fehler: gestrichelt, 0,4, Belichtung × 0,3, keine Kappen, keine Scheibe", () => {
-    const ok = sceneFor("installing", 0, 1, 0.748, false);
-    const s = sceneFor("error", 0, 1, 0.748, false);
-    expect(s.dashed).toBe(true);
-    expect(s.beamAlpha).toBe(0.4);
-    expect(s.expAlpha).toBeCloseTo(ok.expAlpha * 0.3, 6);
-    expect(s.fieldMul).toBeCloseTo(0.3, 6);
-    expect(s.caps).toBe(false);
-    expect(s.disc).toBe("none");
+  it("geglättete Belichtung kommt als Parameter (sceneFor bleibt rein)", () => {
+    const s = sceneFor("installing", 0, 10.3, 11.19, false, 0.5);
+    expect(s.width).toBe(0.5);
+    expect(s.sharp).toBe(10.3);
+    expect(s.strobeBeam).toBe(false);
+  });
+  it("Fehler: ohne Zone/Ränder/Achse, ein gestrichelter Keil, keine Kappen, keine Scheibe, kein Strobo", () => {
+    for (const f of [0.748, 11.19]) {
+      const s = sceneFor("error", 0, 1, f, false);
+      expect(s.dashed).toBe(true);
+      expect(s.zone).toBe(0);
+      expect(s.rims).toBe(0);
+      expect(s.axis).toBe(false);
+      expect(s.sharp).toBe(1);
+      expect(s.camera).toBe("nosignal");
+      expect(s.fieldMul).toBeCloseTo(0.3, 6);
+      expect(s.caps).toBe(false);
+      expect(s.disc).toBe("none");
+      expect(s.strobeBeam).toBe(false);
+    }
   });
   it("Angehalten: Strahlen 0,5", () => {
     expect(sceneFor("halted", 0, 1, 0.8, false).beamAlpha).toBe(0.5);
@@ -52,6 +82,11 @@ describe("sceneFor – Belichtungskamera (F.3)", () => {
     const b = sceneFor("strobe", DONE_TIMING.strobeMs, 42.9, F_STAR, false);
     expect(b.width).toBeCloseTo(0, 9);
     expect(b.sharp).toBe(42.5);
+    expect(b.zone).toBe(0);
+    // Bogen um die Logo-Phase mit Breite min(w, 1): ab w ≥ 1 geschlossener Ring, darunter schließt er sich stetig
+    const mid = sceneFor("strobe", 300, 42.2, F_STAR, false);
+    expect(mid.to - mid.from).toBeCloseTo(Math.min(1, mid.width), 9);
+    expect((mid.from + mid.to) / 2).toBeCloseTo(42.5, 9);
     const c = sceneFor("strobe", DONE_TIMING.morphEndMs, 43.4, F_STAR, false);
     expect(c.morph?.raySplit).toBeCloseTo(1, 6);
   });
@@ -95,25 +130,53 @@ describe("Schirm-Texte (C.2)", () => {
   it("rechte Referenzseite je Zustand", () => {
     expect(driveLabelKey("idle")).toBe("obs.idle");
     expect(driveLabelKey("installing")).toBe("obs.drive");
+    expect(driveLabelKey("halted")).toBe("obs.halted");
+    expect(driveLabelKey("error")).toBe("obs.halted");
     expect(driveLabelKey("uninstalling")).toBe("obs.driveDown");
     expect(driveLabelKey("installed")).toBe("obs.installed");
     expect(driveLabelKey("lost")).toBe("obs.lost");
   });
   it("Hörbar als / lautlos / Ton aus", () => {
     setLang("de");
-    expect(heardLine(t, "installing", "rattle", false)).toBe("Hörbar als · Knattern");
-    expect(heardLine(t, "idle", null, false)).toBe("Leerlauf · lautlos");
-    expect(heardLine(t, "installed", null, true)).toBe("Hörbar als · lautlos · Ton aus");
-    expect(heardLine(t, "strobe", "chord", false)).toBe("Hörbar als · Akkord");
+    // während der Installation nur „Hörbar als …“ (das zweite Glied sagt nichts Neues)
+    expect(heardLine(t, "installing", "rattle", false)).toBe("Hörbar als Knattern");
+    expect(heardLine(t, "relock", null, false)).toBe("lautlos");
+    expect(heardLine(t, "error", null, false)).toBe("lautlos · Empfang angehalten");
+    expect(heardLine(t, "idle", null, false)).toBe("lautlos · Leerlauf");
+    expect(heardLine(t, "installed", null, true)).toBe("Ton aus · Installiert");
+    expect(heardLine(t, "strobe", "chord", false)).toBe("Hörbar als Akkord · Installiert");
+    expect(heardLine(t, "halted", null, false)).toBe("lautlos · Empfang angehalten");
+    expect(heardLine(t, "decay", null, false)).toBe("lautlos · Signal schwindet");
+    expect(heardLine(t, "uninstalling", "clicks", false)).toBe("Hörbar als Einzelklicks");
+    expect(heardLine(t, "lost", null, false).length).toBeLessThanOrEqual(52);
   });
   it("Kamera-Label: Einheit getrennt (nicht versal)", () => {
     setLang("de");
     expect(cameraParts(t, "exposure", 0.748, "de")).toEqual(["Belichtung ", "1/60 s", ""]);
-    expect(cameraParts(t, "exposure", 11.19, "de")[1]).toBe("2 · P");
+    expect(cameraParts(t, "exposure", 11.19, "de")[1]).toBe("2\u202F×\u202FP");
+    expect(cameraParts(t, "exposure", 11.19, "de")[2]).toBe("");
+    expect(cameraParts(t, "nosignal", 11.19, "de")).toEqual(["Belichtung ", "—", ""]);
     expect(cameraParts(t, "strobe", F_STAR, "de")).toEqual(["Strobo ", "173,7 Hz", " · Phase 180°"]);
     expect(cameraParts(t, "still", 1, "de")[0]).toBe("Standbild");
     setLang("en");
     expect(cameraParts(t, "strobe", F_STAR, "en")).toEqual(["Strobe ", "173.7 Hz", " · phase 180°"]);
+  });
+  it("Kamera-Stufen 1/60 … 1/2 s, 2 · P, mit 15 % Hysterese", () => {
+    expect(exposureStep(0.748)).toBe(0);
+    expect(exposureStep(11.19)).toBe(EXPOSURE_FULL);
+    const seq: number[] = [];
+    let prev: number | null = null;
+    for (let f = 0.75; f <= 2.6; f *= 1.01) {
+      prev = exposureStep(f, prev);
+      seq.push(prev);
+    }
+    // monoton steigend, endet bei 2 · P, kein Hin und Her
+    for (let i = 1; i < seq.length; i++) expect(seq[i]).toBeGreaterThanOrEqual(seq[i - 1]);
+    expect(seq[seq.length - 1]).toBe(EXPOSURE_FULL);
+    // Hysterese: knapp über der Grenze bleibt die alte Stufe
+    const f12 = 1.37; // ~0,12 s
+    const i0 = exposureStep(f12);
+    expect(exposureStep(f12 * 1.005, i0)).toBe(i0);
   });
   it("Log-Skala: Nadel x(P) = 24 + 93·log10(P/1 ms), begrenzt", () => {
     expect(needleX(1.3373)).toBeCloseTo(314.7, 1);

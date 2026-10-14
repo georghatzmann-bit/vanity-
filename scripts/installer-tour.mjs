@@ -33,14 +33,15 @@ const INIT = () => {
     if (w.__tour.introDone === undefined && document.body?.dataset.introDone) w.__tour.introDone = now;
     if (w.__tour.welcome === undefined) {
       for (const b of document.querySelectorAll("button")) {
-        if (/Los geht|Let's go/.test(b.textContent ?? "")) {
+        // Die erste Seite liegt vorab (inert, unsichtbar) unter dem Intro – zählt erst, wenn sie bedienbar ist
+        if (/Los geht|Let's go/.test(b.textContent ?? "") && !b.closest("[inert]")) {
           w.__tour.welcome = now;
           break;
         }
       }
     }
   };
-  new MutationObserver(check).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-intro-done"] });
+  new MutationObserver(check).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-intro-done", "inert"] });
 };
 
 let current = "";
@@ -244,6 +245,34 @@ await run("", async (p) => {
   if ((await p.evaluate(() => localStorage.getItem("pulsar-setup-muted"))) !== "1") fail("Ton aus nicht gespeichert");
   await p.screenshot({ path: `${out}/17-muted-titlebar.png`, clip: { x: 0, y: 0, width: 980, height: 40 } });
   console.log("  📸", "17-muted-titlebar");
+});
+
+// 12) Speicherort: ungültiger Pfad sperrt „Weiter“ sofort, Skala ohne alte Werte
+await run("", async (p) => {
+  await skip(p);
+  await click(p, /Los geht/);
+  await waitBtn(p, /^Weiter/);
+  await p.waitForTimeout(500);
+  await p.getByLabel("Zielordner").fill("Spiele");
+  if (!(await p.getByRole("button", { name: /^Weiter/ }).isDisabled())) fail("Weiter nach Ordnerwechsel nicht sofort gesperrt");
+  await shot(p, "18-folder-invalid", 700);
+});
+
+// 13) Deinstallation wird sofort abgelehnt (?unfail) → Fehler mit „Erneut versuchen“
+await run("?mode=uninstall&unfail", async (p) => {
+  await waitHeading(p, /deinstallieren\?/, 8000);
+  await click(p, /^Deinstallieren/);
+  await p.getByTestId("uninstall-error").waitFor({ timeout: 3000 });
+  await shot(p, "19-uninstall-error", 300);
+  await click(p, /Erneut versuchen/);
+  await waitHeading(p, /Signal verloren/);
+});
+
+// 14) Windows-Skalierung 150 %: Haarlinien = 1 Gerätepixel
+await runWith({ deviceScaleFactor: 1.5 }, "", async (p) => {
+  await skip(p);
+  await toInstall(p);
+  await shot(p, "20-install-150", 2000);
 });
 
 await browser.close();

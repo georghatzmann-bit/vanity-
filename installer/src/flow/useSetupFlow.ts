@@ -4,13 +4,14 @@
  * Klänge: nur der Sweep beim Seitenwechsel. Stimme, Fehlerklang, Akkord usw. gehören
  * `useObservatory`, das über `onEvent` mithört.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, on, pickFolder, type DiskInfo, type InstallDone, type InstallError, type InstallOptions, type Manifest, type Progress, type SetupInfo, type UninstallDone, type UninstallProgress } from "../api";
 import { getLang, setLang as setI18nLang, type Lang } from "../i18n";
 import { sound } from "@shared/sound/engine";
+import { prefersReducedMotion } from "../hooks/useReducedMotion";
 import {
-  advancePhaseClock, COUNTDOWN_S, DISK_DEBOUNCE_MS, DONE_DELAY_MS, emptyPhaseClock, FALLBACK_INFO, nextStepAfterIntro, phaseIndexOf, RESUME_NOTE_MS, TIP_COUNT, TIP_INTERVAL_MS, UNDONE_DELAY_MS, UPDATE_RESTART_MS, withPulsarSuffix,
-  type PhaseClock, type PhaseDurations, type Step,
+  acceptResumeProgress, advancePhaseClock, CLOSE_NOTICE_MS, COUNTDOWN_S, DISK_DEBOUNCE_MS, DONE_DELAY_MS, emptyPhaseClock, emptyTally, FALLBACK_INFO, invalidDisk, isAlreadyRunning, isDownloadRestart, nextStepAfterIntro, pausePhaseClock, phaseIndexOf, RESUME_NOTE_MS, RETRY_CLOSE_WAIT_MS, tallyDownload, tallyRunStart, tallyTransferred, TIP_COUNT, TIP_INTERVAL_MS, UNDONE_DELAY_MS, UNDONE_DELAY_REDUCED_MS, UPDATE_RESTART_MS, withPulsarSuffix,
+  type PhaseClock, type PhaseDurations, type Step, type TransferTally,
 } from "./logic";
 
 export * from "./logic";
@@ -72,14 +73,36 @@ export function useSetupFlow() {
   const [busy, setBusy] = useState(false);
   const [phaseClock, setPhaseClock] = useState<PhaseClock>(emptyPhaseClock);
   const [resumedAt, setResumedAt] = useState<number | null>(null);
+  /** Nach dem Fortsetzen begann der Server neu bei 0 (kein Range / `.part` ungültig) */
+  const [downloadRestarted, setDownloadRestarted] = useState(false);
+  /** in dieser Sitzung wirklich übertragene Bytes (für das Protokoll auf „Fertig“) */
+  const [transferred, setTransferred] = useState<number | null>(null);
+  /** Speicherplatz wird gerade geprüft (sperrt „Weiter“) */
+  const [checking, setChecking] = useState(false);
+  /** „Erneut versuchen“ läuft (Pulsar wird geschlossen, 800 ms) */
+  const [retrying, setRetrying] = useState(false);
+  /** X während der Deinstallation: Hinweis statt Beenden */
+  const [closeBlocked, setCloseBlocked] = useState(false);
 
   const stepRef = useRef<Step>("intro");
   const infoRef = useRef<SetupInfo | null>(null);
   const listeners = useRef(new Set<(e: FlowEvent) => void>());
   const timers = useRef(new Set<number>());
   const phaseClockRef = useRef<PhaseClock>(emptyPhaseClock());
+  const tallyRef = useRef<TransferTally>(emptyTally());
+  /** „Erneut versuchen“ nach einem Download-Fehler: Fortsetzen wird erwartet (sonst kein Neustart-Hinweis) */
+  const resumeExpected = useRef(false);
   const awaitingResume = useRef(false);
   const resumeTimer = useRef<number | undefined>(undefined);
+  /** start_install ist unterwegs bzw. läuft (Schutz gegen Doppelklick, synchron) */
+  const startingRef = useRef(false);
+  /** install://done ist eingetroffen: ein folgendes install://error wird ignoriert */
+  const installDoneRef = useRef(false);
+  /** letzter angezeigter Prozentstand (für das Fortsetzen) */
+  const lastPercentRef = useRef(0);
+  /** run_uninstall läuft (ohne uninstall://done/-error) */
+  const unRunningRef = useRef(false);
+  const closeNoticeTimer = useRef<number | undefined>(undefined);
 
   const emit = useCallback((e: FlowEvent) => {
     listeners.current.forEach((cb) => {
@@ -113,6 +136,7 @@ export function useSetupFlow() {
       ts.forEach((id) => window.clearTimeout(id));
       ts.clear();
       window.clearTimeout(resumeTimer.current);
+      window.clearTimeout(closeNoticeTimer.current);
     };
   }, []);
 
@@ -151,6 +175,13 @@ export function useSetupFlow() {
     phaseClockRef.current = emptyPhaseClock();
     setPhaseClock(phaseClockRef.current);
   }, []);
+  const pauseClock = useCallback(() => {
+    const next = pausePhaseClock(phaseClockRef.current, performance.now());
+    if (next !== phaseClockRef.current) {
+      phaseClockRef.current = next;
+      setPhaseClock(next);
+    }
+  }, []);
   const tickPhaseClock = useCallback((phase: Progress["phase"]) => {
     const next = advancePhaseClock(phaseClockRef.current, phase, performance.now());
     if (next !== phaseClockRef.current) {
@@ -159,11 +190,26 @@ export function useSetupFlow() {
     }
   }, []);
 
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
   const startInstall = useCallback(
     async (o: InstallOptions, retry = false) => {
+      // Wiedereintritt (Doppelklick, ausgehende Seite): nur ein start_install gleichzeitig
+      if (startingRef.current || busyRef.current) return;
+      startingRef.current = true;
+      busyRef.current = true;
+      installDoneRef.current = false;
       setError(null);
       setBusy(true);
-      resetPhaseClock();
+      if (!retry) {
+        setProgress(null);
+        lastPercentRef.current = 0;
+        // Nur ein neuer Lauf beginnt bei 0; nach „Erneut versuchen“ addieren sich die Dauern.
+        resetPhaseClock();
+        setTransferred(null);
+      } else pauseClock();
+      tallyRef.current = tallyRunStart(tallyRef.current, !retry);
       if (stepRef.current !== "install") {
         const prev = stepRef.current;
         setDir(1);
@@ -181,13 +227,19 @@ export function useSetupFlow() {
         }
         await api.startInstall(o);
       } catch (e) {
-        const err: InstallError = { phase: "connect", code: "unknown", message: e instanceof Error ? e.message : String(e), retryable: true };
+        const message = e instanceof Error ? e.message : String(e);
+        // „Die Installation läuft bereits.“ heißt: Es läuft – kein Fehler für die Oberfläche.
+        if (isAlreadyRunning(message)) return;
+        startingRef.current = false;
+        busyRef.current = false;
+        const err: InstallError = { phase: "connect", code: "unknown", message, retryable: true };
+        pauseClock();
         setBusy(false);
         setError(err);
         emit({ type: "install://error", payload: err, local: true });
       }
     },
-    [emit, resetPhaseClock, setStepTracked],
+    [emit, pauseClock, resetPhaseClock, setStepTracked],
   );
   const startInstallRef = useRef(startInstall);
   startInstallRef.current = startInstall;
@@ -206,7 +258,12 @@ export function useSetupFlow() {
     if (target.start) {
       if (si.preset && si.mode !== "update") setOpts(si.preset);
       void startInstallRef.current(target.start);
-    } else goRef.current(target.step);
+    } else {
+      // Erste Seite nach dem Intro als Transition: React rendert Seite, Schirm-Wechsel usw. in kleinen
+      // Stücken statt in einem langen Task mitten im Übergang (der Schirm ist schon vorab gemountet).
+      const target_ = target.step;
+      startTransition(() => goRef.current(target_));
+    }
   }, []);
 
   useEffect(() => {
@@ -245,25 +302,50 @@ export function useSetupFlow() {
   useEffect(() => {
     const uns: Promise<() => void>[] = [
       on<Progress>("install://progress", (p) => {
+        // Fortsetzen: „connect = 0“ nicht zeigen (kein 40 → 0 → 40 %). Ein Neustart bei 0 wird übernommen.
+        if (awaitingResume.current && !acceptResumeProgress(p)) return;
+        let restarted = false;
+        if (p.phase === "download") {
+          const prev = tallyRef.current;
+          restarted = awaitingResume.current && resumeExpected.current && isDownloadRestart(prev.last, p.downloaded);
+          tallyRef.current = tallyDownload(prev, p.downloaded);
+          setTransferred(tallyTransferred(tallyRef.current));
+        }
         setProgress(p);
         setError(null);
+        lastPercentRef.current = p.percent;
         tickPhaseClock(p.phase);
-        if (awaitingResume.current && p.phase === "download") {
+        if (awaitingResume.current) {
           awaitingResume.current = false;
-          if (p.downloaded > 0) {
+          window.clearTimeout(resumeTimer.current);
+          if (restarted) {
+            setDownloadRestarted(true);
+            resumeTimer.current = window.setTimeout(() => setDownloadRestarted(false), RESUME_NOTE_MS);
+          } else if (p.phase === "download" && p.downloaded > 0) {
             setResumedAt(p.downloaded);
-            window.clearTimeout(resumeTimer.current);
             resumeTimer.current = window.setTimeout(() => setResumedAt(null), RESUME_NOTE_MS);
           }
         }
         emit({ type: "install://progress", payload: p });
       }),
       on<InstallError>("install://error", (e) => {
+        // Nach dem Erfolg zählt kein Fehler mehr (z. B. ein verspäteter Abbruch)
+        if (installDoneRef.current) return;
+        startingRef.current = false;
+        busyRef.current = false;
+        awaitingResume.current = false;
+        pauseClock();
+        setConfirmClose(false);
         setError(e);
         setBusy(false);
         emit({ type: "install://error", payload: e, local: false });
       }),
       on<InstallDone>("install://done", (d) => {
+        installDoneRef.current = true;
+        startingRef.current = false;
+        busyRef.current = false;
+        awaitingResume.current = false;
+        setConfirmClose(false);
         setDone(d);
         setBusy(false);
         tickPhaseClock("done");
@@ -276,11 +358,16 @@ export function useSetupFlow() {
         emit({ type: "uninstall://progress", payload: p });
       }),
       on<UninstallDone>("uninstall://done", (d) => {
+        unRunningRef.current = false;
+        setCloseBlocked(false);
         setUnDone(d);
         emit({ type: "uninstall://done", payload: d });
-        later(() => goRef.current("un-done", 1, { silent: true }), UNDONE_DELAY_MS);
+        // Die Seite erscheint erst nach dem Zerfall im Schirm (mode „lost“); reduziert wie bisher
+        later(() => goRef.current("un-done", 1, { silent: true }), prefersReducedMotion() ? UNDONE_DELAY_REDUCED_MS : UNDONE_DELAY_MS);
       }),
       on<{ message: string }>("uninstall://error", (e) => {
+        unRunningRef.current = false;
+        setCloseBlocked(false);
         setError({ phase: "install", code: "unknown", message: e.message, retryable: true });
         emit({ type: "uninstall://error", payload: e });
       }),
@@ -288,37 +375,86 @@ export function useSetupFlow() {
     return () => uns.forEach((u) => void u.then((f) => f()));
   }, [emit, later, tickPhaseClock]);
 
-  // Speicherplatz prüfen, wenn sich der Ordner ändert
+  // Speicherplatz prüfen, wenn sich der Ordner ändert. Für den Vorschlag schon auf „Willkommen“
+  // vorladen (kein Einspringen der Werte mitten in der Staffelung des Speicherorts).
+  // Jede Anfrage hat eine Nummer; überholte Antworten werden verworfen.
+  const diskSeq = useRef(0);
+  const diskDirRef = useRef<string | null>(null);
+  const diskActive = step === "welcome" || step === "folder";
   useEffect(() => {
-    if (step !== "folder" || !opts.dir) return;
+    const dir = opts.dir;
+    if (!diskActive || !dir || diskDirRef.current === dir) return;
+    diskDirRef.current = dir;
+    const seq = ++diskSeq.current;
+    setDisk(null);
+    setChecking(true);
+    let fired = false;
     const id = window.setTimeout(() => {
+      fired = true;
       void api
-        .diskSpace(opts.dir)
-        .then(setDisk)
-        .catch(() => setDisk(null));
+        .diskSpace(dir)
+        .then((d) => {
+          if (seq !== diskSeq.current) return;
+          setDisk(d);
+          setChecking(false);
+        })
+        .catch((e) => {
+          if (seq !== diskSeq.current) return;
+          setDisk(invalidDisk(dir, e instanceof Error ? e.message : String(e)));
+          setChecking(false);
+        });
     }, DISK_DEBOUNCE_MS);
-    return () => window.clearTimeout(id);
-  }, [opts.dir, step]);
+    return () => {
+      if (fired) return;
+      window.clearTimeout(id);
+      diskDirRef.current = null;
+    };
+  }, [opts.dir, diskActive]);
 
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const errorRef = useRef(error);
   errorRef.current = error;
 
+  const retryingRef = useRef(false);
   const retry = useCallback(async () => {
-    if (errorRef.current?.code === "running") {
-      await api.closeApp().catch(() => undefined);
-      await new Promise((r) => setTimeout(r, 800));
+    if (retryingRef.current || startingRef.current || busyRef.current) return;
+    retryingRef.current = true;
+    setRetrying(true);
+    try {
+      if (errorRef.current?.code === "running") {
+        await api.closeApp().catch(() => undefined);
+        await new Promise((r) => setTimeout(r, RETRY_CLOSE_WAIT_MS));
+      }
+      // Nur ein Download setzt fort; nach anderen Fehlern beginnt die Anzeige ehrlich bei 0.
+      resumeExpected.current = errorRef.current?.phase === "download";
+      if (!resumeExpected.current) {
+        lastPercentRef.current = 0;
+        setProgress(null);
+      } else {
+        // alte Rate/Rest nicht als „live gemessen“ stehen lassen → „—“ bis zum ersten neuen Messwert
+        setProgress((p) => p && { ...p, speed: 0, eta: 0 });
+      }
+      awaitingResume.current = true;
+      setResumedAt(null);
+      setDownloadRestarted(false);
+      await startInstallRef.current(optsRef.current, true);
+    } finally {
+      retryingRef.current = false;
+      setRetrying(false);
     }
-    awaitingResume.current = true;
-    setResumedAt(null);
-    void startInstallRef.current(optsRef.current, true);
   }, []);
 
-  const finishing = useRef(false);
+  // Option „Pulsar danach starten“: nach kurzem Countdown automatisch starten (abbrechbar)
+  const [countdown, setCountdown] = useState<number | null>(null);
+  /** Fertig: Pulsar wird gestartet bzw. das Setup geschlossen (Fußknöpfe gesperrt) */
+  const [finishing, setFinishing] = useState<"launch" | "close" | null>(null);
+  const finishingRef = useRef(false);
   const finish = useCallback(async (launch: boolean) => {
-    if (finishing.current) return;
-    finishing.current = true;
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setCountdown(null);
+    setFinishing(launch ? "launch" : "close");
     // Kein „launch“-Klang (G.1); nur der normale Klick des Knopfs.
     if (launch) {
       await api.launchApp().catch(() => undefined);
@@ -329,20 +465,18 @@ export function useSetupFlow() {
   const finishRef = useRef(finish);
   finishRef.current = finish;
 
-  // Option „Pulsar danach starten“: nach kurzem Countdown automatisch starten (abbrechbar)
-  const [countdown, setCountdown] = useState<number | null>(null);
   useEffect(() => {
     if (step === "done" && infoRef.current?.mode !== "update" && optsRef.current.launchAfter) setCountdown(COUNTDOWN_S);
   }, [step]);
   useEffect(() => {
-    if (countdown === null) return;
+    if (countdown === null || confirmClose) return; // pausiert, solange ein Dialog offen ist
     if (countdown <= 0) {
       void finishRef.current(true);
       return;
     }
     const id = window.setTimeout(() => setCountdown((c) => (c === null ? null : c - 1)), 1000);
     return () => window.clearTimeout(id);
-  }, [countdown]);
+  }, [countdown, confirmClose]);
   const stopCountdown = useCallback(() => setCountdown(null), []);
 
   // Nach einem Update startet Pulsar automatisch neu
@@ -361,27 +495,49 @@ export function useSetupFlow() {
     return () => window.clearInterval(id);
   }, [step]);
 
-  const busyRef = useRef(busy);
-  busyRef.current = busy;
-  /** Fenster schließen: während der Installation erst nachfragen */
+  // Schließen beendet gerade nicht (Rückfrage/Hinweis) → kein Abschieds-Ausblenden des Fensters
+  const closeGuarded = (step === "install" && busy) || (step === "un-run" && !unDone && !error);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (closeGuarded) root.dataset.closeGuarded = "1";
+    else delete root.dataset.closeGuarded;
+  }, [closeGuarded]);
+
+  /** Fenster schließen: während der Installation erst nachfragen, während der Deinstallation warten */
   const requestClose = useCallback(() => {
     if (stepRef.current === "install" && busyRef.current) setConfirmClose(true);
-    else void api.quit();
+    else if (stepRef.current === "un-run" && unRunningRef.current) {
+      setCloseBlocked(true);
+      window.clearTimeout(closeNoticeTimer.current);
+      closeNoticeTimer.current = window.setTimeout(() => setCloseBlocked(false), CLOSE_NOTICE_MS);
+    } else void api.quit();
   }, []);
 
-  /** Abbruch bestätigt (Dialog) */
+  /** Abbruch bestätigt (Dialog). Nur wenn wirklich noch installiert wird – sonst nur schließen. */
   const cancelInstall = useCallback(async () => {
     setConfirmClose(false);
+    if (stepRef.current !== "install" || !busyRef.current || installDoneRef.current) return;
     await api.cancelInstall().catch(() => undefined);
   }, []);
 
   const keepDataRef = useRef(keepData);
   keepDataRef.current = keepData;
   const startUninstall = useCallback(() => {
+    if (unRunningRef.current) return;
+    unRunningRef.current = true;
     const kd = keepDataRef.current;
-    goRef.current("un-run");
+    setError(null);
+    setUnProgress(null);
+    if (stepRef.current !== "un-run") goRef.current("un-run");
     emit({ type: "flow://uninstall-start", keepData: kd });
-    void api.startUninstall(kd);
+    // Sofortige Ablehnung (z. B. keine Rechte): nicht ewig bei 0 % stehen bleiben
+    api.startUninstall(kd).catch((e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e);
+      unRunningRef.current = false;
+      setCloseBlocked(false);
+      setError({ phase: "install", code: "unknown", message, retryable: true });
+      emit({ type: "uninstall://error", payload: { message } });
+    });
   }, [emit]);
 
   /** Ordner per Dialog wählen */
@@ -394,7 +550,7 @@ export function useSetupFlow() {
     if (si) setOpts((o) => ({ ...o, dir: si.defaultDir }));
   }, []);
 
-  const requiredOk = !disk || (disk.valid && disk.free >= disk.required);
+  const requiredOk = !checking && Boolean(disk?.valid) && (disk?.free ?? 0) >= (disk?.required ?? 0);
   const phaseIndex = phaseIndexOf(progress);
   const phaseDurations: PhaseDurations = phaseClock.durations;
 
@@ -402,7 +558,8 @@ export function useSetupFlow() {
     () => ({
       // Zustand
       info, infoReady, manifest, manifestError, step, dir, lang, muted, opts, disk, progress, error, done, keepData, unProgress, unDone, confirmClose, busy, countdown, tip,
-      phaseDurations, phaseStartedAt: phaseClock.since, resumedAt,
+      checking, retrying, closeBlocked,
+      phaseDurations, phaseStartedAt: phaseClock.since, resumedAt, downloadRestarted, transferred, finishing,
       // abgeleitet
       mode: info?.mode ?? "install",
       isUpdate: info?.mode === "update",
@@ -411,7 +568,7 @@ export function useSetupFlow() {
       go, introFinished, startInstall, retry, finish, stopCountdown, requestClose, cancelInstall, setConfirmClose, startUninstall, browseFolder, resetFolder,
       setOpts, setKeepData, setLang, setMuted, onEvent,
     }),
-    [info, infoReady, manifest, manifestError, step, dir, lang, muted, opts, disk, progress, error, done, keepData, unProgress, unDone, confirmClose, busy, countdown, tip, phaseDurations, phaseClock.since, resumedAt, requiredOk, phaseIndex, go, introFinished, startInstall, retry, finish, stopCountdown, requestClose, cancelInstall, startUninstall, browseFolder, resetFolder, setLang, onEvent],
+    [info, infoReady, manifest, manifestError, step, dir, lang, muted, opts, disk, progress, error, done, keepData, unProgress, unDone, confirmClose, busy, countdown, tip, checking, retrying, closeBlocked, phaseDurations, phaseClock.since, resumedAt, downloadRestarted, transferred, finishing, requiredOk, phaseIndex, go, introFinished, startInstall, retry, finish, stopCountdown, requestClose, cancelInstall, startUninstall, browseFolder, resetFolder, setLang, onEvent],
   );
 }
 

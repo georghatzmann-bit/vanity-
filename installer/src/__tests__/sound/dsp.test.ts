@@ -18,6 +18,10 @@ import {
   noiseShare,
   peakOf,
   progressBuffer,
+  Q_BUTTER,
+  rfiPeak,
+  sawtooth,
+  sawtoothAdditive,
   pulseAmp,
   renderClickTrain,
   renderHarmonicTone,
@@ -243,5 +247,25 @@ describe("Zufall", () => {
       s += x;
     }
     expect(Math.abs(s / 20000)).toBeLessThan(0.02);
+  });
+});
+
+describe("RFI-Kalibrierung (Fehlerklang)", () => {
+  it("PolyBLEP-Sägezahn: rfiPeak innerhalb von 5 % des additiven Werts, und schnell", () => {
+    const sr = SR;
+    let y = sawtoothAdditive(50, sr, Math.round(0.2 * sr));
+    y = filterSignal(y, biquadCoeffs("bandpass", 300, 1.2, sr));
+    y = filterSignal(y, biquadCoeffs("lowpass", 900, Q_BUTTER, sr));
+    const ref = peakOf(y.subarray(Math.round(0.05 * sr)));
+    const t0 = performance.now();
+    const p = rfiPeak(sr);
+    const ms = performance.now() - t0;
+    expect(Math.abs(p / ref - 1)).toBeLessThan(0.05);
+    expect(ms).toBeLessThan(20);
+  });
+  it("Sägezahn beginnt bei 0 und steigt (Phase wie Web Audio)", () => {
+    const y = sawtooth(50, SR, 10);
+    expect(Math.abs(y[0])).toBeLessThan(1e-6);
+    expect(y[5]).toBeGreaterThan(y[1]);
   });
 });

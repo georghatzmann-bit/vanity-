@@ -23,15 +23,17 @@ function RowButton({ index, title, desc, tone, onClick }: { index: string; title
         onClick();
       }}
     >
-      <span aria-hidden className={cn("obs-value w-7 shrink-0 pl-0 text-[11px] leading-4", tone === "error" ? "text-obs-error" : "text-obs-fg-3")}>
-        {index}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span id={`${id}-t`} className="block text-[14px] leading-5 font-semibold text-obs-fg">
-          {title}
+      <span className="flex min-w-0 flex-1 items-baseline gap-4">
+        <span aria-hidden className={cn("obs-value w-7 shrink-0 pl-0 text-[11px] leading-4", tone === "error" ? "text-obs-error" : "text-obs-fg-3")}>
+          {index}
         </span>
-        <span id={`${id}-d`} className="block text-[13px] leading-[18px] text-obs-fg-2">
-          {desc}
+        <span className="min-w-0 flex-1">
+          <span id={`${id}-t`} className="block text-[14px] leading-5 font-semibold text-obs-fg">
+            {title}
+          </span>
+          <span id={`${id}-d`} className="block text-[13px] leading-[18px] text-obs-fg-2">
+            {desc}
+          </span>
         </span>
       </span>
       <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-obs-fg-2" strokeWidth={1.5} />
@@ -55,7 +57,14 @@ export function Maintenance({ flow }: PageViewProps) {
         <Title>{t("maintenance.title")}</Title>
       </Block>
       <Block y={184}>
-        <p className="obs-body break-words">{t("maintenance.text", { v: installed?.version ?? "—", dir: installed?.dir ?? "—" })}</p>
+        <p className="obs-body break-words">{t("maintenance.text", { v: installed?.version ?? "—" })}</p>
+      </Block>
+      {/* Pfad als Messwert: eigene Zeile in Mono 13 (fg-2) mit Label ORDNER */}
+      <Block y={212} className="flex items-baseline">
+        <span className="obs-label w-[72px] shrink-0">{t("maintenance.folder")}</span>
+        <span className="obs-value obs-value-sm min-w-0 truncate text-obs-fg-2" title={installed?.dir} data-testid="maintenance-dir">
+          {installed?.dir ?? "—"}
+        </span>
       </Block>
       <Block y={248}>
         <div className="border-t border-obs-rule">

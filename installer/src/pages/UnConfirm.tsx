@@ -12,7 +12,9 @@ export const UNINSTALL_RAIL = ["steps.unConfirm", "steps.unRun", "steps.unDone"]
 
 export function UnConfirm({ flow }: PageViewProps) {
   const t = useT();
-  const { keepData, setKeepData } = flow;
+  const { keepData, setKeepData, info } = flow;
+  // Aus der Wartung gibt es einen Rückweg; sonst (Deinstallation aus Windows) beendet „Abbrechen“.
+  const cancel = () => (info?.mode === "maintenance" ? flow.go("maintenance", -1) : void api.quit());
   return (
     <Page testId="page-un-confirm">
       <Block y={56}>
@@ -30,12 +32,12 @@ export function UnConfirm({ flow }: PageViewProps) {
       </Block>
       <Footer
         left={
-          <ObsButton variant="ghost" className="-ml-2" onClick={() => void api.quit()}>
+          <ObsButton variant="ghost" className="-ml-2" onClick={cancel}>
             {t("uninstall.cancel")}
           </ObsButton>
         }
         right={
-          <ObsButton variant="danger-solid" icon={<Trash2 aria-hidden />} onClick={flow.startUninstall}>
+          <ObsButton variant="danger" icon={<Trash2 aria-hidden />} onClick={flow.startUninstall}>
             {t("uninstall.confirm")}
           </ObsButton>
         }

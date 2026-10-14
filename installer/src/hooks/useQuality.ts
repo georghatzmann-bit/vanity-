@@ -78,6 +78,18 @@ export function judgeWindow(q: Quality, draws: readonly number[], gaps: readonly
 
 let current: Quality | null = null;
 let auto = true;
+/** bis zu dieser Zeit (performance.now) werden keine Bilder gewertet */
+let holdUntil = 0;
+
+/** Nach Moduswechsel oder Cache-Erzeugung 2 s lang keine Bilder werten (kein Abstufen mitten im Hochdrehen) */
+export const QUALITY_HOLD_MS = 2000;
+
+export function holdQualityJudging(ms = QUALITY_HOLD_MS): void {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  holdUntil = Math.max(holdUntil, now + ms);
+  draws.length = 0;
+  gaps.length = 0;
+}
 const draws: number[] = [];
 const gaps: number[] = [];
 const subs = new Set<() => void>();
@@ -111,6 +123,7 @@ export function getQuality(): Quality {
 export function reportFrame(drawMs: number, gapMs: number): void {
   const q = ensure();
   if (!auto || q === 0 || !Number.isFinite(drawMs) || !Number.isFinite(gapMs) || gapMs > 250) return;
+  if (holdUntil && (typeof performance !== "undefined" ? performance.now() : Date.now()) < holdUntil) return;
   draws.push(drawMs);
   gaps.push(gapMs);
   if (draws.length < WINDOW_FRAMES) return;
@@ -128,6 +141,7 @@ export function reportFrame(drawMs: number, gapMs: number): void {
 export function _resetQualityForTests(q: Quality | null = null, isAuto = true): void {
   current = q;
   auto = isAuto;
+  holdUntil = 0;
   draws.length = 0;
   gaps.length = 0;
 }

@@ -25,7 +25,6 @@ import {
   introStateAt,
   introTimings,
   needleHzAt,
-  skipState,
   type IntroPhase,
   type IntroState,
   type IntroVariant,
@@ -49,6 +48,8 @@ export interface IntroScreenProps {
 export const VARIANT_WAIT_MS = 250;
 /** Überspringen: Bild springt in 150 ms, Ausgang nach 350 ms (D.7) */
 export const SKIP_JUMP_MS = 150;
+/** Überspringen: erst Panel, Achse und Zeilen in 120 ms aus, danach das Zeichen (Kern 0 → voll) ein */
+export const SKIP_OUT_MS = 120;
 export const SKIP_EXIT_MS = 350;
 /** Halten ohne `setupInfo` (D.8): Puls −30 dBFS, Kern 0,8 → 1 für 80 ms */
 export const HOLD_PULSE_DB = -30;
@@ -82,20 +83,33 @@ export interface IntroSound {
   later(ms: number, fn: () => void): void;
 }
 
+/** Ereignis der Intro-Partitur; `catchUp` = auch verspätet noch ausführen (Rauschbett muss stehen) */
+export type IntroScoreEvent = ScoreEvent & { catchUp?: boolean };
+
+/** Vorlauf (s) für den ersten Puls nach dem Anlegen der Partitur (Latenz-Offset) */
+export const SCORE_LEAD_S = 0.08;
+
+/** Modellzeit des Partitur-Starts: der erste Puls liegt mindestens 80 ms in der Zukunft (rein) */
+export function scoreStart(t0Model: number, nowModel: number, v: IntroVariant): number {
+  const first = introEvents(v).find((e) => e.kind === "pulse" || e.kind === "final");
+  if (!first) return t0Model;
+  return Math.max(t0Model, nowModel + SCORE_LEAD_S - first.at / 1000);
+}
+
 /** Die Intro-Partitur: jedes Ereignis aus `introEvents(v)` wird ein Klang-Aufruf zur Modellzeit */
-export function buildIntroScore(v: IntroVariant, snd: IntroSound): ScoreEvent[] {
-  const out: ScoreEvent[] = [];
+export function buildIntroScore(v: IntroVariant, snd: IntroSound): IntroScoreEvent[] {
+  const out: IntroScoreEvent[] = [];
   for (const ev of introEvents(v)) {
     const at = ev.at / 1000;
     switch (ev.kind) {
       case "noise-in":
-        out.push({ at, run: (m) => snd.noiseBed().set({ levelDb: ev.gainDb ?? -34, centerHz: bandpassHz(needleHzAt(ev.at, v)), q: 4, glideS: 0.3, at: m }) });
+        out.push({ at, catchUp: true, run: (m) => snd.noiseBed().set({ levelDb: ev.gainDb ?? -34, centerHz: bandpassHz(needleHzAt(ev.at, v)), q: 4, glideS: 0.3, at: m }) });
         break;
       case "search": {
         const dur = ev.durMs ?? 0;
         const curve = new Float32Array(48);
         for (let i = 0; i < curve.length; i++) curve[i] = bandpassHz(needleHzAt(ev.at + (dur * i) / (curve.length - 1), v));
-        out.push({ at, run: (m) => snd.noiseBed().follow(curve, { at: m, durS: dur / 1000 }) });
+        out.push({ at, catchUp: true, run: (m) => snd.noiseBed().follow(curve, { at: m, durS: dur / 1000 }) });
         break;
       }
       case "lock":
@@ -137,6 +151,8 @@ const MONO10 = { fontFamily: "var(--obs-mono)", fontSize: 10, fontWeight: 500, l
 const AXIS_TICKS = Array.from({ length: 17 }, (_, i) => -80 + 10 * i);
 const LABELED_ROWS = [1, 4, 8, 12, 16];
 const AXIS_Y = 386.5;
+/** Achsenbeschriftung: eine Zeile unter den (nach unten zeigenden) Strichen; links der Titel statt „−80“ */
+const AXIS_NUM_Y = 396;
 
 function minus(n: number): string {
   return n < 0 ? `−${-n}` : n > 0 ? `+${n}` : "0";
@@ -146,7 +162,7 @@ function Panel({ labelRef, countRef }: { labelRef: RefObject<SVGTextElement | nu
   const t = useT();
   return (
     <svg aria-hidden width={980} height={560} viewBox="0 40 980 560" className="pointer-events-none absolute top-0 left-0" data-testid="intro-panel">
-      <rect x={210.5} y={88.5} width={559} height={323} fill="var(--obs-bg)" stroke="var(--obs-rule-strong)" strokeWidth={1} style={{ shapeRendering: "crispEdges" }} />
+      <rect x={210.5} y={88.5} width={559} height={328} fill="var(--obs-bg)" stroke="var(--obs-rule-strong)" strokeWidth={1} style={{ shapeRendering: "crispEdges" }} />
       <g style={MONO10}>
         <text x={222} y={96} dominantBaseline="hanging">
           {t("intro.profile").toUpperCase()}
@@ -157,31 +173,33 @@ function Panel({ labelRef, countRef }: { labelRef: RefObject<SVGTextElement | nu
             {String(k).padStart(2, "0")}
           </text>
         ))}
-        <text ref={countRef} x={736} y={SUM_Y} data-testid="intro-count">
-          00
+        <text ref={countRef} x={766} y={SUM_Y - 10} textAnchor="end" style={{ letterSpacing: 0 }} data-testid="intro-count">
+          n = 00
         </text>
       </g>
       <text x={222} y={SUM_Y} style={{ fontFamily: "var(--obs-sans)", fontSize: 11, fontWeight: 600, fill: "var(--obs-fg-2)" }}>
         Σ
       </text>
-      {/* Achse −80…+80 ms, 3 px/ms; Hauptstriche alle 40 ms */}
+      {/* Achse −80…+80 ms, 3 px/ms; Hauptstriche alle 40 ms, Striche nach unten (nie durch Σ) */}
       <g style={{ shapeRendering: "crispEdges" }}>
         <line x1={250} y1={AXIS_Y} x2={730} y2={AXIS_Y} stroke="var(--obs-rule-strong)" strokeWidth={1} />
         {AXIS_TICKS.map((ms) => {
           const x = 490 + 3 * ms + 0.5;
           const major = ms % 40 === 0;
-          return <line key={ms} x1={x} y1={AXIS_Y} x2={x} y2={AXIS_Y - (major ? 8 : 4)} stroke="var(--obs-fg-3)" strokeOpacity={major ? 1 : 0.6} strokeWidth={1} />;
+          return <line key={ms} x1={x} y1={AXIS_Y} x2={x} y2={AXIS_Y + (major ? 6 : 3)} stroke="var(--obs-fg-3)" strokeOpacity={major ? 1 : 0.6} strokeWidth={1} />;
         })}
       </g>
       <g style={MONO10}>
-        {[-80, -40, 0, 40, 80].map((ms) => (
-          <text key={ms} x={490 + 3 * ms} y={391} dominantBaseline="hanging" textAnchor="middle">
+        <text x={250} y={AXIS_NUM_Y} dominantBaseline="hanging" textAnchor="start" data-testid="intro-axis-title">
+          {t("intro.phase").toUpperCase()}
+        </text>
+        {[-40, 0, 40].map((ms) => (
+          <text key={ms} x={490 + 3 * ms} y={AXIS_NUM_Y} dominantBaseline="hanging" textAnchor="middle">
             {minus(ms)}
-            {ms === 80 ? " ms" : ""}
           </text>
         ))}
-        <text x={670} y={391} dominantBaseline="hanging" textAnchor="middle">
-          {t("intro.phase").toUpperCase()}
+        <text x={730} y={AXIS_NUM_Y} dominantBaseline="hanging" textAnchor="middle">
+          {`${minus(80)} ms`}
         </text>
       </g>
     </svg>
@@ -246,6 +264,13 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
       now: () => sound.clock.now(),
       later: (ms, fn) => void window.setTimeout(fn, ms),
     };
+    // Partitur-Start: der erste Puls hat mindestens 80 ms Vorlauf; das Bild verschiebt sich mit (Bild = Ton)
+    const start = scoreStart(t0Model.current, sound.clock.now(), variant);
+    const shift = start - t0Model.current;
+    if (shift > 0) {
+      t0Model.current = start;
+      t0Ms.current = (t0Ms.current ?? performance.now()) + shift * 1000;
+    }
     const h = sound.score(buildIntroScore(variant, snd), t0Model.current);
     scoreRef.current = h;
     if (import.meta.env.DEV) {
@@ -255,11 +280,8 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
     return () => {
       h.cancel({ fadeS: 0.04 });
       scoreRef.current = null;
-      try {
-        if (variant === "full" || variant === "short") sound.noiseBed().stop({ fadeS: 0.08 });
-      } catch {
-        /* Audio blockiert nie */
-      }
+      // Das gemeinsame Rauschbett NICHT stoppen: Der reguläre Ausgang hat das eigene noise-stop der Partitur,
+      // Überspringen stoppt es in skip(); sonst gehört es schon dem Observatorium (Update/Preset).
     };
   }, [variant]);
 
@@ -336,6 +358,8 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
         return;
       }
       if (!isSkipKey(e)) return;
+      // Nach dem Überspringen bzw. ab dem Ausgang gehören die Tasten schon der Willkommen-Seite
+      if (run.current.exitStarted || run.current.skipAt !== null) return;
       // Bedienelemente der Titelleiste behalten Enter/Leertaste
       const tgt = e.target instanceof Element ? e.target : null;
       if (tgt && tgt.closest("header") && (e.key === "Enter" || e.key === " ")) return;
@@ -358,13 +382,17 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
     let canvasAlpha = 1;
     let chromeFade = 1;
     let exitStart = tm.exitAt;
+    /** Überspringen: Kern des Zeichens 0 → 1 erst nach dem Ausblenden (sonst Doppelbelichtung) */
+    let skipCore = 1;
     if (R.skipAt !== null) {
-      const u = isReduced ? 1 : clamp01((tt - R.skipAt) / SKIP_JUMP_MS);
+      const uOut = isReduced ? 1 : clamp01((tt - R.skipAt) / SKIP_OUT_MS);
+      const uIn = isReduced ? 1 : clamp01((tt - R.skipAt - SKIP_OUT_MS) / SKIP_JUMP_MS);
       const frozen = introStateAt(R.skipAt, v);
-      const end = skipState(v);
-      canvasAlpha = 1 - u;
-      chromeFade = 1 - u;
-      s = { ...frozen, markAlpha: Math.max(frozen.markAlpha, u), acquired: true, foldedLine: true, phase: "acquired", core: end.core };
+      canvasAlpha = 1 - uOut;
+      chromeFade = 1 - uOut;
+      skipCore = frozen.markAlpha >= 1 ? 1 : uIn;
+      // Kern nur über das SVG-Zeichen (markAlpha), im Canvas blendet der eingefrorene Kern aus
+      s = { ...frozen, markAlpha: Math.max(frozen.markAlpha, uIn), acquired: true, foldedLine: true, phase: "acquired", core: frozen.core * canvasAlpha };
       exitStart = R.skipAt + SKIP_EXIT_MS;
     } else {
       s = introStateAt(Math.min(tt, exitStart - 1e-3), v);
@@ -399,7 +427,7 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
     }
 
     // Halte-Pulse vorausplanen (phasenrichtig zum Schlusspuls)
-    let coreAlpha = 1;
+    let coreAlpha = skipCore;
     if (R.holding && R.fadeStart === null) {
       const k = Math.max(1, Math.ceil((tt - R.holdBase) / PULSE_MS));
       const next = R.holdBase + k * PULSE_MS;
@@ -408,14 +436,16 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
         sound.pulse({ timbre: "radio", gainDb: HOLD_PULSE_DB, at: modelAt(next) });
       }
       const last = R.holdBase + Math.floor((tt - R.holdBase) / PULSE_MS) * PULSE_MS;
-      coreAlpha = tt - last < HOLD_BLINK_MS && tt - R.holdBase >= PULSE_MS ? 1 : 0.8;
+      coreAlpha = skipCore * (tt - last < HOLD_BLINK_MS && tt - R.holdBase >= PULSE_MS ? 1 : 0.8);
     }
 
     // Ebenen
     const root = rootRef.current;
     if (root) root.style.opacity = String(1 - exitE);
     if (mapRef.current) mapRef.current.style.opacity = String(s.mapAlpha);
-    const chrome = s.panelAlpha * chromeFade;
+    // Rahmen, Achse und Tuner blenden bei der Faltung über 200 ms aus (auch im Kurz-Intro, kein harter Schritt)
+    const panelA = isReduced ? s.panelAlpha : Math.min(clamp01(tt / 300), 1 - clamp01((tt - tm.foldAt) / 200));
+    const chrome = panelA * chromeFade;
     if (panelRef.current) panelRef.current.style.opacity = String(chrome);
     if (tunerLayerRef.current) tunerLayerRef.current.style.opacity = String(chrome);
     if (objectRef.current) objectRef.current.style.opacity = String(s.mapAlpha);
@@ -434,7 +464,7 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
       R.lastRate = rate;
     }
     if (s.sumCount !== R.lastCount && countRef.current) {
-      countRef.current.textContent = String(s.sumCount).padStart(2, "0");
+      countRef.current.textContent = `n = ${String(s.sumCount).padStart(2, "0")}`;
       R.lastCount = s.sumCount;
     }
 
@@ -534,12 +564,12 @@ export function IntroScreen({ info, reduced, quality, onExit }: IntroScreenProps
         )}
       </div>
 
-      {/* Objektzeile y 428 */}
-      <div ref={objectRef} className="pointer-events-none absolute inset-x-0 top-[381px] text-center" style={{ opacity: 0 }}>
+      {/* Objektzeile y 424 */}
+      <div ref={objectRef} className="pointer-events-none absolute inset-x-0 top-[384px] text-center" style={{ opacity: 0 }}>
         <span className="obs-label">{t("intro.object")}</span>
       </div>
-      {/* Gefaltet aus 16 Rotationen · P 1,3373 s · simuliertes Profil – y 448 */}
-      <div className="pointer-events-none absolute inset-x-0 top-[401px] text-center" aria-hidden={!stage.folded}>
+      {/* Gefaltet aus 16 Rotationen · P 1,3373 s · simuliertes Profil – y 444 */}
+      <div className="pointer-events-none absolute inset-x-0 top-[404px] text-center" aria-hidden={!stage.folded}>
         {stage.folded && (
           <span className="obs-label" data-testid="intro-folded">
             {folded.before}

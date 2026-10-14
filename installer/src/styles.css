@@ -19,7 +19,7 @@
     height: 40px;
     padding: 0 20px;
     border-radius: 2px;
-    border: 1px solid transparent;
+    border: var(--hair, 1px) solid transparent;
     font-family: var(--obs-sans);
     font-size: 13px;
     line-height: 16px;
@@ -105,7 +105,7 @@
     width: 36px;
     height: 18px;
     flex-shrink: 0;
-    border: 1px solid var(--obs-control);
+    border: var(--hair, 1px) solid var(--obs-control);
     border-radius: 2px;
     transition:
       background-color 120ms var(--obs-ease),
@@ -145,7 +145,7 @@
     width: 472px;
     height: 64px;
     padding: 0 0 0 0;
-    border-bottom: 1px solid var(--obs-rule);
+    border-bottom: var(--hair, 1px) solid var(--obs-rule);
     text-align: left;
     cursor: pointer;
     transition: background-color 120ms var(--obs-ease);
@@ -162,7 +162,7 @@
     gap: 16px;
     width: 472px;
     height: 72px;
-    border-bottom: 1px solid var(--obs-rule);
+    border-bottom: var(--hair, 1px) solid var(--obs-rule);
     text-align: left;
     transition: background-color 120ms var(--obs-ease);
   }
@@ -194,7 +194,7 @@
     width: 16px;
     height: 16px;
     flex-shrink: 0;
-    border: 1px solid var(--obs-control);
+    border: var(--hair, 1px) solid var(--obs-control);
     border-radius: 2px;
     transition:
       background-color 120ms var(--obs-ease),
@@ -212,7 +212,7 @@
     height: 40px;
     padding: 0 12px;
     background: var(--obs-panel);
-    border: 1px solid var(--obs-control);
+    border: var(--hair, 1px) solid var(--obs-control);
     border-radius: 2px;
     color: var(--obs-fg);
     font-family: var(--obs-mono);
@@ -225,6 +225,43 @@
   .obs-input:focus-visible {
     outline: none;
     border-color: var(--obs-signal);
-    box-shadow: inset 0 0 0 1px var(--obs-signal);
+    box-shadow: inset 0 0 0 var(--hair, 1px) var(--obs-signal);
   }
+  /* ungültig: Rand in Fehlerfarbe – auch bei Fokus (kein Gelb) */
+  .obs-input[aria-invalid="true"],
+  .obs-input[aria-invalid="true"]:focus,
+  .obs-input[aria-invalid="true"]:focus-visible {
+    border-color: var(--obs-error);
+    box-shadow: none;
+  }
+}
+
+/*
+ * Haarlinien (Spec B.8): 1 Gerätepixel statt 1 CSS-px – bei 150 % Skalierung sonst 1,5 px, also weich
+ * und doppelt. main.tsx setzt --hair = floor(dpr)/dpr px und --hair-k = floor(dpr)/dpr. Linien-Divs
+ * werden per scale gestaucht (rastert auch ohne Layout in Gerätepixeln scharf), Ränder nutzen --hair.
+ * Ohne Ebene, damit es die Utilities schlägt.
+ */
+:root {
+  --hair: 1px;
+  --hair-k: 1;
+}
+.h-px {
+  height: 1px;
+  transform: scaleY(var(--hair-k));
+  transform-origin: 0 0;
+}
+.w-px {
+  width: 1px;
+  transform: scaleX(var(--hair-k));
+  transform-origin: 0 0;
+}
+.border {
+  border-width: var(--hair);
+}
+.border-t {
+  border-top-width: var(--hair);
+}
+.last\:border-b:last-child {
+  border-bottom-width: var(--hair);
 }

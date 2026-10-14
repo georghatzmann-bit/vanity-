@@ -19,7 +19,8 @@ const ROW_WRITE_MS = 160;
 const FOLD_MS = 3900;
 const ACQUIRED_MS = 4500;
 const EXIT_MS = 5300;
-const EXIT_DUR_MS = 300;
+/** Ausblenden des Intros (Zeichen + Text), danach erst tritt die erste Seite auf (gestaffelt, nicht gekreuzt) */
+const EXIT_DUR_MS = 180;
 
 /** Spitzenzeiten der 16 Zeilen in der Vollfassung: 1150, 2487,3, 2637,3 … 3771,3 */
 export const ROW_PULSE_TIMES: number[] = (() => {
@@ -104,7 +105,7 @@ export function introTimings(v: IntroVariant): IntroTimings {
     case "full":
       return { lockAt: LOCK_MS, foldAt: FOLD_MS, foldDur: 600, acquiredAt: ACQUIRED_MS, exitAt: EXIT_MS, exitDur: EXIT_DUR_MS, endAt: EXIT_MS + EXIT_DUR_MS, finalAt: ACQUIRED_MS };
     case "short":
-      return { lockAt: 300, foldAt: 350, foldDur: 400, acquiredAt: 750, exitAt: 1050, exitDur: 300, endAt: 1350, finalAt: 750 };
+      return { lockAt: 300, foldAt: 350, foldDur: 400, acquiredAt: 750, exitAt: 1050, exitDur: 180, endAt: 1230, finalAt: 750 };
     case "reduced":
       return { lockAt: 0, foldAt: 900, foldDur: 200, acquiredAt: 900, exitAt: 1800, exitDur: 200, endAt: 2000, finalAt: 300 + PULSE_MS };
     case "reducedShort":

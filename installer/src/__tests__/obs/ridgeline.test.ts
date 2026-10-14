@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MARK_GEOMETRY, rayAngle, rayDir } from "@shared/ui/PulsarMark";
-import { foldMean, INTRO_MARK_CENTER, INTRO_MARK_SIZE, makeRows, noiseRow, probeGain, rayTarget, ROWS, rowRay, rowToRay, SAMPLES, sampleMs, sumToRing } from "../../obs/ridgeline";
+import { FOLD_FLATTEN, foldMean, foldRowPoint, foldSegment, INTRO_MARK_CENTER, INTRO_MARK_SIZE, makeRows, noiseRow, plotX, probeGain, rayTarget, ROWS, rowBaseY, rowRay, rowStartSegment, rowTargetSegment, rowToRay, SAMPLES, sampleMs, sumToRing } from "../../obs/ridgeline";
 
 const s = INTRO_MARK_SIZE / MARK_GEOMETRY.VIEWBOX;
 const [cx, cy] = INTRO_MARK_CENTER;
@@ -77,8 +77,9 @@ describe("Faltung zum Zeichen (D.4)", () => {
         expect(Math.abs(vx * dy - vy * dx)).toBeLessThan(1e-6);
         expect(vx * dx + vy * dy).toBeGreaterThan(0);
       }
-      const a = rayTarget(i, 0);
-      const e = rayTarget(i, 160);
+      // Strahl 0: j = 0 innen; Strahl 1 umgekehrt (j = 0 außen), damit beide Bündel gleichsinnig drehen
+      const a = rayTarget(i, b === 0 ? 0 : 160);
+      const e = rayTarget(i, b === 0 ? 160 : 0);
       expect(Math.hypot(a[0] - cx, a[1] - cy)).toBeCloseTo(s * MARK_GEOMETRY.RAY_IN, 6);
       expect(Math.hypot(e[0] - cx, e[1] - cy)).toBeCloseTo(s * MARK_GEOMETRY.RAY_OUT(k), 6);
     }
@@ -97,5 +98,53 @@ describe("Faltung zum Zeichen (D.4)", () => {
     const top = sumToRing(0, 1, [0, 0]);
     expect(top[0]).toBeCloseTo(cx, 9);
     expect(top[1]).toBeLessThan(cy);
+  });
+});
+
+describe("Faltung zweistufig (D.4): glätten, dann starres Segment", () => {
+  it("jede Zeile dreht sich um weniger als 90°", () => {
+    for (let i = 1; i <= ROWS; i++) {
+      const A = rowStartSegment(i);
+      const B = rowTargetSegment(i);
+      const d = Math.abs(Math.atan2(Math.sin(B.angle - A.angle), Math.cos(B.angle - A.angle)));
+      expect(d, `Zeile ${i}`).toBeLessThan(Math.PI / 2);
+    }
+  });
+
+  it("keine Überkreuzung benachbarter Haarstrahlen bei e = 0,5", () => {
+    const e = 0.5;
+    const u = (e - FOLD_FLATTEN) / (1 - FOLD_FLATTEN);
+    const ends = (i: number) => {
+      const g = foldSegment(i, u);
+      const h = g.len / 2;
+      return [
+        [g.cx - h * Math.cos(g.angle), g.cy - h * Math.sin(g.angle)],
+        [g.cx + h * Math.cos(g.angle), g.cy + h * Math.sin(g.angle)],
+      ] as const;
+    };
+    const cr = (o: readonly number[], a: readonly number[], b: readonly number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    for (let i = 1; i < ROWS; i++) {
+      const [p1, p2] = ends(i);
+      const [q1, q2] = ends(i + 1);
+      const cross = cr(p1, p2, q1) * cr(p1, p2, q2) < 0 && cr(q1, q2, p1) * cr(q1, q2, p2) < 0;
+      expect(cross, `Zeilen ${i}/${i + 1}`).toBe(false);
+    }
+  });
+
+  it("bis e = 0,35 nur Amplitude → 0 an Ort und Stelle; e = 1 auf dem Haarstrahl; Punkte gleichmäßig", () => {
+    expect(foldRowPoint(5, 40, 0.8, 0)).toEqual([plotX(40), rowBaseY(5) - 34 * 0.8]);
+    const flat = foldRowPoint(5, 40, 0.8, FOLD_FLATTEN - 1e-9);
+    expect(flat[1]).toBeCloseTo(rowBaseY(5), 3);
+    for (const i of [1, 9, 16])
+      for (const j of [0, 80, 160]) {
+        const p = foldRowPoint(i, j, 0.5, 1);
+        const t = rayTarget(i, j);
+        expect(p[0]).toBeCloseTo(t[0], 6);
+        expect(p[1]).toBeCloseTo(t[1], 6);
+      }
+    const a = foldRowPoint(3, 0, 0, 0.6);
+    const b = foldRowPoint(3, 80, 0, 0.6);
+    const c = foldRowPoint(3, 160, 0, 0.6);
+    expect(Math.hypot(b[0] - a[0], b[1] - a[1])).toBeCloseTo(Math.hypot(c[0] - b[0], c[1] - b[1]), 6);
   });
 });

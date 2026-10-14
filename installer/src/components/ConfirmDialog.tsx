@@ -14,13 +14,17 @@ export interface ConfirmDialogProps {
   cancelLabel: string;
   onConfirm(): void;
   onCancel(): void;
+  /** Das vorher fokussierte Element gibt es nicht mehr: Fokus selbst setzen (z. B. auf die H1) */
+  onClosedFocus?(): void;
 }
 
-export function ConfirmDialog({ open, title, text, confirmLabel, cancelLabel, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, text, confirmLabel, cancelLabel, onConfirm, onCancel, onClosedFocus }: ConfirmDialogProps) {
   const id = useId();
   const box = useRef<HTMLDivElement>(null);
   const cancelRef = useRef(onCancel);
   cancelRef.current = onCancel;
+  const closedFocusRef = useRef(onClosedFocus);
+  closedFocusRef.current = onClosedFocus;
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +55,14 @@ export function ConfirmDialog({ open, title, text, confirmLabel, cancelLabel, on
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
-      if (prev?.isConnected) prev.focus({ preventScroll: true });
+      // Erst nach dem Rendern prüfen: Der Knopf, der den Dialog geöffnet hat, kann inzwischen fehlen.
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        // jemand hat schon woanders hin fokussiert (nicht im ausblendenden Dialog)
+        if (active && active !== document.body && active.isConnected && !active.closest("[role=alertdialog]")) return;
+        if (prev?.isConnected) prev.focus({ preventScroll: true });
+        else closedFocusRef.current?.();
+      }, 0);
     };
   }, [open]);
 

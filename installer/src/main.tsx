@@ -18,6 +18,20 @@ window.addEventListener("contextmenu", (e) => {
   if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
 });
 
+// Haarlinien = 1 Gerätepixel (150 %: 0,667 CSS-px statt weicher 1,5 px); folgt Änderungen der Skalierung
+function syncHairline() {
+  const dpr = window.devicePixelRatio || 1;
+  const k = Math.max(1, Math.floor(dpr)) / dpr;
+  document.documentElement.style.setProperty("--hair", `${k}px`);
+  document.documentElement.style.setProperty("--hair-k", String(k));
+  try {
+    matchMedia(`(resolution: ${dpr}dppx)`).addEventListener("change", syncHairline, { once: true });
+  } catch {
+    /* ältere Engines: einmal reicht */
+  }
+}
+syncHairline();
+
 // Installer startet mit halber Lautstärke (J.3); Kontext früh vorbereiten
 sound.setVolume(0.5);
 sound.warmup();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildIntroScore, isSkipKey, type IntroSound } from "../intro/IntroScreen";
+import { buildIntroScore, isSkipKey, scoreStart, SCORE_LEAD_S, type IntroSound } from "../intro/IntroScreen";
 import { tunerReading } from "../intro/Tuner";
 import { DEC_LINES, RA_LINES, RA_SEC_PX } from "../intro/SkyGrid";
 import { PULSE_MS } from "../obs/introTimeline";
@@ -95,11 +95,32 @@ describe("Intro: Partitur aus derselben Tabelle (D.2)", () => {
   });
 });
 
+describe("Intro: Partitur-Start und Nachholen", () => {
+  it("Rauschbett-Ereignisse werden auch verspätet ausgeführt (catchUp)", () => {
+    const calls: unknown[] = [];
+    const snd = { pulse: () => calls.push(1), play: () => calls.push(1), chord: () => calls.push(1), noiseBed: () => ({ set() {}, follow() {}, stop() {} }), now: () => 0, later: () => undefined };
+    const ev = buildIntroScore("full", snd as unknown as IntroSound);
+    expect(ev.filter((e) => e.catchUp).length).toBeGreaterThanOrEqual(2);
+    expect(ev.filter((e) => e.catchUp).every((e) => e.at <= 2)).toBe(true);
+  });
+  it("erster Puls hat mindestens 80 ms Vorlauf", () => {
+    for (const v of ["full", "short", "reduced", "reducedShort"] as const) {
+      const t0 = 10;
+      const now = 10.25;
+      const s = scoreStart(t0, now, v);
+      expect(s).toBeGreaterThanOrEqual(t0);
+      const first = buildIntroScore(v, { pulse() {}, play() {}, chord() {}, noiseBed: () => ({ set() {}, follow() {}, stop() {} }), now: () => 0, later() {} } as unknown as IntroSound).find((e) => e.at > 0 && e.at < 5);
+      expect(first).toBeDefined();
+    }
+    expect(scoreStart(10, 10.25, "reducedShort")).toBeGreaterThanOrEqual(10.25 + SCORE_LEAD_S - 0.2 - 1e-9);
+  });
+});
+
 describe("Intro: Ablesung und Himmelskarte (C.1, B.6)", () => {
   it("Ablesung beim Suchen und eingerastet (wörtlich)", () => {
-    expect(tunerReading(0.412, false, "de")).toBe("f 0,412 Hz · P 2,427 s");
-    expect(tunerReading(0.7478, true, "de")).toBe("f 0,7478 Hz · P 1,3373 s");
-    expect(tunerReading(0.7478, true, "en")).toBe("f 0.7478 Hz · P 1.3373 s");
+    expect(tunerReading(0.412, false, "de")).toBe("F 0,412 Hz · P 2,427 s");
+    expect(tunerReading(0.7478, true, "de")).toBe("F 0,7478 Hz · P 1,3373 s");
+    expect(tunerReading(0.7478, true, "en")).toBe("F 0.7478 Hz · P 1.3373 s");
   });
   it("Karte unverzerrt: 5 s RA = 115,99 px, 1′ Dec = 100 px, CP 1919 bei (490, 250)", () => {
     for (let i = 1; i < RA_LINES.length; i++) expect(RA_LINES[i][0] - RA_LINES[i - 1][0]).toBeCloseTo(5 * RA_SEC_PX, 0);

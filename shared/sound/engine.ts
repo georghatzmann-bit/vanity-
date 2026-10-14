@@ -73,6 +73,11 @@ export interface ScoreEvent {
   /** s relativ zu t0 */
   at: number;
   run: (atModel: number) => void;
+  /**
+   * Zustandssetzend (Rauschbett an, Kurve, Lock, Stopp): verspätet (bis CATCHUP_MAX_S) trotzdem
+   * sofort ausführen statt überspringen. Pulse/Klicks ohne `catchUp` werden weiter verworfen.
+   */
+  catchUp?: boolean;
 }
 
 export interface ScoreHandle {
@@ -94,6 +99,11 @@ export interface EngineDeps {
   random?: Rng;
 }
 
+/** Verspätete `catchUp`-Ereignisse werden bis zu diesem Alter (s) nachgeholt */
+export const CATCHUP_MAX_S = 3;
+/** Ohne `catchUp`: älter als das → übersprungen (kein Nachhol-Burst) */
+const LATE_DROP_S = 0.25;
+
 /** Scheduler-Takt und Lookahead (E.4) */
 export const TICK_MS = 25;
 export const LOOKAHEAD_S = 0.12;
@@ -104,6 +114,10 @@ const CHORD_SEND_DB = -12;
 
 interface Tracked {
   stop(fadeS: number): void;
+  /** geplante Startzeit (AudioContext-Zeit) */
+  startCt?: number;
+  /** sofort stoppen und trennen (noch nicht klingende Quelle) */
+  kill?(): void;
 }
 
 function defaultCreateContext(): AudioContext | null {
@@ -135,14 +149,20 @@ class Score {
     return this.idx >= this.events.length;
   }
 
-  /** Führt fällige Ereignisse aus; deutlich verpasste (verborgenes Fenster) werden ohne Nachhol-Burst übersprungen. */
+  /**
+   * Führt fällige Ereignisse aus. Deutlich verpasste (verborgenes Fenster) werden ohne Nachhol-Burst
+   * übersprungen – außer zustandssetzende (`catchUp`, bis 3 s alt): die laufen sofort mit t = now.
+   */
   runDue(horizon: number, now: number, capture: (list: Tracked[] | null) => void): void {
     while (this.idx < this.events.length) {
       const e = this.events[this.idx];
-      const t = this.t0 + e.at;
+      let t = this.t0 + e.at;
       if (t > horizon) break;
       this.idx++;
-      if (t < now - 0.25) continue;
+      if (t < now - LATE_DROP_S) {
+        if (!e.catchUp || t < now - CATCHUP_MAX_S) continue;
+        t = now;
+      }
       capture(this.tracked);
       try {
         e.run(t);
@@ -154,11 +174,16 @@ class Score {
     }
   }
 
-  cancel(fadeS: number): void {
+  /**
+   * Stoppt alles. Quellen, die noch gar nicht klingen (Startzeit > nowCt), sofort hart stoppen und
+   * trennen – sonst setzt ein geplanter Puls 20 ms nach der Quittung ein (Doppelklick beim Überspringen).
+   */
+  cancel(fadeS: number, nowCt: number | null = null): void {
     this.idx = this.events.length;
     for (const t of this.tracked.splice(0)) {
       try {
-        t.stop(fadeS);
+        if (nowCt !== null && t.kill && t.startCt !== undefined && t.startCt > nowCt) t.kill();
+        else t.stop(fadeS);
       } catch {
         /* ignorieren */
       }
@@ -203,7 +228,12 @@ class NoiseBedImpl implements NoiseBed {
     try {
       if (!centerHz || centerHz.length < 2 || !(o.durS > 0)) return;
       if (this.want) this.want.centerHz = centerHz[centerHz.length - 1];
-      const n = this.n;
+      let n = this.n;
+      // Bett fehlt (z. B. verspätetes noise-in), Wunsch ist aber gesetzt: aus dem Wunsch anlegen
+      if (!n && this.want) {
+        this.set({ ...this.want, glideS: 0.05, at: o.at });
+        n = this.n;
+      }
       if (!n) return;
       const ct = this.eng.ctAt(o.at);
       n.bp.frequency.cancelScheduledValues(ct);
@@ -547,6 +577,11 @@ export class SoundEngine {
       }
       oscs[0].osc.onended = () => disconnectAll([...oscs.flatMap((x) => [x.osc, x.pg]), env]);
       this.track({
+        startCt: ct,
+        kill: () => {
+          for (const x of oscs) stopSafe(x.osc, 0);
+          disconnectAll([...oscs.flatMap((x) => [x.osc, x.pg]), env]);
+        },
         stop: (f) => {
           const now = ctx.currentTime;
           rampParam(env.gain, 0, now, f);
@@ -566,7 +601,7 @@ export class SoundEngine {
       this.wake();
       return {
         cancel: (o = {}) => {
-          s.cancel(Math.max(0.005, o.fadeS ?? 0.04));
+          s.cancel(Math.max(0.005, o.fadeS ?? 0.04), this.ctx ? this.ctx.currentTime : null);
           this.scores.delete(s);
         },
       };
@@ -663,6 +698,13 @@ export class SoundEngine {
       }
       this.g = buildGraph(ctx);
       this.ctx = ctx;
+      // Kalibrierungen vorwärmen (sonst rechnet der erste Fehlerklang sie synchron – Long Task, Knack)
+      try {
+        rfiPeak(this.g.sr);
+        filteredNoiseRms([{ spec: { type: "bandpass", f: 1000, q: 18 }, share: 1 }], this.g.sr);
+      } catch {
+        /* nur Vorwärmen */
+      }
       this.clock.attach(ctx);
       this.applyMaster();
       this.bindUnlock();
@@ -858,6 +900,11 @@ export class SoundEngine {
     osc.stop(ct + Math.max(0, o.holdS) + 7 * Math.max(0.005, o.tauS));
     osc.onended = () => disconnectAll([osc, gain, send]);
     this.track({
+      startCt: ct,
+      kill: () => {
+        stopSafe(osc, 0);
+        disconnectAll([osc, gain, send]);
+      },
       stop: (f) => {
         const now = ctx.currentTime;
         rampParam(gain.gain, 0, now, f);
@@ -879,9 +926,15 @@ export class SoundEngine {
         src.connect(gn);
         gn.connect(g.uiBus);
         const send = reverb ? sendToReverb(g, gn, SEND_DB) : null;
-        src.start(snapToSample(this.ctAt(at), g.sr));
+        const startCt = snapToSample(this.ctAt(at), g.sr);
+        src.start(startCt);
         src.onended = () => disconnectAll([src, gn, send]);
         this.track({
+          startCt,
+          kill: () => {
+            stopSafe(src, 0);
+            disconnectAll([src, gn, send]);
+          },
           stop: (f) => {
             rampParam(gn.gain, 0, ctx.currentTime, f);
             stopSafe(src, ctx.currentTime + f + 0.01);
@@ -939,6 +992,12 @@ export class SoundEngine {
         osc.stop(ct + D + 0.01);
         osc.onended = () => disconnectAll(nodes);
         this.track({
+          startCt: ct,
+          kill: () => {
+            stopSafe(osc, 0);
+            stopSafe(src, 0);
+            disconnectAll(nodes);
+          },
           stop: (f) => {
             const now = ctx.currentTime;
             try {
@@ -988,6 +1047,11 @@ export class SoundEngine {
         src.stop(end + 0.01);
         src.onended = () => disconnectAll([src, bp, env]);
         this.track({
+          startCt: ct,
+          kill: () => {
+            stopSafe(src, 0);
+            disconnectAll([src, bp, env]);
+          },
           stop: (f) => {
             rampParam(env.gain, 0, ctx.currentTime, f);
             stopSafe(src, ctx.currentTime + f + 0.01);
@@ -998,6 +1062,8 @@ export class SoundEngine {
         const g = this.audibleGraph();
         if (!g || !(o.peak > 0)) return;
         const ctx = g.ctx;
+        // Kalibrierung VOR der Startzeit bestimmen: sonst läge `ct` nach einer langen Rechnung in der Vergangenheit
+        const k = o.peak / rfiPeak(g.sr);
         const ct = this.ctAt(o.at);
         const osc = ctx.createOscillator();
         osc.type = "sawtooth";
@@ -1009,7 +1075,6 @@ export class SoundEngine {
         bp.connect(lp);
         lp.connect(env);
         env.connect(g.uiBus);
-        const k = o.peak / rfiPeak(g.sr);
         let last = 0;
         env.gain.setValueAtTime(0, ct);
         for (const [b0, b1] of o.bursts) {
@@ -1023,6 +1088,11 @@ export class SoundEngine {
         osc.stop(ct + last + 0.01);
         osc.onended = () => disconnectAll([osc, bp, lp, env]);
         this.track({
+          startCt: ct,
+          kill: () => {
+            stopSafe(osc, 0);
+            disconnectAll([osc, bp, lp, env]);
+          },
           stop: (f) => {
             rampParam(env.gain, 0, ctx.currentTime, f);
             stopSafe(osc, ctx.currentTime + f + 0.01);

@@ -31,15 +31,18 @@ export function OptionRow({ index, title, desc, checked, onChange }: OptionRowPr
         onChange(!checked);
       }}
     >
-      <span aria-hidden className="obs-value w-7 shrink-0 text-[11px] leading-4 text-obs-fg-3">
-        {String(index).padStart(2, "0")}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span id={`${id}-t`} className="block text-[14px] leading-5 font-semibold text-obs-fg">
-          {title}
+      {/* Index und Titel teilen die Grundlinie (first baseline); die Gruppe bleibt senkrecht mittig */}
+      <span className="flex min-w-0 flex-1 items-baseline gap-4">
+        <span aria-hidden className="obs-value w-7 shrink-0 text-[11px] leading-4 text-obs-fg-3">
+          {String(index).padStart(2, "0")}
         </span>
-        <span id={`${id}-d`} className="block text-[13px] leading-[18px] text-obs-fg-2">
-          {desc}
+        <span className="min-w-0 flex-1">
+          <span id={`${id}-t`} className="block text-[14px] leading-5 font-semibold text-obs-fg">
+            {title}
+          </span>
+          <span id={`${id}-d`} className="block text-[13px] leading-[18px] text-obs-fg-2">
+            {desc}
+          </span>
         </span>
       </span>
       <span aria-hidden className="obs-label w-[26px] text-right">

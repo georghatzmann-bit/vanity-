@@ -77,12 +77,13 @@ und die Auswahl des besten DNS per `vitest` (`netauto.test.ts`).
 | Was | Ergebnis |
 |---|---|
 | `npm run typecheck` (App + Installer) | 0 Fehler |
-| `npm test` | 21 Tests bestanden (inkl. Prüfung, dass jeder benutzte Text existiert) |
-| `cargo test` App (Linux) | 143 Tests bestanden (Datenbank, Scanner, Bilder, Optimierer 38, Netzwerk 41 – darunter DNS-Pakete gegen einen lokalen UDP-Server und TCP-Ping gegen lokale Ports) |
-| `cargo test` Installer (Linux) | bestanden |
+| `npm test` | App 53 Tests, Installer 237 Tests bestanden (Stand 14.10.2026) – Installer: Klang-Engine (Dispersions-Sweep, Pegelgesetz, Rhythmus→Ton-Überblendung, Pulsplanung mit Zittern/Aussetzern, **Melodie-Test**: alle Tonhöhen sind Obertöne von 173,7 Hz, keine nacheinander gespielten Töne verschiedener Höhe), Drehmodell, Fortschritt→Periode, Katalog/Koordinaten, Zahlenformate, Stern-Geometrie, Intro-Zeitachse (zwei Pulse genau 1337,3 ms auseinander), Ablauf-Logik, Texte de/en |
+| `cargo test` App (Linux) | 205 Tests bestanden (Datenbank, Scanner, Bilder, Optimierer, Netzwerk, Admin-Helfer, DNS) |
+| `cargo test` Installer (Linux) | 35 Tests bestanden (unverändert – das neue Setup ändert nur die Oberfläche) |
 | `cargo xwin check --target x86_64-pc-windows-msvc` | Windows-Code (ICMP, IP Helper, WLAN, Registry, powercfg) kompiliert ohne Fehler |
 | Browser-Rundgang App (Playwright, Demo-Backend) | Alle Seiten (Cockpit, Spiele, Spiel, Netzwerk ×5, Optimieren, Berichte, Einstellungen, Palette, Boost, 4 Themes, Overlay) ohne Konsolenfehler; 33 Screenshots |
-| Browser-Rundgang Installer (Playwright, Demo-Backend) | Intro, Willkommen, Ordner, Optionen, Download, Fertig, Fehler + Fortsetzen, Wartung, Deinstallation ohne Konsolenfehler; 13 Screenshots |
+| Browser-Rundgang Installer (Playwright, Demo-Backend, `scripts/installer-tour.mjs`) | Neues Setup „Radioteleskop“: Intro (Suche, Echtzeit, Zeitraffer, Signal erfasst), Überspringen per Taste (Willkommen nach 0,8 s), Willkommen, Ordner (auch ungültig), Optionen, Installation bei 5/42/66/90 %, Fertig mit Countdown, Fehler + Fortsetzen, Abbrechen + Fortsetzen, Update, Wartung, Deinstallation bis „Signal verloren“, Zurückstellen unvollständig, Deinstallations-Fehler, reduzierte Bewegung, Englisch, Ton aus (gespeichert), 150 % Skalierung – alle Szenen erreicht, keine Konsolenfehler. Intro ohne Überspringen: Willkommen nach 5,6 s |
+| Strenge Prüfung des Setups | 3 unabhängige Prüfer (Art Director „wirkt generisch/billig?“, Bewegung Bild für Bild, Code) in 2 Runden; 107 Rohbefunde, davon 68 bestätigt und behoben (26 verworfen nach Prüfung) (u. a. Strahlen bei schneller Drehung als saubere hohle Kegel statt „Propeller“, ruhigere Polkappen, weicher Übergang der Belichtung, Fehlerdarstellung ohne Gelb, Typografie und Abstände) |
 
 Dabei gefunden und behoben: eine Endlosschleife durch Store-Selektoren, die bei jedem Rendern neue Listen erzeugten
 (Spiel-Seite, Seitenleiste), und ein verschachtelter Button im Cockpit.
@@ -96,6 +97,11 @@ Dabei gefunden und behoben: eine Endlosschleife durch Store-Selektoren, die bei 
 - **Overlay über Vollbild-Spielen:** Funktioniert nur im Fenster-/randlosen Modus (technische Grenze ohne Grafik-Hook).
 - **Speedtest-Zahlen:** hängen vom Cloudflare-Server und deiner Leitung ab; die Bufferbloat-Note ist eine Einschätzung, keine Labormessung.
 - **Windows-Benachrichtigungen und Autostart** wurden nur per Code geprüft, nicht per Klick.
+- **Klang des Setups und der App:** Die CI hört nichts. Geprüft sind Rezepte, Pegel und Zeitpunkte rechnerisch (vitest) und
+  die Pegel einmal im Chromium-Browser gemessen. Wie es auf deinen Lautsprechern klingt (z. B. der Übergang vom Rhythmus
+  zum Ton zwischen 24 und 48 Hz, der Abschluss-Akkord), ist nur von Hand auf Windows prüfbar.
+- **Leistung des Sterns auf schwachen PCs:** Die automatische Qualitätsstufe (L2/L1/L0) ist eingebaut, aber nicht auf einer
+  Windows-VM ohne Grafikkarte durchgemessen; die CI macht nur einen Screenshot des Setups nach 9 s.
 
 ## 4. Grenzen, die Pulsar offen nennt
 
