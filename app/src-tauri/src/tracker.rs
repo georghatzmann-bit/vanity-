@@ -362,6 +362,21 @@ impl TrackerState {
     }
 }
 
+/// Aktuelle Spielsitzung für den Netzwerk-Verlauf: laufen mehrere Spiele, die zuletzt gestartete
+/// mit `session_id`; keine → `None`. Ergebnis `(session_id, started_at)`.
+fn current_session_of(running: &HashMap<String, RunningEntry>) -> Option<(i64, i64)> {
+    running
+        .values()
+        .filter_map(|r| r.session_id.map(|id| (id, r.started_at)))
+        .max_by_key(|(id, started_at)| (*started_at, *id))
+}
+
+/// Die aktuelle Sitzung an den Recorder weitergeben (`NetState.current_session`). Nur **nach**
+/// Freigabe der Tracker-Sperre aufrufen.
+fn push_session(core: &Core, session: Option<(i64, i64)>) {
+    *core.net.current_session.lock_safe() = session;
+}
+
 enum TrackerEvent {
     Started(GameStartedEvent),
     Stopped(GameStoppedEvent),
@@ -416,7 +431,7 @@ impl Tracker {
             .filter(|m| m.has_criteria())
             .collect();
         let mut events = Vec::new();
-        {
+        let session = {
             let mut st = self.state.lock_safe();
             st.matchers = matchers;
             let keep: HashSet<String> = st
@@ -439,7 +454,9 @@ impl Tracker {
                 }
             }
             self.wake(&mut st);
-        }
+            current_session_of(&st.running)
+        };
+        push_session(core, session);
         self.emit(events);
     }
 
@@ -530,14 +547,16 @@ impl Tracker {
             };
             if gone {
                 let mut events = Vec::new();
-                {
+                let session = {
                     let mut st = self.state.lock_safe();
                     if let Some(entry) = st.running.remove(game_id) {
                         st.adhoc.remove(game_id);
                         st.launched.remove(game_id);
                         events.push(TrackerEvent::Stopped(finalize(core, game_id, &entry, now_ms())));
                     }
-                }
+                    current_session_of(&st.running)
+                };
+                push_session(core, session);
                 self.emit(events);
             }
         }
@@ -555,10 +574,11 @@ impl Tracker {
     }
 
     /// Alle offenen Sitzungen abschließen. `clear_games` leert zusätzlich die überwachte Liste
-    /// (Profilwechsel), `pause` hält die Erkennung bis `resume()` an.
-    pub fn finalize_all(&self, core: &Core, clear_games: bool, pause: bool) {
+    /// (Profilwechsel), `pause` hält die Erkennung bis `resume()` an. Danach gibt es keine laufende
+    /// Sitzung mehr (an den Recorder weitergegeben, Rückgabe `None`).
+    pub fn finalize_all(&self, core: &Core, clear_games: bool, pause: bool) -> Option<(i64, i64)> {
         let mut events = Vec::new();
-        {
+        let session = {
             let mut st = self.state.lock_safe();
             let now = now_ms();
             let entries: Vec<(String, RunningEntry)> = st.running.drain().collect();
@@ -574,8 +594,11 @@ impl Tracker {
             if pause {
                 st.paused = true;
             }
-        }
+            current_session_of(&st.running)
+        };
+        push_session(core, session);
         self.emit(events);
+        session
     }
 
     /// Erkennung nach `finalize_all(…, pause = true)` fortsetzen.
@@ -587,18 +610,20 @@ impl Tracker {
 
     /// Beim Beenden der App: Sitzungen speichern und Thread stoppen.
     pub fn shutdown(&self, core: &Core) {
-        self.finalize_all(core, true, true);
+        let _ = self.finalize_all(core, true, true);
         let mut st = self.state.lock_safe();
         st.shutdown = true;
         self.cv.notify_all();
     }
 
-    /// Ergebnis einer Prüfung anwenden (Start, Weiterlaufen, Ende).
-    fn apply(&self, core: &Core, found: HashMap<String, Vec<u32>>, now: i64) -> Vec<TrackerEvent> {
+    /// Ergebnis einer Prüfung anwenden (Start, Weiterlaufen, Ende). Liefert die Ereignisse und die
+    /// aktuelle Sitzung, die der Aufrufer nach Freigabe der Sperre weitergibt. Außen `None` = die
+    /// Erkennung ist pausiert/beendet, nichts weitergeben (innen `None` = keine Sitzung).
+    fn apply(&self, core: &Core, found: HashMap<String, Vec<u32>>, now: i64) -> (Vec<TrackerEvent>, Option<Option<(i64, i64)>>) {
         let mut events = Vec::new();
         let mut st = self.state.lock_safe();
         if st.paused || st.shutdown {
-            return events;
+            return (events, None);
         }
         // Liste kann sich seit dem Schnappschuss geändert haben (set_tracked_games)
         let valid: HashSet<String> = st
@@ -693,7 +718,8 @@ impl Tracker {
             }
         }
         st.launched.retain(|_, t| t.elapsed() < FAST_POLL_WINDOW * 2);
-        events
+        let session = current_session_of(&st.running);
+        (events, Some(session))
     }
 }
 
@@ -725,6 +751,10 @@ fn finalize(core: &Core, game_id: &str, entry: &RunningEntry, end: i64) -> GameS
     });
     if let Err(e) = result {
         eprintln!("Sitzung konnte nicht abgeschlossen werden: {e}");
+    }
+    // Kurz-Sitzung verworfen → ihre gepufferten Messwerte ebenfalls (Sperre: tracker → recorder)
+    if let (Some(id), true) = (entry.session_id, seconds < MIN_SESSION_SECONDS) {
+        core.net.recorder.lock_safe().discard_session(id);
     }
     GameStoppedEvent {
         game_id: game_id.to_string(),
@@ -758,7 +788,11 @@ fn thread_main(core: Arc<Core>) {
         };
         let procs = snapshot(&mut sys, own_pid);
         let found = compute_matches(&matchers, &procs);
-        let events = core.tracker.apply(&core, found, now_ms());
+        let (events, session) = core.tracker.apply(&core, found, now_ms());
+        // Nach Freigabe der Tracker-Sperre (gleich neben `emit`)
+        if let Some(session) = session {
+            push_session(&core, session);
+        }
         core.tracker.emit(events);
     }
 }
@@ -873,6 +907,39 @@ mod tests {
         e.misses = 2;
         e.first_miss_at = 33_000;
         assert_eq!(e.estimated_end(40_000), 31_500);
+    }
+
+    fn entry(started_at: i64, session_id: Option<i64>) -> RunningEntry {
+        RunningEntry { started_at, last_seen: started_at, first_miss_at: started_at, last_flush: started_at, session_id, pids: vec![], misses: 0 }
+    }
+
+    #[test]
+    fn current_session_is_latest_started_with_id() {
+        let mut running = HashMap::new();
+        assert_eq!(current_session_of(&running), None);
+        running.insert("a".to_string(), entry(1_000, Some(5)));
+        assert_eq!(current_session_of(&running), Some((5, 1_000)));
+        running.insert("b".to_string(), entry(2_000, Some(9)));
+        assert_eq!(current_session_of(&running), Some((9, 2_000)), "zuletzt gestartet");
+        running.insert("c".to_string(), entry(3_000, None));
+        assert_eq!(current_session_of(&running), Some((9, 2_000)), "ohne session_id zählt nicht");
+    }
+
+    #[test]
+    fn finalize_pushes_session_and_discards_short_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = crate::state::test_core(tmp.path());
+        let short = core.db.with(|db| db.session_insert("g", 1_000, 1_000, 0)).unwrap();
+        *core.net.current_session.lock_safe() = Some((short.id, 1_000));
+        // Vermisst → Ende ≈ Start, also kürzer als 10 s
+        core.tracker.state.lock_safe().running.insert("g".into(), RunningEntry { misses: 2, ..entry(1_000, Some(short.id)) });
+        assert_eq!(core.tracker.finalize_all(&core, false, false), None);
+        assert_eq!(*core.net.current_session.lock_safe(), None, "keine laufende Sitzung mehr");
+        assert!(core.db.with(|db| db.session_get(short.id)).unwrap().is_none(), "Kurz-Sitzung gelöscht");
+        // apply im Pausenzustand gibt nichts weiter
+        core.tracker.state.lock_safe().paused = true;
+        let (events, session) = core.tracker.apply(&core, HashMap::new(), 5_000);
+        assert!(events.is_empty() && session.is_none());
     }
 
     #[test]

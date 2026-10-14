@@ -66,14 +66,12 @@ pub struct NetState {
     /// Aufzeichnung des Verlaufs (Datenbank v2)
     pub(crate) recorder: Mutex<recorder::Recorder>,
     /// Schreib-Koordination des Recorders (außerhalb seiner Sperre)
-    #[allow(dead_code)] // benutzt ab Phase 0b/1
     pub(crate) flush: recorder::FlushGate,
     /// Byte-Zähler und CPU je Monitor-Takt
     pub(crate) load: Mutex<ifstats::LoadSampler>,
     /// Zwischengespeicherte Hauptverbindung
     pub(crate) link: Mutex<Option<link::PrimaryLink>>,
     /// Ermittlung der Hauptverbindung läuft (nie zwei gleichzeitig)
-    #[allow(dead_code)] // benutzt ab Phase 0b/1
     pub(crate) link_refreshing: AtomicBool,
     /// Ruhezeit bis (ms): Pulsars eigener Speedtest/WLAN-Scan
     pub(crate) quiet_until: AtomicI64,
@@ -87,13 +85,15 @@ pub struct NetState {
 }
 
 impl NetState {
-    /// Laufenden Monitor anhalten (kein Fehler, wenn keiner läuft). Meldet dem Recorder den Stopp
-    /// (offene Ereignisse und Block schließen); das Schreiben plant der Datenbasis-Kern.
-    pub fn stop_monitor(&self) {
-        if let Some(h) = self.monitor.lock_safe().take() {
-            h.stop();
-            self.recorder.lock_safe().on_stop(crate::util::now_ms());
-        }
+    /// Laufenden Monitor anhalten (kein Fehler, wenn keiner läuft; synchron, wartet nie). Meldet dem
+    /// Recorder den Stopp (offene Ereignisse und Block schließen). Liefert `true`, wenn ein Monitor
+    /// lief – dann plant der Aufrufer das Schreiben ([`hook::schedule_flush`]) bzw. schreibt beim
+    /// Beenden selbst ([`NetState::flush_now`]).
+    pub fn stop_monitor(&self) -> bool {
+        let Some(h) = self.monitor.lock_safe().take() else { return false };
+        h.stop();
+        self.recorder.lock_safe().on_stop(crate::util::now_ms());
+        true
     }
 
     /// Offene Puffer des Recorders synchron schreiben (vor Lesebefehlen, beim Beenden). Fehler
@@ -106,8 +106,13 @@ impl NetState {
 
     /// Was der Monitor-Hook vor `Recorder::ingest` braucht (kleine Sperren, nie zusammen gehalten).
     pub(crate) fn ingest_ctx(&self, now: i64) -> recorder::IngestCtx {
+        // Grund der Ruhezeit: Pulsars Speedtest (läuft oder endete eben – danach gelten noch 5 s),
+        // sonst ein aktiver WLAN-Scan
+        let speed_end = self.speed.last_end();
+        let speedtest = self.speed.is_running() || (speed_end > 0 && now - speed_end <= speed::QUIET_END_MS + 1_000);
         recorder::IngestCtx {
             quiet: now < self.quiet_until.load(Ordering::SeqCst),
+            quiet_reason: if speedtest { recorder::QuietReason::Speedtest } else { recorder::QuietReason::WifiScan },
             session: *self.current_session.lock_safe(),
             link: self.link.lock_safe().as_ref().map(link::PrimaryLink::lite),
         }
@@ -144,7 +149,9 @@ pub async fn net_ping_once(target: PingTarget, count: Option<u32>) -> CmdResult<
 #[tauri::command]
 pub async fn net_monitor_start(app: AppHandle, state: State<'_, Shared>, targets: Vec<PingTarget>, interval_ms: Option<u32>) -> CmdResult<()> {
     let core = state.inner().clone();
-    core.net.stop_monitor();
+    if core.net.stop_monitor() {
+        hook::schedule_flush(&core);
+    }
     if targets.is_empty() {
         return Ok(());
     }
@@ -155,7 +162,9 @@ pub async fn net_monitor_start(app: AppHandle, state: State<'_, Shared>, targets
 
 #[tauri::command]
 pub async fn net_monitor_stop(state: State<'_, Shared>) -> CmdResult<()> {
-    state.net.stop_monitor();
+    if state.net.stop_monitor() {
+        hook::schedule_flush(state.inner());
+    }
     Ok(())
 }
 
@@ -364,10 +373,13 @@ pub async fn net_speedtest(app: AppHandle, state: State<'_, Shared>) -> CmdResul
         let (rx, tx) = core.net.load.lock_safe().rates(crate::util::now_ms());
         rx.zip(tx).map(|(r, t)| r + t)
     };
-    let result = speed::run(&app, &core.net.speed).await?;
-    // Protokollieren (`speedtest`-Ereignis); ein Fehler beim Speichern ändert das Ergebnis nicht.
+    // Setzt die Ruhezeit (Start: now + 60 s, Ende: now + 5 s)
+    let result = speed::run(&app, &core.net.speed, &core.net.quiet_until).await?;
+    // Protokollieren (`speedtest`-Ereignis) und gleich schreiben; ein Fehler beim Speichern ändert
+    // das Ergebnis nicht.
     let link = core.net.link_lite();
     core.net.recorder.lock_safe().push_speedtest(crate::util::now_ms(), &result, link.as_ref(), local_mbps);
+    hook::schedule_flush(&core);
     Ok(result)
 }
 
@@ -507,7 +519,7 @@ mod tests {
     fn state_is_default_and_idle() {
         let s = NetState::default();
         assert!(!s.monitor_running());
-        s.stop_monitor();
+        assert!(!s.stop_monitor(), "kein Monitor lief");
         assert!(!s.monitor_running());
         assert!(!s.speed.is_running());
         assert!(s.servers.get("cs2").is_none());
@@ -533,6 +545,13 @@ mod tests {
         assert!(ctx.quiet);
         assert_eq!(ctx.session, Some((7, 500)));
         assert!(!s.ingest_ctx(2_000).quiet, "Ruhezeit endet genau bei quiet_until");
+        assert_eq!(ctx.quiet_reason, recorder::QuietReason::WifiScan, "kein Speedtest → WLAN-Scan");
+        assert!(s.speed.try_begin());
+        assert_eq!(s.ingest_ctx(1_000).quiet_reason, recorder::QuietReason::Speedtest);
+        s.speed.end();
+        let now = crate::util::now_ms();
+        assert_eq!(s.ingest_ctx(now + 1_000).quiet_reason, recorder::QuietReason::Speedtest, "Nachlauf nach dem Test");
+        assert_eq!(s.ingest_ctx(now + 60_000).quiet_reason, recorder::QuietReason::WifiScan);
         assert!(s.link_lite().is_none());
     }
 }

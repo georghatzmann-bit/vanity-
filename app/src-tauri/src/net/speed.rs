@@ -3,7 +3,7 @@
 //! abbrechbar.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -33,11 +33,18 @@ const UPLOAD_CHUNK: usize = 64 * 1024;
 pub const CANCELLED: &str = "Abgebrochen.";
 pub const ALREADY_RUNNING: &str = "Es läuft bereits ein Speedtest.";
 
+/// Ruhezeit ab dem Start eines Tests (`quiet_until = now + 60 s`, `docs/API.md` „Ruhezeit“).
+pub const QUIET_START_MS: i64 = 60_000;
+/// Ruhezeit nach dem Ende eines Tests (auch bei Abbruch/Fehler: `quiet_until = now + 5 s`).
+pub const QUIET_END_MS: i64 = 5_000;
+
 /// Steuerung des laufenden Tests (im `NetState`).
 #[derive(Default)]
 pub struct SpeedControl {
     running: AtomicBool,
     cancel: AtomicBool,
+    /// Ende des letzten Tests (ms, 0 = noch keiner) – für den Grund der Ruhezeit
+    last_end: AtomicI64,
 }
 
 impl SpeedControl {
@@ -52,6 +59,12 @@ impl SpeedControl {
 
     pub fn end(&self) {
         self.running.store(false, Ordering::SeqCst);
+        self.last_end.store(crate::util::now_ms(), Ordering::SeqCst);
+    }
+
+    /// Ende des letzten Tests (ms, 0 = noch keiner).
+    pub fn last_end(&self) -> i64 {
+        self.last_end.load(Ordering::SeqCst)
     }
 
     pub fn is_running(&self) -> bool {
@@ -70,11 +83,40 @@ impl SpeedControl {
     }
 }
 
-/// Setzt `running` beim Verlassen von `run` zurück – auch bei Fehlern und Abbruch.
-struct RunGuard<'a>(&'a SpeedControl);
+/// Setzt `running` beim Verlassen von `run` zurück und verkürzt die Ruhezeit auf `now + 5 s` –
+/// auch bei Fehlern und Abbruch.
+struct RunGuard<'a> {
+    ctl: &'a SpeedControl,
+    quiet: &'a AtomicI64,
+    /// Wert, den der Start gesetzt hat (`None` = es galt schon eine längere Ruhezeit). Hat
+    /// inzwischen jemand anderes verlängert (z. B. ein WLAN-Scan), bleibt dessen Ruhezeit.
+    set_at_start: Option<i64>,
+}
+
+impl<'a> RunGuard<'a> {
+    /// Ruhezeit `now + 60 s` setzen (nie verkürzen).
+    fn begin(ctl: &'a SpeedControl, quiet: &'a AtomicI64, now: i64) -> Self {
+        let until = now + QUIET_START_MS;
+        let prev = quiet.fetch_max(until, Ordering::SeqCst);
+        RunGuard { ctl, quiet, set_at_start: (prev < until).then_some(until) }
+    }
+
+    fn finish(&self, now: i64) {
+        let end = now + QUIET_END_MS;
+        let shortened = self
+            .set_at_start
+            .is_some_and(|ours| self.quiet.compare_exchange(ours, end, Ordering::SeqCst, Ordering::SeqCst).is_ok());
+        if !shortened {
+            // Jemand hat die Ruhezeit seit dem Start geändert: nur verlängern, nie verkürzen
+            self.quiet.fetch_max(end, Ordering::SeqCst);
+        }
+        self.ctl.end();
+    }
+}
+
 impl Drop for RunGuard<'_> {
     fn drop(&mut self) {
-        self.0.end();
+        self.finish(crate::util::now_ms());
     }
 }
 
@@ -167,11 +209,12 @@ struct Shared {
 }
 
 /// Den Test ausführen. Sendet `net://speed` und liefert das Ergebnis.
-pub async fn run(app: &AppHandle, ctl: &SpeedControl) -> Result<SpeedResult, String> {
+pub async fn run(app: &AppHandle, ctl: &SpeedControl, quiet_until: &AtomicI64) -> Result<SpeedResult, String> {
     if !ctl.try_begin() {
         return Err(ALREADY_RUNNING.into());
     }
-    let _guard = RunGuard(ctl);
+    // Ruhezeit: während Pulsars eigenem Test keine Ereignisse und keine Momentaufnahmen
+    let _guard = RunGuard::begin(ctl, quiet_until, crate::util::now_ms());
     let progress = |p: SpeedProgress| {
         let _ = app.emit(EVENT_SPEED, &p);
     };
@@ -484,9 +527,40 @@ mod tests {
         assert!(!c.is_running());
         assert!(c.try_begin(), "neuer Start löscht das Abbruch-Flag");
         assert!(!c.cancelled());
+        let quiet = AtomicI64::new(0);
         {
-            let _g = RunGuard(&c);
+            let _g = RunGuard::begin(&c, &quiet, crate::util::now_ms());
         }
         assert!(!c.is_running(), "Guard setzt running zurück");
+        assert!(c.last_end() > 0);
+    }
+
+    #[test]
+    fn quiet_time_60s_then_5s() {
+        let c = SpeedControl::default();
+        let quiet = AtomicI64::new(0);
+        assert!(c.try_begin());
+        let g = RunGuard::begin(&c, &quiet, 1_000);
+        assert_eq!(quiet.load(Ordering::SeqCst), 61_000, "Start: now + 60 s");
+        g.finish(20_000);
+        assert_eq!(quiet.load(Ordering::SeqCst), 25_000, "Ende: now + 5 s");
+        assert!(!c.is_running());
+        std::mem::forget(g);
+
+        // Ein WLAN-Scan hat die Ruhezeit währenddessen verlängert → bleibt
+        let quiet = AtomicI64::new(0);
+        let g = RunGuard::begin(&c, &quiet, 1_000);
+        quiet.store(90_000, Ordering::SeqCst);
+        g.finish(20_000);
+        assert_eq!(quiet.load(Ordering::SeqCst), 90_000);
+        std::mem::forget(g);
+
+        // Längere Ruhezeit vor dem Start wird nicht verkürzt
+        let quiet = AtomicI64::new(200_000);
+        let g = RunGuard::begin(&c, &quiet, 1_000);
+        assert_eq!(quiet.load(Ordering::SeqCst), 200_000);
+        g.finish(20_000);
+        assert_eq!(quiet.load(Ordering::SeqCst), 200_000);
+        std::mem::forget(g);
     }
 }

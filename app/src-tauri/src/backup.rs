@@ -7,8 +7,8 @@ use std::sync::Arc;
 use rusqlite::{Connection, OpenFlags};
 use tauri::State;
 
-use crate::db::{Db, SCHEMA_VERSION};
-use crate::error::{blocking, io_err, CmdResult};
+use crate::db::{Db, PRE_V2_PREFIX, SCHEMA_VERSION};
+use crate::error::{blocking, io_err, CmdResult, LockExt};
 use crate::models::LibraryBackup;
 use crate::state::{Core, Shared};
 use crate::util::{display_path, is_plain_name, mtime_ms, now_ms, parse_timestamp_name, timestamp_name};
@@ -71,8 +71,14 @@ pub fn list_db_backups(dir: &Path) -> Vec<LibraryBackup> {
     list
 }
 
+/// Die Kopie vor dem Datenbank-Update (`pulsar-vor-v2-…`) ist kein automatisches Backup: Sie zählt
+/// nicht zu den 10 und wird nie automatisch gelöscht (nur mit ihr startet eine ältere Version).
+fn is_auto_backup(b: &LibraryBackup) -> bool {
+    !b.file.starts_with(PRE_V2_PREFIX)
+}
+
 fn prune_db_backups(dir: &Path, keep: usize) {
-    for old in list_db_backups(dir).into_iter().skip(keep) {
+    for old in list_db_backups(dir).into_iter().filter(is_auto_backup).skip(keep) {
         let _ = fs::remove_file(&old.path);
     }
 }
@@ -89,11 +95,22 @@ pub fn backup_db(db: &Db, dir: &Path) -> CmdResult<LibraryBackup> {
 /// Backup anlegen, wenn das neueste älter als 24 Stunden ist (oder keins existiert).
 pub fn auto_backup_if_due(core: &Core) -> CmdResult<Option<LibraryBackup>> {
     let dir = core.paths.backups_dir(&core.active_profile_id());
-    let newest = list_db_backups(&dir).first().map(|b| b.created_at);
+    let newest = list_db_backups(&dir).into_iter().find(is_auto_backup).map(|b| b.created_at);
     if newest.map(|t| now_ms() - t < AUTO_BACKUP_AGE_MS).unwrap_or(false) {
         return Ok(None);
     }
     core.db.with(|db| backup_db(db, &dir)).map(Some)
+}
+
+/// Messverlauf aufräumen (`Db::cleanup_history`), dann das tägliche Backup, falls fällig – in
+/// dieser Reihenfolge, damit die Kopien klein bleiben. Fehler werden nur geloggt.
+fn cleanup_then_backup(core: &Core) {
+    if let Err(e) = core.db.with(|db| db.cleanup_history(now_ms())) {
+        eprintln!("Messverlauf konnte nicht aufgeräumt werden: {e}");
+    }
+    if let Err(e) = auto_backup_if_due(core) {
+        eprintln!("Automatisches Backup fehlgeschlagen: {e}");
+    }
 }
 
 /// Automatisches Backup im Hintergrund (beim Start und nach einem Profilwechsel).
@@ -103,21 +120,18 @@ pub fn auto_backup_in_background(core: Arc<Core>) {
         .spawn(move || {
             // Start nicht verzögern
             std::thread::sleep(std::time::Duration::from_secs(5));
-            if let Err(e) = auto_backup_if_due(&core) {
-                eprintln!("Automatisches Backup fehlgeschlagen: {e}");
-            }
+            cleanup_then_backup(&core);
         });
 }
 
-/// Läuft PULSAR länger am Stück (z. B. im Infobereich), stündlich prüfen, ob das tägliche Backup fällig ist.
+/// Läuft PULSAR länger am Stück (z. B. im Infobereich), stündlich den Messverlauf aufräumen und
+/// prüfen, ob das tägliche Backup fällig ist.
 pub fn auto_backup_daily(core: Arc<Core>) {
     let _ = std::thread::Builder::new()
         .name("pulsar-backup-daily".into())
         .spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_secs(60 * 60));
-            if let Err(e) = auto_backup_if_due(&core) {
-                eprintln!("Automatisches Backup fehlgeschlagen: {e}");
-            }
+            cleanup_then_backup(&core);
         });
 }
 
@@ -276,7 +290,12 @@ pub fn restore_db(core: &Core, file: &str) -> CmdResult<()> {
 
     // Keine Windows-Änderung darf gleichzeitig laufen: sie liest und schreibt die Sicherungen
     let _change = crate::elevate::change_lock();
-    core.tracker.finalize_all(core, false, true);
+    // Kein Schreiben des Messverlaufs während der Wiederherstellung (wartet auf einen laufenden)
+    let _history = core.net.flush.write_lock.lock_safe();
+    let _ = core.tracker.finalize_all(core, false, true);
+    // Sitzungs-IDs können danach neu vergeben sein: gepufferte Messwerte und gemerkte rowids
+    // verwerfen (Epoche +1), bevor die Datei ersetzt wird
+    core.net.recorder.lock_safe().discard_session_data();
     let result = (|| -> CmdResult<()> {
         let mut guard = core.db.lock();
         // Ohne geöffnete Datenbank sind die aktuellen Sicherungen von Windows-Änderungen unbekannt
@@ -472,6 +491,35 @@ mod tests {
         let err = open_with_recovery(&paths, "p1").err().unwrap();
         assert!(err.contains("neueren"), "{err}");
         assert!(path.is_file());
+    }
+
+    #[test]
+    fn pre_v2_copy_is_never_pruned() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Db::open(&tmp.path().join("pulsar.db")).unwrap();
+        let dir = tmp.path().join("backups");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(format!("{PRE_V2_PREFIX}20200101-000000.db")), b"x").unwrap();
+        for i in 0..12 {
+            fs::write(dir.join(format!("pulsar-2020010{}-0000{:02}.db", i % 9 + 1, i)), b"x").unwrap();
+        }
+        backup_db(&db, &dir).unwrap();
+        let list = list_db_backups(&dir);
+        assert_eq!(list.iter().filter(|b| is_auto_backup(b)).count(), KEEP_DB_BACKUPS);
+        assert!(list.iter().any(|b| b.file.starts_with(PRE_V2_PREFIX)), "Kopie vor dem Update bleibt");
+    }
+
+    #[test]
+    fn restore_discards_buffered_session_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let core = crate::state::test_core(tmp.path());
+        let dir = core.paths.backups_dir(&core.active_profile_id());
+        let file = core.db.with(|db| backup_db(db, &dir)).unwrap().file;
+        let epoch = core.net.recorder.lock_safe().epoch();
+        restore_db(&core, &file).unwrap();
+        assert_eq!(core.net.recorder.lock_safe().epoch(), epoch + 1);
+        // Die Wiederherstellung hält das Schreiben nicht dauerhaft an
+        assert!(core.net.flush.write_lock.try_lock().is_ok());
     }
 
     #[test]
