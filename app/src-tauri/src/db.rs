@@ -1,4 +1,6 @@
-//! SQLite-Datenbank pro Profil: Bibliothek (JSON-Objekte), Schlüssel/Wert-Speicher und Spielsitzungen.
+//! SQLite-Datenbank pro Profil: Bibliothek (JSON-Objekte), Schlüssel/Wert-Speicher, Spielsitzungen
+//! und (ab Schema v2) der Netzwerk-Verlauf (`session_samples`, `ping_hourly`, `net_events`).
+//! Vertrag: `docs/API.md`, „Datenbank v2“.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -9,10 +11,11 @@ use serde_json::Value;
 
 use crate::error::{db_err, io_err, CmdResult, LockExt};
 use crate::models::{PlayStats, Session};
+use crate::net::hist_types::{method_str, HourlyRow, NetEvent};
 use crate::util::now_ms;
 
 /// Aktuelle Schema-Version (`PRAGMA user_version`).
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -28,6 +31,79 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_game ON sessions(game_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_start ON sessions(start);
 "#;
+
+/// Netzwerk-Verlauf (Schema v2, wörtlich nach Vertrag).
+const SCHEMA_V2: &str = r#"
+CREATE TABLE IF NOT EXISTS session_samples (
+  session_id   INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  chunk_start  INTEGER NOT NULL,
+  target_key   TEXT    NOT NULL,
+  target_label TEXT    NOT NULL,
+  method       TEXT    NOT NULL,
+  n            INTEGER NOT NULL,
+  data         BLOB    NOT NULL,
+  PRIMARY KEY (session_id, chunk_start)
+);
+CREATE TABLE IF NOT EXISTS ping_hourly (
+  hour_start  INTEGER NOT NULL,
+  target_key  TEXT    NOT NULL,
+  net_id      TEXT    NOT NULL,
+  connection  TEXT    NOT NULL,
+  kind        TEXT    NOT NULL,
+  label       TEXT    NOT NULL,
+  method      TEXT    NOT NULL,
+  n           INTEGER NOT NULL,
+  lost        INTEGER NOT NULL,
+  sum_rtt     REAL    NOT NULL,
+  sum_jitter  REAL    NOT NULL,
+  n_jitter    INTEGER NOT NULL,
+  max_rtt     REAL,
+  spikes      INTEGER NOT NULL,
+  covered_ms  INTEGER NOT NULL,
+  PRIMARY KEY (hour_start, target_key, net_id, connection)
+);
+CREATE TABLE IF NOT EXISTS net_events (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  t            INTEGER NOT NULL,
+  end_t        INTEGER,
+  kind         TEXT    NOT NULL,
+  target_key   TEXT,
+  target_label TEXT,
+  method       TEXT,
+  net_id       TEXT    NOT NULL DEFAULT '',
+  connection   TEXT,
+  value        REAL,
+  cause        TEXT,
+  scope        TEXT,
+  session_id   INTEGER,
+  detail       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_net_events_t ON net_events(t);
+CREATE INDEX IF NOT EXISTS idx_net_events_kind_t ON net_events(kind, t);
+CREATE INDEX IF NOT EXISTS idx_net_events_session ON net_events(session_id);
+"#;
+
+const DAY_MS: i64 = 24 * 3_600_000;
+/// Rohdaten (`session_samples`): nur die neuesten so vielen Sitzungen mit Messwerten …
+pub const SAMPLES_KEEP_SESSIONS: usize = 50;
+/// … höchstens so alt …
+pub const SAMPLES_MAX_AGE_MS: i64 = 90 * DAY_MS;
+/// … und zusammen höchstens so groß (`SUM(length(data))`, 8 MB).
+pub const SAMPLES_MAX_BYTES: i64 = 8_000_000;
+/// Stunden-Summen (`ping_hourly`) höchstens so alt.
+pub const HOURLY_MAX_AGE_MS: i64 = 400 * DAY_MS;
+/// Ausreißer (`spike`): höchstens so viele Zeilen …
+pub const SPIKE_MAX_ROWS: i64 = 10_000;
+/// … höchstens so alt …
+pub const SPIKE_MAX_AGE_MS: i64 = 180 * DAY_MS;
+/// … und ab diesem Alter ohne `detail`.
+pub const SPIKE_DETAIL_AGE_MS: i64 = 30 * DAY_MS;
+/// Alle anderen Ereignisse höchstens so alt …
+pub const EVENTS_MAX_AGE_MS: i64 = 365 * DAY_MS;
+/// … und je Art höchstens so viele Zeilen.
+pub const EVENTS_MAX_ROWS_PER_KIND: i64 = 20_000;
+/// Name der Kopie vor der Migration auf v2 (`backups/pulsar-vor-v2-<JJJJMMTT-HHMMSS>.db`).
+pub const PRE_V2_PREFIX: &str = "pulsar-vor-v2-";
 
 /// Erlaubte Tabellennamen für die generischen Befehle (schützt vor SQL-Injection).
 pub fn table_name(t: &str) -> CmdResult<&'static str> {
@@ -90,11 +166,25 @@ impl Db {
         };
         db.migrate()?;
         db.cleanup_empty_sessions()?;
+        // Verlauf aufräumen ist nie ein Grund, die Datenbank nicht zu öffnen
+        if let Err(e) = db.cleanup_history(now_ms()) {
+            eprintln!("Messverlauf konnte nicht aufgeräumt werden: {e}");
+        }
         Ok(db)
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Lesender Zugriff auf die Verbindung (Lesebefehle des Netzwerk-Verlaufs).
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
+
+    /// Schreibender Zugriff (eigene Transaktionen, z. B. das Schreiben des Recorders).
+    pub fn conn_mut(&mut self) -> &mut Connection {
+        &mut self.conn
     }
 
     fn migrate(&mut self) -> CmdResult<()> {
@@ -113,8 +203,110 @@ impl Db {
             tx.execute_batch("PRAGMA user_version = 1").map_err(db_err)?;
             tx.commit().map_err(db_err)?;
         }
-        // Zukünftige Migrationen: if version < 2 { … }
+        if version == 1 {
+            self.copy_before_v2();
+        }
+        if version < 2 {
+            let tx = self.conn.transaction().map_err(db_err)?;
+            tx.execute_batch(SCHEMA_V2).map_err(db_err)?;
+            tx.execute_batch("PRAGMA user_version = 2").map_err(db_err)?;
+            tx.commit().map_err(db_err)?;
+        }
+        // Zukünftige Migrationen: if version < 3 { … }
         Ok(())
+    }
+
+    /// Vor der Migration v1 → v2: Kopie `backups/pulsar-vor-v2-<Zeit>.db`, wenn es schon Sitzungen
+    /// gibt (eine ältere Pulsar-Version öffnet die migrierte Datei nicht mehr). Best effort: Fehler
+    /// werden nur geloggt.
+    fn copy_before_v2(&self) {
+        let has_sessions: bool = self
+            .conn
+            .query_row("SELECT EXISTS(SELECT 1 FROM sessions)", [], |r| r.get(0))
+            .unwrap_or(false);
+        if !has_sessions {
+            return;
+        }
+        let Some(dir) = self.path.parent().map(|p| p.join("backups")) else { return };
+        let stamp = crate::util::timestamp_name();
+        let dest = std::iter::once(dir.join(format!("{PRE_V2_PREFIX}{stamp}.db")))
+            .chain((2..100).map(|i| dir.join(format!("{PRE_V2_PREFIX}{stamp}-{i}.db"))))
+            .find(|p| !p.exists());
+        let Some(dest) = dest else { return };
+        if let Err(e) = self.backup_into(&dest) {
+            eprintln!("Kopie vor dem Datenbank-Update konnte nicht angelegt werden: {e}");
+        }
+    }
+
+    /// Netzwerk-Verlauf aufräumen (Regeln je Tabelle und Ereignisart, `docs/API.md` „Datenbank
+    /// v2“). Eine Transaktion; liefert die Zahl gelöschter bzw. gekürzter Zeilen.
+    pub fn cleanup_history(&mut self, now: i64) -> CmdResult<u64> {
+        let tx = self.conn.transaction().map_err(db_err)?;
+        let mut changed = 0usize;
+        // session_samples: 90 Tage, dann die 50 neuesten Sitzungen und höchstens 8 MB
+        changed += tx
+            .execute("DELETE FROM session_samples WHERE chunk_start < ?1", params![now - SAMPLES_MAX_AGE_MS])
+            .map_err(db_err)?;
+        let per_session: Vec<(i64, i64)> = {
+            let mut stmt = tx
+                .prepare(
+                    "SELECT session_id, SUM(length(data)) FROM session_samples
+                     GROUP BY session_id ORDER BY MAX(chunk_start) DESC, session_id DESC",
+                )
+                .map_err(db_err)?;
+            let rows = stmt
+                .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<i64>>(1)?.unwrap_or(0))))
+                .map_err(db_err)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(db_err)?
+        };
+        for id in samples_to_drop(&per_session) {
+            changed += tx
+                .execute("DELETE FROM session_samples WHERE session_id = ?1", params![id])
+                .map_err(db_err)?;
+        }
+        // ping_hourly: 400 Tage
+        changed += tx
+            .execute("DELETE FROM ping_hourly WHERE hour_start < ?1", params![now - HOURLY_MAX_AGE_MS])
+            .map_err(db_err)?;
+        // spike: 180 Tage, 10 000 Zeilen, ab 30 Tagen ohne detail
+        changed += tx
+            .execute("DELETE FROM net_events WHERE kind = 'spike' AND t < ?1", params![now - SPIKE_MAX_AGE_MS])
+            .map_err(db_err)?;
+        changed += tx
+            .execute(
+                "DELETE FROM net_events WHERE kind = 'spike' AND id NOT IN
+                 (SELECT id FROM net_events WHERE kind = 'spike' ORDER BY t DESC, id DESC LIMIT ?1)",
+                params![SPIKE_MAX_ROWS],
+            )
+            .map_err(db_err)?;
+        changed += tx
+            .execute(
+                "UPDATE net_events SET detail = NULL WHERE kind = 'spike' AND t < ?1 AND detail IS NOT NULL",
+                params![now - SPIKE_DETAIL_AGE_MS],
+            )
+            .map_err(db_err)?;
+        // alle anderen Arten: 365 Tage, je Art 20 000 Zeilen (Ausreißer verdrängen nichts)
+        changed += tx
+            .execute("DELETE FROM net_events WHERE kind <> 'spike' AND t < ?1", params![now - EVENTS_MAX_AGE_MS])
+            .map_err(db_err)?;
+        let kinds: Vec<String> = {
+            let mut stmt = tx
+                .prepare("SELECT DISTINCT kind FROM net_events WHERE kind <> 'spike'")
+                .map_err(db_err)?;
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0)).map_err(db_err)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(db_err)?
+        };
+        for kind in kinds {
+            changed += tx
+                .execute(
+                    "DELETE FROM net_events WHERE kind = ?1 AND id NOT IN
+                     (SELECT id FROM net_events WHERE kind = ?1 ORDER BY t DESC, id DESC LIMIT ?2)",
+                    params![kind, EVENTS_MAX_ROWS_PER_KIND],
+                )
+                .map_err(db_err)?;
+        }
+        tx.commit().map_err(db_err)?;
+        Ok(changed as u64)
     }
 
     /// Entfernt Sitzungs-Reste ohne Dauer (z. B. nach einem Absturz innerhalb der ersten Minute).
@@ -374,6 +566,124 @@ impl Db {
     }
 }
 
+/// Welche Sitzungen ihre Rohdaten verlieren: `per_session` = `(session_id, Bytes)`, neueste zuerst.
+/// Behalten werden die 50 neuesten, solange die Summe 8 MB nicht übersteigt (die neueste bleibt
+/// immer).
+fn samples_to_drop(per_session: &[(i64, i64)]) -> Vec<i64> {
+    let mut total = 0i64;
+    per_session
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (id, bytes))| {
+            total = total.saturating_add(*bytes);
+            (i >= SAMPLES_KEEP_SESSIONS || (i > 0 && total > SAMPLES_MAX_BYTES)).then_some(*id)
+        })
+        .collect()
+}
+
+// =============================================================================================
+// Schreib-Bausteine des Netzwerk-Verlaufs (laufen in der Transaktion des Recorders)
+// =============================================================================================
+
+/// Ein Block Sitzungs-Messwerte, fremdschlüsselsicher: Gibt es die Sitzung nicht (mehr), wird er
+/// still verworfen; ein schon vorhandener Block bleibt. `true` = geschrieben.
+#[allow(clippy::too_many_arguments)]
+pub fn insert_samples_chunk(
+    conn: &Connection,
+    session_id: i64,
+    chunk_start: i64,
+    target_key: &str,
+    target_label: &str,
+    method: &str,
+    n: i64,
+    data: &[u8],
+) -> rusqlite::Result<bool> {
+    let changed = conn.execute(
+        "INSERT INTO session_samples(session_id, chunk_start, target_key, target_label, method, n, data)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE EXISTS(SELECT 1 FROM sessions WHERE id = ?1)
+         ON CONFLICT(session_id, chunk_start) DO NOTHING",
+        params![session_id, chunk_start, target_key, target_label, method, n, data],
+    )?;
+    Ok(changed > 0)
+}
+
+/// Stunden-Summen addieren (Upsert; `max_rtt` mit `CASE`, weil SQLites `max(a, NULL)` NULL wäre).
+pub fn upsert_hourly(conn: &Connection, row: &HourlyRow) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO ping_hourly(hour_start, target_key, net_id, connection, kind, label, method,
+                                 n, lost, sum_rtt, sum_jitter, n_jitter, max_rtt, spikes, covered_ms)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+         ON CONFLICT(hour_start, target_key, net_id, connection) DO UPDATE SET
+           n = n + excluded.n, lost = lost + excluded.lost, sum_rtt = sum_rtt + excluded.sum_rtt,
+           sum_jitter = sum_jitter + excluded.sum_jitter, n_jitter = n_jitter + excluded.n_jitter,
+           spikes = spikes + excluded.spikes, covered_ms = covered_ms + excluded.covered_ms,
+           max_rtt = CASE WHEN max_rtt IS NULL THEN excluded.max_rtt
+                          WHEN excluded.max_rtt IS NULL THEN max_rtt
+                          ELSE max(max_rtt, excluded.max_rtt) END,
+           kind = excluded.kind, label = excluded.label, method = excluded.method",
+        params![
+            row.hour_start,
+            row.target_key,
+            row.net_id,
+            row.connection.as_str(),
+            row.kind.as_str(),
+            row.label,
+            method_str(row.method),
+            row.n,
+            row.lost,
+            row.sum_rtt,
+            row.sum_jitter,
+            row.n_jitter,
+            row.max_rtt,
+            row.spikes,
+            row.covered_ms,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Neues Ereignis anlegen; `detail` ist schon auf 1 KiB gekappt. Liefert die rowid.
+pub fn insert_event(conn: &Connection, e: &NetEvent, detail: Option<&str>) -> rusqlite::Result<i64> {
+    conn.execute(
+        "INSERT INTO net_events(t, end_t, kind, target_key, target_label, method, net_id, connection,
+                                value, cause, scope, session_id, detail)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        params![
+            e.t,
+            e.end_t,
+            e.kind.as_str(),
+            e.target_key,
+            e.target_label,
+            e.method.map(method_str),
+            e.net_id,
+            e.connection.map(|c| c.as_str()),
+            e.value.filter(|v| v.is_finite()),
+            e.cause.map(|c| c.as_str()),
+            e.scope.map(|s| s.as_str()),
+            e.session_id,
+            detail,
+        ],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// Offenes Ereignis auf den aktuellen Stand bringen (`end_t`, `value`, `cause`, `scope`, `detail`).
+/// `false` = Zeile gibt es nicht (mehr).
+pub fn update_event(conn: &Connection, id: i64, e: &NetEvent, detail: Option<&str>) -> rusqlite::Result<bool> {
+    let changed = conn.execute(
+        "UPDATE net_events SET end_t = ?2, value = ?3, cause = ?4, scope = ?5, detail = ?6 WHERE id = ?1",
+        params![
+            id,
+            e.end_t,
+            e.value.filter(|v| v.is_finite()),
+            e.cause.map(|c| c.as_str()),
+            e.scope.map(|s| s.as_str()),
+            detail,
+        ],
+    )?;
+    Ok(changed > 0)
+}
+
 /// Gemeinsamer Zugriff auf die aktive Datenbank (wird beim Profilwechsel ausgetauscht).
 #[derive(Default)]
 pub struct DbHandle {
@@ -424,7 +734,15 @@ mod tests {
     fn schema_version_and_wal() {
         let (_d, db) = temp_db();
         let v: i64 = db.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 1);
+        assert_eq!(v, 2);
+        assert_eq!(v, SCHEMA_VERSION);
+        for t in ["session_samples", "ping_hourly", "net_events"] {
+            let n: i64 = db
+                .conn
+                .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1", [t], |r| r.get(0))
+                .unwrap();
+            assert_eq!(n, 1, "{t}");
+        }
         let mode: String = db.conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert_eq!(mode.to_lowercase(), "wal");
     }
@@ -513,5 +831,239 @@ mod tests {
         assert!(db.backup_into(&dest).is_err(), "vorhandene Datei nicht überschreiben");
         let copy = Db::open(&dest).unwrap();
         assert_eq!(copy.list("games").unwrap().len(), 1);
+    }
+    fn count(db: &Db, sql: &str) -> i64 {
+        db.conn.query_row(sql, [], |r| r.get(0)).unwrap()
+    }
+
+    #[test]
+    fn migrates_v1_to_v2() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("p").join("pulsar.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        {
+            // Eine echte v1-Datei wie aus der Vorversion
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA_V1).unwrap();
+            conn.execute_batch("PRAGMA user_version = 1").unwrap();
+            conn.execute("INSERT INTO sessions(game_id, start, end, seconds) VALUES('g', 1000, 61000, 60)", []).unwrap();
+            conn.execute("INSERT INTO kv(key, value) VALUES('settings', '{\"theme\":\"pulsar\"}')", []).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(count(&db, "PRAGMA user_version"), 2);
+        assert_eq!(db.sessions_range(0, i64::MAX).unwrap().len(), 1, "Sitzung bleibt");
+        assert_eq!(db.kv_get("settings").unwrap()["theme"], "pulsar", "kv bleibt");
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM net_events"), 0);
+        let copies: Vec<String> = std::fs::read_dir(path.parent().unwrap().join("backups"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(copies.len(), 1, "{copies:?}");
+        assert!(copies[0].starts_with(PRE_V2_PREFIX) && copies[0].ends_with(".db"), "{copies:?}");
+        // Die Kopie ist noch v1 (für eine ältere Pulsar-Version)
+        let copy = Connection::open(path.parent().unwrap().join("backups").join(&copies[0])).unwrap();
+        let v: i64 = copy.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 1);
+        drop(db);
+        // Zweites Öffnen: keine weitere Kopie
+        let _db = Db::open(&path).unwrap();
+        assert_eq!(std::fs::read_dir(path.parent().unwrap().join("backups")).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn migration_without_sessions_makes_no_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pulsar.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(SCHEMA_V1).unwrap();
+            conn.execute_batch("PRAGMA user_version = 1").unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(count(&db, "PRAGMA user_version"), 2);
+        assert!(!dir.path().join("backups").exists());
+    }
+
+    #[test]
+    fn samples_cascade_on_session_delete() {
+        let (_d, mut db) = temp_db();
+        let s = db.session_insert("g", 1_000, 61_000, 60).unwrap();
+        let other = db.session_insert("h", 1_000, 61_000, 60).unwrap();
+        assert!(insert_samples_chunk(&db.conn, s.id, 1_000, "aws-x", "X", "icmp", 1, &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap());
+        assert!(insert_samples_chunk(&db.conn, other.id, 1_000, "aws-x", "X", "icmp", 0, &[1]).unwrap());
+        assert!(!insert_samples_chunk(&db.conn, s.id, 1_000, "aws-x", "X", "icmp", 0, &[1]).unwrap(), "vorhandener Block bleibt");
+        assert!(!insert_samples_chunk(&db.conn, 999, 1_000, "aws-x", "X", "icmp", 0, &[1]).unwrap(), "ohne Sitzung verworfen");
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM session_samples"), 2);
+        db.session_delete(s.id).unwrap();
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM session_samples"), 1);
+        db.delete("games", "h").unwrap();
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM session_samples"), 0, "Spiel gelöscht → Sitzungen → Messwerte");
+    }
+
+    fn hourly_row(max_rtt: Option<f64>) -> HourlyRow {
+        use crate::net::hist_types::{ConnectionKind, TargetKind};
+        use crate::net::types::PingMethod;
+        HourlyRow {
+            hour_start: 3_600_000,
+            target_key: "aws-eu-central-1".into(),
+            net_id: "abc".into(),
+            connection: ConnectionKind::Wifi,
+            kind: TargetKind::Region,
+            label: "Frankfurt".into(),
+            method: PingMethod::Icmp,
+            n: 10,
+            lost: 1,
+            sum_rtt: 200.0,
+            sum_jitter: 9.0,
+            n_jitter: 8,
+            max_rtt,
+            spikes: 1,
+            covered_ms: 10_000,
+        }
+    }
+
+    #[test]
+    fn hourly_upsert_adds_up() {
+        let (_d, db) = temp_db();
+        let read_max = |db: &Db| -> Option<f64> { db.conn.query_row("SELECT max_rtt FROM ping_hourly", [], |r| r.get(0)).unwrap() };
+        upsert_hourly(&db.conn, &hourly_row(None)).unwrap();
+        assert_eq!(read_max(&db), None);
+        upsert_hourly(&db.conn, &hourly_row(Some(40.0))).unwrap();
+        assert_eq!(read_max(&db), Some(40.0), "NULL + Wert = Wert");
+        upsert_hourly(&db.conn, &hourly_row(None)).unwrap();
+        assert_eq!(read_max(&db), Some(40.0), "Wert + NULL = Wert");
+        let mut r = hourly_row(Some(80.0));
+        r.label = "Frankfurt am Main".into();
+        upsert_hourly(&db.conn, &r).unwrap();
+        upsert_hourly(&db.conn, &hourly_row(Some(10.0))).unwrap();
+        assert_eq!(read_max(&db), Some(80.0), "größter Wert bleibt");
+        let (n, lost, sum_rtt, sum_jitter, n_jitter, spikes, covered): (i64, i64, f64, f64, i64, i64, i64) = db
+            .conn
+            .query_row("SELECT n, lost, sum_rtt, sum_jitter, n_jitter, spikes, covered_ms FROM ping_hourly", [], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
+            })
+            .unwrap();
+        assert_eq!((n, lost, n_jitter, spikes, covered), (50, 5, 40, 5, 50_000));
+        assert_eq!((sum_rtt, sum_jitter), (1000.0, 45.0));
+        let label: String = db.conn.query_row("SELECT label FROM ping_hourly", [], |r| r.get(0)).unwrap();
+        assert_eq!(label, "Frankfurt", "zuletzt geschrieben");
+        // Anderes Netz oder andere Verbindungsart → eigene Zeile
+        let mut other = hourly_row(None);
+        other.net_id = "def".into();
+        upsert_hourly(&db.conn, &other).unwrap();
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM ping_hourly"), 2);
+    }
+
+    fn event(kind: crate::net::hist_types::EventKind, t: i64) -> NetEvent {
+        NetEvent::new(kind, t)
+    }
+
+    #[test]
+    fn event_insert_and_update() {
+        use crate::net::hist_types::{EventKind, OutageScope};
+        let (_d, db) = temp_db();
+        let mut e = event(EventKind::Outage, 1_000);
+        let id = insert_event(&db.conn, &e, None).unwrap();
+        e.end_t = Some(5_000);
+        e.value = Some(4.0);
+        e.scope = Some(OutageScope::Internet);
+        assert!(update_event(&db.conn, id, &e, Some("{\"checks\":{}}")).unwrap());
+        assert!(!update_event(&db.conn, id + 1, &e, None).unwrap(), "fehlende Zeile");
+        let (end_t, value, scope, detail): (Option<i64>, Option<f64>, Option<String>, Option<String>) = db
+            .conn
+            .query_row("SELECT end_t, value, scope, detail FROM net_events WHERE id = ?1", [id], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+            })
+            .unwrap();
+        assert_eq!((end_t, value, scope.as_deref(), detail.as_deref()), (Some(5_000), Some(4.0), Some("internet"), Some("{\"checks\":{}}")));
+    }
+
+    #[test]
+    fn history_cleanup_rules() {
+        use crate::net::hist_types::EventKind;
+        let (_d, mut db) = temp_db();
+        let now = 1_000 * DAY_MS;
+        // --- session_samples: 60 Sitzungen, die älteste 100 Tage alt
+        let mut ids = Vec::new();
+        for i in 0..60i64 {
+            let start = now - (60 - i) * DAY_MS - DAY_MS / 2 + if i == 0 { -40 * DAY_MS } else { 0 };
+            let s = db.session_insert("g", start, start + 60_000, 60).unwrap();
+            insert_samples_chunk(&db.conn, s.id, start, "aws-x", "X", "icmp", 0, &[1u8; 100]).unwrap();
+            ids.push(s.id);
+        }
+        // --- ping_hourly: 401 und 399 Tage alt
+        let mut old = hourly_row(None);
+        old.hour_start = now - 401 * DAY_MS;
+        upsert_hourly(&db.conn, &old).unwrap();
+        let mut young = hourly_row(None);
+        young.hour_start = now - 399 * DAY_MS;
+        upsert_hourly(&db.conn, &young).unwrap();
+        // --- net_events: Ausreißer-Flut mit 15 000 Zeilen, dazu Aussetzer und Speedtests
+        {
+            let tx = db.conn.transaction().unwrap();
+            for i in 0..15_000i64 {
+                let mut e = event(EventKind::Spike, now - i * 600_000); // alle 10 min → ~104 Tage
+                e.detail = Some(serde_json::json!({ "count": 1 }));
+                insert_event(&tx, &e, Some("{\"count\":1}")).unwrap();
+            }
+            for d in [10, 200, 364, 366] {
+                insert_event(&tx, &event(EventKind::Outage, now - d * DAY_MS), None).unwrap();
+                insert_event(&tx, &event(EventKind::Speedtest, now - d * DAY_MS), None).unwrap();
+            }
+            insert_event(&tx, &event(EventKind::Spike, now - 181 * DAY_MS), None).unwrap();
+            tx.commit().unwrap();
+        }
+        let changed = db.cleanup_history(now).unwrap();
+        assert!(changed > 0);
+
+        // Rohdaten: die älteste (100 Tage) fällt weg, danach nur die 50 neuesten
+        let kept: Vec<i64> = {
+            let mut stmt = db.conn.prepare("SELECT DISTINCT session_id FROM session_samples ORDER BY session_id").unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(kept, ids[10..].to_vec());
+        assert_eq!(db.sessions_range(0, i64::MAX).unwrap().len(), 60, "Sitzungen selbst bleiben");
+        // Stunden: 400-Tage-Grenze
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM ping_hourly"), 1);
+        // Ausreißer: höchstens 10 000, Aussetzer und Speedtests bleiben (bis 365 Tage)
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM net_events WHERE kind = 'spike'"), SPIKE_MAX_ROWS);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM net_events WHERE kind = 'outage'"), 3);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM net_events WHERE kind = 'speedtest'"), 3);
+        assert_eq!(count(&db, &format!("SELECT COUNT(*) FROM net_events WHERE kind = 'spike' AND t < {}", now - SPIKE_MAX_AGE_MS)), 0);
+        // detail ab 30 Tagen NULL, jüngere behalten es
+        let old_with_detail = count(&db, &format!("SELECT COUNT(*) FROM net_events WHERE kind='spike' AND detail IS NOT NULL AND t < {}", now - SPIKE_DETAIL_AGE_MS));
+        assert_eq!(old_with_detail, 0);
+        let young_with_detail = count(&db, &format!("SELECT COUNT(*) FROM net_events WHERE kind='spike' AND detail IS NOT NULL AND t >= {}", now - SPIKE_DETAIL_AGE_MS));
+        assert_eq!(young_with_detail, 30 * 144 + 1);
+        // Ein zweiter Lauf ändert nichts mehr
+        assert_eq!(db.cleanup_history(now).unwrap(), 0);
+    }
+
+    #[test]
+    fn samples_size_cap_drops_oldest_sessions() {
+        assert_eq!(samples_to_drop(&[(3, 5_000_000), (2, 4_000_000), (1, 1)]), vec![2, 1]);
+        assert_eq!(samples_to_drop(&[(3, 9_000_000)]), Vec::<i64>::new(), "die neueste bleibt immer");
+        let many: Vec<(i64, i64)> = (0..55).map(|i| (100 - i, 10)).collect();
+        assert_eq!(samples_to_drop(&many), (46..=50).rev().collect::<Vec<i64>>());
+    }
+
+    #[test]
+    fn events_per_kind_cap() {
+        use crate::net::hist_types::EventKind;
+        let (_d, mut db) = temp_db();
+        let now = 1_000 * DAY_MS;
+        {
+            let tx = db.conn.transaction().unwrap();
+            for i in 0..(EVENTS_MAX_ROWS_PER_KIND + 5) {
+                insert_event(&tx, &event(EventKind::Loss, now - i * 1000), None).unwrap();
+            }
+            insert_event(&tx, &event(EventKind::Quiet, now - 5 * 1000 * EVENTS_MAX_ROWS_PER_KIND), None).unwrap();
+            tx.commit().unwrap();
+        }
+        db.cleanup_history(now).unwrap();
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM net_events WHERE kind = 'loss'"), EVENTS_MAX_ROWS_PER_KIND);
+        assert_eq!(count(&db, "SELECT MIN(t) FROM net_events WHERE kind = 'loss'"), now - (EVENTS_MAX_ROWS_PER_KIND - 1) * 1000);
+        assert_eq!(count(&db, "SELECT COUNT(*) FROM net_events WHERE kind = 'quiet'"), 1, "andere Art bleibt");
     }
 }

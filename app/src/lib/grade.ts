@@ -3,15 +3,22 @@
  */
 import type { Grade, PingSample, PingStats } from "./types";
 
+/**
+ * Grenzen der Ø-Ping-Stufen von `pingGrade` (ms): unter 20 → A+, 20–34,9 → A, 35–59,9 → B, 60–99,9 → C,
+ * 100–179,9 → D, ab 180 → F. Gemeinsame Konstante, z. B. für die Tonstufen von „Hör dein Netz“.
+ */
+export const PING_GRADE_LIMITS = [20, 35, 60, 100, 180] as const;
+
 /** Note aus Ping, Schwankung und Paketverlust (loss 0–1). Ohne Messung → null. */
 export function pingGrade(avg: number | null, jitter: number | null, loss: number): Grade | null {
   if (avg === null || !Number.isFinite(avg)) return null;
   const j = jitter ?? 0;
-  if (loss >= 0.08 || avg >= 180) return "F";
-  if (loss >= 0.03 || avg >= 100 || j >= 25) return "D";
-  if (loss >= 0.01 || avg >= 60 || j >= 12) return "C";
-  if (loss >= 0.005 || avg >= 35 || j >= 6) return "B";
-  if (loss > 0 || avg >= 20 || j >= 3) return "A";
+  const [a, b, c, d, f] = PING_GRADE_LIMITS;
+  if (loss >= 0.08 || avg >= f) return "F";
+  if (loss >= 0.03 || avg >= d || j >= 25) return "D";
+  if (loss >= 0.01 || avg >= c || j >= 12) return "C";
+  if (loss >= 0.005 || avg >= b || j >= 6) return "B";
+  if (loss > 0 || avg >= a || j >= 3) return "A";
   return "A+";
 }
 
@@ -78,13 +85,39 @@ export function summarize(targetId: string, samples: PingSample[]): PingStats {
   };
 }
 
-/** Ping-Spitzen: deutlich über dem Median (mindestens doppelt oder +40 ms) */
+/**
+ * Ausreißer-Grenze über die Antworten: `max(2 × Median, Median + 40)`; null ohne Antwort.
+ * Gleiche Regel wie im Backend (`lag::spike_limit`), gemeinsame Prüfdaten in ./fixtures/spikes.json.
+ */
+export function spikeLimit(ok: number[]): number | null {
+  const base = median(ok);
+  return base === null ? null : Math.max(base * 2, base + 40);
+}
+
+/** Ping-Spitzen (Ausreißer): echt über der Grenze; Verluste sind nie Ausreißer */
 export function countSpikes(rtts: (number | null)[]): number {
   const ok = rtts.filter((v): v is number => v !== null);
-  const base = median(ok);
-  if (base === null) return 0;
-  const limit = Math.max(base * 2, base + 40);
+  const limit = spikeLimit(ok);
+  if (limit === null) return 0;
   return ok.filter((v) => v > limit).length;
+}
+
+/** Live-Fenster: die letzten höchstens 60 Werte; bewertet wird erst ab 10 Antworten */
+export const LIVE_WINDOW = 60;
+export const LIVE_MIN_ANSWERS = 10;
+
+/**
+ * Live-Regel (wie `lag::is_live_spike` im Backend): Ist der neueste Wert von `window` (das Fenster endet mit
+ * ihm) ein Ausreißer? Nur die letzten 60 Werte zählen, mindestens 10 Antworten, Verlust ist nie ein Ausreißer.
+ */
+export function isLiveSpike(window: (number | null)[]): boolean {
+  const w = window.slice(-LIVE_WINDOW);
+  const last = w[w.length - 1];
+  if (last === null || last === undefined) return false;
+  const ok = w.filter((v): v is number => v !== null);
+  if (ok.length < LIVE_MIN_ANSWERS) return false;
+  const limit = spikeLimit(ok);
+  return limit !== null && last > limit;
 }
 
 /** Zeitreihe auf höchstens `max` Punkte verdichten (Mittelwert je Abschnitt, Verlust bleibt sichtbar) */

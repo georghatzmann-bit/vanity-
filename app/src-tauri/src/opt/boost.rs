@@ -260,7 +260,7 @@ mod tests {
     fn running(entries: &[(&str, &[u32])]) -> Vec<RunningGame> {
         entries
             .iter()
-            .map(|(id, pids)| RunningGame { game_id: id.to_string(), started_at: 0, pids: pids.to_vec() })
+            .map(|(id, pids)| RunningGame { game_id: id.to_string(), started_at: 0, pids: pids.to_vec(), session_id: None })
             .collect()
     }
 

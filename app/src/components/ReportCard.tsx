@@ -17,11 +17,36 @@ export function ReportCard({ report, compact = false, onDelete }: { report: Sess
   const game = useLibrary((s) => (report.gameId ? s.games.find((g) => g.id === report.gameId) : undefined));
   const color = gradeColor(report.grade);
   const points = report.timeline.map(([tt, rtt]) => ({ t: tt, rtt }));
+  /** Klick auf die Karte öffnet die Match-Zeitleiste */
+  const open = () => useUI.getState().navigate({ page: "reports", id: report.id });
   return (
-    <motion.div layout className={cn("glass group relative overflow-hidden rounded-xl", compact ? "p-3" : "p-4")} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+    <motion.div
+      layout
+      role="link"
+      tabIndex={0}
+      title={t("timeline.open")}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          open();
+        }
+      }}
+      className={cn("glass group relative cursor-pointer overflow-hidden rounded-xl transition-shadow outline-none hover:shadow-[0_0_0_1px_var(--nv-border-strong)] focus-visible:ring-2 focus-visible:ring-[var(--nv-accent)]", compact ? "p-3" : "p-4")}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
       <div className="flex items-center gap-3">
         {game && !compact && (
-          <button type="button" onClick={() => useUI.getState().navigate({ page: "game", id: game.id })} className="h-14 w-10 shrink-0 overflow-hidden rounded-md">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              useUI.getState().navigate({ page: "game", id: game.id });
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="h-14 w-10 shrink-0 overflow-hidden rounded-md"
+          >
             <GameCover game={game} />
           </button>
         )}
@@ -59,7 +84,16 @@ export function ReportCard({ report, compact = false, onDelete }: { report: Sess
         ))}
       </div>
       {onDelete && (
-        <button type="button" onClick={() => (onDelete(), void useBoost.getState().deleteReport(report.id))} className="absolute top-3 right-3 grid h-7 w-7 place-items-center rounded-md bg-surface-2 text-faint opacity-0 transition group-hover:opacity-100 hover:text-danger" title={t("reports.delete")}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+            void useBoost.getState().deleteReport(report.id);
+          }}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="absolute top-3 right-3 grid h-7 w-7 place-items-center rounded-md bg-surface-2 text-faint opacity-0 transition group-hover:opacity-100 hover:text-danger" title={t("reports.delete")}
+        >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}

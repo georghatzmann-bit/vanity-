@@ -80,6 +80,7 @@ windows = { version = "0.62", features = [
     "Win32_NetworkManagement_Ndis",
     "Win32_NetworkManagement_WiFi",
     "Win32_Networking_WinSock",
+    "Win32_Networking_NetworkListManager",
 ] }
 
 [dev-dependencies]

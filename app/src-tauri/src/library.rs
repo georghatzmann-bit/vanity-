@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tauri::State;
 
-use crate::error::{blocking, CmdResult};
+use crate::error::{blocking, CmdResult, LockExt};
 use crate::models::{PlayStats, Session};
 use crate::state::Shared;
 
@@ -65,8 +65,20 @@ pub async fn kv_set(state: State<'_, Shared>, key: String, value: Option<Value>)
     kv_writable(&key)?;
     let core = state.inner().clone();
     let value = value.unwrap_or(Value::Null);
-    blocking(move || core.db.with(|db| db.kv_set(&key, &value))).await
+    blocking(move || {
+        core.db.with(|db| db.kv_set(&key, &value))?;
+        // Einstellungen sofort in den Recorder spiegeln (`history.record = false` wirkt sofort).
+        // Sperr-Reihenfolge: Datenbank ist hier schon wieder frei.
+        if key == KV_SETTINGS {
+            core.net.recorder.lock_safe().apply_settings(&value);
+        }
+        Ok(())
+    })
+    .await
 }
+
+/// kv-Schlüssel der Einstellungen der Oberfläche.
+pub const KV_SETTINGS: &str = "settings";
 
 #[tauri::command]
 pub async fn playtime_stats(state: State<'_, Shared>) -> CmdResult<Vec<PlayStats>> {

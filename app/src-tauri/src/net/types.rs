@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Wie gemessen wird: ICMP-Echo (klassischer Ping) oder Dauer des TCP-Verbindungsaufbaus.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum PingMethod {
     Icmp,
@@ -15,6 +15,8 @@ pub enum PingMethod {
 #[serde(rename_all = "camelCase")]
 pub struct PingTarget {
     pub id: String,
+    /// Anzeigename (fehlt er beim Aufruf, ist er leer – rückwärtskompatibel)
+    #[serde(default)]
     pub label: String,
     /// Hostname oder IP-Adresse
     pub host: String,

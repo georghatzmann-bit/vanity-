@@ -2,11 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion } from "motion/react";
 import { api, initImgSrc } from "@/lib/api";
 import { useBoost } from "@/store/boost";
+import { useDiagnose } from "@/store/diagnose";
+import { useLag } from "@/store/lag";
 import { useLibrary } from "@/store/library";
 import { useNet } from "@/store/net";
 import { useNetAuto } from "@/store/netauto";
 import { useSettings } from "@/store/settings";
+import { useSonar } from "@/store/sonar";
 import { useUI } from "@/store/ui";
+import { useWifiScan } from "@/store/wifiscan";
 import { useDragDrop, useHotkeys, useLiveStats, useStartupTasks } from "@/hooks/useAppEffects";
 import { Background } from "@/components/Background";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -33,7 +37,7 @@ import { isTauri } from "@shared/lib/env";
 
 // Für automatische Oberflächen-Tests (nur im Entwicklungsmodus)
 if (import.meta.env.DEV) {
-  (window as unknown as Record<string, unknown>).__pulsar = { useUI, useLibrary, useSettings, useNet, useBoost, useNetAuto };
+  (window as unknown as Record<string, unknown>).__pulsar = { useUI, useLibrary, useSettings, useNet, useBoost, useNetAuto, useLag, useSonar, useWifiScan, useDiagnose };
 }
 
 function CurrentPage() {
@@ -50,7 +54,7 @@ function CurrentPage() {
     case "optimize":
       return <Optimize section={route.section} />;
     case "reports":
-      return <Reports />;
+      return <Reports id={route.id} section={route.section} />;
     case "settings":
       return <SettingsPage section={route.section} />;
     default:

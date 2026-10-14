@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Activity, CornerDownLeft, FileBarChart2, FolderSearch, Gauge, Globe, LayoutGrid, Palette, Play, Plus, RefreshCw, Search, Settings, SlidersHorizontal, Sparkles, Square, Volume2, Wand2, Zap, Eraser } from "lucide-react";
+import { Activity, CalendarDays, CornerDownLeft, FileBarChart2, FolderSearch, Gauge, Globe, LayoutGrid, Palette, Play, Plus, RefreshCw, ScrollText, Search, Settings, SlidersHorizontal, Sparkles, Square, Stethoscope, Volume2, Wand2, WifiCog, Zap, Eraser } from "lucide-react";
 import { api } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { useLanguage, useT } from "@/lib/i18n";
@@ -74,6 +74,10 @@ export function CommandPalette() {
       { id: "a-netauto", group: "actions", label: t("palette.netAuto"), sub: t("palette.netAutoSub"), icon: <Sparkles className="h-4 w-4" />, run: nav("optimize", "auto") },
       { id: "a-speed", group: "actions", label: t("palette.speedtest"), icon: <Gauge className="h-4 w-4" />, run: nav("network", "speed") },
       { id: "a-regions", group: "actions", label: t("palette.regions"), icon: <Globe className="h-4 w-4" />, run: nav("network", "regions") },
+      { id: "a-diagnose", group: "actions", label: t("palette.diagnose"), sub: t("palette.diagnoseSub"), icon: <Stethoscope className="h-4 w-4" />, run: nav("network", "diagnose") },
+      { id: "a-wifiscan", group: "actions", label: t("palette.wifiScan"), icon: <WifiCog className="h-4 w-4" />, run: nav("network", "wifi") },
+      { id: "a-isplog", group: "actions", label: t("palette.ispLog"), icon: <ScrollText className="h-4 w-4" />, run: nav("reports", "isp") },
+      { id: "a-calendar", group: "actions", label: t("palette.calendar"), icon: <CalendarDays className="h-4 w-4" />, run: nav("reports", "calendar") },
       { id: "a-scan", group: "actions", label: t("palette.scan"), icon: <FolderSearch className="h-4 w-4" />, run: () => useUI.getState().setScan(true) },
       { id: "a-add", group: "actions", label: t("palette.addManual"), icon: <Plus className="h-4 w-4" />, run: () => useUI.getState().setManual(true) },
       { id: "a-ov", group: "actions", label: t("palette.overlay"), icon: <Wand2 className="h-4 w-4" />, run: () => void api.overlayToggle().catch(() => undefined) },

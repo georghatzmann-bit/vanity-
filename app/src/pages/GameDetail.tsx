@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Heart, ImageDown, MoreHorizontal, Play, Square, Trash2, Upload, Zap } from "lucide-react";
+import { ChartSpline, Heart, ImageDown, MoreHorizontal, Play, Square, Trash2, Upload, Zap } from "lucide-react";
 import { api, errorText, imgSrc } from "@/lib/api";
 import { IMAGE_FILTERS, EXE_FILTERS, pickFile, pickFolder } from "@/lib/dialog";
-import { formatDate, formatDuration, formatRelative } from "@/lib/format";
+import { formatDate, formatDateTime, formatDuration, formatRelative } from "@/lib/format";
 import { gradeColor } from "@/lib/grade";
 import { useT } from "@/lib/i18n";
-import type { Game, ImageKind, LaunchType } from "@/lib/types";
+import type { Game, ImageKind, LaunchType, Session } from "@/lib/types";
 import { gameMenuItems } from "@/hooks/gameMenu";
 import { useNow } from "@/hooks/useNow";
 import { useBoost } from "@/store/boost";
@@ -104,13 +104,70 @@ function Reports({ game }: { game: Game }) {
   const t = useT();
   const allReports = useBoost((s) => s.reports);
   const reports = useMemo(() => allReports.filter((r) => r.gameId === game.id), [allReports, game.id]);
-  if (!reports.length) return <EmptyState icon={<Zap className="h-7 w-7" />} title={t("reports.empty")} text={t("game.noReports")} />;
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      {reports.map((r) => (
-        <ReportCard key={r.id} report={r} />
-      ))}
+    <div className="flex flex-col gap-5">
+      {reports.length ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {reports.map((r) => (
+            <ReportCard key={r.id} report={r} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={<Zap className="h-7 w-7" />} title={t("reports.empty")} text={t("game.noReports")} />
+      )}
+      <SessionList game={game} />
     </div>
+  );
+}
+
+/**
+ * Sitzungsliste (`sessions_for_game`): Einstieg in die Match-Zeitleiste – auch für Sitzungen ohne Bericht
+ * (`{ page: "reports", section: "session", id: <sessionId> }`).
+ */
+function SessionList({ game }: { game: Game }) {
+  const t = useT();
+  const reports = useBoost((s) => s.reports);
+  const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api
+      .sessionsForGame(game.id, 50)
+      .then((list) => alive && setSessions(list))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [game.id]);
+  const withReport = useMemo(() => new Set(reports.map((r) => r.sessionId).filter((x): x is number => typeof x === "number")), [reports]);
+  return (
+    <Section title={t("timeline.sessions.title")} icon={<ChartSpline className="h-4 w-4" />}>
+      <div>
+        <p className="pt-3 text-[12px] text-muted">{t("timeline.sessions.hint")}</p>
+        {failed ? (
+          <div className="py-4 text-sm text-muted">{t("timeline.sessions.failed")}</div>
+        ) : sessions && !sessions.length ? (
+          <div className="py-4 text-sm text-muted">{t("timeline.sessions.empty")}</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-1.5 py-3 md:grid-cols-2">
+            {(sessions ?? []).map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => useUI.getState().navigate({ page: "reports", section: "session", id: String(s.id) })}
+                className="group flex items-center gap-3 rounded-lg bg-surface px-3 py-2 text-left transition hover:bg-surface-2"
+                title={t("timeline.open")}
+              >
+                <ChartSpline className="h-4 w-4 shrink-0 text-muted transition group-hover:text-accent" />
+                <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{formatDateTime(s.start)}</span>
+                <span className="shrink-0 text-[12px] text-muted tabular">{formatDuration(s.seconds, { short: true })}</span>
+                {withReport.has(s.id) && <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">{t("timeline.sessions.withReport")}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </Section>
   );
 }
 

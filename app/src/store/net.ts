@@ -122,7 +122,12 @@ export const useNet = create<NetState>((set, get) => ({
     }
   },
 
-  setTarget: async (target, label) => {
+  setTarget: async (rawTarget, label) => {
+    // Das Messziel trägt einen eindeutigen Namen (`PingTarget.label`, z. B. „Stockholm (Valve)“): Er landet in
+    // Zeitleiste, Kalender, Anbieter-Protokoll und Lag-Detektiv. Regionen und Spielserver liefern als label nur
+    // den Ortsnamen (bzw. ID/Host) – dann gilt der ausführlichere Anzeigename.
+    const generic = !rawTarget.label || rawTarget.label === rawTarget.id || rawTarget.label === rawTarget.host || (label.length > rawTarget.label.length && label.startsWith(rawTarget.label));
+    const target = generic && label ? { ...rawTarget, label } : rawTarget;
     const changed = get().target?.id !== target.id;
     set({ target, targetLabel: label, samples: changed ? [] : get().samples, stats: changed ? null : get().stats, grade: changed ? null : get().grade });
     if (get().monitorOn || changed) await get().startMonitor();
@@ -132,7 +137,7 @@ export const useNet = create<NetState>((set, get) => ({
     const id = regionId ?? useSettings.getState().settings.monitorRegion;
     const region = get().regions.find((r) => r.id === id) ?? get().regions[0];
     if (!region) return;
-    await get().setTarget(region.target, region.name);
+    await get().setTarget({ ...region.target, label: `${region.name} (${region.provider})` }, region.name);
   },
 
   useGameServerTarget: async (game) => {

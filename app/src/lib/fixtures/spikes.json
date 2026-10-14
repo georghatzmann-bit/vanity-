@@ -1,0 +1,263 @@
+{
+  "count": [
+    {
+      "name": "leer",
+      "rtts": [],
+      "limit": null,
+      "spikes": 0
+    },
+    {
+      "name": "nur Verlust",
+      "rtts": [
+        null,
+        null,
+        null
+      ],
+      "limit": null,
+      "spikes": 0
+    },
+    {
+      "name": "ungerade Anzahl",
+      "rtts": [
+        10,
+        20,
+        30,
+        200,
+        15
+      ],
+      "limit": 60,
+      "spikes": 1
+    },
+    {
+      "name": "gerade Anzahl (Mittel der beiden mittleren)",
+      "rtts": [
+        10,
+        20,
+        30,
+        40,
+        100,
+        110
+      ],
+      "limit": 75,
+      "spikes": 2
+    },
+    {
+      "name": "Wert genau auf der Grenze ist kein Ausreißer",
+      "rtts": [
+        20,
+        20,
+        20,
+        60
+      ],
+      "limit": 60,
+      "spikes": 0
+    },
+    {
+      "name": "knapp über der Grenze",
+      "rtts": [
+        20,
+        20,
+        20,
+        20,
+        60,
+        60.5
+      ],
+      "limit": 60,
+      "spikes": 1
+    },
+    {
+      "name": "kleiner Grundwert: +40 greift (20 → 60)",
+      "rtts": [
+        20,
+        20,
+        20,
+        61
+      ],
+      "limit": 60,
+      "spikes": 1
+    },
+    {
+      "name": "großer Grundwert: ×2 greift (50 → 100)",
+      "rtts": [
+        50,
+        50,
+        50,
+        100,
+        101
+      ],
+      "limit": 100,
+      "spikes": 1
+    },
+    {
+      "name": "Verluste gemischt (Verlust ist nie ein Ausreißer)",
+      "rtts": [
+        20,
+        null,
+        20,
+        null,
+        20,
+        100,
+        null
+      ],
+      "limit": 60,
+      "spikes": 1
+    }
+  ],
+  "live": [
+    {
+      "name": "9 Antworten: nie bewertet",
+      "window": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        200
+      ],
+      "spike": false
+    },
+    {
+      "name": "10 Antworten: bewertet",
+      "window": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        200
+      ],
+      "spike": true
+    },
+    {
+      "name": "10 Antworten mit Verlusten dazwischen",
+      "window": [
+        20,
+        null,
+        20,
+        20,
+        null,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        200
+      ],
+      "spike": true
+    },
+    {
+      "name": "neuester Wert verloren",
+      "window": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        null
+      ],
+      "spike": false
+    },
+    {
+      "name": "neuester Wert genau auf der Grenze",
+      "window": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        60
+      ],
+      "spike": false
+    },
+    {
+      "name": "Fenster über 60: nur die letzten 60 zählen",
+      "window": [
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        20,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        100,
+        110
+      ],
+      "spike": false
+    },
+    {
+      "name": "leeres Fenster",
+      "window": [],
+      "spike": false
+    }
+  ]
+}

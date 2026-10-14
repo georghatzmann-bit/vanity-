@@ -84,7 +84,7 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     unlisteners.push(
       await listen<GameStartedEvent>("game://started", ({ gameId, startedAt }) => {
         const running = new Map(get().running);
-        running.set(gameId, { gameId, startedAt, pids: [] });
+        running.set(gameId, { gameId, startedAt, pids: [], sessionId: null });
         const launching = new Set(get().launching);
         launching.delete(gameId);
         set({ running, launching });

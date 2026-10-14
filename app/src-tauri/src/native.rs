@@ -132,7 +132,12 @@ pub fn quit(app: &AppHandle, core: &Core) {
     app.exit(0);
 }
 
-/// Sitzungen abschließen und die Datenbank schließen (mehrfach aufrufbar).
+/// Sitzungen abschließen und die Datenbank schließen (mehrfach aufrufbar). Läuft bei `quit_app`,
+/// beim Beenden über den Infobereich und bei `RunEvent::Exit` – also auf allen Beenden-Wegen.
+///
+/// Reihenfolge (`docs/API.md` „Stopp und Beenden“): Monitor anhalten → Messverlauf synchron
+/// schreiben (hier auf dem Main-Thread erlaubt) → Optimierungen zurückstellen → Sitzungen
+/// abschließen → Datenbank schließen.
 pub fn finalize(core: &Core) {
     let first = {
         let mut n = core.native.lock_safe();
@@ -141,6 +146,8 @@ pub fn finalize(core: &Core) {
         first
     };
     if first {
+        core.net.stop_monitor();
+        core.net.flush_now(core);
         crate::opt::shutdown(core);
         core.tracker.shutdown(core);
         drop(core.db.replace(None));

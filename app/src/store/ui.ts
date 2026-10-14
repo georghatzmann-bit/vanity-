@@ -4,7 +4,7 @@ import type { Game } from "@/lib/types";
 import { sound } from "@shared/sound/engine";
 
 export type Page = "cockpit" | "games" | "game" | "network" | "optimize" | "reports" | "settings";
-export type NetworkTab = "regions" | "route" | "dns" | "speed" | "connection";
+export type NetworkTab = "regions" | "route" | "dns" | "speed" | "connection" | "wifi" | "diagnose";
 
 export interface Route {
   page: Page;

@@ -1,4 +1,12 @@
 import type { Dict } from "./de";
+import { lagEn } from "./lag.en";
+import { timelineEn } from "./timeline.en";
+import { calendarEn } from "./calendar.en";
+import { sonarEn } from "./sonar.en";
+import { wifiScanEn } from "./wifiScan.en";
+import { diagnoseEn } from "./diagnose.en";
+import { ispLogEn } from "./ispLog.en";
+import { historyEn } from "./history.en";
 
 /** English texts – same keys as German. */
 export const en: Dict = {
@@ -50,6 +58,9 @@ export const en: Dict = {
     unknown: "Unknown",
     favorite: "Favorite",
     add: "Add",
+    soon: "Coming shortly – this feature is being built.",
+    saved: "Saved",
+    showInFolder: "Show in folder",
   },
   time: {
     h: "h",
@@ -123,6 +134,7 @@ export const en: Dict = {
     measuringTo: "Measuring: {target}",
     heroEmpty: "Your games, one click away",
     heroEmptyText: "Let Pulsar find your Steam, Epic and GOG games – with cover, logo and background art. Then start them here with boost.",
+    quickDiagnose: "Why is it lagging?",
   },
   games: {
     title: "Games",
@@ -200,7 +212,7 @@ export const en: Dict = {
   network: {
     title: "Network",
     subtitle: "Measure, understand, improve – no sign-up needed.",
-    tabs: { regions: "Regions", route: "Route", dns: "DNS", speed: "Speed test", connection: "Connection" },
+    tabs: { regions: "Regions", route: "Route", dns: "DNS", speed: "Speed test", connection: "Connection", wifi: "Wi-Fi", diagnose: "Why the lag?" },
     regions: {
       intro: "Pulsar measures the ping to data centers around the world. The best region makes a good cockpit target.",
       measureAll: "Measure all",
@@ -502,6 +514,7 @@ export const en: Dict = {
     worst: "Worst session",
     trend: "Avg ping of recent sessions",
     perGame: "By game",
+    section: { rounds: "Rounds", calendar: "Calendar", isp: "ISP log", lag: "Spikes" },
   },
   settings: {
     title: "Settings",
@@ -614,6 +627,11 @@ export const en: Dict = {
     flushDns: "Flush DNS cache",
     netAuto: "Optimize network automatically",
     netAutoSub: "Check DNS service and network settings",
+    diagnose: "Why is it lagging?",
+    diagnoseSub: "Guided check of Wi-Fi, router, server and line",
+    wifiScan: "Wi-Fi scanner",
+    ispLog: "ISP log",
+    calendar: "Calendar",
   },
   scan: {
     title: "Find games",
@@ -702,5 +720,21 @@ export const en: Dict = {
     noConnection: "No active network connection found.",
     noAnswer: "{value} is not answering right now – so Pulsar does not switch to it.",
     notWindows: "Only available on Windows.",
+    noSamples: "There are no measurements for this session.",
+    badRange: "Invalid time range.",
+    badScope: "Unknown scope.",
+    wifiLocked: "Wi-Fi data locked: Windows only releases it with location access. Please turn on location services and “Let desktop apps access your location” under Settings › Privacy & security › Location.",
+    fileType: "File type not allowed.",
+    fileTooBig: "File is too large.",
+    badPath: "Invalid save location.",
+    saveFailed: "The file could not be saved: {value}",
   },
+  lag: lagEn,
+  timeline: timelineEn,
+  calendar: calendarEn,
+  sonar: sonarEn,
+  wifiScan: wifiScanEn,
+  diagnose: diagnoseEn,
+  ispLog: ispLogEn,
+  history: historyEn,
 };

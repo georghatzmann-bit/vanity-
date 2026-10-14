@@ -185,6 +185,7 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
             Ok(t) => r.step("route", !t.hops.is_empty(), format!("{} Stationen, Ziel erreicht: {}", t.hops.len(), t.reached)),
             Err(e) => r.step("route", !cfg!(windows), e),
         }
+        history_steps(&app, &mut r, &regions).await;
 
         // 7) Optimieren: Tweaks lesen, Energiepläne, Boost an/aus (muss den alten Zustand zurückstellen)
         match crate::opt::opt_tweaks(app.state::<Shared>()).await {
@@ -282,6 +283,143 @@ pub fn spawn(app: AppHandle, report_file: PathBuf) {
         println!("SELFTEST {} – {}", if r.ok { "OK" } else { "FAILED" }, report_file.display());
         app.exit(if r.ok { 0 } else { 1 });
     });
+}
+
+/// Schritte der 7 Netzwerk-Funktionen (Teil 2, `docs/API.md` „Gemeinsam für die 7 Funktionen“):
+/// Adapter-Zähler, Teilroute, Lag-Momentaufnahme, WLAN-Netze, Getaktet, Messverlauf, Datei-Export.
+async fn history_steps(app: &AppHandle, r: &mut Report, regions: &[crate::net::types::Region]) {
+    use crate::net::types::PingTarget;
+
+    // Adapter-Zähler: zweimal im Abstand von ≈ 1 s, eine TCP-Messung dazwischen
+    let has_primary = crate::net::net_adapters().await.map(|l| l.iter().any(|a| a.primary)).unwrap_or(false);
+    let first = crate::net::net_if_counters(app.state::<Shared>()).await;
+    let tcp: PingTarget = from(json!({ "id": "selftest-zaehler", "label": "Cloudflare", "host": "1.1.1.1", "port": 443, "method": "tcp" }));
+    let _ = crate::net::net_ping_once(tcp, Some(1)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let second = crate::net::net_if_counters(app.state::<Shared>()).await;
+    match (first, second) {
+        (Ok(a), Ok(b)) if cfg!(windows) && has_primary => {
+            let ok = matches!((&a, &b), (Some(x), Some(y)) if y.rx_bytes >= x.rx_bytes);
+            r.step("adapter-zaehler", ok, format!("{:?} → {:?}", a.map(|c| (c.adapter, c.rx_bytes, c.tx_bytes)), b.map(|c| (c.rx_bytes, c.tx_bytes))));
+        }
+        (Ok(_), Ok(_)) => r.step("adapter-zaehler", true, "keine Hauptverbindung"),
+        (Err(e), _) | (_, Err(e)) => r.step("adapter-zaehler", false, e),
+    }
+
+    // Teilroute: bis 3 Stationen, auch leer ok
+    match crate::net::ping::resolve_host("1.1.1.1", true).await {
+        Ok(std::net::IpAddr::V4(dst)) => {
+            let hops = crate::net::quickhops::quick_hops(dst, 3, crate::net::quickhops::HOP_TIMEOUT).await;
+            let answered = hops.iter().filter(|h| h.rtt.is_some()).count();
+            r.step("teilroute", true, format!("{answered} von 3 Stationen antworten"));
+        }
+        Ok(ip) => r.step("teilroute", true, format!("keine IPv4 ({ip})")),
+        Err(e) => r.step("teilroute", false, e),
+    }
+
+    // Lag-Momentaufnahme auf Wunsch (Region Frankfurt)
+    let frankfurt = regions.iter().find(|x| x.name == "Frankfurt").or_else(|| regions.first());
+    match frankfurt {
+        Some(region) => match crate::net::net_lag_snapshot(app.state::<Shared>(), region.target.clone()).await {
+            Ok(check) => r.step(
+                "lag-momentaufnahme",
+                crate::net::lag::LagCause::parse(check.cause.as_str()).is_some(),
+                format!("Ursache {}, {} ms", check.cause.as_str(), check.snapshot.took_ms),
+            ),
+            Err(e) => r.step("lag-momentaufnahme", false, e),
+        },
+        None => r.step("lag-momentaufnahme", false, "keine Region"),
+    }
+
+    // WLAN-Netze (Zwischenspeicher) und WLAN-Zustand; Sperr-Fehler gilt als sauber
+    let scan = crate::net::net_wifi_scan(app.state::<Shared>(), Some(false)).await;
+    let state = crate::net::net_wifi_state().await;
+    let locked = |e: &String| e == crate::net::wifiscan::WIFI_LOCKED;
+    match (scan, state) {
+        (Err(e), _) if locked(&e) => r.step("wlan-netze", true, "Ortung gesperrt"),
+        (Ok(s), Ok(st)) => {
+            let detail = if s.interfaces == 0 && st.state == crate::net::wifiscan::WifiStateKind::NoService {
+                "kein WLAN-Dienst".to_string()
+            } else {
+                format!("{} Netze, Zustand {:?}", s.networks.len(), st.state)
+            };
+            r.step("wlan-netze", true, detail);
+        }
+        (Ok(_), Err(e)) => r.step("wlan-netze", locked(&e), e),
+        (Err(e), _) => r.step("wlan-netze", false, e),
+    }
+
+    // Getaktete Verbindung: antwortet (Wert egal)
+    match crate::net::net_metered().await {
+        Ok(v) => r.step("getaktet", true, format!("{v:?}")),
+        Err(e) => r.step("getaktet", false, e),
+    }
+
+    // Messverlauf gegen eine temporäre Datenbank mit eigenem Recorder
+    let (ok, detail) = history_roundtrip();
+    r.step("messwerte-speichern", ok, detail);
+
+    // Datei-Export: .txt schreiben und lesen, .exe ablehnen
+    let dir = std::env::temp_dir().join(format!("pulsar-selftest-export-{}", crate::util::now_ms()));
+    let (ok, detail) = match std::fs::create_dir_all(&dir) {
+        Ok(()) => {
+            let file = dir.join("export.txt");
+            let data = "Pulsar-Selbsttest äöü\n".as_bytes();
+            let written = crate::export::export_bytes(&file.to_string_lossy(), data);
+            let same = std::fs::read(&file).map(|b| b == data).unwrap_or(false);
+            let exe = crate::export::check_path(&dir.join("x.exe").to_string_lossy());
+            let _ = std::fs::remove_dir_all(&dir);
+            (written.is_ok() && same && exe == Err(crate::export::FILE_TYPE), format!("geschrieben {written:?}, gleich {same}, .exe → {exe:?}"))
+        }
+        Err(e) => (false, e.to_string()),
+    };
+    r.step("export-datei", ok, detail);
+}
+
+/// Feste Werte in eine temporäre Datenbank aufzeichnen und wiederfinden; die Datei wird danach
+/// gelöscht. Die echte Profil-Datenbank bleibt unberührt.
+fn history_roundtrip() -> (bool, String) {
+    use crate::net::hist_types::EventKind;
+    use crate::net::recorder::{flush_with, FlushGate, IngestCtx, Recorder};
+    use crate::net::types::{PingSample, PingTarget};
+    use std::sync::Mutex;
+
+    let path = std::env::temp_dir().join(format!("pulsar-selftest-{}.db", crate::util::now_ms()));
+    let db = match crate::db::Db::open(&path) {
+        Ok(db) => db,
+        Err(e) => return (false, e),
+    };
+    let handle = crate::db::DbHandle::new();
+    handle.replace(Some(db));
+    let recorder = Mutex::new(Recorder::default());
+    let gate = FlushGate::default();
+    let target: PingTarget = from(json!({ "id": "selftest-verlauf", "label": "Selbsttest", "host": "127.0.0.1", "port": 443, "method": "tcp" }));
+    let start = crate::util::now_ms() - 120_000;
+    let ticks = 90;
+    {
+        let mut rec = crate::error::LockExt::lock_safe(&recorder);
+        for i in 0..ticks {
+            let t = start + i * 1000;
+            // Takte 40–45 verloren → ein Aussetzer
+            let rtt = if (40..46).contains(&i) { None } else { Some(20.0 + (i % 5) as f64) };
+            let samples = [PingSample { target_id: target.id.clone(), t, rtt }];
+            let load = crate::net::ifstats::LoadSample { at: t, ..Default::default() };
+            let _ = rec.ingest(t, 1000, std::slice::from_ref(&target), &[None], &samples, &load, IngestCtx::default());
+        }
+        rec.on_stop(start + ticks * 1000);
+    }
+    let flushed = flush_with(&recorder, &gate, &handle);
+    let to = start + ticks * 1000 + 3_600_000;
+    let hourly = handle.with(|db| crate::net::history_hourly::hourly(db, start - 3_600_000, to, Some(&target.id), None));
+    let events = handle.with(|db| crate::net::history_events::list(db, start - 1000, to, None, None, 100));
+    handle.replace(None);
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+    let n: i64 = hourly.as_ref().map(|rows| rows.iter().map(|x| x.n).sum()).unwrap_or(0);
+    let outages = events.as_ref().map(|p| p.events.iter().filter(|e| e.kind == EventKind::Outage).count()).unwrap_or(0);
+    let ok = flushed.is_ok() && n == ticks && outages >= 1 && !path.exists();
+    (ok, format!("Flush {flushed:?}, {n} von {ticks} Messungen, {outages} Aussetzer, Datei gelöscht: {}", !path.exists()))
 }
 
 /// Die eigene Exe als Kindprozess starten und (bis zum Zeitlimit) auf das Ende warten.
@@ -454,5 +592,16 @@ async fn admin_steps(app: &AppHandle, r: &mut Report) {
             }
             Err(e) => r.step("netzwerk-tweaks", false, e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Der Selbsttest-Schritt `messwerte-speichern` läuft ohne Netz und ohne Windows –
+    /// er muss also schon hier sauber durchlaufen (Stunden-Summen und Aussetzer).
+    #[test]
+    fn history_roundtrip_is_clean() {
+        let (ok, detail) = super::history_roundtrip();
+        assert!(ok, "{detail}");
     }
 }

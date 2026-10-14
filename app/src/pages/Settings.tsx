@@ -15,6 +15,10 @@ import { useSettings } from "@/store/settings";
 import { confirmDialog, toast } from "@/store/ui";
 import { useUpdate } from "@/store/update";
 import { Chip, Field, Section } from "@/components/ui/Field";
+import { HistoryDataSettings } from "@/components/settings/HistoryDataSettings";
+import { IspSettings } from "@/components/settings/IspSettings";
+import { LagSettings } from "@/components/settings/LagSettings";
+import { SonarSettings } from "@/components/settings/SonarSettings";
 import { Segmented } from "@/components/ui/Segmented";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@shared/ui/Button";
@@ -417,6 +421,8 @@ export function SettingsPage({ section }: { section?: string }) {
                 ))}
               </div>
             </Field>
+            {/* Steckplatz: „Hör dein Netz“ (F4) */}
+            <SonarSettings />
           </Section>
 
           <Section id="settings-monitor" title={t("settings.monitor")} icon={<Activity className="h-4 w-4" />}>
@@ -432,6 +438,9 @@ export function SettingsPage({ section }: { section?: string }) {
             <Field label={t("settings.notifications")} description={t("settings.notificationsDesc")}>
               <Toggle checked={s.notifications} onChange={(v) => update({ notifications: v })} />
             </Field>
+            {/* Steckplätze: Lag-Detektiv (F1), Anbieter-Protokoll und Messverlauf (F7) */}
+            <LagSettings />
+            <IspSettings />
           </Section>
 
           <Section id="settings-boost" title={t("settings.boost")} icon={<Zap className="h-4 w-4" />}>
@@ -502,6 +511,8 @@ export function SettingsPage({ section }: { section?: string }) {
 
           <Section id="settings-data" title={t("settings.data")} icon={<HardDrive className="h-4 w-4" />}>
             <DataSection />
+            {/* Steckplatz: „Messverlauf löschen“ (F7) */}
+            <HistoryDataSettings />
           </Section>
 
           <Section id="settings-about" title={t("settings.about")} icon={<Info className="h-4 w-4" />}>
