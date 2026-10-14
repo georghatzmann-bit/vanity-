@@ -51,6 +51,27 @@ Echte Screenshots vom Windows-Rechner der CI (1024×768, englische Systemsprache
 | Boost aus | Energieplan vorher = nachher (8c5e7fda-…) – Rückstellung funktioniert |
 | Starten / erkannt / beenden / Spielzeit | PING.EXE gestartet, nach 0,5 s erkannt, beendet, 13 s in 1 Sitzung gespeichert |
 
+### Teil 2 (7 Netzwerk-Funktionen) auf Windows (CI-Lauf 38586539262, 14.10.2026, Commit `26450bb`)
+
+Lauf: <https://github.com/georghatzmann-bit/vanity-/actions/runs/38586539262> – alle Schritte grün (Typprüfung,
+Oberflächen-Tests, Rust-Tests auf Windows, Bauen, Start-Tests, Installer-Selbsttest 9/9, **App-Selbsttest 36/36**),
+Release `pulsar-latest` aktualisiert. Die neuen Selbsttest-Schritte auf dem GitHub-Windows-Rechner:
+
+| Prüfung | Ergebnis |
+|---|---|
+| Adapter-Zähler (`GetIfEntry2`) | „Ethernet 3“, Zähler steigen zwischen zwei Lesungen (empfangen 2 538 821 512 → 2 538 832 385 Byte) |
+| Teilroute (TTL 1–3) | 0 von 3 Stationen antworten – der Rechner blockt ICMP-TTL-Antworten; der Aufruf bleibt sauber |
+| Lag-Momentaufnahme | Ursache „unklar“ nach 490 ms – ehrlich, weil Router und Stationen dort nicht antworten |
+| WLAN-Netze | „kein WLAN-Dienst“ (Server ohne WLAN) – sauber beantwortet |
+| Getaktete Verbindung | „unbekannt“ (Windows Server liefert keinen Wert) – sauber beantwortet |
+| Messverlauf speichern | temporäre Datenbank: 90 von 90 Messungen wiedergefunden, 1 Aussetzer erkannt, Datei danach gelöscht (echte Daten unberührt) |
+| Datei-Export | Datei geschrieben und gleich zurückgelesen, `.exe` abgelehnt („Dateityp nicht erlaubt.“) |
+| TCP-Ping / DNS-Vergleich | Ø 10 ms, Schwankung 1,4 ms, 0 % Verlust / 6 von 8 Diensten geantwortet |
+
+Ehrlich dazu: Auf diesem Rechner gibt es weder WLAN noch ICMP-TTL-Antworten noch Mobilfunk. Ob der WLAN-Scan, die
+Windows-11-Standortsperre, die Teilroute im echten Heimnetz und die Erkennung einer getakteten Verbindung auf deinem PC
+richtig arbeiten, zeigt sich erst dort (siehe Abschnitt 3).
+
 ### Neues Setup „Radioteleskop“ auf Windows (CI-Lauf 38565471990, 14.10.2026, Commit `de91e53`)
 
 Lauf: <https://github.com/georghatzmann-bit/vanity-/actions/runs/38565471990> – alle Schritte grün, Release `pulsar-latest`
