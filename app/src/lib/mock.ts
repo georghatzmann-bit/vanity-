@@ -288,6 +288,8 @@ GAME_SERVERS.dota2 = GAME_SERVERS.cs2;
 GAME_SERVERS.deadlock = GAME_SERVERS.cs2;
 
 function baseFor(target: PingTarget): number {
+  // Router-Ping von „Warum laggt es?“ (`id: "gateway"`): ein Heimrouter antwortet in ≈ 1 ms
+  if (target.id === "gateway") return 0.9;
   const r = [...REGIONS, ...Object.values(GAME_SERVERS).flat()].find((x) => x.target.id === target.id || x.target.host === target.host);
   return r?.base ?? 24;
 }
