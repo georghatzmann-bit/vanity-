@@ -1,6 +1,10 @@
 /** Deutsche Texte des Namensraums „lag“ (Lag-Detektiv) – eingehängt in `de.ts`. */
 export const lagDe = {
   title: "Lag-Detektiv",
+  subtitle: "Untersucht jeden Ausreißer sofort mit einer Momentaufnahme von etwa einer Sekunde.",
+  estimate: "Einschätzung",
+  likely: "vermutlich {cause}",
+  unclearCause: "Ursache unklar",
   /** Anzeigenamen der eingeschätzten Ursachen (immer mit „vermutlich“/„Einschätzung“ zeigen) */
   cause: {
     wifi: "WLAN",
@@ -9,6 +13,106 @@ export const lagDe = {
     internet: "Internet (hinter dem Anbieter)",
     localTraffic: "Datenverkehr auf diesem PC",
     unknown: "unklar",
+  },
+  /** Fester Untertitel bzw. Zusatz einzelner Ursachen */
+  causeNote: {
+    isp: "auch möglich: Leitung durch andere Geräte im Haushalt ausgelastet",
+    internetServer: "– Spielserver-Netz",
+  },
+  cpuHighShort: "PC ausgelastet",
+  cpuHigh: "PC stark ausgelastet – fühlt sich wie Lag an (Ruckler), ist aber kein Netzproblem",
+  /** Begründungen als Sätze (`Reason`) */
+  reason: {
+    trafficHigh: "Kurz vor dem Ausreißer lief auf diesem PC viel Datenverkehr (z. B. Download, Update oder Cloud-Backup).",
+    spikeGone: "Bei der Momentaufnahme war das Ziel schon wieder normal – der Ausreißer war vorbei.",
+    rssiLow: "Das WLAN-Signal war schwach (unter −70 dBm).",
+    signalDrop: "Das WLAN-Signal lag deutlich unter seinem üblichen Wert.",
+    gatewaySlow: "Der Router antwortete deutlich langsamer als sonst.",
+    gatewayLost: "Der Router antwortete nicht, obwohl er das sonst tut.",
+    ispHopSlow: "Eine Station beim Anbieter war deutlich langsamer als sonst, und die Verzögerung blieb bis zum Ziel bestehen.",
+    ispHopOnly: "Nur eine einzelne Station war langsamer, danach war alles normal – meist beantworten Router solche Anfragen nur nachrangig, das ist kein Problem.",
+    lineBusyPossible: "Auch möglich: Andere Geräte im Haushalt lasten die Leitung aus – Pulsar sieht sie nicht.",
+    pathOk: "Router und Anbieter-Stationen waren normal, das Ziel aber noch langsam – die Verzögerung liegt vermutlich hinter dem Anbieter.",
+    vpnActive: "Ein VPN ist aktiv – die Stationen gehören zum VPN-Weg, deshalb lässt sich die Ursache nicht einordnen.",
+    wifiLocked: "Windows gibt die WLAN-Werte nur mit Standortzugriff frei – ohne sie ist das WLAN nicht bewertbar.",
+    connectionOther: "Der Router war auffällig, aber die Art der Verbindung ist unbekannt (z. B. USB-Tethering oder LTE-Stick).",
+    noHops: "Die ersten Stationen der Route haben nicht geantwortet.",
+    noBaseline: "Es fehlen noch Grundwerte zum Vergleich – Pulsar lernt sie im ruhigen Betrieb (etwa einmal pro Minute).",
+    noTargetCheck: "Das Ziel ließ sich bei der Momentaufnahme nicht prüfen.",
+    snapshotsOff: "Momentaufnahmen sind in den Einstellungen ausgeschaltet.",
+    cpuHigh: "PC stark ausgelastet – fühlt sich wie Lag an (Ruckler), ist aber kein Netzproblem.",
+  },
+  /** Zonen der Stationen */
+  zone: {
+    lan: "Heimnetz",
+    isp: "Anbieter",
+    ispCgnat: "Anbieter (CGNAT)",
+    internet: "Internet",
+    target: "Ziel",
+  },
+  connection: {
+    wifi: "WLAN",
+    ethernet: "Kabel",
+    other: "Andere Verbindung",
+    none: "Hauptverbindung unbekannt",
+    vpn: "über VPN",
+  },
+  /** Cockpit: letzter Ausreißer der letzten 60 s */
+  badge: {
+    text: "{ms} ms · {cause}",
+    title: "Letzter Ausreißer – Klick öffnet den Lag-Detektiv unter Netzwerk › Verbindung",
+  },
+  /** Netzwerk › Verbindung: Karte mit den letzten 20 Ereignissen */
+  card: {
+    recent: "Letzte Ausreißer seit dem Start",
+    empty: "Noch kein Ausreißer seit dem Start von Pulsar. Läuft der Live-Monitor, untersucht der Detektiv jeden Ausreißer sofort.",
+    snapshotsOff: "Momentaufnahmen sind ausgeschaltet – Ausreißer werden nur gemeldet, nicht untersucht.",
+    count: "{n}× in 10 s",
+    spike: "{rtt} ms statt ~{baseline} ms",
+    limit: "Grenze {limit} ms",
+    target: "Ziel bei der Momentaufnahme",
+    targetValue: "{ms} ms · {lost} von 3 verloren",
+    targetLostAll: "keine Antwort · 3 von 3 verloren",
+    targetNotMeasured: "nicht gemessen",
+    hops: "Erste Stationen der Route",
+    hopsNone: "keine Stationen gemessen (z. B. VPN, IPv6 oder außerhalb von Windows)",
+    hopNoAnswer: "keine Antwort",
+    base: "Grundwert {ms} ms",
+    noBase: "noch kein Grundwert",
+    router: "Router",
+    wifi: "WLAN",
+    wifiValue: "{signal} % · {rssi} dBm",
+    wifiBand: "{band} GHz",
+    wifiLocked: "gesperrt (Standortzugriff fehlt)",
+    wifiNone: "kein WLAN verbunden",
+    traffic: "Datenverkehr auf diesem PC",
+    trafficValue: "↓ {rx} · ↑ {tx} Mbit/s",
+    trafficBase: "üblich ~{v} Mbit/s",
+    reference: "Leitung {value}",
+    cpu: "CPU-Last",
+    connection: "Verbindung",
+    reasons: "Warum diese Einschätzung",
+    took: "Momentaufnahme in {ms} ms",
+    unknownValue: "unbekannt",
+    showDetails: "Details zeigen",
+    hideDetails: "Details ausblenden",
+    honest:
+      "Ehrlich: Die Ursache ist eine Einschätzung aus einer Momentaufnahme von etwa einer Sekunde, keine Gewissheit. Andere Geräte im Haushalt sieht Pulsar nicht, mit VPN bleibt sie unklar, und viele Router beantworten Anfragen an einzelne Stationen nur nachrangig. Pulsar behebt keine Ursache selbst.",
+  },
+  /** Berichte › Ausreißer */
+  section: {
+    title: "Ausreißer der letzten 30 Tage",
+    intro: "Ursachen aller Ausreißer, die der Lag-Detektiv untersucht hat – gezählt aus dem Messverlauf.",
+    empty: "In den letzten 30 Tagen gab es keine untersuchten Ausreißer. Gemessen wird nur, solange Pulsar läuft und der Live-Monitor an ist.",
+    error: "Die Ausreißer konnten nicht geladen werden: {error}",
+    share: "{n}×",
+    honest: "Ehrlich: Jede Ursache ist eine Einschätzung aus einer Momentaufnahme. Andere Geräte im Haushalt sieht Pulsar nicht – eine ausgelastete Leitung sieht aus wie „Anschluss/Anbieter“.",
+  },
+  /** Einstellungen › Monitor */
+  settings: {
+    snapshots: "Momentaufnahmen bei Ausreißern",
+    snapshotsDesc:
+      "Untersucht jeden Ausreißer sofort (Ziel, erste Stationen der Route, Router, WLAN, Datenverkehr, CPU) und lernt im ruhigen Betrieb etwa einmal pro Minute Grundwerte – dafür sendet Pulsar ein paar kleine Pakete. Aus: Ausreißer werden nur gemeldet.",
   },
   /** Zählung für Karte, Detail, Berichte und Bildkarte (`causeSummary` in lib/lagtext.ts) */
   summary: {

@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {
+      "name": "normal: Router, 3 Anbieter-Stationen, dann Internet und Ziel",
+      "gateway": "192.168.178.1",
+      "hops": ["192.168.178.1", "62.155.240.129", "80.157.204.182", "80.157.204.183", "52.93.35.126", "3.123.1.77"],
+      "target": 5,
+      "zones": ["lan", "isp", "isp", "isp", "internet", "target"],
+      "cgnat": [false, false, false, false, false, false]
+    },
+    {
+      "name": "CGNAT bei TTL 2",
+      "gateway": "192.168.178.1",
+      "hops": ["192.168.178.1", "100.64.12.1", "62.155.240.129"],
+      "target": null,
+      "zones": ["lan", "isp", "isp"],
+      "cgnat": [false, true, false]
+    },
+    {
+      "name": "doppeltes NAT: eigener Router hinter dem Anbieter-Router, dann CGNAT",
+      "gateway": "192.168.178.1",
+      "hops": ["192.168.178.1", "192.168.0.1", "100.64.3.1"],
+      "target": null,
+      "zones": ["lan", "lan", "isp"],
+      "cgnat": [false, false, true]
+    },
+    {
+      "name": "stumme TTL 1",
+      "gateway": "192.168.178.1",
+      "hops": [null, "62.155.240.129", "87.186.224.1"],
+      "target": null,
+      "zones": [null, "isp", "isp"],
+      "cgnat": [false, false, false]
+    },
+    {
+      "name": "private Adresse nach der ersten öffentlichen Station gehört zum Anbieter",
+      "gateway": "192.168.1.1",
+      "hops": ["192.168.1.1", "62.155.240.129", "10.20.30.1", "80.157.204.182"],
+      "target": null,
+      "zones": ["lan", "isp", "isp", "isp"],
+      "cgnat": [false, false, true, false]
+    },
+    {
+      "name": "ohne bekanntes Gateway: TTL 1 privat, dann privat vor öffentlich",
+      "gateway": null,
+      "hops": ["10.0.0.1", "10.1.0.1", "1.2.3.4"],
+      "target": null,
+      "zones": ["lan", "lan", "isp"],
+      "cgnat": [false, false, false]
+    },
+    {
+      "name": "Mobilfunk: TTL 1 im CGNAT-Bereich",
+      "gateway": null,
+      "hops": ["100.72.0.1", "62.155.240.129", null],
+      "target": null,
+      "zones": ["isp", "isp", null],
+      "cgnat": [true, false, false]
+    },
+    {
+      "name": "Gateway-Adresse zählt immer als Heimnetz, auch wenn sie öffentlich ist",
+      "gateway": "84.10.20.1",
+      "hops": ["84.10.20.1", "62.155.240.129", "80.157.204.182", "80.157.204.183", "52.93.35.126"],
+      "target": null,
+      "zones": ["lan", "isp", "isp", "isp", "internet"],
+      "cgnat": [false, false, false, false, false]
+    },
+    {
+      "name": "Ziel schon bei TTL 2 erreicht",
+      "gateway": "192.168.178.1",
+      "hops": ["192.168.178.1", "192.168.178.20"],
+      "target": 1,
+      "zones": ["lan", "target"],
+      "cgnat": [false, false]
+    }
+  ]
+}
