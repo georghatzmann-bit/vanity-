@@ -6,6 +6,8 @@ const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
 const { createProgressParser } = require('./progress');
+const { watchDownload } = require('./download-watch');
+const { compareVersions } = require('./locate');
 const { classify } = require('./errors');
 const { killTree } = require('../util/ps');
 const log = require('../log');
@@ -24,7 +26,8 @@ function runWinget(wingetPath, args, { onData, signal, timeoutMs = ITEM_TIMEOUT_
     if (signal && signal.aborted) return resolve({ code: null, timedOut: false, aborted: true });
     let child;
     try {
-      child = spawn(wingetPath, args, { windowsHide: true });
+      // stdin must be closed: an unexpected prompt would otherwise wait forever
+      child = spawn(wingetPath, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       log.error('winget konnte nicht gestartet werden', err);
       return resolve({ code: -1, timedOut: false, aborted: false, spawnError: err.message });
@@ -60,8 +63,8 @@ function runWinget(wingetPath, args, { onData, signal, timeoutMs = ITEM_TIMEOUT_
   });
 }
 
-function installArgs(item) {
-  return [
+function installArgs(item, wingetVersion) {
+  const args = [
     'install',
     '--id', item.id,
     '--exact',
@@ -71,7 +74,18 @@ function installArgs(item) {
     '--accept-source-agreements',
     '--disable-interactivity',
   ];
+  // --no-upgrade: skip packages that are already installed (exit 0x8A150061) instead of upgrading them
+  if (!wingetVersion || compareVersions(wingetVersion, '1.9.0') >= 0) args.push('--no-upgrade');
+  return args;
 }
+
+// Waits before the next attempt, per retry reason (index = attempt number - 1).
+const BACKOFF = {
+  network: [5000, 15000],
+  source: [0],
+  'in-use': [10000],
+  busy: [30000, 60000, 120000], // MSI 1618 – Windows Update often installs right after a reset
+};
 
 async function updateSources(wingetPath) {
   const res = await runWinget(wingetPath, ['source', 'update', '--disable-interactivity'], { timeoutMs: 5 * 60 * 1000 });
@@ -79,45 +93,74 @@ async function updateSources(wingetPath) {
 }
 
 /**
- * Installs one package with live progress and one smart retry.
+ * Installs one package with live progress and smart retries.
  * @returns {Promise<{status, rebootRequired, message, code?, codeHex?, retry?}>}
  */
-async function installPackage(item, { wingetPath, onProgress = () => {}, onLog = () => {}, signal } = {}) {
+async function installPackage(item, { wingetPath, wingetVersion, onProgress = () => {}, onLog = () => {}, signal } = {}) {
   let last = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const parser = createProgressParser(onProgress, onLog);
+  for (let attempt = 1; ; attempt++) {
+    let stopWatch = null;
+    let sawBarBytes = 0;
+    const parser = createProgressParser(
+      (p) => {
+        if (p.bytes) sawBarBytes = Date.now();
+        if (p.stage !== 'downloading' && stopWatch) {
+          stopWatch();
+          stopWatch = null;
+        }
+        onProgress(p);
+      },
+      onLog,
+      {
+        onUrl: (url) => {
+          if (stopWatch || item.source !== 'winget') return;
+          stopWatch = watchDownload(url, ({ pct, bytes }) => {
+            // winget <= 1.28 draws its own bar – prefer that when present
+            if (Date.now() - sawBarBytes > 2000) parser.report('downloading', pct, bytes);
+          });
+        },
+      },
+    );
     onProgress({ stage: 'resolving', pct: null });
-    const res = await runWinget(wingetPath, installArgs(item), { onData: (c) => parser.feed(c), signal });
+    const res = await runWinget(wingetPath, installArgs(item, wingetVersion), { onData: (c) => parser.feed(c), signal });
     parser.flush();
+    if (stopWatch) stopWatch();
     if (res.aborted || (signal && signal.aborted)) return { status: 'cancelled', rebootRequired: false, message: 'Abgebrochen.' };
     if (res.timedOut) return { status: 'failed', rebootRequired: false, message: 'Zeitüberschreitung – die Installation hat zu lange gedauert.' };
     if (res.spawnError) return { status: 'failed', rebootRequired: false, message: `winget konnte nicht gestartet werden (${res.spawnError}).` };
 
     last = classify(res.code);
     log.info(`winget install ${item.id}: ${last.codeHex} ${last.name} -> ${last.status} (Versuch ${attempt})`);
-    if (attempt === 2 || !last.retry || last.retry === 'user-lane') break;
+    const waits = last.retry ? BACKOFF[last.retry] : null;
+    if (!waits || attempt > waits.length) break;
 
     if (last.retry === 'source') {
       onLog('Paketquellen werden aktualisiert und es wird erneut versucht …');
       await updateSources(wingetPath);
     } else if (last.retry === 'network') {
-      onLog('Netzwerkproblem – neuer Versuch in 5 Sekunden …');
-      await sleep(5000);
+      onLog(`Netzwerkproblem – neuer Versuch in ${waits[attempt - 1] / 1000} Sekunden …`);
     } else if (last.retry === 'in-use') {
-      onLog('Die App ist geöffnet – neuer Versuch in 10 Sekunden …');
-      await sleep(10000);
+      onLog('Die App ist gerade geöffnet – neuer Versuch gleich …');
     } else if (last.retry === 'busy') {
-      onLog('Eine andere Installation läuft – neuer Versuch in 30 Sekunden …');
-      await sleep(30000);
+      onLog(`Windows installiert gerade etwas anderes (z. B. Updates) – neuer Versuch in ${waits[attempt - 1] / 1000} Sekunden …`);
     }
+    onProgress({ stage: 'resolving', pct: null });
+    await sleep(waits[attempt - 1]);
     if (signal && signal.aborted) return { status: 'cancelled', rebootRequired: false, message: 'Abgebrochen.' };
   }
   return { status: last.status, rebootRequired: last.rebootRequired, message: last.message, code: last.code, codeHex: last.codeHex, retry: last.retry };
 }
 
+/** Folder for winget export: winget <= 1.29 mishandles non-ASCII paths (e.g. C:\\Users\\Jürgen). */
+function exportDir() {
+  const tmp = path.join(os.tmpdir(), 'phoenix');
+  if (/^[\x20-\x7E]+$/.test(tmp)) return tmp;
+  return path.join(process.env.ProgramData || 'C:\\ProgramData', 'Phoenix');
+}
+
 /** `winget export` into a temp file. Resolves { ok, json, code }. */
 async function exportPackages({ wingetPath, timeoutMs = 5 * 60 * 1000 } = {}) {
-  const dir = path.join(os.tmpdir(), 'phoenix');
+  const dir = exportDir();
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `export-${crypto.randomUUID()}.json`);
   const res = await runWinget(wingetPath, ['export', '--output', file, '--accept-source-agreements', '--disable-interactivity'], { timeoutMs });

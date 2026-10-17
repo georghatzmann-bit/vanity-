@@ -72,6 +72,20 @@ const E = {
   INSTALL_SYSTEM_NOT_SUPPORTED: 0x8a150113,
   INSTALL_UPGRADE_NOT_SUPPORTED: 0x8a150114,
   INSTALL_CUSTOM_ERROR: 0x8a150115,
+  UPDATE_INSTALL_TECHNOLOGY_MISMATCH: 0x8a15008e,
+  PROMPT_INPUT_ERROR: 0x8a150042,
+  // non-winget HRESULTs that winget passes through as exit codes
+  HR_CANCELLED: 0x800704c7, // UAC prompt declined
+  HR_ABORT: 0x80004004,
+  HR_ACCESS_DENIED: 0x80070005,
+  HR_DISK_FULL: 0x80070070,
+  HR_NAME_NOT_RESOLVED: 0x80072ee7,
+  HR_CANNOT_CONNECT: 0x80072efd,
+  HR_TIMEOUT: 0x80072ee2,
+  HR_CONNECTION_ABORTED: 0x80072efe,
+  HR_SECURE_FAILURE: 0x80072f8f,
+  HR_HTTP_403: 0x80190193,
+  HR_HTTP_404: 0x80190194,
 };
 
 const NAMES = new Map(Object.entries(E).map(([k, v]) => [v, k]));
@@ -83,6 +97,7 @@ const TABLE = new Map([
   [E.UPDATE_NOT_APPLICABLE, ['already', null, false, 'Bereits installiert und aktuell.']],
   [E.UPGRADE_VERSION_NOT_NEWER, ['already', null, false, 'Bereits in einer aktuellen Version installiert.']],
   [E.INSTALL_DOWNGRADE, ['already', null, false, 'Eine neuere Version ist bereits installiert.']],
+  // (winget normally converts this one to exit 0 for single installs; kept for safety)
   [E.INSTALL_REBOOT_REQUIRED_TO_FINISH, ['installed', null, true, 'Installiert – ein Neustart schließt die Installation ab.']],
   [E.INSTALL_REBOOT_INITIATED, ['installed', null, true, 'Installiert – Windows möchte neu starten.']],
   [E.INSTALL_REBOOT_REQUIRED_FOR_INSTALL, ['failed', null, true, 'Windows muss erst neu starten. Danach diese App erneut installieren.']],
@@ -140,6 +155,19 @@ const TABLE = new Map([
   [E.PORTABLE_INSTALL_FAILED, ['failed', null, false, 'Installation der portablen App fehlgeschlagen.']],
   [E.AUTHENTICATION_FAILED, ['failed', null, false, 'Anmeldung bei der Paketquelle fehlgeschlagen.']],
   [E.INVALID_CL_ARGUMENTS, ['failed', null, false, 'winget kennt einen Parameter nicht – bitte winget aktualisieren.']],
+  [E.UPDATE_INSTALL_TECHNOLOGY_MISMATCH, ['already', null, false, 'Bereits installiert (andere Installationsart).']],
+  [E.PROMPT_INPUT_ERROR, ['failed', null, false, 'winget wollte eine Rückfrage stellen – bitte erneut versuchen.']],
+  [E.HR_CANCELLED, ['failed', null, false, 'Die Windows-Abfrage (Admin-Rechte) wurde abgelehnt.']],
+  [E.HR_ABORT, ['cancelled', null, false, 'Abgebrochen.']],
+  [E.HR_ACCESS_DENIED, ['failed', null, false, 'Zugriff verweigert.']],
+  [E.HR_DISK_FULL, ['failed', null, false, 'Nicht genug Speicherplatz für den Download.']],
+  [E.HR_NAME_NOT_RESOLVED, ['failed', 'network', false, 'Keine Internetverbindung (Server nicht gefunden).']],
+  [E.HR_CANNOT_CONNECT, ['failed', 'network', false, 'Keine Verbindung zum Download-Server.']],
+  [E.HR_TIMEOUT, ['failed', 'network', false, 'Zeitüberschreitung beim Download.']],
+  [E.HR_CONNECTION_ABORTED, ['failed', 'network', false, 'Die Verbindung wurde unterbrochen.']],
+  [E.HR_SECURE_FAILURE, ['failed', 'network', false, 'Sichere Verbindung fehlgeschlagen – stimmen Datum und Uhrzeit des PCs?']],
+  [E.HR_HTTP_403, ['failed', 'source', false, 'Der Download wurde vom Server verweigert (403).']],
+  [E.HR_HTTP_404, ['failed', 'source', false, 'Der Download wurde nicht gefunden (404) – Paket evtl. veraltet.']],
 ]);
 
 /** Converts whatever Node reports (signed or unsigned) into an unsigned 32-bit number. */

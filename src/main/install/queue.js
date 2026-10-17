@@ -7,12 +7,21 @@ const { sanitizeItems } = require('./protocol');
 const { isElevated, launchWorker } = require('./elevate');
 const { runItems } = require('./runItems');
 const bootstrap = require('../winget/bootstrap');
+const { regKeysExist } = require('../util/reg');
+
+const REBOOT_KEYS = [
+  'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending',
+  'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired',
+];
 
 let current = null;
 
-/** Items that must not run elevated go to the user lane; everything else to the admin lane. */
+/**
+ * User lane (this non-elevated process): installers that refuse admin rights, per-user installers
+ * and Store apps – they belong to the logged-in user. Everything else goes to the elevated worker.
+ */
 function laneOf(item) {
-  return item.elevation === 'prohibited' || item.source === 'msstore' ? 'user' : 'admin';
+  return item.elevation === 'prohibited' || item.scope === 'user' || item.source === 'msstore' ? 'user' : 'admin';
 }
 
 function startJob(rawItems, { emit }) {
@@ -137,6 +146,8 @@ async function run(job, items, emit) {
   }
 
   emit({ type: 'phase', phase: 'finishing', message: 'Abschluss …' });
+  // Installers that exit with "reboot required" (e.g. MSI 3010) are reported by winget as success.
+  if ((await regKeysExist(REBOOT_KEYS)).some(Boolean)) summary.rebootRequired = true;
   emit({ type: 'job-done', summary, durationMs: Date.now() - started });
 }
 

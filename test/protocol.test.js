@@ -25,7 +25,7 @@ test('sanitizeItems validates ids, sources and dedupes', () => {
     null,
   ]);
   assert.deepStrictEqual(items, [
-    { key: 'winget:Discord.Discord', id: 'Discord.Discord', source: 'winget', name: 'Discord', elevation: 'none' },
-    { key: 'msstore:9NKSQGP7F2NH', id: '9NKSQGP7F2NH', source: 'msstore', name: 'WhatsApp', elevation: 'unknown' },
+    { key: 'winget:Discord.Discord', id: 'Discord.Discord', source: 'winget', name: 'Discord', elevation: 'none', scope: 'unknown' },
+    { key: 'msstore:9NKSQGP7F2NH', id: '9NKSQGP7F2NH', source: 'msstore', name: 'WhatsApp', elevation: 'unknown', scope: 'unknown' },
   ]);
 });

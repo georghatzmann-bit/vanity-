@@ -49,7 +49,7 @@ Same selection + install screens, pre-filled from the curated catalog (`popular`
 
 - The UI never runs elevated (no UAC on start, drag&drop works, user-scope installers land in the right profile).
 - On install, the queue launches **one** elevated worker (`Start-Process -Verb RunAs`), which connects back over a named pipe (`\\.\pipe\phoenix-<uuid>`) and authenticates with a random token.
-- **Lanes**: items whose installer prohibits elevation (`elevation: "prohibited"`, e.g. Spotify) and `msstore` items run in the **user lane** (UI process spawns winget itself). Everything else runs in the **admin lane** (worker). If UAC is declined/fails, all items move to the user lane (winget then shows per-installer UAC prompts as needed).
+- **Lanes**: items whose installer prohibits elevation (`elevation: "prohibited"`, e.g. Spotify), per-user installers (`scope: "user"`) and `msstore` items run in the **user lane** (UI process spawns winget itself). Everything else runs in the **admin lane** (worker). A worker result `0x8A150056` (installer prohibits elevation) is automatically retried in the user lane. If UAC is declined/fails, all items move to the user lane (winget then shows per-installer UAC prompts as needed).
 - Order: admin lane first, then user lane. Strictly sequential (one winget at a time).
 - **Mock mode**: if `process.platform !== 'win32'` or `PHOENIX_MOCK=1`, main uses `src/main/mock/*` (fake scan, fake installs with timed progress) so the full app runs on Linux for e2e tests and demos. The renderer additionally has a browser mock (`src/renderer/core/mock-api.js`) used when `window.phoenix` is missing (Vite dev server / screenshots).
 
@@ -197,7 +197,7 @@ Profile (file *.phoenix.json, UTF-8, pretty JSON) = {
 { type:'job-done', summary:{ installed, already, failed, skipped, cancelled, rebootRequired }, durationMs }
 ```
 
-Install item sent by the renderer: `{ key: '<source>:<id>', id, source: 'winget'|'msstore', name, elevation }`. `link` catalog items are never sent – the renderer shows them as "Manuell" with an open-link button.
+Install item sent by the renderer: `{ key: '<source>:<id>', id, source: 'winget'|'msstore', name, elevation, scope }` (elevation/scope from the catalog when known). `link` catalog items are never sent – the renderer shows them as "Manuell" with an open-link button.
 
 Worker protocol (NDJSON over the pipe, one JSON object per line):
 `worker→ui {t:'hello', token, pid, elevated}` · `ui→worker {t:'job', items}` · `worker→ui {t:'event', event}` (event = objects above) · `ui→worker {t:'cancel'}` · `worker→ui {t:'bye'}`.
@@ -207,8 +207,11 @@ Worker protocol (NDJSON over the pipe, one JSON object per line):
 ## 7. winget usage rules
 
 - Exit code is the truth; output text is localized (German Windows!) → parsing is only for progress (numbers), never for success.
-- Install: `winget install --id <id> --exact --source <winget|msstore> --silent --accept-package-agreements --accept-source-agreements --disable-interactivity` (final flag set per research in `winget/runner.js`).
-- Sequential only. One retry for transient download/hash/source errors (after `winget source update`).
+- Install: `winget install --id <id> --exact --source <winget|msstore> --silent --accept-package-agreements --accept-source-agreements --disable-interactivity --no-upgrade` (`--no-upgrade` only for winget ≥ 1.9). stdin is closed (`'ignore'`) so a prompt can never hang.
+- winget ≥ 1.29 prints **no progress bar** when piped → `winget/download-watch.js` estimates download progress from the growing file in `%TEMP%\WinGet` + a HEAD request on the download URL.
+- `winget export` writes to an ASCII-only folder (winget ≤ 1.29 breaks on non-ASCII paths).
+- Sequential only. Retries: network 2× (5 s, 15 s), source/hash 1× after `winget source update`, app in use 1×, MSI busy (1618 → `0x8A150102`) 3× (30/60/120 s).
+- After the job, pending-reboot registry keys are checked (winget reports MSI 3010 as success).
 - Per-item watchdog 40 min; cancel kills the process tree (`taskkill /PID <pid> /T /F`).
 
 ## 8. Renderer

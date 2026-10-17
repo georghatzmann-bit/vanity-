@@ -11,9 +11,9 @@ const URL = /https?:\/\/\S+/i;
 const STAGE_HINTS = [
   // [stage, regex] – checked in order, first hit wins
   ['installing', /(Starting package install|Paketinstallation wird gestartet|Installation wird gestartet|Installing|Wird installiert)/i],
-  ['verifying', /(installer hash|Installerhash|Hash des Installationsprogramms|Hash.*(verified|überprüft|verifiziert))/i],
-  ['downloading', /(Downloading|Wird heruntergeladen|Herunterladen)/i],
-  ['resolving', /^(Found|Gefunden)\b/i],
+  ['verifying', /(installer hash|Installer-Hash|Installerhash|Hash des Installationsprogramms|Hash.*(verified|überprüft|verifiziert))/i],
+  ['downloading', /(Downloading|Download läuft|Wird heruntergeladen|Herunterladen)/i],
+  ['resolving', /^(Found|Gefunden)\b.*\[[^\]]+\]/i],
 ];
 
 const UNITS = { B: 1, KB: 1024, KIB: 1024, MB: 1024 ** 2, MIB: 1024 ** 2, GB: 1024 ** 3, GIB: 1024 ** 3, TB: 1024 ** 4 };
@@ -37,7 +37,7 @@ function cleanLine(line) {
  * { stage, pct, bytes? } whenever stage or integer percentage changes, and onLine receives
  * cleaned, non-empty text lines (for the log).
  */
-function createProgressParser(onEvent = () => {}, onLine = () => {}) {
+function createProgressParser(onEvent = () => {}, onLine = () => {}, { onUrl = () => {} } = {}) {
   let buffer = '';
   let stage = 'resolving';
   let lastPct = null;
@@ -68,15 +68,22 @@ function createProgressParser(onEvent = () => {}, onLine = () => {}) {
     }
     for (const [hint, re] of STAGE_HINTS) {
       if (re.test(line)) {
+        const u = line.match(URL);
+        if (u) onUrl(u[0]);
         // never move backwards from installing to an earlier stage
         if (!(stage === 'installing' && hint !== 'installing')) stage = hint;
         emit(stage, stage === 'downloading' ? 0 : null);
         return;
       }
     }
-    if (URL.test(line) && stage === 'resolving') {
-      stage = 'downloading';
-      emit(stage, 0);
+    const url = line.match(URL);
+    // Store packages print agreement links (aka.ms, go.microsoft.com) before anything is downloaded.
+    if (url && !/\/\/(aka\.ms|go\.microsoft\.com|www\.microsoft\.com)\//i.test(url[0])) {
+      onUrl(url[0]);
+      if (stage === 'resolving') {
+        stage = 'downloading';
+        emit(stage, 0);
+      }
       return;
     }
     const pct = line.match(PCT);
@@ -101,6 +108,12 @@ function createProgressParser(onEvent = () => {}, onLine = () => {}) {
     },
     get stage() {
       return stage;
+    },
+    /** Lets an external source (download-file watcher) report progress through the same dedupe. */
+    report(next, pct, bytes) {
+      if (stage === 'installing' && next !== 'installing') return;
+      stage = next;
+      emit(next, pct, bytes);
     },
   };
 }

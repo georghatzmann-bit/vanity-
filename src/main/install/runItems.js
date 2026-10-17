@@ -42,6 +42,7 @@ async function runItems(items, { emit, log = () => {}, signal, indexOffset = 0, 
     try {
       res = await runner.installPackage(item, {
         wingetPath: status.path,
+        wingetVersion: status.version,
         signal,
         onProgress: (p) => emit({ type: 'item-progress', key: item.key, ...p }),
         onLog: (line) => emit({ type: 'log', key: item.key, line }),

@@ -35,7 +35,7 @@ function probe(exe, timeoutMs = 20000) {
     let out = '';
     let child;
     try {
-      child = spawn(exe, ['--version'], { windowsHide: true });
+      child = spawn(exe, ['--version'], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
     } catch {
       resolve(null);
       return;

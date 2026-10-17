@@ -55,8 +55,9 @@ function sanitizeItems(items) {
     if (seen.has(key.toLowerCase())) continue;
     seen.add(key.toLowerCase());
     const elevation = ['required', 'prohibited', 'none', 'unknown'].includes(it.elevation) ? it.elevation : 'unknown';
+    const scope = ['user', 'machine', 'both'].includes(it.scope) ? it.scope : 'unknown';
     const name = typeof it.name === 'string' && it.name.trim() ? it.name.trim().slice(0, 120) : id;
-    out.push({ key, id, source, name, elevation });
+    out.push({ key, id, source, name, elevation, scope });
   }
   return out;
 }
