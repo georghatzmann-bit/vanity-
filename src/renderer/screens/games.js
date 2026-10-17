@@ -6,7 +6,7 @@ import { h } from '../core/dom.js';
 import { icon } from '../components/icons.js';
 import { EmptyState } from '../components/emptyState.js';
 import { gsap, revealText, countUp, motionOK, richMotion, shake, pop } from '../core/motion.js';
-import { PLATFORMS, PLATFORM_ORDER, platformOf, gameKey, isFortnite, hasMsStore, totalBytes, formatGameSize } from '../components/gamesArt.js';
+import { PLATFORMS, PLATFORM_ORDER, platformOf, isFortnite, hasMsStore, totalBytes, formatGameSize } from '../components/gamesArt.js';
 import { ActionBlock, GameTile, GameHero, LauncherSection } from '../components/gamesCards.js';
 import { sparkBurst, shockwave, centerIn } from '../components/gamesFx.js';
 
@@ -559,4 +559,3 @@ export default {
   },
 };
 
-export { gameKey };
