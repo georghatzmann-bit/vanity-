@@ -1,0 +1,85 @@
+'use strict';
+// Finds winget and checks that its version supports the flags Phoenix uses.
+const fs = require('fs');
+const path = require('path');
+const { spawn } = require('child_process');
+
+const MIN_VERSION = '1.6.0';
+
+function parseVersion(text) {
+  const m = String(text || '').match(/v?(\d+)\.(\d+)\.(\d+)/);
+  return m ? `${m[1]}.${m[2]}.${m[3]}` : null;
+}
+
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+/** Possible winget locations, best first (the per-user app execution alias, then PATH lookup). */
+function candidates() {
+  const list = [];
+  const local = process.env.LOCALAPPDATA;
+  if (local) list.push(path.join(local, 'Microsoft', 'WindowsApps', 'winget.exe'));
+  list.push('winget.exe');
+  return list;
+}
+
+function probe(exe, timeoutMs = 20000) {
+  return new Promise((resolve) => {
+    let out = '';
+    let child;
+    try {
+      child = spawn(exe, ['--version'], { windowsHide: true });
+    } catch {
+      resolve(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+      resolve(null);
+    }, timeoutMs);
+    child.stdout.on('data', (b) => (out += b.toString('utf8')));
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const version = parseVersion(out);
+      resolve(code === 0 && version ? version : null);
+    });
+  });
+}
+
+let cached = null;
+
+/** { available, version, path, ok, minVersion } – cached until refresh is requested. */
+async function getStatus({ refresh = false } = {}) {
+  if (cached && !refresh) return cached;
+  if (process.platform !== 'win32') {
+    cached = { available: false, version: null, path: null, ok: false, minVersion: MIN_VERSION };
+    return cached;
+  }
+  for (const exe of candidates()) {
+    if (path.isAbsolute(exe) && !fs.existsSync(exe)) continue;
+    const version = await probe(exe);
+    if (version) {
+      cached = { available: true, version, path: exe, ok: compareVersions(version, MIN_VERSION) >= 0, minVersion: MIN_VERSION };
+      return cached;
+    }
+  }
+  cached = { available: false, version: null, path: null, ok: false, minVersion: MIN_VERSION };
+  return cached;
+}
+
+module.exports = { getStatus, parseVersion, compareVersions, MIN_VERSION };

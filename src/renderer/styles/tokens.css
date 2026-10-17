@@ -1,0 +1,155 @@
+/* PHOENIX design tokens – single source for color, space, type, motion. */
+
+@property --angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Base ---- */
+  --bg: #05060a;
+  --bg-2: #080a11;
+  --bg-3: #0c0e17;
+
+  /* Glass surfaces – translucent over the FX canvas */
+  --glass-1: rgba(16, 18, 28, 0.52);
+  --glass-2: rgba(22, 25, 38, 0.62);
+  --glass-3: rgba(30, 34, 52, 0.72);
+  --glass-solid: rgba(12, 14, 22, 0.94);
+  --glass-tint: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 42%, rgba(255, 255, 255, 0));
+  --glass-blur: blur(22px) saturate(150%);
+
+  /* Hairlines (inner borders) */
+  --line-1: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.09);
+  --line-3: rgba(255, 255, 255, 0.14);
+  --line-hi: rgba(255, 255, 255, 0.22);
+
+  /* Fill steps for hover/press on dark */
+  --fill-1: rgba(255, 255, 255, 0.035);
+  --fill-2: rgba(255, 255, 255, 0.06);
+  --fill-3: rgba(255, 255, 255, 0.09);
+
+  /* ---- Text ---- */
+  --text: #e8eaf0;
+  --text-2: #c3c7d4;
+  --muted: #8a90a2;
+  --faint: #5d6377;
+
+  /* ---- Accent: electric violet (the only accent) ---- */
+  --accent: #8b5cf6;
+  --accent-2: #a78bfa;
+  --accent-3: #c4b5fd;
+  --accent-4: #ede9fe;
+  --accent-deep: #6d28d9;
+  --accent-ink: #1a0b3d;
+  --accent-rgb: 139, 92, 246;
+  --accent-2-rgb: 167, 139, 250;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent-softer: rgba(139, 92, 246, 0.08);
+  --accent-line: rgba(167, 139, 250, 0.42);
+  --accent-grad: linear-gradient(135deg, #b69cff 0%, #8b5cf6 48%, #6d28d9 100%);
+  --accent-text-grad: linear-gradient(100deg, #ffffff 0%, #ede9fe 30%, #c4b5fd 62%, #8b5cf6 100%);
+
+  /* Glows */
+  --glow-xs: 0 0 8px rgba(139, 92, 246, 0.45);
+  --glow-sm: 0 0 14px rgba(139, 92, 246, 0.4), 0 0 2px rgba(196, 181, 253, 0.6);
+  --glow-md: 0 0 24px rgba(139, 92, 246, 0.42), 0 0 64px -8px rgba(139, 92, 246, 0.35);
+  --glow-lg: 0 0 40px rgba(139, 92, 246, 0.5), 0 0 120px -10px rgba(139, 92, 246, 0.45);
+  --glow-drop: drop-shadow(0 0 10px rgba(139, 92, 246, 0.55));
+
+  /* ---- Status (always paired with text) ---- */
+  --ok: #34d399;
+  --ok-rgb: 52, 211, 153;
+  --warn: #fb923c;
+  --warn-rgb: 251, 146, 60;
+  --err: #f87171;
+  --err-rgb: 248, 113, 113;
+  --err-strong: #e5484d;
+
+  /* ---- Space (4/8/12/16/24/32/48/64) ---- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+  --s-8: 64px;
+
+  /* ---- Radii ---- */
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-full: 999px;
+
+  /* ---- Type ---- */
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable Text', 'Segoe UI', 'Inter Display', 'Inter', system-ui, sans-serif;
+  --font-text: 'Segoe UI Variable Text', 'Segoe UI Variable Display', 'Segoe UI', 'Inter', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, 'DejaVu Sans Mono', monospace;
+
+  --fs-hero: clamp(56px, 7.2vw, 104px);
+  --fs-display: clamp(40px, 4.6vw, 64px);
+  --fs-h1: 36px;
+  --fs-h2: 26px;
+  --fs-h3: 18px;
+  --fs-body: 15px;
+  --fs-sm: 13.5px;
+  --fs-xs: 12px;
+  --fs-micro: 11px;
+
+  --lh-tight: 1.02;
+  --lh-snug: 1.2;
+  --lh-body: 1.55;
+
+  --track-hero: -0.045em;
+  --track-display: -0.035em;
+  --track-head: -0.02em;
+  --track-caps: 0.16em;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-snap: cubic-bezier(0.2, 0.9, 0.1, 1);
+  --dur-1: 120ms;
+  --dur-2: 160ms;
+  --dur-3: 200ms;
+  --dur-4: 320ms;
+  --dur-5: 600ms;
+
+  /* ---- Layers ---- */
+  --z-fx: 0;
+  --z-overlay: 1;
+  --z-app: 10;
+  --z-titlebar: 50;
+  --z-toast: 80;
+  --z-modal: 90;
+  --z-cursor: 5;
+
+  /* ---- Layout ---- */
+  --titlebar-h: 48px;
+  --content-max: 1180px;
+  --gutter: clamp(24px, 4vw, 56px);
+
+  /* ---- Shadows ---- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 56px -20px rgba(0, 0, 0, 0.75);
+  --shadow-3: 0 4px 12px rgba(0, 0, 0, 0.4), 0 40px 100px -24px rgba(0, 0, 0, 0.85);
+  --inner-line: inset 0 0 0 1px var(--line-2);
+  --inner-top: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Lower effect tiers trade glass blur for flat translucent surfaces. */
+:root[data-effects='low'],
+:root[data-effects='off'] {
+  --glass-blur: none;
+  --glass-1: rgba(14, 16, 25, 0.86);
+  --glass-2: rgba(20, 23, 35, 0.9);
+  --glass-3: rgba(28, 32, 48, 0.92);
+}

@@ -1,0 +1,405 @@
+/* Reset, document layers, typography base, scrollbars, focus, reduced motion. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-feature-settings: 'ss01', 'cv11';
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+img,
+svg,
+canvas,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--accent-2);
+  text-decoration: none;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- Document layers ---------- */
+
+#fx {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-fx);
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
+.fx-veil {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 50% 40%, transparent 0%, transparent 55%, rgba(3, 4, 8, 0.55) 100%),
+    linear-gradient(180deg, rgba(5, 6, 10, 0.25) 0%, transparent 18%, transparent 78%, rgba(5, 6, 10, 0.6) 100%);
+}
+
+.grain {
+  position: fixed;
+  inset: -50%;
+  z-index: var(--z-overlay);
+  pointer-events: none;
+  opacity: 0.075;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  animation: grain-shift 0.9s steps(6) infinite;
+}
+
+:root[data-effects='low'] .grain,
+:root[data-effects='off'] .grain {
+  animation: none;
+  inset: 0;
+}
+
+@keyframes grain-shift {
+  0% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-4%, 3%, 0); }
+  40% { transform: translate3d(3%, -5%, 0); }
+  60% { transform: translate3d(-6%, -2%, 0); }
+  80% { transform: translate3d(5%, 6%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+#titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: var(--z-titlebar);
+  height: var(--titlebar-h);
+}
+
+#app {
+  position: fixed;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: var(--z-app);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* A routed screen layer. Router stacks these during transitions. */
+.screen {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  transform-origin: 50% 42%;
+  will-change: transform, opacity, filter;
+}
+
+.screen[inert] {
+  pointer-events: none;
+}
+
+.screen__inner {
+  width: 100%;
+  max-width: var(--content-max);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: var(--s-6) var(--gutter) var(--s-7);
+}
+
+#toast-host {
+  position: fixed;
+  right: var(--s-5);
+  bottom: var(--s-5);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--s-2);
+  width: min(380px, calc(100vw - 48px));
+  pointer-events: none;
+}
+
+#modal-host {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  pointer-events: none;
+}
+
+#modal-host:empty {
+  display: none;
+}
+
+/* ---------- Typography ---------- */
+
+.t-hero {
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  line-height: 0.96;
+  letter-spacing: var(--track-hero);
+}
+
+.t-display {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-display);
+}
+
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: var(--track-head);
+}
+
+.t-h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 650;
+  line-height: var(--lh-snug);
+  letter-spacing: -0.015em;
+}
+
+.t-h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.t-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.t-lead {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 62ch;
+}
+
+.t-muted,
+.hint {
+  color: var(--muted);
+}
+
+.hint {
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.t-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--accent-3);
+}
+
+.t-mono {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+.t-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.t-grad {
+  background: var(--accent-text-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+kbd,
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--fill-2);
+  box-shadow: inset 0 0 0 1px var(--line-2), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* ---------- Selection, scrollbars, focus ---------- */
+
+::selection {
+  background: rgba(139, 92, 246, 0.42);
+  color: #fff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, 0.45) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.38) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(167, 139, 250, 0.65) padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.18);
+}
+
+/* ---------- Shared keyframes ---------- */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes angle-spin {
+  to { --angle: 360deg; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--dot-rgb, var(--accent-rgb)), 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(var(--dot-rgb, var(--accent-rgb)), 0); }
+}
+
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ---------- Reduced motion / effects off ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Decorative loops opt in with .deco – they stop on effects "off". Functional spinners keep running. */
+:root[data-effects='off'] .deco,
+:root[data-effects='off'] .deco::before,
+:root[data-effects='off'] .deco::after {
+  animation: none !important;
+}
