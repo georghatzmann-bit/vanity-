@@ -1330,6 +1330,22 @@
   background: rgba(3, 4, 8, 0.82);
 }
 
+/* Low tiers: no backdrop blur anywhere (cheap compositing on weak GPUs). */
+:root[data-effects='low'] :is(.titlebar, .btn--secondary, .toast, .modal),
+:root[data-effects='off'] :is(.titlebar, .btn--secondary, .toast, .modal) {
+  backdrop-filter: none;
+}
+
+:root[data-effects='low'] .modal,
+:root[data-effects='off'] .modal {
+  background: var(--glass-tint), rgba(14, 16, 26, 0.97);
+}
+
+:root[data-effects='low'] .toast,
+:root[data-effects='off'] .toast {
+  background: linear-gradient(110deg, rgba(var(--tone-rgb), 0.12), transparent 45%), rgba(22, 25, 38, 0.97);
+}
+
 .modal {
   position: relative;
   display: flex;
@@ -1516,7 +1532,7 @@
 .range {
   --val: 50%;
   width: 100%;
-  height: 28px;
+  height: 44px;
   margin: 0;
   background: none;
   cursor: pointer;
@@ -1634,7 +1650,6 @@
   grid-template-columns: auto minmax(0, 1fr) 48px;
   align-items: center;
   gap: var(--s-3);
-  margin-top: var(--s-2);
   color: var(--muted);
 }
 

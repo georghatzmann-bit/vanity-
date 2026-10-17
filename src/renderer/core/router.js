@@ -172,7 +172,9 @@ export const router = {
     const id = ++navId;
     const type = motionOK() ? transition : 'none';
 
-    if (current && !replace) history.push({ name: current.name, params: current.params });
+    // Screens that were only passed through (superseded within 350 ms) are not recorded.
+    const settled = current && (current.state === 'active' || performance.now() - (current.enteredAt || 0) > 350);
+    if (current && !replace && settled) history.push({ name: current.name, params: current.params });
     if (history.length > 30) history.shift();
 
     const hadFocusInside = current && current.el.contains(document.activeElement);
@@ -221,6 +223,7 @@ export const router = {
     if (fxState) baseCtx.fx?.setState?.(fxState);
 
     rec.state = 'entering';
+    rec.enteredAt = performance.now();
     rec.el.inert = false;
     prepareStagger(rec.el);
     rec.tl = inTimeline(rec, type, direction);

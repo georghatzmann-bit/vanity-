@@ -80,7 +80,8 @@ async function main() {
   const appEl = document.getElementById('app');
   const titlebarHost = document.getElementById('titlebar');
   const toast = createToaster(document.getElementById('toast-host'));
-  const modal = createModalHost(document.getElementById('modal-host'), { inertTargets: [appEl, titlebarHost] });
+  // The titlebar stays usable while a dialog is open (window controls), only the app content is inert.
+  const modal = createModalHost(document.getElementById('modal-host'), { inertTargets: [appEl] });
 
   const ctx = { api, store, fx, sound, toast, modal };
   let settingsHandle = null;

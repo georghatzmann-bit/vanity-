@@ -118,28 +118,31 @@ textarea,
 
 .grain {
   position: fixed;
-  inset: -50%;
+  inset: -10%;
   z-index: var(--z-overlay);
   pointer-events: none;
-  opacity: 0.075;
-  mix-blend-mode: overlay;
+  opacity: 0.05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 220px 220px;
+  will-change: transform;
   animation: grain-shift 0.9s steps(6) infinite;
 }
 
-:root[data-effects='low'] .grain,
-:root[data-effects='off'] .grain {
+/* Film grain only moves on "ultra"; it is a plain alpha layer (no blend mode) to stay cheap. */
+:root:not([data-effects='ultra']) .grain {
   animation: none;
-  inset: 0;
+}
+
+:root[data-effects='off'] .grain {
+  display: none;
 }
 
 @keyframes grain-shift {
   0% { transform: translate3d(0, 0, 0); }
   20% { transform: translate3d(-4%, 3%, 0); }
   40% { transform: translate3d(3%, -5%, 0); }
-  60% { transform: translate3d(-6%, -2%, 0); }
-  80% { transform: translate3d(5%, 6%, 0); }
+  60% { transform: translate3d(-5%, -2%, 0); }
+  80% { transform: translate3d(5%, 4%, 0); }
   100% { transform: translate3d(0, 0, 0); }
 }
 
@@ -299,6 +302,24 @@ textarea,
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
+}
+
+/* Gradient text with a light sweep every few seconds. Add .deco so effects "off" stops it. */
+.t-shine {
+  background-image: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, 0.95) 50%, transparent 58%), var(--accent-text-grad);
+  background-size: 260% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 160% 0, 0 0;
+  animation: text-shine 7s var(--ease-in-out) 1.6s infinite;
+}
+
+.t-shine.is-revealing {
+  animation: none;
+}
+
+@keyframes text-shine {
+  0% { background-position: 160% 0, 0 0; }
+  22%, 100% { background-position: -60% 0, 0 0; }
 }
 
 kbd,

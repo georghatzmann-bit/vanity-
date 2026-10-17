@@ -132,8 +132,9 @@ export function unsplit(el) {
 }
 
 /**
- * Kinetic headline: characters rise with blur + 3D tilt. Works with gradient text (.t-grad):
- * each char gets its slice of the gradient, and the plain text is restored at the end.
+ * Kinetic headline: characters rise with blur + 3D tilt.
+ * Gradient text (background-clip: text, e.g. .t-grad) is revealed as one line instead – a wipe with
+ * tracking tightening – because per-character clipped backgrounds break under 3D transforms.
  * Returns the timeline (or null).
  */
 export function revealText(el, { delay = 0, stagger = 0.022, duration = 0.9, y = 105, blur = 10 } = {}) {
@@ -143,27 +144,30 @@ export function revealText(el, { delay = 0, stagger = 0.022, duration = 0.9, y =
     return null;
   }
   const cs = getComputedStyle(el);
-  const clipText = /text/.test(cs.webkitBackgroundClip || cs.backgroundClip || '');
+  if (/text/.test(cs.webkitBackgroundClip || cs.backgroundClip || '')) {
+    const tracking = cs.letterSpacing === 'normal' ? '0px' : cs.letterSpacing;
+    el.classList.add('is-revealing');
+    return gsap.fromTo(
+      el,
+      { opacity: 0, x: -24, letterSpacing: '0.12em', filter: `blur(${blur + 6}px)`, clipPath: 'inset(-30% 100% -40% -5%)' },
+      {
+        opacity: 1,
+        x: 0,
+        letterSpacing: tracking,
+        filter: 'blur(0px)',
+        clipPath: 'inset(-30% -5% -40% -5%)',
+        duration: duration + 0.35,
+        delay,
+        ease: 'expo.out',
+        clearProps: 'filter,clipPath,letterSpacing,transform',
+        onComplete: () => el.classList.remove('is-revealing'),
+      },
+    );
+  }
   const chars = splitChars(el);
   el.classList.add('is-split');
-  if (clipText) {
-    const box = el.getBoundingClientRect();
-    for (const c of chars) {
-      // Extra paint room so descenders/umlauts are not cut by the per-char background box.
-      Object.assign(c.style, { padding: '0.12em 0 0.2em', margin: '-0.12em 0 -0.2em' });
-      const r = c.getBoundingClientRect();
-      Object.assign(c.style, {
-        backgroundImage: cs.backgroundImage,
-        backgroundSize: `${box.width}px ${box.height}px`,
-        backgroundPosition: `${box.left - r.left}px ${box.top - r.top}px`,
-        backgroundRepeat: 'no-repeat',
-        webkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-      });
-    }
-  }
   return gsap
-    .timeline({ delay, onComplete: () => clipText && unsplit(el) })
+    .timeline({ delay })
     .fromTo(
       chars,
       { yPercent: y, rotateX: -70, opacity: 0, filter: `blur(${blur}px)` },
@@ -262,7 +266,7 @@ export function tilt(el, { max = 7, perspective = 1000, scale = 1.012, glare = t
     }
   }
   if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
-  gsap.set(el, { transformPerspective: perspective, transformStyle: 'preserve-3d' });
+  gsap.set(el, { transformPerspective: perspective });
   const rx = gsap.quickTo(el, 'rotationX', { duration: 0.5, ease: 'power3.out' });
   const ry = gsap.quickTo(el, 'rotationY', { duration: 0.5, ease: 'power3.out' });
   const sc = gsap.quickTo(el, 'scale', { duration: 0.5, ease: 'power3.out' });

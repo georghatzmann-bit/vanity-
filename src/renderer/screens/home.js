@@ -16,7 +16,7 @@ export default {
     const go = (name, transition = 'warp') => router.go(name, {}, { transition });
 
     const line1 = h('span.home__line', 'Dein PC.');
-    const line2 = h('span.home__line.t-grad', 'Neu geboren.');
+    const line2 = h('span.home__line.t-grad.t-shine.deco', 'Neu geboren.');
     const title = h('h1.t-hero.home__title', line1, line2);
     const status = h('span.home__status-text', 'Bereit');
 
