@@ -2,8 +2,7 @@
 // Triggers game installs through the launchers (the user must be logged in there).
 const fs = require('fs');
 const path = require('path');
-const { shell } = require('electron');
-const { regKeysExist } = require('../util/reg');
+const { app, shell } = require('electron');
 
 const FORTNITE_STORE_ID = 'BT5P2X999VH2'; // Microsoft Store / Xbox app edition (since Nov 2025)
 
@@ -66,7 +65,16 @@ function firstExisting(paths) {
 async function detectLaunchers() {
   const pf86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
   const pf = process.env.ProgramFiles || 'C:\\Program Files';
-  const [epicUri, steamUri] = await regKeysExist(['HKCR\\com.epicgames.launcher', 'HKCR\\steam']);
+  // Electron reports '' unless HKCR\<scheme> is a registered URL protocol – exactly what openExternal needs.
+  const registered = (scheme) => {
+    try {
+      return !!app.getApplicationNameForProtocol(`${scheme}://`);
+    } catch {
+      return false;
+    }
+  };
+  const epicUri = registered('com.epicgames.launcher');
+  const steamUri = registered('steam');
   const epicExe = firstExisting([
     path.join(pf86, 'Epic Games', 'Launcher', 'Portal', 'Binaries', 'Win64', 'EpicGamesLauncher.exe'),
     path.join(pf, 'Epic Games', 'Launcher', 'Portal', 'Binaries', 'Win64', 'EpicGamesLauncher.exe'),

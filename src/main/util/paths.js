@@ -24,17 +24,28 @@ function getKnownFolders() {
   return folders;
 }
 
+// Many USB SSDs report DriveType 3 (fixed): MSFT_Disk.BusType 7 = USB reveals them.
 const DRIVES_PS = `
 $sys = $env:SystemDrive
+$usb = @{}
+try {
+  foreach ($part in Get-CimInstance -Namespace root/Microsoft/Windows/Storage -ClassName MSFT_Partition -ErrorAction Stop) {
+    if (-not $part.DriveLetter) { continue }
+    $disk = Get-CimInstance -Namespace root/Microsoft/Windows/Storage -ClassName MSFT_Disk -Filter ('Number = ' + $part.DiskNumber) -ErrorAction SilentlyContinue
+    if ($disk -and ([int]$disk.BusType -eq 7 -or [int]$disk.BusType -eq 12)) { $usb[([string]$part.DriveLetter).ToUpper() + ':'] = $true }
+  }
+} catch { }
 $list = @()
 foreach ($d in Get-CimInstance -ClassName Win32_LogicalDisk -ErrorAction SilentlyContinue) {
+  $id = [string]$d.DeviceID
   $list += [pscustomobject]@{
-    id = [string]$d.DeviceID
+    id = $id
     type = [int]$d.DriveType
+    usb = [bool]$usb[$id.ToUpper()]
     label = [string]$d.VolumeName
     free = [double]$d.FreeSpace
     size = [double]$d.Size
-    system = ([string]$d.DeviceID -eq $sys)
+    system = ($id -eq $sys)
   }
 }
 Write-PhxJson @($list)
@@ -42,7 +53,7 @@ Write-PhxJson @($list)
 
 function kindOf(d) {
   if (d.system) return 'system';
-  if (d.type === 2) return 'removable';
+  if (d.type === 2 || d.usb) return 'removable';
   if (d.type === 4) return 'network';
   return 'fixed';
 }

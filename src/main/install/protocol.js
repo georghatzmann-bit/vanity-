@@ -1,5 +1,6 @@
 'use strict';
 // PURE NDJSON framing for the UI <-> elevated worker pipe (docs/ARCHITECTURE.md §6).
+const { StringDecoder } = require('string_decoder');
 
 const MAX_LINE = 1024 * 1024; // 1 MiB per message is far more than we ever send
 
@@ -14,8 +15,9 @@ function encodeMessage(msg) {
  */
 function createDecoder(onMessage, onError = () => {}) {
   let buffer = '';
+  const utf8 = new StringDecoder('utf8'); // keeps multi-byte characters split across chunks intact
   return function feed(chunk) {
-    buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    buffer += typeof chunk === 'string' ? chunk : utf8.write(chunk);
     if (buffer.length > MAX_LINE && buffer.indexOf('\n') === -1) {
       buffer = '';
       onError(new Error('message too large'));

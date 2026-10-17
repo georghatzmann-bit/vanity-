@@ -15,6 +15,16 @@ test('decoder handles split chunks, CRLF and garbage', () => {
   assert.strictEqual(errors.length, 2);
 });
 
+test('decoder keeps a multi-byte character split across chunks', () => {
+  const got = [];
+  const feed = createDecoder((m) => got.push(m));
+  const buf = Buffer.from(encodeMessage({ t: 'log', line: 'Lädt … ✓' }));
+  const cut = buf.indexOf(0xc3) + 1; // inside the "ä"
+  feed(buf.subarray(0, cut));
+  feed(buf.subarray(cut));
+  assert.deepStrictEqual(got, [{ t: 'log', line: 'Lädt … ✓' }]);
+});
+
 test('sanitizeItems validates ids, sources and dedupes', () => {
   const items = sanitizeItems([
     { id: 'Discord.Discord', source: 'winget', name: 'Discord', elevation: 'none' },

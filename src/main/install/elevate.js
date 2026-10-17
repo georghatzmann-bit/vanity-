@@ -3,6 +3,8 @@
 // which connects back to a named-pipe server owned by the non-elevated UI process.
 const crypto = require('crypto');
 const net = require('net');
+const os = require('os');
+const path = require('path');
 const { spawnSync } = require('child_process');
 const { app } = require('electron');
 const { runPsJson } = require('../util/ps');
@@ -11,13 +13,22 @@ const log = require('../log');
 
 let elevatedCache = null;
 
-/** True if this process runs with a full administrator token. */
+/**
+ * True if this process runs with a full administrator token. Checks the token's integrity level
+ * (High S-1-16-12288 / System S-1-16-16384) – SIDs are not localized; fltmc is the fallback.
+ */
 function isElevated() {
   if (elevatedCache !== null) return elevatedCache;
   if (process.platform !== 'win32') return (elevatedCache = false);
+  const sys32 = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32');
   try {
-    // fltmc only succeeds with an elevated token.
-    const res = spawnSync('fltmc', [], { windowsHide: true, timeout: 10000 });
+    const res = spawnSync(path.join(sys32, 'whoami.exe'), ['/groups', '/fo', 'csv', '/nh'], { windowsHide: true, timeout: 15000, encoding: 'latin1' });
+    if (res.status === 0 && res.stdout) return (elevatedCache = /S-1-16-(12288|16384)\b/.test(res.stdout));
+  } catch {
+    /* fall through */
+  }
+  try {
+    const res = spawnSync(path.join(sys32, 'fltmc.exe'), [], { windowsHide: true, timeout: 10000 });
     elevatedCache = res.status === 0;
   } catch {
     elevatedCache = false;
@@ -32,15 +43,25 @@ function quoteArg(arg) {
   return `"${s.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`;
 }
 
+// Start-Process would swallow the Win32Exception (no way to tell "user clicked No"), so we call
+// Process.Start with the runas verb directly. Exe and arguments arrive via environment variables.
 const START_ELEVATED_PS = `
-$exe = $args[0]; $argLine = $args[1]
 try {
-  $p = Start-Process -FilePath $exe -ArgumentList $argLine -Verb RunAs -WindowStyle Hidden -PassThru -ErrorAction Stop
-  Write-PhxJson @{ ok = $true; pid = $p.Id }
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $env:PHX_ELEV_FILE
+  $psi.Arguments = $env:PHX_ELEV_ARGS
+  $psi.WorkingDirectory = [System.IO.Path]::GetDirectoryName($env:PHX_ELEV_FILE)
+  $psi.UseShellExecute = $true
+  $psi.Verb = 'runas'
+  $p = [System.Diagnostics.Process]::Start($psi)
+  $procId = 0
+  if ($null -ne $p) { $procId = $p.Id }
+  Write-PhxJson @{ ok = $true; pid = $procId }
 } catch {
+  $e = $_.Exception
+  while ($null -ne $e -and -not ($e -is [System.ComponentModel.Win32Exception])) { $e = $e.InnerException }
   $code = 0
-  $inner = $_.Exception
-  while ($inner) { if ($inner -is [System.ComponentModel.Win32Exception]) { $code = $inner.NativeErrorCode; break }; $inner = $inner.InnerException }
+  if ($null -ne $e) { $code = $e.NativeErrorCode }
   Write-PhxJson @{ ok = $false; code = $code; message = [string]$_.Exception.Message }
 }
 `;
@@ -52,7 +73,9 @@ const ERROR_CANCELLED = 1223;
  * Resolves with a WorkerHandle; rejects with err.code = 'DECLINED' | 'FAILED' | 'TIMEOUT'.
  */
 async function launchWorker({ timeoutMs = 120000 } = {}) {
-  const pipeName = `\\\\.\\pipe\\phoenix-${crypto.randomUUID()}`;
+  // Only the ASCII suffix travels on the command line; the worker rebuilds \\.\pipe\<suffix>.
+  const pipeSuffix = `phoenix-${crypto.randomBytes(16).toString('hex')}`;
+  const pipeName = `\\\\.\\pipe\\${pipeSuffix}`;
   const token = crypto.randomBytes(32).toString('hex');
   const server = net.createServer();
 
@@ -98,13 +121,17 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
     });
   });
 
-  const workerArgs = ['--worker', '--pipe', pipeName, '--token', token];
+  const workerArgs = ['--worker', '--pipe', pipeSuffix, '--token', token];
   if (!app.isPackaged) workerArgs.unshift(app.getAppPath());
   const argLine = workerArgs.map(quoteArg).join(' ');
 
   let started;
   try {
-    started = await runPsJson(START_ELEVATED_PS, { args: [process.execPath, argLine], timeoutMs: 10 * 60 * 1000 });
+    // The UAC prompt can stay open for a long time – Process.Start returns once the user answered.
+    started = await runPsJson(START_ELEVATED_PS, {
+      env: { PHX_ELEV_FILE: process.execPath, PHX_ELEV_ARGS: argLine },
+      timeoutMs: 15 * 60 * 1000,
+    });
   } catch (err) {
     server.close();
     const e = new Error(`Admin-Prozess konnte nicht gestartet werden: ${err.message}`);
@@ -119,6 +146,7 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
     throw e;
   }
   log.info(`Worker gestartet (pid ${started.pid}), warte auf Verbindung …`);
+  const me = os.userInfo().username;
 
   let conn;
   try {
@@ -128,6 +156,10 @@ async function launchWorker({ timeoutMs = 120000 } = {}) {
     throw err;
   }
   server.close(); // stop accepting further clients; the established socket stays open
+  if (conn.hello.user && String(conn.hello.user).toLowerCase() !== String(me).toLowerCase()) {
+    // UAC asked for another admin's password: per-user installs would land in the wrong profile.
+    log.warn(`Worker läuft als ${conn.hello.user}, die Oberfläche als ${me}.`);
+  }
   return createHandle(conn.socket, conn.hello);
 }
 
@@ -155,6 +187,7 @@ function createHandle(socket, hello) {
   return {
     pid: hello.pid,
     elevated: !!hello.elevated,
+    user: hello.user || null,
     /** Sends the job; onEvent receives install events. Resolves { disconnected }. */
     runJob(items, eventCb) {
       onEvent = eventCb;

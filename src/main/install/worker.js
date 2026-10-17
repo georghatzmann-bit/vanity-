@@ -1,7 +1,10 @@
 'use strict';
 // Elevated worker mode: Phoenix.exe --worker --pipe <name> --token <hex>
 // Connects to the UI's pipe, receives one job, installs it sequentially, streams events, exits.
+const fs = require('fs');
+const os = require('os');
 const net = require('net');
+const path = require('path');
 const { app } = require('electron');
 const log = require('../log');
 const { encodeMessage, createDecoder, sanitizeItems } = require('./protocol');
@@ -15,10 +18,20 @@ function argValue(argv, name) {
 
 function run() {
   app.disableHardwareAcceleration();
-  log.init('worker');
-  const pipe = argValue(process.argv, '--pipe');
+  app.commandLine.appendSwitch('disable-gpu');
+  log.init('worker'); // before the userData switch: logs go to the normal Phoenix log folder
+  // Own Chromium profile: no shared locks/caches with the UI, no admin-owned files in its profile.
+  try {
+    const profileDir = path.join(app.getPath('temp'), 'phoenix-worker-profile');
+    fs.mkdirSync(profileDir, { recursive: true });
+    app.setPath('userData', profileDir);
+    process.chdir(path.dirname(process.execPath)); // runas may reset the working directory
+  } catch {
+    /* non-fatal */
+  }
+  const suffix = argValue(process.argv, '--pipe');
   const token = argValue(process.argv, '--token');
-  if (!pipe || !/^\\\\\.\\pipe\\phoenix-[0-9a-f-]{36}$/i.test(pipe) || !token || !/^[0-9a-f]{64}$/i.test(token)) {
+  if (!suffix || !/^phoenix-[0-9a-f]{32}$/.test(suffix) || !token || !/^[0-9a-f]{64}$/.test(token)) {
     log.error('Worker: ungültige Argumente', process.argv.slice(1));
     app.exit(2);
     return;
@@ -26,6 +39,7 @@ function run() {
 
   let controller = null;
   let gotJob = false;
+  const pipe = `\\\\.\\pipe\\${suffix}`;
   const socket = net.connect(pipe);
   const send = (msg) => {
     if (!socket.destroyed) socket.write(encodeMessage(msg));
@@ -39,7 +53,7 @@ function run() {
   }, 60000);
 
   socket.on('connect', () => {
-    send({ t: 'hello', token, pid: process.pid, elevated: isElevated() });
+    send({ t: 'hello', token, pid: process.pid, elevated: isElevated(), user: os.userInfo().username });
   });
 
   socket.on(

@@ -12,10 +12,14 @@ const JSON_MARK = '@@PHXJSON@@';
 const PREAMBLE = [
   "$ErrorActionPreference = 'Stop'",
   "$ProgressPreference = 'SilentlyContinue'",
-  '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-  '$OutputEncoding = [System.Text.Encoding]::UTF8',
-  // Emits one JSON document on its own line, recognised by runPsJson().
-  `function Write-PhxJson($obj) { [Console]::Out.WriteLine('${JSON_MARK}' + (ConvertTo-Json -InputObject $obj -Depth 6 -Compress)) }`,
+  '$OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false',
+  // Emits one JSON document on its own line, recognised by runPsJson(). Non-ASCII is escaped
+  // to \\uXXXX so the result survives any console code page. -InputObject keeps 1-item arrays.
+  'function Write-PhxJson($obj) {',
+  '  $json = ConvertTo-Json -InputObject $obj -Depth 6 -Compress',
+  "  $json = [regex]::Replace($json, '[^\\x00-\\x7F]', { param($m) '\\u{0:x4}' -f [int][char]$m.Value })",
+  `  [Console]::Out.WriteLine('${JSON_MARK}' + $json)`,
+  '}',
   '',
 ].join('\r\n');
 
@@ -37,11 +41,11 @@ function killTree(pid) {
 /**
  * Runs a PowerShell script.
  * @param {string} script  ASCII-only script body (preamble is prepended automatically)
- * @param {{args?: string[], timeoutMs?: number, onLine?: (line: string) => void, raw?: boolean}} [opts]
+ * @param {{args?: string[], timeoutMs?: number, onLine?: (line: string) => void, raw?: boolean, env?: object}} [opts]
  * @returns {Promise<{code: number, stdout: string, stderr: string, timedOut: boolean}>}
  */
 function runPs(script, opts = {}) {
-  const { args = [], timeoutMs = 120000, onLine, raw = false } = opts;
+  const { args = [], timeoutMs = 120000, onLine, raw = false, env } = opts;
   if (/[^\x00-\x7F]/.test(script)) {
     return Promise.reject(new Error('Interner Fehler: PowerShell-Skript enthält Nicht-ASCII-Zeichen.'));
   }
@@ -54,8 +58,8 @@ function runPs(script, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       powershellExe(),
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file, ...args],
-      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] },
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-OutputFormat', 'Text', '-File', file, ...args],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: env ? { ...process.env, ...env } : process.env },
     );
     const out = [];
     const err = [];
