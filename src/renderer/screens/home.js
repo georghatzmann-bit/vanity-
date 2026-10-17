@@ -25,20 +25,20 @@ export default {
     cleanups.push(() => backupBtn.destroy(), () => restoreBtn.destroy());
 
     const backupCard = Card(
-      { variant: 'hero', tilt: { max: 5 }, className: 'home__action' },
+      { variant: 'hero', tilt: { max: 3 }, className: 'home__action' },
       h('div.home__action-top', h('div.icon-tile.icon-tile--lg', icon('shield')), h('span.home__step', '01')),
       h('div.t-eyebrow', 'Vor dem Reset'),
       h('h2.home__action-title', 'Sichern'),
-      h('p.home__action-text', 'Scannt alle Apps, Spiele und Hardware-Infos und speichert sie auf USB-Stick, Festplatte oder als Code.'),
-      h('div.home__action-foot', backupBtn, h('span.hint', 'dauert etwa 1 Minute')),
+      h('p.home__action-text', 'Findet alle Apps und Spiele auf diesem PC und speichert die Liste auf USB-Stick, Festplatte oder als Code.'),
+      h('div.home__action-foot', backupBtn, h('span.hint', 'Dauert etwa eine Minute')),
     );
     const restoreCard = Card(
-      { tilt: { max: 5 }, className: 'home__action' },
+      { tilt: { max: 3 }, className: 'home__action' },
       h('div.home__action-top', h('div.icon-tile.icon-tile--lg', icon('download')), h('span.home__step', '02')),
       h('div.t-eyebrow', 'Nach dem Reset'),
       h('h2.home__action-title', 'Wiederherstellen'),
-      h('p.home__action-text', 'Findet dein Profil automatisch und installiert alles wieder – still im Hintergrund, mit Live-Fortschritt.'),
-      h('div.home__action-foot', restoreBtn, h('span.hint', 'Profil, Datei oder Code')),
+      h('p.home__action-text', 'Findet deine Sicherung automatisch und installiert alles wieder – leise im Hintergrund, mit Live-Fortschritt.'),
+      h('div.home__action-foot', restoreBtn, h('span.hint', 'Per Stick, Datei oder Code')),
     );
     cleanups.push(() => backupCard.destroy(), () => restoreCard.destroy());
 
@@ -47,7 +47,7 @@ export default {
       'button.home__quick',
       { type: 'button', onClick: () => go('select', 'slide'), onPointerenter: () => ctx.sound.play('hover') },
       icon('zap'),
-      h('span', h('b', 'Kein Profil?'), ' Schnell-Setup mit beliebten Apps'),
+      h('span', h('b', 'Keine Sicherung?'), ' Starte mit beliebten Apps'),
       icon('arrow-right'),
     );
 
@@ -55,7 +55,7 @@ export default {
       'div.screen__inner.home',
       h(
         'section.home__hero',
-        h('div.home__badge', { dataset: { stagger: '' } }, h('span.home__dot'), status, h('span.home__sep'), h('span.c-muted', 'Windows-Reset ohne Datenverlust')),
+        h('div.home__badge', { dataset: { stagger: '' } }, h('span.home__dot'), status, h('span.home__sep'), h('span.c-muted', 'Deine Apps überleben den Windows-Reset')),
         title,
         h(
           'p.home__lead',

@@ -24,15 +24,15 @@ export function monogram(name = '') {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-/** Deterministic violet-ish gradient from a name (hues 245–300). */
+/** Deterministic deep violet gradient from a name (hues 238–310) – sits quietly next to real favicons. */
 export function monogramGradient(name = '') {
   const n = hash(String(name).toLowerCase());
-  const h1 = 245 + (n % 55);
-  const h2 = h1 + 18 + ((n >>> 8) % 28);
-  const l1 = 60 + ((n >>> 4) % 10);
-  const l2 = 30 + ((n >>> 12) % 10);
-  const ang = 120 + ((n >>> 16) % 60);
-  return `linear-gradient(${ang}deg, hsl(${h1} 88% ${l1}%) 0%, hsl(${h2} 72% ${l2}%) 100%)`;
+  const h1 = 238 + (n % 46);
+  const h2 = h1 + 10 + ((n >>> 8) % 16);
+  const l1 = 44 + ((n >>> 4) % 8);
+  const l2 = 20 + ((n >>> 12) % 6);
+  const ang = 135 + ((n >>> 16) % 40);
+  return `linear-gradient(${ang}deg, hsl(${h1} 52% ${l1}%) 0%, hsl(${h2} 48% ${l2}%) 100%)`;
 }
 
 export function faviconUrl(homepage) {

@@ -9,7 +9,7 @@ import { store, EFFECT_LEVELS } from './core/store.js';
 import { router } from './core/router.js';
 import { fx } from './core/fx-bridge.js';
 import { sound } from './core/sound.js';
-import { prefersReducedMotion } from './core/motion.js';
+import { prefersReducedMotion, onReducedMotionChange, gsap } from './core/motion.js';
 import { Titlebar } from './components/titlebar.js';
 import { createToaster } from './components/toast.js';
 import { createModalHost } from './components/modal.js';
@@ -64,8 +64,12 @@ async function prepareDevState(screen) {
 
 async function main() {
   applyUrlOverrides();
+  // ?lag=0 (browser mock only): animations follow wall-clock time even at 3 fps, so screenshots
+  // taken in software rendering show final states instead of half-finished tweens.
+  if (isBrowserMock && params.get('lag') === '0') gsap.ticker.lagSmoothing(0);
   const root = document.documentElement;
   root.dataset.motion = prefersReducedMotion() ? 'reduced' : 'full';
+  onReducedMotionChange((reduced) => (root.dataset.motion = reduced ? 'reduced' : 'full'));
   store.subscribe(
     (s) => s.settings.effects,
     (q) => {

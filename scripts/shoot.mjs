@@ -5,12 +5,13 @@
 //   node scripts/shoot.mjs --out <dir> --shots-file shots.json
 //
 // Shot spec:
-//   { "name": "home", "query": "screen=home&firstRun=0", "wait": 1500,
+//   { "name": "home", "query": "screen=home&firstRun=0&lag=0", "wait": 1500, "reducedMotion": false,
 //     "width": 1100, "height": 700, "fullPage": false, "selector": ".card" (element-only screenshot),
 //     "actions": [ { "click": "sel" }, { "hover": "sel" }, { "wait": 500 }, { "press": "Control+," },
 //                  { "scroll": ".screen", "y": 900 }, { "type": "input", "text": "disc" },
 //                  { "eval": "window.__phoenix.toast.success('Hallo')" }, { "eval": "fetchSomething()", "await": true },
 //                  { "shot": "name-suffix" } ] }
+// Tip: add "lag=0" to the query so GSAP follows wall-clock time in slow software rendering.
 // Writes <out>/<name>.png (+ intermediate "shot" actions) and <out>/console.txt.
 // Exits 1 on page errors (uncaught exceptions) or console errors (CSP violations etc.).
 // Failed external image requests (favicons while offline) are reported but do not fail the run.
@@ -147,6 +148,7 @@ for (const spec of shots) {
     ignoreHTTPSErrors: true,
     locale: 'de-DE',
     timezoneId: 'Europe/Berlin',
+    reducedMotion: spec.reducedMotion ? 'reduce' : 'no-preference',
   });
   await routeExternal(context);
   const page = await context.newPage();

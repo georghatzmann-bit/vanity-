@@ -109,7 +109,12 @@ export function createMockApi() {
     },
     profile: {
       save: async (p, dir) => {
-        const path = dir === 'documents' ? 'C:\\Users\\Georg\\Documents\\Phoenix\\Phoenix-Profil-GAMING-PC.phoenix.json' : 'C:\\Users\\Georg\\Desktop\\Phoenix-Profil-GAMING-PC.phoenix.json';
+        const path =
+          dir === 'documents'
+            ? 'C:\\Users\\Georg\\Documents\\Phoenix\\Phoenix-Profil-GAMING-PC.phoenix.json'
+            : dir === 'onedrive'
+              ? 'C:\\Users\\Georg\\OneDrive\\Phoenix\\Phoenix-Profil-GAMING-PC.phoenix.json'
+              : 'C:\\Users\\Georg\\Desktop\\Phoenix-Profil-GAMING-PC.phoenix.json';
         saved.push({ path, profile: profileFrom(p) });
         return { path };
       },
@@ -135,6 +140,7 @@ export function createMockApi() {
         { root: 'E:\\', label: 'SANDISK', kind: 'removable', freeBytes: 28e9, totalBytes: 32e9 },
         { root: 'D:\\', label: 'Spiele', kind: 'fixed', freeBytes: 410e9, totalBytes: 2000e9 },
         { root: 'C:\\', label: 'Windows', kind: 'system', freeBytes: 182e9, totalBytes: 999e9 },
+        { root: 'onedrive', label: 'OneDrive', kind: 'cloud', path: 'C:\\Users\\Georg\\OneDrive', freeBytes: 0, totalBytes: 0 },
       ],
     },
     setup: { find: async () => ({ path: 'C:\\Users\\Georg\\Downloads\\Phoenix-Setup-1.0.0.exe' }) },

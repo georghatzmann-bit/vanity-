@@ -45,7 +45,6 @@ export function Checkbox({ checked = false, label = '', description = '', onChan
     },
     setDisabled(v) {
       input.disabled = !!v;
-      el.style.opacity = v ? '0.5' : '';
       return el;
     },
   };

@@ -15,6 +15,7 @@ export default {
   mount(container, ctx) {
     const { api, router, fx, sound, store } = ctx;
     let alive = true;
+    let scramble = null;
     const offs = [];
 
     const word = h('h1.boot__word', 'PHOENIX');
@@ -22,14 +23,15 @@ export default {
     const sub = h('p.boot__sub', 'Wird eingerichtet …');
     const bar = ProgressBar({ value: null, size: 'sm', label: 'Einrichtung' });
     const steps = [
-      { key: 'sys', label: 'System wird erkannt' },
-      { key: 'winget', label: 'Paketmanager winget wird geprüft' },
-      { key: 'ready', label: 'Alles bereit' },
+      { key: 'sys', label: 'System wird erkannt …', done: 'System erkannt' },
+      { key: 'winget', label: 'winget wird geprüft …', done: 'winget ist bereit', warn: 'winget braucht Hilfe' },
+      { key: 'ready', label: 'Letzte Vorbereitungen …', done: 'Alles bereit' },
     ].map((s) => {
       const state = h('span.boot__state', h('span.spinner'));
+      const label = h('span.boot__label', s.label);
       const detail = h('span.boot__detail');
-      const row = h('li.boot__step', state, h('span.boot__label', s.label), detail);
-      return { ...s, row, state, detail };
+      const row = h('li.boot__step', state, label, detail);
+      return { ...s, row, state, label, detail };
     });
     const startBtn = Button({
       label: 'Los geht’s',
@@ -58,13 +60,15 @@ export default {
     const markDone = (step, text, ok = true) => {
       step.state.replaceChildren(icon(ok ? 'check' : 'alert', { size: 14, strokeWidth: 2.5 }));
       step.row.classList.add(ok ? 'is-done' : 'is-warn');
+      step.label.textContent = ok ? step.done : step.warn || step.done;
       if (text) step.detail.textContent = text;
     };
 
     (async () => {
       sound.play('rise');
       if (motionOK()) gsap.fromTo(mark, { scale: 0.6, opacity: 0, filter: 'blur(20px)' }, { scale: 1, opacity: 1, filter: 'blur(0px)', duration: 1.4, ease: 'expo.out' });
-      await scrambleText(word, 'PHOENIX', { duration: 1.4, delay: 0.2 }).finished;
+      scramble = scrambleText(word, 'PHOENIX', { duration: 1.4, delay: 0.2 });
+      await scramble.finished;
       if (!alive) return;
 
       bar.setValue(0.1);
@@ -101,6 +105,7 @@ export default {
 
     return () => {
       alive = false;
+      scramble?.cancel();
       offs.forEach((off) => off && off());
       startBtn.destroy();
     };

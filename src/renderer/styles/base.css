@@ -137,6 +137,10 @@ textarea,
   display: none;
 }
 
+:root[data-motion='reduced'] .grain {
+  animation: none;
+}
+
 @keyframes grain-shift {
   0% { transform: translate3d(0, 0, 0); }
   20% { transform: translate3d(-4%, 3%, 0); }
@@ -200,9 +204,10 @@ textarea,
   padding-top: var(--s-2);
 }
 
+/* Dialogs cover the app area only: the titlebar (drag, minimise, close) stays usable. */
 #modal-host {
   position: fixed;
-  inset: 0;
+  inset: var(--titlebar-h) 0 0 0;
   z-index: var(--z-modal);
   pointer-events: none;
 }
@@ -313,7 +318,8 @@ textarea,
   animation: text-shine 7s var(--ease-in-out) 1.6s infinite;
 }
 
-.t-shine.is-revealing {
+.t-shine.is-revealing,
+:root[data-effects='low'] .t-shine {
   animation: none;
 }
 
@@ -377,11 +383,10 @@ kbd,
   outline: none;
 }
 
+/* Outline only: it follows each element's own radius and never replaces a component's shadows. */
 :focus-visible {
-  outline: 2px solid var(--accent-2);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
-  border-radius: var(--r-sm);
-  box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.18);
 }
 
 /* ---------- Shared keyframes ---------- */
@@ -419,6 +424,15 @@ kbd,
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Functional busy indicators keep turning (slowly) – a frozen spinner reads as "hung". */
+  .spinner,
+  .btn__spinner::before,
+  .ring.is-indeterminate svg,
+  .progress.is-indeterminate .progress__fill {
+    animation-duration: 1.6s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 

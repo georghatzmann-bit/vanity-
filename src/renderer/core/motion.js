@@ -6,6 +6,13 @@ import { store } from './store.js';
 const reducedMq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
 
 export const prefersReducedMotion = () => !!reducedMq.matches;
+/** Calls fn(reduced) whenever the OS "reduce motion" setting flips. Returns an unsubscribe. */
+export function onReducedMotionChange(fn) {
+  if (typeof reducedMq.addEventListener !== 'function') return () => {};
+  const handler = () => fn(!!reducedMq.matches);
+  reducedMq.addEventListener('change', handler);
+  return () => reducedMq.removeEventListener('change', handler);
+}
 export const effectsLevel = () => store.get('settings')?.effects || 'ultra';
 /** Any motion at all (fades, small slides). */
 export const motionOK = () => !prefersReducedMotion() && effectsLevel() !== 'off';
@@ -210,7 +217,7 @@ export function prepareStagger(container, selector = '[data-stagger]') {
  * `inner` (selector or element) moves a bit further for a parallax feel.
  * @returns cleanup()
  */
-export function magnetic(el, { strength = 0.32, inner = null, innerStrength = 0.16, max = 14 } = {}) {
+export function magnetic(el, { strength = 0.32, inner = null, innerStrength = 0.16, max = 10 } = {}) {
   if (!el || !finePointer.matches) return () => {};
   const innerEl = typeof inner === 'string' ? el.querySelector(inner) : inner;
   const xTo = gsap.quickTo(el, 'x', { duration: 0.55, ease: 'power3.out' });
@@ -226,8 +233,8 @@ export function magnetic(el, { strength = 0.32, inner = null, innerStrength = 0.
     const dy = e.clientY - (r.top + r.height / 2);
     xTo(clamp(dx * strength));
     yTo(clamp(dy * strength));
-    ixTo?.(dx * innerStrength);
-    iyTo?.(dy * innerStrength);
+    ixTo?.(clamp(dx * innerStrength) * 0.6);
+    iyTo?.(clamp(dy * innerStrength) * 0.6);
   };
   const leave = () => {
     gsap.to(el, { x: 0, y: 0, duration: 0.9, ease: 'elastic.out(1, 0.35)', overwrite: 'auto' });
@@ -299,6 +306,7 @@ export function tilt(el, { max = 7, perspective = 1000, scale = 1.012, glare = t
     el.removeEventListener('pointermove', move);
     el.removeEventListener('pointerleave', leave);
     layers.forEach((l) => l.remove());
+    gsap.killTweensOf(el, 'rotationX,rotationY,scaleX,scaleY');
     gsap.set(el, { rotationX: 0, rotationY: 0, scale: 1 });
   };
 }

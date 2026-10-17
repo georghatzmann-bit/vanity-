@@ -138,14 +138,14 @@ window.phoenix = {
 | `winget.ensure()` | `winget:ensure` | `{ ok, version, error? }`, emits `winget:ensure-progress` `{ step, message }` |
 | `scan.run()` | `scan:run` | `ScanResult`, emits `scan:progress` `{ phase, message, pct, found? }` |
 | `catalog.get()` | `catalog:get` | `{ categories: string[], items: CatalogItem[] }` |
-| `profile.save(p, dir?)` | `profile:save` | `{ path }` – no `dir` → save dialog; `dir: 'documents'` → `Documents\Phoenix\` |
+| `profile.save(p, dir?)` | `profile:save` | `{ path }` – no `dir` → save dialog (`{ path:null, canceled:true }` if cancelled); `dir: 'documents'` → `Documents\Phoenix\`; `dir: 'onedrive'` → `OneDrive\Phoenix\` |
 | `profile.saveToDrive(p, root)` | `profile:saveToDrive` | `{ path, setupCopied, setupPath? }` – writes `<root>\Phoenix\<file>` and copies setup exe if found |
 | `profile.open()` | `profile:open` | `Profile \| null` (dialog; accepts `.phoenix.json`, `.json` incl. raw winget export) |
 | `profile.find()` | `profile:find` | `ProfileRef[]` = `{ path, location, createdAt, hostname, appCount, gameCount }` |
 | `profile.load(path)` | `profile:load` | `Profile` |
 | `profile.encode(p)` | `profile:encode` | `string` (`PHX1-…`) |
 | `profile.decode(code)` | `profile:decode` | `Profile` |
-| `drives.list()` | `drives:list` | `Drive[]` = `{ root:'E:\\', label, kind:'removable'\|'fixed'\|'network'\|'system', freeBytes, totalBytes }` |
+| `drives.list()` | `drives:list` | `Drive[]` = `{ root:'E:\\', label, kind:'removable'\|'fixed'\|'network'\|'system', freeBytes, totalBytes }` plus, if present, `{ root:'onedrive', label:'OneDrive', kind:'cloud', path }` (save it with `profile.save(p, 'onedrive')`) |
 | `setup.find()` | `setup:find` | `{ path } \| null` newest `Phoenix-Setup-*.exe` in Downloads/Desktop |
 | `install.start(items)` | `install:start` | `{ jobId }`, emits `install:event` (§6) |
 | `install.cancel()` | `install:cancel` | `true` |
@@ -226,3 +226,18 @@ Worker protocol (NDJSON over the pipe, one JSON object per line):
 ## 9. Security
 
 `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, no remote content except favicon images, `will-navigate` blocked, `setWindowOpenHandler` → deny (+ allowlisted openExternal). IPC inputs validated in main (ids regex, paths must be absolute, profile normalized). Worker pipe authenticated by a random 32-byte token.
+
+## 10. Renderer flow contract (screens ↔ store)
+
+| Screen | Enter with | Reads | Writes / leaves with |
+|---|---|---|---|
+| `boot` | first run only | `api.system.info()`, `api.winget.ensure()` | `api.app.markInstalled()` → `home` |
+| `home` | – | `store.machine` | `backup` · `restore` · `select {mode:'catalog'}` |
+| `backup` | – | `api.scan.run()` + `scan:progress` | `store.scan = ScanResult`, `store.profile = Profile` (built from the scan, **everything included**, `appVersion` from `store.appInfo`) → saves via `api.profile.save/saveToDrive/encode` → `home` |
+| `restore` | – | `api.profile.find()`, `open()`, `load()`, `decode()` | `store.profile = Profile` → `select {mode:'restore'}`; "Ohne Profil" → `select {mode:'catalog'}` |
+| `select` | `{mode:'restore'|'catalog'}` | `store.profile`, `api.catalog.get()`, `store.machine` (GPU → suggest NVIDIA App / AMD link) | `store.installJob = { items: InstallItem[], links: CatalogItem[] (source 'link'), games: GameEntry[] }` → `install` |
+| `install` | – | `store.installJob`, `install:event` | `store.installJob.result = { summary, byKey: {key → item-done event}, durationMs, elevation }` → `done` |
+| `done` | – | `store.installJob` | retry failed → `install` with only failed items; `games` if `store.installJob.games.length`; links list (open in browser) |
+| `games` | – | `store.installJob.games` or `store.profile.games`, `api.games.launchers()` | opens launcher URIs via `api.games.install(game, mode)` → `home` |
+
+Rules: screens never call `window.phoenix` directly (only `ctx.api`); every screen works standalone with `?screen=<name>` by seeding mock data from `ctx.api` when the store slot is empty; `fxState` per screen: boot→`boot`, home→`home`, backup→`scan`, restore/select→`idle`, install→`installing` (+ `fx.setProgress`), done→`success` (or `error` if everything failed), games→`idle`.

@@ -178,6 +178,12 @@ function writeProfile(profile, dir) {
 async function saveProfile(profile, { dir, parentWin } = {}) {
   const { app, dialog } = require('electron');
   if (dir === 'documents') return { path: writeProfile(profile, path.join(app.getPath('documents'), 'Phoenix')) };
+  if (dir === 'onedrive') {
+    const { getKnownFolders } = require('../util/paths');
+    const od = getKnownFolders().oneDrive;
+    if (!od) throw new Error('OneDrive ist auf diesem PC nicht eingerichtet.');
+    return { path: writeProfile(profile, path.join(od, 'Phoenix')) };
+  }
   if (typeof dir === 'string' && dir) {
     if (!path.isAbsolute(dir)) throw new Error('Ungültiger Speicherort.');
     return { path: writeProfile(profile, dir) };

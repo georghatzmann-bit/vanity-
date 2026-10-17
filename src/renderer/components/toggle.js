@@ -53,7 +53,6 @@ export function Toggle({ checked = false, label = '', description = '', onChange
     },
     setDisabled(v) {
       sw.disabled = !!v;
-      el.style.opacity = v ? '0.5' : '';
       return el;
     },
   };

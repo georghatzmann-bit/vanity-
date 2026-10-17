@@ -178,8 +178,8 @@ export const router = {
     const id = ++navId;
     const type = motionOK() ? transition : 'none';
 
-    // Screens that were only passed through (superseded within 350 ms) are not recorded.
-    const settled = current && (current.state === 'active' || performance.now() - (current.enteredAt || 0) > 350);
+    // Screens that were only passed through (still mounting, or superseded within 350 ms) are not recorded.
+    const settled = current && (current.state === 'active' || (current.enteredAt > 0 && performance.now() - current.enteredAt > 350));
     if (current && !replace && settled) history.push({ name: current.name, params: current.params });
     if (history.length > 30) history.shift();
 

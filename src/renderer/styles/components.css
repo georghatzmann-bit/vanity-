@@ -55,7 +55,7 @@
 }
 
 .tilt-glare {
-  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 35%, transparent 60%);
+  background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgba(221, 214, 254, 0.09), rgba(196, 181, 253, 0.025) 40%, transparent 65%);
   mix-blend-mode: plus-lighter;
 }
 
@@ -63,10 +63,10 @@
   background: linear-gradient(
     115deg,
     transparent 25%,
-    rgba(196, 181, 253, 0.1) 40%,
-    rgba(255, 255, 255, 0.1) 47%,
-    rgba(139, 92, 246, 0.14) 53%,
-    rgba(125, 211, 252, 0.06) 58%,
+    rgba(196, 181, 253, 0.06) 40%,
+    rgba(255, 255, 255, 0.06) 47%,
+    rgba(139, 92, 246, 0.08) 53%,
+    rgba(125, 211, 252, 0.035) 58%,
     transparent 72%
   );
   background-size: 260% 260%;
@@ -124,13 +124,10 @@
 
 .titlebar__version {
   margin-left: 2px;
-  padding: 2px 7px;
-  border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--muted);
-  background: var(--fill-1);
-  box-shadow: inset 0 0 0 1px var(--line-1);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--faint);
 }
 
 .titlebar__center {
@@ -232,9 +229,15 @@
 }
 
 .tb-btn:focus-visible {
-  outline-offset: -3px;
-  border-radius: 6px;
-  box-shadow: none;
+  outline: none;
+}
+
+.tb-btn:focus-visible::before {
+  content: '';
+  position: absolute;
+  inset: 8px 5px;
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 2px var(--focus);
 }
 
 .tb-btn.is-off {
@@ -321,29 +324,29 @@
 /* --- primary --- */
 .btn--primary {
   color: #fff;
-  background: linear-gradient(180deg, #a07bff 0%, #8257f6 52%, #6c3ae6 100%);
+  background: linear-gradient(180deg, #9b76ff 0%, #8055f5 55%, #6b3ce3 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -3px 8px rgba(48, 12, 120, 0.35),
-    0 0 0 1px rgba(124, 77, 255, 0.85),
-    0 12px 32px -12px rgba(139, 92, 246, 0.95),
-    0 0 46px -14px rgba(139, 92, 246, 0.9);
-  text-shadow: 0 1px 1px rgba(36, 6, 92, 0.4);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 -2px 6px rgba(48, 12, 120, 0.3),
+    0 1px 2px rgba(20, 6, 60, 0.5),
+    0 10px 28px -12px rgba(139, 92, 246, 0.85);
+  text-shadow: 0 1px 1px rgba(36, 6, 92, 0.35);
 }
 
+/* A short arc of light travels along the 1px edge. */
 .btn--primary::before {
   content: '';
   position: absolute;
-  inset: -3px;
+  inset: 0;
   z-index: -1;
-  padding: 2px;
-  border-radius: calc(var(--btn-r) + 3px);
-  background: conic-gradient(from var(--angle), transparent 0deg, transparent 210deg, rgba(196, 181, 253, 0.95) 280deg, #fff 300deg, rgba(139, 92, 246, 0.9) 320deg, transparent 360deg);
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--angle), transparent 0deg, transparent 230deg, rgba(196, 181, 253, 0.55) 285deg, rgba(245, 243, 255, 0.95) 305deg, rgba(167, 139, 250, 0.5) 325deg, transparent 360deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: angle-spin 3.4s linear infinite;
-  opacity: 0.9;
+  animation: angle-spin 4.8s linear infinite;
 }
 
 .btn--primary::after {
@@ -361,11 +364,16 @@
 
 .btn--primary:hover {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -3px 8px rgba(48, 12, 120, 0.3),
-    0 0 0 1px rgba(167, 139, 250, 0.95),
-    0 16px 40px -12px rgba(139, 92, 246, 1),
-    0 0 72px -10px rgba(139, 92, 246, 0.95);
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 -2px 6px rgba(48, 12, 120, 0.25),
+    0 1px 2px rgba(20, 6, 60, 0.5),
+    0 14px 36px -12px rgba(139, 92, 246, 1),
+    0 0 56px -16px rgba(139, 92, 246, 0.9);
+}
+
+.btn--primary:active {
+  background: linear-gradient(180deg, #8a63fb 0%, #7449ec 55%, #6235d6 100%);
 }
 
 .btn--primary:hover::after {
@@ -405,7 +413,7 @@
 .btn--danger {
   color: #ffdede;
   background: linear-gradient(180deg, rgba(229, 72, 77, 0.24), rgba(229, 72, 77, 0.14));
-  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.42), 0 10px 28px -16px rgba(229, 72, 77, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.4), 0 8px 22px -14px rgba(229, 72, 77, 0.7);
 }
 
 .btn--danger:hover {
@@ -536,7 +544,7 @@
   border-radius: 12px;
   color: var(--accent-3);
   background: linear-gradient(160deg, rgba(167, 139, 250, 0.22), rgba(109, 40, 217, 0.1));
-  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 24px -8px rgba(139, 92, 246, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 22px -10px rgba(139, 92, 246, 0.7);
 }
 
 .icon-tile .icon {
@@ -575,9 +583,7 @@
   position: relative;
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;
-  grid-template-areas:
-    'icon body aside'
-    'progress progress progress';
+  grid-template-areas: 'icon body aside';
   column-gap: 14px;
   align-items: center;
   min-height: 76px;
@@ -596,15 +602,15 @@
   box-shadow: inset 0 0 0 1px var(--line-3), var(--inner-top), 0 16px 32px -20px rgba(0, 0, 0, 0.9);
 }
 
+/* Selection is carried by the checkbox; the tile itself only takes a faint violet tint. */
 .app-card.is-selected {
-  background:
-    radial-gradient(140% 120% at 0% 0%, rgba(139, 92, 246, 0.22), rgba(139, 92, 246, 0.05) 60%),
-    var(--glass-1);
-  box-shadow:
-    inset 0 0 0 1px rgba(167, 139, 250, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 0 1px rgba(139, 92, 246, 0.12),
-    0 12px 34px -16px rgba(139, 92, 246, 0.75);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.13), rgba(139, 92, 246, 0.03) 62%), var(--glass-1);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.app-card.is-selected:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.17), rgba(139, 92, 246, 0.05) 62%), var(--glass-2);
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 32px -20px rgba(0, 0, 0, 0.9);
 }
 
 .app-card.is-disabled {
@@ -653,10 +659,10 @@
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   background: var(--mono-bg, var(--accent-grad));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   transition: opacity 0.3s;
 }
 
@@ -697,11 +703,14 @@
 }
 
 .app-card__progress {
-  grid-area: progress;
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 8px;
 }
 
-.app-card__progress:not(:empty) {
-  margin-top: 12px;
+.app-card__progress .progress {
+  filter: none;
 }
 
 .app-card .checkbox__box {
@@ -763,7 +772,7 @@
 .is-checked > .checkbox__box,
 .is-selected .checkbox__box {
   background: linear-gradient(160deg, #a78bfa, #7c3aed);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 16px rgba(139, 92, 246, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 14px -2px rgba(139, 92, 246, 0.6);
 }
 
 .is-checked > .checkbox__box path,
@@ -773,8 +782,13 @@
 }
 
 .checkbox__input:focus-visible + .checkbox__box {
-  outline: 2px solid var(--accent-2);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
+}
+
+.checkbox:has(.checkbox__input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .checkbox__text {
@@ -823,7 +837,17 @@
 
 .toggle__desc {
   font-size: var(--fs-sm);
+  line-height: 1.4;
   color: var(--muted);
+}
+
+.toggle:has(.toggle__switch:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.toggle:has(.toggle__switch:disabled) .toggle__switch {
+  cursor: not-allowed;
 }
 
 .toggle__switch {
@@ -861,7 +885,7 @@
 
 .toggle.is-on .toggle__switch {
   background: linear-gradient(160deg, #a78bfa, #7c3aed);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 0 18px -2px rgba(139, 92, 246, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 16px -4px rgba(139, 92, 246, 0.7);
 }
 
 .toggle.is-on .toggle__knob {
@@ -895,8 +919,8 @@
   left: 0;
   width: 0;
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(167, 139, 250, 0.36), rgba(124, 58, 237, 0.22));
-  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 22px -4px rgba(139, 92, 246, 0.8);
+  background: linear-gradient(180deg, rgba(167, 139, 250, 0.34), rgba(124, 58, 237, 0.2));
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 6px 16px -8px rgba(139, 92, 246, 0.9);
   transition: transform 0.5s var(--ease-out), width 0.5s var(--ease-out);
   pointer-events: none;
 }
@@ -1079,7 +1103,7 @@
 .progress--err { filter: drop-shadow(0 0 6px rgba(var(--err-rgb), 0.45)); }
 
 .progress--lg { --progress-h: 10px; }
-.progress--sm { --progress-h: 4px; }
+.progress--sm { --progress-h: 4px; filter: none; }
 
 @keyframes progress-indet {
   0% { transform: translateX(-110%); }
@@ -1272,6 +1296,11 @@
   overflow-wrap: anywhere;
 }
 
+.toast__action {
+  --btn-h: 32px;
+  margin-top: var(--s-3);
+}
+
 .toast__close {
   display: grid;
   place-items: center;
@@ -1305,8 +1334,7 @@
   right: 0;
   bottom: 0;
   height: 2px;
-  background: linear-gradient(90deg, rgba(var(--tone-rgb), 0.2), rgb(var(--tone-rgb)));
-  box-shadow: 0 0 8px rgb(var(--tone-rgb));
+  background: linear-gradient(90deg, rgba(var(--tone-rgb), 0.15), rgba(var(--tone-rgb), 0.85));
   transform-origin: left;
 }
 
@@ -1315,25 +1343,34 @@
    ========================================================= */
 
 .modal-layer {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  padding: calc(var(--titlebar-h) + 16px) 24px 24px;
+  padding: var(--s-5);
   pointer-events: auto;
 }
 
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: radial-gradient(80% 80% at 50% 40%, rgba(20, 12, 44, 0.45), rgba(3, 4, 8, 0.78));
-  backdrop-filter: blur(12px) saturate(120%);
+  background: radial-gradient(80% 80% at 50% 40%, rgba(20, 12, 44, 0.42), rgba(3, 4, 8, 0.74));
+  backdrop-filter: blur(10px) saturate(115%);
 }
 
 :root[data-effects='low'] .modal-backdrop,
 :root[data-effects='off'] .modal-backdrop {
   backdrop-filter: none;
   background: rgba(3, 4, 8, 0.82);
+}
+
+/* Decorative loops behind an open dialog are invisible anyway – pause them. */
+.modal-open #app .deco,
+.modal-open #app .deco::before,
+.modal-open #app .deco::after,
+.modal-open #app .btn--primary::before,
+.modal-open .grain {
+  animation-play-state: paused !important;
 }
 
 /* Low tiers: no backdrop blur anywhere (cheap compositing on weak GPUs). */
@@ -1357,15 +1394,16 @@
   display: flex;
   flex-direction: column;
   width: min(var(--modal-w, 560px), 100%);
-  max-height: calc(100vh - var(--titlebar-h) - 48px);
+  max-height: calc(100vh - var(--titlebar-h) - 2 * var(--s-5));
   border-radius: var(--r-xl);
-  background: var(--glass-tint), rgba(14, 16, 26, 0.82);
-  backdrop-filter: blur(30px) saturate(160%);
+  background: var(--glass-tint), rgba(14, 16, 26, 0.84);
+  /* The backdrop below is already blurred – a light second pass is enough for the glass edge. */
+  backdrop-filter: blur(16px) saturate(150%);
   box-shadow:
     inset 0 0 0 1px var(--line-2),
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
     var(--shadow-3),
-    0 0 120px -40px rgba(139, 92, 246, 0.6);
+    0 0 120px -48px rgba(139, 92, 246, 0.55);
 }
 
 .modal::before {
@@ -1375,11 +1413,12 @@
   left: 12%;
   right: 12%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(196, 181, 253, 0.9), transparent);
-  box-shadow: 0 0 16px rgba(139, 92, 246, 0.9);
+  background: linear-gradient(90deg, transparent, rgba(196, 181, 253, 0.75), transparent);
+  box-shadow: 0 0 14px rgba(139, 92, 246, 0.7);
 }
 
 .modal--lg { --modal-w: 760px; }
+.modal--settings { --modal-w: 600px; }
 .modal--sm { --modal-w: 440px; }
 
 .modal__head {
@@ -1422,10 +1461,25 @@
 
 .modal__foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: var(--s-3);
-  padding: var(--s-4) var(--s-5) var(--s-5);
+  padding: var(--s-4) var(--s-5);
   box-shadow: inset 0 1px 0 var(--line-1);
+}
+
+.modal__foot-start {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  margin-right: auto;
+}
+
+/* Short confirm dialogs read as one block – no divider above the buttons. */
+.modal--sm .modal__foot {
+  padding-top: 0;
+  box-shadow: none;
 }
 
 /* =========================================================
@@ -1571,7 +1625,11 @@
 }
 
 .range:focus-visible {
-  outline-offset: 2px;
+  outline: none;
+}
+
+.range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px #0c0e17, 0 0 0 4px var(--focus), 0 0 14px rgba(139, 92, 246, 0.8);
 }
 
 .range:disabled {
@@ -1586,44 +1644,28 @@
 .settings {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: var(--s-1);
+  gap: var(--s-5);
 }
 
-.settings__section {
+.settings__group {
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
-.settings__head {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-
-.settings__head .icon-tile {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-}
-
-.settings__head .icon-tile .icon {
-  width: 18px;
-  height: 18px;
-}
-
-.settings__title {
-  font-size: 15px;
-  font-weight: 650;
-}
-
-.settings__sub {
-  font-size: var(--fs-sm);
+.settings__label {
+  padding-left: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
   color: var(--muted);
 }
 
 .settings__panel {
+  display: flex;
+  flex-direction: column;
   padding: var(--s-4);
   border-radius: var(--r-lg);
   background: rgba(255, 255, 255, 0.025);
@@ -1631,32 +1673,48 @@
 }
 
 .settings__explain {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  margin-top: var(--s-2);
-  padding: 0 4px;
-}
-
-.settings__explain li {
-  padding: 6px 12px;
-  font-size: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-height: 20px;
+  margin-top: var(--s-3);
+  padding: 0 2px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
-  text-align: center;
-  color: var(--faint);
-  transition: color var(--dur-3);
+  color: var(--muted);
 }
 
-.settings__explain li.is-active {
+.settings__explain b {
+  font-weight: 600;
   color: var(--text-2);
+}
+
+.settings__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-4);
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  box-shadow: inset 0 1px 0 var(--line-1);
+}
+
+.settings__row-label {
+  font-size: 14.5px;
+  font-weight: 550;
 }
 
 .settings__volume {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 48px;
+  grid-template-columns: 18px 200px 44px;
   align-items: center;
   gap: var(--s-3);
   color: var(--muted);
+  transition: opacity var(--dur-3);
+}
+
+.settings__volume.is-disabled {
+  opacity: 0.4;
 }
 
 .settings__volume .icon {
@@ -1664,28 +1722,31 @@
   height: 18px;
 }
 
-.settings__about {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-4);
-}
-
 .settings__meta {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--s-2);
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.settings__meta b {
+  font-weight: 600;
+  color: var(--muted);
 }
 
 /* =========================================================
    Cursor glow
    ========================================================= */
 
+/* Sits between the FX canvas and the app: it lights the scene behind the glass, not the text. */
 .cursor-glow {
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-cursor);
   width: 640px;
   height: 640px;
   margin: -320px 0 0 -320px;
@@ -1702,7 +1763,8 @@
   opacity: 1;
 }
 
-:root[data-effects='off'] .cursor-glow {
+:root[data-effects='off'] .cursor-glow,
+:root[data-motion='reduced'] .cursor-glow {
   display: none;
 }
 
@@ -1862,7 +1924,18 @@
   outline: none;
 }
 
-.toggle + .toggle,
 .checkbox + .checkbox {
   margin-top: var(--s-1);
+}
+
+/* Stacked switches read as a list: same rhythm, hairline between rows. */
+.toggle + .toggle {
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  box-shadow: inset 0 1px 0 var(--line-1);
+}
+
+/* Small UI icons get a heavier stroke so they stay crisp at 100–125 % scaling. */
+:is(.btn, .tb-btn, .badge, .search__icon, .back-link, .home__quick, .segmented__opt, .home__machine, .toast__close, .search__clear) .icon {
+  stroke-width: 2;
 }

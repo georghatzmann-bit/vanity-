@@ -51,6 +51,7 @@
   --accent-soft: rgba(139, 92, 246, 0.14);
   --accent-softer: rgba(139, 92, 246, 0.08);
   --accent-line: rgba(167, 139, 250, 0.42);
+  --focus: #b9a4ff;
   --accent-grad: linear-gradient(135deg, #b69cff 0%, #8b5cf6 48%, #6d28d9 100%);
   --accent-text-grad: linear-gradient(100deg, #ffffff 0%, #ede9fe 30%, #c4b5fd 62%, #8b5cf6 100%);
 
@@ -128,8 +129,8 @@
   --z-overlay: 1;
   --z-app: 10;
   --z-titlebar: 50;
-  --z-toast: 80;
-  --z-modal: 90;
+  --z-modal: 80;
+  --z-toast: 90; /* above dialogs: feedback from inside a dialog must stay readable */
   --z-cursor: 5;
 
   /* ---- Layout ---- */

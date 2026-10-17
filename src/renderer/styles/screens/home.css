@@ -70,6 +70,10 @@
   filter: drop-shadow(0 0 40px rgba(139, 92, 246, 0.45));
 }
 
+:root:is([data-effects='low'], [data-effects='off']) .home__line.t-grad {
+  filter: none;
+}
+
 .home__lead {
   max-width: 56ch;
   font-size: 17px;

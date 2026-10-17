@@ -196,14 +196,20 @@ module.exports = {
   ensureWinget,
   runScan,
   getCatalog: async () => catalog.getCatalog(),
-  saveProfile: (p, dir, parentWin) => profile.saveProfile(p, { dir, parentWin }),
+  saveProfile: (p, dir, parentWin) =>
+    dir === 'onedrive' || dir === 'documents'
+      ? Promise.resolve({ path: profile.writeProfile(p, path.join(MOCK_ROOT, dir === 'onedrive' ? 'OneDrive' : 'Dokumente', 'Phoenix')) })
+      : profile.saveProfile(p, { dir, parentWin }),
   saveToDrive: (p, root) => profile.saveToDrive(p, root),
   openProfileDialog: (parentWin) => profile.openProfileDialog(parentWin),
   findProfiles,
   loadProfile: async (file) => profile.loadProfile(file),
   encodeProfile: async (p) => code.encode(p),
   decodeProfile: async (text) => code.decode(text),
-  listDrives: async () => DRIVES.filter((d) => d.kind !== 'system').concat(DRIVES.filter((d) => d.kind === 'system')),
+  listDrives: async () =>
+    DRIVES.filter((d) => d.kind !== 'system')
+      .concat(DRIVES.filter((d) => d.kind === 'system'))
+      .concat([{ root: 'onedrive', label: 'OneDrive', kind: 'cloud', path: path.join(MOCK_ROOT, 'OneDrive'), freeBytes: 0, totalBytes: 0 }]),
   findSetupExe: async () => null,
   startInstall,
   cancelInstall,

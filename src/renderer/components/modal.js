@@ -9,9 +9,10 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 
 /**
  * createModalHost(hostEl, { inertTargets: [elements to make inert while open] }) -> modal
- *   modal.open({ title, subtitle, icon, tone: 'accent'|'danger', content, actions, size: 'sm'|'md'|'lg', dismissible = true, onClose })
+ *   modal.open({ title, subtitle, icon, tone: 'accent'|'danger', content, actions, footStart, size: 'sm'|'md'|'lg', dismissible = true, onClose })
  *     content: Node | string | (handle) => Node
  *     actions: [{ label, variant, icon, value, onClick(handle) -> false keeps it open }]
+ *     footStart: Node shown at the left end of the footer (meta info, secondary links)
  *     -> handle { el, body, close(value), closed: Promise<value> }
  *   modal.confirm({ title, message, confirmLabel, cancelLabel, danger }) -> Promise<boolean>
  *   modal.closeAll() · modal.isOpen
@@ -21,9 +22,11 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
 
   function setInert(on) {
     for (const t of inertTargets) if (t) t.inert = on;
+    // Lets CSS pause decorative loops behind the blurred backdrop (each frame would be re-blurred).
+    document.documentElement.classList.toggle('modal-open', on);
   }
 
-  function open({ title = '', subtitle = '', icon: iconName, tone = 'accent', content, actions = [], size = 'md', dismissible = true, onClose, className = '' } = {}) {
+  function open({ title = '', subtitle = '', icon: iconName, tone = 'accent', content, actions = [], footStart = null, size = 'md', dismissible = true, onClose, className = '' } = {}) {
     const returnFocus = document.activeElement;
     let resolveClosed;
     const closed = new Promise((r) => (resolveClosed = r));
@@ -49,7 +52,10 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
         handle._closing = true;
         const i = stack.indexOf(handle);
         if (i >= 0) stack.splice(i, 1);
-        layer.removeEventListener('keydown', onKey);
+        document.removeEventListener('keydown', onKey);
+        layer.style.pointerEvents = 'none';
+        // Closing mid-entrance: stop the entrance tweens so they cannot fight the exit.
+        gsap.killTweensOf([dialog, backdrop]);
         const finish = () => {
           layer.remove();
           if (!stack.length) setInert(false);
@@ -60,8 +66,8 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
         if (!motionOK()) return finish();
         gsap
           .timeline({ onComplete: finish })
-          .to(dialog, { opacity: 0, y: 14, scale: 0.97, duration: 0.22, ease: 'power2.in' })
-          .to(backdrop, { opacity: 0, duration: 0.25, ease: 'power1.out' }, 0.04);
+          .to(dialog, { opacity: 0, y: 10, scale: 0.975, duration: 0.18, ease: 'power2.in' })
+          .to(backdrop, { opacity: 0, duration: 0.22, ease: 'power1.out' }, 0.02);
       },
     };
 
@@ -69,8 +75,8 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
     if (typeof content === 'string') body.append(h('p.t-body.c-text-2', content));
     else if (content) body.append(content);
 
-    if (actions.length) {
-      const foot = h('div.modal__foot');
+    if (actions.length || footStart) {
+      const foot = h('div.modal__foot', footStart ? h('div.modal__foot-start', footStart) : null);
       for (const a of actions) {
         foot.append(
           Button({
@@ -112,7 +118,9 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
       }
     }
 
-    layer.addEventListener('keydown', onKey);
+    // Document-level so Esc/Tab also work while focus sits in the titlebar; inputs can still
+    // swallow Esc first (stopPropagation), e.g. to clear a search field.
+    document.addEventListener('keydown', onKey);
     if (dismissible) backdrop.addEventListener('click', () => handle.close());
 
     host.append(layer);
@@ -121,11 +129,11 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
     sound.play('whoosh');
 
     if (motionOK()) {
-      gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' });
+      gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: 'power2.out' });
       gsap.fromTo(
         dialog,
-        { opacity: 0, y: 28, scale: 0.94, filter: richMotion() ? 'blur(12px)' : 'none' },
-        { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.6, ease: 'expo.out', clearProps: 'filter,transform,opacity' },
+        { opacity: 0, y: 24, scale: 0.95, filter: richMotion() ? 'blur(10px)' : 'none' },
+        { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.55, ease: 'expo.out', clearProps: 'filter,transform,opacity' },
       );
     }
 

@@ -58,6 +58,14 @@ function kindOf(d) {
   return 'fixed';
 }
 
+/** Drives plus OneDrive (as { root:'onedrive', kind:'cloud', path }) – see listDrives(). */
+async function listTargets() {
+  const drives = await listDrives();
+  const od = getKnownFolders().oneDrive;
+  if (od) drives.push({ root: 'onedrive', label: 'OneDrive', kind: 'cloud', path: od, freeBytes: 0, totalBytes: 0 });
+  return drives;
+}
+
 /** All usable drives: [{ root:'E:\\', label, kind, freeBytes, totalBytes }] */
 async function listDrives() {
   try {
@@ -141,4 +149,4 @@ async function findSetupExe() {
   return best ? { path: best.path } : null;
 }
 
-module.exports = { getKnownFolders, listDrives, getSearchLocations, findSetupExe };
+module.exports = { getKnownFolders, listDrives, listTargets, getSearchLocations, findSetupExe };
