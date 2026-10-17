@@ -74,32 +74,35 @@ test('restore code round trip keeps apps and games', () => {
   assert.throws(() => code.decode(''), /leer/);
 });
 
-test('saveToDrive copies the Setup via a temp name and skips an identical copy', async () => {
+test('saveToDir copies the Setup via a temp name and skips an identical copy', async () => {
   const fs = require('fs');
   const os = require('os');
   const path = require('path');
   const paths = require('../src/main/util/paths');
-  const { saveToDrive } = require('../src/main/profile/profile');
+  const { saveToDrive, saveToDir } = require('../src/main/profile/profile');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'phx-drive-'));
   const src = path.join(tmp, 'Phoenix-Setup-1.0.42.exe');
   fs.writeFileSync(src, Buffer.alloc(256 * 1024, 7));
   const stick = path.join(tmp, 'E');
+  const dir = path.join(stick, 'Phoenix');
   const orig = paths.findSetupExe;
+  // only drive roots are accepted (on Windows a temp folder is not one)
+  await assert.rejects(saveToDrive(sample, 'C:\\Users\\x'), /Ungültiges Laufwerk/);
   try {
     paths.findSetupExe = async () => ({ path: src });
-    const res = await saveToDrive(sample, stick);
+    const res = await saveToDir(sample, dir);
     assert.strictEqual(res.setupCopied, true);
     assert.strictEqual(fs.statSync(res.setupPath).size, 256 * 1024);
     assert.ok(fs.existsSync(res.path));
-    assert.deepStrictEqual(fs.readdirSync(path.join(stick, 'Phoenix')).filter((f) => f.endsWith('.part')), []);
-    const again = await saveToDrive(sample, stick);
+    assert.deepStrictEqual(fs.readdirSync(dir).filter((f) => f.endsWith('.part')), []);
+    const again = await saveToDir(sample, dir);
     assert.strictEqual(again.setupCopied, true);
 
     paths.findSetupExe = async () => ({ path: path.join(tmp, 'missing.exe') });
     fs.rmSync(res.setupPath);
-    const failed = await saveToDrive(sample, stick);
+    const failed = await saveToDir(sample, dir);
     assert.strictEqual(failed.setupCopied, false);
-    assert.deepStrictEqual(fs.readdirSync(path.join(stick, 'Phoenix')).filter((f) => /\.(part|exe)$/.test(f)), []);
+    assert.deepStrictEqual(fs.readdirSync(dir).filter((f) => /\.(part|exe)$/.test(f)), []);
   } finally {
     paths.findSetupExe = orig;
     fs.rmSync(tmp, { recursive: true, force: true });

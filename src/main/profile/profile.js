@@ -205,7 +205,11 @@ async function saveToDrive(profile, root) {
     throw new Error('Ungültiges Laufwerk.');
   }
   const base = /^[A-Za-z]:$/.test(root) ? `${root}\\` : root;
-  const dir = path.join(base, 'Phoenix');
+  return saveToDir(profile, path.join(base, 'Phoenix'));
+}
+
+/** Writes the profile into dir and copies the Setup.exe next to it (saveToDrive without the root check). */
+async function saveToDir(profile, dir) {
   const file = writeProfile(profile, dir);
   let setupCopied = false;
   let setupPath;
@@ -306,6 +310,7 @@ module.exports = {
   writeProfile,
   saveProfile,
   saveToDrive,
+  saveToDir,
   loadProfile,
   openProfileDialog,
   findProfiles,
