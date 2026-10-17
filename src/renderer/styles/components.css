@@ -555,6 +555,12 @@
   height: 26px;
 }
 
+.icon-tile--danger {
+  color: var(--err);
+  background: linear-gradient(160deg, rgba(var(--err-rgb), 0.2), rgba(var(--err-rgb), 0.06));
+  box-shadow: inset 0 0 0 1px rgba(var(--err-rgb), 0.32), 0 0 24px -8px rgba(var(--err-rgb), 0.6);
+}
+
 .icon-tile--muted {
   color: var(--text-2);
   background: var(--fill-2);
@@ -1854,4 +1860,9 @@
 .modal:focus,
 .modal:focus-visible {
   outline: none;
+}
+
+.toggle + .toggle,
+.checkbox + .checkbox {
+  margin-top: var(--s-1);
 }

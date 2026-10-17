@@ -51,9 +51,6 @@ export function scrambleText(el, finalText, { duration = 0.9, delay = 0, glyphs 
       const ch = text[i];
       if (t >= reveal[i] || ch === ' ' || ch === ' ') {
         html += escapeHtml(ch);
-      } else if (t < delay) {
-        html += '';
-        pending++;
       } else {
         if (swap) current[i] = glyphs[(Math.random() * glyphs.length) | 0];
         html += `<span class="scramble-glyph">${escapeHtml(current[i])}</span>`;
@@ -269,7 +266,12 @@ export function tilt(el, { max = 7, perspective = 1000, scale = 1.012, glare = t
   gsap.set(el, { transformPerspective: perspective });
   const rx = gsap.quickTo(el, 'rotationX', { duration: 0.5, ease: 'power3.out' });
   const ry = gsap.quickTo(el, 'rotationY', { duration: 0.5, ease: 'power3.out' });
-  const sc = gsap.quickTo(el, 'scale', { duration: 0.5, ease: 'power3.out' });
+  const sx = gsap.quickTo(el, 'scaleX', { duration: 0.5, ease: 'power3.out' });
+  const sy = gsap.quickTo(el, 'scaleY', { duration: 0.5, ease: 'power3.out' });
+  const sc = (v) => {
+    sx(v);
+    sy(v);
+  };
 
   const move = (e) => {
     if (!richMotion()) return;

@@ -9,7 +9,8 @@
 //     "width": 1100, "height": 700, "fullPage": false, "selector": ".card" (element-only screenshot),
 //     "actions": [ { "click": "sel" }, { "hover": "sel" }, { "wait": 500 }, { "press": "Control+," },
 //                  { "scroll": ".screen", "y": 900 }, { "type": "input", "text": "disc" },
-//                  { "eval": "window.__phoenix.toast.success('Hallo')" }, { "shot": "name-suffix" } ] }
+//                  { "eval": "window.__phoenix.toast.success('Hallo')" }, { "eval": "fetchSomething()", "await": true },
+//                  { "shot": "name-suffix" } ] }
 // Writes <out>/<name>.png (+ intermediate "shot" actions) and <out>/console.txt.
 // Exits 1 on page errors (uncaught exceptions) or console errors (CSP violations etc.).
 // Failed external image requests (favicons while offline) are reported but do not fail the run.
@@ -184,7 +185,10 @@ for (const spec of shots) {
           if (el) el.scrollTop = y;
           else window.scrollTo(0, y);
         }, { sel: action.scroll, y: Number(action.y || 0) });
-      } else if (action.eval) await page.evaluate(action.eval);
+      } else if (action.eval) {
+        // Runs as a statement block; returned promises are not awaited unless "await": true.
+        await page.evaluate(action.await ? action.eval : `(() => { ${action.eval}\n})()`);
+      }
       else if (action.shot) await page.screenshot({ path: path.join(outDir, `${name}-${action.shot}.png`) });
       if (action.wait !== undefined) await page.waitForTimeout(Number(action.wait));
     }

@@ -9,7 +9,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 
 /**
  * createModalHost(hostEl, { inertTargets: [elements to make inert while open] }) -> modal
- *   modal.open({ title, subtitle, icon, content, actions, size: 'sm'|'md'|'lg', dismissible = true, onClose })
+ *   modal.open({ title, subtitle, icon, tone: 'accent'|'danger', content, actions, size: 'sm'|'md'|'lg', dismissible = true, onClose })
  *     content: Node | string | (handle) => Node
  *     actions: [{ label, variant, icon, value, onClick(handle) -> false keeps it open }]
  *     -> handle { el, body, close(value), closed: Promise<value> }
@@ -23,7 +23,7 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
     for (const t of inertTargets) if (t) t.inert = on;
   }
 
-  function open({ title = '', subtitle = '', icon: iconName, content, actions = [], size = 'md', dismissible = true, onClose, className = '' } = {}) {
+  function open({ title = '', subtitle = '', icon: iconName, tone = 'accent', content, actions = [], size = 'md', dismissible = true, onClose, className = '' } = {}) {
     const returnFocus = document.activeElement;
     let resolveClosed;
     const closed = new Promise((r) => (resolveClosed = r));
@@ -33,7 +33,7 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
     const body = h('div.modal__body');
     const head = h(
       'div.modal__head',
-      iconName ? h('div.icon-tile', icon(iconName)) : null,
+      iconName ? h(`div.icon-tile${tone === 'danger' ? '.icon-tile--danger' : ''}`, icon(iconName)) : null,
       h('div.modal__titles', h('h2.modal__title', { id: titleId }, title), subtitle ? h('p.modal__subtitle', subtitle) : null),
       dismissible ? IconButton({ icon: 'close', label: 'Schließen', className: 'modal__close', onClick: () => handle.close() }) : null,
     );
@@ -139,6 +139,7 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
     const handle = open({
       title,
       icon: iconName || (danger ? 'alert' : 'info'),
+      tone: danger ? 'danger' : 'accent',
       content: message,
       size: 'sm',
       actions: [

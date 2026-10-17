@@ -38,17 +38,23 @@ function makeRecord(name, module, params) {
   return { name, module, params, el, cleanup: null, state: 'mounting', tl: null, disposed: false };
 }
 
+function runCleanup(rec) {
+  if (rec.cleanedUp || typeof rec.cleanup !== 'function') return;
+  rec.cleanedUp = true;
+  try {
+    rec.cleanup();
+  } catch (err) {
+    console.error(`[router] cleanup of "${rec.name}" failed`, err);
+  }
+}
+
 function dispose(rec) {
   if (rec.disposed) return;
   rec.disposed = true;
   live.delete(rec);
   rec.tl?.kill();
   gsap.killTweensOf(rec.el);
-  try {
-    if (typeof rec.cleanup === 'function') rec.cleanup();
-  } catch (err) {
-    console.error(`[router] cleanup of "${rec.name}" failed`, err);
-  }
+  runCleanup(rec);
   try {
     rec.module.unmount?.(rec.el);
   } catch (err) {
@@ -215,7 +221,9 @@ export const router = {
     }
 
     if (id !== navId || rec.disposed) {
-      dispose(rec);
+      // Superseded while mounting: dispose now, or run the cleanup that arrived after disposal.
+      if (rec.disposed) runCleanup(rec);
+      else dispose(rec);
       return false;
     }
 
