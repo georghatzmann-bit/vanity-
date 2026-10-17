@@ -339,7 +339,8 @@ export default {
             h(
               'div.dn__fail-body',
               h('div.dn__fail-name', it.name),
-              h('div.dn__fail-msg', d.message || (d.status === 'cancelled' ? 'Abgebrochen – nicht installiert' : 'Installation fehlgeschlagen')),
+              // Main only says "Abgebrochen" for cancelled items – the badge already does; explain instead.
+              h('div.dn__fail-msg', d.status === 'cancelled' ? 'Nach dem Abbruch nicht mehr installiert' : d.message || 'Installation fehlgeschlagen'),
               d.codeHex ? h('div.dn__fail-meta', h('span.dn__code.t-mono', { title: 'Fehlercode von winget – hilft bei der Suche nach der Ursache' }, `Code ${d.codeHex}`)) : null,
             ),
             Badge(meta),

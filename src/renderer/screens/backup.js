@@ -406,7 +406,18 @@ export default {
       save.setActive(next === 'save');
       if (next !== 'save') fx.setState(next === 'scan' ? 'scan' : 'idle');
 
-      if (motionOK()) {
+      // A switch can interrupt one that is still animating (e.g. "Zurück" right after "Speichern"):
+      // stop all section tweens, keep only `from` on screen and reset the others, so no section is
+      // left half-faded, blurred or visible twice.
+      const fromVisible = !from.hidden;
+      for (const sec of Object.values(sections)) {
+        gsap.killTweensOf(sec);
+        if (sec === from) continue;
+        sec.hidden = true;
+        gsap.set(sec, { clearProps: 'opacity,transform,filter' });
+      }
+
+      if (motionOK() && fromVisible) {
         const rich = richMotion();
         const out =
           from === scanSec && rich

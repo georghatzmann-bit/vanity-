@@ -43,7 +43,9 @@ function registerIpc(getWin) {
       try {
         return await fn(...args);
       } catch (err) {
-        log.error(`${channel} fehlgeschlagen:`, err);
+        // invalid user input (wrong code, foreign file) is expected – no stack trace needed
+        if (channel === 'profile:decode' || channel === 'profile:load' || channel === 'profile:open') log.warn(`${channel}: ${userMessage(err)}`);
+        else log.error(`${channel} fehlgeschlagen:`, err);
         throw new Error(userMessage(err));
       }
     });

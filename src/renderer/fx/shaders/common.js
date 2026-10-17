@@ -10,12 +10,15 @@ void main() {
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`;
 
-/** Prefix for every shader: precision + feature defines ({ F_X: true|false|number }). */
+const INT_DEFS = new Set(['OCT', 'N', 'NLAYERS', 'RB_TAPS']);
+
+/** Prefix for every shader: precision + defines ({ F_X: bool, OCT: int, EMB_EXT: float }). */
 export function header(defs = {}) {
   let s = 'precision highp float;\nprecision highp int;\n';
   for (const k of Object.keys(defs)) {
     const v = defs[k];
-    s += `#define ${k} ${typeof v === 'boolean' ? (v ? 1 : 0) : Number.isInteger(v) ? v : Number(v).toFixed(6)}\n`;
+    const val = typeof v === 'boolean' ? (v ? 1 : 0) : INT_DEFS.has(k) ? Math.round(v) : Number(v).toFixed(6);
+    s += `#define ${k} ${val}\n`;
   }
   return s;
 }

@@ -212,6 +212,7 @@ export default {
     }
 
     async function search() {
+      if (busy) return; // a backup is loading / the screen is leaving – keep the stage as it is
       const id = ++searchId;
       stopPolling();
       state = 'searching';

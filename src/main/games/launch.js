@@ -95,7 +95,7 @@ async function installGame(game, mode = 'install') {
   const launcher = game.platform === 'epic' ? launchers.epic : launchers.steam;
   if (mode !== 'msstore' && (!launcher || !launcher.installed)) {
     const name = game.platform === 'epic' ? 'Epic Games Launcher' : 'Steam';
-    return { ok: false, uri, error: `${name} ist noch nicht installiert. Installiere ihn zuerst.` };
+    return { ok: false, uri, error: `${name} ist noch nicht installiert – installiere zuerst ${name}.` };
   }
   try {
     await shell.openExternal(uri);

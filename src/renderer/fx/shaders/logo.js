@@ -38,7 +38,7 @@ uniform vec3 uXf;
 uniform sampler2D uEmblem;     // r: distance to stroke (local units), g: pen order, b: width factor
 uniform sampler2D uHeat;       // g: emblem mask (for the cracks)
 uniform vec4 uHeatBox;
-uniform float uLineReveal, uLineAlpha, uLineEnergy, uPenHead, uPacket, uGlowAmt, uOccl, uCrack;
+uniform float uLineReveal, uLineAlpha, uLineEnergy, uPenHead, uPacket, uGlowAmt, uOccl, uCrack, uHalo;
 ${WORLD}
 ${HASH}
 ${PALETTE}
@@ -50,7 +50,7 @@ void main() {
   float de = e.r, rt = e.g, wf = e.b;
   float P = uLineReveal;
   float rev = ss(rt - 0.002, rt + 0.004, P);
-  float hw = max(0.022 * wf, 0.55 * px);
+  float hw = max(0.018 * wf, 0.55 * px);
   float core = 1.0 - ss(hw - 0.5 * px, hw + 0.8 * px, de);
   float fall = 1.0 - sat(de / EMB_R);
   float done = ss(0.985, 1.0, P);
@@ -65,7 +65,9 @@ void main() {
   float hp = exp(-pow((P - rt) * 230.0, 2.0)) * step(rt, P + 0.0015) * (1.0 - step(0.9999, P));
   c += (C_HOT * exp(-de / 0.014) * 5.0 + C_LAV * exp(-de / 0.04) * 0.8) * hp * fall * uPenHead;
 #endif
-  float occl = core * rev * 0.92 * uLineAlpha * uOccl;
+  // halo: during the climax a dark band around the lines keeps the bird readable inside the glare
+  float halo = (1.0 - ss(hw + 1.0 * px, hw + 0.05, de)) * (1.0 - core);
+  float occl = max(core * 0.92, halo * 0.8 * uHalo) * rev * uLineAlpha * uOccl;
 #if F_CRACK
   vec2 huv = (q - uHeatBox.xy) / (uHeatBox.zw - uHeatBox.xy);
   float mask = texture(uHeat, huv).g;
@@ -102,7 +104,8 @@ void main() {
   float d = textSD(q);
   float cov = 1.0 - ss(-0.7 * px, 0.7 * px, d);
   float dd = max(d, 0.0);
-  float glow = exp(-dd / 0.05) * 0.55 + exp(-dd / 0.16) * 0.12;
+  float dmax = TEXT_SPREAD / TEXT_H;                 // the SDF saturates here: fade the glow out before
+  float glow = (exp(-dd / 0.045) * 0.55 + exp(-dd / 0.11) * 0.1) * smoothstep(dmax * 0.98, dmax * 0.55, dd);
   float wx = q.x / TEXT_ASPECT + 0.5;               // 0..1 left -> right
   // ignition wipe (left -> right) with a hot front
   float vis = ss(wx - 0.05, wx + 0.005, uWordWipe);
@@ -113,7 +116,7 @@ void main() {
   float sw = mix(-0.25, 1.25, uSweep);
   float band = exp(-pow((wx + q.y * 0.12 - sw) * 9.0, 2.0)) * step(0.001, uSweep) * (1.0 - step(0.999, uSweep));
   // thin-film edge shimmer (cyan / violet / magenta only)
-  float rim = exp(-abs(d) / max(0.012, 1.5 * px)) * (1.0 - cov * 0.6);
+  float rim = exp(-abs(d) / max(0.012, 1.5 * px)) * (1.0 - cov * 0.6) * smoothstep(dmax * 0.9, dmax * 0.5, dd);
   vec3 iri = iriHue(wx * 1.3 - q.y * 0.4 + uTime * 0.12);
   vec3 c = fill * cov * (1.0 + band * 2.2 + uWordIgnite * 1.4)
          + mix(C_VIOLET, C_LAV, 0.3) * glow * uWordGlow * (0.6 + 1.6 * uWordIgnite)

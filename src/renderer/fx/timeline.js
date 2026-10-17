@@ -114,13 +114,14 @@ export function bootLook(tau, K, P, A, D, xf) {
   const fl = flashEnv(tc);
 
   // plasma
-  A[P.intensity] = sstep(K.IGN0, K.IGN0 + 0.7, tau) * flick * (1 + 0.3 * climax * CS - 0.3 * inhale) * (1 - 0.38 * idle);
+  const focus = 1 - 0.3 * sstep(K.ASM0 + 0.2, K.ASM0 + 0.9, tau) * (1 - sstep(K.ASM1 - 0.1, K.CLX, tau));
+  A[P.intensity] = sstep(K.IGN0, K.IGN0 + 0.7, tau) * flick * focus * (1 + 0.15 * climax * CS - 0.3 * inhale) * (1 - 0.38 * idle);
   A[P.swirl] = (1 + 1.4 * (1 - sstep(0.1, K.REV1 + 0.1, tau))) * (1 - 0.7 * sstep(K.CLX, K.IDLE - 0.5, tau));
   A[P.idle] = idle;
   A[P.reveal] = 3.3 * Math.pow(clamp01((tau - K.REV0) / (K.REV1 - K.REV0)), 1.6);
   A[P.rim] = tau < K.REV0 ? 0 : 1.1 * (1 - sstep(mix(K.REV0, K.REV1, 0.45), K.REV1, tau));
-  A[P.heatAmt] = sstep(K.ASM0 + 0.3, K.ASM1, tau) * (1 - sstep(K.BURN0 + 0.3, K.BURN0 + 1.8, tau)) + 0.3 * fl * CS;
-  A[P.wordHeat] = 0.8 * sstep(K.WORD0, K.WORD1 + 0.2, tau) * (1 - sstep(K.BURN0 + 0.3, K.BURN0 + 1.6, tau));
+  A[P.heatAmt] = sstep(K.ASM0 + 0.3, K.ASM1, tau) * (1 - sstep(K.BURN0 + 0.3, K.BURN0 + 1.8, tau)) + 0.12 * fl * CS;
+  A[P.wordHeat] = 0.8 * sstep(K.WORD0, K.WORD1 + 0.2, tau) * (1 - sstep(K.GLIDE0 - 0.5, K.GLIDE0 + 0.2, tau));
   A[P.fill] = 0.55 * sstep(K.WORD0 - 0.1, K.ASM1 + 0.1, tau) * (1 - sstep(K.BURN0 + 0.1, K.BURN0 + 1.1, tau));
   A[P.plasmaClimax] = 0; // climax adds come from the event system (state.js)
   A[P.flameY] = mix(-0.52, -0.84, idle);
@@ -136,7 +137,7 @@ export function bootLook(tau, K, P, A, D, xf) {
   A[P.indet] = 0;
   A[P.flashW] = 0.06;
   A[P.wordAsm] = ((tau - K.WORD0) / (K.WORD1 - K.WORD0)) * (1 + WORD_W + WORD_J);
-  A[P.wordA] = 1;
+  A[P.wordA] = 1 - sstep(K.GLIDE0 - 0.5, K.GLIDE0 + 0.15, tau);
   A[P.jitter] = 0;
   A[P.emberRate] = 1;
   A[P.emberDir] = 1;
@@ -150,6 +151,7 @@ export function bootLook(tau, K, P, A, D, xf) {
   A[P.glowAmt] = 1;
   A[P.occl] = 1;
   A[P.crack] = 0;
+  A[P.halo] = 0;
   // SDF wordmark
   A[P.wordAlpha] = sstep(K.WORD0, K.WORD0 + 0.1, tau) * gone;
   A[P.wordWipe] = ((tau - K.WORD0) / (K.WORD1 - K.WORD0)) * 1.05;
@@ -166,7 +168,7 @@ export function bootLook(tau, K, P, A, D, xf) {
   A[P.wordH] = mix(xf.bootWord[2], xf.headWord[2], glide);
   // composite
   A[P.bloomAmt] = 0.8 - 0.25 * idle;
-  A[P.raysAmt] = (0.4 * sstep(K.ASM0 + 0.2, K.ASM1 - 0.3, tau) + 0.06) * (1 - idle);
+  A[P.raysAmt] = (0.28 * sstep(K.ASM0 + 0.2, K.ASM1 - 0.3, tau) + 0.05) * (1 - idle);
   A[P.streakAmt] = 0.5;
   A[P.vig] = 0.55;
   A[P.grain] = 0.04;

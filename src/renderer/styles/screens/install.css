@@ -47,6 +47,12 @@
   box-shadow: 0 0 10px var(--ok);
 }
 
+.inst__dot.is-warn {
+  --dot-rgb: var(--warn-rgb);
+  background: var(--warn);
+  box-shadow: 0 0 10px var(--warn);
+}
+
 .inst__dot.is-err {
   --dot-rgb: var(--err-rgb);
   background: var(--err);

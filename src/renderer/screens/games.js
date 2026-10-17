@@ -6,7 +6,7 @@ import { h } from '../core/dom.js';
 import { icon } from '../components/icons.js';
 import { EmptyState } from '../components/emptyState.js';
 import { gsap, revealText, countUp, motionOK, richMotion, shake, pop } from '../core/motion.js';
-import { PLATFORMS, PLATFORM_ORDER, platformOf, isFortnite, hasMsStore, totalBytes, formatGameSize } from '../components/gamesArt.js';
+import { PLATFORMS, PLATFORM_ORDER, platformOf, isFortnite, hasMsStore, totalBytes, formatGameSize, cleanTitle } from '../components/gamesArt.js';
 import { ActionBlock, GameTile, GameHero, LauncherSection } from '../components/gamesCards.js';
 import { sparkBurst, shockwave, centerIn } from '../components/gamesFx.js';
 
@@ -415,7 +415,12 @@ export default {
         if (!list.length) continue;
         const tiles = list.filter((g) => g !== heroGame).map((g) => GameTile({ game: g, onAction: runAction }));
         uis.push(...tiles);
-        const note = pid === 'epic' && heroGame && !tiles.length ? { title: 'Fortnite steht oben im Rampenlicht.', text: 'Weitere Epic-Spiele waren nicht in deiner Sicherung.' } : null;
+        // The hero's own shelf: a pointer card up to it – when the shelf would be empty, or to fill the
+        // one free slot of a three-column row instead of leaving a hole.
+        const heroHere = pid === 'epic' && heroGame;
+        const note = heroHere && (!tiles.length || tiles.length % 3 === 1)
+          ? { title: `${cleanTitle(heroGame.title)} steht oben im Rampenlicht.`, text: tiles.length ? 'Gehört auch zu Epic Games – du installierst es direkt oben.' : 'Weitere Epic-Spiele waren nicht in deiner Sicherung.' }
+          : null;
         const section = LauncherSection({
           pid,
           games: list,
@@ -436,7 +441,8 @@ export default {
       const foot = buildFooter(linkableCount);
       content = { uis, sections, hero, guide, foot, footer: foot.el, done: foot.done };
 
-      body.replaceChildren(guide, hero ? hero.el : null, ...sections);
+      // replaceChildren() would print a literal "null" for a missing hero – filter it out.
+      body.replaceChildren(...[guide, hero && hero.el, ...sections].filter(Boolean));
       inner.append(foot.el);
 
       // Restore what was already opened in this session.

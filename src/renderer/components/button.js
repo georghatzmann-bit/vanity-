@@ -29,7 +29,9 @@ export function Button({
   className = '',
   clickSound = 'click',
 } = {}) {
-  const labelEl = label ? h('span.btn__label', label) : null;
+  // always create the label node so setLabel() also works for buttons that start empty
+  const labelEl = h('span.btn__label', label);
+  if (!label) labelEl.hidden = true;
   const inner = h('span.btn__inner', iconName ? icon(iconName) : null, labelEl, iconRight ? icon(iconRight) : null);
   const fxLayer = h('span.btn__fx', { attrs: { 'aria-hidden': 'true' } });
   const classes = ['btn', `btn--${variant}`, size !== 'md' && `btn--${size}`, block && 'btn--block', !label && 'btn--icon', className].filter(Boolean).join(' ');
@@ -76,7 +78,8 @@ export function Button({
       return el;
     },
     setLabel(text) {
-      if (labelEl) labelEl.textContent = text;
+      labelEl.textContent = text;
+      labelEl.hidden = !text;
       return el;
     },
     setDisabled(on) {

@@ -16,7 +16,7 @@ export const TIERS = Object.freeze({
   low: Object.freeze({
     name: 'low', dprMax: 1, scale: 0.6, hCap: 600, plasma: 0.26, oct: 3,
     emblem: 6000, word: 2000, embers: 500, sparks: 300, pen: 220, sizeMul: 1.6, sparkW: 1.25,
-    bloom: 4, rays: 0, streak: 0, tunnel: 1, rbTaps: 4, bake: 384, heat: 192,
+    bloom: 3, bloomLite: true, rays: 0, streak: 0, tunnel: 1, rbTaps: 4, bake: 384, heat: 192,
     fps: { intro: 30, idle: 10, installing: 10, pulse: 20 }, plasmaRate: 10,
   }),
 });
@@ -119,7 +119,8 @@ export class Governor {
     if (now - this.lastCheck < 250 || this.n < 8) return null;
     this.lastCheck = now;
     const med = this.median();
-    const limit = this.software ? Math.max(70, targetMs * 1.35) : targetMs * 1.35;
+    // software rasterizers: frames above ~70 ms steal too much CPU from the installs -> static tier
+    const limit = this.software ? 70 : targetMs * 1.35;
     if (med <= limit) {
       this.badSince = -1;
       return null;

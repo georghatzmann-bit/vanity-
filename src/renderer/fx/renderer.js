@@ -144,14 +144,14 @@ export class FxRenderer {
       uIgniteT: v(-100), uBurstT: v(-100), uSparkFrac: v(1), uSparkGain: v(0), uIntroT: v(-100), uPenT0: v(0), uPenK: v(1), uPenGain: v(0),
       // logo
       uXf: v(new THREE.Vector3(0, 0, 0.45)), uExt: v(new THREE.Vector2(1, 1)), uPxW: v(0.002),
-      uLineReveal: v(0), uLineAlpha: v(0), uLineEnergy: v(0), uPenHead: v(0), uPacket: v(0), uGlowAmt: v(1), uOccl: v(1), uCrack: v(0),
+      uLineReveal: v(0), uLineAlpha: v(0), uLineEnergy: v(0), uPenHead: v(0), uPacket: v(0), uGlowAmt: v(1), uOccl: v(1), uCrack: v(0), uHalo: v(0),
       uWordA: v(0), uWordWipe: v(0), uSweep: v(0), uWordIgnite: v(0), uWordGlow: v(1),
       // tunnel
       uWarpU: v(0), uWarpEnv: v(0),
       // post
       uSrc: v(null), uAdd: v(null), uTexel: v(new THREE.Vector2()), uThreshold: v(this.hdr ? 0.55 : 0.5), uKnee: v(0.35),
       uScatter: v(0.85), uC: v(new THREE.Vector2(0.5, 0.5)), uLen: v(0.6), uThresh: v(1), uStep: v(1), uGain: v(1),
-      uScene: v(null), uBloom: v(null), uRays: v(null), uStreak: v(null),
+      uScene: v(null), uBloom: v(null), uBloom2: v(null), uRays: v(null), uStreak: v(null),
       uShockW: v(0.1), uShockAmp: v(0), uShockGlow: v(0), uCA: v(0), uFlash: v(0), uFlashCap: v(0.6), uExposure: v(1),
       uBloomAmt: v(1), uRaysAmt: v(0), uStreakAmt: v(0), uSpark: v(0), uFlare: v(0), uVig: v(0.55), uGrain: v(0.04),
       uPunch: v(0), uPulseSoft: v(0), uShake: v(new THREE.Vector2()), uScrim: v(new Float32Array(16)), uScrimAmt: v(0),
@@ -206,7 +206,7 @@ export class FxRenderer {
       m = this._raw(FULLSCREEN_VS, COMPOSITE_FS, {
         F_SHOCK: !!(key & CO.SHOCK), F_CA: !!(key & CO.CA), F_RAYS: !!(key & CO.RAYS), F_STREAK: !!(key & CO.STREAK),
         F_SPARK: !!(key & CO.SPARK), F_FLASH: !!(key & CO.FLASH), F_PULSE: !!(key & CO.PULSE), F_SCRIM: !!(key & CO.SCRIM),
-        F_WARP: !!(key & CO.WARP), RB_TAPS: this.tier.rbTaps,
+        F_WARP: !!(key & CO.WARP), RB_TAPS: this.tier.rbTaps, BLOOM_LITE: !!this.tier.bloomLite,
       });
       this.vComp.set(key, m);
     }
@@ -308,7 +308,7 @@ export class FxRenderer {
     let h = bh / 2;
     for (let i = 0; i < t.bloom; i++) {
       this.down.push(this._rt(w, h));
-      this.up.push(this._rt(w, h));
+      if (!t.bloomLite) this.up.push(this._rt(w, h));
       w /= 2;
       h /= 2;
     }
@@ -513,6 +513,7 @@ export class FxRenderer {
       U.uGlowAmt.value = p[P.glowAmt];
       U.uOccl.value = p[P.occl];
       U.uCrack.value = p[P.crack];
+      U.uHalo.value = p[P.halo];
       this.embMesh.material = this.embMat(this.embKeyFor(F));
       this.r.setRenderTarget(this.rtScene);
       this.r.render(this.embScene, this.cam);
@@ -540,7 +541,7 @@ export class FxRenderer {
       this._pass(this.mDown, this.down[i]);
     }
     let src = this.down[L - 1];
-    for (let i = L - 2; i >= 0; i--) {
+    for (let i = L - 2; i >= 0 && !t.bloomLite; i--) {
       U.uSrc.value = src.texture;
       U.uAdd.value = this.down[i].texture;
       U.uTexel.value.set(1 / src.width, 1 / src.height);
@@ -561,9 +562,9 @@ export class FxRenderer {
       const s2 = this.down[Math.min(2, L - 1)];
       U.uSrc.value = s2.texture;
       U.uTexel.value.set(1 / s2.width, 1 / s2.height);
-      U.uThresh.value = 2.0;
+      U.uThresh.value = 3.5;
       U.uStep.value = 1.0;
-      U.uGain.value = 3.0;
+      U.uGain.value = 2.0;
       this._pass(this.mStreak, this.rtStreakA);
       U.uSrc.value = this.rtStreakA.texture;
       U.uTexel.value.set(1 / this.rtStreakA.width, 1 / this.rtStreakA.height);
@@ -575,9 +576,11 @@ export class FxRenderer {
 
     // 5) composite to the canvas
     U.uScene.value = this.rtScene.texture;
-    U.uBloom.value = this.up[0].texture;
-    U.uRays.value = this.rtRays ? this.rtRays.texture : this.up[0].texture;
-    U.uStreak.value = this.rtStreak ? this.rtStreak.texture : this.up[0].texture;
+    const bloomTex = t.bloomLite ? this.down[1].texture : this.up[0].texture;
+    U.uBloom.value = bloomTex;
+    U.uBloom2.value = t.bloomLite ? this.down[L - 1].texture : bloomTex;
+    U.uRays.value = this.rtRays ? this.rtRays.texture : bloomTex;
+    U.uStreak.value = this.rtStreak ? this.rtStreak.texture : bloomTex;
     U.uRes.value.set(S.W, S.H);
     U.uShockR.value = F.shockR * p[P.ancS] / 0.45;
     U.uShockW.value = F.shockW * p[P.ancS] / 0.45;
@@ -587,7 +590,7 @@ export class FxRenderer {
     U.uFlash.value = F.flash;
     U.uFlashCap.value = F.flashCap;
     U.uExposure.value = p[P.exposure];
-    U.uBloomAmt.value = p[P.bloomAmt] / L;
+    U.uBloomAmt.value = t.bloomLite ? p[P.bloomAmt] * 0.5 : p[P.bloomAmt] / L;
     U.uRaysAmt.value = p[P.raysAmt];
     U.uStreakAmt.value = p[P.streakAmt];
     U.uIdle.value = p[P.idle] * p[P.scrimAmt];
@@ -618,7 +621,6 @@ export class FxRenderer {
     U.uWarpEnv.value = F.warpEnv;
     U.uWarpRB.value = F.warpRB;
     this._pass(this.compMat(ck), null);
-    void t;
   }
 
   /** Renders n frames of F and returns the median GPU-synced frame time (ms). */

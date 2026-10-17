@@ -190,9 +190,9 @@ async function saveProfile(profile, { dir, parentWin } = {}) {
   }
   const clean = normalize(profile);
   const res = await dialog.showSaveDialog(parentWin || undefined, {
-    title: 'Phoenix-Profil speichern',
+    title: 'Phoenix-Sicherung speichern',
     defaultPath: path.join(app.getPath('desktop'), fileNameFor(clean)),
-    filters: [{ name: 'Phoenix-Profil', extensions: ['json'] }],
+    filters: [{ name: 'Phoenix-Sicherung', extensions: ['json'] }],
   });
   if (res.canceled || !res.filePath) return { path: null, canceled: true };
   fs.writeFileSync(res.filePath, JSON.stringify(clean, null, 2), 'utf8');
@@ -235,7 +235,7 @@ function loadProfile(file) {
 async function openProfileDialog(parentWin) {
   const { app, dialog } = require('electron');
   const res = await dialog.showOpenDialog(parentWin || undefined, {
-    title: 'Phoenix-Profil öffnen',
+    title: 'Phoenix-Sicherung öffnen',
     defaultPath: app.getPath('desktop'),
     properties: ['openFile'],
     filters: [{ name: 'Phoenix-Profil oder winget-Export', extensions: ['json'] }],

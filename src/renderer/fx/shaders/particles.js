@@ -156,7 +156,7 @@ void main() {
     col = mix(diskCol, aColor, smoothstep(0.55, 1.0, e));
     col *= 1.0 + bump * 0.7;
     vec3 hotW = vec3(1.25, 1.1, 1.6);
-    col += hotW * (landFlash * 1.0 + flare * 0.35 * (0.3 + aInfo.z) + ring * 0.8 + burnFlash * 0.9 + pring * 0.8);
+    col += hotW * (landFlash * 1.0 + flare * 0.15 * (0.3 + aInfo.z) + ring * 0.6 + burnFlash * 0.9 + pring * 0.8);
     float cool = smoothstep(0.0, 1.0, rt);
     col = mix(col, vec3(0.55, 0.16, 0.95) * 0.9, cool * 0.75);
   }

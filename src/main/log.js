@@ -66,7 +66,7 @@ function recent(n = 500) {
 function exportLog() {
   const { app } = require('electron');
   const day = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').replace(/(\d{8})(\d{6})/, '$1-$2');
-  const target = path.join(app.getPath('desktop'), `Phoenix-Log-${day}.txt`);
+  const name = `Phoenix-Log-${day}.txt`;
   let body = ring.join('\r\n');
   if (file && fs.existsSync(file)) {
     try {
@@ -75,8 +75,18 @@ function exportLog() {
       /* fall back to ring buffer */
     }
   }
-  fs.writeFileSync(target, body, 'utf8');
-  return { path: target };
+  for (const where of ['desktop', 'documents', 'temp']) {
+    try {
+      const dir = app.getPath(where);
+      fs.mkdirSync(dir, { recursive: true });
+      const target = path.join(dir, name);
+      fs.writeFileSync(target, body, 'utf8');
+      return { path: target };
+    } catch {
+      /* try the next location */
+    }
+  }
+  throw new Error('Das Protokoll konnte nicht gespeichert werden.');
 }
 
 module.exports = { init, info, warn, error, recent, exportLog, get file() { return file; } };

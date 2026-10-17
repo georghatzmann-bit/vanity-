@@ -9,7 +9,7 @@
   overflow: hidden;
   background: #05060a;
   --fx-p: 0;
-  --fx-glow: 0.55;
+  --fx-glow: 0.85;
   transition: filter 0.6s ease;
 }
 
@@ -65,11 +65,11 @@
 }
 
 .fx-static.is-success {
-  --fx-glow: 0.85;
+  --fx-glow: 1.2;
 }
 
 .fx-static.is-error {
-  --fx-glow: 0.3;
+  --fx-glow: 0.45;
   filter: saturate(0.45) hue-rotate(-12deg);
 }
 

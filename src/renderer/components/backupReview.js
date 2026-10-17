@@ -204,8 +204,10 @@ export function BackupReview({ onSave } = {}) {
 
   function headline(appCount, gameCount) {
     nums = [];
+    // Final numbers by default (re-entering the review without enter() must never show "0 Apps");
+    // enter() resets them to 0 right before the count-up.
     const n = (v) => {
-      const s = h('span.bk-rev__num.t-num', '0');
+      const s = h('span.bk-rev__num.t-num', new Intl.NumberFormat('de-DE').format(v));
       s.dataset.to = String(v);
       nums.push(s);
       return s;
@@ -360,6 +362,7 @@ export function BackupReview({ onSave } = {}) {
         0.1,
       );
       nums.forEach((n, i) => {
+        n.textContent = '0';
         const tw = countUp(n, Number(n.dataset.to), { duration: 1.5, delay: 0.25 + i * 0.15, ease: 'power3.out' });
         track(tw);
       });

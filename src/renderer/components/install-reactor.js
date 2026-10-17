@@ -21,7 +21,7 @@ const SEG_STATES = ['pending', 'active', 'requeued', 'installed', 'already', 'fa
  * InstallReactor({ total })
  * Returns the element with:
  *   setTotal(n) · setSegment(i, state) · setValue(0..1, { animate }) · setCount(done, total)
- *   setEta(text) · setMode('wait' | 'run' | 'done' | 'error') · shock(tone) · finale({ tone, label, sub }) · destroy()
+ *   setEta(text) · setMode('wait' | 'run' | 'done' | 'error') · shock(tone) · finale({ tone, label, sub, icon }) · destroy()
  */
 export function InstallReactor({ total = 0 } = {}) {
   const id = nextId('rx');
@@ -178,10 +178,10 @@ export function InstallReactor({ total = 0 } = {}) {
       return el;
     },
     /** Big finish: arc completes, core flares, three shock waves, center turns into a mark. */
-    finale({ tone = 'ok', label = 'Fertig', sub = '' } = {}) {
+    finale({ tone = 'ok', label = 'Fertig', sub = '', icon: markIcon } = {}) {
       api.setMode(tone === 'err' ? 'error' : 'done');
       api.setValue(1, { animate: true });
-      const mark = h('div.rx__mark', icon(tone === 'err' ? 'x' : tone === 'warn' ? 'alert' : 'check', { size: 64, strokeWidth: 2.25 }));
+      const mark = h('div.rx__mark', icon(markIcon || (tone === 'err' ? 'x' : tone === 'warn' ? 'alert' : 'check'), { size: 64, strokeWidth: 2.25 }));
       const lab = h('div.rx__count', label);
       const subEl = h('div.rx__eta', sub);
       const swap = () => center.replaceChildren(mark, lab, subEl);

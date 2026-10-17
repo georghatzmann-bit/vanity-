@@ -117,7 +117,7 @@ void main() {
 export const COMPOSITE_FS = /* glsl */ `
 in vec2 vUv;
 out vec4 fragColor;
-uniform sampler2D uScene, uBloom, uRays, uStreak;
+uniform sampler2D uScene, uBloom, uBloom2, uRays, uStreak;
 uniform vec2 uRes;
 uniform float uTime;
 uniform vec3 uAnchor;
@@ -177,6 +177,10 @@ void main() {
 #else
   col = texture(uScene, suv).rgb;
   bl = texture(uBloom, suv).rgb;
+#endif
+#if BLOOM_LITE
+  // lite bloom (low tier): two bilinear-upsampled pyramid levels instead of the up chain
+  bl = bl * 0.6 + texture(uBloom2, suv).rgb * 1.6;
 #endif
   col += bl * uBloomAmt;
 #if F_RAYS

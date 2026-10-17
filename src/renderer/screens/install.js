@@ -366,7 +366,7 @@ function reduce(s, e) {
       s.overall = 1;
       const t = s.summary;
       const parts = [t.installed && `${t.installed} installiert`, t.already && `${t.already} schon da`, t.failed && `${t.failed} fehlgeschlagen`, t.skipped && `${t.skipped} übersprungen`, t.cancelled && `${t.cancelled} abgebrochen`].filter(Boolean);
-      log(t.failed ? 'warn' : 'ok', `Fertig nach ${formatDuration(s.durationMs)}: ${joinList(parts) || 'nichts zu tun'}`);
+      log(t.failed || t.cancelled ? 'warn' : 'ok', `${t.cancelled ? 'Abgebrochen' : 'Fertig'} nach ${formatDuration(s.durationMs)}: ${joinList(parts) || 'nichts zu tun'}`);
       break;
     }
     default:
@@ -932,11 +932,11 @@ export default {
       const allBad = ok === 0 && (t.failed || 0) > 0;
       const parts = [t.installed && `${t.installed} installiert`, t.already && `${t.already} waren schon da`, t.failed && `${t.failed} fehlgeschlagen`, t.cancelled && `${t.cancelled} abgebrochen`, t.skipped && `${t.skipped} übersprungen`].filter(Boolean);
       const ref = buildSpotInfo({
-        iconName: allBad ? 'x-circle' : t.failed ? 'alert' : 'check-circle',
+        iconName: allBad ? 'x-circle' : t.failed ? 'alert' : t.cancelled ? 'minus' : 'check-circle',
         eyebrow: `Nach ${formatDuration(s.durationMs)}`,
         name: allBad ? 'Leider nichts installiert' : t.cancelled ? 'Abgebrochen' : t.failed ? 'Fast alles erledigt' : 'Alles erledigt',
         text: joinList(parts) || 'Nichts zu tun',
-        tone: allBad ? 'err' : t.failed ? 'warn' : 'ok',
+        tone: allBad ? 'err' : t.failed || t.cancelled ? 'warn' : 'ok',
         bar: false,
       });
       ref.phase = 'done';
@@ -956,8 +956,11 @@ export default {
       const t = tally(s);
       const done = countDone(s);
       const open = s.order.length - done;
-      const bits = [`${done} fertig`];
+      // Only real successes count as "fertig" – failures, cancels and skips are named separately.
+      const bits = [`${t.installed + t.already} fertig`];
       if (t.failed) bits.push(`${t.failed} Fehler`);
+      if (t.cancelled) bits.push(`${t.cancelled} abgebrochen`);
+      if (t.skipped) bits.push(`${t.skipped} übersprungen`);
       if (open) bits.push(`${open} offen`);
       qCount.textContent = bits.join(' · ');
       reactor.setCount(done, s.order.length);
@@ -1066,9 +1069,11 @@ export default {
       const t = s.summary || tally(s);
       const ok = (t.installed || 0) + (t.already || 0);
       const allBad = ok === 0 && (t.failed || 0) > 0;
-      const tone = allBad ? 'err' : t.failed ? 'warn' : 'ok';
+      const stopped = (t.cancelled || 0) > 0;
+      // A user cancel is not a success: orange accents and a "minus" mark instead of green checks.
+      const tone = allBad ? 'err' : t.failed || stopped ? 'warn' : 'ok';
       closeConfirm();
-      liveDot.classList.add(allBad ? 'is-err' : 'is-done');
+      liveDot.classList.add(allBad ? 'is-err' : tone === 'warn' ? 'is-warn' : 'is-done');
       setPhase(t.cancelled ? 'Abgebrochen' : 'Fertig');
       const headline = allBad ? 'Hat nicht geklappt.' : t.cancelled ? 'Abgebrochen.' : t.failed ? 'Fast geschafft.' : 'Geschafft.';
       if (celebrate) relabel(title, headline);
@@ -1076,7 +1081,7 @@ export default {
       lead.textContent = allBad ? 'Keine App konnte installiert werden – in der Übersicht siehst du warum.' : 'Gleich siehst du die Übersicht mit allen Ergebnissen.';
       banner.hide();
       reactor.setEta('');
-      reactor.finale({ tone, label: allBad ? 'Fehlgeschlagen' : t.cancelled ? 'Abgebrochen' : 'Fertig', sub: formatDuration(s.durationMs) });
+      reactor.finale({ tone, icon: !allBad && !t.failed && stopped ? 'minus' : undefined, label: allBad ? 'Fehlgeschlagen' : stopped ? 'Abgebrochen' : 'Fertig', sub: formatDuration(s.durationMs) });
       if (!celebrate) reactor.setValue(1, { animate: false });
       s.order.forEach((k, i) => {
         paintRow(s.rows.get(k));
@@ -1085,6 +1090,10 @@ export default {
       updateCounts();
       showSpotDone();
       fx.setProgress(1);
+      // Problems first: bring the first failed app into view in the queue.
+      const firstBad = s.order.find((k) => s.rows.get(k).status === 'failed');
+      const badLi = firstBad && rowEls.get(firstBad)?.li;
+      if (badLi) later(() => list.scrollTo({ top: Math.max(0, badLi.offsetTop - list.clientHeight * 0.3), behavior: motionOK() ? 'smooth' : 'auto' }), celebrate ? 250 : 0);
       // Swap "Abbrechen" for the way forward (keyboard focus moves along instead of falling to <body>).
       const hadFocus = sideSlot.contains(document.activeElement);
       cancelBtn.remove();
@@ -1095,10 +1104,11 @@ export default {
       }
       if (hadFocus) nextBtn.focus({ preventScroll: true });
       sideHint.textContent = celebrate ? 'Geht gleich von selbst weiter.' : 'Alle Ergebnisse, Fehler und Neustart-Hinweise.';
-      sr.textContent = `Installation beendet. ${t.installed || 0} installiert, ${t.failed || 0} fehlgeschlagen.`;
+      sr.textContent = `Installation ${stopped ? 'abgebrochen' : 'beendet'}. ${t.installed || 0} installiert, ${t.failed || 0} fehlgeschlagen${stopped ? `, ${t.cancelled} abgebrochen` : ''}.`;
       if (!celebrate) return;
       fx.setState(allBad ? 'error' : 'success');
       if (allBad) sound.error();
+      else if (stopped) sound.play('click');
       else {
         sound.boom();
         if (motionOK()) fx.burst({ count: 220 });

@@ -10,11 +10,12 @@ export const STATES = ['boot', 'idle', 'home', 'installing', 'success', 'error']
 const ALIAS = { scan: 'installing' };
 const BLEND = { boot: 0.0, idle: 0.6, home: 0.6, installing: 0.6, success: 0.6, error: 0.35 };
 export const DEFAULT_ANCHOR = Object.freeze([0, 0.16, 0.45]); // world centre + scale of the hero emblem
+const WORD_ASPECT = 1536 / 288; // wordmark SDF box aspect (wordmark.js W / H)
 
 export const PARAMS = [
   'intensity', 'swirl', 'idle', 'reveal', 'rim', 'heatAmt', 'wordHeat', 'fill', 'plasmaClimax', 'flameY', 'hue', 'desat', 'flameBoost',
   'diskGrow', 'cloudA', 'diskA', 'asm', 'asmW', 'asmJ', 'indet', 'flashW', 'wordAsm', 'wordA', 'jitter', 'emberRate', 'emberDir', 'emberA',
-  'lineReveal', 'lineAlpha', 'lineEnergy', 'penHead', 'packet', 'glowAmt', 'occl', 'crack',
+  'lineReveal', 'lineAlpha', 'lineEnergy', 'penHead', 'packet', 'glowAmt', 'occl', 'crack', 'halo',
   'wordAlpha', 'wordWipe', 'sweep', 'wordIgnite', 'wordGlow',
   'ancX', 'ancY', 'ancS', 'embX', 'embY', 'embS', 'wordX', 'wordY', 'wordH',
   'bloomAmt', 'raysAmt', 'streakAmt', 'vig', 'grain', 'scrimAmt', 'exposure', 'ca', 'spark', 'flare',
@@ -259,6 +260,7 @@ function idleLook(A, t) {
   A[P.glowAmt] = 1;
   A[P.occl] = 1;
   A[P.crack] = 0;
+  A[P.halo] = 0;
   A[P.wordAlpha] = 0;
   A[P.wordWipe] = 1.05;
   A[P.sweep] = 0;
@@ -307,7 +309,7 @@ function installingLook(A, t) {
   A[P.indet] = C.indet;
   A[P.lineReveal] = p;
   A[P.lineAlpha] = 0.15 + 0.45 * p;
-  A[P.penHead] = 0.6 * (1 - C.indet);
+  A[P.penHead] = 0.35 * (1 - C.indet);
   A[P.packet] = 0.3;
   A[P.glowAmt] = 0.8;
   A[P.occl] = 0.8;
@@ -394,10 +396,11 @@ function introConsts(snap) {
 
 function headerXf(env, head) {
   // header slot: titlebar logo + wordmark (CSS rects) – defaults match the titlebar layout
-  rectToXf(env, head && head.emb ? head.emb : [14, 9, 22, 22], XF.head, true);
-  const wr = head && head.word ? head.word : [44, 12, 74, 16];
+  rectToXf(env, head && head.emb ? head.emb : [16, 9, 22, 22], XF.head, true);
+  const wr = head && head.word ? head.word : [48, 12, 88, 16];
   rectToXf(env, wr, XF.headWord, false);
-  XF.headWord[2] *= 1.25; // DOM line box -> SDF text box (cap height ratio)
+  // fit the width: the letters span 86 % of the SDF text box (wordmark.js)
+  XF.headWord[2] = ((wr[2] / 0.86 / WORD_ASPECT) * 2) / (env.cssH * env.content);
 }
 
 function look(rec, t, snap, env, A, isTop) {
@@ -471,12 +474,12 @@ function pickClimax(snap, t, tauBoot) {
   if (tauBoot != null && snap.intro && !snap.rm && snap.intro.mode !== 'none') {
     const K = introConsts(snap);
     const skipped = snap.intro.skipT != null && snap.intro.skipT - snap.intro.t0 < K.CLX;
-    if (!skipped) considerEv(t, t - (tauBoot - K.CLX), K.CS, 0.8, K.SHAKE, 1);
+    if (!skipped) considerEv(t, t - (tauBoot - K.CLX), K.CS, 0.25, K.SHAKE, 1);
   }
   const st = snap.states;
-  for (let i = 0; i < st.length; i++) if (st[i].s === 'success') considerEv(t, st[i].t0 + 0.45, 1, 1.3, 3, 1);
+  for (let i = 0; i < st.length; i++) if (st[i].s === 'success') considerEv(t, st[i].t0 + 0.45, 1, 0.6, 3, 1);
   const bs = snap.bursts;
-  for (let i = 0; i < bs.length; i++) considerEv(t, bs[i].t + 0.02, bs[i].amp, 0.5, 0, bs[i].frac);
+  for (let i = 0; i < bs.length; i++) considerEv(t, bs[i].t + 0.02, bs[i].amp, 0.3, 0, bs[i].frac);
   EV.tc = EV.best > -1e8 ? t - EV.best : -100;
   EV.flashOk = EV.best - EV.prev >= 1.0; // at most one flash per second
   return EV;
@@ -548,7 +551,7 @@ export function evaluate(t, snap, env, F) {
   F.shockW = 0.08 + Math.max(tc, 0) * 0.14;
   F.shockGlow = tc > 0 ? 1.0 * Math.exp(-tc * 2.3) * sstep(0, 0.04, tc) * ev.cs : 0;
   F.flashCap = snap.rm ? 0.2 : 0.6;
-  F.flash = ev.flashOk ? flashEnv(tc) * 0.6 * ev.cs : 0;
+  F.flash = ev.flashOk && !snap.noFlash ? flashEnv(tc) * 0.6 * ev.cs : 0;
   F.punch = snap.rm ? 0 : tc > 0 ? 0.03 * Math.exp(-tc * 7.5) * ev.cs : 0;
   const shakePx = snap.rm ? 0 : tc > 0 ? ev.shake * Math.exp(-tc * 4.5) : 0;
   F.shakeX = shakeN(t, 1.3) * shakePx;
@@ -557,11 +560,12 @@ export function evaluate(t, snap, env, F) {
   F.sparkGain = ev.cs > 0 ? Math.min(1, ev.cs * 1.2) : 0;
   F.sparkFrac = ev.frac;
   p[P.raysAmt] += climax * ev.rays;
-  p[P.bloomAmt] += 0.3 * climax;
-  p[P.streakAmt] += 0.3 * climax;
+  p[P.bloomAmt] += 0.15 * climax;
+  p[P.streakAmt] += 0.1 * climax;
+  p[P.halo] = Math.max(p[P.halo], Math.min(1, climax * 1.2));
   p[P.ca] += snap.rm ? 0 : 0.016 * (tc > 0 ? Math.exp(-tc * 3) : 0) * ev.cs;
   p[P.flare] += 0.5 * flashEnv(tc) * ev.cs;
-  p[P.plasmaClimax] = Math.max(p[P.plasmaClimax], 0.1 * climax);
+  p[P.plasmaClimax] = Math.max(p[P.plasmaClimax], 0.05 * climax);
 
   // pulses
   F.pulseSoft = snap.rm ? 1 : 0;

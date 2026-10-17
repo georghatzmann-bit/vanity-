@@ -40,9 +40,9 @@ function envFor(cssW, cssH) {
   return { cssW, cssH, aspect, content: Math.min(1, aspect / 1.25) };
 }
 
-function readTestParams() {
+function readTestParams(search = location.search) {
   try {
-    const q = new URLSearchParams(location.search);
+    const q = new URLSearchParams(search);
     if (!q.has('fxt')) return null;
     const num = (k, d) => (q.has(k) && q.get(k) !== '' && q.get(k) !== 'null' ? Number(q.get(k)) : d);
     const rects = (k) =>
@@ -59,6 +59,7 @@ function readTestParams() {
       intro: q.get('fxintro') || 'full',
       scrim: rects('fxscrim'),
       anchor: rects('fxanchor')[0] || null,
+      noFlash: q.get('fxnoflash') === '1',
     };
   } catch {
     return null;
@@ -71,6 +72,7 @@ function testSnapshot(T) {
   const st = T.state;
   if (T.anchor) s.anchor = { from: null, to: T.anchor, t0: -1000 };
   if (T.scrim.length) s.scrim = T.scrim.slice(0, 4);
+  if (T.noFlash) s.noFlash = true; // test only: isolates the flash term for the duration check
   const at = (name, t0, p0 = 0) => s.states.push({ s: name, t0, dur: 0.6, p0, cloud0: p0 > 0 ? 1 : 0, asm0: p0 * 1.03, rev0: p0, alpha0: 0.15 + 0.45 * p0 });
   if (st === 'boot') {
     s.intro = { mode: T.intro, t0: 0, skipT: null, head: null };
@@ -95,6 +97,14 @@ function testSnapshot(T) {
   return s;
 }
 
+/** Typical steady frame (installing at 60 %, t = 20) for the software-renderer probe. */
+function steadySnapshot() {
+  const s = createSnapshot();
+  s.states.push({ s: 'installing', t0: 0, dur: 0.6, p0: 0, cloud0: 0, asm0: 0, rev0: 0, alpha0: 0 });
+  snapProgress(s, 0, 0.6, true);
+  return s;
+}
+
 /** Heavy frame used by the speed probe (boot climax, t = 3.6). */
 function probeSnapshot() {
   const s = createSnapshot();
@@ -103,7 +113,8 @@ function probeSnapshot() {
   return s;
 }
 
-export async function createFx(canvas, opts = {}) {
+export async function createFx(canvas, options = {}) {
+  let opts = options;
   const T = readTestParams();
   const test = !!T;
   const mq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
@@ -119,6 +130,15 @@ export async function createFx(canvas, opts = {}) {
   let snap = test ? testSnapshot(T) : createSnapshot({ reducedMotion });
   const F = createFrame();
   const Fx = createFrame(); // scratch (entry values for state changes)
+  // dev override (?fxtier=low) to look at a tier on any machine
+  let devTier = null;
+  try {
+    devTier = new URLSearchParams(location.search).get('fxtier');
+  } catch {
+    /* ignore */
+  }
+  if (devTier && !TIER_ORDER.includes(devTier)) devTier = null;
+  if (devTier && !opts.tier) opts = { ...opts, tier: devTier };
   let cap = test ? T.tier : opts.tier && opts.tier !== 'auto' ? opts.tier : tierForSetting(opts.quality || 'ultra');
   const forced = test || (opts.tier && opts.tier !== 'auto');
   let maxTier = 'ultra'; // what the hardware allows (probe result)
@@ -142,6 +162,7 @@ export async function createFx(canvas, opts = {}) {
   const gov = new Governor();
   const t0 = performance.now();
   const now = () => (performance.now() - t0) / 1000;
+  let initMs = 0;
   let env = envFor(1, 1);
   let pendingResize = true;
 
@@ -207,8 +228,9 @@ export async function createFx(canvas, opts = {}) {
     }
     if (!stat) {
       stat = createStaticLayer(canvas, { reducedMotion });
-      stat.setState(staticState);
-      stat.setProgress(F.p[P.asm] || 0);
+      staticState = '';
+      syncStatic();
+      stat.setProgress(F.p[P.lineReveal] || 0);
     }
   }
 
@@ -249,7 +271,6 @@ export async function createFx(canvas, opts = {}) {
   }
 
   // ------------------------------------------------------------------ variants: pre-compile
-  let precompiling = null;
   function variantKeys() {
     const keys = { plasma: new Set(), comp: new Set(), emb: new Set() };
     const s1 = probeSnapshot();
@@ -280,7 +301,7 @@ export async function createFx(canvas, opts = {}) {
   function precompileSoon() {
     if (!R || test) return;
     const r = R;
-    precompiling = (async () => {
+    (async () => {
       await new Promise((res) => setTimeout(res, 50));
       if (r !== R) return;
       try {
@@ -322,7 +343,8 @@ export async function createFx(canvas, opts = {}) {
     if (F.bootActive && F.introT < (snap.intro && snap.intro.mode === 'short' ? INTRO_SHORT.IDLE : INTRO_FULL.IDLE)) f = fp.intro;
     else {
       const top = snap.states[snap.states.length - 1];
-      const busy = top.s === 'success' || top.s === 'error' || F.warpEnv > 0 || F.climax > 0.02 || now() < top.t0 + top.dur + 0.2;
+      const age = now() - top.t0;
+      const busy = (top.s === 'success' && age < 5.2) || (top.s === 'error' && age < 3) || F.warpEnv > 0 || F.climax > 0.02 || age < top.dur + 0.2;
       f = busy ? fp.intro : top.s === 'installing' ? fp.installing : fp.idle;
     }
     if (now() - lastPulseAt < 1.0) f = Math.max(f, fp.pulse);
@@ -339,7 +361,8 @@ export async function createFx(canvas, opts = {}) {
     const nowMs = performance.now();
     if (lastRenderAt > 0 && !forced) {
       const target = 1000 / Math.max(1, fpsCap());
-      const act = gov.sample(nowMs - lastRenderAt, Math.max(target, 16.7), nowMs);
+      const steady = !F.bootActive && F.climax < 0.02 && F.warpEnv === 0;
+      const act = gpu.software && !steady ? null : gov.sample(nowMs - lastRenderAt, Math.max(target, 16.7), nowMs);
       lastRenderAt = -1;
       if (act === 'scale') {
         R.resize(env.cssW, env.cssH, window.devicePixelRatio || 1, gov.scale);
@@ -351,8 +374,8 @@ export async function createFx(canvas, opts = {}) {
         return;
       }
     }
-    const cap = fpsCap();
-    if (cap > 0 && nowMs - lastFrame < 1000 / cap - 3) return;
+    const fps = fpsCap();
+    if (fps > 0 && nowMs - lastFrame < 1000 / fps - 3) return;
     lastFrame = nowMs;
     const t = (nowMs - t0) / 1000;
     try {
@@ -469,13 +492,11 @@ export async function createFx(canvas, opts = {}) {
   let start = test ? (TIER_ORDER.includes(T.tier) ? T.tier : 'high') : cap;
   if (start !== 'static' && !ensureGl()) start = 'static';
   if (start !== 'static' && !forced) {
+    const saved = loadSavedTier(gpu.renderer); // re-probed only when the renderer string changes
+    if (saved) maxTier = saved;
     if (gpu.software) start = 'low';
-    else {
-      const saved = loadSavedTier(gpu.renderer);
-      if (saved) maxTier = saved;
-      else if (!gpu.dedicated && start === 'ultra') start = 'high';
-      start = lowerTier(start, maxTier);
-    }
+    else if (!saved && !gpu.dedicated && start === 'ultra') start = 'high';
+    start = lowerTier(start, maxTier);
   }
 
   if (start !== 'static') {
@@ -484,8 +505,10 @@ export async function createFx(canvas, opts = {}) {
       buildRenderer(start);
       // speed probe (spec 4.6.3) on the heaviest phase unless a saved result exists for this GPU
       if (!forced && !loadSavedTier(gpu.renderer)) {
-        const ps = probeSnapshot();
-        evaluate(3.6, ps, env, Fx);
+        // hardware: heaviest phase (intro climax); software: the steady installing look (spec: the
+        // intro may run at 30 fps, idle / installing must stay under ~70 ms or the tier is static)
+        const ps = gpu.software ? steadySnapshot() : probeSnapshot();
+        evaluate(gpu.software ? 20 : 3.6, ps, env, Fx);
         Fx.p[P.exposure] = 0; // dark while probing
         probeMs = R.probe(Fx, env, gpu.software ? 4 : 12, gpu.software ? 450 : 350);
         let res = tierFromProbe(probeMs, gpu);
@@ -523,6 +546,7 @@ export async function createFx(canvas, opts = {}) {
     showStatic();
   }
 
+  initMs = Math.round(performance.now() - t0);
   window.addEventListener('resize', onResize);
   document.addEventListener('visibilitychange', onVis);
   window.addEventListener('blur', onBlur);
@@ -575,6 +599,7 @@ export async function createFx(canvas, opts = {}) {
         tier,
         maxTier,
         probeMs,
+        initMs,
         size: R ? { w: R.size.W, h: R.size.H } : null,
       };
     },
@@ -729,6 +754,22 @@ export async function createFx(canvas, opts = {}) {
 
   if (test) {
     exposeTestHooks(api, T, () => R, () => gl, () => snap);
+    // re-targets the frozen test frame without a reload: __fxFrame('fxt=3.2&fxstate=boot')
+    window.__fxFrame = (qs) => {
+      const T2 = readTestParams(qs);
+      if (!T2) return false;
+      Object.assign(T, { t: T2.t, state: T2.state, p: T2.p, rm: T2.rm, intro: T2.intro, scrim: T2.scrim, anchor: T2.anchor });
+      snap = testSnapshot(T2);
+      if (R) {
+        R.plasmaValid = false;
+        frameAt(T2.t);
+      } else if (stat) {
+        staticState = '';
+        syncStatic();
+        stat.setProgress(T2.p);
+      }
+      return true;
+    };
     if (tier === 'static') {
       syncStatic();
       stat.setProgress(T.p);
@@ -780,7 +821,8 @@ function lumStats(px, w, h, rects) {
   };
   const all = region(0, 0, w, h);
   const scr = rects.map(([x0, y0, x1, y1]) => region(Math.max(0, x0), Math.max(0, y0), Math.min(w, x1), Math.min(h, y1)));
-  return { ...all, scrims: scr };
+  const center = region(Math.round(w * 0.25), Math.round(h * 0.25), Math.round(w * 0.75), Math.round(h * 0.75));
+  return { ...all, center, scrims: scr };
 }
 
 function exposeTestHooks(api, T, getR, getGl, getSnap) {

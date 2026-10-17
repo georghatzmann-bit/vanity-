@@ -23,7 +23,7 @@ User-facing language: **German** (real umlauts in renderer strings; PowerShell s
    - **Speichern unter…** (dialog).
    - **Wiederherstellungs-Code**: compact text (`PHX1-…`) to copy and send to yourself (WhatsApp / Mail).
    - Always also a copy in `Dokumente\Phoenix\` (clearly labelled "wird beim kompletten Reset gelöscht").
-4. Final checklist: "Profil gesichert ✓ – Setup auf Stick ✓ – Jetzt kannst du resetten."
+4. Final checklist: "Sicherung gespeichert ✓ – Setup auf Stick ✓ – Jetzt kannst du resetten."
 
 ### 1.2 Wiederherstellen (after reset)
 1. Phoenix auto-finds profiles (all drive roots, `<drive>\Phoenix\`, Desktop, Downloads, Documents, OneDrive) and shows them as cards. Alternatives: open file (also accepts a raw `winget export` JSON), paste code, or catalog.
