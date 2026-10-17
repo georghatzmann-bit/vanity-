@@ -34,15 +34,17 @@ export function RestoreRadar({ places = [] } = {}) {
   const core = h('span.rr__core', logoMark({ size: 30 }));
   const disc = h('div.rr__disc', svg(DISC(nextId('rr'))), waves, sweep, core);
   const step = 360 / Math.max(1, places.length);
-  const nodes = places.map((p, i) =>
-    h(
+  const nodes = places.map((p, i) => {
+    // Positioned with left/top (not transforms) so GSAP can scale nodes freely.
+    const rad = ((-90 + i * step) * Math.PI) / 180;
+    return h(
       'span.rr__node',
-      { style: { '--a': `${-90 + i * step}deg` }, dataset: { state: 'idle' }, title: p.label },
+      { style: { left: `${(50 + 50 * Math.cos(rad)).toFixed(3)}%`, top: `${(50 + 50 * Math.sin(rad)).toFixed(3)}%` }, dataset: { state: 'idle' }, title: p.label },
       h('span.rr__node-ping'),
       h('span.rr__node-icon', xicon(p.icon, { size: 18, strokeWidth: 2 })),
       h('span.rr__node-check', xicon('check', { size: 11, strokeWidth: 3 })),
-    ),
-  );
+    );
+  });
   const el = h('div.rr', { attrs: { role: 'img', 'aria-label': 'Radar: Phoenix durchsucht deine Laufwerke und Ordner' } }, disc, ...nodes);
   let sweepTween = null;
 

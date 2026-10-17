@@ -51,7 +51,7 @@ function parseVdf(text) {
   const tokens = tokenize(String(text || ''));
   let pos = 0;
   function parseObject() {
-    const obj = {};
+    const obj = Object.create(null); // keys like "__proto__" must stay plain data
     while (pos < tokens.length) {
       const tok = tokens[pos];
       if (tok.type === '}') {

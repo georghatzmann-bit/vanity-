@@ -60,9 +60,11 @@ async function scanEpic() {
 async function steamRoot() {
   const fromReg = await regQueryValue('HKCU\\Software\\Valve\\Steam', 'SteamPath');
   const fromHklm = await regQueryValue('HKLM\\SOFTWARE\\WOW6432Node\\Valve\\Steam', 'InstallPath');
+  const fromHklm64 = fromHklm ? null : await regQueryValue('HKLM\\SOFTWARE\\Valve\\Steam', 'InstallPath');
   const candidates = [
     fromReg && fromReg.replace(/\//g, '\\'),
     fromHklm,
+    fromHklm64,
     path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Steam'),
     path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Steam'),
   ].filter(Boolean);

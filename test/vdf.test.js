@@ -56,7 +56,13 @@ test('parses appmanifest and ignores comments/conditionals', () => {
 });
 
 test('broken input does not throw', () => {
-  assert.deepStrictEqual(parseVdf('"a" { "b" '), { a: {} });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(parseVdf('"a" { "b" '))), { a: {} });
   assert.strictEqual(parseAppManifest(''), null);
   assert.deepStrictEqual(parseLibraryFolders(null), []);
+});
+
+test('__proto__ keys stay data', () => {
+  const v = parseVdf('"a" { "__proto__" { "x" "1" } "b" "2" }');
+  assert.strictEqual(v.a.b, '2');
+  assert.strictEqual(Object.getPrototypeOf({}).x, undefined);
 });
