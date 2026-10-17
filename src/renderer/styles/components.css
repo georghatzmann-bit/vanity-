@@ -1564,7 +1564,8 @@
 .settings {
   display: flex;
   flex-direction: column;
-  gap: var(--s-5);
+  gap: 20px;
+  padding-top: var(--s-1);
 }
 
 .settings__section {
@@ -1580,8 +1581,8 @@
 }
 
 .settings__head .icon-tile {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
 }
 
@@ -1610,29 +1611,22 @@
 .settings__explain {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--s-2);
-  margin-top: var(--s-3);
+  gap: 0;
+  margin-top: var(--s-2);
+  padding: 0 4px;
 }
 
 .settings__explain li {
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
+  padding: 6px 12px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
+  text-align: center;
   color: var(--faint);
-  transition: color var(--dur-3), background-color var(--dur-3);
+  transition: color var(--dur-3);
 }
 
 .settings__explain li.is-active {
   color: var(--text-2);
-  background: rgba(139, 92, 246, 0.08);
-}
-
-.settings__explain b {
-  display: block;
-  margin-bottom: 2px;
-  font-weight: 600;
-  color: inherit;
 }
 
 .settings__volume {
@@ -1660,7 +1654,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
-  margin-top: 6px;
 }
 
 /* =========================================================
@@ -1838,4 +1831,12 @@
   overflow: hidden;
   border-radius: inherit;
   pointer-events: none;
+}
+
+/* Programmatically focused containers (router screens, dialogs) never show a ring. */
+.screen:focus,
+.screen:focus-visible,
+.modal:focus,
+.modal:focus-visible {
+  outline: none;
 }

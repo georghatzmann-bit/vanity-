@@ -173,7 +173,7 @@ async function exportPackages({ wingetPath, timeoutMs = 5 * 60 * 1000 } = {}) {
   const res = await runWinget(wingetPath, ['export', '--output', file, '--accept-source-agreements', '--disable-interactivity'], { timeoutMs });
   let json = null;
   try {
-    json = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''));
+    json = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
   } catch {
     json = null;
   }

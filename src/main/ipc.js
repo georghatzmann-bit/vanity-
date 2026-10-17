@@ -104,7 +104,7 @@ function registerIpc(getWin) {
 
   // --- games --------------------------------------------------------------
   handle('games:launchers', () => backend.detectLaunchers());
-  handle('games:install', (game) => backend.installGame(game));
+  handle('games:install', (game, mode) => backend.installGame(game, mode));
 
   // --- misc ---------------------------------------------------------------
   handle('shell:open', (url) => openExternalSafe(url));

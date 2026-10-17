@@ -148,7 +148,7 @@ function fromWingetExport(json) {
 function parseProfileText(text) {
   let json;
   try {
-    json = JSON.parse(String(text).replace(/^﻿/, ''));
+    json = JSON.parse(String(text).replace(/^\uFEFF/, ''));
   } catch {
     throw new Error('Die Datei ist beschädigt oder kein Phoenix-Profil.');
   }

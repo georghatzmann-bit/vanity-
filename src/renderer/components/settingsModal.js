@@ -8,10 +8,10 @@ import { Badge } from './badge.js';
 import { formatPercent } from '../core/format.js';
 
 const EFFECTS = [
-  { value: 'ultra', label: 'Ultra', text: 'Alle 3D-Effekte, Partikel und Glas. Für starke Grafikkarten.' },
-  { value: 'high', label: 'Hoch', text: 'Fast alles an, weniger Partikel. Passt für die meisten PCs.' },
-  { value: 'low', label: 'Niedrig', text: 'Ruhiger Hintergrund ohne Unschärfe. Für ältere Laptops.' },
-  { value: 'off', label: 'Aus', text: 'Keine Hintergrund-Animationen. Am schnellsten und ruhigsten.' },
+  { value: 'ultra', label: 'Ultra', text: 'Alles an. Für starke Grafikkarten.' },
+  { value: 'high', label: 'Hoch', text: 'Weniger Partikel. Für die meisten PCs.' },
+  { value: 'low', label: 'Niedrig', text: 'Ohne Unschärfe. Für ältere Laptops.' },
+  { value: 'off', label: 'Aus', text: 'Keine Animationen. Am schnellsten.' },
 ];
 
 function section(iconName, title, sub, ...content) {
@@ -31,7 +31,7 @@ export function openSettings({ api, store, modal, toast, sound }) {
   // --- Effects ---
   const explain = h(
     'ul.settings__explain',
-    EFFECTS.map((e) => h('li', { dataset: { value: e.value } }, h('b', e.label), e.text)),
+    EFFECTS.map((e) => h('li', { dataset: { value: e.value } }, e.text)),
   );
   const markExplain = (v) => explain.querySelectorAll('li').forEach((li) => li.classList.toggle('is-active', li.dataset.value === v));
   const seg = Segmented({
@@ -114,12 +114,8 @@ export function openSettings({ api, store, modal, toast, sound }) {
     section(
       'info',
       'Über PHOENIX',
-      'Sichert deine Apps vor dem Reset und installiert sie danach wieder.',
-      h(
-        'div.settings__panel.settings__about',
-        h('div', h('div.fw-600', 'Protokoll'), h('div.hint', 'Hilft bei Problemen: Speichert das Log auf dem Desktop.'), meta),
-        logBtn,
-      ),
+      'Version, Modus und Protokoll für den Support.',
+      h('div.settings__panel.settings__about', h('div', meta, h('div.hint.mt-2', 'Das Protokoll hilft bei Problemen und landet auf dem Desktop.')), logBtn),
     ),
   );
 
@@ -127,7 +123,7 @@ export function openSettings({ api, store, modal, toast, sound }) {
     title: 'Einstellungen',
     subtitle: 'Änderungen gelten sofort.',
     icon: 'settings',
-    size: 'md',
+    size: 'lg',
     content,
     actions: [{ label: 'Fertig', variant: 'primary', icon: 'check' }],
     onClose: () => cleanups.forEach((fn) => fn()),

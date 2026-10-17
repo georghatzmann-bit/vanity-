@@ -5,18 +5,22 @@
 
 function parseJson(text) {
   try {
-    return JSON.parse(String(text || '').replace(/^﻿/, ''));
+    return JSON.parse(String(text || '').replace(/^\uFEFF/, ''));
   } catch {
     return null;
   }
 }
 
-/** True for engine installs, DLC/add-ons and other non-game entries. */
+/** True for engine installs, engine plugins, DLC/add-ons and other non-game entries (rules from Playnite/Legendary). */
 function isNonGame(item) {
   const appName = String(item.AppName || '');
   if (!appName || /^UE_/i.test(appName)) return true;
+  if (String(item.CatalogNamespace || '').toLowerCase() === 'ue') return true;
   const categories = Array.isArray(item.AppCategories) ? item.AppCategories.map((c) => String(c).toLowerCase()) : [];
-  if (categories.includes('addons') || categories.includes('dlc') || categories.includes('engines')) return true;
+  if (categories.includes('addons') && !categories.includes('addons/launchable')) return true;
+  if (categories.includes('dlc') || categories.includes('engines') || categories.includes('plugins') || categories.includes('plugins/engine')) return true;
+  if (String(item.TechnicalType || '').toLowerCase().includes('plugins/engine')) return true;
+  if (Array.isArray(item.CompatibleApps) && item.CompatibleApps.some((a) => /^UE_/i.test(String(a)))) return true;
   if (item.MainGameAppName && item.MainGameAppName !== appName) return true;
   return false;
 }
@@ -43,7 +47,7 @@ function parseLauncherInstalled(text) {
   const data = parseJson(text);
   const list = data && Array.isArray(data.InstallationList) ? data.InstallationList : [];
   return list
-    .filter((e) => e && e.AppName && !/^UE_/i.test(e.AppName))
+    .filter((e) => e && e.AppName && !/^UE_/i.test(e.AppName) && String(e.NamespaceId || '').toLowerCase() !== 'ue')
     .map((e) => ({
       platform: 'epic',
       title: String(e.AppName) === 'Fortnite' ? 'Fortnite' : String(e.AppName),

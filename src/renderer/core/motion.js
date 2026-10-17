@@ -149,6 +149,8 @@ export function revealText(el, { delay = 0, stagger = 0.022, duration = 0.9, y =
   if (clipText) {
     const box = el.getBoundingClientRect();
     for (const c of chars) {
+      // Extra paint room so descenders/umlauts are not cut by the per-char background box.
+      Object.assign(c.style, { padding: '0.12em 0 0.2em', margin: '-0.12em 0 -0.2em' });
       const r = c.getBoundingClientRect();
       Object.assign(c.style, {
         backgroundImage: cs.backgroundImage,

@@ -29,5 +29,5 @@ module.exports = {
   startInstall: (items, emit) => queue.startJob(items, { emit }),
   cancelInstall: () => queue.cancelJob(),
   detectLaunchers: () => games.detectLaunchers(),
-  installGame: (game) => games.installGame(game),
+  installGame: (game, mode) => games.installGame(game, mode),
 };

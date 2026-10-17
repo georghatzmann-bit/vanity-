@@ -9,7 +9,7 @@ function tokenize(text) {
   const n = text.length;
   while (i < n) {
     const ch = text[i];
-    if (ch === '﻿' || ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+    if (ch === '\uFEFF' || ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
       i++;
     } else if (ch === '/' && text[i + 1] === '/') {
       while (i < n && text[i] !== '\n') i++;

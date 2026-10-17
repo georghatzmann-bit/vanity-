@@ -89,7 +89,7 @@ export function createFx(canvas, opts = {}) {
       const y = (b.cy + Math.cos(t * b.fy * 6 + b.ph * 1.3) * b.ay) * h;
       const r = b.r * m * (0.85 + 0.15 * Math.sin(t * 0.4 + i)) * (1 + pulseAmt * 0.25);
       const c = i === 0 ? cur.tint.map(Math.round) : b.color;
-      const a = Math.min(0.9, b.a * energy * 0.55);
+      const a = Math.min(0.9, b.a * energy * 0.46);
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},${a})`);
       g.addColorStop(0.45, `rgba(${c[0]},${c[1]},${c[2]},${a * 0.35})`);

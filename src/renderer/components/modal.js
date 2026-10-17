@@ -129,11 +129,9 @@ export function createModalHost(host, { inertTargets = [] } = {}) {
       );
     }
 
-    requestAnimationFrame(() => {
-      const target = dialog.querySelector('[autofocus]') || dialog.querySelector('.modal__body ' + FOCUSABLE) || dialog.querySelector(FOCUSABLE);
-      (target || dialog).focus({ preventScroll: true });
-    });
-    if (!dialog.hasAttribute('tabindex')) dialog.tabIndex = -1;
+    // Focus the dialog itself (no ring); Tab then walks into it. [autofocus] wins if present.
+    dialog.tabIndex = -1;
+    requestAnimationFrame(() => (dialog.querySelector('[autofocus]') || dialog).focus({ preventScroll: true }));
     return handle;
   }
 

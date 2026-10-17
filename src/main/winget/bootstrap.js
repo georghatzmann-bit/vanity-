@@ -28,7 +28,7 @@ const FAIL_TEXT = {
 let running = null;
 
 function scriptText() {
-  return fs.readFileSync(path.join(__dirname, 'Ensure-Winget.ps1'), 'utf8').replace(/^﻿/, '');
+  return fs.readFileSync(path.join(__dirname, 'Ensure-Winget.ps1'), 'utf8').replace(/^\uFEFF/, '');
 }
 
 async function repair(onProgress) {

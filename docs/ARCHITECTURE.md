@@ -120,7 +120,7 @@ window.phoenix = {
   drives:   { list() },
   setup:    { find() },
   install:  { start(items), cancel() },
-  games:    { launchers(), install(game) },
+  games:    { launchers(), install(game, mode?) },
   shell:    { open(url), showItem(path) },
   clipboard:{ write(text) },
   log:      { export() },
@@ -150,7 +150,7 @@ window.phoenix = {
 | `install.start(items)` | `install:start` | `{ jobId }`, emits `install:event` (§6) |
 | `install.cancel()` | `install:cancel` | `true` |
 | `games.launchers()` | `games:launchers` | `{ epic:{installed}, steam:{installed}, ... }` |
-| `games.install(game)` | `games:install` | `{ ok, uri, error? }` |
+| `games.install(game, mode?)` | `games:install` | `{ ok, uri, error? }` – mode `'install'` (default, launcher install dialog), `'store'` (store page in launcher), `'library'`, `'msstore'` (Fortnite Xbox/Store edition) |
 | `shell.open(url)` | `shell:open` | `true` – allowlisted schemes only: `https:` `http:` `steam:` `com.epicgames.launcher:` `battlenet:` `uplay:` `goggalaxy:` `origin2:` `ms-windows-store:` `ms-settings:` |
 | `shell.showItem(path)` | `shell:showItem` | `true` |
 | `clipboard.write(t)` | `clipboard:write` | `true` |

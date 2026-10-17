@@ -208,8 +208,8 @@ module.exports = {
   startInstall,
   cancelInstall,
   detectLaunchers: async () => ({ epic: { installed: true }, steam: { installed: true } }),
-  installGame: async (game) => {
+  installGame: async (game, mode) => {
     const { installUri } = require('../games/launch');
-    return { ok: true, uri: installUri(game) };
+    return { ok: true, uri: installUri(game, mode) };
   },
 };

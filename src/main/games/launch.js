@@ -5,8 +5,32 @@ const path = require('path');
 const { shell } = require('electron');
 const { regKeysExist } = require('../util/reg');
 
-/** PURE: launcher URI that opens the install dialog for a GameEntry, or null. */
-function installUri(game) {
+const FORTNITE_STORE_ID = 'BT5P2X999VH2'; // Microsoft Store / Xbox app edition (since Nov 2025)
+
+/**
+ * PURE: launcher URI for a GameEntry, or null.
+ * mode 'install' – opens the launcher's install dialog (Epic: undocumented but working action=install)
+ * mode 'store'   – store page inside the launcher (documented, always works)
+ * mode 'library' – launcher library
+ * mode 'msstore' – Microsoft Store / Xbox edition (Fortnite only)
+ */
+function installUri(game, mode = 'install') {
+  if (!game || typeof game !== 'object') return null;
+  if (mode === 'msstore') return game.platform === 'epic' && game.appName === 'Fortnite' ? `ms-windows-store://pdp/?ProductId=${FORTNITE_STORE_ID}` : null;
+  if (mode === 'library') {
+    if (game.platform === 'epic') return 'com.epicgames.launcher://store/library';
+    if (game.platform === 'steam') return 'steam://open/games';
+    return null;
+  }
+  if (mode === 'store') {
+    if (game.platform === 'steam' && Number(game.appId) > 0) return `steam://store/${Math.trunc(Number(game.appId))}`;
+    if (game.platform === 'epic') return game.appName === 'Fortnite' ? 'com.epicgames.launcher://store/product/fortnite' : 'com.epicgames.launcher://store/library';
+    return null;
+  }
+  return installUriDefault(game);
+}
+
+function installUriDefault(game) {
   if (!game || typeof game !== 'object') return null;
   if (game.platform === 'steam') {
     const id = Math.trunc(Number(game.appId));
@@ -54,13 +78,14 @@ async function detectLaunchers() {
   };
 }
 
-/** Opens the launcher install dialog. Returns { ok, uri, error? }. */
-async function installGame(game) {
-  const uri = installUri(game);
+/** Opens the launcher (from the NON-elevated UI process). Returns { ok, uri, error? }. */
+async function installGame(game, mode = 'install') {
+  const allowed = ['install', 'store', 'library', 'msstore'];
+  const uri = installUri(game, allowed.includes(mode) ? mode : 'install');
   if (!uri) return { ok: false, uri: null, error: 'Für dieses Spiel gibt es keinen Installations-Link.' };
   const launchers = await detectLaunchers();
   const launcher = game.platform === 'epic' ? launchers.epic : launchers.steam;
-  if (!launcher || !launcher.installed) {
+  if (mode !== 'msstore' && (!launcher || !launcher.installed)) {
     const name = game.platform === 'epic' ? 'Epic Games Launcher' : 'Steam';
     return { ok: false, uri, error: `${name} ist noch nicht installiert. Installiere ihn zuerst.` };
   }
